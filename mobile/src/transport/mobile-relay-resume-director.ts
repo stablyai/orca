@@ -1,12 +1,11 @@
 import { z } from 'zod'
 import { parseRetryAfterHeaderMs } from '../../../src/shared/retry-after-header'
 import { MOBILE_RELAY_RETRY_AFTER_MAX_MS } from './mobile-relay-retry-delays'
-import type { MobileRelayEndpoint } from '../../../src/shared/mobile-relay-credential-contract'
+import type { MobileRelayEndpoint } from '../../../src/shared/remote-runtime/relay/mobile-relay-credential-contract'
 
 const MAX_RESPONSE_BYTES = 16 * 1024
 
-// Carries the director's own pacing so the reconnect cooldown can honor a
-// bounded-overload 503 instead of re-dialing on the local backoff.
+// Honor bounded director Retry-After pacing instead of redialing overloaded service on local backoff.
 export class RelayDirectorHttpError extends Error {
   readonly name = 'RelayDirectorHttpError'
 
@@ -35,7 +34,7 @@ const ResolveResponseSchema = z
 export async function resolveMobileRelayEndpoint(args: {
   relay: MobileRelayEndpoint
   resumeToken: string
-  fetchImpl?: typeof fetch
+  fetchImpl?: (url: string, init: RequestInit) => Promise<Response>
   timeoutMs?: number
 }): Promise<MobileRelayEndpoint> {
   const controller = new AbortController()

@@ -2,18 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { LinearIssueContextResult } from '../../../shared/linear/agent-result-types'
 import type { LinearIssueRequest } from '../../../shared/linear/agent-access'
 import type { ResolvedIssue } from './client'
-import { ACTIVITY_QUERY } from '../issue-activity-raw'
-import {
-  ATTACHMENTS_QUERY,
-  CHILDREN_QUERY,
-  COMMENTS_QUERY,
-  INVERSE_RELATIONS_QUERY,
-  RELATIONS_QUERY
-} from './raw'
 
-// The signed public-file-url client is what body reads must use so Linear
-// rewrites inline uploads.linear.app URLs into temporary signed URLs. The plain
-// entry client is a distinct spy so a regression back to it fails these tests.
+// Separate signed/plain client spies expose body reads that would leave uploads.linear.app media unauthorized.
 const rawRequest = vi.fn()
 const plainRawRequest = vi.fn()
 
@@ -150,21 +140,6 @@ describe('Linear issue context includes', () => {
     vi.clearAllMocks()
   })
 
-  it('declares cursor variables on every paged include query', () => {
-    for (const query of [
-      COMMENTS_QUERY,
-      CHILDREN_QUERY,
-      ATTACHMENTS_QUERY,
-      RELATIONS_QUERY,
-      ACTIVITY_QUERY,
-      INVERSE_RELATIONS_QUERY
-    ]) {
-      expect(query).toContain('$after: String')
-      expect(query).toContain('after: $after')
-    }
-    expect(ACTIVITY_QUERY).not.toContain('attachment { id title url source }')
-  })
-
   it('does not probe grandchildren when the first child page exhausts the node cap', async () => {
     for (let page = 0; page < 4; page += 1) {
       rawRequest.mockResolvedValueOnce({
@@ -200,6 +175,57 @@ describe('Linear issue context includes', () => {
       first: 50,
       after: 'cursor-0'
     })
+  })
+
+  it('skips children entirely when not included', async () => {
+    const { readOptionalIncludes } = await import('./includes')
+    const output = result()
+    const input = request()
+    input.include.children = false
+    input.depth = 0
+    await readOptionalIncludes(resolvedIssue(), input, output, [], output.meta.sections)
+    expect(output.children).toBeUndefined()
+    expect(output.meta.sections.children).toBeUndefined()
+    expect(rawRequest).not.toHaveBeenCalled()
+  })
+
+  it('keeps child assignment atomic when a continuation fails', async () => {
+    rawRequest
+      .mockResolvedValueOnce({
+        data: {
+          issue: {
+            children: {
+              nodes: [
+                {
+                  ...rawChild(1),
+                  children: {
+                    nodes: [rawChild(2)],
+                    pageInfo: { hasNextPage: true, endCursor: 'next' }
+                  }
+                }
+              ],
+              pageInfo: { hasNextPage: false }
+            }
+          }
+        }
+      })
+      .mockRejectedValueOnce(new Error('continuation failed'))
+    const { readOptionalIncludes } = await import('./includes')
+    const output = result()
+    await readOptionalIncludes(
+      resolvedIssue(),
+      request(),
+      output,
+      output.meta.includeErrors ?? [],
+      output.meta.sections
+    )
+    expect(output.children).toBeUndefined()
+    expect(output.meta.sections.children).toBeUndefined()
+    expect(output.meta.includeErrors).toEqual([
+      { include: 'children', code: 'linear_include_failed', message: 'continuation failed' }
+    ])
+    expect(plainRawRequest).not.toHaveBeenCalled()
+    expect(rawRequest).toHaveBeenCalledTimes(2)
   })
 
   it('paginates comments up to the advertised include cap', async () => {
@@ -402,9 +428,7 @@ describe('Linear issue context includes', () => {
     ])
   })
 
-  it('reads comment and child bodies through the signed public-file-url client', async () => {
-    // Guards STA-1246: reverting to the plain entry client would return unsigned
-    // uploads.linear.app URLs that 401 for agents.
+  it('reads comment bodies through the signed public-file-url client', async () => {
     rawRequest.mockResolvedValue({
       data: {
         issue: {

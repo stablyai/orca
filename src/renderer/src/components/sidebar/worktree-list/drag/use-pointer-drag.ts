@@ -2,14 +2,14 @@ import { useCallback, useEffect } from 'react'
 import type React from 'react'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
-import { hasWorkspaceKanbanSidebarDropBoard } from '../../workspace-kanban-sidebar-drop'
+import { hasWorkspaceKanbanSidebarDropBoard } from '../../workspace-board/drag/workspace-kanban-sidebar-drop'
 import {
   createSidebarDragPreview,
   isSidebarPointerDragBlocked,
   setSidebarPointerDragDocumentStyles
-} from '../../worktree-sidebar-pointer-drag-dom'
-import { getWorktreeSidebarDragRectsForGroup } from '../../worktree-sidebar-drag-autoscroll'
-import { getWorktreeSidebarDragGrab } from '../../worktree-sidebar-drag-geometry'
+} from './worktree-sidebar-pointer-drag-dom'
+import { getWorktreeSidebarDragRectsForGroup } from './worktree-sidebar-drag-autoscroll'
+import { getWorktreeSidebarDragGrab } from './worktree-sidebar-drag-geometry'
 import { NOOP_WORKSPACE_BOARD_DRAG_PREVIEW_CALLBACK } from './drop-commit-context'
 import type {
   ShouldShowWorkspaceBoardDropIndicator,
@@ -22,7 +22,11 @@ import { useWorktreePointerDragAutoscroll } from './use-pointer-autoscroll'
 import { useWorktreePointerDragWindowEvents } from './use-pointer-window-events'
 import { flushWorktreePointerDragFrame } from './pointer-flush'
 import { EMPTY_WORKTREE_DRAG_PREVIEW_OFFSETS, type WorktreePointerDrag } from './row-state'
-import { draggedWorktreeCopiesOf, uniqueDraggedIds } from './dragged-worktree-copies'
+import {
+  draggedWorktreeCopiesOf,
+  uniqueDraggedIds,
+  uniqueDraggedKeys
+} from './dragged-worktree-copies'
 
 export function useWorktreePointerDrag(args: {
   ctx: WorktreeDropCommitContext
@@ -121,20 +125,20 @@ export function useWorktreePointerDrag(args: {
       suppressWorktreeClickUntilRef.current = window.performance.now() + 500
       setSidebarPointerDragDocumentStyles(true)
       session.worktreeDragSessionRef.current = {
-        draggingWorktreeId: drag.worktreeId,
+        draggingWorktreeId: drag.worktreeKey,
         sourceGroupKey: drag.sourceGroupKey,
         draggedIds: drag.draggedIds,
         draggedCopies: drag.draggedCopies,
         reorderDraggedIds: drag.reorderDraggedIds,
-        reorderUnitDraggedIds: drag.reorderUnitDraggedIds,
+        reorderDraggedKeys: drag.reorderDraggedKeys,
+        reorderUnitDraggedKeys: drag.reorderUnitDraggedKeys,
         rects: drag.rects,
-        // Why: reuse the floating preview's own offset so the hit test tracks the
-        // card the user sees, not the raw pointer.
+        // Hit-test the floating card’s visual offset rather than the raw pointer.
         grab: getWorktreeSidebarDragGrab({ offsetY, height }),
         anchor: null
       }
       setWorktreeDragState({
-        draggingWorktreeId: drag.worktreeId,
+        draggingWorktreeId: drag.worktreeKey,
         sourceGroupKey: drag.sourceGroupKey,
         lineageDropTargetId: null,
         dropIndex: null,
@@ -188,9 +192,10 @@ export function useWorktreePointerDrag(args: {
       const draggedIds = draggedCopies.map((copy) => copy.id)
       const reorderDraggedCopies = session.getReorderDraggedCopies(draggedCopies)
       const reorderDraggedIds = uniqueDraggedIds(reorderDraggedCopies)
-      const reorderUnitDraggedIds = session.getReorderUnitDraggedIds(
+      const reorderDraggedKeys = uniqueDraggedKeys(reorderDraggedCopies)
+      const reorderUnitDraggedKeys = session.getReorderUnitDraggedKeys(
         sourceGroupKey,
-        reorderDraggedIds
+        reorderDraggedKeys
       )
       worktreePointerDragRef.current = {
         pointerId: event.pointerId,
@@ -200,10 +205,12 @@ export function useWorktreePointerDrag(args: {
         currentX: event.clientX,
         currentY: event.clientY,
         worktreeId,
+        worktreeKey: getWorktreeHostIdentity(worktree),
         draggedIds,
         draggedCopies: reorderDraggedCopies,
         reorderDraggedIds,
-        reorderUnitDraggedIds,
+        reorderDraggedKeys,
+        reorderUnitDraggedKeys,
         sourceGroupKey,
         rects,
         active: false,

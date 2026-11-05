@@ -1,15 +1,16 @@
 import { useCallback } from 'react'
 import { useAppStore } from '../store'
-import { isProvenProcessExit } from '../../../shared/terminal-exit-cause'
+import { isProvenProcessExit } from '../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 import { closeTerminalTab } from './terminal/terminal-tab-actions'
+import type { TerminalTabCloseIntent } from './terminal/terminal-tab-close-intent'
 import { shouldDeferParkedPtyExitTabClose } from './terminal-pane/terminal-parked-tab-watchers'
 import { dispatchWorkspaceTabCommand } from '@/lib/workspace-tab-commands'
 import type { TerminalCreateController } from './use-terminal-create-actions'
 
 export function useTerminalCloseActions(controller: TerminalCreateController) {
   const { consumeSuppressedPtyExit } = controller
-  const handleCloseTab = useCallback((tabId: string) => {
-    closeTerminalTab(tabId)
+  const handleCloseTab = useCallback((tabId: string, reason: TerminalTabCloseIntent) => {
+    closeTerminalTab(tabId, { reason })
   }, [])
 
   const handleCloseBrowserTab = useCallback((tabId: string) => {
@@ -24,13 +25,12 @@ export function useTerminalCloseActions(controller: TerminalCreateController) {
       if (consumeSuppressedPtyExit(ptyId)) {
         return
       }
-      // A negative code is the host-loss sentinel, not proof that the remote
-      // process exited. Keep the mounted tab for reconnect/reveal to recover.
+      // Negative exit codes mean host loss, not process exit; retain the tab for reconnect/reveal recovery.
       if (exitCode !== undefined && !isProvenProcessExit(exitCode)) {
         useAppStore.getState().markUnverifiedPtyLoss(tabId)
         return
       }
-      // Why: a parked multi-leaf tab has no PaneManager to promote split siblings, so closing here would kill them; reveal-remount handles dead PTYs per leaf.
+      // Parked splits have no PaneManager to promote siblings; defer dead-leaf handling to reveal/remount instead of killing them.
       if (shouldDeferParkedPtyExitTabClose(tabId, ptyId)) {
         return
       }

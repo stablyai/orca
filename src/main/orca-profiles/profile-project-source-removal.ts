@@ -1,5 +1,4 @@
-import type { WorkspaceKey } from '../../shared/folder-workspace-types'
-import { parseWorkspaceKey } from '../../shared/workspace-scope'
+import { type WorkspaceKey, parseWorkspaceKey } from '../../shared/workspace-scope'
 import {
   rebuildRepoBackedProjectState,
   type TransferProfileState
@@ -10,7 +9,6 @@ import {
 } from './profile-project-session-state'
 import { isRepoWorktreeId, removeRepoWorktreeRecord } from './profile-project-worktree-identity'
 
-/** Removes repository-owned sessions, lineage, and UI preferences from the source profile after transfer. */
 export function removeSourceRepo(
   state: TransferProfileState,
   repoId: string

@@ -1,3 +1,6 @@
+import type { OrchestrationAgentReference } from '../../../../shared/orchestration-agent-reference'
+import type { HTMLAttributes, RefObject } from 'react'
+
 /** Text coordinates keep transport, attachments, and picker logic independent of the editor. */
 export type NativeChatComposerInput = Pick<
   HTMLTextAreaElement,
@@ -9,6 +12,7 @@ export type NativeChatComposerInput = Pick<
   | 'select'
   | 'setSelectionRange'
 > & {
+  insertAgentReferences?: (references: OrchestrationAgentReference[]) => void
   contains?: (node: Node | null) => boolean
   insertText?: (text: string) => void
   insertSkill?: (from: number, to: number, token: string, path?: string) => void
@@ -18,9 +22,25 @@ export type NativeChatComposerInput = Pick<
   insertFileReferences?: (paths: string[]) => void
   /** One user paste transaction; ordinary history retains the replaced rich selection. */
   stagePastedText?: (token: string) => void
-  /** Whether a collapsed caret sits on the first (`start`) or last (`end`) visual line,
-   *  counting wrapped lines, so an arrow key there has nowhere left to move it. */
+  /** True only for collapsed carets at the first/last visual line, including wraps. */
   isCaretOnVisualEdge?: (edge: 'start' | 'end') => boolean
+}
+
+export type NativeChatPromptEditorProps = Omit<
+  HTMLAttributes<HTMLDivElement>,
+  'onChange' | 'onSelect'
+> & {
+  scopeKey?: string
+  positionTarget?: string
+  /** The composer's thumbnail ids, in order, which number its image chips. */
+  imageRow?: readonly string[]
+  inputRef: RefObject<NativeChatComposerInput | null>
+  isComposing?: () => boolean
+  initialValue: string
+  disabled: boolean
+  placeholder: string
+  onChange: (input: NativeChatComposerInput) => void
+  onSelect: (input: NativeChatComposerInput) => void
 }
 
 export function insertNativeChatPastedText(

@@ -1,9 +1,10 @@
 import type { AppState } from '../../../types'
-import type { WorkspaceKey } from '../../../../../../shared/folder-workspace-types'
+
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { resolveWorktreeDisplayName } from '@/lib/worktree-default-display-name'
 import {
+  type WorkspaceKey,
   folderWorkspaceKey,
   parseWorkspaceKey,
   worktreeWorkspaceKey
@@ -64,8 +65,7 @@ export function resolveWorktreeCreateParent(
   }
 }
 
-/** Resolved late so the common create path never walks the folder-workspace list, and defensively
- *  so a missing label can never fail a create that already succeeded. */
+/** Resolve label only for warnings; missing labels must never fail an already successful create. */
 function parentLabel(state: AppState, parent: WorktreeCreateParentPick): string | null {
   // Why not truthiness: a picked-but-unnamed worktree must warn unnamed, not name the active folder.
   if (parent.pickedDisplayName !== null) {

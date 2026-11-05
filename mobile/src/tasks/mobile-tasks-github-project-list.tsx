@@ -1,16 +1,23 @@
 import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-presentation'
+import { translate } from '../i18n/mobile-i18n'
 import {
   View,
-  ActivityIndicator,
   colors,
   Text,
   Pressable,
   FlatList,
   spacing,
   ChevronDown,
-  triggerMediumImpact,
-  TaskProviderLogo
+  TaskProviderLogo,
+  type MobileColorScheme
 } from './mobile-tasks-dependencies'
+import { Inbox } from 'lucide-react-native'
+import {
+  MobileLoadErrorState,
+  MobileNoMatchState,
+  MobileStateView
+} from '../components/MobileStateView'
+import { clearMobileTasksSearch } from './mobile-tasks-search-control'
 import { styles } from './mobile-tasks-legacy-styles'
 import {
   projectGroupMeta,
@@ -19,8 +26,48 @@ import {
   projectFieldDisplayLabel,
   projectRowStatusLabel
 } from './mobile-tasks-legacy-foundation'
+import type { GitHubProjectField, GitHubProjectRow } from './mobile-tasks-view-state-types'
+import { pressedStyle } from '../theme/mobile-theme'
 
-export function renderMobileTasksGitHubProjectList(model: ConnectionPresentationModel) {
+function isProjectFieldEmpty(row: GitHubProjectRow, field: GitHubProjectField): boolean {
+  switch (field.dataType) {
+    case 'ASSIGNEES':
+      return row.content.assignees.map((user) => user.login).join(', ') === ''
+    case 'LABELS':
+      return row.content.labels.map((label) => label.name).join(', ') === ''
+    case 'REPOSITORY':
+      return row.content.repository == null
+    case 'PARENT_ISSUE':
+      return !row.content.parentIssue
+    case 'ISSUE_TYPE':
+      return row.content.issueType?.name == null
+    case 'TITLE':
+      return false
+  }
+  const value = row.fieldValuesByFieldId?.[field.id]
+  if (!value) {
+    return true
+  }
+  switch (value.kind) {
+    case 'text':
+      return !value.text
+    case 'labels':
+      return value.labels.map((label) => label.name).join(', ') === ''
+    case 'users':
+      return value.users.map((user) => user.login).join(', ') === ''
+    case 'date':
+    case 'iteration':
+    case 'number':
+    case 'single-select':
+      return false
+  }
+}
+
+export function renderMobileTasksGitHubProjectList(
+  model: ConnectionPresentationModel,
+  colorScheme: MobileColorScheme,
+  bottomBarHeight: number
+) {
   const {
     activeGitHubProject,
     findProjectRowRepo,
@@ -30,6 +77,7 @@ export function renderMobileTasksGitHubProjectList(model: ConnectionPresentation
     githubProjectRepoSlugReady,
     githubProjectSummaryFields,
     githubProjectTable,
+    hasSearch,
     insets,
     refreshGitHubProject,
     setCollapsedGitHubProjectGroups,
@@ -38,15 +86,24 @@ export function renderMobileTasksGitHubProjectList(model: ConnectionPresentation
     taskUiReady,
     visibleGitHubProjectRows
   } = model
+  const count = githubProjectSummaryFields.length - 4
   return githubProjectLoading ? (
-    <View style={styles.centered}>
-      <ActivityIndicator size="small" color={colors.textSecondary} />
-    </View>
+    <MobileStateView
+      loading
+      title={translate('tasks.githubProjectList.loading', 'Loading project…')}
+      bottomInset={bottomBarHeight}
+    />
   ) : !activeGitHubProject ? (
-    <View style={styles.centered}>
-      <Text style={styles.emptyText}>Choose a GitHub project</Text>
+    <View style={[styles.centered, { paddingBottom: bottomBarHeight }]}>
+      <Text style={styles.emptyText}>
+        {translate('tasks.githubProjectList.chooseProject', 'Choose a GitHub project')}
+      </Text>
       <Pressable
-        style={[styles.targetButton, styles.centerActionButton]}
+        style={({ pressed }) => [
+          styles.targetButton,
+          styles.centerActionButton,
+          pressed && pressedStyle
+        ]}
         disabled={!taskUiReady}
         onPress={() => {
           if (!taskUiReady) {
@@ -55,34 +112,52 @@ export function renderMobileTasksGitHubProjectList(model: ConnectionPresentation
           setShowGitHubProjectPicker(true)
         }}
       >
-        <Text style={styles.targetButtonText}>Browse projects</Text>
+        <Text style={styles.targetButtonText}>
+          {translate('tasks.githubProjectList.browseProjects', 'Browse projects')}
+        </Text>
       </Pressable>
     </View>
   ) : githubProjectError ? (
-    <View style={styles.centered}>
-      <Text style={styles.emptyText}>{githubProjectError}</Text>
-    </View>
+    <MobileLoadErrorState
+      error={githubProjectError}
+      onRetry={() => void refreshGitHubProject()}
+      bottomInset={bottomBarHeight}
+    />
   ) : githubProjectTable && !githubProjectRepoSlugReady ? (
-    <View style={styles.centered}>
-      <ActivityIndicator size="small" color={colors.textSecondary} />
-    </View>
+    <MobileStateView
+      loading
+      title={translate('tasks.githubProjectList.loading', 'Loading project…')}
+      bottomInset={bottomBarHeight}
+    />
+  ) : (!githubProjectTable || visibleGitHubProjectRows.length === 0) && hasSearch ? (
+    <MobileNoMatchState
+      message={translate('tasks.githubProjectList.noMatches', 'No project items match.')}
+      onClear={() => clearMobileTasksSearch(model)}
+      bottomInset={bottomBarHeight}
+    />
   ) : !githubProjectTable || visibleGitHubProjectRows.length === 0 ? (
-    <View style={styles.centered}>
-      <Text style={styles.emptyText}>No project items</Text>
-    </View>
+    <MobileStateView
+      icon={Inbox}
+      title={translate('tasks.githubProjectList.noItems', 'No project items')}
+      bottomInset={bottomBarHeight}
+    />
   ) : (
     <FlatList
       data={githubProjectListEntries}
+      extraData={colorScheme}
       keyExtractor={(entry) => (entry.type === 'group' ? `group:${entry.group.key}` : entry.row.id)}
       ItemSeparatorComponent={() => <View style={styles.separator} />}
-      contentContainerStyle={[styles.list, { paddingBottom: spacing.lg + insets.bottom }]}
+      contentContainerStyle={[
+        styles.list,
+        { paddingBottom: spacing.lg + Math.max(insets.bottom, bottomBarHeight) }
+      ]}
       refreshing={githubProjectLoading}
       onRefresh={refreshGitHubProject}
       renderItem={({ item: entry }) => {
         if (entry.type === 'group') {
           return (
             <Pressable
-              style={styles.projectGroupHeader}
+              style={({ pressed }) => [styles.projectGroupHeader, pressed && pressedStyle]}
               onPress={() =>
                 setCollapsedGitHubProjectGroups((current) => {
                   const next = new Set(current)
@@ -101,7 +176,7 @@ export function renderMobileTasksGitHubProjectList(model: ConnectionPresentation
                 style={entry.collapsed ? styles.projectGroupChevronCollapsed : undefined}
               />
               <Text style={styles.projectGroupTitle} numberOfLines={1}>
-                {entry.group.label || 'Items'}
+                {entry.group.label || translate('tasks.githubProjectList.items', 'Items')}
               </Text>
               <Text style={styles.projectGroupMeta}>{projectGroupMeta(entry.group)}</Text>
             </Pressable>
@@ -113,7 +188,6 @@ export function renderMobileTasksGitHubProjectList(model: ConnectionPresentation
           <Pressable
             style={({ pressed }) => [styles.taskRow, pressed && styles.taskRowPressed]}
             onPress={() => {
-              triggerMediumImpact()
               setProjectRowItem(row)
             }}
           >
@@ -132,28 +206,46 @@ export function renderMobileTasksGitHubProjectList(model: ConnectionPresentation
                   style={[
                     styles.repoDot,
                     {
-                      backgroundColor: getRepoBadgeColor(
-                        repo ?? undefined,
-                        row.content.repository ?? 'project'
-                      )
+                      backgroundColor: getRepoBadgeColor(repo ?? undefined)
                     }
                   ]}
                 />
                 <Text style={styles.subtitle} numberOfLines={1}>
                   {row.itemType === 'PULL_REQUEST'
-                    ? 'Pull request'
+                    ? translate(
+                        'tasks.githubProjectList.pullRequestSubtitle',
+                        'Pull request · {{repository}}{{number}}',
+                        {
+                          repository: row.content.repository ?? githubProjectTable.project.title,
+                          number: row.content.number ? ` #${row.content.number}` : ''
+                        }
+                      )
                     : row.itemType === 'ISSUE'
-                      ? 'Issue'
-                      : 'Project item'}{' '}
-                  · {row.content.repository ?? githubProjectTable.project.title}
-                  {row.content.number ? ` #${row.content.number}` : ''}
+                      ? translate(
+                          'tasks.githubProjectList.issueSubtitle',
+                          'Issue · {{repository}}{{number}}',
+                          {
+                            repository: row.content.repository ?? githubProjectTable.project.title,
+                            number: row.content.number ? ` #${row.content.number}` : ''
+                          }
+                        )
+                      : translate(
+                          'tasks.githubProjectList.itemSubtitle',
+                          'Project item · {{repository}}{{number}}',
+                          {
+                            repository: row.content.repository ?? githubProjectTable.project.title,
+                            number: row.content.number ? ` #${row.content.number}` : ''
+                          }
+                        )}
                 </Text>
               </View>
               {githubProjectSummaryFields.length > 0 ? (
                 <View style={styles.projectFieldPillRow}>
                   {githubProjectSummaryFields.slice(0, 4).map((field) => {
-                    const value = projectFieldDisplayLabel(row, field)
-                    const isEmpty = value === 'Empty'
+                    const isEmpty = isProjectFieldEmpty(row, field)
+                    const value = isEmpty
+                      ? translate('tasks.githubProjectList.emptyField', 'Empty')
+                      : projectFieldDisplayLabel(row, field)
                     return (
                       <View key={field.id} style={styles.projectFieldPill}>
                         <Text style={styles.projectFieldPillText} numberOfLines={1}>
@@ -168,7 +260,17 @@ export function renderMobileTasksGitHubProjectList(model: ConnectionPresentation
                   {githubProjectSummaryFields.length > 4 ? (
                     <View style={styles.projectFieldPill}>
                       <Text style={styles.projectFieldPillText}>
-                        +{githubProjectSummaryFields.length - 4} fields
+                        {count === 1
+                          ? translate(
+                              'tasks.githubProjectList.moreFields_one',
+                              '+{{count}} field',
+                              { count }
+                            )
+                          : translate(
+                              'tasks.githubProjectList.moreFields_other',
+                              '+{{count}} fields',
+                              { count }
+                            )}
                       </Text>
                     </View>
                   ) : null}

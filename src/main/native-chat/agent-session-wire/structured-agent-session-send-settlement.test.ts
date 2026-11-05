@@ -8,18 +8,16 @@ function journal(dispatchState: 'pending' | 'accepted' | 'unknown'): SendSettlem
   return {
     activeTurnId: () => null,
     cursor: () => ({ epoch: 'epoch-1', sequence: dispatchState === 'pending' ? 1 : 2 }),
-    submissions: () => [
-      {
-        clientMessageId: 'client-1',
-        fence: 1,
-        payloadFingerprint: 'fingerprint',
-        dispatchState,
-        providerItemId: dispatchState === 'accepted' ? 'provider-1' : null,
-        reason: dispatchState === 'unknown' ? 'provider exited' : null,
-        submittedAt: 1,
-        resolvedAt: dispatchState === 'pending' ? null : 2
-      }
-    ]
+    submission: () => ({
+      clientMessageId: 'client-1',
+      fence: 1,
+      payloadFingerprint: 'fingerprint',
+      dispatchState,
+      providerItemId: dispatchState === 'accepted' ? 'provider-1' : null,
+      reason: dispatchState === 'unknown' ? 'provider exited' : null,
+      submittedAt: 1,
+      resolvedAt: dispatchState === 'pending' ? null : 2
+    })
   }
 }
 
@@ -27,29 +25,26 @@ function emptyJournal(): SendSettlementJournal {
   return {
     activeTurnId: () => null,
     cursor: () => ({ epoch: 'epoch-1', sequence: 2 }),
-    submissions: () => []
+    submission: () => undefined
   }
 }
 
-/** A message accepted and not yet handed over, while `activeTurnId` names the running turn. */
 function queuedJournal(activeTurnId: string | null, handedOver = false): SendSettlementJournal {
   return {
     cursor: () => ({ epoch: 'epoch-1', sequence: handedOver ? 3 : 2 }),
     activeTurnId: () => activeTurnId,
-    submissions: () => [
-      {
-        clientMessageId: 'client-1',
-        fence: 1,
-        payloadFingerprint: 'fingerprint',
-        dispatchState: 'pending',
-        providerItemId: null,
-        reason: null,
-        submittedAt: 1,
-        resolvedAt: null,
-        handoverRecorded: true,
-        ...(handedOver ? { handedOverAt: 3 } : {})
-      }
-    ]
+    submission: () => ({
+      clientMessageId: 'client-1',
+      fence: 1,
+      payloadFingerprint: 'fingerprint',
+      dispatchState: 'pending',
+      providerItemId: null,
+      reason: null,
+      submittedAt: 1,
+      resolvedAt: null,
+      handoverRecorded: true,
+      ...(handedOver ? { handedOverAt: 3 } : {})
+    })
   }
 }
 
@@ -84,15 +79,6 @@ describe('a wait that also ends behind a running command', () => {
     settlements.publish('session-1', queuedJournal('turn-1', true))
 
     await expect(pending).resolves.toMatchObject({ value: { submission: { handedOverAt: 3 } } })
-  })
-
-  it('leaves the plain handover wait to the handover', async () => {
-    const settlements = new StructuredAgentSessionSendSettlement(() =>
-      queuedJournal('compact:cmd-1')
-    )
-    const pending = settlements.wait('session-1', 'client-1', { until: 'handed-over', budgetMs: 1 })
-
-    await expect(pending).resolves.toBeUndefined()
   })
 })
 

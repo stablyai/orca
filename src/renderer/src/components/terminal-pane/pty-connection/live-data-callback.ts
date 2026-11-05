@@ -1,10 +1,11 @@
-import { makePaneKey } from '../../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { useAppStore } from '@/store'
 import { takeCurrentTerminalDeliveryCredit } from '@/lib/pane-manager/terminal-delivery-credit'
 import { recordAgentHibernationPaneOutput } from '@/lib/agent-hibernation-output-activity'
 import { observeTerminalBracketedPasteModeOutput } from '../terminal-bracketed-paste'
 import type { PtyDataMeta } from '../pty-dispatcher'
 import { sendTerminalOscColorQueryReplies } from '../terminal-capability-replies'
+import { isDropSentinelMeta } from '../terminal-stream-position'
 
 import { shouldWritePtyOutputForeground } from './foreground-output-scan'
 import { registerE2eTerminalPtyDataInjection } from './e2e-terminal-pty-harness'
@@ -19,6 +20,32 @@ export function bindLiveDataCallback(session: ConnectPanePtySession): void {
   ): void => {
     if (streamGeneration !== session.transportStreamGeneration) {
       return
+    }
+    const arrivedData = data
+    const arrivedMeta = meta
+    const admitLiveStreamBytes = (
+      bytes: string,
+      carvedRemainder: string,
+      streamChunk: Parameters<typeof session.admitStreamBytes>[1]
+    ): string | null => {
+      if (isDropSentinelMeta(arrivedMeta)) {
+        return session.admitRecoveryBytes(bytes)
+      }
+      if (carvedRemainder !== streamChunk.data) {
+        // The carved prefix completed a query held from an earlier chunk, so the remainder starts at
+        // ground; but those bytes may have been answered directly instead of written, so xterm can
+        // still hold the query's opening. Resume grounded rather than as a continuation.
+        session.streamPosition.invalidate()
+        if (bytes === carvedRemainder) {
+          return session.admitStreamBytes(bytes, {
+            ...streamChunk,
+            data: bytes,
+            midEscape: undefined
+          })
+        }
+      }
+      // A hidden ordering slice is a suffix of the chunk.
+      return session.admitStreamBytes(bytes, { ...streamChunk, data: carvedRemainder })
     }
     if (session.deferredReattachLiveData !== null) {
       const ackCredit = takeCurrentTerminalDeliveryCredit()
@@ -47,12 +74,7 @@ export function bindLiveDataCallback(session: ConnectPanePtySession): void {
       } else {
         // Why: main dropped buffered output at the pending cap, so the stream has a gap; repaint from the main-owned snapshot instead of writing on.
         session.markHiddenOutputRestoreNeeded()
-        // Why the synthesized \x1b[?2026l is not written here: this branch discards
-        // `data` deliberately, and the grounded snapshot replay
-        // (REPLAY_BASELINE_TERMINAL_RESET) releases the latch instead. Writing it
-        // through writePtyOutputToXterm perturbs the hidden-output-restore state
-        // machine (it consumes the pending snapshot), so the release rides the
-        // restore. Residual gap: a pane whose restore never arrives.
+        // Discarded sentinel bytes must not enter the PTY writer and consume pending restore; snapshot reset releases DEC 2026 when recovery arrives.
         if (data) {
           // The sentinel can carry query bytes carved from the bulk drop (extractDroppedPtyQueryBytes in main); replies must still flow.
           session.salvageRendererQueriesFromDiscardedRestoreData(data)
@@ -110,6 +132,15 @@ export function bindLiveDataCallback(session: ConnectPanePtySession): void {
       data = reconciliation.data
       meta = reconciliation.meta
     }
+    // Where these bytes sit in the stream. Main's boundary flags describe the arrival's first byte,
+    // so a chunk reconciliation cut down to a suffix starts at an unknown boundary.
+    const reconciledSuffix = data !== arrivedData
+    const streamChunk = {
+      data,
+      seq: meta?.seq,
+      rawLength: meta?.rawLength,
+      midEscape: reconciledSuffix ? ('unknown' as const) : arrivedMeta?.midEscape
+    }
     // Why: a hidden Codex query can split just before visibility flips; hand xterm the completed query while other bytes still follow restore.
     const pendingForegroundQuery = foreground
       ? session.takeHiddenStartupRendererQueryPendingForForeground(data)
@@ -161,7 +192,15 @@ export function bindLiveDataCallback(session: ConnectPanePtySession): void {
         if (pendingForegroundQuery?.statefulQueryData) {
           session.queueLiveChunkDuringRestore(pendingForegroundQuery.statefulQueryData)
         }
-        session.queueLiveChunkDuringRestore(orderedRendererData, rendererMeta)
+        session.queueLiveChunkDuringRestore(
+          orderedRendererData,
+          orderedRendererData === streamChunk.data
+            ? {
+                ...rendererMeta,
+                midEscape: streamChunk.midEscape
+              }
+            : { ...rendererMeta, midEscape: 'unknown' }
+        )
         session.requestHiddenOutputRestoreIfNeeded()
       } else if (session.hiddenOutputRestoreInFlight) {
         session.hiddenOutputRestoreNeeded = true
@@ -175,7 +214,11 @@ export function bindLiveDataCallback(session: ConnectPanePtySession): void {
           hiddenStartupRendererQuery: true
         })
       }
-      session.writePtyOutputToXterm(orderedRendererData, foreground, { liveStartupBatch: true })
+      session.writePtyOutputToXterm(
+        admitLiveStreamBytes(orderedRendererData, rendererData, streamChunk) ?? '',
+        foreground,
+        { liveStartupBatch: true }
+      )
       if (foreground) {
         session.recordRendererOrderedSeq(rendererMeta)
       }

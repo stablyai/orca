@@ -18,9 +18,7 @@ test('keeps same-path host models and undo history separate', async ({
   registerPostElectronShutdownCleanup(() => rm(filePath, { force: true }))
   const remoteId = buildOwnedEditorFileId(filePath, context.worktreeId, 'host-model-fixture')
 
-  // Both tabs open through the user's open path, so a layout-owner build's main holds them too.
-  // The second owner is keyed apart by a runtime id, then its record is pointed back at the
-  // fixture's SSH route with local transport before it first loads (it opens unselected).
+  // Open through the user path so main owns both tabs; key the second runtime separately before redirecting its unselected tab to local transport.
   const openedIds = await orcaPage.evaluate(
     ({ filePath, worktreeId }) => {
       const store = window.__store

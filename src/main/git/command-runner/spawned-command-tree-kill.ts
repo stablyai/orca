@@ -1,5 +1,5 @@
 import { spawn, type ChildProcess } from 'node:child_process'
-import { admitSelfInitiatedTreeKill } from '../../own-chromium-tree-kill-guard'
+import { admitSelfInitiatedTreeKill } from '../../pty/process-retirement/own-chromium-tree-kill-guard'
 
 const WINDOWS_TREE_KILL_WAIT_MS = 2_000
 
@@ -19,15 +19,14 @@ export function killSpawnedCommandTree(
   if (
     !admitSelfInitiatedTreeKill({ pid, site: 'git-command-tree-kill', scope: 'win-taskkill-tree' })
   ) {
-    // Refusal blocks the pid-addressed tree walk, never the termination: the
-    // handle-addressed root kill cannot reach a recycled pid.
+    // A refused PID tree walk still permits handle-based root termination without risking a reused PID.
     child.kill()
     return Promise.resolve()
   }
   return new Promise((resolve) => {
     let killer: ChildProcess
     try {
-      // Why: Windows shims/wsl.exe own descendants; wait for /t tree cleanup so a timed-out command can't outlive its probe.
+      // Await Windows tree cleanup so shim/WSL descendants cannot outlive their probe.
       killer = spawn('taskkill', ['/pid', String(pid), '/t', '/f'], {
         stdio: 'ignore',
         windowsHide: true

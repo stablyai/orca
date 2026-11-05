@@ -4,7 +4,6 @@ import type { CommandOf } from './workspace-layout-command-types'
 import { build, testContext, WS } from './workspace-layout-command.test-fixture'
 import type { WorkspaceLayoutModel } from './workspace-layout-model'
 
-/** Four terminal tabs in one group, named in order: [h, a, b, c]. */
 function setup() {
   const ctx = testContext()
   const { model, results } = build(
@@ -56,7 +55,6 @@ describe('moveTab anchor', () => {
       split.model
     )
     expect(orders(moved.model)).toEqual([[c, a, b], [h]])
-    // Into another group, the anchor in the target is honoured.
     const across = build(
       ctx,
       [move({ tabId: a, toGroupId: right, index: 0, afterTabId: h })],

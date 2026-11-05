@@ -2,9 +2,9 @@ import { useCallback, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
-import { SOURCE_CONTROL_CUSTOM_ACTIONS_SECTION_ID } from '@/components/settings/source-control-custom-actions-section'
+import { SOURCE_CONTROL_CUSTOM_ACTIONS_SECTION_ID } from '@/components/settings/source-control/source-control-custom-actions-section'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
-import type { SourceControlCustomAction } from '../../../../../shared/source-control-custom-actions'
+import type { SourceControlCustomAction } from '../../../../../shared/source-control/ai/settings/source-control-custom-actions'
 import { runPullRequestCustomAction } from '../actions/custom-action-launch'
 
 const NO_CUSTOM_ACTIONS: readonly SourceControlCustomAction[] = []

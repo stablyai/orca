@@ -1,8 +1,7 @@
-// Why: the runtime answers an unresolvable `--worktree` with a bare
-// `selector_not_found` — no offending value and no grammar — so a caller who passed
-// a repo id where a worktree id belongs cannot tell what was wrong (#16904). The CLI
-// is the only layer that still knows what the caller typed, so it shapes the recovery
-// here, in the same validFlags/suggestions/nextSteps shape as an unknown-flag error.
+import { RuntimeClientError } from './runtime/types'
+import { attachCliErrorData } from './handlers/worktree-setup-decision-recovery'
+
+// The runtime omits the typed selector from not-found errors; add it and its grammar at the CLI boundary.
 
 export const WORKTREE_SELECTOR_FORMS = [
   'id:<repo-id>::<absolute-path>',
@@ -53,3 +52,36 @@ export function worktreeSelectorRecovery(selector: string): WorktreeSelectorReco
     ]
   }
 }
+
+export async function withWorktreeSelectorRecovery<T>(
+  pending: Promise<T>,
+  nextSteps: readonly string[],
+  selector?: string
+): Promise<T> {
+  try {
+    return await pending
+  } catch (error) {
+    if (
+      !nextSteps.length ||
+      !(error instanceof RuntimeClientError) ||
+      error.code !== 'selector_not_found'
+    ) {
+      throw error
+    }
+    const data = error.data && typeof error.data === 'object' ? error.data : {}
+    const previousSteps =
+      'nextSteps' in data && Array.isArray(data.nextSteps)
+        ? data.nextSteps.filter((step: unknown): step is string => typeof step === 'string')
+        : []
+    throw attachCliErrorData(error, {
+      ...data,
+      ...(selector ? { selector } : {}),
+      validSelectorForms: WORKTREE_SELECTOR_FORMS,
+      nextSteps: [...nextSteps, ...previousSteps]
+    })
+  }
+}
+
+export const parentCwdNextSteps = (selector?: string): string[] => [
+  `The parent selector "${selector}" could not be resolved. Run from an Orca-managed worktree or pass an explicit parent selector.`
+]

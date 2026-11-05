@@ -1,5 +1,6 @@
 import type React from 'react'
-import { isRepoHeaderActionTarget } from '../../project-header-drag'
+import '../drag/project-header-drag'
+import { isRepoHeaderActionTarget } from '../drag/project-header-drag-contract'
 
 export function stopRepoHeaderKeyboardToggle(event: React.KeyboardEvent<HTMLElement>): void {
   if (event.key === 'Enter' || event.key === ' ') {
@@ -18,7 +19,6 @@ export function handleRepoHeaderActionPointerDown(event: React.PointerEvent<HTML
 export function handleRepoHeaderCollapseAffordancePointerDown(
   event: React.PointerEvent<HTMLElement>
 ): void {
-  // Why: keep collapse-chevron clicks from arming the repo-header row drag.
   event.stopPropagation()
 }
 

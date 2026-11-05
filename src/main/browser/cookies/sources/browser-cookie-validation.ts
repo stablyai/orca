@@ -1,9 +1,9 @@
-import { normalizeCookieDomain } from '../../browser-cookie-import-policy'
+import { normalizeCookieDomain } from '../browser-cookie-import-policy'
 import {
   readJsonCookiePartition,
   type SourcePartitionRead
-} from '../../browser-cookie-source-partition'
-import type { ImportedCookieFields } from '../../browser-cookie-import-write'
+} from './browser-cookie-source-partition'
+import type { ImportedCookieFields } from '../browser-cookie-import-write'
 
 export type RawCookieEntry = {
   domain?: unknown
@@ -18,22 +18,14 @@ export type RawCookieEntry = {
   partitionKeyOpaque?: unknown
 }
 
-// Why (STA-4300): `partition` is required, not optional, so every source that builds a cookie has to
-// state what it read. An optional field would let a new source silently default to unpartitioned.
+// Require each source to report partition identity instead of silently defaulting to unpartitioned.
 export type ValidatedCookie = ImportedCookieFields & {
   sameSite: 'unspecified' | 'no_restriction' | 'lax' | 'strict'
   partition: SourcePartitionRead
 }
 
-// Chromium stores net::CookieSameSite unchanged; see net/cookies/cookie_constants.h and
-// net/extras/sqlite/sqlite_persistent_cookie_store.cc (-1 unspecified, 0 None, 1 Lax, 2 Strict;
-// 3 is the deprecated EXTENDED value Chromium itself folds to unspecified).
-// Firefox's moz_cookies OVERLAPS on 1=Lax and 2=Strict but its domain is wider, so the default arm
-// is load-bearing for it, not incidental: 256 (nsICookie SAMESITE_UNSET) is what modern Firefox
-// writes for every cookie with no SameSite attribute, NULL appears on pre-v10 rows, and 0 means
-// explicit None OR a legacy unset row the schema-15 migration left behind — the two are not
-// distinguishable in the column. Every one of those must land on unspecified, so do NOT make this
-// switch exhaustive or drop the default without re-checking both browsers' real value domains.
+// 0=None, 1=Lax, 2=Strict; Chromium -1/3 and Firefox unset 256 use unspecified.
+// Firefox’s legacy unset 0 is indistinguishable from explicit None.
 export function databaseSameSite(raw: number): 'unspecified' | 'no_restriction' | 'lax' | 'strict' {
   switch (raw) {
     case 0:
@@ -69,7 +61,6 @@ export function normalizeSameSite(
   return 'unspecified'
 }
 
-// Why: a cookie identity needs a url to scope it; derive it from domain + secure flag.
 export function deriveUrl(domain: string, secure: boolean): string | null {
   const normalizedDomain = normalizeCookieDomain(domain)
   if (!normalizedDomain) {

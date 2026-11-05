@@ -19,16 +19,18 @@ vi.mock('electron', () => ({
   },
   app: { getPath: () => '/test' }
 }))
-vi.mock('../git/runner', async (original) => ({
+vi.mock('../git/command-runner/git-exec-file', async (original) => ({
   ...(await original<Record<string, unknown>>()),
   gitExecFileAsync: mocks.git
 }))
-vi.mock('../project-runtime-git-options', () => ({ getLocalProjectWorktreeGitOptions: () => ({}) }))
-vi.mock('./registered-worktree-roots-cache', () => ({
+vi.mock('../workspaces/execution-host/project-runtime-git-options', () => ({
+  getLocalProjectWorktreeGitOptions: () => ({})
+}))
+vi.mock('./worktrees/removal/registered-worktree-roots-cache', () => ({
   getRegisteredWorktreeRootsRevision: mocks.rootsRevision,
   registerWorktreeRootsForRepo: mocks.roots
 }))
-vi.mock('../worktree-lineage-pruning', () => ({
+vi.mock('../workspaces/catalog/worktree-lineage-pruning', () => ({
   pruneLineageForMissingRepoWorktrees: mocks.pruneLineage
 }))
 vi.mock('./worktrees/listing/authoritative-local-worktree-metadata-pruning', () => ({
@@ -51,7 +53,7 @@ import { getDefaultWorkspaceSession } from '../../shared/constants'
 
 const path = '/remote/repository'
 const rows = [{ path, head: 'abc', branch: 'main', isBare: false, isMainWorktree: true }]
-const channels = ['legacyDetected', 'hostDetected', 'list', 'listAll', 'known'] as const
+const channels = ['legacyDetected', 'hostDetected', 'known'] as const
 function fixture(fields: Pick<Repo, 'connectionId' | 'executionHostId'>) {
   const repo = hydrateRepo(
     { id: 'repo', path, displayName: 'repo', badgeColor: '#000', addedAt: 0, ...fields },
@@ -70,7 +72,6 @@ function fixture(fields: Pick<Repo, 'connectionId' | 'executionHostId'>) {
     getAllWorkspaceLineage: () => ({}),
     removeWorktreeLineage: vi.fn(),
     captureNativeLocalWorktreeMetadataScanExpectation: () => undefined,
-    // Read by main's switch-on layout purge after a listing.
     getWorkspaceSessionHostIds: () => ['local'],
     getWorkspaceSession: () => getDefaultWorkspaceSession(),
     removeWorkspaceSessionStateForWorktree: vi.fn()
@@ -104,10 +105,7 @@ function invoke(channel: (typeof channels)[number]) {
   if (channel === 'hostDetected') {
     return mocks.handlers.get('worktrees:listDetected')!(null, hostArgs)
   }
-  if (channel === 'known') {
-    return mocks.handlers.get('worktrees:listKnownForExecutionHost')!(null, hostArgs)
-  }
-  return mocks.handlers.get(`worktrees:${channel}`)!(null, { repoId: 'repo' })
+  return mocks.handlers.get('worktrees:listKnownForExecutionHost')!(null, hostArgs)
 }
 beforeEach(() => {
   vi.clearAllMocks()
@@ -122,7 +120,6 @@ describe.each([
   { hostEncoding: 'canonical', fields: { executionHostId: 'ssh:host-a' as const } },
   { hostEncoding: 'legacy', fields: { connectionId: 'host-a' } }
 ])('$hostEncoding SSH listing', ({ fields }) => {
-  // An `ssh:` host is not served here: every channel answers from persisted metadata.
   it.each(channels)('answers %s from metadata, never from this machine', async (channel) => {
     fixture(fields)
     const result = await invoke(channel)
@@ -133,10 +130,8 @@ describe.each([
       })
     } else if (channel === 'known') {
       expect(result).toMatchObject({ status: 'complete', result: { authoritative: false } })
-    } else if (channel === 'legacyDetected') {
-      expect(result).toMatchObject({ authoritative: false })
     } else {
-      expect(result).toEqual([])
+      expect(result).toMatchObject({ authoritative: false })
     }
     expect(mocks.git).not.toHaveBeenCalled()
     expect(mocks.roots).not.toHaveBeenCalled()

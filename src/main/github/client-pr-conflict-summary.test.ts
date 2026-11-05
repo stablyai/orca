@@ -1,3 +1,5 @@
+import type * as GitExecFileModule from '../git/command-runner/git-exec-file'
+import type * as GhExecFileModule from '../git/command-runner/gh-exec-file'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as GithubApiRepositoryModule from './github-api-repository'
 import type * as GitHubEnterpriseRepositoryModule from './github-enterprise-repository'
@@ -9,6 +11,16 @@ const { clientMocks, moduleMocks } = await vi.hoisted(async () => {
 
 vi.mock('./gh-utils', () => moduleMocks.ghUtilsModuleMock(clientMocks))
 vi.mock('../git/runner', () => moduleMocks.gitRunnerModuleMock(clientMocks))
+
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<typeof GitExecFileModule>()),
+  gitExecFileAsync: clientMocks.gitExecFileAsyncMock
+}))
+
+vi.mock('../git/command-runner/gh-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<typeof GhExecFileModule>()),
+  ghExecFileAsync: clientMocks.ghExecFileAsyncMock
+}))
 vi.mock('../git/local-git-object-quarantine', () =>
   moduleMocks.localGitObjectQuarantineModuleMock()
 )
@@ -322,9 +334,7 @@ describe('getPRForBranch', () => {
       baseRefOid: 'base-oid',
       headRefOid: 'head-oid'
     }
-    // Why a second head OID: identical inputs now hit the summary result
-    // cache outright; a pushed head re-derives and must still skip the
-    // unsupported --merge-base retry via the capability cache.
+    // Change head OID to bypass the result cache while retaining the learned Git capability.
     const pushedBranchLookup = { ...branchLookup, head: { ref: 'feature/test', sha: 'head-oid-2' } }
     const pushedExactLookup = { ...exactLookup, headRefOid: 'head-oid-2' }
     ghExecFileAsyncMock

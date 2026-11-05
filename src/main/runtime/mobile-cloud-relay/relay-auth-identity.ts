@@ -6,7 +6,6 @@ export type RelayAuthContext = {
   relayEntitled: boolean
 }
 
-// The one key that ties brokers, demand and revokes to the account that owns them.
 export function relayIdentityKey(identity: RelayIdentity): string {
   return `${identity.userId}\0${identity.profileId}\0${identity.organizationId}`
 }

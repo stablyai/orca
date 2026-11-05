@@ -2,10 +2,11 @@ import { ProducerRevision } from './producer-revision'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
   isFreshNonDoneAgentStatus,
-  type AgentStatusIpcPayload
-} from '../../../shared/agent-status-types'
-import { agentStatusEvidenceObservedAt } from '../../../shared/agent-status-freshness'
-import { resolveAgentStatusWorktreeId } from '../../../shared/agent-status-worktree-attribution'
+  agentStatusEvidenceObservedAt
+} from '../../../shared/agent-status/contracts/agent-status-freshness'
+import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
+
+import { resolveAgentStatusWorktreeId } from '../../../shared/agent-status/identity/agent-status-worktree-attribution'
 import {
   IDLE_WORKSPACE_ACTIVITY,
   isIdleWorkspaceActivity,
@@ -36,11 +37,7 @@ const AGENT_FRESHNESS_DEADLINE = 'agent-freshness'
 
 type AgentPane = { worktreeId: string; status: LiveAgentWorktreeStatus; staleAt: number }
 
-/**
- * Per-workspace activity facts the sidebar builder reads, kept current one workspace at a time.
- * Surfaces are re-read when the runtime publishes a workspace; agent rows follow the hook server's
- * per-row mutations, so a status ping re-derives one pane and never re-reads surfaces.
- */
+/** Refresh surfaces per workspace publication; hook mutations re-derive only their pane without re-reading surfaces. */
 export class WorkspaceActivityFactsProducer {
   private readonly facts = new Map<string, WorkspaceActivityFacts>()
   private readonly agentPanes = new Map<string, AgentPane>()

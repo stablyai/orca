@@ -1,4 +1,3 @@
-// The one place an orchestration address becomes a party, so no two sites can disagree on who it names.
 import {
   formatOrcaSessionAddress,
   isOrcaSessionId,
@@ -10,8 +9,10 @@ import {
   isRecordedStructuredWorkerSession,
   resolveStructuredWorkerIdentity,
   resolveStructuredWorkerIdentityForRoot
-} from '../structured-worker-authority'
+} from './terminal-authority/structured-sessions/structured-worker-authority'
+import type { StructuredWorkerIdentity } from './terminal-authority/structured-sessions/structured-worker-identity'
 import { canonicalOrcaSessionId } from './canonical-orca-session-id'
+import type { AgentSessionRecordReader } from './structured-session-lineage'
 import type { OrchestrationDb } from './db'
 import { mailboxAddressOf, type OrchestrationCallerIdentity } from './orchestration-caller-identity'
 import { OrchestrationError } from './orchestration-error'
@@ -35,23 +36,41 @@ export const ORCHESTRATION_TARGET_PARAM: Readonly<
   'orchestration.inbox': 'terminal',
   'orchestration.sessionAddress': 'sessionId',
   'orchestration.partyLocation': 'address',
+  'orchestration.partyOpen': 'address',
   'orchestration.workerStart': 'terminal'
 }
 
 /** The party an Orca session id names. Throws when it is a worker this host lost the identity of. */
 export function resolveOrcaSessionParty(
   orcaSessionId: OrcaSessionId,
-  db: OrchestrationDb | null | undefined
+  db: OrchestrationDb | null | undefined,
+  store?: Pick<AgentSessionRecordReader, 'listRecords'> | null
 ): OrchestrationSessionParty {
-  const id = canonicalOrcaSessionId(orcaSessionId)
+  const id = canonicalOrcaSessionId(orcaSessionId, store)
   const worker = resolveStructuredWorkerIdentityForRoot(id, db)
-  if (!worker && db && isRecordedStructuredWorkerSession(id, db)) {
-    // Why: handle-less, it would split one worker into two parties and bind like a chat.
+  const party = sessionPartyFromWorkerIdentity(
+    id,
+    worker,
+    !worker && Boolean(db && isRecordedStructuredWorkerSession(id, db))
+  )
+  if (!party) {
+    // Without its handle, one worker would split into two parties and bind as a chat.
     throw new OrchestrationError(
       CODES.notLive,
       `Agent session ${id} is a structured worker whose worker identity this host no longer has, so orchestration cannot address it. No effects were applied.`,
       NO_EFFECTS
     )
+  }
+  return party
+}
+
+export function sessionPartyFromWorkerIdentity(
+  id: OrcaSessionId,
+  worker: Pick<StructuredWorkerIdentity, 'handle' | 'paneKey'> | null,
+  recordedWorker: boolean
+): OrchestrationSessionParty | undefined {
+  if (!worker && recordedWorker) {
+    return undefined
   }
   const key = { terminalHandle: worker?.handle ?? null, orcaSessionId: id }
   return {
@@ -105,10 +124,7 @@ export function resolveDeclaredCallerParty(
   return party
 }
 
-/**
- * A Dispatch assignee: a terminal, a structured worker, or a chat named by its Orca session ID. A
- * chat's party is its `/clear` root address, which its own session id resolves to when it reports.
- */
+/** Resolve terminals, workers and chats; chat assignments use the /clear root address for later reports. */
 export function resolveDispatchAssigneeParty(
   address: string,
   db: OrchestrationDb | null | undefined

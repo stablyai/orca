@@ -1,0 +1,98 @@
+import type { CommitMessageAiModelCapability } from '../generation/commit-message-ai-types'
+import type { TuiAgent } from '../../../agent-launch/catalog/tui-agent'
+import type { CustomAgentId } from '../generation/commit-message-agent-spec'
+import type { SourceControlCustomAction } from './source-control-custom-actions'
+import type {
+  SourceControlAiActionDefaults,
+  SourceControlActionLaunchPreferences,
+  SourceControlActionSurface,
+  SourceControlActionRecipe,
+  SourceControlActionId,
+  SourceControlTextActionId,
+  AiTextActionId
+} from '../recipes/source-control-ai-actions'
+
+export type AiTextOperation = AiTextActionId
+export type SourceControlAiOperation = SourceControlTextActionId
+
+export type SourceControlAiModelChoice = {
+  selectedModelByAgent?: Partial<Record<TuiAgent, string>>
+  selectedModelByAgentByHost?: Partial<Record<string, Partial<Record<TuiAgent, string>>>>
+  selectedThinkingByModel?: Record<string, string>
+}
+
+export type SourceControlAiPrCreationDefaults = {
+  draft?: boolean
+  useTemplate?: boolean
+  generateDetailsOnOpen?: boolean
+  openAfterCreate?: boolean
+}
+
+export type SourceControlAiSettings = {
+  enabled: boolean
+  actions?: SourceControlAiActionDefaults
+  agentId: TuiAgent | 'custom' | null
+  selectedModelByAgent: Partial<Record<TuiAgent, string>>
+  selectedModelByAgentByHost?: Partial<Record<string, Partial<Record<TuiAgent, string>>>>
+  discoveredModelsByAgent?: Partial<Record<TuiAgent, CommitMessageAiModelCapability[]>>
+  discoveredModelsByAgentByHost?: Partial<
+    Record<string, Partial<Record<TuiAgent, CommitMessageAiModelCapability[]>>>
+  >
+  selectedThinkingByModel: Record<string, string>
+  customAgentCommand: string
+  instructionsByOperation: Partial<Record<AiTextOperation, string>>
+  modelOverridesByOperation?: Partial<Record<AiTextOperation, SourceControlAiModelChoice>>
+  prCreationDefaults?: SourceControlAiPrCreationDefaults
+  /** User-defined pull request actions listed beside Start/Resume workspace. */
+  customActions?: SourceControlCustomAction[]
+  /** @deprecated use actions instead. Kept for automatic migration and rollback compatibility. */
+  launchActionDefaults?: SourceControlAiActionDefaults
+}
+
+export type SourceControlAiSettingsPatch =
+  | Partial<SourceControlAiSettings>
+  | ((current: SourceControlAiSettings) => Partial<SourceControlAiSettings>)
+
+export type RepoSourceControlAiOverrides = {
+  enabled?: boolean
+  customAgentCommand?: string
+  modelOverridesByOperation?: Partial<Record<SourceControlAiOperation, SourceControlAiModelChoice>>
+  instructionsByOperation?: Partial<Record<SourceControlAiOperation, string | null>>
+  actionOverrides?: Partial<
+    Record<
+      SourceControlActionId,
+      {
+        agentId?: TuiAgent | CustomAgentId | null
+        commandInputTemplate?: string | null
+        agentArgs?: string | null
+        argumentChoices?: SourceControlActionRecipe['argumentChoices']
+        launchPreferences?: SourceControlActionLaunchPreferences
+        surface?: SourceControlActionSurface
+      }
+    >
+  >
+  prCreationDefaults?: {
+    draft?: boolean | null
+    useTemplate?: boolean | null
+    generateDetailsOnOpen?: boolean | null
+    openAfterCreate?: boolean | null
+  }
+}
+
+export type CompleteSourceControlActionRecipe = {
+  agentId: TuiAgent | CustomAgentId | null
+  commandInputTemplate: string
+  agentArgs?: string | null
+  argumentChoices?: SourceControlActionRecipe['argumentChoices']
+  launchPreferences?: SourceControlActionLaunchPreferences
+  surface?: SourceControlActionSurface
+}
+
+export type WritableRepoSourceControlAiOverrides = {
+  enabled?: boolean
+  customAgentCommand?: string
+  modelOverridesByOperation?: Partial<Record<SourceControlAiOperation, SourceControlAiModelChoice>>
+  instructionsByOperation?: Partial<Record<SourceControlAiOperation, string>>
+  actionOverrides?: RepoSourceControlAiOverrides['actionOverrides']
+  prCreationDefaults?: SourceControlAiPrCreationDefaults
+}

@@ -2,9 +2,12 @@ import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import {
   folderWorkspaceToWorktree,
   getFolderWorkspaceHostIdentity
-} from '../../../../../../shared/folder-workspace-worktree'
-import { getWorktreeExecutionHostId } from '../../../../../../shared/execution-host'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/folder-workspaces/folder-workspace-worktree'
+import {
+  getWorktreeExecutionHostId,
+  type ExecutionHostId
+} from '../../../../../../shared/execution-host'
+
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import {
   composeWorktreeHostIdentity,
@@ -124,8 +127,7 @@ export function findPreferredRenderRowIndexForWorktreeIdentity(
   let fallbackIndex = -1
   for (let index = 0; index < renderRows.length; index++) {
     const row = renderRows[index]
-    // Why: host-qualified reveals are emitted for folder workspaces too, and a
-    // walker that only knows item rows returns -1 so the reveal never lands.
+    // Host-qualified reveals include folder rows, not just worktree item rows.
     if (row.type === 'folder-workspace') {
       if (
         folderWorkspaceKey(row.folderWorkspace.id) === worktree.id &&

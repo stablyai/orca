@@ -1,12 +1,11 @@
-// Layout-owner build: the window's own new tab reaches main's start through the desktop's real
-// runtime IPC channel, which labels itself a client; a paired caller asking the same is refused.
+// Main-owned layout accepts tab starts from its window's real runtime IPC path, while refusing paired callers.
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../runtime/rpc/dispatcher'
 import { TERMINAL_LIFECYCLE_METHODS } from '../runtime/rpc/methods/terminal/terminal-lifecycle-methods'
 import {
   setupLayoutOwnerRuntime,
   WORKTREE_ID
-} from '../runtime/orca-runtime-layout-owner-start-fixture'
+} from '../runtime/orca-runtime-tests/orca-runtime-layout-owner-start-fixture'
 
 const { handleMock } = vi.hoisted(() => ({ handleMock: vi.fn() }))
 

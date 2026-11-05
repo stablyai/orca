@@ -1,13 +1,18 @@
-import { memo, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
+import { autoUpdate, computePosition, offset, size } from '@floating-ui/dom'
+import { memo, useEffect, useRef, useLayoutEffect, useState } from 'react'
 import { Package, RotateCcw } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { cn } from '@/lib/utils'
 import type { SkillSourceKind } from '../../../../shared/skills'
 import { FilenameFirstPath } from '@/components/file-path-cursor-tooltip'
 import { FileTypeIcon } from '@/components/FileTypeIcon'
-import type { ComposerAutocomplete, NativeChatPickerItem } from './native-chat-composer-state'
+import type { ComposerAutocomplete } from '../../../../shared/native-chat/input/native-chat-composer-autocomplete'
+import type { NativeChatPickerItem } from '../../../../shared/native-chat/input/native-chat-picker-items'
 import type { NativeChatMentionFiles } from './use-native-chat-mention-files'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
+import { localizeSlashCommandDescription } from './native-chat-slash-command-descriptions'
 
 export const NativeChatPickerMenu = memo(function NativeChatPickerMenu({
   autocomplete,
@@ -22,6 +27,7 @@ export const NativeChatPickerMenu = memo(function NativeChatPickerMenu({
   onChoose: (item: NativeChatPickerItem) => void
   onRetry: () => void
 }): React.JSX.Element {
+  useUiLanguageRevision()
   const activeItemRef = useRef<HTMLButtonElement | null>(null)
   const commands = autocomplete.items.filter(
     (item): item is Extract<NativeChatPickerItem, { kind: 'command' }> => item.kind === 'command'
@@ -182,10 +188,8 @@ function PickerOption({
 }): React.JSX.Element {
   const annotation = getPickerAnnotation(item)
   const description =
-    item.kind === 'command' &&
-    item.name === 'clear' &&
-    item.description === 'Clear conversation context'
-      ? translate('components.native-chat.composer.clearDescription', 'Clear conversation context')
+    item.kind === 'command'
+      ? localizeSlashCommandDescription(item.name, item.description)
       : item.description
   return (
     <PickerOptionButton
@@ -231,14 +235,57 @@ function PickerListbox({
   id: string
   children: React.ReactNode
 }): React.JSX.Element {
+  const marker = useRef<HTMLSpanElement>(null)
+  const listbox = useRef<HTMLDivElement>(null)
+  const [container, setContainer] = useState<HTMLElement | null>(null)
+  useLayoutEffect(() => {
+    setContainer(marker.current?.closest<HTMLElement>('.native-chat-appearance') ?? document.body)
+  }, [])
+  useLayoutEffect(() => {
+    const anchor = marker.current?.parentElement
+    const floating = listbox.current
+    if (!anchor || !floating) {
+      return
+    }
+    // autoUpdate also follows moves with no resize or scroll, like dragging the floating panel.
+    return autoUpdate(anchor, floating, () => {
+      void computePosition(anchor, floating, {
+        strategy: 'fixed',
+        placement: 'top-start',
+        middleware: [
+          offset(4),
+          size({
+            padding: 8,
+            apply: ({ rects, availableHeight }) => {
+              floating.style.width = `${rects.reference.width}px`
+              floating.style.maxHeight = `min(calc(var(--spacing) * 72), ${Math.max(0, availableHeight)}px)`
+            }
+          })
+        ]
+      }).then(({ x, y }) => {
+        floating.style.left = `${x}px`
+        floating.style.top = `${y}px`
+      })
+    })
+  }, [container])
   return (
-    <div
-      id={id}
-      role="listbox"
-      className="scrollbar-sleek absolute bottom-full left-0 right-0 z-20 mb-1 max-h-72 overflow-y-auto rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-[0_10px_24px_rgba(0,0,0,0.18)]"
-    >
-      {children}
-    </div>
+    <>
+      <span ref={marker} />
+      {container &&
+        createPortal(
+          <div
+            ref={listbox}
+            id={id}
+            role="listbox"
+            data-focus-behavior="composer-suggestions"
+            // Inside the launch setup (a popover or the new-tab menu's submenu), take the menu layer those overlays use.
+            className={`scrollbar-sleek fixed left-0 top-0 overflow-y-auto rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-floating ${marker.current?.closest('[data-slot="popover-content"], [data-slot="dropdown-menu-sub-content"]') ? 'z-[70]' : 'z-50'}`}
+          >
+            {children}
+          </div>,
+          container
+        )}
+    </>
   )
 }
 
@@ -263,16 +310,16 @@ function PickerOptionButton({
       aria-selected={selected}
       type="button"
       onPointerDown={(event) => {
-        // Why: the textarea owns query and caret state, so pointer acceptance
-        // must run before the browser transfers focus to this row.
+        // Accept before focus transfer because the textarea owns query and caret state.
         event.preventDefault()
         if (event.button === 0) {
           onChoose()
         }
       }}
       className={cn(
-        'flex w-full items-start gap-2 rounded-md border border-transparent px-2 py-1.5 text-left text-sm hover:bg-accent hover:text-accent-foreground',
-        selected && 'border-border bg-accent text-accent-foreground'
+        'flex w-full items-start gap-2 rounded-md border border-transparent px-2 py-1.5 text-left text-sm hover:bg-accent hover:text-accent-foreground hover:[--muted-foreground:var(--accent-foreground)]',
+        selected &&
+          'border-border bg-accent text-accent-foreground [--muted-foreground:var(--accent-foreground)]'
       )}
     >
       {children}
@@ -291,8 +338,7 @@ function getPickerAnnotation(item: NativeChatPickerItem): string | null {
     )
   }
   if (item.kind === 'skill' && item.sources.length > 1) {
-    // Why: name the interpolation `sourceCount`, not `count` — a `count` option
-    // makes i18next resolve plural-suffixed keys that these locales don't define.
+    // Use sourceCount because i18next treats count as pluralization input and these keys have no plural variants.
     return translate(
       'components.native-chat.composer.skillMultipleSources',
       '{{sourceCount}} sources - agent resolves',
@@ -323,16 +369,16 @@ export const NativeChatMentionMenu = memo(function NativeChatMentionMenu({
   listboxId: string
   onChoose: (path: string) => void
 }): React.JSX.Element {
+  useUiLanguageRevision()
   const activeItemRef = useRef<HTMLButtonElement | null>(null)
-  const { files } = mention
-  const selectedIndex = Math.min(activeIndex, files.length - 1)
+  const selectedIndex = Math.min(activeIndex, mention.files.length - 1)
 
   useEffect(() => {
     activeItemRef.current?.scrollIntoView({ block: 'nearest' })
-  }, [selectedIndex, files])
+  }, [selectedIndex, mention.files])
 
   const statusText =
-    files.length > 0
+    mention.files.length > 0
       ? null
       : mention.loading
         ? translate('components.native-chat.composer.loadingFiles', 'Loading files...')
@@ -342,23 +388,21 @@ export const NativeChatMentionMenu = memo(function NativeChatMentionMenu({
 
   return (
     <PickerListbox id={listboxId}>
-      {files.map((path, index) => {
-        return (
-          <PickerOptionButton
-            key={path}
-            id={`${listboxId}-option-${index}`}
-            selected={index === selectedIndex}
-            activeItemRef={activeItemRef}
-            onChoose={() => onChoose(path)}
-          >
-            <FileTypeIcon
-              filePath={path}
-              className="mt-0.5 size-3.5 shrink-0 text-muted-foreground"
-            />
-            <FilenameFirstPath path={path} />
-          </PickerOptionButton>
-        )
-      })}
+      {mention.files.map((path, index) => (
+        <PickerOptionButton
+          key={path}
+          id={`${listboxId}-option-${index}`}
+          selected={index === selectedIndex}
+          activeItemRef={activeItemRef}
+          onChoose={() => onChoose(path)}
+        >
+          <FileTypeIcon
+            filePath={path}
+            className="mt-0.5 size-3.5 shrink-0 text-muted-foreground"
+          />
+          <FilenameFirstPath path={path} />
+        </PickerOptionButton>
+      ))}
       {statusText ? (
         <PickerStatus>
           {mention.loading ? <LoadingSpinner className="size-3.5" /> : null}

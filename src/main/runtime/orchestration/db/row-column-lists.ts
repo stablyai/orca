@@ -1,11 +1,7 @@
 import type { AttemptObservationStorageRow } from './attempt-observation-store'
 import type { DispatchContextRow, RemoteDispatchAttachmentRow, RunRow, TaskRow } from '../types'
 
-// Why: `SyncDatabase` refuses to cache any `SELECT *` (node:sqlite can build the first row after a
-// schema change from stale column names), so a wildcard read recompiles its SQL on every call.
-// Spelling the projection out makes the hot-path statements cacheable by that existing LRU.
-// Drift is caught twice: `satisfies` + the exhaustiveness assertions below pin list↔type at tsc,
-// and `row-column-lists.test.ts` pins list↔schema against a freshly migrated database.
+// Explicit projections enable SyncDatabase caching; type exhaustiveness and schema tests prevent column drift.
 
 export const RUN_COLUMNS = [
   'id',
@@ -66,7 +62,9 @@ export const DISPATCH_CONTEXT_COLUMNS = [
   'dispatched_at',
   'completed_at',
   'created_at',
-  'last_heartbeat_at'
+  'last_heartbeat_at',
+  'follow_up_of_dispatch_id',
+  'follow_up_mail_at'
 ] as const satisfies readonly (keyof DispatchContextRow)[]
 
 export const ATTEMPT_OBSERVATION_FACT_COLUMNS = [
@@ -109,8 +107,7 @@ export const REMOTE_DISPATCH_ATTACHMENT_COLUMNS = [
   'updated_at'
 ] as const satisfies readonly (keyof RemoteDispatchAttachmentRow)[]
 
-// Compile check: a row field added without its column here would silently vanish from the
-// projection that used to be `SELECT *`, so the missing key must fail the build.
+// Fail compilation if a row field is missing from its projection.
 type UnprojectedRunColumn = Exclude<keyof RunRow, (typeof RUN_COLUMNS)[number]>
 type UnprojectedTaskColumn = Exclude<keyof TaskRow, (typeof TASK_COLUMNS)[number]>
 type UnprojectedDispatchContextColumn = Exclude<

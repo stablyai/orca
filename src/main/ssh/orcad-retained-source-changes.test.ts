@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { Repo } from '../../shared/repo-types'
 import type { SshTarget } from '../../shared/ssh-types'
-import { closeTestStores, createSqliteTestStore } from '../persistence-test-harness'
+import { closeTestStores, createSqliteTestStore } from '../persistence/persistence-test-harness'
 import { Store } from '../persistence/loading-store/store'
 import { SshConnectionStore } from './connection/ssh-connection-store'
 import { orcadMigrationCutoverFixture } from './orcad-migration-cutover-fixture'
@@ -46,7 +46,7 @@ function repo(id: string, path: string): Repo {
   }
 }
 
-/** A host moved and committed: its manifest is the source as it stood, its rows kept and hidden. */
+/** Commit the initial source manifest while retaining hidden desktop rows. */
 function movedHost(): void {
   const manifest = createOrcadMigrationManifest(store, store.getSshTarget(TARGET.id)!, {
     migrationId: 'm-1',

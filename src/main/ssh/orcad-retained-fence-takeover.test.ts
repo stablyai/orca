@@ -24,8 +24,7 @@ async function sh(command: string): Promise<string> {
   return result.stdout.trim()
 }
 
-// BUG-17: a recovery that took a fence over, failed and retained it left a fresh lock behind, so
-// every later recovery read "still fresh" and the host could never be recovered.
+// BUG-17: failed recovery retained a newly fresh fence that could block every later takeover forever.
 describe.skipIf(process.platform === 'win32')('a retained activation fence', () => {
   it('stays fresh to stale takeover until its holder marks it ownerless', async () => {
     const root = mkdtempSync(join(tmpdir(), 'orcad-fence-'))

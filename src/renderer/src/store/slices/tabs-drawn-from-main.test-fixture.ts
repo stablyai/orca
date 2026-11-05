@@ -1,12 +1,4 @@
-// A switch-on store test's main: main holds the layout the store shows, answers each layout
-// command the window sends by applying it, and its frames draw the store's tabs. Inert with the
-// switch off, where the window draws its own tabs. The test file installs the transport first:
-//   vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
-//     (await import('@/runtime/layout-apply-test-transport.test-fixture'))
-//       .runtimeRpcClientWithLayoutApply(await importOriginal()))
-//   vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
-//     (await import('@/runtime/layout-apply-test-transport.test-fixture'))
-//       .runtimeLayoutClientWithTestFrames(await importOriginal()))
+// With main layout ownership, emulate command replies and frames; install runtimeRpcClientWithLayoutApply/runtimeLayoutClientWithTestFrames mocks first. Inert for window-owned layouts.
 
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'

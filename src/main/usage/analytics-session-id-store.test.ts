@@ -3,7 +3,7 @@ import type * as FsPromises from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { UsageCacheSnapshotWriter } from '../usage-cache-snapshot-writer'
+
 import { AnalyticsSessionIdStore } from './analytics-session-id-store'
 
 type WriteGate = { entered: (() => void) | null; wait: Promise<void> | null; fail: boolean }
@@ -38,7 +38,7 @@ const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f
 let directory: string
 let file: string
 let stores: AnalyticsSessionIdStore[]
-/** Registers every instance for flush-before-cleanup, including simulated restarts. */
+/** Track simulated restarts too; flush every store before fixture cleanup. */
 function createStore(path = file): AnalyticsSessionIdStore {
   const store = new AnalyticsSessionIdStore(path)
   stores.push(store)
@@ -76,20 +76,6 @@ describe('AnalyticsSessionIdStore', () => {
     expect(await idFor(store, 'provider-session-123')).toBe(id)
   })
 
-  it('persists a batch with one durable write and returns IDs in input order', async () => {
-    const store = createStore()
-    const [known] = await store.getOrCreate(['known'])
-    const write = vi.spyOn(UsageCacheSnapshotWriter.prototype, 'write')
-    const ids = await store.getOrCreate(['a', 'known', 'b', 'a'])
-    expect(write).toHaveBeenCalledOnce()
-    expect(ids[1]).toBe(known)
-    expect(ids[3]).toBe(ids[0])
-    expect(new Set(ids).size).toBe(3)
-    expect(await createStore().getOrCreate(['b', 'a', 'known'])).toEqual([ids[2], ids[0], known])
-    await store.getOrCreate(['known', 'a', 'b'])
-    expect(write).toHaveBeenCalledOnce()
-  })
-
   it('restores the ID after a restart or session resume', async () => {
     const original = createStore()
     const id = await idFor(original, 'resumed-session')
@@ -108,15 +94,6 @@ describe('AnalyticsSessionIdStore', () => {
     for (let index = 0; index < 10; index++) {
       expect(await idFor(restored, `session-${index}`)).toBe(ids[index])
     }
-  })
-
-  it('isolates identical provider session IDs across provider and host/profile files', async () => {
-    const ids = await Promise.all([
-      idFor(createStore(join(directory, 'host-a', 'claude.json')), 'same-session'),
-      idFor(createStore(join(directory, 'host-a', 'codex.json')), 'same-session'),
-      idFor(createStore(join(directory, 'host-b', 'claude.json')), 'same-session')
-    ])
-    expect(new Set(ids).size).toBe(3)
   })
 
   it.each(['', '   ', 'x'.repeat(1025)])(

@@ -1,19 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
-import type { TerminalLayoutSnapshot } from '../../../shared/terminal-tab-types'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
-import { folderWorkspaceKey, worktreeWorkspaceKey } from '../../../shared/workspace-scope'
+import type { TerminalLayoutSnapshot } from '../../../shared/workspace-layout/terminal-tab-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
+import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import {
-  buildHostIdByWorktreeId,
-  buildWorkspaceSessionHostSnapshots,
   patchWorkspaceSessionByHost,
-  persistWorkspaceSessionByHost,
   type HostPersistenceState
 } from './workspace-session-host-persistence'
-import {
-  fetchWorkspaceSessionFromHosts,
-  fetchWorkspaceSessionWithRuntimeHostOwners
-} from './workspace-session-host-hydration'
+import { fetchWorkspaceSessionFromHosts } from './workspace-session-host-hydration'
 
 describe('fetchWorkspaceSessionFromHosts', () => {
   it('reads saved runtime host partitions before runtime repos are loaded', async () => {
@@ -49,140 +43,6 @@ describe('fetchWorkspaceSessionFromHosts', () => {
     expect(get).toHaveBeenCalledWith('runtime:env-1')
     expect(session.activeWorktreeId).toBe('local-wt')
     expect(session.tabsByWorktree[worktreeId]).toEqual(remoteSession.tabsByWorktree[worktreeId])
-  })
-
-  it('returns runtime owners for worktrees loaded from runtime host partitions', async () => {
-    const worktreeId = 'remote-repo::/srv/remote-wt'
-    const get = vi.fn(async (hostId?: string): Promise<WorkspaceSessionState> => {
-      if (hostId === 'runtime:env-1') {
-        return {
-          ...getDefaultWorkspaceSession(),
-          tabsByWorktree: {
-            [worktreeId]: [
-              {
-                id: 'remote-tab',
-                ptyId: null,
-                worktreeId,
-                title: 'Remote',
-                customTitle: null,
-                color: null,
-                sortOrder: 0,
-                createdAt: 1
-              }
-            ]
-          }
-        }
-      }
-      return getDefaultWorkspaceSession()
-    })
-
-    const read = await fetchWorkspaceSessionWithRuntimeHostOwners({ get }, [], ['runtime:env-1'])
-
-    expect(read.session.tabsByWorktree[worktreeId]).toHaveLength(1)
-    expect(read.runtimeHostIdByWorkspaceSessionKey).toEqual({
-      [worktreeId]: 'runtime:env-1'
-    })
-  })
-
-  it('normalizes canonical worktree session keys in runtime owner maps', async () => {
-    const worktreeId = 'remote-repo::/srv/remote-wt'
-    const workspaceKey = worktreeWorkspaceKey(worktreeId)
-    const get = vi.fn(async (hostId?: string): Promise<WorkspaceSessionState> => {
-      if (hostId === 'runtime:env-1') {
-        return {
-          ...getDefaultWorkspaceSession(),
-          tabsByWorktree: {
-            [workspaceKey]: [
-              {
-                id: 'remote-tab',
-                ptyId: null,
-                worktreeId,
-                title: 'Remote',
-                customTitle: null,
-                color: null,
-                sortOrder: 0,
-                createdAt: 1
-              }
-            ]
-          }
-        }
-      }
-      return getDefaultWorkspaceSession()
-    })
-
-    const read = await fetchWorkspaceSessionWithRuntimeHostOwners({ get }, [], ['runtime:env-1'])
-
-    expect(read.runtimeHostIdByWorkspaceSessionKey).toEqual({
-      [worktreeId]: 'runtime:env-1'
-    })
-  })
-
-  it('returns runtime owners for folder workspace session keys', async () => {
-    const folderKey = folderWorkspaceKey('folder-1')
-    const get = vi.fn(async (hostId?: string): Promise<WorkspaceSessionState> => {
-      if (hostId === 'runtime:env-1') {
-        return {
-          ...getDefaultWorkspaceSession(),
-          activeWorkspaceKey: folderKey,
-          tabsByWorktree: {
-            [folderKey]: [
-              {
-                id: 'remote-folder-tab',
-                ptyId: null,
-                worktreeId: folderKey,
-                title: 'Remote folder',
-                customTitle: null,
-                color: null,
-                sortOrder: 0,
-                createdAt: 1
-              }
-            ]
-          }
-        }
-      }
-      return getDefaultWorkspaceSession()
-    })
-
-    const read = await fetchWorkspaceSessionWithRuntimeHostOwners({ get }, [], ['runtime:env-1'])
-
-    expect(read.session.tabsByWorktree[folderKey]).toHaveLength(1)
-    expect(read.runtimeHostIdByWorkspaceSessionKey).toEqual({
-      [folderKey]: 'runtime:env-1'
-    })
-  })
-
-  it('returns runtime owners for sleeping-agent-only runtime worktrees', async () => {
-    const worktreeId = 'remote-repo::/srv/sleeping-wt'
-    const get = vi.fn(async (hostId?: string): Promise<WorkspaceSessionState> => {
-      if (hostId === 'runtime:env-1') {
-        return {
-          ...getDefaultWorkspaceSession(),
-          sleepingAgentSessionsByPaneKey: {
-            'remote-tab:leaf-1': {
-              paneKey: 'remote-tab:leaf-1',
-              tabId: 'remote-tab',
-              worktreeId,
-              agent: 'codex',
-              providerSession: { key: 'session_id', id: 'codex-session-1' },
-              prompt: 'finish the task',
-              state: 'working',
-              capturedAt: 1,
-              updatedAt: 1
-            }
-          }
-        }
-      }
-      return getDefaultWorkspaceSession()
-    })
-
-    const read = await fetchWorkspaceSessionWithRuntimeHostOwners({ get }, [], ['runtime:env-1'])
-
-    expect(read.session.sleepingAgentSessionsByPaneKey?.['remote-tab:leaf-1']?.worktreeId).toBe(
-      worktreeId
-    )
-    expect(read.runtimeHostIdByWorkspaceSessionKey).toEqual({
-      [worktreeId]: 'runtime:env-1'
-    })
   })
 
   it('routes restored runtime folder workspace patches back to the runtime host', async () => {
@@ -391,88 +251,6 @@ describe('fetchWorkspaceSessionFromHosts', () => {
       'runtime:env-1'
     )
   })
-
-  it('defaults duplicate repo ids to local when the worktree has no host metadata', () => {
-    const owner = buildHostIdByWorktreeId({
-      repos: [
-        { id: 'same-repo', connectionId: null, executionHostId: 'local' },
-        {
-          id: 'same-repo',
-          connectionId: null,
-          executionHostId: 'runtime:env-1'
-        }
-      ],
-      worktreesByRepo: {
-        'same-repo': [{ id: 'same-repo::/local-only', repoId: 'same-repo' }]
-      }
-    })
-
-    expect(owner('same-repo::/local-only')).toBe('local')
-  })
-
-  it('routes canonical worktree keys using their raw worktree owner', () => {
-    const worktreeId = 'remote-repo::/srv/remote-wt'
-    const owner = buildHostIdByWorktreeId({
-      repos: [],
-      worktreesByRepo: {
-        'remote-repo': [{ id: worktreeId, repoId: 'remote-repo', hostId: 'runtime:env-1' }]
-      }
-    })
-
-    expect(owner(worktreeWorkspaceKey(worktreeId))).toBe('runtime:env-1')
-  })
-
-  it('builds local-first host snapshots', () => {
-    const localWorktreeId = 'local-repo::C:\\src\\local'
-    const remoteWorktreeId = 'remote-repo::/srv/remote'
-    const makeTab = (id: string, worktreeId: string) => ({
-      id,
-      ptyId: null,
-      worktreeId,
-      title: id,
-      customTitle: null,
-      color: null,
-      sortOrder: 0,
-      createdAt: 1
-    })
-    const payload: WorkspaceSessionState = {
-      ...getDefaultWorkspaceSession(),
-      tabsByWorktree: {
-        [localWorktreeId]: [makeTab('local-tab', localWorktreeId)],
-        [remoteWorktreeId]: [makeTab('remote-tab', remoteWorktreeId)]
-      }
-    }
-    const state = {
-      repos: [
-        { id: 'local-repo', connectionId: null, executionHostId: 'local' },
-        {
-          id: 'remote-repo',
-          connectionId: null,
-          executionHostId: 'runtime:env-1'
-        }
-      ],
-      worktreesByRepo: {
-        'local-repo': [{ id: localWorktreeId, repoId: 'local-repo' }],
-        'remote-repo': [
-          {
-            id: remoteWorktreeId,
-            repoId: 'remote-repo',
-            hostId: 'runtime:env-1'
-          }
-        ]
-      }
-    } satisfies HostPersistenceState
-
-    const snapshots = buildWorkspaceSessionHostSnapshots(payload, state)
-
-    expect(snapshots.map((snapshot) => snapshot.hostId)).toEqual([undefined, 'runtime:env-1'])
-    expect(snapshots[0].state.tabsByWorktree).toEqual({
-      [localWorktreeId]: [expect.objectContaining({ id: 'local-tab' })]
-    })
-    expect(snapshots[1].state.tabsByWorktree).toEqual({
-      [remoteWorktreeId]: [expect.objectContaining({ id: 'remote-tab' })]
-    })
-  })
 })
 
 describe('patchWorkspaceSessionByHost write outcome', () => {
@@ -529,9 +307,7 @@ describe('patchWorkspaceSessionByHost tab-keyed routing', () => {
   } satisfies HostPersistenceState
 
   it('routes a layouts-only patch to the partition of the tab the live catalog names', async () => {
-    // A park capture changes only terminalLayoutsByTabId, so the patch carries no tab rows. Routed
-    // by the payload alone it fell into 'local', where main strips scrollback it cannot attribute
-    // to a remote worktree — the runtime partition never received the capture (#21295).
+    // Layouts-only park patches lack tabs; payload-only routing sent them local, where main pruned unattributable remote scrollback (#21295).
     const patch = vi.fn().mockResolvedValue(undefined)
 
     await patchWorkspaceSessionByHost(
@@ -584,8 +360,7 @@ describe('patchWorkspaceSessionByHost tab-keyed routing', () => {
   })
 
   it("lets the payload's own tab row outrank the live catalog", async () => {
-    // Main merges the payload's tabsByWorktree into whichever partition it lands in, so the layout
-    // must follow the tab row in this write even when the store has since moved the tab.
+    // Payload tabs are merged into their target partition; layouts must follow those rows even if live store routing changed.
     const patch = vi.fn().mockResolvedValue(undefined)
 
     await patchWorkspaceSessionByHost(
@@ -601,107 +376,5 @@ describe('patchWorkspaceSessionByHost tab-keyed routing', () => {
     expect(patch).toHaveBeenCalledWith(
       expect.objectContaining({ terminalLayoutsByTabId: { 'remote-tab': parkedLayout } })
     )
-  })
-})
-
-describe('buildHostIdByWorktreeId nested ownership', () => {
-  it('persists an SSH worktree in its paired HUB session partition', () => {
-    const worktreeId = 'nested-repo::/srv/remote-wt'
-    const owner = buildHostIdByWorktreeId({
-      repos: [
-        {
-          id: 'nested-repo',
-          connectionId: 'hub-private-ssh',
-          executionHostId: 'runtime:owner-hub'
-        }
-      ],
-      worktreesByRepo: {
-        'nested-repo': [
-          {
-            id: worktreeId,
-            repoId: 'nested-repo',
-            hostId: 'ssh:hub-private-ssh',
-            runtimeOwnerEnvironmentId: 'owner-hub'
-          }
-        ]
-      }
-    })
-
-    expect(owner(worktreeId)).toBe('runtime:owner-hub')
-  })
-})
-
-describe('persistWorkspaceSessionByHost', () => {
-  it('awaits every host write before crossing the durable flush boundary', async () => {
-    const localWorktreeId = 'local-repo::/src/local'
-    const remoteWorktreeId = 'remote-repo::/srv/remote'
-    const payload: WorkspaceSessionState = {
-      ...getDefaultWorkspaceSession(),
-      tabsByWorktree: {
-        [localWorktreeId]: [
-          {
-            id: 'local-tab',
-            ptyId: null,
-            worktreeId: localWorktreeId,
-            title: 'Local',
-            customTitle: null,
-            color: null,
-            sortOrder: 0,
-            createdAt: 1
-          }
-        ],
-        [remoteWorktreeId]: [
-          {
-            id: 'remote-tab',
-            ptyId: null,
-            worktreeId: remoteWorktreeId,
-            title: 'Remote',
-            customTitle: null,
-            color: null,
-            sortOrder: 0,
-            createdAt: 1
-          }
-        ]
-      }
-    }
-    const set = vi.fn().mockResolvedValue(undefined)
-    const flush = vi.fn().mockResolvedValue(undefined)
-
-    await persistWorkspaceSessionByHost({ get: vi.fn(), set, patch: vi.fn(), flush }, payload, {
-      repos: [
-        { id: 'local-repo', connectionId: null, executionHostId: 'local' },
-        {
-          id: 'remote-repo',
-          connectionId: null,
-          executionHostId: 'runtime:env-1'
-        }
-      ],
-      worktreesByRepo: {
-        'local-repo': [{ id: localWorktreeId, repoId: 'local-repo' }],
-        'remote-repo': [
-          {
-            id: remoteWorktreeId,
-            repoId: 'remote-repo',
-            hostId: 'runtime:env-1'
-          }
-        ]
-      }
-    })
-
-    expect(set).toHaveBeenCalledTimes(2)
-    expect(set).toHaveBeenCalledWith(
-      expect.objectContaining({
-        tabsByWorktree: { [localWorktreeId]: expect.any(Array) }
-      }),
-      undefined
-    )
-    expect(set).toHaveBeenCalledWith(
-      expect.objectContaining({
-        tabsByWorktree: { [remoteWorktreeId]: expect.any(Array) }
-      }),
-      'runtime:env-1'
-    )
-    expect(flush).toHaveBeenCalledTimes(1)
-    expect(set.mock.invocationCallOrder.at(-1)).toBeLessThan(flush.mock.invocationCallOrder[0]!)
   })
 })

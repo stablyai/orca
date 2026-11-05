@@ -27,8 +27,7 @@ import { createBrowserUuid } from '@/lib/browser-uuid'
 export type SkillDeleteFlow = {
   /** False while the target is unresolved or the host predates the capability. */
   supported: boolean
-  /** Why it is unsupported — the two causes need different copy. Null when
-   *  delete is available. */
+  /** Distinguish unresolved-target and missing-capability causes; null means deletion is available. */
   unsupportedReason: string | null
   running: boolean
   result: SkillDeleteResult | null
@@ -102,10 +101,7 @@ export function useSkillDeleteFlow(
         const plan = await previewSkillDeletionOnRuntimeTarget(runtimeTarget, request)
         const actionable = plan.skills.filter((skill) => !skill.blocked)
         if (actionable.length === 0) {
-          // The preview already knows this would remove nothing. Offering a
-          // destructive confirm here is what let a blocked row be "deleted"
-          // over and over with no effect; say why instead, in the band, where
-          // it persists long enough to act on.
+          // Persist blocked reasons instead of offering destructive confirmation for a plan that removes nothing.
           setResult(blockedOnlyResult(plan))
           toast.error(skillDeleteNothingToDoLabel(plan.skills.length))
           return false
@@ -177,8 +173,7 @@ export function useSkillDeleteFlow(
   }
 }
 
-/** Turns a plan in which nothing is actionable into the same result shape the
- *  band already groups, so one component renders every skip reason. */
+/** Project non-actionable plans into the same per-reason result band as completed deletes. */
 function blockedOnlyResult(plan: SkillDeletePlan): SkillDeleteResult {
   return {
     operationId: plan.operationId,
@@ -196,8 +191,7 @@ function unsupportedReason(
   runtimeTarget: RuntimeClientTarget | null,
   capability: 'checking' | 'supported' | 'unsupported' | 'unavailable'
 ): string {
-  // The shared constant is the wire-side error text; what the user reads here
-  // goes through the catalog like every other string in this panel.
+  // Keep wire error constants separate from the translated explanation shown in this panel.
   if (capability === 'unavailable') {
     return translate(
       'auto.components.skills.SkillDelete.hostUnavailable',
@@ -216,7 +210,8 @@ function unsupportedReason(
 }
 
 function skillDeletedToast(count: number): string {
-  return count === 1
-    ? translate('auto.components.skills.count.deletedOne', 'Deleted {{count}} skill', { count })
-    : translate('auto.components.skills.count.deletedOther', 'Deleted {{count}} skills', { count })
+  return translate('auto.components.skills.count.deleted', 'Deleted {{count}} skills', {
+    count,
+    defaultValue_one: 'Deleted {{count}} skill'
+  })
 }

@@ -148,15 +148,22 @@ describe('JSON-lines RPC peer', () => {
     expect(onRecord).not.toHaveBeenCalled()
   })
 
-  it('closes on oversized records, with bounded diagnostics and no later dispatch', async () => {
+  it('skips an oversized event alone and keeps the stream', async () => {
     const onRecord = vi.fn()
-    const { peer, input, reply } = fixture({ onRecord }, { maxLineBytes: 64 })
-    const pending = expect(peer.request('get_state')).rejects.toThrow('size limit')
-    input.write(`{"type":"secret","text":"${'x'.repeat(100)}`)
+    const onOversizedEvent = vi.fn()
+    const { peer, input, reply } = fixture({ onRecord, onOversizedEvent }, { maxLineBytes: 128 })
+    const pending = peer.request('get_state')
+    input.write(`{"type":"tool_execution_end","result":"${'x'.repeat(200)}`)
+    input.write(`${'x'.repeat(200)}"}\n`)
     reply({ type: 'agent_settled' })
-    await pending
-    expect(peer.closed).toBe(true)
-    expect(onRecord).not.toHaveBeenCalled()
+    reply({ type: 'response', id: 'orca-1', command: 'get_state', success: true, data: {} })
+    await expect(pending).resolves.toEqual({})
+    expect(onOversizedEvent).toHaveBeenCalledExactlyOnceWith(
+      'tool_execution_end',
+      expect.stringMatching(/^\{"type":"tool_execution_end",/)
+    )
+    expect(onRecord).toHaveBeenCalledExactlyOnceWith({ type: 'agent_settled' })
+    expect(peer.closed).toBe(false)
   })
 
   it('fails only an opted-in read whose reply is oversized, then keeps the stream', async () => {
@@ -232,7 +239,9 @@ describe('JSON-lines RPC peer', () => {
     ['orca-optional-9007199254740992', 'response'],
     ['orca-1', 'response'],
     ['foreign', 'response'],
-    ['orca-optional-1', 'agent_end']
+    ['orca-optional-1', 'agent_end'],
+    [undefined, 'response'],
+    [undefined, 'extension_ui_request']
   ])('closes on an oversized record without issued optional ownership: %s %s', async (id, type) => {
     const { peer, input } = fixture({}, { maxLineBytes: 128 })
     const pending = expect(

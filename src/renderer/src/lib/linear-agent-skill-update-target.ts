@@ -9,8 +9,7 @@ export type LinearAgentSkillUpdateTarget = {
   skillName: typeof ORCA_LINEAR_SKILL_NAME | typeof LINEAR_TICKETS_SKILL_NAME
 }
 
-// Why: legacy-only installs must update and report freshness for the installed
-// legacy skill, while fresh/canonical/both-name states use the canonical name.
+// Use the installed legacy name only for legacy-only installs; canonical/fresh/both use the canonical skill.
 export function getLinearAgentSkillUpdateTarget(
   skills: readonly DiscoveredSkill[],
   installed: boolean

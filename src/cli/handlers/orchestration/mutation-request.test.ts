@@ -142,6 +142,7 @@ describe('callOrchestrationMutation runtime_unavailable retry', () => {
 
   it('gives up after about two minutes and prints the recovery command with the same id', async () => {
     vi.useFakeTimers()
+    const startedAt = Date.now()
     const { client, requestIds } = fakeClient((_attempt, options) => {
       throw unavailable(options)
     })
@@ -153,10 +154,20 @@ describe('callOrchestrationMutation runtime_unavailable retry', () => {
       undefined,
       RETRY_MS
     )
-    const settled = call.catch((error: unknown) => error)
-    await vi.advanceTimersByTimeAsync(RETRY_MS + 30_000)
+    let finishedAt: number | undefined
+    const settled = call.catch((error: unknown) => {
+      finishedAt = Date.now()
+      return error
+    })
+    await vi.advanceTimersByTimeAsync(RETRY_MS)
+    if (finishedAt === undefined) {
+      throw new Error('mutation kept retrying beyond its two-minute budget')
+    }
+    expect(finishedAt - startedAt).toBeGreaterThanOrEqual(RETRY_MS - 15_000)
+    const attempts = requestIds.length
+    await vi.advanceTimersByTimeAsync(30_000)
+    expect(requestIds).toHaveLength(attempts)
     const error = await settled
-    expect(requestIds.length).toBeGreaterThan(5)
     expect(new Set(requestIds).size).toBe(1)
     expect(error).toMatchObject({
       code: 'runtime_unavailable',
@@ -176,7 +187,7 @@ describe('callOrchestrationMutation runtime_unavailable retry', () => {
     })
   })
 
-  // Why: the fake runtime listens on a Unix socket path, which Windows does not accept.
+  // Windows cannot use this temporary Unix socket path.
   it.skipIf(process.platform === 'win32')(
     'reaches a runtime that comes back after the first attempt found it down',
     async () => {
@@ -191,7 +202,7 @@ describe('callOrchestrationMutation runtime_unavailable retry', () => {
           if (request.method === 'orchestration.send') {
             sendRequestIds.push(String(request.orchestrationRequestId))
             if (sendRequestIds.length === 1) {
-              // A runtime that drops the connection mid-request leaves the outcome unknown.
+              // Dropping the connection mid-request leaves the mutation outcome unknown.
               socket.destroy()
               return
             }
@@ -219,7 +230,7 @@ describe('callOrchestrationMutation runtime_unavailable retry', () => {
         undefined,
         RETRY_MS
       )
-      // The runtime is down for the first attempt: no metadata, so even the contract probe fails.
+      // Initial attempts have no metadata, so the contract probe fails until this runtime starts.
       await new Promise<void>((resolve) => server.listen(endpoint, resolve))
       writeFileSync(
         join(userDataPath, 'orca-runtime.json'),
@@ -234,6 +245,85 @@ describe('callOrchestrationMutation runtime_unavailable retry', () => {
       await expect(call).resolves.toMatchObject({ result: { message: { id: 'msg_1' } } })
       expect(sendRequestIds).toHaveLength(2)
       expect(sendRequestIds[1]).toBe(sendRequestIds[0])
+    },
+    15_000
+  )
+
+  // Windows cannot use this temporary Unix socket path.
+  const RETRY_ID = '11111111-2222-4333-8444-555555555555'
+  it.skipIf(process.platform === 'win32').each([
+    ['a fresh worker_done says nothing was sent', [], /Nothing was sent/],
+    [
+      'a --retry-request rerun keeps the outcome uncertain',
+      ['--retry-request', RETRY_ID],
+      /may already have taken effect/
+    ],
+    [
+      'a credential-bearing worker_done says nothing was sent without printing it',
+      ['--dispatch-capability', 'cap-secret'],
+      /^(?![\s\S]*(cap-secret|request-show))[\s\S]*Nothing was sent[\s\S]*the same original command with --retry-request [0-9a-f-]{36}/
+    ]
+  ])(
+    'when a frozen runtime times out the contract probe, %s',
+    async (_case, extraArgs, outcomeText) => {
+      const userDataPath = mkdtempSync(join(tmpdir(), 'orca-worker-done-frozen-'))
+      tempDirs.add(userDataPath)
+      const endpoint = join(userDataPath, 'runtime.sock')
+      const methods: string[] = []
+      // A frozen runtime accepts the connection but never answers.
+      const server = createServer((socket) => {
+        socket.setTimeout(1_000, () => socket.destroy())
+        socket.setEncoding('utf8')
+        socket.once('data', (line: string) => {
+          methods.push(RuntimeRequest.parse(JSON.parse(line.trim())).method)
+        })
+      })
+      servers.add(server)
+      await new Promise<void>((resolve) => server.listen(endpoint, resolve))
+      writeFileSync(
+        join(userDataPath, 'orca-runtime.json'),
+        JSON.stringify({
+          runtimeId: 'runtime-1',
+          pid: 1,
+          transports: [{ kind: 'unix', endpoint }],
+          authToken: 'token',
+          startedAt: 1
+        })
+      )
+      const argv = ['orchestration', 'send', '--type', 'worker_done', '--subject', 'done']
+      const client = new RuntimeClient(userDataPath, 60_000, null, null, 'orca', [
+        ...argv,
+        ...extraArgs
+      ])
+      const retryRequest = extraArgs[0] === '--retry-request' ? extraArgs[1] : undefined
+      const flags = new Map<string, string | boolean>(
+        retryRequest ? [['retry-request', retryRequest]] : []
+      )
+      const error = await callOrchestrationMutation(
+        client,
+        flags,
+        'orchestration.send',
+        WORKER_DONE,
+        { timeoutMs: 200 },
+        RETRY_MS
+      ).catch((caught: unknown) => caught)
+      expect(methods).toEqual(['status.get'])
+      expect(error).toMatchObject({
+        code: 'runtime_timeout',
+        message: expect.stringMatching(outcomeText),
+        data: {
+          recovery: extraArgs.includes('--dispatch-capability')
+            ? { recoveryBlocked: true, disposition: 'not_sent' }
+            : {
+                retryCommand: [
+                  'orca',
+                  ...argv,
+                  '--retry-request',
+                  retryRequest ?? expect.stringMatching(/^[0-9a-f-]{36}$/)
+                ]
+              }
+        }
+      })
     },
     15_000
   )

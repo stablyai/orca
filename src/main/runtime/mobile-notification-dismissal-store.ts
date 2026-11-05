@@ -3,14 +3,19 @@ import { join } from 'node:path'
 import { isUnreadableError } from '../../shared/secure-file'
 import { AtomicSnapshotWriter } from '../persistence/atomic-snapshot-writer'
 import type { MobileNotificationEvent } from './runtime-mobile-notification-controller'
+import type { ExecutionHostId } from '../../shared/execution-host'
 import type { DeliveredNotificationIdentity } from '../../shared/mobile-notification-identity'
 import {
   isStructuredAttentionOrigin,
   type StructuredAttentionOrigin
-} from '../../shared/agent-session-attention'
+} from '../../shared/agent-session/agent-session-attention'
 
 export type DeliveredNotificationRecord = DeliveredNotificationIdentity & {
   structuredOrigin?: StructuredAttentionOrigin
+  worktreeId?: string
+  paneKey?: string
+  workspaceExecutionHostId?: ExecutionHostId | null
+  executionHost?: `runtime:${string}`
 }
 type RecordEntry = DeliveredNotificationRecord & { dismissedThrough: number; expiresAt: number }
 const LIMIT = 4096
@@ -25,8 +30,7 @@ export class MobileNotificationDismissalStore {
   private entries: RecordEntry[] = []
   private unreadable = false
   private closed = false
-  // Why not the secure writer: this holds notification ids, not credentials, and its synchronous
-  // Windows icacls launches froze every window on each notification (STA-9692).
+  // Notification ids need no secure writer; its synchronous Windows icacls froze windows per alert (STA-9692).
   private readonly writer: AtomicSnapshotWriter
   constructor(userDataPath: string) {
     this.path = join(userDataPath, 'mobile-notification-dismissals.json')
@@ -73,6 +77,12 @@ export class MobileNotificationDismissalStore {
           notificationId: event.notificationId,
           notificationEpoch: event.notificationEpoch,
           notificationSeq: event.notificationSeq,
+          ...(event.workspaceExecutionHostId !== undefined
+            ? { workspaceExecutionHostId: event.workspaceExecutionHostId }
+            : {}),
+          ...(event.worktreeId ? { worktreeId: event.worktreeId } : {}),
+          ...(event.paneKey ? { paneKey: event.paneKey } : {}),
+          ...(event.executionHost ? { executionHost: event.executionHost } : {}),
           ...(event.structuredOrigin ? { structuredOrigin: event.structuredOrigin } : {}),
           dismissedThrough: kept.find(same)?.dismissedThrough ?? -1,
           expiresAt: now + RETENTION_MS
@@ -101,7 +111,7 @@ export class MobileNotificationDismissalStore {
     }
     const serialize = () => JSON.stringify(this.entries, null, 2)
     if (this.closed) {
-      // Why sync: the process is exiting and would drop an async write.
+      // Exit would drop an asynchronous write.
       try {
         this.writer.writeSync(serialize)
       } catch (error) {
@@ -109,36 +119,53 @@ export class MobileNotificationDismissalStore {
       }
       return
     }
-    // Coalesced: a burst of records costs one write of the latest entries.
     this.writer.write(serialize).catch(warnPersistFailed)
   }
 
-  /** Resolves once the pending write settles; its failure is already warned. */
   flush(): Promise<void> {
     return this.writer.waitForPendingWrite().catch(() => {})
   }
 
-  /** Committed exits only: later records save synchronously; resolves when the pending write settles. */
+  /** Committed exits only: subsequent records write synchronously; wait for the pending write. */
   close(): Promise<void> {
     this.closed = true
     return this.flush()
   }
 
-  liveDeliveries(prefix = ''): DeliveredNotificationRecord[] {
+  /** Unreadable history cannot rule a delivery out. */
+  hasLiveDelivery(notificationId: string): boolean {
+    const now = Date.now()
+    return (
+      this.unreadable ||
+      this.entries.some((entry) => entry.notificationId === notificationId && isLive(entry, now))
+    )
+  }
+
+  liveDeliveries(): DeliveredNotificationRecord[] {
     const now = Date.now()
     return this.entries
-      .filter(
-        (entry) =>
-          entry.expiresAt > now &&
-          entry.notificationId.startsWith(prefix) &&
-          entry.dismissedThrough < entry.notificationSeq
+      .filter((entry) => isLive(entry, now))
+      .map(
+        ({
+          notificationId,
+          notificationEpoch,
+          notificationSeq,
+          structuredOrigin,
+          workspaceExecutionHostId,
+          worktreeId,
+          paneKey,
+          executionHost
+        }) => ({
+          notificationId,
+          notificationEpoch,
+          notificationSeq,
+          ...(structuredOrigin ? { structuredOrigin } : {}),
+          ...(worktreeId ? { worktreeId } : {}),
+          ...(paneKey ? { paneKey } : {}),
+          ...(workspaceExecutionHostId !== undefined ? { workspaceExecutionHostId } : {}),
+          ...(executionHost ? { executionHost } : {})
+        })
       )
-      .map(({ notificationId, notificationEpoch, notificationSeq, structuredOrigin }) => ({
-        notificationId,
-        notificationEpoch,
-        notificationSeq,
-        ...(structuredOrigin ? { structuredOrigin } : {})
-      }))
   }
 
   reconcile(delivered: readonly DeliveredNotificationIdentity[]): DeliveredNotificationIdentity[] {
@@ -156,7 +183,11 @@ export class MobileNotificationDismissalStore {
   }
 }
 
-/** An origin this build cannot read (a newer cause kind) degrades to none; the record survives. */
+function isLive(entry: RecordEntry, now: number): boolean {
+  return entry.expiresAt > now && entry.dismissedThrough < entry.notificationSeq
+}
+
+/** Keep records with unknown future origin kinds, degrading only their origin to none. */
 function readEntry(value: unknown): RecordEntry[] {
   if (!isEntry(value)) {
     return []

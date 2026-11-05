@@ -1,11 +1,6 @@
 // @vitest-environment happy-dom
 
-/**
- * The Automations page installs a window capture-phase Escape handler. Capture on
- * `window` runs before Radix's document-capture DismissableLayer, which dismisses
- * only `if (!event.defaultPrevented)` — so any preventDefault here silently vetoes
- * dismissal of a dialog layered above the page (STA-5207).
- */
+/** Window capture runs before Radix document capture; preventing Escape here would veto dismissal of an overlaid dialog (STA-5207). */
 
 import { describe, expect, it, vi } from 'vitest'
 import {

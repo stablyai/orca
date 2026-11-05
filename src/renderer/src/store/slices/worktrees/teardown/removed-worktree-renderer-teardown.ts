@@ -19,13 +19,7 @@ import {
 import { forgetDesktopCreatedServerTabsOf } from '@/lib/desktop-created-server-tabs'
 import type { WorktreeStateBeforeRemoval } from './worktree-state-before-removal'
 
-/**
- * Renderer-side teardown after the backend removal succeeded.
- *
- * Ordering is load-bearing: browsers unregister before other teardown can
- * intercept their guests, and the SSH relay is disposed AFTER terminal teardown
- * so a still-mounted pane cannot hit a gone relay.
- */
+/** After backend success: unregister browsers before other teardown, then dispose SSH relay only after terminals so mounted panes cannot hit a missing relay. */
 export async function tearDownRemovedWorktreeRendererState(args: {
   set: WorktreeSliceSet
   get: WorktreeSliceGet
@@ -38,8 +32,7 @@ export async function tearDownRemovedWorktreeRendererState(args: {
   confirmedDiscards?: ConfirmedUnsavedDiscards
 }): Promise<void> {
   const { set, get, worktreeId, hostId, requiredExecutionHostId, beforeRemoval } = args
-  // Why first: a listing scanned before this removal must not be applied after it and bring
-  // the row back, so the version is on record before any await below yields.
+  // Record removal version before await so earlier listings cannot restore its row.
   if (hostId && args.catalogVersion) {
     const catalogVersion = args.catalogVersion
     set((s) =>
@@ -63,12 +56,12 @@ export async function tearDownRemovedWorktreeRendererState(args: {
       })
     }
   }
-  // Why: renderer state follows the successful backend result, so blocked dirty deletes keep their terminals intact.
-  // Why browsers first: unregister Chromium guests before other teardown can intercept them (avoids a browser-state race).
-  // Selection clears only with the row (applyRemoveWorktreeSuccessState), where the successor is picked.
+  // Only successful backend removal retires surfaces; browsers unregister first. Selection follows row removal when successor is chosen.
   await Promise.resolve(
     get().shutdownWorktreeBrowsers(worktreeId, { preserveWorktreeSelection: true })
   )
+  // Why here too: an SSH or paired workspace's pages use this desktop's profile, which that host's removal never reaches.
+  void get().deleteManagedBrowserSessionProfile({ kind: 'worktree', id: worktreeId })
   await get().shutdownWorktreeTerminals(worktreeId, {
     shutdownReason: 'remove-worktree',
     // The backend removal above already killed the workspace's PTYs.
@@ -106,8 +99,7 @@ export async function tearDownRemovedWorktreeRendererState(args: {
     requiredExecutionHostId ?? hostId,
     args.confirmedDiscards
   )
-  // Remove the orphaned project for the destroyed SSH target so it can't surface as a dead project in the composer.
-  // Why after the row drops: the project purge clears the selection, which must clear with the row.
+  // Purge destroyed-target projects after row removal so selection clears with the row, not earlier.
   await purgeOrphanedRuntimeSshProjects(get, runtimeCleanup.destroyedSshTargetIds)
   get().removeWorkspaceSpaceWorktrees?.(
     hostId ? [{ id: worktreeId, executionHostId: hostId }] : [worktreeId]

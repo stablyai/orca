@@ -1,167 +1,147 @@
-// Bringing the `queued_messages` rows earlier builds wrote into the journal. Those rows are the only
-// record of the work this owes, so nothing else stores it: it ends once no readable row is left.
-// Until then the queue's one view reads each through the fold's own classification, so a card reads
-// the same before and after it moves, and every action on one moves it in its own transaction. The
-// bulk import runs once per open and is never retried in a loop: the next open tries again.
-
-import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
-import { journalDispatchRowApplies, queuedHandOffOutcome } from './journal-dispatch-settlement'
+import { JournalDraftMap, JournalDraftSet } from './journal-transition-collections'
+import { journalInputOrder } from './journal-input-order'
+import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { journalDispatchRowApplies, queuedHandOffInDoubt } from './journal-dispatch-settlement'
+import { legacyQueuedChange } from './journal-queue-legacy-change'
+export { legacyQueuedChange } from './journal-queue-legacy-change'
 import { journalQueueRowBuilder, type JournalQueuedChange } from './journal-queue-events'
 import { queuedCardFromChange } from './journal-queue-fold'
-import { queuedChangeOf } from './journal-queue-retention'
 import type { JournalReducerState } from './journal-reducer'
 import type { JournalOperationReceipt } from './journal-row-writer'
 import type { JournalQueuedMessagesDeps } from './journal-store-contracts'
-import { foldQueuedHandOffInDoubt } from './journal-submission-fold'
-import {
-  QUEUED_MESSAGE_HELD_DELIVERY_UNCONFIRMED,
-  type QueuedMessageRow
-} from './queued-message-table'
+import { foldQueuedHandOffInDoubt, placeQueuedHandOffInDoubt } from './journal-submission-fold'
+import type { QueuedMessageRow } from './queued-message-table'
 import {
   LEGACY_QUEUED_MESSAGE_COLUMNS,
   readStoredQueuedMessageRow
 } from './queued-message-stored-row'
+import type Database from '../../sqlite/sync-database'
+// Adopt legacy cards and delete their rows atomically, using the same fold before and after import.
+// Retry failed bulk import on next open; do not loop while the host is running.
 
 type LegacyDeps = Pick<
   JournalQueuedMessagesDeps,
   'sessionId' | 'database' | 'state' | 'serialize' | 'readOnly' | 'writer' | 'committed'
 >
 
-/** The `queued` change a legacy row moves into the journal as, or null when it is answered and
- *  nothing is written: withdrawn or delivered. Its hand-off link is kept, and its stored refusal
- *  only where that hand-off is not in this epoch. */
-export function legacyQueuedChange(
-  state: JournalReducerState,
-  row: QueuedMessageRow
-): JournalQueuedChange | null {
-  const unconfirmed = row.state === 'waiting' ? unconfirmedHandOff(state, row) : null
-  const attempt = row.state === 'waiting' ? (unconfirmed?.attempt ?? null) : row.consumedAs
-  if (row.state === 'withdrawn' || (row.state === 'dispatched' && attempt === null)) {
-    return null
-  }
-  const holdReason = unconfirmed?.holdReason ?? (row.state === 'waiting' ? row.holdReason : null)
-  const change: JournalQueuedChange = {
-    ...queuedChangeOf(row),
-    ...(holdReason !== null ? { holdReason } : {}),
-    ...(attempt !== null ? { attempt } : {}),
-    ...(row.state === 'returned' && (attempt === null || !state.submissions.has(attempt))
-      ? {
-          returned: {
-            reason: row.returnedReason,
-            ...(row.returnedRejection ? { rejection: row.returnedRejection } : {})
-          }
-        }
-      : {})
-  }
-  const card = queuedCardFromChange(state, row.messageId, change)
-  return unanswered(card, state.submissions) ? change : null
-}
-
-/**
- * Earlier builds put a card back to waiting after any refusal without a verdict, and cleared its
- * link. Its own hand-offs in this epoch say whether one may have reached the agent: unchanged and
- * last sent as that one, the card is spent on it, as today; edited, or sent again since, it is held
- * for its own Send. With no hand-off in doubt it waits as it did: one that never reached the agent
- * is no delivery.
- */
-function unconfirmedHandOff(
-  state: JournalReducerState,
-  row: QueuedMessageRow
-):
-  | { attempt: string; holdReason?: undefined }
-  | { attempt?: undefined; holdReason: string }
-  | null {
-  const attempts = [...state.submissions.values()]
-    .filter((submission) => submission.queuedMessageId === row.messageId)
-    .sort((a, b) => (a.submittedSequence ?? 0) - (b.submittedSequence ?? 0))
-  if (!attempts.some(handOffInDoubt)) {
-    return null
-  }
-  const latest = attempts.at(-1)!
-  return handOffInDoubt(latest) && latest.payloadFingerprint === row.fingerprint
-    ? { attempt: latest.clientMessageId }
-    : { holdReason: QUEUED_MESSAGE_HELD_DELIVERY_UNCONFIRMED }
-}
-
-function handOffInDoubt(submission: AgentJournalSubmission): boolean {
-  return submission.dispatchState === 'rejected' && queuedHandOffOutcome(submission) === 'inDoubt'
-}
-
-/** Waiting, returned, or handed off as a send a later row may still answer (as the fold keeps it),
- *  that may have reached the agent (its message then reads as sent), or that nothing can answer. */
-function unanswered(
-  card: QueuedMessageRow,
-  submissions: ReadonlyMap<string, AgentJournalSubmission>
-): boolean {
-  if (card.state !== 'dispatched') {
-    return card.state !== 'withdrawn'
-  }
-  const handOff = card.consumedAs === null ? undefined : submissions.get(card.consumedAs)
-  return handOff === undefined || journalDispatchRowApplies(handOff) || handOffInDoubt(handOff)
-}
-
-/** The legacy rows still on disk for one session, as the queue's view reads them. */
 export class LegacyQueuedCards {
-  /** Moves after every commit that deleted legacy rows. */
   private revision = 0
   private stored: { revision: number; rows: readonly QueuedMessageRow[] } | null = null
-  private viewed: { key: string; cards: readonly QueuedMessageRow[] } | null = null
+  private readonly witnesses = new Map<string, { messageId: string; change: JournalQueuedChange }>()
+  private viewed: {
+    owner: JournalReducerState
+    key: string
+    cards: readonly QueuedMessageRow[]
+    byId: ReadonlyMap<string, QueuedMessageRow>
+    display?: JournalReducerState
+    displayThrough?: number
+    handedOff: readonly { card: QueuedMessageRow; submission: AgentJournalSubmission }[]
+  } | null = null
 
   constructor(private readonly deps: LegacyDeps) {}
 
-  /** Empty once no readable legacy row is left: the fallback is then off for this handle. A card's
-   *  reading follows the fold, so it moves with every row while any is left. */
+  /** Disable fallback when no readable legacy cards remain; classify retained cards through the live fold. */
   key(): string {
     if (this.rows().length === 0) {
       return ''
     }
-    const { epoch, lastSequence } = this.deps.state()
-    return `${this.revision}:${epoch}:${lastSequence}`
+    const state = this.deps.state()
+    return `${this.revision}:${state.epoch}:${journalInputOrder(state).linkedVersion()}`
   }
 
   cards(): readonly QueuedMessageRow[] {
     const key = this.key()
     if (key === '') {
+      this.viewed = null
       return []
     }
-    if (this.viewed?.key !== key) {
-      const state = this.deps.state()
-      const cards = this.rows().flatMap((row) => {
-        const change = legacyQueuedChange(state, row)
-        return change ? [queuedCardFromChange(state, row.messageId, change)] : []
-      })
-      this.viewed = { key, cards }
+    const state = this.deps.state()
+    if (this.viewed?.key !== key || this.viewed.owner !== state) {
+      const cards: QueuedMessageRow[] = []
+      const handedOff: { card: QueuedMessageRow; submission: AgentJournalSubmission }[] = []
+      const byId = new Map<string, QueuedMessageRow>()
+      for (const row of this.rows()) {
+        const change = this.change(row)
+        if (!change) {
+          continue
+        }
+        const card = queuedCardFromChange(state, row.messageId, change)
+        cards.push(card)
+        byId.set(card.messageId, card)
+        const submission = selectedHandOff(state, card)
+        if (submission) {
+          handedOff.push({ card, submission })
+        }
+      }
+      this.viewed = { owner: state, key, cards, handedOff, byId }
     }
     return this.viewed.cards
   }
 
-  /** Failed adoption must not hide a spent message; derive its adopted display on copies only. */
+  get(messageId: string): QueuedMessageRow | undefined {
+    this.cards()
+    return this.viewed?.byId.get(messageId)
+  }
+
+  // Failed adoption cannot hide spent sends; derive display changes only on copied state.
   displayState(): JournalReducerState {
     const state = this.deps.state()
-    const handedOff = this.cards().flatMap((card) => {
-      const submission =
-        card.consumedAs === null ? undefined : state.submissions.get(card.consumedAs)
-      return submission && handOffInDoubt(submission) ? [{ ...submission }] : []
-    })
+    this.cards()
+    if (this.viewed?.display && this.viewed.displayThrough === state.lastSequence) {
+      return this.viewed.display
+    }
+    const handedOff = this.viewed?.handedOff ?? []
+    if (this.viewed) {
+      this.viewed.displayThrough = state.lastSequence
+    }
     if (handedOff.length === 0) {
+      if (this.viewed) {
+        this.viewed.display = state
+      }
       return state
     }
-    const display = {
+    const display: JournalReducerState = {
       ...state,
-      items: new Map(state.items),
-      submissions: new Map(state.submissions)
+      items: new JournalDraftMap(state.items),
+      submissions: new JournalDraftMap(state.submissions),
+      normalizedHandOffs: new JournalDraftSet(state.normalizedHandOffs),
+      inputs: { ...state.inputs, presentations: new JournalDraftMap(state.inputs.presentations) }
     }
-    for (const submission of handedOff) {
-      display.submissions.set(submission.clientMessageId, submission)
-      foldQueuedHandOffInDoubt(display, submission)
+    for (const { card, submission: entry } of handedOff) {
+      const send = { ...entry }
+      display.submissions.set(send.clientMessageId, send)
+      display.inputs.presentations.set(send.clientMessageId, card)
+      foldQueuedHandOffInDoubt(send)
+      placeQueuedHandOffInDoubt(display, send)
+    }
+    if (this.viewed) {
+      this.viewed.display = display
     }
     return display
   }
 
-  /** On the journal's lane: the change that moves this card into the journal, read from disk now;
-   *  null when it is not a legacy card. */
+  /** Derived during the existing import pass; the selected operation persists this witness. */
+  witness(clientMessageId: string): { messageId: string; change: JournalQueuedChange } | undefined {
+    const witness = this.witnesses.get(clientMessageId)
+    return witness && !this.deps.state().queue.cards.has(witness.messageId) ? witness : undefined
+  }
+
+  witnessRows(
+    clientMessageId: string,
+    adopted?: string[]
+  ): ReturnType<typeof journalQueueRowBuilder>[] {
+    const witness = this.witness(clientMessageId)
+    if (!witness || adopted?.includes(witness.messageId)) {
+      return []
+    }
+    const row = journalQueueRowBuilder(this.deps.state, witness.messageId, witness.change)
+    adopted?.push(witness.messageId)
+    return [row]
+  }
+
+  /** Resolve adoption on the write lane from current disk state; null means no legacy card. */
   adoption(messageId: string): JournalQueuedChange | null {
-    if (this.key() === '') {
+    if (this.deps.state().queue.cards.has(messageId) || this.key() === '') {
       return null
     }
     const { db } = this.deps.database()
@@ -171,10 +151,18 @@ export class LegacyQueuedCards {
       )
       .get(this.deps.sessionId, messageId)
     const card = row === undefined ? null : readStoredQueuedMessageRow(row)
-    return card && legacyQueuedChange(this.deps.state(), card)
+    return card && this.change(card)
   }
 
-  /** Deletes these legacy rows in the caller's transaction; the view re-reads once it commits. */
+  private change(row: QueuedMessageRow): JournalQueuedChange | null {
+    const state = this.deps.state()
+    if (state.queue.cards.has(row.messageId)) {
+      return null
+    }
+    return legacyQueuedChange(state, row)
+  }
+
+  /** Delete in the caller's transaction and refresh the view after commit. */
   deletion(messageIds: readonly string[]): JournalOperationReceipt {
     return {
       write: (db) => {
@@ -191,18 +179,23 @@ export class LegacyQueuedCards {
     }
   }
 
-  /** Every readable legacy row's card id. */
-  messageIds(): string[] {
-    return this.rows().map((row) => row.messageId)
+  cleanup(messageIds: readonly string[]): void {
+    if (!messageIds.length) {
+      return
+    }
+    const receipt = this.deletion(messageIds)
+    try {
+      this.deps.database().transaction((db) => receipt.write(db))
+      receipt.committed()
+    } catch (error) {
+      console.warn('[journal-queue] legacy cleanup skipped:', {
+        sessionId: this.deps.sessionId,
+        error
+      })
+    }
   }
 
-  /** `deletion` of every readable legacy row: a new epoch restates their cards with its own. */
-  deletionOfAll(): JournalOperationReceipt {
-    return this.deletion(this.messageIds())
-  }
-
-  /** Every readable row, unanswered ones as journal rows, all deleted, in ONE transaction; a
-   *  failure is reported and leaves both as they were. */
+  /** Atomically adopt readable unanswered cards and delete legacy rows; failure leaves both unchanged. */
   importAtOpen(): Promise<void> {
     if (this.deps.readOnly() || this.rows().length === 0) {
       return Promise.resolve()
@@ -212,14 +205,37 @@ export class LegacyQueuedCards {
         const rows = this.read()
         const deletion = this.deletion(rows.map((row) => row.messageId))
         const plan = rows.flatMap((row) => {
-          const change = legacyQueuedChange(this.deps.state(), row)
+          const change = this.deps.state().queue.cards.has(row.messageId)
+            ? null
+            : legacyQueuedChange(this.deps.state(), row)
+          if (change) {
+            const state = this.deps.state()
+            for (const send of journalInputOrder(state).linkedTo(row.messageId)) {
+              if (journalDispatchRowApplies(send)) {
+                this.witnesses.set(send.clientMessageId, { messageId: row.messageId, change })
+              }
+            }
+          }
           return change ? [journalQueueRowBuilder(this.deps.state, row.messageId, change)] : []
         })
         if (plan.length > 0) {
-          this.deps.writer.writeRows(() => plan, deletion)
+          this.deps.writer.writeRows(() => plan, {
+            ...deletion,
+            fold: (draft) => {
+              for (const row of rows) {
+                const card = draft.queue.cards.get(row.messageId)
+                const send = card && selectedHandOff(draft, card)
+                if (send) {
+                  draft.inputs.presentations.set(send.clientMessageId, row)
+                  foldQueuedHandOffInDoubt(send)
+                  placeQueuedHandOffInDoubt(draft, send)
+                }
+              }
+            }
+          })
           return
         }
-        // No row to write: the writer opens no transaction for none, so the deletes take their own.
+        // Empty append plans open no transaction, so legacy deletion must commit independently.
         this.deps.database().transaction((db) => deletion.write(db))
         deletion.committed()
         this.deps.committed()
@@ -240,12 +256,34 @@ export class LegacyQueuedCards {
   }
 
   private read(): QueuedMessageRow[] {
-    return this.deps
-      .database()
-      .db.prepare(
-        `SELECT ${LEGACY_QUEUED_MESSAGE_COLUMNS} FROM queued_messages WHERE session_id = ? ORDER BY position ASC`
-      )
-      .all(this.deps.sessionId)
-      .flatMap((row) => readStoredQueuedMessageRow(row) ?? [])
+    return readLegacyRows(this.deps.database().db, this.deps.sessionId)
   }
+}
+
+export function readJournalLegacyCards(
+  db: Database.Database,
+  state: JournalReducerState
+): QueuedMessageRow[] {
+  return readLegacyRows(db, state.sessionId).flatMap((row) => {
+    const change = legacyQueuedChange(state, row)
+    return change ? [queuedCardFromChange(state, row.messageId, change)] : []
+  })
+}
+
+function readLegacyRows(db: Database.Database, sessionId: string): QueuedMessageRow[] {
+  return db
+    .prepare(
+      `SELECT ${LEGACY_QUEUED_MESSAGE_COLUMNS} FROM queued_messages WHERE session_id = ? ORDER BY position ASC`
+    )
+    .all(sessionId)
+    .flatMap((row) => readStoredQueuedMessageRow(row) ?? [])
+}
+
+function selectedHandOff(
+  state: JournalReducerState,
+  card: QueuedMessageRow
+): AgentJournalSubmission | undefined {
+  const id = card.consumedAs ?? card.recovers
+  const send = id ? state.submissions.get(id) : undefined
+  return send && queuedHandOffInDoubt(send) ? send : undefined
 }

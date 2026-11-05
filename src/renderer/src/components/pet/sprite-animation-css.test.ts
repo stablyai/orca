@@ -31,11 +31,9 @@ describe('buildSpriteAnimationCss', () => {
       [100, 100],
       [100, -1, 100],
       [100, Number.NaN, 100],
-      // Above the importer's 60s cap: corrupt/hand-edited persisted holds must
-      // not freeze the overlay.
+      // Reject holds beyond the importer’s 60s cap even in hand-edited/corrupt state.
       [100, 70_000, 100],
-      // Untrusted persisted data: non-arrays with a matching `length` must not
-      // reach .every and throw.
+      // Length-bearing non-arrays from persisted data must not reach .every.
       { length: 3 } as unknown as number[],
       'aaa' as unknown as number[]
     ]) {
@@ -53,10 +51,7 @@ describe('buildSpriteAnimationCss', () => {
   })
 
   it('degrades to uniform pacing rather than dropping a frame that rounds away', () => {
-    // A sub-precision frame among a ~minute total loses its own stop: a leading
-    // one collapses two stops to 0%, a trailing one rounds the final stop to
-    // 100% (no interval before the loop). Either way, degrade to steps() so
-    // every frame still renders instead of letting one vanish.
+    // Subprecision stops collapse at 0%/100%; use uniform steps so no frame disappears.
     for (const frameDurationsMs of [
       [0.001, 60_000],
       [60_000, 0.001]

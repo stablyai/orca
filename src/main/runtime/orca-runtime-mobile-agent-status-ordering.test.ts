@@ -1,11 +1,11 @@
-// #28102: a paired client keeps whichever row has the newer `updatedAt`, so the host's
-// published stamp for one pane must never move backwards across a turn's end.
+// #28102: paired clients choose newer updatedAt; never move a pane's published timestamp backward across turn end.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
-import type { AgentStatusEntry, AgentStatusIpcPayload } from '../../shared/agent-status-types'
-import { makePaneKey } from '../../shared/stable-pane-id'
-import { committingSpawn } from './bind-first-pane.test-fixture'
-import { makeRuntimeStoreWithWorkspaceSession } from './orca-runtime-test-fixtures.spec'
+import type { AgentStatusEntry } from '../../shared/agent-status/contracts/agent-status-types'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
+import { makePaneKey } from '../../shared/workspace-layout/stable-pane-id'
+import { committingSpawn } from './orca-runtime-tests/bind-first-pane.test-fixture'
+import { makeRuntimeStoreWithWorkspaceSession } from './orca-runtime-tests/orca-runtime-test-fixtures.spec'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 
 vi.mock('electron', () => ({
@@ -20,13 +20,12 @@ const TAB_ID = 'muse-tab'
 const WORKTREE_ID = 'wt-muse'
 const PANE_KEY = makePaneKey(TAB_ID, LEAF_ID)
 const PTY_ID = 'pty-muse'
-// Hook Stop time; the rest are the deltas from the issue's 200 ms poll of session.tabs.list.
+// Issue captures sampled session.tabs.list every 200ms; deltas are relative to hook Stop.
 const STOP_AT = 1_700_000_000_000
 const TRAILING_SPINNER_AT = STOP_AT + 4_534
 const PLAIN_TITLE_AT = STOP_AT + 4_800
 
 async function createRuntime(rows: AgentStatusIpcPayload[]): Promise<OrcaRuntimeService> {
-  // Why a store: main's layout binds the pane in the store's workspace session.
   const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(getDefaultWorkspaceSession())
   const runtime = new OrcaRuntimeService(runtimeStore, undefined, {
     getAgentStatusSnapshot: () => rows
@@ -90,7 +89,7 @@ describe('session.tabs agent status ordering after a turn ends', () => {
     }
     const runtime = await createRuntime([stopRow])
 
-    // The agent keeps animating its title for a few seconds after Stop.
+    // Captured spinner animation continues after Stop.
     vi.setSystemTime(TRAILING_SPINNER_AT)
     runtime.onPtyData(PTY_ID, '\x1b]0;⠧ muse\x07', TRAILING_SPINNER_AT)
     const spinning = await projectAgentStatus(runtime)
@@ -103,7 +102,6 @@ describe('session.tabs agent status ordering after a turn ends', () => {
     const settled = await projectAgentStatus(runtime)
     expect(settled?.state).toBe('done')
     expect(settled?.updatedAt).toBeGreaterThanOrEqual(TRAILING_SPINNER_AT)
-    // Freshness still dates from the Stop hook, not from the title repaint.
     expect(settled?.evidenceObservedAt).toBe(STOP_AT)
   })
 })

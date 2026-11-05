@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react'
-import type { TuiAgent } from '../../../shared/tui-agent'
-import { isTuiAgent } from '../../../shared/tui-agent-config'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
+import { isTuiAgent } from '../../../shared/agent-launch/catalog/tui-agent-config'
 import {
   hostStructuredAgentsVersion,
   readHostStructuredAgents,
@@ -24,7 +24,6 @@ export function chatProviderAgents(
   ]
 }
 
-/** Re-renders the caller whenever a host's chat agent list changes. */
 export function useHostStructuredAgentsVersion(): number {
   return useSyncExternalStore(
     subscribeHostStructuredAgents,

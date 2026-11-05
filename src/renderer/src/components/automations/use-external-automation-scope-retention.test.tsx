@@ -95,7 +95,7 @@ describe('useExternalAutomationScopeRetention', () => {
     act(() => root.unmount())
   })
 
-  it('does not restart in-flight probes when the same scope set re-renders', () => {
+  it('does not re-retain the same scope set when it re-renders', () => {
     render([entry(), sshEntry('t1')])
     render([entry(), sshEntry('t1')])
 

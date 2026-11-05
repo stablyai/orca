@@ -2,7 +2,7 @@ import { constants } from 'node:fs'
 import { access, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import path from 'node:path'
-import type { AgentHookTarget } from '../../shared/agent-hook-types'
+import type { AgentHookTarget } from '../../shared/agent-hook-listener/configuration/agent-hook-types'
 import {
   extractExecutableToken,
   hasPathSeparatorToken,
@@ -146,7 +146,6 @@ async function maybeHydrateShellPath(options: DetectOptions): Promise<void> {
   }
 }
 
-/** Merges the login shell's PATH into this process once (cached), as CLI detection does. */
 export async function hydrateAgentCliShellPath(
   hydratePath: () => Promise<HydrationResult> = hydrateShellPath
 ): Promise<void> {
@@ -156,7 +155,6 @@ export async function hydrateAgentCliShellPath(
       mergePathSegments(result.segments)
     }
   } catch (error) {
-    // Detection failure must never permit config mutation.
     console.warn('[agent-hooks] Shell PATH hydration failed; using inherited PATH:', error)
   }
 }

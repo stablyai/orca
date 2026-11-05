@@ -1,9 +1,16 @@
+import type { LinkedReviewClearScope } from './linked-review-clear'
 import type { AppState } from '../types'
+import type { RuntimeFocusSettings } from '../../../../shared/github/github-cache-key'
 import type { PRInfo } from '../../../../shared/github/pull-request-types'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { getHostedReviewCacheKey } from '../slices/hosted-review-cache-identity'
 import type { GitHubPRFallbackSource } from './cache-model'
 import { withBoundedCacheEntry } from './cache-policy'
-import { prRefreshStartedHostedReviewEntries } from './request-coordination'
+import {
+  prRefreshStartedHostedReviewEntries,
+  prRefreshStartedLinkedReviewScopes
+} from './request-coordination'
+import { PR_REFRESH_ACTIVE_STALE_MS } from './pr-refresh-state'
 import {
   shouldWritePRCacheForHostedReviewSync,
   syncHostedReviewCacheFromGitHubPRResult
@@ -16,7 +23,7 @@ type GitHubPRResultCacheArgs = {
   prCacheKey: string
   repoPath: string
   branch: string
-  settings: AppState['settings']
+  settings: RuntimeFocusSettings
   repoId?: string
   connectionId?: string | null
   executionHostId?: string | null
@@ -67,13 +74,38 @@ export function prRefreshStartedEntryKey(sequence: number, cacheKey: string): st
 export function deletePRRefreshStartedEntry(sequence: number | undefined, cacheKey: string): void {
   if (sequence !== undefined && sequence > 0) {
     prRefreshStartedHostedReviewEntries.delete(prRefreshStartedEntryKey(sequence, cacheKey))
+    if (prRefreshStartedLinkedReviewScopes.get(cacheKey)?.sequence === sequence) {
+      prRefreshStartedLinkedReviewScopes.delete(cacheKey)
+    }
   }
 }
 
-export function setPRRefreshStartedHostedReviewEntry(
-  key: string,
-  entry: AppState['hostedReviewCache'][string] | undefined
+export function pruneExpiredPRRefreshStartedEntries(now = performance.now()): void {
+  for (const [cacheKey, request] of prRefreshStartedLinkedReviewScopes) {
+    // Monotonic expiry order avoids scanning live aliases on every refresh event.
+    if (now <= request.expiresAt) {
+      break
+    }
+    deletePRRefreshStartedEntry(request.sequence, cacheKey)
+  }
+}
+
+export function setPRRefreshStartedEntry(
+  sequence: number,
+  cacheKey: string,
+  entry: AppState['hostedReviewCache'][string] | undefined,
+  clearScope?: LinkedReviewClearScope
 ): void {
+  // Ownership evidence must survive advisory cache eviction for every accepted alias.
+  prRefreshStartedLinkedReviewScopes.delete(cacheKey)
+  if (clearScope) {
+    prRefreshStartedLinkedReviewScopes.set(cacheKey, {
+      sequence,
+      scope: clearScope,
+      expiresAt: performance.now() + PR_REFRESH_ACTIVE_STALE_MS
+    })
+  }
+  const key = prRefreshStartedEntryKey(sequence, cacheKey)
   if (entry === undefined) {
     prRefreshStartedHostedReviewEntries.delete(key)
     return
@@ -134,6 +166,10 @@ export function applyGitHubPRResultToCaches(
     current?.fetchedAt === args.fetchedAt &&
     (current.data?.number ?? null) === prNumber &&
     current.data?.url === args.pr?.url &&
+    current.data?.checksStatus === args.pr?.checksStatus &&
+    JSON.stringify(current.data?.checksSummary) === JSON.stringify(args.pr?.checksSummary) &&
+    JSON.stringify(hostedReviewEntry?.data?.checksSummary) ===
+      JSON.stringify(args.pr?.checksSummary) &&
     hostedReviewEntry?.data?.url === args.pr?.url &&
     (hostedReviewEntry?.data?.provider === 'github' ? hostedReviewEntry.data.number : null) ===
       prNumber
@@ -145,6 +181,7 @@ export function applyGitHubPRResultToCaches(
     nextPR: args.pr,
     state: args.state,
     worktreeId: args.worktreeId,
+    executionHostId: args.hasRepoOwner ? getRepoExecutionHostId(args) : undefined,
     linkedPRNumber: args.linkedPRNumber,
     rejectedPRUrls: args.rejectedPRUrls
   })
@@ -190,6 +227,7 @@ export function shouldPreserveExistingPRForFallbackMiss(args: {
   nextPR: PRInfo | null
   state: AppState
   worktreeId?: string
+  executionHostId?: string
   linkedPRNumber?: number | null
   rejectedPRUrls?: readonly string[]
 }): boolean {
@@ -204,7 +242,9 @@ export function shouldPreserveExistingPRForFallbackMiss(args: {
     return false
   }
   // Why: gate the global worktree scan so batched refresh aliases don't multiply full scans (common paths don't need it).
-  const worktree = args.worktreeId ? findWorktreeById(args.state, args.worktreeId) : null
+  const worktree = args.worktreeId
+    ? findWorktreeById(args.state, args.worktreeId, args.executionHostId)
+    : null
   const worktreeHead = worktree?.head
   // Why: keep a merged PR only when its cached head matches the worktree head — exactly or a confirmed-contained commit.
   const preservesMergedPRForCurrentHead =

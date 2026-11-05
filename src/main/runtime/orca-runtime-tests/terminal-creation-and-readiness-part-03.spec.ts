@@ -1,15 +1,14 @@
-import { realpath } from 'node:fs/promises'
+import { realpath, mkdtemp } from 'node:fs/promises'
 import { describe, expect, it, vi } from 'vitest'
-import { detectAgentCommandsOnHost } from '../../preflight/agent-detection'
-import {
-  FLOATING_TERMINAL_WORKTREE_ID,
-  OrcaRuntimeService,
-  SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV,
-  join,
-  mkdtemp,
-  randomUUID,
-  tmpdir
-} from '../orca-runtime-test-mocks.spec'
+import { detectAgentCommandsOnHost } from '../../preflight/agent-command-detection'
+import './runtime-test-module-registration.spec'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV } from '../../../shared/setup-agent-sequencing'
+import { join } from 'node:path'
+
+import { randomUUID } from 'node:crypto'
+import { tmpdir } from 'node:os'
 import {
   TEST_FOLDER_PROJECT_GROUP_ID,
   TEST_FOLDER_WORKSPACE_ID,
@@ -22,9 +21,9 @@ import {
   makeFolderProjectGroup,
   makeFolderWorkspace,
   makeWorktreeMeta,
-  spawnedPtyEnv,
   store
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
+import { spawnedPtyEnv } from '../spawned-pty-env-fixtures'
 
 describe('OrcaRuntimeService', () => {
   it.each(['qoder', 'qodercli'] as const)(
@@ -63,7 +62,7 @@ describe('OrcaRuntimeService', () => {
       ...store,
       getRepos: () => [remoteRepo],
       getRepo: (id: string) => (id === TEST_REPO_ID ? remoteRepo : undefined),
-      // Why: this process serves no SSH git, so the SSH repo resolves from its stored rows.
+      // No SSH Git provider is installed, so the fixture uses stored rows.
       getAllWorktreeMeta: () => ({
         [`${TEST_REPO_ID}::C:/remote/repo`]: makeWorktreeMeta()
       }),
@@ -124,7 +123,7 @@ describe('OrcaRuntimeService', () => {
 
     const spawnCall = spawn.mock.calls[0]?.[0] as { command?: string } | undefined
     expect(spawnCall?.command).toBe(
-      "codex --profile work '--dangerously-bypass-approvals-and-sandbox'"
+      "codex --profile work '-c' 'disable_paste_burst=true' '--dangerously-bypass-approvals-and-sandbox'"
     )
   })
 
@@ -321,14 +320,13 @@ describe('OrcaRuntimeService', () => {
           worktreeId?: string
         }
       | undefined
-    // Why the configured folder: host-launched floating terminals start where the panel's own do.
+    // Host-launched floating terminals must use the panel's configured directory.
     expect(spawnCall).toMatchObject({
       cwd: floatingDir,
       connectionId: null,
       worktreeId: FLOATING_TERMINAL_WORKTREE_ID
     })
     expect(spawnedPtyEnv(spawnCall).ORCA_WORKTREE_ID).toBe(FLOATING_TERMINAL_WORKTREE_ID)
-    // The window's floating panes carry the sentinel as their workspace id too.
     expect(spawnCall?.env?.ORCA_WORKSPACE_ID).toBe(FLOATING_TERMINAL_WORKTREE_ID)
     expect(spawnCall?.env?.ORCA_PROJECT_GROUP_ID).toBeUndefined()
     expect(spawnCall?.env?.ORCA_WORKSPACE_ROOT).toBeUndefined()
@@ -418,7 +416,9 @@ describe('OrcaRuntimeService', () => {
     expect(compoundClaude.env?.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS).toBeUndefined()
     expect(compoundClaude.env?.TMUX).toBeUndefined()
 
-    expect(normalAgent.command).toBe("codex '--dangerously-bypass-approvals-and-sandbox'")
+    expect(normalAgent.command).toBe(
+      "codex '-c' 'disable_paste_burst=true' '--dangerously-bypass-approvals-and-sandbox'"
+    )
     expect(normalAgent.env?.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS).toBeUndefined()
     expect(normalAgent.env?.TMUX).toBeUndefined()
   })

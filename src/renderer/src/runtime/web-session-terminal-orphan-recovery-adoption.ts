@@ -7,7 +7,7 @@ import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import {
   isRecoverableRemoteRuntimeConnectionError,
   toRemoteRuntimeClientErrorLike
-} from '../../../shared/remote-runtime-client-error-classification'
+} from '../../../shared/remote-runtime/remote-runtime-client-error-classification'
 import { hasRuntimeRpcErrorCode } from '../../../shared/runtime-rpc-error-code'
 import { cacheStableSurfaceRecoveryFailure } from './web-session-terminal-orphan-recovery-cache'
 import { runInTerminalRecoveryRpcLane } from './web-session-terminal-orphan-recovery-rpc-lane'

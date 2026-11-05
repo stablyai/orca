@@ -1,6 +1,6 @@
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import type { ExecutionHostId } from '../../shared/execution-host'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import { SESSION_FIELDS_PRUNED_BY_OWNER_KEY } from './profile-project-session-field-disposition'
 import { markdownFileIdCandidates } from './profile-session-markdown-transfer'
@@ -45,7 +45,7 @@ export function mergeWorkspaceSessions(
   const base = existing ?? getDefaultWorkspaceSession()
   return {
     ...base,
-    // Why: the focus scalars below fall back to incoming together, so a borrowed worktree keeps its repo and host.
+    // Borrow focus scalars together so the selected worktree retains its repo and host.
     activeRepoId: base.activeRepoId ?? incoming.activeRepoId,
     activeWorkspaceExecutionHostId:
       base.activeWorkspaceExecutionHostId ?? incoming.activeWorkspaceExecutionHostId,
@@ -185,7 +185,6 @@ export function removeRepoFromWorkspaceSession(
       delete next.browserPagesByWorkspace[workspaceId]
     }
   }
-  // Driven by the census so a field cannot be added to the session type and forgotten here.
   for (const field of SESSION_FIELDS_PRUNED_BY_OWNER_KEY) {
     const record = next[field] as Record<string, unknown> | undefined
     ;(next as Record<string, unknown>)[field] = removeRepoWorktreeRecord(record, repoId)

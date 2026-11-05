@@ -8,10 +8,9 @@ import {
 } from '../runtime/runtime-mobile-notification-controller'
 import {
   agentSessionAttentionSubjectPrefix,
-  type StructuredAttentionRead,
   type StructuredAttentionOrigin,
   type StructuredAttentionState
-} from '../../shared/agent-session-attention'
+} from '../../shared/agent-session/agent-session-attention'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
@@ -54,8 +53,6 @@ function register(
     controller?.dispatch(event)
   )
   const dismissMobileNotification = vi.fn((id: string) => controller?.dismiss(id))
-  const retireStructuredAttention = (read: StructuredAttentionRead) =>
-    controller?.retireStructuredAttention(read)
   const reconcileStructuredPromptAttention = (state: StructuredAttentionState) =>
     controller?.reconcileStructuredPromptAttention(state)
   registerNotificationHandlers(
@@ -65,6 +62,7 @@ function register(
         notifications: {
           enabled: true,
           agentTaskComplete: true,
+          agentNeedsInput: true,
           terminalBell: true,
           suppressWhenFocused: options.suppressWhenFocused
         }
@@ -74,7 +72,7 @@ function register(
     {
       dispatchMobileNotification,
       dismissMobileNotification,
-      retireStructuredAttention,
+      retireNotificationAttention: controller?.acknowledgeAttention.bind(controller),
       reconcileStructuredPromptAttention
     } as never
   )
@@ -102,7 +100,7 @@ describe('notifications:dismiss by acknowledged subject', () => {
       )
     ).toEqual({ delivered: true })
 
-    // The renderer's rebuilt id no longer matches (the row's start moved); the subject still does.
+    // Rebuilt row IDs can change with start position; subject identity stays stable.
     expect(getDismissHandler()({}, ['agent:rebuilt'], [PANE])).toEqual({ dismissed: 1 })
     expect(notificationCloseMock).toHaveBeenCalledTimes(1)
     expect(dismissMobileNotification.mock.calls.map(([id]) => id).sort()).toEqual([
@@ -140,6 +138,36 @@ describe('notifications:dismiss by acknowledged subject', () => {
     expect(dismissMobileNotification).toHaveBeenCalledWith('agent:phone-only')
   })
 
+  // Reads rebuild ids for turns that never alerted; each forwarded one was a silent push and a store slot.
+  it('clears on the phone only alerts that reached it, including ones sent before a restart', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'orca-clear-delivered-'))
+    const original = new RuntimeMobileNotificationController()
+    const restarted = new RuntimeMobileNotificationController()
+    try {
+      original.configureDismissalStore(directory)
+      original.dispatch({
+        type: 'notification',
+        source: 'agent-task-complete',
+        title: 'Done',
+        body: '',
+        notificationId: 'agent:sent'
+      })
+      await original.closeDismissals()
+      restarted.configureDismissalStore(directory)
+      const events: MobileNotificationEvent[] = []
+      restarted.onDispatched((event) => events.push(event))
+      register({ suppressWhenFocused: false }, restarted)
+      getDismissHandler()({}, ['agent:never-sent', 'agent:sent'], [PANE])
+      getDismissHandler()({}, ['agent:sent'], [PANE])
+      expect(events.map((event) => [event.type, event.notificationId])).toEqual([
+        ['dismiss', 'agent:sent']
+      ])
+    } finally {
+      await restarted.closeDismissals()
+      rmSync(directory, { recursive: true, force: true })
+    }
+  })
+
   it('records nothing for a request neither the desktop nor the phone announced', async () => {
     const { dismissMobileNotification } = register({ suppressWhenFocused: false })
     const dispatch = getDispatchHandler()
@@ -152,7 +180,6 @@ describe('notifications:dismiss by acknowledged subject', () => {
         notificationId: 'agent:first'
       }
     )
-    // Inside the first one's per-workspace cooldown: turned away on both paths.
     expect(
       await dispatch(
         {},
@@ -168,7 +195,7 @@ describe('notifications:dismiss by acknowledged subject', () => {
     getDismissHandler()({}, [], [PANE])
     expect(dismissMobileNotification).not.toHaveBeenCalled()
   })
-  // Positioned alerts outlive a no-read or earlier-bounded dismiss: a view ack can run before the transcript shows the edge.
+  // Positioned alerts survive reads before their journal boundary; pane-wide views cannot retire them.
   it('pane dismissal retires older-host structured alerts but not positioned ones past the read', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'orca-pane-boundary-'))
     const controller = new RuntimeMobileNotificationController()
@@ -189,7 +216,7 @@ describe('notifications:dismiss by acknowledged subject', () => {
         journalCursor: { epoch: 'remote-journal', sequence }
       })
       const dispatch = getDispatchHandler()
-      // A host older than journal cursors sends its completion with no position.
+      // Older hosts lack journal positions on completions.
       for (const [id, cause] of [
         ['agent-attention:older-host', undefined],
         ['agent-attention:A', origin('A', 1)],

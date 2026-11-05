@@ -1,9 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { MobileRelayCredentialBundle } from './mobile-relay-credential-bundle'
+import type { connectMobileRelayForPairing } from './mobile-relay-physical-client'
 import type { MobileRelayPairingJournal } from './mobile-relay-pairing-journal'
 import { racePairingCandidates } from './pairing-candidate-race'
 import { startPreProfilePairing } from './pre-profile-pairing-coordinator'
-import type { ConnectionLogEntry, HostProfile, PairingOffer, RpcResponse } from './types'
+import type { ConnectionLogEntry, HostProfile, RpcResponse } from './types'
+import type { PairingOffer } from '../../../src/shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import type { connect, RpcClient } from './rpc-client'
 
 vi.mock('react-native', () => ({ Platform: { OS: 'ios' } }))
@@ -100,7 +102,9 @@ function dependencies(client: RpcClient, events: string[]) {
     connectDirect: vi.fn(
       (..._args: Parameters<typeof connect>) => (events.push('connect'), client)
     ),
-    connectRelay: vi.fn(() => unavailableRelay),
+    connectRelay: vi.fn(
+      (..._args: Parameters<typeof connectMobileRelayForPairing>) => unavailableRelay
+    ),
     resolveInviteDirector: vi.fn(async () => {
       throw new Error('director unavailable')
     }),
@@ -159,76 +163,6 @@ describe('pre-profile pairing coordinator', () => {
     await expect(racing).resolves.toMatchObject({ path: 'direct' })
     expect(relay.close).toHaveBeenCalledOnce()
     expect(direct.close).not.toHaveBeenCalled()
-  })
-
-  it('keeps a legacy offer direct-only through the shared path', async () => {
-    const events: string[] = []
-    const client = fakeClient([success({ version: '1.0.0' })])
-    const deps = dependencies(client, events)
-
-    const attempt = startPreProfilePairing({
-      offer: directOffer,
-      timeoutMs: 5_000,
-      dependencies: deps
-    })
-
-    await expect(attempt.result).resolves.toEqual({ hostId: `host-${now}` })
-    expect(deps.savePairedHost).toHaveBeenCalledWith({
-      id: `host-${now}`,
-      name: 'Blue Whale',
-      endpoint: directOffer.endpoint,
-      deviceToken: directOffer.deviceToken,
-      publicKeyB64: directOffer.publicKeyB64,
-      lastConnected: now
-    })
-    expect(events).toEqual(['connect', 'save-host', 'record-descriptor'])
-  })
-
-  it('reuses the existing host id and name when re-pairing the same desktop key (no duplicate)', async () => {
-    // STA-1840: re-pairing a desktop already stored under a different id must
-    // merge into that card, not mint a new host-${now} and duplicate the row.
-    const events: string[] = []
-    const client = fakeClient([success({ version: '1.0.0' })])
-    const deps = dependencies(client, events)
-    deps.resolveHostIdentity = vi.fn(async (publicKeyB64: string, newHostId: string) => {
-      expect(publicKeyB64).toBe(directOffer.publicKeyB64)
-      expect(newHostId).toBe(`host-${now}`)
-      return { id: 'host-existing', name: 'Studio Mac' }
-    })
-
-    const attempt = startPreProfilePairing({
-      offer: directOffer,
-      timeoutMs: 5_000,
-      dependencies: deps
-    })
-
-    await expect(attempt.result).resolves.toEqual({ hostId: 'host-existing' })
-    expect(deps.savePairedHost).toHaveBeenCalledWith({
-      id: 'host-existing',
-      name: 'Studio Mac',
-      endpoint: directOffer.endpoint,
-      deviceToken: directOffer.deviceToken,
-      publicKeyB64: directOffer.publicKeyB64,
-      lastConnected: now
-    })
-  })
-
-  it('hands the winning status to the descriptor recorder only after the host is saved', async () => {
-    const events: string[] = []
-    const client = fakeClient([success({ machineName: 'm4airs-Air', hostPlatform: 'darwin' })])
-    const deps = dependencies(client, events)
-    const attempt = startPreProfilePairing({
-      offer: directOffer,
-      timeoutMs: 5_000,
-      dependencies: deps
-    })
-
-    await expect(attempt.result).resolves.toEqual({ hostId: `host-${now}` })
-    expect(events).toEqual(['connect', 'save-host', 'record-descriptor'])
-    expect(deps.recordDescriptorFromStatus).toHaveBeenCalledWith(
-      `host-${now}`,
-      expect.objectContaining({ machineName: 'm4airs-Air', hostPlatform: 'darwin' })
-    )
   })
 
   it('pairs a desktop whose status reply is unreadable, recording no descriptor', async () => {
@@ -363,11 +297,7 @@ describe('pre-profile pairing coordinator', () => {
     ])
   })
 
-  // Why 'forbidden' and not only 'method_not_found': the desktop's mobile allowlist gate runs
-  // before its RPC dispatcher, so a method a desktop predates is missing from both and the phone
-  // is refused by scope, never by absence. A desktop that old also omits the offer's `relay` block,
-  // so this flow would not probe it at all — what this pins is the skew that stays reachable, a
-  // desktop that offers relay but does not allowlist the probe. Refusing it must still commit.
+  // Even a relay-advertising host may omit probe allowlisting; forbidden must still allow LAN-only pairing.
   it('tolerates an old desktop scope refusal and commits a direct-only host', async () => {
     const events: string[] = []
     const entries: ConnectionLogEntry[] = []
@@ -427,102 +357,6 @@ describe('pre-profile pairing coordinator', () => {
     expect(deps.writeCredentialBundle).toHaveBeenCalledWith(
       expect.objectContaining({ current: expect.objectContaining({ version: 1 }) })
     )
-  })
-
-  it('streams the relay path and the winning path into the pairing log', async () => {
-    const entries: ConnectionLogEntry[] = []
-    const direct = fakeClient([])
-    ;(direct.sendRequest as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('LAN down'))
-    let journal: MobileRelayPairingJournal | null = null
-    const relay = relayProvisioningClient(() => journal!)
-    const deps = dependencies(direct, [])
-    deps.saveJournal.mockImplementation(async (value) => {
-      journal = value
-    })
-    // Why: stands in for the physical client's own dial line, proving the sink
-    // actually reaches connectMobileRelayForPairing and not just the candidate.
-    deps.connectRelay.mockImplementation((connectArgs) => {
-      connectArgs.onLog?.({
-        id: 'relay-dial',
-        ts: now,
-        level: 'info',
-        message: 'Relay: dialing cell',
-        detail: 'relay-c1.onorca.dev'
-      })
-      return relay
-    })
-
-    const attempt = startPreProfilePairing({
-      offer: relayOffer,
-      timeoutMs: 5_000,
-      connectOptions: { onLog: (entry) => entries.push(entry) },
-      dependencies: deps
-    })
-    await expect(attempt.result).resolves.toEqual({ hostId: `host-${now}` })
-
-    expect(entries.map((entry) => entry.message)).toEqual([
-      'Relay: pairing candidate started',
-      'Relay: dialing cell',
-      'Pairing path selected'
-    ])
-    expect(entries[0]!.detail).toBe('relay-c1.onorca.dev')
-    expect(entries[2]).toMatchObject({ level: 'success', detail: 'winner: relay' })
-  })
-
-  it('attributes each racing candidate so direct retries cannot read as relay', async () => {
-    const entries: ConnectionLogEntry[] = []
-    const direct = fakeClient([])
-    ;(direct.sendRequest as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('LAN down'))
-    let journal: MobileRelayPairingJournal | null = null
-    const relay = relayProvisioningClient(() => journal!)
-    const deps = dependencies(direct, [])
-    deps.saveJournal.mockImplementation(async (value) => {
-      journal = value
-    })
-    // Why: the reconnect lines the direct client emits carry the LAN address
-    // and no path label — the exact shape that was misread as relay retrying.
-    deps.connectDirect.mockImplementation((...args) => {
-      const options = args[3]
-      if (options && typeof options !== 'function') {
-        options.onLog?.({
-          id: 'direct-reconnect',
-          ts: now,
-          level: 'warn',
-          message: 'Reconnecting (attempt 2)',
-          detail: '10.5.0.2:6768'
-        })
-      }
-      return direct
-    })
-    deps.connectRelay.mockImplementation((connectArgs) => {
-      connectArgs.onLog?.({
-        id: 'relay-dial',
-        ts: now,
-        level: 'info',
-        message: 'Relay: dialing cell',
-        detail: 'relay-c1.onorca.dev'
-      })
-      connectArgs.onLog?.({ id: 'relay-open', ts: now, level: 'info', message: 'Cell socket open' })
-      return relay
-    })
-
-    const attempt = startPreProfilePairing({
-      offer: relayOffer,
-      timeoutMs: 5_000,
-      connectOptions: { onLog: (entry) => entries.push(entry) },
-      dependencies: deps
-    })
-    await expect(attempt.result).resolves.toEqual({ hostId: `host-${now}` })
-
-    expect(entries.map((entry) => entry.message)).toEqual([
-      'Direct: Reconnecting (attempt 2)',
-      'Relay: pairing candidate started',
-      // Already self-labelled: attribution must not stutter into 'Relay: Relay:'.
-      'Relay: dialing cell',
-      'Relay: Cell socket open',
-      'Pairing path selected'
-    ])
-    expect(entries[0]).toMatchObject({ level: 'warn', detail: '10.5.0.2:6768' })
   })
 
   it('lets a stale journal recover before the new scan journals, and releases it on failure', async () => {

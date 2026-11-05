@@ -2,9 +2,9 @@ import { ipcRenderer } from 'electron'
 import type {
   WorkspaceSpaceAnalysis,
   WorkspaceSpaceScanProgress
-} from '../../shared/workspace-space-types'
+} from '../../shared/workspace-disk-space/workspace-space-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
-import type { WorkspaceSpaceChange } from '../../shared/workspace-space-change'
+import type { WorkspaceSpaceChange } from '../../shared/workspace-disk-space/workspace-space-change'
 import type { PreloadApi } from '../api-types'
 
 export const workspaceSpaceApi = {
@@ -12,7 +12,6 @@ export const workspaceSpaceApi = {
   getCachedAnalysis: () => ipcRenderer.invoke('workspaceSpace:getCachedAnalysis'),
   cancel: () => ipcRenderer.invoke('workspaceSpace:cancel'),
   openWindow: () => ipcRenderer.invoke('workspaceSpace:openWindow'),
-  closeWindow: () => ipcRenderer.invoke('workspaceSpace:closeWindow'),
   publishWindowState: (state: unknown) =>
     ipcRenderer.invoke('workspaceSpace:publishWindowState', state),
   requestWindowState: () => ipcRenderer.invoke('workspaceSpace:requestWindowState'),

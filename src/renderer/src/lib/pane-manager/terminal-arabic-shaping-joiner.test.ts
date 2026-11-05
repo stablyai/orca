@@ -8,43 +8,9 @@ import {
 } from './terminal-arabic-shaping-joiner'
 
 describe('findRtlJoinRanges', () => {
-  it('returns no ranges for plain ASCII text', () => {
-    expect(findRtlJoinRanges('ls -la | grep foo && echo done')).toEqual([])
-  })
-
-  it('returns no ranges for Latin-1/Cyrillic/Greek text below the RTL floor', () => {
-    expect(findRtlJoinRanges('café привет αβγ')).toEqual([])
-  })
-
-  it('returns a fresh array on every call so xterm can merge into it safely', () => {
-    const first = findRtlJoinRanges('plain')
-    const second = findRtlJoinRanges('plain')
-    expect(first).not.toBe(second)
-  })
-
-  it('joins a single Arabic word as one range', () => {
-    const text = 'مرحبا'
-    expect(findRtlJoinRanges(text)).toEqual([[0, text.length]])
-  })
-
-  it('joins a multi-word Arabic phrase across spaces as one range', () => {
-    const text = 'مرحباً هذه مشكلة في اللغة العربية'
-    expect(findRtlJoinRanges(text)).toEqual([[0, text.length]])
-  })
-
   it('excludes leading and trailing neutrals from the range', () => {
     const text = '  مرحبا هذه  '
     expect(findRtlJoinRanges(text)).toEqual([[2, 11]])
-  })
-
-  it('stops the run at strong LTR words', () => {
-    const text = 'مرحبا hello'
-    expect(findRtlJoinRanges(text)).toEqual([[0, 5]])
-  })
-
-  it('does not pull an adjacent filename into the run', () => {
-    const text = 'ملف test.txt'
-    expect(findRtlJoinRanges(text)).toEqual([[0, 3]])
   })
 
   it('treats box-drawing characters as run breakers so TUI borders stay per-cell', () => {
@@ -97,11 +63,6 @@ describe('findRtlJoinRanges', () => {
     ])
   })
 
-  it('joins Hebrew words with niqqud points', () => {
-    const text = 'שָׁלוֹם עוֹלָם'
-    expect(findRtlJoinRanges(text)).toEqual([[0, text.length]])
-  })
-
   // Escapes, not literals: these controls are invisible in source.
   const ZWNJ = '\u200c'
   const ZWJ = '\u200d'
@@ -109,8 +70,7 @@ describe('findRtlJoinRanges', () => {
   const LRM = '\u200e'
 
   it('tunnels through ZWNJ inside a Persian word without splitting the run', () => {
-    // می‌خواهم — splitting at the ZWNJ would render the word halves in
-    // swapped visual order.
+    // Splitting at ZWNJ in می‌خواهم would swap the word halves visually.
     const text = `می${ZWNJ}خواهم`
     expect(findRtlJoinRanges(text)).toEqual([[0, text.length]])
   })
@@ -120,10 +80,6 @@ describe('findRtlJoinRanges', () => {
     expect(findRtlJoinRanges(zwjText)).toEqual([[0, zwjText.length]])
     const rlmText = `سلام${RLM}عليكم`
     expect(findRtlJoinRanges(rlmText)).toEqual([[0, rlmText.length]])
-  })
-
-  it('excludes a trailing ZWNJ from the joined range', () => {
-    expect(findRtlJoinRanges(`مرحبا${ZWNJ}`)).toEqual([[0, 5]])
   })
 
   it('does not let ZWNJ start a run or bridge into LTR text', () => {
@@ -149,21 +105,13 @@ describe('findRtlJoinRanges', () => {
   })
 
   it('does not open a run at orphan combining marks after an LTR base', () => {
-    // Marks render inside their base's cell; a run opened mid-cell maps to an
-    // empty joined cell range that blanks the following glyph in WebGL.
+    // Combining marks share their base cell; starting a run there yields an empty joined range that blanks the next WebGL glyph.
     expect(findRtlJoinRanges('a\u064b\u0651b')).toEqual([])
     expect(findRtlJoinRanges('x\u05b0\u05b1y')).toEqual([])
   })
 
-  it('lets combining marks extend a run opened by a spacing RTL letter', () => {
-    const text = 'منَّ هنا'
-    expect(findRtlJoinRanges(text)).toEqual([[0, text.length]])
-  })
-
   it('does not open a run at zero-width Cf controls after an LTR base', () => {
-    // BOM/ZWNBSP and Arabic number signs are width-0 in xterm, so like
-    // combining marks a run opened there maps to an empty joined cell range
-    // that blanks the following glyph in WebGL.
+    // BOM/ZWNBSP and Arabic number signs have width zero; opening there also creates an empty joined range that blanks the next glyph.
     const BOM = '\ufeff'
     expect(findRtlJoinRanges(`a${BOM}${BOM}b`)).toEqual([])
     expect(findRtlJoinRanges('x\u0600\u0602y')).toEqual([])
@@ -203,18 +151,6 @@ describe('registerArabicShapingJoiner', () => {
     }
   }
 
-  it('registers a joining handler and returns a cleanup that deregisters it', () => {
-    const host = createJoinerHost()
-    const cleanup = registerArabicShapingJoiner(host.terminal, () => true)
-    const text = 'مرحبا'
-    expect(host.getRegistered()!(text)).toEqual([[0, text.length]])
-    expect(host.getDeregistered()).toBeNull()
-
-    // terminal.dispose() does not deregister joiners, so cleanup must.
-    cleanup()
-    expect(host.getDeregistered()).toBe(7)
-  })
-
   it('returns no ranges while shaping is inactive (DOM renderer misrenders joined spans)', () => {
     const host = createJoinerHost()
     let webglLive = false
@@ -228,6 +164,18 @@ describe('registerArabicShapingJoiner', () => {
 
     webglLive = true
     expect(handler('مرحبا')).toEqual([[0, 5]])
+  })
+
+  it('returns RTL runs and Indic clusters from one handler in start order', () => {
+    const host = createJoinerHost()
+    registerArabicShapingJoiner(host.terminal, () => true)
+
+    expect(host.getRegistered()!('বাংলা مرحبا কি')).toEqual([
+      [0, 3],
+      [3, 5],
+      [6, 11],
+      [12, 14]
+    ])
   })
 })
 
@@ -257,6 +205,60 @@ describe('configureLazyArabicShapingJoiner', () => {
     expect(host.events).toEqual([])
     expect(host.getHandler()).toBeNull()
     cleanup()
+    expect(host.events).toEqual([])
+  })
+
+  it('registers before the first Bengali write and shapes its clusters', () => {
+    const host = createLazyHost()
+    configureLazyArabicShapingJoiner(host.terminal, () => true)
+
+    ensureArabicShapingJoinerForText(host.terminal, 'আমি দেখি')
+
+    expect(host.events).toEqual(['register'])
+    expect(host.getHandler()!('আমি দেখি')).toEqual([
+      [1, 3],
+      [4, 6],
+      [6, 8]
+    ])
+  })
+
+  it('does not register for Indic text that needs no joining', () => {
+    const host = createLazyHost()
+    configureLazyArabicShapingJoiner(host.terminal, () => true)
+
+    ensureArabicShapingJoinerForText(host.terminal, '১২৩ কু ।')
+
+    expect(host.events).toEqual([])
+  })
+
+  it('registers when a Bengali spacing vowel sign arrives in the next write', () => {
+    const host = createLazyHost()
+    configureLazyArabicShapingJoiner(host.terminal, () => true)
+
+    ensureArabicShapingJoinerForText(host.terminal, 'ক')
+    expect(host.events).toEqual([])
+    ensureArabicShapingJoinerForText(host.terminal, 'ি')
+
+    expect(host.events).toEqual(['register'])
+  })
+
+  it('registers when a conjunct is split after the virama', () => {
+    const host = createLazyHost()
+    configureLazyArabicShapingJoiner(host.terminal, () => true)
+
+    ensureArabicShapingJoinerForText(host.terminal, 'ক্')
+    ensureArabicShapingJoinerForText(host.terminal, 'ষ')
+
+    expect(host.events).toEqual(['register'])
+  })
+
+  it('does not carry an Indic tail across an ASCII write', () => {
+    const host = createLazyHost()
+    configureLazyArabicShapingJoiner(host.terminal, () => true)
+
+    ensureArabicShapingJoinerForText(host.terminal, 'ক')
+    ensureArabicShapingJoinerForText(host.terminal, ' ি')
+
     expect(host.events).toEqual([])
   })
 

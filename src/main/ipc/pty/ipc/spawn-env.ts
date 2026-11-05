@@ -2,11 +2,11 @@ import {
   isTerminalLeafId,
   makePaneKey,
   parseLegacyNumericPaneKey
-} from '../../../../shared/stable-pane-id'
+} from '../../../../shared/workspace-layout/stable-pane-id'
 import { isOpaqueRemintedPaneKey } from '../../../../shared/pane-key-alias'
-import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
-import { LocalPtyProvider } from '../../../providers/local-pty-provider'
-import { resolvePathEnvKey } from '../../../pty/windows-environment-path'
+import { isValidTerminalTabId } from '../../../../shared/workspace-layout/terminal-tab-id'
+import { LocalPtyProvider } from '../../../providers/local-pty/local-pty-provider'
+import { resolvePathEnvKey } from '../../../pty/environment/windows-path-segment-merge'
 import { routesFreshSpawnsToLocalProvider } from '../host-env/fresh-spawn-routing'
 import { parseValidPaneKey } from '../pane/key-state'
 import { shouldRefreshNativeClaudeAgentTeamsEnv } from '../pane/launch-authority'
@@ -17,7 +17,7 @@ import { prepareAntigravityAccountForLaunch } from '../../../antigravity/native-
 
 export async function assemblePtyIpcSpawnEnv(ctx: PtyIpcSpawnState): Promise<void> {
   const args = ctx.args
-  // Why: the daemon-backed provider skips LocalPtyProvider's buildSpawnEnv, so assemble the same host-local env here for parity.
+  // Daemon providers bypass LocalPtyProvider environment assembly; inject the same host-local state here.
   const baseEnvWithAuth = ctx.claudeAuth ? { ...args.env, ...ctx.claudeAuth.envPatch } : args.env
   const spawnPaneKey = baseEnvWithAuth?.ORCA_PANE_KEY
   const parsedSpawnPaneKey = parseValidPaneKey(spawnPaneKey)
@@ -75,7 +75,7 @@ export async function assemblePtyIpcSpawnEnv(ctx: PtyIpcSpawnState): Promise<voi
       null)
     : null
   if (shouldRefreshAgentTeamsEnv && ctx.preAllocatedHandle && runtime) {
-    // Why: Agent Teams ids/tokens are process-local, so the team env must be regenerated for the new leader PTY.
+    // Agent Teams tokens are process-local; regenerate them for the new leader PTY.
     const prepared = await runtime.prepareClaudeAgentTeamsLeaderForHandle({
       handle: ctx.preAllocatedHandle,
       baseEnv: ctx.baseEnv ?? {}
@@ -100,7 +100,7 @@ export async function assemblePtyIpcSpawnEnv(ctx: PtyIpcSpawnState): Promise<voi
     : undefined
   ctx.agentTeamsEnvToDelete = shouldRefreshAgentTeamsEnv ? ['TERM_PROGRAM'] : undefined
   stampPtySpawnPaneEnv(ctx.baseEnv, {
-    // Why: the renderer-sent key only picks commit bookkeeping; the env names the spawn's own tab+leaf.
+    // Renderer keys select bookkeeping, while environment identity must name this spawn's actual pane.
     pane: ctx.stablePaneKey
       ? {
           paneKey: ctx.stablePaneKey,
@@ -114,7 +114,7 @@ export async function assemblePtyIpcSpawnEnv(ctx: PtyIpcSpawnState): Promise<voi
         : undefined
   })
   ctx.validatedPaneKey = ctx.stablePaneKey
-  // Why: IPC tab/leaf metadata names the pane even when ORCA_PANE_KEY was not proven.
+  // Tab/leaf metadata still identifies the pane when its supplied ORCA_PANE_KEY was unproved.
   ctx.reservationPaneKey = ctx.metadataPaneKey ?? ctx.validatedPaneKey
   ctx.validatedLeafId = ctx.verifiedLeafId ?? ctx.metadataLeafId
   ctx.spawnTiming.mark('pane_env')

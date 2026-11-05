@@ -1,15 +1,15 @@
+export { resolveChecksActionAgent } from '@/lib/source-control-agent-picker'
 import { toast } from 'sonner'
 import {
   launchPullRequestAgentPrompt,
   type PullRequestAgentPromptLaunchMessages
 } from '@/lib/pull-request-agent-prompt-launch'
-import { readSourceControlLaunchRecipeAgentId } from '../../../shared/source-control-launch-agent-selection'
 import { useAppStore } from '@/store'
-import { resolveSourceControlActionRecipe } from '../../../shared/source-control-ai'
+import { resolveSourceControlActionRecipe } from '../../../shared/source-control/ai/source-control-ai-operation-policy'
 import {
   DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES,
   renderSourceControlActionCommandTemplate
-} from '../../../shared/source-control-ai-actions'
+} from '../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
 import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../shared/workspace-source'
 import type { LaunchSource } from '../../../shared/telemetry-events'
@@ -24,6 +24,7 @@ type StartFixChecksAgentArgs = {
   launchSource: LaunchSource
   telemetrySource?: WorkspaceCreateTelemetrySource
   openModalFallback?: () => void
+  onSetupRequired?: () => void
 }
 
 const FIX_CHECKS_LAUNCH_MESSAGES: PullRequestAgentPromptLaunchMessages = {
@@ -49,33 +50,36 @@ const FIX_CHECKS_LAUNCH_MESSAGES: PullRequestAgentPromptLaunchMessages = {
     )
 }
 
-export async function startFixChecksAgent(args: StartFixChecksAgentArgs): Promise<boolean> {
+export function startFixChecksAgent(args: StartFixChecksAgentArgs): Promise<boolean> {
+  const { basePrompt, ...launchArgs } = args
   const store = useAppStore.getState()
   const repo = store.repos.find((candidate) => candidate.id === args.repoId) ?? null
-  const recipe = resolveSourceControlActionRecipe({
-    settings: store.settings,
-    repo,
-    actionId: 'fixChecks'
-  })
-  const commandInput = renderSourceControlActionCommandTemplate(
-    recipe.commandInputTemplate ?? DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES.fixChecks,
-    { basePrompt: args.basePrompt }
-  ).trim()
-  if (!commandInput) {
-    toast.error(
-      translate(
-        'auto.lib.fix.checks.agent.launch.9f00d7df0c',
-        'Fix checks prompt is empty. Update Source Control AI settings.'
+  const recipe = structuredClone(
+    resolveSourceControlActionRecipe({
+      settings: store.settings,
+      repo,
+      actionId: 'fixChecks'
+    })
+  )
+  const renderPrompt = (): string => {
+    const prompt = renderSourceControlActionCommandTemplate(
+      recipe.commandInputTemplate ?? DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES.fixChecks,
+      { basePrompt }
+    ).trim()
+    if (!prompt) {
+      toast.error(
+        translate(
+          'auto.lib.fix.checks.agent.launch.9f00d7df0c',
+          'Fix checks prompt is empty. Update Source Control AI settings.'
+        )
       )
-    )
-    return false
+    }
+    return prompt
   }
-
-  return await launchPullRequestAgentPrompt({
-    ...args,
-    commandInput,
-    savedAgentId: readSourceControlLaunchRecipeAgentId(recipe),
-    agentArgs: recipe.agentArgs,
+  return launchPullRequestAgentPrompt({
+    ...launchArgs,
+    recipe,
+    renderPrompt,
     messages: FIX_CHECKS_LAUNCH_MESSAGES
   })
 }

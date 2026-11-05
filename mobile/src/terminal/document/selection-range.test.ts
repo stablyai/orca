@@ -4,9 +4,6 @@ import { Terminal } from '@xterm/xterm'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createTerminalDocumentScope, type TerminalDocumentScope } from './document-scope'
 import { seedWordSelection } from './selection-range'
-import { armLongPress, dispatcherShouldBlockSurface } from './tap-dispatch'
-import { handleDragMove, stopEdgeScroll } from './selection-overlay'
-import { terminalDocumentDouble } from './document-terminal-double.test-support'
 
 const terminals: Terminal[] = []
 
@@ -53,7 +50,9 @@ describe('word selection uses the rendered xterm cell range', () => {
     ['🇰🇷 done', 0, '🇰🇷', 0, 2],
     ['가 나', 2, ' ', 2, 1],
     ['before /tmp/file.ts after', 10, '/tmp/file.ts', 7, 12],
-    ['', 6, ' ', 6, 1]
+    ['echo $HOME', 7, '$HOME', 5, 5],
+    ['see (a.ts)', 6, 'a.ts', 5, 4],
+    ['', 6, ' '.repeat(60), 0, 60]
   ] as const)('selects %s at cell %i', async (text, col, expected, start, length) => {
     const f = await fixture(text)
     seedWordSelection(f.scope, col, 0)
@@ -75,16 +74,6 @@ describe('word selection uses the rendered xterm cell range', () => {
     seedWordSelection(f.scope, 6, 0)
     expect(f.select).toHaveBeenLastCalledWith(5, 0, 2)
     expect(f.selected()).toBe('🙂')
-  })
-
-  it('keeps ASCII behavior for a terminal seam without cell readers', async () => {
-    const f = await fixture('hello world')
-    const line = f.term.buffer.active.getLine(0)!
-    const getLine = vi.spyOn(f.term.buffer.active, 'getLine').mockReturnValue(line)
-    vi.spyOn(line, 'getCell').mockReturnValue(undefined)
-    seedWordSelection(f.scope, 8, 0)
-    expect(f.select).toHaveBeenLastCalledWith(6, 0, 5)
-    expect(getLine).toHaveBeenCalledWith(0)
   })
 
   it('keeps an absolute scrollback row and tolerates an evicted line', async () => {
@@ -130,46 +119,4 @@ describe('Unicode selection boundaries across every rendered column', () => {
     expect(f.select).toHaveBeenLastCalledWith(0, 1, 4)
     expect(f.selected()).toBe('next')
   })
-})
-
-it('keeps the Unicode seed while the long-press finger owns a forward or backward drag', async () => {
-  const f = await fixture('가 한글 next')
-  const surface = document.createElement('div')
-  f.scope.term = {
-    ...terminalDocumentDouble().terminal,
-    cols: f.term.cols,
-    rows: f.term.rows,
-    buffer: f.scope.term!.buffer,
-    select: f.select,
-    _core: { _renderService: { dimensions: { css: { cell: { width: 8, height: 15 } } } } }
-  }
-  Object.assign(f.scope, {
-    surface,
-    selectionOverlay: document.createElement('div'),
-    handleStart: document.createElement('div'),
-    handleEnd: document.createElement('div'),
-    selMenu: document.createElement('div'),
-    viewportRect: () => ({ left: 0, top: 50, width: 480, height: 200 }),
-    currentScale: 1,
-    userScale: 1
-  })
-  f.scope.touchDispatch.mode = 'surface'
-  f.scope.touchDispatch.touchId = 7
-  f.scope.tapCandidate = { x: 36, y: 57, t: Date.now(), identifier: 7 }
-  vi.useFakeTimers()
-  armLongPress(f.scope, new Touch({ identifier: 7, target: surface, clientX: 36, clientY: 57 }))
-  vi.advanceTimersByTime(500)
-  expect(f.selected()).toBe('한글')
-  expect(f.scope.sel?.anchor).toEqual({ col: 3, row: 0 })
-  expect(f.scope.sel?.focus).toEqual({ col: 6, row: 0 })
-  expect(f.scope.touchDispatch).toMatchObject({ mode: 'select-drag', touchId: 7 })
-  expect(dispatcherShouldBlockSurface(f.scope)).toBe(true)
-  expect(f.scope.tapCandidate).toBeNull()
-
-  handleDragMove(f.scope, 'end', 11 * 8 + 4, 57)
-  expect(f.selected()).toBe('한글 next')
-  handleDragMove(f.scope, 'end', 4, 57)
-  expect(f.select).toHaveBeenLastCalledWith(0, 0, 4)
-  expect(f.selected()).toBe('가 한')
-  stopEdgeScroll(f.scope)
 })

@@ -12,7 +12,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
-import { getWorkspaceStatusVisualMeta } from '../sidebar/workspace-status'
+import { getWorkspaceStatusVisualMeta } from '../sidebar/workspace-status/presentation/workspace-status'
 import type { DashboardCard, DashboardFilterOptions } from '../../../../shared/dashboard-snapshot'
 import {
   activeDashboardFilterCount,
@@ -40,8 +40,7 @@ type AgentDashboardToolbarProps = {
   filters: DashboardFilters
   onFiltersChange: (filters: DashboardFilters) => void
   searchInputRef: React.RefObject<HTMLInputElement | null>
-  /** Replaces the built-in dropdown. The map needs a popover: its panel holds
-   *  range sliders, and a Radix menu swallows the arrow keys those need. */
+  /** Use a popover for range sliders; Radix menus consume their arrow keys. */
   filterControl?: React.ReactNode
 }
 

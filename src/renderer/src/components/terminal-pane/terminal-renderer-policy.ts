@@ -1,15 +1,10 @@
-import { isGeminiTerminalTitle } from '@/lib/agent-status'
-import type { AgentType } from '../../../../shared/agent-status-types'
+import { isGeminiTerminalTitle as isGeminiTerminalTitleDefault } from '../../../../shared/agent-status/title/agent-title-core'
+import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 
 export type TerminalGpuAccelerationMode = GlobalSettings['terminalGpuAcceleration']
 
-/**
- * The resolved renderer decision for a pane. `gpuEnabled` is the content-compat
- * gate passed to `setPaneGpuRendering`; the user-setting mode gate and WebGL
- * capability/context-loss latches are still applied downstream by the pane
- * manager, so this decision never has to force WebGL on when it is unavailable.
- */
+/** Content compatibility gate only; PaneManager also enforces user mode, WebGL availability and context-loss containment. */
 export type RendererPolicyDecision = {
   gpuEnabled: boolean
   reason: 'user-setting' | 'capability' | 'context-loss' | 'agent-compatibility'
@@ -17,6 +12,7 @@ export type RendererPolicyDecision = {
 }
 
 export type ResolvePaneRendererPolicyInput = {
+  isGeminiTerminalTitle?: typeof isGeminiTerminalTitleDefault
   rawTitle: string | null
   ownerAgentType: AgentType | null | undefined
   userGpuMode: TerminalGpuAccelerationMode
@@ -26,9 +22,7 @@ export type ResolvePaneRendererPolicyInput = {
   inContextLossContainment?: boolean
 }
 
-// Why: an authoritative non-Gemini owner (OMP, Pi, Claude, a shell, …) outranks
-// raw title text. 'unknown' is not authoritative, so it does not veto the
-// title-derived Gemini fallback.
+// Proven non-Gemini ownership overrides raw title text; unknown ownership cannot veto title fallback.
 function isKnownNonGeminiOwner(ownerAgentType: AgentType | null | undefined): boolean {
   return (
     typeof ownerAgentType === 'string' &&
@@ -43,12 +37,11 @@ type GeminiCompatFallback = {
   confidence: 'authoritative' | 'fallback'
 }
 
-// Why: keep the existing title-driven Gemini fallback, but let owner evidence
-// veto it so a Pi/OMP pane whose cwd or session text mentions gemini is never
-// forced onto the DOM renderer.
+// Preserve Gemini title fallback unless current ownership proves another agent/shell.
 function resolveGeminiCompatFallback(
   rawTitle: string | null,
-  ownerAgentType: AgentType | null | undefined
+  ownerAgentType: AgentType | null | undefined,
+  isGeminiTerminalTitle = isGeminiTerminalTitleDefault
 ): GeminiCompatFallback {
   if (!isGeminiTerminalTitle(rawTitle ?? '')) {
     return { disable: false, confidence: 'authoritative' }
@@ -59,28 +52,20 @@ function resolveGeminiCompatFallback(
   return { disable: true, confidence: ownerAgentType === 'gemini' ? 'authoritative' : 'fallback' }
 }
 
-/**
- * Resolves the pane renderer (WebGL vs DOM content gate) from the user GPU
- * setting, WebGL capability/context-loss state, and owner/title evidence.
- *
- * Precedence: user `off` keeps the effective renderer on DOM downstream while
- * leaving the content gate open for a later mode switch; WebGL
- * unavailable/context-loss force DOM; explicit `on` keeps GPU regardless of
- * agent compatibility; `auto` applies the Gemini compatibility fallback only
- * when owner evidence does not attribute the pane to another agent/shell.
- */
+/** Resolve content policy while downstream enforces off. Unavailable/contained WebGL forces DOM; explicit on bypasses agent compatibility; auto uses Gemini fallback unless ownership vetoes it. */
 export function resolvePaneRendererPolicy(
   input: ResolvePaneRendererPolicyInput
 ): RendererPolicyDecision {
   const { rawTitle, ownerAgentType, userGpuMode } = input
 
   if (userGpuMode === 'off') {
-    // Why: the user-setting mode gate downstream already forces DOM. Mirror the
-    // title/owner content gate so a genuine Gemini pane stays DOM-gated while
-    // other panes keep the gate open for a later switch to `auto`/`on`.
-    const fallback = resolveGeminiCompatFallback(rawTitle, ownerAgentType)
-    // Why: carry the fallback's own confidence so identical inputs report the
-    // same confidence whether the effective mode is `off` or `auto`.
+    // Off already forces DOM downstream; keep the content gate accurate for a later mode change.
+    const fallback = resolveGeminiCompatFallback(
+      rawTitle,
+      ownerAgentType,
+      input.isGeminiTerminalTitle
+    )
+    // Retain fallback confidence consistently in off and auto modes.
     return {
       gpuEnabled: !fallback.disable,
       reason: 'user-setting',
@@ -99,7 +84,11 @@ export function resolvePaneRendererPolicy(
     return { gpuEnabled: true, reason: 'user-setting', confidence: 'authoritative' }
   }
 
-  const fallback = resolveGeminiCompatFallback(rawTitle, ownerAgentType)
+  const fallback = resolveGeminiCompatFallback(
+    rawTitle,
+    ownerAgentType,
+    input.isGeminiTerminalTitle
+  )
   if (fallback.disable) {
     return { gpuEnabled: false, reason: 'agent-compatibility', confidence: fallback.confidence }
   }

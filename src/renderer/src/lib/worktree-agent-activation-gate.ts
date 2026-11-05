@@ -1,7 +1,10 @@
 import { useAppStore } from '@/store'
-import type { PtyListedSession } from '../../../shared/pty-listed-session'
-import { parsePtySessionId, PTY_SESSION_ID_SEPARATOR } from '../../../shared/pty-session-id-format'
-import { parsePaneKey } from '../../../shared/stable-pane-id'
+import type { PtyListedSession } from '../../../shared/terminal/pty/lifecycle/pty-listed-session'
+import {
+  parsePtySessionId,
+  PTY_SESSION_ID_SEPARATOR
+} from '../../../shared/terminal/pty/lifecycle/pty-session-id-format'
+import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { worktreeIdsEqual } from '../../../shared/worktree/id'
 import { listActivationPtySessions } from './worktree-activation-pty-inventory'
@@ -14,8 +17,11 @@ import {
   adoptLiveWorkspacePtySurfaces,
   type LiveSurfaceAdoptionStore
 } from './worktree-agent-live-surface-adoption'
-import type { LiveTerminalSurfaceOwnerIndex } from './worktree-live-terminal-surface-owners'
-import { readWorktreeLiveTerminalSurfaceOwners } from './worktree-live-terminal-surface-owners'
+
+import {
+  type LiveTerminalSurfaceOwnerIndex,
+  readWorktreeLiveTerminalSurfaceOwners
+} from './worktree-live-terminal-surface-owners'
 import { isStructuredAgentSyntheticSleepingRecord } from './structured-agent-synthetic-sleeping-record'
 import {
   readWorktreeStructuredActivationInventory,
@@ -48,7 +54,7 @@ export type WorktreeAgentActivationOutcome =
 const inFlightByWorktreeId = new Map<string, Promise<WorktreeAgentActivationOutcome>>()
 const WORKSPACE_SESSION_READY_TIMEOUT_MS = 30_000
 
-function waitForWorkspaceSessionReady(): Promise<boolean> {
+export function waitForWorkspaceSessionReady(): Promise<boolean> {
   const isReady = () => {
     const state = useAppStore.getState()
     return state.workspaceSessionReady && state.terminalStartupRestorationReady
@@ -105,11 +111,18 @@ function sessionBelongsToWorkspace(sessionId: string, worktreeId: string): boole
 function liveSleepingAgentClaims(
   store: ActivationStore,
   worktreeId: string,
-  livePtyIds: ReadonlySet<string>,
+  liveSessions: readonly PtyListedSession[],
   structuredInventory: StructuredActivationInventory | null
 ): { keys: Set<string>; claimedPtyIds: Set<string> } {
   const keys = new Set<string>()
   const claimedPtyIds = new Set<string>()
+  const livePtyIds = new Set(liveSessions.map((session) => session.id))
+  // PTYs may be re-keyed (#21235) or spawned by peers; the agent still reports its original spawn pane key.
+  const livePtyIdBySpawnPaneKey = new Map(
+    liveSessions.flatMap((session) =>
+      session.paneKey ? [[session.paneKey, session.id] as const] : []
+    )
+  )
   for (const record of Object.values(store.sleepingAgentSessionsByPaneKey)) {
     if (record.worktreeId !== worktreeId) {
       continue
@@ -129,8 +142,12 @@ function liveSleepingAgentClaims(
       continue
     }
     const persistedPtyId = layoutPtyId ?? (tabPtyIds?.length === 1 ? tabPtyIds[0] : undefined)
-    if (persistedPtyId && livePtyIds.has(persistedPtyId)) {
-      claimedPtyIds.add(persistedPtyId)
+    const livePtyId =
+      persistedPtyId && livePtyIds.has(persistedPtyId)
+        ? persistedPtyId
+        : livePtyIdBySpawnPaneKey.get(record.paneKey)
+    if (livePtyId) {
+      claimedPtyIds.add(livePtyId)
       keys.add(getProviderSessionClaimKey(record))
     }
   }
@@ -189,25 +206,19 @@ export async function runWorktreeAgentActivationGate(
     return 'blocked'
   }
 
-  // Why either signal rather than a preference: a relay row's worktreeId can be seeded from the
-  // host's own ORCA_WORKTREE_ID, so it must widen the id-prefix match, never replace it — a session
-  // dropped from this set is a live agent the gate would fork a second writer onto.
+  // Union relay worktreeId and minted-prefix evidence: host ORCA_WORKTREE_ID can be foreign, and preferring it would omit live sessions then fork writers.
   const liveWorkspaceSessions = sessions.filter(
     (session) =>
       (session.worktreeId !== undefined && worktreeIdsEqual(session.worktreeId, worktreeId)) ||
       sessionBelongsToWorkspace(session.id, worktreeId)
   )
-  const liveWorkspacePtyIds = new Set(liveWorkspaceSessions.map((session) => session.id))
-  // Why: a session the host is killing was closed by the user (often just before a quit); a
-  // surface for it would bring the closed pane back. It still counts as live work below.
+  // Killing sessions may be user-closed panes; never resurrect surfaces, but still count their live work.
   const adoptablePtyIds = liveWorkspaceSessions
     .filter((session) => session.exiting !== true)
     .map((session) => session.id)
   let liveSurfaceAdopted = false
   if (adoptablePtyIds.length > 0) {
-    // Why: an unreadable census adopts nothing and mints nothing, so reporting 'adopted'
-    // would suppress the caller's seed and leave the workspace with no surface at all —
-    // fail-closed must still leave the user a usable pane (STA-5701).
+    // Unreadable census neither adopts nor mints; report empty so caller can provide a usable surface, not adopted-with-nothing (STA-5701).
     const adoption = await adoptLiveWorkspacePtySurfaces(
       deps.getState,
       worktreeId,
@@ -234,7 +245,7 @@ export async function runWorktreeAgentActivationGate(
   const claims = liveSleepingAgentClaims(
     store,
     worktreeId,
-    liveWorkspacePtyIds,
+    liveWorkspaceSessions,
     structuredInventory
   )
   const hasUnclaimedRecovery = Object.values(store.sleepingAgentSessionsByPaneKey).some(
@@ -251,8 +262,7 @@ export async function runWorktreeAgentActivationGate(
     return 'blocked'
   }
   const launched = deps.resume(worktreeId, { skipClaimKeys: claims.keys })
-  // 'empty' is the caller's directive — "this gate produced no surface, seed one" — not a
-  // claim the host had nothing; the callers re-check their own seeding guards first.
+  // Empty directs caller to seed, not a claim the host has nothing; caller rechecks its own guards.
   return launched > 0
     ? 'resumed'
     : liveSurfaceAdopted

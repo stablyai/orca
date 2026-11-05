@@ -8,8 +8,7 @@ import { claudeBackgroundArgs } from '../../shared/claude-background-run-isolati
 import { CLAUDE_MODEL_LIST_ARGS } from '../../shared/claude-model-list-probe'
 import { realClaudeAvailable, realClaudeCommand } from './claude-real-cli-availability-test-support'
 
-// Pins the contract with Claude itself: its `mcp_status` and `get_settings` answers (no turn spent)
-// in a throwaway home whose own settings allowlist its user-scope server.
+// Probe real CLI control answers in a temporary account home without spending a turn.
 const root = mkdtempSync(join(tmpdir(), 'orca-claude-isolation-'))
 afterEach(() => rmSync(root, { recursive: true, force: true }))
 

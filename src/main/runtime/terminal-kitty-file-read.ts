@@ -1,7 +1,7 @@
 import { constants } from 'node:fs'
 import { lstat, open, realpath } from 'node:fs/promises'
 import { isAbsolute, win32 } from 'node:path'
-import { isDescendantOrEqual } from '../ipc/filesystem-path-containment'
+import { isDescendantOrEqual } from '../ipc/filesystem/access/filesystem-path-containment'
 import {
   parseWslUncPath,
   toLinuxPath,
@@ -13,8 +13,8 @@ import {
   TERMINAL_KITTY_FILE_MAX_BYTES,
   type TerminalKittyFileRequest,
   type TerminalKittyFileResult
-} from '../../shared/terminal-kitty-file'
-import { localTerminalArtifactRoots } from './terminal/artifacts/artifact-integrity'
+} from '../../shared/terminal/images/terminal-kitty-file'
+import { kittyTemporaryRoots } from './terminal-kitty-temporary-roots'
 
 export async function readTerminalKittyFile(
   request: TerminalKittyFileRequest,
@@ -30,7 +30,7 @@ export async function readTerminalKittyFile(
   const [canonical, workspaceRoot, tempRoots] = await Promise.all([
     realpath(path),
     workspacePath ? realpath(workspacePath) : null,
-    localTerminalArtifactRoots(
+    kittyTemporaryRoots(
       owner.wslDistro ? toWindowsWslUncPath('/', owner.wslDistro) : (workspacePath ?? '')
     )
   ])

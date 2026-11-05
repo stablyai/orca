@@ -1,10 +1,8 @@
-// A layout-owner server's held panes (status 'held' in its frames) on this desktop's existing
-// newer-build banner. Reopen asks that server's main to release them; the desktop starts nothing,
-// and the server's next frames (status cleared, pane bound) show the result.
+// Show server frame status=held in the existing newer-build banner. Reopen asks server main; desktop starts nothing and subsequent cleared/bound frames show recovery.
 
 import type { NewerDaemonReopenResult } from '../../../shared/newer-daemon-hold'
-import { isTerminalLeafId, makePaneKey } from '../../../shared/stable-pane-id'
-import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
+import { isTerminalLeafId, makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
+import { toWebTerminalSurfaceTabId } from '../../../shared/workspace-layout/terminal-surface-id'
 import type { PublishedWorkspaceLayout } from '../../../shared/workspace-layout/workspace-layout-published'
 import { showServerHeldPanes } from '@/components/terminal-pane/newer-daemon-hold-state'
 import { callRuntimeRpc } from './runtime-rpc-client'

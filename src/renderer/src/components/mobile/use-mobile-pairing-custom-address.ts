@@ -4,7 +4,7 @@ import {
   addMobilePairingCustomAddress,
   normalizeMobilePairingCustomAddress,
   normalizeMobilePairingCustomAddresses
-} from '../../../../shared/mobile-pairing-custom-address'
+} from '../../../../shared/remote-runtime/pairing/mobile-pairing-custom-address'
 
 export function useMobilePairingCustomAddress(): string | undefined {
   const savedAddress = useAppStore((state) => state.settings?.mobilePairingCustomAddress)

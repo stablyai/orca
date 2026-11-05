@@ -3,8 +3,7 @@ import type {
   CodexManagedAccount,
   CodexManagedAccountRuntimeSelection
 } from '../../shared/managed-account-types'
-// Why: the renderer's switch-time lane guard has to key panes the same way a
-// launch does, so the lane vocabulary lives in shared rather than in main.
+// Share lane keys so renderer switch guards agree with launch routing.
 import {
   getWslSelectionKey,
   normalizeCodexAccountSelectionTarget,

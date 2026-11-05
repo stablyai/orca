@@ -1,6 +1,6 @@
 import type { AppState } from '../../../types'
 import type { Tab, TabGroup } from '../../../../../../shared/tab-types'
-import type { PersistedOpenFile } from '../../../../../../shared/workspace-session-state-types'
+import type { PersistedOpenFile } from '../../../../../../shared/workspace-session/workspace-session-state-types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
 import type { OpenFile } from '../types/open-file'
 import { isEditorTabContentType } from '../tabs/editor-tab-content-type'
@@ -141,7 +141,7 @@ export function migrateHydratedEditorTabsAndGroups(
     }
     const tabIdMigrations = new Map<string, string>()
     const nextTabs = tabs.map((tab) => {
-      // Why: widened for the shared live-move rekey — a move retargets every editor-family tab (diff/conflict-review/check-details), not only plain 'editor'.
+      // Live-move rekey covers all editor-family tabs, including diff/conflict/check-details.
       if (!isEditorTabContentType(tab.contentType)) {
         return tab
       }

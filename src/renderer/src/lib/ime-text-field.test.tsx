@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Command, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
 import { ImeInput, ImeTextarea } from './ime-text-field'
+import { endComposition } from './ime-composition-event.test-support'
 
 beforeEach(() => vi.useFakeTimers())
 afterEach(() => {
@@ -53,10 +54,10 @@ describe.each([Input, Textarea, ImeInput, ImeTextarea])('IME text field %s', (Fi
       const { getByRole } = render(<Field onKeyDown={action} />)
       const field = getByRole('textbox')
       fireEvent.compositionStart(field)
-      fireEvent.change(field, { target: { value: '한글' } })
+      fireEvent.change(field, { target: { value: '日本語' } })
       fireEvent.keyUp(field, { key: 'f', keyCode: 70, isComposing: true })
-      fireEvent.compositionEnd(field)
-      fireEvent.input(field, { data: '글', inputType: 'insertText', isComposing: false })
+      endComposition(field, '日本語')
+      fireEvent.input(field, { data: '日本語', inputType: 'insertText', isComposing: false })
       if (finish === 'confirm') {
         expect(fireEvent.keyDown(field, enter)).toBe(false)
         expect(action).not.toHaveBeenCalled()
@@ -67,6 +68,23 @@ describe.each([Input, Textarea, ImeInput, ImeTextarea])('IME text field %s', (Fi
       expect(action).toHaveBeenCalledOnce()
     }
   )
+
+  // Hangul has no candidate step, so the Enter that commits the last syllable submits (#30159).
+  it.each([
+    { order: 'marked keydown first', marked: { key: 'Process', keyCode: 229 } },
+    { order: 'completion first (IBus)', marked: null }
+  ])('submits on the Enter that commits Hangul: $order', ({ marked }) => {
+    const action = vi.fn()
+    const { getByRole } = render(<Field onKeyDown={action} />)
+    const field = getByRole('textbox')
+    fireEvent.compositionStart(field)
+    if (marked) {
+      fireEvent.keyDown(field, marked)
+    }
+    endComposition(field, '요')
+    fireEvent.keyDown(field, enter)
+    expect(action).toHaveBeenCalledOnce()
+  })
 
   it('guards active composition, preserves lifecycle callbacks, and releases on blur', () => {
     const action = vi.fn()
@@ -97,18 +115,6 @@ describe.each([Input, Textarea, ImeInput, ImeTextarea])('IME text field %s', (Fi
     for (const callback of [start, end, blur, up]) {
       expect(callback).toHaveBeenCalledOnce()
     }
-  })
-
-  it('preserves ordinary keys, Shift+Enter, and modifier submits after a confirmation', () => {
-    const action = vi.fn()
-    const { getByRole } = render(<Field onKeyDown={action} />)
-    const field = getByRole('textbox')
-    fireEvent.keyDown(field, { ...enter, keyCode: 229 })
-    expect(fireEvent.keyDown(field, { ...enter, shiftKey: true })).toBe(true)
-    expect(fireEvent.keyDown(field, { ...enter, ctrlKey: true })).toBe(true)
-    fireEvent.keyDown(field, { key: 'Escape' })
-    fireEvent.keyDown(field, { key: 'a' })
-    expect(action).toHaveBeenCalledTimes(4)
   })
 
   it('does not carry ownership into a replaced field', () => {

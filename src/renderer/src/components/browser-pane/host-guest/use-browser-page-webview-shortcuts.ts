@@ -8,11 +8,7 @@ import { isEditableKeyboardTarget } from './browser-keyboard'
 import { addBrowserPageZoomEventListener, type BrowserPageZoomCommand } from './browser-page-zoom'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
 
-/**
- * History, reload and zoom chords for a <webview>-backed pane — local and client-hosted alike.
- * Each one is handled twice: once for chrome focus, where the chord never leaves the renderer,
- * and once for the IPC main forwards when the guest (its own Chromium process) holds focus.
- */
+/** Handle chrome chords in the renderer and guest chords through main’s IPC; focused guests own a separate WebContents. */
 export function useBrowserPageWebviewShortcuts({
   browserTabId,
   workspaceId,
@@ -34,8 +30,7 @@ export function useBrowserPageWebviewShortcuts({
 }): void {
   const keybindings = useAppStore((state) => state.keybindings)
 
-  // Browser history shortcuts (renderer path: focus on browser chrome)
-  // Why: macOS can't deliver Logitech side-buttons to Electron; Logi Options+ remaps them to history chords, handled here when chrome is focused.
+  // Logi Options+ remaps macOS side-buttons to history chords that chrome must handle here.
   useEffect(() => {
     if (chromeShortcutScope === 'inactive') {
       return
@@ -56,7 +51,6 @@ export function useBrowserPageWebviewShortcuts({
       e.preventDefault()
       // Why: stop other window capture listeners (workspace, embedded editors) from also acting.
       e.stopImmediatePropagation()
-      // Why: Logitech Options+ side-button remaps arrive as these chords on macOS; route through the same nav path as the toolbar.
       if (direction === 'back') {
         webviewRef.current?.goBack()
       } else {
@@ -67,8 +61,6 @@ export function useBrowserPageWebviewShortcuts({
     return () => removeAppKeyListener('keydown', handleKeyDown)
   }, [chromeShortcutScope, keybindings, webviewRef, workspaceId])
 
-  // Browser history shortcuts (IPC path: focus inside webview guest)
-  // Why: a focused webview is a separate WebContents, so main forwards the chords back here.
   useEffect(() => {
     if (!isActive) {
       return
@@ -77,7 +69,6 @@ export function useBrowserPageWebviewShortcuts({
       if (browserPageId !== browserTabId) {
         return
       }
-      // Why: Logitech Options+ side-button remaps arrive as these chords on macOS; route through the same nav path as the toolbar.
       if (direction === 'back') {
         webviewRef.current?.goBack()
       } else {
@@ -86,8 +77,6 @@ export function useBrowserPageWebviewShortcuts({
     })
   }, [browserTabId, isActive, webviewRef])
 
-  // Cmd/Ctrl+R — reload (renderer path: focus on browser chrome, not in guest)
-  // Why: guest shortcut forwarding never fires when focus is on browser chrome, so handle the chord directly here.
   useEffect(() => {
     if (chromeShortcutScope === 'inactive') {
       return
@@ -118,8 +107,6 @@ export function useBrowserPageWebviewShortcuts({
     return () => removeAppKeyListener('keydown', handleKeyDown)
   }, [chromeShortcutScope, keybindings, reloadWebviewOrRecoverGuest, workspaceId])
 
-  // Cmd/Ctrl+R — reload (IPC path: focus inside webview guest)
-  // Why: a focused guest is a separate Chromium process, so main forwards the chord back here.
   useEffect(() => {
     if (!isActive) {
       return

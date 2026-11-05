@@ -1,15 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'expo-router'
 import { PickerModal } from '../components/PickerModal'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { hostPickerOptions } from '../components/use-connected-host-picker'
 import { selectConnectableHostProfiles } from '../transport/host-catalog-selection'
 import { loadHostCatalog } from '../transport/host-store'
 import type { HostProfile } from '../transport/types'
 
-/**
- * Home's "Create Workspace On" picker, inside the overlay so the drawer that follows opens from the
- * same window. A pick starts the load at once, so the loading drawer opens as the picker leaves.
- */
+// Keep picker and loading drawer in the overlay’s window so the load can start as selection leaves.
 export function NewWorkspaceHostPicker({
   hostIds,
   onPick
@@ -17,12 +15,12 @@ export function NewWorkspaceHostPicker({
   hostIds: readonly string[]
   onPick: (hostId: string) => void
 }) {
+  const t = useMobileTranslation()
   const router = useRouter()
   const hosts = useOfferedHosts(hostIds)
   const [open, setOpen] = useState(true)
   const pickedRef = useRef(false)
-  // Nothing to pick (an unreadable catalog, or every offered desktop gone) leaves the overlay rather
-  // than holding an invisible screen over Home.
+  // Exit if no usable desktop remains; otherwise an invisible overlay would block Home.
   const nothingToPick = hosts !== null && hosts.length === 0
   useEffect(() => {
     if (nothingToPick) {
@@ -31,7 +29,7 @@ export function NewWorkspaceHostPicker({
   }, [nothingToPick, router])
   return (
     <PickerModal
-      title="Create Workspace On"
+      title={t('newWorkspace.hostPicker.title', 'Create Workspace On')}
       visible={hosts !== null && !nothingToPick && open}
       options={hostPickerOptions(hosts ?? [])}
       selected=""
@@ -49,7 +47,7 @@ export function NewWorkspaceHostPicker({
   )
 }
 
-/** The offered desktops' profiles, in the offered order; `null` until the catalog is read, `[]` if it can't be. */
+// Preserve offered order; null is loading and empty is unreadable/unavailable.
 function useOfferedHosts(hostIds: readonly string[]): HostProfile[] | null {
   const [hosts, setHosts] = useState<HostProfile[] | null>(null)
   const key = hostIds.join(',')

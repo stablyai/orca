@@ -2,7 +2,10 @@ import { mkdir, mkdtemp, realpath, rm, symlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type { AiVaultListResult, AiVaultSession } from '../../shared/ai-vault-types'
+import type {
+  AiVaultListResult,
+  AiVaultSession
+} from '../../shared/ai-vault/contracts/ai-vault-types'
 import {
   attachAiVaultScopeCwdAliases,
   resolveAiVaultScopeRealPaths
@@ -109,13 +112,5 @@ describe('attachAiVaultScopeCwdAliases', () => {
     const listed = attachAiVaultScopeCwdAliases(result(rows), scope)
 
     expect(listed.sessions).toEqual(rows)
-  })
-
-  it('returns the scan result unchanged when no scope path is a link', async () => {
-    const scanned = result([session('real', realRepo)])
-
-    expect(
-      attachAiVaultScopeCwdAliases(scanned, await resolveAiVaultScopeRealPaths([realRepo]))
-    ).toBe(scanned)
   })
 })

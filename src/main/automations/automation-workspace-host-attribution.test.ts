@@ -3,19 +3,14 @@ import {
   createSqliteTestStore,
   createStore as createFreshStore,
   testState
-} from '../persistence-test-harness'
-import { resetRetirementCollisionKeyCacheForTests } from '../worktree-name-retirement'
-/**
- * A folder workspace can pin its execution host while its repo stays local.
- * The desktop authority used to project only the repo, so those records listed
- * under Self while dispatch sent them to an SSH host.
- */
+} from '../persistence/persistence-test-harness'
+import { resetRetirementCollisionKeyCacheForTests } from '../workspaces/removal/retirement/worktree-name-retirement'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { Automation } from '../../shared/automations-types'
-import type { FolderWorkspace } from '../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../shared/project-group-types'
 import type { ProjectHostSetup } from '../../shared/project-types'
 import type { Repo } from '../../shared/repo-types'
@@ -23,7 +18,7 @@ import type { SshTarget } from '../../shared/ssh-types'
 import { getDefaultPersistedState } from '../../shared/constants'
 import { AUTOMATION_ORPHAN_ISSUES } from '../../shared/automation-list-scope'
 import { AutomationService } from './service'
-import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
+import { installFakeAppEnvironment } from '../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 
 let hasCreatedStoreInCase = false
 
@@ -63,7 +58,6 @@ const GROUPS: ProjectGroup[] = [
   { id: 'group-1', name: 'Work', parentPath: '/work' }
 ] as ProjectGroup[]
 
-/** One local repo and one SSH repo in the same scope: no single host owns it. */
 const AMBIGUOUS_REPOS: Repo[] = [
   ...REPOS,
   {
@@ -128,7 +122,8 @@ async function createStore(
   }
   vi.resetModules()
   installFakeAppEnvironment({ getPath: () => testState.dir })
-  const { Store, initDataPath } = await import('../persistence')
+  const { Store } = await import('../persistence/loading-store/store')
+  const { initDataPath } = await import('../persistence/loading-store/user-data-path')
   initDataPath()
   return createSqliteTestStore(Store, { dataFile: join(testState.dir, 'orca-data.json') })
 }
@@ -145,8 +140,7 @@ afterEach(async () => {
 })
 
 describe('folder-workspace host attribution', () => {
-  // The stored pin is `connectionId`; `executionHostId` is a renderer-side stamp that
-  // normalization drops, so main can only ever see this form.
+  // Main persists connectionId; normalization drops the renderer’s executionHostId stamp.
   it('files a pinned workspace under its SSH host instead of Self', async () => {
     const store = await createStore([folderWorkspace({ connectionId: 'ssh-1' })], [])
 
@@ -185,11 +179,7 @@ describe('folder-workspace host attribution', () => {
 const AMBIGUOUS_REFUSAL =
   'The automation workspace spans more than one host, so Orca cannot tell which one to run it on.'
 
-/**
- * Built through the store rather than seeded: load-time projection replaces any
- * repo-backed setup written by hand, so a literal run context would point at a
- * setup that no longer exists and be refused for that instead of the ambiguity.
- */
+/** Create through Store so normalization cannot invalidate the seeded setup before the ambiguity check. */
 async function ambiguousStore() {
   vi.setSystemTime(new Date('2026-05-13T08:00:00'))
   const store = await createStore([folderWorkspace({})], AMBIGUOUS_REPOS, { automations: [] })
@@ -207,7 +197,6 @@ async function ambiguousStore() {
   return { store, automation }
 }
 
-/** One scheduler pass. `nextRunAt` advancing is the signal that it finished. */
 async function evaluated(
   seeded: Awaited<ReturnType<typeof ambiguousStore>>,
   start: () => void
@@ -221,11 +210,6 @@ async function evaluated(
   )
 }
 
-/**
- * The list calls this record an orphan, so the authority that owns it must refuse
- * to run it. Resolution would otherwise pick one of the two hosts on its own and
- * run the user's prompt somewhere they never chose — on a host they may not trust.
- */
 describe('dispatch refused for an ambiguous workspace host', () => {
   beforeEach(() => {
     testState.dir = mkdtempSync(join(tmpdir(), 'automation-ambiguous-dispatch-'))
@@ -254,7 +238,6 @@ describe('dispatch refused for an ambiguous workspace host', () => {
     service.stop()
   })
 
-  // Serve mode has no renderer to disable actions, so the authority is the only guard.
   it('refuses the headless dispatch, which has no ambiguity check of its own', async () => {
     const seeded = await ambiguousStore()
     const dispatcher = vi.fn(async () => ({ workspaceId: 'folder:fw-1', terminalSessionId: 't1' }))

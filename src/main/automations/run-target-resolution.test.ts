@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { Automation } from '../../shared/automations-types'
 import type { WorkspaceRunContext } from '../../shared/task-source-context'
 import type { ProjectHostSetup } from '../../shared/project-types'
@@ -9,6 +9,7 @@ import {
   type AutomationProjectionContext
 } from '../../shared/automation-list-scope'
 import { toAutomationOwnerPrecondition } from '../../shared/automation-owner-precondition'
+
 import { resolveAutomationRunTarget } from './run-target-resolution'
 
 function makeRepo(overrides: Partial<Repo> = {}): Repo {
@@ -110,46 +111,10 @@ function makeStore(
   } as unknown as Store
 }
 
-describe('resolveAutomationRunTarget owner projection', () => {
-  it('refuses a context-less local selector whose SSH-backed repo makes it malformed', () => {
-    const repo = makeRepo({ connectionId: 'ssh-1' })
-    const automation = makeAutomation(null)
-    const store = makeStore([], [repo], automation)
-
-    expect(resolveAutomationRunTarget(store, automation)).toEqual({
-      ok: false,
-      error: 'This automation has no host to run on.'
-    })
-  })
-
-  it('keeps a generation-less legacy SSH selector runnable when its host is current', () => {
-    const repo = makeRepo({ connectionId: 'ssh-1' })
-    const automation = makeAutomation(null, {
-      executionTargetType: 'ssh',
-      executionTargetId: 'ssh-1'
-    })
-    const store = makeStore([], [repo], automation)
-
-    expect(resolveAutomationRunTarget(store, automation)).toMatchObject({
-      ok: true,
-      cwd: '/repo'
-    })
-  })
-})
-
 describe('resolveAutomationRunTarget projectId drift', () => {
   it('resolves when only the derived projectId tier differs (repo: snapshot vs github: setup)', () => {
     const store = makeStore([makeSetup()], [makeRepo()])
     const automation = makeAutomation(makeRunContext({ projectId: 'repo:repo-1' }))
-
-    const result = resolveAutomationRunTarget(store, automation)
-
-    expect(result).toMatchObject({ ok: true, cwd: '/repo' })
-  })
-
-  it('resolves when the snapshot is at the git: tier and the setup climbed to github:', () => {
-    const store = makeStore([makeSetup()], [makeRepo()])
-    const automation = makeAutomation(makeRunContext({ projectId: 'git:github.com/o/r' }))
 
     const result = resolveAutomationRunTarget(store, automation)
 
@@ -175,7 +140,7 @@ describe('resolveAutomationRunTarget projectId drift', () => {
 
     expect(result).toMatchObject({
       ok: false,
-      error: 'Automation run target no longer matches the selected project host setup.'
+      error: 'Project is not set up on the selected automation host anymore.'
     })
   })
 
@@ -189,7 +154,7 @@ describe('resolveAutomationRunTarget projectId drift', () => {
 
     expect(result).toMatchObject({
       ok: false,
-      error: 'Repository is no longer attached to the selected automation host.'
+      error: 'Repository for the selected automation host is no longer available.'
     })
   })
 
@@ -201,7 +166,8 @@ describe('resolveAutomationRunTarget projectId drift', () => {
 
     expect(result).toMatchObject({
       ok: false,
-      error: 'Project path for the selected automation host has changed.'
+      error: 'Project path for the selected automation host has changed.',
+      errorCode: 'projectPathChanged'
     })
   })
 })

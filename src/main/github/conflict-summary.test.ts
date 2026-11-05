@@ -4,17 +4,15 @@ import { tmpdir } from 'node:os'
 import { isAbsolute, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-// Why these tests exist: the conflict-summary derivation used to re-run a
-// network `git fetch` plus a four-subprocess chain on every PR refresh tick
-// (measured ~490 full derivations in 2.1h on one machine). They pin the
-// regression contract by counting subprocess spawns: unchanged inputs must
-// cost zero subprocesses, and the base fetch must run at most once per
-// throttle window.
+// Count subprocesses: unchanged OIDs reuse summaries and base fetches share a throttle window.
 
 const gitExecFileAsyncMock = vi.hoisted(() => vi.fn())
 const scratchFolderPrefixes = vi.hoisted((): string[] => [])
 
-vi.mock('../git/runner', () => ({ gitExecFileAsync: gitExecFileAsyncMock }))
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  gitExecFileAsync: gitExecFileAsyncMock
+}))
 // Why: off Windows a WSL objects path is relative, so a real scratch dir would land in the cwd.
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFsPromises>()
@@ -30,9 +28,9 @@ vi.mock('node:fs/promises', async (importOriginal) => {
   }
 })
 
-import { findGitSubcommandIndex } from '../../shared/git-command-classification'
-import { GIT_CAPABILITY_RETRY_INTERVAL_MS } from '../../shared/git-capability-cache'
-import { getLocalGitCapabilityCache } from '../git/git-capability-state'
+import { findGitSubcommandIndex } from '../../shared/git/commands/git-command-classification'
+import { GIT_CAPABILITY_RETRY_INTERVAL_MS } from '../../shared/git/commands/git-capability-cache'
+import { getLocalGitCapabilityCache } from '../git/command-runner/git-capability-state'
 import { CONFLICT_SUMMARY_BASE_FETCH_WINDOW_MS } from './conflict-summary-cache'
 import { __resetPRConflictSummaryCachesForTests, getPRConflictSummary } from './conflict-summary'
 
@@ -145,7 +143,6 @@ describe('getPRConflictSummary caching', () => {
     expect(afterExpiry).toEqual(expectedSummary)
     expect(spawnCount('fetch')).toBe(2)
     expect(spawnCount('rev-parse')).toBe(2)
-    // Why: same (headRefOid, latestBaseOid) pair — the summary cache still hits.
     expect(spawnCount('merge-base')).toBe(1)
     expect(spawnCount('rev-list')).toBe(1)
     expect(spawnCount('merge-tree')).toBe(1)
@@ -296,8 +293,7 @@ describe('getPRConflictSummary caching', () => {
     expect(summary).toEqual(expectedSummary)
     expect(spawnCount('fetch')).toBe(1)
 
-    // Why: a failed fetch attempt must also be throttled — offline machines
-    // were the worst case, paying the 10s fetch timeout on every tick.
+    // Failed fetches need the same throttle or offline polling repeatedly pays the timeout.
     const repeat = await deriveSummary()
     expect(repeat).toEqual(expectedSummary)
     expect(spawnCount('fetch')).toBe(1)
@@ -367,8 +363,7 @@ describe('getPRConflictSummary caching', () => {
   it('keeps identities distinct when paths or ref names contain a joiner character', async () => {
     mockGitDispatch()
 
-    // Why: these two calls alias under naive pipe-joined keys — the segment
-    // boundary shifts between repoPath and baseRefName.
+    // Pipe joining would alias these distinct repo/ref segment boundaries.
     await getPRConflictSummary('/repo|x', 'main', 'github-base-oid', 'head-oid-1', {})
     await getPRConflictSummary('/repo', 'x|main', 'github-base-oid', 'head-oid-1', {})
 
@@ -384,11 +379,9 @@ describe('getPRConflictSummary caching', () => {
     await expect(deriveSummary()).resolves.toBeUndefined()
     const failureSpawns = spawnCount()
 
-    // Within the window the failure is negative-cached: zero subprocesses.
     await expect(deriveSummary()).resolves.toBeUndefined()
     expect(spawnCount()).toBe(failureSpawns)
 
-    // After expiry the derivation retries (a fetch may have brought objects in).
     vi.setSystemTime(1_750_000_000_000 + CONFLICT_SUMMARY_BASE_FETCH_WINDOW_MS + 1_000)
     mockGitDispatch()
     await expect(deriveSummary()).resolves.toEqual(expectedSummary)
@@ -447,7 +440,6 @@ describe('getPRConflictSummary caching', () => {
         }
       })
 
-      // The first check learns that this Git writes trees; the next one is quarantined.
       await expect(deriveSummary('head-oid-1')).resolves.toEqual(expectedSummary)
       await expect(deriveSummary('head-oid-2')).resolves.toEqual(expectedSummary)
 

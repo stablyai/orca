@@ -4,7 +4,7 @@ import {
 } from '../../../shared/tab-title-resolution'
 import type { Tab } from '../../../shared/tab-types'
 import { getEditorDisplayLabel } from '@/components/editor/editor-labels'
-import { buildPaletteTabDocument } from './palette-match/tab-document'
+import { buildPaletteTabDocument } from '../../../shared/palette-match/tab-document'
 import {
   getPaletteWorktreeIdentity,
   isPaletteCurrentWorktree,
@@ -33,7 +33,7 @@ import {
   isUnifiedTabOwnedByWorktree
 } from './unified-tab-host-ownership'
 import type { OpenFile } from '@/store/slices/editor'
-import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
 import { isWorkspaceTabContentType } from './workspace-tab-palette-content-type'
 
 function getActiveUnifiedTabId({

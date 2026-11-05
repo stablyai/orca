@@ -1,10 +1,4 @@
-// `agentSession.subscribeTurnCompletions` — every structured turn that settles from now on, and,
-// for a client that asks with `includePrompts`, every approval or question newly put to the user.
-//
-// Separate from `agentSession.subscribeStatus` because it answers a different question. Status is
-// state a late subscriber still needs, so that stream opens with a snapshot of every session. A
-// completion is an edge that has already passed, so this one opens with nothing and replays
-// nothing: a client that was away during a completion has missed it, by decision.
+// Emit future turn completions and opted-in prompts only; unlike status snapshots, missed edges never replay.
 
 import { defineMethod, defineStreamingMethod } from '../core'
 import {
@@ -18,19 +12,29 @@ import {
 import { structuredAgentSessionTurnCompletionSubscriptionId } from './structured-agent-session-subscription-id'
 import { bindStructuredAgentSessionStream } from './structured-agent-session-status-stream'
 import { clientReadsStructuredSessionAgent } from './structured-agent-session-policy'
+import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 
 export const STRUCTURED_AGENT_SESSION_TURN_COMPLETION_METHODS = [
-  // Retire only deliveries whose journal cause the client's accepted read covered: the session and
-  // its journal epoch already name them, so no host is installed to answer. True: the read applied.
+  // Retire delivered attention covered by the journal boundary without installing the host.
   defineMethod({
     name: 'agentSession.acknowledgeAttention',
     permission: 'workspace',
     params: AcknowledgeAttentionParams,
-    handler: (params, ctx) => {
+    handler: async (params, ctx) => {
       requireStructuredCapability(ctx)
-      ctx.runtime.retireStructuredAttention({
-        sessionId: params.sessionId,
-        observedCursor: params.observedCursor
+      const host = getStructuredAgentSessionHost()
+      const scope = host
+        ? host.attentionReads.sessionLocation(params.sessionId)
+        : (await ctx.runtime.openAgentSessionRecordStore()).getConversation(params.sessionId)
+            ?.location
+      ctx.runtime.acknowledgeNotificationAttention({
+        reads: [
+          {
+            sessionId: params.sessionId,
+            observedCursor: params.observedCursor,
+            ...(scope ? { scope } : {})
+          }
+        ]
       })
       return { acknowledged: true }
     }

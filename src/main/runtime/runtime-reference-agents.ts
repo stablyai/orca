@@ -1,4 +1,4 @@
-import type { AgentStatusIpcPayload } from '../../shared/agent-status-ipc-payload'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
 import {
   LOCAL_EXECUTION_HOST_ID,
   getRepoExecutionHostId,
@@ -7,23 +7,24 @@ import {
 } from '../../shared/execution-host'
 import type { Repo } from '../../shared/repo-types'
 import type { FleetAgentStatusEvidence } from '../../shared/orchestration-fleet-agent-status-evidence'
-import type { PtyLivenessVerdict } from '../../shared/pty-liveness-verdict'
+import type { PtyLivenessVerdict } from '../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 import { composeWorktreeHostIdentity } from '../../shared/worktree/host-qualified-identity'
 import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId
-} from '../../shared/structured-agent-session-projection'
+} from '../../shared/agent-session/view/structured-agent-session-projection'
 import { formatOrcaSessionAddress, isOrcaSessionId } from '../../shared/orca-session-address'
-import { peekOpenedAgentSessionRecordStore } from './agent-session-record-store-slot'
+import { peekOpenedAgentSessionRecordStore } from './agent-session/records/agent-session-record-store-slot'
 import type { OrchestrationDb } from './orchestration/db'
 import { structuredSessionMailReach } from './orchestration/structured-session-mail-address'
 import {
   clearedInto,
+  conversationRecordReader,
   readAgentSessionRecordStore,
   type AgentSessionRecordReader
 } from './orchestration/structured-session-lineage'
-import { observeStructuredSession } from './structured-worker-authority'
-import { structuredWorkerHostScope } from './structured-worker-identity'
+import { observeStructuredSession } from './orchestration/terminal-authority/structured-sessions/structured-worker-authority'
+import { structuredWorkerHostScope } from './orchestration/terminal-authority/structured-sessions/structured-worker-identity'
 import type { ReferenceAgentCandidate, ReferenceAgentIndex } from './runtime-reference-find'
 
 export type ReferenceAgentSource = {
@@ -51,7 +52,7 @@ export function createReferenceAgentIndex(
   runtime: ReferenceAgentSource,
   db: OrchestrationDb | null,
   sessions: AgentSessionRecordReader | null = readAgentSessionRecordStore() ??
-    peekOpenedAgentSessionRecordStore(),
+    coldConversationReader(),
   workspaceKeys?: ReadonlySet<string>,
   connectionHosts?: ReadonlyMap<string, ExecutionHostId | null>
 ): ReferenceAgentIndex {
@@ -64,10 +65,14 @@ export function createReferenceAgentIndex(
     index.set(key, entries)
   }
   const visible = sessions?.getVisibleSessionTabIndex?.()
+  let canonicalRecords: ReturnType<AgentSessionRecordReader['listRecords']> | undefined
+  const canonicalStore = {
+    listRecords: () => (canonicalRecords ??= readAgentSessionRecordStore()?.listRecords() ?? [])
+  }
   for (const record of sessions?.listRecords() ?? []) {
     if (
       clearedInto(record) ||
-      // Why: records outlive their chat tab; a closed chat is not an agent on the workspace.
+      // Closed chat records outlive tabs and must not surface as workspace agents.
       (visible?.present && !visible.sessionIds.includes(record.sessionId)) ||
       (workspaceKeys &&
         !workspaceKeys.has(
@@ -84,7 +89,7 @@ export function createReferenceAgentIndex(
     const local = structuredWorkerHostScope(record.location) !== null
     const reachable =
       local && sessions
-        ? structuredSessionMailReach(sessions, record, db).kind === 'reachable'
+        ? structuredSessionMailReach(sessions, record, db, canonicalStore).kind === 'reachable'
         : false
     append(record.location.workspaceId, {
       hostId: record.location.executionHostId,
@@ -180,4 +185,9 @@ export function createReferenceAgentIndex(
     })
   }
   return index
+}
+
+function coldConversationReader(): AgentSessionRecordReader | null {
+  const store = peekOpenedAgentSessionRecordStore()
+  return store ? conversationRecordReader(store) : null
 }

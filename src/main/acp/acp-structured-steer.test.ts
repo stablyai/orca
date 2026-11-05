@@ -1,10 +1,6 @@
-// A message sent while a Grok prompt runs steers: the running prompt is cancelled (the session
-// stays) and the message goes as the next prompt. The adapter holds a steer only while that cancel
-// lands; the host's queue holds everything else.
-
-import { afterEach, describe, expect, it } from 'vitest'
-import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
-import { DISPATCH_REJECTED_CANCELLED } from '../../shared/structured-agent-session-dispatch-rejection'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { DISPATCH_REJECTED_CANCELLED } from '../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import {
   closeProviderTimelineRigs,
   SESSION as ADAPTER_SESSION
@@ -15,6 +11,8 @@ import {
 } from '../native-chat/agent-session-wire/structured-agent-session-host-test-harness'
 import { HOST_TEST_SESSION as SESSION } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import type { AcpScriptedAgent, FakeFrame } from './acp-scripted-agent.test-support'
+import { awaitAcpTurnEnd } from './acp-structured-stop'
+import { isAcpReadySession } from './acp-structured-child'
 import {
   openAcpAdapterRig,
   PROVIDER_SESSION,
@@ -35,7 +33,6 @@ afterEach(async () => {
   await closeProviderTimelineRigs()
 })
 
-/** A turn Grok began itself, as a background task's completion wakes it. */
 const GROK_TURN = 'task-completed-background-1'
 
 function endsGrokTurn(agent: AcpScriptedAgent): void {
@@ -45,7 +42,6 @@ function endsGrokTurn(agent: AcpScriptedAgent): void {
   })
 }
 
-/** Grok answers each cancel by ending the prompt it is running, as `cancelled`. */
 function answersCancels(agent: AcpScriptedAgent): void {
   agent.on('session/cancel', () => {
     const answered = new Set(agent.frames.flatMap((frame) => (frame.method ? [] : [frame.id])))
@@ -57,6 +53,123 @@ function answersCancels(agent: AcpScriptedAgent): void {
     }
   })
 }
+
+describe('permission changes with already admitted ACP input', () => {
+  it('releases deadline and abort waiters without disturbing the active input', async () => {
+    const rig = await openAcpAdapterRig()
+    await rig.acquire()
+    await sendHello(rig, 'still running')
+    const prompt = await rig.frame('session/prompt')
+    rig.child().agent.notify('session/update', replyChunk(promptIdOf(prompt), 'working'))
+    await rig.settle()
+    const session = rig.adapter['children'].sessions.get(ADAPTER_SESSION)
+    if (!isAcpReadySession(session)) {
+      throw new Error('ACP session did not become ready')
+    }
+    for (const population of [1, 10]) {
+      for (let index = 0; index < population; index++) {
+        await awaitAcpTurnEnd(session, Date.now(), 0)
+      }
+      expect(session.turns['idleWaiters'].size).toBe(0)
+      expect(session.lane['turnWatchers'].size).toBe(0)
+    }
+    const abort = new AbortController()
+    const reason = new Error('caller stopped waiting')
+    const aborted = expect(awaitAcpTurnEnd(session, Date.now(), 10_000, abort.signal)).rejects.toBe(
+      reason
+    )
+    abort.abort(reason)
+    await aborted
+    expect(session.turns['idleWaiters'].size).toBe(0)
+    expect(session.lane['turnWatchers'].size).toBe(0)
+    const successor = awaitAcpTurnEnd(session, Date.now(), 500)
+    rig.child().agent.reply(prompt, { stopReason: 'end_turn' })
+    await successor
+    expect(session.turns.running).toBe(false)
+    expect(session.lane.openTurnId).toBeNull()
+  })
+
+  it('settles a provider-initiated turn and delivers the new-policy input once', async () => {
+    const { host, rig } = await openAttachedHostRig()
+    const original = rig.child()
+    original.agent.notify('session/update', replyChunk(GROK_TURN, 'background task finished'))
+    await rig.settle()
+    await host.flushStreamedEvents(SESSION)
+    original.agent.on('session/cancel', () => endsGrokTurn(original.agent))
+    const fields = { key: 'permissionMode', value: 'full-access' }
+    expect(
+      await host.setOption(CALLER, {
+        envelope: envelope('agentSession.setOption', fields),
+        ...fields
+      })
+    ).toMatchObject({ ok: true })
+    const id = await send(host, 'new policy')
+    await waitFor(() => expect(original.exited).toBe(true))
+    expect(framesOf(original, 'session/cancel')).toHaveLength(1)
+    expect(framesOf(original, 'session/prompt')).toHaveLength(0)
+    const prompt = await rig.frame('session/prompt')
+    expect(promptIdOf(prompt)).toBe(`prompt:${id}`)
+    rig.child().agent.notify('session/update', replyChunk(promptIdOf(prompt), 'done'))
+    rig.child().agent.reply(prompt, { stopReason: 'end_turn' })
+    const journal = host.collaboratorsForTests().sessions.get(SESSION)!.journal
+    await waitFor(() => expect(journal.submission(id)?.dispatchState).toBe('accepted'))
+    expect(framesOf(rig.child(), 'session/prompt')).toHaveLength(1)
+    await host.close(SESSION, 'user-close')
+  })
+
+  it.each(['drained', 'deadline'] as const)(
+    'preserves the earlier steer when the transition is %s',
+    async (outcome) => {
+      const fixture = await openAttachedHostRig({ stopGraceMs: outcome === 'deadline' ? 30 : 500 })
+      const { host, rig } = fixture
+      const original = rig.child()
+      const a = await send(host, 'A running')
+      const promptA = await rig.frame('session/prompt')
+      original.agent.notify('session/update', replyChunk(promptIdOf(promptA), 'working A'))
+      await rig.settle()
+      await host.flushStreamedEvents(SESSION)
+      const b = await send(host, 'B already admitted')
+      await waitFor(() => expect(framesOf(original, 'session/cancel')).toHaveLength(1))
+      const fields = { key: 'permissionMode', value: 'full-access' }
+      expect(
+        await host.setOption(CALLER, {
+          envelope: envelope('agentSession.setOption', fields),
+          ...fields
+        })
+      ).toMatchObject({ ok: true })
+      const c = await send(host, 'C new policy')
+      const journal = host.collaboratorsForTests().sessions.get(SESSION)!.journal
+      if (outcome === 'deadline') {
+        await waitFor(() => expect(journal.submission(c)?.dispatchState).toBe('rejected'))
+        expect(journal.submission(c)?.rejection).toMatchObject({
+          kind: 'restartFailed',
+          neverReachedAgent: true
+        })
+        expect(journal.submission(b)?.dispatchState).toBe('pending')
+        expect(original.exited).toBe(false)
+      }
+      original.agent.reply(promptA, { stopReason: 'cancelled' })
+      const promptB = await rig.frame('session/prompt', 1)
+      expect(promptIdOf(promptB)).toBe(`prompt:${b}`)
+      original.agent.notify('session/update', replyChunk(promptIdOf(promptB), 'answered B'))
+      original.agent.reply(promptB, { stopReason: 'end_turn' })
+      await waitFor(() => expect(journal.submission(b)?.dispatchState).toBe('accepted'))
+      expect(journal.submission(a)?.dispatchState).toBe('accepted')
+      expect(framesOf(original, 'session/prompt')).toHaveLength(2)
+      if (outcome === 'drained') {
+        await waitFor(() => expect(original.exited).toBe(true))
+        const promptC = await rig.frame('session/prompt')
+        expect(promptIdOf(promptC)).toBe(`prompt:${c}`)
+        rig.child().agent.notify('session/update', replyChunk(promptIdOf(promptC), 'answered C'))
+        rig.child().agent.reply(promptC, { stopReason: 'end_turn' })
+        await waitFor(() => expect(journal.submission(c)?.dispatchState).toBe('accepted'))
+      } else {
+        expect(journal.submission(c)?.dispatchState).toBe('rejected')
+      }
+      await host.close(SESSION, 'user-close')
+    }
+  )
+})
 
 describe('a send while a Grok prompt runs', () => {
   it('cancels the running prompt, then sends as the next one', async () => {
@@ -162,21 +275,27 @@ describe('a send while a Grok prompt runs', () => {
     await rig.frame('session/prompt')
     rig.child().agent.notify('session/update', replyChunk('prompt:first', 'working'))
     await rig.settle()
-    await sendHello(rig, 'steer')
-    await new Promise((resolve) => setTimeout(resolve, 120))
-    await rig.settle()
-    expect(rig.sent('session/cancel')).toHaveLength(1)
-    expect(rig.ended).toEqual([])
-    expect(rig.child().closes).toBe(0)
-    expect(rig.settled.map((settled) => settled.clientMessageId)).toEqual(['first'])
-    // A Stop sends its own cancel; the host's grace, not the cancel, ends Grok.
-    await rig.adapter.cancelTurn({ sessionId: ADAPTER_SESSION, fence: 1 })
-    expect(rig.sent('session/cancel')).toHaveLength(2)
-    expect(rig.settled).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ clientMessageId: 'steer', state: 'rejected' })
-      ])
-    )
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+    try {
+      await sendHello(rig, 'steer')
+      await rig.settle()
+      await vi.advanceTimersByTimeAsync(60_000)
+      await rig.settle()
+      expect(rig.sent('session/cancel')).toHaveLength(1)
+      expect(rig.ended).toEqual([])
+      expect(rig.child().closes).toBe(0)
+      expect(rig.settled.map((settled) => settled.clientMessageId)).toEqual(['first'])
+      await rig.adapter.cancelTurn({ sessionId: ADAPTER_SESSION, fence: 1 })
+      await rig.settle()
+      expect(rig.sent('session/cancel')).toHaveLength(2)
+      expect(rig.settled).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ clientMessageId: 'steer', state: 'rejected' })
+        ])
+      )
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
 
@@ -217,30 +336,37 @@ describe('a send while a turn Grok began itself runs', () => {
       endsGrokTurn(agent)
       agent.notify('session/update', replyChunk(promptIdOf(a), 'working on a'))
     })
-    await sendHello(rig, 'b')
-    await rig.settle()
-    expect(rig.sent('session/cancel')).toHaveLength(1)
-    // `a` runs a whole turn: a steer's cancel never ends Grok.
-    await new Promise((resolve) => setTimeout(resolve, 120))
-    await rig.settle()
-    expect(rig.ended).toEqual([])
-    expect(rig.child().closes).toBe(0)
-    agent.reply(a, { stopReason: 'end_turn' })
-    const b = await rig.frame('session/prompt', 1)
-    expect(promptIdOf(b)).toBe('prompt:b')
-    agent.notify('session/update', replyChunk('prompt:b', 'on b'))
-    agent.reply(b, { stopReason: 'end_turn' })
-    await waitFor(async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+    try {
+      await sendHello(rig, 'b')
+      await rig.settle()
+      expect(rig.sent('session/cancel')).toHaveLength(1)
+      // `a` runs a whole turn: a steer's cancel never ends Grok.
+      await vi.advanceTimersByTimeAsync(60_000)
+      await rig.settle()
+      expect(rig.ended).toEqual([])
+      expect(rig.child().closes).toBe(0)
+      agent.reply(a, { stopReason: 'end_turn' })
+      await rig.settle()
+      const b = rig.sent('session/prompt')[1]
+      if (!b) {
+        throw new Error('Missing prompt for b after a completed')
+      }
+      expect(promptIdOf(b)).toBe('prompt:b')
+      agent.notify('session/update', replyChunk('prompt:b', 'on b'))
+      agent.reply(b, { stopReason: 'end_turn' })
+      await rig.settle()
       const turns = (await rig.rig.rows()).flatMap((row) => readAgentJournalTurn(row.body) ?? [])
       expect(turns.map((turn) => turn.state)).toEqual(['interrupted', 'completed', 'completed'])
-    })
-    expect(rig.settled.map((settled) => settled.clientMessageId)).toEqual(['a', 'b'])
-    expect(rig.child().closes).toBe(0)
+      expect(rig.settled.map((settled) => settled.clientMessageId)).toEqual(['a', 'b'])
+      expect(rig.child().closes).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
 
 describe('Steer on a Grok card, through the host', () => {
-  /** A card queued behind whatever turn runs. */
   async function queueCard(rig: Awaited<ReturnType<typeof openAttachedHostRig>>) {
     const { host } = rig
     await host.flushStreamedEvents(SESSION)
@@ -273,7 +399,6 @@ describe('Steer on a Grok card, through the host', () => {
     return { cardId, sendNow, page, sends }
   }
 
-  /** A Grok turn running, and a card queued behind it. */
   async function cardBehindARunningTurn() {
     const rig = await openAttachedHostRig({ stopGraceMs: 20 })
     await send(rig.host, 'hello')
@@ -312,7 +437,6 @@ describe('Steer on a Grok card, through the host', () => {
     agent.notify('session/update', replyChunk(promptIdOf(prompt), 'working'))
     await rig.rig.settle()
     await rig.host.flushStreamedEvents(SESSION)
-    // No queued-message delivery: the host hands it over while the turn runs.
     await send(rig.host, 'steer')
     await waitFor(() => expect(framesOf(rig.rig.child(), 'session/cancel')).toHaveLength(1))
     agent.reply(prompt, { stopReason: 'cancelled' })

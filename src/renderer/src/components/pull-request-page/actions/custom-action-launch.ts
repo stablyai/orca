@@ -7,7 +7,7 @@ import {
   MAX_SOURCE_CONTROL_CUSTOM_ACTION_TEMPLATE_LENGTH,
   renderPullRequestCustomActionPrompt,
   type SourceControlCustomAction
-} from '../../../../../shared/source-control-custom-actions'
+} from '../../../../../shared/source-control/ai/settings/source-control-custom-actions'
 import { translate } from '@/i18n/i18n'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 
@@ -69,9 +69,11 @@ export async function runPullRequestCustomAction(args: {
   return await launchPullRequestAgentPrompt({
     repoId: args.repoId,
     item: { ...args.item, repoId: args.repoId },
-    commandInput,
-    savedAgentId: args.action.agentId ?? null,
-    agentArgs: args.action.agentArgs,
+    recipe: {
+      agentId: args.action.agentId ?? null,
+      ...(args.action.agentArgs ? { agentArgs: args.action.agentArgs } : {})
+    },
+    renderPrompt: () => commandInput,
     launchSource: 'task_page',
     telemetrySource: 'sidebar',
     messages: CUSTOM_ACTION_LAUNCH_MESSAGES,

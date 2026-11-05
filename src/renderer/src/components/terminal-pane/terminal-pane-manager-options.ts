@@ -2,22 +2,22 @@ import type { IDisposable } from '@xterm/xterm'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import type { PaneManagerOptions } from '@/lib/pane-manager/pane-manager'
 import { useAppStore } from '@/store'
-import { resolveTerminalLigaturesEnabled } from '../../../../shared/terminal-ligatures'
-import { resolveTerminalFontWeights } from '../../../../shared/terminal-fonts'
-import { normalizeTerminalLineHeight } from '../../../../shared/terminal-line-height-settings'
-import { normalizeDesktopTerminalScrollbackRows } from '../../../../shared/terminal-scrollback-policy'
+import { resolveTerminalLigaturesEnabled } from '../../../../shared/terminal/appearance/terminal-ligatures'
+import { resolveTerminalFontWeights } from '../../../../shared/terminal/appearance/terminal-fonts'
+import { normalizeTerminalLineHeight } from '../../../../shared/terminal/appearance/terminal-line-height-settings'
+import { normalizeDesktopTerminalScrollbackRows } from '../../../../shared/terminal/replay/terminal-scrollback-policy'
 import { normalizeTerminalTuiMouseWheelMultiplier } from '@/lib/pane-manager/pane-terminal-mouse-wheel'
 import {
   normalizeTerminalFastScrollSensitivity,
   normalizeTerminalScrollSensitivity,
-  resolveTerminalCursorInactiveStyle
+  resolveTerminalCursorInactiveStyle,
+  resolveTerminalScrollOnUserInput
 } from '@/lib/pane-manager/pane-terminal-options'
 import { buildFontFamily } from '@/lib/monospace-font-family'
 import { buildWindowsPtyCompatibilityOptions } from '@/lib/pane-manager/windows-pty-compatibility'
 import { buildTerminalKeyboardProtocolOptions } from '@/lib/pane-manager/terminal-keyboard-protocol'
 import { resolvePaneKeyboardProtocolAgent } from './terminal-keyboard-protocol-pane-agent'
-import { getConnectionId } from '@/lib/connection-context'
-import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { UNRESOLVED_OWNER_HOST_ID } from '../../../../shared/execution-host'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { acquireWebviewsDragPassthrough } from '../browser-pane/host-guest/webview-registry'
 import { handleTerminalWebLinkClick } from './terminal-web-link-click'
@@ -29,11 +29,10 @@ import {
 } from './terminal-pane-lifecycle-primitives'
 import { resolveTerminalLayoutActiveLeafId } from './terminal-layout-leaf-ids'
 import type { TerminalPaneManagerOptionsContext } from './terminal-pane-mount-context'
-import { resolveTerminalInlineImagesEnabled } from '../../../../shared/terminal-inline-images-settings'
+import { resolveTerminalInlineImagesEnabled } from '../../../../shared/terminal/images/terminal-inline-images-settings'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { layoutOwnerPaneGestures } from './terminal-pane-layout-owner-gestures'
 
-/** Builds the imperative PaneManager option bag from the mount context. */
 export function createTerminalPaneManagerOptions(
   context: TerminalPaneManagerOptionsContext
 ): PaneManagerOptions {
@@ -107,7 +106,6 @@ export function createTerminalPaneManagerOptions(
     },
     resolveExternalPaneDropTarget,
     onExternalPaneDrop,
-    // Switch point: in-tab pane moves and divider ratios go through main.
     ...(ORCA_LAYOUT_OWNER_IS_MAIN
       ? layoutOwnerPaneGestures({
           worktreeId,
@@ -123,7 +121,7 @@ export function createTerminalPaneManagerOptions(
       ),
     terminalInlineImagesEnabled: () =>
       resolveTerminalInlineImagesEnabled(settingsRef.current?.terminalInlineImages),
-    terminalOptions: () => {
+    terminalOptions: (paneId) => {
       const currentSettings = settingsRef.current
       const terminalFontWeights = resolveTerminalFontWeights(
         currentSettings?.terminalFontWeight,
@@ -139,13 +137,14 @@ export function createTerminalPaneManagerOptions(
         ptyDeps.startup,
         currentTab?.launchAgent
       )
+      const owner = panePtyBindingsRef.current.get(paneId)?.getOwnerContext?.()
       const ptyBackendContext = {
         userAgent: navigator.userAgent,
         osRelease: platformInfo?.osRelease,
-        connectionId: getConnectionId(worktreeId),
+        connectionId: owner?.connectionId,
         cwd: context.startupCwd,
         shellOverride: currentTab?.shellOverride,
-        executionHostId: getExecutionHostIdForWorktree(storeState, worktreeId),
+        executionHostId: owner?.executionHostId ?? UNRESOLVED_OWNER_HOST_ID,
         tuiAgent: knownTuiAgent
       }
       return {
@@ -164,6 +163,9 @@ export function createTerminalPaneManagerOptions(
         ),
         fastScrollSensitivity: normalizeTerminalFastScrollSensitivity(
           currentSettings?.terminalFastScrollSensitivity
+        ),
+        scrollOnUserInput: resolveTerminalScrollOnUserInput(
+          currentSettings?.terminalScrollOnUserInput
         ),
         macOptionIsMeta: context.deps.effectiveMacOptionAsAltRef.current === 'true',
         lineHeight: normalizeTerminalLineHeight(currentSettings?.terminalLineHeight),

@@ -1,9 +1,9 @@
-import { closeTestStores, createSqliteTestStore } from '../../persistence-test-harness'
+import { closeTestStores, createSqliteTestStore } from '../persistence-test-harness'
 import { mkdtempSync, realpathSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 
 vi.mock('electron', () => ({
   app: {

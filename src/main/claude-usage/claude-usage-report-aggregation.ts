@@ -73,9 +73,7 @@ export function buildSummary(
     hasUnpricedModels,
     topModel,
     topProject,
-    // Why: the empty-state UX is scope/range specific. Using global persisted
-    // data here makes the Orca-only view render empty charts instead of the
-    // intended "no usage for this scope" message when only off-Orca logs exist.
+    // Scope the empty state to the selected filters, not all persisted usage.
     hasAnyClaudeData: filteredSessions.length > 0 || filteredDaily.length > 0
   }
 }
@@ -110,8 +108,7 @@ export function buildBreakdown(
   kind: ClaudeUsageBreakdownKind
 ): ClaudeUsageBreakdownRow[] {
   const rows = new Map<string, ClaudeUsageBreakdownRow>()
-  // Why: the 1h cache-write split and long-context subset only feed pricing, so they stay off the
-  // renderer row type.
+  // Keep pricing-only token splits separate from renderer rows.
   const billableByKey = new Map<string, ClaudeBillableTokens>()
   const filteredDaily = getFilteredDaily(state, scope, range)
   const filteredSessions = getFilteredSessions(state, scope, range)

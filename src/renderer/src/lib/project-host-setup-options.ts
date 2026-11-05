@@ -7,7 +7,7 @@ import {
 } from '../../../shared/execution-host'
 import type { ExecutionHostRegistryEntry } from '../../../shared/execution-host-registry'
 import { isHostLocalProjectId } from '../../../shared/project-host-setup-projection'
-import { isEphemeralVmRuntimeEnvironment } from '../../../shared/runtime-environments'
+import { isEphemeralVmRuntimeEnvironment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { isMergedAwayExecutionHost } from '../../../shared/managed-orcad-execution-host'
 import {
   PROJECT_HOST_SETUP_RUNTIME_CAPABILITY,
@@ -16,7 +16,10 @@ import {
 import type { ProjectHostSetup } from '../../../shared/project-types'
 import type { Repo } from '../../../shared/repo-types'
 import { translate } from '@/i18n/i18n'
-import { dedupeReadySetupRows } from './project-host-setup-row-dedupe'
+import {
+  dedupeReadySetupRows,
+  type SelectedProjectHostSetup
+} from './project-host-setup-row-dedupe'
 
 export type ProjectHostSetupSelection = { id: string; hostId: ExecutionHostId }
 
@@ -41,11 +44,9 @@ export type ProjectHostSetupOption =
       label: string
       detail: string
       isAvailable: boolean
-      // Why: only a genuine connection error warrants an alarm glyph; a dormant
-      // disconnected host is merely not-yet-connected, not broken.
+      // Only connection errors warrant alarm; dormant disconnected hosts are not broken.
       attention: boolean
-      // Why: available hosts without a path can be set up in place; connecting or
-      // in-progress/unsupported hosts need a different next step.
+      // Available pathless hosts can set up in place; connecting/in-progress/unsupported hosts need another step.
       canSetLocation: boolean
       connectAction?: { kind: 'ssh'; targetId: string } | { kind: 'runtime'; environmentId: string }
     }
@@ -65,6 +66,7 @@ type BuildReadySetupOptionsInput = {
   projectHostSetups: readonly ProjectHostSetup[]
   eligibleRepos: readonly Repo[]
   hosts: readonly ExecutionHostRegistryEntry[]
+  selectedSetup?: SelectedProjectHostSetup | null
 }
 
 type BuildNeedsSetupOptionsInput = {
@@ -79,13 +81,16 @@ type BuildProjectHostSetupOptionsInput = {
   projectHostSetups: readonly ProjectHostSetup[]
   eligibleRepos: readonly Repo[]
   hosts: readonly ExecutionHostRegistryEntry[]
+  /** Shown as its host's row when that host has several checkouts of the project. */
+  selectedSetup?: SelectedProjectHostSetup | null
 }
 
 export function buildProjectHostSetupOptions({
   projectId,
   projectHostSetups,
   eligibleRepos,
-  hosts
+  hosts,
+  selectedSetup
 }: BuildProjectHostSetupOptionsInput): ProjectHostSetupOption[] {
   if (!projectId) {
     return []
@@ -94,7 +99,8 @@ export function buildProjectHostSetupOptions({
     projectId,
     projectHostSetups,
     eligibleRepos,
-    hosts
+    hosts,
+    selectedSetup
   })
   const readySetupByHost = new Map(readyOptions.map((option) => [option.hostId, option]))
   const pendingSetupByHost = getPendingSetupByHost(projectId, projectHostSetups)
@@ -129,7 +135,8 @@ function buildReadySetupOptions({
   projectId,
   projectHostSetups,
   eligibleRepos,
-  hosts
+  hosts,
+  selectedSetup
 }: BuildReadySetupOptionsInput): ReadyProjectHostSetupOption[] {
   const eligibleRepoIds = new Set(eligibleRepos.map((repo) => repo.id))
   const hostById = new Map(hosts.map((host) => [host.id, host]))
@@ -155,7 +162,7 @@ function buildReadySetupOptions({
       detail: setup.displayName,
       path: setup.path
     }))
-  return dedupeReadySetupRows(options, hostById)
+  return dedupeReadySetupRows(options, hostById, selectedSetup)
 }
 
 function buildNeedsSetupOptions({
@@ -176,8 +183,7 @@ function buildNeedsSetupOptions({
     )
     .map((host) => {
       const pendingSetup = pendingSetupByHost.get(host.id)
-      // Why: disconnected hosts cannot confirm project setup or runtime capabilities,
-      // so connection state needs to win over setup guidance.
+      // Disconnected hosts cannot confirm setup/capabilities; connection state takes precedence.
       const unavailableDetail =
         getHostHealthUnavailableDetail(host.health) ?? getHostSetupUnavailableDetail(host)
       const isAvailable = unavailableDetail === null
@@ -203,9 +209,7 @@ function isEphemeralVmProjectHost(host: ExecutionHostRegistryEntry | undefined):
   return host?.kind === 'runtime' && isEphemeralVmRuntimeEnvironment(host)
 }
 
-// Why: a per-workspace-env SSH repo projects a setup with hostId `ssh:runtime-ssh-<id>`. The
-// execution-host registry filters runtime-owned targets, so its host is absent here — guard on the
-// hostId directly so the hidden target never becomes a selectable run-target option.
+// Runtime-owned ephemeral SSH setups lack host-registry rows; check raw hostId to keep them out of run targets.
 function isRuntimeOwnedSshSetupHost(hostId: ExecutionHostId): boolean {
   const parsed = parseExecutionHostId(hostId)
   return parsed?.kind === 'ssh' && isRuntimeOwnedSshTargetId(parsed.targetId)
@@ -261,9 +265,7 @@ function canSetProjectLocation(
   isAvailable: boolean,
   pendingSetup: ProjectHostSetup | undefined
 ): boolean {
-  // Why: setting up on another host links by project identity, and a host-local
-  // `repo:<id>` project has none to match against — the call always fails, so offer
-  // the plain status line rather than a button that only ever toasts an error.
+  // Cross-host setup links project identity; host-local repo:<id> has no match, so show status instead of a guaranteed error button.
   if (!isAvailable || isHostLocalProjectId(projectId)) {
     return false
   }

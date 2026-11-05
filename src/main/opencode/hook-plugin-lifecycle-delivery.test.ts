@@ -1,7 +1,3 @@
-/**
- * Executes the generated OpenCode plugin source because this delivery state
- * lives inside OpenCode's process, not in Orca's TypeScript runtime.
- */
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -20,8 +16,7 @@ import { _internals } from './hook-service'
 
 type SessionFixture = { id: string; parentID?: string }
 
-/** The plugin probes both SDK call conventions — current `(parameters, options)` and legacy
- *  single-options — so fixtures for one session-client method differ in arity. */
+/** Fixtures cover both current two-argument and legacy single-options SDK calls. */
 type SessionClientCall = (...args: never[]) => Promise<{ data: SessionFixture[] }>
 
 type SessionClientFixture = { list: SessionClientCall; get?: SessionClientCall }
@@ -217,8 +212,7 @@ describe('OpenCode plugin lifecycle delivery', () => {
     const idle = handler({ event: status('idle') })
 
     try {
-      // Why: OpenCode does not await event hooks, so the plugin must prevent
-      // the later idle lookup from overtaking the blocked busy lookup.
+      // OpenCode does not await hooks; later idle lookup must not overtake blocked busy lookup.
       expect(list).toHaveBeenCalledTimes(1)
       expect(posts).toHaveLength(0)
     } finally {
@@ -306,7 +300,6 @@ describe('OpenCode plugin lifecycle delivery', () => {
     await handler({ event: status('idle') })
     expect(names()).toEqual(['SessionBusy', 'SessionIdle'])
 
-    // Why: a stale retry must not resurrect Working after OpenCode is done.
     await vi.advanceTimersByTimeAsync(60_000)
     expect(names()).toEqual(['SessionBusy', 'SessionIdle'])
   })
@@ -324,8 +317,7 @@ describe('OpenCode plugin lifecycle delivery', () => {
     await handler({ event: status('busy') })
     expect(names()).toEqual(['SessionBusy'])
 
-    // Why: current OpenCode streams deltas after an empty text-start part; the
-    // live delta proves work continued and should recover a lost Busy post.
+    // Deltas after empty text-start parts must recover a lost Busy post.
     await handler({ event: delta('hello') })
     expect(names()).toEqual(['SessionBusy', 'SessionBusy'])
 
@@ -443,8 +435,7 @@ describe('OpenCode plugin lifecycle delivery', () => {
     await vi.advanceTimersByTimeAsync(1)
     try {
       expect(list).toHaveBeenCalledTimes(2)
-      // Busy is safe to fail open: even a child means its root is working.
-      // Idle still requires a later confirmed-root lookup.
+      // Child activity safely marks its root busy; idle still requires confirmed root ownership.
       expect(names()).toEqual(['SessionBusy', 'SessionIdle'])
     } finally {
       releaseLookup?.()

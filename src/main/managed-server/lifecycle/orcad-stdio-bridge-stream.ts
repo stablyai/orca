@@ -1,4 +1,3 @@
-/** The client side of one stdio bridge channel: its sentinel, then orcad's bytes. */
 import { Transform, type TransformCallback } from 'node:stream'
 import {
   ORCAD_STDIO_BRIDGE_NO_NODE,
@@ -9,7 +8,7 @@ import {
 
 export type OrcadStdioBridgeSignal = 'ready' | 'refused' | 'no-node'
 
-// What a login profile may print before the bridge starts; past this, it is not a bridge.
+// Bound login-profile noise before declaring the channel unusable.
 const MAX_PRELUDE_BYTES = 64 * 1024
 const NEWLINE = 0x0a
 
@@ -24,10 +23,7 @@ function sentinelOf(line: string): OrcadStdioBridgeSignal | null {
   return trimmed === ORCAD_STDIO_BRIDGE_NO_NODE ? 'no-node' : null
 }
 
-/**
- * Bridge stdout in, orcad's bytes out. Emits `signal` once with the sentinel it found; nothing
- * passes before `ready`, and nothing at all after `refused` or `no-node`.
- */
+/** Emit one sentinel signal; pass bytes only after ready, never after refused/no-node. */
 export class OrcadStdioBridgeDecoder extends Transform {
   private prelude: Buffer = Buffer.alloc(0)
   private signal: OrcadStdioBridgeSignal | null = null
@@ -92,7 +88,6 @@ export class OrcadStdioBridgeDecoder extends Transform {
   }
 }
 
-/** Client bytes to one base64 line per chunk, the framing the Windows bridge reads. */
 export class OrcadStdioBridgeBase64Encoder extends Transform {
   override _transform(chunk: Buffer, _encoding: BufferEncoding, done: TransformCallback): void {
     done(null, `${chunk.toString('base64')}\n`)

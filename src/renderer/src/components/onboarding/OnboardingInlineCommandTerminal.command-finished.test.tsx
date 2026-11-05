@@ -236,8 +236,7 @@ describe('OnboardingInlineCommandTerminal command-finished forwarding', () => {
     })
     expect(onCommandFinished).not.toHaveBeenCalled()
 
-    // Why unbranded-miss matters: pty-connection dispatches the BRANDED id;
-    // matching the raw panel id would silently never fire in production.
+    // Production events use the branded PTY ID; matching the raw panel ID would never receive them.
     await act(async () => {
       dispatchCommandFinished('settings-orchestration-skill-terminal', 1)
     })

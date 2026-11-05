@@ -1,0 +1,29 @@
+{
+  "capturedAt": "2026-10-26T06:03:17.947Z",
+  "platform": "win32",
+  "command": ["wsl.exe", "-d", "<test-distro>"],
+  "cols": 120,
+  "rows": 40,
+  "resizes": [
+    {
+      "atMs": 6000,
+      "cols": 80,
+      "rows": 24,
+      "byteOffset": 1095
+    },
+    {
+      "atMs": 10000,
+      "cols": 160,
+      "rows": 48,
+      "byteOffset": 1858
+    },
+    {
+      "atMs": 14000,
+      "cols": 120,
+      "rows": 40,
+      "byteOffset": 2751
+    }
+  ],
+  "note": "ConPTY 1.23 (bundled conpty.dll) hosting wsl.exe: seq 1 80, then a 302-column line, then resizes 120x40 -> 80x24 -> 160x48 -> 120x40; user and host names scrubbed",
+  "exitCode": 0
+}

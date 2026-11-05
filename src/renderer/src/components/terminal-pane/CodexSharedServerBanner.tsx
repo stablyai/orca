@@ -4,7 +4,7 @@ import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { isCodexSharedServerWarningEnabled } from '../../../../shared/codex-terminal-server-isolation'
 import type { CodexSharedServerStatus } from '../../../../shared/codex-shared-server-command'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { useModalReturnFocus } from '@/hooks/useModalReturnFocus'
 import { OldTerminalDialog } from './OldTerminalDialog'
 import { CodexSharedServerFixDialog } from './CodexSharedServerFixDialog'
@@ -101,8 +101,7 @@ export function CodexSharedServerBanner({
     captureReturnFocus()
     setOpenDialog(dialog)
   }
-  // Why an open dialog keeps it: this pane's Codex can end mid-dialog (Stop server does it), and
-  // the dialog must still close normally so focus returns.
+  // Keep open dialogs mounted after Codex ends so they close normally and return focus.
   if (!status && openDialog === null) {
     return null
   }

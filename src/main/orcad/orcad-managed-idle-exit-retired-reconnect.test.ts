@@ -2,13 +2,16 @@ import { beforeEach, expect, it, vi } from 'vitest'
 import { tmpdir } from 'node:os'
 import { setAppEnvironment } from '../../shared/app-environment'
 import { ORCAD_MANAGED_ACTIVATION_ROOT_ENV } from '../../shared/orcad-managed-launch-env'
-import { createAdapter } from '../daemon/daemon-pty-router-test-fixture'
-import { DaemonPtyRouter } from '../daemon/daemon-pty-router'
-import { installDaemonProvider, replaceDaemonProvider } from '../daemon/daemon-provider-state'
-import type { DaemonIdleRetirementResult } from '../daemon/daemon-pty-runtime-state'
-import { PROTOCOL_VERSION } from '../daemon/types'
+import { createAdapter } from '../daemon/providers/routing/testing/daemon-pty-router-test-fixture'
+import { DaemonPtyRouter } from '../daemon/providers/routing/daemon-pty-router'
+import {
+  installDaemonProvider,
+  replaceDaemonProvider
+} from '../daemon/providers/lifecycle/daemon-provider-state'
+import type { DaemonIdleRetirementResult } from '../daemon/providers/adapter/daemon-pty-runtime-state'
+import { PROTOCOL_VERSION } from '../daemon/protocol/daemon-protocol-version'
 import { getLocalPtyProvider } from '../ipc/pty/provider/registry'
-import { restartDaemon } from '../daemon/daemon-provider-restart'
+import { restartDaemon } from '../daemon/providers/lifecycle/daemon-provider-restart'
 import { bindOrcadIdleShutdown, beginOrcadIdleExit } from './orcad-managed-idle-exit-host'
 import { installOrcadManagedIdleExit } from './orcad-managed-idle-exit'
 import type * as ManagedIdleExit from './orcad-managed-idle-exit'
@@ -18,7 +21,7 @@ const { hasLoadedProviders } = vi.hoisted(() => ({ hasLoadedProviders: vi.fn(() 
 vi.mock('../native-chat/agent-session-wire/structured-agent-session-registry', () => ({
   getStructuredAgentSessionHost: () => ({ hasLoadedProviders })
 }))
-vi.mock('../daemon/daemon-provider-restart', () => ({ restartDaemon: vi.fn() }))
+vi.mock('../daemon/providers/lifecycle/daemon-provider-restart', () => ({ restartDaemon: vi.fn() }))
 vi.mock('./orcad-idle-stop-record', () => ({
   consumeOrcadIdleStopRecord: vi.fn(() => null),
   discardOrcadIdleStopRecord: vi.fn(),
@@ -29,7 +32,6 @@ vi.mock('./orcad-managed-idle-exit', async (importOriginal) => ({
   installOrcadManagedIdleExit: vi.fn(() => () => {})
 }))
 
-/** A router over one adapter whose own fence behaves like the daemon adapter's. */
 function freshRouter(retirements: Promise<DaemonIdleRetirementResult>[] = []): DaemonPtyRouter {
   const current = createAdapter('current', [], undefined, PROTOCOL_VERSION)
   let fenced = false
@@ -45,7 +47,7 @@ function freshRouter(retirements: Promise<DaemonIdleRetirementResult>[] = []): D
   vi.mocked(current.requestIdleRetirement).mockImplementation(async () => {
     fenced = true
     const result = await (retirements.shift() ?? { state: 'retiring' as const })
-    // A lost reply keeps the adapter fenced, as an accepted stop may be behind it.
+    // A lost reply may hide accepted retirement, so keep admission fenced.
     fenceHeld = result.state === 'retiring' || result.state === 'unverifiable'
     fenced = fenceHeld
     return result
@@ -74,6 +76,7 @@ async function stopWithReturningClient(
     agentStates: () => [],
     hasStagedMigration: () => false,
     automationsBusy: () => automationsBusy,
+    emulatorsBusy: async () => false,
     registerCleanup: () => {}
   })
   const installed = vi.mocked(installOrcadManagedIdleExit).mock.calls.at(-1)?.[0]
@@ -84,7 +87,6 @@ async function stopWithReturningClient(
   await vi.waitFor(() =>
     expect(getLocalPtyProvider().spawn({ cols: 80, rows: 24 })).rejects.toThrow('decommissioning')
   )
-  // The returning client may also start work an exit would end.
   activity.openConnections = 1
   automationsBusy = options.automationsBusy ?? false
   retire.resolve(retirementState)

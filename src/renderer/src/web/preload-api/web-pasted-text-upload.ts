@@ -1,8 +1,9 @@
 import {
   agentSessionPastedTextName,
   type AgentSessionAttachmentClipboardTarget
-} from '../../../../shared/agent-session-attachments'
+} from '../../../../shared/agent-session/agent-session-attachments'
 import { createBrowserUuid } from '@/lib/browser-uuid'
+import { holdBrowserAttachmentFiles } from '@/lib/browser-attachment-files'
 import { blobToBase64 } from '@/lib/image-blob-png'
 import { saveClipboardImageAsWebAgentSessionAttachment } from './web-agent-session-attachment-upload'
 
@@ -14,7 +15,11 @@ export async function savePastedTextAsWebAgentSessionAttachment(args: {
   agentSessionAttachment?: AgentSessionAttachmentClipboardTarget
 }): Promise<string> {
   if (!args.agentSessionAttachment || !args.runtimeEnvironmentId) {
-    throw new Error('Pasted text can only be attached to a chat on a server here.')
+    return holdBrowserAttachmentFiles([
+      new File([args.text], agentSessionPastedTextName(Date.now(), createBrowserUuid()), {
+        type: 'text/plain'
+      })
+    ])[0]
   }
   return saveClipboardImageAsWebAgentSessionAttachment(
     await blobToBase64(new Blob([args.text], { type: 'text/plain' })),

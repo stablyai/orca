@@ -1,12 +1,13 @@
-import { isAgentSessionOwnerBinding } from '../../shared/agent-session-host-authority'
+import { isAgentSessionOwnerBinding } from '../../shared/agent-session/agent-session-host-authority'
 import { MAX_CLAIMED_AGENT_PTY_OWNER_ENTRIES } from '../../shared/claimed-agent-pty-owner'
 import { cloneAgentSessionOwnerBinding } from '../../shared/claimed-agent-pty-owner-snapshot'
-import { isPtyIncarnationId } from '../../shared/pty-incarnation'
+import { isPtyIncarnationId } from '../../shared/terminal/pty/lifecycle/pty-incarnation'
 import {
   cloneForegroundProcessEvidence,
   isForegroundProcessEvidence
 } from '../../shared/foreground-process-evidence'
 import type { PtyProcessInfo } from './pty-provider-contract'
+import { readWslGuestRoot } from '../../shared/wsl-guest-root-marker'
 
 export const MAX_AGGREGATED_PTY_PROCESS_LIST_ENTRIES = 4096
 export const MAX_AGGREGATED_PTY_PROCESS_LIST_BYTES = 32 * 1024 * 1024
@@ -57,8 +58,10 @@ export class PtyProcessListAdmission {
     const inventorySourceBytes = retainedOptionalStringBytes(value.inventorySourceId)
     const worktreeIdBytes = retainedOptionalStringBytes(value.worktreeId)
     const terminalHandleBytes = retainedOptionalStringBytes(value.terminalHandle)
+    const paneKeyBytes = retainedOptionalStringBytes(value.paneKey)
     const wslDistroBytes =
       value.wslDistro === null ? 0 : retainedOptionalStringBytes(value.wslDistro)
+    const wslGuestRoot = readWslGuestRoot(value.wslGuestRoot)
     const evidenceBytes =
       value.foregroundProcessEvidence === undefined
         ? 0
@@ -74,8 +77,10 @@ export class PtyProcessListAdmission {
       (value.routed !== undefined && typeof value.routed !== 'boolean') ||
       worktreeIdBytes === null ||
       terminalHandleBytes === null ||
+      paneKeyBytes === null ||
       wslDistroBytes === null ||
       evidenceBytes === null ||
+      (value.wslGuestRoot !== undefined && !wslGuestRoot) ||
       (value.rootProcessId !== undefined &&
         (!Number.isSafeInteger(value.rootProcessId) || value.rootProcessId <= 0)) ||
       (value.incarnationId !== undefined && !isPtyIncarnationId(value.incarnationId)) ||
@@ -110,8 +115,10 @@ export class PtyProcessListAdmission {
       inventorySourceBytes +
       worktreeIdBytes +
       terminalHandleBytes +
+      paneKeyBytes +
       wslDistroBytes +
       evidenceBytes +
+      (wslGuestRoot?.startTime.length ?? 0) +
       ownerBytes
     if (
       nextEntries > MAX_AGGREGATED_PTY_PROCESS_LIST_ENTRIES ||
@@ -139,7 +146,9 @@ export class PtyProcessListAdmission {
       ...(value.rootProcessId !== undefined ? { rootProcessId: value.rootProcessId } : {}),
       ...(value.worktreeId !== undefined ? { worktreeId: value.worktreeId } : {}),
       ...(value.terminalHandle !== undefined ? { terminalHandle: value.terminalHandle } : {}),
+      ...(value.paneKey !== undefined ? { paneKey: value.paneKey } : {}),
       ...(value.wslDistro !== undefined ? { wslDistro: value.wslDistro } : {}),
+      ...(wslGuestRoot ? { wslGuestRoot } : {}),
       ...(value.exiting === true ? { exiting: true as const } : {}),
       ...(value.foregroundProcessEvidence !== undefined
         ? {

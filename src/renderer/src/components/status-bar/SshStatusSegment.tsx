@@ -22,7 +22,7 @@ import { pickerExecutionHosts } from '../../../../shared/managed-orcad-execution
 import {
   isListedRemoteServer,
   runtimePairingRepairRoute
-} from '../../../../shared/runtime-environments'
+} from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { RuntimeHostStatusRow } from './RuntimeHostStatusRow'
 import { connectedHostCountLabel, moreSshHostsLabel } from './ssh-status-segment-copy'
 import { SshHostFindPopover } from './SshHostFindPopover'
@@ -36,11 +36,9 @@ import {
   runtimeHostStatusForOverall,
   sshStatusForOverall
 } from './remote-host-connection-status'
-import {
-  isConnectedRuntimeHostState,
-  runtimeHostConnectionStateForEntry
-} from '@/runtime/runtime-host-connection-state'
-import { RuntimeRepairDialog } from '../settings/RuntimeRepairDialog'
+import { runtimeHostConnectionStateForEntry } from '@/runtime/runtime-host-connection-state'
+import { isConnectedRuntimeHostState } from '../../../../shared/remote-runtime/host-status/runtime-host-connection-state'
+import { RuntimeRepairDialog } from '../runtime-access/RuntimeRepairDialog'
 
 export function SshStatusSegment({
   compact,
@@ -87,8 +85,7 @@ export function SshStatusSegment({
     ).map((host) => [host.id, host])
   )
   const targets = Array.from(sshTargetLabels.entries())
-    // Why: runtime-owned (per-workspace-env) SSH targets are hidden — never list them
-    // as a user-facing SSH host in the status bar.
+    // Hide runtime-owned per-workspace SSH targets from the user-managed host list.
     .filter(([id]) => !isOwnedSshTargetId(id) && visibleHosts.has(toSshExecutionHostId(id)))
     .map(([id, label]) => {
       const state = sshConnectionStates.get(id)
@@ -127,8 +124,7 @@ export function SshStatusSegment({
     ...host,
     state: runtimeHostConnectionStateForEntry(runtimeStatusByEnvironmentId.get(host.id))
   }))
-  // Available remote servers are online even when they are not the active runtime.
-  // Keep host health separate from the advanced active-server selection.
+  // Host health is independent of active runtime selection; available remote servers remain online.
   const connectedRuntimeHosts = runtimeHostRows.filter((host) =>
     isConnectedRuntimeHostState(host.state)
   )

@@ -1,6 +1,15 @@
 import type { OrchestrationDb } from './db'
 import type { DispatchContextRow, MessageType } from './types'
 
+export function federatedMessageNamesOnlyHome(
+  params: { to?: string; run?: string },
+  homeRunId: string
+): boolean {
+  return (
+    (!params.to || params.to === `run:${homeRunId}`) && (!params.run || params.run === homeRunId)
+  )
+}
+
 /** Reports about the worker's own task; gates and handoffs stay with the Run's coordinator. */
 export function isDispatchReportType(type: MessageType | undefined): boolean {
   return (
@@ -27,11 +36,7 @@ export function activeCreatorDispatch(
     : undefined
 }
 
-/**
- * Where a Dispatch's reports go: the worker that started it while that worker is still on its
- * own task, otherwise the Run. Derived on every send, so a helper whose creator settled reports
- * to the Run without anything being rewritten.
- */
+/** Resolve the live creator or Run on each send so helpers follow creator settlement without rewriting routes. */
 export function dispatchReportMailbox(
   db: OrchestrationDb,
   dispatch: Pick<DispatchContextRow, 'creator_dispatch_id' | 'run_id'>

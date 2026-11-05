@@ -6,7 +6,7 @@ import { GitPullRequest } from 'lucide-react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
-import type { SourceControlCustomAction } from '../../../../../shared/source-control-custom-actions'
+import type { SourceControlCustomAction } from '../../../../../shared/source-control/ai/settings/source-control-custom-actions'
 import { PullRequestPageHeader } from './header'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true

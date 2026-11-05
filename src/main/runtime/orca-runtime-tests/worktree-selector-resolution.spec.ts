@@ -1,22 +1,21 @@
 import { SshHostNotServedError } from '../../providers/ssh-host-not-served-error'
 import { describe, expect, it, vi } from 'vitest'
+import './runtime-test-module-registration.spec'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import {
-  FLOATING_TERMINAL_WORKTREE_ID,
   MOCK_GIT_WORKTREES,
-  OrcaRuntimeService,
-  addSparseWorktree,
-  addWorktree,
   computeWorktreePathMock,
-  ensurePathWithinWorkspaceMock,
-  join,
-  listWorktrees,
-  mkdir,
-  mkdtemp,
-  tmpdir,
-  writeFile
-} from '../orca-runtime-test-mocks.spec'
+  ensurePathWithinWorkspaceMock
+} from '../orca-runtime-test-mocks/setup.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { addSparseWorktree } from '../../git/worktrees/creation/worktree-sparse-add'
+import { addWorktree } from '../../git/worktrees/creation/worktree-add'
+import { join } from 'node:path'
+import { listWorktrees } from '../../git/worktrees/catalog/worktree-scan-cache'
+import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { RpcDispatcher, TERMINAL_METHODS } from '../orca-runtime-test-mocks/terminal-rpc.spec'
-import type { WorktreeMeta } from '../orca-runtime-test-mocks.spec'
+import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import {
   TEST_FOLDER_WORKSPACE_KEY,
   TEST_REPO_ID,
@@ -29,7 +28,7 @@ import {
   makeRpcRequest,
   makeWorktreeMeta,
   store
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
 import type { HostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 
 const LOCAL_CHILD_REPO = {
@@ -105,7 +104,7 @@ describe('OrcaRuntimeService', () => {
         addedAt: 1,
         connectionId: 'ssh-1'
       }),
-      // Why: this process serves no SSH git, so the SSH repo resolves from its stored rows.
+      // No SSH Git provider is installed, so the fixture uses stored rows.
       getAllWorktreeMeta: () => ({
         [`${TEST_REPO_ID}:://Server/Share/Repo`]: makeWorktreeMeta()
       }),
@@ -161,7 +160,7 @@ describe('OrcaRuntimeService', () => {
       createFolderWorkspaceRuntimeStore(folderWorkspace, projectGroup) as never
     )
 
-    // Why: this process serves no SSH filesystem, so the folder path itself is unavailable.
+    // No SSH filesystem provider is installed, so the folder path is unavailable.
     await expect(
       runtime.readFileExplorerDir(`id:${TEST_FOLDER_WORKSPACE_KEY}`, 'src')
     ).rejects.toThrow('folder_workspace_path_unavailable:/srv/platform')
@@ -337,7 +336,7 @@ describe('OrcaRuntimeService', () => {
     )
   })
 
-  // #12757: create must refuse the cross-host edge that update refuses and the renderer drops.
+  // Create must enforce the same parent-host fence as update and renderer projection (#12757).
   it('refuses an explicit parent worktree on another execution host before creating', async () => {
     const runtime = new OrcaRuntimeService(store)
     const resolveLineage = runtime['resolveLineageForWorktreeCreate'].bind(runtime)
@@ -453,7 +452,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('neither skips nor retires a name the user typed', async () => {
-    // Why: the pool contains ordinary words. Retirement only ever applies to generated names.
+    // Only generated names may be retired; the pool also contains ordinary words.
     const addRetiredWorktreeName = vi.fn()
     const runtime = new OrcaRuntimeService({
       ...store,
@@ -469,8 +468,7 @@ describe('OrcaRuntimeService', () => {
     }
     computeWorktreePathMock.mockReturnValue(createdWorktree.path)
     ensurePathWithinWorkspaceMock.mockReturnValue(createdWorktree.path)
-    // Not `...Once`: the shared beforeEach re-stubs the resolved value but cannot drain a queue,
-    // so leftover one-shots would poison later tests in this file.
+    // Avoid queued one-shot stubs: shared beforeEach resets defaults but cannot drain leftovers.
     vi.mocked(listWorktrees).mockResolvedValue([...MOCK_GIT_WORKTREES, createdWorktree])
 
     const result = await runtime.createManagedWorktree({

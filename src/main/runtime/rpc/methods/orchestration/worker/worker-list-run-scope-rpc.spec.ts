@@ -6,9 +6,7 @@ import { createOrchestrationWorkerReleaseHarness } from './worker-release.test-s
 export function registerWorkerListRunScopeRpcTests(): void {
   type WorkerListReceipt = { workers: { dispatchId: string; runId: string }[] }
 
-  /** The runtime half of the worker-list scope seam: the two RPC questions the CLI handler asks
-   *  (`cli/handlers/orchestration/worker-list-run-scope.ts`) over a real OrchestrationDb. The CLI
-   *  half lives beside the handler; the two cannot share one file across tsconfig projects. */
+  /** Exercise the CLI's two scope RPCs over real OrchestrationDb; CLI coverage lives in its own tsconfig project. */
   describe('orchestration worker-list Run scope (runtime)', () => {
     const h = createOrchestrationWorkerReleaseHarness()
 
@@ -63,8 +61,7 @@ export function registerWorkerListRunScopeRpcTests(): void {
     })
   })
 
-  // A plain orchestration.dispatch attempt has no worker_dispatches row, so the retry precondition
-  // used to reject it and its abandoned Task had no documented route back.
+  // Plain dispatch has no worker row; retry must still recover its abandoned Task.
   describe('worker-start --retry-of a context-only Dispatch', () => {
     const harness = createOrchestrationWorkerReleaseHarness()
     beforeEach(() => harness.setup())
@@ -119,8 +116,7 @@ export function registerWorkerListRunScopeRpcTests(): void {
     })
   })
 
-  // A coordinator that records context against its own terminal delegated nothing, so the row it
-  // leaves behind must not read back as the coordinator's own parent Attempt.
+  // Self-recorded context delegates nothing and cannot identify the coordinator's parent Attempt.
   describe('context-only self-dispatch and nesting depth', () => {
     const harness = createOrchestrationWorkerReleaseHarness()
     beforeEach(() => harness.setup())
@@ -240,8 +236,7 @@ export function registerWorkerListRunScopeRpcTests(): void {
 
     afterEach(() => h.cleanup())
 
-    /** A pre-v3 dispatch: a real dispatch_contexts row settled through the real lifecycle with no
-     *  worker_dispatches row, which is what every dispatch made before supervised workers looks like. */
+    /** Settle real pre-v3 dispatch_contexts without worker_dispatches, matching legacy unsupervised dispatches. */
     function createLegacyDispatch(status: 'completed' | 'failed' | 'dispatched'): string {
       const task = h.db.createTask({ spec: `legacy ${status} task`, runId: h.activeRunId })
       const dispatch = createRootDispatch(h.db, task.id, `term_legacy_${status}`)
@@ -270,11 +265,9 @@ export function registerWorkerListRunScopeRpcTests(): void {
 
       expect(worker.workerState).toBe('unsupervised')
       expect(worker.dispatchStatus).toBe('completed')
-      // `dispatch_contexts.status = 'completed'` is only written from an accepted `succeeded`
-      // report or a task completion, so the durable record is the whole settlement.
+      // Completed legacy Dispatch rows already prove accepted success/task completion.
       expect(worker.projection.outcome).toBe('succeeded')
-      // Absence is not a death certificate, so the verdict stays unverifiable — but a dispatch
-      // that never had a worker row has no process whose absence could require action.
+      // No worker row means no process to act on; keep liveness unverifiable because absence still proves no death.
       expect(worker.projection.liveness).toEqual({
         verdict: 'unverifiable',
         reason: 'unsupervised_settled'

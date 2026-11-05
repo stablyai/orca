@@ -8,6 +8,7 @@ import {
   createTestStore,
   mockApi
 } from '../../src/renderer/src/store/slices/github-slice-test-harness'
+import { answered } from '../../src/renderer/src/store/github/answered-request.test-fixture'
 
 const repos = Array.from({ length: 36 }, (_, index) => ({
   repoId: `repo-${index}`,
@@ -52,23 +53,27 @@ it.each(['counts-first', 'lists-first'] as const)(
       order === 'counts-first'
         ? { total: counts(), items: lists() }
         : { items: lists(), total: counts() }
-    const [items, total] = await Promise.all([pending.items, pending.total])
+    const [listed, total] = await Promise.all([pending.items, pending.total])
+    const items = answered(listed)
     expect(items).toMatchObject({ failedCount: 0 })
     expect(items.items).toHaveLength(36 * 24)
     expect(new Set(items.items.map((item) => item.repoId)).size).toBe(36)
     expect(total).toEqual({ totalCount: 36 * 120, totalPages: 5 })
     expect(api.restSearches).toBe(0)
     expect(api.rejected).toBe(0)
+    expect(api.calls.some(({ args }) => args[0] === 'pr')).toBe(false)
     expect(api.graphqlCalls).toBeLessThanOrEqual(72)
   }
 )
 
 it('retains all repos on repeat, bypass-cache refresh and independent page jumps', async () => {
   const store = connectedStore()
-  const fetch = (noCache = false) =>
-    store
-      .getState()
-      .fetchWorkItemsAcrossRepos(repos, 24, 1000, 'is:issue is:open', { force: true, noCache })
+  const fetch = async (noCache = false) =>
+    answered(
+      await store
+        .getState()
+        .fetchWorkItemsAcrossRepos(repos, 24, 1000, 'is:issue is:open', { force: true, noCache })
+    )
   expect((await fetch()).items).toHaveLength(36 * 24)
   const firstCalls = api.graphqlCalls
   expect((await fetch()).items).toHaveLength(36 * 24)
@@ -77,9 +82,9 @@ it('retains all repos on repeat, bypass-cache refresh and independent page jumps
     expect((await fetch(true)).items).toHaveLength(36 * 24)
   }
   expect(api.graphqlCalls).toBe(firstCalls + 3 * 36)
-  const page3 = await store
-    .getState()
-    .fetchWorkItemsNextPage(repos, 24, 1000, 'is:issue is:open', 3)
+  const page3 = answered(
+    await store.getState().fetchWorkItemsNextPage(repos, 24, 1000, 'is:issue is:open', 3)
+  )
   expect(page3.items).toHaveLength(36 * 24)
   expect(page3.items.every((item) => item.number <= 9952 && item.number >= 9929)).toBe(true)
   expect(page3.failedCount).toBe(0)

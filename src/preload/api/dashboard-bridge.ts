@@ -1,10 +1,5 @@
 import { ipcRenderer } from 'electron'
-import type {
-  DashboardRevealAgentArgs,
-  DashboardSleepWorkspaceArgs,
-  DashboardSnapshot,
-  DashboardSpawnAgentArgs
-} from '../../shared/dashboard-snapshot'
+import type { DashboardRevealAgentArgs, DashboardSnapshot } from '../../shared/dashboard-snapshot'
 import type { PreloadApi } from '../api-types'
 
 export const dashboardApi = {
@@ -37,18 +32,6 @@ export const dashboardApi = {
     ipcRenderer.on('ui:ackDashboardAgent', listener)
     return () => ipcRenderer.removeListener('ui:ackDashboardAgent', listener)
   },
-  onSpawnAgent: (callback: (args: DashboardSpawnAgentArgs) => void): (() => void) => {
-    const listener = (_event: Electron.IpcRendererEvent, args: DashboardSpawnAgentArgs): void =>
-      callback(args)
-    ipcRenderer.on('ui:spawnDashboardAgent', listener)
-    return () => ipcRenderer.removeListener('ui:spawnDashboardAgent', listener)
-  },
-  onSleepWorkspace: (callback: (args: DashboardSleepWorkspaceArgs) => void): (() => void) => {
-    const listener = (_event: Electron.IpcRendererEvent, args: DashboardSleepWorkspaceArgs): void =>
-      callback(args)
-    ipcRenderer.on('ui:sleepDashboardWorkspace', listener)
-    return () => ipcRenderer.removeListener('ui:sleepDashboardWorkspace', listener)
-  },
 
   requestSnapshot: (): Promise<void> => ipcRenderer.invoke('dashboard:requestSnapshot'),
   onSnapshot: (callback: (snapshot: DashboardSnapshot) => void): (() => void) => {
@@ -60,9 +43,5 @@ export const dashboardApi = {
   revealAgent: (args: DashboardRevealAgentArgs): Promise<void> =>
     ipcRenderer.invoke('dashboardPopout:revealAgent', args),
   ackAgent: (paneKey: string, intent: 'view' | 'explicit'): Promise<void> =>
-    ipcRenderer.invoke('dashboardPopout:ackAgent', { paneKey, intent }),
-  spawnAgent: (args: DashboardSpawnAgentArgs): Promise<void> =>
-    ipcRenderer.invoke('dashboardPopout:spawnAgent', args),
-  sleepWorkspace: (args: DashboardSleepWorkspaceArgs): Promise<void> =>
-    ipcRenderer.invoke('dashboardPopout:sleepWorkspace', args)
+    ipcRenderer.invoke('dashboardPopout:ackAgent', { paneKey, intent })
 } satisfies PreloadApi['dashboard']

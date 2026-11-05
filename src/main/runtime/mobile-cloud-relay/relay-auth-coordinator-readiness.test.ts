@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { mobileRelayMintFailureFromUnknown } from '../../../shared/mobile-relay-mint-failure'
+import { mobileRelayMintFailureFromUnknown } from '../../../shared/remote-runtime/relay/mobile-relay-mint-failure'
 import { DesktopRelayService } from './desktop-relay-service'
 import { RelayAuthCoordinator } from './relay-auth-coordinator'
 import type { RelayAuthContext } from './relay-auth-identity'
@@ -14,8 +14,7 @@ const context: RelayAuthContext = {
 }
 
 function fakeSessionBroker(): RelaySessionBroker {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the service only calls the stubbed members below.
-  const broker = Object.create(RelaySessionBroker.prototype) as RelaySessionBroker
+  const broker = Object.create(RelaySessionBroker.prototype)
   Object.defineProperties(broker, {
     closeNow: { value: vi.fn() },
     isLive: { value: () => true },
@@ -28,8 +27,7 @@ function fakeSessionBroker(): RelaySessionBroker {
 }
 
 function serviceWith(coordinator: RelayAuthCoordinator): DesktopRelayService {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: createPairingRelay touches only the fields assigned here.
-  const service = Object.create(DesktopRelayService.prototype) as DesktopRelayService
+  const service = Object.create(DesktopRelayService.prototype)
   return Object.assign(service, {
     coordinator,
     stopped: false,

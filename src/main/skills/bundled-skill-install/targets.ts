@@ -12,7 +12,6 @@ import {
 } from '../skill-provider-destinations'
 import type { BundledSkillFilesystem } from './filesystem'
 
-/** One real skills folder; every skill gets one target in it. */
 export type BundledSkillTargetRoot = {
   role: 'shared' | 'agent'
   /** Literal spelling: what locks key on and what the user sees. */
@@ -57,11 +56,7 @@ export async function resolveBundledSkillRealPath(
   }
 }
 
-/**
- * The shared root first, then each agent root that is a different real folder. Two spellings
- * of one folder (`~/.claude/skills -> ~/.agents/skills`, a Claude profile linked to
- * `~/.claude/skills`) are one target, so it is never planned twice.
- */
+/** Deduplicate roots by real folder so linked provider homes cannot plan the same target twice; shared root comes first. */
 export async function resolveBundledSkillTargets(
   request: BundledSkillTargetRequest,
   filesystem: BundledSkillFilesystem
@@ -89,7 +84,7 @@ export async function resolveBundledSkillTargets(
       candidates[0].agents.push(destination.provider)
       continue
     }
-    // Why: like the skills CLI, a project only gets links in agent folders it already has.
+    // Project scope creates links only in agent folders that already exist.
     if (scope === 'workspace' && (await filesystem.realpath(destination.rootPath)) === null) {
       continue
     }

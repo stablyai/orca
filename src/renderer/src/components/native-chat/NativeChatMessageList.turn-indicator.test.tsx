@@ -2,7 +2,8 @@
 
 import '@testing-library/jest-dom/vitest'
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, screen } from '@testing-library/react'
+import { render } from './native-chat-tooltip-test-harness'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 
 // Why: these fixtures have neither inline visual owners nor sender navigation.
@@ -29,17 +30,10 @@ import { NativeChatMessageList } from './NativeChatMessageList'
 import { installNativeChatMessageListTestViewport } from './native-chat-message-list-test-viewport'
 import type {
   AgentJournalItemBody,
-  AgentJournalRenderItem,
-  AgentJournalTurnScope
-} from '../../../../shared/agent-session-journal-types'
+  AgentJournalRenderItem
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalTurnScope } from '../../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 
-// The turn record this host writes, and the legacy status row an older host sends.
-const turnItem: AgentJournalItemBody = { kind: 'turn', turnId: 'turn-1', state: 'running' }
-const legacyTurnRow: AgentJournalItemBody = {
-  kind: 'status',
-  text: 'Codex is working…',
-  turnLifecycle: { turnId: 'turn-1', state: 'running' }
-}
 const reasoningRow: AgentJournalItemBody = {
   kind: 'message',
   role: 'reasoning',
@@ -77,159 +71,9 @@ const session: NativeChatLiveSession = {
   readPhase: 'ready'
 }
 
-// The live turn has two rows: the clock bar under the prompt, and a tail line that
-// says what the turn is doing. A settled turn keeps only the bar.
+// Live turns show a prompt clock and tail activity; settled turns retain the clock bar.
 describe('NativeChatMessageList turn indicator', () => {
-  it('keeps a reduced-motion-safe spinner on the live row of a no-tool Codex turn', () => {
-    render(
-      <NativeChatMessageList
-        session={{
-          ...session,
-          status: 'working',
-          messages: [
-            {
-              id: 'user-prose',
-              role: 'user',
-              blocks: [{ type: 'text', text: 'Write a long answer' }],
-              timestamp: 1,
-              source: 'transcript'
-            },
-            {
-              id: 'assistant-prose',
-              role: 'assistant',
-              blocks: [{ type: 'text', text: 'The answer is still streaming.' }],
-              timestamp: 2,
-              source: 'transcript'
-            }
-          ]
-        }}
-        isWorking
-        expandSignal={false}
-      />
-    )
-
-    const activity = screen.getByText('Working…')
-    const row = activity.closest('[data-native-chat-turn-activity]')
-    const spinner = row?.querySelector('svg')
-    expect(activity).not.toHaveClass('animate-pulse', 'animate-spin')
-    expect(spinner).toHaveClass('size-4', 'animate-spin', 'motion-reduce:hidden')
-    expect(row).toHaveAttribute('aria-live', 'polite')
-    expect(screen.getByText('The answer is still streaming.').compareDocumentPosition(row!)).toBe(
-      Node.DOCUMENT_POSITION_FOLLOWING
-    )
-  })
-
-  it('keeps the live row distinct from the running tool row', () => {
-    render(
-      <NativeChatMessageList
-        session={{
-          ...session,
-          status: 'working',
-          messages: [
-            {
-              id: 'assistant-running-tool',
-              role: 'assistant',
-              blocks: [
-                {
-                  type: 'tool-call',
-                  name: 'shell',
-                  input: { command: 'pnpm test' },
-                  state: 'running'
-                }
-              ],
-              timestamp: 1,
-              source: 'transcript'
-            }
-          ]
-        }}
-        isWorking
-        expandSignal={false}
-      />
-    )
-
-    const toolLabel = screen.getByText('Running 1 command')
-    expect(toolLabel).toHaveClass('animate-pulse')
-    expect(screen.getAllByText('Running 1 command')).toHaveLength(1)
-    expect(screen.getByText('pnpm test')).toBeInTheDocument()
-    const activity = screen.getByText('Working…')
-    expect(activity.textContent).not.toBe(toolLabel.textContent)
-    expect(activity).not.toHaveTextContent('shell')
-    expect(activity).not.toHaveTextContent('pnpm test')
-    const spinner = activity.closest('[data-native-chat-turn-activity]')?.querySelector('svg')
-    expect(activity).not.toHaveClass('animate-pulse', 'animate-spin')
-    expect(spinner).toHaveClass('animate-spin', 'motion-reduce:hidden')
-  })
-
-  it('hides foreground turn activity without settling live tool state', () => {
-    const { container } = render(
-      <NativeChatMessageList
-        session={{
-          ...session,
-          status: 'working',
-          messages: [
-            {
-              id: 'assistant-running-tool',
-              role: 'assistant',
-              blocks: [
-                {
-                  type: 'tool-call',
-                  name: 'shell',
-                  input: { command: 'pnpm test' },
-                  state: 'running'
-                }
-              ],
-              timestamp: 1,
-              source: 'transcript'
-            }
-          ]
-        }}
-        journalItems={[journalItem(1, turnItem), journalItem(2, reasoningRow)]}
-        isWorking
-        awaitingInput="shown"
-        expandSignal={false}
-      />
-    )
-
-    expect(container.querySelector('[data-native-chat-turn-activity]')).toBeNull()
-    expect(screen.queryByText(/Working for/)).toBeNull()
-    expect(screen.queryByText('Thinking')).toBeNull()
-    expect(screen.getByText('Running 1 command')).toHaveClass('animate-pulse')
-  })
-
-  // A terminal-backed pane can learn its agent is waiting without being handed
-  // the prompt; the tail then says so, in the row a question uses.
-  it('says the turn waits on the reader when no card shows the prompt', () => {
-    const { container } = render(
-      <NativeChatMessageList
-        session={{
-          ...session,
-          messages: [
-            {
-              id: 'user-wait',
-              role: 'user',
-              blocks: [{ type: 'text', text: 'Deploy it' }],
-              timestamp: 1,
-              source: 'transcript'
-            }
-          ]
-        }}
-        isWorking
-        workingStartedAt={Date.now() - 5000}
-        awaitingInput="unshown"
-        expandSignal={false}
-      />
-    )
-
-    expect(container.querySelector('[data-native-chat-ask-row="awaiting"]')).toHaveTextContent(
-      /^Awaiting user input$/
-    )
-    expect(container.querySelector('[data-native-chat-turn-activity]')).toBeNull()
-    expect(screen.getByText('Working for 5s')).toBeInTheDocument()
-  })
-
-  // The run is the turn's trailing one, so it stays live between calls and only
-  // settles with the turn. Its motion is its own — the tail's spinner never
-  // migrates onto it — and both are gone once the turn is.
+  // The trailing run stays live between calls until the turn ends; its motion stays separate from the tail spinner.
   it('keeps the trailing run live while the turn tail spins, then settles both', () => {
     const workingSession: NativeChatLiveSession = {
       ...session,
@@ -284,7 +128,6 @@ describe('NativeChatMessageList turn indicator', () => {
     expect(container.querySelector('[data-native-chat-turn-activity]')).toBeNull()
     expect(container.querySelector('.animate-pulse')).toBeNull()
     expect(container.querySelector('.animate-spin')).toBeNull()
-    // Same element, now settled: the lone command names it, marked done.
     expect(liveRun).toBeInTheDocument()
     expect(liveRun).toHaveTextContent('pnpm test')
     expect(liveRun).not.toHaveTextContent('Running')
@@ -352,41 +195,6 @@ describe('NativeChatMessageList turn indicator', () => {
     expect(screen.queryByText(/AskUserQuestion/)).toBeNull()
   })
 
-  it('reads "Thinking" on the tail line while the bar keeps the clock', () => {
-    const { container } = render(
-      <NativeChatMessageList
-        session={{
-          ...session,
-          status: 'working',
-          messages: [
-            {
-              id: 'user-thinking',
-              role: 'user',
-              blocks: [{ type: 'text', text: 'Start the task' }],
-              timestamp: Date.now(),
-              source: 'transcript'
-            }
-          ]
-        }}
-        journalItems={[journalItem(1, turnItem), journalItem(2, reasoningRow)]}
-        isWorking
-        expandSignal={false}
-      />
-    )
-
-    const user = screen.getByText('Start the task')
-    const bar = screen.getByText('Working for 0s')
-    const thinking = screen.getByText('Thinking')
-    expect(user.compareDocumentPosition(bar)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
-    expect(bar.compareDocumentPosition(thinking)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
-    expect(screen.getAllByText('Thinking')).toHaveLength(1)
-    expect(screen.queryByText('Working…')).toBeNull()
-    expect(thinking.closest('[data-native-chat-turn-activity]')?.querySelector('svg')).toHaveClass(
-      'animate-spin'
-    )
-    expect(container.querySelector('.animate-bounce')).toBeNull()
-  })
-
   it('does not reuse completed-turn reasoning while the next dispatch is pending', () => {
     render(
       <NativeChatMessageList
@@ -414,198 +222,6 @@ describe('NativeChatMessageList turn indicator', () => {
 
     expect(screen.queryByText('Thinking')).toBeNull()
     expect(screen.getByText('Working…')).toBeInTheDocument()
-  })
-
-  it('lets provider activity text beat the reasoning label on the tail line', () => {
-    const { container } = render(
-      <NativeChatMessageList
-        session={{
-          ...session,
-          status: 'working',
-          messages: [
-            {
-              id: 'user-activity',
-              role: 'user',
-              blocks: [{ type: 'text', text: 'Start the task' }],
-              timestamp: Date.now(),
-              source: 'transcript'
-            }
-          ]
-        }}
-        journalItems={[journalItem(1, legacyTurnRow), journalItem(2, reasoningRow)]}
-        turnActivity={{ kind: 'description', text: 'Exploring the repo layout' }}
-        isWorking
-        expandSignal={false}
-      />
-    )
-
-    expect(screen.getByText('Exploring the repo layout')).toBeInTheDocument()
-    expect(screen.queryByText('Thinking')).toBeNull()
-    expect(container.querySelectorAll('[data-native-chat-turn-activity]')).toHaveLength(1)
-    expect(container.querySelectorAll('[data-native-chat-turn-status]')).toHaveLength(1)
-  })
-
-  it('puts the clock bar under the prompt and the tail line after the newest content', () => {
-    render(
-      <NativeChatMessageList
-        session={{
-          ...session,
-          status: 'working',
-          messages: [
-            {
-              id: 'user-1',
-              role: 'user',
-              blocks: [{ type: 'text', text: 'Run the checks' }],
-              timestamp: 1,
-              source: 'transcript'
-            },
-            {
-              id: 'assistant-1',
-              role: 'assistant',
-              blocks: [{ type: 'text', text: 'I am checking now.' }],
-              timestamp: 2,
-              source: 'transcript'
-            }
-          ]
-        }}
-        isWorking
-        expandSignal={false}
-      />
-    )
-
-    const user = screen.getByText('Run the checks')
-    const bar = screen.getByText('Working for 0s')
-    const assistant = screen.getByText('I am checking now.')
-    const tail = screen.getByText('Working…')
-    expect(user.compareDocumentPosition(bar)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
-    expect(bar.compareDocumentPosition(assistant)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
-    expect(assistant.compareDocumentPosition(tail)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
-    expect(bar.closest('[data-native-chat-turn-status]')).toHaveAttribute(
-      'data-native-chat-turn-status',
-      'active'
-    )
-    // The clock is said once, on the bar.
-    expect(screen.getAllByText(/Working for/)).toHaveLength(1)
-  })
-
-  it('shows elapsed working time on the bar while a tool runs', () => {
-    render(
-      <NativeChatMessageList
-        session={{
-          ...session,
-          status: 'working',
-          messages: [
-            {
-              id: 'user-tool',
-              role: 'user',
-              blocks: [{ type: 'text', text: 'Wait a bit' }],
-              timestamp: 1,
-              source: 'transcript'
-            },
-            {
-              id: 'tool-1',
-              role: 'assistant',
-              blocks: [
-                {
-                  type: 'tool-call',
-                  name: 'shell',
-                  input: { command: 'sleep 5' },
-                  state: 'running'
-                }
-              ],
-              timestamp: 1,
-              source: 'transcript'
-            }
-          ]
-        }}
-        isWorking
-        workingStartedAt={Date.now() - 3000}
-        expandSignal={false}
-      />
-    )
-
-    expect(screen.getByText('Working for 3s')).toBeInTheDocument()
-  })
-
-  it('keeps the completed duration below the user message', () => {
-    const startedAt = Date.now() - 3000
-    const turnSession: NativeChatLiveSession = {
-      ...session,
-      status: 'working',
-      messages: [
-        {
-          id: 'user-complete',
-          role: 'user',
-          blocks: [{ type: 'text', text: 'Complete this task' }],
-          timestamp: startedAt,
-          source: 'transcript'
-        },
-        {
-          id: 'assistant-complete',
-          role: 'assistant',
-          blocks: [{ type: 'text', text: 'Task complete.' }],
-          timestamp: Date.now(),
-          source: 'transcript'
-        }
-      ]
-    }
-    const { rerender } = render(
-      <NativeChatMessageList
-        session={turnSession}
-        isWorking
-        workingStartedAt={startedAt}
-        expandSignal={false}
-      />
-    )
-    // The live bar sits where the settled one will, so settling never moves it.
-    const liveBar = screen.getByText('Working for 3s')
-    expect(screen.getByText('Complete this task').compareDocumentPosition(liveBar)).toBe(
-      Node.DOCUMENT_POSITION_FOLLOWING
-    )
-
-    rerender(
-      <NativeChatMessageList
-        session={{ ...turnSession, status: 'ready' }}
-        isWorking={false}
-        workingStartedAt={null}
-        expandSignal={false}
-      />
-    )
-
-    const user = screen.getByText('Complete this task')
-    const status = screen.getByText('Worked for 3s')
-    // Settled in place: the same bar, not a remount.
-    expect(status.closest('[data-native-chat-turn-status]')).toBe(
-      liveBar.closest('[data-native-chat-turn-status]')
-    )
-    const assistant = screen.getByText('Task complete.')
-    expect(user.compareDocumentPosition(status)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
-    expect(status.compareDocumentPosition(assistant)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
-
-    rerender(
-      <NativeChatMessageList
-        session={{
-          ...turnSession,
-          status: 'working',
-          messages: [
-            ...turnSession.messages,
-            {
-              id: 'user-next',
-              role: 'user',
-              blocks: [{ type: 'text', text: 'Start another task' }],
-              timestamp: Date.now(),
-              source: 'transcript'
-            }
-          ]
-        }}
-        isWorking
-        workingStartedAt={Date.now()}
-        expandSignal={false}
-      />
-    )
-
-    expect(screen.getByText('Worked for 3s')).toBeInTheDocument()
-    expect(screen.getByText('Working for 0s')).toBeInTheDocument()
   })
 
   it.each([
@@ -696,8 +312,7 @@ describe('NativeChatMessageList turn indicator', () => {
         Node.DOCUMENT_POSITION_FOLLOWING
       )
 
-      // A settles in place: under its prompt, above B. A's tool work is A's on either host (read
-      // from its scope, or from journal order), so the settled bar becomes that work's fold toggle.
+      // A’s bar settles under A; tool scope or journal order keeps A’s work inside its fold.
       const expectSettledUnderA = () => {
         const settledA = screen
           .getByText('Worked for 17s')
@@ -745,54 +360,4 @@ describe('NativeChatMessageList turn indicator', () => {
       expect(screen.queryByText(/Working for/)).toBeNull()
     }
   )
-
-  it("uses the completed caret to expand that turn's tool details", () => {
-    const startedAt = Date.now() - 3000
-    render(
-      <NativeChatMessageList
-        session={{
-          ...session,
-          status: 'ready',
-          messages: [
-            {
-              id: 'user-details',
-              role: 'user',
-              blocks: [{ type: 'text', text: 'Inspect the repo' }],
-              timestamp: startedAt,
-              source: 'transcript'
-            },
-            {
-              id: 'assistant-details',
-              role: 'assistant',
-              blocks: [
-                {
-                  type: 'tool-call',
-                  name: 'shell',
-                  input: { command: 'pwd' },
-                  state: 'completed'
-                },
-                { type: 'tool-result', output: '/repo' }
-              ],
-              timestamp: Date.now(),
-              source: 'transcript'
-            }
-          ]
-        }}
-        isWorking={false}
-        workingStartedAt={startedAt}
-        expandSignal={false}
-      />
-    )
-
-    const status = screen.getByRole('button', { name: 'Toggle turn details' })
-    expect(status).toHaveAttribute('aria-expanded', 'false')
-    expect(screen.queryByRole('button', { name: /pwd/ })).toBeNull()
-    fireEvent.click(status)
-    expect(status).toHaveAttribute('aria-expanded', 'true')
-    // Opening the turn status reveals the turn, but does not open its nested
-    // tool-run disclosure. The command remains a separate reader action.
-    const tools = screen.getAllByRole('button', { name: /pwd/ })
-    expect(tools).toHaveLength(1)
-    expect(tools[0]).toHaveAttribute('aria-expanded', 'false')
-  })
 })

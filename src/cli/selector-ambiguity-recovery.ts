@@ -1,6 +1,4 @@
-// Why: the runtime answers a selector that matches several rows (two projects both named `app`)
-// with a bare `selector_ambiguous`, naming neither the value nor a way out. Only the CLI still
-// knows which flag the caller typed, so it says which selector was ambiguous and what is exact.
+// The runtime omits the typed selector from ambiguity errors; only the CLI can supply it.
 
 export type SelectorAmbiguityRecovery = {
   ambiguousSelectors: { flag: string; selector: string }[]
@@ -9,14 +7,12 @@ export type SelectorAmbiguityRecovery = {
 
 const EXACT_FORMS = {
   repo: {
-    // Why the --project route: a local and an SSH project can share both repo id and path.
     forms:
       'id:<repo-id> or path:<absolute-path>; if two hosts share that id or path, use --project <id> --host <host> where the command takes them',
     list: 'orca repo list --json',
     noun: 'project'
   },
   worktree: {
-    // Why identity first: a local and an SSH checkout can share both repo id and path.
     forms:
       'identity:<identity.key> (host-qualified), or id:<repo-id>::<absolute-path> when only one host has that checkout',
     list: 'orca worktree list --json',
@@ -27,7 +23,7 @@ const EXACT_FORMS = {
 export function selectorAmbiguityRecovery(selectors: {
   repo?: string
   worktree?: string
-  /** The command chose a paired server, so the listing must ask that server, not this machine. */
+  /** Route recovery listings to the selected server. */
   remoteServerSelected?: boolean
 }): SelectorAmbiguityRecovery | undefined {
   const entries = (['worktree', 'repo'] as const).flatMap((flag) => {
@@ -54,4 +50,30 @@ export function selectorAmbiguityRecovery(selectors: {
       ]
     })
   }
+}
+
+type WorkspaceChoice = { id: string; path: string; hostId: string; selector: string }
+
+/** The workspace rows a selector_ambiguous error carries, only when every row is complete. */
+export function ambiguousWorkspaceChoices(data: unknown): WorkspaceChoice[] | undefined {
+  if (!data || typeof data !== 'object' || !('workspaces' in data)) {
+    return undefined
+  }
+  const rows: unknown = data.workspaces
+  return Array.isArray(rows) && rows.every(isWorkspaceChoice) ? rows : undefined
+}
+
+function isWorkspaceChoice(row: unknown): row is WorkspaceChoice {
+  return (
+    row !== null &&
+    typeof row === 'object' &&
+    'id' in row &&
+    typeof row.id === 'string' &&
+    'path' in row &&
+    typeof row.path === 'string' &&
+    'hostId' in row &&
+    typeof row.hostId === 'string' &&
+    'selector' in row &&
+    typeof row.selector === 'string'
+  )
 }

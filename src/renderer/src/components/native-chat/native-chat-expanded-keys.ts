@@ -21,8 +21,7 @@ export function toggleNativeChatExpandedKey(
   return next
 }
 
-/** Records the reader's open (true) or closed (false) choice for `key`, which then
- *  outranks whatever state would have decided it; the oldest choice drops when full. */
+/** Remember the reader’s explicit choice over inferred state, evicting the oldest choice at capacity. */
 export function chooseNativeChatExpanded(
   current: ReadonlyMap<string, boolean>,
   key: string,

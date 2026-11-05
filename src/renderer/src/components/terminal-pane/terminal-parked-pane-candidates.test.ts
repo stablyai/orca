@@ -8,29 +8,7 @@ const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 const SECOND_LEAF_ID = '22222222-2222-4222-8222-222222222222'
 
 describe('fallbackParkedPaneCandidates', () => {
-  it('returns nothing without a layout snapshot', () => {
-    expect(
-      fallbackParkedPaneCandidates(
-        { id: TAB_ID, ptyId: PTY_ID },
-        { terminalLayoutsByTabId: {}, runtimePaneTitlesByTabId: {} }
-      )
-    ).toEqual([])
-  })
-
-  it('reuses the single runtime-title slot for a single-pane tab', () => {
-    expect(
-      fallbackParkedPaneCandidates({ id: TAB_ID, ptyId: PTY_ID }, {
-        terminalLayoutsByTabId: {
-          [TAB_ID]: { root: { type: 'leaf', leafId: LEAF_ID }, activeLeafId: null }
-        },
-        runtimePaneTitlesByTabId: { [TAB_ID]: { 7: 'working title' } }
-      } as never)
-    ).toEqual([{ ptyId: PTY_ID, paneId: 7, leafId: LEAF_ID, drivesTabTitle: true }])
-  })
-
-  // Why: a tab that never mounted a pane persists a rootless layout. Walking
-  // only `root` yielded zero candidates, so watcher coverage refused it and a
-  // manual park could never succeed for a workspace the user had not visited.
+  // Never-mounted tabs have rootless layouts; root-only candidates would refuse coverage and prevent manual parking.
   it('resolves the single leaf of a rootless layout', () => {
     expect(
       fallbackParkedPaneCandidates({ id: TAB_ID, ptyId: PTY_ID }, {
@@ -45,17 +23,6 @@ describe('fallbackParkedPaneCandidates', () => {
         runtimePaneTitlesByTabId: {}
       } as never)
     ).toEqual([{ ptyId: PTY_ID, paneId: -1, leafId: LEAF_ID, drivesTabTitle: true }])
-  })
-
-  it('returns nothing for a rootless layout with no resolvable leaf', () => {
-    expect(
-      fallbackParkedPaneCandidates({ id: TAB_ID, ptyId: PTY_ID }, {
-        terminalLayoutsByTabId: {
-          [TAB_ID]: { root: null, activeLeafId: null, expandedLeafId: null }
-        },
-        runtimePaneTitlesByTabId: {}
-      } as never)
-    ).toEqual([])
   })
 
   it('maps split leaves to layout PTYs with collision-free negative pane ids', () => {

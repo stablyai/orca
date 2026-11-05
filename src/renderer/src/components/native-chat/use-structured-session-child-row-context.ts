@@ -2,11 +2,9 @@ import { useMemo } from 'react'
 import {
   agentChildRowContextForParent,
   type AgentChildRowContext
-} from '../../../../shared/agent-child-row-model'
-import {
-  AGENT_STATUS_STALE_AFTER_MS,
-  type AgentStatusEntry
-} from '../../../../shared/agent-status-types'
+} from '../../../../shared/agent-status/presentation/agent-child-row-model'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status/contracts/agent-status-freshness'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { useNow } from '@/hooks/use-now'
 import { isExplicitAgentStatusFresh } from '@/lib/pane-agent-evidence'
 import { useAppStore } from '@/store'
@@ -22,8 +20,7 @@ export function structuredSessionChildRowContext(
   )
 }
 
-/** The strip's children read their parent's verdict from the same status row the sidebar reads,
- *  so one child never says "No update" in one place and "Working" in the other. */
+/** Use the sidebar’s parent verdict so the same child cannot disagree between strip and sidebar. */
 export function useStructuredSessionChildRowContext(
   paneKey: string
 ): AgentChildRowContext | undefined {
@@ -31,8 +28,7 @@ export function useStructuredSessionChildRowContext(
   // The freshness window is thirty minutes; a coarse shared tick is well inside its precision.
   const now = useNow(30_000, parent !== undefined)
   const context = parent ? structuredSessionChildRowContext(parent, now) : undefined
-  // Rebuilt from its values, not the row: a status row that changed none of them keeps the strip's
-  // grouped rows memoized.
+  // Memoize by verdict fields so unchanged status updates cannot rebuild grouped child rows.
   const fresh = context?.parentEvidenceFresh
   const observation = context?.transportObservation
   const observedAt = context?.parentObservedAt

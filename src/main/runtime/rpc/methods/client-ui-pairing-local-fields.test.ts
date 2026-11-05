@@ -12,8 +12,7 @@ function makeRequest(method: string, params?: unknown): RpcRequest {
   return { id: 'req-1', authToken: 'tok', method, params }
 }
 
-// Both directions of the pairing boundary for the fields in PAIRING_LOCAL_UI_FIELDS: a client's
-// value must never be persisted by the host, and the host's must never be returned to a client.
+// Pairing-local fields must cross neither boundary: persist no client value and return no host value.
 describe('client UI RPC pairing-local field seams', () => {
   it('drops a paired client manualRepoOrder while forwarding the rest of the payload', async () => {
     const runtime = {
@@ -22,8 +21,7 @@ describe('client UI RPC pairing-local field seams', () => {
     } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
 
-    // A paired web client restamps every repo onto its own runtime:web-* pseudo-host, so its
-    // overlay names hosts this profile will never own; persisting it erases the desktop order.
+    // Web pseudo-host order keys belong to that client; persisting them erases this desktop's order.
     const response = await dispatcher.dispatch(
       makeRequest('ui.set', {
         sidebarWidth: 280,
@@ -38,8 +36,7 @@ describe('client UI RPC pairing-local field seams', () => {
     expect(runtime.updateUIState).toHaveBeenCalledWith({ sidebarWidth: 280 })
   })
 
-  // Driven off the census so a field added to PAIRING_LOCAL_UI_FIELDS without wiring a seam
-  // fails here rather than shipping. Sample values are what a paired web client actually sends.
+  // Drive cases from PAIRING_LOCAL_UI_FIELDS so adding a field without wiring both seams fails here.
   const pairingLocalSamples: Record<(typeof PAIRING_LOCAL_UI_FIELDS)[number], unknown> = {
     automationHostFilter: { kind: 'host', hostKey: 'authority:desktop|selector:self' },
     hideWorkspacesFromOtherDevices: true,
@@ -48,6 +45,7 @@ describe('client UI RPC pairing-local field seams', () => {
     ],
     workspaceHostOrder: ['runtime:web-11111111-2222-3333-4444-555555555555', 'local'],
     sidebarOpen: false,
+    showAgentModels: false,
     agentsVisibleHostIds: ['runtime:web-11111111-2222-3333-4444-555555555555'],
     agentsFilterRepoIds: ['repo-a'],
     agentsHideWorkspacesFromOtherDevices: true,
@@ -82,9 +80,7 @@ describe('client UI RPC pairing-local field seams', () => {
     }
   )
 
-  // The read path matters as much as the write path: a host that echoes these back overwrites the
-  // client's own value, and on a profile poisoned before the write strip the echoed
-  // runtime:web-* keys match the very client that minted them.
+  // Echoed host values overwrite client preferences; previously persisted web pseudo-host keys can even match that client again.
   it.each(PAIRING_LOCAL_UI_FIELDS.map((field) => [field] as const))(
     'ui.get never returns the pairing-local field %s',
     async (field) => {

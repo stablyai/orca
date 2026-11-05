@@ -2,7 +2,7 @@ import { AlertTriangle, FolderSearch, Loader2 } from 'lucide-react'
 import type {
   WorkspaceSpaceItem,
   WorkspaceSpaceWorktree
-} from '../../../../shared/workspace-space-types'
+} from '../../../../shared/workspace-disk-space/workspace-space-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { formatBytes, formatCompactCount } from './workspace-space-format'
 import { getLargestWorkspaceSpaceItemSize } from './workspace-space-presentation'
@@ -95,10 +95,14 @@ export function WorkspaceSpaceBreakdownList({
               {formatBytes(worktree.sizeBytes)}
             </div>
             <div className="text-[11px] text-muted-foreground">
-              {formatCompactCount(topLevelItemCount)}{' '}
               {translate(
-                'auto.components.status.bar.WorkspaceSpaceManagerPanel.b25c2c1086',
-                'top-level items'
+                'auto.components.status.bar.WorkspaceSpaceManagerPanel.topLevelItems',
+                '{{formattedCount}} top-level items',
+                {
+                  count: topLevelItemCount,
+                  formattedCount: formatCompactCount(topLevelItemCount),
+                  defaultValue_one: '{{formattedCount}} top-level item'
+                }
               )}
             </div>
           </div>

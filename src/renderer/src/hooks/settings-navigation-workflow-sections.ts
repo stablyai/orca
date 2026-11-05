@@ -1,15 +1,15 @@
-import { getArtifactsSettingsSearchEntries } from '@/components/settings/artifacts-settings-search'
-import { getAutomationsSettingsSearchEntries } from '@/components/settings/automations-settings-search'
-import { getBrowserPaneCombinedSearchEntries } from '@/components/settings/browser-pane-search'
-import { getCommitMessageAiPaneSearchEntries } from '@/components/settings/commit-message-ai-search'
-import { getSourceControlCustomActionsSearchEntries } from '@/components/settings/source-control-custom-actions-section'
-import { getFloatingWorkspaceSearchEntries } from '@/components/settings/floating-workspace-search'
-import { getGitProviderApiBudgetSearchEntries } from '@/components/settings/git-provider-api-budget-search'
-import { getGitPaneSearchEntries } from '@/components/settings/git-search'
-import { getMobileEmulatorSearchEntries } from '@/components/settings/mobile-emulator-search'
-import { getQuickCommandsPaneSearchEntries } from '@/components/settings/quick-commands-search'
-import { getShareSkillsSettingsSearchEntries } from '@/components/settings/share-skills-settings-search'
-import { getTasksPaneSearchEntries } from '@/components/settings/tasks-search'
+import { getArtifactsSettingsSearchEntries } from '@/components/settings/artifacts/artifacts-settings-search'
+import { getAutomationsSettingsSearchEntries } from '@/components/settings/automations/automations-settings-search'
+import { getBrowserPaneCombinedSearchEntries } from '@/components/settings/browser/browser-pane-search'
+import { getCommitMessageAiPaneSearchEntries } from '@/components/settings/source-control/commit-message-ai-search'
+import { getSourceControlCustomActionsSearchEntries } from '@/components/settings/source-control/source-control-custom-actions-section'
+import { getFloatingWorkspaceSearchEntries } from '@/components/settings/floating-workspaces/floating-workspace-search'
+import { getGitProviderApiBudgetSearchEntries } from '@/components/settings/source-control/git-provider-api-budget-search'
+import { getGitPaneSearchEntries } from '@/components/settings/source-control/git-search'
+import { getMobileEmulatorSearchEntries } from '@/components/settings/mobile/emulator/mobile-emulator-search'
+import { getQuickCommandsPaneSearchEntries } from '@/components/settings/quick-commands/quick-commands-search'
+import { getShareSkillsSettingsSearchEntries } from '@/components/settings/skills/sharing/share-skills-settings-search'
+import { getTasksPaneSearchEntries } from '@/components/settings/tasks/tasks-search'
 import { translate } from '@/i18n/i18n'
 import type { SettingsNavSection } from '@/lib/settings-navigation-types'
 import {
@@ -63,8 +63,7 @@ export function buildWorkflowSettingsSections(
         'auto.hooks.useSettingsNavigationMetadata.shareSkillsDescription',
         'Share your skills with an unlisted link. Anyone who has it can install them.'
       ),
-      // Why: the sidebar entry and the page header both use BookOpen for
-      // skills, so the settings row that opens them matches.
+      // Match the skills sidebar/page icon in its settings entry.
       icon: BookOpen,
       searchEntries: getShareSkillsSettingsSearchEntries(),
       group: 'workflows',
@@ -100,8 +99,7 @@ export function buildWorkflowSettingsSections(
         'Branch naming, base refs, and Git AI Author.'
       ),
       icon: GitBranch,
-      // Why: Git AI Author is rendered inside Git, so shared
-      // metadata must search both surfaces wherever Git appears.
+      // Git AI Author lives inside Git, so search metadata covers both surfaces.
       searchEntries: [
         ...getGitPaneSearchEntries(),
         ...getCommitMessageAiPaneSearchEntries(),

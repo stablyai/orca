@@ -1,8 +1,6 @@
 import { callRuntimeEnvironment } from '../ipc/runtime-environments/runtime-environment-transport-routing'
 
-// Why: runtime RPC failures resolve as ok:false, but the shared search client
-// classifies thrown errors by code, so the refusal has to keep its code to be
-// recognised as an old host that lacks the method.
+// Preserve RPC refusal codes so search recognizes older hosts that lack the method.
 export async function callRuntimeSessionSearch(
   userDataPath: string,
   environmentId: string,

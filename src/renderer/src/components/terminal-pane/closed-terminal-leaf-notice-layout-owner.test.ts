@@ -17,8 +17,7 @@ afterEach(() => {
 })
 
 describe('a pane main closed before its tab mounted, in a layout-owner build', () => {
-  // Main writes and starts every split itself, so no split waits in the window to mount the pane:
-  // the tab mounts from main's layout, which no longer holds it.
+  // Main-owned splits mount from frames; once main removes the leaf, no window-side deferred mount may remain.
   it('leaves nothing waiting to mount it, and drops it from a mounted tab as before', () => {
     const target = new EventTarget()
     vi.stubGlobal('window', target)
@@ -29,13 +28,14 @@ describe('a pane main closed before its tab mounted, in a layout-owner build', (
       }
     })
 
-    applyClosedTerminalLeafNotice('tab-1', '22222222-2222-4222-8222-222222222222')
+    applyClosedTerminalLeafNotice('tab-1', '22222222-2222-4222-8222-222222222222', 'requested')
 
     expect(takeQueuedTerminalPaneSplitRequests('tab-1', 'wt-1')).toEqual([])
     expect(hasTerminalPaneSplitMountLease('tab-1')).toBe(false)
     expect(closed).toHaveBeenCalledWith({
       tabId: 'tab-1',
-      leafId: '22222222-2222-4222-8222-222222222222'
+      leafId: '22222222-2222-4222-8222-222222222222',
+      lastPaneCloseReason: 'requested'
     })
   })
 })

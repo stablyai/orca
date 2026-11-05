@@ -1,9 +1,8 @@
-// Main's saved layout for the placement test: a split tab, then a trailing tab (layout-owner build).
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import {
   TEST_WORKTREE_ID,
   makeRuntimeStoreWithWorkspaceSession
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
 
 export const LEFT_LEAF = '51515151-5151-4151-8151-515151515151'
 export const RIGHT_LEAF = '52525252-5252-4252-8252-525252525252'
@@ -12,7 +11,6 @@ export const SPLIT_LEFT = `split::${LEFT_LEAF}`
 export const SPLIT_RIGHT = `split::${RIGHT_LEAF}`
 export const TRAILING = `trailing::${TRAILING_LEAF}`
 
-/** Main's saved layout with a split tab and a trailing tab, as the placement test's host has. */
 export function splitPlacementStore() {
   const tab = (id: string, sortOrder: number) => ({
     id,

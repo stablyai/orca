@@ -1,7 +1,9 @@
-import { OrcaRuntimeWithCreateMobileSessionTerminal } from './mobile-terminal-create'
-import type { MobileTerminalCreateOptions } from './mobile-terminal-renderer-create'
-import type { OwnedMobileTerminalCreateOptions } from './mobile-terminal-owned-create'
-import type { TerminalWorkspaceLaunchScope } from '../../runtime-legacy-worker-terminal-recovery-types'
+import {
+  OrcaRuntimeWithCreateMobileSessionTerminal,
+  type MobileTerminalCreateOptions,
+  type OwnedMobileTerminalCreateOptions
+} from './mobile-terminal-create'
+import type { TerminalWorkspaceLaunchScope } from '../../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import type { RuntimeMobileSessionCreateTerminalResult } from '../../../../shared/runtime-types'
 import {
   prepareStructuredChatCliFork,
@@ -9,14 +11,14 @@ import {
 } from '../../../ai-vault/structured-chat-cli-fork'
 import { buildMobileTerminalChatFork } from './mobile-terminal-chat-fork'
 import { isWslUncPath } from '../../../../shared/wsl-paths'
-import { isTuiAgent } from '../../../../shared/tui-agent-config'
-import { applyRemoteViewerLaunchEnv } from '../../remote-viewer-launch-env'
-import { deterministicAgentSessionUuid } from '../../runtime-agent-launch-resolution'
+import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
+import { applyRemoteViewerLaunchEnv } from './remote-viewer-launch-env'
+import { deterministicAgentSessionUuid } from './runtime-agent-launch-resolution'
 import { rendererPublicationThrottle } from '../../../window/renderer-publication-throttle'
 import { PROJECT_RUNTIME_REPAIR_REQUIRED_CODE } from '../../../../shared/project-runtime-repair-message'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
-import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { loadWorkspaceLayoutWithoutReport } from '../../../../shared/workspace-layout/workspace-layout-load'
 import { nameBasedLoadContext } from '../../../../shared/workspace-layout/workspace-layout-minted-ids'
 import { resolveSessionTabRow } from '../../../../shared/workspace-layout/old-client/old-client-session-tab-rows'
@@ -155,6 +157,8 @@ export abstract class OrcaRuntimeWithMobileChatForkCreate extends OrcaRuntimeWit
         opts.activate !== false,
         phoneAnchor,
         {
+          // The phone user's own fork.
+          wslUserAct: true,
           ...startup,
           identity: {
             tabId: deterministicAgentSessionUuid(`mobile-chat-fork-tab\0${seed}`),

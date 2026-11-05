@@ -10,15 +10,8 @@ import {
 
 const NO_ZOOM = { scale: 1, offsetX: 0, offsetY: 0 }
 
-/**
- * What Chromium paints for `dialog.html`, the C6.6 fixture with no `<meta name="viewport">`.
- *
- * Measured on Chromium 1217, 2026-09-20, under a 402x593 mobile emulation at device scale 1.91:
- * the page lays out at 980 CSS px and the frame metadata comes back with `deviceWidth` 402 and
- * `pageScaleFactor` 402/980. `Input.dispatchMouseEvent` takes page CSS coordinates, unscaled, and
- * `scrollOffsetX/Y` must not be added to them — a click sent at `device / scale + scrollOffset`
- * landed 300 px below its target on a scrolled page, and `device / scale` hit it.
- */
+// Measured Chromium 1217 (2026-09-20): no-viewport-meta page lays out at 980 CSS px within 402×593 emulation, scale 402/980.
+// CDP takes viewport-relative CSS coordinates: divide device by scale without scroll offsets, which overshot a scrolled target by 300px.
 const NO_VIEWPORT_META = {
   deviceWidth: 402,
   deviceHeight: 593,
@@ -141,8 +134,7 @@ describe('browser touch geometry', () => {
     const layout = { width: 402, height: 593 }
     const geometry = computeBrowserFrameGeometry(layout, NO_VIEWPORT_META)
 
-    // A 100 point flick up. The frame fits the pane one to one, so the only factor left is the
-    // page scale: 100 screen points span 100 / 0.41 CSS pixels of a page laid out at 980.
+    // 100-screen-point flick spans 100/0.41 CSS pixels on default 980px page; frame fits pane 1:1.
     const delta = browserWheelDeltaFromScreen(0, 100, geometry, 1)
 
     expect(delta.dy).toBe(-244)

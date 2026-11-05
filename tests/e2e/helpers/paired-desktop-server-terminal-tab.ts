@@ -1,8 +1,7 @@
-// A paired desktop's view of a switch-on server's terminal tab: the handles session.tabs gives
-// its panes, and the desktop panes bound to them.
+// Match server session-tab handles to the paired desktop’s bound panes.
 import type { RuntimeMobileSessionTabsResult } from '../../../src/shared/runtime-types'
-import { toRemoteRuntimePtyId } from '../../../src/shared/remote-runtime-pty-id'
-import { toWebTerminalSurfaceTabId } from '../../../src/shared/terminal-surface-id'
+import { toRemoteRuntimePtyId } from '../../../src/shared/remote-runtime/remote-runtime-pty-id'
+import { toWebTerminalSurfaceTabId } from '../../../src/shared/workspace-layout/terminal-surface-id'
 import { expect } from './orca-app'
 import type { HeadlessPairedRuntimeHost } from './headless-paired-runtime-host'
 import type { PairedElectronClient } from './paired-electron-client'

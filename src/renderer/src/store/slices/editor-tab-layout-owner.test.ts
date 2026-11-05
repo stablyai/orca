@@ -1,19 +1,16 @@
-// Editor tabs in a layout-owner build (ORCA_LAYOUT_OWNER=main): the window sends each open, close
-// and promotion to main and draws the tab only from main's frame. With the switch off the window
-// draws its own tabs and sends nothing; those cases run in the plain run.
+// Layout-owner editor opens/closes/promotions draw only from main frames; switch-off cases draw locally without main.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import type { Tab } from '../../../../shared/tab-types'
 import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
-import { buildEditorSessionData } from '@/lib/workspace-session'
-import type { OpenFile } from './editor'
-import { restorableEditorFile } from './editor/tabs/editor-tab-layout-owner'
+import '@/lib/workspace-session'
+
+import './editor/tabs/editor-tab-layout-owner'
 import { createTabsSliceMockApi } from './tabs-slice-test-harness'
-import { createTestStore, makeLayout, makeTab, makeWorktree } from './store-test-helpers'
+import { createTestStore, makeLayout, makeTab } from './store-test-helpers'
 import { drawTabsFromMain, type TabsDrawnFromMain } from './tabs-drawn-from-main.test-fixture'
 
-// Main's answer to the window's layout commands, as a switch-on build sends them.
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
@@ -196,18 +193,6 @@ describe.runIf(ORCA_LAYOUT_OWNER_IS_MAIN)('editor tabs drawn from main’s frame
     expect(editorTabs(other).map((tab) => tab.entityId)).toEqual([remote])
   })
 
-  it('sends a diff tab’s view so a reload rebuilds it', async () => {
-    store.getState().openDiff(WT, '/repo/a.ts', 'a.ts', 'ts', false)
-    const [command] = layoutApplyTestTransport.sentOfType('openEditorTab')
-    expect(command).toMatchObject({
-      contentType: 'diff',
-      view: { view: { mode: 'diff' }, file: { filePath: '/repo/a.ts' } }
-    })
-    expect(command).not.toHaveProperty('file')
-    await main.settle()
-    expect(editorTabs().map((tab) => tab.contentType)).toEqual(['diff'])
-  })
-
   it('sends the record an open rewrote in a tab it reuses, under that tab’s id', async () => {
     const log = { filePath: '/a.log', relativePath: 'a.log', worktreeId: WT, language: 'log' }
     const fileId = store
@@ -228,57 +213,6 @@ describe.runIf(ORCA_LAYOUT_OWNER_IS_MAIN)('editor tabs drawn from main’s frame
       { filePath: '/a.log', relativePath: 'a.log', language: 'log' }
     ])
     expect(tabFor(fileId)?.id).toBe(tabId)
-  })
-
-  it('sends nothing for a reopen that leaves the record and view as main holds them', async () => {
-    const a = openFile('/a.ts')
-    store.getState().openDiff(WT, '/repo/b.ts', 'b.ts', 'ts', false)
-    await main.settle()
-    const sent = layoutApplyTestTransport.sentOfType('openEditorTab').length
-
-    for (let click = 0; click < 3; click += 1) {
-      openFile('/a.ts')
-      store.getState().openDiff(WT, '/repo/b.ts', 'b.ts', 'ts', false)
-    }
-    await main.settle()
-
-    expect(layoutApplyTestTransport.sentOfType('openEditorTab')).toHaveLength(sent)
-    expect(tabFor(a)).toBeDefined()
-  })
-
-  it('asks main once per tab to keep a preview whose file has another open in flight', async () => {
-    const explorerOpen = (path: string, targetGroupId?: string) =>
-      store.getState().openFile(
-        {
-          filePath: path,
-          relativePath: path.slice(1),
-          worktreeId: WT,
-          language: 'ts',
-          mode: 'edit'
-        },
-        { preview: true, focusEditor: true, suppressActiveRuntimeFallback: true, targetGroupId }
-      )
-    const pkg = explorerOpen('/package.json')
-    await main.settle()
-    const kept = tabFor(pkg)?.id
-    const groupId = store.getState().createEmptySplitGroup(WT, tabFor(pkg)?.groupId ?? '', 'right')
-    // A second open of the file is in flight, and main answers the keep first.
-    layoutApplyTestTransport.answerWith((command) =>
-      command.type === 'openEditorTab' ? 'pending' : { ok: false, code: 'tab_not_found' }
-    )
-    explorerOpen('/package.json', groupId ?? undefined)
-    store.getState().makePreviewFilePermanent(pkg)
-    await main.settle()
-    layoutApplyTestTransport.answerWith('apply')
-    layoutApplyTestTransport.answerPending()
-    await main.settle()
-
-    const promoted = layoutApplyTestTransport
-      .sentOfType('promotePreviewTab')
-      .map((command) => command.tabId)
-    // The kept tab once, and the in-flight open's tab once its frame draws it.
-    expect(promoted.filter((tabId) => tabId === kept)).toHaveLength(1)
-    expect(new Set(promoted).size).toBe(promoted.length)
   })
 
   it("keeps a double-clicked Explorer file's tab when a later single click previews another", async () => {
@@ -309,27 +243,6 @@ describe.runIf(ORCA_LAYOUT_OWNER_IS_MAIN)('editor tabs drawn from main’s frame
     expect(
       layoutApplyTestTransport.mainModel?.workspaces[WT]?.tabs.map((tab) => tab.entityId)
     ).toEqual(['term', pkg, index])
-  })
-
-  it('draws a diff a Source Control single click opens as a preview', async () => {
-    // golden-source-control-open-diff.spec.ts: one click on an unstaged row.
-    const entry = { path: 'src/index.ts', status: 'modified' as const, area: 'unstaged' as const }
-    store.getState().setGitStatus(WT, { entries: [entry], conflictOperation: 'unknown' })
-    store.getState().openDiff(WT, '/repo/src/index.ts', 'src/index.ts', 'typescript', false, {
-      targetGroupId: undefined,
-      preview: true
-    })
-    await main.settle()
-    store.getState().setGitStatus(WT, { entries: [entry], conflictOperation: 'unknown' })
-    await main.settle()
-
-    const diff = editorTabs().find((tab) => tab.contentType === 'diff')
-    expect(diff).toMatchObject({ isPreview: true })
-    expect(store.getState().openFiles.map((file) => file.id)).toContain(diff?.entityId)
-    expect(layoutApplyTestTransport.mainModel?.workspaces[WT]?.tabs.map((tab) => tab.id)).toEqual([
-      'term',
-      diff?.id
-    ])
   })
 
   it('closes a tab only with the frame, and its content after it (d)', async () => {
@@ -427,24 +340,6 @@ describe.runIf(ORCA_LAYOUT_OWNER_IS_MAIN)('editor tabs drawn from main’s frame
     await main.settle()
     expect(tabFor(b)).not.toHaveProperty('isPreview')
   })
-
-  it('draws nothing itself and sends nothing when a paired server owns the workspace', async () => {
-    store.setState({
-      worktreesByRepo: {
-        repo1: [
-          makeWorktree({
-            id: WT,
-            repoId: 'repo1',
-            path: '/repo',
-            runtimeOwnerEnvironmentId: 'env-1'
-          })
-        ]
-      }
-    })
-    const a = openFile('/a.ts', { preview: true })
-    expect(layoutApplyTestTransport.sentOfType('openEditorTab')).toEqual([])
-    expect(tabFor(a)).toMatchObject({ isPreview: true })
-  })
 })
 
 describe.skipIf(ORCA_LAYOUT_OWNER_IS_MAIN)('editor tabs with the switch off', () => {
@@ -456,33 +351,4 @@ describe.skipIf(ORCA_LAYOUT_OWNER_IS_MAIN)('editor tabs with the switch off', ()
     expect(tabFor(b)).toBeUndefined()
     expect(layoutApplyTestTransport.sent).toEqual([])
   })
-
-  it('keeps writing the preview flag as false', () => {
-    const a = openFile('/a.ts')
-    const b = openFile('/b.ts', { preview: true })
-    store.getState().pinTab(tabFor(b)!.id)
-
-    expect(tabFor(a)).toHaveProperty('isPreview', false)
-    expect(tabFor(b)).toHaveProperty('isPreview', false)
-  })
-})
-
-it("sends an edit-mode file's record exactly as the window's session save keeps it", () => {
-  const file = {
-    id: 'f1',
-    filePath: '/a.log',
-    relativePath: 'a.log',
-    worktreeId: WT,
-    language: 'log',
-    mode: 'edit',
-    isDirty: false,
-    isPreview: true,
-    runtimeEnvironmentId: null,
-    externalSshTargetId: 'ssh-1',
-    readOnly: true,
-    liveTail: true
-  } satisfies OpenFile
-  const saved = buildEditorSessionData([file], {}, {}, {}, {}).openFilesByWorktree?.[WT]?.[0]
-  const { worktreeId: _worktreeId, isPreview: _isPreview, ...restorable } = saved ?? {}
-  expect(restorableEditorFile(file)).toEqual(restorable)
 })

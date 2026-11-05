@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import { pickStoredFields } from '../../shared/workspace-layout/stored-record-fields'
-import { titleAfterConfirmedShell } from '../../shared/terminal-pane-title-reset'
+import { titleAfterConfirmedShell } from '../../shared/workspace-layout/terminal-pane-title-reset'
 import { OrcaRuntimeService } from './orca-runtime'
 import { RUNTIME_LEAF_PTY_FACT_FIELDS } from './runtime-leaf-record-projection'
 import {
@@ -24,13 +24,14 @@ import {
   PUBLISHED_LEAVES,
   WORKTREE_ID
 } from './runtime-leaf-record-projection.test-fixture'
-import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
+import type {
+  RuntimeLeafRecord,
+  RuntimePtyWorktreeRecord
+} from './terminal/records/runtime-terminal-state-records'
 import type { RuntimeSyncedTab } from '../../shared/runtime-types'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 
-// Proves the projection's fixture is what today's mirror holds; deleted with the mirror.
-// Window-owned builds only: layout-owner builds bind every registered pane in main's layout, which
-// replaces the mirror; runtime-leaf-record-projection.test.ts holds that projection to this fixture.
+// Window-owned builds capture the mirror; layout-owner builds use main layout.
 
 type MirrorMaps = {
   tabs: Map<string, RuntimeSyncedTab>

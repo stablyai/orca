@@ -1,41 +1,34 @@
-// The queue's fold: each card as the chat's own rows say it stands. A card's outcome is decided by
-// the row that decides it (its hand-off's dispatch row) and kept from then on, so a later rewind
-// that retires the hand-off cannot change it, and replay reads the same. A hand-off ends the card's
-// queue life: it waits again only where Orca proves the agent never got it.
-
-import type {
-  AgentJournalCursor,
-  AgentJournalSubmission
-} from '../../../shared/agent-session-journal-types'
-import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
-import { readAgentSessionExecutionOptions } from '../../../shared/agent-session-execution-options'
-import { structuredAgentSessionCommandTurnIdentity } from '../../../shared/structured-agent-session-command-turn-identity'
-import { agentSessionSendBodyFingerprint } from '../../../shared/structured-agent-session-send-mutation'
+import { journalInputOrder } from './journal-input-order'
+import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
+import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { readAgentSessionExecutionOptions } from '../../../shared/agent-session/options/agent-session-execution-options'
+import { structuredAgentSessionCommandTurnIdentity } from '../../../shared/agent-session/view/structured-agent-session-command-turn-identity'
+import { agentSessionSendBodyFingerprint } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { readStoredRejectionFact } from './journal-dispatch-reducer'
-import { queuedHandOffOutcome } from './journal-dispatch-settlement'
+import { queuedHandOffInDoubt, queuedHandOffOutcome } from './journal-dispatch-settlement'
+import type { JournalDispatchRow, JournalRow } from './journal-row-schema'
 import type { JournalQueueRow, JournalQueuedChange } from './journal-queue-events'
 import type { JournalReducerState } from './journal-reducer'
-import type { JournalRow } from './journal-row-schema'
-import { foldQueuedHandOffInDoubt } from './journal-submission-fold'
-import type { QueuedMessageRow } from './queued-message-table'
+import { foldQueuedHandOffInDoubt, placeQueuedHandOffInDoubt } from './journal-submission-fold'
+import {
+  QUEUED_MESSAGE_HELD_DELIVERY_UNCONFIRMED,
+  type QueuedMessageRow
+} from './queued-message-table'
+// Latch handoff outcomes before rewind can retire their rows; requeue only proven-undelivered sends.
 
 export type JournalQueueState = {
   cards: Map<string, QueuedMessageRow>
   /** Moves with every card change, so a reader's memo recomputes only when it must. */
+  returnedCommands: Set<string>
   revision: number
 }
 
 export function createJournalQueueState(): JournalQueueState {
-  return { cards: new Map(), revision: 0 }
+  return { cards: new Map(), returnedCommands: new Set(), revision: 0 }
 }
 
-/**
- * What a refusal makes of the dispatched card it handed off (`queuedHandOffOutcome`): one Orca
- * proves never reached the agent waits again at its own position under the queue's pause; one that
- * may have reached it stays spent; a failure returns the card with its reason, except a command
- * refused in its own turn, which is spent because that turn's row says why and a returned card
- * would hold every card behind it.
- */
+/** Proven non-delivery waits again; uncertainty stays spent; reported command refusals need no returned card. */
 export function rejectedCardTransition(
   card: QueuedMessageRow,
   rejected: AgentJournalSubmission,
@@ -59,20 +52,13 @@ export function rejectedCardTransition(
   }
 }
 
-/** The submission's command turn is in the journal: its own row reports the refusal. */
 function commandTurnReported(state: JournalReducerState, clientMessageId: string): boolean {
   return state.items.has(
     agentJournalItemKey(structuredAgentSessionCommandTurnIdentity(clientMessageId))
   )
 }
 
-/**
- * THE classification of a `queued` change, for the fold, the import and the read of a card not yet
- * imported, so each reads a card exactly as the others do. Its hand-off still in this epoch settles
- * it as that hand-off's answer does; gone, the saved refusal returns it, and with none it is a
- * hand-off nothing can answer: hidden, never resent and never shown as refused. Pure: the fold
- * settles a hand-off in doubt afterwards (`settleHandOffInDoubt`).
- */
+/** Share card classification across replay/import/read; missing handoffs never authorize resending. */
 export function queuedCardFromChange(
   state: JournalReducerState,
   messageId: string,
@@ -90,7 +76,8 @@ export function queuedCardFromChange(
     returnedRejection: null,
     consumedAs: null,
     queuedAt: readQueuedAt(change.queuedAt),
-    ...(options ? { options } : {})
+    ...(options ? { options } : {}),
+    ...(typeof change.recovers === 'string' ? { recovers: change.recovers } : {})
   }
   const attempt =
     typeof change.attempt === 'string' && change.attempt.length > 0 ? change.attempt : null
@@ -106,13 +93,16 @@ export function queuedCardFromChange(
   }
   const { returned } = change
   if (typeof returned === 'object' && returned !== null) {
+    const rejection = readStoredRejectionFact(returned.rejection) ?? null
+    // Saved independent copies need their own Send; a later consumed attempt keeps its refusal.
+    const independent = card.recovers && attempt === null && rejection?.kind === 'unconfirmed'
     return {
       ...card,
-      state: 'returned',
-      holdReason: null,
+      state: independent ? 'waiting' : 'returned',
+      holdReason: independent ? QUEUED_MESSAGE_HELD_DELIVERY_UNCONFIRMED : null,
       consumedAs: attempt,
       returnedReason: typeof returned.reason === 'string' ? returned.reason : null,
-      returnedRejection: readStoredRejectionFact(returned.rejection) ?? null
+      returnedRejection: rejection
     }
   }
   if (attempt !== null) {
@@ -121,10 +111,13 @@ export function queuedCardFromChange(
   return card
 }
 
-/** After any row applies: what it does to the cards. */
-export function foldJournalQueueRow(state: JournalReducerState, row: JournalRow): void {
+export function foldJournalQueueRow(
+  state: JournalReducerState,
+  row: JournalRow,
+  marker5 = false
+): void {
   if (row.kind === 'queue') {
-    applyQueueRow(state, row)
+    applyQueueRow(state, row, marker5)
   } else if (row.kind === 'submission') {
     const card =
       typeof row.queuedMessageId === 'string'
@@ -145,20 +138,26 @@ export function foldJournalQueueRow(state: JournalReducerState, row: JournalRow)
     const card = cardHandedOffAs(state, submission)
     if (card && submission) {
       setCard(state, settledHandOff(state, card, submission))
-      settleHandOffInDoubt(state, row.clientMessageId)
+      settleHandOffInDoubt(state, row.clientMessageId, row, marker5)
     }
   } else if (row.kind === 'item' || row.kind === 'lifecycle-batch') {
     spendReportedCommandCards(state)
   }
 }
 
-function applyQueueRow(state: JournalReducerState, row: JournalQueueRow): void {
+function applyQueueRow(state: JournalReducerState, row: JournalQueueRow, marker5: boolean): void {
   const { change } = row
   if (change.op === 'queued') {
     const card = queuedCardFromChange(state, row.messageId, change)
     setCard(state, card)
+    if (
+      change.recovers &&
+      state.submissions.get(change.recovers)?.queuedMessageId === row.messageId
+    ) {
+      settleHandOffInDoubt(state, change.recovers, row, marker5)
+    }
     if (card.consumedAs !== null) {
-      settleHandOffInDoubt(state, card.consumedAs)
+      settleHandOffInDoubt(state, card.consumedAs, row, marker5)
     }
     return
   }
@@ -178,8 +177,7 @@ function applyQueueRow(state: JournalReducerState, row: JournalQueueRow): void {
   }
 }
 
-/** The card handed off as this submission, while that is still its current hand-off: an older
- *  attempt's late answer never moves a newer one. */
+/** Late answers from earlier attempts must not move cards already handed off again. */
 function cardHandedOffAs(
   state: JournalReducerState,
   submission: AgentJournalSubmission | undefined
@@ -207,16 +205,36 @@ function settledHandOff(
 
 /** The card's own hand-off, refused while it may have reached the agent: read as sent
  *  (`foldQueuedHandOffInDoubt`). */
-function settleHandOffInDoubt(state: JournalReducerState, clientMessageId: string): void {
+function settleHandOffInDoubt(
+  state: JournalReducerState,
+  clientMessageId: string,
+  row: JournalDispatchRow | JournalQueueRow,
+  marker5: boolean
+): void {
   const submission = state.submissions.get(clientMessageId)
-  if (submission?.dispatchState === 'rejected' && queuedHandOffOutcome(submission) === 'inDoubt') {
-    foldQueuedHandOffInDoubt(state, submission)
+  if (
+    submission &&
+    (marker5
+      ? submission.dispatchState === 'rejected' && queuedHandOffOutcome(submission) === 'inDoubt'
+      : queuedHandOffInDoubt(submission))
+  ) {
+    if (!marker5) {
+      state.inputs.presentations.set(clientMessageId, row)
+    }
+    placeQueuedHandOffInDoubt(state, submission)
+    if (marker5) {
+      foldQueuedHandOffInDoubt(submission)
+    }
   }
 }
 
-/** A returned command card is spent once its own turn's row reports the refusal. */
+// Command turns already show their refusal; returned cards would block following work.
 function spendReportedCommandCards(state: JournalReducerState): void {
-  for (const card of state.queue.cards.values()) {
+  for (const id of state.queue.returnedCommands) {
+    const card = state.queue.cards.get(id)
+    if (!card) {
+      continue
+    }
     if (
       card.state === 'returned' &&
       card.body.command &&
@@ -230,8 +248,15 @@ function spendReportedCommandCards(state: JournalReducerState): void {
 
 function setCard(state: JournalReducerState, card: QueuedMessageRow): void {
   if (state.queue.cards.get(card.messageId) !== card) {
+    const prior = state.queue.cards.get(card.messageId)
     state.queue.cards.set(card.messageId, card)
+    if (card.state === 'returned' && card.body.command && card.consumedAs !== null) {
+      state.queue.returnedCommands.add(card.messageId)
+    } else {
+      state.queue.returnedCommands.delete(card.messageId)
+    }
     state.queue.revision += 1
+    journalInputOrder(state).queueChanged(state, prior, card)
   }
 }
 

@@ -1,4 +1,4 @@
-import { readSourceControlLaunchRecipeAgentId } from '../../../../../../shared/source-control-launch-agent-selection'
+import { readSourceControlLaunchRecipeAgentId } from '../../../../../../shared/source-control/ai/source-control-launch-agent-selection'
 import { SourceControlDialogLayer } from './dialog-layer'
 import type { SourceControlPanelReadyProps } from './panel-props'
 
@@ -32,6 +32,7 @@ export function SourceControlPanelDialogs({
     pickerBaseRef,
     pullRequestGenerationDialogOpen,
     refreshBranchCompare,
+    resolveConflictsEditor,
     resolveConflictsComposerOpen,
     resolveConflictsPrompt,
     resolveConflictsRecoveryContext,
@@ -83,6 +84,7 @@ export function SourceControlPanelDialogs({
         window.setTimeout(() => void refreshBranchCompare(), 0)
       }}
       sourceControlAiActionsVisible={sourceControlAiActionsVisible}
+      resolveConflictsEditor={resolveConflictsEditor}
       resolveConflictsComposerOpen={resolveConflictsComposerOpen}
       recoveryContext={resolveConflictsRecoveryContext}
       onResolveConflictsComposerOpenChange={setResolveConflictsComposerOpen}

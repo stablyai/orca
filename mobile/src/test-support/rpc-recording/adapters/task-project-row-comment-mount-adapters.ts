@@ -6,7 +6,6 @@ import { mountFixture } from '../recorder-fixture-shape'
 
 const REPO_ID = 'repo-1'
 
-/** A PR review comment: has a path, a numeric line and a numeric id, so a reply is a review reply. */
 const REVIEW_COMMENT = {
   id: 501,
   author: 'octocat',
@@ -18,7 +17,6 @@ const REVIEW_COMMENT = {
   isResolved: false
 } as const
 
-/** An issue comment: no path or line, so a reply falls back to a plain issue comment. */
 const ISSUE_COMMENT = {
   id: 'comment-2',
   author: 'octocat',
@@ -101,10 +99,6 @@ const PROJECT_TABLE = {
   rows: [ISSUE_ROW, PR_ROW]
 }
 
-/**
- * One model in, an actions object out, every setter recorded as an effect: the shape this domain's
- * hooks share.
- */
 type ModelHookSpec<Actions> = {
   /** Called inside the render body, so a hook that throws is recorded as a mount failure. */
   readonly useHook: (model: never) => Actions
@@ -152,10 +146,6 @@ function mountModelHook<Actions>(
   }
 }
 
-/**
- * Writing on a board row's conversation: review threads and their replies, and plain comments on
- * an issue or a pull-request row.
- */
 export function taskProjectRowCommentMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {

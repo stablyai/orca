@@ -1,12 +1,4 @@
-/**
- * The renderer's scoped external-manager surface.
- *
- * Every call names the owner the host was captured under, so a manager ID —
- * which is only unique inside one host — can never route a mutation to a
- * different machine. The owner is recorded when a manager is discovered and
- * replayed on every later action, rather than re-derived from the manager's own
- * target at action time.
- */
+/** Carry discovered ownership into every manager action; host-local manager IDs cannot identify a machine or safely reconstruct scope later. */
 
 import type {
   ExternalAutomationAction,
@@ -23,13 +15,7 @@ export type ExternalAutomationScope = {
   provider: ExternalAutomationProvider
 }
 
-/**
- * A discovered manager still carrying the scope it was listed under.
- *
- * Why paired rather than looked up: a manager ID is `openclaw:local` on every host
- * that has no SSH target, so it does not name an authority. Recovering the scope
- * from the ID would collide for exactly the hosts a scope is meant to separate.
- */
+/** Pair manager and captured scope; openclaw:local collides on every host without SSH targets. */
 export type ScopedExternalAutomationManager = {
   scope: ExternalAutomationScope
   manager: ExternalAutomationManager

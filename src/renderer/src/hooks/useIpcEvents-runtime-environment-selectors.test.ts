@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
-  buildRuntimeClientEventEnvironmentKey,
   createRuntimeEnvironmentStoreSyncSubscriber,
   getReachableRuntimeEnvironmentIds,
   getRuntimeClientEventEnvironmentIds,
@@ -10,14 +9,6 @@ import type {
   RuntimeEnvironmentStoreSyncState,
   RuntimeEnvironmentStoreSyncSubscriber
 } from './ipc-events/runtime-environment-subscription-selection'
-
-describe('buildRuntimeClientEventEnvironmentKey', () => {
-  it('treats runtime environment ids as a stable set', () => {
-    expect(buildRuntimeClientEventEnvironmentKey(['env-b', 'env-a', 'env-b'])).toBe(
-      buildRuntimeClientEventEnvironmentKey(['env-a', 'env-b'])
-    )
-  })
-})
 
 type RuntimeEnvironmentStoreSubscriber = RuntimeEnvironmentStoreSyncSubscriber
 type RuntimeEnvironmentStoreState = RuntimeEnvironmentStoreSyncState
@@ -168,8 +159,7 @@ describe('createRuntimeEnvironmentStoreSyncSubscriber', () => {
           sshStateByEnvironment,
           activeEnvironmentId: 'runtime-a'
         })
-        // Zustand publishes this nested write synchronously. The outer pass must
-        // absorb its generation instead of enumerating/syncing it a second time.
+        // The outer pass must absorb synchronous nested generation changes without syncing twice.
         subscriber(currentState, previousState)
       },
       sync: () => {

@@ -1,5 +1,4 @@
-// An editor tab's open file as main's layout holds its view, and back: a window that lacks a diff,
-// conflict, preview or check-details tab's open file rebuilds it from the view a frame publishes.
+// Encode/decode nonedit OpenFile views so frames can rebuild diff/conflict/preview/check-detail tabs absent from this window.
 
 import type { EditorTabView } from '../../../../../../shared/editor-tab-view-types'
 import type { LayoutEditorView } from '../../../../../../shared/workspace-layout/layout-editor-view'

@@ -11,26 +11,9 @@ import {
 import { captureStableTabScreenshot } from './terminal-tab-screenshot'
 import { compareTerminalScreenshots } from './terminal-screenshot-diff'
 
-/**
- * Reproduction for the "missing bottom rows on reveal, recover on drag-select"
- * bug (PR #7614). The mechanism is xterm's RenderService gating refreshRows() on
- * its IntersectionObserver: while `_isPaused` is true (the observer can lag a
- * frame behind a just-revealed pane, worse under load), refresh() early-returns
- * and only latches `_needsFullRefresh`. The reveal-repaint's terminal.refresh()
- * is then swallowed and the freshly-cleared render model never repaints.
- *
- * This spec drives the REAL production reveal path (manager.resetWebglTextureAtlases
- * -> resetWebglTextureAtlas -> forceFullViewportPresent) against a real
- * xterm Terminal + RenderService. It:
- *   1. proves the bug: while paused, a plain refresh() renders nothing;
- *   2. proves the fix: the real reveal repaint forces a full-viewport render
- *      through the paused gate and clears the pause latch;
- *   3. confirms recovery at the pixel level.
- *
- * The paused state is set deterministically rather than raced, because headless
- * Electron does not reliably reproduce the observer-lag timing (documented for
- * this bug class). The gate we force is the exact one the field bug hits.
- */
+// #7614: delayed IntersectionObserver leaves RenderService paused; refresh latches _needsFullRefresh but swallows repaint after atlas clear.
+// Force that gate deterministically on real xterm: old refresh must render nothing, production atlas-reset/full-present must clear pause and repaint pixels.
+// Hidden Electron cannot reliably race observer lag, so only _isPaused and render recording are test instrumentation.
 
 const BOTTOM_MARKER = 'REVEAL_PAUSED_RENDER_BOTTOM_MARKER'
 
@@ -53,6 +36,7 @@ type RevealProbeWindow = Window & {
   __revealRenderProbe?: RevealRenderDebug
   __syncRevealProbe?: {
     paintFrame: (marker: string, background: number, release: boolean) => Promise<void>
+    writeSpinnerFrame: (glyph: string, release: boolean) => Promise<void>
     forceRendererPresent: () => void
     read: () => {
       atlasClears: number
@@ -63,12 +47,7 @@ type RevealProbeWindow = Window & {
   }
 }
 
-/**
- * Installs an in-page probe that instruments the active pane's REAL xterm
- * RenderService. Everything here runs against production objects; the only
- * test-only code is the recording wrapper around `_renderRows` and the manual
- * flip of `_isPaused` that stands in for the observer-lag race.
- */
+// Instrument production RenderService; manually pause to model observer lag and wrap _renderRows to record effects.
 async function installRevealRenderProbe(page: Page, tabId: string): Promise<void> {
   await page.evaluate((tabId) => {
     const manager = window.__paneManagers?.get(tabId)
@@ -117,9 +96,7 @@ async function installRevealRenderProbe(page: Page, tabId: string): Promise<void
         return service._isPaused === paused
       },
       dirtyModelLikeReveal: () => {
-        // Why: reveal clears the WebGL render model so a full rebuild is forced.
-        // clearTextureAtlas() routes through RenderService and, crucially, also
-        // requests a redraw — which is exactly what the paused gate then eats.
+        // Atlas clear empties the render model and requests the redraw the paused gate swallows.
         const withAtlas = pane as unknown as {
           webglAddon?: { clearTextureAtlas?: () => void }
         }
@@ -131,7 +108,6 @@ async function installRevealRenderProbe(page: Page, tabId: string): Promise<void
         terminal.refresh?.(0, Math.max(0, rows - 1))
       },
       runRealRevealRepaint: () => {
-        // The real production reveal path — contains the fix under test.
         manager.resetWebglTextureAtlases()
       },
       read: () => ({
@@ -265,6 +241,17 @@ async function installSynchronizedRevealProbe(page: Page, tabId: string): Promis
       originalRenderRows(start, end)
     }
 
+    const writeFrame = (data: string, release: boolean): Promise<void> =>
+      new Promise((resolve) => {
+        terminal.write(data, () => {
+          if (!release && service._syncOutputHandler?._timeout !== undefined) {
+            window.clearTimeout(service._syncOutputHandler._timeout)
+            service._syncOutputHandler._timeout = undefined
+          }
+          resolve()
+        })
+      })
+
     const paintFrame = (marker: string, background: number, release: boolean): Promise<void> => {
       const width = Math.max(1, terminal.cols)
       const rows = Math.max(1, terminal.rows)
@@ -273,22 +260,22 @@ async function installSynchronizedRevealProbe(page: Page, tabId: string): Promis
         { length: rows },
         (_, row) => `\x1b[${row + 1};1H\x1b[48;5;${background}m\x1b[38;5;231m${line}`
       ).join('')
-      return new Promise((resolve) => {
-        terminal.write(
-          `\x1b[?2026h\x1b[?1049h\x1b[2J${frame}\x1b[0m${release ? '\x1b[?2026l' : ''}`,
-          () => {
-            if (!release && service._syncOutputHandler?._timeout !== undefined) {
-              window.clearTimeout(service._syncOutputHandler._timeout)
-              service._syncOutputHandler._timeout = undefined
-            }
-            resolve()
-          }
-        )
-      })
+      return writeFrame(
+        `\x1b[?2026h\x1b[?1049h\x1b[2J${frame}\x1b[0m${release ? '\x1b[?2026l' : ''}`,
+        release
+      )
     }
+
+    // Codex-like idle tick: title spinner and cursor park, each in its own DEC 2026 frame.
+    const writeSpinnerFrame = (glyph: string, release: boolean): Promise<void> =>
+      writeFrame(
+        `\x1b[?2026h\x1b]0;${glyph} work\x07${release ? `\x1b[${terminal.rows};3H\x1b[?2026l` : ''}`,
+        release
+      )
 
     ;(window as RevealProbeWindow).__syncRevealProbe = {
       paintFrame,
+      writeSpinnerFrame,
       forceRendererPresent: () => renderer.renderRows?.(0, terminal.rows - 1),
       read: () => ({
         atlasClears,
@@ -303,8 +290,8 @@ async function installSynchronizedRevealProbe(page: Page, tabId: string): Promis
 
 async function callSynchronizedRevealProbe(
   page: Page,
-  action: 'forceRendererPresent' | 'paintFrame',
-  frame?: { marker: string; background: number; release: boolean }
+  action: 'forceRendererPresent' | 'paintFrame' | 'writeSpinnerFrame',
+  frame?: { marker: string; background?: number; release: boolean }
 ): Promise<void> {
   await page.evaluate(
     async ({ action, frame }) => {
@@ -316,7 +303,11 @@ async function callSynchronizedRevealProbe(
         if (!frame) {
           throw new Error('Synchronized frame missing')
         }
-        await probe.paintFrame(frame.marker, frame.background, frame.release)
+        await probe.paintFrame(frame.marker, frame.background ?? 0, frame.release)
+        return
+      }
+      if (action === 'writeSpinnerFrame') {
+        await probe.writeSpinnerFrame(frame?.marker ?? '*', frame?.release ?? true)
         return
       }
       probe.forceRendererPresent()
@@ -341,10 +332,36 @@ async function captureFirstRevealedFrame(page: Page, tabId: string): Promise<Buf
   return screen.screenshot({ animations: 'disabled' })
 }
 
+// Codex-like idle output: ~30 Hz spinner frames; the last stays open so a renderer swap lands mid-frame deterministically.
+async function runSpinnerFramesEndingOpen(page: Page): Promise<void> {
+  const glyphs = ['\u280b', '\u2819', '\u2839', '\u2838', '\u283c', '\u2834']
+  // ast-grep-ignore: test-no-polling-loop -- models Codex's ~30 Hz spinner cadence; nothing is polled
+  for (let i = 0; i < 12; i++) {
+    const marker = glyphs[i % glyphs.length]
+    await callSynchronizedRevealProbe(page, 'writeSpinnerFrame', {
+      marker,
+      release: true
+    })
+    // ast-grep-ignore: test-no-real-time-wait -- models Codex's ~30 Hz spinner cadence
+    await page.waitForTimeout(33)
+  }
+  await callSynchronizedRevealProbe(page, 'writeSpinnerFrame', {
+    marker: glyphs[0],
+    release: false
+  })
+}
+
+async function replaceWebglRenderer(page: Page, tabId: string): Promise<void> {
+  await page.evaluate((tabId) => {
+    const manager = window.__paneManagers?.get(tabId)
+    manager?.setTerminalGpuAcceleration('off')
+    manager?.setTerminalGpuAcceleration('on')
+  }, tabId)
+}
+
 test.describe('terminal reveal paused-render recovery', () => {
   test("reveal repaint forces a render through xterm's paused gate", async ({ orcaPage }) => {
-    // Why: __store / __paneManagers live on the main Orca renderer window
-    // (orcaPage), not Playwright's default first page.
+    // Use orcaPage: the main renderer owns __store/__paneManagers, unlike Playwright’s first page.
     const page = orcaPage
     await waitForSessionReady(page)
     await waitForActiveTerminalManager(page)
@@ -353,15 +370,13 @@ test.describe('terminal reveal paused-render recovery', () => {
 
     await forceWebglOn(page, tabId)
 
-    // Fill the viewport down to the bottom so a swallowed repaint is observable
-    // both in the render ranges and on-screen.
+    // Fill bottom rows so swallowed repaint affects both render ranges and pixels.
     await execInTerminal(
       page,
       ptyId,
       `for i in $(seq 1 40); do echo "line $i ${BOTTOM_MARKER}_$i"; done`
     )
     await waitForTerminalOutput(page, `${BOTTOM_MARKER}_40`)
-    // Clear-screen + reprint so the marker sits on the real bottom rows.
     await execInTerminal(
       page,
       ptyId,
@@ -374,13 +389,10 @@ test.describe('terminal reveal paused-render recovery', () => {
     await installRevealRenderProbe(page, tabId)
     await probeCall(page, 'installProbe')
 
-    // ---- Control: prove the bug. This sequence (clearTextureAtlas + refresh)
-    // is byte-for-byte the PRE-FIX resetWebglTextureAtlas on origin/main, so it
-    // faithfully replays the old reveal path. While paused, it renders nothing.
+    // Control replays pre-fix origin/main’s clearTextureAtlas+refresh while paused; it must render nothing.
     await probeCall(page, 'setPaused', true)
     await probeCall(page, 'dirtyModelLikeReveal')
     await probeCall(page, 'plainRefresh')
-    // Give any (non-existent) queued render a frame to land.
     await page.waitForTimeout(80)
     const afterPlainRefresh = await probeRead(page)
 
@@ -390,7 +402,6 @@ test.describe('terminal reveal paused-render recovery', () => {
       'BUG REPRODUCED: while paused, plain refresh() is swallowed by the gate — no render fires'
     ).toHaveLength(0)
 
-    // ---- Fix: the real reveal repaint must force a full render through the gate.
     await probeCall(page, 'setPaused', true)
     await probeCall(page, 'dirtyModelLikeReveal')
     await probeCall(page, 'runRealRevealRepaint')
@@ -415,14 +426,94 @@ test.describe('terminal reveal paused-render recovery', () => {
       'FIX: pause latch is cleared so the observer can reassert authority cleanly'
     ).toBe(false)
 
-    // ---- Pixel-level confirmation: the surface still shows the correct content
-    // after being driven through the paused gate (no stale/blank bottom rows).
     const afterFix = await captureStableTabScreenshot(page, tabId)
     const diff = compareTerminalScreenshots(revealed, afterFix)
     expect(
       diff.matches,
       `recovered surface matches the revealed content (diffRatio=${diff.diffRatio})`
     ).toBe(true)
+  })
+
+  test('a WebGL canvas replaced while spinner frames hold DEC 2026 paints instead of staying blank', async ({
+    orcaPage
+  }, testInfo) => {
+    await waitForSessionReady(orcaPage)
+    await waitForActiveTerminalManager(orcaPage)
+    const tabId = (await getActiveTabId(orcaPage))!
+    await forceWebglOn(orcaPage, tabId)
+    const hasWebgl = () =>
+      orcaPage
+        .waitForFunction(
+          (tabId) =>
+            (window.__paneManagers?.get(tabId)?.getRenderingDiagnostics?.() ?? []).some(
+              (diagnostic) => diagnostic.hasWebgl
+            ),
+          tabId,
+          { timeout: 15_000 }
+        )
+        .then(() => true)
+        .catch(() => false)
+    const webglAttached = await hasWebgl()
+    test.skip(!webglAttached, 'WebGL renderer is unavailable')
+    if (!webglAttached) {
+      return
+    }
+    expect(await installSynchronizedRevealProbe(orcaPage, tabId)).toBe(true)
+    await callSynchronizedRevealProbe(orcaPage, 'paintFrame', {
+      marker: 'SPINNER_PANE',
+      background: 17,
+      release: true
+    })
+    const coherent = await captureStableTabScreenshot(orcaPage, tabId)
+
+    await runSpinnerFramesEndingOpen(orcaPage)
+    expect((await readSynchronizedRevealProbe(orcaPage)).synchronizedOutput).toBe(true)
+
+    await replaceWebglRenderer(orcaPage, tabId)
+    expect(await hasWebgl(), 'renderer swapped back to WebGL').toBe(true)
+    const afterSwap = await captureFirstRevealedFrame(orcaPage, tabId)
+    const swapDiff = compareTerminalScreenshots(coherent, afterSwap)
+
+    // A painted canvas keeps honoring DEC 2026: the next frame's cells stay hidden until it closes.
+    await callSynchronizedRevealProbe(orcaPage, 'paintFrame', {
+      marker: 'PENDING_FRAME',
+      background: 52,
+      release: false
+    })
+    await orcaPage.evaluate((tabId) => {
+      window.__paneManagers?.get(tabId)?.scheduleRevealPresent()
+    }, tabId)
+    // Let the settled-frame present run before capturing, so the held check is not vacuous.
+    await orcaPage.evaluate(
+      () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+    )
+    const held = await captureFirstRevealedFrame(orcaPage, tabId)
+    const heldDiff = compareTerminalScreenshots(coherent, held)
+    await callSynchronizedRevealProbe(orcaPage, 'paintFrame', {
+      marker: 'PENDING_FRAME',
+      background: 52,
+      release: true
+    })
+    const released = await captureStableTabScreenshot(orcaPage, tabId)
+
+    const afterSwapPath = testInfo.outputPath('spinner-canvas-after-swap.png')
+    await writeFile(afterSwapPath, afterSwap)
+    await testInfo.attach('spinner-canvas-after-swap.png', {
+      path: afterSwapPath,
+      contentType: 'image/png'
+    })
+    expect(
+      swapDiff.matches,
+      `new canvas shows the pane, not a blank, while DEC 2026 is open (diffRatio=${swapDiff.diffRatio})`
+    ).toBe(true)
+    expect(
+      heldDiff.matches,
+      `painted canvas keeps the coherent frame while DEC 2026 is held (diffRatio=${heldDiff.diffRatio})`
+    ).toBe(true)
+    expect(
+      compareTerminalScreenshots(coherent, released).matches,
+      'release presents the new frame'
+    ).toBe(false)
   })
 
   test('@headful atlas recovery keeps the coherent frame until synchronized output releases', async ({
@@ -466,7 +557,7 @@ test.describe('terminal reveal paused-render recovery', () => {
     expect(held.screen).toContain('REVEALED_FRAME')
 
     await orcaPage.evaluate((tabId) => {
-      window.__paneManagers?.get(tabId)?.scheduleRevealRepaint?.()
+      window.__paneManagers?.get(tabId)?.scheduleRevealRepaint()
     }, tabId)
     await expect
       .poll(async () => (await readSynchronizedRevealProbe(orcaPage)).atlasClears)
@@ -595,7 +686,7 @@ test.describe('terminal reveal paused-render recovery', () => {
     })
     const beforeWatchdog = await readSynchronizedRevealProbe(orcaPage)
     await orcaPage.evaluate((tabId) => {
-      window.__paneManagers?.get(tabId)?.scheduleRevealPresent?.()
+      window.__paneManagers?.get(tabId)?.scheduleRevealPresent()
     }, tabId)
     await expect
       .poll(async () => (await readSynchronizedRevealProbe(orcaPage)).synchronizedOutput, {

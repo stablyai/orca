@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { BrowserWindow } from 'electron'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { makePaneKey } from '../../shared/stable-pane-id'
+import { makePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import { Store } from '../persistence/loading-store/store'
 import { ProfileStateSqliteAuthority } from '../persistence/profile-state/profile-state-sqlite-authority'
 import { wirePtyIpcSession } from '../ipc/pty/delivery/wire-session'
@@ -52,9 +52,7 @@ afterEach(() => {
   }
 })
 
-/** A real store and runtime with one bound pane, and main's exit delivery to a renderer stub.
- *  `lateProviderExit`: the kill's reply overtakes the exit, so main synthesizes one and the
- *  provider's own exit arrives later through its listener. */
+/** Use real store/runtime with renderer stub; lateProviderExit lets the kill reply overtake the provider exit and force a synthetic one. */
 function createHarness(opts: { lateProviderExit?: boolean; folder?: boolean } = {}) {
   const directory = mkdtempSync(join(tmpdir(), 'orca-intentional-stop-'))
   directories.push(directory)

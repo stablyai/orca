@@ -1,6 +1,6 @@
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { PersistedState } from '../../../shared/persisted-state-types'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { sessionPartitions } from './orcad-source-workspace-session-fragments'
 
 export type OrcadMigrationSourceSessionInspection = {
@@ -14,7 +14,6 @@ type SessionScope = {
   ownerMatches: (ownerKey: string, partitionHostId: string) => boolean
 }
 
-/** The terminal tabs and PTYs the target's sessions own, across every partition. */
 export function inspectOrcadMigrationSourceSessions(
   state: PersistedState,
   scope: SessionScope

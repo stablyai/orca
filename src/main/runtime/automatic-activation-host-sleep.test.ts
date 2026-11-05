@@ -1,18 +1,19 @@
-// #24399: a plain shell pane has no agent sleep record, so only the host's sleep state proves it was slept.
+// #24399: plain shells have no agent sleep record; only host sleep proves they slept.
 import { describe, expect, it, vi } from 'vitest'
 import { spawnWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 import type { RuntimeClientEvent } from '../../shared/runtime-client-events'
 
-// Fragments stay side-effect ordered: mocks, then lifecycle, then fixtures.
-const { OrcaRuntimeService } = await import('./orca-runtime-test-mocks.spec')
-await import('./orca-runtime-test-lifecycle.spec')
+// Preserve side-effect order: mocks, lifecycle, fixtures.
+await import('./orca-runtime-tests/runtime-test-module-registration.spec')
+const { OrcaRuntimeService } = await import('./orca-runtime')
+await import('./orca-runtime-tests/orca-runtime-test-lifecycle.spec')
 const {
   HEADLESS_LEAF_ID,
   TEST_WORKTREE_ID,
   deferred,
   makeRuntimeStoreWithWorkspaceSession,
   makeWorkspaceSessionWithHeadlessTerminal
-} = await import('./orca-runtime-test-fixtures.spec')
+} = await import('./orca-runtime-tests/orca-runtime-test-fixtures.spec')
 
 function makeRuntime(listProcesses: () => Promise<never[]> = async () => []) {
   const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
@@ -86,7 +87,6 @@ describe('automatic tab activation honors the host sleep state', () => {
     await expect(sleeping).resolves.toBeDefined()
     await expect(automaticSpawn).rejects.toThrow('worktree_terminals_sleeping')
     expect(sleepPhases()).not.toContain('woken')
-    // The refusal released the lock, so a user spawn still proceeds and wakes.
     const release = await runtime.acquireWorktreeTerminalSpawn(
       spawnWorktreeTarget(TEST_WORKTREE_ID, null)
     )

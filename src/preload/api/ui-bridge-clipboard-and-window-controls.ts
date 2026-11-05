@@ -1,4 +1,4 @@
-import type { AgentSessionAttachmentClipboardTarget } from '../../shared/agent-session-attachments'
+import type { AgentSessionAttachmentClipboardTarget } from '../../shared/agent-session/agent-session-attachments'
 import { ipcRenderer, webFrame } from 'electron'
 import {
   richMarkdownContextMenuCommandChannel,
@@ -8,7 +8,7 @@ import {
   type RichMarkdownContextMenuTableTarget
 } from '../../shared/rich-markdown-context-menu'
 import type { RuntimeNavigationTarget } from '../../shared/runtime-navigation'
-import type { TerminalSurfaceCloseTarget } from '../../shared/terminal-surface-close-target'
+import type { TerminalSurfaceCloseTarget } from '../../shared/workspace-layout/terminal-surface-close-target'
 import type { ClipboardImageThumbnail } from '../../shared/clipboard-image'
 import type { ReadClipboardTextOptions } from '../../shared/clipboard-text'
 import type { PreloadApi } from '../api-types'
@@ -20,6 +20,7 @@ export const uiClipboardAndWindowControlsApi = {
       filePath: string
       relativePath: string
       staged: boolean
+      oldPath?: string
       runtimeEnvironmentId?: string | null
       navigation?: RuntimeNavigationTarget
     }) => void
@@ -31,6 +32,7 @@ export const uiClipboardAndWindowControlsApi = {
         filePath: string
         relativePath: string
         staged: boolean
+        oldPath?: string
         runtimeEnvironmentId?: string | null
         navigation?: RuntimeNavigationTarget
       }
@@ -58,6 +60,15 @@ export const uiClipboardAndWindowControlsApi = {
       callback(notice)
     ipcRenderer.on('ui:workspaceSleep', listener)
     return () => ipcRenderer.removeListener('ui:workspaceSleep', listener)
+  },
+  onProjectMovePause: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, request: Parameters<typeof callback>[0]) =>
+      callback(request)
+    ipcRenderer.on('ui:projectMovePause', listener)
+    return () => ipcRenderer.removeListener('ui:projectMovePause', listener)
+  },
+  respondProjectMovePause: (response) => {
+    ipcRenderer.send('ui:projectMovePauseResponse', response)
   },
   onResumeSleepingAgents: (callback: (data: { worktreeId: string }) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, data: { worktreeId: string }) =>

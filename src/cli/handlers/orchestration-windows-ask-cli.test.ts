@@ -57,8 +57,7 @@ describe('packaged Windows legacy ask protocol', () => {
         expect.any(Object)
       )
       expect(log.mock.calls.map(([line]) => line)).toEqual([
-        'Question msg_question committed.',
-        `Resume with: ${command} orchestration ask --resume msg_question`
+        `Question msg_question committed.\nNext: Resume with: ${command} orchestration ask --resume msg_question`
       ])
       expect(process.exitCode).toBe(75)
     }

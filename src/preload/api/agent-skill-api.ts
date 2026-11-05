@@ -27,10 +27,11 @@ import type {
   SkillShareResolvedOperation
 } from '../../shared/skill-sharing-contract'
 import type {
-  BundledSkillExecuteRequest,
+  BundledSkillAutoUpdateRequest,
+  LocalBundledSkillExecuteRequest,
   BundledSkillInstallResult,
   BundledSkillPlan,
-  BundledSkillPlanRequest
+  LocalBundledSkillPlanRequest
 } from '../../shared/bundled-skill-plan'
 
 import type {
@@ -42,10 +43,12 @@ import type {
 export type SkillsApi = {
   discover: (target?: SkillDiscoveryTarget) => Promise<SkillDiscoveryResult>
   /** This machine's plan for Orca's installed skills; paired hosts plan over RPC. */
-  bundledPlan: (request?: BundledSkillPlanRequest) => Promise<BundledSkillPlan>
-  bundledExecute: (request: BundledSkillExecuteRequest) => Promise<BundledSkillInstallResult>
+  bundledPlan: (request?: LocalBundledSkillPlanRequest) => Promise<BundledSkillPlan>
+  bundledExecute: (request: LocalBundledSkillExecuteRequest) => Promise<BundledSkillInstallResult>
+  bundledAutoUpdate: (request: BundledSkillAutoUpdateRequest) => Promise<BundledSkillInstallResult>
   prepareShare: (input: {
     skillIds: string[]
+    skillDirectories?: string[]
     bundleName: string
     target?: SkillDiscoveryTarget
     packageId?: string
@@ -78,10 +81,6 @@ export type SkillsApi = {
   getPackage: (packageId: string) => Promise<SkillCloudOperation<SkillCloudPackageDetails>>
   listOwnedShares: () => Promise<SkillCloudOperation<SkillCloudOwnedShare[]>>
   revokeShare: (shareId: string) => Promise<SkillCloudOperation<void>>
-  deletePackageVersion: (input: {
-    packageId: string
-    versionId: string
-  }) => Promise<SkillCloudOperation<void>>
   deletePackage: (packageId: string) => Promise<SkillCloudOperation<void>>
   listWslDistros: (environmentId?: string) => Promise<string[]>
   onInstallProgress: (callback: (progress: SkillInstallProgress) => void) => () => void

@@ -1,6 +1,8 @@
-import { normalizeOptionalField } from '../../../shared/agent-status-field-normalization'
+import { normalizeOptionalField } from '../../../shared/agent-status/contracts/agent-status-field-normalization'
+import { formatNativeChatDuration } from '../../../shared/native-chat/transcript/native-chat-turn-status'
 
 export const MAX_PROVIDER_ACTIVITY_LENGTH = 160
+export const PROVIDER_COMPACTING_ACTIVITY = 'Compacting the conversation'
 
 type ActivityText = string | null | undefined
 
@@ -15,17 +17,16 @@ function stringField(source: Record<string, unknown> | null, key: string): strin
   return typeof value === 'string' && value.trim() ? value : null
 }
 
-/** A reasoning summary streams as a bold headline plus body; only the headline is activity copy. */
+/** Use reasoning headlines for activity, excluding the summary body. */
 function reasoningHeadline(text: string | null | undefined): ActivityText {
   const line = text?.split(/\r?\n/).find((candidate) => candidate.trim())
   if (!line) {
     return null
   }
-  // Hold the previous copy until the closing marker streams in; a half headline would flicker.
+  // Partial bold headlines flicker; retain previous activity until their closing marker.
   return /^\s*\*\*/.test(line) && !/\*\*.+\*\*/.test(line) ? undefined : line
 }
 
-/** Keep only a short sentence-shaped preview from provider-declared display fields. */
 export function providerActivityText(value: unknown): string | null {
   const normalized = normalizeOptionalField(value, MAX_PROVIDER_ACTIVITY_LENGTH + 1)
   if (!normalized) {
@@ -71,8 +72,7 @@ const CODEX_ITEM_ACTIVITY: Readonly<Record<string, string>> = {
   imageGeneration: 'Generating an image',
   enteredReviewMode: 'Reviewing changes',
   exitedReviewMode: 'Reviewing changes',
-  contextCompaction: 'Compacting the conversation',
-  sleep: 'Waiting briefly',
+  contextCompaction: PROVIDER_COMPACTING_ACTIVITY,
   hookPrompt: 'Processing workspace guidance'
 }
 
@@ -92,29 +92,30 @@ export function codexProviderFrameActivity(
   if (method === 'item/reasoning/summaryPartAdded') {
     return null
   }
+  const item = record(source?.item)
+  const itemType = stringField(item, 'type')
+  if (itemType === 'sleep') {
+    if (method === 'item/completed') {
+      return null
+    }
+    if (method === 'item/started') {
+      const durationMs = item?.durationMs
+      return typeof durationMs === 'number' && Number.isFinite(durationMs) && durationMs > 0
+        ? `Waiting for ${formatNativeChatDuration(Math.ceil(durationMs / 1000))}`
+        : 'Waiting'
+    }
+  }
   if (method !== 'item/started') {
     return undefined
   }
-  const item = record(source?.item)
-  const itemType = stringField(item, 'type')
   return itemType ? (CODEX_ITEM_ACTIVITY[itemType] ?? null) : null
 }
 
-/**
- * Claude does not narrate its own turn, so the activity line stays the generic fallback.
- *
- * Codex names each item it starts, which is what makes its line worth reading. Claude's only
- * turn-wide frame is `system/status`, whose payload is a bare token — every sentence Orca ever
- * put on this line for it was Orca's own wording for `requesting`, which is true for nearly the
- * whole turn and says no more than the fallback does. Its `task_*` frames do carry prose, but
- * they are keyed by task id and subagent type: they describe a spawned task, not this turn, and
- * the background-tasks strip already owns that. Compaction is the one exception kept — a real,
- * rare state that explains an otherwise unexplained wait, and the Codex map reports it too.
- */
+/** Claude status tokens add no useful narration; task prose belongs to spawned work. Only compaction explains a wait. */
 export function claudeProviderFrameActivity(kind: string, payload: unknown): ActivityText {
   const source = record(payload)
   if (kind === 'message:system:status') {
-    return stringField(source, 'status') === 'compacting' ? 'Compacting the conversation' : null
+    return stringField(source, 'status') === 'compacting' ? PROVIDER_COMPACTING_ACTIVITY : null
   }
   if (
     kind === 'message:system:task_started' ||
@@ -128,7 +129,7 @@ export function claudeProviderFrameActivity(kind: string, payload: unknown): Act
   return undefined
 }
 
-/** Retain only the current summary headline, never materialize the growing transcript. */
+/** Retain the current headline without materializing the full transcript. */
 export function createCodexProviderActivityReader(): (
   method: string,
   payload: unknown

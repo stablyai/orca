@@ -2,7 +2,7 @@ import { z } from 'zod'
 import type {
   ScriptedAgentChild,
   ScriptedAgentChildFactory
-} from '../runtime/structured-agent-scripted-child.test-fixture'
+} from '../runtime/agent-session/installation/structured-agent-scripted-child.test-fixture'
 import { FakeAcpChild, GROK_CONFIG_OPTIONS } from './acp-structured-adapter.test-support'
 import type { FakeFrame } from './acp-scripted-agent.test-support'
 import type { AcpLaunchSpec } from './acp-launch-specs'
@@ -77,7 +77,7 @@ export function acpScriptedChild(agent: AcpLaunchSpec['agent']): ScriptedAgentCh
             script.reply(frame, { configOptions })
           })
           script.on('session/set_model', (frame) => script.reply(frame, {}))
-          // Grok's subagent-stop probe: the handler refuses the missing id, so stops are offered.
+          // Refusing a missing ID proves the subagent-stop route exists.
           script.on('_x.ai/subagent/cancel', (frame) =>
             script.fail(
               frame,
@@ -86,7 +86,7 @@ export function acpScriptedChild(agent: AcpLaunchSpec['agent']): ScriptedAgentCh
               'invalid params: missing field `subagentId`'
             )
           )
-          // Its background-task stop probe, answered the same way.
+          // Prove the background-task Stop route the same way.
           script.on('_x.ai/task/kill', (frame) =>
             script.fail(
               frame,

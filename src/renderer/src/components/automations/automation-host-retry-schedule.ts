@@ -1,11 +1,4 @@
-/**
- * What happens to an entry after its request fails: how the error is classified,
- * whether another attempt is allowed, and when it fires.
- *
- * Separate from the scheduler because these timers outlive the request that
- * armed them — a disposed controller has to cancel them, and a manual retry has
- * to cancel the pending one rather than race it.
- */
+/** Retry timers outlive their requests; dispose cancels them, and manual Retry replaces pending timers rather than racing them. */
 
 import type { AutomationHostCache } from './automation-host-cache'
 import { classifyAutomationHostQueryError } from './automation-host-cache-error'

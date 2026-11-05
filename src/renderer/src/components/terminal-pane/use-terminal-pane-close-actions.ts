@@ -3,7 +3,7 @@ import { onActiveTerminalPaneCloseRequest } from './request-active-terminal-pane
 import { useAppStore } from '../../store'
 import { retireUnboundRuntimeTerminalPane } from './retire-unbound-runtime-terminal-pane'
 import type { PaneExternalDropTarget } from '@/lib/pane-manager/pane-manager'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { closeWebRuntimeTerminal } from '@/runtime/web-runtime-terminal-actions'
 import { resolveLeafCloseCopyKind } from '../terminal/terminal-close-copy-kind'
 import { RUNNING_CLOSE_PROBE_TIMEOUT_MS } from '../terminal/running-terminal-close-guard'
@@ -21,6 +21,7 @@ import { commitTerminalSurfaceClose } from '@/store/terminals/terminal-surface-c
 import { noteAgentLaunchPaneClosedByUser } from '@/lib/agent-launch-pane-closes'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { sendUserPaneCloseToLayoutOwner } from './layout-owner-pane-close-command'
+import type { TerminalTabCloseIntent } from '../terminal/terminal-tab-close-intent'
 
 export function useTerminalPaneCloseActions(controller: TerminalPaneBindingController) {
   const confirmedCloseRef = useRef<(() => void) | null>(null)
@@ -42,15 +43,15 @@ export function useTerminalPaneCloseActions(controller: TerminalPaneBindingContr
   } = controller
   // The window's half of a split pane's close: its transport, status and pane go.
   const closePaneLocally = useCallback(
-    (paneId: number, committedLeafId?: string) => {
+    (paneId: number, committedLeafId: string | undefined, reason: TerminalTabCloseIntent) => {
       const manager = managerRef.current
       // Why the pane check: main's answer can land after the pane already went.
       if (!manager || (committedLeafId && manager.getLeafId(paneId) !== committedLeafId)) {
         return
       }
-      // A sibling went while main answered: this pane is now the tab's last, so the tab closes.
+      // A sibling went while main answered: this pane is now the tab's last, so its close closes the tab.
       if (committedLeafId && manager.getPanes().length <= 1) {
-        onCloseTab()
+        onCloseTab(reason)
         return
       }
       const ptyId = paneTransportsRef.current.get(paneId)?.getPtyId() ?? null
@@ -61,7 +62,7 @@ export function useTerminalPaneCloseActions(controller: TerminalPaneBindingContr
         const launchPane = useAppStore
           .getState()
           .tabsByWorktree[worktreeId]?.find((tab) => tab.id === tabId)?.agentLaunchPane
-        if (launchPane?.leafId === leafId && !launchPane.outcome) {
+        if (reason === 'user' && launchPane?.leafId === leafId && !launchPane.outcome) {
           // The user closed a launch pane whose agent is still starting; main stops that launch.
           noteAgentLaunchPaneClosedByUser(tabId, leafId)
         }
@@ -93,24 +94,26 @@ export function useTerminalPaneCloseActions(controller: TerminalPaneBindingContr
       }
       manager.closePane(paneId)
     },
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
     [
       clearSessionRestoredBannerForPane,
       onCloseTab,
       syncPanePtyLayoutBinding,
       syncPanePtyLayoutBindingForLeaf,
       tabId,
-      worktreeId
+      worktreeId,
+      managerRef,
+      paneTransportsRef,
+      setTerminalErrorsByPaneId
     ]
   )
   const executeClosePane = useCallback(
-    (paneId: number) => {
+    (paneId: number, reason: TerminalTabCloseIntent) => {
       const manager = managerRef.current
       if (!manager) {
         return
       }
       if (manager.getPanes().length <= 1) {
-        onCloseTab()
+        onCloseTab(reason)
         return
       }
       const leafId = manager.getLeafId(paneId)
@@ -120,38 +123,40 @@ export function useTerminalPaneCloseActions(controller: TerminalPaneBindingContr
         leafId &&
         sendUserPaneCloseToLayoutOwner(
           { worktreeId, tabId, leafId, paneId },
-          { getManager: () => managerRef.current, closeTab: onCloseTab, closePaneLocally }
+          {
+            getManager: () => managerRef.current,
+            closeTab: () => onCloseTab(reason),
+            closePaneLocally: (id, committedLeafId) => closePaneLocally(id, committedLeafId, reason)
+          }
         )
       ) {
         return
       }
-      closePaneLocally(paneId)
+      closePaneLocally(paneId, undefined, reason)
     },
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
-    [closePaneLocally, onCloseTab, tabId, worktreeId]
+    [closePaneLocally, onCloseTab, tabId, worktreeId, managerRef]
   )
   const getCloseDialogCopyKind = useCallback(
     (paneId: number) => resolveLeafCloseCopyKind(tabId, managerRef.current?.getLeafId(paneId)),
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
-    [tabId]
+    [tabId, managerRef]
   )
   const handleRequestClosePane = useCallback(
     (paneId: number) => {
       if ((managerRef.current?.getPanes().length ?? 0) <= 1) {
-        executeClosePane(paneId)
+        executeClosePane(paneId, 'user')
         return
       }
       const transport = paneTransportsRef.current.get(paneId)
       const pending = capturePendingTerminalPaneClose(controller, paneId, useAppStore.getState)
       const ptyId = transport?.getPtyId() ?? pending?.ptyId
       if (!ptyId) {
-        executeClosePane(paneId)
+        executeClosePane(paneId, 'user')
         return
       }
       const settings = useAppStore.getState().settings
       const close = (): void => {
         if (!pending || pending.isCurrent()) {
-          executeClosePane(paneId)
+          executeClosePane(paneId, 'user')
         }
       }
       let decided = false
@@ -179,8 +184,7 @@ export function useTerminalPaneCloseActions(controller: TerminalPaneBindingContr
           ),
         RUNNING_CLOSE_PROBE_TIMEOUT_MS
       )
-      // Why the shared probe rather than a direct inspect: this is the same question the tab-close
-      // guard asks, and the two must not drift on what an unanswered host means.
+      // Reuse tab-close admission so unanswered-host behavior cannot drift between split and tab closes.
       void probePtyRunningWork([ptyId], { timeoutMs: RUNNING_CLOSE_PROBE_TIMEOUT_MS })
         .then((probes) => {
           clearTimeout(probeTimeout)
@@ -212,8 +216,7 @@ export function useTerminalPaneCloseActions(controller: TerminalPaneBindingContr
     if (pane) {
       handleRequestClosePane(pane.id)
     }
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
-  }, [handleRequestClosePane])
+  }, [handleRequestClosePane, managerRef])
   useEffect(
     () => onActiveTerminalPaneCloseRequest(tabId, closeActivePane),
     [closeActivePane, tabId]
@@ -236,14 +239,12 @@ export function useTerminalPaneCloseActions(controller: TerminalPaneBindingContr
       }
       confirmedClose()
     },
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
-    [executeClosePane, pendingCloseConfirmation, updateSettings]
+    [pendingCloseConfirmation, updateSettings, setPendingCloseConfirmation]
   )
   const handleCancelClose = useCallback(() => {
     confirmedCloseRef.current = null
     setPendingCloseConfirmation(null)
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
-  }, [])
+  }, [setPendingCloseConfirmation])
   const resolveExternalPaneDropTarget = useCallback(
     ({
       sourcePaneId,
@@ -265,8 +266,7 @@ export function useTerminalPaneCloseActions(controller: TerminalPaneBindingContr
         worktreeId
       })
     },
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
-    [worktreeId]
+    [worktreeId, managerRef]
   )
   const handleExternalPaneDrop = useCallback(
     (sourcePaneId: number, target: PaneExternalDropTarget): boolean => {
@@ -291,8 +291,7 @@ export function useTerminalPaneCloseActions(controller: TerminalPaneBindingContr
       }).catch((error) => console.warn('[terminal-pane-detach] move failed', error))
       return true
     },
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
-    [persistLayoutSnapshot, tabId, worktreeId]
+    [persistLayoutSnapshot, tabId, worktreeId, managerRef, paneCwdRef, paneTransportsRef]
   )
 
   return {

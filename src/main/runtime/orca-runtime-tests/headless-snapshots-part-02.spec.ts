@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import { OrcaRuntimeService, setPlatform } from '../orca-runtime-test-mocks.spec'
-import type { RuntimeTerminalAgentStatusEvent } from '../orca-runtime-test-mocks.spec'
-import { TEST_REPO_ID, TEST_WORKTREE_ID, store } from '../orca-runtime-test-fixtures.spec'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { setPlatform } from '../orca-runtime-test-mocks/setup.spec'
+import type { RuntimeTerminalAgentStatusEvent } from '../runtime-terminal-contracts'
+import { TEST_REPO_ID, TEST_WORKTREE_ID, store } from './orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
   it('replaces a cwd parsed before late WSL context with the provider cwd', async () => {

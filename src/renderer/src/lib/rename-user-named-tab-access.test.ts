@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as RuntimeFileMutationClient from '@/runtime/runtime-file-mutation-client'
-import type * as EditorAutosave from '@/components/editor/editor-autosave'
+import type * as EditorAutosave from '@/components/editor/autosave/editor-autosave'
 
 const mocks = vi.hoisted(() => ({ renameRuntimePath: vi.fn(), writeRuntimeFile: vi.fn() }))
 vi.mock('@/runtime/runtime-file-mutation-client', async (importOriginal) => {
@@ -22,7 +22,7 @@ vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeLayoutClientWithTestFrames(await importOriginal())
 )
-vi.mock('@/components/editor/editor-autosave', async (importOriginal) => {
+vi.mock('@/components/editor/autosave/editor-autosave', async (importOriginal) => {
   const actual = await importOriginal<typeof EditorAutosave>()
   return { ...actual, requestEditorSaveQuiesce: vi.fn().mockResolvedValue(undefined) }
 })
@@ -35,11 +35,11 @@ import {
   clearFileExplorerUndoHistory,
   redoFileExplorer,
   undoFileExplorer
-} from '@/components/right-sidebar/fileExplorerUndoRedo'
-import { createEditorSaveQueue } from '@/components/editor/editor-save-queue'
+} from '@/components/right-sidebar/file-explorer/mutations/fileExplorerUndoRedo'
+import { createEditorSaveQueue } from '@/components/editor/save/queue/editor-save-queue'
 import { editorTabDocumentFolderAccess, editorTabFileAccess } from './local-file-access'
 import { renameFileOnDisk } from './rename-file'
-import { withLoadedBaselines } from '@/components/editor/editor-autosave-controller-test-fixture'
+import { withLoadedBaselines } from '@/components/editor/autosave/editor-autosave-controller-test-fixture'
 import {
   drawTabsFromMain,
   type TabsDrawnFromMain
@@ -100,8 +100,7 @@ async function onlyTab() {
   return tabs[0]!
 }
 
-// Why each check: reads and the next rename/image insert derive access from the tab, and a restart
-// restores the same filePath/relativePath, so access must survive on the stored fields alone.
+// Reads/rename/image insert derive access from stored tab fields; restart restores only filePath/relativePath, so those must retain access.
 async function expectUserNamedAt(filePath: string): Promise<void> {
   const tab = await onlyTab()
   expect(tab.filePath).toBe(filePath)

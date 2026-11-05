@@ -1,13 +1,10 @@
 import type { AppState } from '../store/types'
-import { parsePaneKey } from '../../../shared/stable-pane-id'
+import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { collectLeafIdsInOrder } from '../components/terminal-pane/terminal-layout-leaf-ids'
 import { getIndexedRepoMap, getIndexedWorktreeMap } from '../store/worktree-repo-index'
 import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
-/** Resolve a paneKey (tabId:leafId) to liveness, current title, owning worktree,
- *  and the owning repo's connectionId. Used for agent-type inference and to drop
- *  status updates for torn-down tabs or dead connections (an SSH reconnect retires the
- *  old connectionId, so events still in flight under it must not land). */
+/** Resolve pane liveness, title and owner to reject torn-down tabs or events from retired SSH connections. */
 export function resolvePaneKey(
   store: AppState,
   paneKey: string

@@ -1,0 +1,8 @@
+{
+  "capturedAt": "2026-10-24T23:40:00.000Z",
+  "platform": "darwin",
+  "command": ["dsh-tui", "."],
+  "cols": 120,
+  "rows": 40,
+  "note": "@deepseek-harness-tui/dsh-tui 0.17.0 on @deepseek-ai/dsh 0.2.1-rc.2, macOS arm64, isolated HOME and DSH_HOME, placeholder DEEPSEEK_API_KEY: a bracketed paste on the first launchpad prompt glyph, then every Enter refused while the session opens; the draft stays."
+}

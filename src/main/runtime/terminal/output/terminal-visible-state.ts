@@ -3,19 +3,19 @@ import {
   TERMINAL_INTERACTIVE_WAIT_PROBE_TIMEOUT_MS,
   type RuntimeTerminalProjection
 } from '../../orca-runtime-core'
-import { buildPreview } from '../../terminal-tail-state'
+import { buildPreview } from './tail/terminal-tail-state'
 import type {
   RuntimeHeadlessTerminal,
   RuntimeVisibleTerminalState
-} from '../../runtime-terminal-state-records'
+} from '../records/runtime-terminal-state-records'
 import {
   VISIBLE_TERMINAL_SNAPSHOT_RETRY_MS,
   VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS
 } from '../../orca-runtime-postlude'
-import { projectTerminalVisibleLines } from '../../orca-runtime-terminal-projection'
-import { visibleNonBlankTerminalLines } from '../../terminal-tail-read'
-import type { RuledScreen } from '../../screen-input-veto'
-import { HeadlessEmulator } from '../../../daemon/headless-emulator'
+import { projectTerminalVisibleLines } from '../view/orca-runtime-terminal-projection'
+import { visibleNonBlankTerminalLines } from './tail/terminal-tail-read'
+import type { RuledScreen } from '../wait/screen-input-veto'
+import { HeadlessEmulator } from '../../../daemon/emulation/headless-emulator'
 import { withTimeout } from '../../runtime-async-boundaries'
 
 export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeWithCaptureProviderTerminalBuffer {
@@ -174,6 +174,13 @@ export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeW
     return state ? projectTerminalVisibleLines(state.emulator).lines : null
   }
 
+  /** The ruled grid only once it has applied every PTY chunk; a lagging grid could miss a new dialog. */
+  protected readCaughtUpRuledScreen(ptyId: string): RuledScreen | null {
+    return this.headlessTerminals.get(ptyId)?.outputSequence === this.getPtyOutputSequence(ptyId)
+      ? this.readRuledScreen(ptyId)
+      : null
+  }
+
   /** The grid a screen-ruled agent's rule reads: as painted, and only on the PTY's own size. */
   protected readRuledScreen(ptyId: string | null | undefined): RuledScreen | null {
     const state = this.readWholeScreenModel(ptyId)
@@ -241,9 +248,7 @@ export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeW
       return { lines: [] }
     }
     try {
-      // Why: raw PTY tails can be whitespace-only while a full-screen TUI is
-      // visibly nonblank in renderer xterm. Ask the renderer for the active
-      // screen instead of reusing the headless transcript path.
+      // Raw tails can be blank while full-screen TUIs paint visible cells; ask renderer for the active screen.
       const snapshot = await withTimeout(
         controller.serializeBuffer(ptyId, { scrollbackRows: 0 }),
         VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS,

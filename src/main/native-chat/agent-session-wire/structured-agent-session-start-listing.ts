@@ -1,5 +1,4 @@
-// Session listings warm the account catalog; only startup/readback also resolves its default.
-// Catalog bookkeeping failures never reject the session action that supplied the listing.
+// Warm catalogs from listings; only startup/readback resolves defaults, and bookkeeping must not reject valid actions.
 
 import type { AgentModelCatalogLiveListing } from '../agent-model-catalog/agent-model-catalog-entry'
 import type {
@@ -14,14 +13,14 @@ export type StructuredAgentSessionStartListingContext = {
   serialize: <T>(sessionId: string, task: () => Promise<T>) => Promise<T>
 }
 
-/** Catalog persistence must not reject a valid start or options answer. */
 export function saveStructuredAgentSessionListing(
   context: Pick<StructuredAgentSessionStartListingContext, 'deps'>,
   sessionId: string,
-  listing: AgentModelCatalogLiveListing
+  listing: AgentModelCatalogLiveListing,
+  current: () => boolean
 ): void {
   try {
-    context.deps.modelCatalog?.recordLiveListing(sessionId, listing)
+    context.deps.modelCatalog?.recordLiveListing(sessionId, listing, current)
   } catch (error) {
     context.deps.logger.warn('saving what a provider listed failed', {
       scope: 'provider-catalog',
@@ -31,8 +30,7 @@ export function saveStructuredAgentSessionListing(
   }
 }
 
-/** A start's late readback (Claude's settings) says once what the config resolved. Serialized
- *  behind the attach that published the child, which may still be indexing it. */
+/** Serialize delayed settings readback behind attach publication before resolving the configured default. */
 export function saveStructuredAgentSessionStartReadbackListing(
   context: StructuredAgentSessionStartListingContext,
   reporter: { sessionId: string; acquisitionGeneration: string; fence: number },
@@ -44,7 +42,12 @@ export function saveStructuredAgentSessionStartReadbackListing(
       const child = context.sessions.get(sessionId)?.child
       const identity = { generation: reporter.acquisitionGeneration, fence: reporter.fence }
       if (child && sameProviderChild(child, identity)) {
-        context.deps.modelCatalog?.recordLiveListing(sessionId, listing)
+        context.deps.modelCatalog?.recordLiveListing(
+          sessionId,
+          listing,
+          () =>
+            context.sessions.get(sessionId)?.child === child && child.catalogSource?.() !== false
+        )
       }
     })
     .catch((error: unknown) => {

@@ -1,18 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import {
-  loadRelayConfig,
-  RELAY_CELL_CONNECTION_HARD_CAP,
-  RELAY_DATABASE_POOL_MAX,
-  RELAY_DIRECTOR_DATABASE_POOL_MAX,
-  RELAY_MAX_CELL_CAPACITY_REQUESTS,
-  RELAY_PUBLIC_RESOLVE_CONCURRENCY,
-  RELAY_PUBLIC_RESOLVE_WAIT_MS
-} from './config.js'
+import { loadRelayConfig, RELAY_DATABASE_POOL_MAX, RELAY_DIRECTOR_DATABASE_POOL_MAX, RELAY_MAX_CELL_CAPACITY_REQUESTS, RELAY_PUBLIC_RESOLVE_CONCURRENCY, RELAY_PUBLIC_RESOLVE_WAIT_MS } from './config.js'
+import { RELAY_CELL_CONNECTION_HARD_CAP } from '@orca-cloud/relay-contract/admission-budgets'
 import {
   RELAY_MAX_READINESS_GRACE_MS,
   RELAY_READINESS_JWKS_GRACE_MS,
   RELAY_READINESS_SQL_GRACE_MS
-} from './relay-readiness.js'
+} from './process-lifecycle/relay-readiness.js'
 
 function cellEnvironment(capacity: number): NodeJS.ProcessEnv {
   return {
@@ -37,6 +30,17 @@ describe('GCE relay capacity configuration', () => {
     expect(loadRelayConfig(env).regionCorrectionCohortPercent).toBe(5)
     for (const invalid of ['-1', '101', '1.5', 'not-a-number']) {
       env.ORCA_RELAY_REGION_CORRECTION_COHORT_PERCENT = invalid
+      expect(() => loadRelayConfig(env)).toThrow()
+    }
+  })
+
+  it('defaults reserve rehome on reconnect off and bounds its percent', () => {
+    const env = cellEnvironment(4_000)
+    expect(loadRelayConfig(env).reserveRehomePercent).toBe(0)
+    env.ORCA_RELAY_RESERVE_REHOME_PERCENT = '10'
+    expect(loadRelayConfig(env).reserveRehomePercent).toBe(10)
+    for (const invalid of ['-1', '101', '1.5', 'not-a-number']) {
+      env.ORCA_RELAY_RESERVE_REHOME_PERCENT = invalid
       expect(() => loadRelayConfig(env)).toThrow()
     }
   })

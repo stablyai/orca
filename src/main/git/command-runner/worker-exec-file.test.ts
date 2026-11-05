@@ -122,6 +122,30 @@ describe('worker-owned Git capture', () => {
   })
 })
 
+describe.skipIf(process.platform !== 'darwin')('macOS worker capture stdin', () => {
+  it.each([undefined, '', 'commit message\nλ\n'.repeat(10_000)])(
+    'delivers stdin completely before EOF (%#)',
+    async (input) => {
+      await createHost()
+      const result = await execFileCapture(
+        process.execPath,
+        [
+          '-e',
+          'process.stdin.setEncoding("utf8"); let input = ""; process.stdin.on("data", chunk => { input += chunk }); process.stdin.on("end", () => { process.stdout.write(JSON.stringify({ input })) })'
+        ],
+        {
+          encoding: 'utf8',
+          timeout: 3_000,
+          spawnOnWorkerThread: true,
+          ...(input === undefined ? {} : { stdin: input })
+        }
+      )
+
+      expect(result).toEqual({ stdout: JSON.stringify({ input: input ?? '' }), stderr: '' })
+    }
+  )
+})
+
 describe.skipIf(process.platform !== 'darwin')('macOS worker capture cancellation', () => {
   it('does not report a queued child terminated until the worker processes its kill', async () => {
     const gate = new SharedArrayBuffer(4)

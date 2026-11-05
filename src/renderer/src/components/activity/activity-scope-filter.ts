@@ -8,8 +8,7 @@ import {
 import { isWorkspaceOwnedBySomeoneElse } from '../../../../shared/workspace-creator-visibility'
 import type { AgentPaneThread } from './activity-thread-types'
 
-/** Host/project/workspace-origin scope for the Agents activity surfaces. Persisted and separate
- *  from the workspace-nav filters; hosts `null` = all, repoIds empty = all. */
+/** Persisted Agents scope, independent of workspace navigation; null hosts and empty repo IDs mean all. */
 export type ActivityScopeFilter = {
   visibleHostIds: readonly ExecutionHostId[] | null
   filterRepoIds: readonly string[]
@@ -39,11 +38,7 @@ export function resolveActivityScopeRepoIds(
   return filterRepoIds.filter((repoId) => repoMap.has(repoId))
 }
 
-/**
- * Apply the scope to a thread list. Returns the input array by identity when
- * the scope is inactive or hides nothing, so downstream memos (visible threads,
- * grouping) see an unchanged dep instead of re-running on every rebuild.
- */
+/** Preserve the input array identity when scope hides nothing so downstream memos can reuse results. */
 export function filterThreadsByActivityScope(args: {
   threads: AgentPaneThread[]
   scope: ActivityScopeFilter

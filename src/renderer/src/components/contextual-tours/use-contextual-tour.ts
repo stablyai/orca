@@ -5,6 +5,10 @@ import {
   type FeatureInteractionState
 } from '../../../../shared/feature-interactions'
 import { useAppStore } from '@/store'
+import {
+  isContextualTourSessionConsumed,
+  isContextualTourStartBlockedByProgress
+} from '@/store/slices/ui/ui-slice-tour-actions'
 
 const TOUR_SOURCES = {
   'workspace-board': 'workspace_board_visible',
@@ -74,11 +78,12 @@ export function useContextualTour(
   )
   const contextualToursSeenIds = useAppStore((s) => s.contextualToursSeenIds)
   const contextualToursAutoEligible = useAppStore((s) => s.contextualToursAutoEligible)
-  const contextualTourShownThisSession = useAppStore((s) => s.contextualTourShownThisSession)
+  const contextualToursStartedThisSession = useAppStore((s) => s.contextualToursStartedThisSession)
   const contextualToursOnboardingVisible = useAppStore((s) => s.contextualToursOnboardingVisible)
   const contextualToursBlockingSurfaceVisible = useAppStore(
     (s) => s.contextualToursBlockingSurfaceVisible
   )
+  const featureInteractions = useAppStore((s) => s.featureInteractions)
   const enabledInteractionSnapshotRef = useRef<{
     id: ContextualTourId
     source: string
@@ -108,8 +113,7 @@ export function useContextualTour(
     enabledInteractionSnapshotRef.current = {
       id,
       source,
-      // Why: recording writes featureInteractions; subscribing here would
-      // retrigger this effect and repeatedly persist the same enabled source.
+      // Recording writes featureInteractions; subscribing would retrigger persistence for the same source.
       wasPreviouslyInteracted: snapshot.wasPreviouslyInteracted,
       persisted: snapshot.persisted
     }
@@ -125,8 +129,7 @@ export function useContextualTour(
   ])
 
   useEffect(() => {
-    // Why: source disable should end through the overlay so a shown tour gets
-    // a cancellation outcome; the store flag also lets pre-render attempts retry.
+    // End shown tours through the overlay for a cancellation outcome; pre-render attempts remain retryable.
     if (
       !enabled &&
       activeContextualTourId === id &&
@@ -148,8 +151,7 @@ export function useContextualTour(
   useEffect(() => {
     return () => {
       const state = useAppStore.getState()
-      // Why: surfaces like sheets can unmount without rendering an `enabled=false`
-      // pass, so suppress their active tour during cleanup too.
+      // Sheets may unmount without an enabled=false render; suppress their active tour during cleanup too.
       if (
         state.activeContextualTourId === id &&
         state.activeContextualTourSource === source &&
@@ -170,8 +172,16 @@ export function useContextualTour(
       contextualToursOnboardingVisible ||
       contextualToursBlockingSurfaceVisible ||
       activeContextualTourId !== null ||
-      contextualTourShownThisSession ||
-      contextualToursSeenIds.includes(id)
+      contextualToursSeenIds.includes(id) ||
+      isContextualTourSessionConsumed(
+        { contextualToursSeenIds, contextualToursStartedThisSession },
+        id
+      ) ||
+      // Don't watch the page for a tour that can't start.
+      isContextualTourStartBlockedByProgress(
+        { featureInteractions, contextualToursStartedThisSession },
+        id
+      )
     ) {
       return
     }
@@ -181,7 +191,7 @@ export function useContextualTour(
     let requestPending = false
     let cancelled = false
     const request = (): void => {
-      if (frame !== null || requestPending) {
+      if (cancelled || frame !== null || requestPending) {
         return
       }
       requestPending = true
@@ -195,14 +205,14 @@ export function useContextualTour(
         getContextualToursSeenIds: () => useAppStore.getState().contextualToursSeenIds
       }).then((shouldRequest) => {
         requestPending = false
-        if (!shouldRequest) {
+        if (cancelled || !shouldRequest) {
           return
         }
         attempts += 1
         frame = window.requestAnimationFrame(() => {
           frame = null
           const latestSnapshot = enabledInteractionSnapshotRef.current
-          if (useAppStore.getState().contextualToursSeenIds.includes(id)) {
+          if (cancelled || useAppStore.getState().contextualToursSeenIds.includes(id)) {
             return
           }
           requestContextualTour(
@@ -228,8 +238,7 @@ export function useContextualTour(
       attributes: true,
       attributeFilter: ['aria-hidden', 'class', 'data-contextual-tour-target', 'hidden', 'style']
     })
-    // Why: native prompts and async surface hydration can pause or miss the
-    // first target measurement; retry briefly without long-lived polling.
+    // Bound retries for native prompts and async hydration that delay first measurement.
     const interval = window.setInterval(() => {
       if (attempts >= 20) {
         window.clearInterval(interval)
@@ -252,10 +261,11 @@ export function useContextualTour(
     contextualToursBlockingSurfaceVisible,
     activeModal,
     contextualToursAutoEligible,
-    contextualTourShownThisSession,
+    contextualToursStartedThisSession,
     contextualToursOnboardingVisible,
     contextualToursSeenIds,
     enabled,
+    featureInteractions,
     id,
     persistedUIReady,
     requestContextualTour,

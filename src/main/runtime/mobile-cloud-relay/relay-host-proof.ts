@@ -14,6 +14,12 @@ const HOST_CHALLENGE_PLAINTEXT_DOMAIN = 'orca-relay-host-challenge/v1'
 const RELAY_HOST_PROOF_CLOCK_SKEW_MS = 30_000
 const MAX_HOST_PROOF_CHALLENGE_WINDOW_MS = 10_000
 
+export class RelayHostProofClockSkewError extends Error {
+  constructor(readonly clockOffsetMs: number) {
+    super(`invalid host challenge: clock_skew(offset=${clockOffsetMs}ms)`)
+  }
+}
+
 export type RelayHostChallenge = {
   challengeId: string
   relayEphemeralPublicKeyB64: string
@@ -34,8 +40,7 @@ export type RelayHostProofContext = {
   previousGeneration?: number
   resumeRequested: boolean
   now?: () => number
-  /** Reports the failing check by name only; never receives field values. */
-  onInvalid?: (reason: string) => void
+  onInvalid?: (reason: string, error?: RelayHostProofClockSkewError) => void
 }
 
 function validateTranscript(
@@ -58,18 +63,8 @@ function validateTranscript(
     context.previousGeneration === undefined
       ? new Uint8Array()
       : encodeUint64(context.previousGeneration)
-  // Main's 30s skew bounds with named-check reporting kept from the incident
-  // instrumentation; deltas are relative offsets only, never absolute values.
   const checks: [string, boolean][] = [
     ['issuedAt-readable', issuedAt !== null],
-    [
-      `issuedAt-not-future(d=${issuedAt === null ? 'n/a' : issuedAt - now}ms)`,
-      issuedAt === null || issuedAt - RELAY_HOST_PROOF_CLOCK_SKEW_MS <= now
-    ],
-    [
-      `not-expired(d=${challenge.expiresAt - now}ms)`,
-      now - RELAY_HOST_PROOF_CLOCK_SKEW_MS <= challenge.expiresAt
-    ],
     ['issuedAt-before-expiry', issuedAt === null || issuedAt <= challenge.expiresAt],
     [
       `window(w=${issuedAt === null ? 'n/a' : challenge.expiresAt - issuedAt}ms)`,
@@ -103,6 +98,18 @@ function validateTranscript(
   const failed = checks.filter(([, ok]) => !ok).map(([name]) => name)
   if (failed.length > 0) {
     context.onInvalid?.(`transcript:${failed.join('+')}`)
+    return false
+  }
+  if (
+    issuedAt !== null &&
+    !(
+      issuedAt - RELAY_HOST_PROOF_CLOCK_SKEW_MS <= now &&
+      now - RELAY_HOST_PROOF_CLOCK_SKEW_MS <= challenge.expiresAt
+    )
+  ) {
+    // Diagnose time only after the transcript's identity and signed window pass.
+    const error = new RelayHostProofClockSkewError(now - issuedAt)
+    context.onInvalid?.(error.message, error)
     return false
   }
   return true

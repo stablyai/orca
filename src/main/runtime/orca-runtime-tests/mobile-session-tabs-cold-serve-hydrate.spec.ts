@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
-import { OrcaRuntimeService } from '../orca-runtime-test-mocks.spec'
-import type { WorkspaceSessionState } from '../orca-runtime-test-mocks.spec'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import {
   HEADLESS_LEAF_ID,
   HEADLESS_SECOND_LEAF_ID,
@@ -8,7 +9,7 @@ import {
   makeHeadlessTerminalLayout,
   makeRuntimeStoreWithWorkspaceSession,
   makeWorkspaceSessionWithHeadlessTerminal
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
 
 const SERVE_PTY_ID = 'serve-mobile-created-pty'
 const DAEMON_PTY_ID = 'daemon-agent-launch-pty'
@@ -26,8 +27,7 @@ function makeTerminalTab(id: string, ptyId: string, sortOrder: number) {
   }
 }
 
-// A serve host's persisted session after restart: one phone-created (serve-) terminal and one
-// launched through terminal.create (daemon id), with nothing rebuilt in memory yet.
+// Restart fixture holds phone-created serve ids and CLI-created daemon ids, with no rebuilt memory state.
 function makeRestartedServeRuntime(overrides: Partial<WorkspaceSessionState> = {}) {
   const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
     makeWorkspaceSessionWithHeadlessTerminal({
@@ -72,7 +72,7 @@ const SPLIT_GROUPS = [
   }
 ]
 
-// Why: the per-client list projection repairs activeGroupId, so read the host's stored snapshot.
+// Client projection repairs activeGroupId; inspect host storage to avoid masking errors.
 function storedActiveGroupId(runtime: OrcaRuntimeService): string | null | undefined {
   const snapshots: Map<string, { activeGroupId?: string | null }> =
     runtime['mobileSessionTabsByWorktree']
@@ -208,7 +208,6 @@ describe('OrcaRuntimeService', () => {
     runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
     await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
 
-    // The phone targets the right group; an untargeted CLI create joins the first, as on main.
     const phone = await runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
       targetGroupId: 'group-right'
     })

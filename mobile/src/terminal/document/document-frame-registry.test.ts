@@ -3,18 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { createTerminalDocumentScope } from './document-scope'
 import { cancelDocumentFrames, scheduleDocumentFrame } from './document-frame-registry'
 
-/**
- * The frames the document is owed, and the two things `cancelDocumentFrames` has to do.
- *
- * Taking back the pending ones is the obvious half. The other half is refusing new ones: tearing
- * the terminal down runs the engine's own disposal, which calls back into these modules, and a
- * frame asked for on the way out would be owed by nobody because the cancel has already run. A
- * generation guard cannot help there — it makes a stale frame do nothing, but the frame still
- * runs, and on the page the mount it belonged to may be gone and the next one already up.
- *
- * A scope per case, because that is what a document is now: nothing here can leak into the next
- * case, and nothing has to be reset for it not to.
- */
+// Disposal can call back into document modules; cancellation must remove pending frames and refuse new ones.
 describe('the document frame registry', () => {
   it('holds a frame until it runs, then forgets it', () => {
     const scope = createTerminalDocumentScope()
@@ -24,9 +13,12 @@ describe('the document frame registry', () => {
       return frames.length
     })
 
-    const id = scheduleDocumentFrame(scope, () => {})
+    const callback = vi.fn()
+    const id = scheduleDocumentFrame(scope, callback)
+    expect(callback).not.toHaveBeenCalled()
     expect(scope.scheduledFrames).toEqual([id])
-    frames[0]!(0)
+    frames[0]!(123)
+    expect(callback).toHaveBeenCalledExactlyOnceWith(123)
     expect(scope.scheduledFrames).toEqual([])
     vi.restoreAllMocks()
   })
@@ -61,8 +53,7 @@ describe('the document frame registry', () => {
 
     cancelDocumentFrames(scope)
     expect(scope.framesStopped).toBe(true)
-    // Nothing clears this flag: a stopped document stays stopped, and what schedules again is the
-    // next document's own scope.
+    // Stopped scopes never restart; a new document gets a fresh scope.
     const next = createTerminalDocumentScope()
     expect(next.framesStopped).toBe(false)
     expect(scheduleDocumentFrame(next, () => {})).toBe(7)

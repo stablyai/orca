@@ -1,13 +1,13 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
 import type React from 'react'
 import type { WorkspaceStatus } from '../../../../../../shared/worktree/types'
-import { clearWorkspaceKanbanSidebarDropTargetVisual } from '../../workspace-kanban-sidebar-drop'
-import { setSidebarPointerDragDocumentStyles } from '../../worktree-sidebar-pointer-drag-dom'
+import { clearWorkspaceKanbanSidebarDropTargetVisual } from '../../workspace-board/drag/workspace-kanban-sidebar-drop'
+import { setSidebarPointerDragDocumentStyles } from './worktree-sidebar-pointer-drag-dom'
 import type {
   WorktreeSidebarDragPoint,
   WorktreeSidebarDragSession
-} from '../../worktree-sidebar-drag-autoscroll'
-import type { WorktreeSidebarDropAnchor } from '../../worktree-sidebar-drag-geometry'
+} from './worktree-sidebar-drag-autoscroll'
+import type { WorktreeSidebarDropAnchor } from './worktree-sidebar-drag-geometry'
 import {
   WORKTREE_ROW_DRAG_INITIAL_STATE,
   type WorktreePointerDrag,
@@ -16,8 +16,6 @@ import {
 
 export type WorktreeDragRuntime = ReturnType<typeof useWorktreeDragRuntime>
 
-// Owns everything a drag leaves behind: the visual state the rows read, the RAF handles,
-// and the single teardown both the pointer and native drag paths call.
 export function useWorktreeDragRuntime(args: {
   worktreeDragSessionRef: React.MutableRefObject<WorktreeSidebarDragSession | null>
   statusDropAnchorsRef: React.MutableRefObject<Map<string, WorktreeSidebarDropAnchor>>
@@ -87,8 +85,7 @@ export function useWorktreeDragRuntime(args: {
     worktreeDragSessionRef
   ])
 
-  // Why: drag handlers built from this object end up on memoised cards; keep one identity
-  // per meaningful change instead of one per render.
+  // Keep handler-bundle identity stable for memoized cards until meaningful inputs change.
   return useMemo(
     () => ({
       dragOverStatus,

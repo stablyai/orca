@@ -17,12 +17,6 @@ describe('terminal run facts', () => {
     facts.recordSpawnCommit({ id: 'pending', incarnationId: 'inc-3' })
     expect(facts.read('pending', 'inc-3').firstUserInputAt).toBeNull()
   })
-  it('reads a run main never saw committed as not fresh', () => {
-    expect(new TerminalRunFactsRegister().read('pty-1', 'inc-1')).toEqual({
-      freshSpawn: false,
-      firstUserInputAt: null
-    })
-  })
 
   it('keeps the first user input across later input and a re-registration of the same process', () => {
     const facts = new TerminalRunFactsRegister()
@@ -46,12 +40,30 @@ describe('terminal run facts', () => {
     expect(facts.read('pty-1', 'inc-1')).toEqual({ freshSpawn: false, firstUserInputAt: null })
   })
 
-  it('never reads a reattached process as fresh', () => {
+  it('dates only the processes main started, across a re-registration of the same one', () => {
     const facts = new TerminalRunFactsRegister()
+    facts.recordSpawnCommit({
+      id: 'pty-1',
+      incarnationId: 'inc-1',
+      coldRestore: {},
+      spawnRequestedAt: 100
+    })
+    facts.recordSpawnCommit({
+      id: 'pty-1',
+      incarnationId: 'inc-1',
+      isReattach: true,
+      spawnRequestedAt: 200
+    })
+    facts.recordSpawnCommit({
+      id: 'pty-2',
+      incarnationId: 'inc-9',
+      isReattach: true,
+      spawnRequestedAt: 300
+    })
 
-    facts.recordSpawnCommit({ id: 'pty-1', incarnationId: 'inc-1', isReattach: true })
-
-    expect(facts.read('pty-1', 'inc-1').freshSpawn).toBe(false)
+    expect(facts.readProcessStartedAt('pty-1', 'inc-1')).toBe(100)
+    expect(facts.readProcessStartedAt('pty-1', 'inc-0')).toBeNull()
+    expect(facts.readProcessStartedAt('pty-2', 'inc-9')).toBeNull()
   })
 
   it('starts clean when a new process commits without an incarnation', () => {

@@ -391,8 +391,7 @@ test.describe('terminal paste ownership', () => {
       'Unicode: caf\u00e9 \u4f60\u597d \u0645\u0631\u062d\u0628\u0627 \ud83d\ude00',
       `mixed-newline-before\r\nlf-line\ncrlf-line\r\n${sentinel}`
     ].join('\n')
-    // Why: xterm translates clipboard line endings to terminal Enter bytes;
-    // Orca's direct Windows bracketed-paste path must produce the same bytes.
+    // Match xterm’s clipboard line-ending→Enter translation in Orca’s direct Windows bracketed-paste path.
     const terminalText = payload.replace(/\r?\n/g, '\r')
     const scriptPath = path.join(testRepoPath, `.orca-paste-multiline-${runId}.mjs`)
     writeFileSync(scriptPath, pasteCollectScript(runId, sentinel, terminalText))

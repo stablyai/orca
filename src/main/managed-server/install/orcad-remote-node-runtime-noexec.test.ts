@@ -12,7 +12,6 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { runProcessSync } from '@orca/process-host'
-import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
 import {
   createExecProbedStageCommand,
   ensureRemoteOrcadNodeRuntime
@@ -27,6 +26,7 @@ import { classifyOrcadHostUnavailable } from '../../orcad/orcad-host-unavailable
 import { execCommand } from '../../ssh/remote-exec/remote-exec-command'
 import { uploadRemoteInstallDirectory } from './remote-install-transfers'
 import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
+import { unusedOrcadHostTransport } from '../../ssh/unused-host-transport.test-fixture'
 
 vi.mock('../../ssh/remote-exec/remote-exec-command', async (importOriginal) => ({
   ...(await importOriginal<typeof ExecCommandModule>()),
@@ -36,10 +36,9 @@ vi.mock('./remote-install-transfers', () => ({
   uploadRemoteInstallDirectory: vi.fn(async () => {})
 }))
 
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every remote call goes through the mocked execCommand.
-const conn = {} as OrcadHostTransport
+const conn = unusedOrcadHostTransport()
 const host = getRemoteHostPlatform('linux-x64')
-// What dash printed for the probe on a Docker host whose /root is a `noexec` tmpfs.
+// Captured dash output for executing from a noexec home filesystem.
 const NOEXEC_PROBE_REPLY = [
   REMOTE_NODE_RUNTIME_NOEXEC,
   'ORCA_RUNTIME_EXIT=126',

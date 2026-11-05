@@ -16,17 +16,12 @@ import {
 
 export type HostRepoListResource<Repo> = {
   state: HostRepoListState<Repo>
-  /** Cached repos when this client already answered, otherwise one fetch. */
   ensureLoaded: () => Promise<Repo[]>
-  /** Discards the cache so an explicit refresh re-reads the host. */
   reload: () => Promise<Repo[]>
-  /** The bound client's last answer, readable before React commits it. */
   current: () => Repo[]
 }
 
-/** Binds the repo list to `clientKey`. Pass `fetchRepos: null` while there is no
- *  usable connection; the resource then stays idle instead of caching an empty
- *  answer that a later client would inherit. */
+// No usable connection stays idle; caching an empty reply would poison the next client’s list.
 export function useHostRepoList<Repo>(
   clientKey: unknown,
   fetchRepos: (() => Promise<Repo[]>) | null
@@ -43,18 +38,14 @@ export function useHostRepoList<Repo>(
   const fetchRef = useRef(fetchRepos)
   const stateRef = useRef(state)
 
-  // Why: discarding the previous client's list has to happen before anything can
-  // read it, and Expo reuses this screen for the next host. A state update during
-  // render is the supported way to do that; a ref write here is not, because a
-  // concurrent render React abandons would still have mutated it.
+  // Reset during render before reused screens can read another client’s list; refs would leak abandoned concurrent renders.
   const [boundKey, setBoundKey] = useState(clientKey)
   if (boundKey !== clientKey) {
     setBoundKey(clientKey)
     dispatch({ type: 'reset' })
   }
 
-  // Why: the async request guard reads these, so they are written in the commit
-  // phase - the earliest point a render is known to have survived.
+  // Write async request guards only at commit, after the render is known to survive.
   useEffect(() => {
     fetchRef.current = fetchRepos
     stateRef.current = state
@@ -67,12 +58,10 @@ export function useHostRepoList<Repo>(
     boundKeyRef.current = clientKey
     reposRef.current = []
     inFlightRef.current = null
-    // Retires every request issued for the previous client.
     requestIdRef.current += 1
   }, [clientKey])
 
-  // Why: consumers hold these in dependency arrays, so they must never change
-  // identity. Everything they read lives in refs, so they never need to.
+  // Consumers depend on callback identity; read mutable inputs through refs.
   const reload = useCallback(async (): Promise<Repo[]> => {
     const fetchNow = fetchRef.current
     if (!fetchNow) {
@@ -81,9 +70,7 @@ export function useHostRepoList<Repo>(
     if (inFlightRef.current) {
       return inFlightRef.current
     }
-    // Why: only the request issued for the currently bound client may commit.
-    // A slow response from the previous host would otherwise land afterwards
-    // and pin its repos as this host's authoritative list.
+    // Only requests for the currently bound client may publish; old-host replies can arrive late.
     const requestKey = boundKeyRef.current
     const requestId = requestIdRef.current + 1
     requestIdRef.current = requestId
@@ -91,8 +78,7 @@ export function useHostRepoList<Repo>(
       dispatch({ type: 'requested' })
       try {
         const repos = await fetchNow()
-        // Why: A -> B -> A reuses the same client, so matching the key alone
-        // would let a stale request for A overwrite a newer result for A.
+        // Client-key equality alone cannot fence stale A replies after A → B → A navigation.
         if (boundKeyRef.current !== requestKey || requestIdRef.current !== requestId) {
           return []
         }
@@ -117,9 +103,7 @@ export function useHostRepoList<Repo>(
     return request
   }, [])
 
-  // Why: within one event React has not rendered the `requested` dispatch yet, so
-  // the status still reads `loaded`. Join the in-flight request instead of
-  // handing back the list it is about to replace.
+  // Join the replacement request before requested state commits; loaded still names the old list in this event.
   const ensureLoaded = useCallback(
     (): Promise<Repo[]> =>
       inFlightRef.current ??

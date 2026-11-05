@@ -1,5 +1,4 @@
-// Layout-owner build: a pane main is starting a terminal for never starts one of its own. It waits,
-// then attaches to main's terminal; a start that failed shows why.
+// Wait for main’s start and attach to its terminal; expose start failures without spawning a second terminal.
 import { bindPtyConnectionTestMocks } from './pty-connection-mocks.spec'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushAsyncTicks } from './pty-connection-test-async'
@@ -10,7 +9,11 @@ import {
   leafIdForPane,
   type MockTransport
 } from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
 import type { TerminalPaneStart } from '@/store/terminals/terminal-state'
@@ -24,6 +27,7 @@ import {
   mainLayoutApplyTransport,
   mainStartsPaneAs
 } from './pty-connection-test-main-pane-start-fixtures'
+import { mockPanePtyArgs } from './pty-connection-test-connect-mock-pane'
 
 vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 // Main's answer to the window's layout commands, as a switch-on build sends them.
@@ -60,6 +64,7 @@ function startLeaf1(ptyId: string): void {
 
 async function connectWithStart(start: TerminalPaneStart | undefined) {
   const { connectPanePty } = await import('./pty-connection')
+  const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
   const transport = createMockTransport()
   transportFactoryQueue.push(transport)
   setStore({
@@ -67,10 +72,9 @@ async function connectWithStart(start: TerminalPaneStart | undefined) {
     terminalPaneStartsByPaneKey: start ? { [PANE_KEY]: start } : {}
   })
   const deps = buildPaneConnectionDeps(() => mockStoreState, { tabId: TAB })
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixtures implement the pane, manager and deps members connectPanePty reads.
-  const args = [createPane(1), createManager(1), deps] as unknown as Parameters<
-    typeof connectPanePty
-  >
+  const args = mockPanePtyArgs(createPane(1), createManager(1), deps)
+  bindPaneAgentTitleMocks(args[2], agentTitleMocks)
+
   connectPanePty(...args)
   await flushAsyncTicks()
   return { transport, deps }
@@ -130,6 +134,7 @@ describe('a pane main is starting a terminal for', () => {
 
   it('attaches a split pane to the terminal main bound it to, not its tab’s', async () => {
     const { connectPanePty } = await import('./pty-connection')
+    const agentTitleMocks2 = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
     const transport = createMockTransport()
     transportFactoryQueue.push(transport)
     const newLeaf = leafIdForPane(2)
@@ -143,10 +148,9 @@ describe('a pane main is starting a terminal for', () => {
       tabId: TAB,
       paneTransportsRef: { current: new Map([[1, source]]) }
     })
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixtures implement the pane, manager and deps members connectPanePty reads.
-    const args = [createPane(2), createManager(2), deps] as unknown as Parameters<
-      typeof connectPanePty
-    >
+    const args = mockPanePtyArgs(createPane(2), createManager(2), deps)
+    bindPaneAgentTitleMocks(args[2], agentTitleMocks2)
+
     connectPanePty(...args)
     await flushAsyncTicks()
     expect(transport.connect).not.toHaveBeenCalled()

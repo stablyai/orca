@@ -1,6 +1,5 @@
 import { DESKTOP_PRESENCE_TTL_MS } from '../../shared/desktop-client-presence'
 
-/** The last presence each attached desktop connection reported to this host. */
 export class DesktopClientPresenceTracker {
   private readonly reports = new Map<string, { away: boolean; at: number }>()
 
@@ -21,7 +20,7 @@ export class DesktopClientPresenceTracker {
     let present = false
     for (const [connectionId, { away, at }] of this.reports) {
       if (now - at >= DESKTOP_PRESENCE_TTL_MS) {
-        // Why prune: the next report re-registers the forget-on-close, so nothing can pile up.
+        // Fresh reports re-register close cleanup, so pruning cannot accumulate entries.
         this.reports.delete(connectionId)
       } else if (!away) {
         present = true

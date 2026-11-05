@@ -1,17 +1,23 @@
 // @vitest-environment happy-dom
 
+// @vitest-environment happy-dom
+
 import { act, cleanup, render } from '@testing-library/react'
 import type { RefObject } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { NativeChatPickerItem } from '../../../../shared/native-chat-picker-items'
+import type { NativeChatPickerItem } from '../../../../shared/native-chat/input/native-chat-picker-items'
+import type { QueuedMessageInlineEditor } from './use-structured-agent-session-queued-edit'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
 
 type CommandItem = Extract<NativeChatPickerItem, { kind: 'command' }>
 
 type FieldProps = {
   textareaRef: RefObject<HTMLTextAreaElement | null>
+  autocomplete?: { mode: string; items?: NativeChatPickerItem[] }
+  onChooseMentionFile?: (path: string) => void
   onSend?: () => void
   onChoosePickerItem?: (item: NativeChatPickerItem) => void
+  goalMode?: { active: boolean }
 }
 type KeyDownArgs = {
   completePickerItem: (item: NativeChatPickerItem) => void
@@ -29,7 +35,7 @@ const mocks = vi.hoisted(() => {
   return Object.assign(captured, fns, { sendNativeChatTypedCommand: vi.fn() })
 })
 
-vi.mock('../../store', () => {
+vi.mock('../../store/index', () => {
   const state = {
     dictationState: 'idle',
     settings: { voice: { enabled: false }, nativeChatSessionOptions: {} },
@@ -38,16 +44,19 @@ vi.mock('../../store', () => {
     activeWorkspaceExecutionHostId: 'ssh:box',
     tabsByWorktree: { 'wt-1': [{ id: 'tab-1' }] },
     unifiedTabsByWorktree: {},
+    worktreesByRepo: {},
+    detectedWorktreesByRepo: {},
+    folderWorkspaces: [],
     clearNativeChatLaunchDraft: vi.fn()
   }
   const useAppStore = (selector: (value: typeof state) => unknown) => selector(state)
   useAppStore.getState = () => state
   return { useAppStore }
 })
-vi.mock('../right-sidebar/ai-vault-panel-workspace', () => ({
+vi.mock('../right-sidebar/ai-vault/scope/ai-vault-panel-workspace', () => ({
   selectAiVaultPanelWorkspace: () => ({ worktree: { id: 'wt-1' }, repo: null })
 }))
-vi.mock('../right-sidebar/agent-session-history-modal', () => ({
+vi.mock('../right-sidebar/ai-vault/panel/agent-session-history-modal', () => ({
   openAgentSessionHistoryModal: mocks.openHistory
 }))
 vi.mock('./native-chat-runtime-send', () => ({
@@ -83,17 +92,10 @@ vi.mock('./use-native-chat-composer-keydown', () => ({
 
 import { NativeChatComposer } from './NativeChatComposer'
 
-const RESUME: CommandItem = {
-  kind: 'command',
-  id: 'command:resume',
-  name: 'resume',
-  token: '/resume',
-  skillCollision: false,
-  orcaOwned: true
-}
-
-function renderStructuredChat() {
+function renderStructuredChat(editSession?: QueuedMessageInlineEditor) {
   const transport: NativeChatStructuredComposerTransport = {
+    capturePresentation: () => () => true,
+    ...(editSession ? { threadGoal: { setObjective: vi.fn(async () => true) } } : {}),
     send: vi.fn(() => true),
     dispatchCommand: vi.fn(async () => ({ handled: false, accepted: false, error: null })),
     optionsSurface: {
@@ -112,6 +114,8 @@ function renderStructuredChat() {
   const chat = () => (
     <NativeChatComposer
       terminalTabId="tab-1"
+      editSession={editSession}
+      draftScopeKey={editSession?.draftScopeKey}
       paneKey="tab-1:structured"
       targetPtyId={null}
       agent="claude"
@@ -122,91 +126,35 @@ function renderStructuredChat() {
   return { transport, rerender: () => view.rerender(chat()) }
 }
 
-describe('/resume in the native chat composer', () => {
+describe('/goal picked in a structured chat without host goals', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mocks.draft = '/resume'
-    mocks.imageAttachments = []
     mocks.fieldProps = null
-    mocks.keyDownArgs = null
-    Object.defineProperty(window, 'api', {
-      configurable: true,
-      value: { git: { discoverCommitMessageModels: vi.fn(async () => ({ success: false })) } }
-    })
   })
   afterEach(() => cleanup())
 
-  it("opens a structured chat's history, typed in any case, and sends nothing", () => {
-    mocks.draft = '/Resume  auth  retry'
-    mocks.imageAttachments = [{ id: 'img-1', path: '/tmp/a.png' }]
-    const { transport } = renderStructuredChat()
-    let focusedAtOpen: Element | null = null
-    mocks.openHistory.mockImplementation(() => (focusedAtOpen = document.activeElement))
-
-    // Clicking Send leaves focus on the button; the dialog must be able to hand it back to the chat.
-    act(() => mocks.fieldProps?.onSend?.())
-    expect(focusedAtOpen).toBeInstanceOf(HTMLTextAreaElement)
-
-    expect(mocks.openHistory).toHaveBeenCalledWith({
-      workspace: { worktreeId: 'wt-structured' },
-      chatTabId: 'tab-1',
-      initialQuery: 'auth retry',
-      agent: 'claude'
-    })
-    expect(transport.send).not.toHaveBeenCalled()
-    expect(transport.dispatchCommand).not.toHaveBeenCalled()
-    expect(mocks.setDraft).toHaveBeenCalledWith('')
-    // Attachments stay for the next real prompt.
-    expect(mocks.clearImageAttachments).not.toHaveBeenCalled()
-
-    cleanup()
-    mocks.draft = '/res'
-    renderStructuredChat()
-    act(() => mocks.keyDownArgs?.dispatchPickerCommand(RESUME))
-    expect(mocks.openHistory).toHaveBeenCalledTimes(2)
-  })
-
-  it('sends a picked skill named resume to the agent, as the skill it is', () => {
-    mocks.draft = '/res'
-    const { transport, rerender } = renderStructuredChat()
-    act(() =>
-      mocks.fieldProps?.onChoosePickerItem?.({
-        kind: 'skill',
-        id: 'skill:resume',
-        name: 'resume',
-        token: '/resume',
-        description: null,
-        sources: []
-      })
-    )
-    mocks.draft = '/resume make it one page'
-    rerender()
-
-    act(() => mocks.fieldProps?.onSend?.())
-
-    expect(mocks.openHistory).not.toHaveBeenCalled()
-    expect(transport.dispatchCommand).toHaveBeenCalledWith('/resume make it one page')
-    // Back to the bare token with the menu open: choosing Orca's own row still opens the dialog.
-    mocks.draft = '/resume'
-    rerender()
-    act(() => mocks.keyDownArgs?.dispatchPickerCommand(RESUME))
-    expect(mocks.openHistory).toHaveBeenCalledOnce()
-  })
-
-  // A terminal-backed chat (every SSH chat, for one) keeps the agent's own /resume.
-  it('leaves /resume to the agent in a terminal-backed chat', () => {
-    render(
-      <NativeChatComposer
-        terminalTabId="tab-1"
-        paneKey="tab-1:leaf-1"
-        targetPtyId="pty-1"
-        agent="codex"
-      />
-    )
-
-    act(() => mocks.fieldProps?.onSend?.())
-
-    expect(mocks.openHistory).not.toHaveBeenCalled()
-    expect(mocks.sendNativeChatTypedCommand).toHaveBeenCalledWith('pty-1', '/resume')
-  })
+  // Claude's pre-turn initialize rows are unclassified; only its built-in goal carries the marker.
+  it.each([true, false])(
+    'opens goal entry only for the provider built-in, builtin=%s',
+    (builtin) => {
+      mocks.draft = '/go'
+      const { transport, rerender } = renderStructuredChat()
+      transport.sessionCommands = [
+        {
+          name: 'goal',
+          kind: 'command',
+          kindUnspecified: true,
+          description: 'Set a goal',
+          ...(builtin ? { builtin: true as const } : {})
+        }
+      ]
+      rerender()
+      const goal = mocks.fieldProps?.autocomplete?.items?.find((item) => item.name === 'goal')
+      expect(goal).toBeDefined()
+      act(() => mocks.fieldProps?.onChoosePickerItem?.(goal!))
+      expect(mocks.fieldProps?.goalMode?.active).toBe(builtin)
+      expect(mocks.setDraft).toHaveBeenLastCalledWith(builtin ? '' : '/goal ')
+      expect(transport.send).not.toHaveBeenCalled()
+    }
+  )
 })

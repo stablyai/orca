@@ -1,7 +1,5 @@
-// How a chat pane tells its transcript that the reader just sent something.
-
 import { useCallback, useImperativeHandle, useMemo, useRef } from 'react'
-import { hasAskAnswer } from './native-chat-interactive-prompt'
+import { hasAskAnswer } from '../../../../shared/native-chat/input/native-chat-ask-answer'
 import { nativeChatSlotCopyText } from './native-chat-message-copy-text'
 import type { NativeChatTranscriptSlot } from './native-chat-transcript-slots'
 import type { NativeChatInteractiveSend } from './use-native-chat-interactive-send'
@@ -21,7 +19,7 @@ export function useNativeChatInteractiveSendReveal(
 ): NativeChatInteractiveSend {
   return useMemo<NativeChatInteractiveSend>(
     () => ({
-      // Only what is written moves the reader: no terminal, or an empty answer, writes nothing.
+      // Only actual writes reveal; missing PTYs and empty answers write nothing.
       sendAnswer: (prompt, selections, onDeliverySettled) => {
         if (targetPtyId && hasAskAnswer(prompt, selections)) {
           revealLatest()
@@ -53,8 +51,9 @@ export function useNativeChatInteractiveSendReveal(
 }
 
 export type NativeChatMessageListHandle = {
-  /** Bring the latest into view and follow it, wherever the reader had scrolled. */
-  revealLatest: () => void
+  /** After the reader's own send, follow the latest; with that setting off, only for a reader at the end. */
+  revealLatest: (readerWasAtEnd?: boolean) => void
+  readerAtEnd: () => boolean
   /** Bring a find match into view, clear of the find bar; the reader stops following the latest. */
   revealFindMatch: (match: Range, bar: DOMRectReadOnly | null) => void
   /** What the row drawing this message copies from its hover button; null when none draws it. */
@@ -65,40 +64,47 @@ export type NativeChatMessageListHandle = {
 export function useNativeChatRevealLatest(): {
   messageListRef: React.RefObject<NativeChatMessageListHandle | null>
   revealLatest: () => void
+  captureRevealLatest: () => () => void
 } {
   const messageListRef = useRef<NativeChatMessageListHandle>(null)
-  const revealLatest = useCallback(() => {
+  const reveal = useCallback((readerWasAtEnd?: boolean) => {
     try {
-      messageListRef.current?.revealLatest()
+      messageListRef.current?.revealLatest(readerWasAtEnd)
     } catch (error) {
       // Navigation never stops the send that asked for it.
       console.error('Could not reveal the submitted chat content', error)
     }
   }, [])
-  return { messageListRef, revealLatest }
+  const revealLatest = useCallback(() => reveal(), [reveal])
+  // A reveal that waits for the host reads the reader at the press, before the send's echo moves the end.
+  const captureRevealLatest = useCallback(() => {
+    const readerWasAtEnd = messageListRef.current?.readerAtEnd()
+    return () => reveal(readerWasAtEnd)
+  }, [reveal])
+  return { messageListRef, revealLatest, captureRevealLatest }
 }
 
 function ignoreFindMatch(): void {}
 
-/** The transcript's side: what a pane's reveal does to this list. `onSent` hears of it too:
- *  unlike the reader's own jump to the latest, a reveal is them answering the conversation. */
+function alwaysAtEnd(): boolean {
+  return true
+}
+
 export function useNativeChatMessageListHandle(
   ref: React.Ref<NativeChatMessageListHandle> | undefined,
-  jumpToLatest: () => void,
+  revealLatest: NativeChatMessageListHandle['revealLatest'],
   revealFindMatch: NativeChatMessageListHandle['revealFindMatch'] = ignoreFindMatch,
-  onSent?: () => void,
-  slots: readonly NativeChatTranscriptSlot[] = []
+  slots: readonly NativeChatTranscriptSlot[] = [],
+  readerAtEnd: NativeChatMessageListHandle['readerAtEnd'] = alwaysAtEnd
 ): void {
   useImperativeHandle(
     ref,
     () => ({
-      revealLatest: () => {
-        onSent?.()
-        jumpToLatest()
-      },
+      revealLatest,
+      readerAtEnd,
       revealFindMatch,
       messageCopyText: (messageId) => nativeChatSlotCopyText(slots, messageId)
     }),
-    [jumpToLatest, revealFindMatch, onSent, slots]
+    [readerAtEnd, revealLatest, revealFindMatch, slots]
   )
 }

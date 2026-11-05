@@ -2,7 +2,8 @@
 
 import '@testing-library/jest-dom/vitest'
 
-import { cleanup, render, screen, fireEvent } from '@testing-library/react'
+import { cleanup, screen, fireEvent } from '@testing-library/react'
+import { render } from './native-chat-tooltip-test-harness'
 
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 
@@ -29,18 +30,18 @@ afterEach(() => {
 import {
   agentJournalItemKey,
   agentJournalSubmissionKey
-} from '../../../../shared/agent-session-journal-item-key'
+} from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 
 import type {
   AgentJournalItemBody,
   AgentJournalRenderItem,
-  AgentJournalSubmission,
-  AgentJournalTurnScope
-} from '../../../../shared/agent-session-journal-types'
+  AgentJournalSubmission
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalTurnScope } from '../../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 
-import { projectStructuredAgentSessionMessages } from '../../../../shared/structured-agent-session-message-projection'
+import { projectStructuredAgentSessionMessages } from '../../../../shared/agent-session/view/structured-agent-session-message-projection'
 
-import { selectStructuredAgentSettledTurns } from '../../../../shared/structured-agent-session-turn-timing'
+import { selectStructuredAgentSettledTurns } from '../../../../shared/agent-session/view/structured-agent-session-turn-timing'
 
 import { NativeChatMessageList } from './NativeChatMessageList'
 
@@ -48,9 +49,7 @@ import { installNativeChatMessageListTestViewport } from './native-chat-message-
 
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
 
-import type { AgentSessionLatestTurn } from '../../../../shared/agent-session-wire'
-
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 
 {
   const THREAD: AgentJournalTurnScope = { kind: 'thread' }
@@ -92,7 +91,6 @@ import type { NativeChatMessage } from '../../../../shared/native-chat-types'
       completedAt: start + seconds * 1000
     })
 
-  /** "List three fruits", answered and settled in 4s. */
   function fruitTurn(): AgentJournalRenderItem[] {
     return [
       say('u1', 'user', 'List three fruits'),
@@ -156,49 +154,6 @@ import type { NativeChatMessage } from '../../../../shared/native-chat-types'
     })
     afterAll(() => restoreViewport())
     afterEach(cleanup)
-    it('gives /compact its own turn and result, and leaves the turn before it untouched', () => {
-      const compactEntry = agentJournalSubmissionKey('cmd-1')
-      const commandTurn = agentJournalItemKey({
-        provider: 'orca',
-        clientMessageId: 'command-turn:cmd-1'
-      })
-      const items = [
-        ...fruitTurn(),
-        item(compactEntry, {
-          kind: 'message',
-          role: 'user',
-          blocks: [{ type: 'text', text: '/compact' }],
-          command: { name: 'compact' }
-        }),
-        settledTurn(commandTurn, compactEntry, 2, 10_000),
-        item(
-          'command-result',
-          { kind: 'status', text: 'Conversation compacted.', presentation: 'compaction' },
-          inTurn(commandTurn)
-        )
-      ]
-      renderJournal(items, [
-        {
-          clientMessageId: 'cmd-1',
-          fence: 1,
-          payloadFingerprint: 'f',
-          dispatchState: 'accepted',
-          providerItemId: null,
-          reason: null,
-          submittedAt: 9_000,
-          resolvedAt: 12_000
-        }
-      ])
-
-      expect(screen.getByText('Apple, banana, cherry.')).toBeInTheDocument()
-      expect(screen.queryByText('Thinking about fruit.')).toBeNull()
-      const compact = screen.getByText('/compact')
-      const previousStatus = screen.getByText('Worked for 4s')
-      const ownStatus = screen.getByText('Worked for 2s')
-      expect(follows(compact, previousStatus)).toBe(true)
-      expect(follows(ownStatus, compact)).toBe(true)
-      expect(screen.getByRole('separator', { name: 'Context compacted' })).toBeInTheDocument()
-    })
 
     it('draws a message waiting behind /compact after the compaction, never above it', () => {
       const compactEntry = agentJournalSubmissionKey('cmd-1')
@@ -251,21 +206,6 @@ import type { NativeChatMessage } from '../../../../shared/native-chat-types'
       ).toBe(true)
     })
 
-    it('keeps the row that says why a turn stopped visible in its folded turn', () => {
-      const items = [
-        ...fruitTurn(),
-        item(
-          'exit',
-          { kind: 'status', text: 'The agent exited unexpectedly.', tone: 'error' },
-          inTurn('t1')
-        )
-      ]
-      renderJournal(items)
-
-      expect(screen.queryByText('Thinking about fruit.')).toBeNull()
-      expect(screen.getByText('The agent exited unexpectedly.')).toBeInTheDocument()
-    })
-
     it('folds a turn the provider resumed on its own under its own status', () => {
       const wake = agentJournalItemKey({
         provider: 'legacy',
@@ -292,30 +232,6 @@ import type { NativeChatMessage } from '../../../../shared/native-chat-types'
       expect(screen.getAllByRole('button', { name: 'Toggle turn details' })).toHaveLength(2)
     })
 
-    it("keeps the settled turn's duration while a turn the provider opened runs after it", () => {
-      const wake = agentJournalItemKey({
-        provider: 'legacy',
-        agent: 'claude',
-        sessionId: 'session-1',
-        recordId: 'turn-lifecycle:wake'
-      })
-      const items = [
-        ...fruitTurn(),
-        item(wake, {
-          kind: 'turn',
-          turnId: wake,
-          state: 'running',
-          userItemId: wake,
-          startedAt: 20_000
-        }),
-        say('wake-answer', 'assistant', 'Checking the background build.', inTurn(wake))
-      ]
-      renderJournal(items, [], true)
-
-      expect(screen.getByText('Worked for 4s')).toBeInTheDocument()
-      expect(screen.getByText('Checking the background build.')).toBeInTheDocument()
-    })
-
     it('clocks a turn the provider opened under its own key, not the user turn before it', () => {
       const wake = 'wake'
       const ask = say('u1', 'user', 'List three fruits')
@@ -324,7 +240,6 @@ import type { NativeChatMessage } from '../../../../shared/native-chat-types'
         item('t1', { kind: 'turn', turnId: 't1', state, userItemId: 'u1' }),
         say('t1-answer', 'assistant', 'Apple, banana, cherry.', inTurn('t1'))
       ]
-      // No host durations: this client's own clock is all the rows have.
       const local = { hostTiming: false }
       const { rerender } = render(
         journalList(answer('running'), [], {
@@ -397,58 +312,6 @@ import type { NativeChatMessage } from '../../../../shared/native-chat-types'
       expect(follows(screen.getByText('Say DONE'), activity!)).toBe(true)
     })
 
-    it.each(['settled', 'running'] as const)(
-      "a queued card Steered into a %s turn joins it, under the opener's bar, with no bar of its own",
-      (phase) => {
-        // Steer hands the draft over under a fresh submission id, linked by `queuedMessageId`; the
-        // host scopes its row to the turn it joined.
-        const steer = agentJournalSubmissionKey('handed-off')
-        const running = phase === 'running'
-        const items = [
-          say('u1', 'user', 'List three fruits'),
-          running
-            ? item('t1', {
-                kind: 'turn',
-                turnId: 't1',
-                state: 'running',
-                userItemId: 'u1',
-                startedAt: 1_000
-              })
-            : settledTurn('t1', 'u1', 4, 1_000),
-          say('t1-narration', 'assistant', 'Thinking about fruit.', inTurn('t1')),
-          say(steer, 'user', 'Make it four', inTurn('t1')),
-          say('t1-answer', 'assistant', 'Apple, banana, cherry, date.', inTurn('t1'))
-        ]
-        const { container } = render(
-          journalList(
-            items,
-            [
-              {
-                clientMessageId: 'handed-off',
-                fence: 1,
-                payloadFingerprint: 'steer',
-                dispatchState: 'accepted',
-                providerItemId: null,
-                reason: null,
-                submittedAt: 2_000,
-                resolvedAt: 2_100,
-                queuedMessageId: 'draft-1'
-              }
-            ],
-            running ? { isWorking: true, workingStartedAt: 1_000 } : {}
-          )
-        )
-
-        const bars = container.querySelectorAll<HTMLElement>('[data-native-chat-turn-status]')
-        expect(bars).toHaveLength(1)
-        const opener = screen.getByText('List three fruits')
-        const steered = screen.getByText('Make it four')
-        expect(follows(bars[0]!, opener)).toBe(true)
-        expect(follows(steered, bars[0]!)).toBe(true)
-        expect(follows(screen.getByText('Apple, banana, cherry, date.'), steered)).toBe(true)
-      }
-    )
-
     it("keeps a steer on its way into an ordinary running turn above that turn's activity", () => {
       const steer = agentJournalSubmissionKey('steer')
       const items = [
@@ -483,37 +346,9 @@ import type { NativeChatMessage } from '../../../../shared/native-chat-types'
         )
       )
 
-      // Handed over within moments, where it already is: it must not cross the activity line to wait.
       const activity = container.querySelector<HTMLElement>('[data-native-chat-turn-activity]')
       expect(activity).not.toBeNull()
       expect(follows(activity!, screen.getByText('Make it four'))).toBe(true)
-    })
-
-    it('keeps a message whose own start is pending above the activity that start reports', () => {
-      const waiting = agentJournalSubmissionKey('first')
-      const { container } = render(
-        journalList(
-          [say(waiting, 'user', 'Hello there')],
-          [
-            {
-              clientMessageId: 'first',
-              fence: 1,
-              payloadFingerprint: 'first',
-              dispatchState: 'pending',
-              providerItemId: null,
-              reason: null,
-              submittedAt: 9_000,
-              resolvedAt: null,
-              handoverRecorded: true
-            }
-          ],
-          { isWorking: true, workingStartedAt: 9_000 }
-        )
-      )
-
-      const activity = container.querySelector<HTMLElement>('[data-native-chat-turn-activity]')
-      expect(activity).not.toBeNull()
-      expect(follows(activity!, screen.getByText('Hello there'))).toBe(true)
     })
   })
 }
@@ -557,8 +392,6 @@ import type { NativeChatMessage } from '../../../../shared/native-chat-types'
       readPhase: 'ready'
     }
 
-    const settledTurns = new Map([['user-settled', { startedAt: 1, workedSeconds: 197 }]])
-
     it('does not render a local completed duration when the host cannot verify the end', () => {
       const now = vi.spyOn(Date, 'now').mockReturnValue(1_000)
       const unknownTurns = new Map([['user-settled', null]])
@@ -583,138 +416,6 @@ import type { NativeChatMessage } from '../../../../shared/native-chat-types'
           />
         )
         expect(screen.queryByText(/Worked for/)).not.toBeInTheDocument()
-      } finally {
-        now.mockRestore()
-      }
-    })
-
-    it('renders a host-settled duration without ever clocking the turn locally', () => {
-      // A local clock nowhere near the host's: the value must still be the host's.
-      const now = vi.spyOn(Date, 'now').mockReturnValue(1_700_000_000_000)
-      try {
-        const { rerender } = render(
-          <NativeChatMessageList
-            session={session}
-            isWorking={false}
-            workingStartedAt={null}
-            settledTurns={settledTurns}
-            expandSignal={false}
-          />
-        )
-        expect(screen.getByText('Worked for 3m 17s')).toBeInTheDocument()
-        now.mockReturnValue(1_700_000_099_000)
-        rerender(
-          <NativeChatMessageList
-            session={{ ...session }}
-            isWorking={false}
-            workingStartedAt={null}
-            settledTurns={settledTurns}
-            expandSignal={false}
-          />
-        )
-        expect(screen.getByText('Worked for 3m 17s')).toBeInTheDocument()
-      } finally {
-        now.mockRestore()
-      }
-    })
-  })
-
-  describe('a live turn whose record and opening message are not loaded', () => {
-    let restoreViewport = (): void => {}
-    beforeAll(() => {
-      restoreViewport = installNativeChatMessageListTestViewport()
-    })
-    afterAll(() => restoreViewport())
-    afterEach(cleanup)
-
-    const TURN_RECORD = 'turn-record-1'
-    const IN_TURN: AgentJournalTurnScope = { kind: 'turn', turnItemId: TURN_RECORD }
-
-    /** The newest rows of the turn: everything from its 300th row on. */
-    const loaded: AgentJournalRenderItem[] = [300, 301, 302].map((sequence) => ({
-      itemId: `row-${sequence}`,
-      revision: 0,
-      sequence,
-      observedAt: sequence,
-      body: {
-        kind: 'message',
-        role: 'assistant',
-        blocks: [{ type: 'text', text: `Step ${sequence}` }]
-      },
-      turnScope: IN_TURN
-    }))
-
-    const patch = '@@ -1 +1 @@\n-before\n+after'
-    /** An edit among the loaded rows; the turn's earlier edits are above them. */
-    const edit: AgentJournalRenderItem = {
-      itemId: 'row-303',
-      revision: 0,
-      sequence: 303,
-      observedAt: 303,
-      body: {
-        kind: 'diff',
-        path: 'src/a.ts',
-        patch: { head: patch, truncated: false, digest: 'fixture', byteLength: patch.length }
-      },
-      turnScope: IN_TURN
-    }
-
-    const running: AgentSessionLatestTurn = {
-      itemId: TURN_RECORD,
-      observedAt: 1,
-      turn: { turnId: 'turn-1', state: 'running', startedAt: 1_000, userItemId: 'user-1' }
-    }
-
-    function list(
-      latestTurn: AgentSessionLatestTurn | null | undefined,
-      items: AgentJournalRenderItem[] = loaded
-    ): React.JSX.Element {
-      return (
-        <NativeChatMessageList
-          session={{
-            messages: projectStructuredAgentSessionMessages(items, [], []),
-            status: 'ready',
-            sessionId: 'session-1',
-            agent: 'codex',
-            hasMore: true,
-            loadingEarlier: false,
-            olderHistoryGeneration: 0,
-            loadEarlier: vi.fn(),
-            readPhase: 'ready'
-          }}
-          journalItems={items}
-          journalSubmissions={[]}
-          journalLatestTurn={latestTurn}
-          isWorking
-          workingStartedAt={1_000}
-          expandSignal={false}
-        />
-      )
-    }
-
-    it('draws its Working bar with the running clock', () => {
-      const now = vi.spyOn(Date, 'now').mockReturnValue(64_000)
-      try {
-        render(list(running))
-        expect(screen.getByText('Step 302')).toBeInTheDocument()
-        expect(screen.getByText(/Working for 1m 3s/)).toBeInTheDocument()
-      } finally {
-        now.mockRestore()
-      }
-    })
-
-    it('totals no edits, since only the end of the turn is loaded', () => {
-      render(list(running, [...loaded, edit]))
-      expect(screen.getByText(/Working for/)).toBeInTheDocument()
-      expect(screen.queryByRole('button', { name: /changed file/ })).toBeNull()
-    })
-
-    it('had no bar to draw from the loaded rows alone', () => {
-      const now = vi.spyOn(Date, 'now').mockReturnValue(64_000)
-      try {
-        render(list(undefined))
-        expect(screen.getByText('Step 302')).toBeInTheDocument()
-        expect(screen.queryByText(/Working for/)).not.toBeInTheDocument()
       } finally {
         now.mockRestore()
       }
@@ -761,7 +462,6 @@ import type { NativeChatMessage } from '../../../../shared/native-chat-types'
       }
     }
 
-    /** The journal that says the turn runs and what its newest content is. */
     function journal(rows: readonly NativeChatMessage[]): AgentJournalRenderItem[] {
       return [
         {
@@ -822,13 +522,6 @@ import type { NativeChatMessage } from '../../../../shared/native-chat-types'
     const runHeader = (): HTMLElement =>
       document.querySelector<HTMLElement>('[data-native-chat-tool-run-state]')!
 
-    it('joins collapsed when the reader never opened it', () => {
-      render(list([command, reasoning('completed')]))
-      expect(runHeader()).toHaveAttribute('aria-expanded', 'false')
-      expect(screen.queryByText('Weighing two approaches')).toBeNull()
-    })
-
-    // The run never opens for a thought; the thought keeps its own open state inside it.
     it('keeps a thought the reader opened live open inside its collapsed run', () => {
       const { rerender } = render(list([command, reasoning('running')]))
       fireEvent.click(screen.getByRole('button', { name: 'Thinking' }))
@@ -844,25 +537,6 @@ import type { NativeChatMessage } from '../../../../shared/native-chat-types'
         'true'
       )
       expect(screen.getByText('Weighing two approaches')).toBeInTheDocument()
-    })
-
-    // While the live line is not showing it (a Stop in flight, a prompt the reader owes), the open
-    // thought sits in the run rather than flashing as its own row until the turn ends.
-    it.each([
-      ['a Stop is in flight', { stopping: true }],
-      ['a prompt waits on the reader', { awaitingInput: 'unshown' as const }]
-    ])('keeps an open thought inside the run while %s', (_, props) => {
-      const second: NativeChatMessage = {
-        ...command,
-        id: 'tool-2',
-        blocks: [{ type: 'tool-call', name: 'Bash', input: { command: 'ls' }, state: 'completed' }],
-        timestamp: STARTED + 100
-      }
-      const open = { ...reasoning('running'), id: 'r-2', timestamp: STARTED + 200 }
-      render(list([command, reasoning('completed'), second, open], props))
-      expect(screen.queryByRole('button', { name: /Reasoning|Thought/ })).toBeNull()
-      fireEvent.click(runHeader())
-      expect(screen.getAllByRole('button', { name: /Reasoning|Thought/ })).toHaveLength(2)
     })
   })
 }

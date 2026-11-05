@@ -1,7 +1,6 @@
 import type { MobileNewTabAgentInventory } from '../session/mobile-new-tab-agent-loader'
 
-// Why: installed agents change rarely, so the New Tab drawer reuses the last settled detection for
-// this paired host and host-qualified workspace, as desktop's agent inventory does.
+// Reuse settled agent detection per paired host and host-qualified workspace; installs rarely change, matching desktop inventory.
 
 const cache = new Map<string, MobileNewTabAgentInventory>()
 

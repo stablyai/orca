@@ -1,12 +1,8 @@
-/**
- * Whether a data root sits on a disk only this machine mounts. An instance-lock record that names
- * no machine is judged by its PID only when this holds: on a network home another machine may be
- * running it, and a PID is evidence only on the machine that issued it.
- */
+// Judge legacy machine-less lock records by PID only on local disks; shared homes may belong to other hosts.
 import { statfsSync } from 'node:fs'
 import process from 'node:process'
 
-// Linux `statfs` f_type magics (linux/magic.h) of local disk and memory filesystems.
+// Local disk/memory filesystem IDs from linux/magic.h.
 const LINUX_LOCAL_FILESYSTEM_MAGICS = new Set([
   0xef53, // ext2/3/4
   0x58465342, // xfs
@@ -31,8 +27,7 @@ export function orcadDataRootIsOnLocalDisk(
   platform: NodeJS.Platform = process.platform
 ): boolean {
   if (platform === 'win32') {
-    // `\\?\C:\` and `\\.\C:\` name local drives; any other `\\` path is a share. Mapped network
-    // drives look local here, but every Windows writer records its MachineGuid anyway.
+    // Device-prefixed drive paths are local; other UNC paths are shares. Mapped drives rely on writer MachineGuid.
     return !/^[\\/]{2}/u.test(dataRoot) || /^[\\/]{2}[?.][\\/][a-z]:/iu.test(dataRoot)
   }
   try {
@@ -46,7 +41,6 @@ export function orcadDataRootIsOnLocalDisk(
   }
 }
 
-/** Classifies a `statfs` f_type; also used for types a remote host reports. */
 export function filesystemTypeIsLocalDisk(
   platform: string,
   type: number,
@@ -55,7 +49,6 @@ export function filesystemTypeIsLocalDisk(
   if (platform === 'linux') {
     return LINUX_LOCAL_FILESYSTEM_MAGICS.has(type)
   }
-  // macOS numbers filesystem types as their drivers load, so compare against the boot volume's,
-  // which is always a local disk; network filesystems never share its type.
+  // macOS assigns type numbers per loaded driver; match the local boot volume’s type.
   return platform === 'darwin' && type === rootType()
 }

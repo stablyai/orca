@@ -1,13 +1,14 @@
 // #23428: a floating serve- PTY whose cwd is inside a folder workspace must stay floating.
 import { describe, expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
-import { committingSpawn } from './bind-first-pane.test-fixture'
+import { committingSpawn } from './orca-runtime-tests/bind-first-pane.test-fixture'
 
-// Fragments stay side-effect ordered: mocks, then lifecycle, then fixtures.
-const { OrcaRuntimeService } = await import('./orca-runtime-test-mocks.spec')
-await import('./orca-runtime-test-lifecycle.spec')
+// Preserve side-effect order: mocks, lifecycle, fixtures.
+await import('./orca-runtime-tests/runtime-test-module-registration.spec')
+const { OrcaRuntimeService } = await import('./orca-runtime')
+await import('./orca-runtime-tests/orca-runtime-test-lifecycle.spec')
 const { createFolderWorkspaceRuntimeStore, makeFolderProjectGroup, makeFolderWorkspace, store } =
-  await import('./orca-runtime-test-fixtures.spec')
+  await import('./orca-runtime-tests/orca-runtime-test-fixtures.spec')
 
 const HOME_FOLDER = '/tmp/platform'
 
@@ -43,7 +44,6 @@ function makeRuntime() {
     kill: () => true,
     getForegroundProcess: async () => null,
     hasPty: (ptyId: string) => live.has(ptyId),
-    // The daemon reports no worktree for serve- ids; only the cwd is known.
     listProcesses: async () => [...live].map((id) => ({ id, cwd: HOME_FOLDER, title: 'shell' }))
   })
   runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
@@ -61,7 +61,6 @@ describe('PTY inventory refresh keeps recorded floating ownership', () => {
     )
     expect(created.tab).toMatchObject({ status: 'ready' })
 
-    // A paired desktop lists the folder workspace's tabs, which refreshes inventory scoped to it.
     await runtime.listMobileSessionTabs(`id:${folderWorkspaceKey}`)
     await runtime.listTerminals(`id:${folderWorkspaceKey}`)
     const listed = await runtime.listTerminals()

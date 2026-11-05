@@ -34,7 +34,7 @@ export type SkillMutationVerb = 'install' | 'update'
 
 const SHARED_FOLDER_ONLY = 'universal'
 
-// Why: earlier releases passed `--agent` straight to the skills CLI, so scripts still use its keys.
+// Preserve --agent keys forwarded to the external skills CLI by earlier releases.
 const SKILLS_CLI_KEY_ALIASES = skillsCliAgentAliases(SKILLS_CLI_AGENT_KEY_BY_TUI_AGENT)
 
 /** `undefined` means detect; `[]` is `--agent universal`, the shared folder alone. */
@@ -48,7 +48,7 @@ function requestedAgents(
   if (typeof requested !== 'string') {
     return undefined
   }
-  // Why one comma-separated value: `agent` is a single-value flag on other commands.
+  // Other commands treat --agent as a single-value flag, so accept multiple providers with commas.
   const values = requested
     .split(',')
     .map((entry) => entry.trim())
@@ -156,8 +156,7 @@ function describePlan(plan: BundledSkillPlan): string[] {
 }
 
 async function workspaceDirectory(): Promise<string> {
-  // Why the real path: the planner dedupes targets by real path, so the root it is given must
-  // be the same spelling every time this folder is planned.
+  // Match the real-path spelling used to deduplicate planner targets.
   return realpath(process.cwd())
 }
 
@@ -175,8 +174,7 @@ export function createSkillMutationHandler(verb: SkillMutationVerb): CommandHand
       return
     }
 
-    // Why before target resolution: the answer belongs to the other machine, and agents
-    // detected here would be the wrong host's.
+    // Local agent detection would target the wrong machine for a bridged invocation.
     if (process.env.ORCA_CLI_CWD) {
       throw new RuntimeClientError(
         'invalid_environment',
@@ -200,13 +198,12 @@ export function createSkillMutationHandler(verb: SkillMutationVerb): CommandHand
       selection: {
         names: skillNames,
         ...(flags.get('force') === true ? { force: 'all' as const } : {}),
-        // Why: update never adds a skill; install is the verb that does.
         installedOnly: verb === 'update'
       }
     })
     const plan = await previewBundledSkillInstall(input)
     const planned = new Set(plan.skills.map((entry) => entry.name))
-    // Why --all is exempt: it names every bundled skill, so skipping absent ones is expected.
+    // --all is allowed to skip bundled skills that are not installed.
     const notInstalled =
       verb === 'update' && flags.get('all') !== true
         ? skillNames.filter((name) => !planned.has(name))

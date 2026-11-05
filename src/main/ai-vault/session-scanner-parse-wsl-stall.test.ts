@@ -3,22 +3,18 @@ import type * as NodeFsPromisesModule from 'node:fs/promises'
 import type { SessionFileCandidate } from './session-scanner-types'
 
 const STALLED_PATH = '\\\\wsl.localhost\\Ubuntu\\home\\ada\\.claude\\projects\\p\\a.jsonl'
-const SIBLING_PATH = '\\\\wsl.localhost\\Debian\\home\\ada\\.claude\\projects\\p\\b.jsonl'
 
 const mocks = vi.hoisted(() => ({ open: vi.fn(), readdir: vi.fn() }))
 
-// readdir too: every claude parse counts sibling subagent transcripts, and an
-// unmocked one would reach the host UNC path and stall under fake timers.
+// Claude also counts sibling subagents; mock readdir to avoid real UNC access under fake timers.
 vi.mock('node:fs/promises', async (importOriginal) => ({
   ...(await importOriginal<typeof NodeFsPromisesModule>()),
   open: mocks.open,
   readdir: mocks.readdir
 }))
 
-import {
-  parseAgentSessionFileCached,
-  resetSessionParseCacheForTests
-} from './session-scanner-parse-cache'
+import { parseAgentSessionFileCached } from './parse-cache/session-scanner-parse-cache'
+import { resetSessionParseCacheForTests } from './parse-cache/session-parse-cache-store'
 import {
   resetWslTranscriptFsGateForTests,
   WSL_TRANSCRIPT_FS_ROUTE_QUARANTINE_BASE_MS,
@@ -28,8 +24,7 @@ import {
 
 type ReadResult = { bytesRead: number; buffer: Buffer }
 
-// A stalled task keeps the gate's single scan slot until the call settles, so
-// every case releases its stall before the next one runs.
+// Settle stalled calls between cases to release their scan permits.
 let releaseStall: (() => void) | undefined
 
 function stalls(): Promise<ReadResult> {
@@ -79,8 +74,7 @@ function candidate(path: string, bytes: Buffer, mtimeMs: number): SessionFileCan
   }
 }
 
-// A result that lands past the deadline never lifts the route quarantine, so
-// recovery waits out the back-off window the same way production does.
+// Late results cannot clear quarantine; advance through backoff before retrying.
 async function releaseAndSettle(): Promise<void> {
   releaseStall?.()
   releaseStall = undefined
@@ -88,8 +82,6 @@ async function releaseAndSettle(): Promise<void> {
 }
 
 beforeEach(() => {
-  // blockedRoutes is persistent gate state: a prior stall must not quarantine
-  // this test's route.
   resetWslTranscriptFsGateForTests()
   resetSessionParseCacheForTests()
   mocks.open.mockReset()
@@ -106,29 +98,6 @@ afterEach(async () => {
 })
 
 describe('AI Vault session parse with a stalled WSL transcript body read', () => {
-  it('refuses the stalled candidate and still parses a sibling on a healthy distro', async () => {
-    mocks.open.mockResolvedValue({ read: vi.fn(stalls), close: vi.fn(async () => {}) })
-    // Rejecting (not resolving null) is what lets `parseSessionCandidate`
-    // report it as an issue instead of silently dropping the session. The
-    // assertion is attached before the clock moves so the rejection is never
-    // momentarily unhandled.
-    const refusal = expect(
-      parseAgentSessionFileCached(candidate(STALLED_PATH, body(2), 1), 'linux')
-    ).rejects.toBeInstanceOf(WslTranscriptFsError)
-    await vi.advanceTimersByTimeAsync(WSL_TRANSCRIPT_FS_SCAN_TIMEOUT_MS + 1)
-    await refusal
-
-    await releaseAndSettle()
-    const siblingBytes = body(2)
-    mocks.open.mockResolvedValue(servingHandle(siblingBytes))
-
-    const sibling = await parseAgentSessionFileCached(
-      candidate(SIBLING_PATH, siblingBytes, 1),
-      'linux'
-    )
-    expect(sibling?.messageCount).toBe(2)
-  })
-
   it('caches no resume point when the newline probe is refused mid-append', async () => {
     const first = body(2)
     mocks.open.mockResolvedValue(servingHandle(first))

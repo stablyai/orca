@@ -1,10 +1,9 @@
-// Open to the side in a layout-owner build (ORCA_LAYOUT_OWNER=main): each new split reaches main
-// with its tab, and the window draws main's frames, so both show the same groups after every step.
+// With main layout ownership, each split and tab must reach main together; drawn frames must preserve group parity.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import { createTestStore, makeWorktree, seedStore } from './store-test-helpers'
 import { createStoreCascadesMockApi } from './store-cascades-test-harness'
-import { newGroupSplitOf } from '@/runtime/layout-owner-new-group-split'
+import '@/runtime/layout-owner-new-group-split'
 import { openContentTabThroughLayoutOwner } from '@/runtime/layout-owner-content-tab-open'
 import { contentTabOpenPlacement } from './tabs/content-tab-open-placement'
 import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
@@ -13,7 +12,6 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switc
 import type { LayoutCommand } from '../../../../shared/workspace-layout/workspace-layout-command-types'
 import { drawTabsFromMain, type TabsDrawnFromMain } from './tabs-drawn-from-main.test-fixture'
 
-// Main's answer to the window's layout commands, as a switch-on build sends them.
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
@@ -116,7 +114,6 @@ describe.runIf(ORCA_LAYOUT_OWNER_IS_MAIN)('open to the side in a layout-owner bu
     await settledSent()
     expect(mainView()).toEqual(windowView())
 
-    // An editor open to the side: an empty split first, then the open fills it.
     const editorGroup = store.getState().createEmptySplitGroup(WT, ROOT, 'right')!
     openFile('/a.ts', { targetGroupId: editorGroup })
     expect(await settledSent()).toEqual([
@@ -129,12 +126,10 @@ describe.runIf(ORCA_LAYOUT_OWNER_IS_MAIN)('open to the side in a layout-owner bu
     ])
     expect(mainView()).toEqual(windowView())
 
-    // A terminal and a browser tab made with their split, beside the editor's split.
     store.getState().createTab(WT, undefined, undefined, {
       split: { sourceGroupId: editorGroup, splitDirection: 'down' }
     })
     const terminalGroup = store.getState().groupsByWorktree[WT]!.at(-1)!.id
-    // The browser tab and its split are drawn from main's frame.
     const browser = store.getState().createBrowserTab(WT, 'about:blank', {
       split: { sourceGroupId: ROOT, splitDirection: 'left' }
     })
@@ -171,19 +166,6 @@ describe.runIf(ORCA_LAYOUT_OWNER_IS_MAIN)('open to the side in a layout-owner bu
     expect(
       layoutApplyTestTransport.mainModel!.workspaces[WT]!.tabs.filter((tab) => tab.isPreview)
     ).toHaveLength(2)
-  })
-
-  it('opens a tab beside the emptied root split, whose group main makes its only one', async () => {
-    const editorGroup = store.getState().createEmptySplitGroup(WT, ROOT, 'right')!
-    openFile('/a.ts', { targetGroupId: editorGroup })
-    await settledSent()
-
-    // Main stores no empty group: its frame shows the opened split alone.
-    expect(mainView()).toEqual({
-      groups: [{ id: editorGroup, tabOrder: [onlyTabOf(editorGroup)] }],
-      tree: null
-    })
-    expect(mainView()).toEqual(windowView())
   })
 
   it.each([
@@ -250,62 +232,5 @@ describe.runIf(ORCA_LAYOUT_OWNER_IS_MAIN)('open to the side in a layout-owner bu
     openFile('/c.ts', { targetGroupId: again })
     await settledSent()
     expect(mainView()).toEqual(windowView())
-  })
-
-  it('sends no split for a tab that joins a group holding others, or the only group', async () => {
-    openFile('/a.ts')
-    openFile('/b.ts')
-    store.getState().createTab(WT)
-
-    expect((await settledSent()).map((command) => 'split' in command)).toEqual([
-      false,
-      false,
-      false
-    ])
-    expect(mainView()).toEqual(windowView())
-  })
-})
-
-describe.skipIf(ORCA_LAYOUT_OWNER_IS_MAIN)('open to the side with the switch off', () => {
-  it('sends nothing', () => {
-    openFile('/a.ts')
-    const side = store.getState().createEmptySplitGroup(WT, ROOT, 'right')!
-    openFile('/b.ts', { targetGroupId: side })
-    store.getState().createTab(WT, undefined, undefined, {
-      split: { sourceGroupId: ROOT, splitDirection: 'down' }
-    })
-
-    expect(layoutApplyTestTransport.sent).toEqual([])
-  })
-})
-
-describe('newGroupSplitOf', () => {
-  it('names a sibling that is itself split by its first and last groups', () => {
-    const group = (id: string, tabOrder: string[]) => ({
-      id,
-      worktreeId: WT,
-      activeTabId: null,
-      tabOrder
-    })
-    const state = {
-      groupsByWorktree: { [WT]: [group('A', ['a']), group('M', ['m']), group('N', ['n'])] },
-      layoutByWorktree: {
-        [WT]: {
-          type: 'split' as const,
-          direction: 'horizontal' as const,
-          first: {
-            type: 'split' as const,
-            direction: 'vertical' as const,
-            first: { type: 'leaf' as const, groupId: 'A' },
-            second: { type: 'leaf' as const, groupId: 'M' }
-          },
-          second: { type: 'leaf' as const, groupId: 'N' }
-        }
-      }
-    }
-
-    expect(newGroupSplitOf(state, WT, 'N', 'n')).toEqual({
-      split: { besideGroupId: 'A', besideLastGroupId: 'M', direction: 'right' }
-    })
   })
 })

@@ -5,7 +5,7 @@ import type { RuntimeTerminalPresentation } from '../../../../shared/runtime-typ
 import type {
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode
-} from '../../../../shared/terminal-tab-types'
+} from '../../../../shared/workspace-layout/terminal-tab-types'
 
 export function resolveTerminalPresentation(data: {
   presentation?: RuntimeTerminalPresentation

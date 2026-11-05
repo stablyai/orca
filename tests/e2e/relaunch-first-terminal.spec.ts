@@ -1,9 +1,5 @@
-/**
- * Whether a workspace gets its first terminal after a relaunch: one the user emptied by closing
- * its terminals stays empty, one holding only an editor tab stays as it is, and one never
- * opened gets a terminal when first shown. Main decides this from the terminal rows it keeps,
- * so the answer must be the same whether or not the window's saves carry its tabs.
- */
+// After relaunch, preserve deliberately empty/editor-only workspaces and seed a terminal only when a never-opened workspace is shown.
+// Main’s terminal rows must give the same answer with or without window tab saves.
 
 import path from 'node:path'
 import { writeFileSync } from 'node:fs'

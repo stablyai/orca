@@ -1,24 +1,24 @@
-import type { ProcessedAgentStatusChunk } from '../../../../shared/agent-status-osc'
+import type { ProcessedAgentStatusChunk } from '../../../../shared/agent-status/transport/agent-status-osc'
 import type {
   RuntimePtyWorktreeRecord,
   RuntimeLeafRecord,
   RuntimePtyTitleTrackerEntry
-} from '../../runtime-terminal-state-records'
+} from '../records/runtime-terminal-state-records'
 import type { RuntimeSyncedLeaf } from '../../../../shared/runtime-types'
 import { OrcaRuntimeWithPreparePtyExecutionContext } from '../launch/terminal-execution-context'
 import { advertisedUrlWatcher } from '../../../ports/advertised-url-watcher'
-import { appendNormalizedToTailBuffer } from '../../terminal-tail-buffer'
-import { normalizeTerminalChunk } from '../../terminal-ansi-normalization'
-import { observeTerminalCommandPaint } from '../../terminal-command-paint'
+import { appendNormalizedToTailBuffer } from './tail/terminal-tail-buffer'
+import { normalizeTerminalChunk } from './terminal-ansi-normalization'
+import { observeTerminalCommandPaint } from '../input/terminal-command-paint'
 import {
   appendCompletedTerminalTranscript,
   buildPreview,
   tailStateMatches
-} from '../../terminal-tail-state'
+} from './tail/terminal-tail-state'
 import {
   computeTerminalTailWaitState,
   tailGainedNewerBlockedReason
-} from '../../terminal-wait-tail-state'
+} from '../wait/terminal-wait-tail-state'
 import { extractOscTitleScanTail } from '../../../../shared/osc-title-scan-tail'
 
 export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePtyExecutionContext {
@@ -30,7 +30,7 @@ export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePty
     ptyId: string,
     data: string
   ): ProcessedAgentStatusChunk
-  protected abstract recordRecentPtyOutputForPathProvenance(ptyId: string, data: string): void
+  protected abstract recordRecentPtyOutput(ptyId: string, data: string): void
   protected abstract shouldAnswerQueriesForLiveChunk(ptyId: string): boolean
   abstract maybeHydrateHeadlessFromRenderer(ptyId: string): Promise<boolean> | null
   protected abstract trackHeadlessTerminalData(
@@ -41,7 +41,7 @@ export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePty
   ): void
   protected abstract getOrCreatePtyWorktreeRecord(ptyId: string): RuntimePtyWorktreeRecord | null
   protected abstract scheduleWaitBlockedCheck(ptyId: string, appendedText: string, at: number): void
-  protected abstract getLeavesForPty(ptyId: string): RuntimeLeafRecord[]
+  protected abstract getLeavesForPty(ptyId: string): readonly RuntimeLeafRecord[]
   protected abstract recordPtyWorktree(
     ptyId: string,
     worktreeId: string,
@@ -105,30 +105,14 @@ export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePty
     const cwd = osc7Metadata.cwd
     const cwdChanged = osc7Metadata.cwdChanged
     const agentStatusChunk = this.processAgentStatusOscForPty(ptyId, data)
-    this.recordRecentPtyOutputForPathProvenance(ptyId, data)
-    // Why: watch terminal output for advertised dev-server URLs (e.g. Vite's
-    // `Network: https://local.example.com:3001/`) so the workspace ports
-    // panel can surface them in place of the kernel bind address.
+    this.recordRecentPtyOutput(ptyId, data)
+    // Use advertised dev-server URLs for workspace ports instead of kernel bind addresses.
     advertisedUrlWatcher.ingest(ptyId, data, at)
-    // Why: reply ownership is captured per chunk, here at ingestion — the
-    // same module state and tick as the hidden-gate drop sites — and rides
-    // the writeChain link. A mark/setting/subscriber flip before the queued
-    // emulator write runs must not change who answers (terminal-query-
-    // authority.md invariant 1).
+    // Capture query ownership in the ingestion/drop tick; queued writes must not reinterpret later subscriber/settings changes.
     const forwardQueryReplies = this.shouldAnswerQueriesForLiveChunk(ptyId)
-    // Ordering invariant (DO NOT REORDER): maybeHydrateHeadlessFromRenderer
-    // MUST run before trackHeadlessTerminalData so the eager-state pattern
-    // (set headlessTerminals + writeChain head = seedPromise) is in place
-    // before the live byte's chain link is queued. Without this ordering,
-    // trackHeadlessTerminalData would lazy-create a fresh state at PTY dims
-    // that the later seed-resolve would overwrite, dropping the live byte.
-    // See docs/mobile-prefer-renderer-scrollback.md.
+    // Hydrate before tracking live data: publish the seeded state/chain first or a late seed could overwrite live bytes.
     this.maybeHydrateHeadlessFromRenderer(ptyId)
-    // Our structure wins: OSC title/agent-status extraction runs through the
-    // shared per-PTY title tracker below (getOrCreatePtyTitleTrackerEntry →
-    // applyTrackedPtyTitle) in byte order, superseding main's inline
-    // extractLastOscTitleForPty block (#7880/#7852 title/status semantics are
-    // preserved via the tracker + detectAgentStatusFromTitle path).
+    // The shared tracker processes every title in byte order, preserving coalesced working-to-idle transitions (#1083).
     this.trackHeadlessTerminalData(ptyId, data, outputSequence, forwardQueryReplies)
 
     const pty = this.getOrCreatePtyWorktreeRecord(ptyId)
@@ -146,7 +130,7 @@ export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePty
     let ptyTailAfter: ReturnType<typeof appendNormalizedToTailBuffer> | null = null
     let ptyNormalized: ReturnType<typeof normalizeTerminalChunk> | null = null
     if (pty) {
-      pty.connected = true
+      this.terminalIdentity.setPtyConnected(pty, true)
       pty.disconnectedAt = null
       pty.lastOutputAt = at
       const normalized = normalizeTerminalChunk(data, pty.tailPendingAnsi)
@@ -186,7 +170,7 @@ export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePty
         paneKey: this.makeRuntimePaneKey(leaf),
         surfaceRecordedAtGraphSequence: this.graphSequence
       })
-      leaf.connected = true
+      this.terminalIdentity.updateLeafConnected(leaf, true)
       leaf.writable = this.graphStatus === 'ready'
       leaf.lastOutputAt = at
       if (
@@ -216,10 +200,7 @@ export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePty
         leaf.tailLinesTotal = pty.tailLinesTotal
         leaf.preview = pty.preview
         leaf.waitBlockedAt = pty.waitBlockedAt
-        // Why undefined on this branch: the PTY record's wait scan is throttled
-        // (scheduleWaitBlockedCheck), so pty.tailWaitState is never populated;
-        // copying it here intentionally invalidates the leaf cache and the
-        // mismatch branch below recomputes an exact state on its next chunk.
+        // The PTY wait scan is throttled; copying undefined invalidates the leaf cache for exact recomputation next chunk.
         leaf.tailWaitState = pty.tailWaitState
       } else {
         // Why: the same carried escape prefix normalizes the same chunk identically.
@@ -264,12 +245,7 @@ export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePty
       }
     }
 
-    // Why: feed the chunk's OSC titles through the shared per-PTY tracker in
-    // byte order — the same ordering the renderer transport uses — so
-    // coalesced working→idle transitions reach tui-idle waiters and
-    // pending-message delivery instead of being masked by the chunk's last
-    // title (issue #1083). Uses the OSC 9999-stripped cleanData like the
-    // renderer, so pure status chunks don't perturb the stale-title probe.
+    // Feed cleanData titles in byte order so coalesced transitions reach waits/delivery; pure OSC 9999 status chunks must not disturb stale-title probes.
     const titleTrackerEntry = this.getOrCreatePtyTitleTrackerEntry(ptyId)
     const previousTitleScanTail = this.oscTitleScanTailByPtyId.get(ptyId)
     const titleInput = previousTitleScanTail
@@ -287,9 +263,7 @@ export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePty
       for (const payload of agentStatusChunk.payloads) {
         titleTrackerEntry.pendingFacts.push({ kind: 'agent-status', payload })
       }
-      // Why on the PTY record: the retained status snapshots are keyed by paneKey, which a
-      // background CLI-created PTY may never have. `terminal wait --for tui-idle` still needs
-      // the agent's own account of itself, and ptyId is the only identity that path always holds.
+      // Background CLI PTYs may lack pane keys; retain first-party status on the always-addressable PTY record.
       const latestAgentStatus = agentStatusChunk.payloads.at(-1)
       if (latestAgentStatus) {
         const ptyRecord = this.ptysById.get(ptyId)
@@ -309,17 +283,12 @@ export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePty
         titleScanData: titleInput,
         programActivity: agentStatusChunk.programActivity
       })
-      // Why: the Command Code scrape rides the same per-chunk batch (its facts
-      // trail the tracker's). cleanData keeps OSC 9999 payloads out of the
-      // detector's bounded recent-text window; the detector strips remaining
-      // control sequences itself, exactly like the renderer byte path.
+      // Keep Command Code facts in this chunk's batch; exclude OSC 9999 payloads from its bounded text window.
       titleTrackerEntry.commandCodeDetector?.observe(agentStatusChunk.cleanData)
     } finally {
       titleTrackerEntry.applyingChunk = false
       try {
-        // Why: per-chunk cross-channel contract order is status → titles →
-        // bell — the chunk's agentStatus:set events must reach the renderer
-        // before its pty:sideEffect batch.
+        // Cross-channel order is status, titles, bell; publish agentStatus:set before pty:sideEffect.
         this.emitTerminalAgentStatusEvents(ptyId, agentStatusChunk)
         const lastPayloadTitleOffset =
           agentStatusChunk.lastPayloadCleanOffset === null
@@ -327,14 +296,11 @@ export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePty
             : (previousTitleScanTail?.length ?? 0) + agentStatusChunk.lastPayloadCleanOffset
         this.restoreAgentPromptLifecycleByteOrder(ptyId, titleInput, lastPayloadTitleOffset)
       } finally {
-        // Why: flushed in the finally so a throwing tracker callback cannot
-        // strand this chunk's facts to be emitted under the next chunk's seq.
+        // Always flush, even after tracker exceptions, so facts cannot leak into the next chunk's seq.
         this.flushPendingTerminalSideEffectFacts(ptyId, titleTrackerEntry)
       }
     }
-    // Why only the title arm here: an OSC 9999 transition republishes off the store's own
-    // change signal (installHookStatusSessionTabsRepublish), which sees hook and OSC rows
-    // alike — a second per-chunk republish would only re-emit the same snapshot version.
+    // OSC 9999 already republishes via store changes; only title changes need another session publish.
     if (titleTrackerEntry.chunkTouchedSessionTabs) {
       this.touchMobileSessionSnapshotsForPty(ptyId)
     }

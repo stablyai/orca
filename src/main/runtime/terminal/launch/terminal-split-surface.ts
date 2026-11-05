@@ -1,15 +1,19 @@
 import { OrcaRuntimeWithSplitTerminal } from './terminal-split'
-import type { RuntimePtyWorktreeRecord } from '../../runtime-terminal-state-records'
+import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 import type { TerminalPaneSplitSource } from '../../../../shared/feature-education-telemetry'
 import type { RuntimeTerminalSplit } from '../../../../shared/runtime-types'
-import { makePaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
-import { recordPtySurface, spawnSurfaceClaimSequence } from '../../pty-recorded-surface-topology'
+import { makePaneKey, parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import {
+  recordPtySurface,
+  spawnSurfaceClaimSequence
+} from '../surface/pty-recorded-surface-topology'
 import { randomUUID } from 'node:crypto'
-import { runtimeSplitPlacement } from '../../runtime-terminal-spawn-placement'
+import { runtimeSplitPlacement } from '../layout/runtime-terminal-spawn-placement'
 import { REJECTED_SPLIT_PTY_STOP_TIMEOUT_MS, ownerSurfacing } from '../../orca-runtime-core'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { spawnInAdmittedPane, withdrawRuntimePane } from '../../runtime-pane-admission'
+import { spawnInAdmittedPane, withdrawRuntimePane } from './runtime-pane-admission'
 import { UNMEASURED_PTY_SIZE } from '../../../ipc/pty/pty-first-size'
+import { resolveLaunchCommandPaneAgent } from './runtime-agent-launch-resolution'
 
 export type TerminalSplitOptions = {
   direction?: 'horizontal' | 'vertical'
@@ -21,6 +25,8 @@ export type TerminalSplitOptions = {
   // workspace, for splits the user never asked to see.
   surfaceOwner?: false
   telemetrySource?: TerminalPaneSplitSource
+  /** The user's own act (a CLI or window split); without it a stopped WSL distro holds the start. */
+  wslUserAct?: true
 }
 
 export abstract class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeWithSplitTerminal {
@@ -44,7 +50,8 @@ export abstract class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeW
     const direction = opts.direction ?? 'horizontal'
     const workspace = await this.resolveTerminalWorkspaceLaunchScope(
       `id:${pty.worktreeId}`,
-      createdWorktree
+      createdWorktree,
+      { wslUserAct: opts.wslUserAct === true }
     )
     const sourceAuthority = this.resolveTerminalSplitSourceAuthority(
       workspace.id,
@@ -77,6 +84,8 @@ export abstract class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeW
       envToDelete: opts.envToDelete,
       connectionId: workspace.connectionId,
       worktreeId: workspace.id,
+      resolvedWorkspace: workspace,
+      ...(opts.wslUserAct ? { wslUserAct: true } : {}),
       preAllocatedHandle,
       tabId: parentTabId,
       leafId,
@@ -93,9 +102,7 @@ export abstract class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeW
               tabId: parentTabId,
               leafId: parsedPaneKey.leafId,
               ptyId: pty.ptyId,
-              // Why: the store can only match its own persisted map, so a live-only id it never
-              // recorded would reject every split from a session restored without incarnations.
-              // The live id is fenced by revalidateSourceAuthority below instead.
+              // Persisted maps cannot match live-only incarnations; revalidateSourceAuthority fences those separately.
               ...(sourceAuthority.persistedIncarnationId
                 ? { incarnationId: sourceAuthority.persistedIncarnationId }
                 : {})
@@ -112,12 +119,15 @@ export abstract class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeW
     const createdPty = this.getOrCreatePtyWorktreeRecord(result.id)
     if (createdPty) {
       recordPtySurface(
+        this.terminalIdentity,
         createdPty,
         parentTabId,
         paneKey,
         spawnSurfaceClaimSequence(this.graphSequence)
       )
       createdPty.runtimeSessionOwned = pty.runtimeSessionOwned
+      createdPty.launchCommandAgent = resolveLaunchCommandPaneAgent(opts.command)
+      this.watchLaunchComposer(result.id, createdPty.launchCommandAgent)
       this.setPairedRendererSessionOwnership(
         createdPty.ptyId,
         this.pairedRendererSessionOwnedPtyIds.has(pty.ptyId)
@@ -158,9 +168,7 @@ export abstract class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeW
       revalidateSourceAuthority()
       if (!sourceAuthority.persisted) {
         await revealSplit()
-        // Why: rejecting here unmounts the pane the reveal just added only because the retire
-        // below always emits its exit and the tab still holds the source sibling — the renderer's
-        // exit handler closes non-final panes. Never close it by tabId: that drops the whole tab.
+        // Retirement emits a non-final pane exit and unmounts only the new pane; closing by tabId would also drop the source sibling.
         revalidateSourceAuthority()
       }
       if (createdPty) {
@@ -207,8 +215,7 @@ export abstract class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeW
         )
       : null
     if (committedSourceAuthority?.persisted && !committedSourceAuthority.rendererRunsOtherPty) {
-      // Why: renderer adoption is a projection after the durable main commit; rejection cannot undo it.
-      // Not gated on the window's graph: it lags tabs the window already holds (STA-9417).
+      // Reveal only projects an already durable main commit; failure cannot undo it, and lagging window graphs cannot gate it (STA-9417).
       void revealSplit().catch(() => undefined)
     }
 

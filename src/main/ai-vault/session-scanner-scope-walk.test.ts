@@ -2,8 +2,8 @@ import { link, mkdtemp, mkdir, rm, stat, utimes, writeFile } from 'node:fs/promi
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { truncateAiVaultListResult } from '../../shared/ai-vault-session-depth'
-import type { AiVaultListResult } from '../../shared/ai-vault-types'
+import { truncateAiVaultListResult } from '../../shared/ai-vault/scanning/ai-vault-session-depth'
+import type { AiVaultListResult } from '../../shared/ai-vault/contracts/ai-vault-types'
 import { parseSessionCandidates } from './session-scanner-candidate-parse'
 import {
   MAX_UNLISTED_ENTRIES,
@@ -14,20 +14,23 @@ import {
   storeSessionParseCacheEntry,
   storeSessionScopeCwd,
   resetSessionParseCacheForTests
-} from './session-parse-cache-store'
-import { createSessionParseStats, parseAgentSessionFileCached } from './session-scanner-parse-cache'
+} from './parse-cache/session-parse-cache-store'
+import {
+  createSessionParseStats,
+  parseAgentSessionFileCached
+} from './parse-cache/session-scanner-parse-cache'
 import { scanAiVaultSessions } from './session-scanner'
-import { createAntigravityWorkspaceResolver } from './session-scanner-antigravity-history'
+import { createAntigravityWorkspaceResolver } from './scanners/antigravity/session-scanner-antigravity-history'
 import { scanInScopeSessions } from './session-scanner-scope-walk'
 import * as eventLoop from '../../shared/event-loop-yield'
 import { AI_VAULT_SCOPE_CWD_SOURCES } from './session-scope-cwd'
-import { SessionParseCacheDatabase } from './session-parse-cache-database'
+import { SessionParseCacheDatabase } from './parse-cache/session-parse-cache-database'
 import SyncDatabase from '../sqlite/sync-database'
 import {
   initSessionParseCachePersistence,
   flushSessionParseCachePersist,
   resetSessionParseCachePersistenceForTests
-} from './session-parse-cache-persistence'
+} from './parse-cache/session-parse-cache-persistence'
 import {
   isolatedScanRoots,
   jsonLines,
@@ -126,7 +129,7 @@ async function writeRollout(sessionsDir: string, id: string, cwd: string, day: s
   await writeFile(
     path,
     jsonLines([
-      // Codex's first record carries its base instructions, past the first 8 KB read.
+      // Large Codex headers must still expose cwd beyond the initial read chunk.
       { timestamp, type: 'session_meta', payload: { id, cwd, instructions: 'x'.repeat(20_000) } },
       {
         timestamp,
@@ -171,7 +174,6 @@ describe('scanAiVaultSessions — scope before the recency cap', () => {
     const scoped = await scan([workspace])
     const inScope = scoped.sessions.filter((session) => session.cwd === workspace)
     expect(inScope.map((session) => session.sessionId)).toEqual(['01a14083-old'])
-    // The host's cached list is cut by the same scope rule, so the recovered row survives it.
     expect(
       truncateAiVaultListResult(scoped, 2, [workspace]).sessions.map((s) => s.sessionId)
     ).toContain('01a14083-old')
@@ -239,7 +241,6 @@ it('admits the newest scoped activity when copied Hermes files have newer mtimes
   const scopedIds = (rows: AiVaultListResult) =>
     rows.sessions.filter((row) => row.cwd === '/repo').map((row) => row.sessionId)
   expect(scopedIds(deeper)[0]).toBe('hermes-16')
-  // A deeper cached scan serving depth 1 keeps every scoped row it found.
   expect(scopedIds(truncateAiVaultListResult(deeper, 1, ['/repo']))).toEqual(scopedIds(deeper))
 })
 

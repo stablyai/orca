@@ -1,11 +1,11 @@
 import '../unused-default-rpc-methods.test-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { AI_VAULT_AGENTS } from '../../../../shared/ai-vault-types'
+import { AI_VAULT_AGENTS } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import { RpcDispatcher } from '../dispatcher'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { AI_VAULT_METHODS } from './ai-vault'
-import { fakeSearchService } from '../../../../shared/ai-vault-search-test-fixture'
-import { createSessionSearchClient } from '../../../../shared/ai-vault-search-client'
+import { fakeSearchService } from '../../../../shared/ai-vault/search/ai-vault-search-test-fixture'
+import { createSessionSearchClient } from '../../../../shared/ai-vault/search/ai-vault-search-client'
 import { setSessionSearchService } from '../../../ai-vault-search/session-search-service-registry'
 
 afterEach(() => setSessionSearchService(null))
@@ -179,11 +179,9 @@ describe('session search consent over the runtime RPC', () => {
 
   function consentDispatcher(runtime = new OrcaRuntimeService()) {
     const setSessionSearchEnabled = vi.fn(async () => {})
-    // Overrides the surface-installed method, which proves it is there to override.
     Object.assign(runtime, { setSessionSearchEnabled })
     const dispatcher = new RpcDispatcher({ runtime, methods: AI_VAULT_METHODS })
-    // Why the streaming entry point: `pairedDeviceId` only reaches a handler through it, and
-    // it is the one the WebSocket transport a paired client connects over actually calls.
+    // Streaming dispatch supplies pairedDeviceId, matching the paired WebSocket path.
     const call = async (
       params: unknown,
       options?: { pairedDeviceId?: string; clientKind?: 'runtime' | 'mobile' }

@@ -4,22 +4,22 @@ import type { OrcadDaemonRetirement } from './orcad-daemon-retirement'
 import { stopOrcadAutomationScheduler } from './orcad-automations'
 import { holdOrcadTerminalAdmissionUntilExit } from './orcad-stop-terminal-admission'
 
-// Lazy like the rest of orcad's daemon graph: the entry module must not load it at import time.
+// Keep daemon imports lazy so entry loading cannot initialize native code.
 async function retireLazily(): Promise<OrcadDaemonRetirement> {
   const { retireOrcadDaemonIfIdle } = await import('./orcad-daemon-retirement')
   return retireOrcadDaemonIfIdle()
 }
 
-/** Runs before orcad stops for a managed request; it can record an outcome but never veto. */
+/** Record managed-stop outcomes without vetoing the stop. */
 export async function prepareOrcadManagedStop(
   request: OrcadManagedStopRequest,
   retire: () => Promise<OrcadDaemonRetirement> = retireLazily,
   stopAutomations: () => void = stopOrcadAutomationScheduler,
   holdTerminalAdmission: () => void = holdOrcadTerminalAdmissionUntilExit
 ): Promise<void> {
-  // Before the daemon retirement below, which can take seconds while orcad still serves spawns.
+  // Fence spawns before potentially slow daemon retirement.
   holdTerminalAdmission()
-  // First, so no dispatch races the census below or writes a run the stop then discards.
+  // Stop dispatch before census so new runs cannot race shutdown.
   stopAutomations()
   if (!request.retireIdleDaemon) {
     return
@@ -32,7 +32,7 @@ export async function prepareOrcadManagedStop(
   try {
     persistOrcadDaemonRetirementRecord(request, outcome)
   } catch (error) {
-    // The completion command reads a missing record as `unverifiable`.
+    // Missing retirement records remain unverifiable to the completion reader.
     console.error('[orcad] could not record daemon retirement:', error)
   }
 }

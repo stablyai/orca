@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { translate } from '@/i18n/i18n'
-import type { JiraIssue } from '../../../shared/jira-types'
+import type { JiraIssue } from '../../../shared/jira/jira-types'
 import { copyJiraTextToClipboard } from './jira-issue-workspace-actions'
 import {
   getJiraPromptTemplates,
@@ -123,7 +123,7 @@ export function JiraPromptTemplatePopover({
             disabled={copying || !prompt}
             onClick={async () => {
               setCopying(true)
-              const copied = await copyJiraTextToClipboard(prompt, 'Prompt')
+              const copied = await copyJiraTextToClipboard(prompt, 'prompt')
               setCopying(false)
               if (copied) {
                 onClose()

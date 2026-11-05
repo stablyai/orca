@@ -1,4 +1,4 @@
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 
 /** The closes this client still owes runtime environments; optional for partial fixtures. */
 export type CloseIntentFields = Pick<
@@ -7,8 +7,7 @@ export type CloseIntentFields = Pick<
 >
 
 export function pickCloseIntents(snapshot: CloseIntentFields): CloseIntentFields {
-  // Why unconditional rather than omit-when-empty: a full write replaces the persisted object,
-  // so an emptied map has to be written as empty or the last replay never sticks.
+  // Full writes replace the object; persist empty maps explicitly or the final cleared close-intent replay never sticks.
   return {
     clientHostedBrowserCloseIntentsByEnvironment:
       snapshot.clientHostedBrowserCloseIntentsByEnvironment,

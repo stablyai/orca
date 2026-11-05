@@ -17,7 +17,7 @@ import { useJiraProjectInventory } from '@/components/use-jira-project-inventory
 import { getRepoWorkspaceCreationTargetHint } from '@/lib/project-host-workspace-target'
 import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
 import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
-import type { JiraIssue, JiraProject } from '../../../../shared/jira-types'
+import type { JiraIssue, JiraProject } from '../../../../shared/jira/jira-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type { CreateWorktreeResult } from '../../../../shared/worktree/create-types'

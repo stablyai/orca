@@ -2,15 +2,15 @@ import { SearchAddon } from '@xterm/addon-search'
 import { SerializeAddon } from '@xterm/addon-serialize'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
 import { WebLinksAddon } from '@xterm/addon-web-links'
-import { Terminal } from '@xterm/xterm'
-import type { ILink, ITerminalOptions } from '@xterm/xterm'
+import { Terminal, type ILink, type ITerminalOptions } from '@xterm/xterm'
+
 import { createWrappedTerminalHttpLinkProvider } from '../../components/terminal-pane/wrapped-terminal-http-link-provider'
-import { TERMINAL_HTTP_URL_REGEX } from '../../components/terminal-pane/terminal-http-url-extraction'
-import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
+import { TERMINAL_HTTP_URL_REGEX } from '../../../../shared/terminal/links/terminal-http-url-extraction'
+import type { TerminalLeafId } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { DragReorderCallbacks, DragReorderState } from './pane-drag-reorder'
 import { attachPaneDrag } from './pane-drag-pointer'
 import type { ManagedPaneInternal, PaneManagerOptions } from './pane-manager-types'
-import { buildDefaultTerminalOptions } from './pane-terminal-options'
+import { PANE_TERMINAL_VT_EXTENSIONS, buildDefaultTerminalOptions } from './pane-terminal-options'
 import { shouldFocusTerminalFromPanePointerDown } from './pane-pointer-focus'
 import { ENABLE_WEBGL_RENDERER } from './pane-webgl-renderer'
 import { installGuardedLinkProviderRegistration } from './terminal-link-provider-guard'
@@ -42,16 +42,19 @@ export function createPaneDOM(
   container.appendChild(xtermContainer)
 
   const userOpts = options.terminalOptions?.(id) ?? {}
+  const defaultOpts = buildDefaultTerminalOptions()
   const terminalOpts: ITerminalOptions = {
-    ...buildDefaultTerminalOptions(),
-    ...userOpts
+    ...defaultOpts,
+    ...userOpts,
+    vtExtensions: {
+      ...defaultOpts.vtExtensions,
+      ...userOpts.vtExtensions,
+      ...PANE_TERMINAL_VT_EXTENSIONS
+    }
   }
 
   const terminal = new Terminal(terminalOpts)
-  // Why: a synchronous throw inside any link provider's provideLinks (notably
-  // xterm web-links' LinkComputer raising RangeError on a pathological wrapped
-  // line) escapes to window.onerror and gets the renderer killed. Guard every
-  // provider registered after this point — addon-internal and Orca's own.
+  // Contain every provider’s synchronous provideLinks errors, including pathological web-links RangeError, before they reach window.onerror and terminate the renderer.
   installGuardedLinkProviderRegistration(terminal)
   installWindowsCtrlAltChordRepair(terminal)
   // Why here: the tracker must see every byte, including the first snapshot replay.
@@ -59,13 +62,11 @@ export function createPaneDOM(
   const fitAddon = new StableCellFitAddon()
   const searchAddon = new SearchAddon()
   const unicode11Addon = new Unicode11Addon()
-  // Why: async tooltip formatting can resolve after hover changes, so stale
-  // results must not overwrite the tooltip for the currently hovered link.
+  // Reject late tooltip results after hover changes so they cannot overwrite the current link.
   let linkTooltipHoverToken = 0
 
   const linkTooltip = document.createElement('div')
-  // Why: styles live in terminal.css (.pane-link-tooltip) so the hover URL stays
-  // flush to the pane corner without inline padding/offset drift.
+  // Keep tooltip corner geometry in terminal.css rather than drifting inline padding/offsets.
   linkTooltip.className = 'pane-link-tooltip xterm-hover'
   linkTooltip.style.display = 'none'
 

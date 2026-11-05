@@ -16,6 +16,7 @@ import {
   readCodexResetCreditCapability,
   useCodexResetCreditCapability
 } from './codex-reset-credit-capability'
+import { findByHostType } from '../test-support/react-test-renderer-host-nodes'
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -71,10 +72,10 @@ describe('useCodexResetCreditCapability', () => {
     act(() => {
       renderer = create(createElement(Harness))
     })
-    expect(renderer!.root.findByType('CapabilityResult').props.supported).toBe(false)
+    expect(findByHostType(renderer!.root, 'CapabilityResult').props.supported).toBe(false)
 
     act(() => publish?.([MOBILE_CODEX_RESET_CREDIT_CAPABILITY]))
-    expect(renderer!.root.findByType('CapabilityResult').props.supported).toBe(true)
+    expect(findByHostType(renderer!.root, 'CapabilityResult').props.supported).toBe(true)
 
     act(() => renderer!.unmount())
     expect(cancel).toHaveBeenCalledOnce()

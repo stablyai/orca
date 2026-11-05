@@ -1,14 +1,4 @@
-/**
- * Running node.exe on a Windows orcad host straight from the SSH exec, with plain argv.
- *
- * sshd hands the command to its DefaultShell, cmd.exe on a stock install or PowerShell when an
- * admin sets it, and Orca does not probe which. So the line is built from the subset both parse
- * the same way: an unquoted executable path, then arguments that are bare or double-quoted and
- * contain nothing either shell expands (`%`, `$`, backtick, `"`). When the executable path
- * itself needs quoting (a profile with a space), the line falls back to one unencoded
- * `powershell.exe -Command`, which both shells pass through intact. Anything else is refused
- * rather than encoded (docs/reference/windows-edr-posture.md).
- */
+// SSH DefaultShell may be cmd.exe or PowerShell; commands must parse identically in both.
 import { currentOrcadFence } from '../activation/orcad-activation-fence-scope'
 import { ORCAD_WINDOWS_FENCE_ARG } from '../host-state/orcad-windows-host-fence-ops'
 import {
@@ -41,7 +31,7 @@ import {
 const BARE_EXECUTABLE = /^[A-Za-z]:\\[A-Za-z0-9._+~\\-]*$/u
 // Leading digits are quoted: PowerShell would read `1e5` as a number and pass `100000`.
 const BARE_ARGUMENT = /^[A-Za-z-][A-Za-z0-9._:+=/\\-]*$/u
-// Expanded by cmd.exe (`%`) or PowerShell (`$`, backtick, typographic quotes) inside "..."
+// cmd.exe expands %; PowerShell expands $, backticks and typographic quotes inside double quotes.
 const UNQUOTABLE = /["%$`\r\n\u201C\u201D\u201E\u2018\u2019\u201A\u201B]/u
 
 export class OrcadWindowsCommandLineError extends Error {
@@ -70,7 +60,6 @@ function quotedArgument(value: string): string {
   return `"${value}"`
 }
 
-/** One node.exe invocation that parses identically under cmd.exe and PowerShell. */
 export function orcadWindowsNodeCommandLine(executable: string, args: readonly string[]): string {
   const program = windowsPath(executable)
   const argv = args.map(quotedArgument)
@@ -87,17 +76,14 @@ export function orcadWindowsNodeCommandLine(executable: string, args: readonly s
   return `powershell.exe -NoProfile -NonInteractive -Command "${inner}"`
 }
 
-/** `~/.orca-remote` from the remote home. */
 export function orcadRemoteBaseDir(host: RemoteHostPlatform, remoteHome: string): string {
   return joinRemotePath(host, remoteHome, RELAY_REMOTE_DIR)
 }
 
-/** `~/.orca-remote`, the parent of every slot and of the runtime store. */
 export function orcadWindowsBaseDir(host: RemoteHostPlatform, slotDir: string): string {
   return remoteDirname(slotDir.replace(/\/+$/u, ''), host)
 }
 
-/** This client's pinned node.exe in the runtime store; deterministic from the host's arch. */
 export function orcadWindowsPinnedNodePath(host: RemoteHostPlatform, baseDir: string): string {
   const target: NodeRuntimeTarget = host.arch === 'arm64' ? 'win32-arm64' : 'win32-x64'
   return joinRemotePath(
@@ -113,14 +99,12 @@ function orcadWindowsHostScriptPath(host: RemoteHostPlatform, baseDir: string): 
   return joinRemotePath(host, baseDir, ORCAD_WINDOWS_HOST_SCRIPT_FILENAME)
 }
 
-/** `node.exe <host script> <op> <args>`, run by this client's pinned runtime. */
 export function orcadWindowsHostOpCommand(
   host: RemoteHostPlatform,
   baseDir: string,
   op: OrcadWindowsHostOp,
   args: readonly string[]
 ): string {
-  // Under a held fence, the host script checks it still owns it before running the op.
   const fence = currentOrcadFence()
   return orcadWindowsNodeCommandLine(orcadWindowsPinnedNodePath(host, baseDir), [
     orcadWindowsHostScriptPath(host, baseDir),
@@ -148,14 +132,9 @@ export function orcadWindowsHomeOpCommand(
   return orcadWindowsHostOpCommand(host, orcadRemoteBaseDir(host, remoteHome), op, args)
 }
 
-// Content-addressed paths this connection already saw on the host.
 const stagedHostScripts = new WeakMap<OrcadHostTransport, Set<string>>()
 
-/**
- * Stages the host script before any host op. The name is content-addressed, so it is written
- * only when missing, and through a partial file and a rename: a concurrent node.exe never reads
- * a truncated script.
- */
+/** Content-addressed scripts publish atomically so concurrent readers never see truncated code. */
 export async function installOrcadWindowsHostScript(
   target: { conn: OrcadHostTransport; host: RemoteHostPlatform; signal?: AbortSignal },
   baseDir: string
@@ -166,7 +145,7 @@ export async function installOrcadWindowsHostScript(
   if (staged.has(scriptPath)) {
     return
   }
-  // Both checks run a host-script op on the pinned node.exe, staged first: no inline code.
+  // Run staged host-script ops rather than inline code.
   const runOp = async (
     script: string,
     op: OrcadWindowsHostOp,
@@ -184,7 +163,6 @@ export async function installOrcadWindowsHostScript(
       if (isUnconfirmedSshCommandTermination(error)) {
         throw error
       }
-      // A missing script makes node.exe exit nonzero, which reads as "not present".
       return ''
     })
     return answer.trim().split(/\r?\n/u).at(-1) === ORCAD_WINDOWS_HOST_SCRIPT_PRESENT
@@ -202,7 +180,6 @@ export async function installOrcadWindowsHostScript(
   staged.add(scriptPath)
 }
 
-/** The decoded payload after `marker`, or null when the host printed no such line. */
 export function readOrcadWindowsEncodedAnswer(output: string, marker: string): string | null {
   const line = output
     .split(/\r?\n/u)

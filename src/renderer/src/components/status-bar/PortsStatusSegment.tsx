@@ -3,14 +3,17 @@ import { Plug, ChevronDown, ChevronRight, LoaderCircle } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
-import { refreshWorkspacePortScanForTarget } from '@/lib/workspace-port-scan-refresh'
+import { refreshWorkspacePortScanForTarget } from '@/lib/workspace-ports/workspace-port-scan-refresh'
 import { useWorktreeRuntimeTarget } from '@/runtime/use-worktree-runtime-target'
 import {
   getUnavailableWorkspacePortHosts,
   type WorkspacePortHostRef
-} from '@/lib/workspace-port-host-availability'
+} from '@/lib/workspace-ports/workspace-port-host-availability'
 import { getLocalExecutionHostLabel } from '../../../../shared/execution-host'
-import { getExternalWorkspacePorts, getWorkspacePortGroups } from '@/lib/workspace-port-groups'
+import {
+  getExternalWorkspacePorts,
+  getWorkspacePortGroups
+} from '@/lib/workspace-ports/workspace-port-groups'
 import { SelectedTextCopyMenu } from '@/components/SelectedTextCopyMenu'
 import { STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS } from './status-bar-context-menu-policy'
 import { PortRow, WorkspaceGroupRows } from './ports-status-popover-rows'
@@ -21,7 +24,6 @@ type PortsStatusSegmentProps = {
   iconOnly: boolean
 }
 
-/** Status-bar plug icon with the workspace port count and a per-host ports popover. */
 export function PortsStatusSegment({ iconOnly }: PortsStatusSegmentProps): React.JSX.Element {
   const scan = useAppStore((s) => s.workspacePortScan?.result ?? null)
   const refreshing = useAppStore((s) => s.workspacePortScanRefreshing)
@@ -40,8 +42,7 @@ export function PortsStatusSegment({ iconOnly }: PortsStatusSegmentProps): React
   const hostLabel = useCallback(
     (host: WorkspacePortHostRef, hostScanKey: string, platform: NodeJS.Platform | null) => {
       if (host.kind === 'local') {
-        // Why: a paired web client's own userAgent is not the Orca host's
-        // platform, so name the machine the scan actually ran on.
+        // Name the scanned host’s OS, not the paired web client’s userAgent.
         return getLocalExecutionHostLabel(platform)
       }
       if (host.kind === 'unknown') {
@@ -69,10 +70,7 @@ export function PortsStatusSegment({ iconOnly }: PortsStatusSegmentProps): React
       ? [{ id: 'projection', host: scan.platform, reason: scan.unavailableReason }]
       : []
   }, [hostLabel, scan?.platform, scan?.unavailableReason, unavailableHosts])
-  // Why: a failed scan keeps the host's last-good ports, and those ports are
-  // counted in the badge and header — replacing the list with the notice would
-  // leave the popover claiming N ports over an empty body. Only take over the
-  // body when there is genuinely nothing left to list.
+  // Only replace an empty list with failure copy; retained last-good ports must remain visible beside their counts.
   const noticeReplacesList = Boolean(scan?.unavailableReason) && totalCount === 0
   const handleOpenChange = useCallback(
     (nextOpen: boolean) => {
@@ -84,8 +82,7 @@ export function PortsStatusSegment({ iconOnly }: PortsStatusSegmentProps): React
       if (!runtimeTarget) {
         return
       }
-      // Why: the 30s background poll is intentionally quiet; opening the
-      // popover should still collapse that stale window without flashing icons.
+      // Refresh on open to close the quiet 30-second poll window without flashing icons.
       void refreshWorkspacePortScanForTarget({
         runtimeTarget,
         replaceWorkspacePortScans,
@@ -105,9 +102,9 @@ export function PortsStatusSegment({ iconOnly }: PortsStatusSegmentProps): React
               {...STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS}
               className="inline-flex cursor-pointer items-center gap-1.5 rounded px-1 py-0.5 hover:bg-accent/70"
               aria-label={translate(
-                'auto.components.status.bar.PortsStatusSegment.b8bc3e420a',
-                'Ports, {{value0}} workspace {{value1}}',
-                { value0: workspacePortCount, value1: workspacePortCount === 1 ? 'port' : 'ports' }
+                'auto.components.status.bar.PortsStatusSegment.portsAria',
+                'Ports, {{count}} workspace ports',
+                { count: workspacePortCount, defaultValue_one: 'Ports, {{count}} workspace port' }
               )}
             >
               {refreshing ? (
@@ -129,25 +126,21 @@ export function PortsStatusSegment({ iconOnly }: PortsStatusSegmentProps): React
           </PopoverTrigger>
         </TooltipTrigger>
         <TooltipContent side="top" sideOffset={6}>
-          {translate(
-            'auto.components.status.bar.PortsStatusSegment.ca41be2802',
-            'Ports — {{value0}} workspace {{value1}}{{value2}}',
-            {
-              value0: workspacePortCount,
-              value1:
-                workspacePortCount === 1
-                  ? translate('auto.components.status.bar.PortsStatusSegment.45834a9ace', 'port')
-                  : translate('auto.components.status.bar.PortsStatusSegment.8caaa86e9a', 'ports'),
-              value2:
-                externalPorts.length > 0
-                  ? translate(
-                      'auto.components.status.bar.PortsStatusSegment.a8e4bdb412',
-                      ' · {{value0}} external',
-                      { value0: externalPorts.length }
-                    )
-                  : ''
-            }
-          )}
+          {externalPorts.length > 0
+            ? translate(
+                'auto.components.status.bar.PortsStatusSegment.portsTooltipWithExternal',
+                'Ports — {{count}} workspace ports · {{externalCount}} external',
+                {
+                  count: workspacePortCount,
+                  externalCount: externalPorts.length,
+                  defaultValue_one: 'Ports — {{count}} workspace port · {{externalCount}} external'
+                }
+              )
+            : translate(
+                'auto.components.status.bar.PortsStatusSegment.portsTooltip',
+                'Ports — {{count}} workspace ports',
+                { count: workspacePortCount, defaultValue_one: 'Ports — {{count}} workspace port' }
+              )}
         </TooltipContent>
       </Tooltip>
 

@@ -1,9 +1,10 @@
+import type * as WorktreeScanCacheModule from '../git/worktrees/catalog/worktree-scan-cache'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { resolve } from 'node:path'
 import {
   registerWorktreeRootsForRepo,
   resolveRegisteredWorktreePath
-} from './registered-worktree-roots-cache'
+} from './worktrees/removal/registered-worktree-roots-cache'
 import {
   listWorktreesMock,
   removeWorktreeMock,
@@ -19,18 +20,80 @@ import type { WorktreeRuntimeStub } from './worktrees-test-runtime-stub'
 import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
 import { hostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 
+vi.mock('../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => {
+  return {
+    ...(await importOriginal<typeof WorktreeScanCacheModule>()),
+    listWorktrees: (await import('./worktrees-test-module-mocks')).listWorktreesMock,
+    listWorktreesSharedStrictAllowingTrueEmpty: (await import('./worktrees-test-module-mocks'))
+      .listWorktreesMock,
+    listWorktreesSharedStrict: (await import('./worktrees-test-module-mocks')).listWorktreesMock
+  }
+})
+
 vi.mock('electron', async () =>
   (await import('./worktrees-test-module-mocks')).electronModuleMock()
 )
-vi.mock('../git/worktree', async () =>
-  (await import('./worktrees-test-module-mocks')).gitWorktreeModuleMock()
-)
-vi.mock('../git/runner', async () =>
-  (await import('./worktrees-test-module-mocks')).gitRunnerModuleMock()
-)
+vi.mock('../../shared/git/worktrees/git-worktree-porcelain-parser', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  parseWorktreeList: (await import('./worktrees-test-module-mocks')).parseWorktreeListMock
+}))
+
+vi.mock('../git/worktrees/removal/worktree-removal-preflight', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  assertWorktreeCleanForRemoval: (await import('./worktrees-test-module-mocks'))
+    .assertWorktreeCleanForRemovalMock
+}))
+
+vi.mock('../git/worktrees/creation/worktree-add', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  addWorktree: (await import('./worktrees-test-module-mocks')).addWorktreeMock
+}))
+
+vi.mock('../git/worktrees/creation/worktree-sparse-add', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  addSparseWorktree: (await import('./worktrees-test-module-mocks')).addSparseWorktreeMock
+}))
+
+vi.mock('../git/worktrees/removal/worktree-removal', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  removeWorktree: (await import('./worktrees-test-module-mocks')).removeWorktreeMock
+}))
+
+vi.mock('../git/worktrees/removal/worktree-branch-removal', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  forceDeleteLocalBranch: (await import('./worktrees-test-module-mocks')).forceDeleteLocalBranchMock
+}))
+vi.mock('../git/worktrees/catalog/worktree-listing', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  listWorktreesStrict: (await import('./worktrees-test-module-mocks')).listWorktreesMock,
+  describeCreatedWorktree: (await import('./worktrees-test-module-mocks'))
+    .describeCreatedWorktreeMock
+}))
+const { getWorktreeRunnerMocks } = vi.hoisted(() => {
+  function createWorktreeRunnerMocks() {
+    return (async () => (await import('./worktrees-test-module-mocks')).gitRunnerModuleMock())()
+  }
+  let runner: ReturnType<typeof createWorktreeRunnerMocks> | undefined
+  return { getWorktreeRunnerMocks: () => (runner ??= createWorktreeRunnerMocks()) }
+})
+
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  gitExecFileAsync: (await getWorktreeRunnerMocks()).gitExecFileAsync
+}))
+
+vi.mock('../git/command-runner/git-exec-file-sync', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  gitExecFileSync: (await getWorktreeRunnerMocks()).gitExecFileSync
+}))
 vi.mock('../git/repo', async () =>
   (await import('./worktrees-test-module-mocks')).gitRepoModuleMock()
 )
+
+vi.mock('../git/repo-default-base-ref', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  getBaseRefDefault: (await import('./worktrees-test-module-mocks')).getBaseRefDefaultMock
+}))
 vi.mock('../git/git-username', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   resolveLocalGitUsername: (await import('./worktrees-test-module-mocks'))
@@ -39,29 +102,40 @@ vi.mock('../git/git-username', async (importOriginal) => ({
 vi.mock('../github/client', async () =>
   (await import('./worktrees-test-module-mocks')).githubClientModuleMock()
 )
+vi.mock('../github/client/lookup/get-pr-for-branch', async () =>
+  (await import('./worktrees-test-module-mocks')).githubClientModuleMock()
+)
 vi.mock('../source-control/hosted-review', async () =>
   (await import('./worktrees-test-module-mocks')).hostedReviewModuleMock()
 )
 vi.mock('./worktree-symlinks', async () =>
   (await import('./worktrees-test-module-mocks')).worktreeSymlinksModuleMock()
 )
-vi.mock('../hooks', async () => (await import('./worktrees-test-module-mocks')).hooksModuleMock())
-vi.mock('../setup-runner-script-text', async (importOriginal) =>
+
+vi.mock('../git/worktrees/content-paths/worktree-symlink-detection', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  findExistingWorktreeSymlinkPaths: (await import('./worktrees-test-module-mocks'))
+    .findExistingWorktreeSymlinkPathsMock
+}))
+vi.mock('../workspace-hooks/hooks', async () =>
+  (await import('./worktrees-test-module-mocks')).hooksModuleMock()
+)
+vi.mock('../workspace-hooks/setup-runner-script-text', async (importOriginal) =>
   (await import('./worktrees-test-module-mocks')).setupRunnerScriptTextModuleMock(
     (await importOriginal()) as Record<string, unknown>
   )
 )
-vi.mock('../worktree-runner-script', async (importOriginal) =>
+vi.mock('../workspace-hooks/worktree-runner-script', async (importOriginal) =>
   (await import('./worktrees-test-module-mocks')).worktreeRunnerScriptModuleMock(
     (await importOriginal()) as Record<string, unknown>
   )
 )
-vi.mock('../effective-hook-config', async (importOriginal) =>
+vi.mock('../workspace-hooks/effective-hook-config', async (importOriginal) =>
   (await import('./worktrees-test-module-mocks')).effectiveHookConfigModuleMock(
     (await importOriginal()) as Record<string, unknown>
   )
 )
-vi.mock('../setup-hook-env-vars', async (importOriginal) =>
+vi.mock('../workspace-hooks/setup-hook-env-vars', async (importOriginal) =>
   (await import('./worktrees-test-module-mocks')).setupHookEnvVarsModuleMock(
     (await importOriginal()) as Record<string, unknown>
   )
@@ -71,22 +145,22 @@ vi.mock('./worktree-logic', async (importOriginal) =>
     (await importOriginal()) as Record<string, unknown>
   )
 )
-vi.mock('../terminal-history-deletion', async () =>
+vi.mock('../pty/history/terminal-history-deletion', async () =>
   (await import('./worktrees-test-module-mocks')).terminalHistoryDeletionModuleMock()
 )
 vi.mock('../ports/advertised-url-watcher', async () =>
   (await import('./worktrees-test-module-mocks')).advertisedUrlWatcherModuleMock()
 )
-vi.mock('../workspace-cleanup-scan-snapshot', async () =>
+vi.mock('../workspaces/cleanup/workspace-cleanup-scan-snapshot', async () =>
   (await import('./worktrees-test-module-mocks')).workspaceCleanupScanSnapshotModuleMock()
 )
-vi.mock('../workspace-space-analysis-snapshot', async () =>
+vi.mock('../workspaces/space-analysis/workspace-space-analysis-snapshot', async () =>
   (await import('./worktrees-test-module-mocks')).workspaceSpaceAnalysisSnapshotModuleMock()
 )
-vi.mock('../workspace-cleanup-removal-snapshot-prune', async () =>
+vi.mock('../workspaces/cleanup/workspace-cleanup-removal-snapshot-prune', async () =>
   (await import('./worktrees-test-module-mocks')).workspaceCleanupRemovalSnapshotPruneModuleMock()
 )
-vi.mock('../runtime/worktree-teardown', async () =>
+vi.mock('../runtime/workspaces/removal/worktree-teardown', async () =>
   (await import('./worktrees-test-module-mocks')).worktreeTeardownModuleMock()
 )
 vi.mock('./pty/provider/registry', async () =>
@@ -125,7 +199,7 @@ describe('registerWorktreeHandlers', () => {
       expect(result).toEqual({})
       expect(killAllProcessesForWorktreeMock).toHaveBeenCalledWith(worktreeId, {
         runtime: runtimeStub,
-        // Without the exact id the sweep resolves a selector that no longer exists and stops nothing.
+        // The selector no longer exists, so teardown needs its exact ID.
         resolvedWorktreeId: worktreeId,
         resolvedConnectionId: 'ssh-dead',
         localProvider: ptyProvider,
@@ -135,7 +209,7 @@ describe('registerWorktreeHandlers', () => {
         includeLocalRegistry: false
       })
       expect(runtimeStub.clearOptimisticReconcileToken).toHaveBeenCalledWith(worktreeId)
-      // The purge must be scoped to the same owner the sweep used, or the ssh:* partition keeps this worktree's session state.
+      // Purge the swept host partition; otherwise remote session state survives.
       expect(store.removeWorktreeMeta).toHaveBeenCalledWith(
         hostWorktreeTarget({ id: worktreeId, hostId: 'ssh:ssh-dead' })
       )
@@ -169,7 +243,6 @@ describe('registerWorktreeHandlers', () => {
     it('forgets an ownerless workspace after its repo is already gone', async () => {
       const worktreeId = 'repo-gone::/workspace/feature-wt'
       const worktreePath = '/workspace/feature-wt'
-      // Seed authorized roots while the owning repo still exists, then let it disappear.
       store.getRepos.mockReturnValue([
         {
           id: 'repo-gone',
@@ -193,7 +266,6 @@ describe('registerWorktreeHandlers', () => {
         })
       ).resolves.toEqual({})
 
-      // The whole point: a forgotten workspace must not stay filesystem-authorized via cached roots.
       await expect(resolveRegisteredWorktreePath(worktreePath, store as never)).rejects.toThrow(
         'Access denied: unknown repository or worktree path'
       )
@@ -221,13 +293,11 @@ describe('registerWorktreeHandlers', () => {
       const worktreeId = 'repo-ssh::/workspace/feature-wt'
       store.getRepos.mockReturnValue([repo])
       store.getRepo.mockReturnValue(repo)
-      // The orphan case forget-local exists for: the meta row is lost, so only the repo still records ownership.
       store.getWorktreeMeta.mockReturnValue(undefined)
       getLocalPtyProviderMock.mockReturnValue({} as never)
 
       await expect(handlers['worktrees:forgetLocal'](null, { worktreeId })).resolves.toEqual({})
 
-      // Without the resolved owner the purge resolves to [local] only and ssh:ssh-live keeps tabsByWorktree et al. forever.
       expect(store.removeWorktreeMeta).toHaveBeenCalledWith(
         hostWorktreeTarget({ id: worktreeId, hostId: 'ssh:ssh-live' })
       )
@@ -333,7 +403,6 @@ describe('worktree execution-host disambiguation', () => {
     setupWorktreeHandlers()
   })
 
-  // Why the refusal: this process stops no SSH terminals, so reaching it proves the SSH row was chosen.
   it('routes to the workspace host when duplicate repo ids exist across local and SSH', async () => {
     const localRepo = {
       id: 'repo-shared',
@@ -352,7 +421,6 @@ describe('worktree execution-host disambiguation', () => {
     store.getRepo.mockReturnValue(localRepo)
     store.getRepos.mockReturnValue([localRepo, sshRepo])
 
-    // The SSH owner is selected, so the delete refuses as not served rather than running here.
     await expect(
       handlers['worktrees:remove'](null, {
         worktreeId: 'repo-shared::/remote/feature-wt',
@@ -365,9 +433,7 @@ describe('worktree execution-host disambiguation', () => {
   })
 
   it('refuses a row whose execution host and connection id name different machines', async () => {
-    // #11163: everything below the handler picks the filesystem from `repo.connectionId` while the
-    // prune, the archive-hook route and the home guard come from the resolved execution host. This
-    // row would have listed a remote checkout on this client and deleted a same-named local path.
+    // Contradictory routing and guard ownership could delete a remote path on this client (#11163).
     const brokenRepo = {
       id: 'repo-host-only',
       path: '/remote/repo',
@@ -418,9 +484,7 @@ describe('worktree execution-host disambiguation', () => {
   })
 
   it('refuses a row owned by a runtime environment this process does not execute', async () => {
-    // `runtime:<env>` deletes on that environment's own server. Its repo row looks local here —
-    // `connectionId` is null — so a host id that fell back to "local" would delete a same-named
-    // path on this client.
+    // Runtime rows can have null connectionId; treating them as local risks deleting a same-named client path.
     const runtimeRepo = {
       id: 'repo-runtime-owned',
       path: '/env/repo',
@@ -445,8 +509,7 @@ describe('worktree execution-host disambiguation', () => {
   })
 
   it('accepts a row whose two spellings differ only by percent-escaping', async () => {
-    // `getRepoExecutionHostId` returns the stored text while the connection id is re-encoded, so a
-    // byte compare would refuse this consistent row over a `%20`.
+    // Compare decoded host names so equivalent percent-escapes cannot cause false refusals.
     const repo = {
       id: 'repo-escaped',
       path: '/remote/repo',
@@ -459,7 +522,6 @@ describe('worktree execution-host disambiguation', () => {
     store.getRepo.mockReturnValue(repo)
     store.getRepos.mockReturnValue([repo])
 
-    // Past the spelling check, the host is refused only because it is not served here.
     await expect(
       handlers['worktrees:remove'](null, {
         worktreeId: 'repo-escaped::/remote/feature-wt'
@@ -502,7 +564,6 @@ describe('worktree execution-host disambiguation', () => {
     }
     store.getRepos.mockReturnValue([localRepo, sshRepo])
 
-    // Why: this process serves no SSH filesystem, so the SSH host answers error, never local hooks.
     await expect(
       handlers['hooks:check'](null, {
         repoId: 'repo-shared',
@@ -553,7 +614,6 @@ describe('worktree execution-host disambiguation', () => {
     store.getRepos.mockReturnValue([localRepo, sshRepo])
     store.getRepo.mockReturnValue(localRepo)
 
-    // Why: this process serves no SSH filesystem, so the SSH host offers no imports.
     await expect(
       handlers['hooks:inspectSetupScriptImports'](null, {
         repoId: 'repo-shared',
@@ -601,8 +661,7 @@ describe('worktree execution-host disambiguation', () => {
     await expect(first).resolves.toEqual({})
   })
 
-  // The repos are gone (host removed), so only the single global meta key is left to
-  // key on — and it names one host. It must not merge two hosts' forgets into one.
+  // Global metadata may name only one host; explicit host forgets must still remain separate.
   it('does not let stale metadata coalesce an explicit host forget onto another host', async () => {
     const worktreeId = 'repo-gone::/same/path'
     store.getRepos.mockReturnValue([])

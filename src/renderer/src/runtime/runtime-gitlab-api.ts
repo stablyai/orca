@@ -1,9 +1,9 @@
 import type { PreloadApi } from '../../../preload/api-types'
 import {
   GITLAB_READY_FOR_REVIEW_RUNTIME_CAPABILITY,
-  GITLAB_READY_FOR_REVIEW_UPDATE_REQUIRED_MESSAGE,
-  type RuntimeCapability
-} from '../../../shared/protocol-version'
+  GITLAB_READY_FOR_REVIEW_UPDATE_REQUIRED_MESSAGE
+} from '../../../shared/source-control/runtime/source-control-runtime-capabilities'
+import type { RuntimeCapability } from '../../../shared/protocol-version'
 import {
   GITLAB_WEB_RPC_METHODS,
   type WebGitLabRuntimeMethod
@@ -60,7 +60,8 @@ export function createRuntimeGitLabApi(transport: RuntimeGitLabTransport): GitLa
       }),
     todos: (args) => route<GitLabApiResult<'todos'>>(GITLAB_WEB_RPC_METHODS.todos, args),
     // Why: the owner guard names a host as this client sees it; the server resolves the repo itself.
-    workItemDetails: ({ repoOwnerExecutionHostId: _owner, ...args }) =>
+    // A remote host gates its own polls; `background` is a local IPC hint only.
+    workItemDetails: ({ repoOwnerExecutionHostId: _owner, background: _background, ...args }) =>
       route<GitLabApiResult<'workItemDetails'>>(GITLAB_WEB_RPC_METHODS.workItemDetails, args),
     closeMR: (args) =>
       route<GitLabApiResult<'closeMR'>>(GITLAB_WEB_RPC_METHODS.closeMR, {

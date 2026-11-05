@@ -2,7 +2,10 @@
 import { act, StrictMode, useEffect } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
+import type {
+  TerminalLayoutSnapshot,
+  TerminalTab
+} from '../../../../shared/workspace-layout/terminal-tab-types'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -323,8 +326,7 @@ describe('parked terminal watcher synchronization key semantics', () => {
     expect(harness.syncCalls).toBe(1)
   })
 
-  // Why: a key that stopped covering one of these would strand a parked pane
-  // that never reconciles.
+  // Every reconciliation input must invalidate the key or parked panes can remain stranded.
   it.each([
     ['pty ids', () => useAppStore.setState({ ptyIdsByTabId: { [TAB_ID]: [FIRST_PTY_ID] } })],
     [
@@ -400,8 +402,7 @@ describe('parked terminal watcher synchronization key semantics', () => {
     expect(harness.syncCalls).toBe(4)
   })
 
-  // Why: fragments are concatenated, so a scheme that let one field borrow a
-  // character from its neighbour would collide and skip a synchronization.
+  // Length-prefix fragments so neighboring fields cannot collide and skip synchronization.
   it('keeps adjacent key fragments from borrowing each other characters', () => {
     renderHarness({ inputsKey: 'ab', assignmentsKey: 'c' })
     expect(harness.syncCalls).toBe(1)

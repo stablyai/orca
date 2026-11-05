@@ -16,13 +16,7 @@ export function sshTargetLabelsEqual(
   return targets.every((target) => labels.get(target.id) === target.label)
 }
 
-/**
- * Registration generations by target ID, dropping any the sanitizer rejects.
- *
- * An absent generation is left absent rather than defaulted: only a generation
- * makes a target fenceable, and a guessed one would fence an automation against
- * a registration that never existed.
- */
+/** Keep only sanitized registration generations; never guess absent values, which would fence against a nonexistent registration. */
 export function collectSshTargetGenerations(targets: SshTargetSummary[]): Map<string, number> {
   const generations = new Map<string, number>()
   for (const target of targets) {
@@ -70,11 +64,7 @@ function isSshTargetSessionId(sessionId: string, targetId: string): boolean {
   return parseAppSshPtyId(sessionId)?.connectionId === targetId
 }
 
-// Why: a per-tab session map entry belongs to the removed target if the tab is
-// one of the target's, or the session id is an SSH pty id scoped to it. Shared
-// by the deferred-session and pending-reconnect cleanups so both drop the same
-// dead entries (an uncleared entry would keep a dead tab alive in the orphan
-// sweep, which now reads these maps as liveness — #9911).
+// Match removed target by tab ownership or SSH PTY ID; reconnect maps count as liveness and must not pin dead tabs (#9911).
 function isRemovedSshTargetTabSession(
   tabId: string,
   sessionId: string,
@@ -200,9 +190,7 @@ export function buildRemovedSshTargetCleanupPatch(
     'deferredSshSessionIdsByTabId',
     omitRemovedSshTargetTabSessions(state.deferredSshSessionIdsByTabId, targetId, targetTabIds)
   )
-  // Why: pending-reconnect holds each tab's pre-restart session until reconnect
-  // drains it; if the target is removed first the entry is dead but the orphan
-  // sweep now reads it as liveness, so clear it here too (#9911).
+  // Reconnect maps count as orphan-sweep liveness; removed targets must not leave dead tabs pinned (#9911).
   assign(
     'pendingReconnectPtyIdByTabId',
     omitRemovedSshTargetTabSessions(state.pendingReconnectPtyIdByTabId, targetId, targetTabIds)
@@ -220,11 +208,14 @@ export function buildRemovedSshTargetCleanupPatch(
     omitKey(state.transientClearedAgentStatusConnectionIds, targetId)
   )
   assign('portForwardsByConnection', omitKey(state.portForwardsByConnection, targetId))
+  assign(
+    'unrestoredPortForwardsByConnection',
+    omitKey(state.unrestoredPortForwardsByConnection, targetId)
+  )
   assign('detectedPortsByConnection', omitKey(state.detectedPortsByConnection, targetId))
   assign('sshConnectionStates', withoutMapKey(state.sshConnectionStates, targetId))
   assign('sshTargetLabels', withoutMapKey(state.sshTargetLabels, targetId))
-  // Why: a lingering generation would keep a deleted registration fenceable, and
-  // the id is reissued fresh on re-add, so the old value can never become right.
+  // Deleted registration generations cannot become valid again; re-add issues a fresh ID.
   assign('sshTargetGenerations', withoutMapKey(state.sshTargetGenerations, targetId))
   return Object.keys(patch).length > 0 ? patch : null
 }

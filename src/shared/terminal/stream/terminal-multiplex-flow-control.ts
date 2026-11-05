@@ -1,0 +1,18 @@
+export const TERMINAL_STREAM_CHUNK_BYTES = 48 * 1024
+export const TERMINAL_OUTPUT_BATCH_MAX_BYTES = 64 * 1024
+export const TERMINAL_MULTIPLEX_ACK_STREAM_INITIAL_WINDOW_BYTES = 512 * 1024
+export const TERMINAL_MULTIPLEX_ACK_STREAM_MAX_WINDOW_BYTES = 2 * 1024 * 1024
+export const TERMINAL_MULTIPLEX_ACK_TOTAL_INITIAL_WINDOW_BYTES = 2 * 1024 * 1024
+export const TERMINAL_MULTIPLEX_ACK_TOTAL_MAX_WINDOW_BYTES = 8 * 1024 * 1024
+export const TERMINAL_MULTIPLEX_PENDING_MAX_BYTES = 256 * 1024
+export const TERMINAL_MULTIPLEX_ACK_BATCH_BYTES = 192 * 1024
+export const TERMINAL_MULTIPLEX_ACK_FLUSH_MS = 4
+// History a recovery after lost output carries, so the client replaces its stale history instead of splicing it.
+export const TERMINAL_MULTIPLEX_RECOVERY_SCROLLBACK_ROWS = 1000
+// 128 covers large paired clients while fixed ACK windows and per-stream queues bound pressure.
+export const TERMINAL_MULTIPLEX_MAX_ACTIVE_STREAMS_PER_CONNECTION = 128
+export const TERMINAL_MULTIPLEX_MAX_PENDING_PTY_WAITS_PER_CONNECTION = 32
+// Queue above the running cap so restoring over 32 panes does not fail; bound the queue by the active-stream cap.
+export const TERMINAL_MULTIPLEX_MAX_QUEUED_PTY_WAITS_PER_CONNECTION =
+  TERMINAL_MULTIPLEX_MAX_ACTIVE_STREAMS_PER_CONNECTION
+export const TERMINAL_MULTIPLEX_STREAM_LIMIT_ERROR = 'terminal_stream_limit_exceeded'

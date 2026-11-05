@@ -1,11 +1,4 @@
-/**
- * Background writers (first-work renames, scan pruning, backfills) back off quietly from a project a
- * WSL move is taking, or one the WSL host now owns: no throw, no data change. They are all periodic
- * or event-driven, so they retry on their own once the move settles.
- *
- * Each check names the row's host: a move only takes local rows, and the same id on another host is
- * a different project. The row's own path stands in for the store when the journal is unreadable.
- */
+// Background writers retry naturally; quietly defer moving/moved local rows using host and path evidence.
 import { getRepoExecutionHostId } from '../../../shared/execution-host'
 import { splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
 import {
@@ -33,7 +26,6 @@ export function isWslMoveRepoBlocked(repo: WslMoveRepoRow): boolean {
   return isWslMoveProjectBlocked(repoStore(repo), { repoId: repo.id })
 }
 
-/** `moving` while a move is taking the repo, `owned` once the WSL host runs it, else null. */
 export function wslMoveRepoBackoff(repo: WslMoveRepoRow): 'moving' | 'owned' | null {
   if (!isWslMoveRepoBlocked(repo)) {
     return null
@@ -52,10 +44,7 @@ export function isWslMoveFolderWorkspaceBlocked(folder: WslMoveFolderWorkspaceRo
   return isWslMoveProjectBlocked(store, { folderWorkspaceId: folder.id })
 }
 
-/**
- * For a worktree known only by id and host, such as a resolved worktree or its metadata row.
- * A folder workspace key carries no path, so callers holding one pass its folder path.
- */
+/** Folder keys lack paths, so callers must supply the folder path for fallback checks. */
 export function isWslMoveWorktreeBlocked(
   worktreeId: string,
   hostId: string | null | undefined,

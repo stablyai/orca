@@ -5,8 +5,7 @@ type SkillFreshnessUpdateDialogRequest = { target?: BundledSkillTarget | null }
 let pendingOpen: SkillFreshnessUpdateDialogRequest | null = null
 const listeners = new Set<() => void>()
 
-// Why: the nudge action can fire before the dialog subscribes. Keeping the
-// request as an external snapshot prevents mount ordering from losing it.
+// Retain requests as an external snapshot so a nudge action cannot race dialog subscription.
 export function requestSkillFreshnessUpdateDialog(target?: BundledSkillTarget | null): void {
   pendingOpen = { target }
   for (const listener of listeners) {

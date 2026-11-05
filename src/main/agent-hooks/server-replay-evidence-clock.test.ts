@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentHookServer, _internals } from './server'
 import { createHookListenerState } from '../../shared/agent-hook-listener/listener-state'
-import { normalizeHookPayload } from '../../shared/agent-hook-listener'
+import { normalizeHookPayload } from '../../shared/agent-hook-listener/normalization/normalize-hook-payload'
 import type { EnrichedAgentHookEventPayload } from './server/server-types'
 import { buildBody, PANE } from './server.test-fixtures'
 
@@ -57,7 +57,6 @@ describe('the observation clock a relay replay must not restamp', () => {
     expect(lastForPane().evidenceObservedAt).toBe(T0)
 
     vi.setSystemTime(T0 + 25 * 60 * 1000)
-    // A lost transport clears the row; the age of the evidence it restates is not a claim.
     server.clearStatusEntriesForConnection(CONNECTION)
     ingest(
       server,
@@ -67,7 +66,7 @@ describe('the observation clock a relay replay must not restamp', () => {
 
     const replayed = lastForPane()
     expect(replayed.payload.state).toBe('working')
-    // Delivery order must still clear the connection watermark, or the renderer drops the row.
+    // Fresh delivery order clears the renderer connection watermark without refreshing evidence age.
     expect(replayed.receivedAt).toBeGreaterThan(T0 + 25 * 60 * 1000 - 1)
     expect(replayed.evidenceObservedAt).toBe(T0)
   })
@@ -82,7 +81,6 @@ describe('the observation clock a relay replay must not restamp', () => {
       { isReplay: true }
     )
 
-    // The fleet projection reads this snapshot, not the listener payload.
     const row = server.getStatusSnapshot().find((entry) => entry.paneKey === PANE)!
     expect(row.receivedAt).toBeGreaterThan(T0 + 25 * 60 * 1000 - 1)
     expect(row.evidenceObservedAt).toBe(T0)

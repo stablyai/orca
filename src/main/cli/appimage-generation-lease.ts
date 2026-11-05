@@ -1,13 +1,9 @@
-/**
- * Leases on extracted AppImage generations. A process running from a generation records its pid,
- * Linux start ticks and boot id under `<cache>/leases`, outside every deletable root, so a pruner
- * can prove the generation idle before deleting it. Pre-lease builds never read these files.
- */
+// Process identities in <cache>/leases survive payload deletion; pre-lease builds ignore them.
 import { randomUUID } from 'node:crypto'
 import { readFileSync, unlinkSync } from 'node:fs'
 import { lstat, mkdir, readdir, readFile, rename, unlink, writeFile } from 'node:fs/promises'
 import { basename, dirname, join, resolve } from 'node:path'
-import type { ProcessLivenessVerdict } from '../daemon/daemon-incarnation-evidence-types'
+import type { ProcessLivenessVerdict } from '../daemon/endpoint/identity/daemon-incarnation-evidence-types'
 import { parseLinuxStartTicks, readBootIdentity } from '../agent-hooks/managed-hook-owner-identity'
 import {
   resolveAppImageGenerationOfExecutable,
@@ -163,7 +159,6 @@ export async function inspectAppImageGenerationLeases(
     ) {
       return { status: 'live' }
     }
-    // The holder exited or its pid was recycled: the lease no longer protects anything.
     await unlink(leasePath).catch(() => {})
   }
   return verdict

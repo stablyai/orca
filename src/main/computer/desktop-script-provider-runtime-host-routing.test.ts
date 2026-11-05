@@ -60,8 +60,7 @@ describe('desktop script provider runtime host routing', () => {
     await expect(client.listApps()).resolves.toMatchObject({ apps: [{ pid: 42 }] })
     await client.listApps()
 
-    // The host is kept and asked again: it owns its own cooldown, so one bad
-    // spawn must not stand the session down to a powershell.exe per click.
+    // Retain the host so transient failures can recover after its cooldown.
     expect(request).toHaveBeenCalledTimes(2)
     expect(dispose).not.toHaveBeenCalled()
     expectDesktopProviderSubprocessStartCount(2)
@@ -112,8 +111,7 @@ describe('desktop script provider runtime host routing', () => {
   })
 
   it('never replays an operation whose own output merely mentions a policy error', async () => {
-    // Window titles and element names are user-controlled text that lands in
-    // stdout; matching them would double a click, a keystroke or a paste.
+    // Untrusted window titles and element names must never trigger an operation replay.
     mockBridgeProcessFailure({
       stdout: JSON.stringify({
         ok: true,

@@ -1,3 +1,5 @@
+import type * as GitExecFileModule from '../git/command-runner/git-exec-file'
+import type * as GhExecFileModule from '../git/command-runner/gh-exec-file'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as GithubApiRepositoryModule from './github-api-repository'
 import type * as GitHubEnterpriseRepositoryModule from './github-enterprise-repository'
@@ -9,6 +11,16 @@ const { clientMocks, moduleMocks } = await vi.hoisted(async () => {
 
 vi.mock('./gh-utils', () => moduleMocks.ghUtilsModuleMock(clientMocks))
 vi.mock('../git/runner', () => moduleMocks.gitRunnerModuleMock(clientMocks))
+
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<typeof GitExecFileModule>()),
+  gitExecFileAsync: clientMocks.gitExecFileAsyncMock
+}))
+
+vi.mock('../git/command-runner/gh-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<typeof GhExecFileModule>()),
+  ghExecFileAsync: clientMocks.ghExecFileAsyncMock
+}))
 vi.mock('./local-git-config-signature', () =>
   moduleMocks.localGitConfigSignatureModuleMock(clientMocks)
 )
@@ -82,7 +94,11 @@ describe('getPRForBranch', () => {
     expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
     expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
       1,
-      ['api', 'repos/acme/widgets/pulls?head=acme%3Afeature%2Ftest&state=all&per_page=1'],
+      [
+        'api',
+        'repos/acme/widgets/pulls?head=acme%3Afeature%2Ftest&state=all&per_page=10',
+        '--include'
+      ],
       { cwd: '/repo-root' }
     )
     expect(pr).toMatchObject({ number: 43, title: 'Hydrated branch PR wins' })
@@ -113,7 +129,11 @@ describe('getPRForBranch', () => {
 
     expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
       1,
-      ['api', 'repos/acme/widgets/pulls?head=acme%3Afeature%2Ftest&state=all&per_page=1'],
+      [
+        'api',
+        'repos/acme/widgets/pulls?head=acme%3Afeature%2Ftest&state=all&per_page=10',
+        '--include'
+      ],
       { cwd: '/repo-root' }
     )
     expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
@@ -125,7 +145,7 @@ describe('getPRForBranch', () => {
         '--repo',
         'acme/widgets',
         '--json',
-        'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable,reviewDecision,mergeStateStatus,autoMergeRequest,baseRefName,headRefName,baseRefOid,headRefOid,headRepositoryOwner,headRepository'
+        'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable,reviewDecision,mergeStateStatus,autoMergeRequest,baseRefName,headRefName,baseRefOid,headRefOid,headRepositoryOwner,headRepository,isCrossRepository'
       ],
       { cwd: '/repo-root' }
     )
@@ -159,15 +179,19 @@ describe('getPRForBranch', () => {
         '--state',
         'all',
         '--limit',
-        '1',
+        '10',
         '--json',
-        'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable,baseRefName,headRefName,baseRefOid,headRefOid,headRepositoryOwner,headRepository'
+        'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable,baseRefName,headRefName,baseRefOid,headRefOid,headRepositoryOwner,headRepository,isCrossRepository'
       ],
       { cwd: '/repo-root' }
     )
     expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
       2,
-      ['api', 'repos/stablyai/orca/pulls?head=stablyai%3Afeature%2Ftest&state=all&per_page=1'],
+      [
+        'api',
+        'repos/stablyai/orca/pulls?head=stablyai%3Afeature%2Ftest&state=all&per_page=10',
+        '--include'
+      ],
       { cwd: '/repo-root' }
     )
   })
@@ -193,7 +217,6 @@ describe('getPRForBranch', () => {
       throw new Error('expected upstream-error')
     }
     expect(outcome.errorType).toBe('rate_limited')
-    // ~120s cooldown surfaced as both the manual gate and the auto-retry time.
     expect(outcome.retryDisabledUntil).toBeDefined()
     expect(outcome.nextAutoRetryAt).toBe(outcome.retryDisabledUntil)
     expect(outcome.retryDisabledUntil ?? 0).toBeGreaterThanOrEqual(before + 119_000)
@@ -307,7 +330,7 @@ describe('getPRForBranch', () => {
         '--repo',
         'stablyai/orca',
         '--json',
-        'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable,reviewDecision,mergeStateStatus,autoMergeRequest,baseRefName,headRefName,baseRefOid,headRefOid,headRepositoryOwner,headRepository'
+        'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable,reviewDecision,mergeStateStatus,autoMergeRequest,baseRefName,headRefName,baseRefOid,headRefOid,headRepositoryOwner,headRepository,isCrossRepository'
       ],
       { cwd: '/repo-root' }
     )
@@ -378,9 +401,9 @@ describe('getPRForBranch', () => {
         '--state',
         'all',
         '--limit',
-        '1',
+        '10',
         '--json',
-        'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable,baseRefName,headRefName,baseRefOid,headRefOid,headRepositoryOwner,headRepository'
+        'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable,baseRefName,headRefName,baseRefOid,headRefOid,headRepositoryOwner,headRepository,isCrossRepository'
       ],
       { cwd: '/repo-root' }
     )
@@ -506,7 +529,7 @@ describe('getPRForBranch', () => {
         '--repo',
         'acme/widgets',
         '--json',
-        'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable,reviewDecision,mergeStateStatus,autoMergeRequest,baseRefName,headRefName,baseRefOid,headRefOid,headRepositoryOwner,headRepository'
+        'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable,reviewDecision,mergeStateStatus,autoMergeRequest,baseRefName,headRefName,baseRefOid,headRefOid,headRepositoryOwner,headRepository,isCrossRepository'
       ],
       { cwd: '/repo-root' }
     )

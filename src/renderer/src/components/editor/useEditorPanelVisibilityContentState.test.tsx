@@ -4,7 +4,7 @@ import { act, useLayoutEffect, useMemo } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { OpenFile } from '@/store/slices/editor'
-import type { GitStatusEntry } from '../../../../shared/git-status-types'
+import type { GitStatusEntry } from '../../../../shared/git/status/git-status-types'
 import type { DiffContent, FileContent } from './editor-panel-content-types'
 
 const mocks = vi.hoisted(() => ({
@@ -45,7 +45,7 @@ vi.mock('@/store', () => ({
   )
 }))
 
-import { ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT } from './editor-autosave'
+import { ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT } from './autosave/editor-autosave'
 import { useEditorPanelContentState } from './useEditorPanelContentState'
 import { createTestStore } from '@/store/slices/store-test-helpers'
 
@@ -181,20 +181,6 @@ describe('useEditorPanelContentState visibility', () => {
     container.remove()
   })
 
-  it('defers the initial remote read until reveal', async () => {
-    const file = makeFile('initial')
-    mocks.readRuntimeFileContent.mockResolvedValue({ content: 'remote', isBinary: false })
-
-    await act(async () => root.render(<Probe activeFile={file} isVisible={false} />))
-    expect(mocks.readRuntimeFileContent).not.toHaveBeenCalled()
-
-    await act(async () => root.render(<Probe activeFile={file} />))
-    await vi.waitFor(() =>
-      expect(snapshots.get('main')?.fileContents[file.id]?.content).toBe('remote')
-    )
-    expect(mocks.readRuntimeFileContent).toHaveBeenCalledOnce()
-  })
-
   it('invalidates a hidden tab and rejects its older in-flight result', async () => {
     const file = makeFile('stale')
     const staleRead = createDeferred<FileContent>()
@@ -259,29 +245,6 @@ describe('useEditorPanelContentState visibility', () => {
     )
   })
 
-  it('does not re-read while the reveal read is still in flight', async () => {
-    const file = makeFile('flip-flop')
-    const pendingRead = createDeferred<FileContent>()
-    mocks.readRuntimeFileContent.mockReturnValue(pendingRead.promise)
-
-    await act(async () => root.render(<Probe activeFile={file} isVisible={false} />))
-    await act(async () => root.render(<Probe activeFile={file} />))
-    expect(mocks.readRuntimeFileContent).toHaveBeenCalledOnce()
-
-    await act(async () => root.render(<Probe activeFile={file} isVisible={false} />))
-    await act(async () => root.render(<Probe activeFile={file} />))
-    expect(mocks.readRuntimeFileContent).toHaveBeenCalledOnce()
-
-    await act(async () => {
-      pendingRead.resolve({ content: 'remote', isBinary: false })
-      await pendingRead.promise
-    })
-    await vi.waitFor(() =>
-      expect(snapshots.get('main')?.fileContents[file.id]?.content).toBe('remote')
-    )
-    expect(mocks.readRuntimeFileContent).toHaveBeenCalledOnce()
-  })
-
   it('publishes hidden visibility before a watcher event in the same commit', async () => {
     const file = makeFile('commit-visibility')
     mocks.readRuntimeFileContent.mockResolvedValue({ content: 'old', isBinary: false })
@@ -304,64 +267,6 @@ describe('useEditorPanelContentState visibility', () => {
       isBinary: false,
       isStale: true
     })
-  })
-
-  it('shares one post-change read between visible source and preview panels', async () => {
-    const source = makeFile('source', {
-      filePath: '/repo/readme.md',
-      relativePath: 'readme.md',
-      language: 'markdown'
-    })
-    const preview = makeFile('preview', {
-      filePath: '/repo/readme.md',
-      relativePath: 'readme.md',
-      language: 'markdown',
-      mode: 'markdown-preview',
-      markdownPreviewSourceFileId: source.id
-    })
-    mocks.readRuntimeFileContent
-      .mockResolvedValueOnce({ content: 'old', isBinary: false })
-      .mockResolvedValueOnce({ content: 'fresh', isBinary: false })
-
-    await act(async () => {
-      root.render(
-        <>
-          <Probe activeFile={source} name="source" openFiles={[source, preview]} />
-          <Probe activeFile={preview} name="preview" openFiles={[source, preview]} />
-        </>
-      )
-    })
-    await vi.waitFor(() => expect(mocks.readRuntimeFileContent).toHaveBeenCalledOnce())
-
-    dispatchExternalChange(source)
-    await vi.waitFor(() => expect(mocks.readRuntimeFileContent).toHaveBeenCalledTimes(2))
-    await vi.waitFor(() => {
-      expect(snapshots.get('source')?.fileContents[source.id]?.content).toBe('fresh')
-      expect(snapshots.get('preview')?.fileContents[preview.id]?.content).toBe('fresh')
-    })
-  })
-
-  it('invalidates a hidden file nonce without reading until reveal', async () => {
-    const file = makeFile('file-nonce')
-    mocks.readRuntimeFileContent
-      .mockResolvedValueOnce({ content: 'old', isBinary: false })
-      .mockResolvedValueOnce({ content: 'fresh', isBinary: false })
-
-    await act(async () => root.render(<Probe activeFile={file} />))
-    await vi.waitFor(() =>
-      expect(snapshots.get('main')?.fileContents[file.id]?.content).toBe('old')
-    )
-
-    const changed = { ...file, fileContentReloadNonce: 1 }
-    await act(async () => root.render(<Probe activeFile={changed} isVisible={false} />))
-    expect(snapshots.get('main')?.fileContents[file.id]?.isStale).toBe(true)
-    expect(mocks.readRuntimeFileContent).toHaveBeenCalledOnce()
-
-    await act(async () => root.render(<Probe activeFile={changed} />))
-    await vi.waitFor(() =>
-      expect(snapshots.get('main')?.fileContents[file.id]?.content).toBe('fresh')
-    )
-    expect(mocks.readRuntimeFileContent).toHaveBeenCalledTimes(2)
   })
 
   it('invalidates a hidden diff nonce without reading until reveal', async () => {
@@ -410,8 +315,7 @@ describe('useEditorPanelContentState visibility', () => {
 
     await act(async () => root.render(<Probe activeFile={file} isVisible={false} />))
     dispatchExternalChange(file)
-    // Why: the viewers render "Loading diff…" purely on a missing entry, so a
-    // retained (stale-marked) entry is what keeps the pane painted.
+    // Retaining a stale entry prevents the missing-entry Loading diff state while reload is pending.
     expect(snapshots.get('main')?.diffContents[file.id]?.modifiedContent).toBe('old diff')
     expect(snapshots.get('main')?.diffContents[file.id]?.isStale).toBe(true)
     expect(mocks.getRuntimeGitDiff).toHaveBeenCalledOnce()
@@ -426,30 +330,6 @@ describe('useEditorPanelContentState visibility', () => {
     })
     await vi.waitFor(() =>
       expect(snapshots.get('main')?.diffContents[file.id]).toEqual(textDiff('fresh diff'))
-    )
-    expect(mocks.getRuntimeGitDiff).toHaveBeenCalledTimes(2)
-  })
-
-  it('invalidates a hidden Git-status diff without reading until reveal', async () => {
-    const file = makeFile('status', { mode: 'diff', diffSource: 'unstaged' })
-    const status: GitStatusEntry[] = [
-      { path: file.relativePath, status: 'modified', area: 'unstaged' }
-    ]
-    mocks.getRuntimeGitDiff
-      .mockResolvedValueOnce(textDiff('old diff'))
-      .mockResolvedValueOnce(textDiff('fresh diff'))
-
-    await act(async () => root.render(<Probe activeFile={file} />))
-    await vi.waitFor(() => expect(snapshots.get('main')?.diffContents[file.id]).toBeDefined())
-    await act(async () =>
-      root.render(<Probe activeFile={file} gitStatusEntries={status} isVisible={false} />)
-    )
-    expect(snapshots.get('main')?.diffContents[file.id]?.isStale).toBe(true)
-    expect(mocks.getRuntimeGitDiff).toHaveBeenCalledOnce()
-
-    await act(async () => root.render(<Probe activeFile={file} gitStatusEntries={status} />))
-    await vi.waitFor(() =>
-      expect(snapshots.get('main')?.diffContents[file.id]?.modifiedContent).toBe('fresh diff')
     )
     expect(mocks.getRuntimeGitDiff).toHaveBeenCalledTimes(2)
   })

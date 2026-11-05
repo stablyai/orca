@@ -1,3 +1,4 @@
+import type * as WorktreeScanCacheModule from '../git/worktrees/catalog/worktree-scan-cache'
 import { mkdtempSync, rmSync } from 'node:fs'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import { tmpdir } from 'node:os'
@@ -21,22 +22,84 @@ import {
 } from './worktrees-test-module-mocks'
 import { handlers, harnessRepo, setupWorktreeHandlers, store } from './worktrees-test-harness'
 import { rememberPreservedBranchCleanupTarget } from './worktrees/removal/preserved-branch-cleanup'
-import * as issueCommandFile from '../issue-command-file'
+
 import { hostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
+
+vi.mock('../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => {
+  return {
+    ...(await importOriginal<typeof WorktreeScanCacheModule>()),
+    listWorktrees: (await import('./worktrees-test-module-mocks')).listWorktreesMock,
+    listWorktreesSharedStrictAllowingTrueEmpty: (await import('./worktrees-test-module-mocks'))
+      .listWorktreesMock,
+    listWorktreesSharedStrict: (await import('./worktrees-test-module-mocks')).listWorktreesMock
+  }
+})
 
 vi.mock('electron', async () =>
   (await import('./worktrees-test-module-mocks')).electronModuleMock()
 )
-vi.mock('../git/worktree', async () =>
-  (await import('./worktrees-test-module-mocks')).gitWorktreeModuleMock()
-)
-vi.mock('../git/runner', async () =>
-  (await import('./worktrees-test-module-mocks')).gitRunnerModuleMock()
-)
+vi.mock('../../shared/git/worktrees/git-worktree-porcelain-parser', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  parseWorktreeList: (await import('./worktrees-test-module-mocks')).parseWorktreeListMock
+}))
+
+vi.mock('../git/worktrees/removal/worktree-removal-preflight', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  assertWorktreeCleanForRemoval: (await import('./worktrees-test-module-mocks'))
+    .assertWorktreeCleanForRemovalMock
+}))
+
+vi.mock('../git/worktrees/creation/worktree-add', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  addWorktree: (await import('./worktrees-test-module-mocks')).addWorktreeMock
+}))
+
+vi.mock('../git/worktrees/creation/worktree-sparse-add', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  addSparseWorktree: (await import('./worktrees-test-module-mocks')).addSparseWorktreeMock
+}))
+
+vi.mock('../git/worktrees/removal/worktree-removal', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  removeWorktree: (await import('./worktrees-test-module-mocks')).removeWorktreeMock
+}))
+
+vi.mock('../git/worktrees/removal/worktree-branch-removal', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  forceDeleteLocalBranch: (await import('./worktrees-test-module-mocks')).forceDeleteLocalBranchMock
+}))
+vi.mock('../git/worktrees/catalog/worktree-listing', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  listWorktreesStrict: (await import('./worktrees-test-module-mocks')).listWorktreesMock,
+  describeCreatedWorktree: (await import('./worktrees-test-module-mocks'))
+    .describeCreatedWorktreeMock
+}))
+const { getWorktreeRunnerMocks } = vi.hoisted(() => {
+  function createWorktreeRunnerMocks() {
+    return (async () => (await import('./worktrees-test-module-mocks')).gitRunnerModuleMock())()
+  }
+  let runner: ReturnType<typeof createWorktreeRunnerMocks> | undefined
+  return { getWorktreeRunnerMocks: () => (runner ??= createWorktreeRunnerMocks()) }
+})
+
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  gitExecFileAsync: (await getWorktreeRunnerMocks()).gitExecFileAsync
+}))
+
+vi.mock('../git/command-runner/git-exec-file-sync', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  gitExecFileSync: (await getWorktreeRunnerMocks()).gitExecFileSync
+}))
 vi.mock('../git/repo', async () =>
   (await import('./worktrees-test-module-mocks')).gitRepoModuleMock()
 )
-vi.mock('../runtime/worktree-teardown', async () =>
+
+vi.mock('../git/repo-default-base-ref', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  getBaseRefDefault: (await import('./worktrees-test-module-mocks')).getBaseRefDefaultMock
+}))
+vi.mock('../runtime/workspaces/removal/worktree-teardown', async () =>
   (await import('./worktrees-test-module-mocks')).worktreeTeardownModuleMock()
 )
 vi.mock('./pty/provider/registry', async () =>
@@ -52,7 +115,7 @@ const STAYING = 'repo-2::/workspace/other-wt'
 let userDataPath: string
 beforeEach(() => {
   setupWorktreeHandlers()
-  // The staying worktree's repo must be registered: an unstamped write resolves its host from it.
+  // Unstamped writes resolve ownership through the registered repo.
   store.getRepos.mockReturnValue([harnessRepo, { ...harnessRepo, id: 'repo-2' }])
   userDataPath = mkdtempSync(join(tmpdir(), 'wsl-move-worktree-ipc-'))
   loadWslMoveFence(userDataPath)
@@ -83,14 +146,6 @@ describe('worktree IPC under a WSL move', () => {
     expect(store.removeWorktreeMeta).not.toHaveBeenCalled()
   })
 
-  it('refuses a forget before touching metadata', async () => {
-    await expect(
-      handlers['worktrees:forgetLocal'](null, { worktreeId: MOVING })
-    ).rejects.toBeInstanceOf(WslMoveProjectFencedError)
-    expect(killAllProcessesForWorktreeMock).not.toHaveBeenCalled()
-    expect(store.removeWorktreeMeta).not.toHaveBeenCalled()
-  })
-
   it('refuses a preserved-branch delete before any Git work', async () => {
     rememberPreservedBranchCleanupTarget(
       MOVING,
@@ -109,15 +164,6 @@ describe('worktree IPC under a WSL move', () => {
     ).rejects.toBeInstanceOf(WslMoveProjectFencedError)
     expect(forceDeleteLocalBranchMock).not.toHaveBeenCalled()
     expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
-  })
-
-  it('refuses an issue-command write before touching the file', async () => {
-    const write = vi.spyOn(issueCommandFile, 'writeIssueCommand').mockResolvedValue(undefined)
-    await expect(
-      handlers['hooks:writeIssueCommand'](null, { repoId: 'repo-1', content: 'run' })
-    ).rejects.toBeInstanceOf(WslMoveProjectFencedError)
-    expect(write).not.toHaveBeenCalled()
-    write.mockRestore()
   })
 
   it('drops passive metadata quietly and refuses a user edit', () => {

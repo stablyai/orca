@@ -1,7 +1,4 @@
-/**
- * View-equals-state comparisons: each returns one line per difference between the runtime's
- * layout and what a view shows. Per-viewer state (selection, focus, sizes) is never compared.
- */
+// Compare runtime layout to each view, excluding viewer-owned selection, focus and sizes.
 
 import { isTerminalOwnerPartition } from '../../../src/shared/workspace-layout/terminal-owner-invariants'
 import type { LiveWorkspace } from './workspace-layout-oracle-feed'
@@ -141,7 +138,6 @@ export function compareDrawnToRuntime(
   return differences
 }
 
-/** What a paired client (session tabs) and the CLI (terminal list) are told for one worktree. */
 export function compareClientToRuntime(
   entries: readonly LiveWorkspace[],
   view: ClientView

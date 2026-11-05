@@ -6,12 +6,13 @@ import {
   ORCAD_MIGRATION_CATALOG_RUNTIME_CAPABILITY,
   ORCAD_MIGRATION_LOCAL_WSL_SOURCE_RUNTIME_CAPABILITY
 } from '../../shared/orcad-runtime-capabilities'
-import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../../shared/pairing'
+import { encodePairingOffer } from '../../shared/remote-runtime/pairing/pairing'
+import { PAIRING_OFFER_VERSION } from '../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import { computeOrcadMigrationManifestSha256 } from '../orcad/orcad-migration-manifest-digest'
 
 const sendRequest = vi.hoisted(() => vi.fn())
 const status = vi.hoisted((): { capabilities: string[] } => ({ capabilities: [] }))
-vi.mock('../../shared/remote-runtime-client', () => ({
+vi.mock('../../shared/remote-runtime/remote-runtime-client', () => ({
   sendRemoteRuntimeRequestWithStatusPreflight: async (
     pairing: unknown,
     method: string,
@@ -54,7 +55,7 @@ function sshManifest(): OrcadMigrationManifest {
   return { ...unsigned, manifestSha256: computeOrcadMigrationManifestSha256(unsigned) }
 }
 
-/** A WSL source, or any other `kind` as a newer or confused peer could put on the wire. */
+/** Include unknown wire kinds from newer or malformed peers. */
 function manifestOfKind(kind: string): OrcadMigrationManifest {
   const source: OrcadMigrationManifest['source'] = {
     kind: 'local-wsl',
@@ -78,7 +79,6 @@ const pairingCode = encodePairingOffer({
 beforeEach(() => {
   vi.clearAllMocks()
   sendRequest.mockResolvedValue({ ok: false, error: { code: 'x', message: 'sent' } })
-  // What an older destination advertises.
   status.capabilities = [ORCAD_MIGRATION_CATALOG_RUNTIME_CAPABILITY]
 })
 

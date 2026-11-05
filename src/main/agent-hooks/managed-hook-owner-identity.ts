@@ -90,7 +90,7 @@ async function readDurableHostToken(): Promise<string | undefined> {
     const draftPath = join(directory, `host-id-draft-${token}`)
     await writeFile(draftPath, token, { encoding: 'utf8', flag: 'wx', mode: 0o600 })
     try {
-      // Why: the hard link publishes a complete token atomically across relay processes.
+      // Publish a complete token atomically across relay processes.
       await link(draftPath, tokenPath).catch((error) => {
         if (!hasCode(error, 'EEXIST')) {
           throw error
@@ -111,8 +111,7 @@ async function readHostIdentity(): Promise<string> {
     return `host-token:${durableToken}`
   }
   if (process.platform === 'linux') {
-    // Why: an unverifiable host scope may acquire and release its own clean lock,
-    // but a later process gets a different identity and cannot steal its residue.
+    // A process-local identity can release its own lock but prevents later processes stealing its residue.
     return runtimeHostIdentity
   }
   if (process.platform === 'win32') {
@@ -255,8 +254,7 @@ async function readProcessIdentity(pid: number): Promise<string | null | undefin
       {
         encoding: 'utf8',
         timeout: 1_000,
-        // Why: lstart is locale-sensitive; a fixed locale keeps the identity
-        // stable across relay processes for the same remote account.
+        // Fix locale so relay processes compare stable lstart identities.
         env: { ...process.env, LC_ALL: 'C', LANG: 'C' }
       }
     )

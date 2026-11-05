@@ -1,9 +1,9 @@
 import type { GlobalSettings } from '../../../shared/global-settings-types'
-import { normalizeSourceControlAiSettings } from '../../../shared/source-control-ai'
+import { normalizeSourceControlAiSettings } from '../../../shared/source-control/ai/settings/source-control-ai-settings'
 import {
   DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES,
   SOURCE_CONTROL_TEXT_ACTION_IDS
-} from '../../../shared/source-control-ai-actions'
+} from '../../../shared/source-control/ai/recipes/source-control-ai-actions'
 
 export function retireLegacyInstructionsForClearedTextActionRecipes(
   sourceControlAi: GlobalSettings['sourceControlAi'],
@@ -37,7 +37,7 @@ export function retireLegacyInstructionsForClearedTextActionRecipes(
     if (instructionsByOperation?.[actionId] === '') {
       continue
     }
-    // Why: {basePrompt} is the explicit clear state; an empty instruction shadows rollback commitMessageAi.customPrompt on normalize/project.
+    // Empty overrides suppress legacy prompts; {basePrompt} explicitly clears customization.
     instructionsByOperation = { ...instructionsByOperation, [actionId]: '' }
     changed = true
   }

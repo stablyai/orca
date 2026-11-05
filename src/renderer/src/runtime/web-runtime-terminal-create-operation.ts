@@ -3,6 +3,7 @@ import { createAgentSessionKeyboardOptions } from './agent-session-keyboard-capa
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type { RuntimeMobileSessionCreateTerminalResult } from '../../../shared/runtime-types'
 import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
+import { agentProviderSessionForHostEnsure } from './agent-session-ensure-provider-session'
 import { translate } from '../i18n/i18n'
 import { useAppStore } from '../store'
 import { agentResumeHostAuthorityCapability } from './agent-resume-host-authority-capability'
@@ -20,7 +21,7 @@ import {
   recordWebSessionTerminalPlacement,
   webTerminalPlacementParentTabId
 } from './web-session-terminal-placement'
-import { toHostSessionTabId } from '../../../shared/terminal-surface-id'
+import { toHostSessionTabId } from '../../../shared/workspace-layout/terminal-surface-id'
 import {
   captureRuntimeEnvironmentCall,
   captureWebSessionIntentOwner,
@@ -45,6 +46,7 @@ import {
 } from './web-runtime-terminal-identity'
 import { settleWebRuntimeTerminalPlacement } from './web-runtime-terminal-placement-settlement'
 import { buildPlainCreateTerminalParams } from './web-runtime-plain-terminal-create-params'
+import { agentSessionCreateRequest } from './agent-session-create-request'
 
 export async function createWebRuntimeSessionTerminalResult(
   args: CreateWebRuntimeSessionTerminalArgs
@@ -85,15 +87,19 @@ export async function createWebRuntimeSessionTerminalResult(
   try {
     const agent = args.launchAgent ?? args.agent
     const agentArgsOverride =
-      args.agentArgs !== undefined ? args.agentArgs : args.launchConfig?.agentArgs
+      args.agentArgs !== undefined
+        ? args.agentArgs
+        : args.agentSessionKind === 'resume'
+          ? args.launchConfig?.agentArgs
+          : undefined
     if (agent) {
       // Paired panes retain the default keyboard advertisement, including on Windows clients.
       const keyboardProtocol = buildDefaultTerminalOptions().vtExtensions?.kittyKeyboard
       const keyboardOptions = createAgentSessionKeyboardOptions(keyboardProtocol)
       let legacyAlreadyPlacedInGroup = false
-      // Why: structured creation cannot yet express afterTabId; keep the exact legacy placement contract until it can.
-      // Why: focus belongs to the paired client; a headless execution host has no renderer to focus.
-      // Why: rebuilding a prepared command through host authority can discard its embedded prompt and delivery flags.
+      // Keep legacy placement until structured creation supports afterTabId.
+      // Focus belongs to this client; headless hosts have no renderer.
+      // Rebuilding prepared commands under host authority can discard prompts/delivery flags.
       const mustUseLegacyAgentCreate = args.preparedAgentCommand || args.afterTabId
       const hostAuthority = mustUseLegacyAgentCreate
         ? undefined
@@ -109,7 +115,10 @@ export async function createWebRuntimeSessionTerminalResult(
                         kind: 'explicit',
                         worktree: toRuntimeWorktreeSelector(args.worktreeId),
                         agent,
-                        providerSession: args.providerSession!,
+                        providerSession: await agentProviderSessionForHostEnsure(
+                          environmentId,
+                          args.providerSession!
+                        ),
                         ...(args.launchConfig?.ompResumeFilePath
                           ? { ompResumeFilePath: args.launchConfig.ompResumeFilePath }
                           : {}),
@@ -135,19 +144,13 @@ export async function createWebRuntimeSessionTerminalResult(
                       params: withAgentSessionCreateOperationId(
                         {
                           ...(await keyboardOptions(environmentId)),
-                          worktree: toRuntimeWorktreeSelector(args.worktreeId),
-                          agent,
-                          ...(args.prompt ? { prompt: args.prompt } : {}),
-                          ...(args.promptDelivery ? { promptDelivery: args.promptDelivery } : {}),
-                          ...(agentArgsOverride !== undefined
-                            ? { agentArgs: agentArgsOverride }
-                            : {}),
-                          ...(args.launchPreferences
-                            ? { launchPreferences: args.launchPreferences }
-                            : {}),
+                          ...agentSessionCreateRequest({
+                            ...args,
+                            agent,
+                            agentArgs: args.agentArgs
+                          }),
                           ...(args.cwd ? { startupCwd: args.cwd } : {}),
-                          ...(args.viewMode ? { viewMode: args.viewMode } : {}),
-                          presentation: 'background'
+                          ...(args.viewMode ? { viewMode: args.viewMode } : {})
                         },
                         clientOperationId
                       ),
@@ -163,27 +166,35 @@ export async function createWebRuntimeSessionTerminalResult(
       }>({
         environmentId,
         ...(hostAuthority ? { hostAuthority } : {}),
-        ...(resumeHostAuthorityCapability
-          ? { hostAuthorityCapability: resumeHostAuthorityCapability }
+        ...((resumeHostAuthorityCapability ?? args.agentSessionCreateCapability)
+          ? {
+              hostAuthorityCapability:
+                resumeHostAuthorityCapability ?? args.agentSessionCreateCapability
+            }
           : {}),
         legacy: async () => {
+          const legacyAgentLaunch = await args.legacyAgentLaunch?.()
+          const legacy = legacyAgentLaunch ?? args
           const response = await callEnvironment({
             method: 'session.tabs.createTerminal',
             params: {
               worktree: toRuntimeWorktreeSelector(args.worktreeId),
               afterTabId: args.afterTabId ? toHostSessionTabId(args.afterTabId) : undefined,
               targetGroupId: args.targetGroupId,
-              command: args.command,
+              ...(legacy.command ? { command: legacy.command } : {}),
               cwd: args.cwd,
-              ...(args.env ? { env: args.env } : {}),
+              ...(legacy.env ? { env: legacy.env } : {}),
               ...(args.envToDelete ? { envToDelete: args.envToDelete } : {}),
-              startupCommandDelivery: args.startupCommandDelivery,
-              ...(args.launchConfig ? { launchConfig: args.launchConfig } : {}),
+              startupCommandDelivery: legacy.startupCommandDelivery,
+              ...(legacy.launchConfig ? { launchConfig: legacy.launchConfig } : {}),
+              ...(legacyAgentLaunch?.agentPrompt
+                ? { agentPrompt: legacyAgentLaunch.agentPrompt }
+                : {}),
               ...(args.launchToken ? { launchToken: args.launchToken } : {}),
               ...(args.agent ? { agent: args.agent } : {}),
               ...(args.launchAgent ? { launchAgent: args.launchAgent } : {}),
               ...(args.viewMode ? { viewMode: args.viewMode } : {}),
-              // Why: old hosts understand activate:false; new hosts use select/navigation for caller-local focus.
+              // Old hosts use activate:false; new hosts use select/navigation for caller-local focus.
               activate: false,
               select: args.activate !== false,
               navigation: 'caller'
@@ -233,8 +244,7 @@ export async function createWebRuntimeSessionTerminalResult(
       createdLeafId = created.tab.leafId
     }
     if (args.targetGroupId && createdTabId) {
-      // Why: the host drops client-minted group ids, so this client's own record is what
-      // lands the mirrored tab in the requested pane under client-owned placement.
+      // Host drops client-minted group IDs; client placement must land the mirrored tab in the requested pane.
       recordWebSessionTerminalPlacement({
         environmentId,
         worktreeId: args.worktreeId,
@@ -243,18 +253,17 @@ export async function createWebRuntimeSessionTerminalResult(
       })
     }
     if (args.activate !== false && createdTabId && matchesWebSessionIntentOwner(intentOwner)) {
-      // Why: record focus intent so the reconcile follows the snapshot's active
-      // tab to THIS new terminal, instead of sticky-keeping the prior tab.
+      // Intent lets reconciliation focus this new terminal instead of sticky-keeping the previous tab.
       recordWebSessionFocusIntent(intentOwner, args.worktreeId, createdTabId, createdLeafId)
     }
     const placementTabId =
       createdTabId && (args.targetGroupId || args.afterTabId) ? createdTabId : undefined
     await refreshWebRuntimeSessionTabsSnapshot(environmentId, args.worktreeId, {
       expectedEnvironmentPairingRevision: intentOwner.pairingRevision,
-      // Why: the publication can beat the RPC response; replay it once after caller intent exists.
+      // Publication can beat RPC response; replay once caller intent exists.
       acceptCurrentSnapshot:
         Boolean(createdTabId) && (args.activate !== false || Boolean(placementTabId)),
-      // Why: a placement record needs a post-create list; a deduped in-flight one can predate it.
+      // Require a post-create list; deduped in-flight lists may predate placement.
       ...(placementTabId ? { afterCurrentInFlight: true } : {})
     })
     if (placementTabId) {
@@ -282,7 +291,7 @@ export async function createWebRuntimeSessionTerminalResult(
       message
     )
     if (createdTabId) {
-      // Why: a record that outlives the create flow could yank a user-dragged tab back later.
+      // Expire create placement or later user drags can be yanked back.
       forgetWebSessionTerminalPlacement({
         environmentId,
         worktreeId: args.worktreeId,
@@ -292,8 +301,7 @@ export async function createWebRuntimeSessionTerminalResult(
     if (!hostCreated && workspaceSelectionRollback) {
       restoreActiveWorkspaceSelection(workspaceSelectionRollback)
     }
-    // Why: once the host accepted creation, reporting failure invites the user
-    // to retry with a new operation ID and can duplicate a fresh agent.
+    // Accepted creation must not report failure and invite duplicate agent retries with new operation IDs.
     return {
       outcome: hostCreated ? { status: 'created' } : { status: 'failed', message },
       ...(createdTabId ? { hostTabId: createdTabId } : {}),

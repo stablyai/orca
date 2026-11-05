@@ -1,6 +1,6 @@
 import nacl from 'tweetnacl'
-import type { PairedE2EEPrimitives } from '../../../src/shared/paired-e2ee-primitives'
-import { derivePairedE2EEV2KeySchedule } from '../../../src/shared/paired-e2ee-v2-key-schedule'
+import type { PairedE2EEPrimitives } from '../../../src/shared/remote-runtime/e2ee/paired-e2ee-primitives'
+import { derivePairedE2EEV2KeySchedule } from '../../../src/shared/remote-runtime/e2ee/paired-e2ee-v2-key-schedule'
 import {
   decodeBase64Bytes,
   decodeCanonicalBase64Bytes,
@@ -9,7 +9,7 @@ import {
 import { pairedE2EENativeCodec } from './paired-e2ee-native-codec'
 import * as e2ee from './e2ee'
 
-// Why arrows: resolved per call, so transport tests that mock ./e2ee partially still load.
+// Resolve per call so partial e2ee mocks remain loadable in transport tests.
 export const MOBILE_PAIRED_E2EE_PRIMITIVES: PairedE2EEPrimitives = {
   generateKeyPair: () => e2ee.generateKeyPair(),
   deriveSharedKey: (ourSecretKey, peerPublicKey) =>

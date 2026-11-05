@@ -3,16 +3,17 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { describe, expect, it, vi } from 'vitest'
 import { useActiveWorktreeScroll } from './use-active-worktree-scroll'
 
-type Row = { worktreeId: string; isActive?: boolean }
+type Row = { row: { worktreeId: string; isActive?: boolean } }
 type Sections = { key: string; data: Row[] }[]
 
-/** Rows a, b, c with `active` highlighted; a folded section shows none of them. */
 const listOf = (active: string | null, folded = false): Sections => [
   {
     key: 'all',
     data: folded
       ? []
-      : ['a', 'b', 'c'].map((worktreeId) => ({ worktreeId, isActive: worktreeId === active }))
+      : ['a', 'b', 'c'].map((worktreeId) => ({
+          row: { worktreeId, isActive: worktreeId === active }
+        }))
   }
 ]
 
@@ -23,7 +24,6 @@ function mount(sections: Sections, collapsedGroups: ReadonlySet<string> = NONE) 
   const scrollToLocation = vi.fn()
   function Probe(props: { sections: Sections; collapsedGroups: ReadonlySet<string> }): null {
     const { sectionListRef } = useActiveWorktreeScroll(props.sections, props.collapsedGroups)
-    // The hook calls only scrollToLocation on its list.
     Object.assign(sectionListRef, { current: { scrollToLocation } })
     return null
   }
@@ -55,7 +55,6 @@ describe('useActiveWorktreeScroll', () => {
     const list = mount(listOf('b'))
     list.update(listOf('b', true), FOLDED)
     list.update(listOf('b'), NONE)
-    // A search hiding the row, then cleared.
     list.update(listOf(null))
     list.update(listOf('b'))
     expect(list.scrollToLocation).toHaveBeenCalledTimes(1)
@@ -65,7 +64,6 @@ describe('useActiveWorktreeScroll', () => {
     const list = mount(listOf('b', true), FOLDED)
     list.update(listOf('b'), NONE)
     expect(list.scrollToLocation).not.toHaveBeenCalled()
-    // A later move to another workspace still scrolls.
     list.update(listOf('c'), NONE)
     expect(list.scrollToLocation).toHaveBeenCalledTimes(1)
   })

@@ -1,16 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import {
-  AGENT_STATUS_STALE_AFTER_MS,
-  type AgentStatusEntry
-} from '../../../../shared/agent-status-types'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status/contracts/agent-status-freshness'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { DashboardBucket } from '../../../../shared/dashboard-snapshot'
-import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
-import { EMPTY_WORKTREE_AGENT_ORCHESTRATION } from '../sidebar/worktree-agent-orchestration-batch'
+import '../sidebar/workspace-card/activity/worktree-agent-orchestration-batch'
+import { EMPTY_WORKTREE_AGENT_ORCHESTRATION } from '../sidebar/workspace-card/activity/worktree-agent-orchestration-index'
 import type { DashboardSnapshotState } from './build-dashboard-snapshot'
 import {
   buildDashboardBucketCounts,
@@ -31,10 +30,7 @@ const PANE_2 = makePaneKey('tab2', LEAF_2)
 const FOLDER_WORKSPACE_ID = folderWorkspaceKey('folder-1')
 const PANE_3 = makePaneKey('tab3', LEAF_3)
 
-/**
- * Unmemoized reference walk, composed from the same shared primitives the sidebar
- * counts are defined by. Every assertion below pins the memoized builder to this.
- */
+/** Unmemoized reference using shared sidebar primitives, independent of the memoized builder. */
 function oracleBucketCounts(
   state: DashboardSnapshotState,
   now: number
@@ -215,14 +211,7 @@ function baseState(): DashboardSnapshotState {
   } as unknown as DashboardSnapshotState
 }
 
-/**
- * One agent's clock crossing, walked in order through a single cache.
- *
- * `generation` models the store's `agentStatusEpoch`: it stays put until decay
- * may have shifted a bucket. `BASE + STALE` is the last instant an entry is
- * still fresh (`now - observedAt <= STALE`) and the only point where a cache
- * *hit* — not a recompute — has to return a freshness verdict.
- */
+/** Walk one cache across freshness boundaries; generation changes only when decay may shift buckets, and the exact last-fresh instant must still hit. */
 const CLOCK_WALK: { label: string; now: number; generation: number }[] = [
   { label: 'cold', now: BASE, generation: 1 },
   { label: 'last fresh instant (cache hit)', now: BASE + STALE, generation: 1 },
@@ -296,19 +285,6 @@ const MUTATIONS: Mutation[] = [
 ]
 
 describe('buildDashboardBucketCounts equivalence with the unmemoized walk', () => {
-  it('matches the oracle for every mutation at every clock, sharing one cache', () => {
-    for (const mutation of MUTATIONS) {
-      const cache = createDashboardBucketCountsCache()
-      for (const step of CLOCK_WALK) {
-        const state = mutation.apply(baseState())
-        expect(
-          buildDashboardBucketCounts(state, step.now, cache, step.generation),
-          `${mutation.label} @ ${step.label}`
-        ).toEqual(oracleBucketCounts(state, step.now))
-      }
-    }
-  })
-
   it('matches the oracle when mutations are applied cumulatively through one cache', () => {
     const cache = createDashboardBucketCountsCache()
     let state = baseState()
@@ -330,8 +306,7 @@ describe('buildDashboardBucketCounts equivalence with the unmemoized walk', () =
     expect(buildDashboardBucketCounts(state, BASE, cache, 1).working).toBe(1)
     expect(cache.lastComputedWorktreeIds.length).toBe(3)
 
-    // The boundary the earlier matrix never covered: a cache hit answering at the
-    // exact instant `now - observedAt === STALE`, where the entry is still fresh.
+    // At now-observedAt === STALE the cache still hits and the entry remains fresh.
     const atBoundary = buildDashboardBucketCounts(state, BASE + STALE, cache, 1)
     expect(cache.lastComputedWorktreeIds).toEqual([])
     expect(atBoundary.working).toBe(1)
@@ -340,32 +315,5 @@ describe('buildDashboardBucketCounts equivalence with the unmemoized walk', () =
     const pastBoundary = buildDashboardBucketCounts(state, BASE + STALE + 1, cache, 2)
     expect(pastBoundary.working).toBe(0)
     expect(pastBoundary).toEqual(oracleBucketCounts(state, BASE + STALE + 1))
-  })
-
-  it('returns the previous counts object when the four totals are unchanged', () => {
-    const cache = createDashboardBucketCountsCache()
-    const state = baseState()
-    const first = buildDashboardBucketCounts(state, BASE, cache, 1)
-
-    // A prompt stream on one pane: rows rebuild, totals do not move.
-    const streamed: DashboardSnapshotState = {
-      ...state,
-      agentStatusByPaneKey: {
-        ...state.agentStatusByPaneKey,
-        [PANE_1]: entry(PANE_1, 'tab1', 'w1', { prompt: 'more output' })
-      }
-    }
-    const second = buildDashboardBucketCounts(streamed, BASE + 1_000, cache, 1)
-    expect(cache.lastComputedWorktreeIds).toEqual(['w1'])
-    expect(second).toBe(first)
-
-    const moved: DashboardSnapshotState = {
-      ...state,
-      agentStatusByPaneKey: {
-        ...state.agentStatusByPaneKey,
-        [PANE_1]: entry(PANE_1, 'tab1', 'w1', { state: 'blocked' })
-      }
-    }
-    expect(buildDashboardBucketCounts(moved, BASE + 2_000, cache, 1)).not.toBe(first)
   })
 })

@@ -1,6 +1,6 @@
-import type { RuntimeAccountController } from './runtime-account-controller'
+import type { RuntimeAccountController } from './agent-session/environment/runtime-account-controller'
 import type { RuntimeAiVaultCommands } from './runtime-ai-vault-commands'
-import type { RuntimeBrowserDriverController } from './runtime-browser-driver-controller'
+import type { RuntimeBrowserDriverController } from './browser/driver/runtime-browser-driver-controller'
 import type { RuntimeClientEventBus } from './runtime-client-event-bus'
 import type { RuntimeMessageWaiters } from './runtime-message-waiters'
 import type { RuntimeMobileDictationController } from './runtime-mobile-dictation-controller'
@@ -9,11 +9,13 @@ import type { RuntimeMobileSpeechCatalog } from './runtime-mobile-speech-catalog
 import type { RuntimeNativeChatDraftResolutions } from './runtime-native-chat-draft-resolutions'
 import type { RuntimeSessionSearchSettingsController } from './runtime-session-search-settings'
 import type { RuntimeSubscriptionRegistry } from './runtime-subscription-registry'
+import type { NotificationAttentionAcknowledgement } from '../../shared/notification-settings-types'
 
 export type RuntimeServiceCommandSurface = {
   listAiVaultSessions: RuntimeAiVaultCommands['list']
   resolveAiVaultSessionTitles: RuntimeAiVaultCommands['resolveTitles']
   prepareAiVaultSessionResume: RuntimeAiVaultCommands['prepare']
+  deleteAiVaultSession: RuntimeAiVaultCommands['delete']
   setSessionSearchEnabled: RuntimeSessionSearchSettingsController['setEnabled']
   onClientEvent: RuntimeClientEventBus['on']
   notifyNativeChatLaunchDraftResolved: RuntimeNativeChatDraftResolutions['notify']
@@ -37,7 +39,8 @@ export type RuntimeServiceCommandSurface = {
   reconcileDismissedPushes: RuntimeMobileNotificationController['reconcileDismissedPushes']
   getMobileNotificationEpoch: RuntimeMobileNotificationController['getEpoch']
   dismissMobileNotification: RuntimeMobileNotificationController['dismiss']
-  retireStructuredAttention: RuntimeMobileNotificationController['retireStructuredAttention']
+  retireNotificationAttention: RuntimeMobileNotificationController['acknowledgeAttention']
+  acknowledgeNotificationAttention(acknowledgement: NotificationAttentionAcknowledgement): void
   reconcileStructuredPromptAttention: RuntimeMobileNotificationController['reconcileStructuredPromptAttention']
   dispatchPluginNotification: RuntimeMobileNotificationController['dispatchPlugin']
   setMobilePushRegistrar: RuntimeMobileNotificationController['setPushRegistrar']
@@ -49,6 +52,7 @@ export type RuntimeServiceCommandSurface = {
   setCommitMessageAgentEnvironmentResolvers: RuntimeAccountController['setCommitMessageAgentEnvironment']
   getCommitMessageAgentEnvironmentResolvers: RuntimeAccountController['getCommitMessageAgentEnvironment']
   getAccountsSnapshot: RuntimeAccountController['getSnapshot']
+  getAccountsStreamSnapshot: RuntimeAccountController['getStreamSnapshot']
   getUsageRateLimits: RuntimeAccountController['usageRateLimits']
   requireUsageRateLimits: RuntimeAccountController['requireUsageRateLimits']
   refreshAccountsForMobile: RuntimeAccountController['refreshForMobile']
@@ -81,11 +85,11 @@ export type RuntimeServiceCommandSurface = {
   feedMobileDictation: RuntimeMobileDictationController['feed']
   finishMobileDictation: RuntimeMobileDictationController['finish']
   cancelMobileDictation: RuntimeMobileDictationController['cancel']
-  cancelMobileDictationForConnection: RuntimeMobileDictationController['cancelForConnection']
   getAllBrowserDrivers: RuntimeBrowserDriverController['getAll']
   reclaimBrowserForDesktop: RuntimeBrowserDriverController['reclaimForDesktop']
   notifyMessageArrived(handle: string, messageType?: string): void
   waitForMessage: RuntimeMessageWaiters['wait']
+  notifyMessageWaiters: RuntimeMessageWaiters['notify']
   cancelMessageWaiters: RuntimeMessageWaiters['cancel']
 }
 
@@ -122,6 +126,7 @@ export function installRuntimeServiceCommandSurface(
     listAiVaultSessions: vault.list.bind(vault),
     resolveAiVaultSessionTitles: vault.resolveTitles.bind(vault),
     prepareAiVaultSessionResume: vault.prepare.bind(vault),
+    deleteAiVaultSession: vault.delete.bind(vault),
     setSessionSearchEnabled: sessionSearchSettings.setEnabled.bind(sessionSearchSettings),
     onClientEvent: events.on.bind(events),
     notifyNativeChatLaunchDraftResolved: drafts.notify.bind(drafts),
@@ -146,7 +151,11 @@ export function installRuntimeServiceCommandSurface(
     reconcileDismissedPushes: notifications.reconcileDismissedPushes.bind(notifications),
     getMobileNotificationEpoch: notifications.getEpoch.bind(notifications),
     dismissMobileNotification: notifications.dismiss.bind(notifications),
-    retireStructuredAttention: notifications.retireStructuredAttention.bind(notifications),
+    retireNotificationAttention: notifications.acknowledgeAttention.bind(notifications),
+    acknowledgeNotificationAttention: (acknowledgement: NotificationAttentionAcknowledgement) => {
+      notifications.acknowledgeAttention(acknowledgement)
+      events.emit({ type: 'notificationAttentionAcknowledged', acknowledgement })
+    },
     reconcileStructuredPromptAttention:
       notifications.reconcileStructuredPromptAttention.bind(notifications),
     dispatchPluginNotification: notifications.dispatchPlugin.bind(notifications),
@@ -161,6 +170,7 @@ export function installRuntimeServiceCommandSurface(
     getCommitMessageAgentEnvironmentResolvers:
       accounts.getCommitMessageAgentEnvironment.bind(accounts),
     getAccountsSnapshot: accounts.getSnapshot.bind(accounts),
+    getAccountsStreamSnapshot: accounts.getStreamSnapshot.bind(accounts),
     getUsageRateLimits: accounts.usageRateLimits.bind(accounts),
     requireUsageRateLimits: accounts.requireUsageRateLimits.bind(accounts),
     refreshAccountsForMobile: accounts.refreshForMobile.bind(accounts),
@@ -193,10 +203,10 @@ export function installRuntimeServiceCommandSurface(
     feedMobileDictation: dictation.feed.bind(dictation),
     finishMobileDictation: dictation.finish.bind(dictation),
     cancelMobileDictation: dictation.cancel.bind(dictation),
-    cancelMobileDictationForConnection: dictation.cancelForConnection.bind(dictation),
     getAllBrowserDrivers: browsers.getAll.bind(browsers),
     reclaimBrowserForDesktop: browsers.reclaimForDesktop.bind(browsers),
     waitForMessage: waiters.wait.bind(waiters),
+    notifyMessageWaiters: waiters.notify.bind(waiters),
     cancelMessageWaiters: waiters.cancel.bind(waiters)
   })
 }

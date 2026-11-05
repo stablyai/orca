@@ -1,9 +1,6 @@
-// The save-divergence log's before (main's) and after (the save's) values of each changed field,
-// bounded and stripped of content: ids (an editor tab's is its file path, as `paths` already
-// shows), numbers and flags as they are, any other text only as its length, since titles, labels
-// and records can hold what a user typed or an agent wrote.
+// Bound divergence logs to IDs, numbers and flags; log other text only by length to exclude user/agent content.
 
-/** Keys whose text is an id or a fixed name, read only inside the layout's own records; an array's items take its key. */
+/** ID/fixed-name fields inside layout records; array items inherit their key. */
 const ID_KEYS = new Set([
   'id',
   'entityId',
@@ -23,23 +20,18 @@ const ID_KEYS = new Set([
   'launchAgent',
   'color'
 ])
-/**
- * Records and fields that embed other subsystems' data (an agent's resume record carries its prompt,
- * launch env and transcript path; editor views carry git snapshots): only their size is logged.
- */
+// Embedded agent/editor data may include prompts, environment or snapshots; report only size.
 const OPAQUE_RECORDS = new Set(['file', 'editor view'])
 const OPAQUE_FIELDS = new Set(['sleeping', 'resume', 'value'])
 const MAX_SHOWN_ID_LENGTH = 80
-/** A daemon terminal id embeds its worktree id, which may be a long path. */
+// Daemon IDs embed potentially long worktree paths.
 const MAX_SHOWN_PTY_ID_LENGTH = 256
 const MAX_ITEMS = 8
 const MAX_DEPTH = 6
-/** Changed fields one report line carries values for. */
 const MAX_CHANGES = 8
-/** Values each side of one change may carry, counted per array, object and scalar. */
+/** Per-side budget counts arrays, objects and scalars. */
 const SIDE_BUDGET = 32
 
-/** One changed field of one record (`<kind> <id>`), as main holds it and as the save writes it. */
 export type FieldChange = { record: string; field: string; before: unknown; after: unknown }
 
 type Budget = { left: number }
@@ -93,7 +85,6 @@ function compact(
     : shown
 }
 
-/** `changes` (with the kind of record each names) compacted for one report line. */
 export function compactFieldChanges(
   changes: readonly (FieldChange & { kind: string })[]
 ): FieldChange[] {

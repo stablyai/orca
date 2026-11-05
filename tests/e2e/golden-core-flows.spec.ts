@@ -9,6 +9,7 @@ import os from 'node:os'
 import path from 'node:path'
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
+import { chooseOnboardingAgentSurface } from './helpers/onboarding-navigation'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import {
   countVisibleTerminalPanes,
@@ -34,9 +35,7 @@ function escapeRegExp(value: string): string {
 }
 
 async function createGitRepo(prefix: string, name: string): Promise<string> {
-  // Why: macOS os.tmpdir() (/var/...) symlinks to /private/var/..., and the app
-  // canonicalizes repo.path via `git rev-parse --show-toplevel` on add. Resolve
-  // the symlink here so the path the test asserts on matches what the store holds.
+  // Resolve macOS /var symlinks like git does when registering repo.path.
   const rootPath = realpathSync(await mkdtemp(path.join(os.tmpdir(), prefix)))
   tempRoots.push(rootPath)
   const repoPath = path.join(rootPath, name)
@@ -98,7 +97,7 @@ async function continueOnboarding(page: Page): Promise<void> {
 }
 
 async function selectCodexAgent(page: Page): Promise<void> {
-  const codexButton = page.getByRole('button', { name: 'Codex', exact: true })
+  const codexButton = page.getByRole('button', { name: /^Codex\b/ })
   const codexVisible = await codexButton
     .first()
     .waitFor({ state: 'visible', timeout: 1_000 })
@@ -370,15 +369,32 @@ async function requestAgentSessionsTour(page: Page): Promise<void> {
         force: true
       })
   })
+  const newTabStep = page.getByRole('dialog', { name: 'New agents start here', exact: true })
+  await expect(newTabStep).toBeVisible()
+  await page.locator('[data-contextual-tour-target="tab-create-menu"]').click()
+  await expect(page.getByRole('menu')).toBeVisible()
+  await expect(newTabStep).toBeHidden()
+  await expect(page.getByRole('dialog', { name: /Split a terminal pane/i })).toBeHidden()
+  await expect
+    .poll(() => page.evaluate(() => window.__store?.getState().activeContextualTourStepIndex))
+    .toBe(0)
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('menu')).toBeHidden()
+  const splitStep = page.getByRole('dialog', { name: /Split a terminal pane/i })
+  await expect(splitStep).toBeVisible()
+  await splitStep.getByRole('button', { name: 'Back', exact: true }).click()
+  await expect(newTabStep).toBeVisible()
+  await page.locator('[data-contextual-tour-target="tab-create-menu"]').click()
+  await expect(newTabStep).toBeHidden()
+  await page.getByRole('menuitem', { name: /^New Terminal/ }).click()
+  await expect(page.getByRole('menu')).toBeHidden()
   await expect(page.getByRole('dialog', { name: /Split a terminal pane/i })).toBeVisible()
 }
 
 async function completeWorkspaceCreationTour(page: Page, workspaceName: string): Promise<void> {
   const pickProjectStep = page.getByRole('dialog', { name: /Pick a project/i })
   await expect(pickProjectStep).toBeVisible()
-  // Why: the project picker can leave its command popover open after the tour
-  // starts. Keyboard-activate the step button so the golden verifies the tour
-  // transition instead of pointer geometry around that popover.
+  // Keyboard-activate Next so a lingering project popover cannot obscure the tour transition.
   await pickProjectStep.getByRole('button', { name: /^Next$/ }).focus()
   await page.keyboard.press('Enter')
   const nameStep = page.getByRole('dialog', { name: /Name it, or start from existing work/i })
@@ -436,9 +452,7 @@ test.describe('New-user golden core flow', () => {
     orcaPage
   }) => {
     await waitForSessionReady(orcaPage)
-    await expect(orcaPage.getByRole('heading', { name: /Pick your default agent/i })).toBeVisible({
-      timeout: 15_000
-    })
+    await chooseOnboardingAgentSurface(orcaPage)
 
     await selectCodexAgent(orcaPage)
     await continueOnboarding(orcaPage)

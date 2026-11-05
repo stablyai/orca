@@ -1,22 +1,22 @@
-import { BrowserWindow } from 'electron'
-import { sendRemoteRuntimeRequest } from '../../../shared/remote-runtime-client'
+import { getRuntimeDesktopSurface } from '../../runtime/runtime-desktop-surface'
+import { sendRemoteRuntimeRequest } from '../../../shared/remote-runtime/remote-runtime-client'
 import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../../shared/protocol-version'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
 import {
   getPreferredPairedRuntimeConnection,
   type KnownRuntimeEnvironment
-} from '../../../shared/runtime-environments'
+} from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { OrcadManagedPairingRepairFailedError } from '../../managed-server/lifecycle/orcad-managed-pairing-repair-failure'
 import { recoverRefusedPairing } from './runtime-environment-pairing-refusal-registry'
 import { recordRuntimeEnvironmentUsage } from './runtime-environment-usage-record'
-import { RuntimeHostStatusOwner } from '../../../shared/runtime-host-status-owner'
+import { RuntimeHostStatusOwner } from '../../../shared/remote-runtime/host-status/runtime-host-status-owner'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
 import {
   RUNTIME_HOST_STATUS_CHANNEL,
   runtimeHostStatusError,
   runtimeHostStatusFailure,
   type RuntimeHostStatusResponse
-} from '../../../shared/runtime-host-status'
+} from '../../../shared/remote-runtime/host-status/runtime-host-status'
 import {
   applyRuntimeEnvironmentCapabilityVerdict,
   getAcceptedRuntimeEnvironmentCapabilityOutcome,
@@ -29,16 +29,12 @@ import { resolveManagedRuntimeEnvironment } from './runtime-environment-managed-
 
 const statusListeners = new Set<() => void>()
 
-/** Main's own readers of server status, alongside the windows it is sent to. */
 export function onRuntimeEnvironmentStatusPublished(listener: () => void): () => void {
   statusListeners.add(listener)
   return () => statusListeners.delete(listener)
 }
 
-/**
- * A managed server is paired over SSH, so its refusal re-pairs there instead of blocking on a
- * re-pair only the user could do. A failed re-pair keeps the block, with the reason it failed.
- */
+/** SSH-managed servers recover pairing automatically; failed repair keeps authentication blocked. */
 async function answerRefusedPairing(
   environment: KnownRuntimeEnvironment,
   refused: RuntimeHostStatusResponse
@@ -55,8 +51,7 @@ async function answerRefusedPairing(
       ? runtimeHostStatusFailure('unauthorized', error.message)
       : runtimeHostStatusError(error)
   }
-  // Why changed, not the refusal: the rebuild re-proved the server, so this answer is stale; only
-  // a re-pair changed the pairing (and retired this owner for a successor that verifies anew).
+  // Rebuild re-proved the server, making refusal stale; only re-pairing retires this status owner.
   return runtimeEnvironmentChangedFailure(environment, 'status.get', outcome === 'repaired')
 }
 
@@ -145,16 +140,7 @@ export function createRuntimeEnvironmentStatusOwner(
       return capable && active
     },
     publish: (snapshot) => {
-      for (const window of BrowserWindow.getAllWindows()) {
-        if (window.isDestroyed()) {
-          continue
-        }
-        try {
-          window.webContents.send(RUNTIME_HOST_STATUS_CHANNEL, snapshot)
-        } catch {
-          /* A renderer can close during publication. */
-        }
-      }
+      getRuntimeDesktopSurface().sendToRenderers?.(RUNTIME_HOST_STATUS_CHANNEL, snapshot)
       for (const listener of statusListeners) {
         listener()
       }

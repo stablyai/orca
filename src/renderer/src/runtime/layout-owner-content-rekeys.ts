@@ -1,7 +1,4 @@
-// Window-local editor content (open file records, drafts, buffers, the autosave gate) that a
-// switch-on move or rename of editor tabs rekeys. The window asks main first; the frame flush that
-// first shows main's change applies the rekey in the same store update, so no render shows the
-// tabs under their new ids beside content under the old ones. A refusal drops it unapplied.
+// Rekey local editor files/drafts/buffers/autosave gates in the same store update that first draws main’s accepted IDs, preventing mismatched tabs/content. Refusal drops unapplied rekeys.
 
 import type { AppState } from '@/store/types'
 import type { WorkspaceLayoutCache } from '@/store/workspace-layout-cache'

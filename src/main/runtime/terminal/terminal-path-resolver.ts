@@ -2,15 +2,16 @@ import type {
   RuntimeNativeChatFileContext,
   RuntimeTerminalPathResolution
 } from '../../../shared/runtime-types'
-import { parseWslPath } from '../../wsl'
+import { parseWslPath } from '../../wsl/filesystem/unc-path-access'
 import { relativePathInsideRoot, resolveRuntimePath } from '../../../shared/cross-platform-path'
 import { homedir } from 'node:os'
-import { provenancePathCandidate, resolveTerminalAbsolutePath } from './terminal-file-path'
+import { resolveTerminalAbsolutePath } from './terminal-file-path'
 import { requireRuntimeFileProvider, runtimeFileRouteForTarget } from '../files/file-target'
 import { isSafeMobileRelativePath } from '../files/mobile-file-kind'
-import { isENOENT } from '../../ipc/filesystem-path-containment'
+import { isENOENT } from '../../ipc/filesystem/access/filesystem-path-containment'
 import type { RuntimeFileCommandHost } from '../files/file-command-host'
 import type { RuntimeTerminalArtifacts } from './artifacts/terminal-artifacts'
+import { SSH_OUTSIDE_WORKSPACE_UNSUPPORTED_MESSAGE } from '../../../shared/runtime-file-contracts'
 
 type RuntimeTerminalPathHost = Pick<
   RuntimeFileCommandHost,
@@ -18,17 +19,10 @@ type RuntimeTerminalPathHost = Pick<
   | 'resolveRuntimeFileTarget'
   | 'resolveKnownWorkspaceFileTarget'
   | 'resolveTerminalCwd'
-  | 'resolveTerminalContext'
   | 'resolveTerminalFileUriHostname'
-  | 'hasRecentTerminalOutputPath'
-  | 'hasRecentNativeChatOutputPath'
+  | 'resolveNativeChatMediaPath'
 >
-type RuntimeTerminalArtifactAuthority = Pick<
-  RuntimeTerminalArtifacts,
-  | 'resolveNativeChatArtifactPath'
-  | 'resolveAbsoluteFileGrant'
-  | 'resolveAllowedTerminalArtifactPath'
->
+type RuntimeTerminalArtifactAuthority = Pick<RuntimeTerminalArtifacts, 'resolveAbsoluteFileGrant'>
 
 export class RuntimeTerminalPathResolver {
   constructor(
@@ -52,7 +46,7 @@ export class RuntimeTerminalPathResolver {
     const { worktree } = target
     const route = runtimeFileRouteForTarget(target)
     const connectionId = route.kind === 'ssh' ? route.connectionId : undefined
-    // Why: mobile may attach after OSC7 cwd was emitted; the runtime still owns the terminal's latest cwd to resolve the tap.
+    // Mobile may connect after OSC 7; use runtime's latest terminal cwd for taps.
     const normalizedTerminalHandle =
       terminalHandle && terminalHandle.trim().length > 0 ? terminalHandle.trim() : null
     const terminalCwd = normalizedTerminalHandle
@@ -71,12 +65,30 @@ export class RuntimeTerminalPathResolver {
       isDirectory: false
     }
 
-    // Why: SSH/WSL homes are unknown here; native-chat grants must not expand their ~/… paths against the local host home.
-    const isTilde = pathText.startsWith('~/') || pathText.startsWith('~\\')
-    if (isTilde && (connectionId || (nativeChatContext && parseWslPath(worktree.path)))) {
+    const media = nativeChatContext
+      ? await this.host.resolveNativeChatMediaPath?.({
+          worktreeId: worktree.id,
+          worktreePath: worktree.path,
+          executionHostId: target.executionHostId,
+          pathText,
+          context: nativeChatContext
+        })
+      : undefined
+    if (media?.kind === 'ambiguous') {
       return empty
     }
-    const expanded = isTilde ? resolveRuntimePath(homedir(), pathText.slice(2)) : pathText
+
+    // Never expand SSH/WSL home-relative grants using this machine's home.
+    const isTilde = pathText.startsWith('~/') || pathText.startsWith('~\\')
+    if (isTilde && (connectionId || parseWslPath(worktree.path))) {
+      return empty
+    }
+    const expanded =
+      media?.kind === 'matched'
+        ? media.absolutePath
+        : isTilde
+          ? resolveRuntimePath(homedir(), pathText.slice(2))
+          : pathText
     const absolutePath = resolveTerminalAbsolutePath({
       base,
       expanded,
@@ -85,16 +97,13 @@ export class RuntimeTerminalPathResolver {
       terminalFileUriHostname
     })
     const relativePath = relativePathInsideRoot(worktree.path, absolutePath)
-    // Why: clients that predate crossWorkspace reuse their own worktree id for the
-    // follow-up files.open, so retargeting to a sibling workspace must be opt-in.
+    // Cross-workspace retargeting is opt-in; older clients reuse their original workspace in files.open.
     const knownWorkspaceTarget =
       crossWorkspace && relativePath === null
         ? await this.host.resolveKnownWorkspaceFileTarget?.(absolutePath, target.executionHostId)
         : null
     const ownedWorktree = knownWorkspaceTarget?.worktree ?? worktree
-    // Why: the owner's host replaces this target's outright. Coalescing an optional connection
-    // instead let a sibling workspace resolved as `local` inherit this worktree's SSH target and
-    // stat a local path on the remote host.
+    // Replace the full route with the path owner's; optional connection coalescing could stat a sibling local path on SSH.
     const ownedRoute = runtimeFileRouteForTarget(knownWorkspaceTarget ?? target)
     const ownedRelativePath = knownWorkspaceTarget?.relativePath ?? relativePath
 
@@ -126,61 +135,14 @@ export class RuntimeTerminalPathResolver {
         }
       }
 
-      if (
-        nativeChatContext &&
-        (await this.host.hasRecentNativeChatOutputPath?.(
-          worktree.id,
-          nativeChatContext,
-          pathText,
-          absolutePath
-        ))
-      ) {
-        const artifactPath = await this.artifacts.resolveNativeChatArtifactPath(
-          absolutePath,
-          connectionId
-        )
-        return await this.artifacts.resolveAbsoluteFileGrant({
-          worktreeId: worktree.id,
-          artifactPath,
-          clientId,
-          readOnly: true,
-          provenance: 'native-chat'
-        })
+      // Why: grants read this machine; answering absent would let the client open its own same-path file instead.
+      if (connectionId) {
+        throw new Error(SSH_OUTSIDE_WORKSPACE_UNSUPPORTED_MESSAGE)
       }
-
-      // Why: mobile taps may hit agent artifacts outside the worktree; grant the exact path, not arbitrary absolute paths.
-      if (!normalizedTerminalHandle || !terminalCwd) {
-        return { ...empty, relativePath, absolutePath }
-      }
-      const terminalContext = this.host.resolveTerminalContext?.(normalizedTerminalHandle)
-      if (
-        !terminalContext ||
-        terminalContext.worktreeId !== worktree.id ||
-        (terminalContext.connectionId ?? undefined) !== connectionId
-      ) {
-        return { ...empty, relativePath, absolutePath }
-      }
-      const artifactPath = await this.artifacts.resolveAllowedTerminalArtifactPath({
-        absolutePath,
-        connectionId,
-        worktreePath: worktree.path
-      })
-      if (!artifactPath) {
-        return { ...empty, relativePath, absolutePath }
-      }
-      if (
-        !(await this.host.hasRecentTerminalOutputPath?.(
-          normalizedTerminalHandle,
-          provenancePathCandidate(pathText, absolutePath),
-          artifactPath
-        ))
-      ) {
-        return { ...empty, relativePath, absolutePath }
-      }
+      // Why: any caller allowed this method can already run commands as this host's user, so no path is off limits.
       return await this.artifacts.resolveAbsoluteFileGrant({
         worktreeId: worktree.id,
-        artifactPath,
-        rejectedAbsolutePath: absolutePath,
+        absolutePath,
         clientId
       })
     } catch (error) {

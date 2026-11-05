@@ -4,8 +4,7 @@ import { LoadingSpinner } from '@/components/LoadingSpinner'
 /** Deferred so a fast local round-trip never flashes a spinner; the button greys at once. */
 const PENDING_SPINNER_DELAY_MS = 200
 
-/** A button's icon that turns into the working spinner while its own action is on its way. The
- *  spinner takes the icon's size, so the button never resizes mid-action. */
+/** Reuse the icon’s size for the delayed spinner so pending actions cannot resize the button. */
 export function NativeChatPendingIcon({
   pending,
   className,

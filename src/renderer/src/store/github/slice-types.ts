@@ -1,3 +1,5 @@
+import type { GitHubSourceCollections } from './source-collections'
+import type { GitHubTaskRecordCache } from './task-record-cache'
 import type { ClassifiedError } from '../../../../shared/classified-error'
 import type { PRCheckDetail, PRCheckRunDetails } from '../../../../shared/github/check-types'
 import type {
@@ -43,10 +45,14 @@ import type {
 import type { PRRefreshState, PRRefreshStateClearToken } from './pr-refresh-state'
 
 export type GitHubSlice = {
+  githubSourceCollections: GitHubSourceCollections
+  githubTaskCache: GitHubTaskRecordCache
   prCache: Record<string, CacheEntry<PRInfo>>
   issueCache: Record<string, CacheEntry<IssueInfo>>
   checksCache: Record<string, CacheEntry<PRCheckDetail[]>>
   commentsCache: Record<string, CacheEntry<PRComment[]>>
+  /** Resolve/unresolve requests in flight: comments cacheKey + threadId -> threadId. */
+  reviewThreadResolutionsInFlight: Record<string, string>
   prRefreshSequences: Record<string, number>
   prRefreshStates: Record<string, PRRefreshState>
   prVisibleRefreshGeneration: number
@@ -64,6 +70,7 @@ export type GitHubSlice = {
       fallbackPRNumber?: number | null
       fallbackPRSource?: GitHubPRFallbackSource | null
       reason?: GitHubPRRefreshReason
+      userRefresh?: boolean
     }
   ) => Promise<PRInfo | null>
   fetchIssue: (
@@ -77,7 +84,12 @@ export type GitHubSlice = {
     branch?: string,
     headSha?: string,
     prRepo?: GitHubOwnerRepo | null,
-    options?: RepoScopedFetchOptions & { throwOnError?: boolean }
+    options?: RepoScopedFetchOptions & {
+      throwOnError?: boolean
+      /** Refresh or a check action: a user act that may start a stopped WSL distro. */
+      wakeWslDistro?: boolean
+      userRefresh?: boolean
+    }
   ) => Promise<PRCheckDetail[]>
   fetchPRCheckDetails: (
     repoPath: string,
@@ -93,7 +105,7 @@ export type GitHubSlice = {
   fetchPRComments: (
     repoPath: string,
     prNumber: number,
-    options?: RepoScopedFetchOptions & { prRepo?: GitHubOwnerRepo | null }
+    options?: RepoScopedFetchOptions & { prRepo?: GitHubOwnerRepo | null; userRefresh?: boolean }
   ) => Promise<PRComment[]>
   addPRConversationComment: (
     repoPath: string,
@@ -130,12 +142,13 @@ export type GitHubSlice = {
   ) => Promise<boolean>
   initGitHubCache: () => Promise<void>
   refreshAllGitHub: () => void
-  refreshGitHubForWorktree: (worktreeId: string) => void
+  refreshGitHubForWorktree: (worktreeId: string, executionHostId?: string) => void
   refreshGitHubForWorktreeIfStale: (worktreeId: string) => void
   enqueueGitHubPRRefresh: (
     worktreeId: string,
     reason: GitHubPRRefreshReason,
-    priority?: number
+    priority?: number,
+    executionHostId?: string
   ) => void
   reportVisibleGitHubPRRefreshCandidates: (
     worktreeIds: string[],
@@ -157,17 +170,14 @@ export type GitHubSlice = {
     repoPath?: string,
     sourceContext?: TaskSourceContext | null
   ) => readonly GitHubWorkItem[] | null
-  /** Returns a thin view (sources + error, never items) so it stays a cheap selector without dragging the whole work-item array through the equality check. */
+  /** Select only sources/error, avoiding item-array equality cost. */
   getWorkItemsSourcesAndError: (
     repoId: string,
     limit: number,
     query: string,
     repoPath?: string
   ) => { sources: WorkItemsCacheSources | null; error: WorkItemsCacheError | null }
-  /**
-   * Falls back to any `${repoPath}::` cache entry with resolved sources when the primary entry isn't populated yet — sources are repo-level (query-independent), so any sibling is safe to reuse.
-   * Returns a single stable reference so the dialog can subscribe to just this selector; entries are replaced (not mutated) on write, preserving reference equality between unchanged entries.
-   */
+  /** Sources are query-independent: fall back to sibling repoPath cache entries until primary populates. Return one stable reference; replaced entries preserve equality across unchanged writes. */
   getWorkItemsAnySourcesForRepo: (
     repoId: string,
     limit: number,
@@ -179,11 +189,8 @@ export type GitHubSlice = {
     limit: number,
     query: string,
     options?: FetchOptions
-  ) => Promise<readonly GitHubWorkItem[]>
-  /**
-   * Fan out one work-item query across repos; partial failures don't reject — a repo with no cached fallback increments `failedCount`, but one served stale cache on rejection isn't counted.
-   * `githubUnavailable`: every selected GitHub source refresh failed because GitHub was unreachable (5xx/network/rate-limit), even if stale cache remains — lets the caller attribute the stale/empty list.
-   */
+  ) => Promise<readonly GitHubWorkItem[] | undefined>
+  /** Fan out across repos with stale-cache fallback; failedCount counts only failures without data. githubUnavailable means all eligible GitHub sources failed reachability, even if stale results remain. */
   fetchWorkItemsAcrossRepos: (
     repos: {
       repoId: string
@@ -195,12 +202,15 @@ export type GitHubSlice = {
     displayLimit: number,
     query: string,
     options?: FetchOptions
-  ) => Promise<{
-    items: GitHubWorkItem[]
-    failedCount: number
-    githubUnavailable: boolean
-    requestFailureCount?: number
-  }>
+  ) => Promise<
+    | {
+        items: GitHubWorkItem[]
+        failedCount: number
+        githubUnavailable: boolean
+        requestFailureCount?: number
+      }
+    | undefined
+  >
   /** Fetch one numbered provider page. Pagination pages remain renderer-local. */
   fetchWorkItemsNextPage: (
     repos: {
@@ -213,12 +223,15 @@ export type GitHubSlice = {
     displayLimit: number,
     query: string,
     page: number,
-    options?: Pick<FetchOptions, 'noCache' | 'requireComplete'>
-  ) => Promise<{
-    items: GitHubWorkItem[]
-    failedCount: number
-    errorTypes: ClassifiedError['type'][]
-  }>
+    options?: Pick<FetchOptions, 'noCache' | 'requireComplete' | 'wakeWslDistro'>
+  ) => Promise<
+    | {
+        items: GitHubWorkItem[]
+        failedCount: number
+        errorTypes: ClassifiedError['type'][]
+      }
+    | undefined
+  >
   /** Count items and derive pages from the largest per-repo result set. */
   countWorkItemsAcrossRepos: (
     repos: {
@@ -228,8 +241,9 @@ export type GitHubSlice = {
       sourceContext?: TaskSourceContext | null
     }[],
     query: string,
-    perRepoLimit: number
-  ) => Promise<{ totalCount: number; totalPages: number }>
+    perRepoLimit: number,
+    options?: Pick<FetchOptions, 'wakeWslDistro'>
+  ) => Promise<{ totalCount: number; totalPages: number } | undefined>
   /** Fire-and-forget prefetch to warm the cache before the page mounts (hover/focus of the "new workspace" buttons). */
   prefetchWorkItems: (
     repoId: string,
@@ -240,13 +254,14 @@ export type GitHubSlice = {
   ) => void
   patchWorkItem: (
     itemId: string,
-    patch: Partial<GitHubWorkItem>,
+    /** A function patch applies one operation's change to each matching copy's current value. */
+    patch: Partial<GitHubWorkItem> | ((row: GitHubWorkItem) => Partial<GitHubWorkItem>),
     repoId?: string | null,
     options?: GitHubPatchWorkItemOptions
   ) => void
-  /** Monotonic counter bumped on issue-source preference flips; subscribers include it in their deps to force a re-fetch, since cache eviction alone won't trip effects keyed on selectedRepos/search/nonce. */
+  /** Source preference changes bump this nonce; cache eviction alone does not trigger fetch effects. */
   workItemsInvalidationNonce: number
-  /** Persist the preference, update the local Repo record, and invalidate all `${repoId}::*` cache keys — not just the primary — so alternate-query lines don't serve stale results after the source flips. */
+  /** Persist preference, patch local repo and invalidate every repoId query key so alternate caches cannot retain the old source. */
   setIssueSourcePreference: (
     repoId: string,
     repoPath: string,
@@ -256,7 +271,6 @@ export type GitHubSlice = {
   ) => Promise<void>
   /** Drops the row's entries on every host scope; `hostId` names the row so a same-id twin on another host keeps its own. */
   evictGitHubRepoCaches: (repoId: string, repoPath?: string, hostId?: ExecutionHostId) => void
-  // ── ProjectV2 view cache ─────────────────────────────────────────────
   projectViewCache: Record<string, ProjectViewCacheEntry<GitHubProjectTable>>
   /** `sourceTarget` names the board's row-less source host; the focused server is never read. */
   fetchProjectViewTable: (
@@ -285,6 +299,6 @@ export type GitHubSlice = {
     rowId: string,
     issueType: { id: string; name: string; color: string | null; description: string | null } | null
   ) => Promise<GitHubProjectMutationResult>
-  /** Optimistic, IPC-free patcher for a single `projectViewCache` row's `content`; `patchWorkItem` only walks `workItemsCache` and would leave the Project view stale until the next refresh. */
+  /** Patch ProjectV2 content without IPC; patchWorkItem updates only workItemsCache and leaves boards stale. */
   patchProjectRowContent: (cacheKey: string, rowId: string, patch: ProjectRowContentPatch) => void
 }

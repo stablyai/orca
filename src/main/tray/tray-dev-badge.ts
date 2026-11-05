@@ -1,22 +1,13 @@
 import { nativeImage, type NativeImage } from 'electron'
 
-// Why: a 5px-tall pixel-caps "DEV" is the smallest text that stays legible in
-// the 14pt menu-bar template; it fills the empty area left of the orca glyph
-// so the status item keeps the exact production footprint.
+// Five-pixel DEV text fits the empty glyph area without widening the production 14pt status item.
 const DEV_BADGE_ROWS = ['##..###.#.#', '#.#.#...#.#', '#.#.##..#.#', '#.#.#...#.#', '##..###..#.']
 const BADGE_OFFSET_X = 0
 const BADGE_OFFSET_Y = 3
-// Why: the orca tail's antialiased pixels touch the V's right stroke and make
-// "DEV" read as "DEU"; clearing a margin around the badge keeps it legible.
+// Clear an antialias margin so the tail does not turn DEV into DEU.
 const BADGE_CLEAR_MARGIN = 1
 
-/**
- * Returns a copy of the menu-bar template with a "DEV" pixel-text badge
- * stamped left of the glyph. Badge pixels are template black (#000 + alpha),
- * so macOS tints them with the glyph in both menu-bar themes and the attention
- * tint path inherits the badge unchanged. Returns `base` untouched when the
- * image has no pixels.
- */
+/** Stamp template-black/alpha pixels so macOS and attention tint preserve the dev badge across themes; empty images stay unchanged. */
 export function stampTrayDevBadge(base: NativeImage, scaleFactor = 1): NativeImage {
   const { width, height } = base.getSize()
   if (width <= 0 || height <= 0) {
@@ -43,8 +34,7 @@ export function stampTrayDevBadge(base: NativeImage, scaleFactor = 1): NativeIma
       if (pattern[col] !== '#') {
         continue
       }
-      // Why: replicate each badge pixel scaleFactor times so the Retina
-      // representation shows the same physical badge as the 1x one.
+      // Scale badge pixels so Retina and 1x keep the same physical size.
       for (let dy = 0; dy < scaleFactor; dy++) {
         for (let dx = 0; dx < scaleFactor; dx++) {
           const x = (BADGE_OFFSET_X + col) * scaleFactor + dx

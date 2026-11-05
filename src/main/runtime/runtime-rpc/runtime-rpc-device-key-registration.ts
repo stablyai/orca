@@ -1,15 +1,15 @@
 import type {
   RegisterDeviceKeyParams,
   RegisterDeviceKeyResult
-} from '../../../shared/device-key-registration-contract'
-import { sanitizeDeviceLabel, verifyDeviceProof } from '../../../shared/device-key-proof'
+} from '../../../shared/remote-runtime/pairing/device-key-registration-contract'
+import {
+  sanitizeDeviceLabel,
+  verifyDeviceProof
+} from '../../../shared/remote-runtime/pairing/device-key-proof'
 import type { DeviceRegistry } from '../device-registry'
 import type { AuthenticatedMobileSocket } from '../rpc/mobile-socket-wiring'
 
-/**
- * Registers the calling installation's key by forking its token row (device-key-fork.ts). Proof of
- * possession is bound to this socket's v2 transcript, so a captured proof is useless elsewhere.
- */
+/** Fork the installation's token row; possession proof binds to this socket's v2 transcript and cannot be replayed elsewhere. */
 export function registerSocketDeviceKey(
   registry: DeviceRegistry,
   socket: AuthenticatedMobileSocket,

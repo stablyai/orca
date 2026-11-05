@@ -1,7 +1,4 @@
-/**
- * Invariant: the documented hello-orca plugin stays inert before visible
- * consent, then its panel, worker command, and event subscription all work.
- */
+// Require visible consent before the hello-orca panel, worker command or event subscription runs.
 
 import { cp, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -9,6 +6,15 @@ import { join } from 'node:path'
 import type { Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
 import { removeWorktreeViaStore } from './helpers/dead-terminal'
+import {
+  pluginGuest,
+  readGuestCsp,
+  readInGuest,
+  ISOLATED_FRAMES_E2E
+} from './helpers/plugin-frame-guest'
+
+// Isolated frames are off by default; these journeys exercise the guest path.
+test.use(ISOLATED_FRAMES_E2E)
 
 async function openPluginSettings(page: Page): Promise<void> {
   await page.evaluate(() => {
@@ -19,7 +25,9 @@ async function openPluginSettings(page: Page): Promise<void> {
     state.openSettingsTarget({ pane: 'plugins', repoId: null })
     state.openSettingsPage()
   })
-  await expect(page.locator('[data-settings-section="plugins"]')).toBeVisible()
+  const section = page.locator('[data-settings-section="plugins"]')
+  await expect(section).toBeVisible()
+  await expect(section.getByText('Alpha', { exact: true })).toBeVisible()
 }
 
 async function openDemoPanel(page: Page): Promise<void> {
@@ -36,11 +44,16 @@ async function openDemoPanel(page: Page): Promise<void> {
   const panelButton = page.getByRole('button', { name: 'Hello Orca', exact: true })
   await expect(panelButton).toBeVisible({ timeout: 15_000 })
   await panelButton.click()
-  const frame = page.frameLocator('iframe[title="Hello Orca"]')
-  await expect(frame.getByRole('heading', { name: 'Hello Orca 👋' })).toBeVisible()
-  await expect(frame.locator('meta[http-equiv="Content-Security-Policy"]')).toHaveAttribute(
-    'content',
-    /default-src 'none'/
+  const guest = pluginGuest(page, 'Hello Orca')
+  await expect(guest).toBeVisible({ timeout: 15_000 })
+  await expect.poll(() => readDemoHeading(page)).toBe('Hello Orca 👋')
+  expect(await readGuestCsp(guest)).toMatch(/default-src 'self'.*connect-src 'self' data: blob:/)
+}
+
+function readDemoHeading(page: Page): Promise<string | null> {
+  return readInGuest<string | null>(
+    pluginGuest(page, 'Hello Orca'),
+    `document.querySelector('h1')?.textContent ?? null`
   )
 }
 
@@ -110,16 +123,26 @@ test('runs hello-orca panel, command, and event behind visible consent', async (
     await openPluginSettings(orcaPage)
     await orcaPage.getByRole('tab', { name: /^Installed/ }).click()
     const row = orcaPage.locator(`[data-plugin-key="${installed.pluginKey}"]`)
-    await expect(row).toContainText('Needs review')
-    await row.getByRole('button', { name: 'Review & enable' }).click()
-    const consent = orcaPage.getByRole('dialog', { name: 'Review permissions' })
+    // Why on the page: review sits above its one button there, not in a dialog over the list.
+    await row.getByRole('button', { name: 'Review', exact: true }).click()
+    const consent = orcaPage.locator('[data-plugin-consent]')
     await expect(consent).toBeVisible()
-    await expect(consent).toContainText('Local folder')
-    await expect(consent).toContainText('full access to your files, network, and other processes')
-    await expect(consent.getByRole('button', { name: 'Keep Disabled' })).toBeFocused()
-    await consent.getByRole('button', { name: 'Enable plugin' }).click()
+    await expect(orcaPage.getByRole('article')).toContainText('Local folder')
+    await expect(consent).toContainText(
+      'Full access: runs as a normal program and can read your files, use the network and run other programs.'
+    )
+    await expect(orcaPage.getByRole('dialog')).toHaveCount(0)
+    await orcaPage
+      .getByRole('article')
+      .getByRole('button', { name: /^Enable plugin/ })
+      .click()
     await expect(consent).toBeHidden()
-    await expect(row).toContainText('Enabled')
+    await orcaPage
+      .getByRole('article')
+      .getByRole('button', { name: 'Plugins', exact: true })
+      .click()
+    await orcaPage.getByRole('tab', { name: /^Installed/ }).click()
+    await expect(row).toContainText('Installed')
 
     const commandResults = await orcaPage.evaluate(async (pluginKey) => {
       const first = await window.api.plugins.invokeCommand({
@@ -134,25 +157,37 @@ test('runs hello-orca panel, command, and event behind visible consent', async (
       })
       return { first, second }
     }, installed.pluginKey)
-    expect(commandResults.first).toEqual({ pong: true, count: 1, args: { source: 'e2e' } })
-    expect(commandResults.second).toEqual({ pong: true, count: 2, args: { source: 'e2e' } })
+    expect(commandResults.first).toBe('Pong! First ping.')
+    expect(commandResults.second).toBe('Pong! 2 pings so far.')
 
     await orcaPage.evaluate(async (sourcePath) => {
       const settings = await window.api.settings.set({ devPluginPaths: [sourcePath] })
       window.__store?.setState({ settings })
       await window.api.plugins.refresh()
     }, pluginRoot)
+    // A dev folder taking over the approved install is different code, so it needs its own review.
+    await orcaPage.evaluate(async (pluginKey) => {
+      const plugin = (await window.api.plugins.list()).find(
+        (entry) => entry.pluginKey === pluginKey
+      )
+      if (!plugin?.consentFingerprint || plugin.status !== 'pending') {
+        throw new Error('the dev copy should wait for review')
+      }
+      await window.api.plugins.consent({
+        pluginKey,
+        reviewedFingerprint: plugin.consentFingerprint,
+        decision: 'approve'
+      })
+    }, installed.pluginKey)
 
     await openDemoPanel(orcaPage)
 
     const panelPath = join(pluginRoot, 'panel.html')
     const panelHtml = await readFile(panelPath, 'utf8')
     await writeFile(panelPath, panelHtml.replace('Hello Orca 👋', 'Hello Orca reloaded'))
-    await expect(
-      orcaPage.frameLocator('iframe[title="Hello Orca"]').getByRole('heading', {
-        name: 'Hello Orca reloaded'
-      })
-    ).toBeVisible({ timeout: 15_000 })
+    await expect
+      .poll(() => readDemoHeading(orcaPage), { timeout: 15_000 })
+      .toBe('Hello Orca reloaded')
 
     createdWorktreeId = await createWorktree(orcaPage, `plugin-event-${Date.now()}`)
     await expect

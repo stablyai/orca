@@ -1,19 +1,11 @@
-/**
- * A switch-on desktop paired to a switch-on `orca serve` sends its tab moves on a server workspace
- * to the server's main (H5c-1): a tab drag and a move into a new split change the server's own
- * layout, and the desktop draws the result from the server's frames, never the session.tabs mirror.
- *
- * Run (switch-on build: ORCA_LAYOUT_OWNER=main ... --mode e2e):
- *   SKIP_BUILD=1 pnpm exec playwright test tests/e2e/paired-desktop-server-layout-intents.spec.ts \
- *     --config tests/playwright.config.ts --project electron-headless --workers=2
- */
+// H5c-1: with ORCA_LAYOUT_OWNER=main, desktop tab drags and splits must change server authority and draw its frames.
 import { existsSync } from 'node:fs'
 import path from 'node:path'
 import type { Page } from '@stablyai/playwright-test'
 import {
   HOST_TERMINAL_SURFACE_SEPARATOR,
   toWebTerminalSurfaceTabId
-} from '../../src/shared/terminal-surface-id'
+} from '../../src/shared/workspace-layout/terminal-surface-id'
 import { LAYOUT_INTENTS_RUNTIME_CAPABILITY } from '../../src/shared/workspace-layout/layout-intents-capability'
 import { expect, test } from './helpers/orca-app'
 import { launchHeadlessPairedRuntimeHost } from './helpers/headless-paired-runtime-host'

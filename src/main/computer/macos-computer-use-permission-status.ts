@@ -17,11 +17,16 @@ import { stopMacOSPermissionStatusHelper } from './macos-computer-use-permission
 
 const PERMISSION_STATUS_HELPER_LAUNCH_TIMEOUT_MS = 5_000
 
-export function getComputerUsePermissionStatus(): Promise<ComputerUsePermissionStatusResult> {
-  return getComputerUsePermissionStatusAsync()
+// onHelperSpawn fires when `open` actually starts, so launch budgets measure real spawns.
+export function getComputerUsePermissionStatus(
+  onHelperSpawn: () => void = () => {}
+): Promise<ComputerUsePermissionStatusResult> {
+  return getComputerUsePermissionStatusAsync(onHelperSpawn)
 }
 
-async function getComputerUsePermissionStatusAsync(): Promise<ComputerUsePermissionStatusResult> {
+async function getComputerUsePermissionStatusAsync(
+  onHelperSpawn: () => void
+): Promise<ComputerUsePermissionStatusResult> {
   if (process.platform !== 'darwin') {
     return {
       platform: process.platform,
@@ -35,19 +40,15 @@ async function getComputerUsePermissionStatusAsync(): Promise<ComputerUsePermiss
   }
 
   const helperAppPath = resolveMacOSComputerUseAppPath()
-  if (!helperAppPath) {
-    return createUnavailablePermissionStatus('Orca Computer Use.app was not found', null)
-  }
-
-  const executablePath = resolveMacOSComputerUseExecutablePath()
-  if (!executablePath) {
+  const unavailableReason = resolveComputerUseHelperUnavailableReason()
+  if (!helperAppPath || unavailableReason) {
     return createUnavailablePermissionStatus(
-      `${helperAppPath}/Contents/MacOS/orca-computer-use-macos was not found`,
+      unavailableReason ?? 'Orca Computer Use.app was not found',
       helperAppPath
     )
   }
 
-  const raw = await readPermissionStatusFromHelperApp(helperAppPath)
+  const raw = await readPermissionStatusFromHelperApp(helperAppPath, onHelperSpawn)
 
   return {
     platform: process.platform,
@@ -58,6 +59,18 @@ async function getComputerUsePermissionStatusAsync(): Promise<ComputerUsePermiss
       { id: 'screenshots', status: raw.screenshots ?? 'not-granted' }
     ]
   }
+}
+
+// Answers from the bundle layout alone, without launching the helper.
+export function resolveComputerUseHelperUnavailableReason(): string | null {
+  const helperAppPath = resolveMacOSComputerUseAppPath()
+  if (!helperAppPath) {
+    return 'Orca Computer Use.app was not found'
+  }
+  if (!resolveMacOSComputerUseExecutablePath()) {
+    return `${helperAppPath}/Contents/MacOS/orca-computer-use-macos was not found`
+  }
+  return null
 }
 
 function createUnavailablePermissionStatus(
@@ -76,14 +89,14 @@ function createUnavailablePermissionStatus(
 }
 
 async function readPermissionStatusFromHelperApp(
-  helperAppPath: string
+  helperAppPath: string,
+  onHelperSpawn: () => void
 ): Promise<Partial<Record<ComputerUsePermissionId, ComputerUsePermissionStatus>>> {
   const tempDir = await mkdtemp(join(tmpdir(), 'orca-computer-use-permissions-'))
   const statusPath = join(tempDir, 'status.json')
   try {
-    // Why: TCC status must be checked through the helper app identity. Directly
-    // execing the binary can inherit the parent app's already-granted context.
-    await launchPermissionStatusHelper(helperAppPath, statusPath)
+    // Launch the helper app so TCC checks its identity instead of inheriting the parent's grants.
+    await launchPermissionStatusHelper(helperAppPath, statusPath, onHelperSpawn)
 
     for (let attempt = 0; attempt < 50; attempt++) {
       if (await fileExists(statusPath)) {
@@ -96,13 +109,16 @@ async function readPermissionStatusFromHelperApp(
     }
     throw new RuntimeClientError('accessibility_error', 'Timed out checking permissions')
   } finally {
-    // Do not wait for helper cleanup before returning its permission status.
     void stopMacOSPermissionStatusHelper(statusPath)
     await rm(tempDir, { recursive: true, force: true })
   }
 }
 
-function launchPermissionStatusHelper(helperAppPath: string, statusPath: string): Promise<void> {
+function launchPermissionStatusHelper(
+  helperAppPath: string,
+  statusPath: string,
+  onHelperSpawn: () => void
+): Promise<void> {
   return new Promise((resolve, reject) => {
     const launch = spawn(
       '/usr/bin/open',
@@ -111,6 +127,7 @@ function launchPermissionStatusHelper(helperAppPath: string, statusPath: string)
         stdio: ['ignore', 'pipe', 'pipe']
       }
     )
+    onHelperSpawn()
     let stdout = ''
     let stderr = ''
 
@@ -174,8 +191,7 @@ function launchPermissionStatusHelper(helperAppPath: string, statusPath: string)
         new RuntimeClientError('accessibility_error', 'Timed out launching permission helper')
       )
     }
-    // Why: the status-file polling timeout only starts after `open` exits; if
-    // `open` wedges first, permission checks would otherwise stay pending.
+    // Polling starts after open exits, so a stalled launch needs its own deadline.
     launchTimeout = setTimeout(onTimeout, PERMISSION_STATUS_HELPER_LAUNCH_TIMEOUT_MS)
     if (typeof launchTimeout.unref === 'function') {
       launchTimeout.unref()

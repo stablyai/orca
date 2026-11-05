@@ -4,11 +4,7 @@ import { computeMonacoRevealRange } from './monaco-reveal-range'
 
 export const MAX_REVEAL_CONTENT_WAIT_FRAMES = 120
 
-/**
- * Shared reveal logic used by both onMount and useEffect paths in MonacoEditor.
- * Positions the cursor, optionally selects the match range, scrolls into center,
- * and applies a transient inline highlight decoration that clears after 1.2s.
- */
+/** Share mount/live reveal behavior: select and center the match, then briefly highlight it. */
 export function performReveal(
   ed: editor.IStandaloneCodeEditor,
   line: number,

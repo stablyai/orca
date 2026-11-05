@@ -1,7 +1,7 @@
 import type { Repo } from '../repo-types'
 import type { Worktree } from '../worktree/types'
 import { getWorktreeHostIdentity } from '../worktree/host-qualified-identity'
-import { getFolderWorkspaceHostIdentity } from '../folder-workspace-worktree'
+import { getFolderWorkspaceHostIdentity } from '../folder-workspaces/folder-workspace-worktree'
 import { getWorktreeLineageGroupKey } from './group-keys'
 import {
   getExpandedWorktreeOccurrences,
@@ -35,15 +35,14 @@ export function buildPendingCreationRow(
 
 export function buildImportedWorktreesCardRow(
   candidate: ImportedWorktreesCardCandidate,
-  placement: ImportedWorktreesCardRow['placement'],
   hostContext?: NoticeHostContext
 ): ImportedWorktreesCardRow {
   return {
     type: 'imported-worktrees-card',
-    key: `imported-worktrees-card:${placement}:${candidate.repo.id}`,
+    key: `imported-worktrees-card:repo-group:${candidate.repo.id}`,
     repo: candidate.repo,
     hiddenWorktrees: candidate.hiddenWorktrees,
-    placement,
+    placement: 'repo-group',
     ...(hostContext
       ? { hostContextLabel: hostContext.label, hostContextHostId: hostContext.hostId }
       : {})
@@ -78,7 +77,6 @@ export function appendWorktreeRows(
   }
 ): void {
   const sectionOccurrences = plan.bySection.get(options.sectionKey) ?? []
-  // Keep disclosure membership available while child rows are collapsed.
   const childIdsByParent = new Map<string, string[]>()
   for (const occurrence of sectionOccurrences) {
     if (occurrence.parent) {
@@ -118,9 +116,7 @@ export function appendWorktreeRows(
   }
 }
 
-/** The one folder-workspace row constructor, shared by the project-group,
- *  grouped-lane and flat emitters so their rows cannot diverge. Keyed by host: two hosts can
- *  share a folder id. */
+/** One host-keyed folder row constructor for all emitters; IDs can collide across hosts. */
 export function buildFolderWorkspaceRow(
   pair: RenderableFolderWorkspace,
   groupDepth: number

@@ -30,9 +30,12 @@ vi.mock('./runtime-client', async () => {
 
 vi.mock('./runtime/environments', () => ({
   addEnvironmentFromPairingCode: addEnvironmentFromPairingCodeMock,
-  listEnvironments: listEnvironmentsMock,
   removeEnvironment: vi.fn(),
   resolveEnvironment: vi.fn()
+}))
+
+vi.mock('../shared/remote-runtime/host-store/runtime-environment-store', () => ({
+  listEnvironments: listEnvironmentsMock
 }))
 
 vi.mock('child_process', async () => {
@@ -56,7 +59,7 @@ function buildSetup(overrides: { id: string; hostId: string; repoId: string; pat
   }
 }
 
-// Why one repo id on two setups: a project copied between hosts keeps its id (Codex review 6 #6).
+// Copies on different hosts retain the same repo id.
 const TWIN_SETUPS = [
   buildSetup({ id: 'setup-1', hostId: 'local', repoId: 'repo-1', path: '/tmp/orca' }),
   buildSetup({ id: 'setup-1', hostId: 'runtime:gpu', repoId: 'repo-1', path: '/srv/orca' })

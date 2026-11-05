@@ -53,8 +53,7 @@ export function releasePaneResumeHold(paneKey: string, isHolding: () => boolean)
   }
 }
 
-// Why: a pane's start that resumes its record in place (shown, or a hidden pane's background wake)
-// owns it until that start settles; main clears the gone terminal's binding meanwhile.
+// An in-place resumed start owns its session until settlement even while main clears the old terminal binding.
 const inPlaceResumesByPaneKey = new Map<string, Set<() => boolean>>()
 
 /** Returns the release; `isLive` lets a disposed pane stop owning a start that never settles. */

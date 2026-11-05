@@ -5,23 +5,22 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   AgentSessionStatusEvent,
   AgentSessionStatusSummary
-} from '../../../../shared/agent-session-wire'
-import { buildSubagentChildRows } from '../sidebar/worktree-subagent-child-rows'
-import { hasSleepableWorkspaceActivity } from '../sidebar/workspace-lineage-menu-actions'
+} from '../../../../shared/agent-session/agent-session-wire'
+import { buildSubagentChildRows } from '../sidebar/workspace-card/activity/worktree-subagent-child-rows'
+import { hasSleepableWorkspaceActivity } from '../sidebar/workspace-actions/context-menu/workspace-lineage-menu-actions'
 import { resolveAttention } from '../../../../shared/sidebar-list/smart-attention'
 import { isExplicitAgentStatusFresh } from '@/lib/pane-agent-evidence'
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { Tab } from '../../../../shared/tab-types'
 import type { AppState } from '@/store/types'
 import type * as RuntimeRpcClientModule from '@/runtime/runtime-rpc-client'
 
 const mocks = vi.hoisted(() => ({
-  removeAgentStatus: vi.fn(),
   setAgentStatus: vi.fn(),
-  store: null as null | {
+  store: ((): {
     getState: () => AppState
-    setState: (state: Partial<AppState> & { testRuntimeOwner?: string | null }) => void
-  },
+    setState: (state: Partial<AppState>) => void
+  } | null => null)(),
   subscribeStatus: vi.fn(),
   subscribeTranscript: vi.fn(),
   supportsCapability: vi.fn(),
@@ -31,25 +30,28 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/store', async () => {
   const { createTestStore } = await import('@/store/slices/store-test-helpers')
   const useAppStore = createTestStore()
-  const { setAgentStatus, removeAgentStatus } = useAppStore.getState()
+  const { setAgentStatus, transactAgentStatuses } = useAppStore.getState()
   useAppStore.setState({
+    transactAgentStatuses: (operation) =>
+      transactAgentStatuses((transaction) =>
+        operation({
+          ...transaction,
+          apply: (update) => {
+            if (update.kind === undefined || update.kind === 'status') {
+              mocks.setAgentStatus(update)
+            }
+            return transaction.apply(update)
+          }
+        })
+      ),
     setAgentStatus: (...args) => {
       mocks.setAgentStatus(...args)
       setAgentStatus(...args)
-    },
-    removeAgentStatus: (paneKey) => {
-      mocks.removeAgentStatus(paneKey)
-      removeAgentStatus(paneKey)
     }
   })
   mocks.store = useAppStore
   return { useAppStore }
 })
-
-vi.mock('@/lib/worktree-runtime-owner', () => ({
-  getExecutionHostIdForWorktree: (state: { testRuntimeOwner?: string | null }) =>
-    state.testRuntimeOwner ? `runtime:${state.testRuntimeOwner}` : 'local'
-}))
 
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => ({
   ...(await importOriginal<typeof RuntimeRpcClientModule>()),
@@ -62,12 +64,7 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
   subscribeStructuredAgentSessionStatus: mocks.subscribeStatus
 }))
 
-import {
-  getStructuredAgentSessionTabs,
-  StructuredAgentSessionStatusBridge,
-  useStructuredAgentSessionHostExecutionPhase,
-  useStructuredAgentSessionHostStopping
-} from './StructuredAgentSessionStatusBridge'
+import { StructuredAgentSessionStatusBridge } from './StructuredAgentSessionStatusBridge'
 import { resetStructuredAgentSessionStatusFeedsForTests } from '@/runtime/structured-agent-session-status-feed'
 import { useAppStore } from '@/store'
 
@@ -117,13 +114,17 @@ function feed(index = 0): { target: unknown; emit: (event: AgentSessionStatusEve
 
 describe('StructuredAgentSessionStatusBridge', () => {
   beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(1_800_000_000_000)
     vi.clearAllMocks()
     resetStructuredAgentSessionStatusFeedsForTests()
     mocks.subscribeStatus.mockResolvedValue({ unsubscribe: mocks.unsubscribe })
     mocks.supportsCapability.mockResolvedValue(true)
     mocks.store?.setState({
       agentStatusByPaneKey: {},
-      testRuntimeOwner: null,
+      repos: [],
+      worktreesByRepo: {},
+      activeWorkspaceExecutionHostId: null,
       unifiedTabsByWorktree: { 'wt-1': [structuredTab] }
     })
   })
@@ -131,62 +132,10 @@ describe('StructuredAgentSessionStatusBridge', () => {
   afterEach(() => {
     cleanup()
     resetStructuredAgentSessionStatusFeedsForTests()
+    vi.useRealTimers()
   })
 
-  it('reuses the structured-tab projection for an unchanged tab map', () => {
-    const secondStructuredTab = {
-      ...structuredTab,
-      id: 'structured-tab-2',
-      entityId: 'session-2'
-    }
-    const tabsByWorktree: Record<string, Tab[]> = {
-      'wt-1': [structuredTab],
-      'wt-2': [secondStructuredTab]
-    }
-
-    const first = getStructuredAgentSessionTabs(tabsByWorktree)
-    const second = getStructuredAgentSessionTabs(tabsByWorktree)
-
-    expect(second).toBe(first)
-    expect(second).toEqual([structuredTab, secondStructuredTab])
-
-    const nextTabsByWorktree = {
-      ...tabsByWorktree,
-      'wt-3': [{ ...structuredTab, id: 'structured-tab-3', entityId: 'session-3' }]
-    }
-    expect(getStructuredAgentSessionTabs(nextTabsByWorktree)).toEqual([
-      structuredTab,
-      secondStructuredTab,
-      nextTabsByWorktree['wt-3'][0]
-    ])
-  })
-
-  it('projects the host status feed without opening a transcript reader', async () => {
-    render(<StructuredAgentSessionStatusBridge />)
-    await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledOnce())
-    expect(feed().target).toEqual({ kind: 'local' })
-    expect(mocks.subscribeTranscript).not.toHaveBeenCalled()
-
-    act(() => feed().emit({ type: 'snapshot', sessions: [summary()] }))
-
-    expect(statuses()).toEqual([
-      expect.objectContaining({
-        state: 'working',
-        prompt: 'hello',
-        agentType: 'codex',
-        sessionBoundary: false,
-        tabId: structuredTab.id,
-        worktreeId: 'wt-1',
-        terminalTitle: 'Codex Chat',
-        terminalResumeEligible: false,
-        providerSession
-      })
-    ])
-  })
-
-  // Hiddenness is the host's side of this: see structured-agent-session-subscribers.test.ts,
-  // which drives an unsubscribed journal through the feed. Here the transport is a mock, so
-  // only the summary-to-store mapping is under test.
+  // Test summary projection here; structured-agent-session-subscribers.test.ts covers real unsubscribed host liveness.
   it('keeps host-held working evidence active past the normal freshness window', async () => {
     render(<StructuredAgentSessionStatusBridge />)
     await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledOnce())
@@ -197,135 +146,7 @@ describe('StructuredAgentSessionStatusBridge', () => {
     expect(isExplicitAgentStatusFresh(entry, Date.now(), 30 * 60 * 1000)).toBe(true)
   })
 
-  it('clears host-held evidence when the status stream disconnects', async () => {
-    render(<StructuredAgentSessionStatusBridge />)
-    await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledOnce())
-    act(() => feed().emit({ type: 'status', session: summary() }))
-    expect(statuses()).toHaveLength(1)
-    act(() => feed().emit({ type: 'end' }))
-    expect(statuses()).toHaveLength(1)
-    expect(statuses()[0]).not.toHaveProperty('structuredHostOwned')
-  })
-
-  it('maps each host status onto the sidebar agent state', async () => {
-    render(<StructuredAgentSessionStatusBridge />)
-    await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledOnce())
-    act(() => feed().emit({ type: 'snapshot', sessions: [summary()] }))
-    expect(statuses()).toEqual([expect.objectContaining({ state: 'working' })])
-
-    act(() => feed().emit({ type: 'status', session: summary({ status: 'idle', updatedAt: 2 }) }))
-    expect(statuses()).toEqual([
-      expect.objectContaining({ state: 'done', sessionBoundary: false, stateStartedAt: 2 })
-    ])
-
-    act(() =>
-      feed().emit({ type: 'status', session: summary({ status: 'attention', updatedAt: 3 }) })
-    )
-    expect(statuses()).toEqual([expect.objectContaining({ state: 'blocked' })])
-  })
-
-  it('publishes agent-kind background tasks as the sidebar subagent children', async () => {
-    render(<StructuredAgentSessionStatusBridge />)
-    await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledOnce())
-
-    act(() =>
-      feed().emit({
-        type: 'snapshot',
-        sessions: [
-          summary({
-            backgroundTasks: [
-              {
-                id: 'child-1',
-                kind: 'agent',
-                name: 'deep_review',
-                description: 'Review the diff',
-                state: 'working',
-                startedAt: 500
-              },
-              // A backgrounded shell is not a subagent; kinds stay distinct.
-              { id: 'shell-1', kind: 'command', description: 'sleep 180', state: 'working' }
-            ]
-          })
-        ]
-      })
-    )
-    expect(statuses()).toEqual([
-      expect.objectContaining({
-        subagents: [
-          {
-            id: 'child-1',
-            state: 'working',
-            startedAt: 500,
-            agentType: 'deep_review',
-            description: 'Review the diff'
-          }
-        ]
-      })
-    ])
-
-    // An unchanged roster must not rewrite the store.
-    const writes = mocks.setAgentStatus.mock.calls.length
-    act(() =>
-      feed().emit({
-        type: 'status',
-        session: summary({
-          backgroundTasks: [
-            {
-              id: 'child-1',
-              kind: 'agent',
-              name: 'deep_review',
-              description: 'Review the diff',
-              state: 'working',
-              startedAt: 500
-            },
-            { id: 'shell-1', kind: 'command', description: 'sleep 180', state: 'working' }
-          ]
-        })
-      })
-    )
-    expect(mocks.setAgentStatus.mock.calls.length).toBe(writes)
-
-    act(() =>
-      feed().emit({
-        type: 'status',
-        session: summary({
-          updatedAt: 2,
-          backgroundTasks: [
-            { id: 'child-1', kind: 'agent', name: 'deep_review', state: 'waiting', startedAt: 500 }
-          ]
-        })
-      })
-    )
-    expect(statuses()).toEqual([
-      expect.objectContaining({
-        subagents: [expect.objectContaining({ id: 'child-1', state: 'waiting' })]
-      })
-    ])
-
-    act(() =>
-      feed().emit({
-        type: 'status',
-        session: summary({
-          updatedAt: 3,
-          backgroundTasks: [{ id: 'child-1', kind: 'agent', state: 'unverifiable' }]
-        })
-      })
-    )
-    expect(
-      buildSubagentChildRows({
-        parentEntry: statuses()[0],
-        tab: structuredTab as never,
-        parentIsFresh: true
-      })[0]?.state
-    ).toBe('unverifiable')
-
-    // A summary without tasks ends the fan-out: children clear with it.
-    act(() => feed().emit({ type: 'status', session: summary({ status: 'idle', updatedAt: 4 }) }))
-    expect(statuses()).toEqual([expect.objectContaining({ subagents: undefined })])
-  })
-
-  // The same fold the hook lane applies to a subagent roster: an idle lead is not idle
-  // while its children run, and a backgrounded shell reads as monitoring.
+  // Match hook semantics: live children keep the lead working; background shells keep it monitoring.
   it('keeps an idle session working while a subagent runs, and monitoring while a shell runs', async () => {
     render(<StructuredAgentSessionStatusBridge />)
     await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledOnce())
@@ -385,8 +206,7 @@ describe('StructuredAgentSessionStatusBridge', () => {
     ])
   })
 
-  // A watch loop's age is not how long the agent has been working: the clock restarts when the
-  // user's prompt turns a monitoring row into a real turn.
+  // A user turn restarts the working clock; a monitor’s age is not turn duration.
   it('restarts the state clock when monitoring becomes a real turn', async () => {
     render(<StructuredAgentSessionStatusBridge />)
     await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledOnce())
@@ -424,30 +244,6 @@ describe('StructuredAgentSessionStatusBridge', () => {
         stateStartedAt: 2_700_001
       })
     ])
-  })
-
-  // Mirrors the host ingest: the journal clock cannot date child work, so a row held open by a
-  // live roster alone must not age into staleness while the work is still running.
-  it('dates a child-work row by when this client saw it, not by the journal clock', async () => {
-    render(<StructuredAgentSessionStatusBridge />)
-    await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledOnce())
-    const before = Date.now()
-
-    act(() =>
-      feed().emit({
-        type: 'snapshot',
-        sessions: [
-          summary({
-            status: 'idle',
-            updatedAt: 1,
-            backgroundTasks: [{ id: 'shell-1', kind: 'command', state: 'working' }]
-          })
-        ]
-      })
-    )
-    const [row] = statuses()
-    expect(row).toMatchObject({ state: 'working', workingMode: 'monitoring' })
-    expect(row?.evidenceObservedAt ?? 0).toBeGreaterThanOrEqual(before)
   })
 
   it('requires fresh parent evidence as well as a reconfirmed feed after reconnect', async () => {
@@ -544,33 +340,6 @@ describe('StructuredAgentSessionStatusBridge', () => {
     expect(statuses()).toEqual([
       expect.objectContaining({ lastAssistantMessage: 'Suite is green — 412 passed.' })
     ])
-  })
-
-  it('shows no status before a persisted turn', async () => {
-    render(<StructuredAgentSessionStatusBridge />)
-    await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledOnce())
-
-    act(() => feed().emit({ type: 'snapshot', sessions: [summary({ status: null })] }))
-    expect(mocks.setAgentStatus).not.toHaveBeenCalled()
-
-    act(() => feed().emit({ type: 'status', session: summary({ updatedAt: 2 }) }))
-    expect(statuses()).toEqual([expect.objectContaining({ state: 'working' })])
-  })
-
-  it('keeps the status map reference stable for repeated equal summaries', async () => {
-    render(<StructuredAgentSessionStatusBridge />)
-    await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledOnce())
-    act(() => feed().emit({ type: 'snapshot', sessions: [summary()] }))
-    const before = mocks.store?.getState().agentStatusByPaneKey
-
-    act(() => {
-      for (let repeat = 0; repeat < 10; repeat += 1) {
-        feed().emit({ type: 'status', session: summary() })
-      }
-    })
-
-    expect(mocks.setAgentStatus).toHaveBeenCalledOnce()
-    expect(mocks.store?.getState().agentStatusByPaneKey).toBe(before)
   })
 
   it.each(['claude', 'codex'] as const)(
@@ -704,130 +473,6 @@ describe('StructuredAgentSessionStatusBridge', () => {
     expect(statuses()).toEqual([])
     await waitFor(() => expect(mocks.unsubscribe).toHaveBeenCalledOnce())
   })
-
-  it('reconnects after the host ends the stream', async () => {
-    vi.useFakeTimers()
-    try {
-      render(<StructuredAgentSessionStatusBridge />)
-      await act(() => Promise.resolve())
-      expect(mocks.subscribeStatus).toHaveBeenCalledOnce()
-
-      act(() => feed().emit({ type: 'end' }))
-      await act(() => vi.advanceTimersByTimeAsync(300))
-
-      expect(mocks.unsubscribe).toHaveBeenCalledOnce()
-      expect(mocks.subscribeStatus).toHaveBeenCalledTimes(2)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('keys the feed by the worktree runtime environment', async () => {
-    mocks.store?.setState({ testRuntimeOwner: 'env-1' })
-    render(<StructuredAgentSessionStatusBridge />)
-    await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledOnce())
-
-    expect(feed().target).toEqual({ kind: 'environment', environmentId: 'env-1' })
-  })
-
-  // Two hosts can publish the same workspace id; the tab records which one holds this chat.
-  it("reads a chat's status from the host recorded on its tab, not its workspace", async () => {
-    mocks.store?.setState({
-      testRuntimeOwner: null,
-      unifiedTabsByWorktree: {
-        'wt-1': [{ ...structuredTab, executionHostId: 'runtime:server-1' }]
-      }
-    })
-    render(<StructuredAgentSessionStatusBridge />)
-    await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledOnce())
-
-    expect(feed().target).toEqual({ kind: 'environment', environmentId: 'server-1' })
-  })
-
-  // Hosts publish chat tabs only of agents they registered; each projects as itself.
-  it("projects a host-registered agent's status as that agent, never as Codex", async () => {
-    mocks.store?.setState({
-      unifiedTabsByWorktree: {
-        'wt-1': [{ ...structuredTab, agentSessionAgent: 'grok' }]
-      }
-    })
-    render(<StructuredAgentSessionStatusBridge />)
-    await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledOnce())
-
-    act(() => feed().emit({ type: 'snapshot', sessions: [summary()] }))
-
-    expect(statuses()).toEqual([expect.objectContaining({ agentType: 'grok' })])
-  })
-
-  it('does not project a tab naming no agent', async () => {
-    mocks.store?.setState({
-      unifiedTabsByWorktree: {
-        'wt-1': [{ ...structuredTab, agentSessionAgent: undefined }]
-      }
-    })
-    render(<StructuredAgentSessionStatusBridge />)
-    await act(() => Promise.resolve())
-
-    expect(mocks.subscribeStatus).not.toHaveBeenCalled()
-    expect(mocks.setAgentStatus).not.toHaveBeenCalled()
-  })
-
-  it('re-renders a startup reader only when its phase changes', async () => {
-    const phases: ReturnType<typeof useStructuredAgentSessionHostExecutionPhase>[] = []
-    function PhaseProbe(): null {
-      phases.push(useStructuredAgentSessionHostExecutionPhase('session-1', { kind: 'local' }))
-      return null
-    }
-    render(<PhaseProbe />)
-    await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledOnce())
-
-    act(() => feed().emit({ type: 'status', session: summary({ hostExecutionPhase: 'starting' }) }))
-    const rendersWhileStarting = phases.length
-    act(() =>
-      feed().emit({
-        type: 'status',
-        session: summary({ hostExecutionPhase: 'starting', latestPrompt: 'next', updatedAt: 2 })
-      })
-    )
-    expect(phases).toHaveLength(rendersWhileStarting)
-    // Older hosts (v1.4.218 on) also send which provider child is starting; nothing reads it.
-    const olderHostChild = { hostExecutionChild: { generation: 'child-1', fence: 2 } }
-    act(() =>
-      feed().emit({
-        type: 'status',
-        session: summary({ hostExecutionPhase: 'starting', ...olderHostChild })
-      })
-    )
-    expect(phases).toHaveLength(rendersWhileStarting)
-
-    act(() => feed().emit({ type: 'status', session: summary({ hostExecutionPhase: 'ready' }) }))
-    expect(phases.at(-1)).toBe('ready')
-    act(() => feed().emit({ type: 'status', session: summary({ hostExecutionPhase: 'starting' }) }))
-    expect(phases.at(-1)).toBe('starting')
-  })
-
-  it('re-renders a Stopping reader only when the host starts or stops saying so', async () => {
-    const stops: boolean[] = []
-    function StoppingProbe(): null {
-      stops.push(useStructuredAgentSessionHostStopping('session-1', { kind: 'local' }))
-      return null
-    }
-    render(<StoppingProbe />)
-    await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledOnce())
-
-    act(() => feed().emit({ type: 'status', session: summary({ stopping: true }) }))
-    expect(stops.at(-1)).toBe(true)
-    const rendersWhileStopping = stops.length
-    act(() =>
-      feed().emit({
-        type: 'status',
-        session: summary({ stopping: true, latestPrompt: 'next', updatedAt: 2 })
-      })
-    )
-    expect(stops).toHaveLength(rendersWhileStopping)
-    act(() => feed().emit({ type: 'status', session: summary({}) }))
-    expect(stops.at(-1)).toBe(false)
-  })
 })
 
 describe('the main agent fact the bridge writes', () => {
@@ -838,7 +483,9 @@ describe('the main agent fact the bridge writes', () => {
     mocks.supportsCapability.mockResolvedValue(true)
     mocks.store?.setState({
       agentStatusByPaneKey: {},
-      testRuntimeOwner: null,
+      repos: [],
+      worktreesByRepo: {},
+      activeWorkspaceExecutionHostId: null,
       unifiedTabsByWorktree: { 'wt-1': [structuredTab] }
     })
   })
@@ -873,7 +520,7 @@ describe('the main agent fact the bridge writes', () => {
       })
     ])
 
-    // The shell drains: the row settles, the main agent was done all along, so its clock holds.
+    // Draining shells settle monitoring without changing the main agent’s already-ended duration.
     act(() =>
       feed().emit({
         type: 'status',

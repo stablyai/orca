@@ -1,7 +1,4 @@
-/**
- * A forward made through a ControlMaster leaves its listener on that master after its `-N` client
- * exits, so no process holds the port for the orphan sweep to stop; only the master can drop it.
- */
+/** A mux forward remains on its master after the client exits; only the master can release it. */
 import { runProcess } from '@orca/process-host'
 import { buildSshArgs, type SystemSshBuildArgsOptions } from './system-ssh-args'
 import { findSystemSsh } from './system-ssh-binary'
@@ -9,7 +6,7 @@ import type { SshTarget } from '../../../shared/ssh-types'
 
 const SYSTEM_SSH_MUXED_FORWARD_CANCEL_TIMEOUT_MS = 5_000
 
-/** `ssh -G` with the target's own args: the control socket its commands multiplex through. */
+/** Query the socket used by this target's commands. */
 export function buildControlPathQueryArgs(
   target: SshTarget,
   options?: SystemSshBuildArgsOptions
@@ -17,16 +14,12 @@ export function buildControlPathQueryArgs(
   return ['-G', ...buildSshArgs(target, options)]
 }
 
-/** The expanded ControlPath `ssh -G` reports, or null where the target does not multiplex. */
 export function parseControlPath(stdout: string): string | null {
   const path = /^controlpath (.+)$/im.exec(stdout)?.[1]?.trim()
   return path && path.toLowerCase() !== 'none' ? path : null
 }
 
-/**
- * No config file: `-O cancel` cancels every forward the loaded config declares as well as this
- * `-L`, so reading the host's config would also drop its LocalForward/RemoteForward entries.
- */
+/** Read no config: -O cancel also cancels its configured forwards, which may belong to the user. */
 export function buildMuxedLocalForwardCancelArgs(
   controlPath: string,
   localPort: number,
@@ -61,7 +54,7 @@ async function runSsh(sshPath: string, args: string[]) {
   }).catch(() => null)
 }
 
-/** True when the target's master released exactly this forward; OpenSSH refuses any other spec. */
+/** True only when the target master releases the exact forward specification. */
 export async function cancelMuxedLocalForward(
   target: SshTarget,
   localPort: number,

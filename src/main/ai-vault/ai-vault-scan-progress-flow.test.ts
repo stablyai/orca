@@ -2,7 +2,10 @@ import { link, mkdir, mkdtemp, rm, utimes } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AiVaultScanProgress, AiVaultScanWork } from '../../shared/ai-vault-scan-progress'
+import type {
+  AiVaultScanProgress,
+  AiVaultScanWork
+} from '../../shared/ai-vault/scanning/ai-vault-scan-progress'
 import {
   localAiVaultScanProgress,
   onLocalAiVaultScanProgress,
@@ -10,34 +13,40 @@ import {
   resetLocalAiVaultScanProgressForTests,
   startLocalAiVaultScanProgress
 } from './ai-vault-local-scan-progress'
-import * as parseCache from './session-scanner-parse-cache'
+import * as parseCache from './parse-cache/session-scanner-parse-cache'
 import * as transcriptFs from '../native-chat/wsl-transcript-fs-access'
 import { AiVaultScanTally } from './ai-vault-scan-tally'
 import { aiVaultScanWork, trackAiVaultScanProgress } from './ai-vault-scan-progress'
-import { writeOpenCodeSqliteDatabase } from './session-scanner-opencode-sqlite-fixture'
+import { writeOpenCodeSqliteDatabase } from './scanners/opencode/sqlite/session-scanner-opencode-sqlite-fixture'
 import { scanAiVaultSessions } from './session-scanner'
-import { resetSessionParseCacheForTests } from './session-scanner-parse-cache'
-import { AiVaultScannerServiceClient } from './session-scanner-service-client'
+import { resetSessionParseCacheForTests } from './parse-cache/session-parse-cache-store'
+import { AiVaultScannerServiceClient } from './scan-service/session-scanner-service-client'
 import {
   AiVaultServiceTestChild,
   aiVaultServiceRequestId,
   readyAiVaultServiceChild
-} from './session-scanner-service-test-child'
+} from './scan-service/session-scanner-service-test-child'
 import { isolatedScanRoots, writeJsonlFile } from './session-scanner-test-fixtures'
 
 // Source fixtures exercise the real SQLite readers without a packaged worker bundle.
-vi.mock('./session-scanner-opencode-sqlite-worker-spawn', async () => {
-  const { listOpenCodeSqliteSessions } = await import('./session-scanner-opencode-sqlite-list')
-  const { listOpenCode2SqliteSessions } = await import('./session-scanner-opencode2-sqlite-list')
-  const { parseOpenCodeSqliteSession } = await import('./session-scanner-opencode-sqlite')
-  return {
-    listOpenCode2SqliteSessionsViaWorker: listOpenCode2SqliteSessions,
-    listOpenCodeSqliteSessionsViaWorker: listOpenCodeSqliteSessions,
-    listZcodeSqliteSessionsViaWorker: (args: Parameters<typeof listOpenCodeSqliteSessions>[0]) =>
-      listOpenCodeSqliteSessions({ ...args, agent: 'zcode' }),
-    parseOpenCodeSqliteSessionViaWorker: parseOpenCodeSqliteSession
+vi.mock(
+  './scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-spawn',
+  async () => {
+    const { listOpenCodeSqliteSessions } =
+      await import('./scanners/opencode/sqlite/session-scanner-opencode-sqlite-list')
+    const { listOpenCode2SqliteSessions } =
+      await import('./scanners/opencode2/session-scanner-opencode2-sqlite-list')
+    const { parseOpenCodeSqliteSession } =
+      await import('./scanners/opencode/sqlite/session-scanner-opencode-sqlite')
+    return {
+      listOpenCode2SqliteSessionsViaWorker: listOpenCode2SqliteSessions,
+      listOpenCodeSqliteSessionsViaWorker: listOpenCodeSqliteSessions,
+      listZcodeSqliteSessionsViaWorker: (args: Parameters<typeof listOpenCodeSqliteSessions>[0]) =>
+        listOpenCodeSqliteSessions({ ...args, agent: 'zcode' }),
+      parseOpenCodeSqliteSessionViaWorker: parseOpenCodeSqliteSession
+    }
   }
-})
+)
 
 let tempRoot: string | null = null
 
@@ -52,7 +61,6 @@ afterEach(async () => {
   }
 })
 
-/** Runs a real scan in this process the way the scanner child does, keeping every report. */
 async function scanInChild(
   limit = 20
 ): Promise<{ reports: AiVaultScanWork[]; final: AiVaultScanWork }> {
@@ -71,7 +79,7 @@ async function scanInChild(
     ])
     await utimes(path, 1_000 + index, 1_000 + index)
   }
-  // A second path to one transcript, as Codex homes and linked profiles produce: still one file.
+  // Codex homes and linked profiles can expose hardlinks to the same transcript.
   await mkdir(join(roots.claudeProjectsDir, 'linked'))
   await link(
     join(roots.claudeProjectsDir, 'project', 'a.jsonl'),
@@ -114,7 +122,7 @@ function startScan(): {
   return { child, client, scan, published }
 }
 
-describe('Session History scan progress, scanner child to window', () => {
+describe('Session History scanner totals and service-client progress state', () => {
   it('counts distinct files while walking, then reads, and publishes the finished totals', async () => {
     const { reports, final } = await scanInChild()
     expect(reports.some((work) => work.stage === 'finding')).toBe(true)
@@ -160,7 +168,6 @@ describe('Session History scan progress, scanner child to window', () => {
   })
 
   it('reaches its total when the first pass stops before reading every file it planned', async () => {
-    // The newest file fills a limit of 1, so the pass never reads the older ones it announced.
     const { reports, final } = await scanInChild(1)
     expect(final.read).toEqual({ done: 1, total: 2, skipped: 1 })
     expect(
@@ -176,7 +183,6 @@ describe('Session History scan progress, scanner child to window', () => {
     old.fail()
     expect(localAiVaultScanProgress('scope')).toMatchObject({ stage: 'finding', startedAt: 2_000 })
 
-    // A failed refresh puts back the last finished scan rather than leaving the key empty.
     replacement.fail()
     expect(localAiVaultScanProgress('scope')).toMatchObject({
       scanId: 'earlier',
@@ -312,7 +318,6 @@ it.each(['cutoff', 'bucket', 'filtered'] as const)(
             Number(basename(path).replace('rollout-', '').replace('.jsonl', ''))
           )
         ).toEqual(ids)
-        // Captured from the same generated corpus before the change; representatives move earlier.
         expect(opened.mock.calls).toHaveLength(warm ? 0 : flow === 'bucket' ? 7 : ids.length)
         expect(stats.mock.results.at(-1)?.value).toEqual({
           reused: warm ? ids.length : 0,

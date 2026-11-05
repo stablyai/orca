@@ -1,20 +1,11 @@
-/**
- * A switch-on desktop paired to a switch-on `orca serve` draws the server's workspace from the
- * server's layout stream (H5b), not the session.tabs mirror: its tree equals the server's own by
- * tab and pane ids and order, its terminal panes bind the session.tabs handle, and both hold
- * through a serve restart and a layout change made on the server's side.
- *
- * Run (switch-on build: ORCA_LAYOUT_OWNER=main ... --mode e2e):
- *   pnpm exec playwright test tests/e2e/paired-desktop-server-layout-frames.spec.ts \
- *     --config tests/playwright.config.ts --project electron-headless --workers=2
- */
+// H5b: with ORCA_LAYOUT_OWNER=main, draw the paired server’s layout stream with matching tab/pane ids/order and session-tab bindings across server changes/restart.
 import { existsSync, rmSync } from 'node:fs'
 import path from 'node:path'
 import type { Page } from '@stablyai/playwright-test'
 import {
   HOST_TERMINAL_SURFACE_SEPARATOR,
   toWebTerminalSurfaceTabId
-} from '../../src/shared/terminal-surface-id'
+} from '../../src/shared/workspace-layout/terminal-surface-id'
 import { LAYOUT_INTENTS_RUNTIME_CAPABILITY } from '../../src/shared/workspace-layout/layout-intents-capability'
 import { expect, test } from './helpers/orca-app'
 import { launchHeadlessPairedRuntimeHost } from './helpers/headless-paired-runtime-host'

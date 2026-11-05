@@ -1,21 +1,18 @@
-// A pane's own agent launch, planned in its reserved spawn by the shared planner; no launch record.
-
 import { randomUUID } from 'node:crypto'
 import { AgentLaunch } from '../../../../shared/rpc-contract/agent-launch-params'
-import { toAgentLaunchPreferences } from '../../../../shared/agent-launch-preferences'
-import { hasClosedTerminalTabRecord } from '../../../../shared/closed-terminal-tab-tombstones'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
-import { AgentLaunchTabClosedError } from '../../../../shared/agent-launch-tab-closed'
+import { toAgentLaunchPreferences } from '../../../../shared/agent-launch/choices/agent-launch-preferences'
+import { hasClosedTerminalTabRecord } from '../../../../shared/workspace-layout/closed-terminal-tab-tombstones'
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import { AgentLaunchTabClosedError } from '../../../../shared/agent-launch/contracts/agent-launch-tab-closed'
 import { trackRunningAgentLaunchPane } from '../../../agent-launch/agent-launch-pane-attachment'
 import { agentLaunchTokenFor } from '../../../agent-launch/agent-launch-token'
 import { resolveUnlaunchedIntent } from '../../../runtime/rpc/methods/agent-launch-intent-resolution'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
-import type { Store } from '../../../persistence'
+import type { Store } from '../../../persistence/loading-store/store'
 import { resolveEarlyPaneKey } from './spawn-begin'
 import type { PtyIpcSpawnState } from './spawn-state'
 import type { PtySpawnIpcArgs } from './spawn-types'
 
-/** Whether the user's close of this pane, or its whole tab, is already committed to main. */
 function closedInSession(store: Store | undefined, paneKey: string): boolean {
   const pane = parsePaneKey(paneKey)
   const session = store?.getWorkspaceSession()
@@ -27,7 +24,6 @@ function closedInSession(store: Store | undefined, paneKey: string): boolean {
   )
 }
 
-/** The planned launch replaces whatever the pane would have run; the pane's own spawn facts stay. */
 function withPlannedLaunch(
   args: PtySpawnIpcArgs,
   planned: Awaited<ReturnType<OrcaRuntimeService['planAgentPaneLaunch']>>
@@ -63,16 +59,18 @@ function withPlannedLaunch(
     ...(launchToken ? { launchToken } : {}),
     ...(planned.launchConfig ? { launchConfig: planned.launchConfig } : {}),
     ...(planned.launchAgent ? { launchAgent: planned.launchAgent } : {}),
-    ...(planned.startupCommandDelivery
-      ? { startupCommandDelivery: planned.startupCommandDelivery }
-      : {}),
+    ...(args.connectionId && args.startupCommandDelivery
+      ? { startupCommandDelivery: args.startupCommandDelivery }
+      : planned.startupCommandDelivery
+        ? { startupCommandDelivery: planned.startupCommandDelivery }
+        : {}),
     ...(planned.telemetry ? { telemetry: planned.telemetry } : {})
   }
 }
 
 export async function planPaneAgentLaunch(ctx: PtyIpcSpawnState): Promise<void> {
   const { args, deps } = ctx
-  // A live owner of the pane is adopted below: its agent already runs there.
+  // Adopting a live pane owner also adopts its already-running agent.
   if (args.agentLaunch === undefined || ctx.earlyStablePaneOwner) {
     return
   }
@@ -85,6 +83,10 @@ export async function planPaneAgentLaunch(ctx: PtyIpcSpawnState): Promise<void> 
       ? request.launch
       : undefined
   const params = AgentLaunch.safeParse({ ...launch, paneKey })
+  const suppressStartupUpdatePrompt =
+    request !== null &&
+    'suppressStartupUpdatePrompt' in request &&
+    request.suppressStartupUpdatePrompt === true
   if (
     !runtime ||
     !paneKey ||
@@ -92,7 +94,11 @@ export async function planPaneAgentLaunch(ctx: PtyIpcSpawnState): Promise<void> 
     !args.worktreeId ||
     !params.success ||
     params.data.reuseTerminal ||
-    params.data.prompt
+    (params.data.prompt &&
+      (params.data.prompt.delivery !== 'submit' ||
+        !request ||
+        !('startupPromptCarry' in request) ||
+        request.startupPromptCarry !== 'force-line'))
   ) {
     throw new Error('agent_launch_request_invalid')
   }
@@ -103,24 +109,43 @@ export async function planPaneAgentLaunch(ctx: PtyIpcSpawnState): Promise<void> 
     paneKey,
     running,
     dispatched: false,
+    returnLaunchFailure:
+      request !== null && 'returnLaunchFailure' in request && request.returnLaunchFailure === true,
     refuseIfClosed: () => {
       if (running.closedByUser() || closedInSession(deps.store, paneKey)) {
         throw new AgentLaunchTabClosedError()
       }
     }
   }
-  const intent = await resolveUnlaunchedIntent(params.data, runtime, null)
+  const { intent } = await resolveUnlaunchedIntent(params.data, runtime, null, {
+    terminalOnly: true
+  })
   if (intent.target.kind !== 'existing') {
     throw new Error('agent_launch_request_invalid')
   }
-  const launchPreferences = toAgentLaunchPreferences(intent.sessionOptions)
-  const planned = await runtime.planAgentPaneLaunch(intent.target.worktree, {
-    startupAgent: intent.agent,
-    ...(intent.agentArgs !== undefined ? { agentArgs: intent.agentArgs } : {}),
-    ...(launchPreferences ? { launchPreferences } : {}),
-    ...(intent.launchSource ? { launchSource: intent.launchSource } : {}),
-    ...(intent.cwd ? { cwd: intent.cwd } : {})
-  })
+  const launchPreferences = toAgentLaunchPreferences(intent.sessionOptions, intent.agent)
+  const planned = await runtime.planAgentPaneLaunch(
+    intent.target.worktree,
+    {
+      startupAgent: intent.agent,
+      ...(intent.agentArgs !== undefined ? { agentArgs: intent.agentArgs } : {}),
+      ...(request && 'extraAgentArgs' in request && typeof request.extraAgentArgs === 'string'
+        ? { extraAgentArgs: request.extraAgentArgs }
+        : {}),
+      ...(intent.prompt
+        ? {
+            startupPrompt: intent.prompt.text,
+            startupPromptCarry: 'force-line' as const,
+            startupPromptDelivery: 'auto-submit' as const
+          }
+        : {}),
+      ...(launchPreferences ? { launchPreferences } : {}),
+      ...(intent.launchSource ? { launchSource: intent.launchSource } : {}),
+      ...(intent.cwd ? { cwd: intent.cwd } : {}),
+      ...(suppressStartupUpdatePrompt ? { suppressStartupUpdatePrompt } : {})
+    },
+    intent.sessionOptions
+  )
   ctx.paneAgentLaunch.launchRuntime = planned.launchRuntime
   ctx.args = withPlannedLaunch(args, planned)
 }

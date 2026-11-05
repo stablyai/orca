@@ -4,22 +4,23 @@ import type {
 } from '../../shared/runtime-file-contracts'
 import { ipcRenderer } from 'electron'
 import type { TerminalPaneSplitSource } from '../../shared/feature-education-telemetry'
-import type { TerminalTabCreateReply } from '../../shared/terminal-reveal-identity'
+import type { TerminalTabCreateReply } from '../../shared/workspace-layout/terminal-reveal-identity'
 import type {
   AgentLaunchTabPublishReply,
   AgentLaunchTabViewerRule,
   AgentLaunchTabPublishRequest
-} from '../../shared/agent-launch-tab-publication'
-import type { AgentLaunchPaneVerdictEvent } from '../../shared/agent-launch-pane-verdict'
+} from '../../shared/agent-launch/contracts/agent-launch-tab-publication'
+import type { AgentLaunchPaneVerdictEvent } from '../../shared/agent-launch/contracts/agent-launch-pane-verdict'
+import type { PaneLaunchRecipe } from '../../shared/terminal/pty/lifecycle/terminal-attachment-launch-result'
 import type {
   TerminalPaneRevealReply,
   TerminalPaneRevealRequest
-} from '../../shared/terminal-pane-reveal'
+} from '../../shared/workspace-layout/terminal-pane-reveal'
 import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
-} from '../../shared/agent-session-resume'
-import type { TuiAgent } from '../../shared/tui-agent'
+} from '../../shared/agent-session/lifecycle/agent-session-resume'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type { RuntimeNavigationTarget } from '../../shared/runtime-navigation'
 import type {
   RuntimeMobileSessionTabMove,
@@ -141,6 +142,11 @@ export const uiTerminalAndSessionTabsApi = {
       callback(data)
     ipcRenderer.on('ui:agentLaunchPaneVerdict', listener)
     return () => ipcRenderer.removeListener('ui:agentLaunchPaneVerdict', listener)
+  },
+  onLaunchRecipe: (callback: (data: PaneLaunchRecipe) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: PaneLaunchRecipe) => callback(data)
+    ipcRenderer.on('ui:launchRecipe', listener)
+    return () => ipcRenderer.removeListener('ui:launchRecipe', listener)
   },
   onSplitTerminal: (
     callback: (data: {

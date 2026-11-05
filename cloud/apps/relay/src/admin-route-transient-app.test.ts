@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { RelayConfig } from './config.js'
 
-vi.mock('./admin-token-verifier.js', () => ({
+vi.mock('./authentication/admin-token-verifier.js', () => ({
   createAdminTokenVerifier: () => async (token: string) => token === 'deploy-token',
   createReadOnlyAdminTokenVerifier: () => async () => false,
   createRegionalRehomeControlApplyTokenVerifier: () => async () => false,
@@ -10,15 +10,14 @@ vi.mock('./admin-token-verifier.js', () => ({
   createRuntimeTokenVerifier: () => async () => false
 }))
 
-vi.mock('./relay-token-verifier.js', () => ({
+vi.mock('./authentication/relay-token-verifier.js', () => ({
   createRelayTokenVerifier: () => async () => null,
   readBearer: (value: string | undefined) => value?.replace(/^Bearer /, '') ?? null
 }))
 
 import { createRelayApp } from './app.js'
 
-// The message the pool raises when its own dial outruns connectionTimeoutMillis.
-// This is the shape that failed a rollout wave as an HTTP 404.
+// Actual pg-pool timeout shape that a rollout incorrectly surfaced as 404.
 const poolTimeout = () => new Error('Connection terminated due to connection timeout')
 
 function adminRequest(body: unknown): RequestInit {

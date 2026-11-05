@@ -49,7 +49,8 @@ it('retains only exact match fields and the remaining range budget', () => {
 })
 
 it('rejects depth overflow and invalid submatch shapes', () => {
-  expect(() => parseDenseRipgrepMatchJson('['.repeat(17), 2, 16)).toThrow()
+  const nested = `${'['.repeat(17)}0${']'.repeat(17)}`
+  expect(() => parseDenseRipgrepMatchJson(nested, 2, 16)).toThrow('rg record nesting exceeds limit')
   expect(() => parseDenseRipgrepMatchJson('{"data":{"submatches":[null]}}', 2, 16)).toThrow()
 })
 

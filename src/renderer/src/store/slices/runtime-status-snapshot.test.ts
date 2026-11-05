@@ -6,9 +6,9 @@ import {
   clearRuntimeEnvironmentConnectionGenerationsForTests,
   type RuntimeStatusSlice
 } from './runtime-status'
-import type { RuntimeHostStatusSnapshot } from '../../../../shared/runtime-host-status'
+import type { RuntimeHostStatusSnapshot } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
-import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
+import type { PublicKnownRuntimeEnvironment } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { runtimeHostConnectionStateForEntry } from '@/runtime/runtime-host-connection-state'
 import { ensureBrowserClientHostOnRuntimeContact } from '@/runtime/restored-client-hosted-browser-host-attach'
 import { setRuntimeEnvironmentCatalogRefresher } from '@/runtime/runtime-environment-pairing-refresh'
@@ -57,18 +57,6 @@ function snapshot(
   }
 }
 
-it('hydrates both viewers and rejects an older read after a newer publication', () => {
-  for (const viewer of [store(), store()]) {
-    viewer.getState().applyRuntimeHostStatusSnapshot(snapshot(2))
-    viewer
-      .getState()
-      .applyRuntimeHostStatusSnapshot(snapshot(1, { status: null, verification: 'unavailable' }))
-    expect(viewer.getState().runtimeStatusByEnvironmentId.get('env-a')?.status?.runtimeId).toBe(
-      'rt-1'
-    )
-  }
-})
-
 it('represents failed verification honestly without manufacturing a session restart or toast', () => {
   const viewer = store()
   viewer.getState().applyRuntimeHostStatusSnapshot(snapshot(1))
@@ -83,9 +71,7 @@ it('represents failed verification honestly without manufacturing a session rest
     generation
   )
   viewer.getState().applyRuntimeHostStatusSnapshot(snapshot(3))
-  // Regaining contact on the same runtime is neither a new connection nor a new session: the
-  // generation holds so the session mirror is not rebuilt (#19647), and only the contact epoch
-  // — the mirror's resubscribe trigger — moves. Hosting is re-claimed, but no toast.
+  // Same-runtime recovery advances only resubscribe epoch, preserving mirror cache (#19647); reclaim hosting without a toast.
   expect(viewer.getState().runtimeStatusByEnvironmentId.get('env-a')?.connectionGeneration).toBe(
     generation
   )

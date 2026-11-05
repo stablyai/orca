@@ -1,9 +1,8 @@
-// STA-6224: a close the paired host never received must survive a reload, or the host's next
-// snapshot brings the closed tab back and the close is never sent.
+// Persist unheard paired closes across reload or the next host snapshot restores closed tabs forever (STA-6224).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
-import { parseWorkspaceSession } from '../../../shared/workspace-session-schema'
-import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
+import { parseWorkspaceSession } from '../../../shared/workspace-session/workspace-session-schema'
+import { toWebTerminalSurfaceTabId } from '../../../shared/workspace-layout/terminal-surface-id'
 import { useAppStore, type AppState } from '@/store'
 import {
   createSessionWriteSubscriber,
@@ -105,8 +104,7 @@ describe('a held paired-host close across a reload', () => {
       )
     )
 
-    // The reload: every in-memory record is gone, the store starts from the saved session, and
-    // the environment list has not published its pairings yet.
+    // Reload loses in-memory state; saved closes must work before environment pairings arrive.
     resetWebSessionTabsSyncTestState()
     resetWebSessionCloseReplaysForTests()
     replaceRuntimeEnvironmentRevisions([])

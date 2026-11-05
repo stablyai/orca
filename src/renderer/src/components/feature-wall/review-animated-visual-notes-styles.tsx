@@ -1,9 +1,6 @@
 import type { JSX } from 'react'
 
-// Why: Notes-page-specific CSS lives here so the imperative loop in
-// ReviewNotesAnimatedVisual can flip a small set of stateful classes without
-// going through React reconciliation. Split from the Ship-page styles purely
-// to keep each file under the per-file line-length lint cap.
+// Class-driven styles let the imperative loop animate without React reconciliation.
 export function ReviewNotesVisualStyles(): JSX.Element {
   return (
     <style>

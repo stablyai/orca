@@ -1,9 +1,9 @@
 import {
   isCursorNativeAgentTitle,
-  normalizeTerminalTitle,
   shouldSuppressCursorNativeTitle
-} from '../../../../shared/agent-detection'
-import type { AgentStatus } from '../../../../shared/agent-title-core'
+} from '../../../../shared/agent-status/title/agent-title-core'
+import { normalizeTerminalTitle } from '../../../../shared/agent-status/title/agent-title-status'
+import type { AgentStatus } from '../../../../shared/agent-status/title/agent-title-core'
 import type { PlacedProgramActivity } from '../../../../shared/program-status/title-activity-order'
 import type { PendingPtySideEffect } from './pty-output-side-effect-queue'
 
@@ -43,8 +43,7 @@ type OrderedPtyEffects = Pick<
   emptyTitleScanEffect: PendingPtySideEffect['titleScanEffect']
 }
 
-/** One queue entry per payload, title and activity change, in byte order, so the drain's per-entry
- *  budget never splits a chunk's effects out of order. */
+/** Group each chunk’s payload/title/activity changes in byte order so drain budgets cannot reorder its effects. */
 export function enqueueOrderedPtyEffects(
   enqueue: (effect: PendingPtySideEffect) => void,
   {

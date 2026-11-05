@@ -14,7 +14,7 @@ import {
   getVisibleDeletableWorkspaceIdentities,
   getWorkspaceSpaceWorktreeIdentity
 } from './workspace-space-delete-selection'
-import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-space-types'
+import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-disk-space/workspace-space-types'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-inputs-switch'
 import { useAppStore } from '@/store'
 import { getWorkspaceSpaceProgressLabel } from './workspace-space-format'
@@ -110,8 +110,7 @@ export function useWorkspaceSpaceManagerProjection(args: {
     sourceRows,
     treemapZoomWorktreeId
   )
-  // Why: these ids are local UI state derived from the latest scan rows. Repair
-  // them before commit so stale selections cannot flash after a scan changes.
+  // Repair scan-derived selection before commit so obsolete rows cannot flash after a new scan.
   if (inspectedWorktreeId !== nextInspectedWorktreeId) {
     // react-doctor-disable-next-line react-doctor/no-prop-callback-in-render
     setInspectedWorktreeId(nextInspectedWorktreeId)

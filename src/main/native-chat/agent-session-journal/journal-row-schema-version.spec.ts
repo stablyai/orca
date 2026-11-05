@@ -1,24 +1,21 @@
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { agentJournalTurnBody } from '../../../shared/agent-session-turn-record'
+import { agentJournalTurnBody } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import {
   createTrackedJournalOpener,
   openTestJournalHostDatabase,
   liveTestJournalRows
 } from './journal-host-database-test-support'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 export function registerJournalRowSchemaVersionTests(): void {
-  // Which rows an older host can still read: only rows that carry a turn item
-  // are stamped with the version it does not know, and the epoch row never is.
-  // Read raw: the reader upcasts every row to the current version, so only the
-  // stored row_json says what an older build would see.
+  // Inspect raw rows: upcasting hides the version older readers would see on disk.
   describe('journal row schema versions', () => {
     let root = ''
-    const opener = createTrackedJournalOpener()
+    const opener = createTrackedJournalOpener({ legacyInputs: true })
 
     beforeEach(async () => {
       root = await mkdtemp(join(tmpdir(), 'orca-journal-row-version-'))
@@ -68,7 +65,7 @@ export function registerJournalRowSchemaVersionTests(): void {
           ['item', 3]
         ])
       } finally {
-        opened.close()
+        await opened.close()
       }
     })
   })

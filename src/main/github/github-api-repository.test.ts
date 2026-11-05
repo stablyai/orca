@@ -19,7 +19,6 @@ const {
 vi.mock('./gh-utils', async (importOriginal) => ({
   ...(await importOriginal<typeof GhUtils>()),
   getOwnerRepo: getOwnerRepoMock,
-  // Why: origin resolution uses getOwnerRepoForRemote, not getOwnerRepo.
   getOwnerRepoForRemote: getOwnerRepoForRemoteMock
 }))
 
@@ -29,7 +28,7 @@ vi.mock('./github-enterprise-repository', async (importOriginal) => ({
   isGitHubHostAuthenticated: isGitHubHostAuthenticatedMock
 }))
 
-vi.mock('../git/remote-name-listing', () => ({
+vi.mock('../git/remotes/remote-name-listing', () => ({
   shouldProbeGitRemote: shouldProbeGitRemoteMock
 }))
 

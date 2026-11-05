@@ -8,14 +8,7 @@ import type { operationModuleLoader } from '../operation-module-loader'
 const WORKSPACE = 'workspace-1'
 const HANDLE = 'terminal-1'
 
-/**
- * Adding and removing session tabs: the markdown note and browser tab a user creates, and the
- * rename/close writes the tab strip makes.
- *
- * Each of these keeps local tab state only on an accepted reply, so the state projection is the tab
- * list itself — a golden that showed the same list after a refusal would be recording the erasure
- * these call sites exist to avoid.
- */
+// Project the real tab list so refused rename/close writes cannot masquerade as successful local erasure.
 export function sessionScreenTabMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
@@ -128,10 +121,7 @@ export function sessionScreenTabMountAdapters(
             setSessionTabs: (update) => {
               sessionTabs = typeof update === 'function' ? update(sessionTabs) : update
             },
-            reconcileBufferedDraftsRef: { current: () => {} },
             closedTabTombstonesRef: { current: new Map() },
-            clearTerminalLiveInputDefault: (handle: string) =>
-              effect('clear-live-input', { handle }),
             setActiveHandle: (value) => {
               activeHandle = typeof value === 'function' ? value(activeHandle) : value
             },
@@ -150,7 +140,10 @@ export function sessionScreenTabMountAdapters(
               timers.push(setTimeout(callback, delayMs))
             },
             unsubscribeTerminal: (handle: string) => effect('unsubscribe-terminal', { handle }),
-            subscribeToTerminal: (handle: string) => effect('subscribe-terminal', { handle }),
+            subscribeToTerminal: (handle: string) => {
+              effect('subscribe-terminal', { handle })
+              return true
+            },
             fetchTerminals: () => {
               effect('fetch-terminals', {})
               return Promise.resolve(true)

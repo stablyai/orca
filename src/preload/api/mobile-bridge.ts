@@ -1,8 +1,8 @@
 import { ipcRenderer } from 'electron'
-import type { MobileRelayStatusDetail } from '../../shared/mobile-relay-status'
-import type { MobilePairingConnectionMode } from '../../shared/mobile-pairing-connection-mode'
+import type { MobileRelayStatusDetail } from '../../shared/remote-runtime/relay/mobile-relay-status'
+import type { MobilePairingConnectionMode } from '../../shared/remote-runtime/pairing/mobile-pairing-connection-mode'
 import type { RuntimePairingReach } from '../../shared/runtime-pairing-reach'
-import type { MobileRelayMintFailure } from '../../shared/mobile-relay-mint-failure'
+import type { MobileRelayMintFailure } from '../../shared/remote-runtime/relay/mobile-relay-mint-failure'
 import type { PreloadApi } from '../api-types'
 
 export const mobileApi = {
@@ -67,9 +67,6 @@ export const mobileApi = {
 
   revokeRuntimeAccess: (args: { deviceId: string }): Promise<{ revoked: boolean }> =>
     ipcRenderer.invoke('mobile:revokeRuntimeAccess', args),
-
-  isWebSocketReady: (): Promise<{ ready: boolean; endpoint: string | null }> =>
-    ipcRenderer.invoke('mobile:isWebSocketReady'),
 
   getRelayStatus: (): Promise<MobileRelayStatusDetail> =>
     ipcRenderer.invoke('mobile:getRelayStatus'),

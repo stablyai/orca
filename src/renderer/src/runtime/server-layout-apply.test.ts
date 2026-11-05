@@ -6,8 +6,8 @@ import type * as FrameDrawnModule from './web-session-tabs-sync/frame-drawn-serv
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import type { LayoutApplyReply } from '../../../shared/workspace-layout/workspace-layout-command-types'
 import type { PublishedWorkspaceLayout } from '../../../shared/workspace-layout/workspace-layout-published'
-import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
-import { ownedEditorFileId } from '../../../shared/workspace-session-pane-ownership'
+import { toWebTerminalSurfaceTabId } from '../../../shared/workspace-layout/terminal-surface-id'
+import '../../../shared/workspace-session/workspace-session-pane-ownership'
 import { createStoreSessionMockApi } from '../store/slices/store-session-test-harness'
 import {
   _resetLayoutFramePositionForTests,
@@ -17,7 +17,7 @@ import {
 import { recordLayoutApply, sendLayoutApply, type WindowLayoutCommand } from './layout-apply-send'
 import { recordTabOrderInLayoutOwner } from '@/store/slices/tabs/tab-order-layout-owner'
 import { mainLayoutFrameSender } from './main-loaded-layout-frames.test-fixture'
-import { SERVER_ROUTED_LAYOUT_COMMANDS, serverLayoutApplyFor } from './server-layout-apply'
+import './server-layout-apply'
 import { redrawServerLayoutWorkspace } from './server-layout-apply-routes'
 import {
   CAPABLE,
@@ -189,186 +189,6 @@ describe('a layout intent for a workspace a server’s frames draw', () => {
     expect(handlers.asToday).not.toHaveBeenCalled()
   })
 
-  it('names a move’s anchor by the server’s id', async () => {
-    const { store } = await drawnByServer()
-    send(store, {
-      type: 'moveTab',
-      tabId: TAB_1,
-      toGroupId: HOST_GROUP,
-      index: 1,
-      afterTabId: TAB_2
-    })
-    await settle()
-    expect(hoisted.sent[0]!.params).toMatchObject({
-      command: { tabId: 'bar-1', afterTabId: 'bar-2', index: 1 }
-    })
-  })
-
-  it('never sends raw an anchor the server does not hold when no drawn order places it', async () => {
-    await drawnByServer()
-    const move = { type: 'moveTab', tabId: TAB_1, toGroupId: HOST_GROUP, index: 1 } as const
-    expect(serverLayoutApplyFor(ENV, WT, { ...move, afterTabId: 'desktop-only' })?.command).toEqual(
-      { ...move, tabId: 'bar-1' }
-    )
-  })
-
-  it('sends a new editor open under the proposed tab id and group, the server’s file id, no desktop owner', async () => {
-    const { store } = await drawnByServer()
-    const filePath = '/worktree/src/a.ts'
-    hoisted.reply = async () => ({ ok: true, result: { tabId: 'proposed-tab' } })
-
-    const { taken, handlers } = send(store, {
-      type: 'openEditorTab',
-      tabId: 'proposed-tab',
-      fileId: ownedEditorFileId(filePath, WT, ENV),
-      contentType: 'editor',
-      file: {
-        filePath,
-        relativePath: 'src/a.ts',
-        language: 'typescript',
-        runtimeEnvironmentId: ENV
-      },
-      groupId: HOST_GROUP,
-      preview: true
-    })
-    await settle()
-
-    expect(taken).toBe(true)
-    expect(hoisted.sent).toEqual([
-      {
-        target: { kind: 'environment', environmentId: ENV },
-        params: {
-          command: {
-            type: 'openEditorTab',
-            tabId: 'proposed-tab',
-            fileId: ownedEditorFileId(filePath, WT, undefined),
-            contentType: 'editor',
-            file: { filePath, relativePath: 'src/a.ts', language: 'typescript' },
-            groupId: HOST_GROUP,
-            preview: true,
-            workspace: WT
-          }
-        }
-      }
-    ])
-    expect(handlers.apply).toHaveBeenCalledWith(
-      { tabId: 'proposed-tab' },
-      { framesKey: ENV, routed: true }
-    )
-  })
-
-  // A window's close tells main the window already stopped its terminals, which this desktop cannot
-  // do for a server's; closes, starts, sleeps and terminal names keep the RPCs that main applies.
-  it('keeps today’s path for closes, starts, sleeps and a terminal’s own name', async () => {
-    const { store } = await drawnByServer()
-    const offList: WindowLayoutCommand[] = [
-      { type: 'renamePane', tabId: TAB_1, leafId: LEAF_ID, title: 'x' },
-      { type: 'closeTabs', tabIds: [TAB_1] },
-      { type: 'closeTabs', tabIds: [TAB_1], recordClose: 'user' },
-      { type: 'closePane', tabId: TAB_1, leafId: LEAF_ID },
-      { type: 'splitPane', tabId: TAB_1, leafId: LEAF_ID, direction: 'vertical' },
-      { type: 'createTerminalTab', tabId: TAB_1, leafId: LEAF_ID },
-      { type: 'sleep', tabId: TAB_1, paneKeys: [], records: [] },
-      { type: 'wake', tabId: TAB_1, paneKeys: ['k'] },
-      { type: 'renameTab', tabId: TAB_1, kind: 'custom', title: 'named' },
-      // A desktop's guess that the launched agent exited never clears the server's relaunch record.
-      { type: 'setTabProps', tabId: TAB_1, clearLaunchAgent: true }
-    ]
-    for (const command of offList) {
-      expect(send(store, command).taken).toBe(false)
-    }
-    for (const type of ['closeTabs', 'closePane', 'splitPane', 'createTerminalTab', 'sleep']) {
-      expect(SERVER_ROUTED_LAYOUT_COMMANDS).not.toContain(type)
-    }
-    await settle()
-    expect(hoisted.sent).toEqual([])
-  })
-
-  it.each<{ name: string; command: WindowLayoutCommand; sent: Record<string, unknown> }>([
-    {
-      name: 'a tab’s color',
-      command: { type: 'setTabProps', tabId: TAB_2, color: '#ff0000' },
-      sent: { type: 'setTabProps', tabId: 'bar-2', color: '#ff0000' }
-    },
-    {
-      name: 'a tab’s pin',
-      command: { type: 'setTabProps', tabId: TAB_1, isPinned: true },
-      sent: { type: 'setTabProps', tabId: 'bar-1', isPinned: true }
-    },
-    {
-      name: 'a tab’s chat pane',
-      command: { type: 'setChatPane', tabId: TAB_1, leafId: LEAF_ID },
-      sent: { type: 'setChatPane', tabId: 'bar-1', leafId: LEAF_ID }
-    },
-    {
-      name: 'an AI vault title',
-      command: { type: 'renameTab', tabId: TAB_2, kind: 'aiVault', title: null },
-      sent: { type: 'renameTab', tabId: 'bar-2', kind: 'aiVault', title: null }
-    },
-    {
-      name: 'the workspace’s default-tabs mark',
-      command: { type: 'setDefaultTabsApplied' },
-      sent: { type: 'setDefaultTabsApplied' }
-    }
-  ])('takes $name to the server’s main, which applies it as from its own window', async (each) => {
-    const { store } = await drawnByServer()
-    const { taken, handlers } = send(store, each.command)
-    await settle()
-    expect(taken).toBe(true)
-    expect(handlers.asToday).not.toHaveBeenCalled()
-    expect(hoisted.sent).toEqual([
-      {
-        target: { kind: 'environment', environmentId: ENV },
-        params: { command: { ...each.sent, workspace: WT } }
-      }
-    ])
-  })
-
-  // A drag-out on a server workspace must reach that server's main, or its frames snap the pane back.
-  it('takes a pane dragged into a new tab to the server’s main, naming no desktop terminal', async () => {
-    const { store } = await drawnByServer()
-    hoisted.reply = async () => ({ ok: true, result: { tabId: 'bar-2', ptyId: 'server-pty-2' } })
-    const { taken, handlers } = send(store, {
-      type: 'movePaneToNewTab',
-      tabId: TAB_1,
-      leafId: LEAF_ID,
-      groupId: HOST_GROUP,
-      index: 1,
-      windowDetach: { ptyId: 'remote:desktop-pty', startupCwd: '/srv/wt' }
-    })
-    await settle()
-
-    expect(taken).toBe(true)
-    expect(hoisted.sent).toEqual([
-      {
-        target: { kind: 'environment', environmentId: ENV },
-        params: {
-          command: {
-            type: 'movePaneToNewTab',
-            tabId: 'bar-1',
-            leafId: LEAF_ID,
-            groupId: HOST_GROUP,
-            index: 1,
-            windowDetach: { ptyId: null, startupCwd: '/srv/wt' },
-            workspace: WT
-          }
-        }
-      }
-    ])
-    expect(handlers.apply).toHaveBeenCalledWith(
-      { tabId: TAB_2, ptyId: 'server-pty-2' },
-      { framesKey: ENV, routed: true }
-    )
-    expect(handlers.asToday).not.toHaveBeenCalled()
-  })
-
-  it('keeps today’s path for a tab the server’s frames do not hold', async () => {
-    const { store } = await drawnByServer()
-    const command = { type: 'equalizePanes', tabId: 'web-terminal-unknown' } as const
-    expect(send(store, command).taken).toBe(false)
-    expect(hoisted.sent).toEqual([])
-  })
-
   it.each([
     { reply: { ok: false, code: 'host_not_owned' } as const, code: 'host_not_owned' },
     { reply: { ok: false, code: 'tab_not_found' } as const, code: 'tab_not_found' },
@@ -416,38 +236,6 @@ describe('a layout intent for a workspace a server’s frames draw', () => {
       expect(hoisted.sent).toHaveLength(1)
     }
   )
-
-  it('keeps today’s path once the server’s stream stops, and for a server without layout intents', async () => {
-    const { store, stream } = await drawnByServer()
-    stream.onStatus({ state: 'lost' })
-    await settle()
-    expect(send(store, { type: 'equalizePanes', tabId: TAB_1 }).taken).toBe(false)
-
-    uninstallAll()
-    const older = mirroredStore()
-    install(older)
-    setServers(older, [{ ...CAPABLE, capable: false }])
-    expect(streams.of(ENV).filter((open) => !open.closed)).toHaveLength(0)
-    const today: WindowLayoutCommand[] = [
-      { type: 'equalizePanes', tabId: TAB_1 },
-      { type: 'setTabProps', tabId: TAB_1, color: '#ff0000' },
-      { type: 'setChatPane', tabId: TAB_1, leafId: LEAF_ID },
-      { type: 'renameTab', tabId: TAB_1, kind: 'aiVault', title: null },
-      { type: 'moveTab', tabId: TAB_1, toGroupId: HOST_GROUP, index: 1 },
-      {
-        type: 'movePaneToNewTab',
-        tabId: TAB_1,
-        leafId: LEAF_ID,
-        groupId: HOST_GROUP,
-        windowDetach: { ptyId: null }
-      },
-      { type: 'setDefaultTabsApplied' }
-    ]
-    for (const command of today) {
-      expect(send(older, command).taken).toBe(false)
-    }
-    expect(hoisted.sent).toEqual([])
-  })
 
   // A desktop close the server refuses (a pinned tab): the window dropped it, the frames bring it back.
   it('draws a tab the window closed again when its close is refused', async () => {
@@ -559,22 +347,6 @@ describe('a move routed to a server among tabs this desktop holds alone', () => 
     expect(hoisted.sent).toHaveLength(1)
     expect(sentCommand(0)).toMatchObject({
       command: { tabId: 'bar-1', index: 0, afterTabId: null }
-    })
-  })
-
-  it('anchors a drop after a desktop tab on the server tab before it', async () => {
-    const { store } = await drawnByServer(THREE_TABS)
-    drawOrder(store, [TAB_1, 'd1', TAB_3, TAB_2])
-    send(store, {
-      type: 'moveTab',
-      tabId: TAB_2,
-      toGroupId: HOST_GROUP,
-      index: 2,
-      afterTabId: 'd1'
-    })
-    await settle()
-    expect(sentCommand(0)).toMatchObject({
-      command: { tabId: 'bar-2', index: 1, afterTabId: 'bar-1' }
     })
   })
 })

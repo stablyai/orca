@@ -5,7 +5,6 @@ import type { DetectedWorktreeListResult, Worktree } from '../../../../shared/wo
 import {
   callRuntimeEnvelope,
   callRuntimeResult,
-  callRuntimeResultWithOwner,
   withRuntimeWorktreeOwner
 } from './web-runtime-calls'
 import type { WebRuntimeEnvelopeCaller, WebRuntimeResultCaller } from './web-runtime-calls'
@@ -15,25 +14,7 @@ import {
   webRuntimeState
 } from './web-runtime-session'
 
-export const WEB_RUNTIME_WORKTREE_LIST_LIMIT = 10_000
-
-export async function listAllRuntimeWorktrees(): Promise<Worktree[]> {
-  if (
-    webRuntimeState.cachedWorktrees &&
-    Date.now() - webRuntimeState.cachedWorktrees.loadedAt < 5_000
-  ) {
-    return webRuntimeState.cachedWorktrees.worktrees
-  }
-  const owned = await callRuntimeResultWithOwner<{ worktrees: Worktree[] }>('worktree.list', {
-    limit: WEB_RUNTIME_WORKTREE_LIST_LIMIT
-  })
-  const worktrees = owned.result.worktrees.map((worktree) =>
-    withRuntimeWorktreeOwner(worktree, owned.hostId)
-  )
-  assertActiveEnvironment(owned.environmentId)
-  webRuntimeState.cachedWorktrees = { loadedAt: Date.now(), worktrees }
-  return worktrees
-}
+const WEB_RUNTIME_WORKTREE_LIST_LIMIT = 10_000
 
 export async function listAllRuntimeDetectedWorktrees(
   callResult: WebRuntimeResultCaller = callRuntimeResult,

@@ -5,7 +5,7 @@ import {
   type WorkspaceCleanupBackgroundRemovalArgs
 } from './workspace-cleanup-background-removal'
 import { makeCandidate } from './workspace-cleanup-presentation-fixtures'
-import { getWorkspaceCleanupHostIdentity } from '../../../../shared/workspace-cleanup-host-identity'
+import { getWorkspaceCleanupHostIdentity } from '../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
 
 vi.mock('sonner', () => ({
   toast: {
@@ -15,11 +15,11 @@ vi.mock('sonner', () => ({
   }
 }))
 
-vi.mock('../sidebar/preserved-branch-batch-toast', () => ({
+vi.mock('../sidebar/workspace-actions/deletion/preserved-branch-batch-toast', () => ({
   showPreservedBranchBatchToast: vi.fn()
 }))
 
-import { showPreservedBranchBatchToast } from '../sidebar/preserved-branch-batch-toast'
+import { showPreservedBranchBatchToast } from '../sidebar/workspace-actions/deletion/preserved-branch-batch-toast'
 
 async function settleBackgroundRemoval(): Promise<void> {
   for (let index = 0; index < 10; index += 1) {
@@ -321,8 +321,7 @@ describe('startWorkspaceCleanupBackgroundRemoval', () => {
     })
     await settleBackgroundRemoval()
 
-    // Child fails at removal (per-row result), then parent is skipped as its
-    // ancestor — both reported incrementally, not only in the final result.
+    // Report child failure and ancestor skip incrementally, before final batch settlement.
     expect(onRowFailed.mock.calls.map(([failure]) => failure.worktreeId)).toEqual([
       child.worktreeId,
       parent.worktreeId

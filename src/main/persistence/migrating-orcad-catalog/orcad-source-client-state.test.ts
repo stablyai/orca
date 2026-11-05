@@ -2,13 +2,13 @@ import { describe, expect, it } from 'vitest'
 import type { OrcadMigrationCatalogPayload } from '../../../shared/orcad-migration/orcad-migration-manifest'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import { getDefaultPersistedState, getDefaultWorkspaceSession } from '../../../shared/constants'
-import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
 import type { BrowserWorkspace } from '../../../shared/browser-workspace-types'
 import {
   CLIENT_HOSTED_BROWSER_PAGE_RECORD_VERSION,
   type PersistedClientHostedBrowserPage
-} from '../../../shared/client-hosted-browser-page-record'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+} from '../../../shared/workspace-session/client-hosted-browser-page-record'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { collectOrcadMigrationSourceClientState } from './orcad-source-client-state'
 import { ORCAD_MIGRATION_UI_ROUTING_MERGE } from './orcad-destination-client-state'
 import { parseMobileSelections } from '../../../shared/orcad-migration/orcad-migration-client-state-parsing'
@@ -331,7 +331,6 @@ describe('source client-state migration', () => {
       current.workspaceSession
     )
 
-    // The unrelated close stays with this client; it does not block.
     expect(result.blockedCount).toBe(0)
     expect(result.payload?.clientHostedBrowserCloseIntents).toEqual([
       {

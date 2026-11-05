@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
-import type { SourceControlCustomAction } from '../../../../../shared/source-control-custom-actions'
+import type { SourceControlCustomAction } from '../../../../../shared/source-control/ai/settings/source-control-custom-actions'
 
 const mocks = vi.hoisted(() => ({
   launchPullRequestAgentPrompt: vi.fn(),
@@ -52,11 +52,12 @@ describe('runPullRequestCustomAction', () => {
     expect(args).toMatchObject({
       repoId: 'repo-1',
       item: { number: 123, repoId: 'repo-1' },
-      commandInput: '/code-review https://github.com/acme/api/pull/123 xhigh --comment with codex.',
-      savedAgentId: null,
-      agentArgs: undefined,
+      recipe: { agentId: null },
       launchSource: 'task_page'
     })
+    expect(args.renderPrompt()).toBe(
+      '/code-review https://github.com/acme/api/pull/123 xhigh --comment with codex.'
+    )
     expect(args.openModalFallback).toBeTypeOf('function')
   })
 
@@ -68,7 +69,7 @@ describe('runPullRequestCustomAction', () => {
     })
 
     expect(mocks.launchPullRequestAgentPrompt).toHaveBeenCalledWith(
-      expect.objectContaining({ savedAgentId: 'claude', agentArgs: '--model opus' })
+      expect.objectContaining({ recipe: { agentId: 'claude', agentArgs: '--model opus' } })
     )
   })
 

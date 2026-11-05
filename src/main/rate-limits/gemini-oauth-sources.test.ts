@@ -34,9 +34,9 @@ describe.skipIf(process.platform === 'win32')('saveGeminiCredentials', () => {
     rmSync(state.home, { recursive: true, force: true })
   })
 
-  // Regression (#31125): orcad no longer inherits umask 077, so the replacement must be born 0600.
+  // #31125: orcad inherits login umask; replacement credentials must still be created owner-only.
   it('keeps the refreshed OAuth tokens owner-only under a permissive umask', async () => {
-    // Imported here: the module resolves the credential path from homedir() at load.
+    // Import after mocking home because credential paths resolve at module load.
     const { saveGeminiCredentials } = await import('./gemini-oauth-sources')
     const path = join(state.home, '.gemini', 'oauth_creds.json')
     mkdirSync(join(state.home, '.gemini'))

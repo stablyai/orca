@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentStatusState } from '../../shared/agent-status-types'
+import type { AgentStatusState } from '../../shared/agent-status/contracts/agent-status-types'
 import type { AutomationRun } from '../../shared/automations-types'
 import { AGENT_START_GRACE_MS } from './automation-run-agent-evidence'
 import {
@@ -16,19 +16,30 @@ type StatusRow = {
   receivedAt: number
   stateStartedAt: number
   sessionBoundary?: boolean
+  interrupted?: boolean
 }
 
-/** A pane where idle is idle whatever painted it: a ready shell prompt satisfies tui-idle too. */
-function createPane(initial: { idle: boolean; tail: string[]; idleEdgeOnly?: boolean }) {
+function createPane(initial: {
+  idle: boolean
+  tail: string[]
+  idleEdgeOnly?: boolean
+  /** Model status cleanup landing while the observer reads the screen. */
+  clearRowsOnRead?: boolean
+}) {
   let idle = initial.idle
-  // The real runtime may settle tui-idle once per idle edge: an already-idle shell only times out.
+  // Model runtimes that satisfy tui-idle only once per idle edge.
   let edgeSpent = false
   let tail = initial.tail
   let rows: StatusRow[] = []
   const waiters = new Set<() => void>()
   const runtime: AutomationRunTerminalHost = {
     getTerminalHandleForPaneKey: () => HANDLE,
-    readTerminal: async () => ({ tail }),
+    readTerminal: async () => {
+      if (initial.clearRowsOnRead) {
+        rows = []
+      }
+      return { tail }
+    },
     waitForTerminal: (_handle, options) => {
       if (options?.signal?.aborted) {
         return Promise.reject(new Error('request_aborted'))
@@ -135,6 +146,38 @@ describe('observing a run with agent evidence', () => {
     expect(run.settled).toHaveBeenCalledWith(expect.objectContaining({ status: 'completed' }))
   })
 
+  // Why: headless runs have no renderer writer, so the observer must fail a cut-off turn (STA-12638).
+  it.each([
+    { name: 'on its idle edge', becomeIdle: true },
+    { name: 'from a held done on a pane that never reads idle', becomeIdle: false }
+  ])('fails a run whose agent reported its turn interrupted, $name', async ({ becomeIdle }) => {
+    const pane = createPane({ idle: false, tail: ['working'] })
+    const run = observe(pane)
+    await vi.advanceTimersByTimeAsync(1_000)
+    pane.report({ interrupted: true })
+    if (becomeIdle) {
+      pane.becomeIdle()
+    } else {
+      await vi.advanceTimersByTimeAsync(90_000)
+    }
+    await run.promise
+    expect(run.settled).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'dispatch_failed', errorCode: 'agentInterrupted' })
+    )
+  })
+
+  it('keeps a held interrupted verdict when its row is cleared during the screen read', async () => {
+    const pane = createPane({ idle: false, tail: ['working'], clearRowsOnRead: true })
+    const run = observe(pane)
+    await vi.advanceTimersByTimeAsync(AGENT_START_GRACE_MS)
+    pane.report({ interrupted: true })
+    await vi.advanceTimersByTimeAsync(90_000)
+    await run.promise
+    expect(run.settled).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'dispatch_failed', errorCode: 'agentInterrupted' })
+    )
+  })
+
   it("waits out a reused pane's previous done until this run's turn is done", async () => {
     const pane = createPane({ idle: true, tail: ['previous summary', '❯'] })
     // A reconnect replay restamps receivedAt; the done itself still predates the run.
@@ -168,7 +211,6 @@ describe('observing a run with agent evidence', () => {
 
   it('does not take the done of a run that finished while this one waited in its precheck', async () => {
     const startedAt = Date.now()
-    // Another run of the automation prompted the pane and finished after this run started.
     await vi.advanceTimersByTimeAsync(60_000)
     const pane = createPane({ idle: true, tail: ['other run summary', '❯'] })
     pane.report()
@@ -208,7 +250,6 @@ describe('observing a run with agent evidence', () => {
     await vi.advanceTimersByTimeAsync(AGENT_START_GRACE_MS * 3)
     expect(run.settled).not.toHaveBeenCalled()
 
-    // Waited out only by the observation deadline, never read as completed.
     await vi.advanceTimersByTimeAsync(6 * 60 * 60 * 1000)
     await run.promise
     expect(run.settled).toHaveBeenCalledWith(
@@ -229,16 +270,6 @@ describe('observing a run with agent evidence', () => {
     expect(run.settled).toHaveBeenCalledWith(expect.objectContaining({ status: 'completed' }))
   })
 
-  it('keeps idle-means-done for an agent that never reports, after its start window', async () => {
-    const pane = createPane({ idle: true, tail: ['summary written', '$'] })
-    const run = observe(pane)
-    await vi.advanceTimersByTimeAsync(10_000)
-    expect(run.settled).not.toHaveBeenCalled()
-    await vi.advanceTimersByTimeAsync(AGENT_START_GRACE_MS)
-    await run.promise
-    expect(run.settled).toHaveBeenCalledWith(expect.objectContaining({ status: 'completed' }))
-  })
-
   it("never reads an agent's own tool output as its command missing", async () => {
     const tail = ['running tests', 'bash: pytest: command not found', 'fell back to unittest', '$']
     const run = observe(createPane({ idle: true, tail }))
@@ -248,7 +279,6 @@ describe('observing a run with agent evidence', () => {
   })
 
   it('completes an agent that exited before the window once the window passes, not at a wait timeout', async () => {
-    // The stub ran, exited 0 and left an idle shell; no agent status, no new idle edge.
     const pane = createPane({ idle: true, tail: ['stub done', '$'], idleEdgeOnly: true })
     const run = observe(pane)
     await vi.advanceTimersByTimeAsync(AGENT_START_GRACE_MS - 1_000)
@@ -267,6 +297,20 @@ describe('observing a run with agent evidence', () => {
 
     pane.report()
     pane.becomeIdle()
+    await run.promise
+    expect(run.settled).toHaveBeenCalledWith(expect.objectContaining({ status: 'completed' }))
+  })
+
+  it("completes on the agent's own done when the screen never reads idle (#34064)", async () => {
+    // A finished pane whose title and screen lost their rest evidence, e.g. after a stream gap.
+    const pane = createPane({ idle: false, tail: ['done', '❯'] })
+    const run = observe(pane)
+    await vi.advanceTimersByTimeAsync(5_000)
+    pane.report()
+    await vi.advanceTimersByTimeAsync(20_000)
+    expect(run.settled).not.toHaveBeenCalled()
+
+    await vi.advanceTimersByTimeAsync(60_000)
     await run.promise
     expect(run.settled).toHaveBeenCalledWith(expect.objectContaining({ status: 'completed' }))
   })

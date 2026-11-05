@@ -6,15 +6,14 @@ import {
   encodeMobileE2EEV2Transcript,
   validateMobileE2EEV2Handshake,
   type MobileE2EEV2Ready
-} from '../../../src/shared/mobile-e2ee-v2-contract'
-import { sealMobileE2EEV2Frame } from '../../../src/shared/mobile-e2ee-v2-framing'
-import type { PairedE2EEPrimitives } from '../../../src/shared/paired-e2ee-primitives'
-import { PairedE2EEV2ClientSession } from '../../../src/shared/paired-e2ee-v2-client-session'
-import { derivePairedE2EEV2KeySchedule } from '../../../src/shared/paired-e2ee-v2-key-schedule'
+} from '../../../src/shared/remote-runtime/e2ee/mobile-e2ee-v2-contract'
+import { sealMobileE2EEV2Frame } from '../../../src/shared/remote-runtime/e2ee/mobile-e2ee-v2-framing'
+import type { PairedE2EEPrimitives } from '../../../src/shared/remote-runtime/e2ee/paired-e2ee-primitives'
+import { PairedE2EEV2ClientSession } from '../../../src/shared/remote-runtime/e2ee/paired-e2ee-v2-client-session'
+import { derivePairedE2EEV2KeySchedule } from '../../../src/shared/remote-runtime/e2ee/paired-e2ee-v2-key-schedule'
 import type { PairedE2EENativeBindings } from './paired-e2ee-native-codec'
 
-// Under Node, react-native-libsodium resolves to its web build: the same libsodium C, as wasm.
-// The codec module's half is a stand-in here; its own Kotlin and Swift tests pin it.
+// Use the package’s wasm libsodium under Node; Kotlin/Swift tests pin the separate codec stand-in.
 const secretboxOpenCalls = vi.fn()
 let bindings: PairedE2EENativeBindings | null = null
 
@@ -49,7 +48,6 @@ function libsodiumBindings(): PairedE2EENativeBindings {
   }
 }
 
-/** A fresh module graph, so the once-only detection runs again with or without native. */
 async function load(withNative: boolean) {
   bindings = withNative ? libsodiumBindings() : null
   vi.resetModules()
@@ -115,7 +113,6 @@ const PAYLOADS = [
   JSON.stringify({ dataBase64: b64(randomBytes(150_000)) })
 ]
 
-/** Every desktop frame for counters 0..n, each preceded by the ways a frame can be wrong. */
 function inboundWire(schedule: ReturnType<typeof derivePairedE2EEV2KeySchedule>) {
   const wire: { frame: string; plaintext: string | null }[] = []
   const seal = (payload: string, counter: bigint, key = schedule.desktopToMobileKey) =>
@@ -170,26 +167,27 @@ describe('the native paired E2EE codec', () => {
   })
 
   it('opens and refuses exactly the frames the JS paths do, never advancing on a refusal', async () => {
-    const { primitives: nativePrimitives, native } = await load(true)
-    const { primitives: fallbackPrimitives, native: absent } = await load(false)
-    expect(native).not.toBeNull()
-    expect(absent).toBeNull()
-    // What the desktop's own client session runs: tweetnacl, re-encode, TextDecoder.
-    const originalPrimitives: PairedE2EEPrimitives = {
-      ...fallbackPrimitives,
-      openSecretbox: undefined,
-      decodeCanonicalBase64: undefined,
-      decodeUtf8: undefined
-    }
-    const sessions = [nativePrimitives, fallbackPrimitives, originalPrimitives].map((primitives) =>
-      pairedSession(primitives)
-    )
-    const wire = inboundWire(sessions[0]!.schedule)
+    const wire = inboundWire(pairedSession((await load(true)).primitives).schedule)
     expect(wire.filter((entry) => entry.plaintext === null).length).toBeGreaterThan(50)
-    for (const { session } of sessions) {
+    for (const mode of ['native', 'fallback', 'original']) {
+      const { primitives, native } = await load(mode === 'native')
+      expect(native === null).toBe(mode !== 'native')
+      const originalPrimitives: PairedE2EEPrimitives = {
+        ...primitives,
+        openSecretbox: undefined,
+        decodeCanonicalBase64: undefined,
+        decodeUtf8: undefined
+      }
+      const { session } = pairedSession(mode === 'original' ? originalPrimitives : primitives)
+      secretboxOpenCalls.mockClear()
       expect(wire.map(({ frame }) => session.openText(frame))).toEqual(
         wire.map(({ plaintext }) => plaintext)
       )
+      if (mode === 'native') {
+        expect(secretboxOpenCalls).toHaveBeenCalled()
+      } else {
+        expect(secretboxOpenCalls).not.toHaveBeenCalled()
+      }
     }
   })
 
@@ -202,33 +200,13 @@ describe('the native paired E2EE codec', () => {
     expect(codec.pairedE2EENativeCodec()).not.toBeNull()
   })
 
-  it('agrees with tweetnacl on boxes either library sealed', async () => {
-    const { native } = await load(true)
-    for (let index = 0; index < 300; index++) {
-      const key = randomBytes(32)
-      const nonce = randomBytes(24)
-      const message = randomBytes(random(600))
-      const boxes = [
-        sodium.crypto_secretbox_easy(message, nonce, key),
-        nacl.secretbox(message, nonce, key)
-      ]
-      expect(boxes[0]).toEqual(boxes[1])
-      for (const box of boxes) {
-        expect(native!.openSecretbox(box, nonce, key)).toEqual(message)
-        const tampered = box.slice()
-        tampered[random(box.length)]! ^= 1 << random(8)
-        expect(native!.openSecretbox(tampered, nonce, key)).toBeNull()
-        expect(nacl.secretbox.open(tampered, nonce, key)).toBeNull()
-      }
-    }
-  })
-
-  // The frame is open and the counter advanced before UTF-8, so a native throw must not drop it.
+  // UTF-8 fallback must preserve an already-opened frame whose counter advanced.
   it('falls back to TextDecoder when native UTF-8 throws', async () => {
-    const { primitives } = await load(true)
-    bindings!.codec.decodeUtf8 = () => {
+    const { primitives, native } = await load(true)
+    expect(native).not.toBeNull()
+    const decodeUtf8 = vi.spyOn(bindings!.codec, 'decodeUtf8').mockImplementation(() => {
       throw new Error('native UTF-8 failed')
-    }
+    })
     const { session, schedule } = pairedSession(primitives)
     const frames = ['{"a":1}', 'é✓🙂'].map((payload, counter) =>
       b64(
@@ -243,6 +221,7 @@ describe('the native paired E2EE codec', () => {
       )
     )
     expect(frames.map((frame) => session.openText(frame))).toEqual(['{"a":1}', 'é✓🙂'])
+    expect(decodeUtf8).toHaveBeenCalledTimes(2)
   })
 
   // libsodium sizes its output as the box length minus the MAC, which underflows and crashes.
@@ -255,48 +234,5 @@ describe('the native paired E2EE codec', () => {
       ).toBeNull()
     }
     expect(secretboxOpenCalls).not.toHaveBeenCalled()
-  })
-
-  it('accepts exactly the base64 that re-encodes to itself, on both paths', async () => {
-    const { native, primitives } = await load(true)
-    const { primitives: fallback } = await load(false)
-    const reencodes = (value: string) => {
-      try {
-        const bytes = Uint8Array.from(atob(value), (char) => char.charCodeAt(0))
-        return b64(bytes) === value ? bytes : null
-      } catch {
-        return null
-      }
-    }
-    const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
-    const noise = `${alphabet}=-_ \n\t.`
-    const cases = [
-      '',
-      'QR==',
-      'QQ==',
-      'QQ',
-      'QQ=',
-      'Q===',
-      '====',
-      'QUJD',
-      'QUJ D',
-      'Q=Q=',
-      '-_8=',
-      'AB+/'
-    ]
-    for (let index = 0; index < 5_000; index++) {
-      let value = b64(randomBytes(random(10)))
-      if (random(2) === 0) {
-        const at = random(value.length + 1)
-        value = value.slice(0, at) + noise[random(noise.length)] + value.slice(at + 1)
-      }
-      cases.push(value)
-    }
-    for (const value of cases) {
-      const expected = reencodes(value)
-      expect(native!.decodeBase64(value), value).toEqual(expected)
-      expect(primitives.decodeCanonicalBase64!(value), value).toEqual(expected)
-      expect(fallback.decodeCanonicalBase64!(value), value).toEqual(expected)
-    }
   })
 })

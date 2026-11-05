@@ -1,5 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ExecutionHostFactsModule from '@/lib/execution-host-facts'
+import type * as HostChatProgramAcquisitionModule from './host-chat-program-acquisition'
+import { clearHostAgentMenuSettingsForTests } from '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
 import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
 import type { PullRequestAgentPromptLaunchArgs } from './pull-request-agent-prompt-launch'
 
@@ -50,6 +52,14 @@ const mocks = vi.hoisted(() => {
   }
 })
 
+vi.mock('@/runtime/runtime-rpc-client', () => ({
+  callRuntimeRpc: vi.fn(),
+  runtimeEnvironmentSupportsCapability: async () => true
+}))
+vi.mock('./host-chat-program-acquisition', async (importOriginal) => ({
+  ...(await importOriginal<typeof HostChatProgramAcquisitionModule>()),
+  acquireAgentLaunchChoices: async (_: unknown, run: () => unknown) => ({ detected: await run() })
+}))
 vi.mock('@/store', () => ({ useAppStore: { getState: () => mocks.store } }))
 vi.mock('sonner', () => ({ toast: { error: mocks.toastError } }))
 vi.mock('@/lib/focus-terminal-tab-surface', () => ({
@@ -90,6 +100,8 @@ const item: GitHubWorkItem = {
   repoId: 'repo-1'
 }
 
+const PROMPT = '/code-review https://github.com/acme/repo/pull/77'
+
 const messages = {
   savedAgentUnavailable: () => 'saved agent unavailable',
   workspaceMissing: () => 'workspace missing',
@@ -102,9 +114,8 @@ function launchArgs(
 ): PullRequestAgentPromptLaunchArgs {
   return {
     repoId: 'repo-1',
-    commandInput: '/code-review https://github.com/acme/repo/pull/77',
-    savedAgentId: null,
-    agentArgs: '--model opus',
+    recipe: { agentId: null, agentArgs: '--model opus' },
+    renderPrompt: () => PROMPT,
     item,
     launchSource: 'task_page',
     openModalFallback: vi.fn(),
@@ -114,6 +125,8 @@ function launchArgs(
 }
 
 describe('launchPullRequestAgentPrompt', () => {
+  afterEach(clearHostAgentMenuSettingsForTests)
+
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.store.settings = { defaultTuiAgent: 'codex', disabledTuiAgents: [] }
@@ -135,43 +148,22 @@ describe('launchPullRequestAgentPrompt', () => {
 
     await expect(launchPullRequestAgentPrompt(args)).resolves.toBe(true)
 
-    expect(mocks.launchWorkItemDirect).toHaveBeenCalledWith(
-      expect.objectContaining({
-        item: expect.objectContaining({ number: 77, pasteContent: args.commandInput }),
-        repoId: 'repo-1',
-        promptDelivery: 'submit-after-ready',
-        agentArgs: '--model opus',
-        agentOverride: 'codex',
-        openModalFallback: args.openModalFallback
-      })
-    )
-  })
-
-  it('picks a detected agent for a new workspace when the default agent is blank', async () => {
-    mocks.store.settings = { defaultTuiAgent: 'blank', disabledTuiAgents: [] }
-    mocks.store.ensureDetectedAgents.mockResolvedValue(['claude'])
-
-    await launchPullRequestAgentPrompt(launchArgs())
-
-    expect(mocks.launchWorkItemDirect).toHaveBeenCalledWith(
-      expect.objectContaining({ agentOverride: 'claude' })
-    )
-  })
-
-  it('refuses to create a workspace when no enabled agent is detected', async () => {
-    mocks.store.ensureDetectedAgents.mockResolvedValue([])
-
-    await expect(launchPullRequestAgentPrompt(launchArgs())).resolves.toBe(false)
-
-    expect(mocks.launchWorkItemDirect).not.toHaveBeenCalled()
-    expect(mocks.toastError).toHaveBeenCalledWith(
-      'No enabled AI agent was detected on this workspace host.'
-    )
+    const directArgs = mocks.launchWorkItemDirect.mock.lastCall?.[0]
+    expect(directArgs).toMatchObject({
+      item: { number: 77, pasteContent: PROMPT },
+      repoId: 'repo-1',
+      promptDelivery: 'submit-after-ready',
+      openModalFallback: args.openModalFallback
+    })
+    expect(directArgs.resolveLaunchInputs('codex')).toMatchObject({
+      commandInput: PROMPT,
+      agentArgs: '--model opus'
+    })
   })
 
   it('refuses to create a workspace when the saved agent is not detected', async () => {
     await expect(
-      launchPullRequestAgentPrompt(launchArgs({ savedAgentId: 'claude' }))
+      launchPullRequestAgentPrompt(launchArgs({ recipe: { agentId: 'claude' } }))
     ).resolves.toBe(false)
 
     expect(mocks.launchWorkItemDirect).not.toHaveBeenCalled()
@@ -188,7 +180,7 @@ describe('launchPullRequestAgentPrompt', () => {
       expect.objectContaining({
         agent: 'codex',
         worktreeId: 'wt-1',
-        prompt: '/code-review https://github.com/acme/repo/pull/77',
+        prompt: PROMPT,
         agentArgs: '--model opus',
         promptDelivery: 'submit-after-ready'
       })
@@ -200,7 +192,7 @@ describe('launchPullRequestAgentPrompt', () => {
     mocks.findGithubPrWorkspaceAttachment.mockReturnValue(mocks.store.worktrees[0])
 
     await expect(
-      launchPullRequestAgentPrompt(launchArgs({ savedAgentId: 'claude' }))
+      launchPullRequestAgentPrompt(launchArgs({ recipe: { agentId: 'claude' } }))
     ).resolves.toBe(false)
 
     expect(mocks.launchAgentInNewTab).not.toHaveBeenCalled()

@@ -8,7 +8,6 @@ import { buildContainedLinkedContextBlock } from '@/lib/linked-work-item-context
 import { translate } from '@/i18n/i18n'
 import { buildLinearIssueBranchName } from '@/components/linear-issue-workspace-text'
 import type { LinearComment, LinearIssue } from '../../../shared/linear/issue-types'
-import type { LinearProjectSummary } from '../../../shared/linear/project-types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 import { copyLinearIssueText } from './linear-issue-clipboard'
 import { LinearIssueProjectSelector } from './linear-issue-project-selector'
@@ -62,12 +61,12 @@ function LinearIssueActionsCard({
     {
       label: translate('auto.components.LinearIssueWorkspace.9a9a884236', 'Copy URL'),
       icon: Clipboard,
-      action: () => void copyLinearIssueText(issue.url, 'URL')
+      action: () => void copyLinearIssueText(issue.url, 'url')
     },
     {
       label: translate('auto.components.LinearIssueWorkspace.30c1242f3a', 'Copy identifier'),
       icon: Clipboard,
-      action: () => void copyLinearIssueText(issue.identifier, 'Identifier')
+      action: () => void copyLinearIssueText(issue.identifier, 'identifier')
     },
     {
       label: translate(
@@ -75,8 +74,7 @@ function LinearIssueActionsCard({
         'Copy suggested branch name'
       ),
       icon: GitBranch,
-      action: () =>
-        void copyLinearIssueText(buildLinearIssueBranchName(issue), 'Suggested branch name')
+      action: () => void copyLinearIssueText(buildLinearIssueBranchName(issue), 'branchName')
     },
     {
       label: translate('auto.components.LinearIssueWorkspace.f6c6381593', 'Copy prompt'),
@@ -89,7 +87,7 @@ function LinearIssueActionsCard({
             version: 1,
             renderedText
           }) ?? renderedText
-        void copyLinearIssueText(prompt, 'Prompt')
+        void copyLinearIssueText(prompt, 'prompt')
       }
     }
   ]
@@ -130,8 +128,6 @@ export function LinearIssueWorkspaceSidebar({
   comments,
   editState,
   attachedWorkspaceLabel,
-  onEditStateChange,
-  onProjectChanged,
   onOpenAttachedWorkspace,
   sourceContext
 }: {
@@ -139,8 +135,6 @@ export function LinearIssueWorkspaceSidebar({
   comments: LinearComment[]
   editState: LinearEditState
   attachedWorkspaceLabel: string | null
-  onEditStateChange: (patch: Partial<LinearEditState>) => void
-  onProjectChanged: (project: LinearProjectSummary) => void
   onOpenAttachedWorkspace: () => void
   sourceContext?: TaskSourceContext | null
 }): React.JSX.Element {
@@ -149,15 +143,10 @@ export function LinearIssueWorkspaceSidebar({
       <LinearIssueEditSection
         issue={issue}
         editState={editState}
-        onEditStateChange={onEditStateChange}
         layout="properties"
         sourceContext={sourceContext}
       />
-      <LinearIssueProjectSelector
-        issue={issue}
-        onProjectChanged={onProjectChanged}
-        sourceContext={sourceContext}
-      />
+      <LinearIssueProjectSelector issue={issue} sourceContext={sourceContext} />
       <LinearIssueWorkspaceAttachmentCard
         label={attachedWorkspaceLabel}
         onOpen={onOpenAttachedWorkspace}

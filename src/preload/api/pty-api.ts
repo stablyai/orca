@@ -2,39 +2,41 @@ import type { PaintedRestorePane } from '../../shared/painted-restore-ack'
 import type {
   PtyFencedTerminationRequest,
   PtyFencedTerminationOutcome
-} from '../../shared/pty-fenced-termination'
+} from '../../shared/terminal/pty/lifecycle/pty-fenced-termination'
 import type { ResourceViewAdmission } from '../../shared/resource-view-admission'
 import type { SpawnIntent } from '../../shared/host-spawn-admission'
 import type {
+  SavedResumeDecision,
+  TerminalLaunchResult,
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
-} from '../../shared/agent-session-resume'
-import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
-import type { TerminalInputKind } from '../../shared/terminal-input-kind'
+} from '../../shared/agent-session/lifecycle/agent-session-resume'
+import type { StartupCommandDelivery } from '../../shared/agent-launch/startup/codex-startup-delivery'
+import type { TerminalInputKind } from '../../shared/terminal/input/terminal-input-kind'
 import type {
   TerminalLeafMoveRequest,
   TerminalLeafMoveResult
-} from '../../shared/terminal-leaf-move'
+} from '../../shared/workspace-layout/terminal-leaf-move'
 import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
 import type {
   PtyListedSession,
   PtySessionListScope,
   PtySessionLifecycle
-} from '../../shared/pty-listed-session'
-import type { PtyMainDeliveryDiagnostics } from '../../shared/pty-delivery-diagnostics'
-import type { PtyModelRestoreNeededEvent } from '../../shared/pty-model-restore-marker'
+} from '../../shared/terminal/pty/lifecycle/pty-listed-session'
+import type { PtyMainDeliveryDiagnostics } from '../../shared/terminal/pty/diagnostics/pty-delivery-diagnostics'
+import type { PtyModelRestoreNeededEvent } from '../../shared/terminal/replay/pty-model-restore-marker'
 import type {
   PtyRendererDeliveryHealthReply,
   PtyRendererDeliveryStateReport
-} from '../../shared/pty-renderer-delivery-health'
+} from '../../shared/terminal/pty/diagnostics/pty-renderer-delivery-health'
 import type { AgentKind, LaunchSource, RequestKind } from '../../shared/telemetry-events'
-import type { TerminalSideEffectBatch } from '../../shared/terminal-side-effect-facts'
-import type { TerminalViewAttributes } from '../../shared/terminal-view-attributes'
-import type { TuiAgent } from '../../shared/tui-agent'
-import type { TerminalPanePlacement } from '../../shared/terminal-pane-placement'
-import type { AgentPaneLaunchRequest } from '../../shared/agent-pane-launch-request'
+import type { TerminalSideEffectBatch } from '../../shared/terminal/output/terminal-side-effect-facts'
+import type { TerminalViewAttributes } from '../../shared/terminal/protocol/queries/terminal-view-attributes'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
+import type { TerminalPanePlacement } from '../../shared/workspace-layout/terminal-pane-placement'
+import type { AgentPaneLaunchRequest } from '../../shared/agent-launch/contracts/agent-pane-launch-request'
 import type { PtyManagementApi } from './pty-management-api'
-import type { TerminalProcessInspection } from '../../shared/terminal-process-inspection'
+import type { TerminalProcessInspection } from '../../shared/terminal/pty/lifecycle/terminal-process-inspection'
 import type { CodexSharedServerStatus } from '../../shared/codex-shared-server-command'
 import type { NewerDaemonHeldScreen, NewerDaemonReopenResult } from '../../shared/newer-daemon-hold'
 
@@ -49,6 +51,7 @@ export type PtyApi = {
     commandDelivery?: 'renderer' | 'provider'
     launchConfig?: SleepingAgentLaunchConfig
     resumeProviderSession?: AgentProviderSessionMetadata
+    resumeOrigin?: 'saved'
     launchToken?: string
     launchAgent?: TuiAgent
     startupCommandDelivery?: StartupCommandDelivery
@@ -72,6 +75,8 @@ export type PtyApi = {
     placement?: TerminalPanePlacement
     // Visible restores are `user-resume`, hidden ones `automatic-restore`; the fork gate validates.
     spawnIntent?: SpawnIntent
+    // A restore no user act asked for; main holds it for a stopped WSL distro. Older mains ignore it.
+    wslPassiveRestore?: true
     agentLaunch?: AgentPaneLaunchRequest
     // Main emits agent_started only after a successful spawn.
     telemetry?: { agent_kind: AgentKind; launch_source: LaunchSource; request_kind: RequestKind }
@@ -97,6 +102,11 @@ export type PtyApi = {
     coldRestore?: { scrollback: string; cwd: string; cols?: number; rows?: number }
     startupCwdFallback?: { kind: 'worktree'; cwd: string }
     agentResumeUnavailable?: true
+    agentResumeRefused?: 'chat-home' | 'chat-writing' | 'unverifiable'
+    savedResumeDecision?: SavedResumeDecision
+    refusedResume?: TerminalLaunchResult['refusedResume']
+    launchToken?: string
+    resumeProviderSession?: TerminalLaunchResult['resumeProviderSession']
     /** Host verdict on the shell-ready marker; absent when the execution host predates the field. */
     shellReadyArmed?: boolean
   }>
@@ -243,6 +253,7 @@ export type PtyApi = {
       transformed?: boolean
       background?: boolean
       droppedOutput?: boolean
+      midEscape?: true | 'unknown'
     }) => void
   ) => () => void
   onReplay: (callback: (data: { id: string; data: string }) => void) => () => void

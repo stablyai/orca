@@ -10,11 +10,7 @@ import {
 } from './combined-diff-file-tree-row'
 import type { CombinedDiffTreeNode } from './combined-diff-file-tree-model'
 
-/**
- * One flattened tree section, windowed inside the file tree's scroller. A 900-file review flattens
- * to over a thousand rows; below the virtualize threshold the rows stay in natural flow so small
- * diffs keep byte-identical markup.
- */
+/** Window large reviews; keep small trees in natural flow to preserve their markup. */
 export function CombinedDiffFileTreeRows({
   rows,
   mode,

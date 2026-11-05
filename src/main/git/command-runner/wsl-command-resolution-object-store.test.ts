@@ -24,8 +24,7 @@ async function alternatesSeenByWslGit(profileAlternates: string | undefined): Pr
   return result.stdout.trim()
 }
 
-// Why pin this: a WSL login profile that sets GIT_ALTERNATE_OBJECT_DIRECTORIES used to replace a
-// WSLENV-forwarded value, so a quarantined merge-tree lost the real object store and failed.
+// Login profiles must not replace the quarantine's WSLENV-forwarded object-store values.
 describe.skipIf(originalPlatform === 'win32')('WSL Git object-store variables', () => {
   beforeEach(() => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })

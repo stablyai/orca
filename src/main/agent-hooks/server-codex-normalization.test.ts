@@ -144,7 +144,6 @@ describe('Codex hook normalization', () => {
   })
 
   it('PreToolUse surfaces tool name + input preview and stays in working state', () => {
-    // Why: Codex's PreToolUse fires for every tool call (not an approval), so map it to `working` not `waiting`; approvals flow through PermissionRequest.
     const result = _internals.normalizeHookPayload(
       'codex',
       buildBody({
@@ -160,7 +159,6 @@ describe('Codex hook normalization', () => {
   })
 
   it('PermissionRequest maps to waiting and surfaces the pending tool input', () => {
-    // Why: PermissionRequest must map to `waiting` (sidebar red dot); treating it like PreToolUse would leave the pane looking busy while blocked on the user.
     const result = _internals.normalizeHookPayload(
       'codex',
       buildBody({
@@ -177,7 +175,6 @@ describe('Codex hook normalization', () => {
   })
 
   it('UserPromptSubmit does not extract tool fields even when the payload carries them', () => {
-    // Why: UserPromptSubmit is a turn boundary; tool extraction is gated to Pre/PostToolUse so stray tool_name can't leak into the preview.
     const result = _internals.normalizeHookPayload(
       'codex',
       buildBody({
@@ -193,8 +190,7 @@ describe('Codex hook normalization', () => {
     expect(result?.payload.toolInput).toBeUndefined()
   })
 
-  it('SessionStart clears cached tool state from a prior session', () => {
-    // Seed a Stop snapshot with an assistant message.
+  it('SessionStart clears cached assistant text from a prior session', () => {
     _internals.normalizeHookPayload(
       'codex',
       buildBody({
@@ -550,7 +546,7 @@ describe.each(['opencode', 'opencode2'] as const)('%s hook normalization', (sour
   })
 
   it('SessionBusy does NOT clear the cached user prompt', () => {
-    // Why: OpenCode caches the user's MessagePart before SessionBusy fires, so the cached prompt is this turn's; clearing it would clobber the dashboard.
+    // OpenCode caches this turn's user MessagePart before SessionBusy.
     _internals.normalizeHookPayload(
       source,
       buildBody({ hook_event_name: 'MessagePart', role: 'user', text: 'new prompt' }),
@@ -625,7 +621,6 @@ describe.each(['opencode', 'opencode2'] as const)('%s hook normalization', (sour
   })
 
   it('AskUserQuestion maps to waiting', () => {
-    // Why: AskUserQuestion leaves the agent idle-but-waiting on a human, so it must map to `waiting` (red dot) like permission.asked, not stay `working`.
     const result = _internals.normalizeHookPayload(
       source,
       buildBody({ hook_event_name: 'AskUserQuestion' }),
@@ -676,7 +671,7 @@ describe.each(['opencode', 'opencode2'] as const)('%s hook normalization', (sour
   })
 
   it('caps oversized MessagePart text from stale (pre-throttle) plugin builds', () => {
-    // Why: stale plugin builds re-post the full reply on every part update, so the listener must cap the text to keep per-event work O(cap).
+    // Older plugins resend full replies on each update; cap per-event work.
     const assistant = _internals.normalizeHookPayload(
       source,
       buildBody({
@@ -688,7 +683,6 @@ describe.each(['opencode', 'opencode2'] as const)('%s hook normalization', (sour
     )
     expect(assistant?.payload.lastAssistantMessage?.length).toBe(8_000)
 
-    // Why: prompt is capped at 200 by normalizeAgentStatusObject; assert oversized input still stays within that bound.
     const user = _internals.normalizeHookPayload(
       source,
       buildBody({

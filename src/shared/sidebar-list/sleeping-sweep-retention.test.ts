@@ -39,8 +39,7 @@ describe('sleeping sweep retention', () => {
     const state = createSleepingSweepRetentionState()
     runPass(state, ['wt-a'], 1_000)
 
-    // The grace clock starts when the workspace first reads inactive, not when
-    // it was last active — a quiet gap between passes must not eat the window.
+    // Start grace on first observed inactivity; time between passes must not consume it.
     const during = runPass(state, [], 1_000)
     expect([...during.retainedIds]).toEqual(['wt-a'])
     expect(during.nextExpiryInMs).toBe(SLEEPING_SWEEP_SETTLE_MS)

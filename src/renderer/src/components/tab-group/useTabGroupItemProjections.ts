@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import type { OpenFile } from '@/store/slices/editor'
 import type { BrowserTab as BrowserTabState } from '../../../../shared/browser-workspace-types'
 import type { Tab, TabGroup } from '../../../../shared/tab-types'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import { resolveUnifiedTabLabel } from '../../../../shared/tab-title-resolution'
 import type { useAppStore } from '../../store'
 import { isEditorTabContentType } from '@/store/slices/editor/tabs/editor-tab-content-type'
@@ -51,9 +51,7 @@ export function useTabGroupItemProjections({
     () => new Map(worktreeState.terminalTabs.map((item) => [item.id, item])),
     [worktreeState.terminalTabs]
   )
-  // Why indexed like the terminal tabs above: `openFiles` is the global list across every
-  // worktree and `tabOrder` is as long as the group, so the per-tab `.find` scans below were
-  // quadratic in tab count on a path that reruns whenever any unified tab is written.
+  // Index global openFiles once; scanning it per group tab made unified-tab updates quadratic.
   const openFileById = useMemo(
     () => new Map(worktreeState.openFiles.map((item) => [item.id, item])),
     [worktreeState.openFiles]

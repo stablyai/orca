@@ -1,13 +1,13 @@
 import { getDefaultWorkspaceSession } from '../../shared/constants'
-import type { SleepingAgentSessionRecord } from '../../shared/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-resume'
 import type { BrowserPage, BrowserWorkspace } from '../../shared/browser-workspace-types'
 import { remapBrowserPageDocLocation } from '../../shared/browser-page-doc-location'
 import type { Tab, TabGroup } from '../../shared/tab-types'
-import type { TerminalTab } from '../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../shared/workspace-layout/terminal-tab-types'
 import type {
   PersistedOpenFile,
   WorkspaceSessionState
-} from '../../shared/workspace-session-state-types'
+} from '../../shared/workspace-session/workspace-session-state-types'
 import { isWorkspaceKey } from '../../shared/workspace-scope'
 import { SESSION_FIELDS_COPIED_BY_OWNER_KEY } from './profile-project-session-field-disposition'
 import { mapMarkdownFrontmatterVisible } from './profile-session-markdown-transfer'
@@ -16,16 +16,16 @@ export {
   buildMarkdownFrontmatterIdMap,
   markdownFileIdCandidates
 } from './profile-session-markdown-transfer'
-import { paneBelongsToTabs } from '../../shared/workspace-session-pane-ownership'
+import { paneBelongsToTabs } from '../../shared/workspace-session/workspace-session-pane-ownership'
 
 export type SessionOwnerProjection = {
   mapOwnerKey: (ownerKey: string) => string | null
   mapWorktreeId: (worktreeId: string) => string
-  /** Keeps a sleeping agent's resume record when it can still resume after the transfer. */
+  /** Keep only records that can still resume after transfer. */
   projectSleepingAgentSession?: (
     record: SleepingAgentSessionRecord
   ) => SleepingAgentSessionRecord | null
-  /** Projects source-partition focus scalars when the selected entities are dormant. */
+  /** Project focus when selected entities are dormant. */
   projectSessionFocus?: (args: {
     source: WorkspaceSessionState
     transferred: WorkspaceSessionState
@@ -60,8 +60,7 @@ export function extractSessionOwnersForTransfer(
       return mapTerminalTab(tab, projection)
     })
   )
-  // Newer sessions may persist a terminal only in the unified tab model while the legacy
-  // terminal map is absent. Keep its layout and pane metadata attached to the transferred tab.
+  // Unified-tab-only terminals still need their layouts and pane metadata transferred.
   for (const [ownerKey, tabs] of Object.entries(source.unifiedTabs ?? {})) {
     if (!projection.mapOwnerKey(ownerKey)) {
       continue
@@ -222,7 +221,7 @@ function mapBrowserWorkspace(
           )
         }
       : {}),
-    // Why: the browser session profile and partition are source-profile-scoped.
+    // Browser profiles and partitions belong to the source profile.
     sessionProfileId: null,
     sessionPartition: null
   }

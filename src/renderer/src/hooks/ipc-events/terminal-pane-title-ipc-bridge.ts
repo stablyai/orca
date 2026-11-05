@@ -6,8 +6,8 @@ import { collectLeafIdsInOrder } from '@/components/terminal-pane/terminal-layou
 import { findTerminalTabWorktreeId } from '@/components/native-chat/native-chat-file-link'
 import { sendLayoutCommandToOwner } from '@/runtime/layout-owner-command'
 import { useAppStore } from '../../store'
-import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
-import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
+import type { TerminalLayoutSnapshot } from '../../../../shared/workspace-layout/terminal-tab-types'
+import { isTerminalLeafId } from '../../../../shared/workspace-layout/stable-pane-id'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { resolveRootlessTerminalLayoutLeafId } from '../../../../shared/workspace-layout/terminal-pane-tree'
 
@@ -34,7 +34,6 @@ function showRuntimePaneTitle(tabId: string, leafId: string, title: string | nul
   window.dispatchEvent(new CustomEvent(SET_TERMINAL_PANE_TITLE_EVENT, { detail }))
 }
 
-/** Applies main's title for one pane; the tab's own name is never touched. */
 export function applyRuntimePaneTitle({ tabId, leafId, title }: SetTerminalPaneTitleDetail): void {
   const store = useAppStore.getState()
   const layout = store.terminalLayoutsByTabId[tabId]
@@ -51,7 +50,6 @@ export function applyRuntimePaneTitle({ tabId, leafId, title }: SetTerminalPaneT
   }
   const show = (): void => showRuntimePaneTitle(tabId, leafId, normalizedTitle)
   const worktreeId = findTerminalTabWorktreeId(store.tabsByWorktree, tabId)
-  // Switch point: a main-owned layout takes the rename, and main's frame draws it.
   if (
     ORCA_LAYOUT_OWNER_IS_MAIN &&
     worktreeId &&

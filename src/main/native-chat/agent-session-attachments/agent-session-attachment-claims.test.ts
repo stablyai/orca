@@ -2,10 +2,8 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type {
-  AgentJournalMessageItem,
-  AgentSessionJournalIdentity
-} from '../../../shared/agent-session-journal-types'
+import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionJournalIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import { formatNativeChatFileReference } from '../../../shared/agent-image-paste'
 import {
   createTrackedJournalOpener,
@@ -17,11 +15,12 @@ import {
   markUnclaimedUploadForSweep
 } from './agent-session-attachment-claims'
 import {
+  agentSessionAttachmentReferenceNames,
   agentSessionAttachmentReferences,
   agentSessionAttachmentStoreRoot
 } from './agent-session-attachment-references'
-import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
-import { agentSessionSendBodyFingerprint } from '../../../shared/structured-agent-session-send-mutation'
+import { claudeProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { agentSessionSendBodyFingerprint } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 
 const UPLOAD_A = '0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c01'
 const UPLOAD_B = '7c2d9e10-3f4a-4b5c-8d6e-2f1a0b9c8d02'
@@ -46,12 +45,36 @@ describe('agentSessionAttachmentReferences', () => {
     expect([...references].sort()).toEqual([UPLOAD_A, UPLOAD_B].sort())
   })
 
+  it.each([
+    [
+      'an image path, whose spaces are part of it',
+      { type: 'image-ref', path: 'my shot.png' },
+      'my shot.png'
+    ],
+    ['a quoted reference', { type: 'text', text: 'read @"$/my notes.txt" please' }, 'my notes.txt'],
+    [
+      'a bare reference, at the next space',
+      { type: 'text', text: 'read @$/notes.txt please' },
+      'notes.txt'
+    ],
+    ['a reference with no file name, by its id', { type: 'text', text: 'see $ please' }, UPLOAD_A]
+  ] as const)('names %s', (_case, block, name) => {
+    const stored = `${root}/${UPLOAD_A}`
+    const body = message(
+      block.type === 'text'
+        ? { ...block, text: block.text.replace('$', stored) }
+        : { ...block, path: `${stored}/${block.path}` }
+    )
+    expect(agentSessionAttachmentReferenceNames(root, body, [UPLOAD_A], 'linux')).toEqual([
+      { uploadId: UPLOAD_A, name }
+    ])
+  })
+
   it("leaves a mention of any other store path as text: another server's, a ~ form, a bare name", () => {
     const mentions = [
       `@/home/other/agent-session-attachments/${UPLOAD_A}/a.txt`,
       `~/Library/Application Support/Orca/agent-session-attachments/${UPLOAD_A}/x.png`,
       `see agent-session-attachments/${UPLOAD_A}`,
-      // This host's root as the tail of a longer path is still another path.
       `/mnt${root}/${UPLOAD_A}/a.txt`
     ]
     for (const text of mentions) {

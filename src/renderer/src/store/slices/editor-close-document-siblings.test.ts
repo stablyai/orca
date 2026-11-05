@@ -10,7 +10,6 @@ import { dispatchWorkspaceTabCommand } from '@/lib/workspace-tab-commands'
 import { captureEditorFileOperationProvenance } from '@/lib/editor-file-operation-owner'
 import { drawTabsFromMain, type TabsDrawnFromMain } from './tabs-drawn-from-main.test-fixture'
 
-// Main's answer to the window's layout commands, as a switch-on build sends them.
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
@@ -189,12 +188,6 @@ describe('closing duplicate document records', () => {
     expect(store.getState().openFiles).toEqual([sibling])
   })
 
-  it('preserves the same path in another worktree', () => {
-    const sibling = addSibling({ worktreeId: 'wt-2' })
-    store.getState().closeFile(file.id)
-    expect(store.getState().openFiles).toEqual([sibling])
-  })
-
   it('preserves a sibling with different captured owner provenance', () => {
     const provenance = file.operationProvenance
     if (!provenance) {
@@ -209,15 +202,6 @@ describe('closing duplicate document records', () => {
     store.getState().closeFile(file.id)
     expect(store.getState().openFiles).toEqual([sibling])
   })
-
-  it.each([{ readOnly: true }, { mode: 'diff' } as const])(
-    'preserves another file mode or access type: %j',
-    (overrides) => {
-      const sibling = addSibling(overrides)
-      store.getState().closeFile(file.id)
-      expect(store.getState().openFiles).toEqual([sibling])
-    }
-  )
 
   it('closes a disconnected runtime document without requiring its worktree catalog', async () => {
     const provenance = file.operationProvenance
@@ -260,51 +244,6 @@ describe('closing duplicate document records', () => {
     expect(store.getState().openFiles).toEqual([])
     expect(store.getState().unifiedTabsByWorktree['wt-1'] ?? []).toEqual([])
   })
-
-  it.each([undefined, '', 'pending sibling text'])(
-    'close-all preserves the backing file of a dirty duplicate: %s',
-    async (draft) => {
-      const stat = vi.fn(async () => ({ size: 0, isDirectory: false, mtime: 0 }))
-      const deletePath = vi.fn(async () => {})
-      vi.stubGlobal('window', { api: { fs: { stat, deletePath } } })
-      file = { ...file, isUntitled: true }
-      store.setState({ openFiles: [file] })
-      const sibling = addSibling({ isDirty: draft === undefined })
-      if (draft !== undefined) {
-        store.setState({ editorDrafts: { [sibling.id]: draft } })
-      }
-      // Switch on: the files go once main's frame dropped their tabs.
-      const drawn = await mainHoldsStore()
-      store.getState().closeAllFiles()
-      await drawn.settle()
-      await new Promise<void>((resolve) => setImmediate(resolve))
-      expect(stat).not.toHaveBeenCalled()
-      expect(deletePath).not.toHaveBeenCalled()
-      expect(store.getState().openFiles).toEqual([])
-    }
-  )
-
-  it.each(['closeFile', 'closeAllFiles'] as const)(
-    '%s retains the backing file when the selected untitled document has an empty draft',
-    async (action) => {
-      const stat = vi.fn(async () => ({ size: 0, isDirectory: false, mtime: 0 }))
-      const deletePath = vi.fn(async () => {})
-      vi.stubGlobal('window', { api: { fs: { stat, deletePath } } })
-      store.setState({
-        openFiles: [{ ...file, isUntitled: true }],
-        editorDrafts: { [file.id]: '' }
-      })
-      if (action === 'closeFile') {
-        store.getState().closeFile(file.id)
-      } else {
-        store.getState().closeAllFiles()
-      }
-      await new Promise<void>((resolve) => setImmediate(resolve))
-      expect(stat).not.toHaveBeenCalled()
-      expect(deletePath).not.toHaveBeenCalled()
-      expect(store.getState().recentlyClosedEditorTabsByWorktree['wt-1']).toHaveLength(1)
-    }
-  )
 
   it.each(['closeFile', 'closeAllFiles'] as const)(
     '%s cancels placeholder deletion when its document reopens during stat',

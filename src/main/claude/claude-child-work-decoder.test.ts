@@ -53,6 +53,48 @@ describe('Claude child-work decoder', () => {
     expect(decoder.drain(600)).toEqual([])
   })
 
+  it('marks a background orca orchestration check --wait as the worker wait it is', () => {
+    const decoder = new ClaudeChildWorkDecoder()
+    decoder.observe({
+      type: 'assistant',
+      session_id: 'provider-1',
+      uuid: 'assistant-1',
+      parent_tool_use_id: null,
+      message: {
+        role: 'assistant',
+        content: [
+          {
+            type: 'tool_use',
+            id: 'toolu_wait',
+            name: 'Bash',
+            input: {
+              command: `ORCA_RUN=${'x'.repeat(200)} orca orchestration check --wait --json`,
+              run_in_background: true
+            }
+          }
+        ]
+      }
+    })
+    decoder.observe(
+      system('task_started', {
+        task_id: 'wait-1',
+        tool_use_id: 'toolu_wait',
+        task_type: 'local_bash',
+        description: 'Wait for next worker message',
+        is_backgrounded: true
+      })
+    )
+    expect(decoder.drain(500)).toMatchObject([
+      {
+        type: 'live',
+        child: {
+          kind: 'command',
+          operation: { toolName: 'Bash', input: 'orca orchestration check --wait' }
+        }
+      }
+    ])
+  })
+
   it("carries a child's progress: the tool it last ran, its summary and its usage", () => {
     const decoder = decoderWith(foregroundAgent)
     decoder.observe(
@@ -70,7 +112,6 @@ describe('Claude child-work decoder', () => {
         observedAt: 600,
         child: expect.objectContaining({
           handle: { idKind: 'task_id', id: 'agent-fg', runId: 'toolu_fg' },
-          // The progress description restates the tool; the task keeps its own.
           description: 'Find flaky tests',
           operation: { toolName: 'Bash', basis: 'reported', observedAt: 600 },
           lastMessage: 'Reproducing the flake',
@@ -118,6 +159,16 @@ describe('Claude child-work decoder', () => {
     ])
   })
 
+  it('ends a background agent at the notification that wakes its launcher, not the update before it', () => {
+    for (const status of ['completed', 'failed', 'killed']) {
+      const decoder = decoderWith(backgroundAgent)
+      decoder.observe(system('task_updated', { task_id: 'agent-bg', patch: { status } }))
+      expect(decoder.drain(500)).toEqual([])
+      decoder.observe(system('task_notification', { task_id: 'agent-bg', status }))
+      expect(decoder.drain(600)).toEqual([expect.objectContaining({ type: 'ended' })])
+    }
+  })
+
   it("reads nothing from a roster, a turn's end or a spawn call's result", () => {
     const decoder = decoderWith(foregroundAgent, backgroundAgent)
     decoder.observe(system('background_tasks_changed', { tasks: [] }))
@@ -154,7 +205,6 @@ describe('Claude child-work decoder', () => {
         status: 'completed'
       })
     )
-    // However many other children ended meanwhile, the wake still reads as this run's restart.
     for (let index = 0; index < 300; index += 1) {
       const id = `other-${index}`
       decoder.observe({ ...backgroundAgent, task_id: id, tool_use_id: `toolu_${index}` })
@@ -227,7 +277,6 @@ describe('Claude child-work decoder', () => {
     const decoder = decoderWith(backgroundAgent)
     decoder.clear()
     expect(decoder.drain(500)).toEqual([{ type: 'session-ended', observedAt: 500 }])
-    // Nothing of the old session is remembered: a start is a first run again.
     decoder.observe(backgroundAgent)
     expect(decoder.drain(600)).toEqual([expect.not.objectContaining({ restart: true })])
   })
@@ -251,7 +300,6 @@ describe('Claude children waiting on a permission request', () => {
 
   it('reads every live report of a waiting child as waiting, a start included', () => {
     const decoder = new ClaudeChildWorkDecoder()
-    // The request can name a child before its start is read.
     decoder.observeWaiting(new Set(['agent-bg']))
     decoder.observe(backgroundAgent)
     decoder.observe(foregroundAgent)
@@ -268,13 +316,11 @@ describe('Claude children waiting on a permission request', () => {
     decoder.observeWaiting(new Set(['agent-bg']))
     decoder.observe(system('task_notification', { task_id: 'agent-bg', status: 'stopped' }))
     expect(states(decoder.drain(500))).toEqual(['agent-bg waiting', 'ended'])
-    // Nothing is live to stop waiting.
     decoder.observeWaiting(new Set())
     expect(decoder.drain(600)).toEqual([])
     decoder.observe(system('task_started', { ...backgroundAgent, tool_use_id: 'toolu_bg_2' }))
     decoder.observeWaiting(new Set(['agent-bg']))
     decoder.clear()
-    // The session's end frees every wait: nothing its drain carries reads waiting.
     const edges = states(decoder.drain(700))
     expect(edges.at(-1)).toBe('session-ended')
     expect(edges).not.toContain('agent-bg waiting')

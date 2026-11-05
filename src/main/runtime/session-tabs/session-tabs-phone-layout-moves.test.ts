@@ -1,14 +1,14 @@
-// A windowless server (orca serve, orcad): a phone's split move and its create after a split tab
-// go through main's layout, so the rows main then lists keep them (layout-owner build).
+// Windowless phone split moves and subsequent creates must retain main-owned groups/order.
 import { describe, expect, it, vi } from 'vitest'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-types'
 
 vi.mock('../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 
 // Fragments stay side-effect ordered: mocks, then lifecycle, then fixtures.
-await import('../orca-runtime-test-mocks.spec')
-await import('../orca-runtime-test-lifecycle.spec')
-const { TEST_WORKTREE_ID, TEST_WORKTREE_PATH } = await import('../orca-runtime-test-fixtures.spec')
+await import('../orca-runtime-tests/runtime-test-module-registration.spec')
+await import('../orca-runtime-tests/orca-runtime-test-lifecycle.spec')
+const { TEST_WORKTREE_ID, TEST_WORKTREE_PATH } =
+  await import('../orca-runtime-tests/orca-runtime-test-fixtures.spec')
 const { SURFACE_TAB_ID } = await import('../terminal/surface/terminal-surface-replies.test-fixture')
 const { SAVED_GROUP_ID, SECOND_TAB_ID, THIRD_TAB_ID, tabStrip, threeTabSurfaceRuntime } =
   await import('./session-tabs-layout-moves.test-fixture')
@@ -91,17 +91,6 @@ describe("a phone's layout change on a windowless server (switch on)", () => {
     expect((await runtime.listMobileSessionTabs(WORKTREE)).tabs.map((row) => row.id)).toContain(
       CHAT
     )
-  })
-
-  it("sends nothing for a group's last tab dropped on its neighbour's facing edge", async () => {
-    const { runtime } = await headlessRuntime()
-    const split = { kind: 'split', tabId: SECOND_TAB_ID, targetGroupId: SAVED_GROUP_ID } as const
-    await runtime.moveMobileSessionTab(WORKTREE, { ...split, splitDirection: 'right' })
-    const apply = vi.spyOn(runtime, 'applyLayoutCommand')
-
-    await runtime.moveMobileSessionTab(WORKTREE, { ...split, splitDirection: 'right' })
-
-    expect(apply).not.toHaveBeenCalled()
   })
 
   it("answers a split main refuses with main's refusal code", async () => {

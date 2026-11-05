@@ -1,8 +1,8 @@
 import { isDocumentVisibilityProvenStale } from '../stale-document-visibility'
 import {
   scanSynchronizedOutput,
-  type SynchronizedOutputScan
-} from '../../../../../shared/terminal-synchronized-output-scan'
+  type SynchronizedOutputScan as SynchronizedForegroundScan
+} from '../../../../../shared/terminal/protocol/escape/terminal-synchronized-output-scan'
 import {
   INACTIVE_FOREGROUND_IMMEDIATE_BUDGET_CHARS,
   consumeForegroundImmediateBudget,
@@ -10,11 +10,7 @@ import {
 } from './foreground-output-budgets'
 
 export const TERMINAL_RENDERER_RISK_SCAN_TAIL_CHARS = 256
-export {
-  SYNCHRONIZED_OUTPUT_START_SEQUENCE,
-  SYNCHRONIZED_OUTPUT_END_SEQUENCE,
-  SYNCHRONIZED_OUTPUT_MARKER_TAIL_CHARS
-} from '../../../../../shared/terminal-synchronized-output-scan'
+
 export const CURSOR_SHOW_SEQUENCE = '\x1b[?25h'
 export const CURSOR_HIDE_SEQUENCE = '\x1b[?25l'
 export const TERMINAL_FOCUS_IN_SEQUENCE = '\x1b[I'
@@ -32,19 +28,13 @@ export function shouldWritePtyOutputForeground(isPaneVisible: boolean): boolean 
   if (typeof document === 'undefined') {
     return true
   }
-  // Why: Electron can keep visible panes mounted while the whole app is
-  // backgrounded. Treat hidden documents like background tabs so Chromium
-  // timer throttling cannot pin terminal writes on the renderer foreground path.
+  // Background documents need background scheduling even with visible mounted panes, or Chromium throttling can pin foreground writes.
   if (document.visibilityState === 'visible') {
     return true
   }
-  // Why: macOS occlusion tracking can wedge visibilityState at 'hidden' after
-  // display sleep; proven-stale means real user input contradicted it, so the
-  // hidden-delivery gate must not keep dropping a watched pane's bytes.
+  // Real input can disprove stale macOS occlusion after sleep; hidden gating must then resume watched output.
   return isDocumentVisibilityProvenStale()
 }
-
-export type SynchronizedForegroundScan = SynchronizedOutputScan
 
 /** Renderer-facing name for the shared latch scan; the logic is protocol, not view. */
 export function scanSynchronizedForegroundOutput(

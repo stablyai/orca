@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it } from 'vitest'
-import { resetTranscriptConsumersForTests } from '../ai-vault/session-transcript-consumers'
+import { resetTranscriptConsumersForTests } from '../ai-vault/transcripts/session-transcript-consumers'
 import { registerSessionSearchIndexConsumer } from './session-search-index-consumer'
 import {
   openSessionSearchIndexFile,
@@ -123,7 +123,7 @@ it('still indexes new appended messages', () => {
 })
 
 it('keeps the index current when a second fold appends a span it already holds', () => {
-  // Pi and OMP fold one shared transcript apart, so the same append reaches the index twice.
+  // Pi and OMP can publish the same append when folding one shared transcript.
   replayTranscriptRead({ messages })
   const append = {
     candidate: syntheticCandidate({ sizeBytes: 5000 }),

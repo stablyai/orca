@@ -1,17 +1,15 @@
-// How a running ACP turn ends before its child does, for a Stop and a requested close alike: the
-// cancel goes out once, and the agent gets a bounded grace, counted from it, to end its turn.
-
+import { isAcpReadySession, type AcpStructuredChild } from './acp-structured-child'
+import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import type { AcpStructuredSession } from './acp-structured-session'
 
 type AcpStoppableSession = Pick<AcpStructuredSession, 'connection' | 'lane' | 'prompts' | 'turns'>
 
-/** A turn a cancel can end: Orca's prompt, or one the agent opened itself. */
 function acpTurnInFlight(session: AcpStoppableSession): boolean {
   return session.turns.running || session.lane.openTurnId !== null
 }
 
-/** As a Stop: held steers and the agent's open requests are withdrawn, then the cancel is written,
- *  never awaited; a failed write leaves the grace to run out. */
+/** Do not await the cancel write; grace expiry must still close an unresponsive child. */
 export function interruptAcpTurn(session: AcpStoppableSession): void {
   session.turns.stop(Date.now())
   if (!acpTurnInFlight(session)) {
@@ -21,32 +19,37 @@ export function interruptAcpTurn(session: AcpStoppableSession): void {
   void session.connection.cancel().catch(() => undefined)
 }
 
-/** Resolves once the running turn ended, or `graceMs` after `stoppedAt` (`Date.now()` time). */
+/** Wait for turn completion or grace expiry using the Date.now clock. */
 export async function awaitAcpTurnEnd(
   session: AcpStoppableSession,
   stoppedAt: number,
-  graceMs: number
+  graceMs: number,
+  signal?: AbortSignal
 ): Promise<void> {
+  const waiting = new AbortController()
   let timer: ReturnType<typeof setTimeout> | undefined
   const elapsed = new Promise<void>((resolve) => {
     timer = setTimeout(resolve, Math.max(0, stoppedAt + graceMs - Date.now()))
   })
   const turnId = session.lane.openTurnId
   try {
-    await Promise.race([
-      Promise.all([
-        session.turns.whenIdle(),
-        turnId === null ? undefined : session.lane.whenTurnLeaves(turnId)
+    await waitForPromiseWithSignal(
+      Promise.race([
+        Promise.all([
+          session.turns.whenIdle(waiting.signal),
+          turnId === null ? undefined : session.lane.whenTurnLeaves(turnId, waiting.signal)
+        ]),
+        elapsed
       ]),
-      elapsed
-    ])
+      signal
+    )
   } finally {
     clearTimeout(timer)
+    waiting.abort()
   }
 }
 
-/** Before a requested close: a running turn is cancelled, unless a Stop already did, and waited on
- *  within the grace that cancel started. */
+/** Reuse an earlier Stop's grace deadline rather than starting a new one. */
 export async function windDownAcpTurn(
   session: AcpStoppableSession,
   graceMs: number
@@ -59,4 +62,42 @@ export async function windDownAcpTurn(
     interruptAcpTurn(session)
   }
   await awaitAcpTurnEnd(session, turns.stoppedAt ?? Date.now(), graceMs)
+}
+
+export async function settleAcpPermissionTransition(
+  session: AcpStructuredSession,
+  input: Parameters<NonNullable<StructuredAgentSessionAdapter['settlePermissionTransition']>>[0],
+  graceMs: number
+): Promise<boolean> {
+  input.signal?.throwIfAborted()
+  if (session.fence !== input.fence || session.closeRequested) {
+    return false
+  }
+  session.turns.interruptForPermissionTransition()
+  await awaitAcpTurnEnd(session, Date.now(), graceMs, input.signal)
+  return (
+    !session.ended &&
+    !session.closeRequested &&
+    !session.turns.running &&
+    session.lane.openTurnId === null
+  )
+}
+
+export function requestEndWait(
+  sessionFor: (id: string) => AcpStructuredChild | undefined,
+  graceMs: () => number
+): NonNullable<StructuredAgentSessionAdapter['awaitStoppedRequestEnd']> {
+  return async (id, at) => {
+    const session = sessionFor(id)
+    if (isAcpReadySession(session)) {
+      await awaitAcpTurnEnd(session, at, graceMs())
+    }
+  }
+}
+
+export function acpPermissionTransition(
+  sessionFor: (id: string) => AcpStructuredSession,
+  graceMs: () => number
+): NonNullable<StructuredAgentSessionAdapter['settlePermissionTransition']> {
+  return (input) => settleAcpPermissionTransition(sessionFor(input.sessionId), input, graceMs())
 }

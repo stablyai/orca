@@ -1,8 +1,4 @@
-// Tabs this desktop created in a paired server's workspace that the server's layout never lists (a
-// simulator, a client-hosted browser tab), by tab-bar or entity id: that server's frame builds keep
-// them as drawn, inside the server's own groups (ledgers L273, L274). A tab the server published is
-// not one: it follows the server's frames. Kept in this desktop's localStorage, by server and
-// workspace, so a reload keeps the tabs its session restores; never a session field nor sent.
+// Keep desktop-created simulator/browser tabs absent from paired-server frames in this desktop’s localStorage, keyed by server/workspace; published tabs follow server frames. Never serialize or send this record.
 
 import type { Tab } from '../../../shared/tab-types'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
@@ -17,8 +13,7 @@ type Entry = { environmentId: string; worktreeId: string; ids: Set<string> }
 let records: Map<string, Entry> | undefined
 
 function recordMap(): Map<string, Entry> {
-  // Switch point: only a layout-owner build draws a server's frames; any other never reads or
-  // keeps the record.
+  // Only layout-owner builds consume these server-frame exceptions.
   if (!ORCA_LAYOUT_OWNER_IS_MAIN) {
     return new Map()
   }
@@ -49,7 +44,6 @@ function recordMap(): Map<string, Entry> {
   return records
 }
 
-/** Drops emptied entries, then writes the record through. */
 function save(map: Map<string, Entry>): void {
   for (const [key, entry] of map) {
     if (entry.ids.size === 0) {
@@ -88,7 +82,6 @@ export function noteDesktopCreatedServerTab(
   save(map)
 }
 
-/** Deletes `ids` from `entries`; writes through when any was there. */
 function forgetIn(entries: readonly Entry[], ids: Iterable<string>): void {
   let changed = false
   for (const id of ids) {
@@ -105,7 +98,6 @@ export function forgetDesktopCreatedServerTab(id: string): void {
   forgetIn([...recordMap().values()], [id])
 }
 
-/** A removed workspace's tabs. */
 export function forgetDesktopCreatedServerTabsOf(workspace: string): void {
   const entries = entriesOf(workspace)
   forgetIn(
@@ -141,12 +133,10 @@ export function pruneDesktopCreatedServerTabs(
 const isCreated = (workspace: string, id: string): boolean =>
   entriesOf(workspace).some((entry) => entry.ids.has(id))
 
-/** The servers whose record names `id` in `workspace`. */
 export function desktopCreatedServerTabEnvironments(workspace: string, id: string): string[] {
   return entriesOf(workspace).flatMap((entry) => (entry.ids.has(id) ? [entry.environmentId] : []))
 }
 
-/** Whether `tabId` (a tab-bar id) is such a tab, also when it is recorded by its entity id. */
 export function isDesktopCreatedServerTab(
   tabs: readonly Pick<Tab, 'id' | 'entityId'>[] | undefined,
   workspace: string,
@@ -162,7 +152,6 @@ export const DESKTOP_CREATED_SERVER_TAB_HOLDS: HeldDrawnTabs = {
   keepsInMainGroups: isCreated
 }
 
-/** As a reload: the in-memory record is gone, localStorage stays. */
 export function _reloadDesktopCreatedServerTabsForTests(): void {
   records = undefined
 }

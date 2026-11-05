@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
-import { registerLivePty } from '../bind-first-pane.test-fixture'
-import { OrcaRuntimeService } from '../orca-runtime-test-mocks.spec'
+import { registerLivePty } from './bind-first-pane.test-fixture'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import {
   expectDesktopDropsPane,
@@ -13,7 +14,7 @@ import {
   makeHeadlessTerminalLayout,
   makeRuntimeStoreWithWorkspaceSession,
   makeWorkspaceSessionWithHeadlessTerminal
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
   it('rejects missing requested split leaves instead of activating a sibling', async () => {
@@ -173,7 +174,6 @@ describe('OrcaRuntimeService', () => {
       getForegroundProcess: async () => null,
       listProcesses: async () => []
     })
-    // Why: an attached renderer (closeTerminal exists) sends the close down the renderer-attached path that historically leaked serve-owned tabs.
     runtime.setNotifier({ closeTerminal } as never)
     runtime.syncWindowGraph(1, {
       tabs: [
@@ -204,15 +204,14 @@ describe('OrcaRuntimeService', () => {
     await runtime.closeMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'host-tab')
 
     expect(kill).toHaveBeenCalledWith(servePtyId)
-    // De-persist so syncMobileSessionTabs cannot re-hydrate and resurrect it.
+    // Remove persistence too, or syncMobileSessionTabs can resurrect the tab.
     expect(getSession().tabsByWorktree[TEST_WORKTREE_ID]).toEqual([])
     expect(getSession().terminalLayoutsByTabId['host-tab']).toBeUndefined()
-    // Best-effort renderer notify so no adopted pane is left dead.
     expectDesktopDropsTab({ closeTerminal, getSession }, 'host-tab')
   })
 
   it('delegates a renderer-owned daemon-session (worktreeId@@uuid) local terminal to the renderer', async () => {
-    // Why: the daemon mints <worktreeId>@@<uuid> for ordinary renderer-owned terminals too, so id shape alone must not mark it runtime-owned (regression: killed normal locals).
+    // Ordinary renderer terminals also use <worktreeId>@@<uuid>; id shape cannot prove host ownership.
     const daemonPtyId = `${TEST_WORKTREE_ID}@@d9213842`
     const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(
       makeWorkspaceSessionWithHeadlessTerminal({
@@ -245,7 +244,6 @@ describe('OrcaRuntimeService', () => {
       listProcesses: async () => []
     })
     runtime.setNotifier({ closeTerminal } as never)
-    // Renderer graph PUBLISHES this tab -> it is renderer-owned.
     runtime.syncWindowGraph(1, {
       tabs: [
         {
@@ -271,20 +269,18 @@ describe('OrcaRuntimeService', () => {
     await runtime.closeMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'host-tab')
 
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-      // #31571: main owns the tab's layout, so it closes the tab and stops its terminal itself.
       expectDesktopDropsTab({ closeTerminal, getSession }, 'host-tab')
       expect(kill).toHaveBeenCalledWith(daemonPtyId)
       return
     }
     expect(closeTerminal).toHaveBeenCalledWith('host-tab')
     expect(kill).not.toHaveBeenCalled()
-    // Not torn down by the runtime — left for the renderer's own close to prune.
     expect(getSession().tabsByWorktree[TEST_WORKTREE_ID]).toHaveLength(1)
     expect(getSession().terminalLayoutsByTabId['host-tab']).toBeDefined()
   })
 
   it('tears down a leaked daemon-session headless tab the renderer never published', async () => {
-    // Why: same <worktreeId>@@<uuid> id but absent from the renderer graph — a real leak that must be de-persisted so syncMobileSessionTabs can't resurrect it.
+    // An unpublished daemon tab must be de-persisted to prevent resurrection.
     const daemonPtyId = `${TEST_WORKTREE_ID}@@77e25ca0`
     const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(
       makeWorkspaceSessionWithHeadlessTerminal({
@@ -317,7 +313,6 @@ describe('OrcaRuntimeService', () => {
       listProcesses: async () => []
     })
     runtime.setNotifier({ closeTerminal } as never)
-    // Empty renderer graph -> the host's tab was never published by the renderer.
     runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
 
     await runtime.closeMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'host-tab')
@@ -342,7 +337,7 @@ describe('OrcaRuntimeService', () => {
       listProcesses: async () => []
     })
     runtime.setNotifier({ closeTerminal } as never)
-    // Pending tab in the renderer graph (PTY not bound yet) is renderer-owned, so the runtime forwards the close but must not de-persist it.
+    // A published pending tab remains renderer-owned before its PTY binds.
     runtime.syncWindowGraph(1, {
       tabs: [
         {
@@ -379,7 +374,6 @@ describe('OrcaRuntimeService', () => {
     await runtime.closeMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'host-tab')
 
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-      // #31571: main owns the tab's layout, so it closes the tab and stops the terminal it binds.
       expectDesktopDropsTab({ closeTerminal, getSession }, 'host-tab')
       expect(kill).toHaveBeenCalledWith('persisted-pty')
       return
@@ -387,7 +381,6 @@ describe('OrcaRuntimeService', () => {
     expect(closeTerminal).toHaveBeenCalledWith('host-tab')
     expect(forgetTabs).not.toHaveBeenCalled()
     expect(kill).not.toHaveBeenCalled()
-    // Not torn down by the runtime: the renderer-owned tab is left for the renderer's own close to prune.
     expect(getSession().tabsByWorktree[TEST_WORKTREE_ID]).toHaveLength(1)
     expect(getSession().terminalLayoutsByTabId['host-tab']).toBeDefined()
   })
@@ -445,12 +438,11 @@ describe('OrcaRuntimeService', () => {
       `host-tab::${HEADLESS_LEAF_ID}`
     )
 
-    // Why: a delegated close is handed to the renderer over a fire-and-forget
-    // notifier that may decline it, so tombstoning would hide a live tab from
-    // paired clients forever. Only a host-committed close may tombstone.
-    expect(result).toEqual({ closed: true })
+    // Only a host-committed close may tombstone; a fire-and-forget renderer request can be declined.
+    expect(result).toEqual(
+      ORCA_LAYOUT_OWNER_IS_MAIN ? { closed: true, retirementConfirmed: true } : { closed: true }
+    )
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-      // #31571: main commits the close in its own layout, so nothing is delegated.
       expectDesktopDropsTab({ closeTerminal, getSession }, 'host-tab')
       return
     }
@@ -474,12 +466,11 @@ describe('OrcaRuntimeService', () => {
       listProcesses: async () => []
     })
     runtime.setNotifier({ closeTerminal } as never)
-    // Empty graph → this persisted headless shell (no live PTY) is runtime-owned and must be torn down or it re-hydrates on next publish.
+    // An unbound headless shell must be de-persisted or the next publish rehydrates it.
     runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
 
     await runtime.closeMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'host-tab')
 
-    // #31571: main's close stops the terminal its layout binds; the window-era close kills none.
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {
       expect(kill).toHaveBeenCalledWith('persisted-pty')
     } else {
@@ -567,10 +558,8 @@ describe('OrcaRuntimeService', () => {
       `host-tab::${HEADLESS_SECOND_LEAF_ID}`
     )
 
-    // Exact split leaf: kill only that leaf's PTY, keep the sibling, don't tear down the parent.
     expect(kill).toHaveBeenCalledWith('serve-right')
     expect(kill).not.toHaveBeenCalledWith('serve-left')
-    // Only the leaf-addressed notice for the closed pane; never a whole-tab close.
     expectDesktopDropsPane({ closeTerminalPane, getSession }, 'host-tab', HEADLESS_SECOND_LEAF_ID)
     expect(closeTerminal).not.toHaveBeenCalled()
     expect(getSession().tabsByWorktree[TEST_WORKTREE_ID]).toHaveLength(1)

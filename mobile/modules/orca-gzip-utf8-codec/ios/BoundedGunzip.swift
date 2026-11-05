@@ -5,11 +5,8 @@ struct BoundedGunzipError: Error, CustomStringConvertible {
   let description: String
 }
 
-/// Inflates exactly one gzip member with zlib's gzip mode, which checks the header, CRC32 and ISIZE.
-/// Any byte after the member (trailing data or a second member) is refused.
-///
-/// Never produces more than `outputLimit` bytes. A body that reaches the limit comes back at the
-/// limit with the rest of the stream unread: the caller sets the limit one past anything it accepts.
+/// Validate one gzip member (header, CRC32, ISIZE), rejecting trailing bytes/extra members.
+/// Stops at outputLimit with the stream unread; callers pass one byte beyond their accepted limit.
 func gunzipBounded(_ input: Data, outputLimit: Int) throws -> Data {
   guard outputLimit >= 0 else {
     throw BoundedGunzipError(description: "negative output limit")

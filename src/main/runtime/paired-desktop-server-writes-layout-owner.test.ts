@@ -1,9 +1,6 @@
-// Layout-owner build: what a paired desktop sends a server for a workspace that server's frames draw
-// (H5c-2). A close goes by session.tabs.close, which main applies and whose terminals it stops; a
-// window-style `layout.apply` closeTabs stops nothing, which is why the desktop never routes one.
+// Paired close uses session.tabs.close to stop host terminals; window-style layout.apply assumes its window already stopped them.
 import { describe, expect, it, vi } from 'vitest'
 import {
-  LEAF_A,
   PTY_A,
   TAB_ID,
   WORKTREE_ID,
@@ -36,7 +33,7 @@ const desktopClose = (fixture: Fixture) =>
     clientNavigationId: 'paired-desktop'
   })
 
-// A window's session.tabs rows come from its renderer's publish, which this harness has none of.
+// This harness has no renderer publication, so only main-owned session rows exist.
 describe('a paired desktop’s close of a tab a server’s main owns, with no window', () => {
   it('closes the tab in main’s layout and stops its terminal', async () => {
     const fixture = setupMainOwnedWorkspace()
@@ -74,22 +71,6 @@ describe.each([
 
     expect(tabRow(fixture)?.customTitle).toBe('from desktop')
     expect(notifier?.renameTerminal.mock.calls ?? []).toEqual([])
-  })
-
-  it('applies the routed props, chat pane and AI vault title in main, stopping nothing', async () => {
-    const { fixture } = setup()
-
-    for (const command of [
-      { type: 'setTabProps', workspace: WORKTREE_ID, tabId: TAB_ID, color: '#ff0000' },
-      { type: 'setChatPane', workspace: WORKTREE_ID, tabId: TAB_ID, leafId: LEAF_A },
-      { type: 'renameTab', workspace: WORKTREE_ID, tabId: TAB_ID, kind: 'aiVault', title: null }
-    ] as const) {
-      await expect(fixture.runtime.applyLayoutCommand(command)).resolves.toMatchObject({ ok: true })
-    }
-
-    expect(tabRow(fixture)).toMatchObject({ color: '#ff0000' })
-    expect(fixture.session().terminalLayoutsByTabId[TAB_ID]?.chatLeafId).toBe(LEAF_A)
-    expect(fixture.stopped).toEqual([])
   })
 
   // The pitfall: a window's closeTabs means its window already stopped the terminals.

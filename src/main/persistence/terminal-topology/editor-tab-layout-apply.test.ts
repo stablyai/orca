@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import type { Store } from '../loading-store/store'
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import { applyWindowLayoutCommand } from '../../runtime/runtime-layout-apply'
+import { applyWindowLayoutCommand } from '../../runtime/terminal/layout/runtime-layout-apply'
 import { WindowSession } from './terminal-topology-window-session-fixture'
 import {
   emptyTerminalSessionProfile,
@@ -184,8 +184,7 @@ describe('a window moveTabToWorkspace between a local and an SSH workspace', () 
       })
     ).resolves.toEqual({ ok: true, result: { tabId: 'e1', groupId: `group-${to}` } })
 
-    // The move resolves once durable; a reload would drop the SSH workspace, whose repo the fixture
-    // catalog lacks.
+    // Inspect before reload: this fixture lacks the SSH repo needed to retain its workspace.
     const source = store.getWorkspaceSession(routes[from])
     const target = store.getWorkspaceSession(routes[to])
     expect(source.unifiedTabs?.[from]?.some((tab) => tab.id === 'e1') ?? false).toBe(false)

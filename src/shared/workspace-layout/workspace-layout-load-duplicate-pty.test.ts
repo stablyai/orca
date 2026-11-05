@@ -1,9 +1,8 @@
-// One terminal bound in two panes of one tab: with main owning the layout, the Loader keeps one
-// pane as the window does, so main's frames never draw the duplicate.
+// Main must apply the window’s duplicate-PTY repair before publishing layout frames.
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../execution-host'
-import type { WorkspaceSessionState } from '../workspace-session-state-types'
+import type { WorkspaceSessionState } from '../workspace-session/workspace-session-state-types'
 import { loadWorkspaceLayout } from './workspace-layout-load'
 import { checkLayoutRoundTrip } from './workspace-layout-round-trip-check'
 import {

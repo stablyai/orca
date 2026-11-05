@@ -30,12 +30,10 @@ describe('a pane an agent launch laid out', () => {
       kind: 'not-started',
       code: 'agent_session_exited_during_start'
     })
-    // Over, for this process: a later spawn of the pane gets the same answer, never a shell.
     await expect(resolveAgentLaunchPaneVerdict(PANE, notLive)).resolves.toEqual({
       kind: 'not-started',
       code: 'agent_session_exited_during_start'
     })
-    // After a restart nothing is left: the pane is an ordinary one.
     resetAgentLaunchPanesForTests()
     expect(resolveAgentLaunchPaneVerdict(PANE, notLive)).toBeNull()
   })

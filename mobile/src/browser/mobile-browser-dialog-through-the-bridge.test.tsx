@@ -1,11 +1,4 @@
-/**
- * The pane's dialog card against a host that answers the way Chromium does.
- *
- * Measured on Chromium 1217, 2026-09-20: a page that opens a dialog runs nothing else until the
- * dialog is answered, and `Page.javascriptDialogClosed` is what says it was. So the card is the
- * page's block, not a local overlay — closing it on the press reports an answer the page never
- * got, and hides a page that is still waiting.
- */
+// Dialog blocks Chromium until answered (1217,2026-09-20); card must await Page.javascriptDialogClosed, not disappear merely on button press.
 import { createElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { describe, expect, it, vi } from 'vitest'
@@ -58,12 +51,7 @@ const TAB: MobileBrowserTab = {
   isActive: true
 }
 
-/**
- * A page that runs `alert('first')` and then `confirm('second')`, stopped at each one.
- *
- * `answer` is the only thing that moves it, which is the property the product has to hold: the
- * card may not clear until this has run.
- */
+// Stop page at sequential alert/confirm; only answer moves it, so card cannot clear before host applies answer.
 function createBlockedPage(emit: (event: unknown) => void) {
   let step = 0
   let confirmValue: boolean | null = null
@@ -181,8 +169,7 @@ describe('the pane keeps its dialog card until the page is unblocked', () => {
 
     pressButton(pane.renderer, 'OK')
     await pane.flush()
-    // The host has the reply and has not answered the page. The alert is still up on the page,
-    // so it is still up here.
+    // Host received reply but has not answered page; both page and card must retain alert.
     expect(cardMessages(pane.renderer)).toContain('first')
 
     await pane.answerFromTheHost()
@@ -236,8 +223,7 @@ describe('the pane keeps its dialog card until the page is unblocked', () => {
     pressButton(pane.renderer, 'OK')
     await pane.flush()
     const inFlight = pane.rpc.requests.length
-    // The host takes one answer per dialog: a second would be refused, or would settle the page's
-    // next dialog unseen. The button is what stops the second tap from ever being sent.
+    // Host takes one answer per dialog; duplicate tap could settle next unseen dialog, so disable buttons until settlement.
     expect(findButton(pane.renderer, 'OK').props.disabled).toBe(true)
 
     await pane.answerFromTheHost()
@@ -260,8 +246,7 @@ describe('the pane keeps its dialog card until the page is unblocked', () => {
     await pane.flush()
     const answeringFirst = pane.rpc.requests.at(-1)
 
-    // The page moves on without the pane hearing about it: the alert was settled and the confirm
-    // raised, but the reply to that first answer is still out there.
+    // Page advanced to confirm while first answer reply is still pending; old reply cannot mutate new card.
     await act(async () => {
       pane.page.answer(true)
       await pane.flush()

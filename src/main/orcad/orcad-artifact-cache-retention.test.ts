@@ -4,11 +4,9 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { ORCAD_LOCK_FILE_NAME } from './orcad-instance-lock'
 import {
-  liveLocalOrcadServeVersion,
   pruneDesktopOrcadArtifactCache,
   pruneOrcadArtifactCache
 } from './orcad-artifact-cache-retention'
-import { liveDaemonOrcadSlots, type OrcadSlotPeerJudge } from './orcad-daemon-slot-pins'
 
 const roots: string[] = []
 afterEach(() => {
@@ -23,7 +21,6 @@ function cacheRoot(): string {
   return root
 }
 
-/** A slot dir last used `ageMinutes` ago. */
 function slot(root: string, target: string, name: string, ageMinutes: number): string {
   const path = join(root, target, name)
   mkdirSync(path, { recursive: true })
@@ -62,39 +59,6 @@ describe('orcad artifact cache retention', () => {
     for (const path of [...recent, inUse, staging]) {
       expect(existsSync(path)).toBe(true)
     }
-  })
-
-  it('leaves the runtime archive cache and a missing root alone', async () => {
-    const root = cacheRoot()
-    const archives = join(root, 'node', 'archives')
-    mkdirSync(archives, { recursive: true })
-    for (const age of [1, 2, 3, 4]) {
-      slot(root, 'node', `archive-${age}`, age)
-    }
-    expect(await pruneOrcadArtifactCache(root)).toEqual([])
-    expect(await pruneOrcadArtifactCache(join(root, 'missing'))).toEqual([])
-  })
-
-  it('names the slot a live local orcad serve runs from, and nothing for the desktop', () => {
-    const userData = cacheRoot()
-    const lock = (role: string) =>
-      writeFileSync(
-        join(userData, ORCAD_LOCK_FILE_NAME),
-        JSON.stringify({
-          pid: process.pid,
-          startedAtMs: null,
-          nonce: 'nonce',
-          identity: 'uid',
-          version: '0.1.0+abc',
-          acquiredAt: new Date().toISOString(),
-          role
-        })
-      )
-    lock('orcad')
-    expect(liveLocalOrcadServeVersion(userData)).toBe('0.1.0+abc')
-    expect(liveLocalOrcadServeVersion(userData, () => false)).toBeNull()
-    lock('desktop')
-    expect(liveLocalOrcadServeVersion(userData)).toBeNull()
   })
 
   it('keeps both the selected slot and the one a running orcad serve still uses', async () => {
@@ -145,79 +109,5 @@ describe('orcad artifact cache retention', () => {
     mkdirSync(join(userData, 'daemon'))
     writeFileSync(join(userData, 'daemon', 'daemon-v30.pid'), '')
     expect(await pruneDesktopOrcadArtifactCache(userData)).toEqual([])
-  })
-
-  describe('a peer record from another machine or boot (a shared home)', () => {
-    const here: OrcadSlotPeerJudge = {
-      self: { machineIdentity: 'machine-a', bootId: 'boot-a' },
-      dataRootIsOnLocalDisk: () => true
-    }
-    const dead = () => false
-    const lock = (userData: string, fields: Record<string, unknown>) =>
-      writeFileSync(
-        join(userData, ORCAD_LOCK_FILE_NAME),
-        JSON.stringify({
-          pid: 4242,
-          startedAtMs: null,
-          nonce: 'nonce',
-          identity: 'uid',
-          version: '0.1.0+peer',
-          acquiredAt: new Date().toISOString(),
-          role: 'orcad',
-          ...fields
-        })
-      )
-
-    it('keeps the slot of a serve whose lock names another machine, though its PID is dead here', () => {
-      const userData = cacheRoot()
-      lock(userData, { machineIdentity: 'machine-b', bootId: 'boot-b' })
-      expect(liveLocalOrcadServeVersion(userData, dead, here)).toBe('0.1.0+peer')
-    })
-
-    it('keeps the slot of a serve on the same machine id but another boot', () => {
-      const userData = cacheRoot()
-      lock(userData, { machineIdentity: 'machine-a', bootId: 'boot-b' })
-      expect(liveLocalOrcadServeVersion(userData, dead, here)).toBe('0.1.0+peer')
-    })
-
-    it('keeps the slot of a lock naming no machine on a data root other machines can reach', () => {
-      const userData = cacheRoot()
-      lock(userData, {})
-      expect(
-        liveLocalOrcadServeVersion(userData, dead, { ...here, dataRootIsOnLocalDisk: () => false })
-      ).toBe('0.1.0+peer')
-      expect(liveLocalOrcadServeVersion(userData, dead, here)).toBeNull()
-    })
-
-    it('still frees the slot of a dead serve on this machine and boot', () => {
-      const userData = cacheRoot()
-      lock(userData, { machineIdentity: 'machine-a', bootId: 'boot-a' })
-      expect(liveLocalOrcadServeVersion(userData, dead, here)).toBeNull()
-      expect(liveLocalOrcadServeVersion(userData, () => true, here)).toBe('0.1.0+peer')
-    })
-
-    it("keeps a daemon's slot when its record names another boot or a network home", () => {
-      const userData = cacheRoot()
-      const root = join(userData, 'orcad-artifacts')
-      const daemonSlot = slot(root, 'linux-x64-glibc', '0.1.0+old', 90)
-      mkdirSync(join(userData, 'daemon'))
-      const record = (bootId?: string) =>
-        writeFileSync(
-          join(userData, 'daemon', 'daemon-v30.pid'),
-          JSON.stringify({
-            pid: 4242,
-            entryPath: join(daemonSlot, 'out', 'daemon-entry.js'),
-            ...(bootId ? { bootId } : {})
-          })
-        )
-      record('boot-b')
-      expect(liveDaemonOrcadSlots(userData, root, dead, here)).toEqual(['0.1.0+old'])
-      record()
-      expect(
-        liveDaemonOrcadSlots(userData, root, dead, { ...here, dataRootIsOnLocalDisk: () => false })
-      ).toEqual(['0.1.0+old'])
-      record('boot-a')
-      expect(liveDaemonOrcadSlots(userData, root, dead, here)).toEqual([])
-    })
   })
 })

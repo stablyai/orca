@@ -1,5 +1,4 @@
-// Main publishes one records frame per operation on a real Store (design E1), checked against a
-// fresh projection on every frame, with or without a window.
+// Check each operation's single records frame against a fresh real-Store projection, with or without a window (E1).
 
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -17,7 +16,7 @@ import {
   FIXTURE_GIT_WORKTREE_ID as GIT,
   openTopologyStore
 } from '../persistence/terminal-topology/terminal-topology-profile-fixture'
-import { applyWindowLayoutCommand } from './runtime-layout-apply'
+import { applyWindowLayoutCommand } from './terminal/layout/runtime-layout-apply'
 import {
   layoutFrameModelErrors,
   logLayoutFrameModelErrors
@@ -27,7 +26,10 @@ import {
   observeWorkspaceLayoutFrames,
   type LayoutFrameObservation
 } from './workspace-layout-frame-observer'
-import { WorkspaceLayoutStream, type LayoutOperationCommit } from './workspace-layout-stream'
+import {
+  WorkspaceLayoutStream,
+  type LayoutOperationCommit
+} from './terminal/surface/workspace-layout-stream'
 
 const layoutOwner = vi.hoisted(() => ({ isMain: true }))
 vi.mock('../../shared/layout-owner-switch', () => ({
@@ -126,7 +128,6 @@ describe('one records frame per main operation', () => {
       throw new Error('expected one records frame')
     }
     expect(frame.seq).toBe(seq + 1)
-    // Only the renamed tab rows: no tree, binding or workspace record.
     expect(
       frame.workspaces.map(({ key, change, ...records }) => [key, change, Object.keys(records)])
     ).toEqual([
@@ -256,13 +257,12 @@ describe('a headless main', () => {
     await renameTabs(store, titles({ [SSH_KEY]: 1 }))
 
     expect(commits).toEqual([{ hostIds: [SSH] }])
-    // The untouched partition is the same loaded model, read once.
     getSession.mockClear()
     expect(stream.readPartition('local')).toBe(first)
     expect(getSession).not.toHaveBeenCalled()
     const ssh = stream.readPartition(SSH)!.layout.workspaces[SSH_KEY]!
     expect(ssh.tabs.map((tab) => tab.generatedTitle)).toEqual(['Title 0'])
-    // The model is the stream's own: a reader that edits it fails.
+    // Readers share the stream's model; mutations must fail.
     expect(() => {
       ssh.tabs[0]!.generatedTitle = 'edited'
     }).toThrow(TypeError)

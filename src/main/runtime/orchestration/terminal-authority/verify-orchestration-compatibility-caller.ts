@@ -9,8 +9,8 @@ import type {
   OrchestrationCompatibilityTerminalAuthority
 } from '../../runtime-terminal-contracts'
 import { createHash } from 'node:crypto'
-import type { RuntimePtyWorktreeRecord } from '../../runtime-terminal-state-records'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import type { RuntimePtyWorktreeRecord } from '../../terminal/records/runtime-terminal-state-records'
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 
 export abstract class OrcaRuntimeWithVerifyOrchestrationCompatibilityCaller extends OrcaRuntimeWithSerializeHeadlessTerminalBuffer {
   abstract getOrchestrationDispatchAuthority(
@@ -81,8 +81,7 @@ export abstract class OrcaRuntimeWithVerifyOrchestrationCompatibilityCaller exte
       terminalProvenance === 'current_runtime' &&
       claimedPaneKey === terminal.paneKey
     ) {
-      // Why: the checks above bind a fresh launch to its live PTY, host, and
-      // launch secret. Only an exact live-pane match may skip hook attestation.
+      // Only an exact live-pane match may skip hook attestation after PTY, host and launch-secret checks.
       return this.freezeOrchestrationCompatibilityCallerAuthority(
         terminal,
         terminal.processIncarnation,

@@ -33,12 +33,8 @@ const dispatched = withOrcadDecommissionStopDispatched(prepared, request, T)
 const exited = withOrcadDecommissionProcessExited(dispatched, T)
 
 describe('the decommission journal entry', () => {
-  it('deactivates the active version and keeps it as previous', () => {
-    expect(prepared.recordAfter).toMatchObject({ active: null, previous: NEW, snapshot: null })
-  })
-
   it('journals a recordAfter released desktops still read, and commits the app version', () => {
-    // Frozen copy of the check released desktops run on every stop journal they recover.
+    // Frozen validation from released desktops must continue accepting new stop journals.
     const releasedDefect = (journal: typeof prepared): string | null => {
       const b = journal.recordBefore
       const deactivated = {

@@ -1,10 +1,10 @@
 import {
   composePaletteEvidence,
   type PaletteComposedEvidence
-} from './palette-match/evidence-composer'
+} from '../../../shared/palette-match/evidence-composer'
 import { extractWorktreePaletteCommentSnippet } from './worktree-palette-comment-snippet'
-import type { MatchRange } from './palette-match/normalized-text'
-import type { HostedReviewInfo } from '../../../shared/hosted-review'
+import type { MatchRange } from '../../../shared/palette-match/normalized-text'
+import type { HostedReviewInfo } from '../../../shared/source-control/hosted-review/hosted-review-contracts'
 import type { WorkspaceAttachment, Worktree } from '../../../shared/worktree/types'
 
 /** Chip label kinds the worktree row can render for a supporting-evidence unit. */

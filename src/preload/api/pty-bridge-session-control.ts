@@ -2,33 +2,38 @@ import type { PaintedRestorePane } from '../../shared/painted-restore-ack'
 import type {
   PtyFencedTerminationRequest,
   PtyFencedTerminationOutcome
-} from '../../shared/pty-fenced-termination'
+} from '../../shared/terminal/pty/lifecycle/pty-fenced-termination'
 import type { ResourceViewAdmission } from '../../shared/resource-view-admission'
 import type { SpawnIntent } from '../../shared/host-spawn-admission'
 import { ipcRenderer } from 'electron'
 import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
-import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
-import type { TerminalInputKind } from '../../shared/terminal-input-kind'
+import type { StartupCommandDelivery } from '../../shared/agent-launch/startup/codex-startup-delivery'
+import type { TerminalInputKind } from '../../shared/terminal/input/terminal-input-kind'
 import type {
   TerminalLeafMoveRequest,
   TerminalLeafMoveResult
-} from '../../shared/terminal-leaf-move'
+} from '../../shared/workspace-layout/terminal-leaf-move'
 import type {
+  SavedResumeDecision,
+  TerminalLaunchResult,
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
-} from '../../shared/agent-session-resume'
-import type { TuiAgent } from '../../shared/tui-agent'
-import type { PtyListedSession, PtySessionListScope } from '../../shared/pty-listed-session'
+} from '../../shared/agent-session/lifecycle/agent-session-resume'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
+import type {
+  PtyListedSession,
+  PtySessionListScope
+} from '../../shared/terminal/pty/lifecycle/pty-listed-session'
 import type {
   PtyRendererDeliveryHealthReply,
   PtyRendererDeliveryStateReport
-} from '../../shared/pty-renderer-delivery-health'
-import type { TerminalViewAttributes } from '../../shared/terminal-view-attributes'
-import type { PtyMainDeliveryDiagnostics } from '../../shared/pty-delivery-diagnostics'
+} from '../../shared/terminal/pty/diagnostics/pty-renderer-delivery-health'
+import type { TerminalViewAttributes } from '../../shared/terminal/protocol/queries/terminal-view-attributes'
+import type { PtyMainDeliveryDiagnostics } from '../../shared/terminal/pty/diagnostics/pty-delivery-diagnostics'
 import type { AgentKind, LaunchSource, RequestKind } from '../../shared/telemetry-events'
 import type { PreloadApi } from '../api-types'
-import type { TerminalPanePlacement } from '../../shared/terminal-pane-placement'
-import type { AgentPaneLaunchRequest } from '../../shared/agent-pane-launch-request'
+import type { TerminalPanePlacement } from '../../shared/workspace-layout/terminal-pane-placement'
+import type { AgentPaneLaunchRequest } from '../../shared/agent-launch/contracts/agent-pane-launch-request'
 
 export const ptySessionControlApi = {
   spawn: (opts: {
@@ -41,6 +46,7 @@ export const ptySessionControlApi = {
     commandDelivery?: 'renderer' | 'provider'
     launchConfig?: SleepingAgentLaunchConfig
     resumeProviderSession?: AgentProviderSessionMetadata
+    resumeOrigin?: 'saved'
     launchToken?: string
     launchAgent?: TuiAgent
     startupCommandDelivery?: StartupCommandDelivery
@@ -57,12 +63,14 @@ export const ptySessionControlApi = {
     replacesPtyId?: string
     placement?: TerminalPanePlacement
     spawnIntent?: SpawnIntent
+    wslPassiveRestore?: true
     agentLaunch?: AgentPaneLaunchRequest
     telemetry?: { agent_kind: AgentKind; launch_source: LaunchSource; request_kind: RequestKind }
   }): Promise<{
     id: string
     incarnationId?: string
     launchConfig?: SleepingAgentLaunchConfig
+    launchAgent?: TuiAgent
     snapshot?: string
     snapshotCols?: number
     snapshotRows?: number
@@ -79,6 +87,11 @@ export const ptySessionControlApi = {
     coldRestore?: { scrollback: string; cwd: string; cols?: number; rows?: number }
     startupCwdFallback?: { kind: 'worktree'; cwd: string }
     agentResumeUnavailable?: true
+    agentResumeRefused?: 'chat-home' | 'chat-writing' | 'unverifiable'
+    savedResumeDecision?: SavedResumeDecision
+    refusedResume?: TerminalLaunchResult['refusedResume']
+    launchToken?: string
+    resumeProviderSession?: TerminalLaunchResult['resumeProviderSession']
     shellReadyArmed?: boolean
   }> => ipcRenderer.invoke('pty:spawn', opts),
   write: (id: string, data: string, inputKind: TerminalInputKind): void => {

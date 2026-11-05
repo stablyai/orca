@@ -1,6 +1,6 @@
 import { parseAppSshPtyId } from '../../shared/ssh-pty-id'
 import { getConnectionExecutionHostId } from '../../shared/execution-host'
-import { getPtyExecutionHost } from '../../shared/terminal-execution-host'
+import { getPtyExecutionHost } from '../../shared/terminal/pty/lifecycle/terminal-execution-host'
 import type { RuntimeLegacyWorkerTerminalRecoveryController } from './runtime-legacy-worker-terminal-recovery-controller'
 import {
   isAbsentLegacyWorkerTerminalProvenExited,
@@ -12,7 +12,7 @@ import type {
   LegacyWorkerRecoveryResolution,
   LegacyWorkerRecoveryWorkspace,
   LegacyWorkerTerminalRecoveryResult
-} from './runtime-legacy-worker-terminal-recovery-types'
+} from './orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 
 export async function runLegacyWorkerTerminalRecovery(
   controller: RuntimeLegacyWorkerTerminalRecoveryController,
@@ -169,7 +169,7 @@ export async function runLegacyWorkerTerminalRecovery(
     deferredDispatchIds: [...deferredDispatchIds]
   }
   ports.updateRetry(plan, deferredDispatchIds, options)
-  // Why: releases may only finish after the owning provider's terminals are rediscovered.
+  // Rediscover owning-provider terminals before completing releases.
   if (!options.retry || pendingResolutions.length > 0 || ports.hasRequestedReleases()) {
     controller.trackBackgroundWork(
       ports.reconcileRequestedReleases().catch((error) => {

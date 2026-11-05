@@ -1,7 +1,8 @@
+import { journalInputOrder } from './journal-input-order'
 import { journalItemEchoFields } from './journal-item-echo'
 import { isDeepStrictEqual } from 'node:util'
-import { agentJournalLinkageFields } from '../../../shared/agent-session-journal-producer'
-import type { AgentJournalCursor } from '../../../shared/agent-session-journal-types'
+import { agentJournalLinkageFields } from '../../../shared/agent-session/journal/agent-session-journal-producer'
+import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { JournalReducerState } from './journal-reducer'
 import {
   journalLifecycleMutationFitsOneBatch,
@@ -18,10 +19,13 @@ import {
 import type {
   JournalLifecycleBatchInput,
   JournalPlannedLifecycleBatchInput,
-  JournalResolvedLifecycleBatchInput
+  JournalResolvedLifecycleBatchInput,
+  ResolveDispatchInput
 } from './journal-store-contracts'
 import type { JournalRow } from './journal-row-schema'
-import { journalQueuedRejectionRowBuilders } from './journal-pending-submission-recovery'
+import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
+import { keepFailedStartSends } from './journal-unsent-send-hold'
+import { buildJournalQueueRow } from './journal-queue-events'
 
 export class JournalLifecycleBatchAppender {
   constructor(
@@ -38,10 +42,19 @@ export class JournalLifecycleBatchAppender {
     return this.deps
       .enqueueRows(() => {
         if (input.rejectsQueued) {
-          const rejections = journalQueuedRejectionRowBuilders(
-            this.deps.state,
-            input.fence,
-            input.rejectsQueued
+          const rejection = input.rejectsQueued
+          const rejections = this.planDispatches(
+            input,
+            journalInputOrder(this.deps.state())
+              .unsettledSubmissions()
+              .filter(isQueuedAgentJournalSubmission)
+              .map((send) => ({
+                clientMessageId: send.clientMessageId,
+                fence: input.fence,
+                state: 'rejected' as const,
+                ...rejection,
+                recovered: true as const
+              }))
           )
           if (rejections.length > 0 && input.mutations.length === 0) {
             throw new Error('journal_lifecycle_batch_mutation_bound_exceeded')
@@ -54,16 +67,14 @@ export class JournalLifecycleBatchAppender {
           return []
         }
         return [
-          ...(input.dispatches ?? []).map((dispatch) =>
-            journalDispatchRowBuilder(this.deps.state, dispatch)
-          ),
+          ...this.planDispatches(input, input.dispatches ?? []),
           ...this.planMutations(input, input.mutations)
         ]
       })
       .then((rows) => this.cursorAfter(rows))
   }
 
-  /** `append`, with every row chosen at the batch's own turn in the queue. */
+  /** Resolve rows at the batch's own position in the write queue. */
   appendPlanned(input: JournalPlannedLifecycleBatchInput): Promise<AgentJournalCursor> {
     return this.deps
       .enqueueRows(() => {
@@ -71,12 +82,29 @@ export class JournalLifecycleBatchAppender {
           return []
         }
         const { mutations, dispatches } = input.plan()
-        return [
-          ...dispatches.map((dispatch) => journalDispatchRowBuilder(this.deps.state, dispatch)),
-          ...this.planMutations(input, mutations)
-        ]
+        return [...this.planDispatches(input, dispatches), ...this.planMutations(input, mutations)]
       })
       .then((rows) => this.cursorAfter(rows))
+  }
+
+  private planDispatches(
+    input: { keepFailedStart?: boolean },
+    dispatches: readonly ResolveDispatchInput[]
+  ): ((seq: number, ts: number) => JournalRow)[] {
+    const kept = input.keepFailedStart
+      ? keepFailedStartSends(this.deps.state(), dispatches)
+      : { cards: [], dispatches }
+    return [
+      ...kept.cards.flatMap(({ messageId, change }) =>
+        change
+          ? [
+              (seq: number, ts: number) =>
+                buildJournalQueueRow(this.deps.state(), messageId, change, seq, ts)
+            ]
+          : []
+      ),
+      ...kept.dispatches.map((dispatch) => journalDispatchRowBuilder(this.deps.state, dispatch))
+    ]
   }
 
   private cursorAfter(rows: readonly JournalRow[]): AgentJournalCursor {
@@ -84,8 +112,6 @@ export class JournalLifecycleBatchAppender {
     return last ? { epoch: last.epoch, sequence: last.seq } : this.deps.cursor()
   }
 
-  /** The rows a resolved settlement writes, planned at its own turn in the queue: its mutations,
-   *  chosen then, in as many consecutive rows as they need, minus any already applied. */
   planResolved(
     input: JournalResolvedLifecycleBatchInput
   ): ((seq: number, ts: number) => JournalRow)[] {
@@ -101,7 +127,6 @@ export class JournalLifecycleBatchAppender {
     if (this.wasApplied(input.settlementId)) {
       return []
     }
-    // A provider's batch states its generation on every item it creates.
     const { ownerFence } = input
     const mutations =
       ownerFence === undefined
@@ -113,7 +138,7 @@ export class JournalLifecycleBatchAppender {
           )
     const current = this.deps.state()
     const options = { ...input, epoch: current.epoch }
-    // Every row in this transaction must advance past the rows planned before it.
+    // Later writes in this transaction must outrank revisions planned earlier in the same batch.
     const revisions = new Map<string, number>()
     const plannedItems = new Set<string>()
     let namedSettlement = false
@@ -152,7 +177,7 @@ export class JournalLifecycleBatchAppender {
                 ]
           }
           const existing = current.items.get(resolved)
-          // An all-oversized settlement has no batch receipt; its terminal bodies are its receipt.
+          // Oversized-only settlements lack batch receipts; terminal item bodies prove completion.
           return !previouslyPlanned &&
             existing &&
             isDeepStrictEqual(existing.body, only.body) &&
@@ -174,13 +199,14 @@ export class JournalLifecycleBatchAppender {
                     turnScope: only.turnScope,
                     fence: input.fence,
                     ownerFence: only.ownerFence,
+                    observedAt: only.observedAt,
                     recovered: input.recovered
                   },
                   revisions
                 )
               ]
         }
-        // One bounded row remembers the generation even when the re-derived plan has fewer items.
+        // Preserve generation evidence even when replanning yields fewer mutations.
         const id = namedSettlement ? chunk.settlementId : input.settlementId
         namedSettlement = true
         return this.wasApplied(id)

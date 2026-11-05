@@ -30,9 +30,12 @@ vi.mock('./runtime-client', async () => {
 
 vi.mock('./runtime/environments', () => ({
   addEnvironmentFromPairingCode: addEnvironmentFromPairingCodeMock,
-  listEnvironments: listEnvironmentsMock,
   removeEnvironment: vi.fn(),
   resolveEnvironment: vi.fn()
+}))
+
+vi.mock('../shared/remote-runtime/host-store/runtime-environment-store', () => ({
+  listEnvironments: listEnvironmentsMock
 }))
 
 vi.mock('child_process', async () => {
@@ -113,7 +116,6 @@ describe('orca cli worktree awareness', () => {
     expect(output).toContain('hostAvailable: 2.0 MB (free-memory)')
     expect(output).toContain('app: 1.0 MB')
     expect(output).toContain('- feature  1.0 MB  2.5%  1 session')
-    // Back-compat: a host that never heard of committed bytes prints none.
     expect(output).not.toContain('totalPrivateMemory')
     expect(output).not.toContain('processCommitMetric')
   })

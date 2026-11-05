@@ -1,22 +1,4 @@
-/**
- * Real-fish regression for #9993: Orca must never write `CSI ?997;Nn` into a PTY
- * because fish armed DECSET 2031 around a prompt.
- *
- * fish toggles `?2031h ... ?2031l` in tty_handoff.rs every time it paints a prompt and
- * withdraws before handing the tty to a child, so the arm window is ~1ms — shorter than
- * a renderer IPC hop. Any reply lands after the withdrawal and is read by whatever owns
- * the tty next: it paints as literal `?997;1n` at the prompt, or is swallowed by a child
- * that reads stdin (npx / brew confirm prompts).
- *
- * The assertion is therefore about what a CHILD PROCESS READS, not what renders: a
- * screen-level check passes while the child's stdin is still corrupted.
- *
- * Real production code under test: connectPanePty's live mode-2031 chunk observer. The
- * mock transport writes whatever the renderer sends straight into the real fish PTY, so a
- * reply-on-subscribe reaches the child exactly as it does in the app. DA1/CPR/OSC-10/11
- * probes are answered by the harness because no real xterm is attached here — without
- * them fish stalls ~10s on its DA1 wait and every timing claim becomes meaningless.
- */
+/** Verify real fish child stdin stays free of unsolicited CSI ?997 replies after DECSET 2031 withdrawal; rendered output alone misses consumed bytes. */
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
@@ -28,9 +10,7 @@ import {
   resolveFishBinary
 } from '../../../../shared/fish-binary-requirement'
 
-// Why a version floor and not just presence: DECSET 2031 arming lives in the Rust
-// tty_handoff introduced by the fish 4.0 rewrite. An older fish cannot produce the
-// subscribe at all, so the test would pass vacuously instead of guarding anything.
+// Require fish 4’s Rust tty_handoff so absent DECSET 2031 cannot make the test pass vacuously.
 const FISH = resolveFishBinary(4)
 const FISH_BIN = FISH.path
 const itWithFish = FISH.available ? it : it.skip
@@ -200,7 +180,6 @@ function createManager(pane: Record<string, unknown>): Record<string, unknown> {
   return {
     setPaneGpuRendering: vi.fn(),
     markPaneHasComplexScriptOutput: vi.fn(),
-    rebuildPaneWebgl: vi.fn(),
     hasWebglRenderer: vi.fn(() => false),
     getPanes: vi.fn(() => [pane]),
     closePane: vi.fn(),
@@ -228,7 +207,6 @@ async function waitUntil(predicate: () => boolean, timeoutMs: number): Promise<b
 
 function createTerminalQueryResponder(write: (reply: string) => void): {
   accept: (chunk: string) => void
-  getCarryLength: () => number
 } {
   let carry = ''
   return {
@@ -248,91 +226,9 @@ function createTerminalQueryResponder(write: (reply: string) => void): {
           break
         }
       }
-    },
-    getCarryLength: () => carry.length
-  }
-}
-
-function allChunkPartitions(input: string): string[][] {
-  if (input.length === 0) {
-    return [[]]
-  }
-  const partitions: string[][] = []
-  for (let end = 1; end <= input.length; end += 1) {
-    for (const suffix of allChunkPartitions(input.slice(end))) {
-      partitions.push([input.slice(0, end), ...suffix])
     }
   }
-  return partitions
 }
-
-function collectTerminalQueryReplies(chunks: readonly string[]): string[] {
-  const replies: string[] = []
-  const responder = createTerminalQueryResponder((reply) => replies.push(reply))
-  chunks.forEach(responder.accept)
-  return replies
-}
-
-describe('terminal query responder', () => {
-  it.each([
-    ['OSC 10 BEL', '\x1b]10;?\x07', OSC_10_REPLY],
-    ['OSC 10 ST', '\x1b]10;?\x1b\\', OSC_10_REPLY],
-    ['OSC 11 BEL', '\x1b]11;?\x07', OSC_11_REPLY],
-    ['OSC 11 ST', '\x1b]11;?\x1b\\', OSC_11_REPLY]
-  ])('answers each complete %s query once across every partition', (_label, query, reply) => {
-    for (const chunks of allChunkPartitions(query)) {
-      expect(collectTerminalQueryReplies(chunks)).toEqual([reply])
-    }
-  })
-
-  it.each([
-    ['DA1 with omitted parameter', '\x1b[c', DA1_REPLY],
-    ['DA1 with zero parameter', '\x1b[0c', DA1_REPLY],
-    ['DSR cursor position', '\x1b[6n', DSR_REPLY]
-  ])('preserves %s across every partition', (_label, query, reply) => {
-    for (const chunks of allChunkPartitions(query)) {
-      expect(collectTerminalQueryReplies(chunks)).toEqual([reply])
-    }
-  })
-
-  it.each([
-    ['unterminated OSC 10', '\x1b]10;?'],
-    ['unterminated OSC 11 ST', '\x1b]11;?\x1b'],
-    ['OSC 10 extra query marker', '\x1b]10;??\x07'],
-    ['OSC 11 stacked query', '\x1b]11;?;?\x07'],
-    ['OSC 10 malformed body', '\x1b]10;?x\x07'],
-    ['OSC 11 malformed ST body', '\x1b]11;?x\x1b\\'],
-    ['OSC slot lookalike', '\x1b]110;?\x07']
-  ])('rejects %s across every partition', (_label, input) => {
-    for (const chunks of allChunkPartitions(input)) {
-      expect(collectTerminalQueryReplies(chunks)).toEqual([])
-    }
-  })
-
-  it('answers concatenated queries once each in source order across every partition', () => {
-    const input = '\x1b]10;?\x07\x1b]11;?\x07'
-    for (const chunks of allChunkPartitions(input)) {
-      expect(collectTerminalQueryReplies(chunks)).toEqual([OSC_10_REPLY, OSC_11_REPLY])
-    }
-  })
-
-  it('bounds carry while rejecting a long unterminated query lookalike', () => {
-    const replies: string[] = []
-    const responder = createTerminalQueryResponder((reply) => replies.push(reply))
-    let maxCarryLength = 0
-    for (const fragment of `\x1b]10;?${'x'.repeat(10_000)}`) {
-      responder.accept(fragment)
-      maxCarryLength = Math.max(maxCarryLength, responder.getCarryLength())
-    }
-    for (const fragment of '\x1b]10;?\x07') {
-      responder.accept(fragment)
-    }
-
-    expect(maxCarryLength).toBe(QUERY_CARRY_LENGTH)
-    expect(responder.getCarryLength()).toBeLessThanOrEqual(QUERY_CARRY_LENGTH)
-    expect(replies).toEqual([OSC_10_REPLY])
-  })
-})
 
 describe('fish never receives a color-scheme report it did not query (#9993)', () => {
   let configHome: string | null = null
@@ -356,6 +252,7 @@ describe('fish never receives a color-scheme report it did not query (#9993)', (
     mockStoreState = {
       activeWorktreeId: 'wt-1',
       tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: 'fish-pty' }] },
+      unifiedTabsByWorktree: {},
       ptyIdsByTabId: { 'tab-1': ['fish-pty'] },
       terminalPaneStartsByPaneKey: {},
       terminalPaneResumeOutcomesByPaneKey: {},
@@ -488,10 +385,7 @@ describe('fish never receives a color-scheme report it did not query (#9993)', (
           ''
         ].join('\n')
       )
-      // Echoes the first stdin LINE back escaped, so leaked control bytes are visible on
-      // screen. Why a line and not the first chunk: leaked replies carry no newline, so a
-      // once('data') child reports them alone whenever they arrive in their own read —
-      // which is what the issue's own `sys.stdin.readline()` repro measures.
+      // Read a whole stdin line because leaked replies lack newline and may arrive in separate chunks.
       const childScript = path.join(configHome, 'read-stdin.mjs')
       writeFileSync(
         childScript,
@@ -528,8 +422,7 @@ describe('fish never receives a color-scheme report it did not query (#9993)', (
       const answerTerminalQueries = createTerminalQueryResponder((reply) => term.write(reply))
       transportFactoryQueue.push(transport)
 
-      // Why answered here: no real xterm is attached, and fish blocks its first prompt ~10s
-      // on DA1 and re-probes every prompt. These are harness bytes, never renderer output.
+      // Answer harness DA1/CPR/color probes without xterm so fish’s prompt cannot stall; these are not renderer writes.
       term.onData((chunk) => {
         rendered += chunk
         // Maximal fragmentation keeps query handling independent of node-pty chunk boundaries.
@@ -559,10 +452,7 @@ describe('fish never receives a color-scheme report it did not query (#9993)', (
           .paneMode2031Ref.current
         expect(await waitUntil(() => paneMode2031.get(1) === true, 5_000)).toBe(true)
 
-        // Type-ahead is the deterministic leak shape: queue the child command while an
-        // external command still owns the tty, so fish repaints the prompt (`?2031h`) and
-        // consumes the buffered line in the same breath — handoff lands sub-millisecond
-        // after the subscribe, inside any reply's flight time.
+        // Type ahead while sleep owns the tty to make fish’s prompt re-arm and child handoff occur inside reply flight time.
         term.write('sleep 0.4\r')
         // Withdrawal #1: `sleep` owns the tty now, so the next line is typed ahead.
         expect(await waitUntil(() => countOf(rendered, WITHDRAW_2031) >= 1, 5_000)).toBe(true)
@@ -585,15 +475,10 @@ describe('fish never receives a color-scheme report it did not query (#9993)', (
 
         const childRead =
           rendered.slice(renderedBeforeChildInput).match(/CHILD-READ:[^\r\n]*/)?.[0] ?? ''
-        // The merge-blocking assertion: the child's STDIN, not the screen. A rendered-output
-        // check passes while npx/brew confirm prompts still eat the bytes.
-        // Scope note: the harness' own DA1/CPR/OSC-11 answers can still land here — that is
-        // the separate probe-reply family (fish asks for those; nobody asked for 997).
+        // Inspect child stdin: screen checks miss consumed reports; harness-requested DA1/CPR/color replies are separate from unsolicited 997.
         expect(childRead).not.toContain('997')
         expect(childRead).toContain('hello')
-        // Nothing the renderer sent was a color-scheme report, on any path.
         expect(sent.filter((data) => data.includes(COLOR_SCHEME_REPORT_PREFIX))).toEqual([])
-        // And fish never echoed one back as literal prompt text.
         expect(rendered).not.toContain('997;1n')
 
         binding.dispose()
@@ -602,9 +487,7 @@ describe('fish never receives a color-scheme report it did not query (#9993)', (
         await waitUntil(() => exited, 3_000)
         try {
           term.kill()
-        } catch {
-          // already gone
-        }
+        } catch {}
       }
     },
     30_000

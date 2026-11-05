@@ -29,9 +29,7 @@ const SAFE_THREAD_ID = /^[A-Za-z0-9-]{1,64}$/
 
 type TrackedTranscriptSubagent = JsonlCursor & {
   description?: string
-  /** Latest model seen in the child's own rollout. Retained across polls
-   *  because the cursor is incremental: `turn_context` is emitted once per
-   *  turn, so a later read usually carries no model at all. */
+  /** Retain the child’s own model across incremental reads; turn_context appears once per turn. */
   model?: string
   startedAt: number
   unresolvedSince?: number
@@ -138,9 +136,7 @@ function readActivity(recordValue: JsonRecord):
   }
 }
 
-/** Latest model from the child's own `turn_context` records. A child can be
- *  launched on a different model than its parent, so this is read from the
- *  child rollout rather than inherited. */
+/** Read model from child turn_context; it may differ from the parent’s. */
 function readChildModel(records: JsonRecord[]): string | undefined {
   let model: string | undefined
   for (const recordValue of records) {
@@ -251,6 +247,12 @@ export function reconcileCodexSubagentTranscript(
     parentRecords === undefined
       ? undefined
       : (readApprovalsReviewer(parentRecords) ?? state.approvalsReviewer)
+  // Hook-only and restored children may predate the bounded parent transcript read.
+  for (const [id, child] of roster) {
+    if (!state.subagents.has(id)) {
+      state.subagents.set(id, { offset: 0, carry: '', startedAt: child.startedAt })
+    }
+  }
   for (const recordValue of parentRecords ?? []) {
     const turnEnd = readTurnEnd(recordValue)
     if (turnEnd) {
@@ -308,9 +310,7 @@ export function reconcileCodexSubagentTranscript(
     } else {
       tracked.unresolvedSince = undefined
       tracked.model = readChildModel(records) ?? tracked.model
-      // Why: re-applied every reconcile, not just on discovery — the parent's
-      // own activity upsert can rebuild this child's roster entry, which would
-      // otherwise drop a model found on an earlier poll.
+      // Reapply each poll because parent activity can rebuild the child row and erase its discovered model.
       setCodexSubagentModel(roster, id, tracked.model)
       if (!childIsComplete(records)) {
         continue

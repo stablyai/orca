@@ -1,12 +1,17 @@
 import { useAppStore } from '@/store'
-import { makePaneKey, parsePaneKey, type PaneKey } from '../../../shared/stable-pane-id'
+import {
+  makePaneKey,
+  parsePaneKey,
+  type PaneKey
+} from '../../../shared/workspace-layout/stable-pane-id'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
-import type { AgentType } from '../../../shared/agent-status-types'
+import type { AgentType } from '../../../shared/agent-status/contracts/agent-status-types'
 import { bindAutomationTerminal } from '@/lib/automation-terminal-ownership'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { retireProvider, retireUnownedTerminal } from '@/lib/retire-unowned-background-terminal'
 import { isTerminalTabPresent } from '@/store/slices/terminal-tab-retirement'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
+import type { TerminalCreationExecutionFacts } from '@/store/terminals/terminal-contracts'
 
 type Store = ReturnType<typeof useAppStore.getState>
 type RegisterArgs = Parameters<Store['registerAgentLaunchConfig']>
@@ -16,8 +21,6 @@ export function reserveAgentBackgroundSessionIdentity(args: {
   store: Store
   agentType: AgentType
   worktreeId: string
-  launchConfig: RegisterArgs[1]
-  env: Record<string, string> | undefined
 }): {
   reservedTabId: string
   leafId: string
@@ -36,7 +39,6 @@ export function reserveAgentBackgroundSessionIdentity(args: {
     tabId: reservedTabId,
     leafId
   }
-  args.store.registerAgentLaunchConfig(paneKey, args.launchConfig, launchRegistration)
   return {
     reservedTabId,
     leafId,
@@ -44,7 +46,6 @@ export function reserveAgentBackgroundSessionIdentity(args: {
     launchToken,
     launchRegistration,
     paneEnv: {
-      ...args.env,
       ORCA_PANE_KEY: paneKey,
       ORCA_TAB_ID: reservedTabId,
       ORCA_WORKTREE_ID: args.worktreeId,
@@ -53,17 +54,17 @@ export function reserveAgentBackgroundSessionIdentity(args: {
   }
 }
 
-/** Publishes a hidden run tab already bound to its live PTY (#2989). */
 export async function adoptAgentBackgroundSessionTab(args: {
   store: Store
   worktreeId: string
   reservedTabId: string
   ptyId: string
   paneKey: PaneKey
-  launchConfig: RegisterArgs[1]
+  launchConfig?: RegisterArgs[1]
   launchRegistration: NonNullable<RegisterArgs[2]>
   runtimeTarget: RuntimeClientTarget
   runtimeTerminalHandle: string | null
+  executionFacts?: TerminalCreationExecutionFacts
   onRetire: () => void
   title?: string
 }): Promise<{
@@ -75,7 +76,7 @@ export async function adoptAgentBackgroundSessionTab(args: {
   // The worktree can disappear while its PTY spawn is pending.
   if (
     await retireUnownedTerminal({
-      owner: { worktreeId: args.worktreeId },
+      owner: { worktreeId: args.worktreeId, hostId: args.executionFacts?.hostId },
       ptyId,
       runtimeTarget: args.runtimeTarget,
       runtimeTerminalHandle: args.runtimeTerminalHandle,
@@ -98,13 +99,15 @@ export async function adoptAgentBackgroundSessionTab(args: {
   const tab = store.createTab(args.worktreeId, undefined, undefined, {
     id: reservedTabId,
     initialPtyId: ptyId,
+    executionFacts: args.executionFacts,
     activate: false,
     recordInteraction: false,
-    // Switch point: main records the tab under the pane id its terminal already runs as.
     ...(ORCA_LAYOUT_OWNER_IS_MAIN ? { initialLeafId: parsePaneKey(args.paneKey)?.leafId } : {})
   })
   const paneKey = args.paneKey
-  store.registerAgentLaunchConfig(paneKey, args.launchConfig, launchRegistration)
+  if (args.launchConfig) {
+    store.registerAgentLaunchConfig(paneKey, args.launchConfig, launchRegistration)
+  }
   const terminalOwnership = bindAutomationTerminal(
     tab,
     paneKey,

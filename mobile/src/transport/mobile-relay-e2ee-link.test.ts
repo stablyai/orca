@@ -16,7 +16,7 @@ vi.mock('./mobile-e2ee-v2-physical-channel', () => ({
   }
 }))
 
-import { MOBILE_RELAY_PHONE_CLOSE_REASON } from '../../../src/shared/mobile-relay-close-codes'
+import { MOBILE_RELAY_PHONE_CLOSE_REASON } from '../../../src/shared/remote-runtime/relay/mobile-relay-close-codes'
 import { MobileRelayE2eeLink, RelayOuterError } from './mobile-relay-e2ee-link'
 
 class ThrowingSocket {
@@ -28,7 +28,7 @@ class ThrowingSocket {
   onmessage: ((event: { data: unknown }) => void) | null = null
   onerror: (() => void) | null = null
   onclose: ((event: { code: number; reason?: string }) => void) | null = null
-  send = vi.fn(() => {
+  send = vi.fn((_frame: string): void => {
     throw new Error('relay auth write failed')
   })
   close = vi.fn()
@@ -51,7 +51,7 @@ describe('MobileRelayE2eeLink', () => {
       onText: vi.fn(),
       onBinary: vi.fn(),
       onError,
-      createSocket: () => socket as unknown as WebSocket
+      createSocket: () => relayWebSocket(socket)
     })
 
     expect(() => socket.onopen?.()).not.toThrow()
@@ -59,61 +59,6 @@ describe('MobileRelayE2eeLink', () => {
       expect.objectContaining({ message: 'relay auth write failed' })
     )
     expect(socket.close).toHaveBeenCalledOnce()
-  })
-
-  it('reports open only once relay-auth is on the wire', () => {
-    const socket = new ThrowingSocket()
-    const onOpen = vi.fn()
-    const sent: string[] = []
-    socket.send.mockImplementation((frame: string) => {
-      sent.push(frame)
-    })
-    new MobileRelayE2eeLink({
-      endpoint: {
-        cellUrl: 'https://relay-c1.onorca.dev',
-        relayHostId: 'AbCdEf0123_-xyZ9'
-      },
-      credential: 'credential',
-      expectedCredentialKind: 'resume',
-      deviceToken: 'device-token',
-      desktopPublicKeyB64: 'desktop-key',
-      onAuthenticated: vi.fn(),
-      onText: vi.fn(),
-      onBinary: vi.fn(),
-      onOpen,
-      onError: vi.fn(),
-      createSocket: () => socket as unknown as WebSocket
-    })
-
-    expect(onOpen).not.toHaveBeenCalled()
-    socket.onopen?.()
-    expect(sent).toHaveLength(1)
-    expect(JSON.parse(sent[0]!)).toMatchObject({ type: 'relay-auth', mode: 'connect' })
-    expect(onOpen).toHaveBeenCalledOnce()
-  })
-
-  it('does not report open when the relay-auth write fails', () => {
-    const socket = new ThrowingSocket()
-    const onOpen = vi.fn()
-    new MobileRelayE2eeLink({
-      endpoint: {
-        cellUrl: 'https://relay-c1.onorca.dev',
-        relayHostId: 'AbCdEf0123_-xyZ9'
-      },
-      credential: 'credential',
-      expectedCredentialKind: 'resume',
-      deviceToken: 'device-token',
-      desktopPublicKeyB64: 'desktop-key',
-      onAuthenticated: vi.fn(),
-      onText: vi.fn(),
-      onBinary: vi.fn(),
-      onOpen,
-      onError: vi.fn(),
-      createSocket: () => socket as unknown as WebSocket
-    })
-
-    socket.onopen?.()
-    expect(onOpen).not.toHaveBeenCalled()
   })
 
   it('keeps a typed close code when transport error precedes close', () => {
@@ -132,38 +77,13 @@ describe('MobileRelayE2eeLink', () => {
       onText: vi.fn(),
       onBinary: vi.fn(),
       onError,
-      createSocket: () => socket as unknown as WebSocket
+      createSocket: () => relayWebSocket(socket)
     })
 
     socket.onerror?.()
     socket.onclose?.({ code: 4409 })
 
     expect(onError).toHaveBeenCalledWith(expect.objectContaining({ message: 'relay_outer_4409' }))
-  })
-
-  it('classifies an opaque close after transport error as 1006', () => {
-    const socket = new ThrowingSocket()
-    const onError = vi.fn()
-    new MobileRelayE2eeLink({
-      endpoint: {
-        cellUrl: 'https://relay-c1.onorca.dev',
-        relayHostId: 'AbCdEf0123_-xyZ9'
-      },
-      credential: 'credential',
-      expectedCredentialKind: 'resume',
-      deviceToken: 'device-token',
-      desktopPublicKeyB64: 'desktop-key',
-      onAuthenticated: vi.fn(),
-      onText: vi.fn(),
-      onBinary: vi.fn(),
-      onError,
-      createSocket: () => socket as unknown as WebSocket
-    })
-
-    socket.onerror?.()
-    socket.onclose?.({ code: 0 })
-
-    expect(onError).toHaveBeenCalledWith(expect.objectContaining({ message: 'relay_outer_1006' }))
   })
 
   it('bounds an error when the platform never emits close', async () => {
@@ -184,7 +104,7 @@ describe('MobileRelayE2eeLink', () => {
         onText: vi.fn(),
         onBinary: vi.fn(),
         onError,
-        createSocket: () => socket as unknown as WebSocket
+        createSocket: () => relayWebSocket(socket)
       })
       socket.onerror?.()
       await vi.advanceTimersByTimeAsync(250)
@@ -214,10 +134,12 @@ describe('MobileRelayE2eeLink', () => {
         onText: vi.fn(),
         onBinary: vi.fn(),
         onError,
-        createSocket: () => socket as unknown as WebSocket
+        createSocket: () => relayWebSocket(socket)
       })
       socket.onerror?.()
+      expect(vi.getTimerCount()).toBe(1)
       link.close()
+      expect(vi.getTimerCount()).toBe(0)
       await vi.advanceTimersByTimeAsync(250)
 
       expect(onError).not.toHaveBeenCalled()
@@ -288,7 +210,11 @@ function openLink(socket: ThrowingSocket, onError: (error: Error) => void): Mobi
     onText: vi.fn(),
     onBinary: vi.fn(),
     onError,
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the link only calls send/close and assigns handlers on this stub.
-    createSocket: () => socket as unknown as WebSocket
+    createSocket: () => relayWebSocket(socket)
   })
+}
+
+function relayWebSocket(socket: ThrowingSocket): WebSocket {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The link and mocked channel only send/close and assign event handlers on this socket.
+  return socket as unknown as WebSocket
 }

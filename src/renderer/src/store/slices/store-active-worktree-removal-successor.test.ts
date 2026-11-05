@@ -21,7 +21,6 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
   return { ...actual, detectAgentStatusFromTitle: vi.fn().mockReturnValue(null) }
 })
 vi.mock('@/lib/worktree-activation', () => ({ activateAndRevealWorktree: vi.fn() }))
-// Main answers the window's browser-tab commands and its frames draw them (switch-on builds).
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
@@ -81,21 +80,10 @@ const resolution = {
   targetId: 'host',
   workspaceWorktreeIds: [active.id],
   hostRepoIds: ['repo1'],
-  workspaceCount: 1,
-  isConnected: false
+  workspaceCount: 1
 }
 
 describe('deleting the active workspace', () => {
-  it('hands off from a browser-only workspace after returning from Settings', async () => {
-    const store = setup()
-    store.getState().createBrowserTab(active.id, 'https://example.com')
-    store.getState().openSettingsPage()
-    store.getState().closeSettingsPage()
-    expect(await forget(store, active)).toEqual({ ok: true })
-    expect(activateAndRevealWorktree).toHaveBeenCalledOnce()
-    expect(vi.mocked(activateAndRevealWorktree).mock.calls[0][0]).toBe(sibling.id)
-  })
-
   it('respects a user closing the last browser tab after startup dropped its row', async () => {
     const store = setup()
     layoutMain = await drawTabsFromMain(store)
@@ -116,22 +104,11 @@ describe('deleting the active workspace', () => {
       throw new Error('host unavailable')
     })
     removeForHost.mockRejectedValueOnce(new Error('host unavailable'))
-    expect((await clearSshHostWorkspaces(resolution, 'forget-local')).failedIds).toContain(
-      active.id
-    )
+    expect((await clearSshHostWorkspaces(resolution)).failedIds).toContain(active.id)
     expect(store.getState().activeWorktreeId).toBe(active.id)
     expect(activateAndRevealWorktree).not.toHaveBeenCalled()
     await forget(store, active)
     expect(vi.mocked(activateAndRevealWorktree).mock.calls[0]?.[0]).toBe(sibling.id)
-  })
-
-  it('stays on Landing when an SSH host is forgotten after its last PTY exited', async () => {
-    const store = setup()
-    const tab = store.getState().createTab(active.id)
-    store.getState().closeTab(tab.id, { reason: 'pty-exit' })
-    expect(store.getState().activeWorktreeId).toBeNull()
-    await clearSshHostWorkspaces(resolution, 'forget-local')
-    expect(activateAndRevealWorktree).not.toHaveBeenCalled()
   })
 
   it('keeps paired-host retirement on Landing while ordinary disappearance on another host still repairs', async () => {

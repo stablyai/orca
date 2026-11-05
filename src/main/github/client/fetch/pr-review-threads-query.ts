@@ -1,4 +1,4 @@
-// Why: review thread resolution status + thread IDs are GraphQL-only (REST pulls/{n}/comments omits them).
+// REST review comments omit thread IDs and resolution status; fetch them through GraphQL.
 export const REVIEW_THREADS_QUERY = `
 query($owner: String!, $repo: String!, $pr: Int!) {
   repository(owner: $owner, name: $repo) {
@@ -11,6 +11,12 @@ query($owner: String!, $repo: String!, $pr: Int!) {
           startLine
           originalLine
           originalStartLine
+          diffSide
+          rootHunk: comments(first: 1) {
+            nodes {
+              diffHunk
+            }
+          }
           comments(first: 100) {
             nodes {
               id
@@ -55,6 +61,7 @@ query($owner: String!, $repo: String!, $pr: Int!) {
           author { __typename login avatarUrl(size: 48) }
           body
           createdAt
+          submittedAt
           url
           reactionGroups {
             content

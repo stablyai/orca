@@ -1,4 +1,3 @@
-/* eslint-disable unicorn/no-useless-spread */
 import { OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal } from '../launch/mobile-terminal-owned-create'
 import type { OrcaRuntimeWithResolveTerminalSplitSourceAuthority } from '../launch/terminal-split-source-authority'
 import type {
@@ -6,13 +5,13 @@ import type {
   RuntimeMobileSessionTerminalClientTab
 } from '../../../../shared/runtime-types'
 import { MOBILE_TERMINAL_SURFACE_TIMEOUT_MS } from '../../orca-runtime-core'
-import { makePaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
-import { resolveTerminalSessionWorktreeId } from '../../runtime-worktree-path-identity'
+import { makePaneKey, parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import { resolveTerminalSessionWorktreeId } from '../../workspaces/catalog/runtime-worktree-path-identity'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
 import type {
   RuntimePtyTabCloseAuthority,
   RuntimePtyWorktreeRecord
-} from '../../runtime-terminal-state-records'
+} from '../records/runtime-terminal-state-records'
 
 export abstract class OrcaRuntimeWithWaitForMobileTerminalSurface extends OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal {
   protected abstract resolveTerminalSplitSourceAuthority(
@@ -180,7 +179,7 @@ export abstract class OrcaRuntimeWithWaitForMobileTerminalSurface extends OrcaRu
     return { pty: live.pty, surface }
   }
 
-  // Why: publish an in-flight mobile create main-side from the live PTY so it can't stall on graph sync and destroy the session (#7587).
+  // Publish live-backed pending creates in main so graph-sync stalls cannot destroy sessions (#7587).
   protected ensurePtyBackedMobileSurfaceForRendererTab(
     worktreeId: string,
     tabId: string
@@ -217,8 +216,8 @@ export abstract class OrcaRuntimeWithWaitForMobileTerminalSurface extends OrcaRu
       selectIfNoActiveTab: pending.selectIfNoActiveTab,
       ...(pending.viewMode ? { viewMode: pending.viewMode } : {})
     })
-    // Why: check closures normally drain only inside syncWindowGraph; a main-side publish must drain them too or the pending wait misses the insertion.
-    for (const cb of [...this.graphSyncCallbacks]) {
+    // Main-side publication must wake graph callbacks too or pending waits miss the new surface.
+    for (const cb of Array.from(this.graphSyncCallbacks)) {
       cb()
     }
     return this.findMobileTerminalSurface(worktreeId, tabId)

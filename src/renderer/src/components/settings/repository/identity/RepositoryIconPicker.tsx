@@ -3,8 +3,10 @@ import { toast } from 'sonner'
 import { RotateCcw } from 'lucide-react'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { RepoIcon } from '../../../../../../shared/repo-icon'
-import { DEFAULT_REPO_BADGE_COLOR } from '../../../../../../shared/constants'
-import { normalizeRepoBadgeColor } from '../../../../../../shared/repo-badge-color'
+import {
+  DEFAULT_REPO_BADGE_COLOR,
+  normalizeRepoBadgeColor
+} from '../../../../../../shared/repo-badge-color'
 import { Button } from '../../../ui/button'
 import { Label } from '../../../ui/label'
 import { RepoIconGlyph, getRepoLucideIconOptions } from '../../../repo/repo-icon'
@@ -20,7 +22,7 @@ import {
   buildRepositoryGitHubAvatarUpdate,
   resolveRepositoryGitHubAvatar,
   resolveRepositoryUpstreamLive
-} from './repository-icon-github'
+} from '../../../../runtime/repository-github/repository-icon-github'
 import { translate } from '@/i18n/i18n'
 
 export function RepositoryIconPicker({
@@ -33,8 +35,7 @@ export function RepositoryIconPicker({
   const [loadingGitHub, setLoadingGitHub] = useState(false)
   const [resetting, setResetting] = useState(false)
   const mountedRef = useMountedRef()
-  // Why: resolve this repo's upstream/avatar on the host that owns it, not the
-  // focused runtime.
+  // Resolve avatars/upstream on the selected repo owner, independent of focused host.
   const selectedHost = parseExecutionHostId(getRepoExecutionHostId(repo))
   const ownerEnvironmentId = selectedHost?.kind === 'runtime' ? selectedHost.environmentId : null
   const selectedLucideName = repo.repoIcon?.type === 'lucide' ? repo.repoIcon.name : null
@@ -96,7 +97,6 @@ export function RepositoryIconPicker({
         )
         return
       }
-      // A null build means the stored icon/upstream already match — nothing to write.
       const updates = buildRepositoryGitHubAvatarUpdate(repo, resolution)
       if (updates) {
         updateRepo(repo.id, updates)
@@ -150,8 +150,7 @@ export function RepositoryIconPicker({
       let updates: Partial<Repo> | null
       try {
         if (hasGitHubAvatar) {
-          // Why: stored upstream/icon metadata can outlive a GitHub repo transfer.
-          // Refresh only when settings opens for the affected GitHub-avatar repo.
+          // Stored GitHub avatar metadata can outlive transfers; refresh live only when opening affected repo settings.
           const resolution = await resolveGitHubAvatar({ forceLive: true })
           updates = buildRepositoryGitHubAvatarUpdate(repo, resolution)
         } else {

@@ -12,7 +12,7 @@ import path from 'node:path'
 import type { Page } from '@stablyai/playwright-test'
 import { test as base, expect } from './helpers/orca-app'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
-import { getTerminalContent } from './helpers/terminal'
+import { getTerminalContent } from './helpers/terminal-pane-identity'
 
 const PR_NUMBER = 77
 const PR_TITLE = 'Add retry to the upload client'
@@ -80,12 +80,9 @@ installFakeCli('claude', fakeClaudeSource)
 appendFileSync(unhandledGhLog, '')
 
 const test = base.extend({
-  launchEnv: [
-    {
-      PATH: `${fakeCliDir}${path.delimiter}${process.env.PATH ?? ''}`
-    },
-    { option: true }
-  ]
+  launchEnv: {
+    PATH: `${fakeCliDir}${path.delimiter}${process.env.PATH ?? ''}`
+  }
 })
 
 // Why: testRepoPath is shared by every spec in this worker, so the GitHub remote must not outlive this file.

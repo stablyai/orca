@@ -1,5 +1,4 @@
-// Commands against what reaches disk: the legacy row-ownership marker and revision, a terminal tab
-// whose tab-bar id and terminal id differ, and the unsaved-draft refusal on preview replacement.
+// Verify disk effects: legacy row ownership/revision, distinct tab/terminal IDs and dirty-draft refusal on preview replacement.
 
 import { describe, expect, it } from 'vitest'
 import { LOCAL_EXECUTION_HOST_ID } from '../execution-host'
@@ -10,7 +9,7 @@ import type { WorkspaceLayoutModel } from './workspace-layout-model'
 import { localDesktopSession } from './workspace-layout-profile.test-fixture'
 import { saveWorkspaceLayout } from './workspace-layout-save'
 import { GIT_KEY, leaf } from './workspace-layout-session.test-fixture'
-import type { WorkspaceSessionState } from '../workspace-session-state-types'
+import type { WorkspaceSessionState } from '../workspace-session/workspace-session-state-types'
 
 function reload(session: WorkspaceSessionState) {
   let next = 0

@@ -1,9 +1,12 @@
 import { join } from 'node:path'
 import { existsSync } from 'node:fs'
 import { realpath, readdir, stat } from 'node:fs/promises'
-import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from '../codex/codex-home-paths'
-import { getCodexAccountHomeSessionDirectories } from '../codex/codex-account-home-discovery'
-import { getLegacyCopiedCodexSessionBridgeScanPreference } from '../codex/codex-session-bridge'
+import {
+  getOrcaManagedCodexHomePath,
+  getSystemCodexHomePath
+} from '../codex/configuration/homes/codex-home-paths'
+import { getCodexAccountHomeSessionDirectories } from '../codex/history/rollouts/codex-account-home-discovery'
+import { getLegacyCopiedCodexSessionBridgeScanPreference } from '../codex/history/bridges/codex-session-bridge'
 import { normalizeFsPath } from '../usage/usage-path-comparison'
 import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
 
@@ -53,24 +56,19 @@ async function walkJsonlFiles(
 }
 
 function appendDiscoveredFiles(target: string[], source: readonly string[]): void {
-  // Why: large session directories can exceed V8's argument limit if child
-  // file arrays are spread into push().
+  // Spreading large directory listings into push() can exceed V8's argument limit.
   for (const filePath of source) {
     target.push(filePath)
   }
 }
 
 export function getCodexSessionsDirectory(): string {
-  // Why: Orca-launched Codex processes receive an Orca-owned CODEX_HOME, so
-  // callers that need the primary runtime path should not consult ambient
-  // shell CODEX_HOME.
+  // The primary runtime uses an Orca-owned home regardless of ambient CODEX_HOME.
   return join(getOrcaManagedCodexHomePath(), 'sessions')
 }
 
 export function getCodexSessionDirectories(): string[] {
-  // Why: sessions now live in three lanes — the shared runtime mirror, the real
-  // ~/.codex, and per-account self-contained homes; missing any lane silently
-  // undercounts usage for multi-account users.
+  // Include runtime, system and account homes to avoid undercounting multi-account usage.
   return [
     getCodexSessionsDirectory(),
     join(getSystemCodexHomePath(), 'sessions'),

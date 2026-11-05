@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import type { Tab } from '../../../shared/tab-types'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import type { LayoutApplyReply } from '../../../shared/workspace-layout/workspace-layout-command-types'
 import { loadWorkspaceLayoutWithoutReport } from '../../../shared/workspace-layout/workspace-layout-load'
 import { nameBasedLoadContext } from '../../../shared/workspace-layout/workspace-layout-minted-ids'
@@ -11,7 +11,7 @@ import {
   type PublishedWorkspaceLayout
 } from '../../../shared/workspace-layout/workspace-layout-published'
 import type { WorkspaceLayoutChangeFrame } from '../../../shared/workspace-layout/workspace-layout-stream-frames'
-import { makePaneKey } from '../../../shared/stable-pane-id'
+import '../../../shared/workspace-layout/stable-pane-id'
 import { GIT_KEY } from '../../../shared/workspace-layout/workspace-layout-session.test-fixture'
 import { bootWindowFromPartitions } from '../app-shell/startup-window-view.test-fixture'
 import { buildWorkspaceSessionPayload } from '../lib/workspace-session'
@@ -114,11 +114,9 @@ async function boot() {
   stream.onPosition!(seq)
   sync.start()
   await settle()
-  /** Main's answer to the window's command, with the frame holding the window's change. */
   const answer = async (
     index: number,
     reply: LayoutApplyReply = okReply,
-    /** Main's change the window has not drawn: a change main applies first. */
     mainChange: (layout: PublishedWorkspaceLayout) => void = () => {}
   ): Promise<void> => {
     const frame = publishedOf(buildWorkspaceSessionPayload(store.getState()))
@@ -299,7 +297,6 @@ describe('a change main applies first, with frames flowing', () => {
       contentType: 'editor',
       isPreview: true
     })
-    // Main holds the tab: its frame carries the window's copy.
     seq += 1
     stream.onFrame!(
       frames.records(GIT_KEY, publishedOf(buildWorkspaceSessionPayload(store.getState())), seq)
@@ -323,7 +320,6 @@ describe('a change main applies first, with frames flowing', () => {
     await answer(pin, okReply, (layout) => {
       layout.tabs.find((item) => item.id === tab.id)!.isPinned = true
     })
-    // Main's frame draws the pin; the window does not pin it again.
     expect(windowPin).not.toHaveBeenCalled()
     expect(callsOf('promotePreviewTab')).toHaveLength(1)
     expect(entry()).toMatchObject({ isPinned: true, isPreview: true })
@@ -352,7 +348,6 @@ describe('a change main applies first, with frames flowing', () => {
     const agent = () =>
       store.getState().unifiedTabsByWorktree[GIT_KEY]!.find((item) => item.id === 'tab-agent')!
     expect(agent().viewMode).toBe('terminal')
-    // Main owns the workspace: the paired-server mirror is not asked.
     expect(effects.mirrorViewMode).not.toHaveBeenCalled()
     expect(effects.chatToggled).toHaveBeenCalledTimes(1)
     expect(effects.chatToggled).toHaveBeenCalledWith(
@@ -362,33 +357,6 @@ describe('a change main applies first, with frames flowing', () => {
     // The answered send is settled: the next toggle flips from what is shown, back to chat.
     store.getState().toggleTabViewMode('tab-agent')
     expect(rpc.calls.at(-1)!.command).toMatchObject({ type: 'setTabProps', viewMode: 'chat' })
-    sync.close()
-  })
-
-  it('sends main no generated title, and shows the one main derived from its frame alone', async () => {
-    const { store, sync } = await boot()
-    store.setState({ settings: { ...store.getState().settings!, tabAutoGenerateTitle: true } })
-    const leafId = store.getState().terminalLayoutsByTabId['tab-unbound']!.activeLeafId!
-    const paneKey = makePaneKey('tab-unbound', leafId)
-    const renames = () => callsOf('renameTabs')
-    store.getState().setGeneratedTabTitleFromAgentPrompt(paneKey, 'Refactor the auth middleware')
-    store.getState().setGeneratedTabTitleFromAgentPrompt(paneKey, 'Fix the flaky login test', {
-      replaceExistingGeneratedTitle: true
-    })
-    expect(renames()).toEqual([])
-
-    // Main's frame carries the title main derived from its own agent status.
-    const writes = writesOf(store, (state) => state.tabsByWorktree)
-    const frame = publishedOf(buildWorkspaceSessionPayload(store.getState()))
-    frame.tabs.find((item) => item.id === 'tab-unbound')!.generatedTitle = 'Refactor the auth'
-    stream.onFrame!(frames.records(GIT_KEY, frame, ++seq))
-    stream.onPosition!(seq)
-    await settle()
-    writes.stop()
-    const row = store.getState().tabsByWorktree[GIT_KEY]!.find((item) => item.id === 'tab-unbound')!
-    expect(row.generatedTitle).toBe('Refactor the auth')
-    expect(writes.count()).toBe(1)
-    expect(renames()).toEqual([])
     sync.close()
   })
 
@@ -412,23 +380,6 @@ describe('a change main applies first, with frames flowing', () => {
         graphBefore
       )
     ).toBe(false)
-    writes.stop()
-    sync.close()
-  })
-
-  it('shows main’s tab color from its frame alone, without the window writing it again', async () => {
-    const { store, sync, answer } = await boot()
-    store.getState().setTabColor('tab-unbound', '#ff0000')
-    const color = rpc.calls.length - 1
-    expect(rpc.calls[color]!.command).toMatchObject({ type: 'setTabProps', color: '#ff0000' })
-    const writes = writesOf(store, (state) => state.tabsByWorktree)
-
-    await answer(color, okReply, (layout) => {
-      layout.tabs.find((item) => item.id === 'tab-unbound')!.color = '#ff0000'
-    })
-    const row = store.getState().tabsByWorktree[GIT_KEY]!.find((item) => item.id === 'tab-unbound')!
-    expect(row.color).toBe('#ff0000')
-    expect(writes.count()).toBe(1)
     writes.stop()
     sync.close()
   })

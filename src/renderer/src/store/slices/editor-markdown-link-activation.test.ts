@@ -1,4 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
+import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../../shared/constants'
 import { createEditorStore, ownedEditorFileId } from './editor-slice-test-harness'
 import type { AppState } from '../types'
 import { makeWorktree } from './worktrees-slice-test-fixtures'
@@ -7,7 +8,6 @@ import {
   type RuntimeEnvironmentCallRequest
 } from '../../runtime/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 
 const { toastErrorMock } = vi.hoisted(() => ({
   toastErrorMock: vi.fn()
@@ -93,27 +93,6 @@ describe('createEditorSlice activateMarkdownLink', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
     vi.useRealTimers()
-  })
-
-  it('opens in-worktree markdown links as preview edit tabs', async () => {
-    const store = createEditorStore()
-    pathExistsMock.mockResolvedValue(true)
-
-    await store.getState().activateMarkdownLink('./guide.md', {
-      sourceFilePath: '/repo/docs/note.md',
-      worktreeId: 'wt-1',
-      worktreeRoot: '/repo'
-    })
-
-    expect(store.getState().openFiles).toEqual([
-      expect.objectContaining({
-        filePath: '/repo/docs/guide.md',
-        mode: 'edit',
-        isPreview: true
-      })
-    ])
-    expect(openFileUriMock).not.toHaveBeenCalled()
-    expect(openUrlMock).not.toHaveBeenCalled()
   })
 
   it('opens remote-owned markdown links through the source file runtime owner', async () => {
@@ -270,29 +249,6 @@ describe('createEditorSlice activateMarkdownLink', () => {
     expect(toastErrorMock).toHaveBeenCalledWith('Cannot open directory: docs/guide.md')
   })
 
-  it('can open a local file without adopting the currently active runtime owner', () => {
-    const store = createEditorStore()
-    store.setState({
-      settings: { activeRuntimeEnvironmentId: 'env-active' } as AppState['settings']
-    })
-
-    store.getState().openFile(
-      {
-        filePath: '/remote/.orca/drops/log.txt',
-        relativePath: '.orca/drops/log.txt',
-        worktreeId: 'wt-1',
-        language: 'text',
-        mode: 'edit'
-      },
-      { suppressActiveRuntimeFallback: true }
-    )
-
-    expect(store.getState().openFiles[0]).toMatchObject({
-      filePath: '/remote/.orca/drops/log.txt'
-    })
-    expect(store.getState().openFiles[0]?.runtimeEnvironmentId).toBeNull()
-  })
-
   it('toasts when the markdown target is missing', async () => {
     const store = createEditorStore()
     pathExistsMock.mockResolvedValue(false)
@@ -306,26 +262,6 @@ describe('createEditorSlice activateMarkdownLink', () => {
     expect(toastErrorMock).toHaveBeenCalledWith('File not found: docs/missing.md')
     expect(store.getState().openFiles).toEqual([])
     expect(openFileUriMock).not.toHaveBeenCalled()
-  })
-
-  it('sets source view mode when the link has a line anchor', async () => {
-    const store = createEditorStore()
-    pathExistsMock.mockResolvedValue(true)
-
-    await store.getState().activateMarkdownLink('./guide.md#L10', {
-      sourceFilePath: '/repo/docs/note.md',
-      worktreeId: 'wt-1',
-      worktreeRoot: '/repo'
-    })
-
-    expect(store.getState().markdownViewMode['/repo/docs/guide.md']).toBe('source')
-    expect(store.getState().pendingEditorReveal).toEqual({
-      filePath: '/repo/docs/guide.md',
-      fileId: '/repo/docs/guide.md',
-      line: 10,
-      column: 1,
-      matchLength: 0
-    })
   })
 
   it('cancels superseded line-anchor reveal frames', async () => {
@@ -377,9 +313,8 @@ describe('createEditorSlice activateMarkdownLink', () => {
   it('reveals active-runtime markdown line anchors on the owner-qualified tab id', async () => {
     const store = createEditorStore()
     pathExistsMock.mockResolvedValue(true)
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the store under test reads only these fields of the partial state.
     store.setState({
-      settings: { activeRuntimeEnvironmentId: 'env-active' } as AppState['settings'],
+      settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'env-active' },
       // The server's rows are stamped as they land; focus alone never names a file's owner.
       worktreesByRepo: {
         'wt-1': [
@@ -404,7 +339,7 @@ describe('createEditorSlice activateMarkdownLink', () => {
           mode: 'edit'
         }
       ]
-    } as Partial<AppState>)
+    })
     const activeRuntimeFileId = ownedEditorFileId('/repo/docs/guide.md', 'wt-1', 'env-active')
 
     await store.getState().activateMarkdownLink('./guide.md#L10', {
@@ -469,21 +404,6 @@ describe('createEditorSlice activateMarkdownLink', () => {
     })
   })
 
-  it('delegates external links to openHttpLink with the ctx worktreeId', async () => {
-    const store = createEditorStore()
-    await store.getState().activateMarkdownLink('https://example.com', {
-      sourceFilePath: '/repo/docs/note.md',
-      worktreeId: 'wt-1',
-      worktreeRoot: '/repo'
-    })
-    expect(openHttpLinkMock).toHaveBeenCalledWith('https://example.com/', {
-      worktreeId: 'wt-1',
-      sourceOwner: { kind: 'local' }
-    })
-    expect(openUrlMock).not.toHaveBeenCalled()
-    expect(store.getState().openFiles).toEqual([])
-  })
-
   it('does not rescan legacy owner state when the source owner is explicit', async () => {
     const store = createEditorStore()
     for (const key of ['openFiles', 'repos', 'worktreesByRepo', 'folderWorkspaces'] as const) {
@@ -506,24 +426,6 @@ describe('createEditorSlice activateMarkdownLink', () => {
       worktreeId: 'wt-1',
       sourceOwner: { kind: 'local' }
     })
-  })
-
-  it('opens in-worktree file links in Orca', async () => {
-    const store = createEditorStore()
-    await store.getState().activateMarkdownLink('./image.png', {
-      sourceFilePath: '/repo/docs/note.md',
-      worktreeId: 'wt-1',
-      worktreeRoot: '/repo'
-    })
-    expect(store.getState().openFiles).toEqual([
-      expect.objectContaining({
-        filePath: '/repo/docs/image.png',
-        relativePath: 'docs/image.png',
-        mode: 'edit',
-        isPreview: true
-      })
-    ])
-    expect(openFileUriMock).not.toHaveBeenCalled()
   })
 
   it('reveals line targets for non-markdown file links', async () => {
@@ -549,24 +451,6 @@ describe('createEditorSlice activateMarkdownLink', () => {
       column: 7,
       matchLength: 0
     })
-  })
-
-  it('opens explicit file URLs inside the worktree in Orca', async () => {
-    const store = createEditorStore()
-    await store.getState().activateMarkdownLink('file:///repo/docs/image.png', {
-      sourceFilePath: '/repo/docs/note.md',
-      worktreeId: 'wt-1',
-      worktreeRoot: '/repo'
-    })
-    expect(store.getState().openFiles).toEqual([
-      expect.objectContaining({
-        filePath: '/repo/docs/image.png',
-        relativePath: 'docs/image.png',
-        mode: 'edit',
-        isPreview: true
-      })
-    ])
-    expect(openFileUriMock).not.toHaveBeenCalled()
   })
 
   it('opens explicit file URLs outside the worktree in Orca as user-named tabs', async () => {

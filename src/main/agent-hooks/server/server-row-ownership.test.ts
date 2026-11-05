@@ -87,7 +87,7 @@ describe('status-row change detection', () => {
     expect(probe.commit(before, reordered)).toBe(false)
   })
 
-  // Why: paired clients read the whole payload off session.tabs, so no field may be skipped.
+  // Paired clients read the entire payload through session.tabs.
   it.each<[string, Partial<EnrichedAgentHookEventPayload>]>([
     ['state', { payload: { state: 'done', prompt: 'ship it' } }],
     [

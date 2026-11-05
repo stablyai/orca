@@ -1,16 +1,16 @@
+import { getProviderChecksOutcome } from '../../../src/shared/source-control/checks/provider-check-summary'
 import type { CheckStatus } from '../../../src/shared/github/pull-request-types'
 import {
   getWorkspaceAttachmentKey,
   getWorkspaceAttachmentUrlScope
-} from '../../../src/shared/workspace-attachment-normalization'
+} from '../../../src/shared/workspace-attachments/workspace-attachment-normalization'
 import {
   getWorkspaceAttachments,
   workspaceAttachmentReferenceLabel
-} from '../../../src/shared/workspace-attachments'
+} from '../../../src/shared/workspace-attachments/workspace-attachments'
 import type { WorkspaceAttachment } from '../../../src/shared/worktree/types'
 import type { Worktree } from './workspace-list-types'
 
-/** A linked review or task as the long-press details list shows it. */
 export type WorkspaceDetailLink = {
   key: string
   provider: WorkspaceAttachment['provider']
@@ -22,10 +22,9 @@ export type WorkspaceDetailLink = {
   url?: string
   /** Review state (`open`, `merged`, ...); reviews only. */
   state?: string
-  checks?: CheckStatus
+  checks?: CheckStatus | 'cancelled'
 }
 
-/** Who made the workspace, as the desktop hover card's Automation / Orca CLI sections say. */
 export type WorkspaceOrigin = { kind: 'automation'; name?: string } | { kind: 'cli' }
 
 function optionalText(value: unknown): string | undefined {
@@ -50,16 +49,10 @@ function toDetailLink(item: WorkspaceAttachment): WorkspaceDetailLink {
   }
 }
 
-/**
- * Every review and task linked to the row, read the way the desktop hover card reads them: the
- * host's `linkedItems`, then the singular fields older hosts send. The branch's PR is the row's
- * `linkedPR`, so it carries the same state as the row's badge, and the title, link and checks
- * when the host sends them. Reviews come first, as in the desktop's list.
- */
+// Read linkedItems with legacy singular-field fallback; enrich the branch PR from linkedPR and keep reviews before tasks.
 export function buildWorkspaceDetailLinks(row: Worktree): WorkspaceDetailLink[] {
   const pr = row.linkedPR
   const items = getWorkspaceAttachments({
-    // Rows arrive unvalidated; the shared reader drops entries it cannot place.
     linkedItems: row.linkedItems,
     linkedPR: pr?.number ?? null,
     linkedIssue: row.linkedIssue ?? null,
@@ -81,16 +74,17 @@ export function buildWorkspaceDetailLinks(row: Worktree): WorkspaceDetailLink[] 
       url: branchPR.url ?? link.url,
       state: pr.state,
       checks: pr.checksStatus
+        ? getProviderChecksOutcome(pr.checksSummary, pr.checksStatus)
+        : undefined
     })
     const index = items.findIndex((item) => isBranchPRAttachment(item, branchPR, row.repoId))
     if (index !== -1) {
       links[index] = enrich(links[index])
     } else {
-      // A same-numbered PR from another repo absorbed the legacy entry; the branch PR still shows.
+      // A same-numbered PR in another repo absorbed the legacy entry; keep the branch PR visible.
       links.push(enrich(toDetailLink(branchPR)))
     }
   }
-  // Stable: the host's own order holds within reviews and within tasks.
   return links.sort((a, b) => Number(a.type === 'issue') - Number(b.type === 'issue'))
 }
 

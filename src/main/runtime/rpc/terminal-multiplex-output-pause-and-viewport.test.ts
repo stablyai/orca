@@ -12,7 +12,7 @@ import {
   encodeTerminalStreamFrame,
   encodeTerminalStreamJson,
   encodeTerminalStreamText
-} from '../../../shared/terminal-stream-protocol'
+} from '../../../shared/terminal/stream/terminal-stream-protocol'
 import {
   SET_OUTPUT_PAUSED_OPCODE,
   makeRequest,
@@ -312,6 +312,7 @@ describe('terminal multiplex RPC', () => {
         { text: 'x', enter: false, interrupt: false },
         {
           inputKind: 'driving',
+          inputSource: 'mobile',
           reserveWrite: expect.any(Function),
           afterWrite: expect.any(Function)
         }

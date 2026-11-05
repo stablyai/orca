@@ -1,5 +1,5 @@
 import { unlinkSync } from 'node:fs'
-import { writeEncryptedCredential } from '../integration-credential-file'
+import { writeEncryptedCredential } from '../credentials/integration-credential-file'
 import {
   LEGACY_WORKSPACE_ID,
   ensureOrcaDir,
@@ -23,7 +23,7 @@ import {
   workspaceTokenFileCache
 } from './linear-workspace-registry'
 import type { LinearWorkspace } from '../../shared/linear/workspace-types'
-import { readCredentialFileProtection } from '../credential-file-protection'
+import { readCredentialFileProtection } from '../credentials/credential-file-protection'
 import type { SecretAtRestProtection } from '../../shared/secret-at-rest-protection'
 
 export function saveWorkspaceToken(workspaceId: string, apiKey: string): void {
@@ -32,7 +32,7 @@ export function saveWorkspaceToken(workspaceId: string, apiKey: string): void {
     ensureWorkspaceTokenDir()
   }
   const tokenPath = getWorkspaceTokenPath(workspaceId)
-  // Why the shared writer: it re-applies 0600 to an existing file and never truncates it mid-write.
+  // Credential writes restore existing file permissions and publish without truncating live contents.
   writeEncryptedCredential('Linear', tokenPath, apiKey)
   workspaceTokenFileCache.forget(workspaceId)
 }
@@ -45,7 +45,6 @@ export function loadToken(options: { force?: boolean; workspaceId?: string } = {
   return workspaceTokenFileCache.read(workspaceId, options.force === true)
 }
 
-/** How a workspace's stored token sits on disk, or null when none is stored. */
 export function getWorkspaceTokenProtection(workspaceId: string): SecretAtRestProtection | null {
   return readCredentialFileProtection(getWorkspaceTokenPath(workspaceId))
 }
@@ -55,7 +54,7 @@ export function clearTokenFile(workspaceId: string): void {
   try {
     unlinkSync(getWorkspaceTokenPath(workspaceId))
   } catch {
-    // File may not exist — safe to ignore.
+    // Token cleanup is best-effort when storage is absent or unavailable.
   }
 }
 

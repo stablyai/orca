@@ -2,10 +2,13 @@ import React from 'react'
 import { ChevronDown } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
-import type { GitHistoryItem, GitHistoryItemRef } from '../../../../../../shared/git-history'
-import type { GitHistoryItemViewModel } from '../../../../../../shared/git-history-graph'
+import type {
+  GitHistoryItem,
+  GitHistoryItemRef
+} from '../../../../../../shared/git/history/git-history-types'
+import type { GitHistoryItemViewModel } from '../../../../../../shared/git/history/git-history-graph'
 import { GitHistoryGraphSvg, graphColor } from './git-history-graph-svg'
-import { dedupeRemoteTrackingRefs } from '../../../../../../shared/git-history-ref-display'
+import { dedupeRemoteTrackingRefs } from '../../../../../../shared/git/history/git-history-ref-display'
 import { translate } from '@/i18n/i18n'
 
 function GitHistoryRefBadge({ itemRef }: { itemRef: GitHistoryItemRef }): React.JSX.Element {
@@ -55,14 +58,10 @@ export const GitHistoryRow = React.forwardRef<HTMLElement, GitHistoryRowProps>(
     const item = viewModel.historyItem
     const isBoundaryNode =
       viewModel.kind === 'incoming-changes' || viewModel.kind === 'outgoing-changes'
-    // Expanding to an inline file list is the primary click; opening the combined
-    // diff stays reachable from the expanded list. Fall back to open-all when no
-    // expand handler is wired so the row still does something useful.
+    // Prefer inline expansion; retain open-all as fallback when no expansion handler exists.
     const canExpand = !isBoundaryNode && Boolean(onToggleExpand)
     const canOpenCommit = !isBoundaryNode && Boolean(onOpenCommit)
     const isInteractive = canExpand || canOpenCommit
-    // A local branch and its own remote-tracking ref at the same commit are
-    // redundant, so collapse the pair to one pill.
     const refs = dedupeRemoteTrackingRefs(item.references ?? [], { preserveRefIds })
     const visibleRefs = refs.slice(0, 2)
     const hiddenRefs = refs.slice(2)

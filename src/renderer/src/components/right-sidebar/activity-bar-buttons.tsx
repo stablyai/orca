@@ -1,7 +1,8 @@
 import React from 'react'
 import { MoreHorizontal } from 'lucide-react'
 import type { ActiveRightSidebarTab } from '@/store/slices/editor'
-import type { CheckStatus } from '../../../../shared/github/pull-request-types'
+import type { CheckStatus as CoarseCheckStatus } from '../../../../shared/github/pull-request-types'
+type CheckStatus = CoarseCheckStatus | 'cancelled'
 import { cn } from '@/lib/utils'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { RIGHT_SIDEBAR_HEADER_NO_DRAG_CLASS_NAME } from './right-sidebar-titlebar-drag-regions'
@@ -33,14 +34,17 @@ const STATUS_DOT_COLOR: Record<CheckStatus, string> = {
   success: 'bg-emerald-500',
   failure: 'bg-rose-500',
   pending: 'bg-amber-500',
-  neutral: 'bg-muted-foreground'
+  neutral: 'bg-muted-foreground',
+  cancelled: 'bg-muted-foreground'
 }
 
 function activityItemAriaLabel(item: ActivityBarItem, status?: CheckStatus | null): string {
   const base = item.shortcut ? `${item.title} (${item.shortcut})` : item.title
   return status === 'failure'
     ? `${base} — ${translate('auto.components.right.sidebar.activityBar.error', 'Error')}`
-    : base
+    : status === 'cancelled'
+      ? `${base} — ${translate('auto.components.editor.CheckRunDetailsPanel.91a4c7e2b0', 'Cancelled')}`
+      : base
 }
 
 export function TopActivityOverflowMenu({
@@ -78,7 +82,9 @@ export function TopActivityOverflowMenu({
           aria-label={
             hiddenItemStatus === 'failure'
               ? `${moreTabsLabel} — ${translate('auto.components.right.sidebar.activityBar.error', 'Error')}`
-              : moreTabsLabel
+              : hiddenItemStatus === 'cancelled'
+                ? `${moreTabsLabel} — ${translate('auto.components.editor.CheckRunDetailsPanel.91a4c7e2b0', 'Cancelled')}`
+                : moreTabsLabel
           }
         >
           <MoreHorizontal size={16} />
@@ -100,6 +106,7 @@ export function TopActivityOverflowMenu({
             <DropdownMenuItem
               key={item.id}
               onSelect={() => onSelect(item.id)}
+              data-workspace-board-dismiss=""
               className={cn(active && 'bg-accent text-accent-foreground')}
               aria-current={active ? 'page' : undefined}
               aria-label={activityItemAriaLabel(item, item.statusIndicator)}
@@ -150,6 +157,7 @@ export function ActivityBarButton({
             active ? 'text-foreground' : 'text-muted-foreground/60 hover:text-muted-foreground'
           )}
           onClick={onClick}
+          data-workspace-board-dismiss=""
           aria-label={activityItemAriaLabel(item, effectiveStatus)}
         >
           <Icon size={isTop ? 16 : 18} />

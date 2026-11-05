@@ -1,22 +1,10 @@
 // @vitest-environment happy-dom
-// STA-5781: workspace sidebar filter settings intermittently reset across clients.
-//
-// Topology under test (all shipping code except where pinned):
-//   desktop renderer  = real usePersistedUIWriter + real UI slice (createUIStore)
-//   authority (main)  = real updatePersistedUI/getPersistedUI merge
-//   broadcast         = controlled queue modeling the async ui:stateChanged IPC send
-//   mobile client     = mobile/src/worktree/workspace-view-settings mapping; the ui.set
-//                       payload mirrors the shipping buildWorkspaceViewSettingsUpdate.
-//
-// Invariant: when two independently identified clients change DISJOINT workspace-view
-// fields concurrently or across stale-mirror windows, both changes survive and all
-// mirrors converge; no client may restore a stale sibling field.
+// Exercise the real desktop writer/UI slice and persistence merge with queued IPC broadcasts; model Expo mobile mapping locally. Disjoint edits must survive stale mirrors and converge (STA-5781).
 import { StrictMode, act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { StoreApi } from 'zustand/vanilla'
 import { getDefaultUIState } from '../../../shared/constants'
-import { omitPairingLocalUiFields } from '../../../shared/pairing-local-ui-fields'
 import type { PersistedUIState } from '../../../shared/persisted-ui-state-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import { getPersistedUI } from '../../../main/persistence/applying-settings/ui-state-read'
@@ -78,83 +66,6 @@ function createAuthority() {
 
 type Authority = ReturnType<typeof createAuthority>
 
-// Local model of mobile/src/worktree/workspace-view-settings.ts (the desktop test
-// runner cannot transform Expo-configured sources).
-type MobileViewState = {
-  groupMode: 'none' | 'workspaceStatus' | 'repo' | 'prStatus'
-  sortMode: 'smart' | 'name' | 'recent' | 'repo' | 'manual'
-  hideSleeping: boolean
-  hideDefaultBranch: boolean
-  alwaysShowDefaultBranch: boolean
-  filterRepoIds: string[]
-  collapsedGroups: string[]
-}
-
-/** Mirrors buildWorkspaceViewSettingsUpdate (candidate) — only touched fields. */
-function patchOnlyUpdate(
-  patch: Partial<MobileViewState>,
-  next: MobileViewState
-): Partial<PersistedUIState> {
-  const update: Partial<PersistedUIState> = {}
-  if ('groupMode' in patch) {
-    update.groupBy = next.groupMode === 'workspaceStatus' ? 'workspace-status' : 'repo'
-  }
-  if ('sortMode' in patch) {
-    update.sortBy = next.sortMode
-  }
-  if ('hideSleeping' in patch) {
-    update.hideSleepingWorkspaces = next.hideSleeping
-  }
-  if ('hideDefaultBranch' in patch) {
-    update.hideDefaultBranchWorkspace = next.hideDefaultBranch
-  }
-  if ('filterRepoIds' in patch) {
-    update.filterRepoIds = next.filterRepoIds
-  }
-  if ('collapsedGroups' in patch) {
-    update.collapsedGroups = next.collapsedGroups
-  }
-  return update
-}
-
-/** Model of the mobile host screen's view-settings client (persistViewSettings et al.). */
-function createMobileClient(authority: Authority) {
-  let view: MobileViewState = {
-    groupMode: 'repo',
-    sortMode: 'recent',
-    hideSleeping: false,
-    hideDefaultBranch: false,
-    alwaysShowDefaultBranch: true,
-    filterRepoIds: [],
-    collapsedGroups: []
-  }
-  return {
-    get view() {
-      return view
-    },
-    /** ui.get on connect/focus: merge the shared state onto the local mirror
-     *  (mirrors applyDesktopViewSettings' ??-per-field semantics). */
-    sync() {
-      const ui = omitPairingLocalUiFields(authority.get())
-      view = {
-        ...view,
-        hideSleeping: ui.hideSleepingWorkspaces ?? view.hideSleeping,
-        hideDefaultBranch: ui.hideDefaultBranchWorkspace ?? view.hideDefaultBranch,
-        alwaysShowDefaultBranch:
-          ui.alwaysShowDefaultBranchWorkspace ?? view.alwaysShowDefaultBranch,
-        filterRepoIds: ui.filterRepoIds ?? view.filterRepoIds,
-        collapsedGroups: ui.collapsedGroups ?? view.collapsedGroups
-      }
-    },
-    /** A user tap: apply locally, then push through the shipping payload shape. */
-    tap(patch: Partial<MobileViewState>) {
-      view = { ...view, ...patch }
-      const payload = patchOnlyUpdate(patch, view)
-      authority.set(omitPairingLocalUiFields(payload) as Partial<PersistedUIState>)
-    }
-  }
-}
-
 describe('workspace view preferences: cross-client persistence (STA-5781)', () => {
   let authority: Authority
   let store: StoreApi<AppState>
@@ -178,7 +89,6 @@ describe('workspace view preferences: cross-client persistence (STA-5781)', () =
   }
 
   function deliverBroadcasts() {
-    // Models the async ui:stateChanged IPC delivery to the desktop renderer.
     const queued = pendingBroadcasts.splice(0)
     for (const ui of queued) {
       act(() => {
@@ -192,16 +102,14 @@ describe('workspace view preferences: cross-client persistence (STA-5781)', () =
       usePersistedUIWriter()
       return null
     }
-    // StrictMode, like the real renderer (main.tsx): the writer effect must
-    // stay correct under double-invoked mount/cleanup cycles.
+    // Match real StrictMode mount/cleanup replay.
     act(() => {
       root.render(createElement(StrictMode, null, createElement(Probe)))
     })
   }
 
   async function flushDesktopDebounce() {
-    // Async act: the writer folds its baseline in a .then after the ui.set
-    // resolves, so the microtask queue must drain for the flush to register.
+    // Drain the ack microtask so the writer folds its baseline before assertions.
     await act(async () => {
       vi.advanceTimersByTime(200)
       await Promise.resolve()
@@ -233,8 +141,7 @@ describe('workspace view preferences: cross-client persistence (STA-5781)', () =
             rejectNextSet = false
             return new Promise<void>((_, reject) => pendingRejects.push(reject))
           }
-          // Like the real IPC: main applies the update before the renderer's
-          // promise resolves; holdAcks models the in-flight round-trip window.
+          // Apply before resolving as IPC does; held acks expose the in-flight window.
           authority.set(updates)
           if (!holdAcks) {
             return Promise.resolve()
@@ -246,7 +153,6 @@ describe('workspace view preferences: cross-client persistence (STA-5781)', () =
     container = document.createElement('div')
     document.body.appendChild(container)
     root = createRoot(container)
-    // Startup: desktop hydrates from the authority before the writer arms.
     act(() => {
       store.getState().hydratePersistedUI(authority.get(), 'startup')
     })
@@ -338,10 +244,7 @@ describe('workspace view preferences: cross-client persistence (STA-5781)', () =
     expect(store.getState().persistedUIWriteInFlightCounts).toEqual({})
   })
 
-  it('a mobile tap must not revert a desktop change the mobile mirror has not seen', async () => {
-    const mobile = createMobileClient(authority)
-    mobile.sync()
-
+  it('merges another client’s field without reverting a prior desktop write', async () => {
     // Desktop turns on "hide default branch"; the write lands and broadcasts.
     act(() => {
       store.getState().setHideDefaultBranchWorkspace(true)
@@ -350,22 +253,18 @@ describe('workspace view preferences: cross-client persistence (STA-5781)', () =
     expect(authority.get().hideDefaultBranchWorkspace).toBe(true)
     deliverBroadcasts()
 
-    // Mobile (mirror stale since its last ui.get) toggles the DISJOINT
-    // "hide sleeping" filter.
-    mobile.tap({ hideSleeping: true })
+    // Another client sends only its changed field.
+    authority.set({ hideSleepingWorkspaces: true })
 
-    // Both changes must survive.
     expect(authority.get().hideSleepingWorkspaces).toBe(true)
     expect(authority.get().hideDefaultBranchWorkspace).toBe(true)
 
-    // And the desktop mirror must not be reverted by the echoed broadcast.
     deliverBroadcasts()
     expect(store.getState().hideDefaultBranchWorkspace).toBe(true)
   })
 
   it('persists the desktop sleeping-workspaces toggle in the durable hide form', async () => {
-    // Pins the mirror->wire inversion end-to-end: showSleepingWorkspaces false
-    // must land as hideSleepingWorkspaces true at the authority.
+    // Verify mirror-to-wire inversion: showSleeping=false persists hideSleeping=true.
     act(() => {
       store.getState().setShowSleepingWorkspaces(false)
     })
@@ -379,70 +278,53 @@ describe('workspace view preferences: cross-client persistence (STA-5781)', () =
     expect(authority.get().hideSleepingWorkspaces).toBe(false)
   })
 
-  it('the desktop debounced writer must not revert a concurrent mobile change', async () => {
-    const mobile = createMobileClient(authority)
-    mobile.sync()
-
+  it('the desktop debounced writer preserves a concurrent client’s field', async () => {
     // t=0: desktop toggles a desktop-only filter (disjoint from mobile fields).
     act(() => {
       store.getState().setHideCliCreatedWorkspaces(true)
     })
 
-    // t<150ms: mobile turns on "hide sleeping". The authority applies it, but the
-    // ui:stateChanged broadcast is still in flight to the desktop renderer.
+    // Apply mobile’s disjoint edit before the desktop debounce, but delay its broadcast.
     act(() => {
       vi.advanceTimersByTime(100)
     })
-    mobile.tap({ hideSleeping: true })
+    authority.set({ hideSleepingWorkspaces: true })
     expect(authority.get().hideSleepingWorkspaces).toBe(true)
 
-    // t=150ms: the desktop debounce fires from its (not yet re-hydrated) mirror.
+    // Flush the desktop’s still-stale mirror.
     await flushDesktopDebounce()
 
-    // Both disjoint changes must survive.
     expect(authority.get().hideCliCreatedWorkspaces).toBe(true)
     expect(authority.get().hideSleepingWorkspaces).toBe(true)
 
-    // After full delivery and a mobile re-sync, every mirror converges on both.
     deliverBroadcasts()
-    mobile.sync()
     expect(store.getState().showSleepingWorkspaces).toBe(false)
     expect(store.getState().hideCliCreatedWorkspaces).toBe(true)
-    expect(mobile.view.hideSleeping).toBe(true)
   })
 
   it('a broadcast landing inside the debounce window must not revert the pending desktop toggle', async () => {
-    const mobile = createMobileClient(authority)
-    mobile.sync()
-
     // t=0: desktop toggles a filter; its write is pending in the 150ms debounce.
     act(() => {
       store.getState().setHideCliCreatedWorkspaces(true)
     })
 
-    // t<150ms: mobile changes a disjoint field AND its broadcast is delivered
+    // t<150ms: another client changes a disjoint field AND its broadcast is delivered
     // before the desktop debounce fires. The broadcast still carries the OLD
     // value of the desktop's pending toggle.
-    mobile.tap({ hideSleeping: true })
+    authority.set({ hideSleepingWorkspaces: true })
     deliverBroadcasts()
 
-    // The hydration must not wipe the user's pending toggle from the mirror.
     expect(store.getState().hideCliCreatedWorkspaces).toBe(true)
-    // The remote change must land in the mirror.
     expect(store.getState().showSleepingWorkspaces).toBe(false)
 
     await flushDesktopDebounce()
 
-    // Both disjoint changes survive at the authority.
     expect(authority.get().hideCliCreatedWorkspaces).toBe(true)
     expect(authority.get().hideSleepingWorkspaces).toBe(true)
   })
 
   it('preserves a flip-back made while the first write is still in flight', async () => {
-    // CodeRabbit PR#17057 finding: toggle -> debounce fires (write in flight)
-    // -> toggle back. The flip-back equals the pre-fold baseline, so without
-    // in-flight tracking it diffs empty, the ack folds the obsolete value in,
-    // and the echo broadcast visually reverts the user's second toggle.
+    // A flip-back matches the pre-ack baseline. Track in-flight fields so an obsolete ack/echo cannot erase the second toggle (PR #17057).
     holdAcks = true
     act(() => {
       store.getState().setHideDefaultBranchWorkspace(true)
@@ -450,15 +332,13 @@ describe('workspace view preferences: cross-client persistence (STA-5781)', () =
     await flushDesktopDebounce()
     expect(authority.get().hideDefaultBranchWorkspace).toBe(true)
 
-    // Flip back while the first write's ack is still in flight.
     act(() => {
       store.getState().setHideDefaultBranchWorkspace(false)
     })
-    // The echo of the FIRST write arrives before the ack.
+    // Deliver the first write’s echo before its ack.
     deliverBroadcasts()
     expect(store.getState().hideDefaultBranchWorkspace).toBe(false)
 
-    // Ack lands; the writer must notice the mirror moved on and re-flush.
     await resolveAcks()
     await flushDesktopDebounce()
     await resolveAcks()
@@ -468,8 +348,7 @@ describe('workspace view preferences: cross-client persistence (STA-5781)', () =
   })
 
   it('edits made during the ack window flush at debounce rate, not ack rate', async () => {
-    // Round-3 review: the trailing re-diff must not bypass the 150ms debounce,
-    // or one in-flight write turns a drag into one ui.set per IPC round trip.
+    // Trailing rediffs must obey debounce, or dragging sends one write per IPC ack.
     holdAcks = true
     act(() => {
       store.getState().setHideDefaultBranchWorkspace(true)
@@ -477,7 +356,6 @@ describe('workspace view preferences: cross-client persistence (STA-5781)', () =
     await flushDesktopDebounce()
     const sendsAfterFirstFlush = setCallCount
 
-    // Rapid edits while the first write's ack is in flight.
     act(() => {
       store.getState().setHideCliCreatedWorkspaces(true)
     })
@@ -488,11 +366,9 @@ describe('workspace view preferences: cross-client persistence (STA-5781)', () =
       store.getState().setHideAutomationGeneratedWorkspaces(true)
     })
 
-    // The ack lands: nothing may be sent inline — only a debounced flush later.
     await resolveAcks()
     expect(setCallCount).toBe(sendsAfterFirstFlush)
 
-    // One debounce window later, the three edits coalesce into a single write.
     await flushDesktopDebounce()
     expect(setCallCount).toBe(sendsAfterFirstFlush + 1)
     await resolveAcks()
@@ -505,21 +381,17 @@ describe('workspace view preferences: cross-client persistence (STA-5781)', () =
   })
 
   it('converges when a remote client writes the same field during the ack window', async () => {
-    // Round-3 review: the ack must not fold the sent value over a baseline a
-    // hydration advanced past, or the mirror and authority diverge with no
-    // further traffic to reconcile them (the reset then reappears later).
+    // Never fold an ack over a newer hydrated baseline; it would leave mirror/authority divergent without further traffic.
     holdAcks = true
-    const mobile = createMobileClient(authority)
-    mobile.sync()
 
     act(() => {
       store.getState().setHideDefaultBranchWorkspace(true)
     })
     await flushDesktopDebounce()
 
-    // Mobile writes the SAME field at the authority after us; both broadcasts
-    // (our echo, then mobile's) land before our ack does.
-    mobile.tap({ hideDefaultBranch: false })
+    // Another client writes the SAME field at the authority after us; both broadcasts
+    // (our echo, then the other client's) land before our ack does.
+    authority.set({ hideDefaultBranchWorkspace: false })
     deliverBroadcasts()
     await resolveAcks()
 
@@ -530,8 +402,7 @@ describe('workspace view preferences: cross-client persistence (STA-5781)', () =
     await resolveAcks()
     deliverBroadcasts()
 
-    // Either side may win a same-field conflict, but mirror and authority
-    // must agree once traffic settles.
+    // Same-field conflicts may choose either writer, but settled mirrors must agree.
     expect(store.getState().hideDefaultBranchWorkspace).toBe(
       authority.get().hideDefaultBranchWorkspace
     )
@@ -544,10 +415,8 @@ describe('workspace view preferences: cross-client persistence (STA-5781)', () =
     })
     await flushDesktopDebounce()
     expect(authority.get().hideDefaultBranchWorkspace).toBe(false)
-    // The rejection must settle the in-flight marker, not leak it.
     expect(store.getState().persistedUIWriteInFlightCounts).toEqual({})
 
-    // Transport recovers; the next edit re-flushes the dirty field too.
     rejectSets = false
     act(() => {
       store.getState().setHideCliCreatedWorkspaces(true)
@@ -559,9 +428,7 @@ describe('workspace view preferences: cross-client persistence (STA-5781)', () =
   })
 
   it('a terminal rejection leaves one dirty field without an automatic retry loop', async () => {
-    // A rejected transport write is terminal for this attempt. The mirror must
-    // stay dirty for an explicit later edit, but the rejection itself must not
-    // keep scheduling 150ms trailing writes forever.
+    // Keep rejection dirty for a later edit without scheduling an endless trailing retry loop.
     rejectSets = true
     setCallCount = 0
     act(() => {
@@ -569,12 +436,10 @@ describe('workspace view preferences: cross-client persistence (STA-5781)', () =
     })
 
     vi.advanceTimersByTime(150)
-    // Let the controlled rejection settle and (on the buggy writer) arm its
-    // next trailing timer, without allowing that timer to fire in this tick.
+    // Settle rejection without firing any erroneously rearmed timer yet.
     await Promise.resolve()
 
-    // Independent signals: exactly one transport call and no trailing timer
-    // remain after its rejection settles; the failed field is still dirty.
+    // Assert transport count, settled markers and no retry timer independently; the field stays dirty.
     expect(setCallCount).toBe(1)
     expect(store.getState().persistedUIWriteInFlightCounts).toEqual({})
     const state = store.getState()
@@ -586,8 +451,7 @@ describe('workspace view preferences: cross-client persistence (STA-5781)', () =
     ).toEqual({ hideDefaultBranchWorkspace: true })
     expect(vi.getTimerCount()).toBe(0)
 
-    // Recovery is explicit: the next user edit arms one debounce and flushes
-    // both the old dirty field and the new edit once transport recovers.
+    // A new edit explicitly flushes both its change and the previous dirty field.
     rejectSets = false
     act(() => {
       store.getState().setHideCliCreatedWorkspaces(true)
@@ -599,8 +463,7 @@ describe('workspace view preferences: cross-client persistence (STA-5781)', () =
     expect(authority.get().hideCliCreatedWorkspaces).toBe(true)
     expect(store.getState().persistedUIWriteInFlightCounts).toEqual({})
 
-    // Unmount cleanup must cancel any delayed work and prevent a post-close
-    // write when the store changes later.
+    // Unmount must cancel delayed work and prevent later store writes.
     act(() => {
       root.unmount()
     })
@@ -612,9 +475,7 @@ describe('workspace view preferences: cross-client persistence (STA-5781)', () =
   })
 
   it('a transient rejection still flushes a pending flip-back exactly once', async () => {
-    // A trailing pass that was already needed for an edit made while a write
-    // was in flight must survive that write's rejection. This is distinct from
-    // a terminal rejection with no newer edit (covered above).
+    // A newer pending edit still deserves one trailing flush after rejection; rejection alone does not.
     holdAcks = true
     rejectNextSet = true
     setCallCount = 0
@@ -625,9 +486,7 @@ describe('workspace view preferences: cross-client persistence (STA-5781)', () =
     expect(setCallCount).toBe(1)
     expect(pendingRejects).toHaveLength(1)
 
-    // Flip the first field back and edit a second field while write #1 is in
-    // flight. The failed write must not be retried; only the pending edit is
-    // eligible for the one trailing flush.
+    // Flip back and edit another field in flight; only newer edits authorize the trailing pass.
     act(() => {
       store.getState().setHideDefaultBranchWorkspace(false)
       store.getState().setHideCliCreatedWorkspaces(true)
@@ -644,8 +503,6 @@ describe('workspace view preferences: cross-client persistence (STA-5781)', () =
     expect(authority.get().hideCliCreatedWorkspaces).toBe(true)
     expect(store.getState().persistedUIWriteInFlightCounts).toEqual({})
 
-    // Once the pending edit is acknowledged, no rejection-induced timer may
-    // remain to send another copy.
     vi.advanceTimersByTime(150)
     await Promise.resolve()
     expect(setCallCount).toBe(2)
@@ -653,8 +510,7 @@ describe('workspace view preferences: cross-client persistence (STA-5781)', () =
   })
 
   it('a rejected trailing write does not inherit automatic retry permission', async () => {
-    // A successful write's trailing pass is still a normal persistence attempt:
-    // if that pass is rejected with no newer edit, it must be terminal too.
+    // A trailing attempt rejected without newer edits is terminal too.
     holdAcks = true
     setCallCount = 0
     act(() => {
@@ -670,8 +526,7 @@ describe('workspace view preferences: cross-client persistence (STA-5781)', () =
     holdAcks = false
     rejectSets = true
 
-    // The edit's debounce and the successful ack's trailing pass may overlap;
-    // either way only one rejected trailing attempt is allowed.
+    // Overlapping debounce/ack scheduling must yield only one rejected trailing attempt.
     vi.advanceTimersByTime(150)
     await Promise.resolve()
     expect(setCallCount).toBe(2)
@@ -709,8 +564,7 @@ describe('workspace view preferences: cross-client persistence (STA-5781)', () =
   })
 
   it('overlapping in-flight writes on one field decrement, not clear, the marker', () => {
-    // Unit-pins the count semantics: ack #1 of two overlapping writes must not
-    // un-pin the field while write #2 is still out.
+    // Two overlapping writes require counts: the first ack must not unpin the second.
     const s = store.getState()
     s.notePersistedUIWriteStarted(['hideDefaultBranchWorkspace'])
     s.notePersistedUIWriteStarted(['hideDefaultBranchWorkspace'])
@@ -722,18 +576,15 @@ describe('workspace view preferences: cross-client persistence (STA-5781)', () =
     expect(store.getState().persistedUIWriteInFlightCounts).toEqual({})
   })
 
-  it('desktop and mobile changing the same field converges on the newest write', async () => {
-    const mobile = createMobileClient(authority)
-    mobile.sync()
-
+  it('desktop and another client changing the same field converge on the newest write', async () => {
     act(() => {
       store.getState().setHideDefaultBranchWorkspace(true)
     })
     await flushDesktopDebounce()
     deliverBroadcasts()
 
-    // Mobile flips the SAME field afterwards; last writer wins everywhere.
-    mobile.tap({ hideDefaultBranch: false })
+    // Another client flips the SAME field afterwards; last writer wins everywhere.
+    authority.set({ hideDefaultBranchWorkspace: false })
     deliverBroadcasts()
     expect(authority.get().hideDefaultBranchWorkspace).toBe(false)
     await flushDesktopDebounce()

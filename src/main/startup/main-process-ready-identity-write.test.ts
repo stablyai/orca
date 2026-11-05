@@ -2,7 +2,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as DurableFileWrite from '../durable-file-write'
+import type * as DurableFileWrite from '../filesystem/durable-file-write'
 import { JIRA_IMAGE_SCHEME } from '../../shared/jira/jira-attachment-image'
 
 const ORIGINAL_PLATFORM = process.platform
@@ -10,8 +10,7 @@ const ORCA_PROFILE_ID = 'local-default'
 const RETIRED_PROFILE_ID = '11111111-1111-4111-8111-111111111111'
 
 const mocks = vi.hoisted(() => ({
-  // Assigned in beforeAll; the factories below read them lazily, so real directories exist by the
-  // time ready composition resolves the canonical userData path and the active profile directory.
+  // Factories resolve paths lazily after beforeAll creates real profile/userData directories.
   userDataPath: '',
   isPackaged: false,
   setAppUserModelId: vi.fn(),
@@ -28,17 +27,15 @@ const mocks = vi.hoisted(() => ({
   openMainWindow: vi.fn(),
   handleProtocol: vi.fn(),
   runtimeRpcStart: vi.fn(async () => {}),
-  // The identity record's only writer. Watching this is what makes the pin real: asserting on
-  // writeFileAtomically watched a function the identity store never calls.
+  // Observe the identity record's actual writer; watching an unused atomic writer cannot detect regression.
   writeFileDurableSync: vi.fn()
 }))
 
-vi.mock('../durable-file-write', async (importOriginal) => {
+vi.mock('../filesystem/durable-file-write', async (importOriginal) => {
   const actual = await importOriginal<typeof DurableFileWrite>()
   return {
     ...actual,
-    // Records and then really writes: the registry path below must land on disk so
-    // readBrowserIdentityModeRecord is reading what ready actually produced.
+    // Record and perform real durable writes so reads verify what readiness produced.
     writeFileDurableSync: (...args: Parameters<typeof actual.writeFileDurableSync>) => {
       mocks.writeFileDurableSync(...args)
       actual.writeFileDurableSync(...args)
@@ -72,7 +69,7 @@ vi.mock('electron', () => ({
   }
 }))
 vi.mock('./main-process-state', () => ({ mainProcessState: mocks.state }))
-vi.mock('../persistence', () => ({
+vi.mock('../persistence/loading-store/store', () => ({
   Store: class {
     getSettings() {
       return {}
@@ -85,8 +82,7 @@ vi.mock('../persistence', () => ({
     getSshTargets() {
       return []
     }
-  },
-  getCanonicalUserDataPath: () => mocks.userDataPath
+  }
 }))
 vi.mock('../persistence/profile-state/profile-state-startup-authority', () => ({
   createProfileStateStoreForStartup: () => ({
@@ -99,7 +95,6 @@ vi.mock('../persistence/profile-state/profile-state-startup-authority', () => ({
     }
   })
 }))
-// The registry reads the canonical path from this module, not from '../persistence'.
 vi.mock('../persistence/loading-store/user-data-path', () => ({
   getCanonicalUserDataPath: () => mocks.userDataPath
 }))
@@ -138,12 +133,16 @@ vi.mock('../orca-profiles/profile-index-store', () => ({
     dataFile: join(mocks.profileDirectory, 'data.json')
   })
 }))
-vi.mock('../browser/browser-client-host-id', () => ({ initializeBrowserClientHostId: vi.fn() }))
+vi.mock('../browser/client-hosts/lifecycle/browser-client-host-id', () => ({
+  initializeBrowserClientHostId: vi.fn()
+}))
 vi.mock('../host/deferred-secret-protection-report', () => ({
   scheduleSecretProtectionGapReport: vi.fn()
 }))
 vi.mock('../ssh/ssh-host-key-store', () => ({ initSshHostKeyStoreFile: vi.fn() }))
-vi.mock('../pty/legacy-terminal-shim-dir', () => ({ neutralizeLegacyTerminalShimDir: vi.fn() }))
+vi.mock('../pty/shell-startup/legacy-terminal-shim-dir', () => ({
+  neutralizeLegacyTerminalShimDir: vi.fn()
+}))
 vi.mock('./windows-shell-path-hydration', () => ({
   createWindowsShellPathHydration: () => ({
     configure: vi.fn(),
@@ -151,59 +150,62 @@ vi.mock('./windows-shell-path-hydration', () => ({
     whenReady: Promise.resolve()
   })
 }))
-vi.mock('../git/runner', () => ({
-  configureWindowsHostGitEnvironmentReadiness: vi.fn(),
+vi.mock('../git/command-runner/windows-host-git-environment', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  configureWindowsHostGitEnvironmentReadiness: vi.fn()
+}))
+
+vi.mock('../git/command-runner/wsl-command-resolution', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   setDefaultWslDistroOverride: vi.fn()
 }))
 vi.mock('../agent-hooks/wsl-hook-relay-manager', () => ({
   wslHookRelayManager: { setManagedHookSettingsResolver: vi.fn() }
 }))
-vi.mock('../app-icon', () => ({ applyAppIcon: vi.fn() }))
+vi.mock('../window/desktop-integration/app-icon', () => ({ applyAppIcon: vi.fn() }))
 vi.mock('./dev-education-suppression', () => ({
   shouldSuppressDevEducation: () => false,
   suppressDevEducationForStore: vi.fn()
 }))
-vi.mock('../browser/browser-session-proxy', () => ({
-  applyBrowserSessionProxies: vi.fn(async () => {}),
+vi.mock('../browser/sessions/browser-session-proxy', () => ({
+  awaitBrowserSessionProxies: vi.fn(async () => {}),
   setBrowserNetworkProxySettingsResolver: vi.fn(),
   invalidateBrowserSessionProxyApplication: vi.fn()
 }))
-vi.mock('../browser/doc-preview-protocol', () => ({ installDocPreviewProtocolHandler: vi.fn() }))
+vi.mock('../browser/document-preview/doc-preview-protocol', () => ({
+  installDocPreviewProtocolHandler: vi.fn()
+}))
 vi.mock('../media/media-preview-protocol', () => ({ installMediaPreviewProtocolHandler: vi.fn() }))
 vi.mock('../ipc/doc-preview-grant-ipc', () => ({ registerDocPreviewGrantHandlers: vi.fn() }))
 
-// browser-session-startup and browser-session-registry are deliberately NOT mocked: they are the
-// one ready-phase path that can write the identity record, and stubbing them is what made the
-// original assertion unable to fail. Only the pieces hanging off that path — partition policies,
-// route sessions, cookie staging — are stubbed, so the meta load, the retired-choice inspection
-// and the identity write are all real.
-vi.mock('../browser/browser-route-session-runtime', () => ({
+// Keep registry/startup real through meta load, retired-choice inspection and identity write; stub only surrounding route/policy/cookie machinery.
+vi.mock('../browser/routing/sessions/browser-route-session-runtime', () => ({
   configureRouteSessionsForOrcaProfile: vi.fn()
 }))
-vi.mock('../browser/paired-runtime-browser-client-host-runtime', () => ({
+vi.mock('../browser/client-hosts/lifecycle/paired-runtime-browser-client-host-runtime', () => ({
   configurePairedRuntimeBrowserClientHostsForOrcaProfile: vi.fn()
 }))
-vi.mock('../browser/browser-route-partition-storage-runtime', () => ({
+vi.mock('../browser/routing/partitions/browser-route-partition-storage-runtime', () => ({
   collectOrphanedBrowserRoutePartitionStorage: vi.fn(async () => {})
 }))
-vi.mock('../browser/browser-session-partition-policies', () => ({
+vi.mock('../browser/sessions/browser-session-partition-policies', () => ({
   installBrowserSessionPartitionPolicies: vi.fn(async () => {}),
   forgetBrowserSessionPartitionConfiguration: vi.fn(),
   clearBrowserSessionPartitionPolicies: vi.fn()
 }))
-vi.mock('../browser/browser-session-cookie-staging', () => ({
+vi.mock('../browser/cookies/staging/browser-session-cookie-staging', () => ({
   applyPendingBrowserCookieImports: vi.fn(),
   clearPendingBrowserCookieImport: vi.fn(),
   setPendingBrowserCookieImport: vi.fn()
 }))
-vi.mock('../browser/browser-session-route-policies', () => ({
+vi.mock('../browser/routing/sessions/browser-session-route-policies', () => ({
   installBrowserRoutePartitionPolicies: vi.fn(),
   clearBrowserRoutePartitionPolicies: vi.fn()
 }))
-vi.mock('../browser/browser-session-profile-retirement', () => ({
+vi.mock('../browser/sessions/browser-session-profile-retirement', () => ({
   retireFailedBrowserSessionProfile: vi.fn(async () => {})
 }))
-vi.mock('../browser/browser-webauthn-account-picker', () => ({
+vi.mock('../browser/webauthn/browser-webauthn-account-picker', () => ({
   cancelBrowserWebAuthnAccountRequestsForSession: vi.fn()
 }))
 
@@ -221,7 +223,7 @@ vi.mock('../cli/wsl-cli-registration-reconciliation', () => ({
 vi.mock('./wsl-cli-reconciliation-startup-barrier', () => ({
   createWslCliReconciliationStartupBarrier: () => Promise.resolve()
 }))
-vi.mock('../agent-hooks/managed-agent-hook-controls', () => ({
+vi.mock('../../shared/agent-hook-listener/configuration/agent-status-hooks-setting', () => ({
   isAgentStatusHooksEnabled: vi.fn()
 }))
 vi.mock('./main-process-ready-runtime', () => ({
@@ -244,9 +246,11 @@ import {
   BROWSER_IDENTITY_MODE_FILE,
   BROWSER_IDENTITY_MODE_VERSION,
   readBrowserIdentityModeRecord
-} from '../browser/browser-identity-mode-record'
-import { BROWSER_SESSION_META_FILE_NAME } from '../browser/browser-session-meta-store'
+} from '../browser/identity/browser-identity-mode-record'
+import { BROWSER_SESSION_META_FILE_NAME } from '../browser/sessions/browser-session-meta-store'
 import { getOrcaProfileBrowserSessionPartition } from '../../shared/orca-profiles'
+// Transform the ready graph at collection, outside any test timeout; tests re-evaluate it after resetModules.
+import './main-process-ready'
 
 function seedIdentityRecord(mode: string, explicitSelection: boolean): void {
   writeFileSync(
@@ -261,7 +265,6 @@ function seedIdentityRecord(mode: string, explicitSelection: boolean): void {
   )
 }
 
-/** A profile carrying the retired per-profile choice, which is what arms the startup notice. */
 function seedRetiredProfile(): void {
   writeFileSync(
     join(mocks.profileDirectory, BROWSER_SESSION_META_FILE_NAME),
@@ -284,13 +287,10 @@ function seedRetiredProfile(): void {
   )
 }
 
-/**
- * `initializeBrowserSessionsForApp` latches on a module-level flag, so each case needs a fresh
- * module graph; that forces the dynamic imports here.
- */
+/** Use fresh module graphs to reset the registry's initialization latch. */
 async function runReady(): Promise<void> {
-  const identity = await import('../browser/browser-identity-mode-store')
-  // Preflight's read is what fixes the identity for this launch.
+  const identity = await import('../browser/identity/browser-identity-mode-store')
+  // Preflight fixes identity for this launch.
   identity.initializeBrowserIdentityModeStore(mocks.userDataPath)
   const { initializeMainProcessReady } = await import('./main-process-ready')
   await initializeMainProcessReady({
@@ -352,10 +352,7 @@ describe('ready-phase browser identity authority', () => {
     }
   )
 
-  // The bug: ready used to mirror a retired per-profile setting into the root record, so switching
-  // from a native profile to a clean one started the clean profile in native. The root record read
-  // before ready is the only authority now, and ready must not rewrite it in either direction —
-  // not even when the real registry finds retired per-profile bytes sitting right beside it.
+  // Root identity remains authoritative across profile switches; ready must not restore retired per-profile choices in either direction.
   it.each([{ rootMode: 'native' }, { rootMode: 'clean' }])(
     'leaves root=$rootMode authoritative over a retired profile choice',
     async ({ rootMode }) => {
@@ -371,14 +368,11 @@ describe('ready-phase browser identity authority', () => {
         explicitSelection: true,
         migrationNoticePending: false
       })
-      // The explicit choice already retired the notice, so the real registry path must not
-      // re-arm it — and with nothing to write, the record is never touched at all.
       expect(identityRecordWrites()).toEqual([])
     }
   )
 
-  // The other half: proof the registry path this test stops mocking is actually live. Without an
-  // explicit choice the same retired profile must arm the notice, through ready, on disk.
+  // Prove the real registry seam is live: without explicit choice, retired profile data must arm the notice on disk.
   it('arms the retired-choice notice through the real registry path', async () => {
     seedIdentityRecord('clean', false)
     seedRetiredProfile()

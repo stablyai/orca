@@ -1,3 +1,5 @@
+import type * as WorktreeScanCacheModule from '../git/worktrees/catalog/worktree-scan-cache'
+import type * as WorktreeListingModule from '../git/worktrees/catalog/worktree-listing'
 import './rpc/unused-default-rpc-methods.test-fixture'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -17,20 +19,40 @@ import {
   seedSupervisedAskWorkers
 } from './runtime-rpc-test-harness'
 
-vi.mock('../git/worktree', () => {
-  const worktrees = [
-    {
-      path: '/tmp/worktree-a',
-      head: 'abc',
-      branch: 'feature/foo',
-      isBare: false,
-      isMainWorktree: false
-    }
-  ]
+vi.mock('../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => {
+  const listings = getWorktreeListingMocks()
   return {
-    listWorktrees: vi.fn().mockResolvedValue(worktrees),
-    listWorktreesStrict: vi.fn().mockResolvedValue(worktrees)
+    ...(await importOriginal<typeof WorktreeScanCacheModule>()),
+    listWorktrees: listings.listWorktrees
   }
+})
+
+vi.mock('../git/worktrees/catalog/worktree-listing', async (importOriginal) => {
+  const listings = getWorktreeListingMocks()
+  return {
+    ...(await importOriginal<typeof WorktreeListingModule>()),
+    listWorktreesStrict: listings.listWorktreesStrict
+  }
+})
+
+const { getWorktreeListingMocks } = vi.hoisted(() => {
+  function createWorktreeListingMocks() {
+    const worktrees = [
+      {
+        path: '/tmp/worktree-a',
+        head: 'abc',
+        branch: 'feature/foo',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ]
+    return {
+      listWorktrees: vi.fn().mockResolvedValue(worktrees),
+      listWorktreesStrict: vi.fn().mockResolvedValue(worktrees)
+    }
+  }
+  let listings: ReturnType<typeof createWorktreeListingMocks> | undefined
+  return { getWorktreeListingMocks: () => (listings ??= createWorktreeListingMocks()) }
 })
 
 class FakeWebSocket extends EventEmitter {
@@ -127,7 +149,7 @@ describe('OrcaRuntimeRpcServer', () => {
     // A consuming check now requires a live pane; these transport tests only need it to block.
     vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) => `tab_${handle}:leaf`)
     seedSupervisedAskWorkers(db, ['term_w0', 'term_w1', 'term_w2'])
-    // Why: cap 4 → ask sub-cap 2, so the third ask must be shed while waits keep the other half.
+    // Cap 4 reserves half for waits; shed the third ask.
     const server = new OrcaRuntimeRpcServer({
       runtime,
       methods: [...ORCHESTRATION_CHECK_METHODS, ...ORCHESTRATION_ASK_METHODS],
@@ -136,7 +158,7 @@ describe('OrcaRuntimeRpcServer', () => {
       longPollCap: 4
     })
     server['deviceRegistry'] = new DeviceRegistry(userDataPath)
-    // Why: 'runtime' scope, not 'mobile' — orchestration.ask is absent from the mobile allowlist.
+    // Use runtime scope because mobile does not allow orchestration.ask.
     const entry = server['deviceRegistry']!.addDevice('runtime-test', 'runtime')
     const ws = new FakeWebSocket()
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the server reads only these wiring members in this test.
@@ -168,7 +190,7 @@ describe('OrcaRuntimeRpcServer', () => {
           timeoutMs: 10_000
         })
       )
-      // Why: gate on the pre-existing total so a missing sub-cap fails on the shed below, not here.
+      // Fill existing total first so missing ask sub-cap fails at the shed assertion.
       await waitFor(() => server['activeLongPolls'] === 2)
 
       await dispatch('req_ask_overflow', 'orchestration.ask', {

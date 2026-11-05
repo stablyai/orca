@@ -1,23 +1,32 @@
-import { OrcaRuntimeWithCreateManagedWorktree } from './workspace-creation'
+import { OrcaRuntimeWithCreateManagedWorktree } from './creation/workspace-creation'
 import type { LocalGitExecOptions } from '../../git/repo-default-base-ref'
 import type { CreateWorktreeResult } from '../../../shared/worktree/create-types'
-import type { RemoteFetchResult, RemoteTrackingBase } from '../runtime-remote-fetch-controller'
+import type {
+  RemoteFetchResult,
+  RemoteTrackingBase
+} from '../repositories/runtime-remote-fetch-controller'
 import type { WorktreeBaseStatusEvent } from '../../../shared/worktree/base-ref-drift-types'
-import { probeRuntimeWorktreeDrift } from '../runtime-worktree-drift-probe'
+import { probeRuntimeWorktreeDrift } from './metadata/runtime-worktree-drift-probe'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import type { GitHubPrStartPoint, GitPushTarget } from '../../../shared/worktree/types'
 import {
   persistRuntimeManagedWorktreeSortOrder,
   updateRuntimeManagedWorktreeMetadata
-} from '../runtime-managed-worktree-metadata'
-import { resolveRuntimeGitHubWorktreeBase } from '../runtime-github-worktree-base'
-import { resolveRuntimeGitLabWorktreeBase } from '../runtime-gitlab-worktree-base'
-import { listWorktreesStrict } from '../../git/worktree-listing'
+} from './metadata/runtime-managed-worktree-metadata'
+import {
+  resolveRuntimeGitHubWorktreeBase,
+  type RuntimeGitHubWorktreeBaseArgs
+} from '../integrations/github/runtime-github-worktree-base'
+import {
+  resolveRuntimeGitLabWorktreeBase,
+  type RuntimeGitLabWorktreeBaseArgs
+} from '../integrations/gitlab/runtime-gitlab-worktree-base'
+import { listWorktreesStrict } from '../../git/worktrees/catalog/worktree-listing'
 import {
   adoptRuntimeProvisionedRoot,
   readLocalSparseCheckoutEnabled,
   type RuntimeProvisionedRootRequest
-} from '../runtime-provisioned-root-adoption'
+} from './creation/runtime-provisioned-root-adoption'
 
 export abstract class OrcaRuntimeWithCreateManagedRemoteWorktree extends OrcaRuntimeWithCreateManagedWorktree {
   async getCanonicalFetchKey(
@@ -93,12 +102,7 @@ export abstract class OrcaRuntimeWithCreateManagedRemoteWorktree extends OrcaRun
     await this.worktreeBaseReconciliation.reconcile(args)
   }
 
-  /**
-   * Probe how far the worktree's HEAD is behind its tracking remote. Returns
-   * null when the probe cannot establish a signal (no default base ref, or
-   * git failure). Dispatch treats null as "unknown — proceed" (§3.1); only
-   * knowing-and-stale refuses.
-   */
+  /** Null means unknown HEAD drift and permits dispatch; only confirmed staleness refuses (§3.1). */
   async probeWorktreeDrift(worktreeSelector: string): Promise<{
     base: string
     behind: number
@@ -107,7 +111,7 @@ export abstract class OrcaRuntimeWithCreateManagedRemoteWorktree extends OrcaRun
     return probeRuntimeWorktreeDrift({
       selector: worktreeSelector,
       store: this.store ? this.requireStore() : null,
-      resolveWorktree: (selector) => this.resolveWorktreeSelector(selector),
+      resolveWorktree: (selector) => this.resolveGitWorktreeSelector(selector),
       resolveRemoteTrackingBase: (repoPath, base, options) =>
         this.resolveRemoteTrackingBase(repoPath, base, options),
       fetchRemote: (repoPath, remote, options) =>
@@ -133,7 +137,7 @@ export abstract class OrcaRuntimeWithCreateManagedRemoteWorktree extends OrcaRun
       updates,
       store: this.store,
       ports: {
-        resolveWorktree: (selector) => this.resolveWorktreeSelector(selector),
+        resolveWorktree: (selector) => this.resolveGitWorktreeSelector(selector),
         validateParent: (worktree, parent) => this.worktreeLineage.validateParent(worktree, parent),
         invalidateResolved: () => this.invalidateResolvedWorktreeCache(),
         invalidateScan: (repoId) => this.invalidateWorktreeScanCacheForRepo(repoId),
@@ -186,26 +190,18 @@ export abstract class OrcaRuntimeWithCreateManagedRemoteWorktree extends OrcaRun
     })
   }
 
-  async resolveManagedPrBase(args: {
-    repoSelector: string
-    prNumber: number
-    headRefName?: string
-    baseRefName?: string
-    isCrossRepository?: boolean
-  }): Promise<GitHubPrStartPoint | { error: string }> {
+  async resolveManagedPrBase(
+    args: RuntimeGitHubWorktreeBaseArgs
+  ): Promise<GitHubPrStartPoint | { error: string }> {
     return resolveRuntimeGitHubWorktreeBase(args, {
       store: this.store ? this.requireStore() : null,
       resolveRepo: (selector) => this.resolveRepoSelector(selector)
     })
   }
 
-  async resolveManagedMrBase(args: {
-    repoSelector: string
-    mrIid: number
-    sourceBranch?: string
-    targetBranch?: string
-    isCrossRepository?: boolean
-  }): Promise<
+  async resolveManagedMrBase(
+    args: RuntimeGitLabWorktreeBaseArgs
+  ): Promise<
     { baseBranch: string; compareBaseRef?: string; pushTarget?: GitPushTarget } | { error: string }
   > {
     return resolveRuntimeGitLabWorktreeBase(args, {

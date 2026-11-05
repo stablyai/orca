@@ -1,11 +1,13 @@
-import { useCallback, useEffect, useMemo } from 'react'
+import { resolveAutomationEditDestination } from './automation-orca-save-operations'
+import { AUTOMATION_ORPHAN_ISSUES } from '../../../../shared/automation-list-scope'
 import {
-  getRepoExecutionHostId,
-  getWorktreeExecutionHostId,
-  parseExecutionHostId,
-  toRuntimeExecutionHostId
-} from '../../../../shared/execution-host'
+  recordedAutomationRunContext,
+  isSameAutomationWorkspace
+} from './automation-recorded-target'
+import { useCallback, useEffect, useMemo } from 'react'
+import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 import { translate } from '@/i18n/i18n'
+import { automationWorktreesForRepo } from './automation-list-row-identity'
 import { getAutomationCreateRepos } from './automation-create-projects'
 import {
   automationCreateEligibleProjects,
@@ -57,6 +59,7 @@ export function useAutomationsPageDestinationForm({
     editingHostStableKey,
     setEditingHostStableKey,
     setEditingDestination,
+    setTargetEdited,
     setDraft,
     draft,
     draftRef
@@ -66,6 +69,7 @@ export function useAutomationsPageDestinationForm({
   const editingRow = editingRowKey
     ? (visibleRows.find((row) => row.key === editingRowKey) ?? null)
     : null
+  const captured = capturedAutomationOwner(capturedAutomationOwners, editingRowKey)
   const editingRowCapturedOwner: AutomationCapturedOwner['owner'] = capturedAutomationOwner(
     capturedAutomationOwners,
     editingRowKey
@@ -73,6 +77,9 @@ export function useAutomationsPageDestinationForm({
   const automationDialogTarget: AutomationHostTarget = (() => {
     if (editingAutomationId === null) {
       return getAutomationListTarget(settings)
+    }
+    if (captured.authority) {
+      return getAutomationAuthorityTarget(captured.authority)
     }
     if (editingRow && !editingRowCapturedOwner) {
       return getAutomationOwnerTarget(editingRow.automation, automationHostTarget)
@@ -94,6 +101,18 @@ export function useAutomationsPageDestinationForm({
       ? editHostEntries.find((entry) => entry.stableKey === editingHostStableKey)
       : null
   )
+  const recordedAutomation =
+    captured.selector?.kind === 'orphan' &&
+    captured.selector.issue === AUTOMATION_ORPHAN_ISSUES.hostReselection &&
+    editingRow?.automation.runContext
+      ? editingRow.automation
+      : null
+  const recordedTargetSelected = !!(
+    recordedAutomation &&
+    isSameAutomationWorkspace(recordedAutomation, draft) &&
+    editHostResolution.status === 'ready' &&
+    recordedAutomationRunContext(recordedAutomation, captured, editHostResolution)
+  )
   const editHostProjects =
     editHostResolution.status === 'ready'
       ? automationCreateEligibleProjects(
@@ -110,6 +129,27 @@ export function useAutomationsPageDestinationForm({
     automationAuthorityCatalogKey(editHostResolution.authority) !== dialogAuthorityKey
       ? editHostResolution.entry
       : null
+  const editSaveDestination = resolveAutomationEditDestination({
+    currentAutomation: editingRow?.automation ?? null,
+    editingAutomationId,
+    editingDestination: local.editingDestination,
+    draft,
+    targetEdited: local.targetEdited,
+    rowKey: editingRowKey,
+    automationDialogTarget,
+    editHostEntries,
+    rowRecoveryHost: base.rowRecoveryHost
+  })
+  const editorSaveAuthority =
+    editingAutomationId === null
+      ? base.createDestination.control.resolution.status === 'ready'
+        ? base.createDestination.control.resolution.authority
+        : undefined
+      : local.targetEdited
+        ? editSaveDestination.ok && editHostResolution.status === 'ready'
+          ? editHostResolution.authority
+          : undefined
+        : (captured.authority ?? base.automationDispatchContext.authority)
   const editDestinationRuntimeEnvironmentId =
     editHostResolution.status === 'ready' && editHostResolution.authority.kind === 'runtime'
       ? editHostResolution.authority.environmentId
@@ -121,18 +161,28 @@ export function useAutomationsPageDestinationForm({
   }, [editDestinationRuntimeEnvironmentId, fetchRuntimeEnvironmentRepos])
 
   const handleEditHostChange = (stableKey: string): void => {
+    setTargetEdited(true)
     setEditingHostStableKey(stableKey)
     const resolved = resolveAutomationCreateDestination(
       editHostEntries.find((entry) => entry.stableKey === stableKey)
     )
     const projectId = draftRef.current.projectId
     if (
+      recordedAutomation &&
+      isSameAutomationWorkspace(recordedAutomation, draftRef.current) &&
+      resolved.status === 'ready' &&
+      recordedAutomationRunContext(recordedAutomation, captured, resolved)
+    ) {
+      setEditingDestination({ projectId, destination: resolved })
+      return
+    }
+    if (
       projectId &&
       resolved.status === 'ready' &&
       !automationCreateProjectMismatch(repoTables, resolved, projectId)
     ) {
       setEditingDestination({ projectId, destination: resolved })
-      if (editingHostStableKey !== stableKey) {
+      if (editingHostStableKey !== null && editingHostStableKey !== stableKey) {
         setDraft((current) => ({ ...current, workspaceId: '', baseBranch: '' }))
         if (resolved.authority.kind === 'runtime') {
           void fetchWorktrees(projectId, {
@@ -150,6 +200,10 @@ export function useAutomationsPageDestinationForm({
     resolution: editHostResolution,
     onSelect: handleEditHostChange,
     projects: editHostProjects,
+    recordedProject:
+      recordedAutomation && (!editingHostStableKey || recordedTargetSelected)
+        ? { id: recordedAutomation.projectId, label: recordedAutomation.runContext!.path }
+        : undefined,
     moveWarning: editMoveTargetEntry
       ? translate(
           'auto.components.automations.createDestination.move',
@@ -159,8 +213,7 @@ export function useAutomationsPageDestinationForm({
   }
   const dialogRepos = editingAutomationId !== null ? editHostProjects : editorProjects
 
-  // A destination change can strand the chosen project on another host; clear
-  // it so the draft/default-target effect can select a project the host owns.
+  // Clear projects stranded by destination changes so defaults can select one the chosen host owns.
   useEffect(() => {
     if (!createOpen || editingAutomationId !== null) {
       return
@@ -175,21 +228,8 @@ export function useAutomationsPageDestinationForm({
   const dialogWorktrees = useMemo(() => {
     const candidates = worktreesByRepo[draft.projectId] ?? []
     const project = dialogRepos.find((repo) => repo.id === draft.projectId)
-    if (!project) {
-      return candidates
-    }
-    const hostId = getRepoExecutionHostId(project)
-    const parsedHost = parseExecutionHostId(hostId)
-    return candidates.filter((worktree) => {
-      if (getWorktreeExecutionHostId(worktree, project) === hostId) {
-        return true
-      }
-      return (
-        parsedHost?.kind === 'runtime' &&
-        worktree.runtimeOwnerEnvironmentId === parsedHost.environmentId
-      )
-    })
-  }, [dialogRepos, draft.projectId, worktreesByRepo])
+    return project ? automationWorktreesForRepo(candidates, project, repos) : []
+  }, [dialogRepos, draft.projectId, repos, worktreesByRepo])
   const destinationForProject = useCallback(
     (projectId: string, hostStableKey?: string | null): AutomationCreateDestination | null => {
       const selectedEntry = hostStableKey
@@ -198,7 +238,9 @@ export function useAutomationsPageDestinationForm({
       if (hostStableKey) {
         const selected = resolveAutomationCreateDestination(selectedEntry)
         return selected.status === 'ready' &&
-          !automationCreateProjectMismatch(repoTables, selected, projectId)
+          (!automationCreateProjectMismatch(repoTables, selected, projectId) ||
+            (recordedAutomation?.projectId === projectId &&
+              !!recordedAutomationRunContext(recordedAutomation, captured, selected)))
           ? selected
           : null
       }
@@ -217,11 +259,13 @@ export function useAutomationsPageDestinationForm({
       const resolved = resolveAutomationCreateDestination(entry)
       return resolved.status === 'ready' ? resolved : null
     },
-    [hostCatalog.entries, projectHostSetups, repoTables, repos]
+    [hostCatalog.entries, projectHostSetups, repoTables, repos, recordedAutomation, captured]
   )
 
   return {
     editingRow,
+    editorSaveAuthority,
+    recordedTargetSelected,
     editingRowCapturedOwner,
     automationDialogTarget,
     dialogAuthorityRepos,

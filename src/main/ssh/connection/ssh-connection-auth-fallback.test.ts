@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi, beforeEach } from 'vitest'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { utils } from 'ssh2'
+import type * as Ssh2 from 'ssh2'
 import { clientInstances, emitSshEvent, ssh2Mock } from '../__tests__/ssh-connection-test-client'
 import { nextSshClientCreation, resetSshConnectionMocks } from './ssh-connection-test-harness'
 import {
@@ -12,9 +12,12 @@ import {
 } from './ssh-connection-test-fixtures'
 import { SshConnection } from './ssh-connection'
 import { resolveWithSshG } from '../config/ssh-g-config-resolution'
+import { loadSsh2 } from '../ssh2-module-load'
 
-vi.mock('ssh2', async () =>
-  (await import('../__tests__/ssh-connection-test-client')).createSsh2Module()
+const { utils } = loadSsh2()
+
+vi.mock('../ssh2-module-load', async () =>
+  (await import('../__tests__/ssh-connection-test-client')).createSsh2LoaderModule()
 )
 vi.mock('../system-transport/system-ssh-binary', async () =>
   (await import('./ssh-connection-test-harness')).createSystemSshBinaryModule()
@@ -125,7 +128,7 @@ describe('SshConnection', () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'orca-ssh-home-'))
     mkdirSync(join(tempDir, '.ssh'))
     // Real key bytes and parser: deferral requires the waiting key to parse as unencrypted.
-    const realSsh2 = await vi.importActual<{ utils: typeof utils }>('ssh2')
+    const realSsh2 = await vi.importActual<typeof Ssh2>('ssh2')
     const keyBytes = Buffer.from(realSsh2.utils.generateKeyPairSync('ecdsa', { bits: 256 }).private)
     writeFileSync(join(tempDir, '.ssh', 'id_ed25519'), keyBytes)
     vi.mocked(utils.parseKey).mockImplementation(realSsh2.utils.parseKey)
@@ -140,8 +143,7 @@ describe('SshConnection', () => {
       await conn.connect()
 
       expect(clientInstances).toHaveLength(2)
-      // The agent-first attempt defers ~/.ssh/id_ed25519, so its ladder ends at the agent:
-      // answering the host's password challenge there would preempt the key that authenticates.
+      // The deferred default key must precede the password challenge after agent failure.
       expect(
         walkInitialAuthLadder(clientInstances[0].lastConnectConfig, [
           'publickey',
@@ -168,7 +170,7 @@ describe('SshConnection', () => {
       tempDir = mkdtempSync(join(tmpdir(), 'orca-ssh-home-'))
       mkdirSync(join(tempDir, '.ssh'))
       // Real key bytes and parser: deferral requires the waiting key to parse as unencrypted.
-      const realSsh2 = await vi.importActual<{ utils: typeof utils }>('ssh2')
+      const realSsh2 = await vi.importActual<typeof Ssh2>('ssh2')
       writeFileSync(
         join(tempDir, '.ssh', 'id_ed25519'),
         realSsh2.utils.generateKeyPairSync('ecdsa', { bits: 256 }).private
@@ -199,7 +201,7 @@ describe('SshConnection', () => {
       emitSshEvent('error', new Error('All configured authentication methods failed'))
       await keyRetryCreated
       await settle()
-      // Wrapped: an async function returning the promise itself would wait for the whole connect.
+      // Wrap the promise so this async fixture does not await connection completion.
       return { connected }
     }
 

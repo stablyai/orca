@@ -5,28 +5,13 @@ import { toSshExecutionHostId, type ExecutionHostId } from '../../shared/executi
 import { hostStableKey, parseHostStableKey } from '../../shared/automation-owner-key'
 import { sanitizeSshTargetGeneration } from '../../shared/ssh-target-generation'
 
-/**
- * The automation half of SSH re-adoption (see ssh/ssh-target-readoption.ts).
- *
- * `reassignSshTargetId` re-points repos and worktrees onto the re-added target's
- * id; the same transaction must move every automation-side reference too, or the
- * workspace repairs while its automation stays orphaned on the dead id and the
- * persisted host filter keeps naming a host that no longer exists.
- *
- * The captured generation is rewritten to the re-added registration's rather
- * than left to fail closed: an identity-matched removal tombstone plus a live
- * registration is exactly the positive current-target evidence the design
- * requires, and the value is read from the stored target at migration time — so
- * it can never exceed the allocated high-water mark, and an older incarnation
- * can never be made to look current.
- */
+// Re-adopt automation references with repos, using the matched registration’s current generation.
 
 type HostContextCarrier = {
   runContext?: WorkspaceRunContext | null
   sourceContext?: TaskSourceContext | null
 }
 
-/** Mutates in place, matching how the Store edits `this.state`. */
 function migrateContextHostIds(
   record: HostContextCarrier,
   oldHostId: string,
@@ -49,17 +34,12 @@ export type AutomationSshReadoptionInput = {
   automationRuns: AutomationRun[]
   oldTargetId: string
   newTargetId: string
-  /**
-   * Records the old target owned through their folder workspace rather than their
-   * selector, collected before the workspace sweep re-points the pin. Their
-   * capture is the pin's, so re-adoption has to move it with everything else.
-   */
+  /** Collect workspace-owned records before re-pointing their pins. */
   workspacePinnedAutomationIds?: ReadonlySet<string>
-  /** The re-added target's current registration generation, read from stored state. */
   newTargetGeneration: number | undefined
 }
 
-/** Why: a re-added target with no generation yet must not leave a foreign capture behind — drop it so load-time migration stamps it. */
+/** Drop an unknown generation so load-time migration can stamp the new registration. */
 function rewriteCapturedGeneration(automation: Automation, generation: number | undefined): void {
   if (generation === undefined) {
     delete automation.executionTargetGeneration
@@ -68,7 +48,6 @@ function rewriteCapturedGeneration(automation: Automation, generation: number | 
   }
 }
 
-/** Re-point stored automations and their run history onto the re-added target. */
 export function migrateAutomationsForSshReadoption(input: AutomationSshReadoptionInput): boolean {
   const oldHostId = toSshExecutionHostId(input.oldTargetId)
   const newHostId = toSshExecutionHostId(input.newTargetId)
@@ -101,7 +80,6 @@ export function migrateAutomationsForSshReadoption(input: AutomationSshReadoptio
   return changed
 }
 
-/** Follow the re-adopted id in the persisted Automations host filter. */
 export function migrateAutomationHostFilterSshTargetId(
   ui: PersistedUIState,
   oldTargetId: string,
@@ -112,7 +90,7 @@ export function migrateAutomationHostFilterSshTargetId(
     return false
   }
   const host = parseHostStableKey(filter.hostKey)
-  // Why: a target id is unique only inside one authority, so a runtime's identical id is a different host.
+  // Target IDs are unique only within an authority.
   if (
     host?.authority.kind !== 'desktop' ||
     host.selector.kind !== 'ssh' ||

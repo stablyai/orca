@@ -1,67 +1,49 @@
-// An earlier build kept queued cards in their own table. They move into the chat's journal: the
-// queue reads each the same before and after, each action moves only its own card, and the bulk
-// import runs once per open, all-or-nothing, until no readable legacy row is left.
-
-import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
-import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
+import {
+  readTestQueueChanges,
+  appendTestJournalQueueRow
+} from '../agent-session-journal/journal-host-database-test-support'
+import { randomUUID } from 'node:crypto'
+import { mkdir, writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
+import { agentSessionAttachmentStoreRoot } from '../agent-session-attachments/agent-session-attachment-references'
+import { markUnclaimedUploadForSweep } from '../agent-session-attachments/agent-session-attachment-claims'
+import type { AgentSessionExecutionOptions } from '../../../shared/agent-session/options/agent-session-execution-options'
+import { readCodexHistoryJournalView } from '../../codex/history/journal-views/codex-history-journal-view'
+import { catchUpCodexThread } from '../../codex/structured/threads/codex-structured-thread-catch-up'
+import { createDeferredStructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
+import { testEventSinkLogging } from './structured-agent-session-logger-test-support'
+import { expect, it, vi } from 'vitest'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalMessageItem
-} from '../../../shared/agent-session-journal-types'
-import { activeProviderContext } from '../../../shared/agent-session-provider-context'
-import { projectStructuredAgentSessionMessages } from '../../../shared/structured-agent-session-message-projection'
-import { structuredAgentSessionCommandTurnIdentity } from '../../../shared/structured-agent-session-command-turn-identity'
-import { agentSessionSendBodyFingerprint } from '../../../shared/structured-agent-session-send-mutation'
-import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
-import { AgentSessionJournal } from '../agent-session-journal/journal-store'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { projectStructuredAgentSessionMessages } from '../../../shared/agent-session/view/structured-agent-session-message-projection'
+import { structuredAgentSessionCommandTurnIdentity } from '../../../shared/agent-session/view/structured-agent-session-command-turn-identity'
+import { readAgentSessionHistory } from './agent-session-history-page'
+import { readPublishedQueuedMessages } from './structured-agent-session-queued-publication'
+import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import { hostTestOperationId } from './structured-agent-session-host-test-data'
 import {
-  HOST_TEST_SESSION as SESSION,
-  hostTestOperationId
-} from './structured-agent-session-host-test-data'
-import {
-  createQueuedMessageTestRig,
   eventually,
-  QUEUED_RIG_CALLER as CALLER,
-  type QueuedMessageTestRig
+  QUEUED_RIG_CALLER as CALLER
 } from './structured-agent-session-queued-message-rig.test-fixture'
-
-let rig: QueuedMessageTestRig
-
-beforeEach(async () => {
-  rig = await createQueuedMessageTestRig({ restartable: true, rewind: async () => ({ ok: true }) })
-})
-
-afterEach(() => rig.dispose())
-
-const db = () => openTestJournalHostDatabase(rig.root).db
-const message = (text: string): AgentJournalMessageItem => ({
-  kind: 'message',
-  role: 'user',
-  blocks: [{ type: 'text', text }],
-  ...(text === '/compact' ? { command: { name: 'compact' } } : {})
-})
-const words = (fact: 'providerRejected' | 'cancelled') =>
-  agentSessionFailureWords(
-    fact === 'providerRejected'
-      ? agentSessionFailureFact(fact, { detail: { text: 'refused', audience: 'person' } })
-      : agentSessionFailureFact(fact),
-    { surface: 'rejection' }
-  )
-
-function journalFor(sessionId: string): AgentSessionJournal {
-  return new AgentSessionJournal({
-    database: openTestJournalHostDatabase(rig.root),
-    identity: {
-      sessionId,
-      workspaceId: 'workspace-1',
-      hostId: 'local',
-      agent: 'codex',
-      providerHandle: activeProviderContext(rig.store.getRecord(SESSION)!).head!.handle
-    }
-  })
-}
+import {
+  SESSION,
+  rig,
+  db,
+  message,
+  words,
+  journalFor,
+  historicalJournalFor,
+  seedLegacy,
+  legacyIds
+} from './structured-agent-session-queued-legacy-import.test-fixture'
+import { agentSessionSendBodyFingerprint } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
+import * as fixture from './structured-agent-session-queued-legacy-import.test-fixture'
+// An earlier build kept queued cards in their own table. They move into the chat's journal: the
+// queue reads each the same before and after, each action moves only its own card, and the bulk
+// import runs once per open, all-or-nothing, until no readable legacy row is left.
 
 /** An earlier build's hand-off of `card`, answered `as`. */
 async function handOff(
@@ -70,9 +52,11 @@ async function handOff(
   card: string,
   text: string,
   as: 'providerRejected' | 'cancelled' | 'accepted',
-  fence = 0
+  fence = 0,
+  answered = false,
+  full?: { body: AgentJournalMessageItem; options: AgentSessionExecutionOptions }
 ): Promise<void> {
-  const body = message(text)
+  const body = full?.body ?? message(text)
   const payloadFingerprint = agentSessionSendBodyFingerprint(journal.queuedMessages.sessionId, body)
   await journal.appendSubmission({
     clientMessageId: attempt,
@@ -80,7 +64,9 @@ async function handOff(
     body,
     fence,
     handoverRecorded: true,
-    queuedMessageId: card
+    queuedMessageId: card,
+    ...(answered ? { origin: 'client' as const } : {}),
+    ...(full ? { options: full.options } : {})
   })
   await journal.resolveDispatch({
     clientMessageId: attempt,
@@ -91,44 +77,36 @@ async function handOff(
   await journal.resolveDispatch(
     as === 'accepted'
       ? { clientMessageId: attempt, state: 'accepted', providerIdentity: null, fence }
-      : { clientMessageId: attempt, state: 'rejected', ...words(as), fence }
+      : {
+          clientMessageId: attempt,
+          state: 'rejected',
+          ...words(as),
+          fence,
+          ...(answered
+            ? {
+                answeredInTurn: {
+                  turn: {
+                    provider: 'legacy' as const,
+                    agent: 'codex',
+                    sessionId: 'thread',
+                    recordId: 'ended'
+                  },
+                  via: 'start' as const
+                }
+              }
+            : {})
+        }
   )
 }
-
-type Legacy = [id: string, state: string, text: string | null, consumedAs?: string, hold?: string]
-
-function seedLegacy(sessionId: string, rows: readonly Legacy[]): void {
-  const insert = db().prepare(
-    `INSERT INTO queued_messages (session_id, message_id, position, body_json, fingerprint,
-       created_at, host_instance, state, hold_reason, returned_reason, consumed_as)
-     VALUES (?, ?, ?, ?, ?, 0, 'earlier', ?, ?, ?, ?)`
-  )
-  rows.forEach(([id, state, text, consumedAs, hold], index) => {
-    const body = text === null ? '{' : JSON.stringify(message(text))
-    const print = text === null ? '' : agentSessionSendBodyFingerprint(sessionId, message(text))
-    const reason = state === 'returned' ? 'refused before' : null
-    insert.run(
-      sessionId,
-      id,
-      index + 1,
-      body,
-      print,
-      state,
-      hold ?? null,
-      reason,
-      consumedAs ?? null
-    )
-  })
-}
-
-const legacyIds = (sessionId = SESSION) =>
-  db()
-    .prepare('SELECT message_id AS id FROM queued_messages WHERE session_id = ? ORDER BY position')
-    .all(sessionId)
-    .map((row) => (typeof row === 'object' && row !== null && 'id' in row ? row.id : null))
 
 /** Each queue row on disk: its card, op and whether it saved a refusal. */
 function queueRows(sessionId = SESSION): string[] {
+  const outcomes = readTestQueueChanges(db(), sessionId)
+  if (outcomes.length) {
+    return outcomes.map(
+      ({ messageId, op, returned }) => `${messageId}:${op}${returned ? '+refusal' : ''}`
+    )
+  }
   return db()
     .prepare('SELECT row_json FROM journal_rows WHERE session_id = ? ORDER BY seq')
     .all(sessionId)
@@ -148,7 +126,8 @@ function queueRows(sessionId = SESSION): string[] {
 }
 
 async function nothingSentTo(...cards: string[]): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, 100))
+  await rig.host.collaboratorsForTests().serialize(SESSION, async () => {})
+  await rig.host.flushStreamedEvents(SESSION)
   for (const card of cards) {
     expect(await rig.handoff(card)).toBeUndefined()
   }
@@ -200,14 +179,14 @@ it("moves an earlier build's cards into the journal, each action its own card, t
     { messageId: 'edited', state: 'waiting' },
     { messageId: 'held', state: 'waiting', paused: true }
   ]
-  expect(await rig.drafts()).toEqual(published)
+  expect(await fixture.rig.drafts()).toEqual(published)
   const stopped = async () => {
-    const { items, submissions } = await rig.host.journalSnapshot(SESSION)
+    const { items, submissions } = await fixture.rig.host.journalSnapshot(SESSION)
     return projectStructuredAgentSessionMessages(items, [], submissions).find(
       (entry) => entry.id === agentJournalSubmissionKey('att-stopped')
     )
   }
-  const live = rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal
+  const live = fixture.rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal
   const rawStopped = structuredClone(live.submission('att-stopped'))
   const displayedStopped = await stopped()
   expect(displayedStopped).toMatchObject({
@@ -227,15 +206,17 @@ it("moves an earlier build's cards into the journal, each action its own card, t
 
   // Delete and Send each move only their own card, in the action's transaction.
   const deletion = hostTestOperationId()
-  expect(await rig.deleteQueued('ret-present', deletion)).toMatchObject({
+  expect(await fixture.rig.deleteQueued('ret-present', deletion)).toMatchObject({
     value: { deleted: true }
   })
-  const sent = await rig.sendNow('ret-gone')
+  const sent = await fixture.rig.sendNow('ret-gone')
   expect(sent).toMatchObject({ ok: true, value: { submission: { queuedMessageId: 'ret-gone' } } })
+  // Saved cards are whole values: an import stores each card as it reads, refused or not.
   expect(queueRows()).toEqual([
-    'ret-present:queued',
+    'ret-present:queued+refusal',
     'ret-present:withdrawn',
-    'ret-gone:queued+refusal'
+    'ret-gone:queued+refusal',
+    'ret-gone:dispatched'
   ])
   expect(legacyIds()).toEqual(all.filter((id) => id !== 'ret-present' && id !== 'ret-gone'))
   // The returned cards ahead still hold the queue.
@@ -243,12 +224,13 @@ it("moves an earlier build's cards into the journal, each action its own card, t
 
   // The next open moves the rest in one transaction: answered cards write nothing, and a refusal
   // is written only where its hand-off is not in this epoch.
+  await rig.settleAccepted(await rig.handoffId('ret-gone'), 'received-returned-card')
   await rig.restartHostProcess()
   expect(await rig.drafts()).toEqual(published.slice(2))
   expect(legacyIds()).toEqual(['broken'])
-  expect(queueRows().slice(3)).toEqual([
+  expect(queueRows().slice(4)).toEqual([
     'cmd-gone:queued+refusal',
-    'disp-refused:queued',
+    'disp-refused:queued+refusal',
     'stopped-same:queued',
     'stopped-edited:queued',
     'orphan:queued',
@@ -264,30 +246,32 @@ it("moves an earlier build's cards into the journal, each action its own card, t
     structuredAgentSessionCommandTurnIdentity('att-cmd'),
     { kind: 'status', text: 'Compact failed' },
     {
-      fence: rig.store.getRecord(SESSION)!.lease.runtimeFence,
+      fence: fixture.rig.store.getRecord(SESSION)!.lease.runtimeFence,
       turnScope: AGENT_JOURNAL_THREAD_SCOPE
     }
   )
-  expect(await rig.drafts()).toEqual(published.slice(3))
-  expect(await rig.deleteQueued('disp-refused')).toMatchObject({ value: { deleted: true } })
-  await rig.resume()
-  await eventually(async () => expect(await rig.handoff('edited')).toBeDefined())
+  expect(await fixture.rig.drafts()).toEqual(published.slice(3))
+  expect(await fixture.rig.deleteQueued('disp-refused')).toMatchObject({ value: { deleted: true } })
+  await fixture.rig.resume()
+  await eventually(async () => expect(await fixture.rig.handoff('edited')).toBeDefined())
   await nothingSentTo('held')
   expect((await rig.handoff('stopped-edited'))?.clientMessageId).toBe('att-edited')
   // Edited since, it waits for its own Send.
   expect(await rig.sendNow('stopped-edited')).toMatchObject({ ok: true })
   const resent = await rig.handoffId('stopped-edited')
   expect(resent).not.toBe('att-edited')
-  await rig.settleAccepted(resent, 'resent')
+  await fixture.rig.settleAccepted(resent, 'resent')
 
+  // Finish the automatic handoff too, so this reopen isolates import idempotence.
+  await rig.settleAccepted(await rig.handoffId('edited'), 'received-edited-card')
   // A third open finds nothing to move, and an old Delete still answers from its receipt.
   const rows = queueRows()
-  await rig.restartHostProcess()
-  await rig.drafts()
+  await fixture.rig.restartHostProcess()
+  await fixture.rig.drafts()
   expect(queueRows()).toEqual(rows)
   expect(await stopped()).toEqual(displayedStopped)
   expect(legacyIds()).toEqual(['broken'])
-  expect(await rig.deleteQueued('ret-present', deletion)).toMatchObject({
+  expect(await fixture.rig.deleteQueued('ret-present', deletion)).toMatchObject({
     replayed: true,
     value: { deleted: true }
   })
@@ -309,7 +293,7 @@ it("moves an earlier build's cards into the journal, each action its own card, t
   await reopened.close()
 })
 
-it('a rewind while the import has failed moves the legacy cards first: a refused one stays returned', async () => {
+it('a rewind while import fails preserves canonical refusals and leaves legacy cleanup optional', async () => {
   // Made before the clear, which leaves the chat no provider handle to read.
   const earlier = journalFor(SESSION)
   const clear = { command: 'clear' as const }
@@ -361,8 +345,451 @@ it('a rewind while the import has failed moves the legacy cards first: a refused
     })
   ).toMatchObject({ ok: true })
   expect(live.epoch).toBe(rewound.expectedEpoch)
-  expect(live.submission('att-refused')).toBeUndefined()
+  expect(live.submission('att-refused')?.dispatchState).toBe('rejected')
   expect(await rig.drafts()).toEqual(held)
   await nothingSentTo('edited')
-  expect(legacyIds()).toEqual([])
+  expect(legacyIds()).toEqual(['disp-refused', 'edited'])
 })
+
+it.each([false, true])(
+  'keeps legacy effective actions and exact proof durable while cleanup fails=%s',
+  async (failed) => {
+    const session = `legacy-action-${failed}`
+    let journal = historicalJournalFor(session)
+    await journal.open()
+    const ids = ['proof', 'deleted', 'edited', 'sent']
+    for (const id of ids) {
+      await handOff(journal, `U-${id}`, `Q-${id}`, id, 'cancelled', 0, true)
+      expect(journal.queuedMessages.get(`recovery:U-${id}`)).toBeNull()
+      appendTestJournalQueueRow(db(), journal, `recovery:U-${id}`, {
+        op: 'queued',
+        body: message(id),
+        recovers: `U-${id}`,
+        position: 0,
+        queuedAt: journal.cursor(),
+        returned: { reason: 'prior-build uncertainty', rejection: { kind: 'unconfirmed' } }
+      })
+    }
+    await journal.close()
+    seedLegacy(
+      session,
+      ids.map((id) => [`Q-${id}`, 'waiting', id])
+    )
+    if (failed) {
+      db().exec(
+        `CREATE TEMP TRIGGER fail_import BEFORE DELETE ON queued_messages BEGIN SELECT RAISE(ABORT, 'cleanup unavailable'); END`
+      )
+    }
+    const warned = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const open = async () => {
+      journal = journalFor(session)
+      await journal.open()
+      journal.queuedMessages.inputWork = () => ({
+        allowsObservation: () => true,
+        owesSend: () => false,
+        generationEnded: () => true
+      })
+    }
+    await open()
+    for (const id of ids) {
+      expect(journal.submission(`U-${id}`)?.dispatchState).toBe('unknown')
+      expect(journal.queuedMessages.get(`recovery:U-${id}`)).toMatchObject({
+        state: 'waiting',
+        holdReason: 'delivery_unconfirmed'
+      })
+    }
+    if (failed) {
+      db().exec(
+        `CREATE TEMP TRIGGER fail_action BEFORE INSERT ON journal_outcomes BEGIN SELECT RAISE(ABORT, 'action unavailable'); END`
+      )
+      await expect(journal.queuedMessages.withdraw(['recovery:U-deleted'])).rejects.toThrow(
+        'action unavailable'
+      )
+      expect(journal.queuedMessages.get('recovery:U-deleted')?.state).toBe('waiting')
+      expect(legacyIds(session)).toHaveLength(4)
+      db().exec('DROP TRIGGER fail_action')
+    }
+    await journal.acceptLate({
+      clientMessageId: 'U-proof',
+      state: 'accepted',
+      fence: 0,
+      providerIdentity: { provider: 'codex', threadId: 'thread', turnId: 'late', ordinal: 0 }
+    })
+    await journal.queuedMessages.withdraw(['recovery:U-deleted'])
+    const edit = journal.queuedMessages.get('recovery:U-edited')!
+    expect(
+      await journal.queuedMessages.update({
+        messageId: edit.messageId,
+        expectedBodyFingerprint: edit.fingerprint,
+        text: 'changed'
+      })
+    ).toMatchObject({ status: 'updated' })
+    const send = journal.queuedMessages.get('recovery:U-sent')!
+    await journal.appendSubmission(
+      {
+        clientMessageId: 'V',
+        body: send.body,
+        payloadFingerprint: send.fingerprint,
+        fence: 0,
+        origin: 'client',
+        handoverRecorded: true
+      },
+      { messageId: send.messageId, expect: 'waiting' }
+    )
+    if (failed) {
+      expect(legacyIds(session)).toHaveLength(4)
+    }
+    await journal.replaceEpochItems('handle_forked', 0, [])
+    await journal.close()
+    await open()
+    expect(journal.submission('U-proof')?.dispatchState).toBe('accepted')
+    expect(journal.queuedMessages.get('recovery:U-proof')).toMatchObject({
+      state: 'waiting',
+      holdReason: 'delivery_unconfirmed',
+      body: message('proof')
+    })
+    expect(journal.queuedMessages.get('recovery:U-deleted')?.state).toBe('withdrawn')
+    expect(journal.queuedMessages.get('recovery:U-edited')).toMatchObject({
+      state: 'waiting',
+      body: message('changed')
+    })
+    expect(journal.queuedMessages.get('recovery:U-sent')).toMatchObject({
+      state: 'dispatched',
+      consumedAs: 'V'
+    })
+    expect(
+      journal.queuedMessages
+        .list()
+        .filter((card) => card.messageId.startsWith('Q-'))
+        .every((card) => card.state === 'dispatched')
+    ).toBe(true)
+    expect(journal.submission('V')?.dispatchState).toBe('pending')
+    if (failed) {
+      expect(legacyIds(session)).toHaveLength(4)
+      db().exec('DROP TRIGGER fail_import')
+    }
+    warned.mockRestore()
+    await journal.close()
+  }
+)
+
+it.each(['proof', 'withdraw'] as const)(
+  'protects the legacy witness upload through %s while cleanup fails',
+  async (action) => {
+    const session = `witness-upload-${action}`
+    const upload = randomUUID()
+    const directory = join(agentSessionAttachmentStoreRoot(rig.root), upload)
+    await mkdir(directory, { recursive: true })
+    const path = join(directory, 'original.png')
+    await writeFile(path, 'stored image')
+    const body: AgentJournalMessageItem = {
+      ...message('original'),
+      blocks: [
+        { type: 'text', text: 'original' },
+        { type: 'image-ref', path }
+      ]
+    }
+    let journal = historicalJournalFor(session)
+    await journal.open()
+    await handOff(journal, 'U', 'Q', 'original', 'cancelled', 0, true, { body, options: {} })
+    if (action === 'withdraw') {
+      appendTestJournalQueueRow(db(), journal, 'recovery:U', {
+        op: 'queued',
+        body,
+        recovers: 'U',
+        position: 0,
+        queuedAt: journal.cursor(),
+        returned: { reason: 'prior-build uncertainty', rejection: { kind: 'unconfirmed' } }
+      })
+    }
+    await journal.close()
+    seedLegacy(session, [['Q', 'waiting', 'original']])
+    db()
+      .prepare('UPDATE queued_messages SET body_json = ?, fingerprint = ? WHERE session_id = ?')
+      .run(JSON.stringify(body), agentSessionSendBodyFingerprint(session, body), session)
+    db().prepare('DELETE FROM agent_session_attachment_claims WHERE session_id = ?').run(session)
+    db().exec(`CREATE TEMP TRIGGER fail_witness_cleanup BEFORE DELETE ON queued_messages
+      BEGIN SELECT RAISE(ABORT, 'cleanup unavailable'); END`)
+    const warned = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    journal = journalFor(session)
+    await journal.open()
+    const goal = { provider: 'orca' as const, clientMessageId: 'live-goal' }
+    await journal.appendClaimingAttachments(
+      goal,
+      { ...body, sentAs: 'goal' },
+      {
+        fence: 0,
+        turnScope: AGENT_JOURNAL_THREAD_SCOPE
+      }
+    )
+    if (action === 'proof') {
+      await journal.acceptLate({
+        clientMessageId: 'U',
+        state: 'accepted',
+        fence: 0,
+        providerIdentity: {
+          provider: 'codex',
+          threadId: 'thread',
+          turnId: 'late-upload',
+          ordinal: 0
+        }
+      })
+    } else {
+      await journal.queuedMessages.withdraw(['recovery:U'])
+      expect(journal.queuedMessages.get('recovery:U')?.state).toBe('withdrawn')
+    }
+    await journal.withdrawGoalObjective(goal, { fence: 0 })
+    expect(journal.queuedMessages.get('Q')?.state).toBe('dispatched')
+    expect(legacyIds(session)).toEqual(['Q'])
+    expect(
+      db()
+        .prepare('SELECT upload_id FROM agent_session_attachment_claims WHERE session_id = ?')
+        .all(session)
+    ).toEqual([{ upload_id: upload }])
+    expect(markUnclaimedUploadForSweep(db(), upload, 1)).toBe(false)
+    await journal.close()
+    journal = journalFor(session)
+    await journal.open()
+    expect(journal.queuedMessages.get('Q')?.state).toBe('dispatched')
+    if (action === 'proof') {
+      expect(journal.submission('U')?.dispatchState).toBe('accepted')
+    } else {
+      expect(journal.queuedMessages.get('recovery:U')?.state).toBe('withdrawn')
+    }
+    await journal.close()
+    db().exec('DROP TRIGGER fail_witness_cleanup')
+    warned.mockRestore()
+  }
+)
+
+it.each([false, true])(
+  'keeps edited prior-build intent independent from original proof with failed cleanup=%s',
+  async (failed) => {
+    const session = `edited-legacy-${failed}`
+    let journal = journalFor(session)
+    await journal.open()
+    const original = {
+      body: {
+        ...message('original'),
+        blocks: [
+          { type: 'text' as const, text: 'original' },
+          { type: 'image-ref' as const, path: '/qa/original.png' }
+        ]
+      },
+      options: { model: 'before-edit-model', effort: 'medium' }
+    }
+    for (const id of ['proof', 'edited', 'deleted', 'sent']) {
+      await handOff(journal, `U-${id}`, `Q-${id}`, 'original', 'cancelled', 0, true, original)
+      await handOff(
+        journal,
+        `V-${id}`,
+        `Q-${id}`,
+        'previous independent edit',
+        id === 'deleted' ? 'providerRejected' : id === 'edited' ? 'accepted' : 'cancelled',
+        0,
+        true
+      )
+    }
+    await handOff(journal, 'refusal', 'refused', 'original', 'providerRejected', 0, true)
+    await journal.close()
+    seedLegacy(
+      session,
+      ['proof', 'edited', 'deleted', 'sent'].map((id) => [`Q-${id}`, 'waiting', 'independent edit'])
+    )
+    const editedBody: AgentJournalMessageItem = {
+      ...message('independent edit'),
+      blocks: [
+        { type: 'text', text: 'independent edit' },
+        { type: 'image-ref', path: '/qa/prior-image.png' }
+      ]
+    }
+    const options = { model: 'original-model', effort: 'high' }
+    db()
+      .prepare(
+        'UPDATE queued_messages SET body_json = ?, fingerprint = ?, options_json = ? WHERE session_id = ?'
+      )
+      .run(
+        JSON.stringify(editedBody),
+        agentSessionSendBodyFingerprint(session, editedBody),
+        JSON.stringify(options),
+        session
+      )
+    if (failed) {
+      db().exec(
+        `CREATE TEMP TRIGGER fail_edited_cleanup BEFORE DELETE ON queued_messages BEGIN SELECT RAISE(ABORT, 'cleanup unavailable'); END`
+      )
+    }
+    const warned = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const open = async () => {
+      journal = journalFor(session)
+      await journal.open()
+      journal.queuedMessages.inputWork = () => ({
+        allowsObservation: () => true,
+        owesSend: () => false,
+        generationEnded: () => true
+      })
+    }
+    await open()
+    const independent = journal.queuedMessages.get('Q-proof')!
+    expect(
+      readPublishedQueuedMessages(journal).find((card) => card.messageId === 'Q-proof')
+    ).toMatchObject({ state: 'waiting', paused: true, body: editedBody })
+    expect(independent).toMatchObject({
+      state: 'waiting',
+      consumedAs: null,
+      recovers: 'V-proof',
+      body: editedBody,
+      options
+    })
+    expect(journal.submission('U-proof')?.dispatchState).toBe('unknown')
+    expect(
+      readCodexHistoryJournalView(journal, 'thread', AbortSignal.abort()).unresolvedIds
+    ).toContain('U-proof')
+    expect(journal.item(agentJournalSubmissionKey('U-proof'))).toBeNull()
+    expect(journal.presentationRemoved(agentJournalSubmissionKey('U-proof'))).toBe(true)
+    expect(
+      journal.queuedMessages.list().filter((card) => card.messageId.startsWith('recovery:U-'))
+    ).toEqual([])
+    const before = journal.cursor()
+    expect(
+      await journal.queuedMessages.update({
+        messageId: 'Q-proof',
+        expectedBodyFingerprint: independent.fingerprint,
+        text: 'independent edit'
+      })
+    ).toMatchObject({ status: 'unchanged' })
+    expect(journal.cursor()).toEqual(before)
+    await journal.queuedMessages.update({
+      messageId: 'Q-edited',
+      expectedBodyFingerprint: independent.fingerprint,
+      text: 'second independent edit'
+    })
+    await journal.queuedMessages.withdraw(['Q-deleted'])
+    const send = journal.queuedMessages.get('Q-sent')!
+    await journal.appendSubmission(
+      {
+        clientMessageId: 'V',
+        body: send.body,
+        payloadFingerprint: send.fingerprint,
+        fence: 0,
+        origin: 'client',
+        handoverRecorded: true,
+        options: send.options
+      },
+      { messageId: 'Q-sent', expect: 'waiting' }
+    )
+    const proof = async (id: string) =>
+      journal.acceptLate({
+        clientMessageId: id,
+        state: 'accepted',
+        fence: 0,
+        providerIdentity: { provider: 'codex', threadId: 'thread', turnId: id, ordinal: 0 }
+      })
+    const beforeProof = journal.cursor()
+    const frontier = readCodexHistoryJournalView(journal, 'thread', AbortSignal.abort()).latest
+    const sink = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
+    sink.bind({ journal, fence: 0, publish: () => {} })
+    await catchUpCodexThread({
+      connection: {
+        request: async () => {
+          throw new Error('whole source must not paginate')
+        }
+      },
+      threadId: 'thread',
+      sessionId: session,
+      sink: sink.sink,
+      paginate: false,
+      returnedTurns: [
+        {
+          id: 'hidden-U',
+          status: 'completed',
+          itemsView: 'full',
+          items: [
+            {
+              type: 'userMessage',
+              id: 'u',
+              clientId: 'U-proof',
+              content: [{ type: 'text', text: 'original' }]
+            },
+            { type: 'agentMessage', id: 'a', text: 'hidden reply must not return' }
+          ]
+        }
+      ],
+      onReceipt: (clientMessageId, providerIdentity) =>
+        journal.acceptLate({ clientMessageId, providerIdentity, state: 'accepted', fence: 0 })
+    })
+    await sink.drained()
+    sink.close()
+    expect(readCodexHistoryJournalView(journal, 'thread', AbortSignal.abort()).latest).toBe(
+      frontier
+    )
+    const forward = readAgentSessionHistory(journal, {
+      sessionId: session,
+      direction: 'after',
+      cursor: beforeProof
+    })
+    expect(
+      forward.page.items.some((item) => item.itemId === agentJournalSubmissionKey('U-proof'))
+    ).toBe(false)
+    if (forward.ok) {
+      expect(forward.page.removedItemIds).toContain(agentJournalSubmissionKey('U-proof'))
+    } else {
+      expect(forward.reset).toBe('cursor_compacted')
+    }
+    for (const id of ['proof', 'edited', 'deleted']) {
+      if (id !== 'proof') {
+        await proof(`U-${id}`)
+      }
+      expect(journal.submission(`U-${id}`)?.dispatchState).toBe('accepted')
+      expect(journal.receiptFor(`U-${id}`)).not.toBeNull()
+      expect(journal.submissionBody(`U-${id}`)).toEqual(original.body)
+      expect(journal.submission(`U-${id}`)?.options).toEqual(original.options)
+      expect(journal.item(agentJournalSubmissionKey(`U-${id}`))).toBeNull()
+      expect(journal.submission(`V-${id}`)?.dispatchState).toBe(
+        id === 'deleted' ? 'rejected' : id === 'edited' ? 'accepted' : 'unknown'
+      )
+    }
+    await proof('V-deleted')
+    expect(journal.submission('V-deleted')?.dispatchState).toBe('rejected')
+    await proof('refusal')
+    expect(journal.submission('refusal')?.dispatchState).toBe('rejected')
+    await journal.replaceEpochItems('handle_forked', 0, [])
+    await journal.close()
+    await open()
+    await proof('U-sent')
+    expect(journal.item(agentJournalSubmissionKey('U-sent'))).toBeNull()
+    expect(readCodexHistoryJournalView(journal, 'thread', AbortSignal.abort()).latest).toBe(
+      frontier
+    )
+    await journal.close()
+    await open()
+    expect(
+      journal.queuedMessages.list().some((card) => card.messageId.startsWith('recovery:U-'))
+    ).toBe(false)
+    expect(journal.queuedMessages.get('Q-proof')).toMatchObject(independent)
+    expect(journal.queuedMessages.get('Q-edited')).toMatchObject({
+      state: 'waiting',
+      body: {
+        ...editedBody,
+        blocks: [{ type: 'text', text: 'second independent edit' }, editedBody.blocks[1]]
+      },
+      options
+    })
+    expect(journal.queuedMessages.get('Q-edited')?.recovers).toBeUndefined()
+    expect(journal.queuedMessages.get('Q-deleted')?.state).toBe('withdrawn')
+    expect(journal.queuedMessages.get('Q-sent')).toMatchObject({
+      state: 'dispatched',
+      consumedAs: 'V'
+    })
+    expect(journal.submission('V')).toMatchObject({ dispatchState: 'pending', options })
+    for (const id of ['proof', 'edited', 'deleted', 'sent']) {
+      expect(journal.submission(`U-${id}`)?.dispatchState).toBe('accepted')
+    }
+    if (failed) {
+      expect(legacyIds(session)).toHaveLength(4)
+      db().exec('DROP TRIGGER fail_edited_cleanup')
+    }
+    warned.mockRestore()
+    await journal.close()
+  }
+)

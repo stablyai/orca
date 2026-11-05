@@ -7,7 +7,7 @@ import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { repairDuplicatePtyPanesOnStart } from '../../runtime/moved-pane-owner-rekey'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import type { PersistedState } from '../../../shared/persisted-state-types'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { DelayedAuthority } from '../loading-store/profile-state-delayed-authority-fixture'
 import { Store } from '../loading-store/store'
 import { ProfileStateSqliteAuthority } from '../profile-state/profile-state-sqlite-authority'
@@ -40,7 +40,6 @@ afterEach(async () => {
   vi.restoreAllMocks()
 })
 
-/** The stored shape a window save leaves behind: one terminal drawn in two panes of one tab. */
 function duplicateSession(): WorkspaceSessionState {
   const window = new WindowSession(getDefaultWorkspaceSession())
   window.addTab(FIXTURE_GIT_WORKTREE_ID, TAB, KEPT)
@@ -76,7 +75,6 @@ function seededDirectory(
 const DROPPED_KEY = `${TAB}:${DUPLICATE}`
 const KEPT_KEY = `${TAB}:${KEPT}`
 
-/** Records the window files under the dropped pane: its sleep record, read marks and SSH lease. */
 function withDroppedPaneRecords(state: Record<string, unknown>, session: WorkspaceSessionState) {
   session.terminalPtyIncarnationsByPaneKey = { [DROPPED_KEY]: 'inc-1' }
   session.sleepingAgentSessionsByPaneKey = {
@@ -189,7 +187,7 @@ describe('duplicate-terminal pane repair at load (layout-owner builds)', () => {
       fromPaneKey: `${TAB}:${DUPLICATE}`,
       toPaneKey: `${TAB}:${KEPT}`
     })
-    // The status moved while disk still held both panes.
+    // Transfer ownership before disk drops either pane.
     expect(diskAtTransfer).toEqual([[KEPT, DUPLICATE]])
     await quit(store)
     expect(storedLeafIds(directory)).toEqual([KEPT])
@@ -201,7 +199,7 @@ describe('duplicate-terminal pane repair at load (layout-owner builds)', () => {
     const seeded = storedLayouts(directory)
     const transfer = vi.spyOn(agentHookServer, 'transferPaneAuthority').mockImplementation(() => {})
 
-    // A load no runtime starts on (a CLI-only read): it reads the repair, never writes it.
+    // CLI-only loads may project repairs but must not persist them.
     const cliOnly = await load(directory)
     await quit(cliOnly.store)
     expect(storedLayouts(directory)).toBe(seeded)

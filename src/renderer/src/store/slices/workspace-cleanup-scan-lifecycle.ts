@@ -2,7 +2,7 @@ import type { AppState } from '../types'
 import type {
   WorkspaceCleanupScanArgs,
   WorkspaceCleanupScanResult
-} from '../../../../shared/workspace-cleanup'
+} from '../../../../shared/workspace-cleanup/workspace-cleanup'
 import {
   getInFlightWorkspaceCleanupScan,
   hasInFlightWorkspaceCleanupScan,
@@ -12,7 +12,10 @@ import {
   supersedeInFlightWorkspaceCleanupScans,
   throwIfWorkspaceCleanupScanSuperseded
 } from './workspace-cleanup-broad-scan-registry'
-import { enrichWorkspaceCleanupCandidates } from './workspace-cleanup-candidate-enrichment'
+import {
+  applyWorkspaceCleanupDismissal,
+  enrichWorkspaceCleanupCandidates
+} from './workspace-cleanup-candidate-enrichment'
 import { getInitialWorkspaceCleanupGitDeferrals } from './workspace-cleanup-local-evidence'
 import {
   beginWorkspaceCleanupScan,
@@ -71,10 +74,7 @@ export async function scanWorkspaceCleanup(
     }
   }
 
-  // Why: a different scan key (git deferrals track live tab/agent state) must
-  // not leave the previous fleet scan running concurrently in main — cancel
-  // and supersede it instead of racing it. Legacy suggestion-only and
-  // full-workspace scans are separate modes and never supersede each other.
+  // Supersede changed fleet-scan keys instead of running concurrent scans; legacy suggestion and full-workspace modes remain independent.
   supersedeInFlightWorkspaceCleanupScans(
     window.api.workspaceCleanup.cancelScan,
     (key) => getWorkspaceCleanupScanKeyMode(key) === (scanArgs.includeAllWorkspaces === true)
@@ -98,20 +98,29 @@ export async function scanWorkspaceCleanup(
         scanToken
       )
       throwIfWorkspaceCleanupScanSuperseded(scanArgs.scanId)
-      const result = { ...scan, candidates: enriched }
+      let result = { ...scan, candidates: enriched }
       if (isLatestWorkspaceCleanupScan(scanToken)) {
         finalizeWorkspaceCleanupScan(scanToken)
-        set({
-          workspaceCleanupScan: result,
-          workspaceCleanupProgress: {
-            scanId: get().workspaceCleanupProgress?.scanId ?? scanArgs.scanId,
-            scannedAt: result.scannedAt,
-            scannedWorktreeCount: result.candidates.length,
-            totalWorktreeCount: result.candidates.length,
-            candidates: result.candidates,
-            errors: result.errors
-          },
-          workspaceCleanupLoading: false
+        set((state) => {
+          // Ignore / Stop ignoring may commit during final enrichment.
+          result = {
+            ...result,
+            candidates: enriched.map((candidate) =>
+              applyWorkspaceCleanupDismissal(candidate, state.workspaceCleanupDismissals)
+            )
+          }
+          return {
+            workspaceCleanupScan: result,
+            workspaceCleanupProgress: {
+              scanId: state.workspaceCleanupProgress?.scanId ?? scanArgs.scanId,
+              scannedAt: result.scannedAt,
+              scannedWorktreeCount: result.candidates.length,
+              totalWorktreeCount: result.candidates.length,
+              candidates: result.candidates,
+              errors: result.errors
+            },
+            workspaceCleanupLoading: false
+          }
         })
       }
       return result

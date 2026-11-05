@@ -1,15 +1,38 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { RuntimeClientError, type RuntimeClient } from '../runtime-client'
+import { RuntimeClient, RuntimeClientError } from '../runtime-client'
+import type { CliStatusResult } from '../../shared/runtime-types'
+import '../../shared/protocol-version'
 import {
   TERMINAL_CREATE_SHELL_SELECTION_RUNTIME_CAPABILITY,
   TERMINAL_PROMPT_DELIVERY_RUNTIME_CAPABILITY
-} from '../../shared/protocol-version'
+} from '../../shared/terminal/runtime-policy/terminal-runtime-capabilities'
 import { parseArgs } from '../args'
 import { printHelp } from '../help'
 import { COMMAND_SPECS } from '../specs'
 import { TERMINAL_HANDLERS } from './terminal'
 
 const ORIGINAL_EXIT_CODE = process.exitCode
+
+function terminalClient(
+  call: RuntimeClient['call'],
+  runtime?: CliStatusResult['runtime']
+): RuntimeClient {
+  const client = new RuntimeClient('/tmp/orca-terminal-test', 60_000, null, null)
+  vi.spyOn(client, 'call').mockImplementation(call)
+  if (runtime) {
+    vi.spyOn(client, 'getCliStatus').mockResolvedValue({
+      id: 'status',
+      ok: true,
+      result: {
+        app: { running: runtime.reachable, pid: runtime.reachable ? 123 : null },
+        runtime,
+        graph: { state: runtime.reachable ? 'ready' : 'not_running' }
+      },
+      _meta: { runtimeId: runtime.runtimeId ?? 'none' }
+    })
+  }
+  return client
+}
 
 describe('terminal close CLI', () => {
   afterEach(() => {
@@ -29,7 +52,7 @@ describe('terminal close CLI', () => {
 
     await TERMINAL_HANDLERS['terminal close']({
       flags: new Map([['terminal', 'term-1']]),
-      client: { call } as unknown as RuntimeClient,
+      client: terminalClient(call),
       cwd: '/tmp/worktree',
       json: true
     })
@@ -81,7 +104,7 @@ describe('terminal close CLI', () => {
 
       await TERMINAL_HANDLERS['terminal close']({
         flags: new Map([['terminal', close.handle]]),
-        client: { call } as unknown as RuntimeClient,
+        client: terminalClient(call),
         cwd: '/tmp/worktree',
         json: true
       })
@@ -107,7 +130,7 @@ describe('terminal close CLI', () => {
 
     await TERMINAL_HANDLERS['terminal close']({
       flags: new Map([['terminal', close.handle]]),
-      client: { call } as unknown as RuntimeClient,
+      client: terminalClient(call),
       cwd: '/tmp/worktree',
       json: false
     })
@@ -133,7 +156,7 @@ describe('terminal close CLI', () => {
 
     await TERMINAL_HANDLERS['terminal close']({
       flags: parsed.flags,
-      client: { call } as unknown as RuntimeClient,
+      client: terminalClient(call),
       cwd: '/tmp/worktree',
       json: true
     })
@@ -152,7 +175,7 @@ describe('terminal close CLI', () => {
 
     await TERMINAL_HANDLERS['terminal close']({
       flags: parsed.flags,
-      client: { call } as unknown as RuntimeClient,
+      client: terminalClient(call),
       cwd: '/tmp/worktree',
       json: true
     })
@@ -180,7 +203,7 @@ describe('terminal close CLI', () => {
         ['worktree', 'id:repo::/worktree'],
         ['all', true]
       ]),
-      client: { call } as unknown as RuntimeClient,
+      client: terminalClient(call),
       cwd: '/tmp/worktree',
       json: true
     })
@@ -207,14 +230,16 @@ describe('terminal close CLI', () => {
     ],
     [new Map<string, string | true>([['all', true]]), 'Missing required --worktree']
   ])('rejects ambiguous bulk-close flags', async (flags, message) => {
+    const call = vi.fn()
     await expect(
       TERMINAL_HANDLERS['terminal close']({
         flags,
-        client: { call: vi.fn() } as unknown as RuntimeClient,
+        client: terminalClient(call),
         cwd: '/tmp/worktree',
         json: true
       })
     ).rejects.toThrow(message)
+    expect(call).not.toHaveBeenCalled()
   })
 
   it('fails safely before mutation when the host predates bulk close', async () => {
@@ -227,14 +252,17 @@ describe('terminal close CLI', () => {
     await expect(
       TERMINAL_HANDLERS['terminal close']({
         flags: new Map<string, string | true>([
-          ['worktree', 'active'],
+          ['worktree', 'id:repo::/worktree'],
           ['all', true]
         ]),
-        client: { call } as unknown as RuntimeClient,
+        client: terminalClient(call),
         cwd: '/tmp/worktree',
         json: true
       })
     ).rejects.toMatchObject({ code: 'incompatible_runtime' })
+    expect(call).toHaveBeenCalledExactlyOnceWith('terminal.closeAll', {
+      worktree: 'id:repo::/worktree'
+    })
   })
 
   it('documents that --tab waits for durable persistence', () => {
@@ -285,19 +313,13 @@ describe('terminal close CLI', () => {
 })
 
 describe('terminal send CLI', () => {
-  const promptClient = (call: ReturnType<typeof vi.fn>, supported: boolean) =>
-    ({
-      call,
-      getCliStatus: vi.fn().mockResolvedValue({
-        result: {
-          runtime: {
-            reachable: true,
-            runtimeId: 'runtime-current',
-            capabilities: supported ? [TERMINAL_PROMPT_DELIVERY_RUNTIME_CAPABILITY] : []
-          }
-        }
-      })
-    }) as unknown as RuntimeClient
+  const promptClient = (call: RuntimeClient['call'], supported: boolean) =>
+    terminalClient(call, {
+      state: 'ready',
+      reachable: true,
+      runtimeId: 'runtime-current',
+      capabilities: supported ? [TERMINAL_PROMPT_DELIVERY_RUNTIME_CAPABILITY] : []
+    })
 
   afterEach(() => {
     vi.restoreAllMocks()
@@ -436,7 +458,7 @@ describe('terminal send CLI', () => {
         ['terminal', 'term-1'],
         ['text', 'x']
       ]),
-      client: { call } as unknown as RuntimeClient,
+      client: terminalClient(call),
       cwd: '/tmp/worktree',
       json: true
     })
@@ -445,7 +467,7 @@ describe('terminal send CLI', () => {
         ['terminal', 'term-1'],
         ['enter', true]
       ]),
-      client: { call } as unknown as RuntimeClient,
+      client: terminalClient(call),
       cwd: '/tmp/worktree',
       json: true
     })
@@ -517,18 +539,12 @@ describe('terminal send CLI', () => {
       _meta: { runtimeId: 'old-runtime-after-restart' }
     }
     const call = vi.fn().mockResolvedValue(response)
-    const client = {
-      call,
-      getCliStatus: vi.fn().mockResolvedValue({
-        result: {
-          runtime: {
-            reachable: true,
-            runtimeId: 'new-runtime-before-restart',
-            capabilities: [TERMINAL_PROMPT_DELIVERY_RUNTIME_CAPABILITY]
-          }
-        }
-      })
-    } as unknown as RuntimeClient
+    const client = terminalClient(call, {
+      state: 'ready',
+      reachable: true,
+      runtimeId: 'new-runtime-before-restart',
+      capabilities: [TERMINAL_PROMPT_DELIVERY_RUNTIME_CAPABILITY]
+    })
     const log = vi.spyOn(console, 'log').mockImplementation(() => {})
 
     const error = await TERMINAL_HANDLERS['terminal send']({
@@ -557,14 +573,13 @@ describe('terminal send CLI', () => {
     )
     expect(error).toMatchObject({
       code: 'incompatible_runtime',
+      message: expect.stringContaining('cannot prove whether the prompt was delivered'),
       data: {
         deliveryOutcome: 'unknown',
         retrySafe: false,
         nextSteps: expect.arrayContaining([expect.stringContaining('Inspect the terminal output')])
       }
     })
-    expect((error as Error).message).toContain('cannot prove whether the prompt was delivered')
-    expect((response.result.send as { prompt?: unknown }).prompt).toBeUndefined()
     expect(log).not.toHaveBeenCalled()
   })
 
@@ -572,7 +587,7 @@ describe('terminal send CLI', () => {
     const call = vi.fn().mockResolvedValue({
       result: { send: { handle: 'term-1', accepted: true, bytesWritten: 7 } }
     })
-    vi.spyOn(console, 'log').mockImplementation(() => {})
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
 
     await TERMINAL_HANDLERS['terminal send']({
       flags: new Map<string, string | true>([
@@ -590,9 +605,7 @@ describe('terminal send CLI', () => {
       expect.objectContaining({ agentPrompt: true }),
       { legacyTerminalPrompt: true }
     )
-    expect(call.mock.results[0]?.value).toBeDefined()
-    const response = await call.mock.results[0]?.value
-    expect(response.result.send.prompt).toEqual({
+    expect(JSON.parse(String(log.mock.calls[0]?.[0])).result.send.prompt).toEqual({
       requestId: 'unsupported-old-host',
       stages: ['input_accepted'],
       provider: 'old-host',
@@ -603,7 +616,7 @@ describe('terminal send CLI', () => {
     })
   })
 
-  it('does not fabricate an accepted prompt receipt for an old-host refusal', async () => {
+  it('reports an old-host refusal with its permission reason', async () => {
     const call = vi.fn().mockResolvedValue({
       result: {
         send: {
@@ -627,8 +640,6 @@ describe('terminal send CLI', () => {
       json: false
     })
 
-    const response = await call.mock.results[0]?.value
-    expect(response.result.send.prompt).toBeUndefined()
     expect(String(log.mock.calls[0]?.[0])).toBe('Input refused by term-1: permission.')
   })
 
@@ -643,23 +654,20 @@ describe('terminal send CLI', () => {
         ['enter', true],
         ['retry-request', '11111111-1111-4111-8111-111111111111']
       ]),
-      client: {
-        call,
-        getCliStatus: vi.fn().mockResolvedValue({
-          result: { runtime: { reachable: true, capabilities: [] } }
-        })
-      } as unknown as RuntimeClient,
+      client: promptClient(call, false),
       cwd: '/tmp/worktree',
       json: true
     })
       .then(() => undefined)
       .catch((caught: unknown) => caught)
 
-    expect(error).toMatchObject({ code: 'incompatible_runtime' })
-    expect((error as Error).message).toContain(
-      'updating the host cannot make this specific retry idempotent'
-    )
-    expect((error as Error).message).not.toContain('omit --retry-request')
+    expect(error).toMatchObject({
+      code: 'incompatible_runtime',
+      message: expect.stringContaining(
+        'updating the host cannot make this specific retry idempotent'
+      )
+    })
+    expect(error).not.toMatchObject({ message: expect.stringContaining('omit --retry-request') })
     expect(call).not.toHaveBeenCalled()
   })
 
@@ -722,27 +730,18 @@ describe('terminal create --shell', () => {
   const WORKTREE = 'path:C:/src/app'
 
   const shellClient = (
-    call: ReturnType<typeof vi.fn>,
+    call: RuntimeClient['call'],
     supported: boolean,
     reachable = true
   ): RuntimeClient => {
-    const client = {
-      call,
-      isRemote: false,
-      getCliStatus: vi.fn().mockResolvedValue({
-        result: {
-          runtime: reachable
-            ? {
-                reachable: true,
-                runtimeId: 'runtime-current',
-                capabilities: supported ? [TERMINAL_CREATE_SHELL_SELECTION_RUNTIME_CAPABILITY] : []
-              }
-            : { reachable: false, runtimeId: null }
-        }
-      })
-    }
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: `terminal create` reads only `call`, `isRemote`, and `getCliStatus`, all stubbed above; RuntimeClient is a class, so a structural double cannot satisfy it without the cast.
-    return client as unknown as RuntimeClient
+    return terminalClient(call, {
+      state: reachable ? 'ready' : 'not_running',
+      reachable,
+      runtimeId: reachable ? 'runtime-current' : null,
+      ...(reachable
+        ? { capabilities: supported ? [TERMINAL_CREATE_SHELL_SELECTION_RUNTIME_CAPABILITY] : [] }
+        : {})
+    })
   }
 
   afterEach(() => {
@@ -785,8 +784,7 @@ describe('terminal create --shell', () => {
     expect(call).not.toHaveBeenCalled()
   })
 
-  // An older host strips the unknown param and answers with its default shell, which reads as a
-  // successful create. Creating the wrong shell silently is worse than refusing.
+  // Older hosts ignore shell and report a successful create using their default shell.
   it('refuses rather than creating a default-shell terminal on a host without the capability', async () => {
     const call = vi.fn()
 
@@ -796,8 +794,7 @@ describe('terminal create --shell', () => {
     expect(call).not.toHaveBeenCalled()
   })
 
-  // A status probe that fails or times out reports no capabilities either; blaming the host
-  // version would send the caller to update a host that may already be current.
+  // Missing capabilities on an unreachable runtime do not establish a version gap.
   it('reports an unreachable host as unavailable rather than incompatible', async () => {
     const call = vi.fn()
 

@@ -1,18 +1,4 @@
-/**
- * Memory-leak regression: removing a project must purge its worktrees' per-worktree
- * state.
- *
- * `removeProject` hand-deleted only a small subset of per-worktree maps
- * (tabsByWorktree, terminalLayoutsByTabId, ptyIdsByTabId, …) and never called the
- * canonical `purgeWorktreeTerminalState` / `buildWorktreePurgeState`. So ~30+
- * worktree-scoped maps (unifiedTabsByWorktree, groupsByWorktree, layoutByWorktree,
- * gitStatusByWorktree, gitStatusHugeByWorktree, browserTabsByWorktree,
- * everActivatedWorktreeIds, …) kept an entry for every worktree of every removed
- * project. No background reaper recovers them (fetchWorktrees never runs again for a
- * removed repo). Repos churn forever and each can own many worktrees, so the state
- * grew monotonically. The single `removeWorktree` path already routes through
- * `purgeWorktreeTerminalState`; project removal did not.
- */
+/** Project removal must invoke canonical worktree purge like single removal; partial hand-deletion leaves dozens of editor/layout/git/browser maps. Removed repos never run fetchWorktrees again, so no background sweep can reclaim them. */
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { createTestStore, makeWorktree } from './store-test-helpers'
@@ -59,7 +45,6 @@ export function registerReposRemoveProjectPurgeLeakTests(): void {
         [repo1.id]: [makeWorktree({ id: W1, repoId: repo1.id, path: '/r1/wt1' })],
         [repo2.id]: [makeWorktree({ id: W2, repoId: repo2.id, path: '/r2/wt1' })]
       },
-      // Per-worktree maps that removeProject previously left behind.
       unifiedTabsByWorktree: { [W1]: [], [W2]: [] },
       groupsByWorktree: { [W1]: [], [W2]: [] },
       browserTabsByWorktree: { [W1]: [], [W2]: [] },
@@ -80,7 +65,6 @@ export function registerReposRemoveProjectPurgeLeakTests(): void {
       await store.getState().removeProject(repo1.id, { hostId: getRepoExecutionHostId(repo1) })
 
       const s = store.getState()
-      // Removed project's worktree is purged from every map.
       expect(s.unifiedTabsByWorktree[W1]).toBeUndefined()
       expect(s.groupsByWorktree[W1]).toBeUndefined()
       expect(s.browserTabsByWorktree[W1]).toBeUndefined()
@@ -96,7 +80,6 @@ export function registerReposRemoveProjectPurgeLeakTests(): void {
       await store.getState().removeProject(repo1.id, { hostId: getRepoExecutionHostId(repo1) })
 
       const s = store.getState()
-      // Surviving project's worktree state is untouched (guard over-eviction).
       expect(s.unifiedTabsByWorktree[W2]).toBeDefined()
       expect(s.groupsByWorktree[W2]).toBeDefined()
       expect(s.browserTabsByWorktree[W2]).toBeDefined()

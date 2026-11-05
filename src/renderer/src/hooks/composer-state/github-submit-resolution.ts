@@ -226,7 +226,7 @@ export function useGitHubSubmitResolution(input: GitHubSubmitResolutionInput) {
       if (smartSourceSelectionRef.current !== submitSelection) {
         return resolution
       }
-      // Why: Create can fire before the debounced smart field commits; commit the resolved item here so the form shows the title, not the raw URL.
+      // Create can beat debounced field commit; apply the resolved item now so the form shows its title.
       setLinkedIssue(
         resolution.linkedIssueNumber !== null ? String(resolution.linkedIssueNumber) : ''
       )

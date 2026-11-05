@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { WorkspaceStatusDefinition } from '../../../src/shared/worktree/types'
 import type { ExecutionHostId } from '../../../src/shared/execution-host'
 import type {
@@ -15,9 +16,11 @@ import {
   type Worktree
 } from './workspace-list-sections'
 import { buildFilterRepos, type WorkspaceSectionRepo } from './workspace-filter-repos'
+import type { WorktreeHostContextOf } from './worktree-host-context-labels'
 
 export function useWorkspaceSections(args: {
   displayWorktrees: Worktree[]
+  hostContextOf: WorktreeHostContextOf
   sortMode: WorkspaceSortBy
   filters: FilterState
   search: string
@@ -35,11 +38,12 @@ export function useWorkspaceSections(args: {
   sections: Section[]
   rawSections: Section[]
   uniqueRepos: WorkspaceSectionRepo[]
-  /** Each row's repo by id, as the desktop's cards look theirs up for colour and icon. */
   repoById: ReadonlyMap<string, SectionRepo>
 } {
+  const t = useMobileTranslation()
   const {
     displayWorktrees,
+    hostContextOf,
     sortMode,
     filters,
     search,
@@ -55,12 +59,12 @@ export function useWorkspaceSections(args: {
 
   const uniqueRepos = useMemo(
     () => buildFilterRepos(filterCatalogRepos, displayWorktrees),
-    [filterCatalogRepos, displayWorktrees]
+    [filterCatalogRepos, displayWorktrees, t]
   )
 
   const repoById = useMemo(
     () => buildSectionRepoMap(projectCatalog.repos, displayWorktrees),
-    [projectCatalog.repos, displayWorktrees]
+    [projectCatalog.repos, displayWorktrees, t]
   )
 
   const plan = useMemo(
@@ -88,11 +92,15 @@ export function useWorkspaceSections(args: {
       pinnedIds,
       projectCatalog,
       workspaceStatuses,
-      showPinnedInGroups
+      showPinnedInGroups,
+      t
     ]
   )
 
-  const rawSections = useMemo(() => plan.render(collapsedGroups), [plan, collapsedGroups])
+  const rawSections = useMemo(
+    () => plan.render(collapsedGroups, hostContextOf),
+    [plan, collapsedGroups, hostContextOf]
+  )
 
   const sections = useMemo(
     () =>

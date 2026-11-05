@@ -1,7 +1,6 @@
 import type { UsageRateLimitFailureKind } from '../../shared/rate-limit-types'
 
-// Why: app-server wraps reqwest's transport-error Display text ("error sending request for url
-// (...)" when the proxy/DNS/TCP/TLS hop fails); HTTP status failures never use these phrases.
+// reqwest wraps proxy/DNS/TCP/TLS failures in these phrases; HTTP-status failures use different text.
 const CODEX_TRANSPORT_FAILURE_PATTERN =
   /\berror sending request\b|\brequest or response body error\b/i
 

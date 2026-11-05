@@ -5,17 +5,8 @@ import { RUNTIME_CAPABILITIES } from '../../../shared/protocol-version'
 import { SSH_TARGET_MANAGEMENT_RUNTIME_CAPABILITY } from '../../../shared/ssh-target-management'
 import { SKILL_INSTALL_CAPABILITY } from '../../../shared/skill-install-capability'
 
-/**
- * Electron (`main-process-*`) and orcad (`orcad-entry.ts`) each compose the same runtime, and every
- * dependency is optional, so one root can silently skip a service the other wires (#30120 never
- * gave orcad its web client root). This records what each root's source wires and fails on any
- * difference that is not declared below with a reason.
- *
- * It covers every way a host hands the runtime a service: constructor options, positional
- * constructor arguments, `runtime.set*` and `rpc.set*`, and the process-wide host ports installed
- * at preflight. The last two once went unrecorded, so orcad shipped without a stats collector
- * (#31112) and without speech (#31174) while this test passed.
- */
+/** Optional services can silently diverge between Electron/orcad (#30120, #31112, #31174).
+ * Compare constructor args/options, runtime/RPC setters and preflight host ports; require reasons for differences. */
 
 type Root = 'electron' | 'orcad'
 
@@ -23,7 +14,6 @@ type DeclaredDifference = {
   wiring: string
   missingOn: Root
   reason: string
-  /** Capabilities the missing host still advertises; its methods must refuse accurately. */
   advertisedUnserved?: readonly string[]
 }
 
@@ -51,14 +41,14 @@ const DECLARED_HOST_DIFFERENCES: readonly DeclaredDifference[] = [
     reason: 'orcad installs browser automation through the runtime factory when Chromium exists.'
   },
   {
-    wiring: 'runtime.setEmulatorBridge',
-    missingOn: 'orcad',
-    reason: 'Device emulators are desktop-only.'
-  },
-  {
     wiring: 'runtime.setOffscreenBrowserBackend',
     missingOn: 'orcad',
     reason: 'Offscreen WebContents need Electron.'
+  },
+  {
+    wiring: 'ctor:getSetupTerminalTitle',
+    missingOn: 'orcad',
+    reason: 'orcad has no UI language and serves clients in any locale, so Setup tabs stay English.'
   },
   {
     wiring: 'ctor:prepareClaudeAuth',
@@ -86,16 +76,6 @@ const DECLARED_HOST_DIFFERENCES: readonly DeclaredDifference[] = [
     reason: 'Pairs with attestAgentHookCompatibilityAuthority.'
   },
   {
-    wiring: 'ctor:getPairedDeviceName',
-    missingOn: 'orcad',
-    reason: 'Unwired gap (follow-up): client-hosted browser rows show no paired-device name.'
-  },
-  {
-    wiring: 'ctor:orchestrationEnvironmentTransport',
-    missingOn: 'orcad',
-    reason: 'Cross-environment orchestration dials paired environments from the desktop only.'
-  },
-  {
     wiring: 'ctor:skillTransactionRecovery',
     missingOn: 'orcad',
     reason:
@@ -106,6 +86,12 @@ const DECLARED_HOST_DIFFERENCES: readonly DeclaredDifference[] = [
     missingOn: 'orcad',
     reason:
       'Sleep reaches paired servers and suspends VMs from the desktop only; orcad refuses those parts.'
+  },
+  {
+    wiring: 'ctor:headlessTerminalScrollbackRows',
+    missingOn: 'electron',
+    reason:
+      "Desktop reveals hidden panes from its model at desktop depth; renderer-less orcad needs only the daemon's live window."
   },
   {
     wiring: 'rpc-option:exposeNetworkByDefault',
@@ -121,11 +107,6 @@ const DECLARED_HOST_DIFFERENCES: readonly DeclaredDifference[] = [
     wiring: 'rpc.setOnUnpairedDeviceAuthFailure',
     missingOn: 'orcad',
     reason: 'It notifies a desktop window.'
-  },
-  {
-    wiring: 'rpc-option:pinnedBindHost',
-    missingOn: 'electron',
-    reason: 'The desktop binds loopback until a device pairs (STA-2370).'
   },
   {
     wiring: 'host:setMainHttpClient',
@@ -163,16 +144,81 @@ const DECLARED_HOST_DIFFERENCES: readonly DeclaredDifference[] = [
     reason: 'Browser profiles live in Chromium sessions; orcad pages carry profile ids only.'
   },
   {
+    wiring: 'host:setManagedBrowserProfileDeleter',
+    missingOn: 'orcad',
+    reason: 'Managed profiles live in Chromium sessions; orcad has none to delete on removal.'
+  },
+  {
     wiring: 'host:setDesktopBrowserBridgeHostEnabled',
     missingOn: 'electron',
     reason: 'The desktop hosts browser pages itself; orcad enables the bridge to a desktop.'
   }
 ]
 
-/** Construction options neither root passes; each still needs a reason. */
+type WindowAttachStart = {
+  reason: string
+  /** Where each headless host starts its own equivalent; omitted only when none needs one. */
+  headless?: Record<Root, { file: string; call: string }>
+}
+
+/** Background work started when a desktop window attaches; headless hosts never attach one (#37256). */
+const WINDOW_ATTACH_STARTS: Readonly<Record<string, WindowAttachStart>> = {
+  automations: {
+    reason: 'The desktop binds automations to its window; headless hosts start them at launch.',
+    headless: {
+      electron: {
+        file: 'src/main/startup/main-process-runtime-launch.ts',
+        call: 'automations?.start()'
+      },
+      orcad: { file: 'src/main/orcad/orcad-entry.ts', call: 'startOrcadAutomations(' }
+    }
+  },
+  'rateLimits.attach': {
+    reason: 'A focused window is one usage watcher; the shared account composition runs the poller.'
+  },
+  initTccPromptNotice: { reason: 'macOS privacy-prompt notices render in the window.' },
+  installPluginDesktopFrameServices: { reason: 'Plugin frames render inside the window.' },
+  attachMainWindowServices: {
+    reason: 'Window IPC and renderer wiring; its starts are listed here.'
+  },
+  hydrateLocalPtyRegistryAtBoot: {
+    reason: 'Headless PTY registration hydrates the same registry.',
+    headless: {
+      electron: {
+        file: 'src/main/startup/main-process-runtime-launch.ts',
+        call: 'registerHeadlessPtyRuntime('
+      },
+      orcad: { file: 'src/main/orcad/orcad-entry.ts', call: 'registerHeadlessPtyRuntime(' }
+    }
+  },
+  scheduleMainWindowAutoUpdaterSetup: {
+    reason: 'Serve sets up its own updater; orcad is updated by the client that manages it.'
+  },
+  scheduleWorktreeBaseDirectoryWatcherSync: {
+    reason: 'Unwired gap (follow-up): external worktree changes on a headless host push nothing.'
+  },
+  startFolderRepoGitUpgradeWatch: {
+    reason:
+      'Unwired gap (follow-up): git init in a headless folder project needs a manual type change.'
+  },
+  scheduleHistoryGc: {
+    reason: 'Unwired gap (follow-up): headless hosts never prune history of vanished worktrees.'
+  },
+  'openCodeHookService.configDirGc.schedule': {
+    reason: 'Unwired gap (follow-up): headless hosts never prune stale OpenCode overlays.'
+  },
+  'openCode2HookService.configDirGc.schedule': {
+    reason: 'Unwired gap (follow-up): headless hosts never prune stale OpenCode overlays.'
+  }
+}
+
+const WINDOW_ATTACH_SOURCES = [
+  { file: 'src/main/startup/main-window-core-services.ts', fn: 'attachMainWindowCoreServices' },
+  { file: 'src/main/window/attach-main-window-services.ts', fn: 'attachMainWindowServices' }
+] as const
+
 const UNWIRED_CONSTRUCTION_OPTIONS: Readonly<Record<string, string>> = {}
 
-/** Positional `OrcaRuntimeService` parameters after `store`, by position. */
 const POSITIONAL_CONSTRUCTOR_PARAMETERS = ['stats'] as const
 
 const ROOT_SOURCES: Record<Root, readonly string[]> = {
@@ -182,13 +228,17 @@ const ROOT_SOURCES: Record<Root, readonly string[]> = {
     'src/main/startup/main-process-runtime-launch.ts',
     'src/main/window/attach-main-window-services.ts'
   ],
-  orcad: ['src/main/orcad/orcad-entry.ts', 'src/main/orcad/orcad-account-services.ts']
+  orcad: [
+    'src/main/orcad/orcad-entry.ts',
+    'src/main/orcad/orcad-account-services.ts',
+    'src/main/orcad/orcad-emulator-bridge.ts'
+  ]
 }
 
-/** Where each root installs process-wide host ports (`set*` calls that are not methods). */
 const HOST_PORT_SOURCES: Record<Root, readonly string[]> = {
   electron: [
     'src/main/startup/main-process-preflight.ts',
+    'src/main/startup/agent-hooks-uninstall-preflight.ts',
     'src/main/host/electron-browser-commands.ts'
   ],
   orcad: [
@@ -200,7 +250,6 @@ const HOST_PORT_SOURCES: Record<Root, readonly string[]> = {
 
 const NOT_HOST_PORTS = new Set(['setTimeout', 'setInterval', 'setImmediate'])
 
-/** A spread with no inline object literal names the source of the object it spreads. */
 const SPREAD_SOURCES: Record<string, { file: string; anchor: string }> = {
   'agentHookRuntimeDeps(': {
     file: 'src/main/agent-hooks/agent-hook-runtime-deps.ts',
@@ -214,6 +263,10 @@ const SPREAD_SOURCES: Record<string, { file: string; anchor: string }> = {
     file: 'src/main/orcad/orcad-account-services.ts',
     anchor: 'runtimeDeps: {'
   },
+  'pairedEnvironments.runtimeOptions': {
+    file: 'src/main/orcad/orcad-paired-environment-options.ts',
+    anchor: 'runtimeOptions: {'
+  },
   'orcadWsPortOptions(': { file: 'src/main/orcad/orcad-ws-port-policy.ts', anchor: 'wsPort: port' }
 }
 
@@ -222,7 +275,6 @@ const read = (file: string): string => stripComments(readFileSync(join(repoRoot,
 
 const QUOTES = `'"\``
 
-/** The index of the quote that closes the string opening at `open` (or the end of the source). */
 function stringEnd(source: string, open: number): number {
   for (let i = open + 1; i < source.length; i++) {
     if (source[i] === '\\') {
@@ -257,7 +309,6 @@ function stripComments(source: string): string {
   return out
 }
 
-/** The inner text of the brace group that opens at `open` (strings are opaque). */
 function braceGroup(source: string, open: number): string {
   let depth = 0
   for (let i = open; i < source.length; i++) {
@@ -273,7 +324,6 @@ function braceGroup(source: string, open: number): string {
   throw new Error('unbalanced braces')
 }
 
-/** The inner text of the parenthesised group that opens at `open` (strings are opaque). */
 function parenGroup(source: string, open: number): string {
   let depth = 0
   for (let i = open; i < source.length; i++) {
@@ -289,19 +339,17 @@ function parenGroup(source: string, open: number): string {
   throw new Error('unbalanced parentheses')
 }
 
-/** The last match: a type declaring the same shape comes before the value. */
+// A matching type shape precedes the value; use the final match.
 function objectLiteralAfter(source: string, anchor: string): string {
   const at = source.lastIndexOf(anchor)
   if (at === -1) {
     throw new Error(`anchor not found: ${anchor}`)
   }
   const anchorOpen = anchor.lastIndexOf('{')
-  // An anchor inside the literal (no brace of its own) belongs to the nearest enclosing `{`.
   const open = anchorOpen !== -1 ? at + anchorOpen : source.lastIndexOf('{', at)
   return braceGroup(source, open)
 }
 
-/** Top-level entries of an object literal's inner text, split on depth-0 commas. */
 function topLevelEntries(inner: string): string[] {
   const entries: string[] = []
   let depth = 0
@@ -340,7 +388,6 @@ function objectKeys(inner: string): string[] {
       keys.push(...objectKeys(objectLiteralAfter(read(source[1].file), source[1].anchor)))
       continue
     }
-    // An inline conditional spread, e.g. `...(cond ? { a } : {})`: every literal it may spread.
     let found = false
     for (let i = spread.indexOf('{'); i !== -1; i = spread.indexOf('{', i + 1)) {
       const group = braceGroup(spread, i)
@@ -394,7 +441,7 @@ function recordWiring(root: Root): Set<string> {
   return wired
 }
 
-/** Host-port installs in a source; a teardown reset (`null`, `undefined`, `false`) installs nothing. */
+/** Teardown resets (null/undefined/false) do not install host ports. */
 function hostPortCalls(source: string): string[] {
   const installs: string[] = []
   for (const match of source.matchAll(/(?<![\w$.])(?<!function\s+)(set[A-Z]\w*)\(/g)) {
@@ -413,14 +460,37 @@ function sourceFilesUnder(dir: string): string[] {
     .map((file) => join(dir, file).split(sep).join('/'))
 }
 
-/** Every option `RuntimeConstructionDependencies` declares. */
+function functionBody(source: string, name: string): string {
+  const at = source.indexOf(`export function ${name}(`)
+  if (at === -1) {
+    throw new Error(`function not found: ${name}`)
+  }
+  const open = source.indexOf('(', at)
+  const paramsEnd = open + parenGroup(source, open).length + 1
+  return braceGroup(source, source.indexOf('{', paramsEnd))
+}
+
+/** Calls whose final member starts, schedules, hydrates, initializes, attaches or installs something. */
+function windowAttachStarts(): Set<string> {
+  const starts = new Set<string>()
+  for (const { file, fn } of WINDOW_ATTACH_SOURCES) {
+    const body = functionBody(read(file), fn)
+    for (const [, callee] of body.matchAll(
+      /(?<![\w$.])((?:[A-Za-z_$][\w$]*\??\.)*(?:start|schedule|hydrate|init|attach|install)[\w$]*)(?:\?\.)?\(/g
+    )) {
+      const path = callee.replaceAll('?', '')
+      starts.add(path.endsWith('.start') ? path.slice(0, -'.start'.length) : path)
+    }
+  }
+  return starts
+}
+
 function declaredConstructionOptions(): string[] {
   const source = read('src/main/runtime/construction/runtime-construction-dependencies.ts')
   const inner = objectLiteralAfter(source, 'export type RuntimeConstructionDependencies = {')
   return [...inner.matchAll(/^\s{2}([A-Za-z_$][\w$]*)\??:/gm)].map(([, key]) => key)
 }
 
-/** The positional parameters `OrcaRuntimeService`'s constructor takes after `store`. */
 function declaredPositionalParameters(): string[] {
   const source = read('src/main/runtime/construction/runtime-construction.ts')
   const params = topLevelEntries(parenGroup(source, source.indexOf('constructor(') + 11))
@@ -436,6 +506,9 @@ describe('runtime composition parity (Electron vs orcad)', () => {
       'ctor:getLocalProvider',
       'ctor:onTerminalAgentStatus',
       'ctor:agentSessionClaimSigner',
+      // #36853: without it a headless Run home refuses worker-start --on with server_required.
+      'ctor:orchestrationEnvironmentTransport',
+      'ctor:getPairedDeviceName',
       'rpc-option:webClientRoot',
       'rpc-option:wsPort',
       'runtime.setAccountServices',
@@ -445,7 +518,9 @@ describe('runtime composition parity (Electron vs orcad)', () => {
       'host:setSecretStore',
       'host:setRuntimeBrowserCommandsFactory',
       // #31174: without it every speech call refuses with speech_unavailable.
-      'host:setSpeechServiceFactories'
+      'host:setSpeechServiceFactories',
+      // #33650: Android emulators run on headless Linux hosts too.
+      'runtime.setEmulatorBridge'
     ]) {
       expect(electron, shared).toContain(shared)
       expect(orcad, shared).toContain(shared)
@@ -485,7 +560,7 @@ describe('runtime composition parity (Electron vs orcad)', () => {
   })
 
   // #30731: orcad once installed a browser factory that could not place pages on a desktop.
-  it('installs a browser factory on both roots that hosts pages on a paired desktop', () => {
+  it('wires the browser factory and client-hosting options on both roots', () => {
     const installs: Record<Root, { root: string; call: string; file: string; option: RegExp }> = {
       electron: {
         root: 'src/main/startup/main-process-preflight.ts',
@@ -506,11 +581,20 @@ describe('runtime composition parity (Electron vs orcad)', () => {
     }
   })
 
+  it('accounts for every service a desktop window starts, which headless hosts never attach', () => {
+    expect([...windowAttachStarts()].sort()).toEqual(Object.keys(WINDOW_ATTACH_STARTS).sort())
+    for (const [start, { headless }] of Object.entries(WINDOW_ATTACH_STARTS)) {
+      for (const [root, counterpart] of Object.entries(headless ?? {})) {
+        expect(read(counterpart.file), `${root} ${start}`).toContain(counterpart.call)
+      }
+    }
+  })
+
+  // #37256: one composition runs the usage poller on desktop, Electron serve and orcad alike.
   it('lists each advertised-but-unserved capability against what the host advertises', () => {
     for (const difference of DECLARED_HOST_DIFFERENCES) {
       expect(difference.reason, difference.wiring).not.toBe('')
       for (const capability of difference.advertisedUnserved ?? []) {
-        // Not advertised any more: drop it from the declaration.
         expect(new Set<string>(RUNTIME_CAPABILITIES), difference.wiring).toContain(capability)
       }
     }

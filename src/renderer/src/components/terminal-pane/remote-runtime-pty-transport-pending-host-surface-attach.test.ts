@@ -5,7 +5,6 @@ import {
 } from './remote-runtime-pty-transport-test-harness'
 import type { PtyTransportRecoveryState } from './pty-transport-types'
 
-// These transport fixtures never read abandoned-launch ownership from the app store.
 const appStore = vi.hoisted(() => ({
   getState: vi.fn(() => {
     throw new Error('These transport fixtures must not read app-store ownership')
@@ -248,8 +247,7 @@ describe('initial host-mirror attach against a surface published as pending-hand
     const connect = transport.connect({ url: '', callbacks: { onError } })
     await vi.advanceTimersByTimeAsync(1_000)
 
-    // A snapshot with no surface for the tab is a client-side view of a host that may still be
-    // republishing — unknown liveness, so no terminal-closed verdict may be surfaced.
+    // Missing tab surfaces during host republish prove unknown liveness, never terminal closure.
     expect(onError).not.toHaveBeenCalled()
 
     hostRepublished = true

@@ -12,6 +12,7 @@ import { renderSmartWorkspaceSourceResults } from './smart-workspace-source-resu
 import { getJiraSourceStatusMessage } from './jira-source-status-message'
 import type { SmartWorkspaceNameFieldController } from './use-smart-workspace-name-field-controller'
 import { JiraProjectPicker } from '../jira-project-picker'
+import { LinearWorkspacePicker } from '../linear-workspace-picker'
 
 export function renderSmartWorkspaceNameField(
   controller: SmartWorkspaceNameFieldController
@@ -59,6 +60,14 @@ export function renderSmartWorkspaceNameField(
           disabled={disabled || controller.jiraProjectInventory.loading}
         />
       ) : null}
+      {mode === 'linear' && selectedSource === null ? (
+        <LinearWorkspacePicker
+          workspaces={controller.linearStatus.workspaces ?? []}
+          value={controller.linearWorkspaceIdOverride}
+          onChange={controller.setLinearWorkspaceId}
+          disabled={disabled || !controller.linearStatusChecked}
+        />
+      ) : null}
       <Popover
         open={!disabled && open && mode !== 'text' && selectedSource === null}
         onOpenChange={handleSourcePopoverOpenChange}
@@ -66,7 +75,7 @@ export function renderSmartWorkspaceNameField(
         <Command
           value={resolvedCommandValue}
           onValueChange={(next) => {
-            // Why: cmdk re-emits when rows reshape; freeze it while debounce trails input.
+            // cmdk re-emits on row reshapes; freeze selection while debounce trails the input.
             if (isQueryStale) {
               return
             }

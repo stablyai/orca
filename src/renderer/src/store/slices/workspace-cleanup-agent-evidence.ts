@@ -1,19 +1,20 @@
+import { getStructuredAgentSessionTabsByPaneKey } from '@/components/native-chat/structured-agent-session-tabs'
 import type { AppState } from '../types'
-import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup/workspace-cleanup'
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
   getWorkspaceCleanupCandidateIdentity,
   resolveWorkspaceCleanupRemovalHostId
-} from '../../../../shared/workspace-cleanup-host-identity'
+} from '../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
 import {
   buildActivityTabHostIndex,
   resolveActivityExecutionHostId
 } from '@/components/activity/activity-event-builder-context'
-import { buildWorktreeAgentRows } from '@/components/sidebar/worktree-agent-rows'
+import { buildWorktreeAgentRows } from '@/components/sidebar/workspace-card/activity/worktree-agent-rows'
 import {
   selectLiveAgentStatusEntriesForWorktree,
   selectRetainedAgentEntriesForWorktree
-} from '@/components/sidebar/worktree-agent-row-selectors'
+} from '@/components/sidebar/workspace-card/activity/worktree-agent-row-selectors'
 import { isExecutionHostAliasForWorktree } from '@/lib/worktree-execution-host-alias'
 import {
   findIndexedDetectedWorktrees,
@@ -68,6 +69,9 @@ export function getWorkspaceCleanupAgentEvidence(
   for (const [worktreeId, worktreeCandidates] of candidatesByWorktreeId) {
     const rows = buildWorktreeAgentRows({
       tabs: state.tabsByWorktree[worktreeId] ?? [],
+      representedTabs: state.unifiedTabsByWorktree
+        ? getStructuredAgentSessionTabsByPaneKey(state.unifiedTabsByWorktree)
+        : undefined,
       entries: selectLiveAgentStatusEntriesForWorktree(state, worktreeId),
       retained: selectRetainedAgentEntriesForWorktree(state, worktreeId),
       runtimePaneTitlesByTabId: state.runtimePaneTitlesByTabId,

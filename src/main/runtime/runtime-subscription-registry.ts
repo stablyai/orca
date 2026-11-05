@@ -49,7 +49,7 @@ export class RuntimeSubscriptionRegistry {
     const request = connectionId && requestId ? { connectionId, requestId } : undefined
     this.cleanups.set(subscriptionId, { cleanup, version, request })
     if (request) {
-      // Why: IPC reuses a request id after aborting its previous subscription, so the newer one owns the address.
+      // IPC reuses ids after abort; the newest registration owns the request address.
       this.subscriptionsByRequest.set(requestKey(request), { subscriptionId, version })
     }
     if (!connectionId) {
@@ -77,7 +77,7 @@ export class RuntimeSubscriptionRegistry {
 
   /** Releases the registration a request created; an unknown, ended or replaced request is a no-op. */
   releaseByRequest(connectionId: string | undefined, requestId: string): void {
-    // Why: some non-phone sockets carry no connection id, and a bare request id is not unique across sockets.
+    // Without connection identity, bare request ids collide across sockets.
     if (!connectionId) {
       return
     }

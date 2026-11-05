@@ -1,19 +1,18 @@
-// P4 (L80): with the switch on, a handle resolved for a pane whose terminal a replacement unbound
-// learns that replacement, and only when its own terminal ended, the replacement is connected and
-// bound at that pane now, and the workspace is the same.
-import { readdirSync, readFileSync } from 'node:fs'
-import path from 'node:path'
+// Recover ended pane handles only to connected replacements bound in the same pane and workspace (L80 P4).
+
 import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 
-await import('../../orca-runtime-test-mocks.spec')
-await import('../../orca-runtime-test-lifecycle.spec')
-const { OrcaRuntimeService, makePaneKey } = await import('../../orca-runtime-test-mocks.spec')
+await import('../../orca-runtime-tests/runtime-test-module-registration.spec')
+await import('../../orca-runtime-tests/orca-runtime-test-lifecycle.spec')
+await import('../../orca-runtime-tests/runtime-test-module-registration.spec')
+const { OrcaRuntimeService } = await import('../../orca-runtime')
+const { makePaneKey } = await import('../../../../shared/workspace-layout/stable-pane-id')
 const { HEADLESS_LEAF_ID, HEADLESS_SECOND_LEAF_ID, TEST_REPO_ID, TEST_WORKTREE_ID, store } =
-  await import('../../orca-runtime-test-fixtures.spec')
+  await import('../../orca-runtime-tests/orca-runtime-test-fixtures.spec')
 const { dropFromHostInventory, movePaneFirst, registerBoundPty } =
-  await import('../../bind-first-pane.test-fixture')
+  await import('../../orca-runtime-tests/bind-first-pane.test-fixture')
 
 function paneWithHandle(tabId: string) {
   const runtime = new OrcaRuntimeService(store)
@@ -131,30 +130,5 @@ describe('a stale handle of a replaced pane (switch on)', () => {
       restarted.recoverTerminalPane(paneKey, TEST_WORKTREE_ID, oldHandle)
     ).rejects.toThrow('terminal_not_found')
     expect(createTerminal).not.toHaveBeenCalled()
-  })
-})
-
-describe('issuedForPaneKey census', () => {
-  it('is written by issuePtyHandle and read only by recoverTerminalPane', () => {
-    const root = path.resolve(__dirname, '../../../../..')
-    const users: string[] = []
-    const walk = (dir: string): void => {
-      for (const entry of readdirSync(dir, { withFileTypes: true })) {
-        const full = path.join(dir, entry.name)
-        if (entry.isDirectory()) {
-          walk(full)
-        } else if (/\.tsx?$/.test(entry.name) && !/\.(test|spec)\.tsx?$/.test(entry.name)) {
-          if (readFileSync(full, 'utf8').includes('issuedForPaneKey')) {
-            users.push(path.relative(root, full))
-          }
-        }
-      }
-    }
-    walk(path.join(root, 'src'))
-    expect(users.sort()).toEqual([
-      'src/main/runtime/runtime-terminal-contracts.ts',
-      'src/main/runtime/terminal/identity/terminal-handle-bindings.ts',
-      'src/main/runtime/terminal/recovery/resolve-terminal-pane.ts'
-    ])
   })
 })

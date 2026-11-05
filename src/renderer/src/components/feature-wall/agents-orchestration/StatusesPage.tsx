@@ -1,4 +1,3 @@
-/* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: this page is a timed storyboard; reveal state intentionally resets when the active/reduced-motion gates change. */
 import { useEffect, useRef, useState } from 'react'
 import type { JSX, ReactNode } from 'react'
 import { Wrench } from 'lucide-react'
@@ -49,9 +48,7 @@ export function StatusesPage(props: { active: boolean; reducedMotion: boolean })
     schedule(() => setRevealed((r) => ({ ...r, codex: true })), 1900)
 
     let idx = 0
-    // Why: nobody watches an animation in a hidden window. `runOnVisible` is a
-    // no-op so revealing the window resumes the cycle instead of skipping an
-    // activity; `idx` lives outside the timer, so the reveal picks up where it left off.
+    // Pause hidden-window work; keep idx so revealing resumes without skipping an activity.
     const stopCycle = installWindowVisibilityInterval({
       run: () => {
         setClaudeFading(true)
@@ -207,8 +204,7 @@ function Skel(props: { widthPct: number }): JSX.Element {
   )
 }
 
-// Long horizontal scroller of supported agent pills. Track is duplicated so a
-// -50% translate loop reads as seamless infinite scroll.
+// Duplicate the track so translating by half its width loops seamlessly.
 function SupportedAgentsMarquee(props: { reducedMotion: boolean }): JSX.Element {
   const trackRef = useRef<HTMLDivElement | null>(null)
   const agentCatalog = getAgentCatalog()

@@ -1,10 +1,7 @@
-// A pane's last outcome: why a pane with no live terminal is not simply restorable. Held in memory
-// beside the start tokens, never saved, so a relaunch makes every such pane restorable again.
+// Keep start-failed/process-exited outcomes in memory beside start tokens; relaunch makes unbound panes restorable again.
 
-/** `failed`: its start failed. `exited`: its process exited and the pane was kept to show why. */
 export type PaneOutcome = 'failed' | 'exited'
 
-/** Leaf id → last outcome. */
 export type PaneOutcomes = Readonly<Record<string, PaneOutcome>>
 
 /** What one apply changed; null clears the leaf's outcome. */
