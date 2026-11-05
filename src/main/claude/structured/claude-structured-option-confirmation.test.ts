@@ -64,9 +64,29 @@ describe('confirmation never outlives the write it belongs to', () => {
     await refresh({ applied: { effort: null } })
     expect((await current()).confirmed ?? []).not.toContain('effort')
 
-    await setClaudeStructuredOption(session, { key: 'effort', value: 'max' }, undefined)
-    expect(session.options.get('effort')).toBe('max')
-    expect(session.confirmedOptions.has('effort')).toBe(false)
+    await refresh({ applied: { effort: 'high' } })
+    expect((await current()).confirmed).toContain('effort')
+    let releaseRead!: (value: unknown) => void
+    session.connection.getSettings = () =>
+      new Promise((resolve) => {
+        releaseRead = resolve
+      })
+    const lateRead = refreshClaudeStructuredSessionOptions(
+      session,
+      undefined,
+      () => true,
+      () => {}
+    )
+    await expect(
+      setClaudeStructuredOption(session, { key: 'effort', value: 'max' }, undefined)
+    ).resolves.toMatchObject({ effort: 'max' })
+    expect((await current()).effort).toBe('max')
+    expect((await current()).confirmed ?? []).not.toContain('effort')
+    releaseRead({ applied: { effort: 'max' } })
+    await lateRead
+    expect((await current()).effort).toBe('max')
+    expect(session.appliedInputOptions.get('effort')).toBe('max')
+    expect((await current()).confirmed ?? []).not.toContain('effort')
     expect(calls).toEqual(['apply:high', 'apply:max'])
   })
 })
