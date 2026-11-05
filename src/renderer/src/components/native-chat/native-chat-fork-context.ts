@@ -8,3 +8,6 @@ export const NativeChatForkContext = createContext<NativeChatForkSurface | undef
 export const NativeChatForkedFromContext = createContext<
   ((sourceSessionId: string) => void) | undefined
 >(undefined)
+
+/** The pane draws fork actions, so root responses keep a gutter for one whatever its support says. */
+export const NativeChatForkGutterContext = createContext(false)
