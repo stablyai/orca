@@ -106,7 +106,7 @@ jobs:
         run: |
           pnpm build:orcad-prebuilds
           pnpm build:orcad-prebuilds --require-slots linux-x64-glibc
-          node config/scripts/build-orcad-template.mjs --targets linux-x64-glibc
+          node config/scripts/orcad-distribution/template/build-orcad-template.mjs --targets linux-x64-glibc
       - uses: actions/upload-artifact@v7
         with:
           name: wsl-orcad-template

@@ -2,8 +2,8 @@ import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:f
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { resolveAgentStartupPlanInputs } from '../../shared/agent-startup-plan-inputs'
-import type { TuiAgent } from '../../shared/tui-agent'
+import { resolveAgentStartupPlanInputs } from '../../shared/agent-launch/startup/agent-startup-plan-inputs'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import { resolveAgentTerminalCreateOptions } from './runtime-agent-terminal-startup'
 import {
   resolveWslHostAgentLaunchInputs,

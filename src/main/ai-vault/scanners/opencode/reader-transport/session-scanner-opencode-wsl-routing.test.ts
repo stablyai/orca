@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AiVaultScanIssue } from '../../../../../shared/ai-vault-types'
+import type { AiVaultScanIssue } from '../../../../../shared/ai-vault/contracts/ai-vault-types'
 import { createAccumulator, finalizeSession } from '../../../session-scanner-accumulator'
 import type { SessionFileCandidate } from '../../../session-scanner-types'
 import type * as wslClientModule from './session-scanner-opencode-wsl-client'

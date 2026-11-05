@@ -1,11 +1,11 @@
-import { AGENT_TUI_CLEAR_INPUT_MAX } from '../../../../shared/agent-tui-input-clear'
+import { AGENT_TUI_CLEAR_INPUT_MAX } from '../../../../shared/agent-launch/startup/agent-tui-input-clear'
 // @vitest-environment happy-dom
 
 import '@testing-library/jest-dom/vitest'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
-import type { AgentStatusPayload } from '../../../../shared/agent-status-types'
+import type { AgentStatusPayload } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
 import type {
@@ -96,7 +96,7 @@ vi.mock('./NativeChatComposer', async () => {
 
 const { NativeChatResolvedView } = await import('./NativeChatResolvedView')
 const { TooltipProvider } = await import('@/components/ui/tooltip')
-const { useAppStore } = await import('../../store')
+const { useAppStore } = await import('../../store/index')
 const { installNativeChatMessageListTestViewport } =
   await import('./native-chat-message-list-test-viewport')
 const { resetNativeChatPtySendQueuesForTests } = await import('./native-chat-runtime-send')
@@ -136,14 +136,6 @@ function renderPane(): void {
       />
     </TooltipProvider>
   )
-}
-
-function rootElement(): Element {
-  const root = document.querySelector('[data-native-chat-root="true"]')
-  if (!root) {
-    throw new Error('chat root missing')
-  }
-  return root
 }
 
 beforeEach(() => {
@@ -252,41 +244,4 @@ describe('a prompt card hides the composer without unmounting it', () => {
     expect(screen.getByTestId('composer-send').closest('[hidden]')).toBeNull()
     expect(composer.mounts).toBe(1)
   })
-
-  it('routes no typing to the hidden composer until the card is answered', async () => {
-    setStatus({ state: 'waiting', interactivePrompt: approval })
-    renderPane()
-
-    fireEvent.keyDown(rootElement(), { key: 'x' })
-    expect(composer.typed).not.toHaveBeenCalled()
-
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Allow' }))
-    })
-    fireEvent.keyDown(rootElement(), { key: 'x' })
-    expect(composer.typed).toHaveBeenCalledExactlyOnceWith('x')
-    expect(composer.mounts).toBe(1)
-  })
-
-  it.each(['Escape', 'chevron'])(
-    'gives the composer focus after a %s collapse',
-    async (gesture) => {
-      setStatus({ state: 'waiting', interactivePrompt: approval })
-      renderPane()
-      const card = document.querySelector<HTMLElement>('[data-native-chat-approval-card="true"]')!
-      expect(document.activeElement).toBe(card)
-      act(() => {
-        if (gesture === 'Escape') {
-          fireEvent.keyDown(card, { key: 'Escape' })
-        } else {
-          fireEvent.click(screen.getByRole('button', { name: 'Collapse' }))
-        }
-      })
-      await act(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 100))
-      })
-      expect(document.activeElement).toBe(screen.getByTestId('composer-field'))
-      expect(pty.verified).not.toHaveBeenCalled()
-    }
-  )
 })

@@ -4,8 +4,8 @@ import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { build } from 'esbuild'
-import { buildCounterbalancedSchedule } from './counterbalanced-benchmark-schedule.mjs'
-import { summarizeBenchmarkSamples } from './benchmark-sample-summary.mjs'
+import { buildCounterbalancedSchedule } from './performance/measurement/counterbalanced-benchmark-schedule.mjs'
+import { summarizeBenchmarkSamples } from './performance/measurement/benchmark-sample-summary.mjs'
 
 // git show <baseline>:src/shared/native-chat-tool-fold.ts | node config/scripts/native-chat-tool-pairing-benchmark.mjs
 const root = path.resolve(import.meta.dirname, '../..')

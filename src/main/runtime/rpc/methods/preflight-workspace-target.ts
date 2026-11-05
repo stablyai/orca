@@ -1,7 +1,7 @@
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
-import { resolveQualifiedFolderWorkspace } from '../../../../shared/folder-workspace-execution-host'
+import { resolveQualifiedFolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-execution-host'
 import { resolveWorkspaceAgentDetectionHost } from '../../../preflight/workspace-agent-detection'
 import { resolveWorktreeHostRouting } from '../../worktree-launch-host-repo'
 

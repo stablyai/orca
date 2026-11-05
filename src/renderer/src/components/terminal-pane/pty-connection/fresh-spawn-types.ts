@@ -4,7 +4,7 @@ import type {
   SavedResumeStartupSource,
   SleepingAgentSessionRecord
 } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
-import type { buildAgentResumeStartupPlan } from '@/lib/tui-agent-startup'
+import type { buildAgentResumeStartupPlan } from '../../../../../shared/agent-launch/startup/tui-agent-resume-startup'
 
 export type PendingStartupCommand = {
   command: string

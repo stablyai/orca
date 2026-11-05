@@ -4,9 +4,12 @@ import { join } from 'node:path'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
 import ts from 'typescript-api'
-import { baseRuleId, scanAstGrep } from './ast-grep-scan.mjs'
-import { resolvePullRequestDiffBase } from './git-pull-request-diff-base.mjs'
-import { listTrackedFiles, runCountRatchet } from './ratchet-baseline.mjs'
+import { baseRuleId, scanAstGrep } from './static-analysis/structural-scan/ast-grep-scan.mjs'
+import { resolvePullRequestDiffBase } from './git/pr-diff-base/git-pull-request-diff-base.mjs'
+import {
+  listTrackedFiles,
+  runCountRatchet
+} from './static-analysis/ratchet-baseline/ratchet-baseline.mjs'
 
 // Count each flaky-test rule per file so fixing one pattern cannot pay for adding another.
 

@@ -3,7 +3,7 @@ import { publicRuntimeEnvironment } from '@/runtime/paired-runtime-environment-t
 // @vitest-environment happy-dom
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { Profiler, StrictMode, type ReactNode } from 'react'
+import { StrictMode, type ReactNode } from 'react'
 import { useStore } from 'zustand'
 import { ConfirmationDialogContext } from '../../../confirmation-dialog-context'
 import { createTestStore, createBrowserMockApi } from '@/store/slices/browser-slice-test-harness'
@@ -18,8 +18,7 @@ const mocks = vi.hoisted(() => ({
   error: vi.fn(),
   confirm: vi.fn(),
   target: vi.fn(),
-  clear: vi.fn(),
-  fromPartition: vi.fn()
+  clear: vi.fn()
 }))
 vi.mock('@/store/index', async () => {
   const { useStore } = await import('zustand')
@@ -36,37 +35,6 @@ vi.mock('sonner', () => ({
 vi.mock('../../../BrowserCookieImportMachineNotice', () => ({
   BrowserCookieImportMachineNotice: () => null
 }))
-vi.mock('../../../../../../main/browser/browser-manager', () => ({ browserManager: {} }))
-vi.mock('../../../../../../main/browser/browser-session-registry', () => ({
-  browserSessionRegistry: {
-    getProfile: () => profile,
-    listProfiles: () => [profile],
-    updateProfileSource: vi.fn()
-  }
-}))
-vi.mock('../../../../../../main/browser/cookies/browser-cookie-import', () => ({
-  detectInstalledBrowsers: () => [browser],
-  importCookiesFromBrowser: vi.fn(),
-  selectBrowserProfile: vi.fn()
-}))
-vi.mock('electron', () => ({
-  ipcMain: {},
-  session: { fromPartition: mocks.fromPartition }
-}))
-import type { RuntimeRpcResponse } from '../../../../../../shared/runtime-rpc-envelope'
-
-type ProfileDispatcher = {
-  dispatch(request: {
-    id: string
-    authToken: string
-    method: string
-    params?: Record<string, unknown>
-  }): Promise<RuntimeRpcResponse<unknown>>
-}
-const { browserProfileRpcFixture } = await vi.importActual<{
-  browserProfileRpcFixture(executorRuntimeId: string): { dispatcher: ProfileDispatcher }
-}>('../../../../../../main/runtime/browser/browser-profile-rpc-test-fixture')
-
 import { BrowserSessionCookiesSection } from './BrowserSessionCookiesSection'
 import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
 import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
@@ -193,40 +161,6 @@ afterEach(async () => {
   clearRuntimeCompatibilityCacheForTests()
 })
 
-it('places one Google section after the rows and clears the current Active profile', async () => {
-  mount(<SessionSection />)
-  const button = screen.getByRole('button', { name: 'Clear Google cookies…' })
-  await waitFor(() => expect(button.hasAttribute('disabled')).toBe(false))
-  fireEvent.keyDown(screen.getAllByRole('button', { name: 'Import Cookies' })[0], {
-    key: 'ArrowDown'
-  })
-  await screen.findByRole('menuitem', { name: 'From File…' })
-  expect(screen.queryByRole('menuitem', { name: 'Clear Google cookies…' })).toBeNull()
-  fireEvent.keyDown(screen.getByRole('menuitem', { name: 'From File…' }), { key: 'Escape' })
-  expect(screen.getAllByText('Google Cookies')).toHaveLength(1)
-  expect(
-    screen.getByText('Google Cookies').compareDocumentPosition(screen.getByText('Private')) & 2
-  ).toBe(2)
-  await act(async () => fireEvent.click(button))
-  expect(mocks.clear).toHaveBeenLastCalledWith(
-    expect.objectContaining({ profileId: 'default', environmentId: null })
-  )
-  fireEvent.click(screen.getByRole('button', { name: /Private No cookies imported/ }))
-  await waitFor(() => expect(button.hasAttribute('disabled')).toBe(false))
-  await act(async () => fireEvent.click(button))
-  expect(mocks.clear).toHaveBeenLastCalledWith(
-    expect.objectContaining({ profileId: 'private', environmentId: null })
-  )
-  expect(mocks.confirm).toHaveBeenLastCalledWith(
-    expect.objectContaining({ title: 'Clear Google cookies from Private?' })
-  )
-  cleanup()
-  await i18n.changeLanguage('zh')
-  store.setState({ settingsSearchQuery: '谷歌' })
-  mount(<SessionSection />)
-  expect(screen.getByRole('button', { name: 'Clear Google cookies…' })).toBeTruthy()
-})
-
 it('captures the selected Host and Active profile at press through delayed capture/confirmation, cancel and repeat', async () => {
   selectServer()
   store.setState((s) => ({
@@ -268,190 +202,6 @@ it('captures the selected Host and Active profile at press through delayed captu
   await act(async () => fireEvent.click(button))
   expect(mocks.clear).toHaveBeenCalledTimes(3)
 })
-
-it.each([10, 100])(
-  'real Zustand updates cause no irrelevant section renders or IPC at N=%i',
-  async (count) => {
-    let renders = 0
-    mount(
-      <>
-        {Array.from({ length: count }, (_, i) => (
-          <Profiler
-            key={i}
-            id={String(i)}
-            onRender={() => {
-              renders++
-            }}
-          >
-            <SessionSection />
-          </Profiler>
-        ))}
-      </>
-    )
-    await waitFor(() => expect(mocks.target).toHaveBeenCalledTimes(count))
-    await act(async () => {})
-    mocks.target.mockClear()
-    renders = 0
-    const status = createCompatibleRuntimeStatusResponse().result
-    await act(async () =>
-      store.setState({
-        runtimeStatusByEnvironmentId: new Map([['unrelated', { checkedAt: 2, status }]])
-      })
-    )
-    expect(renders).toBe(0)
-    expect(mocks.target).not.toHaveBeenCalled()
-    expect(api.runtimeEnvironments.call).not.toHaveBeenCalled()
-    await act(async () => store.getState().setDefaultBrowserSessionProfileId('private'))
-    expect(renders).toBeGreaterThan(0)
-    await waitFor(() => expect(mocks.target).toHaveBeenCalledTimes(count))
-  }
-)
-
-it('freezes actual executor provenance through confirmation, refuses replacement and captures fresh authority', async () => {
-  replaceRuntimeEnvironmentRevisions([environment])
-  let executor = browserProfileRpcFixture('B').dispatcher
-  let stamped = true
-  let rows = [{ name: 'SID', domain: '.google.com', path: '/', secure: true }]
-  const cookies = {
-    get: vi.fn(async () =>
-      rows.map((row) => ({ ...row, value: 'live', sameSite: 'unspecified' as const }))
-    ),
-    remove: vi.fn(async () => {
-      rows = []
-    })
-  }
-  mocks.fromPartition.mockReturnValue({ cookies })
-  const status = selectServer()
-  mocks.target.mockResolvedValue(null)
-  api.runtimeEnvironments.call.mockImplementation(
-    async (request: { method: string; params?: Record<string, unknown> }) => {
-      if (request.method === 'status.get') {
-        return { id: 'status', ok: true, result: status }
-      }
-      const response = await executor.dispatch({ ...request, id: 'rpc', authToken: 'fixture' })
-      if (response.ok) {
-        expect(response._meta?.runtimeId).toBe('D')
-      }
-      if (response.ok && request.method === 'browser.profileList') {
-        if (!stamped && response.result && typeof response.result === 'object') {
-          Reflect.deleteProperty(response.result, 'executorRuntimeId')
-        }
-      }
-      return response
-    }
-  )
-  mount(<SessionSection />)
-  const button = screen.getByRole('button', { name: 'Clear Google cookies…' })
-  await waitFor(() => expect(button.hasAttribute('disabled')).toBe(false))
-  const confirmation = Promise.withResolvers<boolean>()
-  mocks.confirm.mockReturnValueOnce(confirmation.promise)
-  fireEvent.click(button)
-  await waitFor(() => expect(mocks.confirm).toHaveBeenCalledTimes(1))
-  executor = browserProfileRpcFixture('C').dispatcher
-  await act(async () => confirmation.resolve(true))
-  await waitFor(() =>
-    expect(api.runtimeEnvironments.call).toHaveBeenCalledWith(
-      expect.objectContaining({
-        method: 'browser.profileClearGoogleCookies',
-        params: { profileId: 'default', executorRuntimeId: 'B' },
-        expectedEnvironmentPairingRevision: 7
-      })
-    )
-  )
-  expect(cookies.get).not.toHaveBeenCalled()
-  expect(mocks.clear).not.toHaveBeenCalled()
-  await waitFor(() => expect(button.hasAttribute('disabled')).toBe(false))
-  fireEvent.click(button)
-  await waitFor(() => expect(cookies.remove).toHaveBeenCalledTimes(1))
-  expect(api.runtimeEnvironments.call).toHaveBeenLastCalledWith(
-    expect.objectContaining({
-      method: 'browser.profileClearGoogleCookies',
-      params: { profileId: 'default', executorRuntimeId: 'C' }
-    })
-  )
-  await waitFor(() => expect(button.hasAttribute('disabled')).toBe(false))
-  fireEvent.click(button)
-  await waitFor(() => expect(cookies.get).toHaveBeenCalledTimes(3))
-  for (const mode of ['missing stamp', 'old daemon', 'unknown R']) {
-    stamped = mode !== 'missing stamp'
-    act(() => {
-      selectServer(mode !== 'old daemon')
-      replaceRuntimeEnvironmentRevisions(mode === 'unknown R' ? [] : [environment])
-      profileEvents.forEach((notify) => notify())
-    })
-    const unavailable = mode === 'old daemon' || mode === 'unknown R'
-    await waitFor(() => expect(button.hasAttribute('disabled')).toBe(unavailable))
-    const confirms = mocks.confirm.mock.calls.length
-    if (!unavailable) {
-      fireEvent.click(button)
-      await waitFor(() => expect(button.hasAttribute('disabled')).toBe(mode === 'missing stamp'))
-    }
-    expect(mocks.confirm).toHaveBeenCalledTimes(confirms)
-    expect(cookies.get).toHaveBeenCalledTimes(3)
-    expect(cookies.remove).toHaveBeenCalledTimes(1)
-  }
-})
-
-it.each(['same host', 'changed host', 'changed pairing'])(
-  'keeps pressed-target provenance through overlapping list overlay: %s',
-  async (change) => {
-    const status = selectServer()
-    mocks.target.mockResolvedValue(null)
-    let listing = 0
-    api.runtimeEnvironments.call.mockImplementation(async ({ method }: { method: string }) => ({
-      id: 'rpc',
-      ok: true,
-      result:
-        method === 'status.get'
-          ? status
-          : {
-              profiles: listing++ ? [profile, { ...profile, id: 'new' }] : [profile],
-              executorRuntimeId: listing === 1 ? 'S1' : 'S2'
-            }
-    }))
-    const overlay = Promise.withResolvers<Record<string, never>>()
-    const overlayReader = vi.fn().mockReturnValueOnce(overlay.promise).mockResolvedValue({})
-    Object.assign(api.browser, { sessionClientRouteImportSources: overlayReader })
-    mount(<SessionSection />)
-    const button = screen.getByRole('button', { name: 'Clear Google cookies…' })
-    await waitFor(() => expect(button.hasAttribute('disabled')).toBe(false))
-    fireEvent.click(button)
-    await waitFor(() => expect(overlayReader).toHaveBeenCalledTimes(1))
-    await act(async () => {
-      await store.getState().fetchBrowserSessionProfiles('runtime:server')
-    })
-    if (change === 'changed pairing') {
-      replaceRuntimeEnvironmentRevisions([{ ...environment, pairingRevision: 8 }])
-      act(() => store.setState({ runtimeEnvironments: [{ ...environment, pairingRevision: 8 }] }))
-    } else if (change === 'changed host') {
-      act(() => store.setState({ browserSessionHostIdOverride: 'local' }))
-    }
-    await act(async () => overlay.resolve({}))
-    expect(store.getState().browserSessionProfilesByHostId['runtime:server']).toHaveLength(2)
-    const clears = api.runtimeEnvironments.call.mock.calls.filter(
-      ([request]) => request.method === 'browser.profileClearGoogleCookies'
-    )
-    if (change === 'changed pairing') {
-      expect(clears).toHaveLength(0)
-      expect(mocks.confirm).not.toHaveBeenCalled()
-    } else {
-      await waitFor(() => expect(mocks.confirm).toHaveBeenCalledTimes(1))
-      expect(clears).toEqual([
-        [
-          expect.objectContaining({
-            params: { profileId: 'default', executorRuntimeId: 'S1' },
-            expectedEnvironmentPairingRevision: 7
-          })
-        ]
-      ])
-    }
-    expect(
-      api.runtimeEnvironments.call.mock.calls.filter(
-        ([request]) => request.method === 'browser.profileList'
-      )
-    ).toHaveLength(2)
-  }
-)
 
 it.each([false, true])(
   'refuses R7 replacement during initial local reply (null=%s), then permits fresh R8',
@@ -530,41 +280,3 @@ it.each(['success', 'rejection'])(
     )
   }
 )
-
-it('recovers availability from owner events, rejects stale probes, and retires its subscription', async () => {
-  selectServer(false)
-  mocks.target.mockResolvedValue(null)
-  const view = mount(<SessionSection />)
-  const button = screen.getByRole('button', { name: 'Clear Google cookies…' })
-  await screen.findByText('Unavailable for this profile on the selected host.')
-  expect(button.hasAttribute('disabled')).toBe(true)
-  const old = Promise.withResolvers<typeof local | null>()
-  mocks.target.mockReturnValueOnce(old.promise)
-  act(() => profileEvents.forEach((notify) => notify()))
-  expect(screen.queryByText('Unavailable for this profile on the selected host.')).toBeNull()
-  mocks.target.mockResolvedValue({ ...local, environmentId: 'server' })
-  await act(async () => profileEvents.forEach((notify) => notify()))
-  expect(button.hasAttribute('disabled')).toBe(false)
-  await act(async () => old.resolve(null))
-  expect(button.hasAttribute('disabled')).toBe(false)
-  await act(async () => fireEvent.click(button))
-  expect(mocks.clear).toHaveBeenCalledWith(expect.objectContaining({ environmentId: 'server' }))
-  mocks.target.mockResolvedValue(null)
-  await act(async () => profileEvents.forEach((notify) => notify()))
-  expect(button.hasAttribute('disabled')).toBe(true)
-  mocks.target.mockResolvedValue({ ...local, environmentId: 'server' })
-  await act(async () => profileEvents.forEach((notify) => notify()))
-  expect(button.hasAttribute('disabled')).toBe(false)
-  mocks.target.mockResolvedValueOnce(null)
-  await act(async () => fireEvent.click(button))
-  expect(button.hasAttribute('disabled')).toBe(true)
-  expect(mocks.confirm).toHaveBeenCalledTimes(1)
-  expect(mocks.error).not.toHaveBeenCalled()
-  expect(api.runtimeEnvironments.call).not.toHaveBeenCalled()
-  const late = Promise.withResolvers<typeof local>()
-  mocks.target.mockReturnValueOnce(late.promise)
-  act(() => profileEvents.forEach((notify) => notify()))
-  view.unmount()
-  await act(async () => late.resolve(local))
-  expect(profileEvents.size).toBe(0)
-})

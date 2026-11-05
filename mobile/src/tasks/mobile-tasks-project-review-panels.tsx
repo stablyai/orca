@@ -1,6 +1,6 @@
 import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-presentation'
 import { translate } from '../i18n/mobile-i18n'
-import { isBrokenCheck } from '../../../src/shared/pr-checks-fix-prompt'
+import { isBrokenCheck } from '../../../src/shared/source-control/checks/pr-checks-fix-prompt'
 import {
   SHOW_MOBILE_PROJECT_REVIEW_PANELS,
   getGitHubReviewSummary,
@@ -162,7 +162,7 @@ export function renderMobileTasksProjectReviewPanels(model: ConnectionPresentati
                 onPress={() => void rerunProjectGitHubChecks(projectRowItem, true)}
               >
                 <Text style={styles.inlineSaveText}>
-                  {translate('tasks.projectReviewPanels.rerunFailed', 'Rerun failed')}
+                  {translate('tasks.rerunUnsuccessful', 'Retry checks')}
                 </Text>
               </Pressable>
               <Pressable

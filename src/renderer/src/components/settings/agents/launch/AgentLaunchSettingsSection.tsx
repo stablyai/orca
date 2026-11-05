@@ -1,15 +1,15 @@
 import { useChatSettingsOwnPermissions } from '@/runtime/structured-agent-session-host-capability'
 import { toast } from 'sonner'
 import { getAgentLabel } from '@/lib/agent-catalog'
-import type { TuiAgent } from '../../../../../../shared/tui-agent'
-import { wholeAgentEnvironmentUpdates } from '../../../../../../shared/agent-launch-permission-updates'
+import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
+import { wholeAgentEnvironmentUpdates } from '../../../../../../shared/agent-launch/choices/agent-launch-permission-updates'
 import { useRef } from 'react'
 import { useAppStore } from '@/store/index'
 import {
   agentLaunchSettingsMutationUpdates,
   projectAgentLaunchSettings,
   type AgentLaunchSettingsMutation
-} from '../../../../../../shared/agent-launch-settings'
+} from '../../../../../../shared/agent-launch/choices/agent-launch-settings'
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
 import {
   AgentLaunchSettingsCatalog,

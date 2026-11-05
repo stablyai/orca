@@ -1,7 +1,10 @@
 import { readFile } from 'node:fs/promises'
 import * as path from 'node:path'
-import { resolveGitMetadataPath, resolveWorktreeHostPath } from '../../../shared/git-metadata-path'
-import { parseGitdirMarkerPayload } from '../../../shared/gitdir-marker-payload'
+import {
+  resolveGitMetadataPath,
+  resolveWorktreeHostPath
+} from '../../../shared/git/metadata/git-metadata-path'
+import { parseGitdirMarkerPayload } from '../../../shared/git/metadata/gitdir-marker-payload'
 import type { GitRuntimeOptions } from '../git-runtime-options'
 
 export async function resolveGitDir(

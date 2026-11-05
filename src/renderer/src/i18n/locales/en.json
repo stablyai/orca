@@ -466,6 +466,24 @@
         "imported_other": "Imported {{count}} cookies for {{domains}}. Reload the page to use them.",
         "failed": "Cookie import failed: {{reason}}"
       }
+    },
+    "passwords": {
+      "savePrompt": {
+        "open": "Saved password offer",
+        "updateTitle": "Update password?",
+        "saveTitle": "Save password?",
+        "username": "Username",
+        "password": "Password",
+        "never": "Never for this site",
+        "notNow": "Not now",
+        "update": "Update",
+        "save": "Save"
+      },
+      "fill": {
+        "noUsername": "(no username)",
+        "title": "Saved logins",
+        "otherLogins": "Other logins on this site"
+      }
     }
   },
   "editor": {
@@ -818,6 +836,87 @@
           "browse": "Browse the Chrome Web Store",
           "openFailed": "Open a workspace to browse the Chrome Web Store."
         }
+      },
+      "passwords": {
+        "searchKeywords": {
+          "passwords": "passwords",
+          "autofill": "autofill",
+          "vault": "vault",
+          "logins": "logins",
+          "import": "import",
+          "csv": "csv",
+          "touchId": "touch id"
+        },
+        "authFailed": "Could not confirm it was you",
+        "copied": "Password copied. Orca clears it from the clipboard in 2 minutes.",
+        "search": "Search {{count}} passwords",
+        "add": "Add",
+        "noMatches": "No saved passwords match.",
+        "noUsername": "(no username)",
+        "edit": "Edit",
+        "copy": "Copy password",
+        "delete": "Delete…",
+        "neverHeading": "Never saved for {{count}} sites",
+        "removeNever": "Remove",
+        "importFailed": "Could not import passwords",
+        "importDuplicates": "{{count}} already saved",
+        "importConflicts": "{{count}} kept because a different password is saved",
+        "importInvalid": "{{count}} unreadable rows",
+        "importUndecryptable": "{{count}} protected by the browser; export a CSV from it instead",
+        "imported": "Imported {{count}} passwords",
+        "deleteAllConfirmTitle": "Delete all password data?",
+        "deleteAllConfirmDescription": "Every saved password in the {{profile}} profile is permanently deleted. This can’t be undone.",
+        "deleteAll": "Delete data",
+        "deletedAll": "Password data deleted",
+        "form": {
+          "invalidSite": "Enter a website address, like example.com.",
+          "invalidPassword": "Enter a password.",
+          "duplicate": "A password for this username is already saved for this site.",
+          "unavailable": "Could not save this password.",
+          "editTitle": "Edit password",
+          "addTitle": "Add password",
+          "site": "Site",
+          "sitePlaceholder": "example.com",
+          "username": "Username",
+          "password": "Password",
+          "currentHint": "Save the password you use on this site today.",
+          "note": "Note",
+          "cancel": "Cancel",
+          "save": "Save",
+          "description": "Orca fills it when you pick it under a sign-in field on this site.",
+          "usernamePlaceholder": "Email or username",
+          "addNote": "Add a note"
+        },
+        "hide": "Hide password",
+        "show": "Show password",
+        "offerToSave": "Offer to save passwords",
+        "offerToSaveDescription": "After you sign in to a site in Orca’s browser, offer to save the login.",
+        "fillReauth": "Ask for Touch ID before filling",
+        "fillReauthDescription": "For a shared computer. Showing or copying a password already asks.",
+        "noReauth": "This computer can’t confirm it’s you with Touch ID, so passwords show and fill without a check.",
+        "reauthUnavailable": "Touch ID can’t be used right now, so Orca won’t show, copy or fill a password that needs it.",
+        "import": "Import",
+        "importCsv": "From a CSV file…",
+        "deleteAllTitle": "Delete all password data",
+        "deleteAllDescription": "Every saved password, note and never-save site in the {{profile}} profile.",
+        "empty": "Orca offers to save a login after you sign in. You can also bring them from another browser or a CSV file.",
+        "account": "{{username}} on {{site}}",
+        "lastUsed": "Used {{when}}",
+        "copyFor": "Copy password for {{account}}",
+        "editFor": "Edit {{account}}",
+        "moreActions": "More actions for {{account}}",
+        "accountCount": "{{count}} accounts",
+        "deleteConfirmTitle": "Delete the {{site}} password for {{username}}?",
+        "deleteConfirmDescription": "Orca won’t fill it anymore. This can’t be undone.",
+        "deleteConfirm": "Delete",
+        "profileDescription": "Saved logins for the {{profile}} profile. Orca fills one only when you pick it under a sign-in field.",
+        "unavailableTitle": "Saved passwords are off on this computer",
+        "emptyTitle": "No saved passwords yet",
+        "searchLabel": "Search passwords",
+        "deleteAllAction": "Delete…",
+        "title": "Passwords",
+        "description": "Saved logins for Orca’s browser: add, import, edit and delete them.",
+        "httpSuffix": " · http"
       }
     },
     "agents": {
@@ -1099,6 +1198,12 @@
       "description": "Format text before manual saves and auto save. Configure a formatter command in Settings > Projects. Off by default.",
       "keywords": "formatter format on save prettier biome gofmt"
     },
+    "editorInsertFinalNewline": {
+      "title": "Insert Final Newline",
+      "description": "Add a line break when saving a non-empty code file that does not end with one. Off by default.",
+      "keywordNewline": "newline",
+      "keywordEndOfFile": "end of file"
+    },
     "repositoryFormatter": {
       "title": "Formatter Command",
       "description": "Use this project’s formatter for Format on Save.",
@@ -1110,7 +1215,8 @@
       "saving": "Saving…",
       "save": "Save formatter",
       "placeholder": "npx --no-install prettier --stdin-filepath \"${file}\""
-    }
+    },
+    "experimental": {}
   },
   "menu": {
     "checkForUpdates": "Check for Updates...",
@@ -2249,7 +2355,6 @@
         "9c3ba11a05": "Status:",
         "934d87ab96": "Loading check details…",
         "71c11aff84": "Rerun all checks",
-        "e31651a224": "Rerun failed checks",
         "1b56e28faa": "Rerun",
         "f4b1292569": "Start the default AI agent on these checks",
         "9a1004fc76": "Refresh checks",
@@ -2754,7 +2859,6 @@
         "662bc2998d": "Status:",
         "d8e82b7f15": "Loading check details…",
         "54cddd1858": "Rerun all checks",
-        "68605516dd": "Rerun failed checks",
         "522d9353e1": "Rerun",
         "0fa8b8faec": "Start the default AI agent on these checks",
         "5d0f42766d": "Refresh checks",
@@ -3868,7 +3972,6 @@
             "e8b3741ff7": "Ignored",
             "a9957007eb": "Ignore {{value0}}",
             "bef0adef9b": "Branch",
-            "0b1766738a": "Repo",
             "bbb1ab6a6f": "Select {{value0}}",
             "b771c92598": "Delete selected",
             "7eee951968": "Scanning workspaces",
@@ -3877,7 +3980,6 @@
             "b2c1331844": "Delete Inactive Workspaces",
             "7f451a3e2c": "Could not ignore cleanup suggestion",
             "662b8ec3f8": "Workspace cleanup scan failed",
-            "4d0b72481c": "Ignore",
             "9cc26c019d": "Remove",
             "0e2d235c63": "Workspace scan ready",
             "4a35c08764": "Review",
@@ -3885,9 +3987,6 @@
             "1d3503357d": "You can close this and come back while deletion continues.",
             "4c2990886e": "{{value0}}/{{value1}} deleted",
             "86ba852118": "{{value0}}, {{value1}} failed",
-            "deletingCount": "Deleting workspaces: {{value0}}",
-            "deleteCount": "Delete workspaces: {{value0}}?",
-            "selectedForDeletionCount": "Selected for deletion: {{value0}}",
             "deleteButtonCount": "Delete {{value0}}",
             "archivedStatus": "Archived",
             "74f6c16279": "Back"
@@ -3902,7 +4001,6 @@
           },
           "candidateRow": {
             "gitLabel": "Git",
-            "commitsLabel": "Commits",
             "contextLabel": "Context",
             "flagsLabel": "Flags",
             "collapseDetails": "Collapse details",
@@ -4143,7 +4241,7 @@
             "copyFilePathFailed": "Failed to copy file path",
             "downloadOpenWithDefaultApp": "Download & open with default app",
             "downloadOpenFailed": "Failed to download '{{value0}}'.",
-            "openInThisGroup": "Open in this group",
+            "openInNewTab": "Open in new tab",
             "openInThisGroupRefused": "Couldn't open {{value0}} in this group"
           },
           "TerminalSessionStateSaveFailureDialog": {
@@ -4707,7 +4805,6 @@
             "5c938d39ac": "wk",
             "54e8d6bb2d": "Fable",
             "a79c64f87e": "Fable",
-            "c98ea88392": "No other accounts",
             "d450654fa2": "Claude Account",
             "11e2354daf": "Claude usage runtime",
             "3dd7ddfae1": "Open Claude details and account switcher",
@@ -4737,6 +4834,8 @@
             "zcodeUsageMenu": "ZCode Usage",
             "rateLimitResetsAvailable_one": "{{count}} rate-limit reset available",
             "rateLimitResetsAvailable_other": "{{count}} rate-limit resets available",
+            "signedOutAccounts": "Signed out",
+            "addAnotherAccount": "Add another account…",
             "staleCodexSessions_one": "{{count}} Codex session is still on the old account.",
             "staleCodexSessions_other": "{{count}} Codex sessions are still on the old account."
           },
@@ -6190,8 +6289,6 @@
           "expandAriaLabel": "Expand hidden worktrees for {{repo}}",
           "hiding_one": "Hiding {{count}} discovered worktree",
           "hiding_other": "Hiding {{count}} discovered worktrees",
-          "hidingInRepo_one": "Hiding {{count}} discovered worktree in {{repo}}",
-          "hidingInRepo_other": "Hiding {{count}} discovered worktrees in {{repo}}",
           "keepHiddenAriaLabel_one": "Keep {{count}} discovered worktree hidden for {{repo}}; recover from the project menu",
           "keepHiddenAriaLabel_other": "Keep {{count}} discovered worktrees hidden for {{repo}}; recover from the project menu",
           "keepHiddenTooltip": "Keep hidden - recover from the project menu",
@@ -7863,7 +7960,7 @@
         },
         "BrowserUseComputerUseNotice": {
           "15b5e680ba": "Open Computer Use",
-          "79209b37b9": "If cookie import is not the right fit, Computer Use can control local apps and may use existing logged-in browser sessions where applicable. Install the Computer Use skill; macOS also requires privacy permissions.",
+          "79209b37b9": "If cookie import is not the right fit, Computer Use can control local apps and may use existing logged-in browser sessions where applicable. Install the Orca Computer Use skill; macOS also requires privacy permissions.",
           "333984cf90": "Use an existing browser session"
         },
         "BrowserUseEnableSwitch": {
@@ -7983,7 +8080,7 @@
         },
         "ComputerUsePane": {
           "1735461723": "Enables agents to inspect and operate local desktop apps.",
-          "93255aaf18": "Computer Use skill",
+          "93255aaf18": "Orca Computer Use skill",
           "45f8e22c2e": "Open",
           "d95d1cfab8": "Refresh",
           "0c29da5805": "Ready",
@@ -8119,9 +8216,6 @@
           "browserExtensions": {
             "copy": "Adds Settings › Browser › Extensions for local browser profiles.",
             "toggleLabel": "Toggle browser extensions"
-          },
-          "orchestrationPanel": {
-            "toggleLabel": "Toggle orchestration panel"
           }
         },
         "FloatingWorkspacePane": {
@@ -8183,7 +8277,9 @@
           "7ddd66fede": "Editor Word Wrap",
           "9b18de6eea": "Wrap long lines in file editors instead of requiring horizontal scrolling.",
           "collapseUnchangedTitle": "Collapse Unchanged Regions",
-          "collapseUnchangedDescription": "Show only changed lines and a little surrounding context in a file diff, hiding the rest behind expandable bands. The View All Changes diff always collapses this way."
+          "collapseUnchangedDescription": "Show only changed lines and a little surrounding context in a file diff, hiding the rest behind expandable bands. The View All Changes diff always collapses this way.",
+          "markdownDefaultView": "Default Markdown View",
+          "markdownDefaultViewDesc": "The view Markdown files open in. Right-click the view switcher in a Markdown tab to change it there."
         },
         "AdvancedNetworkSettingsSection": {
           "3e431564b5": "localhost, 127.0.0.1, *.internal",
@@ -9423,7 +9519,7 @@
           "902f5dee1f": "Copy on Select",
           "9129b7e805": "Hovering a terminal pane activates it without needing to click.",
           "8eefeaa3da": "Focus Follows Mouse",
-          "96fe15def8": "Mouse and clipboard behavior for terminal panes.",
+          "96fe15def8": "Scrolling, mouse, and clipboard behavior for terminal panes.",
           "45721f3e67": "Terminal Interaction",
           "9c0b1c1792": "On",
           "c1fc9e9444": "GPU Acceleration",
@@ -10332,14 +10428,6 @@
               "extension": "extension",
               "chrome": "chrome",
               "password": "password manager"
-            },
-            "orchestrationPanel": {
-              "title": "Orchestration panel",
-              "description": "Shows which agents each agent is working with, beside its chat or terminal.",
-              "orchestration": "orchestration",
-              "agents": "agents",
-              "workers": "workers",
-              "manager": "manager"
             }
           }
         },
@@ -10528,7 +10616,11 @@
             "command": "command",
             "confirm": "confirm",
             "close": "close",
-            "omp": "OMP"
+            "omp": "OMP",
+            "markdownDefaultView": "Default Markdown View",
+            "markdownDefaultViewDesc": "The view Markdown files open in. Right-click the view switcher in a Markdown tab to change it there.",
+            "markdownSourceKw": "source",
+            "markdownRichKw": "rich"
           }
         },
         "git": {
@@ -14487,7 +14579,8 @@
             "9fffaf17c1": "Toggle right sidebar ({{value0}})",
             "aiVaultSessionHistory": "Agents",
             "folderWorkspaces": "Attached worktrees",
-            "parentPrChecks": "PR Checks"
+            "parentPrChecks": "PR Checks",
+            "creatingWorkspace": "Available when the workspace is ready"
           },
           "right": {
             "panel": {
@@ -15308,9 +15401,7 @@
           "ae3b00ca82": "Set up GitHub tasks",
           "ff92d15436": "Orca will notify you when agents are done or need help.",
           "b054332836": "Set up notifications",
-          "04ae28d8ca": "Pick the look you want to stare at for hours.",
           "f396db9f20": "Make it feel like home",
-          "322fc50a18": "Orca works with every CLI agent. Choose the one you'll reach for most. Switch any time.",
           "198b148b3c": "Pick your default agent",
           "windowsTerminalTitle": "Set Windows terminal defaults",
           "windowsTerminalSubtitle": "Choose the DEFAULT Shell for new panes and how right-click behaves in the terminal.",
@@ -15778,8 +15869,6 @@
           "AiCommitPrSettingsCard": {
             "8d4152701a": "e.g. ollama run llama3.1 {{value0}}",
             "9ee54037a4": "Custom command",
-            "4b2fc4b80c": "Thinking effort",
-            "be8917699e": "Model",
             "560d4feb00": "Custom",
             "29d119fe95": "Agent",
             "f9382b48a1": "Enable AI author",
@@ -17160,6 +17249,9 @@
           "nameTaken": "A file with that name already exists",
           "createFailed": "Couldn't create the file.",
           "sshUnsupported": "Creating files in SSH workspaces isn't supported yet."
+        },
+        "MarkdownDefaultViewContextMenu": {
+          "label": "Default Markdown View"
         }
       },
       "diff": {
@@ -18296,6 +18388,9 @@
         },
         "automationTargetAvailability": {
           "hostMismatch": "The saved run host no longer matches this project setup."
+        },
+        "launchSettings": {
+          "needsFreshSession": "Agent launch settings require a fresh session for every run."
         }
       },
       "agent": {
@@ -19382,12 +19477,23 @@
           "theme": "Appearance",
           "windowsTerminal": "Windows Terminal",
           "notifications": "Notifications",
-          "integrations": "Integrations"
+          "integrations": "Integrations",
+          "agentSurface": "Chat or Terminal"
         },
         "actions": {
           "addFirstProject": "Add your first project",
           "continue": "Continue",
           "openingAddProject": "Opening Add Project..."
+        },
+        "agentSurface": {
+          "title": "How do you want to work with agents?",
+          "pickWhereAgentsOpen": "Pick where new agents open."
+        },
+        "agentChat": {
+          "subtitle": "Pick a Chat UI agent. Agents without chat support open in a terminal instead."
+        },
+        "agentTerminal": {
+          "subtitle": "Orca works with every CLI agent. Choose the one you'll reach for most."
         }
       },
       "skipConfirmation": {
@@ -19399,7 +19505,32 @@
           "system": "Match OS",
           "dark": "Easy on the eyes",
           "light": "Bright & crisp"
-        }
+        },
+        "looks": {
+          "activeNow": "now",
+          "browsePlugins": "Browse plugins",
+          "browseThemePlugins": "Browse theme plugins",
+          "colorMode": "Color mode",
+          "colorModeCaption": "Light, dark, or follow your OS.",
+          "darkLook": "Dark look",
+          "darkLooks": "Dark looks",
+          "lightLook": "Light look",
+          "lightLooks": "Light looks",
+          "moreThemes": "More themes",
+          "next": "More looks",
+          "orcaDark": "Orca Dark",
+          "orcaLight": "Orca Light",
+          "pluginsHint": "More themes are available as plugins.",
+          "previous": "Previous looks",
+          "showsWhenDark": "Shows when your system is dark",
+          "showsWhenLight": "Shows when your system is light",
+          "slotLabel": "Look to edit",
+          "sourceBuiltIn": "Built in",
+          "sourceCommunity": "Terminal palette",
+          "themes": "Theme",
+          "themesCaption": "Optional. Go further with app themes and terminal palettes."
+        },
+        "subtitle": "Choose light or dark, then optionally a theme. Change either any time in Settings."
       },
       "integrations": {
         "capabilities": {
@@ -19408,6 +19539,56 @@
           "reviewStatus": "See issue state, review status, and CI checks on every worktree",
           "managePullRequests": "Read, comment on, and merge pull requests without leaving Orca"
         }
+      },
+      "yoloPermissions": {
+        "overrideDescription": "These agents can still run commands and edit files without asking. Their individual settings override Yolo mode.",
+        "fullAccessOverride": "{{agent}} still has full access",
+        "useAgentOwnSettings": "Use {{agent}}’s own settings",
+        "useOwnSettings": "Use own settings",
+        "saveError": "Could not change permissions. Try again.",
+        "ownSettingsDescription": "Off uses each agent’s own settings. Individual agent permissions can override this switch."
+      },
+      "agentStep": {
+        "worksInChat": "Works in Chat UI",
+        "chatAgents": "Chat UI agents",
+        "terminalAgents": "Available as terminal agents",
+        "terminalAgentsHint": "No Chat UI support, so these fall back to a terminal.",
+        "chatAvailable": "Chat available",
+        "agentsOpenIn": "Agents open in",
+        "terminalUi": "Terminal UI",
+        "noAgentsForChat": "<em>No agents found on your PATH.</em> Chat UI works with {{agents}}. Install one, or continue and add an agent later.",
+        "noChatAgentsDetected": "<em>None of your agents work in Chat UI.</em> They would all open in a terminal, so Terminal fits better.",
+        "opensInTerminalFit": "<em>{{agent}} opens in a terminal</em>, so Terminal fits better.",
+        "useTerminalInstead": "Use Terminal instead",
+        "terminalTipHow": "Show how to start an agent in a terminal",
+        "terminalTip": "Switch back any time in <em>Settings → Chat UI</em>. You can also start any agent in a terminal from the <em>+</em> menu.",
+        "terminalTipWeb": "Switch back any time in <em>Settings → Onboarding checklist</em>. You can also start any agent in a terminal from the <em>+</em> menu.",
+        "terminalTipCaption": "Click <em>+</em> in the tab bar, then pick an agent marked <em>(CLI)</em>. If a chat agent's CLI is installed, hover its row and click the terminal icon to use the CLI.",
+        "chatTip": "Want chat too? Turn it on any time in <em>Settings → Chat UI</em>.",
+        "turnOnChat": "Turn on now"
+      },
+      "agentSurface": {
+        "chat": {
+          "label": "Chat UI",
+          "description": "Agents reply in a chat, with rendered messages and diffs.",
+          "terminalFallback": "Agents without chat support, and SSH or WSL projects, still open in a terminal.",
+          "noneDetected": "None of your detected agents work in Chat UI."
+        },
+        "terminal": {
+          "label": "Terminal",
+          "description": "Each agent's own CLI, exactly as it ships. Works with every CLI agent."
+        },
+        "switchNote": "Not a permanent choice. Switch any time in <em>Settings → Chat UI</em>.",
+        "preview": {
+          "userMessage": "Add retry to fetchUser",
+          "agentMessage": "Failed requests now retry up to 3 times.",
+          "composerPlaceholder": "Ask a follow-up…"
+        }
+      },
+      "launchDemo": {
+        "userMessage": "Fix the flaky upload test",
+        "agentMessage": "Found it. The retry timer wasn't mocked.",
+        "cliReady": "{{agent}} CLI ready."
       }
     },
     "jiraIssueAssigneeField": {
@@ -19510,6 +19691,7 @@
         "cancelled": "This message was withdrawn before the agent started it.",
         "chatClosed": "The chat closed before this message was sent.",
         "hostRestarted": "Orca restarted before this message was sent.",
+        "unconfirmed": "Couldn't confirm whether this was sent. It hasn't been resent.",
         "notDelivered": "This message was not delivered.",
         "notDeliveredSendAgain": "This message was not delivered. Send it again to continue.",
         "commandRefused": "This command didn't run.",
@@ -19655,10 +19837,9 @@
       },
       "turnDiff": {
         "partial": "Partial diff",
-        "showDiff": "Show diff",
-        "hideDiff": "Hide diff",
         "changedFiles_one": "{{count}} changed file",
-        "changedFiles_other": "{{count}} changed files"
+        "changedFiles_other": "{{count}} changed files",
+        "showMoreFiles": "Show {{count}} more"
       },
       "receipt": {
         "unavailable": "Selected answer unavailable",
@@ -19691,7 +19872,8 @@
         "orcaStopUnnamedServer": "the remote server",
         "permissionDenied": "{{agent}} denied permission. View details.",
         "safetyReview": "{{agent}} reported a safety review warning. View details.",
-        "truncatedResponse": "Provider response truncated (original size: {{bytes}} bytes)."
+        "truncatedResponse": "Provider response truncated (original size: {{bytes}} bytes).",
+        "modelFallback": "Claude switched models: {{from}} → {{to}}."
       },
       "composer": {
         "send": "Send",
@@ -19764,6 +19946,7 @@
         "availableAfterSessionStarts": "Available after the session starts.",
         "optionUpdateFailed": "Could not update option",
         "optionValue": {
+          "ultracode": "Ultracode",
           "fast": "Fast",
           "minimal": "Minimal",
           "low": "Low",
@@ -19976,8 +20159,6 @@
         "stateUnverifiableCount_other": "{{value0}} with status unavailable"
       },
       "jumpToLatest": "Jump to latest",
-      "newRowsAnnouncement": "New messages arrived while you were away",
-      "newRowsMarker": "New",
       "find": {
         "label": "Find in chat",
         "noResults": "No results",
@@ -20180,9 +20361,9 @@
         "orcaSessionIdTooltip": "Orca's ID for this chat, separate from the agent CLI's own session ID. Agents use it to refer to each other through Orca."
       },
       "dismissDeliveryNotice": "Dismiss",
+      "editDeliveryNotice": "Edit",
       "addSelectionToChat": "Add to chat",
       "messageNotSent": "Message not sent",
-      "deliveryUnconfirmed": "Delivery unconfirmed — check chat before retrying",
       "messageSending": "Sending…",
       "userMessage": {
         "showFull": "Show full message",
@@ -20256,7 +20437,6 @@
         "continue": "Continue",
         "failed": "Couldn't continue this chat. Try again, or send a message.",
         "explanation": "Continue, and the agent first checks whether its last step finished.",
-        "unconfirmed": "Couldn't confirm whether {{agent}} received Continue. Check the chat before trying again.",
         "usageLimitExplanation": "Asks the agent to continue where it left off. Use it once the limit resets."
       },
       "antigravitySignIn": {
@@ -20288,7 +20468,8 @@
         "settingsRejected": "Codex could not apply the selected model and effort. This goal change was not sent. Check the selection and try again.",
         "settingsUnconfirmed": "Codex did not confirm the selected model and effort. This goal change was not sent. Check the chat and try again.",
         "pauseUnconfirmed": "Codex stopped running, but its goal pause was not confirmed. Check the goal before continuing.",
-        "stopUnconfirmed": "Codex could not confirm Stop. Check the chat before continuing."
+        "stopUnconfirmed": "Codex could not confirm Stop. Check the chat before continuing.",
+        "noGoal": "Codex has no goal to change in this chat. Set one with /goal followed by the objective."
       },
       "slashCommandDescriptions": {
         "clearConversation": "Clear the conversation",
@@ -20435,7 +20616,9 @@
         "cancelled": "Orca won't continue this chat automatically.",
         "scheduled": "Orca will continue this chat at {{time}}.",
         "cancel": "Don't continue"
-      }
+      },
+      "settings": "Chat settings",
+      "creationChatNotOpened": "Your worktree is ready, but the chat could not open. Retry to open it with your message."
     },
     "tab": {
       "bar": {
@@ -20483,9 +20666,7 @@
         "browse": {
           "noSizes": "No workspace sizes measured yet.",
           "noSizesDescription": "Sizes appear after disk usage has been measured.",
-          "measureSizes": "Scan",
           "measureSizesTitle": "Scan workspace sizes",
-          "measureSizesDescription": "Scan disk usage to compare, sort, and filter workspaces by size.",
           "sizeOnDisk": "Size on disk: {{value0}}",
           "checkingGitRow": "Checking git status",
           "searchPlaceholder": "Search name, repo, branch, path, host",
@@ -20667,7 +20848,18 @@
           "selectionWithheldCount_other": "{{count}} selected workspaces are hidden by the current filters and were deselected.",
           "selectAllSafetyChecked_one": "Select {{count}} safety-checked workspace",
           "selectAllSafetyChecked_other": "Select all {{count}} safety-checked workspaces",
-          "lastActive": "Last active {{value0}}"
+          "lastActive": "Last active {{value0}}",
+          "projectNamed": "Project: {{value0}}",
+          "moreFlags": "Show {{value0}} more flags",
+          "pathLabel": "Path",
+          "copyPath": "Copy path",
+          "gitNotChecked": "Not checked",
+          "workspaceCount_one": "{{count}} workspace",
+          "workspaceCount_other": "{{count}} workspaces",
+          "restoreFailed": "Could not stop ignoring {{value0}}",
+          "ignoreTooltip": "Ignore: skip in bulk delete",
+          "stopIgnoring": "Stop ignoring",
+          "stopIgnoringNamed": "Stop ignoring {{value0}}"
         },
         "scan": {
           "progress": "Scanning workspaces ({{value0}}/{{value1}})",
@@ -20708,6 +20900,12 @@
             "unpushed": "Unpushed",
             "unknown": "Unknown"
           }
+        },
+        "confirm": {
+          "deletingTitle_one": "Deleting {{count}} workspace",
+          "deletingTitle_other": "Deleting {{count}} workspaces",
+          "deleteTitle_one": "Delete {{count}} workspace?",
+          "deleteTitle_other": "Delete {{count}} workspaces?"
         }
       },
       "creation": {
@@ -20799,7 +20997,9 @@
       "TerminalInteraction": {
         "copyTrimsGutter": "Trim Gutter on Copy",
         "copyTrimsGutterDescription": "Drop the left gutter agent output is painted behind, so copied text is not indented. Only the indent every selected line shares is removed.",
-        "copyOnSelectDescription": "Automatically copy text you select in a terminal or chat to the clipboard."
+        "copyOnSelectDescription": "Automatically copy text you select in a terminal or chat to the clipboard.",
+        "scrollOnUserInput": "Scroll to Bottom on Input",
+        "scrollOnUserInputDescription": "Typing or pasting while scrolled up jumps to the latest output. Turn off to keep your place."
       },
       "terminal": {
         "clipboard": {
@@ -20814,14 +21014,26 @@
             "whitespace": "whitespace",
             "spaces": "spaces"
           }
+        },
+        "search": {
+          "typing": "typing",
+          "input": "input",
+          "jump": "jump",
+          "bottom": "bottom",
+          "scrollback": "scrollback",
+          "snap": "snap",
+          "position": "position"
         }
       },
       "nativeChat": {
         "followUpBehaviorTitle": "Queue follow-ups",
+        "scrollToLatestOnSendTitle": "Scroll to latest when sending",
+        "scrollToLatestOnSendCopy": "Sending while scrolled up jumps to the latest message and follows the reply. Turn off to keep your place.",
+        "scrollToLatestOnSendSearchPosition": "position",
         "inlineVisualsTitle": "Inline visuals",
         "inlineVisualsCopy": "Let the agent show charts, diagrams and mockups inside its replies. Applies to newly started chats.",
         "inlineVisualsToggleLabel": "Toggle inline visuals",
-        "followUpBehaviorCopy": "Messages sent while the agent works wait as cards until the turn ends, instead of going into the running turn. Cmd/Ctrl+Enter does the opposite for one message.",
+        "followUpBehaviorCopy": "Messages sent while the agent works wait as cards until the turn ends, instead of going into the running turn. Cmd/Ctrl+Enter does the opposite for one message. Messages with images wait as cards too.",
         "behaviorTitle": "Behavior",
         "resumeSearchUpdate": "update",
         "resumeSearchRelaunch": "relaunch",
@@ -20839,7 +21051,13 @@
         "usageLimitContinueCopy": "Orca sends \"Continue where you left off.\" when the limit resets. Applies to all chats with a known reset time.",
         "usageLimitContinueSearchLimit": "usage limit",
         "usageLimitContinueSearchReset": "reset",
-        "usageLimitContinueToggleLabel": "Toggle continuing chats when a usage limit resets"
+        "usageLimitContinueToggleLabel": "Toggle continuing chats when a usage limit resets",
+        "idleStopTitle": "Stop idle agents after",
+        "idleStopCopy": "Ends a chat's agent once the chat has been idle this long, to free memory. The chat stays, and your next message starts the agent again. Choose Never for agents that keep working in the background between turns.",
+        "idleStopSearchIdle": "idle",
+        "idleStopSearchTimeout": "timeout",
+        "idleStopSearchKeepAlive": "keep alive",
+        "idleStopNever": "Never"
       }
     },
     "agentChildRow": {
@@ -21023,6 +21241,23 @@
       "formatOnSave": {
         "failed": "Could not format {{file}}. Saving without formatting: {{reason}}"
       }
+    },
+    "contextualTours": {
+      "agentSessions": {
+        "newTab": {
+          "title": "New agents start here",
+          "body": "Click + to start an agent, a terminal, or a browser tab."
+        },
+        "splitChat": {
+          "title": "Run two chats side by side",
+          "body": "Press {terminal.splitRight}, or click the split button at the top of the chat. Each side gets its own tabs.",
+          "bodyWithoutShortcut": "Click the split button at the top of the chat. Each side gets its own tabs.",
+          "action": "Split chat"
+        },
+        "split": {
+          "bodyWithoutShortcut": "Right-click the pane for split options."
+        }
+      }
     }
   },
   "dashboardPopout": {
@@ -21204,20 +21439,14 @@
       "offTerminal": "Prefer the terminal? It stays fully supported. Your agents keep opening there until you choose Chat.",
       "onIntro": "Chat UI is out of Experimental and now part of Orca. Your agents keep opening as chats, with rich messages, visuals and images.",
       "onTerminal": "The terminal stays fully supported too. Switch any agent back anytime.",
-      "changeInSettings": "Change anytime in <link>Settings → Agents</link>.",
+      "changeInSettings": "Change anytime in <link>Settings → Chat UI</link>.",
       "stayInTerminal": "Stay in terminal",
       "switchToTerminal": "Switch to terminal",
       "cta": "Use Chat UI",
-      "saveFailed": "Could not turn on Chat UI. Choose Chat in Settings → Agents.",
-      "terminalSaveFailed": "Could not switch to terminal. Choose Terminal in Settings → Agents.",
+      "saveFailed": "Could not turn on Chat UI. Turn it on in Settings → Chat UI.",
+      "terminalSaveFailed": "Could not switch to terminal. Turn off Chat UI in Settings → Chat UI.",
+      "switched": "Chat UI is now the default for new agents. You can switch back any time in Settings → Chat UI.",
       "dismiss": "Dismiss",
-      "liveSwitching": "Live switching available",
-      "liveSwitchingTitle": "Live switching 101",
-      "liveSwitchingDescription": "Right-click an agent tab to switch between Chat UI and the terminal.",
-      "liveSwitchingGotIt": "Got it",
-      "liveSwitchingTerminalTab": "Claude Code",
-      "liveSwitchingPolishTab": "Polish Bottom…",
-      "liveSwitchingCouncilTab": "Council Review",
       "demoTabTitle": "Explain login",
       "demoPrompt": "Map out how login works",
       "demoReply": "Login starts in {{file}}: the browser posts to /login, the server checks the password and creates a session, then redirects you to the app. Here’s the flow:",
@@ -21670,6 +21899,7 @@
     "searchHitSourceHost": "Found on {{value0}}",
     "antigravityIdeToCli": "IDE → CLI",
     "antigravity2ToCli": "2.0 → CLI",
+    "antigravityChatToCli": "Chat → CLI",
     "continueInCli": "Continue in CLI",
     "continueInCliNewTab": "Continue in CLI in New Tab",
     "subagents": {
@@ -23338,6 +23568,7 @@
       "hooksReviewBlocked": "The agent is waiting for someone to review new or changed hooks (\"Hooks need review\"). Open this run and trust them, or remove them. Scheduled runs keep going and succeed once nothing needs review.",
       "agentNeverStarted": "Automation agent never started after the prompt was submitted.",
       "agentNoCompletion": "Automation agent did not report completion.",
+      "agentInterrupted": "The agent was interrupted before it finished this run.",
       "watchTimedOut": "Orca stopped watching this run after 6h without a completion signal.",
       "wslDistroStopped": "The WSL distro {{distro}} is stopped, so this scheduled run did not start it. Start the distro or use Run now; later runs go ahead while it runs.",
       "projectSetupState": {
@@ -23675,5 +23906,8 @@
       "message": "{{plugin}} wants to open {{host}}",
       "alwaysAllow": "Always allow {{host}} for this plugin"
     }
+  },
+  "checks": {
+    "rerunUnsuccessful": "Rerun unsuccessful"
   }
 }

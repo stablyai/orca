@@ -1,6 +1,6 @@
 import type { ITerminalOptions } from '@xterm/xterm'
-import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from '../../../../shared/terminal-scrollback-policy'
-import { LIGHT_BG_MIN_CONTRAST } from '../../../../shared/terminal-contrast-correction'
+import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from '../../../../shared/terminal/replay/terminal-scrollback-policy'
+import { LIGHT_BG_MIN_CONTRAST } from '../../../../shared/terminal-themes/terminal-contrast-correction'
 
 type TerminalCursorStyle = NonNullable<ITerminalOptions['cursorStyle']>
 type TerminalCursorInactiveStyle = NonNullable<ITerminalOptions['cursorInactiveStyle']>
@@ -18,6 +18,10 @@ export function normalizeTerminalFastScrollSensitivity(value: number | undefined
   return typeof value === 'number' && Number.isFinite(value)
     ? Math.min(20, Math.max(1, value))
     : DEFAULT_TERMINAL_FAST_SCROLL_SENSITIVITY
+}
+
+export function resolveTerminalScrollOnUserInput(value: boolean | undefined): boolean {
+  return value !== false
 }
 
 export function resolveTerminalCursorInactiveStyle(
@@ -48,6 +52,7 @@ export function buildDefaultTerminalOptions(): ITerminalOptions {
     // A small wheel multiplier offsets Orca’s taller default terminal cells.
     scrollSensitivity: DEFAULT_TERMINAL_SCROLL_SENSITIVITY,
     fastScrollSensitivity: DEFAULT_TERMINAL_FAST_SCROLL_SENSITIVITY,
+    scrollOnUserInput: true,
     allowTransparency: false,
     // Initial value only; applyTerminalAppearance re-gates by background luminance (#7934) before any content paints.
     minimumContrastRatio: LIGHT_BG_MIN_CONTRAST,

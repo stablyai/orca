@@ -1,6 +1,6 @@
 import type { StructuredLaunchSurfaceAddress } from './agent-session/launch/structured-agent-session-launch-record'
 import type { StructuredAgentSessionResumeSource } from '../../../shared/agent-session/structured-agent-session-create'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import {
   isLocalExecutionHost,
   parseExecutionHostId,
@@ -50,7 +50,10 @@ export type AgentSessionLaunchRequest = AgentLaunchRouteArgs & {
 }
 
 /** Carry the decided route and delivery fields in memory so post-create launches and same-session retries reuse them without re-resolving. */
-export type AgentSessionLaunchVerdict = {
+export type AgentSessionLaunchVerdict = Pick<
+  StructuredAgentLaunchOptions,
+  'promptAttachments' | 'promptSkills' | 'preparePrompt'
+> & {
   route: AgentLaunchRoute
   requestedSurface?: AgentLaunchSurface
   requestId: AgentLaunchRequestId
@@ -97,6 +100,9 @@ function structuredLaunchOptions(verdict: AgentSessionLaunchVerdict): Structured
   return {
     requestId: verdict.requestId,
     ...(verdict.prompt !== undefined ? { prompt: verdict.prompt } : {}),
+    ...(verdict.promptAttachments?.length ? { promptAttachments: verdict.promptAttachments } : {}),
+    ...(verdict.promptSkills?.length ? { promptSkills: verdict.promptSkills } : {}),
+    ...(verdict.preparePrompt ? { preparePrompt: verdict.preparePrompt } : {}),
     ...(verdict.promptDelivery ? { promptDelivery: verdict.promptDelivery } : {}),
     ...(verdict.resumeFrom ? { resumeFrom: verdict.resumeFrom } : {}),
     ...(verdict.onPromptDelivered ? { onPromptDelivered: verdict.onPromptDelivered } : {}),

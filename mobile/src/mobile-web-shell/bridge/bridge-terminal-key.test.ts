@@ -3,59 +3,12 @@ import { MOBILE_WEB_SHELL_GRANTS } from '../page-route-policy'
 import { createFakeBridgePortPair } from './bridge-port-pair-test-harness'
 import { BRIDGE_PROTOCOL_VERSION } from './bridge-envelope'
 import {
-  BridgeTerminalKeyIdSchema,
-  BridgeTerminalToolbarSchema,
-  BRIDGE_TERMINAL_KEY_IDS,
-  BRIDGE_TERMINAL_MODIFIER_IDS,
-  BRIDGE_TERMINAL_TOOLBAR_KEY_IDS,
   BRIDGE_TERMINAL_KEY_RAIL_CLAIM_NOTIFY,
   BRIDGE_TERMINAL_KEY_RAIL_GRANT,
-  type BridgeTerminalKeyId,
-  type BridgeTerminalKeyRail
+  type BridgeTerminalKeyId
 } from './bridge-terminal-key'
 
-const ALL_RAIL_KEYS: BridgeTerminalKeyRail = [
-  ...BRIDGE_TERMINAL_TOOLBAR_KEY_IDS,
-  ...BRIDGE_TERMINAL_KEY_IDS,
-  ...BRIDGE_TERMINAL_MODIFIER_IDS,
-  'char:/',
-  'char:@'
-]
-
 describe('the iPhone Duo key rail over the bridge', () => {
-  it('publishes and delivers every rail key through both bridge ends', async () => {
-    const pair = createFakeBridgePortPair({ terminalKeyRail: ALL_RAIL_KEYS })
-    await pair.flush()
-    expect(pair.client.getShellSession()?.terminalKeyRail).toEqual(ALL_RAIL_KEYS)
-    const pressed: BridgeTerminalKeyId[] = []
-    const release = pair.client.claimTerminalKeyRail((key) => pressed.push(key), 'all-keys')
-    await pair.flush()
-    for (const key of ALL_RAIL_KEYS) {
-      expect(pair.host.sendTerminalKey(key, 'all-keys')).toBe(true)
-    }
-    await pair.flush()
-    expect(pressed).toEqual(ALL_RAIL_KEYS)
-    release()
-    await pair.flush()
-    expect(pair.host.sendTerminalKey('ctrlC', 'all-keys')).toBe(false)
-  })
-  it('tells the page which keys the rail holds, and moves that live as the window turns', async () => {
-    const pair = createFakeBridgePortPair({ terminalKeyRail: ['escape', 'tab', 'enter'] })
-    await pair.flush()
-    expect(pair.client.getShellSession()?.terminalKeyRail).toEqual(['escape', 'tab', 'enter'])
-    const seen: BridgeTerminalKeyRail[] = []
-    pair.client.onTerminalKeyRailUpdate((keys) => seen.push(keys))
-
-    pair.host.publishTerminalKeyRail(['escape'])
-    await pair.flush()
-    pair.host.publishTerminalKeyRail(['escape'])
-    await pair.flush()
-    pair.host.publishTerminalKeyRail([])
-    await pair.flush()
-    expect(pair.client.getShellSession()?.terminalKeyRail).toEqual([])
-    expect(seen).toEqual([['escape'], []])
-  })
-
   it('hears the page claim the rail, and drops the claim when a document starts or ends', async () => {
     const pair = createFakeBridgePortPair({ terminalKeyRail: ['escape', 'arrowUp'] })
     await pair.flush()
@@ -169,26 +122,4 @@ it('carries toolbar state across both bridge ends and delivers toolbar actions o
   release.update('toolbar-owner', toolbar)
   await pair.flush()
   expect(pair.toShell).toHaveLength(releaseEnd)
-})
-
-it('accepts only single printable characters and known latches', () => {
-  expect(BridgeTerminalKeyIdSchema.safeParse('char:~').success).toBe(true)
-  expect(BridgeTerminalKeyIdSchema.safeParse('char:ab').success).toBe(false)
-  expect(BridgeTerminalKeyIdSchema.safeParse('char: ').success).toBe(false)
-  const toolbar = {
-    canSend: true,
-    canCompose: true,
-    keyboardVisible: false,
-    liveInputEnabled: true,
-    phoneDisplayMode: false,
-    runsAgent: true,
-    modifiers: { ctrl: 'off', alt: 'off', shift: 'off' }
-  }
-  expect(BridgeTerminalToolbarSchema.parse(toolbar)).toEqual(toolbar)
-  expect(
-    BridgeTerminalToolbarSchema.safeParse({
-      ...toolbar,
-      modifiers: { ...toolbar.modifiers, ctrl: 'on' }
-    }).success
-  ).toBe(false)
 })

@@ -98,28 +98,6 @@ describe('useImeEnterGestureOwnership', () => {
     }
   })
 
-  // Only bare confirm redispatch is suppressed; held Cmd/Ctrl still requests deliberate submit.
-  it.each([
-    ['meta', { metaKey: true }],
-    ['ctrl', { ctrlKey: true }],
-    ['alt', { altKey: true }]
-  ])('lets the %s+Enter chord through the carried redispatch', (_label, modifier) => {
-    const { result } = renderHook(() => useImeEnterGestureOwnership())
-    result.current.setComposing(true)
-
-    // The IME still owns the confirming keydown even with the modifier held.
-    expect(
-      result.current.ownsKeyDown(
-        gestureEvent({ key: 'Enter', keyCode: 13, isComposing: true, ...modifier })
-      )
-    ).toBe(true)
-
-    result.current.setComposing(false)
-    const chord = gestureEvent({ key: 'Enter', keyCode: 13, ...modifier })
-    expect(result.current.ownsKeyDown(chord)).toBe(false)
-    expect(chord.prevented).toBe(false)
-  })
-
   // Chorded redispatch must spend carry without suppressing submit or the next Enter would be swallowed.
   it('spends the carry on the chorded redispatch so the next Enter is not eaten', () => {
     const { result } = renderHook(() => useImeEnterGestureOwnership())

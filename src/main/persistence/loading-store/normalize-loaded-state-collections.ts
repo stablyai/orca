@@ -3,8 +3,8 @@ import {
   normalizeProjectHostSetupRows,
   normalizeProjectRows
 } from '../../../shared/project-catalog-row-normalization'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
-import { parseWorkspaceSessionSalvaging } from '../../../shared/workspace-session-salvage'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
+import { parseWorkspaceSessionSalvaging } from '../../../shared/workspace-session/workspace-session-salvage'
 import {
   backfillAutomationRunNumbers,
   pruneAutomationRuns

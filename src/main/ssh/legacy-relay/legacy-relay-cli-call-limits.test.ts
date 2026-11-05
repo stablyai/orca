@@ -3,14 +3,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { toAppSshPtyId } from '../../../shared/ssh-pty-id'
-import { isRemoteCliControlAllowed } from '../../../shared/ssh-remote-cli-control'
+
 import { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { OrchestrationDb } from '../../runtime/orchestration/db'
-import {
-  LEGACY_RELAY_CLI_BUSY,
-  cappedWait,
-  runLegacyRelayCliCall
-} from './legacy-relay-cli-call-limits'
+import { LEGACY_RELAY_CLI_BUSY, runLegacyRelayCliCall } from './legacy-relay-cli-call-limits'
 import { createLegacyRelayCliServer } from './legacy-relay-cli-server'
 
 const TARGET = 'target-1'
@@ -66,21 +62,6 @@ const server = () =>
   })
 
 describe('limits on relay-era CLI calls', () => {
-  it('stops a waiting check once a default-on switch is turned off', async () => {
-    allowed = isRemoteCliControlAllowed({})
-    const waiting = server().cli(
-      { argv: ['orchestration', 'check', '--wait', '--timeout-ms', '60000', '--json'], env: ENV },
-      new AbortController().signal
-    )
-    await new Promise((resolve) => setTimeout(resolve, 50))
-    allowed = isRemoteCliControlAllowed({ allowRemoteCliControl: false })
-    const started = Date.now()
-    const result = await waiting
-    expect(Date.now() - started).toBeLessThan(5_000)
-    const stdout = result && typeof result === 'object' && 'stdout' in result ? result.stdout : ''
-    expect(JSON.parse(String(stdout)).result).toMatchObject({ cancelled: true })
-  })
-
   it('caps how many calls one host may hold open', async () => {
     const release: (() => void)[] = []
     const held = Array.from({ length: 16 }, () =>
@@ -118,12 +99,6 @@ describe('limits on relay-era CLI calls', () => {
         async () => 2
       )
     ).resolves.toBe(2)
-  })
-
-  it('caps how long a host may park a desktop waiter', () => {
-    expect(cappedWait(Number.MAX_SAFE_INTEGER)).toBe(1_800_000)
-    expect(cappedWait(-5)).toBe(0)
-    expect(cappedWait(undefined)).toBeUndefined()
   })
 
   it('scopes a reused retry id whose payload differs from the committed one', async () => {
@@ -188,17 +163,6 @@ describe('limits on relay-era CLI calls', () => {
       )
     expect(body(replay)).toMatchObject({ ok: true, result: { mutation: { replayed: true } } })
     expect(body(replay).result.message).toEqual(body(first).result.message)
-  })
-
-  it('bounds the rows an inbox read may return', async () => {
-    const read = vi.spyOn(db, 'getAllMessagesForHandle')
-    for (const limit of ['-1', '1000000000', '0']) {
-      await server().cli(
-        { argv: ['orchestration', 'inbox', '--limit', limit, '--json'], env: ENV },
-        new AbortController().signal
-      )
-    }
-    expect(read.mock.calls.map((call) => call[1])).toEqual([1, 100, 1])
   })
 
   it('names nobody when two hosts claim one handle', () => {

@@ -80,6 +80,8 @@ const COPY: Record<
     translate('automations.runFailures.agentNeverStarted', EN.agentNeverStarted),
   agentNoCompletion: () =>
     translate('automations.runFailures.agentNoCompletion', EN.agentNoCompletion),
+  agentInterrupted: () =>
+    translate('automations.runFailures.agentInterrupted', EN.agentInterrupted),
   watchTimedOut: () => translate('automations.runFailures.watchTimedOut', EN.watchTimedOut),
   wslDistroStopped: (params) => {
     const distro = params?.distro

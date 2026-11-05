@@ -38,9 +38,9 @@ it('clears Google paths/partitions and preserves other sites across a graceful E
       import { existsSync, readFileSync, writeFileSync } from 'node:fs'
       import { join } from 'node:path'
       import { DatabaseSync } from 'node:sqlite'
-      import { browserSessionRegistry as registry } from ${JSON.stringify(join(process.cwd(), 'src/main/browser/browser-session-registry.ts'))}
-      import { loadBrowserSessionMeta, persistBrowserSessionMeta } from ${JSON.stringify(join(process.cwd(), 'src/main/browser/browser-session-meta-store.ts'))}
-      import { resolveChromiumCookiesPath } from ${JSON.stringify(join(process.cwd(), 'src/main/browser/chromium-cookie-path.ts'))}
+      import { browserSessionRegistry as registry } from ${JSON.stringify(join(process.cwd(), 'src/main/browser/sessions/browser-session-registry.ts'))}
+      import { loadBrowserSessionMeta, persistBrowserSessionMeta } from ${JSON.stringify(join(process.cwd(), 'src/main/browser/sessions/browser-session-meta-store.ts'))}
+      import { resolveChromiumCookiesPath } from ${JSON.stringify(join(process.cwd(), 'src/main/browser/cookies/chromium/chromium-cookie-path.ts'))}
       import { clearGoogleCookiesFromPartition } from ${JSON.stringify(join(process.cwd(), 'src/main/browser/cookies/browser-google-cookie-clear.ts'))}
       app.setPath('userData', ${JSON.stringify(join(root, 'user-data'))})
       const deadline = setTimeout(() => app.exit(2), 30000)
@@ -139,11 +139,11 @@ it('clears Google paths/partitions and preserves other sites across a graceful E
             build.onResolve({ filter: /./ }, ({ path, importer }) =>
               importer.endsWith('/browser-session-registry.ts') &&
               ![
-                './browser-session-cookie-staging',
+                '../cookies/staging/browser-session-cookie-staging',
                 './browser-session-meta-store',
                 './browser-session-persisted-profile-validation'
               ].includes(path) &&
-              !path.startsWith('../../shared/') &&
+              !path.startsWith('../../../shared/') &&
               !['electron', 'node:crypto', 'node:path'].includes(path)
                 ? { path, namespace: 'registry-policy-effects' }
                 : undefined
@@ -159,7 +159,7 @@ it('clears Google paths/partitions and preserves other sites across a graceful E
               unused as retireDeletedBrowserSessionProfile,
               unused as attachBrowserExtensionsToProfileSession,
               unused as getCanonicalUserDataPath, unused as markBrowserIdentityMigrationNoticePending,
-              unused as forgetBrowserSitePermissions, unused as forgetBrowserSiteDisplay };
+              unused as forgetBrowserProfileOwnedStores };
           `
             }))
           }

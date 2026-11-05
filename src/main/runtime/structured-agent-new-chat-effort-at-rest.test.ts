@@ -10,7 +10,7 @@ import type { AgentSessionAccountHome } from '../../shared/agent-session/lifecyc
 import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionModelOption } from '../../shared/agent-session/agent-session-wire'
 import { structuredAgentSessionSeedCatalog } from '../../shared/agent-session/options/structured-agent-session-seed-catalog'
-import { agentChatPermissionModes } from '../../shared/agent-chat-permission-mode'
+import { agentChatPermissionModes } from '../../shared/agent-launch/permissions/agent-chat-permission-support'
 import {
   applyStructuredAgentSessionModelCatalog,
   applyStructuredAgentSessionOptions,
@@ -21,7 +21,7 @@ import { structuredAgentSessionShownSnapshot } from '../../shared/agent-session/
 import { grokModelCatalogFromState } from '../acp/acp-dialects/grok-model-catalog'
 import { acpLaunchSpecFor } from '../acp/acp-launch-specs'
 import { acpStructuredAgentDefinition } from '../acp/acp-structured-agent-definitions'
-import { CODEX_STRUCTURED_AGENT } from '../codex/codex-structured-agent-definition'
+import { CODEX_STRUCTURED_AGENT } from '../codex/structured/launch/codex-structured-agent-definition'
 import { agentModelCatalogFingerprintForRecord } from '../native-chat/agent-model-catalog/agent-model-catalog-fingerprint'
 import { createAgentModelCatalogService } from '../native-chat/agent-model-catalog/agent-model-catalog-service'
 import { AgentModelCatalogStore } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
@@ -226,7 +226,8 @@ function host(agent: string, record: AgentSessionRecord) {
     journal: {
       threadGoal: () => null,
       visitItems: () => {},
-      submissions: () => [],
+      inputOrder: { hasInputs: () => false },
+      statusRead: () => ({ items: [], submissions: [] }),
       contextUsage: () => null,
       context: { floor: () => null }
     }
@@ -315,10 +316,10 @@ describe("a new chat's effort pill before its agent starts", () => {
       expect(atRest.current).toStrictEqual({
         model,
         effort: undefined,
-        defaulted: [],
+        defaulted: ['model'],
         ...modeOf(agent),
         ...AT_REST_METADATA,
-        acceptedInputSources: { model: 'policy' }
+        acceptedInputSources: {}
       })
     }
   )
@@ -352,10 +353,10 @@ describe("a new chat's effort pill before its agent starts", () => {
     expect(atRest.current).toStrictEqual({
       model: 'gpt-5.5',
       effort: undefined,
-      defaulted: [],
+      defaulted: ['model'],
       permissionMode: 'ask',
       ...AT_REST_METADATA,
-      acceptedInputSources: { model: 'policy' }
+      acceptedInputSources: {}
     })
     expect(atRest.conversationCommands).toEqual(['clear', 'compact'])
   })
@@ -366,10 +367,10 @@ describe("a new chat's effort pill before its agent starts", () => {
     expect(atRest.current).toStrictEqual({
       model: 'gpt-5.5',
       effort: undefined,
-      defaulted: [],
+      defaulted: ['model'],
       permissionMode: 'ask',
       ...AT_REST_METADATA,
-      acceptedInputSources: { model: 'policy' }
+      acceptedInputSources: {}
     })
   })
 
@@ -379,10 +380,10 @@ describe("a new chat's effort pill before its agent starts", () => {
     expect(atRest.current).toStrictEqual({
       model: 'grok-4',
       effort: 'high',
-      defaulted: [],
+      defaulted: ['model'],
       ...modeOf('grok'),
       ...AT_REST_METADATA,
-      acceptedInputSources: { model: 'policy', effort: 'saved' }
+      acceptedInputSources: { effort: 'saved' }
     })
     expect(settled.effort?.value).toBe('high')
   })

@@ -24,7 +24,8 @@ import {
   clearNativeChatPendingAttachments,
   settleNativeChatPendingAttachment,
   settleNativeChatPendingAttachmentReferences,
-  nativeChatPendingAttachmentSnapshot
+  nativeChatPendingAttachmentSnapshot,
+  nativeChatPendingAttachmentScope
 } from './native-chat-pending-attachment-cache'
 import { useNativeChatComposerImageChips } from './use-native-chat-composer-image-chips'
 import { createUuidV4 } from '../../../../shared/uuid-v4'
@@ -202,22 +203,25 @@ export function useNativeChatComposerAttachments({
       options?: NativeChatPendingAttachmentOptions,
       serverOwned = false
     ) =>
-      settlePendingImageReferences(destinationScope(), scopeEditor(), () =>
-        settleNativeChatPendingAttachmentReferences(
-          attachmentScopeKey,
-          references,
-          options?.insertReferences !== undefined
-            ? (options.insertReferences ?? undefined)
-            : mountedRef.current && !disabledRef.current && !isComposing()
-              ? (paths) =>
-                  // The paste re-checked the owner just before settling a server-owned image.
-                  attachResolvedPaths(
-                    paths,
-                    null,
-                    serverOwned ? { ...options, targetOwnerIsCurrent: () => true } : options
-                  )
-              : undefined
-        )
+      settlePendingImageReferences(
+        nativeChatPendingAttachmentScope(destinationScope(), references[0]?.id ?? ''),
+        scopeEditor(),
+        () =>
+          settleNativeChatPendingAttachmentReferences(
+            attachmentScopeKey,
+            references,
+            options?.insertReferences !== undefined
+              ? (options.insertReferences ?? undefined)
+              : mountedRef.current && !disabledRef.current && !isComposing()
+                ? (paths) =>
+                    // The paste re-checked the owner just before settling a server-owned image.
+                    attachResolvedPaths(
+                      paths,
+                      null,
+                      serverOwned ? { ...options, targetOwnerIsCurrent: () => true } : options
+                    )
+                : undefined
+          )
       ),
     [
       attachResolvedPaths,
@@ -239,8 +243,10 @@ export function useNativeChatComposerAttachments({
     ) => {
       const serverOwned = serverOwnedPendingIds.delete(id)
       return mountedRef.acceptsImages
-        ? settlePendingImageReferences(destinationScope(), scopeEditor(), () =>
-            settleNativeChatPendingAttachment(destinationScope(), id, path, connectionId)
+        ? settlePendingImageReferences(
+            nativeChatPendingAttachmentScope(destinationScope(), id),
+            scopeEditor(),
+            () => settleNativeChatPendingAttachment(destinationScope(), id, path, connectionId)
           )
         : attachPendingReferences([{ id, path }], options, serverOwned)
     },

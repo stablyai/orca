@@ -1,12 +1,12 @@
-import { rangeForParsedLinkOnRow } from '../../../../shared/terminal-link-row-range'
+import { rangeForParsedLinkOnRow } from '../../../../shared/terminal/links/terminal-link-row-range'
 import type { ILink, ILinkProvider, Terminal } from '@xterm/xterm'
 import {
   buildTerminalHttpLogicalLines,
   hasHardWrappedRows
-} from '../../../../shared/terminal-http-logical-lines'
-import { extractTerminalHttpLinks } from '../../../../shared/terminal-http-url-extraction'
-import { rangeForParsedFileLink } from '../../../../shared/wrapped-terminal-link-ranges'
-import { terminalLogicalLinkHasOscLink } from '../../../../shared/terminal-osc-link-cells'
+} from '../../../../shared/terminal/links/terminal-http-logical-lines'
+import { extractTerminalHttpLinks } from '../../../../shared/terminal/links/terminal-http-url-extraction'
+import { rangeForParsedFileLink } from '../../../../shared/terminal/links/wrapped-terminal-link-ranges'
+import { terminalLogicalLinkHasOscLink } from '../../../../shared/terminal/links/terminal-osc-link-cells'
 
 export function createWrappedTerminalHttpLinkProvider(
   terminal: Pick<Terminal, 'buffer'>,

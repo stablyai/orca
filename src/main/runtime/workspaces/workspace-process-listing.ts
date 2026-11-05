@@ -46,8 +46,8 @@ import {
   structuredWorkerOpenTaskTitle,
   structuredWorkerOwesWork
 } from '../structured-worker-custody'
-import { preModeChatGetsFullAccess } from '../../../shared/agent-chat-permission-mode'
-import { isTuiAgent } from '../../../shared/tui-agent-config'
+import { preModeChatGetsFullAccess } from '../../../shared/agent-launch/permissions/agent-chat-permission-mode'
+import { isTuiAgent } from '../../../shared/agent-launch/catalog/tui-agent-config'
 import { claudeCliFlagSupport } from '../../claude/claude-cli-flag-support'
 import {
   runtimeHiddenHostIds,
@@ -57,6 +57,7 @@ import {
 } from '../runtime-visible-catalog'
 import { isWorkspaceNotificationMuted } from '../workspace-notification-mute'
 import { WorkerAutoReleaseActivity } from '../orchestration/worker-auto-release-activity'
+import { nativeChatIdleStopMs } from '../../../shared/native-chat/native-chat-idle-stop'
 
 export abstract class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithWorktreePsDependencies {
   protected readonly workerAutoReleaseActivity = new WorkerAutoReleaseActivity(
@@ -243,6 +244,7 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithWorktr
       ...catalogDeps,
       claudeCliFlags: claudeCliFlagSupport,
       usageLimitAutoContinue: this.usageLimitAutoContinueHostDeps(),
+      idleSweep: { idleMs: () => nativeChatIdleStopMs(this.requireStore().getSettings()) },
       nativeChatVisuals: {
         isEnabled: () => this.requireStore().getSettings().nativeChatInlineVisuals !== false
       },

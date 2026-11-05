@@ -1,6 +1,7 @@
 import { useAppStore } from '@/store'
 import { useRunningTerminalCloseConfirmStore } from '@/store/running-terminal-close-confirm'
 import type { TerminalTabCloseReason } from '@/store/slices/terminal-tab-retirement'
+import type { TerminalTabCloseIntent } from './terminal-tab-close-intent'
 import type { AppState } from '@/store/types'
 import { resolveBusyPtyCloseCopyKind } from './terminal-close-copy-kind'
 import { probePtyRunningWork } from './pty-running-work-probe'
@@ -8,7 +9,7 @@ import { probePtyRunningWork } from './pty-running-work-probe'
 export type RunningTerminalCloseGuardOptions = {
   force?: boolean
   rejectPinned?: boolean
-  reason?: TerminalTabCloseReason
+  reason?: TerminalTabCloseIntent
   hostCloseReason?: TerminalTabCloseReason
   lifecyclePtyId?: string
   skipRunningProcessConfirm?: boolean
@@ -27,7 +28,7 @@ export function shouldConfirmRunningTerminalClose(
   if (options?.skipRunningProcessConfirm === true || options?.lifecyclePtyId !== undefined) {
     return false
   }
-  const isUserReason = (reason: TerminalTabCloseReason | undefined): boolean =>
+  const isUserReason = (reason: TerminalTabCloseIntent | undefined): boolean =>
     reason === undefined || reason === 'user'
   return isUserReason(options?.reason) && isUserReason(options?.hostCloseReason)
 }

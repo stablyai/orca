@@ -1,4 +1,4 @@
-import type { HostedReviewState } from './hosted-review'
+import type { HostedReviewState } from './source-control/hosted-review/hosted-review-contracts'
 import type { CheckStatus } from './github/pull-request-types'
 
 export const REVIEW_REFRESH_COOLDOWN_MS = 10_000

@@ -21,7 +21,7 @@ import { join } from 'node:path'
 import type { GitWorktreeInfo } from '../../shared/worktree/types'
 import type { Store } from '../persistence/loading-store/store'
 import { agentHookServer } from '../agent-hooks/server'
-import { makePaneKey } from '../../shared/stable-pane-id'
+import { makePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import {
   ORIGINAL_PLATFORM,
   setPlatform,
@@ -60,7 +60,7 @@ vi.mock('../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) =
 vi.mock('electron', async () =>
   (await import('./worktrees-test-module-mocks')).electronModuleMock()
 )
-vi.mock('../../shared/git-worktree-porcelain-parser', async (importOriginal) => ({
+vi.mock('../../shared/git/worktrees/git-worktree-porcelain-parser', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   parseWorktreeList: (await import('./worktrees-test-module-mocks')).parseWorktreeListMock
 }))
@@ -116,6 +116,7 @@ vi.mock('../git/command-runner/git-exec-file-sync', async (importOriginal) => ({
 vi.mock('../git/repo', async () =>
   (await import('./worktrees-test-module-mocks')).gitRepoModuleMock()
 )
+
 vi.mock('../git/repo-default-base-ref', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   getBaseRefDefault: (await import('./worktrees-test-module-mocks')).getBaseRefDefaultMock

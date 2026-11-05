@@ -1,5 +1,5 @@
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
-import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 
 /** Restore per-worktree active tab; validate ids when the map exists, else derive for legacy sessions. */
 export function restoreActiveTabIdByWorktree({

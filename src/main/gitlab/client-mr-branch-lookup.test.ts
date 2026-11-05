@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as GlUtils from './gl-utils'
 import { derivePipelineStatus, mapMRInfo } from './mappers'
-import { gitlabMrCheckCases } from '../../shared/gitlab-mr-checks.test-fixture'
+import { gitlabMrCheckCases } from '../../shared/source-control/checks/gitlab/gitlab-mr-checks.test-fixture'
 import { mapGitLabReview } from '../source-control/forge-review-mappers'
 import {
   __resetHostedReviewBranchCacheForTests,

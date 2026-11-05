@@ -1,6 +1,9 @@
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
-import { readTrackedSources, runCountRatchet } from './ratchet-baseline.mjs'
+import {
+  readTrackedSources,
+  runCountRatchet
+} from './static-analysis/ratchet-baseline/ratchet-baseline.mjs'
 
 // Ratchet retirements lacking exit proof and ownership drops outside finishPtyShutdown downward: both can lose the stop handle while processes live.
 

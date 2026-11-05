@@ -1,4 +1,4 @@
-import type { PairingOffer } from '../../../shared/mobile-relay-pairing-offer'
+import type { PairingOffer } from '../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import type { OrcadTunnelIdentity } from '../../managed-server/lifecycle/orcad-managed-tunnel-identity'
 import type { ServeReadiness } from '../../server/serve-readiness'
 import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'

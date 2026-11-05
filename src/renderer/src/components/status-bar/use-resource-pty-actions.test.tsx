@@ -1,11 +1,11 @@
 // @vitest-environment happy-dom
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import type { PtyListedSession } from '../../../../shared/pty-listed-session'
+import type { PtyListedSession } from '../../../../shared/terminal/pty/lifecycle/pty-listed-session'
 import type {
   PtyFencedTerminationOutcome,
   PtyFencedTerminationRequest
-} from '../../../../shared/pty-fenced-termination'
+} from '../../../../shared/terminal/pty/lifecycle/pty-fenced-termination'
 import { useResourcePtyActions } from './use-resource-pty-actions'
 import { useResourceSessionInventory } from './use-resource-session-inventory'
 import { buildResourcePtyRows } from './resource-pty-view-model'

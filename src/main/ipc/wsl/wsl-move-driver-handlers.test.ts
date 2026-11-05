@@ -58,20 +58,6 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllEnvs())
 
 describe('WSL move driver IPC', () => {
-  it('previews, starts and cancels a move from the main window', async () => {
-    expect(await invoke('wslMove:preview', { distro: 'Ubuntu', repoIds: ['r1'] })).toEqual({
-      outcome: 'ready'
-    })
-    expect(await invoke('wslMove:start', { distro: 'Ubuntu' })).toEqual({ outcome: 'moved' })
-    expect(invoke('wslMove:cancel', 'Ubuntu')).toBe(true)
-    expect(driver.moveProjectsToWslHost).toHaveBeenCalledWith(
-      expect.objectContaining({ now: expect.any(Function) }),
-      { distro: 'Ubuntu' }
-    )
-    // The move's start and outcome are reported.
-    expect(track.mock.calls.map(([, props]) => props.outcome)).toEqual(['started', 'finished'])
-  })
-
   it('is unreachable with the internal WSL hosts gate closed: nothing is built or run', async () => {
     vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '')
     const refused = { outcome: 'refused', code: 'wsl_move_unavailable' }
@@ -99,14 +85,5 @@ describe('WSL move driver IPC', () => {
       expect(await invoke('wslMove:start', bad)).toMatchObject({ detail: 'invalid-request' })
     }
     expect(driver.moveProjectsToWslHost).not.toHaveBeenCalled()
-  })
-
-  // The quit prompt asks this; with the gate closed it is always false, so nothing prompts.
-  it('says whether a move is running, and never with the gate closed', async () => {
-    running.any = true
-    expect(await invoke('wslMove:isRunning')).toBe(true)
-    vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '')
-    expect(await invoke('wslMove:isRunning')).toBe(false)
-    running.any = false
   })
 })

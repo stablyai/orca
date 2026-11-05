@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 import {
   mobileWebAppModuleClosure,
   mobileWebAppRouteClosure
-} from '../build-mobile-web-app-bundle.mjs'
+} from '../build/mobile-web-app/build-mobile-web-app-bundle.mjs'
 import { mobileWebAppDependenciesPresent } from './mobile-web-app-bundle-dependencies.mjs'
 import { pageClosureFamilies, pinnedFamilyNames } from './mobile-web-app-page-closure-families.mjs'
 

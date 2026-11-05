@@ -5,10 +5,10 @@
  */
 import { randomUUID } from 'node:crypto'
 import { app } from 'electron'
-import { encodePairingOffer } from '../../../shared/pairing'
-import { getPreferredPairingOffer } from '../../../shared/runtime-environments'
-import { resolveEnvironment } from '../../../shared/runtime-environment-store'
-import { findWslHostDeployment } from '../../../shared/runtime-environment-wsl-host-store'
+import { encodePairingOffer } from '../../../shared/remote-runtime/pairing/pairing'
+import { getPreferredPairingOffer } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
+import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
+import { findWslHostDeployment } from '../../../shared/remote-runtime/host-store/runtime-environment-wsl-host-store'
 import {
   WSL_MOVE_PROGRESS_CHANNEL,
   type WslMoveProgressEvent
@@ -24,8 +24,8 @@ import { orcadMigrationDestinationFor } from '../../managed-server/lifecycle/orc
 import type { Store } from '../../persistence/loading-store/store'
 import { exportWslMoveManifest } from '../../persistence/moving-wsl-projects/wsl-move-manifest-export'
 import { ensureWslMoveDestinationBrowserLogins } from '../../persistence/moving-wsl-projects/wsl-move-browser-cookie-copy'
-import { activeBrowserRoutePartitionOrcaProfileId } from '../../browser/browser-route-partition-binding-runtime'
-import { wslHostBrowserRouteStorage } from '../../browser/wsl-host-browser-route-partition'
+import { activeBrowserRoutePartitionOrcaProfileId } from '../../browser/routing/partitions/browser-route-partition-binding-runtime'
+import { wslHostBrowserRouteStorage } from '../../browser/routing/local-host-partitions/wsl-host-browser-route-partition'
 import { runGatedWslMoveDesktopRewritePass } from '../../persistence/moving-wsl-projects/wsl-move-desktop-rewrite'
 import type {
   WslMoveDriverDeps,

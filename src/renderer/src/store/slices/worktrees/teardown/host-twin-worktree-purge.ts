@@ -8,7 +8,8 @@ import {
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
 import type { WorktreePurgeTarget } from '../../worktree-purge-target'
-import { getFolderWorkspaceHostId } from '../../../../../../shared/folder-workspace-execution-host'
+import '../../../../../../shared/folder-workspaces/folder-workspace-execution-host'
+import { getFolderWorkspaceHostId } from '../../../../../../shared/folder-workspaces/folder-workspace-host-id'
 import { getProjectGroupHostId } from '../../project-group-owner-routing'
 import {
   collectRemovedHostTwinState,

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as DocPreviewGuestPolicyModule from '../../browser/doc-preview-guest-policy'
+import type * as DocPreviewGuestPolicyModule from '../../browser/document-preview/doc-preview-guest-policy'
 import type * as TabRegistrationWaitModule from './browser-tab-registration-wait'
 
 const {
@@ -32,6 +32,7 @@ const {
   registrationWaitSpy: vi.fn()
 }))
 
+vi.mock('./browser-passwords-ipc', () => ({ registerBrowserPasswordsHandlers: vi.fn() }))
 vi.mock('electron', () => ({
   BrowserWindow: { fromWebContents: vi.fn() },
   ipcMain: { removeHandler: removeHandlerMock, handle: handleMock },
@@ -61,7 +62,7 @@ vi.mock('../../browser/browser-manager', () => ({
 }))
 
 // Spy on the real policy so registry selection remains observable.
-vi.mock('../../browser/doc-preview-guest-policy', async (importOriginal) => {
+vi.mock('../../browser/document-preview/doc-preview-guest-policy', async (importOriginal) => {
   const actual = await importOriginal<typeof DocPreviewGuestPolicyModule>()
   return {
     ...actual,
@@ -90,12 +91,12 @@ import { browserManager } from '../../browser/browser-manager'
 import {
   getWorkspaceDocPageGuest,
   installDocPreviewGuestPolicy
-} from '../../browser/doc-preview-guest-policy'
+} from '../../browser/document-preview/doc-preview-guest-policy'
 import {
   mintDocPreviewGrant,
   revokeAllDocPreviewGrants,
   revokeDocPreviewGrant
-} from '../../browser/doc-preview-grant-registry'
+} from '../../browser/document-preview/doc-preview-grant-registry'
 import { buildDocPreviewUrl } from '../../../shared/doc-preview-scheme'
 
 const HOST_RENDERER_ID = 91
@@ -309,7 +310,7 @@ beforeEach(() => {
   captureSelectionScreenshotMock.mockResolvedValue(null)
   extractHoverPayloadMock.mockResolvedValue(null)
   setAnnotationViewportBridgeMock.mockResolvedValue(true)
-  registerBrowserHandlers()
+  registerBrowserHandlers({ getSettings: vi.fn() })
   // Fake timers settle registration waits for guests that never attach.
   vi.useFakeTimers()
 })

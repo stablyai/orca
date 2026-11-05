@@ -28,8 +28,8 @@ vi.mock('node:fs/promises', async (importOriginal) => {
   }
 })
 
-import { findGitSubcommandIndex } from '../../shared/git-command-classification'
-import { GIT_CAPABILITY_RETRY_INTERVAL_MS } from '../../shared/git-capability-cache'
+import { findGitSubcommandIndex } from '../../shared/git/commands/git-command-classification'
+import { GIT_CAPABILITY_RETRY_INTERVAL_MS } from '../../shared/git/commands/git-capability-cache'
 import { getLocalGitCapabilityCache } from '../git/command-runner/git-capability-state'
 import { CONFLICT_SUMMARY_BASE_FETCH_WINDOW_MS } from './conflict-summary-cache'
 import { __resetPRConflictSummaryCachesForTests, getPRConflictSummary } from './conflict-summary'

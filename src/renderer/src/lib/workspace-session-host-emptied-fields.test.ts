@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import { toRuntimeExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
-import type { WorkspaceSessionPatch } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionPatch } from '../../../shared/workspace-session/workspace-session-state-types'
 import {
   patchWorkspaceSessionByHost,
   type HostPersistenceState

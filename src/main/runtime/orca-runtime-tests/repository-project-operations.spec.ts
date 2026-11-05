@@ -21,6 +21,11 @@ import {
 } from '../orca-runtime-test-mocks.spec'
 import { store } from '../orca-runtime-test-fixtures.spec'
 
+// Clone and create register resolved paths (macOS tmpdir is a /var symlink).
+async function mkdtempReal(prefix: string): Promise<string> {
+  return realpath(await mkdtemp(prefix))
+}
+
 describe('OrcaRuntimeService', () => {
   it('deduplicates runtime repo paths with Windows/UNC comparison semantics', async () => {
     const added: Record<string, unknown>[] = []
@@ -55,7 +60,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('browses runtime server directories before projects are added', async () => {
-    const tempRoot = await mkdtemp(join(tmpdir(), 'orca-runtime-browse-'))
+    const tempRoot = await mkdtempReal(join(tmpdir(), 'orca-runtime-browse-'))
     try {
       await mkdir(join(tempRoot, 'zeta'))
       await mkdir(join(tempRoot, 'alpha'))
@@ -135,7 +140,9 @@ describe('OrcaRuntimeService', () => {
 
   it('sets up an existing folder on a fresh runtime after importing the repo project', async () => {
     // The runtime stores the resolved path; macOS tmpdir sits behind the /private symlink.
-    const tempRoot = await realpath(await mkdtemp(join(tmpdir(), 'orca-runtime-project-setup-')))
+    const tempRoot = await realpath(
+      await mkdtempReal(join(tmpdir(), 'orca-runtime-project-setup-'))
+    )
     const repos: Record<string, unknown>[] = []
     getRepoUpstreamMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
     const runtimeStore = {
@@ -214,7 +221,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('sets up a project whose identity exists only on the requesting host', async () => {
-    const tempRoot = await mkdtemp(join(tmpdir(), 'orca-runtime-cross-host-project-'))
+    const tempRoot = await mkdtempReal(join(tmpdir(), 'orca-runtime-cross-host-project-'))
     const repos: Record<string, unknown>[] = []
     getRepoUpstreamMock.mockResolvedValueOnce(null)
     const runtimeStore = {
@@ -266,7 +273,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('rolls back a new runtime repo when project alignment fails', async () => {
-    const tempRoot = await mkdtemp(join(tmpdir(), 'orca-runtime-project-rollback-'))
+    const tempRoot = await mkdtempReal(join(tmpdir(), 'orca-runtime-project-rollback-'))
     const repos: Record<string, unknown>[] = []
     getRepoUpstreamMock.mockResolvedValueOnce(null)
     const runtimeStore = {
@@ -354,7 +361,7 @@ describe('OrcaRuntimeService', () => {
 
   it('keeps existing-folder imports split by runtime host on the same normalized path', async () => {
     // The runtime stores the resolved path; macOS tmpdir sits behind the /private symlink.
-    const tempRoot = await realpath(await mkdtemp(join(tmpdir(), 'orca-runtime-project-host-')))
+    const tempRoot = await realpath(await mkdtempReal(join(tmpdir(), 'orca-runtime-project-host-')))
     const repos: Record<string, unknown>[] = []
     getRepoUpstreamMock.mockResolvedValue({ owner: 'stablyai', repo: 'orca' })
     const runtimeStore = {
@@ -553,7 +560,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('keeps project clone setup on the cloned host-qualified repo', async () => {
-    const destination = await mkdtemp(join(tmpdir(), 'orca-runtime-project-clone-'))
+    const destination = await mkdtempReal(join(tmpdir(), 'orca-runtime-project-clone-'))
     const clonePath = join(destination, 'orca')
     const spawnSpy = vi.spyOn(gitSpawn, 'gitSpawnAfterWindowsEnvironmentReady')
     const repos: Record<string, unknown>[] = []
@@ -616,7 +623,7 @@ describe('OrcaRuntimeService', () => {
 
   it('never sets an SSH-hosted project up on the local machine', async () => {
     // Use valid writable paths so earlier I/O failures cannot hide an unsafe local clone or probe.
-    const destination = await mkdtemp(join(tmpdir(), 'orca-runtime-ssh-guard-'))
+    const destination = await mkdtempReal(join(tmpdir(), 'orca-runtime-ssh-guard-'))
     const existingFolder = join(destination, 'orca')
     mkdirSync(existingFolder, { recursive: true })
     execFileSync('git', ['init'], { cwd: existingFolder, stdio: 'ignore' })

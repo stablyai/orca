@@ -7,7 +7,7 @@ import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import type { AutomationWorkspaceProvenance, GitWorktreeInfo } from '../../../shared/worktree/types'
 import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
 import { getProjectHostSetupWorktreeMeta } from '../../../shared/project-host-setup-lookup'
-import { isTuiAgent } from '../../../shared/tui-agent-config'
+import { isTuiAgent } from '../../../shared/agent-launch/catalog/tui-agent-config'
 import { getWorktreeCreationLayout } from '../../ipc/worktree-logic'
 import {
   resolveWorktreeCreateDisplayNameMeta,
