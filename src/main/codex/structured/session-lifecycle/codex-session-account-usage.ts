@@ -1,9 +1,5 @@
 import { requireLegacyAgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/agent-session-account-home'
-import {
-  runCodexAppServerSession,
-  type CodexAppServerRpc
-} from '../../app-server/codex-app-server-session'
-import { CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS } from '../../../codex-cli/codex-read-only-app-server-args'
+import type { CodexAppServerRpc } from '../../app-server/codex-app-server-session'
 import {
   resolveCodexHomeProcessLockKey,
   withCodexHomeProcessLock
@@ -14,14 +10,8 @@ import {
   type CodexAccountUsageRead,
   type RpcRateLimitsResponse
 } from '../../../rate-limits/codex-rpc-rate-limit-mapper'
-import { codexStructuredLaunchArgs } from '../launch/codex-structured-launch-args'
-import { resolveCodexStructuredInvocation } from '../launch/codex-structured-launch-resolution'
 import {
-  NATIVE_CHAT_SCRATCH_DIR_ENV,
-  LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV
-} from '../../../native-chat/native-chat-visuals-delivery'
-import {
-  codexProviderProbeCwd,
+  runCodexProviderAppServer,
   type CodexProviderInvocationDeps
 } from './codex-provider-session-rename'
 import type { CodexSession } from './codex-structured-session-state'
@@ -65,29 +55,10 @@ export function readCodexSessionAccountUsage(
     const codexHome = requireLegacyAgentSessionAccountHome(record.accountHome).path
     return withCodexHomeProcessLock(resolveCodexHomeProcessLockKey(codexHome), async () => {
       signal.throwIfAborted()
-      const cwd = await codexProviderProbeCwd(record, invocation)
-      const { command, prefixArgs, environment } = await resolveCodexStructuredInvocation({
-        ...invocation,
-        signal,
-        resolveWorkingDirectory: () => cwd
-      })
-      const args = codexStructuredLaunchArgs(await invocation.resolveLaunchArgs())
-      const env = Object.fromEntries(
-        Object.entries(environment ?? {}).filter(
-          (entry): entry is [string, string] => entry[1] !== undefined
-        )
-      )
-      return runCodexAppServerSession(
-        {
-          command,
-          args: [...prefixArgs, ...args, ...CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS],
-          cwd,
-          cliPath: command,
-          env: { ...env, CODEX_HOME: codexHome },
-          envToDelete: [NATIVE_CHAT_SCRATCH_DIR_ENV, LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV],
-          timeoutMs: COLD_USAGE_TIMEOUT_MS,
-          signal
-        },
+      return runCodexProviderAppServer(
+        record,
+        invocation,
+        { timeoutMs: COLD_USAGE_TIMEOUT_MS, signal },
         (rpc) => readUsage(rpc.request)
       )
     })
