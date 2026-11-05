@@ -8,6 +8,7 @@ import { GrokUsagePane } from './GrokUsagePane'
 import { OpenCodeUsagePane } from './OpenCodeUsagePane'
 import { MuseUsagePane } from './MuseUsagePane'
 import { OllamaUsagePane } from './OllamaUsagePane'
+import { OllamaIcon } from '../status-bar/accounts/provider-icons'
 import { UsageOverviewPane } from './UsageOverviewPane'
 import {
   StatsHostCaption,
@@ -119,9 +120,9 @@ function UsageAnalyticsOptionIcon({ tab }: { tab: UsageTab }): React.JSX.Element
   if (tab === 'overview') {
     return <BarChart3 className="size-3.5 text-muted-foreground" />
   }
-  // 'ollama' is a cloud subscription (no TUI binary), not a TuiAgent; give it the bar icon.
+  // 'ollama' is a cloud subscription (no TUI binary), not a TuiAgent; use its own glyph.
   if (tab === 'ollama') {
-    return <BarChart3 className="size-3.5 text-muted-foreground" />
+    return <OllamaIcon size={14} className="text-muted-foreground" />
   }
   return <AgentIcon agent={tab} size={14} />
 }

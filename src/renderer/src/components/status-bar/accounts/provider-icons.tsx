@@ -316,6 +316,29 @@ export function OpenCodeGoIcon({ size = 14 }: { size?: number }): React.JSX.Elem
   )
 }
 
+/** Ollama: a simple llama-face silhouette in the theme's foreground; the cloud provider has no bundled asset. */
+export function OllamaIcon({
+  size = 14,
+  className
+}: {
+  size?: number
+  className?: string
+}): React.JSX.Element {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      className={className}
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden
+    >
+      <path d="M12 2.4c-2.85 0-5.04 2.05-5.04 4.9v.86a5.03 5.03 0 00-2.1 4.11c0 .99.28 1.92.78 2.7a5.06 5.06 0 00-.62 2.44c0 2.6 1.94 4.7 4.42 4.98.32.13 1.62.71 2.56.71.95 0 2.24-.58 2.56-.71a5 5 0 004.42-4.98 5.06 5.06 0 00-.62-2.43c.5-.79.78-1.72.78-2.71a5.03 5.03 0 00-2.1-4.11v-.86c0-2.85-2.19-4.9-5.04-4.9z" />
+    </svg>
+  )
+}
+
 export function ClaudeIcon({
   size = 14,
   className
