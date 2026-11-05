@@ -1,9 +1,6 @@
-import {
-  normalizeNativeChatTaskList,
-  type NativeChatTaskList
-} from '../../../../shared/native-chat/input/native-chat-task-list'
-import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
-import { pairToolBlocks } from '../../../../shared/native-chat/tools/native-chat-tool-pairs'
+import { normalizeNativeChatTaskList, type NativeChatTaskList } from './native-chat-task-list'
+import type { NativeChatMessage } from '../native-chat-types'
+import { pairToolBlocks } from '../tools/native-chat-tool-pairs'
 
 const snapshots = new WeakMap<NativeChatMessage, NativeChatTaskList | null>()
 
@@ -27,11 +24,10 @@ function latestSnapshot(message: NativeChatMessage): NativeChatTaskList | null {
   return list
 }
 
-/** Select composer progress without consuming historical transcript updates. */
-export function nativeChatTaskListState(messages: readonly NativeChatMessage[]): {
+/** The plan docked above the composer: the latest accepted snapshot, gone once it is emptied. */
+export function nativeChatDockedTaskList(
   messages: readonly NativeChatMessage[]
-  list: NativeChatTaskList | null
-} {
+): NativeChatTaskList | null {
   let list: NativeChatTaskList | null = null
   for (const message of messages) {
     const snapshot = latestSnapshot(message)
@@ -39,5 +35,5 @@ export function nativeChatTaskListState(messages: readonly NativeChatMessage[]):
       list = snapshot
     }
   }
-  return { messages, list }
+  return list && list.tasks.length > 0 ? list : null
 }

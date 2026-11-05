@@ -77,6 +77,7 @@ vi.mock('react-native-reanimated', async () => {
 vi.mock('react-native', () => ({
   Dimensions: { get: () => ({ width: 430, height: 900 }) },
   useWindowDimensions: () => ({ fontScale: 1 }),
+  Platform: { OS: 'ios' },
   Pressable: 'Pressable',
   ScrollView: 'ScrollView',
   StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },
