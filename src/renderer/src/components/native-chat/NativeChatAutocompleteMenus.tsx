@@ -278,8 +278,8 @@ function PickerListbox({
             id={id}
             role="listbox"
             data-focus-behavior="composer-suggestions"
-            // Inside a popover (the launch setup), take the menu layer Select and DropdownMenu use above popovers.
-            className={`scrollbar-sleek fixed left-0 top-0 overflow-y-auto rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-floating ${marker.current?.closest('[data-slot="popover-content"]') ? 'z-[70]' : 'z-50'}`}
+            // Inside the launch setup (a popover or the new-tab menu's submenu), take the menu layer those overlays use.
+            className={`scrollbar-sleek fixed left-0 top-0 overflow-y-auto rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-floating ${marker.current?.closest('[data-slot="popover-content"], [data-slot="dropdown-menu-sub-content"]') ? 'z-[70]' : 'z-50'}`}
           >
             {children}
           </div>,
