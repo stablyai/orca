@@ -25,7 +25,7 @@ import {
   getPreflightWslTarget,
   type PreflightRuntimeContext
 } from '../ipc/preflight-runtime-target'
-import { resolveWorktreeHostRouting } from '../runtime/worktree-launch-host-repo'
+import { resolveWorktreeHostRouting } from '../runtime/workspaces/catalog/worktree-launch-host-repo'
 import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
 import {
   detectInstalledAgentsWithShellPathHydration,

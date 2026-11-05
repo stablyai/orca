@@ -2,19 +2,16 @@
 import { existsSync } from 'node:fs'
 import { readFile, realpath, writeFile } from 'node:fs/promises'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  join,
-  listWorktreesStrict,
-  localWorktreeFilesystem,
-  mkdir,
-  mkdtemp,
-  removeWorktree,
-  rm,
-  scanLocalRepoWorktreesForResolutionMock,
-  tmpdir
-} from '../orca-runtime-test-mocks.spec'
-import { TEST_REPO_ID, TEST_REPO_PATH } from '../orca-runtime-test-fixtures.spec'
-import { createWorktreeRemovalRuntime } from '../orca-runtime-test-scenario-builders.spec'
+import './runtime-test-module-registration.spec'
+import { join } from 'node:path'
+import { listWorktreesStrict } from '../../git/worktrees/catalog/worktree-listing'
+import * as localWorktreeFilesystem from '../../workspaces/removal/local-worktree-filesystem'
+import { mkdir, mkdtemp, rm } from 'node:fs/promises'
+import { removeWorktree } from '../../git/worktrees/removal/worktree-removal'
+import { scanLocalRepoWorktreesForResolutionMock } from '../orca-runtime-test-mocks/setup.spec'
+import { tmpdir } from 'node:os'
+import { TEST_REPO_ID, TEST_REPO_PATH } from './orca-runtime-test-fixtures.spec'
+import { createWorktreeRemovalRuntime } from './orca-runtime-test-scenario-builders.spec'
 import {
   _resetPendingWorktreeRemovalsForTests,
   _settlePendingWorktreeRemovalsForTests,

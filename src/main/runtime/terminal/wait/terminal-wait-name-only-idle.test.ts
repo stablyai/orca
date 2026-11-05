@@ -5,7 +5,7 @@ import type { RuntimeSyncWindowGraph } from '../../../../shared/runtime-session-
 
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 
-import { registerBoundPty } from '../../bind-first-pane.test-fixture'
+import { registerBoundPty } from '../../orca-runtime-tests/bind-first-pane.test-fixture'
 
 // #6011: name-only Codex/Devin titles were stored as idle and prematurely satisfied tui-idle; distinguish settling, corroborating and veto evidence.
 

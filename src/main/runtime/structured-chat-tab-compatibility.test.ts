@@ -16,7 +16,7 @@ import {
   savedIds
 } from './structured-agent-session-tab-authority.test-support'
 import { structuredAgentSessionTabId } from '../../shared/agent-session/view/structured-agent-session-projection'
-import { chatTabCommandsSettled } from './session-layout-apply.test-fixture'
+import { chatTabCommandsSettled } from './orca-runtime-tests/session-layout-apply.test-fixture'
 import { discardStructuredWorkerSession } from './rpc/methods/orchestration-structured-worker-session'
 
 vi.mock('../claude/claude-cli-flag-prewarm', () => ({
@@ -124,7 +124,7 @@ it.each(['stop', 'discard', 'sweep'] as const)(
     const { stopStructuredWorker } =
       await import('./rpc/methods/orchestration-structured-worker-lifecycle')
     const { closeStructuredSessionsForWorktree, createStructuredSweepProgress } =
-      await import('./structured-session-worktree-teardown')
+      await import('./workspaces/removal/structured-session-worktree-teardown')
     vi.spyOn(Date, 'now').mockReturnValue(1_800_000_000_000)
     const progress = createStructuredSweepProgress([{ sessionId: B, agent: 'claude' }])
     const stopping =

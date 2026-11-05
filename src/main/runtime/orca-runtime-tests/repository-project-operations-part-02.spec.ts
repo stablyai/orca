@@ -1,32 +1,31 @@
 import * as gitSpawn from '../../git/command-runner/git-spawn'
 import { realpath } from 'node:fs/promises'
 import { describe, expect, it, vi } from 'vitest'
+import './runtime-test-module-registration.spec'
+import { DEFAULT_REPO_BADGE_COLOR } from '../../../shared/repo-badge-color'
+import { EventEmitter } from 'node:events'
+import { OrcaRuntimeService } from '../orca-runtime'
 import {
-  DEFAULT_REPO_BADGE_COLOR,
-  EventEmitter,
-  OrcaRuntimeService,
   clearSubmodulePathsCacheForTests,
-  execFileSync,
+  listSubmodulePaths
+} from '../../git/source-control/submodule-paths'
+import { execFileSync } from 'node:child_process'
+import {
   getRepoUpstreamMock,
   invalidateAuthorizedRootsCacheMock,
-  join,
-  listSubmodulePaths,
-  lstat,
-  mkdir,
-  mkdirSync,
-  mkdtemp,
-  prepareLocalWorktreeRootForRepoMock,
-  projectHostSetupProjectionFromRepos,
-  rm,
-  tmpdir,
-  writeFile
-} from '../orca-runtime-test-mocks.spec'
+  prepareLocalWorktreeRootForRepoMock
+} from '../orca-runtime-test-mocks/setup.spec'
+import { join } from 'node:path'
+import { lstat, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdirSync } from 'node:fs'
+import { projectHostSetupProjectionFromRepos } from '../../../shared/project-host-setup-projection'
+import { tmpdir } from 'node:os'
 import {
   TEST_REPO_ID,
   TEST_REPO_PATH,
   createRuntime,
   store
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
 import { normalizeRuntimePathSeparators } from '../../../shared/cross-platform-path'
 
 // Clone and create register resolved paths (macOS tmpdir is a /var symlink).

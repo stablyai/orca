@@ -1,15 +1,14 @@
-import { realpath } from 'node:fs/promises'
+import { realpath, mkdtemp } from 'node:fs/promises'
 import { describe, expect, it, vi } from 'vitest'
 import { detectAgentCommandsOnHost } from '../../preflight/agent-command-detection'
-import {
-  FLOATING_TERMINAL_WORKTREE_ID,
-  OrcaRuntimeService,
-  SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV,
-  join,
-  mkdtemp,
-  randomUUID,
-  tmpdir
-} from '../orca-runtime-test-mocks.spec'
+import './runtime-test-module-registration.spec'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV } from '../../../shared/setup-agent-sequencing'
+import { join } from 'node:path'
+
+import { randomUUID } from 'node:crypto'
+import { tmpdir } from 'node:os'
 import {
   TEST_FOLDER_PROJECT_GROUP_ID,
   TEST_FOLDER_WORKSPACE_ID,
@@ -22,9 +21,9 @@ import {
   makeFolderProjectGroup,
   makeFolderWorkspace,
   makeWorktreeMeta,
-  spawnedPtyEnv,
   store
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
+import { spawnedPtyEnv } from '../spawned-pty-env-fixtures'
 
 describe('OrcaRuntimeService', () => {
   it.each(['qoder', 'qodercli'] as const)(

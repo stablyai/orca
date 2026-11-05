@@ -1,8 +1,11 @@
 import { randomUUID } from 'node:crypto'
 import { describe, expect, it, vi } from 'vitest'
 import type { PtyProcessInfo } from '../../../providers/pty-process-info'
-import { setupLayoutOwnerRuntime, WORKTREE_ID } from '../../orca-runtime-layout-owner-start-fixture'
-import { committingSpawn } from '../../bind-first-pane.test-fixture'
+import {
+  setupLayoutOwnerRuntime,
+  WORKTREE_ID
+} from '../../orca-runtime-tests/orca-runtime-layout-owner-start-fixture'
+import { committingSpawn } from '../../orca-runtime-tests/bind-first-pane.test-fixture'
 
 vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 

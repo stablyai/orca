@@ -1,4 +1,4 @@
-import { partialRuntimeStore } from './runtime-store-partial-fixture'
+import { partialRuntimeStore } from './orca-runtime-tests/runtime-store-partial-fixture'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import { agentSessionRecordFixture } from '../native-chat/agent-session-record-test-fixture'

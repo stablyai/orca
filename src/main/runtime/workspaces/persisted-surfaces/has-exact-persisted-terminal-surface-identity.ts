@@ -7,7 +7,7 @@ import type {
 } from '../../../../shared/runtime-types'
 
 import type { PtyControllerInventory } from '../../runtime-pty-controller-contract'
-import { resolveTerminalSessionWorktreeId } from '../../runtime-worktree-path-identity'
+import { resolveTerminalSessionWorktreeId } from '../catalog/runtime-worktree-path-identity'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { layoutContainsLeafId } from '../../../persistence/restoring-sessions/terminal-layout-normalization'
@@ -18,7 +18,7 @@ import type {
   LegacyWorkerRecoveryInventory,
   TerminalWorkspaceLaunchScope
 } from '../../runtime-legacy-worker-terminal-recovery-types'
-import { getLatestPtyTitle } from '../../runtime-worktree-status-projection'
+import { getLatestPtyTitle } from '../process-listing/runtime-worktree-status-projection'
 import type { AutomationService } from '../../../automations/service'
 import type { ArtifactCloudService } from '../../../artifacts/artifact-cloud-service'
 import type {

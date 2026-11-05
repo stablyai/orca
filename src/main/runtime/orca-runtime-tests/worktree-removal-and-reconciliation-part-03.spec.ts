@@ -3,24 +3,21 @@ import { describe, expect, it, vi, type MockInstance } from 'vitest'
 import { readFile } from 'node:fs/promises'
 import { _settlePendingWorktreeRemovalsForTests } from '../../workspaces/removal/worktree-background-removal'
 
+import './runtime-test-module-registration.spec'
+import { assertWorktreeCleanForRemoval } from '../../git/worktrees/removal/worktree-removal-preflight'
 import {
-  assertWorktreeCleanForRemoval,
   closeLocalWatcherForWorktreePathMock,
   deleteWorktreeHistoryDirMock,
   forceDeleteLocalBranchMock,
   invalidateAuthorizedRootsCacheMock,
-  join,
-  listWorktrees,
-  lstat,
-  mkdir,
-  mkdtemp,
-  removeWorktree,
-  rm,
-  runHook,
-  setPlatform,
-  tmpdir,
-  writeFile
-} from '../orca-runtime-test-mocks.spec'
+  setPlatform
+} from '../orca-runtime-test-mocks/setup.spec'
+import { join } from 'node:path'
+import { listWorktrees } from '../../git/worktrees/catalog/worktree-scan-cache'
+import { lstat, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { removeWorktree } from '../../git/worktrees/removal/worktree-removal'
+import { runHook } from '../../workspace-hooks/hooks'
+import { tmpdir } from 'node:os'
 import {
   TEST_REPO_ID,
   TEST_REPO_PATH,
@@ -28,8 +25,8 @@ import {
   createStaleRuntimeWorktreeStore,
   deferred,
   store
-} from '../orca-runtime-test-fixtures.spec'
-import { createWorktreeRemovalRuntime } from '../orca-runtime-test-scenario-builders.spec'
+} from './orca-runtime-test-fixtures.spec'
+import { createWorktreeRemovalRuntime } from './orca-runtime-test-scenario-builders.spec'
 import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 
 // Connected SSH fixtures need the host HOME for removal guards.

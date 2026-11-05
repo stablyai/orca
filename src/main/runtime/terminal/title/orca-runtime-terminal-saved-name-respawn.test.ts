@@ -1,12 +1,13 @@
-import '../../orca-runtime-test-lifecycle.spec'
+import '../../orca-runtime-tests/orca-runtime-test-lifecycle.spec'
 import { describe, expect, it, vi } from 'vitest'
-import { OrcaRuntimeService } from '../../orca-runtime-test-mocks.spec'
+import '../../orca-runtime-tests/runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../../orca-runtime'
 import {
   HEADLESS_LEAF_ID,
   TEST_WORKTREE_ID,
   makeRuntimeStoreWithWorkspaceSession,
   makeWorkspaceSessionWithHeadlessTerminal
-} from '../../orca-runtime-test-fixtures.spec'
+} from '../../orca-runtime-tests/orca-runtime-test-fixtures.spec'
 import type { RuntimeNotifier } from '../../runtime-notifier-contract'
 
 // After a restart, a reconnecting client restarts each saved tab's terminal. The mobile row for

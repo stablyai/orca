@@ -2,32 +2,35 @@ import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import { describe, expect, it, vi } from 'vitest'
 import { SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV } from '../../../shared/setup-agent-sequencing'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
 import {
-  OrcaRuntimeService,
   SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV,
-  SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV,
+  SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV
+} from '../../../shared/setup-agent-sequencing'
+import {
   computeWorktreePathMock,
-  createSetupRunnerScript,
   detectInstalledAgentsWithShellPathHydrationMock,
   electronMocks,
-  ensurePathWithinWorkspaceMock,
-  getEffectiveHooks,
-  listWorktrees,
-  shouldRunSetupForCreate,
-  type WorktreeMeta
-} from '../orca-runtime-test-mocks.spec'
+  ensurePathWithinWorkspaceMock
+} from '../orca-runtime-test-mocks/setup.spec'
+import { createSetupRunnerScript } from '../../workspace-hooks/worktree-runner-script'
+import { getEffectiveHooks } from '../../workspace-hooks/hooks'
+import { listWorktrees } from '../../git/worktrees/catalog/worktree-scan-cache'
+import { shouldRunSetupForCreate } from '../../workspace-hooks/effective-hook-config'
+import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 
 import {
   TEST_REPO_ID,
   makeWorktreeMeta,
-  spawnedPtyEnv,
   store,
   makeRuntimeStoreWithWorkspaceSession
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
+import { spawnedPtyEnv } from '../spawned-pty-env-fixtures'
 import type { HostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { collectLeafIds } from '../../../shared/workspace-layout/terminal-pane-layout-tree'
-import { ProvisioningRuntime } from '../orca-runtime-layout-owner-start-fixture'
+import { ProvisioningRuntime } from './orca-runtime-layout-owner-start-fixture'
 
 describe('OrcaRuntimeService', () => {
   it('sends follow-up prompts for CLI-created stdin-after-start startup agents', async () => {

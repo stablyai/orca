@@ -47,7 +47,7 @@ import { createStructuredAgentSessionLogger } from '../native-chat/agent-session
 import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 import { conversationRecordReader } from './orchestration/structured-session-lineage'
 import { requireUnownedStructuredAgentSessionAdoption } from './agent-session/structured-agent-session-create-adoption'
-import { listStructuredSessionsForWorktree } from './structured-session-worktree-teardown'
+import { listStructuredSessionsForWorktree } from './workspaces/removal/structured-session-worktree-teardown'
 import * as membership from './agent-session/records/agent-session-store-state'
 import type { AgentSessionReserveRequest } from './agent-session/ownership/agent-session-reservation-admission'
 

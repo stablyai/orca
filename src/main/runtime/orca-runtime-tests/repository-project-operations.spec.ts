@@ -1,25 +1,22 @@
 import * as gitSpawn from '../../git/command-runner/git-spawn'
 import { describe, expect, it, vi } from 'vitest'
-import { realpath } from 'node:fs/promises'
+import { realpath, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import * as folderPathStatus from '../../project-groups/folder-workspace-path-status'
+import './runtime-test-module-registration.spec'
+import { DEFAULT_REPO_BADGE_COLOR } from '../../../shared/repo-badge-color'
+import { EventEmitter } from 'node:events'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { execFileSync } from 'node:child_process'
 import {
-  DEFAULT_REPO_BADGE_COLOR,
-  EventEmitter,
-  OrcaRuntimeService,
-  execFileSync,
   getRepoUpstreamMock,
-  join,
-  mkdir,
-  mkdirSync,
-  mkdtemp,
-  prepareLocalWorktreeRootForRepoMock,
-  projectHostSetupProjectionFromRepos,
-  rm,
-  tmpdir,
-  win32,
-  writeFile
-} from '../orca-runtime-test-mocks.spec'
-import { store } from '../orca-runtime-test-fixtures.spec'
+  prepareLocalWorktreeRootForRepoMock
+} from '../orca-runtime-test-mocks/setup.spec'
+import { join, win32 } from 'node:path'
+
+import { mkdirSync } from 'node:fs'
+import { projectHostSetupProjectionFromRepos } from '../../../shared/project-host-setup-projection'
+import { tmpdir } from 'node:os'
+import { store } from './orca-runtime-test-fixtures.spec'
 
 // Clone and create register resolved paths (macOS tmpdir is a /var symlink).
 async function mkdtempReal(prefix: string): Promise<string> {

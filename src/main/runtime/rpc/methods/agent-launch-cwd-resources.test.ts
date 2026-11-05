@@ -66,19 +66,23 @@ import { RpcDispatcher } from '../dispatcher'
 import { UnixSocketTransport } from '../unix-socket-transport'
 import { AGENT_LAUNCH_METHODS } from './agent-launch'
 import { WORKTREE_METHODS } from './worktree'
-import { OrcaRuntimeService } from '../../orca-runtime-test-mocks.spec'
-import '../../orca-runtime-test-lifecycle.spec'
-import { store as runtimeStore, TEST_WORKTREE_ID } from '../../orca-runtime-test-fixtures.spec'
+import '../../orca-runtime-tests/runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../../orca-runtime'
+import '../../orca-runtime-tests/orca-runtime-test-lifecycle.spec'
+import {
+  store as runtimeStore,
+  TEST_WORKTREE_ID
+} from '../../orca-runtime-tests/orca-runtime-test-fixtures.spec'
 import { openTestAgentSessionRecordStore } from '../../agent-session/records/agent-session-record-store-test-harness'
 import {
   openTestJournalHostDatabase,
   closeTestJournalHostDatabase
 } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
 import { runtimeStub, setAgentLaunchRecordStore } from './agent-launch.test-fixture'
-import { RuntimeWorktreeLineageController } from '../../runtime-worktree-lineage-controller'
-import type { RuntimeManagedWorktreeCreateArgs } from '../../runtime-managed-worktree-create-types'
-import type { ResolvedWorktree } from '../../runtime-worktree-path-identity'
-import { formatAmbiguousCwdParentMessage } from '../../runtime-worktree-lineage-resolution'
+import { RuntimeWorktreeLineageController } from '../../workspaces/lineage/runtime-worktree-lineage-controller'
+import type { RuntimeManagedWorktreeCreateArgs } from '../../workspaces/creation/runtime-managed-worktree-create-types'
+import type { ResolvedWorktree } from '../../workspaces/catalog/runtime-worktree-path-identity'
+import { formatAmbiguousCwdParentMessage } from '../../workspaces/lineage/runtime-worktree-lineage-resolution'
 import { managedCwdLaunchFixture } from './managed-cwd-launch.test-fixture'
 
 configureWorktreeAwarenessEnvironment({

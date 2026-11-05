@@ -17,11 +17,11 @@ const electronMocks = vi.hoisted(() => {
 vi.mock('electron', () => electronMocks)
 
 const localScanMock = vi.hoisted(() => vi.fn())
-vi.mock('./repo-worktree-resolution-scan', () => ({
+vi.mock('./workspaces/catalog/repo-worktree-resolution-scan', () => ({
   scanLocalRepoWorktreesForResolution: localScanMock
 }))
 
-vi.mock('./repo-worktree-admin-fingerprint', () => ({
+vi.mock('./workspaces/catalog/repo-worktree-admin-fingerprint', () => ({
   readRepoWorktreeAdminFingerprint: vi.fn(async () => null)
 }))
 
@@ -32,7 +32,7 @@ import {
   storeRepo,
   storeWorktreeMeta,
   type PartialRuntimeStore
-} from './runtime-store-partial-fixture'
+} from './orca-runtime-tests/runtime-store-partial-fixture'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 
 const REPO_ID = 'repo-upgraded'

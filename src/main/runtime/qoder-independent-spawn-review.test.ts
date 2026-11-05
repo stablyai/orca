@@ -6,9 +6,10 @@ import { join } from 'node:path'
 import { buildAgentResumeStartupPlan } from '../../shared/agent-launch/startup/tui-agent-resume-startup'
 import { buildAiVaultResumeShellCommand } from '../../shared/ai-vault/resume/ai-vault-resume-command'
 
-await import('./orca-runtime-test-mocks.spec')
-await import('./orca-runtime-test-lifecycle.spec')
-const { OrcaRuntimeService } = await import('./orca-runtime-test-mocks.spec')
+await import('./orca-runtime-tests/runtime-test-module-registration.spec')
+await import('./orca-runtime-tests/orca-runtime-test-lifecycle.spec')
+await import('./orca-runtime-tests/runtime-test-module-registration.spec')
+const { OrcaRuntimeService } = await import('./orca-runtime')
 const {
   store,
   TEST_WORKTREE_PATH,
@@ -16,8 +17,8 @@ const {
   createFolderWorkspaceRuntimeStore,
   makeFolderWorkspace,
   makeFolderProjectGroup
-} = await import('./orca-runtime-test-fixtures.spec')
-const { committingSpawn } = await import('./bind-first-pane.test-fixture')
+} = await import('./orca-runtime-tests/orca-runtime-test-fixtures.spec')
+const { committingSpawn } = await import('./orca-runtime-tests/bind-first-pane.test-fixture')
 const { detectAgentCommandsOnHost } = await import('../preflight/agent-command-detection')
 beforeEach(() =>
   vi
@@ -230,7 +231,8 @@ it.each([
 it.each(['offline', 'legacy-identity'])(
   'refuses a Qoder command-bearing create with unverifiable inventory: %s',
   async (state) => {
-    const { TEST_WORKTREE_ID } = await import('./orca-runtime-test-fixtures.spec')
+    const { TEST_WORKTREE_ID } =
+      await import('./orca-runtime-tests/orca-runtime-test-fixtures.spec')
     const runtime = new OrcaRuntimeService(store)
     runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
     const spawn = vi.fn()
@@ -270,7 +272,7 @@ it.each(['offline', 'legacy-identity'])(
 )
 
 it('reconciles after the reply-cache expires and isolates deliberate forks and paired callers', async () => {
-  const { TEST_WORKTREE_ID } = await import('./orca-runtime-test-fixtures.spec')
+  const { TEST_WORKTREE_ID } = await import('./orca-runtime-tests/orca-runtime-test-fixtures.spec')
   vi.useFakeTimers()
   try {
     // Copy the fixture store so main-owned bindings cannot leak into shared tests.
