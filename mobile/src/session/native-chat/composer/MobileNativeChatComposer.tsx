@@ -12,6 +12,7 @@ import {
 import type { NativeChatSkillDiscoverySnapshot } from '../../../../../src/shared/native-chat/input/native-chat-picker-items'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { ActivityIndicator, Keyboard, Pressable, type TextInput, View } from 'react-native'
+import type { NativeChatContextUsageSummary } from '../../../../../src/shared/native-chat/native-chat-context-usage-summary'
 import { Plus } from 'lucide-react-native'
 import { colors } from '../../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
@@ -40,6 +41,7 @@ import {
 } from '../../../components/composer-input/composer-input-styles'
 import { MobileNativeChatSendButton } from './MobileNativeChatSendButton'
 import { MobileNativeChatEditActions } from './MobileNativeChatEditActions'
+import { useMobileNativeChatContextRing } from './MobileNativeChatContextUsageRing'
 import type { MobileNativeChatSendIntent } from '../mobile-native-chat-send'
 import {
   MobileNativeChatComposerMic,
@@ -81,6 +83,8 @@ type Props = MobileNativeChatMicProps & {
   getComposerEditGeneration: () => number
   agent?: string | null
   sessionOptions?: MobileNativeChatSessionOptionPickersProps | null
+  /** A structured chat's context-window readout; null hides the ring. */
+  contextUsage?: NativeChatContextUsageSummary | null
   onAttachImage?: () => void
   attachments?: PendingNativeChatImage[]
   onRemoveAttachment?: (id: string) => void
@@ -116,6 +120,7 @@ export function MobileNativeChatComposer({
   agent = null,
   structured = null,
   sessionOptions,
+  contextUsage = null,
   onAttachImage,
   attachments = NO_ATTACHMENTS,
   onRemoveAttachment,
@@ -183,6 +188,7 @@ export function MobileNativeChatComposer({
     onSlashMenuDemand: structured?.onSlashMenuDemand,
     focusField: () => fieldRef.current?.focus()
   })
+  const contextRing = useMobileNativeChatContextRing(contextUsage, menu.rows.length > 0)
   const dictation = useMobileNativeChatComposerDictation({
     draftScopeKey,
     value,
@@ -281,7 +287,7 @@ export function MobileNativeChatComposer({
         />
       ) : null}
       <View style={styles.composerInset} testID="native-chat-composer-inset">
-        <View style={styles.bar} testID="native-chat-composer">
+        <View {...contextRing.barProps} style={styles.bar} testID="native-chat-composer">
           <MobileNativeChatComposerAttachments
             images={attachments}
             files={files}
@@ -360,6 +366,7 @@ export function MobileNativeChatComposer({
               />
             ) : null}
             <View style={inputStyles.actionSpacer} />
+            {contextRing.ring}
             {onMicPress ? (
               <MobileNativeChatComposerMic
                 onMicPress={onMicPress}

@@ -193,6 +193,11 @@
       "sendQueueHint": "S’exécute après le tour en cours",
       "sendSteerHint": "S’ajoute à ce que l’agent fait en ce moment"
     },
+    "contextUsage": {
+      "label": "Contexte : {{used}} tokens sur {{window}}, {{percent}} % utilisés",
+      "title": "Contexte",
+      "estimated": "Estimation basée sur la dernière réponse."
+    },
     "composerAttachments": {
       "attachedImage": "Image jointe",
       "file": "Fichier",

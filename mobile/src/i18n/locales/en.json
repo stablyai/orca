@@ -2788,6 +2788,11 @@
       "sendQueueHint": "Runs after the current turn",
       "sendSteerHint": "Goes into what the agent is doing now"
     },
+    "contextUsage": {
+      "label": "Context {{used}} of {{window}} tokens, {{percent}}% used",
+      "title": "Context",
+      "estimated": "Estimated from the last response."
+    },
     "composerAttachments": {
       "file": "File",
       "fileMeta": "{{type}} · {{size}}",

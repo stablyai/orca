@@ -16,6 +16,7 @@ import type {
 } from '../../../../src/shared/native-chat/transcript/native-chat-turn-status'
 import type { NativeChatTurnJournal } from '../../../../src/shared/native-chat/transcript/native-chat-turn-membership'
 import type { NativeChatResolvedPrompt } from '../../../../src/shared/native-chat/native-chat-resolution-receipt'
+import type { NativeChatContextUsageSummary } from '../../../../src/shared/native-chat/native-chat-context-usage-summary'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { styles } from './mobile-native-chat-view-styles'
@@ -115,6 +116,7 @@ type ChatViewProps = MobileNativeChatSendProps &
     skillDiscovery?: NativeChatSkillDiscoverySnapshot
     onNeedSkills?: () => void
     sessionOptions?: MobileNativeChatSessionOptionPickersProps | null
+    contextUsage?: NativeChatContextUsageSummary | null
     structuredComposer?: MobileNativeChatStructuredComposer | null
     askRequiresTerminal?: boolean
     promptKey?: string | null
@@ -174,6 +176,7 @@ export function MobileNativeChatView({
   skillDiscovery,
   onNeedSkills,
   sessionOptions,
+  contextUsage = null,
   structuredComposer: structured = null,
   ask,
   askKey,
@@ -393,6 +396,7 @@ export function MobileNativeChatView({
             {...{ getSendCompletionGeneration, getComposerEditGeneration, inputRef, sendFollowUp }}
             agent={agent}
             sessionOptions={sessionOptions}
+            contextUsage={contextUsage}
             onAttachImage={onAttachImage}
             attachments={attachments}
             onRemoveAttachment={onRemoveAttachment}

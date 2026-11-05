@@ -1,5 +1,5 @@
 import { useContext } from 'react'
-import { StyleSheet, Text, View } from 'react-native'
+import { Text, View } from 'react-native'
 import { styles } from './mobile-session-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
@@ -8,8 +8,7 @@ import { MobileSessionContentRow } from './MobileSessionContentRow'
 import { MobileSessionHeader } from './MobileSessionHeader'
 import { MobileSessionSheets } from './MobileSessionSheets'
 import { MobileWorkerAutoCloseStrip } from './MobileWorkerAutoCloseStrip'
-import { DetailCardLayer } from '../components/detail-card-host'
-import { AnchoredDetailCard } from '../components/AnchoredDetailCard'
+import { AnchoredDetailCardLayer } from '../components/AnchoredDetailCard'
 import { StatusDot } from '../components/StatusDot'
 import { useResponsiveLayout } from '../layout/responsive-layout'
 import { WorkspaceServerContext } from '../transport/use-workspace-client'
@@ -62,40 +61,21 @@ export function MobileSessionSurface({ controller }: { controller: MobileSession
         <MobileWorkerAutoCloseStrip controller={controller} />
         <MobileSessionContentRow controller={controller} />
       </View>
-      <DetailCardLayer>
-        <View
-          ref={details.layerRef}
-          collapsable={false}
-          pointerEvents="box-none"
-          onLayout={details.onLayout}
-          style={detailLayer}
-        >
-          {details.visual ? (
-            <AnchoredDetailCard
-              {...details.visual}
-              bounds={details.bounds}
-              contentRef={details.contentRef}
-              boundaryRefs={details.boundaryRefs}
-              active={details.active}
-              obscured={obscured}
-              onSettled={details.onSettled}
-              title={controller.worktreeName || t('session.header.terminalTitle', 'Terminal')}
-              detail={controller.worktreePath}
-              footer={
-                hostName ? (
-                  <>
-                    <StatusDot state={controller.connState} />
-                    <Text style={styles.sessionMetaText}>{hostName}</Text>
-                  </>
-                ) : null
-              }
-            />
-          ) : null}
-        </View>
-      </DetailCardLayer>
+      <AnchoredDetailCardLayer
+        card={details}
+        obscured={obscured}
+        title={controller.worktreeName || t('session.header.terminalTitle', 'Terminal')}
+        detail={controller.worktreePath}
+        footer={
+          hostName ? (
+            <>
+              <StatusDot state={controller.connState} />
+              <Text style={styles.sessionMetaText}>{hostName}</Text>
+            </>
+          ) : null
+        }
+      />
       <MobileSessionSheets controller={controller} />
     </View>
   )
 }
-
-const detailLayer = { ...StyleSheet.absoluteFillObject, zIndex: 1000 }

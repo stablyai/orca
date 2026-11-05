@@ -189,6 +189,11 @@
       "sendQueueHint": "在目前回合結束後執行",
       "sendSteerHint": "加入代理程式目前正在進行的工作"
     },
+    "contextUsage": {
+      "label": "上下文 {{used}}/{{window}} token，已用 {{percent}}%",
+      "title": "上下文",
+      "estimated": "根據上一次回應的估算值。"
+    },
     "composerAttachments": {
       "attachedImage": "已附加的圖片",
       "file": "檔案",
