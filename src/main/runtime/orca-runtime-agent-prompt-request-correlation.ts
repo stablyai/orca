@@ -3,8 +3,8 @@ import type { RuntimeTerminalPromptDelivery } from '../../shared/runtime-types'
 import type {
   AgentPromptTurnStartEvidence,
   AgentPromptWaitTextCache
-} from './agent-prompt-submission-verification'
-import { verifyAgentPromptSubmission } from './agent-prompt-submission-verification'
+} from './terminal/input/agent-prompt-submission-verification'
+import { verifyAgentPromptSubmission } from './terminal/input/agent-prompt-submission-verification'
 import { AgentPromptRequestCorrelation } from './agent-prompt-request-correlation'
 
 export abstract class OrcaRuntimeWithAgentPromptRequestCorrelation extends OrcaRuntimeWithSerializeAgentPromptSubmission {

@@ -10,7 +10,7 @@ import { isTuiAgent } from '../../../shared/agent-launch/catalog/tui-agent-confi
 import { resolveTuiAgentLaunchEnv } from '../../../shared/agent-launch/choices/tui-agent-launch-defaults'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { StructuredAgentId } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
-import type { RuntimeWorkspaceCatalog } from './workspace-catalog'
+import type { RuntimeWorkspaceCatalog } from './catalog/workspace-catalog'
 import type { OrcaRuntimeWithRefreshPtyWorktreeRecordsFromController } from '../terminal/lifecycle/pty-worktree-refresh'
 import type { RuntimeAccountController } from '../runtime-account-controller'
 import type { OrcaRuntimeWithPruneMobileSessionTabGroupLayout } from '../session-lifecycle/projection/prune-mobile-session-tab-group-layout'

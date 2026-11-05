@@ -1,3 +1,4 @@
+import type * as GitHubGetPrCheckDetailsModule from '../github/client/check/get-pr-check-details'
 import './rpc/unused-default-rpc-methods.test-fixture'
 import type { ChildProcess, SpawnOptions } from 'node:child_process'
 import { existsSync, mkdtempSync, rmSync } from 'node:fs'
@@ -15,7 +16,7 @@ import { RemoteRuntimeRequestConnection } from '../../shared/remote-runtime/requ
 import type { Repo } from '../../shared/repo-types'
 import type { OrcaRuntimeService } from './orca-runtime'
 import { OrcaRuntimeRpcServer } from './runtime-rpc'
-import { RuntimeGitHubReviewQueryCommands } from './runtime-github-review-query-commands'
+import { RuntimeGitHubReviewQueryCommands } from './integrations/github/runtime-github-review-query-commands'
 import { GITHUB_PULL_REQUEST_METHODS } from './rpc/methods/github-pull-request-methods'
 import { clearGhAccountTokenCacheForTests } from '../github/gh-account-token'
 import { clearGhCapabilityStateForTests } from '../github/gh-capability-state'
@@ -34,8 +35,14 @@ const { spawnMock, resolverMock, detailsDelegate, captures, terminationMock } = 
 })
 vi.mock('node:child_process', async (original) => ({ ...(await original()), spawn: spawnMock }))
 vi.mock('../github/github-api-repository', () => ({ resolveGitHubRepoExecution: resolverMock }))
+vi.mock('../github/client/check/get-pr-check-details', async (importOriginal) => {
+  const actual = await importOriginal<typeof GitHubGetPrCheckDetailsModule>()
+  return { getPRCheckDetails: detailsDelegate.mockImplementation(actual.getPRCheckDetails) }
+})
 vi.mock('../github/client', async () => {
-  const actual = await import('../github/client/check/get-pr-check-details')
+  const actual = await vi.importActual<typeof GitHubGetPrCheckDetailsModule>(
+    '../github/client/check/get-pr-check-details'
+  )
   return {
     getPRCheckDetails: detailsDelegate.mockImplementation(actual.getPRCheckDetails),
     getPRChecks: vi.fn(),

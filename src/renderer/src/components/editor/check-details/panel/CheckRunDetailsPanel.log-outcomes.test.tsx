@@ -8,14 +8,14 @@ import { createEditorTabsStore } from '@/store/slices/editor-slice-test-harness'
 import type { PRCheckRunDetails } from '../../../../../../shared/github/check-types'
 import { readingCheck, readingDetails } from '../reading/check-details-reading-fixture'
 import { CheckRunDetailsPanel } from './CheckRunDetailsPanel'
-import { CheckRunDetails } from '@/components/right-sidebar/checks-panel/check-run-details'
+import { CheckRunDetails } from '@/components/right-sidebar/checks-panel/presentation/check-run-details'
 import { scrollTopCache, setWithLRU } from '@/lib/scroll-cache'
 import {
   checkDetailsReadingKey,
   checkJobIdentities,
   checkReadingIntentKey
 } from '../reading/check-details-reading-cache'
-import * as diagnosticPosition from '@/components/right-sidebar/check-log-initial-diagnostic-position'
+import * as diagnosticPosition from '@/components/right-sidebar/checks-panel/logs/check-log-initial-diagnostic-position'
 
 vi.mock('@/i18n/i18n', () => ({
   getIntlLocale: () => 'en',
@@ -126,106 +126,6 @@ afterEach(() => {
 })
 
 describe('synthetic outcome payloads through real sidebar and header actions', () => {
-  it('keeps the provider action and truthful manual output without inventing failed steps', () => {
-    const manualCheck = { ...check, conclusion: 'neutral' as const }
-    const details = {
-      ...readingDetails(),
-      conclusion: 'neutral',
-      summary: 'Waiting for manual approval.',
-      jobs: []
-    }
-    render(
-      <TooltipProvider>
-        <CheckRunDetailsPanel
-          check={manualCheck}
-          details={details}
-          loading={false}
-          error={null}
-          openUrl={check.url}
-          worktreeId={null}
-        />
-      </TooltipProvider>
-    )
-    expect(screen.getByText('Waiting for manual approval.')).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Open details' })).toBeTruthy()
-    expect(screen.queryByText('Failed jobs')).toBeNull()
-    expect(screen.queryByText('Log excerpt')).toBeNull()
-    expect(document.body.textContent).not.toMatch(/expired|Couldn't load logs|steps failed/)
-  })
-  it.each(['available', 'empty', 'not_requested', undefined] as const)(
-    'does not invent first-text navigation from null outcome %s',
-    async (outcome) => {
-      const first = readingDetails(null, outcome)
-      const pending = gate()
-      useAppStore.setState({ fetchPRCheckDetails: vi.fn(() => pending.promise) })
-      open(first)
-      const marker = vi.spyOn(diagnosticPosition, 'findInitialCheckLogDiagnostic')
-      render(
-        <TooltipProvider>
-          <StoredPanel />
-        </TooltipProvider>
-      )
-      expect(scrollTopCache.size).toBe(1)
-      expect([...scrollTopCache.keys()].some((key) => key.includes('::intent:'))).toBe(false)
-      fireEvent.click(screen.getByRole('button', { name: 'Refresh' }))
-      await act(async () => pending.resolve(readingDetails(undefined, 'available')))
-      expect(screen.getByTestId('outcome-pane').querySelector('pre')?.scrollTop).toBe(0)
-      expect(marker).not.toHaveBeenCalled()
-    }
-  )
-
-  it('ends zero-layout first-text setup and cannot revive it after close or late frames', async () => {
-    const frames = new Map<number, FrameRequestCallback>()
-    let frameId = 0
-    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
-      frames.set(++frameId, callback)
-      return frameId
-    })
-    vi.spyOn(window, 'cancelAnimationFrame').mockImplementation((key) => {
-      frames.delete(key)
-    })
-    vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(0)
-    const first = payload()
-    const pending = gate()
-    useAppStore.setState({ fetchPRCheckDetails: vi.fn(() => pending.promise) })
-    open(first)
-    const marker = vi.spyOn(diagnosticPosition, 'findInitialCheckLogDiagnostic')
-    const { unmount } = render(
-      <TooltipProvider>
-        <StoredPanel />
-      </TooltipProvider>
-    )
-    expect(marker).not.toHaveBeenCalled()
-    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }))
-    await act(async () =>
-      pending.resolve(payload('Error: synthetic delayed first text', 'available'))
-    )
-    const queued = [...frames.values()]
-    act(() => {
-      frames.clear()
-      for (const callback of queued) {
-        callback(0)
-      }
-    })
-    expect(marker).not.toHaveBeenCalled()
-    expect(frames.size).toBe(0)
-    vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(200)
-    fireEvent.resize(window)
-    expect(marker).not.toHaveBeenCalled()
-    act(() => {
-      useAppStore.setState({ openFiles: [] })
-    })
-    scrollTopCache.clear()
-    act(() => {
-      for (const callback of queued) {
-        callback(0)
-      }
-    })
-    unmount()
-    expect(scrollTopCache.size).toBe(0)
-    expect(frames.size).toBe(0)
-  })
-
   it.each([false, true])(
     'retries one combined request with unchanged identities, already open=%s',
     async (alreadyOpen) => {

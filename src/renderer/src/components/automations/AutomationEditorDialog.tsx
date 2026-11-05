@@ -1,3 +1,4 @@
+import type { AutomationAuthorityRef } from '../../../../shared/automation-owner-ref'
 import React from 'react'
 import { useAppStore } from '@/store'
 import { selectAgentLaunchRouteView } from '@/lib/agent-launch-route-input'
@@ -11,6 +12,8 @@ import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { getAgentCatalog } from '@/lib/agent-catalog'
 import { filterEnabledTuiAgents } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
 import type {
+  AutomationLaunchPreferences,
+  AutomationLaunchSetupPatch,
   AutomationSchedulePreset,
   AutomationWorkspaceMode
 } from '../../../../shared/automations-types'
@@ -49,6 +52,10 @@ export type AutomationDraft = {
   surface?: 'chat' | 'terminal'
   /** Saved as-is; empty means none. */
   extraAgentArgs: string
+  launchPreferences?: AutomationLaunchPreferences
+  agentArgs?: string | null
+  launchSetupPatch?: AutomationLaunchSetupPatch & { legacyOnly?: true }
+  launchArgumentsInput?: { kind: 'legacy' | 'supplemental'; value: string }
   projectId: string
   workspaceMode: AutomationWorkspaceMode
   workspaceId: string
@@ -68,6 +75,7 @@ export type AutomationDraft = {
 }
 
 type AutomationEditorDialogProps = {
+  launchAuthority?: AutomationAuthorityRef
   open: boolean
   isEditing: boolean
   isSaving: boolean
@@ -99,6 +107,7 @@ type AutomationEditorDialogProps = {
 }
 
 export function AutomationEditorDialog({
+  launchAuthority,
   open,
   isEditing,
   isSaving,
@@ -191,6 +200,8 @@ export function AutomationEditorDialog({
             onDismiss={() => onOpenChange(false)}
           />
           <AutomationEditorSettingsSidebar
+            launchWorkspace={launchWorkspace}
+            launchAuthority={launchAuthority}
             destination={destination}
             surface={surface}
             chatSupported={chatSupported}

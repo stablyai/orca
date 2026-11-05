@@ -9,7 +9,6 @@ import {
   HIDDEN_OUTPUT_RESTORE_REMOTE_REARM_MAX
 } from './hidden-output-restore-limits'
 import { shouldWritePtyOutputForeground } from './foreground-output-scan'
-import { admitResumedAppChunk } from './resume-escape-admission'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 import type { PendingHiddenOutputRestoreChunk } from './pending-hidden-output-restore-chunk'
@@ -24,6 +23,8 @@ export function bindHiddenOutputRestoreDrain(session: ConnectPanePtySession): vo
       discardPendingLiveChunksSalvagingQueries()
       return 'overflow'
     }
+    // A chunk skipped after a gap left output only a fresher snapshot can repaint.
+    let skippedAfterGap = false
     while (session.hiddenOutputRestorePendingChunks.length > 0) {
       const chunks = session.hiddenOutputRestorePendingChunks
       session.hiddenOutputRestorePendingChunks = []
@@ -47,7 +48,12 @@ export function bindHiddenOutputRestoreDrain(session: ConnectPanePtySession): vo
           )
         }
         if (data) {
-          session.writePtyOutputToXterm(admitResumedAppChunk(session, data, chunk), true)
+          const admitted = session.admitStreamBytes(data, chunk, { repairsOwnSkips: true })
+          if (admitted === null) {
+            skippedAfterGap = true
+          } else {
+            session.writePtyOutputToXterm(admitted, true)
+          }
           session.recordRendererOrderedSeq(chunk)
         }
       }
@@ -57,7 +63,7 @@ export function bindHiddenOutputRestoreDrain(session: ConnectPanePtySession): vo
         return 'overflow'
       }
     }
-    return 'drained'
+    return skippedAfterGap ? 'refetch' : 'drained'
   }
 
   function discardPendingLiveChunksSalvagingQueries(): void {

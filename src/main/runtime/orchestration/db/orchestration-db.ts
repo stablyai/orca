@@ -40,6 +40,8 @@ class OrchestrationDbCore {
     this.db.pragma('journal_mode = WAL')
     this.db.pragma('synchronous = NORMAL')
     this.db.pragma('busy_timeout = 5000')
+    // Savepoint journals otherwise need a temp file; a full or unwritable temp dir then aborts the whole transaction (#38123).
+    this.db.pragma('temp_store = MEMORY')
     createTables.call(this as unknown as OrchestrationDb)
     // Read before migrate, which drops the capture triggers it may need to rebuild around.
     const removedWorkCaptureWasIntact = isRemovedWorkCaptureIntact(this.db)

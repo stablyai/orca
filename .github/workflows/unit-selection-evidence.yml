@@ -21,7 +21,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 2
-          sparse-checkout: ${{ !inputs.rebuild_plan && '/config/scripts/ci-unit-selection-review.mjs' || '' }}
+          sparse-checkout: ${{ !inputs.rebuild_plan && '/config/scripts/ci/unit-selection/ci-unit-selection-review.mjs' || '' }}
           sparse-checkout-cone-mode: false
           persist-credentials: false
       - uses: ./.github/actions/install-node-dependencies
@@ -32,7 +32,7 @@ jobs:
           ORCA_UNIT_SELECTION_MODE: shadow
           ORCA_PULL_REQUEST_DRAFT: ${{ github.event.pull_request.draft }}
           ORCA_UNIT_FULL_SHARD_COUNT: ${{ vars.ORCA_UNIT_FULL_SHARD_COUNT || '12' }}
-        run: node config/scripts/ci-unit-plan.mjs
+        run: node config/scripts/ci/unit-selection/ci-unit-plan.mjs
       - uses: actions/download-artifact@v8
         with:
           pattern: unit-shard-node-*-attempt-${{ github.run_attempt }}
@@ -48,7 +48,7 @@ jobs:
             const env = { ...process.env }
             delete env['INPUT_GITHUB-TOKEN']
             const args = [
-              'config/scripts/ci-unit-selection-review.mjs',
+              'config/scripts/ci/unit-selection/ci-unit-selection-review.mjs',
               'unit-evidence'
             ]
             if (env.REBUILD_SELECTION_PLAN === 'true') args.push('ci-shards/unit-selection.json')

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { IMMEDIATE_KILL_REPLY_BUDGET_MS } from '../daemon/immediate-kill-reply-budget'
+import { IMMEDIATE_KILL_REPLY_BUDGET_MS } from '../daemon/sessions/immediate-kill-reply-budget'
 
 import { startLateExitHarness } from '../ipc/pty/daemon-late-exit-test-fixture'
 import { finishPtyShutdown } from '../ipc/pty/provider/liveness'

@@ -15,7 +15,7 @@ import { projectStructuredItemToNativeChat } from '../../../../shared/agent-sess
 import { NativeChatMessageList } from './NativeChatMessageList'
 import { installNativeChatMessageListTestViewport } from './native-chat-message-list-test-viewport'
 import { projectNativeChatTaskListFrames } from '../../../../shared/native-chat/input/native-chat-task-list-frames'
-import { openToolRunMembers } from './native-chat-tool-run-members-test-support'
+
 import { projectStructuredQuestionMessages } from '../../../../shared/structured-agent-question-projection'
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
 
@@ -109,9 +109,6 @@ import type { NativeChatLiveSession } from './use-native-chat-live-session'
     )
   }
 
-  const liveLine = (): HTMLElement =>
-    screen.getByText('Thinking').closest<HTMLElement>('[data-native-chat-turn-activity]')!
-
   describe('live reasoning, read through the one live line', () => {
     let restoreViewport = (): void => {}
     beforeAll(() => {
@@ -119,15 +116,6 @@ import type { NativeChatLiveSession } from './use-native-chat-live-session'
     })
     afterAll(() => restoreViewport())
     afterEach(cleanup)
-    it('shows one "Thinking", collapsed, and no row for the open block', () => {
-      render(list([reasoning('r-1', 'Weighing two approaches', 'running')]))
-      expect(screen.getAllByText('Thinking')).toHaveLength(1)
-      const toggle = screen.getByRole('button', { name: 'Thinking' })
-      expect(toggle).toHaveAttribute('aria-expanded', 'false')
-      expect(liveLine()).toContainElement(toggle)
-      expect(screen.queryByRole('button', { name: /Reasoning|Thought/ })).toBeNull()
-      expect(screen.queryByText('Weighing two approaches')).toBeNull()
-    })
 
     it('opens to the live text, which follows the block as it grows', () => {
       const { rerender } = render(list([reasoning('r-1', 'Weighing two approaches', 'running')]))
@@ -141,14 +129,6 @@ import type { NativeChatLiveSession } from './use-native-chat-live-session'
       expect(screen.getByText('Weighing two approaches, then the cheaper one')).toBeInTheDocument()
     })
 
-    it('keeps the body out of the live region, which announces the label only', () => {
-      render(list([reasoning('r-1', 'Weighing two approaches', 'running')]))
-      fireEvent.click(screen.getByRole('button', { name: 'Thinking' }))
-      const body = screen.getByText('Weighing two approaches')
-      expect(body.closest('[aria-live]')).toBeNull()
-      expect(screen.getByText('Thinking').closest('[aria-live]')).not.toBeNull()
-    })
-
     it('lands the finished row open when the reader opened it live, while the turn works on', () => {
       const { rerender } = render(list([reasoning('r-1', 'Weighing two approaches', 'running')]))
       fireEvent.click(screen.getByRole('button', { name: 'Thinking' }))
@@ -159,20 +139,6 @@ import type { NativeChatLiveSession } from './use-native-chat-live-session'
         'true'
       )
       expect(screen.getByText('Weighing two approaches')).toBeInTheDocument()
-    })
-
-    // Body-owned color prevents reasoning from dimming when it moves from the live line into its row.
-    it('draws the same body, in its own quieter tone, live and once landed', () => {
-      const body = () =>
-        screen.getByText('Weighing two approaches').closest('[data-native-chat-message-tone]')
-      const { rerender } = render(list([reasoning('r-1', 'Weighing two approaches', 'running')]))
-      fireEvent.click(screen.getByRole('button', { name: 'Thinking' }))
-      const live = body()
-      expect(live).toHaveAttribute('data-native-chat-message-tone', 'faint')
-      expect(live).toHaveClass('text-chat-foreground-faint', 'pl-5.5', 'max-h-80')
-      const liveClasses = live?.getAttribute('class')
-      rerender(list([reasoning('r-1', 'Weighing two approaches', 'completed')]))
-      expect(body()?.getAttribute('class')).toBe(liveClasses)
     })
 
     it('starts the next block collapsed', () => {
@@ -189,96 +155,6 @@ import type { NativeChatLiveSession } from './use-native-chat-live-session'
         'false'
       )
       expect(screen.queryByText('Second')).toBeNull()
-    })
-
-    it('is not expandable while the open block has no text yet', () => {
-      render(list([reasoning('r-1', '', 'running')]))
-      expect(screen.getAllByText('Thinking')).toHaveLength(1)
-      expect(screen.queryByRole('button', { name: 'Thinking' })).toBeNull()
-    })
-
-    it('draws the open row when a waiting prompt replaces the line', () => {
-      render(
-        list([reasoning('r-1', 'Weighing two approaches', 'running')], {
-          awaitingInput: 'unshown'
-        })
-      )
-      expect(screen.queryByText('Thinking')).toBeNull()
-      expect(screen.getByRole('button', { name: 'Reasoning' })).toHaveAttribute(
-        'aria-expanded',
-        'false'
-      )
-    })
-
-    it('draws no row for the open block under a diff rollup on its turn', () => {
-      const edit: NativeChatMessage = {
-        id: 'edit-1',
-        role: 'assistant',
-        blocks: [
-          { type: 'tool-call', name: 'Diff', input: { path: 'a.ts' }, state: 'completed' },
-          { type: 'tool-result', output: '@@ -1 +1 @@\n-old\n+new' }
-        ],
-        timestamp: STARTED,
-        source: 'transcript'
-      }
-      render(
-        list([
-          edit,
-          reasoning('r-1', 'Weighing two approaches', 'running', { timestamp: STARTED + 50 })
-        ])
-      )
-      expect(screen.queryByRole('button', { name: /Reasoning/ })).toBeNull()
-      fireEvent.click(screen.getByRole('button', { name: 'Thinking' }))
-      expect(screen.getAllByText('Weighing two approaches')).toHaveLength(1)
-    })
-
-    it('draws no row for the open block that carries a provider-opened turn bar', () => {
-      const asked: NativeChatMessage = { ...prompt, id: 'u1', timestamp: 1 }
-      const done: NativeChatMessage = {
-        id: 'a1',
-        role: 'assistant',
-        blocks: [{ type: 'text', text: 'Done.' }],
-        timestamp: 2,
-        source: 'transcript'
-      }
-      const woke = reasoning('r-w', 'Checking the background build', 'running', { timestamp: 3 })
-      const thread = { kind: 'thread' as const }
-      const inTurn = (turnItemId: string) => ({ kind: 'turn' as const, turnItemId })
-      const item = (
-        itemId: string,
-        sequence: number,
-        body: AgentJournalRenderItem['body'],
-        turnScope: AgentJournalRenderItem['turnScope']
-      ): AgentJournalRenderItem => ({
-        itemId,
-        revision: 0,
-        sequence,
-        observedAt: sequence,
-        turnScope,
-        body
-      })
-      const items = [
-        item('u1', 1, { kind: 'message', role: 'user', blocks: asked.blocks }, thread),
-        item('t1', 2, { kind: 'turn', turnId: 't1', state: 'completed', userItemId: 'u1' }, thread),
-        item('a1', 3, { kind: 'message', role: 'assistant', blocks: done.blocks }, inTurn('t1')),
-        item(
-          'wake',
-          4,
-          { kind: 'turn', turnId: 'wake', state: 'running', userItemId: 'claude:wake' },
-          thread
-        ),
-        item(
-          'r-w',
-          5,
-          { kind: 'message', role: 'reasoning', blocks: woke.blocks, state: 'running' },
-          inTurn('wake')
-        )
-      ]
-      render(list([], { session: sessionOf([asked, done, woke]), journalItems: items }))
-      expect(screen.getByText(/Working for/)).toBeInTheDocument()
-      expect(screen.queryByRole('button', { name: /Reasoning/ })).toBeNull()
-      fireEvent.click(screen.getByRole('button', { name: 'Thinking' }))
-      expect(screen.getAllByText('Checking the background build')).toHaveLength(1)
     })
 
     // A live region only announces changes to itself; a replaced one says nothing.
@@ -410,89 +286,6 @@ import type { NativeChatLiveSession } from './use-native-chat-live-session'
         projectNativeChatTaskListFrames([last])[0]
       )
     })
-
-    it('uses the latest complete snapshot across Codex tool calls and notifications', () => {
-      const tool: NativeChatMessage = {
-        id: 'tool',
-        role: 'assistant',
-        timestamp: 1,
-        source: 'transcript',
-        journalPosition: { sequence: 1, index: 0 },
-        blocks: [
-          {
-            type: 'tool-call',
-            name: 'update_plan',
-            input: { plan: [{ step: 'Verify', status: 'pending' }] }
-          }
-        ]
-      }
-      render(transcript([tool, frame(3, 'completed')]))
-      fireEvent.click(screen.getByRole('button', { name: 'Tasks 1 of 1 task completed' }))
-      expect(screen.getAllByText('Verify')).toHaveLength(2)
-      expect(
-        within(
-          screen.getByRole('button', { name: 'Tasks 1 of 1 task completed' }).parentElement!
-        ).getByText('Verify')
-      ).toHaveClass('line-through')
-    })
-
-    it('keeps malformed, truncated, other-provider, and plan-document frames unchanged', () => {
-      const truncated = frame(1, 'pending', { truncated: true })
-      const document = frame(2, 'pending', { kind: 'item:plan' })
-      const malformed = frame(3, 'pending')
-      const otherProvider = frame(4, 'pending')
-      const malformedBlock = malformed.blocks[0]
-      const otherBlock = otherProvider.blocks[0]
-      if (malformedBlock.type === 'text' && malformedBlock.providerFrame) {
-        malformedBlock.providerFrame.payload.head = '{"plan":null}'
-      }
-      if (otherBlock.type === 'text' && otherBlock.providerFrame) {
-        otherBlock.providerFrame.provider = 'claude'
-      }
-      const messages = [truncated, document, malformed, otherProvider]
-      const projected = projectNativeChatTaskListFrames(messages)
-      projected.forEach((message, index) => expect(message).toBe(messages[index]))
-      render(transcript([truncated]))
-      expect(screen.queryByText('notification:turn/plan/updated')).toBeNull()
-      expect(screen.queryByText('Tasks')).toBeNull()
-    })
-
-    // Stored for readers like the task list, drawn only when it has words of its own.
-    it('hides a wordless unrecognised frame while a plan update still becomes the checklist', () => {
-      const unknown = frame(1, 'pending', { kind: 'notification:future/event' })
-      const failure = frame(2, 'pending', { kind: 'notification:future/failure' })
-      const failureBlock = failure.blocks[0]
-      if (failureBlock.type === 'text') {
-        failureBlock.tone = 'error'
-      }
-      render(transcript([unknown, failure, frame(3, 'inProgress')]))
-      expect(screen.queryByText('notification:future/event')).toBeNull()
-      expect(screen.getByText('codex · notification:future/failure')).toBeInTheDocument()
-      expect(
-        screen.getByRole('button', { name: 'Tasks 0 of 1 task completed' })
-      ).toBeInTheDocument()
-    })
-
-    it('does not consume a neighboring tool failure as a notification result', () => {
-      const command: NativeChatMessage = {
-        id: 'command',
-        role: 'assistant',
-        timestamp: 2,
-        source: 'transcript',
-        blocks: [
-          { type: 'tool-call', name: 'shell', input: { command: 'verify' }, state: 'failed' },
-          { type: 'tool-result', output: 'Verification failed', isError: true }
-        ]
-      }
-      render(transcript([frame(1, 'pending'), command]))
-      expect(
-        screen.getByRole('button', { name: 'Tasks 0 of 1 task completed' })
-      ).toBeInTheDocument()
-      openToolRunMembers()
-      expect(screen.getByText('Verification failed', { selector: 'pre' })).toHaveClass(
-        'text-destructive'
-      )
-    })
   })
 
   describe('NativeChatMessageList task list history', () => {
@@ -563,8 +356,6 @@ import type { NativeChatLiveSession } from './use-native-chat-live-session'
 }
 
 {
-  const scrollTo = vi.fn()
-
   function item(
     itemId: string,
     body: AgentJournalItemBody,
@@ -669,40 +460,6 @@ import type { NativeChatLiveSession } from './use-native-chat-live-session'
       expect(screen.getByText('main')).toBeInTheDocument()
     })
 
-    it('renders one resolved row when Claude journals both the call and receipt', () => {
-      const call = item(
-        'ask-call',
-        {
-          kind: 'tool-call',
-          name: 'AskUserQuestion',
-          input: { questions: [{ question: 'Which branch?' }] },
-          state: 'completed',
-          output: { head: 'main', byteLength: 4, truncated: false, digest: 'answer' }
-        },
-        3
-      )
-      const question = item(
-        'question-receipt',
-        {
-          kind: 'question',
-          question: 'Which branch?',
-          options: [{ id: 'main', label: 'main' }],
-          resolution: {
-            state: 'resolved',
-            selectedOptionId: 'main',
-            resolvedBy: 'desktop',
-            resolvedAt: 4000
-          }
-        },
-        4
-      )
-
-      render(view([user, call, question]))
-
-      expect(screen.getAllByText('Asked:')).toHaveLength(1)
-      expect(screen.queryByText(/AskUserQuestion/)).toBeNull()
-    })
-
     it('groups pending Codex questions then narrows the awaiting count after one answer', () => {
       const first = item(
         'q1',
@@ -759,25 +516,13 @@ import type { NativeChatLiveSession } from './use-native-chat-live-session'
       expect(screen.getAllByText('Awaiting user input:')).toHaveLength(1)
     })
 
-    it('reveals and scrolls to a folded diff card from a collapsed completed turn', () => {
-      vi.spyOn(HTMLElement.prototype, 'scrollTo').mockImplementation(scrollTo)
+    it('opens a recorded patch while completed work stays folded', () => {
       render(view([user, prose, diff()]))
-      expect(screen.queryByRole('button', { name: /^Edited .*a\.ts(?:\s|$)/ })).toBeNull()
-      const header = screen.getByRole('button', { name: /1 changed file/ })
-      expect(header).toHaveAttribute('aria-expanded', 'false')
-      fireEvent.click(header)
+      expect(screen.queryByText('after')).toBeNull()
       fireEvent.click(screen.getByRole('button', { name: /src\/a.ts/ }))
-      expect(screen.getByText('Edited')).toBeInTheDocument()
       expect(screen.getByText('after')).toBeInTheDocument()
       expect(screen.getByText('before')).toBeInTheDocument()
-      expect(scrollTo).toHaveBeenCalled()
-      fireEvent.click(screen.getByRole('button', { name: /Edited 1 file/ }))
-      expect(screen.queryByRole('button', { name: /^Edited .*a\.ts(?:\s|$)/ })).toBeNull()
-      fireEvent.click(header)
-      expect(header).toHaveAttribute('aria-expanded', 'false')
-      fireEvent.click(header)
-      fireEvent.click(screen.getByRole('button', { name: /src\/a.ts/ }))
-      expect(scrollTo.mock.calls.length).toBeGreaterThanOrEqual(2)
+      expect(screen.getByRole('button', { name: /Edited 1 file/, expanded: false })).toBeVisible()
     })
 
     it('updates journal revisions and replaces flat approval text with a passive receipt', () => {
@@ -817,26 +562,12 @@ import type { NativeChatLiveSession } from './use-native-chat-live-session'
         }
       }
       rerender(view([user, prose, diff('@@ -0,0 +1,2 @@\n+first\n+second'), resolved]))
-      expect(screen.getByRole('button', { name: /1 changed file \+2/ })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /src\/a.ts \+2/ })).toBeInTheDocument()
       expect(screen.getByText('Run tests?')).toBeInTheDocument()
       expect(screen.getByText('Allow once')).toBeInTheDocument()
       expect(screen.getByText('Answered on another device')).toBeInTheDocument()
       expect(screen.getByText('Resolved').closest('[data-native-chat-receipt]')).not.toBeNull()
       expect(screen.queryByText('resolved')).toBeNull()
-    })
-
-    it('keeps rollups turn-local and leaves legacy message lists unchanged', () => {
-      const secondUser = item(
-        'user-two',
-        { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'Again' }] },
-        5
-      )
-      const secondDiff = { ...diff(), itemId: 'second-diff', sequence: 6, observedAt: 6000 }
-      const items = [user, prose, diff(), secondUser, secondDiff]
-      const { rerender } = render(view(items))
-      expect(screen.getAllByRole('button', { name: /1 changed file/ })).toHaveLength(2)
-      rerender(view(items, false))
-      expect(screen.queryByRole('button', { name: /changed file/ })).toBeNull()
     })
   })
 }

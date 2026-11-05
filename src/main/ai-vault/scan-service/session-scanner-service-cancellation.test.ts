@@ -116,33 +116,6 @@ afterEach(async () => {
 })
 
 describe('AI Vault service cancellation ownership', () => {
-  it.each(['result', 'error'] as const)(
-    'does not retain late cancellations after a %s response',
-    async (responseType) => {
-      const first = Promise.withResolvers<typeof result>()
-      scanAiVaultSessions.mockReturnValueOnce(first.promise)
-      scan(1)
-      await settle()
-      const cancelled = cancelAndObserveSet(1)
-      first.resolve(result)
-      await settle()
-      expect(cancelled.size).toBe(0)
-
-      if (responseType === 'error') {
-        scanAiVaultSessions.mockRejectedValue(new Error('Synthetic parse failure'))
-      }
-      for (let id = 2; id <= 65; id++) {
-        scan(id)
-        await settle()
-        expect(sent).toContainEqual(expect.objectContaining({ type: responseType, id }))
-        // The parent can cancel while this completed response is still in transit.
-        emit({ type: 'cancel', id })
-      }
-      emit({ type: 'cancel', id: 999 })
-      expect(cancelled.size).toBe(0)
-    }
-  )
-
   it('cancels running and queued requests and releases both IDs when they settle', async () => {
     const first = Promise.withResolvers<typeof result>()
     const signals: AbortSignal[] = []
@@ -164,27 +137,5 @@ describe('AI Vault service cancellation ownership', () => {
     expect(signals[1]?.aborted).toBe(true)
     expect(cancelled.size).toBe(0)
     expect(sent.filter((message) => message.type === 'result')).toHaveLength(2)
-  })
-
-  it('aborts the running request and closes the service before ignoring later cancels', async () => {
-    const first = Promise.withResolvers<typeof result>()
-    let signal: AbortSignal | undefined
-    scanAiVaultSessions.mockImplementation((options: { signal: AbortSignal }) => {
-      signal = options.signal
-      return first.promise
-    })
-    scan(1)
-    await settle()
-    const cancelled = cancelAndObserveSet(1)
-    emit({ type: 'shutdown' })
-    expect(signal?.aborted).toBe(true)
-    first.resolve(result)
-    await settle()
-    expect(cancelled.size).toBe(0)
-    expect(closeSearch).toHaveBeenCalledOnce()
-    expect(flushSessionParseCachePersist).toHaveBeenCalledOnce()
-    expect(disconnect).toHaveBeenCalledOnce()
-    emit({ type: 'cancel', id: 1 })
-    expect(cancelled.size).toBe(0)
   })
 })

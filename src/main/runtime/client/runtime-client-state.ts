@@ -13,7 +13,7 @@ import {
   getRepoExecutionHostId
 } from '../../../shared/execution-host'
 import type { IPtyProvider } from '../../providers/pty-provider-contract'
-import { killAllProcessesForWorktree } from '../worktree-teardown'
+import { killAllProcessesForWorktree } from '../workspaces/removal/worktree-teardown'
 import type { MemorySnapshot, StatsSummary } from '../../../shared/process-stats-types'
 import { collectMemorySnapshot } from '../../memory/collector'
 import type { PersistedUIState } from '../../../shared/persisted-ui-state-types'

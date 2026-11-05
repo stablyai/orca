@@ -15,6 +15,9 @@ type FocusTerminalPaneEventDeps = {
   acknowledgeAgents: (paneKeys: string[]) => void
   surfaceStaleAgentRow: (tabId: string, leafId: string) => void
   scrollToBottomIfOutputSinceLastView?: (paneId: number) => void
+  /** The saved layout's expanded leaf; it is known even right after a parked pane remounts. */
+  expandedLeafId?: string | null
+  toggleExpandPane?: (paneId: number) => void
 }
 
 export function handleFocusTerminalPaneDetail(
@@ -24,7 +27,9 @@ export function handleFocusTerminalPaneDetail(
     manager,
     acknowledgeAgents,
     surfaceStaleAgentRow,
-    scrollToBottomIfOutputSinceLastView
+    scrollToBottomIfOutputSinceLastView,
+    expandedLeafId,
+    toggleExpandPane
   }: FocusTerminalPaneEventDeps
 ): void {
   if (!detail?.tabId || detail.tabId !== tabId) {
@@ -45,6 +50,14 @@ export function handleFocusTerminalPaneDetail(
       surfaceStaleAgentRow(tabId, resolution.leafId)
     }
     return
+  }
+  const expandedPaneId =
+    detail.collapseExpandedPane && expandedLeafId && expandedLeafId !== detail.leafId
+      ? manager.getNumericIdForLeaf(expandedLeafId)
+      : null
+  if (expandedPaneId !== null) {
+    // Toggling the expanded pane collapses it, as moving to another pane does.
+    toggleExpandPane?.(expandedPaneId)
   }
   manager.setActivePane(resolution.numericPaneId, { focus: true })
   if (detail.scrollToBottomIfOutputSinceLastView) {

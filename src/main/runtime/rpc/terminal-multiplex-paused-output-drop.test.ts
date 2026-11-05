@@ -13,7 +13,7 @@ import {
   TERMINAL_STREAM_CHUNK_BYTES
 } from '../../../shared/terminal/stream/terminal-multiplex-flow-control'
 import { startDesktopMultiplexSubscribe } from './terminal-multiplex-test-harness'
-import { RuntimeTerminalViewSubscribers } from '../runtime-terminal-view-subscribers'
+import { RuntimeTerminalViewSubscribers } from '../terminal/view/runtime-terminal-view-subscribers'
 
 async function subscribePausable(
   capabilities: Record<string, 1>,

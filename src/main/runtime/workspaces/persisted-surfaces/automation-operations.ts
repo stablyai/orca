@@ -1,5 +1,5 @@
 import { getWorkerTerminalAutoReleaseScheduler } from '../../orchestration/worker-terminal-auto-release-scheduler'
-import type { ResolvedWorktree } from '../../runtime-worktree-path-identity'
+import type { ResolvedWorktree } from '../catalog/runtime-worktree-path-identity'
 import { OrcaRuntimeWithAutomationApiOperations } from './automation-api-operations'
 import { OrchestrationDb } from '../../orchestration/db'
 import {

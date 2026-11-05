@@ -14,8 +14,8 @@ import { tokenizeStartupCommand } from '../../shared/agent-launch/startup/tui-ag
 import type { TerminalCreateOptions } from './runtime-terminal-contracts'
 import type { IPtyProvider } from '../providers/pty-provider-contract'
 
-function operationId(now = Date.now()): string {
-  return `${now}-0123456789abcdef0123456789abcdef`
+function operationId(now = Date.now(), nonce = '0123456789abcdef0123456789abcdef'): string {
+  return `${now}-${nonce}`
 }
 
 function request(
@@ -519,6 +519,151 @@ describe('agent-session create operation ledger', () => {
     await expect(first).resolves.toMatchObject({ disposition: 'created' })
     await expect(joined).resolves.toMatchObject({ disposition: 'replayed' })
     expect(createTerminal).toHaveBeenCalledOnce()
+  })
+
+  it('joins reordered complete options and gives their resolved execution the same identity', async () => {
+    const runtime = createRuntime()
+    Object.assign(runtime, { runtimeId: 'complete-options-host' })
+    let finish!: (result: ReturnType<typeof terminal>) => void
+    const createTerminal = vi.spyOn(runtime, 'createTerminal').mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve
+        })
+    )
+    const id = operationId()
+    const inputs = {
+      sessionOptions: { model: 'opus', fastMode: 'false' },
+      extraAgentArgs: '--add-dir docs'
+    }
+    const first = runtime.createAgentSession(request(id, inputs), { clientId: 'device-a' })
+    const reordered = { ...inputs, sessionOptions: { fastMode: 'false', model: 'opus' } }
+    const joined = runtime.createAgentSession(request(id, reordered), { clientId: 'device-a' })
+    await vi.waitFor(() => expect(createTerminal).toHaveBeenCalledOnce())
+    finish(terminal())
+    await expect(first).resolves.toMatchObject({ disposition: 'created' })
+    await expect(joined).resolves.toMatchObject({ disposition: 'replayed' })
+
+    const sameHost = createRuntime()
+    Object.assign(sameHost, { runtimeId: 'complete-options-host' })
+    const secondCreate = vi.spyOn(sameHost, 'createTerminal').mockResolvedValue(terminal())
+    await sameHost.createAgentSession(request(id, reordered), { clientId: 'device-a' })
+    expect(secondCreate.mock.calls[0]?.[1]?.agentSessionCreateOperationId).toBe(
+      createTerminal.mock.calls[0]?.[1]?.agentSessionCreateOperationId
+    )
+    const resolvedIds = new Set([secondCreate.mock.calls[0]?.[1]?.agentSessionCreateOperationId])
+    const changedRequests: Partial<RuntimeCreateAgentSessionRequest>[] = [
+      { ...inputs, sessionOptions: { model: 'opus', fastMode: 'true' } },
+      { ...inputs, extraAgentArgs: '--add-dir src' },
+      { extraAgentArgs: inputs.extraAgentArgs },
+      { extraAgentArgs: inputs.extraAgentArgs, sessionOptions: {} }
+    ]
+    for (const changed of changedRequests) {
+      const changedHost = createRuntime()
+      Object.assign(changedHost, { runtimeId: 'complete-options-host' })
+      const changedCreate = vi.spyOn(changedHost, 'createTerminal').mockResolvedValue(terminal())
+      await changedHost.createAgentSession(request(id, changed), { clientId: 'device-a' })
+      resolvedIds.add(changedCreate.mock.calls[0]?.[1]?.agentSessionCreateOperationId)
+    }
+    expect(resolvedIds.size).toBe(5)
+    expect(createTerminal).toHaveBeenCalledOnce()
+  })
+
+  it('fences changed options, supplemental extras, and absent versus empty inputs', async () => {
+    const runtime = createRuntime()
+    const createTerminal = vi.spyOn(runtime, 'createTerminal').mockResolvedValue(terminal())
+    const id = operationId()
+    const inputs = { sessionOptions: { fastMode: 'false' }, extraAgentArgs: '--add-dir docs' }
+    await runtime.createAgentSession(request(id, inputs))
+    for (const changed of [
+      { ...inputs, sessionOptions: { fastMode: 'true' } },
+      { ...inputs, extraAgentArgs: '--add-dir src' }
+    ]) {
+      await expect(runtime.createAgentSession(request(id, changed))).rejects.toThrow(
+        'agent_session_operation_conflict'
+      )
+    }
+    const absentId = operationId(undefined, 'fedcba9876543210fedcba9876543210')
+    await runtime.createAgentSession(request(absentId))
+    for (const changed of [{ sessionOptions: {} }, { extraAgentArgs: '' }, { agentArgs: null }]) {
+      await expect(runtime.createAgentSession(request(absentId, changed))).rejects.toThrow(
+        'agent_session_operation_conflict'
+      )
+    }
+    expect(createTerminal).toHaveBeenCalledTimes(2)
+  })
+
+  it('compiles complete choices with host defaults, replacement Args and supplemental extras once', async () => {
+    const runtime = createRuntime(undefined, {
+      agentCmdOverrides: { claude: 'host-claude' },
+      agentDefaultArgs: { claude: '--verbose' },
+      agentDefaultEnv: { claude: { HOST_ENV: 'kept' } },
+      agentPermissionDefault: 'accept-edits',
+      agentLaunchChoices: { claude: { model: 'sonnet', options: { fastMode: 'false' } } }
+    })
+    const planned: TerminalCreateOptions[] = []
+    const createTerminal = vi
+      .spyOn(runtime, 'createTerminal')
+      .mockImplementation(async (selector = '', opts = {}) => {
+        const scope = await runtime.resolveTerminalWorkspaceLaunchScope(selector)
+        planned.push(
+          await runtime.resolveAgentTerminalCreateOptions(scope, opts, opts.sessionOptions)
+        )
+        return terminal()
+      })
+    for (const [index, overrides] of [
+      {},
+      { agentArgs: null },
+      { agentArgs: '--debug' }
+    ].entries()) {
+      await runtime.createAgentSession(
+        CreateAgentSessionParams.parse(
+          request(operationId(undefined, String(index).padStart(32, '0')), {
+            agent: 'claude',
+            prompt: 'scheduled task',
+            promptDelivery: 'auto-submit',
+            sessionOptions: {
+              model: 'opus',
+              fastMode: 'true',
+              ...(index > 0 ? { permissionMode: 'accept-edits' } : {})
+            },
+            launchPreferences: { model: 'legacy-model', effort: 'low' },
+            extraAgentArgs: '--add-dir docs',
+            ...overrides
+          })
+        )
+      )
+      const launch = planned[index]
+      const parsed = tokenizeStartupCommand(launch?.command ?? '', 'posix')
+      expect(parsed.ok).toBe(true)
+      if (!parsed.ok) {
+        throw new Error('Expected a tokenizable host launch')
+      }
+      expect(parsed.tokens[0]).toBe('host-claude')
+      expect(parsed.tokens).toEqual(
+        expect.arrayContaining([
+          '--model',
+          'opus',
+          '--settings',
+          '{"fastMode":true}',
+          '--permission-mode',
+          'acceptEdits',
+          '--add-dir',
+          'docs',
+          'scheduled task'
+        ])
+      )
+      expect(parsed.tokens.filter((token) => token === '--add-dir')).toHaveLength(1)
+      expect(parsed.tokens.filter((token) => token === 'scheduled task')).toHaveLength(1)
+      expect(parsed.tokens.includes('--verbose')).toBe(index === 0)
+      expect(parsed.tokens.includes('--debug')).toBe(index === 2)
+      expect(parsed.tokens).not.toContain('sonnet')
+      expect(parsed.tokens).not.toContain('legacy-model')
+      expect(launch?.env).toMatchObject({ HOST_ENV: 'kept' })
+      expect(launch?.launchAgent).toBe('claude')
+      expect(launch?.launchConfig?.agentCommand).toContain('host-claude')
+    }
+    expect(createTerminal).toHaveBeenCalledTimes(3)
   })
 
   it('isolates operation ids by authenticated caller', async () => {

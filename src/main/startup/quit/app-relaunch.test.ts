@@ -12,7 +12,9 @@ vi.mock('electron', () => ({
 vi.mock('../../windows/windows-administrator-status', () => ({
   getWindowsAdministratorStatus: vi.fn(async () => true)
 }))
-vi.mock('../../daemon/daemon-provider-restart', () => ({ restartDaemon: vi.fn(async () => {}) }))
+vi.mock('../../daemon/providers/lifecycle/daemon-provider-restart', () => ({
+  restartDaemon: vi.fn(async () => {})
+}))
 vi.mock('../../crash-reporting/durable-crash-breadcrumb', () => ({
   recordDurableCrashBreadcrumb: recordDurableCrashBreadcrumbMock
 }))

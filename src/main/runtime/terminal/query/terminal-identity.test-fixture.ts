@@ -1,13 +1,13 @@
-import '../../orca-runtime-test-mocks.spec'
+import '../../orca-runtime-tests/runtime-test-module-registration.spec'
 import { vi, type Mock, type MockInstance } from 'vitest'
-import { store, TEST_WORKTREE_ID } from '../../orca-runtime-test-fixtures.spec'
+import { store, TEST_WORKTREE_ID } from '../../orca-runtime-tests/orca-runtime-test-fixtures.spec'
 import type { RuntimeSyncWindowGraph } from '../../../../shared/runtime-types'
 import type { TerminalIdentitySource } from '../identity/terminal-identity-source'
 import type { CrewRuntimeReaders } from '../../orchestration/crew/crew-runtime-watch'
 import type {
   RuntimeLeafRecord,
   RuntimePtyWorktreeRecord
-} from '../../runtime-terminal-state-records'
+} from '../records/runtime-terminal-state-records'
 import type {
   OrchestrationCompatibilitySshTerminal,
   TerminalHandleRecord

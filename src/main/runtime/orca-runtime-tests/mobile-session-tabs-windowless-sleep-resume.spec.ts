@@ -8,7 +8,9 @@ import {
 } from '../../../shared/host-spawn-admission'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { describe, expect, it, vi } from 'vitest'
-import { OrcaRuntimeService, electronMocks } from '../orca-runtime-test-mocks.spec'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { electronMocks } from '../orca-runtime-test-mocks/setup.spec'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import {
   HEADLESS_LEAF_ID,
@@ -17,7 +19,7 @@ import {
   TEST_WORKTREE_ID,
   makeRuntimeStoreWithWorkspaceSession,
   makeWorkspaceSessionWithHeadlessTerminal
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
 import type { RuntimeStore } from '../runtime-store-contract'
 
 const PANE_KEY = `host-tab:${HEADLESS_LEAF_ID}`

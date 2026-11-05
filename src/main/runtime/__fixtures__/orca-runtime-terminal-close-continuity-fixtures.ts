@@ -1,4 +1,4 @@
-import { withDurableRuntimeStore } from '../runtime-durable-store-fixture'
+import { withDurableRuntimeStore } from '../orca-runtime-tests/runtime-durable-store-fixture'
 import { vi, type Mock } from 'vitest'
 import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'

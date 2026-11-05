@@ -158,7 +158,7 @@ import {
   structuredWorkerIdentities,
   structuredWorkerProcessIncarnation
 } from './structured-worker-identity'
-import { partialRuntimeStore } from './runtime-store-partial-fixture'
+import { partialRuntimeStore } from './orca-runtime-tests/runtime-store-partial-fixture'
 
 // A new agent goes last: its cases then shift only the configured ones' session ids.
 const AGENTS = [
@@ -534,6 +534,7 @@ function normalized(value: string): string {
     .split(process.cwd())
     .join('<repo>')
     .replace(/(acp-temp[\\/]\w+[\\/]run-)\w+/, '$1<random>')
+    .replace(/(probes[\\/])\d+-[\w-]+/, '$1<pid>-<random>')
 }
 
 /** Keys whose value is the installed SDK's own, which a dependency bump changes. */

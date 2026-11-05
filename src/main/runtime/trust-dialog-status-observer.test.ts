@@ -2,7 +2,10 @@ import { readFileSync } from 'node:fs'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
-import { createTranscriptPane, TRANSCRIPT_PANE_PTY_ID } from './agent-transcript-pane-test-harness'
+import {
+  createTranscriptPane,
+  TRANSCRIPT_PANE_PTY_ID
+} from './orca-runtime-tests/agent-transcript-pane-test-harness'
 
 function fixture(name: string): { recording: string; cols: number; rows: number } {
   const url = (ext: string) => new URL(`./__fixtures__/${name}.${ext}`, import.meta.url)

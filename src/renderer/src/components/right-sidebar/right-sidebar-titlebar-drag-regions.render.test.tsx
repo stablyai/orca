@@ -78,7 +78,10 @@ vi.mock('@/store/index', async () => {
       activityBarPosition: mockAppState.activityBarPosition,
       setActivityBarPosition: vi.fn(),
       checksByWorktreeId: {},
-      keybindings: {}
+      keybindings: {},
+      activeView: 'terminal',
+      activePendingCreationId: null,
+      pendingWorktreeCreations: {}
     })
     mockAppState.snapshotCache.set(selector, selected)
     return selected
@@ -150,7 +153,7 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
   }
 }))
 
-vi.mock('./FileExplorer', () => ({
+vi.mock('./file-explorer/panel/FileExplorer', () => ({
   default: () => <div data-file-explorer />
 }))
 
@@ -158,15 +161,15 @@ vi.mock('./FolderWorkspaceWorktreesPanel', () => ({
   default: () => <div data-folder-workspace-worktrees-panel />
 }))
 
-vi.mock('./FolderWorkspacePrChecksPanel', () => ({
+vi.mock('./hosted-review/folder-checks/FolderWorkspacePrChecksPanel', () => ({
   default: () => <div data-folder-workspace-pr-checks-panel />
 }))
 
-vi.mock('./SourceControl', () => ({
+vi.mock('./source-control/panel/SourceControl', () => ({
   default: () => <div data-source-control />
 }))
 
-vi.mock('./ChecksPanel', () => ({
+vi.mock('./checks-panel/ChecksPanel', () => ({
   default: () => <div data-checks-panel />
 }))
 

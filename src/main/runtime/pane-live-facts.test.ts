@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { spawnInAdmittedPane } from './runtime-pane-admission'
+import { spawnInAdmittedPane } from './terminal/launch/runtime-pane-admission'
 import { PaneOwnerContentionError } from '../ipc/pty/pane/pane-spawn-operation'
 import type { RuntimeStore } from './runtime-store-contract'
 import { bindingOf } from './pane-live-facts'

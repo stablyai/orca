@@ -17,7 +17,7 @@ import type { CommitAreaProps } from './commit-area-types'
 import { CommitMessageComposer } from './commit-message-composer'
 import { CommitNotices } from './commit-notices'
 import { getCommitMessageTextareaRows } from './commit-message-rows'
-import type { PrimaryAction } from '../../source-control-primary-action'
+import type { PrimaryAction } from '../review/source-control-primary-action-types'
 import { getSourceControlRecoveryFailureKindLabel } from '../sync/push-recovery'
 
 // Omit Pull's icon because a down arrow reads as download/save; hoist the map to avoid render allocations.

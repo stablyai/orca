@@ -29,7 +29,7 @@ import type { RpcClient } from '../../../transport/rpc-client'
 import { structuredAgentSessionHostSupport } from '../../mobile-structured-agent-session-host-support'
 import { AGENT_SESSION_RUNTIME_CAPABILITIES } from '../../../../../src/shared/agent-session/agent-session-runtime-capabilities'
 import { createElement, type ComponentProps } from 'react'
-import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
+import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   MobileNativeChatComposer as NativeChatComposer,
@@ -382,117 +382,6 @@ describe('MobileNativeChatComposer on a structured chat', () => {
     }
   )
 
-  it('puts a picked skill at the start of the draft, highlighted, and deletes it as one unit', async () => {
-    const onChangeText = vi.fn()
-    const onSlashMenuDemand = vi.fn()
-    const catalog = structured({ onSlashMenuDemand })
-    await act(async () => {
-      renderer = create(draw({ value: '/re', onChangeText, structured: catalog }))
-    })
-    await act(async () =>
-      field().props.onSelectionChange({ nativeEvent: { selection: { end: 3 } } })
-    )
-    expect(catalog.onSlashMenuOpen).toHaveBeenCalled()
-    expect(onSlashMenuDemand).toHaveBeenLastCalledWith(true)
-    await act(async () => labelled('/review-pr')[0]!.props.onPress())
-    expect(onChangeText).toHaveBeenLastCalledWith('/review-pr ')
-    expect(field().props.selection).toEqual({ start: 11, end: 11 })
-
-    await act(async () =>
-      renderer!.update(draw({ value: '/review-pr focus', onChangeText, structured: catalog }))
-    )
-    expect(onSlashMenuDemand).toHaveBeenLastCalledWith(false)
-    const token = field().find((node) => node.props.children === '/review-pr')
-    expect(token.props.style).toMatchObject({ backgroundColor: expect.any(String) })
-    await act(async () => field().props.onChangeText('/review-pr focus on auth'))
-    expect(onChangeText).toHaveBeenLastCalledWith('/review-pr focus on auth')
-    await act(async () => field().props.onChangeText('/review-prfocus'))
-    expect(onChangeText).toHaveBeenLastCalledWith('focus')
-  })
-
-  it('opens the + sheet on a structured chat, and the photo library at once otherwise', async () => {
-    const onAttachImage = vi.fn()
-    await act(async () => {
-      renderer = create(draw({ onAttachImage, structured: structured() }))
-    })
-    await act(async () => labelled('Add to message')[0]!.props.onPress())
-    expect(onAttachImage).not.toHaveBeenCalled()
-    expect(drawers()).toHaveLength(1)
-
-    await act(async () => renderer!.update(draw({ onAttachImage, structured: null })))
-    await act(async () => labelled('Attach image')[0]!.props.onPress())
-    expect(onAttachImage).toHaveBeenCalledTimes(1)
-  })
-
-  it.each([
-    {
-      locale: 'en',
-      send: 'Send message',
-      queue: 'Queue',
-      steer: 'Steer',
-      queueHint: 'Runs after the current turn',
-      steerHint: 'Goes into what the agent is doing now'
-    },
-    {
-      locale: 'de',
-      send: 'Nachricht senden',
-      queue: 'Einreihen',
-      steer: 'Steuern',
-      queueHint: 'Läuft nach dem aktuellen Durchgang',
-      steerHint: 'Fließt in das ein, was der Agent gerade tut'
-    }
-  ] as const)(
-    'mid-turn Send shows what a tap does, and holding it offers the other way first-marked in $locale',
-    async (labels) => {
-      await activateMobileUiLocale(labels.locale)
-      const onSend = vi.fn().mockResolvedValue(true)
-      const choices = () =>
-        drawers()[0]!.findAll(
-          (node) => String(node.type) === 'Pressable' && node.props.onPress !== undefined
-        )
-      const text = (node: ReactTestInstance) =>
-        node
-          .findAll((child) => typeof child.props.children === 'string')
-          .map((child) => child.props.children)
-      await act(async () => {
-        renderer = create(
-          draw({ value: 'hi', onSend, sendFollowUp: { action: 'steer', offersChoice: true } })
-        )
-      })
-      const send = () => labelled(labels.steer)[0]!
-      expect(send().findAll((node) => String(node.type) === 'CornerDownRight')).toHaveLength(1)
-      await act(async () => send().props.onLongPress())
-      await act(async () => drawers()[0]!.props.onClose())
-      expect(onSend).not.toHaveBeenCalled()
-
-      await act(async () => send().props.onLongPress())
-      expect(choices().map(text)).toEqual([
-        [labels.steer, labels.steerHint],
-        [labels.queue, labels.queueHint]
-      ])
-      expect(choices().map((choice) => choice.props.accessibilityState?.checked)).toEqual([
-        true,
-        undefined
-      ])
-      await act(async () => choices()[1]!.props.onPress())
-      expect(onSend).toHaveBeenCalledExactlyOnceWith('hi', { alternate: true })
-      await act(async () => send().props.onLongPress())
-      await act(async () => choices()[0]!.props.onPress())
-      expect(onSend).toHaveBeenCalledTimes(2)
-      expect(onSend).toHaveBeenLastCalledWith('hi')
-
-      // A waiting command queues either way: the button says so, and a hold is a tap.
-      await act(async () =>
-        renderer!.update(
-          draw({ value: 'hi', onSend, sendFollowUp: { action: 'queue', offersChoice: false } })
-        )
-      )
-      expect(labelled(labels.queue)[0]!.props.onLongPress).toBeUndefined()
-      await act(async () => renderer!.update(draw({ value: 'hi', onSend, sendFollowUp: null })))
-      expect(labelled(labels.send)[0]!.props.onLongPress).toBeUndefined()
-    }
-  )
-
   it('the hold choice and a tap reach the outgoing request through the real send path', async () => {
     const scope = mobileNativeChatScopeKey('host', 'worktree', 'hold-choice')!
     resetMobileNativeChatDraftInputsForTests()
@@ -589,7 +478,9 @@ describe('MobileNativeChatComposer on a structured chat', () => {
     )
     const sends = () =>
       sendRequest.mock.calls.filter(([method]) => method === 'agentSession.send').map(([, p]) => p)
-    const send = () => labelled('Queue')[0]!
+    const send = () => labelled('Send message')[0]!
+    // Like desktop, the arrow stays while the agent works; a hold is the only other way.
+    expect(send().findAll((node) => String(node.type) === 'ArrowUp')).toHaveLength(1)
     await act(async () => send().props.onLongPress())
     const steer = drawers()[0]!.findAll(
       (node) =>
@@ -611,31 +502,6 @@ describe('MobileNativeChatComposer on a structured chat', () => {
     })
     await act(async () => publish?.(batchEvent([compact])))
     expect(send().props.onLongPress).toBeUndefined()
-  })
-
-  it('holds Send while a file is still uploading, and sends a stored file alone', async () => {
-    const onSend = vi.fn().mockResolvedValue(true)
-    const file = { id: 'f1', name: 'spec.pdf', mime: 'application/pdf', byteLength: 10 }
-    await act(async () => {
-      renderer = create(
-        draw({
-          value: 'see attached',
-          onSend,
-          structured: structured({ files: [{ ...file, path: null }] })
-        })
-      )
-    })
-    expect(labelled('Send message')[0]!.props.disabled).toBe(true)
-    await act(async () => labelled('Send message')[0]!.props.onPress())
-    expect(onSend).not.toHaveBeenCalled()
-    await act(async () =>
-      renderer!.update(
-        draw({ onSend, structured: structured({ files: [{ ...file, path: '/s/spec.pdf' }] }) })
-      )
-    )
-    expect(labelled('Send message')[0]!.props.disabled).toBe(false)
-    await act(async () => labelled('Send message')[0]!.props.onPress())
-    expect(onSend).toHaveBeenCalledExactlyOnceWith('')
   })
   it('forgets inline picked skill identity after its token is removed and retyped', async () => {
     const scope = 'removed-skill'

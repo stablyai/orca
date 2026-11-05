@@ -8,7 +8,7 @@ import {
   HEADLESS_LEAF_ID,
   HEADLESS_SECOND_LEAF_ID,
   TEST_WORKTREE_ID
-} from '../orca-runtime-test-fixtures.spec'
+} from '../orca-runtime-tests/orca-runtime-test-fixtures.spec'
 import {
   SURFACE_TAB_ID,
   surfaceRuntime

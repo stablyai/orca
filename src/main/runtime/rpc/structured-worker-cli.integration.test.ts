@@ -12,9 +12,9 @@ import { createStructuredAgentSessionLogger } from '../../native-chat/agent-sess
 import type { StructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-host'
 import { CODEX_MINIMUM_SUPPORTED_VERSION } from '../../../shared/codex-cli-installation'
 import { OrchestrationDb } from '../orchestration/db'
-import { storeRepo } from '../runtime-store-partial-fixture'
-import { scriptedCodexTransport } from '../scripted-codex-transport.test-fixture'
-import { chatTabCommandsSettled } from '../session-layout-apply.test-fixture'
+import { storeRepo } from '../orca-runtime-tests/runtime-store-partial-fixture'
+import { scriptedCodexTransport } from '../orca-runtime-tests/scripted-codex-transport.test-fixture'
+import { chatTabCommandsSettled } from '../orca-runtime-tests/session-layout-apply.test-fixture'
 import {
   AuthorityRuntime,
   authorityProfile,

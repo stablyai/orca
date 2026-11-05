@@ -616,10 +616,10 @@ describe('hidden-output restore loss disclosure (STA-4869)', () => {
       drive.disposable.dispose()
     })
 
-    // #33766: main labels the first chunk after its hidden drop with the escape the drop left open.
+    // #33766: main marks the first chunk after its hidden drop when it resumes inside an escape.
     async function abandonAfterResumedChunk(
       resumed: string,
-      gapEscapeState?: string,
+      midEscape?: true | 'unknown',
       transform?: { rawLength: number }
     ) {
       vi.mocked(window.api.pty.getMainBufferSnapshot).mockResolvedValue(null)
@@ -632,7 +632,7 @@ describe('hidden-output restore loss disclosure (STA-4869)', () => {
         seq: HIDDEN_FLOOD.length + rawLength,
         rawLength,
         ...(transform ? { transformed: true } : {}),
-        ...(gapEscapeState ? { gapEscapeState } : {})
+        ...(midEscape ? { midEscape } : {})
       })
       await flushAsyncTicks(20)
       for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -645,35 +645,28 @@ describe('hidden-output restore loss disclosure (STA-4869)', () => {
     }
 
     it.each([
-      [
-        'an OSC title',
-        '\x1b]',
-        'ial refactoring PRs | cleanup-dumb-exports\x07> prompt',
-        'ial refactoring'
-      ],
-      ['an SGR sequence', '\x1b[', ';5;242m> prompt', ';242m']
-    ])(
-      'skips the tail of %s main says the gap left open',
-      async (_name, gapEscapeState, resumed, tail) => {
-        const screen = await abandonAfterResumedChunk(resumed, gapEscapeState)
-        expect({
-          banner: screen.includes(BANNER_FRAGMENT),
-          prompt: screen.includes('> prompt'),
-          tail: screen.includes(tail)
-        }).toEqual({ banner: true, prompt: true, tail: false })
-      }
-    )
+      ['an OSC title', 'ial refactoring PRs | cleanup-dumb-exports\x07> prompt', 'ial refactoring'],
+      ['an SGR sequence', ';5;242m> prompt', ';242m']
+    ])('skips a delivery resuming inside %s after the gap reset', async (_name, resumed, tail) => {
+      // Skipped whole, never trimmed: the prompt it carried returns with the repaint nudge.
+      const screen = await abandonAfterResumedChunk(resumed, true)
+      expect({
+        banner: screen.includes(BANNER_FRAGMENT),
+        prompt: screen.includes('> prompt'),
+        tail: screen.includes(tail)
+      }).toEqual({ banner: true, prompt: false, tail: false })
+    })
 
-    it('skips a labeled tail after the gap reset even when main stripped agent status from the chunk', async () => {
-      const screen = await abandonAfterResumedChunk('2C> prompt', '\x1b[', { rawLength: 40 })
+    it('skips a mid-escape delivery after the gap reset even when main stripped agent status from it', async () => {
+      const screen = await abandonAfterResumedChunk('2C> prompt', true, { rawLength: 40 })
       expect({
         banner: screen.includes(BANNER_FRAGMENT),
         prompt: screen.includes('> prompt'),
         tail: screen.includes('2C')
-      }).toEqual({ banner: true, prompt: true, tail: false })
+      }).toEqual({ banner: true, prompt: false, tail: false })
     })
 
-    it('keeps a labeled continuation when the snapshot at the gap carries the open escape', async () => {
+    it('keeps a mid-escape continuation when the snapshot at the gap carries the open escape', async () => {
       // The snapshot predates the resumed chunk, so its pending escape needs every continuation byte.
       vi.mocked(window.api.pty.getMainBufferSnapshot).mockResolvedValue({
         data: 'history\r\n',
@@ -690,7 +683,7 @@ describe('hidden-output restore loss disclosure (STA-4869)', () => {
       drive.deliverWithMeta?.(resumed, {
         seq: HIDDEN_FLOOD.length + resumed.length,
         rawLength: resumed.length,
-        gapEscapeState: '\x1b['
+        midEscape: true
       })
       await allowRecoveryWindow()
       drive.disposable.dispose()

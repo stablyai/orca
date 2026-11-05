@@ -27,7 +27,7 @@ import {
   reportCliChatResumeFailureInChat,
   reportCliChatResumeTerminalChanged
 } from './cli-chat-resume-feedback'
-import { adoptingAgentOnHost } from '../right-sidebar/ai-vault-session-resume-in-chat-launch'
+import { adoptingAgentOnHost } from '../right-sidebar/ai-vault/session-actions/ai-vault-session-resume-in-chat-launch'
 
 const pending = new Map<string, { controller: AbortController; source: CliChatResumeSource }>()
 const listeners = new Set<() => void>()

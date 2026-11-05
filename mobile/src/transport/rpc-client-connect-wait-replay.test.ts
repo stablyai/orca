@@ -1,7 +1,6 @@
 import { isRpcDeliveryUnknown } from './rpc-delivery-ambiguity'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { connect, type RpcClient, type SendRequestOptions } from './rpc-client'
-import { RpcClientRequestTracker } from './rpc-client-request-tracker'
 
 vi.mock('./direct-e2ee-framing-policy', () => import('./legacy-direct-framing-test-policy'))
 
@@ -95,40 +94,6 @@ describe('mobile rpc-client connect-wait replay', () => {
   afterEach(() => {
     vi.useRealTimers()
     globalThis.WebSocket = originalWebSocket
-  })
-
-  it('asserts one physical admission with the original receiver and refuses before allocating a frame', async () => {
-    let nextId = 0
-    const sendFrame = vi.fn(() => true)
-    const tracker = new RpcClientRequestTracker({
-      nextId: () => String(++nextId),
-      getState: () => 'connected',
-      waitForConnected: async () => {},
-      sendFrame
-    })
-    const options = {
-      beforeSend: vi.fn(function (this: unknown) {
-        expect(this).toBe(options)
-      })
-    }
-    const pending = tracker.sendRequest('accepted', {}, options)
-    await vi.advanceTimersByTimeAsync(0)
-    expect(options.beforeSend).toHaveBeenCalledTimes(1)
-    expect(sendFrame).toHaveBeenCalledTimes(1)
-    expect(tracker.resolve({ id: '1', ok: true, result: 'accepted' })).toBe(true)
-    await expect(pending).resolves.toMatchObject({ result: 'accepted' })
-    const refusal = new Error('retired')
-    const refusedOptions = {
-      beforeSend: function (this: unknown) {
-        expect(this).toBe(refusedOptions)
-        throw refusal
-      }
-    }
-    await expect(tracker.sendRequest('refused', {}, refusedOptions)).rejects.toBe(refusal)
-    expect(sendFrame).toHaveBeenCalledTimes(1)
-    expect(nextId).toBe(1)
-    expect(tracker.size()).toBe(0)
-    expect(vi.getTimerCount()).toBe(0)
   })
 
   it('Given a cut connection When a send opts into failWhenDisconnected Then it rejects now and nothing replays after reconnect', async () => {

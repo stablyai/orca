@@ -1,3 +1,5 @@
+import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
+import { streamDeliveryOf } from '../terminal-stream-position'
 import { takeCurrentTerminalDeliveryCredit } from '@/lib/pane-manager/terminal-delivery-credit'
 import { nativeWindowsRewriteNeedsFollowupRenderRefresh } from '@/lib/pane-manager/terminal-complex-script'
 import { writeTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
@@ -112,6 +114,8 @@ export function bindWritePtyOutputToXterm(session: ConnectPanePtySession): void 
       // Why: every scheduler write claims one child so a split delivery is credited only after all children parse or discard.
       ackCredit: takeCurrentTerminalDeliveryCredit() ?? undefined,
       onBackgroundBacklogDropped: session.markHiddenOutputRestoreNeeded,
+      // The CAN-led warning replaced queued bytes, moving xterm's parser off the stream.
+      onBacklogReplaced: () => session.streamPosition.invalidate({ grounded: true }),
       latencySensitive:
         !foreground || parseHiddenStartupOutput
           ? true
@@ -128,6 +132,59 @@ export function bindWritePtyOutputToXterm(session: ConnectPanePtySession): void 
       coalesceForeground: synchronizedForegroundOutput && synchronizedOutputEnded,
       holdForeground: synchronizedForegroundOutput && nextSynchronizedForegroundOutputActive
     })
+  }
+
+  session.admitStreamBytes = (data, delivered, options) => {
+    const ptyId = session.transport.getPtyId()
+    if (!ptyId) {
+      return data
+    }
+    // Remote-runtime seq counts frames, not chars, so it cannot locate a delivery in the stream.
+    const delivery = streamDeliveryOf(data, delivered, {
+      seqCountsChars: !isRemoteRuntimePtyId(ptyId)
+    })
+    const admitted = session.streamPosition.admit(ptyId, data, delivery)
+    if (admitted !== null) {
+      session.skippedQueryCarry = null
+      return admitted
+    }
+    // A skipped delivery still answers its queries, including one split from the previous skip.
+    const carry = session.skippedQueryCarry
+    const continuesCarry =
+      carry !== null &&
+      carry.ptyId === ptyId &&
+      typeof delivery.startSeq === 'number' &&
+      carry.endSeq === delivery.startSeq
+    session.skippedQueryCarry = {
+      ptyId,
+      endSeq: delivery.endSeq,
+      pending: session.salvageRendererQueriesFromDiscardedRestoreData(
+        data,
+        continuesCarry ? carry.pending : ''
+      )
+    }
+    // Skipped bytes are lost until a snapshot repaints them. Drains own that for their restore; live
+    // skips ask for one, deferring to the post-flood repaint during a flood (a restore per skip is the fetch loop).
+    if (options?.repairsOwnSkips !== true) {
+      if (session.isForegroundRestoreBackpressureContext()) {
+        session.noteHiddenOutputRestoreFloodBackpressure()
+      } else if (
+        !session.hiddenOutputRestoreNeeded &&
+        session.hiddenOutputRestoreInFlight === null
+      ) {
+        session.markHiddenOutputRestoreNeeded()
+      }
+    }
+    return null
+  }
+
+  // Orca-composed bytes (the drop sentinel's salvaged queries and mode releases) are not stream
+  // bytes: they write as-is and leave xterm's parser somewhere the stream never was.
+  session.admitRecoveryBytes = (data) => {
+    if (data) {
+      session.streamPosition.invalidate()
+    }
+    return data
   }
 
   session.queueAgentIdleTerminalModeReset = (): void => {

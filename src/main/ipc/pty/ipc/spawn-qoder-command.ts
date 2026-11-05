@@ -1,4 +1,4 @@
-import { resolveQoderTerminalCommand } from '../../../runtime/qoder-terminal-command-resolution'
+import { resolveQoderTerminalCommand } from '../../../runtime/terminal/launch/qoder-terminal-command-resolution'
 import { resolveStartupShell } from '../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { resolveLocalWindowsAgentStartupShell } from '../../../../shared/windows-terminal-shell'
 import type { PtyIpcSpawnState } from './spawn-state'

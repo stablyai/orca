@@ -15,7 +15,7 @@ import { OrcaRuntimeWithLinearCommands } from '../integrations/linear/linear-com
 
 import type { RuntimeStore } from '../runtime-store-contract'
 import { installGitHubProjectAccounts } from '../../github/github-project-account'
-import type { WorkspaceSleepPlatform } from '../workspaces/workspace-sleep-platform'
+import type { WorkspaceSleepPlatform } from '../workspaces/sleep/workspace-sleep-platform'
 import type { StatsCollector } from '../../stats/collector'
 
 import type { PrepareClaudeAuth } from '../../ipc/pty/host-env/types'
@@ -29,11 +29,11 @@ import {
 import {
   type RuntimeGitCommandSurface,
   installRuntimeGitCommandSurface
-} from '../runtime-git-command-surface'
+} from '../integrations/git/runtime-git-command-surface'
 import {
   type RuntimeRepositoryCommandSurface,
   installRuntimeRepositoryCommandSurface
-} from '../runtime-repository-command-surface'
+} from '../repositories/runtime-repository-command-surface'
 import {
   type RuntimeReviewCommandSurface,
   installRuntimeReviewCommandSurface
@@ -42,11 +42,11 @@ import {
   type RuntimeServiceCommandSurface,
   installRuntimeServiceCommandSurface
 } from '../runtime-service-command-surface'
-import { RuntimeSkillCommands } from '../runtime-skill-command-surface'
+import { RuntimeSkillCommands } from '../integrations/skill/runtime-skill-command-surface'
 import {
   type RuntimeSkillCommandSurface,
   installRuntimeSkillCommandSurface
-} from '../runtime-skill-command-contract'
+} from '../integrations/skill/runtime-skill-command-contract'
 import { getAppEnvironment } from '../../../shared/app-environment'
 import { RuntimeClientSettingsController } from '../runtime-client-settings'
 import { RuntimeSessionSearchSettingsController } from '../runtime-session-search-settings'
@@ -56,7 +56,7 @@ import { configureAiVaultSessionSources } from '../../ai-vault/cached-session-li
 import { configureHostReadableTranscriptPathSources } from '../../native-chat/host-readable-transcript-path'
 import { createEphemeralAgentSessionClaimSigner } from '../agent-session/ownership/agent-session-claim-identity'
 import { registerConptyDa1OverrideInstaller } from '../terminal-model-query-authority'
-import { registerTerminalViewAttributesApplier } from '../terminal-view-attribute-store'
+import { registerTerminalViewAttributesApplier } from '../terminal/view/terminal-view-attribute-store'
 import { RuntimeMachineName } from '../runtime-machine-name'
 import { setPRConflictSummaryRemoteFetches } from '../../github/conflict-summary'
 import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from '../../../shared/terminal/replay/terminal-scrollback-policy'

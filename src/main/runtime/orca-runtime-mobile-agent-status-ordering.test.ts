@@ -4,8 +4,8 @@ import { OrcaRuntimeService } from './orca-runtime'
 import type { AgentStatusEntry } from '../../shared/agent-status/contracts/agent-status-types'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { makePaneKey } from '../../shared/workspace-layout/stable-pane-id'
-import { committingSpawn } from './bind-first-pane.test-fixture'
-import { makeRuntimeStoreWithWorkspaceSession } from './orca-runtime-test-fixtures.spec'
+import { committingSpawn } from './orca-runtime-tests/bind-first-pane.test-fixture'
+import { makeRuntimeStoreWithWorkspaceSession } from './orca-runtime-tests/orca-runtime-test-fixtures.spec'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 
 vi.mock('electron', () => ({

@@ -5,7 +5,7 @@ import {
   authorityProfile,
   openAuthorityRuntime
 } from '../../src/main/runtime/structured-agent-session-tab-authority.test-support'
-import { chatTabCommandsSettled } from '../../src/main/runtime/session-layout-apply.test-fixture'
+import { chatTabCommandsSettled } from '../../src/main/runtime/orca-runtime-tests/session-layout-apply.test-fixture'
 import type { createChatTabLayoutQueue } from '../../src/main/runtime/agent-session-tab-layout-queue'
 import { fixture } from '../../src/main/persistence/loading-store/profile-state-delayed-authority-fixture'
 import {
@@ -310,7 +310,8 @@ it('keeps failed advisory legacy insertion and retention while the actual inner 
   const { store: profile, authority } = await fixture()
   const { root, B, holdStartup, rejectVisibility, savedIds } =
     await import('../../src/main/runtime/structured-agent-session-tab-authority.test-support')
-  const { installFakeAppEnvironment } = await import('../../config/scripts/vitest-host-ports-setup')
+  const { installFakeAppEnvironment } =
+    await import('../../config/scripts/test-runtime/environment/vitest-host-ports-setup')
   installFakeAppEnvironment({ getPath: () => root })
   const base = await authorityProfile([B], { visible: [B] }, profile)
   const { workspace } = base
@@ -388,7 +389,8 @@ it.each([
       createStructuredSweepProgress,
       closeStructuredSessionsForWorktree,
       retireStructuredSessionTabsForWorktree
-    } = await import('../../src/main/runtime/structured-session-worktree-teardown')
+    } =
+      await import('../../src/main/runtime/workspaces/removal/structured-session-worktree-teardown')
     const ids = Array.from({ length: s }, (_, i) => `sweep-${i.toString().padStart(5, '0')}`)
     const background = Array.from({ length: n }, (_, i) => `other-${i.toString().padStart(5, '0')}`)
     const rig = await openAuthorityRuntime(
@@ -612,7 +614,7 @@ it.each([10, 100])(
     const { root, B, rejectVisibility } =
       await import('../../src/main/runtime/structured-agent-session-tab-authority.test-support')
     const { installFakeAppEnvironment } =
-      await import('../../config/scripts/vitest-host-ports-setup')
+      await import('../../config/scripts/test-runtime/environment/vitest-host-ports-setup')
     installFakeAppEnvironment({ getPath: () => root })
     const ids = Array.from({ length: p }, (_, i) =>
       i === 0 ? B : `pending-${i.toString().padStart(5, '0')}`
