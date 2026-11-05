@@ -1,7 +1,10 @@
 import { BrowserNetworkTunnelDuplex } from './browser-network-tunnel-duplex'
 import type { BrowserNetworkTunnelSourceFlowStream } from './browser-network-tunnel-source-flow'
 import type { BrowserNetworkTunnelSourceReceiveStream } from './browser-network-tunnel-source-receive-flow'
-import { BROWSER_NETWORK_TUNNEL_CONNECT_TIMEOUT_MS } from './browser-network-tunnel-stream-state'
+import {
+  BROWSER_NETWORK_TUNNEL_CONNECT_TIMEOUT_MS,
+  BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES
+} from './browser-network-tunnel-stream-state'
 
 export type BrowserNetworkTunnelClientStream = BrowserNetworkTunnelSourceFlowStream &
   BrowserNetworkTunnelSourceReceiveStream & {
@@ -27,6 +30,7 @@ type BrowserNetworkTunnelClientStreamCallbacks = {
 
 export function createBrowserNetworkTunnelClientStream(
   id: number,
+  windowBytes: number,
   callbacks: BrowserNetworkTunnelClientStreamCallbacks
 ): { stream: BrowserNetworkTunnelClientStream; opening: Promise<BrowserNetworkTunnelDuplex> } {
   let resolveOpen = (_socket: BrowserNetworkTunnelDuplex): void => {}
@@ -39,6 +43,8 @@ export function createBrowserNetworkTunnelClientStream(
   const stream: BrowserNetworkTunnelClientStream = {
     id,
     socket,
+    windowBytes,
+    receiveWindowBytes: BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES,
     opened: false,
     closed: false,
     localEnded: false,
@@ -47,8 +53,7 @@ export function createBrowserNetworkTunnelClientStream(
     remoteClosed: false,
     readableEnded: false,
     sendCredit: 0,
-    // Granted at Opened alongside the initial WindowUpdate; tracking must match the announcement.
-    receiveCredit: 0,
+    receiveCredit: BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES,
     pendingToSocket: [],
     pendingToSocketBytes: 0,
     unsettledToSocket: [],

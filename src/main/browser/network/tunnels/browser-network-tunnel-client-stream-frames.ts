@@ -12,8 +12,6 @@ import {
 } from './browser-network-tunnel-source-receive-flow'
 
 type BrowserNetworkTunnelClientStreamFrameActions = {
-  /** Negotiated per-stream receive window for the initial grant and credit validation. */
-  windowBytes: number
   send: (
     opcode: BrowserNetworkTunnelOpcode,
     streamId: number,
@@ -43,7 +41,6 @@ export function handleBrowserNetworkTunnelClientStreamFrame(
   })
 }
 
-/** Marks the stream open and grants the negotiated receive window, keeping tracked credit equal to the announcement. */
 function openedStream(
   stream: BrowserNetworkTunnelClientStream,
   actions: BrowserNetworkTunnelClientStreamFrameActions
@@ -54,13 +51,11 @@ function openedStream(
   }
   stream.opened = true
   clearTimeout(stream.connectTimeout)
-  // Track exactly what the grant announces, or in-window data would be rejected as a violation.
-  stream.receiveCredit = actions.windowBytes
   if (
     !actions.send(
       BrowserNetworkTunnelOpcode.WindowUpdate,
       stream.id,
-      encodeBrowserNetworkTunnelWindowUpdate(actions.windowBytes)
+      encodeBrowserNetworkTunnelWindowUpdate(stream.receiveWindowBytes)
     )
   ) {
     actions.closeTunnel(new Error('Browser tunnel transport rejected initial credit'))
@@ -69,14 +64,13 @@ function openedStream(
   stream.resolveOpen(stream.socket)
 }
 
-/** Applies peer send credit, fencing the tunnel if the total ever exceeds the negotiated window. */
 function grantStreamCredit(
   stream: BrowserNetworkTunnelClientStream,
   payload: Uint8Array<ArrayBufferLike>,
   actions: BrowserNetworkTunnelClientStreamFrameActions
 ): void {
   const credit = decodeBrowserNetworkTunnelWindowUpdate(payload)
-  if (!stream.opened || !credit || stream.sendCredit + credit > actions.windowBytes) {
+  if (!stream.opened || !credit || stream.sendCredit + credit > stream.windowBytes) {
     actions.closeTunnel(new Error('Browser tunnel received invalid stream credit'))
     return
   }

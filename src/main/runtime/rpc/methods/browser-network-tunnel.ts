@@ -1,9 +1,9 @@
 import { BrowserNetworkTunnelSession } from '../../../browser/network/tunnels/browser-network-tunnel-session'
-import {
-  BROWSER_NETWORK_TUNNEL_MAX_WINDOW_BYTES,
-  negotiateBrowserNetworkTunnelWindowBytes
-} from '../../../browser/network/tunnels/browser-network-tunnel-stream-state'
 import { BrowserNetworkTunnelOutboundMemoryBudgetRegistry } from '../../../browser/network/tunnels/browser-network-tunnel-outbound-memory-budget'
+import {
+  BROWSER_NETWORK_TUNNEL_LEGACY_FLOW_CONTROL,
+  BROWSER_NETWORK_TUNNEL_WINDOW_V2_FLOW_CONTROL
+} from '../../../browser/network/tunnels/browser-network-tunnel-stream-state'
 import {
   browserNetworkExecutionHostKey,
   type BrowserNetworkExecutionRouteResolver
@@ -13,7 +13,8 @@ import { BrowserNetworkTunnelAttachParams } from '../../../../shared/browser/cli
 import {
   BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
   BROWSER_NETWORK_EXECUTION_HOSTS_RUNTIME_CAPABILITY,
-  BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY
+  BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY,
+  BROWSER_NETWORK_TUNNEL_WINDOW_V2_CAPABILITY
 } from '../../../../shared/protocol-version'
 import { getBrowserHostLeaseRegistry } from '../../browser-host/leases/browser-host-lease-registry-instance'
 import { defineStreamingMethod } from '../core'
@@ -190,14 +191,15 @@ export function createBrowserNetworkTunnelMethods(
           params.browserHostClientId,
           tunnelIdentity.executionHostKey
         ])
+        const windowV2 = clientCapabilities.includes(BROWSER_NETWORK_TUNNEL_WINDOW_V2_CAPABILITY)
         try {
           session = new BrowserNetworkTunnelSession({
             tunnelGeneration: route.tunnelGeneration,
             connect: executionRoute.connect,
             sendBinary: (bytes) => sendBinary(bytes) !== false,
-            receiveWindowBytes: negotiateBrowserNetworkTunnelWindowBytes(
-              params.clientMaxWindowBytes
-            ),
+            flowControl: windowV2
+              ? BROWSER_NETWORK_TUNNEL_WINDOW_V2_FLOW_CONTROL
+              : BROWSER_NETWORK_TUNNEL_LEGACY_FLOW_CONTROL,
             claimAggregateRetainedBytes: outboundMemory.claimApplicationBytes,
             onClose: () => {
               try {
@@ -219,7 +221,7 @@ export function createBrowserNetworkTunnelMethods(
           emit({
             type: 'ready',
             tunnelGeneration: route.tunnelGeneration,
-            hostMaxWindowBytes: BROWSER_NETWORK_TUNNEL_MAX_WINDOW_BYTES
+            ...(windowV2 ? { capabilities: [BROWSER_NETWORK_TUNNEL_WINDOW_V2_CAPABILITY] } : {})
           })
           await closed
         } finally {

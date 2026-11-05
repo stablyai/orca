@@ -306,26 +306,16 @@ export const BrowserClientHostEvent = z.union([
   BrowserClientHostCommandEvent
 ])
 
-// Per-stream flow-control window the client can buffer. Optional: older hosts omit it and both
-// sides fall back to the legacy window. Bounded so a peer cannot force oversized server buffers.
-const TunnelWindowBytes = z
-  .number()
-  .int()
-  .min(1)
-  .max(64 * 1024 * 1024)
-
 export const BrowserNetworkTunnelAttachParams = BrowserHostLeaseAuthority.extend({
-  executionHost: BrowserNetworkExecutionHost,
-  /** Largest per-stream receive window this client supports; absent on older clients. */
-  clientMaxWindowBytes: TunnelWindowBytes.optional()
+  executionHost: BrowserNetworkExecutionHost
 })
 
 export const BrowserNetworkTunnelEvent = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('ready'),
     tunnelGeneration: Generation,
-    /** Largest per-stream receive window this host supports; absent on older hosts. */
-    hostMaxWindowBytes: TunnelWindowBytes.optional()
+    /** Tunnel capabilities the host accepted from the attach; older hosts omit it. */
+    capabilities: z.array(z.string().max(128)).max(16).optional()
   }),
   z.object({ type: z.literal('closed'), tunnelGeneration: Generation })
 ])

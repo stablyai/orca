@@ -13,13 +13,14 @@ import { RemoteRuntimeClientError } from '../../../../shared/remote-runtime/remo
 import {
   BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
   BROWSER_NETWORK_EXECUTION_HOSTS_RUNTIME_CAPABILITY,
-  BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY
+  BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY,
+  BROWSER_NETWORK_TUNNEL_WINDOW_V2_CAPABILITY
 } from '../../../../shared/browser-runtime-capabilities'
 import { BrowserNetworkTunnelClient } from '../tunnels/browser-network-tunnel-client'
 import type { BrowserNetworkTunnelOutboundMemoryLease } from '../tunnels/browser-network-tunnel-outbound-memory-budget'
 import {
-  BROWSER_NETWORK_TUNNEL_MAX_WINDOW_BYTES,
-  negotiateBrowserNetworkTunnelWindowBytes
+  BROWSER_NETWORK_TUNNEL_LEGACY_FLOW_CONTROL,
+  BROWSER_NETWORK_TUNNEL_WINDOW_V2_FLOW_CONTROL
 } from '../tunnels/browser-network-tunnel-stream-state'
 
 const BROWSER_TUNNEL_WS_SOFT_CAP_BYTES = 1024 * 1024
@@ -105,8 +106,7 @@ export class PairedRuntimeBrowserNetworkTransport {
           authorityEpoch: this.options.lease.authorityEpoch,
           browserHostClientId: this.options.lease.browserHostClientId,
           browserHostGeneration: this.options.lease.browserHostGeneration,
-          executionHost: this.options.executionHost,
-          clientMaxWindowBytes: BROWSER_NETWORK_TUNNEL_MAX_WINDOW_BYTES
+          executionHost: this.options.executionHost
         },
         this.options.timeoutMs,
         {
@@ -133,7 +133,7 @@ export class PairedRuntimeBrowserNetworkTransport {
             if (result.type === 'ready') {
               this.acceptReady(
                 result.tunnelGeneration,
-                result.hostMaxWindowBytes,
+                result.capabilities?.includes(BROWSER_NETWORK_TUNNEL_WINDOW_V2_CAPABILITY) === true,
                 resolveReady,
                 rejectReady
               )
@@ -178,6 +178,7 @@ export class PairedRuntimeBrowserNetworkTransport {
             ...(this.options.subscription?.clientCapabilities ?? []),
             BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
             BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY,
+            BROWSER_NETWORK_TUNNEL_WINDOW_V2_CAPABILITY,
             ...(this.options.executionHost.kind === 'native'
               ? []
               : [BROWSER_NETWORK_EXECUTION_HOSTS_RUNTIME_CAPABILITY])
@@ -216,10 +217,9 @@ export class PairedRuntimeBrowserNetworkTransport {
     }
   }
 
-  /** Retains the host's tunnel once per generation, sizing the receive window from its advertisement. */
   private acceptReady(
     tunnelGeneration: number,
-    hostMaxWindowBytes: number | undefined,
+    windowV2: boolean,
     resolveReady: () => void,
     rejectReady: (error: Error) => void
   ): void {
@@ -239,7 +239,9 @@ export class PairedRuntimeBrowserNetworkTransport {
         sendBinary: (bytes) => this.subscription?.sendBinary(bytes) ?? false,
         outboundMemory: this.options.outboundMemory,
         maxStreamIds: this.options.maxStreamIds,
-        receiveWindowBytes: negotiateBrowserNetworkTunnelWindowBytes(hostMaxWindowBytes),
+        flowControl: windowV2
+          ? BROWSER_NETWORK_TUNNEL_WINDOW_V2_FLOW_CONTROL
+          : BROWSER_NETWORK_TUNNEL_LEGACY_FLOW_CONTROL,
         onClosed: (error) => this.fail(error, rejectReady)
       })
       this.options.onReady(this, tunnelGeneration)

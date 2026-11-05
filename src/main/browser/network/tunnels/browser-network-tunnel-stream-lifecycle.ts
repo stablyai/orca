@@ -1,5 +1,6 @@
 import {
   BROWSER_NETWORK_TUNNEL_CONNECT_TIMEOUT_MS,
+  BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES,
   type BrowserNetworkTunnelSocket,
   type BrowserNetworkTunnelStream
 } from './browser-network-tunnel-stream-state'
@@ -7,15 +8,17 @@ import {
 export function createBrowserNetworkTunnelStream(options: {
   id: number
   socket: BrowserNetworkTunnelSocket
+  windowBytes: number
   onConnectTimeout: (stream: BrowserNetworkTunnelStream) => void
 }): BrowserNetworkTunnelStream {
   const stream: BrowserNetworkTunnelStream = {
     id: options.id,
     socket: options.socket,
+    windowBytes: options.windowBytes,
+    receiveWindowBytes: BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES,
     connected: false,
     closed: false,
-    // Granted at connect alongside the initial WindowUpdate; tracking must match the announcement.
-    receiveCredit: 0,
+    receiveCredit: BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES,
     sendCredit: 0,
     pendingToClient: [],
     pendingToClientBytes: 0,

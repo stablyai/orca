@@ -3,13 +3,13 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
   BROWSER_NETWORK_EXECUTION_HOSTS_RUNTIME_CAPABILITY,
-  BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY
+  BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY,
+  BROWSER_NETWORK_TUNNEL_WINDOW_V2_CAPABILITY
 } from '../../../../shared/protocol-version'
 import { getBrowserHostLeaseRegistry } from '../../browser-host/leases/browser-host-lease-registry-instance'
 import type { BrowserHostLease } from '../../browser-host/leases/browser-host-lease-records'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { BrowserNetworkTunnelOutboundMemoryBudgetRegistry } from '../../../browser/network/tunnels/browser-network-tunnel-outbound-memory-budget'
-import { BROWSER_NETWORK_TUNNEL_MAX_WINDOW_BYTES } from '../../../browser/network/tunnels/browser-network-tunnel-stream-state'
 import {
   browserNetworkExecutionHostKey,
   type BrowserNetworkExecutionRoute,
@@ -555,16 +555,41 @@ describe('network.browserTunnel RPC', () => {
       expect.objectContaining({
         ok: true,
         streaming: true,
-        result: {
-          type: 'ready',
-          tunnelGeneration: 1,
-          hostMaxWindowBytes: BROWSER_NETWORK_TUNNEL_MAX_WINDOW_BYTES
-        }
+        result: { type: 'ready', tunnelGeneration: 1 }
       })
     ])
     cleanups.values().next().value?.()
     await dispatch
     expect(unregister).toHaveBeenCalledOnce()
+  })
+
+  it('opts into window.v2 flow control only for a client that advertises it', async () => {
+    const cleanups = new Map<string, () => void>()
+    const hostRuntime = runtime(cleanups)
+    const lease = attachLease(hostRuntime)
+    const dispatcher = new RpcDispatcher({
+      runtime: hostRuntime,
+      methods: BROWSER_NETWORK_TUNNEL_METHODS
+    })
+    const registerBinaryMessageHandler = vi.fn(() => vi.fn())
+    const replies: string[] = []
+    const dispatch = dispatcher.dispatchStreaming(request(lease), (reply) => replies.push(reply), {
+      connectionId: 'connection-a',
+      clientKind: 'runtime',
+      pairedDeviceId: 'device-a',
+      clientCapabilities: [...negotiatedCapabilities, BROWSER_NETWORK_TUNNEL_WINDOW_V2_CAPABILITY],
+      sendBinary: vi.fn(() => true),
+      registerBinaryMessageHandler
+    })
+
+    await vi.waitFor(() => expect(registerBinaryMessageHandler).toHaveBeenCalledOnce())
+    expect(JSON.parse(replies[0]!).result).toEqual({
+      type: 'ready',
+      tunnelGeneration: 1,
+      capabilities: [BROWSER_NETWORK_TUNNEL_WINDOW_V2_CAPABILITY]
+    })
+    cleanups.values().next().value?.()
+    await dispatch
   })
 
   it('releases route memory when binary-handler cleanup throws', async () => {
@@ -629,8 +654,7 @@ describe('network.browserTunnel RPC', () => {
     await vi.waitFor(() => expect(secondReplies).toHaveLength(1))
     expect(JSON.parse(secondReplies[0]!).result).toEqual({
       type: 'ready',
-      tunnelGeneration: 2,
-      hostMaxWindowBytes: BROWSER_NETWORK_TUNNEL_MAX_WINDOW_BYTES
+      tunnelGeneration: 2
     })
     getBrowserHostLeaseRegistry(hostRuntime)
       .attach({

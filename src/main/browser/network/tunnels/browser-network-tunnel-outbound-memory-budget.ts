@@ -1,13 +1,8 @@
-// Sized so the larger negotiated per-stream window (2 MB) keeps room for Chromium's per-host
-// socket pool of concurrent streams before retained-byte admission starts shedding streams.
-export const BROWSER_NETWORK_TUNNEL_HOST_MAX_OUTBOUND_BYTES = 64 * 1024 * 1024
-export const BROWSER_NETWORK_TUNNEL_PROCESS_MAX_OUTBOUND_BYTES = 256 * 1024 * 1024
+export const BROWSER_NETWORK_TUNNEL_HOST_MAX_OUTBOUND_BYTES = 32 * 1024 * 1024
+export const BROWSER_NETWORK_TUNNEL_PROCESS_MAX_OUTBOUND_BYTES = 128 * 1024 * 1024
 
-// One claim per retained chunk: cover the whole byte budget at the 1 KiB-per-chunk pairing the
-// pending caps use, so claim exhaustion never precedes byte exhaustion for in-protocol frames.
-// Claims are counters, not stored entries, so the higher caps retain no extra memory.
-const DEFAULT_HOST_MAX_CLAIMS = BROWSER_NETWORK_TUNNEL_HOST_MAX_OUTBOUND_BYTES / 1024
-const DEFAULT_PROCESS_MAX_CLAIMS = BROWSER_NETWORK_TUNNEL_PROCESS_MAX_OUTBOUND_BYTES / 1024
+const DEFAULT_HOST_MAX_CLAIMS = 16_384
+const DEFAULT_PROCESS_MAX_CLAIMS = 65_536
 const DEFAULT_HOST_MAX_SOCKET_SOURCES = 8
 const DEFAULT_PROCESS_MAX_SOCKET_SOURCES = 32
 const DEFAULT_HOST_MAX_LEASES = 8

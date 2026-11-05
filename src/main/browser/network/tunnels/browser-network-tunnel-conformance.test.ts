@@ -12,7 +12,8 @@ import { BrowserNetworkTunnelSession } from './browser-network-tunnel-session'
 import {
   BROWSER_NETWORK_TUNNEL_CONNECT_TIMEOUT_MS,
   BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES,
-  BROWSER_NETWORK_TUNNEL_MAX_WINDOW_BYTES,
+  BROWSER_NETWORK_TUNNEL_WINDOW_V2_FLOW_CONTROL,
+  type BrowserNetworkTunnelFlowControl,
   type BrowserNetworkTunnelSocket
 } from './browser-network-tunnel-stream-state'
 
@@ -177,36 +178,36 @@ describe('browser network tunnel conformance', () => {
     await teardown(tunnel)
   })
 
-  it('carries a full negotiated window of small frames in both directions before any settlement', async () => {
-    const tunnel = createConformanceTunnel({
-      receiveWindowBytes: BROWSER_NETWORK_TUNNEL_MAX_WINDOW_BYTES
-    })
+  it('carries a fully grown window.v2 window of 1 KiB frames in both directions', async () => {
+    const tunnel = createConformanceTunnel(BROWSER_NETWORK_TUNNEL_WINDOW_V2_FLOW_CONTROL)
     const { duplex, destination } = await openStream(tunnel)
-    // 1 KiB frames fill the window with far more frames than the legacy 256-chunk cap allowed.
-    const smallChunkBytes = 1024
-    const windowChunks = BROWSER_NETWORK_TUNNEL_MAX_WINDOW_BYTES / smallChunkBytes
+    const consumer = consumeDuplex(duplex, { autoSettle: false })
+    const windowBytes = BROWSER_NETWORK_TUNNEL_WINDOW_V2_FLOW_CONTROL.streamWindowBytes
+    const frames = windowBytes / 1024
+    const sendWindow = async (): Promise<void> => {
+      for (let index = 0; index < frames; index += 1) {
+        await writeChunk(duplex, new Uint8Array(1024).fill(index))
+        destination.emit('data', new Uint8Array(1024).fill(index))
+      }
+      await settle()
+    }
 
-    // A full negotiated window outstanding toward the destination, nothing settled yet.
+    // One window of settled traffic grows both receive windows from the legacy size to the maximum.
+    await sendWindow()
+    for (let round = 0; consumer.byteLength() < windowBytes && round < 16; round += 1) {
+      consumer.settleAll()
+      await settle()
+    }
+    consumer.settleAll()
+    await settle()
+
+    // The grown window then carries a full window of tiny frames with nothing settled.
     destination.autoSettleWrites = false
-    for (let index = 0; index < windowChunks; index += 1) {
-      await writeChunk(duplex, new Uint8Array(smallChunkBytes).fill(index % 0xff))
-    }
-    await settle()
-    expect(totalBytes(destination.written)).toBe(BROWSER_NETWORK_TUNNEL_MAX_WINDOW_BYTES)
-
-    // A full negotiated window outstanding toward an unread client duplex, frame by frame.
-    for (let index = 0; index < windowChunks; index += 1) {
-      destination.emit('data', new Uint8Array(smallChunkBytes).fill(index % 0xff))
-    }
-    await settle()
-
-    // The whole announced window must be usable without tripping credit or chunk validation.
+    await sendWindow()
+    expect(totalBytes(destination.written)).toBe(2 * windowBytes)
+    expect(consumer.byteLength()).toBe(2 * windowBytes)
     expect(tunnel.closures).toEqual([])
     expect(tunnel.onSessionClose).not.toHaveBeenCalled()
-
-    const consumer = consumeDuplex(duplex, { autoSettle: false })
-    await settle()
-    expect(consumer.byteLength()).toBe(BROWSER_NETWORK_TUNNEL_MAX_WINDOW_BYTES)
 
     destination.settleWrites()
     consumer.settleAll()
@@ -362,7 +363,7 @@ function createAggregateBudgetProbe(): AggregateBudgetProbe {
   }
 }
 
-function createConformanceTunnel(options: { receiveWindowBytes?: number } = {}): ConformanceTunnel {
+function createConformanceTunnel(flowControl?: BrowserNetworkTunnelFlowControl): ConformanceTunnel {
   const aggregate = createAggregateBudgetProbe()
   const memory = new BrowserNetworkTunnelOutboundMemoryBudgetRegistry()
   const lease = memory.acquire('conformance-host')
@@ -395,7 +396,7 @@ function createConformanceTunnel(options: { receiveWindowBytes?: number } = {}):
       tunnel.client.handleBinary(bytes)
       return true
     },
-    receiveWindowBytes: options.receiveWindowBytes,
+    flowControl,
     onClose: tunnel.onSessionClose,
     claimAggregateRetainedBytes: aggregate.claim
   })
@@ -407,7 +408,7 @@ function createConformanceTunnel(options: { receiveWindowBytes?: number } = {}):
       return true
     },
     outboundMemory: lease,
-    receiveWindowBytes: options.receiveWindowBytes,
+    flowControl,
     onClosed: (error) => tunnel.closures.push(error)
   })
   return tunnel
