@@ -139,7 +139,7 @@ export function normalizeTerminalChunk(
       continue
     }
     if (code === 0x0d) {
-      // Repeated CRs land on the same column, so a run acts as one CR; raw-mode output ends lines with CR CR LF.
+      // A CR run acts as one CR; raw-mode programs end lines with CR CR LF.
       let runEnd = index + 1
       while (combined.charCodeAt(runEnd) === 0x0d) {
         runEnd += 1
