@@ -13,7 +13,7 @@ import {
 } from '../../shared/agent-launch/catalog/tui-agent-selection'
 import { resolveAgentStartupPlanInputs } from '../../shared/agent-launch/startup/agent-startup-plan-inputs'
 import type { AgentLaunchRuntime } from '../../shared/agent-launch/startup/agent-launch-runtime'
-import type { resolveStartupAgentLaunchRuntime } from './agent-launch-scope-runtime'
+import type { resolveStartupAgentLaunchRuntime } from './terminal/launch/agent-launch-scope-runtime'
 import {
   buildAgentDraftLaunchPlan,
   buildAgentStartupPlan
@@ -22,7 +22,7 @@ import { planStartupWithPromptCandidate } from '../../shared/startup-line-prompt
 import {
   launchHostProvesAgentInFront,
   nameLocalTypedLineShell
-} from './agent-launch-typed-line-shell'
+} from './terminal/launch/agent-launch-typed-line-shell'
 import { detectAgentsOnHost } from '../preflight/workspace-agent-detection'
 import type { RuntimeStore } from './runtime-store-contract'
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'

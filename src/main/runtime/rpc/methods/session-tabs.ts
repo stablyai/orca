@@ -1,6 +1,6 @@
 import { isDeepStrictEqual } from 'node:util'
 import { terminalCreateFeatureRequirement } from '../agent-launch-feature-requirement'
-import { terminalImageViewerSupported } from '../../terminal-image-viewer-env'
+import { terminalImageViewerSupported } from '../../terminal/launch/terminal-image-viewer-env'
 import { resolveRuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
 import { getExplicitWorktreeIdSelector } from '../../runtime-worktree-selection'
 import { worktreeIdentityKey, worktreeIdsEqual } from '../../../../shared/worktree/id'

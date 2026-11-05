@@ -13,13 +13,13 @@ import {
   isKnownReadyPromptBody,
   isKnownReadyPromptPreview,
   isQuietReadyScreenBody
-} from './terminal-wait-detection'
+} from './terminal/wait/terminal-wait-detection'
 import {
   evaluateTuiIdle,
   hasQuietReadyScreen,
   isTuiIdleReadyVerdict,
   type TuiIdleEvaluationInput
-} from './tui-idle-evidence'
+} from './terminal/wait/tui-idle-evidence'
 import type { RuntimeTerminalWaitBlockedReason } from '../../shared/runtime-types'
 
 vi.mock('electron', () => ({

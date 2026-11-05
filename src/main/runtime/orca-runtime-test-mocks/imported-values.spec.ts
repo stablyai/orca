@@ -116,7 +116,7 @@ import { WATCHER_REMOVAL_DRAIN_BUDGET_MS } from '../../workspaces/removal/watche
 import {
   _resetTerminalViewAttributesForTest,
   setTerminalViewAttributes
-} from '../terminal-view-attribute-store'
+} from '../terminal/view/terminal-view-attribute-store'
 import { clearConfiguredWorktreeSharedDirectoriesCacheForTests } from '../../git/worktrees/content-paths/worktree-shared-directories'
 import { setWorktreeWatcherRemoval } from '../../workspaces/removal/worktree-watcher-removal'
 import { createRootDispatch } from '../orchestration/db/root-dispatch-test-fixture'

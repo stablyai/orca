@@ -8,7 +8,7 @@ import type {
   PtyForegroundProcessRead,
   PtyForegroundProcessReadEntry
 } from './runtime-terminal-contracts'
-import type { RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
+import type { RuntimePtyWorktreeRecord } from './terminal/records/runtime-terminal-state-records'
 
 type Dependencies = {
   getController(): RuntimePtyController | null

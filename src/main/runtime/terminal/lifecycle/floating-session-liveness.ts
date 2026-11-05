@@ -4,7 +4,7 @@ import { indexFloatingSnapshotPtyBindings } from '../../floating-snapshot-pty-bi
 import type {
   RuntimeLeafRecord,
   RuntimePtyWorktreeRecord
-} from '../../runtime-terminal-state-records'
+} from '../records/runtime-terminal-state-records'
 import { DISCONNECTED_PTY_RECORD_MAX } from '../../orca-runtime-postlude'
 import { questionAnswerWaitPrefix } from '../../orchestration/question-answer-delivery'
 
