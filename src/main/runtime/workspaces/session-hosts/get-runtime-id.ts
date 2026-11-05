@@ -15,7 +15,7 @@ import {
   toSshExecutionHostId
 } from '../../../../shared/execution-host'
 import type { RuntimeTerminalSummary } from '../../../../shared/runtime-types'
-import type { ResolvedWorktree } from '../../runtime-worktree-path-identity'
+import type { ResolvedWorktree } from '../catalog/runtime-worktree-path-identity'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 

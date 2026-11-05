@@ -1,4 +1,4 @@
-import { collectSavedStructuredAgentSessionIds } from '../saved-structured-agent-session-restoration'
+import { collectSavedStructuredAgentSessionIds } from '../agent-session/lifecycle/saved-structured-agent-session-restoration'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import type {
   RuntimeConstructionBindings,
@@ -15,7 +15,7 @@ import { OrcaRuntimeWithLinearCommands } from '../integrations/linear/linear-com
 
 import type { RuntimeStore } from '../runtime-store-contract'
 import { installGitHubProjectAccounts } from '../../github/github-project-account'
-import type { WorkspaceSleepPlatform } from '../workspaces/workspace-sleep-platform'
+import type { WorkspaceSleepPlatform } from '../workspaces/sleep/workspace-sleep-platform'
 import type { StatsCollector } from '../../stats/collector'
 
 import type { PrepareClaudeAuth } from '../../ipc/pty/host-env/types'
@@ -33,7 +33,7 @@ import {
 import {
   type RuntimeRepositoryCommandSurface,
   installRuntimeRepositoryCommandSurface
-} from '../runtime-repository-command-surface'
+} from '../repositories/runtime-repository-command-surface'
 import {
   type RuntimeReviewCommandSurface,
   installRuntimeReviewCommandSurface

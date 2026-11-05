@@ -2,8 +2,8 @@ import { OrcaRuntimeWithStateFields } from '../construction/runtime-construction
 import {
   persistClientHostedBrowserPages,
   rehydrateClientHostedBrowserPages
-} from '../client-hosted-browser-page-persistence'
-import { getRuntimeBrowserPageRegistry } from '../runtime-browser-page-registry'
+} from '../browser/client-pages/client-hosted-browser-page-persistence'
+import { getRuntimeBrowserPageRegistry } from '../browser/client-pages/runtime-browser-page-registry'
 import { splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 
@@ -13,7 +13,7 @@ import {
   getRepoExecutionHostId
 } from '../../../shared/execution-host'
 import type { IPtyProvider } from '../../providers/pty-provider-contract'
-import { killAllProcessesForWorktree } from '../worktree-teardown'
+import { killAllProcessesForWorktree } from '../workspaces/removal/worktree-teardown'
 import type { MemorySnapshot, StatsSummary } from '../../../shared/process-stats-types'
 import { collectMemorySnapshot } from '../../memory/collector'
 import type { PersistedUIState } from '../../../shared/persisted-ui-state-types'

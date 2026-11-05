@@ -1,6 +1,6 @@
-import type { RuntimeWorktreeScanResult } from './repo-worktree-resolution-scan'
-import type { TerminalWorkspaceLaunchScope } from './runtime-legacy-worker-terminal-recovery-types'
-import type { ResolvedWorktree } from './runtime-worktree-path-identity'
+import type { RuntimeWorktreeScanResult } from './workspaces/catalog/repo-worktree-resolution-scan'
+import type { TerminalWorkspaceLaunchScope } from './orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
+import type { ResolvedWorktree } from './workspaces/catalog/runtime-worktree-path-identity'
 import type { RuntimeTerminalRowMetadata } from '../../shared/runtime-terminal-contracts'
 import { IMMEDIATE_KILL_REPLY_BUDGET_MS } from '../daemon/sessions/immediate-kill-reply-budget'
 import type {
@@ -11,7 +11,7 @@ import type { RuntimeEdgeCommandSurface } from './runtime-edge-command-controlle
 import type { RuntimeLinearCommandSurface } from './integrations/linear/runtime-linear-command-surface'
 import type { RuntimeFileCommandSurface } from './runtime-file-command-surface'
 import type { RuntimeGitCommandSurface } from './integrations/git/runtime-git-command-surface'
-import type { RuntimeRepositoryCommandSurface } from './runtime-repository-command-surface'
+import type { RuntimeRepositoryCommandSurface } from './repositories/runtime-repository-command-surface'
 import type { RuntimeReviewCommandSurface } from './runtime-review-command-surface'
 import type { RuntimeServiceCommandSurface } from './runtime-service-command-surface'
 import type { RuntimeSkillCommandSurface } from './integrations/skill/runtime-skill-command-contract'

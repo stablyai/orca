@@ -34,7 +34,7 @@ import {
 } from '../runtime-graph-reload-lifecycle'
 import { ClientHostedPageReconciliationWindow } from '../client-hosted-page-reconciliation-window'
 import { ClientSessionTabSelectionStore } from '../client-session-tab-selection'
-import { WorktreeTerminalMutationLock } from '../worktree-terminal-mutation-lock'
+import { WorktreeTerminalMutationLock } from '../workspaces/lifecycle/worktree-terminal-mutation-lock'
 import { RemoteRuntimeTerminalCreateIdempotency } from '../terminal/identity/remote-runtime-terminal-create-idempotency'
 import type { PtyIncarnationId } from '../../../shared/terminal/pty/lifecycle/pty-incarnation'
 

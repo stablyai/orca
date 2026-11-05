@@ -5,7 +5,7 @@ import {
   captureStructuredWorkerReadInputs,
   createStructuredWorkerReadContext,
   type StructuredWorkerReadContext
-} from '../../structured-worker-authority'
+} from '../../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type {
   OrchestrationCompatibilitySshTerminal,

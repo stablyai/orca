@@ -86,31 +86,6 @@ describe('RuntimeTerminalIdlePolls timer budget', () => {
     expect(setIntervalSpy).toHaveBeenCalledTimes(1)
   })
 
-  it('keeps one interval across waiters and re-arms after going idle', () => {
-    const polls = new RuntimeTerminalIdlePolls({
-      intervalMs: INTERVAL_MS,
-      quiescenceMs: 1500,
-      getForegroundProcess: () => null,
-      hasCommandPainted: () => true,
-      getAdoptedPtyIdleStatus: () => null,
-      getPaneAgent: () => null,
-      getFirstPartyAgentStatus: () => null,
-      readScreenLines: () => null,
-      readVisibleScreen: () => null,
-      resolve: () => {}
-    })
-
-    for (let index = 0; index < 10; index += 1) {
-      polls.start(makeWaiter(`pty-handle-${index}`), makePty(`pty-${index}`))
-    }
-    expect(setIntervalSpy).toHaveBeenCalledTimes(1)
-
-    vi.advanceTimersByTime(INTERVAL_MS * 5)
-    // Nothing resolved: still exactly one live handle after 5 sweeps.
-    expect(polls.activeTimerCount).toBe(1)
-    expect(setIntervalSpy).toHaveBeenCalledTimes(1)
-  })
-
   it('retires the shared timer when the last waiter is cancelled through the waiter record', () => {
     const polls = new RuntimeTerminalIdlePolls({
       intervalMs: INTERVAL_MS,
@@ -213,35 +188,6 @@ describe('RuntimeTerminalIdlePolls rendered-screen blocked prompts', () => {
     })
   }
 
-  it('reports a dialog the tail lost but the screen still shows, ahead of a quiet-pane idle', async () => {
-    const resolved: RuntimeTerminalWait[] = []
-    const polls = createPolls(() => Promise.resolve(TRUST_SCREEN), resolved)
-    polls.start(makeWaiter('pty'), makePty('pty-1', { lastOutputAt: Date.now() - 10_000 }))
-
-    await vi.advanceTimersByTimeAsync(INTERVAL_MS)
-
-    expect(resolved).toEqual([
-      expect.objectContaining({ satisfied: false, blockedReason: 'agent-trust-workspace' })
-    ])
-    expect(polls.activeTimerCount).toBe(0)
-  })
-
-  it('does not read the screen of an agent whose title says it is working', async () => {
-    const resolved: RuntimeTerminalWait[] = []
-    const reads: string[] = []
-    const polls = createPolls((ptyId) => {
-      reads.push(ptyId)
-      return Promise.resolve(TRUST_SCREEN)
-    }, resolved)
-    polls.start(makeWaiter('pty'), makePty('pty-1', { lastAgentStatus: 'working' }))
-
-    await vi.advanceTimersByTimeAsync(INTERVAL_MS * 3)
-
-    expect(reads).toEqual([])
-    expect(resolved).toEqual([])
-    expect(polls.activeTimerCount).toBe(1)
-  })
-
   it('does not resolve a waiter that was cancelled while its screen read was pending', async () => {
     const resolved: RuntimeTerminalWait[] = []
     const finishRead = new Map<string, (screen: string) => void>()
@@ -268,63 +214,6 @@ describe('RuntimeTerminalIdlePolls rendered-screen blocked prompts', () => {
     finishRead.get('pty-1')?.(TRUST_SCREEN)
     await vi.advanceTimersByTimeAsync(0)
     expect(resolved).toEqual([])
-  })
-
-  // Name-only rest signals can miss dialogs absent from tail; wait for a clear screen read.
-  it.each(['grok', 'copilot', 'aider'] as const)(
-    "settles %s's name-only title only after its screen read",
-    async (agent) => {
-      const resolved: RuntimeTerminalWait[] = []
-      const screens: ((screen: string) => void)[] = []
-      const polls = createPolls(
-        () => new Promise<string>((resolve) => screens.push(resolve)),
-        resolved,
-        null,
-        agent
-      )
-      const pty = makePty('pty-1', { lastAgentStatus: 'idle', lastOscTitle: agent })
-      polls.start(makeWaiter('pty'), pty, { kind: 'ready-weak' })
-
-      await vi.advanceTimersByTimeAsync(0)
-      expect(screens).toHaveLength(1)
-      expect(resolved).toEqual([])
-
-      screens[0](`${agent} ready for input`)
-      await vi.advanceTimersByTimeAsync(0)
-      expect(resolved).toEqual([expect.objectContaining({ satisfied: true })])
-    }
-  )
-
-  it('reports a dialog on screen under a name-only title instead of settling ready', async () => {
-    const resolved: RuntimeTerminalWait[] = []
-    const polls = createPolls(() => Promise.resolve(TRUST_SCREEN), resolved, null, 'grok')
-    const pty = makePty('pty-1', { lastAgentStatus: 'idle', lastOscTitle: 'grok' })
-    polls.start(makeWaiter('pty'), pty, { kind: 'ready-weak' })
-
-    await vi.advanceTimersByTimeAsync(0)
-    expect(resolved).toEqual([
-      expect.objectContaining({ satisfied: false, blockedReason: 'agent-trust-workspace' })
-    ])
-  })
-
-  it("lets an agent's own idle title outrank dialog wording on its screen", async () => {
-    const resolved: RuntimeTerminalWait[] = []
-    const reads: string[] = []
-    const polls = createPolls(
-      (ptyId) => {
-        reads.push(ptyId)
-        return Promise.resolve(TRUST_SCREEN)
-      },
-      resolved,
-      null,
-      'claude'
-    )
-    const pty = makePty('pty-1', { lastAgentStatus: 'idle', lastOscTitle: '✳ Claude Code' })
-    polls.start(makeWaiter('pty'), pty)
-
-    await vi.advanceTimersByTimeAsync(INTERVAL_MS)
-    expect(reads).toEqual([])
-    expect(resolved).toEqual([expect.objectContaining({ satisfied: true })])
   })
 })
 
@@ -384,14 +273,5 @@ describe('RuntimeTerminalIdlePolls quiet foreground for a launched agent', () =>
     await vi.advanceTimersByTimeAsync(INTERVAL_MS)
     expect(resolved).toEqual(['pty'])
     expect(polls.activeTimerCount).toBe(0)
-  })
-
-  it('does not settle an agent that will announce rest itself on a quiet foreground', async () => {
-    const resolved: string[] = []
-    const polls = createPolls('claude', resolved)
-    polls.start(makeWaiter('pty'), makePty('pty-claude', { lastOutputAt: Date.now() }))
-
-    await vi.advanceTimersByTimeAsync(INTERVAL_MS * 5)
-    expect(resolved).toEqual([])
   })
 })

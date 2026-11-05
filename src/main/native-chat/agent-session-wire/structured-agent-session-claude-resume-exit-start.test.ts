@@ -4,7 +4,7 @@ import {
   PROVIDER_SESSION_ID,
   fakeClaude
 } from '../../claude/structured/claude-structured-session-test-support'
-import { structuredClaudeLifecycleEvent } from '../../runtime/structured-claude-runtime-adapter'
+import { structuredClaudeLifecycleEvent } from '../../runtime/agent-session/installation/structured-claude-runtime-adapter'
 import { withObservedProviderExit } from './structured-agent-session-failure-text'
 import { HOST_TEST_SESSION as SESSION } from './structured-agent-session-host-test-data'
 import type { StructuredAgentSessionSinkBarrier } from './structured-agent-session-event-sink'

@@ -12,9 +12,9 @@ import type {
   RuntimeMobileSessionTerminalTab
 } from '../../../shared/runtime-types'
 import type { RuntimePtyWorktreeRecord } from '../terminal/records/runtime-terminal-state-records'
-import type { BrowserSessionTabSelectionOptions } from '../browser-tab-create-publication'
-import { getRuntimeBrowserPageRegistry } from '../runtime-browser-page-registry'
-import { applyBrowserSessionTabSelection } from '../browser-session-tab-selection-snapshot'
+import type { BrowserSessionTabSelectionOptions } from '../browser/tabs/browser-tab-create-publication'
+import { getRuntimeBrowserPageRegistry } from '../browser/client-pages/runtime-browser-page-registry'
+import { applyBrowserSessionTabSelection } from '../browser/tabs/browser-session-tab-selection-snapshot'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
 import type { StructuredAgentSessionCloseCause } from '../../native-chat/agent-session-wire/structured-agent-session-host-lifetime'
 import {

@@ -1,7 +1,7 @@
 import { GROK_TEXT_TASK_ENV } from '../grok/grok-text-task'
 import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import type { AcpStructuredSessionAdapterDeps } from './acp-structured-session-adapter-deps'
-import { STRUCTURED_CHILD_ENV_TO_DELETE } from '../runtime/structured-session-child-env'
+import { STRUCTURED_CHILD_ENV_TO_DELETE } from '../runtime/agent-session/environment/structured-session-child-env'
 import { z } from 'zod'
 import type { AcpLaunchSpec } from './acp-launch-specs'
 import type {

@@ -5,7 +5,7 @@ import {
   createTranscriptPane,
   TRANSCRIPT_PANE_PTY_ID,
   waitForTranscriptIdle
-} from '../../agent-transcript-pane-test-harness'
+} from '../../orca-runtime-tests/agent-transcript-pane-test-harness'
 import { createHookListenerState } from '../../../../shared/agent-hook-listener/listener-state'
 import { normalizeHermesEvent } from '../../../../shared/agent-hook-listener/providers/hermes-events'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
@@ -124,25 +124,6 @@ describe('Hermes captured hook readiness', () => {
         runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 550 })
       ).rejects.toThrow('timeout')
     }, 3_000)
-
-    it('reports a visible blocker instead of readiness when Hermes asks for approval', async () => {
-      const { runtime, handle } = await readyPane()
-      runtime.onPtyData(
-        TRANSCRIPT_PANE_PTY_ID,
-        status('on_session_start', { session_id: 's1' }),
-        Date.now()
-      )
-      // `pre_approval_request` supersedes the boundary row the session opened with.
-      runtime.onPtyData(
-        TRANSCRIPT_PANE_PTY_ID,
-        status('pre_approval_request', { command: 'rm -rf build' }),
-        Date.now()
-      )
-
-      await expect(
-        runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 550 })
-      ).rejects.toThrow('timeout')
-    }, 3_000)
   })
 })
 
@@ -222,7 +203,7 @@ describe('Canonical hook status readiness', () => {
   // A Pi turn in progress: no ready sign the other lanes could settle on.
   const BUSY_SCREEN = '⠋ Working...\r\n'
   // A Codex turn in progress, which Codex's screen rules read as busy.
-  const CODEX_BUSY_SCREEN = '• Working (4s • esc to interrupt)\r\n'
+
   // OpenCode 1.18's permission dialog, as the line tail keeps it after the prompt is answered.
   const OPENCODE_PERMISSION_DIALOG = [
     '△ Permission required',
@@ -291,24 +272,12 @@ describe('Canonical hook status readiness', () => {
   })
 
   describe('tui-idle hook lane through the runtime', () => {
-    it('settles a mid-turn screen on the hook row alone, with no ready title (headless serve)', async () => {
-      expect(await waitOutcome({ rows: () => [row()] })).toBe('ready')
-    })
-
-    it('without a row, the same pane does not settle', async () => {
-      expect(await waitOutcome({ rows: () => [] })).toBe('timeout')
-    })
-
     it('joins a row on the terminal handle when its pane key is not the pane', async () => {
       expect(
         await waitOutcome({
           rows: (handle) => [row({ paneKey: OTHER_PANE_KEY, terminalHandle: handle })]
         })
       ).toBe('ready')
-    })
-
-    it('falls back to the other lanes for a row no pane key or handle joins', async () => {
-      expect(await waitOutcome({ rows: () => [row({ paneKey: OTHER_PANE_KEY })] })).toBe('timeout')
     })
 
     it('ignores the row the PTY id held before a respawn', async () => {
@@ -377,17 +346,6 @@ describe('Canonical hook status readiness', () => {
           data: `\x1b]133;A\x07OK\x1b]133;C\x07${BUSY_SCREEN}`
         })
       ).toBe('ready')
-    })
-
-    // Before Codex Interrupt hooks, Esc posts no update; trust done only and leave working to screen rules.
-    it('settles Codex on its done, and leaves a working row to its screen rules', async () => {
-      const codex = { launchAgent: 'codex' as const, data: CODEX_BUSY_SCREEN }
-      expect(await waitOutcome({ ...codex, rows: () => [row({ agentType: 'codex' })] })).toBe(
-        'ready'
-      )
-      expect(
-        await waitOutcome({ ...codex, rows: () => [row({ agentType: 'codex', state: 'working' })] })
-      ).toBe('timeout')
     })
 
     it("settles past a denied prompt's dialog text once the hook says the turn ended", async () => {

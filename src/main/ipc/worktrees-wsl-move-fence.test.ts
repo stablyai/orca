@@ -99,7 +99,7 @@ vi.mock('../git/repo-default-base-ref', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   getBaseRefDefault: (await import('./worktrees-test-module-mocks')).getBaseRefDefaultMock
 }))
-vi.mock('../runtime/worktree-teardown', async () =>
+vi.mock('../runtime/workspaces/removal/worktree-teardown', async () =>
   (await import('./worktrees-test-module-mocks')).worktreeTeardownModuleMock()
 )
 vi.mock('./pty/provider/registry', async () =>

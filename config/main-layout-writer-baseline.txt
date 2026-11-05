@@ -50,14 +50,14 @@
 1 src/main/persistence/tracking-repos/project-group-operations.ts
 4 src/main/persistence/tracking-repos/repo-worktree-pruning.ts
 3 src/main/persistence/tracking-repos/worktree-identity-migration.ts
-1 src/main/runtime/client-hosted-browser-page-persistence.ts
+1 src/main/runtime/browser/client-pages/client-hosted-browser-page-persistence.ts
 1 src/main/runtime/client/runtime-client-state.ts
 1 src/main/runtime/mobile-session-editor-projection.ts
 3 src/main/runtime/terminal/surface/mobile-session-layout-projection.ts
 4 src/main/runtime/runtime-legacy-worker-terminal-recovery-persistence.ts
 2 src/main/runtime/terminal/launch/runtime-pane-admission.ts
 7 src/main/runtime/terminal/adoption/runtime-terminal-orphan-session-adoption.ts
-1 src/main/runtime/runtime-workspace-session-controller.ts
+1 src/main/runtime/workspaces/session-hosts/runtime-workspace-session-controller.ts
 2 src/main/runtime/session-graph/session-graph-promotion.ts
 2 src/main/runtime/session-lifecycle/projection/apply-mobile-session-tab-navigation.ts
 2 src/main/runtime/session-lifecycle/projection/build-headless-mobile-session-browser-tabs.ts

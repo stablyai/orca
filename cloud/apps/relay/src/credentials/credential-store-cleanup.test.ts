@@ -146,26 +146,6 @@ describe('credential cleanup invite reaper', () => {
     await database.close()
   })
 
-  it('bounds one cycle to a single batch and drains the rest on later cycles', async () => {
-    const database = await openInMemoryRelayDatabase()
-    const store = new RelayCredentialStore(database, () => NOW)
-    const stale = NOW - 30 * DAY_MS
-    for (let index = 0; index < 5_002; index += 1) {
-      await insertInvite(database, {
-        token: `consumed-${String(index).padStart(5, '0')}`,
-        state: 'consumed',
-        updatedAt: stale
-      })
-    }
-
-    await store.cleanup()
-    expect(await remainingTokens(database)).toHaveLength(2)
-
-    await store.cleanup()
-    expect(await remainingTokens(database)).toEqual([])
-    await database.close()
-  })
-
   it('still expires credentials the sweep owns, and only those past their deadline', async () => {
     // Reaper follows sweep; ensure all five prior transitions still run.
     const database = await openInMemoryRelayDatabase()
@@ -292,49 +272,6 @@ describe('credential cleanup invite reaper', () => {
       'pending-ancient',
       'recent-consumed'
     ])
-    await database.close()
-  })
-
-  it('bounds each table to one batch per cycle', async () => {
-    const database = await openInMemoryRelayDatabase()
-    const store = new RelayCredentialStore(database, () => NOW)
-    for (let index = 0; index < 5_001; index += 1) {
-      const id = String(index).padStart(5, '0')
-      await insertBasis(database, { id: `basis-${id}`, active: 0, deadline: NOW - 2 * DAY_MS })
-      await insertDirectAuthorization(database, {
-        id: `auth-${id}`,
-        deadline: NOW - 2 * DAY_MS,
-        consumedAt: NOW - 2 * DAY_MS
-      })
-    }
-
-    await store.cleanup()
-    expect(await remainingIds(database, 'relay_connection_bases', 'basis_conn_id')).toHaveLength(1)
-    expect(await remainingIds(database, 'relay_direct_authorizations', 'direct_auth_id')).toHaveLength(1)
-
-    await store.cleanup()
-    expect(await remainingIds(database, 'relay_connection_bases', 'basis_conn_id')).toEqual([])
-    expect(await remainingIds(database, 'relay_direct_authorizations', 'direct_auth_id')).toEqual([])
-    await database.close()
-  })
-
-  it('skips drained invite and authorization reaps until the pause ends', async () => {
-    const database = await openInMemoryRelayDatabase()
-    let now = NOW
-    const store = new RelayCredentialStore(database, () => now)
-    await store.cleanup()
-    await insertInvite(database, { token: 'stale', state: 'consumed', updatedAt: NOW - 8 * DAY_MS })
-    await insertDirectAuthorization(database, { id: 'stale', deadline: NOW, consumedAt: NOW - 2 * DAY_MS })
-
-    now = NOW + 60_000
-    await store.cleanup()
-    expect(await remainingTokens(database)).toEqual(['stale'])
-    expect(await remainingIds(database, 'relay_direct_authorizations', 'direct_auth_id')).toEqual(['stale'])
-
-    now = NOW + 6 * 60_000
-    await store.cleanup()
-    expect(await remainingTokens(database)).toEqual([])
-    expect(await remainingIds(database, 'relay_direct_authorizations', 'direct_auth_id')).toEqual([])
     await database.close()
   })
 

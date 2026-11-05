@@ -10,7 +10,7 @@ import type { RuntimeStore } from './runtime-store-contract'
 import type {
   LegacyWorkerRecoveryCandidate,
   LegacyWorkerRecoveryResolution
-} from './runtime-legacy-worker-terminal-recovery-types'
+} from './orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import { cloneWorkspaceSessionState } from '../persistence/restoring-sessions/session-owner-fields'
 import { rollbackWorkspaceSessionAfterFailedAsyncWrite } from '../persistence/restoring-sessions/workspace-session-write-rollback'
 import { worktreeIdsEqual } from '../../shared/worktree/id'

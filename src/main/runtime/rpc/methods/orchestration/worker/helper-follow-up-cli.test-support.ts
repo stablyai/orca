@@ -20,7 +20,7 @@ import {
   mintStructuredWorkerPaneKey,
   structuredWorkerIdentities,
   structuredWorkerProcessIncarnation
-} from '../../../../structured-worker-identity'
+} from '../../../../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
 import { testOrcaSessionId } from '../../../../../../shared/orca-session-address-test-fixture'
 import * as placement from './worker-start-agent-placement'
 

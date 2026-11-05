@@ -38,16 +38,12 @@ import type { RuntimeReferenceFindParams } from '../../shared/runtime-reference-
 import { getRepoExecutionHostId } from '../../shared/execution-host'
 import type { LayoutApplyReply } from '../../shared/workspace-layout/workspace-layout-command-types'
 import { rekeyMovedPaneOwners } from './moved-pane-owner-rekey'
-import {
-  applyWindowLayoutCommand,
-  type WindowLayoutCommand,
-  type LayoutCommandRunOptions
-} from './terminal/layout/runtime-layout-apply'
+import * as Layout from './terminal/layout/runtime-layout-apply'
 import type { TerminalCreateOptions } from './runtime-terminal-contracts'
 import {
-  installStructuredAgentAvailability,
-  type StructuredAgentAvailabilityReader
-} from './structured-agent-availability'
+  installStructuredAgentAvailability as installAvailability,
+  type StructuredAgentAvailabilityReader as AvailabilityReader
+} from './agent-session/launch/structured-agent-availability'
 import { PairedServerRowsProducer } from './sidebar-inputs/paired-server-rows-producer'
 import { RepoIconDataUrls } from './sidebar-inputs/repo-icon-data-urls'
 import { WorkspaceRowsProducer } from './sidebar-inputs/workspace-rows-producer'
@@ -178,11 +174,11 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
     publishNativeChatFollowUpChanges(this.store, (event) => this.emitClientEvent(event))
   }
 
-  private structuredAgentAvailability?: ReturnType<typeof installStructuredAgentAvailability>
+  private structuredAgentAvailability?: ReturnType<typeof installAvailability>
 
   /** Subscribe from first use; returns the release function. */
-  subscribeStructuredAgentAvailability(read: StructuredAgentAvailabilityReader): () => void {
-    this.structuredAgentAvailability ??= installStructuredAgentAvailability(this.store, this)
+  subscribeStructuredAgentAvailability(read: AvailabilityReader): () => void {
+    this.structuredAgentAvailability ??= installAvailability(this.store, this)
     return this.structuredAgentAvailability.subscribe(read)
   }
 
@@ -263,13 +259,13 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
 
   /** Apply a window command to the partitions that hold its tab. */
   async applyLayoutCommand(
-    command: WindowLayoutCommand,
-    run?: Pick<LayoutCommandRunOptions, 'admit'>
+    command: Layout.WindowLayoutCommand,
+    run?: Pick<Layout.LayoutCommandRunOptions, 'admit'>
   ): Promise<LayoutApplyReply> {
     // Wait for live terminal placement before creating the first workspace surface.
     const placing = this.livePlacementSettledFor(command)
     const apply = (): Promise<LayoutApplyReply> =>
-      applyWindowLayoutCommand(
+      Layout.applyWindowLayoutCommand(
         this.requireStore(),
         (worktreeId, tabId) =>
           tabId !== null
@@ -309,16 +305,17 @@ const OrcaRuntimeServiceExport: {
 export { OrcaRuntimeServiceExport as OrcaRuntimeService }
 installRuntimeLinearCommandSurface(OrcaRuntimeServiceExport.prototype)
 
-export type { LegacyWorkerTerminalRecoveryResult } from './runtime-legacy-worker-terminal-recovery-types'
 export type {
   RuntimeAutomationCreateInput,
   RuntimeAutomationUpdateInput
 } from './runtime-automation-controller'
 export type { SubscriptionRegistration } from './runtime-subscription-registry'
 export type { MessageWaitResult } from './runtime-message-waiters'
-export type { AccountsSnapshot, CodexRateLimitResetRpcResult } from './runtime-account-controller'
 export type { RuntimeTerminalDataMeta } from './terminal/output/runtime-terminal-stream-consumers'
-export type { RemoteFetchResult, RemoteTrackingBase } from './runtime-remote-fetch-controller'
+export type {
+  RemoteFetchResult,
+  RemoteTrackingBase
+} from './repositories/runtime-remote-fetch-controller'
 export {
   computeTerminalTailWaitState,
   tailGainedNewerBlockedReason,
@@ -329,7 +326,7 @@ export { appendNormalizedToMultilineTailBufferUnwindowed } from './terminal/outp
 export { buildPreview } from './terminal/output/tail/terminal-tail-state'
 export { buildRestoredTerminalTailSeed } from './terminal/output/tail/terminal-tail-restore-seed'
 export { projectTerminalTailLines } from './terminal/view/orca-runtime-terminal-projection'
-export { resolveWorktreeScanCacheTtlMs } from './runtime-worktree-scan-cache'
+export { resolveWorktreeScanCacheTtlMs } from './workspaces/catalog/runtime-worktree-scan-cache'
 export type {
   OrchestrationCompatibilityCallerAuthority,
   OrchestrationCompatibilityTerminalAuthority,

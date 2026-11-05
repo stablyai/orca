@@ -20,13 +20,13 @@ import type {
   RuntimeLeafRecord,
   RuntimePtyWorktreeRecord
 } from './terminal/records/runtime-terminal-state-records'
-import type { RuntimeAgentRowSnapshot } from './runtime-worktree-agent-rows'
+import type { RuntimeAgentRowSnapshot } from './workspaces/process-listing/runtime-hook-agent-row-selection'
 import {
   classifyAgentTitle,
   getLatestAgentCandidate,
   getLatestPtyTitle,
   terminalTitleBlocksExplicitAgentStatus
-} from './runtime-worktree-status-projection'
+} from './workspaces/process-listing/runtime-worktree-status-projection'
 
 type RuntimeMobileAgentStatusHost = {
   getPaneKey(tab: RuntimeMobileSessionTerminalTab): string

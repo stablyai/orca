@@ -1,4 +1,4 @@
-import '../../orca-runtime-test-lifecycle.spec'
+import '../../orca-runtime-tests/orca-runtime-test-lifecycle.spec'
 import { expect, it, vi } from 'vitest'
 import {
   identityFixture,
@@ -10,7 +10,7 @@ import {
   makeRuntimeStoreWithWorkspaceSession,
   TEST_WORKTREE_ID,
   TEST_WORKTREE_PATH
-} from '../../orca-runtime-test-fixtures.spec'
+} from '../../orca-runtime-tests/orca-runtime-test-fixtures.spec'
 import { getDefaultWorkspaceSession } from '../../../../shared/constants'
 
 function sessions() {
