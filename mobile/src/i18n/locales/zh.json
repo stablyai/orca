@@ -1547,7 +1547,7 @@
       "notificationsTitle": "智能体需要您时，及时收到提醒",
       "openInChatUi": "在聊天界面中打开会话",
       "openInTerminal": "在终端中打开会话",
-      "sessionViewDescription": "选择在此设备上以终端还是聊天界面打开受支持的智能体会话。长按会话标签页可切换视图，也可稍后在“设置”中更改默认方式。",
+      "sessionViewDescription": "选择在此设备上以终端还是聊天界面打开受支持的智能体会话。长按会话标签页可切换视图，也可随时在“设置”→“聊天界面”中更改默认方式。",
       "sessionViewTitle": "以何种方式打开会话？",
       "skipNotifications": "暂不启用通知",
       "useChatUi": "使用聊天界面"

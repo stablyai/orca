@@ -28,8 +28,8 @@ export type PtyDataPayload = {
   transformed?: boolean
   background?: boolean
   droppedOutput?: boolean
-  /** Escape left open by bytes dropped just before this chunk; lets an abandoned restore skip its tail. */
-  gapEscapeState?: string
+  /** The stream is inside an escape (or at an unknown point) where `data` begins, so it cannot resume a stream after a gap. */
+  midEscape?: true | 'unknown'
 }
 
 export type RendererPtyDeliveryAccounting = {
