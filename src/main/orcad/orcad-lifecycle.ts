@@ -6,6 +6,7 @@ import { startOrcadBrowserProvider } from './orcad-browser-startup'
 import { OrcadRuntimeLifetime, type OrcadRuntimeCleanup } from './orcad-runtime-lifetime'
 import type { OrcadManagedStopInstance } from '../../shared/orcad-stop-request'
 import { acquireOrcadInstanceLock } from './orcad-instance-lock'
+import { recordOrcadPreviousUnexpectedExit } from './orcad-unexpected-exit'
 import { ORCAD_BUNDLED_LAUNCHER_ENV } from './orcad-bundled-runtime'
 import { resolveOrcadExitCode } from './orcad-exit-code'
 import { recordAgentSessionRuntimeEnd } from '../runtime/agent-session/records/agent-session-runtime-end-record'
@@ -138,6 +139,13 @@ export async function startOrcadWithHost<T extends object>(
   runQuitHandlers: () => void | Promise<void>
 ): Promise<T & { stop(): Promise<void>; instance: OrcadManagedStopInstance }> {
   const instanceLock = acquireOrcadInstanceLock(userDataPath)
+  const previous = instanceLock.previousUnexpectedExit
+  recordOrcadPreviousUnexpectedExit(previous)
+  if (previous) {
+    console.error(
+      `[orcad] the previous run (pid ${previous.pid}, ${previous.version}) exited without stopping cleanly`
+    )
+  }
   const { pid, startedAtMs, nonce } = instanceLock.record
   const instance = { pid, startedAtMs, nonce, lockPath: instanceLock.path }
   let admission: ProfileStateRuntimeAdmission | undefined

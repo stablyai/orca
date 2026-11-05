@@ -23,6 +23,7 @@ import { hasErrorCode, isProcessAlive } from '../daemon/daemon-process-inspectio
 import { profileStateAccessMachineIdentity } from '../persistence/profile-state/profile-state-access-identity'
 import { orcadDataRootIsOnLocalDisk } from './orcad-data-root-locality'
 import type { OrcadReclaimHintRuntime } from '../../shared/orcad-stale-lock-reclaim'
+import { reclaimedUnexpectedExit } from './orcad-unexpected-exit'
 import {
   orcadLockHolderLocality,
   orcadLockHolderUnverifiableError
@@ -74,6 +75,7 @@ export function readOrcadInstanceLockRecord(path: string): OrcadLockRecord | nul
 export type OrcadInstanceLock = {
   readonly path: string
   readonly record: OrcadLockRecord
+  readonly previousUnexpectedExit: ReturnType<typeof reclaimedUnexpectedExit>
   release(): void
 }
 
@@ -187,7 +189,7 @@ export function acquireOrcadInstanceLock(
   }
 
   if (publish()) {
-    return makeLock(lockPath, record)
+    return makeLock(lockPath, record, null)
   }
 
   const dataRootIsLocal = (): boolean =>
@@ -227,7 +229,7 @@ export function acquireOrcadInstanceLock(
     // Old torn writes become reclaimable only after the writer grace period.
     if (garbledLockIsAbandoned(lockPath)) {
       reclaimAndPublish(lockPath, dataRoot, existingContents, publish, recoveryOwner)
-      return makeLock(lockPath, record)
+      return makeLock(lockPath, record, null)
     }
     throw new OrcadInstanceLockError(
       'orcad_instance_lock_held',
@@ -276,7 +278,7 @@ export function acquireOrcadInstanceLock(
     )
   }
   reclaimAndPublish(lockPath, dataRoot, existingContents, publish, recoveryOwner)
-  return makeLock(lockPath, record)
+  return makeLock(lockPath, record, reclaimedUnexpectedExit(existing, record, self.bootStartedAtMs))
 }
 
 function possiblyReusedPidError(
@@ -309,12 +311,17 @@ function describeLockHolder(record: OrcadLockRecord): string {
   return record.role === 'desktop' ? 'The Orca desktop app' : 'Another orcad'
 }
 
-function makeLock(lockPath: string, record: OrcadLockRecord): OrcadInstanceLock {
+function makeLock(
+  lockPath: string,
+  record: OrcadLockRecord,
+  previousUnexpectedExit: ReturnType<typeof reclaimedUnexpectedExit>
+): OrcadInstanceLock {
   let released = false
   const stopHeartbeat = startOrcadLockHeartbeat(lockPath)
   return {
     path: lockPath,
     record,
+    previousUnexpectedExit,
     release: () => {
       if (released) {
         return

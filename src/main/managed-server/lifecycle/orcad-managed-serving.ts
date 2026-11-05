@@ -6,6 +6,12 @@ import { managedOrcadSlot } from './orcad-managed-runtime-context'
 import { wakeStoppedManagedOrcad } from './orcad-managed-wake'
 import { resolveOrcadRemoteContext } from '../install/orcad-remote-context'
 import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
+import { crashLoopMessage, getManagedOrcadCrashLoopBrake } from './orcad-managed-crash-loop'
+import { readOrcadActivationRecord } from '../activation/orcad-activation-record-store'
+import { orcadSlotDir } from '../../ssh/orcad-recovery-slot'
+import { withOrcadLogTail } from '../install/orcad-remote-log-tail'
+import { ORCAD_LOG_FILENAME } from '../install/orcad-remote-host-support'
+import { joinRemotePath } from '../../ssh/ssh-remote-platform'
 
 export type OrcadManagedServing =
   | { state: 'serving' }
@@ -101,11 +107,13 @@ async function checkAndStart(input: OrcadManagedServingInput): Promise<OrcadMana
     return { state: 'serving' }
   }
   let starting = false
+  // Braked hosts publish why they were not started.
+  const braked = getManagedOrcadCrashLoopBrake().engaged(input.environment.id)
   const serving = await wakeIfStopped(input, () => {
     starting = true
     startListener?.starting(input.target)
   })
-  if (starting) {
+  if (starting || braked) {
     startListener?.settled(input.target, input.environment.id, serving)
   }
   return serving
@@ -116,13 +124,16 @@ async function wakeIfStopped(
   onStarting: () => void
 ): Promise<OrcadManagedServing> {
   const label = input.target.label
+  const brake = getManagedOrcadCrashLoopBrake()
   try {
     const context = await resolveOrcadRemoteContext(input.target, input.connection)
-    const wake = await wakeStoppedManagedOrcad(
-      managedOrcadSlot(context, input.remotePort),
-      onStarting
-    )
+    const slot = managedOrcadSlot(context, input.remotePort)
+    if (brake.engaged(input.environment.id)) {
+      return { state: 'unverifiable', detail: await crashLoopDetail(input, slot) }
+    }
+    const wake = await wakeStoppedManagedOrcad(slot, onStarting)
     if (wake.outcome === 'started') {
+      brake.noteStarted(input.environment.id, wake.readiness.health)
       const idle = wake.readiness.health?.previousIdleStop
       const cause = idle
         ? `it had stopped after idling at ${idle.stoppedAt}`
@@ -147,6 +158,28 @@ async function wakeIfStopped(
     console.warn(`[ssh] Could not start the managed Orca server on ${label}:`, error)
     return { state: 'unverifiable', detail: error instanceof Error ? error.message : String(error) }
   }
+}
+
+async function crashLoopDetail(
+  input: OrcadManagedServingInput,
+  slot: ReturnType<typeof managedOrcadSlot>
+): Promise<string> {
+  const brake = getManagedOrcadCrashLoopBrake()
+  const known = brake.detail(input.environment.id)
+  if (known) {
+    return known
+  }
+  const active = (await readOrcadActivationRecord(slot)).active
+  const slotDir = active ? orcadSlotDir(slot, active) : null
+  const message = crashLoopMessage(
+    input.target.label,
+    slotDir ? joinRemotePath(slot.host, slotDir, ORCAD_LOG_FILENAME) : ORCAD_LOG_FILENAME
+  )
+  // The log is appended across launches, so its tail still holds the last run's fatal error.
+  const detail = slotDir ? await withOrcadLogTail(slot, slotDir, message) : message
+  console.warn(`[ssh] ${message}`)
+  brake.setDetail(input.environment.id, detail)
+  return detail
 }
 
 function wakeRefusal(outcome: 'not-activated' | 'unverifiable' | 'fenced'): string {
