@@ -2,6 +2,7 @@
 // Build from existing create params and strip reserved agent fields so the legacy fallback stays equivalent.
 
 import {
+  isAgentLaunchChatFallback,
   isAgentLaunchModeReceipt,
   withoutReservedAgentCreateFields,
   type AgentLaunchPlacement,
@@ -105,13 +106,7 @@ export function readAgentLaunchNotice(source: unknown): string {
     'warning' in source && typeof source.warning === 'string' ? source.warning.trim() : ''
   const receipt =
     'receipt' in source && isAgentLaunchModeReceipt(source.receipt) ? source.receipt : null
-  // A Chat default doesn't apply to an agent that has no chat, so its terminal is not a fallback.
-  const fallback =
-    receipt?.mode === 'terminal' &&
-    receipt.preferred === 'structured' &&
-    receipt.reason !== 'agent_without_structured_session'
-      ? receipt.detail.trim()
-      : ''
+  const fallback = receipt && isAgentLaunchChatFallback(receipt) ? receipt.detail.trim() : ''
   return [warning, fallback].filter(Boolean).join(' ')
 }
 
