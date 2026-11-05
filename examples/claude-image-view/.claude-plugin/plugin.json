@@ -1,0 +1,9 @@
+{
+  "name": "orca-image-view",
+  "description": "Preview pasted images in Claude Code terminals hosted by Orca, including SSH sessions",
+  "version": "0.1.0",
+  "author": {
+    "name": "Orca contributors"
+  },
+  "license": "MIT"
+}
