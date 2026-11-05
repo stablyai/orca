@@ -109,7 +109,7 @@ export function updateManagedOrcadEnvironment(
   })
 }
 
-/** Install or activate the managed build on the host; a refused activation is recorded as a deferral. */
+/** Install or activate the managed build on the host; retryable refusals are recorded as deferrals. */
 export async function runManagedOrcadUpdate(
   userDataPath: string,
   { environment, deployment }: ReturnType<typeof requireManagedOrcadEnvironment>,
