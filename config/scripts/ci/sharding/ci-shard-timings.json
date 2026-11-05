@@ -1337,7 +1337,6 @@
       "src/main/browser/extensions/api-runtime/browser-extension-worker-api-host.test.ts": 237,
       "src/main/browser/extensions/declarative-net-request/engine-stages.test.ts": 112,
       "src/main/browser/extensions/declarative-net-request/engine.test.ts": 145,
-      "src/main/browser/extensions/declarative-net-request/indexed-rule.test.ts": 121,
       "src/main/browser/extensions/declarative-net-request/redirect-url.test.ts": 66,
       "src/main/browser/extensions/declarative-net-request/regex-filter.test.ts": 116,
       "src/main/browser/extensions/declarative-net-request/url-pattern.test.ts": 84,
