@@ -262,7 +262,11 @@ describe('federated transport safety', () => {
       'orchestration.federationImport'
     ])
     for (const call of callOrchestrationWorkerServer.mock.calls) {
-      expect((call as unknown[])[5]).toEqual({ expectedEnvironmentPairingRevision: 73 })
+      expect((call as unknown[])[5]).toEqual(
+        call[1] === 'orchestration.federationImport'
+          ? { expectedEnvironmentPairingRevision: 73, prepareRequest: expect.any(Function) }
+          : { expectedEnvironmentPairingRevision: 73 }
+      )
     }
   })
 

@@ -19,6 +19,7 @@ import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { useMobileNativeChatOpenedDetail } from './visual/mobile-native-chat-opened-detail'
 import { useMobileNativeChatDisclosure } from './transcript/mobile-native-chat-disclosure-store'
 import { toolStyles as styles, toolType } from './transcript/mobile-native-chat-tool-styles'
+import { useMobileNativeChatOpenFile } from './mobile-native-chat-open-file-context'
 
 function VerbIcon({ kind, size }: { kind: NativeChatEditFile['changeKind']; size: number }) {
   useMobileColorScheme()
@@ -130,15 +131,13 @@ export function MobileNativeChatDiffCard({
   fontScale,
   disclosureKey,
   rootIdentity,
-  initialOpen = false,
-  onOpenFile
+  initialOpen = false
 }: {
   file: NativeChatEditFile
   fontScale: number
   disclosureKey?: string
   rootIdentity?: string
   initialOpen?: boolean
-  onOpenFile?: (path: string) => void
 }): React.JSX.Element {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -149,7 +148,8 @@ export function MobileNativeChatDiffCard({
   const copyText = useMemo(() => nativeChatEditFilePatchText(file.lines), [file.lines])
   const type = toolType(fontScale)
   const iconSize = 15 * fontScale
-  const openFile = file.changeKind === 'deleted' ? undefined : onOpenFile
+  const chatOpenFile = useMobileNativeChatOpenFile()
+  const openFile = file.changeKind === 'deleted' ? undefined : chatOpenFile
   return (
     <View>
       <View style={styles.cardHeader}>

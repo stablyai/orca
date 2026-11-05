@@ -135,7 +135,7 @@ function conversationRecords<T>(records: Record<string, T> | undefined, paneKey?
 }
 
 export function collectAiVaultTitleRequests(state: AppState): AiVaultTitleRequest[] {
-  return collectAgentPaneConversations(state, isAiVaultTitleAgent).map(
+  return collectAgentPaneConversations(state, isAiVaultTitleAgent, { skipHostNamedTabs: true }).map(
     ({ paneKey: _paneKey, ...request }) => request
   )
 }
@@ -150,6 +150,8 @@ export function collectAgentPaneConversations<Agent extends AgentType>(
     includeLastReported?: boolean
     pane?: { worktreeId: string; paneKey: string }
     tab?: { worktreeId: string; tabId: string }
+    /** A paired host that publishes a tab's session name is its only writer; an in-flight result rechecks this. */
+    skipHostNamedTabs?: boolean
   } = {}
 ): AgentPaneConversation<Agent>[] {
   const addressed = options.pane
@@ -227,6 +229,10 @@ export function collectAgentPaneConversations<Agent extends AgentType>(
 
   return [...candidates.values()]
     .filter((candidate) => !options.pane || candidate.paneKey === options.pane.paneKey)
+    .filter(
+      (candidate) =>
+        !options.skipHostNamedTabs || !tabsById.get(candidate.tabId)?.sessionTitleFromHost
+    )
     .map(({ priority: _priority, ...request }) => request)
 }
 

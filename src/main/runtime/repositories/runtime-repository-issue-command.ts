@@ -6,7 +6,7 @@ import {
   writeIssueCommandUnlessWslStopped
 } from '../../workspace-hooks/issue-command-file'
 import { isFolderRepo } from '../../../shared/repo-kind'
-import { joinWorktreeRelativePath } from '../runtime-relative-paths'
+import { joinWorktreeRelativePath } from '../files/paths/runtime-relative-paths'
 import type { RuntimeStore } from '../runtime-store-contract'
 import { assertWslMoveRepoWritable } from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'
 

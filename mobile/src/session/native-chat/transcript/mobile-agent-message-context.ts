@@ -1,7 +1,9 @@
+import { parseOrcaSessionAddress } from '../../../../../src/shared/orca-session-address'
 import { createContext, useCallback, useContext, useMemo, useSyncExternalStore } from 'react'
 import type { MobileSessionTab } from '../../mobile-session-route-types'
 import type { AgentMessageSource } from '../../../../../src/shared/agent-session/agent-session-message-source'
 import {
+  agentMessageSavedKind,
   agentMessageSenderLabel,
   agentMessageSenderView,
   type AgentMessageSenderView
@@ -12,9 +14,11 @@ import { agentDotState } from '../../../worktree/agent-row-display'
 type Sender = AgentMessageSource['senders'][number]
 type TerminalIdentity = { handle: string; agentIdentity?: string }
 const EMPTY_VIEW: AgentMessageSenderView = Object.freeze({})
+const senderSession = (sender: Sender | undefined) =>
+  sender?.party.orcaSessionId ?? parseOrcaSessionAddress(sender?.party.address)
 const senderKey = (sender: Sender | undefined) =>
-  sender?.party.orcaSessionId
-    ? `chat:${sender.party.orcaSessionId}`
+  senderSession(sender)
+    ? `chat:${senderSession(sender)}`
     : `terminal:${sender?.party.terminalHandle ?? ''}`
 
 export function createMobileAgentMessageSource() {
@@ -26,7 +30,7 @@ export function createMobileAgentMessageSource() {
     { tab: MobileSessionTab; agentType: AgentMessageSenderView['agentType'] }
   >()
   let now = 0
-  const views = new Map<string, AgentMessageSenderView>()
+  const views = new WeakMap<Sender, AgentMessageSenderView>()
   const listeners = new Set<() => void>()
   return {
     update(
@@ -78,7 +82,11 @@ export function createMobileAgentMessageSource() {
       })
     },
     view(sender: Sender | undefined): AgentMessageSenderView {
+      if (!sender) {
+        return EMPTY_VIEW
+      }
       const key = senderKey(sender)
+      const saved = agentMessageSavedKind(sender)
       const facts = indexed.get(key)
       const tab = facts?.tab
       const status =
@@ -89,13 +97,17 @@ export function createMobileAgentMessageSource() {
             : undefined
       const next = facts
         ? agentMessageSenderView(
-            status && !(tab?.type === 'terminal' && tab.agentStatus?.restoredUnconfirmed)
+            senderSession(sender) &&
+              status &&
+              !(tab?.type === 'terminal' && tab.agentStatus?.restoredUnconfirmed)
               ? { agentType: facts.agentType, dot: agentDotState(status, now) }
               : undefined,
-            facts.agentType
+            saved ?? facts.agentType
           )
-        : EMPTY_VIEW
-      const previous = views.get(key)
+        : saved
+          ? { agentType: saved }
+          : EMPTY_VIEW
+      const previous = views.get(sender)
       if (
         previous &&
         previous.agentType === next.agentType &&
@@ -104,7 +116,7 @@ export function createMobileAgentMessageSource() {
       ) {
         return previous
       }
-      views.set(key, next)
+      views.set(sender, next)
       return next
     }
   }
@@ -128,6 +140,10 @@ export function useMobileAgentMessageName(sender: Sender, fallback: string): str
 }
 export function useMobileAgentMessageView(sender: Sender | undefined): AgentMessageSenderView {
   const source = useContext(MobileAgentMessageContext)
-  const read = useMemo(() => () => source?.view(sender) ?? EMPTY_VIEW, [source, sender])
+  const read = useMemo(() => {
+    const saved = agentMessageSavedKind(sender)
+    const fallback = saved ? { agentType: saved } : EMPTY_VIEW
+    return () => source?.view(sender) ?? fallback
+  }, [source, sender])
   return useSyncExternalStore(source?.subscribe ?? noopSubscribe, read, read)
 }

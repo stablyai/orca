@@ -7,7 +7,6 @@ import { buildMobileWebAppBundle } from '../../build/mobile-web-app/build-mobile
 import { MOBILE_WEB_APP_ROUTE_ROOT } from '../mobile-web-app-route-manifest.mjs'
 import {
   COLS,
-  CONTROL_SOURCE,
   LAYOUT_SOURCE,
   probeRouteSource,
   ROWS
@@ -15,9 +14,7 @@ import {
 import {
   createBundleServer,
   installCspViolationRecorder,
-  installListenerRecorder,
   installPageErrorSentinel,
-  installSchedulerRecorder,
   installShellDouble,
   readBridgeFaultGrant,
   readBridgeProtocolVersion,
@@ -30,8 +27,7 @@ const projectDir = fileURLToPath(new URL('../../../..', import.meta.url))
 const mobileDir = join(projectDir, 'mobile')
 
 export const PROBE_ROUTE = '/h/terminal-probe'
-export const CONTROL_ROUTE = '/h/terminal-control'
-const PAGE_ROUTE_PATTERNS = [PROBE_ROUTE, CONTROL_ROUTE]
+const PAGE_ROUTE_PATTERNS = [PROBE_ROUTE]
 const SHELL_SESSION_ID = 'terminal-render-session'
 const SHELL_BUILD_ID = 'terminal-render-build'
 const SHELL_HOST = {
@@ -84,14 +80,10 @@ export async function startTerminalRenderFixture() {
       join(routeDir, 'terminal-probe.tsx'),
       probeRouteSource(join(mobileDir, 'src', 'terminal', 'TerminalWebView'))
     )
-    await writeFile(join(routeDir, 'terminal-control.tsx'), CONTROL_SOURCE)
     const built = await buildMobileWebAppBundle({
       appDir,
       outDir: join(scratch, 'bundle'),
-      pageRoutes: [
-        { pathname: PROBE_ROUTE, grants: [] },
-        { pathname: CONTROL_ROUTE, grants: [] }
-      ]
+      pageRoutes: [{ pathname: PROBE_ROUTE, grants: [] }]
     })
     served = await createBundleServer({ outDir: built.outDir, cspHeader })
     const executablePath = process.env.ORCA_MOBILE_WEB_RENDER_BROWSER
@@ -106,18 +98,9 @@ export async function startTerminalRenderFixture() {
   }
   const { origin } = served
 
-  async function openPage(
-    pathname,
-    { errorSentinel = false, listeners = false, scheduler = false, beforeNavigate } = {}
-  ) {
+  async function openPage(pathname, { errorSentinel = false, beforeNavigate } = {}) {
     const page = await browser.newPage({ viewport: { width: 390, height: 844 } })
     await beforeNavigate?.(page)
-    if (scheduler) {
-      await page.addInitScript(installSchedulerRecorder)
-    }
-    if (listeners) {
-      await page.addInitScript(installListenerRecorder)
-    }
     await page.addInitScript(installCspViolationRecorder)
     if (errorSentinel) {
       await page.addInitScript(installPageErrorSentinel)

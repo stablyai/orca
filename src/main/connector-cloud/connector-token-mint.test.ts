@@ -14,7 +14,7 @@ vi.mock('../orca-profiles/profile-index-store', () => ({
 vi.mock('../orca-profiles/profile-cloud-session-refresh', () => ({
   runWithFreshOrcaCloudSession: runFresh
 }))
-vi.mock('../runtime/host-descriptor', () => ({
+vi.mock('../runtime/hosts/platform-probe/host-descriptor', () => ({
   loadOrCreateHostInstallationId: async () => '6b1f2c1e-0d7a-4a57-9b38-6f1c2e3d4a5b'
 }))
 

@@ -8,7 +8,8 @@ import { useAgentMessageSenderView } from './native-chat-agent-message-sender-vi
 import { initialStore, resetSenderStore, status } from './native-chat-agent-sender.test-fixture'
 import {
   agentSenderPublicationPatch,
-  selectAgentSenderAssociation
+  selectAgentSenderAssociation,
+  resolveAgentMessageSender
 } from '@/runtime/agent-sender-associations'
 import type { AgentSenderPublication } from '../../../../shared/agent-sender-associations'
 import type { AgentMessageSender } from '../../../../shared/agent-session/agent-session-message-source'
@@ -79,13 +80,15 @@ it('qualifies federation by both execution peer and the attachment home principa
       attachments: [{ ...association(0), identity: 'dispatch:same', homePeerFingerprint: 'home-a' }]
     })
   )
-  expect(read()?.host).toBe('runtime:remote')
-  // The home's card draws the dot of the worker running on its paired host.
+  // The attachment is qualified by its principals, but has no exact launch proof.
+  expect(read()).toBeUndefined()
   expect(
     renderHook(() =>
-      useAgentMessageSenderView(sender('dispatch:same'), 'workspace', { kind: 'local' })
-    ).result.current.dot
-  ).toBe('working')
+      useAgentMessageSenderView({ ...sender('dispatch:same'), agent: 'codex' }, 'workspace', {
+        kind: 'local'
+      })
+    ).result.current
+  ).toEqual({ agentType: 'codex' })
   // The same execution peer reached as a second host makes the match ambiguous, not a pick.
   useAppStore.setState(
     agentSenderPublicationPatch(useAppStore.getState(), 'runtime:other', 'workspace', {
@@ -95,6 +98,23 @@ it('qualifies federation by both execution peer and the attachment home principa
     })
   )
   expect(read()).toBeUndefined()
+  expect(
+    resolveAgentMessageSender(useAppStore.getState(), 'local', sender('dispatch:same'))
+  ).toEqual({ kind: 'ambiguous' })
+  for (const [index, host] of ['runtime:remote', 'runtime:other'].entries()) {
+    useAppStore.setState(
+      agentSenderPublicationPatch(useAppStore.getState(), host, 'workspace', {
+        ...publication(),
+        peerFingerprint: 'execution',
+        attachments: [
+          { ...association(index), identity: 'dispatch:same', homePeerFingerprint: 'home-b' }
+        ]
+      })
+    )
+  }
+  expect(
+    resolveAgentMessageSender(useAppStore.getState(), 'local', sender('dispatch:same')).kind
+  ).toBe('gone')
 })
 
 it('keeps equal session ids on two hosts separate and rejects an unqualified pane collision', () => {

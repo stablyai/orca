@@ -1,18 +1,19 @@
-import { agentPromptObservationSignal } from './agent-prompt-signals'
+import {
+  agentPromptObservationSignal,
+  assertAgentPromptRequestActive,
+  waitForAgentPromptDelay,
+  waitForAgentPromptPromise
+} from './agent-prompt-signals'
 import { assertTerminalInputAdmitted } from './terminal-input-admission'
 import type {
   AgentPromptExpectedBinding,
   RuntimeAgentPromptWriteOptions
-} from '../../runtime-terminal-contracts'
+} from './agent-prompt-write-options'
 import type {
   RuntimeTerminalPromptDelivery,
   RuntimeTerminalSend
-} from '../../../../shared/runtime-types'
-import {
-  assertAgentPromptRequestActive,
-  waitForAgentPromptDelay,
-  waitForAgentPromptPromise
-} from '../../orca-runtime-core'
+} from '../../../../shared/runtime-terminal-send-contract'
+
 import {
   AGENT_PROMPT_POST_PASTE_SUBMIT_DELAY_MS,
   AGENT_PROMPT_SUBMIT,
@@ -22,11 +23,10 @@ import {
   getTerminalPasteIngestMs,
   resolveAgentPromptSubmitDelayForAgent
 } from '../../../../shared/agent-launch/startup/agent-prompt-injection'
-import type {
-  AgentPromptActivity,
-  AgentPromptWaitTextCache
-} from './agent-prompt-submission-verification'
+
 import {
+  type AgentPromptActivity,
+  type AgentPromptWaitTextCache,
   isTerminalSendSettlementAgent,
   resolveAgentPromptEffectTimeoutMs,
   verifyAgentPromptSubmission

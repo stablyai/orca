@@ -32,6 +32,7 @@ import { useMobileNativeChatDisclosure } from './mobile-native-chat-disclosure-s
 import { toolStyles as styles, toolType } from './mobile-native-chat-tool-styles'
 import type { Translate } from '../../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
+import { useMobileNativeChatOpenFile } from '../mobile-native-chat-open-file-context'
 
 function toolDuration(durationMs: unknown, t: Translate): string | null {
   if (typeof durationMs !== 'number' || !Number.isFinite(durationMs) || durationMs < 0) {
@@ -182,17 +183,16 @@ export function MobileNativeChatToolLine({
   block,
   result,
   disclosureKey,
-  fontScale,
-  onOpenFile
+  fontScale
 }: {
   memberId?: string
   block: NativeChatToolCallBlock | NativeChatToolResultBlock
   result?: NativeChatToolResultBlock
   disclosureKey?: string
   fontScale: number
-  onOpenFile?: (path: string) => void
 }): React.JSX.Element {
   useMobileColorScheme()
+  const onOpenFile = useMobileNativeChatOpenFile()
   const t = useMobileTranslation()
   const [expanded, setExpanded] = useMobileNativeChatDisclosure(disclosureKey, false)
   const { call, label, body, resultPreview, failed, results, hasDetail } = useMemo(

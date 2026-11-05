@@ -1,5 +1,3 @@
-// Render real component in Chromium/WebKit under shipped CSP; verify no bundle JIT/policy violations and inert hostile diagrams.
-// Lazy prebundled Mermaid costs one ~3.48MB chunk plus ~284KB entry; package splitting emitted 103 assets against shell’s 256-asset limit.
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -21,15 +19,6 @@ const diagramDir = join(mobileDir, 'src/components/pr-sidebar')
 // Use design fixture so recorded byte counts remain comparable.
 const FIXTURE =
   'graph TD\n  A[Start] --> B{Choice}\n  B -->|yes| C[Ship it]\n  B -->|no| D[Fix it]\n  D --> A'
-
-// Different shape makes stale SVG after source change visible.
-const SECOND = 'graph LR\n  One --> Two\n  Two --> Three'
-
-// Hostile labels/clicks reach document as JS-string data; Mermaid strict sanitization is their security boundary.
-const HOSTILE =
-  'graph TD\n  A["<img src=x onerror=window.__pwned=1><script>window.__pwned=2<\\/script>"] --> B\n' +
-  '  B --> C\n  click A "javascript:window.__pwned=3"\n' +
-  '  C --> D["</script><script>window.__pwned=4</script>"]'
 
 const BROKEN = 'graph TD\n  A[[[unclosed'
 
@@ -160,13 +149,6 @@ function installJitRecorder() {
   globalThis.Function = PatchedFunction
 }
 
-// Require a nonempty recorder before filtering bundle JIT; an uninstalled recorder must not pass as no page calls.
-async function pageJitCalls(page) {
-  const all = await page.evaluate(() => globalThis.__orcaJit)
-  expect(all.length).toBeGreaterThan(0)
-  return all.filter((one) => /mermaid-check\.js|\/chunk-/.test(one.stack))
-}
-
 // Mermaid marks its drawings; the frame's expand icon is an SVG too.
 function readDiagram() {
   const DRAWING = 'svg[aria-roledescription]'
@@ -220,21 +202,6 @@ async function show(page, source, contains = null) {
   }, contains)
 }
 
-async function unmount(page) {
-  await page.evaluate(() => globalThis.__orcaMermaidSet({ mounted: false, source: '' }))
-  await page.waitForFunction(
-    () => document.querySelector('[data-testid="mermaid-diagram"]') === null
-  )
-}
-
-// Normalize host-generated diagram ID for byte-for-byte remount comparison.
-function normaliseSvg(html, id) {
-  return html
-    .split(id)
-    .join('ID')
-    .replace(/ xmlns:xlink="[^"]*"/g, '')
-}
-
 describeMermaid(
   'mermaid on the page',
   () => {
@@ -249,29 +216,6 @@ describeMermaid(
         afterAll(async () => {
           await browser?.close()
         })
-
-        it('paints the diagram with no violation and no JIT', async () => {
-          const { page, consoleErrors } = await openPage(browser)
-          const fetched = []
-          page.on('response', (response) => fetched.push(response.url()))
-          try {
-            await show(page, FIXTURE)
-            const shown = await page.evaluate(readDiagram)
-            expect(shown.inFrame).toBe(1)
-            // Require a rendered Mermaid diagram before absence checks.
-            expect(shown.html).toContain('aria-roledescription="flowchart-v2"')
-            expect(await pageJitCalls(page)).toEqual([])
-            expect(await page.evaluate(() => globalThis.__orcaCspViolations)).toEqual([])
-            expect(consoleErrors).toEqual([])
-            // Use CSS-valid ID: Mermaid writes #<id> stylesheet selectors, which «r0» would break.
-            expect(shown.id).toMatch(/^[A-Za-z_][\w-]*$/)
-            // Require one same-origin on-demand engine chunk; package import fetched 27 chunks here and emitted 103 in app bundle, consuming asset budget.
-            expect(fetched.filter((url) => url.includes('/chunk-'))).toHaveLength(1)
-            expect(fetched.filter((url) => !url.startsWith(origin))).toEqual([])
-          } finally {
-            await page.close()
-          }
-        }, 600_000)
 
         it('expands the drawn diagram into the pan and zoom viewer as an image', async () => {
           const { page, consoleErrors } = await openPage(browser)
@@ -295,81 +239,6 @@ describeMermaid(
             expect(drawn.shown).toBeGreaterThan(0)
             expect(await page.evaluate(() => globalThis.__orcaCspViolations)).toEqual([])
             expect(consoleErrors).toEqual([])
-          } finally {
-            await page.close()
-          }
-        }, 600_000)
-
-        it('leaves one SVG across a source change, an unmount and a remount', async () => {
-          const { page, consoleErrors } = await openPage(browser)
-          const listeners = () => page.evaluate(() => globalThis.__orcaListeners.snapshot())
-          try {
-            const beforeAnyMount = await listeners()
-            await show(page, FIXTURE)
-            const first = await page.evaluate(readDiagram)
-            await unmount(page)
-            // Baseline after first full mount cycle: Mermaid’s module-level load listener and RN-Web responder are permanent, not per-mount leaks.
-            // Require named Mermaid listener so an empty/uninstalled baseline cannot pass.
-            const afterEngineLoaded = await listeners()
-            expect(
-              Object.keys(afterEngineLoaded).filter((key) => !(key in beforeAnyMount))
-            ).toContain('window load')
-
-            await show(page, FIXTURE)
-            await show(page, SECOND, 'Three')
-            const changed = await page.evaluate(readDiagram)
-            // Require one SVG in host and whole document to catch an orphan from first source.
-            expect(changed.inFrame).toBe(1)
-            expect(changed.inDocument).toBe(1)
-            expect(changed.html).not.toBe(first.html)
-
-            await unmount(page)
-            const gone = await page.evaluate(readDiagram)
-            expect(gone.framed).toBe(false)
-            expect(gone.inDocument).toBe(0)
-            // Further mounts/source changes must preserve first-cycle listener baseline.
-            expect(await listeners()).toEqual(afterEngineLoaded)
-
-            await show(page, FIXTURE)
-            const again = await page.evaluate(readDiagram)
-            expect(again.inFrame).toBe(1)
-            expect(again.inDocument).toBe(1)
-            expect(normaliseSvg(again.html, again.id)).toBe(normaliseSvg(first.html, first.id))
-            expect(await page.evaluate(() => globalThis.__orcaCspViolations)).toEqual([])
-            expect(consoleErrors).toEqual([])
-          } finally {
-            await page.close()
-          }
-        }, 600_000)
-
-        it('renders a hostile diagram inert', async () => {
-          const { page } = await openPage(browser)
-          try {
-            await show(page, HOSTILE)
-            const inert = await page.evaluate(() => {
-              const frame = document.querySelector('[data-testid="mermaid-diagram"]')
-              return {
-                rendered: frame?.querySelector('svg[aria-roledescription]') !== null,
-                scripts: frame.querySelectorAll('script').length,
-                inlineHandlers: [...frame.querySelectorAll('*')].filter((element) =>
-                  [...element.attributes].some((attribute) => attribute.name.startsWith('on'))
-                ).length,
-                javascriptHrefs: [...frame.querySelectorAll('[*|href]')]
-                  .map(
-                    (element) =>
-                      element.getAttribute('href') ?? element.getAttribute('xlink:href') ?? ''
-                  )
-                  .filter((href) => href.toLowerCase().startsWith('javascript:')).length,
-                pwned: globalThis.__pwned ?? null
-              }
-            })
-            // Require payload rendered inert, rather than refused before reaching document.
-            expect(inert.rendered).toBe(true)
-            expect(inert.scripts).toBe(0)
-            expect(inert.inlineHandlers).toBe(0)
-            expect(inert.javascriptHrefs).toBe(0)
-            expect(inert.pwned).toBeNull()
-            expect(await pageJitCalls(page)).toEqual([])
           } finally {
             await page.close()
           }

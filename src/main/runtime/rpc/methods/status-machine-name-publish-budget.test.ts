@@ -2,7 +2,7 @@ import os from 'node:os'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { normalizeMachineName } from '../../../../shared/machine-name'
 import { OrcaRuntimeService } from '../../orca-runtime'
-import { MACHINE_NAME_PUBLISH_WAIT_MS } from '../../runtime-machine-name'
+import { MACHINE_NAME_PUBLISH_WAIT_MS } from '../../hosts/platform-probe/runtime-machine-name'
 import { STATUS_METHODS } from './status'
 import { partialRuntimeStore } from '../../orca-runtime-tests/runtime-store-partial-fixture'
 

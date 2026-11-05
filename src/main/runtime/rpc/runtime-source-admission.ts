@@ -1,5 +1,5 @@
 import { ExpectedRuntimeSourceSchema } from '../../../shared/runtime-rpc-envelope'
-import { getPublishedHostDescriptor } from '../host-descriptor'
+import { getPublishedHostDescriptor } from '../hosts/platform-probe/host-descriptor'
 import type { RpcEnvelopeMeta, RpcRequest, RpcResponse } from './core'
 import { errorResponse } from './errors'
 

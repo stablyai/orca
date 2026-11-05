@@ -7,7 +7,7 @@ import { TerminalIdentitySource } from '../identity/terminal-identity-source'
 import type { WaitBlockedCheckState } from '../../wait-blocked-check-state'
 import { OrcaRuntimeWithStopRequestedPtyIds } from '../../construction/runtime-service-state'
 import { RuntimeSubscriptionRegistry } from '../../runtime-subscription-registry'
-import { RuntimeMobileNotificationController } from '../../runtime-mobile-notification-controller'
+import { RuntimeMobileNotificationController } from '../../push/notifications/runtime-mobile-notification-controller'
 import type {
   ProviderBufferAcquisition,
   RuntimeHeadlessTerminal,

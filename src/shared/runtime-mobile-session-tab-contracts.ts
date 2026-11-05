@@ -15,6 +15,8 @@ export type RuntimeMobileSessionTerminalTab = {
   quickCommandLabel?: string | null
   /** Window-to-main names ranked above live titles; generatedTitle is sent only when enabled. */
   aiVaultTitle?: TerminalTab['aiVaultTitle']
+  /** The publishing window resolves this surface's session name, so aiVaultTitle (null clears) is authoritative. Headless and older hosts omit it; their saved names are only cache. */
+  resolvesSessionTitle?: true
   generatedTitle?: string | null
   parentTabId: string
   leafId: string

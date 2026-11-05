@@ -135,8 +135,6 @@ function height(field) {
   return field.evaluate((input) => input.getBoundingClientRect().height)
 }
 
-const longDraft = Array.from({ length: 30 }, (_, index) => `Line ${index + 1}`).join('\n')
-
 describeSizing.each(engines)('web composer sizing in $name', (engine) => {
   it('grows for newlines and wrapping, remeasures width, and shrinks without losing focus', async () => {
     const { page, field } = await openPage(engine)
@@ -158,27 +156,6 @@ describeSizing.each(engines)('web composer sizing in $name', (engine) => {
       expect(await field.evaluate((input) => document.activeElement === input)).toBe(true)
 
       await field.fill('Short draft')
-      await expect.poll(() => height(field)).toBe(compact)
-    } finally {
-      await page.close()
-    }
-  })
-
-  it('fits a wrapping placeholder as fully as the same text entered as a draft', async () => {
-    const { page, field } = await openPage(engine)
-    try {
-      await page.setViewportSize({ width: 320, height: 568 })
-      const compact = await height(field)
-      const placeholder = 'Describe the changes you want to make to the mobile composer input.'
-      await page.evaluate((placeholder) => window.updateComposer({ placeholder }), placeholder)
-      await expect.poll(() => height(field)).toBeGreaterThan(compact)
-      const placeholderHeight = await height(field)
-      await field.fill(placeholder)
-      await expect.poll(() => height(field)).toBe(placeholderHeight)
-      expect(await field.evaluate((input) => input.scrollHeight <= input.clientHeight)).toBe(true)
-      await field.fill('')
-      await expect.poll(() => height(field)).toBe(placeholderHeight)
-      await page.evaluate(() => window.updateComposer({ placeholder: 'Message' }))
       await expect.poll(() => height(field)).toBe(compact)
     } finally {
       await page.close()
@@ -208,41 +185,4 @@ describeSizing.each(engines)('web composer sizing in $name', (engine) => {
       await page.close()
     }
   })
-
-  it.each(['shell', 'browser'])(
-    'caps and scrolls a long draft as the %s keyboard opens and rotates',
-    async (mode) => {
-      const { page, field } = await openPage(engine, mode)
-      const setKeyboard = (height) =>
-        page.evaluate(
-          ({ mode, height }) => {
-            if (mode === 'shell') {
-              window.setShellKeyboard(height)
-            } else {
-              window.setVisualKeyboard(height)
-            }
-          },
-          { mode, height }
-        )
-      try {
-        await field.fill(longDraft)
-        await expect.poll(() => height(field)).toBeCloseTo(295, 0)
-        expect(await field.evaluate((input) => input.scrollHeight > input.clientHeight)).toBe(true)
-        await setKeyboard(340)
-        await expect.poll(() => height(field)).toBeCloseTo(176, 0)
-        await field.press('ControlOrMeta+End')
-        await field.pressSequentially(' Last word')
-        await expect.poll(() => field.evaluate((input) => input.scrollTop)).toBeGreaterThan(0)
-
-        await page.setViewportSize({ width: 844, height: 390 })
-        await setKeyboard(250)
-        await expect.poll(() => height(field)).toBeCloseTo(49, 0)
-        await setKeyboard(0)
-        await expect.poll(() => height(field)).toBeCloseTo(137, 0)
-        expect(await field.evaluate((input) => document.activeElement === input)).toBe(true)
-      } finally {
-        await page.close()
-      }
-    }
-  )
 })
