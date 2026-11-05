@@ -8,7 +8,7 @@ import type {
 import { OrchestrationError } from '../../orchestration-error'
 import type { OrchestrationDb } from '../orchestration-db'
 
-/** Import one relay item in a home-owned transaction; a replayed sequence changes nothing. */
+/** Import one relay item in a home-owned transaction; a replayed sequence must not be lost. */
 export function importFederatedRelayItem(
   this: OrchestrationDb,
   params: {
@@ -125,10 +125,14 @@ export function importFederatedRelayItem(
     this.db.exec('COMMIT')
     return { message, duplicate, ...(lifecycle ? { lifecycle } : {}) }
   } catch (error) {
-    // A failed statement can already have ended the transaction; rolling back again would
-    // replace the failure that actually happened (#38123).
-    if (this.db.isTransaction) {
-      this.db.exec('ROLLBACK')
+    // A failed statement can already have ended the transaction, and a cleanup failure must not
+    // replace the import failure that actually happened (#38123).
+    try {
+      if (this.db.isTransaction) {
+        this.db.exec('ROLLBACK')
+      }
+    } catch {
+      // The import failure is the one to report; rollback cleanup is secondary.
     }
     throw error
   }
