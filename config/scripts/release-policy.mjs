@@ -5,7 +5,7 @@ import {
   DESKTOP_STABLE_TAG as STABLE_TAG,
   MOBILE_TAG,
   isAgentStateRulesTag
-} from './release-tag-patterns.mjs'
+} from './release/versioning/release-tag-patterns.mjs'
 
 const BOT_LOGIN = 'github-actions[bot]'
 const BOT_EMAIL = '41898282+github-actions[bot]@users.noreply.github.com'

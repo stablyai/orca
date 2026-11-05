@@ -1,6 +1,9 @@
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
-import { readTrackedSources, runCountRatchet } from './ratchet-baseline.mjs'
+import {
+  readTrackedSources,
+  runCountRatchet
+} from './static-analysis/ratchet-baseline/ratchet-baseline.mjs'
 
 // Ratchet direct host-row JSX downward: >10k imported SSH hosts once crashed renderer; use bounded searchable host-picker.
 

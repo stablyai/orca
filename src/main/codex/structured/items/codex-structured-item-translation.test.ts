@@ -738,6 +738,16 @@ describe('codex item bodies', () => {
     })
   })
 
+  it('shows an image generation as running while codex sends a Responses API status', () => {
+    for (const status of ['in_progress', 'generating']) {
+      expect(codexItemBody({ type: 'imageGeneration', id: 'i', status })).toEqual({
+        kind: 'message',
+        role: 'assistant',
+        blocks: [{ type: 'text', text: 'Generating image…' }]
+      })
+    }
+  })
+
   it('carries the web search hits as the call output', () => {
     const results = [{ title: 'Orca 1.0', url: 'https://example.com/notes' }]
     expect(

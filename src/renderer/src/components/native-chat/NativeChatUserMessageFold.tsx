@@ -10,10 +10,12 @@ export function NativeChatUserMessageFold({
   messageId,
   markdown,
   onRefolded,
+  className,
   children
 }: {
   messageId: string
   markdown: string
+  className?: string
   /** After the reader folded the prompt again, once its new height is laid out. */
   onRefolded?: () => void
   children: React.ReactNode
@@ -54,7 +56,10 @@ export function NativeChatUserMessageFold({
         ref={clipRef}
         id={clipId}
         data-native-chat-user-message-folded={folded ? '' : undefined}
-        className={cn(folded && 'max-h-44 overflow-hidden mask-b-from-[calc(100%-1.75rem)]')}
+        className={cn(
+          className,
+          folded && 'max-h-44 overflow-hidden mask-b-from-[calc(100%-1.75rem)]'
+        )}
         style={unkerned ? NATIVE_CHAT_UNKERNED_CSS : undefined}
         // Tabbing to a link under the fold scrolls the preview to it; the top returns once focus leaves.
         onBlur={(event) => {

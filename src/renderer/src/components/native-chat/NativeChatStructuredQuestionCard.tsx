@@ -21,7 +21,7 @@ export function NativeChatStructuredQuestionCard({
   onCancel: () => void
   isSubmitting?: boolean
   shouldFocus?: boolean
-  answerInputRef?: RefObject<HTMLInputElement | null>
+  answerInputRef?: RefObject<HTMLTextAreaElement | null>
 } & Pick<NativeChatQuestionCardProps, 'onLinkClick'>): React.JSX.Element {
   const card = structuredQuestionCard(questions)
   return (

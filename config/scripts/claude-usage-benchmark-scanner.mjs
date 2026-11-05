@@ -20,7 +20,7 @@ export async function describeClaudeUsageBenchmarkTooling() {
   const paths = [
     'config/scripts/claude-usage-append-benchmark.mjs',
     'config/scripts/claude-usage-benchmark-scanner.mjs',
-    'config/scripts/counterbalanced-benchmark-schedule.mjs',
+    'config/scripts/performance/measurement/counterbalanced-benchmark-schedule.mjs',
     'src/packages/process-host/src/run-process.ts',
     'src/packages/process-host/dist/run-process.js'
   ]

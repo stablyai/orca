@@ -7,7 +7,7 @@ import {
   evaluateSecurityAudit,
   securityExceptions
 } from './dependency-security-audit.mjs'
-import { resolvePnpmCliInvocation } from './pnpm-cli-invocation.mjs'
+import { resolvePnpmCliInvocation } from './tool-invocation/pnpm-cli-invocation.mjs'
 
 const ROOT = resolve(import.meta.dirname, '../..')
 

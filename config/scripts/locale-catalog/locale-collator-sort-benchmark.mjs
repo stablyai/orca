@@ -3,7 +3,7 @@
 import { performance } from 'node:perf_hooks'
 import { fileURLToPath } from 'node:url'
 import { createJiti } from 'jiti'
-import { buildCounterbalancedSchedule } from '../counterbalanced-benchmark-schedule.mjs'
+import { buildCounterbalancedSchedule } from '../performance/measurement/counterbalanced-benchmark-schedule.mjs'
 
 const ROUND_COUNT = 6
 const MIN_ROUND_MS = 120

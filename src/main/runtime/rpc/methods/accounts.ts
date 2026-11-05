@@ -240,7 +240,7 @@ const ACCOUNT_METHOD_DEFINITIONS = [
     name: 'accounts.subscribe',
     permission: 'workspace',
     params: null,
-    handler: async (_params, { runtime, connectionId, signal }, emit) => {
+    handler: async (_params, { runtime, connectionId, signal, caller }, emit) => {
       if (signal?.aborted) {
         return
       }
@@ -248,6 +248,11 @@ const ACCOUNT_METHOD_DEFINITIONS = [
       const unsubscribe = runtime.onAccountsChanged((snapshot) => {
         emit({ type: 'snapshot', snapshot })
       })
+      // A paired client watching keeps polls running without a window; the host's own renderer follows window focus.
+      const releaseUsageViewer =
+        caller?.kind === 'paired-device'
+          ? runtime.getUsageRateLimits()?.addUsageViewer()
+          : undefined
 
       // Key cleanup by socket plus sequence so sibling sockets and concurrent subscribes cannot evict each other.
       const seq = ++accountsSubscriptionSeq
@@ -258,6 +263,7 @@ const ACCOUNT_METHOD_DEFINITIONS = [
         () => {
           signal?.removeEventListener('abort', release)
           unsubscribe()
+          releaseUsageViewer?.()
           stopped.resolve()
         },
         connectionId

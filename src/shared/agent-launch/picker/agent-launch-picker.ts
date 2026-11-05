@@ -29,6 +29,7 @@ export type AgentPickerEntry = {
   textGeneration?: TextActionPickerCatalog
   agent: TuiAgent
   label: string
+  description?: string
   aliases?: string[]
   rows: NewTabAgentMenuRow[]
   surfaces: AgentPickerSurface[]

@@ -1,7 +1,7 @@
 // Shells refuse RN-Web window.open while Linking reports success; require device external-link seam throughout tasks closure, including future callers.
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { mobileWebAppRouteClosure } from '../build-mobile-web-app-bundle.mjs'
+import { mobileWebAppRouteClosure } from '../build/mobile-web-app/build-mobile-web-app-bundle.mjs'
 import { mobileWebAppDependenciesPresent } from './mobile-web-app-bundle-dependencies.mjs'
 import {
   EXTERNAL_LINK_SEAM as SEAM,

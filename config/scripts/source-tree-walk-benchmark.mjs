@@ -4,8 +4,8 @@ import { readFileSync } from 'node:fs'
 import { stripTypeScriptTypes } from 'node:module'
 import { resolve } from 'node:path'
 import { performance } from 'node:perf_hooks'
-import { buildCounterbalancedSchedule } from './counterbalanced-benchmark-schedule.mjs'
-import { summarizeBenchmarkSamples } from './benchmark-sample-summary.mjs'
+import { buildCounterbalancedSchedule } from './performance/measurement/counterbalanced-benchmark-schedule.mjs'
+import { summarizeBenchmarkSamples } from './performance/measurement/benchmark-sample-summary.mjs'
 
 // git show <baseline-ref>:src/shared/source-scan/source-tree-scan.ts | node config/scripts/source-tree-walk-benchmark.mjs
 async function load(source) {

@@ -41,9 +41,9 @@ jobs:
           cache-pnpm-store-lookup-only: 'true'
       - name: Populate shared Electron archive
         if: startsWith(matrix.runner, 'blacksmith-')
-        run: node config/scripts/install-electron-package-binary.mjs
+        run: node config/scripts/electron-installation/platform-layout/install-electron-package-binary.mjs
       - name: Verify native cache is usable
-        run: node config/scripts/ensure-native-runtime.mjs --check-only
+        run: node config/scripts/native-build/node-addons/ensure-native-runtime.mjs --check-only
 
   # node-server's hosted macOS lane needs nothing; this serves hosted macOS PR contracts and updater tests.
   warm-macos-runtime:
@@ -67,9 +67,9 @@ jobs:
           cache-electron-package: 'true'
           cache-pnpm-store: 'false'
       - name: Populate shared Electron archive
-        run: node config/scripts/install-electron-package-binary.mjs
+        run: node config/scripts/electron-installation/platform-layout/install-electron-package-binary.mjs
       - name: Verify native cache is usable
-        run: node config/scripts/ensure-native-runtime.mjs --check-only
+        run: node config/scripts/native-build/node-addons/ensure-native-runtime.mjs --check-only
 
   warm-windows:
     concurrency:
@@ -93,13 +93,13 @@ jobs:
           # Windows PR consumers download packages directly; retain only the build caches.
           cache-pnpm-store: 'false'
       - name: Verify native cache is usable
-        run: node config/scripts/ensure-native-runtime.mjs --check-only
+        run: node config/scripts/native-build/node-addons/ensure-native-runtime.mjs --check-only
 
       - name: Resolve the Windows Rust build scope
         id: rust-scope
         if: runner.arch == 'X64' && matrix.os != 'windows-2025'
         shell: bash
-        run: node config/scripts/windows-rust-build-scope.mjs >> "$GITHUB_OUTPUT"
+        run: node config/scripts/native-build/windows/windows-rust-build-scope.mjs >> "$GITHUB_OUTPUT"
 
       - name: Cache Windows CLI launcher
         if: runner.arch == 'X64' && matrix.os != 'windows-2025'
@@ -111,7 +111,7 @@ jobs:
             native/windows-agent-hook/.build
             native/windows-agent-hook/target
             ~/.cargo/registry
-          key: windows-cli-launcher-v2-${{ runner.os }}-${{ runner.arch }}-${{ steps.rust-scope.outputs.toolchain }}-${{ steps.rust-scope.outputs.app-version }}-${{ hashFiles('native/windows-cli-launcher/src/**', 'native/windows-cli-launcher/build.rs', 'native/windows-cli-launcher/Cargo.toml', 'native/windows-cli-launcher/Cargo.lock', 'native/windows-cli-launcher/app.manifest', 'native/windows-cli-launcher/.cargo/**', 'native/windows-agent-hook/src/**', 'native/windows-agent-hook/build.rs', 'native/windows-agent-hook/Cargo.toml', 'native/windows-agent-hook/Cargo.lock', 'native/windows-agent-hook/app.manifest', 'native/windows-agent-hook/.cargo/**', 'config/scripts/build-windows-cli-launcher.mjs', 'config/scripts/build-windows-agent-hook.mjs', 'config/scripts/windows-rust-executable-build.mjs', 'config/scripts/windows-pe-imports.mjs', 'resources/build/icon.ico') }}
+          key: windows-cli-launcher-v2-${{ runner.os }}-${{ runner.arch }}-${{ steps.rust-scope.outputs.toolchain }}-${{ steps.rust-scope.outputs.app-version }}-${{ hashFiles('native/windows-cli-launcher/src/**', 'native/windows-cli-launcher/build.rs', 'native/windows-cli-launcher/Cargo.toml', 'native/windows-cli-launcher/Cargo.lock', 'native/windows-cli-launcher/app.manifest', 'native/windows-cli-launcher/.cargo/**', 'native/windows-agent-hook/src/**', 'native/windows-agent-hook/build.rs', 'native/windows-agent-hook/Cargo.toml', 'native/windows-agent-hook/Cargo.lock', 'native/windows-agent-hook/app.manifest', 'native/windows-agent-hook/.cargo/**', 'config/scripts/native-build/windows/build-windows-cli-launcher.mjs', 'config/scripts/native-build/windows/build-windows-agent-hook.mjs', 'config/scripts/native-build/windows/windows-rust-executable-build.mjs', 'config/scripts/native-build/windows/windows-pe-imports.mjs', 'resources/build/icon.ico') }}
           restore-keys: |
             windows-cli-launcher-v2-${{ runner.os }}-${{ runner.arch }}-${{ steps.rust-scope.outputs.toolchain }}-
 
@@ -119,9 +119,9 @@ jobs:
         if: runner.arch == 'X64' && matrix.os != 'windows-2025'
         shell: pwsh
         run: |
-          node config/scripts/build-windows-agent-hook.mjs
+          node config/scripts/native-build/windows/build-windows-agent-hook.mjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          node config/scripts/build-windows-cli-launcher.mjs
+          node config/scripts/native-build/windows/build-windows-cli-launcher.mjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Warm the Windows ARM server launcher
@@ -153,7 +153,7 @@ jobs:
         if: >-
           github.event_name != 'pull_request' && matrix.os != 'windows-2025' &&
           steps.orcad-prebuild.outputs.cache-hit != 'true' && steps.orcad-prebuild.outputs.cache-key != ''
-        run: node config/scripts/orcad-windows-prebuild-cache.mjs --validate
+        run: node config/scripts/orcad-distribution/prebuilds/orcad-windows-prebuild-cache.mjs --validate
       - name: Save the Windows server prebuild
         if: steps.orcad-prebuild-validate.outcome == 'success'
         continue-on-error: true
