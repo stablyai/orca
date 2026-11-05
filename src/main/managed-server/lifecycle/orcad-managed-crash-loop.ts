@@ -2,7 +2,8 @@
 import { OrcadUnexpectedExitSchema } from '../../../shared/orcad-unexpected-exit'
 import type { OrcadHealth } from '../../orcad/orcad-health'
 import { OrcadLaunchReadinessError } from '../../ssh/orcad-active-readiness'
-import { orcadSlotDir, type OrcadSlotOptions } from '../../ssh/orcad-recovery-slot'
+import { orcadSlotDir, slotLiveness, type OrcadSlotOptions } from '../../ssh/orcad-recovery-slot'
+import { orcadLivenessProvenExited } from '../install/orcad-remote-launch'
 import { joinRemotePath } from '../../ssh/ssh-remote-platform'
 import { readOrcadActivationRecord } from '../activation/orcad-activation-record-store'
 import { ORCAD_LOG_FILENAME } from '../install/orcad-remote-host-support'
@@ -152,8 +153,11 @@ async function wakeUnlessEngaged(
 ): Promise<BrakedWake> {
   if (brake.engaged(environmentId) && (await latchedRunExitedCleanly(environmentId, slot))) {
     brake.forget(environmentId)
+    // This wake starts the fresh budget, so it must count.
+    epoch = brake.resetEpoch(environmentId)
   }
-  if (brake.engaged(environmentId)) {
+  // The brake refuses only a new launch; a live server is still reported as it is.
+  if (brake.engaged(environmentId) && (await activeSlotProvenExited(slot))) {
     return { outcome: 'crash-loop', detail: await crashLoopDetail(environmentId, hostLabel, slot) }
   }
   try {
@@ -172,6 +176,19 @@ async function wakeUnlessEngaged(
       brake.noteFailedStart(environmentId, epoch, error.message)
     }
     throw error
+  }
+}
+
+async function activeSlotProvenExited(slot: ManagedOrcadSlot): Promise<boolean> {
+  try {
+    const active = (await readOrcadActivationRecord(slot)).active
+    return (
+      active !== null &&
+      orcadLivenessProvenExited(await slotLiveness(slot, orcadSlotDir(slot, active)))
+    )
+  } catch {
+    // Unproven: stay braked rather than risk another launch.
+    return true
   }
 }
 
