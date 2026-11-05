@@ -78,15 +78,42 @@ export function getManagedOrcadCrashLoopBrake(): ManagedOrcadCrashLoopBrake {
 
 type ManagedOrcadSlot = ReturnType<typeof managedOrcadSlot>
 
+type BrakedWake =
+  | Awaited<ReturnType<typeof wakeStoppedManagedOrcad>>
+  | { outcome: 'crash-loop'; detail: string }
+
+const wakes = new Map<string, Promise<unknown>>()
+
 /** Every automatic wake of a managed orcad goes through here so the brake sees each start. */
-export async function wakeManagedOrcadUnlessCrashLooping(
+export function wakeManagedOrcadUnlessCrashLooping(
   environmentId: string,
   hostLabel: string,
   slot: ManagedOrcadSlot,
   onStarting?: () => void
-): Promise<
-  Awaited<ReturnType<typeof wakeStoppedManagedOrcad>> | { outcome: 'crash-loop'; detail: string }
-> {
+): Promise<BrakedWake> {
+  // Queued wakes must see the failure an earlier wake just recorded.
+  const prior = wakes.get(environmentId)
+  const wake = (async () => {
+    await prior?.catch(() => {})
+    return wakeUnlessEngaged(environmentId, hostLabel, slot, onStarting)
+  })()
+  wakes.set(environmentId, wake)
+  void wake
+    .catch(() => {})
+    .finally(() => {
+      if (wakes.get(environmentId) === wake) {
+        wakes.delete(environmentId)
+      }
+    })
+  return wake
+}
+
+async function wakeUnlessEngaged(
+  environmentId: string,
+  hostLabel: string,
+  slot: ManagedOrcadSlot,
+  onStarting?: () => void
+): Promise<BrakedWake> {
   if (brake.engaged(environmentId)) {
     return { outcome: 'crash-loop', detail: await crashLoopDetail(environmentId, hostLabel, slot) }
   }

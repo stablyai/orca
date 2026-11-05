@@ -118,6 +118,20 @@ describe('a managed orcad that keeps exiting unexpectedly', () => {
     expect(wakeStoppedManagedOrcad).toHaveBeenCalledTimes(4)
   })
 
+  it('does not let overlapping checks launch past the cap', async () => {
+    startsReporting(CRASHED)
+    await findStopped()
+    await findStopped()
+
+    generation += 1
+    const first = ensureManagedOrcadServing(input())
+    generation += 1
+    const second = ensureManagedOrcadServing(input())
+    await Promise.all([first, second])
+
+    expect(wakeStoppedManagedOrcad).toHaveBeenCalledTimes(3)
+  })
+
   it('restarts it again once the user reconnects', async () => {
     startsReporting(CRASHED)
     for (let i = 0; i < 3; i++) {
