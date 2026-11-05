@@ -32,7 +32,7 @@ export type UseNativeChatComposerKeyDownArgs = {
   dismissPicker: (triggerKey: string) => void
   interrupt: () => void
   send: (intent?: NativeChatComposerSendIntent) => void
-  /** Cmd/Ctrl+Shift+Enter steers the head queued card, whatever the composer holds. */
+  /** Cmd/Ctrl+Shift+Enter steers the head queued card, whatever the composer holds; Cmd/Ctrl+Enter does on an empty composer. */
   steerHead?: (() => boolean) | undefined
   setActiveSuggestion: Dispatch<SetStateAction<number>>
   setDraft: Dispatch<SetStateAction<string>>
@@ -138,8 +138,11 @@ export function useNativeChatComposerKeyDown({
         if (!modified) {
           send()
         } else if (draft.trim() !== '' || hasAttachments) {
-          // The other thing than the setting; an empty composer has nothing to send either way.
+          // The other thing than the setting, for this one message.
           send({ alternate: true })
+        } else if (!event.repeat) {
+          // An empty composer has nothing of its own to send, so the chord steers the head card.
+          steerHead?.()
         }
         return
       }
