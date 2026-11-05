@@ -79,7 +79,11 @@ export function useNativeChatComposerEditSession({
       if (destination && !destination.active) {
         return
       }
-      insertNativeChatComposerDraftText(destination?.scopeKey ?? draftScopeKey, text)
+      const focused = element.ownerDocument.activeElement
+      insertNativeChatComposerDraftText(destination?.scopeKey ?? draftScopeKey, text, {
+        // Late text must not pull the caret out of a field the user moved to mid-dictation.
+        keepFocus: !!focused && focused !== element.ownerDocument.body && !element.contains(focused)
+      })
     })
   }, [draftScopeKey, root, handle])
 
