@@ -231,7 +231,12 @@ async function runAutoRename(
   }
   const params = resolvedParams.params
 
-  const target = await resolveGenerationTarget(worktreePath, params.agentId, deps)
+  const target = await resolveGenerationTarget(
+    worktreePath,
+    params.agentId,
+    deps,
+    await deps.getAgentWslDistro?.(worktreeId)
+  )
   if (!target) {
     deps.setRenameError(worktreeId, 'Could not prepare the branch-name generation environment.')
     return retry('could not prepare generation environment')
