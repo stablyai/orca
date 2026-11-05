@@ -16,7 +16,6 @@ import { Label } from '../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { translate } from '@/i18n/i18n'
 import { commitMessageAgentLabel } from './ai-commit-pr-settings-helpers'
-import { isCoveredModelAlias } from '../../../../shared/model-alias-rows'
 
 type AiCommitPrSettingsFieldsProps = {
   config: CommitMessageAiSettings
@@ -137,17 +136,11 @@ export function AiCommitPrSettingsFields({
               <SelectValue />
             </SelectTrigger>
             <SelectContent portalContainer={selectPortalRoot} position="popper" align="start">
-              {activeCapability.models
-                .filter(
-                  (model) =>
-                    model.id === activeModel.id ||
-                    !isCoveredModelAlias(model, activeCapability.models)
-                )
-                .map((model) => (
-                  <SelectItem key={model.id} value={model.id} className="cursor-pointer">
-                    {sourceControlModelLabel(model)}
-                  </SelectItem>
-                ))}
+              {activeCapability.models.map((model) => (
+                <SelectItem key={model.id} value={model.id} className="cursor-pointer">
+                  {sourceControlModelLabel(model)}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
