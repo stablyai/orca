@@ -3,6 +3,7 @@ import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'rea
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { MobileMarkdown } from './MobileMarkdown'
+import { MarkdownLinkHandlerContext } from './markdown-link-handler'
 
 const openURL = vi.fn((_url: string) => Promise.resolve())
 
@@ -50,6 +51,13 @@ function hasTextAncestor(node: ReactTestInstance): boolean {
   return isText(node) || (node.parent !== null && hasTextAncestor(node.parent))
 }
 
+function press(tree: ReactTestRenderer, label: string): void {
+  const target = tree.root.find(
+    (node) => isText(node) && typeof node.props.onPress === 'function' && flatten(node) === label
+  )
+  act(() => target.props.onPress())
+}
+
 describe('MobileMarkdown rendering', () => {
   it('C21: closes open markup while a reply grows, and never links a half-written address', () => {
     expect(texts(render('2 * 3 is six.\n\nRead **src/main/ses', true))).toEqual([
@@ -59,6 +67,32 @@ describe('MobileMarkdown rendering', () => {
     const tree = render('See [config loader](https://exa', true)
     expect(texts(tree)).toEqual(['See config loader'])
     expect(tree.root.findAll((node) => typeof node.props.onPress === 'function')).toEqual([])
+  })
+
+  it('hands a web link to the screen that offers choices; mail and file links still open directly', () => {
+    const onOpenLink = vi.fn()
+    const onOpenFile = vi.fn()
+    act(() => {
+      renderer = create(
+        createElement(
+          MarkdownLinkHandlerContext.Provider,
+          { value: onOpenLink },
+          createElement(MobileMarkdown, {
+            content: '[docs](https://x.com/a), [mail](mailto:a@x.com) and [file](src/a.ts)',
+            onOpenFile
+          })
+        )
+      )
+    })
+    press(renderer!, 'docs')
+    press(renderer!, 'mail')
+    press(renderer!, 'file')
+
+    expect(onOpenLink).toHaveBeenCalledTimes(1)
+    expect(onOpenLink).toHaveBeenCalledWith('https://x.com/a')
+    expect(openURL).toHaveBeenCalledTimes(1)
+    expect(openURL).toHaveBeenCalledWith('mailto:a@x.com')
+    expect(onOpenFile).toHaveBeenCalledWith('src/a.ts')
   })
 })
 

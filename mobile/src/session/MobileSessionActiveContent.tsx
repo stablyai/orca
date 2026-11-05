@@ -110,8 +110,22 @@ export function MobileSessionActiveContent({
     keyboardLift,
     activeTerminalKeyboardLift,
     toastAnimatedStyle,
-    createTabBusy
+    createTabBusy,
+    handleCreateBrowserRef,
+    isFloatingWorkspaceRoute
   } = controller
+  // Why: a browser tab needs a real worktree and a connected host known to stream it; elsewhere
+  // only the phone's browser is offered, so the sheet never shows a choice that would refuse.
+  const canOpenUrlInOrca =
+    client !== null &&
+    controller.presentedConnState === 'connected' &&
+    !isFloatingWorkspaceRoute &&
+    browserScreencastSupported === true
+  const openUrlInOrca = useMemo(
+    () =>
+      canOpenUrlInOrca ? (url: string) => void handleCreateBrowserRef.current?.(url) : undefined,
+    [canOpenUrlInOrca, handleCreateBrowserRef]
+  )
   const hostProfile = useHostProfile(hostId)
   const hostTitle = useHostDisplay(hostProfile).title
   const nativeChatImageSource = useMemo(
@@ -349,6 +363,7 @@ export function MobileSessionActiveContent({
                   keyboardInset={keyboardLift}
                   // A workspace routed to another server stops with that server, whose name the phone lacks.
                   hostName={executionHost === undefined && hostProfile ? hostTitle : null}
+                  onOpenUrlInOrca={openUrlInOrca}
                 />
               </MobileNativeChatForkProvider>
             </MobileAgentMessageProvider>

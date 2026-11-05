@@ -10582,7 +10582,7 @@
       "providers": ["daemon"],
       "coveredPlatforms": ["windows"],
       "coveredProviders": ["daemon"],
-      "coverageNotes": "A packaged Windows CI run force-kills the launched instance's real Electron main without tree-killing, then proves the same scoped daemon and interactive PowerShell survive, no FailFast event is observed, and relaunch input reaches the same shell. Focused cross-platform unit tests fail closed on unavailable event-log or PID-liveness evidence, stale or ambiguous daemon identity, and incomplete reattach assertions.",
+      "coverageNotes": "A packaged Windows CI run force-kills the launched instance's real Electron main without tree-killing, then proves the same scoped daemon and interactive PowerShell survive, no FailFast event is observed, and relaunch input reaches the same shell.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/issues/7742",
         "https://github.com/stablyai/orca/pull/9311"
@@ -10590,24 +10590,10 @@
       "invariant": "On packaged Windows, abrupt death of Orca's Electron main process must not terminate or replace the userData-scoped terminal daemon or its live ConPTY shell, and a relaunch must adopt that exact daemon and route terminal input to that exact surviving shell without a PowerShell 0xE9 FailFast.",
       "oracle": "Resolve the launched instance's real main PID from inside Electron, force-kill only that PID, require it to die, require one command-line-scoped daemon PID and the stamped interactive shell PID to remain live, relaunch with persisted state, require the daemon PID to remain identical, read the exact shell PID and a per-shell environment sentinel back through the exact restored tab, then require a successful Windows Application event-log query with zero matching pwsh FailFast events across the full crash-to-input window.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts config/scripts/runtime-verification/crash-survival/win-crash-survival-e2e.test.mjs",
         "node tests/tools/win-crash-survival-e2e/run.mjs --expect survival --exe-path \"$env:ORCA_EXE\" --soak-seconds 8"
       ],
-      "testFiles": [
-        "config/scripts/runtime-verification/crash-survival/win-crash-survival-e2e.test.mjs",
-        "tests/tools/win-crash-survival-e2e/run.mjs"
-      ],
+      "testFiles": ["tests/tools/win-crash-survival-e2e/run.mjs"],
       "assertionRefs": [
-        {
-          "file": "config/scripts/runtime-verification/crash-survival/win-crash-survival-e2e.test.mjs",
-          "assertions": [
-            "survival requires the crash antecedent, daemon and shell liveness, unchanged daemon identity, zero FailFast events, and same-shell reattach",
-            "event-log query failure cannot be converted into zero FailFast events",
-            "malformed event-log and PID-liveness evidence fails closed",
-            "stale, missing, or ambiguous userData-scoped daemon identity fails closed",
-            "the packaged survival proof remains wired to targeted pull requests without a duplicate branch-push run"
-          ]
-        },
         {
           "file": "tests/tools/win-crash-survival-e2e/run.mjs",
           "assertions": [

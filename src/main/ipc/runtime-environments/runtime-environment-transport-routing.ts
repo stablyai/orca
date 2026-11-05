@@ -18,10 +18,7 @@ import {
   type ManagedRuntimeCallPreparation
 } from './runtime-environment-managed-tunnel'
 import { recordRuntimeEnvironmentUsage } from './runtime-environment-usage-record'
-import type {
-  RuntimeOrchestrationEnvelope,
-  RuntimeRpcResponse
-} from '../../../shared/runtime-rpc-envelope'
+import type * as Rpc from '../../../shared/runtime-rpc-envelope'
 import {
   subscribeRemoteRuntimeRequest,
   type RemoteRuntimeSubscription
@@ -51,13 +48,14 @@ export async function callRuntimeEnvironment(
   params: unknown,
   timeoutMs?: number,
   expectedEnvironmentPairingRevision?: number,
-  envelope?: RuntimeOrchestrationEnvelope,
+  envelope?: Rpc.RuntimeOrchestrationEnvelope,
   options?: {
+    prepareRequest?: Rpc.RuntimeRequestPreparation
     signal?: AbortSignal
     expectedEnvironmentRuntimeId?: string
     preparation?: ManagedRuntimeCallPreparation
   }
-): Promise<RuntimeRpcResponse<unknown>> {
+): Promise<Rpc.RuntimeRpcResponse<unknown>> {
   if (method === 'status.get') {
     let statusOptions = options
     // Why: the status probe dials on its own, so a no-start caller's WSL host is checked first.
@@ -117,7 +115,8 @@ export async function callRuntimeEnvironment(
             effectiveTimeoutMs,
             envelope,
             options?.signal,
-            ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
+            ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
+            options?.prepareRequest
           )
           markEnvironmentUsedFromResponse(userDataPath, currentEnvironment.id, response)
           return response
@@ -179,7 +178,7 @@ export async function subscribeRuntimeEnvironment(
   rawCallbacks: {
     onEvent: (
       payload:
-        | { type: 'response'; response: RuntimeRpcResponse<unknown> }
+        | { type: 'response'; response: Rpc.RuntimeRpcResponse<unknown> }
         | { type: 'binary'; bytes: Uint8Array<ArrayBufferLike> }
         | { type: 'error'; code: string; message: string }
         | { type: 'close' }
@@ -217,7 +216,7 @@ export async function subscribeRuntimeEnvironment(
     recordRuntimeEnvironmentUsage(userDataPath, environment.id, { runtimeId })
   }
   const callbacksWithMarkUsed = {
-    onResponse: (response: RuntimeRpcResponse<unknown>) => {
+    onResponse: (response: Rpc.RuntimeRpcResponse<unknown>) => {
       if (
         crewAttempt &&
         response._meta?.runtimeId != null &&
@@ -295,7 +294,7 @@ export async function subscribeRuntimeEnvironment(
 function markEnvironmentUsedFromResponse(
   userDataPath: string,
   environmentId: string,
-  response: RuntimeRpcResponse<unknown>
+  response: Rpc.RuntimeRpcResponse<unknown>
 ): void {
   if (response.ok === true) {
     markEnvironmentUsed(userDataPath, environmentId, { runtimeId: response._meta.runtimeId })

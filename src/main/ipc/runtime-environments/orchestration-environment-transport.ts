@@ -22,7 +22,15 @@ export function createOrchestrationEnvironmentTransport(): OrchestrationEnvironm
       }
     },
     // Loaded on first dial: the routing graph is large and most hosts never place remote workers.
-    call: async (selector, method, params, timeoutMs, envelope, expectedPairingRevision) =>
+    call: async (
+      selector,
+      method,
+      params,
+      timeoutMs,
+      envelope,
+      expectedPairingRevision,
+      prepareRequest
+    ) =>
       (await import('./runtime-environment-transport-routing')).callRuntimeEnvironment(
         registryRoot(),
         selector,
@@ -30,7 +38,8 @@ export function createOrchestrationEnvironmentTransport(): OrchestrationEnvironm
         params,
         timeoutMs,
         expectedPairingRevision,
-        envelope
+        envelope,
+        ...(prepareRequest ? [{ prepareRequest }] : [])
       )
   }
 }

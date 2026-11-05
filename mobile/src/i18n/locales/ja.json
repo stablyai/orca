@@ -1206,6 +1206,10 @@
       "retryLoading": "{{path}} の読み込みを再試行",
       "unavailable": "モバイルでは利用不可"
     },
+    "fileExplorerRowActions": {
+      "copyName": "名前をコピー",
+      "copyRelativePath": "相対パスをコピー"
+    },
     "fileMarkdownPreview": {
       "copyLoadedSource": "読み込み済みの Markdown ソースをコピー",
       "copySource": "Markdown ソースをコピー",

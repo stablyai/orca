@@ -111,6 +111,10 @@ vi.mock('../platform/haptics', () => ({
   triggerSelection: vi.fn()
 }))
 
+vi.mock('./mobile-file-explorer-row-actions-sheet', () => ({
+  useMobileFileExplorerRowActions: () => ({ openRowActions: () => {}, rowActionsSheet: null })
+}))
+
 vi.mock('../transport/host-client-hooks', () => ({
   useForceReconnect: () => mockTransport.forceReconnect,
   useHostClient: () => ({

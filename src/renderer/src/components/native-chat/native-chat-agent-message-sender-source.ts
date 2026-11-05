@@ -21,6 +21,8 @@ let rowBuilds = 0
 /** Sidebar row sets the card sources built; a leased source reuses its rows across store writes. */
 export const agentMessageSenderRowBuildsForTest = () => rowBuilds
 export type SenderLocation = {
+  /** A fallback endpoint supplies its kind, never an earlier actor's activity. */
+  activity?: false
   host: string
   worktreeId: string
   paneKey: string
@@ -123,6 +125,14 @@ export function readAgentMessageSenderRow(
   return readSource(state, location).read(state, location.paneKey)
 }
 
+function senderRowView(
+  state: AppState,
+  location: SenderLocation
+): AgentMessageSenderView | undefined {
+  const row = readSource(state, location).read(state, location.paneKey)
+  return location.activity === false ? { agentType: row?.agentType ?? location.agentType } : row
+}
+
 /** Share the sidebar projection before notifying cards; only subscription leases retain a source.
  *  `savedAgent`: the kind written on the message, drawn ahead of any live row's guess.
  *  `leaseLocate`: the rows the card reads to decide, also where it then draws none. */
@@ -136,7 +146,7 @@ export function useAgentMessageSenderSource(
     return (state: AppState) => {
       const location = locate(state)
       const next = agentMessageSenderView(
-        location ? readSource(state, location).read(state, location.paneKey) : undefined,
+        location ? senderRowView(state, location) : undefined,
         savedAgent ?? location?.agentType
       )
       if (!equalView(previous, next)) {
@@ -217,7 +227,7 @@ export function useAgentMessageSenderSources(
       const next = lookups.map(({ locate, savedAgent }, index) => {
         const location = locate(state)
         const view = agentMessageSenderView(
-          location ? readSource(state, location).read(state, location.paneKey) : undefined,
+          location ? senderRowView(state, location) : undefined,
           savedAgent ?? location?.agentType
         )
         const prior = previous[index]

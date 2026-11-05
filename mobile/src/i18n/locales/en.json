@@ -1863,6 +1863,10 @@
       "previewFile": "Preview file {{name}}",
       "unavailable": "Unavailable on mobile"
     },
+    "fileExplorerRowActions": {
+      "copyName": "Copy Name",
+      "copyRelativePath": "Copy Relative Path"
+    },
     "fileMutationOwnership": {
       "sshOwnerChanged": "Couldn't verify the SSH connection. Reconnect the host and try again."
     },
@@ -2763,6 +2767,11 @@
       "diffFailed": "Couldn't load diff preview",
       "fileFailed": "Couldn't load file preview",
       "outsideWorkspace": "This file is outside the workspace. Open it on desktop to view it."
+    },
+    "linkActionSheet": {
+      "openInOrca": "Open in Orca browser",
+      "openInBrowser": "Open in system browser",
+      "copyLink": "Copy link"
     },
     "useDiffReviewGitHub": {
       "waitingForDesktop": "Waiting for desktop..."

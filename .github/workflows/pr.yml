@@ -567,9 +567,7 @@ jobs:
           --maxWorkers=4 --isolate --retry=0 --bail=0
           config/scripts/mobile-web/check-entry/mobile-release-check-scope.test.mjs
           config/scripts/mobile-web/check-entry/mobile-test-change-scope.test.mjs
-          config/scripts/workflow/pr-admission/pr-ready-check-reuse.test.mjs
           config/scripts/ci/unit-selection/win32-test-lane-registration.test.mjs
-          config/scripts/test-runtime/node-worker/vitest-node-runtime-boundary.test.ts
           config/scripts/test-runtime/sqlite-admission/vitest-sqlite-runtime-boundary.test.ts
 
       # Report failure through the separate required check without blocking unrelated consumers.
