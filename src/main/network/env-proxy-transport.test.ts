@@ -60,10 +60,22 @@ describe('createEnvProxyFetch', () => {
     server?.close()
     server = null
     vi.restoreAllMocks()
+    vi.unstubAllEnvs()
   })
 
   it('is null when no proxy variable exists, so the global fetch stays in use', () => {
     expect(createEnvProxyFetch({})).toBeNull()
+    // accountRelayFetch() reads process.env; an inherited proxy variable must not decide this.
+    for (const name of [
+      'HTTP_PROXY',
+      'HTTPS_PROXY',
+      'ALL_PROXY',
+      'http_proxy',
+      'https_proxy',
+      'all_proxy'
+    ]) {
+      vi.stubEnv(name, '')
+    }
     expect(accountRelayFetch()).toBe(globalThis.fetch)
   })
 
