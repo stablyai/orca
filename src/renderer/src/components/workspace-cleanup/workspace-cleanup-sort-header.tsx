@@ -1,6 +1,7 @@
 import React from 'react'
-import { ArrowDown, ArrowUp, Check, ChevronsUpDown, Minus, Trash2 } from 'lucide-react'
+import { ArrowDown, ArrowUp, ChevronsUpDown, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -46,21 +47,12 @@ export function WorkspaceCleanupSortHeader({
   )
   return (
     <div className="flex h-13 items-center gap-2 border-b border-border bg-muted/25 px-4">
-      <button
-        type="button"
-        role="checkbox"
-        aria-checked={someSelected ? 'mixed' : allSelected}
+      <Checkbox
+        checked={someSelected ? 'indeterminate' : allSelected}
         disabled={selectableCount === 0}
         aria-label={selectAllLabel}
-        onClick={() => onToggleSelectAll(!allSelected)}
-        className="flex size-4 shrink-0 items-center justify-center rounded border border-border bg-background text-primary hover:bg-accent disabled:opacity-40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-      >
-        {allSelected ? (
-          <Check className="size-3" strokeWidth={3} />
-        ) : someSelected ? (
-          <Minus className="size-3" strokeWidth={3} />
-        ) : null}
-      </button>
+        onCheckedChange={() => onToggleSelectAll(!allSelected)}
+      />
       {/* Bulk action sits beside the selection it acts on; it appears once something is selected. */}
       {selectedCount > 0 ? (
         <div className="flex min-w-0 flex-1 items-center gap-3">

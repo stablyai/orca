@@ -1,7 +1,6 @@
 import React from 'react'
 import {
   AlertTriangle,
-  Check,
   CircleDot,
   FileWarning,
   GitBranch,
@@ -12,6 +11,7 @@ import {
   SquareTerminal
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
@@ -160,20 +160,15 @@ export const CandidateRow = React.memo(function CandidateRow({
       <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-x-3">
         <div className="flex h-6 items-center">
           {selectable ? (
-            <button
-              type="button"
-              role="checkbox"
-              aria-checked={selected}
+            <Checkbox
+              checked={selected}
               aria-label={translate(
                 'auto.components.workspace.cleanup.WorkspaceCleanupDialog.bbb1ab6a6f',
                 'Select {{value0}}',
                 { value0: candidateAccessibleName }
               )}
-              onClick={() => onToggleSelected(identity)}
-              className="flex size-4 shrink-0 items-center justify-center rounded border border-border bg-background text-primary hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-            >
-              {selected ? <Check className="size-3" strokeWidth={3} /> : null}
-            </button>
+              onCheckedChange={() => onToggleSelected(identity)}
+            />
           ) : deleting ? (
             <Loader2 className="size-4 shrink-0 animate-spin text-muted-foreground" />
           ) : !queueable ? (

@@ -55,6 +55,7 @@ export function WorkspaceCleanupFilterBar({
 }): React.JSX.Element {
   const { filters, totalCount } = facetProps
   const applied = useAppliedWorkspaceCleanupFilters(filters)
+  const filtersLabel = translate('components.workspace.cleanup.browse.filters', 'Filters')
   return (
     <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-2.5">
       <div className="relative min-w-[180px] flex-1">
@@ -70,48 +71,63 @@ export function WorkspaceCleanupFilterBar({
             'components.workspace.cleanup.browse.searchLabel',
             'Search workspaces'
           )}
+          adornment="trailing"
           className="h-8 pl-8 text-xs"
         />
-      </div>
-
-      <Popover modal={false} open={facetPanelOpen} onOpenChange={onFacetPanelOpenChange}>
-        <PopoverTrigger asChild>
-          <Button variant="outline" size="sm" className="shrink-0">
-            <SlidersHorizontal className="size-3.5" />
-            {translate('components.workspace.cleanup.browse.filters', 'Filters')}
-            {activeFacetGroupCount > 0 ? (
-              <span className="ml-1 rounded-full bg-accent px-1.5 text-[11px] tabular-nums text-accent-foreground">
-                {activeFacetGroupCount}
+        {/* Filters live inside the search field: both narrow the same list. */}
+        <Popover modal={false} open={facetPanelOpen} onOpenChange={onFacetPanelOpenChange}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  aria-label={filtersLabel}
+                  className="absolute top-1/2 right-1 -translate-y-1/2"
+                >
+                  <SlidersHorizontal className="size-3.5" />
+                  {activeFacetGroupCount > 0 ? (
+                    <span className="tabular-nums">{activeFacetGroupCount}</span>
+                  ) : null}
+                </Button>
+              </PopoverTrigger>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" sideOffset={4}>
+              {filtersLabel}
+            </TooltipContent>
+          </Tooltip>
+          <PopoverContent
+            align="end"
+            sideOffset={6}
+            // Portaled content needs the wheel shim for Radix scroll-lock, but not popover-scroll-content’s max-height, which would crush the facet column.
+            className="popover-wheel-scroll flex h-[min(471px,var(--radix-popover-content-available-height))] w-[320px] flex-col p-0"
+          >
+            {/* 471px preserves the 420px facet viewport plus the fixed footer at full height. */}
+            <ScrollArea className="min-h-0 flex-1">
+              <WorkspaceCleanupLifecycleFacets {...facetProps} />
+              <WorkspaceCleanupGitReviewFacets {...facetProps} />
+            </ScrollArea>
+            <div className="flex items-center justify-between gap-2 border-t border-border px-3 py-2">
+              <span className="text-[11px] text-muted-foreground">
+                {translate(
+                  'components.workspace.cleanup.browse.showingCount',
+                  'Showing {{value0}} of {{value1}}',
+                  { value0: matchedCount, value1: totalCount }
+                )}
               </span>
-            ) : null}
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent
-          align="end"
-          sideOffset={6}
-          // Portaled content needs the wheel shim for Radix scroll-lock, but not popover-scroll-content’s max-height, which would crush the facet column.
-          className="popover-wheel-scroll flex h-[min(471px,var(--radix-popover-content-available-height))] w-[320px] flex-col p-0"
-        >
-          {/* 471px preserves the 420px facet viewport plus the fixed footer at full height. */}
-          <ScrollArea className="min-h-0 flex-1">
-            <WorkspaceCleanupLifecycleFacets {...facetProps} />
-            <WorkspaceCleanupGitReviewFacets {...facetProps} />
-          </ScrollArea>
-          <div className="flex items-center justify-between gap-2 border-t border-border px-3 py-2">
-            <span className="text-[11px] text-muted-foreground">
-              {translate(
-                'components.workspace.cleanup.browse.showingCount',
-                'Showing {{value0}} of {{value1}}',
-                { value0: matchedCount, value1: totalCount }
-              )}
-            </span>
-            <Button variant="ghost" size="sm" disabled={!hasActiveFilters} onClick={onClearFilters}>
-              <RotateCcw className="size-3.5" />
-              {translate('components.workspace.cleanup.browse.clearFilters', 'Clear filters')}
-            </Button>
-          </div>
-        </PopoverContent>
-      </Popover>
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={!hasActiveFilters}
+                onClick={onClearFilters}
+              >
+                <RotateCcw className="size-3.5" />
+                {translate('components.workspace.cleanup.browse.clearFilters', 'Clear filters')}
+              </Button>
+            </div>
+          </PopoverContent>
+        </Popover>
+      </div>
 
       {sizeScan ? <SizeScanButton {...sizeScan} /> : null}
 
