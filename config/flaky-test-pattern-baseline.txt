@@ -292,7 +292,6 @@
 1 test-no-real-time-wait:src/renderer/src/components/editor/DiagramViewerModal.test.tsx
 1 test-no-real-time-wait:src/renderer/src/components/editor/combined-diff/load-sections/combined-diff-stale-analysis-work-budget.test.tsx
 1 test-no-real-time-wait:src/renderer/src/components/native-chat/NativeChatModelCombobox.test.tsx
-1 test-no-real-time-wait:src/renderer/src/components/native-chat/NativeChatSessionOptionPickers.focus-return.test.tsx
 1 test-no-real-time-wait:src/renderer/src/components/native-chat/native-chat-composer-draft-lifecycle.test.tsx
 1 test-no-real-time-wait:src/renderer/src/components/native-chat/structured-chat-menu-lifetime.test.tsx
 1 test-no-real-time-wait:src/renderer/src/components/native-chat/use-structured-agent-session-options.learned-default.test.tsx
