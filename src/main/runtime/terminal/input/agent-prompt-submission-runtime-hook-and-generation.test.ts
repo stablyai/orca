@@ -108,11 +108,11 @@ describe('agent prompt submission runtime hook and generation cases', () => {
   it('settles a prompt whose turn starts while child work keeps the row working', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
-    const hook = {
-      state: 'working' as const,
-      stateStartedAt: 500,
-      mainAgent: { state: 'done' as 'done' | 'working', stateStartedAt: 800 }
+    const mainAgent: { state: 'done' | 'working'; stateStartedAt: number } = {
+      state: 'done',
+      stateStartedAt: 800
     }
+    const hook = { state: 'working' as const, stateStartedAt: 500, mainAgent }
     const { runtime, handle, writes } = await createHookOnlyPromptRuntime(hook, 'codex')
     runtime.setPtyController({
       spawn: vi.fn().mockResolvedValue({ id: 'pty-prompt' }),
