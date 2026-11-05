@@ -32,8 +32,8 @@ vi.mock('../tray/system-tray', async () =>
 
 import { registerNotificationHandlers } from './notifications'
 import { activeNotificationsById } from './native-notification-lifecycle'
-import { RuntimeMobileNotificationController } from '../runtime/runtime-mobile-notification-controller'
-import { RuntimeClientEventBus } from '../runtime/runtime-client-event-bus'
+import { RuntimeMobileNotificationController } from '../runtime/push/notifications/runtime-mobile-notification-controller'
+import { RuntimeClientEventBus } from '../runtime/client/events/runtime-client-event-bus'
 
 const nativePlatform = process.platform
 const location = {

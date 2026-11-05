@@ -31,7 +31,7 @@ import type {
   RuntimeTerminalCreate,
   RuntimeTerminalRead
 } from '../../src/shared/runtime-types'
-import { PROTOCOL_VERSION } from '../../src/main/daemon/types'
+import { PROTOCOL_VERSION } from '../../src/main/daemon/protocol/daemon-protocol-version'
 import { parsePaneKey } from '../../src/shared/workspace-layout/stable-pane-id'
 
 const electronPackageDir = path.join(process.cwd(), 'node_modules', 'electron')

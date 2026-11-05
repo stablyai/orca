@@ -3,7 +3,7 @@ import type { OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab as StoredM
 import { OrcaRuntimeWithWriteOrchestrationPointerPty } from '../orchestration/terminal-authority/write-orchestration-pointer-pty'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/runtime-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
-import { getMobileSessionSnapshotTabIdentityKeys } from '../mobile-session-tab-merge'
+import { getMobileSessionSnapshotTabIdentityKeys } from '../session-lifecycle/projection/mobile-session-tab-merge'
 
 export abstract class OrcaRuntimeWithSyncMobileSessionTabs extends OrcaRuntimeWithWriteOrchestrationPointerPty {
   protected abstract buildPreservedHeadlessMobileSessionSnapshot(

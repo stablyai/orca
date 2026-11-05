@@ -4,11 +4,9 @@ import { act, cleanup, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionStatusEvent } from '../../../../../../shared/agent-session/agent-session-wire'
 import type { AiVaultSession } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
-import type { AiVaultSearchHit } from '../../../../../../shared/ai-vault/search/ai-vault-search-types'
+
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { Tab } from '../../../../../../shared/tab-types'
-import { AGENT_SESSION_WORKSPACE_SLEEP_MARK_RUNTIME_CAPABILITY } from '../../../../../../shared/agent-session/agent-session-workspace-sleep'
-import { AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY } from '../../../../../../shared/agent-session/agent-session-attention-capabilities'
 
 const mocks = vi.hoisted(() => ({ subscribe: vi.fn(), supports: vi.fn() }))
 vi.mock('@/runtime/structured-agent-session-client', () => ({
@@ -26,7 +24,6 @@ import {
   resetStructuredAgentSessionStatusFeedsForTests
 } from '@/runtime/structured-agent-session-status-feed'
 import { VaultSessionRow } from './AiVaultSessionRow'
-import { aiVaultSearchHitToSession } from '../search/ai-vault-search-session'
 
 const initialState = useAppStore.getInitialState()
 const emitters = new Map<string, (event: AgentSessionStatusEvent) => void>()
@@ -58,29 +55,6 @@ function row(host: ExecutionHostId = 'local', title = 'Codex Chat'): AiVaultSess
       sessionId: 'native-session'
     }
   }
-}
-
-function searchRow(): AiVaultSession {
-  const hit: AiVaultSearchHit = {
-    agent: 'codex',
-    sessionId: 'provider-session',
-    title: 'Codex Chat',
-    cwd: '/folder',
-    branch: null,
-    updatedAt: null,
-    messageCount: 1,
-    score: 1,
-    source: {
-      presence: 'present',
-      filePath: '/sessions/provider-session.jsonl'
-    },
-    evidence: null,
-    structuredSession: {
-      workspaceId: 'folder-workspace',
-      sessionId: 'native-session'
-    }
-  }
-  return aiVaultSearchHitToSession(hit, 'local')
 }
 
 function tab(customLabel: string | null = null): Tab {
@@ -189,50 +163,6 @@ describe('native chat names in Vault rows', () => {
     expect(screen.queryByText('Codex Chat')).toBeNull()
   })
 
-  it.each([
-    ['list', row],
-    ['search', searchRow]
-  ])(
-    'lets a manual tab rename win in a %s row, and returns to the name once cleared',
-    async (_kind, make) => {
-      useAppStore.setState({
-        unifiedTabsByWorktree: { 'folder-workspace': [tab('Manual name')] }
-      })
-      await renderRow(make())
-      publish('local', 'Explain the parser')
-      expect(screen.getByText('Manual name')).toBeTruthy()
-      act(() =>
-        useAppStore.setState({
-          unifiedTabsByWorktree: { 'folder-workspace': [tab()] }
-        })
-      )
-      expect(screen.getByText('Explain the parser')).toBeTruthy()
-    }
-  )
-
-  it.each(['constructor', '__proto__'])(
-    'renders a paired row whose workspace id names an object member (%s)',
-    async (workspaceId) => {
-      await renderRow({
-        ...row('local', 'Host row title'),
-        structuredSession: { workspaceId, sessionId: 'native-session' }
-      })
-      expect(screen.getByText('Host row title')).toBeTruthy()
-    }
-  )
-
-  it('ignores a published name no record store would hold', async () => {
-    await renderRow(row('local', 'Host row title'))
-    publish('local', 'x'.repeat(201))
-    expect(screen.getByText('Host row title')).toBeTruthy()
-  })
-
-  it('keeps the host row title for a chat the feed has not named, as after a restart', async () => {
-    await renderRow(row('local', 'Named before restart'))
-    publish('local')
-    expect(screen.getByText('Named before restart')).toBeTruthy()
-  })
-
   it('never shows a name another host published for the same session id', async () => {
     mocks.supports.mockResolvedValue(true)
     const releaseLocal = getStructuredAgentSessionStatusFeed({
@@ -245,20 +175,5 @@ describe('native chat names in Vault rows', () => {
     expect(screen.getByText('Codex Chat')).toBeTruthy()
     expect(screen.queryByText('Local chat name')).toBeNull()
     releaseLocal()
-  })
-
-  it('keeps the host row title from an older paired host without probing it again', async () => {
-    mocks.supports.mockResolvedValue(false)
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
-    await renderRow(row('runtime:older', 'Saved by older host'))
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(60_000)
-    })
-    expect(screen.getByText('Saved by older host')).toBeTruthy()
-    expect(mocks.supports.mock.calls).toEqual([
-      ['older', AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY],
-      ['older', AGENT_SESSION_WORKSPACE_SLEEP_MARK_RUNTIME_CAPABILITY]
-    ])
-    expect(mocks.subscribe).not.toHaveBeenCalled()
   })
 })

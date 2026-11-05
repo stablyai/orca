@@ -2,7 +2,7 @@
 
 import type { RuntimeTerminalClose } from '../../../shared/runtime-types'
 import type { LayoutApplyReply } from '../../../shared/workspace-layout/workspace-layout-command-types'
-import type { WindowLayoutCommand } from '../runtime-layout-apply'
+import type { WindowLayoutCommand } from '../terminal/layout/runtime-layout-apply'
 import { startedMainTerminalSurfaces } from '../terminal/surface/main-terminal-surfaces'
 import type { ExplicitCloseStop } from './explicit-terminal-close-pty-stops'
 import { closeInMainLayout } from './main-layout-close-command'

@@ -8,7 +8,7 @@ import {
   getStructuredAgentSessionHost,
   setStructuredAgentSessionHost
 } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
-import { RuntimeMobileNotificationController } from '../../runtime-mobile-notification-controller'
+import { RuntimeMobileNotificationController } from '../../push/notifications/runtime-mobile-notification-controller'
 import {
   call,
   clearStructuredHostStub,

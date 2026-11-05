@@ -6,10 +6,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
-import { readRuntimeMetadata } from './runtime-metadata'
-import { OrcaRuntimeRpcServer } from './runtime-rpc'
-import { DeviceRegistry } from './device-registry'
-import { DEVICE_REGISTRY_FILENAME } from './mobile-pairing-files'
+import { readRuntimeMetadata } from './rpc/server/runtime-metadata'
+import { OrcaRuntimeRpcServer } from './rpc/server/runtime-rpc'
+import { DeviceRegistry } from './rpc/server/pairing/device-registry'
+import { DEVICE_REGISTRY_FILENAME } from './rpc/server/pairing/mobile-pairing-files'
 import { encodePairingOffer, parsePairingCode } from '../../shared/remote-runtime/pairing/pairing'
 import type { PairingOffer } from '../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import { sendRemoteRuntimeRequest } from '../../shared/remote-runtime/remote-runtime-client'
@@ -18,15 +18,15 @@ import {
   DELEGATED_MOBILE_DEVICE_SYNC_METHOD,
   type DelegatedMobileDeviceSyncResult
 } from '../../shared/delegated-mobile-device-contract'
-import { sendRequest } from './runtime-rpc-test-harness'
+import { sendRequest } from './rpc/server/runtime-rpc-test-harness'
 import {
   authenticateMobileWsSession,
   createEncryptedWsResponseReader,
   sendEncryptedWsRequest,
   waitForWsClose
-} from './runtime-rpc-mobile-ws-test-harness'
-import { makeStore } from './runtime-rpc-worktree-store-fixtures'
-import { partialRuntimeStore } from './runtime-store-partial-fixture'
+} from './rpc/server/runtime-rpc-mobile-ws-test-harness'
+import { makeStore } from './rpc/server/runtime-rpc-worktree-store-fixtures'
+import { partialRuntimeStore } from './orca-runtime-tests/runtime-store-partial-fixture'
 
 vi.mock('../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => {
   const facade = getWorktreeListingMocks()

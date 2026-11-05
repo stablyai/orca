@@ -11,7 +11,7 @@ import { OrcaRuntimeService } from './orca-runtime'
 import { buildAgentStartupPlan } from '../../shared/agent-launch/startup/tui-agent-startup'
 import { buildAgentResumeStartupPlan } from '../../shared/agent-launch/startup/tui-agent-resume-startup'
 import { tokenizeStartupCommand } from '../../shared/agent-launch/startup/tui-agent-startup-shell'
-import type { TerminalCreateOptions } from './runtime-terminal-contracts'
+import type { TerminalCreateOptions } from './terminal/launch/terminal-create-options'
 import type { IPtyProvider } from '../providers/pty-provider-contract'
 
 function operationId(now = Date.now(), nonce = '0123456789abcdef0123456789abcdef'): string {

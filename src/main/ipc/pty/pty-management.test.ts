@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { DaemonSessionInfo } from '../../daemon/daemon-session-info'
+import type { DaemonSessionInfo } from '../../daemon/protocol/daemon-session-info'
 
 // Keep mock result types independent of the replaced module.
 type FolderAccessResetResult = {
@@ -37,29 +37,29 @@ vi.mock('electron', () => ({
   ipcMain: { handle: handleMock, removeHandler: removeHandlerMock }
 }))
 
-vi.mock('../../daemon/daemon-folder-access-mismatch', () => ({
+vi.mock('../../daemon/permissions/daemon-folder-access-mismatch', () => ({
   getDaemonFolderAccessMismatch: getDaemonFolderAccessMismatchMock,
   refreshDaemonFolderAccessProbe: refreshDaemonFolderAccessProbeMock
 }))
 
-vi.mock('../../daemon/daemon-folder-access-reset', () => ({
+vi.mock('../../daemon/permissions/daemon-folder-access-reset', () => ({
   resetFolderAccessForDaemon: resetFolderAccessForDaemonMock
 }))
 
-vi.mock('../../daemon/daemon-newer-protocol-hold', () => ({
+vi.mock('../../daemon/providers/routing/daemon-newer-protocol-hold', () => ({
   isHoldingForNewerProtocolDaemon: isHoldingForNewerProtocolDaemonMock
 }))
 
-vi.mock('../../daemon/daemon-provider-restart', () => ({
+vi.mock('../../daemon/providers/lifecycle/daemon-provider-restart', () => ({
   restartDaemon: restartDaemonMock
 }))
-vi.mock('../../daemon/daemon-provider-state', () => ({
+vi.mock('../../daemon/providers/lifecycle/daemon-provider-state', () => ({
   getDaemonProvider: getDaemonProviderMock,
   getCurrentDaemonMacTccAttributionHealth: getCurrentDaemonMacTccAttributionHealthMock
 }))
 
 // Preserve instanceof routing without the real router constructor's event subscriptions.
-vi.mock('../../daemon/daemon-pty-router', () => {
+vi.mock('../../daemon/providers/routing/daemon-pty-router', () => {
   class DaemonPtyRouter {
     private allAdapters: unknown[]
     private current: unknown
@@ -81,7 +81,7 @@ vi.mock('../../daemon/daemon-pty-router', () => {
 })
 
 // Preserve degraded-provider instanceof routing without constructor event subscriptions.
-vi.mock('../../daemon/degraded-daemon-pty-provider', () => {
+vi.mock('../../daemon/providers/routing/degraded-daemon-pty-provider', () => {
   class DegradedDaemonPtyProvider {
     private allAdapters: unknown[]
     private current: unknown
@@ -169,12 +169,13 @@ async function importFresh() {
 }
 
 async function makeRouter(current: MockAdapter, legacy: MockAdapter[] = []) {
-  const { DaemonPtyRouter } = await import('../../daemon/daemon-pty-router')
+  const { DaemonPtyRouter } = await import('../../daemon/providers/routing/daemon-pty-router')
   return new DaemonPtyRouter({ current: current as never, legacy: legacy as never })
 }
 
 async function makeDegradedProvider(current: MockAdapter, legacy: MockAdapter[] = []) {
-  const { DegradedDaemonPtyProvider } = await import('../../daemon/degraded-daemon-pty-provider')
+  const { DegradedDaemonPtyProvider } =
+    await import('../../daemon/providers/routing/degraded-daemon-pty-provider')
   return new DegradedDaemonPtyProvider({
     current: current as never,
     legacy: legacy as never,

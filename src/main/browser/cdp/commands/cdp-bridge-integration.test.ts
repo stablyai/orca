@@ -2,8 +2,8 @@ import type * as WorktreeScanCacheModule from '../../../git/worktrees/catalog/wo
 import type * as WorktreeListingModule from '../../../git/worktrees/catalog/worktree-listing'
 import '../../../runtime/desktop-browser-bridge/desktop-browser-bridge-allowlist.spec'
 import { mkdtempSync } from 'node:fs'
-import { RuntimeBrowserCommands } from '../../../runtime/browser/browser-commands'
-import { setRuntimeBrowserCommandsFactory } from '../../../runtime/runtime-browser-commands-factory'
+import { RuntimeBrowserCommands } from '../../../runtime/browser/commands/browser-commands'
+import { setRuntimeBrowserCommandsFactory } from '../../../runtime/browser/installation/runtime-browser-commands-factory'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createConnection } from 'node:net'
@@ -49,8 +49,8 @@ import { BrowserManager } from '../../browser-manager'
 import { CdpBridge } from './cdp-bridge'
 import { BROWSER_TEXT_INSERT_CHUNK_BYTES } from '../../../../shared/browser-text-insertion-chunks'
 import { OrcaRuntimeService } from '../../../runtime/orca-runtime'
-import { OrcaRuntimeRpcServer } from '../../../runtime/runtime-rpc'
-import { readRuntimeMetadata } from '../../../runtime/runtime-metadata'
+import { OrcaRuntimeRpcServer } from '../../../runtime/rpc/server/runtime-rpc'
+import { readRuntimeMetadata } from '../../../runtime/rpc/server/runtime-metadata'
 
 type AXNode = {
   nodeId: string

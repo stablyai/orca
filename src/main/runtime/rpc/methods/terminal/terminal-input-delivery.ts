@@ -2,11 +2,12 @@ import {
   isTerminalInputPaused,
   TerminalInputPausedError,
   type TerminalInputSource
-} from '../../../terminal-input-admission'
+} from '../../../terminal/input/terminal-input-admission'
 import type { RpcCallerIdentity } from '../../rpc-caller-identity'
 import { InvalidArgumentError } from '../../core'
 import type { RuntimeTerminalSend } from '../../../../../shared/runtime-terminal-send-contract'
-import type { DriverState, OrcaRuntimeService } from '../../../orca-runtime'
+import type { OrcaRuntimeService } from '../../../orca-runtime'
+import type { RuntimeTerminalDriverState as DriverState } from '../../../../../shared/runtime-session-contracts'
 import {
   TERMINAL_INPUT_MAX_BYTES,
   TERMINAL_INPUT_TOO_LARGE_ERROR,

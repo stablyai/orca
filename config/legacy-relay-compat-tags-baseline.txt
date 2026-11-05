@@ -10,7 +10,7 @@ src/main/ipc/ssh/ssh-host-server-on-connect-wiring.ts
 src/main/ipc/ssh/ssh-session-teardown.ts
 src/main/ipc/ssh/ssh.ts
 src/main/runtime/orchestration/terminal-authority/verify-orchestration-compatibility-caller.ts
-src/main/runtime/runtime-terminal-contracts.ts
+src/main/runtime/orchestration/terminal-authority/orchestration-compatibility-authority.ts
 src/main/ssh/orcad-migration-delta-move.test.ts
 src/main/ssh/orcad-migration-delta-move.ts
 src/main/ssh/orcad-migration-repository-link.test.ts

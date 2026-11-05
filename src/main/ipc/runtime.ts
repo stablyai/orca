@@ -15,7 +15,7 @@ import { RpcDispatcher } from '../runtime/rpc/dispatcher'
 import { DESKTOP_RPC_CALLER } from '../runtime/rpc/rpc-caller-identity'
 import { ALL_RPC_METHODS } from '../runtime/rpc/methods'
 import { DesktopRuntimeSenderLifecycle } from './desktop-runtime-sender-lifecycle'
-import { publishMobileProjectSections } from '../runtime/mobile-project-sections-snapshot'
+import { publishMobileProjectSections } from '../runtime/sidebar-inputs/mobile-project-sections-snapshot'
 
 function boundTerminalFitRestore(pending: Promise<boolean>): Promise<boolean> {
   let timer: ReturnType<typeof setTimeout> | undefined

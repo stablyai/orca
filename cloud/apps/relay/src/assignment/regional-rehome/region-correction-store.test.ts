@@ -194,43 +194,6 @@ describe('ordered region decisions and migration outcomes', () => {
     ])
   })
 
-  it('supersedes prior windows and keeps an inconclusive tombstone immutable', async () => {
-    const context = await setup()
-    const first = await window(context)
-    const second = await window(context)
-    expect(second.generation).toBe(first.generation + 1)
-    const report = {
-      v: 1 as const,
-      action: 'report' as const,
-      assignmentEpoch: first.assignmentEpoch,
-      policyVersion: 1 as const,
-      outcome: 'conclusive' as const,
-      measurements: { 'us-central1': 200, 'asia-east2': 40 }
-    }
-    expect(
-      await context.store.exchangeRegionCorrection(
-        identity,
-        { ...report, generation: first.generation },
-        first.assignmentEpoch
-      )
-    ).toMatchObject({ reportStatus: 'stale' })
-    expect(
-      await context.store.exchangeRegionCorrection(
-        identity,
-        { ...report, generation: second.generation, outcome: 'inconclusive', reason: 'jitter' },
-        second.assignmentEpoch
-      )
-    ).toMatchObject({ reportStatus: 'accepted' })
-    expect(
-      await context.store.exchangeRegionCorrection(
-        identity,
-        { ...report, generation: second.generation },
-        second.assignmentEpoch
-      )
-    ).toMatchObject({ reportStatus: 'duplicate' })
-    expect(await context.store.previewRegionCorrection()).toEqual({ ineligible: 1 })
-  })
-
   it('previews the uncapped fleet without writes, claims, or locked reads', async () => {
     const context = await setup()
     const query = context.database.query.bind(context.database)

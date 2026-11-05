@@ -10,9 +10,9 @@ import { createRootDispatch } from './orchestration/db/root-dispatch-test-fixtur
 import type { RuntimeMobileSessionTabsResult } from '../../shared/runtime-types'
 import { AgentHookServer } from '../agent-hooks/server'
 import { OrcaRuntimeService } from './orca-runtime'
-import { makeStore } from './runtime-rpc-worktree-store-fixtures'
+import { makeStore } from './rpc/server/runtime-rpc-worktree-store-fixtures'
 import { spawnedPtyEnv } from './spawned-pty-env-fixtures'
-import { committingSpawn } from './bind-first-pane.test-fixture'
+import { committingSpawn } from './orca-runtime-tests/bind-first-pane.test-fixture'
 
 // STA-4557: deferred OpenCode foreground reads retained/revived finished authority (#14866, reverted in #14943).
 

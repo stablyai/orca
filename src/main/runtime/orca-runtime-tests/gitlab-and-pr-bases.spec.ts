@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
 import {
-  OrcaRuntimeService,
   addGitLabIssueCommentMock,
   addGitLabMRCommentMock,
   addGitLabMRInlineCommentMock,
@@ -23,8 +24,8 @@ import {
   updateGitLabIssueMock,
   updateGitLabMRMock,
   updateGitLabMRReviewersMock
-} from '../orca-runtime-test-mocks.spec'
-import { TEST_REPO_ID, TEST_REPO_PATH, store } from '../orca-runtime-test-fixtures.spec'
+} from '../orca-runtime-test-mocks/setup.spec'
+import { TEST_REPO_ID, TEST_REPO_PATH, store } from './orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
   it('passes SSH connection ids through GitLab task operations', async () => {

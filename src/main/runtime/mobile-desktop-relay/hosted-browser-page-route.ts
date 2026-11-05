@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import type { RpcRequest } from '../rpc/core'
-import { browserScreencastSubscriptionPageId } from '../browser-screencast-subscription-id'
+import { browserScreencastSubscriptionPageId } from '../browser/screencast/browser-screencast-subscription-id'
 
 const BrowserCallParams = z.looseObject({
   page: z.string().optional(),

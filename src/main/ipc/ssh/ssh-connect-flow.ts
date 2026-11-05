@@ -60,7 +60,7 @@ export async function connectTarget(
     return admitConnect(targetId, true)
   }
   clearSshCredentialDeclined(targetId)
-  // Only explicit user connects may lift the re-pair cap.
+  // Only explicit user connects may lift the re-pair and crash-loop caps.
   const managedEnvironmentId = getManagedOrcadFenceEnvironmentId(
     getSshTargetRegistryStore()?.getTarget(targetId)
   )

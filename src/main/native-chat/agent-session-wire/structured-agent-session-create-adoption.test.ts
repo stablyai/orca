@@ -25,7 +25,7 @@ import {
   codexLegacyMirrorRecords,
   writeCodexHistoryFixture
 } from '../agent-session-journal/codex-history-test-fixture'
-import { structuredAgentRuntimeMetadata } from '../../runtime/structured-agent-runtime-metadata'
+import { structuredAgentRuntimeMetadata } from '../../runtime/agent-session/installation/structured-agent-runtime-metadata'
 import {
   resolveStructuredAgentSessionAdoptionForCreate,
   structuredAgentSessionAdoptAttach

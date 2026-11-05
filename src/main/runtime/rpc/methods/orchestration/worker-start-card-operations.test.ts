@@ -3,7 +3,7 @@ import {
   expectWorkerStartSourcePlans
 } from './worker-start-card-population.test-fixture'
 import { expect, it, vi } from 'vitest'
-import { partialRuntimeStore } from '../../../runtime-store-partial-fixture'
+import { partialRuntimeStore } from '../../../orca-runtime-tests/runtime-store-partial-fixture'
 import { resolveOrchestrationSessionCaller } from '../../orchestration-session-caller'
 import { setStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import {

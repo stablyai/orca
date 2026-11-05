@@ -13,7 +13,7 @@ import type {
   ConversationEvent,
   ConversationSnapshot
 } from '../external-conversations/external-conversation-events'
-import { isMissingFileError } from '../runtime/device-registry-corruption'
+import { isMissingFileError } from '../runtime/rpc/server/pairing/device-registry-corruption'
 import { ConnectorOutbox, type ConnectorOutboxHead, type ConnectorStamp } from './connector-outbox'
 import { connectorSnapshot, jsonBytes, unsupported } from './connector-snapshot'
 

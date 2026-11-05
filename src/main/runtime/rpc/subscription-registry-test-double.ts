@@ -1,4 +1,4 @@
-import type { SubscriptionRegistration } from '../orca-runtime'
+import type { SubscriptionRegistration } from '../runtime-subscription-registry'
 
 type Cleanup = () => void | Promise<void>
 type Entry = {

@@ -8,7 +8,7 @@ import type {
   RuntimeMobileSessionTabsSnapshot,
   RuntimeMobileSessionTerminalTab
 } from '../../../../shared/runtime-types'
-import { SSH_PANE_RECOVERY_GRACE_MS } from '../../orca-runtime-core'
+import { SSH_PANE_RECOVERY_GRACE_MS } from '../../terminal/recovery/ssh-pane-recovery-window'
 import { terminalIsOfTab } from './closed-tab-terminal'
 
 export abstract class OrcaRuntimeWithHasLiveOrPersistedServeOrSshOwnedPtyBinding extends OrcaRuntimeWithReconcileHeadlessMobileSessionBrowserTabs {

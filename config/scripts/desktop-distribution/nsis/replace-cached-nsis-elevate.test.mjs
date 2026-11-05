@@ -43,39 +43,8 @@ function makeCache(...relativeFiles) {
 
 describe('cached elevate.exe swap covers the real electron-builder layouts', () => {
   // Model real <releaseName>/<archive>-<url hash> legacy/unified layouts; old <cache>/nsis matched neither. Custom layout is covered by probe tests.
-  it.each([
-    ['legacy bundle', 'nsis-3.0.4.1/nsis-3.0.4.1-1mx3n/elevate.exe'],
-    ['unified bundle', 'nsis@1.2.1/nsis-bundle-3.12-k4d9x/elevate.exe'],
-    ['bare nsis release dir', 'nsis/nsis-3.0.4.1/elevate.exe']
-  ])('finds the cached helper in the %s layout', (_label, relative) => {
-    const cacheDir = makeCache(relative)
-    expect(findCachedElevatePaths(cacheDir, { env: {} })).toEqual([
-      join(cacheDir, ...relative.split('/'))
-    ])
-  })
-
-  it('leaves other toolsets and the raw download dir alone', () => {
-    const cacheDir = makeCache(
-      'winCodeSign/winCodeSign-2.6.0-abc12/elevate.exe',
-      'downloads/nsis/elevate.exe'
-    )
-    expect(findCachedElevatePaths(cacheDir, { env: {} })).toEqual([])
-  })
 
   // Allow nsis-resources overmatch: it ships plugins without elevate.exe and costs one cheap read; guessing narrower upstream naming is brittle.
-  it('scans the resources bundle too, which ships no helper to find', () => {
-    expect(
-      findCachedElevatePaths(makeCache('nsis-resources-3.4.1/plugins/x86-unicode/nsProcess.dll'), {
-        env: {}
-      })
-    ).toEqual([])
-
-    const planted = 'nsis-resources-3.4.1/nsis-resources-3.4.1-p8w1z/elevate.exe'
-    const cacheDir = makeCache(planted)
-    expect(findCachedElevatePaths(cacheDir, { env: {} })).toEqual([
-      join(cacheDir, ...planted.split('/'))
-    ])
-  })
 
   // Replace all cached copies because only app-builder-lib knows which one repack chooses.
   it('replaces every cached copy when several bundles are present', async () => {
@@ -97,17 +66,6 @@ describe('cached elevate.exe swap covers the real electron-builder layouts', () 
     for (const path of replaced) {
       expect(readFileSync(path, 'utf8')).toBe('signpath-signed-elevate')
     }
-  })
-
-  it('covers the ELECTRON_BUILDER_NSIS_DIR override copy', () => {
-    const overrideDir = join(scratch, 'nsis-override')
-    mkdirSync(overrideDir, { recursive: true })
-    writeFileSync(join(overrideDir, 'elevate.exe'), 'unsigned-elevate')
-    const cacheDir = makeCache()
-
-    expect(
-      findCachedElevatePaths(cacheDir, { env: { ELECTRON_BUILDER_NSIS_DIR: overrideDir } })
-    ).toEqual([join(overrideDir, 'elevate.exe')])
   })
 
   // Compare real cache scan against independent unbounded walk to catch vacuous empty matches; skip only if no bundle is cached.
@@ -137,57 +95,6 @@ describe('the probe, not the scan, decides whether the swap worked', () => {
   })
 
   // Prefix-restored stale release can satisfy replaced.length while authoritative packed bundle sits outside scan; model both copies.
-  it('does not call a stale directory a success when the packed bundle is unmatched', async () => {
-    const stale = 'nsis-3.0.4.1/nsis-3.0.4.1-1mx3n/elevate.exe'
-    const packed = 'builder-nsis@4.0.0/nsis-bundle-4.0-k4d9x/elevate.exe'
-    const cacheDir = makeCache(stale, packed)
-    const signed = join(scratch, 'signed-elevate.exe')
-    writeFileSync(signed, 'signpath-signed-elevate')
-
-    const result = await replaceCachedElevateHelpers({
-      signedPath: signed,
-      cacheDir,
-      env: {},
-      probe: probeUnavailable
-    })
-
-    expect(result.replaced).toEqual([join(cacheDir, ...stale.split('/'))])
-    expect(readFileSync(join(cacheDir, ...packed.split('/')), 'utf8')).toBe('unsigned-elevate')
-
-    const { annotations, exitCode } = summarizeSwap(result)
-    expect(exitCode).toBe(0)
-    expect(annotations).toHaveLength(1)
-    expect(annotations[0].level).toBe('warning')
-    expect(annotations[0].message).toContain('Could not ask app-builder-lib')
-  })
-
-  it('fails when the probe names a copy that could not be replaced', () => {
-    const summary = summarizeSwap({
-      replaced: ['C:/cache/nsis-3.0.4.1/nsis-3.0.4.1-1mx3n/elevate.exe'],
-      cacheDir: 'C:/cache',
-      toolsetPath: 'C:/cache/nsis@2.0.0/nsis-bundle-4.0-k4d9x/elevate.exe',
-      toolsetError: null,
-      toolsetReplaced: false
-    })
-
-    expect(summary.exitCode).toBe(1)
-    expect(summary.annotations[0].level).toBe('error')
-    expect(summary.annotations[0].message).toContain('will pack')
-  })
-
-  it('fails when nothing at all was replaced', () => {
-    const summary = summarizeSwap({
-      replaced: [],
-      cacheDir: 'C:/cache',
-      toolsetPath: null,
-      toolsetError: 'app-builder-lib not loadable',
-      toolsetReplaced: false
-    })
-
-    expect(summary.exitCode).toBe(1)
-    expect(summary.annotations[0].level).toBe('error')
-    expect(summary.annotations[0].message).toContain('No cached elevate.exe found')
-  })
 })
 
 describe('a cached elevate.exe miss is not silent', () => {

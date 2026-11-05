@@ -114,7 +114,7 @@
       "sourceClosureSha256": "08558478f5a5a6c0aa2e4e4d92d609ff55c11564d04a957f999f2302c478ae80"
     },
     {
-      "file": "src/main/daemon/serialize-grid-transcript-replay.test.ts",
+      "file": "src/main/daemon/emulation/testing/serialize-grid-transcript-replay.test.ts",
       "inputs": ["src/main/runtime/__fixtures__/", "src/main/daemon/__fixtures__/"],
       "emptyEnv": [
         "SERIALIZE_TRANSCRIPT_DIR",

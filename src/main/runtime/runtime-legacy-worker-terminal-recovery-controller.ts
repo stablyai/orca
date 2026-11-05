@@ -6,7 +6,7 @@ import type {
   LegacyWorkerRecoveryOptions,
   LegacyWorkerRecoveryPorts,
   LegacyWorkerTerminalRecoveryResult
-} from './runtime-legacy-worker-terminal-recovery-types'
+} from './orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 
 type RecoveryRetry = {
   attempt: number
