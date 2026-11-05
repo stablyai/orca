@@ -2,6 +2,7 @@ import { createBrowserUuid } from '@/lib/browser-uuid'
 import { useRef, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
@@ -12,9 +13,10 @@ import type {
 import type { CodexRateLimitResetOutcome } from '../../../../shared/rate-limit-types'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { normalizeUsagePercentageDisplay } from '../../../../shared/usage-percentage-display'
+import { getProviderDisplayName } from '../../../../shared/usage-provider-windows'
 import { ProviderIdentityCard } from '../status-bar/ProviderIdentityCard'
 import { CodexResetConfirmation, CodexResetCredits } from '../status-bar/CodexResetCredits'
-import { formatResetCreditExpiry } from '../status-bar/tooltip'
+import { formatResetCreditExpiry, ProviderIcon } from '../status-bar/tooltip'
 
 type UsageResult = Extract<AgentSessionAccountUsage, { status: 'ok' }>
 
@@ -70,7 +72,7 @@ export function NativeChatAccountUsageCard({
   const display = normalizeUsagePercentageDisplay(useAppStore((s) => s.usagePercentageDisplay))
   const message =
     result === null
-      ? translate('components.native-chat.usage.loading', 'Loading Codex usage…')
+      ? null
       : result.status === 'failed'
         ? translate(
             'components.native-chat.usage.failed',
@@ -87,13 +89,21 @@ export function NativeChatAccountUsageCard({
                 'Codex usage isn’t available with an API key. Sign in to Codex with a ChatGPT account to view usage.'
               )
           : null
+  const accountHeading = (
+    <div className="mb-2 text-xs text-muted-foreground">
+      {translate('components.native-chat.usage.account', 'Account used by this chat')}
+    </div>
+  )
   return (
     <div className="p-3 text-sm text-foreground">
-      {result?.status === 'ok' ? (
+      {result === null ? (
         <>
-          <div className="mb-2 text-xs text-muted-foreground">
-            {translate('components.native-chat.usage.account', 'Account used by this chat')}
-          </div>
+          {accountHeading}
+          <LoadingUsageCard />
+        </>
+      ) : result.status === 'ok' ? (
+        <>
+          {accountHeading}
           <ProviderIdentityCard
             p={result.rateLimits}
             accountLabel={chatAccountLabel(result.account)}
@@ -103,7 +113,6 @@ export function NativeChatAccountUsageCard({
         </>
       ) : (
         <div className="flex items-center gap-2">
-          {result === null ? <Loader2 className="size-4 animate-spin" /> : null}
           {message}
           {result?.status === 'failed' ? (
             <Button variant="outline" size="xs" onClick={() => onRetry(notice)}>
@@ -114,6 +123,38 @@ export function NativeChatAccountUsageCard({
       )}
       {/* A reset's outcome outlives the refresh it triggered, whether that refresh succeeds or not. */}
       {notice ? <div className="mt-2 text-xs text-muted-foreground">{notice}</div> : null}
+    </div>
+  )
+}
+
+/** The loaded card's layout with one usage window, so the modal keeps its height when usage lands. */
+function LoadingUsageCard(): React.JSX.Element {
+  const line = 'block rounded bg-foreground/10'
+  return (
+    <div className="w-full space-y-2 text-xs" aria-busy="true">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5 text-sm font-medium">
+          <ProviderIcon provider="codex" />
+          {getProviderDisplayName('codex')}
+        </div>
+        <span className="flex shrink-0 items-center gap-1.5 text-muted-foreground">
+          <Loader2 className="size-3 animate-spin" />
+          {translate('components.native-chat.usage.loading', 'Loading Codex usage…')}
+        </span>
+      </div>
+      <Card size="sm">
+        <div className="space-y-3 px-2.5">
+          <div className="text-sm">
+            <span className={`${line} h-5 w-40`} />
+          </div>
+          <div className="space-y-1">
+            <span className={`${line} h-4 w-14`} />
+            <div className="h-[6px] w-full rounded-full bg-foreground/10" />
+            <span className={`${line} h-4 w-16`} />
+          </div>
+          <span className={`${line} h-4 w-36`} />
+        </div>
+      </Card>
     </div>
   )
 }

@@ -31,13 +31,14 @@ function UsageDialog({
     document.activeElement instanceof HTMLElement ? document.activeElement : null
   )
   const title = translate('components.native-chat.usage.title', 'Codex usage')
+  // Sized to the card, capped at /resume's height; the card holds its layout while loading.
   return (
     <Dialog open onOpenChange={(open) => !open && closeModal()}>
       <DialogContent
         showCloseButton={false}
         aria-describedby={undefined}
         surface="panel"
-        className="flex h-[min(640px,calc(100vh-4rem))] flex-col overflow-hidden sm:max-w-[560px]"
+        className="flex max-h-[min(640px,calc(100vh-4rem))] flex-col overflow-hidden sm:max-w-[560px]"
         onCloseAutoFocus={(event) => {
           event.preventDefault()
           if (returnFocusTo?.isConnected) {
@@ -59,7 +60,7 @@ function UsageDialog({
             </Button>
           </DialogClose>
         </div>
-        <div className="scrollbar-sleek min-h-0 flex-1 overflow-y-auto">
+        <div className="scrollbar-sleek min-h-0 overflow-y-auto">
           <NativeChatAccountUsageCard
             result={usage.result}
             notice={usage.notice}
