@@ -387,6 +387,45 @@ describe('issue source operations', () => {
     expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(3)
   })
 
+  it('recovers an oversized body when gh reports it only in the stdout response', async () => {
+    // Real `gh api` puts the reduced status line on stderr and the per-field
+    // validation detail ("body is too long ...") in the stdout JSON. The recovery
+    // must inspect both, not stderr alone, or an over-long body hard-fails with 422.
+    getIssueOwnerRepoMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
+    ghExecFileAsyncMock
+      .mockRejectedValueOnce(
+        Object.assign(new Error('Command failed: gh'), {
+          stderr: 'gh: Validation Failed (HTTP 422)',
+          stdout: JSON.stringify({
+            message: 'Validation Failed',
+            errors: [
+              {
+                resource: 'Issue',
+                field: 'body',
+                code: 'invalid',
+                message: 'body is too long (maximum is 65536 characters)'
+              }
+            ],
+            status: '422'
+          })
+        })
+      )
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          number: 931,
+          html_url: 'https://github.com/stablyai/orca/issues/931'
+        })
+      })
+      .mockResolvedValueOnce({ stdout: '' })
+
+    await expect(createIssue('/repo-root', 'Image issue', 'data:image')).resolves.toEqual({
+      ok: true,
+      number: 931,
+      url: 'https://github.com/stablyai/orca/issues/931'
+    })
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(3)
+  })
+
   it('does not retry unrelated create failures', async () => {
     getIssueOwnerRepoMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
     ghExecFileAsyncMock.mockRejectedValueOnce(new Error('HTTP 422: assignees is invalid'))
