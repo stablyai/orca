@@ -60,7 +60,7 @@ import { createPtyOutputProcessor } from './pty-output-processor'
 import { localizeWslDistroHoldText } from '@/lib/wsl-distro-hold-copy'
 import { isSshSessionGoneError } from './pty-connection/pty-connect-limits'
 import { RuntimeRpcCallError, unwrapRuntimeRpcResult } from '../../runtime/runtime-rpc-result'
-import { latestRetiredTerminalHandle } from '../../runtime/web-session-terminal-orphan-recovery-surface-index'
+import { latestTerminalRetirementProof } from '../../runtime/web-session-terminal-orphan-recovery-surface-index'
 import {
   getRemoteRuntimePtyEnvironmentId,
   getRemoteRuntimeTerminalHandle,
@@ -154,7 +154,7 @@ const TERMINAL_CREATE_RETRY_DELAYS_MS = [250, 500, 1000, 2000, 4000, 8000, 15_00
 type HostHandleReplacementPolicy = 'reuse' | 'prefer-replacement' | 'require-replacement'
 
 /** The host closed this pane's surface for good (its process ended or it was closed); never reattach it. */
-type RetiredHostSurface = { retiredHandle: string }
+type RetiredHostSurface = { retiredHandle: string; incarnationId?: string }
 
 type PersistedHostPaneResolution =
   | { kind: 'resolved'; terminal: RuntimeTerminalResolvePane }
@@ -804,17 +804,18 @@ export function createRemoteRuntimePtyTransport(
     if (!leafId || hasHostSessionTerminalSurface(snapshot, hostTabId)) {
       return null
     }
-    const retiredHandle = latestRetiredTerminalHandle(snapshot, { tabId: hostTabId, leafId })
-    return retiredHandle && (!expectedHandle || retiredHandle === expectedHandle)
-      ? { retiredHandle }
+    const proof = latestTerminalRetirementProof(snapshot, { tabId: hostTabId, leafId })
+    return proof && (!expectedHandle || proof.terminal === expectedHandle)
+      ? { retiredHandle: proof.terminal, incarnationId: proof.incarnationId }
       : null
   }
 
   // Why: the close record already proves the end; the host's exit record only adds its code.
   async function endRetiredHostSurface(
-    retiredHandle: string,
+    { retiredHandle, incarnationId }: RetiredHostSurface,
     isCurrent: () => boolean
   ): Promise<void> {
+    const rebindWatch = startHostRebindWatch()
     const exitCode = await callRuntime<{ terminal?: RuntimeTerminalShow }>('terminal.show', {
       terminal: retiredHandle
     }).then(
@@ -822,9 +823,11 @@ export function createRemoteRuntimePtyTransport(
         hostRecordsTerminalExit(terminal) ? hostRecordedExitCode(terminal) : undefined,
       () => undefined
     )
-    if (isCurrent() && !terminalEnded) {
-      retireRemoteTerminalId(exitCode)
+    if (!isCurrent() || terminalEnded) {
+      rebindWatch?.dispose()
+      return
     }
+    retireWatchingForRebind(rebindWatch, exitCode, retiredHandle, incarnationId ?? null)
   }
 
   // Why: pending host surfaces materialize only through activation.
@@ -1266,10 +1269,7 @@ export function createRemoteRuntimePtyTransport(
       if (notifySpawn) {
         onPtySpawn?.(remotePtyId)
       }
-      await endRetiredHostSurface(
-        hostHandle.retiredHandle,
-        () => isCurrent() && handle === endedHandle
-      )
+      await endRetiredHostSurface(hostHandle, () => isCurrent() && handle === endedHandle)
       return undefined
     }
 
@@ -2423,14 +2423,14 @@ export function createRemoteRuntimePtyTransport(
         return
       }
       remotePtyId ??= exitedPtyId
-      const exitedIncarnationId = terminal.incarnationId ?? authoritativePtyIncarnationId
-      retireRemoteTerminalId(hostRecordedExitCode(terminal))
-      if (rebindWatch && !destroyed) {
-        stopWatchingHostRebind = rebindWatch.dispose
-        const armed = rebindWatch
-        rebindWatch = null
-        armed.arm(targetHandle, exitedIncarnationId)
-      }
+      const watch = rebindWatch
+      rebindWatch = null
+      retireWatchingForRebind(
+        watch,
+        hostRecordedExitCode(terminal),
+        targetHandle,
+        terminal.incarnationId ?? authoritativePtyIncarnationId
+      )
     })()
       .catch(() => {})
       .finally(() => {
@@ -2439,6 +2439,22 @@ export function createRemoteRuntimePtyTransport(
           hostExitProbeHandle = null
         }
       })
+  }
+
+  // Why: the watch started before the exit probe, so a replacement published meanwhile still revives the pane.
+  function retireWatchingForRebind(
+    watch: HostRebindAfterExitWatch | null,
+    exitCode: number | undefined,
+    exitedHandle: string,
+    exitedIncarnationId: string | null
+  ): void {
+    retireRemoteTerminalId(exitCode)
+    if (watch && !destroyed) {
+      stopWatchingHostRebind = watch.dispose
+      watch.arm(exitedHandle, exitedIncarnationId)
+    } else {
+      watch?.dispose()
+    }
   }
 
   // Why: a restart's new process can land just after the probe read the old one's exit (#31968).
@@ -2754,13 +2770,13 @@ export function createRemoteRuntimePtyTransport(
       if (nextHandle && typeof nextHandle !== 'string') {
         const probeLifecycle = lifecycleEpoch
         await endRetiredHostSurface(
-          nextHandle.retiredHandle,
+          nextHandle,
           () =>
             !destroyed &&
             connected &&
             handle === previousHandle &&
             probeLifecycle === lifecycleEpoch &&
-            recovery.isCurrent(recoveryEpoch)
+            recovery.ownsEpoch(recoveryEpoch)
         )
         return
       }

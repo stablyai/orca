@@ -77,15 +77,47 @@ const EXITED_127 = {
 }
 
 async function createHostMirror(onPtyExit = vi.fn(), onPtySpawn = vi.fn()) {
+  const onHostReboundExitedPty = vi.fn()
   const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
   const transport = createRemoteRuntimePtyTransport('env-1', {
     worktreeId: 'wt-1',
     tabId: 'web-terminal-host-tab-1',
     leafId: 'pane:1',
     onPtyExit,
-    onPtySpawn
+    onPtySpawn,
+    onHostReboundExitedPty
   })
-  return { transport, onPtyExit, onPtySpawn }
+  return { transport, onPtyExit, onPtySpawn, onHostReboundExitedPty }
+}
+
+async function publishLiveHostSurface(terminal: string): Promise<void> {
+  // Why dynamic: the harness resets modules, so the transport's channel is the freshly loaded one.
+  const { queueAcceptedWebSessionTerminalSnapshot } =
+    await import('../../runtime/web-session-terminal-handle-events')
+  queueAcceptedWebSessionTerminalSnapshot(
+    {
+      worktree: 'wt-1',
+      publicationEpoch: 'epoch-ready',
+      snapshotVersion: 4,
+      activeGroupId: null,
+      activeTabId: 'host-tab-1::pane:1',
+      activeTabType: 'terminal',
+      tabs: [
+        {
+          type: 'terminal',
+          id: 'host-tab-1::pane:1',
+          parentTabId: 'host-tab-1',
+          leafId: 'pane:1',
+          title: 'Terminal',
+          isActive: true,
+          status: 'ready',
+          terminal
+        }
+      ]
+    },
+    'env-1'
+  )
+  await new Promise((resolve) => setTimeout(resolve, 0))
 }
 
 describe('remote runtime pane whose host retired its surface (#38151)', () => {
@@ -145,6 +177,32 @@ describe('remote runtime pane whose host retired its surface (#38151)', () => {
 
     await vi.waitFor(() => expect(onPtyExit).toHaveBeenCalledWith('remote:env-1@@terminal-1'))
     expect(transport.getRecoveryState?.().phase).toBe('ended')
+    transport.destroy?.()
+  })
+
+  it('hands the pane to a replacement the host publishes while it reads the exit', async () => {
+    answerAsHostThatRetired({ retired: 'terminal-ended', show: EXITED_127 })
+    const exitRead = Promise.withResolvers<void>()
+    const answer = runtimeCall.getMockImplementation()
+    runtimeCall.mockImplementation(async (args: { method: string; params?: unknown }) => {
+      if (args.method === 'terminal.show') {
+        await exitRead.promise
+      }
+      return answer?.(args)
+    })
+    const { transport, onPtyExit, onHostReboundExitedPty } = await createHostMirror()
+
+    void transport.connect({ url: '', callbacks: {} })
+    await vi.waitFor(() =>
+      expect(runtimeCall).toHaveBeenCalledWith(expect.objectContaining({ method: 'terminal.show' }))
+    )
+    await publishLiveHostSurface('terminal-restarted')
+    exitRead.resolve()
+
+    await vi.waitFor(() =>
+      expect(onHostReboundExitedPty).toHaveBeenCalledWith('remote:env-1@@terminal-restarted')
+    )
+    expect(onPtyExit).toHaveBeenCalledWith('remote:env-1@@terminal-ended', 127)
     transport.destroy?.()
   })
 })
