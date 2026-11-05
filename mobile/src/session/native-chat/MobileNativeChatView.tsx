@@ -41,6 +41,7 @@ import { MobileNativeChatAwaitingInputRow } from './transcript/MobileNativeChatA
 import type { NativeChatAwaitingInput } from '../../../../src/shared/native-chat/native-chat-terminal-turn'
 import { MobileNativeChatFloatingControls } from './MobileNativeChatFloatingControls'
 import type { PendingNativeChatImage } from './composer/mobile-native-chat-image-attachment'
+import type { MobilePastedImages } from './composer/mobile-native-chat-composer-paste'
 import {
   MobileNativeChatDraftComposer,
   type MobileNativeChatSendProps,
@@ -104,6 +105,7 @@ type ChatViewProps = MobileNativeChatSendProps &
     draftKey: string | null
     onComposerTextChange: (text: string) => void
     onAttachImage?: () => void
+    onPasteImages?: (paste: MobilePastedImages) => void
     attachments?: PendingNativeChatImage[]
     onRemoveAttachment?: (id: string) => void
     isAttaching?: boolean
@@ -158,6 +160,7 @@ export function MobileNativeChatView({
   composerScopeKey,
   onComposerTextChange,
   onAttachImage,
+  onPasteImages,
   attachments,
   onRemoveAttachment,
   isAttaching,
@@ -398,6 +401,7 @@ export function MobileNativeChatView({
             sessionOptions={sessionOptions}
             contextUsage={contextUsage}
             onAttachImage={onAttachImage}
+            onPasteImages={onPasteImages}
             attachments={attachments}
             onRemoveAttachment={onRemoveAttachment}
             isAttaching={isAttaching}
