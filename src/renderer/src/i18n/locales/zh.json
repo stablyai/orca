@@ -19983,7 +19983,10 @@
       "workerAutoClose": {
         "running": "临时编排工作代理 · 完成后 2 分钟关闭",
         "finished": "临时编排工作代理已完成 · {{countdown}}后关闭",
-        "keepOpen": "保持打开"
+        "keepOpen": "保持打开",
+        "bannerRunning": "编排工作代理 · 完成后 2 分钟关闭",
+        "bannerFinished": "编排工作代理已完成 · {{countdown}}后关闭",
+        "temporaryBadge": "临时"
       }
     },
     "wslHostMark": {

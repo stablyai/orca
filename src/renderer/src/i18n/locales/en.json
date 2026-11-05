@@ -6815,7 +6815,15 @@
           "childCount_one": "{{count}} child",
           "childCount_other": "{{count}} children",
           "groupProjectsRemained_one": "{{remaining}} of {{count}} contained project remained after deleting the group.",
-          "groupProjectsRemained_other": "{{remaining}} of {{count}} contained projects remained after deleting the group."
+          "groupProjectsRemained_other": "{{remaining}} of {{count}} contained projects remained after deleting the group.",
+          "projectGroupRefreshScanFailed": "Could not scan this project group",
+          "projectGroupRefreshNoProjects": "No new projects found",
+          "projectGroupRefreshPartial": "Some new projects could not be added to the group",
+          "projectGroupRefreshIncomplete": "The folder scan stopped early; some new projects may not have been found",
+          "projectGroupRefreshSuccess_one": "Added {{count}} project to {{group}}",
+          "projectGroupRefreshSuccess_other": "Added {{count}} projects to {{group}}",
+          "projectGroupRefreshing": "Refreshing {{group}}…",
+          "refreshProjectGroup": "Refresh projects"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "Cancel",
@@ -21256,7 +21264,10 @@
       "workerAutoClose": {
         "running": "Temporary orchestration worker · Closes 2 minutes after it finishes",
         "finished": "Temporary orchestration worker finished · Closes in {{countdown}}",
-        "keepOpen": "Keep open"
+        "keepOpen": "Keep open",
+        "bannerRunning": "Orchestration worker · Closes 2 minutes after it finishes",
+        "bannerFinished": "Orchestration worker finished · Closes in {{countdown}}",
+        "temporaryBadge": "Temporary"
       }
     },
     "wslHostMark": {

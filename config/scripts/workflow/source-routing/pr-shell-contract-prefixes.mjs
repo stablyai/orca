@@ -1,10 +1,12 @@
 // Files whose edits run the real-shell contracts job (shell_contracts in pr.yml).
 export const SHELL_PREFIXES = [
-  'src/main/daemon/repro-13767-shell-ready-marker-lost-to-exec',
-  'src/main/daemon/shell-ready',
-  'src/main/daemon/daemon-bash-shell-ready',
-  'src/main/daemon/daemon-shell-ready-wrapper',
-  'src/main/daemon/node-pty-fd-leak',
+  'src/main/daemon/shell-readiness/testing/repro-13767-shell-ready-marker-lost-to-exec.test.ts',
+  'src/main/daemon/shell-readiness/shell-ready.ts',
+  'src/main/daemon/shell-readiness/testing/shell-ready-bash-wrapper.test.ts',
+  'src/main/daemon/shell-readiness/testing/shell-ready.test.ts',
+  'src/main/daemon/shell-readiness/daemon-bash-shell-ready-rcfile.ts',
+  'src/main/daemon/shell-readiness/daemon-shell-ready-wrapper-fileset.ts',
+  'src/main/daemon/pty-subprocess/testing/node-pty-fd-leak.test.ts',
   'src/main/providers/local-pty/local-pty-shell-ready',
   'src/main/pty/',
   'src/main/runtime/structured-session-cli-login-shell',

@@ -79,7 +79,7 @@ import {
   appendBrowserTabOrder,
   collectBrowserGroupAssignment
 } from '../mobile-session-browser-group-projection'
-import { HeadlessEmulator } from '../../daemon/headless-emulator'
+import { HeadlessEmulator } from '../../daemon/emulation/headless-emulator'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-types'
 import '../../../shared/terminal/input/terminal-input'
 import {

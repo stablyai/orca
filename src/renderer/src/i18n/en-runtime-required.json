@@ -933,6 +933,8 @@
           "groupProjectsRemained_other": "{{remaining}} of {{count}} contained projects remained after deleting the group.",
           "hideChildWorkspaces_one": "Hide {{count}} child workspace",
           "hideChildWorkspaces_other": "Hide {{count}} child workspaces",
+          "projectGroupRefreshSuccess_one": "Added {{count}} project to {{group}}",
+          "projectGroupRefreshSuccess_other": "Added {{count}} projects to {{group}}",
           "showChildWorkspaces_one": "Show {{count}} child workspace",
           "showChildWorkspaces_other": "Show {{count}} child workspaces"
         },
@@ -1644,11 +1646,11 @@
         "writeFailed": "Orca couldn't hand this message to the agent, so it was not sent."
       },
       "goalControl": {
+        "noGoal": "Codex has no goal to change in this chat. Set one with /goal followed by the objective.",
         "pauseUnconfirmed": "Codex stopped running, but its goal pause was not confirmed. Check the goal before continuing.",
         "settingsRejected": "Codex could not apply the selected model and effort. This goal change was not sent. Check the selection and try again.",
         "settingsUnconfirmed": "Codex did not confirm the selected model and effort. This goal change was not sent. Check the chat and try again.",
-        "stopUnconfirmed": "Codex could not confirm Stop. Check the chat before continuing.",
-        "noGoal": "Codex has no goal to change in this chat. Set one with /goal followed by the objective."
+        "stopUnconfirmed": "Codex could not confirm Stop. Check the chat before continuing."
       },
       "notices": {
         "compaction": "Context compacted",
