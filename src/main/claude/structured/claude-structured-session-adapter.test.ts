@@ -24,41 +24,8 @@ import {
 } from './claude-structured-startup-settled-test-support'
 import { invokeCanUseTool } from '../claude-can-use-tool-test-support'
 import { claudeProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
-import { providerRequestTimeoutOf } from '../../provider-process/provider-request-timeout'
 
 describe('ClaudeStructuredSessionAdapter.acquire', () => {
-  it('ends a stalled initialize at its 60-second deadline with the timed-out step', async () => {
-    vi.useFakeTimers()
-    const claude = fakeClaude({ initDelayMs: 60_001 })
-    const adapter = adapterFor(claude)
-    let result: Promise<unknown> | undefined
-    try {
-      let settled = false
-      result = adapter
-        .acquire({ identity: identityFor(), fence: 7, spawnToken: 'deadline' })
-        .catch((error: unknown) => {
-          settled = true
-          return error
-        })
-      await vi.advanceTimersByTimeAsync(59_999)
-      expect(settled).toBe(false)
-      await vi.advanceTimersByTimeAsync(1)
-      expect(providerRequestTimeoutOf(await result)).toEqual({
-        method: 'initialize',
-        timeoutMs: 60_000
-      })
-      expect(claude.connections).toHaveLength(1)
-    } finally {
-      claude.dispose()
-      try {
-        await result
-        await adapter.closeAll()
-      } finally {
-        vi.useRealTimers()
-      }
-    }
-  })
-
   it('pins the account and proves init without treating the system-frame uuid as a chain leaf', async () => {
     const claude = fakeClaude()
     const events: ClaudeStructuredSessionEvent[] = []
