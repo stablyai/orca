@@ -1,20 +1,18 @@
 import { useEffect, useRef, useState } from 'react'
-import { getWorktreeGitIdentityDisplay } from '../../../src/shared/worktree/git-identity-display'
+import { automaticWorktreeDisplayName } from '../../../src/shared/worktree/display-name-provenance'
 import { TextInputSheetContent } from '../components/TextInputModal'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { Worktree } from '../worktree/workspace-list-types'
 
-// Swapped into the workspace menu's open drawer; unmounting it is the cancel.
+// Swapped into the workspace menu's open drawer.
 export function WorkspaceRenameSheet({
   row,
   rename,
-  onDone,
-  onCancel
+  onClose
 }: {
   row: Worktree
   rename: (row: Worktree, displayName: string) => Promise<void>
-  onDone: () => void
-  onCancel: () => void
+  onClose: () => void
 }) {
   const t = useMobileTranslation()
   const [value, setValue] = useState(row.displayName)
@@ -28,36 +26,38 @@ export function WorkspaceRenameSheet({
     }
   }, [])
 
-  // The host's automatic name (mergeWorktree): the branch, else the project's name.
-  const identity = getWorktreeGitIdentityDisplay({ branch: row.branch })
-  const automaticName = identity?.kind === 'branch' ? identity.branchName : row.repo
+  const automaticName = automaticWorktreeDisplayName({
+    branch: row.branch,
+    projectName: row.repo,
+    path: row.path
+  })
+  // A detached HEAD falls back to the project's name, which neither hint describes.
+  const hint = row.branch
+    ? t('hostScreen.workspaceRenameSheet.emptyUsesBranch', 'Leave empty to use the branch name.')
+    : row.detachedHead
+      ? undefined
+      : t('hostScreen.workspaceRenameSheet.emptyUsesFolder', 'Leave empty to use the folder name.')
 
   async function submit(displayName: string) {
     // Like desktop's Workspace details, an unchanged name is not written (it would pin the label).
     if (displayName === row.displayName) {
-      onDone()
+      onClose()
       return
     }
     setBusy(true)
     setError(null)
     try {
       await rename(row, displayName)
+      // A late success must not close a menu reopened since.
       if (mountedRef.current) {
-        onDone()
+        onClose()
       }
     } catch (failure) {
-      if (!mountedRef.current) {
-        return
-      }
       const reason = failure instanceof Error ? failure.message : ''
       setError(
-        reason
-          ? t(
-              'hostScreen.workspaceRenameSheet.failedWithReason',
-              "Couldn't rename the workspace. {{reason}}",
-              { reason }
-            )
-          : t('hostScreen.workspaceRenameSheet.failed', "Couldn't rename the workspace.")
+        t('hostScreen.workspaceRenameSheet.failed', "Couldn't rename the workspace. {{reason}}", {
+          reason
+        }).trim()
       )
       setBusy(false)
     }
@@ -66,19 +66,7 @@ export function WorkspaceRenameSheet({
   return (
     <TextInputSheetContent
       title={t('hostScreen.workspaceRenameSheet.title', 'Rename Workspace')}
-      message={
-        identity?.kind === 'branch'
-          ? t(
-              'hostScreen.workspaceRenameSheet.emptyUsesBranch',
-              'Leave empty to use the branch name.'
-            )
-          : row.detachedHead
-            ? undefined
-            : t(
-                'hostScreen.workspaceRenameSheet.emptyUsesFolder',
-                'Leave empty to use the folder name.'
-              )
-      }
+      message={hint}
       value={value}
       onChangeText={setValue}
       placeholder={automaticName}
@@ -88,7 +76,7 @@ export function WorkspaceRenameSheet({
       error={error}
       busy={busy}
       onSubmit={(displayName) => void submit(displayName)}
-      onCancel={onCancel}
+      onCancel={onClose}
     />
   )
 }

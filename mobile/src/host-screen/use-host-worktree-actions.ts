@@ -31,10 +31,7 @@ export function useHostWorktreeActions(args: {
   client: RpcClient | null
   connState: ConnectionState
   embedded: boolean
-  fetchWorktrees: (options?: {
-    allowDuringModal?: boolean
-    queueIfInFlight?: boolean
-  }) => Promise<void>
+  fetchWorktrees: (options?: { allowDuringModal?: boolean }) => Promise<void>
   forgetHostClient: ReturnType<typeof useForgetHostClient>
   hostCapabilities: readonly string[]
   hostId: string | undefined
@@ -186,7 +183,7 @@ export function useHostWorktreeActions(args: {
           displayName
         })
       )
-      void fetchWorktrees({ queueIfInFlight: true })
+      void fetchWorktrees()
     },
     [clientForRow, fetchWorktrees]
   )

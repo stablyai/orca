@@ -109,8 +109,7 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
             <WorkspaceRenameSheet
               row={actionTarget}
               rename={actions.renameWorktree}
-              onDone={closeActionSheet}
-              onCancel={closeActionSheet}
+              onClose={closeActionSheet}
             />
           ) : (
             <ActionSheetContent
