@@ -422,8 +422,9 @@ it.each([undefined, ''])(
       platform: 'linux',
       isRemote: false,
       shell: 'posix',
-      agentArgs: request.agentArgs as string | undefined,
-      sessionOptions: request.sessionOptions as Record<string, string>
+      ...(typeof request.agentArgs === 'string' ? { agentArgs: request.agentArgs } : {}),
+      // Asserted above to be exactly this request's sessionOptions.
+      sessionOptions: { permissionMode: 'ask' }
     })
     expect(inputs.agentArgs).toBe('')
     expect(
