@@ -11,7 +11,11 @@ import {
   type GitHubChecksContextOwner
 } from '@/components/github-checks-tab-state'
 import { getCheckDetailsKey } from '@/components/github/pr-check-presentation'
-import { getCheckCounts, getChecksSummaryLabel } from '@/components/pr-check-counts'
+import {
+  getCheckCounts,
+  getOverallCheckCounts,
+  getChecksSummaryLabel
+} from '@/components/pr-check-counts'
 import { getBrokenChecks } from '../../../../../shared/source-control/checks/pr-checks-fix-prompt'
 import { sortChecksBySeverity } from '../../../../../shared/source-control/checks/pr-check-severity-order'
 import { githubRepoIdentityKey } from '../../../../../shared/github/repository-identity-key'

@@ -56,7 +56,12 @@ export const unavailableWithFailedRow = defineFixture({
     <div className="bg-background text-foreground">
       <PRTriageStrip
         review={acceptPRCheckObservation(
-          { number: 42, url: 'https://github.com/acme/widgets/pull/42', headSha: 'h1' },
+          {
+            number: 42,
+            url: 'https://github.com/acme/widgets/pull/42',
+            headSha: 'h1',
+            mergeable: 'UNKNOWN' as const
+          },
           null,
           { scope: 'fixture', complete: true, current: true }
         )!}

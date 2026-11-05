@@ -1,4 +1,4 @@
-import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
+import type { ProviderCheckSummary } from '../../../../../shared/github/pull-request-types'
 import { PRCheckEmptyDetails } from '@/components/pr-check-empty-details'
 import React from 'react'
 import { LoaderCircle } from 'lucide-react'
@@ -24,7 +24,7 @@ export function ChecksTabLayouts({
   renderCheckRow,
   fixChecksAgentDialog
 }: {
-  owner?: GitHubWorkItem
+  owner?: { checksSummary?: ProviderCheckSummary }
   summaryPending: boolean
   loading: boolean
   listLength: number

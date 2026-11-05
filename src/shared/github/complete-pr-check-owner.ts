@@ -102,7 +102,7 @@ export function acceptPRCheckObservation<T extends CheckOwner>(
   next: T,
   previous: CheckOwner | null | undefined,
   context: PRCheckObservationContext
-): T | null {
+): (T & { checksSummary?: ProviderCheckSummary }) | null {
   if (!context.current) {
     return null
   }

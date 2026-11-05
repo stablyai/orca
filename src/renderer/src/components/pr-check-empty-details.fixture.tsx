@@ -8,7 +8,12 @@ import { acceptPRCheckObservation } from '../../../shared/github/complete-pr-che
 import { Button } from './ui/button'
 
 const owner = acceptPRCheckObservation(
-  { number: 42, url: 'https://github.com/acme/widgets/pull/42', headSha: 'h1' },
+  {
+    number: 42,
+    url: 'https://github.com/acme/widgets/pull/42',
+    headSha: 'h1',
+    mergeable: 'UNKNOWN' as const
+  },
   null,
   { scope: 'fixture', complete: true, current: true }
 )!

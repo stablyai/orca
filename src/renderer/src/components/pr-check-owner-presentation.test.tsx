@@ -12,7 +12,12 @@ import { PRTriageStrip } from './right-sidebar/checks-panel/presentation/triage-
 import { i18n } from '@/i18n/i18n'
 import type { PRCheckDetail } from '../../../shared/github/check-types'
 
-const owner = { number: 42, url: 'https://github.com/acme/widgets/pull/42', headSha: 'h1' }
+const owner = {
+  number: 42,
+  url: 'https://github.com/acme/widgets/pull/42',
+  headSha: 'h1',
+  mergeable: 'UNKNOWN' as const
+}
 const context = { scope: 'account:runtime', complete: true, current: true }
 const blocked = {
   state: 'failure' as const,
