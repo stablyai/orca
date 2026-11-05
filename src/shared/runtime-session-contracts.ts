@@ -19,6 +19,7 @@ import type {
 import type { CliStatusCaller } from './orchestration-caller-status'
 import type { RuntimeHostDescriptor } from './remote-runtime/host-status/runtime-host-descriptor'
 import type { TuiAgent } from './agent-launch/catalog/tui-agent'
+import type { SleepingAgentLaunchConfig } from './agent-session/lifecycle/agent-session-resume'
 
 export type * from './runtime-mobile-session-tab-contracts'
 
@@ -301,6 +302,8 @@ export type RuntimeMobileSessionCreateTerminalResult = {
   warning?: 'desktop-tab-not-shown'
   /** The saved folder was gone, so the terminal started at the workspace root. */
   startupCwdFallback?: 'workspace-root'
+  /** The recipe the terminal actually launched with; a reconciled retry keeps its first attempt's. */
+  launchConfig?: SleepingAgentLaunchConfig
 }
 
 /** Activation's reply: the fallback rides this one answer and is never stored on the snapshot. */

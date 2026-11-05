@@ -216,7 +216,8 @@ export abstract class OrcaRuntimeWithResumeAgentSessionInWorkspace extends OrcaR
       handle: tab.terminal,
       paneKey: makePaneKey(tab.parentTabId, tab.leafId),
       ptyId: tab.ptyId,
-      launchConfig: resume.launchConfig
+      // The PTY may be one an earlier attempt spawned; keep what it actually launched with.
+      launchConfig: created.launchConfig ?? resume.launchConfig
     }
   }
 }
