@@ -190,6 +190,11 @@
       "sendQueueHint": "在当前回合结束后运行",
       "sendSteerHint": "加入智能体当前正在进行的工作"
     },
+    "contextUsage": {
+      "label": "上下文 {{used}}/{{window}} token，已用 {{percent}}%",
+      "title": "上下文",
+      "estimated": "根据上一次响应的估算值。"
+    },
     "composerAttachments": {
       "attachedImage": "已添加的图片",
       "file": "文件",
@@ -283,7 +288,9 @@
       "permissionDenied": "{{agent}} 拒绝了权限。查看详情。",
       "safetyReview": "{{agent}} 报告了安全审查警告。查看详情。",
       "truncatedResponse": "提供方响应已截断（原始大小：{{bytes}} 字节）。",
-      "modelFallback": "Claude 已切换模型：{{from}} → {{to}}。"
+      "modelFallback": "Claude 已切换模型：{{from}} → {{to}}。",
+      "signIn": "登录",
+      "signInHint": "在运行此聊天的电脑上打开终端"
     },
     "orcaStop": {
       "canContinue": "您可以在此对话中继续。",
@@ -292,6 +299,13 @@
       "remote": "此回复进行期间，{{machine}} 上的 Orca 已停止。",
       "unnamedServer": "远程服务器",
       "update": "此回复进行期间，{{machine}} 上的 Orca 为更新而重新启动。"
+    },
+    "interruptedContinue": {
+      "failed": "无法继续此聊天。请重试，或发送一条消息。",
+      "explanation": "继续后，智能体会先检查其上一步是否已完成。"
+    },
+    "sendError": {
+      "dismiss": "关闭"
     },
     "permission": {
       "needsAccessTo": "需要访问： ",
@@ -376,7 +390,9 @@
     },
     "sessionOptionRows": {
       "defaultMarker": "默认",
-      "notReportedMarker": "未上报"
+      "notReportedMarker": "未上报",
+      "moreModels": "更多模型",
+      "fewerModels": "较少模型"
     },
     "sessionOptionSegments": {
       "dispatchUnconfirmed": "已发送给智能体 — 尚未确认"
@@ -546,6 +562,12 @@
       "byteSize": "{{size}} 字节",
       "saveUpdate": "保存功能将在手机更新中提供。",
       "fullCopySaveUpdate": "完整复制和保存此附件的功能将在手机更新中提供。"
+    },
+    "hostOutage": {
+      "reconnecting": "{{hostName}} 正在重新连接…",
+      "stopped": "{{hostName}} 已停止。请在你的电脑上启动它。",
+      "server": "服务器",
+      "unavailable": "无法从手机访问 {{hostName}}。请在你的电脑上打开它的一个项目。"
     }
   },
   "common": {
@@ -775,7 +797,9 @@
     },
     "markdownBlocks": {
       "copyCode": "复制代码",
-      "openImage": "打开图片"
+      "openImage": "打开图片",
+      "wrapLines": "自动换行",
+      "disableLineWrap": "关闭自动换行"
     },
     "mountedBottomDrawer": {
       "dismissDrawer": "关闭抽屉"
@@ -1205,6 +1229,10 @@
       "retryLoading": "重试加载 {{path}}",
       "unavailable": "移动端不可用"
     },
+    "fileExplorerRowActions": {
+      "copyName": "复制名称",
+      "copyRelativePath": "复制相对路径"
+    },
     "fileMarkdownPreview": {
       "copyLoadedSource": "复制已加载的 Markdown 源码",
       "copySource": "复制 Markdown 源码",
@@ -1548,7 +1576,7 @@
       "notificationsTitle": "智能体需要您时，及时收到提醒",
       "openInChatUi": "在聊天界面中打开会话",
       "openInTerminal": "在终端中打开会话",
-      "sessionViewDescription": "选择在此设备上以终端还是聊天界面打开受支持的智能体会话。长按会话标签页可切换视图，也可稍后在“设置”中更改默认方式。",
+      "sessionViewDescription": "选择在此设备上以终端还是聊天界面打开受支持的智能体会话。长按会话标签页可切换视图，也可随时在“设置”→“聊天界面”中更改默认方式。",
       "sessionViewTitle": "以何种方式打开会话？",
       "skipNotifications": "暂不启用通知",
       "useChatUi": "使用聊天界面"
@@ -1766,13 +1794,8 @@
       "noUpdate": "已有 {{value0}} 未更新"
     },
     "agentMessageAttribution": {
-      "from": "来自 {{sender}}",
-      "fromMore": "来自 {{sender}} 及其他 {{count}} 个智能体",
-      "fromUnnamed": "来自智能体",
-      "messageFrom": "来自 {{sender}} 的消息",
-      "messageFromMore": "来自 {{sender}} 及其他 {{count}} 个智能体的消息",
-      "messageFromUnnamed": "来自智能体的消息",
-      "unnamedSender": "一个智能体"
+      "unnamedSender": "一个智能体",
+      "fromSender": "来自"
     },
     "aiVaultResumeLaunch": {
       "createFailed": "创建终端失败",
@@ -1797,6 +1820,7 @@
       "countWorkflows_one": "{{count}} 个工作流程",
       "countWorkflows_other": "{{count}} 个工作流程",
       "detailsUnavailable": "此会话的任务详细信息不可用。",
+      "outputFile": "输出：{{value0}}",
       "groupAgents": "智能体",
       "groupMonitors": "监控",
       "groupShell": "Shell",
@@ -2140,8 +2164,7 @@
     },
     "queuedMessageComposer": {
       "commandsNotAllowed": "排队消息中不能保存命令。",
-      "editing": "正在编辑消息",
-      "editingAttributed": "正在编辑消息 · {{attribution}}"
+      "editing": "正在编辑消息"
     },
     "quickCommandEditorForm": {
       "action": "操作",

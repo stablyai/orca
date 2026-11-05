@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
+import { installFakeAppEnvironment } from '../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 import { existsSync } from 'node:fs'
 import { buildCodexResetCreditExpectedScope } from '../../shared/codex-reset-credit-scope'
 import {

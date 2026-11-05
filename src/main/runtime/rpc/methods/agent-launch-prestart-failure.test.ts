@@ -22,7 +22,7 @@ import {
   RuntimeLineageError,
   LINEAGE_PARENT_AMBIGUOUS,
   formatAmbiguousCwdParentMessage
-} from '../../runtime-worktree-lineage-resolution'
+} from '../../workspaces/lineage/runtime-worktree-lineage-resolution'
 import { trackTerminalSpawnDispatch } from '../../../agent-launch/agent-launch-not-started'
 import {
   launchFailureWithoutEffectsCode,

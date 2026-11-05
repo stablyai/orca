@@ -1,8 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
-import { registerLivePty } from '../bind-first-pane.test-fixture'
-import { OrcaRuntimeService } from '../orca-runtime-test-mocks.spec'
-import { TEST_WORKTREE_ID, store } from '../orca-runtime-test-fixtures.spec'
+import { registerLivePty } from './bind-first-pane.test-fixture'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { TEST_WORKTREE_ID, store } from './orca-runtime-test-fixtures.spec'
 import { makeAgentStatusStoreWiring } from '../agent-status-store-wiring.test-fixture'
 
 /** Drive real OSC parsing so desktop dismissal also removes runtime and mobile rows. */

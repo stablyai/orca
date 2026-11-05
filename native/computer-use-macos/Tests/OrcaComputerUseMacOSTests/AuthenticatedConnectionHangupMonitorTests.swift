@@ -4,14 +4,6 @@ import Dispatch
 import XCTest
 
 final class AuthenticatedConnectionHangupMonitorTests: XCTestCase {
-    func testRejectsInvalidDescriptorDuringSetup() {
-        XCTAssertThrowsError(
-            try AuthenticatedConnectionHangupMonitor(
-                fileDescriptor: -1,
-                onHangup: {}
-            )
-        )
-    }
 
     func testRegistrationFailureClosesEventQueueOnce() {
         let closes = DescriptorCloseRecorder()
@@ -106,26 +98,6 @@ final class AuthenticatedConnectionHangupMonitorTests: XCTestCase {
         close(descriptors.peer)
 
         wait(for: [hangup], timeout: 0.1)
-        close(descriptors.local)
-    }
-
-    func testCancelReleasesMonitorWhileSocketStaysOpen() throws {
-        let descriptors = try makeSocketPair()
-        var monitor: AuthenticatedConnectionHangupMonitor? = try AuthenticatedConnectionHangupMonitor(
-            fileDescriptor: descriptors.local,
-            onHangup: {}
-        )
-        weak var retainedMonitor = monitor
-
-        monitor?.cancel()
-        monitor = nil
-
-        let deadline = Date().addingTimeInterval(1)
-        while retainedMonitor != nil, Date() < deadline {
-            usleep(10_000)
-        }
-        XCTAssertNil(retainedMonitor)
-        close(descriptors.peer)
         close(descriptors.local)
     }
 

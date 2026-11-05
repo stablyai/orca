@@ -1,18 +1,18 @@
 import { describe, expect, it, vi } from 'vitest'
-import { committingSpawn } from '../bind-first-pane.test-fixture'
-import {
-  AGENT_STATUS_STALE_AFTER_MS,
-  OrcaRuntimeService,
-  makePaneKey,
-  waitForMobileSessionTabsEvents
-} from '../orca-runtime-test-mocks.spec'
-import type { RuntimeMobileSessionTabsResult } from '../orca-runtime-test-mocks.spec'
+import { committingSpawn } from './bind-first-pane.test-fixture'
+import './runtime-test-module-registration.spec'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../../shared/agent-status/contracts/agent-status-freshness'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
+import '../orca-runtime-test-mocks/setup.spec'
+import { waitForMobileSessionTabsEvents } from './mobile-session-tab-event-wait'
+import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-session-contracts'
 import {
   HEADLESS_LEAF_ID,
   TEST_WORKTREE_ID,
   deferred,
   store
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
   it('publishes the hook provider session on a headless mobile tab so native chat can address the transcript', async () => {

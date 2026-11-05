@@ -36,10 +36,9 @@ const {
   webContentsFromIdMock: vi.fn()
 }))
 
+vi.mock('./browser-passwords-ipc', () => ({ registerBrowserPasswordsHandlers: vi.fn() }))
 vi.mock('electron', () => ({
-  BrowserWindow: {
-    fromWebContents: browserWindowFromWebContentsMock
-  },
+  BrowserWindow: { fromWebContents: browserWindowFromWebContentsMock },
   ipcMain: {
     removeHandler: removeHandlerMock,
     handle: handleMock
@@ -118,7 +117,7 @@ describe('registerBrowserHandlers', () => {
   })
 
   it('rejects non-window callers', async () => {
-    registerBrowserHandlers()
+    registerBrowserHandlers({ getSettings: vi.fn() })
 
     const registerHandler = handleMock.mock.calls.find(
       ([channel]) => channel === 'browser:registerGuest'
@@ -144,7 +143,7 @@ describe('registerBrowserHandlers', () => {
     try {
       registerGuestMock.mockReturnValue(false)
       const settled = Promise.allSettled([waitForTabRegistration('page-1', 1000)])
-      registerBrowserHandlers()
+      registerBrowserHandlers({ getSettings: vi.fn() })
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: ipcMain.handle's mock records handlers as a loose tuple; this is the signature registerBrowserHandlers registered for this channel.
       const registerHandler = handleMock.mock.calls.find(
         ([channel]) => channel === 'browser:registerGuest'
@@ -177,7 +176,7 @@ describe('registerBrowserHandlers', () => {
 
   it('validates exact live guest registration only for the trusted renderer', () => {
     getGuestWebContentsIdMock.mockReturnValue(123)
-    registerBrowserHandlers()
+    registerBrowserHandlers({ getSettings: vi.fn() })
     const validateHandler = handleMock.mock.calls.find(
       ([channel]) => channel === 'browser:isGuestRegistered'
     )?.[1] as (event: { sender: Electron.WebContents }, args: unknown) => boolean
@@ -209,7 +208,7 @@ describe('registerBrowserHandlers', () => {
   })
 
   it('repairs only a live webview owned by the trusted renderer', () => {
-    registerBrowserHandlers()
+    registerBrowserHandlers({ getSettings: vi.fn() })
     const repairHandler = handleMock.mock.calls.find(
       ([channel]) => channel === 'browser:repairGuestRegistration'
     )?.[1] as (
@@ -252,7 +251,7 @@ describe('registerBrowserHandlers', () => {
 
   it('authorizes browser download cancellation through the owning renderer', () => {
     cancelDownloadMock.mockReturnValue(true)
-    registerBrowserHandlers()
+    registerBrowserHandlers({ getSettings: vi.fn() })
 
     const cancelHandler = handleMock.mock.calls.find(
       ([channel]) => channel === 'browser:cancelDownload'
@@ -275,7 +274,7 @@ describe('registerBrowserHandlers', () => {
   })
 
   it('rejects browser download cancellation from untrusted callers', () => {
-    registerBrowserHandlers()
+    registerBrowserHandlers({ getSettings: vi.fn() })
 
     const cancelHandler = handleMock.mock.calls.find(
       ([channel]) => channel === 'browser:cancelDownload'
@@ -298,7 +297,7 @@ describe('registerBrowserHandlers', () => {
   })
 
   it('allows only the trusted renderer to approve an exact certificate challenge', () => {
-    registerBrowserHandlers()
+    registerBrowserHandlers({ getSettings: vi.fn() })
     const proceedHandler = handleMock.mock.calls.find(
       ([channel]) => channel === 'browser:proceedCertificate'
     )?.[1] as (event: { sender: Electron.WebContents }, args: unknown) => unknown
@@ -336,7 +335,7 @@ describe('registerBrowserHandlers', () => {
   })
 
   it('rejects malformed certificate approval IPC arguments', () => {
-    registerBrowserHandlers()
+    registerBrowserHandlers({ getSettings: vi.fn() })
     const proceedHandler = handleMock.mock.calls.find(
       ([channel]) => channel === 'browser:proceedCertificate'
     )?.[1] as (event: { sender: Electron.WebContents }, args: unknown) => unknown
@@ -359,7 +358,7 @@ describe('registerBrowserHandlers', () => {
     getWorktreeIdForTabMock.mockReturnValue('wt-browser')
 
     setAgentBrowserBridgeRef({ onTabChanged: onTabChangedMock } as never)
-    registerBrowserHandlers()
+    registerBrowserHandlers({ getSettings: vi.fn() })
 
     const activeTabChangedHandler = handleMock.mock.calls.find(
       ([channel]) => channel === 'browser:activeTabChanged'
@@ -379,7 +378,7 @@ describe('registerBrowserHandlers', () => {
       const second = waitForTabRegistration('page-1', 1000)
       const settled = Promise.allSettled([first, second])
 
-      registerBrowserHandlers()
+      registerBrowserHandlers({ getSettings: vi.fn() })
 
       const registerHandler = handleMock.mock.calls.find(
         ([channel]) => channel === 'browser:registerGuest'
@@ -425,7 +424,7 @@ describe('registerBrowserHandlers', () => {
     const guest = { id: 123 } as Electron.WebContents
     getGuestWebContentsIdMock.mockReturnValue(122)
     getAuthorizedGuestMock.mockReturnValueOnce(null).mockReturnValue(guest)
-    registerBrowserHandlers()
+    registerBrowserHandlers({ getSettings: vi.fn() })
     const sender = {
       id: 91,
       isDestroyed: () => false,
@@ -475,7 +474,7 @@ describe('registerBrowserHandlers', () => {
     try {
       getGuestWebContentsIdMock.mockReturnValue(null)
       getAuthorizedGuestMock.mockReturnValue(null)
-      registerBrowserHandlers()
+      registerBrowserHandlers({ getSettings: vi.fn() })
       const sender = {
         id: 91,
         isDestroyed: () => false,
@@ -506,7 +505,7 @@ describe('registerBrowserHandlers', () => {
     const guest = { id: 123 } as Electron.WebContents
     let registered = false
     getAuthorizedGuestMock.mockImplementation(() => (registered ? guest : null))
-    registerBrowserHandlers()
+    registerBrowserHandlers({ getSettings: vi.fn() })
     const sender = {
       id: 91,
       isDestroyed: () => false,
@@ -557,7 +556,7 @@ describe('registerBrowserHandlers', () => {
     const guest = { id: 123 } as Electron.WebContents
     let registered = false
     getAuthorizedGuestMock.mockImplementation(() => (registered ? guest : null))
-    registerBrowserHandlers()
+    registerBrowserHandlers({ getSettings: vi.fn() })
     const sender = {
       id: 91,
       isDestroyed: () => false,
@@ -613,7 +612,7 @@ describe('registerBrowserHandlers', () => {
     })
     getAuthorizedGuestMock.mockReturnValue(guest)
     setGrabModeMock.mockReturnValueOnce(firstEnable).mockResolvedValue(true)
-    registerBrowserHandlers()
+    registerBrowserHandlers({ getSettings: vi.fn() })
     const sender = {
       id: 91,
       isDestroyed: () => false,
@@ -651,7 +650,7 @@ describe('registerBrowserHandlers', () => {
     const guest = { id: 123 } as Electron.WebContents
     getAuthorizedGuestMock.mockReturnValue(guest)
     setGrabModeMock.mockResolvedValue(false)
-    registerBrowserHandlers()
+    registerBrowserHandlers({ getSettings: vi.fn() })
     const sender = {
       id: 91,
       isDestroyed: () => false,
@@ -678,7 +677,7 @@ describe('registerBrowserHandlers', () => {
       const anyWait = waitForAnyTabRegistration(1000)
       const settled = Promise.allSettled([worktreeWait, anyWait])
 
-      registerBrowserHandlers()
+      registerBrowserHandlers({ getSettings: vi.fn() })
 
       const registerHandler = handleMock.mock.calls.find(
         ([channel]) => channel === 'browser:registerGuest'
@@ -748,7 +747,7 @@ describe('registerBrowserHandlers', () => {
 
     expect(resolved).toBe(false)
 
-    registerBrowserHandlers()
+    registerBrowserHandlers({ getSettings: vi.fn() })
     const registerHandler = handleMock.mock.calls.find(
       ([channel]) => channel === 'browser:registerGuest'
     )?.[1] as (
@@ -784,7 +783,7 @@ describe('registerBrowserHandlers', () => {
   })
 
   it('validates annotation viewport bridge requests before syncing to the guest', async () => {
-    registerBrowserHandlers()
+    registerBrowserHandlers({ getSettings: vi.fn() })
     const guest = { isDestroyed: () => false } as Electron.WebContents
     getAuthorizedGuestMock.mockReturnValue(guest)
 
@@ -826,7 +825,7 @@ describe('registerBrowserHandlers', () => {
 
   // Annotation tools must enforce the same renderer ownership as grab tools.
   it('refuses an annotation viewport bridge request from a renderer that does not own the page', async () => {
-    registerBrowserHandlers()
+    registerBrowserHandlers({ getSettings: vi.fn() })
     getAuthorizedGuestMock.mockReturnValue(null)
 
     const syncHandler = handleMock.mock.calls.find(
@@ -856,7 +855,7 @@ describe('registerBrowserHandlers', () => {
   })
 
   it('rejects invalid annotation viewport bridge requests', async () => {
-    registerBrowserHandlers()
+    registerBrowserHandlers({ getSettings: vi.fn() })
 
     const syncHandler = handleMock.mock.calls.find(
       ([channel]) => channel === 'browser:setAnnotationViewportBridge'

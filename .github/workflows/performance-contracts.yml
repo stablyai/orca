@@ -13,7 +13,7 @@ on:
       - 'config/oxlint-plugins/*performance.mjs'
       - 'config/oxlint-plugins/quadratic-buffer-concat.mjs'
       - 'config/scripts/*-plugin.test.mjs'
-      - '!config/scripts/renderer-scrollbar-style-plugin.test.mjs'
+      - '!config/scripts/static-analysis/oxlint-contracts/renderer-scrollbar-style-plugin.test.mjs'
       # Keep in sync with the contract list in config/vitest.performance.config.ts;
       # without these a rename lands green and only breaks the next nightly.
       - 'src/main/ipc/pty/runtime/spawn-preflight-saved-resume.test.ts'

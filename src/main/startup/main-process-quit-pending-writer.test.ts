@@ -17,7 +17,10 @@ const dependencies: Record<string, Record<string, unknown>> = {
   '../ipc/worktree-base-directory-watcher': { disposeWorktreeBaseDirectoryWatchers: settled() },
   '../ipc/folder-repo-git-upgrade': { stopFolderRepoGitUpgradeWatch: idle() },
   '../ipc/pty/kill-all': { killAllPty },
-  '../daemon/daemon-provider-state': { disconnectDaemon: settled(), shutdownDaemon: settled() },
+  '../daemon/providers/lifecycle/daemon-provider-state': {
+    disconnectDaemon: settled(),
+    shutdownDaemon: settled()
+  },
   '../ipc/ssh/ssh-shutdown-drain': { beginSshShutdown },
   './main-process-connector-startup': { desktopConnectorCloud: () => null },
   '../agent-hooks/server': { agentHookServer: { stop: stopAgentHookServer } },
@@ -32,7 +35,7 @@ const dependencies: Record<string, Record<string, unknown>> = {
     setStructuredAgentSessionTeardownTrigger: idle()
   },
   '../runtime/files/watch/file-watcher-leases': { awaitRuntimeFileWatcherUnsubscribes: settled() },
-  '../runtime/runtime-metadata': { clearRuntimeMetadataIfOwned: idle() },
+  '../runtime/rpc/server/runtime-metadata': { clearRuntimeMetadataIfOwned: idle() },
   '../browser/client-hosts/lifecycle/paired-runtime-browser-client-host-runtime': {
     shutdownPairedRuntimeBrowserClientHosts: settled()
   },

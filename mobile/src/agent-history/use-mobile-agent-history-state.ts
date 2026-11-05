@@ -20,7 +20,11 @@ import {
   mobileAiVaultScopePathsKey,
   resolveActiveHistoryWorktree
 } from './agent-history-scope-paths'
-import type { AiVaultScope } from '../../../src/shared/ai-vault/contracts/ai-vault-types'
+import type {
+  AiVaultScanIssue,
+  AiVaultScope,
+  AiVaultSession
+} from '../../../src/shared/ai-vault/contracts/ai-vault-types'
 import { useAgentHistoryAssociationReload } from './use-agent-history-association-reload'
 import { agentHistoryHostStatusRead } from './mobile-agent-history-operations'
 import {
@@ -231,8 +235,10 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
           kind: 'ready',
           hostId,
           client,
-          sessions: result.sessions,
-          issues: result.issues
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the reader checks both containers; the rows stay the host's own records because `agent` is a vocabulary this client echoes back on resume. aivault-history-screen-listed `normal` records a full row: every member the cards and the resume path read unguarded.
+          sessions: result.sessions as AiVaultSession[],
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: same reader, same container check; the issue rows are the host's AiVaultScanIssue, classified by `kind` like desktop History (an unknown kind still reads as a notice).
+          issues: result.issues as AiVaultScanIssue[]
         })
       } catch (err) {
         if (!isCurrent()) {

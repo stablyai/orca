@@ -7,7 +7,7 @@ import {
   DISPATCH_STALE_THRESHOLD,
   parseAllowStaleBaseFromSpec
 } from './coordinator-stale-base-flag'
-import { isAgentPromptStalledError } from '../agent-prompt-submission-verification'
+import { isAgentPromptStalledError } from '../terminal/input/agent-prompt-submission-verification'
 import { takesNewWork } from './db/worker-terminal/worker-terminal-transfer'
 
 /** `dispatched-unobserved`: the preamble landed but the worker's turn start was never observed. */

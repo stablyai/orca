@@ -20,6 +20,8 @@ export type ChromiumCookieSnapshot = {
 
 type ChromiumCookieSnapshotOptions = {
   tempRoot?: string
+  /** Copy's basename; SQLite finds the copied WAL only beside a DB of the same name. */
+  fileName?: string
 }
 
 function removeSnapshotDirectory(path: string): void {
@@ -118,7 +120,7 @@ export function createChromiumCookieSnapshot(
   options: ChromiumCookieSnapshotOptions = {}
 ): ChromiumCookieSnapshot {
   const snapshotDir = mkdtempSync(join(options.tempRoot ?? tmpdir(), 'orca-cookie-import-'))
-  const databasePath = join(snapshotDir, 'Cookies')
+  const databasePath = join(snapshotDir, options.fileName ?? 'Cookies')
   let keepSnapshot = false
 
   try {

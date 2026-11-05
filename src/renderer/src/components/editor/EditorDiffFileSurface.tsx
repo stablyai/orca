@@ -129,6 +129,7 @@ export function EditorDiffFileSurface({
               filePath={activeFile.filePath}
               sourceFileId={activeFile.id}
               sourceWorktreeId={activeFile.worktreeId}
+              sourceRelativePath={activeFile.relativePath}
               sourceRuntimeEnvironmentId={activeFile.runtimeEnvironmentId}
               scrollCacheKey={`${diffViewStateKey}:preview`}
               showTableOfContents={showMarkdownTableOfContents}
