@@ -270,7 +270,8 @@ describe('Cmd-J host-qualified candidate ownership', () => {
       activeFileId: null,
       activeFileIdByWorktree: {},
       activeTabTypeByWorktree: {},
-      generatedTitlesEnabled: true
+      generatedTitlesEnabled: true,
+      chatNames: new Map()
     })
 
     expect(
@@ -343,7 +344,8 @@ describe('Cmd-J host-qualified candidate ownership', () => {
         retainedAgentsByPaneKey: {},
         sleepingAgentSessionsByPaneKey: {},
         terminalLayoutsByTabId: {}
-      }
+      },
+      new Map()
     )
 
     expect(entries).toEqual({

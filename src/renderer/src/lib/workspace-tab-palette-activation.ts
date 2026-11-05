@@ -6,6 +6,9 @@ import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { activateAndRevealWorkspace } from './worktree-activation'
+import { activateStructuredAgentSessionTab } from './agent-session/structured-agent-session-tab-activation'
+import { clearClientHostedBrowserRowSelection } from './pane-manager/client-hosted-browser-row-state'
+import { isEditorTabContentType } from '@/store/slices/editor/tabs/editor-tab-content-type'
 import {
   findAmbiguousWorktreeIds,
   getPaletteOwnershipWorktreeIds,
@@ -79,7 +82,7 @@ function validateTarget(
   if (tabs.length !== 1 || !tab) {
     return 'missing-tab'
   }
-  if (result.contentType !== 'terminal') {
+  if (isEditorTabContentType(result.contentType)) {
     const files = state.openFiles.filter((file) => file.id === result.entityId)
     if (files.length !== 1 || files[0].worktreeId !== result.worktreeId) {
       return 'missing-file'
@@ -117,6 +120,15 @@ export function activateWorkspaceTabPaletteResult(
   const finalFailure = validateTarget(state, result)
   if (finalFailure) {
     return { status: 'failed', reason: finalFailure }
+  }
+
+  if (result.contentType === 'agent-session') {
+    // Same path as clicking the chat's tab: drops a paired-device placeholder over it, focuses the
+    // composer and tells the chat's host.
+    clearClientHostedBrowserRowSelection()
+    return activateStructuredAgentSessionTab({ worktreeId: result.worktreeId, tabId: result.tabId })
+      ? { status: 'activated' }
+      : { status: 'failed', reason: 'missing-tab' }
   }
 
   const runtimeEnvironmentId = runtimeEnvironmentIdOrLocalUnlessTwin(state, result.worktreeId)
