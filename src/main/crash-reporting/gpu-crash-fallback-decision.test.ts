@@ -52,19 +52,21 @@ describe('GpuCrashFallbackTracker', () => {
 })
 
 describe('isGpuFallbackCrashCandidate', () => {
-  it('tracks only crash-shaped Windows GPU child failures', () => {
-    for (const reason of ['abnormal-exit', 'crashed', 'launch-failed']) {
-      expect(
-        isGpuFallbackCrashCandidate({
-          platform: 'win32',
-          processType: 'GPU',
-          reason
-        })
-      ).toBe(true)
+  it('tracks crash-shaped GPU child failures on fallback platforms', () => {
+    for (const platform of ['win32', 'linux'] as const) {
+      for (const reason of ['abnormal-exit', 'crashed', 'launch-failed']) {
+        expect(
+          isGpuFallbackCrashCandidate({
+            platform,
+            processType: 'GPU',
+            reason
+          })
+        ).toBe(true)
+      }
     }
   })
 
-  it('ignores normal GPU exits and non-Windows platforms', () => {
+  it('ignores normal GPU exits and unsupported platforms', () => {
     expect(
       isGpuFallbackCrashCandidate({
         platform: 'win32',
@@ -81,7 +83,7 @@ describe('isGpuFallbackCrashCandidate', () => {
     ).toBe(false)
     expect(
       isGpuFallbackCrashCandidate({
-        platform: 'linux',
+        platform: 'darwin',
         processType: 'GPU',
         reason: 'crashed'
       })
