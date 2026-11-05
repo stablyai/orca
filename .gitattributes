@@ -4,6 +4,8 @@
 /skill-stubs/*.md text eol=lf
 /skill-stubs/_shared/*.md text eol=lf
 /skills/*/SKILL.md text eol=lf
+# Legacy skill fixtures add CRLF explicitly when exercising Windows installs.
+/src/main/skills/bundled-skill-install/*.skill-md.txt text eol=lf
 /src/cli/bundled-skill-guides.ts text eol=lf
 # SVG bytes feed embedded data URLs and asset hashes on every build host.
 *.svg text eol=lf
