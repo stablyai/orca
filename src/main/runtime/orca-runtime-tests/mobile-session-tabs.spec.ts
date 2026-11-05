@@ -1,19 +1,19 @@
 import { describe, expect, it, vi } from 'vitest'
-import { boundSessionOf, registerLivePty } from '../bind-first-pane.test-fixture'
+import { registerLivePty } from './bind-first-pane.test-fixture'
+import { boundSessionOf } from '../profile-session-store.test-fixture'
 import { expectDesktopDropsPane } from '../__fixtures__/main-layout-close-fixture'
-import {
-  OrcaRuntimeService,
-  electronMocks,
-  getDefaultWorkspaceSession
-} from '../orca-runtime-test-mocks.spec'
-import type { WorktreeMeta } from '../orca-runtime-test-mocks.spec'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { electronMocks } from '../orca-runtime-test-mocks/setup.spec'
+import { getDefaultWorkspaceSession } from '../../../shared/constants'
+import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import {
   TEST_REPO_ID,
   TEST_WINDOW_ID,
   TEST_WORKTREE_ID,
   makeWorktreeMeta,
   store
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
 import {
   hostWorktreeTarget,
   type HostWorktreeTarget

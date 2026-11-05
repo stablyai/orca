@@ -2,6 +2,9 @@ import { StyleSheet, type TextStyle } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet, themedStyles } from '../theme/themed-styles'
 
+/** Lifts the 13pt base to 14pt body text for documents (file preview, PR bodies); headings scale with it. */
+export const MOBILE_MARKDOWN_DOCUMENT_SCALE = 14 / 13
+
 export const styles = themedStyleSheet(() => ({
   root: {
     gap: spacing.md
@@ -98,6 +101,26 @@ export const styles = themedStyleSheet(() => ({
   codeLines: {
     paddingRight: spacing.md
   },
+  codeLinesWrapped: {
+    flex: 1,
+    paddingLeft: spacing.md
+  },
+  codeActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs
+  },
+  codeWrapButton: {
+    width: 24,
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radii.control
+  },
+  codeWrapButtonOn: {
+    backgroundColor: colors.translucentFill
+  },
+
   codeText: {
     fontFamily: typography.monoFamily,
     fontSize: 12,
@@ -107,6 +130,22 @@ export const styles = themedStyleSheet(() => ({
   imageParagraph: {
     gap: spacing.sm
   },
+  details: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderSubtle,
+    borderRadius: radii.surface,
+    overflow: 'hidden'
+  },
+  detailsSummary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    backgroundColor: colors.bgRaised
+  },
+  detailsSummaryText: { fontWeight: '600', flexShrink: 1 },
+  detailsBody: { padding: spacing.sm, gap: spacing.md },
   imageFrame: {
     borderWidth: 1,
     borderColor: colors.borderSubtle,
@@ -206,14 +245,24 @@ export type MarkdownTone = {
   inlineCode: TextStyle | null
 }
 
-/** Colours over the styles above, for one surface. The default tone overrides nothing. */
-export const MARKDOWN_TONES: Record<'default' | 'userMessage', MarkdownTone> = {
-  default: { text: null, secondary: null, link: null, inlineCode: null },
-  // Desktop's user bubble only strengthens the text; links and code keep their chat colors.
-  userMessage: themedStyles(() => ({
-    text: { color: colors.chatForegroundStrong },
-    secondary: null,
-    link: null,
-    inlineCode: null
-  }))
-}
+/** Colours and weight over the styles above, for one surface. The default tone overrides nothing. */
+export const MARKDOWN_TONES: Record<'default' | 'userMessage' | 'strong' | 'muted', MarkdownTone> =
+  {
+    default: { text: null, secondary: null, link: null, inlineCode: null },
+    // A card's title: the question an agent asks.
+    strong: { text: { fontWeight: '600' }, secondary: null, link: null, inlineCode: null },
+    // Settled text beside a receipt's muted answer.
+    muted: themedStyles(() => ({
+      text: { color: colors.textMuted },
+      secondary: null,
+      link: null,
+      inlineCode: null
+    })),
+    // Desktop's user bubble only strengthens the text; links and code keep their chat colors.
+    userMessage: themedStyles(() => ({
+      text: { color: colors.chatForegroundStrong },
+      secondary: null,
+      link: null,
+      inlineCode: null
+    }))
+  }

@@ -1,4 +1,4 @@
-import type { RuntimePtyWorktreeRecord } from '../../runtime-terminal-state-records'
+import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 
 type CreatedTerminalTitleHost = {
   getSessionCustomTitle(sessionId: string): string | null

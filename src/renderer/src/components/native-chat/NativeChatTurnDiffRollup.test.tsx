@@ -8,6 +8,7 @@ import { TooltipProvider } from '../ui/tooltip'
 
 import { NativeChatMessageList } from './NativeChatMessageList'
 import { session, stubLayout, stubResizeObserver } from './native-chat-windowing-test-harness'
+import { NativeChatLinkClickContext } from './native-chat-link-click-context'
 
 const messages: NativeChatMessage[] = [
   {
@@ -69,13 +70,14 @@ it('keeps landed files visible after work folds, opens a patch in one click and 
   const onLinkClick = vi.fn()
   const view = (working: boolean) => (
     <TooltipProvider>
-      <NativeChatMessageList
-        session={session(messages)}
-        isWorking={working}
-        expandSignal={false}
-        onLinkClick={onLinkClick}
-        settledTurns={working ? undefined : new Map([['u', { startedAt: 1, workedSeconds: 2 }]])}
-      />
+      <NativeChatLinkClickContext value={onLinkClick}>
+        <NativeChatMessageList
+          session={session(messages)}
+          isWorking={working}
+          expandSignal={false}
+          settledTurns={working ? undefined : new Map([['u', { startedAt: 1, workedSeconds: 2 }]])}
+        />
+      </NativeChatLinkClickContext>
     </TooltipProvider>
   )
   const { rerender, unmount } = render(view(true))

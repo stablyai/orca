@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
-import { committingSpawn } from '../bind-first-pane.test-fixture'
-import { OrcaRuntimeService } from '../orca-runtime-test-mocks.spec'
-import { TEST_WORKTREE_PATH, store } from '../orca-runtime-test-fixtures.spec'
+import { committingSpawn } from './bind-first-pane.test-fixture'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { TEST_WORKTREE_PATH, store } from './orca-runtime-test-fixtures.spec'
 
 describe('terminal agent presence', () => {
   it('finds an idle Claude by a fresh read when p_comm is its version directory', async () => {
