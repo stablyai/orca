@@ -115,7 +115,7 @@ it.each<{ label: string; choices: Readonly<Record<string, string>> }>([
   )
 })
 
-it.each([
+it.each<{ label: string; choices: Readonly<Record<string, string>> }>([
   { label: 'model', choices: { model: 'other-model', effort: 'high' } },
   { label: 'effort', choices: { model: 'gpt-ran', effort: 'low' } },
   { label: 'planning mode', choices: { model: 'gpt-ran', effort: 'high', interactionMode: 'plan' } }
