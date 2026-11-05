@@ -135,7 +135,8 @@ async function setup(viewedSurface: 'editor' | 'terminal'): Promise<{
     mode: 'edit'
   })
   if (viewedSurface === 'terminal') {
-    store.getState().createTab(VIEWED)
+    // Why placementFixed: these tests pin one pane; the second-pane split is covered elsewhere.
+    store.getState().createTab(VIEWED, undefined, undefined, { placementFixed: true })
     store.getState().setActiveTabType('terminal', VIEWED)
   }
   await settle()

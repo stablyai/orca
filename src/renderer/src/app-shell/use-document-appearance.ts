@@ -29,6 +29,7 @@ import { useAppStore } from '../store'
 import { useDocumentDarkTheme, useSettingsDarkTheme } from '@/hooks/use-document-dark-theme'
 import { useReduceVisualEffects } from '@/hooks/use-reduce-visual-effects'
 import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-prefers-dark'
+import { applySinglePaneCapVariables } from './single-pane-cap-variables'
 
 /** The Match Terminal app theme while the requested mode's slot selects it, else null. */
 function useTerminalAppTheme(selected: boolean): TerminalAppTheme | null {
@@ -97,6 +98,7 @@ export function useDocumentAppearance(): void {
     () => tolerantPluginThemeBackgroundRegistration.parse(registeredBackground),
     [registeredBackground]
   )
+  const singlePaneMaxWidth = useAppStore((s) => s.settings?.terminalSinglePaneMaxWidth)
 
   // Why `dark` too: a system theme repaints when the OS flips, before the slot paint below.
   useEffect(() => {
@@ -166,4 +168,8 @@ export function useDocumentAppearance(): void {
       rebuildAllTerminalWebglRenderers('code-font-smoothing')
     }
   }, [codeFontSmoothing])
+
+  useEffect(() => {
+    applySinglePaneCapVariables(document.documentElement, singlePaneMaxWidth)
+  }, [singlePaneMaxWidth])
 }

@@ -173,8 +173,8 @@ describe('file links open beside their source', () => {
     await main.settle()
     main.close()
 
-    // Why: the plain open documents the unchanged baseline for callers without link intent.
-    expect(groupOfFile(store, '/repo/plain.ts')).toEqual([a])
+    // Why: a plain open from a content panel of two opens opposite it (lone-pane-split-source.ts).
+    expect(groupOfFile(store, '/repo/plain.ts')).toEqual([b])
     expect(groupOfFile(store, '/repo/link.ts')).toEqual([b])
     expect(opened).toMatchObject({ fileId: '/repo/link.ts', groupId: b })
   })

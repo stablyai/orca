@@ -52,7 +52,8 @@ export function createOpenFileAction(
       scratch.editorItemIsPreview,
       scratch.editorItemTargetGroupId,
       options?.selection,
-      options?.groupIndex
+      options?.groupIndex,
+      options?.placementFixed
     )
     const settled: { ran: boolean; result: EditorOpenResult | null } = { ran: false, result: null }
     // Why after: a layout-owner build draws a new tab only with main's frame; today's is drawn already.

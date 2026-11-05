@@ -54,8 +54,9 @@ function open(linkContext = context()) {
   })
 }
 
-function browser(groupId: string, url = URL_TO_OPEN) {
+function browser(groupId: string, url = URL_TO_OPEN, extra: { placementFixed?: boolean } = {}) {
   return store.getState().createBrowserTab(WORKSPACE, url, {
+    ...extra,
     targetGroupId: groupId,
     executionHostId: 'local',
     browserRuntimeEnvironmentId: null,

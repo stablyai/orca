@@ -15,6 +15,7 @@ export type HostAgentLaunchArgs = {
   agent: TuiAgent
   worktreeId: string
   groupId?: string
+  placementFixed?: boolean
   /** Kept by the window: a pane whose agent could not start offers to copy it. */
   prompt: string
   /** Absent uses the settings default; `null` means no arguments. */
@@ -63,6 +64,7 @@ export function launchAgentThroughHost(args: HostAgentLaunchArgs): {
     id: tabId,
     initialLeafId: leafId,
     agentLaunchPane: { leafId },
+    ...(args.placementFixed ? { placementFixed: true } : {}),
     launchAgent: args.agent,
     quickCommandLabel: args.quickCommandLabel,
     ...(args.activate === false ? { activate: false } : {}),

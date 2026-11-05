@@ -55,6 +55,7 @@ export function launchAgentInNewTabWithOutcome(
     agent,
     worktreeId,
     groupId,
+    placementFixed,
     prompt,
     agentArgs,
     sessionOptions,
@@ -109,6 +110,7 @@ export function launchAgentInNewTabWithOutcome(
       worktreeId,
       ...(args.focusIntent ? { focusIntent: args.focusIntent } : {}),
       ...(groupId ? { groupId } : {}),
+      ...(placementFixed ? { placementFixed } : {}),
       ...(beforeSurfaceOpen ? { beforeSurfaceOpen } : {}),
       ...(args.onStructuredHostDeclined ? { onHostDeclined: args.onStructuredHostDeclined } : {}),
       // The host's "no" opens this same launch as a terminal, with the caller's arguments.
@@ -162,6 +164,7 @@ export function launchAgentInNewTabWithOutcome(
       worktreeId,
       environmentId: runtimeEnvironmentId,
       groupId,
+      ...(placementFixed ? { placementFixed } : {}),
       cwd: initialCwd,
       buildStartup,
       sessionOptions,
@@ -200,6 +203,7 @@ export function launchAgentInNewTabWithOutcome(
       agent,
       worktreeId,
       ...(groupId ? { groupId } : {}),
+      ...(placementFixed ? { placementFixed } : {}),
       prompt: trimmedPrompt,
       ...(agentArgs !== undefined ? { agentArgs } : {}),
       ...(sessionOptions ? { sessionOptions } : {}),
@@ -221,6 +225,7 @@ export function launchAgentInNewTabWithOutcome(
     }
   }
   const tab = store.createTab(worktreeId, groupId, undefined, {
+    ...(placementFixed ? { placementFixed } : {}),
     launchAgent: agent,
     quickCommandLabel,
     ...(pendingActivationSpawn ? { pendingActivationSpawn: true } : {}),

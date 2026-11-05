@@ -38,6 +38,7 @@ export async function launchAgentInWebHostTab(args: {
   worktreeId: string
   environmentId: string | null
   groupId?: string
+  placementFixed?: boolean
   cwd?: string | null
   buildStartup: (choices: AgentLaunchChoices | undefined) => LaunchAgentStartupPromptPlan
   sessionOptions?: Readonly<Record<string, SessionOptionValue>>
@@ -116,6 +117,7 @@ export async function launchAgentInWebHostTab(args: {
       worktreeId,
       environmentId,
       targetGroupId: groupId,
+      ...(args.placementFixed ? { placementFixed: true } : {}),
       activate: args.activate !== false,
       ...(!hasPrompt && args.activate === false ? { selectWorktree: false } : {}),
       ...(cwd?.trim() ? { cwd } : {}),
