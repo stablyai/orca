@@ -173,9 +173,13 @@ describe('a worker after its worker_done', () => {
   const PANE = 'tab_worker:leaf_worker'
 
   // A remote worker this host ran in the pane's process, settled.
-  function finishRemoteWorker(db: OrchestrationDb, processIncarnation: string): void {
+  function finishRemoteWorker(
+    db: OrchestrationDb,
+    processIncarnation: string,
+    dispatchId = 'ctx_remote'
+  ): void {
     db.createRemoteDispatchAttachment({
-      dispatchId: 'ctx_remote',
+      dispatchId,
       runId: 'run_home',
       taskId: 'task_remote',
       homePeerFingerprint: 'peer_fp',
@@ -183,13 +187,13 @@ describe('a worker after its worker_done', () => {
       runtimeEpoch: 'epoch_1',
       mutationReceipt: {
         callerFingerprint: 'peer_fp',
-        requestId: 'attach_1',
+        requestId: `attach_${dispatchId}`,
         method: 'orchestration.federationAttachStart',
         payloadHash: 'attach_payload'
       }
     })
     db.prepareRemoteAttachmentAuthority({
-      dispatchId: 'ctx_remote',
+      dispatchId,
       paneKey: PANE,
       processIncarnation,
       worktreeId: 'folder_workspace',
@@ -197,8 +201,8 @@ describe('a worker after its worker_done', () => {
       setupState: 'not_applicable',
       effects: []
     })
-    db.markRemoteAttachmentReady('ctx_remote')
-    db.settleRemoteAttachmentInRelayTransaction('ctx_remote', 'succeeded')
+    db.markRemoteAttachmentReady(dispatchId)
+    db.settleRemoteAttachmentInRelayTransaction(dispatchId, 'succeeded')
   }
 
   // A local worker this host ran in the pane's process, finished unless still working.
@@ -284,9 +288,26 @@ describe('a worker after its worker_done', () => {
       message: { to_handle: `run:${local.runId}` }
     })
 
-    // A local worker working in that process speaks for it.
+    // A local worker working in that process speaks and asks for it.
     const working = await localWorker(db, ctx, 'runtime_test:term_worker:1', false)
     await expect(send()).resolves.toMatchObject({ message: { run_id: working.runId } })
+    await expect(ask()).resolves.toMatchObject({ messageId: expect.any(String) })
+  })
+
+  it('finds the remote worker by the process it ran in, not the newest remote row', async () => {
+    const { db, runtime, ctx } = harness.setup(false)
+    vi.mocked(runtime.getTerminalPaneKey).mockImplementation((handle) =>
+      handle === 'term_worker' ? PANE : null
+    )
+    vi.mocked(runtime.getTerminalProcessIncarnation).mockReturnValue('runtime_test:term_worker:1')
+    finishRemoteWorker(db, 'runtime_test:term_worker:1', 'ctx_remote_ran_here')
+    finishRemoteWorker(db, 'runtime_test:term_worker:9', 'ctx_remote_elsewhere')
+    await expect(
+      harness.call('orchestration.send', { from: 'term_worker', subject: 'Later' }, ctx)
+    ).rejects.toMatchObject({
+      code: 'run_home_unreachable',
+      message: expect.stringContaining('ctx_remote_ran_here')
+    })
   })
 
   it('lets a new process in the pane speak as its own local worker', async () => {

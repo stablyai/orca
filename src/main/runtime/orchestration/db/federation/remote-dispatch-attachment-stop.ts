@@ -77,18 +77,44 @@ export function findActiveRemoteAttachmentForPane(
   return findRemoteAttachmentForPane(this, paneKey, `${potentiallyLiveRemoteAttachmentSql()} AND`)
 }
 
-/** The newest remote Dispatch this pane ran, finished or not. */
-export function findLatestRemoteAttachmentForPane(
+/** The newest remote Dispatch this pane ran in its current process, finished or not; one recorded without a
+ *  process may have been any. The process is read only for a pane that ran one. */
+export function findRemoteAttachmentForPaneProcess(
   this: OrchestrationDb,
-  paneKey: string
+  paneKey: string,
+  processIncarnation: () => string | null
 ): RemoteDispatchAttachmentRow | undefined {
-  return findRemoteAttachmentForPane(this, paneKey, '')
+  if (!findRemoteAttachmentForPane(this, paneKey, '')) {
+    return undefined
+  }
+  return findRemoteAttachmentForPane(
+    this,
+    paneKey,
+    '(process_incarnation IS NULL OR process_incarnation = ?) AND',
+    [processIncarnation()]
+  )
+}
+
+/** A remote Dispatch still working in this terminal, for callers that have no pane to match. */
+export function findActiveRemoteAttachmentForHandle(
+  this: OrchestrationDb,
+  terminalHandle: string
+): RemoteDispatchAttachmentRow | undefined {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The schema-pinned attachment projection returns RemoteDispatchAttachmentRow rows; the adapter exposes unknown.
+  return this.db
+    .prepare(
+      `SELECT ${REMOTE_DISPATCH_ATTACHMENT_COLUMN_LIST} FROM remote_dispatch_attachments
+       WHERE ${potentiallyLiveRemoteAttachmentSql()} AND terminal_handle = ?
+       ORDER BY rowid DESC LIMIT 1`
+    )
+    .get(terminalHandle) as RemoteDispatchAttachmentRow | undefined
 }
 
 function findRemoteAttachmentForPane(
   db: OrchestrationDb,
   paneKey: string,
-  stateFilter: string
+  stateFilter: string,
+  filterParams: (string | null)[] = []
 ): RemoteDispatchAttachmentRow | undefined {
   if (!parsePaneKey(paneKey)) {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The schema-pinned attachment projection returns RemoteDispatchAttachmentRow rows; the adapter exposes unknown.
@@ -98,7 +124,7 @@ function findRemoteAttachmentForPane(
          WHERE ${stateFilter} pane_key = ?
          ORDER BY rowid DESC LIMIT 1`
       )
-      .get(paneKey) as RemoteDispatchAttachmentRow | undefined
+      .get(...filterParams, paneKey) as RemoteDispatchAttachmentRow | undefined
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The schema-pinned attachment projection returns RemoteDispatchAttachmentRow rows; the adapter exposes unknown.
   return db.db
@@ -109,7 +135,7 @@ function findRemoteAttachmentForPane(
          AND ${REMOTE_ATTACHMENT_PANE_KEY_MATCH_SUFFIX_SQL} = ?
        ORDER BY rowid DESC LIMIT 1`
     )
-    .get(paneKeyMatchSuffix(paneKey)) as RemoteDispatchAttachmentRow | undefined
+    .get(...filterParams, paneKeyMatchSuffix(paneKey)) as RemoteDispatchAttachmentRow | undefined
 }
 
 export type RemoteDispatchAttachmentStopMethods = {
@@ -117,7 +143,8 @@ export type RemoteDispatchAttachmentStopMethods = {
   settleRemoteAttachmentStop: typeof settleRemoteAttachmentStop
   markRemoteAttachmentStopUnknown: typeof markRemoteAttachmentStopUnknown
   findActiveRemoteAttachmentForPane: typeof findActiveRemoteAttachmentForPane
-  findLatestRemoteAttachmentForPane: typeof findLatestRemoteAttachmentForPane
+  findRemoteAttachmentForPaneProcess: typeof findRemoteAttachmentForPaneProcess
+  findActiveRemoteAttachmentForHandle: typeof findActiveRemoteAttachmentForHandle
 }
 
 export function attachRemoteDispatchAttachmentStop(ctor: { prototype: object }): void {
@@ -126,6 +153,7 @@ export function attachRemoteDispatchAttachmentStop(ctor: { prototype: object }):
     settleRemoteAttachmentStop,
     markRemoteAttachmentStopUnknown,
     findActiveRemoteAttachmentForPane,
-    findLatestRemoteAttachmentForPane
+    findRemoteAttachmentForPaneProcess,
+    findActiveRemoteAttachmentForHandle
   })
 }

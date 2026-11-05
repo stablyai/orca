@@ -126,29 +126,22 @@ export function finishedWorkerSend<P extends { to?: string; type?: string }>(
   }
 }
 
-/** The finished remote worker a caller may still be: its pane's newest remote Dispatch, while the pane runs
- *  that worker's process. */
+/** The finished remote worker a caller may still be: one its pane ran in the pane's current process. */
 function finishedRemoteSender(
   db: OrchestrationDb,
   sender: FinishedSender
 ): RemoteDispatchAttachmentRow | undefined {
-  const attachment = sender.paneKey
-    ? db.findLatestRemoteAttachmentForPane(sender.paneKey)
-    : undefined
-  return attachment &&
-    (!attachment.process_incarnation ||
-      db.isRemoteAttachmentProcessCurrent({
-        dispatchId: attachment.dispatch_id,
-        paneKey: sender.paneKey,
-        processIncarnation: sender.processIncarnation() ?? null
-      }))
-    ? attachment
+  return sender.paneKey
+    ? db.findRemoteAttachmentForPaneProcess(
+        sender.paneKey,
+        () => sender.processIncarnation() ?? null
+      )
     : undefined
 }
 
 /** A finished worker on a paired host cannot reach its coordinator yet; say why instead of a bare refusal. A
- *  local worker in the same process speaks instead while working; once both finished, nothing records which
- *  came last, so it must name the local Dispatch rather than risk the wrong coordinator. */
+ *  local worker working in that process speaks instead, since a terminal takes one Dispatch at a time; once both
+ *  finished, nothing records which came last, so it must name the local Dispatch rather than guess. */
 export function refuseFinishedRemoteWorker(
   db: OrchestrationDb,
   sender: FinishedSender,
@@ -158,11 +151,13 @@ export function refuseFinishedRemoteWorker(
   if (!attachment || (to && to !== `dispatch:${attachment.dispatch_id}`)) {
     return
   }
-  const local = db.getLatestDispatchForTerminal(sender.address, sender.paneKey ?? undefined)
+  const paneKey = sender.paneKey ?? undefined
+  const working = db.getActiveDispatchForIdentity(sender.address, paneKey)
+  if (working && speaksAs(db, sender, working)) {
+    return
+  }
+  const local = db.getLatestDispatchForTerminal(sender.address, paneKey)
   if (local && speaksAs(db, sender, local)) {
-    if (local.status === 'pending' || local.status === 'dispatched') {
-      return
-    }
     throw new OrchestrationError(
       'recipient_ambiguous',
       `This terminal finished Dispatch ${local.id} here and Dispatch ${attachment.dispatch_id} for a coordinator on another computer. Nothing was sent; to reach this computer's coordinator, use orca orchestration send --to dispatch:${local.id}.`

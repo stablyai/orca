@@ -6,7 +6,9 @@ export function assertNoActiveRemoteWorker(
   handle: string,
   paneKey: string | null | undefined
 ): void {
-  const remote = paneKey ? db.findActiveRemoteAttachmentForPane(paneKey) : undefined
+  const remote = paneKey
+    ? db.findActiveRemoteAttachmentForPane(paneKey)
+    : db.findActiveRemoteAttachmentForHandle(handle)
   if (remote) {
     throw new Error(`Terminal ${handle} already has active remote Dispatch ${remote.dispatch_id}.`)
   }

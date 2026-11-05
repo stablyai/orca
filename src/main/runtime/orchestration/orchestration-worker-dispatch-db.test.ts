@@ -492,9 +492,34 @@ describe('OrchestrationDb worker Dispatch state', () => {
 
     d.db.prepare("UPDATE dispatch_contexts SET status = 'completed' WHERE id = ?").run(working.id)
     attach('ctx_remote_owner')()
-    expect(() => local('while remote works')).toThrow(
-      'already has active remote Dispatch ctx_remote_owner'
-    )
+    const busy = 'already has active remote Dispatch ctx_remote_owner'
+    expect(() => local('while remote works')).toThrow(busy)
+    // Nor by a manual dispatch that names only the terminal, or by a worker-start taking it over.
+    expect(() =>
+      d.createDispatchContext({
+        taskId: d.createTask({ runId: 'run_legacy_local', spec: 'no pane' }).id,
+        assigneeHandle: 'term_shared',
+        creator: { kind: 'system' },
+        maxDepth: Number.MAX_SAFE_INTEGER
+      })
+    ).toThrow(busy)
+    const started = d.createStartingWorkerDispatch({
+      creator: { kind: 'system' },
+      maxDepth: Number.MAX_SAFE_INTEGER,
+      taskId: d.createTask({ runId: 'run_legacy_local', spec: 'worker-start' }).id,
+      startOptions: { topology: 'current', agent: 'codex' }
+    })
+    expect(() =>
+      d.prepareStartingWorkerAuthority({
+        dispatchId: started.dispatch.id,
+        handle: 'term_shared',
+        paneKey,
+        processIncarnation: 'process_shared',
+        worktreeId: 'repo::worktree',
+        setupState: 'not_applicable',
+        effects: []
+      })
+    ).toThrow(busy)
   })
 
   it('bounds remote attachment lookup across pane remints and malformed suffix collisions', () => {
