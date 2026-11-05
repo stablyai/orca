@@ -86,7 +86,10 @@ function cards() {
               role: 'user',
               source: 'transcript',
               blocks: [
-                { type: 'text', text: i === 0 ? 'A short task fits without a disclosure.' : prose },
+                {
+                  type: 'text',
+                  text: i === 0 ? 'A short task opens from its one-line header.' : prose
+                },
                 ...(kind === 'generic'
                   ? [{ type: 'image-ref' as const, url: image, alt: 'Attached diagram' }]
                   : [])
