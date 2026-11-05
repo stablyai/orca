@@ -3,6 +3,7 @@ import { recognizeAgentProcessFromCommandLine } from '../../../shared/agent-stat
 import { WINDOWS_GIT_BASH_SHELL } from '../../../shared/windows-terminal-shell'
 import { resolveWindowsGitBashShellPath } from '../../pty/shell-startup/git-bash'
 import { resolveUnixPaneShellPath } from '../../daemon/shell-readiness/shell-ready'
+import { resolvePosixPaneShellPath } from '../../pty/shell-startup/posix-pwsh'
 import { getDefaultWslDistro } from '../../wsl/discovery/distro-catalog'
 import { parseWslPath } from '../../wsl/filesystem/unc-path-access'
 import {
@@ -235,10 +236,9 @@ export function createLocalPtyLaunchPlan(
   if (process.platform === 'win32') {
     return createWindowsLocalPtyLaunchPlan(seed, getOptions)
   }
-  const shellPath = resolveUnixPaneShellPath(
-    args.env ?? {},
-    args.shellOverride,
-    getOptions().getDefaultShell?.()
+  const shellPath = resolvePosixPaneShellPath(
+    resolveUnixPaneShellPath(args.env ?? {}, args.shellOverride, getOptions().getDefaultShell?.()),
+    args.env?.PATH
   )
   return finalizeLocalPtyLaunchPlan(seed, {
     shellPath,

@@ -205,6 +205,19 @@ describePosix('daemon shell-ready launch config', () => {
     expect(shellPathSupportsPtyStartupBarrier('/usr/bin/tcsh')).toBe(false)
   })
 
+  it.each(['/opt/homebrew/bin/pwsh', '/usr/bin/pwsh', 'pwsh-preview'])(
+    'starts %s as a login shell before the PowerShell integration',
+    async (shell) => {
+      const { getShellReadyLaunchConfig } = await importFreshShellReady()
+
+      const config = getShellReadyLaunchConfig(shell)
+
+      // pwsh only honours -Login as its first argument.
+      expect(config.args?.slice(0, 4)).toEqual(['-Login', '-NoLogo', '-NoExit', '-EncodedCommand'])
+      expect(config.env).toEqual({})
+    }
+  )
+
   it('wraps fish launches with a fish_prompt shell-ready marker init command', async () => {
     const { getShellReadyLaunchConfig } = await importFreshShellReady()
 
