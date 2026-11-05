@@ -26,10 +26,6 @@ export function useTaskPagePRCheckHydration(
   showPRManagementColumns: boolean
 ) {
   const { repos, fetchPRChecks, taskSource, githubMode, patchTaskPageWorkItemRows } = model
-  const localCapabilities = useSyncExternalStore(
-    subscribeLocalRuntimeCapabilityObservation,
-    readLocalRuntimeCapabilityObservation
-  )
   const sourceContracts = useMemo(
     () =>
       model.selectedRepos.map((repo) => {
@@ -37,6 +33,14 @@ export function useTaskPagePRCheckHydration(
         return { source, target: getGitHubSourceRuntimeTarget(source) }
       }),
     [model.selectedRepos]
+  )
+  const localSelected = sourceContracts.some(({ target }) => target.kind === 'local')
+  const localCapabilities = useSyncExternalStore(
+    subscribeLocalRuntimeCapabilityObservation,
+    useCallback(
+      () => (localSelected ? readLocalRuntimeCapabilityObservation() : null),
+      [localSelected]
+    )
   )
   const runtimeStatuses = useAppStore((state) =>
     sourceContracts
