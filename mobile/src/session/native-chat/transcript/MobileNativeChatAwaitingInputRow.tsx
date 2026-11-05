@@ -8,6 +8,7 @@ import { colors, spacing, typography } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { scaledType } from './mobile-native-chat-message-styles'
+import { MobileNativeChatQuestionText } from '../MobileNativeChatQuestionText'
 
 const ICON_SIZE = 15
 
@@ -30,10 +31,15 @@ export function MobileNativeChatAwaitingInputRow({
     subject?.kind === 'questions' ? subject.questions.length : undefined
   )
   const label = !pending ? copy.asked : subject === null ? copy.awaitingUnnamed : copy.awaiting
-  const text =
-    subject === null ? null : subject.kind === 'question' ? subject.text : copy.questionCount
+  // The count stays in the label; questions are agent text, so they draw below it as chat markdown.
+  const count = subject?.kind === 'questions' ? copy.questionCount : null
   const type = scaledType(typography.bodySize, fontScale)
-  const questions = subject?.kind === 'questions' && listsQuestions ? subject.questions : null
+  const questions =
+    subject?.kind === 'question'
+      ? [subject.text]
+      : subject?.kind === 'questions' && listsQuestions
+        ? subject.questions.map((question, index) => `${index + 1}. ${question}`)
+        : null
   return (
     <>
       <View style={styles.row} accessibilityLiveRegion={pending ? 'polite' : undefined}>
@@ -45,17 +51,13 @@ export function MobileNativeChatAwaitingInputRow({
         />
         <Text selectable={INLINE_TEXT_SELECTION} style={[styles.label, type]}>
           {label}
-          {text === null ? null : <Text style={[styles.question, type]}> {text}</Text>}
+          {count === null ? null : <Text style={[styles.question, type]}> {count}</Text>}
         </Text>
       </View>
       {questions === null ? null : (
         <View style={{ paddingLeft: ICON_SIZE * fontScale + spacing.sm }}>
           {questions.map((question, index) => (
-            <Text
-              key={index}
-              selectable={INLINE_TEXT_SELECTION}
-              style={[styles.question, type]}
-            >{`${index + 1}. ${question}`}</Text>
+            <MobileNativeChatQuestionText key={index} content={question} fontSize={type.fontSize} />
           ))}
         </View>
       )}

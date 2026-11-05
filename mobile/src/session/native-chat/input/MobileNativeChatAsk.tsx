@@ -23,6 +23,7 @@ import type { Translate } from '../../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { MessageBox } from '../../../components/composer-input/MessageBox'
 import { MobileNativeChatCardHeaderAction } from '../MobileNativeChatCardHeaderAction'
+import { MobileNativeChatQuestionText } from '../MobileNativeChatQuestionText'
 import { useMobileNativeChatAskAutoAdvance } from './use-mobile-native-chat-ask-auto-advance'
 import { MobileNativeChatAskOptionRow } from './MobileNativeChatAskOptionRow'
 import { useMobileNativeChatReplyScroll } from './use-mobile-native-chat-reply-scroll'
@@ -252,7 +253,7 @@ export function MobileNativeChatAsk({
         keyboardShouldPersistTaps="always"
       >
         <View style={styles.questionRow}>
-          <Text style={styles.questionText}>{q.question}</Text>
+          <MobileNativeChatQuestionText title content={q.question} style={styles.questionText} />
           <MobileNativeChatCardHeaderAction
             onCollapse={
               onCollapse &&
@@ -379,9 +380,6 @@ const styles = themedStyleSheet(() => ({
   questionRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm },
   questionText: {
     flex: 1,
-    color: colors.textPrimary,
-    fontSize: typography.bodySize + 1,
-    fontWeight: '600',
     marginVertical: spacing.sm
   },
   other: {

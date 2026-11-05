@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { Check, CircleHelp } from 'lucide-react-native'
 import { MobileNativeChatCardHeaderAction } from '../MobileNativeChatCardHeaderAction'
+import { MobileNativeChatQuestionText } from '../MobileNativeChatQuestionText'
 import { colors, concentricRadius, radii, spacing, typography } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
@@ -122,7 +123,7 @@ export function MobileNativeChatQuestion({
     >
       <View style={styles.header}>
         <CircleHelp size={15} color={colors.accentBlue} strokeWidth={2.2} />
-        <Text style={styles.question}>{question.question}</Text>
+        <MobileNativeChatQuestionText title content={question.question} style={styles.question} />
         <MobileNativeChatCardHeaderAction
           prompt={question.prompt}
           onCancel={onCancel}
@@ -234,11 +235,7 @@ const styles = themedStyleSheet(() => ({
     gap: spacing.sm
   },
   question: {
-    flex: 1,
-    color: colors.textPrimary,
-    fontSize: typography.bodySize + 1,
-    fontWeight: '600',
-    lineHeight: typography.bodySize + 7
+    flex: 1
   },
   options: {
     gap: spacing.xs
