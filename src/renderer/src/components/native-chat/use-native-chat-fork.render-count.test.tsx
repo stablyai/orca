@@ -79,7 +79,6 @@ const rowContext: NativeChatTranscriptRowContext = {
   revealedDiff: null,
   taskListPredecessors: new Map(),
   expandedTurnIds: new Set(),
-  allowFileUriLinks: false,
   onToggleExpandedTurn: () => {},
   subagentDisclosure: { setSectionOpen: () => {}, setRosterOpen: () => {} },
   onScrollMessageToTop: () => {},

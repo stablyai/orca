@@ -5,6 +5,7 @@ import type { RecordedValue } from './recording-values'
 // Producers whose input or recorded product contract this PR changed (the re-recorded set). Each earns its own
 // direct page outcomes; none is judged by a legacy label or counted in the unchanged tally.
 export const CHANGED_PRODUCERS: readonly string[] = [
+  'matrix-tasks.item-review-github-pr-check-discovery',
   'matrix-github.pr-read-github.listassignableusers-1',
   'matrix-github.pr-read-github.prcheckdetails-1',
   'matrix-github.pr-read-github.prchecks-1',

@@ -80,6 +80,7 @@ export type PrSidebarLoadDeps = {
       linkedPRNumber?: number | null
       fallbackPRNumber?: number | null
       currentHeadOid?: string | null
+      refresh?: boolean
     }
   ) => Promise<GitHubPrReadOutcome<PRInfo | null>>
   fetchWorkItemDetails: (
@@ -131,6 +132,7 @@ export async function loadPrSidebarData(
     branch: string
     headSha?: string | null
     prRepo?: GitHubPrRepoSlug | null
+    refresh?: boolean
   }
 ): Promise<PrSidebarState> {
   try {
@@ -148,7 +150,8 @@ export async function loadPrSidebarData(
         branch: args.branch,
         linkedPRNumber,
         fallbackPRNumber: linkedPRNumber === null ? branchHint : null,
-        currentHeadOid: requestHeadOid
+        currentHeadOid: requestHeadOid,
+        ...(args.refresh ? { refresh: true } : {})
       })
     let linkedPR = link.linkedPR
     let prOutcome = await fetchPR(linkedPR)

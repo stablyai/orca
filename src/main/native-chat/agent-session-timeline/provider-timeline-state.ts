@@ -35,6 +35,8 @@ export type ProviderTimelineOpenItem = {
   /** Request rows are chosen later by their queued write. */
   row: ProviderTimelineRowId | null
   turnItemId: string | null
+  /** Requests whose live exchange settles them, not their turn's end. */
+  outlivesTurn?: true
 }
 
 export class ProviderTimelineState {
@@ -111,7 +113,7 @@ export class ProviderTimelineState {
     }
   }
 
-  endTurn(turn: ProviderTimelineTurnRef): void {
+  endTurn(turn: ProviderTimelineTurnRef, journal?: StructuredAgentSessionTransitionJournal): void {
     if (this.open?.itemId === turn.itemId) {
       this.open = null
       this.latest = turn
@@ -119,7 +121,10 @@ export class ProviderTimelineState {
     if (this.stopped?.itemId === turn.itemId) {
       this.stopped = null
     }
-    this.forget(turn, () => true)
+    this.forget(turn, (entry) => !entry.outlivesTurn)
+    if (journal) {
+      this.forgetSettledRequests(journal)
+    }
     for (const [key, turnItemId] of this.closedItems) {
       if (turnItemId === turn.itemId) {
         this.closedItems.delete(key)
@@ -134,7 +139,27 @@ export class ProviderTimelineState {
       this.latest = turn
       this.stopped = turn
     }
-    this.forget(turn, (entry) => entry.kind === 'request')
+    this.forget(turn, (entry) => entry.kind === 'request' && !entry.outlivesTurn)
+  }
+
+  /** Kept requests leave once answered or withdrawn, so the kept set stays live-sized. */
+  private forgetSettledRequests(journal: StructuredAgentSessionTransitionJournal): void {
+    for (const [key, entry] of this.items) {
+      if (entry.outlivesTurn && this.settledInJournal(key, journal)) {
+        this.items.delete(key)
+      }
+    }
+  }
+
+  /** Rows a turn's end must leave pending. */
+  liveRequestRows(turnItemId: string): Set<string> {
+    const rows = new Set<string>()
+    for (const entry of this.items.values()) {
+      if (entry.outlivesTurn && entry.row && entry.turnItemId === turnItemId) {
+        rows.add(entry.row.itemId)
+      }
+    }
+    return rows
   }
 
   endSession(): void {
