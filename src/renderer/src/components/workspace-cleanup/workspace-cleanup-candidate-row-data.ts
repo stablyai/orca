@@ -89,7 +89,12 @@ function getBlockerFactStatus(blocker: WorkspaceCleanupBlocker): CandidateFactSt
             'Ignored'
           )
         : getWorkspaceCleanupBlockerLabel(blocker),
-    tone: blocker === 'git-status-error' || blocker === 'unknown-base' ? 'destructive' : 'neutral',
+    tone:
+      blocker === 'git-status-error' || blocker === 'unknown-base'
+        ? 'destructive'
+        : blocker === 'dirty-files' || blocker === 'unpushed-commits'
+          ? 'review'
+          : 'neutral',
     git: GIT_SAFETY_BLOCKERS.has(blocker)
   }
 }

@@ -274,7 +274,7 @@ export const CandidateRow = React.memo(function CandidateRow({
                 icon={GitBranch}
                 label={formatGitStatus(candidate)}
                 value={getWorkspaceCleanupGitChipLabel(gitState)}
-                tone={gitState === 'clean' ? 'ready' : 'review'}
+                tone={gitState === 'clean' ? 'neutral' : 'review'}
               />
             )}
             {!deletionPhase && visibleFlags.length > 0 ? (

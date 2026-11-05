@@ -27,7 +27,8 @@ export function WorkspaceCleanupMetadataChip({
             'border-border bg-background text-muted-foreground',
             tone === 'ready' &&
               'border-[color:color-mix(in_srgb,var(--git-decoration-added)_45%,transparent)] bg-[color:color-mix(in_srgb,var(--git-decoration-added)_10%,transparent)] text-[var(--git-decoration-added)]',
-            tone === 'review' && 'bg-muted text-foreground',
+            tone === 'review' &&
+              'border-status-warning-border bg-status-warning-background text-status-warning-text',
             tone === 'destructive' && 'border-destructive/30 text-destructive',
             toneClassName
           )}
