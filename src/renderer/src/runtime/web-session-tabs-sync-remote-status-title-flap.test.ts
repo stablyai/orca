@@ -473,4 +473,34 @@ describe('remote-paired pane: host session name', () => {
     expect(tab?.generatedTitle).toBe(EXPECTED_GENERATED_TITLE)
     expect(resolveTerminalTabTitle(tab!, true)).toBe('Login cleanup')
   })
+
+  it('keeps the client name for a session it tracks so a stale host snapshot cannot revert a rename', () => {
+    const store = seedPairedClientStore()
+    applyHostSnapshot(
+      store,
+      makeHostSnapshot({
+        snapshotVersion: 1,
+        hostNow: T0,
+        includeAgentStatus: true,
+        aiVaultTitle: { agent: 'claude', sessionId: 'session-1', title: 'Old' }
+      }),
+      T0
+    )
+    store
+      .getState()
+      .setAiVaultTabTitle(MIRROR_TAB_ID, { agent: 'claude', sessionId: 'session-1', title: 'New' })
+    applyHostSnapshot(
+      store,
+      makeHostSnapshot({
+        snapshotVersion: 2,
+        hostNow: T0 + 1_000,
+        includeAgentStatus: true,
+        aiVaultTitle: { agent: 'claude', sessionId: 'session-1', title: 'Old' }
+      }),
+      T0 + 1_000
+    )
+
+    const tab = (store.getState().tabsByWorktree[WT] ?? []).find((t) => t.id === MIRROR_TAB_ID)
+    expect(tab?.aiVaultTitle?.title).toBe('New')
+  })
 })
