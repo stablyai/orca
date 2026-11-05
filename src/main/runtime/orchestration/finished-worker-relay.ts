@@ -19,7 +19,8 @@ export type FinishedWorkerHostRound = 'listening' | 'done' | 'unreachable'
 
 /** One question to one host, never per worker: which of its finished workers are still heard, and which left
  *  mail. Only those with mail are synced, plus any with an answer to deliver. 'listening' while the host still
- *  hears one, which lapses on its own once they stop writing. */
+ *  hears one, which lapses on its own once they stop writing, or after anything moved, since an answer wakes
+ *  its worker again. */
 export async function pullFinishedWorkerMail(
   db: OrchestrationDb,
   environmentId: string,
@@ -34,6 +35,7 @@ export async function pullFinishedWorkerMail(
     return 'unreachable'
   }
   let failed = false
+  let moved = false
   for (const worker of db.listFinishedFederatedWorkers()) {
     if (
       worker.environmentId !== environmentId ||
@@ -44,17 +46,20 @@ export async function pullFinishedWorkerMail(
     if (!host.isCurrent()) {
       return 'done'
     }
+    moved = true
     await host.sync(worker.dispatchId).catch(() => {
       failed = true
     })
   }
-  return failed ? 'unreachable' : reply.data.open.length > 0 ? 'listening' : 'done'
+  return failed ? 'unreachable' : moved || reply.data.open.length > 0 ? 'listening' : 'done'
 }
 
 const FinishedWorkersReply = z.object({ open: z.array(z.string()), mail: z.array(z.string()) })
 
 const FINISHED_MAIL_INTERVAL_MS = 5_000
-const FINISHED_MAIL_RETRIES = 5
+const FINISHED_MAIL_MAX_RETRY_MS = 5 * 60_000
+// About an hour; mail a finished worker sent just before a longer outage waits for the next contact or start.
+const FINISHED_MAIL_RETRIES = 16
 
 /** At most one round per host, even across a reset; one asked for meanwhile runs after it. A failing host is
  *  retried less often, never sooner when asked again, then left alone until it answers some other call. */
@@ -128,7 +133,10 @@ export class FinishedWorkerMailRounds {
           const failures = (this.failures.get(environmentId) ?? 0) + 1
           this.failures.set(environmentId, failures)
           if (failures <= FINISHED_MAIL_RETRIES) {
-            this.schedule(environmentId, FINISHED_MAIL_INTERVAL_MS * 2 ** (failures - 1))
+            this.schedule(
+              environmentId,
+              Math.min(FINISHED_MAIL_INTERVAL_MS * 2 ** (failures - 1), FINISHED_MAIL_MAX_RETRY_MS)
+            )
           }
           return
         }

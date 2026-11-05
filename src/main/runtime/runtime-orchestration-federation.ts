@@ -231,6 +231,12 @@ export class RuntimeOrchestrationFederation {
   }
 
   private pullFinishedWorkerMail(environmentId: string): Promise<FinishedWorkerHostRound> {
+    try {
+      this.resolveWorkerServer(environmentId)
+    } catch {
+      // A removed server has nobody left to ask.
+      return Promise.resolve('done')
+    }
     const generation = this.relayGeneration
     const db = this.runtime.getOrchestrationDb()
     return pullFinishedWorkerMail(db, environmentId, {
