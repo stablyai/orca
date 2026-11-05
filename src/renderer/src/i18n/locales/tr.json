@@ -6026,8 +6026,6 @@
           "expandAriaLabel": "{{repo}} için gizli worktree'leri genişlet",
           "hiding_one": "Bulunan {{count}} worktree gizleniyor",
           "hiding_other": "Bulunan {{count}} worktree gizleniyor",
-          "hidingInRepo_one": "{{repo}} içinde bulunan {{count}} worktree gizleniyor",
-          "hidingInRepo_other": "{{repo}} içinde bulunan {{count}} worktree gizleniyor",
           "keepHiddenAriaLabel_one": "{{repo}} için bulunan {{count}} worktree'yi gizli tut; proje menüsünden geri getir",
           "keepHiddenAriaLabel_other": "{{repo}} için bulunan {{count}} worktree'yi gizli tut; proje menüsünden geri getir",
           "keepHiddenTooltip": "Gizli tut - proje menüsünden geri getir",

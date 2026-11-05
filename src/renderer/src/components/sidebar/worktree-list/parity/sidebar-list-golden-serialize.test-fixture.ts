@@ -110,9 +110,17 @@ export function serializeSidebarRow(
     case 'imported-worktrees-card':
       return line('IMPORTED', [
         field('key', row.key),
-        field('repo', row.repo.id),
+        field('repo', row.placement === 'repo-group' ? row.repo.id : undefined),
         field('placement', row.placement),
-        field('hidden', row.hiddenWorktrees.map((worktree) => worktree.id).join(',')),
+        field(
+          'hidden',
+          (row.placement === 'repo-group'
+            ? row.hiddenWorktrees
+            : row.projects.flatMap((project) => project.hiddenWorktrees)
+          )
+            .map((worktree) => worktree.id)
+            .join(',')
+        ),
         field('hostLabel', row.hostContextLabel ? JSON.stringify(row.hostContextLabel) : undefined),
         field('hostId', row.hostContextHostId)
       ])
