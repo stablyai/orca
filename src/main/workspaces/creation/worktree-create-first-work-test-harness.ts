@@ -10,6 +10,7 @@ import {
 } from '../../agent-hooks/first-work-branch-rename'
 import { gitResponder, workingEvent } from '../../agent-hooks/first-work-branch-rename-test-harness'
 import { mergeWorktree } from '../../ipc/worktree-metadata-merge'
+import { HOST_DEFAULT_AGENT_DETECTION } from '../../preflight/workspace-agent-detection'
 
 export const typedLabelCreateRequests: Pick<
   CreateWorktreeArgs,
@@ -77,7 +78,8 @@ export async function renameCreatedWorktreeOnFirstWork(
       getCommitMessageAgentEnvironmentResolvers: () => undefined,
       notifyFolderWorkspaceChanged: vi.fn(),
       notifyBranchRenamed: vi.fn(),
-      notifyWorktreeFolderRenamed: vi.fn()
+      notifyWorktreeFolderRenamed: vi.fn(),
+      resolveAgentDetectionHost: async () => HOST_DEFAULT_AGENT_DETECTION
     }
   )
   await maybeAutoRenameBranchOnFirstWork(workingEvent({ worktreeId: worktree.id }), deps)

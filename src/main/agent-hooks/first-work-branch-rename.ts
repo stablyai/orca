@@ -54,6 +54,8 @@ export type FirstWorkBranchRenameDeps = {
     Partial<Pick<GlobalSettings, 'autoRenameBranchFromWork'>>
   getRepo: (repoId: string) => Repo | undefined
   getAgentEnvResolvers: () => CommitMessageAgentEnvironmentResolvers | undefined
+  /** The WSL distro the workspace's agents run in and undefined means the host. */
+  getAgentWslDistro?: (worktreeId: string) => Promise<string | undefined>
   getCurrentDisplayName: (worktreeId: string) => string | undefined
   getFolderWorkspacePath?: (worktreeId: string) => string | undefined
   isFolderWorkspaceWslMoveBlocked?: (worktreeId: string) => boolean
