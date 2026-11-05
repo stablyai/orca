@@ -18,6 +18,7 @@ import type {
   CatalogOption
 } from './agent-session-option-catalog-types'
 import type { SessionOptionValue } from '../../native-chat/input/native-chat-session-options'
+import { removeAgentArgOption } from './agent-session-option-agent-args'
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../agent-launch/permissions/agent-chat-permission-mode'
 import { agentPermissionArgsForLaunch } from '../../agent-launch/permissions/agent-permission-args'
 import {
@@ -53,6 +54,9 @@ export function removeOverriddenAgentSessionArgs(
   const modelId = typeof values.model === 'string' ? values.model : null
   if (modelId) {
     result = catalog.modelApply.removeAgentArgs?.(result) ?? result
+    for (const args of catalog.argsReplacedWithModel ?? []) {
+      result = removeAgentArgOption(agent, result, [args], undefined, 'required')
+    }
   }
   for (const option of launchOptionsFor(catalog, modelId, values).options) {
     const value = values[option.id]

@@ -60,4 +60,24 @@ describe('Pi launch options', () => {
       ])
     ).toEqual(['--', '--model', 'trailing'])
   })
+
+  it('drops a --provider that would search its own models for the new one', () => {
+    expect(
+      removeOverriddenAgentSessionArgs('pi', { model: 'anthropic/claude-sonnet-5' }, [
+        '--provider',
+        'openai',
+        '--model',
+        'gpt-5.5',
+        '--no-extensions'
+      ])
+    ).toEqual(['--no-extensions'])
+    expect(
+      removeOverriddenAgentSessionArgs('pi', { effort: 'high' }, [
+        '--provider',
+        'openai',
+        '--model',
+        'gpt-5.5'
+      ])
+    ).toEqual(['--provider', 'openai', '--model', 'gpt-5.5'])
+  })
 })

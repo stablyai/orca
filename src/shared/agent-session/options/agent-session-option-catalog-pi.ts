@@ -54,6 +54,9 @@ export const PI_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
       pickerCommand: '/model'
     }
   },
+  // Pi resolves `--model` only among the provider `--provider` names, so a stale pin reads the
+  // picked id as another provider's custom model.
+  argsReplacedWithModel: ['--provider'],
   // Account-scoped provider ids never appear in a seed, so effort rides every listed model.
   unknownModelOptions: [PI_THINKING]
 }

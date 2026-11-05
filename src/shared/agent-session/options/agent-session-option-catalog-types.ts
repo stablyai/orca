@@ -65,6 +65,8 @@ export type AgentSessionOptionCatalog = {
   modelApply: CatalogOptionApply
   /** Opts this agent into structured per-worker launch overrides. */
   supportsWorkerLaunchPreferences?: true
+  /** Configured flags a picked model replaces, since they would otherwise constrain it. */
+  argsReplacedWithModel?: readonly string[]
   /** Launch-safe options for opaque model ids that are absent from the static catalog. */
   unknownModelOptions?: CatalogOption[]
   composeModelValue?: (modelId: string, values: Record<string, SessionOptionValue>) => string
