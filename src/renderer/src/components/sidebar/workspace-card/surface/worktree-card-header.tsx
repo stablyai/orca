@@ -14,6 +14,7 @@ import {
 import { WorktreeCardSshHostControl } from '../host/WorktreeCardSshHostControl'
 import { WorktreeTitleInlineRename } from '../identity/WorktreeTitleInlineRename'
 import type { WorktreeCardController } from '../controller/use-worktree-card-controller'
+import { WorktreeCreateButton } from './WorktreeCreateButton'
 
 export function WorktreeCardHeader({
   card,
@@ -103,6 +104,12 @@ export function WorktreeCardHeader({
           }
           onBeginEditingConsumed={affiliateListMode ? undefined : () => setRenamingWorktreeId(null)}
         />
+        {!affiliateListMode && !titleRenaming ? (
+          <WorktreeCreateButton
+            worktreeId={worktree.id}
+            disabled={isDeleting || isRuntimeDisconnected}
+          />
+        ) : null}
 
         {typeof worktree.firstAgentMessageRenameError === 'string' &&
         worktree.firstAgentMessageRenameError.length > 0 &&

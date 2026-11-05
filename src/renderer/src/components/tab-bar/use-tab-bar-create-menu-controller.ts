@@ -25,6 +25,7 @@ export function useTabBarCreateMenuController({
   resolvedGroupId,
   terminalOnly,
   showAgentLaunchItems = true,
+  initialOpen = false,
   mobileEmulatorEnabled,
   managedBrowserCreationEnabled,
   mobileEmulatorCreationEnabled,
@@ -46,6 +47,7 @@ export function useTabBarCreateMenuController({
   resolvedGroupId: string
   terminalOnly: boolean
   showAgentLaunchItems?: boolean
+  initialOpen?: boolean
   mobileEmulatorEnabled: boolean
   managedBrowserCreationEnabled: boolean
   mobileEmulatorCreationEnabled: boolean
@@ -66,7 +68,7 @@ export function useTabBarCreateMenuController({
   onOpenFileTab?: () => void
 }): TabBarCreateMenuController {
   // Why: <webview> clicks are out-of-process, so Radix's document-pointerdown outside-click check misses them; use window blur.
-  const [newTabMenuOpen, setNewTabMenuOpen] = useState(false)
+  const [newTabMenuOpen, setNewTabMenuOpen] = useState(initialOpen)
   const [createMenuQuery, setCreateMenuQuery] = useState('')
   const agentMenu = useNewTabAgentMenuRows(
     worktreeId,
