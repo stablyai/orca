@@ -1,3 +1,4 @@
+import { isTerminalMailbox } from './terminal-mailbox-subscriptions'
 import type {
   OrchestrationMailboxPointerMessage,
   PointerDeliveryDependencies
@@ -11,13 +12,18 @@ import {
 
 /** Classifies persisted pointer reservations against the terminal's current process; it owns no live flight. */
 export function resumePendingOrchestrationMailboxPointer(args: {
-  deps: Pick<PointerDeliveryDependencies<never>, 'getDb' | 'resolveSubmitTarget'>
+  deps: Pick<
+    PointerDeliveryDependencies<never>,
+    'getDb' | 'resolveSubmitTarget' | 'terminalSubscriptions'
+  >
   terminal: OrchestrationMailboxTerminal
+  mailboxHandle?: string
   messages: readonly OrchestrationMailboxPointerMessage[]
 }): boolean {
   const { ptyId } = args.terminal
   const newestSequence = args.messages.at(-1)?.sequence
-  const expectedTarget = args.deps.resolveSubmitTarget(ptyId)
+  const mailboxHandle = args.mailboxHandle ?? args.terminal.handle
+  const expectedTarget = args.deps.resolveSubmitTarget(ptyId, mailboxHandle)
   const staged = args.messages[0]
   const messageIds = args.messages.map((message) => message.id)
   const phases = new Set(args.messages.map((message) => message.pointer_enter_pending))
@@ -27,17 +33,39 @@ export function resumePendingOrchestrationMailboxPointer(args: {
         processIncarnation: staged.pointer_process_incarnation ?? ''
       }
     : null
+  const bare = isTerminalMailbox(mailboxHandle)
+  const subscriptionGeneration = args.deps.terminalSubscriptions?.generation(mailboxHandle)
+  const hasMixedTargets = args.messages.some(
+    (message) =>
+      message.pointer_pty_id !== staged?.pointer_pty_id ||
+      message.pointer_process_incarnation !== staged?.pointer_process_incarnation
+  )
+  if (
+    bare &&
+    (!ptyId ||
+      newestSequence === undefined ||
+      !expectedTarget ||
+      !staged ||
+      !persistedTarget ||
+      hasMixedTargets)
+  ) {
+    args.deps.terminalSubscriptions?.record(
+      mailboxHandle,
+      expectedTarget ? 'ambiguous_write' : 'host_unverifiable',
+      'unverifiable',
+      expectedTarget ? 'persisted_target_ambiguous' : 'current_target_unverifiable',
+      messageIds,
+      subscriptionGeneration
+    )
+    return true
+  }
   if (
     newestSequence === undefined ||
     !expectedTarget ||
     !staged ||
     staged.pointer_pty_id !== ptyId ||
     staged.pointer_process_incarnation !== expectedTarget.processIncarnation ||
-    args.messages.some(
-      (message) =>
-        message.pointer_pty_id !== staged.pointer_pty_id ||
-        message.pointer_process_incarnation !== staged.pointer_process_incarnation
-    )
+    hasMixedTargets
   ) {
     const db = args.deps.getDb()
     if (db) {
@@ -71,6 +99,17 @@ export function resumePendingOrchestrationMailboxPointer(args: {
     return false
   }
   if (phases.size !== 1 || !phases.has(MAILBOX_POINTER_RESERVED)) {
+    if (isTerminalMailbox(mailboxHandle)) {
+      args.deps.terminalSubscriptions?.record(
+        mailboxHandle,
+        'ambiguous_write',
+        'unverifiable',
+        'prior_write_unverifiable',
+        messageIds,
+        subscriptionGeneration
+      )
+      return true
+    }
     // Same-incarnation recovery cannot tell whether pointer text or Enter reached the PTY.
     args.deps
       .getDb()

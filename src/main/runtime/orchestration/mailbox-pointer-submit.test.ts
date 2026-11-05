@@ -171,7 +171,6 @@ describe('orchestration mailbox pointer submit', () => {
     await vi.waitFor(() => expect(settle).toHaveBeenCalledOnce())
     expect(writePty).toHaveBeenCalledOnce()
     expect(writePty).toHaveBeenCalledWith(ptyId, '\r')
-    expect(resolveMailbox).toHaveBeenCalledWith(terminal, mailboxHandle)
     expect(markMailboxPointerEnterAttempted.mock.invocationCallOrder[0]).toBeLessThan(
       writePty.mock.invocationCallOrder[0]!
     )
@@ -381,6 +380,41 @@ describe('orchestration mailbox pointer submit', () => {
       { ptyId: 'pty-b', processIncarnation: 'inc-b' },
       [MAILBOX_POINTER_RESERVED, MAILBOX_POINTER_WRITE_ATTEMPTED, MAILBOX_POINTER_ENTER_ATTEMPTED]
     )
+  })
+
+  it('keeps a direct attempted reservation when the host target is unverifiable', () => {
+    const db = new OrchestrationDb(':memory:')
+    const releaseMailboxPointerEnter = vi.spyOn(db, 'releaseMailboxPointerEnter')
+    const terminal = {
+      ptyId: 'pty-old',
+      handle: 'term_recipient',
+      paneKeys: ['tab-old:leaf-old'],
+      lastAgentStatus: 'idle' as const,
+      lastAgentStatusObservedLive: true
+    }
+    const deps = {
+      getDb: () => db,
+      resolveSubmitTarget: () => null
+    }
+    const resumed = resumePendingOrchestrationMailboxPointer({
+      deps,
+      terminal,
+      mailboxHandle: 'term_recipient',
+      messages: [
+        {
+          id: 'msg-old',
+          type: 'status',
+          sequence: 1,
+          pointer_enter_pending: MAILBOX_POINTER_WRITE_ATTEMPTED,
+          pointer_pty_id: 'pty-old',
+          pointer_process_incarnation: 'inc-old'
+        }
+      ]
+    })
+
+    expect(resumed).toBe(true)
+    expect(releaseMailboxPointerEnter).not.toHaveBeenCalled()
+    db.close()
   })
 
   it('does not submit after the parked PTY incarnation is replaced', async () => {

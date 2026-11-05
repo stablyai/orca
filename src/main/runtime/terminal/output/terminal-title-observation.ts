@@ -196,6 +196,11 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
     if (ptyInputEdge) {
       this.deliverPendingMessagesForPty(ptyId)
     }
+    if (agentStatus === 'idle') {
+      for (const handle of this.terminalMailboxSubscriptions.handlesForPty(ptyId)) {
+        this.deliverPendingMessagesForHandle(handle)
+      }
+    }
     return ptyRecordChanged
   }
 

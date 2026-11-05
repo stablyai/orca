@@ -651,6 +651,7 @@ import {
   TerminalResizeForClient,
   TerminalSubscribe
 } from './terminal-stream-params'
+import { TerminalSubscriptionParams } from './terminal-subscription-params'
 import {
   AgentTeamsPrepareLaunch,
   AgentTeamsTmuxCompat,
@@ -1319,8 +1320,11 @@ export const RPC_PARAMS_BY_METHOD = {
   'orchestration.runStop': RunStopParams,
   'orchestration.runUse': RunUseParams,
   'orchestration.sessionAddress': SessionAddressParams,
+  'orchestration.subscribe': TerminalSubscriptionParams,
+  'orchestration.subscriptionStatus': TerminalSubscriptionParams,
   'orchestration.taskCreate': TaskCreateParams,
   'orchestration.taskList': TaskListParams,
+  'orchestration.unsubscribe': TerminalSubscriptionParams,
   'orchestration.workerAbandon': WorkerDispatchParams,
   'orchestration.workerAutoClose': OrchestrationWorkerSubjectParams,
   'orchestration.workerChatTouch': OrchestrationWorkerSubjectParams,

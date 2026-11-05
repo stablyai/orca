@@ -215,8 +215,6 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
       this.layoutQueues.delete(ptyId)
       this.freshSubscribeGuard.delete(ptyId)
       this.cancelPendingDriverMutations(ptyId)
-      // Cold restore can reuse ids during delayed Enter; revoke it before it injects into a replacement.
-      this.orchestrationMailboxNotifications.retirePty(ptyId)
       // Repoint retained handle/pane mailbox pointers away from the retired session.
       for (const leaf of this.getLeavesForPty(ptyId)) {
         const mailboxHandle = this.handleByLeafKey.get(this.getLeafKey(leaf.tabId, leaf.leafId))
@@ -241,6 +239,7 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
       this.disposeHeadlessTerminal(ptyId)
       this.trustDialogStatus.forget(ptyId)
       if (processDeathCertified) {
+        this.orchestrationMailboxNotifications.retirePty(ptyId)
         // The bounded verdict register also fences late graphs after the PTY record was pruned.
         this.rememberPtyLivenessVerdict(ptyId, {
           status: 'exited',
