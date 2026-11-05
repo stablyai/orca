@@ -52,21 +52,27 @@ export async function pairedAgentLaunchInputs(args: {
     )
   const explicitArgs = args.agentArgs !== undefined ? { agentArgs: args.agentArgs } : {}
   const hasActionArgs = args.actionAgentArgs !== undefined
-  if (args.complete && !hasActionArgs) {
+  const permissionMode = readLaunchPermissionChoice(sessionOptions)
+  const actionNeedsHostPermission =
+    hasActionArgs &&
+    permissionMode === undefined &&
+    agentPermissionHasTerminalChoice(agent, 'own') &&
+    !agentArgsSetPermission(agent, args.actionAgentArgs)
+  const directArgs = hasActionArgs ? { agentArgs: args.actionAgentArgs } : explicitArgs
+  if (args.complete && !actionNeedsHostPermission) {
     return {
-      ...explicitArgs,
+      ...directArgs,
       sessionOptions,
       launchPreferences
     }
   }
-  const permissionMode = readLaunchPermissionChoice(sessionOptions)
   const needsArguments =
     agentLaunchNeedsPreparedCommand(agent, sessionOptions) ||
     (!args.complete &&
       permissionMode !== undefined &&
       (!args.capable || launchPreferences?.mode === undefined))
-  if (!needsArguments && !hasActionArgs) {
-    return { ...explicitArgs, launchPreferences }
+  if (!needsArguments && !actionNeedsHostPermission) {
+    return { ...directArgs, launchPreferences }
   }
   // Why: old paired servers keep their prepared launch for inputs they cannot express.
   if (

@@ -506,6 +506,10 @@ it('leaves chat-only permission out of an OpenCode terminal action request', asy
 it.each([undefined, ''])(
   'keeps a no-flag Ask pick structured with action Arguments %j on a create-options host',
   async (agentArgs) => {
+    vi.mocked(settingsTransport.readHostAgentLaunchSettings).mockRejectedValue(new Error('offline'))
+    vi.spyOn(settingsTransport, 'readHostAgentStartupSettings').mockRejectedValue(
+      new Error('offline')
+    )
     const projection = projectSourceControlActionLaunch(
       {
         agentId: 'antigravity',
@@ -516,13 +520,20 @@ it.each([undefined, ''])(
       'antigravity',
       { basePrompt: '' }
     )
-    await launch({
-      agent: 'antigravity',
-      sessionOptions: projection.sessionOptions,
-      actionAgentArgs: projection.actionAgentArgs
-    })
+    await expect(
+      launch({
+        agent: 'antigravity',
+        buildStartup: () => {
+          throw new Error('Unexpected prepared launch')
+        },
+        sessionOptions: projection.sessionOptions,
+        actionAgentArgs: projection.actionAgentArgs
+      })
+    ).resolves.toMatchObject({ outcome: { status: 'created' } })
     const request = params('terminal.createAgentSession')
     expect(request.sessionOptions).toEqual({ permissionMode: 'ask' })
+    expect(request).not.toHaveProperty('command')
+    expect(request).not.toHaveProperty('env')
     if (agentArgs === undefined) {
       expect(request).not.toHaveProperty('agentArgs')
     } else {
@@ -530,7 +541,11 @@ it.each([undefined, ''])(
     }
     const inputs = resolveAgentStartupPlanInputs({
       agent: 'antigravity',
-      settings: { agentPermissionDefault: 'full-access' },
+      settings: {
+        agentPermissionDefault: 'full-access',
+        agentCmdOverrides: { antigravity: '/host/agy' },
+        agentDefaultEnv: { antigravity: { HOST_ENV: 'host' } }
+      },
       platform: 'linux',
       isRemote: false,
       shell: 'posix',
@@ -539,8 +554,11 @@ it.each([undefined, ''])(
       sessionOptions: { permissionMode: 'ask' }
     })
     expect(
-      buildAgentStartupPlan({ ...inputs, prompt: '', allowEmptyPromptLaunch: true })?.launchCommand
-    ).toBe('agy')
+      buildAgentStartupPlan({ ...inputs, prompt: '', allowEmptyPromptLaunch: true })
+    ).toMatchObject({
+      launchCommand: '/host/agy',
+      env: { HOST_ENV: 'host' }
+    })
   }
 )
 
