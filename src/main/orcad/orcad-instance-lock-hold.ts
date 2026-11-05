@@ -18,6 +18,15 @@ export type OrcadInstanceLock = {
 
 type OrcadLockBeat = 'held' | 'lost' | 'unproven'
 
+function lockIsAbsent(lockPath: string): boolean {
+  try {
+    return !statSync(lockPath, { throwIfNoEntry: false })
+  } catch {
+    // Unstattable (e.g. a Windows delete-pending file) proves nothing; the next beat retries.
+    return false
+  }
+}
+
 /** Re-assert ownership: a removed lock lets the next starter in, so re-publish it or yield to its new holder. */
 function beatOrcadInstanceLock(
   lockPath: string,
@@ -25,7 +34,7 @@ function beatOrcadInstanceLock(
   publish: () => boolean
 ): OrcadLockBeat {
   let current = readBoundedLockFile(lockPath)
-  if (current === null && !statSync(lockPath, { throwIfNoEntry: false })) {
+  if (current === null && lockIsAbsent(lockPath)) {
     try {
       if (publish()) {
         console.warn(
