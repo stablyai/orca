@@ -10,6 +10,7 @@ import {
   type AgentSessionWireRefusalCode
 } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { isAgentSessionCreateAdmissionRefusal } from '../../../../shared/agent-session/failures/agent-session-definitive-refusal'
+import { tuiAgentDisplayName } from '../../../../shared/agent-launch/catalog/tui-agent-display-names'
 
 export type StructuredCreateRefused = { refusal: AgentSessionWireRefusal }
 
@@ -35,7 +36,7 @@ function wireRefusalCode(error: unknown): AgentSessionWireRefusalCode | null {
 
 const PRECOMMIT_REFUSAL_MESSAGE = 'Orca cannot open a structured agent chat for this workspace.'
 
-function precommitRefusal(error: unknown): AgentSessionWireRefusal {
+function precommitRefusal(error: unknown, agent?: string): AgentSessionWireRefusal {
   // A refusal the host raised keeps its situation; a bare code names none.
   if (isAgentSessionRefusalError(error)) {
     return agentSessionRefusalFromReference(error.refusal, PRECOMMIT_REFUSAL_MESSAGE)
@@ -44,23 +45,26 @@ function precommitRefusal(error: unknown): AgentSessionWireRefusal {
   if (code) {
     return refuseUnclassified(code, PRECOMMIT_REFUSAL_MESSAGE)
   }
-  const message = error instanceof Error ? error.message : String(error)
   // Log code-less faults while returning compatibility refusal; no structured situation means no reason field.
   console.warn('[agent-session] create refused before it committed anything', error)
+  const agentName = agent ? tuiAgentDisplayName(agent) : null
   return refuseUnclassified(
     UNCODED_PRECOMMIT_REFUSAL_CODE,
-    `Orca could not prepare a structured agent chat for this workspace: ${message}`
+    agentName
+      ? `${agentName} chat could not be started. Try again.`
+      : 'The chat could not be started. Try again.'
   )
 }
 
 /** Convert throws only before attach; afterward failure cannot prove no session exists. Preserve explicit refusals unchanged. */
 export async function resolveUncommittedStructuredCreate<TPrepared>(
-  prepare: () => Promise<TPrepared | StructuredCreateRefused>
+  prepare: () => Promise<TPrepared | StructuredCreateRefused>,
+  agent?: string
 ): Promise<TPrepared | StructuredCreateRefused> {
   try {
     return await prepare()
   } catch (error) {
-    const refusal = precommitRefusal(error)
+    const refusal = precommitRefusal(error, agent)
     return {
       refusal: isAgentSessionCreateAdmissionRefusal(refusal)
         ? { ...refusal, createAttemptRefusedBeforeCommit: true }

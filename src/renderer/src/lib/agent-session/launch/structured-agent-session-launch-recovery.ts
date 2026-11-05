@@ -170,14 +170,17 @@ export async function launchAndReconcile(
 }
 
 export async function reconcileUnknownLaunch(
-  state: StructuredLaunchRecoveryState
+  state: StructuredLaunchRecoveryState,
+  requested = false
 ): Promise<StructuredAgentLaunchReceipt> {
   throwIfLaunchCancelled(state)
-  if (state.intent.params.firstMessage) {
+  if (state.intent.params.firstMessage && !requested) {
     return recoverPublishedSessionReceipt(state)
   }
-  state.visibilityUnknown = false
-  state.onVisibilityChanged?.()
+  if (!state.intent.params.firstMessage) {
+    state.visibilityUnknown = false
+    state.onVisibilityChanged?.()
+  }
   try {
     return await recoverPublishedSessionReceipt(state)
   } catch (error) {

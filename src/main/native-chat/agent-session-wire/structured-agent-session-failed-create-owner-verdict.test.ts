@@ -28,6 +28,7 @@ import {
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
+import { claudeProfileSetupFailed } from '../../claude-accounts/claude-profile-launch-errors'
 
 const CALLER = { callerKey: 'client-1' }
 const EXIT_REASON = 'claude stream-json exited (code 1): stderr tail'
@@ -84,6 +85,23 @@ afterEach(async () => {
 })
 
 describe('failed create owner verdict', () => {
+  it('returns a typed preparation failure on its first response and replay, then permits recovery', async () => {
+    acquire.mockRejectedValueOnce(claudeProfileSetupFailed())
+    const params = hostTestAttachParams(null)
+    const first = await host.attach(CALLER, params)
+    expect(first).toMatchObject({
+      ok: false,
+      refusal: {
+        code: 'agent_session_operation_invalid',
+        details: { reason: 'claudeAccountSetupFailed', ownerVerdict: 'exited' },
+        ownerVerdict: 'exited'
+      }
+    })
+    await expect(host.attach(CALLER, params)).resolves.toEqual(first)
+    await expect(host.attach(CALLER, hostTestAttachParams(null))).resolves.toMatchObject({
+      ok: true
+    })
+  })
   it.each([
     // Cleanup proves absence, not why startup failed.
     ['a failure the cleanup proved gone', () => new Error(EXIT_REASON), {}, COULD_NOT_RESTART],

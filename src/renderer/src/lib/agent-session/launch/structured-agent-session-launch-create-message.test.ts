@@ -492,7 +492,6 @@ describe('the first message owned by create', () => {
       expect(mocks.call.mock.calls.filter(([, method]) => method === 'agentSession.send')).toEqual(
         []
       )
-      expect(retryStructuredAgentSessionLaunch('workspace-1', launch.sessionId)).toBe(false)
       expect(readStructuredAgentLaunchRecord(launch.sessionId)).toBeUndefined()
       expect(
         mocks.call.mock.calls.filter(([, method]) => method === 'agentSession.create')
@@ -678,7 +677,6 @@ describe('the first message owned by create', () => {
           mocks.call.mock.calls.filter(([, method]) => method === 'agentSession.history')
         ).toHaveLength(2)
       )
-      expect(retryStructuredAgentSessionLaunch('workspace-1', launch.sessionId)).toBe(false)
       const joined = startStructuredAgentLaunch('workspace-1', 'codex', {
         requestId: newAgentLaunchRequestId(),
         executionHostId: 'local',
@@ -738,29 +736,6 @@ describe('the first message owned by create', () => {
     }
   )
 
-  it('coalesces the same completed uncertain create without Retry or a second issue', async () => {
-    mocks.call.mockReturnValue(new Promise(() => {}))
-    const options = {
-      requestId: newAgentLaunchRequestId(),
-      executionHostId: 'local' as const,
-      prompt: 'opening text'
-    }
-    const launch = startStructuredAgentLaunch('workspace-1', 'codex', options)
-    await vi.waitFor(() => expect(mocks.call).toHaveBeenCalledOnce())
-    const original = createParams()
-    await vi.advanceTimersByTimeAsync(30_000)
-    await expect(launch.launchResult).rejects.toThrow('Opening message outcome unknown.')
-    const joined = startStructuredAgentLaunch('workspace-1', 'codex', options)
-    expect(joined.sessionId).toBe(launch.sessionId)
-    await expect(joined.launchResult).rejects.toThrow('Opening message outcome unknown.')
-    expect(retryStructuredAgentSessionLaunch('workspace-1', launch.sessionId)).toBe(false)
-    expect(getStructuredAgentSessionPendingSends(launch.sessionId)).toHaveLength(1)
-    expect(readStructuredAgentLaunchRecord(launch.sessionId)?.firstMessage).toEqual(
-      original.firstMessage
-    )
-    expect(mocks.call.mock.calls.map(([, method]) => method)).toEqual(['agentSession.create'])
-  })
-
   it.each([
     // A window-owned build leaves a cancellation record; this machine's host closes the chat itself.
     ['a window-owned', false, ['agentSession.create']],
@@ -808,7 +783,6 @@ describe('the first message owned by create', () => {
       }
       await vi.advanceTimersByTimeAsync(30_000)
       expect(getStructuredAgentLaunchStatus('workspace-1', 'codex')).toBe('idle')
-      expect(retryStructuredAgentSessionLaunch('workspace-1', launch.sessionId)).toBe(false)
       expect(readStructuredAgentLaunchRecord(launch.sessionId)?.firstMessage).toEqual(
         original.firstMessage
       )

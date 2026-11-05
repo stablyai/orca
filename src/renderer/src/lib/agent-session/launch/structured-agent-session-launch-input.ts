@@ -34,19 +34,24 @@ export function settleStructuredLaunchFirstMessageFromJournal(
   const state = getStructuredLaunchStateBySessionId(sessionId)
   if (
     state &&
-    (state.cancelled || state.callers.outcome === 'failed' || state.callers.outcome === 'published')
+    (state.cancelled ||
+      (state.callers.outcome === 'failed' && !state.visibilityUnknown) ||
+      state.callers.outcome === 'published')
   ) {
     return
   }
-  const firstMessage =
-    state?.intent.params.firstMessage ??
-    getPersistedStructuredAgentLaunchRecord(sessionId)?.firstMessage
+  const record = getPersistedStructuredAgentLaunchRecord(sessionId)
+  if (!state && record?.lifecycle === 'failed') {
+    return
+  }
+  const firstMessage = state?.intent.params.firstMessage ?? record?.firstMessage
   const submission = firstMessage && readRecorded().get(firstMessage.clientMessageId)
   if (!submission) {
     return
   }
   if (state) {
     state.visibilityUnknown = false
+    delete state.failure
     state.callers.outcome = 'published'
     state.promise = import('./structured-agent-session-launch-create-message').then(
       ({ publishStructuredLaunchCreateOptions }) =>

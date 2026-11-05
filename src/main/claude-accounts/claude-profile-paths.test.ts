@@ -5,12 +5,18 @@ import {
   readFileSync,
   rmSync,
   symlinkSync,
+  unlinkSync,
   writeFileSync
 } from 'node:fs'
+import type * as NodeFs from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 vi.mock('electron', () => ({ app: { getPath: () => '/unused-test-path' } }))
+vi.mock('node:fs', async (original) => {
+  const fs = await original<typeof NodeFs>()
+  return { ...fs, unlinkSync: vi.fn(fs.unlinkSync) }
+})
 import {
   describeClaudeProfile,
   prepareClaudeProfileDirectory,
@@ -35,6 +41,7 @@ function root(): string {
   return dir
 }
 afterEach(() => {
+  vi.mocked(unlinkSync).mockReset()
   for (const dir of roots.splice(0)) {
     rmSync(dir, { recursive: true, force: true })
   }
@@ -135,6 +142,8 @@ describe('Claude profile namespace', () => {
       expect(() =>
         prepareClaudeProfileDirectory(dir, describeClaudeProfile(dir, 'a', local), userHome)
       ).toThrow('another account')
+      expect(readFileSync(marker, 'utf8')).toBe(JSON.stringify(other))
+      expect(existsSync(join(dir, 'claude-profiles/a/home'))).toBe(false)
     }
     writeFileSync(marker, '{')
     expect(() =>
@@ -143,6 +152,46 @@ describe('Claude profile namespace', () => {
     expect(existsSync(join(dir, 'claude-profiles/a/home'))).toBe(false)
     expect(readFileSync(marker, 'utf8')).toBe('{')
   })
+  it('does not recreate a home if its completion marker cannot be invalidated', () => {
+    const dir = root()
+    const userHome = root()
+    const profile = describeClaudeProfile(dir, 'a', local)
+    prepareClaudeProfileDirectory(dir, profile, userHome)()
+    const marker = join(dir, 'claude-profiles/a/profile.json')
+    const original = readFileSync(marker, 'utf8')
+    rmSync(profile.home, { recursive: true })
+    vi.mocked(unlinkSync).mockImplementationOnce(() => {
+      throw Object.assign(new Error('busy'), { code: 'EBUSY' })
+    })
+    expect(() => prepareClaudeProfileDirectory(dir, profile, userHome)).toThrow()
+    expect(existsSync(profile.home)).toBe(false)
+    expect(readFileSync(marker, 'utf8')).toBe(original)
+  })
+  it.each(['file', 'link'] as const)(
+    'preserves a %s occupying home and its completion marker',
+    (kind) => {
+      const dir = root()
+      const userHome = root()
+      const profile = describeClaudeProfile(dir, 'a', local)
+      prepareClaudeProfileDirectory(dir, profile, userHome)()
+      const marker = join(dir, 'claude-profiles/a/profile.json')
+      const original = readFileSync(marker, 'utf8')
+      rmSync(profile.home, { recursive: true })
+      const outside = root()
+      writeFileSync(join(outside, 'keep'), 'personal data')
+      if (kind === 'file') {
+        writeFileSync(profile.home, 'personal data')
+      } else {
+        symlinkSync(outside, profile.home, 'junction')
+      }
+      expect(() => prepareClaudeProfileDirectory(dir, profile, userHome)).toThrow()
+      expect(readFileSync(marker, 'utf8')).toBe(original)
+      expect(
+        readFileSync(kind === 'file' ? profile.home : join(profile.home, 'keep'), 'utf8')
+      ).toBe('personal data')
+      expect(readFileSync(join(outside, 'keep'), 'utf8')).toBe('personal data')
+    }
+  )
   it('rejects a linked account parent before creating a profile outside the namespace', () => {
     const dir = root()
     mkdirSync(join(dir, 'claude-profiles'))

@@ -73,6 +73,30 @@ it('a capable client creates a blank chat without acquire', async () => {
   expect(runtimeCalls.publishStructuredAgentSessionTab).toHaveBeenCalledOnce()
 })
 
+it('refuses a new founding operation before dispatching the same opening again', async () => {
+  const input = params(undefined, true)
+  expect(await call('agentSession.create', input, capable)).toMatchObject({
+    ok: true,
+    result: { ok: true }
+  })
+  await vi.waitFor(() => expect(rig.adapter.dispatch).toHaveBeenCalledOnce())
+  const retry = {
+    ...input,
+    envelope: { ...input.envelope, clientOperationId: hostTestOperationId() }
+  }
+  expect(await call('agentSession.create', retry, capable)).toMatchObject({
+    ok: true,
+    result: {
+      ok: false,
+      refusal: { code: 'agent_session_conflict', details: { reason: 'sessionExists' } }
+    }
+  })
+  expect(
+    (await rig.host.journalSnapshot(SESSION)).submissions.map((row) => row.clientMessageId)
+  ).toEqual([input.firstMessage?.clientMessageId])
+  expect(rig.adapter.dispatch).toHaveBeenCalledOnce()
+})
+
 it.each([
   { name: 'legacy', client: legacy },
   { name: 'capable', client: capable }

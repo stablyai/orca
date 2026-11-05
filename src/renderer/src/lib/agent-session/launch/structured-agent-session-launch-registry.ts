@@ -168,7 +168,12 @@ export function getStructuredAgentSessionLaunchFailure(
   sessionId: string
 ): StructuredLaunchFailure | null {
   const state = getStructuredLaunchStateBySessionId(sessionId)
-  return state && state.intent.worktreeId === worktreeId && launchStateLifecycle(state) === 'failed'
+  if (!state || state.intent.worktreeId !== worktreeId) {
+    return null
+  }
+  const lifecycle = launchStateLifecycle(state)
+  return lifecycle === 'failed' ||
+    (lifecycle === 'visibility-unknown' && !!state.intent.params.firstMessage)
     ? (state.failure ?? null)
     : null
 }

@@ -1,10 +1,7 @@
 import { structuredAgentSessionStopControl } from '../../../shared/agent-session/view/structured-agent-session-stop-control'
 import { isStructuredAgentSessionMainAgentWorking } from '../../../shared/agent-session/view/structured-agent-session-main-agent-working'
 import { expect, it, vi } from 'vitest'
-import {
-  startStructuredAgentLaunch,
-  retryStructuredAgentSessionLaunch
-} from './agent-session/launch/structured-agent-session-launch'
+import { startStructuredAgentLaunch } from './agent-session/launch/structured-agent-session-launch'
 import { holdStructuredAgentSessionLaunchOption } from './agent-session/launch/structured-agent-session-launch-options'
 import { recordHostModelCatalogSnapshot } from '@/runtime/host-model-catalog-snapshots'
 import { newAgentLaunchRequestId } from './agent-launch-request-id'
@@ -125,7 +122,6 @@ export function registerCreateSelectionTests(): void {
     mocks.call.mockImplementation((_target, method) =>
       method === 'agentSession.setOption' ? applied.promise : Promise.resolve(created())
     )
-    expect(retryStructuredAgentSessionLaunch('workspace-1', launch.sessionId)).toBe(false)
     const raw = getStructuredLaunchStateBySessionId(launch.sessionId)?.promise
     create.resolve(created(original))
     await raw

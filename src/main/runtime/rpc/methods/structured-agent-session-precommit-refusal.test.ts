@@ -14,6 +14,7 @@ import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { RpcResponse } from '../core'
 import { RpcDispatcher } from '../dispatcher'
 import { STRUCTURED_AGENT_SESSION_METHODS } from './structured-agent-session'
+import { createStructuredAgentSessionForWorktree } from './structured-agent-session-create'
 
 const SESSION = 'session-alpha'
 const OPERATION = '1800000000000-00000000000000000000000000000001'
@@ -149,19 +150,18 @@ describe('a create refused before it commits', () => {
     expect(attach).not.toHaveBeenCalled()
   })
 
-  it('answers a code-less failure as a definitive envelope too, keeping the cause in the message', async () => {
+  it('keeps private precommit faults out of a definitive public refusal', async () => {
     // The class no per-site conversion catches: an unresolvable worktree throws prose, not a code.
     const response = await create({
       resolveStructuredAgentSessionCreateIntent: vi.fn(async () => {
-        throw new Error('No worktree matches id:workspace-1')
+        throw new Error('private-workspace-detail-sentinel')
       })
     })
 
     const refusal = refusalOf(response)
     expect(isDefinitiveAgentSessionCreateRefusal(refusal?.code)).toBe(true)
-    expect(refusal?.message).toContain('structured agent chat')
-    expect(refusal?.message).not.toContain('Codex')
-    expect(refusal?.message).toContain('No worktree matches id:workspace-1')
+    expect(JSON.stringify(refusal)).not.toContain('private-workspace-detail-sentinel')
+    expect(refusal).not.toHaveProperty('details')
     expect(attach).not.toHaveBeenCalled()
   })
 
@@ -170,13 +170,35 @@ describe('a create refused before it commits', () => {
 
     const response = await create({
       ensureStructuredAgentSessionHost: vi.fn(async () => {
-        throw new Error('EACCES: could not open the session store')
+        throw new Error('private-store-detail-sentinel')
       })
     })
 
     const refusal = refusalOf(response)
     expect(isDefinitiveAgentSessionCreateRefusal(refusal?.code)).toBe(true)
-    expect(refusal?.message).toContain('could not open the session store')
+    expect(JSON.stringify(refusal)).not.toContain('private-store-detail-sentinel')
+  })
+
+  it('keeps private faults out of in-process create refusals too', async () => {
+    const params = createParams()
+    const result = await createStructuredAgentSessionForWorktree({
+      runtime: {
+        resolveStructuredAgentSessionCreateIntent: async () => {
+          throw new Error('private-in-process-sentinel')
+        }
+      } as unknown as OrcaRuntimeService,
+      ensureHost: async () => hostStub(),
+      caller: { callerKey: 'in-process-client' },
+      envelope: params.envelope,
+      worktree: WORKTREE,
+      agent: 'codex',
+      activate: true
+    })
+    expect(result).toMatchObject({
+      ok: false,
+      refusal: { code: 'structured_agent_session_unsupported' }
+    })
+    expect(JSON.stringify(result)).not.toContain('private-in-process-sentinel')
   })
 
   it('still refuses a fingerprint conflict with its own code, not a pre-commit one', async () => {

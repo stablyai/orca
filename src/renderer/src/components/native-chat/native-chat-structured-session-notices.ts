@@ -42,13 +42,12 @@ function nativeChatLaunchNotice({
           'auto.components.native.chat.NativeChatLaunchRetry.unknown',
           'Chat connection could not be confirmed.'
         )
-  const cause =
-    lifecycle === 'failed' && failure
-      ? (failure.causeText ??
-        agentSessionWriteNoticeText(
-          agentSessionRefusalCauseParts(failure, agentLabel ? { agentName: agentLabel } : {})
-        ))
-      : ''
+  const cause = failure
+    ? (failure.causeText ??
+      agentSessionWriteNoticeText(
+        agentSessionRefusalCauseParts(failure, agentLabel ? { agentName: agentLabel } : {})
+      ))
+    : ''
   // An argument problem already says the start failed; the generic lead would repeat it.
   const saysStartFailure =
     failure?.code === 'agent_session_operation_invalid' && failure.details?.argumentProblem
