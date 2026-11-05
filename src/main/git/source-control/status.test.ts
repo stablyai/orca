@@ -9,7 +9,7 @@ import {
   createFsPromisesModuleMock,
   createGitRunnerModuleMock
 } from './status-test-harness'
-import { MAX_IGNORED_PATHS } from '../../shared/git-status-porcelain-parser'
+import { MAX_IGNORED_PATHS } from '../../../shared/git/status/git-status-porcelain-parser'
 
 const {
   gitExecFileAsyncMock,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { FsChangeEvent } from '../../../../shared/filesystem-entry-types'
+import type { FsChangeEvent } from '../../../../../../shared/filesystem-entry-types'
 import { shouldRefreshGitStatusForFileChange } from './git-status-file-watch-refresh'
 
 const root = '/repo'

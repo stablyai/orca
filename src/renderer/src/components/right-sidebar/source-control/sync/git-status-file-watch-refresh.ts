@@ -17,7 +17,7 @@ import {
   ORCA_WORKTREE_FILE_CHANGE_EVENT,
   type WorktreeFileChangeEventDetail
 } from '@/hooks/worktree-file-change-event'
-import { buildIgnoredSet, isPathIgnored } from './status-display'
+import { buildIgnoredSet, isPathIgnored } from '@/lib/git-path-decoration'
 
 const WATCH_REFRESH_DEBOUNCE_MS = 125
 
