@@ -142,6 +142,16 @@ export function RetainedPaneHost({
       onFocusOwningGroup(groupId)
     }
   }, [groupId, onFocusOwningGroup])
+  // Why: a key an app shortcut already handled (Cmd+W closing this tab) is not typing in the pane,
+  // and recording it after the close would revive the closed tab's use.
+  const recordKeyUse = useCallback(
+    (event: React.KeyboardEvent) => {
+      if (!event.defaultPrevented) {
+        onUse?.()
+      }
+    },
+    [onUse]
+  )
 
   return (
     <div
@@ -156,7 +166,7 @@ export function RetainedPaneHost({
       onPointerDown={focusGroup}
       onFocusCapture={focusGroup}
       onPointerDownCapture={onUse}
-      onKeyDownCapture={onUse}
+      onKeyDownCapture={recordKeyUse}
     >
       {awaitsFirstFallbackRect ? null : children}
     </div>

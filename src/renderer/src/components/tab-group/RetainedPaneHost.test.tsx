@@ -225,3 +225,20 @@ it('mounts a pane at once when it has no group body to measure', () => {
   )
   expect(view.getByRole('textbox')).toBeTruthy()
 })
+
+it('records typing in the pane but not a key an app shortcut already handled', () => {
+  const onUse = vi.fn()
+  const view = render(
+    <RetainedPaneHost groupId="left" isVisible onUse={onUse}>
+      <input />
+    </RetainedPaneHost>
+  )
+  const input = view.getByRole('textbox')
+  fireEvent.keyDown(input, { key: 'a' })
+  expect(onUse).toHaveBeenCalledTimes(1)
+  const closeShortcut = (event: KeyboardEvent): void => event.preventDefault()
+  window.addEventListener('keydown', closeShortcut, true)
+  fireEvent.keyDown(input, { key: 'w', metaKey: true })
+  window.removeEventListener('keydown', closeShortcut, true)
+  expect(onUse).toHaveBeenCalledTimes(1)
+})

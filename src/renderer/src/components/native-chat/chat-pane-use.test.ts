@@ -79,11 +79,12 @@ describe('chat pane use', () => {
       recordPaneUse('a', entityId)
     }
     recordPaneUse('b', 'b-1')
-    setTabs({ a: [liveTab('a-1', 'a'), liveTab('a-3', 'a'), shared[1]], b: other })
+    setTabs({ a: [liveTab('a-1', 'a'), liveTab('a-3', 'a'), ...shared], b: other })
     expect(readPaneUse('a', 'a-2')).toBeUndefined()
     expect(readPaneUse('a', 'a-1')).toBeTypeOf('number')
-    expect(readPaneUse('a', 'shared')).toBeTypeOf('number')
     expect(readPaneUse('b', 'b-1')).toBeTypeOf('number')
+    setTabs({ a: [liveTab('a-1', 'a'), shared[1]], b: other })
+    expect(readPaneUse('a', 'shared')).toBeTypeOf('number')
   })
 
   // Why: a click or key in a pane must not cost more as editor tabs pile up in the workspace.
