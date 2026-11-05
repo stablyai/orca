@@ -1,7 +1,8 @@
 import { aiVaultScopePathsForWslDistro } from '../../../../../shared/ai-vault/scanning/ai-vault-scope-cwd-match'
 import { recordSessionScanIssue, scanIssueTextFromError } from '../../../session-scan-issues'
 import { existsSync } from 'node:fs'
-import { Worker } from 'node:worker_threads'
+import type { Worker } from 'node:worker_threads'
+import { spawnWorkerThread } from '../../../../worker-threads/worker-thread-spawn'
 import type * as AiVault from '../../../../../shared/ai-vault/contracts/ai-vault-types'
 import { throwIfSignalAborted } from '../../../../../shared/abort-signal-reason'
 import { openCodeTranscriptPageLimit } from '../../../../../shared/opencode-transcript-page-limit'
@@ -34,7 +35,7 @@ function defaultWorkerFactory(): Worker {
   if (!existsSync(workerPath)) {
     throw new Error(`OpenCode SQLite worker entry not found: ${workerPath}`)
   }
-  return new Worker(workerPath)
+  return spawnWorkerThread(workerPath)
 }
 
 let sharedClient: OpenCodeSqliteWorkerClient | null = null

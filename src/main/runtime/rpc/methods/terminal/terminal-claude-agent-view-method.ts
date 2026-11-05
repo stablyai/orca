@@ -1,4 +1,7 @@
-import { isTerminalInputPaused, TerminalInputPausedError } from '../../../terminal-input-admission'
+import {
+  isTerminalInputPaused,
+  TerminalInputPausedError
+} from '../../../terminal/input/terminal-input-admission'
 import { defineMethod, defineStreamingMethod } from '../../core'
 import { bindStructuredAgentSessionStream } from '../structured-agent-session-status-stream'
 import { TerminalViewClaudeAgent } from '../../../../../shared/rpc-contract/terminal-unary-params'

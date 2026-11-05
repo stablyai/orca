@@ -1,11 +1,8 @@
+import { refreshMobileTaskPRChecks } from './mobile-task-pr-check-refresh'
 import { githubTaskKey, sameGitHubTask, requireGitHubTaskTarget } from './github-task-identity'
 import { useClipboardWriter } from '../platform/clipboard'
 import type { HostedMetadataActionsModel } from './use-mobile-tasks-hosted-metadata-actions'
-import {
-  buildGitHubCheckSummary,
-  scheduleMobileTaskCopyFeedbackReset,
-  useCallback
-} from './mobile-tasks-dependencies'
+import { scheduleMobileTaskCopyFeedbackReset, useCallback } from './mobile-tasks-dependencies'
 import {
   type DetailComment,
   type GitHubAssignableUser,
@@ -17,10 +14,7 @@ import {
   gitlabIssueCommentWrite,
   gitlabMergeRequestCommentWrite
 } from './mobile-task-item-comment-operations'
-import {
-  githubPullRequestChecksRead,
-  githubReviewerRequest
-} from './mobile-task-item-state-operations'
+import { githubReviewerRequest } from './mobile-task-item-state-operations'
 
 export type HostedCommentReviewActionsInput = Pick<
   HostedMetadataActionsModel,
@@ -272,81 +266,13 @@ export function useMobileTasksHostedCommentReviewActions<
     [claimPublication, client, detailPayload, itemReviewersDraft, tryBeginMutation]
   )
 
-  const refreshGitHubChecks = async (
-    item: Extract<TaskItem, { provider: 'github' }>
-  ): Promise<void> => {
-    if (!client || item.source.type !== 'pr') {
-      return
-    }
-    const finish = tryBeginMutation()
-    if (!finish) {
-      return
-    }
-    setError('')
-    const isCurrent = claimPublication(item, detailPayload)
-    const requestedHeadSha =
-      detailPayload?.provider === 'github' ? detailPayload.headSha : undefined
-    try {
-      const reply = await githubPullRequestChecksRead.request(
-        client,
-        {
-          repo: `id:${item.source.repoId}`,
-          prNumber: item.source.number,
-          prRepo: requireGitHubTaskTarget(item.source).repository,
-          headSha: requestedHeadSha,
-          noCache: true
-        },
-        { timeoutMs: 30_000 }
-      )
-      const checks = githubPullRequestChecksRead.interpret(reply)
-      if (!isCurrent()) {
-        return
-      }
-      const checksSummary = buildGitHubCheckSummary(checks)
-      const summaryFor = (source: typeof item.source) =>
-        requestedHeadSha !== undefined &&
-        source.headSha === requestedHeadSha &&
-        source.checksSummary?.state === checksSummary.state
-          ? source.checksSummary
-          : checksSummary
-      setDetailPayload((current) =>
-        current?.provider === 'github' && current.targetKey === githubTaskKey(item.source)
-          ? { ...current, checks }
-          : current
-      )
-      setActionItem((current) =>
-        sameGitHubTask(current, item)
-          ? {
-              ...current,
-              source: { ...current.source, checksSummary: summaryFor(current.source) }
-            }
-          : current
-      )
-      setItems((current) =>
-        current.map((candidate) =>
-          sameGitHubTask(candidate, item)
-            ? {
-                ...candidate,
-                source: { ...candidate.source, checksSummary: summaryFor(candidate.source) }
-              }
-            : candidate
-        )
-      )
-    } catch (err) {
-      if (!isCurrent()) {
-        return
-      }
-      setError(err instanceof Error ? err.message : 'Failed to refresh checks')
-    } finally {
-      finish()
-    }
-  }
   return Object.assign(model, {
     addHostedItemComment,
     copyTaskLink,
     copyTextToClipboard,
     requestGitHubReviewers,
-    refreshGitHubChecks
+    refreshGitHubChecks: (item: Extract<TaskItem, { provider: 'github' }>) =>
+      refreshMobileTaskPRChecks(model, item)
   })
 }
 

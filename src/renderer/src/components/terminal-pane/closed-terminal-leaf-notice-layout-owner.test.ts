@@ -28,13 +28,14 @@ describe('a pane main closed before its tab mounted, in a layout-owner build', (
       }
     })
 
-    applyClosedTerminalLeafNotice('tab-1', '22222222-2222-4222-8222-222222222222')
+    applyClosedTerminalLeafNotice('tab-1', '22222222-2222-4222-8222-222222222222', 'requested')
 
     expect(takeQueuedTerminalPaneSplitRequests('tab-1', 'wt-1')).toEqual([])
     expect(hasTerminalPaneSplitMountLease('tab-1')).toBe(false)
     expect(closed).toHaveBeenCalledWith({
       tabId: 'tab-1',
-      leafId: '22222222-2222-4222-8222-222222222222'
+      leafId: '22222222-2222-4222-8222-222222222222',
+      lastPaneCloseReason: 'requested'
     })
   })
 })

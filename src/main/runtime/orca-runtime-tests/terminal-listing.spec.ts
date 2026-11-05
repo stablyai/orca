@@ -1,10 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import {
-  FOLDER_WORKSPACE_INSTANCE_SEPARATOR,
-  MOCK_GIT_WORKTREES,
-  OrcaRuntimeService,
-  listWorktrees
-} from '../orca-runtime-test-mocks.spec'
+import './runtime-test-module-registration.spec'
+import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR } from '../../../shared/worktree/id'
+import { MOCK_GIT_WORKTREES } from '../orca-runtime-test-mocks/setup.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { listWorktrees } from '../../git/worktrees/catalog/worktree-scan-cache'
 import {
   TEST_FOLDER_WORKSPACE_PATH,
   TEST_REPO_ID,
@@ -13,7 +12,7 @@ import {
   createRuntime,
   makeWorktreeMeta,
   store
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
   it('emits one mobile session terminal tab per live PTY even if two tabs resolve to it', () => {

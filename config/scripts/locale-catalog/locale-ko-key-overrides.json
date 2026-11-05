@@ -857,9 +857,6 @@
   "auto.components.feature.wall.AiCommitPrSettingsCard.1c0cb4fabb": {
     "ko": "AI 작성자"
   },
-  "auto.components.feature.wall.AiCommitPrSettingsCard.4b2fc4b80c": {
-    "ko": "사고 강도"
-  },
   "auto.components.feature.wall.AiCommitPrSettingsCard.8d4152701a": {
     "ko": "예: ollama run llama3.1 {{value0}}"
   },
@@ -1261,9 +1258,6 @@
   },
   "auto.components.onboarding.IntegrationsStep.0b4a7d23ab": {
     "ko": "로그인 중"
-  },
-  "auto.components.onboarding.OnboardingFlow.322fc50a18": {
-    "ko": "Orca는 모든 CLI agent와 함께 작동합니다. 가장 자주 사용할 agent를 선택하세요. 언제든지 전환할 수 있습니다."
   },
   "auto.components.onboarding.OnboardingFlow.windowsTerminalSubtitle": {
     "ko": "새 창에서 사용할 기본 셸과 terminal에서 오른쪽 클릭이 동작하는 방식을 선택하세요."

@@ -157,6 +157,7 @@ function Probe(props: ProbeProps): null {
     sessionId: props.sessionId,
     enabled: true,
     fence: props.fence,
+    unloadedTurnRevisions: undefined,
     mutate: props.mutate,
     turnId: props.turnId ?? null,
     ...(props.optionStamp ? { optionStamp: props.optionStamp } : {}),

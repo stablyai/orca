@@ -9,8 +9,8 @@ type VisibleOverlayOptions = {
   ignoreSelector?: string
   /** Ignore matching chrome itself while retaining overlays nested within it. */
   ignoreMatches?: string
-  /** A terminal hosted inside an overlay may still take focus within that overlay. */
-  ignoreContaining?: Element
+  /** Layers containing these owners are part of their surface, rather than above it. */
+  ignoreContaining?: Element | readonly Element[]
   /** An overlay animating out no longer outranks focus that was queued before it closed. */
   ignoreDismissed?: boolean
 }
@@ -41,7 +41,12 @@ export function isVisibleOverlay(element: Element, options?: VisibleOverlayOptio
   if (options?.ignoreMatches && element.matches(options.ignoreMatches)) {
     return false
   }
-  if (options?.ignoreContaining && element.contains(options.ignoreContaining)) {
+  const owners = options?.ignoreContaining
+  if (
+    owners instanceof Element
+      ? element.contains(owners)
+      : owners?.some((owner) => element.contains(owner))
+  ) {
     return false
   }
   // Dismissed overlays remain painted during ~300ms exit animation; exclude them from focus ownership. Escape checks run before closed attributes update and must opt out.

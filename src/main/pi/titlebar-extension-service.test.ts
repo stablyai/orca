@@ -10,14 +10,16 @@ import {
   readFileSync,
   readdirSync,
   rmSync,
+  statSync,
   symlinkSync,
+  utimesSync,
   writeFileSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import type * as osModule from 'node:os'
 import type * as fsModule from 'node:fs'
 import { join } from 'node:path'
-import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
+import { installFakeAppEnvironment } from '../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 
 const userDataDir = mkdtempSync(join(tmpdir(), 'orca-pi-test-userdata-'))
 
@@ -510,6 +512,19 @@ describe('PiTitlebarExtensionService', () => {
     expect(readFileSync(join(piHome, 'extensions', 'new-ext', 'ext.ts'), 'utf-8')).toBe(
       'new user extension'
     )
+  })
+
+  it('leaves current Orca-owned extensions untouched on later spawns', () => {
+    const svc = new PiTitlebarExtensionService()
+    svc.buildPtyEnv('pty-current-1', piHome, 'pi')
+    const installed = ['orca-titlebar-spinner.ts', 'orca-prefill.ts', 'orca-agent-status.ts'].map(
+      (name) => join(piHome, 'extensions', name)
+    )
+    installed.forEach((path) => utimesSync(path, 0, 0))
+
+    svc.buildPtyEnv('pty-current-2', piHome, 'pi')
+
+    expect(installed.map((path) => statSync(path).mtimeMs)).toEqual([0, 0, 0])
   })
 
   it("does not overwrite a user's same-named Orca extension file", () => {

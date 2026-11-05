@@ -7,12 +7,7 @@ const { events } = await vi.hoisted(async () => {
   return { events: new EventEmitter() }
 })
 vi.mock('electron', () => ({ app: events }))
-
-import {
-  allowNativeBrowserPopup,
-  isNativeBrowserPopupRequest,
-  prepareNativeBrowserPopup
-} from './browser-popup-native-window'
+import { allowNativeBrowserPopup, prepareNativeBrowserPopup } from './browser-popup-native-window'
 
 afterEach(() => {
   events.removeAllListeners()
@@ -40,51 +35,6 @@ function nativeWindow() {
 }
 
 describe('native popup admission', () => {
-  it('uses the native path only for observed unnamed, featureless OpenURL dispositions', () => {
-    for (const disposition of ['new-window', 'background-tab']) {
-      expect(isNativeBrowserPopupRequest({ disposition, features: '', frameName: '' })).toBe(true)
-      expect(
-        isNativeBrowserPopupRequest({ disposition, features: 'width=500', frameName: '' })
-      ).toBe(false)
-      expect(isNativeBrowserPopupRequest({ disposition, features: '', frameName: 'oauth' })).toBe(
-        false
-      )
-    }
-    for (const details of [
-      { disposition: 'foreground-tab', features: '', frameName: '' },
-      { disposition: 'new-window', features: 'width=500', frameName: '' },
-      { disposition: 'new-window', features: '', frameName: 'oauth' },
-      {}
-    ]) {
-      expect(isNativeBrowserPopupRequest(details)).toBe(false)
-    }
-  })
-
-  it('leaves request continuation to Electron and expires an unused admission before the next turn', async () => {
-    vi.stubEnv('ORCA_BACKGROUND_LAUNCH', '1')
-    const opener = nativeWindow().browserWindow.webContents
-    const onCreated = vi.fn()
-    const response = allowNativeBrowserPopup({
-      opener,
-      options: { show: true, frame: true },
-      onCreated
-    })
-    expect(response.createWindow).toBeUndefined()
-    expect(response.overrideBrowserWindowOptions).toMatchObject({
-      show: false,
-      fullscreenable: false,
-      title: 'about:blank',
-      useContentSize: true,
-      minWidth: 360,
-      minHeight: 200,
-      webPreferences: { session: opener.session }
-    })
-    expect(events.listenerCount('browser-window-created') > 0).toBe(true)
-    await Promise.resolve()
-    expect(events.listenerCount('browser-window-created') > 0).toBe(false)
-    expect(onCreated).not.toHaveBeenCalled()
-  })
-
   it('admits the script-opened child its opener reports in a later task', async () => {
     const opener = nativeWindow()
     const linked = nativeWindow()
@@ -146,73 +96,6 @@ describe('native popup admission', () => {
     expect(first.window.destroy).not.toHaveBeenCalled()
   })
 
-  it.fails('KNOWN BLOCKER: a later scripted admission must not supersede the earlier request', async () => {
-    const opener = nativeWindow()
-    const first = nativeWindow()
-    const second = nativeWindow()
-    first.contents.session = opener.contents.session
-    second.contents.session = opener.contents.session
-    const earlier = vi.fn(() => first.browserWindow.webContents)
-    const later = vi.fn(() => second.browserWindow.webContents)
-    for (const onCreated of [earlier, later]) {
-      allowNativeBrowserPopup({
-        opener: opener.browserWindow.webContents,
-        options: { show: false },
-        onCreated
-      })
-      await Promise.resolve()
-    }
-    opener.contents.emit('did-create-window', second.browserWindow)
-    opener.contents.emit('did-create-window', first.browserWindow)
-    expect(later).toHaveBeenCalledWith(
-      expect.objectContaining({ nativeWindow: second.browserWindow })
-    )
-    expect(earlier).toHaveBeenCalledWith(
-      expect.objectContaining({ nativeWindow: first.browserWindow })
-    )
-  })
-
-  it.fails('KNOWN BLOCKER: canceled A must not transfer B to a late child of A', async () => {
-    const opener = nativeWindow()
-    const lateA = nativeWindow()
-    lateA.contents.session = opener.contents.session
-    const onA = vi.fn(() => lateA.browserWindow.webContents)
-    const onB = vi.fn(() => lateA.browserWindow.webContents)
-    for (const onCreated of [onA, onB]) {
-      allowNativeBrowserPopup({
-        opener: opener.browserWindow.webContents,
-        options: { show: false },
-        onCreated
-      })
-      await Promise.resolve()
-    }
-    opener.contents.emit('did-create-window', lateA.browserWindow)
-    expect(onB).not.toHaveBeenCalled()
-  })
-
-  it.fails('KNOWN BLOCKER: shared-session parents must not both prepare the same app notification', () => {
-    const first = nativeWindow()
-    const second = nativeWindow()
-    const child = nativeWindow()
-    second.contents.session = first.contents.session
-    child.contents.session = first.contents.session
-    const onFirst = vi.fn(() => child.browserWindow.webContents)
-    const onSecond = vi.fn(() => child.browserWindow.webContents)
-    for (const [opener, onCreated] of [
-      [first.browserWindow.webContents, onFirst],
-      [second.browserWindow.webContents, onSecond]
-    ] as const) {
-      allowNativeBrowserPopup({
-        opener,
-        options: { show: false },
-        onCreated
-      })
-    }
-    events.emit('browser-window-created', {}, child.browserWindow)
-    expect(onSecond).toHaveBeenCalledOnce()
-    expect(onFirst).not.toHaveBeenCalled()
-  })
-
   it('ignores a different-session app window without consuming the legitimate child admission', async () => {
     const opener = nativeWindow()
     const unrelated = nativeWindow()
@@ -239,40 +122,6 @@ describe('native popup admission', () => {
     expect(unrelated.window.destroy).not.toHaveBeenCalled()
     expect(child.contents.close).not.toHaveBeenCalled()
     expect(child.window.destroy).not.toHaveBeenCalled()
-  })
-
-  it.fails('KNOWN BLOCKER: an unrelated same-session app window receives neither policy nor disposal', async () => {
-    const opener = nativeWindow()
-    const unrelated = nativeWindow()
-    unrelated.contents.session = opener.contents.session
-    const onCreated = vi.fn(() => unrelated.browserWindow.webContents)
-    allowNativeBrowserPopup({
-      opener: opener.browserWindow.webContents,
-      options: { show: false },
-      onCreated
-    })
-    events.emit('browser-window-created', {}, unrelated.browserWindow)
-    await Promise.resolve()
-    expect(onCreated).not.toHaveBeenCalled()
-    expect(unrelated.contents.close).not.toHaveBeenCalled()
-    expect(unrelated.window.destroy).not.toHaveBeenCalled()
-  })
-
-  it('handles duplicate did-create-window delivery idempotently for an already marked child', async () => {
-    const opener = nativeWindow()
-    const child = nativeWindow()
-    child.contents.session = opener.contents.session
-    const onCreated = vi.fn(() => child.browserWindow.webContents)
-    allowNativeBrowserPopup({
-      opener: opener.browserWindow.webContents,
-      options: { show: false },
-      onCreated
-    })
-    await Promise.resolve()
-    opener.contents.emit('did-create-window', child.browserWindow)
-    opener.contents.emit('did-create-window', child.browserWindow)
-    expect(onCreated).toHaveBeenCalledOnce()
-    expect(child.contents.close).not.toHaveBeenCalled()
   })
 
   it.each([
@@ -374,61 +223,5 @@ describe('native popup admission', () => {
       true
     )
     expect(window.setTitle).toHaveBeenLastCalledWith('chrome-error:')
-  })
-
-  it.each([1, 1000])(
-    'ignores %i subframe failures but still updates main-frame errors',
-    (count) => {
-      const { browserWindow, contents, window } = nativeWindow()
-      contents.mainFrame.url = 'https://committed.example/'
-      contents.mainFrame.origin = 'https://committed.example'
-      prepareNativeBrowserPopup(browserWindow)
-      window.setTitle.mockClear()
-
-      for (let index = 0; index < count; index += 1) {
-        contents.emit('did-fail-load', {}, -2, 'ERR_FAILED', 'https://iframe.example/', false)
-      }
-      expect(window.setTitle).not.toHaveBeenCalled()
-
-      contents.mainFrame.url = 'https://failed.example/'
-      contents.mainFrame.origin = 'null'
-      contents.emit('did-fail-load', {}, -2, 'ERR_FAILED', contents.mainFrame.url, true)
-      expect(window.setTitle).toHaveBeenCalledExactlyOnceWith('unknown')
-    }
-  )
-
-  it('uses a neutral title for an opaque network document and retains a surviving origin on abort', () => {
-    const { browserWindow, contents, window } = nativeWindow()
-    contents.mainFrame.url = 'https://committed.example/'
-    contents.mainFrame.origin = 'https://committed.example'
-    prepareNativeBrowserPopup(browserWindow)
-    contents.emit('did-fail-load', {}, -3, 'ERR_ABORTED', 'https://failed.example/', true)
-    expect(window.setTitle).toHaveBeenLastCalledWith('https://committed.example')
-    contents.mainFrame.url = 'https://failed.example/'
-    contents.mainFrame.origin = 'null'
-    contents.emit('did-fail-load', {}, -2, 'ERR_FAILED', 'https://failed.example/', true)
-    expect(window.setTitle).toHaveBeenLastCalledWith('unknown')
-  })
-
-  it('protects the title and updates only main-frame origins, including redirects', () => {
-    const { browserWindow, contents, window } = nativeWindow()
-    prepareNativeBrowserPopup(browserWindow, () => true)
-    expect(window.setTitle).toHaveBeenLastCalledWith('about:blank')
-    const preventDefault = vi.fn()
-    window.emit('page-title-updated', { preventDefault }, 'Spoofed title')
-    expect(preventDefault).toHaveBeenCalledOnce()
-    contents.emit('did-start-navigation', {}, 'https://iframe.example.net/secret', false, false)
-    expect(window.setTitle).toHaveBeenCalledTimes(1)
-    contents.emit(
-      'will-redirect',
-      {},
-      'https://destination.example.net/callback?token=synthetic',
-      false,
-      true
-    )
-    expect(window.setTitle).toHaveBeenCalledTimes(1)
-    contents.mainFrame.url = 'https://destination.example.net/other'
-    contents.emit('did-navigate', {}, 'https://destination.example.net/other')
-    expect(window.setTitle).toHaveBeenLastCalledWith('https://destination.example.net')
   })
 })

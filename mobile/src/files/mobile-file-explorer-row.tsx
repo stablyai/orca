@@ -8,7 +8,7 @@ import {
   Folder,
   Image as ImageIcon
 } from 'lucide-react-native'
-import { triggerSelection } from '../platform/haptics'
+import { triggerMediumImpact, triggerSelection } from '../platform/haptics'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors, spacing } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
@@ -23,13 +23,21 @@ type Props = {
   onPreviewFile: (relativePath: string, displayName: string) => void
   onRetryDirectory: (relativePath: string) => void
   onToggleDirectory: (relativePath: string) => void
+  onOpenActions: (node: TreeNode) => void
 }
 
 export function MobileFileExplorerRow(props: Props) {
   const t = useMobileTranslation()
   useMobileColorScheme()
-  const { item, maximumIndentation, expanded, onPreviewFile, onRetryDirectory, onToggleDirectory } =
-    props
+  const {
+    item,
+    maximumIndentation,
+    expanded,
+    onPreviewFile,
+    onRetryDirectory,
+    onToggleDirectory,
+    onOpenActions
+  } = props
   const paddingLeft = spacing.lg + Math.min(item.depth * 18, maximumIndentation)
 
   if (item.kind === 'loading') {
@@ -72,6 +80,7 @@ export function MobileFileExplorerRow(props: Props) {
         expanded={expanded}
         onPreviewFile={onPreviewFile}
         onToggleDirectory={onToggleDirectory}
+        onOpenActions={onOpenActions}
       />
     )
   }
@@ -89,10 +98,11 @@ function TreeRow(props: {
   expanded: ReadonlySet<string>
   onPreviewFile: (relativePath: string, displayName: string) => void
   onToggleDirectory: (relativePath: string) => void
+  onOpenActions: (node: TreeNode) => void
 }) {
   const t = useMobileTranslation()
   useMobileColorScheme()
-  const { item, paddingLeft, expanded, onPreviewFile, onToggleDirectory } = props
+  const { item, paddingLeft, expanded, onPreviewFile, onToggleDirectory, onOpenActions } = props
   const isDirectory = item.kind === 'directory'
   const isExpanded = expanded.has(item.relativePath)
   const previewable =
@@ -110,7 +120,13 @@ function TreeRow(props: {
         pressed && !disabled && styles.rowPressed,
         disabled && styles.rowDisabled
       ]}
-      disabled={disabled}
+      // Unpreviewable files still long-press for their actions, so the row stays enabled.
+      accessibilityState={{ disabled }}
+      onLongPress={() => {
+        triggerMediumImpact()
+        onOpenActions(item)
+      }}
+      delayLongPress={400}
       onPress={() => {
         if (isDirectory) {
           // Expanding a folder toggles in place; opening a file navigates and stays quiet.

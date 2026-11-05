@@ -1,3 +1,9 @@
+import {
+  GITHUB_CONNECTION_CHANGED,
+  githubOperationResponse
+} from '../transport/github-target-invocation'
+import { captureMobilePRCheckContract } from '../transport/pr-check-observation-contract'
+import { acceptPRCheckObservation } from '../../../src/shared/github/complete-pr-check-owner'
 import type { RpcClient } from '../transport/rpc-client'
 import { withGitHubTargetOperation } from '../tasks/github-work-item-operation'
 import { requireGitHubWorkItemTargetDetails } from '../../../src/shared/github/work-item-target'
@@ -95,7 +101,7 @@ export function fetchHostedReviewForBranch(
 }
 
 // Raise decoded upstream-error here so the sidebar retains host text; it is not a protocol decode failure.
-export function fetchPRForBranch(
+export async function fetchPRForBranch(
   client: RpcOperationSender,
   worktreeId: string,
   args: {
@@ -103,24 +109,70 @@ export function fetchPRForBranch(
     linkedPRNumber?: number | null
     fallbackPRNumber?: number | null
     currentHeadOid?: string | null
+    refresh?: boolean
   }
 ): Promise<GitHubPrReadOutcome<PRInfo | null>> {
-  return settleGithubPrRead(
-    {
-      operation: githubPrForBranchRead.operation,
-      interpret: (reply) => resolveGithubPrForBranchOutcome(githubPrForBranchRead.interpret(reply))
-    },
-    () =>
-      githubPrForBranchRead.request(
-        client,
-        githubPrRequestParams(githubPrForBranchRead.operation.method, worktreeId, {
-          branch: args.branch,
-          linkedPRNumber: args.linkedPRNumber ?? null,
-          fallbackPRNumber: args.fallbackPRNumber ?? null,
-          currentHeadOid: args.currentHeadOid ?? null
-        })
+  return observe(true, args.refresh === true)
+  async function observe(
+    adopt: boolean,
+    refresh = false
+  ): Promise<GitHubPrReadOutcome<PRInfo | null>> {
+    const contract = await captureMobilePRCheckContract(
+      client,
+      {
+        repo: mobileRepoSelectorFromWorktreeId(worktreeId)
+      },
+      refresh
+    )
+    try {
+      let sourceMismatch = false
+      const result = await settleGithubPrRead(
+        {
+          operation: githubPrForBranchRead.operation,
+          interpret: (reply) =>
+            resolveGithubPrForBranchOutcome(githubPrForBranchRead.interpret(reply))
+        },
+        async () => {
+          const reply = await githubPrForBranchRead.request(
+            contract.client ?? client,
+            githubPrRequestParams(githubPrForBranchRead.operation.method, worktreeId, {
+              branch: args.branch,
+              linkedPRNumber: args.linkedPRNumber ?? null,
+              fallbackPRNumber: args.fallbackPRNumber ?? null,
+              currentHeadOid: args.currentHeadOid ?? null
+            }),
+            contract.options
+          )
+          sourceMismatch =
+            !reply.ok &&
+            ['runtime_source_mismatch', 'runtime_source_unverifiable'].includes(reply.error.code)
+          return githubOperationResponse(reply)
+        }
       )
-  )
+      if (adopt && sourceMismatch && contract.routeCurrent()) {
+        return observe(false, true)
+      }
+      if (!contract.current()) {
+        if (adopt && !contract.complete && contract.routeCurrent()) {
+          return observe(false)
+        }
+        return { ok: false, error: GITHUB_CONNECTION_CHANGED }
+      }
+      if (result.ok && result.result && contract.complete) {
+        return {
+          ok: true,
+          result: acceptPRCheckObservation(result.result, null, {
+            scope: contract.scope!,
+            complete: true,
+            current: contract.current()
+          })!
+        }
+      }
+      return result
+    } finally {
+      contract.retire()
+    }
+  }
 }
 
 function resolveGithubPrForBranchOutcome(outcome: GitHubPrForBranchOutcome | null): PRInfo | null {

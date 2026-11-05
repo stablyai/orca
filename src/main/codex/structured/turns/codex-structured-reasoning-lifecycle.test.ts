@@ -246,9 +246,10 @@ describe('a Codex reasoning row', () => {
     for (let index = 2; index <= MAX_CODEX_ACTIVE_ITEMS + 1; index += 1) {
       items.handle({ threadId: THREAD_ID, method: 'item/started', params: reasoning(`r-${index}`) })
     }
-    expect(rows.get('orca:codex-item%3Athread-abc%3Apatch-1')).toEqual({
-      kind: 'status',
-      text: 'File changes were interrupted before completion.'
+    expect(rows.get('orca:codex-item%3Athread-abc%3Apatch-1')).toMatchObject({
+      kind: 'tool-call',
+      name: 'apply_patch',
+      state: 'failed'
     })
   })
 

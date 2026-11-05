@@ -29,9 +29,9 @@
       "workspaceHostAmbiguous": "Its workspace spans more than one host, so it has no single owner."
     },
     "runFailures": {
+      "agentInterrupted": "The agent was interrupted before it finished this run.",
       "agentNeverStarted": "Automation agent never started after the prompt was submitted.",
       "agentNoCompletion": "Automation agent did not report completion.",
-      "agentInterrupted": "The agent was interrupted before it finished this run.",
       "automationChanged": "The automation changed before this run could launch.",
       "destinationChanged": "The automation destination changed before this run could launch.",
       "hooksReviewBlocked": "The agent is waiting for someone to review new or changed hooks (\"Hooks need review\"). Open this run and trust them, or remove them. Scheduled runs keep going and succeed once nothing needs review.",
@@ -151,6 +151,12 @@
     "hostCard": {
       "needsYou_one": "{{count}} needs you",
       "needsYou_other": "{{count}} need you"
+    },
+    "native-chat": {
+      "turnDiff": {
+        "changedFiles_one": "{{count}} changed file",
+        "changedFiles_other": "{{count}} changed files"
+      }
     },
     "worktreeAgentList": {
       "hideChildAgents_one": "Hide {{count}} child agent",

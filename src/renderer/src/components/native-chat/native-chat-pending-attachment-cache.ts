@@ -26,6 +26,14 @@ const chipScopes = new Map<string, string>()
 const pendingOwners = new Map<string, NativeChatComposerDraftOwner>()
 const listeners = new Map<string, Set<() => void>>()
 
+export function nativeChatPendingAttachmentScope(scope: string, id: string): string {
+  return currentDraftScope(chipScopes.get(id) ?? scope)
+}
+
+export function hasNativeChatPendingAttachment(id: string): boolean {
+  return chipScopes.has(id)
+}
+
 /** Keep snapshot identity stable until pending chips change. */
 export function nativeChatPendingAttachmentSnapshot(
   scopeKey: string

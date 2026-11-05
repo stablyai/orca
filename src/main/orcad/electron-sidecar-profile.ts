@@ -7,7 +7,7 @@ import { isSafeOwnedDirectory } from '../../shared/owned-private-directory'
 import { isProcessAlive } from '../../shared/serve-bundle-coordination'
 import { removeTree } from '../../shared/windows-transient-lock-removal'
 import { isDirectChild } from '../window/owned-temp-staging-root'
-import { readRuntimeMetadataAsync } from '../runtime/runtime-metadata'
+import { readRuntimeMetadataAsync } from '../runtime/rpc/server/runtime-metadata'
 import { sendOrcadSidecarRequest } from './orcad-sidecar-runtime-client'
 
 const STOP_TIMEOUT_MS = 5_000

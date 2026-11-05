@@ -4,7 +4,7 @@ import { ShieldQuestion } from 'lucide-react-native'
 import { approvalDetailPreview } from '../../../../../src/shared/agent-session/agent-session-approval-detail-preview'
 import { approvalBlockedPathToShow } from '../../../../../src/shared/agent-session/agent-session-approval-blocked-path'
 import { MobileNativeChatCardHeaderAction } from '../MobileNativeChatCardHeaderAction'
-import { MobileMarkdown } from '../../../components/MobileMarkdown'
+import { MobileNativeChatMarkdown } from '../MobileNativeChatMarkdown'
 import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
@@ -136,7 +136,7 @@ function MobileNativeChatPermissionContext({
       ) : null}
       {isPlanApprovalSubject(permission.subject) ? (
         <View>
-          <MobileMarkdown content={permission.subject.text} />
+          <MobileNativeChatMarkdown content={permission.subject.text} />
           {permission.subject.filePath ? (
             <Text style={styles.planFile}>
               {t('chat.permission.planFile', 'Plan file: {{filePath}}', {

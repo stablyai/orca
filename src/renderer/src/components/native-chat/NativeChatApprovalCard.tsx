@@ -5,7 +5,6 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { approvalDetailPreview } from '../../../../shared/agent-session/agent-session-approval-detail-preview'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
-import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 import { NativeChatMarkdown } from './NativeChatMarkdown'
 import { approvalBlockedPathToShow } from '../../../../shared/agent-session/agent-session-approval-blocked-path'
 import {
@@ -28,9 +27,6 @@ export type NativeChatApprovalCardProps = {
   /** A choice is being delivered: the options wait for its answer. */
   isSubmitting?: boolean
   shouldFocus?: boolean
-  /** A plan body renders as markdown; these make its file paths clickable. */
-  onLinkClick?: CommentMarkdownLinkClickHandler
-  allowFileUriLinks?: boolean
 }
 
 /** PTY options are literal replies; structured options are journal ids. Style the first option as primary. */
@@ -40,9 +36,7 @@ export function NativeChatApprovalCard({
   onCancel,
   onCollapse,
   isSubmitting = false,
-  shouldFocus = false,
-  onLinkClick,
-  allowFileUriLinks = false
+  shouldFocus = false
 }: NativeChatApprovalCardProps): React.JSX.Element {
   const cardRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
@@ -137,9 +131,7 @@ export function NativeChatApprovalCard({
                       variant="document"
                       className="text-sm text-chat-foreground"
                       renderCodeBlock={NativeChatCodeBlock}
-                      {...(onLinkClick ? { onLinkClick } : {})}
-                      allowFileUriLinks={allowFileUriLinks}
-                      linkifyFilePaths={onLinkClick !== undefined}
+                      linkifyFilePaths
                     />
                     {approval.subject.filePath ? (
                       <p className="mt-2 break-all">
