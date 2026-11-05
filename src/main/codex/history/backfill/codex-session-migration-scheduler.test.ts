@@ -8,7 +8,7 @@ describe('createCodexSessionMigrationScheduler', () => {
   })
 
   it('publishes the baseline while a Codex pane is still open', async () => {
-    vi.setSystemTime(new Date('2026-08-05T10:00:00Z'))
+    vi.setSystemTime(new Date(2026, 7, 5, 10, 0, 0))
     const prepareScheduledRun = vi.fn()
     const startBackfill = vi.fn().mockResolvedValue({ stopped: false })
     const scheduler = createCodexSessionMigrationScheduler({
@@ -176,7 +176,7 @@ describe('createCodexSessionMigrationScheduler', () => {
   })
 
   it('finishes a launch generation only after its PTY exits and every date is rescanned', async () => {
-    vi.setSystemTime(new Date('2026-08-05T23:59:59Z'))
+    vi.setSystemTime(new Date(2026, 7, 5, 23, 59, 59))
     const finishScheduledRun = vi.fn()
     const startBackfill = vi.fn().mockResolvedValue({ stopped: false })
     const scheduler = createCodexSessionMigrationScheduler({
@@ -199,7 +199,7 @@ describe('createCodexSessionMigrationScheduler', () => {
     )
     expect(finishScheduledRun).not.toHaveBeenCalled()
 
-    vi.setSystemTime(new Date('2026-08-07T01:00:00Z'))
+    vi.setSystemTime(new Date(2026, 7, 7, 1, 0, 0))
     scheduler.finishLaunch('pty-1')
     await vi.advanceTimersByTimeAsync(1_000)
     await vi.waitFor(() => expect(startBackfill).toHaveBeenCalledTimes(2))
