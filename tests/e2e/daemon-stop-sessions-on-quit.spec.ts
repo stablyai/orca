@@ -10,7 +10,12 @@ import {
   waitForPaneCount,
   waitForTerminalOutput
 } from './helpers/terminal'
-import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
+import {
+  ensureTerminalVisible,
+  getActiveTabId,
+  waitForActiveWorktree,
+  waitForSessionReady
+} from './helpers/store'
 import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
 
 function isProcessAlive(pid: number): boolean {
@@ -65,6 +70,8 @@ test('stops terminal children on quit when enabled, then restores the tab', asyn
     await ensureTerminalVisible(firstLaunch.page)
     await waitForActiveTerminalManager(firstLaunch.page, 30_000)
     await waitForPaneCount(firstLaunch.page, 1, 30_000)
+    const tabId = await getActiveTabId(firstLaunch.page)
+    expect(tabId).not.toBeNull()
 
     await firstLaunch.page.evaluate(async () => {
       await window.__store?.getState().updateSettingsOrThrow({ stopTerminalSessionsOnQuit: true })
@@ -103,6 +110,8 @@ test('stops terminal children on quit when enabled, then restores the tab', asyn
     await ensureTerminalVisible(secondLaunch.page)
     await waitForActiveTerminalManager(secondLaunch.page, 30_000)
     await waitForPaneCount(secondLaunch.page, 1, 30_000)
+    // A retired tab would come back as a new default terminal with a different id.
+    await expect.poll(() => getActiveTabId(secondLaunch.page)).toBe(tabId)
 
     const freshMarker = `FRESH_${Date.now()}`
     // The restored pane spawns a new shell; Windows PowerShell can miss a probe sent during startup.

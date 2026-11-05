@@ -464,6 +464,25 @@ describe('pty:management IPC handlers', () => {
       })
     })
 
+    it('stops a listed generation without waiting for a wedged one to answer', async () => {
+      const current = makeAdapter(5, [makeSession('a')])
+      const wedged = makeAdapter(3, [])
+      wedged.listSessions = vi.fn(
+        () =>
+          new Promise((_resolve, reject) =>
+            setTimeout(() => reject(new Error('request timed out')), 30_000)
+          )
+      )
+      const { registerDaemonManagementHandlers } = await importFresh()
+      getDaemonProviderMock.mockReturnValue(await makeRouter(current, [wedged]))
+      registerDaemonManagementHandlers()
+
+      void buildHandlerMap()['pty:management:killAll']({})
+      await vi.advanceTimersByTimeAsync(0)
+
+      expect(current.shutdown).toHaveBeenCalledWith('a', { immediate: true })
+    })
+
     it('counts a generation that answered while another keeps failing, and flags the sweep', async () => {
       const currentSessions = [makeSession('a')]
       const current = makeAdapter(5, [])

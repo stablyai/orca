@@ -63,15 +63,17 @@ function readCurrentDaemonIdentity(): DaemonEndpointIdentity | null {
 
 // A generation that failed to list may still own sessions, so its silence is not "none".
 async function listSessionsOfEveryAdapter(
-  adapters: DaemonPtyAdapter[]
+  adapters: DaemonPtyAdapter[],
+  onListed?: (adapter: DaemonPtyAdapter, sessions: DaemonSessionInfo[]) => Promise<void>
 ): Promise<{ sessions: DaemonSessionInfo[]; unlistedVersions: Set<number> }> {
   const results = await Promise.allSettled(
     adapters.map(async (adapter) => {
-      const sessions = await adapter.listSessions()
-      return sessions.map<DaemonSessionInfo>((s) => ({
+      const sessions = (await adapter.listSessions()).map<DaemonSessionInfo>((s) => ({
         ...s,
         protocolVersion: adapter.protocolVersion
       }))
+      await onListed?.(adapter, sessions)
+      return sessions
     })
   )
   return {
@@ -126,7 +128,17 @@ export type DaemonKillAllResult = {
 export async function killAllDaemonSessions(): Promise<DaemonKillAllResult> {
   const adapters = getDaemonAdapters()
   // Exclude panes respawned after the user requested killAll.
-  const { sessions: initial, unlistedVersions } = await listSessionsOfEveryAdapter(adapters)
+  // Each generation stops its own sessions once listed, so a wedged generation cannot hold back the rest.
+  const { sessions: initial, unlistedVersions } = await listSessionsOfEveryAdapter(
+    adapters,
+    async (adapter, sessions) => {
+      // Each session owns its kill ladder; one rejection must not abort the others.
+      // Legacy/future adapters may use immediate; stuck sessions are reported by remainingCount.
+      await Promise.allSettled(
+        sessions.map(async (session) => adapter.shutdown(session.sessionId, { immediate: true }))
+      )
+    }
+  )
   const initialIds = new Set(initial.map((s) => s.sessionId))
   const initialCount = initial.length
   const incomplete = listedEveryGeneration(adapters, unlistedVersions)
@@ -136,19 +148,6 @@ export async function killAllDaemonSessions(): Promise<DaemonKillAllResult> {
   if (initialCount === 0) {
     return { killedCount: 0, remainingCount: 0, killedSessionIds: [], ...incomplete }
   }
-
-  // Each session owns its kill ladder; one rejection must not abort the others.
-  await Promise.allSettled(
-    initial.map(async (session) => {
-      // Current and legacy protocol versions must remain distinct to route to the owning adapter.
-      const owner = adapters.find((a) => a.protocolVersion === session.protocolVersion)
-      if (!owner) {
-        return
-      }
-      // Legacy/future adapters may use immediate; stuck sessions are reported by remainingCount.
-      await owner.shutdown(session.sessionId, { immediate: true }).catch(() => {})
-    })
-  )
 
   let remainingOriginalIds = initialIds
   const pollDeadline = Date.now() + POLL_WINDOW_MS
