@@ -101,21 +101,14 @@ const HELD_PROMPT_EXTRA_CHARS_PER_LINE_FEED = 2
 const HELD_PROMPT_COUNT_SLACK_CHARS = 8
 const HELD_PROMPT_TEXT_MIN_CHARS = 32
 
-const collapseComposerWhitespace = (text: string): string => text.replace(/\s+/g, ' ').trim()
-
-/** Whether the composer shows all of `prompt` and nothing else: proof its paste landed. Stricter
- *  than the held-draft match, whose suffix and placeholder-count slack also fit a partial paste. */
+/** Whether the composer's typed text is exactly `prompt`: proof its paste landed. Spacing the
+ *  projection can't vouch for, such as a wrap or trailing whitespace, fails it and keeps the wait. */
 export function isCompleteAgentPromptDraft(
   draft: string | null | undefined,
   prompt: string
 ): boolean {
-  const expected = sanitizeAgentPromptText(prompt)
-  // Why: trailing whitespace may not render, so a composer missing it looks complete.
-  return (
-    !!draft &&
-    expected.trimEnd() === expected &&
-    collapseComposerWhitespace(draft) === collapseComposerWhitespace(expected)
-  )
+  const lineEndings = (text: string): string => text.replace(/\r\n?/g, '\n')
+  return !!draft && lineEndings(draft) === lineEndings(sanitizeAgentPromptText(prompt))
 }
 
 /** Whether a composer draft is `prompt` still held, as Codex's paste placeholders or as text;
@@ -151,8 +144,9 @@ export function isHeldAgentPromptDraft(
           HELD_PROMPT_COUNT_SLACK_CHARS
     )
   }
-  const shown = collapseComposerWhitespace(draft)
-  const wanted = collapseComposerWhitespace(expected)
+  const collapse = (text: string): string => text.replace(/\s+/g, ' ').trim()
+  const shown = collapse(draft)
+  const wanted = collapse(expected)
   // Why a long tail only: a scrolled composer shows the paste's end; a short or inner fragment
   // could be the user's own text that recurs in the prompt.
   return shown === wanted || (shown.length >= HELD_PROMPT_TEXT_MIN_CHARS && wanted.endsWith(shown))
