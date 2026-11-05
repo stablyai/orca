@@ -241,7 +241,9 @@ describePostgres('PostgreSQL drain releases against director placement', () => {
       }
       await resetSelectorBoundary()
     }
-    for (const instance of directors) await instance.database.close()
+    for (const instance of directors) {
+      await instance.database.close()
+    }
     await observer?.close()
   })
 
