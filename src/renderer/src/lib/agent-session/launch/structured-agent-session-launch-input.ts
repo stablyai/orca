@@ -64,9 +64,9 @@ export function settleStructuredLaunchFirstMessageFromJournal(
 
 /** The launch adopts an existing conversation, which may keep a model of its own. */
 export function getStructuredAgentSessionLaunchResumes(sessionId: string): boolean {
-  const state = getStructuredLaunchStateBySessionId(sessionId)
-  const resumeFrom = state
-    ? state.intent.params.resumeFrom
-    : getPersistedStructuredAgentLaunchRecord(sessionId)?.resumeFrom
-  return resumeFrom !== undefined
+  // A fork opens onto history it adopts, as a resume does.
+  const params =
+    getStructuredLaunchStateBySessionId(sessionId)?.intent.params ??
+    getPersistedStructuredAgentLaunchRecord(sessionId)
+  return params?.resumeFrom !== undefined || params?.forkFrom !== undefined
 }

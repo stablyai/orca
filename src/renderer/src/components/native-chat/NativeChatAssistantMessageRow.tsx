@@ -7,6 +7,7 @@ import { NATIVE_CHAT_QUOTE_SOURCE_PROPS } from './native-chat-quote-selection'
 import { NativeChatToolRun } from './NativeChatToolRun'
 import { NativeChatCodeBlock, NativeChatPlainCodeBlock } from './NativeChatCodeBlock'
 import { NativeChatAgentControls, NativeChatImageAttachments } from './NativeChatTranscriptChrome'
+import { NativeChatForkAction } from './NativeChatForkAction'
 import type { useNativeChatWorkRun } from './use-native-chat-work-run'
 
 function messageIsStreaming(
@@ -43,7 +44,8 @@ export function NativeChatAssistantMessageRow({
     onLinkClick,
     allowFileUriLinks = false,
     inSubagentSection = false,
-    runtimeContext
+    runtimeContext,
+    fork
   } = props
   const { markdown, prose } = content
   const toolRun = toolRunProps(props, content, run)
@@ -53,6 +55,10 @@ export function NativeChatAssistantMessageRow({
   // Hide controls on system asides and the still-working frontier, where more content may arrive.
   const showControls =
     !isSystem && words.length > 0 && !continuesTurn && activeTurnIsWorking !== true
+  const forkAction =
+    fork && words.length > 0 ? <NativeChatForkAction itemId={message.id} fork={fork} /> : null
+  const revealOnHover =
+    'mt-1 w-fit select-none transition-opacity can-hover:pointer-events-none can-hover:opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 [.group:has(:focus-visible)_&]:pointer-events-auto [.group:has(:focus-visible)_&]:opacity-100'
 
   return (
     <div
@@ -92,12 +98,18 @@ export function NativeChatAssistantMessageRow({
           markdown={words}
           timestamp={message.timestamp}
           onScrollToTop={scrollToTop}
+          action={forkAction}
           className={cn(
-            'mt-1 w-fit select-none transition-opacity can-hover:pointer-events-none can-hover:opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 [.group:has(:focus-visible)_&]:pointer-events-auto [.group:has(:focus-visible)_&]:opacity-100',
+            revealOnHover,
             // They hang into the gap below; a section keeps them inside its border instead.
             !inSubagentSection && '-mb-5'
           )}
         />
+      ) : forkAction ? (
+        // Mid-turn, the next row sits too close to hang into, so the fork takes its own line.
+        <div data-native-chat-find-skip className={cn('flex items-center', revealOnHover)}>
+          {forkAction}
+        </div>
       ) : null}
     </div>
   )

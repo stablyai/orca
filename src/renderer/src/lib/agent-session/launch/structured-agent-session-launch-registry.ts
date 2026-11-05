@@ -3,7 +3,10 @@ import { forgetStructuredSessionSelection } from '../../structured-agent-session
 import { useSyncExternalStore } from 'react'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import type { StructuredLaunchFailure } from './structured-agent-session-launch-failure'
-import type { StructuredAgentSessionResumeSource } from '../../../../../shared/agent-session/structured-agent-session-create'
+import type {
+  StructuredAgentSessionForkSource,
+  StructuredAgentSessionResumeSource
+} from '../../../../../shared/agent-session/structured-agent-session-create'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../../shared/execution-host'
 import type { StructuredLaunchRecoveryState } from './structured-agent-session-launch-recovery'
 import type { StructuredLaunchSelection } from './structured-agent-session-launch-options'
@@ -82,9 +85,16 @@ export function subscribeStructuredAgentLaunchStatus(listener: () => void): () =
 export function structuredLaunchIdentity(
   worktreeId: string,
   agent: TuiAgent,
-  scope: { resumeFrom?: StructuredAgentSessionResumeSource; executionHostId?: string } = {}
+  scope: {
+    resumeFrom?: StructuredAgentSessionResumeSource
+    forkFrom?: StructuredAgentSessionForkSource
+    executionHostId?: string
+  } = {}
 ): string {
-  const { resumeFrom, executionHostId = LOCAL_EXECUTION_HOST_ID } = scope
+  const { resumeFrom, forkFrom, executionHostId = LOCAL_EXECUTION_HOST_ID } = scope
+  if (forkFrom) {
+    return `${agent}:${worktreeId}:fork:${executionHostId}:${forkFrom.sessionId}:${forkFrom.throughItemId}`
+  }
   // A conversation id names a transcript on one host; never join a resume running on another.
   return resumeFrom
     ? `${agent}:${worktreeId}:resume:${executionHostId}:${resumeFrom.providerSessionId}`

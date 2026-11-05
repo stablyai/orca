@@ -14,6 +14,8 @@ import type { NativeChatTranscriptSlot } from './native-chat-transcript-slots'
 import type { NativeChatDiffReveal, NativeChatDiffTarget } from './native-chat-turn-diffs'
 import { NativeChatRewindContext } from './native-chat-rewind-context'
 import { nativeChatRowOffersRewind } from './native-chat-rewind-eligibility'
+import { NativeChatForkContext } from './native-chat-fork-context'
+import { nativeChatRowOffersFork } from '../../../../shared/native-chat/native-chat-fork-offer'
 import { isActionableStructuredAgentSessionPrompt } from '../../../../shared/agent-session/view/structured-agent-session-live-turn'
 
 /** Memoize shared context so unchanged rows keep their props during transcript updates. */
@@ -25,6 +27,8 @@ export type NativeChatTranscriptRowContext = {
   revealedDiff: NativeChatDiffReveal | null
   taskListPredecessors: ReadonlyMap<string, NativeChatTaskListPredecessors>
   expandedTurnIds: ReadonlySet<string>
+  /** The conversation's newest turn, the only one an agent that forks at its tip can fork. */
+  latestTurnKey?: string
   /** Keyed by message id: the user messages that did not go through, each with its own words. */
   deliveryNotices?: ReadonlyMap<string, NativeChatDeliveryNotice>
   allowFileUriLinks: boolean
@@ -47,6 +51,7 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
 }): React.JSX.Element {
   // Offered only on the conversation's own turn-opening prompts (`nativeChatRowOffersRewind`).
   const rewind = useContext(NativeChatRewindContext)
+  const fork = useContext(NativeChatForkContext)
   const sectionClassName = cn(
     slot.depth > 0 && 'border-l-2 border-border/60 pl-3',
     slot.depth > 1 && 'ml-4'
@@ -132,6 +137,20 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
             nativeChatRowOffersRewind(message, slot, deliveryNotice !== undefined) &&
             (!rewind?.eligibleItemIds || rewind.eligibleItemIds.has(message.id))
               ? rewind
+              : undefined
+          }
+          fork={
+            fork &&
+            nativeChatRowOffersFork(
+              {
+                message,
+                inSubagentSection: slot.depth > 0,
+                turnWorking: slot.activeTurnIsWorking,
+                inLatestTurn: turnKey !== undefined && turnKey === context.latestTurnKey
+              },
+              fork
+            )
+              ? fork
               : undefined
           }
           workRun={workRun}

@@ -96,7 +96,7 @@ function adoptPairedHostSeed(
   seedOptions: StructuredLaunchState['selection']['seed']
 ): void {
   // The support answer is a fresh seed; continuation baseline belongs to actual host create.
-  if (state.intent.params.resumeFrom) {
+  if (state.intent.params.resumeFrom || state.intent.params.forkFrom) {
     seedOptions = undefined
   }
   const { seedPending, ...selection } = state.selection
@@ -207,9 +207,12 @@ function structuredAgentLaunchState(
     options.executionHostId,
     options.resumeFrom,
     options.hostSeedOptions,
-    options.activate
+    options.activate,
+    options.forkFrom
   )
-  intent.explicitLaunchOptions = options.launchOptions ? { ...options.launchOptions } : undefined
+  // A fork inherits its source's options.
+  intent.explicitLaunchOptions =
+    !options.forkFrom && options.launchOptions ? { ...options.launchOptions } : undefined
   intent.beforeCreate = options.beforeCreate
   intent.createAfter = options.createAfter
   intent.surfaceAddress = options.surfaceAddress

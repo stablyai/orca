@@ -232,7 +232,7 @@ export function beginHostAdmittedStructuredLaunch(args: {
           args.executionHostId,
           args.declinedOpensCallerSurface
         )
-        if (plan.resumeFrom || plan.requestedSurface === 'chat' || noCli) {
+        if (plan.resumeFrom || plan.forkFrom || plan.requestedSurface === 'chat' || noCli) {
           return failBeforeSurface(
             new StructuredAgentSessionCreateRefusalError('structured_agent_session_unsupported'),
             admission.reason,

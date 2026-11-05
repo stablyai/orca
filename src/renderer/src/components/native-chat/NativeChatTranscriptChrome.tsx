@@ -252,11 +252,14 @@ export function NativeChatAgentControls({
   markdown,
   timestamp,
   onScrollToTop,
+  action,
   className
 }: {
   markdown: string
   timestamp: number | null
   onScrollToTop: () => void
+  /** A row action of its own, beside Copy. */
+  action?: React.ReactNode
   className?: string
 }): React.JSX.Element {
   return (
@@ -264,6 +267,7 @@ export function NativeChatAgentControls({
     <div data-native-chat-find-skip className={cn('flex items-center gap-1', className)}>
       {/* A visual line means nothing pasted outside Orca, so the copy leaves it out. */}
       <NativeChatCopyButton text={withoutNativeChatVisualDirectiveLines(markdown)} />
+      {action}
       <button
         type="button"
         onClick={onScrollToTop}
