@@ -543,7 +543,6 @@
     "usageLimit": {
       "reached": "{{agent}} kullanım sınırına ulaştı.",
       "reachedNamed": "{{agent}}, {{window}} sınırına ulaştı.",
-      "resetsAt": "Sıfırlanma zamanı: {{when}}.",
       "theAgent": "Ajan",
       "windowCredits": "ek kullanım",
       "windowSession": "oturum",

@@ -43,6 +43,7 @@ import { MONO_SIZE, TEXT_SIZE, scaledType } from './mobile-native-chat-message-s
 import { MobileNativeChatOwnedScrollView } from './MobileNativeChatOwnedScrollView'
 import { toolStyles } from './mobile-native-chat-tool-styles'
 import { styles as chatViewStyles } from '../mobile-native-chat-view-styles'
+import { MobileNativeChatUsageLimitStatus } from './MobileNativeChatUsageLimitStatus'
 
 function toneColor(tone: NativeChatNoticeTone): string {
   return { warning: colors.statusAmber, error: colors.statusRed, notice: colors.textMuted }[tone]
@@ -308,6 +309,7 @@ export function MobileNativeChatNoticeRow({
               </Text>
             </Pressable>
           ) : null}
+          <MobileNativeChatUsageLimitStatus notice={notice} fontScale={fontScale} />
           {detail || payload ? (
             <View>
               <NoticeDisclosureSummary

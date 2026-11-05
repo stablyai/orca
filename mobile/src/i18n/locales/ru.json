@@ -613,7 +613,6 @@
     "usageLimit": {
       "reached": "{{agent}} достиг лимита использования.",
       "reachedNamed": "{{agent}} достиг лимита: {{window}}.",
-      "resetsAt": "Сброс: {{when}}.",
       "theAgent": "Агент",
       "windowCredits": "дополнительное использование",
       "windowSession": "на сессию",

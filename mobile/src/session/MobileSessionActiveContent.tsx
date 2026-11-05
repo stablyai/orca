@@ -133,6 +133,10 @@ export function MobileSessionActiveContent({
     () => (client ? { client, worktreeId } : undefined),
     [client, worktreeId]
   )
+  const openNativeChatAccounts = useCallback(
+    () => controller.router.push(`/h/${encodeURIComponent(hostId)}/accounts`),
+    [controller.router, hostId]
+  )
   const navigateToSender = useCallback(
     (senderWorktreeId: string, paneKey: string) => {
       const execution = executionHost ? `&executionHost=${encodeURIComponent(executionHost)}` : ''
@@ -374,6 +378,8 @@ export function MobileSessionActiveContent({
                     terminalView: true
                   })
                 }
+                // Accounts open on the paired host, so a chat another server runs offers none.
+                onOpenAccounts={executionHost === undefined ? openNativeChatAccounts : undefined}
               />
             </MobileAgentMessageProvider>
           </MobileDictationMeterContext.Provider>

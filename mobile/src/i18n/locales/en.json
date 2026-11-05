@@ -3104,7 +3104,14 @@
       "windowCredits": "extra usage",
       "reachedNamed": "{{agent}} hit its {{window}} limit.",
       "reached": "{{agent}} hit its usage limit.",
-      "resetsAt": "It resets at {{when}}."
+      "switchAccount": "Switch Account",
+      "autoContinueCancelFailed": "Couldn't cancel automatic continuation. Try again.",
+      "autoContinueCancel": "Don't continue",
+      "statusResetAt": "Reset at {{time}}",
+      "statusResetsAt": "Resets at {{time}}",
+      "statusContinuesShortly": "Orca continues shortly",
+      "statusContinuesThen": "Orca continues then",
+      "statusWontContinue": "Orca won't continue automatically"
     },
     "composerPlaceholder": {
       "reconnecting": "Reconnecting…",

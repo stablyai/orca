@@ -49,6 +49,7 @@ import {
 } from './use-mobile-structured-thread-goal'
 import { useMobileStructuredTranscript } from './use-mobile-structured-transcript'
 import { useMobileStructuredAgentRewind } from './use-mobile-structured-agent-rewind'
+import { useMobileNativeChatUsageLimit } from './native-chat/use-mobile-native-chat-usage-limit'
 
 export function useMobileStructuredAgentSession(
   args: MobileStructuredAgentSessionArgs
@@ -194,6 +195,10 @@ export function useMobileStructuredAgentSession(
     sendSelection: options.sendSelection,
     takesSkills: hostSupport?.sendSkills === true
   })
+  const usageLimit = useMobileNativeChatUsageLimit(args, state, {
+    busy: isWorking || queueSendsNext || sendsOut.sending(),
+    send: sendWithOutcome
+  })
   const { items, currentRequests, actionablePromptIds, status, epoch } = state
   // Prefer host actionability: ended-agent prompts must receive no answer.
   const [approvalPrompt, questionPrompt] = useMemo(() => {
@@ -294,6 +299,7 @@ export function useMobileStructuredAgentSession(
       isWorking || queueSendsNext
     ),
     threadGoal: goal.threadGoal,
-    rewind
+    rewind,
+    usageLimit
   }
 }

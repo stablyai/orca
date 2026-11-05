@@ -539,7 +539,6 @@
     "usageLimit": {
       "reached": "{{agent}} 已達用量上限。",
       "reachedNamed": "{{agent}} 已達 {{window}} 上限。",
-      "resetsAt": "將於 {{when}} 重設。",
       "theAgent": "代理程式",
       "windowCredits": "額外用量",
       "windowSession": "工作階段",

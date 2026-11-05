@@ -578,7 +578,6 @@
     "usageLimit": {
       "reached": "{{agent}} atingiu seu limite de uso.",
       "reachedNamed": "{{agent}} atingiu seu limite de {{window}}.",
-      "resetsAt": "Renovação do limite: {{when}}",
       "theAgent": "O agente",
       "windowCredits": "uso extra",
       "windowSession": "sessão",
