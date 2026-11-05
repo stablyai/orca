@@ -40,7 +40,6 @@ vi.mock('@/store', () => ({
   })
 }))
 vi.mock('@/store/plugin-panels', () => ({ usePluginCommands: () => fixture.plugins }))
-vi.mock('@/i18n/i18n', () => ({ translate: (_: string, fallback: string) => fallback }))
 vi.mock('@/lib/plugin-command-execution', () => ({ executePluginCommand: fixture.pluginRun }))
 vi.mock('@/lib/plugin-command-replacements', () => ({
   runBuiltInOrReplacement: (_: string, run: () => void) => run()
