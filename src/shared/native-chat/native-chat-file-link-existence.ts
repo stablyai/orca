@@ -1,6 +1,6 @@
 import type { ParsedTerminalFileLink } from '../terminal/links/terminal-links'
 import type { FileLinkExists } from './native-chat-file-link-tree'
-import { readTerminalPathExistsCache, writeTerminalPathExistsCache } from '../path-exists-cache-lru'
+import { readRecentPathAnswer, writeRecentPathAnswer } from '../recent-path-answers'
 
 // Why: a host that could not answer is retried a few times, then waits for the next recheck.
 export const UNVERIFIABLE_RETRY_DELAYS_MS = [2_000, 10_000, 30_000] as const
@@ -86,7 +86,7 @@ export function createNativeChatFileLinkChecker<Target>(
     if (held) {
       held.answer = { exists, generation: sentIn }
     } else {
-      writeTerminalPathExistsCache(answers, key, { exists, generation: sentIn })
+      writeRecentPathAnswer(answers, key, { exists, generation: sentIn })
     }
     if ((previous?.exists ?? false) !== exists) {
       for (const watcher of holders.get(key)?.watchers ?? []) {
@@ -156,7 +156,7 @@ export function createNativeChatFileLinkChecker<Target>(
       if (entry?.watchers.size === 0) {
         holders.delete(key)
         if (entry.answer) {
-          writeTerminalPathExistsCache(answers, key, entry.answer)
+          writeRecentPathAnswer(answers, key, entry.answer)
         }
         // Why: nothing shows this path any more, so its retries end here.
         clearFailure(key)
@@ -174,7 +174,7 @@ export function createNativeChatFileLinkChecker<Target>(
       return found.kind === 'linked'
     }
     const { key, target } = found
-    const answer = holders.get(key)?.answer ?? readTerminalPathExistsCache(answers, key)
+    const answer = holders.get(key)?.answer ?? readRecentPathAnswer(answers, key)
     if (!answer && !mayAsk) {
       return false
     }

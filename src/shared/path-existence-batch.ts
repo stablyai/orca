@@ -65,9 +65,6 @@ export function createPathExistenceBatch<Group>({
         group,
         pending.map((row) => row.path)
       )
-      if (results.length !== pending.length) {
-        throw new Error('Invalid path existence response')
-      }
       results.forEach((result, index) => {
         if ('exists' in result) {
           pending[index].resolve(result.exists)

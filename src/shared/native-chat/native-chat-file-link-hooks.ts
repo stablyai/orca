@@ -35,23 +35,22 @@ export function createNativeChatFileLinkHooks({
     return snapshot ? (streaming ? snapshot.peek : snapshot.check) : undefined
   }
 
-  /** A finished turn may have created or removed files its text names. */
-  function useRecheckNativeChatFileLinksAfterTurn(
+  /** Recheck when `busy` settles: a finished turn may have changed files, a returning host may now answer. */
+  function useRecheckNativeChatFileLinksWhenSettled(
     existence: NativeChatFileLinkExistence | null,
-    isWorking: boolean
+    busy: boolean
   ): void {
-    const seen = useRef<{
-      existence: NativeChatFileLinkExistence | null
-      isWorking: boolean
-    } | null>(null)
+    const seen = useRef<{ existence: NativeChatFileLinkExistence | null; busy: boolean } | null>(
+      null
+    )
     useEffect(() => {
       const previous = seen.current
-      seen.current = { existence, isWorking }
-      if (existence && previous?.existence === existence && previous.isWorking && !isWorking) {
+      seen.current = { existence, busy }
+      if (existence && previous?.existence === existence && previous.busy && !busy) {
         existence.recheck()
       }
-    }, [existence, isWorking])
+    }, [existence, busy])
   }
 
-  return { useNativeChatFileLinkExistsFrom, useRecheckNativeChatFileLinksAfterTurn }
+  return { useNativeChatFileLinkExistsFrom, useRecheckNativeChatFileLinksWhenSettled }
 }

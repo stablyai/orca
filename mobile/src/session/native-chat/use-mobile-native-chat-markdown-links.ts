@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { z } from 'zod'
 import { relativePathInsideRoot } from '../../../../src/shared/cross-platform-path'
 import {
@@ -17,7 +17,7 @@ import {
 import { resolveTerminalFileLink } from '../../../../src/shared/terminal/links/terminal-links'
 import { getRepoIdFromWorktreeId } from '../../../../src/shared/worktree/id'
 import {
-  useRecheckNativeChatFileLinksAfterTurn,
+  useRecheckNativeChatFileLinksWhenSettled,
   type MobileMarkdownLinks
 } from '../../components/mobile-markdown-links-context'
 import type { RpcClient } from '../../transport/rpc-client'
@@ -46,12 +46,14 @@ export function createMobileNativeChatFileLinkExistence(
   worktreeId: string,
   worktreePath: string
 ): NativeChatFileLinkExistence {
+  // Why: a host from before this check refuses it; its paths link as the old detector linked them.
+  let hostChecks = true
   const pathsExist = createPathExistenceBatch<string>({
     groupKey: (worktree) => worktree,
     run: async (worktree, relativePaths) => {
       const reply = await chatPathsExistRead.request(client, { worktree, relativePaths })
-      // Why: a host from before this check refuses it; its paths link as the old detector linked them.
       if (!reply.ok && isMobileMethodUnavailableError(reply.error.code, reply.error.message)) {
+        hostChecks = false
         return relativePaths.map((path) => ({ exists: isFilePathCodeSpan(path) }))
       }
       return requirePathExistenceResults(chatPathsExistRead.interpret(reply), relativePaths.length)
@@ -71,7 +73,7 @@ export function createMobileNativeChatFileLinkExistence(
         return { kind: 'plain' }
       }
       // Why: the host checks only its workspace; outside paths link as the old detector linked them.
-      if (relativePath === null) {
+      if (relativePath === null || !hostChecks) {
         return isFilePathCodeSpan(link.pathText) ? { kind: 'linked' } : { kind: 'plain' }
       }
       return { kind: 'ask', key: relativePath, target: relativePath }
@@ -114,7 +116,7 @@ export function useMobileNativeChatMarkdownLinks({
   worktreePath,
   isWorking
 }: {
-  /** The chat is on screen; nothing is asked otherwise. */
+  /** The chat is on screen; the `#123` repo is looked up only then. */
   enabled: boolean
   client: RpcClient | null
   connState: ConnectionState
@@ -125,19 +127,22 @@ export function useMobileNativeChatMarkdownLinks({
   const connected = connState === 'connected'
   const fileLinks = useMemo(
     () =>
-      enabled && client && worktreePath
+      client && worktreePath
         ? createMobileNativeChatFileLinkExistence(client, worktreeId, worktreePath)
         : null,
-    [enabled, client, worktreeId, worktreePath]
+    [client, worktreeId, worktreePath]
   )
-  useRecheckNativeChatFileLinksAfterTurn(fileLinks, isWorking)
-  useRecheckWhenReconnected(fileLinks, connected)
+  useRecheckNativeChatFileLinksWhenSettled(fileLinks, isWorking)
+  // Why: answers missed while the host was unreachable stay plain until something asks again.
+  useRecheckNativeChatFileLinksWhenSettled(fileLinks, !connected)
 
   const [github, setGithub] = useState<{ worktreeId: string; repo: GitHubRepoReference } | null>(
     null
   )
+  const githubRepo = github?.worktreeId === worktreeId ? github.repo : null
   // Folder workspaces have no repo; their bare `#123` stays text, as on desktop.
-  const asksGithub = enabled && connected && !worktreeId.startsWith('folder:')
+  const asksGithub =
+    enabled && connected && githubRepo === null && !worktreeId.startsWith('folder:')
   useEffect(() => {
     if (!client || !asksGithub) {
       return
@@ -154,24 +159,6 @@ export function useMobileNativeChatMarkdownLinks({
       active = false
     }
   }, [client, asksGithub, worktreeId])
-  const githubRepo = github?.worktreeId === worktreeId ? github.repo : null
 
   return useMemo(() => ({ fileLinks, githubRepo }), [fileLinks, githubRepo])
-}
-
-// Why: answers missed while the host was unreachable stay plain until something asks again.
-function useRecheckWhenReconnected(
-  existence: NativeChatFileLinkExistence | null,
-  connected: boolean
-): void {
-  const seen = useRef<{ existence: NativeChatFileLinkExistence | null; connected: boolean } | null>(
-    null
-  )
-  useEffect(() => {
-    const previous = seen.current
-    seen.current = { existence, connected }
-    if (existence && previous?.existence === existence && !previous.connected && connected) {
-      existence.recheck()
-    }
-  }, [existence, connected])
 }

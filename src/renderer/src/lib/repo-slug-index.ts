@@ -15,8 +15,10 @@ import {
   type RepoSlugMatches,
   type SlugIndex
 } from './repo-slug-cache'
-import { githubRepoIdentityKey } from '../../../shared/github/repository-identity-key'
-import { repoUpstreamIdentityKey } from '../../../shared/github/github-reference-links'
+import {
+  githubRepoIdentityKey,
+  repoUpstreamIdentityKey
+} from '../../../shared/github/repository-identity-key'
 import { createBoundedGenerationMap } from './bounded-generation-map'
 
 export { lookupReposBySlugFromCache } from './repo-slug-cache'

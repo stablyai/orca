@@ -13,10 +13,12 @@ import type { WorktreeRuntimeOwnerState } from '@/lib/worktree-runtime-owner-sta
 import { FILE_LINK_CONTEXT_INPUT_KEYS } from './native-chat-file-link'
 import type { Repo } from '../../../../shared/repo-types'
 import { getRepoExecutionHostId, isUnresolvedOwnerHostId } from '../../../../shared/execution-host'
-import { githubRepoIdentityKey } from '../../../../shared/github/repository-identity-key'
+import {
+  githubRepoIdentityKey,
+  repoUpstreamIdentityKey
+} from '../../../../shared/github/repository-identity-key'
 import {
   githubReferenceRepo,
-  repoUpstreamIdentityKey,
   type GitHubRepoReference
 } from '../../../../shared/github/github-reference-links'
 

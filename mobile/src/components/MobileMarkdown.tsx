@@ -54,8 +54,11 @@ function MobileMarkdownContent({
   const setup = useContext(MarkdownTextContext)
   const onOpenLink = useContext(MarkdownLinkHandlerContext)
   const links = useContext(MobileMarkdownLinksContext)
-  const fileLinks = onOpenFile ? (links?.fileLinks ?? null) : null
-  const fileLinkExists = useNativeChatFileLinkExistsFrom(fileLinks, fileLinks !== null, streaming)
+  const fileLinkExists = useNativeChatFileLinkExistsFrom(
+    links?.fileLinks ?? null,
+    onOpenFile !== undefined,
+    streaming
+  )
   const text = content?.trim() ?? ''
   const { root, directives } = useMobileMarkdownTree(text, renderVisual !== undefined, growing, {
     fileLinkExists,

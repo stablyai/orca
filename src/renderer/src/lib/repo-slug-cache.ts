@@ -2,8 +2,10 @@
 import type { Repo } from '../../../shared/repo-types'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { runtimeTargetForRepoOwner } from './repo-runtime-owner'
-import { githubRepoIdentityKey } from '../../../shared/github/repository-identity-key'
-import { repoUpstreamIdentityKey } from '../../../shared/github/github-reference-links'
+import {
+  githubRepoIdentityKey,
+  repoUpstreamIdentityKey
+} from '../../../shared/github/repository-identity-key'
 
 /** Lowercased `owner/repo` → Repo[]. */
 export type SlugIndex = Map<string, Repo[]>

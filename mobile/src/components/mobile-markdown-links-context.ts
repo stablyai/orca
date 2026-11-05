@@ -13,5 +13,5 @@ export type MobileMarkdownLinks = {
 
 export const MobileMarkdownLinksContext = createContext<MobileMarkdownLinks | null>(null)
 
-export const { useNativeChatFileLinkExistsFrom, useRecheckNativeChatFileLinksAfterTurn } =
+export const { useNativeChatFileLinkExistsFrom, useRecheckNativeChatFileLinksWhenSettled } =
   createNativeChatFileLinkHooks({ useEffect, useMemo, useRef, useSyncExternalStore })

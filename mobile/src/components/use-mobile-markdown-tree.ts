@@ -16,8 +16,8 @@ const NO_DIRECTIVES: NativeChatVisualDirective[] = []
 
 /** Chat links drawn into the tree: host-confirmed file paths and `#123` refs. */
 export type MobileMarkdownTreeLinks = {
-  fileLinkExists?: FileLinkExists
-  githubRepo?: GitHubRepoReference | null
+  fileLinkExists: FileLinkExists | undefined
+  githubRepo: GitHubRepoReference | null | undefined
 }
 
 /** The tree MobileMarkdown draws; with `visuals`, directive lines become placeholders. */
@@ -25,7 +25,7 @@ export function useMobileMarkdownTree(
   text: string,
   visuals: boolean,
   growing: boolean,
-  { fileLinkExists, githubRepo }: MobileMarkdownTreeLinks = {}
+  { fileLinkExists, githubRepo }: MobileMarkdownTreeLinks
 ): { root: Root; directives: NativeChatVisualDirective[] } {
   const visualLines = useMemo(
     () => (visuals ? protectMobileMarkdownVisualLines(text) : null),

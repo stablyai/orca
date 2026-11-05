@@ -1,7 +1,4 @@
-import {
-  readTerminalPathExistsCache,
-  writeTerminalPathExistsCache
-} from '../../../../shared/path-exists-cache-lru'
+import { readRecentPathAnswer, writeRecentPathAnswer } from '../../../../shared/recent-path-answers'
 
 const NEGATIVE_PATH_EXISTS_TTL_MS = 10_000
 
@@ -31,7 +28,7 @@ export function readTerminalPathExistence(
   if (!entry.exists && now - entry.checkedAt >= NEGATIVE_PATH_EXISTS_TTL_MS) {
     return undefined
   }
-  return readTerminalPathExistsCache(cache, key)?.exists
+  return readRecentPathAnswer(cache, key)?.exists
 }
 
 export function writeTerminalPathExistence(
@@ -44,7 +41,7 @@ export function writeTerminalPathExistence(
   if (existing && existing.sequence > probe.sequence) {
     return
   }
-  writeTerminalPathExistsCache(cache, key, { exists, ...probe })
+  writeRecentPathAnswer(cache, key, { exists, ...probe })
 }
 
 // Scope POSIX SSH paths by connection; local/runtime cache keys retain legacy scope.

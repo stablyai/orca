@@ -14,7 +14,7 @@ import {
 import type { NativeChatFileLinkExistence } from '../../../../shared/native-chat/native-chat-file-link-existence'
 import { createNativeChatFileLinkHooks } from '../../../../shared/native-chat/native-chat-file-link-hooks'
 
-const { useNativeChatFileLinkExistsFrom, useRecheckNativeChatFileLinksAfterTurn } =
+const { useNativeChatFileLinkExistsFrom, useRecheckNativeChatFileLinksWhenSettled } =
   createNativeChatFileLinkHooks({ useEffect, useMemo, useRef, useSyncExternalStore })
 
 const subscribeToPairings = (onChange: () => void): (() => void) =>
@@ -72,7 +72,10 @@ function useRecheckWhenHostReturns(
 }
 
 export function useRecheckNativeChatFileLinksWhenTurnEnds(isWorking: boolean): void {
-  useRecheckNativeChatFileLinksAfterTurn(useContext(NativeChatFileLinkExistenceContext), isWorking)
+  useRecheckNativeChatFileLinksWhenSettled(
+    useContext(NativeChatFileLinkExistenceContext),
+    isWorking
+  )
 }
 
 /** One per chat view: paths in its transcript are checked on the workspace's host. */

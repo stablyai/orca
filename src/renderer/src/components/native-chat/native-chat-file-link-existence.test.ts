@@ -3,7 +3,7 @@ import type { ParsedTerminalFileLink } from '../../../../shared/terminal/links/t
 import type * as FileLinkTargetModule from '@/components/terminal-pane/terminal-file-link-target'
 import type { FileLinkPathExistence } from '@/components/terminal-pane/terminal-file-link-target'
 import type * as FilePathMappingModule from '@/components/terminal-pane/terminal-file-path-mapping'
-import { TERMINAL_PATH_EXISTS_CACHE_MAX_ENTRIES } from '../../../../shared/path-exists-cache-lru'
+import { RECENT_PATH_ANSWERS_MAX } from '../../../../shared/recent-path-answers'
 import { createNativeChatFileLinkExistence } from './native-chat-file-link-existence'
 import { UNVERIFIABLE_RETRY_DELAYS_MS } from '../../../../shared/native-chat/native-chat-file-link-existence'
 
@@ -165,7 +165,7 @@ describe('createNativeChatFileLinkExistence', () => {
     const existence = createNativeChatFileLinkExistence(host, pathExists)
     const { watcher } = watching(existence)
     const names = Array.from(
-      { length: TERMINAL_PATH_EXISTS_CACHE_MAX_ENTRIES + 100 },
+      { length: RECENT_PATH_ANSWERS_MAX + 100 },
       (_, index) => `file-${index}.md`
     )
     const render = (): boolean[] => names.map((name) => watcher.getSnapshot().check(link(name)))

@@ -181,6 +181,10 @@ function exactFileLink(value: string, exists: FileLinkExists): ParsedTerminalFil
 }
 
 function splitTextNode(value: string, exists: FileLinkExists): MarkdownNode[] {
+  // Prose paths need a separator (isLinkifiableFile); skip the scans for text that has none.
+  if (!/[\\/]/.test(value)) {
+    return [{ type: 'text', value }]
+  }
   const children: MarkdownNode[] = []
   let cursor = 0
   for (const match of value.matchAll(QUOTED_TEXT_PATTERN)) {

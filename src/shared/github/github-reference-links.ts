@@ -1,5 +1,5 @@
 import type { Repo } from '../repo-types'
-import { githubHostFromIdentityKey, githubRepoIdentityKey } from './repository-identity-key'
+import { githubHostFromIdentityKey, repoUpstreamIdentityKey } from './repository-identity-key'
 
 export type GitHubRepoReference = {
   owner: string
@@ -15,21 +15,6 @@ type MarkdownNode = {
 }
 
 const GITHUB_REFERENCE_PATTERN = /(?:\b([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+))?#([1-9][0-9]*)\b/g
-
-/** Fork-parent alias, or null if untrusted. Require resolved origin identity as host fallback for older upstream metadata, or GHES parents could collapse into github.com. */
-export function repoUpstreamIdentityKey(
-  repo: Pick<Repo, 'upstream'>,
-  originIdentityKey: string | null | undefined
-): string | null {
-  const upstream = repo.upstream
-  if (!upstream?.owner || !upstream.repo || !originIdentityKey) {
-    return null
-  }
-  return githubRepoIdentityKey({
-    ...upstream,
-    host: upstream.host ?? githubHostFromIdentityKey(originIdentityKey)
-  })
-}
 
 /** Where bare `#123` points: upstream unless the repo prefers origin. github.com only. */
 export function githubReferenceRepo(
