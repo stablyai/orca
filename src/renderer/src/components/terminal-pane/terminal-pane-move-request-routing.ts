@@ -2,7 +2,7 @@ import type { AppState } from '@/store'
 import type { TerminalLeafMoveResult } from '../../../../shared/workspace-layout/terminal-leaf-move'
 import { requestBackgroundTerminalWorktreeMount } from '../terminal/background-terminal-worktree-mount'
 import { BACKGROUND_WORKTREE_MEASURE_WINDOW_MS } from '../terminal/background-terminal-worktree-visibility'
-import { leaseTerminalPaneMount } from './terminal-pane-split-request-routing'
+import { holdTerminalPaneMount } from './terminal-pane-split-request-routing'
 
 /** A pane another client moved to a new tab, under the tab id that client drew. */
 export type TerminalPaneMoveToNewTabTarget = {
@@ -50,8 +50,7 @@ function mountedHandler(
   if (mounted) {
     return Promise.resolve(mounted)
   }
-  // A parked or background tab has no live panes; mount it as a routed split would.
-  leaseTerminalPaneMount(tabId, worktreeId)
+  // A parked or background tab has no live panes; the caller's hold keeps it mounted once it is.
   requestBackgroundTerminalWorktreeMount({ worktreeId, tabIds: [tabId] })
   return new Promise((resolve) => {
     const settle = (handler: TerminalPaneMoveHandler | null): void => {
@@ -95,6 +94,9 @@ export async function moveTerminalPaneToNewTabForClient(
   request: TerminalPaneMoveToNewTabTarget & { worktreeId: string; sourceTabId: string }
 ): Promise<TerminalLeafMoveResult> {
   const { worktreeId, sourceTabId, ...move } = request
+  // Held for the whole move: parking the source tab mid-move would tear down the pane main
+  // may already have committed to the client.
+  const releaseMount = holdTerminalPaneMount(sourceTabId, worktreeId)
   try {
     const handler = await mountedHandler(worktreeId, sourceTabId)
     const moved = handler ? await handler(move) : null
@@ -103,6 +105,8 @@ export async function moveTerminalPaneToNewTabForClient(
     }
   } catch (error) {
     console.warn('[terminal-pane-detach] could not move the pane for a client', error)
+  } finally {
+    releaseMount()
   }
   return { status: 'refused', reason: 'pane_unavailable' }
 }

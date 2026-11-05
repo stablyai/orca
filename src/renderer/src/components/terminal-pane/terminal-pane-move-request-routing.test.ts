@@ -5,7 +5,10 @@ import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyConnectionDeps } from './pty-connection-types'
 import { installTerminalPaneMountEvents } from './terminal-pane-mount-events'
 import { moveTerminalPaneToNewTabForClient } from './terminal-pane-move-request-routing'
-import { _resetTerminalPaneSplitRequestRoutingForTests } from './terminal-pane-split-request-routing'
+import {
+  _resetTerminalPaneSplitRequestRoutingForTests,
+  hasTerminalPaneSplitMountLease
+} from './terminal-pane-split-request-routing'
 import type { DetachTerminalPaneToNewTab } from './terminal-pane-tab-detach'
 import { createTerminalTab } from './terminal-pane-tab-detach-fixture'
 
@@ -119,10 +122,23 @@ describe('a pane move a client asked this window for', () => {
     await expect(answer).resolves.toEqual({ status: 'moved', ptyId: 'pty-2' })
   })
 
+  it('keeps a parked source tab mounted until a move slower than the mount lease settles', async () => {
+    const detached = Promise.withResolvers<Awaited<ReturnType<DetachTerminalPaneToNewTab>>>()
+    const answer = moveTerminalPaneToNewTabForClient(request)
+    unmount = mountTab(() => detached.promise)
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(hasTerminalPaneSplitMountLease('tab-1', 'wt-1')).toBe(true)
+
+    detached.resolve(await moved('pty-2'))
+    await expect(answer).resolves.toEqual({ status: 'moved', ptyId: 'pty-2' })
+    expect(hasTerminalPaneSplitMountLease('tab-1', 'wt-1')).toBe(false)
+  })
+
   it('refuses when the source tab does not mount, so the client puts the pane back', async () => {
     const answer = moveTerminalPaneToNewTabForClient(request)
     await vi.runAllTimersAsync()
 
     await expect(answer).resolves.toEqual({ status: 'refused', reason: 'pane_unavailable' })
+    expect(hasTerminalPaneSplitMountLease('tab-1', 'wt-1')).toBe(false)
   })
 })
