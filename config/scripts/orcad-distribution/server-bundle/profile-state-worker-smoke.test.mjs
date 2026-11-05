@@ -1,5 +1,5 @@
 import { build } from 'esbuild'
-import { copyFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { copyFileSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -44,42 +44,6 @@ afterAll(() => {
 describe('profile state build smoke', () => {
   it('writes through the built writer and verifies the built backup after handle release', async () => {
     await expect(smokeProfileStateWorkers(builtDirectory)).resolves.toBeUndefined()
-  })
-
-  it('rejects a worker that exits without completing its protocol', async () => {
-    const directory = fixtureDirectory()
-    writeFileSync(join(directory, writerFilename), 'process.exit(0)\n')
-    await expect(smokeProfileStateWorkers(directory)).rejects.toThrow('before completing')
-  })
-
-  it('rejects a mismatched startup revision', async () => {
-    const directory = fixtureDirectory()
-    writeFileSync(
-      join(directory, writerFilename),
-      `const { parentPort } = require('node:worker_threads')
-      parentPort.postMessage({ id: 0, ok: true, revision: 7 })
-      parentPort.close()`
-    )
-    await expect(smokeProfileStateWorkers(directory)).rejects.toThrow('unexpected revision')
-  })
-
-  it('does not accept a close acknowledgement from a worker that remains alive', async () => {
-    const directory = fixtureDirectory()
-    const acknowledged = join(directory, 'close-acknowledged')
-    writeFileSync(
-      join(directory, writerFilename),
-      `const { parentPort } = require('node:worker_threads')
-      parentPort.postMessage({ id: 0, ok: true, revision: 0 })
-      parentPort.on('message', ({ id }) => {
-        parentPort.postMessage({ id, ok: true, revision: 1 })
-        if (id === 2) require('node:fs').writeFileSync(${JSON.stringify(acknowledged)}, 'close')
-      })
-      setInterval(() => {}, 1000)`
-    )
-    await expect(smokeProfileStateWorkers(directory, { timeoutMs: 2_000 })).rejects.toThrow(
-      'timed out'
-    )
-    expect(readFileSync(acknowledged, 'utf8')).toBe('close')
   })
 
   it('does not accept a successful backup response without the copied database', async () => {

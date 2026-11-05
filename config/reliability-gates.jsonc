@@ -17664,21 +17664,20 @@
       "providers": ["wsl1", "wsl2"],
       "coveredPlatforms": ["windows"],
       "coveredProviders": ["wsl1"],
-      "coverageNotes": "Real WSL1 coverage: three scenarios each passed three times with no skips or retries; exact JSON report verified. Latest PR routing and installer-checksum follow-ups await CI. WSL2 remains untested.",
+      "coverageNotes": "Remove synthetic WSL participation-verifier tests. The real WSL1 receipt and partial protection remain; WSL2 is still untested. Historical scope before this audit: Real WSL1 coverage: three scenarios each passed three times with no skips or retries; exact JSON report verified. Latest PR routing and installer-checksum follow-ups await CI. WSL2 remains untested.",
       "motivatingLinks": ["https://github.com/stablyai/orca/actions/runs/34030832614"],
       "invariant": "An agent launched into WSL runs in the guest; keyboard paste reaches exactly one owning PTY and preserves Linux content even after the default shell changes.",
       "oracle": "Run the existing real WSL launch and two paste cases three times; require nine passes and zero skipped, unexpected, or flaky results in the Playwright JSON report.",
       "commands": [
         "gh workflow run windows-wsl-e2e.yml",
         "pnpm exec playwright test tests/e2e/golden-tab-bar-agent-launch.spec.ts tests/e2e/terminal-windows-shell-paste-ownership.spec.ts --config tests/playwright.config.ts --project=electron-headless --workers=1",
-        "node_modules/.bin/vitest run --config config/vitest.config.ts config/scripts/workflow/source-routing/wsl-e2e-lane-contract.test.mjs config/scripts/runtime-verification/participation/verify-wsl-e2e-participation.test.mjs",
+        "node_modules/.bin/vitest run --config config/vitest.config.ts config/scripts/workflow/source-routing/wsl-e2e-lane-contract.test.mjs",
         "gh run view 34031806291 --log"
       ],
       "testFiles": [
         "tests/e2e/golden-tab-bar-agent-launch.spec.ts",
         "tests/e2e/terminal-windows-shell-paste-ownership.spec.ts",
-        "config/scripts/workflow/source-routing/wsl-e2e-lane-contract.test.mjs",
-        "config/scripts/runtime-verification/participation/verify-wsl-e2e-participation.test.mjs"
+        "config/scripts/workflow/source-routing/wsl-e2e-lane-contract.test.mjs"
       ],
       "assertionRefs": [
         {
@@ -17691,10 +17690,6 @@
             "requires exact Linux pasted content and exactly one PTY write",
             "retains WSL paste ownership after changing the default shell"
           ]
-        },
-        {
-          "file": "config/scripts/runtime-verification/participation/verify-wsl-e2e-participation.test.mjs",
-          "assertions": ["rejects skipped, missing, substituted and retried scenarios"]
         }
       ],
       "evidenceRuns": [
@@ -17730,6 +17725,7 @@
         "Collect repeated CI history before adding this experimental lane to required verification."
       ],
       "knownGaps": [
+        "Remove synthetic WSL participation-verifier tests. The real WSL1 receipt and partial protection remain; WSL2 is still untested.",
         "WSL2 is not provisioned.",
         "No SSH, folder-only workspace, packaged mixed-version, or live-service claim.",
         "The new PR lane is outside verify until reliability is established."
