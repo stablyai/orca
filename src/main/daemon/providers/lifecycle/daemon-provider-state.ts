@@ -44,7 +44,10 @@ export function getDaemonSpawner(): DaemonSpawner | null {
 
 /** Degraded providers spawn fresh terminals in-process until their routing recovers to the daemon. */
 export function daemonOwnsFreshPersistentPtys(): boolean {
-  return adapter !== null && adapter.routesFreshSpawnsToLocalProvider !== true
+  return (
+    adapter !== null &&
+    !(adapter instanceof DegradedDaemonPtyProvider && adapter.routesFreshSpawnsToLocalProvider)
+  )
 }
 
 /** Endpoint coordinates of the daemon this process installed, for out-of-band health probes. */
