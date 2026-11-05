@@ -145,13 +145,26 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
     if (this.isPtyAwaitingUserInput(ptyId)) {
       return true
     }
-    const lastInputAt = this.terminalRunFacts.readLastDrivingInputAt(ptyId)
+    const facts = this.terminalRunFacts
     const state = this.readWholeScreenModel(ptyId)
+    const draft = state
+      ? readTerminalComposerTypedText(state.emulator.getCursorLineContext())
+      : null
+    const drivingInputAt = facts.readLastDrivingInputAt(ptyId)
+    const unattributed = drivingInputAt === null && facts.readProcessStartedAt(ptyId) === null
+    // Why: main saw every input to a process it started, so with no typing there the draft is Orca's
+    // launch text; a process it attached to, as after a restart, may hold one typed before, which a
+    // screen still restoring cannot rule out yet.
+    const restoring = !state && this.headlessHydrationState.get(ptyId) === 'pending'
+    const unattributedSince = facts.noteUnattributedDraft(
+      ptyId,
+      unattributed && (!!draft || restoring)
+    )
+    const holdSince = drivingInputAt ?? unattributedSince
     return (
-      lastInputAt !== null &&
-      Date.now() - lastInputAt <= USER_INPUT_HOLD_CAP_MS &&
-      !!state &&
-      !!readTerminalComposerTypedText(state.emulator.getCursorLineContext())
+      (!!draft || (unattributed && restoring)) &&
+      holdSince !== null &&
+      Date.now() - holdSince <= USER_INPUT_HOLD_CAP_MS
     )
   }
 
