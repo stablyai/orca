@@ -203,11 +203,6 @@ export const WorktreeSet = WorktreeSelector.extend({
   }
 })
 
-/** Asked of the parent's own store; `reparent` adds the Set Parent loop check. */
-export const WorktreeCrossStoreParentRef = WorktreeSelector.extend({
-  reparent: OptionalBoolean
-})
-
 export const WorktreeRemove = WorktreeSelector.extend({
   // Omission retains legacy/UI metadata policy; explicit CLI intent overrides it.
   deleteBranch: OptionalBoolean,

@@ -23,16 +23,11 @@ import {
 } from './profile-project-session-transfer'
 import { collectTransferWorktreeIds } from './profile-project-transfer-worktree-ids'
 import {
-  isRepoWorktreeId,
+  ownerKeyBelongsToRepo,
   rekeyWorktreeId,
   rekeyWorkspaceKey
 } from './profile-project-worktree-identity'
-import { parseWorkspaceKey } from '../../shared/workspace-scope'
-import {
-  findCrossStoreLineageConflict,
-  validCrossStoreLineage,
-  withCrossStoreChildKey
-} from '../../shared/worktree/cross-store-lineage-records'
+import { assertNoCrossStoreLinkedWorkspaceInMove } from '../../shared/worktree/cross-store-lineage-move-refusal'
 
 export type TransferPayload = {
   repo: Repo
@@ -43,7 +38,6 @@ export type TransferPayload = {
   worktreeMeta: PersistedState['worktreeMeta']
   worktreeLineageById: PersistedState['worktreeLineageById']
   workspaceLineageByChildKey: PersistedState['workspaceLineageByChildKey']
-  crossStoreLineageByChildKey: Record<string, unknown>
   workspaceSession?: PersistedState['workspaceSession']
   workspaceSessionsByHostId?: Partial<Record<ExecutionHostId, PersistedState['workspaceSession']>>
   sshTargets: SshTarget[]
@@ -136,24 +130,6 @@ function rekeyWorkspaceLineageRecord(
   return next
 }
 
-/** Rekeys the child only; the parent lives in another store and keeps its own key. */
-function rekeyCrossStoreLineageRecord(
-  record: PersistedState['crossStoreLineageByChildKey'],
-  oldRepoId: string,
-  newRepoId: string
-): Record<string, unknown> {
-  const next: Record<string, unknown> = {}
-  for (const [oldKey, lineage] of Object.entries(record ?? {})) {
-    const child = parseWorkspaceKey(oldKey)
-    if (child?.type !== 'worktree' || !isRepoWorktreeId(oldRepoId, child.worktreeId)) {
-      continue
-    }
-    const newChildKey = rekeyWorkspaceKey(oldRepoId, newRepoId, oldKey as WorkspaceKey)
-    next[newChildKey] = withCrossStoreChildKey(structuredClone(lineage), newChildKey)
-  }
-  return next
-}
-
 export function createTransferPayload(args: {
   sourceState: TransferProfileState
   sourceRepo: Repo
@@ -163,6 +139,9 @@ export function createTransferPayload(args: {
   const { sourceState, sourceRepo, targetRepo, includeSessions } = args
   const oldRepoId = sourceRepo.id
   const newRepoId = targetRepo.id
+  assertNoCrossStoreLinkedWorkspaceInMove(sourceState, (childKey) =>
+    ownerKeyBelongsToRepo(childKey, oldRepoId)
+  )
   const worktreeIds = collectTransferWorktreeIds(sourceState, oldRepoId)
   const targetProjection = projectHostSetupProjectionFromRepos([targetRepo])
   const targetProjectId =
@@ -201,11 +180,6 @@ export function createTransferPayload(args: {
       oldRepoId,
       newRepoId
     ),
-    crossStoreLineageByChildKey: rekeyCrossStoreLineageRecord(
-      sourceState.crossStoreLineageByChildKey,
-      oldRepoId,
-      newRepoId
-    ),
     ...(includeSessions
       ? {
           workspaceSession: extractSessionForTransfer(
@@ -231,7 +205,6 @@ export function applyPayloadToTarget(
   targetState: TransferProfileState,
   payload: TransferPayload
 ): TransferProfileState {
-  assertNoLineageChildConflict(targetState, payload)
   const next: TransferProfileState = {
     ...targetState,
     repos: [...targetState.repos, payload.repo],
@@ -254,10 +227,6 @@ export function applyPayloadToTarget(
       ...targetState.workspaceLineageByChildKey,
       ...payload.workspaceLineageByChildKey
     },
-    crossStoreLineageByChildKey: {
-      ...targetState.crossStoreLineageByChildKey,
-      ...payload.crossStoreLineageByChildKey
-    },
     sshTargets: mergeSshTargets(targetState.sshTargets, payload.sshTargets)
   }
   if (payload.workspaceSession) {
@@ -273,29 +242,6 @@ export function applyPayloadToTarget(
     )
   }
   return rebuildRepoBackedProjectState(next)
-}
-
-/** Refuses before writing: a child must not end up with both parent representations. */
-function assertNoLineageChildConflict(
-  targetState: TransferProfileState,
-  payload: TransferPayload
-): void {
-  const conflict =
-    findCrossStoreLineageConflict({
-      crossStoreChildKeys: Object.keys(validCrossStoreLineage(payload.crossStoreLineageByChildKey)),
-      sameStoreWorktreeIds: Object.keys(targetState.worktreeLineageById),
-      sameStoreChildKeys: Object.keys(targetState.workspaceLineageByChildKey)
-    }) ??
-    findCrossStoreLineageConflict({
-      crossStoreChildKeys: Object.keys(
-        validCrossStoreLineage(targetState.crossStoreLineageByChildKey)
-      ),
-      sameStoreWorktreeIds: Object.keys(payload.worktreeLineageById),
-      sameStoreChildKeys: Object.keys(payload.workspaceLineageByChildKey)
-    })
-  if (conflict) {
-    throw new Error(`profile_transfer_lineage_child_conflict:${conflict}`)
-  }
 }
 
 function mergeSshTargets(existing: SshTarget[], incoming: SshTarget[]): SshTarget[] {

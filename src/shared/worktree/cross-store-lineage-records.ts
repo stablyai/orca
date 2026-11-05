@@ -1,4 +1,4 @@
-import { isWorkspaceKey, worktreeWorkspaceKey, type WorkspaceKey } from '../workspace-scope'
+import { isWorkspaceKey, type WorkspaceKey } from '../workspace-scope'
 import type { CrossStoreWorkspaceLineage } from './lineage-types'
 
 const ORIGINS: readonly unknown[] = ['orchestration', 'cli', 'manual']
@@ -65,24 +65,4 @@ export function validCrossStoreLineage(
 /** Re-keys a saved entry to its child's new key; an unreadable entry moves unchanged. */
 export function withCrossStoreChildKey(entry: unknown, childWorkspaceKey: WorkspaceKey): unknown {
   return isPlainRecord(entry) ? { ...entry, childWorkspaceKey } : entry
-}
-
-type LineageChildKeys = {
-  crossStoreChildKeys: Iterable<string>
-  sameStoreWorktreeIds: Iterable<string>
-  sameStoreChildKeys: Iterable<string>
-}
-
-/** A child keeps at most one parent record; returns a child named by both representations. */
-export function findCrossStoreLineageConflict(keys: LineageChildKeys): string | null {
-  const sameStore = new Set<string>(keys.sameStoreChildKeys)
-  for (const worktreeId of keys.sameStoreWorktreeIds) {
-    sameStore.add(worktreeWorkspaceKey(worktreeId))
-  }
-  for (const childKey of keys.crossStoreChildKeys) {
-    if (sameStore.has(childKey)) {
-      return childKey
-    }
-  }
-  return null
 }

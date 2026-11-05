@@ -58,11 +58,10 @@ export function crossStoreManualLineage(parent: CrossStoreParentRef): CrossStore
   }
 }
 
-/** App picks are manual; an inferred CLI parent keeps the env-workspace source same-store inference records. */
+/** App picks are manual; the CLI's explicit --parent-worktree is the only other cross-store source. */
 export function crossStoreCreateLineage(input: {
   crossStoreParent: CrossStoreParentRef
   parentWorkspaceOrigin?: 'manual'
-  crossStoreParentInferred?: true
 }): CrossStoreLineageResolution {
   if (input.parentWorkspaceOrigin === 'manual') {
     return crossStoreManualLineage(input.crossStoreParent)
@@ -71,9 +70,7 @@ export function crossStoreCreateLineage(input: {
     kind: 'crossStore',
     parent: input.crossStoreParent,
     origin: 'cli',
-    capture: input.crossStoreParentInferred
-      ? { source: 'env-workspace', confidence: 'inferred' }
-      : { source: 'explicit-cli-flag', confidence: 'explicit' }
+    capture: { source: 'explicit-cli-flag', confidence: 'explicit' }
   }
 }
 

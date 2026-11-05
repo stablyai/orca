@@ -1,3 +1,8 @@
+import {
+  hasModernAutomationLaunchSetup,
+  automationCanonicalLaunchSetup
+} from '../../shared/automation-launch-setup'
+import { AUTOMATION_LAUNCH_SETUP_RUNTIME_CAPABILITY } from '../../shared/automation-runtime-capabilities'
 import { z } from 'zod'
 import { pairedRuntimeConnectionFromOffer } from '../../shared/remote-runtime/pairing/paired-runtime-connection'
 import {
@@ -25,7 +30,6 @@ import {
 import { parsePairingCode } from '../../shared/remote-runtime/pairing/pairing'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/electron-remote-runtime-client-capabilities'
 import { ORCAD_MIGRATION_CATALOG_RUNTIME_CAPABILITY } from '../../shared/orcad-runtime-capabilities'
-import { assertDestinationKeepsMigrationPayload } from './orcad-migration-destination-payload-gate'
 import { sendRemoteRuntimeRequestWithStatusPreflight } from '../../shared/remote-runtime/remote-runtime-client'
 import { assertOrcadMigrationRequestFits } from './orcad-migration-manifest-export'
 import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
@@ -222,9 +226,8 @@ async function request(
   const params = expectedBlobs.length > 0 ? { manifest, expectedBlobs } : { manifest }
   // Validation-size limits can exceed sealed-frame capacity; reject before the host closes the socket.
   assertOrcadMigrationRequestFits(params)
-  const imports = operation === 'stage' || operation === 'commit'
   const carriesExtraAgentArgs =
-    imports &&
+    (operation === 'stage' || operation === 'commit') &&
     (manifest.payload.dormantState?.automations ?? []).some((automation) =>
       hasExtraAgentArgs(automation.extraAgentArgs)
     )
@@ -238,8 +241,16 @@ async function request(
     requiredOrcadMigrationSourceCapability(manifest.source),
     // Hosts without blob capability would strip expectedBlobs and commit unchecked.
     (capabilities) => {
-      if (imports) {
-        assertDestinationKeepsMigrationPayload(manifest, capabilities)
+      if (
+        (operation === 'stage' || operation === 'commit') &&
+        (manifest.payload.dormantState?.automations ?? []).some((automation) =>
+          hasModernAutomationLaunchSetup(automationCanonicalLaunchSetup(automation))
+        ) &&
+        !capabilities.includes(AUTOMATION_LAUNCH_SETUP_RUNTIME_CAPABILITY)
+      ) {
+        throw new Error(
+          'Update Orca on the destination host to keep automation agent launch settings.'
+        )
       }
       const unsupported = findUnsupportedMigrationBlobKind(expectedBlobs, capabilities)
       if (unsupported) {

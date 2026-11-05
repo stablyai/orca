@@ -141,10 +141,7 @@ export function describeOversizedOrcadMigrationPayload(
     ['saved tabs and panes', dormant?.workspaceSession],
     ['saved terminal history', dormant?.terminalScrollbackSnapshots],
     ['saved workspace details', dormant?.worktreeMeta],
-    [
-      'workspace history',
-      [dormant?.worktreeLineage, dormant?.workspaceLineage, dormant?.crossStoreLineage]
-    ],
+    ['workspace history', [dormant?.worktreeLineage, dormant?.workspaceLineage]],
     ['sparse checkout presets', dormant?.sparsePresets],
     [
       'retired workspace names',
@@ -208,7 +205,6 @@ export function hasDormantState(state: OrcadMigrationDormantStatePayload): boole
     state.worktreeMeta.length > 0 ||
     state.worktreeLineage.length > 0 ||
     state.workspaceLineage.length > 0 ||
-    (state.crossStoreLineage?.length ?? 0) > 0 ||
     state.sparsePresets.length > 0 ||
     state.retiredWorktreeNames.length > 0 ||
     state.retiredWorktreeNamespaces.length > 0 ||
