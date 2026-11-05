@@ -21,8 +21,8 @@ vi.mock('../install/orcad-remote-record-file', () => ({
   readBoundedOrcadRemoteRecord: vi.fn(async () => ({ state: 'present', raw: '{}' }))
 }))
 vi.mock('../install/orcad-remote-runtime-control', () => ({
-  // The host's current boot id.
-  execOrcadRemote: vi.fn(async () => 'boot-a\n')
+  // The answering machine's boot id and hostname.
+  execOrcadRemote: vi.fn(async () => 'boot-a\nnode-1\n')
 }))
 vi.mock('../install/orcad-remote-log-tail', () => ({
   withOrcadLogTail: vi.fn(
@@ -231,29 +231,57 @@ describe('a managed orcad that keeps exiting unexpectedly', () => {
           throw new OrcadLaunchReadinessError('rejected', 'orcad did not become ready')
         })
     ]
-  ])('wakes it again once the host rebooted since runs that %s', async (_case, failEachRun) => {
-    failEachRun()
-    for (let i = 0; i < 3; i++) {
-      await findStopped().catch(() => undefined)
+  ])(
+    'wakes it again once the same machine rebooted after runs that %s',
+    async (_case, failEachRun) => {
+      failEachRun()
+      for (let i = 0; i < 3; i++) {
+        await findStopped()
+      }
+      startsReporting(null)
+
+      expect(await findStopped()).toMatchObject({ state: 'unverifiable' })
+      vi.mocked(execOrcadRemote).mockResolvedValueOnce('boot-b\nnode-1\n')
+      expect(await findStopped()).toMatchObject({ state: 'started' })
     }
-    startsReporting(null)
-    const lockOnBootA = JSON.stringify({
+  )
+
+  // A lock from before the loop (or from another machine) says nothing about this machine's boot.
+  it('stays braked when only the leftover lock comes from another boot', async () => {
+    stoppedSlotLaunches(async () => {
+      throw new OrcadLaunchReadinessError('rejected', 'orcad did not become ready')
+    })
+    for (let i = 0; i < 3; i++) {
+      await findStopped()
+    }
+    const oldBootLock = JSON.stringify({
       pid: 4343,
       startedAtMs: 1,
-      bootId: 'boot-a',
+      bootId: 'boot-old',
       identity: '1000',
       version: '1.2.3',
-      acquiredAt: '2026-11-04T10:05:00.000Z',
+      acquiredAt: '2026-11-03T10:05:00.000Z',
       nonce: 'n'
     })
-    const lockRead = { state: 'present', raw: lockOnBootA } as const
-    vi.mocked(readBoundedOrcadRemoteRecord)
-      .mockResolvedValueOnce(lockRead)
-      .mockResolvedValueOnce(lockRead)
+    vi.mocked(readBoundedOrcadRemoteRecord).mockResolvedValueOnce({
+      state: 'present',
+      raw: oldBootLock
+    })
 
     expect(await findStopped()).toMatchObject({ state: 'unverifiable' })
-    vi.mocked(execOrcadRemote).mockResolvedValueOnce('boot-b\n')
-    expect(await findStopped()).toMatchObject({ state: 'started' })
+    expect(launches).toBe(3)
+  })
+
+  // Shared homes: a login node behind the same name may answer, with its own boot.
+  it('stays braked when a different machine answers', async () => {
+    startsReporting(CRASHED)
+    for (let i = 0; i < 3; i++) {
+      await findStopped()
+    }
+    vi.mocked(execOrcadRemote).mockResolvedValueOnce('boot-b\nnode-2\n')
+
+    expect(await findStopped()).toMatchObject({ state: 'unverifiable' })
+    expect(launches).toBe(3)
   })
 
   it('wakes it again once the run it braked on later stopped cleanly', async () => {

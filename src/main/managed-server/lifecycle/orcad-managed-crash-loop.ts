@@ -7,10 +7,13 @@ import { orcadSlotDir, type OrcadSlotOptions } from '../../ssh/orcad-recovery-sl
 import { isWindowsRemoteHost, joinRemotePath } from '../../ssh/ssh-remote-platform'
 import { execOrcadRemote } from '../install/orcad-remote-runtime-control'
 import { readOrcadActivationRecord } from '../activation/orcad-activation-record-store'
-import { ORCAD_LOG_FILENAME } from '../install/orcad-remote-host-support'
+import {
+  ORCAD_LAUNCH_MACHINE_COMMAND,
+  ORCAD_LOG_FILENAME
+} from '../install/orcad-remote-host-support'
 import { withOrcadLogTail } from '../install/orcad-remote-log-tail'
 import { readBoundedOrcadRemoteRecord } from '../install/orcad-remote-record-file'
-import { ORCAD_LOCK_FILE_NAME, parseOrcadInstanceLockRecord } from '../../orcad/orcad-instance-lock'
+import { ORCAD_LOCK_FILE_NAME } from '../../orcad/orcad-instance-lock'
 import { MAX_ORCAD_LOCK_BYTES } from '../../orcad/orcad-instance-lock-reclaim'
 import { ManagedOrcadEventWindow } from './orcad-managed-event-window'
 import { wakeStoppedManagedOrcad } from './orcad-managed-wake'
@@ -29,6 +32,8 @@ export class ManagedOrcadCrashLoopBrake {
   private readonly resets = new Map<string, number>()
   private readonly latchedOnServingRun = new Set<string>()
   private readonly lastFailedStart = new Map<string, string>()
+  /** The answering machine's boot when the brake engaged; null when it could not be read. */
+  private readonly latchedBoot = new Map<string, string | null>()
 
   constructor(now: () => number = Date.now) {
     this.failures = new ManagedOrcadEventWindow(FAILED_RUN_WINDOW_MS, now)
@@ -73,6 +78,16 @@ export class ManagedOrcadCrashLoopBrake {
     return this.latchedOnServingRun.has(environmentId)
   }
 
+  latchedBootOf(environmentId: string): string | null | undefined {
+    return this.latchedBoot.get(environmentId)
+  }
+
+  setLatchedBoot(environmentId: string, boot: string | null): void {
+    if (this.engaged(environmentId)) {
+      this.latchedBoot.set(environmentId, boot)
+    }
+  }
+
   lastFailedStartOf(environmentId: string): string | null {
     return this.lastFailedStart.get(environmentId) ?? null
   }
@@ -97,6 +112,7 @@ export class ManagedOrcadCrashLoopBrake {
     this.countedFailedStarts.delete(environmentId)
     this.latchedOnServingRun.delete(environmentId)
     this.lastFailedStart.delete(environmentId)
+    this.latchedBoot.delete(environmentId)
     this.resets.set(environmentId, this.resetEpoch(environmentId) + 1)
   }
 
@@ -186,45 +202,71 @@ async function wakeUnlessEngaged(
     if ((wake.outcome === 'fenced' || wake.outcome === 'recovery-refused') && wake.launchFailure) {
       brake.noteFailedStart(environmentId, epoch, wake.launchFailure)
     }
+    await recordLatchedBoot(environmentId, slot)
     return wake
   } catch (error) {
     // A host-policy refusal is not counted: nothing ran, and its own message says what to change.
     if (isOrcadLaunchFailure(error)) {
       brake.noteFailedStart(environmentId, epoch, error)
+      await recordLatchedBoot(environmentId, slot)
     }
     throw error
   }
 }
 
-/** A served run releases orcad.lock on a clean exit; any run's lock from an earlier boot ended by reboot. */
+/** Taken as the brake engages, so a later boot of the same machine proves the loop's runs ended. */
+async function recordLatchedBoot(environmentId: string, slot: ManagedOrcadSlot): Promise<void> {
+  if (brake.engaged(environmentId) && brake.latchedBootOf(environmentId) === undefined) {
+    brake.setLatchedBoot(environmentId, await readMachineBoot(slot))
+  }
+}
+
+/** "<boot id>\n<hostname>" on Linux; null elsewhere or when unreadable. */
+async function readMachineBoot(slot: ManagedOrcadSlot): Promise<string | null> {
+  if (isWindowsRemoteHost(slot.host)) {
+    return null
+  }
+  try {
+    const answer = (await execOrcadRemote(slot, MACHINE_BOOT_COMMAND)).trim()
+    return answer.split('\n').length === 2 ? answer : null
+  } catch {
+    return null
+  }
+}
+
+const MACHINE_BOOT_COMMAND = `{ ${ORCAD_LAUNCH_MACHINE_COMMAND}; } 2>/dev/null || :`
+
+/**
+ * A served run releases orcad.lock on a clean exit. A reboot ends every run, but only a new boot of
+ * the machine that answered when the brake engaged proves one: shared homes reach other machines.
+ */
 async function latchedRunEndedWithoutCrash(
   environmentId: string,
   slot: ManagedOrcadSlot
 ): Promise<boolean> {
+  const latched = brake.latchedBootOf(environmentId)
+  if (latched) {
+    const current = await readMachineBoot(slot)
+    const [, latchedHost] = latched.split('\n')
+    if (current && current !== latched && current.split('\n')[1] === latchedHost) {
+      return true
+    }
+  }
+  if (!brake.latchedOnServingRunOf(environmentId)) {
+    return false
+  }
   try {
     const lock = await readBoundedOrcadRemoteRecord(
       slot,
       joinRemotePath(slot.host, slot.userDataDir, ORCAD_LOCK_FILE_NAME),
       MAX_ORCAD_LOCK_BYTES
     )
-    if (lock.state === 'absent') {
-      // A start that died before readiness may never have taken the lock, so absence proves nothing there.
-      return brake.latchedOnServingRunOf(environmentId)
-    }
-    const lockBoot = parseOrcadInstanceLockRecord(lock.raw)?.bootId
-    // Only Linux records a boot id; elsewhere a reconnect re-arms the host.
-    if (!lockBoot || isWindowsRemoteHost(slot.host)) {
-      return false
-    }
-    const currentBoot = (await execOrcadRemote(slot, CURRENT_BOOT_ID_COMMAND)).trim()
-    return currentBoot !== '' && currentBoot !== lockBoot
+    return lock.state === 'absent'
   } catch {
     // Unreadable proves nothing; stay braked.
     return false
   }
 }
-
-const CURRENT_BOOT_ID_COMMAND = 'cat /proc/sys/kernel/random/boot_id 2>/dev/null || :'
 
 async function crashLoopDetail(
   environmentId: string,
