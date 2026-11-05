@@ -13,12 +13,12 @@ const ACTIVATED_AT = '2026-11-01T10:00:00.000Z'
 const NONE: OrcadIncumbent = { active: null, activatedAt: null }
 const RUNNING: OrcadIncumbent = { active: ACTIVE, activatedAt: ACTIVATED_AT }
 
-function defer(incumbent: OrcadIncumbent): void {
+function defer(incumbent: OrcadIncumbent, candidateVersion = CANDIDATE): void {
   recordManagedOrcadUpdateDeferral(
     'env-1',
     {
       outcome: 'deferred',
-      candidateVersion: CANDIDATE,
+      candidateVersion,
       code: 'orcad_activation_fence_busy',
       reason: 'Another update holds this host.',
       forceable: false
@@ -63,5 +63,11 @@ describe('a recorded update deferral', () => {
     defer(atDeferral)
     expect(currentManagedOrcadUpdateDeferral('env-1', movedTo)).toBeNull()
     expect(currentManagedOrcadUpdateDeferral('env-1', atDeferral)).toBeNull()
+  })
+
+  it('is dropped when its candidate is the build the host already runs', () => {
+    // An Update of the running build, refused while another desktop held the fence.
+    defer(RUNNING, ACTIVE)
+    expect(currentManagedOrcadUpdateDeferral('env-1', RUNNING)).toBeNull()
   })
 })
