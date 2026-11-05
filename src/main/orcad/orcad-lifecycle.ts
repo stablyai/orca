@@ -152,12 +152,14 @@ export async function startOrcadWithHost<T extends object>(
 ): Promise<T & { stop(): Promise<void>; instance: OrcadManagedStopInstance }> {
   const instanceLock = acquireOrcadInstanceLock(userDataPath, {
     // Yield the data root to the process that took its lock; supervisors stand by on this code.
-    onExclusivityLost: () =>
+    onExclusivityLost: () => {
+      console.error('[orcad] Stopping so only one runtime writes this data root.')
       installedShutdown?.(
         'instance lock lost',
         undefined,
         SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE
       )
+    }
   })
   const previous = instanceLock.previousUnexpectedExit
   recordOrcadPreviousUnexpectedExit(previous)

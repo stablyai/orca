@@ -1,8 +1,9 @@
+import './runtime-test-module-registration.spec'
 import './orca-runtime-test-lifecycle.spec'
 import { describe, expect, it } from 'vitest'
-import { OrcaRuntimeService } from './orca-runtime-test-mocks.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
 import { store } from './orca-runtime-test-fixtures.spec'
-import { TERMINAL_PERSISTENCE_UNAVAILABLE_CODE } from '../../shared/runtime-capability-degradation'
+import { TERMINAL_PERSISTENCE_UNAVAILABLE_CODE } from '../../../shared/runtime-capability-degradation'
 
 describe('runtime status terminal persistence', () => {
   it('reports when new terminals would not survive a server restart', () => {

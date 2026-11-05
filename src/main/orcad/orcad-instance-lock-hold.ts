@@ -58,7 +58,7 @@ function beatOrcadInstanceLock(
   if (holder.nonce !== record.nonce) {
     console.error(
       `[orcad] ${describeLockHolder(holder)} (pid ${holder.pid}) took over the instance lock ` +
-        `${lockPath}; stopping so only one runtime writes this data root.`
+        `${lockPath}.`
     )
     return 'lost'
   }

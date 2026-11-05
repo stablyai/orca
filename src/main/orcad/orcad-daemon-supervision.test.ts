@@ -1,7 +1,7 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const initDaemonPtyProvider = vi.hoisted(() => vi.fn())
-vi.mock('../daemon/daemon-provider-init', () => ({ initDaemonPtyProvider }))
+vi.mock('../daemon/providers/lifecycle/daemon-provider-init', () => ({ initDaemonPtyProvider }))
 
 import { startOrcadDaemon } from './orcad-daemon-supervision'
 import { OrcadTerminalsNotDurableError } from './orcad-serve-supervision'
@@ -10,6 +10,11 @@ import {
   ORCA_SERVE_SUPERVISED_ENV,
   ORCAD_EXIT_TERMINALS_NOT_DURABLE
 } from '../../shared/serve-supervised-terminal-durability'
+
+afterEach(() => {
+  vi.restoreAllMocks()
+  delete process.env[ORCA_SERVE_SUPERVISED_ENV]
+})
 
 describe('startOrcadDaemon', () => {
   it('refuses to serve a supervised host whose terminals would die with it', async () => {
