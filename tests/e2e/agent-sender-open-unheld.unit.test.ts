@@ -114,7 +114,7 @@ const open = (sender: AgentMessageSender, target: RuntimeClientTarget = LOCAL) =
     sender,
     'workspace',
     target,
-    'first',
+    undefined,
     'Worker'
   )
 const asked = (method: string) => calls.filter((call) => call.method === method)
@@ -146,35 +146,34 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-/** A worker that first ran in tab-0, which this window holds, and was reopened by a follow-up
- *  in tab-1, which this window has no tab for yet. */
-function reopenedWorker(first: 'live' | 'gone') {
-  const firstHandle = first === 'live' ? host.open('tab-0', 'workspace') : 'term_before'
-  const reopened = host.open('tab-1', 'workspace')
+/** An ordinary sender in an unheld pane, alongside an unrelated first terminal. */
+function locatedWorker(first: 'live' | 'gone') {
+  const firstHandle = first === 'live' ? host.open('tab-0', 'workspace') : undefined
+  const located = host.open('tab-1', 'workspace')
   publish('local', [
-    { identity: 'dispatch:first', paneKey: pane('tab-1'), worktreeId: 'workspace' },
-    ...(first === 'live'
+    { identity: located, paneKey: pane('tab-1'), worktreeId: 'workspace' },
+    ...(firstHandle
       ? [{ identity: firstHandle, paneKey: pane('tab-0'), worktreeId: 'workspace' }]
-      : [{ identity: firstHandle, paneKey: pane('tab-1'), worktreeId: 'workspace' }])
+      : [])
   ])
-  return { sender: worker(firstHandle), reopened }
+  return { sender: worker(located), located }
 }
 
-it('focuses the handle the reopened pane’s own status row holds, asking the host nothing', async () => {
-  const { sender, reopened } = reopenedWorker('live')
+it('focuses the handle the located pane’s own status row holds, asking the host nothing', async () => {
+  const { sender, located } = locatedWorker('live')
   useAppStore.setState({
     agentStatusByPaneKey: {
       [status(0).paneKey]: status(0),
-      [status(1).paneKey]: { ...status(1), terminalHandle: reopened }
+      [status(1).paneKey]: { ...status(1), terminalHandle: located }
     }
   })
   await open(sender)
   expect(calls).toEqual([])
-  expect(mocks.focusRuntime).toHaveBeenCalledWith(reopened, null)
+  expect(mocks.focusRuntime).toHaveBeenCalledWith(located, null)
 })
 
-it('asks the host for the reopened pane when its status row has no handle, while the first terminal still runs', async () => {
-  const { sender, reopened } = reopenedWorker('live')
+it('asks the host for the located pane when its status row has no handle, while the first terminal still runs', async () => {
+  const { sender, located } = locatedWorker('live')
   const { terminalHandle: _none, ...unhandled } = status(1)
   useAppStore.setState({
     agentStatusByPaneKey: { [status(0).paneKey]: status(0), [status(1).paneKey]: unhandled }
@@ -184,11 +183,11 @@ it('asks the host for the reopened pane when its status row has no handle, while
     sender,
     'workspace',
     LOCAL,
-    'first'
+    undefined
   )
   expect(resolved.kind === 'located' && resolved.location.paneKey).toBe(pane('tab-1'))
   expect(agentMessageSenderOpens(resolved, sender)).toBe(true)
-  const avatar = renderHook(() => useAgentMessageSenderView(sender, 'workspace', LOCAL, 'first'))
+  const avatar = renderHook(() => useAgentMessageSenderView(sender, 'workspace', LOCAL))
   expect(avatar.result.current.dot).toBe('working')
   await open(sender)
   expect(calls).toEqual([
@@ -198,21 +197,21 @@ it('asks the host for the reopened pane when its status row has no handle, while
       params: { paneKey: pane('tab-1'), worktreeId: 'workspace' }
     }
   ])
-  expect(mocks.focusRuntime).toHaveBeenCalledWith(reopened, null)
+  expect(mocks.focusRuntime).toHaveBeenCalledWith(located, null)
 })
 
-it('opens the reopened pane when the first terminal is gone and no status has arrived', async () => {
-  const { sender, reopened } = reopenedWorker('gone')
+it('opens the located pane when the first terminal is gone and no status has arrived', async () => {
+  const { sender, located } = locatedWorker('gone')
   useAppStore.setState({ agentStatusByPaneKey: {} })
   await open(sender)
   expect(asked('orchestration.partyLocation')).toEqual([])
   expect(asked('terminal.resolvePane')).toHaveLength(1)
-  expect(mocks.focusRuntime).toHaveBeenCalledWith(reopened, null)
+  expect(mocks.focusRuntime).toHaveBeenCalledWith(located, null)
   expect(mocks.toastInfo).not.toHaveBeenCalled()
 })
 
 it('says the worker stopped when its pane closed on the host, and opens no other terminal', async () => {
-  const { sender } = reopenedWorker('live')
+  const { sender } = locatedWorker('live')
   useAppStore.setState({ agentStatusByPaneKey: {} })
   host.close('tab-1')
   await open(sender)
@@ -226,9 +225,9 @@ it('says the worker stopped when its pane closed on the host, and opens no other
 })
 
 it('acts on what the card names after the host answers, not on what it named at the click', async () => {
-  const { sender, reopened } = reopenedWorker('live')
+  const { sender, located } = locatedWorker('live')
   useAppStore.setState({ agentStatusByPaneKey: {} })
-  // While the host answers, the worker's follow-up ends: the card names its first terminal again.
+  // The current publication moves this endpoint while the old pane lookup is in flight.
   duringLookup = () =>
     publish(
       'local',
@@ -236,12 +235,12 @@ it('acts on what the card names after the host answers, not on what it named at 
       2
     )
   await open(sender)
-  expect(mocks.focusRuntime).not.toHaveBeenCalledWith(reopened, null)
+  expect(mocks.focusRuntime).not.toHaveBeenCalledWith(located, null)
   expect(useAppStore.getState().activeTabId).toBe('tab-0')
 })
 
 it('opens a held tab itself, without asking the host', async () => {
-  const { sender } = reopenedWorker('live')
+  const { sender } = locatedWorker('live')
   useAppStore.setState({
     tabsByWorktree: {
       workspace: [
@@ -256,7 +255,7 @@ it('opens a held tab itself, without asking the host', async () => {
 })
 
 it('asks a paired host for the pane by its own coordinates, not this window’s alias for it', async () => {
-  const reopened = host.open('tab-1', 'host-workspace')
+  const located = host.open('tab-1', 'host-workspace')
   // This window mirrors the host's tab-1 under its own tab id, in another worktree bucket.
   const mirrored = toWebTerminalSurfaceTabId(`tab-1::${LEAF}`)
   useAppStore.setState({
@@ -266,21 +265,21 @@ it('asks a paired host for the pane by its own coordinates, not this window’s 
         makeTab({
           id: mirrored,
           worktreeId: 'workspace',
-          ptyId: toRemoteRuntimePtyId(reopened, 'paired')
+          ptyId: toRemoteRuntimePtyId(located, 'paired')
         })
       ]
     }
   })
   publish('runtime:paired', [
-    { identity: 'dispatch:first', paneKey: pane('tab-1'), worktreeId: 'host-workspace' }
+    { identity: located, paneKey: pane('tab-1'), worktreeId: 'host-workspace' }
   ])
-  const sender = worker('term_before')
+  const sender = worker(located)
   const resolved = resolveAgentMessageSenderTarget(
     useAppStore.getState(),
     sender,
     'workspace',
     PAIRED,
-    'first'
+    undefined
   )
   expect(resolved.kind === 'located' && resolved.location.paneKey).toBe(`${mirrored}:${LEAF}`)
   await open(sender, PAIRED)
@@ -291,11 +290,11 @@ it('asks a paired host for the pane by its own coordinates, not this window’s 
       params: { paneKey: pane('tab-1'), worktreeId: 'host-workspace' }
     }
   ])
-  expect(mocks.focusRuntime).toHaveBeenCalledWith(reopened, 'paired')
+  expect(mocks.focusRuntime).toHaveBeenCalledWith(located, 'paired')
 })
 
 it('shows and opens a paired host’s pane under the window’s whole-tab mirror of it', async () => {
-  const reopened = host.open('tab-2', 'workspace')
+  const located = host.open('tab-2', 'workspace')
   // This window mirrors the host's whole tab-2, keeping its leaf ids, as its status rows name it.
   const mirrored = toWebTerminalSurfaceTabId('tab-2')
   const mirroredPane = `${mirrored}:${LEAF}`
@@ -304,7 +303,7 @@ it('shows and opens a paired host’s pane under the window’s whole-tab mirror
       [mirroredPane]: {
         ...status(2),
         paneKey: mirroredPane,
-        terminalHandle: reopened,
+        terminalHandle: located,
         connectionId: 'paired'
       }
     },
@@ -313,28 +312,28 @@ it('shows and opens a paired host’s pane under the window’s whole-tab mirror
         makeTab({
           id: mirrored,
           worktreeId: 'workspace',
-          ptyId: toRemoteRuntimePtyId(reopened, 'paired')
+          ptyId: toRemoteRuntimePtyId(located, 'paired')
         })
       ]
     }
   })
   publish('runtime:paired', [
-    { identity: 'dispatch:first', paneKey: pane('tab-2'), worktreeId: 'workspace' }
+    { identity: located, paneKey: pane('tab-2'), worktreeId: 'workspace' }
   ])
-  const sender = worker('term_before')
+  const sender = worker(located)
   const resolved = resolveAgentMessageSenderTarget(
     useAppStore.getState(),
     sender,
     'workspace',
     PAIRED,
-    'first'
+    undefined
   )
   expect(resolved.kind === 'located' && resolved.location).toMatchObject({
     paneKey: mirroredPane,
     hostPaneKey: pane('tab-2')
   })
   expect(agentMessageSenderOpens(resolved, sender)).toBe(true)
-  const avatar = renderHook(() => useAgentMessageSenderView(sender, 'workspace', PAIRED, 'first'))
+  const avatar = renderHook(() => useAgentMessageSenderView(sender, 'workspace', PAIRED))
   expect(avatar.result.current.dot).toBe('working')
   await open(sender, PAIRED)
   expect(calls).toEqual([])
@@ -349,12 +348,12 @@ it('shows and opens a paired host’s pane under the window’s whole-tab mirror
         makeTab({
           id: toWebTerminalSurfaceTabId(`tab-2::${LEAF}`),
           worktreeId: 'other',
-          ptyId: toRemoteRuntimePtyId(reopened, 'paired')
+          ptyId: toRemoteRuntimePtyId(located, 'paired')
         })
       ]
     }
   })
   expect(
-    resolveAgentMessageSenderTarget(useAppStore.getState(), sender, 'workspace', PAIRED, 'first')
+    resolveAgentMessageSenderTarget(useAppStore.getState(), sender, 'workspace', PAIRED, undefined)
   ).toEqual({ kind: 'gone', sender: 'terminal' })
 })
