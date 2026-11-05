@@ -52,6 +52,7 @@ export type PluginContributionSource = {
     filenames: readonly string[]
     /** Absent when only a catalog summary names the editor. */
     priority?: 'default' | 'option'
+    binaryFallback?: boolean
   }[]
   vmRecipes: readonly string[]
   newFiles: readonly { title: string; extension: string }[]
@@ -265,7 +266,17 @@ export function describePluginContributions(
   }
   for (const [index, editor] of source.customEditors.entries()) {
     const label = translate('auto.components.settings.PluginDetailSections.customEditor', 'Editor')
-    const files = fileList(editor.extensions, editor.filenames)
+    const files = [
+      fileList(editor.extensions, editor.filenames),
+      editor.binaryFallback
+        ? translate(
+            'auto.components.plugins.binaryFallback',
+            'Unsupported binary files (any file name)'
+          )
+        : null
+    ]
+      .filter(Boolean)
+      .join(', ')
     const takeover = customEditorTakeover(editor)
     rows.push({
       key: `customEditors:${index}`,

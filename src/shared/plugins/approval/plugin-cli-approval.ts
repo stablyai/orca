@@ -197,7 +197,7 @@ export function formatPluginApprovalMessage(request: PluginApprovalRequest, stal
   ]
   if (request.grants.contributions.length > 0) {
     lines.push(
-      `Adds: ${request.grants.contributions.map((item) => `${item.kind} "${item.name}"`).join(', ')}`
+      `Adds: ${request.grants.contributions.map((item) => `${item.kind} "${item.name}"${item.detail ? ` (${item.detail})` : ''}`).join(', ')}`
     )
   }
   lines.push(

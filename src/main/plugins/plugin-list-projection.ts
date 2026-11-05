@@ -187,6 +187,7 @@ export async function buildPluginList(
           filenames: editor.filenames,
           priority: editor.priority ?? 'default',
           contentKind: customEditorContentKind(editor),
+          binaryFallback: editor.binaryFallback ?? false,
           frame: customEditorFrame(editor),
           ...contributionIcon(`editor-${index}`, editor.icon)
         })),

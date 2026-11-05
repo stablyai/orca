@@ -1141,6 +1141,14 @@
             "bytes"
           ]
         },
+        "binaryFallback": {
+          "description": "Planned for Orca 1.4.250. `true` offers this bytes editor for unsupported binary files, regardless of file name. Eligible file-matched editors keep priority, with this fallback offered as an option beside them. Orca image, PDF, audio and video viewers keep their files. Requires `contentKind: bytes`. Defaults to `false`. The editor receives only the opened document; `option` never opens automatically.",
+          "x-orca-since": "1.4.250",
+          "examples": [
+            true
+          ],
+          "type": "boolean"
+        },
         "frame": {
           "description": "`any` (the default) runs in whatever frame the client gives. `isolated` runs only in the desktop app's isolated frame, never the browser-client fallback: browser clients, and desktop with isolated frames switched off, open the file in Source with a notice that the editor needs the Orca desktop app.",
           "x-orca-since": "1.4.248",
@@ -1160,7 +1168,7 @@
         "entry"
       ],
       "additionalProperties": false,
-      "description": "An editor for the listed files, shown in the editor tab beside Source. It must list at least one extension or file name. Requires the `sandboxed-ui` execution profile or higher."
+      "description": "An editor for the listed files, shown in the editor tab beside Source. It must list at least one extension or file name, or enable `binaryFallback` with `contentKind: bytes`. Requires the `sandboxed-ui` execution profile or higher."
     },
     "NewFileContribution": {
       "type": "object",

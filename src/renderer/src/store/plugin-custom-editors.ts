@@ -1,6 +1,13 @@
-import { useMemo } from 'react'
+import { useMemo, useSyncExternalStore } from 'react'
 import { create } from 'zustand'
 import type { PluginHostCustomEditor, PluginHostListEntry } from '../../../preload/api-types'
+import { filePreviewForPath, filePreviewExtension } from '../../../shared/file-preview-kind'
+import type { FileContent } from '@/components/editor/editor-panel-content-types'
+import {
+  pluginEditorCaptureStatus,
+  subscribePluginEditorCapture
+} from '@/components/editor/plugin-editor-capture-status'
+import type { OpenFile } from './slices/editor'
 import { matchPluginFile } from '../../../shared/plugins/contributions/plugin-file-match'
 import { customEditorMayOpenByDefault } from '../../../shared/plugins/contributions/plugin-custom-editor-core-file-types'
 import { isLivePlugin, keyedPluginContribution, usePluginListDerived } from './plugin-panels'
@@ -27,7 +34,7 @@ export function collectActivePluginCustomEditors(
   plugins: readonly PluginHostListEntry[]
 ): ActivePluginCustomEditor[] {
   return plugins
-    .filter(isLivePlugin)
+    .filter((plugin) => isLivePlugin(plugin) && !plugin.needsReconsent)
     .flatMap((plugin) =>
       (plugin.customEditors ?? []).map((editor) => keyedPluginContribution(plugin, editor))
     )
@@ -42,21 +49,66 @@ export function customEditorsForFile(
 ): ActivePluginCustomEditor[] {
   const matching = editors.flatMap((editor) => {
     const match = matchPluginFile(filePath, editor)
-    if (match === null) {
+    if (match === null && !editor.binaryFallback) {
       return []
     }
     const takesDefault =
-      editor.priority === 'default' && customEditorMayOpenByDefault(filePath, match)
+      editor.priority === 'default' &&
+      customEditorMayOpenByDefault(
+        filePath,
+        match ?? { by: 'extension', extension: filePreviewExtension(filePath) }
+      )
     if (takesDefault && editor.frame === 'isolated' && !isolatedFrames) {
       return [{ ...editor, priority: 'option' as const, frameUnavailable: true }]
     }
     return [{ ...editor, priority: takesDefault ? ('default' as const) : ('option' as const) }]
   })
   const byPlugin = (a: ActivePluginCustomEditor, b: ActivePluginCustomEditor): number =>
-    a.pluginKey < b.pluginKey ? -1 : a.pluginKey > b.pluginKey ? 1 : 0
+    a.key < b.key ? -1 : a.key > b.key ? 1 : 0
   return [
     ...matching.filter((editor) => editor.priority === 'default').sort(byPlugin),
-    ...matching.filter((editor) => editor.priority !== 'default')
+    ...matching.filter((editor) => editor.priority !== 'default').sort(byPlugin)
+  ]
+}
+
+/** Applies document eligibility after the owning loader has classified the file. */
+export function eligibleCustomEditorsForContent(
+  file: Pick<OpenFile, 'filePath' | 'mode' | 'conflict' | 'readOnly'>,
+  content: FileContent | undefined,
+  editors: readonly ActivePluginCustomEditor[],
+  readOnly = file.readOnly === true
+): ActivePluginCustomEditor[] {
+  if (
+    file.mode !== 'edit' ||
+    !content ||
+    content.loadError ||
+    content.csvPreview ||
+    file.conflict
+  ) {
+    return []
+  }
+  const eligible = editors.filter((editor) =>
+    editor.contentKind === 'bytes'
+      ? content.byteSource !== undefined
+      : !readOnly && !content.isBinary
+  )
+  const matched = eligible.filter((editor) => matchPluginFile(file.filePath, editor) !== null)
+  const fallback =
+    content.isBinary && !content.isImage && !content.mediaUrl && !filePreviewForPath(file.filePath)
+      ? eligible.filter(
+          (editor) =>
+            editor.binaryFallback &&
+            editor.contentKind === 'bytes' &&
+            matchPluginFile(file.filePath, editor) === null
+        )
+      : []
+  return [
+    ...matched,
+    ...fallback.map((editor) =>
+      matched.length === 0
+        ? editor
+        : { ...editor, priority: 'option' as const, frameUnavailable: false }
+    )
   ]
 }
 
@@ -120,5 +172,19 @@ export function useTabCustomEditor(file: {
     isEdit ? file.id : null,
     isEdit ? file.filePath : undefined
   )
-  return resolveCustomEditorChoice(customEditors, customEditorChoice)
+  const eligibility = useSyncExternalStore(subscribePluginEditorCapture, () =>
+    pluginEditorCaptureStatus(file.id)
+  )
+  const eligible =
+    eligibility?.filePath === file.filePath && eligibility.eligibleEditorKeys !== undefined
+      ? customEditors.filter((editor) => eligibility.eligibleEditorKeys?.includes(editor.key))
+      : customEditors.filter((editor) => matchPluginFile(file.filePath, editor) !== null)
+  if (
+    eligibility?.filePath === file.filePath &&
+    eligibility.defaultEditorKey !== undefined &&
+    customEditorChoice === undefined
+  ) {
+    return eligible.find((editor) => editor.key === eligibility.defaultEditorKey) ?? null
+  }
+  return resolveCustomEditorChoice(eligible, customEditorChoice)
 }

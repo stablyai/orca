@@ -113,7 +113,13 @@ export type PluginViewDrawnPanel = {
 
 export type PluginViewReply =
   /** `restored`: on `end-capture` after `--act`, whether the panel's atoms were put back. */
-  | { requestId: string; ok: true; panel?: PluginViewDrawnPanel; restored?: boolean }
+  | {
+      requestId: string
+      ok: true
+      panel?: PluginViewDrawnPanel
+      restored?: boolean
+      editor?: { id: string; title: string }
+    }
   | { requestId: string; ok: false; code: string; message: string }
 
 /** The renderer could not show the view; `code` is a stable reason callers may branch on. */

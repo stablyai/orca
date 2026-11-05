@@ -1,3 +1,4 @@
+import { clearPluginEditorContent } from '../../plugin-editor-capture-status'
 import type { StoreApi } from 'zustand'
 import type { editor } from 'monaco-editor'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
@@ -254,6 +255,7 @@ export function attachClosedEditorTabCleanup(
         liveFile.filePath !== file.filePath ||
         (file.mode === 'edit' && ownerKeyOf(liveFile, currentState) !== priorOwnerOf(file))
       ) {
+        clearPluginEditorContent(file.id)
         const descriptor = {
           id: file.id,
           mode: file.mode,

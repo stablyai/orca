@@ -91,6 +91,27 @@ describe('resolvePluginViewEditor', () => {
     ).resolves.toEqual({ pluginKey: KEY, editorId: 'notes', title: 'Notes' })
   })
 
+  it('offers a bytes fallback candidate without reading the file in main', async () => {
+    const fallback = {
+      id: 'hex',
+      title: 'Hex',
+      extensions: [],
+      filenames: [],
+      binaryFallback: true,
+      contentKind: 'bytes'
+    }
+    await expect(
+      resolvePluginViewEditor(source('idle', { customEditors: [fallback] }), KEY, '/w/unlisted')
+    ).resolves.toEqual({ pluginKey: KEY, editorId: 'hex', title: 'Hex' })
+    await expect(
+      resolvePluginViewEditor(
+        source('idle', { customEditors: [fallback, ...editors] }),
+        KEY,
+        '/w/plan.notes'
+      )
+    ).resolves.toEqual({ pluginKey: KEY, editorId: 'notes', title: 'Notes' })
+  })
+
   it('says which files its editors open when none takes this one', async () => {
     await expect(
       resolvePluginViewEditor(source('idle', { customEditors: editors }), KEY, '/w/plan.md')

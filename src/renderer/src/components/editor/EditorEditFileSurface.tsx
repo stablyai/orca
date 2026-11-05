@@ -185,7 +185,7 @@ export function EditorEditFileSurface({
     }
     return (
       <div className="flex h-full flex-col">
-        <PluginEditorSourceFallbackNotice fileId={activeFile.id} filePath={activeFile.filePath} />
+        <PluginEditorSourceFallbackNotice file={activeFile} fileContent={fileContent} />
         <PluginFileTypeSuggestion filePath={activeFile.filePath} />
         <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
           {translate(
@@ -363,7 +363,7 @@ export function EditorEditFileSurface({
     <div className="flex flex-1 min-h-0 flex-col">
       {externalChangeBanner}
       {customEditor ? null : (
-        <PluginEditorSourceFallbackNotice fileId={activeFile.id} filePath={activeFile.filePath} />
+        <PluginEditorSourceFallbackNotice file={activeFile} fileContent={fileContent} />
       )}
       {customEditor ? null : (
         <PluginFileTypeSuggestion

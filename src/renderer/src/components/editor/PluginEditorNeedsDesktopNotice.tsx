@@ -2,7 +2,12 @@ import { Monitor } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { isWebClientLocation } from '@/lib/web-client-location'
-import { useFileCustomEditors } from '@/store/plugin-custom-editors'
+import type { OpenFile } from '@/store/slices/editor'
+import type { FileContent } from './editor-panel-content-types'
+import {
+  eligibleCustomEditorsForContent,
+  useFileCustomEditors
+} from '@/store/plugin-custom-editors'
 
 function detail(title: string): string {
   return isWebClientLocation()
@@ -75,14 +80,16 @@ export function PluginEditorNeedsDesktopNotice({
 
 /** The strip above Source when the file opened there because its default editor cannot run. */
 export function PluginEditorSourceFallbackNotice({
-  fileId,
-  filePath
+  file,
+  fileContent
 }: {
-  fileId: string
-  filePath: string
+  file: OpenFile
+  fileContent: FileContent
 }): React.JSX.Element | null {
-  const { customEditors, customEditorChoice } = useFileCustomEditors(fileId, filePath)
-  const unavailable = customEditors.find((editor) => editor.frameUnavailable)
+  const { customEditors, customEditorChoice } = useFileCustomEditors(file.id, file.filePath)
+  const unavailable = eligibleCustomEditorsForContent(file, fileContent, customEditors).find(
+    (editor) => editor.frameUnavailable
+  )
   // Why not after a pick: choosing Source is a choice, not a fallback worth explaining.
   if (!unavailable || customEditorChoice !== undefined) {
     return null

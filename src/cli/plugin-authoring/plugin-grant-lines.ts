@@ -3,7 +3,7 @@ export type PluginGrantSummary = {
   execution: string
   executionDescription: string
   capabilities: { description: string }[]
-  contributions: { kind: string; name: string }[]
+  contributions: { kind: string; name: string; detail?: string }[]
 }
 
 type GrantSubject = { pluginKey: string; version: string; grants: PluginGrantSummary }
@@ -15,6 +15,8 @@ export function formatPluginGrantLines(subject: GrantSubject): string[] {
     `${subject.pluginKey} ${subject.version} (${grants.execution})`,
     `  ${grants.executionDescription}`,
     ...grants.capabilities.map((capability) => `  - ${capability.description}`),
-    ...grants.contributions.map((item) => `  adds ${item.kind}: ${item.name}`)
+    ...grants.contributions.map(
+      (item) => `  adds ${item.kind}: ${item.name}${item.detail ? ` (${item.detail})` : ''}`
+    )
   ]
 }

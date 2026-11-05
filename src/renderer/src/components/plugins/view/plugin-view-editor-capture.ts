@@ -4,7 +4,7 @@ import {
   type PluginViewReply
 } from '../../../../../shared/plugins/view/plugin-view-protocol'
 import {
-  pluginEditorCaptureStatus,
+  pluginEditorCaptureStatuses,
   subscribePluginEditorCapture,
   type PluginEditorCaptureStatus
 } from '@/components/editor/plugin-editor-capture-status'
@@ -25,8 +25,10 @@ export function waitForPluginEditor(
     let unsubscribe = (): void => {}
     let timer: ReturnType<typeof setTimeout> | undefined
     const check = (final: boolean): void => {
-      const status = pluginEditorCaptureStatus(fileId)
-      const met = status !== null && done(status)
+      const snapshots = pluginEditorCaptureStatuses(fileId)
+      const matching = snapshots.find(done)
+      const status = matching ?? snapshots[0] ?? null
+      const met = matching !== undefined
       if (met || final) {
         clearTimeout(timer)
         unsubscribe()
@@ -39,13 +41,22 @@ export function waitForPluginEditor(
   })
 }
 
-function editorFrameOf(fileId: string): Element | null {
-  const surface = document.querySelector(`[data-plugin-editor-surface="${CSS.escape(fileId)}"]`)
+function editorFrameOf(
+  fileId: string,
+  frameName?: string,
+  frameKey?: string | null
+): Element | null {
+  const selector = `[data-plugin-editor-surface="${CSS.escape(fileId)}"]${frameName ? `[data-plugin-editor-frame="${CSS.escape(frameName)}"]` : ''}${frameKey ? `[data-plugin-editor-frame-key="${CSS.escape(frameKey)}"]` : ''}`
+  const surface = document.querySelector(selector)
   return surface?.querySelector('webview, iframe') ?? null
 }
 
-function measureEditorFrame(fileId: string): Rect | null {
-  const frame = editorFrameOf(fileId)
+function measureEditorFrame(
+  fileId: string,
+  frameName?: string,
+  frameKey?: string | null
+): Rect | null {
+  const frame = editorFrameOf(fileId, frameName, frameKey)
   if (!frame) {
     return null
   }
@@ -54,8 +65,12 @@ function measureEditorFrame(fileId: string): Rect | null {
 }
 
 /** This tab's guest: another tab of the same editor loads the same URL. */
-function editorGuestContentsId(fileId: string): number | undefined {
-  const frame = editorFrameOf(fileId)
+function editorGuestContentsId(
+  fileId: string,
+  frameName?: string,
+  frameKey?: string | null
+): number | undefined {
+  const frame = editorFrameOf(fileId, frameName, frameKey)
   if (!frame || !('getWebContentsId' in frame) || typeof frame.getWebContentsId !== 'function') {
     return undefined
   }
@@ -76,14 +91,30 @@ const refuse = (requestId: string, code: string, message: string): PluginViewRep
   message
 })
 
-const loaded = (status: PluginEditorCaptureStatus): boolean =>
+export const pluginEditorStatusMatches = (
+  status: PluginEditorCaptureStatus,
+  editorKey: string
+): boolean =>
+  status.editorKey === editorKey || status.frameKey?.startsWith(`${editorKey}:`) === true
+
+export const pluginEditorFailureApplies = (
+  status: PluginEditorCaptureStatus,
+  editorKey?: string
+): boolean =>
+  status.failure != null &&
+  (status.failure.editorKey === undefined ||
+    editorKey === undefined ||
+    status.failure.editorKey === editorKey)
+
+export const pluginEditorDocumentLoaded = (status: PluginEditorCaptureStatus): boolean =>
   status.frame === 'ready' && status.delivered
 
 /** Waits for the open file's editor frame to get its document and ask for it, then measures it. */
 export async function captureOpenEditor(
   requestId: string,
   fileId: string,
-  capture: PluginViewEditorCapture
+  capture: PluginViewEditorCapture,
+  editorKey?: string
 ): Promise<PluginViewReply> {
   // The capture reloads an open editor's frame, so edits still in its debounce window go first.
   if (!(await flushEditorFrames(useAppStore.getState(), fileId))) {
@@ -110,14 +141,52 @@ export async function captureOpenEditor(
     }
   })
   const loadNumber = usePluginViewCaptureStore.getState().editorLoads[fileId] ?? 0
+  const currentGeneration = (status: PluginEditorCaptureStatus): boolean =>
+    status.captureId === capture.captureId && status.captureLoad === loadNumber
+  const selectedEditor = (status: PluginEditorCaptureStatus): boolean =>
+    editorKey === undefined || pluginEditorStatusMatches(status, editorKey)
+  const contentFailed = (status: PluginEditorCaptureStatus): boolean =>
+    status.contentReady === true &&
+    ((status.failure != null && status.failure.editorKey === undefined) ||
+      (editorKey !== undefined &&
+        status.eligibleEditorKeys !== undefined &&
+        !status.eligibleEditorKeys.includes(editorKey)))
+  const terminal = (status: PluginEditorCaptureStatus): boolean =>
+    currentGeneration(status) &&
+    selectedEditor(status) &&
+    (pluginEditorFailureApplies(status, editorKey) ||
+      status.frame === 'error' ||
+      status.frame === 'unresponsive')
+  const loaded = (status: PluginEditorCaptureStatus): boolean =>
+    currentGeneration(status) && selectedEditor(status) && pluginEditorDocumentLoaded(status)
   const load = await waitForPluginEditor(
     fileId,
     (status) =>
-      status.frame === 'error' ||
-      status.frame === 'unresponsive' ||
-      (status.frameKey?.endsWith(`:${loadNumber}`) === true && loaded(status)),
+      contentFailed(status) ||
+      loaded(status) ||
+      (terminal(status) &&
+        !pluginEditorCaptureStatuses(fileId).some(
+          (sibling) => selectedEditor(sibling) && !terminal(sibling) && !loaded(sibling)
+        )),
     capture.timeoutMs
   )
+  if (!load.met) {
+    return refuse(
+      requestId,
+      'editor_document_unavailable',
+      'The selected editor did not receive its document in time.'
+    )
+  }
+  if (load.status && contentFailed(load.status) && !load.status.failure) {
+    return refuse(
+      requestId,
+      'editor_ineligible',
+      'The selected editor can no longer open the loaded document.'
+    )
+  }
+  if (load.status?.failure && pluginEditorFailureApplies(load.status, editorKey)) {
+    return refuse(requestId, load.status.failure.code, load.status.failure.message)
+  }
   const frame = load.status?.frame
   if (frame === 'error' || frame === 'unresponsive') {
     return {
@@ -133,19 +202,46 @@ export async function captureOpenEditor(
   const subscription = load.met
     ? await waitForPluginEditor(
         fileId,
-        (status) => status.subscribed,
+        (status) =>
+          currentGeneration(status) &&
+          status.frameName === load.status?.frameName &&
+          status.frameKey === load.status?.frameKey &&
+          status.subscribed,
         PLUGIN_EDITOR_SUBSCRIBE_TIMEOUT_MS
       )
     : { met: false }
   await waitForColorScheme(wantDark)
   await nextPaintedFrames()
-  const rect = measureEditorFrame(fileId)
+  const currentCapture = usePluginViewCaptureStore.getState()
+  const live = pluginEditorCaptureStatuses(fileId).find(
+    (status) =>
+      loaded(status) &&
+      !contentFailed(status) &&
+      !pluginEditorFailureApplies(status, editorKey) &&
+      status.frameName === load.status?.frameName &&
+      status.frameKey === load.status?.frameKey &&
+      status.guestUrl === load.status?.guestUrl
+  )
+  if (
+    currentCapture.owner !== capture.captureId ||
+    currentCapture.editorLoads[fileId] !== loadNumber ||
+    !live
+  ) {
+    return refuse(
+      requestId,
+      'editor_changed_during_capture',
+      'The editor changed while its capture was being prepared. Try the capture again.'
+    )
+  }
+  const rect = measureEditorFrame(fileId, live.frameName, live.frameKey)
   if (!rect) {
     return refuse(requestId, 'editor_hidden', 'The editor is not on screen.')
   }
   const dark = document.documentElement.classList.contains('dark')
-  const guestUrl = load.status?.guestUrl ?? null
-  const guestContentsId = guestUrl ? editorGuestContentsId(fileId) : undefined
+  const guestUrl = live.guestUrl
+  const guestContentsId = guestUrl
+    ? editorGuestContentsId(fileId, live.frameName, live.frameKey)
+    : undefined
   return {
     requestId,
     ok: true,

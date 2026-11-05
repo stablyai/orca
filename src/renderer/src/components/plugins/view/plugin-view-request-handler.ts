@@ -29,7 +29,13 @@ import { restoreActedPanel, settleAndActOnPanel } from './plugin-view-capture-ac
 import { pluginPanelNotShownReason } from './plugin-view-shown'
 import { endPluginShotReplay, replayPluginPanel } from './plugin-view-replay'
 import { showWorkspaceForFile } from './plugin-view-editor-workspace'
-import { captureOpenEditor } from './plugin-view-editor-capture'
+import {
+  captureOpenEditor,
+  waitForPluginEditor,
+  pluginEditorDocumentLoaded,
+  pluginEditorStatusMatches,
+  pluginEditorFailureApplies
+} from './plugin-view-editor-capture'
 import { planEditorShotCleanup, runEditorShotCleanup } from './plugin-view-editor-shot-cleanup'
 import { captureChrome } from './plugin-view-chrome-capture'
 import { pickWorkspaceToShow } from './plugin-view-workspace-pick'
@@ -175,9 +181,8 @@ async function openEditor(
 ): Promise<PluginViewReply> {
   const { requestId, pluginKey, editorId, filePath, capture } = request
   await usePluginPanelsStore.getState().fetchPlugins()
-  const editor = collectActivePluginCustomEditors(usePluginPanelsStore.getState().plugins).find(
-    (entry) => entry.pluginKey === pluginKey && entry.id === editorId
-  )
+  const editors = collectActivePluginCustomEditors(usePluginPanelsStore.getState().plugins)
+  const editor = editors.find((entry) => entry.pluginKey === pluginKey && entry.id === editorId)
   if (!editor) {
     return fail(
       requestId,
@@ -205,17 +210,78 @@ async function openEditor(
     },
     { preview: false }
   )
-  useCustomEditorViewStore.getState().setChoice(fileId, editor.key)
-  if (!capture) {
-    return { requestId, ok: true }
+  if (capture) {
+    planEditorShotCleanup(capture.captureId, {
+      fileId,
+      openedByShot: !openBefore.has(fileId) && !capture.keepOpen,
+      scratchRepoId: capture.scratch ? (workspace.addedRepoId ?? null) : null,
+      previousWorktreeId
+    })
   }
-  planEditorShotCleanup(capture.captureId, {
+  const timeoutMs = capture?.timeoutMs ?? 8_000
+  const deadline = Date.now() + timeoutMs
+  const remaining = (): number => Math.max(0, deadline - Date.now())
+  const content = await waitForPluginEditor(
     fileId,
-    openedByShot: !openBefore.has(fileId) && !capture.keepOpen,
-    scratchRepoId: capture.scratch ? (workspace.addedRepoId ?? null) : null,
-    previousWorktreeId
-  })
-  return captureOpenEditor(requestId, fileId, capture)
+    (status) =>
+      status.contentReady === true &&
+      status.filePath === workspace.filePath &&
+      ((status.failure != null && status.failure.editorKey === undefined) ||
+        status.eligibleEditorKeys !== undefined),
+    remaining()
+  )
+  if (content.status?.failure && content.status.failure.editorKey === undefined) {
+    return fail(requestId, content.status.failure.code, content.status.failure.message)
+  }
+  if (!content.met) {
+    return fail(
+      requestId,
+      'editor_read_failed',
+      'The file could not be loaded for the editor in time.'
+    )
+  }
+  const eligibleKeys = content.status?.eligibleEditorKeys ?? []
+  const selected =
+    editors.find((entry) => entry.key === editor.key && eligibleKeys.includes(entry.key)) ??
+    editors.find((entry) => entry.pluginKey === pluginKey && eligibleKeys.includes(entry.key))
+  if (!selected) {
+    return fail(
+      requestId,
+      'editor_ineligible',
+      'No editor from this plugin can open the loaded document.'
+    )
+  }
+  useCustomEditorViewStore.getState().setChoice(fileId, selected.key)
+  if (!capture) {
+    const opened = await waitForPluginEditor(
+      fileId,
+      (status) =>
+        pluginEditorFailureApplies(status, selected.key) ||
+        (pluginEditorStatusMatches(status, selected.key) &&
+          (status.frame === 'error' ||
+            status.frame === 'unresponsive' ||
+            pluginEditorDocumentLoaded(status))),
+      remaining()
+    )
+    if (opened.status?.failure && pluginEditorFailureApplies(opened.status, selected.key)) {
+      return fail(requestId, opened.status.failure.code, opened.status.failure.message)
+    }
+    if (!opened.met || opened.status?.frame !== 'ready') {
+      return fail(
+        requestId,
+        'editor_document_unavailable',
+        'The selected editor could not load its document.'
+      )
+    }
+    return { requestId, ok: true, editor: { id: selected.id, title: selected.title } }
+  }
+  const reply = await captureOpenEditor(
+    requestId,
+    fileId,
+    { ...capture, timeoutMs: remaining() },
+    selected.key
+  )
+  return reply.ok ? { ...reply, editor: { id: selected.id, title: selected.title } } : reply
 }
 
 export async function handlePluginViewRequest(

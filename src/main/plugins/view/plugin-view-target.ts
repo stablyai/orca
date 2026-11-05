@@ -88,7 +88,9 @@ export async function resolvePluginViewEditor(
 ): Promise<PluginViewEditorTarget> {
   const { plugin } = await liveEntry(source, pluginKey)
   const editors = plugin.manifest.contributes.customEditors
-  const editor = editors.find((entry) => matchPluginFile(filePath, entry) !== null)
+  const editor =
+    editors.find((entry) => matchPluginFile(filePath, entry) !== null) ??
+    editors.find((entry) => entry.binaryFallback && entry.contentKind === 'bytes')
   if (!editor) {
     throw refuse(
       editors.length === 0

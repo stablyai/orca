@@ -84,7 +84,18 @@ export function pluginContributionSummary(
     ...named('terminalThemes', c.terminalThemes, (theme) => theme.title),
     ...named('iconThemes', c.iconThemes, (theme) => theme.title),
     ...named('syntaxes', c.syntaxes, (syntax) => syntax.title, fileMatchDetail),
-    ...named('customEditors', c.customEditors, (editor) => editor.title, fileMatchDetail),
+    ...named(
+      'customEditors',
+      c.customEditors,
+      (editor) => editor.title,
+      (editor) =>
+        [
+          fileMatchDetail(editor),
+          editor.binaryFallback ? 'Unsupported binary files (any file name)' : undefined
+        ]
+          .filter(Boolean)
+          .join(', ') || undefined
+    ),
     ...named(
       'newFiles',
       c.newFiles,

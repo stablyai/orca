@@ -25,9 +25,10 @@ import {
   resolveCustomEditorToggle,
   type CustomEditorToggle
 } from './view-mode/custom-editor-toggle'
-import type {
-  ActivePluginCustomEditor,
-  CustomEditorViewChoice
+import {
+  eligibleCustomEditorsForContent,
+  type ActivePluginCustomEditor,
+  type CustomEditorViewChoice
 } from '@/store/plugin-custom-editors'
 
 type StoreState = ReturnType<typeof useAppStore.getState>
@@ -139,20 +140,11 @@ export function getEditorPanelRenderModel({
       ? editorToggleModes.filter((mode) => mode !== 'changes')
       : editorToggleModes
   const inlineFileContent = activeFile.mode === 'edit' ? fileContents[activeFile.id] : undefined
-  const customEditorContentReady =
-    activeFile.mode === 'edit' &&
-    inlineFileContent !== undefined &&
-    !inlineFileContent.loadError &&
-    inlineFileContent.csvPreview === undefined &&
-    activeFile.conflict === undefined
-  // Read-only tabs keep raw source, as for every other rich view.
-  const textEditorEligible =
-    customEditorContentReady && !rawReadOnly && inlineFileContent?.isBinary !== true
-  // Bytes editors honor read-only themselves, so they open read-only tabs too; they need a pageable route.
-  const bytesEditorEligible =
-    customEditorContentReady && inlineFileContent?.byteSource !== undefined
-  const eligibleCustomEditors = customEditors.filter((editor) =>
-    editor.contentKind === 'bytes' ? bytesEditorEligible : textEditorEligible
+  const eligibleCustomEditors = eligibleCustomEditorsForContent(
+    activeFile,
+    inlineFileContent,
+    customEditors,
+    rawReadOnly
   )
   const customEditorToggle: CustomEditorToggle | null = resolveCustomEditorToggle({
     editors: eligibleCustomEditors,

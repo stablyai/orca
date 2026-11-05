@@ -17,7 +17,9 @@ const firstLoadApprovalSchema = z.object({
     execution: z.string(),
     executionDescription: z.string(),
     capabilities: z.array(z.object({ description: z.string() })),
-    contributions: z.array(z.object({ kind: z.string(), name: z.string() }))
+    contributions: z.array(
+      z.object({ kind: z.string(), name: z.string(), detail: z.string().optional() })
+    )
   })
 })
 

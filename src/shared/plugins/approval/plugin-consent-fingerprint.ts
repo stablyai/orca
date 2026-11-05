@@ -66,7 +66,7 @@ export function canonicalizePluginConsent(
   const declarativeIdentity = hasDeclarativePluginContributions(manifest)
     ? `\0instructional-content:${contentIdentity ?? 'unresolved'}`
     : ''
-  return `${capabilities}${executionIdentity}${workerIdentity}${executableIdentity}${declarativeIdentity}${replacementIdentity(manifest)}`
+  return `${capabilities}${executionIdentity}${workerIdentity}${executableIdentity}${declarativeIdentity}${replacementIdentity(manifest)}${binaryFallbackIdentity(manifest)}`
 }
 
 /** Taking over a built-in action needs its own approval, also for a dev folder whose code may
@@ -88,4 +88,13 @@ export function fingerprintPluginConsent(
   return `sha256-${createHash('sha256')
     .update(canonicalizePluginConsent(manifest, contentIdentity))
     .digest('base64')}`
+}
+
+function binaryFallbackIdentity(manifest: PluginConsentSubject): string {
+  const editors = (manifest.contributes?.customEditors ?? [])
+    .flatMap((editor) =>
+      isPluginJsonObject(editor) && editor.binaryFallback === true ? [String(editor.id)] : []
+    )
+    .sort()
+  return editors.length > 0 ? `\0binary-fallback:${JSON.stringify(editors)}` : ''
 }

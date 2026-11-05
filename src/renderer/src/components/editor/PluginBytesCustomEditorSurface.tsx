@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
+import React, { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { translate } from '@/i18n/i18n'
 import { basename } from '@/lib/path'
 import { readRuntimeFileBytes } from '@/runtime/runtime-paged-file-read'
@@ -11,6 +11,11 @@ import { Button } from '../ui/button'
 import type { OpenFile } from '@/store/slices/editor'
 import type { FileContent } from './editor-panel-content-types'
 import PluginCustomEditorFrame from './PluginCustomEditorFrame'
+import {
+  reportPluginEditorFailure,
+  withdrawPluginEditorFrame,
+  usePluginEditorCaptureView
+} from './plugin-editor-capture-status'
 import { ExternalFileChangeBanner } from './external-changes/ExternalFileChangeBanner'
 import {
   editorBytesDocument,
@@ -69,6 +74,8 @@ export default function PluginBytesCustomEditorSurface({
   onSave: (content: string) => Promise<boolean>
   reloadContent: (file: OpenFile) => void
 }): React.JSX.Element {
+  const failureOwner = useRef(Symbol('bytes-surface')).current
+  const { captureLoad } = usePluginEditorCaptureView(file.id)
   const [state, setState] = useState<BytesState>({ status: 'ok' })
   const [attempt, setAttempt] = useState(0)
   const { id: fileId, filePath } = file
@@ -127,6 +134,23 @@ export default function PluginBytesCustomEditorSurface({
       cancelled = true
     }
   }, [loadKey, source, fileType, attempt, fileId])
+
+  useEffect(() => {
+    if (state.status !== 'ok') {
+      reportPluginEditorFailure(
+        fileId,
+        failureOwner,
+        state.status === 'too_large' ? 'editor_document_too_large' : 'editor_read_failed',
+        state.status === 'too_large'
+          ? 'The document exceeds the editor’s 64 MiB limit.'
+          : state.status === 'error'
+            ? state.message
+            : 'This host cannot deliver bytes to the editor.',
+        editor.key
+      )
+    }
+    return () => withdrawPluginEditorFrame(fileId, failureOwner)
+  }, [fileId, state, editor.key, failureOwner, captureLoad])
 
   const name = basename(filePath)
   if (state.status === 'too_large') {

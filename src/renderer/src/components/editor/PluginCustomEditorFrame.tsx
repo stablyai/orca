@@ -170,7 +170,16 @@ export default function PluginCustomEditorFrame({
     fileId,
     entry.status,
     guest?.url ?? null,
-    frameKey
+    frameKey,
+    entry.status === 'ready' && !guest && editor.frame === 'isolated'
+      ? {
+          code: 'editor_frame_unavailable',
+          message: 'This editor requires an isolated desktop frame.',
+          editorKey: editor.key
+        }
+      : null,
+    editor.key,
+    frameName
   )
   useLayoutEffect(() => {
     progressRef.current = reportProgress
@@ -270,6 +279,8 @@ export default function PluginCustomEditorFrame({
       className="flex h-full min-h-0 flex-col"
       style={captureSize ?? undefined}
       data-plugin-editor-surface={fileId}
+      data-plugin-editor-frame={frameName}
+      data-plugin-editor-frame-key={frameKey ?? undefined}
     >
       {saveBlocked ? (
         <div className="border-b border-border px-3 py-1.5 text-xs text-destructive">
