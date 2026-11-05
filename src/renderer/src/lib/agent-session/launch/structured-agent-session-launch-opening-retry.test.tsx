@@ -22,7 +22,8 @@ import {
   getStructuredLaunchStateBySessionId,
   getStructuredAgentSessionLaunchLifecycle,
   resetStructuredAgentLaunchRegistryForTests,
-  getStructuredAgentSessionLaunchFailure
+  getStructuredAgentSessionLaunchFailure,
+  subscribeStructuredAgentLaunchStatus
 } from './structured-agent-session-launch-registry'
 import {
   resetStructuredAgentLaunchPersistenceForTests,
@@ -164,6 +165,10 @@ it.each([
         cancelStructuredAgentLaunch('workspace-1', launch.sessionId)
       })
     }
+    const lateNotifications = vi.fn()
+    const stopWatching = subscribeStructuredAgentLaunchStatus(lateNotifications)
+    const lateWrites = vi.spyOn(localStorage, 'setItem')
+    lateWrites.mockClear()
     await act(async () => {
       if (proof === 'receipt') {
         const success = created(original)
@@ -184,6 +189,14 @@ it.each([
       }
       await vi.advanceTimersByTimeAsync(0)
     })
+    if (cancel && proof === 'receipt') {
+      expect(lateNotifications).not.toHaveBeenCalled()
+      expect(
+        lateWrites.mock.calls.filter(([key]) => key === 'orca:structuredAgentLaunches:v1')
+      ).toHaveLength(0)
+    }
+    stopWatching()
+    lateWrites.mockRestore()
     expect(getStructuredAgentSessionLaunchLifecycle('workspace-1', launch.sessionId)).toBe(
       cancel ? 'cancelled' : 'published'
     )
