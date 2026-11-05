@@ -229,7 +229,6 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     rewind,
     conversationCommands,
     accountUsage,
-    accountUsageFence: state.fence,
     compactInstructions,
     ...structuredConversationCommandRunner({
       agentName,

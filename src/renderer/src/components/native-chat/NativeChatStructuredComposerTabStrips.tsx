@@ -18,7 +18,6 @@ export function NativeChatStructuredComposerTabStrips(props: {
 }): React.JSX.Element {
   return (
     <>
-      {props.transport.accountUsage?.card}
       <NativeChatStructuredGoalStrip {...props} sessionId={props.transport.sessionId} />
       <NativeChatStructuredWorkerLifetimeStrip
         tabId={props.tabId}

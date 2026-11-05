@@ -1,6 +1,6 @@
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { useRef, useState } from 'react'
-import { Loader2, X } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
@@ -60,13 +60,11 @@ export function NativeChatAccountUsageCard({
   result,
   notice,
   target,
-  onDismiss,
   onRetry
 }: {
   result: AgentSessionAccountUsage | null
   notice: string | null
   target: RuntimeClientTarget
-  onDismiss: () => void
   onRetry: (notice?: string | null) => void
 }): React.JSX.Element {
   const display = normalizeUsagePercentageDisplay(useAppStore((s) => s.usagePercentageDisplay))
@@ -90,44 +88,32 @@ export function NativeChatAccountUsageCard({
               )
           : null
   return (
-    <div className="relative rounded-md border bg-card p-3 text-sm text-foreground">
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-xs"
-        className="absolute right-1 top-1"
-        onClick={onDismiss}
-        aria-label={translate('components.native-chat.usage.dismiss', 'Dismiss Codex usage')}
-      >
-        <X className="size-3.5" />
-      </Button>
-      <div className="pr-5">
-        {result?.status === 'ok' ? (
-          <>
-            <div className="mb-2 text-xs text-muted-foreground">
-              {translate('components.native-chat.usage.account', 'Account used by this chat')}
-            </div>
-            <ProviderIdentityCard
-              p={result.rateLimits}
-              accountLabel={chatAccountLabel(result.account)}
-              usagePercentageDisplay={display}
-              footer={<ChatUsageReset result={result} target={target} onRefresh={onRetry} />}
-            />
-          </>
-        ) : (
-          <div className="flex items-center gap-2">
-            {result === null ? <Loader2 className="size-4 animate-spin" /> : null}
-            {message}
-            {result?.status === 'failed' ? (
-              <Button variant="outline" size="xs" onClick={() => onRetry(notice)}>
-                {translate('components.native-chat.usage.retry', 'Retry')}
-              </Button>
-            ) : null}
+    <div className="p-3 text-sm text-foreground">
+      {result?.status === 'ok' ? (
+        <>
+          <div className="mb-2 text-xs text-muted-foreground">
+            {translate('components.native-chat.usage.account', 'Account used by this chat')}
           </div>
-        )}
-        {/* A reset's outcome outlives the refresh it triggered, whether that refresh succeeds or not. */}
-        {notice ? <div className="mt-2 text-xs text-muted-foreground">{notice}</div> : null}
-      </div>
+          <ProviderIdentityCard
+            p={result.rateLimits}
+            accountLabel={chatAccountLabel(result.account)}
+            usagePercentageDisplay={display}
+            footer={<ChatUsageReset result={result} target={target} onRefresh={onRetry} />}
+          />
+        </>
+      ) : (
+        <div className="flex items-center gap-2">
+          {result === null ? <Loader2 className="size-4 animate-spin" /> : null}
+          {message}
+          {result?.status === 'failed' ? (
+            <Button variant="outline" size="xs" onClick={() => onRetry(notice)}>
+              {translate('components.native-chat.usage.retry', 'Retry')}
+            </Button>
+          ) : null}
+        </div>
+      )}
+      {/* A reset's outcome outlives the refresh it triggered, whether that refresh succeeds or not. */}
+      {notice ? <div className="mt-2 text-xs text-muted-foreground">{notice}</div> : null}
     </div>
   )
 }

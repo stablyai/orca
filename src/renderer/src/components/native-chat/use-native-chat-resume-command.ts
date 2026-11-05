@@ -96,6 +96,8 @@ export function useNativeChatResumeCommand(args: {
   const openUsage = useCallback(
     (draft: string): void => {
       const rest = draft.replace(/^\/\S+\s*/, '')
+      // Focus before opening so closing the modal returns to the editor even after a Send click.
+      textareaRef.current?.focus()
       usage?.open()
       setDraft(rest)
       setCaret(rest.length)
