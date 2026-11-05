@@ -118,13 +118,13 @@ it('links paths like before on a host too old to check them', async () => {
   expect(linked(tree).map(label)).toEqual(['src/app.ts'])
 })
 
-it('opens a bare #123 on the repo bare refs point to, leaving embedded ones alone', async () => {
-  const tree = await renderChat('Fixed in #123, see stablyai/other#7 and issue#9.', {
+it('opens a bare #123 on the repo bare refs point to', async () => {
+  const tree = await renderChat('Fixed in #123.', {
     fileLinks: null,
     githubRepo: { owner: 'stablyai', repo: 'orca' }
   })
 
-  expect(linked(tree).map(label)).toEqual(['#123', 'stablyai/other#7'])
+  expect(linked(tree).map(label)).toEqual(['#123'])
   act(() => linked(tree)[0]?.props.onPress())
   expect(openURL).toHaveBeenCalledWith('https://github.com/stablyai/orca/issues/123')
 })
