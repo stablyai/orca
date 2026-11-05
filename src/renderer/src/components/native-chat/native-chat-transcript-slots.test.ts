@@ -67,6 +67,32 @@ function toolRun(id: string): NativeChatMessage {
 }
 
 describe('transcript slots', () => {
+  it('draws the completed plan outside collapsed work', () => {
+    const plan: NativeChatMessage = {
+      ...text('plan', '# Proposed change', 'system'),
+      blocks: [{ type: 'text', text: '# Proposed change', presentation: 'plan-document' }]
+    }
+    const slots = build(
+      [
+        text('u', 'Plan the change.', 'user'),
+        text('preamble', 'Inspecting.'),
+        toolRun('work'),
+        plan
+      ],
+      {
+        turnStatuses: {
+          active: null,
+          completedByTurn: { u: { startedAt: 1, thinking: false, workedSeconds: 4 } }
+        }
+      }
+    )
+    expect(slots.map((slot) => [slot.message.id, slot.drawsMessage, slot.folded])).toEqual([
+      ['u', true, false],
+      ['preamble', true, false],
+      ['plan', true, false]
+    ])
+  })
+
   it('shows unresolved historical input without a timer or unanchored live attribution', () => {
     const message = text('follow-up', 'keep this text', 'user')
     const items: AgentJournalRenderItem[] = [
