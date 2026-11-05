@@ -5,6 +5,7 @@ import { decodeSafariBinaryCookies } from './browser-cookie-safari-parser'
 import { importValidatedCookies, cookieImportTarget } from '../browser-cookie-import-pipeline'
 import type { DetectedBrowser } from './browser-cookie-source-profiles'
 import { diag } from '../browser-cookie-import-diagnostics'
+import { isMacPrivacyDenial } from './browser-cookie-macos-privacy-denial'
 
 export async function importCookiesFromSafari(
   browser: DetectedBrowser,
@@ -17,10 +18,7 @@ export async function importCookiesFromSafari(
     data = readFileSync(browser.cookiesPath)
   } catch (err) {
     diag(`  Safari read failed: ${String(err)}`)
-    // Safari’s sandboxed cookie file requires Full Disk Access.
-    const isPermError =
-      err instanceof Error && 'code' in err && (err as NodeJS.ErrnoException).code === 'EPERM'
-    if (isPermError) {
+    if (isMacPrivacyDenial(err)) {
       return browserCookieImportFailure('safariFullDiskAccess')
     }
     return browserCookieImportFailure('readFailed', { browser: 'Safari' })
