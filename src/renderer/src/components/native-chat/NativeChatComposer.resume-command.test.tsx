@@ -168,9 +168,13 @@ describe('/usage in a structured chat', () => {
     ).toBe(true)
     mocks.draft = '/usa keep this draft'
     rerender()
+    const select = vi.spyOn(HTMLTextAreaElement.prototype, 'setSelectionRange')
     act(() => mocks.keyDownArgs?.dispatchPickerCommand(USAGE))
     expect(open).toHaveBeenCalledOnce()
     expect(mocks.setDraft).toHaveBeenCalledWith('keep this draft')
+    // The next keystroke lands after the kept text, not in front of it.
+    expect(select).toHaveBeenLastCalledWith('keep this draft'.length, 'keep this draft'.length)
+    select.mockRestore()
     expect(mocks.clearImageAttachments).not.toHaveBeenCalled()
     expect(transport.send).not.toHaveBeenCalled()
     mocks.draft = '/usage'

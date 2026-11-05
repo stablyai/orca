@@ -9,7 +9,10 @@ import { openAgentSessionHistoryModal } from '../right-sidebar/ai-vault/panel/ag
 import type { NativeChatPickerItem } from '../../../../shared/native-chat/input/native-chat-picker-items'
 import type { NativeChatPickerState } from './use-native-chat-picker-state'
 import { findNativeChatTabOwnerWorktreeId } from './native-chat-file-link'
-import type { NativeChatComposerInput } from './native-chat-composer-input'
+import {
+  writeNativeChatComposerText,
+  type NativeChatComposerInput
+} from './native-chat-composer-input'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
 
 export const NATIVE_CHAT_RESUME_COMMAND = 'resume'
@@ -98,7 +101,11 @@ export function useNativeChatResumeCommand(args: {
       setCaret(rest.length)
       setActiveSuggestion(0)
       setNotice(null)
-      textareaRef.current?.focus()
+      // The editor owns its selection; state alone leaves the caret where the command was.
+      const input = textareaRef.current
+      if (input) {
+        writeNativeChatComposerText(input, rest, rest.length)
+      }
     },
     [usage, setDraft, setCaret, setActiveSuggestion, setNotice, textareaRef]
   )
