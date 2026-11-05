@@ -17,6 +17,7 @@ import { resolveWorktreeMetaOwner } from '../../../persistence/host-qualified-wo
 import { hostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 import { worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
 import type { WorktreeIpcContext } from '../worktree-ipc-context'
+import { isValidWorkspaceUrl } from '../../../../shared/workspace-url'
 import {
   isWslMoveSourceHost,
   isWslMoveWorkspaceBlocked,
@@ -42,6 +43,11 @@ export function registerWorktreeMetadataHandlers(context: WorktreeIpcContext): v
           : parseExecutionHostId(args.executionHostId)?.id
       if (args.executionHostId !== undefined && !executionHostId) {
         throw new Error('Invalid execution host identity.')
+      }
+      const { workspaceUrl } = args.updates
+      // The renderer is untrusted: only http(s) links may reach Orca's browser.
+      if (workspaceUrl !== undefined && workspaceUrl !== '' && !isValidWorkspaceUrl(workspaceUrl)) {
+        throw new Error('Invalid workspace URL.')
       }
       if (
         isWslMoveSourceHost(executionHostId) &&
