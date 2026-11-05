@@ -211,6 +211,31 @@ describe('terminal worker turn stops', () => {
     expect(waiting.mail()).toHaveLength(0)
   })
 
+  it('reports an idle finish once until the coordinator writes to the worker again', async () => {
+    const ctx = setup()
+    const current = { row: hookRow({}) }
+    const stops = terminal(ctx, current)
+    // A worker that wakes on its own schedule ends turn after turn without new mail.
+    for (const stateStartedAt of [200, 300, 400]) {
+      current.row = hookRow({ stateStartedAt })
+      stops.observe(moved('working', 'done'))
+      await settle()
+    }
+    expect(ctx.mail().map((m) => m.subject)).toEqual(['Worker stopped without reporting'])
+    expect(ctx.mail()[0].body).toContain('later idle turns are not reported until you write to it')
+
+    ctx.db.insertMessage({
+      from: 'term_coordinator',
+      to: `dispatch:${ctx.dispatch.id}`,
+      subject: 'check again',
+      runId: ctx.run.id
+    })
+    current.row = hookRow({ stateStartedAt: 500 })
+    stops.observe(moved('working', 'done'))
+    await settle()
+    expect(ctx.mail()).toHaveLength(2)
+  })
+
   it('stays quiet after the worker asks and ends its turn, until the answer arrives', async () => {
     const ctx = setup()
     const question = ctx.db.createQuestion({
