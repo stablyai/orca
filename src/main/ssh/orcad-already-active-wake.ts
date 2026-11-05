@@ -1,5 +1,7 @@
-import { RemoteRuntimeClientError } from '../../shared/remote-runtime/remote-runtime-client-error'
-import { wakeManagedOrcadUnlessCrashLooping } from '../managed-server/lifecycle/orcad-managed-crash-loop'
+import {
+  OrcadCrashLoopError,
+  wakeManagedOrcadUnlessCrashLooping
+} from '../managed-server/lifecycle/orcad-managed-crash-loop'
 import { wakeStoppedManagedOrcad } from '../managed-server/lifecycle/orcad-managed-wake'
 import type { OrcadSlotOptions } from './orcad-recovery-slot'
 
@@ -13,7 +15,7 @@ export async function wakeAlreadyActiveOrcad(
     ? await wakeManagedOrcadUnlessCrashLooping(managed.environmentId, managed.hostLabel, options)
     : await wakeStoppedManagedOrcad(options)
   if (wake.outcome === 'crash-loop') {
-    throw new RemoteRuntimeClientError('runtime_unavailable', wake.detail)
+    throw new OrcadCrashLoopError(wake.detail)
   }
   if (wake.outcome === 'recovery-refused') {
     throw new Error(wake.reason)

@@ -1,14 +1,16 @@
 // Stop waking a managed orcad that keeps dying; an explicit Connect re-arms automatic starts.
 import { OrcadUnexpectedExitSchema } from '../../../shared/orcad-unexpected-exit'
+import { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
 import type { OrcadHealth } from '../../orcad/orcad-health'
 import { isOrcadLaunchFailure, orcadLaunchFailureRanProcess } from '../../ssh/orcad-launch-failure'
 import { orcadSlotDir, type OrcadSlotOptions } from '../../ssh/orcad-recovery-slot'
-import { joinRemotePath } from '../../ssh/ssh-remote-platform'
+import { isWindowsRemoteHost, joinRemotePath } from '../../ssh/ssh-remote-platform'
+import { execOrcadRemote } from '../install/orcad-remote-runtime-control'
 import { readOrcadActivationRecord } from '../activation/orcad-activation-record-store'
 import { ORCAD_LOG_FILENAME } from '../install/orcad-remote-host-support'
 import { withOrcadLogTail } from '../install/orcad-remote-log-tail'
 import { readBoundedOrcadRemoteRecord } from '../install/orcad-remote-record-file'
-import { ORCAD_LOCK_FILE_NAME } from '../../orcad/orcad-instance-lock'
+import { ORCAD_LOCK_FILE_NAME, parseOrcadInstanceLockRecord } from '../../orcad/orcad-instance-lock'
 import { MAX_ORCAD_LOCK_BYTES } from '../../orcad/orcad-instance-lock-reclaim'
 import { ManagedOrcadEventWindow } from './orcad-managed-event-window'
 import { wakeStoppedManagedOrcad } from './orcad-managed-wake'
@@ -108,6 +110,14 @@ export class ManagedOrcadCrashLoopBrake {
 
 const brake = new ManagedOrcadCrashLoopBrake()
 
+/** A braked host's refusal; it reports the server, never a failed update or action. */
+export class OrcadCrashLoopError extends RemoteRuntimeClientError {
+  constructor(detail: string) {
+    super('runtime_unavailable', detail)
+    this.name = 'OrcadCrashLoopError'
+  }
+}
+
 export function getManagedOrcadCrashLoopBrake(): ManagedOrcadCrashLoopBrake {
   return brake
 }
@@ -152,7 +162,7 @@ async function wakeUnlessEngaged(
   slot: ManagedOrcadSlot,
   onStarting?: () => void
 ): Promise<BrakedWake> {
-  if (brake.engaged(environmentId) && (await latchedRunExitedCleanly(environmentId, slot))) {
+  if (brake.engaged(environmentId) && (await latchedRunEndedWithoutCrash(environmentId, slot))) {
     brake.forget(environmentId)
     // This wake starts the fresh budget, so it must count.
     epoch = brake.resetEpoch(environmentId)
@@ -186,8 +196,8 @@ async function wakeUnlessEngaged(
   }
 }
 
-/** A run that served releases orcad.lock on a clean exit, so an absent lock means the loop ended. */
-async function latchedRunExitedCleanly(
+/** A run that served releases orcad.lock on a clean exit; a lock from an earlier boot ended by reboot. */
+async function latchedRunEndedWithoutCrash(
   environmentId: string,
   slot: ManagedOrcadSlot
 ): Promise<boolean> {
@@ -200,12 +210,23 @@ async function latchedRunExitedCleanly(
       joinRemotePath(slot.host, slot.userDataDir, ORCAD_LOCK_FILE_NAME),
       MAX_ORCAD_LOCK_BYTES
     )
-    return lock.state === 'absent'
+    if (lock.state === 'absent') {
+      return true
+    }
+    const lockBoot = parseOrcadInstanceLockRecord(lock.raw)?.bootId
+    // Only Linux records a boot id; elsewhere a reconnect re-arms the host.
+    if (!lockBoot || isWindowsRemoteHost(slot.host)) {
+      return false
+    }
+    const currentBoot = (await execOrcadRemote(slot, CURRENT_BOOT_ID_COMMAND)).trim()
+    return currentBoot !== '' && currentBoot !== lockBoot
   } catch {
     // Unreadable proves nothing; stay braked.
     return false
   }
 }
+
+const CURRENT_BOOT_ID_COMMAND = 'cat /proc/sys/kernel/random/boot_id 2>/dev/null || :'
 
 async function crashLoopDetail(
   environmentId: string,

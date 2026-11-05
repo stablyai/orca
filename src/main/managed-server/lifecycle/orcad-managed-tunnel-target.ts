@@ -13,8 +13,7 @@ import {
   type OrcadTunnelIdentity
 } from './orcad-managed-tunnel-identity'
 import { managedOrcadSlot } from './orcad-managed-runtime-context'
-import { wakeManagedOrcadUnlessCrashLooping } from './orcad-managed-crash-loop'
-import { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
+import { OrcadCrashLoopError, wakeManagedOrcadUnlessCrashLooping } from './orcad-managed-crash-loop'
 import { resolveOrcadRemoteContext } from '../install/orcad-remote-context'
 import type { SshConnection } from '../../ssh/connection/ssh-connection'
 import type { PortForwardEntry } from '../../../shared/ssh-types'
@@ -56,7 +55,7 @@ async function wakeStoppedManagedOrcadForTunnel(input: OrcadTunnelPortInput): Pr
   }
   // The crash-loop reason beats the foreign-port mismatch the reread would report.
   if (wake.outcome === 'crash-loop') {
-    throw new RemoteRuntimeClientError('runtime_unavailable', wake.detail)
+    throw new OrcadCrashLoopError(wake.detail)
   }
 }
 

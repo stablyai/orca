@@ -15,8 +15,10 @@ import {
   rebuildOrcadManagedTunnel
 } from '../../managed-server/lifecycle/orcad-managed-tunnel'
 import { verifyOrcadManagedServing } from '../../managed-server/lifecycle/orcad-managed-serving-verify'
-import { getManagedOrcadCrashLoopBrake } from '../../managed-server/lifecycle/orcad-managed-crash-loop'
-import { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
+import {
+  getManagedOrcadCrashLoopBrake,
+  OrcadCrashLoopError
+} from '../../managed-server/lifecycle/orcad-managed-crash-loop'
 import {
   MANAGED_ORCAD_NOT_ACTIVATED_DETAIL,
   setManagedOrcadStartListener,
@@ -104,7 +106,7 @@ async function prepareNetworkServerForCall(
     serving.state === 'unverifiable' ? getManagedOrcadCrashLoopBrake().detail(environment.id) : null
   if (crashLoop) {
     // Fail with the reason instead of waiting out the status timeout against a stopped server.
-    throw new RemoteRuntimeClientError('runtime_unavailable', crashLoop)
+    throw new OrcadCrashLoopError(crashLoop)
   }
   const createDeps = () => ({
     ...managedServerUpdateDeps(userDataPath),

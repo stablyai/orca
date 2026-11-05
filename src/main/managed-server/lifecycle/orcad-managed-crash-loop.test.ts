@@ -20,6 +20,10 @@ vi.mock('../install/orcad-remote-record-file', () => ({
   // The latched run's lock: left behind when it died, removed when it stopped cleanly.
   readBoundedOrcadRemoteRecord: vi.fn(async () => ({ state: 'present', raw: '{}' }))
 }))
+vi.mock('../install/orcad-remote-runtime-control', () => ({
+  // The host's current boot id.
+  execOrcadRemote: vi.fn(async () => 'boot-a\n')
+}))
 vi.mock('../install/orcad-remote-log-tail', () => ({
   withOrcadLogTail: vi.fn(
     async (_target: unknown, _slotDir: string, message: string) =>
@@ -29,6 +33,7 @@ vi.mock('../install/orcad-remote-log-tail', () => ({
 
 import { wakeStoppedManagedOrcad } from './orcad-managed-wake'
 import { readBoundedOrcadRemoteRecord } from '../install/orcad-remote-record-file'
+import { execOrcadRemote } from '../install/orcad-remote-runtime-control'
 import { OrcadLaunchReadinessError } from '../../ssh/orcad-active-readiness'
 import {
   OrcadWindowsLaunchFailedError,
@@ -211,6 +216,30 @@ describe('a managed orcad that keeps exiting unexpectedly', () => {
       state: 'unverifiable',
       detail: 'This host’s Orca server process is live but is not answering.'
     })
+  })
+
+  it('wakes it again once the host rebooted since the run it braked on', async () => {
+    startsReporting(CRASHED)
+    for (let i = 0; i < 3; i++) {
+      await findStopped()
+    }
+    const lockOnBootA = JSON.stringify({
+      pid: 4343,
+      startedAtMs: 1,
+      bootId: 'boot-a',
+      identity: '1000',
+      version: '1.2.3',
+      acquiredAt: '2026-11-04T10:05:00.000Z',
+      nonce: 'n'
+    })
+    const lockRead = { state: 'present', raw: lockOnBootA } as const
+    vi.mocked(readBoundedOrcadRemoteRecord)
+      .mockResolvedValueOnce(lockRead)
+      .mockResolvedValueOnce(lockRead)
+
+    expect(await findStopped()).toMatchObject({ state: 'unverifiable' })
+    vi.mocked(execOrcadRemote).mockResolvedValueOnce('boot-b\n')
+    expect(await findStopped()).toMatchObject({ state: 'started' })
   })
 
   it('wakes it again once the run it braked on later stopped cleanly', async () => {
