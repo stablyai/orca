@@ -88,11 +88,11 @@ Click any UI element in a real Chromium window to send its HTML, CSS, and a crop
 <tr>
 <td width="50%" valign="middle">
 
-### GitHub &amp; Linear, Native
+### Native Task Integrations
 
-Browse PRs, issues, and project boards in-app — open a worktree from any task and review without a context switch.
+Browse GitHub, GitLab, Linear, and Jira issues in-app — open a workspace from a task without a context switch. Each provider has its own setup.
 
-[Docs →](https://www.onorca.dev/docs/review/linear)
+[GitHub &amp; GitLab →](https://www.onorca.dev/docs/review/github) · [Linear →](https://www.onorca.dev/docs/review/linear) · [Jira →](https://www.onorca.dev/docs/review/jira)
 
 </td>
 <td width="50%">
