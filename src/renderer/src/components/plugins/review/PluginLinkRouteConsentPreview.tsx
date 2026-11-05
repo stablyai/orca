@@ -40,7 +40,7 @@ export function PluginLinkRouteConsentPreview({
       {routes.map((route) => (
         <div key={route.hostname} className="space-y-1 pt-1">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <span className="font-mono text-xs text-foreground">{route.hostname}</span>
+            <span className="font-mono text-xs break-all text-foreground">{route.hostname}</span>
             <span className="text-xs text-muted-foreground">
               {destinationLabel(route.destination)}
             </span>
