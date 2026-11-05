@@ -155,7 +155,7 @@ function Sidebar({
   const drawerCoversSeam =
     workspaceBoardRenderedOpen || (showAgentDashboard && agentDashboardDrawerOpen)
 
-  useWorkspaceRevealBodyRedirect(sidebarOpen && sidebarBody === 'agents')
+  useWorkspaceRevealBodyRedirect(!sidebarOpen || sidebarBody === 'agents')
   // A collapsed sidebar takes no drops.
   const sidebarRef = React.useCallback(
     (node: HTMLDivElement | null) => {

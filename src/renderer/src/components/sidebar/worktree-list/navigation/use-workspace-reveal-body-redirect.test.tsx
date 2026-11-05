@@ -8,15 +8,17 @@ import { useWorkspaceRevealBodyRedirect } from './use-workspace-reveal-body-redi
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
-const mocks = vi.hoisted(() => ({ setSidebarBody: vi.fn() }))
-
-vi.mock('@/store', () => ({
-  useAppStore: (selector: (state: { setSidebarBody: typeof mocks.setSidebarBody }) => unknown) =>
-    selector({ setSidebarBody: mocks.setSidebarBody })
+const mocks = vi.hoisted(() => ({
+  setSidebarBody: vi.fn(),
+  setSidebarOpen: vi.fn()
 }))
 
-function Host({ agentsBodyShowing }: { agentsBodyShowing: boolean }): null {
-  useWorkspaceRevealBodyRedirect(agentsBodyShowing)
+vi.mock('@/store', () => ({
+  useAppStore: (selector: (state: typeof mocks) => unknown) => selector(mocks)
+}))
+
+function Host({ listHidden }: { listHidden: boolean }): null {
+  useWorkspaceRevealBodyRedirect(listHidden)
   return null
 }
 
@@ -25,6 +27,7 @@ let root: Root
 
 beforeEach(() => {
   mocks.setSidebarBody.mockClear()
+  mocks.setSidebarOpen.mockClear()
   container = document.createElement('div')
   document.body.append(container)
   root = createRoot(container)
@@ -36,9 +39,9 @@ afterEach(() => {
 })
 
 describe('useWorkspaceRevealBodyRedirect', () => {
-  it('switches the body to Spaces and replays the request once the list is mounted', () => {
+  it('opens the sidebar on Spaces and replays the request once the list is mounted', () => {
     act(() => {
-      root.render(<Host agentsBodyShowing />)
+      root.render(<Host listHidden />)
     })
     const seen: unknown[] = []
     const listener = (event: Event): void => {
@@ -52,12 +55,13 @@ describe('useWorkspaceRevealBodyRedirect', () => {
         })
       )
     })
+    expect(mocks.setSidebarOpen).toHaveBeenCalledWith(true)
     expect(mocks.setSidebarBody).toHaveBeenCalledWith('workspaces')
     expect(seen).toEqual([])
 
     window.addEventListener(SCROLL_TO_CURRENT_WORKSPACE_REVEAL_REQUEST_EVENT, listener)
     act(() => {
-      root.render(<Host agentsBodyShowing={false} />)
+      root.render(<Host listHidden={false} />)
     })
     window.removeEventListener(SCROLL_TO_CURRENT_WORKSPACE_REVEAL_REQUEST_EVENT, listener)
 
