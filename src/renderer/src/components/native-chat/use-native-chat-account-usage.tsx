@@ -3,6 +3,7 @@ import type { AgentSessionAccountUsage } from '../../../../shared/agent-session/
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
 import { NativeChatAccountUsageCard } from './NativeChatAccountUsageCard'
+import { useNativeChatUsageResetAuthority } from './use-native-chat-usage-reset-authority'
 
 export function useNativeChatAccountUsage(args: {
   supported: boolean
@@ -16,7 +17,9 @@ export function useNativeChatAccountUsage(args: {
   const { sessionId, target, supported, fence, turnId, promptId } = args
   const identity = `${target.kind === 'local' ? 'local' : target.environmentId}:${sessionId}:${fence}`
   const [panel, setPanel] = useState<{
-    /** Which `/usage` opening this panel belongs to; late replies for any other are dropped. */
+    /** Which `/usage` opening this panel is; callbacks from any other are dropped. */
+    opening: number
+    /** The newest read for this panel; late replies to older ones are dropped. */
     request: number
     identity: string
     turnId: string | null
@@ -26,13 +29,13 @@ export function useNativeChatAccountUsage(args: {
     notice: string | null
   } | null>(null)
   const nextRequest = useRef(0)
-  // The committed panel's request, for callbacks that outlive it (a reset finishing after dismissal).
-  const shownRequest = useRef<number | null>(null)
+  // The committed panel's opening, for callbacks that outlive it (a reset finishing after dismissal).
+  const shownOpening = useRef<number | null>(null)
   useEffect(() => {
-    shownRequest.current = panel?.request ?? null
+    shownOpening.current = panel?.opening ?? null
     // Unmounting retires callbacks that outlive the chat (a reset finishing later).
     return () => {
-      shownRequest.current = null
+      shownOpening.current = null
     }
   }, [panel])
   const dismiss = useCallback(() => setPanel(null), [])
@@ -47,7 +50,7 @@ export function useNativeChatAccountUsage(args: {
   const open = useCallback(
     async (notice: string | null = null) => {
       const request = ++nextRequest.current
-      setPanel({ request, identity, turnId, promptId, result: null, notice })
+      setPanel({ opening: request, request, identity, turnId, promptId, result: null, notice })
       const result = await callStructuredAgentSession<AgentSessionAccountUsage>(
         target,
         'agentSession.accountUsage',
@@ -57,6 +60,29 @@ export function useNativeChatAccountUsage(args: {
     },
     [identity, sessionId, target, turnId, promptId]
   )
+  // The host builds the reset offer from its own Codex state, which can land after the card
+  // opened (its first read after launch, an account switch); re-read when it changes.
+  const authority = useNativeChatUsageResetAuthority(target, panel?.result?.status === 'ok')
+  const seenAuthority = useRef<string | null>(null)
+  useEffect(() => {
+    const previous = seenAuthority.current
+    seenAuthority.current = authority
+    if (authority === null || previous === null || previous === authority) {
+      return
+    }
+    const request = ++nextRequest.current
+    setPanel((current) => (current ? { ...current, request } : current))
+    void callStructuredAgentSession<AgentSessionAccountUsage>(target, 'agentSession.accountUsage', {
+      sessionId
+    })
+      .catch(() => null)
+      .then((result) =>
+        // A failed background read keeps what the card already shows.
+        setPanel((current) =>
+          current?.request === request && result?.status === 'ok' ? { ...current, result } : current
+        )
+      )
+  }, [authority, sessionId, target])
   return {
     command: supported
       ? {
@@ -73,7 +99,7 @@ export function useNativeChatAccountUsage(args: {
           target={target}
           onDismiss={dismiss}
           onRetry={(notice) => {
-            if (shownRequest.current === panel.request) {
+            if (shownOpening.current === panel.opening) {
               void open(notice)
             }
           }}

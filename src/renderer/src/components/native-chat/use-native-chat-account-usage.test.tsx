@@ -4,7 +4,22 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionAccountUsage } from '../../../../shared/agent-session/agent-session-account-usage'
 import { useNativeChatAccountUsage } from './use-native-chat-account-usage'
 
-const mocks = vi.hoisted(() => ({ read: vi.fn(), reset: vi.fn(), updateSettings: vi.fn() }))
+const mocks = vi.hoisted(() => ({
+  read: vi.fn(),
+  reset: vi.fn(),
+  updateSettings: vi.fn(),
+  hostSnapshot: null as ((snapshot: unknown) => void) | null
+}))
+vi.mock('@/runtime/runtime-provider-accounts-client', () => ({
+  watchProviderAccounts: (_target: unknown, handlers: { onSnapshot: (s: unknown) => void }) => {
+    mocks.hostSnapshot = handlers.onSnapshot
+    return {
+      close: () => {
+        mocks.hostSnapshot = null
+      }
+    }
+  }
+}))
 vi.mock('@/runtime/structured-agent-session-client', () => ({
   callStructuredAgentSession: mocks.read
 }))
@@ -141,6 +156,33 @@ describe('chat usage card', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Reset now' }))
     view.unmount()
     await act(async () => finish({ outcome: 'reset' }))
+    expect(mocks.read).toHaveBeenCalledTimes(2)
+  })
+
+  it('re-reads the offer when the host’s Codex state lands after the card opened, keeping the card', async () => {
+    const { reset: _offer, ...withoutOffer } = result as Extract<
+      AgentSessionAccountUsage,
+      { status: 'ok' }
+    >
+    mocks.read.mockResolvedValueOnce(withoutOffer).mockResolvedValueOnce(result)
+    render(<Chat />)
+    fireEvent.click(screen.getByText('Usage'))
+    await screen.findByText('chat@example.com')
+    expect(screen.queryByRole('button', { name: 'Reset now' })).toBeNull()
+    const host = (status: string, availableCount: number) => ({
+      codex: { accounts: [], activeAccountId: 'chat' },
+      rateLimits: {
+        codexTarget: { runtime: 'host', wslDistro: null },
+        codex: { status, rateLimitResetCredits: { availableCount, nextExpiresAt: 2_000 } }
+      }
+    })
+    act(() => mocks.hostSnapshot?.(host('fetching', 0)))
+    expect(mocks.read).toHaveBeenCalledOnce()
+    act(() => mocks.hostSnapshot?.(host('ok', 1)))
+    await screen.findByRole('button', { name: 'Reset now' })
+    expect(mocks.read).toHaveBeenCalledTimes(2)
+    // An unchanged host state reads nothing more.
+    act(() => mocks.hostSnapshot?.(host('ok', 1)))
     expect(mocks.read).toHaveBeenCalledTimes(2)
   })
 

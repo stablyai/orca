@@ -19,16 +19,16 @@ import { defineMethod } from '../core'
 import { requireInstalledStructuredHost } from './structured-agent-session-gate'
 import { OptionsParams } from './structured-agent-session-schemas'
 
-type UsageOfferSettings = Partial<
-  Pick<
-    GlobalSettings,
-    'codexManagedAccounts' | 'activeCodexManagedAccountId' | 'activeCodexManagedAccountIdsByRuntime'
-  >
->
-
-function sessionManagedAccount(
+export function sessionAccountUsageOffer(
   record: AgentSessionRecord,
-  settings: UsageOfferSettings,
+  settings: Partial<
+    Pick<
+      GlobalSettings,
+      | 'codexManagedAccounts'
+      | 'activeCodexManagedAccountId'
+      | 'activeCodexManagedAccountIdsByRuntime'
+    >
+  >,
   state: RateLimitState | undefined
 ) {
   const home = normalizeRuntimePathForComparison(
@@ -41,25 +41,15 @@ function sessionManagedAccount(
       (candidate.managedHomeRuntime ?? 'host') === 'host' &&
       normalizeRuntimePathForComparison(candidate.managedHomePath) === home
   )
-  const selected =
-    account !== undefined &&
-    state !== undefined &&
+  const matches =
+    account &&
+    state &&
     state.codexTarget.runtime === target.runtime &&
     state.codexTarget.wslDistro === target.wslDistro &&
     getSelectedCodexAccountIdForTarget(
       { ...settings, activeCodexManagedAccountId: settings.activeCodexManagedAccountId ?? null },
       target
     ) === account.id
-  return { home, target, account, selected }
-}
-
-export function sessionAccountUsageOffer(
-  record: AgentSessionRecord,
-  settings: UsageOfferSettings,
-  state: RateLimitState | undefined
-) {
-  const { home, target, account, selected } = sessionManagedAccount(record, settings, state)
-  const matches = selected && account && state
   const scope = matches
     ? buildCodexResetCreditExpectedScope({ target, account, limits: state.codex })
     : null
@@ -82,9 +72,6 @@ export function sessionAccountUsageOffer(
   }
 }
 
-// A slow host read leaves the card without its reset button rather than holding the usage numbers.
-const SNAPSHOT_WAIT_MS = 15_000
-
 export const STRUCTURED_AGENT_SESSION_ACCOUNT_USAGE_METHODS = [
   defineMethod({
     name: 'agentSession.accountUsage',
@@ -98,7 +85,6 @@ export const STRUCTURED_AGENT_SESSION_ACCOUNT_USAGE_METHODS = [
       }
       const abort = new AbortController()
       let timer: ReturnType<typeof setTimeout> | undefined
-      let snapshotTimer: ReturnType<typeof setTimeout> | undefined
       try {
         // Capture the adapter read now; usage never enters the conversation's mutation queue.
         const read = host.deps.agents
@@ -107,25 +93,8 @@ export const STRUCTURED_AGENT_SESSION_ACCOUNT_USAGE_METHODS = [
         if (!read) {
           return { status: 'failed' }
         }
-        const rateLimits = ctx.runtime.getUsageRateLimits()
-        const settings = ctx.runtime.requireStore().getSettings()
-        const current = rateLimits?.getState()
-        // Before the host's first Codex read the reset offer has nothing to build its scope from;
-        // one forced read for the selected account lets this card offer its reset now.
-        const snapshot =
-          rateLimits &&
-          current &&
-          current.codex?.status !== 'ok' &&
-          sessionManagedAccount(record, settings, current).selected
-            ? Promise.race([
-                rateLimits.refreshCodexForTarget(current.codexTarget).catch(() => undefined),
-                new Promise<undefined>((resolve) => {
-                  snapshotTimer = setTimeout(() => resolve(undefined), SNAPSHOT_WAIT_MS)
-                })
-              ]).then(() => rateLimits.getState())
-            : Promise.resolve(current)
-        const [result, state] = await Promise.race([
-          Promise.all([read, snapshot]),
+        const result = await Promise.race([
+          read,
           new Promise<never>((_, reject) => {
             timer = setTimeout(() => {
               abort.abort()
@@ -133,7 +102,11 @@ export const STRUCTURED_AGENT_SESSION_ACCOUNT_USAGE_METHODS = [
             }, 40_000)
           })
         ])
-        const offer = sessionAccountUsageOffer(record, settings, state)
+        const offer = sessionAccountUsageOffer(
+          record,
+          ctx.runtime.requireStore().getSettings(),
+          ctx.runtime.getUsageRateLimits()?.getState()
+        )
         return {
           status: 'ok',
           ...offer,
@@ -153,7 +126,6 @@ export const STRUCTURED_AGENT_SESSION_ACCOUNT_USAGE_METHODS = [
         return { status: 'failed' }
       } finally {
         clearTimeout(timer)
-        clearTimeout(snapshotTimer)
       }
     }
   })

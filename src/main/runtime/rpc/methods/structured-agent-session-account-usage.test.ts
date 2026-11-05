@@ -1,6 +1,5 @@
 import '../unused-default-rpc-methods.test-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { RateLimitState } from '../../../../shared/rate-limit-types'
 import { join } from 'node:path'
 import { homedir } from 'node:os'
 import { agentSessionRecordFixture } from '../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
@@ -91,27 +90,6 @@ describe('chat account usage', () => {
       }
     })
     expect(read).toHaveBeenCalledWith(record, expect.any(AbortSignal))
-  })
-
-  it('reads the selected account once when the host has no Codex snapshot yet, then offers its reset', async () => {
-    let current: RateLimitState = { ...state, codex: null }
-    const refreshCodexForTarget = vi.fn(async () => {
-      current = state
-      return state
-    })
-    const { overrides } = install()
-    const reply = await usage({
-      ...overrides,
-      getUsageRateLimits: () => ({ getState: () => current, refreshCodexForTarget })
-    })
-    expect(refreshCodexForTarget).toHaveBeenCalledOnce()
-    expect(reply).toMatchObject({ status: 'ok', reset: { available: 1 } })
-    // A loaded snapshot is used as it is.
-    await usage({
-      ...overrides,
-      getUsageRateLimits: () => ({ getState: () => state, refreshCodexForTarget })
-    })
-    expect(refreshCodexForTarget).toHaveBeenCalledOnce()
   })
 
   it.each([
