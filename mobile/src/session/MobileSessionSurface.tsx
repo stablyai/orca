@@ -15,10 +15,12 @@ import { WorkspaceServerContext } from '../transport/workspace-server-context'
 import { useSessionTitleCard } from './use-session-title-card'
 import { useDetailCardScope } from '../components/use-detail-card-scope'
 import { useShellSideRail } from '../layout/use-shell-side-rail'
+import { useReducedMotionEnabled } from '../platform/use-reduced-motion'
 
 export function MobileSessionSurface({ controller }: { controller: MobileSessionController }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
+  const reducedMotion = useReducedMotionEnabled()
   const { setMobileSessionRootRef } = controller
   const server = useContext(WorkspaceServerContext)
   const layout = useResponsiveLayout()
@@ -64,6 +66,7 @@ export function MobileSessionSurface({ controller }: { controller: MobileSession
       <AnchoredDetailCardLayer
         card={details}
         obscured={obscured}
+        reducedMotion={reducedMotion}
         title={controller.worktreeName || t('session.header.terminalTitle', 'Terminal')}
         detail={controller.worktreePath}
         footer={

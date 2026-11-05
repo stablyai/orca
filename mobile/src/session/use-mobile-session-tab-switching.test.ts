@@ -1,8 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
 
+const tabActivation = vi.hoisted(() => ({
+  activateMobileSessionTab: vi.fn(() => Promise.resolve({ ok: true, result: null }))
+}))
 vi.mock('../platform/haptics', () => ({
   triggerSelection: vi.fn()
 }))
+vi.mock('./mobile-session-tab-activation', () => tabActivation)
 import { hookMount, performHookAction } from '../test-support/rpc-recording/hook-mount'
 import { mountFixture } from '../test-support/rpc-recording/recorder-fixture-shape'
 import { MobileTerminalDiagnostics } from './mobile-terminal-diagnostics'
@@ -44,10 +48,25 @@ function mountSwitching(args: {
   activeSessionTabId: string | null
   markdownDocs?: Map<string, MarkdownDocState>
   fileDocs?: Map<string, FileDocState>
+  sessionTabs?: MobileSessionTab[]
+  activeHandle?: string | null
+  subscribedHandles?: readonly string[]
+  visibleHandles?: readonly string[]
+  client?: object | null
+  worktreeId?: string
 }) {
   const readMarkdownTab = vi.fn()
   const readFileTab = vi.fn()
   const setActiveSessionTabId = vi.fn()
+  const setActiveHandle = vi.fn()
+  const unsubscribeTerminal = vi.fn()
+  const subscribeToTerminal = vi.fn()
+  const setSplitTerminalHandles = vi.fn()
+  const activeHandleRef = { current: args.activeHandle ?? null }
+  const terminalUnsubsRef = {
+    current: new Map((args.subscribedHandles ?? []).map((handle) => [handle, () => {}]))
+  }
+  const visibleTerminalHandlesRef = { current: [...(args.visibleHandles ?? [])] }
   let switching: ReturnType<typeof useMobileSessionTabSwitching> | undefined
   const hook = hookMount(() => {
     switching = useMobileSessionTabSwitching(
@@ -58,14 +77,20 @@ function mountSwitching(args: {
         readMarkdownTab,
         readFileTab,
         setActiveSessionTabId,
-        setActiveHandle: vi.fn(),
+        setActiveHandle,
         switchSessionTabRef: { current: null },
         terminalDiagnosticsRef: { current: new MobileTerminalDiagnostics() },
         pendingSelectionRef: { current: null },
         activeSessionTabTypeRef: { current: null },
-        activeHandleRef: { current: null },
-        client: null,
-        sessionTabs: []
+        activeHandleRef,
+        terminalUnsubsRef,
+        visibleTerminalHandlesRef,
+        unsubscribeTerminal,
+        subscribeToTerminal,
+        setSplitTerminalHandles,
+        client: args.client === undefined ? null : args.client,
+        sessionTabs: args.sessionTabs ?? [],
+        worktreeId: args.worktreeId
       })
     )
   })
@@ -74,6 +99,10 @@ function mountSwitching(args: {
     readMarkdownTab,
     readFileTab,
     setActiveSessionTabId,
+    setActiveHandle,
+    unsubscribeTerminal,
+    subscribeToTerminal,
+    setSplitTerminalHandles,
     switchTo: (tab: MobileSessionTab) => {
       performHookAction(() => switching?.switchSessionTab(tab))
     },
@@ -165,6 +194,131 @@ describe('useMobileSessionTabSwitching active document retap', () => {
     try {
       harness.switchTo(markdownTab)
       expect(harness.readMarkdownTab).toHaveBeenCalledOnce()
+    } finally {
+      harness.unmount()
+    }
+  })
+})
+
+const liveTerminal: MobileSessionTab = {
+  type: 'terminal',
+  id: 'term',
+  title: 'Shell',
+  terminal: 'pty-1',
+  isActive: true
+}
+
+const otherTerminal: MobileSessionTab = {
+  type: 'terminal',
+  id: 'term-2',
+  title: 'Other',
+  terminal: 'pty-2',
+  isActive: false
+}
+
+const browserTab: MobileSessionTab = {
+  type: 'browser',
+  id: 'browser',
+  title: 'Docs',
+  browserWorkspaceId: 'bw',
+  browserPageId: null,
+  url: 'https://example.com',
+  loading: false,
+  canGoBack: false,
+  canGoForward: false,
+  isActive: true
+}
+
+const agentTab: MobileSessionTab = {
+  type: 'agent-session',
+  id: 'agent',
+  title: 'Agent',
+  sessionId: 'sess',
+  agent: 'codex',
+  isActive: true
+}
+
+describe('useMobileSessionTabSwitching live surface retap', () => {
+  function mountLive(args: {
+    tab: MobileSessionTab
+    activeHandle: string | null
+    subscribedHandles?: readonly string[]
+    visibleHandles?: readonly string[]
+    sessionTabs?: MobileSessionTab[]
+  }) {
+    tabActivation.activateMobileSessionTab.mockClear()
+    return mountSwitching({
+      activeSessionTabId: args.tab.id,
+      activeHandle: args.activeHandle,
+      subscribedHandles: args.subscribedHandles,
+      visibleHandles: args.visibleHandles,
+      sessionTabs: args.sessionTabs ?? [args.tab],
+      client: {},
+      worktreeId: 'wt'
+    })
+  }
+
+  it('does not tear down or reactivate a subscribed terminal that is already showing', () => {
+    const harness = mountLive({
+      tab: liveTerminal,
+      activeHandle: 'pty-1',
+      subscribedHandles: ['pty-1']
+    })
+    try {
+      harness.switchTo(liveTerminal)
+      expect(harness.unsubscribeTerminal).not.toHaveBeenCalled()
+      expect(harness.subscribeToTerminal).not.toHaveBeenCalled()
+      expect(harness.setActiveSessionTabId).not.toHaveBeenCalled()
+      expect(tabActivation.activateMobileSessionTab).not.toHaveBeenCalled()
+    } finally {
+      harness.unmount()
+    }
+  })
+
+  it('does not reactivate an open browser or agent tab', () => {
+    const browser = mountLive({ tab: browserTab, activeHandle: null })
+    const agent = mountLive({ tab: agentTab, activeHandle: null })
+    try {
+      browser.switchTo(browserTab)
+      agent.switchTo(agentTab)
+      expect(browser.setActiveSessionTabId).not.toHaveBeenCalled()
+      expect(agent.setActiveHandle).not.toHaveBeenCalled()
+      expect(tabActivation.activateMobileSessionTab).not.toHaveBeenCalled()
+    } finally {
+      browser.unmount()
+      agent.unmount()
+    }
+  })
+
+  it('still subscribes and activates when the tapped terminal is not the live one', () => {
+    const harness = mountLive({
+      tab: otherTerminal,
+      activeHandle: 'pty-1',
+      subscribedHandles: ['pty-1'],
+      sessionTabs: [liveTerminal, otherTerminal]
+    })
+    try {
+      harness.switchTo(otherTerminal)
+      expect(harness.unsubscribeTerminal).toHaveBeenCalledWith('pty-1')
+      expect(harness.subscribeToTerminal).toHaveBeenCalledWith('pty-2')
+      expect(tabActivation.activateMobileSessionTab).toHaveBeenCalledOnce()
+    } finally {
+      harness.unmount()
+    }
+  })
+
+  it('still moves a subscribed terminal that is hidden by the other split pane', () => {
+    const harness = mountLive({
+      tab: liveTerminal,
+      activeHandle: 'pty-1',
+      subscribedHandles: ['pty-1'],
+      visibleHandles: ['pty-2', 'pty-3']
+    })
+    try {
+      harness.switchTo(liveTerminal)
+      expect(harness.subscribeToTerminal).toHaveBeenCalledWith('pty-1')
+      expect(harness.setSplitTerminalHandles).toHaveBeenCalledWith(['pty-1', 'pty-2'])
+      expect(tabActivation.activateMobileSessionTab).toHaveBeenCalledOnce()
     } finally {
       harness.unmount()
     }

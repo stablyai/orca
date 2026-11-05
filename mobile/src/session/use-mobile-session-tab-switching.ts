@@ -105,6 +105,18 @@ export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateMo
       if (isCachedActiveDocumentRetap(tab, activeSessionTabId, { markdownDocs, fileDocs })) {
         return
       }
+      // Retap of the live tab only opens details. Resubscribe would tear the stream down during that fade.
+      if (
+        tab.id === activeSessionTabId &&
+        retapKeepsLiveSurface(
+          tab,
+          activeHandleRef.current,
+          tab.type === 'terminal' ? terminalUnsubsRef.current : null,
+          visibleTerminalHandlesRef?.current ?? null
+        )
+      ) {
+        return
+      }
       if (tab.type === 'terminal') {
         if (typeof tab.terminal === 'string') {
           switchTab(tab.terminal)
@@ -200,3 +212,21 @@ export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateMo
 
 export type MobileSessionTabSwitchingModel = MobileSessionKeyboardStateModel &
   ReturnType<typeof useMobileSessionTabSwitching>
+
+/** Already-open terminal, browser, or agent tab: keep the live surface instead of activating again. */
+function retapKeepsLiveSurface(
+  tab: MobileSessionTab,
+  activeHandle: string | null,
+  subscribedHandles: ReadonlyMap<string, unknown> | null,
+  visibleHandles: readonly string[] | null
+): boolean {
+  if (tab.type === 'agent-session' || tab.type === 'browser') {
+    return activeHandle === null
+  }
+  if (tab.type !== 'terminal' || typeof tab.terminal !== 'string' || subscribedHandles === null) {
+    return false
+  }
+  const hiddenInSplit =
+    visibleHandles !== null && visibleHandles.length === 2 && !visibleHandles.includes(tab.terminal)
+  return activeHandle === tab.terminal && subscribedHandles.has(tab.terminal) && !hiddenInSplit
+}

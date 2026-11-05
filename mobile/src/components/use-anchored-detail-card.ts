@@ -16,6 +16,23 @@ type Action =
   | { type: 'moved'; anchor: DetailCardAnchor }
   | { type: 'settled'; motion: number }
 
+function sameAnchor(current: DetailCardAnchor, next: DetailCardAnchor): boolean {
+  if (
+    current.side !== next.side ||
+    current.origin.x !== next.origin.x ||
+    current.origin.y !== next.origin.y
+  ) {
+    return false
+  }
+  if (current.side === 'below' && next.side === 'below') {
+    return current.left === next.left && current.top === next.top
+  }
+  if (current.side === 'above' && next.side === 'above') {
+    return current.right === next.right && current.bottom === next.bottom
+  }
+  return false
+}
+
 function reduce(state: State, action: Action): State {
   const { visual, request, serial } = state
   switch (action.type) {
@@ -41,14 +58,22 @@ function reduce(state: State, action: Action): State {
         return state
       }
       const { anchor } = action
+      if (visual?.target === 1 && sameAnchor(visual.anchor, anchor)) {
+        return { ...state, request: null }
+      }
       return {
         serial: serial + 1,
         request: null,
-        visual: { anchor, target: 1, motion: serial + 1 }
+        visual: {
+          anchor,
+          target: 1,
+          // Reposition an open card without restarting its entry animation.
+          motion: visual?.target === 1 ? visual.motion : serial + 1
+        }
       }
     }
     case 'moved':
-      return visual?.target === 1
+      return visual?.target === 1 && !sameAnchor(visual.anchor, action.anchor)
         ? { ...state, visual: { ...visual, anchor: action.anchor } }
         : state
     case 'settled':
@@ -56,6 +81,15 @@ function reduce(state: State, action: Action): State {
         ? { ...state, visual: null }
         : state
   }
+}
+
+/** Window origin of a DOM layer. Null on native, where measureInWindow is the layout source. */
+function domLayerOrigin(layer: unknown): { x: number; y: number } | null {
+  if (typeof HTMLElement === 'undefined' || !(layer instanceof HTMLElement)) {
+    return null
+  }
+  const rect = layer.getBoundingClientRect()
+  return { x: rect.left, y: rect.top }
 }
 
 /** Places the card from window coordinates; null when its views are gone or hidden, which closes it. */
@@ -120,12 +154,23 @@ export function useAnchoredDetailCard({
       }
       let disposed = false
       const current = generation.current
-      layer.measureInWindow((rootX, rootY) => {
-        measureRef.current({ x: rootX, y: rootY }, (placement) => {
+      const finish = (origin: { x: number; y: number }) => {
+        measureRef.current(origin, (placement) => {
           if (!disposed && current === generation.current) {
-            done(placement && { ...placement, origin: { x: rootX, y: rootY } })
+            done(placement && { ...placement, origin })
           }
         })
+      }
+      // DOM layout is current in this frame; measureInWindow waits a task and drops the open frame.
+      const origin = domLayerOrigin(layer)
+      if (origin) {
+        finish(origin)
+        return () => {
+          disposed = true
+        }
+      }
+      layer.measureInWindow((rootX, rootY) => {
+        finish({ x: rootX, y: rootY })
       })
       return () => {
         disposed = true

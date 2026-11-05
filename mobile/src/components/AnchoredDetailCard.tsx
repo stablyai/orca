@@ -18,6 +18,8 @@ const CARD_WIDTH = 256
 const EDGE_INSET = spacing.sm
 const TRANSITION_MS = 150
 const SLIDE_FROM = -6
+// easeOutCubic, the same curve as Easing.out(Easing.cubic).
+const EASE_OUT_CUBIC = 'cubic-bezier(0.33, 1, 0.68, 1)'
 
 type DetailCardContent = {
   title: string
@@ -26,6 +28,21 @@ type DetailCardContent = {
   children?: ReactNode
   footer?: ReactNode
 }
+
+type AnchoredDetailCardProps = {
+  anchor: DetailCardAnchor
+  target: 0 | 1
+  motion: number
+  bounds: { left: number; top: number; right: number; bottom: number }
+  layerHeight: number
+  contentRef: RefObject<View | null>
+  boundaryRefs: RefObject<unknown[]>
+  active: boolean
+  obscured: boolean
+  onSettled: (motion: number) => void
+  /** Settled preference from a mounted parent. Omit to read it here. */
+  reducedMotion?: boolean | null
+} & DetailCardContent
 
 /** The full-screen layer an anchored card measures from and draws in, with the card while it shows. */
 export function AnchoredDetailCardLayer({
@@ -69,7 +86,20 @@ export function AnchoredDetailCardLayer({
 const layerStyle = { ...StyleSheet.absoluteFillObject, zIndex: 1000 }
 
 /** Only the current motion may release the retained exit presentation. */
-function AnchoredDetailCard({
+export function AnchoredDetailCard(props: AnchoredDetailCardProps): React.JSX.Element {
+  if (props.reducedMotion === undefined) {
+    return <AnchoredDetailCardMotion {...props} />
+  }
+  return <AnchoredDetailCardFrame {...props} reducedMotion={props.reducedMotion} />
+}
+
+function AnchoredDetailCardMotion(
+  props: Omit<AnchoredDetailCardProps, 'reducedMotion'>
+): React.JSX.Element {
+  return <AnchoredDetailCardFrame {...props} reducedMotion={useReducedMotionEnabled()} />
+}
+
+function AnchoredDetailCardFrame({
   anchor,
   target,
   motion,
@@ -84,25 +114,71 @@ function AnchoredDetailCard({
   titleTrailing,
   detail,
   children,
-  footer
-}: {
-  anchor: DetailCardAnchor
-  target: 0 | 1
-  motion: number
-  bounds: { left: number; top: number; right: number; bottom: number }
-  layerHeight: number
-  contentRef: RefObject<View | null>
-  boundaryRefs: RefObject<unknown[]>
-  active: boolean
-  obscured: boolean
-  onSettled: (motion: number) => void
-} & DetailCardContent): React.JSX.Element {
+  footer,
+  reducedMotion
+}: AnchoredDetailCardProps & { reducedMotion: boolean | null }): React.JSX.Element {
   useMobileColorScheme()
   // Unknown counts as reduced, so the card never slides before the setting is read.
-  const slide = useReducedMotionEnabled() === false
+  const slide = reducedMotion === false
   const [progress] = useState(() => new Animated.Value(0))
+  const webState = useState(() => ({
+    value: 0,
+    from: 0,
+    to: 0,
+    animation: null as Animation | null
+  }))[0]
+  useLayoutEffect(
+    () => () => {
+      webState.animation?.cancel()
+      webState.animation = null
+    },
+    [webState]
+  )
   useLayoutEffect(() => {
     let disposed = false
+    const node = detailCardElement(contentRef.current)
+    if (node) {
+      if (webState.animation) {
+        webState.value =
+          webState.animation.playState === 'finished'
+            ? webState.to
+            : detailCardPlayback(webState.animation, webState.from, webState.to)
+      }
+      const from = webState.value
+      if (target === 0 && from === 0) {
+        webState.animation?.cancel()
+        webState.animation = null
+        webState.from = 0
+        webState.to = 0
+        onSettled(motion)
+        return
+      }
+      if (from === target && webState.to === target && webState.animation) {
+        return
+      }
+      webState.animation?.cancel()
+      // Web Animations run on the compositor, so main-thread tab work cannot drop this fade.
+      const animation = node.animate(detailCardFrames(from, target, slide), {
+        duration: TRANSITION_MS * Math.abs(target - from),
+        easing: EASE_OUT_CUBIC,
+        fill: 'both'
+      })
+      webState.from = from
+      webState.to = target
+      webState.animation = animation
+      animation.onfinish = () => {
+        if (disposed || webState.animation !== animation) {
+          return
+        }
+        webState.value = target
+        if (target === 0) {
+          commitDetailCardExit(() => onSettled(motion))
+        }
+      }
+      return () => {
+        disposed = true
+      }
+    }
     progress.stopAnimation((value) => {
       if (disposed) {
         return
@@ -126,7 +202,7 @@ function AnchoredDetailCard({
       disposed = true
       progress.stopAnimation()
     }
-  }, [motion, target, progress, onSettled])
+  }, [motion, target, progress, webState, onSettled, slide, contentRef])
 
   const width = Math.max(0, Math.min(CARD_WIDTH, bounds.right - bounds.left - EDGE_INSET * 2))
   const minLeft = bounds.left + EDGE_INSET
@@ -202,6 +278,25 @@ function AnchoredDetailCard({
       <DetailCardFocusBoundary refs={boundaryRefs} index={3} active={active} />
     </>
   )
+}
+
+function detailCardElement(node: unknown): HTMLElement | null {
+  if (typeof HTMLElement === 'undefined' || !(node instanceof HTMLElement)) {
+    return null
+  }
+  return typeof node.animate === 'function' ? node : null
+}
+
+function detailCardFrames(from: number, to: number, slide: boolean): Keyframe[] {
+  const frame = (opacity: number): Keyframe =>
+    slide ? { opacity, transform: `translateY(${SLIDE_FROM * (1 - opacity)}px)` } : { opacity }
+  return [frame(from), frame(to)]
+}
+
+function detailCardPlayback(animation: Animation, from: number, to: number): number {
+  const timing = animation.effect?.getComputedTiming().progress
+  const eased = typeof timing === 'number' ? timing : 0
+  return from + (to - from) * eased
 }
 
 const styles = themedStyleSheet(() => ({
