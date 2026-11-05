@@ -23,7 +23,23 @@ import type { DiscoveredSkill } from '../../../../shared/skills'
 import { withNativeChatResumeCommand } from './use-native-chat-resume-command'
 
 function transport(sessionCommands?: NativeChatStructuredComposerTransport['sessionCommands']) {
-  return { sessionCommands, optionSnapshot: [] } as NativeChatStructuredComposerTransport
+  return {
+    sessionCommands,
+    optionSnapshot: [],
+    capturePresentation: () => () => true,
+    send: () => true,
+    dispatchCommand: async () => ({ handled: false, accepted: false, error: null }),
+    optionsSurface: {
+      getSnapshot: () => [],
+      subscribe: () => () => {},
+      setOption: async () => ({ snapshot: [] }),
+      invokeAction: async () => ({ snapshot: [] })
+    },
+    onError: () => {},
+    runtime: 'local',
+    sessionId: 'catalog-session',
+    runtimeEnvironmentId: null
+  } satisfies NativeChatStructuredComposerTransport
 }
 
 describe('composer catalog authority', () => {
