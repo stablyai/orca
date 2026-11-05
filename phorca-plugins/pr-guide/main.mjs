@@ -141,8 +141,6 @@ export async function generateGuide(prUrl, run = runCli, findClaude = resolveCla
         '--json-schema',
         GUIDE_SCHEMA_JSON,
         '--no-session-persistence',
-        '--model',
-        'sonnet',
         '--effort',
         'medium',
         '--tools',

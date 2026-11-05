@@ -17,8 +17,6 @@ The viewer and comment form are React components in `guide-ui.jsx` and `comment-
    git clone --filter=blob:none --sparse --depth 1 https://github.com/phocassoftware/phorca.git phorca-pr-guide
    git -C phorca-pr-guide sparse-checkout set phorca-plugins/pr-guide
    ```
-
-   Until [PR #30](https://github.com/phocassoftware/phorca/pull/30) merges, add `--branch lfa9603/pr-guide-plugin-module` to the `git clone` command.
 3. In Phorca, open **Settings → Plugins**, enable plugins, and choose **Install plugin → Local folder**. Enter the absolute path to `phorca-pr-guide/phorca-plugins/pr-guide` and approve **notifications**, **storage**, **workspace read**, and **terminal send**. Phorca copies the checked-in bundle and refreshes the plugin. The **Git URL** tab expects `orca-plugin.json` at the repository root, so it cannot install this subfolder directly.
 
 To update later, run `git -C phorca-pr-guide pull --ff-only`, then install the same local folder again in Phorca and approve any changed permissions. No worktree is created or pruned by the plugin.
@@ -51,6 +49,6 @@ Guides are saved under `%LOCALAPPDATA%\Phorca PR Guide\guides` on Windows or `~/
 
 To reopen a saved snapshot without regenerating it, run `node /path/to/pr-guide/viewer.mjs /path/to/guide.json`, then open the printed local URL. Keep that process running while commenting. It still refreshes from the GitHub PR when the remote head changes. This standalone viewer supports GitHub comments; local agent comments require a guide opened by the Phorca action or session command.
 
-Guide generation uses Claude Sonnet at medium effort and accepts up to 250 changed files and a 600 KB patch. It checks GitHub's total file count before downloading the diff and gets the complete filename list from the paginated files API. Larger PRs return a clear error rather than a partial guide. For example, phorca PR #24 changes 16,928 files and needs to be split before a complete guide can be generated. On macOS, `gh` and `claude` must be on Phorca's `PATH`. On Windows, `gh.exe` must be on `PATH`; the plugin accepts a `claude.exe` on `PATH` or a standard WinGet `claude.cmd` shim pointing to the native executable.
+Guide generation uses Claude Code's configured model at medium effort and accepts up to 250 changed files and a 600 KB patch. It checks GitHub's total file count before downloading the diff and gets the complete filename list from the paginated files API. Larger PRs return a clear error rather than a partial guide. For example, phorca PR #24 changes 16,928 files and needs to be split before a complete guide can be generated. On macOS, `gh` and `claude` must be on Phorca's `PATH`. On Windows, `gh.exe` must be on `PATH`; the plugin accepts a `claude.exe` on `PATH` or a standard WinGet `claude.cmd` shim pointing to the native executable.
 
 The current Phorca plugin API does not let a sidebar panel invoke the guide worker or load generated guide data, so the interactive guide opens as a local browser page. The palette command reads the PR URL from the clipboard because palette commands receive no arguments.
