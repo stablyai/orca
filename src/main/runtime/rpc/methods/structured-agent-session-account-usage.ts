@@ -1,12 +1,14 @@
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import type { AgentSessionAccountUsage } from '../../../../shared/agent-session/agent-session-account-usage'
+import {
+  supportsSessionAccountUsage,
+  type AgentSessionAccountUsage
+} from '../../../../shared/agent-session/agent-session-account-usage'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { requireLegacyAgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/agent-session-account-home'
 import type { RateLimitState } from '../../../../shared/rate-limit-types'
 import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
-import { isNativeLocalLocation } from '../../../../shared/execution-host'
 import { buildCodexResetCreditExpectedScope } from '../../../../shared/codex-reset-credit-scope'
 import { getSelectedCodexAccountIdForTarget } from '../../../codex-accounts/runtime-selection'
 import {
@@ -16,12 +18,6 @@ import {
 import { defineMethod } from '../core'
 import { requireInstalledStructuredHost } from './structured-agent-session-gate'
 import { OptionsParams } from './structured-agent-session-schemas'
-
-export function supportsSessionAccountUsage(
-  record: AgentSessionRecord | undefined | null
-): boolean {
-  return record?.provider === 'codex' && isNativeLocalLocation(record.location)
-}
 
 export function sessionAccountUsageOffer(
   record: AgentSessionRecord,

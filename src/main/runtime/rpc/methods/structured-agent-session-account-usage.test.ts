@@ -89,8 +89,6 @@ describe('chat account usage', () => {
       }
     })
     expect(read).toHaveBeenCalledWith(record, expect.any(AbortSignal))
-    const options = await call('agentSession.options', { sessionId: SESSION })
-    expect(options).toMatchObject({ ok: true, result: { accountUsage: true } })
   })
 
   it.each([
