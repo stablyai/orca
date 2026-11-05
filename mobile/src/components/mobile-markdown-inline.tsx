@@ -97,7 +97,8 @@ function renderPhrasing(
     case 'delete': {
       const emphasis =
         node.type === 'strong'
-          ? [styles.bold, ctx.tone.text]
+          ? // A tone recolours bold text, but bold keeps its weight over a tone's weight.
+            [styles.bold, ctx.tone.text, { fontWeight: styles.bold.fontWeight }]
           : node.type === 'emphasis'
             ? styles.italic
             : styles.strike

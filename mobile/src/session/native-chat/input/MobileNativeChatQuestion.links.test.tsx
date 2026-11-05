@@ -35,6 +35,12 @@ afterEach(() => {
 
 const flatten = (node: ReactTestInstance | string): string =>
   typeof node === 'string' ? node : node.children.map(flatten).join('')
+const flattenStyle = (style: unknown): Record<string, unknown> =>
+  Array.isArray(style)
+    ? Object.assign({}, ...style.map(flattenStyle))
+    : style && typeof style === 'object'
+      ? (style as Record<string, unknown>)
+      : {}
 
 // A terminal-backed question reaches the phone as plain agent text, which names files like any chat text.
 it('opens a file named in a question card through the chat', () => {
@@ -46,7 +52,7 @@ it('opens a file named in a question card through the chat', () => {
         { value: openFile },
         createElement(MobileNativeChatQuestion, {
           question: {
-            question: 'Should I keep the retry in src/app.ts?',
+            question: 'Should I keep the **retry** in src/app.ts?',
             options: ['Yes', 'No'],
             multiSelect: false,
             optionTokens: [null, null]
@@ -64,4 +70,9 @@ it('opens a file named in a question card through the chat', () => {
   )
   act(() => link.props.onPress())
   expect(openFile).toHaveBeenCalledExactlyOnceWith('src/app.ts')
+  // The title is already strong, so the agent's bold must still read heavier than it.
+  const boldWeights = renderer!.root
+    .findAll((node) => String(node.type) === 'Text' && flatten(node) === 'retry')
+    .map((node) => flattenStyle(node.props.style).fontWeight)
+  expect(boldWeights).toContain('700')
 })
