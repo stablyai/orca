@@ -144,6 +144,10 @@ export async function initializeAcpStructuredSession(
       started.kind === 'new' ? 'new' : 'loaded'
     )
   }
+  // A load restores the conversation's own model, so only a new session runs the launch choice.
+  if (started.kind === 'new' && launch.launchModel) {
+    options.adoptLaunchModel(launch.launchModel)
+  }
   const link: AgentSessionProviderHandleLink = {
     linkId:
       deps.mintLinkId?.() ?? `${spec.agent}-${acquire.fence}-${started.sessionId}`.slice(0, 128),

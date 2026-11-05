@@ -39,14 +39,23 @@ describe('orchestration worker launch preferences', () => {
     })
   })
 
-  it('rejects OMP effort until its model options support it', () => {
+  it('passes an OMP role and thinking level to the launch arguments', () => {
+    const launch = resolveWorkerLaunchPreferences({
+      agent: 'omp',
+      model: '@worker_be',
+      effort: 'medium'
+    })
+
+    expect(launch.preferences).toEqual({ model: '@worker_be', effort: 'medium' })
+    expect(resolveAgentSessionOptionLaunch('omp', launch.preferences, [], false).args).toEqual([
+      '--model',
+      '@worker_be',
+      '--thinking',
+      'medium'
+    ])
     expect(() =>
-      resolveWorkerLaunchPreferences({
-        agent: 'omp',
-        model: 'google-vertex/claude-haiku-4-5@20251001',
-        effort: 'low'
-      })
-    ).toThrow('does not support effort low')
+      resolveWorkerLaunchPreferences({ agent: 'omp', model: '@worker_be', effort: 'turbo' })
+    ).toThrow('does not support effort turbo')
   })
 
   it('passes an opaque Claude model and portable effort through the shared catalog', () => {

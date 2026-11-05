@@ -35,6 +35,7 @@ import { STRUCTURED_CHILD_ENV_TO_DELETE } from '../runtime/structured-session-ch
 import { acpSessionNotRestoredItem } from './acp-session-reopen-failure'
 
 const GROK = acpLaunchSpecFor('grok')!
+const OMP = acpLaunchSpecFor('omp')!
 const identity = {
   sessionId: 'session-alpha-1',
   workspaceId: 'workspace-1',
@@ -51,6 +52,23 @@ function grokRecord(overrides: Partial<AgentSessionRecord> = {}): AgentSessionRe
     accountHome: { variable: 'GROK_HOME', path: '/home/user/.grok-work' },
     ...overrides
   }
+}
+
+function ompRecord(options: Record<string, string>): AgentSessionRecord {
+  return grokRecord({
+    provider: 'omp',
+    accountHome: { variable: 'PI_CODING_AGENT_DIR', path: '/home/user/.omp/agent' },
+    options,
+    providerHandleChain: [
+      {
+        linkId: 'link-created',
+        origin: 'created',
+        mintedAtFence: 1,
+        observedAt: 1,
+        handle: { transport: 'acp', agent: 'omp', nativeId: 'omp-1' }
+      }
+    ]
+  })
 }
 
 function journalWithTurns(...providerSessions: string[]): JournalLoad {
@@ -71,11 +89,15 @@ function journalWithTurns(...providerSessions: string[]): JournalLoad {
   return { state, newer: null, damage: null }
 }
 
-function resolver(record: AgentSessionRecord, readJournal: () => JournalLoad | null = () => null) {
+function resolver(
+  record: AgentSessionRecord,
+  readJournal: () => JournalLoad | null = () => null,
+  spec = GROK
+) {
   const searched: (string | null | undefined)[] = []
   return {
     searched,
-    resolve: createAcpStructuredLaunchResolver(GROK, {
+    resolve: createAcpStructuredLaunchResolver(spec, {
       store: { getRecord: () => record, pinLaunchDirectory: vi.fn() },
       readJournal,
       resolveWorkspacePath: async () => '/repo/worktree',
@@ -268,6 +290,19 @@ describe('ACP launch resolution', () => {
     const launch = await resolver(value, readJournal).resolve({ identity })
     expect(launch.resume).toBeNull()
     expect(readJournal).not.toHaveBeenCalled()
+  })
+
+  it("puts an OMP chat's saved model on the launch line, where OMP resolves roles", async () => {
+    const launch = await resolver(
+      ompRecord({ model: '@worker_be', effort: 'medium' }),
+      () => null,
+      OMP
+    ).resolve({
+      identity
+    })
+    expect(launch.args.slice(-2)).toEqual(['--model', '@worker_be'])
+    expect(launch.args).not.toContain('--thinking')
+    expect(launch.launchModel).toBe('@worker_be')
   })
 
   it("asks the agent to approve everything only under the chat's full access", async () => {

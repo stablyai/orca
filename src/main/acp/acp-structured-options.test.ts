@@ -2,6 +2,8 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it, vi } from 'vitest'
 import { AcpStructuredOptions, readAcpLiveOptions } from './acp-structured-options'
 import { writeAcpSessionOption } from './acp-session-option-write'
+import { applyAcpMessageOptions } from './acp-message-execution-options'
+import type { AcpStructuredSession } from './acp-structured-session'
 import { grokModelEfforts } from './acp-dialects/grok-model-catalog'
 import { GROK_ACP_DIALECT } from './acp-dialects/grok-dialect'
 import { OMP_ACP_DIALECT } from './acp-dialects/omp-dialect'
@@ -436,5 +438,20 @@ describe('what a new session with no pick says about the configured default', ()
       'new'
     )
     expect(options.configuredDefault()).toBeNull()
+  })
+})
+
+describe('OMP launch-line model', () => {
+  it('does not re-send a role the session already runs from its launch line', async () => {
+    const options = recordedOmpOptions('new')
+    options.adoptLaunchModel('@worker_be')
+    const setOption = vi.fn(async () => undefined)
+    await applyAcpMessageOptions(
+      { options } as unknown as AcpStructuredSession,
+      { model: '@worker_be', effort: 'medium' },
+      setOption,
+      () => true
+    )
+    expect(setOption.mock.calls).toEqual([['effort', 'medium']])
   })
 })

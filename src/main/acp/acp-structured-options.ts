@@ -96,6 +96,12 @@ export class AcpStructuredOptions {
     this.appliedInput.clear()
   }
 
+  /** The session runs a model the launch line applied, so sends need not write it again. */
+  adoptLaunchModel(model: string): void {
+    this.appliedInput.set('model', model)
+    this.picked.add('model')
+  }
+
   notePick(key: string): void {
     this.picked.add(key)
   }

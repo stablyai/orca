@@ -97,7 +97,10 @@ export type AcpLaunchSpec = {
   command: string
   /** The terminal agent's Command setting may name a different program than this chat server. */
   ignoreAgentCommandSetting?: true
-  args(input: { fullAccess: boolean; pluginDir: string | null }): string[]
+  /** `model` is the chat's saved model, passed only to specs that launch with it. */
+  args(input: { fullAccess: boolean; pluginDir: string | null; model?: string }): string[]
+  /** The ACP model option cannot name every selection the CLI resolves, so the launch line carries it. */
+  launchesWithModel?: true
   /** Applied after the account and user environment. */
   env: Readonly<Record<string, string>>
   /** Scrubs inherited Orca plumbing and returns keys to omit entirely. */
@@ -231,7 +234,13 @@ const OMP_LAUNCH_SPEC: AcpLaunchSpec = {
   agent: 'omp',
   command: 'omp',
   // Full access approves permission requests individually.
-  args: ({ pluginDir }) => ['acp', ...(pluginDir ? ['--plugin-dir', pluginDir] : [])],
+  args: ({ pluginDir, model }) => [
+    'acp',
+    ...(pluginDir ? ['--plugin-dir', pluginDir] : []),
+    ...(model ? ['--model', model] : [])
+  ],
+  // ACP takes listed provider/id values only; the CLI also resolves roles, fallbacks and :level.
+  launchesWithModel: true,
   env: {},
   dialect: OMP_ACP_DIALECT,
   loginCommand: agentSessionSignInFor('omp')?.loginCommand ?? [],
