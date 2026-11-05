@@ -19884,6 +19884,8 @@
         "loadingFiles": "Loading files...",
         "noFiles": "No matching files",
         "filesLoadFailed": "Couldn't load files",
+        "noMatchingPrompts": "No matching prompts",
+        "sentPrompts": "Sent prompts",
         "attach": "Attach file",
         "startDictation": "Start dictation",
         "stopDictation": "Stop dictation",

@@ -1,11 +1,11 @@
 import { observeTranscriptPaneLifetime } from './helpers/native-chat-transcript-fixture'
-// Up/Down in the composer walk the chat's sent prompts, against real layout and key events.
+// Up/Down and Ctrl+R in the composer reach the chat's sent prompts, against real layout and key events.
 
 import { randomUUID } from 'node:crypto'
 import { mkdtempSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import type { Locator } from '@stablyai/playwright-test'
+import type { Locator, Page, TestInfo } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import {
@@ -15,6 +15,7 @@ import {
   waitForPaneIdentitySnapshot
 } from './helpers/terminal'
 import { waitForPtyShellEcho } from './terminal-pty-readiness'
+import type { PaneIdentitySnapshot } from './helpers/terminal-pane-identity'
 
 const FIRST = 'first prompt'
 const MULTI_LINE = 'line one\nline two\nline three'
@@ -53,7 +54,12 @@ function draft(composer: Locator): Promise<string> {
   )
 }
 
-test('Up and Down walk the prompts already in the chat', async ({ orcaPage }, testInfo) => {
+/** Open a chat over a Claude transcript holding PROMPTS and run `exercise` against it. */
+async function withPromptsChat(
+  orcaPage: Page,
+  testInfo: TestInfo,
+  exercise: (chat: Locator, composer: Locator, boundPane: PaneIdentitySnapshot) => Promise<void>
+): Promise<void> {
   await waitForSessionReady(orcaPage)
   await waitForActiveWorktree(orcaPage)
   await ensureTerminalVisible(orcaPage)
@@ -110,6 +116,17 @@ test('Up and Down walk the prompts already in the chat', async ({ orcaPage }, te
     const chat = orcaPage.locator('[data-native-chat-root="true"]')
     await expect(chat.getByText('Answer 4.')).toBeVisible()
     const composer = chat.getByRole('textbox')
+    await exercise(chat, composer, boundPane)
+  } finally {
+    await testInfo.attach('transcript-pane-lifetime', {
+      body: JSON.stringify(await finishLifetime()),
+      contentType: 'application/json'
+    })
+  }
+}
+
+test('Up and Down walk the prompts already in the chat', async ({ orcaPage }, testInfo) => {
+  await withPromptsChat(orcaPage, testInfo, async (chat, composer, boundPane) => {
     await composer.click()
     const press = async (key: 'ArrowUp' | 'ArrowDown'): Promise<string> => {
       await orcaPage.keyboard.press(key)
@@ -165,10 +182,26 @@ test('Up and Down walk the prompts already in the chat', async ({ orcaPage }, te
     expect(finalPane.activeLeafId).toBe(boundPane.activeLeafId)
     expect(finalPane.ptyIdsByLeafId).toEqual(boundPane.ptyIdsByLeafId)
     await expect(chat).toBeVisible()
-  } finally {
-    await testInfo.attach('transcript-pane-lifetime', {
-      body: JSON.stringify(await finishLifetime()),
-      contentType: 'application/json'
-    })
-  }
+  })
+})
+
+test('Ctrl+R searches the prompts already in the chat', async ({ orcaPage }, testInfo) => {
+  await withPromptsChat(orcaPage, testInfo, async (_chat, composer) => {
+    await composer.click()
+    await orcaPage.keyboard.press('Control+r')
+    await expect(composer).toHaveAttribute('aria-expanded', 'true')
+    // The composer names its menu; the sidebar holds listboxes of its own.
+    const search = orcaPage.locator(`[id="${await composer.getAttribute('aria-controls')}"]`)
+    // Newest first; the harness turn never reaches the list.
+    await expect(search.getByRole('option')).toHaveText([COMMAND, WRAPPED, MULTI_LINE, FIRST])
+
+    await orcaPage.keyboard.type('line')
+    await expect(search.getByRole('option')).toHaveText([MULTI_LINE])
+    await expect(search.getByRole('option')).toHaveAttribute('aria-selected', 'true')
+
+    await orcaPage.keyboard.press('Enter')
+    await expect(composer).toHaveAttribute('aria-expanded', 'false')
+    await expect(search).toBeHidden()
+    expect(await draft(composer)).toBe(MULTI_LINE)
+  })
 })

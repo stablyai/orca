@@ -89,6 +89,23 @@ export function nativeChatSentPrompts(source: NativeChatRecallSource): NativeCha
   return prompts
 }
 
+/** Newest first, each prompt once; a case-insensitive substring match, as in a shell's reverse search. */
+export function searchNativeChatSentPrompts(
+  prompts: readonly NativeChatSentPrompt[],
+  query: string
+): NativeChatSentPrompt[] {
+  const needle = query.trim().toLocaleLowerCase()
+  const seen = new Set<string>()
+  const matches: NativeChatSentPrompt[] = []
+  for (const prompt of prompts.toReversed()) {
+    if (!seen.has(prompt.prompt) && prompt.prompt.toLocaleLowerCase().includes(needle)) {
+      matches.push(prompt)
+    }
+    seen.add(prompt.prompt)
+  }
+  return matches
+}
+
 /** Start Back only from empty input; stop at the oldest prompt, clear past newest, and return null to leave the key to the caret. */
 export function stepNativeChatPromptRecall(input: {
   direction: 'back' | 'forward'

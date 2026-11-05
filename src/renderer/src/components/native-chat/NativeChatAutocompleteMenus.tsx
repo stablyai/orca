@@ -163,7 +163,7 @@ function PickerGroupHeading({ kind }: { kind: 'commands' | 'skills' }): React.JS
   )
 }
 
-function PickerStatus({ children }: { children: React.ReactNode }): React.JSX.Element {
+export function PickerStatus({ children }: { children: React.ReactNode }): React.JSX.Element {
   return (
     <div className="flex items-center gap-2 px-2 py-1.5 text-xs text-muted-foreground">
       {children}
@@ -228,7 +228,7 @@ function PickerOption({
   )
 }
 
-function PickerListbox({
+export function PickerListbox({
   id,
   children
 }: {
@@ -289,7 +289,7 @@ function PickerListbox({
   )
 }
 
-function PickerOptionButton({
+export function PickerOptionButton({
   id,
   selected,
   activeItemRef,
