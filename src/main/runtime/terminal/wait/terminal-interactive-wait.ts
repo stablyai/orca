@@ -147,6 +147,7 @@ export abstract class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRunt
     displayName: string
   } | null> {
     const session = this.store?.getWorkspaceSession?.()
+    const hostId = session?.activeWorkspaceExecutionHostId ?? undefined
     // The scoped key is set for folder workspaces and remote focus; the legacy id alone misses those.
     let worktreeId = getActiveSidebarWorkspaceId(
       session?.activeWorkspaceKey ?? null,
@@ -164,7 +165,10 @@ export abstract class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRunt
       return null
     }
     try {
-      const resolved = await this.resolveWorkspaceSelector(`id:${worktreeId}`)
+      const resolved = await this.resolveWorkspaceSelector(
+        `id:${worktreeId}`,
+        hostId ? { requiredHostId: hostId } : undefined
+      )
       return {
         worktreeId: resolved.id,
         path: resolved.git.path,
@@ -174,7 +178,7 @@ export abstract class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRunt
     } catch {
       // A remote worktree is not in the local catalog; project what the stored row knows.
     }
-    return resolveStoredWorkspaceContext(this.store, worktreeId)
+    return resolveStoredWorkspaceContext(this.store, worktreeId, hostId)
   }
 
   getExactWorkerProviderSession(

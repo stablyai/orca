@@ -245,6 +245,8 @@ describe('OrcaRuntimeService', () => {
       getRepo: () => remoteRepo,
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
+      getWorktreeMetaForHost: (worktreeId: string, hostId: string) =>
+        hostId === 'ssh:ssh-missing' ? metaById[worktreeId] : undefined,
       getWorkspaceSession: () => ({
         activeWorktreeId: mainId,
         activeWorkspaceExecutionHostId: 'ssh:ssh-missing'
@@ -258,7 +260,7 @@ describe('OrcaRuntimeService', () => {
     ).mockRejectedValue(new Error('selector_not_found'))
 
     await expect(runtime.resolveActiveWorktreeContext()).resolves.toMatchObject({
-      worktreeId: mainId,
+      worktreeId: `ssh:ssh-missing|${mainId}`,
       displayName: 'Remote main'
     })
   })
@@ -282,6 +284,8 @@ describe('OrcaRuntimeService', () => {
       getRepo: () => remoteRepo,
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
+      getWorktreeMetaForHost: (worktreeId: string, hostId: string) =>
+        hostId === 'ssh:ssh-missing' ? metaById[worktreeId] : undefined,
       getWorkspaceSession: () => ({
         activeWorktreeId: null,
         activeWorkspaceKey: `worktree:${mainId}`,
@@ -295,8 +299,84 @@ describe('OrcaRuntimeService', () => {
     ).mockRejectedValue(new Error('selector_not_found'))
 
     await expect(runtime.resolveActiveWorktreeContext()).resolves.toMatchObject({
-      worktreeId: mainId,
+      worktreeId: `ssh:ssh-missing|${mainId}`,
       displayName: 'Remote main'
+    })
+  })
+
+  it('uses the selected host copy for twin worktree ids', async () => {
+    const hostA = {
+      id: 'twin-repo',
+      path: '/srv/repo',
+      displayName: 'A repo',
+      badgeColor: 'blue',
+      addedAt: 1,
+      connectionId: 'host-a'
+    }
+    const hostB = { ...hostA, path: '/srv/repo-b', connectionId: 'host-b' }
+    const id = 'twin-repo::/srv/repo'
+    const metaA: Record<string, WorktreeMeta> = {
+      [id]: makeWorktreeMeta({ displayName: 'Host A' })
+    }
+    const metaB: Record<string, WorktreeMeta> = {
+      [id]: makeWorktreeMeta({ displayName: 'Host B' })
+    }
+    const runtimeStore = {
+      ...store,
+      getRepos: () => [hostA, hostB],
+      getAllWorktreeMeta: () => metaA,
+      // The unscoped read names the other host on purpose; the host-qualified read must win.
+      getWorktreeMeta: (worktreeId: string) => metaB[worktreeId],
+      getWorktreeMetaForHost: (worktreeId: string, hostId: string) =>
+        hostId === 'ssh:host-a' ? metaA[worktreeId] : metaB[worktreeId],
+      getWorkspaceSession: () => ({
+        activeWorktreeId: id,
+        activeWorkspaceExecutionHostId: 'ssh:host-a'
+      })
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    vi.spyOn(
+      runtime as unknown as { resolveWorkspaceSelector: (selector: string) => Promise<unknown> },
+      'resolveWorkspaceSelector'
+    ).mockRejectedValue(new Error('selector_not_found'))
+
+    await expect(runtime.resolveActiveWorktreeContext()).resolves.toMatchObject({
+      worktreeId: `ssh:host-a|${id}`,
+      displayName: 'Host A'
+    })
+  })
+
+  it('falls back to a nonempty name when stored metadata is blank', async () => {
+    const remoteRepo = {
+      id: 'blank-repo',
+      path: '/srv/blank',
+      displayName: '',
+      badgeColor: 'blue',
+      addedAt: 1,
+      connectionId: 'ssh-blank'
+    }
+    const id = `${remoteRepo.id}::/srv/blank`
+    const meta: Record<string, WorktreeMeta> = { [id]: makeWorktreeMeta({ displayName: '' }) }
+    const runtimeStore = {
+      ...store,
+      getRepos: () => [remoteRepo],
+      getAllWorktreeMeta: () => meta,
+      getWorktreeMeta: (worktreeId: string) => meta[worktreeId],
+      getWorktreeMetaForHost: (worktreeId: string) => meta[worktreeId],
+      getWorkspaceSession: () => ({
+        activeWorktreeId: id,
+        activeWorkspaceExecutionHostId: 'ssh:ssh-blank'
+      })
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    vi.spyOn(
+      runtime as unknown as { resolveWorkspaceSelector: (selector: string) => Promise<unknown> },
+      'resolveWorkspaceSelector'
+    ).mockRejectedValue(new Error('selector_not_found'))
+
+    await expect(runtime.resolveActiveWorktreeContext()).resolves.toMatchObject({
+      worktreeId: `ssh:ssh-blank|${id}`,
+      displayName: '/srv/blank'
     })
   })
 
