@@ -12,7 +12,8 @@ import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-typ
  */
 export async function downloadAndOpenRemoteTerminalFile(
   fileContext: RuntimeFileOperationArgs,
-  filePath: string
+  filePath: string,
+  isRequestCurrent?: () => boolean
 ): Promise<void> {
   const name = basename(filePath) || filePath
   try {
@@ -23,7 +24,24 @@ export async function downloadAndOpenRemoteTerminalFile(
     if (result.canceled) {
       return
     }
-    await window.api.shell.openFilePath(result.destinationPath, LOCAL_EXECUTION_HOST_ID)
+    // Why: a newer link click during the download supersedes this one.
+    if (isRequestCurrent && !isRequestCurrent()) {
+      return
+    }
+    const opened = await window.api.shell.openFilePath(
+      result.destinationPath,
+      LOCAL_EXECUTION_HOST_ID
+    )
+    // Why: the copy is saved where the user chose, so say where when no app took it.
+    if (!opened && (!isRequestCurrent || isRequestCurrent())) {
+      toast.error(
+        translate(
+          'auto.components.terminal.pane.TerminalLinkActionPopover.downloadedNoDefaultApp',
+          "Saved '{{value0}}', but no app opened it.",
+          { value0: result.destinationPath }
+        )
+      )
+    }
   } catch (error) {
     toast.error(
       extractIpcErrorMessage(
