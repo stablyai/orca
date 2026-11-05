@@ -83,7 +83,6 @@ function needsWindowToast(outcome: WorkspaceSleepOutcome): boolean {
 export class WorkspaceSleepCoordinator {
   /** Reopening during sleep prevents subsequent VM suspension. */
   private readonly reopenings = new Map<string, number>()
-  private readonly vmWakes = new Map<string, Promise<EphemeralVmRuntimeRecord | null>>()
   private readonly vmOperations = new Map<string, Promise<void>>()
 
   constructor(private readonly runtime: WorkspaceSleepRuntime) {}
@@ -138,34 +137,19 @@ export class WorkspaceSleepCoordinator {
     })
   }
 
-  /** The one path that resumes a workspace's recipe VM. A wake already waiting or running is
-   *  joined, so the recipe's resume never runs twice for one reopening. */
-  async wakeVm(worktreeId: string): Promise<EphemeralVmRuntimeRecord | null> {
+  /** The one path that resumes a workspace's recipe VM. Each workspace's VM resumes and suspends
+   *  one at a time, so a wake behind a running suspend resumes the VM it leaves asleep, and a wake
+   *  behind another wake finds the VM already up (the recipe's resume only runs on a suspended VM). */
+  wakeVm(worktreeId: string): Promise<EphemeralVmRuntimeRecord | null> {
     const platform = this.runtime.workspaceSleepPlatform
     if (!platform?.ownsVm(worktreeId)) {
-      return null
+      return Promise.resolve(null)
     }
     this.noteReopened(worktreeId)
-    const pending = this.vmWakes.get(worktreeId)
-    if (pending) {
-      return pending
-    }
-    const wake = queueTerminalWorkspaceCommand(this.runtime, `id:${worktreeId}`, {
+    return queueTerminalWorkspaceCommand(this.runtime, `id:${worktreeId}`, {
       kind: 'wake',
       run: () => this.afterVmOperations(worktreeId, () => platform.resumeVm(worktreeId))
-    }).finally(() => {
-      if (this.vmWakes.get(worktreeId) === wake) {
-        this.vmWakes.delete(worktreeId)
-      }
     })
-    this.vmWakes.set(worktreeId, wake)
-    return wake
-  }
-
-  private suspendVm(platform: WorkspaceSleepPlatform, worktreeId: string): Promise<void> {
-    // Earlier wakes are answered by the VM this suspends; a later one must resume after it.
-    this.vmWakes.delete(worktreeId)
-    return this.afterVmOperations(worktreeId, () => platform.suspendVm(worktreeId))
   }
 
   /** One VM operation at a time per workspace: lifecycle queueing alone is off in shipped builds. */
@@ -210,7 +194,9 @@ export class WorkspaceSleepCoordinator {
         }
         return host.sleepWorkspace(worktreeId, markAsleep)
       },
-      suspendVm: platform ? (worktreeId) => this.suspendVm(platform, worktreeId) : null,
+      suspendVm: platform
+        ? (worktreeId) => this.afterVmOperations(worktreeId, () => platform.suspendVm(worktreeId))
+        : null,
       ownRecords: (worktreeId) => runtime.wakeRecordsForWorktree(worktreeId),
       watchReopen: (worktreeId) => {
         const at = this.reopenings.get(worktreeId) ?? 0

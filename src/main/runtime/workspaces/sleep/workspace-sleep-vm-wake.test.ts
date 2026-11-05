@@ -1,5 +1,5 @@
 // A recipe VM's suspend and resume never overlap, and one reopening runs its resume once.
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import type { EphemeralVmRuntimeRecord } from '../../../../shared/ephemeral-vm-runtimes'
 import { WorkspaceSleepCoordinator, type WorkspaceSleepRuntime } from './workspace-sleep-runtime'
 import type { WorkspaceSleepPlatform } from './workspace-sleep-platform'
@@ -76,12 +76,20 @@ describe('WorkspaceSleepCoordinator VM wake', () => {
     expect(order).toEqual(['suspend:start', 'suspend:end', 'resume'])
   })
 
-  it('joins a wake already running instead of running the resume again', async () => {
+  it("runs the recipe's resume once for two quick clicks, the second waiting for the first", async () => {
     const resuming = gate()
-    const resumeVm = vi.fn(async (): Promise<EphemeralVmRuntimeRecord | null> => {
+    let suspended = true
+    let resumes = 0
+    // Like the recipe resume: it only runs on a suspended VM.
+    const resumeVm = async (): Promise<EphemeralVmRuntimeRecord | null> => {
+      if (!suspended) {
+        return null
+      }
+      resumes += 1
       await resuming.opened
+      suspended = false
       return null
-    })
+    }
     const workspaceSleep = coordinator({ suspendVm: async () => {}, resumeVm })
 
     const first = workspaceSleep.wakeVm(WORKTREE_ID)
@@ -89,10 +97,10 @@ describe('WorkspaceSleepCoordinator VM wake', () => {
     resuming.open()
     await Promise.all([first, second])
 
-    expect(resumeVm).toHaveBeenCalledTimes(1)
+    expect(resumes).toBe(1)
   })
 
-  it('wakes again for a click after a suspend started instead of joining the older wake', async () => {
+  it('wakes again for a click after a suspend started', async () => {
     const order: string[] = []
     const firstResume = gate()
     let resumes = 0

@@ -31,6 +31,20 @@ describe('registerRuntimeHandlers', () => {
     fromWebContentsMock.mockReset()
   })
 
+  // #36923: the window's wake shares the runtime's one VM wake path with its sleep's suspend.
+  it("routes the window's recipe VM wake through the runtime", async () => {
+    const record = { id: 'vm-1', status: 'running' }
+    const runtime = { wakeWorkspaceVm: vi.fn().mockResolvedValue(record) }
+
+    registerRuntimeHandlers(runtime as never)
+
+    const registration = handleMock.mock.calls.find(
+      ([channel]) => channel === 'ephemeralVm:resumeWorkspace'
+    )
+    await expect(registration![1]({}, { workspaceId: 'repo::/vm' })).resolves.toBe(record)
+    expect(runtime.wakeWorkspaceVm).toHaveBeenCalledWith('repo::/vm')
+  })
+
   // #37067: a phone's re-read on the add's reposChanged came before this publish.
 
   it('rejects a graph publication queued by a superseded main frame', () => {
