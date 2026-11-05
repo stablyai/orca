@@ -21,7 +21,6 @@ export function removeSourceRepo(
     worktreeMeta: { ...state.worktreeMeta },
     worktreeLineageById: { ...state.worktreeLineageById },
     workspaceLineageByChildKey: { ...state.workspaceLineageByChildKey },
-    crossStoreLineageByChildKey: { ...state.crossStoreLineageByChildKey },
     workspaceSession: removeRepoFromWorkspaceSession(state.workspaceSession, repoId),
     workspaceSessionsByHostId: removeRepoFromHostWorkspaceSessions(
       state.workspaceSessionsByHostId,
@@ -67,12 +66,6 @@ function removeRepoWorktreeMetadata(state: TransferProfileState, repoId: string)
       (parent?.type === 'worktree' && isRepoWorktreeId(repoId, parent.worktreeId))
     ) {
       delete state.workspaceLineageByChildKey[key as WorkspaceKey]
-    }
-  }
-  for (const key of Object.keys(state.crossStoreLineageByChildKey ?? {})) {
-    const child = parseWorkspaceKey(key)
-    if (child?.type === 'worktree' && isRepoWorktreeId(repoId, child.worktreeId)) {
-      delete state.crossStoreLineageByChildKey?.[key]
     }
   }
 }
