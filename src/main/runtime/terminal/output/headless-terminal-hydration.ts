@@ -114,6 +114,9 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
         if (this.headlessTerminals.get(ptyId) !== state) {
           return
         }
+        // A whole-screen seed paints the grid from the renderer, authoritative at this size.
+        state.reflowRepaintTrust = undefined
+        state.unrepaintedReflowGrid = undefined
         // Why: the renderer parsed live bytes queued behind this seed while serializing; writing them again doubles TUI frames and splits escapes.
         if (typeof rendered.seq === 'number') {
           state.rendererSeedSeq = rendered.seq
@@ -239,26 +242,24 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
       }
       for (const chunk of splitFreebuffScreenUpdates(data, state.emulator.partialEscapeTailAnsi)) {
         await state.emulator.write(chunk, { forwardQueryReplies })
-        // Fresh output retires the reflow distrust buffer by buffer: a full screen of bytes at this
-        // size, or a full-screen erase, proves every visible cell of the active buffer was painted
-        // on this grid. Output queued before the reflow boundary cannot retire it (#38418).
+        // The reflowed grid distrusts cells wrapped at an older width. Only a reliable signal of a
+        // fresh paint retires it: an explicit full-screen erase on the active buffer — byte counts
+        // prove nothing, since an OSC title or cursor moves can outrun a screen — or a whole-screen
+        // seed from the renderer/provider. Output queued before the reflow cannot retire it (#38418).
         const trust = state.reflowRepaintTrust
         if (trust && outputSequence > trust.boundarySequence) {
-          const alternate = state.emulator.isAlternateScreen
-          // Seen together with the carry, an escape sequence split across chunks still counts.
           const followed = `${trust.escapeCarry}${chunk}`
           trust.escapeCarry = followed.slice(-3)
-          const erased = followed.includes('[2J')
-          if (alternate) {
-            trust.alternateBytesOutstanding = erased
-              ? 0
-              : trust.alternateBytesOutstanding - chunk.length
-          } else {
-            trust.normalBytesOutstanding = erased ? 0 : trust.normalBytesOutstanding - chunk.length
-          }
-          if (trust.normalBytesOutstanding <= 0 && trust.alternateBytesOutstanding <= 0) {
-            state.reflowRepaintTrust = undefined
-            state.unrepaintedReflowGrid = undefined
+          if (followed.includes('[2J')) {
+            if (state.emulator.isAlternateScreen) {
+              trust.alternateRepainted = true
+            } else {
+              trust.normalRepainted = true
+            }
+            if (trust.normalRepainted && trust.alternateRepainted) {
+              state.reflowRepaintTrust = undefined
+              state.unrepaintedReflowGrid = undefined
+            }
           }
         }
         const pty = this.ptysById.get(ptyId)

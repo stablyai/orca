@@ -178,10 +178,10 @@ export type RuntimeHeadlessTerminal = {
 export type ReflowRepaintTrust = {
   /** Output at or below this sequence was queued before the reflow and cannot retire it. */
   boundarySequence: number
-  /** Bytes still needed on the normal buffer before every visible cell was painted there. */
-  normalBytesOutstanding: number
+  /** An explicit full-screen erase painted the normal buffer since the reflow. */
+  normalRepainted: boolean
   /** The same for the alternate buffer. */
-  alternateBytesOutstanding: number
+  alternateRepainted: boolean
   /** Tail of the last chunk, so an escape sequence split across chunks is still recognized. */
   escapeCarry: string
 }

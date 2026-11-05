@@ -169,6 +169,9 @@ export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends Orca
         if (this.headlessTerminals.get(ptyId) !== state) {
           return
         }
+        // A whole-screen seed paints the grid from the renderer/provider, authoritative at this size.
+        state.reflowRepaintTrust = undefined
+        state.unrepaintedReflowGrid = undefined
         if (snapshot.cwd !== undefined) {
           state.emulator.setCwd(snapshot.cwd)
           if (!this.terminalCwdByPtyId.has(ptyId) && snapshot.cwd?.trim()) {
@@ -238,8 +241,8 @@ export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends Orca
       // fresh output arrived on it, and ignore what was queued before this boundary (#38418).
       state.reflowRepaintTrust = {
         boundarySequence: this.getPtyOutputSequence(ptyId),
-        normalBytesOutstanding: cols * rows,
-        alternateBytesOutstanding: cols * rows,
+        normalRepainted: false,
+        alternateRepainted: false,
         escapeCarry: ''
       }
     }

@@ -191,9 +191,7 @@ export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeW
     const trust = state.reflowRepaintTrust
     if (
       trust &&
-      (state.emulator.isAlternateScreen
-        ? trust.alternateBytesOutstanding > 0
-        : trust.normalBytesOutstanding > 0)
+      !(state.emulator.isAlternateScreen ? trust.alternateRepainted : trust.normalRepainted)
     ) {
       return null
     }

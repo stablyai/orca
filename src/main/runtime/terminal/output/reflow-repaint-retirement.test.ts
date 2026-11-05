@@ -29,16 +29,20 @@ async function settle(runtime: RuledRuntime): Promise<void> {
   await runtime['headlessTerminals'].get(PTY_ID)!.writeChain
 }
 
+function reflowed(): RuledRuntime {
+  const runtime = new RuledRuntime()
+  // Early banner bytes arrive before the size commit, so the model starts on the default grid.
+  runtime.onPtyData(PTY_ID, BANNER, 1)
+  // The attach commits the measured grid; the reflow leaves the model distrusting its cells.
+  runtime.commitGrid(20, 5)
+  runtime.reflowHeadlessTerminalToPtyGrid(PTY_ID, 20, 5)
+  return runtime
+}
+
 describe('a reattach reflow that nothing resizes again', () => {
-  it('recovers the ruled screen once a full frame repaints at the committed size (#38418)', async () => {
-    const runtime = new RuledRuntime()
-    // Early banner bytes arrive before the size commit, so the model starts on the default grid.
-    runtime.onPtyData(PTY_ID, BANNER, 1)
-    // The attach commits the measured grid; the reflow leaves the model distrusting its cells.
-    runtime.commitGrid(20, 5)
-    runtime.reflowHeadlessTerminalToPtyGrid(PTY_ID, 20, 5)
+  it('recovers the ruled screen once the TUI erases and repaints (#38418)', async () => {
+    const runtime = reflowed()
     expect(runtime['readRuledScreen'](PTY_ID)).toBeNull()
-    // A TUI paints its first full frame — at least cols*rows fresh bytes at this size.
     runtime.onPtyData(PTY_ID, paintFrame(20, 5, 'x'), 2)
     await settle(runtime)
     const ruled = runtime['readRuledScreen'](PTY_ID)
@@ -47,20 +51,22 @@ describe('a reattach reflow that nothing resizes again', () => {
   })
 
   it('keeps distrusting while only a short echo arrived', async () => {
-    const runtime = new RuledRuntime()
-    runtime.onPtyData(PTY_ID, BANNER, 1)
-    runtime.commitGrid(20, 5)
-    runtime.reflowHeadlessTerminalToPtyGrid(PTY_ID, 20, 5)
+    const runtime = reflowed()
     runtime.onPtyData(PTY_ID, 'ok\r\n', 2)
     await settle(runtime)
     expect(runtime['readRuledScreen'](PTY_ID)).toBeNull()
   })
 
+  it('does not count long non-painting output as a repaint', async () => {
+    // An OSC title or cursor moves can outrun a screen of bytes without changing one cell.
+    const runtime = reflowed()
+    runtime.onPtyData(PTY_ID, `\x1b]0;${'x'.repeat(1000)}\x07${'\x1b[1;1H'.repeat(300)}`, 2)
+    await settle(runtime)
+    expect(runtime['readRuledScreen'](PTY_ID)).toBeNull()
+  })
+
   it('still clears immediately when a real resize repaints off the reflowed grid', async () => {
-    const runtime = new RuledRuntime()
-    runtime.onPtyData(PTY_ID, BANNER, 1)
-    runtime.commitGrid(20, 5)
-    runtime.reflowHeadlessTerminalToPtyGrid(PTY_ID, 20, 5)
+    const runtime = reflowed()
     runtime.commitGrid(30, 5)
     runtime['resizeHeadlessTerminal'](PTY_ID, 30, 5)
     const state = runtime['headlessTerminals'].get(PTY_ID)!
@@ -72,10 +78,7 @@ describe('a reattach reflow that nothing resizes again', () => {
 
 describe('reflow distrust boundaries', () => {
   it('recognizes a full-screen erase split across two chunks', async () => {
-    const runtime = new RuledRuntime()
-    runtime.onPtyData(PTY_ID, BANNER, 1)
-    runtime.commitGrid(20, 5)
-    runtime.reflowHeadlessTerminalToPtyGrid(PTY_ID, 20, 5)
+    const runtime = reflowed()
     runtime.onPtyData(PTY_ID, '\x1b[', 2)
     runtime.onPtyData(PTY_ID, '2J', 3)
     await settle(runtime)
@@ -83,10 +86,7 @@ describe('reflow distrust boundaries', () => {
   })
 
   it('does not let an alternate-screen erase stand in for the normal buffer', async () => {
-    const runtime = new RuledRuntime()
-    runtime.onPtyData(PTY_ID, BANNER, 1)
-    runtime.commitGrid(20, 5)
-    runtime.reflowHeadlessTerminalToPtyGrid(PTY_ID, 20, 5)
+    const runtime = reflowed()
     runtime.onPtyData(PTY_ID, `${ALT_ENTER}${ERASE}`, 2)
     await settle(runtime)
     // The alternate screen is repainted and readable; the normal buffer behind it is not.
@@ -94,6 +94,9 @@ describe('reflow distrust boundaries', () => {
     runtime.onPtyData(PTY_ID, ALT_LEAVE, 3)
     await settle(runtime)
     expect(runtime['readRuledScreen'](PTY_ID)).toBeNull()
+    runtime.onPtyData(PTY_ID, `${ERASE}frame`, 4)
+    await settle(runtime)
+    expect(runtime['readRuledScreen'](PTY_ID)).not.toBeNull()
   })
 
   it('ignores output that was queued before the reflow boundary', async () => {
