@@ -498,6 +498,8 @@ describe('OpenCode composer', () => {
     ['the stock placeholder', box(['Ask anything… "Fix a TODO in the codebase"'], 0, '')],
     ['the shell placeholder', box(['Run a command… "git status"'], 0, '', { metadata: 'Shell' })],
     ['a placeholder clipped by a narrow pane', box(['Ask anything…'], 0, '', { metadata: '' })],
+    ['a placeholder cut off at the box edge', box(['Ask anythin'], 0, '', { metadata: '' })],
+    ['a cut-off shell placeholder', box(['Run a c'], 0, '', { metadata: 'Shell' })],
     ['a transparent theme', box(['Ask anything… "Fix broken tests"'], 0, '', { bottom: '' })]
   ])('reads an empty box showing %s as no draft', (_label, context) => {
     expect(hasTerminalComposerTypedText(context)).toBe(false)

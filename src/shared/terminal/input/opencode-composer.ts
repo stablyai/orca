@@ -8,10 +8,10 @@ const OPENCODE_PLACEHOLDERS = ['Ask anything', 'Run a command']
 const ELLIPSIS = '…'
 
 function isOpenCodePlaceholder(line: string): boolean {
-  // Narrow panes clip the placeholder to one row, ending it with an ellipsis.
-  const clipped = line.endsWith(ELLIPSIS) ? line.slice(0, -ELLIPSIS.length) : null
+  // Narrow panes clip the placeholder to the box width, with or without an ellipsis.
+  const shown = line.endsWith(ELLIPSIS) ? line.slice(0, -ELLIPSIS.length) : line
   return OPENCODE_PLACEHOLDERS.some(
-    (placeholder) => line.startsWith(placeholder) || (!!clipped && placeholder.startsWith(clipped))
+    (placeholder) => line.startsWith(placeholder) || (!!shown && placeholder.startsWith(shown))
   )
 }
 
