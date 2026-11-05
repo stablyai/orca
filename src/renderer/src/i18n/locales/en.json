@@ -20637,6 +20637,27 @@
         }
       },
       "activity": {
+        "state": {
+          "working": "Working",
+          "completed": "Completed",
+          "idle": "Idle",
+          "failed": "Failed",
+          "stopped": "Stopped",
+          "unavailable": "Status unavailable"
+        },
+        "viewing": "Viewing {{name}}",
+        "mainAgent": "Main agent",
+        "composerStays": "The composer still sends to the main agent.",
+        "noMessages": "No messages from this subagent yet",
+        "subagentsLabel_one": "{{count}} subagent",
+        "subagentsLabel_other": "{{count}} subagents",
+        "subagentsTitle": "Subagents",
+        "dismissAllFailed": "Dismiss all failed or unavailable",
+        "backToConversation": "Back to the conversation",
+        "dismissSubagent": "Dismiss {{name}}",
+        "noActivity": "No activity yet",
+        "completedSubagents": "Completed ({{count}})",
+        "openSubagent": "Open {{name}}",
         "transcriptUnavailable": "Transcript unavailable"
       }
     },
