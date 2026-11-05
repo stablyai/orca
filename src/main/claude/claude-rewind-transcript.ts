@@ -1,5 +1,4 @@
 import { AgentConversationCopyError } from '../native-chat/agent-conversation-copy-error'
-import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
@@ -9,6 +8,8 @@ import {
   currentWorkerEntryLayout,
   resolveWorkerThreadEntryPath
 } from '../worker-threads/worker-thread-entry-path'
+import { durableWriteTempPath } from '../filesystem/durable-file-write'
+import type { ClaudeForkCheckpoint } from './claude-conversation-fork-boundary'
 import type { ClaudeConversationForkWork } from './claude-conversation-fork-worker-entry'
 
 type ConversationCopy = { sessionId: string; resumeCursor: string; filePath: string }
@@ -17,70 +18,87 @@ type ConversationCopy = { sessionId: string; resumeCursor: string; filePath: str
 export async function materializeClaudeConversationTranscript(input: {
   sourcePath: string
   sourceSessionId: string
-  throughEntryId: string
+  throughEntryId?: string
+  checkpoint?: ClaudeForkCheckpoint
+  rewind?: true
   destinationDirectory?: string
   title?: string
   signal?: AbortSignal
 }): Promise<ConversationCopy | null> {
   input.signal?.throwIfAborted()
   const destinationDirectory = input.destinationDirectory ?? dirname(input.sourcePath)
-  const temporaryPath = join(destinationDirectory, `.fork-${randomUUID()}.tmp`)
+  const temporaryPath = durableWriteTempPath(join(destinationDirectory, 'conversation.jsonl'))
   const compiled = resolveWorkerThreadEntryPath(
-    currentWorkerEntryLayout(import.meta.dirname),
+    currentWorkerEntryLayout(__dirname),
     'claude-conversation-fork-worker-entry.js'
   )
-  const entry = existsSync(compiled)
-    ? compiled
+  const installed = [
+    compiled,
+    join(dirname(compiled), '..', 'claude-conversation-fork-worker-entry.js')
+  ].find(existsSync)
+  const entry = installed
+    ? installed
     : new URL('./claude-conversation-fork-worker-entry.ts', import.meta.url)
-  const signal = AbortSignal.any([
-    AbortSignal.timeout(60_000),
-    ...(input.signal ? [input.signal] : [])
-  ])
+  const signal = input.signal
+  const failure = input.rewind
+    ? 'Claude could not rewind this chat. Try again.'
+    : 'Claude could not copy this chat. Try again.'
   const workerData: ClaudeConversationForkWork = {
     sourcePath: input.sourcePath,
     sourceSessionId: input.sourceSessionId,
     throughEntryId: input.throughEntryId,
+    checkpoint: input.checkpoint,
     title: input.title,
     destinationDirectory,
     temporaryPath
   }
-  const worker = new Worker(entry, { workerData, resourceLimits: { maxOldGenerationSizeMb: 512 } })
+  const worker = new Worker(entry, { workerData })
   let abort: () => void = () => undefined
   try {
     return await new Promise<ConversationCopy | null>((resolve, reject) => {
       abort = () =>
         reject(
-          new AgentConversationCopyError('Claude could not finish copying this chat. Try again.')
+          new AgentConversationCopyError(
+            input.rewind ? failure : 'Claude took too long to copy this chat. Try again.'
+          )
         )
-      signal.addEventListener('abort', abort, { once: true })
-      worker.once('message', (message: { result?: ConversationCopy | null; error?: string }) => {
-        if (message.error) {
-          reject(new AgentConversationCopyError('Claude could not copy this chat. Try again.'))
-        } else {
-          resolve(message.result ?? null)
+      signal?.addEventListener('abort', abort, { once: true })
+      worker.once(
+        'message',
+        (message: { result?: ConversationCopy | null; error?: string; copyError?: boolean }) => {
+          if (message.error) {
+            reject(
+              new AgentConversationCopyError(
+                message.copyError && !input.rewind ? message.error : failure
+              )
+            )
+          } else {
+            resolve(message.result ?? null)
+          }
         }
-      })
+      )
       worker.once('error', (error) =>
         reject(
           new AgentConversationCopyError(
-            error.message.includes('memory')
-              ? 'Claude could not copy this chat because it is too large. Fork an earlier response.'
-              : 'Claude could not copy this chat. Try again.',
+            ('code' in error && error.code === 'ERR_WORKER_OUT_OF_MEMORY') ||
+              error.message.includes('memory')
+              ? `Claude ran out of memory while ${input.rewind ? 'rewinding' : 'copying'} this chat. Close other apps, then try again.`
+              : failure,
             { cause: error }
           )
         )
       )
       worker.once('exit', (code) => {
         if (code !== 0) {
-          reject(new AgentConversationCopyError('Claude could not copy this chat. Try again.'))
+          reject(new AgentConversationCopyError(failure))
         }
       })
-      if (signal.aborted) {
+      if (signal?.aborted) {
         abort()
       }
     })
   } finally {
-    signal.removeEventListener('abort', abort)
+    signal?.removeEventListener('abort', abort)
     await worker.terminate()
     await rm(temporaryPath, { force: true })
   }
@@ -96,6 +114,7 @@ export async function materializeClaudeRewindTranscript(
   }
   const copy = await materializeClaudeConversationTranscript({
     sourcePath,
+    rewind: true,
     sourceSessionId: fork.sourceSessionId,
     throughEntryId: fork.throughEntryId,
     destinationDirectory

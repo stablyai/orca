@@ -1,3 +1,4 @@
+import type * as AppServerSession from './app-server/codex-app-server-session'
 import { mkdir, mkdtemp, rm, writeFile, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -16,7 +17,7 @@ const state = vi.hoisted(() => ({
 vi.mock('../native-chat/session-file-resolver', () => ({
   resolveSessionFilePath: async (_agent: string, id: string) => state.paths.get(id) ?? null
 }))
-vi.mock('./codex-provider-session-invocation', () => ({
+vi.mock('./structured/session-lifecycle/codex-provider-session-invocation', () => ({
   codexProviderSessionInvocation: async () => ({
     command: 'codex',
     args: [],
@@ -25,7 +26,8 @@ vi.mock('./codex-provider-session-invocation', () => ({
     timeoutMs: 60_000
   })
 }))
-vi.mock('./app-server/codex-app-server-session', () => ({
+vi.mock('./app-server/codex-app-server-session', async (importOriginal) => ({
+  ...(await importOriginal<typeof AppServerSession>()),
   runCodexAppServerSession: async (
     launch: unknown,
     body: (rpc: CodexAppServerRpc) => Promise<unknown>
@@ -93,6 +95,7 @@ function copy(selected = `${SOURCE}:a1`, settled = true) {
         providerHandle: null
       },
       providerSessionId: SOURCE,
+      title: 'Source fork',
       accountHome: { variable: 'CODEX_HOME', path: root },
       checkpoint: {
         selectedItemId: agentJournalItemKey({
@@ -112,6 +115,11 @@ it('uses a persisted terminal canonical boundary for an idle imported latest rep
   await history(SOURCE, turn('canonical', 1))
   state.request.mockResolvedValue({ thread: { id: CHILD } })
   await expect(copy(undefined, false)).resolves.toEqual({ sessionId: CHILD })
+  expect(state.request).toHaveBeenCalledWith(
+    'thread/name/set',
+    { threadId: CHILD, name: 'Source fork' },
+    { timeoutMs: 15_000 }
+  )
   expect(state.request).toHaveBeenCalledWith(
     'thread/fork',
     expect.objectContaining({ lastTurnId: 'canonical' })
@@ -146,6 +154,9 @@ it('forks and reverts only the child for legacy, legacy, canonical, counting aga
       return { thread: { id: CHILD, historyMode: 'paginated' } }
     }
     expect(params?.threadId).toBe(CHILD)
+    if (method === 'thread/name/set') {
+      return {}
+    }
     if (method === 'thread/revert') {
       reverted = true
       return { thread: { id: CHILD } }
@@ -195,4 +206,10 @@ it('uses exact physical identities across repeated prompts rather than a retaine
   })
   expect(result.index).toBe(1)
   expect(result.selected.id).toBe('second')
+})
+
+it('reports a provider in-progress rejection without suggesting an update', async () => {
+  await history(SOURCE, turn('canonical', 1))
+  state.request.mockRejectedValue(new Error('Cannot fork thread with an in-progress turn'))
+  await expect(copy()).rejects.toThrow('Wait for it to finish')
 })

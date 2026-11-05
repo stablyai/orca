@@ -334,6 +334,7 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
       settled: boolean
       beforeMessage?: { sessionId: string; uuid: string }
       throughMessage?: { sessionId: string; uuid: string }
+      rootMessage?: { sessionId: string; uuid: string }
       turnId?: string
     }
     title?: string

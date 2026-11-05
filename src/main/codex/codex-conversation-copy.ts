@@ -1,3 +1,4 @@
+import { setThreadName } from './structured/session-lifecycle/codex-provider-session-rename'
 import { AgentConversationCopyError } from '../native-chat/agent-conversation-copy-error'
 import { join } from 'node:path'
 import { requireLegacyAgentSessionAccountHome } from '../../shared/agent-session/lifecycle/agent-session-account-home'
@@ -9,20 +10,21 @@ import { readCodexLocalHistory } from '../native-chat/codex-local-history'
 import { resolveSessionFilePath } from '../native-chat/session-file-resolver'
 import { decodeCodexTranscriptLine } from '../native-chat/transcript-line-decoders-codex'
 import {
+  CodexAppServerTimeoutError,
   runCodexAppServerSession,
   type CodexAppServerRpc
 } from './app-server/codex-app-server-session'
 import {
   codexProviderSessionInvocation,
   type CodexProviderSessionInvocationDeps
-} from './codex-provider-session-invocation'
+} from './structured/session-lifecycle/codex-provider-session-invocation'
 
 type CopyInput = Parameters<NonNullable<StructuredAgentSessionAdapter['copyConversation']>>[0]
 type Root = { id?: string; terminal: boolean; prompt: boolean }
 
 function unavailable(): never {
   throw new AgentConversationCopyError(
-    'Codex could not locate an exact saved boundary for this response. Update Codex, then try again.'
+    'Codex could not locate an exact saved boundary in this older chat. Fork a response in a newer chat.'
   )
 }
 
@@ -232,7 +234,31 @@ export async function copyCodexConversation(
           }
         }
       }
+      if (input.title) {
+        await setThreadName(rpc.request, id, input.title)
+      }
       return { sessionId: id }
     }
-  )
+  ).catch((error: unknown) => {
+    if (error instanceof AgentConversationCopyError) {
+      throw error
+    }
+    if (error instanceof CodexAppServerTimeoutError || signal.aborted) {
+      throw new AgentConversationCopyError('Codex took too long to copy this chat. Try again.', {
+        cause: error
+      })
+    }
+    if (
+      error instanceof Error &&
+      /(?:in[- ]progress|active turn|turn.*running)/i.test(error.message)
+    ) {
+      throw new AgentConversationCopyError(
+        'Codex could not copy this chat while a response was running. Wait for it to finish, then try again.',
+        { cause: error }
+      )
+    }
+    throw new AgentConversationCopyError('Codex could not copy this chat. Try again.', {
+      cause: error
+    })
+  })
 }

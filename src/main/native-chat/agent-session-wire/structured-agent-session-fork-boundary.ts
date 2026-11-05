@@ -1,3 +1,4 @@
+import { agentSessionProviderHandleRoot } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { agentSessionCurrentContextRows } from '../../../shared/agent-session/agent-session-context-clear'
 import { savedRewindKeys } from '../../../shared/agent-session/lifecycle/agent-session-rewind'
 import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
@@ -14,7 +15,8 @@ type Checkpoint = NonNullable<
 export function structuredAgentSessionForkBoundary(
   snapshot: AgentJournalSnapshot,
   record: AgentSessionRecord,
-  throughItemId: string
+  throughItemId: string,
+  capability: 'checkpoint' | 'tip' = 'checkpoint'
 ): { checkpoint: Checkpoint; latest: boolean; retained: string } | null {
   const { items } = agentSessionCurrentContextRows(snapshot.items, snapshot.submissions)
   const index = items.findIndex((item) => item.itemId === throughItemId)
@@ -46,6 +48,8 @@ export function structuredAgentSessionForkBoundary(
   const nextTurn = next && readAgentJournalTurn(next.body)
   const nextIdentity = next && keys.nativeIdentity(nextTurn?.userItemId ?? next.itemId)
   const identity = keys.nativeIdentity(selected.itemId)
+  const opener = turn?.userItemId ? keys.nativeIdentity(turn.userItemId) : undefined
+  const head = record.providerHandleChain.at(-1)
   const anchor = record.forkedFrom?.childBoundary
   const anchorIndex =
     anchor?.kind === 'item' ? items.findIndex((item) => item.itemId === anchor.itemId) : -1
@@ -60,6 +64,9 @@ export function structuredAgentSessionForkBoundary(
     settled,
     ...(turn ? { turnId: turn.providerTurnId ?? turn.turnId } : {}),
     ...(identity?.provider === 'codex' ? { turnId: identity.turnId } : {}),
+    ...(opener?.provider === 'claude'
+      ? { rootMessage: { sessionId: opener.sessionId, uuid: opener.uuid } }
+      : {}),
     ...(identity?.provider === 'claude'
       ? { throughMessage: { sessionId: identity.sessionId, uuid: identity.uuid } }
       : {}),
@@ -74,9 +81,10 @@ export function structuredAgentSessionForkBoundary(
       selected: selected.itemId,
       root: root?.itemId,
       identity,
+      opener,
       floor: record.providerContextBoundary,
       rewind: record.rewind,
-      head: record.providerHandleChain.at(-1)
+      head: capability === 'tip' ? head : head && agentSessionProviderHandleRoot(head.handle)
     })
   }
 }

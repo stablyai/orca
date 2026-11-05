@@ -1,20 +1,20 @@
 import { stat } from 'node:fs/promises'
 import { resolve } from 'node:path'
-import { requireLegacyAgentSessionAccountHome } from '../../shared/agent-session/lifecycle/agent-session-account-home'
-import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
-import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
-import { agentSessionPinnedLaunchDirectory } from '../runtime/agent-session/records/agent-session-record-launch-directory'
-import { resolveHiddenProbeCwd } from '../rate-limits/hidden-probe-cwd'
-import { codexStructuredLaunchArgs } from './structured/launch/codex-structured-launch-args'
+import { requireLegacyAgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/agent-session-account-home'
+import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
+import { isDefinitiveAbsence } from '../../../../shared/definitive-filesystem-absence'
+import { agentSessionPinnedLaunchDirectory } from '../../../runtime/agent-session/records/agent-session-record-launch-directory'
+import { resolveHiddenProbeCwd } from '../../../rate-limits/hidden-probe-cwd'
+import { codexStructuredLaunchArgs } from '../launch/codex-structured-launch-args'
 import {
   resolveCodexStructuredInvocation,
   type CodexStructuredInvocationDeps
-} from './structured/launch/codex-structured-launch-resolution'
+} from '../launch/codex-structured-launch-resolution'
 import {
   NATIVE_CHAT_SCRATCH_DIR_ENV,
   LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV
-} from '../native-chat/native-chat-visuals-delivery'
-import { CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS } from '../codex-cli/codex-read-only-app-server-args'
+} from '../../../native-chat/native-chat-visuals-delivery'
+import { CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS } from '../../../codex-cli/codex-read-only-app-server-args'
 
 export type CodexProviderSessionInvocationDeps = CodexStructuredInvocationDeps & {
   resolveLaunchArgs: () => Promise<string[]> | string[]

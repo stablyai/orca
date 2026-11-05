@@ -36,3 +36,53 @@ it('does not treat the presence of saved assistant content as completion of an u
     )?.checkpoint.settled
   ).toBe(false)
 })
+
+it('carries a settled root opener even when the streamed block never acquired a final native row', () => {
+  const opener = agentJournalItemKey({
+    provider: 'claude',
+    sessionId: 'native-source',
+    uuid: 'prompt-1'
+  })
+  const selected = agentJournalItemKey({
+    provider: 'claude',
+    sessionId: 'native-source',
+    uuid: 'block:msg_lost:0'
+  })
+  const boundary = structuredAgentSessionForkBoundary(
+    {
+      sessionId: 'source',
+      cursor: { epoch: 'epoch', sequence: 3 },
+      submissions: [],
+      items: [
+        {
+          itemId: opener,
+          sequence: 1,
+          revision: 0,
+          observedAt: 1,
+          body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hello' }] }
+        },
+        {
+          itemId: 'root',
+          sequence: 2,
+          revision: 1,
+          observedAt: 2,
+          body: { kind: 'turn', turnId: 'root', userItemId: opener, state: 'interrupted' }
+        },
+        {
+          itemId: selected,
+          sequence: 3,
+          revision: 1,
+          observedAt: 3,
+          turnScope: { kind: 'turn', turnItemId: 'root' },
+          body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'partial' }] }
+        }
+      ]
+    },
+    agentSessionRecordFixture({ sessionId: 'source', provider: 'claude' }),
+    selected
+  )
+  expect(boundary?.checkpoint).toMatchObject({
+    settled: true,
+    rootMessage: { sessionId: 'native-source', uuid: 'prompt-1' }
+  })
+})
