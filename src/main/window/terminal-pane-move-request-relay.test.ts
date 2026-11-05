@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { TerminalLeafMoveResult } from '../../shared/terminal-leaf-move'
+import type { TerminalLeafMoveResult } from '../../shared/workspace-layout/terminal-leaf-move'
 
 const ipcEmitter = new EventEmitter()
 const ipcMainMock = {

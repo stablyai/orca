@@ -1,5 +1,5 @@
 import type { AppState } from '@/store'
-import type { TerminalLeafMoveResult } from '../../../../shared/terminal-leaf-move'
+import type { TerminalLeafMoveResult } from '../../../../shared/workspace-layout/terminal-leaf-move'
 import { requestBackgroundTerminalWorktreeMount } from '../terminal/background-terminal-worktree-mount'
 import { BACKGROUND_WORKTREE_MEASURE_WINDOW_MS } from '../terminal/background-terminal-worktree-visibility'
 import { leaseTerminalPaneMount } from './terminal-pane-split-request-routing'

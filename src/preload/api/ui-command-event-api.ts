@@ -21,7 +21,7 @@ import type { PaneLaunchRecipe } from '../../shared/terminal/pty/lifecycle/termi
 import type {
   TerminalPaneMoveToNewTabReply,
   TerminalPaneMoveToNewTabRequest
-} from '../../shared/terminal-leaf-move'
+} from '../../shared/workspace-layout/terminal-leaf-move'
 import type {
   TerminalPaneRevealReply,
   TerminalPaneRevealRequest
