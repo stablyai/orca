@@ -28,7 +28,7 @@ const entry = (agent: 'codex' | 'claude', label: string): AgentPickerEntry => ({
 it('offers "Set as default" when an agent row is right-clicked', () => {
   const onSetDefault = vi.fn()
   render(
-    <DropdownMenu defaultOpen modal={false}>
+    <DropdownMenu defaultOpen>
       <DropdownMenuTrigger>Open</DropdownMenuTrigger>
       <DropdownMenuContent>
         <AgentLaunchPickerMenu
@@ -41,7 +41,12 @@ it('offers "Set as default" when an agent row is right-clicked', () => {
       </DropdownMenuContent>
     </DropdownMenu>
   )
-  fireEvent.contextMenu(screen.getByRole('menuitem', { name: 'Codex' }))
+  const row = screen.getByRole('menuitem', { name: 'Codex' })
+  const other = screen.getByRole('menuitem', { name: 'Claude' })
+  fireEvent.contextMenu(row)
+  // Hovering rows under the menu must not dismiss it.
+  fireEvent.pointerMove(row, { pointerType: 'mouse' })
+  fireEvent.pointerMove(other, { pointerType: 'mouse' })
   fireEvent.click(screen.getByRole('menuitem', { name: 'Set as default' }))
   expect(onSetDefault).toHaveBeenCalledWith('codex')
 })

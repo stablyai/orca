@@ -57,7 +57,8 @@ export function AgentDefaultContextMenu({
     return children
   }
   return (
-    <ContextMenu>
+    // Why: rows under a non-modal menu take focus on hover (Radix menu items), which dismisses it.
+    <ContextMenu modal>
       <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
       <ContextMenuContent className="z-[70]">
         <ContextMenuItem onSelect={onSetDefault} disabled={isDefault}>
