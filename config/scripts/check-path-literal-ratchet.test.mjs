@@ -91,7 +91,7 @@ describe('isScannedPath', () => {
     expect(isScannedPath('tests/e2e/ssh-orcad-terminal-journeys.spec.ts')).toBe(true)
     expect(isScannedPath('config/scripts/pr-e2e-source-routing.test.mjs')).toBe(false)
     expect(isScannedPath('tests/e2e/helpers/pr-comments-sidebar-fixture.ts')).toBe(false)
-    expect(isScannedPath('config/scripts/ci/sharding/ci-shard-timings.json')).toBe(false)
+    expect(isScannedPath('config/scripts/ci-shard-timings.json')).toBe(false)
     expect(isScannedPath('config/patches/foo.patch')).toBe(false)
   })
 })

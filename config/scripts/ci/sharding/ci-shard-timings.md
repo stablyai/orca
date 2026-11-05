@@ -68,7 +68,7 @@ baseline. Runs from before the fixes are not comparable, because their `pty-subp
 files still carried 5-second waits.
 
 ```sh
-node config/scripts/ci/sharding/ci-unit-timing-import.mjs RUN_DIR... config/scripts/ci/sharding/ci-shard-timings.json
+node config/scripts/ci/sharding/ci-unit-timing-import.mjs RUN_DIR... config/scripts/ci-shard-timings.json
 ```
 
 Each directory holds one run's twelve `unit-shard-node-*` artifacts. Every run is validated
@@ -217,7 +217,7 @@ API, source workflow/config, report provenance and exact file coverage against t
 saved assignments, then run:
 
 ```sh
-node config/scripts/ci/sharding/ci-unit-timing-import.mjs ARTIFACT_DIRECTORY config/scripts/ci/sharding/ci-shard-timings.json
+node config/scripts/ci/sharding/ci-unit-timing-import.mjs ARTIFACT_DIRECTORY config/scripts/ci-shard-timings.json
 ```
 
 The importer rejects missing or duplicate shards, duplicate files, failed unit reports,
@@ -234,7 +234,7 @@ job IDs from the Actions jobs API and fetch each with
 lanes or multiple attempts. Then run:
 
 ```sh
-node config/scripts/ci/sharding/ci-shard-timing-import.mjs LOG_DIRECTORY UNIT_RUN_ID E2E_RUN_ID config/scripts/ci/sharding/ci-shard-timings.json
+node config/scripts/ci/sharding/ci-shard-timing-import.mjs LOG_DIRECTORY UNIT_RUN_ID E2E_RUN_ID config/scripts/ci-shard-timings.json
 ```
 
 The initial source logs are in `/tmp/orca-ci-shard-logs`; two were reused from

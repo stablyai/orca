@@ -65,7 +65,7 @@ describe('the actual terminal smoke dependency graph', () => {
   it.each([
     'src/renderer/src/components/Example.tsx',
     'src/main/menu/register-app-menu.ts',
-    'config/scripts/ci/sharding/ci-shard-timings.json',
+    'config/scripts/ci-shard-timings.json',
     '.github/workflows/e2e.yml',
     'docs/reference/ci-runner-efficiency.md'
   ])('skips unrelated inputs: %s', async (file) => {
