@@ -103,9 +103,14 @@ export class TerminalPluginHookOrder {
 
 /** Whether `agent.prompt.before` runs: prompts Orca, the CLI or a plugin submits, as for
  *  `terminal.send`; a person's own prompt is never held. */
-export function agentPromptHookApplies(options: { inputSource?: TerminalInputSource }): boolean {
+export function agentPromptHookApplies(options: {
+  inputSource?: TerminalInputSource
+  inputKind?: TerminalInputKind
+}): boolean {
   return (
-    (options.inputSource === undefined || options.inputSource === 'programmatic') &&
+    (options.inputKind === 'orchestration' ||
+      options.inputSource === undefined ||
+      options.inputSource === 'programmatic') &&
     pluginHookWanted('agent.prompt.before')
   )
 }

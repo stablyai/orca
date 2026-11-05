@@ -304,6 +304,8 @@ export type RuntimeAgentPromptWriteOptions = Omit<RuntimeTerminalWriteOptions, '
   expectedBinding?: AgentPromptExpectedBinding
   /** Run on accepted Enter write, including OMP paste framing; later abort cannot undo submitted text. */
   onSubmitWritten?: () => void
+  /** Host-only guard reads the actual text after plugin rewriting. */
+  onPromptPrepared?: (prompt: string) => void
 }
 
 export type AgentPromptExpectedBinding = { ptyId: string; processIncarnation: string }

@@ -3,6 +3,7 @@ import type { AgentHookEventPayload } from './listener-event'
 import type { HookListenerState } from './listener-state'
 import { hasCodexTranscriptSubagents } from './providers/codex-state'
 import { hasMuseSessionLog } from './providers/muse-events'
+import { mainAgentStatusEqual } from '../agent-status/lifecycle/main-agent-status'
 
 export function shouldPollHookTranscript(
   state: HookListenerState,
@@ -53,19 +54,16 @@ export function transcriptPollUpdate<T extends AgentHookEventPayload>(
   }
   const subagentsChanged =
     JSON.stringify(polled.payload.subagents) !== JSON.stringify(original.payload.subagents)
-  const leadChanged =
-    polled.payload.mainAgent?.state !== original.payload.mainAgent?.state ||
-    polled.payload.mainAgent?.outcome !== original.payload.mainAgent?.outcome
+  const leadChanged = !mainAgentStatusEqual(polled.payload.mainAgent, original.payload.mainAgent)
   if (!subagentsChanged && !leadChanged) {
     return undefined
   }
-  // Keep root Stop for remote turn-end derivation, but unlabel failures so clients cannot derive success.
-  const replayedStop =
-    polled.hookEventName === 'Stop' &&
-    original.payload.mainAgent?.state !== 'done' &&
-    polled.payload.mainAgent?.outcome !== 'failure'
+  // The source folds the verified root end before removing a success-shaped public label.
+  const endedRoot = polled.hookEventName === 'Stop' && original.payload.mainAgent?.state !== 'done'
+  const replayedStop = endedRoot && polled.payload.mainAgent?.outcome !== 'failure'
   return {
     ...polled,
+    ...(endedRoot && source === 'codex' ? { transcriptTurnEnd: true as const } : {}),
     hasExplicitPrompt: undefined,
     hookEventName: replayedStop ? 'Stop' : undefined
   }

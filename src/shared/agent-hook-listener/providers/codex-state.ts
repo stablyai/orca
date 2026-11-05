@@ -1,4 +1,3 @@
-import type { AgentMainAgentStatus } from '../../agent-status/lifecycle/main-agent-status'
 import type { ParsedAgentStatusPayload } from '../../agent-status/contracts/agent-status-types'
 import { isAskUserQuestionTool } from '../../agent-status/lifecycle/agent-question-answered-intent'
 import {
@@ -22,6 +21,8 @@ import {
 import type { AgentHookEventPayload } from '../listener-event'
 import type { HookListenerState } from '../listener-state'
 import type { CodexLeadTurnState } from '../main-agent-turn-state'
+import { codexMainAgentStatusForPayload, codexLeadOutcomeForEvent } from './codex-main-agent-status'
+export { codexMainAgentStatusForPayload, codexLeadOutcomeForEvent } from './codex-main-agent-status'
 
 export function getOrCreateCodexSubagentRoster(
   state: HookListenerState,
@@ -69,6 +70,9 @@ export function setCodexMainAgentTurnState(
   const record: CodexLeadTurnState = {
     state: next.state,
     ...(continued.outcome ? { outcome: continued.outcome } : {}),
+    ...(next.state === 'done' && continued.outcome === 'failure' && next.usageLimit
+      ? { usageLimit: next.usageLimit }
+      : {}),
     stateStartedAt: continued.stateStartedAt,
     model: next.model,
     ...(sessionId ? { sessionId } : {}),
@@ -76,20 +80,6 @@ export function setCodexMainAgentTurnState(
   }
   state.codexLeadStateByPaneKey.set(paneKey, record)
   return record
-}
-
-/** Interrupt records cancellation; late Stops restate the ended turn's verdict until a new turn clears it. */
-export function codexLeadOutcomeForEvent(
-  eventName: unknown,
-  previous: CodexLeadTurnState | undefined,
-  nextState: CodexLeadTurnState['state']
-): Pick<CodexLeadTurnState, 'outcome'> {
-  if (eventName === 'Interrupt') {
-    return { outcome: 'cancellation' }
-  }
-  return nextState === 'done' && previous?.state === 'done' && previous.outcome
-    ? { outcome: previous.outcome }
-    : {}
 }
 
 /** The combined row state for a Codex pane: the root record and its roster through the same
@@ -103,19 +93,6 @@ export function resolveCodexPaneStatus(
     leadState: record.state,
     childWorkLiveness: codexRosterChildWorkLiveness(state.codexSubagentRosterByPaneKey.get(paneKey))
   })
-}
-
-/** The `mainAgent` fact a Codex row publishes, straight from the root record. */
-export function codexMainAgentStatusForPayload(
-  record: CodexLeadTurnState | undefined
-): AgentMainAgentStatus | undefined {
-  return record
-    ? {
-        state: record.state,
-        ...(record.state === 'done' && record.outcome ? { outcome: record.outcome } : {}),
-        stateStartedAt: record.stateStartedAt
-      }
-    : undefined
 }
 
 export function seedCodexStateFromSnapshot(
@@ -134,6 +111,7 @@ export function seedCodexStateFromSnapshot(
       setCodexMainAgentTurnState(state, paneKey, {
         state: mainAgent.state,
         ...(mainAgent.outcome ? { outcome: mainAgent.outcome } : {}),
+        ...(mainAgent.usageLimit ? { usageLimit: mainAgent.usageLimit } : {}),
         stateStartedAt: mainAgent.stateStartedAt,
         model: payload.model
       })
@@ -239,7 +217,12 @@ export function reconcileRemoteCodexState(
   }
 
   // Why: older relays send child identity without roster snapshots; keep their already-normalized aggregate authoritative.
-  if (agentId && !payload.subagents && !state.codexSubagentRosterByPaneKey.has(paneKey)) {
+  if (
+    agentId &&
+    !payload.mainAgent &&
+    !payload.subagents &&
+    !state.codexSubagentRosterByPaneKey.has(paneKey)
+  ) {
     return payload
   }
   const roster = getOrCreateCodexSubagentRoster(state, paneKey)
@@ -254,27 +237,44 @@ export function reconcileRemoteCodexState(
     if (eventName === 'SubagentStop') {
       finishCodexSubagent(roster, agentId)
     }
-  } else {
-    const leadState = codexLeadStateForHookEvent(eventName, payload.state, payload.toolName)
-    if (eventName === 'SessionStart' || (eventName === 'Stop' && !payload.subagents)) {
-      roster.clear()
-    }
-    if (leadState) {
-      const previousLead = state.codexLeadStateByPaneKey.get(paneKey)
+  } else if (eventName === 'SessionStart' || (eventName === 'Stop' && !payload.subagents)) {
+    roster.clear()
+  }
+  const previousLead = state.codexLeadStateByPaneKey.get(paneKey)
+  const rootOpened = !agentId && (eventName === 'SessionStart' || eventName === 'UserPromptSubmit')
+  const leadState = agentId
+    ? undefined
+    : codexLeadStateForHookEvent(eventName, payload.state, payload.toolName)
+  const root = payload.mainAgent
+  // Main can retain a cancellation the restarted source has not observed.
+  if (previousLead?.outcome !== 'cancellation' || rootOpened) {
+    if (
+      !rootOpened &&
+      eventName !== 'Interrupt' &&
+      root?.state === 'done' &&
+      root.outcome === 'failure' &&
+      root.usageLimit !== undefined
+    ) {
+      // A child observation can be the first publication of its parent's typed quota.
+      setCodexMainAgentTurnState(state, paneKey, {
+        ...root,
+        state: 'done',
+        model: payload.model ?? previousLead?.model
+      })
+    } else if (leadState) {
       setCodexMainAgentTurnState(state, paneKey, {
         state: leadState,
         ...codexLeadOutcomeForEvent(eventName, previousLead, leadState),
+        ...(leadState === 'done' ? { usageLimit: previousLead?.usageLimit } : {}),
+        model: payload.model ?? previousLead?.model
+      })
+    } else if (!eventName && !agentId && root && root.state !== 'blocked') {
+      setCodexMainAgentTurnState(state, paneKey, {
+        ...root,
+        state: root.state,
         model: payload.model ?? previousLead?.model
       })
     }
-  }
-
-  if (!eventName && !agentId && payload.mainAgent && payload.mainAgent.state !== 'blocked') {
-    setCodexMainAgentTurnState(state, paneKey, {
-      ...payload.mainAgent,
-      state: payload.mainAgent.state,
-      model: payload.model ?? state.codexLeadStateByPaneKey.get(paneKey)?.model
-    })
   }
   const lead = state.codexLeadStateByPaneKey.get(paneKey)
   if (!lead) {

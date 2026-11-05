@@ -1,5 +1,6 @@
 import type { AgentStatusState } from '../agent-status/contracts/agent-status-types'
 import type { AgentTurnOutcome } from '../agent-status/lifecycle/agent-turn-outcome'
+import type { AgentSessionUsageLimit } from '../agent-session/failures/agent-session-usage-limit'
 
 /** The Claude main agent's own turn record, published on every row as `mainAgent`. */
 export type ClaudeLeadTurnState = {
@@ -8,6 +9,7 @@ export type ClaudeLeadTurnState = {
   taskWakeupTurn?: true
   /** Done-turn verdict from provider, inferred cancellation or persisted seed; the fold reads cancellation as interrupted. */
   outcome?: AgentTurnOutcome
+  usageLimit?: AgentSessionUsageLimit
   /** When `state` first appeared; the main agent's own clock, distinct from the gated row's. */
   stateStartedAt: number
   /** Only the waiting child's next activity may clear its card; sibling churn cannot. */
@@ -19,7 +21,7 @@ export type ClaudeLeadTurnState = {
   /** Restore the lead state displaced by a child wait; inventing working cannot later fold back to done. */
   stateBeforeWait?: Pick<
     ClaudeLeadTurnState,
-    'state' | 'outcome' | 'stateStartedAt' | 'turnCompletedAt' | 'taskWakeupTurn'
+    'state' | 'outcome' | 'usageLimit' | 'stateStartedAt' | 'turnCompletedAt' | 'taskWakeupTurn'
   >
 }
 
@@ -35,6 +37,7 @@ export type CodexLeadTurnState = {
   state: 'working' | 'waiting' | 'done'
   /** Inferred/persisted verdict; Codex Stop carries none. */
   outcome?: AgentTurnOutcome
+  usageLimit?: AgentSessionUsageLimit
   /** When `state` first appeared; the root's own clock, published as `mainAgent.stateStartedAt`. */
   stateStartedAt: number
   model?: string

@@ -202,6 +202,12 @@ export const TerminalSend = TerminalHandle.extend({
   claimViewport: z.literal(true).optional()
 })
 
+export const TerminalContinueAfterUsageLimit = TerminalHandle.extend({
+  sessionId: z.string().min(1).max(512),
+  turnEndedAt: z.number().finite().positive(),
+  client: TerminalSend.shape.client
+})
+
 export const TerminalOpenInputSession = TerminalHandle.extend({
   client: z.object({ id: requiredString('Missing client ID'), type: z.literal('mobile') })
 })

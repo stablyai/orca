@@ -19,7 +19,8 @@ import { shouldIgnoreCompactContinuationUserPromptSubmit } from '../prompt-field
 import { readString } from '../tool-input-preview'
 import {
   buildClaudeCachedLeadStatusPayload,
-  normalizeClaudeSubagentLifecycleEvent
+  normalizeClaudeSubagentLifecycleEvent,
+  normalizeClaudeSessionStart
 } from './claude-lifecycle-events'
 import {
   getOrCreateClaudeSubagentRoster,
@@ -35,6 +36,7 @@ import {
 import { buildClaudeStatusPayload } from './claude-status-build'
 import { trackClaudeTaskNotificationDelivery } from './claude-task-notification-delivery'
 import { recordClaudeTeammateSpawn } from './claude-teammate-spawn'
+import { readClaudeTerminalUsageLimitForHook } from '../claude-terminal-usage-limit'
 
 const CLAUDE_HOOK_AGENT_ID_PREFIX = 'hook-agent-'
 
@@ -43,7 +45,8 @@ export function normalizeClaudeEvent(
   eventName: unknown,
   promptText: string,
   paneKey: string,
-  hookPayload: Record<string, unknown>
+  hookPayload: Record<string, unknown>,
+  onUsageLimitScanComplete?: () => void
 ): ParsedAgentStatusPayload | null {
   const eventAgentId = readString(hookPayload, 'agent_id')
   if (
@@ -55,29 +58,7 @@ export function normalizeClaudeEvent(
   }
   voidClaimsOfReplacedClaudeSession(state, eventName, eventAgentId, paneKey, hookPayload)
   if (eventName === 'SessionStart') {
-    // SessionStart supplies resume identity before prompts; mark idle/sessionBoundary to avoid phantom work/completion notifications (STA-3386).
-    const sessionStartSource = hookPayload['source']
-    if (
-      eventAgentId !== undefined ||
-      (sessionStartSource !== 'startup' &&
-        sessionStartSource !== 'resume' &&
-        sessionStartSource !== 'clear')
-    ) {
-      // Only known idle sources qualify; compact restarts and child SessionStart cannot settle a live lead.
-      return null
-    }
-    // New sessions must not inherit old child/task/cron gates.
-    state.claudeSubagentRosterByPaneKey.delete(paneKey)
-    state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
-    state.claudeActiveSessionCronPaneKeys.delete(paneKey)
-    state.claudeLaunchedBackgroundTasksByPaneKey.delete(paneKey)
-    // New sessions start a new main-agent clock.
-    setClaudeMainAgentTurnState(state, paneKey, { state: 'done', stateStartedAt: Date.now() })
-    return buildClaudeStatusPayload(state, eventName, promptText, paneKey, hookPayload, {
-      stateName: 'done',
-      updateToolSnapshot: true,
-      sessionBoundary: true
-    })
+    return normalizeClaudeSessionStart(state, promptText, paneKey, hookPayload)
   }
   const previousLead = state.claudeLeadStateByPaneKey.get(paneKey)
   // Only Stop/StopFailure carries a turn verdict; cancellation never retires surviving shell/cron/subagent work.
@@ -252,6 +233,7 @@ export function normalizeClaudeEvent(
               state: previousLead.state,
               // Child waits must retain the lead's verdict and clock.
               ...(previousLead.outcome ? { outcome: previousLead.outcome } : {}),
+              ...(previousLead.usageLimit ? { usageLimit: previousLead.usageLimit } : {}),
               stateStartedAt: previousLead.stateStartedAt,
               ...(previousLead.taskWakeupTurn ? { taskWakeupTurn: true as const } : {}),
               // Keep the displaced lead end time so later child drain belongs to the same turn.
@@ -304,6 +286,10 @@ export function normalizeClaudeEvent(
     state: reportedStateName,
     ...(taskWakeupTurn ? { taskWakeupTurn: true as const } : {}),
     ...(outcome ? { outcome } : {}),
+    usageLimit:
+      outcome === 'failure'
+        ? readClaudeTerminalUsageLimitForHook(eventName, hookPayload, onUsageLimitScanComplete)
+        : undefined,
     ...(isWaitingInducing && eventAgentId ? { waitingAgentId: eventAgentId } : {}),
     ...(isAskUserQuestionWait && waitingToolUseId !== undefined ? { waitingToolUseId } : {}),
     ...(stateBeforeWait ? { stateBeforeWait } : {}),

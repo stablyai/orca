@@ -61,6 +61,16 @@ export class RelaySessionGenerations {
     return issued && issued.binding === binding && issued.isCurrent() ? { rooted: true } : {}
   }
 
+  capturePaneOwner(connectionId: string, paneKey: string): () => boolean {
+    const key = connectionId.trim()
+    const generation = this.generation(key)
+    const root = this.paneRootsByConnectionId.get(key)?.get(paneKey)
+    return () =>
+      this.generation(key) === generation &&
+      this.paneRootsByConnectionId.get(key)?.get(paneKey) === root &&
+      (!root || root.isCurrent())
+  }
+
   codexRosterAuthority(
     connectionId: string | null,
     payload: ParsedAgentStatusPayload,

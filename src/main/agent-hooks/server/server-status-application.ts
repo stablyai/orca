@@ -21,6 +21,17 @@ import { AgentHookServerStatusDisposition } from './server-status-disposition'
 // Evicting remembered evidence makes later replay fall back to its arrival time.
 const MAX_REMEMBERED_EVIDENCE_OBSERVATIONS = 1024
 
+function isTurnBoundary(payload: AgentHookEventPayload): boolean {
+  return (
+    payload.source !== undefined &&
+    isNewTurnEvent(payload.source, payload.hookEventName) &&
+    // SessionStart also resets provider caches when compact only restates the current turn.
+    (payload.source !== 'claude' ||
+      payload.hookEventName !== 'SessionStart' ||
+      payload.payload.sessionBoundary === true)
+  )
+}
+
 /** Only live main-agent turn boundaries establish a start; replay and child events preserve it. */
 function resolveTurnStartedAt(
   previous: EnrichedAgentHookEventPayload | undefined,
@@ -28,11 +39,10 @@ function resolveTurnStartedAt(
   at: number
 ): number | undefined {
   if (
-    payload.source !== undefined &&
     payload.toolAgentId === undefined &&
     payload.isReplay !== true &&
     payload.providerSessionOnly !== true &&
-    isNewTurnEvent(payload.source, payload.hookEventName)
+    isTurnBoundary(payload)
   ) {
     return payload.payload.sessionBoundary === true ? undefined : at
   }
@@ -156,6 +166,7 @@ export abstract class AgentHookServerStatusApplication extends AgentHookServerSt
     const {
       stopHookActive: _stopHookActive,
       nativeTurnKey: _nativeTurnKey,
+      transcriptTurnEnd: _transcriptTurnEnd,
       turnEndedAt: _turnEndedAt,
       turnEndDisposition: _turnEndDisposition,
       hostTurn: _hostTurn,
@@ -272,9 +283,7 @@ export abstract class AgentHookServerStatusApplication extends AgentHookServerSt
     return this.observations.observe(payload.paneKey, {
       origin,
       observedAt,
-      // Use provider classifiers; boundary event names vary.
-      boundary:
-        payload.source !== undefined && isNewTurnEvent(payload.source, payload.hookEventName),
+      boundary: isTurnBoundary(payload),
       kind: payload.providerSessionOnly
         ? 'identity-only'
         : // Replay and OSC restate status rather than establish a fresh transition.

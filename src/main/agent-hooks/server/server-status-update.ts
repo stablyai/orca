@@ -1,3 +1,4 @@
+import { shouldClearAssistantMessageRetry } from '../../../shared/agent-hook-listener/claude-usage-limit-refinement'
 import { RelaySessionGenerations } from './server-relay-sessions'
 import { retainHookRootContext } from '../../../shared/agent-hook-listener/pane-provider-session'
 import { deriveCliWriterTopology } from './cli-writer-observation'
@@ -255,10 +256,7 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
       }
       return held
     }
-    if (
-      effectivePayload.payload.state !== 'done' ||
-      effectivePayload.payload.lastAssistantMessage
-    ) {
+    if (shouldClearAssistantMessageRetry(effectivePayload)) {
       this.clearAssistantMessageRetry(effectivePayload.paneKey)
     }
     onAccepted?.()

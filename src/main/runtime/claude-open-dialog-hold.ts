@@ -18,6 +18,11 @@ function hasCursoredOptionList(lines: readonly string[]): boolean {
   )
 }
 
+export function hasTerminalDialogScreen(lines: readonly string[]): boolean {
+  const region = lines.filter((line) => line.trim() !== '').slice(-DIALOG_REGION_LINES)
+  return region.some((line) => DIALOG_FOOTER_RE.test(line)) || hasCursoredOptionList(region)
+}
+
 /** Claude keeps its rest-glyph title during dialogs without OSC 7501; Esc emits no dismissal hook.
  * Trust readable screen evidence and cap otherwise-unretired hook rows. */
 export function isClaudeDialogHoldingPane(args: {
@@ -39,6 +44,5 @@ export function isClaudeDialogHoldingPane(args: {
   if (lines === null) {
     return true
   }
-  const region = lines.filter((line) => line.trim() !== '').slice(-DIALOG_REGION_LINES)
-  return region.some((line) => DIALOG_FOOTER_RE.test(line)) || hasCursoredOptionList(region)
+  return hasTerminalDialogScreen(lines)
 }

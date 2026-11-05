@@ -21435,7 +21435,22 @@
       "count_other": "{{count}} laufende Terminals"
     },
     "restartedInputNotSent": "Das Terminal wurde während der Eingabe neu gestartet. Daher hat es möglicherweise einen Teil der Eingabe nicht erhalten. Die neue Shell prüfen, bevor die Eingabe wiederholt wird.",
-    "typingBeforeStartNotSent": "Einige Tasteneingaben während des Terminalstarts wurden nicht gesendet."
+    "typingBeforeStartNotSent": "Einige Tasteneingaben während des Terminalstarts wurden nicht gesendet.",
+    "usageLimit": {
+      "resetUnknown": "Die Rücksetzzeit ist nicht verfügbar.",
+      "legacy": "Eine Nachricht im Terminal senden, um fortzufahren.",
+      "explanation": "„continue“ an {{agent}} senden, um es erneut zu versuchen.",
+      "sent": "Continue wurde an {{agent}} gesendet. Die Antwort im Terminal prüfen.",
+      "draft": "Continue steht im Entwurf von {{agent}}. Den Entwurf im Terminal prüfen und senden.",
+      "unknown": "Es konnte nicht bestätigt werden, ob {{agent}} Continue erhalten hat. Vor einem erneuten Versuch das Terminal prüfen.",
+      "existingDraft": "{{agent}} hat bereits einen Entwurf. Den Entwurf im Terminal senden oder löschen und es dann erneut versuchen.",
+      "permission": "{{agent}} wartet auf eine Auswahl. Die Auswahl im Terminal treffen und es dann erneut versuchen.",
+      "changed": "Dieser Durchlauf von {{agent}} hat sich geändert. Das Terminal prüfen und es dann erneut versuchen.",
+      "inProgress": "Continue wird bereits an {{agent}} gesendet. Vor einem erneuten Versuch das Terminal prüfen.",
+      "unavailable": "{{agent}} konnte nicht fortgesetzt werden. Die Terminalverbindung prüfen und es dann erneut versuchen.",
+      "minimize": "Minimieren",
+      "continue": "Jetzt fortsetzen"
+    }
   },
   "fileExplorer": {
     "root": {

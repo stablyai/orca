@@ -37,6 +37,7 @@ export function normalizeHookPayload(
   options: {
     deferCompactOwnershipToClient?: boolean
     previousOpenCodeMainAgent?: AgentMainAgentStatus
+    onClaudeUsageLimitScanComplete?: () => void
     bindingStatusByPaneKey?: ReadonlyMap<string, AgentHookEventPayload>
     admitOpenCodeTui?: (
       identity: Pick<
@@ -110,9 +111,15 @@ export function normalizeHookPayload(
   if (tuiAdmission !== 'preserve-poster') {
     trackOpenCodePaneLaunchToken(state, paneKey, launchToken)
   }
+  const previousRoot = state.lastStatusByPaneKey.get(paneKey)
+  const claudeChild =
+    source === 'claude' &&
+    (readString(hookPayloadRecord, 'agent_id') !== undefined || eventName === 'TeammateIdle')
   const providerPromptId =
     source === 'claude'
-      ? normalizeClaudePromptId(hookPayloadRecord.prompt_id)
+      ? claudeChild && previousRoot?.providerSession?.id === providerSession?.id
+        ? previousRoot?.providerPromptId
+        : normalizeClaudePromptId(hookPayloadRecord.prompt_id)
       : source === 'grok'
         ? normalizeGrokPromptId(hookPayloadRecord.promptId ?? hookPayloadRecord.prompt_id)
         : undefined
@@ -227,7 +234,8 @@ export function normalizeHookPayload(
     hookPayload: hookPayloadRecord,
     envelope: record,
     extractedPrompt,
-    previousOpenCodeMainAgent: options.previousOpenCodeMainAgent
+    previousOpenCodeMainAgent: options.previousOpenCodeMainAgent,
+    onClaudeUsageLimitScanComplete: options.onClaudeUsageLimitScanComplete
   })
   const providerSessionOnly =
     (source === 'pi' || source === 'prime-agent' || source === 'jcode') &&

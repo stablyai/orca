@@ -47,6 +47,7 @@ let currentReference: JourneyRecord
 /** What the baseline host publishes to a client of its own version. */
 let baselineReference: JourneyRecord
 let legacyTerminalModeMetadata: TerminalWireBuild
+let originalWindow: PropertyDescriptor | undefined
 
 beforeAll(async () => {
   baselineRef = resolveBaselineReleaseRef()
@@ -58,13 +59,14 @@ beforeAll(async () => {
   current = workingTree
   baseline = baselineRelease
   legacyTerminalModeMetadata = legacyRelease
+  originalWindow = Object.getOwnPropertyDescriptor(globalThis, 'window')
   currentReference = await runTerminalSkewJourney({ hostBuild: current, clientBuild: current })
   baselineReference = await runTerminalSkewJourney({ hostBuild: baseline, clientBuild: baseline })
 }, SUITE_TIMEOUT_MS)
 
 afterEach(() => {
-  // Each journey installs and removes its own window stub; fail loudly if one leaked.
-  expect(typeof globalThis.window).toBe('undefined')
+  // Main-process imports may install a window polyfill before the transport stub.
+  expect(Object.getOwnPropertyDescriptor(globalThis, 'window')).toEqual(originalWindow)
 })
 
 function expectJourneyActuallyRan(record: JourneyRecord): void {

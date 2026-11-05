@@ -31,3 +31,17 @@ export function reconcileCodexTranscriptTurn(
     }
   }
 }
+
+export function readCodexTranscriptTurnEnd(
+  recordValue: JsonRecord
+): { turnId: string; end: 'completed' | 'failed' } | undefined {
+  if (recordValue.type !== 'event_msg') {
+    return undefined
+  }
+  const payload = record(recordValue.payload)
+  const turnId = typeof payload?.turn_id === 'string' ? payload.turn_id.trim() : ''
+  if ((payload?.type !== 'task_complete' && payload?.type !== 'turn_complete') || !turnId) {
+    return undefined
+  }
+  return { turnId, end: payload.error == null ? 'completed' : 'failed' }
+}

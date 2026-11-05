@@ -20,6 +20,7 @@ import { PREFLIGHT_RUNTIME_CAPABILITIES } from '../../../../shared/preflight-run
 import { launchHeadlessAutomationAgent } from '../../../automations/headless-automation-agent-launch'
 import type { Automation, AutomationRun } from '../../../../shared/automations-types'
 import type * as WorkspaceAgentDetection from '../../../preflight/workspace-agent-detection'
+import type * as WslBackgroundExecGate from '../../../wsl/discovery/wsl-background-exec-gate'
 
 const { refresh, deliver } = vi.hoisted(() => ({
   deliver: vi.fn(async () => true),
@@ -33,7 +34,8 @@ const { refresh, deliver } = vi.hoisted(() => ({
 }))
 vi.mock('./agent-launch-terminal-prompt', () => ({ deliverTerminalAgentLaunchPrompt: deliver }))
 // These ownership cases use a running distro; the stopped-distro contract is separate.
-vi.mock('../../../wsl/discovery/wsl-background-exec-gate', () => ({
+vi.mock('../../../wsl/discovery/wsl-background-exec-gate', async (original) => ({
+  ...(await original<typeof WslBackgroundExecGate>()),
   assertWslDistroRunningForExec: async () => {},
   runAsWslExecUserAct: async (_distro: unknown, act: () => Promise<unknown>) => act()
 }))

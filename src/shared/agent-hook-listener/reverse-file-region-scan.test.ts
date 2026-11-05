@@ -1,8 +1,14 @@
-import { afterEach, describe, expect, it } from 'vitest'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { mkdtempSync, readSync, rmSync, writeFileSync } from 'node:fs'
+import type * as NodeFs from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { scanFileRegionsBackward } from './reverse-file-region-scan'
+
+vi.mock('node:fs', async (importOriginal) => {
+  const fs = await importOriginal<typeof NodeFs>()
+  return { ...fs, readSync: vi.fn(fs.readSync) }
+})
 
 const roots: string[] = []
 afterEach(() => {
@@ -29,6 +35,17 @@ function collectLines(file: string, chunkBytes: number, maxScanBytes = 1024 * 10
 }
 
 describe('scanFileRegionsBackward', () => {
+  it('reports completion only after an available scan', () => {
+    const file = writeFixture('first\nsecond\n')
+    const completed = vi.fn()
+    const limits = { chunkBytes: 8, maxScanBytes: 8 }
+    vi.mocked(readSync).mockReturnValueOnce(0)
+    expect(scanFileRegionsBackward(file, limits, () => undefined, completed)).toBeUndefined()
+    expect(completed).not.toHaveBeenCalled()
+    scanFileRegionsBackward(file, limits, () => undefined, completed)
+    expect(completed).toHaveBeenCalledTimes(1)
+  })
+
   it('yields every whole line exactly once, whatever the chunk size', () => {
     const lines = Array.from({ length: 40 }, (_, i) => `line-${i}`)
     const file = writeFixture(`${lines.join('\n')}\n`)

@@ -1,3 +1,4 @@
+import { validateRelayTerminalUsageLimit } from './terminal-usage-limit-source-validation'
 import { AgentHookStartup } from '../shared/agent-hook-listener/transport/agent-hook-startup'
 import { bindRelayHookServer } from './agent-hook-server-bind'
 import {
@@ -108,6 +109,10 @@ export class RelayAgentHookServer extends RelayAgentHookCanonicalStatus {
       applyEvent: (event, source, env, version) =>
         this.applyEvent(event, source, env, version, { checkPresence: false })
     })
+  }
+
+  validateTerminalUsageLimit(request: unknown) {
+    return validateRelayTerminalUsageLimit(this.relayInterruptHost(), request)
   }
 
   start(options: RelayHookServerStartOptions = {}): Promise<void> {
@@ -250,17 +255,12 @@ export class RelayAgentHookServer extends RelayAgentHookCanonicalStatus {
   }
 
   checkAgentPresence(paneKey: string): Promise<void> {
-    const row = this.state.lastStatusByPaneKey.get(paneKey)
     const meta = this.lastEnvelopeMetaByPaneKey.get(paneKey)
-    return this.presenceChecks.check(
-      row,
-      () => this.state.lastStatusByPaneKey.get(paneKey),
-      (event) => {
-        if (meta) {
-          this.applyEvent(event, meta.source, meta.env, meta.version, { isReplay: event.isReplay })
-        }
+    return this.presenceChecks.checkPane(paneKey, (event) => {
+      if (meta) {
+        this.applyEvent(event, meta.source, meta.env, meta.version, { isReplay: event.isReplay })
       }
-    )
+    })
   }
 
   /** Drop a paneKey's cached entries on PTY exit so a terminated pane can't resurface as a ghost event on reconnect. */

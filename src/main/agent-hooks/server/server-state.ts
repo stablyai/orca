@@ -40,6 +40,7 @@ import type {
   AgentStatusDispositionEvent,
   AgentPromptSentDedupeEntry,
   EnrichedAgentHookEventPayload,
+  LocalHookNormalizationArgs,
   NormalizedLocalHook,
   PaneKeyAliasEntry,
   PaneKeyAliasPersistenceListener,
@@ -264,8 +265,7 @@ export abstract class AgentHookServerState {
   protected abstract resolvePaneKeyAlias(paneKey: string): string
   protected abstract normalizeHookBodyPaneKeyAlias(body: unknown): unknown
   protected abstract normalizeLocalHookPayload(
-    source: AgentHookSource,
-    body: unknown
+    ...args: LocalHookNormalizationArgs
   ): NormalizedLocalHook
   protected abstract setClaudeBackgroundEvidence(
     paneKey: string,

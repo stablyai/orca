@@ -56,6 +56,7 @@ export function normalizeProviderEvent(input: {
   envelope: Record<string, unknown>
   extractedPrompt: ExtractedPromptText
   previousOpenCodeMainAgent?: AgentMainAgentStatus
+  onClaudeUsageLimitScanComplete?: () => void
 }): ProviderDispatchResult {
   const { state, source, promptText, paneKey, hookPayload, envelope, extractedPrompt } = input
   // Ephemeral side chats share the pane but must not replace its recorded main turn.
@@ -86,7 +87,14 @@ export function normalizeProviderEvent(input: {
       )
       break
     case 'claude':
-      payload = normalizeClaudeEvent(state, eventName, promptText, paneKey, hookPayload)
+      payload = normalizeClaudeEvent(
+        state,
+        eventName,
+        promptText,
+        paneKey,
+        hookPayload,
+        input.onClaudeUsageLimitScanComplete
+      )
       break
     case 'codex':
       payload = normalizeCodexEvent(state, eventName, promptText, paneKey, hookPayload)

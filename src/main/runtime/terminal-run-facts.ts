@@ -46,6 +46,7 @@ export class TerminalRunFactsRegister {
   // Why apart from the run record: input must count on a PTY main adopted without a commit.
   private readonly lastInputAtByPtyId = new Map<string, number>()
   private readonly lastDrivingInputAtByPtyId = new Map<string, number>()
+  private readonly inputSequenceByPtyId = new Map<string, number>()
   private readonly pendingByPtyId = new Map<
     string,
     { incarnationId: string | null; firstInputAt: number | null }
@@ -93,6 +94,7 @@ export class TerminalRunFactsRegister {
     if (!sameProcess) {
       this.lastInputAtByPtyId.delete(commit.id)
       this.lastDrivingInputAtByPtyId.delete(commit.id)
+      this.inputSequenceByPtyId.delete(commit.id)
     }
     this.runsByPtyId.set(commit.id, {
       incarnationId,
@@ -116,6 +118,7 @@ export class TerminalRunFactsRegister {
       return
     }
     this.lastInputAtByPtyId.set(ptyId, now)
+    this.inputSequenceByPtyId.set(ptyId, this.readInputSequence(ptyId) + 1)
     const run = this.runsByPtyId.get(ptyId)
     if (isDrivingInputKind(inputKind)) {
       if (inputKind === 'driving') {
@@ -140,6 +143,11 @@ export class TerminalRunFactsRegister {
    *  included; null if none has. */
   readLastInputAt(ptyId: string): number | null {
     return this.lastInputAtByPtyId.get(ptyId) ?? null
+  }
+
+  /** Input admission order remains distinct when multiple writes share one clock tick. */
+  readInputSequence(ptyId: string): number {
+    return this.inputSequenceByPtyId.get(ptyId) ?? 0
   }
 
   /** Like readLastInputAt, but only `driving` input, so Orca's own launch and orchestration writes don't count. */
@@ -174,6 +182,7 @@ export class TerminalRunFactsRegister {
     this.runsByPtyId.delete(ptyId)
     this.lastInputAtByPtyId.delete(ptyId)
     this.lastDrivingInputAtByPtyId.delete(ptyId)
+    this.inputSequenceByPtyId.delete(ptyId)
     this.pendingByPtyId.delete(ptyId)
   }
 }

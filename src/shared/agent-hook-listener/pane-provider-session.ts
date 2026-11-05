@@ -54,7 +54,8 @@ function readPaneProviderSession(
     return null
   }
   if (source === 'codex' && readString(hookPayload, 'agent_id')) {
-    return null
+    const previous = state.lastStatusByPaneKey.get(paneKey)
+    return previous?.source === 'codex' ? (previous.providerSession ?? null) : null
   }
   if (source === 'grok' && isGrokSubagentEvent(hookPayload)) {
     // A Grok child's session id is its own; the only child row it emits restates the pane's session.

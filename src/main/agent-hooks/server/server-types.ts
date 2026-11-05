@@ -170,5 +170,12 @@ export type NormalizedLocalHook = {
   onAccepted?: () => void
 }
 
+export type LocalHookNormalizationArgs = [
+  source: AgentHookSource,
+  body: unknown,
+  isReplay?: boolean,
+  onClaudeUsageLimitScanComplete?: () => void
+]
+
 export type ServerStatusLineListener = ((event: ClaudeStatusLineRateLimits) => void) | null
 export type ServerAgentStatusListener = ((payload: EnrichedAgentHookEventPayload) => void) | null

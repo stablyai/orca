@@ -6,7 +6,7 @@ import {
   parsePaneKey
 } from '../../../shared/workspace-layout/stable-pane-id'
 import {
-  pickHostTurnEnd,
+  projectHostTurnEnd,
   type AgentType
 } from '../../../shared/agent-status/contracts/agent-status-types'
 import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
@@ -66,7 +66,7 @@ export function toAgentStatusIpcPayload(
       : {}),
     stateStartedAt: entry.stateStartedAt,
     ...(entry.turnStartedAt !== undefined ? { turnStartedAt: entry.turnStartedAt } : {}),
-    ...pickHostTurnEnd(entry),
+    ...projectHostTurnEnd(entry),
     ...(entry.providerSession ? { providerSession: entry.providerSession } : {}),
     ...(entry.providerSessionOnly ? { providerSessionOnly: true } : {}),
     ...(entry.promptInteractionKey ? { promptInteractionKey: entry.promptInteractionKey } : {}),

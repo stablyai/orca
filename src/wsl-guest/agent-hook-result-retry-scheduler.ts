@@ -1,3 +1,8 @@
+import {
+  hasPendingClaudeUsageLimit,
+  isSameClaudeUsageLimitTurn,
+  readClaudeUsageLimitRetrySignature
+} from '../shared/agent-hook-listener/claude-usage-limit-refinement'
 import { ClaudeHelperKillPoller } from '../shared/agent-hook-listener/providers/claude-helper-kill-poller'
 import { pollCodexTranscriptStatus } from '../shared/agent-hook-listener/providers/codex-transcript-poll'
 // Retry late transcript results against the same cached event; one owner cancels both timer families before cache teardown.
@@ -176,11 +181,13 @@ export class AgentHookResultRetryScheduler {
     env?: string,
     version?: string,
     attempt = 1,
-    discoveryReady = false
+    discoveryReady = false,
+    quotaReadSignature?: string
   ): void {
+    const quotaPending = hasPendingClaudeUsageLimit(source, body, original)
     if (
-      original.payload.lastAssistantMessage ||
-      !hasPendingAgentResultText(source, body) ||
+      (!quotaPending && original.payload.lastAssistantMessage) ||
+      (!quotaPending && !hasPendingAgentResultText(source, body)) ||
       attempt > ASSISTANT_MESSAGE_RETRY_ATTEMPTS
     ) {
       return
@@ -214,7 +221,8 @@ export class AgentHookResultRetryScheduler {
           env,
           version,
           attempt + 1,
-          discoveryReady
+          discoveryReady,
+          quotaReadSignature
         )
       } catch (err) {
         process.stderr.write(
@@ -235,20 +243,23 @@ export class AgentHookResultRetryScheduler {
     env: string | undefined,
     version: string | undefined,
     nextAttempt: number,
-    requireExactOriginal: boolean
+    requireExactOriginal: boolean,
+    quotaReadSignature?: string
   ): void {
     const current = this.host.state.lastStatusByPaneKey.get(original.paneKey)
+    const quotaPending = hasPendingClaudeUsageLimit(source, body, original)
     if (
       !current ||
+      (quotaPending && !isSameClaudeUsageLimitTurn(original, current)) ||
       (requireExactOriginal && current !== original) ||
       current.payload.agentType !== original.payload.agentType ||
       current.payload.prompt !== original.payload.prompt ||
-      current.payload.lastAssistantMessage
+      (!quotaPending && current.payload.lastAssistantMessage)
     ) {
       return
     }
-    const event = normalizeHookPayload(this.host.state, source, body, this.host.env)
-    if (!event?.payload.lastAssistantMessage) {
+    const signature = quotaPending ? readClaudeUsageLimitRetrySignature(body) : undefined
+    if (signature !== undefined && signature === quotaReadSignature) {
       this.scheduleAssistantMessageRetry(
         source,
         body,
@@ -256,11 +267,54 @@ export class AgentHookResultRetryScheduler {
         env,
         version,
         nextAttempt,
-        requireExactOriginal
+        requireExactOriginal,
+        signature
       )
       return
     }
+    let quotaScanCompleted = false
+    const event = normalizeHookPayload(this.host.state, source, body, this.host.env, {
+      onClaudeUsageLimitScanComplete: () => {
+        quotaScanCompleted = true
+      }
+    })
+    const negativeSignature = quotaScanCompleted ? signature : undefined
+    const newText = !current.payload.lastAssistantMessage && event?.payload.lastAssistantMessage
+    const newQuota = quotaPending && event?.payload.mainAgent?.usageLimit
+    if (!newText && !newQuota) {
+      this.scheduleAssistantMessageRetry(
+        source,
+        body,
+        original,
+        env,
+        version,
+        nextAttempt,
+        requireExactOriginal,
+        negativeSignature
+      )
+      return
+    }
+    if (!event) {
+      return
+    }
     // Why: the retry only adds text to the same turn end, so it restates that end instead of minting one.
-    this.host.applyEvent({ ...event, ...pickHostTurnEnd(current) }, source, env, version)
+    const next = this.host.applyEvent(
+      { ...event, ...pickHostTurnEnd(current) },
+      source,
+      env,
+      version
+    )
+    if (next && quotaPending && !newQuota) {
+      this.scheduleAssistantMessageRetry(
+        source,
+        body,
+        next,
+        env,
+        version,
+        nextAttempt,
+        requireExactOriginal,
+        negativeSignature
+      )
+    }
   }
 }

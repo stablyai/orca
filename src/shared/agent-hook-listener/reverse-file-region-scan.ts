@@ -4,11 +4,14 @@ import { closeSync, openSync, readSync, statSync } from 'node:fs'
 export function scanFileRegionsBackward<T>(
   filePath: string,
   limits: { chunkBytes: number; maxScanBytes: number },
-  visit: (region: Buffer, regionPosition: number) => T | undefined
+  visit: (region: Buffer, regionPosition: number) => T | undefined,
+  onComplete?: () => void
 ): T | undefined {
+  let completed = false
   try {
     const size = statSync(filePath).size
     if (size <= 0) {
+      completed = true
       return undefined
     }
     const fd = openSync(filePath, 'r')
@@ -55,16 +58,23 @@ export function scanFileRegionsBackward<T>(
         if (region.length > 0) {
           const found = visit(region, regionPosition)
           if (found !== undefined) {
+            completed = true
             return found
           }
         }
       }
+      completed = true
       return undefined
     } finally {
       closeSync(fd)
     }
   } catch {
+    completed = false
     return undefined
+  } finally {
+    if (completed) {
+      onComplete?.()
+    }
   }
 }
 
