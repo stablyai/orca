@@ -272,11 +272,13 @@ export abstract class OrcaRuntimeWithTransitionGraphReloadToTerminalState extend
 
   routeClientHostedBrowserRpc(
     method: string,
-    params: unknown
+    params: unknown,
+    caller: RpcContext['caller']
   ): Promise<ClientHostedBrowserRpcRoute> {
     return routeRuntimeBrowserClientAutomation({
       method,
       params,
+      caller,
       pages: getRuntimeBrowserPageRegistry(this),
       leases: getBrowserHostLeaseRegistry(this),
       resolveWorkspace: (selector) =>

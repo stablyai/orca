@@ -96,12 +96,12 @@ function sessionView(agent: 'codex' | 'grok' = 'codex'): React.JSX.Element {
   )
 }
 
-function composerSend(): (text: string, attachments: unknown[]) => boolean | 'queued' {
+function composerSend() {
   const send = mocks.composerProps?.structuredTransport?.send
   if (typeof send !== 'function') {
     throw new Error('Structured composer transport was not installed')
   }
-  return (text, attachments) => send(text, attachments)
+  return send
 }
 
 describe('NativeChatStructuredSession launch lifecycle', () => {
@@ -338,6 +338,24 @@ describe('NativeChatStructuredSession launch lifecycle', () => {
     )
     expect(mocks.send).not.toHaveBeenCalled()
   })
+
+  it.each(['staged file', 'selected skill'] as const)(
+    'keeps a %s draft when Send retries a failed chat',
+    (kind) => {
+      mocks.launchLifecycle = 'failed'
+      render(sessionView())
+      const prepareAttachments = vi.fn(async (input: { text: string }) => input)
+      const request =
+        kind === 'staged file'
+          ? { prepareAttachments }
+          : { skills: [{ name: 'review', path: '/skills/review/SKILL.md' }] }
+      expect(composerSend()('@"browser-file:context.txt"', [], request)).toBe(false)
+      expect(mocks.retryLaunch).toHaveBeenCalledExactlyOnceWith('wt-1', 'session-1')
+      expect(mocks.relaunchWithMessage).not.toHaveBeenCalled()
+      expect(mocks.send).not.toHaveBeenCalled()
+      expect(prepareAttachments).not.toHaveBeenCalled()
+    }
+  )
 
   it.each(['pending', 'visibility-unknown'] as const)(
     'takes no send while the chat is %s: Send is off and the text stays',

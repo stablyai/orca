@@ -6040,8 +6040,6 @@
           "expandAriaLabel": "Ausgeblendete Worktrees für {{repo}} ausklappen",
           "hiding_one": "{{count}} entdeckter Worktree ausgeblendet",
           "hiding_other": "{{count}} entdeckte Worktrees ausgeblendet",
-          "hidingInRepo_one": "{{count}} entdeckter Worktree in {{repo}} ausgeblendet",
-          "hidingInRepo_other": "{{count}} entdeckte Worktrees in {{repo}} ausgeblendet",
           "keepHiddenAriaLabel_one": "{{count}} entdeckten Worktree für {{repo}} ausgeblendet lassen; über das Projektmenü wieder einblenden",
           "keepHiddenAriaLabel_other": "{{count}} entdeckte Worktrees für {{repo}} ausgeblendet lassen; über das Projektmenü wieder einblenden",
           "keepHiddenTooltip": "Ausgeblendet lassen - über das Projektmenü wieder einblenden",
@@ -19338,8 +19336,6 @@
       },
       "turnDiff": {
         "partial": "Teilweiser Diff",
-        "showDiff": "Diff anzeigen",
-        "hideDiff": "Diff ausblenden",
         "changedFiles_one": "{{count}} geänderte Datei",
         "changedFiles_other": "{{count}} geänderte Dateien"
       },
@@ -20840,10 +20836,8 @@
       "offTerminal": "Lieber das Terminal? Es wird weiterhin voll unterstützt. Deine Agenten öffnen sich dort, bis du Chat wählst.",
       "onIntro": "Die Chat-Oberfläche ist nicht mehr experimentell und jetzt fester Teil von Orca. Deine Agenten öffnen sich weiterhin als Chats, mit formatierten Nachrichten, Grafiken und Bildern.",
       "onTerminal": "Auch das Terminal wird weiterhin voll unterstützt. Jeder Agent lässt sich jederzeit zurückstellen.",
-      "changeInSettings": "Jederzeit unter <link>Einstellungen → Agenten</link> ändern.",
       "stayInTerminal": "Im Terminal bleiben",
       "cta": "Chat-Oberfläche nutzen",
-      "saveFailed": "Die Chat-Oberfläche konnte nicht aktiviert werden. Unter Einstellungen → Agenten „Chat“ wählen.",
       "demoTabTitle": "Anmeldung erklären",
       "demoPrompt": "Zeig mir, wie die Anmeldung funktioniert",
       "demoReply": "Die Anmeldung beginnt in {{file}}: Der Browser sendet an /login, der Server prüft das Passwort und erstellt eine Sitzung, dann leitet er dich zur App weiter. So läuft es ab:",

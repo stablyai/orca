@@ -5402,8 +5402,6 @@
           "expandAriaLabel": "{{repo}} の非表示のワークツリー一覧を展開",
           "hiding_one": "{{count}} 件のワークツリーを非表示中",
           "hiding_other": "{{count}} 件のワークツリーを非表示中",
-          "hidingInRepo_one": "{{repo}} の {{count}} 件のワークツリーを非表示中",
-          "hidingInRepo_other": "{{repo}} の {{count}} 件のワークツリーを非表示中",
           "keepHiddenAriaLabel_one": "{{repo}} で検出されたワークツリー {{count}} 件を非表示のままにする（プロジェクトメニューから再表示できます）",
           "keepHiddenAriaLabel_other": "{{repo}} で検出されたワークツリー {{count}} 件を非表示のままにする（プロジェクトメニューから再表示できます）",
           "keepHiddenTooltip": "非表示のままにする（プロジェクトメニューから再表示できます）",
@@ -18952,8 +18950,6 @@
       },
       "turnDiff": {
         "partial": "部分的な差分",
-        "showDiff": "差分を表示",
-        "hideDiff": "差分を非表示",
         "changedFiles_other": "変更されたファイル {{count}} 個"
       },
       "receipt": {
@@ -20555,10 +20551,8 @@
       "offTerminal": "ターミナルのほうが好みですか？ターミナルは引き続き完全にサポートされます。チャットを選ぶまで、Agent はこれまでどおりターミナルで開きます。",
       "onIntro": "チャット UI は実験的機能を卒業し、Orca の標準機能になりました。Agent はこれまでどおりチャットとして開き、リッチなメッセージ、ビジュアル、画像を表示できます。",
       "onTerminal": "ターミナルも引き続き完全にサポートされます。どの Agent もいつでもターミナルに戻せます。",
-      "changeInSettings": "<link>設定 → Agent</link> でいつでも変更できます。",
       "stayInTerminal": "ターミナルのまま使う",
       "cta": "チャット UI を使う",
-      "saveFailed": "チャット UI をオンにできませんでした。設定 → Agent でチャットを選んでください。",
       "demoTabTitle": "ログインの説明",
       "demoPrompt": "ログインの仕組みを図にして",
       "demoReply": "ログインは {{file}} から始まります。ブラウザが /login に送信し、サーバーがパスワードを確認してセッションを作成し、アプリにリダイレクトします。流れは次のとおりです:",
