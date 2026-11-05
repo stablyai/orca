@@ -1,4 +1,4 @@
-import { getDaemonRuntimeDir } from '../daemon/daemon-launch-paths'
+import { getDaemonRuntimeDir } from '../daemon/launch/daemon-launch-paths'
 import { readWindowsProcessTableFresh } from '../windows/windows-process-table'
 import type { HostProcess } from '../../shared/perforce/workspace-copy/workspace-copy-host'
 import { readPosixProcessTable, type CopyHostProcessRow } from './perforce-copy-posix-processes'

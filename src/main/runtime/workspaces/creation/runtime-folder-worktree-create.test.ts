@@ -1,9 +1,9 @@
 /** A folder workspace create in a Perforce project becomes a copy on its own stream. */
 
 import { describe, expect, it, vi } from 'vitest'
-import type { Repo } from '../../shared/repo-types'
+import type { Repo } from '../../../../shared/repo-types'
 import { createRuntimeFolderWorktree } from './runtime-folder-worktree-create'
-import type { HostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
+import type { HostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 
 const perforceCopies = vi.hoisted(() => {
   const summary = {
@@ -24,7 +24,7 @@ const perforceCopies = vi.hoisted(() => {
   }
 })
 
-vi.mock('./runtime-perforce-copy-commands', () => ({
+vi.mock('../../runtime-perforce-copy-commands', () => ({
   createRuntimePerforceCopy: perforceCopies.createRuntimePerforceCopy
 }))
 
