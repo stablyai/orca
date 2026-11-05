@@ -7383,7 +7383,6 @@
       "src/renderer/src/components/native-chat/native-chat-active-rail-item.test.ts": 62,
       "src/renderer/src/components/native-chat/native-chat-agent-message-sender-host.test.tsx": 8140,
       "src/renderer/src/components/native-chat/native-chat-agent-message-sender-identity.test.tsx": 1880,
-      "src/renderer/src/components/native-chat/native-chat-agent-message-sender-view.test.tsx": 2101,
       "src/renderer/src/components/native-chat/native-chat-appearance-write.test.ts": 329,
       "src/renderer/src/components/native-chat/native-chat-attachment-upload.test.ts": 1614,
       "src/renderer/src/components/native-chat/native-chat-autoscroll.test.ts": 47,
