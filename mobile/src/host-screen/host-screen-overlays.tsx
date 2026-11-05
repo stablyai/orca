@@ -18,6 +18,11 @@ import { hostScreenStyles as styles } from './host-screen-styles'
 import { WorkspaceOptionsSheet } from './workspace-options-sheet'
 import { WorkspaceDetailsSheet } from './workspace-details-sheet'
 import { WorkspaceRenameSheet } from './workspace-rename-sheet'
+import { setSelectedSidebarSession } from './selected-sidebar-session'
+import { SidebarSessionActionSheet } from './SidebarSessionActionSheet'
+import { closeHostSidebarSession } from './sidebar-session-close'
+import { clearClosedSidebarSession } from './sidebar-session-action'
+import { WorkspaceSessionJumpList } from './WorkspaceSessionJumpList'
 import type { HostScreenController } from './use-host-screen-controller'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 
@@ -178,13 +183,24 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
               }
             >
               {actionTarget ? (
-                <WorkspaceDetailsSheet
-                  row={actionTarget}
-                  onOpenLink={(url) => {
-                    openExternalLink(url)
-                    state.setActionTarget(null)
-                  }}
-                />
+                <>
+                  <WorkspaceDetailsSheet
+                    row={actionTarget}
+                    onOpenLink={(url) => {
+                      openExternalLink(url)
+                      state.setActionTarget(null)
+                    }}
+                  />
+                  <WorkspaceSessionJumpList
+                    agents={actionTarget.agents}
+                    now={controller.now}
+                    onJump={(paneKey) => {
+                      setSelectedSidebarSession({ worktreeId: actionTarget.worktreeId, paneKey })
+                      actions.openWorktreeSession(actionTarget, paneKey)
+                      state.setActionTarget(null)
+                    }}
+                  />
+                </>
               ) : null}
             </ActionSheetContent>
           )}
@@ -212,6 +228,44 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
           onCancel={actions.dismissArchiveHookFailure}
         />
       </BottomDrawerModalHost>
+
+      <SidebarSessionActionSheet
+        session={state.sessionAction ?? null}
+        onDismiss={() => state.setSessionAction(null)}
+        onOpen={(session) => {
+          setSelectedSidebarSession({
+            worktreeId: session.worktree.worktreeId,
+            paneKey: session.paneKey
+          })
+          actions.openWorktreeSession(session.worktree, session.paneKey)
+          state.setSessionAction(null)
+        }}
+        onCloseSession={(session) => {
+          state.setSessionAction(null)
+          void closeHostSidebarSession(
+            client,
+            hostCapabilities,
+            session.worktree,
+            session.paneKey
+          ).then((outcome) => {
+            if (outcome === 'closed') {
+              clearClosedSidebarSession(session)
+              return
+            }
+            state.setActionError(
+              outcome === 'missing'
+                ? t(
+                    'hostScreen.hostScreenOverlays.closeSessionMissing',
+                    'This session is no longer open.'
+                  )
+                : t(
+                    'hostScreen.hostScreenOverlays.closeSessionFailed',
+                    'This session could not be closed.'
+                  )
+            )
+          })
+        }}
+      />
 
       <ConfirmModal
         visible={state.confirmRemoveHost}

@@ -19,6 +19,8 @@ describe('the keys a page may read and write', () => {
     expect(isPageStorageKey('orca:last-visited-worktree')).toBe(true)
     expect(isPageStorageKey('orca:pins:host-1')).toBe(true)
     expect(isPageStorageKey('orca:terminalTextScale')).toBe(true)
+    expect(isPageStorageKey('orca:selectableSidebarSessions')).toBe(true)
+    expect(isPageStorageKey('orca.selectableSidebarSessions')).toBe(false)
     expect(isPageStorageKey('orca:nativeChatTabs:host-1:wt-1')).toBe(true)
   })
 
