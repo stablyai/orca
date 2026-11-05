@@ -61,7 +61,6 @@ export function WorkspaceCleanupDialogHeader({
             <Button
               variant="ghost"
               size="icon-sm"
-              className="-mr-2.5"
               aria-label={translate(
                 'auto.components.workspace.cleanup.WorkspaceCleanupDialog.191f0bc98e',
                 'Close'

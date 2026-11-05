@@ -80,40 +80,37 @@ export function WorkspaceCleanupSortHeader({
           {selectAllLabel}
         </span>
       )}
-      {/* Pull the arrow glyph, not the button, onto the shared right gutter. */}
-      <div className="-mr-2.5 shrink-0">
-        <DropdownMenu modal={false}>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="xs"
-              className="shrink-0 text-[11px] text-muted-foreground"
-              aria-label={translate(
-                'components.workspace.cleanup.browse.sortByField',
-                'Sort by {{value0}}',
-                { value0: getWorkspaceCleanupSortFieldLabel(sort.field) }
-              )}
-            >
-              <ChevronsUpDown className="size-3" />
-              {translate('components.workspace.cleanup.browse.sortByField', 'Sort by {{value0}}', {
-                value0: getWorkspaceCleanupSortFieldLabel(sort.field)
-              })}
-              <SortDirectionIcon direction={sort.direction} />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56">
-            <DropdownMenuLabel>
-              {translate('components.workspace.cleanup.browse.sortBy', 'Sort by')}
-            </DropdownMenuLabel>
-            {WORKSPACE_CLEANUP_SORT_FIELD_VALUES.map((field) => (
-              <DropdownMenuItem key={field} onSelect={() => onToggleSortField(field)}>
-                <span className="flex-1">{getWorkspaceCleanupSortFieldLabel(field)}</span>
-                {sort.field === field ? <SortDirectionIcon direction={sort.direction} /> : null}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
+      <DropdownMenu modal={false}>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            size="xs"
+            className="shrink-0 text-[11px] text-muted-foreground"
+            aria-label={translate(
+              'components.workspace.cleanup.browse.sortByField',
+              'Sort by {{value0}}',
+              { value0: getWorkspaceCleanupSortFieldLabel(sort.field) }
+            )}
+          >
+            <ChevronsUpDown className="size-3" />
+            {translate('components.workspace.cleanup.browse.sortByField', 'Sort by {{value0}}', {
+              value0: getWorkspaceCleanupSortFieldLabel(sort.field)
+            })}
+            <SortDirectionIcon direction={sort.direction} />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-56">
+          <DropdownMenuLabel>
+            {translate('components.workspace.cleanup.browse.sortBy', 'Sort by')}
+          </DropdownMenuLabel>
+          {WORKSPACE_CLEANUP_SORT_FIELD_VALUES.map((field) => (
+            <DropdownMenuItem key={field} onSelect={() => onToggleSortField(field)}>
+              <span className="flex-1">{getWorkspaceCleanupSortFieldLabel(field)}</span>
+              {sort.field === field ? <SortDirectionIcon direction={sort.direction} /> : null}
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   )
 }

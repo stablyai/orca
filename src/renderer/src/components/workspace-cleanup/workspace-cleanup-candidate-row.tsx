@@ -150,8 +150,23 @@ export const CandidateRow = React.memo(function CandidateRow({
 
   return (
     <div
+      // Pointer shortcut for the checkbox; controls and the details panel keep their own clicks.
+      onClick={
+        selectable
+          ? (event) => {
+              if (
+                event.target instanceof Element &&
+                !event.target.closest('button, a, input, [data-workspace-cleanup-row-details]') &&
+                window.getSelection()?.isCollapsed !== false
+              ) {
+                onToggleSelected(identity)
+              }
+            }
+          : undefined
+      }
       className={cn(
         'group w-full border-b border-border/60 px-4 py-2.5 text-left text-foreground transition-colors hover:bg-accent/40',
+        selectable && 'cursor-pointer select-none',
         selected && 'bg-accent/30',
         deleting && 'opacity-70',
         last && 'border-b-0'

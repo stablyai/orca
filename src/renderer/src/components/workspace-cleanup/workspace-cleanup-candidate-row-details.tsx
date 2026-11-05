@@ -32,11 +32,12 @@ export function CandidateRowDetails({
         expanded ? 'mt-2 grid-rows-[1fr] opacity-100' : 'mt-0 grid-rows-[0fr] opacity-0'
       )}
       aria-hidden={!expanded}
+      data-workspace-cleanup-row-details
       inert={!expanded}
     >
       <div className="min-h-0 overflow-hidden">
         {/* One label column keeps every value on the same left edge. */}
-        <dl className="grid grid-cols-[max-content_minmax(0,1fr)] items-baseline gap-x-4 gap-y-1.5 rounded-md border border-border/60 bg-muted/30 px-3 py-2.5 text-xs">
+        <dl className="grid select-text grid-cols-[max-content_minmax(0,1fr)] items-baseline gap-x-4 gap-y-1.5 rounded-md border border-border/60 bg-muted/30 px-3 py-2.5 text-xs">
           <DetailRow
             label={translate('components.workspace.cleanup.browse.pathLabel', 'Path')}
             mono

@@ -8,9 +8,6 @@ import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cle
 import { WorkspaceCleanupForgetLocallyButton } from './workspace-cleanup-forget-locally-button'
 import { getWorkspaceCleanupCandidateAccessibleName } from './workspace-cleanup-host-label'
 
-// Pull the chevron's glyph, not its button, onto the right gutter shared with the header.
-const CHEVRON_INK_ALIGN = '-mr-2'
-
 type CandidateRowTrailingProps = {
   candidate: WorkspaceCleanupCandidate
   identity: string
@@ -146,13 +143,12 @@ export function CandidateRowTrailing({
           tooltip={expandLabel}
           ariaLabel={expandLabel}
           ariaExpanded={expanded}
-          className={CHEVRON_INK_ALIGN}
           onClick={() => onToggleExpanded(identity)}
         >
           <ChevronDown className={cn('size-3.5 transition-transform', expanded && 'rotate-180')} />
         </RowIconAction>
       ) : (
-        <ActionSlotPlaceholder className={CHEVRON_INK_ALIGN} />
+        <ActionSlotPlaceholder />
       )}
     </div>
   )
@@ -213,6 +209,6 @@ function RowIconAction({
 }
 
 // Reserve icon-xs slots so metric and action columns line up across rows with different actions.
-function ActionSlotPlaceholder({ className }: { className?: string }): React.JSX.Element {
-  return <span className={cn('size-6 shrink-0', className)} aria-hidden="true" />
+function ActionSlotPlaceholder(): React.JSX.Element {
+  return <span className="size-6 shrink-0" aria-hidden="true" />
 }

@@ -1,5 +1,5 @@
 import React from 'react'
-import { HardDrive, Loader2, RotateCcw, Search, SlidersHorizontal } from 'lucide-react'
+import { Loader2, RotateCcw, Search, SlidersHorizontal } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -58,7 +58,7 @@ export function WorkspaceCleanupFilterBar({
   const filtersLabel = translate('components.workspace.cleanup.browse.filters', 'Filters')
   return (
     <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-2.5">
-      <div className="relative min-w-[180px] flex-1">
+      <div className="relative w-[28rem] min-w-[180px] shrink">
         <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
         <Input
           value={filters.query}
@@ -129,10 +129,14 @@ export function WorkspaceCleanupFilterBar({
         </Popover>
       </div>
 
-      {sizeScan ? <SizeScanButton {...sizeScan} /> : null}
-
       <span className="ml-auto flex shrink-0 items-center gap-1.5 pl-1 text-xs tabular-nums text-muted-foreground">
         <GitCheckIndicator pendingCount={gitEvidence.pendingCount} />
+        {sizeScan ? (
+          <>
+            <SizeScanButton {...sizeScan} />
+            <span aria-hidden="true">·</span>
+          </>
+        ) : null}
         {hasActiveFilters
           ? translate(
               'components.workspace.cleanup.browse.showingCount',
@@ -183,14 +187,10 @@ function SizeScanButton({
         )
       : translate('components.workspace.cleanup.browse.measuringSizes', 'Scanning sizes')
   return (
-    <Button variant="outline" size="sm" className="shrink-0" disabled={scanning} onClick={onRun}>
-      {scanning ? (
-        <Loader2 className="size-3.5 animate-spin" />
-      ) : (
-        <HardDrive className="size-3.5" />
-      )}
-      {/* Stack the idle label under the live one so the button never changes width. */}
-      <span className="grid tabular-nums">
+    <Button variant="link" size="inline" className="shrink-0" disabled={scanning} onClick={onRun}>
+      {scanning ? <Loader2 className="size-3 animate-spin text-muted-foreground" /> : null}
+      {/* Stack the idle label under the live one so the link never changes width. */}
+      <span className="grid text-xs tabular-nums text-muted-foreground underline decoration-muted-foreground/50 underline-offset-4 hover:text-foreground">
         <span className="invisible col-start-1 row-start-1" aria-hidden="true">
           {idleLabel}
         </span>
