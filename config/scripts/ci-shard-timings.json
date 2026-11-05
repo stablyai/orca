@@ -7327,7 +7327,6 @@
       "src/renderer/src/components/native-chat/NativeChatPacedMarkdown.file-links.test.tsx": 2576,
       "src/renderer/src/components/native-chat/NativeChatPacedMarkdown.mermaid.test.tsx": 2702,
       "src/renderer/src/components/native-chat/NativeChatPaneHeader.test.tsx": 2736,
-      "src/renderer/src/components/native-chat/NativeChatPermissionModePicker.test.tsx": 840,
       "src/renderer/src/components/native-chat/NativeChatPromptEditor.paragraph-selection.test.tsx": 652,
       "src/renderer/src/components/native-chat/NativeChatPromptEditor.test.tsx": 1110,
       "src/renderer/src/components/native-chat/NativeChatQuestionCard.test.tsx": 762,
