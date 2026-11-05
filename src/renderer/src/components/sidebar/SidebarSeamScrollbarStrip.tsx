@@ -105,13 +105,20 @@ export function SidebarSeamScrollbarStrip({
         moveEvent.preventDefault()
         scrollToPointer(moveEvent.clientY)
       }
+      // Why: a viewport overlay keeps mouseup over native plugins such as PDF embeds, preventing a stuck drag.
+      const overlay = document.createElement('div')
+      overlay.style.position = 'fixed'
+      overlay.style.inset = '0'
+      overlay.style.zIndex = '2147483647'
       const endDrag = (): void => {
         window.removeEventListener('mousemove', onMove)
         window.removeEventListener('mouseup', endDrag)
         window.removeEventListener('blur', endDrag)
+        overlay.remove()
         document.body.style.userSelect = ''
         endDragRef.current = null
       }
+      document.body.appendChild(overlay)
       document.body.style.userSelect = 'none'
       window.addEventListener('mousemove', onMove)
       window.addEventListener('mouseup', endDrag)
