@@ -1,6 +1,3 @@
-import { OrcaRuntimeWithCreateManagedWorktree } from './creation/workspace-creation'
-import type { LocalGitExecOptions } from '../../git/repo-default-base-ref'
-import type { CreateWorktreeResult } from '../../../shared/worktree/create-types'
 import type {
   RemoteFetchResult,
   RemoteTrackingBase
@@ -8,75 +5,14 @@ import type {
 import type { WorktreeBaseStatusEvent } from '../../../shared/worktree/base-ref-drift-types'
 import { probeRuntimeWorktreeDrift } from './metadata/runtime-worktree-drift-probe'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
-import type { GitHubPrStartPoint, GitPushTarget } from '../../../shared/worktree/types'
+import type { GitPushTarget } from '../../../shared/worktree/types'
 import {
   persistRuntimeManagedWorktreeSortOrder,
   updateRuntimeManagedWorktreeMetadata
 } from './metadata/runtime-managed-worktree-metadata'
-import {
-  resolveRuntimeGitHubWorktreeBase,
-  type RuntimeGitHubWorktreeBaseArgs
-} from '../integrations/github/runtime-github-worktree-base'
-import {
-  resolveRuntimeGitLabWorktreeBase,
-  type RuntimeGitLabWorktreeBaseArgs
-} from '../integrations/gitlab/runtime-gitlab-worktree-base'
-import { listWorktreesStrict } from '../../git/worktrees/catalog/worktree-listing'
-import {
-  adoptRuntimeProvisionedRoot,
-  readLocalSparseCheckoutEnabled,
-  type RuntimeProvisionedRootRequest
-} from './creation/runtime-provisioned-root-adoption'
+import { RuntimeWorktreeReviewBase } from './metadata/runtime-worktree-review-base'
 
-export abstract class OrcaRuntimeWithCreateManagedRemoteWorktree extends OrcaRuntimeWithCreateManagedWorktree {
-  async getCanonicalFetchKey(
-    repoPath: string,
-    remote: string,
-    gitOptions: LocalGitExecOptions = {}
-  ): Promise<string> {
-    return await this.remoteFetches.getCanonicalFetchKey(repoPath, remote, gitOptions)
-  }
-
-  async getOrStartRemoteFetch(
-    repoPath: string,
-    remote: string,
-    gitOptions: LocalGitExecOptions = {}
-  ): Promise<RemoteFetchResult> {
-    return await this.remoteFetches.getOrStartRemoteFetch(repoPath, remote, gitOptions)
-  }
-
-  async getOrStartRemoteTrackingBaseRefresh(
-    repoPath: string,
-    base: RemoteTrackingBase,
-    gitOptions: LocalGitExecOptions = {}
-  ): Promise<RemoteFetchResult> {
-    return await this.remoteFetches.getOrStartRemoteTrackingBaseRefresh(repoPath, base, gitOptions)
-  }
-
-  async fetchRemoteWithCache(
-    repoPath: string,
-    remote: string,
-    gitOptions: LocalGitExecOptions = {}
-  ): Promise<void> {
-    await this.remoteFetches.fetchRemoteWithCache(repoPath, remote, gitOptions)
-  }
-
-  async resolveRemoteTrackingBase(
-    repoPath: string,
-    baseBranch: string,
-    gitOptions: LocalGitExecOptions = {}
-  ): Promise<RemoteTrackingBase | null> {
-    return await this.remoteFetches.resolveRemoteTrackingBase(repoPath, baseBranch, gitOptions)
-  }
-
-  async hasRemoteTrackingRef(
-    repoPath: string,
-    base: RemoteTrackingBase,
-    gitOptions: LocalGitExecOptions = {}
-  ): Promise<boolean> {
-    return await this.remoteFetches.hasRemoteTrackingRef(repoPath, base, gitOptions)
-  }
-
+export abstract class RuntimeWorkspaceMetadata extends RuntimeWorktreeReviewBase {
   recordOptimisticReconcileToken(worktreeId: string): string {
     return this.worktreeBaseReconciliation.recordToken(worktreeId)
   }
@@ -147,27 +83,6 @@ export abstract class OrcaRuntimeWithCreateManagedRemoteWorktree extends OrcaRun
     })
   }
 
-  adoptManagedProvisionedRoot(
-    repoSelector: string,
-    request: RuntimeProvisionedRootRequest
-  ): Promise<CreateWorktreeResult> {
-    if (!this.store) {
-      throw new Error('runtime_unavailable')
-    }
-    return adoptRuntimeProvisionedRoot(repoSelector, request, {
-      store: this.store,
-      resolveRepo: (selector) => this.resolveRepoSelector(selector),
-      listWorktrees: (repoPath) => listWorktreesStrict(repoPath),
-      isSparseCheckoutEnabled: readLocalSparseCheckoutEnabled,
-      invalidateScan: (repoId) => {
-        this.invalidateResolvedWorktreeCache()
-        this.invalidateWorktreeScanCacheForRepo(repoId)
-      },
-      notifyChanged: (repoId) => this.notifyWorktreesChanged(repoId),
-      showWorktree: (selector) => this.showManagedWorktree(selector)
-    })
-  }
-
   persistManagedWorktreeSortOrder(
     orderedIds: string[],
     hostIds?: readonly string[]
@@ -187,26 +102,6 @@ export abstract class OrcaRuntimeWithCreateManagedRemoteWorktree extends OrcaRun
             ? { invalidateGitScans: false, sortOrderOnly: true, sortOrders }
             : { invalidateGitScans: false }
         )
-    })
-  }
-
-  async resolveManagedPrBase(
-    args: RuntimeGitHubWorktreeBaseArgs
-  ): Promise<GitHubPrStartPoint | { error: string }> {
-    return resolveRuntimeGitHubWorktreeBase(args, {
-      store: this.store ? this.requireStore() : null,
-      resolveRepo: (selector) => this.resolveRepoSelector(selector)
-    })
-  }
-
-  async resolveManagedMrBase(
-    args: RuntimeGitLabWorktreeBaseArgs
-  ): Promise<
-    { baseBranch: string; compareBaseRef?: string; pushTarget?: GitPushTarget } | { error: string }
-  > {
-    return resolveRuntimeGitLabWorktreeBase(args, {
-      store: this.store ? this.requireStore() : null,
-      resolveRepo: (selector) => this.resolveRepoSelector(selector)
     })
   }
 }

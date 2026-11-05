@@ -46,6 +46,22 @@ class OrchestrationDbCore {
     // Read before migrate, which drops the capture triggers it may need to rebuild around.
     const removedWorkCaptureWasIntact = isRemovedWorkCaptureIntact(this.db)
     migrate.call(this as unknown as OrchestrationDb)
+    for (const [table, columns] of [
+      ['messages', ['answer_sender_snapshot']],
+      ['federation_relay_items', ['answer_sender_report']]
+    ] as const) {
+      const existing = new Set(
+        this.db
+          .prepare(`PRAGMA table_info(${table})`)
+          .all()
+          .map((row) => row.name)
+      )
+      for (const column of columns) {
+        if (!existing.has(column)) {
+          this.db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} TEXT`)
+        }
+      }
+    }
     createRunCoordinatorAddressTriggers(this.db)
     backfillFederatedStubHomeRuns(this.db)
     // After every open step that creates Runs, before any step that deletes work.

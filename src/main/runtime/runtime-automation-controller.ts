@@ -25,11 +25,6 @@ import {
   type RuntimeAutomationUpdateInput
 } from './runtime-automation-run-context'
 
-export type {
-  RuntimeAutomationCreateInput,
-  RuntimeAutomationUpdateInput
-} from './runtime-automation-run-context'
-
 export class RuntimeAutomationController {
   private service: AutomationService | null = null
 

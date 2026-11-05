@@ -46,11 +46,11 @@ import { getHostedReviewForBranch } from '../source-control/hosted-review'
 import type { ForgeProviderId } from '../source-control/forge-provider'
 import { validateGitPushTarget } from '../git/push-target-validation'
 import { gitExecFileAsync } from '../git/runner'
+import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type {
-  OrcaRuntimeService,
   RemoteFetchResult,
   RemoteTrackingBase
-} from '../runtime/orca-runtime'
+} from '../runtime/repositories/runtime-remote-fetch-controller'
 import { getProjectHostSetupWorktreeMeta } from '../../shared/project-host-setup-lookup'
 import { getEffectiveHooks, loadHooks } from '../workspace-hooks/hooks'
 import {

@@ -28,7 +28,7 @@ import {
 } from './agent-session/structured-agent-session-runtime'
 import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 import { scriptedCodexTransport } from './orca-runtime-tests/scripted-codex-transport.test-fixture'
-import { createScriptedClaudeRuntime } from './structured-claude-scripted-runtime-test-support'
+import { createScriptedClaudeRuntime } from './agent-session/installation/structured-claude-scripted-runtime-test-support'
 
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../telemetry/cohort-classifier', () => ({ getCohortAtEmit: vi.fn() }))

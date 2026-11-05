@@ -4,7 +4,7 @@ import { committingSpawn, registerBoundPty } from './bind-first-pane.test-fixtur
 import './runtime-test-module-registration.spec'
 import { MOCK_GIT_WORKTREES, electronMocks } from '../orca-runtime-test-mocks/setup.spec'
 import { OrcaRuntimeService } from '../orca-runtime'
-import { getRuntimeBrowserPageRegistry } from '../runtime-browser-page-registry'
+import { getRuntimeBrowserPageRegistry } from '../browser/client-pages/runtime-browser-page-registry'
 import { ipcMain } from 'electron'
 import { listWorktrees } from '../../git/worktrees/catalog/worktree-scan-cache'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-session-contracts'

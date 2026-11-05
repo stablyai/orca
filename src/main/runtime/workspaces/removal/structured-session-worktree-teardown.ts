@@ -12,7 +12,7 @@ import { getStructuredAgentSessionHost } from '../../../native-chat/agent-sessio
 import {
   observeStructuredSession,
   structuredSessionCloseSettled
-} from '../../structured-worker-authority'
+} from '../../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
 import {
   closeStructuredAgentSessionChild,
   captureStructuredSessionSurface,

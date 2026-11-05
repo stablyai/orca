@@ -279,7 +279,6 @@ function HeldMessageRow({
       prose={prose}
       rowRef={rowRef}
       onRefolded={() => {}}
-      allowFileUriLinks={false}
     />
   )
 }

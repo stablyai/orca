@@ -30,7 +30,7 @@ import {
   stopStructuredAgentSessionRuntime
 } from './structured-agent-session-runtime'
 import { createStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/structured-agent-session-logger'
-import { createCoordinatorMailObservationClock } from '../structured-chat-coordinator-observation-clock.test-fixture'
+import { createCoordinatorMailObservationClock } from '../orchestration/terminal-authority/structured-sessions/structured-chat-coordinator-observation-clock.test-fixture'
 import { scriptedCodexTransport } from '../orca-runtime-tests/scripted-codex-transport.test-fixture'
 // A Codex send without an exact receipt stays in doubt after Stop; execution still ends. A send made while that turn runs, a
 // queued card's Send-now included, goes in as `turn/steer` naming it. A Stop made before Codex

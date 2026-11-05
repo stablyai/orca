@@ -7,7 +7,7 @@ import {
   reconcileClaudeAgentViewMock
 } from '../orca-runtime-test-mocks/setup.spec'
 import { deferred, store } from './orca-runtime-test-fixtures.spec'
-import { RuntimeClientSettingsController } from '../runtime-client-settings'
+import { RuntimeClientSettingsController } from '../client/settings/runtime-client-settings'
 
 describe('OrcaRuntimeService', () => {
   it.each([true, false])(

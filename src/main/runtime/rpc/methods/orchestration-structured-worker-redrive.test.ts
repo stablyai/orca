@@ -15,17 +15,17 @@ import { setStructuredAgentSessionHost } from '../../../native-chat/agent-sessio
 import {
   structuredWorkerIdentities,
   type StructuredWorkerIdentity
-} from '../../structured-worker-identity'
+} from '../../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
 import { createOrchestrationRpcHarness } from './orchestration/rpc-test-harness'
 import {
   createStructuredWorkerSession,
   releaseStructuredWorkerSession
 } from './orchestration-structured-worker-session'
 import { stopStructuredWorker } from './orchestration-structured-worker-lifecycle'
-import { OrcaRuntimeRpcServer } from '../../runtime-rpc'
+import { OrcaRuntimeRpcServer } from '../server/runtime-rpc'
 import { ORCHESTRATION_METHODS } from './orchestration'
 import { STATUS_METHODS } from './status'
-import { createKeyedTrailingEdgeCoalescer } from '../../keyed-trailing-edge-coalescer'
+import { createKeyedTrailingEdgeCoalescer } from '../../client/events/keyed-trailing-edge-coalescer'
 import { subscribeForRedrive } from '../../orchestration/structured-session-journal-redrive'
 import { idOf, resultOf } from '../orchestration-session-caller-test-fixture'
 import { createStructuredWorkerSessionForWorktree } from './orchestration/worker/worker-topology'

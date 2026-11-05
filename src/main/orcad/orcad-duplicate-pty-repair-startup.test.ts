@@ -169,7 +169,7 @@ vi.mock('../runtime/orca-runtime', () => ({
     setAgentSenderPeerKey() {}
   }
 }))
-vi.mock('../runtime/runtime-rpc', () => ({
+vi.mock('../runtime/rpc/server/runtime-rpc', () => ({
   OrcaRuntimeRpcServer: class {
     async start() {
       state.onStartupStep?.('rpc.start')

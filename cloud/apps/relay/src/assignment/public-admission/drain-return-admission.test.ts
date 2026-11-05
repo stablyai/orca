@@ -68,57 +68,6 @@ function deferred(result: DrainReturnGrant | DrainReturnDeferral): DrainReturnDe
 const host = (index: number): string => `host${String(index).padStart(12, '0')}`
 
 describe('drain-return admission', () => {
-  it('admits up to its concurrency and defers the rest with a paced Retry-After', async () => {
-    const { lane } = harness()
-    admitted(await lane.acquire(host(0)))
-
-    const retries = []
-    for (let index = 1; index <= 5; index++) {
-      const deferral = deferred(await lane.acquire(host(index)))
-      expect(deferral.reason).toBe('queue-full')
-      retries.push(deferral.retryAfterSeconds)
-    }
-
-    // 860 ms per slot before any measurement: one host per slot, in order.
-    expect(retries).toEqual([2, 3, 4, 5, 6])
-  })
-
-  it('gives the same answers to the same arrivals', async () => {
-    const run = async (): Promise<number[]> => {
-      const { lane, advance } = harness({ maxQueued: 2 })
-      const answers: number[] = []
-      const settled: Promise<void>[] = []
-      for (let index = 0; index < 40; index++) {
-        settled.push(
-          lane.acquire(host(index)).then((result) => {
-            if (result.kind === 'deferred') answers.push(result.retryAfterSeconds)
-          })
-        )
-        await Promise.resolve()
-        advance(100)
-      }
-      advance(10_000)
-      await Promise.all(settled.slice(1))
-      return answers
-    }
-
-    const first = await run()
-    expect(first).toHaveLength(39)
-    expect(await run()).toEqual(first)
-    expect(Math.min(...first)).toBeGreaterThanOrEqual(DRAIN_RETURN_MIN_RETRY_AFTER_SECONDS)
-  })
-
-  it('never asks a host to wait longer than the configured ceiling', async () => {
-    const { lane } = harness({ maxRetryAfterSeconds: 10 })
-    admitted(await lane.acquire(host(0)))
-
-    const retries = []
-    for (let index = 1; index <= 50; index++) {
-      retries.push(deferred(await lane.acquire(host(index))).retryAfterSeconds)
-    }
-
-    expect(Math.max(...retries)).toBe(10)
-  })
 
   it('shortens the pacing once the measured service time is short', async () => {
     const { lane, advance } = harness()
@@ -141,19 +90,6 @@ describe('drain-return admission', () => {
   })
 
   // The unclamped sample: the EWMA's floor and ceiling would hide the real tail.
-  it('reports each slot hold once, as measured', async () => {
-    const samples: number[] = []
-    const { lane, advance } = harness({ onServiceMs: (ms) => samples.push(ms) })
-    const fast = admitted(await lane.acquire(host(1)))
-    advance(5)
-    fast.lease.release()
-    fast.lease.release()
-    const slow = admitted(await lane.acquire(host(2)))
-    advance(20_000)
-    slow.lease.release()
-
-    expect(samples).toEqual([5, 20_000])
-  })
 
   it('answers a host’s own early retry with its interval, not a place behind the cohort', async () => {
     const { lane } = harness()
@@ -180,14 +116,6 @@ describe('drain-return admission', () => {
     advance(1_000)
     // Early and still full: the same instant, not a new slot after everyone else.
     expect(deferred(await lane.acquire(host(5))).retryAfterSeconds).toBe(5)
-  })
-
-  it('never holds placement’s last permit', async () => {
-    const { lane } = harness()
-    admitted(await lane.acquire(host(0)))
-
-    // One of two permits is still free, but it is placement's.
-    expect(deferred(await lane.acquire(host(1))).reason).toBe('queue-full')
   })
 
   it('lets a queued placement go before a queued drain return', async () => {

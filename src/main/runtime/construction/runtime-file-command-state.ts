@@ -17,9 +17,9 @@ import { RuntimeGitHubIssueCommentCommands } from '../integrations/github/runtim
 import { RuntimeGitHubProjectCommands } from '../integrations/github/runtime-github-project-commands'
 import { RuntimeRepositoryHooksCommands } from '../repositories/runtime-repository-hooks-commands'
 import { RuntimeRepositoryIssueCommand } from '../repositories/runtime-repository-issue-command'
-import { ClientHostedBrowserRowPublisher } from '../client-hosted-browser-row-publication'
-import { getRuntimeBrowserPageRegistry } from '../runtime-browser-page-registry'
-import { getBrowserHostLeaseRegistry } from '../browser-host/browser-host-lease-registry-instance'
+import { ClientHostedBrowserRowPublisher } from '../browser/client-pages/client-hosted-browser-row-publication'
+import { getRuntimeBrowserPageRegistry } from '../browser/client-pages/runtime-browser-page-registry'
+import { getBrowserHostLeaseRegistry } from '../browser-host/leases/browser-host-lease-registry-instance'
 import {
   isChatScratchWorktreeId,
   resolveChatScratchSelectorFolder

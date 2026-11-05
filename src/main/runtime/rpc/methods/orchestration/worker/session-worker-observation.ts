@@ -9,7 +9,7 @@ import type { OrchestrationDb } from '../../../../orchestration/db'
 import {
   holdStructuredWorker,
   observeStructuredSession
-} from '../../../../structured-worker-authority'
+} from '../../../../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
 import { resolveStructuredWorkerForDispatch } from '../../orchestration-structured-worker-lifecycle'
 
 export type SessionWorkerObservation = {

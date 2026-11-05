@@ -13,7 +13,7 @@ import {
   getWorktreeExecutionHostId,
   parseExecutionHostId
 } from '../../../../shared/execution-host'
-import { resolveRuntimeBrowserNetworkExecutionHost } from '../../runtime-browser-network-execution-host'
+import { resolveRuntimeBrowserNetworkExecutionHost } from '../../browser/network/runtime-browser-network-execution-host'
 import { resolveLocalProjectRuntimeForWorktreeId } from '../../../workspaces/execution-host/local-project-runtime-resolution'
 import { getRegisteredSshState } from '../../../ssh/targets/ssh-target-registry'
 import {
@@ -25,13 +25,10 @@ import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folde
 import type { ResolvedWorktree } from '../../workspaces/catalog/runtime-worktree-path-identity'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspaces/folder-workspace-worktree'
-import type { TerminalWorkspaceLaunchScope } from '../../runtime-legacy-worker-terminal-recovery-types'
+import type { TerminalWorkspaceLaunchScope } from '../../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import { resolveTerminalStartupCwd } from '../../../../shared/shell/launch/terminal-startup-cwd'
 
-import {
-  type ResolvedTerminalWorkspaceLaunchTarget,
-  AGENT_HOOK_RUNTIME_ENV_KEYS
-} from '../../orca-runtime-core'
+import type { ResolvedTerminalWorkspaceLaunchTarget } from './terminal-workspace-launch-target'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { homedir } from 'node:os'
 import { getExplicitWorktreeIdSelector } from '../../workspaces/catalog/runtime-worktree-selection'
@@ -41,6 +38,14 @@ import { getPtyExecutionHost } from '../../../../shared/terminal/pty/lifecycle/t
 import { WorktreeIdRequiresFullPathError } from '../../workspaces/lineage/runtime-worktree-lineage-resolution'
 import { triggerTerminalSpawnPushTargetMaterialization } from './runtime-terminal-spawn-push-target-materialization'
 import { resolveCreatedWorktreeTerminalTarget } from './runtime-created-worktree-terminal-target'
+const AGENT_HOOK_RUNTIME_ENV_KEYS = [
+  'ORCA_AGENT_HOOK_PORT',
+  'ORCA_AGENT_HOOK_TOKEN',
+  'ORCA_AGENT_HOOK_ENV',
+  'ORCA_AGENT_HOOK_VERSION',
+  'ORCA_AGENT_HOOK_TRANSPORT',
+  'ORCA_AGENT_HOOK_ENDPOINT'
+] as const
 
 export type TerminalWorkspaceCreationEvidence = [
   createdWorktree?: Worktree,

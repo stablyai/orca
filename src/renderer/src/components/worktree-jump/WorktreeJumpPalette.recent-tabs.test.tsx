@@ -268,6 +268,48 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
     )
   })
 
+  it('lists a native chat in recents and finds it by its renamed title', async () => {
+    const chat = {
+      ...makeUnifiedTab('tab-chat', 'wt-beta', 'session-chat', 'Claude'),
+      contentType: 'agent-session' as const,
+      agentSessionAgent: 'claude' as const,
+      customLabel: 'Release notes draft',
+      sortOrder: 1,
+      lastFocusedAt: 10
+    }
+    const state = makeRecentTabState()
+    await renderPalette({
+      ...state,
+      unifiedTabsByWorktree: {
+        ...state.unifiedTabsByWorktree,
+        'wt-beta': [...(state.unifiedTabsByWorktree?.['wt-beta'] ?? []), chat]
+      },
+      groupsByWorktree: {
+        ...state.groupsByWorktree,
+        'wt-beta': [makeGroup('wt-beta', ['tab-beta', 'tab-chat'])]
+      }
+    })
+
+    expect(getTabRowIds()).toContain('tab-chat')
+
+    await act(async () => {
+      setCommandQuery?.('release notes')
+    })
+    await flushEffects()
+
+    expect(getTabRowIds()).toEqual(['tab-chat'])
+    const row = testContainer.querySelector<HTMLElement>(
+      `[data-command-item="${encodePaletteIdentity(['workspace-tab', '', 'wt-beta', 'tab-chat'])}"]`
+    )
+    expect(row?.textContent).toContain('Release notes draft')
+    await act(async () => {
+      row?.click()
+    })
+    expect(activateWorkspaceTabPaletteResult).toHaveBeenCalledWith(
+      expect.objectContaining({ contentType: 'agent-session', tabId: 'tab-chat' })
+    )
+  })
+
   it('caps the recent section so the worktree header stays above the fold', async () => {
     await renderPalette(makeManyTabState(12))
 

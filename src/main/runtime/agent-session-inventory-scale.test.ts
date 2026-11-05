@@ -38,7 +38,7 @@ import {
   mintStructuredWorkerPaneKey,
   structuredWorkerIdentities,
   structuredWorkerProcessIncarnation
-} from './structured-worker-identity'
+} from './orchestration/terminal-authority/structured-sessions/structured-worker-identity'
 import {
   openAgentSessionRecordStoreOnce,
   releaseAgentSessionRecordStore
