@@ -23,6 +23,7 @@ import {
 import type { OrcadManagedRefusal } from '../../../shared/orcad-managed-runtime'
 import { resumeInterruptedOrcadCandidate } from '../../ssh/orcad-interrupted-candidate-resume'
 import { errorMessage } from '../../../shared/error-message'
+import { isOrcadLaunchFailure } from '../../ssh/orcad-launch-failure'
 
 export type OrcadActivationRecoveryResult =
   | { outcome: 'none' }
@@ -33,7 +34,8 @@ export type OrcadActivationRecoveryResult =
       activeVersion: string | null
       readiness: ServeReadiness | null
     }
-  | OrcadManagedRefusal
+  /** A launch failure behind an unverifiable refusal still ended a run. */
+  | (OrcadManagedRefusal & { launchFailure?: Error })
 
 type OrcadActivationRecoveryOptions = OrcadIncumbentRecoveryOptions
 
@@ -84,7 +86,8 @@ export async function recoverInterruptedOrcadActivation(
       code: ORCAD_RECOVERY_UNVERIFIABLE_CODE,
       reason:
         `The interrupted activation could not be reconciled safely: ${errorMessage(error)} ` +
-        'The host remains fenced.'
+        'The host remains fenced.',
+      ...(isOrcadLaunchFailure(error) ? { launchFailure: error } : {})
     }
   }
 }

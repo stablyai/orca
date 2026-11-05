@@ -159,6 +159,35 @@ describe('a managed orcad that keeps exiting unexpectedly', () => {
     expect(launches).toBe(3)
   })
 
+  it('counts starts that fail while recovering an interrupted activation', async () => {
+    stoppedSlotLaunches(async () => ({
+      outcome: 'fenced',
+      launchFailure: new OrcadLaunchReadinessError('rejected', 'orcad did not become ready')
+    }))
+    for (let i = 0; i < 3; i++) {
+      await findStopped()
+    }
+
+    expect(await findStopped()).toMatchObject({
+      detail: expect.stringContaining('Orca stopped restarting its server on Box')
+    })
+    expect(launches).toBe(3)
+  })
+
+  // A Windows launch failure ran nothing, so the next report names an earlier run.
+  it('still counts the crash the next orcad reports after a Windows launch failure', async () => {
+    stoppedSlotLaunches(async () => {
+      throw new OrcadWindowsLaunchFailedError('CreateProcess failed (code 5)')
+    })
+    await findStopped()
+    startsReporting(CRASHED)
+    await findStopped()
+    await findStopped()
+
+    expect(await findStopped()).toMatchObject({ state: 'unverifiable' })
+    expect(launches).toBe(3)
+  })
+
   // Nothing ran, and the refusal's own message says what to change on the host.
   it('keeps showing a Windows host-policy refusal instead of braking on it', async () => {
     const refusal = new OrcadWindowsLaunchRefusedError('breakaway-denied')

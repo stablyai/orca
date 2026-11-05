@@ -1,7 +1,7 @@
 // Stop waking a managed orcad that keeps dying; an explicit Connect re-arms automatic starts.
 import { OrcadUnexpectedExitSchema } from '../../../shared/orcad-unexpected-exit'
 import type { OrcadHealth } from '../../orcad/orcad-health'
-import { OrcadLaunchReadinessError } from '../../ssh/orcad-active-readiness'
+import { isOrcadLaunchFailure, orcadLaunchFailureRanProcess } from '../../ssh/orcad-launch-failure'
 import { orcadSlotDir, type OrcadSlotOptions } from '../../ssh/orcad-recovery-slot'
 import { joinRemotePath } from '../../ssh/ssh-remote-platform'
 import { readOrcadActivationRecord } from '../activation/orcad-activation-record-store'
@@ -10,7 +10,6 @@ import { withOrcadLogTail } from '../install/orcad-remote-log-tail'
 import { readBoundedOrcadRemoteRecord } from '../install/orcad-remote-record-file'
 import { ORCAD_LOCK_FILE_NAME } from '../../orcad/orcad-instance-lock'
 import { MAX_ORCAD_LOCK_BYTES } from '../../orcad/orcad-instance-lock-reclaim'
-import { OrcadWindowsLaunchFailedError } from '../install/orcad-remote-launch-windows'
 import { ManagedOrcadEventWindow } from './orcad-managed-event-window'
 import { wakeStoppedManagedOrcad } from './orcad-managed-wake'
 
@@ -54,11 +53,14 @@ export class ManagedOrcadCrashLoopBrake {
     }
   }
 
-  noteFailedStart(environmentId: string, epoch: number, reason: string): void {
+  noteFailedStart(environmentId: string, epoch: number, failure: Error): void {
     if (epoch !== this.resetEpoch(environmentId)) {
       return
     }
-    this.countedFailedStarts.add(environmentId)
+    if (orcadLaunchFailureRanProcess(failure)) {
+      this.countedFailedStarts.add(environmentId)
+    }
+    const reason = failure.message
     this.lastFailedStart.set(environmentId, reason)
     this.latchedOnServingRun.delete(environmentId)
     this.record(environmentId)
@@ -171,15 +173,14 @@ async function wakeUnlessEngaged(
     if (wake.outcome === 'started') {
       brake.noteStarted(environmentId, epoch, wake.readiness.health)
     }
+    if (wake.outcome === 'fenced' && wake.launchFailure) {
+      brake.noteFailedStart(environmentId, epoch, wake.launchFailure)
+    }
     return wake
   } catch (error) {
-    // A launch that never became ready, or that the host reported failing, also ends a run.
-    // A host-policy refusal is not: nothing ran, and its own message says what to change.
-    if (
-      error instanceof OrcadLaunchReadinessError ||
-      error instanceof OrcadWindowsLaunchFailedError
-    ) {
-      brake.noteFailedStart(environmentId, epoch, error.message)
+    // A host-policy refusal is not counted: nothing ran, and its own message says what to change.
+    if (isOrcadLaunchFailure(error)) {
+      brake.noteFailedStart(environmentId, epoch, error)
     }
     throw error
   }
