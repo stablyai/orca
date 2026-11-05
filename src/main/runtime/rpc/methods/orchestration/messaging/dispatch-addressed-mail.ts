@@ -4,38 +4,48 @@ import { assertDispatchMailboxDeliverable } from './recipient-routing'
 import { passHeldWorkerMail } from './settled-worker-follow-through'
 import { planWorkerFollowUp, startWorkerFollowUp, type FollowUpContext } from './worker-follow-up'
 
+type Routed =
+  | { kind: 'started'; receipt: Record<string, unknown> }
+  | { kind: 'mail'; dispatchId: string }
+
 /** Mail to `dispatch:<id>`, sent or replied: a finished worker takes it as its next Task, a working one
- *  (or the follow-up already continuing it) as mail in the returned Dispatch's mailbox. */
-export async function routeDispatchAddressedMail(args: {
+ *  (or the follow-up already continuing it) as mail in the returned Dispatch's mailbox. Mail is decided
+ *  synchronously, so nothing can settle a working worker before the caller inserts it; only a start awaits. */
+export function routeDispatchAddressedMail(args: {
   ctx: FollowUpContext
   db: OrchestrationDb
   dispatchId: string
   type: MessageType
   from: string
   message: { subject: string; body?: string | undefined }
-}): Promise<
-  { kind: 'started'; receipt: Record<string, unknown> } | { kind: 'mail'; dispatchId: string }
-> {
+}): Routed | { kind: 'start'; start: () => Promise<Routed> } {
   const { ctx, db } = args
   const plan = planWorkerFollowUp(db, args.dispatchId, args.type)
-  // Only a settled worker awaits; mail to a working one stays synchronous until it is inserted.
-  const followUp =
-    plan?.kind === 'start'
-      ? await startWorkerFollowUp({
-          ctx,
-          db,
-          plan,
-          from: args.from,
-          message: args.message
-        })
-      : plan
-  if (followUp?.kind === 'started') {
-    if (typeof followUp.receipt.dispatchId === 'string') {
-      passHeldWorkerMail(ctx.runtime, db, followUp.receipt.dispatchId)
-    }
-    return followUp
+  if (plan?.kind !== 'start') {
+    return mailTo(ctx, db, plan?.dispatchId ?? args.dispatchId)
   }
-  const dispatchId = followUp?.dispatchId ?? args.dispatchId
+  return {
+    kind: 'start',
+    start: async () => {
+      const followUp = await startWorkerFollowUp({
+        ctx,
+        db,
+        plan,
+        from: args.from,
+        message: args.message
+      })
+      if (followUp.kind === 'steer') {
+        return mailTo(ctx, db, followUp.dispatchId)
+      }
+      if (typeof followUp.receipt.dispatchId === 'string') {
+        passHeldWorkerMail(ctx.runtime, db, followUp.receipt.dispatchId)
+      }
+      return followUp
+    }
+  }
+}
+
+function mailTo(ctx: FollowUpContext, db: OrchestrationDb, dispatchId: string): Routed {
   assertDispatchMailboxDeliverable(ctx.runtime, db, dispatchId)
   return { kind: 'mail', dispatchId }
 }

@@ -481,9 +481,15 @@ describe('a follow-up to a finished terminal worker', () => {
 
     await expect(
       h.call('orchestration.reply', { id: reportId, from: 'term_coord', body: 'fix the lint too' })
-    ).resolves.toMatchObject({ delivery: 'follow_up', followUpOf: dispatchId })
+    ).resolves.toMatchObject({
+      delivery: 'follow_up',
+      followUpOf: dispatchId,
+      message: { body: 'fix the lint too' }
+    })
     const followUp = getFollowUpDispatch(h.db, dispatchId)!
     expect(h.db.getTask(followUp.task_id)?.spec).toContain('fix the lint too')
+    // The Task carries the reply; its thread copy is never delivered again.
+    expect(h.db.getUnreadMessages(`dispatch:${followUp.id}`)).toEqual([])
   })
 
   it('takes mail for a working worker even when its report settles the Dispatch in the same turn', async () => {
