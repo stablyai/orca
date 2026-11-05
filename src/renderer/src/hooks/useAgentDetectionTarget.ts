@@ -2,7 +2,6 @@ import { useMemo } from 'react'
 import { useAppStore } from '@/store'
 import { getConnectionIdFromState } from '@/lib/connection-owner-resolution'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
-import { authorityKey } from '../../../shared/host-authority'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { resolveOwner, runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/resolve-owner'
 import type { WorktreeRuntimeOwnerState } from '@/lib/worktree-runtime-owner-state'
@@ -42,10 +41,10 @@ export function getAgentDetectionTargetKeyForWorktree(
     if (owner.kind !== 'resolved') {
       return undefined
     }
-    const host = parseExecutionHostId(authorityKey(owner.owner))
-    if (host?.kind === 'runtime') {
-      return getRuntimeAgentDetectionTargetKey(host.environmentId, worktreeId)
+    if (owner.owner.endpoint.kind === 'environment') {
+      return getRuntimeAgentDetectionTargetKey(owner.owner.endpoint.environmentId, worktreeId)
     }
+    const host = parseExecutionHostId(owner.owner.at)
     if (host?.kind === 'ssh') {
       return `ssh:${host.targetId}`
     }

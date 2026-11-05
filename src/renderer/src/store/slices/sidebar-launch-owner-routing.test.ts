@@ -1,3 +1,5 @@
+import { runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/resolve-owner'
+import { resolveAgentLaunchExecutionContext } from '@/lib/launch-agent-execution-context'
 import { describe, expect, it, vi } from 'vitest'
 import { createTestStore, makeWorktree, seedStore } from './store-test-helpers'
 import { runtimeStatuses } from './browser-slice-test-harness'
@@ -55,4 +57,55 @@ describe('captured sidebar workspace copy', () => {
       vi.unstubAllGlobals()
     }
   })
+})
+
+it('keeps nested SSH inventory, capability transport and quoting on the owning server', () => {
+  const store = setup()
+  store.setState({
+    worktreesByRepo: {
+      repo1: [
+        makeWorktree({
+          id,
+          repoId: 'repo1',
+          path: '/path/twin',
+          hostId: 'ssh:box',
+          runtimeOwnerEnvironmentId: 'env-1'
+        })
+      ]
+    },
+    sshStateByEnvironment: new Map([
+      [
+        'env-1',
+        {
+          connectionStates: new Map([
+            [
+              'box',
+              {
+                targetId: 'box',
+                status: 'connected',
+                error: null,
+                reconnectAttempt: 0,
+                remotePlatform: 'linux'
+              }
+            ]
+          ]),
+          targetLabels: new Map(),
+          targetGenerations: new Map(),
+          removedTargetLabels: new Map(),
+          targetsHydrated: true
+        }
+      ]
+    ])
+  })
+  const state = store.getState()
+  expect(getAgentDetectionTargetKeyForWorktree(state, id, 'ssh:box')).toBe(
+    'runtime:env-1:repo1%3A%3A%2Fpath%2Ftwin'
+  )
+  expect(
+    runtimeEnvironmentIdForWorkspaceOwner(state, { workspaceId: id, hostId: 'ssh:box' })
+  ).toEqual({ kind: 'resolved', environmentId: 'env-1' })
+  expect(
+    resolveAgentLaunchExecutionContext(state, { worktreeId: id, executionHostId: 'ssh:box' })
+      ?.resolvedLaunchPlatform
+  ).toBe('linux')
 })

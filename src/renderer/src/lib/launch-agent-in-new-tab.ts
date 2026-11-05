@@ -1,4 +1,4 @@
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/resolve-owner'
 import {
   launchNewTabPromptThroughHost,
   newTabPromptLaunchesThroughHost
@@ -70,18 +70,12 @@ export function launchAgentInNewTabWithOutcome(
     beforeSurfaceOpen,
     activate
   } = args
-  if (
-    args.selectedExecutionHostId &&
-    activateAndRevealWorktree(worktreeId, {
-      executionHostId: args.selectedExecutionHostId,
-      providesInitialSurface: true
-    }) === false
-  ) {
-    args.focusIntent?.cancel()
-    return null
-  }
   const store = useAppStore.getState()
-  const executionContext = resolveAgentLaunchExecutionContext(store, { worktreeId, launchPlatform })
+  const executionContext = resolveAgentLaunchExecutionContext(store, {
+    worktreeId,
+    launchPlatform,
+    executionHostId: args.selectedExecutionHostId
+  })
   if (!executionContext) {
     args.focusIntent?.cancel()
     return null
@@ -163,7 +157,16 @@ export function launchAgentInNewTabWithOutcome(
       isFollowupPath
     })
   args.focusIntent?.cancel()
-  const runtimeEnvironmentId = runtimeEnvironmentIdOrLocalUnlessTwin(store, worktreeId)
+  const selectedOwner = args.selectedExecutionHostId
+    ? runtimeEnvironmentIdForWorkspaceOwner(store, {
+        workspaceId: worktreeId,
+        hostId: args.selectedExecutionHostId
+      })
+    : undefined
+  const runtimeEnvironmentId =
+    selectedOwner?.kind === 'resolved'
+      ? selectedOwner.environmentId
+      : runtimeEnvironmentIdOrLocalUnlessTwin(store, worktreeId)
   if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
     if (beforeSurfaceOpen?.({ kind: 'host-published' }) === false) {
       return null
@@ -208,6 +211,7 @@ export function launchAgentInNewTabWithOutcome(
     newTabPromptLaunchesThroughHost({ promptDelivery, pastesPrompt: true, isRemote })
   ) {
     const launched = launchNewTabPromptThroughHost({
+      ...(args.selectedExecutionHostId ? { executionHostId: args.selectedExecutionHostId } : {}),
       agent,
       worktreeId,
       ...(groupId ? { groupId } : {}),
@@ -232,6 +236,7 @@ export function launchAgentInNewTabWithOutcome(
     }
   }
   const tab = store.createTab(worktreeId, groupId, undefined, {
+    ...(args.selectedExecutionHostId ? { executionHostId: args.selectedExecutionHostId } : {}),
     launchAgent: agent,
     quickCommandLabel,
     ...(pendingActivationSpawn ? { pendingActivationSpawn: true } : {}),

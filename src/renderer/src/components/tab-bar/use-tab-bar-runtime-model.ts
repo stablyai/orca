@@ -1,3 +1,4 @@
+import { runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/resolve-owner'
 import { useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import type { GitFileStatus } from '../../../../shared/git/status/git-status-types'
@@ -128,13 +129,16 @@ export function useTabBarRuntimeModel({
   )
   const settings = useAppStore((s) => s.settings)
   // Why: use the worktree's owning host so offered Windows shells match the host that actually runs the terminal.
-  const ownerRuntimeEnvironmentId = useAppStore((s) =>
-    executionHostId
-      ? selectedHost?.kind === 'runtime'
-        ? selectedHost.environmentId
-        : null
-      : runtimeEnvironmentIdOrLocalUnlessTwin(s, worktreeId)
-  )
+  const ownerRuntimeEnvironmentId = useAppStore((s) => {
+    if (!executionHostId) {
+      return runtimeEnvironmentIdOrLocalUnlessTwin(s, worktreeId)
+    }
+    const owner = runtimeEnvironmentIdForWorkspaceOwner(s, {
+      workspaceId: worktreeId,
+      hostId: executionHostId
+    })
+    return owner.kind === 'resolved' ? owner.environmentId : null
+  })
   // Why: retained tab strips rerun selectors on every store write; reuse canonical indexes, don't flatten both slices here.
   const worktreeConnectionId = useAppStore(
     (s) =>
@@ -147,7 +151,12 @@ export function useTabBarRuntimeModel({
     if (!worktreeConnectionId) {
       return null
     }
-    return s.sshConnectionStates.get(worktreeConnectionId)?.remotePlatform ?? null
+    const connection = ownerRuntimeEnvironmentId
+      ? s.sshStateByEnvironment
+          .get(ownerRuntimeEnvironmentId)
+          ?.connectionStates.get(worktreeConnectionId)
+      : s.sshConnectionStates.get(worktreeConnectionId)
+    return connection?.remotePlatform ?? null
   })
   const isWebClient = (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ === true
   const windowsTerminalCapabilityOwnerKey = getWindowsTerminalCapabilityOwnerKey(
