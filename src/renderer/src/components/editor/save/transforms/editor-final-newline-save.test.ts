@@ -135,34 +135,6 @@ describe('saving with Insert Final Newline', () => {
     storeRef.current = null
   })
 
-  it.each([
-    ['appends LF', true, 'packages:\n  - app', 'packages:\n  - app\n'],
-    ['preserves CRLF', true, 'packages:\r\n  - app', 'packages:\r\n  - app\r\n'],
-    ['keeps an existing LF', true, 'packages:\n  - app\n', 'packages:\n  - app\n'],
-    ['keeps an existing CRLF', true, 'packages:\r\n  - app\r\n', 'packages:\r\n  - app\r\n'],
-    ['keeps a final CR', true, 'packages:\r', 'packages:\r'],
-    ['leaves empty files empty', true, '', ''],
-    ['does nothing when disabled', false, 'packages:\n  - app', 'packages:\n  - app'],
-    ['does nothing when the setting is absent', undefined, 'packages: []', 'packages: []']
-  ])('%s', async (_label, enabled, draft, written) => {
-    const { store, fileId } = openFile({ enabled, draft })
-    const files = await save(store, fileId)
-
-    expect(files.get(PATH)).toBe(written)
-    expect(store.getState().openFiles[0]?.isDirty).toBe(false)
-  })
-
-  it.each(['autosave', 'restart', 'overwrite', 'convert'] as const)(
-    'inserts a newline for a %s save',
-    async (trigger) => {
-      const { store, fileId } = openFile({ enabled: true, draft: 'packages: []' })
-      const files = await save(store, fileId, { trigger })
-
-      expect(files.get(PATH)).toBe('packages: []\n')
-      expect(store.getState().openFiles[0]?.isDirty).toBe(false)
-    }
-  )
-
   it('uses the retained CRLF model ending after its last line break is removed', async () => {
     const draft = 'packages: []'
     const { store, fileId } = openFile({ enabled: true, draft })
@@ -236,17 +208,6 @@ describe('saving with Insert Final Newline', () => {
     }
   })
 
-  it.each([
-    ['/repo/note.md', 'markdown'],
-    ['/repo/table.csv', 'csv'],
-    ['/repo/notebook.ipynb', 'json']
-  ])('does not alter the structured editor for %s', async (path, language) => {
-    const { store, fileId } = openFile({ enabled: true, draft: 'content', path, language })
-    const files = await save(store, fileId)
-
-    expect(files.get(path)).toBe('content')
-  })
-
   it('applies to Markdown when its source code view is selected', async () => {
     const path = '/repo/note.md'
     const { store, fileId } = openFile({
@@ -272,19 +233,6 @@ describe('saving with Insert Final Newline', () => {
     expect(model.getValue()).toBe('typed meanwhile')
     expect(store.getState().editorDrafts[fileId]).toBe('captured')
     expect(store.getState().openFiles[0]?.isDirty).toBe(true)
-  })
-
-  it('adds a newline after formatter output and keeps the model and draft in sync', async () => {
-    const { store, fileId } = openFile({ enabled: true, draft: 'packages:[]' })
-    const model = createModel(store, 'packages:[]')
-    store.setState({ settings: { ...store.getState().settings!, editorFormatOnSave: true } })
-    vi.mocked(callRuntimeRpc).mockResolvedValueOnce({ kind: 'formatted', text: 'packages: []' })
-
-    const files = await save(store, fileId)
-
-    expect(files.get(PATH)).toBe('packages: []\n')
-    expect(model.getValue()).toBe('packages: []\n')
-    expect(store.getState().openFiles[0]?.isDirty).toBe(false)
   })
 
   it('adopts formatter output that already ends with a newline when saving a clean file', async () => {

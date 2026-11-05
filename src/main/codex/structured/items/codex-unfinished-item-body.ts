@@ -17,7 +17,7 @@ import {
 import type { CodexActiveJournalItem } from '../journal/codex-structured-journal-contracts'
 
 /** Prefer streamed text so unfinished rows retain partial output. */
-export function codexActiveItemBody(
+function codexActiveItemBody(
   active: CodexActiveJournalItem,
   streams: Pick<CodexStructuredItemStreams, 'snapshot'>
 ): AgentJournalItemBody | null {
@@ -42,9 +42,17 @@ export function codexCompletedItem(
 }
 
 export function interruptedCodexItemBody(
-  body: AgentJournalItemBody | null,
+  active: CodexActiveJournalItem,
+  streams: Pick<CodexStructuredItemStreams, 'snapshot'>,
   end: { at?: number; call?: AgentJournalRunningCallEnd } = {}
 ): AgentJournalItemBody | null {
+  // Codex never completes an image generation the turn abandoned, so its started status is stale.
+  const body = codexActiveItemBody(
+    active.item.type === 'imageGeneration'
+      ? { ...active, item: { ...active.item, status: 'interrupted' } }
+      : active,
+    streams
+  )
   if (!body) {
     return null
   }

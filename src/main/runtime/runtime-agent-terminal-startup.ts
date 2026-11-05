@@ -36,7 +36,7 @@ import {
 } from './agent-launch-scope-runtime'
 import { resolveQoderTerminalCommand } from './qoder-terminal-command-resolution'
 import { resolveStartupShell } from '../../shared/agent-launch/startup/tui-agent-startup-shell'
-import { resolveWslSessionContext } from '../daemon/wsl-session-context'
+import { resolveWslSessionContext } from '../daemon/pty-subprocess/wsl-session-context'
 import { isTuiAgentEnabled } from '../../shared/agent-launch/catalog/tui-agent-selection'
 import { resolveWslHostAgentLaunchInputs } from './wsl-host-agent-terminal-launch'
 
@@ -185,6 +185,7 @@ async function buildRuntimeAgentTerminalStartupOptions(
         platform: runtime.platform,
         isRemote,
         ...(opts.agentArgs !== undefined ? { agentArgs: opts.agentArgs } : {}),
+        ...(opts.extraAgentArgs !== undefined ? { extraAgentArgs: opts.extraAgentArgs } : {}),
         shell: agentLaunchQuotingShell(runtime),
         sessionOptions: sessionOptions ?? host.toSessionOptions(opts.launchPreferences),
         ...(opts.suppressStartupUpdatePrompt ? { suppressStartupUpdatePrompt: true } : {})

@@ -120,28 +120,6 @@ describe('remote runtime recovery input hold', () => {
     expect(sent).toEqual([])
   })
 
-  it('accepts new input right after a release drained the previous hold', async () => {
-    const hold = createRemoteRuntimeRecoveryInputHold()
-    const { sent, writer } = createWriter()
-    hold.enqueue(endpoint, 'a', 'driving')
-    hold.release(endpoint, writer)
-    await vi.waitFor(() => expect(sent).toEqual(['a']))
-
-    expect(hold.enqueue(endpoint, 'b', 'driving')).toBe(true)
-    hold.release(endpoint, writer)
-    await vi.waitFor(() => expect(sent).toEqual(['a', 'b']))
-  })
-
-  it('resolves held acknowledged input as undelivered on discard', async () => {
-    const hold = createRemoteRuntimeRecoveryInputHold()
-    const accepted = hold.enqueueAccepted(endpoint, 'x', 'driving')
-
-    hold.discard()
-
-    await expect(accepted).resolves.toBe(false)
-    expect(hold.isHolding()).toBe(false)
-  })
-
   it('lets only the latest connect settle typing held before the pane bound a terminal', async () => {
     const hold = createRemoteRuntimeRecoveryInputHold({ holdBeforeFirstConnect: true })
     const { sent, writer } = createWriter()

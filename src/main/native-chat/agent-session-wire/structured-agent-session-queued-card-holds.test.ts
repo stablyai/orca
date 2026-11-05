@@ -38,7 +38,7 @@ import { StructuredAgentSessionCurrentWork } from './structured-agent-session-cu
 
 let rig: QueuedMessageTestRig
 
-const MANUAL_IDLE_SWEEP = { idleMs: 0, intervalMs: 60 * 60 * 1000 }
+const MANUAL_IDLE_SWEEP = { idleMs: () => 0, intervalMs: 60 * 60 * 1000 }
 
 beforeEach(async () => {
   vi.useFakeTimers()

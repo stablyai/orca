@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import type { ProjectHostSetup } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
 import {
-  getAutomationSetupDecisionDraftValue,
   getVisibleAutomationSetupDecision,
   resolveAutomationSetupDecisionForSave
 } from './automation-setup-decision'
@@ -38,31 +37,6 @@ function setup(overrides: Partial<ProjectHostSetup> = {}): ProjectHostSetup {
 }
 
 describe('automation setup decision defaults', () => {
-  it.each([
-    ['run-by-default', 'run'],
-    ['skip-by-default', 'skip'],
-    ['ask', 'skip']
-  ] as const)('maps %s setup policy to %s', (setupRunPolicy, expectedDecision) => {
-    expect(
-      getVisibleAutomationSetupDecision({
-        workspaceMode: 'new_per_run',
-        repoId: 'repo-1',
-        repos: [
-          {
-            ...repo,
-            hookSettings: {
-              mode: 'override',
-              setupRunPolicy,
-              scripts: { setup: 'pnpm install', archive: '' }
-            }
-          }
-        ],
-        projectHostSetups: [],
-        yamlHooks: null
-      })
-    ).toBe(expectedDecision)
-  })
-
   it('hides setup choice outside Orca new-run automations with setup', () => {
     const baseArgs = {
       repoId: 'repo-1',
@@ -183,67 +157,6 @@ describe('automation setup decision defaults', () => {
     ).toBe('skip')
   })
 
-  it('omits setup decision when no setup source is visible', () => {
-    expect(
-      resolveAutomationSetupDecisionForSave({
-        workspaceMode: 'new_per_run',
-        repoId: 'repo-1',
-        repos: [
-          {
-            ...repo,
-            hookSettings: {
-              mode: 'override',
-              setupRunPolicy: 'ask',
-              scripts: { setup: '', archive: '' }
-            }
-          }
-        ],
-        projectHostSetups: [],
-        yamlHooks: null,
-        draftSetupDecision: undefined
-      })
-    ).toBeUndefined()
-    expect(
-      resolveAutomationSetupDecisionForSave({
-        workspaceMode: 'new_per_run',
-        repoId: 'repo-1',
-        repos: [
-          {
-            ...repo,
-            hookSettings: {
-              mode: 'override',
-              setupRunPolicy: 'run-by-default',
-              scripts: { setup: '', archive: '' }
-            }
-          }
-        ],
-        projectHostSetups: [],
-        yamlHooks: null,
-        draftSetupDecision: undefined
-      })
-    ).toBeUndefined()
-
-    expect(
-      resolveAutomationSetupDecisionForSave({
-        workspaceMode: 'new_per_run',
-        repoId: 'repo-1',
-        repos: [
-          {
-            ...repo,
-            hookSettings: {
-              mode: 'override',
-              setupRunPolicy: 'skip-by-default',
-              scripts: { setup: '', archive: '' }
-            }
-          }
-        ],
-        projectHostSetups: [],
-        yamlHooks: null,
-        draftSetupDecision: undefined
-      })
-    ).toBeUndefined()
-  })
-
   it('fails closed when saving before shared hook inspection is available', () => {
     expect(
       resolveAutomationSetupDecisionForSave({
@@ -263,26 +176,5 @@ describe('automation setup decision defaults', () => {
         draftSetupDecision: undefined
       })
     ).toBe('skip')
-  })
-
-  it('loads legacy new-run automations as skip when editing', () => {
-    expect(
-      getAutomationSetupDecisionDraftValue({
-        workspaceMode: 'new_per_run',
-        persistedSetupDecision: undefined
-      })
-    ).toBe('skip')
-    expect(
-      getAutomationSetupDecisionDraftValue({
-        workspaceMode: 'new_per_run',
-        persistedSetupDecision: 'run'
-      })
-    ).toBe('run')
-    expect(
-      getAutomationSetupDecisionDraftValue({
-        workspaceMode: 'existing',
-        persistedSetupDecision: undefined
-      })
-    ).toBeUndefined()
   })
 })

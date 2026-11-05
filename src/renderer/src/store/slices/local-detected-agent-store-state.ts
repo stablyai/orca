@@ -27,6 +27,8 @@ export type LocalDetectedAgentState = {
     options?: LocalAgentRefreshOptions
   ) => Promise<TuiAgent[]>
   ensureNativeDetectedAgents: () => Promise<TuiAgent[]>
+  /** Re-reads this computer's own agents; under WSL the workspace refresh does not reach them. */
+  refreshNativeDetectedAgents: () => Promise<TuiAgent[]>
   ensureDetectedAgents: (worktreeId?: string | null) => Promise<TuiAgent[]>
   /** The focused (or given) workspace's last agent probe was refused because its WSL distro was not running. */
   isLocalAgentInventoryRefused: (worktreeId?: string | null) => boolean

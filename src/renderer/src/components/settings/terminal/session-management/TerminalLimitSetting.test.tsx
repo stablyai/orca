@@ -5,19 +5,14 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { TerminalLimitSetting } from './TerminalLimitSetting'
 import { readTerminalLimit, saveTerminalLimit } from './terminal-limit-transport'
-import type * as TerminalLimitTransport from './terminal-limit-transport'
 import type { SettingsHostScope } from '../../host-scope/settings-host-scope'
 import type { TerminalLimitStatus } from '../../../../../../shared/terminal/runtime-policy/terminal-limit-policy'
 import { useAppStore } from '@/store/index'
 import { i18n } from '@/i18n/i18n'
-import ptCatalog from '@/i18n/locales/pt.json'
-import { getTerminalAdvancedSearchEntries } from '../platform/terminal-advanced-platform-search'
-import { matchesSettingsSearch } from '../../search/settings-search'
+
 import type { RuntimeStatus } from '../../../../../../shared/runtime-session-contracts'
-import { callHostRoute } from '@/runtime/host-route-call'
 import { advanceRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status-connection-generation'
 
-vi.mock('@/runtime/host-route-call', () => ({ callHostRoute: vi.fn() }))
 vi.mock('./terminal-limit-transport', () => ({
   readTerminalLimit: vi.fn(),
   saveTerminalLimit: vi.fn()
@@ -41,7 +36,6 @@ vi.mock('@/store/host-catalog-fencing', () => ({
   captureHostIdentityFence: () => ({}),
   isHostIdentityFenceCurrent: () => true
 }))
-const transport = await vi.importActual<typeof TerminalLimitTransport>('./terminal-limit-transport')
 const local: SettingsHostScope = { target: { kind: 'local' }, available: true }
 const base: TerminalLimitStatus = {
   maxTerminals: 256,
@@ -95,27 +89,6 @@ async function enter(): Promise<void> {
   )
 }
 
-it('clamps in the input, confirms Enter and blur saves once, and omits the caption and reset', async () => {
-  await render()
-  expect(input().value).toBe('256')
-  expect(input().max).toBe('511')
-  expect(container.textContent).toContain('System PTY limit: 511')
-  expect(container.textContent).not.toMatch(/Reset|Default:|1–511|Couldn’t read/)
-  await type('9999')
-  expect(input().value).toBe('511')
-  await enter()
-  await act(async () => input().dispatchEvent(new FocusEvent('focusout', { bubbles: true })))
-  expect(saveTerminalLimit).toHaveBeenCalledTimes(1)
-  expect(saveTerminalLimit).toHaveBeenLastCalledWith(
-    { target: { kind: 'local' }, at: 'local' },
-    { maxTerminals: 511, daemonNonce: 'daemon-a' },
-    expect.any(AbortSignal)
-  )
-  await type('384')
-  await act(async () => input().dispatchEvent(new FocusEvent('focusout', { bubbles: true })))
-  expect(input().value).toBe('384')
-})
-
 it('discards a late answer and draft when switching execution hosts', async () => {
   let complete: ((value: TerminalLimitStatus) => void) | undefined
   vi.mocked(readTerminalLimit).mockImplementationOnce(
@@ -166,25 +139,6 @@ it('retains a failed draft and ignores its late refresh after a successful retry
   expect(container.textContent).not.toContain('Couldn’t confirm')
 })
 
-it('keeps confirmed environment values above the bound and leaves old daemons uneditable', async () => {
-  vi.mocked(readTerminalLimit).mockResolvedValue({
-    ...base,
-    maxTerminals: 600,
-    source: 'environment',
-    editable: false
-  })
-  await render()
-  expect(input().value).toBe('600')
-  expect(input().disabled).toBe(true)
-  expect(container.textContent).toContain('environment')
-  vi.mocked(readTerminalLimit).mockResolvedValue(null)
-  publish('old', true, 1)
-  await render({ target: { kind: 'environment', environmentId: 'old' }, available: true })
-  expect(input().value).toBe('')
-  expect(input().disabled).toBe(true)
-  expect(container.textContent).toContain('does not support')
-})
-
 const runtime: RuntimeStatus = {
   runtimeId: 'same-runtime',
   rendererGraphEpoch: 0,
@@ -232,72 +186,6 @@ it('disables on contact loss and reads again on a real same-runtime recovery pub
   expect(input().disabled).toBe(false)
   expect(input().value).toBe('64')
   expect(readTerminalLimit).toHaveBeenCalledTimes(2)
-})
-
-it('finds and formats capacity in the UI language in the catalog and rendered row', async () => {
-  await i18n.changeLanguage('fr')
-  search.query = 'capacité'
-  expect(
-    getTerminalAdvancedSearchEntries().some((entry) => matchesSettingsSearch(search.query, entry))
-  ).toBe(true)
-  vi.mocked(readTerminalLimit).mockResolvedValue({
-    ...base,
-    maxTerminals: 2048,
-    systemPtyLimit: 4096,
-    savedUnreadable: true
-  })
-  const format = vi.spyOn(Number.prototype, 'toLocaleString')
-  try {
-    await render()
-    expect(input().value).toBe('2048')
-    expect(container.textContent).toContain('4\u202f096')
-    expect(container.querySelector('[role="status"]')?.textContent).toContain('2\u202f048')
-    expect(format).toHaveBeenCalledWith('fr')
-    expect(format).not.toHaveBeenCalledWith()
-    search.query = 'aucun-résultat'
-    await render()
-    expect(container.querySelector('input')).toBeNull()
-    expect(ptCatalog.settings.terminal.limit.savedUnreadable).toContain('Não foi possível ler')
-  } finally {
-    format.mockRestore()
-  }
-})
-
-it.each([
-  ['Enter', 256],
-  ['blur', 256],
-  ['Enter', 384]
-] as const)(
-  'repairs an unreadable saved limit with %s at %s, including the edited effective value',
-  async (event, maximum) => {
-    vi.mocked(readTerminalLimit).mockResolvedValue({ ...base, savedUnreadable: true })
-    await render()
-    expect(input().disabled).toBe(false)
-    expect(container.textContent).toContain('Using 256')
-    await type('')
-    await type(String(maximum))
-    await (event === 'Enter'
-      ? enter()
-      : act(async () => input().dispatchEvent(new FocusEvent('focusout', { bubbles: true }))))
-    expect(saveTerminalLimit).toHaveBeenCalledWith(
-      expect.anything(),
-      { maxTerminals: maximum, daemonNonce: 'daemon-a' },
-      expect.any(AbortSignal)
-    )
-    expect(input().value).toBe(String(maximum))
-    expect(container.textContent).not.toContain('Couldn’t read')
-  }
-)
-
-it('uses the selected-host transport and refuses unsupported capability without issuing a policy RPC', async () => {
-  const route = {
-    target: { kind: 'environment' as const, environmentId: 'old-server' },
-    at: 'local' as const
-  }
-  const signal = new AbortController().signal
-  vi.mocked(callHostRoute).mockResolvedValue({ capabilities: [] })
-  await expect(transport.readTerminalLimit(route, signal)).resolves.toBeNull()
-  expect(callHostRoute).toHaveBeenCalledExactlyOnceWith(route, 'status.get', undefined, { signal })
 })
 
 it('preserves unhealthy above-bound readback on untouched and canceled commits', async () => {

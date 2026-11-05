@@ -29,7 +29,6 @@ type BuildArgs = {
   settings: AppState['settings']
   projectActions: RepoHeaderProjectActions
   newCardStyle: boolean
-  folderBackedProjectGroupIds: ReadonlySet<string>
   session: WorktreeDragSession
   runtime: WorktreeDragRuntime
   primaryActive: ReturnType<typeof usePrimaryActiveWorktreeRow>
@@ -88,6 +87,7 @@ export function buildWorktreeVirtualRowContext(args: BuildArgs): WorktreeVirtual
       projectActions: args.projectActions,
       onRenameProjectGroup: props.handleRenameProjectGroup,
       onDeleteProjectGroup: props.handleDeleteProjectGroup,
+      onRefreshProjectGroup: props.handleRefreshProjectGroup,
       onCreateFolderWorkspace: props.handleCreateFolderWorkspace,
       onWorkspaceStatusDragOver: statusDrag.handleWorkspaceStatusDragOver,
       onWorkspaceStatusDragLeave: statusDrag.handleWorkspaceStatusDragLeave,
@@ -98,7 +98,6 @@ export function buildWorktreeVirtualRowContext(args: BuildArgs): WorktreeVirtual
     item: {
       settings: args.settings,
       groupBy: props.groupBy,
-      folderBackedProjectGroupIds: args.folderBackedProjectGroupIds,
       groupKeyByRowKey: session.groupKeyByRowKey,
       groupIndexByRowKey: session.groupIndexByRowKey,
       agentSendTargetWorktreeId: props.agentSendTargetWorktreeId,

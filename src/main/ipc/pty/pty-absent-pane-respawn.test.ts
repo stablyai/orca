@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { SessionNotFoundError } from '../../daemon/daemon-errors'
+import { SessionNotFoundError } from '../../daemon/protocol/daemon-errors'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import {
   installRestartHarness,

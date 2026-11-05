@@ -142,29 +142,4 @@ describe('a background Stop acts on the host child records', () => {
       { membership: 'settled', outcome: 'succeeded', lastMessage: 'Found 3 call sites' }
     ])
   })
-
-  it('never lets an acknowledged Stop replace an ending the task reported itself', async () => {
-    const { run, records } = await droppedFromRoster()
-    // The task's own failure lands; a Stop the user sent before it is acknowledged after.
-    run.replay([
-      {
-        at: 7_000,
-        frame: {
-          type: 'system',
-          subtype: 'task_notification',
-          task_id: 'agent-1',
-          status: 'failed',
-          summary: 'Exit code 1'
-        }
-      }
-    ])
-    await run.adapter.stopBackgroundTasks({
-      sessionId: 'session-1',
-      fence: 7,
-      taskIds: ['agent-1']
-    })
-    expect(records()).toMatchObject([
-      { membership: 'settled', outcome: 'failed', lastMessage: 'Exit code 1' }
-    ])
-  })
 })

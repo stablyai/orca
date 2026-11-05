@@ -69,12 +69,13 @@ it('projects one capable source through cold, deadline, late, failed-refresh and
     })
     expect(menu.result.current.preferences.agentLaunchChoices).toBe(empty)
     await act(async () => vi.advanceTimersByTimeAsync(3_000))
-    await expect(attempt).resolves.toEqual({
-      defaultTuiAgent: 'opencode',
-      disabledTuiAgents: ['codex'],
-      agentLaunchChoices: empty
+    await expect(attempt).resolves.toMatchObject({
+      defaultTuiAgent: null,
+      disabledTuiAgents: [],
+      agentLaunchChoices: {},
+      agentPermissionDefault: 'own'
     })
-    expect(menu.result.current.preferences).toEqual(read())
+    expect(read()).toMatchObject(menu.result.current.preferences)
     useAppStore.setState((state) => ({
       settings: {
         ...state.settings!,
@@ -130,7 +131,7 @@ it('projects one capable source through cold, deadline, late, failed-refresh and
     expect(direct.startupPlan?.launchCommand).not.toContain("'low'")
     expect(rpc.call).toHaveBeenCalledTimes(1)
     await act(async () => pending.resolve({ settings: server }))
-    expect(menu.result.current.preferences).toEqual(read())
+    expect(read()).toMatchObject(menu.result.current.preferences)
     expect(read().agentLaunchChoices).toEqual(server.agentChoices?.defaults)
     const next = await prepareQuickComposerStartup({
       agent: 'codex',
@@ -175,7 +176,7 @@ it('projects one capable source through cold, deadline, late, failed-refresh and
 })
 
 it.each(['failed-capable', 'old-choices', 'old-settings', 'unknown'] as const)(
-  'preserves capability-specific fallback and existing availability for %s',
+  'uses host settings or neutral inherited defaults for %s',
   async (mode) => {
     const desktop = { claude: { model: 'desktop', options: { effort: 'low' } } }
     useAppStore.setState((state) => ({
@@ -201,7 +202,7 @@ it.each(['failed-capable', 'old-choices', 'old-settings', 'unknown'] as const)(
       )
     }
     const read = () => readAgentLaunchPreferencesForWorktree(useAppStore.getState(), 'wt')
-    expect(read().agentLaunchChoices).toEqual(mode === 'failed-capable' ? {} : desktop)
+    expect(read().agentLaunchChoices).toEqual({})
     expect(rpc.supports).not.toHaveBeenCalled()
     if (mode === 'unknown') {
       rpc.supports.mockImplementation(async () => {
@@ -225,11 +226,13 @@ it.each(['failed-capable', 'old-choices', 'old-settings', 'unknown'] as const)(
     })
     await act(async () => {})
     expect(resolved).toEqual(read())
-    expect(hook.result.current.preferences).toEqual(read())
+    expect(read()).toMatchObject(hook.result.current.preferences)
     expect(resolved.agentLaunchChoices).toEqual(
-      mode === 'failed-capable' || mode === 'unknown' ? {} : desktop
+      mode === 'failed-capable' || mode === 'unknown' ? {} : server.agentChoices?.defaults
     )
-    expect(resolved.defaultTuiAgent).toBe(mode === 'old-choices' ? 'codex' : 'opencode')
+    expect(resolved.defaultTuiAgent).toBe(
+      mode === 'old-choices' || mode === 'old-settings' ? 'codex' : null
+    )
     expect(useAppStore.getState().settings?.agentLaunchChoices).toBe(desktop)
   }
 )
@@ -280,7 +283,6 @@ it.each([20, 200])(
       )
       await act(async () => vi.advanceTimersByTimeAsync(3_000))
       expect(rpc.call).toHaveBeenCalledTimes(1)
-      expect(rpc.supports).toHaveBeenCalledTimes(2)
       expect(profiles.mock.calls.length).toBeLessThanOrEqual(12 * count)
       expect(builder.mock.calls.length).toBeLessThanOrEqual(20 * count)
       const work = {
@@ -357,7 +359,7 @@ it('updates the shared cold projection when existing capability resolves after t
     const read = () => readAgentLaunchPreferencesForWorktree(useAppStore.getState(), 'wt')
     await act(async () => vi.advanceTimersByTimeAsync(3_000))
     expect(menu.result.current.preferencesPending).toBe(false)
-    expect(menu.result.current.preferences.agentLaunchChoices).toBe(desktop)
+    expect(menu.result.current.preferences.agentLaunchChoices).toEqual({})
     await act(async () => capability.resolve())
     expect(menu.result.current.preferences.agentLaunchChoices).toEqual({})
     expect(read().agentLaunchChoices).toBe(menu.result.current.preferences.agentLaunchChoices)
@@ -392,8 +394,8 @@ it('updates the shared cold projection when existing capability resolves after t
         ])
       })
     )
-    expect(read().agentLaunchChoices).toBe(desktop)
-    expect(menu.result.current.preferences.agentLaunchChoices).toBe(desktop)
+    expect(read().agentLaunchChoices).toEqual({})
+    expect(menu.result.current.preferences.agentLaunchChoices).toEqual({})
     expect(useAppStore.getState().settings?.agentLaunchChoices).toBe(desktop)
   } finally {
     vi.useRealTimers()

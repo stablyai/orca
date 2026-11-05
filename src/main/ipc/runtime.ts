@@ -51,8 +51,12 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
       }
       const result = runtime.syncWindowGraph(window.id, graph)
       // Only the authoritative window's accepted graph may publish its project catalog.
-      if (graph.projectSectionCatalog) {
+      if (
+        graph.projectSectionCatalog &&
         publishMobileProjectSections(graph.projectSectionCatalog)
+      ) {
+        // Why: phones re-read on main's reposChanged before this publish landed (#37067); every client version handles reposChanged.
+        runtime.notifyReposChangedForRemoteClients()
       }
       return result
     }

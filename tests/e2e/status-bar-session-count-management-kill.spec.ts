@@ -4,8 +4,8 @@ import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import type { Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
-import { DaemonClient } from '../../src/main/daemon/client'
-import { PROTOCOL_VERSION } from '../../src/main/daemon/types'
+import { DaemonClient } from '../../src/main/daemon/transport/client/daemon-client'
+import { PROTOCOL_VERSION } from '../../src/main/daemon/protocol/daemon-protocol-version'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import {
   splitActiveTerminalPane,

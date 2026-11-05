@@ -4,6 +4,18 @@ export type ScrollGeometry = {
   clientHeight: number
 }
 
+export function geometryOf(element: HTMLElement): ScrollGeometry {
+  return {
+    scrollTop: element.scrollTop,
+    scrollHeight: element.scrollHeight,
+    clientHeight: element.clientHeight
+  }
+}
+
+export function hasMeasurableViewport(element: HTMLElement | null): element is HTMLElement {
+  return element !== null && element.clientHeight > 0
+}
+
 /** Hide the jump affordance while the latest output is still nearby. */
 export const NATIVE_CHAT_BOTTOM_THRESHOLD_PX = 48
 

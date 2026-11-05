@@ -3214,7 +3214,6 @@
             "e8b3741ff7": "被忽略",
             "a9957007eb": "忽略 {{value0}}",
             "bef0adef9b": "分支",
-            "0b1766738a": "仓库",
             "bbb1ab6a6f": "选择{{value0}}",
             "b771c92598": "删除所选内容",
             "7eee951968": "检查工作区安全",
@@ -3223,7 +3222,6 @@
             "b2c1331844": "删除不活动的工作区",
             "7f451a3e2c": "无法忽略清理建议",
             "662b8ec3f8": "工作区清理扫描失败",
-            "4d0b72481c": "忽略",
             "9cc26c019d": "移除",
             "0e2d235c63": "非活动工作区扫描已就绪",
             "4a35c08764": "查看",
@@ -3231,9 +3229,6 @@
             "1d3503357d": "删除继续期间，你可以关闭此窗口并稍后回来。",
             "4c2990886e": "已删除 {{value0}}/{{value1}}",
             "86ba852118": "{{value0}}，{{value1}} 个失败",
-            "deletingCount": "正在删除工作区：{{value0}}",
-            "deleteCount": "删除工作区：{{value0}}？",
-            "selectedForDeletionCount": "已选择删除：{{value0}}",
             "deleteButtonCount": "删除 {{value0}}",
             "archivedStatus": "已归档",
             "74f6c16279": "返回"
@@ -3248,7 +3243,6 @@
           },
           "candidateRow": {
             "gitLabel": "Git",
-            "commitsLabel": "提交",
             "contextLabel": "上下文",
             "flagsLabel": "标记",
             "collapseDetails": "收起详情",
@@ -5402,8 +5396,6 @@
           "expandAriaLabel": "展开 {{repo}} 的隐藏工作树",
           "hiding_one": "已隐藏 {{count}} 个检测到的工作树",
           "hiding_other": "已隐藏 {{count}} 个检测到的工作树",
-          "hidingInRepo_one": "已隐藏 {{repo}} 中的 {{count}} 个检测到的工作树",
-          "hidingInRepo_other": "已隐藏 {{repo}} 中的 {{count}} 个检测到的工作树",
           "keepHiddenAriaLabel_one": "为 {{repo}} 保留 {{count}} 个检测到的工作树为隐藏状态；可从项目菜单恢复",
           "keepHiddenAriaLabel_other": "为 {{repo}} 保留 {{count}} 个检测到的工作树为隐藏状态；可从项目菜单恢复",
           "keepHiddenTooltip": "保持隐藏 - 从项目菜单恢复",
@@ -14404,7 +14396,6 @@
           "ff92d15436": "Orca 会在智能体完成工作或需要帮助时通知你。",
           "b054332836": "设置通知",
           "f396db9f20": "让这里有家的感觉",
-          "322fc50a18": "Orca 支持所有 CLI 智能体。选择你最常用的一个，随时可切换。",
           "198b148b3c": "选择默认智能体",
           "windowsTerminalTitle": "设置 Windows 终端默认值",
           "windowsTerminalSubtitle": "为新面板选择默认 Shell，以及终端中右键单击的行为。",
@@ -14860,8 +14851,6 @@
           "AiCommitPrSettingsCard": {
             "8d4152701a": "例如llama 运行 llama3.1 {{value0}}",
             "9ee54037a4": "自定义命令",
-            "4b2fc4b80c": "思考努力",
-            "be8917699e": "模型",
             "560d4feb00": "自定义",
             "29d119fe95": "智能体",
             "f9382b48a1": "启用AI作者",
@@ -17327,6 +17316,9 @@
         },
         "automationTargetAvailability": {
           "hostMismatch": "保存的运行主机与此项目配置不再匹配。"
+        },
+        "launchSettings": {
+          "needsFreshSession": "智能体启动设置要求每次运行都使用新会话。"
         }
       },
       "agent": {
@@ -18903,8 +18895,6 @@
       },
       "turnDiff": {
         "partial": "部分差异",
-        "showDiff": "显示差异",
-        "hideDiff": "隐藏差异",
         "changedFiles_other": "{{count}} 个已更改的文件"
       },
       "receipt": {
@@ -19430,9 +19420,7 @@
           },
           "noSizes": "尚未测量工作区大小。",
           "noSizesDescription": "测量磁盘使用情况后会显示大小。",
-          "measureSizes": "扫描",
           "measureSizesTitle": "扫描工作区大小",
-          "measureSizesDescription": "扫描磁盘使用情况，按大小比较、排序和过滤工作区。",
           "sizeOnDisk": "磁盘大小：{{value0}}",
           "checkingGitRow": "检查 git 状态",
           "searchPlaceholder": "搜索名称、仓库、分支、路径、主机",
@@ -19795,6 +19783,9 @@
       },
       "nativeChat": {
         "followUpBehaviorTitle": "将后续消息加入队列",
+        "scrollToLatestOnSendTitle": "发送时滚动到最新消息",
+        "scrollToLatestOnSendCopy": "向上滚动时发送消息会跳到最新消息并跟随回复。关闭后将保持当前位置。",
+        "scrollToLatestOnSendSearchPosition": "位置",
         "followUpBehaviorCopy": "智能体工作时发送的消息会以卡片形式等待到回合结束，而不是进入正在进行的回合。Cmd/Ctrl+Enter 会对单条消息采取相反做法。",
         "inlineVisualsTitle": "内联可视化",
         "inlineVisualsCopy": "允许智能体在其回复中显示图表、示意图和原型图。适用于新启动的聊天。",
@@ -19811,7 +19802,13 @@
         "usageLimitContinueCopy": "额度重置后，Orca 会发送“Continue where you left off.”。适用于所有已知重置时间的聊天。",
         "usageLimitContinueSearchLimit": "使用额度",
         "usageLimitContinueSearchReset": "重置",
-        "usageLimitContinueToggleLabel": "切换使用额度重置后自动继续聊天"
+        "usageLimitContinueToggleLabel": "切换使用额度重置后自动继续聊天",
+        "idleStopTitle": "空闲多久后停止智能体",
+        "idleStopCopy": "聊天空闲达到此时长后，结束该聊天的智能体以释放内存。聊天会保留，你发送下一条消息时智能体会重新启动。如果智能体在轮次之间仍会在后台继续工作，请选择“从不”。",
+        "idleStopSearchIdle": "idle",
+        "idleStopSearchTimeout": "超时",
+        "idleStopSearchKeepAlive": "保持活动",
+        "idleStopNever": "从不"
       }
     },
     "agentChildRow": {
@@ -19953,7 +19950,10 @@
       "workerAutoClose": {
         "running": "临时编排工作代理 · 完成后 2 分钟关闭",
         "finished": "临时编排工作代理已完成 · {{countdown}}后关闭",
-        "keepOpen": "保持打开"
+        "keepOpen": "保持打开",
+        "bannerRunning": "编排工作代理 · 完成后 2 分钟关闭",
+        "bannerFinished": "编排工作代理已完成 · {{countdown}}后关闭",
+        "temporaryBadge": "临时"
       }
     },
     "wslHostMark": {
@@ -20553,10 +20553,8 @@
       "offTerminal": "更喜欢终端？终端将继续获得完整支持。在你选择聊天之前，智能体会继续在终端中打开。",
       "onIntro": "聊天界面已结束实验阶段，正式成为 Orca 的一部分。你的智能体会继续以聊天方式打开，支持富文本消息、可视化内容和图片。",
       "onTerminal": "终端同样会继续获得完整支持。你可以随时把任何智能体切换回终端。",
-      "changeInSettings": "可随时在<link>设置 → 智能体</link>中更改。",
       "stayInTerminal": "继续使用终端",
       "cta": "使用聊天界面",
-      "saveFailed": "无法开启聊天界面。请在“设置 → 智能体”中选择聊天。",
       "demoTabTitle": "解释登录流程",
       "demoPrompt": "梳理一下登录是怎么工作的",
       "demoReply": "登录从 {{file}} 开始：浏览器提交到 /login，服务器检查密码并创建会话，然后将你重定向到应用。流程如下：",

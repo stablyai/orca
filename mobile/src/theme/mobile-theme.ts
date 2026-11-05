@@ -35,7 +35,7 @@ const darkColors = {
   // --primary: the filled primary-action surface.
   surfaceBright: '#e5e5e5',
 
-  accentBlue: '#3b82f6',
+  accentBlue: '#3276f2',
   // White text preserves contrast on saturated accent fills.
   onAccent: '#ffffff',
 
@@ -104,7 +104,7 @@ const lightColors: MobilePalette = {
 
   surfaceBright: '#171717',
 
-  accentBlue: '#2563eb',
+  accentBlue: '#225be3',
   onAccent: '#ffffff',
 
   statusGreen: '#147638',
