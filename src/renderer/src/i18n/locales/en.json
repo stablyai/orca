@@ -6724,7 +6724,8 @@
           "d1113f4660": "Failed to open browser",
           "unknownProcess": "Unknown process",
           "livePorts_one": "{{count}} live port",
-          "livePorts_other": "{{count}} live ports"
+          "livePorts_other": "{{count}} live ports",
+          "workspaceLink": "Workspace link"
         },
         "WorktreeContextMenu": {
           "c39c37676a": "Create a group and move this project into it.",
@@ -7537,6 +7538,12 @@
           "needsInput": "Needs input",
           "running": "Running",
           "idle": "Idle"
+        },
+        "WorktreeWorkspaceUrlField": {
+          "label": "Link",
+          "placeholder": "https://app.test/admin",
+          "hint": "Opened from the card, the status bar, and the Open Workspace Link shortcut.",
+          "invalid": "Enter a full http:// or https:// link."
         }
       },
       "shared": {
@@ -23052,6 +23059,7 @@
       "workspaceRename": "Rename worktree",
       "workspaceDelete": "Delete Workspace",
       "workspaceOpenBoard": "Toggle Workspace Board",
+      "workspaceOpenUrl": "Open Workspace Link",
       "dashboardToggle": "Toggle Agent Dashboard",
       "workspaceSelectByIndex": "Select Workspace 1–9",
       "voiceDictation": "Dictation",

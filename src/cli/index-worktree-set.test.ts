@@ -477,4 +477,54 @@ describe('orca cli worktree awareness', () => {
 
     process.exitCode = priorExitCode
   })
+
+  it.each([
+    ['https://app.test/admin?x=1', 'https://app.test/admin?x=1'],
+    ['null', '']
+  ])('sends --url %s as workspaceUrl', async (flag, expected) => {
+    queueFixtures(
+      callMock,
+      worktreeListFixture([buildWorktree('/tmp/repo/feature', 'feature/foo')]),
+      okFixture('req_url', { worktree: buildWorktree('/tmp/repo/feature', 'feature/foo') })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      ['worktree', 'set', '--worktree', 'active', '--url', flag, '--json'],
+      '/tmp/repo/feature'
+    )
+
+    expect(callMock).toHaveBeenNthCalledWith(
+      2,
+      'worktree.set',
+      expect.objectContaining({ workspaceUrl: expected })
+    )
+  })
+
+  it('rejects a non-http --url without calling worktree.set', async () => {
+    queueFixtures(
+      callMock,
+      worktreeListFixture([buildWorktree('/tmp/repo/feature', 'feature/foo')])
+    )
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await main(
+      ['worktree', 'set', '--worktree', 'active', '--url', 'app.test'],
+      '/tmp/repo/feature'
+    )
+
+    expect(callMock).not.toHaveBeenCalledWith('worktree.set', expect.anything())
+  })
+
+  it('rejects --url on a folder workspace instead of dropping it', async () => {
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await main(
+      ['worktree', 'set', '--worktree', 'folder:docs', '--url', 'https://app.test'],
+      '/tmp/repo/feature'
+    )
+
+    expect(callMock).not.toHaveBeenCalledWith('worktree.set', expect.anything())
+    expect(errSpy.mock.calls.flat().join('\n')).toContain('not supported for folder workspaces')
+  })
 })
