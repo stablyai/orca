@@ -206,21 +206,28 @@ export function hasPendingFederatedWorkerReport(
   )
 }
 
-/** Finished workers on this host whose mail their Run home has not taken yet. */
-export function listFinishedRemoteWorkersWithMail(
+/** For a Run home: its finished workers here with mail it has not taken, and those whose terminal has closed. */
+export function listFinishedRemoteWorkers(
   this: OrchestrationDb,
   homePeerFingerprint: string
-): string[] {
-  return this.db
+): { dispatchIds: string[]; released: string[] } {
+  const rows = this.db
     .prepare(
-      `SELECT DISTINCT a.dispatch_id AS dispatchId FROM remote_dispatch_attachments a
-       JOIN federation_relay_items r ON r.dispatch_id = a.dispatch_id
-         AND r.direction = 'to_home' AND r.acked_at IS NULL
+      `SELECT a.dispatch_id AS dispatchId,
+         EXISTS (SELECT 1 FROM federation_relay_items r WHERE r.dispatch_id = a.dispatch_id
+                  AND r.direction = 'to_home' AND r.acked_at IS NULL) AS mail,
+         EXISTS (SELECT 1 FROM worker_terminal_resources t WHERE t.owner_dispatch_id = a.dispatch_id
+                  AND t.release_state = 'released') AS released
+       FROM remote_dispatch_attachments a
        WHERE a.home_peer_fingerprint = ? AND a.protocol_version >= ?
          AND NOT (${potentiallyLiveRemoteAttachmentSql('a.state')})`
     )
     .all(homePeerFingerprint, ORCHESTRATION_FEDERATION_FINISHED_WORKER_MAIL_PROTOCOL_VERSION)
-    .flatMap((row) => (typeof row?.dispatchId === 'string' ? [row.dispatchId] : []))
+  const ids = (flag: 'mail' | 'released') =>
+    rows.flatMap((row) =>
+      typeof row?.dispatchId === 'string' && row[flag] === 1 ? [row.dispatchId] : []
+    )
+  return { dispatchIds: ids('mail'), released: ids('released') }
 }
 
 export type FederationRelayAckMethods = {
@@ -230,7 +237,7 @@ export type FederationRelayAckMethods = {
   setFederatedHomeImportSequence: typeof setFederatedHomeImportSequence
   recordFederatedHomeAcknowledgment: typeof recordFederatedHomeAcknowledgment
   hasPendingFederatedWorkerReport: typeof hasPendingFederatedWorkerReport
-  listFinishedRemoteWorkersWithMail: typeof listFinishedRemoteWorkersWithMail
+  listFinishedRemoteWorkers: typeof listFinishedRemoteWorkers
 }
 
 export function attachFederationRelayAck(ctor: { prototype: object }): void {
@@ -241,6 +248,6 @@ export function attachFederationRelayAck(ctor: { prototype: object }): void {
     setFederatedHomeImportSequence,
     recordFederatedHomeAcknowledgment,
     hasPendingFederatedWorkerReport,
-    listFinishedRemoteWorkersWithMail
+    listFinishedRemoteWorkers
   })
 }

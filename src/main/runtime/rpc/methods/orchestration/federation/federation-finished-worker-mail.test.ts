@@ -139,17 +139,18 @@ describe('a finished worker on a paired host', () => {
   const report = (outcome: string) => JSON.stringify({ taskId, dispatchId, outcome })
   // The home's per-host round for finished workers, as its timer runs it.
   const homePull = () =>
-    pullFinishedWorkerMail(
-      homeDb,
-      (environmentId) =>
+    pullFinishedWorkerMail(homeDb, {
+      ask: (environmentId) =>
         homeRuntime.callOrchestrationWorkerServer(
           environmentId,
           'orchestration.federationFinishedMail',
           {},
           5_000
         ),
-      (id) => homeRuntime.syncOrchestrationFederatedDispatchAfterCurrent(id)
-    )
+      sync: (id) => homeRuntime.syncOrchestrationFederatedDispatchAfterCurrent(id),
+      retire: () => {},
+      isCurrent: () => true
+    })
 
   async function finish(): Promise<void> {
     const done = workerCall('orchestration.send', {
@@ -192,6 +193,13 @@ describe('a finished worker on a paired host', () => {
     ])
     expect(homeDb.getTask(taskId)).toEqual(settled)
 
+    // Coordinator mail the worker never took before finishing must not hold its answer back.
+    homeDb.enqueueFederationRelay({
+      dispatchId,
+      direction: 'to_worker',
+      kind: 'control_message',
+      payload: JSON.stringify({ from: 'term_coord', subject: 'Late', body: 'too late' })
+    })
     const asking = workerCall('orchestration.ask', {
       question: 'Anything else?',
       wait: false,

@@ -20,6 +20,7 @@ import {
 } from './orchestration/federation-ack-checkpoints'
 import { syncFederatedDispatch } from './orchestration/federation-sync'
 import { pullFinishedWorkerMail } from './orchestration/finished-worker-relay'
+import { applyConfirmedFederatedReleaseHomeProjection } from './rpc/methods/orchestration/federation/federated-worker-release'
 import type { OrchestrationDb } from './orchestration/db'
 import type { FederationRuntime } from './orchestration/federation-runtime'
 
@@ -212,17 +213,21 @@ export class RuntimeOrchestrationFederation {
         return
       }
       pulling = true
-      void pullFinishedWorkerMail(
-        this.runtime.getOrchestrationDb(),
-        (environmentId) =>
+      const generation = this.relayGeneration
+      const db = this.runtime.getOrchestrationDb()
+      void pullFinishedWorkerMail(db, {
+        ask: (environmentId) =>
           this.runtime.callOrchestrationWorkerServer(
             environmentId,
             'orchestration.federationFinishedMail',
             {},
             15_000
           ),
-        (dispatchId) => this.syncDispatch(dispatchId)
-      )
+        sync: (dispatchId) => this.syncDispatch(dispatchId),
+        retire: (dispatchId) => applyConfirmedFederatedReleaseHomeProjection(db, dispatchId),
+        isCurrent: () =>
+          generation === this.relayGeneration && this.runtime.getOrchestrationDb() === db
+      })
         .then((pending) => {
           if (!pending && this.finishedMailTimer === timer) {
             this.stopFinishedWorkerMail()
