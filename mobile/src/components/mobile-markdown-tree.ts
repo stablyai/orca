@@ -12,7 +12,7 @@ import type {
   Table
 } from 'mdast'
 import remend from 'remend'
-import { appendHtmlBlock } from './mobile-markdown-details'
+import { appendHtmlBlock, popContainer } from './mobile-markdown-details'
 import { normalizeMobileMarkdownPreviewHtml } from './mobile-markdown-preview-html'
 import { endLinkifyUrlsAtProsePunctuation } from './markdown-linkify-prose-boundary'
 
@@ -238,11 +238,7 @@ function toTree(tokens: readonly Token[], source: string): Root {
         break
       default:
         if (CLOSING_TOKENS.has(token.type)) {
-          // A section left open inside a quote or list ends with it.
-          while (stack.at(-1)?.type === 'details') {
-            stack.pop()
-          }
-          const closed = stack.pop()
+          const closed = popContainer(stack)
           if (closed?.type === 'listItem') {
             readTaskMarker(closed)
           }

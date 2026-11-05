@@ -74,4 +74,18 @@ describe('GitHub <details> sections', () => {
     })
     expect(after).toEqual({ type: 'paragraph', children: [{ type: 'text', value: 'After' }] })
   })
+
+  it('closes a section whose </details> sits inside a list item with that list', () => {
+    const types = parseMobileMarkdownTree(
+      '<details>\n<summary>S</summary>\n\n- a\n- b\n  </details>\n\nafter',
+      false
+    ).children.map((node) => node.type)
+    expect(types).toEqual(['details', 'paragraph'])
+  })
+
+  it('leaves details markup inside an HTML comment alone', () => {
+    expect(
+      parseMobileMarkdownTree('<!-- <details><summary>x</summary> -->\n\nVisible', false).children
+    ).toEqual([{ type: 'paragraph', children: [{ type: 'text', value: 'Visible' }] }])
+  })
 })
