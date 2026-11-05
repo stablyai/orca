@@ -184,10 +184,8 @@ export class AgentStateRulesLiveUpdater {
       })
       if (!response.ok) {
         await response.body?.cancel().catch(() => undefined)
-        // 404 means nothing is published for this channel (or a re-upload is in flight); keep the last good rules.
-        if (response.status === 404) {
-          console.debug('[agent-state-rules] no published rules for this channel')
-        } else {
+        // 404 is the normal state until rules are published (or mid re-upload); keep the last good rules.
+        if (response.status !== 404) {
           warn(`download failed: HTTP ${response.status}`)
         }
         return null

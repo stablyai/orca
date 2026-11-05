@@ -66,7 +66,6 @@ type Harness = {
 
 let userData: string
 let warn: ReturnType<typeof vi.spyOn>
-let debug: ReturnType<typeof vi.spyOn>
 
 function status(): { version: number; source: string } {
   const { version, source } = getActiveAgentStateRules()
@@ -108,13 +107,11 @@ function writeCache(text: string, channel: 'next' | 'stable' = 'stable'): void {
 beforeEach(() => {
   userData = mkdtempSync(join(tmpdir(), 'agent-state-rules-live-update-'))
   warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-  debug = vi.spyOn(console, 'debug').mockImplementation(() => {})
 })
 
 afterEach(() => {
   activateAgentStateRules(BUNDLED_AGENT_STATE_RULES)
   warn.mockRestore()
-  debug.mockRestore()
   rmSync(userData, { recursive: true, force: true })
 })
 
