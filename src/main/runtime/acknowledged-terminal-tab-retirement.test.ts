@@ -8,7 +8,7 @@ import {
   createAcknowledgedTabRetirementFixture
 } from './acknowledged-terminal-tab-retirement-fixture'
 import { advanceTerminalTopologyRevision } from '../persistence/terminal-topology/terminal-topology-membership'
-import { delegatedMobileSessionTabClose } from './mobile-session-tab-close-outcome'
+import { delegatedMobileSessionTabClose } from './session-lifecycle/close/mobile-session-tab-close-outcome'
 import { hostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 

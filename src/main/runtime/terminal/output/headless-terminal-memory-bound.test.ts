@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest'
 import { DAEMON_SESSION_SCROLLBACK_ROWS } from '../../../daemon/sessions/daemon-session-scrollback-window'
-import { AUTHORITATIVE_TERMINAL_SNAPSHOT_TIMEOUT_MS } from '../../orca-runtime-postlude'
+import { AUTHORITATIVE_TERMINAL_SNAPSHOT_TIMEOUT_MS } from './provider-snapshot-budget'
 import type { PtyProviderBufferSnapshot } from '../../../providers/pty-provider-contract'
 import { deferred } from '../../orca-runtime-tests/orca-runtime-test-fixtures.spec'
 import {

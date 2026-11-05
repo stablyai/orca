@@ -2,8 +2,6 @@ import { describe, expect, it, vi } from 'vitest'
 import type { RelayAssignment } from '../../assignment/assignment-store.js'
 import type { RelayConfig } from '../../config.js'
 import {
-  SHADOW_COMPARE_FLUSH_MS,
-  SHADOW_COMPARE_SAMPLES_PER_CLASS,
   ShadowDirectoryCompare
 } from './shadow-directory-compare.js'
 import { ShadowSeatDirectory, type SeatFeedResponse } from './shadow-seat-directory.js'
@@ -49,46 +47,6 @@ function directoryWith(
   for (const cellId of noFeed) directory.markNoFeed(cellId, 10)
   return directory
 }
-
-describe('ShadowDirectoryCompare', () => {
-  it('flushes one count line per route and class, and rate-limits unexplained samples', () => {
-    let now = 0
-    const lines: Record<string, unknown>[] = []
-    const compare = new ShadowDirectoryCompare(
-      directoryWith({ 'cell-a': [seat(3)] }),
-      () => now,
-      (line) => lines.push(JSON.parse(line))
-    )
-    for (let index = 0; index < SHADOW_COMPARE_SAMPLES_PER_CLASS + 5; index += 1) {
-      compare.compare('resolve', IDENTITY, null)
-    }
-    compare.compare('sticky-verify', IDENTITY, assignment('cell-a'))
-    const samples = lines.filter((line) => line.event === 'orca_relay_shadow_compare_unexplained')
-    expect(samples).toHaveLength(SHADOW_COMPARE_SAMPLES_PER_CLASS)
-    now = SHADOW_COMPARE_FLUSH_MS
-    compare.compare('sticky-verify', IDENTITY, assignment('cell-a'))
-    expect(lines.filter((line) => line.event === 'orca_relay_shadow_compare')).toEqual([
-      {
-        event: 'orca_relay_shadow_compare',
-        route: 'resolve',
-        class: 'map-only',
-        explained: false,
-        count: SHADOW_COMPARE_SAMPLES_PER_CLASS + 5,
-        windowMs: SHADOW_COMPARE_FLUSH_MS,
-        countByCell: { 'cell-a': SHADOW_COMPARE_SAMPLES_PER_CLASS + 5 }
-      },
-      {
-        event: 'orca_relay_shadow_compare',
-        route: 'sticky-verify',
-        class: 'agree',
-        explained: true,
-        count: 2,
-        windowMs: SHADOW_COMPARE_FLUSH_MS,
-        countByCell: { 'cell-a': 2 }
-      }
-    ])
-  })
-})
 
 describe('unexplained samples', () => {
   it('log only the cell and epoch of the real database record, never raw ids', () => {

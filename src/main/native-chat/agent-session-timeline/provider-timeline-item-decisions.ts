@@ -128,7 +128,8 @@ export function decideRequest(
   const opened: ProviderTimelineOpenItem = {
     kind: 'request',
     row: null,
-    turnItemId: turn
+    turnItemId: turn,
+    ...(event.outlivesTurn ? { outlivesTurn: true as const } : {})
   }
   return {
     writes: [
@@ -143,7 +144,12 @@ export function decideRequest(
           // Reused request IDs need new incarnations; never overwrite existing rows.
           const row = context.rows.nextRequest(event.request, at)
           opened.row = row
-          if (turn !== null && providerTimelineTurnRowState(at, turn) === 'settled') {
+          // A live request outliving its turn still needs its card.
+          if (
+            turn !== null &&
+            !event.outlivesTurn &&
+            providerTimelineTurnRowState(at, turn) === 'settled'
+          ) {
             return null
           }
           return { identity: row.identity, body: event.body }

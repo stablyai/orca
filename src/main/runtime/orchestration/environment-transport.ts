@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { fingerprintAuthenticatedPairingCredential } from '../device-principal'
+import { fingerprintAuthenticatedPairingCredential } from '../rpc/server/pairing/device-principal'
 import type {
   RuntimeOrchestrationEnvelope,
   RuntimeRpcResponse

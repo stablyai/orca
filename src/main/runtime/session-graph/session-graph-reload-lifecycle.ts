@@ -2,7 +2,7 @@ import type { OrcaRuntimeWithTransitionGraphReloadToTerminalState as TransitionG
 import type { OrcaRuntimeWithBindPtyIncarnationHandle as BindPtyIncarnationHandleMethods } from '../terminal/identity/terminal-handle-bindings'
 import type { OrcaRuntimeWithResolveWaiter as ResolveWaiterMethods } from '../orca-runtime-resolve-waiter'
 import { OrcaRuntimeWithSessionTitleAuthority } from '../session-tabs/session-title-publisher'
-import type { RuntimeRendererReloadFence } from '../orca-runtime-core'
+import type { RuntimeRendererReloadFence } from './renderer-reload-fence'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-types'
 

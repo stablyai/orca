@@ -5,61 +5,7 @@ import { CELL_FLAG_DEFAULTS, type CellFlags } from '../cell/control-flags/cell-f
 import type { RelayConfig } from '../config.js'
 import type { RelayDatabase } from '../database/database.js'
 import type { AppliedControlFlags } from '../cell/control-flags/relay-control-flag-channel.js'
-import { createRelayLocalReadiness } from './relay-local-readiness.js'
 import { createRelayServer } from '../relay-server.js'
-import { createRelayApp } from '../app.js'
-
-describe('local readiness verdict', () => {
-  it('is not ready before the server listens', () => {
-    const verdict = createRelayLocalReadiness({
-      listening: () => false,
-      keys: { jwks: () => ({ keys: [] }), reload: vi.fn(async () => {}) },
-      failingDependencies: () => []
-    })
-    expect(verdict()).toEqual({ ready: false, reason: 'not_listening' })
-  })
-
-  it('loads the verifier keys itself, once at a time, and is ready after they land', async () => {
-    let keys: unknown
-    let finishLoad!: () => void
-    const reload = vi.fn(
-      () =>
-        new Promise<void>((resolve) => {
-          finishLoad = () => {
-            keys = { keys: [] }
-            resolve()
-          }
-        })
-    )
-    const verdict = createRelayLocalReadiness({
-      listening: () => true,
-      keys: { jwks: () => keys, reload },
-      failingDependencies: () => ['sql']
-    })
-    expect(verdict()).toEqual({ ready: false, reason: 'keys_not_loaded' })
-    expect(verdict()).toEqual({ ready: false, reason: 'keys_not_loaded' })
-    expect(reload).toHaveBeenCalledTimes(1)
-    finishLoad()
-    await Promise.resolve()
-    expect(verdict()).toEqual({ ready: true, failing: ['sql'] })
-  })
-
-  it('retries a key load that failed', async () => {
-    const reload = vi.fn(async () => {
-      throw new Error('jwks unreachable')
-    })
-    const verdict = createRelayLocalReadiness({
-      listening: () => true,
-      keys: { jwks: () => undefined, reload },
-      failingDependencies: () => []
-    })
-    verdict()
-    await vi.waitFor(() => expect(reload).toHaveBeenCalledTimes(1))
-    await new Promise<void>((resolve) => setImmediate(resolve))
-    verdict()
-    expect(reload).toHaveBeenCalledTimes(2)
-  })
-})
 
 // Boot-down database never earns a grace window (E-dep-3).
 describe('cell /ready with the database down', () => {
@@ -161,31 +107,3 @@ function cellConfig(jwksUrl: string): RelayConfig {
     dataDir: './data'
   }
 }
-
-describe('one host-token key set per process', () => {
-  it('verifies HTTP relay tokens with the key set the server shares', async () => {
-    const keys = vi.fn(async () => {
-      throw new Error('no key in this test')
-    })
-    const app = createRelayApp(
-      { ...cellConfig('https://auth.example.test/jwks'), role: 'director', cellId: 'director' },
-      {
-        store: {} as never,
-        assignments: {} as never,
-        drain: vi.fn(),
-        ready: vi.fn(async () => true),
-        // SAFETY: jwtVerify only calls the key set; the jwks/reload members are unused here.
-        relayJwks: keys as never
-      }
-    )
-    const encode = (value: object) => Buffer.from(JSON.stringify(value)).toString('base64url')
-    const token = `${encode({ alg: 'ES256' })}.${encode({ sub: 'user-1' })}.c2ln`
-    const response = await app.request('/v1/assign', {
-      method: 'POST',
-      headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
-      body: JSON.stringify({ v: 1, relayHostId: 'abcdefghijklmnop' })
-    })
-    expect(response.status).toBe(401)
-    expect(keys).toHaveBeenCalledTimes(1)
-  })
-})

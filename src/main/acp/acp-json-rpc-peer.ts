@@ -294,6 +294,10 @@ export class AcpJsonRpcPeer {
         this.incoming.handle(frame.id, frame.method, frame.params)
         return
       }
+      if (frame.method === '$/cancel_request') {
+        this.incoming.cancelRequested(frame.params)
+        return
+      }
       try {
         this.handlers.onNotification?.(frame.method, frame.params)
       } catch (error) {

@@ -7,7 +7,7 @@ import {
 import {
   STRUCTURED_WORKER_INCARNATION_PREFIX,
   sessionIdFromStructuredWorkerIncarnation
-} from '../../../structured-worker-identity'
+} from '../../terminal-authority/structured-sessions/structured-worker-identity'
 import { currentRunCoordinatorOrcaSessionIdSql } from '../runs/run-coordinator-orca-session'
 
 const CURRENT_COORDINATOR_ORCA_SESSION_ID_SQL = currentRunCoordinatorOrcaSessionIdSql('runs')

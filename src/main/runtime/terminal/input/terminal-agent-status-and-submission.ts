@@ -5,7 +5,7 @@ import type { RuntimeTerminalAgentStatusSnapshot } from '../query/runtime-termin
 import { getDisplayPromptLifecycle } from '../../workspaces/process-listing/runtime-worktree-status-projection'
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 import { hasCompatibleAgentTitleIdentity } from '../../../../shared/agent-status/title/agent-title-owner'
-import type { PtyForegroundProcessRead } from '../../runtime-terminal-contracts'
+import type { PtyForegroundProcessRead } from '../lifecycle/pty-foreground-observation-state'
 import { recognizeAgentProcess } from '../../../../shared/agent-status/process/agent-process-recognition'
 import type {
   AgentPromptActivity,

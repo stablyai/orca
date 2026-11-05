@@ -1,10 +1,10 @@
-import type { RuntimeSyncedTab } from '../../../../shared/runtime-types'
+import type { RuntimeSyncedTab } from '../../../../shared/runtime-session-contracts'
 import type {
   RuntimeLeafRecord,
   RuntimePtyWorktreeRecord
 } from '../records/runtime-terminal-state-records'
-import type { TerminalHandleRecord } from '../../runtime-terminal-contracts'
-import type { PtyIncarnationHandleRecord } from '../../orca-runtime-core'
+import type { TerminalHandleRecord, PtyIncarnationHandleRecord } from './terminal-handle-records'
+
 import { TerminalIncarnationCandidates } from './terminal-incarnation-candidates'
 
 type Mutable<T> = { -readonly [K in keyof T]: T[K] }

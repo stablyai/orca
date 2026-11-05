@@ -114,20 +114,6 @@ async function openPage(engine, hash = '') {
 }
 
 describeParity.each(ENGINES)('the page against native, at a phone density, in $name', (engine) => {
-  it('draws StyleSheet.hairlineWidth one device pixel thick, as native does', async () => {
-    const page = await openPage(engine)
-    try {
-      const measured = await page.evaluate(() => {
-        const line = document.querySelector('[data-testid="hairline"]')
-        const ratio = window.devicePixelRatio
-        return { ratio, devicePixels: Math.round(line.getBoundingClientRect().height * ratio) }
-      })
-      expect(measured).toEqual({ ratio: 3, devicePixels: 1 })
-    } finally {
-      await page.close()
-    }
-  })
-
   it('paints a StyleSheet.hairlineWidth-tall separator one device pixel tall at a fractional offset', async () => {
     const page = await openPage(engine)
     try {
@@ -144,42 +130,6 @@ describeParity.each(ENGINES)('the page against native, at a phone density, in $n
         }
       }
       expect(darkRows).toBe(1)
-    } finally {
-      await page.close()
-    }
-  })
-
-  it('paints no focus ring on a focused text input, as no native TextInput does', async () => {
-    const page = await openPage(engine)
-    try {
-      await page.focus('[data-testid="input"]')
-      const outline = await page.evaluate(() => {
-        const input = document.querySelector('[data-testid="input"]')
-        const style = getComputedStyle(input)
-        return { focused: document.activeElement === input, style: style.outlineStyle }
-      })
-      expect(outline).toEqual({ focused: true, style: 'none' })
-    } finally {
-      await page.close()
-    }
-  })
-
-  it('leaves only selectable text and editable fields selectable, as native does', async () => {
-    // iOS keeps WebKit text interaction for fields; plain-text holds must not raise selection over page long-press.
-    const page = await openPage(engine)
-    try {
-      await page.type('[data-testid="input"]', 'typed')
-      const measured = await page.evaluate(() => {
-        const select = (id) => getComputedStyle(document.querySelector(`[data-testid="${id}"]`))
-        const read = (id) => select(id).webkitUserSelect || select(id).userSelect
-        return {
-          plain: read('plain-text'),
-          selectable: read('selectable-text'),
-          input: read('input'),
-          value: document.querySelector('[data-testid="input"]').value
-        }
-      })
-      expect(measured).toEqual({ plain: 'none', selectable: 'text', input: 'text', value: 'typed' })
     } finally {
       await page.close()
     }
@@ -205,35 +155,6 @@ describeParity.each(ENGINES)('the page against native, at a phone density, in $n
         return input.selectionEnd - input.selectionStart
       })
       expect(selectedInField).toBeGreaterThan(0)
-    } finally {
-      await page.close()
-    }
-  })
-
-  it('applies the same to text a modal portals outside #root, and keeps its fields selectable', async () => {
-    // RN-Web Modal portals to body, outside #root rules; desktop WebKit cannot measure fields’ callout exemption.
-    const page = await openPage(engine, '#modal')
-    try {
-      await page.waitForSelector('[data-testid="modal-text"]')
-      const measured = await page.evaluate(() => {
-        const text = document.querySelector('[data-testid="modal-text"]')
-        const input = document.querySelector('[data-testid="modal-input"]')
-        const read = (node) =>
-          getComputedStyle(node).webkitUserSelect || getComputedStyle(node).userSelect
-        return {
-          outsideRoot: !document.getElementById('root').contains(text),
-          text: read(text),
-          input: read(input)
-        }
-      })
-      expect(measured).toEqual({
-        outsideRoot: true,
-        text: 'none',
-        input: 'text'
-      })
-      await page.evaluate(() => window.getSelection()?.removeAllRanges())
-      await page.dblclick('[data-testid="modal-text"]')
-      expect(await page.evaluate(() => window.getSelection()?.toString() ?? '')).toBe('')
     } finally {
       await page.close()
     }

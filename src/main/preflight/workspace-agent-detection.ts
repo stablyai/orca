@@ -3,7 +3,7 @@ import type { ProjectLaunchContext } from '../../shared/rpc-contract/preflight-p
 import { isTuiAgent } from '../../shared/agent-launch/catalog/tui-agent-config'
 import { WORKSPACE_ON_OTHER_RUNTIME } from '../../shared/protocol-version'
 import { refreshAtRestCommandContext } from '../native-chat/agent-session-wire/at-rest-command-context'
-import { captureHostShellEnvironment } from '../runtime/structured-agent-shell-environment'
+import { captureHostShellEnvironment } from '../runtime/agent-session/environment/structured-agent-shell-environment'
 import {
   getRepoExecutionHostId,
   getSshTargetIdForExecutionHost,

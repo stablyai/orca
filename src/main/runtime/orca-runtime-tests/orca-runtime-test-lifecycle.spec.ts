@@ -80,7 +80,7 @@ import {
   updateGitLabMRMock,
   updateGitLabMRReviewersMock
 } from '../orca-runtime-test-mocks/setup.spec'
-import { RuntimeBrowserCommands } from '../browser/browser-commands'
+import { RuntimeBrowserCommands } from '../browser/commands/browser-commands'
 import { _resetTerminalViewAttributesForTest } from '../terminal/view/terminal-view-attribute-store'
 import { addSparseWorktree } from '../../git/worktrees/creation/worktree-sparse-add'
 import { addWorktree } from '../../git/worktrees/creation/worktree-add'
@@ -113,7 +113,7 @@ import { removeWorktree } from '../../git/worktrees/removal/worktree-removal'
 import {
   setRuntimeBrowserCommandsFactory,
   setRuntimeBrowserUnavailableCause
-} from '../runtime-browser-commands-factory'
+} from '../browser/installation/runtime-browser-commands-factory'
 import { setRuntimeDesktopSurface } from '../runtime-desktop-surface'
 import { setRuntimeTerminalUnavailableCause } from '../native-terminal-availability'
 import { OrcaRuntimeService as runtimeMockOrcaRuntimeService } from '../orca-runtime'

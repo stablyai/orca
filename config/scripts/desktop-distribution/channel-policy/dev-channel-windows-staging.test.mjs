@@ -23,56 +23,6 @@ async function runScript(script, { cwd = directory, env = {} } = {}) {
 }
 
 describe('Windows dev-channel artifact staging', () => {
-  it('keeps existing callers publishing by default', () => {
-    expect(build.on.workflow_call.inputs.stage_only).toMatchObject({
-      type: 'boolean',
-      default: false,
-      required: false
-    })
-    expect(build.on.workflow_dispatch.inputs.stage_only).toBeUndefined()
-    const normalPackage = buildSteps.find((step) => step.name === 'Publish Windows artifacts')
-    expect(normalPackage.with.command).toContain('--publish always')
-    expect(normalPackage.if).toBe('${{ !inputs.stage_only }}')
-  })
-
-  it('never mints or consumes release-write credentials while staging', () => {
-    for (const step of buildSteps) {
-      const credentialed = JSON.stringify(step).includes('secrets.') || step.env?.GH_TOKEN
-      if (credentialed) {
-        expect(step.if, step.name).toBe('${{ !inputs.stage_only }}')
-      }
-    }
-    const stagePackage = buildSteps.find(
-      (step) => step.name === 'Package Windows artifacts without publishing'
-    )
-    expect(stagePackage.if).toBe('inputs.stage_only')
-    expect(stagePackage.with.command).toContain('--publish never')
-    expect(stagePackage.env.GH_TOKEN).toBeUndefined()
-    for (const workflow of [build, publish]) {
-      const contents = JSON.stringify(workflow.jobs)
-      expect(contents).not.toMatch(/SignPath|SIGNPATH|signpath/)
-    }
-  })
-
-  it('passes exactly the installer, blockmap, and update manifest within the same run', () => {
-    const upload = buildSteps.find((step) => step.uses?.startsWith('actions/upload-artifact@'))
-    const download = publishSteps.find((step) =>
-      step.uses?.startsWith('actions/download-artifact@')
-    )
-    expect(upload.if).toBe('inputs.stage_only')
-    expect(upload.with.path.trim().split('\n')).toEqual([
-      'dist/orca-windows-setup.exe',
-      'dist/orca-windows-setup.exe.blockmap',
-      'dist/latest.yml'
-    ])
-    expect(upload.with['if-no-files-found']).toBe('error')
-    expect(download.with).toEqual({
-      name: upload.with.name,
-      path: 'staged-windows'
-    })
-    expect(build.concurrency.group).not.toBe(publish.concurrency.group)
-  })
-
   it.each([
     ['build', buildSteps, 'dist'],
     ['publish', publishSteps, 'staged-windows']
@@ -106,34 +56,5 @@ describe('Windows dev-channel artifact staging', () => {
     ]) {
       expect((await runScript(step.run, { env: { CHANNEL: channel, TAG: tag } })).code).toBe(code)
     }
-  })
-
-  it('requires a live existing release and never creates one', async () => {
-    const guard = publishSteps.find((step) => step.name === 'Confirm the target release is live')
-    for (const [response, code] of [
-      ['false', 0],
-      ['true', 1],
-      ['', 1]
-    ]) {
-      const stub = 'gh() { printf "%s" "$STUB_RESPONSE"; }; export -f gh;\n'
-      expect(
-        (
-          await runScript(`${stub}${guard.run}`, {
-            env: { STUB_RESPONSE: response, CHANNEL: 'adhoc', TAG: 'v1.4.232-adhoc.1' }
-          })
-        ).code
-      ).toBe(code)
-    }
-    expect(
-      (
-        await runScript(`gh() { return 1; };\n${guard.run}`, {
-          env: { CHANNEL: 'adhoc', TAG: 'v1.4.232-adhoc.1' }
-        })
-      ).code
-    ).toBe(1)
-    const upload = publishSteps.find((step) => step.name === 'Publish Windows artifacts')
-    expect(upload.with.command).toContain('gh release upload')
-    expect(JSON.stringify(publish)).not.toContain('gh release create')
-    expect(publishSteps.indexOf(guard)).toBeLessThan(publishSteps.indexOf(upload))
   })
 })

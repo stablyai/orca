@@ -5,7 +5,7 @@ import type { WorkerTerminalReleaseRuntime } from '../../../../orchestration/wor
 import type { FederatedDispatchRow } from '../../../../orchestration/types'
 import { keptOpenStopRefusal } from '../../../../orchestration/db/worker-terminal/worker-terminal-user-keep'
 import { callFederatedWorkerShow } from './worker-observation'
-import { resolveStructuredWorkerIdentityForSession } from '../../../../structured-worker-authority'
+import { resolveStructuredWorkerIdentityForSession } from '../../../../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
 import {
   OrchestrationWorkerKeepOpenParams,
   OrchestrationWorkerSubjectParams

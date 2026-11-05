@@ -5,7 +5,7 @@ import type { ExecutionHostFilesystemRoute } from '../providers/execution-host-p
 import { detectImageFileSignature } from '../media/image-file-signature'
 import { extractIconHref } from './repo-icon-source-href'
 import { iconHrefCandidates } from './repo-icon-href-candidates'
-import { joinWorktreeRelativePath } from '../runtime/runtime-relative-paths'
+import { joinWorktreeRelativePath } from '../runtime/files/paths/runtime-relative-paths'
 
 // Keep add-repo probes limited to conventional paths.
 const REPO_ICON_FILE_STEMS = [

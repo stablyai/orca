@@ -18,7 +18,7 @@ import {
   structuredWorkerIdentities,
   structuredWorkerProcessIncarnation,
   type StructuredWorkerIdentity
-} from '../../structured-worker-identity'
+} from '../../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
 
 const createSpy = vi.fn()
 vi.mock('./structured-agent-session-create', () => ({

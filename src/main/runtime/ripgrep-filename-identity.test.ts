@@ -2,7 +2,10 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { joinWorktreeRelativePath, normalizeRuntimeRelativePath } from './runtime-relative-paths'
+import {
+  joinWorktreeRelativePath,
+  normalizeRuntimeRelativePath
+} from './files/paths/runtime-relative-paths'
 import { normalizeQuickOpenRgLine } from '../../shared/quick-open-filter'
 
 describe.skipIf(process.platform === 'win32')('real POSIX filename collision', () => {

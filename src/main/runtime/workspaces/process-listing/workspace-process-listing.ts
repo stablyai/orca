@@ -1,11 +1,11 @@
 import { getRepoHostIdentityForParts } from '../../../../shared/repo-host-identity'
 import { createRepoRowExecutionHostLookup } from '../../../../shared/worktree-execution-host-resolution'
 import { resolveWorktreeHostRouting } from '../catalog/worktree-launch-host-repo'
-import { resolveHostStructuredAgentLaunchEnvironment } from '../../structured-agent-launch-support'
+import { resolveHostStructuredAgentLaunchEnvironment } from '../../agent-session/launch/structured-agent-launch-support'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import { collectRuntimeWorktreeAgentSources } from './runtime-worktree-agent-sources'
-import { OrcaRuntimeWithWorktreePsDependencies } from '../workspace-process-listing-dependencies'
-import { DEFAULT_WORKTREE_PS_LIMIT } from '../../orca-runtime-postlude'
+import { RuntimeChatWorkerEvents } from '../../orchestration/chat-worker-runtime-events'
+
 import type { RuntimeWorktreePsResult } from '../../../../shared/runtime-worktree-contracts'
 import type { ResolvedWorktreeSnapshot } from '../catalog/runtime-resolved-worktree-cache'
 import { buildRuntimeWorktreePsSummaries } from './runtime-worktree-ps-summaries'
@@ -37,7 +37,7 @@ import type { AgentSessionRecordStore } from '../../agent-session/records/agent-
 import { maybeAutoRenameWorkspaceOnFirstStructuredTurn } from '../../../agent-hooks/first-work-structured-session-rename'
 import { firstWorkRenameDeps } from '../../../agent-hooks/first-work-rename-runtime'
 import { createStructuredChatNamingHandler } from '../../../native-chat/structured-chat-naming'
-import { structuredChatNamingDeps } from '../../structured-chat-naming-runtime'
+import { structuredChatNamingDeps } from '../../agent-session/naming/structured-chat-naming-runtime'
 import { getProfileUserDataPath } from '../../../orca-profiles/profile-storage-paths'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { chatWorkerTurnStopReporter } from '../../orchestration/chat-worker-turn-stops'
@@ -45,7 +45,7 @@ import { buildWorktreeListingPage } from '../catalog/worktree-listing-host-scope
 import {
   structuredWorkerOpenTaskTitle,
   structuredWorkerOwesWork
-} from '../../structured-worker-custody'
+} from '../../orchestration/terminal-authority/structured-sessions/structured-worker-custody'
 import { preModeChatGetsFullAccess } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { claudeCliFlagSupport } from '../../../claude/claude-cli-flag-support'
@@ -55,11 +55,12 @@ import {
   runtimeVisibleRepos,
   withoutHiddenHosts
 } from '../catalog/runtime-visible-catalog'
-import { isWorkspaceNotificationMuted } from '../../workspace-notification-mute'
+import { isWorkspaceNotificationMuted } from '../../push/notifications/workspace-notification-mute'
 import { WorkerAutoReleaseActivity } from '../../orchestration/worker-auto-release-activity'
 import { nativeChatIdleStopMs } from '../../../../shared/native-chat/native-chat-idle-stop'
+const DEFAULT_WORKTREE_PS_LIMIT = 200
 
-export abstract class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithWorktreePsDependencies {
+export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEvents {
   protected readonly workerAutoReleaseActivity = new WorkerAutoReleaseActivity(
     () => this._orchestrationDb
   )
