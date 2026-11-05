@@ -47,3 +47,13 @@ it('ignores a local browsed root for a remote-runtime workspace', () => {
   expect(result.current.outsideWorkspace).toBe(false)
   expect(result.current.navigation?.breadcrumbs.at(-1)?.path).toBe('/remote/repo')
 })
+
+it('keeps the same breadcrumbs while the displayed root stays the same', () => {
+  const worktree = { path: '/remote/repo' }
+  const { result, rerender } = renderHook(() => useFileExplorerDisplayRootState('wt', worktree))
+  const breadcrumbs = result.current.navigation?.breadcrumbs
+
+  rerender()
+
+  expect(result.current.navigation?.breadcrumbs).toBe(breadcrumbs)
+})

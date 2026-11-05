@@ -44,9 +44,14 @@ export function useFileExplorerDisplayRootState(
     rootNavigationSupported ? rootNavigation.browsedRootPath : null
   )
   const outsideWorkspace = isExplorerRootOutsideWorkspace(worktreePath, displayRootPath)
+  // Why: the bar scrolls to the end whenever this array changes, so rerenders must not replace it.
+  const breadcrumbs = useMemo(
+    () => (displayRootPath ? getExplorerBreadcrumbs(displayRootPath) : []),
+    [displayRootPath]
+  )
   const navigation = displayRootPath
     ? {
-        breadcrumbs: getExplorerBreadcrumbs(displayRootPath),
+        breadcrumbs,
         outsideWorkspace,
         localOnlyDisabled: !rootNavigationSupported,
         onNavigate: rootNavigation.navigateToPath,
