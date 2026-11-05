@@ -78,6 +78,7 @@ describe('OnboardingFlow', () => {
     useAppStore.setState({
       settings: { ...getDefaultSettings('/tmp'), defaultTuiAgent: 'claude' },
       refreshDetectedAgents: vi.fn().mockResolvedValue(['claude']),
+      refreshNativeDetectedAgents: vi.fn().mockResolvedValue(['claude']),
       refreshPreflightStatus: vi.fn().mockResolvedValue(undefined),
       openModal
     })
