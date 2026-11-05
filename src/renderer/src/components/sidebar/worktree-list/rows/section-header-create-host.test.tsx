@@ -76,6 +76,7 @@ function headerContext(): SectionHeaderRowContext {
   return {
     groupBy: 'repo',
     collapsedGroups: new Set(),
+    activeWorktreeId: null,
     workspaceStatuses: [],
     projectGroups: [],
     highlightedRevealRowKey: null,
@@ -104,6 +105,7 @@ function headerContext(): SectionHeaderRowContext {
     },
     projectActions: {
       getWorktreeVisibilityDefaults: () => undefined,
+      getSidebarRows: () => [],
       onOpenRepoSettings: vi.fn(),
       onOpenWorktreeVisibility: vi.fn(),
       onCreateGroupFromRepo: vi.fn(),
@@ -134,6 +136,8 @@ function clickCreate(row: GroupHeaderRow): void {
         isActiveStickyHeader: false,
         hasStickyHost: false,
         hasHeaderTopSpacing: false,
+        hasGroupExitGap: false,
+        projectBlock: null,
         measureVirtualRowElement: vi.fn()
       })}
     </TooltipProvider>

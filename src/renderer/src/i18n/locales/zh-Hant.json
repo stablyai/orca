@@ -7093,6 +7093,11 @@
           "needsInput": "需要輸入",
           "running": "執行中",
           "idle": "閒置"
+        },
+        "projectCollapse": {
+          "collapseAll": "摺疊全部專案",
+          "expandAll": "展開全部專案",
+          "expandActive": "只展開活躍專案"
         }
       },
       "shared": {

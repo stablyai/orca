@@ -36,6 +36,8 @@ type WorktreeCardStatusSlotProps = {
   /** The review status is the last known one (its WSL host is off). */
   reviewStale?: boolean
   className?: string
+  /** The card's activity status, when its caller already subscribes to it. */
+  status?: WorktreeStatus
 }
 
 const QUIET_REVIEW_REPLACEABLE_STATUSES = new Set<WorktreeStatus>(['active', 'done', 'inactive'])
@@ -107,7 +109,26 @@ function getReviewStatusLabel(review: WorktreeCardPrDisplay): string {
   return translate('workspace.reviewStatus.open', '{{review}}: Open', values)
 }
 
-export function WorktreeCardStatusSlot({
+function WorktreeCardStatusSlotWithActivity(
+  props: WorktreeCardStatusSlotProps
+): React.JSX.Element | null {
+  const status = useWorktreeActivityStatus(props.worktreeId)
+  return <WorktreeCardStatusSlotView {...props} status={status} />
+}
+
+// Why: the card controller already reads activity status; reusing it avoids a second
+// subscription per card, and the hook stays as a fallback for callers without it.
+export function WorktreeCardStatusSlot(
+  props: WorktreeCardStatusSlotProps
+): React.JSX.Element | null {
+  return props.status === undefined ? (
+    <WorktreeCardStatusSlotWithActivity {...props} />
+  ) : (
+    <WorktreeCardStatusSlotView {...props} status={props.status} />
+  )
+}
+
+function WorktreeCardStatusSlotView({
   worktreeId,
   showStatus,
   showUnreadAction,
@@ -121,13 +142,15 @@ export function WorktreeCardStatusSlot({
   hasBranchIdentity = false,
   branchIdentityLabel,
   reviewStale = false,
-  className
-}: WorktreeCardStatusSlotProps): React.JSX.Element | null {
+  className,
+  status
+}: WorktreeCardStatusSlotProps & { status: WorktreeStatus }): React.JSX.Element | null {
   const collectionChecks = reviewChecks && reviewChecks.total > 1 ? reviewChecks : undefined
   const isReviewStale = reviewStale || Boolean(collectionChecks?.stale)
-  const status = useWorktreeActivityStatus(worktreeId)
   const isSleeping = useIsSleepingWorktree(worktreeId)
   const statusLabel = getWorktreeStatusLabel(status) || status
+  // Idle rows carry no dot: the muted title already says "nothing open here".
+  const idleDotClassName = status === 'inactive' ? 'invisible' : undefined
   // Sleeping remains distinct from quiet done/branch/review states; attention keeps its own glyph.
   const canShowSleepingStatus =
     newCardStyle && showStatus && isSleeping && QUIET_REVIEW_REPLACEABLE_STATUSES.has(status)
@@ -201,7 +224,12 @@ export function WorktreeCardStatusSlot({
   ) : newCardStyle && showStatus ? (
     <>
       <span className={cn('inline-flex size-5 items-center justify-center', className)}>
-        <StatusIndicator status={status} aria-hidden="true" tooltipSide="right" />
+        <StatusIndicator
+          status={status}
+          aria-hidden="true"
+          tooltipSide="right"
+          className={idleDotClassName}
+        />
       </span>
       <span className="sr-only">{passiveStatusAnnouncement}</span>
     </>
@@ -210,7 +238,7 @@ export function WorktreeCardStatusSlot({
       <StatusIndicator
         status={status}
         aria-hidden="true"
-        className={className}
+        className={cn(className, idleDotClassName)}
         tooltipSide="right"
       />
       <span className="sr-only">{statusLabel}</span>
@@ -268,7 +296,12 @@ export function WorktreeCardStatusSlot({
                   {branchStatusIcon}
                 </span>
               ) : showStatus ? (
-                <StatusIndicator status={status} aria-hidden="true" showTooltip={false} />
+                <StatusIndicator
+                  status={status}
+                  aria-hidden="true"
+                  showTooltip={false}
+                  className={idleDotClassName}
+                />
               ) : (
                 <span className="sr-only">{actionLabel}</span>
               )
@@ -280,7 +313,10 @@ export function WorktreeCardStatusSlot({
                   status={status}
                   aria-hidden="true"
                   showTooltip={false}
-                  className="transition-opacity group-hover/unread:opacity-0 group-focus-within/unread:opacity-0"
+                  className={cn(
+                    'transition-opacity group-hover/unread:opacity-0 group-focus-within/unread:opacity-0',
+                    idleDotClassName
+                  )}
                 />
                 <Bell className="absolute size-3 text-muted-foreground/40 opacity-0 transition-opacity group-hover/unread:opacity-100 group-focus-within/unread:opacity-100" />
               </>

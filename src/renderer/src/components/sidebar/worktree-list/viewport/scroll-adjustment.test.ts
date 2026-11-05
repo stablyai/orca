@@ -240,7 +240,7 @@ describe('getScrollTopToRevealBounds', () => {
         },
         WORKTREE_SIDEBAR_REVEAL_TOP_INSET
       )
-    ).toBe(66)
+    ).toBe(62)
   })
 
   it('does not scroll when the bounds are below the sticky header', () => {

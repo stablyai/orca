@@ -47,6 +47,8 @@ import {
   stopRepoHeaderKeyboardToggle,
   stopRepoHeaderMenuEvent
 } from './header-event-guards'
+import { ProjectCollapseMenuItems } from './project-collapse-actions'
+import type { HostSectionRow } from '../../../../../../shared/sidebar-list/host-section-rows'
 
 function getWorktreeVisibilityMenuLabel(
   repo: Repo,
@@ -70,6 +72,8 @@ function getWorktreeVisibilityMenuLabel(
 
 export type RepoHeaderProjectActions = {
   getWorktreeVisibilityDefaults: (repo: Repo) => WorktreeVisibilityDefaults | undefined
+  /** Latest sidebar rows, read when a collapse/expand-all item is chosen. */
+  getSidebarRows: () => readonly HostSectionRow[]
   onOpenRepoSettings: (projectId: string, sectionId?: string) => void
   onOpenWorktreeVisibility: (repo: Repo) => void
   onCreateGroupFromRepo: (repo: Repo) => void
@@ -181,6 +185,7 @@ export const RepoHeaderProjectActionsMenu = React.memo(function RepoHeaderProjec
           </DropdownMenuItem>
         ) : null}
         <WslMoveProjectMenuItem repo={repo} />
+        <ProjectCollapseMenuItems getRows={actions.getSidebarRows} />
         <DropdownMenuSeparator />
         <DropdownMenuItem variant="destructive" onSelect={() => actions.onRemoveProject(repo)}>
           <Trash2 className="size-3.5" />

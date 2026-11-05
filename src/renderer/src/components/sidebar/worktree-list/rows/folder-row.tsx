@@ -18,6 +18,7 @@ import { folderWorkspaceToWorktree } from '../../../../../../shared/folder-works
 import WorktreeCard from '../../workspace-card/surface/WorktreeCard'
 import type { WorktreeGroupBy } from '../../../../../../shared/sidebar-list/row-types'
 import { getVirtualRowTransform } from '../viewport/virtual-rows'
+import { getProjectBlockRowAttributes, type ProjectBlockFrame } from './project-block-frames'
 import { getFolderWorkspaceRowGeometry } from './indentation'
 import { getFolderWorkspaceCardPrDisplay } from '../../workspace-card/review/folder-workspace-card-pr-display'
 import { FolderPathStatusIndicator } from './FolderPathStatusIndicator'
@@ -61,6 +62,7 @@ export function renderFolderWorkspaceVirtualRow(args: {
   row: FolderWorkspaceItemRow
   vItem: VirtualItem
   measureVirtualRowElement: (element: HTMLDivElement | null) => void
+  projectBlock: ProjectBlockFrame | null
 }): React.JSX.Element {
   const { ctx, row, vItem } = args
   const folderWorktree = folderWorkspaceToWorktree(row.folderWorkspace)
@@ -91,8 +93,12 @@ export function renderFolderWorkspaceVirtualRow(args: {
     isFolderBackedWorkspaceChild:
       ctx.groupBy === 'repo' && row.projectGroup.createdFrom === 'folder-scan',
     isGrouped: ctx.groupBy !== 'none',
-    groupDepth: row.groupDepth,
+    // Why: the project block frame already carries the group indent.
+    groupDepth: args.projectBlock ? 0 : row.groupDepth,
     lineageDepth: row.depth
+  })
+  const blockAttributes = getProjectBlockRowAttributes(args.projectBlock, {
+    transform: getVirtualRowTransform(vItem.start)
   })
   return (
     <div
@@ -108,9 +114,10 @@ export function renderFolderWorkspaceVirtualRow(args: {
       data-worktree-virtual-row-key={String(vItem.key)}
       data-worktree-virtual-row-start={vItem.start}
       data-index={vItem.index}
+      data-project-block={blockAttributes['data-project-block']}
       ref={args.measureVirtualRowElement}
       className="absolute left-0 right-0 top-0"
-      style={{ transform: getVirtualRowTransform(vItem.start) }}
+      style={blockAttributes.style}
       onClick={forwardOptionPressToCardSurface}
       onClickCapture={ctx.onRowClickCapture}
       onPointerDown={(event) => ctx.onRowPointerDown(event, folderWorktree, folderWorktreeIdentity)}

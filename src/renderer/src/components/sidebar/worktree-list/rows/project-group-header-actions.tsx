@@ -6,6 +6,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
@@ -21,6 +22,8 @@ import {
   stopRepoHeaderKeyboardToggle,
   stopRepoHeaderMenuEvent
 } from './header-event-guards'
+import { ProjectCollapseMenuItems } from './project-collapse-actions'
+import type { HostSectionRow } from '../../../../../../shared/sidebar-list/host-section-rows'
 
 export function ProjectGroupHeaderMenu({
   groupId,
@@ -29,7 +32,8 @@ export function ProjectGroupHeaderMenu({
   projectGroup,
   onRefreshProjectGroup,
   onRename,
-  onDelete
+  onDelete,
+  getSidebarRows
 }: {
   groupId: string
   /** Owner host of the group row, so rename/delete route to the host that holds it. */
@@ -39,6 +43,8 @@ export function ProjectGroupHeaderMenu({
   onRefreshProjectGroup?: (projectGroup: ProjectGroup) => void
   onRename: (groupId: string, currentName: string, hostId?: ExecutionHostId) => void
   onDelete: (groupId: string, groupName: string, hostId?: ExecutionHostId) => void
+  /** Latest sidebar rows, read when a collapse/expand-all item is chosen. */
+  getSidebarRows: () => readonly HostSectionRow[]
 }): React.JSX.Element {
   const onRefresh = getFolderProjectGroupRefreshHandler(projectGroup, onRefreshProjectGroup)
   return (
@@ -86,6 +92,8 @@ export function ProjectGroupHeaderMenu({
         <DropdownMenuItem onSelect={() => onRename(groupId, label, hostId)}>
           {translate('auto.components.sidebar.WorktreeList.4d7b73658c', 'Rename group')}
         </DropdownMenuItem>
+        <ProjectCollapseMenuItems getRows={getSidebarRows} />
+        <DropdownMenuSeparator />
         <DropdownMenuItem variant="destructive" onSelect={() => onDelete(groupId, label, hostId)}>
           {translate('auto.components.sidebar.WorktreeList.902115cdbe', 'Delete group')}
         </DropdownMenuItem>

@@ -9,7 +9,7 @@ import StatusIndicator from '../surface/StatusIndicator'
 import { useWorktreeActivityStatuses } from '../activity/use-worktree-activity-statuses'
 
 const EMPTY_CHILD_IDS: readonly string[] = []
-const STATUS_ORDER: readonly WorktreeStatus[] = [
+export const STATUS_ORDER: readonly WorktreeStatus[] = [
   'permission',
   'failed',
   'working',

@@ -7537,6 +7537,11 @@
           "needsInput": "Needs input",
           "running": "Running",
           "idle": "Idle"
+        },
+        "projectCollapse": {
+          "collapseAll": "Collapse all projects",
+          "expandAll": "Expand all projects",
+          "expandActive": "Expand only active projects"
         }
       },
       "shared": {

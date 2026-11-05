@@ -18,11 +18,13 @@ import type { WorktreeVirtualRowContext } from '../rows/virtual-row-dispatch'
 import type { RepoHeaderProjectActions } from '../rows/repo-header-project-actions'
 
 import type { ProjectHeaderHostContext } from '../rows/project-header-host-context'
+import type { ProjectBlockFrame } from '../rows/project-block-frames'
 
 type BuildArgs = {
   props: VirtualizedWorktreeViewportProps
   projectGroups: readonly ProjectGroup[]
   renderRows: RenderRow[]
+  projectBlockFrames: readonly (ProjectBlockFrame | null)[]
   firstHeaderIndex: number
   virtualization: WorktreeListVirtualizer
   measureVirtualRowElement: (element: HTMLDivElement | null) => void
@@ -52,6 +54,7 @@ export function buildWorktreeVirtualRowContext(args: BuildArgs): WorktreeVirtual
   const { props, runtime, session, statusDrag, headerDrag, primaryActive, reveal } = args
   return {
     renderRows: args.renderRows,
+    projectBlockFrames: args.projectBlockFrames,
     firstHeaderIndex: args.firstHeaderIndex,
     activeStickyHeaderIndexRef: args.virtualization.activeStickyHeaderIndexRef,
     activeStickyHostIndexRef: args.virtualization.activeStickyHostIndexRef,
@@ -75,6 +78,7 @@ export function buildWorktreeVirtualRowContext(args: BuildArgs): WorktreeVirtual
     header: {
       groupBy: props.groupBy,
       collapsedGroups: props.collapsedGroups,
+      activeWorktreeId: props.activeWorktreeId,
       workspaceStatuses: props.workspaceStatuses,
       projectGroups: args.projectGroups,
       highlightedRevealRowKey: reveal.highlightedRevealRowKey,
