@@ -108,8 +108,13 @@ export function removeAgentArgOption(
 ): string[] {
   const kept: string[] = []
   const required = agentRequiredValueOptions(agent)
+  // Pi reads `--model --api-key` as a model id, so removal must consume dash-leading operands too.
+  const consumes =
+    takesValue === 'required' || (!!takesValue && aliases.every((a) => required.includes(a)))
+      ? ('required' as const)
+      : takesValue
   let cursor = 0
-  let found = findOptionOccurrence(tokens, aliases, true, required, cursor, takesValue)
+  let found = findOptionOccurrence(tokens, aliases, true, required, cursor, consumes)
   while (found) {
     const end = found.index + found.consumed
     const keptEnd = matchesValue(found.value) ? found.index : end
@@ -117,7 +122,7 @@ export function removeAgentArgOption(
       kept.push(tokens[index])
     }
     cursor = end
-    found = findOptionOccurrence(tokens, aliases, true, required, cursor, takesValue)
+    found = findOptionOccurrence(tokens, aliases, true, required, cursor, consumes)
   }
   for (let index = cursor; index < tokens.length; index += 1) {
     kept.push(tokens[index])
