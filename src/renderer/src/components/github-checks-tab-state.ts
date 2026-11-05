@@ -47,9 +47,13 @@ export function resolveGitHubChecksTabState(
   if (state.contextKey !== contextKey) {
     return createGitHubChecksTabState(sourceChecks, contextKey)
   }
-  return state.sourceChecks === sourceChecks
-    ? state
-    : resetGitHubChecksTabForSource(state, sourceChecks)
+  if (state.sourceChecks === sourceChecks) {
+    return state
+  }
+  const reset = resetGitHubChecksTabForSource(state, sourceChecks)
+  return sourceChecks === state.localChecks
+    ? { ...reset, checkObservationOwner: state.checkObservationOwner }
+    : reset
 }
 
 export function resetGitHubChecksTabForSource(

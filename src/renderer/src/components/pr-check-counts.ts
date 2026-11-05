@@ -1,3 +1,4 @@
+import { normalizePRCheckHeadSha } from '../../../shared/github/pr-check-head'
 import {
   isCompletePRCheckOwner,
   samePRCheckObservation
@@ -42,7 +43,7 @@ export function getCheckCounts(checks: readonly PRCheckDetail[]): PRCheckCounts 
 
 export function getOverallCheckCounts(
   checks: readonly PRCheckDetail[],
-  owner?: { checksSummary?: ProviderCheckSummary },
+  owner?: { headSha?: string; checksSummary?: ProviderCheckSummary },
   rowsOwner?: { checksSummary?: ProviderCheckSummary }
 ): PRCheckCounts {
   if (!owner || !isCompletePRCheckOwner(owner)) {
@@ -59,6 +60,12 @@ export function getOverallCheckCounts(
   const explained =
     rowsOwner &&
     samePRCheckObservation(owner, rowsOwner) &&
+    checks.length > 0 &&
+    checks.every(
+      (check) =>
+        normalizePRCheckHeadSha(check.observedHeadSha) !== undefined &&
+        normalizePRCheckHeadSha(check.observedHeadSha) === normalizePRCheckHeadSha(owner.headSha)
+    ) &&
     failed > 0 &&
     distinctApprovals === failed &&
     rows.needsAction === distinctApprovals &&
@@ -135,7 +142,7 @@ export function getCheckCountChips(counts: PRCheckCounts): PRCheckCountChip[] {
 
 export function getChecksSummaryLabel(
   checks: readonly PRCheckDetail[],
-  owner?: { checksSummary?: ProviderCheckSummary },
+  owner?: { headSha?: string; checksSummary?: ProviderCheckSummary },
   rowsOwner?: { checksSummary?: ProviderCheckSummary }
 ): string {
   const complete = owner && isCompletePRCheckOwner(owner)

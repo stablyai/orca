@@ -1,3 +1,4 @@
+import { normalizePRCheckHeadSha } from '../../../../shared/github/pr-check-head'
 import type { PRCheckDetail } from '../../../../shared/github/check-types'
 import { githubRepositoryWebHost, type GitHubApiRepository } from '../../github-api-repository'
 import {
@@ -154,7 +155,16 @@ export function mapGraphQLPRChecksResponse(
       mapGraphQLPendingApprovalCheckSuite(ownerRepo, suite, pullRequest.headRefOid, index)
     )
 
-  return [...checkRuns, ...legacyStatuses, ...pendingApprovalChecks]
+  const observedHeadSha = normalizePRCheckHeadSha(commit.oid)
+  const provedHead =
+    observedHeadSha &&
+    observedHeadSha === normalizePRCheckHeadSha(pullRequest.headRefOid) &&
+    !response.errors?.length
+      ? observedHeadSha
+      : undefined
+  return [...checkRuns, ...legacyStatuses, ...pendingApprovalChecks].map((check) =>
+    provedHead ? { ...check, observedHeadSha: provedHead } : check
+  )
 }
 
 export function getPendingApprovalCheckSuiteName(

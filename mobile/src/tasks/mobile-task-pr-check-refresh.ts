@@ -45,7 +45,7 @@ export async function refreshMobileTaskPRChecks(
   setError('')
   const selected = claimPublication(item, detailPayload)
   const requestedHead = detailPayload?.provider === 'github' ? detailPayload.headSha : undefined
-  const contract = await captureMobilePRCheckContract(
+  let contract = await captureMobilePRCheckContract(
     client,
     { repo: `id:${item.source.repoId}` },
     true
@@ -86,8 +86,7 @@ export async function refreshMobileTaskPRChecks(
   }
   try {
     const repository = requireGitHubTaskTarget(item.source).repository
-    let owner: GitHubWorkItem | null = null
-    if (contract.complete) {
+    const readOwner = async (): Promise<GitHubWorkItem | null> => {
       try {
         const reply = await githubWorkItemBySlugRead.request(
           contract.client ?? client,
@@ -110,11 +109,16 @@ export async function refreshMobileTaskPRChecks(
             number: item.source.number
           })
         ) {
-          owner = observed
+          return observed
         }
       } catch {
         /* Rows remain independently useful when the complete owner is unavailable. */
       }
+      return null
+    }
+    let owner: GitHubWorkItem | null = null
+    if (contract.complete) {
+      owner = await readOwner()
       if (!current()) {
         return
       }
@@ -140,6 +144,16 @@ export async function refreshMobileTaskPRChecks(
         ? { ...prior, checks }
         : prior
     )
+    if (!contract.complete && !current() && selected() && contract.routeCurrent()) {
+      contract.retire()
+      contract = await captureMobilePRCheckContract(client, { repo: `id:${item.source.repoId}` })
+      if (contract.complete) {
+        owner = await readOwner()
+        if (current()) {
+          publish(owner)
+        }
+      }
+    }
     if (!contract.complete && current()) {
       const summary = buildGitHubCheckSummary(checks)
       const update = (source: typeof item.source) => ({

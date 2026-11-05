@@ -15,7 +15,7 @@ import type { PRCheckDetail } from '../../../shared/github/check-types'
 const owner = {
   number: 42,
   url: 'https://github.com/acme/widgets/pull/42',
-  headSha: 'h1',
+  headSha: 'a'.repeat(40),
   mergeable: 'UNKNOWN' as const
 }
 const context = { scope: 'account:runtime', complete: true, current: true }
@@ -28,7 +28,13 @@ const blocked = {
   neutral: 0
 }
 const rows: PRCheckDetail[] = [
-  { name: 'Approval', status: 'completed', conclusion: 'action_required', url: null }
+  {
+    name: 'Approval',
+    status: 'completed',
+    conclusion: 'action_required',
+    url: null,
+    observedHeadSha: 'a'.repeat(40)
+  }
 ]
 afterEach(async () => {
   cleanup()
@@ -145,4 +151,24 @@ it('keeps the row Fix action available when the complete owner is unavailable', 
   )
   expect(screen.getByText('Checks unavailable')).toBeTruthy()
   expect(screen.getByRole('button', { name: 'Fix' }).hasAttribute('disabled')).toBe(false)
+})
+
+it('keeps a successful whole owner presentation when independent rows still contain an old failure', () => {
+  const accepted = acceptPRCheckObservation(
+    { ...owner, checksSummary: { ...blocked, state: 'success', total: 1, passed: 1, failed: 0 } },
+    null,
+    context
+  )!
+  render(
+    <PRTriageStrip
+      review={accepted}
+      checks={[{ name: 'Build', status: 'completed', conclusion: 'failure', url: null }]}
+      isResolvingConflictsWithAI={false}
+      onResolveConflictsWithAI={() => {}}
+      isFixingChecksWithAI={false}
+      onFixChecksWithAI={() => {}}
+    />
+  )
+  expect(screen.getByText('No blocking PR action')).toBeTruthy()
+  expect(screen.queryByText('0 failing checks')).toBeNull()
 })

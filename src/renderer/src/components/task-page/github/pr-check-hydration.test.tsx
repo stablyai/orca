@@ -1,3 +1,4 @@
+import { createCompatibleRuntimeStatusResponse } from '@/runtime/runtime-compatibility-test-fixture'
 import { useAppStore } from '@/store'
 // @vitest-environment happy-dom
 import { act, cleanup, renderHook } from '@testing-library/react'
@@ -50,6 +51,7 @@ function item(number: number): GitHubWorkItem {
 function model(items: GitHubWorkItem[], patch = vi.fn()) {
   const input = {
     repos: [repo],
+    selectedRepos: [repo],
     fetchPRChecks: vi.fn().mockResolvedValue([]),
     taskSource: 'github',
     githubMode: 'items',
@@ -181,4 +183,40 @@ it('does not rerender or rearm failed demand on unrelated host writes or capacit
   view.rerender()
   await act(async () => {})
   expect(lookup).toHaveBeenCalledTimes(calls + 20)
+})
+
+it('ignores an unselected remote source change and hydrates again when the selected source changes', async () => {
+  const selectedRepo = { ...repo, executionHostId: 'runtime:host-a' as const }
+  const unselectedRepo = { ...repo, id: 'repo-b', executionHostId: 'runtime:host-b' as const }
+  const setStatus = (host: string, runtimeId: string) => {
+    const response = createCompatibleRuntimeStatusResponse(runtimeId)
+    if (!response.ok) {
+      throw new Error('Expected a runtime status')
+    }
+    const statuses = new Map(useAppStore.getState().runtimeStatusByEnvironmentId)
+    statuses.set(host, { status: { ...response.result, capabilities: [capability] }, checkedAt: 1 })
+    useAppStore.setState({ runtimeStatusByEnvironmentId: statuses })
+  }
+  setStatus('host-a', 'a1')
+  setStatus('host-b', 'b1')
+  const input = model([item(42)])
+  input.repos = [selectedRepo, unselectedRepo]
+  input.selectedRepos = [selectedRepo]
+  lookup.mockResolvedValue(null)
+  let renders = 0
+  renderHook(() => {
+    renders++
+    return useTaskPageGitHubListProjection(input)
+  })
+  await act(async () => {})
+  expect(lookup).toHaveBeenCalledTimes(1)
+  const before = renders
+  act(() => setStatus('host-b', 'b2'))
+  await act(async () => {})
+  expect(renders).toBe(before)
+  expect(lookup).toHaveBeenCalledTimes(1)
+  act(() => setStatus('host-a', 'a2'))
+  await act(async () => {})
+  expect(renders).toBeGreaterThan(before)
+  expect(lookup).toHaveBeenCalledTimes(2)
 })

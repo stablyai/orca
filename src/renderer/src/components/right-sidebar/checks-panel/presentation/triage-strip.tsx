@@ -88,7 +88,11 @@ export function PRTriageStrip({
       />
     ) : null
 
-  if (brokenCheckCount > 0 || (complete && (summary?.failed ?? 0) > 0) || pipelineFailed) {
+  if (
+    ((!complete || !summary) && brokenCheckCount > 0) ||
+    (complete && (summary?.failed ?? 0) > 0) ||
+    pipelineFailed
+  ) {
     return (
       <>
         {conflictStrip}

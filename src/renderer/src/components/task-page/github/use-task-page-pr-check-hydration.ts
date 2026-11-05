@@ -30,15 +30,18 @@ export function useTaskPagePRCheckHydration(
     subscribeLocalRuntimeCapabilityObservation,
     readLocalRuntimeCapabilityObservation
   )
-  const runtimeStatuses = useAppStore((s) =>
-    repos
-      .map((repo) => {
+  const sourceContracts = useMemo(
+    () =>
+      model.selectedRepos.map((repo) => {
         const source = getTaskPageRepoSourceContext(repo, 'github')
-        const contract = capturePRCheckContract(
-          () => s,
-          getGitHubSourceRuntimeTarget(source),
-          source
-        )
+        return { source, target: getGitHubSourceRuntimeTarget(source) }
+      }),
+    [model.selectedRepos]
+  )
+  const runtimeStatuses = useAppStore((state) =>
+    sourceContracts
+      .map(({ source, target }) => {
+        const contract = capturePRCheckContract(() => state, target, source)
         return `${contract.scope}:${contract.complete}`
       })
       .join('|')

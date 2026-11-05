@@ -495,17 +495,46 @@ it.each([
 )
 
 it.each([1, 10])(
-  'reuses combined exact hydration and page-linear continuations at N=%i',
+  'reuses combined exact hydration with independent context and suite populations at N=%i',
   async (n) => {
+    const contextPages = 2 * n
+    const suitePages = 3 * n
     exec.mockImplementation(async (args: string[]) => {
-      const continuation = args.some((arg) => arg === 'checksCursor=next')
-      return response({
-        ...fields,
-        commits: commits(
-          continuation ? [{ __typename: 'StatusContext', state: 'FAILURE' }] : [successCheck],
-          continuation ? undefined : 'next'
-        )
-      })
+      const contextCursor = args.find((arg) => arg.startsWith('checksCursor='))
+      const suiteCursor = args.find((arg) => arg.startsWith('suitesCursor='))
+      const contextIndex = contextCursor ? Number(contextCursor.split('=')[1]) : 0
+      const suiteIndex = suiteCursor ? Number(suiteCursor.split('=')[1]) : 0
+      const lastContext = contextIndex === contextPages - 1
+      const commit = {
+        oid: fields.headRefOid,
+        ...(!suiteCursor
+          ? {
+              statusCheckRollup: {
+                contexts: {
+                  nodes: [
+                    lastContext ? { __typename: 'StatusContext', state: 'FAILURE' } : successCheck
+                  ],
+                  pageInfo: {
+                    hasNextPage: !lastContext,
+                    endCursor: lastContext ? null : String(contextIndex + 1)
+                  }
+                }
+              }
+            }
+          : {}),
+        ...(!contextCursor
+          ? {
+              checkSuites: {
+                nodes: [{ databaseId: suiteIndex + 1, conclusion: 'SUCCESS' }],
+                pageInfo: {
+                  hasNextPage: suiteIndex < suitePages - 1,
+                  endCursor: suiteIndex < suitePages - 1 ? String(suiteIndex + 1) : null
+                }
+              }
+            }
+          : {})
+      }
+      return response({ ...fields, commits: { nodes: [{ commit }] } })
     })
     const known = {
       ...fields,
@@ -513,16 +542,14 @@ it.each([1, 10])(
       statusCheckRollup: [],
       headDefaultBranchName: 'trunk'
     }
-    for (let target = 0; target < n; target++) {
-      await expect(
-        getPRByNumber(repository, 42, options, 'local:host', known)
-      ).resolves.toMatchObject({
-        headDefaultBranchName: 'trunk',
-        checksUnavailable: false,
-        statusCheckRollup: [successCheck, { __typename: 'StatusContext', state: 'FAILURE' }]
-      })
-    }
-    expect(exec).toHaveBeenCalledTimes(n * 2)
+    const observed = await getPRByNumber(repository, 42, options, 'local:host', known)
+    expect(observed).toMatchObject({ headDefaultBranchName: 'trunk', checksUnavailable: false })
+    expect(observed?.statusCheckRollup).toHaveLength(contextPages)
+    expect(observed?.statusCheckRollup?.at(-1)).toEqual({
+      __typename: 'StatusContext',
+      state: 'FAILURE'
+    })
+    expect(exec).toHaveBeenCalledTimes(1 + (contextPages - 1) + (suitePages - 1))
     expect(exec.mock.calls.every(([args]) => args[0] === 'api' && args[1] === 'graphql')).toBe(true)
   }
 )

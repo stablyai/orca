@@ -1,3 +1,4 @@
+import { normalizePRCheckHeadSha } from '../../../../shared/github/pr-check-head'
 import {
   withGitHubRepoExecution,
   githubRepoContext,
@@ -91,7 +92,10 @@ export async function getPRChecksViaRestFallback(
     } catch (err) {
       console.warn('getPRChecks REST check-suite fallback failed:', err)
     }
-    return checks.length > 0 ? checks : null
+    const observedHeadSha = normalizePRCheckHeadSha(headSha)
+    return checks.length > 0
+      ? checks.map((check) => (observedHeadSha ? { ...check, observedHeadSha } : check))
+      : null
   } catch (err) {
     console.warn('getPRChecks via REST fallback failed, falling back to gh pr checks:', err)
     return null
@@ -110,7 +114,6 @@ async function readPRChecks(
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<PRCheckDetail[]> {
-  void headSha
   const { ownerRepo, ghOptions } = await resolveGitHubRepoExecution(
     repoPath,
     prRepo,

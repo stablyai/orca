@@ -2,7 +2,7 @@ import { afterEach, expect, it } from 'vitest'
 import { buildPrGateRows } from './pr-tab-gates'
 import { markCompletePRCheckOwner } from '../../../../src/shared/github/complete-pr-check-owner'
 import type { PRInfo } from '../../../../src/shared/github/pull-request-types'
-import { activateMobileUiLocale } from '../../i18n/mobile-i18n'
+import { activateMobileUiLocale, mobileI18n } from '../../i18n/mobile-i18n'
 const pr: PRInfo = {
   number: 42,
   title: 'PR',
@@ -17,9 +17,26 @@ const checks = [
   { name: 'Build', status: 'completed' as const, conclusion: 'success' as const, url: null }
 ]
 afterEach(() => activateMobileUiLocale('en'))
-it.each(['en', 'es'] as const)(
+it.each([
+  ['en', '1 check failing'],
+  ['es', '1 comprobación fallida']
+] as const)(
   'keeps the whole PR blocking with partial passing rows in %s',
-  async (locale) => {
+  async (locale, title) => {
+    mobileI18n.addResourceBundle(
+      'es',
+      'translation',
+      {
+        pullRequest: {
+          gates: {
+            checksFailing_one: '{{count}} comprobación fallida',
+            checksFailing_other: '{{count}} comprobaciones fallidas'
+          }
+        }
+      },
+      true,
+      true
+    )
     await activateMobileUiLocale(locale)
     const owner = markCompletePRCheckOwner(
       {
@@ -38,7 +55,7 @@ it.each(['en', 'es'] as const)(
     )
     expect(
       buildPrGateRows({ pr: owner, details: null, checks, checksError: null })[0]
-    ).toMatchObject({ key: 'checks', tone: 'blocking', subtitle: null })
+    ).toMatchObject({ key: 'checks', tone: 'blocking', title, subtitle: null })
     expect(
       buildPrGateRows({ pr: owner, details: null, checks, checksError: 'Rows unavailable' })[0].tone
     ).toBe('blocking')
