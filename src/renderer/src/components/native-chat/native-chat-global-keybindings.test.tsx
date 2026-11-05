@@ -12,22 +12,28 @@ import { registerWorkspaceShortcutIpcBridge } from '../../hooks/ipc-events/works
 import type { MainWindowFocusLifecycle } from '../../../../main/window/main-window-focus-lifecycle'
 import type { BrowserWindow, Input } from 'electron'
 
-const fixture = vi.hoisted(() => ({
-  state: {} as AppState,
-  plugins: [] as ActivePluginCommand[],
-  floating: false,
-  platform: 'darwin' as NodeJS.Platform,
-  pluginRun: vi.fn(),
-  deleteWorktree: vi.fn(),
-  send: vi.fn(),
-  steer: vi.fn(() => true),
-  explorer: vi.fn(),
-  setSidebar: vi.fn(),
-  openSettings: vi.fn(),
-  settingsTarget: vi.fn(),
-  deleteIpc: () => {},
-  handlers: new Map<string, (...args: any[]) => void>()
-}))
+const fixture = vi.hoisted(() => {
+  const context: { plugins: ActivePluginCommand[]; platform: NodeJS.Platform } = {
+    plugins: [],
+    platform: 'darwin'
+  }
+  return {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: beforeEach supplies every store field read by this controlled fixture.
+    state: {} as AppState,
+    ...context,
+    floating: false,
+    pluginRun: vi.fn(),
+    deleteWorktree: vi.fn(),
+    send: vi.fn(),
+    steer: vi.fn(() => true),
+    explorer: vi.fn(),
+    setSidebar: vi.fn(),
+    openSettings: vi.fn(),
+    settingsTarget: vi.fn(),
+    deleteIpc: () => {},
+    handlers: new Map<string, (...args: any[]) => void>()
+  }
+})
 vi.mock('@/store', () => ({
   useAppStore: Object.assign((selector: (state: AppState) => unknown) => selector(fixture.state), {
     getState: () => fixture.state
@@ -68,6 +74,7 @@ const floatingWorkspace = {
   setOpenWithFocus: noop
 }
 function Composer() {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture supplies the layout members read by the mounted shortcut hook.
   useGlobalKeybindings({ layout: layout as never, floatingWorkspace: floatingWorkspace as never })
   const onKeyDown = useNativeChatComposerKeyDown({
     autocomplete: { mode: 'none' },
@@ -124,6 +131,7 @@ beforeEach(() => {
   fixture.floating = false
   fixture.platform = 'darwin'
   fixture.pluginRun.mockResolvedValue(undefined)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mocked store exposes only the fields exercised by these production handlers.
   fixture.state = {
     activeView: 'terminal',
     activeWorktreeId: 'wt-1',
@@ -293,6 +301,7 @@ it('carries native default deletion through the IPC bridge and preserves composi
   row.setAttribute('data-hovered-fixture', '')
   document.body.append(row)
   const subscribe = () => noop
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the real IPC bridge only subscribes to UI events, supplied by this proxy.
   window.api = {
     ui: new Proxy(
       {},
@@ -329,7 +338,9 @@ it('carries native default deletion through the IPC bridge and preserves composi
     isMarkdownEditorFocused: () => false
   }
   installMainWindowShortcutRouting({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: routing uses only the on/send surface supplied by this native event fixture.
     mainWindow: mainWindow as unknown as BrowserWindow,
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: routing reads only the focus predicates supplied by this fixture.
     focus: focus as MainWindowFocusLifecycle,
     store: null,
     opts: { getKeybindings: () => fixture.state.keybindings }
