@@ -43,12 +43,12 @@ beforeEach(() => {
 })
 afterEach(cleanup)
 
-describe('Jira Tasks view mode', () => {
-  // Leaving Tasks unmounts the hook, so each case reopens it with a fresh render.
-  function openTasks() {
-    return renderHook(() => useTaskPageJiraListState(fixture())).result
-  }
+// Leaving Tasks unmounts the hook, so each case reopens it with a fresh render.
+function openTasks() {
+  return renderHook(() => useTaskPageJiraListState(fixture())).result
+}
 
+describe('Jira Tasks view mode', () => {
   it('reopens on the board after the view mode was switched', async () => {
     const first = openTasks()
     await act(async () => first.current.setJiraViewMode('board'))
@@ -62,5 +62,14 @@ describe('Jira Tasks view mode', () => {
     await act(async () => first.current.setJiraViewMode('list'))
     cleanup()
     expect(openTasks().current.jiraViewMode).toBe('list')
+  })
+})
+
+describe('Jira Tasks current sprint', () => {
+  it('reopens with Current sprint on after it was switched on', async () => {
+    const first = openTasks()
+    await act(async () => first.current.setJiraCurrentSprint(true))
+    cleanup()
+    expect(openTasks().current.jiraCurrentSprint).toBe(true)
   })
 })
