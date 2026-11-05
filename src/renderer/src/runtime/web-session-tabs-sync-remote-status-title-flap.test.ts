@@ -55,6 +55,8 @@ function makeHostSnapshot(args: {
   agentStatusOverrides?: Partial<AgentStatusEntry>
   aiVaultTitle?: { agent: 'claude'; sessionId: string; title: string } | null
   resolvesSessionTitle?: true
+  title?: string
+  status?: 'ready' | 'pending-handle'
 }): RuntimeMobileSessionTabsResult {
   return {
     worktree: WT,
@@ -67,11 +69,11 @@ function makeHostSnapshot(args: {
       {
         type: 'terminal',
         id: HOST_SURFACE_ID,
-        title: 'Terminal',
+        title: args.title ?? 'Terminal',
         parentTabId: HOST_TAB_ID,
         leafId: LEAF_ID,
         isActive: true,
-        status: 'ready',
+        status: args.status ?? 'ready',
         terminal: 'terminal-1',
         ...(args.aiVaultTitle !== undefined ? { aiVaultTitle: args.aiVaultTitle } : {}),
         ...(args.resolvesSessionTitle ? { resolvesSessionTitle: true as const } : {}),
@@ -481,7 +483,8 @@ describe('remote-paired pane: host session name', () => {
     const store = seedPairedClientStore()
     const publish = (
       snapshotVersion: number,
-      aiVaultTitle: { agent: 'claude'; sessionId: string; title: string } | null
+      aiVaultTitle: { agent: 'claude'; sessionId: string; title: string } | null,
+      surface: { title?: string; status?: 'ready' | 'pending-handle' } = {}
     ) =>
       applyHostSnapshot(
         store,
@@ -490,19 +493,23 @@ describe('remote-paired pane: host session name', () => {
           hostNow: T0 + snapshotVersion * 1_000,
           includeAgentStatus: true,
           aiVaultTitle,
-          resolvesSessionTitle: true
+          resolvesSessionTitle: true,
+          ...surface
         }),
         T0 + snapshotVersion * 1_000
       )
     const mirrored = () =>
       (store.getState().tabsByWorktree[WT] ?? []).find((t) => t.id === MIRROR_TAB_ID)
-    publish(1, { agent: 'claude', sessionId: 'session-1', title: 'Old' })
-    publish(2, { agent: 'claude', sessionId: 'session-1', title: 'New' })
+    publish(1, { agent: 'claude', sessionId: 'session-1', title: 'Old' }, { title: 'Old' })
+    // The host's own title already ranks the session name in.
+    publish(2, { agent: 'claude', sessionId: 'session-1', title: 'New' }, { title: 'New' })
     expect(mirrored()?.aiVaultTitle?.title).toBe('New')
 
-    publish(3, null)
+    // An idle pane publishes the placeholder title while the host clears the name.
+    publish(3, null, { title: 'Terminal', status: 'pending-handle' })
     expect(mirrored()?.aiVaultTitle).toBeUndefined()
     expect(mirrored()?.sessionTitleFromHost).toBe(true)
+    expect(resolveTerminalTabTitle(mirrored()!, false)).toBe('Terminal')
   })
 
   it('takes a saved name back as cache once the host stops resolving it', () => {
