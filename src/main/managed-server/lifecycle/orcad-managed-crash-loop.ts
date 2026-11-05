@@ -31,8 +31,9 @@ export class ManagedOrcadCrashLoopBrake {
   private readonly lastFailedStart = new Map<string, string>()
   /** The answering machine's boot when the brake engaged; null when it could not be read. */
   private readonly latchedBoot = new Map<string, MachineBoot | null>()
+  private readonly engagedAt = new Map<string, number>()
 
-  constructor(now: () => number = Date.now) {
+  constructor(private readonly now: () => number = () => Date.now()) {
     this.failures = new ManagedOrcadEventWindow(FAILED_RUN_WINDOW_MS, now)
   }
 
@@ -70,9 +71,11 @@ export class ManagedOrcadCrashLoopBrake {
     this.record(environmentId)
   }
 
-  /** A served run's clean exit (its lock gone) may release the brake, even one that served late. */
-  noteServing(environmentId: string): void {
-    if (this.engaged(environmentId)) {
+  /** A served run's clean exit (its lock gone) may release the brake, even one that served late.
+   * Only an answer received after the brake engaged counts; an earlier one may be from a run since gone. */
+  noteServing(environmentId: string, answeredAt: number = this.now()): void {
+    const engagedAt = this.engagedAt.get(environmentId)
+    if (engagedAt !== undefined && answeredAt >= engagedAt) {
       this.latchedOnServingRun.add(environmentId)
     }
   }
@@ -117,12 +120,16 @@ export class ManagedOrcadCrashLoopBrake {
     this.latchedOnServingRun.delete(environmentId)
     this.lastFailedStart.delete(environmentId)
     this.latchedBoot.delete(environmentId)
+    this.engagedAt.delete(environmentId)
     this.resets.set(environmentId, this.resetEpoch(environmentId) + 1)
   }
 
   private record(environmentId: string): void {
     this.failures.record(environmentId)
     if (this.failures.recent(environmentId).length >= MAX_FAILED_RUNS_PER_WINDOW) {
+      if (!this.engaged(environmentId)) {
+        this.engagedAt.set(environmentId, this.now())
+      }
       this.engagedHosts.set(environmentId, this.detail(environmentId))
     }
   }

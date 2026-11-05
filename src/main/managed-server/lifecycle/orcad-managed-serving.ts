@@ -79,8 +79,13 @@ export function ensureManagedOrcadServing(
   const answeredAt = input.answeredAt?.(id) ?? null
   const answerAge = answeredAt === null ? null : now() - answeredAt
   // Clock rollback must not extend the proof window.
-  if (answerAge !== null && answerAge >= 0 && answerAge < LIVE_ANSWER_PROOF_MS) {
-    getManagedOrcadCrashLoopBrake().noteServing(id)
+  if (
+    answeredAt !== null &&
+    answerAge !== null &&
+    answerAge >= 0 &&
+    answerAge < LIVE_ANSWER_PROOF_MS
+  ) {
+    getManagedOrcadCrashLoopBrake().noteServing(id, answeredAt)
     return Promise.resolve({ state: 'serving' })
   }
   const next: ServingCheck = { ...transport, check: checkAndStart(input) }

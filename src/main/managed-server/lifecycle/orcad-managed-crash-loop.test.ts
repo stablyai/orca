@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
 
 vi.mock('../install/orcad-remote-context', () => ({
@@ -94,6 +94,10 @@ async function findStopped() {
 }
 
 const CRASHED = { pid: 4242, version: '1.2.3', acquiredAt: '2026-11-04T10:00:00.000Z' }
+
+afterEach(() => {
+  vi.useRealTimers()
+})
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -227,6 +231,26 @@ describe('a managed orcad that keeps exiting unexpectedly', () => {
       state: 'unverifiable',
       detail: 'This host’s Orca server process is live but is not answering.'
     })
+  })
+
+  // A pong from just before the brake engaged may be from a run that has since gone.
+  it('does not count an answer from before the brake engaged as served', async () => {
+    const brakeEngagesAt = Date.parse('2026-11-05T12:00:00.000Z')
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(brakeEngagesAt)
+    stoppedSlotLaunches(async () => {
+      throw new OrcadLaunchReadinessError('rejected', 'orcad did not become ready')
+    })
+    for (let i = 0; i < 3; i++) {
+      await findStopped()
+    }
+    const beforeBrake = brakeEngagesAt - 1_000
+    generation += 1
+    await ensureManagedOrcadServing({ ...input(), answeredAt: () => beforeBrake })
+    vi.mocked(readBoundedOrcadRemoteRecord).mockResolvedValueOnce({ state: 'absent' })
+
+    expect(await findStopped()).toMatchObject({ state: 'unverifiable' })
+    expect(launches).toBe(3)
   })
 
   it('does not count a live but unanswering run as served', async () => {
