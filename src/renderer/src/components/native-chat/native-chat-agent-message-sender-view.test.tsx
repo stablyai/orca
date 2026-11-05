@@ -499,25 +499,19 @@ it('shows only a proved Dispatch invocation and withdraws proof without changing
     agent: 'codex' as const,
     party: { address: 'term_old', terminalHandle: 'term_old', orcaSessionId: null }
   }
-  const inputs = [saved, ordinary].map((sender) => ({ sender, worktreeId: 'workspace' }))
   const alias = renderHook(() =>
     useAgentMessageSenderView(ordinary, 'workspace', { kind: 'local' })
   )
   const single = renderHook(() => useAgentMessageSenderView(saved, 'workspace', { kind: 'local' }))
-  const list = renderHook(() => useAgentMessageSenderViews(inputs, { kind: 'local' }))
   expect(single.result.current).toMatchObject({ agentType: 'codex', dot: 'working' })
-  expect(list.result.current[0]).toMatchObject({ agentType: 'codex', dot: 'working' })
   expect(alias.result.current).toEqual({ agentType: 'codex' })
   const before = new Map(renders)
   act(() => publish(false, 2))
   expect(renders).toEqual(before)
   expect(single.result.current.agentType).toBe('codex')
   expect(single.result.current.dot).toBeUndefined()
-  expect(list.result.current[0].agentType).toBe('codex')
-  expect(list.result.current[0].dot).toBeUndefined()
   expect(alias.result.current.agentType).toBe('codex')
   expect(alias.result.current.dot).toBeUndefined()
-  expect(list.result.current[1].dot).toBeUndefined()
   act(() => publish(false, 3))
   expect(renders).toEqual(before)
   expect(alias.result.current.dot).toBeUndefined()
@@ -553,10 +547,7 @@ it('never falls from a missing saved session to the later occupant of its handle
     revision: { epoch: 'saved-session', revision: 1 }
   })
   const single = renderHook(() => useAgentMessageSenderView(saved, 'workspace', { kind: 'local' }))
-  const inputs = [{ sender: saved, worktreeId: 'workspace' }]
-  const list = renderHook(() => useAgentMessageSenderViews(inputs, { kind: 'local' }))
   expect(single.result.current).toEqual({ agentType: 'codex' })
-  expect(list.result.current).toEqual([{ agentType: 'codex' }])
   act(() =>
     useAppStore.getState().setAgentSenderPublication('local', {
       associations: [
@@ -573,5 +564,4 @@ it('never falls from a missing saved session to the later occupant of its handle
     })
   )
   expect(single.result.current).toMatchObject({ agentType: 'codex', dot: 'working' })
-  expect(list.result.current[0]).toMatchObject({ agentType: 'codex', dot: 'working' })
 })

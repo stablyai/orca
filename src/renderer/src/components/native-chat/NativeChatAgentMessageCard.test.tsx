@@ -4,6 +4,9 @@ import { act, cleanup, fireEvent, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { render } from './native-chat-tooltip-test-harness'
 import { useAppStore } from '@/store'
+import { makeUnifiedTab } from '@/store/slices/store-test-helpers'
+import { testOrcaSessionId } from '../../../../shared/orca-session-address-test-fixture'
+import { structuredAgentSessionPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import {
   initialStore,
   from,
@@ -419,12 +422,26 @@ it('keeps a short message footer-free with copy beside the header timestamp', ()
 it.each(['task', 'mail'] as const)(
   'keeps native %s progress independent from Markdown and reparses own edits',
   async (kind) => {
-    const paneKey = status(0).paneKey
+    const sessionId = testOrcaSessionId('progress-sender')
+    const tab = makeUnifiedTab({
+      id: 'progress-chat',
+      entityId: sessionId,
+      worktreeId: 'workspace',
+      groupId: 'g',
+      contentType: 'agent-session',
+      executionHostId: 'local',
+      agentSessionAgent: 'claude'
+    })
+    const paneKey = structuredAgentSessionPaneKey(tab.id, sessionId)
     const entry = {
       ...status(0),
+      paneKey,
       programStatus: { state: 'working' as const, progress: 40, observedAt: 2_000_000 }
     }
-    useAppStore.setState({ agentStatusByPaneKey: { [paneKey]: entry } })
+    useAppStore.setState({
+      unifiedTabsByWorktree: { workspace: [tab] },
+      agentStatusByPaneKey: { [paneKey]: entry }
+    })
     const prefix =
       kind === 'task' ? 'You are working inside Orca, a multi-agent IDE.\n=== TASK ===\n' : ''
     const message: NativeChatMessage = {
@@ -434,6 +451,9 @@ it.each(['task', 'mail'] as const)(
       timestamp: 1,
       from: {
         ...from,
+        senders: from.senders.map((sender, index) =>
+          index === 0 ? { ...sender, party: { ...sender.party, orcaSessionId: sessionId } } : sender
+        ),
         orchestration:
           kind === 'task'
             ? { message: 'task', runId: 'r', taskId: 't', dispatchId: 'd' }

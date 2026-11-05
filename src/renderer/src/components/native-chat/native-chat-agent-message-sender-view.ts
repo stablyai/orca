@@ -192,28 +192,23 @@ export function useAgentMessageSenderViews(
         : environmentId !== undefined
           ? { kind: 'environment', environmentId }
           : undefined
-    return inputs.map(({ sender, worktreeId }) => {
-      const activity = activitySender(sender)
-      return {
-        locate: (state: AppState) => {
-          const resolved = activity
-            ? resolveAgentMessageSenderTarget(state, activity, worktreeId, stable, undefined)
-            : undefined
-          const fallback = sender
-            ? resolveAgentMessageSenderTarget(state, sender, worktreeId, stable, undefined)
-            : undefined
-          return viewLocation(resolved) ?? viewLocation(fallback, false)
-        },
-        leaseLocate: (state: AppState) =>
-          (activity
-            ? agentMessageSenderCandidateLocation(state, activity, worktreeId, stable, undefined)
-            : undefined) ??
-          (sender
-            ? agentMessageSenderCandidateLocation(state, sender, worktreeId, stable, undefined)
-            : undefined),
-        savedAgent: agentMessageSavedKind(sender)
-      }
-    })
+    return inputs.map(({ sender, worktreeId }) => ({
+      locate: (state: AppState) => {
+        const resolved = sender
+          ? resolveAgentMessageSenderTarget(state, sender, worktreeId, stable, undefined)
+          : undefined
+        if (resolved?.kind === 'legacy') {
+          return resolved.location
+        }
+        const located = resolved?.kind === 'located' ? resolved.location : undefined
+        return located && { ...located, agentType: located.tab?.agentSessionAgent }
+      },
+      leaseLocate: (state: AppState) =>
+        sender
+          ? agentMessageSenderCandidateLocation(state, sender, worktreeId, stable, undefined)
+          : undefined,
+      savedAgent: agentMessageSavedKind(sender)
+    }))
   }, [inputs, targetKind, environmentId])
   return useAgentMessageSenderSources(lookups)
 }
