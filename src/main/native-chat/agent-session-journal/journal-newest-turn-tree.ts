@@ -1,5 +1,6 @@
 import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { compareAgentJournalItems } from '../../../shared/agent-session/journal/agent-session-journal-position'
+import { finishJournalSteps } from './journal-reconstruction-steps'
 
 /** A turn or context clear, with the row where it first became a holding failure (zero while it is
  * not one). A command that failed on its own terms is not `relevant`: it neither holds nor releases. */
@@ -68,6 +69,15 @@ export function putTurnSource(
   source: TurnSource,
   remove: boolean
 ): TurnSourceNode | undefined {
+  return finishJournalSteps(putTurnSourceSteps(node, source, remove))
+}
+
+export function* putTurnSourceSteps(
+  node: TurnSourceNode | undefined,
+  source: TurnSource,
+  remove: boolean
+): Generator<void, TurnSourceNode | undefined> {
+  yield
   if (!node) {
     return remove
       ? undefined
@@ -75,9 +85,9 @@ export function putTurnSource(
   }
   const order = compareTurnSources(source, node.source)
   if (order < 0) {
-    node.left = putTurnSource(node.left, source, remove)
+    node.left = yield* putTurnSourceSteps(node.left, source, remove)
   } else if (order > 0) {
-    node.right = putTurnSource(node.right, source, remove)
+    node.right = yield* putTurnSourceSteps(node.right, source, remove)
   } else if (!remove) {
     node.source = source
   } else {
@@ -90,9 +100,11 @@ export function putTurnSource(
     let next = node.right
     while (next.left) {
       next = next.left
+      yield
     }
     node.source = next.source
-    node.right = putTurnSource(node.right, next.source, true)
+    node.right = yield* putTurnSourceSteps(node.right, next.source, true)
   }
+  yield
   return balance(node)
 }

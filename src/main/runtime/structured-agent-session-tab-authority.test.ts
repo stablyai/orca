@@ -1,3 +1,4 @@
+import { testJournalNativeDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import './rpc/unused-default-rpc-methods.test-fixture'
 import { beforeEach, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from './rpc/dispatcher'
@@ -514,25 +515,20 @@ it.each([false, true])(
   'SQL COMMIT rejection adopts no authority or record, firstMessage=%s',
   async (first) => {
     const rig = await openAuthorityRuntime(await authorityProfile())
-    const db = rig.host.deps.journalDatabase.db
-    const exec = db.exec.bind(db)
-    const failure = vi.spyOn(db, 'exec').mockImplementation((sql) => {
-      if (
-        sql === 'COMMIT' &&
-        db
-          .prepare("SELECT value FROM agent_session_store_meta WHERE key='session_tabs_recorded'")
-          .get()
-      ) {
-        throw new Error('commit rejected')
-      }
-      return exec(sql)
-    })
+    const db = testJournalNativeDatabase(rig.host.deps.journalDatabase)
+    db.exec(
+      'CREATE TABLE fixture_tab_commit_guard (missing TEXT REFERENCES agent_session_records(session_id) DEFERRABLE INITIALLY DEFERRED)'
+    )
+    db.exec(
+      "CREATE TRIGGER fixture_reject_tab_commit AFTER INSERT ON agent_session_store_meta WHEN NEW.key='session_tabs_recorded' BEGIN INSERT INTO fixture_tab_commit_guard VALUES ('missing'); END"
+    )
     await (first
       ? expect(createC(rig, first)).resolves.toMatchObject({ ok: false })
-      : expect(createC(rig, first)).rejects.toThrow('commit rejected'))
+      : expect(createC(rig, first)).rejects.toThrow('FOREIGN KEY constraint failed'))
     expect(rig.store.getVisibleSessionTabIndex().present).toBe(false)
     expect(rig.store.getRecord(C)).toBeNull()
-    failure.mockRestore()
+    db.exec('DROP TRIGGER fixture_reject_tab_commit')
+    db.exec('DROP TABLE fixture_tab_commit_guard')
     expect(await createC(rig, first)).toMatchObject({ ok: true })
     expect(rig.store.listVisibleSessionIds()).toEqual([B, C])
   }

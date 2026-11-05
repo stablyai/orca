@@ -48,7 +48,7 @@ it.each([10, 40])(
       providerHandle: claudeProviderHandle('thread', null)
     }
     let journal = await journals.open({ identity, stateDirectory: root })
-    const database = openTestJournalHostDatabase(root)
+    const database = await openTestJournalHostDatabase(root)
     const cost = { sets: 0, queries: 0, nodes: 0, reads: 0 }
     const inspect = journalInputIndexProbe(['index', 'left', 'right'], {
       allocated: () => {
@@ -59,15 +59,15 @@ it.each([10, 40])(
       }
     })
     let inspecting = true
-    const set = JournalInputDomainIndex.prototype.set
+    const set = JournalInputDomainIndex.prototype.setSteps
     const domainSets = vi
-      .spyOn(JournalInputDomainIndex.prototype, 'set')
-      .mockImplementation(function (this: JournalInputDomainIndex, ...args) {
+      .spyOn(JournalInputDomainIndex.prototype, 'setSteps')
+      .mockImplementation(function* (this: JournalInputDomainIndex, ...args) {
         cost.sets++
         if (inspecting) {
           inspect(this['root'])
         }
-        set.apply(this, args)
+        yield* set.apply(this, args)
         if (inspecting) {
           inspect(this['root'])
         }
@@ -79,7 +79,7 @@ it.each([10, 40])(
         cost.queries++
         return query.apply(this, args)
       })
-    const indexSets = vi.spyOn(JournalInputPlaceIndex.prototype, 'set')
+    const indexSets = vi.spyOn(JournalInputPlaceIndex.prototype, 'setSteps')
     const release = journalInputHistoryProbe()
     try {
       const { epoch, sequence } = journal.cursor()
@@ -105,7 +105,7 @@ it.each([10, 40])(
       queue('C', { epoch, sequence: seq }, true)
       queue('F', { epoch: 'original-foreign', sequence: 1 })
       queue('N', null)
-      database.transaction((db) => writeCommandReceiptTestRecord(db, identity.sessionId))
+      database.fixtureTransaction((db) => writeCommandReceiptTestRecord(db, identity.sessionId))
       const ids = Array.from({ length: n }, (_, i) => `M${i + 1}`)
       for (let i = 0; i < n; i++) {
         queue(`ordinary-${i}`, { epoch, sequence: seq })
@@ -135,7 +135,7 @@ it.each([10, 40])(
         }
         insertTestJournalRow(database.db, identity.sessionId, target)
         if (id !== 'M2') {
-          database.transaction((db) =>
+          database.fixtureTransaction((db) =>
             insertCommandReceiptIfAbsent(
               db,
               { kind: 'global' },
@@ -319,7 +319,7 @@ it.each(['waiting', 'returned'] as const)(
       let journal = await journals.open({ identity, stateDirectory: root })
       await journal.queuedMessages.insert({ messageId: 'z-canonical', body })
       await journal.close()
-      const { db } = openTestJournalHostDatabase(root)
+      const { db } = await openTestJournalHostDatabase(root)
       db.prepare(
         `INSERT INTO queued_messages (session_id, message_id, position, body_json, fingerprint,
            created_at, host_instance, state, returned_reason)

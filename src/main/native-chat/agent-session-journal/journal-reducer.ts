@@ -1,24 +1,14 @@
+import { finishJournalSteps, sortJournalSteps } from './journal-reconstruction-steps'
 import { journalContextCursor } from './journal-context-cursor'
 import { journalDispatchRowApplies } from './journal-dispatch-settlement'
 import {
-  createJournalInputObligations,
   foldJournalInputObligations,
   journalInputPresentationMember
 } from './journal-input-obligations'
 import { resolveJournalItemId } from './journal-item-echo'
-import {
-  journalInputOrder,
-  initializeJournalInputOrder,
-  type JournalInputOrder
-} from './journal-input-order'
-import type { JournalInputEntry, JournalInputCard } from './journal-input-lineage'
-import type {
-  AgentJournalAcceptanceReceipt,
-  AgentJournalRenderItem,
-  AgentJournalSnapshot,
-  AgentJournalSubmission
-} from '../../../shared/agent-session/journal/agent-session-journal-types'
-import { journalHistoryOrigin, type JournalHistoryOrigin } from './journal-history-origin'
+import { journalInputOrder } from './journal-input-order'
+import type { AgentJournalSnapshot } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { journalHistoryOrigin } from './journal-history-origin'
 import { journalBatchMutationProducer, journalRenderItem } from './journal-render-item'
 import { compareAgentJournalItems } from '../../../shared/agent-session/journal/agent-session-journal-position'
 import { parseAgentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
@@ -28,23 +18,18 @@ import { removeJournalItem, statedOrDerivedTurnScope, upsertJournalItem } from '
 import { journalItemRevisionIsStale } from './journal-item-revision'
 import { observeJournalProviderActivity } from './journal-provider-activity'
 import { isJournalStopOrResumeRow, type JournalRow } from './journal-row-schema'
-import { acceptSubmissionFromProviderItem, applyJournalSubmission } from './journal-submission-fold'
+import {
+  acceptSubmissionFromProviderItemSteps,
+  applyJournalSubmission
+} from './journal-submission-fold'
 import { applyJournalDispatchRow } from './journal-dispatch-reducer'
 
 import { projectJournalStopNote } from './journal-stop-note-projection'
 import { journalItemExecutionFence } from './journal-item-provenance'
-import { retireRewoundJournalSubmission } from './journal-rewind-submission-retirement'
+import { retireRewoundJournalSubmissionSteps } from './journal-rewind-submission-retirement'
 
-import {
-  createJournalQueuePauseMarks,
-  foldJournalQueuePauseMark,
-  type JournalQueuePauseMarks
-} from './queued-message-pause'
-import {
-  createJournalQueueState,
-  foldJournalQueueRow,
-  type JournalQueueState
-} from './journal-queue-fold'
+import { foldJournalQueuePauseMark } from './queued-message-pause'
+import { foldJournalQueueRowSteps } from './journal-queue-fold'
 export {
   resolveJournalItemId,
   journalEchoClaimant,
@@ -55,101 +40,28 @@ export {
 
 export const MAX_JOURNAL_APPLIED_SETTLEMENT_IDS = 4_096
 
-export type JournalReducerState = {
-  sessionId: string
-  epoch: string
-  contextBoundary: number
-  lastSequence: number
-  lastActivityAt: number
-  /** Earliest individually replayable sequence. */
-  oldestSequence: number
-  highestFence: number
-  items: Map<string, AgentJournalRenderItem>
-  /** Creation provenance determines whether an item belongs to current execution. */
-  itemFences: Map<string, number>
-  /** Later runs may explicitly assume execution of reusable child items. */
-  itemExecutionOwners: Map<string, number>
-  providerActivityAt: Map<number, number>
-  /** Retain removed revisions to prevent stale resurrection. */
-  tombstones: Map<string, number>
-  /** Rewound turns remain ended even after their visible records disappear. */
-  removedTurnIds: Set<string>
-  inputs: ReturnType<typeof createJournalInputObligations>
-  submissions: Map<string, AgentJournalSubmission>
-  receipts: Map<string, AgentJournalAcceptanceReceipt>
-  /** Alias provider echoes to existing optimistic submissions to prevent duplicate bubbles. */
-  aliases: Map<string, string>
-  /** Preserve the first declared echo contract through tombstones. */
-  itemEchoes: Map<string, unknown>
-  appliedSettlementIds: Set<string>
-  derivedTurnScope: JournalDerivedTurnScope
-  /** Acceptance survives visible-message rewind; zero means none in this epoch. */
-  latestAcceptedTurnSequence: number
-  queuePauseMarks: JournalQueuePauseMarks
-  stoppedHistoryCarried: Map<string, readonly string[]>
-  queuedHandOffPlaces: Map<
-    string,
-    Pick<AgentJournalRenderItem, 'sequence' | 'observedAt' | 'turnScope'>
-  >
-  /** Historical display corrections, rebuilt by the hand-off fold on replay. */
-  normalizedHandOffs: Set<string>
-  /** The queued messages, folded from their own rows and their hand-offs (`journal-queue-fold.ts`). */
-  queue: JournalQueueState
-  inputEntries: Map<string, JournalInputEntry>
-  inputCards: Map<string, JournalInputCard>
-  historyOrigin: JournalHistoryOrigin | null
-}
-
-export function createJournalReducerState(
-  sessionId: string,
-  epoch: string,
-  originalAcceptance?: ConstructorParameters<typeof JournalInputOrder>[1]
-): JournalReducerState {
-  const state: JournalReducerState = {
-    sessionId,
-    epoch,
-    contextBoundary: 1,
-    lastSequence: 0,
-    lastActivityAt: 0,
-    oldestSequence: 1,
-    highestFence: 0,
-    items: new Map(),
-    itemFences: new Map(),
-    itemExecutionOwners: new Map(),
-    providerActivityAt: new Map(),
-    tombstones: new Map(),
-    removedTurnIds: new Set(),
-    inputs: createJournalInputObligations(),
-    submissions: new Map(),
-    receipts: new Map(),
-    aliases: new Map(),
-    itemEchoes: new Map(),
-    appliedSettlementIds: new Set(),
-    derivedTurnScope: new JournalDerivedTurnScope(),
-    latestAcceptedTurnSequence: 0,
-    queuePauseMarks: createJournalQueuePauseMarks(),
-    stoppedHistoryCarried: new Map(),
-    queuedHandOffPlaces: new Map(),
-    normalizedHandOffs: new Set(),
-    queue: createJournalQueueState(),
-    inputEntries: new Map(),
-    inputCards: new Map(),
-    historyOrigin: null
-  }
-  initializeJournalInputOrder(state, originalAcceptance)
-  return state
-}
+export { createJournalReducerState, type JournalReducerState } from './journal-reducer-state'
+import type { JournalReducerState } from './journal-reducer-state'
 
 export function applyJournalRow(
   state: JournalReducerState,
   row: JournalRow,
   savedAt = row.ts
 ): void {
+  finishJournalSteps(applyJournalRowSteps(state, row, savedAt))
+}
+export function* applyJournalRowSteps(
+  state: JournalReducerState,
+  row: JournalRow,
+  savedAt = row.ts
+): Generator<void> {
+  const order = journalInputOrder(state)
+  yield* order.prepareRowSteps(state, row)
   const dispatchApplies =
     row.kind !== 'dispatch' || journalDispatchRowApplies(state.submissions.get(row.clientMessageId))
   journalInputOrder(state).beforeRow(state, row)
-  applyJournalRowFacts(state, row, savedAt)
-  foldJournalQueueRow(state, row)
+  yield* applyJournalRowFactsSteps(state, row, savedAt)
+  yield* foldJournalQueueRowSteps(state, row)
   foldJournalInputObligations(state, row, dispatchApplies)
   journalInputOrder(state).afterRow(state, row)
 }
@@ -160,18 +72,26 @@ export function applyMarker5JournalRow(
   row: JournalRow,
   savedAt = row.ts
 ): void {
+  finishJournalSteps(applyMarker5JournalRowSteps(state, row, savedAt))
+}
+export function* applyMarker5JournalRowSteps(
+  state: JournalReducerState,
+  row: JournalRow,
+  savedAt = row.ts
+): Generator<void> {
+  yield* journalInputOrder(state).prepareRowSteps(state, row)
   journalInputOrder(state).beforeRow(state, row)
-  applyJournalRowFacts(state, row, savedAt, true)
-  foldJournalQueueRow(state, row, true)
+  yield* applyJournalRowFactsSteps(state, row, savedAt, true)
+  yield* foldJournalQueueRowSteps(state, row, true)
   journalInputOrder(state).afterRow(state, row)
 }
 
-function applyJournalRowFacts(
+function* applyJournalRowFactsSteps(
   state: JournalReducerState,
   row: JournalRow,
   savedAt: number,
   marker5 = false
-): void {
+): Generator<void> {
   state.lastSequence = Math.max(state.lastSequence, row.seq)
   state.highestFence = Math.max(state.highestFence, row.fence)
   if (row.kind === 'epoch') {
@@ -196,7 +116,7 @@ function applyJournalRowFacts(
     }
     const itemId = resolveJournalItemId(state, row.itemId, row.body, marker5)
     if (!state.itemEchoes.has(row.itemId)) {
-      acceptSubmissionFromProviderItem(state, row.itemId, itemId, row)
+      yield* acceptSubmissionFromProviderItemSteps(state, row.itemId, itemId, row)
     }
     upsertJournalItem(
       state,
@@ -216,7 +136,7 @@ function applyJournalRowFacts(
   if (row.kind === 'tombstone') {
     removeJournalItem(state, resolveItemId(state, row.itemId), row.revision)
     if (row.retireSubmission === true) {
-      retireRewoundJournalSubmission(state, row.itemId)
+      yield* retireRewoundJournalSubmissionSteps(state, row.itemId)
       const identity = parseAgentJournalItemKey(row.itemId)
       if (marker5 && identity?.provider === 'orca') {
         state.submissions.delete(identity.clientMessageId)
@@ -240,7 +160,7 @@ function applyJournalRowFacts(
         const { revision, body } = mutation
         const itemId = resolveJournalItemId(state, mutation.itemId, body, marker5)
         if (!state.itemEchoes.has(mutation.itemId)) {
-          acceptSubmissionFromProviderItem(state, mutation.itemId, itemId, row)
+          yield* acceptSubmissionFromProviderItemSteps(state, mutation.itemId, itemId, row)
         }
         const producer = journalBatchMutationProducer(row, mutation)
         const scope = statedOrDerivedTurnScope(state, mutation)
@@ -281,11 +201,20 @@ export function rememberAppliedSettlementId(
 }
 
 export function renderJournalItems(state: JournalReducerState): AgentJournalSnapshot['items'] {
-  // Map insertion order changes on recreation; journal position alone orders the timeline.
-  return [...state.items.values()]
-    .filter((item) => journalInputPresentationMember(state, item.itemId))
-    .map((item) => projectJournalStopNote(item, state.items))
-    .sort(compareAgentJournalItems)
+  return finishJournalSteps(renderJournalItemSteps(state))
+}
+
+export function* renderJournalItemSteps(
+  state: JournalReducerState
+): Generator<void, AgentJournalSnapshot['items']> {
+  const items: AgentJournalSnapshot['items'] = []
+  for (const item of state.items.values()) {
+    if (journalInputPresentationMember(state, item.itemId)) {
+      items.push(projectJournalStopNote(item, state.items))
+    }
+    yield
+  }
+  return yield* sortJournalSteps(items, compareAgentJournalItems)
 }
 
 export function renderJournalState(state: JournalReducerState): AgentJournalSnapshot {

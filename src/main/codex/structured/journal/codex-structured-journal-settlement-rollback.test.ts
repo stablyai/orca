@@ -1,3 +1,4 @@
+import { observeNativeJournalTransactions } from '../../../native-chat/agent-session-journal/journal-native-test-instrumentation'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -79,30 +80,15 @@ it('rolls back the entire Codex exit settlement when a later row fails', async (
   published.length = 0
   journal.observeCommits(commits)
   const before = journal.snapshot()
-  const database = openTestJournalHostDatabase(root)
+  const database = await openTestJournalHostDatabase(root)
   const diskBefore = liveTestJournalRows(database.db, SESSION)
   const sawEarlierInserts: number[] = []
-  const transaction = database.transaction.bind(database)
-  vi.spyOn(database, 'transaction').mockImplementation((run, streamed, committed) =>
-    transaction(
-      (db) => {
-        try {
-          return run(db)
-        } catch (error) {
-          sawEarlierInserts.push(liveTestJournalRows(db, SESSION).length - diskBefore.length)
-          expect(journal.snapshot()).toEqual(before)
-          expect(commits).not.toHaveBeenCalled()
-          expect(
-            published.every((snapshot) => JSON.stringify(snapshot) === JSON.stringify(before))
-          ).toBe(true)
-          throw error
-        }
-      },
-      streamed,
-      committed
-    )
-  )
-  database.db.exec(`CREATE TEMP TRIGGER reject_codex_later BEFORE INSERT ON journal_rows
+  observeNativeJournalTransactions(database, ({ sql, rowInserts }) => {
+    if (sql === 'ROLLBACK') {
+      sawEarlierInserts.push(rowInserts)
+    }
+  })
+  database.db.exec(`CREATE TRIGGER reject_codex_later BEFORE INSERT ON journal_rows
     WHEN NEW.session_id = '${SESSION}' AND NEW.seq > ${before.cursor.sequence + 1}
     BEGIN SELECT RAISE(ABORT, 'later Codex settlement row rejected'); END`)
   const ended = {

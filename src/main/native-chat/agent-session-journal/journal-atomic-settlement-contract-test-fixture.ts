@@ -7,7 +7,7 @@ import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/age
 import { settleObservedExitForTest } from '../agent-session-wire/structured-agent-session-observed-exit.test-fixture'
 import {
   createTrackedJournalOpener,
-  openTestJournalHostDatabase,
+  getTestJournalNativeDatabase,
   readTestJournalRows
 } from './journal-host-database-test-support'
 import { parseJournalRow } from './journal-row-schema'
@@ -48,7 +48,7 @@ export function createFixture() {
   })
 
   function rows() {
-    return readTestJournalRows(openTestJournalHostDatabase(root).db, SESSION, journal.epoch).map(
+    return readTestJournalRows(getTestJournalNativeDatabase(root), SESSION, journal.epoch).map(
       (stored) => {
         const parsed = parseJournalRow(stored.rowJson)
         if (!parsed.ok) {

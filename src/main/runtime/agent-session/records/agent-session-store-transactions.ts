@@ -7,11 +7,6 @@ import {
   requireWritableAgentSessionRecord,
   type AgentSessionStoreState
 } from './agent-session-store-state'
-import {
-  insertAgentSessionOperationRowsIfAbsent,
-  writeAgentSessionStoreRows
-} from './agent-session-record-rows'
-import { readCommandReceipt } from '../../../native-chat/agent-session-journal/command-receipt-table'
 import type { CommandReceiptScope } from '../../../native-chat/agent-session-journal/command-receipt-schema'
 import {
   agentSessionRuntimeIncarnation,
@@ -139,7 +134,9 @@ export class AgentSessionStoreTransactions {
   admittedSendCount = (sessionId: string): number => this.admittedSends.get(sessionId) ?? 0
 
   readCommandReceipt(scope: CommandReceiptScope, operationId: string) {
-    return readCommandReceipt(this.journalDatabase.db, scope, operationId)
+    return this.journalDatabase.read(async (read) =>
+      (await read.receipts(scope, [operationId])).get(operationId)!
+    )
   }
 
   /** Mutate only the draft. Newer databases refuse writes; inMemoryWhenReadOnly permits startup-derived verdicts. */
@@ -182,16 +179,11 @@ export class AgentSessionStoreTransactions {
         this.staged = { transaction, draft: staged.draft }
         const writes = staged.writes
         if (writes) {
-          // TEMPORARY: ledger co-write preserves cross-family identity until every mutation uses receipts.
-          if (options.insertOperationsIfAbsent) {
-            insertAgentSessionOperationRowsIfAbsent(db, writes.operations.upsert)
-          }
-          writeAgentSessionStoreRows(
-            db,
-            options.insertOperationsIfAbsent
-              ? { ...writes, operations: { ...writes.operations, upsert: [] } }
-              : writes
-          )
+          db.add({
+            kind: 'store',
+            writes,
+            insertOperationsIfAbsent: options.insertOperationsIfAbsent === true
+          })
         }
       },
       committed: () => {
@@ -213,25 +205,40 @@ export class AgentSessionStoreTransactions {
 
   /** Commit a receipt separately when its command made no journal write. */
   commitReceipt(receipt: JournalOperationReceipt): Promise<void> {
-    const run = this.queue.then(() => {
-      this.journalDatabase.transaction((db) => receipt.write(db))
-      receipt.committed()
-    })
+    const run = this.queue.then(() =>
+      this.journalDatabase.transaction(
+        (db) => receipt.write(db),
+        false,
+        () => receipt.committed()
+      )
+    )
     this.queue = run.catch(() => {})
     return run
   }
 
-  private commit<T>(apply: (draft: AgentSessionStoreState) => T, inMemoryWhenReadOnly: boolean): T {
-    const readOnly = this.journalDatabase.readOnly
-    if (readOnly && !inMemoryWhenReadOnly) {
-      throw readOnlyStoreRefusal()
+  private async commit<T>(
+    apply: (draft: AgentSessionStoreState) => T,
+    inMemoryWhenReadOnly: boolean
+  ): Promise<T> {
+    if (this.journalDatabase.readOnly) {
+      if (!inMemoryWhenReadOnly) {
+        throw readOnlyStoreRefusal()
+      }
+      const staged = this.stage(apply)
+      staged.adopt()
+      return staged.result
     }
-    const staged = this.stage(apply)
-    const writes = staged.writes
-    if (writes && !readOnly) {
-      this.journalDatabase.transaction((db) => writeAgentSessionStoreRows(db, writes))
-    }
-    staged.adopt()
+    const staged = await this.journalDatabase.transaction(
+      (plan) => {
+        const staged = this.stage(apply)
+        if (staged.writes) {
+          plan.add({ kind: 'store', writes: staged.writes, insertOperationsIfAbsent: false })
+        }
+        return staged
+      },
+      false,
+      (staged) => staged.adopt()
+    )
     return staged.result
   }
 

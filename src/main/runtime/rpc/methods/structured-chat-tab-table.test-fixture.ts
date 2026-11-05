@@ -100,7 +100,7 @@ export async function openHost(): Promise<void> {
     logger: createStructuredAgentSessionLogger(),
     store,
     adapter: providerAdapter(),
-    journalDatabase: openTestJournalHostDatabase(directory),
+    journalDatabase: await openTestJournalHostDatabase(directory),
     claimKeyId: 'key',
     now: () => HOST_TEST_NOW,
     mintSpawnToken: () => `spawn-${acquisitions}`

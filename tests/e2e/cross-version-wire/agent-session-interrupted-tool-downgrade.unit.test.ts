@@ -85,7 +85,7 @@ test('an older host and client read a call a stop cut short as the failure they 
       'unverifiable'
     )
     await journal.appendItem(call(1), unverified, { fence: 1, turnScope: { kind: 'thread' } })
-    const since = journal.readSince({ epoch: journal.epoch, sequence: 0 })
+    const since = await journal.readSince({ epoch: journal.epoch, sequence: 0 })
     if (!since.ok) {
       throw new Error(`expected rows, got reset ${since.reset}`)
     }

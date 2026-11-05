@@ -1,3 +1,5 @@
+import { structuredAgentSessionCommandTurnItemIdsSteps } from '../agent-session/structured-agent-session-command-entry'
+import { finishAgentSessionSteps } from '../agent-session/agent-session-projection-steps'
 // Derive Orca-stop cuts from the journal for Continue; never store them. Host rechecks under the session lock before sending.
 
 import {
@@ -19,10 +21,7 @@ import {
   agentTurnVerdict,
   type AgentTurnOutcome
 } from '../agent-status/lifecycle/agent-turn-outcome'
-import {
-  isStructuredAgentSessionCommandTurn,
-  structuredAgentSessionCommandTurnItemIds
-} from '../agent-session/structured-agent-session-command-entry'
+import { isStructuredAgentSessionCommandTurn } from '../agent-session/structured-agent-session-command-entry'
 import {
   isStructuredAgentSessionNonRequestRow,
   type StructuredAgentSessionLatestRequest
@@ -52,16 +51,28 @@ export type NativeChatOrcaStopCut = {
 export function latestNativeChatTurnSinceRequest(
   items: readonly AgentJournalRenderItem[],
   submissions: readonly Pick<AgentJournalSubmission, 'dispatchState'>[],
-  /** With an indexed body read, only the turns this scan reaches are checked, not all history. */
   bodyOf?: (itemId: string) => AgentJournalItemBody | null | undefined
 ): { turnItem: AgentJournalRenderItem; verdict: AgentTurnOutcome | null } | null {
-  if (submissions.some((submission) => submission.dispatchState === 'pending')) {
-    return null
+  return finishAgentSessionSteps(latestNativeChatTurnSinceRequestSteps(items, submissions, bodyOf))
+}
+
+export function* latestNativeChatTurnSinceRequestSteps(
+  items: readonly AgentJournalRenderItem[],
+  submissions: readonly Pick<AgentJournalSubmission, 'dispatchState'>[],
+  bodyOf?: (itemId: string) => AgentJournalItemBody | null | undefined
+): Generator<void, { turnItem: AgentJournalRenderItem; verdict: AgentTurnOutcome | null } | null> {
+  for (const submission of submissions) {
+    yield
+    if (submission.dispatchState === 'pending') {
+      return null
+    }
   }
   const commandTurns = bodyOf
     ? commandTurnsByBody(bodyOf)
-    : structuredAgentSessionCommandTurnItemIds(items)
+    : yield* structuredAgentSessionCommandTurnItemIdsSteps(items)
   for (let index = items.length - 1; index >= 0; index -= 1) {
+    yield
+
     const item = items[index]!
     if (
       !isRootAgentJournalItem(item) ||
@@ -88,7 +99,17 @@ export function findInNativeChatTurn<T>(
   turnItemId: string,
   read: (item: AgentJournalRenderItem) => T | null
 ): T | null {
+  return finishAgentSessionSteps(findInNativeChatTurnSteps(items, turnItemId, read))
+}
+
+export function* findInNativeChatTurnSteps<T>(
+  items: readonly AgentJournalRenderItem[],
+  turnItemId: string,
+  read: (item: AgentJournalRenderItem) => T | null
+): Generator<void, T | null> {
   for (const item of items) {
+    yield
+
     const inTurn = item.turnScope?.kind === 'turn' && item.turnScope.turnItemId === turnItemId
     const found = inTurn ? read(item) : null
     if (found !== null) {
@@ -121,12 +142,19 @@ export function latestNativeChatOrcaStopCut(
   items: readonly AgentJournalRenderItem[],
   submissions: readonly Pick<AgentJournalSubmission, 'dispatchState'>[]
 ): NativeChatOrcaStopCut | null {
-  const latest = latestNativeChatTurnSinceRequest(items, submissions)
+  return finishAgentSessionSteps(latestNativeChatOrcaStopCutSteps(items, submissions))
+}
+
+export function* latestNativeChatOrcaStopCutSteps(
+  items: readonly AgentJournalRenderItem[],
+  submissions: readonly Pick<AgentJournalSubmission, 'dispatchState'>[]
+): Generator<void, NativeChatOrcaStopCut | null> {
+  const latest = yield* latestNativeChatTurnSinceRequestSteps(items, submissions)
   if (!latest || latest.verdict !== 'interruption') {
     return null
   }
   const turnItemId = latest.turnItem.itemId
-  const cause = findInNativeChatTurn(items, turnItemId, orcaStopCauseOfRow)
+  const cause = yield* findInNativeChatTurnSteps(items, turnItemId, orcaStopCauseOfRow)
   return cause ? { turnItemId, cause } : null
 }
 
@@ -136,9 +164,18 @@ export function nativeChatStatusTurnOutcome(
   items: readonly AgentJournalRenderItem[],
   submissions: readonly Pick<AgentJournalSubmission, 'dispatchState'>[]
 ): AgentTurnOutcome | null {
+  return finishAgentSessionSteps(nativeChatStatusTurnOutcomeSteps(request, items, submissions))
+}
+
+export function* nativeChatStatusTurnOutcomeSteps(
+  request: StructuredAgentSessionLatestRequest | null,
+  items: readonly AgentJournalRenderItem[],
+  submissions: readonly Pick<AgentJournalSubmission, 'dispatchState'>[]
+): Generator<void, AgentTurnOutcome | null> {
   const verdict = request
     ? agentTurnVerdict({ state: request.turnState, outcome: request.outcome })
     : null
-  const stop = verdict === 'interruption' ? latestNativeChatOrcaStopCut(items, submissions) : null
+  const stop =
+    verdict === 'interruption' ? yield* latestNativeChatOrcaStopCutSteps(items, submissions) : null
   return stop && stop.cause !== 'crash' ? 'cancellation' : verdict
 }

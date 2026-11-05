@@ -129,7 +129,7 @@ describe('Claude provider fallback', () => {
   it('keeps provider-fallback rows distinct across acquisitions', async () => {
     const journal = await openAgentSessionJournal({
       identity: IDENTITY,
-      database: openTestJournalHostDatabase(root),
+      database: await openTestJournalHostDatabase(root),
       now: () => 1_700_000_000_000,
       mintEpoch: () => 'epoch-1'
     })

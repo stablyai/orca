@@ -1,5 +1,6 @@
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { restoreRetainedJournalInputs } from './journal-retained-inputs'
+import { finishJournalSteps } from './journal-reconstruction-steps'
 import { readJournalLegacyCards } from './journal-queue-import'
 import { journalInputOrder } from './journal-input-order'
 import { journalOutcomeSource } from './journal-outcome-format'
@@ -8,8 +9,8 @@ import { JournalOutcomeDecodeError } from './journal-outcome-codec'
 import { AgentSessionJournalError } from './journal-write-guards'
 import { journalInputAcceptance } from './journal-input-provenance'
 import {
-  applyJournalRow,
-  applyMarker5JournalRow,
+  applyJournalRowSteps,
+  applyMarker5JournalRowSteps,
   createJournalReducerState,
   type JournalReducerState
 } from './journal-reducer'
@@ -154,7 +155,14 @@ export function startJournalRowFold(
   },
   state = createJournalReducerState(input.sessionId, input.epoch, input.originalAcceptance)
 ): {
-  add: (entry: { seq: number; rowJson: string; ts?: number }) => boolean
+  add: (
+    entry: { seq: number; rowJson: string; ts?: number },
+    parsed?: ReturnType<typeof parseJournalRow>
+  ) => boolean
+  addSteps: (
+    entry: { seq: number; rowJson: string; ts?: number },
+    parsed?: ReturnType<typeof parseJournalRow>
+  ) => Generator<void, boolean>
   finish: () => JournalLoad
 } {
   journalInputOrder(state).beginReconstruction()
@@ -164,9 +172,11 @@ export function startJournalRowFold(
   let newer: { sequence: number } | null = null
   let empty = true
 
-  const add = (entry: { seq: number; rowJson: string; ts?: number }): boolean => {
+  const addSteps = function* (
+    entry: { seq: number; rowJson: string; ts?: number },
+    parsed = parseJournalRow(entry.rowJson, input.interpretation === 'sources')
+  ): Generator<void, boolean> {
     empty = false
-    const parsed = parseJournalRow(entry.rowJson, input.interpretation === 'sources')
     if (!parsed.ok && parsed.unreadable) {
       newer = { sequence: entry.seq }
       return false
@@ -196,11 +206,9 @@ export function startJournalRowFold(
       return true
     }
     anchored = true
-    if (input.interpretation === 'marker5') {
-      applyMarker5JournalRow(state, row, entry.ts)
-    } else {
-      applyJournalRow(state, row, entry.ts)
-    }
+    yield* input.interpretation === 'marker5'
+      ? applyMarker5JournalRowSteps(state, row, entry.ts)
+      : applyJournalRowSteps(state, row, entry.ts)
     return true
   }
   const finish = (): JournalLoad => {
@@ -220,7 +228,20 @@ export function startJournalRowFold(
         : { sequence: FIRST_JOURNAL_SEQUENCE, cause: 'no-epoch-row' as const })
     return { state, newer, damage: newer ? null : found }
   }
-  return { add: input.untilDamage ? (entry) => add(entry) && damage === null : add, finish }
+  return {
+    add: (
+      entry: { seq: number; rowJson: string; ts?: number },
+      parsed?: ReturnType<typeof parseJournalRow>
+    ) => finishJournalSteps(addSteps(entry, parsed)) && (!input.untilDamage || damage === null),
+    addSteps: function* (
+      entry: { seq: number; rowJson: string; ts?: number },
+      parsed?: ReturnType<typeof parseJournalRow>
+    ) {
+      return (yield* addSteps(entry, parsed)) && (!input.untilDamage || damage === null)
+    },
+    finish
+  }
 }
 
 export { journalRowsAfterReader, readJournalRowsAfterCursor } from './journal-read-row'
+export { restoreJournalAsync, readJournalRowsAfterCursorAsync } from './journal-async-open'

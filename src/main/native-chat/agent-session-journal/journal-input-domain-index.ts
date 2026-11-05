@@ -1,3 +1,4 @@
+import { finishJournalSteps } from './journal-reconstruction-steps'
 import {
   queryInputContext,
   type JournalInputCard,
@@ -33,7 +34,15 @@ export class JournalInputDomainIndex {
     actionable: boolean,
     handoff: boolean
   ): void {
-    this.change(card, source, actionable, handoff, false)
+    return finishJournalSteps(this.setSteps(card, source, actionable, handoff))
+  }
+  *setSteps(
+    card: QueuedMessageRow,
+    source: JournalInputCard,
+    actionable: boolean,
+    handoff: boolean
+  ): Generator<void, void> {
+    yield* this.changeSteps(card, source, actionable, handoff, false)
   }
 
   setPosition(card: QueuedMessageRow, source: JournalInputCard): void {
@@ -52,6 +61,16 @@ export class JournalInputDomainIndex {
     remove: boolean,
     positionOnly = false
   ): void {
+    finishJournalSteps(this.changeSteps(card, source, actionable, handoff, remove, positionOnly))
+  }
+  private *changeSteps(
+    card: QueuedMessageRow,
+    source: JournalInputCard,
+    actionable: boolean,
+    handoff: boolean,
+    remove: boolean,
+    positionOnly = false
+  ): Generator<void> {
     if (!source.baseline) {
       return
     }
@@ -69,8 +88,9 @@ export class JournalInputDomainIndex {
           source.baseline.coordinate ?? { epoch: '', sequence: 0 }
         )
       } else {
-        node.index.set(card, actionable, handoff, source.baseline.coordinate)
+        yield* node.index.setSteps(card, actionable, handoff, source.baseline.coordinate)
       }
+      yield
       if (high - low <= 1) {
         break
       }

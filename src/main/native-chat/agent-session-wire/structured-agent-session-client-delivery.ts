@@ -1,3 +1,5 @@
+import { publishStructuredGenerationEnded } from './structured-agent-session-generation-publication'
+import type { JournalRow } from '../agent-session-journal/journal-row-schema'
 import { StructuredAgentSessionJournalObservers } from './structured-agent-session-journal-observers'
 import type { StructuredAgentSessionConversations } from './structured-agent-session-conversations'
 import { StructuredAgentSessionSavedStatus } from './structured-agent-session-saved-status'
@@ -24,12 +26,10 @@ import {
   sendSettlementReading
 } from './structured-agent-session-send-settlement'
 import { heldStructuredAgentSessionCurrentWork } from './structured-agent-session-host-current-work'
-import { structuredAgentSessionConversationFence } from './structured-agent-session-provider-child'
 import type {
   StructuredAgentSessionStatusFeed,
   StructuredAgentSessionStatusSubscriber
 } from './structured-agent-session-status-feed'
-import type { CapturedChildWorkStops } from './structured-agent-session-status-ownership'
 import { createStructuredAgentSessionHostStatusFeed } from './structured-agent-session-host-status-feed'
 import type { StructuredAgentSessionChildWorkProducer } from './structured-agent-session-subagent-rows'
 import {
@@ -54,6 +54,9 @@ export class StructuredAgentSessionClientDelivery {
         error
       })
   )
+
+  advanceStatusProjection = (journal: AgentSessionJournal, rows?: readonly JournalRow[]): void =>
+    this.statusFeed.advanceJournalProjection(journal, rows)
 
   constructor(
     private readonly sessions: Map<string, StructuredAgentSessionHostSession>,
@@ -84,7 +87,10 @@ export class StructuredAgentSessionClientDelivery {
       currentWork: (sessionId, journal) => this.currentWork(sessionId, journal),
       deps,
       onAgentStarted,
-      onChildWorkChanged,
+      onChildWorkChanged: (sessionId) => {
+        onChildWorkChanged(sessionId)
+        this.turnCompletionFeed.observe(sessionId)
+      },
       readUsageLimitContinue
     })
     this.turnCompletionFeed = new StructuredAgentSessionTurnCompletionFeed({
@@ -99,6 +105,7 @@ export class StructuredAgentSessionClientDelivery {
     )
     this.waitForSendSettlement = this.sendSettlement.wait
     this.subscribers = new AgentSessionSubscribers({
+      isCurrentJournal: (id, journal) => sessions.get(id)?.journal === journal,
       readCommands: (sessionId, commandsOnRequest) =>
         this.readCommands(sessionId, commandsOnRequest),
       readQueuePublication: (sessionId) =>
@@ -180,8 +187,7 @@ export class StructuredAgentSessionClientDelivery {
 
   publishStatus = (sessionId: string): void => this.statusFeed.publish(sessionId)
 
-  publishConversationName = (sessionId: string): void =>
-    this.statusFeed.publishConversationName(sessionId)
+  publishConversationName = (id: string): void => this.statusFeed.publishConversationName(id)
 
   publishRecordNotes = (sessionId: string): void => this.statusFeed.publishRecordNotes(sessionId)
 
@@ -189,68 +195,44 @@ export class StructuredAgentSessionClientDelivery {
     sessionId: string,
     evidence: AgentChildWorkEvidence[],
     producer?: StructuredAgentSessionChildWorkProducer
-  ): void => {
-    this.statusFeed.publishChildWork(sessionId, evidence, producer)
-    // A drain can be the moment a held turn becomes finished.
-    this.turnCompletionFeed.observe(sessionId)
-  }
+  ): void => this.statusFeed.publishChildWork(sessionId, evidence, producer)
 
-  readStopping = (sessionId: string): boolean => {
-    const projection = this.statusFeed.journalProjection(sessionId)
-    return projection?.stopping === true && projection.state.summary.status === 'working'
-  }
+  readStopping = (id: string): boolean => this.statusFeed.readStopping(id)
 
   readChildWork = (sessionId: string): AgentChildWorkView[] | undefined =>
     this.statusFeed.readChildWork(sessionId)
 
   childWorkOpen = (sessionId: string): boolean => this.statusFeed.childWorkOpen(sessionId)
 
-  captureChildWorkStops = (
-    sessionId: string,
-    handleIds: readonly string[]
-  ): CapturedChildWorkStops => this.statusFeed.captureChildWorkStops(sessionId, handleIds)
+  captureChildWorkStops: StructuredAgentSessionStatusFeed['captureChildWorkStops'] = (...args) =>
+    this.statusFeed.captureChildWorkStops(...args)
 
-  childWorkIncomplete = (sessionId: string): boolean =>
-    this.statusFeed.childWorkIncomplete(sessionId)
+  childWorkIncomplete = (id: string): boolean => this.statusFeed.childWorkIncomplete(id)
 
   publishStatusAndSettlement = (sessionId: string): void => {
     this.publications?.publish(sessionId, 'operational')
-    this.statusFeed.publish(sessionId)
+    const publish = () => {
+      this.statusFeed.publish(sessionId)
+      const journal = this.sessions.get(sessionId)?.journal
+      if (journal) {
+        this.sendSettlement.publish(sessionId, this.settlementReading(sessionId, journal))
+        this.queue.onJournalActivity(sessionId, false)
+      }
+    }
     const journal = this.sessions.get(sessionId)?.journal
-    if (journal) {
-      this.sendSettlement.publish(sessionId, this.settlementReading(sessionId, journal))
-      this.queue.onJournalActivity(sessionId, false)
+    if (!journal || !this.afterReplacementProjection(sessionId, journal, publish)) {
+      publish()
     }
   }
 
   /** Publish generation-end evidence even without cleanup rows; wake queue without renewing idle time.
    * restate rebaselines readers after fence movement. */
-  publishGenerationEnded = (sessionId: string, options: { restate?: boolean } = {}): void => {
-    const session = this.sessions.get(sessionId)
-    if (!session) {
-      return
-    }
-    try {
-      this.requestFailures.generationEnded(sessionId)
-    } catch (error) {
-      this.deps().logger.warn('observing a request death failed', {
-        scope: 'request-outcomes',
-        sessionId,
-        error
-      })
-    }
-    // Invalidate cached work before every reader re-derives.
-    session.operationalRevision = (session.operationalRevision ?? 0) + 1
-    const { journal } = session
-    this.publications?.publish(sessionId, 'operational')
-    if (options.restate) {
-      const fence = structuredAgentSessionConversationFence(this.deps().store, sessionId)
-      this.subscribers.snapshot(sessionId, journal, fence)
-      return
-    }
-    this.subscribers.deliverFrames(sessionId, journal)
-    this.publishJournal(sessionId, journal, false)
-  }
+  publishGenerationEnded = (sessionId: string, options: { restate?: boolean } = {}): void =>
+    publishStructuredGenerationEnded(
+      { sessions: this.sessions, publications: this.publications, client: this, deps: this.deps() },
+      sessionId,
+      options
+    )
 
   readCurrentWork = (sessionId: string) => {
     const journal = this.sessions.get(sessionId)?.journal
@@ -309,12 +291,26 @@ export class StructuredAgentSessionClientDelivery {
     this.journalObservers.clear()
   }
 
+  afterReplacementProjection: StructuredAgentSessionStatusFeed['afterReplacementProjection'] = (
+    ...args
+  ) => this.statusFeed.afterReplacementProjection(...args)
+
+  observeReplacement: StructuredAgentSessionStatusFeed['refreshJournalProjection'] = (...args) =>
+    this.statusFeed.refreshJournalProjection(...args)
+
   publishJournal(
     sessionId: string,
     journal: AgentSessionJournal,
     activity = true,
     inputChanged = true
   ): void {
+    if (
+      this.afterReplacementProjection(sessionId, journal, () =>
+        this.publishJournal(sessionId, journal, activity, inputChanged)
+      )
+    ) {
+      return
+    }
     this.statusFeed.publish(sessionId, journal)
     this.sendSettlement.publish(sessionId, this.settlementReading(sessionId, journal))
     // Observe completion after status projection updates, even without subscribers for background chats.

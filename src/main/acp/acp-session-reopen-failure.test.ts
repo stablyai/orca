@@ -44,7 +44,9 @@ it.each([
   { agent: 'exited while its output drained', exits: true },
   { agent: 'is still running', exits: false }
 ])("keeps a load deadline's words when the agent $agent", async ({ exits }) => {
-  vi.useFakeTimers()
+  vi.useFakeTimers({
+    toFake: ['Date', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval']
+  })
   const spawned: ReturnType<typeof createFakePipedChild>[] = []
   const agents: AcpScriptedAgent[] = []
   const rig = await openAcpAdapterRig({
@@ -86,6 +88,9 @@ it.each([
   })
   try {
     const acquired = rig.acquire()
+    await vi.waitFor(() =>
+      expect(agents[0]?.frames.some((frame) => frame.method === 'session/load')).toBe(true)
+    )
     await vi.advanceTimersByTimeAsync(299_500)
     // An exiting agent leaves unanswered at 299.5 s, holding stdout open; the load's own deadline
     // fires at 300 s, inside the output drain that the exit started.
@@ -106,6 +111,10 @@ it.each([
     )
     expect(spawned).toHaveLength(1)
   } finally {
+    for (const child of spawned) {
+      child.stdout.end()
+      child.stderr.end()
+    }
     await rig.adapter.closeAll()
   }
 })

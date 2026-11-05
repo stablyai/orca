@@ -15,13 +15,24 @@ export function createStructuredAgentSessionPublicationWiring(input: {
   now: () => number
 }): StructuredAgentSessionConversations {
   return new StructuredAgentSessionConversations({
-    observe: (id, journal, rows) => input.client().requestFailures.observe(id, journal, rows),
+    advanceStatusProjection: (journal, rows) =>
+      input.client().advanceStatusProjection(journal, rows),
+    observe: (id, journal, rows, replacement) => {
+      const client = input.client()
+      if (!replacement) {
+        return client.requestFailures.observe(id, journal, rows)
+      }
+      return client.observeReplacement(id, journal, () =>
+        client.requestFailures.observeAsync(id, journal, rows)
+      )
+    },
     forget: (id) => input.client().requestFailures.forget(id),
     deliver: (id, journal, inputChanged) => {
       input.client().subscribers.deliverFrames(id, journal)
       input.client().publishJournal(id, journal, true, inputChanged)
       input.delivery().afterCommit(id, journal)
     },
+    afterReplacementProjection: (...args) => input.client().afterReplacementProjection(...args),
     deliverSettleEdge: (id, journal) => input.delivery().afterSettleEdge(id, journal),
     logger: deferredStructuredAgentSessionLogger(input.logger),
     onOpened: input.opened,

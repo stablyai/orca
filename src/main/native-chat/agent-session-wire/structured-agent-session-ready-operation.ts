@@ -103,11 +103,11 @@ export async function runWithReadyStructuredAgentSessionOperation<T>(
         // Resolve receipt replay/unreadable results before any provider start.
         let recorded: boolean
         try {
-          recorded =
-            context.deps.store.readCommandReceipt(
-              commandReceiptScope(callerKey, plan.operationIdScope),
-              envelope.clientOperationId
-            ).verdict !== 'absent'
+          const receipt = await context.deps.store.readCommandReceipt(
+            commandReceiptScope(callerKey, plan.operationIdScope),
+            envelope.clientOperationId
+          )
+          recorded = receipt.verdict !== 'absent'
         } catch (error) {
           context.deps.logger.warn('reading a command receipt failed', {
             scope: 'command-receipt-read',

@@ -100,6 +100,9 @@ function runtime(terminals: number, desktop = true) {
     getExplicitSessionWorktreeIdSelector: (selector: string) => selector.slice(3),
     refreshMobileSessionPtyRecords: async () => undefined,
     getMobileSessionTabsForWorktree: Publication.prototype['getMobileSessionTabsForWorktree'],
+    getMobileSessionTabsWithoutSenders: Publication.prototype['getMobileSessionTabsWithoutSenders'],
+    getMobileSessionTabsForWorktreeWithChangeSequence:
+      Publication.prototype['getMobileSessionTabsForWorktreeWithChangeSequence'],
     toMobileSessionTabsFrame: Publication.prototype['toMobileSessionTabsFrame'],
     withMobileSessionTabSenders: Publication.prototype['withMobileSessionTabSenders'],
     emptyMobileSessionTabsResult: Publication.prototype['emptyMobileSessionTabsResult'],
@@ -110,6 +113,8 @@ function runtime(terminals: number, desktop = true) {
     worktreesAwaitingSessionTabsPublication: new Set<string>(),
     sessionTabsInventoryWaiters: new Set<() => void>(),
     listMobileSessionTabs: Inventory.prototype.listMobileSessionTabs,
+    listMobileSessionTabsWithChangeSequence:
+      Inventory.prototype.listMobileSessionTabsWithChangeSequence,
     listAllMobileSessionTabs: Inventory.prototype.listAllMobileSessionTabs,
     listAllMobileSessionTabsWithChangeSequence:
       Inventory.prototype.listAllMobileSessionTabsWithChangeSequence,
@@ -160,7 +165,7 @@ it.each([100, 1000])(
   'walks the live terminals once per inventory or broadcast pass, at %i terminals',
   async (terminals) => {
     const h = runtime(terminals)
-    h.senders.build()
+    await h.senders.build()
     const revision = h.senders.publisher.current().revision
     const pass = async (run: () => unknown) => {
       const before = h.walks()
@@ -221,7 +226,7 @@ it.each([100, 1000])(
       (frame) => mobile.push(JSON.parse(frame)),
       { clientKind: 'mobile' }
     )
-    h.broadcast()
+    await h.broadcast()
     Headless.prototype['emitMobileSessionTabsSnapshot'].call(
       h.host,
       h.host.mobileSessionTabsByWorktree.get('w0')!
@@ -251,11 +256,11 @@ it.each([100, 1000])(
       { connectionId: 'desktop', clientKind: 'runtime', signal: firstDesktop.signal }
     )
     expect(desktop[0]).toMatchObject({ ok: true })
-    // Single subscribe obtains complete identity before registering its ongoing listener.
+    // Initial identity joins the already-registered listener so commits during setup remain owned.
     expect(desktop[0]?.result.agentSenderAssociations?.associations).toHaveLength(
       terminals / WORKTREES
     )
-    expect(release).toHaveBeenCalledTimes(1)
+    expect(release).not.toHaveBeenCalled()
     release.mockClear()
     const secondDesktop = new AbortController()
     await h.rpc.dispatchStreaming(
@@ -264,7 +269,7 @@ it.each([100, 1000])(
       { connectionId: 'desktop-all', clientKind: 'runtime', signal: secondDesktop.signal }
     )
     const before = h.walks()
-    h.broadcast()
+    await h.broadcast()
     expect(h.walks().leafVisits - before.leafVisits).toBe(terminals)
     expect(h.walks().ptyVisits - before.ptyVisits).toBe(terminals)
     firstDesktop.abort()
@@ -272,7 +277,7 @@ it.each([100, 1000])(
     secondDesktop.abort()
     expect(release).toHaveBeenCalledTimes(1)
     const dormant = h.walks()
-    h.broadcast()
+    await h.broadcast()
     await h.host.listAllMobileSessionTabs(undefined, { includeAgentSenders: false })
     expect(h.walks()).toEqual(dormant)
 
@@ -299,9 +304,11 @@ it('does no sender work for zero-snapshot inventory or unpublished phone empty n
   h.host.mobileSessionTabsByWorktree.clear()
   expect((await h.inventory()).snapshots).toEqual([])
   h.host.getAuthoritativeSessionTabsInventoryEpoch = () => 0
-  h.host.getMobileSessionTabsForWorktree('empty', undefined, { includeAgentSenders: false })
+  await h.host.getMobileSessionTabsForWorktree('empty', undefined, { includeAgentSenders: false })
   h.host.getAuthoritativeSessionTabsInventoryEpoch = (): number | null => null
-  h.host.getMobileSessionTabsForWorktree('unpublished', undefined, { includeAgentSenders: false })
+  await h.host.getMobileSessionTabsForWorktree('unpublished', undefined, {
+    includeAgentSenders: false
+  })
   h.host.getAuthoritativeSessionTabsInventoryEpoch = () => 1
   h.host.onMobileSessionTabsChanged(() => undefined, 'phone', 'mobile')
   for (const published of h.host.sessionTabsInventoryWaiters) {
@@ -348,33 +355,33 @@ it('keeps changes pending across a one-shot read and targeted navigation until e
     'phone',
     'mobile'
   )
-  h.broadcast()
+  await h.broadcast()
   const original = desktopB.at(-1)?.agentSenderAssociations
-  expect(h.senders.changedScopes(['w0'])).toEqual([])
+  expect(await h.senders.changedScopes(['w0'])).toEqual([])
   const acknowledge = vi.spyOn(h.senders, 'acknowledgeFrame')
 
   append(100)
   const oneShot = await h.host.listMobileSessionTabs('id:w0', 'desktop-a')
   expect(oneShot.agentSenderAssociations?.associations).toHaveLength(6)
-  expect(h.senders.changedScopes(['w0'])).toEqual(['w0'])
+  expect(await h.senders.changedScopes(['w0'])).toEqual(['w0'])
   h.host.emitMobileSessionTabsSnapshotToClient(oneShot, 'desktop-a', true)
   expect(desktopA.at(-1)?.agentSenderAssociations).toBe(oneShot.agentSenderAssociations)
   expect(desktopB.at(-1)?.agentSenderAssociations).toBe(original)
   expect(acknowledge).not.toHaveBeenCalled()
-  expect(h.senders.changedScopes(['w0'])).toEqual(['w0'])
+  expect(await h.senders.changedScopes(['w0'])).toEqual(['w0'])
 
   // A newer identity built during delivery stays pending after this complete older frame.
   changeDuringBroadcast = true
-  h.broadcast()
+  await h.broadcast()
   const delivered = desktopB.at(-1)?.agentSenderAssociations
   expect(delivered).toBe(oneShot.agentSenderAssociations)
   expect(desktopA.at(-1)?.agentSenderAssociations).toBe(delivered)
   expect(acknowledge.mock.calls.find(([worktree]) => worktree === 'w0')?.[1]).toBe(delivered)
-  expect(h.senders.changedScopes(['w0'])).toEqual(['w0'])
-  h.broadcast()
+  expect(await h.senders.changedScopes(['w0'])).toEqual(['w0'])
+  await h.broadcast()
   expect(desktopB.at(-1)?.agentSenderAssociations?.associations).toHaveLength(7)
   expect(desktopA.at(-1)?.agentSenderAssociations).toBe(desktopB.at(-1)?.agentSenderAssociations)
-  expect(h.senders.changedScopes(['w0'])).toEqual([])
+  expect(await h.senders.changedScopes(['w0'])).toEqual([])
   stopA()
   stopB()
   stopPhone()

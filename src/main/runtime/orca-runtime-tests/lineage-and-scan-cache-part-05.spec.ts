@@ -11,7 +11,7 @@ import {
 import { TEST_REPO_ID, TEST_WORKTREE_ID, store } from '../orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
-  it('uses durable Run ownership before worktree-scoped legacy attribution', () => {
+  it('uses durable Run ownership before worktree-scoped legacy attribution', async () => {
     const childWorktreeId = `${TEST_REPO_ID}::${join(tmpdir(), 'workspaces', 'run-a-worker')}`
     const folderWorktreeId = `${TEST_REPO_ID}::${join(tmpdir(), 'folder')}${FOLDER_WORKSPACE_INSTANCE_SEPARATOR}11111111-1111-4111-8111-111111111111`
     const meta = store.getAllWorktreeMeta()[TEST_WORKTREE_ID]
@@ -112,7 +112,7 @@ describe('OrcaRuntimeService', () => {
       runtime.setOrchestrationDb(db)
       runtime.attachWindow(1)
 
-      const result = runtime.syncWindowGraph(1, {
+      const result = await runtime.syncWindowGraph(1, {
         tabs: terminals.map((terminal) => ({
           tabId: terminal.tabId,
           worktreeId: terminal.worktreeId,
@@ -160,7 +160,7 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
-  it('uses the still-bound owning Run coordinator after a creator pane rebinds', () => {
+  it('uses the still-bound owning Run coordinator after a creator pane rebinds', async () => {
     const runtime = new OrcaRuntimeService(store)
     const terminals = [
       {
@@ -216,7 +216,7 @@ describe('OrcaRuntimeService', () => {
     try {
       runtime.setOrchestrationDb(db)
       runtime.attachWindow(1)
-      runtime.syncWindowGraph(1, graph())
+      await runtime.syncWindowGraph(1, graph())
       const runA = db.createRun({
         objective: 'own the nested worker',
         coordinatorHandle: handles.coordinator,
@@ -264,7 +264,7 @@ describe('OrcaRuntimeService', () => {
         paneKey('coordinator-created-worker')
       )
       expect(
-        runtime.syncWindowGraph(1, graph()).agentOrchestrationByPaneKey?.[paneKey('worker')]
+        (await runtime.syncWindowGraph(1, graph())).agentOrchestrationByPaneKey?.[paneKey('worker')]
       ).toMatchObject({
         parentTerminalHandle: handles.creator,
         parentPaneKey: paneKey('creator'),
@@ -276,15 +276,14 @@ describe('OrcaRuntimeService', () => {
       terminalByName.creator.tabId = 'tab-creator-reminted'
       terminalByName.creator.ptyId = 'pty-creator-reminted'
       const remintedCreatorHandle = runtime.preAllocateHandleForPty(terminalByName.creator.ptyId)
-      runtime.syncWindowGraph(1, graph())
+      await runtime.syncWindowGraph(1, graph())
       const runB = db.createRun({
         objective: 'rebind the creator pane',
         coordinatorHandle: remintedCreatorHandle,
         coordinatorPaneKey: paneKey('creator')
       })
-      const reboundContext = runtime.syncWindowGraph(1, graph()).agentOrchestrationByPaneKey?.[
-        paneKey('worker')
-      ]
+      const reboundContext = (await runtime.syncWindowGraph(1, graph()))
+        .agentOrchestrationByPaneKey?.[paneKey('worker')]
 
       expect(db.getRun(runA.id)).toMatchObject({
         coordinator_handle: handles.coordinator,
@@ -312,9 +311,8 @@ describe('OrcaRuntimeService', () => {
         coordinatorHandle: handles.coordinator,
         coordinatorPaneKey: paneKey('coordinator')
       })
-      const unboundContext = runtime.syncWindowGraph(1, graph()).agentOrchestrationByPaneKey?.[
-        paneKey('coordinator-created-worker')
-      ]
+      const unboundContext = (await runtime.syncWindowGraph(1, graph()))
+        .agentOrchestrationByPaneKey?.[paneKey('coordinator-created-worker')]
 
       expect(db.getRun(runA.id)).toMatchObject({
         coordinator_handle: null,

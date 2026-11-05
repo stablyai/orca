@@ -116,17 +116,7 @@ export class JsonlRpcAgentConnection {
     managed.onExit((exit) => {
       clearTimeout(this.streamExitTimer)
       clearTimeout(this.inputEndTimer)
-      const error = withProviderSpawnAbsence(
-        withProviderDiagnostic(
-          new JsonlRpcAgentExitError(
-            exit.processless
-              ? 'Agent process could not start'
-              : `Agent process exited (code ${exit.code ?? 'none'}, signal ${exit.signal ?? 'none'})`
-          ),
-          providerDiagnostic(managed.stderrTail(), 'person')
-        ),
-        managed.spawnAbsence
-      )
+      const error = this.exitError(exit)
       this.peer.finishOnInputEnd(error)
       const finish = (): void => {
         this.finishObservedExit = undefined
@@ -172,8 +162,8 @@ export class JsonlRpcAgentConnection {
   }
 
   /** `requested`: Orca was closing the agent when it exited. */
-  onExit(listener: (requested?: boolean) => void): void {
-    this.managed.onExit(() => listener(this.closing))
+  onExit(listener: (requested: boolean, error: Error) => void): void {
+    this.managed.onExit((exit) => listener(this.closing, this.exitError(exit)))
   }
 
   request(
@@ -207,6 +197,19 @@ export class JsonlRpcAgentConnection {
   }
 
   private readonly onError = (error: Error): void => this.peer.close(error)
+  private exitError(exit: ProviderProcessExit): Error {
+    return withProviderSpawnAbsence(
+      withProviderDiagnostic(
+        new JsonlRpcAgentExitError(
+          exit.processless
+            ? 'Agent process could not start'
+            : `Agent process exited (code ${exit.code ?? 'none'}, signal ${exit.signal ?? 'none'})`
+        ),
+        providerDiagnostic(this.managed.stderrTail(), 'person')
+      ),
+      this.managed.spawnAbsence
+    )
+  }
   private diagnose(message: string): void {
     try {
       this.options.onDiagnostic?.(message)

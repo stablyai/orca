@@ -1,3 +1,5 @@
+import { structuredAgentSessionCommandTurnItemIdsSteps } from '../structured-agent-session-command-entry'
+import { finishAgentSessionSteps } from '../agent-session-projection-steps'
 // Sidebar request/verdict/preview share this read: a turn or refused send is a request; steers belong to their turn, and commands are not requests.
 
 import type {
@@ -18,8 +20,7 @@ import { withoutNativeChatVisualDirectiveLines } from '../../native-chat/native-
 import { isUnansweredStructuredAgentSessionDispatch } from './structured-agent-session-unanswered-dispatch'
 import {
   isStructuredAgentSessionCommandEntry,
-  isStructuredAgentSessionCommandRow,
-  structuredAgentSessionCommandTurnItemIds
+  isStructuredAgentSessionCommandRow
 } from '../structured-agent-session-command-entry'
 import type { NativeChatBlock } from '../../native-chat/native-chat-types'
 
@@ -54,9 +55,18 @@ export function latestStructuredAgentSessionRequest(
   items: readonly AgentJournalRenderItem[],
   submissions: readonly AgentJournalSubmission[]
 ): StructuredAgentSessionLatestRequest | null {
-  const rejected = rejectedSubmissionsByItem(submissions)
-  const commandTurns = structuredAgentSessionCommandTurnItemIds(items)
+  return finishAgentSessionSteps(latestStructuredAgentSessionRequestSteps(items, submissions))
+}
+
+export function* latestStructuredAgentSessionRequestSteps(
+  items: readonly AgentJournalRenderItem[],
+  submissions: readonly AgentJournalSubmission[]
+): Generator<void, StructuredAgentSessionLatestRequest | null> {
+  const rejected = yield* rejectedSubmissionsByItemSteps(submissions)
+  const commandTurns = yield* structuredAgentSessionCommandTurnItemIdsSteps(items)
   for (let index = items.length - 1; index >= 0; index -= 1) {
+    yield
+
     const item = items[index]
     // Commands retain the last real request’s verdict.
     if (
@@ -81,7 +91,7 @@ export function latestStructuredAgentSessionRequest(
         turnState: turn.state,
         outcome: readAgentJournalTurnOutcome(turn),
         settledAt: turn.state === 'running' ? undefined : turnEndedAt(item, turn),
-        ...(turn.userItemId === item.itemId && !steeredInto(submissions, item.itemId)
+        ...(turn.userItemId === item.itemId && !(yield* steeredIntoSteps(submissions, item.itemId))
           ? { selfStarted: true as const }
           : {})
       }
@@ -106,11 +116,17 @@ export function latestStructuredAgentSessionRequest(
 }
 
 /** A user message steered into a turn the agent started makes it the user's turn too. */
-function steeredInto(submissions: readonly AgentJournalSubmission[], turnItemId: string): boolean {
-  return submissions.some(
-    ({ answeredInTurn }) =>
-      answeredInTurn?.via === 'steer' && answeredInTurn.turnItemId === turnItemId
-  )
+function* steeredIntoSteps(
+  submissions: readonly AgentJournalSubmission[],
+  turnItemId: string
+): Generator<void, boolean> {
+  for (const { answeredInTurn } of submissions) {
+    yield
+    if (answeredInTurn?.via === 'steer' && answeredInTurn.turnItemId === turnItemId) {
+      return true
+    }
+  }
+  return false
 }
 
 /** Exclude sends that failed nobody and never became turns; include provider-journaled user rows, even from children/history/old hosts. */
@@ -119,31 +135,52 @@ export function hasStructuredAgentSessionRequest(
   submissions: readonly AgentJournalSubmission[],
   currentFence?: number | null
 ): boolean {
-  const sent = new Set(
-    submissions.map((submission) => agentJournalSubmissionKey(submission.clientMessageId))
-  )
-  return (
-    items.some(
-      (item) =>
-        readAgentJournalTurn(item.body) !== null ||
-        (item.body.kind === 'message' &&
-          (item.body.role === 'assistant' || (item.body.role === 'user' && !sent.has(item.itemId))))
-    ) ||
-    submissions.some(
-      (submission) =>
-        submission.dispatchState === 'accepted' ||
-        isUnansweredStructuredAgentSessionDispatch(submission, currentFence) ||
-        (submission.dispatchState === 'rejected' &&
-          classifyDispatchRejection(submission).verdict === 'failure')
-    )
+  return finishAgentSessionSteps(
+    hasStructuredAgentSessionRequestSteps(items, submissions, currentFence)
   )
 }
 
-function rejectedSubmissionsByItem(
+export function* hasStructuredAgentSessionRequestSteps(
+  items: readonly AgentJournalRenderItem[],
+  submissions: readonly AgentJournalSubmission[],
+  currentFence?: number | null
+): Generator<void, boolean> {
+  const sent = new Set<string>()
+  for (const submission of submissions) {
+    sent.add(agentJournalSubmissionKey(submission.clientMessageId))
+    yield
+  }
+  for (const item of items) {
+    yield
+    if (
+      readAgentJournalTurn(item.body) !== null ||
+      (item.body.kind === 'message' &&
+        (item.body.role === 'assistant' || (item.body.role === 'user' && !sent.has(item.itemId))))
+    ) {
+      return true
+    }
+  }
+  for (const submission of submissions) {
+    yield
+    if (
+      submission.dispatchState === 'accepted' ||
+      isUnansweredStructuredAgentSessionDispatch(submission, currentFence) ||
+      (submission.dispatchState === 'rejected' &&
+        classifyDispatchRejection(submission).verdict === 'failure')
+    ) {
+      return true
+    }
+  }
+  return false
+}
+
+export function* rejectedSubmissionsByItemSteps(
   submissions: readonly AgentJournalSubmission[]
-): Map<string, AgentJournalSubmission> {
+): Generator<void, Map<string, AgentJournalSubmission>> {
   const rejected = new Map<string, AgentJournalSubmission>()
   for (const submission of submissions) {
+    yield
+
     if (submission.dispatchState === 'rejected') {
       rejected.set(agentJournalSubmissionKey(submission.clientMessageId), submission)
     }
@@ -167,14 +204,28 @@ function messageProse(blocks: readonly NativeChatBlock[]): string {
 export function latestStructuredAgentSessionPrompt(
   items: readonly AgentJournalRenderItem[]
 ): string {
-  const body = latestStructuredAgentSessionUserItem(items)?.body
+  return finishAgentSessionSteps(latestStructuredAgentSessionPromptSteps(items))
+}
+
+export function* latestStructuredAgentSessionPromptSteps(
+  items: readonly AgentJournalRenderItem[]
+): Generator<void, string> {
+  const body = (yield* latestStructuredAgentSessionUserItemSteps(items))?.body
   return body?.kind === 'message' ? messageProse(body.blocks) : ''
 }
 
 export function latestStructuredAgentSessionUserItem(
   items: readonly AgentJournalRenderItem[]
 ): AgentJournalRenderItem | null {
+  return finishAgentSessionSteps(latestStructuredAgentSessionUserItemSteps(items))
+}
+
+export function* latestStructuredAgentSessionUserItemSteps(
+  items: readonly AgentJournalRenderItem[]
+): Generator<void, AgentJournalRenderItem | null> {
   for (let index = items.length - 1; index >= 0; index -= 1) {
+    yield
+
     const item = items[index]
     if (
       item?.body.kind === 'message' &&
@@ -192,8 +243,16 @@ export function latestStructuredAgentSessionUserItem(
 export function latestStructuredAgentSessionAssistantMessage(
   items: readonly AgentJournalRenderItem[]
 ): string {
-  const commandTurns = structuredAgentSessionCommandTurnItemIds(items)
+  return finishAgentSessionSteps(latestStructuredAgentSessionAssistantMessageSteps(items))
+}
+
+export function* latestStructuredAgentSessionAssistantMessageSteps(
+  items: readonly AgentJournalRenderItem[]
+): Generator<void, string> {
+  const commandTurns = yield* structuredAgentSessionCommandTurnItemIdsSteps(items)
   for (let index = items.length - 1; index >= 0; index -= 1) {
+    yield
+
     const item = items[index]
     const body = item?.body
     if (!isRootAgentJournalItem(item) || isStructuredAgentSessionCommandRow(item, commandTurns)) {

@@ -1,3 +1,8 @@
+import {
+  observeNativeJournalSql,
+  type NativeJournalSqlObservation
+} from '../../../native-chat/agent-session-journal/journal-native-test-instrumentation'
+import { testJournalNativeDatabase } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
 import { expect, vi } from 'vitest'
 import { mkdtempSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -19,7 +24,6 @@ import {
 import { createSessionCallerHarness } from '../../rpc/orchestration-session-caller-test-fixture'
 import { ORCHESTRATION_CREW_METHODS } from '../../rpc/methods/orchestration/crew-methods'
 import { CrewFrame, type OrchestrationCrewFrame } from '../../../../shared/orchestration-crew'
-import { meterCrewSql, sqlTotals } from './crew-recipient-sql.test-fixture'
 import { agentSessionRecordFixture } from '../../../native-chat/agent-session-record-test-fixture'
 import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { testOrcaSessionId } from '../../../../shared/orca-session-address-test-fixture'
@@ -143,7 +147,7 @@ export async function runColdCrewCostProfiles(clearHost: () => void) {
       throw new Error('Expected fixture-owned seeded slot')
     }
     const stateDirectory = released.journalDatabase.stateDirectory
-    const savedDb = released.journalDatabase.db
+    const savedDb = testJournalNativeDatabase(released.journalDatabase)
     // Retained valid launch arguments are loaded, never executed by this fixture.
     savedDb
       .prepare(
@@ -169,7 +173,7 @@ export async function runColdCrewCostProfiles(clearHost: () => void) {
         .prepare('INSERT INTO agent_session_retired_claim_keys (key_id, retired_at) VALUES (?, ?)')
         .run(`retired-${i}`, Date.now())
     }
-    released.journalDatabase.close()
+    await released.journalDatabase.close()
     const runtimeDirectory = join(stateDirectory, 'agent-session-runtimes')
     mkdirSync(runtimeDirectory, { recursive: true })
     for (let i = 0; i < 2; i++) {
@@ -182,15 +186,13 @@ export async function runColdCrewCostProfiles(clearHost: () => void) {
     const runtimeRead = vi.spyOn(runtimeRecords, 'readAgentSessionRuntimeEnds')
     const runtimeBegin = vi.spyOn(runtimeRecords, 'beginAgentSessionRuntimeRecord')
     const actualOpen = AgentSessionRecordStore.open
-    const cold: ReturnType<typeof meterCrewSql>['executions'] = []
-    const opens = vi.spyOn(AgentSessionRecordStore, 'open').mockImplementation((args) => {
-      const meter = meterCrewSql(args.journalDatabase.db)
-      meter.control.phase = 'cold-store-load'
+    const cold: NativeJournalSqlObservation[] = []
+    const opens = vi.spyOn(AgentSessionRecordStore, 'open').mockImplementation(async (args) => {
+      const stop = observeNativeJournalSql(args.journalDatabase, (entry) => cold.push(entry))
       try {
-        return actualOpen(args)
+        return await actualOpen(args)
       } finally {
-        cold.push(...meter.executions)
-        meter.restore()
+        stop()
       }
     })
     const journalOpen = vi.spyOn(JournalHostDatabase, 'open')
@@ -240,17 +242,22 @@ export async function runColdCrewCostProfiles(clearHost: () => void) {
       expect(runtimeBegin).toHaveBeenCalledOnce()
       expect(runtimeRead.mock.results[0].value?.size).toBe(3)
       expect(h.runtime.ensureStructuredAgentSessionHost).not.toHaveBeenCalled()
-      const totals = sqlTotals(cold)
-      expect(totals).toMatchObject({ get: 2, all: 4, run: 0, iterate: 0 })
+      const statements = cold.filter((row) => ['get', 'all', 'run', 'iterate'].includes(row.method))
+      const primer = 'SELECT rootpage FROM sqlite_master LIMIT 1'
+      expect(statements.filter((row) => row.sql === primer)).toHaveLength(1)
       expect(
-        cold.find((row) => row.sql.includes('record_json FROM agent_session_records'))?.rows
-      ).toBe(ids.length)
-      expect(
-        cold.find((row) => row.sql.includes('row_json FROM agent_session_operations'))?.rows
-      ).toBe(j)
-      expect(
-        cold.find((row) => row.sql.includes('FROM agent_session_retired_claim_keys'))?.rows
-      ).toBe(j)
+        statements
+          .filter((row) => row.sql !== primer)
+          .map((row) => row.method)
+          .sort()
+      ).toEqual(['get', 'get', 'iterate', 'iterate', 'iterate', 'iterate'])
+      const returnedRows = (sql: string) =>
+        cold
+          .filter((row) => row.method === 'row' && row.sql.includes(sql))
+          .reduce((total, row) => total + row.rows, 0)
+      expect(returnedRows('record_json FROM agent_session_records')).toBe(ids.length)
+      expect(returnedRows('row_json FROM agent_session_operations')).toBe(j)
+      expect(returnedRows('FROM agent_session_retired_claim_keys')).toBe(j)
       for (const operationId of operationIds) {
         expect(opened?.getOperationRow('private-cold', operationId)?.outcome).toEqual({
           status: 'pending'
@@ -260,7 +267,7 @@ export async function runColdCrewCostProfiles(clearHost: () => void) {
       controllers.forEach((controller) => controller.abort())
       await Promise.all(subscriptions)
       const opened = await releaseAgentSessionRecordStore()
-      opened?.journalDatabase.close()
+      await opened?.journalDatabase.close()
       runtimeRead.mockRestore()
       runtimeBegin.mockRestore()
       opens.mockRestore()

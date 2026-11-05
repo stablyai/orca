@@ -38,7 +38,7 @@ vi.mock('../../src/main/native-chat/agent-session-wire/structured-agent-session-
 }))
 afterEach(async () => {
   const remaining = await releaseAgentSessionRecordStore()
-  remaining?.journalDatabase.close()
+  await remaining?.journalDatabase.close()
   vi.restoreAllMocks()
   vi.unstubAllEnvs()
 })
@@ -88,8 +88,8 @@ it('keeps imported and local peer authority through real CLI import, settlement,
     h.db.db.prepare('SELECT * FROM federation_relay_items ORDER BY direction, sequence').all()
   const directory = mkdtempSync(join(tmpdir(), 'orca-pr34890-real-command-'))
   vi.spyOn(profileStorage, 'getProfileUserDataPath').mockReturnValue(directory)
-  const homeJournal = JournalHostDatabase.open(join(directory, 'home-journal'))
-  const homeStore = AgentSessionRecordStore.open({
+  const homeJournal = await JournalHostDatabase.open(join(directory, 'home-journal'))
+  const homeStore = await AgentSessionRecordStore.open({
     journalDatabase: homeJournal,
     hostId: 'local',
     legacySessionTabIds: []

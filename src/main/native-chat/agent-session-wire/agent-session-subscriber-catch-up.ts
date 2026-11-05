@@ -1,3 +1,5 @@
+import { emitCaughtUp } from './agent-session-subscriber-checkpoint'
+import { journalDerivedRefreshPending } from '../agent-session-journal/journal-derived-read'
 import {
   AGENT_SESSION_HISTORY_MAX_LIMIT,
   type AgentSessionSlashCommand,
@@ -6,28 +8,26 @@ import {
 } from '../../../shared/agent-session/agent-session-wire'
 import { sameJournalCursor } from '../agent-session-journal/journal-cursor'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
-import { emptyAgentSessionBatch } from './agent-session-empty-batch'
 import {
   withPublishedWork,
   withPublishedWorkResult,
+  capturePublishedWork,
+  capturePublishedWorkSteps,
   type AgentSessionPublishedWork
 } from './agent-session-published-work'
 import { refreshPublishedWork } from './agent-session-work-refresh'
 import type { StructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 import {
   createAgentSessionCatchUpReader,
-  readAgentSessionHydrationPage
+  readAgentSessionHydration
 } from './agent-session-history-page'
 import { subscriberHistoryReader } from './agent-session-bounded-frames'
-import {
-  subscriberCommandsChanged,
-  subscriberQueuedMessagesChanged,
-  type SubscriberFieldHooks
-} from './agent-session-subscriber-frame-fields'
+import type { SubscriberFieldHooks } from './agent-session-subscriber-frame-fields'
 import type { Subscriber } from './structured-agent-session-subscribers'
 
 export type SubscriberDeliveryPort = {
   hooks: SubscriberFieldHooks & {
+    isCurrentJournal?: (sessionId: string, journal: AgentSessionJournal) => boolean
     readCommands?: (sessionId: string) => AgentSessionSlashCommand[] | undefined
     readCurrentWork?: (
       sessionId: string,
@@ -48,7 +48,7 @@ export type SubscriberDeliveryPort = {
   activity: (sessionId: string) => AgentSessionTurnActivity | null
 }
 
-export function deliverToSubscriber(
+export async function deliverToSubscriber(
   port: SubscriberDeliveryPort,
   input: {
     subscriber: Subscriber
@@ -57,19 +57,38 @@ export function deliverToSubscriber(
     emitCheckpoint: boolean
     activity?: AgentSessionTurnActivity | null | undefined
   }
-): void {
+): Promise<void> {
   const { subscriber, journal, hostNow, emitCheckpoint, activity } = input
+  const refreshed = journalDerivedRefreshPending(journal)
+    ? await readAgentSessionHydration(
+        journal,
+        subscriber.fence,
+        subscriberHistoryReader(subscriber),
+        undefined,
+        () => port.hooks.readCurrentWork?.(subscriber.sessionId, journal)
+      )
+    : undefined
+  if (
+    !port.isActive(subscriber) ||
+    port.hooks.isCurrentJournal?.(subscriber.sessionId, journal) === false
+  ) {
+    return
+  }
   const checkpointActivity = emitCheckpoint ? port.activity(subscriber.sessionId) : undefined
   const publishedActivity = activity !== undefined ? activity : checkpointActivity
   const shared = {
     hostNow,
     ...(publishedActivity !== undefined ? { activity: publishedActivity } : {})
   }
-  const work = port.hooks.readCurrentWork?.(subscriber.sessionId, journal)
+  let work: AgentSessionPublishedWork | undefined =
+    refreshed?.work ?? port.hooks.readCurrentWork?.(subscriber.sessionId, journal)
   const emit: SubscriberDeliveryPort['emit'] = (target, event, options) =>
     port.emit(target, event, { ...options, currentWork: work, journal })
   const delivery = { ...port, emit }
-  const view = journal.publicRead()
+  let view: Pick<
+    ReturnType<AgentSessionJournal['publicRead']>,
+    'snapshot' | 'normalizationKey' | 'currentSnapshot'
+  > = journal.publicRead()
   if (
     subscriber.snapshotCatchUp !== false &&
     subscriber.readsCurrentRequests &&
@@ -77,15 +96,27 @@ export function deliverToSubscriber(
     view.normalizationKey !== '' &&
     subscriber.historyView !== view.normalizationKey
   ) {
-    const page = withPublishedWork(
-      readAgentSessionHydrationPage(
-        journal,
-        subscriber.fence,
-        subscriberHistoryReader(subscriber),
-        view.currentSnapshot()
-      ),
-      work
-    )
+    const pending =
+      refreshed?.view === journal.publicRead()
+        ? refreshed
+        : readAgentSessionHydration(
+            journal,
+            subscriber.fence,
+            subscriberHistoryReader(subscriber),
+            undefined,
+            () => port.hooks.readCurrentWork?.(subscriber.sessionId, journal)
+          )
+    const hydration = pending instanceof Promise ? await pending : pending
+    view = hydration.view
+    work = hydration.work
+    const page = withPublishedWork(hydration.page, work)
+    if (
+      !port.isActive(subscriber) ||
+      port.hooks.isCurrentJournal?.(subscriber.sessionId, journal) === false ||
+      journal.publicRead() !== view
+    ) {
+      return
+    }
     emit(
       subscriber,
       {
@@ -112,17 +143,45 @@ export function deliverToSubscriber(
     return
   }
   const reader = subscriberHistoryReader(subscriber)
-  const readPage = createAgentSessionCatchUpReader(journal, reader, view)
+  const readPage = createAgentSessionCatchUpReader(
+    journal,
+    reader,
+    view,
+    (snapshot, capturedView) => {
+      view = capturedView
+      work = capturePublishedWork(
+        snapshot,
+        port.hooks.readCurrentWork?.(subscriber.sessionId, journal)
+      )
+      return (result) => withPublishedWorkResult(result, work)
+    },
+    function* (snapshot, capturedView) {
+      view = capturedView
+      work = yield* capturePublishedWorkSteps(
+        snapshot,
+        port.hooks.readCurrentWork?.(subscriber.sessionId, journal)
+      )
+      return (result) => withPublishedWorkResult(result, work)
+    },
+    refreshed !== undefined
+  )
   while (true) {
-    const result = withPublishedWorkResult(
-      readPage({
-        sessionId: subscriber.sessionId,
-        direction: 'after',
-        cursor: subscriber.cursor,
-        limit: AGENT_SESSION_HISTORY_MAX_LIMIT
-      }),
-      work
-    )
+    const reading = { ...subscriber.cursor }
+    const fence = subscriber.fence
+    const result = await readPage({
+      sessionId: subscriber.sessionId,
+      direction: 'after',
+      cursor: subscriber.cursor,
+      limit: AGENT_SESSION_HISTORY_MAX_LIMIT
+    })
+    if (
+      !port.isActive(subscriber) ||
+      port.hooks.isCurrentJournal?.(subscriber.sessionId, journal) === false ||
+      subscriber.fence !== fence ||
+      !sameJournalCursor(subscriber.cursor, reading)
+    ) {
+      return
+    }
     if (!result.ok) {
       const page = { ...result.page, fence: subscriber.fence }
       emit(
@@ -152,10 +211,26 @@ export function deliverToSubscriber(
     }
     // Bound synchronous catch-up; older history remains available through paging.
     if (page.hasNewer && subscriber.snapshotCatchUp !== false) {
-      const tail = withPublishedWork(
-        readAgentSessionHydrationPage(journal, subscriber.fence, reader),
-        work
+      view = journal.publicRead()
+      work = port.hooks.readCurrentWork?.(subscriber.sessionId, journal)
+      const pending = readAgentSessionHydration(
+        journal,
+        subscriber.fence,
+        reader,
+        (view) => view.snapshot,
+        () => port.hooks.readCurrentWork?.(subscriber.sessionId, journal)
       )
+      const hydration = pending instanceof Promise ? await pending : pending
+      view = hydration.view
+      work = hydration.work
+      const tail = withPublishedWork(hydration.page, work)
+      if (
+        !port.isActive(subscriber) ||
+        port.hooks.isCurrentJournal?.(subscriber.sessionId, journal) === false ||
+        journal.publicRead() !== view
+      ) {
+        return
+      }
       emit(
         subscriber,
         {
@@ -203,42 +278,5 @@ export function deliverToSubscriber(
       }
       return
     }
-  }
-}
-
-function emitCaughtUp(
-  port: SubscriberDeliveryPort,
-  subscriber: Subscriber,
-  emitCheckpoint: boolean,
-  shared: {
-    hostNow: number
-    activity?: AgentSessionTurnActivity | null
-  },
-  current: {
-    journal: AgentSessionJournal
-    work: StructuredAgentSessionCurrentWork | undefined
-  }
-): void {
-  const commandsChanged = subscriberCommandsChanged(port.hooks, subscriber)
-  const queuedChanged = subscriberQueuedMessagesChanged(port.hooks, subscriber)
-  // Ownership/exit changes without rows still require current-work restatement.
-  const { work } = current
-  const workChanged = work !== undefined && work.workViewKey() !== subscriber.workView
-  if (workChanged) {
-    refreshPublishedWork(port, subscriber, current.journal, work, shared)
-    return
-  }
-  if (emitCheckpoint || shared.activity !== undefined || commandsChanged || queuedChanged) {
-    port.emit(
-      subscriber,
-      {
-        type: 'batch',
-        sessionId: subscriber.sessionId,
-        batch: emptyAgentSessionBatch(subscriber.cursor),
-        fence: subscriber.fence,
-        ...shared
-      },
-      { currentWork: work }
-    )
   }
 }

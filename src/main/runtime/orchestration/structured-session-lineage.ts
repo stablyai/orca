@@ -1,5 +1,6 @@
 /** Resolve /clear successors from committed durable pointers on each read; clearing rewrites no callers. */
 
+import { finishJournalSteps } from '../../native-chat/agent-session-journal/journal-reconstruction-steps'
 import type { AgentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
 import {
@@ -15,11 +16,16 @@ export type AgentSessionRecordReader = {
   /** Absent on a store that predates tab visibility; every session then counts as open. */
   getVisibleSessionTabIndex?: () => { present: boolean; sessionIds: string[] }
   /** Chats with an open tab, from the tab table or, before one is recorded, the saved workspace tabs. */
-  listVisibleSessionIds?: () => string[]
+  listVisibleSessionIds?: () => Iterable<string>
   /** Moves when a commit changes which chats exist, where, their /clear successor or open tabs. */
   senderIdentityRevision?: () => number
-  /** The sessions a committed /clear continued into this one, from the store's in-memory index. */
-  listClearedFrom?: (sessionId: string) => readonly string[]
+  /** Candidates from the existing native successor index, checked against committed conversations. */
+  listClearedFrom?: (sessionId: string) => readonly string[] | Promise<readonly string[]>
+  senderSnapshot?: () => Promise<{
+    records: AgentSessionRecordReader
+    revision: number
+    close: () => Promise<void>
+  }>
   /** One session's tab is gone from an index that exists; false while no index exists. */
   isSessionTabRetired?: (sessionId: string) => boolean
   /** Changes identity only when records join or leave or a /clear links them, so lookups derived from
@@ -39,8 +45,9 @@ export function conversationRecordReader(store: {
   isSessionUnreadable?: AgentSessionRecordReader['isSessionUnreadable']
   getVisibleSessionTabIndex: NonNullable<AgentSessionRecordReader['getVisibleSessionTabIndex']>
   senderIdentityRevision?: () => number
-  listVisibleSessionIds?: () => string[]
-  listClearedFrom?: (sessionId: string) => readonly string[]
+  listVisibleSessionIds?: () => Iterable<string>
+  listClearedFrom?: AgentSessionRecordReader['listClearedFrom']
+  senderSnapshot?: AgentSessionRecordReader['senderSnapshot']
   isSessionTabRetired?: AgentSessionRecordReader['isSessionTabRetired']
   lineageRevision?: AgentSessionRecordReader['lineageRevision']
 }): AgentSessionRecordReader {
@@ -54,6 +61,7 @@ export function conversationRecordReader(store: {
       ? { senderIdentityRevision: store.senderIdentityRevision }
       : {}),
     ...(store.listClearedFrom ? { listClearedFrom: store.listClearedFrom } : {}),
+    ...(store.senderSnapshot ? { senderSnapshot: store.senderSnapshot } : {}),
     isSessionTabRetired: store.isSessionTabRetired,
     lineageRevision: store.lineageRevision
   }
@@ -154,12 +162,20 @@ export function createCanonicalSessionPaneResolver(
 export function createCanonicalSessionResolver(
   store: AgentSessionRecordReader | null
 ): (sessionId: string) => string {
+  const resolve = createCanonicalSessionResolverSteps(store)
+  return (sessionId) => finishJournalSteps(resolve(sessionId))
+}
+
+export function createCanonicalSessionResolverSteps(
+  store: AgentSessionRecordReader | null
+): (sessionId: string) => Generator<void, string> {
   const resolved = new Map<string, string | null>()
-  return (sessionId) => {
+  return function* (sessionId) {
     let current = sessionId
     const path = new Set<string>()
     let destination: string | null = null
     for (;;) {
+      yield
       if (resolved.has(current)) {
         destination = resolved.get(current) ?? null
         break
@@ -186,6 +202,7 @@ export function createCanonicalSessionResolver(
     }
     for (const member of path) {
       resolved.set(member, destination)
+      yield
     }
     return destination ?? sessionId
   }

@@ -1,3 +1,4 @@
+import '../../../native-chat/agent-session-journal/journal-host-database-test-support'
 import * as fs from 'node:fs/promises'
 import type { RpcResponse } from '../core'
 import { RUNTIME_CAPABILITIES as runtimeCapabilities } from '../../../../shared/protocol-version'

@@ -71,7 +71,7 @@ export async function initializeAcpStructuredSession(
   const resume = launch.resume
   let started: Awaited<ReturnType<AcpStructuredConnection['start']>> | null = null
   let liveLane: AcpStructuredLane | null = null
-  let takeover: ReturnType<typeof acpReopenTakeover> | null = null
+  let takeover: Awaited<ReturnType<typeof acpReopenTakeover>> | null = null
   let replayed: AcpLoadHistoryFrame[] | null = null
   if (resume) {
     const attaching = input.lanes.create(resume.sessionId, true)
@@ -87,12 +87,13 @@ export async function initializeAcpStructuredSession(
       replayed = input.lanes.finishLoad()
       attaching.translator.finishLoad()
     } catch (error) {
-      takeover = acpReopenTakeover(error, resume, {
+      takeover = await acpReopenTakeover(error, resume, {
         // An agent already exited, its output still draining, has no session to take over in.
         over: connection.closed || connection.exited || input.abandoned(),
         now: now(),
         warn: (fields) => deps.logger?.warn(ACP_REOPEN_FAILED, { ...fields, sessionId })
       })
+      assertStarting()
     }
   }
   if (!started || !liveLane) {
@@ -168,10 +169,9 @@ export async function initializeAcpStructuredSession(
     throw new Error(connection.stderrTail() || `${spec.command} exited while starting`)
   }
   // Include warning rows missed by earlier failed starts.
-  const lost = [
-    ...(launch.resume?.unannouncedLosses() ?? []),
-    ...(takeover?.replaces ? [takeover.replaces.key] : [])
-  ]
+  const priorLosses = (await launch.resume?.unannouncedLosses()) ?? []
+  assertStarting()
+  const lost = [...priorLosses, ...(takeover?.replaces ? [takeover.replaces.key] : [])]
   for (const key of lost) {
     liveLane.apply(acpSessionNotRestoredRow(key, started.sessionId, agentName))
   }

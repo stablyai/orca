@@ -1,7 +1,9 @@
+import { finishJournalSteps } from './journal-reconstruction-steps'
+import { testJournalNativeDatabase } from './journal-host-database-test-support'
 import type Database from '../../sqlite/sync-database'
 import type { AgentSessionJournal } from './journal-store'
 import { journalOutcomeSource } from './journal-outcome-format'
-import { readJournalSessionEpoch, insertJournalRow } from './journal-row-table'
+import { readJournalSessionEpoch, journalRowReadBack } from './journal-row-table'
 import { applyJournalRow } from './journal-reducer'
 import { isolateJournalTransition } from './journal-reducer-transition'
 
@@ -18,7 +20,7 @@ export function finishTestJournalHistoricalInputs(journal: AgentSessionJournal):
 export function pinTestJournalInputMode(journal: AgentSessionJournal): void {
   const projection = journal['projection']
   const prepare = projection.prepare.bind(projection)
-  const db = journal['database'].db
+  const db = testJournalNativeDatabase(journal['database'])
   const sessionId = journal['identity'].sessionId
   const epoch = readJournalSessionEpoch(db, sessionId)
   if (historicalWriters.has(journal) || (epoch && journalOutcomeSource(db, sessionId, epoch))) {
@@ -28,13 +30,13 @@ export function pinTestJournalInputMode(journal: AgentSessionJournal): void {
     projection.prepare = prepare
     historicalWriters.set(journal, null)
   })
-  projection.prepare = (db, rows, savedAt, finishFold) => {
+  projection.prepare = async (db, rows, savedAt, finishFold) => {
     const state = journal['state']
     if (
-      journalOutcomeSource(db, state.sessionId, state.epoch) ||
+      (await db.source(state.sessionId, state.epoch)) ||
       rows.some((row) => row.kind === 'epoch')
     ) {
-      const adopt = prepare(db, rows, savedAt, finishFold)
+      const adopt = await prepare(db, rows, savedAt, finishFold)
       return () => {
         adopt()
         finishTestJournalHistoricalInputs(journal)
@@ -44,10 +46,24 @@ export function pinTestJournalInputMode(journal: AgentSessionJournal): void {
       for (const row of rows) {
         applyJournalRow(draft, row, savedAt)
       }
-      finishFold?.(draft)
+      const steps = finishFold?.(draft)
+      if (steps) {
+        finishJournalSteps(steps)
+      }
     })
     for (const row of rows) {
-      insertJournalRow(db, state.sessionId, row, savedAt)
+      db.add({
+        kind: 'rows',
+        sessionId: state.sessionId,
+        rows: [
+          {
+            epoch: row.epoch,
+            seq: row.seq,
+            savedAt,
+            json: journalRowReadBack(state.sessionId, row).rowJson
+          }
+        ]
+      })
     }
     return () => {
       transition.adopt()

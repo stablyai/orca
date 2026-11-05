@@ -1,3 +1,6 @@
+import { JournalPersistencePlan } from './journal-persistence-plan'
+import { JournalReadConnection } from './journal-sql-owner'
+import { applyJournalPersistenceEffect } from './journal-persistence-unit'
 import { mkdtemp, readFile, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -95,7 +98,13 @@ export function registerCommandReceiptSchemaTests(): void {
         const write = () => insertCommandReceiptIfAbsent(db, scope, receipt)
         expect(write).toThrow(AgentSessionJournalError)
         expect(write).toThrow(expect.objectContaining({ code: 'journal_read_only' }))
-        expect(() => buildCommandReceiptTransaction(scope, receipt).write(db)).toThrow(
+        const plan = new JournalPersistencePlan(
+          new JournalReadConnection(async () => {
+            throw new Error('unused read')
+          })
+        )
+        await buildCommandReceiptTransaction(scope, receipt).write(plan)
+        expect(() => applyJournalPersistenceEffect(db, plan.effects[0])).toThrow(
           expect.objectContaining({ code: 'journal_read_only' })
         )
       } finally {

@@ -107,6 +107,8 @@ export function measureAutomationChatRun(
   const publicReads = vi.spyOn(journal, 'publicRead').mockImplementation(() => {
     const view = realPublicRead()
     return {
+      prepareSteps: () => view.prepareSteps(),
+      currentSnapshotSteps: (ids) => view.currentSnapshotSteps(ids),
       currentSnapshot(ids) {
         const result = output(() => view.currentSnapshot(ids))
         if (!materialized.has(result)) {
@@ -151,8 +153,8 @@ export function measureAutomationChatRun(
   )
   let deltaRows = 0
   const readSince = journal.readSince.bind(journal)
-  const deltas = vi.spyOn(journal, 'readSince').mockImplementation((...args) => {
-    const value = readSince(...args)
+  const deltas = vi.spyOn(journal, 'readSince').mockImplementation(async (...args) => {
+    const value = await readSince(...args)
     if (value.ok) {
       deltaRows += value.rows.length
     }

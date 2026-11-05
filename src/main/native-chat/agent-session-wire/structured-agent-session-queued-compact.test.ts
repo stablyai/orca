@@ -34,7 +34,9 @@ import {
 let rig: QueuedMessageTestRig
 
 beforeEach(async () => {
-  vi.useFakeTimers()
+  vi.useFakeTimers({
+    toFake: ['Date', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval']
+  })
   rig = await createQueuedMessageTestRig({ restartable: true })
 })
 
@@ -420,7 +422,8 @@ describe('a /compact that waits in line', () => {
       expect(await rig.sendNow(compactId)).toMatchObject({ ok: true })
     }
     await eventually(() => expect(rig.starts.mock.calls.length).toBeGreaterThan(startsBefore))
-    rig.crashRestartHostProcess()
+    await rig.crashRestartHostProcess()
+    await rig.host.revealSession(SESSION)
     release()
     return compactId
   }
@@ -498,7 +501,8 @@ describe('a /compact that waits in line', () => {
     const startsBefore = rig.starts.mock.calls.length
     const { id } = compact()
     await eventually(() => expect(rig.starts.mock.calls.length).toBeGreaterThan(startsBefore))
-    rig.crashRestartHostProcess()
+    await rig.crashRestartHostProcess()
+    await rig.host.revealSession(SESSION)
     release()
     // Only the earlier unconfirmed message is recoverable; the command must be run again.
     expect(await rig.drafts()).toEqual([])

@@ -94,13 +94,26 @@ export class StructuredAgentSessionStatusOwnership {
     this.landed.add(summary.sessionId)
   }
 
-  /** Publish children only after parent landing; track all provider edges independently of display admission. */
+  /** Execution obligations are live immediately, independently of committed display admission. */
+  observeChildWork(sessionId: string, evidence: AgentChildWorkEvidence[]): void {
+    this.open.observe(sessionId, evidence)
+  }
+
+  /** Publish children only after parent landing. */
   publishChildWork(
     sessionId: string,
     evidence: AgentChildWorkEvidence[],
     provider: AgentSessionRecord['provider']
   ): void {
-    this.open.observe(sessionId, evidence)
+    this.observeChildWork(sessionId, evidence)
+    this.publishObservedChildWork(sessionId, evidence, provider)
+  }
+
+  publishObservedChildWork(
+    sessionId: string,
+    evidence: AgentChildWorkEvidence[],
+    provider: AgentSessionRecord['provider']
+  ): void {
     const subject = this.subjects.get(sessionId)
     if (!subject || !this.landed.has(sessionId)) {
       return

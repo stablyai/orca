@@ -31,9 +31,12 @@ type StoredStopEvent = NonNullable<
   ReturnType<typeof outcomeFormat1StoredScalars.shape.queuePauseMarks.parse>['latestStop']
 >['event']
 
-function stopEvents(): StoredStopEvent[] {
+async function stopEvents(): Promise<StoredStopEvent[]> {
   const events = new Map<number, StoredStopEvent>()
-  for (const row of readTestJournalOutcomes(openTestJournalHostDatabase(rig.root).db, SESSION)) {
+  for (const row of readTestJournalOutcomes(
+    (await openTestJournalHostDatabase(rig.root)).db,
+    SESSION
+  )) {
     if (row.field === '$' && row.key === JSON.stringify('queuePauseMarks') && !row.deleted) {
       const { latestStop } = outcomeFormat1StoredScalars.shape.queuePauseMarks.parse(
         JSON.parse(row.json)
@@ -77,11 +80,11 @@ it('keeps Resume visible beside an idle-evicted unknown send recovery', async ()
   await eventually(async () =>
     expect(await rig.submission(id)).toMatchObject({ dispatchState: 'unknown' })
   )
-  const before = stopEvents()
+  const before = await stopEvents()
 
   await rig.host.collaboratorsForTests().lifetime.idleSweep.tick()
 
-  expect(stopEvents()).toEqual(before)
+  expect(await stopEvents()).toEqual(before)
   expect(await rig.queuePause()).toEqual({ reason: 'stopped' })
   expect(journal().submissionBody(id)).toEqual(fields.body)
   expect(journal().queuedMessages.get(`recovery:${id}`)).toBeNull()
@@ -119,7 +122,7 @@ it('a later failed-start Stop returns only its own card and holds older waiting 
   await rig.host.collaboratorsForTests().lifetime.idleSweep.tick()
   await mail.result
 
-  expect(stopEvents().map((event) => event.reason)).toEqual(['user-stop', 'host-stop'])
+  expect((await stopEvents()).map((event) => event.reason)).toEqual(['user-stop', 'host-stop'])
   expect(await rig.queuePause()).not.toEqual({ reason: 'stopped' })
   await eventually(async () =>
     expect(await rig.drafts()).toContainEqual({ messageId: mail.id, state: 'returned' })

@@ -100,14 +100,14 @@ async function handOff(
 }
 
 /** Each queue row on disk: its card, op and whether it saved a refusal. */
-function queueRows(sessionId = SESSION): string[] {
-  const outcomes = readTestQueueChanges(db(), sessionId)
+async function queueRows(sessionId = SESSION): Promise<string[]> {
+  const outcomes = readTestQueueChanges(await db(), sessionId)
   if (outcomes.length) {
     return outcomes.map(
       ({ messageId, op, returned }) => `${messageId}:${op}${returned ? '+refusal' : ''}`
     )
   }
-  return db()
+  return (await db())
     .prepare('SELECT row_json FROM journal_rows WHERE session_id = ? ORDER BY seq')
     .all(sessionId)
     .flatMap((row) => {
@@ -137,7 +137,7 @@ it("moves an earlier build's cards into the journal, each action its own card, t
   // An earlier build's chat: its hand-offs are journal rows, its cards rows of their own table.
   await rig.drafts()
   await rig.host.close(SESSION, 'evict')
-  const earlier = journalFor(SESSION)
+  const earlier = await journalFor(SESSION)
   await earlier.open()
   await handOff(earlier, 'att-present', 'ret-present', 'returned here', 'providerRejected')
   await handOff(
@@ -151,7 +151,7 @@ it("moves an earlier build's cards into the journal, each action its own card, t
   await handOff(earlier, 'att-stopped', 'stopped-same', 'stopped, unchanged', 'cancelled')
   await handOff(earlier, 'att-edited', 'stopped-edited', 'stopped, then edited', 'cancelled')
   await earlier.close()
-  seedLegacy(SESSION, [
+  await seedLegacy(SESSION, [
     ['ret-present', 'returned', 'returned here, edited', 'att-present'],
     ['ret-gone', 'returned', 'returned in a lost epoch', 'att-gone'],
     ['cmd-gone', 'returned', '/compact', 'att-cmd'],
@@ -164,10 +164,10 @@ it("moves an earlier build's cards into the journal, each action its own card, t
     ['gone', 'withdrawn', 'deleted'],
     ['broken', 'waiting', null]
   ])
-  const all = legacyIds()
+  const all = await legacyIds()
 
   // The first open's import fails: nothing moves, and the view reads every card as it will.
-  db().exec(`CREATE TEMP TRIGGER fail_import BEFORE DELETE ON queued_messages
+  ;(await db()).exec(`CREATE TRIGGER fail_import BEFORE DELETE ON queued_messages
     BEGIN SELECT RAISE(ABORT, 'disk full'); END`)
   const warned = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
   const published = [
@@ -195,14 +195,14 @@ it("moves an earlier build's cards into the journal, each action its own card, t
   })
   expect(live.submission('att-stopped')).toEqual(rawStopped)
   await nothingSentTo('stopped-same')
-  db().exec('DROP TRIGGER fail_import')
+  ;(await db()).exec('DROP TRIGGER fail_import')
   expect(warned).toHaveBeenCalledWith(
     '[journal-open] queued-message import skipped:',
     expect.objectContaining({ sessionId: SESSION })
   )
   warned.mockRestore()
-  expect(legacyIds()).toEqual(all)
-  expect(queueRows()).toEqual([])
+  expect(await legacyIds()).toEqual(all)
+  expect(await queueRows()).toEqual([])
 
   // Delete and Send each move only their own card, in the action's transaction.
   const deletion = hostTestOperationId()
@@ -212,13 +212,13 @@ it("moves an earlier build's cards into the journal, each action its own card, t
   const sent = await fixture.rig.sendNow('ret-gone')
   expect(sent).toMatchObject({ ok: true, value: { submission: { queuedMessageId: 'ret-gone' } } })
   // Saved cards are whole values: an import stores each card as it reads, refused or not.
-  expect(queueRows()).toEqual([
+  expect(await queueRows()).toEqual([
     'ret-present:queued+refusal',
     'ret-present:withdrawn',
     'ret-gone:queued+refusal',
     'ret-gone:dispatched'
   ])
-  expect(legacyIds()).toEqual(all.filter((id) => id !== 'ret-present' && id !== 'ret-gone'))
+  expect(await legacyIds()).toEqual(all.filter((id) => id !== 'ret-present' && id !== 'ret-gone'))
   // The returned cards ahead still hold the queue.
   await nothingSentTo('edited', 'held')
 
@@ -227,8 +227,8 @@ it("moves an earlier build's cards into the journal, each action its own card, t
   await rig.settleAccepted(await rig.handoffId('ret-gone'), 'received-returned-card')
   await rig.restartHostProcess()
   expect(await rig.drafts()).toEqual(published.slice(2))
-  expect(legacyIds()).toEqual(['broken'])
-  expect(queueRows().slice(4)).toEqual([
+  expect(await legacyIds()).toEqual(['broken'])
+  expect((await queueRows()).slice(4)).toEqual([
     'cmd-gone:queued+refusal',
     'disp-refused:queued+refusal',
     'stopped-same:queued',
@@ -265,37 +265,37 @@ it("moves an earlier build's cards into the journal, each action its own card, t
   // Finish the automatic handoff too, so this reopen isolates import idempotence.
   await rig.settleAccepted(await rig.handoffId('edited'), 'received-edited-card')
   // A third open finds nothing to move, and an old Delete still answers from its receipt.
-  const rows = queueRows()
+  const rows = await queueRows()
   await fixture.rig.restartHostProcess()
   await fixture.rig.drafts()
-  expect(queueRows()).toEqual(rows)
+  expect(await queueRows()).toEqual(rows)
   expect(await stopped()).toEqual(displayedStopped)
-  expect(legacyIds()).toEqual(['broken'])
+  expect(await legacyIds()).toEqual(['broken'])
   expect(await fixture.rig.deleteQueued('ret-present', deletion)).toMatchObject({
     replayed: true,
     value: { deleted: true }
   })
 
   // A chat holding only answered legacy rows has nothing to write: they go in a transaction alone.
-  const other = journalFor('session-y')
+  const other = await journalFor('session-y')
   await other.open()
   await handOff(other, 'y-att', 'y-sent', 'delivered', 'accepted')
   await other.close()
-  seedLegacy('session-y', [
+  await seedLegacy('session-y', [
     ['y-gone', 'withdrawn', 'deleted'],
     ['y-sent', 'dispatched', 'delivered', 'y-att']
   ])
-  const reopened = journalFor('session-y')
+  const reopened = await journalFor('session-y')
   await reopened.open()
-  expect(legacyIds('session-y')).toEqual([])
-  expect(queueRows('session-y')).toEqual([])
+  expect(await legacyIds('session-y')).toEqual([])
+  expect(await queueRows('session-y')).toEqual([])
   expect(reopened.queuedMessages.list()).toEqual([])
   await reopened.close()
 })
 
 it('a rewind while import fails preserves canonical refusals and leaves legacy cleanup optional', async () => {
   // Made before the clear, which leaves the chat no provider handle to read.
-  const earlier = journalFor(SESSION)
+  const earlier = await journalFor(SESSION)
   const clear = { command: 'clear' as const }
   expect(
     await rig.host.conversationCommand(CALLER, {
@@ -325,7 +325,7 @@ it('a rewind while import fails preserves canonical refusals and leaves legacy c
     ['disp-refused', 'dispatched', 'refused, never settled', 'att-refused'],
     ['edited', 'waiting', 'waiting, edited']
   ])
-  db().exec(`CREATE TEMP TRIGGER fail_import BEFORE DELETE ON queued_messages
+  ;(await db()).exec(`CREATE TRIGGER fail_import BEFORE DELETE ON queued_messages
     BEGIN SELECT RAISE(ABORT, 'disk full'); END`)
   const warned = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
   const held = [
@@ -333,7 +333,7 @@ it('a rewind while import fails preserves canonical refusals and leaves legacy c
     { messageId: 'edited', state: 'waiting' }
   ]
   expect(await rig.drafts()).toEqual(held)
-  db().exec('DROP TRIGGER fail_import')
+  ;(await db()).exec('DROP TRIGGER fail_import')
   warned.mockRestore()
 
   const live = rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal
@@ -348,20 +348,20 @@ it('a rewind while import fails preserves canonical refusals and leaves legacy c
   expect(live.submission('att-refused')?.dispatchState).toBe('rejected')
   expect(await rig.drafts()).toEqual(held)
   await nothingSentTo('edited')
-  expect(legacyIds()).toEqual(['disp-refused', 'edited'])
+  expect(await legacyIds()).toEqual(['disp-refused', 'edited'])
 })
 
 it.each([false, true])(
   'keeps legacy effective actions and exact proof durable while cleanup fails=%s',
   async (failed) => {
     const session = `legacy-action-${failed}`
-    let journal = historicalJournalFor(session)
+    let journal = await historicalJournalFor(session)
     await journal.open()
     const ids = ['proof', 'deleted', 'edited', 'sent']
     for (const id of ids) {
       await handOff(journal, `U-${id}`, `Q-${id}`, id, 'cancelled', 0, true)
       expect(journal.queuedMessages.get(`recovery:U-${id}`)).toBeNull()
-      appendTestJournalQueueRow(db(), journal, `recovery:U-${id}`, {
+      appendTestJournalQueueRow(await db(), journal, `recovery:U-${id}`, {
         op: 'queued',
         body: message(id),
         recovers: `U-${id}`,
@@ -376,13 +376,13 @@ it.each([false, true])(
       ids.map((id) => [`Q-${id}`, 'waiting', id])
     )
     if (failed) {
-      db().exec(
-        `CREATE TEMP TRIGGER fail_import BEFORE DELETE ON queued_messages BEGIN SELECT RAISE(ABORT, 'cleanup unavailable'); END`
+      ;(await db()).exec(
+        `CREATE TRIGGER fail_import BEFORE DELETE ON queued_messages BEGIN SELECT RAISE(ABORT, 'cleanup unavailable'); END`
       )
     }
     const warned = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const open = async () => {
-      journal = journalFor(session)
+      journal = await journalFor(session)
       await journal.open()
       journal.queuedMessages.inputWork = () => ({
         allowsObservation: () => true,
@@ -399,15 +399,15 @@ it.each([false, true])(
       })
     }
     if (failed) {
-      db().exec(
-        `CREATE TEMP TRIGGER fail_action BEFORE INSERT ON journal_outcomes BEGIN SELECT RAISE(ABORT, 'action unavailable'); END`
+      ;(await db()).exec(
+        `CREATE TRIGGER fail_action BEFORE INSERT ON journal_outcomes BEGIN SELECT RAISE(ABORT, 'action unavailable'); END`
       )
       await expect(journal.queuedMessages.withdraw(['recovery:U-deleted'])).rejects.toThrow(
         'action unavailable'
       )
       expect(journal.queuedMessages.get('recovery:U-deleted')?.state).toBe('waiting')
-      expect(legacyIds(session)).toHaveLength(4)
-      db().exec('DROP TRIGGER fail_action')
+      expect(await legacyIds(session)).toHaveLength(4)
+      ;(await db()).exec('DROP TRIGGER fail_action')
     }
     await journal.acceptLate({
       clientMessageId: 'U-proof',
@@ -437,7 +437,7 @@ it.each([false, true])(
       { messageId: send.messageId, expect: 'waiting' }
     )
     if (failed) {
-      expect(legacyIds(session)).toHaveLength(4)
+      expect(await legacyIds(session)).toHaveLength(4)
     }
     await journal.replaceEpochItems('handle_forked', 0, [])
     await journal.close()
@@ -465,8 +465,8 @@ it.each([false, true])(
     ).toBe(true)
     expect(journal.submission('V')?.dispatchState).toBe('pending')
     if (failed) {
-      expect(legacyIds(session)).toHaveLength(4)
-      db().exec('DROP TRIGGER fail_import')
+      expect(await legacyIds(session)).toHaveLength(4)
+      ;(await db()).exec('DROP TRIGGER fail_import')
     }
     warned.mockRestore()
     await journal.close()
@@ -489,11 +489,11 @@ it.each(['proof', 'withdraw'] as const)(
         { type: 'image-ref', path }
       ]
     }
-    let journal = historicalJournalFor(session)
+    let journal = await historicalJournalFor(session)
     await journal.open()
     await handOff(journal, 'U', 'Q', 'original', 'cancelled', 0, true, { body, options: {} })
     if (action === 'withdraw') {
-      appendTestJournalQueueRow(db(), journal, 'recovery:U', {
+      appendTestJournalQueueRow(await db(), journal, 'recovery:U', {
         op: 'queued',
         body,
         recovers: 'U',
@@ -504,14 +504,16 @@ it.each(['proof', 'withdraw'] as const)(
     }
     await journal.close()
     seedLegacy(session, [['Q', 'waiting', 'original']])
-    db()
+    ;(await db())
       .prepare('UPDATE queued_messages SET body_json = ?, fingerprint = ? WHERE session_id = ?')
       .run(JSON.stringify(body), agentSessionSendBodyFingerprint(session, body), session)
-    db().prepare('DELETE FROM agent_session_attachment_claims WHERE session_id = ?').run(session)
-    db().exec(`CREATE TEMP TRIGGER fail_witness_cleanup BEFORE DELETE ON queued_messages
+    ;(await db())
+      .prepare('DELETE FROM agent_session_attachment_claims WHERE session_id = ?')
+      .run(session)
+    ;(await db()).exec(`CREATE TRIGGER fail_witness_cleanup BEFORE DELETE ON queued_messages
       BEGIN SELECT RAISE(ABORT, 'cleanup unavailable'); END`)
     const warned = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    journal = journalFor(session)
+    journal = await journalFor(session)
     await journal.open()
     const goal = { provider: 'orca' as const, clientMessageId: 'live-goal' }
     await journal.appendClaimingAttachments(
@@ -540,15 +542,15 @@ it.each(['proof', 'withdraw'] as const)(
     }
     await journal.withdrawGoalObjective(goal, { fence: 0 })
     expect(journal.queuedMessages.get('Q')?.state).toBe('dispatched')
-    expect(legacyIds(session)).toEqual(['Q'])
+    expect(await legacyIds(session)).toEqual(['Q'])
     expect(
-      db()
+      (await db())
         .prepare('SELECT upload_id FROM agent_session_attachment_claims WHERE session_id = ?')
         .all(session)
     ).toEqual([{ upload_id: upload }])
-    expect(markUnclaimedUploadForSweep(db(), upload, 1)).toBe(false)
+    expect(markUnclaimedUploadForSweep(await db(), upload, 1)).toBe(false)
     await journal.close()
-    journal = journalFor(session)
+    journal = await journalFor(session)
     await journal.open()
     expect(journal.queuedMessages.get('Q')?.state).toBe('dispatched')
     if (action === 'proof') {
@@ -557,7 +559,7 @@ it.each(['proof', 'withdraw'] as const)(
       expect(journal.queuedMessages.get('recovery:U')?.state).toBe('withdrawn')
     }
     await journal.close()
-    db().exec('DROP TRIGGER fail_witness_cleanup')
+    ;(await db()).exec('DROP TRIGGER fail_witness_cleanup')
     warned.mockRestore()
   }
 )
@@ -566,7 +568,7 @@ it.each([false, true])(
   'keeps edited prior-build intent independent from original proof with failed cleanup=%s',
   async (failed) => {
     const session = `edited-legacy-${failed}`
-    let journal = journalFor(session)
+    let journal = await journalFor(session)
     await journal.open()
     const original = {
       body: {
@@ -604,7 +606,7 @@ it.each([false, true])(
       ]
     }
     const options = { model: 'original-model', effort: 'high' }
-    db()
+    ;(await db())
       .prepare(
         'UPDATE queued_messages SET body_json = ?, fingerprint = ?, options_json = ? WHERE session_id = ?'
       )
@@ -615,13 +617,13 @@ it.each([false, true])(
         session
       )
     if (failed) {
-      db().exec(
-        `CREATE TEMP TRIGGER fail_edited_cleanup BEFORE DELETE ON queued_messages BEGIN SELECT RAISE(ABORT, 'cleanup unavailable'); END`
+      ;(await db()).exec(
+        `CREATE TRIGGER fail_edited_cleanup BEFORE DELETE ON queued_messages BEGIN SELECT RAISE(ABORT, 'cleanup unavailable'); END`
       )
     }
     const warned = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const open = async () => {
-      journal = journalFor(session)
+      journal = await journalFor(session)
       await journal.open()
       journal.queuedMessages.inputWork = () => ({
         allowsObservation: () => true,
@@ -723,7 +725,7 @@ it.each([false, true])(
     expect(readCodexHistoryJournalView(journal, 'thread', AbortSignal.abort()).latest).toBe(
       frontier
     )
-    const forward = readAgentSessionHistory(journal, {
+    const forward = await readAgentSessionHistory(journal, {
       sessionId: session,
       direction: 'after',
       cursor: beforeProof
@@ -786,8 +788,8 @@ it.each([false, true])(
       expect(journal.submission(`U-${id}`)?.dispatchState).toBe('accepted')
     }
     if (failed) {
-      expect(legacyIds(session)).toHaveLength(4)
-      db().exec('DROP TRIGGER fail_edited_cleanup')
+      expect(await legacyIds(session)).toHaveLength(4)
+      ;(await db()).exec('DROP TRIGGER fail_edited_cleanup')
     }
     warned.mockRestore()
     await journal.close()

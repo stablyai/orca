@@ -111,7 +111,7 @@ async function journalWithNewerRow(
   })
   await journals.closeAll()
   insertTestJournalRowJson(
-    openTestJournalHostDatabase(directory).db,
+    (await openTestJournalHostDatabase(directory)).db,
     IDENTITY.sessionId,
     seq,
     newer,
@@ -121,7 +121,10 @@ async function journalWithNewerRow(
 }
 
 async function storedRows(): Promise<string[]> {
-  const rows = liveTestJournalRows(openTestJournalHostDatabase(directory).db, IDENTITY.sessionId)
+  const rows = liveTestJournalRows(
+    (await openTestJournalHostDatabase(directory)).db,
+    IDENTITY.sessionId
+  )
   await closeTestJournalHostDatabase(directory)
   return rows.map((row) => row.rowJson)
 }

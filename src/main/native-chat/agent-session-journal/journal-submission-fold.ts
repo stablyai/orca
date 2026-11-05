@@ -1,4 +1,5 @@
 import { getJournalInputOrder } from './journal-input-order-registry'
+import { finishJournalSteps } from './journal-reconstruction-steps'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalSubmission
@@ -135,9 +136,20 @@ export function acceptSubmissionFromProviderItem(
   resolvedItemId: string,
   row: Pick<JournalRow, 'epoch' | 'seq' | 'fence' | 'ts'>
 ): void {
+  finishJournalSteps(
+    acceptSubmissionFromProviderItemSteps(state, providerItemId, resolvedItemId, row)
+  )
+}
+export function* acceptSubmissionFromProviderItemSteps(
+  state: JournalReducerState,
+  providerItemId: string,
+  resolvedItemId: string,
+  row: Pick<JournalRow, 'epoch' | 'seq' | 'fence' | 'ts'>
+): Generator<void> {
   if (providerItemId === resolvedItemId) {
     return
   }
+  yield
   state.inputs.echoes.add(resolvedItemId)
   const submission = getJournalInputOrder(state)?.inputForItem(resolvedItemId)
   if (!submission || !journalDispatchRowApplies(submission)) {

@@ -13,6 +13,8 @@ import {
 } from './agent-session-history-page'
 import {
   withPublishedWorkResult,
+  capturePublishedWork,
+  capturePublishedWorkSteps,
   type AgentSessionPublishedWork
 } from './agent-session-published-work'
 
@@ -32,24 +34,39 @@ export function readStructuredAgentSessionHistoryResult(input: {
   replaceNormalizedHistory?: boolean
   /** The host's current-work projection, which the page's turn and prompt fields state. */
   work?: AgentSessionPublishedWork
-}): AgentSessionHistoryResult {
-  const result = withPublishedWorkResult(
-    readAgentSessionHistory(input.journal, input.request, {
-      scope: input.scope,
-      reader: input.reader,
-      rowReplay: input.replaceNormalizedHistory === false
-    }),
-    input.work
-  )
-  const fence = input.record?.currentFence
-  const providerSession = structuredAgentSessionProviderSessionMetadata(input.record)
-  if (fence === undefined) {
-    return providerSession ? { ...result, providerSession } : result
-  }
-  return {
-    ...result,
-    page: { ...result.page, fence },
-    ...(result.ok ? {} : { fence }),
-    ...(providerSession ? { providerSession } : {})
+}): AgentSessionHistoryResult | Promise<AgentSessionHistoryResult> {
+  return readAgentSessionHistory(input.journal, input.request, {
+    scope: input.scope,
+    reader: input.reader,
+    rowReplay: input.replaceNormalizedHistory === false,
+    captureResult: (snapshot) => decorate(capturePublishedWork(snapshot, input.work)),
+    captureResultSteps: function* (snapshot) {
+      for (;;) {
+        const work = input.work
+        const captured = yield* capturePublishedWorkSteps(snapshot, work)
+        const next = input.work
+        if (work?.viewKey() === next?.viewKey() && work?.revision === next?.revision) {
+          return decorate(captured)
+        }
+        yield
+      }
+    }
+  })
+
+  function decorate(work: AgentSessionPublishedWork | undefined) {
+    const fence = input.record?.currentFence
+    const providerSession = structuredAgentSessionProviderSessionMetadata(input.record)
+    return (read: AgentSessionHistoryResult) => {
+      const result = withPublishedWorkResult(read, work)
+      if (fence === undefined) {
+        return providerSession ? { ...result, providerSession } : result
+      }
+      return {
+        ...result,
+        page: { ...result.page, fence },
+        ...(result.ok ? {} : { fence }),
+        ...(providerSession ? { providerSession } : {})
+      }
+    }
   }
 }

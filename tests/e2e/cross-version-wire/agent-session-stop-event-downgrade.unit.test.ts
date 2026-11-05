@@ -99,7 +99,7 @@ test.each(['v1.4.219', 'v1.4.220', WRITABLE_BASELINE_REF])(
         fence: 1,
         turnScope: { kind: 'turn', turnItemId: agentJournalItemKey(turn) }
       })
-      const since = journal.readSince({ epoch: journal.epoch, sequence: 0 })
+      const since = await journal.readSince({ epoch: journal.epoch, sequence: 0 })
       if (!since.ok) {
         throw new Error(since.reset)
       }
@@ -332,7 +332,7 @@ test("this build keeps a newer build's row kind and refuses the load; a build be
     })
     await journals.closeAll()
     insertTestJournalRowJson(
-      openTestJournalHostDatabase(directory).db,
+      (await openTestJournalHostDatabase(directory)).db,
       IDENTITY.sessionId,
       at,
       newer

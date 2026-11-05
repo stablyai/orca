@@ -1,10 +1,17 @@
+import {
+  callStructuredSessionTestRpc,
+  flushStructuredSessionTestEvents,
+  leaseOf,
+  itemsOf,
+  textOf
+} from './structured-session-observation-test-support'
+import '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { EVERY_AGENT_CHAT } from '../../shared/native-chat/every-agent-chat.test-fixture'
 import { mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
-import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionSubscribeEvent } from '../../shared/agent-session/agent-session-wire'
 import {
   AGENT_SESSION_TURN_ITEM_CAPABILITY,
@@ -12,7 +19,6 @@ import {
 } from '../../shared/agent-session/agent-session-runtime-capabilities'
 import {
   fakeClaude,
-  leaseOf,
   startingConnection,
   failStarting
 } from './claude-structured-fake-connection-test-fixture'
@@ -23,7 +29,6 @@ import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire
 import type { StructuredAgentSessionStatusSink } from '../native-chat/agent-session-wire/structured-agent-session-status-feed'
 import { AgentHookServer, _internals } from '../agent-hooks/server'
 import type { OrcaRuntimeService } from './orca-runtime'
-import type { RpcRequest, RpcResponse } from './rpc/core'
 import type { ClaudeStructuredAuthPolicy } from '../claude-accounts/claude-structured-auth-policy'
 import { RpcDispatcher } from './rpc/dispatcher'
 import type { NativeChatShellEnvironmentPolicy } from '../../shared/native-chat/native-chat-shell-environment'
@@ -133,15 +138,8 @@ let childWork: Parameters<NonNullable<StructuredAgentSessionStatusSink['publishC
 let hookServer: AgentHookServer
 let releaseUsage = (): void => {}
 
-async function call(method: string, params: unknown): Promise<RpcResponse> {
-  const replies: RpcResponse[] = []
-  const request: RpcRequest = { id: `req-${operations}`, authToken: 'token', method, params }
-  await dispatcher.dispatchStreaming(request, (raw) => replies.push(JSON.parse(raw)), CLIENT)
-  if (!replies[0]) {
-    throw new Error(`no reply for ${method}`)
-  }
-  return replies[0]
-}
+const call = (method: string, params: unknown) =>
+  callStructuredSessionTestRpc(dispatcher, `req-${operations}`, method, params, CLIENT)
 
 async function ok<T>(method: string, params: unknown): Promise<T> {
   const response = await call(method, params)
@@ -171,28 +169,6 @@ async function subscribe(
     client
   )
   return frames
-}
-
-function itemsOf(frames: AgentSessionSubscribeEvent[]): AgentJournalRenderItem[] {
-  const items = new Map<string, AgentJournalRenderItem>()
-  for (const frame of frames) {
-    const rows =
-      frame.type === 'snapshot' || frame.type === 'reset'
-        ? frame.page.items
-        : frame.type === 'batch'
-          ? frame.batch.items
-          : []
-    for (const row of rows) {
-      items.set(row.itemId, row)
-    }
-  }
-  return [...items.values()]
-}
-
-function textOf(item: AgentJournalRenderItem): string {
-  return item.body?.kind === 'message'
-    ? item.body.blocks.map((block) => (block.type === 'text' ? block.text : '')).join('')
-    : ''
 }
 
 beforeEach(async () => {
@@ -302,19 +278,21 @@ describe('a structured Claude session over agentSession.*', () => {
       description: 'Audit the build',
       is_backgrounded: true
     })
-    expect(childWork).toContainEqual([
-      expect.objectContaining({ kind: 'structured-session', sessionId: SESSION }),
-      [
-        expect.objectContaining({
-          type: 'live',
-          child: expect.objectContaining({
-            handle: { idKind: 'task_id', id: 'agent-1', runId: 'toolu_1' },
-            description: 'Audit the build'
+    await vi.waitFor(() =>
+      expect(childWork).toContainEqual([
+        expect.objectContaining({ kind: 'structured-session', sessionId: SESSION }),
+        [
+          expect.objectContaining({
+            type: 'live',
+            child: expect.objectContaining({
+              handle: { idKind: 'task_id', id: 'agent-1', runId: 'toolu_1' },
+              description: 'Audit the build'
+            })
           })
-        })
-      ],
-      'claude'
-    ])
+        ],
+        'claude'
+      ])
+    )
   })
 
   it("keeps the shell's Anthropic auth with its proxy address once a managed account is pinned", async () => {
@@ -393,15 +371,15 @@ describe('a structured Claude session over agentSession.*', () => {
     connection.initialization.resolve()
     await waitForStructuredAgentSessionRecovery()
 
+    await vi.waitFor(() =>
+      expect(leaseOf(SESSION)).toMatchObject({ claimStatus: 'released', handoffStage: null })
+    )
     const guidance = itemsOf(await subscribe()).find((item) => item.body?.kind === 'status')
     expect(guidance?.body).toMatchObject({
       kind: 'status',
       text: "Claude isn't signed in. Run `claude auth login`, or choose an account in Claude Accounts settings.",
       failure: { kind: 'notSignedIn', account: 'system' }
     })
-    await vi.waitFor(() =>
-      expect(leaseOf(SESSION)).toMatchObject({ claimStatus: 'released', handoffStage: null })
-    )
     expect(claude.connections).toHaveLength(1)
   })
 
@@ -598,10 +576,17 @@ describe('a structured Claude session over agentSession.*', () => {
     // System auth retains shell credentials; the configured overlay still wins.
     expect(claude.live().launch.env).toMatchObject({ ANTHROPIC_API_KEY: 'sk-ant-SHELL-LEAK' })
     expect(claude.live().launch.env?.PATH ?? claude.live().launch.env?.Path).toBeTruthy()
-    const history = await call('agentSession.history', {
-      sessionId: SESSION,
-      direction: 'tail',
-      limit: 1
+    const history = await vi.waitFor(async () => {
+      const value = await call('agentSession.history', {
+        sessionId: SESSION,
+        direction: 'tail',
+        limit: 1
+      })
+      expect(value).toMatchObject({
+        ok: true,
+        result: { providerSession: { key: 'session_id', id: PROVIDER_SESSION } }
+      })
+      return value
     })
     expect(history).toMatchObject({
       ok: true,
@@ -646,7 +631,7 @@ describe('a structured Claude session over agentSession.*', () => {
       uuid: 'stream-event-frame-uuid',
       event: { type: 'message_stop' }
     })
-    await getStructuredAgentSessionHost()?.flushStreamedEvents(SESSION)
+    await flushStructuredSessionTestEvents(SESSION)
     expect(itemsOf(stream).find((item) => textOf(item) === 'Two files.')?.itemId).toBe(
       `claude:${PROVIDER_SESSION}:assistant-leaf`
     )
@@ -659,7 +644,7 @@ describe('a structured Claude session over agentSession.*', () => {
       parent_tool_use_id: null,
       message: { role: 'assistant', content: [{ type: 'text', text: 'Background task update.' }] }
     })
-    await getStructuredAgentSessionHost()?.flushStreamedEvents(SESSION)
+    await flushStructuredSessionTestEvents(SESSION)
 
     for (const [taskId, taskType, description] of [
       ['task-one', 'local_agent', 'First task'],
@@ -676,7 +661,7 @@ describe('a structured Claude session over agentSession.*', () => {
         is_backgrounded: true
       })
     }
-    await getStructuredAgentSessionHost()?.flushStreamedEvents(SESSION)
+    await flushStructuredSessionTestEvents(SESSION)
     const itemsBeforeTaskStop = itemsOf(stream)
     const targetedStopFields = {
       turnId: 'background-tasks',
@@ -723,7 +708,7 @@ describe('a structured Claude session over agentSession.*', () => {
         signal: new AbortController().signal
       } as never)
     )
-    await getStructuredAgentSessionHost()?.flushStreamedEvents(SESSION)
+    await flushStructuredSessionTestEvents(SESSION)
     const approval = itemsOf(stream).find((item) => item.body?.kind === 'approval')
     expect(approval?.body).toMatchObject({
       title: 'Allow Bash?',
@@ -846,7 +831,7 @@ describe('a structured Claude session over agentSession.*', () => {
         session_id: PROVIDER_SESSION,
         uuid: 'result-frame-uuid'
       })
-      await getStructuredAgentSessionHost()?.flushStreamedEvents(SESSION)
+      await flushStructuredSessionTestEvents(SESSION)
       const turnRow = () => itemsOf(stream).find((item) => item.body?.kind === 'turn')
       expect(turnRow()?.body).toMatchObject({ state: 'completed' })
 
@@ -858,7 +843,7 @@ describe('a structured Claude session over agentSession.*', () => {
       })
       // This final event has no later publication to carry it to the client.
       await vi.waitFor(async () => {
-        await getStructuredAgentSessionHost()?.flushStreamedEvents(SESSION)
+        await flushStructuredSessionTestEvents(SESSION)
         const turn = turnRow()?.body
         expect(turn?.kind === 'turn' ? turn.contextUsage?.used : undefined).toMatchObject({
           kind: 'report',

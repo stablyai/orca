@@ -1,3 +1,4 @@
+import '../native-chat/agent-session-journal/journal-host-database-test-support'
 // The production runtime hands a Codex session's child work to the status sink, under the address
 // the session's own row landed under, and ends it with the provider.
 
@@ -122,6 +123,11 @@ describe('structured Codex child work through the production runtime', () => {
         agentPath: '/root/review'
       }
     })
+    await host.flushStreamedEvents(SESSION)
+    await host
+      .collaboratorsForTests()
+      .sessions.get(SESSION)!
+      .journal.readInOrder(() => {})
     const subject = expect.objectContaining({ kind: 'structured-session', sessionId: SESSION })
     expect(childWork).toEqual([
       [
@@ -140,6 +146,10 @@ describe('structured Codex child work through the production runtime', () => {
     ])
     // The provider dies: its session's end is reported under the same address.
     connections[0]?.onExit?.(new Error('scripted provider exit'))
+    await host
+      .collaboratorsForTests()
+      .sessions.get(SESSION)!
+      .journal.readInOrder(() => {})
     expect(childWork.at(-1)).toEqual([
       subject,
       [expect.objectContaining({ type: 'session-ended' })],

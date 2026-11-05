@@ -99,18 +99,18 @@ function adapterThatNeverSpawns(): StructuredAgentSessionAdapter {
   return Object.assign(adapterFor({ ...codex, openConnection }), { supportsCreate: () => true })
 }
 
-function host(
+async function host(
   generation: HostGeneration,
   store: AgentSessionRecordStore,
   adapter: StructuredAgentSessionAdapter,
   overrides: Partial<StructuredAgentSessionHostDeps> = {}
-): StructuredAgentSessionHost {
+): Promise<StructuredAgentSessionHost> {
   return new StructuredAgentSessionHost({
     agents: NO_STRUCTURED_AGENTS,
     logger: createStructuredAgentSessionLogger(),
     store,
     adapter,
-    journalDatabase: openTestJournalHostDatabase(generationRoot(generation)),
+    journalDatabase: await openTestJournalHostDatabase(generationRoot(generation)),
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-a',
     now: () => NOW,
@@ -121,7 +121,7 @@ function host(
 describe('a host that dies while its Codex child is starting', () => {
   it('leaves the spawned child recorded, so the next host stops it by identity and starts over', async () => {
     const first = await openStore('dying')
-    const dying = host('dying', first, adapterThatNeverFinishesStarting())
+    const dying = await host('dying', first, adapterThatNeverFinishesStarting())
     void dying.attach(CALLER, hostTestAttachParams(null)).catch(() => {})
     // Spawn proof must be durable while handshake remains unanswered.
     await vi.waitFor(() =>
@@ -139,7 +139,7 @@ describe('a host that dies while its Codex child is starting', () => {
     const restarted = fakeCodex()
     await crash(first)
     const store = await openStore('relaunched')
-    const relaunched = host(
+    const relaunched = await host(
       'relaunched',
       store,
       Object.assign(adapterFor(restarted), { supportsCreate: () => true }),
@@ -198,7 +198,7 @@ describe('a create replayed after the host that ran it died', () => {
   ] as const)('starts an agent when %s', async (_case, dyingAdapter, elapsedMs) => {
     const params = hostTestAttachParams(null)
     const first = await openStore('dying')
-    const dying = host('dying', first, dyingAdapter())
+    const dying = await host('dying', first, dyingAdapter())
     void dying.attach(CALLER, params).catch(() => {})
     await vi.waitFor(() =>
       expect(first.getRecord(SESSION)?.lease).toMatchObject(
@@ -211,7 +211,7 @@ describe('a create replayed after the host that ran it died', () => {
     const restarted = fakeCodex()
     await crash(first)
     const store = await openStore('relaunched')
-    const relaunched = host(
+    const relaunched = await host(
       'relaunched',
       store,
       Object.assign(adapterFor(restarted), { supportsCreate: () => true }),
@@ -257,13 +257,13 @@ describe('a create answered before the host that ran it died', () => {
   it('replays that answer with the chat at rest, and the next send starts the agent', async () => {
     const params = hostTestAttachParams(null)
     const first = await openStore('dying')
-    const dying = host('dying', first, adapterThatNeverFinishesStarting())
+    const dying = await host('dying', first, adapterThatNeverFinishesStarting())
     await expect(dying.attach(CALLER, params)).resolves.toMatchObject({ ok: true })
 
     const restarted = fakeCodex()
     await crash(first)
     const store = await openStore('relaunched')
-    const relaunched = host(
+    const relaunched = await host(
       'relaunched',
       store,
       Object.assign(adapterFor(restarted), { supportsCreate: () => true }),

@@ -1,11 +1,15 @@
+import {
+  testJournalNativeDatabase,
+  closeTestJournalHostDatabases
+} from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { randomUUID } from 'node:crypto'
-import type { MockInstance } from 'vitest'
+import { type MockInstance, afterEach, beforeEach, vi } from 'vitest'
 import type { AgentSessionRecordStore } from './agent-session/records/agent-session-record-store'
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, vi } from 'vitest'
+
 import { folderWorkspaceKey } from '../../shared/workspace-scope'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import { structuredAgentSessionTabId } from '../../shared/agent-session/view/structured-agent-session-projection'
@@ -15,7 +19,7 @@ import {
 } from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { createStore, closeTestStores, testState } from '../persistence/persistence-test-harness'
 import { initOrcaProfilePaths } from '../orca-profiles/profile-storage-paths'
-import { closeTestJournalHostDatabases } from '../native-chat/agent-session-journal/journal-host-database-test-support'
+
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import {
   createTestParams,
@@ -185,15 +189,15 @@ export async function holdStartup(rig: AuthorityRig) {
   }
 }
 export function rejectVisibility(rig: AuthorityRig) {
-  const db = rig.host.deps.journalDatabase.db
+  const db = testJournalNativeDatabase(rig.host.deps.journalDatabase)
   db.exec(
-    "CREATE TEMP TRIGGER reject_initial_tabs BEFORE INSERT ON agent_session_store_meta WHEN NEW.key='session_tabs_recorded' BEGIN SELECT RAISE(ABORT, 'visibility rejected'); END"
+    "CREATE TRIGGER reject_initial_tabs BEFORE INSERT ON agent_session_store_meta WHEN NEW.key='session_tabs_recorded' BEGIN SELECT RAISE(ABORT, 'visibility rejected'); END"
   )
   db.exec(
-    "CREATE TEMP TRIGGER reject_tab_delta BEFORE DELETE ON agent_session_tabs BEGIN SELECT RAISE(ABORT, 'visibility rejected'); END"
+    "CREATE TRIGGER reject_tab_delta BEFORE DELETE ON agent_session_tabs BEGIN SELECT RAISE(ABORT, 'visibility rejected'); END"
   )
   db.exec(
-    "CREATE TEMP TRIGGER reject_tab_insert BEFORE INSERT ON agent_session_tabs BEGIN SELECT RAISE(ABORT, 'visibility rejected'); END"
+    "CREATE TRIGGER reject_tab_insert BEFORE INSERT ON agent_session_tabs BEGIN SELECT RAISE(ABORT, 'visibility rejected'); END"
   )
   return () => {
     db.exec('DROP TRIGGER reject_tab_insert')

@@ -97,7 +97,7 @@ export function registerJournalStopAndResumeRowsTests(): void {
       const cursor = journal.cursor()
       await journal.appendStopEvent({ reason: 'user-stop' }, 1)
       await journal.appendQueueResume(1)
-      const since = journal.readSince(cursor)
+      const since = await journal.readSince(cursor)
       if (!since.ok) {
         throw new Error(`expected rows, got reset ${since.reset}`)
       }

@@ -1,3 +1,4 @@
+import { finishJournalSteps } from './journal-reconstruction-steps'
 import { journalInputOrder } from './journal-input-order'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
@@ -116,6 +117,13 @@ export function foldJournalQueueRow(
   row: JournalRow,
   marker5 = false
 ): void {
+  finishJournalSteps(foldJournalQueueRowSteps(state, row, marker5))
+}
+export function* foldJournalQueueRowSteps(
+  state: JournalReducerState,
+  row: JournalRow,
+  marker5 = false
+): Generator<void> {
   if (row.kind === 'queue') {
     applyQueueRow(state, row, marker5)
   } else if (row.kind === 'submission') {
@@ -141,7 +149,7 @@ export function foldJournalQueueRow(
       settleHandOffInDoubt(state, row.clientMessageId, row, marker5)
     }
   } else if (row.kind === 'item' || row.kind === 'lifecycle-batch') {
-    spendReportedCommandCards(state)
+    yield* spendReportedCommandCardsSteps(state)
   }
 }
 
@@ -229,8 +237,9 @@ function settleHandOffInDoubt(
 }
 
 // Command turns already show their refusal; returned cards would block following work.
-function spendReportedCommandCards(state: JournalReducerState): void {
+function* spendReportedCommandCardsSteps(state: JournalReducerState): Generator<void> {
   for (const id of state.queue.returnedCommands) {
+    yield
     const card = state.queue.cards.get(id)
     if (!card) {
       continue
@@ -243,6 +252,7 @@ function spendReportedCommandCards(state: JournalReducerState): void {
     ) {
       setCard(state, { ...card, state: 'withdrawn' })
     }
+    yield
   }
 }
 

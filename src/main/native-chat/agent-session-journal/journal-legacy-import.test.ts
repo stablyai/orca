@@ -81,7 +81,7 @@ async function open(
   return journals.track(
     await openAgentSessionJournal({
       identity: identity(agent, sessionId),
-      database: openTestJournalHostDatabase(root),
+      database: await openTestJournalHostDatabase(root),
       now: tick,
       mintEpoch: () => `epoch-${clock}`,
       ...overrides
@@ -526,7 +526,7 @@ describe('import failures', () => {
 
   it('imports a source past 16 MiB, keeping its newest messages', async () => {
     const journal = await open('claude', CLAUDE_SESSION, {
-      database: openTestJournalHostDatabase(join(root, 'large-source-journal'))
+      database: await openTestJournalHostDatabase(join(root, 'large-source-journal'))
     })
     const filePath = join(root, 'large-source.jsonl')
     const filler = 'x'.repeat(17 * 1024)
@@ -564,7 +564,7 @@ describe('import failures', () => {
     const journalDir = join(root, 'bounded-tool-input-journal')
     const limits = { ...LEGACY_IMPORT_BLOCK_LIMITS, inlineHeadBytes: 64 }
     const journal = await open('claude', CLAUDE_SESSION, {
-      database: openTestJournalHostDatabase(journalDir)
+      database: await openTestJournalHostDatabase(journalDir)
     })
     const filePath = await writeFixture('oversized-tool-input.jsonl', [
       {
@@ -686,7 +686,7 @@ describe('multi-block legacy messages', () => {
 
   it('bounds a Claude tool call that shares its message with narration', async () => {
     const journal = await open('claude', CLAUDE_SESSION, {
-      database: openTestJournalHostDatabase(join(root, 'claude-mixed-journal'))
+      database: await openTestJournalHostDatabase(join(root, 'claude-mixed-journal'))
     })
     const filePath = await writeFixture('claude-mixed.jsonl', [
       {
@@ -732,7 +732,7 @@ describe('multi-block legacy messages', () => {
 
   it('bounds a Grok tool call that shares its row with assistant text', async () => {
     const journal = await open('grok', CODEX_SESSION, {
-      database: openTestJournalHostDatabase(join(root, 'grok-mixed-journal'))
+      database: await openTestJournalHostDatabase(join(root, 'grok-mixed-journal'))
     })
     const filePath = await writeFixture('grok-mixed.jsonl', [
       {
@@ -760,7 +760,7 @@ describe('multi-block legacy messages', () => {
 
   it('bounds an omp execution cell, whose invocation always ships with its output', async () => {
     const journal = await open('omp', CODEX_SESSION, {
-      database: openTestJournalHostDatabase(join(root, 'omp-mixed-journal'))
+      database: await openTestJournalHostDatabase(join(root, 'omp-mixed-journal'))
     })
     const filePath = await writeFixture('omp-mixed.jsonl', [
       {

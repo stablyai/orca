@@ -1,4 +1,7 @@
-import type { AgentJournalSnapshot } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import {
+  finishJournalSteps,
+  finishJournalStepsAsync
+} from '../agent-session-journal/journal-reconstruction-steps'
 import { agentTurnVerdict } from '../../../shared/agent-status/lifecycle/agent-turn-outcome'
 import { isAgentSessionContextClear } from '../../../shared/agent-session/agent-session-context-clear'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
@@ -14,42 +17,19 @@ import {
 import { classifyDispatchRejection } from '../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { JournalRow } from '../agent-session-journal/journal-row-schema'
-import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
-import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
-import type { AgentSessionFailureWordsContext } from '../../../shared/agent-session/failures/agent-session-failure-words'
 
-export type StructuredAgentSessionRequestFailure = {
-  sessionId: string
-  agent: string
-  kind: 'turn' | 'refused-send'
-  id: string
-  outcome: 'failure' | 'interruption'
-  capturePendingOutput?: () => (() => boolean) | undefined
-  death?: NonNullable<StructuredAgentSessionHostSession['lastEndedChild']> &
-    AgentSessionFailureWordsContext
-  read: () => Promise<AgentJournalSnapshot | null>
-}
-
-type Baseline = ReturnType<AgentSessionJournal['cursor']> & {
-  sessionId: string
-  journal: AgentSessionJournal
-  floor: number
-  marks: Map<string, string>
-  ended: StructuredAgentSessionHostSession['lastEndedChild']
-}
+import type {
+  StructuredAgentSessionRequestFailure,
+  Baseline,
+  StructuredRequestFailureDeps
+} from './structured-agent-session-request-failure-types'
+export type { StructuredAgentSessionRequestFailure } from './structured-agent-session-request-failure-types'
 
 /** Live request edges use the journal's fold before the latest-only publications can coalesce. */
 export class StructuredAgentSessionRequestFailures {
   private readonly baselines = new Map<string, Baseline>()
 
-  constructor(
-    private readonly deps: {
-      sessions: ReadonlyMap<string, StructuredAgentSessionHostSession>
-      onFailure: (failure: StructuredAgentSessionRequestFailure) => void
-      capturePendingOutput?: StructuredAgentSessionAdapter['capturePendingOutput']
-      wordsContext?: (sessionId: string) => AgentSessionFailureWordsContext
-    }
-  ) {}
+  constructor(private readonly deps: StructuredRequestFailureDeps) {}
 
   forget = (sessionId: string): void => {
     this.baselines.delete(sessionId)
@@ -59,8 +39,59 @@ export class StructuredAgentSessionRequestFailures {
   observe = (
     sessionId: string,
     journal: AgentSessionJournal,
-    rows?: readonly JournalRow[]
+    rows?: readonly JournalRow[],
+    _replacement?: boolean
   ): void => {
+    finishJournalSteps(this.observeSteps(sessionId, journal, rows))
+  }
+
+  observeAsync = async (
+    sessionId: string,
+    journal: AgentSessionJournal,
+    rows?: readonly JournalRow[]
+  ): Promise<void> => {
+    const initiallyEnded = this.deps.sessions.get(sessionId)?.lastEndedChild
+    for (;;) {
+      const session = this.deps.sessions.get(sessionId)
+      if (session?.journal !== journal) {
+        return
+      }
+      const previous = this.baselines.get(sessionId)
+      const ended = session.lastEndedChild
+      const child = session.child
+      const revision = session.operationalRevision
+      const current = () =>
+        this.deps.sessions.get(sessionId) === session &&
+        session.journal === journal &&
+        session.lastEndedChild === ended &&
+        session.child === child &&
+        session.operationalRevision === revision &&
+        this.baselines.get(sessionId) === previous
+      const installed = await finishJournalStepsAsync(
+        this.observeSteps(sessionId, journal, rows, current)
+      )
+      if (
+        installed &&
+        this.deps.sessions.get(sessionId) === session &&
+        session.journal === journal
+      ) {
+        const baseline = this.baselines.get(sessionId)
+        if (baseline) {
+          baseline.ended = initiallyEnded
+        }
+        this.generationEnded(sessionId)
+        return
+      }
+      await new Promise<void>((resolve) => setImmediate(resolve))
+    }
+  };
+
+  private *observeSteps(
+    sessionId: string,
+    journal: AgentSessionJournal,
+    rows?: readonly JournalRow[],
+    current?: () => boolean
+  ): Generator<void, boolean> {
     const cursor = journal.cursor()
     let baseline = this.baselines.get(sessionId)
     const items = new Set<string>()
@@ -71,7 +102,9 @@ export class StructuredAgentSessionRequestFailures {
         submissions.add(row.clientMessageId)
       }
       const mutations = row.kind === 'lifecycle-batch' ? row.mutations : [row]
+      yield
       for (const mutation of mutations) {
+        yield
         if (mutation.kind !== 'item' && mutation.kind !== 'tombstone') {
           continue
         }
@@ -92,10 +125,10 @@ export class StructuredAgentSessionRequestFailures {
       baseline.journal !== journal ||
       baseline.epoch !== cursor.epoch ||
       cursor.sequence < baseline.sequence
-    const historical = replaced || cleared
+    const historical = Boolean(current) || replaced || cleared
     if (historical) {
       // Context clear retires marks, while captured reads still belong to the held journal.
-      baseline = Object.assign(replaced ? {} : (baseline ?? {}), {
+      baseline = Object.assign(replaced || current ? {} : (baseline ?? {}), {
         ...cursor,
         sessionId,
         journal,
@@ -103,9 +136,11 @@ export class StructuredAgentSessionRequestFailures {
         marks: new Map(),
         ended: this.deps.sessions.get(sessionId)?.lastEndedChild
       })
-      this.baselines.set(sessionId, baseline)
-      journal.visitItems((id) => items.add(id))
+      yield* journal.visitItemSteps((id) => {
+        items.add(id)
+      })
       for (const itemId of items) {
+        yield
         const submission = journal.inputOrder.inputForItem(itemId)
         if (submission) {
           submissions.add(submission.clientMessageId)
@@ -113,22 +148,35 @@ export class StructuredAgentSessionRequestFailures {
       }
     }
     if (!baseline) {
-      return
+      return true
     }
     baseline.sequence = cursor.sequence
     for (const id of items) {
+      yield
       this.account(sessionId, baseline, this.request(baseline, 'turn', id), historical)
     }
     for (const id of submissions) {
+      yield
       this.account(sessionId, baseline, this.request(baseline, 'refused-send', id), historical)
     }
+    if (current && !current()) {
+      return false
+    }
+    this.baselines.set(sessionId, baseline)
+    return true
   }
 
   generationEnded = (sessionId: string): void => {
     const baseline = this.baselines.get(sessionId)
     const session = this.deps.sessions.get(sessionId)
     const ended = session?.lastEndedChild
-    if (!baseline || !session || baseline.journal !== session.journal || baseline.ended === ended) {
+    if (
+      !baseline ||
+      !session ||
+      baseline.journal !== session.journal ||
+      baseline.epoch !== session.journal.epoch ||
+      baseline.ended === ended
+    ) {
       return
     }
     baseline.ended = ended

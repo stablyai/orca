@@ -59,6 +59,7 @@ export class AgentSenderPublisher {
   }
 
   retireScope(worktreeId: string): void {
+    this.scoped = new Map(this.scoped)
     this.scoped.delete(worktreeId)
     this.framed.delete(worktreeId)
   }
@@ -73,6 +74,37 @@ export class AgentSenderPublisher {
       this.framed.set(worktreeId, scope)
     }
     return scope
+  }
+
+  /** A finite pass keeps its accepted rows even if a newer refresh publishes. */
+  captureScopes(): (worktreeId: string) => AgentSenderPublication {
+    const scopes = this.scoped
+    const contents = this.contents
+    const revision = this.publication.revision
+    const empty = this.empty
+    return (worktreeId) => {
+      const content = contents.get(worktreeId)
+      const scope = scopes.get(worktreeId) ?? (content ? { ...content, revision } : empty)
+      if (
+        !scopes.has(worktreeId) &&
+        this.scoped === scopes &&
+        (content || this.ownsScope(worktreeId))
+      ) {
+        scopes.set(worktreeId, scope)
+      }
+      return scope
+    }
+  }
+
+  captureFramePass(): (worktreeId: string) => AgentSenderPublication {
+    const scopeOf = this.captureScopes()
+    return (worktreeId) => {
+      const scope = scopeOf(worktreeId)
+      if (!this.framed.has(worktreeId) && this.hasScope(worktreeId)) {
+        this.framed.set(worktreeId, scope)
+      }
+      return scope
+    }
   }
 
   acknowledgeFrame(worktreeId: string, scope: AgentSenderPublication): void {
@@ -92,20 +124,24 @@ export class AgentSenderPublisher {
   }
 
   /** A window graph reply: the rows only when the window's applied base is not current. */
-  forGraph(base: AgentSenderRevision | undefined): {
+  forGraph(
+    base: AgentSenderRevision | undefined,
+    publication = this.publication
+  ): {
     agentSenderAssociations?: AgentSenderPublication
     agentSenderRevision?: AgentSenderRevision
   } {
-    const current = this.publication.revision
+    const current = publication.revision
     return base && current && base.epoch === current.epoch && base.revision === current.revision
       ? { agentSenderRevision: current }
-      : { agentSenderAssociations: this.publication }
+      : { agentSenderAssociations: publication }
   }
 
   publish(next: Content): void {
     if (sameContent(next, this.publication)) {
       return
     }
+    this.scoped = new Map(this.scoped)
     this.revision++
     this.publication = this.stamp(next)
     const host = this.hostFields()

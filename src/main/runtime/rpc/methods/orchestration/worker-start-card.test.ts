@@ -1,3 +1,4 @@
+import '../../../../native-chat/agent-session-journal/journal-host-database-test-support'
 import { verifyWorkerStartCardScenario } from './worker-start-card-scenario.test-fixture'
 import { expect, it, vi } from 'vitest'
 import { partialRuntimeStore } from '../../../runtime-store-partial-fixture'
@@ -84,7 +85,7 @@ it.each([
       )
     }
     if (scenario === 'federated-no-card') {
-      vi.spyOn(current.host, 'captureAgentStartDestination').mockReturnValue(null)
+      vi.spyOn(current.host, 'captureAgentStartDestination').mockResolvedValue(null)
     }
     if (federated) {
       vi.spyOn(runtime, 'resolveOrchestrationWorkerServer').mockReturnValue({
@@ -316,7 +317,7 @@ it.each([
     }
     // A pending display append must not hold the successful RPC; release it only after the reply.
     if (scenario === 'append-pending' || scenario === 'federated-pending-card') {
-      expect(append).toHaveBeenCalledTimes(1)
+      await eventually(() => expect(append).toHaveBeenCalledTimes(1))
       pending.resolve()
     }
     if (

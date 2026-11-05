@@ -1,3 +1,4 @@
+import { settleTestSubscriberDeliveries } from './agent-session-subscriber-test-support'
 import { join } from 'node:path'
 import { expect, it, vi } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
@@ -63,14 +64,18 @@ it('keeps catch-up keyed and shares requested snapshots for N/10N items and one/
             boundedFrames: index === 1,
             emit: (event) => events.push(event)
           })
+          await settleTestSubscriberDeliveries(subscribers)
         }
         subscribers.publish(SESSION, journal)
+        await settleTestSubscriberDeliveries(subscribers)
+        await settleTestSubscriberDeliveries(subscribers)
         for (const text of ['streamed', 'newer']) {
           const prior = journal.snapshot()
           await journal.appendItem(identity(size - 1), body(text), options)
           render.mockClear()
           events.length = 0
           subscribers.publish(SESSION, journal)
+          await settleTestSubscriberDeliveries(subscribers)
           expect(render).toHaveBeenCalledTimes(0)
           const current = journal.snapshot()
           expect(current).not.toBe(prior)
@@ -107,6 +112,8 @@ it('bounds retained turn activity across session churn', async () => {
 
   for (let index = 0; index < MAX_RETAINED_SESSION_ACTIVITIES + 4; index += 1) {
     subscribers.publish(`session-${index}`, journal, { turnId: `turn-${index}`, text: 'working' })
+    await settleTestSubscriberDeliveries(subscribers)
+    await settleTestSubscriberDeliveries(subscribers)
   }
 
   expect(subscribers.retainedActivityCountForTests).toBe(MAX_RETAINED_SESSION_ACTIVITIES)
@@ -125,7 +132,8 @@ it('publishes the current fence when a resumed cursor is already caught up', asy
   })
   const events: AgentSessionSubscribeEvent[] = []
 
-  new AgentSessionSubscribers().open({
+  const subscribers = new AgentSessionSubscribers()
+  subscribers.open({
     id: 'subscriber-1',
     sessionId: SESSION,
     journal,
@@ -133,6 +141,7 @@ it('publishes the current fence when a resumed cursor is already caught up', asy
     cursor: journal.cursor(),
     emit: (event) => events.push(event)
   })
+  await settleTestSubscriberDeliveries(subscribers)
 
   expect(events).toEqual([
     {
@@ -173,19 +182,24 @@ it('stamps the host clock once per published frame', async () => {
     events.push(event)
   }
   subscribers.open({ id: 'one', sessionId: SESSION, journal, fence: 1, emit })
+  await settleTestSubscriberDeliveries(subscribers)
   subscribers.open({ id: 'two', sessionId: SESSION, journal, fence: 1, emit })
+  await settleTestSubscriberDeliveries(subscribers)
   await journal.appendItem(
     { provider: 'orca', clientMessageId: 'clocked' },
     { kind: 'status', text: 'Clocked' },
     { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
   )
   subscribers.publish(SESSION, journal)
+  await settleTestSubscriberDeliveries(subscribers)
+  await settleTestSubscriberDeliveries(subscribers)
   roster = {
     state: 'monitoring',
     tasks: [{ id: 'task-1', kind: 'command', description: 'run the build' }]
   }
   subscribers.republishBackgroundTasks(SESSION, 1)
   subscribers.snapshot(SESSION, journal, 1)
+  await settleTestSubscriberDeliveries(subscribers)
 
   expect(events.map((event) => ('hostNow' in event ? event.hostNow : null))).toEqual([
     1_001, 1_002,
@@ -225,9 +239,12 @@ it('includes catalogs on reconnect and sends an idle checkpoint without journal 
     fence: 7,
     emit: (event) => events.push(event)
   })
+  await settleTestSubscriberDeliveries(subscribers)
   expect(events[0]).toMatchObject({ type: 'snapshot', commands })
   commands = [{ name: 'second', kind: 'skill' as const }]
   subscribers.publish(SESSION, journal)
+  await settleTestSubscriberDeliveries(subscribers)
+  await settleTestSubscriberDeliveries(subscribers)
   expect(events[1]).toEqual({
     type: 'batch',
     sessionId: SESSION,
@@ -244,5 +261,6 @@ it('includes catalogs on reconnect and sends an idle checkpoint without journal 
     fence: 7,
     emit: (event) => events.push(event)
   })
+  await settleTestSubscriberDeliveries(subscribers)
   expect(events[2]).toMatchObject({ type: 'batch', commands })
 })

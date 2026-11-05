@@ -23,22 +23,27 @@ export class JournalEpochController {
       database: () => JournalHostDatabase
       state: () => JournalReducerState
       writer: JournalRowWriter
-      adopt: (loaded: JournalLoad) => void
+      adopt: (loaded: JournalLoad) => void | Promise<void>
+      publish: () => void
     }
   ) {}
 
-  start(reason: AgentJournalEpochReason, fence: number, expectedEpoch: string | null): void {
-    publishNewEpoch({
+  start(
+    reason: AgentJournalEpochReason,
+    fence: number,
+    expectedEpoch: string | null
+  ): Promise<void> {
+    return publishNewEpoch(this.deps.database(), async () => ({
       expectedEpoch,
-      database: this.deps.database(),
       identity: this.deps.identity,
       epoch: this.deps.mintEpoch(),
       reason,
       fence,
       now: this.deps.now(),
       queue: { cards: [], receipt: { write: () => {}, committed: () => {} } },
-      onPublished: this.deps.adopt
-    })
+      onPublished: this.deps.adopt,
+      publish: this.deps.publish
+    }))
   }
 
   roll(reason: AgentJournalEpochReason, fence: number): Promise<AgentJournalCursor> {

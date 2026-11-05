@@ -95,7 +95,10 @@ export async function holdUnsentSends(
       journal.itemBody(agentJournalSubmissionKey(submission.clientMessageId))
     )
   }))
-  const positions = headOfQueuePositions(journal, kept, Boolean(input.unrun))
+  const positions = await journal.withInputOrder(
+    () => kept.map(({ submission }) => submission.clientMessageId),
+    () => headOfQueuePositions(journal, kept, Boolean(input.unrun))
+  )
   const rejection = agentSessionFailureWords(agentSessionFailureFact(hold.cause), {
     surface: 'rejection'
   })

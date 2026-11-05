@@ -1,12 +1,13 @@
+import type { JournalFinishFold } from './journal-row-writer'
 import { isDeepStrictEqual } from 'node:util'
+import type { JournalPersistencePlan } from './journal-persistence-plan'
 import type { JournalHostDatabase } from './journal-host-database'
 import type { JournalReducerState } from './journal-reducer'
 import type { JournalRow } from './journal-row-schema'
-import { prepareJournalOutcomeWrite } from './journal-outcome-write'
+import { prepareJournalOutcomeWriteAsync } from './journal-outcome-write'
 import { encodeJournalState } from './journal-state-codec'
-import { restoreJournal } from './journal-open'
-import type Database from '../../sqlite/sync-database'
-import type { JournalOperationReceipt } from './journal-row-writer'
+import { restoreJournalAsync } from './journal-open'
+import { settleJournalCommitAsync, type JournalOperationReceipt } from './journal-row-writer'
 import { journalStoppedUsageLimitCut } from './journal-stopped-usage-limit-cut'
 import type { UsageLimitContinueIdentity } from '../../../shared/agent-session/lifecycle/agent-session-usage-limit-continue'
 
@@ -30,27 +31,37 @@ export class JournalWriteProjection {
   ) {}
 
   /** The callback is invoked only after the outer transaction has committed. */
-  prepare(
-    db: Database.Database,
+  async prepare(
+    db: JournalPersistencePlan,
     rows: readonly JournalRow[],
     savedAt: number,
-    finishFold?: (draft: JournalReducerState) => void
-  ): () => void {
-    const transition = prepareJournalOutcomeWrite(db, this.deps.state(), rows, savedAt, finishFold)
+    finishFold?: JournalFinishFold,
+    replacement = false
+  ): Promise<() => void | Promise<void>> {
+    const transition = await prepareJournalOutcomeWriteAsync(
+      db,
+      this.deps.state(),
+      rows,
+      savedAt,
+      finishFold,
+      replacement
+    )
     // A stopped cut and its withdrawal commit together, so no reader sees it schedulable.
     const cut = this.deps.withdrawStoppedCut && journalStoppedUsageLimitCut(transition.state, rows)
     const withdrawal = cut ? this.deps.withdrawStoppedCut?.(cut) : undefined
-    withdrawal?.write(db)
+    await withdrawal?.write(db)
     return () => {
-      withdrawal?.committed()
-      this.deps.adopt(transition.adopt())
+      return settleJournalCommitAsync([
+        () => this.deps.adopt(transition.adopt()),
+        () => withdrawal?.committed()
+      ])
     }
   }
 
   /** Runs after commit notification, never in the adopt path. */
-  verify(): void {
+  async verify(): Promise<void> {
     if (JournalWriteProjection.verifyEachCommit) {
-      this.checkEquivalent()
+      await this.checkEquivalent()
       return
     }
     const now = performance.now()
@@ -62,7 +73,7 @@ export class JournalWriteProjection {
     }
     this.verifiedAt = now
     try {
-      this.checkEquivalent()
+      await this.checkEquivalent()
     } catch (error) {
       logJournalVerifyFailure(this.deps.state().sessionId, error)
     }
@@ -70,14 +81,22 @@ export class JournalWriteProjection {
 
   /** Every saved form (input fold, prefix plus records, or records alone) must restore the live
    * state. */
-  private checkEquivalent(): void {
-    const live = this.deps.state()
-    const loaded = restoreJournal(this.deps.database.db, live.sessionId)
+  private async checkEquivalent(): Promise<void> {
+    const lease = await this.deps.database.snapshot(() => {
+      const live = this.deps.state()
+      return { sessionId: live.sessionId, encoded: encodeJournalState(live) }
+    })
+    let loaded
+    try {
+      loaded = await restoreJournalAsync(lease.read, lease.view.sessionId)
+    } finally {
+      await lease.close()
+    }
     if (
       !loaded ||
       loaded.damage ||
       loaded.newer ||
-      !isDeepStrictEqual(encodeJournalState(loaded.state), encodeJournalState(live))
+      !isDeepStrictEqual(encodeJournalState(loaded.state), lease.view.encoded)
     ) {
       throw new Error('journal saved state differs from live state')
     }

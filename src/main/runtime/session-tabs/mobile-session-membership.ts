@@ -34,16 +34,11 @@ export abstract class OrcaRuntimeWithTouchMobileSessionTabsForWorktree extends O
   }
 
   /** Republish only worktrees whose sender scope differs from the one their last frame carried. */
-  refreshAgentSenderAssociations(): void {
+  async refreshAgentSenderAssociations(): Promise<void> {
     if (!this.hasAgentSenderListeners()) {
       return
     }
-    const changed = this.agentProjections.senders.changedScopes(
-      this.mobileSessionTabsByWorktree.keys()
-    )
-    for (const worktreeId of changed) {
-      this.touchMobileSessionTabsForWorktree(worktreeId)
-    }
+    await this.agentProjections.senders.build()
   }
 
   /** Bump snapshotVersion before emitting (coalesced unless immediate); clients discard re-emits at the same version. */

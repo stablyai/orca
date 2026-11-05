@@ -141,9 +141,11 @@ export function acceptedNoLaterThan(
     submission.acceptedSequence <= cursor.sequence
 }
 
-export function oldestQueuedSubmission(
+export async function oldestQueuedSubmission(
   session: Pick<StructuredAgentSessionHostSession, 'journal'>
-): ReturnType<StructuredAgentSessionHostSession['journal']['submissions']>[number] | undefined {
+): Promise<
+  ReturnType<StructuredAgentSessionHostSession['journal']['submissions']>[number] | undefined
+> {
   return selectedStructuredSubmission(session.journal)
 }
 

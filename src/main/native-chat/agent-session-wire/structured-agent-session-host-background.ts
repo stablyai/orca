@@ -15,7 +15,7 @@ export function start(
     host: context.deps,
     sessions: context.sessions,
     readLoadedCut: delivery.readUsageLimitCut,
-    readSavedCut: (id) => readSavedUsageLimitCut(context.deps.journalDatabase.db, id),
+    readSavedCut: (id) => readSavedUsageLimitCut(context.deps.journalDatabase, id),
     serialize: context.serialize,
     send: (params) => host.send({ callerKey: 'trusted-local:usage-limit-continue' }, params),
     publish: delivery.publishStatus,

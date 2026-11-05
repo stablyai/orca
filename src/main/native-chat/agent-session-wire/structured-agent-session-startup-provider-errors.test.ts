@@ -81,7 +81,7 @@ beforeEach(async () => {
     now: () => NOW
   })
   store = await openTestAgentSessionRecordStore(root)
-  host = startHost()
+  host = await startHost()
   const params = hostTestAttachParams(null, {
     provider: 'claude',
     agent: 'claude',
@@ -93,15 +93,15 @@ beforeEach(async () => {
   await host.close(SESSION, 'evict')
   await host.flushAllStreamedEvents()
   claude.connections.splice(0)
-  host = startHost()
+  host = await startHost()
 })
 
-function startHost(): StructuredAgentSessionHost {
+async function startHost(): Promise<StructuredAgentSessionHost> {
   return new StructuredAgentSessionHost({
     agents: claudeAndCodexDeclared(),
     store,
     adapter: Object.assign(adapter, { supportsCreate: () => true }),
-    journalDatabase: openTestJournalHostDatabase(root),
+    journalDatabase: await openTestJournalHostDatabase(root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => `spawn-${claude.connections.length}`,
     logger: log.logger,

@@ -126,3 +126,27 @@ export function notifyStructuredStatusPublication(
     })
   }
 }
+
+/** Failed subscribers detach without blocking other status deliveries. */
+export function emitStructuredStatusEvent(
+  subscribers: Map<string, StructuredAgentSessionStatusSubscriber>,
+  subscriber: StructuredAgentSessionStatusSubscriber,
+  event: AgentSessionStatusEvent
+): void {
+  try {
+    subscriber.emit(event)
+  } catch {
+    subscribers.delete(subscriber.id)
+  }
+}
+
+export function unsubscribeStructuredStatus(
+  subscribers: Map<string, StructuredAgentSessionStatusSubscriber>,
+  id: string
+): void {
+  const subscriber = subscribers.get(id)
+  if (subscriber) {
+    subscribers.delete(id)
+    emitStructuredStatusEvent(subscribers, subscriber, { type: 'end' })
+  }
+}

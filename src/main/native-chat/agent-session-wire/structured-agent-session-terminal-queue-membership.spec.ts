@@ -1,3 +1,4 @@
+import { settleTestSubscriberDeliveries } from './agent-session-subscriber-test-support'
 import { structuredAgentSessionMessageSendMutation } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { NATIVE_CHAT_USAGE_LIMIT_CONTINUE_MESSAGE } from '../../../shared/native-chat/native-chat-usage-limit-cut'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
@@ -174,7 +175,8 @@ it.each([10, 100])(
             })
           )
         }
-        const check = (ids: string[]) => {
+        const check = async (ids: string[]) => {
+          await settleTestSubscriberDeliveries(rig.host.collaboratorsForTests().subscribers)
           const view = publication().queuedMessages
           expect(view.map((card) => card.messageId)).toEqual(ids)
           for (const card of view) {
@@ -195,7 +197,7 @@ it.each([10, 100])(
           await insert(id)
           const after = publication()
           expect(after.queuedMessages).not.toBe(before.queuedMessages)
-          check([...baseline, id])
+          await check([...baseline, id])
           if (edit) {
             expect(
               await lane(() =>
@@ -216,11 +218,11 @@ it.each([10, 100])(
                   journal.queuedMessages.move({ messageId: id, beforeMessageId: baseline[0] })
                 )
               ).toMatchObject({ status: 'moved' })
-              check([id, ...baseline])
+              await check([id, ...baseline])
             }
           }
           expect(await rig.deleteQueued(id)).toMatchObject({ ok: true })
-          check(baseline)
+          await check(baseline)
           expect(publication().queuePause).toBeNull()
         }
         await run(`cycles-${l}`, async () => {
@@ -354,7 +356,7 @@ it.each([10, 100])(
           expect(publication().queuedMessages[0]?.messageId).toBe(direct)
           expect(journal.queuedMessages.get(direct)?.body).toEqual(hostTestMessage(direct))
           expect(await rig.deleteQueued(direct)).toMatchObject({ ok: true })
-          check(baseline)
+          await check(baseline)
         })
         close()
         received = undefined
@@ -579,7 +581,13 @@ it.each([10, 100])(
         expect(c.fullViews, name).toBe(0)
         expect(c.fullInputs, name).toBe(0)
         expect(c.fullIterations, name).toBe(0)
-        expect(c.archived, name).toBe(0)
+        // Private rewind copies retained ownership finitely; ordinary queue actions never scan it.
+        if (name.startsWith('rewind-')) {
+          expect(c.archived, name).toBeGreaterThanOrEqual(2 * h)
+          expect(c.archived, name).toBeLessThanOrEqual(100 * h)
+        } else {
+          expect(c.archived, name).toBe(0)
+        }
         expect(c.restores, name).toBe(0)
         expect(c.indexed, name).toBeLessThanOrEqual(200)
         expect(c.records, name).toBeLessThanOrEqual(5000)

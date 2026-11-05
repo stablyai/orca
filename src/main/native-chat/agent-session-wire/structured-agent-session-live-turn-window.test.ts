@@ -1,3 +1,4 @@
+import { settleTestSubscriberDeliveries } from './agent-session-subscriber-test-support'
 // Revised long-turn rows retain their old position; whole-journal state must outlive bounded pages.
 
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -84,7 +85,7 @@ function hydrate(): StructuredAgentSessionState {
   })
 }
 
-function subscribeFrom(state: StructuredAgentSessionState) {
+async function subscribeFrom(state: StructuredAgentSessionState) {
   const events: AgentSessionSubscribeEvent[] = []
   const subscribers = new AgentSessionSubscribers()
   subscribers.open({
@@ -95,6 +96,7 @@ function subscribeFrom(state: StructuredAgentSessionState) {
     emit: (event) => events.push(event),
     ...(state.cursor ? { cursor: state.cursor } : {})
   })
+  await settleTestSubscriberDeliveries(subscribers)
   let current = state
   return {
     subscribers,
@@ -136,10 +138,11 @@ describe('a running turn whose record is older than the loaded page', () => {
 
   it('stops reading as running when the turn ends off the page', async () => {
     await runLongTurn('turn-1', 250)
-    const live = subscribeFrom(hydrate())
+    const live = await subscribeFrom(hydrate())
 
     await writeTurn('turn-1', { state: 'completed', startedAt: 1_000, completedAt: 2_000 })
     live.subscribers.publish('session-1', journal)
+    await settleTestSubscriberDeliveries(live.subscribers)
     const state = live.apply()
 
     // Completion revises the old position, outside this window.
@@ -153,10 +156,11 @@ describe('a running turn whose record is older than the loaded page', () => {
   it('follows the next turn as it opens', async () => {
     await runLongTurn('turn-1', 250)
     await writeTurn('turn-1', { state: 'completed', startedAt: 1_000, completedAt: 2_000 })
-    const live = subscribeFrom(hydrate())
+    const live = await subscribeFrom(hydrate())
 
     await writeTurn('turn-2', { state: 'running', startedAt: 3_000 })
     live.subscribers.publish('session-1', journal)
+    await settleTestSubscriberDeliveries(live.subscribers)
 
     expect(runningStructuredAgentSessionTurnId(live.apply())).toBe('turn-2')
   })
@@ -164,15 +168,16 @@ describe('a running turn whose record is older than the loaded page', () => {
   it('is not undone by an older page read while live frames moved on', async () => {
     await runLongTurn('turn-1', 250)
     const before = hydrate()
-    const older = readAgentSessionHistory(journal, {
+    const older = await readAgentSessionHistory(journal, {
       sessionId: 'session-1',
       direction: 'before',
       cursor: { epoch: before.epoch ?? '', sequence: before.items[0]?.sequence ?? 0 },
       limit: 40
     })
-    const live = subscribeFrom(before)
+    const live = await subscribeFrom(before)
     await writeTurn('turn-1', { state: 'completed', startedAt: 1_000, completedAt: 2_000 })
     live.subscribers.publish('session-1', journal)
+    await settleTestSubscriberDeliveries(live.subscribers)
     const ended = live.apply()
 
     if (!older.ok) {

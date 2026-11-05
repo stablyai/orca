@@ -9,7 +9,7 @@ import type { QueuedMessageRow } from '../agent-session-journal/queued-message-t
 import type { StructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 import { structuredAgentSessionSendBlock } from './structured-agent-session-send-preparation'
 import {
-  selectStructuredAgentSessionInput,
+  selectPublishedStructuredAgentSessionInput,
   structuredInputExecutionWorking,
   structuredInputHandoverWorking
 } from './structured-agent-session-input-selection'
@@ -60,7 +60,12 @@ export function nextStructuredQueuedMessage(
   ) {
     return null
   }
-  const selected = selectStructuredAgentSessionInput(input.journal, undefined, false, steer)
+  const selected = selectPublishedStructuredAgentSessionInput(
+    input.journal,
+    undefined,
+    false,
+    steer
+  )
   return selected.kind === 'card' && (!steer || input.canSteer?.(selected.card) === true)
     ? selected.card
     : null

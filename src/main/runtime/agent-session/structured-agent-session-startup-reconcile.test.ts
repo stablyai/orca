@@ -1,3 +1,4 @@
+import { JournalPersistencePlan } from '../../native-chat/agent-session-journal/journal-persistence-plan'
 // Newer records reconcile read-only in memory; bookkeeping write failures must not put startup into Session restore failed.
 
 import { readFile, mkdtemp, rm } from 'node:fs/promises'
@@ -7,7 +8,6 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { agentSessionRecordFixture } from '../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { journalDatabasePath } from '../../native-chat/agent-session-journal/journal-host-database'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
-import type * as AgentSessionRecordRows from './records/agent-session-record-rows'
 import {
   seedTestAgentSessionRecordStore,
   seedTestAgentSessionStoreFromNewerBuild
@@ -22,17 +22,17 @@ import { recordingStructuredAgentSessionLogger } from '../../native-chat/agent-s
 
 const writes = vi.hoisted(() => ({ failing: false }))
 
-vi.mock('./records/agent-session-record-rows', async (importOriginal) => {
-  const actual = await importOriginal<typeof AgentSessionRecordRows>()
-  return {
-    ...actual,
-    writeAgentSessionStoreRows: (...args: Parameters<typeof actual.writeAgentSessionStoreRows>) => {
-      if (writes.failing) {
-        throw new Error('disk I/O error')
-      }
-      return actual.writeAgentSessionStoreRows(...args)
+beforeEach(() => {
+  const add = JournalPersistencePlan.prototype.add
+  vi.spyOn(JournalPersistencePlan.prototype, 'add').mockImplementation(function (
+    this: JournalPersistencePlan,
+    ...args
+  ) {
+    if (writes.failing && args[0].kind === 'store') {
+      throw new Error('disk I/O error')
     }
-  }
+    add.apply(this, args)
+  })
 })
 
 let root: string

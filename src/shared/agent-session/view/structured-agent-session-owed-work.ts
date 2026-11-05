@@ -1,13 +1,13 @@
+import { activeStructuredAgentSessionTurnIdSteps } from './structured-agent-session-live-turn'
+import { isStructuredAgentSessionMainAgentWorkingSteps } from './structured-agent-session-main-agent-working'
+import { agentSessionCurrentContextRowsSteps } from '../agent-session-context-clear'
+import { finishAgentSessionSteps } from '../agent-session-projection-steps'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from '../journal/agent-session-journal-types'
-import { activeStructuredAgentSessionTurnId } from './structured-agent-session-live-turn'
-import {
-  isStructuredAgentSessionMainAgentWorking,
-  type StructuredAgentSessionWorkScope
-} from './structured-agent-session-main-agent-working'
-import { agentSessionCurrentContextRows } from '../agent-session-context-clear'
+
+import type { StructuredAgentSessionWorkScope } from './structured-agent-session-main-agent-working'
 
 /** Journal main-agent rule: running turn or unanswered send, including work hidden beneath an attention prompt. */
 export function owesStructuredAgentSessionWork(
@@ -16,9 +16,20 @@ export function owesStructuredAgentSessionWork(
   currentFence?: number | null,
   scope?: StructuredAgentSessionWorkScope
 ): boolean {
-  const current = agentSessionCurrentContextRows(items, submissions)
-  return isStructuredAgentSessionMainAgentWorking(
-    activeStructuredAgentSessionTurnId(
+  return finishAgentSessionSteps(
+    owesStructuredAgentSessionWorkSteps(items, submissions, currentFence, scope)
+  )
+}
+
+export function* owesStructuredAgentSessionWorkSteps(
+  items: readonly AgentJournalRenderItem[],
+  submissions: readonly AgentJournalSubmission[],
+  currentFence?: number | null,
+  scope?: StructuredAgentSessionWorkScope
+): Generator<void, boolean> {
+  const current = yield* agentSessionCurrentContextRowsSteps(items, submissions)
+  return yield* isStructuredAgentSessionMainAgentWorkingSteps(
+    yield* activeStructuredAgentSessionTurnIdSteps(
       current.items,
       scope && ((item) => scope.isCurrentItem(item.itemId))
     ),

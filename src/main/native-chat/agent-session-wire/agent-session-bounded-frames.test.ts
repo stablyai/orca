@@ -1,3 +1,4 @@
+import { settleTestSubscriberDeliveries } from './agent-session-subscriber-test-support'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { CLIENT_HISTORY_READER } from './agent-session-item-wire-form'
 import { readStructuredAgentSessionHistoryResult } from './structured-agent-session-history-result'
@@ -170,21 +171,25 @@ describe('frames to a bounded-frame subscriber', () => {
     }
     const request = { sessionId: SESSION, direction: 'tail' as const, limit: 1 }
     expect(
-      readStructuredAgentSessionHistoryResult({
-        journal,
-        record: null,
-        request,
-        reader
-      }).page.items.map((row) => row.itemId)
+      (
+        await readStructuredAgentSessionHistoryResult({
+          journal,
+          record: null,
+          request,
+          reader
+        })
+      ).page.items.map((row) => row.itemId)
     ).toEqual([agentJournalItemKey(first)])
-    expect(readAgentSessionHistory(journal, request).page.items.map((row) => row.itemId)).toEqual([
-      hidden
-    ])
     expect(
-      readAgentSessionHistory(
-        journal,
-        { ...request, direction: 'before', cursor: journal.cursor() },
-        { reader }
+      (await readAgentSessionHistory(journal, request)).page.items.map((row) => row.itemId)
+    ).toEqual([hidden])
+    expect(
+      (
+        await readAgentSessionHistory(
+          journal,
+          { ...request, direction: 'before', cursor: journal.cursor() },
+          { reader }
+        )
       ).page.items.map((row) => row.itemId)
     ).toEqual([agentJournalItemKey(first)])
     const projected: AgentSessionSubscribeEvent[] = []
@@ -216,6 +221,7 @@ describe('frames to a bounded-frame subscriber', () => {
       turnScope: { kind: 'thread' }
     })
     subscribers.publish(SESSION, journal)
+    await settleTestSubscriberDeliveries(subscribers)
     const update = projected.at(-1)
     expect(update?.type === 'batch' && update.batch.removedItemIds).toContain(hidden)
     const ordinary = canonical.at(-1)
@@ -231,7 +237,7 @@ describe('frames to a bounded-frame subscriber', () => {
     expect(
       current?.type === 'snapshot' && current.page.items.some((row) => row.itemId === hidden)
     ).toBe(true)
-    const stale = readAgentSessionHistory(
+    const stale = await readAgentSessionHistory(
       journal,
       { ...request, cursor: { epoch: 'old', sequence: 0 }, direction: 'after' },
       { reader }
@@ -311,6 +317,7 @@ describe('frames to a bounded-frame subscriber', () => {
       emit,
       boundedFrames: true
     })
+    await settleTestSubscriberDeliveries(subscribers)
     check('unknown')
     close()
     frames.length = 0
@@ -324,6 +331,7 @@ describe('frames to a bounded-frame subscriber', () => {
       cursor,
       snapshotCatchUp: false
     })
+    await settleTestSubscriberDeliveries(subscribers)
     expect(
       frames.filter((frame) => frame.type === 'batch' && frame.batch.items.length).length
     ).toBeGreaterThan(1)
@@ -331,6 +339,8 @@ describe('frames to a bounded-frame subscriber', () => {
     frames.length = 0
     held = new Set(ids)
     subscribers.publish(SESSION, journal)
+    await settleTestSubscriberDeliveries(subscribers)
+    await settleTestSubscriberDeliveries(subscribers)
     check('pending')
     for (const frame of frames) {
       expect(frame).toMatchObject({
@@ -403,6 +413,7 @@ describe('frames to a bounded-frame subscriber', () => {
       emit,
       boundedFrames: true
     })
+    await settleTestSubscriberDeliveries(subscribers)
     subscribers.open({
       id: 'catch-up',
       sessionId: SESSION,
@@ -412,9 +423,13 @@ describe('frames to a bounded-frame subscriber', () => {
       cursor: { epoch: journal.epoch, sequence: 0 },
       boundedFrames: true
     })
+    await settleTestSubscriberDeliveries(subscribers)
     await fillChat()
     subscribers.publish(SESSION, journal, { turnId: 't'.repeat(100_000), text: 'working' })
+    await settleTestSubscriberDeliveries(subscribers)
+    await settleTestSubscriberDeliveries(subscribers)
     subscribers.snapshot(SESSION, journal, 1)
+    await settleTestSubscriberDeliveries(subscribers)
 
     expect(frames.length).toBeGreaterThan(4)
     for (const frame of frames) {
@@ -445,12 +460,15 @@ describe('frames to a bounded-frame subscriber', () => {
       emit: (event) => frames.push(event),
       boundedFrames: true
     })
+    await settleTestSubscriberDeliveries(subscribers)
     // Simulate a buffered drain before one publish.
     for (let index = 0; index < 40; index += 1) {
       await append(message('x'.repeat(256 * 1024)))
     }
     frames.length = 0
     subscribers.publish(SESSION, journal)
+    await settleTestSubscriberDeliveries(subscribers)
+    await settleTestSubscriberDeliveries(subscribers)
 
     // The phone shell caps unacknowledged stream bytes at 4 MiB.
     const bytes = frames.reduce((sum, frame) => sum + bridgeFrameBytes(frame), 0)
@@ -463,6 +481,8 @@ describe('frames to a bounded-frame subscriber', () => {
     await append(message('next'))
     const live = frames.length
     subscribers.publish(SESSION, journal)
+    await settleTestSubscriberDeliveries(subscribers)
+    await settleTestSubscriberDeliveries(subscribers)
     expect(frames.slice(live).map((frame) => frame.type)).toEqual(['batch'])
 
     let state = frames.reduce(
@@ -470,7 +490,7 @@ describe('frames to a bounded-frame subscriber', () => {
       EMPTY_STRUCTURED_AGENT_SESSION
     )
     for (let cursor = oldestStructuredAgentSessionCursor(state); state.hasOlder && cursor;) {
-      const older = readAgentSessionHistory(journal, {
+      const older = await readAgentSessionHistory(journal, {
         sessionId: SESSION,
         direction: 'before',
         cursor
@@ -524,8 +544,11 @@ describe('frames to a bounded-frame subscriber', () => {
       fence: 1,
       emit: (event) => frames.push(event)
     })
+    await settleTestSubscriberDeliveries(subscribers)
     await append(stored)
     subscribers.publish(SESSION, journal)
+    await settleTestSubscriberDeliveries(subscribers)
+    await settleTestSubscriberDeliveries(subscribers)
 
     expect(frames).toHaveLength(2)
     expect(frames[0]).toMatchObject({

@@ -81,11 +81,11 @@ function createRuntime() {
   const setSession = (next: WorkspaceSessionState): void => {
     session = next
   }
-  const sync = (
+  const sync = async (
     mobileSessionTabs: RuntimeMobileSessionTabsSnapshot[],
     unchangedMobileSessionWorktrees?: string[]
-  ): RuntimeSyncWindowGraphResult =>
-    runtime.syncWindowGraph(1, {
+  ): Promise<RuntimeSyncWindowGraphResult> =>
+    await runtime.syncWindowGraph(1, {
       tabs: [],
       leaves: [],
       mobileSessionTabs,
@@ -124,74 +124,74 @@ describe('graph-sync mobile payload partition', () => {
     vi.useRealTimers()
   })
 
-  it('keeps a withheld worktree alive instead of pruning it as removed', () => {
+  it('keeps a withheld worktree alive instead of pruning it as removed', async () => {
     const { events, sync, internals } = createRuntime()
-    sync([makeSnapshot(WT_A, 1), makeSnapshot(WT_B, 2)])
-    vi.advanceTimersByTime(300)
+    await sync([makeSnapshot(WT_A, 1), makeSnapshot(WT_B, 2)])
+    await vi.advanceTimersByTimeAsync(300)
     const storedB = internals.mobileSessionTabsByWorktree.get(WT_B)
     expect(storedB).toBeDefined()
     events.length = 0
 
-    sync([makeSnapshot(WT_A, 3)], [WT_B])
-    vi.advanceTimersByTime(300)
+    await sync([makeSnapshot(WT_A, 3)], [WT_B])
+    await vi.advanceTimersByTimeAsync(300)
 
     expect(internals.mobileSessionTabsByWorktree.get(WT_B)).toBe(storedB)
     expect(events.filter((event) => 'removed' in event && event.removed === true)).toEqual([])
     expect(events.map((event) => event.worktree)).toEqual([WT_A])
   })
 
-  it('still prunes a worktree the renderer omits from both lists', () => {
+  it('still prunes a worktree the renderer omits from both lists', async () => {
     const { events, sync, internals } = createRuntime()
-    sync([makeSnapshot(WT_A, 1), makeSnapshot(WT_B, 2)])
-    vi.advanceTimersByTime(300)
+    await sync([makeSnapshot(WT_A, 1), makeSnapshot(WT_B, 2)])
+    await vi.advanceTimersByTimeAsync(300)
     events.length = 0
 
-    sync([makeSnapshot(WT_A, 3)], [])
-    vi.advanceTimersByTime(300)
+    await sync([makeSnapshot(WT_A, 3)], [])
+    await vi.advanceTimersByTimeAsync(300)
 
     expect(internals.mobileSessionTabsByWorktree.has(WT_B)).toBe(false)
     const removed = events.filter((event) => 'removed' in event && event.removed === true)
     expect(removed.map((event) => event.worktree)).toEqual([WT_B])
   })
 
-  it('asks for a republish of a withheld worktree it dropped, and accepts the resend', () => {
+  it('asks for a republish of a withheld worktree it dropped, and accepts the resend', async () => {
     const { sync, internals } = createRuntime()
-    sync([makeSnapshot(WT_A, 1), makeSnapshot(WT_B, 2)])
-    vi.advanceTimersByTime(300)
+    await sync([makeSnapshot(WT_A, 1), makeSnapshot(WT_B, 2)])
+    await vi.advanceTimersByTimeAsync(300)
 
     internals.mobileSessionTabsByWorktree.delete(WT_B)
 
-    const result = sync([], [WT_A, WT_B])
-    vi.advanceTimersByTime(300)
+    const result = await sync([], [WT_A, WT_B])
+    await vi.advanceTimersByTimeAsync(300)
     expect(result.mobileSessionResyncWorktrees).toEqual([WT_B])
     expect(internals.mobileSessionTabsByWorktree.has(WT_A)).toBe(true)
 
     // Republish uses the same revision; forgetting the row must also clear its accepted-revision gate.
-    const resend = sync([makeSnapshot(WT_B, 2)], [WT_A])
-    vi.advanceTimersByTime(300)
+    const resend = await sync([makeSnapshot(WT_B, 2)], [WT_A])
+    await vi.advanceTimersByTimeAsync(300)
     expect(resend.mobileSessionResyncWorktrees).toBeUndefined()
     expect(internals.mobileSessionTabsByWorktree.get(WT_B)?.tabs).toEqual([
       expect.objectContaining({ parentTabId: 'tab-1' })
     ])
   })
 
-  it('asks for a republish when headless hydration masks a dropped renderer snapshot', () => {
+  it('asks for a republish when headless hydration masks a dropped renderer snapshot', async () => {
     const { sync, setSession, internals } = createRuntime()
     setSession(
       makeSession({
         tabsByWorktree: { [WT_A]: [makeTerminalTab('serve-tab', 'serve-pty-1')] }
       })
     )
-    sync([makeSnapshot(WT_A, 1)])
+    await sync([makeSnapshot(WT_A, 1)])
     internals.mobileSessionTabsByWorktree.delete(WT_A)
 
-    const result = sync([], [WT_A])
+    const result = await sync([], [WT_A])
     expect(result.mobileSessionResyncWorktrees).toEqual([WT_A])
     expect(internals.mobileSessionTabsByWorktree.get(WT_A)?.publicationEpoch).toMatch(
       /^headless-hydrated:/
     )
 
-    const resend = sync([makeSnapshot(WT_A, 1)], [])
+    const resend = await sync([makeSnapshot(WT_A, 1)], [])
     expect(resend.mobileSessionResyncWorktrees).toBeUndefined()
     expect(
       internals.mobileSessionTabsByWorktree
@@ -200,14 +200,14 @@ describe('graph-sync mobile payload partition', () => {
     ).toEqual(['tab-1', 'serve-tab'])
   })
 
-  it('requests the accepted revision again to prune a stale preserved tab', () => {
+  it('requests the accepted revision again to prune a stale preserved tab', async () => {
     const { sync, setSession, internals } = createRuntime()
     setSession(
       makeSession({
         tabsByWorktree: { [WT_A]: [makeTerminalTab('serve-tab', 'serve-pty-1')] }
       })
     )
-    sync([makeSnapshot(WT_A, 1)])
+    await sync([makeSnapshot(WT_A, 1)])
     expect(
       internals.mobileSessionTabsByWorktree
         .get(WT_A)
@@ -215,10 +215,10 @@ describe('graph-sync mobile payload partition', () => {
     ).toBe(true)
 
     setSession(makeSession())
-    const result = sync([], [WT_A])
+    const result = await sync([], [WT_A])
     expect(result.mobileSessionResyncWorktrees).toEqual([WT_A])
 
-    sync([makeSnapshot(WT_A, 1)], [])
+    await sync([makeSnapshot(WT_A, 1)], [])
     expect(
       internals.mobileSessionTabsByWorktree
         .get(WT_A)
@@ -226,7 +226,7 @@ describe('graph-sync mobile payload partition', () => {
     ).toBe(false)
   })
 
-  it('does not request a renderer tab rejected by the retirement fence', () => {
+  it('does not request a renderer tab rejected by the retirement fence', async () => {
     const { sync, setSession, internals } = createRuntime()
     setSession(
       makeSession({
@@ -234,21 +234,21 @@ describe('graph-sync mobile payload partition', () => {
       })
     )
 
-    sync([makeSnapshot(WT_A, 1)])
+    await sync([makeSnapshot(WT_A, 1)])
     expect(internals.mobileSessionTabsByWorktree.get(WT_A)?.tabs).toEqual([])
 
-    expect(sync([], [WT_A]).mobileSessionResyncWorktrees).toBeUndefined()
-    expect(sync([], [WT_A]).mobileSessionResyncWorktrees).toBeUndefined()
+    expect((await sync([], [WT_A])).mobileSessionResyncWorktrees).toBeUndefined()
+    expect((await sync([], [WT_A])).mobileSessionResyncWorktrees).toBeUndefined()
   })
 
-  it('leaves the legacy full-payload contract untouched when no list is sent', () => {
+  it('leaves the legacy full-payload contract untouched when no list is sent', async () => {
     const { events, sync, internals } = createRuntime()
-    sync([makeSnapshot(WT_A, 1), makeSnapshot(WT_B, 2)])
-    vi.advanceTimersByTime(300)
+    await sync([makeSnapshot(WT_A, 1), makeSnapshot(WT_B, 2)])
+    await vi.advanceTimersByTimeAsync(300)
     events.length = 0
 
-    sync([makeSnapshot(WT_A, 3)])
-    vi.advanceTimersByTime(300)
+    await sync([makeSnapshot(WT_A, 3)])
+    await vi.advanceTimersByTimeAsync(300)
 
     expect(internals.mobileSessionTabsByWorktree.has(WT_B)).toBe(false)
     expect(

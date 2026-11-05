@@ -73,7 +73,7 @@ let events: StructuredAgentSessionEventSink | undefined
 let initialAttach: ReturnType<typeof hostTestAttachParams>
 let idleSweep: StructuredAgentSessionHostDeps['idleSweep']
 
-function startHost(): void {
+async function startHost(): Promise<void> {
   host = new StructuredAgentSessionHost({
     agents: NO_STRUCTURED_AGENTS,
     logger: createStructuredAgentSessionLogger(),
@@ -104,7 +104,7 @@ function startHost(): void {
       answerPrompt: vi.fn(async () => undefined),
       setOption: vi.fn(async () => undefined)
     },
-    journalDatabase: openTestJournalHostDatabase(root),
+    journalDatabase: await openTestJournalHostDatabase(root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => `spawn-${acquire.mock.calls.length}`,
     probeOwner,
@@ -135,7 +135,7 @@ async function restart(reopen = false): Promise<void> {
   if (reopen) {
     store = await openTestAgentSessionRecordStore(root)
   }
-  startHost()
+  await startHost()
 }
 
 const SETUP: Record<Point, () => Promise<void>> = {
@@ -238,7 +238,7 @@ beforeEach(async () => {
   releaseAcquisition = vi.fn(async () => true)
   probeOwner = vi.fn(async () => PID_ABSENT)
   store = await openTestAgentSessionRecordStore(root)
-  startHost()
+  await startHost()
   initialAttach = hostTestAttachParams(null)
   expect(await host.attach(CALLER, initialAttach)).toMatchObject({ ok: true })
 })
@@ -484,8 +484,9 @@ describe('a start racing the host', () => {
     idleSweep = { intervalMs: 5, idleMs: () => 0 }
     const { first, release } = await heldAt('spawn')
     await first.sent
-    await new Promise((resolve) => setTimeout(resolve, 30))
+    const swept = host.collaboratorsForTests().lifetime.idleSweep.tick()
     release()
+    await swept
 
     await eventually(async () =>
       expect((await submission(first.id))?.dispatchState).toBe('accepted')

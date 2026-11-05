@@ -31,7 +31,7 @@ import {
 import { publishJournalOutcomeEpoch } from './journal-outcome-write'
 import { restoreJournal } from './journal-open'
 import type { JournalRow } from './journal-row-schema'
-import type { JournalHostDatabase } from './journal-host-database'
+import type { TestJournalHostDatabase as JournalHostDatabase } from './journal-host-database-test-support'
 
 const identity: AgentSessionJournalIdentity = {
   sessionId: 'session-1',
@@ -59,7 +59,7 @@ const journals = createTrackedJournalOpener()
 
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-journal-saved-state-'))
-  database = openTestJournalHostDatabase(root)
+  database = await openTestJournalHostDatabase(root)
 })
 afterEach(async () => {
   await journals.closeAll()
@@ -67,7 +67,7 @@ afterEach(async () => {
 })
 
 function write(rows: readonly JournalRow[]): JournalReducerState {
-  const result = database.transaction((db) => {
+  const result = database.fixtureTransaction((db) => {
     publishTestJournalEpoch(db, identity.sessionId, epoch)
     return publishJournalOutcomeEpoch(db, identity.sessionId, epoch, rows)
   })

@@ -42,7 +42,8 @@ export class FakeConnection implements PiRpcConnection {
   readonly sent: JsonlRpcRecord[] = []
   readonly requests: string[] = []
   readonly compactParams: unknown[] = []
-  private readonly exitListeners: (() => void)[] = []
+  private readonly exitListeners: Parameters<PiRpcConnection['onExit']>[0][] = []
+  private exitError = new Error('child exited')
   requestOverride?: (command: string) => Promise<unknown> | undefined
   abortRequest?: () => void
   constructor(
@@ -87,9 +88,9 @@ export class FakeConnection implements PiRpcConnection {
   }
   pauseReading(): void {}
   resumeReading(): void {}
-  onExit(listener: () => void): void {
+  onExit(listener: Parameters<PiRpcConnection['onExit']>[0]): void {
     if (this.rootVerdict === 'exited') {
-      listener()
+      listener(false, this.exitError)
     } else {
       this.exitListeners.push(listener)
     }
@@ -100,8 +101,9 @@ export class FakeConnection implements PiRpcConnection {
   exit(error = new Error('child exited')): void {
     this.closed = true
     this.rootVerdict = 'exited'
+    this.exitError = error
     for (const listener of this.exitListeners.splice(0)) {
-      listener()
+      listener(false, error)
     }
     this.handlers.onExit?.(error, {
       expected: false,

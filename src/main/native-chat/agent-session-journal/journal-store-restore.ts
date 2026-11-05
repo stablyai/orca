@@ -1,6 +1,6 @@
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { JournalEpochController } from './journal-epoch-controller'
-import { restoreJournal } from './journal-open'
+import { restoreJournalAsync } from './journal-open'
 import { journalOpenRefusalError } from './journal-open-failure'
 import type { JournalStoreHost } from './journal-store-collaborators'
 import { openJournalStoreState } from './journal-store-open'
@@ -20,7 +20,7 @@ export async function restoreJournalStore(
     )
   }
   // Unpaced and charged to no maintenance budget: background work alone pays its duty cycle.
-  const loaded = restoreJournal(database.db, host.identity.sessionId)
+  const loaded = await database.read((read) => restoreJournalAsync(read, host.identity.sessionId))
   return openJournalStoreState({
     sessionId: host.identity.sessionId,
     replay: () => loaded,

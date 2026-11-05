@@ -95,7 +95,7 @@ export abstract class OrcaRuntimeWithApplyMobileSessionTabNavigation extends Orc
     surface: { tabId: string; leafId: string } | { sessionId: string },
     clientNavigationId: string
   ): boolean {
-    const snapshot = this.getMobileSessionTabsForWorktree(worktreeId, undefined, {
+    const snapshot = this.getMobileSessionTabsWithoutSenders(worktreeId, undefined, {
       includeAgentSenders: false
     })
     const tab = snapshot.tabs.find((candidate) =>
@@ -117,7 +117,7 @@ export abstract class OrcaRuntimeWithApplyMobileSessionTabNavigation extends Orc
     sessionId: string,
     clientNavigationId: string
   ): boolean {
-    const snapshot = this.getMobileSessionTabsForWorktree(worktreeId, undefined, {
+    const snapshot = this.getMobileSessionTabsWithoutSenders(worktreeId, undefined, {
       includeAgentSenders: false
     })
     const tab = snapshot.tabs.find(

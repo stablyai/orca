@@ -1,11 +1,10 @@
+import { finishJournalSteps } from './journal-reconstruction-steps'
 import {
-  readJournalInputPlace,
-  restoreJournalInputPlaces,
   currentJournalInputIdentity,
   journalInputOrderChanged,
   isJournalInputOverride,
   recordJournalInputAdmission,
-  releaseJournalInputHistory
+  restoreJournalInputPlacesSteps
 } from './journal-input-order-state'
 export type { JournalInputPlace } from './journal-input-order-state'
 
@@ -17,52 +16,48 @@ import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/re
 import type { JournalReducerState } from './journal-reducer'
 import type { JournalRow } from './journal-row-schema'
 import type { QueuedMessageRow } from './queued-message-table'
-import type { InputPlaceQuery } from './journal-input-place-index'
-import { JournalInputEvidence } from './journal-input-evidence'
-import { JournalInputLineageOwner } from './journal-input-lineage'
-import { JournalInputCardIndex } from './journal-input-card-index'
+import { JournalInputPlaces } from './journal-input-places'
 
-import { getJournalInputOrder, setJournalInputOrder } from './journal-input-order-registry'
-export { setJournalInputOrder } from './journal-input-order-registry'
-
-export function initializeJournalInputOrder(
-  state: JournalReducerState,
-  originalAcceptance?: (id: string) => AgentJournalCursor | undefined
-): JournalInputOrder {
-  const owner = new JournalInputOrder(state, originalAcceptance)
-  setJournalInputOrder(state, owner)
-  return owner
-}
-export function journalInputOrder(state: JournalReducerState): JournalInputOrder {
-  return getJournalInputOrder(state) ?? initializeJournalInputOrder(state)
-}
+export {
+  initializeJournalInputOrder,
+  initializeJournalInputOrderSteps,
+  journalInputOrder,
+  setJournalInputOrder
+} from './journal-input-order-owner'
 
 /** Own admission places and shared command witnesses are reconstructed by the journal fold. */
-export class JournalInputOrder extends JournalInputEvidence {
+export class JournalInputOrder extends JournalInputPlaces {
   private reconstructing = false
   private legacyPlaces = 0
   private readonly recoveryOwed = new Set<string>()
-  private readonly originals = new Map<string, AgentJournalCursor | undefined>()
   private readonly unsettled = new JournalSubmissionIndex()
   // Recovered unknown sends stay unsettled forever; only pending ones can still be accepted.
   private readonly sending = new JournalSubmissionIndex()
   private readonly queued = new Map<string, AgentJournalSubmission>()
   private readonly entered = new Map<string, AgentJournalSubmission>()
   private readonly overrides = new Map<string, AgentJournalSubmission>()
-  readonly lineage: JournalInputLineageOwner
-  readonly cards: JournalInputCardIndex
   private receiptCount = 0
   private queueRevision = 0
   private revision = 0
 
   constructor(
     state: JournalReducerState,
-    private readonly originalAcceptance?: (id: string) => AgentJournalCursor | undefined,
+    originalAcceptance?: (id: string) => AgentJournalCursor | undefined,
     readonly newestTurn = new JournalNewestTurn(state)
   ) {
-    super(state)
-    this.lineage = new JournalInputLineageOwner(state.inputCards)
-    this.cards = new JournalInputCardIndex(this.lineage)
+    super(state, originalAcceptance)
+  }
+
+  *prepareRowSteps(state: JournalReducerState, row: JournalRow): Generator<void> {
+    yield* this.cards.ensureSteps(state)
+    if (
+      row.kind === 'submission' &&
+      row.handoverRecorded &&
+      row.queuedMessageId === undefined &&
+      row.inputOrderContext?.basis !== 'observed'
+    ) {
+      yield
+    }
   }
 
   beforeRow(state: JournalReducerState, row: JournalRow): void {
@@ -92,42 +87,66 @@ export class JournalInputOrder extends JournalInputEvidence {
 
   // A streaming prefix cannot establish the last legacy consumer.
   beginReconstruction(): void {
+    return finishJournalSteps(this.beginReconstructionSteps())
+  }
+  *beginReconstructionSteps(): Generator<void, void> {
     this.reconstructing = true
     this.legacyPlaces = 0
     for (const entry of this.state.inputEntries.values()) {
       if (entry.context.basis === 'legacy') {
         this.legacyPlaces++
       }
+      yield
     }
   }
   finishReconstruction(state: JournalReducerState): void {
+    return finishJournalSteps(this.finishReconstructionSteps(state))
+  }
+  *finishReconstructionSteps(state: JournalReducerState): Generator<void, void> {
     this.reconstructing = false
     if (this.legacyPlaces === 0) {
-      this.releaseHistory(state)
+      yield* this.releaseHistorySteps(state)
     }
   }
 
   restore(state: JournalReducerState): void {
-    this.legacyPlaces = restoreJournalInputPlaces(state)
-    this.cards.ensure(state)
+    return finishJournalSteps(this.restoreSteps(state))
+  }
+  *restoreSteps(state: JournalReducerState): Generator<void, void> {
+    this.legacyPlaces = yield* restoreJournalInputPlacesSteps(state)
+    yield* this.cards.ensureSteps(state)
     for (const id of state.submissions.keys()) {
       this.refresh(state, id)
+      yield
     }
-    this.lineage.restoreFrontier(state.lastSequence, state.inputEntries.values())
+    yield* this.lineage.restoreFrontierSteps(state.lastSequence, state.inputEntries.values())
   }
 
   overlay(state: JournalReducerState, rows: readonly QueuedMessageRow[]): void {
-    this.cards.overlay(state, rows)
+    return finishJournalSteps(this.overlaySteps(state, rows))
+  }
+  *overlaySteps(
+    state: JournalReducerState,
+    rows: readonly QueuedMessageRow[]
+  ): Generator<void, void> {
+    yield* this.cards.overlaySteps(state, rows)
   }
   introduceOverlays(state: JournalReducerState): void {
-    this.cards.introduceOverlays((card) => this.queueChanged(state, undefined, card))
+    return finishJournalSteps(this.introduceOverlaysSteps(state))
+  }
+  *introduceOverlaysSteps(state: JournalReducerState): Generator<void, void> {
+    yield* this.cards.introduceOverlaysSteps((card) => this.queueChanged(state, undefined, card))
   }
 
   markOpeningRecovery(): void {
+    return finishJournalSteps(this.markOpeningRecoverySteps())
+  }
+  *markOpeningRecoverySteps(): Generator<void, void> {
     for (const entry of this.unsettled.values()) {
       if (isQueuedAgentJournalSubmission(entry)) {
         this.markRecoveryPending(entry.clientMessageId)
       }
+      yield
     }
   }
 
@@ -143,16 +162,17 @@ export class JournalInputOrder extends JournalInputEvidence {
     return this.recoveryOwed.has(id)
   }
   carryRecovery(previous: JournalInputOrder): void {
+    finishJournalSteps(this.carryRecoverySteps(previous))
+  }
+  *carryRecoverySteps(previous: JournalInputOrder): Generator<void> {
     for (const id of previous.recoveryOwed) {
+      yield
       if (this.queued.has(id)) {
         this.markRecoveryPending(id)
       }
     }
   }
 
-  place(id: string): ReturnType<typeof readJournalInputPlace> {
-    return readJournalInputPlace(this.state, id, this.originals, this.originalAcceptance)
-  }
   forced(id: string): boolean {
     return this.state.inputEntries.get(id)?.witnessCardId !== undefined
   }
@@ -173,37 +193,6 @@ export class JournalInputOrder extends JournalInputEvidence {
   }
   version(): number {
     return this.revision
-  }
-
-  liveCards(state: JournalReducerState): Iterable<QueuedMessageRow> {
-    this.cards.ensure(state)
-    return this.cards.live()
-  }
-  cardVersion(state: JournalReducerState): number {
-    this.cards.ensure(state)
-    return this.cards.version()
-  }
-  cardBounds(state: JournalReducerState): { first: number; last: number } {
-    this.cards.ensure(state)
-    return this.cards.bounds()
-  }
-  head(state: JournalReducerState, floor: AgentJournalCursor | null): QueuedMessageRow | undefined {
-    this.cards.ensure(state, floor)
-    return this.cards.head()
-  }
-  paused(
-    state: JournalReducerState,
-    card: QueuedMessageRow,
-    floor: AgentJournalCursor | null
-  ): boolean {
-    this.cards.ensure(state, floor)
-    return this.cards.paused(card)
-  }
-
-  predecessors(state: JournalReducerState, id: string): InputPlaceQuery {
-    this.cards.ensure(state)
-    const place = this.place(id)
-    return place?.witnessCardId ? this.cards.query(place) : { position: -Infinity }
   }
 
   queueChanged(
@@ -314,11 +303,16 @@ export class JournalInputOrder extends JournalInputEvidence {
   }
 
   private releaseHistory(state: JournalReducerState): void {
-    releaseJournalInputHistory(state, this.lineage, this.cards)
+    finishJournalSteps(this.releaseHistorySteps(state))
   }
-
-  precedes(card: QueuedMessageRow, submission: AgentJournalSubmission): boolean {
-    const place = this.place(submission.clientMessageId)
-    return Boolean(place?.witnessCardId && this.cards.relation(card, place))
+  private *releaseHistorySteps(state: JournalReducerState): Generator<void> {
+    yield* this.lineage.releaseHistorySteps((id) => {
+      const keep = this.currentIdentity(state, id)
+      if (!keep) {
+        this.cards.releaseCard(id, state.lastSequence)
+      }
+      return keep
+    })
+    yield* this.cards.releaseHistorySteps()
   }
 }

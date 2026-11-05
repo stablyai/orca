@@ -1,5 +1,11 @@
+import { settleTestSubscriberDeliveries } from './agent-session-subscriber-test-support'
 import { join } from 'node:path'
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
+import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import {
+  EMPTY_STRUCTURED_AGENT_SESSION,
+  reduceStructuredAgentSession
+} from '../../../shared/agent-session/structured-agent-session-reducer'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type {
   AgentSessionStatusEvent,
@@ -72,6 +78,7 @@ it('settles a session nobody is reading, from running to idle', async () => {
     { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
   )
   subscribers.publish(SESSION, journal)
+  await settleTestSubscriberDeliveries(subscribers)
 
   expect(statuses.at(-1)).toEqual({
     type: 'status',
@@ -80,6 +87,7 @@ it('settles a session nobody is reading, from running to idle', async () => {
 
   await journal.appendTombstone(turn, { fence: 1 })
   subscribers.publish(SESSION, journal)
+  await settleTestSubscriberDeliveries(subscribers)
 
   expect(statuses.at(-1)).toEqual({
     type: 'status',
@@ -108,6 +116,7 @@ it('publishes background lifecycle without advancing the journal and carries its
     fence: 1,
     emit: (event) => events.push(event)
   })
+  await settleTestSubscriberDeliveries(subscribers)
   const cursor = journal.cursor()
 
   const backgroundTasks: AgentSessionBackgroundTaskState = {
@@ -133,6 +142,7 @@ it('publishes background lifecycle without advancing the journal and carries its
     { fence: 2, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
   )
   subscribers.publish(SESSION, journal)
+  await settleTestSubscriberDeliveries(subscribers)
 
   expect(events.at(-1)).toMatchObject({ type: 'batch', fence: 2 })
 })
@@ -157,12 +167,14 @@ it('publishes latest turn activity without advancing or adding journal rows', as
     fence: 1,
     emit: (event) => events.push(event)
   })
+  await settleTestSubscriberDeliveries(subscribers)
   const cursor = journal.cursor()
 
   subscribers.publish(SESSION, journal, {
     turnId: 'turn-1',
     text: 'Inspecting the session wire'
   })
+  await settleTestSubscriberDeliveries(subscribers)
 
   expect(journal.cursor()).toEqual(cursor)
   expect(events.at(-1)).toEqual({
@@ -176,6 +188,7 @@ it('publishes latest turn activity without advancing or adding journal rows', as
 
   subscribers.close(SESSION, 'subscriber-1')
   subscribers.publish(SESSION, journal, null)
+  await settleTestSubscriberDeliveries(subscribers)
   subscribers.open({
     id: 'reconnected',
     sessionId: SESSION,
@@ -184,6 +197,77 @@ it('publishes latest turn activity without advancing or adding journal rows', as
     cursor,
     emit: (event) => events.push(event)
   })
+  await settleTestSubscriberDeliveries(subscribers)
   expect(journal.cursor()).toEqual(cursor)
   expect(events.at(-1)).toMatchObject({ activity: null })
+})
+
+it('retains explicit activity through an ordinary held catch-up and later pending publications', async () => {
+  const stateDirectory = join(fixture.root, 'held-activity')
+  const journal = await journals.open({
+    identity: {
+      sessionId: SESSION,
+      workspaceId: 'workspace-1',
+      hostId: 'local',
+      agent: 'codex',
+      providerHandle: codexProviderHandle('thread-1')
+    },
+    stateDirectory
+  })
+  const database = await openTestJournalHostDatabase(stateDirectory)
+  const subscribers = new AgentSessionSubscribers()
+  let client = EMPTY_STRUCTURED_AGENT_SESSION
+  subscribers.open({
+    id: 'held-activity',
+    sessionId: SESSION,
+    journal,
+    fence: 1,
+    emit: (event) => {
+      client = reduceStructuredAgentSession(client, { type: 'event', event })
+    }
+  })
+  await settleTestSubscriberDeliveries(subscribers)
+  const original = { turnId: 'turn-1', text: 'Original activity' }
+  subscribers.publish(SESSION, journal, original)
+  await settleTestSubscriberDeliveries(subscribers)
+  expect(client.activity).toEqual(original)
+  for (const activity of [null, { turnId: 'turn-1', text: 'Replacement activity' }]) {
+    await journal.appendItem(
+      { provider: 'orca', clientMessageId: `held-${activity?.text ?? 'clear'}` },
+      { kind: 'status', text: 'Catch-up content' },
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+    )
+    let entered!: () => void
+    let release!: () => void
+    const reading = new Promise<void>((resolve) => {
+      entered = resolve
+    })
+    const held = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const snapshot = database.snapshot.bind(database)
+    const hold: typeof database.snapshot = async (view) => {
+      const lease = await snapshot(view)
+      entered()
+      await held
+      return lease
+    }
+    const spy = vi.spyOn(database, 'snapshot').mockImplementationOnce(hold)
+    try {
+      subscribers.publish(SESSION, journal)
+      await reading
+      subscribers.publish(SESSION, journal, activity)
+      subscribers.publish(SESSION, journal)
+      release()
+      await settleTestSubscriberDeliveries(subscribers)
+      expect(client.activity).toEqual(activity)
+    } finally {
+      release()
+      spy.mockRestore()
+    }
+  }
+  const recovered = { turnId: 'turn-2', text: 'Later legitimate activity' }
+  subscribers.publish(SESSION, journal, recovered)
+  await settleTestSubscriberDeliveries(subscribers)
+  expect(client.activity).toEqual(recovered)
 })

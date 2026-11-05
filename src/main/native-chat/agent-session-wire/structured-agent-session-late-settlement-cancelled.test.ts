@@ -54,7 +54,7 @@ describe('settling a send the provider proves it received after the ack window',
       providerIdentity: { provider: 'codex', threadId: THREAD, turnId: 'turn-1', ordinal: 1 }
     })
 
-    const after = journal().readSince(before)
+    const after = await journal().readSince(before)
     expect(after.ok && after.rows.filter((row) => row.kind === 'dispatch')).toEqual([])
 
     expect(await submissions()).toMatchObject([
@@ -116,7 +116,7 @@ describe('settling a send the provider proves it received after the ack window',
     await Promise.all([receipt('echo-row'), receipt('echo-row')])
     await receipt('a-different-uuid')
 
-    const after = journal().readSince(before)
+    const after = await journal().readSince(before)
     expect(after.ok && after.rows).toHaveLength(1)
     expect(journal().submission(params.envelope.clientOperationId)).toMatchObject({
       dispatchState: 'accepted',

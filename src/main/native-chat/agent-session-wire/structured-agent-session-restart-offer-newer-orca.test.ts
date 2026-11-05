@@ -23,8 +23,8 @@ import {
 
 afterEach(() => vi.restoreAllMocks())
 
-function newerOrcaRow(root: string, sessionId: string = SESSION): void {
-  const { db } = openTestJournalHostDatabase(root)
+async function newerOrcaRow(root: string, sessionId: string = SESSION): Promise<void> {
+  const { db } = await openTestJournalHostDatabase(root)
   const first = liveTestJournalRows(db, sessionId)[0]
   if (!first) {
     throw new Error('the chat has no founding row')
@@ -65,13 +65,13 @@ async function keptWithoutAWord(
 
 it('lists an unopened newer journal passively and preserves its offer when acting is refused', async () => {
   const { host, root, acquire } = await interruptedRestart()
-  newerOrcaRow(root)
+  await newerOrcaRow(root)
   await keptWithoutAWord(host, root, acquire, true)
 })
 
 it('keeps the offer of every chat in a newer Orca database, and offers, runs and counts nothing', async () => {
   const { host, root, acquire } = await interruptedRestart()
-  const database = openTestJournalHostDatabase(root)
+  const database = await openTestJournalHostDatabase(root)
   Object.defineProperty(database, 'readOnly', { value: true })
   database.db.exec('ALTER TABLE journal_sessions RENAME TO journal_sessions_newer')
   await keptWithoutAWord(host, root, acquire)
@@ -106,7 +106,7 @@ it('lists a filed failure passively and hides it once an action discovers a newe
   await host.restartResume.continueAfterRestart([SESSION], 'modal')
   expect(await host.restartResume.listFailures()).toMatchObject([{ sessionId: SESSION }])
   await host.close(SESSION, 'evict')
-  newerOrcaRow(root)
+  await newerOrcaRow(root)
 
   expect(await host.restartResume.listFailures()).toMatchObject([{ sessionId: SESSION }])
   await host.restartResume.continueAfterRestart([SESSION], 'retry')
@@ -118,7 +118,7 @@ it('lists a filed failure passively and hides it once an action discovers a newe
 
 it('still offers a damaged chat, and files its failure when acting on it', async () => {
   const { host, root, acquire } = await interruptedRestart()
-  updateTestJournalRowJson(openTestJournalHostDatabase(root).db, SESSION, 1, '}{')
+  updateTestJournalRowJson((await openTestJournalHostDatabase(root)).db, SESSION, 1, '}{')
 
   expect((await host.restartResume.list()).map((candidate) => candidate.sessionId)).toEqual([
     SESSION
@@ -150,7 +150,7 @@ it.each([
     expect(created.ok).toBe(true)
     hostTestState().acquire.mockClear()
     const { host, root, marker } = await interruptedRestart()
-    newerOrcaRow(root, NEWER)
+    await newerOrcaRow(root, NEWER)
     const path = join(root, AGENT_SESSION_RECOVERY_CAPSULE_FILE)
     const capsule = JSON.parse(await readFile(path, 'utf8'))
     capsule.entries.push({ state: 'pending', marker: { ...marker, sessionId: NEWER } })

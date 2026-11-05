@@ -67,7 +67,7 @@ export function createFixture() {
     stateDirectory: string,
     run: (db: Database.Database) => void
   ): Promise<void> {
-    const opened = openTestJournalHostDatabase(stateDirectory)
+    const opened = await openTestJournalHostDatabase(stateDirectory)
     try {
       run(opened.db)
     } finally {

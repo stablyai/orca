@@ -1,3 +1,4 @@
+import { settleTestSubscriberDeliveries } from './agent-session-subscriber-test-support'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
 import { AGENT_SESSION_JOURNAL_SCHEMA_VERSION } from '../../../shared/agent-session/journal/agent-session-journal-types'
@@ -61,7 +62,7 @@ it('catches a subscriber up past a pre-existing unsendable removal with a bounde
   ]
   // Direct writes model legacy persisted rows.
   await seeded.close()
-  const opened = openTestJournalHostDatabase(journalDir)
+  const opened = await openTestJournalHostDatabase(journalDir)
   try {
     opened.db.exec('BEGIN IMMEDIATE')
     for (const row of rows) {
@@ -92,6 +93,7 @@ it('catches a subscriber up past a pre-existing unsendable removal with a bounde
     cursor: resumeCursor,
     emit: (event) => events.push(event)
   })
+  await settleTestSubscriberDeliveries(subscribers)
 
   for (const event of events) {
     expect(Buffer.byteLength(serializeRemoteRuntimePayload(event), 'utf8')).toBeLessThanOrEqual(
@@ -104,5 +106,6 @@ it('catches a subscriber up past a pre-existing unsendable removal with a bounde
   // Reset must advance past the unsendable row so later publications make progress.
   const settled = events.length
   subscribers.publish(SESSION, journal)
+  await settleTestSubscriberDeliveries(subscribers)
   expect(events.slice(settled).filter((event) => event.type === 'reset')).toEqual([])
 })

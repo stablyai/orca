@@ -41,12 +41,14 @@ it('replays a saved send and its conflict but refuses fresh send, Stop and metad
   const accepted = await rig.host.send(CALLER, params)
   expect(accepted).toMatchObject({ ok: true })
   expect(
-    rig.store.readCommandReceipt({ kind: 'global' }, envelope.clientOperationId)
+    await rig.store.readCommandReceipt({ kind: 'global' }, envelope.clientOperationId)
   ).toMatchObject({ verdict: 'readable' })
   await rig.host.flushAllStreamedEvents()
-  damageFloor(rig.root)
+  await damageFloor(rig.root)
   const store = await openTestAgentSessionRecordStore(rig.root)
-  expect(store.readCommandReceipt({ kind: 'global' }, envelope.clientOperationId)).toMatchObject({
+  expect(
+    await store.readCommandReceipt({ kind: 'global' }, envelope.clientOperationId)
+  ).toMatchObject({
     verdict: 'readable'
   })
   restored = new StructuredAgentSessionHost({ ...rig.host.deps, store })
@@ -128,7 +130,7 @@ it('answers a recorded ledger result without a preparation hook before requiring
       conversationWrite: true
     })
   ).toMatchObject({ admission: { decision: 'admit' } })
-  damageFloor(rig.root)
+  await damageFloor(rig.root)
   const store = await openTestAgentSessionRecordStore(rig.root)
   expect(await admitAndRunAgentSessionMutation({ ...request, store })).toMatchObject({
     ok: true,
@@ -192,9 +194,9 @@ it('answers a recorded ledger result without a preparation hook before requiring
   ).toBeNull()
 })
 
-function damageFloor(root: string): void {
-  openTestJournalHostDatabase(root)
-    .db.prepare(
+async function damageFloor(root: string): Promise<void> {
+  ;(await openTestJournalHostDatabase(root)).db
+    .prepare(
       "UPDATE agent_session_records SET record_json = json_set(record_json, '$.lease.minimumNextFence', 'bad') WHERE session_id = ?"
     )
     .run(SESSION)
@@ -221,7 +223,7 @@ it('refuses launch and probe results when saved authority changes during prepara
     resolveAgentEnvironment: async () => ({})
   }
   const part = async () => {
-    damageFloor(rig!.root)
+    await damageFloor(rig!.root)
     current = await openTestAgentSessionRecordStore(rig!.root)
     return { launch: { command: '/fixture/codex' }, env: {}, inheritedEnvToDelete: [] }
   }

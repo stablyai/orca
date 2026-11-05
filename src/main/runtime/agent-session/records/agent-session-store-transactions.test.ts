@@ -29,6 +29,13 @@ let counter = 0
 
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-agent-session-store-transactions-'))
+  const db = (await openTestJournalHostDatabase(root)).db
+  db.exec('CREATE TABLE test_record_writes (n INTEGER); INSERT INTO test_record_writes VALUES (0)')
+  for (const event of ['INSERT', 'UPDATE', 'DELETE']) {
+    db.exec(
+      `CREATE TRIGGER test_record_${event} AFTER ${event} ON agent_session_records BEGIN UPDATE test_record_writes SET n = n + 1; END`
+    )
+  }
 })
 
 afterEach(async () => {
@@ -89,9 +96,10 @@ async function liveChat(
   })
 }
 
-function totalChanges(): number {
+async function totalChanges(): Promise<number> {
   return Number(
-    openTestJournalHostDatabase(root).db.prepare('SELECT total_changes() AS n').get()?.n ?? 0
+    (await openTestJournalHostDatabase(root)).db.prepare('SELECT n FROM test_record_writes').get()
+      ?.n ?? 0
   )
 }
 
@@ -101,7 +109,7 @@ describe('writing a transaction', () => {
     await liveChat(store, 'chat-a-0001')
     await liveChat(store, 'chat-b-0002')
     const renewed = await liveChat(store, 'chat-c-0003')
-    const before = totalChanges()
+    const before = await totalChanges()
 
     await store.renewLease({
       sessionId: 'chat-c-0003',
@@ -110,7 +118,7 @@ describe('writing a transaction', () => {
       now: NOW + 10_000
     })
 
-    expect(totalChanges() - before).toBe(1)
+    expect((await totalChanges()) - before).toBe(1)
     expect(
       (await openTestAgentSessionRecordStore(root)).getRecord('chat-c-0003')?.lease.lastRenewedAt
     ).toBe(NOW + 10_000)
@@ -119,11 +127,11 @@ describe('writing a transaction', () => {
   it('writes nothing for a transaction that changes nothing', async () => {
     const store = await openTestAgentSessionRecordStore(root)
     await liveChat(store, 'chat-a-0001')
-    const before = totalChanges()
+    const before = await totalChanges()
 
     await store.renewLeases([])
 
-    expect(totalChanges()).toBe(before)
+    expect(await totalChanges()).toBe(before)
   })
 
   // Defer BEGIN beyond the caller's frame to avoid nesting its open journal transaction.
@@ -132,7 +140,9 @@ describe('writing a transaction', () => {
     await liveChat(store, 'chat-a-0001')
     let pending: Promise<unknown> | null = null
 
-    openTestJournalHostDatabase(root).transaction(() => {
+    await (
+      await openTestJournalHostDatabase(root)
+    ).transaction(() => {
       pending = store.setConversationName('chat-a-0001', 'renamed')
     })
 
@@ -186,7 +196,7 @@ describe('a receipt', () => {
         ...(insert ? { fingerprint: 'fp', now: NOW } : {})
       })
 
-      openTestJournalHostDatabase(root).transaction((db) => {
+      ;(await openTestJournalHostDatabase(root)).transaction((db) => {
         receipt.write(db)
         expect(store.getOperationRow('client-1', operationId)?.outcome.status).toBe(
           insert ? undefined : 'pending'
@@ -218,12 +228,12 @@ describe('a receipt', () => {
       ...(insert ? { fingerprint: 'fp', now: NOW } : {})
     })
 
-    expect(() =>
-      openTestJournalHostDatabase(root).transaction((db) => {
-        receipt.write(db)
+    await expect(
+      (await openTestJournalHostDatabase(root)).transaction(async (db) => {
+        await receipt.write(db)
         throw new Error('the journal row was refused')
       })
-    ).toThrow('the journal row was refused')
+    ).rejects.toThrow('the journal row was refused')
 
     expect(store.getOperationRow('client-1', operationId)?.outcome.status).toBe(
       insert ? undefined : 'pending'

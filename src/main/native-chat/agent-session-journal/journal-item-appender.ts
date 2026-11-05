@@ -1,10 +1,11 @@
+import type { JournalTombstoneInput } from './journal-store-contracts'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type {
   AgentJournalItemBody,
   AgentJournalMessageItem
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalItemIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
-import { journalItemRowBuilder } from './journal-row-builders'
+import { journalTombstoneRowBuilder, journalItemRowBuilder } from './journal-row-builders'
 import type { JournalReducerState } from './journal-reducer'
 import type { JournalAppendResult, JournalItemAppendOptions } from './journal-store-contracts'
 import type { JournalRow } from './journal-row-schema'
@@ -25,6 +26,7 @@ export class JournalItemAppender {
       ) => ReturnType<typeof journalInputClaimsReceipt>
       state: () => JournalReducerState
       enqueue: JournalRowWriter['enqueue']
+      append: JournalRowWriter['append']
       claimAttachments: JournalAttachmentClaim
     }
   ) {}
@@ -43,6 +45,17 @@ export class JournalItemAppender {
       .then((row) => appendResult(row, itemId))
   }
 
+  tombstone(
+    identity: AgentJournalItemIdentity,
+    { fence }: JournalTombstoneInput,
+    receipt?: JournalOperationReceipt
+  ) {
+    return this.deps.append(
+      journalTombstoneRowBuilder(this.deps.state, agentJournalItemKey(identity), fence),
+      receipt
+    )
+  }
+
   /** A client-authored message claims the uploads it names with its row; a swept one refuses both. */
   appendClaimingAttachments(
     identity: AgentJournalItemIdentity,
@@ -52,8 +65,8 @@ export class JournalItemAppender {
     let committed: (() => void) | void
     return this.deps
       .enqueue(journalItemRowBuilder(this.deps.state, identity, body, options), {
-        write: (db) => {
-          committed = this.deps.claimAttachments(
+        write: async (db) => {
+          committed = await this.deps.claimAttachments(
             db,
             body,
             true,

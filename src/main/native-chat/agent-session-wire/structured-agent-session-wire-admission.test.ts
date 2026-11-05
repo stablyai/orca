@@ -1,3 +1,4 @@
+import { settleTestSubscriberDeliveries } from './agent-session-subscriber-test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -71,6 +72,7 @@ describe('structured agent-session outbound admission', () => {
       fence: 1,
       emit: (event) => initial.push(event)
     })
+    await settleTestSubscriberDeliveries(subscribers)
     expect(initial).toHaveLength(1)
     expect(initial[0]).toMatchObject({ type: 'snapshot', page: { hasOlder: true } })
     expectAdmitted(initial[0])
@@ -78,6 +80,7 @@ describe('structured agent-session outbound admission', () => {
     roster = { state: 'monitoring' }
     subscribers.republishBackgroundTasks(SESSION, 2)
     subscribers.snapshot(SESSION, journal, 2)
+    await settleTestSubscriberDeliveries(subscribers)
     expect(initial.slice(1)).toHaveLength(2)
     initial.slice(1).forEach(expectAdmitted)
 
@@ -90,9 +93,10 @@ describe('structured agent-session outbound admission', () => {
       cursor: { epoch: 'retired-epoch', sequence: 1 },
       emit: (event) => epochReset.push(event)
     })
+    await settleTestSubscriberDeliveries(subscribers)
     expect(epochReset[0]).toMatchObject({ type: 'reset', reset: 'epoch_changed' })
     expectAdmitted(epochReset[0])
-    const epochHistory = readAgentSessionHistory(journal, {
+    const epochHistory = await readAgentSessionHistory(journal, {
       sessionId: SESSION,
       direction: 'before',
       cursor: { epoch: 'retired-epoch', sequence: 1 }
@@ -103,7 +107,7 @@ describe('structured agent-session outbound admission', () => {
     // Epochs no longer shed rows; exercise cursor_compacted via an over-budget legacy page.
     const cursorBefore = journal.cursor()
     const overBudget = await reopenWithOversizedRemoval(cursorBefore.sequence)
-    const history = readAgentSessionHistory(overBudget, {
+    const history = await readAgentSessionHistory(overBudget, {
       sessionId: SESSION,
       direction: 'after',
       cursor: cursorBefore
@@ -114,7 +118,7 @@ describe('structured agent-session outbound admission', () => {
     dispose()
   })
 
-  it('replaces an over-budget catch-up with one admitted newest page', () => {
+  it('replaces an over-budget catch-up with one admitted newest page', async () => {
     const subscribers = new AgentSessionSubscribers()
     const catchup: AgentSessionSubscribeEvent[] = []
     const firstItemSequence = journal.snapshot().items[0]!.sequence
@@ -127,6 +131,7 @@ describe('structured agent-session outbound admission', () => {
       cursor: { epoch: journal.epoch, sequence: firstItemSequence },
       emit: (event) => catchup.push(event)
     })
+    await settleTestSubscriberDeliveries(subscribers)
 
     expect(catchup).toHaveLength(1)
     catchup.forEach(expectAdmitted)
@@ -169,7 +174,7 @@ async function reopenWithOversizedRemoval(afterSequence: number): Promise<AgentS
     { ...base, kind: 'tombstone', itemId: hugeItemId, revision: 2, seq: afterSequence + 2 }
   ]
   await journal.close()
-  const opened = openTestJournalHostDatabase(root)
+  const opened = await openTestJournalHostDatabase(root)
   try {
     opened.db.exec('BEGIN IMMEDIATE')
     for (const row of rows) {

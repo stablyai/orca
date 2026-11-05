@@ -97,9 +97,9 @@ it('is saved before it interrupts, and a retry of its id never stops the newer t
   const working = await rig.workingSend()
   await turnRow('turn-1', 'running')
   const id = opId()
-  let atInterrupt: ReturnType<typeof receipt> | undefined
+  let atInterrupt: Awaited<ReturnType<typeof receipt>> | undefined
   rig.cancelTurn.mockImplementationOnce(async () => {
-    atInterrupt = receipt(id)
+    atInterrupt = await receipt(id)
     return { cancelled: true }
   })
   expect(await rig.stop(id)).toMatchObject({
@@ -109,14 +109,14 @@ it('is saved before it interrupts, and a retry of its id never stops the newer t
   })
   const [mark] = stopEvents()
   expect(mark?.event).toMatchObject({ turnId: 'turn-1' })
-  expect(receipt(id)).toMatchObject({
+  expect(await receipt(id)).toMatchObject({
     verdict: 'readable',
     receipt: {
       method: 'agentSession.cancel',
       result: { kind: 'journal-row', epoch: journal().epoch, sequence: mark?.sequence }
     }
   })
-  expect(atInterrupt).toEqual(receipt(id))
+  expect(atInterrupt).toEqual(await receipt(id))
   await turnRow('turn-1', 'interrupted')
   await rig.settleAccepted(working, 'stopped')
   const newer = await rig.workingSend()
@@ -151,7 +151,7 @@ it('answers a Stop naming a turn already over as a no-op, withdrawing nothing a 
       turnId: 'turn-gone'
     })
   ).toMatchObject({ ok: true, replayed: false, value: { turnId: 'turn-gone', cancelled: false } })
-  expect(receipt(id)).toMatchObject({
+  expect(await receipt(id)).toMatchObject({
     verdict: 'readable',
     receipt: {
       result: { kind: 'no-op', outcome: { kind: 'cancel', cancelled: false, turnId: 'turn-gone' } }
@@ -166,7 +166,7 @@ it('answers a Stop naming a turn already over as a no-op, withdrawing nothing a 
 it('refuses in plain words when it cannot be saved, interrupting and withdrawing nothing', async () => {
   await rig.workingSend()
   const queued = await queuedSend('queued behind the turn')
-  const db = openTestJournalHostDatabase(rig.root).db
+  const db = (await openTestJournalHostDatabase(rig.root)).db
   db.exec(`CREATE TRIGGER fail_stop_receipt BEFORE INSERT ON agent_session_command_receipts
     BEGIN SELECT RAISE(ABORT, 'receipt unavailable'); END`)
   try {
@@ -201,7 +201,7 @@ it('interrupts and answers from its receipt when its write throws after the comm
 
   expect(await rig.stop(id)).toMatchObject({ ok: true })
   expect(rig.cancelTurn).toHaveBeenCalledOnce()
-  expect(receipt(id)).toMatchObject({ verdict: 'readable', receipt: { status: 'accepted' } })
+  expect(await receipt(id)).toMatchObject({ verdict: 'readable', receipt: { status: 'accepted' } })
   expect(warned.mock.calls.map((call) => String(call[0]))).toEqual(
     expect.arrayContaining([expect.stringContaining('a Stop was saved, then its write failed')])
   )
@@ -237,9 +237,9 @@ describe('a background-task Stop', () => {
     rig.host.deps.statusSink = { publish: () => {}, forget: () => {}, readChildWork: () => [TASK] }
     await rig.workingSend()
     const id = opId()
-    let atStop: ReturnType<typeof receipt> | undefined
+    let atStop: Awaited<ReturnType<typeof receipt>> | undefined
     const provider = vi.fn(async (input: Parameters<typeof stopBackgroundTasks>[0]) => {
-      atStop = receipt(id)
+      atStop = await receipt(id)
       return stopBackgroundTasks(input)
     })
     Object.assign(rig.host.deps.adapter, { stopBackgroundTasks: provider })

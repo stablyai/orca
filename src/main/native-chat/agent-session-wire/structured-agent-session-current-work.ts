@@ -1,15 +1,11 @@
+import { finishJournalSteps } from '../agent-session-journal/journal-reconstruction-steps'
 import type {
   StructuredAgentSessionWorkEvidence,
   StructuredAgentSessionCurrentWorkJournal,
   StructuredAgentSessionSeenEnd,
   StructuredAgentSessionReplacedEnd
 } from './structured-agent-session-work-evidence'
-import {
-  reusePromptProjection,
-  type PromptProjection
-} from './structured-agent-session-actionable-prompts'
-import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
-import { compareAgentJournalItems } from '../../../shared/agent-session/journal/agent-session-journal-position'
+import { prepareActionablePromptSteps } from './structured-agent-session-actionable-prompts'
 
 import { isHistoricalProviderTimelineItem } from '../agent-session-timeline/provider-timeline-history'
 import { currentRequestsProjection } from './agent-session-current-requests'
@@ -100,8 +96,6 @@ function structuredAgentSessionHandsOver(
   )
 }
 
-const promptProjections = new WeakMap<StructuredAgentSessionCurrentWorkJournal, PromptProjection>()
-
 /** Re-read lease evidence per decision; immutable prompts share cursor/fence caches. */
 export class StructuredAgentSessionCurrentWork {
   readonly scope: StructuredAgentSessionWorkScope = {
@@ -153,6 +147,15 @@ export class StructuredAgentSessionCurrentWork {
     return `${this.viewKey()}|${this.working() ? 1 : 0}|${sends.join(',')}`
   }
 
+  *workViewKeySteps(): Generator<void, string> {
+    const sends: string[] = []
+    for (const submission of yield* this.unansweredSendSteps()) {
+      sends.push(`${submission.clientMessageId}:${this.holds(submission) ? 1 : 0}`)
+      yield
+    }
+    return `${this.viewKey()}|${(yield* this.workingSteps()) ? 1 : 0}|${sends.join(',')}`
+  }
+
   /** A send as clients are told it. One handed to the live child that it no longer holds, with no
    *  answer, reads in doubt: no client counts it as work, and its echo or refusal still settles it. */
   publishedSubmission = (submission: AgentJournalSubmission): AgentJournalSubmission =>
@@ -182,9 +185,33 @@ export class StructuredAgentSessionCurrentWork {
       .filter((submission) => this.unanswered(submission))
   }
 
+  private *unansweredSendSteps(): Generator<void, AgentJournalSubmission[]> {
+    const order = this.journal.inputOrder
+    const inputs = order.recoverableSubmissionSteps
+      ? yield* order.recoverableSubmissionSteps()
+      : order.recoverableSubmissions()
+    const sends: AgentJournalSubmission[] = []
+    for (const submission of inputs) {
+      if (this.unanswered(submission)) {
+        sends.push(submission)
+      }
+      yield
+    }
+    return sends
+  }
+
   /** Restate held-send changes even without journal rows. */
   restatedSubmissions(): AgentJournalSubmission[] {
     return this.unansweredSends().map(this.publishedSubmission)
+  }
+
+  *restatedSubmissionSteps(): Generator<void, AgentJournalSubmission[]> {
+    const submissions: AgentJournalSubmission[] = []
+    for (const submission of yield* this.unansweredSendSteps()) {
+      submissions.push(this.publishedSubmission(submission))
+      yield
+    }
+    return submissions
   }
 
   private holds(submission: AgentJournalSubmission): boolean {
@@ -236,46 +263,10 @@ export class StructuredAgentSessionCurrentWork {
   }
 
   actionablePrompts(): AgentJournalRenderItem[] {
-    const cursor = this.journal.cursor()
-    const prior = promptProjections.get(this.journal)
-    const reusable = reusePromptProjection(this.journal, prior, cursor, this.liveFence)
-    if (reusable) {
-      return reusable
-    }
-    const dependencies = new Set<string>()
-    const items: AgentJournalRenderItem[] = []
-    this.journal.visitItems((itemId, _sequence, body) => {
-      if (
-        (body.kind === 'approval' || body.kind === 'question') &&
-        body.resolution.state === 'pending'
-      ) {
-        const item = this.journal.item(itemId)
-        dependencies.add(itemId)
-        if (item?.turnScope?.kind === 'turn') {
-          dependencies.add(item.turnScope.turnItemId)
-          const turn = readAgentJournalTurn(this.journal.item(item.turnScope.turnItemId)?.body)
-          if (turn?.userItemId) {
-            dependencies.add(turn.userItemId)
-          }
-        }
-        if (item && this.isCurrentItem(itemId)) {
-          items.push(item)
-        }
-      }
-    })
-    items.sort(compareAgentJournalItems)
-    const stable =
-      prior?.items.length === items.length &&
-      items.every((item, index) => item === prior.items[index])
-        ? prior.items
-        : items
-    promptProjections.set(this.journal, {
-      ...cursor,
-      fence: this.liveFence,
-      items: stable,
-      dependencies
-    })
-    return stable
+    return finishJournalSteps(this.actionablePromptSteps())
+  }
+  actionablePromptSteps(current?: () => boolean): Generator<void, AgentJournalRenderItem[]> {
+    return prepareActionablePromptSteps(this.journal, this, current)
   }
 
   requestProjection(sessionId: string) {
@@ -291,13 +282,27 @@ export class StructuredAgentSessionCurrentWork {
   }
 
   owesAnySend(): boolean {
-    return this.journal.inputOrder
-      .recoverableSubmissions()
-      .some((submission) => this.owesSend(submission))
+    return finishJournalSteps(this.owedSendSteps())
+  }
+
+  private *owedSendSteps(): Generator<void, boolean> {
+    const order = this.journal.inputOrder
+    for (const submission of order.recoverableSubmissionValues?.() ??
+      order.recoverableSubmissions()) {
+      if (this.owesSend(submission)) {
+        return true
+      }
+      yield
+    }
+    return false
   }
 
   working(): boolean {
-    return this.activeTurnId() !== null || this.owesAnySend()
+    return finishJournalSteps(this.workingSteps())
+  }
+
+  *workingSteps(): Generator<void, boolean> {
+    return this.activeTurnId() !== null || (yield* this.owedSendSteps())
   }
 
   /** Project interrupted turns immediately from observed/replaced-runtime death, before settlement persists. */

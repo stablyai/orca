@@ -1,4 +1,3 @@
-import type Database from '../../sqlite/sync-database'
 import type { JournalOperationReceipt } from './journal-row-writer'
 
 /** Losing this live proof revokes permission to retract a durable claim. */
@@ -38,7 +37,7 @@ export class JournalGoalAttachmentInverse {
   withdraw(goalId: string): JournalOperationReceipt {
     const next = new Map<string, Set<string>>()
     return {
-      write: (db: Database.Database) => {
+      write: (db) => {
         next.clear()
         for (const id of this.goals.get(goalId) ?? []) {
           const live = this.uploads.get(id)
@@ -49,9 +48,10 @@ export class JournalGoalAttachmentInverse {
           remaining.delete(goalId)
           next.set(id, remaining)
           if (remaining.size === 0) {
-            db.prepare(
-              'DELETE FROM agent_session_attachment_claims WHERE upload_id = ? AND session_id = ?'
-            ).run(id, this.sessionId)
+            db.add({
+              kind: 'sweep',
+              operation: { kind: 'prune', pairs: [{ uploadId: id, sessionId: this.sessionId }] }
+            })
           }
         }
       },

@@ -10,9 +10,11 @@ import {
 import { isStructuredAgentSessionCommandTurnId } from '../agent-session-wire/structured-agent-session-command-turn'
 import type { JournalReducerState } from './journal-reducer'
 import type { JournalRow } from './journal-row-schema'
+import { finishJournalSteps } from './journal-reconstruction-steps'
 import {
   compareTurnSources,
   putTurnSource,
+  putTurnSourceSteps,
   type TurnSource,
   type TurnSourceNode
 } from './journal-newest-turn-tree'
@@ -31,8 +33,20 @@ export class JournalNewestTurn {
   private boundary: number
 
   /** Only on restore; streamed rows never rescan conversation history. */
-  constructor(state: JournalReducerState) {
+  constructor(state: JournalReducerState, restore = true) {
     this.boundary = state.lastSequence
+    if (restore) {
+      finishJournalSteps(this.restoreSteps(state))
+    }
+  }
+
+  static *createSteps(state: JournalReducerState): Generator<void, JournalNewestTurn> {
+    const owner = new JournalNewestTurn(state, false)
+    yield* owner.restoreSteps(state)
+    return owner
+  }
+
+  private *restoreSteps(state: JournalReducerState): Generator<void> {
     const turns: AgentJournalRenderItem[] = []
     const reported = new Set<string>()
     for (const item of state.items.values()) {
@@ -40,9 +54,10 @@ export class JournalNewestTurn {
       if (isTurnOrClear(item)) {
         turns.push(item)
       }
+      yield
     }
     for (const item of turns) {
-      this.place(item, state.lastSequence)
+      yield* this.placeSteps(item, state.lastSequence)
     }
   }
 
@@ -61,33 +76,35 @@ export class JournalNewestTurn {
   }
 
   /** Only known, unchanged retained sources can carry chronology across presentation rebuilding. */
-  retainFailures(
+  *retainFailuresSteps(
     state: JournalReducerState,
-    itemIds: readonly string[]
-  ): (next: JournalNewestTurn, state: JournalReducerState) => void {
-    const failures = itemIds.flatMap((id) => {
+    itemIds: Iterable<string>
+  ): Generator<void, (next: JournalNewestTurn, state: JournalReducerState) => Generator<void>> {
+    const failures: { source: TurnSource; at: number; reports: number }[] = []
+    const evidence: { id: string; target: string; item: AgentJournalRenderItem }[] = []
+    for (const id of itemIds) {
       const source = this.sources.get(id)
-      return source?.failedAt
-        ? [
-            {
-              source,
-              at: Math.max(
-                source.failedAt,
-                this.boundary > (source.witnessedThrough ?? 0) ? this.boundary : 0
-              ),
-              reports: this.reports.get(id) ?? 0
-            }
-          ]
-        : []
-    })
-    const evidence = itemIds.flatMap((id) => {
+      if (source?.failedAt) {
+        failures.push({
+          source,
+          at: Math.max(
+            source.failedAt,
+            this.boundary > (source.witnessedThrough ?? 0) ? this.boundary : 0
+          ),
+          reports: this.reports.get(id) ?? 0
+        })
+      }
       const target = this.evidence.get(id)
       const item = state.items.get(id)
-      return target && item ? [{ id, target, item }] : []
-    })
-    return (next, current) => {
+      if (target && item) {
+        evidence.push({ id, target, item })
+      }
+      yield
+    }
+    return function* (next, current) {
       const unchanged = new Map<string, number>()
       for (const { id, target, item } of evidence) {
+        yield
         const kept = current.items.get(id)
         if (
           next.evidence.get(id) === target &&
@@ -100,6 +117,7 @@ export class JournalNewestTurn {
         }
       }
       for (const { source, at, reports } of failures) {
+        yield
         const kept = next.sources.get(source.item.itemId)
         if (
           !kept?.failedAt ||
@@ -118,7 +136,7 @@ export class JournalNewestTurn {
         }
         const retained = { ...kept, failedAt: at, witnessedThrough: next.boundary }
         next.sources.set(kept.item.itemId, retained)
-        next.root = putTurnSource(next.root, retained, false)
+        next.root = yield* putTurnSourceSteps(next.root, retained, false)
       }
     }
   }
@@ -156,6 +174,10 @@ export class JournalNewestTurn {
 
   /** Keeps the first failure position across same-failure revisions; leaving failure clears it. */
   private place(item: AgentJournalRenderItem | undefined, at: number): void {
+    finishJournalSteps(this.placeSteps(item, at))
+  }
+
+  private *placeSteps(item: AgentJournalRenderItem | undefined, at: number): Generator<void> {
     if (!item || !isTurnOrClear(item)) {
       return
     }
@@ -181,10 +203,10 @@ export class JournalNewestTurn {
       return
     }
     if (prior && compareTurnSources(prior, source) !== 0) {
-      this.root = putTurnSource(this.root, prior, true)
+      this.root = yield* putTurnSourceSteps(this.root, prior, true)
     }
     this.sources.set(item.itemId, source)
-    this.root = putTurnSource(this.root, source, false)
+    this.root = yield* putTurnSourceSteps(this.root, source, false)
   }
 
   private index(

@@ -1,3 +1,4 @@
+import { JournalReadConnection } from '../agent-session-journal/journal-sql-owner'
 import { commandReceiptFixture } from '../agent-session-journal/command-receipt-test-support'
 import { insertCommandReceiptIfAbsent } from '../agent-session-journal/command-receipt-table'
 import { CommandReceiptExistsError } from '../agent-session-journal/command-receipt-transaction'
@@ -74,16 +75,18 @@ describe('a resent send id', () => {
     await host.send(CALLER, params)
     await deliveredOnce()
     await host.close(SESSION, 'evict')
-    const connection = openTestJournalHostDatabase(root).db
-    const prepare = connection.prepare.bind(connection)
-    vi.spyOn(connection, 'prepare').mockImplementation((sql: string) => {
+    const prepare = JournalReadConnection.prototype.prepare
+    vi.spyOn(JournalReadConnection.prototype, 'prepare').mockImplementation(function (
+      this: JournalReadConnection,
+      sql: string
+    ) {
       if (sql.includes('journal_')) {
         throw Object.assign(new Error('database disk image is malformed'), {
           code: 'ERR_SQLITE_ERROR',
           errcode: 11
         })
       }
-      return prepare(sql)
+      return prepare.call(this, sql)
     })
     vi.spyOn(console, 'warn').mockImplementation(() => undefined)
 
@@ -196,7 +199,7 @@ describe('a resent send id', () => {
     await deliveredOnce()
     await host.close(SESSION, 'evict')
     const rowsBefore = store.listOperationRows()
-    Object.defineProperty(openTestJournalHostDatabase(root), 'readOnly', { value: true })
+    Object.defineProperty(await openTestJournalHostDatabase(root), 'readOnly', { value: true })
     expect(store.readOnly).toBe(true)
     vi.spyOn(console, 'warn').mockImplementation(() => undefined)
 
@@ -297,9 +300,9 @@ describe('send receipt acceptance', () => {
     })
     expect(store.listOperationRows()).toEqual(before)
     expect(hostJournal().submissions()).toHaveLength(0)
-    expect(store.readCommandReceipt({ kind: 'global' }, params.envelope.clientOperationId)).toEqual(
-      { verdict: 'absent' }
-    )
+    expect(
+      await store.readCommandReceipt({ kind: 'global' }, params.envelope.clientOperationId)
+    ).toEqual({ verdict: 'absent' })
   })
 
   it('keeps the temporary ledger row so Stop cannot reuse a send id', async () => {
@@ -329,7 +332,7 @@ describe('send receipt acceptance', () => {
     async (table) => {
       await attach()
       const params = sendParams('receipt must commit')
-      const db = openTestJournalHostDatabase(root).db
+      const db = (await openTestJournalHostDatabase(root)).db
       db.exec(`CREATE TRIGGER fail_receipt BEFORE INSERT ON ${table}
       BEGIN SELECT RAISE(ABORT, 'receipt storage failed'); END`)
       await expect(host.send(CALLER, params)).resolves.toMatchObject({
@@ -343,7 +346,7 @@ describe('send receipt acceptance', () => {
           .find((row) => row.operationId === params.envelope.clientOperationId)
       ).toBeUndefined()
       expect(
-        store.readCommandReceipt({ kind: 'global' }, params.envelope.clientOperationId)
+        await store.readCommandReceipt({ kind: 'global' }, params.envelope.clientOperationId)
       ).toEqual({ verdict: 'absent' })
       expect(dispatch).not.toHaveBeenCalled()
       db.exec('DROP TRIGGER fail_receipt')
@@ -357,10 +360,8 @@ describe('send receipt acceptance', () => {
     const params = sendParams('accepted before corruption')
     await host.send(CALLER, params)
     await deliveredOnce()
-    openTestJournalHostDatabase(root)
-      .db.prepare(
-        "UPDATE agent_session_command_receipts SET result_json = '{' WHERE operation_id = ?"
-      )
+    ;(await openTestJournalHostDatabase(root)).db
+      .prepare("UPDATE agent_session_command_receipts SET result_json = '{' WHERE operation_id = ?")
       .run(params.envelope.clientOperationId)
     await expect(host.send(CALLER, params)).resolves.toMatchObject({
       ok: false,
@@ -379,7 +380,7 @@ describe('send receipt acceptance', () => {
     const original = journal.submissions()[0]
     const receipt = store.readCommandReceipt({ kind: 'global' }, params.envelope.clientOperationId)
     const before = journal.cursor()
-    vi.spyOn(store, 'readCommandReceipt').mockReturnValueOnce({ verdict: 'absent' })
+    vi.spyOn(store, 'readCommandReceipt').mockResolvedValueOnce({ verdict: 'absent' })
     await expect(host.send(CALLER, params)).resolves.toMatchObject({
       ok: true,
       replayed: false,
@@ -412,11 +413,11 @@ describe('send receipt acceptance', () => {
       result: { kind: 'journal-row', epoch: 'legacy-spent-epoch', sequence: 1 }
     })
     expect(
-      openTestJournalHostDatabase(root).transaction((db) =>
+      (await openTestJournalHostDatabase(root)).fixtureTransaction((db) =>
         insertCommandReceiptIfAbsent(db, { kind: 'global' }, receipt)
       )
     ).toEqual({ inserted: true })
-    vi.spyOn(store, 'readCommandReceipt').mockReturnValueOnce({ verdict: 'absent' })
+    vi.spyOn(store, 'readCommandReceipt').mockResolvedValueOnce({ verdict: 'absent' })
     const append = vi.spyOn(journal, 'appendSubmission')
     await expect(host.send(CALLER, racing)).resolves.toMatchObject({
       ok: true,
@@ -435,9 +436,9 @@ describe('send receipt acceptance', () => {
     expect(journal.submissions()).toEqual(sources)
     expect(journal.submissionBody(racing.envelope.clientOperationId)).toBeNull()
     expect(journal.submissionBody(original.envelope.clientOperationId)).toEqual(original.body)
-    expect(store.readCommandReceipt({ kind: 'global' }, racing.envelope.clientOperationId)).toEqual(
-      { verdict: 'readable', receipt }
-    )
+    expect(
+      await store.readCommandReceipt({ kind: 'global' }, racing.envelope.clientOperationId)
+    ).toEqual({ verdict: 'readable', receipt })
     expect(dispatch).toHaveBeenCalledTimes(1)
   })
 
@@ -459,7 +460,13 @@ describe('send receipt acceptance', () => {
     expect(hostTestState().log.entries).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          fields: expect.objectContaining({ scope: 'send-journal-write', error })
+          fields: expect.objectContaining({
+            scope: 'send-journal-write',
+            error: expect.objectContaining({
+              outcome: 'committed',
+              cause: expect.objectContaining({ errors: expect.arrayContaining([error]) })
+            })
+          })
         }),
         expect.objectContaining({
           fields: expect.objectContaining({
@@ -493,7 +500,7 @@ it('keeps a same-fingerprint ledger row unchanged while writing the Send receipt
     store.listOperationRows().find((row) => row.operationId === params.envelope.clientOperationId)
   ).toEqual(prior)
   expect(
-    store.readCommandReceipt({ kind: 'global' }, params.envelope.clientOperationId)
+    await store.readCommandReceipt({ kind: 'global' }, params.envelope.clientOperationId)
   ).toMatchObject({
     verdict: 'readable',
     receipt: { status: 'accepted', fingerprint: params.envelope.payloadFingerprint }
@@ -515,7 +522,9 @@ it('preserves global conflicts with a non-chat operation already in the ledger',
     refusal: { code: 'agent_session_operation_conflict', details: { reason: 'operationIdReused' } }
   })
   expect(hostJournal().submissions()).toHaveLength(0)
-  expect(store.readCommandReceipt({ kind: 'global' }, params.envelope.clientOperationId)).toEqual({
+  expect(
+    await store.readCommandReceipt({ kind: 'global' }, params.envelope.clientOperationId)
+  ).toEqual({
     verdict: 'absent'
   })
 })

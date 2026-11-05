@@ -83,7 +83,7 @@ it('preserves existing queuedAt across two live replacements despite an older or
     const secondVerdict = await rewindAgain
     expect(secondVerdict).toMatchObject({ ok: true })
     expect(snapshots).toHaveLength(4)
-    const receipt = rig.store.readCommandReceipt({ kind: 'global' }, m.id)
+    const receipt = await rig.store.readCommandReceipt({ kind: 'global' }, m.id)
     const card = journal.queuedMessages.get(c)!
     expect(receipt).toMatchObject({
       verdict: 'readable',

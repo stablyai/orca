@@ -2,7 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { JournalHostDatabase } from './journal-host-database'
+import type { TestJournalHostDatabase as JournalHostDatabase } from './journal-host-database-test-support'
 import {
   closeTestJournalHostDatabases,
   openTestJournalHostDatabase
@@ -26,8 +26,8 @@ export function registerCommandReceiptTableTests(): void {
 
   beforeEach(async () => {
     root = await mkdtemp(join(tmpdir(), 'orca-command-receipt-table-'))
-    database = openTestJournalHostDatabase(root)
-    database.transaction((db) => writeCommandReceiptTestRecord(db))
+    database = await openTestJournalHostDatabase(root)
+    database.fixtureTransaction((db) => writeCommandReceiptTestRecord(db))
   })
 
   afterEach(async () => {
@@ -36,7 +36,7 @@ export function registerCommandReceiptTableTests(): void {
   })
 
   function insert(receipt: CommandReceipt, scope: CommandReceiptScope = globalScope) {
-    return database.transaction((db) => insertCommandReceiptIfAbsent(db, scope, receipt))
+    return database.fixtureTransaction((db) => insertCommandReceiptIfAbsent(db, scope, receipt))
   }
 
   function read(receipt: CommandReceipt, scope: CommandReceiptScope = globalScope) {
@@ -72,7 +72,7 @@ export function registerCommandReceiptTableTests(): void {
     it('reports a changed canonical hash, including a different method or chat, as conflict', () => {
       const receipt = commandReceiptFixture()
       insert(receipt)
-      database.transaction((db) => writeCommandReceiptTestRecord(db, 'session-2'))
+      database.fixtureTransaction((db) => writeCommandReceiptTestRecord(db, 'session-2'))
       for (const target of [
         { method: 'agentSession.cancel', sessionId: 'session-1' },
         { method: 'agentSession.send', sessionId: 'session-2' }
@@ -242,11 +242,11 @@ export function registerCommandReceiptTableTests(): void {
     it('preserves receipts across record upserts and cascades only on record deletion', () => {
       const receipt = commandReceiptFixture()
       insert(receipt)
-      database.transaction((db) =>
+      database.fixtureTransaction((db) =>
         writeCommandReceiptTestRecord(db, 'session-1', '{"updated":true}')
       )
       expect(read(receipt)).toEqual({ verdict: 'readable', receipt })
-      database.transaction((db) => writeCommandReceiptTestRecord(db, 'session-1', null))
+      database.fixtureTransaction((db) => writeCommandReceiptTestRecord(db, 'session-1', null))
       expect(read(receipt)).toEqual({ verdict: 'absent' })
     })
   })

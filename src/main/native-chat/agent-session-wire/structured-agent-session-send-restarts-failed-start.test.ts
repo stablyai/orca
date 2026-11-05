@@ -153,7 +153,7 @@ beforeEach(async () => {
         reportedOptions: { model: '' }
       })
     }),
-    journalDatabase: openTestJournalHostDatabase(root),
+    journalDatabase: await openTestJournalHostDatabase(root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => `spawn-${generation + 1}`,
     now: () => NOW

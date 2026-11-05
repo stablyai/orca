@@ -148,7 +148,7 @@ describe('a message accepted while the agent starts, then Orca stops', () => {
         queuedAt: { epoch: journal().epoch, sequence: expect.any(Number) }
       })
       await rig.host.close(SESSION, 'evict')
-      rig.crashRestartHostProcess()
+      await rig.crashRestartHostProcess()
       expect(await rig.drafts()).toEqual([{ messageId: id, ...KEPT }])
       expect(rig.dispatch).not.toHaveBeenCalled()
     }
@@ -269,7 +269,7 @@ describe('the next accepted turn releases a kept card', () => {
     const id = await acceptWhileStarting(sendRequest('kept twice over'))
     await quitRestart()
     expect(await rig.drafts()).toEqual([{ messageId: id, ...KEPT }])
-    rig.crashRestartHostProcess()
+    await rig.crashRestartHostProcess()
     await observationClock.observe(100)
     expect(rig.dispatch).not.toHaveBeenCalled()
     const working = await rig.workingSend()
@@ -328,11 +328,7 @@ describe('cards queued behind a working turn, then Orca stops', () => {
         ok: true,
         value: { queued: { state: 'waiting' } }
       })
-      if (how === 'quit') {
-        await quitRestart()
-      } else {
-        rig.crashRestartHostProcess()
-      }
+      await (how === 'quit' ? quitRestart() : rig.crashRestartHostProcess())
 
       expect(await rig.drafts()).toEqual([
         { messageId: first.id, state: 'waiting' },
@@ -386,7 +382,7 @@ describe('a message accepted while the agent starts, then the chat closes', () =
     async (cause) => {
       const id = await acceptWhileStarting(sendRequest('kept at close'))
       await closeWhileStarting(cause)
-      rig.crashRestartHostProcess()
+      await rig.crashRestartHostProcess()
 
       expect(await rig.submission(id)).toMatchObject({ dispatchState: 'rejected', ...CHAT_CLOSED })
       expect(await rig.drafts()).toEqual([{ messageId: id, ...KEPT }])
@@ -491,7 +487,7 @@ describe('what is not kept', () => {
     vi.spyOn(JournalQueuedMessages.prototype, 'plan').mockImplementation(() => {
       throw new Error('disk full')
     })
-    rig.crashRestartHostProcess()
+    await rig.crashRestartHostProcess()
 
     await eventually(async () =>
       expect(await rig.submission(id)).toMatchObject({
@@ -662,7 +658,7 @@ describe("the reopen's mark", () => {
     await queued.result
     void working
     const sent = rig.dispatch.mock.calls.length
-    rig.crashRestartHostProcess()
+    await rig.crashRestartHostProcess()
     await openTestChats(rig.host, [SESSION])
     expect(rig.host.collaboratorsForTests().sessions.has(SESSION)).toBe(true)
     await observationClock.observe(100)
@@ -715,7 +711,7 @@ async function peekSubmission(id: string) {
   })
   const peeked = await openAgentSessionJournal({
     identity: journalIdentityFor(record, params),
-    database: openTestJournalHostDatabase(rig.root)
+    database: await openTestJournalHostDatabase(rig.root)
   })
   try {
     return peeked.submission(id)

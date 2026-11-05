@@ -1,3 +1,4 @@
+import '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -210,9 +211,9 @@ async function pipedChat() {
       expect(prompts).toHaveLength(2)
     },
     reopen: async () => {
-      const database = JournalHostDatabase.open(directory)
+      const database = await JournalHostDatabase.open(directory)
       try {
-        const store = AgentSessionRecordStore.open({
+        const store = await AgentSessionRecordStore.open({
           journalDatabase: database,
           hostId: 'local',
           legacySessionTabIds: []

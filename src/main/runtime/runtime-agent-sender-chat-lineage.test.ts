@@ -43,6 +43,38 @@ const cleared = (
   }
 })
 
+/** Enumerate every native successor key, including empty/dangling candidates, without one
+ *  native roundtrip per unrelated record in the independent oracle. */
+async function indexedMembership(
+  store: Awaited<ReturnType<typeof openTestAgentSessionRecordStore>>,
+  root: string
+) {
+  const database = await openTestJournalHostDatabase(root)
+  const targets = await database.read((read) =>
+    read
+      .prepare(`SELECT DISTINCT
+    CASE WHEN json_valid(record_json) THEN json_extract(record_json, '$.conversationCommand.replacementSessionId') END AS successor
+    FROM agent_session_records`)
+      .all()
+  )
+  const indexed = new Map<string, string[]>()
+  const snapshot = await store.senderSnapshot()
+  try {
+    for (const { successor } of targets) {
+      if (typeof successor !== 'string') {
+        continue
+      }
+      const from = [...(await snapshot.records.listClearedFrom!(successor))].sort()
+      if (from.length) {
+        indexed.set(successor, from)
+      }
+    }
+    return indexed
+  } finally {
+    await snapshot.close()
+  }
+}
+
 /** Six open chats, one behind a three-deep /clear chain, and `history` unrelated closed chats. */
 async function chats(history: number) {
   const root = await scaleDirectory()
@@ -87,19 +119,18 @@ async function chats(history: number) {
     }
   )
   /** The chat rows a build publishes, as identity -> the session it now opens. */
-  const rows = () =>
+  const rows = async () =>
     Object.fromEntries(
-      senders
-        .build()
-        .associations.filter((row) => row.sessionId)
+      (await senders.build()).associations
+        .filter((row) => row.sessionId)
         .map((row) => [row.identity.slice('orca_session_id:'.length), row.sessionId])
     )
   /** What every saved chat says, read the slow way: the full scan the index replaces. */
-  const oracle = () => {
+  const oracle = async () => {
     inventories.mockClear()
     const { listClearedFrom: _index, ...listing }: AgentSessionRecordReader = records
     const scanned = Object.fromEntries(
-      readAgentSenderSessions(listing).map((row) => [
+      (await readAgentSenderSessions(listing)).map((row) => [
         row.identity.slice('orca_session_id:'.length),
         row.sessionId
       ])
@@ -111,12 +142,7 @@ async function chats(history: number) {
         rebuilt.set(next, [...(rebuilt.get(next) ?? []), record.sessionId].sort())
       }
     }
-    const indexed = new Map(
-      store.listHeldSessionIds().flatMap((id) => {
-        const from = [...store.listClearedFrom(id)].sort()
-        return from.length ? [[id, from] as const] : []
-      })
-    )
+    const indexed = await indexedMembership(store, root)
     inventories.mockClear()
     return { scanned, index: Object.fromEntries(indexed), rebuilt: Object.fromEntries(rebuilt) }
   }
@@ -128,10 +154,10 @@ it.each([1_000, 10_000])(
   async (history) => {
     const h = await chats(history)
     const visits = () => h.senders.workForTest().chatRecords
-    const check = (expected: Record<string, string>, readsAtMost: number) => {
+    const check = async (expected: Record<string, string>, readsAtMost: number) => {
       const before = visits()
       const seeks = agentSessionPredecessorWorkForTest()
-      expect(h.rows()).toEqual(expected)
+      expect(await h.rows()).toEqual(expected)
       // Open chats plus their predecessors, whatever the saved history holds: one indexed seek
       // per visited chat, returning only rows that name it.
       expect(visits() - before).toBeLessThanOrEqual(readsAtMost)
@@ -139,7 +165,7 @@ it.each([1_000, 10_000])(
       expect(work.seeks - seeks.seeks).toBeLessThanOrEqual(readsAtMost)
       expect(work.rows - seeks.rows).toBeLessThanOrEqual(readsAtMost)
       expect(h.inventories).not.toHaveBeenCalled()
-      const { scanned, index, rebuilt } = h.oracle()
+      const { scanned, index, rebuilt } = await h.oracle()
       expect(scanned).toEqual(expected)
       expect(index).toEqual(rebuilt)
     }
@@ -154,30 +180,31 @@ it.each([1_000, 10_000])(
       'cleared-2': 'cleared-3',
       'cleared-3': 'cleared-3'
     }
-    check(base, 9)
+    await check(base, 9)
     await h.store.setSessionTabVisibility('opened-5', true)
-    check({ ...base, 'opened-5': 'opened-5' }, 10)
+    await check({ ...base, 'opened-5': 'opened-5' }, 10)
     await h.store.setSessionTabVisibility('opened-5', false)
-    check(base, 9)
+    await check(base, 9)
     // A committed /clear continues opened-1 in opened-2: its cards follow, through the index.
     await h.store.reviseSessionOptions((record) => cleared(record, 'opened-2'), {
       sessionId: 'opened-1'
     })
     const { 'opened-1': _cleared, ...rest } = base
-    check({ ...rest, 'opened-1': 'opened-2' }, 9)
+    await check({ ...rest, 'opened-1': 'opened-2' }, 9)
     // A move keeps the identity and changes only where the row says the chat runs.
     await h.store.reviseSessionOptions(
       (record) => ({ ...record, location: { ...record.location, workspaceId: 'moved' } }),
       { sessionId: 'cleared-3' }
     )
-    expect(h.senders.build().associations.find((row) => row.sessionId === 'cleared-3')).toEqual(
-      expect.objectContaining({ worktreeId: 'moved' })
-    )
+    expect(
+      (await h.senders.build()).associations.find((row) => row.sessionId === 'cleared-3')
+    ).toEqual(expect.objectContaining({ worktreeId: 'moved' }))
     // A reload reads the same saved pointers.
     const reopened = await openTestAgentSessionRecordStore(h.root)
-    const index = (store: typeof h.store) =>
-      store.listHeldSessionIds().map((id) => [id, [...store.listClearedFrom(id)].sort()])
-    expect(index(reopened)).toEqual(index(h.store))
+    expect(reopened.listHeldSessionIds()).toEqual(h.store.listHeldSessionIds())
+    expect(await indexedMembership(reopened, h.root)).toEqual(
+      await indexedMembership(h.store, h.root)
+    )
   }
 )
 
@@ -203,21 +230,23 @@ it('follows branching, unreadable and cyclic /clear predecessors as the full sca
   expect(store.isSessionUnreadable('unreadable-u')).toBe(true)
   const records = conversationRecordReader(store)
   const { listClearedFrom: _index, ...listing }: AgentSessionRecordReader = records
-  const rows = (reader: AgentSessionRecordReader) =>
-    readAgentSenderSessions(reader)
+  const rows = async (reader: AgentSessionRecordReader) =>
+    (await readAgentSenderSessions(reader))
       .map((row) => `${row.identity.slice('orca_session_id:'.length)}>${row.sessionId}`)
       .sort()
-  expect(rows(records)).toEqual(rows(listing))
-  expect(rows(records)).toEqual([
+  expect(await rows(records)).toEqual(await rows(listing))
+  expect(await rows(records)).toEqual([
     'cycle-x1>cycle-x1',
     'session-a>session-c',
     'session-b>session-c',
     'session-c>session-c',
     'unreadable-u>session-c'
   ])
-  const plan = openTestJournalHostDatabase(root)
-    .db.prepare(`EXPLAIN QUERY PLAN ${AGENT_SESSION_PREDECESSOR_IDS}`)
-    .all('session-c')
-    .map((row) => String(row.detail))
+  const database = await openTestJournalHostDatabase(root)
+  const plan = await database.read(async (read) =>
+    (
+      await read.prepare(`EXPLAIN QUERY PLAN ${AGENT_SESSION_PREDECESSOR_IDS}`).all('session-c')
+    ).map((row) => String(row.detail))
+  )
   expect(plan.join('\n')).toContain('USING INDEX idx_agent_session_clear_successor')
 })

@@ -1,6 +1,6 @@
 import { isolateJournalTransition } from './journal-reducer-transition'
 import { expect } from 'vitest'
-import type { JournalHostDatabase } from './journal-host-database'
+import type { TestJournalHostDatabase as JournalHostDatabase } from './journal-host-database-test-support'
 import { JournalRowWriter } from './journal-row-writer'
 import { JournalWriteQueue } from './journal-write-queue'
 import { JournalWriteProjection } from './journal-write-projection'
@@ -37,7 +37,7 @@ export function seedProjectionRows(
   rows: readonly JournalRow[]
 ): JournalReducerState {
   const state = createJournalReducerState(projectionSessionId, projectionEpoch)
-  database.transaction((db) => {
+  database.fixtureTransaction((db) => {
     publishTestJournalEpoch(db, projectionSessionId, projectionEpoch)
     for (const row of rows) {
       insertTestJournalRow(db, projectionSessionId, row)
@@ -51,7 +51,7 @@ export function seedOutcomeRows(
   database: JournalHostDatabase,
   rows: readonly JournalRow[]
 ): JournalReducerState {
-  const publication = database.transaction((db) => {
+  const publication = database.fixtureTransaction((db) => {
     publishTestJournalEpoch(db, projectionSessionId, projectionEpoch)
     return publishJournalOutcomeEpoch(db, projectionSessionId, projectionEpoch, rows)
   })
@@ -76,7 +76,8 @@ export function projectionWriter(database: JournalHostDatabase, initial: Journal
     readOnly: () => false,
     highestFence: () => state.highestFence,
     nextSequence: () => state.lastSequence + 1,
-    prepare: (db, rows, savedAt, finishFold) => projection.prepare(db, rows, savedAt, finishFold),
+    prepare: (db, rows, savedAt, finishFold, replacement) =>
+      projection.prepare(db, rows, savedAt, finishFold, replacement),
     commit: () => undefined
   })
   return { writer, projection, state: () => state, queue }

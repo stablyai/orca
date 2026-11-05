@@ -263,7 +263,7 @@ it('legacy activating republish before close settlement keeps its old identity a
 it('failed durable hide still stops the provider, remains unconfirmed, and reuses committed identity; failed fresh show publishes nothing', async () => {
   await twoChats()
   await send(HOST_TEST_SESSION, 'start provider')
-  const db = openTestJournalHostDatabase(directory).db
+  const db = (await openTestJournalHostDatabase(directory)).db
   db.exec(
     "CREATE TRIGGER refuse_tab_hide BEFORE DELETE ON agent_session_tabs BEGIN SELECT RAISE(ABORT, 'test write failure'); END"
   )

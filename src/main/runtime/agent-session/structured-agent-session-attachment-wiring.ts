@@ -27,7 +27,7 @@ export function installAgentSessionAttachments(deps: {
   store: Pick<AgentSessionRecordStore, 'getRecord' | 'isSessionUnreadable'>
   journalDatabase: Pick<
     JournalHostDatabase,
-    'readOnly' | 'isClosed' | 'db' | 'writeAutocommit' | 'transaction'
+    'readOnly' | 'isClosed' | 'scan' | 'read' | 'transaction' | 'maintenance'
   >
   logger: StructuredAgentSessionLogger
 }): void {
@@ -60,11 +60,7 @@ export function installAgentSessionAttachments(deps: {
       database: () =>
         deps.journalDatabase.readOnly || deps.journalDatabase.isClosed
           ? null
-          : deps.journalDatabase.db,
-      write: (run) =>
-        deps.journalDatabase.readOnly || deps.journalDatabase.isClosed
-          ? undefined
-          : deps.journalDatabase.writeAutocommit(run),
+          : deps.journalDatabase,
       recordedSessionIds: () => ({
         // Readable or not: an unreadable chat's claims still protect its uploads.
         has: (sessionId) =>

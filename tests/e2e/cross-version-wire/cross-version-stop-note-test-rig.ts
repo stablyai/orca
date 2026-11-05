@@ -1,3 +1,4 @@
+import { settleTestSubscriberDeliveries } from '../../../src/main/native-chat/agent-session-wire/agent-session-subscriber-test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -93,7 +94,7 @@ export function createReleasedStopNoteRig(port: ScenarioPort, ref: string) {
     host = new StructuredAgentSessionHost({
       agents: NO_STRUCTURED_AGENTS,
       store,
-      journalDatabase: openTestJournalHostDatabase(root),
+      journalDatabase: await openTestJournalHostDatabase(root),
       claimKeyId: 'key-1',
       logger: createStructuredAgentSessionLogger(),
       now: () => NOW,
@@ -222,6 +223,7 @@ export function createReleasedStopNoteRig(port: ScenarioPort, ref: string) {
           fence: 1,
           turnScope: AGENT_JOURNAL_THREAD_SCOPE
         }))
+    await settleTestSubscriberDeliveries(host.collaboratorsForTests().subscribers)
   }
   async function note(body: AgentJournalItemBody = unconfirmed) {
     await journal.appendItem(noteIdentity, body, {

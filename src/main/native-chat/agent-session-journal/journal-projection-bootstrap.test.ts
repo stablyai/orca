@@ -14,7 +14,7 @@ import {
   openTestJournalHostDatabase,
   liveTestJournalRows
 } from './journal-host-database-test-support'
-import type { JournalHostDatabase } from './journal-host-database'
+import type { TestJournalHostDatabase as JournalHostDatabase } from './journal-host-database-test-support'
 import { readJournalRowsAfterCursor, restoreJournal } from './journal-open'
 import { parseJournalRow, type JournalRow } from './journal-row-schema'
 import { publishNewEpoch } from './journal-epoch-rollover'
@@ -39,7 +39,7 @@ const experimentRoots: string[] = []
 const rigs: ReturnType<typeof projectionWriter>[] = []
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-journal-outcome-prefix-'))
-  database = openTestJournalHostDatabase(root)
+  database = await openTestJournalHostDatabase(root)
   vi.spyOn(console, 'warn').mockImplementation(() => {})
 })
 afterEach(async () => {
@@ -159,13 +159,12 @@ it('fences opens and every writer before mutation, while the old parser refuses 
 })
 
 // The check runs inside the publishing transaction, against the epoch the caller last saw.
-it('refuses to publish a new epoch over one the caller did not see, writing nothing', () => {
+it('refuses to publish a new epoch over one the caller did not see, writing nothing', async () => {
   seedOutcomeRows(database, [projectionEpochRow, item(2)])
   const before = database.db.prepare('SELECT * FROM journal_rows ORDER BY seq').all()
   const committed = vi.fn()
-  expect(() =>
-    publishNewEpoch({
-      database,
+  await expect(
+    publishNewEpoch(database, () => ({
       identity: {
         sessionId,
         workspaceId: 'ws',
@@ -180,8 +179,8 @@ it('refuses to publish a new epoch over one the caller did not see, writing noth
       expectedEpoch: 'an-epoch-replaced-meanwhile',
       queue: { cards: [], receipt: { write: () => {}, committed } },
       onPublished: committed
-    })
-  ).toThrow(expect.objectContaining({ code: 'journal_row_rejected' }))
+    }))
+  ).rejects.toThrow(expect.objectContaining({ code: 'journal_row_rejected' }))
   expect(committed).not.toHaveBeenCalled()
   expect(database.db.prepare('SELECT * FROM journal_rows ORDER BY seq').all()).toEqual(before)
   expect(restoreJournal(database.db, sessionId)?.state.epoch).toBe(epoch)
@@ -234,7 +233,7 @@ function frozenDatabase() {
 
 // Exact rows/outcomes and public values captured from the pinned writers, before/after real cleanup.
 function seedFrozen(db: JournalHostDatabase, fixture: z.output<ReturnType<typeof frozenDatabase>>) {
-  db.transaction((connection) => {
+  db.fixtureTransaction((connection) => {
     connection
       .prepare('INSERT INTO journal_sessions VALUES (?, ?, ?)')
       .run(fixture.session.session_id, fixture.session.workspace_id, fixture.session.epoch)
@@ -310,7 +309,7 @@ it('main-outcome-old-prefix-source-roundtrip', async () => {
 
   const rawRoot = await mkdtemp(join(tmpdir(), 'orca-32267-raw-fixture-'))
   experimentRoots.push(rawRoot)
-  const rawDb = openTestJournalHostDatabase(rawRoot)
+  const rawDb = await openTestJournalHostDatabase(rawRoot)
   seedFrozen(rawDb, historicalFixture.raw)
   const raw = readJournalHistoricalInputs(rawDb.db, sessionId)!.load
   expect(raw).toMatchObject({ newer: null, damage: null })
@@ -324,7 +323,7 @@ it('main-outcome-old-prefix-source-roundtrip', async () => {
   const { startJournalOutcomeLog, JOURNAL_OUTCOME_MARKER_VERSION } =
     await import('./journal-outcome-format')
   const rawPrefix = liveTestJournalRows(rawDb.db, sessionId)
-  rawDb.transaction((db) => {
+  rawDb.fixtureTransaction((db) => {
     startJournalOutcomeLog(db, sessionId, epoch, raw.state.lastSequence, 20_000)
     const marker = { v: 6, kind: 'outcomes', epoch, seq: raw.state.lastSequence + 1, ts: 20_000 }
     db.prepare('UPDATE journal_rows SET row_json=? WHERE session_id=? AND epoch=? AND seq=?').run(
@@ -344,7 +343,7 @@ it('main-outcome-old-prefix-source-roundtrip', async () => {
 
   const stoppedRoot = await mkdtemp(join(tmpdir(), 'orca-32267-stop-fixture-'))
   experimentRoots.push(stoppedRoot)
-  let stoppedDb = openTestJournalHostDatabase(stoppedRoot)
+  let stoppedDb = await openTestJournalHostDatabase(stoppedRoot)
   seedFrozen(stoppedDb, historicalFixture.stopped)
   const selected = () => {
     const historical = readJournalHistoricalInputs(stoppedDb.db, sessionId)!
@@ -396,7 +395,7 @@ it('main-outcome-old-prefix-source-roundtrip', async () => {
   }
   expect(kept.size).toBeLessThan(historicalFixture.stopped.outcomes.length)
   await closeTestJournalHostDatabases()
-  stoppedDb = openTestJournalHostDatabase(stoppedRoot)
+  stoppedDb = await openTestJournalHostDatabase(stoppedRoot)
   expect(selected()).toEqual(historicalFixture.oldStoppedCarry)
   const wrong = { ...JSON.parse(firstItem[5]), sequence: 999 }
   stoppedDb.db

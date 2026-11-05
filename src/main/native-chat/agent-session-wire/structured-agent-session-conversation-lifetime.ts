@@ -251,7 +251,7 @@ export function createStructuredAgentSessionConversationLifetime(
               startKey: failed.generation,
               ...structuredAgentSessionStartFailure(cause, wording)
             },
-            oldestQueuedSubmission(session)?.clientMessageId ?? null
+            (await oldestQueuedSubmission(session))?.clientMessageId ?? null
           ).catch((writeError: unknown) =>
             deps().logger.warn('recording a failed provider open failed', {
               scope: 'provider-open-failure',

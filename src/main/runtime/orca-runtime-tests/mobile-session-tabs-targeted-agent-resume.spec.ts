@@ -1,3 +1,4 @@
+import { withHeldSenderDiscovery } from '../runtime-agent-sender-snapshot.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { OrcaRuntimeService, electronMocks } from '../orca-runtime-test-mocks.spec'
@@ -723,13 +724,15 @@ describe('resumeAgentSessionInWorkspace retries, cancellation and a failed publi
 
   it('settles a failed post-spawn publication when that PTY exits', async () => {
     const { runtime, resume } = makeRuntime(makeSleptWorkspace())
-    const unsubscribe = runtime.onMobileSessionTabsChanged(() => {
-      throw new Error('publication failed')
+    await withHeldSenderDiscovery(runtime, async () => {
+      const unsubscribe = runtime.onMobileSessionTabsChanged(() => {
+        throw new Error('publication failed')
+      })
+      await expect(resume()).resolves.toEqual({ ok: false, reason: 'create_failed' })
+      unsubscribe()
+      await runtime.onPtyExit('resumed-pty', 0)
+      await expect(resume({ mutationId: 'next-delivery' })).resolves.toMatchObject({ ok: true })
     })
-    await expect(resume()).resolves.toEqual({ ok: false, reason: 'create_failed' })
-    unsubscribe()
-    runtime.onPtyExit('resumed-pty', 0)
-    await expect(resume({ mutationId: 'next-delivery' })).resolves.toMatchObject({ ok: true })
   })
 })
 

@@ -1,3 +1,4 @@
+import { finishJournalSteps } from '../agent-session-journal/journal-reconstruction-steps'
 // Keep history/cursors contiguous; name off-page subagent spawns separately so visible child rows keep labels.
 
 import {
@@ -24,14 +25,23 @@ export function offPageSubagentRoster(
   journal: readonly AgentJournalRenderItem[],
   page: readonly AgentJournalRenderItem[]
 ): AgentSessionSubagentRosterEntry[] | undefined {
+  return finishJournalSteps(offPageSubagentRosterSteps(journal, page))
+}
+
+export function* offPageSubagentRosterSteps(
+  journal: readonly AgentJournalRenderItem[],
+  page: readonly AgentJournalRenderItem[]
+): Generator<void, AgentSessionSubagentRosterEntry[] | undefined> {
   const unnamed = new Set<string>()
   for (const item of page) {
+    yield
     const agentId = agentJournalItemSubagentId(item)
     if (agentId !== null) {
       unnamed.add(agentId)
     }
   }
   for (const item of page) {
+    yield
     for (const entry of rosterEntries(item)) {
       unnamed.delete(entry.id)
     }
@@ -42,6 +52,7 @@ export function offPageSubagentRoster(
   const named: AgentSessionSubagentRosterEntry[] = []
   let bytes = 0
   for (const item of journal) {
+    yield
     for (const entry of rosterEntries(item)) {
       if (!unnamed.delete(entry.id) || named.length >= MAX_ENTRIES) {
         continue

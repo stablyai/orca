@@ -1,3 +1,8 @@
+import {
+  readJournalDerived,
+  journalDerivedRefreshPending
+} from '../agent-session-journal/journal-derived-read'
+import { finishJournalStepsAsync } from '../agent-session-journal/journal-reconstruction-steps'
 import { structuredAgentSessionOwnerStatus } from './structured-agent-session-owner-status'
 import type { AgentSessionCurrentRequestsRead } from '../../../shared/agent-session/requests/agent-session-current-requests-wire'
 import { readCurrentRequestsPiece } from './agent-session-current-requests'
@@ -41,8 +46,15 @@ export class StructuredAgentSessionBackgroundTaskChannel {
   handoffStatus = (sessionId: string) => structuredAgentSessionOwnerStatus(this.deps, sessionId)
 
   /** Full reduction: absence from a bounded page cannot prove a revised/tombstoned item is absent. */
-  journalSnapshot = async (sessionId: string) =>
-    (await this.conversation(sessionId)).journal.snapshot()
+  journalSnapshot = async (sessionId: string) => {
+    const journal = (await this.conversation(sessionId)).journal
+    return readJournalDerived(journal, function* (finite) {
+      if (finite) {
+        yield* journal.preparePublicReadSteps()
+      }
+      return journal.snapshot()
+    })
+  }
 
   async history(
     request: AgentSessionHistoryRequest,
@@ -51,18 +63,29 @@ export class StructuredAgentSessionBackgroundTaskChannel {
     replaceNormalizedHistory = true
   ): Promise<AgentSessionHistoryResult> {
     const journal = (await this.conversation(request.sessionId)).journal
-    const work = hostStructuredAgentSessionCurrentWork(
-      { store: this.deps.store, sessions: this.sessions },
-      request.sessionId
-    )
-    const result = readStructuredAgentSessionHistoryResult({
+    const current = () => {
+      if (this.sessions.get(request.sessionId)?.journal !== journal) {
+        throw new Error('History unavailable')
+      }
+      return hostStructuredAgentSessionCurrentWork(
+        { store: this.deps.store, sessions: this.sessions },
+        request.sessionId
+      )
+    }
+    const store = this.deps.store
+    const result = await readStructuredAgentSessionHistoryResult({
       journal,
-      record: this.deps.store.getConversation(request.sessionId),
+      get record() {
+        current()
+        return store.getConversation(request.sessionId)
+      },
       request,
       scope,
       reader,
       replaceNormalizedHistory,
-      ...(work ? { work } : {})
+      get work() {
+        return current() ?? undefined
+      }
     })
     const backgroundTasks = this.read(request.sessionId)
     const queue = this.subscribers.readQueuePublication(request.sessionId)
@@ -86,7 +109,36 @@ export class StructuredAgentSessionBackgroundTaskChannel {
   }
 
   async currentRequests(request: AgentSessionCurrentRequestsRead) {
-    await this.conversation(request.sessionId)
+    const session = await this.conversation(request.sessionId)
+    if (journalDerivedRefreshPending(session.journal)) {
+      return session.journal.readInOrder(async () => {
+        for (;;) {
+          const work = hostStructuredAgentSessionCurrentWork(
+            { store: this.deps.store, sessions: this.sessions },
+            request.sessionId
+          )
+          if (!work || this.sessions.get(request.sessionId) !== session) {
+            throw new Error('Current requests unavailable')
+          }
+          const key = work.viewKey()
+          const child = session.child
+          const revision = session.operationalRevision
+          const current = () =>
+            this.sessions.get(request.sessionId) === session &&
+            session.child === child &&
+            session.operationalRevision === revision &&
+            hostStructuredAgentSessionCurrentWork(
+              { store: this.deps.store, sessions: this.sessions },
+              request.sessionId
+            )?.viewKey() === key
+          await finishJournalStepsAsync(work.actionablePromptSteps(current))
+          if (current()) {
+            return readCurrentRequestsPiece(work.requestProjection(request.sessionId), request)
+          }
+          await new Promise<void>((resolve) => setImmediate(resolve))
+        }
+      })
+    }
     const work = hostStructuredAgentSessionCurrentWork(
       { store: this.deps.store, sessions: this.sessions },
       request.sessionId

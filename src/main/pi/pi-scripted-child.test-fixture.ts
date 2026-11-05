@@ -34,7 +34,8 @@ class ScriptedPiConnection implements PiRpcConnection {
   readonly pid: number
   readonly file: string
   private readonly handshake = Promise.withResolvers<unknown>()
-  private readonly exitListeners = new Set<() => void>()
+  private readonly exitListeners = new Set<Parameters<PiRpcConnection['onExit']>[0]>()
+  private exitError = new Error('Scripted Pi closed')
   private firstStateRead = true
   private streaming = false
   private model: NonNullable<PiScriptOptions['model']> = {
@@ -179,9 +180,9 @@ class ScriptedPiConnection implements PiRpcConnection {
     return { root: 'exited', tree: 'exited' }
   }
 
-  onExit(listener: () => void): void {
+  onExit(listener: Parameters<PiRpcConnection['onExit']>[0]): void {
     if (this.rootVerdict === 'exited') {
-      listener()
+      listener(false, this.exitError)
     } else {
       this.exitListeners.add(listener)
     }
@@ -196,8 +197,9 @@ class ScriptedPiConnection implements PiRpcConnection {
     }
     this.closed = true
     this.rootVerdict = 'exited'
+    this.exitError = error
     this.lastCloseResult = { root: 'exited', tree: 'exited' }
-    this.exitListeners.forEach((listener) => listener())
+    this.exitListeners.forEach((listener) => listener(false, error))
     this.exitListeners.clear()
     this.handlers.onExit?.(error, {
       expected: false,

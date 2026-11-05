@@ -4,8 +4,6 @@ import type {
 } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { AgentSessionStartEndings } from '../native-chat/agent-session-wire/structured-agent-session-start-failure'
 import type { StructuredAgentSessionProviderOpenInput } from '../native-chat/agent-session-wire/structured-agent-session-provider-open-contract'
-import { JsonlRpcAgentExitError } from '../jsonl-rpc/agent-connection'
-import { withProviderSpawnAbsence } from '../provider-process/provider-executable-missing'
 import type { PiRpcSession } from './rpc-session'
 import { piStartFailure } from './rpc-startup-outcome'
 
@@ -18,13 +16,9 @@ export function watchPiStartExit(
 ): void {
   const sessionId = session.input.identity.sessionId
   endings.admit(sessionId, session.generation)
-  session.connection.onExit((requested) => {
+  session.connection.onExit((requested, exited) => {
     if (!requested) {
       input.events?.observeRootExit?.()
-      const exited = withProviderSpawnAbsence(
-        new JsonlRpcAgentExitError('Pi exited while starting'),
-        session.connection.spawnAbsence
-      )
       endings.record(sessionId, session.generation, piStartFailure([session.failure, exited]))
     }
   })
@@ -63,4 +57,8 @@ export async function openPiStart(
       session?.connection.rootVerdict === 'exited' && !session.requestedClose
     )
   }
+}
+
+export function piClosedStartError(ending: Error | false | null | undefined): Error {
+  return ending || new Error('Pi exited while starting')
 }

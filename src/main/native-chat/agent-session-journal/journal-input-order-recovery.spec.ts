@@ -83,7 +83,7 @@ it('keeps the released native boundary when a warm close recovers before another
     const state = journal.queuedMessages.inputState()
     expect(journal.inputOrder.predecessors(state, 'M').position).toBe(3)
     const submitted = journal.submission('M')!
-    expect(selectStructuredAgentSessionInput(journal)).toMatchObject({
+    expect(await selectStructuredAgentSessionInput(journal)).toMatchObject({
       kind: 'card',
       card: { messageId: 'C' }
     })
@@ -172,11 +172,11 @@ it('keeps the released native boundary when a warm close recovers before another
     })
     expect(journal.queuedMessages.pauses()).toEqual([])
     expect(journal.queuedMessages.nextInputCard()?.messageId).toBe('C')
-    expect(selectStructuredAgentSessionInput(journal)).toMatchObject({
+    expect(await selectStructuredAgentSessionInput(journal)).toMatchObject({
       kind: 'card',
       card: { messageId: 'C' }
     })
-    expect(selectedStructuredSubmission(journal)).toBeUndefined()
+    expect(await selectedStructuredSubmission(journal)).toBeUndefined()
   } finally {
     await journals.closeAll()
     await rm(root, { recursive: true, force: true })

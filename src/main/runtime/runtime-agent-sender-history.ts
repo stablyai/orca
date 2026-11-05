@@ -1,3 +1,4 @@
+import { finishJournalStepsAsync } from '../native-chat/agent-session-journal/journal-reconstruction-steps'
 import { z } from 'zod'
 import type {
   AgentSenderAssociation,
@@ -8,7 +9,7 @@ import {
   structuredAgentSessionTabId
 } from '../../shared/agent-session/view/structured-agent-session-projection'
 import {
-  createCanonicalSessionResolver,
+  createCanonicalSessionResolverSteps,
   type AgentSessionRecordReader
 } from './orchestration/structured-session-lineage'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
@@ -46,10 +47,18 @@ export function readAgentSenderPrincipals(
 
 /** Chats with an open tab. Without a recorded tab table the store still knows the workspace's
  *  saved chat tabs, so closed history never counts as open; a reader that can't say counts all. */
-function visibleChats(records: AgentSessionRecordReader | null): Set<string> | null {
+async function visibleChats(records: AgentSessionRecordReader | null): Promise<Set<string> | null> {
   const listed = records?.listVisibleSessionIds?.()
   if (listed) {
-    return new Set(listed)
+    const visible = new Set<string>()
+    let visits = 0
+    for (const id of listed) {
+      visible.add(id)
+      if (++visits % 256 === 0) {
+        await new Promise<void>((resolve) => setImmediate(resolve))
+      }
+    }
+    return visible
   }
   const visibility = records?.getVisibleSessionTabIndex?.()
   return visibility?.present ? new Set(visibility.sessionIds) : null
@@ -58,55 +67,76 @@ function visibleChats(records: AgentSessionRecordReader | null): Set<string> | n
 /** Every open chat and, through the store's reverse /clear index, each session whose lineage
  *  reaches one: a row's chat is where its lineage runs now, so no other saved chat yields a row.
  *  Null for a reader without the index or visibility, which lists every chat. */
-function senderCandidates(
+async function senderCandidates(
   records: AgentSessionRecordReader | null,
   visible: Set<string> | null
-): Set<string> | null {
+): Promise<Set<string> | null> {
   const clearedFrom = records?.listClearedFrom
   if (!visible || !clearedFrom) {
     return null
   }
   const seen = new Set<string>()
-  const pending = [...visible]
+  const pending: string[] = []
+  let visits = 0
+  for (const id of visible) {
+    pending.push(id)
+    if (++visits % 256 === 0) {
+      await new Promise<void>((resolve) => setImmediate(resolve))
+    }
+  }
   for (let id = pending.pop(); id !== undefined; id = pending.pop()) {
     if (!seen.has(id)) {
       seen.add(id)
-      pending.push(...clearedFrom(id))
+      for (const predecessor of await clearedFrom(id)) {
+        pending.push(predecessor)
+        if (++visits % 256 === 0) {
+          await new Promise<void>((resolve) => setImmediate(resolve))
+        }
+      }
+      if (++visits % 256 === 0) {
+        await new Promise<void>((resolve) => setImmediate(resolve))
+      }
     }
   }
   return seen
 }
 
 /** Visible chats under their own and every /clear predecessor's session id. */
-export function readAgentSenderSessions(
+export async function readAgentSenderSessions(
   records: AgentSessionRecordReader | null,
   work?: { chatRecords: number }
-): AgentSenderAssociation[] {
-  const visible = visibleChats(records)
+): Promise<AgentSenderAssociation[]> {
+  const visible = await visibleChats(records)
   const ids =
-    senderCandidates(records, visible) ?? (records?.listRecords() ?? []).map((r) => r.sessionId)
-  const resolve = createCanonicalSessionResolver(records)
-  return [...ids].flatMap((sessionId) => {
+    (await senderCandidates(records, visible)) ??
+    (records?.listRecords() ?? []).map((r) => r.sessionId)
+  const resolve = createCanonicalSessionResolverSteps(records)
+  const associations: AgentSenderAssociation[] = []
+  let visits = 0
+  for (const sessionId of ids) {
     if (work) {
       work.chatRecords++
     }
-    const destinationId = resolve(sessionId)
+    const destinationId = await finishJournalStepsAsync(resolve(sessionId))
     const destination = records?.getRecord(destinationId)
-    return !destination ||
-      // Local chats, WSL ones included, as the sidebar shows them.
-      destination.location.executionHostId !== LOCAL_EXECUTION_HOST_ID ||
-      (visible && !visible.has(destinationId))
-      ? []
-      : [
-          {
-            identity: `orca_session_id:${sessionId}`,
-            paneKey: structuredAgentSessionPaneKey(
-              structuredAgentSessionTabId(destinationId),
-              destinationId
-            ),
-            worktreeId: destination.location.workspaceId,
-            sessionId: destinationId
-          }
-        ]
-  })
+    if (
+      destination &&
+      destination.location.executionHostId === LOCAL_EXECUTION_HOST_ID &&
+      (!visible || visible.has(destinationId))
+    ) {
+      associations.push({
+        identity: `orca_session_id:${sessionId}`,
+        paneKey: structuredAgentSessionPaneKey(
+          structuredAgentSessionTabId(destinationId),
+          destinationId
+        ),
+        worktreeId: destination.location.workspaceId,
+        sessionId: destinationId
+      })
+    }
+    if (++visits % 256 === 0) {
+      await new Promise<void>((resolve) => setImmediate(resolve))
+    }
+  }
+  return associations
 }

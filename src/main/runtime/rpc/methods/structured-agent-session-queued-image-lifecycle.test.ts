@@ -691,7 +691,7 @@ it.each([
     expect(journal().queuedMessages.list()).toEqual([])
     if (edit) {
       appendTestJournalQueueRow(
-        openTestJournalHostDatabase(rig.root).db,
+        (await openTestJournalHostDatabase(rig.root)).db,
         journal(),
         `recovery:${id}`,
         {

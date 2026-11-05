@@ -1,6 +1,7 @@
 // Claim writes and sweep marks share the journal transaction connection so only one can win.
 
 import { lstatSync, readdirSync } from 'node:fs'
+import { readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { isDefinitiveAbsence } from '../../../shared/definitive-filesystem-absence'
 import type Database from '../../sqlite/sync-database'
@@ -20,12 +21,42 @@ const CLAIM_SAVEPOINT = 'agent_session_attachment_claims'
 
 /** Add tables without user_version changes so older builds stay writable; multiple chats may hold uploads. */
 export function ensureAgentSessionAttachmentClaimTables(db: Database.Database): void {
+  const columns = db.prepare('PRAGMA table_info(agent_session_attachment_claims)').all()
+  if (columns.length && !columns.some((column) => column.name === 'claim_id')) {
+    if (
+      columns.length !== 3 ||
+      columns.some(
+        (column, i) =>
+          column.name !== ['upload_id', 'session_id', 'claimed_at'][i] ||
+          column.type !== ['TEXT', 'TEXT', 'INTEGER'][i] ||
+          column.notnull !== 1 ||
+          column.pk !== [1, 2, 0][i]
+      )
+    ) {
+      throw new Error('unrecognized attachment claim schema')
+    }
+    db.exec(`
+CREATE TABLE agent_session_attachment_claims_new (
+  claim_id INTEGER PRIMARY KEY AUTOINCREMENT,
+  upload_id TEXT NOT NULL,
+  session_id TEXT NOT NULL,
+  claimed_at INTEGER NOT NULL,
+  UNIQUE (upload_id, session_id)
+);
+INSERT INTO agent_session_attachment_claims_new (upload_id, session_id, claimed_at)
+  SELECT upload_id, session_id, claimed_at FROM agent_session_attachment_claims
+  ORDER BY upload_id, session_id;
+DROP TABLE agent_session_attachment_claims;
+ALTER TABLE agent_session_attachment_claims_new RENAME TO agent_session_attachment_claims;
+`)
+  }
   db.exec(`
 CREATE TABLE IF NOT EXISTS agent_session_attachment_claims (
+  claim_id INTEGER PRIMARY KEY AUTOINCREMENT,
   upload_id  TEXT    NOT NULL,
   session_id TEXT    NOT NULL,
   claimed_at INTEGER NOT NULL,
-  PRIMARY KEY (upload_id, session_id)
+  UNIQUE (upload_id, session_id)
 );
 CREATE TABLE IF NOT EXISTS agent_session_attachment_sweeps (
   upload_id  TEXT    NOT NULL PRIMARY KEY,
@@ -97,34 +128,88 @@ export type AgentSessionAttachmentClaim = {
   now: number
 }
 
+export type PreparedAgentSessionAttachmentClaim = {
+  sessionId: string
+  now: number
+  uploadIds: Set<string>
+  required: (AgentSessionExpiredAttachment & { stored: boolean })[]
+}
+
+function attachmentClaimParts(claim: AgentSessionAttachmentClaim): {
+  root: string
+  prepared: PreparedAgentSessionAttachmentClaim
+} {
+  const root = agentSessionAttachmentStoreRoot(claim.stateDirectory)
+  const uploadIds = agentSessionAttachmentReferences(root, claim.body)
+  const kept = claim.previous
+    ? agentSessionAttachmentReferences(root, claim.previous)
+    : new Set<string>()
+  return {
+    root,
+    prepared: {
+      sessionId: claim.sessionId,
+      now: claim.now,
+      uploadIds,
+      required: agentSessionAttachmentReferenceNames(
+        root,
+        claim.body,
+        claim.required ? [...uploadIds].filter((id) => !kept.has(id)) : []
+      ).map((reference) => ({ ...reference, stored: true }))
+    }
+  }
+}
+
+/** Mutation ownership excludes a new sweep mark until the prepared native claim commits. */
+export async function prepareAgentSessionAttachmentClaim(
+  claim: AgentSessionAttachmentClaim
+): Promise<PreparedAgentSessionAttachmentClaim> {
+  const { root, prepared } = attachmentClaimParts(claim)
+  for (const reference of prepared.required) {
+    let stored = false
+    try {
+      stored = (await readdir(join(root, reference.uploadId))).some(
+        (entry) => entry !== AGENT_SESSION_ATTACHMENT_PART_FILE
+      )
+    } catch {
+      stored = false
+    }
+    reference.stored = stored
+  }
+  return prepared
+}
+
 /** Share the message transaction so missing required uploads roll back the entire send. */
 export function claimAgentSessionAttachmentsInTransaction(
   db: Database.Database,
   claim: AgentSessionAttachmentClaim
 ): { referenced: Set<string>; inserted: string[] } {
-  const root = agentSessionAttachmentStoreRoot(claim.stateDirectory)
-  const uploadIds = agentSessionAttachmentReferences(root, claim.body)
+  const { root, prepared } = attachmentClaimParts(claim)
+  for (const reference of prepared.required) {
+    reference.stored = uploadIsStored(root, reference.uploadId)
+  }
+  return claimPreparedAgentSessionAttachments(db, prepared)
+}
+
+/** Sweep marks and claims are rechecked atomically on the sole native writer. */
+export function claimPreparedAgentSessionAttachments(
+  db: Database.Database,
+  claim: PreparedAgentSessionAttachmentClaim
+): { referenced: Set<string>; inserted: string[] } {
+  const { uploadIds, required } = claim
   if (uploadIds.size === 0) {
     return { referenced: uploadIds, inserted: [] }
   }
-  const kept = claim.previous
-    ? agentSessionAttachmentReferences(root, claim.previous)
-    : new Set<string>()
-  const required = claim.required ? [...uploadIds].filter((id) => !kept.has(id)) : []
-  const expired = required.filter(
-    (uploadId) => isBeingSwept(db, uploadId) || !uploadIsStored(root, uploadId)
-  )
+  const expired = required.filter(({ uploadId, stored }) => !stored || isBeingSwept(db, uploadId))
   if (expired.length > 0) {
     throw new AgentSessionAttachmentExpiredError(
-      agentSessionAttachmentReferenceNames(
-        root,
-        claim.body,
-        expired.slice(0, AGENT_SESSION_EXPIRED_ATTACHMENTS_MAX)
-      )
+      expired
+        .slice(0, AGENT_SESSION_EXPIRED_ATTACHMENTS_MAX)
+        .map(({ uploadId, name }) => ({ uploadId, name }))
     )
   }
-  const inserted = insertClaims(db, required, claim.sessionId, claim.now)
-  const bestEffort = [...uploadIds].filter((id) => !required.includes(id))
+  const requiredIds = new Set(required.map(({ uploadId }) => uploadId))
+  const inserted = insertClaims(db, requiredIds, claim.sessionId, claim.now)
+  const bestEffort = [...uploadIds].filter((id) => !requiredIds.has(id))
   if (bestEffort.length === 0) {
     return { referenced: uploadIds, inserted }
   }

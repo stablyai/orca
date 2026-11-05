@@ -70,7 +70,7 @@ export function registerJournalLifecycleBatchAppenderTests(): void {
       const before = journal.cursor().sequence
       await journal.appendLifecycleBatch(input)
       expect(commits).toHaveBeenCalledTimes(1)
-      const { db } = openTestJournalHostDatabase(root)
+      const { db } = await openTestJournalHostDatabase(root)
       const rows = liveTestJournalRows(db, SESSION).flatMap((stored) => {
         const parsed = parseJournalRow(stored.rowJson)
         if (!parsed.ok) {

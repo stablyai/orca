@@ -3,9 +3,7 @@ import type {
   AgentSenderPublication,
   AgentSenderRevision
 } from '../../shared/agent-sender-associations'
-import { isStructuredWorkerHandle } from '../../shared/structured-worker-handle'
-import { parsePaneKey } from '../../shared/workspace-layout/stable-pane-id'
-import type { RuntimeAgentOrchestrationDependencies } from './runtime-agent-orchestration-projection'
+
 import {
   readAgentSenderPrincipals,
   readAgentSenderSessions,
@@ -16,40 +14,23 @@ import {
   AgentSenderWorkerHistory,
   type AgentSenderWorkers
 } from './runtime-agent-sender-worker-history'
-import { readAgentSenderGeneration } from './runtime-agent-sender-history-triggers'
+import { AgentSenderLivePanes } from './runtime-agent-sender-panes'
 import type { OrchestrationDb } from './orchestration/db'
-import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 import { AgentSenderPublisher, type AgentSenderScope } from './runtime-agent-sender-publication'
 
-/** The handles terminals already hold, read without issuing one: display bookkeeping never
- *  changes terminal identity, so a terminal with no issued handle has no sender row. */
-export type AgentSenderHandleReads = {
-  hasPublishedScope?(worktreeId: string): boolean
-  readLeafHandle(leaf: RuntimeLeafRecord): string | null
-  /** One reader per walk, so a lookup that must index records does it once per build. */
-  readPtyHandles(): (pty: RuntimePtyWorktreeRecord) => string | null
+export type { AgentSenderHandleReads, TerminalHandleAccess } from './runtime-agent-sender-panes'
+import {
+  captureAgentSenderInput,
+  sameAgentSenderInput as same,
+  type AgentSenderDependencies
+} from './runtime-agent-sender-input'
+
+type SenderPass = {
+  publication: AgentSenderPublication
+  scope: (worktreeId: string) => AgentSenderPublication
+  frame: (worktreeId: string) => AgentSenderPublication
 }
-
-/** Orchestration issues terminal handles; sender rows only read the ones already issued. */
-export type TerminalHandleAccess = Pick<
-  RuntimeAgentOrchestrationDependencies,
-  'issueLeafHandle' | 'issuePtyHandle'
-> &
-  AgentSenderHandleReads
-
-type Dependencies = Omit<
-  RuntimeAgentOrchestrationDependencies,
-  'issueLeafHandle' | 'issuePtyHandle'
-> &
-  AgentSenderHandleReads & {
-    peerFingerprint(): string | undefined
-    /** This host's principal as the paired environment authenticates it, and that peer's key. */
-    principal(environmentId: string): AgentSenderPrincipal | undefined
-    /** Moves when a pairing changes, so principals are read again only then. */
-    pairingGeneration(): number
-  }
-/** Bounded like the hook server's per-pane maps; eviction only forgets an old respawn. */
-const MAX_HANDLE_INCARNATIONS = 4096
+type TerminalSenders = Pick<AgentSenderScope, 'associations' | 'attachments'>
 
 /** Publishes where each sender a card saves runs now: the terminal its handle names, the worker
  *  lineage a Dispatch continued into, and chats by session. Terminal and chat inputs rebuild
@@ -78,43 +59,62 @@ export class RuntimeAgentSenderAssociations {
     }
   }
   /** The process each handle was first seen running; a respawn that kept the handle is not it. */
-  private readonly handleIncarnations = new Map<string, string>()
+  private readonly panes: AgentSenderLivePanes
   private terminalKey: unknown[] = []
   private failedKey: unknown[] = []
-  private terminal: Pick<AgentSenderScope, 'associations' | 'attachments'> = {
-    associations: [],
-    attachments: []
-  }
+  private terminal: TerminalSenders = { associations: [], attachments: [] }
   private chatKey: unknown[] = []
   private chats: AgentSenderAssociation[] = []
+  private refreshing?: { key: unknown[]; result: Promise<SenderPass>; terminalChanged: boolean }
+  private nextRefresh?: Promise<SenderPass>
+  private releaseWhenSettled = false
   readonly publisher = new AgentSenderPublisher((id) => this.deps.hasPublishedScope?.(id) ?? false)
-  constructor(private readonly deps: Dependencies) {}
+  constructor(
+    private readonly deps: AgentSenderDependencies,
+    private readonly captureChatDelivery: () => { key: unknown[]; publish: () => void } = () => ({
+      key: [],
+      publish: () => {}
+    })
+  ) {
+    this.panes = new AgentSenderLivePanes(deps, this.work)
+  }
 
   /** Display bookkeeping: a failure keeps the last good publication and never fails a caller. */
-  build(worktreeId?: string): AgentSenderPublication {
+  async build(worktreeId?: string): Promise<AgentSenderPublication> {
     try {
-      this.refresh()
-    } catch (error) {
-      console.warn('[runtime] Sender identity publication failed', error)
-    }
+      const pass = await this.refresh()
+      return worktreeId ? pass.scope(worktreeId) : pass.publication
+    } catch {}
     return worktreeId ? this.publisher.scope(worktreeId) : this.publisher.current()
   }
 
   /** A window graph reply carries the rows only when the window's applied base is stale. */
-  buildForGraph(base: AgentSenderRevision | undefined) {
-    this.build()
-    return this.publisher.forGraph(base)
+  async buildForGraph(base: AgentSenderRevision | undefined) {
+    return this.publisher.forGraph(base, await this.build())
   }
 
   /** The scope a client frame carries; remembered so a refresh republishes only changed worktrees. */
-  buildForFrame(worktreeId: string): AgentSenderPublication {
-    return this.buildForFramePass()(worktreeId)
+  async buildForFrame(worktreeId: string): Promise<AgentSenderPublication> {
+    return (await this.buildForFramePass())(worktreeId)
   }
 
   /** One refresh for a synchronous pass that frames many worktrees: each reads that one result. */
-  buildForFramePass(): (worktreeId: string) => AgentSenderPublication {
-    this.build()
-    return (worktreeId) => this.publisher.frame(worktreeId)
+  async buildForFramePass(): Promise<(worktreeId: string) => AgentSenderPublication> {
+    try {
+      return (await this.refresh()).frame
+    } catch {
+      return this.publisher.captureFramePass()
+    }
+  }
+
+  /** Structural delivery owns its callback; only chat lineage continues in the native flight. */
+  immediateFramePass(): (worktreeId: string) => AgentSenderPublication {
+    try {
+      void this.refresh()
+    } catch (error) {
+      console.warn('[runtime] Sender identity publication failed', error)
+    }
+    return this.publisher.captureFramePass()
   }
 
   acknowledgeFrame(worktreeId: string, scope: AgentSenderPublication): void {
@@ -126,6 +126,11 @@ export class RuntimeAgentSenderAssociations {
   }
 
   releaseDerivedHistory(): void {
+    if (this.refreshing || this.nextRefresh) {
+      this.releaseWhenSettled = true
+      return
+    }
+    this.releaseWhenSettled = false
     try {
       this.workerHistory.release(this.database)
     } catch (error) {
@@ -141,137 +146,130 @@ export class RuntimeAgentSenderAssociations {
   }
 
   /** Worktrees whose scope differs from the one their last frame carried; an unframed one has no stale client. */
-  changedScopes(worktreeIds: Iterable<string>): string[] {
-    this.build()
+  async changedScopes(worktreeIds: Iterable<string>): Promise<string[]> {
+    await this.build()
     return this.publisher.changedScopes(worktreeIds)
   }
 
-  private livePanes(): Map<string, AgentSenderPane & { original: boolean }> {
-    const panes = new Map<string, AgentSenderPane & { original: boolean }>()
-    const ptys = new Map([...this.deps.getPtys()].map((pty) => [pty.ptyId, pty]))
-    const terminal = (
-      handle: string | null,
-      paneKey: string | null,
-      worktreeId: string | null,
-      ptyId: string | null
-    ) => {
-      if (
-        !handle ||
-        !paneKey ||
-        !worktreeId ||
-        isStructuredWorkerHandle(handle) ||
-        !parsePaneKey(paneKey)
-      ) {
-        return
-      }
-      const pty = ptyId ? ptys.get(ptyId) : undefined
-      const processIncarnation = pty?.incarnationId ? `${pty.ptyId}:${pty.incarnationId}` : null
-      panes.set(paneKey, {
-        paneKey,
-        worktreeId,
-        handle,
-        processIncarnation,
-        original: this.originalExecution(handle, processIncarnation)
-      })
-    }
-    for (const leaf of this.deps.getLeaves()) {
-      this.work.leafVisits++
-      if (leaf.ptyId) {
-        terminal(
-          this.deps.readLeafHandle(leaf),
-          this.deps.makePaneKey(leaf),
-          leaf.worktreeId,
-          leaf.ptyId
-        )
-      }
-    }
-    const readPtyHandle = this.deps.readPtyHandles()
-    for (const pty of ptys.values()) {
-      this.work.ptyVisits++
-      const paneKey = this.deps.paneOf(pty).paneKey
-      if (paneKey && !panes.has(paneKey)) {
-        terminal(readPtyHandle(pty), paneKey, pty.worktreeId, pty.ptyId)
-      }
-    }
-    return panes
+  private capture() {
+    return captureAgentSenderInput(this.deps, this.panes, this.database)
   }
 
-  /** A handle names the execution it was issued to; restart reattach keeps both, but a respawn
-   *  that kept the handle runs a fresh shell, so its old cards no longer name what runs there. */
-  private originalExecution(handle: string, incarnation: string | null): boolean {
-    if (!incarnation) {
-      return true
+  private refresh(): Promise<SenderPass> {
+    const input = this.capture()
+    const beforeTerminal = this.publisher.current()
+    this.refreshTerminals(input)
+    const terminalChanged = beforeTerminal !== this.publisher.current()
+    const delivery = this.captureChatDelivery()
+    const key = [input.db, ...input.chatKey, ...delivery.key]
+    if (this.refreshing) {
+      this.refreshing.terminalChanged ||= terminalChanged
+      if (same(key, this.refreshing.key)) {
+        return this.refreshing.result
+      }
+      this.nextRefresh ??= this.refreshing.result
+        .catch(() => {})
+        .then(() => {
+          this.nextRefresh = undefined
+          return this.refresh()
+        })
+      return this.nextRefresh
     }
-    const first = this.handleIncarnations.get(handle)
-    if (first === undefined) {
-      this.handleIncarnations.set(handle, incarnation)
-      if (this.handleIncarnations.size > MAX_HANDLE_INCARNATIONS) {
-        const oldest = this.handleIncarnations.keys().next().value
-        if (oldest !== undefined) {
-          this.handleIncarnations.delete(oldest)
+    const result = this.runRefresh(input)
+      .then(
+        (changed) => {
+          const lifetimeChanged = !same(delivery.key, this.chatKey.slice(2))
+          const pass = {
+            publication: this.publisher.current(),
+            scope: this.publisher.captureScopes(),
+            frame: this.publisher.captureFramePass()
+          }
+          if (changed || this.refreshing?.terminalChanged || lifetimeChanged) {
+            delivery.publish()
+          }
+          this.chatKey = [...this.chatKey.slice(0, 2), ...delivery.key]
+          return pass
+        },
+        (error: unknown) => {
+          if (this.refreshing?.terminalChanged) {
+            delivery.publish()
+          }
+          throw error
         }
-      }
-    }
-    return first === undefined || first === incarnation
+      )
+      .finally(() => {
+        this.refreshing = undefined
+        if (this.releaseWhenSettled && !this.nextRefresh) {
+          this.releaseDerivedHistory()
+        }
+      })
+    this.refreshing = { key, result, terminalChanged }
+    void result.catch((error: unknown) => {
+      console.warn('[runtime] Sender identity publication failed', error)
+    })
+    return result
   }
 
-  private refresh(): void {
-    const db = this.deps.getDb()
-    const install = db !== this.database
+  private refreshTerminals(input: ReturnType<RuntimeAgentSenderAssociations['capture']>): void {
+    const { db, install, generation, panes, peerFingerprint, terminalKey } = input
     if (install) {
       this.database = db
       this.workerHistory = new AgentSenderWorkerHistory()
       this.principalsRead = ''
       this.principals = []
+      this.terminalKey = []
+      this.failedKey = []
     }
-    const generation = db ? readAgentSenderGeneration(db, install) : null
-    const panes = this.livePanes()
-    const peerFingerprint = this.deps.peerFingerprint()
-    // Primitives compared in place: a status-only build allocates no key string.
-    const terminalKey: unknown[] = [
-      generation?.history,
-      generation?.principals,
-      this.deps.pairingGeneration(),
-      peerFingerprint
-    ]
-    for (const p of panes.values()) {
-      terminalKey.push(p.paneKey, p.worktreeId, p.handle, p.processIncarnation, p.original)
-    }
-    const records = this.deps.getSessionRecords()
-    // A store says when what chats read changed; a reader without it is listed.
-    const chatKey = [
-      records?.listRecords,
-      records?.senderIdentityRevision
-        ? records.senderIdentityRevision()
-        : JSON.stringify([
-            records?.listRecords().map((r) => [r.sessionId, r.location, r.conversationCommand]),
-            records?.getVisibleSessionTabIndex?.()
-          ])
-    ]
-    const terminalChanged =
-      !same(terminalKey, this.terminalKey) && !same(terminalKey, this.failedKey)
-    const chatsChanged = !same(chatKey, this.chatKey)
-    if (chatsChanged) {
-      this.chatReads++
-      this.chats = readAgentSenderSessions(records, this.work)
-      this.chatKey = chatKey
+    if (same(terminalKey, this.terminalKey) || same(terminalKey, this.failedKey)) {
+      return
     }
     try {
-      if (terminalChanged) {
-        this.readTerminals(db, generation?.principals ?? '', panes, terminalKey)
+      this.readTerminals(db, generation?.principals ?? '', panes, terminalKey)
+      this.publish(peerFingerprint)
+    } catch (error) {
+      console.warn('[runtime] Sender identity publication failed', error)
+    }
+  }
+
+  private async runRefresh(
+    input: ReturnType<RuntimeAgentSenderAssociations['capture']>
+  ): Promise<boolean> {
+    const { db, records } = input
+    let { chatKey } = input
+    if (same(chatKey, this.chatKey.slice(0, 2))) {
+      return false
+    }
+    this.chatReads++
+    const snapshot = await records?.senderSnapshot?.()
+    let chats: AgentSenderAssociation[]
+    try {
+      chats = await readAgentSenderSessions(snapshot?.records ?? records, this.work)
+      if (snapshot) {
+        chatKey = [records?.listRecords, snapshot.revision]
       }
     } finally {
-      // A failed terminal read still publishes the chats read with it, beside the last good
-      // terminal rows; publishing unchanged rows moves no revision.
-      if (terminalChanged || chatsChanged) {
-        this.publisher.publish({
-          associations: [...this.terminal.associations, ...this.chats],
-          principals: db ? this.principals : [],
-          attachments: this.terminal.attachments,
-          ...(peerFingerprint ? { peerFingerprint } : {})
-        })
-      }
+      await snapshot?.close()
     }
+    if (
+      this.deps.getSessionRecords()?.listRecords !== records?.listRecords ||
+      this.deps.getDb() !== db
+    ) {
+      return false
+    }
+    this.chats = chats
+    this.chatKey = chatKey
+    const before = this.publisher.current()
+    this.publish(this.publisher.current().peerFingerprint)
+    return before !== this.publisher.current()
+  }
+
+  private publish(peerFingerprint: string | undefined): void {
+    this.publisher.publish({
+      associations: [...this.terminal.associations, ...this.chats],
+      principals: this.database ? this.principals : [],
+      attachments: this.terminal.attachments,
+      ...(peerFingerprint ? { peerFingerprint } : {})
+    })
   }
 
   private readTerminals(
@@ -333,8 +331,4 @@ export class RuntimeAgentSenderAssociations {
       })
     }
   }
-}
-
-function same(key: unknown[], other: unknown[]): boolean {
-  return key.length === other.length && key.every((value, i) => value === other[i])
 }

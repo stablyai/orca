@@ -1,8 +1,9 @@
+import { queueSubscriberDelivery } from './agent-session-subscriber-delivery'
 import type { AgentSessionSubscribeInput } from './agent-session-subscribe-input'
 import type { CurrentRequestsSubscriber } from './agent-session-current-requests'
+// Advance subscriber cursors independently, sending resets or reducer-projected batches as needed.
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type {
-  AgentSessionHistoryPage,
   AgentSessionSubscribeEvent,
   AgentSessionTurnActivity
 } from '../../../shared/agent-session/agent-session-wire'
@@ -14,13 +15,13 @@ import {
   type SubscriberFieldState
 } from './agent-session-subscriber-frame-fields'
 import type { QueuePublication } from './structured-agent-session-queued-publication'
-import {
+import type {
   deliverToSubscriber,
-  type SubscriberDeliveryPort
+  SubscriberDeliveryPort
 } from './agent-session-subscriber-catch-up'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { emptyAgentSessionBatch } from './agent-session-empty-batch'
-import { readAgentSessionHydrationPage } from './agent-session-history-page'
+import { readAgentSessionHydration } from './agent-session-history-page'
 import { withPublishedWork } from './agent-session-published-work'
 import { subscriberHistoryReader } from './agent-session-bounded-frames'
 import { rememberSessionActivity } from './structured-agent-session-activity-retention'
@@ -34,22 +35,25 @@ export type { AgentSessionSubscribeInput } from './agent-session-subscribe-input
 // Advance subscriber cursors independently, sending resets or reducer-projected batches as needed.
 
 export type AgentSessionSubscriberEmit = (event: AgentSessionSubscribeEvent) => void
-export type Subscriber = {
-  id: string
-  emit: AgentSessionSubscriberEmit
-  cursor: AgentJournalCursor
-  fence: number
-  readHistorySnapshot?: HistoryReader['snapshot']
-  readQueueSourceIds?: HistoryReader['queueSourceIds']
-  snapshotCatchUp?: boolean
-  /** The current-work view the last frame's fields were read under
-   *  (`StructuredAgentSessionCurrentWork.viewKey`); a change with no row still owes a frame. */
-  workView?: string
-  historyView?: string
-} & CurrentRequestsSubscriber &
-  SubscriberFieldState
+export type Subscriber = CurrentRequestsSubscriber &
+  SubscriberFieldState & {
+    id: string
+    emit: AgentSessionSubscriberEmit
+    cursor: AgentJournalCursor
+    fence: number
+    readHistorySnapshot?: HistoryReader['snapshot']
+    readQueueSourceIds?: HistoryReader['queueSourceIds']
+    snapshotCatchUp?: boolean
+    /** Last frame’s current-work key; row-free changes still require a frame. */
+    workView?: string
+    /** Semantic history baseline actually emitted, independent of token/row progress. */
+    historyView?: string
+    delivery?: Promise<void>
+    pendingDelivery?: Omit<Parameters<typeof deliverToSubscriber>[1], 'subscriber'>
+  }
 
 export type AgentSessionSubscribersHooks = {
+  isCurrentJournal?: (sessionId: string, journal: AgentSessionJournal) => boolean
   readCommands?: SubscriberFieldHooks['readCommands']
   /** Stable identity avoids serialization until queue changes. */
   readQueuePublication?: (sessionId: string) => QueuePublication | undefined
@@ -95,39 +99,8 @@ export class AgentSessionSubscribers {
     const hostNow = this.now()
     if (input.cursor) {
       this.deliver(subscriber, input.journal, hostNow, true)
-      refreshDerivedStopNotes(
-        this.deliveryPort(),
-        subscriber,
-        input.journal,
-        hostNow,
-        this.hooks.readCurrentWork?.(input.sessionId, input.journal)
-      )
     } else {
-      const view = input.journal.publicRead()
-      const work = this.hooks.readCurrentWork?.(input.sessionId, input.journal)
-      const page = withPublishedWork(
-        readAgentSessionHydrationPage(
-          input.journal,
-          input.fence,
-          subscriberHistoryReader(subscriber),
-          view.currentSnapshot()
-        ),
-        work
-      )
-      this.emit(
-        subscriber,
-        {
-          type: 'snapshot',
-          sessionId: input.sessionId,
-          page,
-          fence: input.fence,
-          hostNow,
-          ...this.activityField(input.sessionId)
-        },
-        { currentWork: work, historyView: view.normalizationKey, journal }
-      )
-      subscriber.cursor = page.liveCursor ?? page.window.nextCursor
-      refreshPublishedWork(this.deliveryPort(), subscriber, input.journal, work, { hostNow })
+      this.hydrate(subscriber, journal, hostNow)
     }
     const { sessionId, id } = subscriber
     return () => this.close(sessionId, id)
@@ -181,45 +154,19 @@ export class AgentSessionSubscribers {
   }
 
   snapshot(sessionId: string, journal: AgentSessionJournal, fence: number): void {
-    const view = journal.publicRead()
-    const work = this.hooks.readCurrentWork?.(sessionId, journal)
-    // Cache each stored/bounded form separately; each sizes its own page.
-    let storedPage: AgentSessionHistoryPage | undefined
-    let boundedPage: AgentSessionHistoryPage | undefined
-    const read = (subscriber: Subscriber): AgentSessionHistoryPage =>
-      withPublishedWork(
-        readAgentSessionHydrationPage(
-          journal,
-          fence,
-          subscriberHistoryReader(subscriber),
-          view.currentSnapshot()
-        ),
-        work
-      )
-    const pageFor = (subscriber: Subscriber): AgentSessionHistoryPage =>
-      subscriber.readHistorySnapshot
-        ? read(subscriber)
-        : subscriber.boundedFrames
-          ? (boundedPage ??= read(subscriber))
-          : (storedPage ??= read(subscriber))
     const hostNow = this.now()
+    const pages = new Map<HistoryReader, ReturnType<typeof readAgentSessionHydration>>()
     for (const subscriber of this.subscribers(sessionId)) {
-      const page = pageFor(subscriber)
-      this.emit(
-        subscriber,
-        {
-          type: 'snapshot',
-          sessionId,
-          page,
-          fence,
-          hostNow,
-          ...this.activityField(sessionId)
-        },
-        { currentWork: work, historyView: view.normalizationKey, journal }
-      )
-      subscriber.cursor = page.liveCursor ?? page.window.nextCursor
       subscriber.fence = fence
-      refreshPublishedWork(this.deliveryPort(), subscriber, journal, work, { hostNow })
+      const reader = subscriberHistoryReader(subscriber)
+      let prepared = pages.get(reader)
+      if (!prepared) {
+        prepared = readAgentSessionHydration(journal, fence, reader, undefined, () =>
+          this.hooks.readCurrentWork?.(sessionId, journal)
+        )
+        pages.set(reader, prepared)
+      }
+      this.hydrate(subscriber, journal, hostNow, prepared)
     }
     this.hooks.onJournalPublished?.(sessionId, journal)
   }
@@ -266,6 +213,58 @@ export class AgentSessionSubscribers {
     }
   }
 
+  private hydrate(
+    subscriber: Subscriber,
+    journal: AgentSessionJournal,
+    hostNow: number,
+    prepared = readAgentSessionHydration(
+      journal,
+      subscriber.fence,
+      subscriberHistoryReader(subscriber),
+      undefined,
+      () => this.hooks.readCurrentWork?.(subscriber.sessionId, journal)
+    )
+  ): void {
+    const fence = subscriber.fence
+    const reading = { ...subscriber.cursor }
+    const publish = ({ page, view, work }: Awaited<typeof prepared>) => {
+      if (
+        !this.isActive(subscriber) ||
+        subscriber.fence !== fence ||
+        this.hooks.isCurrentJournal?.(subscriber.sessionId, journal) === false
+      ) {
+        return
+      }
+      if (
+        (prepared instanceof Promise && journal.publicRead() !== view) ||
+        subscriber.cursor.epoch !== reading.epoch ||
+        subscriber.cursor.sequence !== reading.sequence
+      ) {
+        this.deliver(subscriber, journal, hostNow, true)
+        return
+      }
+      this.emit(
+        subscriber,
+        {
+          type: 'snapshot',
+          sessionId: subscriber.sessionId,
+          page: withPublishedWork(page, work),
+          fence,
+          hostNow,
+          activity: this.activityBySession.get(subscriber.sessionId) ?? null
+        },
+        { currentWork: work, historyView: view.normalizationKey, journal }
+      )
+      subscriber.cursor = page.liveCursor ?? page.window.nextCursor
+      refreshPublishedWork(this.deliveryPort(), subscriber, journal, work, { hostNow })
+    }
+    if (prepared instanceof Promise) {
+      void prepared.then(publish).catch(() => this.close(subscriber.sessionId, subscriber.id))
+    } else {
+      publish(prepared)
+    }
+  }
+
   private subscribers(sessionId: string): Subscriber[] {
     return [...(this.bySession.get(sessionId)?.values() ?? [])]
   }
@@ -277,13 +276,20 @@ export class AgentSessionSubscribers {
     emitCheckpoint = false,
     activity?: AgentSessionTurnActivity | null
   ): void {
-    deliverToSubscriber(this.deliveryPort(), {
+    queueSubscriberDelivery(
+      this.deliveryPort(),
       subscriber,
-      journal,
-      hostNow,
-      emitCheckpoint,
-      activity
-    })
+      { journal, hostNow, emitCheckpoint, activity },
+      (pending) => {
+        refreshDerivedStopNotes(
+          this.deliveryPort(),
+          subscriber,
+          pending.journal,
+          pending.hostNow,
+          this.hooks.readCurrentWork?.(subscriber.sessionId, pending.journal)
+        )
+      }
+    )
   }
 
   private now = (): number => this.hooks.now?.() ?? Date.now()
@@ -293,7 +299,7 @@ export class AgentSessionSubscribers {
       hooks: this.hooks,
       emit: (target, event, options) => this.emit(target, event, options),
       isActive: this.isActive,
-      activity: (sessionId) => this.activityField(sessionId).activity
+      activity: (sessionId) => this.activityBySession.get(sessionId) ?? null
     }
   }
 
@@ -322,9 +328,5 @@ export class AgentSessionSubscribers {
     if (session?.size === 0) {
       this.bySession.delete(subscriber.sessionId)
     }
-  }
-
-  private activityField(sessionId: string): { activity: AgentSessionTurnActivity | null } {
-    return { activity: this.activityBySession.get(sessionId) ?? null }
   }
 }

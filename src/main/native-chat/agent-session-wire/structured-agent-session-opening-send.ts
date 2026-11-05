@@ -26,7 +26,7 @@ export function structuredAgentSessionSendOpeningTurnInJournal(
 }
 
 /** Oldest pending send, unless an earlier send still opens its turn; settlement wakes delivery. */
-export function structuredAgentSessionNextHandover(
+export async function structuredAgentSessionNextHandover(
   session: Pick<StructuredAgentSessionHostSession, 'journal'>,
   fence: number,
   work?: StructuredAgentSessionCurrentWork | null

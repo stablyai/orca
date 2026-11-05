@@ -2,15 +2,14 @@
 // Retain claimed uploads while any recorded chat holds them; resume interrupted deletions on later sweeps.
 
 import { readdir, stat } from 'node:fs/promises'
+import { sweepAttachmentClaims } from './agent-session-attachment-claim-sweep'
 import { join } from 'node:path'
 import { isDefinitiveAbsence } from '../../../shared/definitive-filesystem-absence'
-import type Database from '../../sqlite/sync-database'
-import {
-  finishUploadSweep,
-  listUploadsBeingSwept,
-  markUnclaimedUploadForSweep,
-  pruneAgentSessionAttachmentClaims
-} from './agent-session-attachment-claims'
+import type { JournalHostDatabase } from '../agent-session-journal/journal-host-database'
+import type {
+  JournalPersistenceEffect,
+  JournalEffectResult
+} from '../agent-session-journal/journal-persistence-plan'
 import { AGENT_SESSION_ATTACHMENT_PART_FILE } from './agent-session-attachment-references'
 import { removeQuietly, type AgentSessionAttachmentStore } from './agent-session-attachment-store'
 
@@ -19,8 +18,7 @@ export const UNCLAIMED_ATTACHMENT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
 
 export type AgentSessionAttachmentSweepFacts = {
   /** Without a writable journal, only unfinished part files may be removed. */
-  database: () => Database.Database | null
-  write: <T>(run: (db: Database.Database) => T) => T | undefined
+  database: () => Pick<JournalHostDatabase, 'transaction' | 'read' | 'scan'> | null
   /** null means imports are incomplete; no chat claims can yet be judged orphaned. */
   recordedSessionIds: () => Pick<ReadonlySet<string>, 'has'> | null
   onUploadRemoved?: (uploadDir: string) => void
@@ -36,13 +34,33 @@ export async function sweepAgentSessionAttachments(
   const removed: string[] = []
   // Disk awaits can outlive journal closure; resolve the database again for each statement.
   const { database } = facts
+  const write = async (
+    operation: Extract<JournalPersistenceEffect, { kind: 'sweep' }>['operation']
+  ): Promise<JournalEffectResult | undefined> => {
+    const db = database()
+    if (!db) {
+      return undefined
+    }
+    let value: JournalEffectResult | undefined
+    await db.transaction((plan) => {
+      plan.add({ kind: 'sweep', operation }, (result) => {
+        value = result
+      })
+    })
+    return value
+  }
+  const marked = await database()?.read(async (read) =>
+    (await read.prepare('SELECT upload_id FROM agent_session_attachment_sweeps').all()).flatMap(
+      (row) => (typeof row.upload_id === 'string' ? [row.upload_id] : [])
+    )
+  )
   const remove = async (uploadDir: string): Promise<void> => {
     await removeQuietly(uploadDir)
     facts.onUploadRemoved?.(uploadDir)
   }
-  for (const uploadId of withDatabase(database, listUploadsBeingSwept) ?? []) {
+  for (const uploadId of marked ?? []) {
     await remove(join(store.rootDir, uploadId))
-    facts.write((db) => finishUploadSweep(db, uploadId))
+    await write({ kind: 'finish', uploadId })
   }
   for (const uploadId of await listDirectories(store.rootDir)) {
     if (store.isUploadInFlight(uploadId)) {
@@ -63,29 +81,16 @@ export async function sweepAgentSessionAttachments(
     // Whichever lands first wins: claims retain uploads, sweep marks reject later claims.
     if (
       ageMs <= UNCLAIMED_ATTACHMENT_MAX_AGE_MS ||
-      facts.write((db) => markUnclaimedUploadForSweep(db, uploadId, now)) !== true
+      (await write({ kind: 'mark', uploadId, now })) !== true
     ) {
       continue
     }
     await remove(uploadDir)
-    facts.write((db) => finishUploadSweep(db, uploadId))
+    await write({ kind: 'finish', uploadId })
     removed.push(uploadDir)
   }
-  facts.write((db) =>
-    pruneAgentSessionAttachmentClaims(db, {
-      root: store.rootDir,
-      recordedSessionIds: facts.recordedSessionIds()
-    })
-  )
+  await sweepAttachmentClaims(store, facts)
   return { removed }
-}
-
-function withDatabase<T>(
-  database: AgentSessionAttachmentSweepFacts['database'],
-  run: (db: Database.Database) => T
-): T | undefined {
-  const db = database()
-  return db ? run(db) : undefined
 }
 
 async function listDirectories(dir: string): Promise<string[]> {

@@ -59,7 +59,7 @@ export abstract class StructuredSessionWorkspaceScope extends OrcaRuntimeWithStr
     const host = getStructuredAgentSessionHost()
     const reads = host
       ? await host.attentionReads.workspace(worktree)
-      : (await this.openAgentSessionRecordStore()).workspaceAttentionReads(worktree)
+      : await (await this.openAgentSessionRecordStore()).workspaceAttentionReads(worktree)
     return { worktree, reads }
   }
 

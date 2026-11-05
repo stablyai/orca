@@ -1,5 +1,5 @@
 import type { createFixture } from './journal-terminal-validation-test-fixture'
-import { expect, it, vi } from 'vitest'
+import { expect, it } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { AgentJournalItemBodySchema } from '../../../shared/agent-session/journal/agent-session-journal-schemas'
@@ -8,8 +8,7 @@ import {
   liveTestJournalRows,
   openTestJournalHostDatabase
 } from './journal-host-database-test-support'
-import { parseJournalRow, type JournalRow } from './journal-row-schema'
-import * as rowTable from './journal-row-table'
+import { parseJournalRow } from './journal-row-schema'
 
 export function registerJournalTerminalTimeValidationTests(
   fixture: ReturnType<typeof createFixture>
@@ -141,12 +140,20 @@ export function registerJournalTerminalTimeValidationTests(
         }
       ]
       await fixture.saveOldItems(inputs)
-      const { db } = openTestJournalHostDatabase(fixture.root)
+      const { db } = await openTestJournalHostDatabase(fixture.root)
       const history = liveTestJournalRows(db, 'validation')
-      const rows: JournalRow[] = []
-      const insert = rowTable.insertJournalRow
-      vi.spyOn(rowTable, 'insertJournalRow').mockImplementation((database, sessionId, row) => {
-        expect(parseJournalRow(JSON.stringify(row))).toMatchObject({ ok: true })
+      await fixture.settle(observedAt, lastProvenAliveAt)
+      const rows = liveTestJournalRows(db, 'validation')
+        .slice(history.length)
+        .map((stored) => {
+          const parsed = parseJournalRow(stored.rowJson)
+          expect(parsed).toMatchObject({ ok: true })
+          if (!parsed.ok) {
+            throw new Error('invalid generated settlement row')
+          }
+          return parsed.row
+        })
+      for (const row of rows) {
         const bodies =
           row.kind === 'item'
             ? [row.body]
@@ -159,10 +166,7 @@ export function registerJournalTerminalTimeValidationTests(
           expect(body).toMatchObject(AgentJournalItemBodySchema.parse(body))
           fixture.expectRewriteTimes(body)
         }
-        rows.push(row)
-        return insert(database, sessionId, row)
-      })
-      await fixture.settle(observedAt, lastProvenAliveAt)
+      }
       expect(rows.some((row) => row.kind === 'lifecycle-batch')).toBe(true)
       expect(
         rows.some((row) => row.kind === 'item' && row.itemId === `orca:${long}oversized`)

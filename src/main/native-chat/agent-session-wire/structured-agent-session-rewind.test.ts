@@ -122,7 +122,7 @@ beforeEach(async () => {
     logger: createStructuredAgentSessionLogger(),
     store,
     adapter,
-    journalDatabase: openTestJournalHostDatabase(directory),
+    journalDatabase: await openTestJournalHostDatabase(directory),
     claimKeyId: 'key',
     now: () => clock,
     probeOwner: async () => ({ outcome: 'exit-observed' })
@@ -249,8 +249,8 @@ describe('host rewind', () => {
     const request = await params(await seed())
     expect(await host.rewind(caller, request)).toMatchObject({ ok: true })
     await host.flushAllStreamedEvents()
-    openTestJournalHostDatabase(directory)
-      .db.prepare(
+    ;(await openTestJournalHostDatabase(directory)).db
+      .prepare(
         "UPDATE agent_session_records SET record_json = json_set(record_json, '$.lease.minimumNextFence', 'bad') WHERE session_id = ?"
       )
       .run(HOST_TEST_SESSION)
@@ -648,7 +648,7 @@ describe('host rewind', () => {
     await host.flushStreamedEvents(HOST_TEST_SESSION)
     const journal = host.collaboratorsForTests().sessions.get(HOST_TEST_SESSION)!.journal
     const before = journal.snapshot()
-    const database = openTestJournalHostDatabase(directory)
+    const database = await openTestJournalHostDatabase(directory)
     const saved = () =>
       database.db
         .prepare('SELECT * FROM journal_outcomes ORDER BY generation,seq,field,entry_key')

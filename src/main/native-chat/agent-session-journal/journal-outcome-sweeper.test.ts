@@ -7,11 +7,19 @@ import {
   openTestJournalHostDatabase,
   publishTestJournalEpoch
 } from './journal-host-database-test-support'
-import type { JournalHostDatabase } from './journal-host-database'
+import type { TestJournalHostDatabase as JournalHostDatabase } from './journal-host-database-test-support'
 import type { JournalRow } from './journal-row-schema'
 import { restoreJournal } from './journal-open'
 import { publishJournalOutcomeEpoch } from './journal-outcome-write'
-import { JournalOutcomeSweeper } from './journal-outcome-cleanup'
+import { JournalOutcomeSweeper, sweepJournalOutcomePage } from './journal-outcome-cleanup'
+import { observeNativeJournalSql } from './journal-native-test-instrumentation'
+import type { JournalMaintenanceUnit } from './journal-maintenance-unit'
+import {
+  projectionBase,
+  projectionEpochRow,
+  projectionSessionId,
+  seedOutcomeRows
+} from './journal-projection-test-support'
 
 // The production sweeper over a real database, on its own timers.
 const epoch = 'epoch-1'
@@ -34,10 +42,12 @@ let root: string
 let database: JournalHostDatabase
 const sweepers: JournalOutcomeSweeper[] = []
 beforeEach(async () => {
-  vi.useFakeTimers()
+  vi.useFakeTimers({
+    toFake: ['Date', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval']
+  })
   root = await mkdtemp(join(tmpdir(), 'orca-journal-outcome-sweeper-'))
-  database = openTestJournalHostDatabase(root)
-  database.transaction((db) => {
+  database = await openTestJournalHostDatabase(root)
+  database.fixtureTransaction((db) => {
     publishTestJournalEpoch(db, 'live', epoch)
     publishJournalOutcomeEpoch(db, 'live', epoch, [epochRow, item])
   })
@@ -53,13 +63,14 @@ afterEach(async () => {
 function started(onError = vi.fn()) {
   const rests = vi.fn(async () => {})
   const sweeper = new JournalOutcomeSweeper({ database: () => database, delay: rests, onError })
+  const pass = vi.spyOn(sweeper, 'pass')
   sweepers.push(sweeper.start())
-  return { rests, onError }
+  return { rests, onError, pass }
 }
 
 /** A generation no epoch names any more, as a replacement leaves it, holding `keys` records. */
 function retire(keys: number): void {
-  database.transaction((db) => {
+  database.fixtureTransaction((db) => {
     const retired = Number(
       db
         .prepare('INSERT INTO journal_outcome_generations (session_id, epoch) VALUES (?, ?)')
@@ -82,10 +93,12 @@ const retiredRecords = () =>
 
 it('sweeps a retired generation a minute after launch in paced pages, keeping the live chat', async () => {
   retire(100)
-  const { rests } = started()
+  const { rests, pass } = started()
   await vi.advanceTimersByTimeAsync(59_999)
   expect(retiredRecords()).toBe(100)
   await vi.advanceTimersByTimeAsync(1)
+  expect(pass).toHaveBeenCalledTimes(1)
+  await pass.mock.results[0].value
   expect(retiredRecords()).toBe(0)
   // Four 32-record pages and the generation row, each its own transaction with a rest after it.
   expect(rests.mock.calls.length).toBeGreaterThanOrEqual(4)
@@ -98,17 +111,216 @@ it('sweeps a retired generation a minute after launch in paced pages, keeping th
 it('retries a failed pass at the next periodic pass, and runs none after it stops', async () => {
   retire(10)
   const failure = Object.assign(new Error('disk I/O error'), { code: 'ERR_SQLITE_ERROR' })
-  vi.spyOn(database, 'transaction').mockImplementationOnce(() => {
-    throw failure
-  })
-  const { onError } = started()
+  vi.spyOn(database, 'maintenance').mockRejectedValueOnce(failure)
+  const { onError, pass } = started()
   await vi.advanceTimersByTimeAsync(60_000)
+  expect(pass).toHaveBeenCalledTimes(1)
+  await expect(pass.mock.results[0].value).rejects.toBe(failure)
   expect(onError).toHaveBeenCalledWith(failure)
   expect(retiredRecords()).toBe(10)
   await vi.advanceTimersByTimeAsync(6 * 60 * 60_000)
+  expect(pass).toHaveBeenCalledTimes(2)
+  await pass.mock.results[1].value
   expect(retiredRecords()).toBe(0)
   retire(10)
   sweepers.forEach((sweeper) => sweeper.stop())
   await vi.advanceTimersByTimeAsync(12 * 60 * 60_000)
   expect(retiredRecords()).toBe(10)
+})
+
+it('bounds retired discovery, indexed outcome pages and writer identity rechecks at N and 10N', async () => {
+  for (const size of [100, 1_000]) {
+    database = await openTestJournalHostDatabase(join(root, String(size)))
+    let retired = 0
+    database.fixtureTransaction((db) => {
+      const generation = db.prepare(
+        'INSERT INTO journal_outcome_generations (session_id, epoch) VALUES (?, ?)'
+      )
+      const live = db.prepare('INSERT INTO journal_outcome_epochs VALUES (?, ?, ?, 2, 1, 0)')
+      const outcome = db.prepare(`INSERT INTO journal_outcomes VALUES
+        (?, ?, 'aliases', ?, 1, 's0000000000000001:0000000000000000', ?, 0)`)
+      for (let index = 0; index < size; index++) {
+        const id = `live-${index}`
+        const key = Number(generation.run(id, epoch).lastInsertRowid)
+        live.run(id, epoch, key)
+        outcome.run(key, 1, JSON.stringify(id), JSON.stringify([id, 'retained']))
+      }
+      retired = Number(generation.run('retired', 'previous').lastInsertRowid)
+      // Insertion/rowid order disagrees with the existing sequence/key index.
+      for (let index = size; index > 0; index--) {
+        outcome.run(retired, index, JSON.stringify(`gone-${index}`), JSON.stringify(['gone', 'v']))
+      }
+    })
+    const sqls = new Set<string>()
+    let returned = 0
+    let statements = 0
+    const stop = observeNativeJournalSql(database, (entry) => {
+      returned += entry.rows
+      statements += Number(entry.method !== 'prepare')
+      if (entry.method === 'prepare') {
+        sqls.add(entry.sql)
+      }
+    })
+    try {
+      let units = 0
+      for (;;) {
+        returned = 0
+        statements = 0
+        const more = await sweepJournalOutcomePage(database)
+        // Returned rows aren't VM/examined work; bounded ranges/plans below establish access shape.
+        expect(returned).toBeLessThanOrEqual(100)
+        expect(statements).toBeLessThanOrEqual(105)
+        units++
+        if (!more) {
+          break
+        }
+        expect(units).toBeLessThanOrEqual(2 * size + 2)
+      }
+      expect(retiredRecords()).toBe(0)
+      expect(database.db.prepare('SELECT COUNT(*) AS n FROM journal_outcomes').get()?.n).toBe(size)
+      expect(
+        database.db.prepare('SELECT COUNT(*) AS n FROM journal_outcome_generations').get()?.n
+      ).toBe(size)
+      const queries = [...sqls]
+      const boundaries = [
+        { sql: queries.find((sql) => sql.includes('WHERE generation > ?')), args: [0, retired] },
+        {
+          sql: queries.find((sql) => sql.includes('ORDER BY seq, field, entry_key')),
+          args: [retired]
+        },
+        { sql: queries.find((sql) => sql.startsWith('SELECT session_id, epoch')), args: [retired] },
+        {
+          sql: queries.find((sql) => sql.startsWith('SELECT epoch, generation')),
+          args: ['retired']
+        }
+      ]
+      for (const { sql, args } of boundaries) {
+        expect(sql).toBeDefined()
+        const plan = database.db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...args)
+        const detail = plan.map((row) => row.detail).join(' ')
+        expect(detail).toContain('SEARCH')
+        expect(detail).not.toContain('TEMP B-TREE')
+      }
+      sqls.clear()
+      // A live-only prefix still advances and completes without inspecting outcomes.
+      let remaining = size + 1
+      while (await sweepJournalOutcomePage(database)) {
+        expect(--remaining).toBeGreaterThan(0)
+      }
+      expect([...sqls].some((sql) => sql.includes('FROM journal_outcomes'))).toBe(false)
+    } finally {
+      stop()
+    }
+  }
+})
+
+it('runs a scheduled pass with bounded discovery, admissions and native calls at N and 10N, letting foreground writes through between units', async () => {
+  const measure = async (size: number) => {
+    database = await openTestJournalHostDatabase(join(root, `pass-${size}`))
+    database.fixtureTransaction((db) => {
+      publishTestJournalEpoch(db, 'live', epoch)
+      publishJournalOutcomeEpoch(db, 'live', epoch, [epochRow, item])
+    })
+    retire(size)
+    // A second chat whose one item was revised `size` times: compaction keeps first and latest.
+    const revisions: JournalRow[] = [projectionEpochRow]
+    for (let revision = 1; revision <= size; revision++) {
+      revisions.push({
+        ...projectionBase(revision + 1),
+        kind: 'item',
+        itemId: 'answer',
+        revision,
+        body: {
+          kind: 'message',
+          role: 'assistant',
+          blocks: [{ type: 'text', text: 'x'.repeat(100) }]
+        }
+      })
+    }
+    seedOutcomeRows(database, revisions)
+    const compactable = Number(
+      database.db
+        .prepare(`SELECT COUNT(*) AS n FROM journal_outcomes WHERE generation =
+          (SELECT generation FROM journal_outcome_epochs WHERE session_id = ?)`)
+        .get(projectionSessionId)?.n
+    )
+    expect(compactable).toBeGreaterThan(size)
+    let freeAtVacuum: number | undefined
+    const scans = vi.spyOn(database, 'scan')
+    const units: JournalMaintenanceUnit['kind'][] = []
+    const requests: string[] = []
+    const owner = database['owner']
+    const request = owner.request.bind(owner)
+    vi.spyOn(owner, 'request').mockImplementation((command) => {
+      requests.push(command.type)
+      return request(command)
+    })
+    const foreground: Promise<void>[] = []
+    const maintenance = database.maintenance.bind(database)
+    vi.spyOn(database, 'maintenance').mockImplementation((unit) => {
+      units.push(unit.kind)
+      if (unit.kind === 'vacuum') {
+        freeAtVacuum ??= Number(database.db.prepare('PRAGMA freelist_count').get()?.freelist_count)
+      }
+      const admitted = maintenance(unit)
+      // A send arriving while this unit is admitted reaches the writer before the next unit.
+      foreground.push(
+        database.transaction((plan) => {
+          plan.add({
+            kind: 'sweep',
+            operation: { kind: 'mark', uploadId: `fg-${units.length}`, now: 1 }
+          })
+        })
+      )
+      return admitted
+    })
+    let calls = 0
+    let largest = 0
+    const stop = observeNativeJournalSql(database, (entry) => {
+      if (entry.method !== 'prepare') {
+        calls++
+        largest = Math.max(largest, entry.rows, entry.changes)
+      }
+    })
+    try {
+      const { pass } = started()
+      await vi.advanceTimersByTimeAsync(60_000)
+      expect(pass).toHaveBeenCalledTimes(1)
+      await pass.mock.results[0].value
+      await Promise.all(foreground)
+    } finally {
+      stop()
+      sweepers.splice(0).forEach((sweeper) => sweeper.stop())
+    }
+    // Cleanup happened: the retired generation is gone and the revised item keeps two records.
+    expect(retiredRecords()).toBe(0)
+    expect(
+      database.db.prepare("SELECT COUNT(*) AS n FROM journal_outcomes WHERE field = 'items'").get()
+        ?.n
+    ).toBe(3)
+    const pages = (records: number) => Math.ceil(records / 32)
+    const count = (kind: JournalMaintenanceUnit['kind']) => units.filter((k) => k === kind).length
+    // One atomic unit per page of at most 32 records, plus each source's boundary.
+    expect(count('retired')).toBeLessThanOrEqual(pages(size) + 1)
+    expect(count('compact')).toBeLessThanOrEqual(pages(compactable) + 2)
+    expect(count('vacuum')).toBeLessThanOrEqual(freeAtVacuum ?? 0)
+    // Each deleting unit follows its own released discovery scan; registry steps add a constant.
+    expect(scans.mock.calls.length).toBeGreaterThanOrEqual(count('retired') + count('compact'))
+    expect(scans.mock.calls.length).toBeLessThanOrEqual(count('retired') + count('compact') + 8)
+    // No native call returns or changes more than a page, whatever the history size.
+    expect(largest).toBeLessThanOrEqual(32)
+    // Each admitted unit's foreground write committed before the writer took the next unit.
+    const maintained = requests.flatMap((type, index) => (type === 'maintenance' ? [index] : []))
+    expect(maintained).toHaveLength(units.length)
+    for (let index = 0; index + 1 < maintained.length; index++) {
+      expect(requests.slice(maintained[index], maintained[index + 1])).toContain('unit')
+    }
+    expect(restoreJournal(database.db, 'live')?.state.items.has('kept')).toBe(true)
+    return { units: units.length, calls }
+  }
+  const small = await measure(100)
+  const large = await measure(1_000)
+  // Work grows with pages, never with a per-call scan of the whole history.
+  expect(large.units).toBeLessThanOrEqual(12 * small.units)
+  expect(large.calls).toBeLessThanOrEqual(12 * small.calls)
 })

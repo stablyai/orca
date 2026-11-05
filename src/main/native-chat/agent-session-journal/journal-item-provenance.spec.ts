@@ -12,7 +12,7 @@ import type {
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
-import type { JournalHostDatabase } from './journal-host-database'
+import type { TestJournalHostDatabase as JournalHostDatabase } from './journal-host-database-test-support'
 import {
   createTrackedJournalOpener,
   liveTestJournalRows,
@@ -63,7 +63,7 @@ export function registerJournalItemProvenanceTests(): void {
 
   beforeEach(async () => {
     root = await mkdtemp(join(tmpdir(), 'orca-journal-provenance-'))
-    database = openTestJournalHostDatabase(root)
+    database = await openTestJournalHostDatabase(root)
   })
 
   afterEach(async () => {

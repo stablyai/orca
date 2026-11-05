@@ -52,7 +52,7 @@ export async function admitCommandReceiptMutation<TValue>(
   }
   let read
   try {
-    read = store.readCommandReceipt(
+    read = await store.readCommandReceipt(
       commandReceiptScope(callerKey, plan.operationIdScope),
       envelope.clientOperationId
     )

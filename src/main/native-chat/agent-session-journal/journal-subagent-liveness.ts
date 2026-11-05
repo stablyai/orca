@@ -30,6 +30,7 @@ import {
   type NativeChatSubagentBlock,
   type NativeChatSubagentGroupBlock
 } from '../../../shared/native-chat/native-chat-types'
+import { finishJournalSteps } from './journal-reconstruction-steps'
 
 export type JournalSubagentLivenessRevision = {
   identity: AgentJournalItemIdentity
@@ -39,8 +40,15 @@ export type JournalSubagentLivenessRevision = {
 export function staleSubagentRosterRevisions(
   items: Iterable<AgentJournalRenderItem>
 ): JournalSubagentLivenessRevision[] {
+  return finishJournalSteps(staleSubagentRosterRevisionSteps(items))
+}
+
+export function* staleSubagentRosterRevisionSteps(
+  items: Iterable<AgentJournalRenderItem>
+): Generator<void, JournalSubagentLivenessRevision[]> {
   const revisions: JournalSubagentLivenessRevision[] = []
   for (const item of items) {
+    yield
     const body = lostLiveWorkJournalBody(item.body)
     if (!body) {
       continue

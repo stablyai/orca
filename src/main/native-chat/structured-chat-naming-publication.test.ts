@@ -1,3 +1,4 @@
+import './agent-session-journal/journal-host-database-test-support'
 import '../runtime/rpc/unused-default-rpc-methods.test-fixture'
 import { expect, it, vi } from 'vitest'
 import { getDefaultSettings, getDefaultWorkspaceSession } from '../../shared/constants'

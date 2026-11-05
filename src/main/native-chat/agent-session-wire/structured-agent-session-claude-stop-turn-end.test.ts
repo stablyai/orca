@@ -75,7 +75,7 @@ beforeEach(async () => {
     agents: NO_STRUCTURED_AGENTS,
     store,
     adapter: Object.assign(adapter, { supportsCreate: () => true }),
-    journalDatabase: openTestJournalHostDatabase(root),
+    journalDatabase: await openTestJournalHostDatabase(root),
     logger: createStructuredAgentSessionLogger(),
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-a',

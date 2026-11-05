@@ -32,7 +32,7 @@ beforeEach(async () => {
       agent: 'codex',
       providerHandle: codexProviderHandle(THREAD)
     },
-    database: openTestJournalHostDatabase(root),
+    database: await openTestJournalHostDatabase(root),
     now: () => 1_000
   })
 })

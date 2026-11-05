@@ -1,3 +1,6 @@
+import { prepareJournalRunningTurnSteps } from './journal-public-read'
+import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { finishJournalStepsAsync, sortJournalSteps } from './journal-reconstruction-steps'
 import { journalInputOrder } from './journal-input-order'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
@@ -14,7 +17,7 @@ import type { JournalLoad } from './journal-open'
 import { JournalQueuedMessages } from './journal-queued-messages'
 import { JournalStopMarks } from './journal-stop-marks'
 import { JournalStopAcceptor } from './journal-stop-acceptance'
-import { projectJournalRows } from './journal-context-cursor'
+import { projectJournalRowSteps } from './journal-context-cursor'
 import type { JournalReducerState } from './journal-reducer'
 import { JournalRowWriter, type JournalOperationReceipt } from './journal-row-writer'
 import { JournalStepWriter } from './journal-step-writer'
@@ -25,10 +28,11 @@ import type { AgentSessionJournal } from './journal-store'
 import type { JournalWriteBody } from './journal-write-queue'
 import {
   journalInputClaimsReceipt,
+  journalInputClaimsReceiptSteps,
   journalAttachmentClaimsReceipt,
   type JournalAttachmentClaim
 } from './journal-submission-hook'
-import { claimAgentSessionAttachmentsInTransaction } from '../agent-session-attachments/agent-session-attachment-claims'
+import { prepareAgentSessionAttachmentClaim } from '../agent-session-attachments/agent-session-attachment-claims'
 import { JournalGoalAttachmentInverse } from './journal-goal-attachment-inverse'
 import {
   isJournalOutputRevision,
@@ -46,7 +50,9 @@ export type JournalStoreHost = {
   state: () => JournalReducerState
   readOnly: () => boolean
   cursor: () => AgentJournalCursor
-  adopt: (loaded: JournalLoad) => void
+  adopt: (loaded: JournalLoad) => void | Promise<void>
+  publish: () => void
+  verify: () => Promise<void>
   prepare: NonNullable<ConstructorParameters<typeof JournalRowWriter>[0]['prepare']>
   commit: ConstructorParameters<typeof JournalRowWriter>[0]['commit']
   journal: () => AgentSessionJournal
@@ -70,8 +76,8 @@ export type JournalStoreCollaborators = {
 
 export function createJournalStoreCollaborators(host: JournalStoreHost): JournalStoreCollaborators {
   const goalAttachments = new JournalGoalAttachmentInverse(host.identity.sessionId)
-  const claimAttachments: JournalAttachmentClaim = (db, body, required, previous, goalId) => {
-    const claim = claimAgentSessionAttachmentsInTransaction(db, {
+  const claimAttachments: JournalAttachmentClaim = async (db, body, required, previous, goalId) => {
+    const claim = await prepareAgentSessionAttachmentClaim({
       stateDirectory: host.database().stateDirectory,
       sessionId: host.identity.sessionId,
       body,
@@ -79,7 +85,19 @@ export function createJournalStoreCollaborators(host: JournalStoreHost): Journal
       ...(previous ? { previous } : {}),
       now: host.now()
     })
-    return () => goalAttachments.acquired(claim.referenced, claim.inserted, goalId)
+    let acquired: { referenced: Set<string>; inserted: string[] } | undefined
+    db.add({ kind: 'claim', claim }, (result) => {
+      if (typeof result !== 'object' || !result || !('referenced' in result)) {
+        throw new Error('journal attachment claim result is missing')
+      }
+      acquired = result
+    })
+    return () => {
+      if (!acquired) {
+        throw new Error('journal attachment claim did not settle')
+      }
+      goalAttachments.acquired(acquired.referenced, acquired.inserted, goalId)
+    }
   }
   const rowWriter = new JournalRowWriter({
     sessionId: host.identity.sessionId,
@@ -90,8 +108,13 @@ export function createJournalStoreCollaborators(host: JournalStoreHost): Journal
     highestFence: () => host.state().highestFence,
     nextSequence: () => host.state().lastSequence + 1,
     prepare: host.prepare,
+    preparePublication: async (state) => {
+      await queuedMessages.listAsync(state)
+      await finishJournalStepsAsync(prepareJournalRunningTurnSteps(state))
+    },
     commit: host.commit,
-    project: (rows) => projectJournalRows(host.state(), rows),
+    verify: host.verify,
+    projectSteps: (rows) => projectJournalRowSteps(host.state(), rows),
     streamedTextRevision: (row) => isJournalStreamedTextRevision(host.state(), row),
     outputRevision: (row) => isJournalOutputRevision(host.state(), row)
   })
@@ -108,20 +131,43 @@ export function createJournalStoreCollaborators(host: JournalStoreHost): Journal
     committed: host.notifyCommitted,
     claimAttachments
   })
-  const rewindReceipt = (rows: readonly JournalRow[], receipt?: JournalOperationReceipt) => {
+  const rewindReceipt = async (rows: readonly JournalRow[], receipt?: JournalOperationReceipt) => {
     const state = host.state()
-    const pending = journalInputOrder(state)
-      .recoverableSubmissions()
-      .filter(isQueuedAgentJournalSubmission)
-    const bodies = queuedMessages.list().map((card) => card.body)
-    for (const submission of pending) {
-      const body = state.items.get(agentJournalSubmissionKey(submission.clientMessageId))?.body
-      if (body?.kind !== 'message') {
-        throw new Error('journal_queued_submission_body_missing')
-      }
-      bodies.push(body)
-    }
-    return inputReceipt(rows, journalAttachmentClaimsReceipt(claimAttachments, bodies, receipt))
+    const order = journalInputOrder(state)
+    const cards = await queuedMessages.listAsync()
+    const bodies = await finishJournalStepsAsync(
+      (function* () {
+        const bodies: AgentJournalMessageItem[] = []
+        for (const card of cards) {
+          bodies.push(card.body)
+          yield
+        }
+        const pending = yield* sortJournalSteps(
+          order.recoverableSubmissionValues(),
+          (a, b) => order.inputOrdinal(a.clientMessageId) - order.inputOrdinal(b.clientMessageId)
+        )
+        for (const submission of pending) {
+          yield
+          if (!isQueuedAgentJournalSubmission(submission)) {
+            continue
+          }
+          const body = state.items.get(agentJournalSubmissionKey(submission.clientMessageId))?.body
+          if (body?.kind !== 'message') {
+            throw new Error('journal_queued_submission_body_missing')
+          }
+          bodies.push(body)
+        }
+        return bodies
+      })()
+    )
+    return finishJournalStepsAsync(
+      journalInputClaimsReceiptSteps(
+        claimAttachments,
+        (id) => goalAttachments.isLive(id),
+        rows,
+        journalAttachmentClaimsReceipt(claimAttachments, bodies, receipt)
+      )
+    )
   }
   const epochController = new JournalEpochController({
     identity: host.identity,
@@ -132,7 +178,8 @@ export function createJournalStoreCollaborators(host: JournalStoreHost): Journal
     writer: rowWriter,
     inputReceipt: rewindReceipt,
     cards: queuedMessages,
-    adopt: host.adopt
+    adopt: host.adopt,
+    publish: host.publish
   })
   const lifecycleBatchAppender = new JournalLifecycleBatchAppender({
     state: host.state,
@@ -150,10 +197,13 @@ export function createJournalStoreCollaborators(host: JournalStoreHost): Journal
       cards: queuedMessages,
       inputReceipt: rewindReceipt
     }),
-    stops: new JournalStopAcceptor({ writer: rowWriter, state: host.state }),
+    stops: new JournalStopAcceptor({ now: host.now, writer: rowWriter, state: host.state }),
     // Import legacy cards once per open without failing the open.
     restore: () =>
-      restoreJournalStore(host, { epochController }).then(() => queuedMessages.importAtOpen()),
+      queuedMessages
+        .initialize()
+        .then(() => restoreJournalStore(host, { epochController }))
+        .then(() => queuedMessages.importAtOpen()),
     rowWriter,
     submissionWriter: new JournalSubmissionWriter({
       state: host.state,
@@ -167,6 +217,7 @@ export function createJournalStoreCollaborators(host: JournalStoreHost): Journal
       inputReceipt,
       state: host.state,
       enqueue: host.enqueue,
+      append: rowWriter.append.bind(rowWriter),
       claimAttachments
     }),
     lifecycleBatchAppender,

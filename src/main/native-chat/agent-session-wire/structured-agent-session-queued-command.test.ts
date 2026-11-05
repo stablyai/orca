@@ -171,17 +171,21 @@ describe('/clear', () => {
     await rig.settleAccepted(working, 'a')
     expect(await command('clear')).toMatchObject({ ok: true })
     expect(await rig.sendNow(draftId, hostTestOperationId())).toMatchObject({ ok: true })
-    await eventually(async () => expect(await rig.handoff(draftId)).toBeDefined())
+    await eventually(async () => expect((await rig.handoff(draftId))?.handedOverAt).toBeDefined())
     const journal = rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal
     const sent = journal.submissions().findLast((entry) => entry.queuedMessageId === draftId)!
     await eventually(() =>
-      expect(activeProviderContext(rig.store.getRecord(SESSION)!).head).not.toBeNull()
+      expect(
+        rig.dispatch.mock.calls.some(([input]) => input.clientMessageId === sent.clientMessageId)
+      ).toBe(true)
     )
+    const child = rig.host.collaboratorsForTests().sessions.get(SESSION)!.child!
+    expect(journal.submission(sent.clientMessageId)?.fence).toBe(child.fence)
     const thread = activeProviderContext(rig.store.getRecord(SESSION)!).head!.handle.nativeId
     await journal.appendItem(
       { provider: 'codex', threadId: thread, turnId: 'turn-echo', ordinal: 0 },
       hostTestMessage('waiting text'),
-      { fence: sent.fence, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+      { fence: child.fence, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     const floor = journal.context.floor()!.sequence
     expect(
@@ -216,10 +220,12 @@ it('replays /compact across callers with one submission and one provider command
   }
   expect(replay.value).toEqual(original.value)
   expect((await rig.host.journalSnapshot(params.envelope.sessionId)).submissions).toHaveLength(1)
-  expect(rig.store.readCommandReceipt({ kind: 'caller', callerKey: 'second-caller' }, id)).toEqual({
+  expect(
+    await rig.store.readCommandReceipt({ kind: 'caller', callerKey: 'second-caller' }, id)
+  ).toEqual({
     verdict: 'absent'
   })
-  expect(rig.store.readCommandReceipt({ kind: 'global' }, id)).toMatchObject({
+  expect(await rig.store.readCommandReceipt({ kind: 'global' }, id)).toMatchObject({
     verdict: 'readable',
     receipt: { callerKey: CALLER.callerKey }
   })
@@ -306,8 +312,8 @@ it('replays a completed compact after reopening an unreadable writer without com
   expect(rig.compact).toHaveBeenCalledOnce()
   rig.host.stopDelivery()
   await rig.host.flushAllStreamedEvents()
-  openTestJournalHostDatabase(rig.root)
-    .db.prepare(
+  ;(await openTestJournalHostDatabase(rig.root)).db
+    .prepare(
       "UPDATE agent_session_records SET record_json = json_set(record_json, '$.lease.minimumNextFence', 'bad') WHERE session_id = ?"
     )
     .run(SESSION)

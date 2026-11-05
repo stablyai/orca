@@ -1,53 +1,115 @@
+import { journalMaintenancePage } from './journal-maintenance-unit'
 // One sweeper per database deletes retired epochs' records in the background. Opens and sends never
 // wait for it: a retired generation is one no current epoch names, so no read reaches its records.
 
 import type { JournalHostDatabase } from './journal-host-database'
-import type Database from '../../sqlite/sync-database'
+import { JournalOutcomeCompaction } from './journal-outcome-compaction'
+import { vacuumJournalPage } from './journal-incremental-vacuum'
 
 const FIRST_PASS_MS = 60_000
 const PASS_INTERVAL_MS = 6 * 60 * 60_000
-const sweepPositions = new WeakMap<Database.Database, number>()
-type SweptDatabase = Pick<JournalHostDatabase, 'transaction' | 'isClosed' | 'readOnly'>
+const sweepPositions = new WeakMap<object, { after: number; upper: number }>()
+type SweptDatabase = Pick<JournalHostDatabase, 'scan' | 'maintenance' | 'isClosed' | 'readOnly'>
 
-/** A retired epoch's records go with it, as main deletes a retired epoch's rows: every generation
- * the chat's current epoch no longer names is swept, one bounded page per transaction. */
-export function sweepJournalOutcomePage(
-  database: Pick<JournalHostDatabase, 'transaction'>
-): boolean {
-  return database.transaction((db) => {
-    const after = sweepPositions.get(db) ?? 0
-    const candidates = db
-      .prepare(`SELECT a.generation FROM journal_outcome_generations a LEFT JOIN journal_outcome_epochs e
-      ON e.session_id = a.session_id AND e.epoch = a.epoch AND e.generation = a.generation
-      WHERE e.session_id IS NULL AND a.generation > ? ORDER BY a.generation LIMIT 32`)
-      .all(after)
-    for (const { generation } of candidates) {
-      if (typeof generation !== 'number') {
-        continue
+/** A scan proposes stored identities; only the sole native writer can authorize their deletion. */
+export async function sweepJournalOutcomePage(
+  database: Pick<JournalHostDatabase, 'scan' | 'maintenance'>,
+  charge: (ms: number) => void = () => {}
+): Promise<boolean> {
+  const discovered = await database.scan(async (read) => {
+    const started = performance.now()
+    try {
+      const position = sweepPositions.get(database) ?? {
+        after: 0,
+        upper: Number(
+          (
+            await read
+              .prepare('SELECT MAX(generation) AS generation FROM journal_outcome_generations')
+              .get()
+          )?.generation ?? 0
+        )
       }
-      sweepPositions.set(db, generation)
-      const removed = db
-        .prepare(`DELETE FROM journal_outcomes WHERE rowid IN (
-        SELECT rowid FROM journal_outcomes WHERE generation = ? LIMIT 32)`)
-        .run(generation)
-      if (removed.changes === 0) {
-        db.prepare('DELETE FROM journal_outcome_generations WHERE generation = ?').run(generation)
-        continue
+      const candidates = await read
+        .prepare(`SELECT generation, session_id, epoch FROM journal_outcome_generations
+          WHERE generation > ? AND generation <= ? ORDER BY generation LIMIT 32`)
+        .all(position.after, position.upper)
+      let generation: number | null = null
+      let after = position.after
+      for (const candidate of candidates) {
+        if (typeof candidate.generation !== 'number') {
+          continue
+        }
+        after = candidate.generation
+        if (typeof candidate.session_id !== 'string' || typeof candidate.epoch !== 'string') {
+          continue
+        }
+        const current = await read
+          .prepare('SELECT epoch, generation FROM journal_outcome_epochs WHERE session_id = ?')
+          .get(candidate.session_id)
+        if (
+          current &&
+          (typeof current.epoch !== 'string' ||
+            typeof current.generation !== 'number' ||
+            current.epoch === candidate.epoch ||
+            current.generation === after)
+        ) {
+          continue
+        }
+        generation = after
+        break
       }
-      // One bounded data page per transaction, even with many retired generations. The next page
-      // resumes at this generation, so it never rescans the live ones before it.
-      sweepPositions.set(db, generation - 1)
-      return true
+      if (generation === null) {
+        return {
+          position: { ...position, after },
+          generation,
+          rows: [],
+          more: candidates.length > 0
+        }
+      }
+      const found = await read
+        .prepare(
+          `SELECT rowid, length(CAST(value_json AS BLOB)) AS bytes FROM journal_outcomes
+            WHERE generation = ? ORDER BY seq, field, entry_key LIMIT 32`
+        )
+        .all(generation)
+      const rows = journalMaintenancePage(
+        found.flatMap((row) =>
+          typeof row.rowid === 'number' && typeof row.bytes === 'number'
+            ? [{ rowid: row.rowid, bytes: row.bytes }]
+            : []
+        )
+      )
+      return { position, generation, rows, more: true }
+    } finally {
+      charge(performance.now() - started)
     }
-    if (candidates.length === 32) {
-      return true
-    }
-    sweepPositions.delete(db)
-    return false
   })
+  if (discovered.generation === null) {
+    if (discovered.more) {
+      sweepPositions.set(database, discovered.position)
+    } else {
+      sweepPositions.delete(database)
+    }
+    return discovered.more
+  }
+  const result = await database.maintenance({
+    kind: 'retired',
+    generation: discovered.generation,
+    rows: discovered.rows
+  })
+  charge(result.elapsed)
+  sweepPositions.set(database, {
+    ...discovered.position,
+    after: result.valid && result.more ? discovered.generation - 1 : discovered.generation
+  })
+  return true
 }
 
-export type JournalPace = { work: <T>(unit: () => T) => T; rest: () => Promise<void> }
+export type JournalPace = {
+  charge: (ms: number) => void
+  work: <T>(unit: () => T) => T
+  rest: () => Promise<void>
+}
 
 /** A 10% duty cycle for background deletion only: a chat open or a send is never charged. */
 export function createJournalPace(
@@ -56,6 +118,9 @@ export function createJournalPace(
 ): JournalPace {
   let worked = 0
   return {
+    charge: (ms) => {
+      worked += ms
+    },
     work<T>(unit: () => T): T {
       const start = now()
       try {
@@ -76,6 +141,7 @@ export function createJournalPace(
 
 /** Sweeps a minute after launch, then every six hours; a failed pass is retried by the next one. */
 export class JournalOutcomeSweeper {
+  private readonly compaction = new JournalOutcomeCompaction()
   private readonly pace: JournalPace
   private running: Promise<void> | null = null
   private timer: ReturnType<typeof setTimeout> | null = null
@@ -111,10 +177,21 @@ export class JournalOutcomeSweeper {
   }
 
   private async run(): Promise<void> {
-    for (;;) {
-      const database = this.current()
-      if (!database || !this.pace.work(() => sweepJournalOutcomePage(database))) {
-        return
+    for (const page of [
+      (database: SweptDatabase) => sweepJournalOutcomePage(database, this.pace.charge),
+      (database: SweptDatabase) => this.compaction.page(database, this.pace.charge),
+      (database: SweptDatabase) => vacuumJournalPage(database, this.pace.charge)
+    ]) {
+      for (;;) {
+        const database = this.current()
+        if (!database) {
+          return
+        }
+        const more = await page(database)
+        await this.pace.rest()
+        if (!more) {
+          break
+        }
       }
       await this.pace.rest()
     }

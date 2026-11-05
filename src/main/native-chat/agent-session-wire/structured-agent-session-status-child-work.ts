@@ -1,5 +1,7 @@
+import { finishAgentSessionSteps } from '../../../shared/agent-session/agent-session-projection-steps'
 // Broadcast only child facts and minute-scale freshness; per-tick usage/clocks stay on the chat’s background channel.
 
+import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentId } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionBackgroundTask } from '../../../shared/agent-session/agent-session-background-task-wire'
@@ -57,6 +59,27 @@ export function newestAcceptedSendKey(
   epoch: string,
   submissions: readonly AgentJournalSubmission[]
 ): string {
-  const accepted = submissions.findLast((submission) => submission.dispatchState === 'accepted')
-  return `${epoch}:${accepted?.clientMessageId ?? ''}`
+  return finishAgentSessionSteps(newestAcceptedSendKeySteps(epoch, submissions))
+}
+
+export function* newestAcceptedSendKeySteps(
+  epoch: string,
+  submissions: readonly AgentJournalSubmission[]
+): Generator<void, string> {
+  for (let index = submissions.length - 1; index >= 0; index--) {
+    yield
+    if (submissions[index].dispatchState === 'accepted') {
+      return `${epoch}:${submissions[index].clientMessageId}`
+    }
+  }
+  return `${epoch}:`
+}
+
+/** Display effects follow prior row adoption while execution obligations remain immediate. */
+export function publishOrderedStructuredChildWork(
+  journal: Pick<AgentSessionJournal, 'readInOrder'>,
+  publish: () => void,
+  failed: (error: unknown) => void
+): void {
+  void journal.readInOrder(publish).catch(failed)
 }

@@ -10,7 +10,7 @@ import {
   openTestJournalHostDatabase,
   publishTestJournalEpoch
 } from './journal-host-database-test-support'
-import type { JournalHostDatabase } from './journal-host-database'
+import type { TestJournalHostDatabase as JournalHostDatabase } from './journal-host-database-test-support'
 import { restoreJournal } from './journal-open'
 import type { JournalReducerState } from './journal-reducer'
 import {
@@ -45,8 +45,8 @@ let root: string
 let database: JournalHostDatabase
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-journal-outcome-format-1-'))
-  database = openTestJournalHostDatabase(root)
-  database.transaction((db) => {
+  database = await openTestJournalHostDatabase(root)
+  database.fixtureTransaction((db) => {
     publishTestJournalEpoch(db, sessionId, epoch)
     insertTestJournalRowJson(db, sessionId, 1, fixture.marker)
     db.prepare(`INSERT INTO journal_outcome_generations (generation, session_id, epoch)

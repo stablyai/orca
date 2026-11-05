@@ -125,7 +125,7 @@ export abstract class OrcaRuntimeWithAdoptTerminalOrphansFromInventory extends O
       onlyRuntimeOwnedTerminals: true
     })
     this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId)
-    return this.getMobileSessionTabsForWorktree(worktreeId, undefined, {
+    return this.getMobileSessionTabsWithoutSenders(worktreeId, undefined, {
       includeAgentSenders: false
     })
   }
@@ -141,7 +141,7 @@ export abstract class OrcaRuntimeWithAdoptTerminalOrphansFromInventory extends O
         : null
       const snapshots = targetWorktreeId
         ? [
-            this.getMobileSessionTabsForWorktree(targetWorktreeId, undefined, {
+            this.getMobileSessionTabsWithoutSenders(targetWorktreeId, undefined, {
               includeAgentSenders: false
             })
           ]

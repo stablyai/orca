@@ -63,13 +63,13 @@ export async function createQueuedMessageTestRig(
   const store = await openTestAgentSessionRecordStore(root)
   const provider = createQueuedRigProvider(store, options, () => host)
   const { dispatch, compact, cancelTurn, closeSession, setOption } = provider
-  const makeHost = () =>
+  const makeHost = async () =>
     new StructuredAgentSessionHost({
       agents: claudeAndCodexDeclared(),
       logger: createStructuredAgentSessionLogger(),
       store,
       adapter: provider.adapter,
-      journalDatabase: openTestJournalHostDatabase(root),
+      journalDatabase: await openTestJournalHostDatabase(root),
       claimKeyId: 'key-1',
       mintSpawnToken: () => 'spawn-1',
       now: options.now ?? (() => NOW),
@@ -79,7 +79,7 @@ export async function createQueuedMessageTestRig(
       ...(options.idleSweep ? { idleSweep: options.idleSweep } : {}),
       ...(options.recoveryCapsule ? { recoveryCapsule: new AgentSessionRecoveryCapsule(root) } : {})
     })
-  let host = makeHost()
+  let host = await makeHost()
   const firstAttach = hostTestAttachParams(null, {
     ...(options.location ? { location: options.location } : {}),
     envelope: {
@@ -97,7 +97,9 @@ export async function createQueuedMessageTestRig(
         } as const)
       : {})
   })
-  const pinLegacy = options.legacyInputs && seedQueuedRigLegacyJournal(root, SESSION, options.agent)
+  const pinLegacy = options.legacyInputs
+    ? await seedQueuedRigLegacyJournal(root, SESSION, options.agent)
+    : undefined
   expect(await host.attach(QUEUED_RIG_CALLER, firstAttach)).toMatchObject({ ok: true })
   if (pinLegacy) {
     pinLegacy(host)
@@ -239,19 +241,14 @@ export async function createQueuedMessageTestRig(
     })
   }
 
-  /** Graceful restart preserves personal Stop pauses because quit writes no close Stop event. */
-  async function restartHostProcess(): Promise<void> {
-    await quitRestartHostProcess()
-  }
-
   /** Replace the host without graceful close, reusing persisted state. */
-  function crashRestartHostProcess(): void {
-    host = makeHost()
+  async function crashRestartHostProcess(): Promise<void> {
+    host = await makeHost()
   }
 
   async function quitRestartHostProcess(): Promise<void> {
     await host.flushAllStreamedEvents()
-    crashRestartHostProcess()
+    await crashRestartHostProcess()
   }
 
   async function queuePause(sessionId = SESSION): Promise<AgentSessionQueuePause | null> {
@@ -318,7 +315,8 @@ export async function createQueuedMessageTestRig(
     workingSend,
     settleAccepted,
     settleRejected,
-    restartHostProcess,
+    // Graceful quit preserves personal Stop pauses.
+    restartHostProcess: quitRestartHostProcess,
     crashRestartHostProcess,
     quitRestartHostProcess,
     queuePause,

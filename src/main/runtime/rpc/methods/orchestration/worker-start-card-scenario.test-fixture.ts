@@ -91,7 +91,7 @@ export async function verifyWorkerStartCardScenario(input: {
     expect(context.capturedText).not.toContain(task)
     await current.quitRestartHostProcess()
     await closeTestJournalHostDatabase(current.root)
-    current.crashRestartHostProcess()
+    await current.crashRestartHostProcess()
     const reopened = await current.host.journalSnapshot(COORD)
     expect(reopened.items.map(({ itemId }) => itemId)).toEqual(
       snapshot.items.map(({ itemId }) => itemId)
@@ -157,7 +157,7 @@ export async function verifyWorkerStartCardScenario(input: {
   if (scenario === 'success') {
     await current.quitRestartHostProcess()
     await closeTestJournalHostDatabase(current.root)
-    current.crashRestartHostProcess()
+    await current.crashRestartHostProcess()
   }
   await current.host.appendAgentStart(destination, card.body, card.observedAt + 30)
   expect(

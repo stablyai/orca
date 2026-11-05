@@ -192,13 +192,20 @@ export class StructuredAgentSessionQueuedMessageDrain {
     const record = this.deps.getRecord(sessionId)
     const work = this.deps.currentWork(sessionId)
     const next = work
-      ? nextStructuredQueuedMessage({
-          journal,
-          record,
-          work,
-          steer: true,
-          canSteer: this.deps.canSteer?.bind(null, sessionId)
-        })
+      ? await journal.withInputOrder(
+          () =>
+            [journal.inputOrder.firstQueued()?.clientMessageId].filter(
+              (id): id is string => id !== undefined
+            ),
+          () =>
+            nextStructuredQueuedMessage({
+              journal,
+              record,
+              work,
+              steer: true,
+              canSteer: this.deps.canSteer?.bind(null, sessionId)
+            })
+        )
       : null
     if (this.disposed || !next) {
       return

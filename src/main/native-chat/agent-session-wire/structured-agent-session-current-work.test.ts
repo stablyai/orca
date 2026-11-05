@@ -179,7 +179,7 @@ describe('a close Orca asked for, its settlement refused', () => {
     await leaveUnfinishedWork(current, { prompt: true })
     const view = watch(current)
     await vi.waitFor(() => expect(view.answerable()).toBe(true))
-    const database = openTestJournalHostDatabase(current.root)
+    const database = await openTestJournalHostDatabase(current.root)
     vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     database.db.exec(REJECT_RECOVERED_ROWS)
     const before = currentJournal(current).cursor().sequence
@@ -224,7 +224,7 @@ describe('a waiting card when the generation ahead of it ends', () => {
     const journal = currentJournal(current)
     const [card] = journal.queuedMessages.list()
     expect(card?.state).toBe('waiting')
-    const database = openTestJournalHostDatabase(current.root)
+    const database = await openTestJournalHostDatabase(current.root)
     vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     database.db.exec(REJECT_RECOVERED_ROWS)
     const before = journal.cursor().sequence
@@ -354,5 +354,5 @@ it('reuses token deltas but refreshes pending prompt dependencies', async () => 
     await journal.appendItem(token, body, { fence: 1, turnScope: { kind: 'thread' } })
   }
   expect(currentWork(rig).actionablePromptIds()).toContain(APPROVAL_ID)
-  expect(visits).toHaveBeenCalledOnce()
+  expect(visits).not.toHaveBeenCalled()
 })

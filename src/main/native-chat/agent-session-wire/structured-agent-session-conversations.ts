@@ -1,3 +1,4 @@
+import { advancePromptProjection } from './structured-agent-session-actionable-prompts'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { JournalRow } from '../agent-session-journal/journal-row-schema'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
@@ -32,13 +33,20 @@ export class StructuredAgentSessionConversations extends Map<
 
   constructor(
     private readonly delivery: {
+      advanceStatusProjection?: (journal: AgentSessionJournal, rows?: readonly JournalRow[]) => void
       observe?: (
         sessionId: string,
         journal: AgentSessionJournal,
-        rows?: readonly JournalRow[]
-      ) => void
+        rows?: readonly JournalRow[],
+        replacement?: boolean
+      ) => void | Promise<void>
       forget?: (sessionId: string) => void
       deliver: (sessionId: string, journal: AgentSessionJournal, inputChanged?: boolean) => void
+      afterReplacementProjection?: (
+        sessionId: string,
+        journal: AgentSessionJournal,
+        publish: () => void
+      ) => boolean
       /** Settle edges write no row and renew no activity clock. */
       deliverSettleEdge?: (sessionId: string, journal: AgentSessionJournal) => void
       logger: StructuredAgentSessionLogger
@@ -72,49 +80,72 @@ export class StructuredAgentSessionConversations extends Map<
       }
     }
     const current = () => this.attachments.get(sessionId) === source
-    const releaseCommit = journal.observeCommits((rows, affectsInput = true) => {
-      if (!current()) {
-        return
-      }
-      this.publish(sessionId, rows === undefined ? 'reset' : 'commit', rows)
-      try {
-        this.delivery.observe?.(sessionId, journal, rows)
-      } catch (error) {
-        this.delivery.logger.warn('observing committed requests failed', {
-          scope: 'request-outcomes',
-          sessionId,
-          error
-        })
-      }
-      inputChanged ||= affectsInput
-      if (queued) {
-        return
-      }
-      queued = true
-      queueMicrotask(() => {
-        queued = false
-        const affectsInput = inputChanged
-        inputChanged = false
+    const releaseCommit = journal.observeCommits(
+      (rows, affectsInput = true, replacement = false): void | Promise<void> => {
         if (!current()) {
           return
         }
-        try {
-          this.delivery.deliver(sessionId, journal, affectsInput)
-        } catch (error) {
-          this.delivery.logger.warn('delivering a journal commit failed', {
-            scope: 'journal-delivery',
-            sessionId,
-            error
-          })
+        advancePromptProjection(journal, rows)
+        this.delivery.advanceStatusProjection?.(journal, rows)
+        const observe = async () => {
+          try {
+            await this.delivery.observe?.(sessionId, journal, rows, replacement)
+          } catch (error) {
+            this.delivery.logger.warn('observing committed requests failed', {
+              scope: 'request-outcomes',
+              sessionId,
+              error
+            })
+          }
         }
-      })
-    })
+        if (replacement) {
+          return observe()
+            .then(() => {
+              if (current()) {
+                this.publish(sessionId, rows === undefined ? 'reset' : 'commit', rows)
+                this.delivery.deliver(sessionId, journal, affectsInput)
+              }
+            })
+            .catch((error) => {
+              this.delivery.logger.warn('delivering a journal commit failed', {
+                scope: 'journal-delivery',
+                sessionId,
+                error
+              })
+            })
+        }
+        this.publish(sessionId, rows === undefined ? 'reset' : 'commit', rows)
+        void observe()
+        inputChanged ||= affectsInput
+        if (queued) {
+          return
+        }
+        queued = true
+        queueMicrotask(() => {
+          queued = false
+          const affectsInput = inputChanged
+          inputChanged = false
+          if (!current()) {
+            return
+          }
+          try {
+            this.delivery.deliver(sessionId, journal, affectsInput)
+          } catch (error) {
+            this.delivery.logger.warn('delivering a journal commit failed', {
+              scope: 'journal-delivery',
+              sessionId,
+              error
+            })
+          }
+        })
+      }
+    )
     const releaseSettle = journal.stopMarks.observeSettleEdges(() => {
       if (!current()) {
         return
       }
       this.publish(sessionId, 'operational')
-      queueMicrotask(() => {
+      const deliver = () => {
         if (!current()) {
           return
         }
@@ -127,7 +158,10 @@ export class StructuredAgentSessionConversations extends Map<
             error
           })
         }
-      })
+      }
+      if (!this.delivery.afterReplacementProjection?.(sessionId, journal, deliver)) {
+        queueMicrotask(deliver)
+      }
     })
     this.attachments.set(sessionId, source)
     this.activity.set(sessionId, this.delivery.now())

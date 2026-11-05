@@ -30,7 +30,7 @@ beforeEach(async () => {
 
 afterEach(() => rig.dispose())
 
-export const db = () => openTestJournalHostDatabase(rig.root).db
+export const db = async () => (await openTestJournalHostDatabase(rig.root)).db
 export const message = (text: string): AgentJournalMessageItem => ({
   kind: 'message',
   role: 'user',
@@ -45,9 +45,9 @@ export const words = (fact: 'providerRejected' | 'cancelled') =>
     { surface: 'rejection' }
   )
 
-export function journalFor(sessionId: string): AgentSessionJournal {
+export async function journalFor(sessionId: string): Promise<AgentSessionJournal> {
   return new AgentSessionJournal({
-    database: openTestJournalHostDatabase(rig.root),
+    database: await openTestJournalHostDatabase(rig.root),
     identity: {
       sessionId,
       workspaceId: 'workspace-1',
@@ -59,9 +59,11 @@ export function journalFor(sessionId: string): AgentSessionJournal {
 }
 
 /** Prepare a genuinely historical source before any current writer owns this session. */
-export function historicalJournalFor(sessionId: string): AgentSessionJournal {
-  const journal = journalFor(sessionId)
-  seedLegacyTestJournal(openTestJournalHostDatabase(rig.root), { identity: journal['identity'] })
+export async function historicalJournalFor(sessionId: string): Promise<AgentSessionJournal> {
+  const journal = await journalFor(sessionId)
+  seedLegacyTestJournal(await openTestJournalHostDatabase(rig.root), {
+    identity: journal['identity']
+  })
   pinTestJournalInputMode(journal)
   return journal
 }
@@ -74,8 +76,8 @@ export type Legacy = [
   hold?: string
 ]
 
-export function seedLegacy(sessionId: string, rows: readonly Legacy[]): void {
-  const insert = db().prepare(
+export async function seedLegacy(sessionId: string, rows: readonly Legacy[]): Promise<void> {
+  const insert = (await db()).prepare(
     `INSERT INTO queued_messages (session_id, message_id, position, body_json, fingerprint,
        created_at, host_instance, state, hold_reason, returned_reason, consumed_as)
      VALUES (?, ?, ?, ?, ?, 0, 'earlier', ?, ?, ?, ?)`
@@ -98,8 +100,15 @@ export function seedLegacy(sessionId: string, rows: readonly Legacy[]): void {
   })
 }
 
-export const legacyIds = (sessionId = SESSION) =>
-  db()
-    .prepare('SELECT message_id AS id FROM queued_messages WHERE session_id = ? ORDER BY position')
-    .all(sessionId)
-    .map((row) => (typeof row === 'object' && row !== null && 'id' in row ? row.id : null))
+export const legacyIds = async (sessionId = SESSION) => {
+  const database = await openTestJournalHostDatabase(rig.root)
+  return database.read(async (read) =>
+    (
+      await read
+        .prepare(
+          'SELECT message_id AS id FROM queued_messages WHERE session_id = ? ORDER BY position'
+        )
+        .all(sessionId)
+    ).map((row) => row.id)
+  )
+}

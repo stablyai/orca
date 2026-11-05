@@ -39,7 +39,7 @@ const LEGACY_TEXT =
 let host: StructuredAgentSessionHost
 let providerEnd: Pick<AgentJournalTurnLifecycle, 'state' | 'outcome' | 'completedAt'>
 
-beforeEach(() => {
+beforeEach(async () => {
   const state = hostTestState()
   providerEnd = { state: 'interrupted', completedAt: HOST_TEST_NOW }
   host = new StructuredAgentSessionHost({
@@ -67,7 +67,7 @@ beforeEach(() => {
         return true
       }
     },
-    journalDatabase: openTestJournalHostDatabase(state.root),
+    journalDatabase: await openTestJournalHostDatabase(state.root),
     recoveryCapsule: new AgentSessionRecoveryCapsule(state.root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-a',
@@ -104,7 +104,7 @@ async function restartAfterDeath(): Promise<void> {
     logger: createStructuredAgentSessionLogger(),
     store,
     adapter: adapter(),
-    journalDatabase: openTestJournalHostDatabase(root),
+    journalDatabase: await openTestJournalHostDatabase(root),
     recoveryCapsule: new AgentSessionRecoveryCapsule(root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-next',

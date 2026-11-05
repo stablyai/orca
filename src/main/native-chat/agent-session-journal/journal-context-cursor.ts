@@ -1,3 +1,4 @@
+import { finishJournalSteps } from './journal-reconstruction-steps'
 import type Database from '../../sqlite/sync-database'
 import { createHash } from 'node:crypto'
 import type { AgentJournalAcceptanceReceipt } from '../../../shared/agent-session/journal/agent-session-journal-types'
@@ -27,15 +28,30 @@ export function journalContextCursor(
 }
 
 export function projectJournalRows<Row extends JournalReadRow>(
-  state: JournalReducerState,
+  state: Pick<JournalReducerState, 'epoch' | 'contextBoundary'>,
   rows: readonly Row[]
 ): Row[] {
-  const boundary = Math.max(
-    state.contextBoundary,
-    rows.findLast((row) => row.kind === 'epoch')?.seq ?? 1
-  )
+  return finishJournalSteps(projectJournalRowSteps(state, rows))
+}
+
+export function* projectJournalRowSteps<Row extends JournalReadRow>(
+  state: Pick<JournalReducerState, 'epoch' | 'contextBoundary'>,
+  rows: readonly Row[]
+): Generator<void, Row[]> {
+  let boundary = state.contextBoundary
+  for (const row of rows) {
+    if (row.kind === 'epoch') {
+      boundary = Math.max(boundary, row.seq)
+    }
+    yield
+  }
   const epoch = journalContextEpoch(state.epoch, boundary)
-  return rows.map((row) => ({ ...row, epoch }))
+  const result: Row[] = []
+  for (const row of rows) {
+    result.push({ ...row, epoch })
+    yield
+  }
+  return result
 }
 
 export function journalContextReceipt(

@@ -1,3 +1,4 @@
+import { JournalReadConnection } from '../agent-session-journal/journal-sql-owner'
 import * as transitions from '../agent-session-journal/journal-reducer-transition'
 import * as outcomes from '../agent-session-journal/journal-outcome-codec'
 import { journalInputOrder, JournalInputOrder } from '../agent-session-journal/journal-input-order'
@@ -114,14 +115,14 @@ it.each([10, 30])(
       })
     const stackLimit = Error.stackTraceLimit
     Error.stackTraceLimit = 40
-    const indexCard = JournalInputCardIndex.prototype.indexCard
+    const indexCard = JournalInputCardIndex.prototype.indexCardSteps
     const indexed = vi
-      .spyOn(JournalInputCardIndex.prototype, 'indexCard')
-      .mockImplementation(function (this: JournalInputCardIndex, ...args) {
+      .spyOn(JournalInputCardIndex.prototype, 'indexCardSteps')
+      .mockImplementation(function* (this: JournalInputCardIndex, ...args) {
         if (selecting) {
           seam().indexedCards++
         }
-        return indexCard.apply(this, args)
+        return yield* indexCard.apply(this, args)
       })
     const next = JournalQueuedMessages.prototype.nextInputCard
     const head = vi
@@ -218,9 +219,11 @@ it.each([10, 30])(
           }
         }
       })
-    const encode = outcomes.encodeJournalOutcomes
-    const encoded = vi.spyOn(outcomes, 'encodeJournalOutcomes').mockImplementation((...args) => {
-      const result = encode(...args)
+    const encode = outcomes.encodeJournalOutcomeSteps
+    const encoded = vi.spyOn(outcomes, 'encodeJournalOutcomeSteps').mockImplementation(function* (
+      ...args
+    ) {
+      const result = yield* encode(...args)
       for (const value of result.values) {
         if (value.field === 'inputEntries') {
           metric().nativeEntries++
@@ -258,14 +261,13 @@ it.each([10, 30])(
         boundaryCalls[phase] = (boundaryCalls[phase] ?? 0) + 1
         return predecessor.apply(this, args)
       })
-    const set = JournalInputPlaceIndex.prototype.set
-    const indexSet = vi.spyOn(JournalInputPlaceIndex.prototype, 'set').mockImplementation(function (
-      this: JournalInputPlaceIndex,
-      ...args
-    ) {
-      metric().sets++
-      set.apply(this, args)
-    })
+    const set = JournalInputPlaceIndex.prototype.setSteps
+    const indexSet = vi
+      .spyOn(JournalInputPlaceIndex.prototype, 'setSteps')
+      .mockImplementation(function* (this: JournalInputPlaceIndex, ...args) {
+        metric().sets++
+        yield* set.apply(this, args)
+      })
     const query = JournalInputPlaceIndex.prototype.query
     const indexQuery = vi
       .spyOn(JournalInputPlaceIndex.prototype, 'query')
@@ -273,14 +275,13 @@ it.each([10, 30])(
         metric().queries++
         return query.apply(this, args)
       })
-    const domainSet = JournalInputDomainIndex.prototype.set
-    const domain = vi.spyOn(JournalInputDomainIndex.prototype, 'set').mockImplementation(function (
-      this: JournalInputDomainIndex,
-      ...args
-    ) {
-      metric().domains++
-      return domainSet.apply(this, args)
-    })
+    const domainSet = JournalInputDomainIndex.prototype.setSteps
+    const domain = vi
+      .spyOn(JournalInputDomainIndex.prototype, 'setSteps')
+      .mockImplementation(function* (this: JournalInputDomainIndex, ...args) {
+        metric().domains++
+        return yield* domainSet.apply(this, args)
+      })
     const change = JournalInputLineageOwner.prototype.change
     const line = vi
       .spyOn(JournalInputLineageOwner.prototype, 'change')
@@ -293,6 +294,13 @@ it.each([10, 30])(
       metric().receipts++
       return receipt(...args)
     })
+    const readReceipts = JournalReadConnection.prototype.receipts
+    const nativeReceipts = vi
+      .spyOn(JournalReadConnection.prototype, 'receipts')
+      .mockImplementation(function (this: JournalReadConnection, scope, ids) {
+        metric().receipts += ids.length
+        return readReceipts.call(this, scope, ids)
+      })
     const before = JournalInputOrder.prototype.beforeRow
     const rows = vi.spyOn(JournalInputOrder.prototype, 'beforeRow').mockImplementation(function (
       this: JournalInputOrder,
@@ -449,9 +457,9 @@ it.each([10, 30])(
             fingerprint: journal.queuedMessages.get('Q0')!.fingerprint
           }).status
         ).toBe('held')
-        expect(selectStructuredAgentSessionInput(journal).kind).toBe('none')
+        expect((await selectStructuredAgentSessionInput(journal)).kind).toBe('none')
         journal.queuedMessages.editLeases.release(key, 'Q0')
-        expect(selectStructuredAgentSessionInput(journal)).toMatchObject({
+        expect(await selectStructuredAgentSessionInput(journal)).toMatchObject({
           kind: 'card',
           card: { messageId: 'Q0' }
         })
@@ -626,6 +634,7 @@ it.each([10, 30])(
       domain.mockRestore()
       line.mockRestore()
       receipts.mockRestore()
+      nativeReceipts.mockRestore()
       rows.mockRestore()
       folded.mockRestore()
     }

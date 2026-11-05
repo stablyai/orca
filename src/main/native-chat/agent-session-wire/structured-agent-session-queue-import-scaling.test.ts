@@ -1,3 +1,4 @@
+import { settleTestSubscriberDeliveries } from './agent-session-subscriber-test-support'
 import * as provenance from '../agent-session-journal/journal-input-provenance'
 import {
   JournalDraftMap,
@@ -31,7 +32,7 @@ it.each([100, 1_000].flatMap((size) => [false, true].map((adopt) => ({ size, ado
   'publication reuse: $size historical items, adopted=$adopt',
   async ({ size, adopt }) => {
     const corrections = 1
-    const earlier = journalFor(SESSION)
+    const earlier = await journalFor(SESSION)
     await earlier.open()
     await handOff(
       earlier,
@@ -52,17 +53,17 @@ it.each([100, 1_000].flatMap((size) => [false, true].map((adopt) => ({ size, ado
       { turn: { provider: 'codex', threadId: 'history', turnId: 't', ordinal: -1 }, via: 'steer' }
     )
     await earlier.close()
-    seedLegacy(
+    await seedLegacy(
       SESSION,
       Array.from({ length: corrections }, (_, i): Legacy => [`q-${i}`, 'waiting', 'stopped words'])
     )
     if (!adopt) {
-      db().exec(`CREATE TEMP TRIGGER b2_perf_fail_import BEFORE DELETE ON queued_messages
+      ;(await db()).exec(`CREATE TRIGGER b2_perf_fail_import BEFORE DELETE ON queued_messages
       BEGIN SELECT RAISE(ABORT, 'disk full'); END`)
     }
-    const journal = journalFor(SESSION)
+    const journal = await journalFor(SESSION)
     await journal.open()
-    expect(legacyIds()).toHaveLength(adopt ? 0 : corrections)
+    expect(await legacyIds()).toHaveLength(adopt ? 0 : corrections)
     let display = journal['state']
     const feed = new AgentSessionSubscribers()
     const events: AgentSessionSubscribeEvent[] = []
@@ -269,6 +270,7 @@ it.each([100, 1_000].flatMap((size) => [false, true].map((adopt) => ({ size, ado
           readsCurrentRequests: id !== 'old',
           emit: (event) => events.push(event)
         })
+        await settleTestSubscriberDeliveries(feed)
       }
       expect(work()).toEqual([0, 1, 1])
       // Adopted display shares the raw map used by the keyed inverse lookup.
@@ -280,6 +282,8 @@ it.each([100, 1_000].flatMap((size) => [false, true].map((adopt) => ({ size, ado
       visits = 0
       for (let publication = 0; publication < 5; publication++) {
         feed.publish(SESSION, journal)
+        await settleTestSubscriberDeliveries(feed)
+        await settleTestSubscriberDeliveries(feed)
       }
       // Only subscriber visits; history copies/materialization would add N visits.
       expect(visits).toBe(15)
@@ -292,6 +296,7 @@ it.each([100, 1_000].flatMap((size) => [false, true].map((adopt) => ({ size, ado
       expect(journal.queuedMessages.displayState() === display).toBe(false)
       expect(journal.snapshot()).not.toBe(snapshot)
       feed.publish(SESSION, journal)
+      await settleTestSubscriberDeliveries(feed)
       // Count canonical normalization reads, not the draft’s changed-key metadata.
       expect(work()).toEqual([0, 1, 1])
       reset()
@@ -307,6 +312,7 @@ it.each([100, 1_000].flatMap((size) => [false, true].map((adopt) => ({ size, ado
           { fence: 0, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
         )
         feed.publish(SESSION, journal)
+        await settleTestSubscriberDeliveries(feed)
         const delivered = events.slice(from)
         expect(delivered).toHaveLength(3)
         for (const event of delivered) {
@@ -360,7 +366,7 @@ it.each([100, 1_000].flatMap((size) => [false, true].map((adopt) => ({ size, ado
         spy.mockRestore()
       }
       if (!adopt) {
-        db().exec('DROP TRIGGER b2_perf_fail_import')
+        ;(await db()).exec('DROP TRIGGER b2_perf_fail_import')
       }
     }
     expect(events.filter((event) => event.type === 'snapshot')).toHaveLength(2)
@@ -370,18 +376,18 @@ it.each([100, 1_000].flatMap((size) => [false, true].map((adopt) => ({ size, ado
 
 it.each([10, 100])('bounds actual canonical fallback reads/writes N=%i', async (n) => {
   const session = 'overlay-scale'
-  const seed = journalFor(session)
+  const seed = await journalFor(session)
   await seed.open()
   await seed.queuedMessages.insert({ messageId: 'C', body: message('/compact') })
   await seed.close()
-  seedLegacy(
+  await seedLegacy(
     session,
     Array.from({ length: n }, (_, i): Legacy => [`D${i}`, 'waiting', `body${i}`])
   )
-  db().exec(`CREATE TEMP TRIGGER overlay_scale_import_failure BEFORE DELETE ON queued_messages
+  ;(await db()).exec(`CREATE TRIGGER overlay_scale_import_failure BEFORE DELETE ON queued_messages
     BEGIN SELECT RAISE(ABORT, 'import failure'); END`)
   const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-  const journal = journalFor(session)
+  const journal = await journalFor(session)
   let indexed = 0
   let draftKeys = 0
   let receiptQueries = 0
@@ -393,28 +399,28 @@ it.each([10, 100])('bounds actual canonical fallback reads/writes N=%i', async (
   let cards = 0
   let bytes = 0
   let drafts: ReturnType<typeof transitions.isolateJournalTransition>[] = []
-  const index = JournalInputCardIndex.prototype.indexCard
+  const index = JournalInputCardIndex.prototype.indexCardSteps
   const indexSpy = vi
-    .spyOn(JournalInputCardIndex.prototype, 'indexCard')
-    .mockImplementation(function (this: JournalInputCardIndex, ...args) {
+    .spyOn(JournalInputCardIndex.prototype, 'indexCardSteps')
+    .mockImplementation(function* (this: JournalInputCardIndex, ...args) {
       indexed++
-      return index.apply(this, args)
+      return yield* index.apply(this, args)
     })
-  const introduce = JournalInputCardIndex.prototype.introduceOverlays
+  const introduce = JournalInputCardIndex.prototype.introduceOverlaysSteps
   const introduction = vi
-    .spyOn(JournalInputCardIndex.prototype, 'introduceOverlays')
-    .mockImplementation(function (this: JournalInputCardIndex, change) {
-      introduce.call(this, (card) => {
+    .spyOn(JournalInputCardIndex.prototype, 'introduceOverlaysSteps')
+    .mockImplementation(function* (this: JournalInputCardIndex, change) {
+      yield* introduce.call(this, (card) => {
         introduced++
         change(card)
       })
     })
-  const frontier = JournalInputLineageOwner.prototype.restoreFrontier
+  const frontier = JournalInputLineageOwner.prototype.restoreFrontierSteps
   const frontierSpy = vi
-    .spyOn(JournalInputLineageOwner.prototype, 'restoreFrontier')
-    .mockImplementation(function (this: JournalInputLineageOwner, ...args) {
+    .spyOn(JournalInputLineageOwner.prototype, 'restoreFrontierSteps')
+    .mockImplementation(function* (this: JournalInputLineageOwner, ...args) {
       frontiers++
-      return frontier.apply(this, args)
+      return yield* frontier.apply(this, args)
     })
   const isolate = transitions.isolateJournalTransition
   const isolateSpy = vi
@@ -424,9 +430,11 @@ it.each([10, 100])('bounds actual canonical fallback reads/writes N=%i', async (
       drafts.push(draft)
       return draft
     })
-  const encode = outcomes.encodeJournalOutcomes
-  const encodeSpy = vi.spyOn(outcomes, 'encodeJournalOutcomes').mockImplementation((...args) => {
-    const encoded = encode(...args)
+  const encode = outcomes.encodeJournalOutcomeSteps
+  const encodeSpy = vi.spyOn(outcomes, 'encodeJournalOutcomeSteps').mockImplementation(function* (
+    ...args
+  ) {
+    const encoded = yield* encode(...args)
     for (const value of encoded.values) {
       if (value.field === 'inputEntries') {
         entries++
@@ -527,7 +535,7 @@ it.each([10, 100])('bounds actual canonical fallback reads/writes N=%i', async (
   }
   try {
     await journal.open()
-    measurements.discovery = measure()
+    measurements.discovery = await measure()
     expect(indexed).toBeLessThanOrEqual(5 * n + 1)
     expect(cohortVisits).toBeLessThanOrEqual(8 * n)
     expect(frontiers).toBe(1)
@@ -558,7 +566,7 @@ it.each([10, 100])('bounds actual canonical fallback reads/writes N=%i', async (
       expect(journal.queuedMessages.nextInputCard()?.messageId).toBe('C')
     }
     expect(encodeJournalState(journal['state'])).toEqual(before)
-    expect(measure()).toEqual({
+    expect(await measure()).toEqual({
       indexed: 0,
       draftKeys: 0,
       receiptQueries: 0,
@@ -575,13 +583,13 @@ it.each([10, 100])('bounds actual canonical fallback reads/writes N=%i', async (
     mutation.mockRestore()
     deletion.mockRestore()
     clearing.mockRestore()
-    measurements.reads = measure()
+    measurements.reads = await measure()
     await journal.appendItem(
       { provider: 'orca', clientMessageId: 'unrelated' },
       message('unrelated'),
       threadWrite
     )
-    measurements.firstWrite = measure()
+    measurements.firstWrite = await measure()
     expect(introduced).toBe(n)
     expect(cards).toBe(n)
     expect(indexed).toBe(n)
@@ -605,7 +613,7 @@ it.each([10, 100])('bounds actual canonical fallback reads/writes N=%i', async (
         )
       ).toBe(true)
     }
-    measurements.admissions = measure()
+    measurements.admissions = await measure()
     expect({
       indexed,
       draftKeys,
@@ -626,11 +634,11 @@ it.each([10, 100])('bounds actual canonical fallback reads/writes N=%i', async (
       entries: n
     })
     // One input's fixed graph plus at most two AVL paths, each with bounded wrapper fields.
-    expect(measure().nodes).toBeLessThanOrEqual(160 * n * (1 + Math.ceil(Math.log2(n + 2))))
+    expect((await measure()).nodes).toBeLessThanOrEqual(160 * n * (1 + Math.ceil(Math.log2(n + 2))))
     // Each native entry contains fixed IDs/cursors and one witness, never card bodies/populations.
     expect(bytes).toBeLessThanOrEqual(400 * n)
     reset()
-    db().exec('DROP TRIGGER overlay_scale_import_failure')
+    ;(await db()).exec('DROP TRIGGER overlay_scale_import_failure')
     const old = journal.queuedMessages.get('D0')!
     expect(
       await journal.queuedMessages.update({
@@ -641,7 +649,7 @@ it.each([10, 100])('bounds actual canonical fallback reads/writes N=%i', async (
     ).toMatchObject({ status: 'updated' })
     expect(journal.queuedMessages.get('D0')?.body).toEqual(message('latest D'))
     expect(journal['state'].inputCards.size).toBe(n + 1)
-    measurements.edit = measure()
+    measurements.edit = await measure()
     expect({ indexed, cards, cohortVisits, introduced }).toEqual({
       indexed: 1,
       cards: 0,
@@ -651,8 +659,8 @@ it.each([10, 100])('bounds actual canonical fallback reads/writes N=%i', async (
     reset()
     await journal.queuedMessages.withdraw(Array.from({ length: n }, (_, i) => `D${i}`))
     expect(journal['state'].inputCards.size).toBe(1)
-    expect(legacyIds(session)).toEqual([])
-    measurements.retirement = measure()
+    expect(await legacyIds(session)).toEqual([])
+    measurements.retirement = await measure()
     // One bulk adoption, withdrawals, then current-cohort retirement; not n separate flushes.
     expect(cards).toBe(n)
     expect(bytes).toBe(4 * n) // Native tombstone null values.
@@ -661,7 +669,7 @@ it.each([10, 100])('bounds actual canonical fallback reads/writes N=%i', async (
     console.info('overlay-operation-counts', JSON.stringify({ n, measurements }))
     expect(fixture.rig.dispatch).not.toHaveBeenCalled()
   } finally {
-    db().exec('DROP TRIGGER IF EXISTS overlay_scale_import_failure')
+    ;(await db()).exec('DROP TRIGGER IF EXISTS overlay_scale_import_failure')
     for (const spy of [
       indexSpy,
       introduction,

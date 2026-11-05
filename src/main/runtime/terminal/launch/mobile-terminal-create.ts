@@ -88,9 +88,9 @@ export abstract class OrcaRuntimeWithCreateMobileSessionTerminal extends OrcaRun
 
   abstract getExplicitSessionWorktreeIdSelector(selector: string | undefined): string | null
 
-  protected abstract getMobileSessionTabsForWorktree(
-    ...args: Parameters<SessionTabsPublication['getMobileSessionTabsForWorktree']>
-  ): ReturnType<SessionTabsPublication['getMobileSessionTabsForWorktree']>
+  protected abstract getMobileSessionTabsWithoutSenders(
+    ...args: Parameters<SessionTabsPublication['getMobileSessionTabsWithoutSenders']>
+  ): ReturnType<SessionTabsPublication['getMobileSessionTabsWithoutSenders']>
 
   async createMobileSessionTerminal(
     worktreeSelector: string,
@@ -161,7 +161,9 @@ export abstract class OrcaRuntimeWithCreateMobileSessionTerminal extends OrcaRun
         this.getExplicitSessionWorktreeIdSelector(worktreeSelector) ??
         (await this.resolveWorkspaceSelector(worktreeSelector)).id
       this.applyMobileSessionTabNavigation(
-        this.getMobileSessionTabsForWorktree(worktreeId, undefined, { includeAgentSenders: false }),
+        this.getMobileSessionTabsWithoutSenders(worktreeId, undefined, {
+          includeAgentSenders: false
+        }),
         result.tab.id,
         navigation,
         opts.clientNavigationId

@@ -95,7 +95,7 @@ function host(workers: number, path: string = ':memory:') {
       }
     ).senders
   const senders = start(db)
-  const rows = (publication: ReturnType<typeof senders.build>) =>
+  const rows = (publication: Awaited<ReturnType<typeof senders.build>>) =>
     publication.associations.map((row) => `${row.identity}@${row.paneKey}`).sort()
   return {
     db,
@@ -108,15 +108,15 @@ function host(workers: number, path: string = ':memory:') {
     senders,
     rows,
     /** What a cold build on its own connection publishes: the full rebuild to equal. */
-    cold: (database = db) => rows(start(database).build())
+    cold: async (database = db) => rows(await start(database).build())
   }
 }
 
 it.each([100, 1000])(
   'reads no worker history for a write no live worker read, and only the changed worker for one it did, at %i live workers',
-  (workers) => {
+  async (workers) => {
     const h = host(workers)
-    const first = h.senders.build()
+    const first = await h.senders.build()
     expect(first.associations.filter((row) => row.identity.startsWith('dispatch:'))).toHaveLength(
       workers
     )
@@ -129,32 +129,32 @@ it.each([100, 1000])(
     h.db.db
       .prepare("UPDATE dispatch_contexts SET status = 'completed' WHERE id = ?")
       .run(h.unrelated.id)
-    expect(h.senders.build()).toBe(first)
+    expect(await h.senders.build()).toBe(first)
     expect(work()).toEqual({ ...settled, historyReads: settled.historyReads + 1 })
 
     // One live worker lets its terminal go: its pane and its own lineage only.
     h.db.db
       .prepare("UPDATE worker_terminal_resources SET ownership_state = 'released' WHERE id = ?")
       .run(`res-${h.ids[0]}`)
-    const changed = h.senders.build()
+    const changed = await h.senders.build()
     expect({
       paneReads: work().paneReads - settled.paneReads,
       lineageReads: work().lineageReads - settled.lineageReads
     }).toEqual({ paneReads: 3, lineageReads: 3 })
     expect(h.rows(changed)).not.toContain(`dispatch:${h.ids[0]}@${pane(0)}`)
-    expect(h.rows(changed)).toEqual(h.cold())
+    expect(h.rows(changed)).toEqual(await h.cold())
   }
 )
 
-it('follows each write that changes a worker, as a cold rebuild reads it', () => {
+it('follows each write that changes a worker, as a cold rebuild reads it', async () => {
   const directory = mkdtempSync(join(tmpdir(), 'orca-sender-history-'))
   const h = host(3, join(directory, 'orchestration.db'))
-  const step = (only = (_row: string) => true) => {
-    const rows = h.rows(h.senders.build())
-    expect(rows.filter(only)).toEqual(h.cold().filter(only))
+  const step = async (only = (_row: string) => true) => {
+    const rows = h.rows(await h.senders.build())
+    expect(rows.filter(only)).toEqual((await h.cold()).filter(only))
     return rows
   }
-  step()
+  await step()
   // A follow-up of a worker whose earlier lookup found none takes it to the follow-up's own
   // terminal in another pane; only that earlier miss, not any pane it read, says so.
   h.leaves.push({ ...MIRROR_LEAVES_STEP_1[0], tabId: 'tab-3', worktreeId: 'w', ptyId: 'pty-3' })
@@ -164,35 +164,35 @@ it('follows each write that changes a worker, as a cold rebuild reads it', () =>
     incarnationId: 'inc-1',
     worktreeId: 'w'
   } as RuntimePtyWorktreeRecord)
-  step()
+  await step()
   const followUp = h.dispatch(3, 'follow-up')
   h.hold.run(`res-${followUp.id}`, followUp.id, followUp.id, pane(3), handle(3), 'pty-3:inc-1')
-  step()
+  await step()
   h.db.db
     .prepare('UPDATE dispatch_contexts SET follow_up_of_dispatch_id = ? WHERE id = ?')
     .run(h.ids[0], followUp.id)
-  expect(step()).toContain(`dispatch:${h.ids[0]}@${pane(3)}`)
+  expect(await step()).toContain(`dispatch:${h.ids[0]}@${pane(3)}`)
   // A terminal that moves to another pane takes its worker there.
   h.db.db
     .prepare(
       "UPDATE worker_terminal_resources SET pane_key = ?, process_incarnation = 'pty-2:inc-1' WHERE id = ?"
     )
     .run(pane(2), `res-${h.ids[1]}`)
-  expect(step()).toContain(`dispatch:${h.ids[1]}@${pane(2)}`)
+  expect(await step()).toContain(`dispatch:${h.ids[1]}@${pane(2)}`)
   // A respawned process under the same pane no longer holds its worker.
   // (A fresh publisher sees the new process as the handle's first, so only worker rows compare.)
   h.ptys[2] = { ...h.ptys[2], incarnationId: 'inc-2' }
   const dispatches = (row: string) => row.startsWith('dispatch:')
-  expect(step(dispatches)).not.toContain(`dispatch:${h.ids[2]}@${pane(2)}`)
+  expect(await step(dispatches)).not.toContain(`dispatch:${h.ids[2]}@${pane(2)}`)
   h.db.db.prepare('DELETE FROM worker_terminal_resources WHERE id = ?').run(`res-${h.ids[0]}`)
-  step(dispatches)
+  await step(dispatches)
   // A rolled-back write marks nothing.
   const settled = h.senders.workForTest()
-  const before = h.senders.build()
+  const before = await h.senders.build()
   h.db.db.exec('BEGIN')
   h.db.db.prepare("UPDATE worker_terminal_resources SET ownership_state = 'released'").run()
   h.db.db.exec('ROLLBACK')
-  expect(h.senders.build()).toBe(before)
+  expect(await h.senders.build()).toBe(before)
   expect(h.senders.workForTest().paneReads).toBe(settled.paneReads)
   // Another connection's commit, which no trigger here sees, rebuilds from the database.
   const other = new OrchestrationDb(join(directory, 'orchestration.db'))
@@ -200,31 +200,31 @@ it('follows each write that changes a worker, as a cold rebuild reads it', () =>
   other.db
     .prepare("UPDATE worker_terminal_resources SET ownership_state = 'released' WHERE id = ?")
     .run(`res-${h.ids[1]}`)
-  expect(step(dispatches)).not.toContain(`dispatch:${h.ids[1]}@${pane(2)}`)
+  expect(await step(dispatches)).not.toContain(`dispatch:${h.ids[1]}@${pane(2)}`)
 })
 
-it('keeps nothing it read inside a transaction that rolls back', () => {
+it('keeps nothing it read inside a transaction that rolls back', async () => {
   const h = host(3)
-  h.senders.build()
+  await h.senders.build()
   const held = `dispatch:${h.ids[1]}@${pane(1)}`
   h.db.db.exec('BEGIN')
   h.db.db
     .prepare("UPDATE worker_terminal_resources SET ownership_state = 'released' WHERE id = ?")
     .run(`res-${h.ids[1]}`)
-  h.senders.build()
+  await h.senders.build()
   h.db.db.exec('ROLLBACK')
-  expect(h.rows(h.senders.build())).toContain(held)
+  expect(h.rows(await h.senders.build())).toContain(held)
   // A later write no worker read leaves it as the database has it.
   h.db.db
     .prepare("UPDATE dispatch_contexts SET status = 'completed' WHERE id = ?")
     .run(h.unrelated.id)
-  expect(h.rows(h.senders.build())).toEqual(h.cold())
+  expect(h.rows(await h.senders.build())).toEqual(await h.cold())
 })
 
-it('forgets the workers and the keys it read once their panes close', () => {
+it('forgets the workers and the keys it read once their panes close', async () => {
   const h = host(20)
   // Installs this connection's triggers.
-  h.senders.build()
+  await h.senders.build()
   const history = new AgentSenderWorkerHistory()
   const work = { lineageReads: 0, paneReads: 0 }
   const panes = h.ids.map((_, i) => ({
@@ -443,22 +443,22 @@ it.each([100, 1000])(
   }
 )
 
-it('replaces and retires former-owner dependencies when a terminal resource transfers', () => {
+it('replaces and retires former-owner dependencies when a terminal resource transfers', async () => {
   const h = host(3)
-  h.senders.build()
+  await h.senders.build()
   h.db.db.prepare("UPDATE dispatch_contexts SET status = 'completed' WHERE id = ?").run(h.ids[0])
   h.db.db.prepare('DELETE FROM worker_terminal_resources WHERE id = ?').run(`res-${h.ids[0]}`)
   const transfer = h.db.db.prepare(
     'UPDATE worker_terminal_resources SET origin_dispatch_id = ?, prior_owner_dispatch_ids = ? WHERE id = ?'
   )
   transfer.run(h.ids[0], JSON.stringify([h.ids[0]]), `res-${h.ids[1]}`)
-  const moved = h.rows(h.senders.build())
+  const moved = h.rows(await h.senders.build())
   expect(moved).toContain(`dispatch:${h.ids[0]}@${pane(1)}`)
-  expect(moved).toEqual(h.cold())
+  expect(moved).toEqual(await h.cold())
   transfer.run(h.ids[1], '[]', `res-${h.ids[1]}`)
-  const retired = h.rows(h.senders.build())
+  const retired = h.rows(await h.senders.build())
   expect(retired.some((value) => value.startsWith(`dispatch:${h.ids[0]}@`))).toBe(false)
-  expect(retired).toEqual(h.cold())
+  expect(retired).toEqual(await h.cold())
 })
 
 it('keeps a structured self-cycle separate from another root sharing a missing resource owner', () => {

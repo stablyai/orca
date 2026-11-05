@@ -2,13 +2,27 @@ import type { AgentJournalItemBody } from '../../../shared/agent-session/journal
 import type { AgentJournalItemIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { JournalLoad } from './journal-open'
 import { failLoadOnUnloadableJournal } from './journal-open-failure'
-import { staleSubagentRosterRevisions } from './journal-subagent-liveness'
+import { staleSubagentRosterRevisionSteps } from './journal-subagent-liveness'
+import { journalInputOrder } from './journal-input-order'
+import { finishJournalStepsAsync } from './journal-reconstruction-steps'
+import type { JournalReducerState } from './journal-reducer'
+
+export async function adoptJournalStoreState(
+  previous: JournalReducerState,
+  loaded: JournalLoad,
+  adopt: (state: JournalReducerState) => void
+): Promise<void> {
+  await finishJournalStepsAsync(
+    journalInputOrder(loaded.state).carryRecoverySteps(journalInputOrder(previous))
+  )
+  adopt(loaded.state)
+}
 
 export async function openJournalStoreState(input: {
   sessionId: string
   replay: () => JournalLoad | null
-  start: () => void
-  adopt: (loaded: JournalLoad) => void
+  start: () => void | Promise<void>
+  adopt: (loaded: JournalLoad) => void | Promise<void>
   appendItem: (
     identity: AgentJournalItemIdentity,
     body: AgentJournalItemBody,
@@ -19,11 +33,11 @@ export async function openJournalStoreState(input: {
   const loaded = input.replay()
   // Empty epochs left by older repairs contain nothing to preserve; found afresh without deleting rows.
   if (!loaded || (!loaded.newer && !loaded.damage && loaded.state.lastSequence === 0)) {
-    input.start()
+    await input.start()
     return
   }
   failLoadOnUnloadableJournal(input.sessionId, loaded)
-  input.adopt(loaded)
+  await input.adopt(loaded)
   await settleStaleSubagentRosters(input, loaded)
 }
 
@@ -38,7 +52,10 @@ async function settleStaleSubagentRosters(
   },
   loaded: JournalLoad
 ): Promise<void> {
-  for (const revision of staleSubagentRosterRevisions(loaded.state.items.values())) {
+  const revisions = await finishJournalStepsAsync(
+    staleSubagentRosterRevisionSteps(loaded.state.items.values())
+  )
+  for (const revision of revisions) {
     await input.appendItem(revision.identity, revision.body, input.highestFence())
   }
 }

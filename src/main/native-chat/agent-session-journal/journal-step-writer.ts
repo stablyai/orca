@@ -32,10 +32,10 @@ export class JournalStepWriter {
   ) {}
 
   append(steps: readonly JournalStep[]): Promise<boolean[]> {
-    return this.deps.serialize(() => {
+    return this.deps.serialize(async () => {
       const wrote: boolean[] = []
       for (const step of steps) {
-        wrote.push(this.deps.writeRows(() => this.plan(step)).length > 0)
+        wrote.push((await this.deps.writeRows(() => this.plan(step))).length > 0)
       }
       return wrote
     })

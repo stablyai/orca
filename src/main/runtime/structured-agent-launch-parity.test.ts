@@ -142,7 +142,7 @@ import {
 } from '../native-chat/native-chat-visuals-delivery'
 import type { StructuredAgentSessionAcquireInput } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import type { JournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database'
+import type { TestJournalHostDatabase as JournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { createClaudeCliFlagSupport } from '../claude/claude-cli-flag-support'
 import type { AgentSessionRecordStore } from './agent-session/records/agent-session-record-store'
 import { OrcaRuntimeService } from './orca-runtime'

@@ -132,7 +132,7 @@ it('writes nothing after a step whose row the database refused', async () => {
   const { root, journal, deferred, sink, bind } = await rig()
   bind()
   // Fail step two to verify step three never fills its place.
-  openTestJournalHostDatabase(root).db.exec(`CREATE TEMP TRIGGER fail_second_step
+  ;(await openTestJournalHostDatabase(root)).db.exec(`CREATE TRIGGER fail_second_step
 BEFORE INSERT ON main.journal_rows WHEN instr(NEW.row_json, 'refused-step') > 0
 BEGIN SELECT RAISE(ABORT, 'second step refused'); END`)
   const step = (recordId: string) =>

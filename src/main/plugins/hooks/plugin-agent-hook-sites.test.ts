@@ -1,3 +1,4 @@
+import '../../native-chat/agent-session-journal/journal-host-database-test-support'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { PluginHookName } from '../../../shared/plugins/contributions/plugin-hook-contribution'
 import { runPluginHookChain } from '../../../shared/plugins/workers/plugin-hook-chain'

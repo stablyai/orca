@@ -6,7 +6,7 @@ import {
   openTestJournalHostDatabase,
   closeTestJournalHostDatabase
 } from './journal-host-database-test-support'
-import type { JournalHostDatabase } from './journal-host-database'
+import type { TestJournalHostDatabase as JournalHostDatabase } from './journal-host-database-test-support'
 import { publishNewEpoch } from './journal-epoch-rollover'
 import { openAgentSessionJournal } from './journal-store-factory'
 import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
@@ -92,10 +92,9 @@ export function registerRetainedOutcomeContract() {
         agent: 'codex' as const,
         providerHandle: codexProviderHandle('thread-1')
       }
-      let database = openTestJournalHostDatabase(root)
+      let database = await openTestJournalHostDatabase(root)
       let time = 10000
-      publishNewEpoch({
-        database,
+      await publishNewEpoch(database, () => ({
         identity,
         epoch: 'retained-epoch',
         reason: 'session_created',
@@ -104,7 +103,7 @@ export function registerRetainedOutcomeContract() {
         expectedEpoch: null,
         queue: { cards: [], receipt: { write: () => {}, committed: () => {} } },
         onPublished: () => {}
-      })
+      }))
       journal = await openAgentSessionJournal({ identity, database, now: () => time++ })
       const original: AgentJournalMessageItem = {
         kind: 'message',
@@ -262,7 +261,7 @@ export function registerRetainedOutcomeContract() {
       await journal.close()
       journal = undefined
       await closeTestJournalHostDatabase(root)
-      database = openTestJournalHostDatabase(root)
+      database = await openTestJournalHostDatabase(root)
       const record = agentSessionConversationView(
         agentSessionRecordFixture({
           sessionId,
@@ -345,7 +344,7 @@ export function registerRetainedOutcomeContract() {
       await journal.close()
       journal = undefined
       await closeTestJournalHostDatabase(root)
-      database = openTestJournalHostDatabase(root)
+      database = await openTestJournalHostDatabase(root)
       journal = (
         await openStructuredAgentSessionConversationJournal(
           {
@@ -412,7 +411,7 @@ export function registerRetainedOutcomeContract() {
       await journal.close()
       journal = undefined
       await closeTestJournalHostDatabase(root)
-      database = openTestJournalHostDatabase(root)
+      database = await openTestJournalHostDatabase(root)
       journal = (
         await openStructuredAgentSessionConversationJournal(
           {
@@ -463,9 +462,8 @@ export function registerRetainedEchoBoundaryContract() {
               agent: 'codex' as const,
               providerHandle: codexProviderHandle('thread-1')
             }
-            let database = openTestJournalHostDatabase(root)
-            publishNewEpoch({
-              database,
+            let database = await openTestJournalHostDatabase(root)
+            await publishNewEpoch(database, () => ({
               identity,
               epoch: 'implicit-epoch',
               reason: 'session_created',
@@ -474,7 +472,7 @@ export function registerRetainedEchoBoundaryContract() {
               expectedEpoch: null,
               queue: { cards: [], receipt: { write: () => {}, committed: () => {} } },
               onPublished: () => {}
-            })
+            }))
             journal = await openAgentSessionJournal({ identity, database, now: () => time++ })
             const body: AgentJournalMessageItem = {
               kind: 'message',
@@ -633,7 +631,7 @@ export function registerRetainedEchoBoundaryContract() {
               await journal.close()
               journal = undefined
               await closeTestJournalHostDatabase(root)
-              database = openTestJournalHostDatabase(root)
+              database = await openTestJournalHostDatabase(root)
               journal = await openAgentSessionJournal({ identity, database, now: () => time++ })
             }
             await journal.appendSubmission({

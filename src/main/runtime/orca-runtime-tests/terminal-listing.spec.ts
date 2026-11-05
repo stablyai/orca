@@ -16,8 +16,9 @@ import {
 } from '../orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
-  it('emits one mobile session terminal tab per live PTY even if two tabs resolve to it', () => {
+  it('emits one mobile session terminal tab per live PTY even if two tabs resolve to it', async () => {
     const runtime = createRuntime()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture exercises the runtime's actual private PTY and tab owners.
     const internals = runtime as unknown as {
       recordPtyWorktree: (
         ptyId: string,
@@ -25,9 +26,9 @@ describe('OrcaRuntimeService', () => {
         state?: Record<string, unknown>
       ) => void
       mobileSessionTabsByWorktree: Map<string, unknown>
-      getMobileSessionTabsForWorktree: (worktreeId: string) => {
+      getMobileSessionTabsForWorktree: (worktreeId: string) => Promise<{
         tabs: { type: string; terminal?: string | null }[]
-      }
+      }>
     }
     // Unclaimed PTYs can bind through the worktree-only fallback.
     internals.recordPtyWorktree('pty-shared', TEST_WORKTREE_ID, { connected: true })
@@ -53,7 +54,7 @@ describe('OrcaRuntimeService', () => {
       activeTabType: 'terminal',
       tabs: [terminalTab('leaf-new', 'pty-shared'), terminalTab('leaf-old', 'pty-shared')]
     })
-    const deduped = internals.getMobileSessionTabsForWorktree(TEST_WORKTREE_ID)
+    const deduped = await internals.getMobileSessionTabsForWorktree(TEST_WORKTREE_ID)
     const dedupedTerminals = deduped.tabs.filter((tab) => tab.type === 'terminal')
     expect(dedupedTerminals).toHaveLength(1)
     expect(dedupedTerminals[0].terminal).toBeTruthy()
@@ -67,7 +68,7 @@ describe('OrcaRuntimeService', () => {
       activeTabType: 'terminal',
       tabs: [terminalTab('leaf-new', 'pty-shared'), terminalTab('leaf-old', 'pty-other')]
     })
-    const split = internals.getMobileSessionTabsForWorktree(TEST_WORKTREE_ID)
+    const split = await internals.getMobileSessionTabsForWorktree(TEST_WORKTREE_ID)
     expect(split.tabs.filter((tab) => tab.type === 'terminal')).toHaveLength(2)
   })
 

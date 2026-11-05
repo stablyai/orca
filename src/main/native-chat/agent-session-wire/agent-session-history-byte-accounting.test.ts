@@ -88,7 +88,7 @@ it.each([1, 100, 200])('serializes each of %i unchanged forward page items once'
     return forwardStringify(value, replacer, space)
   }
   try {
-    const result = readAgentSessionHistory(
+    const result = await readAgentSessionHistory(
       journal,
       {
         sessionId: 'session-1',

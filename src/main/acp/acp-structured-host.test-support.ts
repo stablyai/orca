@@ -96,7 +96,7 @@ export async function openHostRig(
   let generation = 0
   // Forward lifecycle and late-send settlements as the runtime does.
   const hosted: { host: StructuredAgentSessionHost | null } = { host: null }
-  const journalDatabase = openTestJournalHostDatabase(state.root)
+  const journalDatabase = await openTestJournalHostDatabase(state.root)
   const rig = await openAcpAdapterRig({
     ...options,
     deps: {

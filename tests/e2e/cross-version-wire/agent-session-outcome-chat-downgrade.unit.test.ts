@@ -1,9 +1,10 @@
+import { failNextNativeJournalStatement } from '../../../src/main/native-chat/agent-session-journal/journal-native-test-instrumentation'
 import { createHash } from 'node:crypto'
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { isDeepStrictEqual } from 'node:util'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
 import type {
   AgentSessionJournalIdentity,
@@ -87,7 +88,10 @@ async function savedChat(kind: 'new' | 'existing'): Promise<JournalStoredRow[]> 
       await appendStatus(journal, ordinal)
     }
     await older.closeAll()
-    prefix = liveTestJournalRows(openTestJournalHostDatabase(directory).db, IDENTITY.sessionId)
+    prefix = liveTestJournalRows(
+      (await openTestJournalHostDatabase(directory)).db,
+      IDENTITY.sessionId
+    )
     expect(prefix).toHaveLength(4)
   }
   const journals = createTrackedJournalOpener()
@@ -96,7 +100,7 @@ async function savedChat(kind: 'new' | 'existing'): Promise<JournalStoredRow[]> 
     await appendStatus(journal, ordinal)
   }
   await journals.closeAll()
-  const database = openTestJournalHostDatabase(directory)
+  const database = await openTestJournalHostDatabase(directory)
   expect(journalOutcomeSource(database.db, IDENTITY.sessionId, journal.epoch)).toMatchObject({
     prefix: prefix.length
   })
@@ -208,7 +212,7 @@ describe('a chat this build wrote, opened by a shipped build', () => {
         ).toEqual([])
       }
       // Upgraded again, this build reads the prefix and its records, the rows still as they were.
-      const database = openTestJournalHostDatabase(directory)
+      const database = await openTestJournalHostDatabase(directory)
       try {
         const reopened = restoreJournal(database.db, IDENTITY.sessionId)
         expect(reopened).toMatchObject({ newer: null, damage: null })
@@ -234,28 +238,21 @@ it(
     }
     await older.closeAll()
     const prefix = liveTestJournalRows(
-      openTestJournalHostDatabase(directory).db,
+      (await openTestJournalHostDatabase(directory)).db,
       IDENTITY.sessionId
     )
     await closeTestJournalHostDatabase(directory)
 
     const journals = createTrackedJournalOpener()
     const journal = await journals.open({ identity: IDENTITY, stateDirectory: directory })
-    const database = openTestJournalHostDatabase(directory)
+    const database = await openTestJournalHostDatabase(directory)
     // The first write fails after its marker is in: at a record, then at COMMIT.
-    database.db.exec(`CREATE TEMP TRIGGER failure BEFORE INSERT ON main.journal_outcomes
+    database.db.exec(`CREATE TRIGGER failure BEFORE INSERT ON journal_outcomes
       BEGIN SELECT RAISE(ABORT, 'record failure'); END`)
     await expect(appendStatus(journal, 3)).rejects.toThrow('record failure')
     database.db.exec('DROP TRIGGER failure')
-    const exec = database.db.exec.bind(database.db)
-    const commit = vi.spyOn(database.db, 'exec').mockImplementation((sql) => {
-      if (sql === 'COMMIT') {
-        throw new Error('commit failure')
-      }
-      exec(sql)
-    })
+    await failNextNativeJournalStatement(database, 'COMMIT', 'commit failure')
     await expect(appendStatus(journal, 4)).rejects.toThrow('commit failure')
-    commit.mockRestore()
     expect(journalOutcomeSource(database.db, IDENTITY.sessionId, journal.epoch)).toBeNull()
     expect(
       database.db.prepare('SELECT COUNT(*) AS n FROM journal_outcome_generations').get()?.n
@@ -287,7 +284,7 @@ it(
         'closeTestJournalHostDatabase'
       )(directory)
     }
-    const reopened = openTestJournalHostDatabase(directory)
+    const reopened = await openTestJournalHostDatabase(directory)
     try {
       expect(restoreJournal(reopened.db, IDENTITY.sessionId)?.state.items.size).toBe(4)
       expect(liveTestJournalRows(reopened.db, IDENTITY.sessionId).slice(0, prefix.length)).toEqual(

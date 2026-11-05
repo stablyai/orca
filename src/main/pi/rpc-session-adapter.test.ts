@@ -200,7 +200,9 @@ describe('Pi RPC session ownership and delivery', () => {
         ).toEqual({ accepted: true })
         return gate.promise
       })
-      vi.useFakeTimers()
+      vi.useFakeTimers({
+        toFake: ['Date', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval']
+      })
       h.connection.receive({ type: 'agent_start' })
       h.connection.receive({ type: 'message_end', message: { role: 'assistant', content } })
       h.connection.receive({

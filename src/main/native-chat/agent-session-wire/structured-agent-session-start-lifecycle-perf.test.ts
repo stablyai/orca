@@ -154,7 +154,7 @@ async function runStarts(count: number) {
     logger: createStructuredAgentSessionLogger(),
     store,
     adapter: router,
-    journalDatabase: openTestJournalHostDatabase(join(root, `starts-${count}`)),
+    journalDatabase: await openTestJournalHostDatabase(join(root, `starts-${count}`)),
     claimKeyId: 'key-1',
     mintSpawnToken: () => `spawn-${codex.connections.length}`,
     startupLimits: { ceilingMs: CEILING_MS },

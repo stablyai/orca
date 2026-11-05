@@ -10,6 +10,7 @@ import type { JournalStopFailedOn, JournalStopSettle } from './queued-message-pa
 export class JournalStopMarks {
   // Settle edges write no row; invalidate readers cached per commit.
   private settleRevision = 0
+  private activeSettle: { handle: JournalStopSettle; sequence: number; epoch: string } | undefined
   private onSettleEdge: (() => void) | null = null
 
   constructor(private readonly deps: { state: () => JournalReducerState }) {}
@@ -45,6 +46,11 @@ export class JournalStopMarks {
   beginSettle(endsSession = false): JournalStopSettle | null {
     const settle = beginJournalStopSettle(this.deps.state(), endsSession)
     if (settle) {
+      this.activeSettle = {
+        handle: settle,
+        sequence: this.latest()!.sequence,
+        epoch: this.deps.state().epoch
+      }
       this.edge()
     }
     return settle
@@ -52,9 +58,17 @@ export class JournalStopMarks {
 
   /** Bind the stopped turn, or retain failedOn solely for display. */
   settled(settle: JournalStopSettle | null, turnId?: string, failedOn?: JournalStopFailedOn): void {
-    if (!settle) {
+    const stop = this.latest()
+    if (
+      !settle ||
+      this.activeSettle?.handle !== settle ||
+      stop?.sequence !== this.activeSettle.sequence ||
+      this.deps.state().epoch !== this.activeSettle.epoch ||
+      !stop.settle
+    ) {
       return
     }
+    settle = stop.settle
     settle.settling = false
     if (turnId !== undefined) {
       settle.turnId = turnId
@@ -62,6 +76,21 @@ export class JournalStopMarks {
       settle.failedOn = failedOn
     }
     this.edge()
+  }
+
+  /** Settlement can finish while a private replacement yields; reconcile only this incarnation. */
+  reconcileReplacement(state: JournalReducerState): void {
+    if (state === this.deps.state()) {
+      return
+    }
+    const stop = this.latest()
+    const next = state.queuePauseMarks.latestStop
+    if (stop && state.epoch === this.deps.state().epoch && next?.sequence === stop.sequence) {
+      next.settle = stop.settle && {
+        ...stop.settle,
+        ...(stop.settle.failedOn ? { failedOn: { ...stop.settle.failedOn } } : {})
+      }
+    }
   }
 
   private edge(): void {

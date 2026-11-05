@@ -119,12 +119,20 @@ export async function observeAutomationChatRun(
           if (!current()) {
             continue
           }
-          const { submission, turnItem, observation } = resolveChatAutomationRun(
-            snapshot,
-            messageId,
-            agent,
-            queued
-          )
+          let resolved = resolveChatAutomationRun(snapshot, messageId, agent, queued)
+          if (resolved.observation) {
+            // A terminal row can land before the final output already admitted by its producer.
+            await host.flushStreamedEvents(sessionId)
+            if (!current()) {
+              continue
+            }
+            const settledSnapshot = await host.journalSnapshot(sessionId)
+            if (!current()) {
+              continue
+            }
+            resolved = resolveChatAutomationRun(settledSnapshot, messageId, agent, queued)
+          }
+          const { submission, turnItem, observation } = resolved
           if (submission) {
             submissionId = submission.clientMessageId
             providerItemId = submission.providerItemId

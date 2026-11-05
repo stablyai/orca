@@ -1,3 +1,4 @@
+import '../../native-chat/agent-session-journal/journal-host-database-test-support'
 import './unused-default-rpc-methods.test-fixture'
 import { randomUUID } from 'node:crypto'
 import { mkdir, writeFile } from 'node:fs/promises'
@@ -236,6 +237,12 @@ async function launch() {
     worktreeId: rig.workspace,
     outcome: { kind: 'structured', sessionId }
   })
+  await vi.waitFor(() =>
+    expect(host.deps.store.getRecord(sessionId)?.lease).toMatchObject({
+      claimStatus: 'live',
+      handoffStage: null
+    })
+  )
   vi.stubEnv('ORCA_AGENT_SESSION_ID', sessionId)
   runId = db.createRun({
     objective: 'CLI lifecycle',
@@ -633,9 +640,14 @@ it('worktree create --agent reaches common native creation and worktree rm perfo
   if (!session) {
     throw new Error('created workspace has no native record')
   }
-  const connection = codex.connections.find(
-    (c) => c.threadId === activeProviderContext(session).head?.handle.nativeId
-  )
+  const connection = await vi.waitFor(() => {
+    const current = host.deps.store.getRecord(session.sessionId)!
+    const found = codex.connections.find(
+      (c) => c.threadId === activeProviderContext(current).head?.handle.nativeId
+    )
+    expect(found).toBeDefined()
+    return found
+  })
   if (!connection) {
     throw new Error('created workspace has no provider')
   }

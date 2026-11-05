@@ -1,3 +1,4 @@
+import '../../native-chat/agent-session-journal/journal-host-database-test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -92,7 +93,7 @@ let historyReads: number
 /** What `thread/resume` reports as the thread's turns, as Codex does: times in whole seconds. */
 let resumeTurns: unknown[] | null
 let turns: ReturnType<typeof codexTurnLifecycleFake>
-/** Codex takes the interrupt and answers it; the test streams more and sends the end later. */
+/** Codex takes the interrupt but loses its reply; the test delivers the end later. */
 let interruptEndHeld: boolean
 let operations = 0
 
@@ -201,7 +202,7 @@ const openConnection: typeof openCodexAppServerConnection = async (
       }
       if (method === 'turn/interrupt' && interruptEndHeld) {
         turns.takeInterrupt()
-        return {}
+        throw new Error('interrupt reply lost')
       }
       if (method === 'turn/interrupt') {
         return turns.routes['turn/interrupt'](params)
@@ -285,10 +286,12 @@ describe("a send made while Codex held the first send's answer, then a Stop", ()
     // Both wait on the session behind the held answer: the second send, then the Stop.
     const second = send('second')
     const stopping = stop()
-    interruptEndHeld = true
     release()
     const secondId = await second
     await vi.waitFor(async () => expect(verdictOf(await submissions(), secondId)).toBe('withdrawn'))
+    await vi.waitFor(() => expect(openWaits.turnIds).toContain('turn-1'))
+    // The unopened interrupt refused normally; the retry loses its reply after the turn opens.
+    interruptEndHeld = true
     turns.start()
     turns.echo(first)
     // The turn opened after the second send was accepted, and streams after the Stop was pressed.

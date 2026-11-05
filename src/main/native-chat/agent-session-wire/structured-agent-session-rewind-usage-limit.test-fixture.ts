@@ -142,8 +142,8 @@ export async function expectUsageLimitCompletionRollback({
   const request = await params(target)
   const before = await host.journalSnapshot(HOST_TEST_SESSION)
   const physical = journal.physicalCursor().epoch
-  const db = openTestJournalHostDatabase(directory).db
-  db.exec(`CREATE TEMP TRIGGER fail_rewind_completion BEFORE UPDATE ON agent_session_records
+  const db = (await openTestJournalHostDatabase(directory)).db
+  db.exec(`CREATE TRIGGER fail_rewind_completion BEFORE UPDATE ON agent_session_records
       WHEN instr(NEW.record_json, '"phase":"completed"') > 0
       BEGIN SELECT RAISE(ABORT, 'completion write failed'); END`)
   await expect(host.rewind({ callerKey: 'desktop' }, request)).rejects.toThrow(

@@ -1,3 +1,4 @@
+import { finishJournalSteps } from './journal-reconstruction-steps'
 import { orchestrationMailNotice } from '../../../shared/agent-session/agent-session-message-source'
 import type { QueuedMessageRow } from './queued-message-table'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
@@ -34,8 +35,8 @@ export function readJournalInputPlace(
   if (!own || !entry) {
     return undefined
   }
-  if (own.context.basis === 'legacy' && !originals.has(id)) {
-    originals.set(id, originalAcceptance?.(id))
+  if (own.context.basis === 'legacy' && !originals.has(id) && originalAcceptance) {
+    originals.set(id, originalAcceptance(id))
   }
   const original = originals.get(id)
   return {
@@ -63,8 +64,14 @@ export function currentJournalInputIdentity(
 }
 
 export function restoreJournalInputPlaces(state: JournalReducerState): number {
+  return finishJournalSteps(restoreJournalInputPlacesSteps(state))
+}
+export function* restoreJournalInputPlacesSteps(
+  state: JournalReducerState
+): Generator<void, number> {
   let legacyPlaces = 0
   for (const [id, own] of state.inputEntries) {
+    yield
     if (state.submissions.get(id)?.dispatchState !== 'pending') {
       state.inputEntries.delete(id)
     } else if (own.context.basis === 'legacy') {
@@ -223,4 +230,28 @@ export function sameJournalInputCardPlace(
     Boolean(prior.body.command) === Boolean(card.body.command) &&
     !!orchestrationMailNotice(prior.body.from) === !!orchestrationMailNotice(card.body.from)
   )
+}
+
+export function journalInputsNeedingAcceptance(
+  state: JournalReducerState,
+  originals: ReadonlyMap<string, unknown>,
+  ids: readonly string[]
+): string[] {
+  return ids.filter(
+    (id) => state.inputEntries.get(id)?.context.basis === 'legacy' && !originals.has(id)
+  )
+}
+
+export function* journalInputAcceptanceIdsSteps(
+  state: JournalReducerState,
+  originals: ReadonlyMap<string, unknown>
+): Generator<void, string[]> {
+  const ids: string[] = []
+  for (const id of state.inputEntries.keys()) {
+    if (journalInputsNeedingAcceptance(state, originals, [id]).length) {
+      ids.push(id)
+    }
+    yield
+  }
+  return ids
 }

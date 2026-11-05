@@ -43,8 +43,8 @@ function mobileChat(provider: IPtyProvider) {
   })
   runtime.attachWindow(1)
   let snapshotVersion = 0
-  const publish = (ptyId: string) =>
-    runtime.syncWindowGraph(1, {
+  const publish = async (ptyId: string) =>
+    await runtime.syncWindowGraph(1, {
       tabs: [
         {
           tabId: 'host-tab',
@@ -130,7 +130,7 @@ it.each(['direct', 'router', 'degraded'] as const)(
                 fallback: new LocalPtyProvider()
               })
       const chat = mobileChat(provider)
-      chat.publish('persisted-pty')
+      await chat.publish('persisted-pty')
       const before = await chat.read()
       expect(owner.hasPty('persisted-pty')).toBe(false)
       expect(before.tabs[0]).toMatchObject({ status: 'ready', terminal: expect.any(String) })
@@ -148,8 +148,11 @@ it.each(['direct', 'router', 'degraded'] as const)(
         status: 'pending-handle',
         terminal: null
       })
-      chat.publish('persisted-pty')
-      expect(chat.published().tabs[0]).toMatchObject({ status: 'pending-handle', terminal: null })
+      await chat.publish('persisted-pty')
+      expect((await chat.published()).tabs[0]).toMatchObject({
+        status: 'pending-handle',
+        terminal: null
+      })
 
       await owner.spawn({
         sessionId: 'replacement-pty',
@@ -157,7 +160,7 @@ it.each(['direct', 'router', 'degraded'] as const)(
         cols: 80,
         rows: 24
       })
-      chat.publish('replacement-pty')
+      await chat.publish('replacement-pty')
       const restored = (await chat.read()).tabs[0]
       expect(restored).toMatchObject({
         id: original.id,
@@ -188,7 +191,7 @@ it('withholds an attached PTY during endpoint recovery and restores its same con
   try {
     await owner.spawn({ sessionId: 'persisted-pty', cwd: TEST_WORKTREE_PATH, cols: 80, rows: 24 })
     const chat = mobileChat(owner)
-    chat.publish('persisted-pty')
+    await chat.publish('persisted-pty')
     const original = (await chat.read()).tabs[0]
     if (original?.type !== 'terminal') {
       throw new Error('Expected the attached terminal')
@@ -199,7 +202,10 @@ it('withholds an attached PTY during endpoint recovery and restores its same con
     expect(() => owner.write('persisted-pty', 'refused')).toThrow(PtyWriteUnavailableError)
     await unavailable
     expect(owner.hasPty('persisted-pty')).toBe(true)
-    expect(chat.published().tabs[0]).toMatchObject({ status: 'pending-handle', terminal: null })
+    expect((await chat.published()).tabs[0]).toMatchObject({
+      status: 'pending-handle',
+      terminal: null
+    })
 
     // Successful inventory reconnects transport but does not clear the remount fence.
     expect((await chat.read()).tabs[0]).toMatchObject({ status: 'pending-handle', terminal: null })

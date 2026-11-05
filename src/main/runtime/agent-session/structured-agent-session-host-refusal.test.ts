@@ -1,3 +1,5 @@
+import { failNextNativeJournalStatement } from '../../native-chat/agent-session-journal/journal-native-test-instrumentation'
+import { closeTestJournalHostDatabases } from '../../native-chat/agent-session-journal/journal-host-database-test-support'
 import { structuredAgentSessionTabId } from '../../../shared/agent-session/view/structured-agent-session-projection'
 import { seedTestAgentSessionRecordStore } from './records/agent-session-record-store-test-harness'
 import { agentSessionRecordFixture } from '../../native-chat/agent-session-record-test-fixture'
@@ -28,7 +30,6 @@ import {
   stopStructuredAgentSessionRuntime
 } from './structured-agent-session-runtime'
 import { recordingStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
-import { closeTestJournalHostDatabases } from '../../native-chat/agent-session-journal/journal-host-database-test-support'
 
 let root: string
 let log = recordingStructuredAgentSessionLogger()
@@ -381,11 +382,15 @@ describe('stopping', () => {
     let connectionClose: ReturnType<typeof vi.fn> | null = null
     const journalClose = vi
       .spyOn(JournalHostDatabase.prototype, 'close')
-      .mockImplementation(function (this: JournalHostDatabase) {
-        // The connection's first close fails, as a native close can before it completes.
-        connectionClose ??= vi.spyOn(this.db, 'close').mockImplementationOnce(() => {
-          throw new Error('unable to close due to unfinalized statements')
-        })
+      .mockImplementation(async function (this: JournalHostDatabase) {
+        if (!connectionClose) {
+          connectionClose = vi.spyOn(this['owner'], 'close')
+          await failNextNativeJournalStatement(
+            this,
+            'CLOSE',
+            'unable to close due to unfinalized statements'
+          )
+        }
         return close.call(this)
       })
     const journal = () => journalClose.mock.contexts[0]

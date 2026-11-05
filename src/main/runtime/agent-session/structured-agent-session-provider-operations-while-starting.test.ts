@@ -1,3 +1,4 @@
+import '../../native-chat/agent-session-journal/journal-host-database-test-support'
 // Protocol operations wait for the real Codex adapter to open; only its child is scripted.
 
 import { mkdtemp, rm } from 'node:fs/promises'

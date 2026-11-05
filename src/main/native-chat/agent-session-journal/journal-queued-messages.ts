@@ -1,12 +1,20 @@
+import { JournalQueuedMessageList } from './journal-queued-message-list'
 import type { JournalReducerState } from './journal-reducer'
 import { journalInputAttemptEnded, type JournalInputWork } from './journal-input-obligations'
+import {
+  journalQueuePausesAsync,
+  prepareJournalQueueRestatement
+} from './journal-queue-restatement'
 import { journalInputOrder } from './journal-input-order'
 import {
   assertQueuedCardConsumable,
   nextEligibleQueuedCard
 } from './journal-queue-mail-eligibility'
-import { journalQueueAdoptionPlan } from './journal-queue-adoption-plan'
+import { journalQueueAdoptionPlan, type JournalQueuePlan } from './journal-queue-adoption-plan'
+export type { JournalQueuePlan } from './journal-queue-adoption-plan'
 import { journalAttachmentClaimReceipt } from './journal-submission-hook'
+// Fold cards from journal rows, without a second mutable copy. Drafts never count as active work.
+
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type {
   AgentSessionQueuedMessageMoveAnchor,
@@ -14,9 +22,13 @@ import type {
   AgentSessionQueuedMessageUpdateResult
 } from '../../../shared/agent-session/requests/agent-session-queued-message-wire'
 import type { AgentSessionExecutionOptions } from '../../../shared/agent-session/options/agent-session-execution-options'
-import type { JournalQueueCardChange, JournalQueueRow } from './journal-queue-events'
+import type { JournalQueueCardChange } from './journal-queue-events'
 import { LegacyQueuedCards } from './journal-queue-import'
-import { composeJournalOperationReceipts, type JournalOperationReceipt } from './journal-row-writer'
+import {
+  settleJournalCommitAsync,
+  composeJournalOperationReceipts,
+  type JournalOperationReceipt
+} from './journal-row-writer'
 import type { JournalQueuedMessagesDeps, JournalSubmissionConsume } from './journal-store-contracts'
 import {
   deriveQueuePauses,
@@ -34,9 +46,9 @@ import { queuedMessageUpdateDecision, type QueuedMessageUpdate } from './queued-
 import { queuedMessageMovePlan } from './queued-message-move'
 // Fold cards from journal rows, without a second mutable copy. Drafts never count as active work.
 
-export type JournalQueuePlan = {
-  rows: ((seq: number, ts: number) => JournalQueueRow)[]
-  receipt: JournalOperationReceipt
+export type JournalQueueRestatement = {
+  cards: readonly JournalQueueCardChange[]
+  receipt: Omit<JournalOperationReceipt, 'committed'> & { committed: () => void | Promise<void> }
 }
 
 export class JournalQueuedMessages {
@@ -47,11 +59,14 @@ export class JournalQueuedMessages {
   )
   private readonly legacy: LegacyQueuedCards
   inputWork: () => JournalInputWork | null = () => null
-  private viewed: { key: string; cards: readonly QueuedMessageRow[] } | null = null
+  private readonly listed: JournalQueuedMessageList
 
   constructor(private readonly deps: JournalQueuedMessagesDeps) {
     this.legacy = new LegacyQueuedCards(deps)
+    this.listed = new JournalQueuedMessageList(this.legacy, () => this.inputState(), deps.state)
   }
+
+  initialize = (): Promise<void> => this.legacy.initialize()
 
   get sessionId(): string {
     return this.deps.sessionId
@@ -73,13 +88,11 @@ export class JournalQueuedMessages {
   }
 
   list(): readonly QueuedMessageRow[] {
-    const key = this.revision()
-    if (this.viewed?.key !== key) {
-      const state = this.inputState()
-      const cards = [...journalInputOrder(state).liveCards(state)]
-      this.viewed = { key, cards: cards.sort((a, b) => a.position - b.position) }
-    }
-    return this.viewed.cards
+    return this.listed.list()
+  }
+
+  listAsync(state?: JournalReducerState): Promise<readonly QueuedMessageRow[]> {
+    return this.listed.listAsync(state)
   }
 
   attemptEnded(clientMessageId: string): boolean {
@@ -156,7 +169,8 @@ export class JournalQueuedMessages {
   update(input: QueuedMessageUpdate): Promise<AgentSessionQueuedMessageUpdateResult> {
     let edit: { body: AgentJournalMessageItem; previous: AgentJournalMessageItem } | undefined
     const receipt = journalAttachmentClaimReceipt(
-      (db) => (edit ? this.deps.claimAttachments(db, edit.body, true, edit.previous) : undefined),
+      async (db) =>
+        edit ? this.deps.claimAttachments(db, edit.body, true, edit.previous) : undefined,
       () => this.editLeases.retire(input.messageId)
     )
     return this.write<AgentSessionQueuedMessageUpdateResult>(() => {
@@ -235,18 +249,23 @@ export class JournalQueuedMessages {
     )
   }
 
+  restatementAsync(): Promise<JournalQueueRestatement> {
+    return prepareJournalQueueRestatement(
+      this.deps.state(),
+      this.legacy,
+      this.deps.claimAttachments
+    )
+  }
+  pausesAsync(): Promise<DerivedQueuePause[]> {
+    return journalQueuePausesAsync(this.deps.state(), this.legacy, this.deps.reopenFloor())
+  }
+
   proofWitness(clientMessageId: string): JournalQueuePlan {
     const witness = this.legacy.witness(clientMessageId)
     return this.plan(witness ? [{ messageId: witness.messageId }] : [])
   }
 
-  importAtOpen(): Promise<void> {
-    return this.legacy.importAtOpen()
-  }
-
-  pauses(): DerivedQueuePause[] {
-    return this.derivePauses(this.list())
-  }
+  importAtOpen = (): Promise<void> => this.legacy.importAtOpen()
 
   awaitReopenMark(): boolean {
     if (this.list().some((card) => card.state === 'waiting')) {
@@ -271,14 +290,14 @@ export class JournalQueuedMessages {
     return journalUserStopInForce(state.queuePauseMarks, state.latestAcceptedTurnSequence)
   }
 
-  private derivePauses(cards: readonly QueuedMessageRow[]): DerivedQueuePause[] {
+  pauses(): DerivedQueuePause[] {
     const state = this.deps.state()
     return deriveQueuePauses({
       epoch: state.epoch,
       marks: state.queuePauseMarks,
       latestAcceptedTurnSequence: state.latestAcceptedTurnSequence,
       failedAt: journalInputOrder(state).newestTurn.failure(),
-      cards,
+      cards: this.list(),
       reopenFloor: this.deps.reopenFloor()
     })
   }
@@ -297,13 +316,15 @@ export class JournalQueuedMessages {
           return planned.plan.rows
         },
         {
-          write: (db, row) => {
-            planned?.plan.receipt.write(db, row)
-            receipt?.write(db, row)
+          write: async (db, row) => {
+            await planned?.plan.receipt.write(db, row)
+            await receipt?.write(db, row)
           },
           committed: () => {
-            planned?.plan.receipt.committed()
-            receipt?.committed()
+            return settleJournalCommitAsync([
+              () => planned?.plan.receipt.committed(),
+              () => receipt?.committed()
+            ])
           }
         }
       )

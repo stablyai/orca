@@ -1,3 +1,4 @@
+import { StructuredAgentRegistry } from './structured-agent-registry'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -58,7 +59,7 @@ function reservedRecord(): AgentSessionRecord {
   }
 }
 
-function runtimeState(
+async function runtimeState(
   record: AgentSessionRecord | null,
   probeOwner: NonNullable<StructuredAgentSessionHostDeps['probeOwner']>,
   options: {
@@ -67,15 +68,39 @@ function runtimeState(
     now?: StructuredAgentSessionHostDeps['now']
   } = {}
 ) {
-  const journalDatabase = openTestJournalHostDatabase(stateDirectory)
+  const journalDatabase = await openTestJournalHostDatabase(stateDirectory)
   const store = Object.assign(
-    AgentSessionRecordStore.open({ journalDatabase, hostId: 'local', legacySessionTabIds: [] }),
+    await AgentSessionRecordStore.open({
+      journalDatabase,
+      hostId: 'local',
+      legacySessionTabIds: []
+    }),
     { getRecord: () => record, ...options.store }
   )
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these runtime-state cases supply every store/probe/clock dependency they invoke; other host dependencies are unused.
   const deps = {
     store,
-    adapter: {},
+    adapter: {
+      open: async () => {
+        throw new Error('unused open')
+      },
+      acquire: async () => {
+        throw new Error('unused acquire')
+      },
+      cancelTurn: async () => {
+        throw new Error('unused cancel')
+      },
+      dispatch: async () => {
+        throw new Error('unused dispatch')
+      },
+      answerPrompt: async () => {
+        throw new Error('unused answer')
+      },
+      setOption: async () => {
+        throw new Error('unused option')
+      }
+    },
+    agents: new StructuredAgentRegistry([]),
     journalDatabase,
     claimKeyId: 'key-1',
     probeOwner,
@@ -106,7 +131,7 @@ describe('host runtime-state owner probe', () => {
       outcome: 'indeterminate' as const,
       reason: 'reservation named no process'
     }))
-    const state = runtimeState(reservedRecord(), probeOwner)
+    const state = await runtimeState(reservedRecord(), probeOwner)
 
     await expect(state.probeOwner('session-probe')).resolves.toEqual({
       outcome: 'indeterminate',
@@ -136,8 +161,8 @@ describe('host runtime-state owner probe', () => {
     const now = vi.fn(() => NOW)
     const otherNow = vi.fn(() => NOW + 1)
     const store = { getRecord, reconcileOnRestart }
-    const state = runtimeState(record, probeOwner, { store, probeOwners, now })
-    const other = runtimeState(record, otherProbeOwner, {
+    const state = await runtimeState(record, probeOwner, { store, probeOwners, now })
+    const other = await runtimeState(record, otherProbeOwner, {
       store,
       probeOwners: otherProbeOwners,
       now: otherNow
@@ -193,7 +218,7 @@ describe('host runtime-state owner probe', () => {
         getRecord: () => record
       },
       adapter: {},
-      journalDatabase: openTestJournalHostDatabase(stateDirectory),
+      journalDatabase: await openTestJournalHostDatabase(stateDirectory),
       claimKeyId: 'key-1',
       probeOwner,
       logger: log.logger

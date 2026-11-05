@@ -806,7 +806,11 @@ describe('publication', () => {
     await workingSend()
     const events = await subscribeEvents()
     await send('queued behind', 'queue-if-active').result
-    await eventually(() => expect(queuedFrames(events).length).toBeGreaterThan(0))
+    await eventually(() =>
+      expect(queuedFrames(events).at(-1)).toMatchObject([
+        { body: hostTestMessage('queued behind') }
+      ])
+    )
     const framesAfterInsert = queuedFrames(events).length
     const { result } = send('another working send')
     await result

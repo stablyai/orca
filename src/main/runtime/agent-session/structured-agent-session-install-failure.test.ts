@@ -1,3 +1,4 @@
+import '../../native-chat/agent-session-journal/journal-host-database-test-support'
 // Failed host installation reuses the record-store slot's open journal connection; launch admission may already hold it.
 
 import { mkdtemp, rm } from 'node:fs/promises'

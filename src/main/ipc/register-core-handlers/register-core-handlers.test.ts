@@ -1,3 +1,4 @@
+import '../../native-chat/agent-session-journal/journal-host-database-test-support'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
@@ -636,7 +637,9 @@ describe('registerCoreHandlers', () => {
   })
 
   it('lets relaunch exit after 2 s when the dismissal close never settles', async () => {
-    vi.useFakeTimers()
+    vi.useFakeTimers({
+      toFake: ['Date', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval']
+    })
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     try {
       registeredRuntime?.closeNotificationDismissals.mockReturnValueOnce(new Promise(() => {}))

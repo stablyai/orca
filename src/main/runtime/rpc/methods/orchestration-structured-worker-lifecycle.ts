@@ -6,11 +6,7 @@ import type { OrchestrationWorkerReadTranscriptResult } from '../../../../shared
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { OrchestrationDb } from '../../orchestration/db'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
-import {
-  buildStructuredJournalArchive,
-  captureRetiredLineageArchive,
-  type WorkerStructuredJournalArchive
-} from '../../orchestration/structured-worker-journal-archive'
+import type { WorkerStructuredJournalArchive } from '../../orchestration/structured-worker-journal-archive'
 import {
   readStructuredLineageJournalPage,
   type StructuredLineageJournalPage
@@ -50,6 +46,7 @@ import {
 } from './orchestration-chat-assignee-journal'
 
 export { observeStructuredWorker, structuredWorkerOwned, type StructuredWorkerObservation }
+export { captureStructuredWorkerArchive } from '../../orchestration/structured-worker-journal-archive'
 
 /** The structured worker behind a dispatch, or null when a PTY worker owns it. */
 export function resolveStructuredWorkerForDispatch(
@@ -221,38 +218,6 @@ function structuredJournalPrefixIdentity(args: {
       .slice(0, args.position)
       .flatMap(({ index, revision }) => [itemKey(index), String(revision)])
   ])
-}
-
-/** Freezes the journal before the session is closed, so a released worker is still readable. */
-export async function captureStructuredWorkerArchive(
-  identity: StructuredWorkerIdentity,
-  agent: AgentType
-): Promise<WorkerStructuredJournalArchive> {
-  const running = requireRunningStructuredWorker(identity)
-  // Open resting journals too and preserve the whole /clear lineage.
-  const page = await readStructuredLineageJournalPage(running.lineage)
-  if (page) {
-    return buildStructuredJournalArchive({
-      agent,
-      processIncarnation: identity.processIncarnation,
-      items: page.items,
-      hasOlder: page.hasOlder
-    })
-  }
-  // Unreadable owned/unverifiable journals must retain evidence for later archive.
-  // Only proven-retired lineages may skip missing journals: a user-closed chat can never supply more evidence.
-  if (structuredWorkerOwned(running) !== false) {
-    throw new OrchestrationError(
-      'archive_failed',
-      'Output could not be preserved for this structured worker; the session was retained.'
-    )
-  }
-  // A retired lineage's unreadable sessions are gone for good; earlier ones may not be.
-  return captureRetiredLineageArchive({
-    agent,
-    processIncarnation: identity.processIncarnation,
-    lineage: running.lineage
-  })
 }
 
 export function readArchivedStructuredJournal(args: {

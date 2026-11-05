@@ -160,10 +160,10 @@ async function workingSession(): Promise<{
   return { server, feed, sessions, journal, records }
 }
 
-function attachContext(
+async function attachContext(
   sessions: Map<string, StructuredAgentSessionHostSession>,
   feed: StructuredAgentSessionStatusFeed
-): StructuredAgentSessionAttachContext {
+): Promise<StructuredAgentSessionAttachContext> {
   const eventSink = {
     sink: {},
     drained: async () => ({ ok: true }) as const,
@@ -176,7 +176,7 @@ function attachContext(
     deps: {
       store: { getRecord: () => null, getConversation: () => null },
       claimKeyId: 'key-1',
-      journalDatabase: openTestJournalHostDatabase(root)
+      journalDatabase: await openTestJournalHostDatabase(root)
     },
     runtimeState: {
       resolveRecovery: async () => undefined,
@@ -250,7 +250,7 @@ describe('a session that leaves the host without an explicit close', () => {
     const drop = vi.spyOn(server, 'dropStructuredStatus')
 
     await expect(
-      attachStructuredAgentSession(attachContext(sessions, feed), 'caller-1', attachParams)
+      attachStructuredAgentSession(await attachContext(sessions, feed), 'caller-1', attachParams)
     ).rejects.toThrow('attach failed after acquisition')
 
     expect(sessions.has(SESSION)).toBe(true)
@@ -263,7 +263,7 @@ describe('a session that leaves the host without an explicit close', () => {
     const { feed, sessions } = await workingSession()
 
     await expect(
-      attachStructuredAgentSession(attachContext(sessions, feed), 'caller-1', attachParams)
+      attachStructuredAgentSession(await attachContext(sessions, feed), 'caller-1', attachParams)
     ).rejects.toThrow('attach failed after acquisition')
 
     const events: unknown[] = []

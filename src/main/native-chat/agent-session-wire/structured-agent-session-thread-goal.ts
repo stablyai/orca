@@ -81,7 +81,7 @@ export async function performThreadGoalChange(
   let replacesGoal = false
   if (change.kind === 'set') {
     // Read before the objective message lands; it is not a goal transition.
-    replacesGoal = ctx.journal.threadGoal() !== null
+    replacesGoal = await ctx.journal.readInOrder(() => ctx.journal.threadGoal() !== null)
   }
   try {
     // Journal first: active goals start work immediately, which must follow the objective in the transcript.

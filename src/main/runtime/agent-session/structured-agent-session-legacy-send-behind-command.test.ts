@@ -1,3 +1,4 @@
+import '../../native-chat/agent-session-journal/journal-host-database-test-support'
 // Clients without accepted-send support wait for handover; sends queued behind compact must answer when queued to avoid the phone timeout.
 
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'

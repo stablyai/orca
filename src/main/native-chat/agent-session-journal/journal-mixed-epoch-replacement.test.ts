@@ -61,17 +61,21 @@ afterEach(async () => {
   await rm(root, { recursive: true, force: true })
 })
 
-const db = () => openTestJournalHostDatabase(root).db
-const rowsOfEpoch = (epoch: string) =>
-  db().prepare('SELECT seq, row_json FROM journal_rows WHERE epoch = ? ORDER BY seq').all(epoch)
-const recordsOf = (generation: number) =>
-  db().prepare('SELECT * FROM journal_outcomes WHERE generation = ? ORDER BY seq').all(generation)
+const db = async () => (await openTestJournalHostDatabase(root)).db
+const rowsOfEpoch = async (epoch: string) =>
+  (await db())
+    .prepare('SELECT seq, row_json FROM journal_rows WHERE epoch = ? ORDER BY seq')
+    .all(epoch)
+const recordsOf = async (generation: number) =>
+  (await db())
+    .prepare('SELECT * FROM journal_outcomes WHERE generation = ? ORDER BY seq')
+    .all(generation)
 
 /** Old rows (items 0 and 1, a waiting card, a user Stop), then this build's records (item 0
  * revised, item 2, a second card). */
 async function mixedChat(): Promise<AgentSessionJournal> {
   // Freeze the old writer's rows before opening a current native coordinate owner.
-  const database = openTestJournalHostDatabase(root)
+  const database = await openTestJournalHostDatabase(root)
   const epoch = 'old-input-epoch'
   seedLegacyTestJournal(database, { identity: IDENTITY, mintEpoch: () => epoch, now: () => 1000 })
   const base = { v: 2, epoch, fence: FENCE, ts: 1000 }
@@ -107,17 +111,15 @@ async function mixedChat(): Promise<AgentSessionJournal> {
       stopEvent: { reason: 'user-stop', at: 1000 }
     }
   ] satisfies JournalRow[]
-  database.transaction((db) => {
+  database.fixtureTransaction((db) => {
     for (const row of prefix) {
       insertTestJournalRow(db, IDENTITY.sessionId, row)
     }
   })
   expect(
-    rowsOfEpoch(epoch)
-      .slice(1)
-      .map((row) => JSON.parse(String(row.row_json)))
+    (await rowsOfEpoch(epoch)).slice(1).map((row) => JSON.parse(String(row.row_json)))
   ).toEqual(prefix)
-  expect(journalOutcomeSource(db(), IDENTITY.sessionId, epoch)).toBeNull()
+  expect(journalOutcomeSource(await db(), IDENTITY.sessionId, epoch)).toBeNull()
   const journal = await journals.open({ identity: IDENTITY, stateDirectory: root })
   expect(seen(journal)).toEqual({
     items: [status('first'), status('second')],
@@ -125,17 +127,17 @@ async function mixedChat(): Promise<AgentSessionJournal> {
     stop: 'user-stop'
   })
   await journal.appendItem(item(0), status('first, revised'), scope)
-  const converted = journalOutcomeSource(db(), IDENTITY.sessionId, epoch)
+  const converted = journalOutcomeSource(await db(), IDENTITY.sessionId, epoch)
   expect(converted).toMatchObject({ prefix: 5, format: 2 })
   expect(
-    db()
+    (await db())
       .prepare(`SELECT entry_key FROM journal_outcomes
     WHERE generation = ? AND field = 'inputCards' AND deleted = 0`)
       .all(converted!.generation)
   ).toEqual([{ entry_key: JSON.stringify('card-old') }])
   await journal.appendItem(item(2), status('third'), scope)
   await journal.queuedMessages.insert({ messageId: 'card-new', body: message('new card') })
-  const source = journalOutcomeSource(db(), IDENTITY.sessionId, journal.epoch)
+  const source = journalOutcomeSource(await db(), IDENTITY.sessionId, journal.epoch)
   expect(source?.prefix).toBeGreaterThan(0)
   return journal
 }
@@ -154,22 +156,22 @@ async function reopened() {
   return seen(await journals.open({ identity: IDENTITY, stateDirectory: root }))
 }
 
-function expectPhysicalRetained(
-  retired: { epoch: string; generation: number; rows: ReturnType<typeof rowsOfEpoch> },
+async function expectPhysicalRetained(
+  retired: { epoch: string; generation: number; rows: Awaited<ReturnType<typeof rowsOfEpoch>> },
   live: string
 ) {
   expect(live).not.toBe(retired.epoch)
-  expect(rowsOfEpoch(retired.epoch)).toEqual(retired.rows)
-  const source = journalOutcomeSource(db(), IDENTITY.sessionId, retired.epoch)!
+  expect(await rowsOfEpoch(retired.epoch)).toEqual(retired.rows)
+  const source = journalOutcomeSource(await db(), IDENTITY.sessionId, retired.epoch)!
   expect(source.generation).toBe(retired.generation)
   expect(source.prefix).toBe(5)
-  expect(recordsOf(retired.generation).length).toBeGreaterThan(0)
-  const database = openTestJournalHostDatabase(root)
-  while (sweepJournalOutcomePage(database)) {
+  expect((await recordsOf(retired.generation)).length).toBeGreaterThan(0)
+  const database = await openTestJournalHostDatabase(root)
+  while (await sweepJournalOutcomePage(database)) {
     // Maintenance must not retire the active physical generation.
   }
-  expect(rowsOfEpoch(retired.epoch)).toEqual(retired.rows)
-  expect(recordsOf(source.generation).length).toBeGreaterThan(0)
+  expect(await rowsOfEpoch(retired.epoch)).toEqual(retired.rows)
+  expect((await recordsOf(source.generation)).length).toBeGreaterThan(0)
 }
 
 it.each(['rewind', 'replacement'] as const)(
@@ -178,8 +180,8 @@ it.each(['rewind', 'replacement'] as const)(
     const journal = await mixedChat()
     const retired = {
       epoch: journal.epoch,
-      generation: journalOutcomeSource(db(), IDENTITY.sessionId, journal.epoch)!.generation,
-      rows: rowsOfEpoch(journal.epoch)
+      generation: journalOutcomeSource(await db(), IDENTITY.sessionId, journal.epoch)!.generation,
+      rows: await rowsOfEpoch(journal.epoch)
     }
     const kept = [
       { identity: item(0), body: status('first, revised'), ownerFence: FENCE },
@@ -202,7 +204,7 @@ it.each(['rewind', 'replacement'] as const)(
     const epoch = journal.epoch
     expect(epoch).not.toBe(retired.epoch)
     expect(await reopened()).toEqual(live)
-    expectPhysicalRetained(retired, epoch)
+    await expectPhysicalRetained(retired, epoch)
   }
 )
 
@@ -210,8 +212,8 @@ it('a rollover of a mixed chat keeps its queue and retains the physical prefix',
   const journal = await mixedChat()
   const retired = {
     epoch: journal.epoch,
-    generation: journalOutcomeSource(db(), IDENTITY.sessionId, journal.epoch)!.generation,
-    rows: rowsOfEpoch(journal.epoch)
+    generation: journalOutcomeSource(await db(), IDENTITY.sessionId, journal.epoch)!.generation,
+    rows: await rowsOfEpoch(journal.epoch)
   }
   const before = seen(journal)
   await journal.rollEpoch('unreconcilable_prefix', FENCE)
@@ -219,13 +221,13 @@ it('a rollover of a mixed chat keeps its queue and retains the physical prefix',
   expect(live).toEqual({ ...before, items: [] })
   const epoch = journal.epoch
   expect(await reopened()).toEqual(live)
-  expectPhysicalRetained(retired, epoch)
+  await expectPhysicalRetained(retired, epoch)
 })
 
 it('a refused replacement of a mixed chat leaves its rows, records and state as they were', async () => {
   const journal = await mixedChat()
-  const rows = liveTestJournalRows(db(), IDENTITY.sessionId)
-  const records = db().prepare('SELECT * FROM journal_outcomes ORDER BY rowid').all()
+  const rows = liveTestJournalRows(await db(), IDENTITY.sessionId)
+  const records = (await db()).prepare('SELECT * FROM journal_outcomes ORDER BY rowid').all()
   const before = seen(journal)
   const unreadable: AgentJournalItemBody = {
     kind: 'message',
@@ -238,8 +240,10 @@ it('a refused replacement of a mixed chat leaves its rows, records and state as 
       { identity: item(5), body: unreadable, ownerFence: FENCE }
     ])
   ).rejects.toMatchObject({ code: 'journal_row_rejected' })
-  expect(liveTestJournalRows(db(), IDENTITY.sessionId)).toEqual(rows)
-  expect(db().prepare('SELECT * FROM journal_outcomes ORDER BY rowid').all()).toEqual(records)
+  expect(liveTestJournalRows(await db(), IDENTITY.sessionId)).toEqual(rows)
+  expect((await db()).prepare('SELECT * FROM journal_outcomes ORDER BY rowid').all()).toEqual(
+    records
+  )
   expect(seen(journal)).toEqual(before)
   expect(await reopened()).toEqual(before)
 })

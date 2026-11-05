@@ -1,3 +1,4 @@
+import { settleTestSubscriberDeliveries } from './agent-session-subscriber-test-support'
 // Each intermediate echo/turn frame must preserve Working so Stop and session lists stay consistent.
 
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -73,7 +74,7 @@ beforeEach(async () => {
     logger: createStructuredAgentSessionLogger(),
     store,
     adapter: Object.assign(adapter, { supportsCreate: () => true }),
-    journalDatabase: openTestJournalHostDatabase(root),
+    journalDatabase: await openTestJournalHostDatabase(root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-a',
     now: () => NOW
@@ -95,10 +96,6 @@ afterEach(async () => {
   await closeTestJournalHostDatabases()
   await rm(root, { recursive: true, force: true })
 })
-
-function settled(): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, 20))
-}
 
 async function expectWorkingThroughEcho(backlog: boolean): Promise<void> {
   const submissions = new Map<string, AgentJournalSubmission>()
@@ -128,7 +125,7 @@ async function expectWorkingThroughEcho(backlog: boolean): Promise<void> {
   })
   working.length = 0
   const body = hostTestMessage('hi')
-  await host.send(CALLER, {
+  const sent = await host.send(CALLER, {
     envelope: {
       sessionId: SESSION,
       clientOperationId: hostTestOperationId(),
@@ -141,8 +138,11 @@ async function expectWorkingThroughEcho(backlog: boolean): Promise<void> {
     },
     body
   })
-  await settled()
+  if (!sent.ok) {
+    throw new Error('expected send accepted')
+  }
   const connection = claude.current.connections[0]!
+  await vi.waitFor(() => expect(connection.sent).toHaveLength(1))
   if (backlog) {
     // Queue the previous result immediately ahead of the new echo in the same read.
     connection.handlers.onMessage?.({
@@ -158,7 +158,9 @@ async function expectWorkingThroughEcho(backlog: boolean): Promise<void> {
     })
   }
   connection.handlers.onMessage?.({ ...connection.sent.at(-1)!, uuid: 'echo-uuid' })
-  await settled()
+  await host.waitForSendSettlement(SESSION, sent.value.clientMessageId)
+  await host.flushStreamedEvents(SESSION)
+  await settleTestSubscriberDeliveries(host.collaboratorsForTests().subscribers)
 
   expect([...submissions.values()].map((submission) => submission.dispatchState)).toEqual([
     'accepted'

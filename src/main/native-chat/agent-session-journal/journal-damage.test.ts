@@ -1,3 +1,4 @@
+import { JournalReadConnection } from './journal-sql-owner'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -11,7 +12,7 @@ import type {
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
-import Database from '../../sqlite/sync-database'
+import type Database from '../../sqlite/sync-database'
 import type { openAgentSessionJournal } from './journal-store-factory'
 import {
   createTrackedJournalOpener,
@@ -59,7 +60,7 @@ function open(overrides: Partial<Parameters<typeof openAgentSessionJournal>[0]> 
 }
 
 async function withJournalDatabase<T>(run: (db: Database.Database) => T): Promise<T> {
-  const opened = openTestJournalHostDatabase(root)
+  const opened = await openTestJournalHostDatabase(root)
   try {
     return run(opened.db)
   } finally {
@@ -138,6 +139,7 @@ describe('a damaged chat', () => {
     await writeChat()
     await withJournalDatabase((db) => deleteTestJournalRow(db, IDENTITY.sessionId, 4))
 
+    await openTestJournalHostDatabase(root)
     expect(loadTestJournal(root, IDENTITY.sessionId)).toMatchObject({
       newer: null,
       damage: { sequence: 4, cause: 'sequence-gap' }
@@ -182,16 +184,16 @@ describe('a chat whose saved state cannot be read right now', () => {
     })
     await journal.close()
     let failures = 1
-    const prepare = Database.prototype.prepare
-    vi.spyOn(Database.prototype, 'prepare').mockImplementation(function (
-      this: Database,
-      sql: string
+    const outcomesRead = JournalReadConnection.prototype.outcomes
+    vi.spyOn(JournalReadConnection.prototype, 'outcomes').mockImplementation(async function (
+      this: JournalReadConnection,
+      ...args: Parameters<JournalReadConnection['outcomes']>
     ) {
-      if (failures > 0 && sql.includes('FROM journal_outcomes')) {
+      if (failures > 0) {
         failures -= 1
         throw Object.assign(new Error('disk I/O error'), { code: 'ERR_SQLITE_ERROR', errcode: 10 })
       }
-      return prepare.call(this, sql)
+      return outcomesRead.apply(this, args)
     })
 
     // As on main, the storage error reaches the host, which reports "unavailable, try again".
@@ -249,9 +251,9 @@ describe('a row the reader would reject', () => {
     const journal = await open()
     await journal.appendItem(item(0), body('kept'), scope)
     // Closing the shared test connection would also close the live journal.
-    const liveRows = () =>
-      liveTestJournalRows(openTestJournalHostDatabase(root).db, IDENTITY.sessionId)
-    const before = liveRows()
+    const liveRows = async () =>
+      liveTestJournalRows((await openTestJournalHostDatabase(root)).db, IDENTITY.sessionId)
+    const before = await liveRows()
 
     await expect(
       journal.replaceEpochItems('legacy_import', 1, [
@@ -260,7 +262,7 @@ describe('a row the reader would reject', () => {
       ])
     ).rejects.toMatchObject({ code: 'journal_row_rejected' })
 
-    expect(liveRows()).toEqual(before)
+    expect(await liveRows()).toEqual(before)
     await journal.appendItem(item(1), body('still writable'), scope)
     await journal.close()
     await expect(open()).resolves.toBeTruthy()
@@ -275,6 +277,7 @@ describe('an epoch named with no rows at all', () => {
         deleteTestJournalRow(db, IDENTITY.sessionId, row.seq)
       }
     })
+    await openTestJournalHostDatabase(root)
     expect(loadTestJournal(root, IDENTITY.sessionId)).toMatchObject({
       newer: null,
       damage: null,

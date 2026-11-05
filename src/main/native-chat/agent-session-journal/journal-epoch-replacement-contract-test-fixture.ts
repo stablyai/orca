@@ -8,7 +8,7 @@ import type {
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { JournalHostDatabase } from './journal-host-database'
+import type { TestJournalHostDatabase as JournalHostDatabase } from './journal-host-database-test-support'
 import {
   createTrackedJournalOpener,
   openTestJournalHostDatabase
@@ -61,7 +61,7 @@ export function createFixture() {
   beforeEach(async () => {
     root = await mkdtemp(join(tmpdir(), 'orca-journal-replace-'))
     clock = 1_000
-    database = openTestJournalHostDatabase(root)
+    database = await openTestJournalHostDatabase(root)
   })
 
   afterEach(async () => {

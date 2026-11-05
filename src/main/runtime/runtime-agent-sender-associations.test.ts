@@ -136,8 +136,8 @@ function harness(n = 1, records: AgentSessionRecordReader | null = null) {
       )
     return dispatch
   }
-  const located = (identity: string) =>
-    projection.build().associations.find((row) => row.identity === identity)?.paneKey
+  const located = async (identity: string) =>
+    (await projection.build()).associations.find((row) => row.identity === identity)?.paneKey
   return {
     db,
     run,
@@ -156,7 +156,7 @@ function harness(n = 1, records: AgentSessionRecordReader | null = null) {
   }
 }
 
-it('locates every sender by the handle or Dispatch its card saved after a warm restart, with no agent event', () => {
+it('locates every sender by the handle or Dispatch its card saved after a warm restart, with no agent event', async () => {
   const h = harness(3)
   const idleWorker = h.worker(0)
   // Dispatched to tab-1's own terminal; Orca hasn't recorded that terminal for it yet.
@@ -170,14 +170,14 @@ it('locates every sender by the handle or Dispatch its card saved after a warm r
     check()
     // Started-worker cards name the Dispatch; Message, Task and Update cards name the handle,
     // whether the sender is a hooked agent, a hooks-off agent, a plain shell or a reply.
-    expect(h.located(`dispatch:${idleWorker.id}`)).toBe(pane('tab-0'))
-    expect(h.located(`dispatch:${starting.id}`)).toBe(pane('tab-1'))
-    expect(h.located(handle(0))).toBe(pane('tab-0'))
-    expect(h.located(handle(2))).toBe(pane('tab-2'))
+    expect(await h.located(`dispatch:${idleWorker.id}`)).toBe(pane('tab-0'))
+    expect(await h.located(`dispatch:${starting.id}`)).toBe(pane('tab-1'))
+    expect(await h.located(handle(0))).toBe(pane('tab-0'))
+    expect(await h.located(handle(2))).toBe(pane('tab-2'))
   }
 })
 
-it('names a reply or a hooks-off sender by the handle it sent from, once per batch', () => {
+it('names a reply or a hooks-off sender by the handle it sent from, once per batch', async () => {
   const h = harness(1)
   // A reply records no sender pane, and a plain shell or hooks-off agent sends no hook.
   const batch = [
@@ -192,10 +192,10 @@ it('names a reply or a hooks-off sender by the handle it sent from, once per bat
     senderSnapshot: () => ({ name: 'Worker', agent: 'claude' })
   })
   expect(source.senders.map((sender) => sender.party.terminalHandle)).toEqual([handle(0)])
-  expect(h.located(handle(0))).toBe(pane('tab-0'))
+  expect(await h.located(handle(0))).toBe(pane('tab-0'))
 })
 
-it('follows a follow-up into the pane that reopened the worker; a live old handle keeps its own pane', () => {
+it('follows a follow-up into the pane that reopened the worker; a live old handle keeps its own pane', async () => {
   const h = harness(2)
   const first = h.worker(0)
   h.db.db
@@ -207,16 +207,16 @@ it('follows a follow-up into the pane that reopened the worker; a live old handl
   h.db.db
     .prepare('UPDATE dispatch_contexts SET follow_up_of_dispatch_id = ? WHERE id = ?')
     .run(first.id, reopened.id)
-  expect(h.located(`dispatch:${first.id}`)).toBe(pane('tab-1'))
+  expect(await h.located(`dispatch:${first.id}`)).toBe(pane('tab-1'))
   // Its first terminal is still open: cards from there open it, not the reopened worker.
-  expect(h.located(handle(0))).toBe(pane('tab-0'))
+  expect(await h.located(handle(0))).toBe(pane('tab-0'))
   h.leaves.splice(0, 1)
   h.ptys.splice(0, 1)
-  expect(h.located(handle(0))).toBe(pane('tab-1'))
-  expect(h.located(`dispatch:${first.id}`)).toBe(pane('tab-1'))
+  expect(await h.located(handle(0))).toBe(pane('tab-1'))
+  expect(await h.located(`dispatch:${first.id}`)).toBe(pane('tab-1'))
 })
 
-it('rejects a worker whose terminal is released, unproven or on another process, and a settled one with none', () => {
+it('rejects a worker whose terminal is released, unproven or on another process, and a settled one with none', async () => {
   const h = harness(2)
   const worker = h.worker(0)
   const settled = createRootDispatch(
@@ -226,12 +226,12 @@ it('rejects a worker whose terminal is released, unproven or on another process,
     pane('tab-1')
   )
   h.db.db.prepare("UPDATE dispatch_contexts SET status = 'completed' WHERE id = ?").run(settled.id)
-  expect(h.located(`dispatch:${settled.id}`)).toBeUndefined()
+  expect(await h.located(`dispatch:${settled.id}`)).toBeUndefined()
   // A malformed former-owner list loses only that row's former owners.
   h.db.db
     .prepare("UPDATE worker_terminal_resources SET prior_owner_dispatch_ids = 'not json'")
     .run()
-  expect(h.located(`dispatch:${worker.id}`)).toBe(pane('tab-0'))
+  expect(await h.located(`dispatch:${worker.id}`)).toBe(pane('tab-0'))
   for (const [column, value] of [
     ['process_incarnation', 'pty-0:replaced'],
     ['process_incarnation', null],
@@ -239,7 +239,7 @@ it('rejects a worker whose terminal is released, unproven or on another process,
     ['retained_reason', 'identity_unproven']
   ] as const) {
     h.db.db.prepare(`UPDATE worker_terminal_resources SET ${column} = ?`).run(value)
-    expect(h.located(`dispatch:${worker.id}`)).toBeUndefined()
+    expect(await h.located(`dispatch:${worker.id}`)).toBeUndefined()
     h.db.db
       .prepare(
         "UPDATE worker_terminal_resources SET process_incarnation = 'pty-0:inc-1', ownership_state = 'owned', retained_reason = NULL"
@@ -247,22 +247,22 @@ it('rejects a worker whose terminal is released, unproven or on another process,
       .run()
   }
   // The terminal itself is still the one that sent the worker's cards.
-  expect(h.located(handle(0))).toBe(pane('tab-0'))
+  expect(await h.located(handle(0))).toBe(pane('tab-0'))
 })
 
-it('does not take a respawned or fresh terminal for the one a card was sent from', () => {
+it('does not take a respawned or fresh terminal for the one a card was sent from', async () => {
   const h = harness(2)
   const worker = h.worker(0)
-  expect(h.located(handle(0))).toBe(pane('tab-0'))
+  expect(await h.located(handle(0))).toBe(pane('tab-0'))
   // Same pane and handle, new process: a respawn that kept the handle runs a fresh shell.
   h.ptys[0] = { ...h.ptys[0], incarnationId: 'inc-2' }
-  expect(h.located(handle(0))).toBeUndefined()
-  expect(h.located(`dispatch:${worker.id}`)).toBeUndefined()
+  expect(await h.located(handle(0))).toBeUndefined()
+  expect(await h.located(`dispatch:${worker.id}`)).toBeUndefined()
   // A cold restart restores the pane under a new handle; the old one names nothing.
   h.restart()
   h.handles.set('tab-1', 'term_fresh')
-  expect(h.located(handle(1))).toBeUndefined()
-  expect(h.located('term_fresh')).toBe(pane('tab-1'))
+  expect(await h.located(handle(1))).toBeUndefined()
+  expect(await h.located('term_fresh')).toBe(pane('tab-1'))
 })
 
 const planRow = z.object({ detail: z.string() })
@@ -279,7 +279,7 @@ it('reads each live pane through an index, never every Dispatch or attachment it
   }
 })
 
-it('publishes plain chats and canonical /clear successors without credential handles or credential panes', () => {
+it('publishes plain chats and canonical /clear successors without credential handles or credential panes', async () => {
   const root = testOrcaSessionId('11111111-1111-4111-8111-111111111111')
   const live = testOrcaSessionId('22222222-2222-4222-8222-222222222222')
   const base = (sessionId: string) =>
@@ -308,20 +308,20 @@ it('publishes plain chats and canonical /clear successors without credential han
     structured,
     credentialPane
   )
-  const associations = h.projection.build().associations
+  const associations = (await h.projection.build()).associations
   expect(associations.find((r) => r.identity === `orca_session_id:${root}`)).toMatchObject({
     sessionId: live
   })
   expect(associations.find((r) => r.identity === `orca_session_id:${live}`)).toMatchObject({
     sessionId: live
   })
-  expect(JSON.stringify(h.projection.build())).not.toContain(structured)
-  expect(JSON.stringify(h.projection.build())).not.toContain(credentialPane)
+  expect(JSON.stringify(await h.projection.build())).not.toContain(structured)
+  expect(JSON.stringify(await h.projection.build())).not.toContain(credentialPane)
 })
 
 it.each([100, 1000])(
   'does no identity work for heartbeats, read marks, mail or status at %i dispatches',
-  (n) => {
+  async (n) => {
     const h = harness(n)
     const chain = Array.from({ length: n }, (_, i) => h.worker(i))
     for (let i = 1; i < n; i++) {
@@ -329,8 +329,8 @@ it.each([100, 1000])(
         .prepare('UPDATE dispatch_contexts SET follow_up_of_dispatch_id = ? WHERE id = ?')
         .run(chain[i - 1].id, chain[i].id)
     }
-    const first = h.projection.build()
-    const other = h.projection.buildForFrame('other')
+    const first = await h.projection.build()
+    const other = await h.projection.buildForFrame('other')
     expect(first.associations.some((r) => r.identity === `dispatch:${chain[0].id}`)).toBe(true)
     const settled = identityReads(h)
     const sent = h.db.insertMessage({
@@ -343,15 +343,15 @@ it.each([100, 1000])(
     h.db.db.prepare('UPDATE messages SET read = 1 WHERE id = ?').run(sent.id)
     h.db.insertMessage({ from: handle(1), to: 'recipient', subject: 'update' })
     h.leaves[0].lastOutputAt = 100
-    expect(h.projection.build()).toBe(first)
-    expect(h.projection.build('other')).toBe(other)
+    expect(await h.projection.build()).toBe(first)
+    expect(await h.projection.build('other')).toBe(other)
     expect(identityReads(h)).toEqual(settled)
-    expect(h.projection.changedScopes(['other', 'workspace'])).toEqual([])
+    expect(await h.projection.changedScopes(['other', 'workspace'])).toEqual([])
     // Settling a worker is an identity fact: it rebuilds once.
     h.db.db
       .prepare("UPDATE dispatch_contexts SET status = 'completed' WHERE id = ?")
       .run(chain[0].id)
-    h.projection.build()
+    await h.projection.build()
     expect(identityReads(h).historyReads).toBe(settled.historyReads + 1)
   }
 )
@@ -361,7 +361,7 @@ it.each([100, 1000])(
   async (n) => {
     const { store } = await scaleStore(n)
     const h = harness(1, conversationRecordReader(store))
-    const first = h.projection.build()
+    const first = await h.projection.build()
     expect(
       first.associations.filter((r) => r.identity.startsWith('orca_session_id:')).length
     ).toBeGreaterThanOrEqual(n)
@@ -370,11 +370,11 @@ it.each([100, 1000])(
     // renewals and receipts do, rebuilds nothing.
     for (let i = 0; i < 5; i++) {
       await store.setConversationName(`chat-0000${i}`, `renamed ${i}`)
-      expect(h.projection.build()).toBe(first)
+      expect(await h.projection.build()).toBe(first)
     }
     expect(identityReads(h)).toEqual(settled)
     await store.setSessionTabVisibility('chat-00000', false)
-    const closed = h.projection.build()
+    const closed = await h.projection.build()
     expect(closed.associations.some((r) => r.identity === 'orca_session_id:chat-00000')).toBe(false)
     // One rebuild, which reads each open chat once (none here has a /clear predecessor).
     expect(identityReads(h)).toEqual({
@@ -385,70 +385,72 @@ it.each([100, 1000])(
   }
 )
 
-it('reports only worktrees whose scope changed since their last frame', () => {
+it('reports only worktrees whose scope changed since their last frame', async () => {
   const h = harness(1)
-  const workspace = h.projection.buildForFrame('workspace')
-  const other = h.projection.buildForFrame('other')
+  const workspace = await h.projection.buildForFrame('workspace')
+  const other = await h.projection.buildForFrame('other')
   h.worker(0)
-  expect(h.projection.changedScopes(['workspace', 'other', 'never-framed'])).toEqual(['workspace'])
-  expect(h.projection.build('other')).toBe(other)
-  expect(h.projection.build('workspace')).not.toBe(workspace)
+  expect(await h.projection.changedScopes(['workspace', 'other', 'never-framed'])).toEqual([
+    'workspace'
+  ])
+  expect(await h.projection.build('other')).toBe(other)
+  expect(await h.projection.build('workspace')).not.toBe(workspace)
 })
 
-it('keeps an existing subscriber owed its update when another client reads the newer scope', () => {
+it('keeps an existing subscriber owed its update when another client reads the newer scope', async () => {
   const h = harness(1)
-  const first = h.projection.buildForFrame('workspace')
+  const first = await h.projection.buildForFrame('workspace')
   h.handles.set('tab-0', 'term_changed')
-  const oneShot = h.projection.buildForFrame('workspace')
+  const oneShot = await h.projection.buildForFrame('workspace')
   expect(oneShot).not.toBe(first)
-  expect(h.projection.changedScopes(['workspace'])).toEqual(['workspace'])
-  h.projection.buildForFramePass()('workspace')
-  expect(h.projection.changedScopes(['workspace'])).toEqual(['workspace'])
+  expect(await h.projection.changedScopes(['workspace'])).toEqual(['workspace'])
+  ;(await h.projection.buildForFramePass())('workspace')
+  expect(await h.projection.changedScopes(['workspace'])).toEqual(['workspace'])
   h.projection.acknowledgeFrame('workspace', oneShot)
-  expect(h.projection.changedScopes(['workspace'])).toEqual([])
+  expect(await h.projection.changedScopes(['workspace'])).toEqual([])
 })
 
 it.each([100, 1000])(
   'retires %i frame owners and reconstructs a scope from current authority',
-  (n) => {
+  async (n) => {
     const h = harness(1)
     for (let i = 0; i < n; i++) {
-      h.projection.buildForFrame(`absent-${i}`)
+      await h.projection.buildForFrame(`absent-${i}`)
     }
     expect(h.projection.scopeCountsForTest()).toEqual({ scoped: 1, framed: 0 })
-    const before = h.projection.buildForFrame('workspace')
+    const before = await h.projection.buildForFrame('workspace')
     h.projection.retireScope('workspace')
     expect(h.projection.scopeCountsForTest()).toEqual({ scoped: 0, framed: 0 })
-    const restored = h.projection.buildForFrame('workspace')
+    const restored = await h.projection.buildForFrame('workspace')
     expect(restored.associations).toEqual(before.associations)
     expect(restored.revision).toEqual(before.revision)
-    expect(h.projection.changedScopes(['workspace'])).toEqual([])
+    expect(await h.projection.changedScopes(['workspace'])).toEqual([])
     h.worker(0)
-    expect(h.projection.changedScopes(['workspace'])).toEqual(['workspace'])
+    expect(await h.projection.changedScopes(['workspace'])).toEqual(['workspace'])
   }
 )
 
 it.each([100, 1000])(
   'releases %i former sender-only scopes without a snapshot retirement callback',
-  (n) => {
+  async (n) => {
     const h = harness(n)
     h.scopes.clear()
     for (let i = 0; i < n; i++) {
       h.leaves[i] = { ...h.leaves[i], worktreeId: `sender-only-${i}` }
       h.ptys[i] = { ...h.ptys[i], worktreeId: `sender-only-${i}` }
     }
-    const frame = h.projection.buildForFramePass()
+    const frame = await h.projection.buildForFramePass()
     for (let i = 0; i < n; i++) {
       frame(`sender-only-${i}`)
     }
     expect(h.projection.scopeCountsForTest()).toEqual({ scoped: n, framed: n })
     h.leaves.splice(1)
     h.ptys.splice(1)
-    h.projection.build()
+    await h.projection.build()
     expect(h.projection.scopeCountsForTest()).toEqual({ scoped: 1, framed: 1 })
     const stringify = vi.spyOn(JSON, 'stringify')
     h.handles.set('tab-0', 'term_changed')
-    h.projection.build()
+    await h.projection.build()
     expect(stringify.mock.calls.length).toBeLessThanOrEqual(20)
   }
 )
@@ -486,10 +488,10 @@ it.each([100, 1000])('keeps publish work bounded after %i populated scopes retir
   expect(publisher.scopeCountsForTest().scoped).toBe(1)
 })
 
-it('keeps responses available after history cleanup fails and rebuilds tracking from current owners', () => {
+it('keeps responses available after history cleanup fails and rebuilds tracking from current owners', async () => {
   const h = harness()
   h.worker(0)
-  h.projection.buildForFrame('workspace')
+  await h.projection.buildForFrame('workspace')
   const prepare = h.db.db.prepare.bind(h.db.db)
   const cleanup = vi.spyOn(h.db.db, 'prepare').mockImplementation((sql: string) => {
     if (sql === 'DELETE FROM temp.agent_sender_tracked') {
@@ -503,20 +505,20 @@ it('keeps responses available after history cleanup fails and rebuilds tracking 
   cleanup.mockRestore()
   h.leaves.splice(0)
   h.ptys.splice(0)
-  expect(h.projection.build().associations).toEqual([])
+  expect((await h.projection.build()).associations).toEqual([])
   expect(h.db.db.prepare('SELECT COUNT(*) AS n FROM temp.agent_sender_tracked').get()).toEqual({
     n: 0
   })
 })
 
-it('keeps the last good publication when a read fails and retries on the next identity change', () => {
+it('keeps the last good publication when a read fails and retries on the next identity change', async () => {
   const chats: ReturnType<typeof agentSessionConversationView>[] = []
   const h = harness(3, {
     getRecord: (id) => chats.find((r) => r.sessionId === id) ?? null,
     listRecords: () => chats
   })
   h.worker(0)
-  const good = h.projection.build()
+  const good = await h.projection.build()
   const prepare = h.db.db.prepare.bind(h.db.db)
   vi.spyOn(h.db.db, 'prepare').mockImplementation((sql: string) => {
     if (sql === AGENT_SENDER_PANE_READS.resources) {
@@ -526,8 +528,8 @@ it('keeps the last good publication when a read fails and retries on the next id
   })
   const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
   h.worker(1)
-  expect(h.projection.build()).toBe(good)
-  expect(h.projection.build()).toBe(good)
+  expect(await h.projection.build()).toBe(good)
+  expect(await h.projection.build()).toBe(good)
   expect(identityReads(h).historyReads).toBe(2)
   // A chat opens in the same refresh as another failing read: the chat is published beside the
   // last good terminal rows.
@@ -540,18 +542,18 @@ it('keeps the last good publication when a read fails and retries on the next id
   // tab-1 now runs under a fresh handle, so its terminal rows are read again, and fail.
   h.handles.set('tab-1', 'term_fresh')
   const warned = warn.mock.calls.length
-  const withChat = h.projection.build().associations
+  const withChat = (await h.projection.build()).associations
   expect(withChat.filter((r) => !r.sessionId)).toEqual(good.associations)
   expect(withChat.map((r) => r.identity)).toContain(`orca_session_id:${chat}`)
   // The failure still reaches the build's warning.
   expect(warn.mock.calls.length).toBe(warned + 1)
   vi.mocked(h.db.db.prepare).mockRestore()
   const third = h.worker(2)
-  expect(h.located(`dispatch:${third.id}`)).toBe(pane('tab-2'))
-  expect(h.located(`orca_session_id:${chat}`)).toBeDefined()
+  expect(await h.located(`dispatch:${third.id}`)).toBe(pane('tab-2'))
+  expect(await h.located(`orca_session_id:${chat}`)).toBeDefined()
 })
 
-it('publishes one principal per paired peer and attachments only while their worker runs there', () => {
+it('publishes one principal per paired peer and attachments only while their worker runs there', async () => {
   const h = harness()
   h.db.createRemoteDispatchAttachment({
     dispatchId: 'federated',
@@ -581,7 +583,7 @@ it('publishes one principal per paired peer and attachments only while their wor
   for (const id of ['federated', 'second', 'third']) {
     route.run(id, 'remote', 'Remote', 'execution-peer', 1)
   }
-  const publicRows = h.projection.build('workspace')
+  const publicRows = await h.projection.build('workspace')
   expect(publicRows.peerFingerprint).toBe(fingerprintOrchestrationPeer('execution-key'))
   expect(publicRows.principals).toEqual([
     { peerFingerprint: 'execution-peer', homePeerFingerprint: 'paired-home' }
@@ -596,10 +598,10 @@ it('publishes one principal per paired peer and attachments only while their wor
   expect(publicRows.associations.some((row) => row.identity === 'dispatch:federated')).toBe(false)
   // A settled attachment no longer names a worker running there.
   h.db.db.prepare("UPDATE remote_dispatch_attachments SET state = 'stopped'").run()
-  expect(h.projection.build('workspace').attachments).toEqual([])
+  expect((await h.projection.build('workspace')).attachments).toEqual([])
 })
 
-it('names a federated worker by the fingerprints its home derives for the runtime and itself', () => {
+it('names a federated worker by the fingerprints its home derives for the runtime and itself', async () => {
   // The execution runtime records the home as the principal it authenticated the home's socket as.
   const home = devicePrincipalOf({
     deviceId: 'home-device',
@@ -632,7 +634,7 @@ it('names a federated worker by the fingerprints its home derives for the runtim
     setupState: 'skipped',
     effects: []
   })
-  const execution = h.projection.build('workspace')
+  const execution = await h.projection.build('workspace')
   // The home's principal for that runtime, derived from its pairing record as main resolves it.
   const paired = pairedOrchestrationPeers('execution-key', 'home-device-token')
   expect(execution.peerFingerprint).toBe(paired.peerFingerprint)
@@ -665,7 +667,7 @@ it('sends desktop clients the sender scope and strips it from phone frames', () 
   )
 })
 
-it('publishes WSL chats, and only open chats when no tab table is recorded yet', () => {
+it('publishes WSL chats, and only open chats when no tab table is recorded yet', async () => {
   const record = (sessionId: string, wslDistro: string | null = null) => {
     const base = agentSessionRecordFixture(agentSessionLeaseFixture({ sessionId }))
     return agentSessionConversationView({ ...base, location: { ...base.location, wslDistro } })
@@ -682,29 +684,29 @@ it('publishes WSL chats, and only open chats when no tab table is recorded yet',
       getVisibleSessionTabIndex: () => ({ present: false, sessionIds: [] }),
       listVisibleSessionIds: () => ['wsl-chat']
     })
-    expect(h.projection.build().associations.map((r) => r.identity)).toEqual([
+    expect((await h.projection.build()).associations.map((r) => r.identity)).toEqual([
       'orca_session_id:wsl-chat'
     ])
   }
 })
 
-it('reads paired principals again only after a pairing write, not on each Dispatch change', () => {
+it('reads paired principals again only after a pairing write, not on each Dispatch change', async () => {
   const h = harness(2)
   h.db.db
     .prepare(
       'INSERT INTO federated_dispatches (dispatch_id, environment_id, environment_name, peer_fingerprint, protocol_version) VALUES (?, ?, ?, ?, ?)'
     )
     .run('federated', 'remote', 'Remote', 'execution-peer', 1)
-  expect(h.projection.build().principals).toHaveLength(1)
+  expect((await h.projection.build()).principals).toHaveLength(1)
   for (let i = 0; i < 2; i++) {
     h.worker(i)
-    h.projection.build()
+    await h.projection.build()
   }
   expect(h.resolveServer).toHaveBeenCalledTimes(1)
   writeEnvironmentStore(mkdtempSync(join(tmpdir(), 'orca-sender-pairing-')), {
     version: 1,
     environments: []
   })
-  h.projection.build()
+  await h.projection.build()
   expect(h.resolveServer).toHaveBeenCalledTimes(2)
 })

@@ -78,7 +78,7 @@ export function openJournalDatabase(dbPath: string): OpenJournalDatabase {
     probe.exec(`CREATE INDEX IF NOT EXISTS idx_agent_session_clear_successor
       ON agent_session_records (CASE WHEN json_valid(record_json)
         THEN json_extract(record_json, '$.conversationCommand.replacementSessionId') END)`)
-    ensureAgentSessionAttachmentClaimTables(probe)
+    runJournalTransaction(probe, () => ensureAgentSessionAttachmentClaimTables(probe))
     hardenSqliteDatabaseFiles(dbPath)
     transferred = true
     return { db: probe, readOnly: false }

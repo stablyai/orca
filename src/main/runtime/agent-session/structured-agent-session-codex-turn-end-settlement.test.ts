@@ -1,3 +1,4 @@
+import '../../native-chat/agent-session-journal/journal-host-database-test-support'
 import { AGENT_SESSION_GOAL_CONTROL_COPY } from '../../../shared/agent-session/view/agent-session-goal-control-copy'
 import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { classifyDispatchRejection } from '../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
@@ -656,13 +657,14 @@ describe("a Stop pressed while Codex's turn/start is in flight", () => {
     const began = Promise.withResolvers<void>()
     openWaits.began = began.resolve
     vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
-    const stopping = settledWithin(stop(), CODEX_TURN_OPEN_WAIT_MS + 2_000)
+    const stopping = stop()
     release?.()
     await began.promise
     await vi.advanceTimersByTimeAsync(CODEX_TURN_OPEN_WAIT_MS - 1)
     expect(openWaits.ended).toEqual([])
-    await vi.advanceTimersByTimeAsync(2_001)
-    expect(await stopping).not.toBe('held')
+    await vi.advanceTimersByTimeAsync(1)
+    vi.useRealTimers()
+    expect(await settledWithin(stopping, 2_000)).not.toBe('held')
   }
 
   function turnRow(
@@ -826,6 +828,9 @@ describe("a Stop pressed while Codex's turn/start is in flight", () => {
   // turn's own end then arrives; a second Stop finds its turn never opened.
   it('keeps doubt for a send made after a Stop that started its own turn, which never opened', async () => {
     const original = await runningTurn()
+    await vi.waitFor(async () =>
+      expect(verdictOf((await settled()).submissions, original)).toBe('accepted')
+    )
     const accepted = (await settled()).submissions.find(
       (entry) => entry.clientMessageId === original
     )

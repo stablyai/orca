@@ -136,8 +136,8 @@ it.each(['resting-newer-format', 'live-closed'] as const)(
       )
       expect(accepted).toBeDefined()
       if (failure === 'resting-newer-format') {
-        openTestJournalHostDatabase(rig.root)
-          .db.prepare('UPDATE journal_outcome_epochs SET format = format + 1 WHERE session_id = ?')
+        ;(await openTestJournalHostDatabase(rig.root)).db
+          .prepare('UPDATE journal_outcome_epochs SET format = format + 1 WHERE session_id = ?')
           .run(damaged)
       } else {
         await rig.host.collaboratorsForTests().sessions.get(damaged)?.journal.close()

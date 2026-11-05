@@ -104,7 +104,7 @@ export function registerJournalRowContextUsageTests(): void {
         { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
       )
       await journal.close()
-      const opened = openTestJournalHostDatabase(root)
+      const opened = await openTestJournalHostDatabase(root)
       try {
         const rowJson = liveTestJournalRows(opened.db, IDENTITY.sessionId)[1]?.rowJson ?? ''
         const future = JSON.parse(rowJson)

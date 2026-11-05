@@ -68,7 +68,7 @@ it('steers inherited applied inputs and sends an explicit effort or tier change 
     logger: createStructuredAgentSessionLogger(),
     store,
     adapter,
-    journalDatabase: openTestJournalHostDatabase(root),
+    journalDatabase: await openTestJournalHostDatabase(root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-1',
     now: () => HOST_TEST_NOW

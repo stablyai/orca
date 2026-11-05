@@ -65,7 +65,7 @@ it('keeps a send a crash cut off as sent when its chat reattaches', async () => 
   await prior.host.close(HOST_TEST_SESSION, 'evict')
   const journal = await openAgentSessionJournal({
     identity: journalIdentityFor(record, attachParams()),
-    database: openTestJournalHostDatabase(prior.root)
+    database: await openTestJournalHostDatabase(prior.root)
   })
   await journal.appendSubmission({
     clientMessageId: 'crashed-send',

@@ -273,10 +273,20 @@ export function visitJournalInputItems(
   state: JournalReducerState,
   visit: JournalItemLinkageVisitor
 ): void {
+  for (const _ of visitJournalInputItemSteps(state, visit)) {
+    /* synchronous public visitor */
+  }
+}
+
+export function* visitJournalInputItemSteps(
+  state: JournalReducerState,
+  visit: JournalItemLinkageVisitor
+): Generator<void> {
   for (const item of state.items.values()) {
     if (journalInputPresentationMember(state, item.itemId)) {
       visit(item.itemId, item.sequence, item.body, item)
     }
+    yield
   }
 }
 

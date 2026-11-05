@@ -7,10 +7,12 @@ import type {
 import { createSavedStructuredStatusGroup } from './structured-agent-session-saved-status'
 import type { AgentChildWorkEvidence } from '../../../shared/agent-status/child-work/agent-status-child-work-evidence'
 import type { AgentChildWorkRecord } from '../../../shared/agent-status/child-work/agent-status-child-work'
-import type { AgentChildWorkView } from '../../../shared/agent-status/child-work/agent-status-child-work-view'
+
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import {
   structuredAgentSessionNamingSnapshot,
+  emitStructuredStatusEvent,
+  unsubscribeStructuredStatus,
   notifyStructuredStatusObservers,
   notifyStructuredStatusPublication,
   type StatusFeedSession,
@@ -24,11 +26,11 @@ import {
   retainedStructuredStatusSummaries,
   structuredAgentSessionStatusSummary
 } from './structured-agent-session-status-summary'
-import { structuredStatusChildWorkFields } from './structured-agent-session-status-child-work'
 import {
-  StructuredAgentSessionJournalProjections,
-  type StructuredAgentSessionJournalProjection
-} from './structured-agent-session-status-journal-projection'
+  publishOrderedStructuredChildWork,
+  structuredStatusChildWorkFields
+} from './structured-agent-session-status-child-work'
+import { StructuredAgentSessionStatusJournal } from './structured-agent-session-status-journal'
 import {
   permissionReportOnly,
   structuredStatusSummariesEqual
@@ -42,10 +44,9 @@ import {
 
 export type { StructuredAgentSessionStatusSink } from './structured-agent-session-status-ownership'
 export type { StructuredAgentSessionStatusFeedDeps } from './structured-agent-session-status-feed-deps'
+export type { StructuredAgentSessionStatusSubscriber } from './structured-agent-session-status-feed-deps'
 
 export type { StructuredAgentSessionStatusState } from './structured-agent-session-status-journal-projection'
-
-export type { StructuredAgentSessionStatusSubscriber } from './structured-agent-session-status-feed-deps'
 
 export class StructuredAgentSessionStatusFeed {
   private readonly ownership = new StructuredAgentSessionStatusOwnership(() =>
@@ -55,17 +56,14 @@ export class StructuredAgentSessionStatusFeed {
   // Never evicted: chats are named only while in here, and AI Vault reads closed ones' names here.
   private readonly published = new Map<string, StatusPublication>()
   private readonly acceptedSends = new Map<string, string>()
-  private readonly projections = new StructuredAgentSessionJournalProjections((sessionId) =>
-    this.deps.replacedRuntime?.(sessionId)
-  )
+  private readonly projections = new StructuredAgentSessionStatusJournal(() => this.deps)
 
   constructor(private readonly deps: StructuredAgentSessionStatusFeedDeps) {}
 
-  private logFailure(scope: string, message: string, sessionId: string, error: unknown): void {
+  private logFailure = (scope: string, message: string, sessionId: string, error: unknown): void =>
     this.deps.logger.warn(message, { scope, sessionId, error })
-  }
 
-  /** Opens with every session this host has projected, live ones re-read, then only changes. */
+  /** Replay retained statuses; live refreshes publish their complete successor when ready. */
   subscribe(subscriber: StructuredAgentSessionStatusSubscriber): () => void {
     // Naming completion must be observable even if a held journal cannot be read.
     if (this.deps.namingActiveSessionIds || this.deps.listConversations) {
@@ -112,14 +110,7 @@ export class StructuredAgentSessionStatusFeed {
   }
 
   unsubscribe(id: string): void {
-    const subscriber = this.subscribers.get(id)
-    if (!subscriber) {
-      return
-    }
-    this.subscribers.delete(id)
-    try {
-      subscriber.emit({ type: 'end' })
-    } catch {}
+    unsubscribeStructuredStatus(this.subscribers, id)
   }
 
   /** Retain history but clear live authority/Stopping; this host no longer ends that work. */
@@ -166,21 +157,22 @@ export class StructuredAgentSessionStatusFeed {
     (id) => this.deps.sessions.has(id),
     this.published,
     this.sink.bind(this),
-    this.broadcast.bind(this),
+    (event) => this.broadcast(event),
     () => this.deps.statusSink?.()
   )
 
-  /** Share per-commit projection with completion and steer-hold readers to avoid repeated snapshots. */
-  journalProjection(
-    sessionId: string,
-    journal?: AgentSessionJournal
-  ): StructuredAgentSessionJournalProjection | null {
-    const session = this.deps.sessions.get(sessionId)
-    const source = journal ?? session?.journal
-    return source
-      ? this.projections.read(source, this.deps.getConversation(sessionId), session)
-      : null
-  }
+  advanceJournalProjection = this.projections.advance.bind(this.projections)
+
+  refreshJournalProjection = (...args: Parameters<typeof this.projections.refresh>) =>
+    this.projections.refresh(...args)
+
+  afterReplacementProjection = (...args: Parameters<typeof this.projections.afterRefresh>) =>
+    this.projections.afterRefresh(...args)
+
+  readStopping = (id: string): boolean => this.projections.readStopping(id)
+
+  journalProjection = (...args: Parameters<typeof this.projections.read>) =>
+    this.projections.read(...args)
 
   publish(sessionId: string, journal?: AgentSessionJournal, options?: { replay?: boolean }): void {
     const session = this.deps.sessions.get(sessionId)
@@ -188,8 +180,18 @@ export class StructuredAgentSessionStatusFeed {
       return
     }
     const source = journal ?? session.journal
+    if (
+      this.afterReplacementProjection(sessionId, source, () =>
+        this.publish(sessionId, source, options)
+      )
+    ) {
+      return
+    }
     const record = this.deps.getConversation(sessionId)
-    const projection = this.projections.read(source, record, session)
+    const projection = this.projections.read(sessionId, source)
+    if (!projection) {
+      return
+    }
     this.retireSettledChildrenOnNewTurn(sessionId, session, projection.acceptedSendKey)
     const summary = structuredAgentSessionStatusSummary({
       sessionId,
@@ -249,12 +251,10 @@ export class StructuredAgentSessionStatusFeed {
   }
 
   /** Exclude per-tick usage from global broadcasts; chat background channels retain it. */
-  private childWorkFields(
+  private childWorkFields = (
     sessionId: string,
     provider: StatusFeedSession['params']['provider']
-  ): Pick<AgentSessionStatusSummary, 'children' | 'backgroundTasks'> {
-    return structuredStatusChildWorkFields(this.readChildWork(sessionId), provider)
-  }
+  ) => structuredStatusChildWorkFields(this.readChildWork(sessionId), provider)
 
   /** Publish evidence then refold parent/summary; sink failure must not block other publications. */
   publishChildWork(
@@ -263,20 +263,36 @@ export class StructuredAgentSessionStatusFeed {
     producer?: StructuredAgentSessionChildWorkProducer
   ): void {
     const session = this.deps.sessions.get(sessionId)
-    if (!session || !this.admitChildWork(sessionId, session, evidence, producer)) {
+    if (!session) {
       return
     }
-    this.publish(sessionId)
+    this.ownership.observeChildWork(sessionId, evidence)
+    publishOrderedStructuredChildWork(
+      session.journal,
+      () => {
+        if (!this.published.get(sessionId)?.summary.status) {
+          this.publish(sessionId)
+        }
+        if (this.admitChildWork(sessionId, session, evidence, producer)) {
+          this.publish(sessionId)
+        }
+      },
+      (error) =>
+        this.logFailure('child-work-publication', 'child work publication failed', sessionId, error)
+    )
   }
 
-  readChildWork(sessionId: string): AgentChildWorkView[] | undefined {
+  private readChildWorkSafely<T>(sessionId: string, read: () => T, fallback: T): T {
     try {
-      return this.ownership.readChildWork(sessionId)
+      return read()
     } catch (error) {
       this.logFailure('child-work-read', 'child work read failed', sessionId, error)
-      return undefined
+      return fallback
     }
   }
+
+  readChildWork = (sessionId: string) =>
+    this.readChildWorkSafely(sessionId, () => this.ownership.readChildWork(sessionId), undefined)
 
   childWorkOpen = (sessionId: string): boolean => this.ownership.childWorkOpen(sessionId)
 
@@ -285,14 +301,8 @@ export class StructuredAgentSessionStatusFeed {
     handleIds: readonly string[]
   ): CapturedChildWorkStops => this.ownership.captureChildWorkStops(sessionId, handleIds)
 
-  childWorkIncomplete = (sessionId: string): boolean => {
-    try {
-      return this.ownership.childWorkIncomplete(sessionId)
-    } catch (error) {
-      this.logFailure('child-work-read', 'child work read failed', sessionId, error)
-      return false
-    }
-  }
+  childWorkIncomplete = (sessionId: string): boolean =>
+    this.readChildWorkSafely(sessionId, () => this.ownership.childWorkIncomplete(sessionId), false)
 
   /** Observer already reports failures; retain host-only facts outside display views. */
   readChildWorkRecords = (sessionId: string): AgentChildWorkRecord[] | undefined =>
@@ -305,7 +315,7 @@ export class StructuredAgentSessionStatusFeed {
     producer?: StructuredAgentSessionChildWorkProducer
   ): boolean {
     try {
-      this.ownership.publishChildWork(sessionId, evidence, session.params.provider)
+      this.ownership.publishObservedChildWork(sessionId, evidence, session.params.provider)
     } catch (error) {
       this.logFailure('child-work-publish', 'child work publish failed', sessionId, error)
       return false
@@ -330,18 +340,11 @@ export class StructuredAgentSessionStatusFeed {
     }
   }
 
-  private broadcast(event: AgentSessionStatusEvent): void {
-    // Map iteration permits failed subscribers to remove themselves.
-    for (const subscriber of this.subscribers.values()) {
-      this.emit(subscriber, event)
-    }
-  }
+  private broadcast = (event: AgentSessionStatusEvent): void =>
+    this.subscribers.forEach((subscriber) => this.emit(subscriber, event))
 
-  private emit(subscriber: StructuredAgentSessionStatusSubscriber, event: AgentSessionStatusEvent) {
-    try {
-      subscriber.emit(event)
-    } catch {
-      this.subscribers.delete(subscriber.id)
-    }
-  }
+  private emit = (
+    subscriber: StructuredAgentSessionStatusSubscriber,
+    event: AgentSessionStatusEvent
+  ): void => emitStructuredStatusEvent(this.subscribers, subscriber, event)
 }

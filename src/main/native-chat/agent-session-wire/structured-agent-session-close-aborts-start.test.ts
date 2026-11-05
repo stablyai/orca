@@ -18,13 +18,15 @@ import {
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { claudeAndCodexDeclared } from './structured-agent-session-adapter-router-test-support'
 
-function openHost(state: ReturnType<typeof hostTestState>): StructuredAgentSessionHost {
+async function openHost(
+  state: ReturnType<typeof hostTestState>
+): Promise<StructuredAgentSessionHost> {
   const host = new StructuredAgentSessionHost({
     agents: claudeAndCodexDeclared(),
     logger: createStructuredAgentSessionLogger(),
     store: state.store,
     adapter: adapter(),
-    journalDatabase: openTestJournalHostDatabase(state.root),
+    journalDatabase: await openTestJournalHostDatabase(state.root),
     recoveryCapsule: new AgentSessionRecoveryCapsule(state.root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-a',
@@ -44,7 +46,7 @@ it('a close stops a start the provider never answers instead of queueing behind 
         input.signal?.addEventListener('abort', () => reject(new Error('closed while starting')))
       })
   )
-  const host = openHost(state)
+  const host = await openHost(state)
   const attaching = host.attach(CALLER, attachParams())
   await vi.waitFor(() => expect(state.acquire).toHaveBeenCalled())
   await host.close(SESSION, 'user-close')
@@ -55,7 +57,7 @@ it('a close stops a start the provider never answers instead of queueing behind 
 it('a close while the attach still probes the previous owner asks no adapter to start', async () => {
   const state = hostTestState()
   // Test adapters that ignore signals; host admission must still prevent late spawn.
-  const host = openHost(state)
+  const host = await openHost(state)
   const runtimeState = host.collaboratorsForTests().runtimeState
   const probe = runtimeState.probeOwner.bind(runtimeState)
   let closing: Promise<void> | undefined

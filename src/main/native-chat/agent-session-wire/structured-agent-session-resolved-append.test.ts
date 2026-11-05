@@ -42,7 +42,7 @@ let journal: AgentSessionJournal
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-resolved-append-'))
   journal = await openAgentSessionJournal({
-    database: openTestJournalHostDatabase(root),
+    database: await openTestJournalHostDatabase(root),
     identity: {
       sessionId: 'session-1',
       workspaceId: 'workspace-1',

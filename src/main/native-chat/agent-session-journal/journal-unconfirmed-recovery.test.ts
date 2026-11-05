@@ -106,8 +106,8 @@ async function receipt(id: string) {
   })
 }
 
-function savedCopy(id: string, changedBody?: AgentJournalMessageItem) {
-  appendTestJournalQueueRow(openTestJournalHostDatabase(root).db, journal, cardId(id), {
+async function savedCopy(id: string, changedBody?: AgentJournalMessageItem) {
+  appendTestJournalQueueRow((await openTestJournalHostDatabase(root)).db, journal, cardId(id), {
     op: 'queued',
     body: changedBody ?? journal.submissionBody(id)!,
     position: 0,
@@ -432,16 +432,16 @@ it('retains full source, action resolution and exact late proof across cuts and 
   }
   await send('U', true, full)
   await ended('U-end')
-  const original = savedCopy('U')
+  const original = await savedCopy('U')
   await send('delete-U')
   await ended('delete-end')
-  savedCopy('delete-U')
+  await savedCopy('delete-U')
   await send('edited', true, full)
   await ended('edited-end')
-  const edit = savedCopy('edited', full)
+  const edit = await savedCopy('edited', full)
   await send('resent', true, full)
   await ended('resent-end')
-  const retry = savedCopy('resent')
+  const retry = await savedCopy('resent')
   finishTestJournalHistoricalInputs(journal)
   await journal.context.rewind(floor, 7, [], () => noop)
   expect(journal.item(agentJournalSubmissionKey('U'))).toBeNull()
@@ -731,7 +731,7 @@ it('indexes queue-restored unknown for an ordinary card and a retained recovery 
   await openHistorical()
   await send('original')
   await ended('original-end')
-  const recovery = savedCopy('original')
+  const recovery = await savedCopy('original')
   finishTestJournalHistoricalInputs(journal)
   await journal.appendSubmission(
     {

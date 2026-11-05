@@ -1,3 +1,4 @@
+import { finishJournalSteps } from '../agent-session-journal/journal-reconstruction-steps'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { compareAgentJournalItems } from '../../../shared/agent-session/journal/agent-session-journal-position'
 import type {
@@ -17,7 +18,7 @@ export type JournalBatchProjection =
   /** Reload on gaps instead of rendering partial history. */
   | { ok: false; reset: 'journal_gap' }
 
-export function projectJournalBatch(input: {
+type JournalBatchInput = {
   rows: readonly JournalReadRow[]
   snapshot: AgentJournalSnapshot
   afterSequence: number
@@ -25,7 +26,15 @@ export function projectJournalBatch(input: {
   hasSubmission?: (id: string) => boolean
   queueSourceIds?: (messageId: string) => readonly string[]
   readSnapshot?: (touched: ReadonlySet<string>) => AgentJournalSnapshot
-}): JournalBatchProjection {
+}
+
+export function projectJournalBatch(input: JournalBatchInput): JournalBatchProjection {
+  return finishJournalSteps(projectJournalBatchSteps(input))
+}
+
+export function* projectJournalBatchSteps(
+  input: JournalBatchInput
+): Generator<void, JournalBatchProjection> {
   if (
     input.rows.every((row) => row.kind !== 'outcome') &&
     findSequenceGap(
@@ -35,20 +44,26 @@ export function projectJournalBatch(input: {
   ) {
     return { ok: false, reset: 'journal_gap' }
   }
-  const aliases = input.canonicalItemId ? undefined : submissionAliases(input.snapshot.submissions)
+  const aliases = input.canonicalItemId
+    ? undefined
+    : yield* submissionAliasesSteps(input.snapshot.submissions)
   const touchedItemIds = new Set<string>()
   for (const row of input.rows) {
+    yield
     if (row.kind === 'outcome') {
       for (const itemId of row.itemIds) {
+        yield
         touchedItemIds.add(input.canonicalItemId?.(itemId) ?? aliases?.get(itemId) ?? itemId)
       }
       for (const clientMessageId of row.submissionIds) {
+        yield
         touchedItemIds.add(agentJournalSubmissionKey(clientMessageId))
       }
       continue
     }
     if (row.kind === 'lifecycle-batch') {
       for (const mutation of row.mutations) {
+        yield
         touchedItemIds.add(
           input.canonicalItemId?.(mutation.itemId) ??
             aliases?.get(mutation.itemId) ??
@@ -93,27 +108,33 @@ export function projectJournalBatch(input: {
     }
   }
 
-  const notes = stopNotesByTurn(input.snapshot.items)
+  const notes = yield* stopNotesByTurnSteps(input.snapshot.items)
   for (const itemId of touchedItemIds) {
+    yield
     for (const noteId of notes.get(itemId) ?? []) {
       touchedItemIds.add(noteId)
     }
   }
   const snapshot = input.readSnapshot?.(touchedItemIds) ?? input.snapshot
-  const live = liveItemsById(snapshot.items)
+  const live = yield* liveItemsByIdSteps(snapshot.items)
   const items = [...touchedItemIds]
     .map((itemId) => live.get(itemId))
     .filter((item) => item !== undefined)
     .sort(compareAgentJournalItems)
+  const submissions: AgentJournalSubmission[] = []
+  for (const submission of snapshot.submissions) {
+    if (touchedItemIds.has(agentJournalSubmissionKey(submission.clientMessageId))) {
+      submissions.push(submission)
+    }
+    yield
+  }
   return {
     ok: true,
     batch: {
       cursor: input.snapshot.cursor,
       items,
       removedItemIds: [...touchedItemIds].filter((itemId) => !live.has(itemId)),
-      submissions: snapshot.submissions.filter((submission) =>
-        touchedItemIds.has(agentJournalSubmissionKey(submission.clientMessageId))
-      )
+      submissions
     }
   }
 }
@@ -132,15 +153,16 @@ const stopNotesByTimeline = new WeakMap<
   ReadonlyMap<string, readonly string[]>
 >()
 
-function stopNotesByTurn(
+function* stopNotesByTurnSteps(
   items: readonly AgentJournalRenderItem[]
-): ReadonlyMap<string, readonly string[]> {
+): Generator<void, ReadonlyMap<string, readonly string[]>> {
   const cached = stopNotesByTimeline.get(items)
   if (cached) {
     return cached
   }
   const notes = new Map<string, string[]>()
   for (const item of items) {
+    yield
     // Re-emit projected Stop notes on turn removal even if their failure field is already absent.
     if (
       item.body.kind === 'status' &&
@@ -157,28 +179,33 @@ function stopNotesByTurn(
   return notes
 }
 
-function liveItemsById(
+function* liveItemsByIdSteps(
   items: readonly AgentJournalRenderItem[]
-): ReadonlyMap<string, AgentJournalRenderItem> {
+): Generator<void, ReadonlyMap<string, AgentJournalRenderItem>> {
   const cached = liveItemsByTimeline.get(items)
   if (cached) {
     return cached
   }
-  const live = new Map(items.map((item) => [item.itemId, item]))
+  const live = new Map<string, AgentJournalRenderItem>()
+  for (const item of items) {
+    live.set(item.itemId, item)
+    yield
+  }
   liveItemsByTimeline.set(items, live)
   return live
 }
 
 /** Derive aliases from published acceptance so projection stays independent of reducer internals. */
-function submissionAliases(
+function* submissionAliasesSteps(
   submissions: readonly AgentJournalSubmission[]
-): ReadonlyMap<string, string> {
+): Generator<void, ReadonlyMap<string, string>> {
   const cached = aliasesBySubmissions.get(submissions)
   if (cached) {
     return cached
   }
   const aliases = new Map<string, string>()
   for (const submission of submissions) {
+    yield
     if (submission.dispatchState === 'accepted' && submission.providerItemId) {
       aliases.set(submission.providerItemId, agentJournalSubmissionKey(submission.clientMessageId))
     }

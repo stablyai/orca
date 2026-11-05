@@ -1,3 +1,4 @@
+import { finishJournalSteps } from './journal-reconstruction-steps'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { QueuedMessageRow } from './queued-message-table'
 
@@ -126,6 +127,14 @@ export class JournalInputPlaceIndex {
     handoff: boolean,
     coordinate: AgentJournalCursor | null = card.queuedAt
   ): void {
+    return finishJournalSteps(this.setSteps(card, actionable, handoff, coordinate))
+  }
+  *setSteps(
+    card: QueuedMessageRow,
+    actionable: boolean,
+    handoff: boolean,
+    coordinate: AgentJournalCursor | null = card.queuedAt
+  ): Generator<void, void> {
     this.delete(card.messageId)
     if (card.state === 'withdrawn') {
       return
@@ -143,6 +152,7 @@ export class JournalInputPlaceIndex {
     }
     this.entries.set(card.messageId, entry)
     this.change(entry, false)
+    yield
   }
 
   /** Numeric summaries retain positions/sequences without retaining or walking record bodies. */

@@ -1,3 +1,4 @@
+import { settleTestSubscriberDeliveries } from './agent-session-subscriber-test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -77,6 +78,7 @@ describe('the background-task roster on subscriber frames', () => {
     subscribers.republishBackgroundTasks(SESSION, 1)
     await appendRow(journal, 'after')
     subscribers.publish(SESSION, journal)
+    await settleTestSubscriberDeliveries(subscribers)
 
     subscribers.open({
       id: 'pane-2',
@@ -86,6 +88,7 @@ describe('the background-task roster on subscriber frames', () => {
       cursor: pane.cursor!,
       emit: toPane
     })
+    await settleTestSubscriberDeliveries(subscribers)
 
     expect(pane.backgroundTasks).toBeNull()
   })

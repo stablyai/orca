@@ -98,7 +98,7 @@ it('persists unknown Set objective and receipt across reopen, without replay ove
   host = new StructuredAgentSessionHost({
     ...host.deps,
     store,
-    journalDatabase: openTestJournalHostDatabase(root)
+    journalDatabase: await openTestJournalHostDatabase(root)
   })
   replaceHostTestState({ host, store })
   expect((await host.journalSnapshot(SESSION)).items.map((item) => item.body)).toContainEqual(

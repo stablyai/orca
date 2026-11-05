@@ -153,7 +153,7 @@ export class StructuredAgentSessionDeliveryLoop {
       await owned(async () => {
         try {
           const session = this.deps.sessions.get(sessionId)
-          const selected = session && oldestQueuedSubmission(session)
+          const selected = session && (await oldestQueuedSubmission(session))
           await this.fail(sessionId, { startKey: null, cause }, selected?.clientMessageId ?? null)
         } finally {
           this.stop(sessionId)
@@ -187,7 +187,7 @@ export class StructuredAgentSessionDeliveryLoop {
     }
     // Commands block while their child lives; ended command commits wake delivery again.
     const work = this.deps.currentWork(sessionId)
-    const oldest = selectableStructuredSubmission(session.journal, work)
+    const oldest = await selectableStructuredSubmission(session.journal, work)
     if (!oldest || (session.child && work && structuredAgentSessionCommandRunning(work))) {
       return this.stop(sessionId)
     }
@@ -249,7 +249,7 @@ export class StructuredAgentSessionDeliveryLoop {
     }
     // Opening turns must exist before follow-ups join them.
     const work = this.deps.currentWork(sessionId)
-    const next = structuredAgentSessionNextHandover(session, awaitedChild.fence, work)
+    const next = await structuredAgentSessionNextHandover(session, awaitedChild.fence, work)
     if (!next) {
       return this.stop(sessionId)
     }

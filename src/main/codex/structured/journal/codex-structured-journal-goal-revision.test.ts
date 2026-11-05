@@ -60,27 +60,34 @@ function goalFrame(goal: Record<string, unknown> = {}) {
 function journalSink(journal: AgentSessionJournal) {
   const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
   const published: AgentSessionHistoryPage[] = []
+  const publications: Promise<void>[] = []
   let subscriberCursor: AgentJournalCursor | null = null
   deferred.bind({
     journal,
     fence: 1,
     publish: () => {
-      if (subscriberCursor === null) {
-        return
+      const publish = async () => {
+        if (subscriberCursor === null) {
+          return
+        }
+        const result = await readAgentSessionHistory(journal, {
+          sessionId: IDENTITY.sessionId,
+          direction: 'after',
+          cursor: subscriberCursor
+        })
+        if (result.ok) {
+          published.push(result.page)
+        }
       }
-      const result = readAgentSessionHistory(journal, {
-        sessionId: IDENTITY.sessionId,
-        direction: 'after',
-        cursor: subscriberCursor
-      })
-      if (result.ok) {
-        published.push(result.page)
-      }
+      publications.push(publish())
     }
   })
   return {
     sink: deferred.sink,
-    drained: () => deferred.drained(),
+    drained: async () => {
+      await deferred.drained()
+      await Promise.all(publications.splice(0))
+    },
     subscribe: () => {
       subscriberCursor = journal.cursor()
     },
