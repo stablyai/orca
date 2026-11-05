@@ -6,7 +6,7 @@ import {
   MobileNativeChatDisclosureContext,
   useMobileNativeChatDisclosures
 } from './transcript/mobile-native-chat-disclosure-store'
-import { type NativeScrollEvent, type NativeSyntheticEvent, Text, View } from 'react-native'
+import { type NativeScrollEvent, type NativeSyntheticEvent, View } from 'react-native'
 import { MobileNativeChatSendErrorBanner } from './MobileNativeChatSendErrorBanner'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
@@ -20,7 +20,6 @@ import type { NativeChatResolvedPrompt } from '../../../../src/shared/native-cha
 import type { NativeChatContextUsageSummary } from '../../../../src/shared/native-chat/native-chat-context-usage-summary'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { MobileNativeChatInputLockStatus } from './composer/MobileNativeChatInputLockStatus'
-import type { MobileNativeChatHostOutage } from './mobile-native-chat-host-outage'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { styles } from './mobile-native-chat-view-styles'
 import { MobileNativeChatEmptyStateView } from '../MobileNativeChatEmptyStateView'
@@ -114,7 +113,7 @@ type ChatViewProps = MobileNativeChatSendProps &
     isAttaching?: boolean
     inputLockReason?: MobileNativeChatInputLockReason | null
     /** Why a `disconnected` lock holds: which host is out, and Reconnect when it can help. */
-    hostOutage?: MobileNativeChatHostOutage | null
+    hostOutage?: ComponentProps<typeof MobileNativeChatInputLockStatus>['hostOutage']
     // Report send failures here only while mounted; the route uses a toast otherwise.
     sendErrorMessage?: string | null
     onClearSendError?: () => void

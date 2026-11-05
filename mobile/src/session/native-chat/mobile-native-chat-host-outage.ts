@@ -2,6 +2,7 @@ import { isConnectionOutage, type ConnectionVerdict } from '../../transport/conn
 import type { ConnectionState } from '../../transport/types'
 import type { ServerHostDesktopReach } from '../../worktree/server-workspaces'
 import { translate, type Translate } from '../../i18n/mobile-i18n'
+import type { MobileSessionController } from '../use-mobile-session-controller'
 
 /** The composer's status line while the chat's host is out, with Reconnect only when redialing can help. */
 export type MobileNativeChatHostOutage = { text: string; onReconnect?: () => void }
@@ -60,4 +61,38 @@ export function mobileNativeChatHostOutage(
     case undefined:
       return { text: linkText(hostName, server.state === 'disconnected') }
   }
+}
+
+/** A session chat's outage line, shown only while its composer is locked for a lost link. */
+export function mobileSessionNativeChatHostOutage(
+  session: Pick<
+    MobileSessionController,
+    | 'hostId'
+    | 'nativeChatOverlayInputLockReason'
+    | 'pairedHostState'
+    | 'connectionVerdict'
+    | 'showConnectionRetry'
+    | 'forceReconnectHost'
+    | 'workspaceServer'
+  >,
+  hostName: string,
+  t: Translate
+): MobileNativeChatHostOutage | null {
+  const { hostId, forceReconnectHost: forceReconnect } = session
+  if (session.nativeChatOverlayInputLockReason !== 'disconnected') {
+    return null
+  }
+  return mobileNativeChatHostOutage(
+    {
+      pairedHostState: session.pairedHostState,
+      pairedVerdict: session.connectionVerdict,
+      hostName,
+      reconnect:
+        session.showConnectionRetry && hostId && forceReconnect
+          ? () => void forceReconnect(hostId)
+          : null,
+      server: session.workspaceServer
+    },
+    t
+  )
 }
