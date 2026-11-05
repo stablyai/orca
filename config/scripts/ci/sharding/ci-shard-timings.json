@@ -7414,7 +7414,6 @@
       "src/renderer/src/components/native-chat/native-chat-host-file-open.test.ts": 895,
       "src/renderer/src/components/native-chat/native-chat-hover-preview-cache.test.ts": 49,
       "src/renderer/src/components/native-chat/native-chat-image-references.test.tsx": 2485,
-      "src/renderer/src/components/native-chat/native-chat-incremental-assembler.test.ts": 234,
       "src/renderer/src/components/native-chat/native-chat-interactive-prompt.test.ts": 273,
       "src/renderer/src/components/native-chat/native-chat-leaf-routing.test.ts": 49,
       "src/renderer/src/components/native-chat/native-chat-live-message-preparation.test.ts": 252,
