@@ -38,7 +38,14 @@ import type { NativeChatSubagentEntry } from '../../../../shared/native-chat/nat
 import { projectStructuredItemsToNativeChat } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { NativeChatMessageList } from './NativeChatMessageList'
 import type { NativeChatOlderPageResult } from './native-chat-pagination'
-import { session, stubLayout } from './native-chat-windowing-test-harness'
+import {
+  deliverResizes,
+  layout,
+  session,
+  stubLayout,
+  stubResizeObserver
+} from './native-chat-windowing-test-harness'
+import { transcriptRowOffset } from './native-chat-window-test-layout'
 import type { NativeChatMessageListHandle } from './use-native-chat-reveal-latest'
 
 function journalItem(
@@ -363,5 +370,86 @@ describe('revealing a subagent named by the agents strip', () => {
     await reveal(handle, 'task-1')
 
     expect(loads).not.toHaveBeenCalled()
+  })
+})
+
+describe('where a strip reveal lands', () => {
+  let restore: (() => void)[] = []
+  beforeEach(() => {
+    vi.useFakeTimers()
+    restore = [stubLayout({ scrollGeometry: true, offsetChain: true }), stubResizeObserver()]
+    layout.aboveTranscriptPx = 0
+  })
+  afterEach(() => {
+    cleanup()
+    for (const undo of restore.toReversed()) {
+      undo()
+    }
+    vi.useRealTimers()
+    vi.restoreAllMocks()
+  })
+
+  function scroller(): HTMLElement {
+    const element = document.querySelector<HTMLElement>('[data-native-chat-scroll]')
+    if (!element) {
+      throw new Error('no transcript scroll root')
+    }
+    return element
+  }
+
+  /** Deliver resizes and scroll events until the virtualizer stops moving, as painted frames would. */
+  function paint(): void {
+    const element = scroller()
+    let last = -1
+    for (let pass = 0; pass < 12; pass += 1) {
+      act(() => {
+        deliverResizes()
+        vi.advanceTimersByTime(16)
+      })
+      if (element.scrollTop === last && pass >= 2) {
+        return
+      }
+      last = element.scrollTop
+      fireEvent.scroll(element)
+    }
+  }
+
+  it("brings the end of a child's newest drawn row to the bottom of the view, past an open sibling", async () => {
+    const items = [
+      // Earlier history, so the child sits far enough down that its end can reach the view's bottom.
+      ...Array.from({ length: 40 }, (_, index) =>
+        say(`earlier-${index}`, 'assistant', `Earlier ${index}.`, index - 40)
+      ),
+      say('ask', 'user', 'Review it', 1),
+      spawn('spawn', [agent('task-a', 'lane a'), agent('task-b', 'lane b')], 2),
+      ...Array.from({ length: 6 }, (_, index) =>
+        say(`a-${index}`, 'assistant', `Lane a step ${index}.`, 3 + index, 'task-a')
+      ),
+      say('b-first', 'assistant', 'Opening lane b.', 8.5, 'task-b'),
+      say('b-said', 'assistant', 'Read lane b.', 9, 'task-b'),
+      journalItem('b-stub', { kind: 'message', role: 'assistant', blocks: [] }, 10, {
+        agentId: 'task-b',
+        producerKind: 'agent'
+      }),
+      ...Array.from({ length: 80 }, (_, index) =>
+        say(`later-${index}`, 'assistant', `Later ${index}.`, 11 + index)
+      )
+    ]
+    const handle = createRef<NativeChatMessageListHandle>()
+    render(<Transcript items={items} handle={handle} />)
+    paint()
+    await reveal(handle, 'task-a')
+    paint()
+
+    await reveal(handle, 'task-b')
+    paint()
+
+    const row = screen.getByText('Read lane b.').closest<HTMLElement>('[data-index]')
+    expect(row).not.toBeNull()
+    const viewBottom = scroller().scrollTop + scroller().clientHeight
+    const rowBottom = transcriptRowOffset(row!) + row!.offsetHeight
+    expect(rowBottom).toBeLessThanOrEqual(viewBottom + 1)
+    expect(rowBottom).toBeGreaterThan(viewBottom - row!.offsetHeight)
+    expect(screen.getByText('Lane a step 5.')).toBeInTheDocument()
   })
 })
