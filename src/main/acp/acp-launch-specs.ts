@@ -1,6 +1,6 @@
 import type { AcpHistoryTurnIdentity } from './history/acp-history-replay'
 import { join } from 'node:path'
-import type { AcpDialect } from './acp-dialects/acp-dialect'
+import { GENERIC_ACP_DIALECT, type AcpDialect } from './acp-dialects/acp-dialect'
 import { GROK_ACP_DIALECT } from './acp-dialects/grok-dialect'
 import { OMP_ACP_DIALECT } from './acp-dialects/omp-dialect'
 import { OPENCODE_ACP_DIALECT } from './acp-dialects/opencode-dialect'
@@ -297,12 +297,37 @@ export const ANTIGRAVITY_LAUNCH_SPEC = {
   launchGate: ANTIGRAVITY_LAUNCH_GATE
 } satisfies AcpLaunchSpec
 
+const MCODE_SESSION_HISTORY: StructuredAgentSessionHistory = {
+  rowAgents: [],
+  rowSessionId: (link) => link.handle.nativeId,
+  parseResumeArgs: () => null
+}
+
+export const MCODE_LAUNCH_SPEC = {
+  agent: 'mcode',
+  command: 'mcode',
+  args: () => ['acp'],
+  env: {},
+  dialect: GENERIC_ACP_DIALECT,
+  loginCommand: agentSessionSignInFor('mcode')?.loginCommand ?? [],
+  account: directoryAccountBinding('MINIMAX_DATA_DIR', (homePath) => join(homePath, '.minimax')),
+  installDirectories: () => [],
+  modelDiscovery: {
+    kind: 'unavailable',
+    reason: 'mcode lists its models via provider config'
+  },
+  transcriptImport: null,
+  sessionHistory: MCODE_SESSION_HISTORY,
+  resumePreference: 'resume'
+} satisfies AcpLaunchSpec
+
 export const ACP_LAUNCH_SPECS: readonly AcpLaunchSpec[] = [
   GROK_LAUNCH_SPEC,
   OPENCODE_LAUNCH_SPEC,
   OPENCODE2_LAUNCH_SPEC,
   OMP_LAUNCH_SPEC,
-  ANTIGRAVITY_LAUNCH_SPEC
+  ANTIGRAVITY_LAUNCH_SPEC,
+  MCODE_LAUNCH_SPEC
 ]
 
 export function acpLaunchSpecFor(agent: string): AcpLaunchSpec | null {
