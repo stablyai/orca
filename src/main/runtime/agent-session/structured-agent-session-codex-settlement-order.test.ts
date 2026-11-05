@@ -32,7 +32,7 @@ import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
 } from './structured-agent-session-runtime'
-import { scriptedCodexTransport } from '../scripted-codex-transport.test-fixture'
+import { scriptedCodexTransport } from '../orca-runtime-tests/scripted-codex-transport.test-fixture'
 // With only the Codex child faked, verify direct settlements follow the streamed frames that prove them, including coalesced writes.
 
 const CALLER = { callerKey: 'codex-settlement-order-test' }

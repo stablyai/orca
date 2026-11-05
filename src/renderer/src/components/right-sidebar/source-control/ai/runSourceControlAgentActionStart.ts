@@ -147,6 +147,7 @@ export async function runSourceControlAgentActionStart({
   const {
     commandInput: _prompt,
     agentArgs: launchAgentArgs,
+    actionAgentArgs,
     requestedSurface,
     selectedExecutionHostId,
     ...launchOptions
@@ -217,6 +218,7 @@ export async function runSourceControlAgentActionStart({
       agentArgs: launchAgentArgs,
       ...launchOptions,
       requestedSurface,
+      ...(actionAgentArgs !== undefined ? { actionAgentArgs } : {}),
       selectedExecutionHostId,
       promptDelivery,
       launchPlatform,

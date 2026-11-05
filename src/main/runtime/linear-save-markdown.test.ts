@@ -1,7 +1,7 @@
 import { createServer, type Server } from 'node:http'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type * as linearClient from '../linear/client'
-import { RuntimeLinearSaveCommands } from './runtime-linear-save-commands'
+import { RuntimeLinearSaveCommands } from './integrations/linear/runtime-linear-save-commands'
 import { loadLinearSdk } from '../linear/linear-sdk'
 
 const boundary = vi.hoisted(() => ({ clients: vi.fn(), status: vi.fn(), signing: vi.fn() }))

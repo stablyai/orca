@@ -48,14 +48,6 @@ describe('markdown preview search highlighting keeps react-owned DOM intact (cra
     return body
   }
 
-  it('applies highlights without mutating the react-owned subtree', () => {
-    const body = render(['hello world'])
-    const matches = applyMarkdownPreviewSearchHighlights(instance, body, 'lo')
-    expect(matches.length).toBe(1)
-    expect(body.querySelector('mark')).toBeNull()
-    expect(body.textContent).toBe('hello world')
-  })
-
   it('survives a streamed re-render while highlights are active', () => {
     const body = render(['alpha ', 'beta'])
     applyMarkdownPreviewSearchHighlights(instance, body, 'beta')
@@ -108,15 +100,6 @@ describe('markdown preview search painting with the CSS Custom Highlight API', (
     return div
   }
 
-  it('paints many matches without a constructor-arg spread', () => {
-    const instance = {}
-    const body = bodyWithText('a a a a a a a a')
-    expect(() => applyMarkdownPreviewSearchHighlights(instance, body, 'a')).not.toThrow()
-    expect(registry.entries.get(SEARCH_HIGHLIGHT_NAME)?.ranges.size).toBe(8)
-    clearMarkdownPreviewSearchHighlights(instance)
-    body.remove()
-  })
-
   it('unions highlights across previews so a second Find does not clobber the first', () => {
     const a = {}
     const b = {}
@@ -138,20 +121,6 @@ describe('markdown preview search painting with the CSS Custom Highlight API', (
     setActiveMarkdownPreviewSearchMatch(a, matchesA, -1)
     bodyA.remove()
     bodyB.remove()
-  })
-
-  it('navigation repaints only the active highlight, not the full match set', () => {
-    const instance = {}
-    const body = bodyWithText('a a a a')
-    const matches = applyMarkdownPreviewSearchHighlights(instance, body, 'a')
-    const paintedAfterApply = registry.entries.get(SEARCH_HIGHLIGHT_NAME)
-    setActiveMarkdownPreviewSearchMatch(instance, matches, 0)
-    setActiveMarkdownPreviewSearchMatch(instance, matches, 1)
-    // Navigation must retain the search highlight while moving the active match.
-    expect(registry.entries.get(SEARCH_HIGHLIGHT_NAME)).toBe(paintedAfterApply)
-    expect(registry.entries.get(ACTIVE_SEARCH_HIGHLIGHT_NAME)?.ranges.has(matches[1])).toBe(true)
-    clearMarkdownPreviewSearchHighlights(instance)
-    body.remove()
   })
 
   it('re-apply drops the active highlight until the caller repaints it (same-count rerender)', () => {

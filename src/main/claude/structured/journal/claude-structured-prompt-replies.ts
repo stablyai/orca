@@ -1,4 +1,4 @@
-import type { PermissionResult } from '@anthropic-ai/claude-agent-sdk'
+import type { PermissionResult, PermissionUpdate } from '@anthropic-ai/claude-agent-sdk'
 import type {
   AgentSessionPromptResponse,
   AgentSessionQuestionAnswer
@@ -89,6 +89,11 @@ export function decodeClaudeQuestionOptionId(
   }
 }
 
+/** Claude suggests rules saved to settings files; "Allow for this session" must not persist them. */
+function sessionScopedPermission(suggestion: PermissionUpdate): PermissionUpdate {
+  return { ...suggestion, destination: 'session' }
+}
+
 function approvalResponse(prompt: ClaudePendingPrompt, optionId: string): PermissionResult {
   if (!isClaudeApprovalDecision(optionId)) {
     throw new Error(`${optionId} is not a Claude approval decision`)
@@ -101,7 +106,7 @@ function approvalResponse(prompt: ClaudePendingPrompt, optionId: string): Permis
       ...(decision === 'allowForSession' &&
       prompt.subject?.kind !== 'plan' &&
       prompt.suggestions.length > 0
-        ? { updatedPermissions: prompt.suggestions }
+        ? { updatedPermissions: prompt.suggestions.map(sessionScopedPermission) }
         : {}),
       toolUseID: prompt.toolUseId
     }

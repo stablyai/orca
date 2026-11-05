@@ -98,6 +98,7 @@ export function createWorkspaceTabCloseCommands({
     if (item.contentType === 'terminal') {
       // Run the empty check only after deferred pin/process confirmations actually close the tab.
       closeTerminalTab(item.entityId, {
+        reason: 'user',
         ...(opts?.skipRunningProcessConfirm ? { skipRunningProcessConfirm: true } : {}),
         ...(whenEmptied ? { onClosed: whenEmptied } : {})
       })

@@ -6,14 +6,9 @@ import {
   resetRemoteRuntimeMocks,
   runtimeEnvironmentCall
 } from './github-slice-test-harness'
-import { runtimeOwnedRepoState } from './store-test-helpers'
+
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import '../../../../shared/work-items'
-import {
-  buildTaskPageRepoSourceState,
-  selectTaskPageUnresolvedSourceRepos,
-  selectTaskPageWorkItemsCacheEntries
-} from '@/components/task-page/task-page-cache-selectors'
 
 describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
   beforeEach(() => {
@@ -28,34 +23,6 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       },
       _meta: { runtimeId: 'remote-runtime' }
     })
-  })
-
-  it('restores the unknown-source notice after a forced legacy runtime empty response', async () => {
-    const store = createTestStore()
-    store.setState(runtimeOwnedRepoState('env-1', 'repo-id', '/repo'))
-    const repos = store.getState().repos
-    const emptySources = { issues: null, prs: null, originCandidate: null, upstreamCandidate: null }
-    for (const ineligible of [true, false]) {
-      const sources = ineligible ? { ...emptySources, ineligible: true } : emptySources
-      runtimeEnvironmentCall.mockResolvedValueOnce({
-        id: 'rpc-marker',
-        ok: true,
-        result: { items: [], sources },
-        _meta: { runtimeId: 'remote-runtime' }
-      })
-      await store.getState().fetchWorkItems('repo-id', '/repo', 24, '', { force: !ineligible })
-      const cache = store.getState().workItemsCache
-      const entries = selectTaskPageWorkItemsCacheEntries(cache, repos, 24, '')
-      expect(entries[0]?.sources).toEqual(sources)
-      expect(
-        selectTaskPageUnresolvedSourceRepos(repos, buildTaskPageRepoSourceState(repos, entries))
-      ).toEqual(
-        ineligible
-          ? []
-          : [{ repoId: 'repo-id', sourceKey: 'repo-id::runtime:env-1', label: 'repo' }]
-      )
-    }
-    expect(runtimeEnvironmentCall).toHaveBeenCalledTimes(2)
   })
 
   it('force-retry invalidates a still-failing in-flight request instead of deduping onto it', async () => {

@@ -148,7 +148,7 @@ needed. Things to know:
   dependencies the package never declared and hides missing-dependency bugs; `pnpm install` warns
   when it finds one.
 - Native addons are never rebuilt in place in a shared slot: each CPU gets its own build
-  beside it (see [`native-build-entry.cjs`](../config/scripts/native-build-entry.cjs)), so
+  beside it (see [`native-build-entry.cjs`](../config/scripts/native-build/node-addons/native-build-entry.cjs)), so
   cross-arch packaging is safe for other worktrees.
 - `ORCA_PNPM_GLOBAL_VIRTUAL_STORE=0` opts out. Keep it set
   in your shell: `pnpm run` re-checks the install and relinks a worktree whose layout no longer

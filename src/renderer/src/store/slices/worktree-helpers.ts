@@ -199,10 +199,13 @@ export type WorktreeSlice = {
       error?: string
       loaderVisible?: boolean
       request?: PendingWorktreeCreation['request']
+      chatSessionOptions?: Readonly<Record<string, string>>
       provisioningLog?: string
       checkoutProgress?: PendingWorktreeCreation['checkoutProgress']
       worktreeId?: string
       heldChatMessage?: string
+      heldChatAttachments?: PendingWorktreeCreation['heldChatAttachments']
+      heldChatSkills?: PendingWorktreeCreation['heldChatSkills']
       chatInputHandedOff?: boolean
     }
   ) => void

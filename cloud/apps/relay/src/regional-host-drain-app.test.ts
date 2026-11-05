@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { RelayConfig } from './config.js'
 
-vi.mock('./admin-token-verifier.js', () => ({
+vi.mock('./authentication/admin-token-verifier.js', () => ({
   createAdminTokenVerifier: () => async (token: string, route?: string) =>
     token === 'deploy-token' ||
     (token === 'monitor-token' &&
@@ -17,19 +17,19 @@ vi.mock('./admin-token-verifier.js', () => ({
   createRuntimeTokenVerifier: () => async (token: string) => token === 'runtime-token'
 }))
 
-vi.mock('./relay-token-verifier.js', () => ({
+vi.mock('./authentication/relay-token-verifier.js', () => ({
   createRelayTokenVerifier: () => async () => null,
   readBearer: (value: string | undefined) => value?.replace(/^Bearer /, '') ?? null
 }))
 
 import { createRelayApp } from './app.js'
-import { RelayObservability } from './relay-observability.js'
-import { emptyPostgresPoolPressureCounts } from './postgres-pool-pressure.js'
+import { RelayObservability } from './observability/relay-observability.js'
+import { emptyPostgresPoolPressureCounts } from './database/postgres-pool-pressure.js'
 import {
   REGIONAL_REHOME_TRUST_PROBE_ATTEMPT_ID,
   REGIONAL_REHOME_TRUST_PROBE_HOST_ID,
   REGIONAL_REHOME_TRUST_PROBE_USER_ID
-} from './regional-rehome-trust-probe.js'
+} from './assignment/regional-rehome/regional-rehome-trust-probe.js'
 
 const cellIncarnation = '11111111-1111-4111-8111-111111111111'
 const request = {

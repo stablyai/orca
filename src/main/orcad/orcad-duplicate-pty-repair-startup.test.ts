@@ -96,7 +96,9 @@ vi.mock('./orcad-automations', () => ({
 vi.mock('../runtime/agent-state-rules/agent-state-rules-live-update', () => ({
   startAgentStateRulesLiveUpdates: () => {}
 }))
-vi.mock('../daemon/daemon-provider-state', () => ({ daemonOwnsFreshPersistentPtys: () => false }))
+vi.mock('../daemon/providers/lifecycle/daemon-provider-state', () => ({
+  daemonOwnsFreshPersistentPtys: () => false
+}))
 vi.mock('../ipc/pty/register-headless-runtime', () => ({
   registerHeadlessPtyRuntime: async () => {}
 }))
@@ -167,7 +169,7 @@ vi.mock('../runtime/orca-runtime', () => ({
     setAgentSenderPeerKey() {}
   }
 }))
-vi.mock('../runtime/runtime-rpc', () => ({
+vi.mock('../runtime/rpc/server/runtime-rpc', () => ({
   OrcaRuntimeRpcServer: class {
     async start() {
       state.onStartupStep?.('rpc.start')

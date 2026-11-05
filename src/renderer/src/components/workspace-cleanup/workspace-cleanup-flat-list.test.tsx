@@ -34,6 +34,9 @@ function renderRows(
             identity={row.identity}
             candidate={row.candidate}
             reviewInfo={row.review}
+            repo={null}
+            showHostLabel={false}
+            showSizeColumn={row.sizeBytes !== null}
             expanded={false}
             last={index === rows.length - 1}
             lastActivityLabel="40d ago"
@@ -41,6 +44,7 @@ function renderRows(
             workspaceStatusLabel={row.workspaceStatusLabel}
             selected={false}
             onIgnore={vi.fn()}
+            onRestore={vi.fn()}
             onRemove={vi.fn()}
             onForgetLocally={onForgetLocally}
             onToggleExpanded={vi.fn()}

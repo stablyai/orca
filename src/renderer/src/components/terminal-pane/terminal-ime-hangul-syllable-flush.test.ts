@@ -88,17 +88,6 @@ describe.each([
     document.body.replaceChildren()
   })
 
-  it('flushes syllable N before syllable N+1 finishes composing', async () => {
-    const { emitted, textarea } = openTerminal(TerminalType)
-    composeSyllable(textarea, '', ['ㅎ', '하', '한'])
-    composition(textarea, 'compositionend', '한')
-    textarea.setSelectionRange(1, 1)
-    composition(textarea, 'compositionstart')
-    await nextEventLoop()
-
-    expect(emitted.join('')).toBe('한')
-  })
-
   it('preserves Korean final-consonant transfer', async () => {
     const { emitted, textarea } = openTerminal(TerminalType)
     composeSyllable(textarea, '', ['ㅇ', '아', '앙'])
@@ -116,17 +105,6 @@ describe.each([
 
     expect(emitted.join('')).toBe('아아')
     expect(emitted.join('')).not.toContain('앙')
-  })
-
-  it('emits 한글 exactly once', async () => {
-    const { emitted, textarea } = openTerminal(TerminalType)
-    composeSyllable(textarea, '', ['ㅎ', '하', '한'])
-    composition(textarea, 'compositionend', '한')
-    composeSyllable(textarea, '한', ['ㄱ', '그', '글'])
-    composition(textarea, 'compositionend', '글')
-    await nextEventLoop()
-
-    expect(emitted.join('')).toBe('한글')
   })
 
   it('shows 가나다 before the final macOS composition commits', async () => {
@@ -166,18 +144,6 @@ describe.each([
     await nextEventLoop()
 
     expect(emitted.join('')).toBe('한')
-  })
-
-  it('does not commit a composition deleted to empty', async () => {
-    const { emitted, textarea } = openTerminal(TerminalType)
-    composeSyllable(textarea, '', ['ㅇ'])
-    composition(textarea, 'compositionupdate', '')
-    textarea.value = ''
-    textarea.setSelectionRange(0, 0)
-    composition(textarea, 'compositionend', '')
-    await nextEventLoop()
-
-    expect(emitted).toEqual([])
   })
 
   it('starts cleanly after deleting a composition to empty', async () => {

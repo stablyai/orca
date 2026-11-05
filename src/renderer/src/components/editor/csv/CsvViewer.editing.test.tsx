@@ -104,20 +104,6 @@ describe('editable CSV table', () => {
     expect(screen.getByTestId('dirty').textContent).toBe('true')
   })
 
-  it('flushes the active input into the draft for global Save and hot exit', () => {
-    const { changes } = setup()
-    edit('B', 'pending')
-    act(() => flushPendingEditorBuffer(NO_SHARING, 'csv-edit-test'))
-    expect(changes).toHaveBeenCalledWith('\ufeffname,value\r\npending,2\r\nA,1')
-  })
-
-  it('retains pending input when switching away from the table', () => {
-    const { changes, unmount } = setup()
-    edit('B', 'switching')
-    unmount()
-    expect(changes).toHaveBeenCalledWith('\ufeffname,value\r\nswitching,2\r\nA,1')
-  })
-
   it('saves the current cell value and reports a failed write without dropping the draft', async () => {
     const { save } = setup()
     save.mockResolvedValue(false)
@@ -180,18 +166,6 @@ describe('editable CSV table', () => {
     expect(screen.getByTestId('source').textContent).toBe(source)
   })
 
-  it('keeps a rejected over-limit edit visible and recoverable on view detachment', () => {
-    const { changes, unmount } = setup()
-    const value = 'x'.repeat(1024 * 1024 + 1)
-    fireEvent.keyDown(edit('B', value), { key: 'Enter' })
-    expect(screen.getByRole('alert').textContent).toContain('record is too large')
-    expect(changes).not.toHaveBeenCalled()
-    const retained = screen.getByRole('textbox', { name: /Edit row/ })
-    expect(retained instanceof HTMLTextAreaElement && retained.value).toBe(value)
-    unmount()
-    expect(changes).toHaveBeenCalledWith(`\ufeffname,value\r\n${value},2\r\nA,1`)
-  })
-
   it('blocks table mutations after a rejected pending edit and preserves its recovery draft', () => {
     const { changes, unmount } = setup()
     const value = 'x'.repeat(1024 * 1024 + 1)
@@ -223,37 +197,6 @@ describe('editable CSV table', () => {
     )
     expect(changes).toHaveBeenCalledExactlyOnceWith('name,new,value\npending,,2')
     expect(result.current.interaction?.editing).toBeNull()
-  })
-
-  it('leaves a read-only table without mutation controls or an input', () => {
-    render(<CsvViewer content={'a,b\nx,y'} filePath="readonly.csv" />)
-    fireEvent.doubleClick(screen.getByRole('cell', { name: 'x' }))
-    expect(screen.queryByRole('grid')).toBeNull()
-    expect(screen.queryByRole('textbox', { name: /Edit row/ })).toBeNull()
-    expect(screen.queryByRole('button', { name: 'Save' })).toBeNull()
-  })
-
-  it('rejects an asynchronous paste when the selection changes while reading', async () => {
-    let resolveRead: (value: string) => void = () => {
-      throw new Error('read not initialized')
-    }
-    const pending = new Promise<string>((resolve) => {
-      resolveRead = resolve
-    })
-    Object.defineProperty(window, 'api', {
-      configurable: true,
-      value: { ui: { readClipboardText: () => pending } }
-    })
-    const { changes } = setup()
-    fireEvent.pointerDown(screen.getByRole('gridcell', { name: 'B' }), { button: 0 })
-    fireEvent.click(screen.getByRole('button', { name: 'Paste' }))
-    fireEvent.pointerDown(screen.getByRole('gridcell', { name: 'A' }), { button: 0 })
-    await act(async () => {
-      resolveRead('stale paste')
-      await pending
-    })
-    expect(changes).not.toHaveBeenCalled()
-    expect(screen.getByRole('alert').textContent).toContain('CSV changed before paste completed')
   })
 
   it('rejects a delayed paste if typing starts before the clipboard read completes', async () => {

@@ -1,5 +1,5 @@
 import { agentPromptObservationSignal } from './agent-prompt-signals'
-import type { RuntimeAgentPromptWriteOptions } from '../../runtime-terminal-contracts'
+import type { RuntimeAgentPromptWriteOptions } from './agent-prompt-write-options'
 import type { RuntimeTerminalSend } from '../../../../shared/runtime-types'
 import type { AgentTransitionDetector } from '../../../agent-hooks/agent-transition-detector'
 import { OrcaRuntimeWithWriteTerminalAgentPrompt } from './terminal-agent-prompt'
