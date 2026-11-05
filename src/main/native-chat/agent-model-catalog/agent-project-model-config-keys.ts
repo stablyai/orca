@@ -39,17 +39,12 @@ function isClaudeModelEnvKey(key: string): boolean {
   )
 }
 
-/** Treat malformed settings as possible model overrides; `modelOnly` ignores effort-only keys. */
-export function claudeSettingsMayPickModel(text: string, modelOnly = false): boolean {
-  let settings: Record<string, unknown> | null
-  try {
-    settings = record(JSON.parse(text))
-  } catch {
-    return true
-  }
-  if (!settings) {
-    return true
-  }
+/** What a project's own settings may pick: `model`, or anything including effort (`effort`). */
+export type ProjectModelOverride = { model: boolean; effort: boolean }
+
+const both = (value: boolean): ProjectModelOverride => ({ model: value, effort: value })
+
+function claudeSettingsPick(settings: Record<string, unknown>, modelOnly: boolean): boolean {
   const keys = modelOnly
     ? CLAUDE_MODEL_SETTINGS.filter(
         (key) => !CLAUDE_EFFORT_SETTINGS.includes(key) && key !== 'modelSettings'
@@ -80,17 +75,23 @@ export function claudeSettingsMayPickModel(text: string, modelOnly = false): boo
   )
 }
 
+/** Treat malformed settings as possible model overrides. */
+export function claudeSettingsModelOverride(text: string): ProjectModelOverride {
+  let settings: Record<string, unknown> | null
+  try {
+    settings = record(JSON.parse(text))
+  } catch {
+    return both(true)
+  }
+  if (!settings) {
+    return both(true)
+  }
+  return { model: claudeSettingsPick(settings, true), effort: claudeSettingsPick(settings, false) }
+}
+
 const CODEX_MODEL_KEYS = ['model', 'model_reasoning_effort', 'model_provider'] as const
 
-/** Treat malformed TOML and profile-based picks as possible model overrides; `modelOnly` ignores
- *  effort-only keys. */
-export function codexConfigMayPickModel(text: string, modelOnly = false): boolean {
-  let config: Record<string, unknown>
-  try {
-    config = parseToml(text)
-  } catch {
-    return true
-  }
+function codexConfigPick(config: Record<string, unknown>, modelOnly: boolean): boolean {
   const keys = modelOnly
     ? CODEX_MODEL_KEYS.filter((key) => key !== 'model_reasoning_effort')
     : CODEX_MODEL_KEYS
@@ -105,6 +106,17 @@ export function codexConfigMayPickModel(text: string, modelOnly = false): boolea
       return table === null || setsAny(table, keys)
     })
   )
+}
+
+/** Treat malformed TOML and profile-based picks as possible model overrides. */
+export function codexConfigModelOverride(text: string): ProjectModelOverride {
+  let config: Record<string, unknown>
+  try {
+    config = parseToml(text)
+  } catch {
+    return both(true)
+  }
+  return { model: codexConfigPick(config, true), effort: codexConfigPick(config, false) }
 }
 
 const OPENCODE_MODEL_KEYS = [
