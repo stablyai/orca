@@ -63,6 +63,9 @@ export function routeListingBranchSwitchesThroughGitIdentity(args: {
     if (
       requestStartedWorktree &&
       existing &&
+      // Why: no head means the row was never listed (a restored-session stub); git status filling
+      // it in is no newer identity, and keeping the stub would drop the listing's catalog facts.
+      requestStartedWorktree.head !== '' &&
       (existing.branch !== requestStartedWorktree.branch ||
         existing.head !== requestStartedWorktree.head ||
         !branchScopedReviewContextMatches(existing, requestStartedWorktree))
