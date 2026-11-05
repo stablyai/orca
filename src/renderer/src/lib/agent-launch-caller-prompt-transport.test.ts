@@ -196,8 +196,8 @@ it.each(['openclaude', 'zcode'] as const)(
   'delivers %s input without seeding a retired chat',
   async (agent) => {
     resetLaunchFunnelStore(store)
-    const seedPrompt = vi.spyOn(store, 'seedNativeChatLaunchPrompt')
-    const seedDraft = vi.spyOn(store, 'seedNativeChatLaunchDraft')
+    const seedPrompt = vi.spyOn(store, 'seedNativeChatLaunchPrompt').mockClear()
+    const seedDraft = vi.spyOn(store, 'seedNativeChatLaunchDraft').mockClear()
     const { deliverLaunchPromptToAgentTab } = await import('./agent-launch-prompt-delivery')
     try {
       for (const submit of [false, true]) {
