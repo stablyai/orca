@@ -23,7 +23,7 @@ import {
   newWorktreeLaunchScope,
   resolveAgentLaunchRuntime,
   resolveStartupAgentLaunchRuntime
-} from '../agent-launch-scope-runtime'
+} from '../terminal/launch/agent-launch-scope-runtime'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { AgentLaunchRuntime } from '../../../shared/agent-launch/startup/agent-launch-runtime'
 import type { TerminalWorkspaceLaunchScope } from '../runtime-legacy-worker-terminal-recovery-types'

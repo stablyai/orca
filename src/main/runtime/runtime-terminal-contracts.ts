@@ -1,5 +1,8 @@
 import type { SessionOptionValue } from '../../shared/native-chat/input/native-chat-session-options'
-import type { RuntimePtyWorktreeRecord, RuntimeLeafRecord } from './runtime-terminal-state-records'
+import type {
+  RuntimePtyWorktreeRecord,
+  RuntimeLeafRecord
+} from './terminal/records/runtime-terminal-state-records'
 import type { ProgramStatusFacet } from '../../shared/program-status/facet'
 import type { AgentLaunchRuntime } from '../../shared/agent-launch/startup/agent-launch-runtime'
 import type { AgentLaunchTabViewerRule } from '../../shared/agent-launch/contracts/agent-launch-tab-publication'
@@ -24,7 +27,7 @@ import type {
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type { WorktreeStartupLaunch } from '../../shared/worktree/launch-types'
 import type { RuntimeTerminalSend } from '../../shared/runtime-terminal-contracts'
-import type { RuntimeTerminalWriteOptions } from './runtime-terminal-writer'
+import type { RuntimeTerminalWriteOptions } from './terminal/input/runtime-terminal-writer'
 import type { TerminalInputKind } from '../../shared/terminal/input/terminal-input-kind'
 import type { RuntimePtyController } from './runtime-pty-controller-contract'
 import type { RuntimeAgentRowSnapshot } from './runtime-worktree-agent-rows'

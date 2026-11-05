@@ -1,7 +1,7 @@
 // Take only order/groups from main; preserve written rows and terminal/exit facts that may be newer than layout bindings.
 
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/runtime-session-contracts'
-import { mergeTerminalOrphanGroupLayout } from '../terminal-orphan-topology'
+import { mergeTerminalOrphanGroupLayout } from '../terminal/adoption/terminal-orphan-topology'
 import type { MainSessionTabRows } from './main-session-tab-rows'
 import { orderIdOf, placeInMainGroups, withStrayIn } from './main-session-tab-group-placement'
 

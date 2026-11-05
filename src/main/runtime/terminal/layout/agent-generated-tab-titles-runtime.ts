@@ -7,7 +7,7 @@ import {
   parsePaneKey
 } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { LayoutApplyReply } from '../../../../shared/workspace-layout/workspace-layout-command-types'
-import type { LayoutCommandRunOptions, WindowLayoutCommand } from '../../runtime-layout-apply'
+import type { LayoutCommandRunOptions, WindowLayoutCommand } from './runtime-layout-apply'
 
 export abstract class OrcaRuntimeWithAgentGeneratedTabTitles extends OrcaRuntimeWithWorktreeSleepResumeRecording {
   abstract applyLayoutCommand(

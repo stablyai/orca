@@ -9,7 +9,7 @@ import type { PtyLivenessVerdict } from '../../shared/terminal/pty/lifecycle/pty
 import type { RuntimeTerminalSend } from '../../shared/runtime-terminal-send-contract'
 import type { HostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 import type { AgentPaneWorkspace } from '../agent-hooks/agent-transition-detector'
-import type { LaunchedAgentForeground } from '../runtime/launched-agent-foreground'
+import type { LaunchedAgentForeground } from '../runtime/terminal/wait/launched-agent-foreground'
 
 import type { ExternalConversationLinkStore } from './external-conversation-links'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'

@@ -72,7 +72,7 @@ async function startOrcadManagedIdleExit(
 ): Promise<void> {
   const { getLocalPtyProvider } = await import('../ipc/pty/provider/registry')
   const { getCurrentDaemonPid, getDaemonEndpointFacts, isDaemonTerminalAdmissionClosed } =
-    await import('../daemon/daemon-provider-state')
+    await import('../daemon/providers/lifecycle/daemon-provider-state')
   const { countLiveOrcadDaemonSessions, retireOrcadDaemonIfIdle } =
     await import('./orcad-daemon-retirement')
   const idleRecord = createIdleStopRecordOwnership(input.userDataPath)
@@ -129,7 +129,8 @@ async function startOrcadManagedIdleExit(
             if (retiringPid === null) {
               throw new Error('the retiring daemon never identified itself')
             }
-            const { restartDaemon } = await import('../daemon/daemon-provider-restart')
+            const { restartDaemon } =
+              await import('../daemon/providers/lifecycle/daemon-provider-restart')
             await restartDaemon({ expectedDaemonPid: retiringPid, endpointMayBeGone: true })
           }
         })

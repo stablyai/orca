@@ -375,7 +375,9 @@
     },
     "sessionOptionRows": {
       "defaultMarker": "기본값",
-      "notReportedMarker": "보고되지 않음"
+      "notReportedMarker": "보고되지 않음",
+      "moreModels": "모델 더 보기",
+      "fewerModels": "모델 간단히 보기"
     },
     "sessionOptionSegments": {
       "dispatchUnconfirmed": "에이전트에 전송됨 — 확인되지 않음"

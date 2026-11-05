@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 const nodePty = vi.hoisted(() => ({ spawn: vi.fn() }))
 vi.mock('node-pty', () => nodePty)
 
-import { TerminalCreationWork } from '../../daemon/terminal-creation-work'
+import { TerminalCreationWork } from '../../daemon/terminal-host/terminal-creation-work'
 import type { IPty } from 'node-pty'
 import { loadLocalPtyRuntimeSpawn } from './local-pty-runtime-spawn'
 

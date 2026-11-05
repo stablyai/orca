@@ -1,4 +1,4 @@
-import type { TerminalCreationWork } from '../../daemon/terminal-creation-work'
+import type { TerminalCreationWork } from '../../daemon/terminal-host/terminal-creation-work'
 import { trackLocalPtyCreation } from './local-pty-creation-proof'
 import { assertWslDistroAllowed } from '@orca/process-host/wsl-distro-allowlist'
 import {

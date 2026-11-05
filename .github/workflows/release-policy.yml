@@ -23,7 +23,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           sparse-checkout: |
-            config/scripts/release-policy.mjs
+            config/scripts/release/workflow-contracts/release-policy.mjs
             config/scripts/release/versioning/release-tag-patterns.mjs
           sparse-checkout-cone-mode: false
           persist-credentials: false
@@ -33,6 +33,6 @@ jobs:
           script: |
             const { pathToFileURL } = await import("node:url")
             const { enforceReleasePolicy } = await import(
-              pathToFileURL(`${process.env.GITHUB_WORKSPACE}/config/scripts/release-policy.mjs`).href
+              pathToFileURL(`${process.env.GITHUB_WORKSPACE}/config/scripts/release/workflow-contracts/release-policy.mjs`).href
             )
             await enforceReleasePolicy({ github, context, core })

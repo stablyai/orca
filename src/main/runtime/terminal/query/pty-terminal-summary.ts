@@ -6,7 +6,7 @@ import { OrcaRuntimeWithMailboxTerminalIdentity } from '../../orchestration/mail
 import type {
   RuntimeLeafRecord,
   RuntimePtyWorktreeRecord
-} from '../../runtime-terminal-state-records'
+} from '../records/runtime-terminal-state-records'
 import type { ResolvedWorktree } from '../../runtime-worktree-path-identity'
 import { worktreeIdentityKey } from '../../../../shared/worktree/id'
 import type { RuntimeTerminalRead, RuntimeTerminalSummary } from '../../../../shared/runtime-types'
@@ -20,10 +20,10 @@ import { isValidTerminalTabId } from '../../../../shared/workspace-layout/termin
 import {
   ptyHoldsRecordedSurface,
   type PtySurfaceTopology
-} from '../../pty-recorded-surface-topology'
+} from '../surface/pty-recorded-surface-topology'
 import type { PtyIncarnationHandleRecord } from '../../orca-runtime-core'
 import type { TerminalHandleRecord } from '../../runtime-terminal-contracts'
-import { readTerminalTail } from '../../terminal-tail-read'
+import { readTerminalTail } from '../output/tail/terminal-tail-read'
 import { structuredWorkerTerminalRefusal } from '../../structured-worker-terminal-refusal'
 
 export abstract class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntimeWithMailboxTerminalIdentity {

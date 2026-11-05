@@ -1,7 +1,7 @@
 // CLI/phone closes share main's closePane or closeTabs command; stop ended terminals here because layout close itself stops none.
 
 import type { LayoutApplyReply } from '../../../shared/workspace-layout/workspace-layout-command-types'
-import type { WindowLayoutCommand } from '../runtime-layout-apply'
+import type { WindowLayoutCommand } from '../terminal/layout/runtime-layout-apply'
 // Type-only: the stops module sits late in the runtime's class chain, and this runs early in it.
 import type {
   ExplicitCloseStop,

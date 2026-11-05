@@ -1,5 +1,5 @@
 import type { IPty } from 'node-pty'
-import type { TerminalCreationWork } from '../../daemon/terminal-creation-work'
+import type { TerminalCreationWork } from '../../daemon/terminal-host/terminal-creation-work'
 import type { PtyCreationDisposition } from '../../../shared/terminal/pty/lifecycle/pty-creation-disposition'
 
 /** Observe the returned handle before publication/cancellation can dispose its ordinary listener. */

@@ -1,3 +1,4 @@
+import { refuseWslHostWindowsDrivePath } from './terminal/launch/wsl-host-windows-drive-guard'
 import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-workspace-types'
 import type { Repo } from '../../shared/repo-types'
 import type {
@@ -8,7 +9,6 @@ import {
   captureFolderOwnerRemoval,
   captureProjectGroupOwnerRemoval
 } from './workspaces/canonical-owner-removal-scopes'
-import { refuseWslHostWindowsDrivePath } from './wsl-host-windows-drive-guard'
 import type { ProjectGroup } from '../../shared/project-group-types'
 import type {
   FolderWorkspacePathStatus,

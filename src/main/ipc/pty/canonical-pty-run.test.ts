@@ -1,4 +1,4 @@
-import '../../daemon/mock-descendant-sweep'
+import '../../daemon/pty-subprocess/testing/mock-descendant-sweep'
 import { SurfaceAllocationRecovery } from '../../workspace-surfaces/surface-allocation-recovery'
 import { SurfaceRunExecutor } from '../../workspace-surfaces/surface-run-executor'
 import { SurfaceExecutorReader } from '../../workspace-surfaces/surface-executor-reader'
@@ -14,7 +14,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, expect, it, vi } from 'vite
 import { createLiveProfileStateStore } from '../../persistence/profile-state/profile-state-live-store-factory'
 import type { Store } from '../../persistence/loading-store/store'
 import type { PtySpawnOptions, PtySpawnResult } from '../../providers/pty-provider-contract'
-import { SessionNotFoundError } from '../../daemon/daemon-errors'
+import { SessionNotFoundError } from '../../daemon/protocol/daemon-errors'
 import { CanonicalPtyRun } from './canonical-pty-run'
 
 vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))

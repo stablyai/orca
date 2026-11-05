@@ -1,6 +1,6 @@
 import { SurfaceRunExecutor } from '../../workspace-surfaces/surface-run-executor'
 import { SurfaceExecutorReader } from '../../workspace-surfaces/surface-executor-reader'
-import { TerminalCreationWork } from '../../daemon/terminal-creation-work'
+import { TerminalCreationWork } from '../../daemon/terminal-host/terminal-creation-work'
 import { ptyIncarnations, ptyProcesses } from './local-pty-provider-state'
 import { shutdownLocalPty } from './local-pty-termination'
 import { spawnLocalPty } from './local-pty-spawn'

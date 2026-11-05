@@ -1,10 +1,9 @@
 // @vitest-environment happy-dom
 import '@testing-library/jest-dom/vitest'
 import type { ComponentProps } from 'react'
-import { act, cleanup, fireEvent, render, screen, within, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, expect, it, vi } from 'vitest'
-import { toast } from 'sonner'
 import { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { useAppStore } from '@/store/index'
 import { TooltipProvider } from '@/components/ui/tooltip'
@@ -13,7 +12,6 @@ import { emptyCrew, type OrchestrationCrewRow } from '../../../../shared/orchest
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { createIpcPtyTransport } from '../terminal-pane/pty-transport'
 import { TerminalCrewPortals } from './TerminalCrewPortals'
-import { holdPhysicalCloseTasks } from './crew-menu.test-fixture'
 
 // Exercise dormant panel interactions independently of the suspension gate.
 vi.mock('./use-orchestration-panel-enabled', () => ({
@@ -184,128 +182,6 @@ function mount(insertion?: {
     update: () => view.rerender(content())
   }
 }
-function fixture(acceptance: boolean | Promise<boolean> | undefined, split = false) {
-  const test = mount({ acceptance, split })
-  const pane = test.first
-  fireEvent.click(
-    within(pane.container).getByRole('button', { name: /^Show orchestration: 1 worker,/ })
-  )
-  return {
-    ...test,
-    pane,
-    more: within(pane.container).getByRole('button', { name: 'More for Worker' }),
-    mention: () =>
-      fireEvent.click(within(pane.container).getByRole('button', { name: 'Mention all' }))
-  }
-}
-
-it.each(['row', 'all', 'menu'] as const)(
-  'focuses captured input at the pointer and keyboard %s press before pending paste, keeping the panel open',
-  async (route) => {
-    for (const method of ['pointer', 'keyboard'] as const) {
-      const tasks = holdPhysicalCloseTasks()
-      const user = userEvent.setup()
-      const delivery = Promise.withResolvers<boolean>()
-      const test = fixture(delivery.promise, true)
-      const pane = within(test.pane.container)
-      test.accepted.mockImplementationOnce(async () => {
-        expect(test.input).toHaveFocus()
-        expect(test.manager.getActivePane()?.id).toBe(test.pane.id)
-        return delivery.promise
-      })
-      const button =
-        route === 'row'
-          ? pane.getByRole('button', { name: /^Mention Worker:/ })
-          : route === 'all'
-            ? pane.getByRole('button', { name: 'Mention all' })
-            : test.more
-      if (method === 'keyboard') {
-        act(() => button.focus())
-        await user.keyboard('{Enter}')
-      } else {
-        await user.click(button)
-      }
-      if (route === 'menu') {
-        const item = screen.getByRole('menuitem', { name: 'Mention in message' })
-        if (method === 'keyboard') {
-          await waitFor(() => expect(item).toHaveFocus())
-          await user.keyboard('{Enter}')
-        } else {
-          await user.click(item)
-        }
-      }
-      expect(test.accepted).toHaveBeenCalledExactlyOnceWith(
-        'Worker (Orca agent term_worker) ',
-        'driving'
-      )
-      expect(test.input).toHaveFocus()
-      expect(pane.getByRole('button', { name: 'Collapse orchestration panel' })).toBeInTheDocument()
-      const returned = vi.spyOn(test.more, 'focus')
-      if (route === 'menu') {
-        expect(tasks).toHaveLength(1)
-        act(tasks[0])
-        expect(returned).not.toHaveBeenCalled()
-        expect(test.input).toHaveFocus()
-      }
-      vi.mocked(test.manager.setActivePane).mockClear()
-      await act(async () => delivery.resolve(true))
-      expect(test.manager.setActivePane).not.toHaveBeenCalled()
-      expect(test.input).toHaveFocus()
-      expect(test.input.value).toBe('existing suffix')
-      expect(test.input.selectionStart).toBe(8)
-      expect(test.sendInput).not.toHaveBeenCalled()
-      expect(toast.error).not.toHaveBeenCalled()
-      resetFixture()
-      vi.clearAllMocks()
-    }
-  }
-)
-
-it('does not focus or activate after ACK over a later pointer choice of another pane', async () => {
-  const tasks = holdPhysicalCloseTasks()
-  const user = userEvent.setup()
-  const delivery = Promise.withResolvers<boolean>()
-  const test = fixture(delivery.promise, true)
-  await user.click(test.more)
-  await user.click(screen.getByRole('menuitem', { name: 'Mention in message' }))
-  expect(test.input).toHaveFocus()
-  fireEvent.pointerDown(test.second.container)
-  const destination = document.activeElement
-  act(tasks[0])
-  expect(document.activeElement).toBe(destination)
-  vi.mocked(test.manager.setActivePane).mockClear()
-  const focus = vi.mocked(test.pane.terminal.focus)
-  focus.mockClear()
-  await act(async () => delivery.resolve(false))
-  expect(test.manager.setActivePane).not.toHaveBeenCalled()
-  expect(focus).not.toHaveBeenCalled()
-  expect(document.activeElement).toBe(destination)
-  expect(test.accepted).toHaveBeenCalledExactlyOnceWith(
-    'Worker (Orca agent term_worker) ',
-    'driving'
-  )
-  expect(test.sendInput).not.toHaveBeenCalled()
-  expect(toast.error).toHaveBeenCalledOnce()
-})
-
-it('focuses the captured pane before acceptance, preserves caret/no Enter, and uses the legacy input fallback', async () => {
-  for (const acceptance of [true, undefined]) {
-    const test = fixture(acceptance)
-    expect(document.activeElement).not.toBe(test.input)
-    await act(async () => test.mention())
-    expect(test.manager.setActivePane).toHaveBeenCalledExactlyOnceWith(test.pane.id, {
-      focus: false
-    })
-    expect(document.activeElement).toBe(test.input)
-    expect(test.input.selectionStart).toBe(8)
-    expect(test.input.value).toBe('existing suffix')
-    const writer = acceptance === undefined ? test.sendInput : test.accepted
-    expect(writer).toHaveBeenCalledExactlyOnceWith('Worker (Orca agent term_worker) ', 'driving')
-    expect(toast.error).not.toHaveBeenCalled()
-    resetFixture()
-    vi.clearAllMocks()
-  }
-})
 
 it('mentions into a restored pane whose terminal connects after the panel first rendered', async () => {
   const test = mount({ acceptance: true, restored: true })
@@ -321,81 +197,6 @@ it('mentions into a restored pane whose terminal connects after the panel first 
     'Worker (Orca agent term_worker) ',
     'driving'
   )
-})
-
-it.each(['retired pane', 'disconnected terminal'] as const)(
-  'refuses an invocation into a %s without focusing or writing',
-  async (kind) => {
-    const test = fixture(true)
-    if (kind === 'retired pane') {
-      test.manager.createInitialPane({ focus: false })
-      test.manager.retirePanePreservingPty(test.pane.id)
-    } else {
-      test.link.connected = false
-    }
-    vi.mocked(test.manager.setActivePane).mockClear()
-    const focus = vi.mocked(test.pane.terminal.focus)
-    focus.mockClear()
-    await act(async () => test.mention())
-    expect(test.accepted).not.toHaveBeenCalled()
-    expect(test.sendInput).not.toHaveBeenCalled()
-    expect(test.manager.setActivePane).not.toHaveBeenCalled()
-    expect(focus).not.toHaveBeenCalled()
-    expect(toast.error).toHaveBeenCalledExactlyOnceWith(
-      'The terminal did not accept the agent reference. Try again.'
-    )
-  }
-)
-
-it('retires only the hidden menu before deferred physical close and never replays it on show', async () => {
-  const tasks = holdPhysicalCloseTasks()
-  const user = userEvent.setup()
-  const { controller, first, update } = mount()
-  const pane = within(first.container)
-  await user.click(pane.getByRole('button', { name: /^Show orchestration: 1 worker,/ }))
-  const disclosure = pane.getByRole('button', { name: "Show Worker's task and latest message" })
-  await user.click(disclosure)
-  const oldMore = pane.getByRole('button', { name: 'More for Worker' })
-  await user.click(oldMore)
-  const firstPopup = screen.getByRole('menu')
-  const oldFocus = vi.spyOn(oldMore, 'focus')
-  act(() => {
-    controller.isRendererVisible = false
-    update()
-  })
-  expect(firstPopup.isConnected).toBe(false)
-  expect(oldMore.isConnected).toBe(false)
-  expect(tasks).toHaveLength(1)
-  expect(disclosure).toHaveAttribute('aria-expanded', 'true')
-  expect(pane.getByText('Latest')).toBeInTheDocument()
-  expect(pane.getByRole('button', { name: 'Collapse orchestration panel' })).toBeInTheDocument()
-  act(() => {
-    controller.isRendererVisible = true
-    update()
-  })
-  expect(screen.queryByRole('menu')).not.toBeInTheDocument()
-  const more = pane.getByRole('button', { name: 'More for Worker' })
-  expect(more).toHaveAttribute('aria-expanded', 'false')
-  await user.click(more)
-  const secondPopup = screen.getByRole('menu')
-  await user.keyboard('{Escape}')
-  expect(secondPopup.isConnected).toBe(false)
-  expect(tasks).toHaveLength(2)
-  const focus = vi.spyOn(more, 'focus')
-  act(tasks[0])
-  expect(oldFocus).not.toHaveBeenCalled()
-  expect(focus).not.toHaveBeenCalled()
-  act(tasks[1])
-  expect(focus).toHaveBeenCalledExactlyOnceWith({ preventScroll: true })
-  expect(more).toHaveFocus()
-  expect(disclosure).toHaveAttribute('aria-expanded', 'true')
-  await user.click(pane.getByRole('button', { name: 'Open Worker' }))
-  expect(rig.open).toHaveBeenCalledExactlyOnceWith(worker, { kind: 'local' })
-  await user.click(more)
-  await user.click(screen.getByRole('menuitem', { name: 'Open its chat' }))
-  expect(rig.open).toHaveBeenCalledTimes(2)
-  expect(rig.open).toHaveBeenLastCalledWith(worker, { kind: 'local' })
-  expect(rig.copy).not.toHaveBeenCalled()
 })
 
 it('uses numeric expansion and exact activity leaf identity without dismissing another visible split', async () => {

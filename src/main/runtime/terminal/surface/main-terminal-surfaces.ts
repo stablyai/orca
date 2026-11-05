@@ -15,7 +15,7 @@ import {
 import { withMainTabOrder } from '../../session-tabs/main-session-tab-order'
 import { headlessMobileSnapshotContentUnchanged } from '../../mobile-session-snapshot-equality'
 import type { RuntimeStore } from '../../runtime-store-contract'
-import type { WorkspaceLayoutReads } from '../../workspace-layout-stream'
+import type { WorkspaceLayoutReads } from './workspace-layout-stream'
 import {
   composeMainTerminalSurfaces,
   TerminalSurfaceIndex,

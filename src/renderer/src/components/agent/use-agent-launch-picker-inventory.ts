@@ -6,7 +6,7 @@ import {
   selectFolderWorkspaces
 } from '@/store/workspace-record-selectors'
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
-import { readHostAgentLaunchSettings } from '../../runtime/agent-launch-settings/agent-launch-settings-transport'
+import { readHostAgentLaunchDefaults } from '../../runtime/agent-launch-settings/agent-launch-settings-transport'
 import type { NewTabAgentMenuModel } from '../tab-bar/use-new-tab-agent-menu-rows'
 import { useAppStore } from '@/store'
 import {
@@ -15,7 +15,6 @@ import {
 } from '@/lib/agent-launch-route-input'
 import { structuredAgentSessionTargetForHost } from '@/runtime/structured-agent-session-owner'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { readHostStructuredAgentsForRuntime } from '@/runtime/host-structured-agents'
 import { getAgentSessionOptionLaunchCatalog } from '../../../../shared/agent-session/options/agent-session-option-catalog'
 import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
@@ -29,7 +28,6 @@ import {
   type AgentPickerInventorySource
 } from './agent-launch-picker-acquisition'
 import {
-  usableAgentPickerDefaultSettings as usable,
   agentPickerChoiceSeeds,
   type AgentPickerDefaultSettings
 } from '../../../../shared/agent-launch/picker/agent-launch-picker-defaults'
@@ -210,7 +208,7 @@ export function useAgentLaunchPickerInventorySource(
           target.kind !== 'environment'
             ? undefined
             : async () => {
-                const host = await readHostAgentLaunchSettings(
+                const defaults = await readHostAgentLaunchDefaults(
                   {
                     environmentId: target.environmentId,
                     pairingRevision: context?.pairingRevision,
@@ -218,47 +216,12 @@ export function useAgentLaunchPickerInventorySource(
                   },
                   controller.signal
                 ).catch(() => null)
-                let defaults: AgentPickerDefaultSettings | undefined
-                let structuredKnown = false
-                if (usable(host)) {
-                  const permission = host.agentPermission
-                  const choices = host.agentChoices
-                  defaults = {
-                    agentDefaultArgs:
-                      choices?.userArgs ?? permission?.userArgs ?? host.agentDefaultArgs,
-                    agentLaunchChoices: choices?.defaults ?? settings?.agentLaunchChoices,
-                    ...(permission
-                      ? {
-                          agentPermissionDefault: permission.default,
-                          agentPermissionOverrides: permission.overrides
-                        }
-                      : {})
-                  }
-                } else {
-                  const legacy = await callRuntimeRpc<{ settings?: AgentPickerDefaultSettings }>(
-                    target,
-                    'settings.get',
-                    undefined,
-                    {
-                      signal: controller.signal,
-                      timeoutMs: 15_000,
-                      expectedEnvironmentPairingRevision: context?.pairingRevision,
-                      ...(context?.runtimeId
-                        ? { expectedEnvironmentRuntimeId: context.runtimeId }
-                        : {})
-                    }
-                  ).catch(() => null)
-                  if (usable(legacy?.settings)) {
-                    defaults = legacy.settings
-                    structuredKnown = true
-                  }
-                }
                 return defaults
-                  ? build(defaults).map((entry) => ({
+                  ? build(defaults.settings).map((entry) => ({
                       ...entry,
                       defaultsPending: false,
                       structuredDefaultsPending:
-                        entry.surfaces.includes('chat') && !structuredKnown,
+                        entry.surfaces.includes('chat') && !defaults.structuredKnown,
                       ownerKey: key,
                       draftTarget,
                       worktreeId

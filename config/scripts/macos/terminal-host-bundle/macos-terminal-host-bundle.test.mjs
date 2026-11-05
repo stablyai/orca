@@ -15,7 +15,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   MAC_TERMINAL_HOST_BUNDLE,
   MAC_TERMINAL_HOST_EXECUTABLE
-} from '../../../../src/main/daemon/macos-daemon-bundle.ts'
+} from '../../../../src/main/daemon/executable-host/macos/macos-daemon-bundle.ts'
 
 const require = createRequire(new URL('../../macos-terminal-host-bundle.test.mjs', import.meta.url))
 const {

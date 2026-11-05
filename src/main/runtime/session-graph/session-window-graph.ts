@@ -6,7 +6,7 @@ import type {
   RuntimeSyncWindowGraphResult
 } from '../../../shared/runtime-session-contracts'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-types'
-import type { RuntimeLeafRecord } from '../runtime-terminal-state-records'
+import type { RuntimeLeafRecord } from '../terminal/records/runtime-terminal-state-records'
 
 type Graph = RuntimeSyncWindowGraph
 

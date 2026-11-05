@@ -2,12 +2,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { NEWER_DAEMON_HOLD_ERROR } from '../../shared/newer-daemon-hold'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../shared/execution-host'
-import type * as DaemonHoldModule from '../daemon/daemon-newer-protocol-hold'
+import type * as DaemonHoldModule from '../daemon/providers/routing/daemon-newer-protocol-hold'
 import { committingSpawn } from './bind-first-pane.test-fixture'
 
 vi.mock('../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 const daemonHold = vi.hoisted(() => ({ reopen: vi.fn() }))
-vi.mock('../daemon/daemon-newer-protocol-hold', async (importOriginal) => ({
+vi.mock('../daemon/providers/routing/daemon-newer-protocol-hold', async (importOriginal) => ({
   ...(await importOriginal<typeof DaemonHoldModule>()),
   reopenNewerDaemonTerminals: daemonHold.reopen
 }))

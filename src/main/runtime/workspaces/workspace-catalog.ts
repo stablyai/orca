@@ -16,8 +16,10 @@ import {
 import {
   joinResolvedWorktreeScans,
   platformsByRepoId,
+  projectResolvedWorktreeScans,
   scanResolvedWorktreeRepos,
   type ResolvedWorktreeRepoScans,
+  type ResolvedWorktreeRowsJoin,
   type ResolvedWorktreeScanJoin
 } from './resolved-worktree-scan-join'
 import { projectResolvedWorktreeLineage } from '../../../shared/resolved-worktree-lineage'
@@ -34,7 +36,7 @@ import { withUnregisteredRemovalCheckouts } from '../../workspaces/removal/workt
 import { withoutInFlightWorktreeCreates } from '../../workspaces/creation/worktree-create-in-flight'
 import { preserveFolderUpgradeWorktreePath } from '../../workspaces/catalog/folder-upgrade-worktree-path'
 import type { RuntimeWorktreeScanCache } from '../orca-runtime-core'
-import { getRepoHostIdentityForParts } from '../../../shared/repo-host-identity'
+import { getRepoHostIdentity } from '../../../shared/repo-host-identity'
 import {
   resolveWorktreeScanCacheTtlMs,
   resolveWorktreeScanRuntime
@@ -114,9 +116,7 @@ export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFi
     const platformByRepoId = platformsByRepoId(repos, projectRuntimeByRepoId)
     const deps = this.repoWorktreeRowDeps()
     const perRepoWorktrees = await Promise.all(
-      repos.map(
-        async (repo) => await resolveRepoWorktreeRows(deps, repo, metaById, projectRuntimeByRepoId)
-      )
+      repos.map((repo) => resolveRepoWorktreeRows(deps, repo, metaById, projectRuntimeByRepoId))
     )
     const lineageById = this.store?.getAllWorktreeLineage?.() ?? {}
     const worktrees = projectResolvedWorktreeLineage(perRepoWorktrees.flat(), lineageById)
@@ -159,26 +159,35 @@ export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFi
     )
   }
 
-  protected projectCachedWorktrees(): ResolvedWorktreeScanJoin {
-    const scans: ResolvedWorktreeRepoScans = new Map()
-    for (const repo of this.store?.getRepos() ?? []) {
-      const cached = this.worktreeScanCache.get(`${repo.id}\0${getRepoExecutionHostId(repo)}`)
-      if (cached) {
-        scans.set(getRepoHostIdentityForParts(repo.id, getRepoExecutionHostId(repo)), {
-          ...(cached.listing ?? cached.result),
-          gitRun: cached
-        })
-      }
-    }
-    return joinResolvedWorktreeScans(
+  /** The fleet from cached scans for synchronous selector matching, reprojected only when its inputs change. */
+  protected projectCachedWorktrees(): ResolvedWorktreeRowsJoin {
+    const cachedScans = (this.store?.getRepos() ?? []).map((repo) => {
+      const entry = this.worktreeScanCache.get(`${repo.id}\0${getRepoExecutionHostId(repo)}`)
+      return { repo, entry, scan: entry && (entry.listing ?? entry.result) }
+    })
+    return this.resolvedWorktrees.projectCachedScans(
       this.store,
-      () => ({
-        ...this.repoWorktreeRowDeps(),
-        listFolderWorkspaces: (repo, count) =>
-          projectRuntimeFolderWorkspaces(this.requireStore(), repo, count)
-      }),
-      scans,
-      true
+      cachedScans.flatMap(({ repo, entry, scan }) => [getRepoHostIdentity(repo), entry, scan]),
+      () => {
+        const scans: ResolvedWorktreeRepoScans = new Map()
+        for (const { repo, entry, scan } of cachedScans) {
+          if (entry && scan) {
+            scans.set(getRepoHostIdentity(repo), {
+              ...scan,
+              gitRun: entry
+            })
+          }
+        }
+        return projectResolvedWorktreeScans(
+          this.store,
+          () => ({
+            ...this.repoWorktreeRowDeps(),
+            listFolderWorkspaces: (repo, count) =>
+              projectRuntimeFolderWorkspaces(this.requireStore(), repo, count)
+          }),
+          scans
+        )
+      }
     )
   }
 
@@ -209,10 +218,9 @@ export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFi
     worktreeId: string,
     requiredHostId?: ExecutionHostId
   ): Promise<ResolvedWorktree | null> {
-    if (!this.store) {
-      return null
-    }
-    return await resolveScopedWorktreeIdRow(this.repoWorktreeRowDeps(), worktreeId, requiredHostId)
+    return this.store
+      ? resolveScopedWorktreeIdRow(this.repoWorktreeRowDeps(), worktreeId, requiredHostId)
+      : null
   }
 
   /** The resolution scan plus the checkouts this host's removals own that Git no longer lists. */

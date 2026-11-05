@@ -12,7 +12,7 @@ import { surfaceLayoutOutcome } from '../../workspace-surfaces/surface-layout-ou
 import {
   capturePersistedTerminalTabCopy,
   isSamePersistedTerminalTabCopy
-} from '../../runtime/workspace-session-terminal-tab-retirement-identity'
+} from '../../runtime/terminal/surface/workspace-session-terminal-tab-retirement-identity'
 
 /** Keep every owning partition and pane-keyed profile record behind the canonical commit. */
 export async function moveCanonicalTerminalLeaf(

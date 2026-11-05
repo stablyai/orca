@@ -32,7 +32,7 @@ function pick<T>(rng: () => number, values: readonly T[]): T {
 
 const WORDS = [
   'reading',
-  'src/main/daemon/session.ts',
+  'src/main/daemon/sessions/session.ts',
   'tokens 12.4k',
   'esc to interrupt',
   'Thinking…',

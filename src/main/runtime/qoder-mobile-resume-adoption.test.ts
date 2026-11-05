@@ -7,7 +7,7 @@ await import('./orca-runtime-test-mocks.spec')
 await import('./orca-runtime-test-lifecycle.spec')
 const { OrcaRuntimeService } = await import('./orca-runtime-test-mocks.spec')
 const { store, TEST_WORKTREE_PATH } = await import('./orca-runtime-test-fixtures.spec')
-const { detectAgentCommandsOnHost } = await import('../preflight/agent-detection')
+const { detectAgentCommandsOnHost } = await import('../preflight/agent-command-detection')
 const { bindPaneFirst, committingSpawn, registerBoundPty } =
   await import('./bind-first-pane.test-fixture')
 
@@ -297,7 +297,7 @@ it.each(['missing-original', 'different-agent'])(
   async (state) => {
     const { TEST_WORKTREE_ID } = await import('./orca-runtime-test-fixtures.spec')
     const { deriveRemoteRuntimeTerminalCreateHandle } =
-      await import('./remote-runtime-terminal-create-identity')
+      await import('./terminal/identity/remote-runtime-terminal-create-identity')
     const handle = deriveRemoteRuntimeTerminalCreateHandle(
       'owned-phone',
       TEST_WORKTREE_ID,
@@ -370,7 +370,7 @@ it('releases abandoned dispatch capacity without guessing an expired live recipe
   try {
     const { TEST_WORKTREE_ID } = await import('./orca-runtime-test-fixtures.spec')
     const { deriveRemoteRuntimeTerminalCreateHandle } =
-      await import('./remote-runtime-terminal-create-identity')
+      await import('./terminal/identity/remote-runtime-terminal-create-identity')
     vi.mocked(detectAgentCommandsOnHost)
       .mockReset()
       .mockResolvedValue(new Set(['qoder']))

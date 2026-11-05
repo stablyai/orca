@@ -18,7 +18,10 @@ import {
 } from './runtime-agent-sender-worker-history'
 import { readAgentSenderGeneration } from './runtime-agent-sender-history-triggers'
 import type { OrchestrationDb } from './orchestration/db'
-import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
+import type {
+  RuntimeLeafRecord,
+  RuntimePtyWorktreeRecord
+} from './terminal/records/runtime-terminal-state-records'
 import { AgentSenderPublisher, type AgentSenderScope } from './runtime-agent-sender-publication'
 
 /** The handles terminals already hold, read without issuing one: display bookkeeping never

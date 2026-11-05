@@ -5,8 +5,8 @@ import type {
   PtySpawnOptions,
   PtySpawnResult
 } from '../../providers/pty-provider-contract'
-import { SessionNotFoundError } from '../../daemon/daemon-errors'
-import { mintPtySessionId } from '../../daemon/pty-session-id'
+import { SessionNotFoundError } from '../../daemon/protocol/daemon-errors'
+import { mintPtySessionId } from '../../daemon/sessions/pty-session-id'
 import {
   runLeafOf,
   type SurfaceRunTarget

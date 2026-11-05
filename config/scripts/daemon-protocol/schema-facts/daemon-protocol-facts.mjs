@@ -4,7 +4,7 @@ import { readFileSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
-export const DAEMON_PROTOCOL_SOURCE_PATH = 'src/main/daemon/daemon-protocol-version.ts'
+export const DAEMON_PROTOCOL_SOURCE_PATH = 'src/main/daemon/protocol/daemon-protocol-version.ts'
 
 const CURRENT_DECLARATION = /^export const PROTOCOL_VERSION\b[^=\n]*=\s*([^\n;]*)/gmu
 const PREVIOUS_DECLARATION =

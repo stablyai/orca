@@ -1,9 +1,12 @@
 import { windowListsTab } from '../terminal/surface/main-terminal-surfaces'
 import type { RuntimeTerminalClose } from '../../../shared/runtime-types'
-import type { RuntimePtyTabCloseAuthority } from '../runtime-terminal-state-records'
+import type { RuntimePtyTabCloseAuthority } from '../terminal/records/runtime-terminal-state-records'
 import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import type { LayoutApplyReply } from '../../../shared/workspace-layout/workspace-layout-command-types'
-import type { LayoutCommandRunOptions, WindowLayoutCommand } from '../runtime-layout-apply'
+import type {
+  LayoutCommandRunOptions,
+  WindowLayoutCommand
+} from '../terminal/layout/runtime-layout-apply'
 import { closeMainOwnedPaneByHandle } from './main-handle-close'
 import {
   NO_STOP,

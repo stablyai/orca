@@ -1,7 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
-import { OrcaRuntimeService, setPlatform } from '../orca-runtime-test-mocks.spec'
-import type { HeadlessEmulator } from '../../daemon/headless-emulator'
-import type { RuntimeTerminalAgentStatusEvent } from '../orca-runtime-test-mocks.spec'
+import {
+  OrcaRuntimeService,
+  setPlatform,
+  type RuntimeTerminalAgentStatusEvent
+} from '../orca-runtime-test-mocks.spec'
+import type { HeadlessEmulator } from '../../daemon/emulation/headless-emulator'
+
 import {
   TEST_WORKTREE_ID,
   createRuntime,

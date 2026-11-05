@@ -15,7 +15,7 @@ import type {
   ExplicitCloseStop,
   ExplicitCloseTarget
 } from '../../session-tabs/explicit-terminal-close-pty-stops'
-import { retireTerminalSurfacesFromSnapshot } from '../../mobile-session-terminal-retirement'
+import { retireTerminalSurfacesFromSnapshot } from '../../terminal/surface/mobile-session-terminal-retirement'
 
 export abstract class OrcaRuntimeWithCloseMobileRowInMainLayout extends OrcaRuntimeWithRefuseUnattributedMobileSessionTabClose {
   protected abstract stopExplicitlyClosedTabPtys(

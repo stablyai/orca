@@ -29,7 +29,7 @@ import { agentHookServer } from '../../agent-hooks/server'
 import { buildProfileStateCutoverFixture } from '../profile-state-cutover-fixture'
 import { createLiveProfileStateStore } from './profile-state-live-store-factory'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
-import { startInAdmittedPane } from '../../runtime/runtime-pane-admission'
+import { startInAdmittedPane } from '../../runtime/terminal/launch/runtime-pane-admission'
 import {
   profileStateJsonExportPath,
   profileStateJsonExportPaths

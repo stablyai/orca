@@ -8,8 +8,8 @@ const NODE_RUNTIME_INCLUDE = [
   'tests/e2e/linear-cli-recovery.unit.test.ts',
   'src/main/runtime/structured-agent-cli-writers.test.ts',
   'config/scripts/test-runtime/sqlite-admission/vitest-sqlite-runtime-boundary.test.ts',
-  'config/scripts/cloud-security-history-workflow.test.mjs',
-  'config/scripts/skill-recipe-shell.test.mjs',
+  'config/scripts/ci/workflow-contracts/cloud-security-history-workflow.test.mjs',
+  'config/scripts/skills/recipe-contracts/skill-recipe-shell.test.mjs',
   'src/main/ssh/legacy-relay/ssh-relay-endpoint-incumbent-shell.integration.test.ts',
   'src/main/ssh/ssh-remote-commands.test.ts',
   'src/packages/process-host/src/run-process.test.ts',
@@ -26,7 +26,7 @@ const NODE_RUNTIME_INCLUDE = [
   // Electron main bridges streams with Node's implementation.
   'src/main/host/electron-http-client.test.ts',
   'src/main/browser/extensions/native-messaging/browser-extension-native-host-process-backpressure.test.ts',
-  'src/main/daemon/daemon-init-provider-installation.test.ts',
+  'src/main/daemon/providers/lifecycle/testing/daemon-init-provider-installation.test.ts',
   'src/main/orcad/orcad-daemon-teardown-linux.test.ts',
   // Launches process.execPath as orcad's pinned runtime to measure V8 address-space reservations.
   'src/main/managed-server/install/orcad-remote-launch-address-space.test.ts',
@@ -104,8 +104,8 @@ const NODE_RUNTIME_INCLUDE = [
   'src/**/*.live-shell.test.ts',
   // These drive live zsh through node-pty and rely on Node's native PTY stream delivery.
   'src/main/pty/shell-startup/shell-startup-feature-channel.test.ts',
-  'src/main/daemon/shell-ready.test.ts',
-  'src/main/daemon/repro-13767-shell-ready-marker-lost-to-exec.test.ts',
+  'src/main/daemon/shell-readiness/testing/shell-ready.test.ts',
+  'src/main/daemon/shell-readiness/testing/repro-13767-shell-ready-marker-lost-to-exec.test.ts',
   'src/**/*real-pty*.test.ts',
   'src/**/*-native.test.ts',
   'src/**/*retention*.test.ts',
@@ -205,7 +205,7 @@ const NODE_RUNTIME_INCLUDE = [
   'src/renderer/src/components/emulator-pane/emulator-device-frame-visibility.test.tsx',
   'src/main/claude/claude-agent-sdk-contract-pins.test.ts',
   'config/scripts/orcad-distribution/server-bundle/profile-state-worker-smoke.test.mjs',
-  'config/scripts/process-host-dev-rebuild.test.ts',
+  'config/scripts/desktop-distribution/runtime-verification/process-host-dev-rebuild.test.ts',
   'config/scripts/test-runtime/node-worker/vitest-node-runtime-boundary.test.ts',
   'config/scripts/test-runtime/node-worker/vitest-node-runtime-pool.test.ts'
 ]

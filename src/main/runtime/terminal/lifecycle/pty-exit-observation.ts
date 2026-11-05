@@ -3,7 +3,7 @@ import { OrcaRuntimeWithOnClientDisconnected } from '../layout/terminal-client-d
 import type {
   RuntimePtyWorktreeRecord,
   RuntimeLeafRecord
-} from '../../runtime-terminal-state-records'
+} from '../records/runtime-terminal-state-records'
 import type { TerminalExitCause } from '../../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 import type { PtyLivenessVerdict } from '../../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'

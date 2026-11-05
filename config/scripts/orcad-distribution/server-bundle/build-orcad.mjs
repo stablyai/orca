@@ -347,15 +347,16 @@ if (graphErrors.length > 0) {
     )
     process.exitCode = 1
   }
-  // Require bundle then call exported parseArgs to prove entry code evaluates; socket/token/PTY lifecycle belongs to smoke:orcad-terminal.
+  // Load the shipped entry and check arguments through their defining owner; PTY lifecycle belongs to smoke:orcad-terminal.
   // Assert exit code because minified exception text includes unrelated bundle strings.
   const daemonSmoke = spawnSync(
     process.execPath,
     [
       '-e',
-      `const mod = require(${JSON.stringify(DAEMON_OUT_FILE)})\n` +
-        `if (typeof mod.parseArgs !== 'function') { process.exit(3) }\n` +
-        `try { mod.parseArgs([]); process.exit(4) } catch { process.exit(0) }`
+      `require(${JSON.stringify(DAEMON_OUT_FILE)})\n` +
+        `const { parseArgs } = require(${JSON.stringify(join(ROOT, 'src/main/daemon/launch/daemon-command-arguments.ts'))})\n` +
+        `if (typeof parseArgs !== 'function') { process.exit(3) }\n` +
+        `try { parseArgs([]); process.exit(4) } catch { process.exit(0) }`
     ],
     {
       encoding: 'utf8',
