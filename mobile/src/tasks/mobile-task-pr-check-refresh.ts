@@ -1,5 +1,4 @@
 import type { GitHubWorkItem } from '../../../src/shared/github/work-item-types'
-import type { PRCheckDetail } from '../../../src/shared/github/check-types'
 import { matchesGitHubWorkItemTarget } from '../../../src/shared/github/work-item-target'
 import { acceptPRCheckObservation } from '../../../src/shared/github/complete-pr-check-owner'
 import { captureMobilePRCheckContract } from '../transport/pr-check-observation-contract'
@@ -125,7 +124,7 @@ export async function refreshMobileTaskPRChecks(
       }
       publish(owner)
     }
-    let checks: PRCheckDetail[] | undefined
+    let checks: ReturnType<typeof githubPullRequestChecksRead.interpret> | undefined
     try {
       const reply = await githubPullRequestChecksRead.request(
         contract.client ?? client,
