@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest'
+import { runInNewContext } from 'node:vm'
+import { describe, expect, it, vi } from 'vitest'
 import type { ProviderProcessLaunch } from './provider-process-launch'
 import {
   createProviderSpawnSpec,
@@ -17,6 +18,51 @@ const launch: ProviderProcessLaunch = {
 const command = { command: launch.command, args: launch.args, cwd: launch.cwd }
 
 describe('structured provider supervision', () => {
+  it.each([
+    { requested: '1', deleted: false, expected: '1' },
+    { requested: undefined, deleted: false, expected: undefined },
+    { requested: '1', deleted: true, expected: undefined }
+  ])('passes the final provider environment for %j', ({ requested, deleted, expected }) => {
+    const spec = createProviderSpawnSpec(
+      {
+        ...command,
+        env: requested === undefined ? {} : { ELECTRON_RUN_AS_NODE: requested },
+        envToDelete: deleted ? ['ELECTRON_RUN_AS_NODE'] : []
+      },
+      { PATH: '/bin' },
+      'linux'
+    )
+    const stopped = new Error('stop after capturing the provider spawn')
+    const spawn = vi.fn(() => {
+      throw stopped
+    })
+    expect(() =>
+      runInNewContext(POSIX_PROVIDER_SUPERVISOR_SCRIPT, {
+        Buffer,
+        require: (id: string) => (id === 'node:child_process' ? { spawn } : { writeSync: vi.fn() }),
+        process: {
+          env: spec.env,
+          argv: [spec.program, ...spec.args.slice(3)],
+          ppid: process.pid,
+          on: vi.fn(),
+          exit: () => {
+            throw stopped
+          }
+        }
+      })
+    ).toThrow(stopped)
+    expect(spawn).toHaveBeenCalledWith(
+      command.command,
+      command.args,
+      expect.objectContaining({
+        env:
+          expected === undefined
+            ? { PATH: '/bin' }
+            : { PATH: '/bin', ELECTRON_RUN_AS_NODE: expected }
+      })
+    )
+  })
+
   it('wraps POSIX launches in a detached supervisor and preserves the launch spec', () => {
     const childEnv = { PATH: '/bin', CODEX_HOME: '/tmp/codex' }
     const spec = supervisedPosixLaunch(command, childEnv)

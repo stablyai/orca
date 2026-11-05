@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
+  createProviderSpawnSpec,
   PROVIDER_SIGTERM_GRACE_MS,
   PROVIDER_STDIN_END_GRACE_MS,
   PROVIDER_SUPERVISOR_MAX_STOP_MS,
@@ -256,6 +257,40 @@ afterEach(() => {
 })
 
 describe.runIf(process.platform !== 'win32')('POSIX provider supervisor processes', () => {
+  it.each([undefined, '1'])(
+    'passes the requested Node mode %s to the actual provider',
+    async (nodeMode) => {
+      const spec = createProviderSpawnSpec(
+        {
+          command: process.execPath,
+          args: [
+            '-e',
+            'process.stdout.write(JSON.stringify({ nodeMode: process.env.ELECTRON_RUN_AS_NODE, supervisorSpec: process.env.ORCA_PROVIDER_SUPERVISOR_SPEC }))'
+          ],
+          env: nodeMode === undefined ? {} : { ELECTRON_RUN_AS_NODE: nodeMode },
+          cwd: process.cwd()
+        },
+        {},
+        process.platform,
+        { lifetime: 'one-shot' }
+      )
+      const supervisor = spawn(spec.program, spec.args, {
+        env: spec.env,
+        stdio: ['ignore', 'pipe', 'pipe'],
+        detached: spec.detached
+      })
+      recordedPids.add(supervisor.pid!)
+      let stdout = ''
+      supervisor.stdout!.on('data', (chunk: Buffer) => (stdout += chunk.toString()))
+      const code = await new Promise<number | null>((resolve, reject) => {
+        supervisor.once('error', reject)
+        supervisor.once('close', resolve)
+      })
+      expect(code).toBe(0)
+      expect(JSON.parse(stdout)).toEqual(nodeMode === undefined ? {} : { nodeMode })
+    }
+  )
+
   it('reaps the provider group on SIGTERM and exits only after the group is gone', async () => {
     const { supervisor, exit } = launchSupervisor({ sigtermGraceMs: 300 })
     const { provider, grandchild } = await readPids(supervisor, ['provider', 'grandchild'])
