@@ -39,7 +39,7 @@ const flattenStyle = (style: unknown): Record<string, unknown> =>
   Array.isArray(style)
     ? Object.assign({}, ...style.map(flattenStyle))
     : style && typeof style === 'object'
-      ? (style as Record<string, unknown>)
+      ? Object.fromEntries(Object.entries(style))
       : {}
 
 // A terminal-backed question reaches the phone as plain agent text, which names files like any chat text.
