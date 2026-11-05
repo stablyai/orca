@@ -233,21 +233,19 @@ export abstract class OrcaRuntimeWithRecordAgentPromptLifecycleState extends Orc
 
   /** The exit frees the buffer, so keep what the PTY's last command printed for its start failure. */
   protected releaseRecentPtyOutput(ptyId: string, pty: RuntimePtyWorktreeRecord | undefined): void {
-    if (pty) {
-      pty.lastExitOutput = readLaunchCommandOutput(
-        this.recentPtyOutputById.get(ptyId)?.read() ?? '',
-        {
-          ptyExited: true
-        }
-      )
+    const recent = this.recentPtyOutputById.get(ptyId)
+    // A repeated exit report finds the buffer already freed and keeps what the first one saved.
+    if (pty && recent) {
+      pty.lastExitOutput = {
+        incarnationId: pty.incarnationId,
+        text: readLaunchCommandOutput(recent.read(), { ptyExited: true })
+      }
     }
     this.recentPtyOutputById.delete(ptyId)
   }
 
   readExitedLaunchOutput(ptyId: string, incarnationId: string): string | undefined {
-    const pty = this.ptysById.get(ptyId)
-    return pty && !pty.connected && pty.incarnationId === incarnationId
-      ? pty.lastExitOutput
-      : undefined
+    const saved = this.ptysById.get(ptyId)?.lastExitOutput
+    return saved?.incarnationId === incarnationId ? saved.text : undefined
   }
 }
