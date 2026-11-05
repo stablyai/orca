@@ -308,6 +308,53 @@ describe('/resume in the native chat composer', () => {
     }
   )
 
+  it('rechecks a retained Plan command pick when the host starts owning mode changes', () => {
+    mocks.draft = '/pl'
+    const edit: QueuedMessageInlineEditor = {
+      messageId: 'queued',
+      draftScopeKey: 'queued-edit:plan-pick',
+      text: '/pl',
+      change: vi.fn(),
+      acquiring: false,
+      saving: false,
+      canSave: true,
+      imagesCapable: true,
+      save: vi.fn(),
+      cancel: vi.fn()
+    }
+    const { transport, rerender } = renderStructuredChat(edit)
+    transport.sessionCommands = [{ name: 'plan', kind: 'command' }]
+    rerender()
+    const plan = mocks.fieldProps?.autocomplete?.items?.find((item) => item.name === 'plan')
+    expect(plan).toBeDefined()
+    act(() => mocks.fieldProps?.onChoosePickerItem?.(plan!))
+    expect(mocks.setDraft).toHaveBeenCalledWith('/plan ')
+    mocks.setDraft.mockClear()
+    transport.optionSnapshot = [
+      {
+        id: 'interactionMode',
+        label: 'Mode',
+        category: 'mode',
+        kind: {
+          type: 'select',
+          currentValue: 'default',
+          choices: [
+            { value: 'default', label: 'Build' },
+            { value: 'plan', label: 'Plan' }
+          ]
+        },
+        valueSource: 'default',
+        transport: 'agent-session',
+        settable: true
+      }
+    ]
+    rerender()
+    act(() => mocks.fieldProps?.onChoosePickerItem?.(plan!))
+    expect(mocks.setDraft).not.toHaveBeenCalled()
+    expect(transport.send).not.toHaveBeenCalled()
+    expect(transport.dispatchCommand).not.toHaveBeenCalled()
+  })
+
   it('saves ordinary text and a picked provider skill without any send or command RPC', () => {
     mocks.draft = '/res'
     const editor: QueuedMessageInlineEditor = {
