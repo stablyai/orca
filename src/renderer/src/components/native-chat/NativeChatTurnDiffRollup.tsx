@@ -22,7 +22,6 @@ function TurnDiffFilePatches({ file }: { file: NativeChatTurnDiffFile }): React.
           <NativeChatDiffCard
             key={`${edit.target.messageId}:${edit.target.editKey}:${edit.fileIndex}`}
             file={patch}
-
             initialOpen
             disclosureKey={`turn-diff-card:${edit.target.messageId}:${edit.target.editKey}:${edit.fileIndex}`}
           />
