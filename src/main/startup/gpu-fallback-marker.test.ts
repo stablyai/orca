@@ -34,6 +34,18 @@ describe('gpu-fallback-marker', () => {
     expect(readActiveGpuFallbackMarker(userDataPath, environment)?.userConfirmed).toBe(true)
   })
 
+  it('persists Linux safe-graphics consent for the same build', () => {
+    const linuxEnvironment = { ...environment, platform: 'linux' as const }
+    writeGpuFallbackMarker(
+      userDataPath,
+      { engagedAt: 123, crashesInWindow: 3, userConfirmed: false },
+      linuxEnvironment
+    )
+    const marker = readActiveGpuFallbackMarker(userDataPath, linuxEnvironment)
+    expect(marker?.platform).toBe('linux')
+    expect(marker?.crashesInWindow).toBe(3)
+  })
+
   it('keeps an active marker for repeated launches on the same build', () => {
     writeGpuFallbackMarker(
       userDataPath,
@@ -66,7 +78,7 @@ describe('gpu-fallback-marker', () => {
     expect(existsSync(join(userDataPath, GPU_FALLBACK_MARKER_FILE))).toBe(false)
   })
 
-  // A macOS fallback marker would skip the Graphite fix inside GPU-feature setup; ensure fallback stays win32-only.
+  // A macOS fallback marker would skip the Graphite fix inside GPU-feature setup; ensure fallback never engages there.
   it('clears an active marker on macOS so the Graphite fix is never skipped', () => {
     writeGpuFallbackMarker(
       userDataPath,
