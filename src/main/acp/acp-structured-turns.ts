@@ -93,7 +93,7 @@ export class AcpStructuredTurns {
       this.stopAt = at
       if (agentTurn !== null) {
         void this.deps.lane.whenTurnLeaves(agentTurn).then(() => {
-          if (!this.active && this.stopAt === at) {
+          if (this.stopAt === at) {
             this.stopAt = null
           }
         })
@@ -149,6 +149,7 @@ export class AcpStructuredTurns {
       requestedAt: this.deps.now()
     }
     lane.beginCommand(command)
+    this.stopAt = null
     try {
       const opened = lane.translator.openPrompt(
         send.clientMessageId,
@@ -203,6 +204,8 @@ export class AcpStructuredTurns {
 
   private start(send: Send): void {
     const { lane } = this.deps
+    // A new message is not covered by a Stop of the agent's own earlier turn.
+    this.stopAt = null
     this.active = send
     const opened = lane.translator.openPrompt(send.clientMessageId, send.requestedAt)
     lane.apply(opened.events)

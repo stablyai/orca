@@ -192,5 +192,16 @@ describe('Grok requests and the turn they belong to', () => {
     expect(await agent.request(13, 'x.ai/ask_user_question', question('call-13'))).toMatchObject({
       result: { outcome: 'cancelled' }
     })
+    await sendHello(rig, 'next')
+    await rig.frame('session/prompt')
+    void agent.request(14, 'x.ai/ask_user_question', question('call-14'))
+    await waitFor(async () =>
+      expect(
+        (await rig.rig.rows()).filter((row) => row.body.kind === 'question').map((row) => row.body)
+      ).toMatchObject([
+        { resolution: { state: 'cancelled' } },
+        { resolution: { state: 'pending' } }
+      ])
+    )
   })
 })
