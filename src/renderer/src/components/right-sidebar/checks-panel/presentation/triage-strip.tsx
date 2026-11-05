@@ -149,7 +149,11 @@ export function PRTriageStrip({
               type="button"
               variant="outline"
               size="xs"
-              disabled={isFixingChecksWithAI || fixChecksDisabled || brokenCheckCount === 0}
+              disabled={
+                isFixingChecksWithAI ||
+                fixChecksDisabled ||
+                (brokenCheckCount === 0 && !pipelineFailed)
+              }
               title={fixChecksDisabled ? fixChecksDisabledReason : undefined}
               onClick={onFixChecksWithAI}
             >

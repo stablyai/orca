@@ -1,7 +1,8 @@
 import { createCompatibleRuntimeStatusResponse } from '@/runtime/runtime-compatibility-test-fixture'
 import { useAppStore } from '@/store'
+import { StrictMode, Suspense, startTransition, useState } from 'react'
 // @vitest-environment happy-dom
-import { act, cleanup, renderHook } from '@testing-library/react'
+import { act, cleanup, render, renderHook, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import type { TaskPageJiraCreationMetadataModel } from '../jira/use-task-page-jira-creation-metadata'
@@ -223,3 +224,94 @@ it('ignores an unselected remote source change and hydrates again when the selec
   expect(renders).toBeGreaterThan(before)
   expect(lookup).toHaveBeenCalledTimes(2)
 })
+
+it('publishes one committed demand read through StrictMode effect replay', async () => {
+  const row = item(42)
+  let current = row
+  const patch = vi.fn((_key, values, accepts: (item: GitHubWorkItem) => boolean) => {
+    if (accepts(current)) {
+      current = { ...current, ...values }
+    }
+  })
+  const pending = Promise.withResolvers<GitHubWorkItem>()
+  const summary = {
+    state: 'failure' as const,
+    total: 1,
+    passed: 0,
+    failed: 1,
+    cancelled: 0,
+    pending: 0,
+    neutral: 0
+  }
+  lookup.mockReturnValue(pending.promise)
+  const input = model([row], patch)
+  renderHook(() => useTaskPageGitHubListProjection(input), { wrapper: StrictMode })
+  await act(async () => {})
+  expect(lookup).toHaveBeenCalledOnce()
+  await act(async () => {
+    pending.resolve({ ...row, checksSummary: summary })
+    await pending.promise
+  })
+  expect(current.checksSummary).toEqual(summary)
+})
+
+it.each([true, false])(
+  'only a committed query replacement retires a pending read (suspend=%s)',
+  async (suspend) => {
+    const row = item(42)
+    let current = row
+    const patch = vi.fn((_key, values, accepts: (item: GitHubWorkItem) => boolean) => {
+      if (accepts(current)) {
+        current = { ...current, ...values }
+      }
+    })
+    const original = Promise.withResolvers<GitHubWorkItem>()
+    const replacement = Promise.withResolvers<GitHubWorkItem>()
+    const blocked = Promise.withResolvers<void>()
+    const summary = {
+      state: 'failure' as const,
+      total: 1,
+      passed: 0,
+      failed: 1,
+      cancelled: 0,
+      pending: 0,
+      neutral: 0
+    }
+    lookup.mockReturnValueOnce(original.promise).mockReturnValueOnce(replacement.promise)
+    const first = model([row], patch)
+    const second = { ...first, appliedTaskSearch: 'replacement' }
+    let navigate!: (next: boolean) => void
+    function Consumer({ next }: { next: boolean }) {
+      useTaskPageGitHubListProjection(next ? second : first)
+      if (next && suspend) {
+        throw blocked.promise
+      }
+      return <span>{next ? 'Replacement query' : 'Original query'}</span>
+    }
+    function Harness() {
+      const [next, setNext] = useState(false)
+      navigate = setNext
+      return (
+        <Suspense fallback={<span>Waiting</span>}>
+          <Consumer next={next} />
+        </Suspense>
+      )
+    }
+    const view = render(<Harness />)
+    await act(async () => {
+      startTransition(() => navigate(true))
+    })
+    expect(screen.getByText(suspend ? 'Original query' : 'Replacement query')).toBeTruthy()
+    await act(async () => {
+      original.resolve({ ...row, checksSummary: summary })
+      await original.promise
+    })
+    expect(current.checksSummary).toEqual(suspend ? summary : undefined)
+    view.unmount()
+    await act(async () => {
+      replacement.resolve({ ...row, checksSummary: summary })
+      blocked.resolve()
+      await replacement.promise
+    })
+  }
+)

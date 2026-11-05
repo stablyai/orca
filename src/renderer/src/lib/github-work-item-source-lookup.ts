@@ -97,7 +97,10 @@ export async function lookupGitHubWorkItemForSource(
             number: args.number,
             type: args.type
           },
-          { timeoutMs: 30_000, ...contract?.rpcOptions }
+          {
+            timeoutMs: 30_000,
+            ...(args.checkContract ? contract?.rpcOptions : contract?.sourceRpcOptions)
+          }
         )
       : await window.api.gh.workItem({
           repoPath: args.repoPath,
@@ -105,11 +108,11 @@ export async function lookupGitHubWorkItemForSource(
           number: args.number,
           type: args.type
         })
-  if (contract && !contract.current()) {
+  if (contract && !(args.checkContract ? contract.current() : contract.sourceCurrent())) {
     return null
   }
   let row: GitHubWorkItem | null = item ? { ...item, repoId: args.repoId } : null
-  if (row && contract?.complete && !('preview' in args && args.preview)) {
+  if (row && contract?.complete && contract.current() && !('preview' in args && args.preview)) {
     row = acceptPRCheckObservation(row, null, { ...contract, current: contract.current() })
   }
   return row && records ? records.cache.acceptSearch([row], records.binding)[0] : row
@@ -148,10 +151,13 @@ export async function lookupGitHubWorkItemByOwnerRepoForSource(
           },
           {
             timeoutMs: 30_000,
-            ...contract?.rpcOptions,
+            ...(args.checkContract ? contract?.rpcOptions : contract?.sourceRpcOptions),
             ...args.rpcOptions,
             beforeSend: () => {
-              contract?.rpcOptions.beforeSend?.()
+              const contractOptions = args.checkContract
+                ? contract?.rpcOptions
+                : contract?.sourceRpcOptions
+              contractOptions?.beforeSend?.()
               args.rpcOptions?.beforeSend?.()
               if (args.accepts?.() === false) {
                 throw new Error('Task source changed.')
@@ -173,7 +179,7 @@ export async function lookupGitHubWorkItemByOwnerRepoForSource(
   if (args.accepts?.() === false) {
     return null
   }
-  if (contract && !contract.current()) {
+  if (contract && !(args.checkContract ? contract.current() : contract.sourceCurrent())) {
     return null
   }
   let row: GitHubWorkItem | null = item ? { ...item, repoId: args.repoId } : null
@@ -185,7 +191,7 @@ export async function lookupGitHubWorkItemByOwnerRepoForSource(
   if (row && !matchesGitHubWorkItemTarget(row, requestedTarget)) {
     throw new GitHubWorkItemTargetError(requestedTarget)
   }
-  if (row && contract?.complete && !('preview' in args && args.preview)) {
+  if (row && contract?.complete && contract.current() && !('preview' in args && args.preview)) {
     row = acceptPRCheckObservation(row, null, { ...contract, current: contract.current() })
   }
   // A canonical verification read publishes through its record, not as a search reading.
@@ -229,10 +235,10 @@ export async function lookupGitHubWorkItemDetailsForSource(
         type: args.type
       },
       rpcOptions: {
-        ...contract?.rpcOptions,
+        ...contract?.sourceRpcOptions,
         ...args.rpcOptions,
         beforeSend: () => {
-          contract?.rpcOptions.beforeSend?.()
+          contract?.sourceRpcOptions.beforeSend?.()
           args.rpcOptions?.beforeSend?.()
           if (args.accepts?.() === false) {
             throw new Error('Task context changed.')
@@ -262,10 +268,10 @@ export async function lookupGitHubWorkItemDetailsForSource(
   if (args.accepts?.() === false) {
     return null
   }
-  if (contract && !contract.current()) {
+  if (contract && !contract.sourceCurrent()) {
     return null
   }
-  if (result && contract?.complete) {
+  if (result && contract?.complete && contract.current()) {
     result.item = acceptPRCheckObservation(result.item, null, {
       ...contract,
       current: contract.current()

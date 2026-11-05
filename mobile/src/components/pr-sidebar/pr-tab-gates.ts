@@ -103,7 +103,7 @@ function checksGate(checks: PRCheckDetail[], checksError: string | null, pr: PRI
       ...base,
       tone: 'idle',
       title: translate('pullRequest.checkStatus.cancelled', 'Cancelled'),
-      subtitle: rowSummary.label
+      subtitle: checks.length > 0 ? rowSummary.label : null
     }
   }
   if (summary.total === 0) {

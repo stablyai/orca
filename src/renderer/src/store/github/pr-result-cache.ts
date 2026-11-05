@@ -180,21 +180,29 @@ export function applyGitHubPRResultToCaches(
   )
   const hostedReviewEntry = args.hostedReviewCache[hostedReviewCacheKey]
   const current = args.prCache[args.prCacheKey]
+  let suppliedChecksTrusted = true
   if (args.checkContract) {
-    if (!args.checkContract.current()) {
+    if (!args.checkContract.sourceCurrent()) {
       return { prCache: args.prCache, hostedReviewCache: args.hostedReviewCache }
     }
     if (args.pr) {
+      const publication = args.checkContract.publicationContext()
+      const scope = `${publication.scope}:${args.prCacheKey}`
+      const complete =
+        publication.complete || completePRCheckOwnerScope(current?.data ?? {}) === scope
+      const trusted = publication.trusted && args.checksProof !== false
+      suppliedChecksTrusted =
+        !complete || (trusted && Boolean(args.pr.headSha) && Boolean(args.pr.checksSummary))
       const accepted = acceptPRCheckObservation(args.pr, current?.data, {
-        ...args.checkContract,
-        scope: `${args.checkContract.scope}:${args.prCacheKey}`,
-        current: true,
-        trusted: args.checksProof !== false
+        ...publication,
+        scope,
+        complete,
+        trusted
       })!
       args = {
         ...args,
         pr:
-          args.checkContract.complete || !args.overlayChecks
+          complete || !args.overlayChecks
             ? accepted
             : applyCachedChecksStatus(
                 args.state,
@@ -251,21 +259,24 @@ export function applyGitHubPRResultToCaches(
     requestStartedEntry: args.requestStartedEntry
   })
   return {
-    prCache: applyPRCacheResult(
-      args.prCache,
-      args.prCacheKey,
-      args.pr,
-      args.fetchedAt,
-      shouldWritePRCacheForHostedReviewSync({
-        hostedReviewSyncAccepted: hostedReviewSync.accepted,
-        hostedReviewEntry,
-        pr: args.pr,
-        linkedPRNumber: args.linkedPRNumber,
-        fallbackPRNumber: args.fallbackPRNumber
-      }),
-      preserveExistingPRForFallbackMiss,
-      args.fetchedHeadOid
-    ),
+    prCache:
+      !suppliedChecksTrusted && !hostedReviewSync.accepted
+        ? args.prCache
+        : applyPRCacheResult(
+            args.prCache,
+            args.prCacheKey,
+            args.pr,
+            args.fetchedAt,
+            shouldWritePRCacheForHostedReviewSync({
+              hostedReviewSyncAccepted: hostedReviewSync.accepted,
+              hostedReviewEntry,
+              pr: args.pr,
+              linkedPRNumber: args.linkedPRNumber,
+              fallbackPRNumber: args.fallbackPRNumber
+            }),
+            preserveExistingPRForFallbackMiss,
+            args.fetchedHeadOid
+          ),
     hostedReviewCache: hostedReviewSync.cache
   }
 }

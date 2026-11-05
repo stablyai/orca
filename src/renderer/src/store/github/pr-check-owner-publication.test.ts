@@ -3,12 +3,16 @@ import {
   createTestStore,
   makePR,
   mockApi,
-  resetRemoteRuntimeMocks
+  resetRemoteRuntimeMocks,
+  runtimeEnvironmentCall,
+  runtimeEnvironmentTransportCall
 } from '../slices/github-slice-test-harness'
 import { setLocalRuntimeCapabilitiesForTests } from '../../runtime/local-runtime-capabilities'
 import { GITHUB_COMPLETE_PR_CHECK_OBSERVATION_CAPABILITY as capability } from '../../../../shared/source-control/runtime/source-control-runtime-capabilities'
 import type { PRCheckDetail } from '../../../../shared/github/check-types'
 import type { PRInfo } from '../../../../shared/github/pull-request-types'
+import { isCompletePRCheckOwner } from '../../../../shared/github/complete-pr-check-owner'
+import { createCompatibleRuntimeStatusResponse } from '../../runtime/runtime-compatibility-test-fixture'
 import { getOverallCheckCounts } from '../../components/pr-check-counts'
 
 const repo = {
@@ -240,3 +244,189 @@ it('does not lose refresh settlement when its request evidence is evicted', asyn
   })
   expect(store.getState().prRefreshStates[cacheKey]).toBeUndefined()
 })
+
+it.each(['direct', 'event'] as const)(
+  'keeps first-load metadata on capability adoption through %s',
+  async (delivery) => {
+    const store = makeStore()
+    setLocalRuntimeCapabilitiesForTests(null)
+    const alias = { cacheKey, repoId: repo.id, repoPath: repo.path, branch }
+    const incoming = {
+      ...failedPR(),
+      title: 'Found during discovery',
+      mergeable: 'MERGEABLE' as const
+    }
+    const deferred = Promise.withResolvers<unknown>()
+    let pending: Promise<PRInfo | null> | undefined
+    if (delivery === 'direct') {
+      mockApi.gh.refreshPRNow.mockReturnValueOnce(deferred.promise)
+      pending = store
+        .getState()
+        .fetchPRForBranch(repo.path, branch, { repoId: repo.id, force: true })
+    } else {
+      store.getState().applyGitHubPRRefreshEvent({
+        sequence: 151,
+        aliases: [alias],
+        reason: 'manual',
+        requestStartedAt: now,
+        status: 'in-flight'
+      })
+    }
+    setLocalRuntimeCapabilitiesForTests([capability])
+    const outcome = { kind: 'found' as const, pr: incoming, fetchedAt: now + 1 }
+    if (pending) {
+      deferred.resolve(outcome)
+      expect(await pending).toMatchObject({
+        title: 'Found during discovery',
+        mergeable: 'MERGEABLE',
+        checksStatus: 'neutral'
+      })
+    } else {
+      store
+        .getState()
+        .applyGitHubPRRefreshEvent({ sequence: 151, aliases: [alias], reason: 'manual', outcome })
+    }
+    const accepted = store.getState().prCache[cacheKey].data!
+    expect(accepted).toMatchObject({
+      title: 'Found during discovery',
+      mergeable: 'MERGEABLE',
+      checksStatus: 'neutral'
+    })
+    expect(accepted.checksSummary).toBeUndefined()
+    expect(isCompletePRCheckOwner(accepted)).toBe(true)
+    expect(Object.values(store.getState().hostedReviewCache)[0].data).toMatchObject({
+      title: 'Found during discovery',
+      mergeable: 'MERGEABLE',
+      status: 'neutral'
+    })
+    expect(store.getState().prRefreshStates[cacheKey]).toBeUndefined()
+  }
+)
+
+it.each(['linked', 'fallback'] as const)(
+  'keeps a newer complete owner in both caches against a late unproved %s reply',
+  async (mode) => {
+    const store = makeStore()
+    await publish(store, failedPR())
+    setLocalRuntimeCapabilitiesForTests([])
+    const deferred = Promise.withResolvers<unknown>()
+    mockApi.gh.refreshPRNow.mockReturnValueOnce(deferred.promise)
+    const options = mode === 'linked' ? { linkedPRNumber: 12 } : { fallbackPRNumber: 12 }
+    const pending = store
+      .getState()
+      .fetchPRForBranch(repo.path, branch, { repoId: repo.id, force: true, ...options })
+    setLocalRuntimeCapabilitiesForTests([capability])
+    const alias = { cacheKey, repoId: repo.id, repoPath: repo.path, branch, ...options }
+    const fresh = { ...failedPR(), headSha: 'head-2', title: 'New complete owner' }
+    store.getState().applyGitHubPRRefreshEvent({
+      sequence: 152,
+      aliases: [alias],
+      reason: 'manual',
+      requestStartedAt: now,
+      status: 'in-flight'
+    })
+    store.getState().applyGitHubPRRefreshEvent({
+      sequence: 152,
+      aliases: [alias],
+      reason: 'manual',
+      outcome: { kind: 'found', pr: fresh, fetchedAt: now + 1 }
+    })
+    deferred.resolve({
+      kind: 'found',
+      pr: {
+        ...failedPR(),
+        title: 'Late old head',
+        checksStatus: 'success',
+        checksSummary: { ...summary, state: 'success', passed: 101, failed: 0 }
+      },
+      fetchedAt: now + 2
+    })
+    expect(await pending).toMatchObject({
+      title: 'New complete owner',
+      headSha: 'head-2',
+      checksStatus: 'failure'
+    })
+    expect(store.getState().prCache[cacheKey].data).toMatchObject({
+      title: 'New complete owner',
+      headSha: 'head-2',
+      checksSummary: summary
+    })
+    expect(Object.values(store.getState().hostedReviewCache)[0].data).toMatchObject({
+      title: 'New complete owner',
+      headSha: 'head-2',
+      checksSummary: summary
+    })
+  }
+)
+
+it('keeps valid metadata but not old-head checks after a capable capture expires', async () => {
+  const store = makeStore()
+  await publish(store, failedPR())
+  const deferred = Promise.withResolvers<unknown>()
+  mockApi.gh.refreshPRNow.mockReturnValueOnce(deferred.promise)
+  const pending = store
+    .getState()
+    .fetchPRForBranch(repo.path, branch, { repoId: repo.id, force: true })
+  setLocalRuntimeCapabilitiesForTests([])
+  deferred.resolve({
+    kind: 'found',
+    pr: { ...failedPR(), headSha: 'head-2', title: 'New head metadata' },
+    fetchedAt: now + 1
+  })
+  const result = await pending
+  expect(result).toMatchObject({
+    title: 'New head metadata',
+    headSha: 'head-2',
+    checksStatus: 'neutral'
+  })
+  expect(result?.checksSummary).toBeUndefined()
+  expect(store.getState().prCache[cacheKey].data?.checksSummary).toBeUndefined()
+  expect(Object.values(store.getState().hostedReviewCache)[0].data?.checksSummary).toBeUndefined()
+})
+
+it.each([false, true])(
+  'allows first runtime discovery at the real before-send boundary (complete=%s)',
+  async (complete) => {
+    const store = makeStore()
+    store.setState({
+      repos: [{ ...repo, executionHostId: 'runtime:owner' }],
+      runtimeStatusByEnvironmentId: new Map()
+    })
+    runtimeEnvironmentTransportCall.mockImplementation((args) => {
+      if (args.method === 'status.get') {
+        const response = createCompatibleRuntimeStatusResponse('owner-1')
+        response.result.capabilities = complete ? [capability] : []
+        store.setState({
+          runtimeStatusByEnvironmentId: new Map([
+            ['owner', { status: response.result, checkedAt: now }]
+          ])
+        })
+        return response
+      }
+      return runtimeEnvironmentCall(args)
+    })
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'lookup',
+      ok: true,
+      result: {
+        kind: 'found',
+        pr: { ...failedPR(), title: 'Discovered remote' },
+        fetchedAt: now + 1
+      }
+    })
+    const result = await store
+      .getState()
+      .fetchPRForBranch(repo.path, branch, { repoId: repo.id, force: true })
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'github.prForBranch' })
+    )
+    expect(result?.title).toBe('Discovered remote')
+    expect(result?.checksStatus).toBe(complete ? 'neutral' : 'failure')
+    expect(result?.checksSummary).toEqual(complete ? undefined : summary)
+    expect(isCompletePRCheckOwner(result ?? {})).toBe(complete)
+    expect(Object.values(store.getState().prCache)[0].data?.title).toBe('Discovered remote')
+    expect(Object.values(store.getState().hostedReviewCache)[0].data?.title).toBe(
+      'Discovered remote'
+    )
+  }
+)

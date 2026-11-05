@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useSyncExternalStore
+} from 'react'
 import {
   readLocalRuntimeCapabilityObservation,
   subscribeLocalRuntimeCapabilityObservation
@@ -63,14 +70,15 @@ export function useTaskPagePRCheckHydration(
     model.workItemsInvalidationNonce,
     model.appliedTaskSearch
   ])
-  const activeCheckReads = useRef<typeof checkReads | null>(checkReads)
-  activeCheckReads.current = checkReads
-  useEffect(
-    () => () => {
-      activeCheckReads.current = null
-    },
-    []
-  )
+  const activeCheckReads = useRef<typeof checkReads | null>(null)
+  useLayoutEffect(() => {
+    activeCheckReads.current = checkReads
+    return () => {
+      if (activeCheckReads.current === checkReads) {
+        activeCheckReads.current = null
+      }
+    }
+  }, [checkReads])
   const ensurePRChecksLoaded = useCallback(
     (item: GitHubWorkItem): void => {
       if (item.type !== 'pr') {

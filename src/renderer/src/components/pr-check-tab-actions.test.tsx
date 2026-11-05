@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import React, { useSyncExternalStore } from 'react'
+import { useSyncExternalStore } from 'react'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'

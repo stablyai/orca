@@ -106,7 +106,7 @@ export function startPullRequestLookup(args: {
                 ? { fallbackPRNumber, acceptMergedFallbackPR: fallbackPRSource !== null }
                 : {})
             },
-            { timeoutMs: 30_000, ...checkContract.rpcOptions }
+            { timeoutMs: 30_000, ...checkContract.sourceRpcOptions }
           ).then((result) => normalizeGitHubPRForBranchOutcome(result))
         : (async () => {
             const candidate: GitHubPRRefreshCandidate = {
@@ -139,11 +139,11 @@ export function startPullRequestLookup(args: {
         transportFailed = true
         return githubPRTransportFailureOutcome()
       })
-      if (!checkContract.current()) {
+      if (!checkContract.sourceCurrent()) {
         return cached?.data ?? null
       }
       const pr = outcome.kind === 'found' ? outcome.pr : null
-      let acceptedPR = pr
+      let acceptedPR: PRInfo | null = null
       // RPC and lost IPC replies get no coordinator settlement; a lost reply is reported only to the click that asked, so polls stay silent.
       if (
         prRequestGenerations.get(cacheKey) === generation &&
@@ -185,7 +185,7 @@ export function startPullRequestLookup(args: {
             requestStartedAt,
             requestStartedEntry: requestStartedHostedReviewEntry
           })
-          acceptedPR = (updates.prCache ?? s.prCache)[cacheKey]?.data ?? pr
+          acceptedPR = (updates.prCache ?? s.prCache)[cacheKey]?.data ?? null
           return updates.prCache || updates.hostedReviewCache ? updates : s
         })
         if (skippedStaleLinkedPRLookup) {

@@ -105,6 +105,9 @@ export const createRefreshEventActions = (
             }
             continue
           }
+          if (!contract.sourceCurrent()) {
+            continue
+          }
           const data = event.outcome.kind === 'found' ? event.outcome.pr : null
           const linkedPRNumber = alias.linkedPRNumber ?? null
           // Why: one outcome fans out to many aliases; build one lazy index instead of rescanning worktrees per alias.

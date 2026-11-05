@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
-import { cleanup, render, screen } from '@testing-library/react'
-import { afterEach, expect, it } from 'vitest'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { afterEach, expect, it, vi } from 'vitest'
 import { CircleDashed } from 'lucide-react'
 import { acceptPRCheckObservation } from '../../../shared/github/complete-pr-check-owner'
 import { getCheckCounts, getOverallCheckCounts, getChecksSummaryLabel } from './pr-check-counts'
@@ -171,4 +171,35 @@ it('keeps a successful whole owner presentation when independent rows still cont
   )
   expect(screen.getByText('No blocking PR action')).toBeTruthy()
   expect(screen.queryByText('0 failing checks')).toBeNull()
+})
+
+it.each([false, true])('keeps a failed parent pipeline fixable with empty jobs: %s', (empty) => {
+  const fix = vi.fn()
+  const props = {
+    review: owner,
+    reviewKind: 'MR' as const,
+    checks: empty ? [] : rows.map((row) => ({ ...row, conclusion: 'success' as const })),
+    pipelineCheck: {
+      name: 'Pipeline',
+      status: 'completed' as const,
+      conclusion: 'failure' as const,
+      url: null
+    },
+    isResolvingConflictsWithAI: false,
+    onResolveConflictsWithAI: () => {},
+    isFixingChecksWithAI: false,
+    onFixChecksWithAI: fix
+  }
+  const view = render(<PRTriageStrip {...props} />)
+  fireEvent.click(screen.getByRole('button', { name: 'Fix' }))
+  expect(fix).toHaveBeenCalledOnce()
+  view.rerender(<PRTriageStrip {...props} fixChecksDisabled />)
+  expect(screen.getByRole('button', { name: 'Fix' }).hasAttribute('disabled')).toBe(true)
+  view.rerender(<PRTriageStrip {...props} isFixingChecksWithAI />)
+  expect(screen.getByRole('button', { name: 'Fix' }).hasAttribute('disabled')).toBe(true)
+  const accepted = acceptPRCheckObservation({ ...owner, checksSummary: blocked }, null, context)!
+  view.rerender(
+    <PRTriageStrip {...props} reviewKind="PR" review={accepted} checks={[]} pipelineCheck={null} />
+  )
+  expect(screen.getByRole('button', { name: 'Fix' }).hasAttribute('disabled')).toBe(true)
 })

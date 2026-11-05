@@ -72,3 +72,48 @@ it('does not certify passing rows when complete checks are unavailable', () => {
     'idle'
   )
 })
+
+it.each([
+  ['en', 'Cancelled'],
+  ['es', 'Cancelado']
+] as const)('keeps a cancelled owner truthful without detail rows in %s', async (locale, title) => {
+  mobileI18n.addResourceBundle(
+    'es',
+    'translation',
+    { pullRequest: { checkStatus: { cancelled: 'Cancelado' } } },
+    true,
+    true
+  )
+  await activateMobileUiLocale(locale)
+  const owner = markCompletePRCheckOwner(
+    {
+      ...pr,
+      checksSummary: {
+        state: 'failure',
+        total: 1,
+        passed: 0,
+        failed: 1,
+        cancelled: 1,
+        pending: 0,
+        neutral: 0
+      }
+    },
+    'host-epoch'
+  )
+  for (const checksError of [null, 'Rows unavailable']) {
+    expect(buildPrGateRows({ pr: owner, details: null, checks: [], checksError })[0]).toMatchObject(
+      { title, tone: 'idle', subtitle: null }
+    )
+  }
+  expect(
+    buildPrGateRows({
+      pr: owner,
+      details: null,
+      checks: [{ name: 'Build', status: 'completed', conclusion: 'cancelled', url: null }],
+      checksError: null
+    })[0].subtitle
+  ).toBeTruthy()
+  expect(
+    buildPrGateRows({ pr, details: null, checks: [], checksError: null })[0].subtitle
+  ).toBeNull()
+})

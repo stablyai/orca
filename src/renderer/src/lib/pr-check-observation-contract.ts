@@ -5,6 +5,7 @@ import {
 import { RUNTIME_CONNECTION_CHANGED_MESSAGE } from '../web/web-runtime-request-registry'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import type { AppState } from '../store/types'
+import type { callRuntimeRpc } from '../runtime/runtime-rpc-client'
 import { GITHUB_COMPLETE_PR_CHECK_OBSERVATION_CAPABILITY } from '../../../shared/source-control/runtime/source-control-runtime-capabilities'
 import { lastVerifiedRuntimeStatus } from '../../../shared/remote-runtime/host-status/runtime-host-status'
 import { readLocalRuntimeCapabilitiesOrUnknown } from '../runtime/local-runtime-capabilities'
@@ -20,6 +21,8 @@ export function capturePRCheckContract(
     if (target.kind === 'local') {
       return {
         runtimeId: undefined,
+        revision: undefined,
+        generation: undefined,
         epoch: 'local',
         complete:
           readLocalRuntimeCapabilitiesOrUnknown()?.includes(
@@ -29,9 +32,13 @@ export function capturePRCheckContract(
     }
     const entry = get().runtimeStatusByEnvironmentId?.get(target.environmentId)
     const status = lastVerifiedRuntimeStatus(entry)
+    const revision = getRuntimeEnvironmentRevision(target.environmentId)
+    const generation = getRuntimeEnvironmentConnectionGeneration(target.environmentId)
     return {
       runtimeId: status?.runtimeId,
-      epoch: `${getRuntimeEnvironmentRevision(target.environmentId)}:${getRuntimeEnvironmentConnectionGeneration(target.environmentId)}:${status?.runtimeId ?? ''}`,
+      revision,
+      generation,
+      epoch: `${revision}:${generation}:${status?.runtimeId ?? ''}`,
       complete:
         status?.capabilities?.includes(GITHUB_COMPLETE_PR_CHECK_OBSERVATION_CAPABILITY) === true
     }
@@ -41,22 +48,46 @@ export function capturePRCheckContract(
     const now = read()
     return now.epoch === captured.epoch && now.complete === captured.complete
   }
+  const sourceCurrent = () => {
+    const now = read()
+    return (
+      now.revision === captured.revision &&
+      now.generation === captured.generation &&
+      (!captured.runtimeId || now.runtimeId === captured.runtimeId)
+    )
+  }
+  const runtimeOptions =
+    target.kind === 'environment'
+      ? {
+          expectedEnvironmentPairingRevision: captured.revision,
+          expectedEnvironmentRuntimeId: captured.runtimeId
+        }
+      : {}
+  const assertCurrent = (valid: () => boolean) => () => {
+    if (!valid()) {
+      throw new Error(RUNTIME_CONNECTION_CHANGED_MESSAGE)
+    }
+  }
+  const scope = (observation: ReturnType<typeof read>) =>
+    `${source ? getTaskSourceCacheScope(source) : 'workspace'}:${target.kind === 'local' ? 'local' : target.environmentId}:${observation.epoch}`
+  const optionsFor = (valid: () => boolean): NonNullable<Parameters<typeof callRuntimeRpc>[3]> =>
+    target.kind === 'environment' ? { ...runtimeOptions, beforeSend: assertCurrent(valid) } : {}
   return {
-    scope: `${source ? getTaskSourceCacheScope(source) : 'workspace'}:${target.kind === 'local' ? 'local' : target.environmentId}:${captured.epoch}`,
+    scope: scope(captured),
     complete: captured.complete,
     current,
-    rpcOptions:
-      target.kind === 'environment'
-        ? {
-            expectedEnvironmentPairingRevision: getRuntimeEnvironmentRevision(target.environmentId),
-            expectedEnvironmentRuntimeId: captured.runtimeId,
-            beforeSend: () => {
-              if (!current()) {
-                throw new Error(RUNTIME_CONNECTION_CHANGED_MESSAGE)
-              }
-            }
-          }
-        : {}
+    sourceCurrent,
+    publicationContext: () => {
+      const now = read()
+      return {
+        scope: scope(now),
+        complete: captured.complete || now.complete,
+        current: sourceCurrent(),
+        trusted: current()
+      }
+    },
+    rpcOptions: optionsFor(current),
+    sourceRpcOptions: optionsFor(sourceCurrent)
   }
 }
 
