@@ -21,6 +21,9 @@ vi.mock('../input/MobileNativeChatSessionOptionPickers', () => ({
   MobileNativeChatSessionOptionPickers: () => null
 }))
 vi.mock('./MobileNativeChatComposerMic', () => ({ MobileNativeChatComposerMic: () => null }))
+vi.mock('./MobileNativeChatContextUsageRing', () => ({
+  useMobileNativeChatContextRing: () => ({ barProps: {}, ring: null })
+}))
 vi.mock('./MobileNativeChatSendButton', () => ({ MobileNativeChatSendButton: () => null }))
 vi.mock('./MobileNativeChatEditActions', () => ({ MobileNativeChatEditActions: () => null }))
 vi.mock('./MobileNativeChatComposerAttachments', () => ({
