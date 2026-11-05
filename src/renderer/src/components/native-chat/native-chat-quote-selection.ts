@@ -41,7 +41,7 @@ export function readNativeChatQuotableSelection(
 }
 
 // Triple-click ranges can end outside the reply; check selected text edges instead of range endpoints.
-function selectedTextEdges(range: Range): { first: Text; last: Text } | null {
+export function selectedTextEdges(range: Range): { first: Text; last: Text } | null {
   const container = range.commonAncestorContainer
   if (container instanceof Text) {
     return { first: container, last: container }
