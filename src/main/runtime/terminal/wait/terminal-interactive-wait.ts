@@ -16,6 +16,8 @@ import type { AgentLaunchScope } from '../../session-tabs/structured-session-tab
 import { withTimeout } from '../../../../shared/promise-timeout-fallback'
 import { TERMINAL_INTERACTIVE_WAIT_PROBE_TIMEOUT_MS } from './terminal-interactive-probe-budget'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import { getActiveSidebarWorkspaceId } from '../../../../shared/workspace-scope'
+import { resolveStoredWorkspaceContext } from './active-worktree-context-fallback'
 import type { ExactWorkerProviderSession } from '../../../../shared/orchestration-worker-output'
 import { selectExactWorkerProviderSession } from '../../orchestration/workers/transcripts/worker-provider-session'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
@@ -144,7 +146,12 @@ export abstract class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRunt
     branch: string
     displayName: string
   } | null> {
-    let worktreeId = this.store?.getWorkspaceSession?.()?.activeWorktreeId ?? null
+    const session = this.store?.getWorkspaceSession?.()
+    // The scoped key is set for folder workspaces and remote focus; the legacy id alone misses those.
+    let worktreeId = getActiveSidebarWorkspaceId(
+      session?.activeWorkspaceKey ?? null,
+      session?.activeWorktreeId ?? null
+    )
     if (!worktreeId && this.graphStatus === 'ready') {
       for (const tab of this.tabs.values()) {
         if (tab.activeLeafId && tab.worktreeId) {
@@ -165,8 +172,9 @@ export abstract class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRunt
         displayName: resolved.displayName
       }
     } catch {
-      return null
+      // A remote worktree is not in the local catalog; project what the stored row knows.
     }
+    return resolveStoredWorkspaceContext(this.store, worktreeId)
   }
 
   getExactWorkerProviderSession(

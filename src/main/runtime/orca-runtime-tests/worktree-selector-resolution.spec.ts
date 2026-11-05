@@ -226,6 +226,80 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
+  it('resolves the active workspace when the focus is on a stored SSH worktree', async () => {
+    const remoteRepo = {
+      id: 'remote-repo',
+      path: '/home/user/repo',
+      displayName: 'remote',
+      badgeColor: 'blue',
+      addedAt: 1,
+      connectionId: 'ssh-missing'
+    }
+    const mainId = `${remoteRepo.id}::/home/user/repo`
+    const metaById: Record<string, WorktreeMeta> = {
+      [mainId]: makeWorktreeMeta({ displayName: 'Remote main' })
+    }
+    const runtimeStore = {
+      ...store,
+      getRepos: () => [remoteRepo],
+      getRepo: () => remoteRepo,
+      getAllWorktreeMeta: () => metaById,
+      getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
+      getWorkspaceSession: () => ({
+        activeWorktreeId: mainId,
+        activeWorkspaceExecutionHostId: 'ssh:ssh-missing'
+      })
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    // The local catalog cannot resolve a remote worktree; the stored row is the only source.
+    vi.spyOn(
+      runtime as unknown as { resolveWorkspaceSelector: (selector: string) => Promise<unknown> },
+      'resolveWorkspaceSelector'
+    ).mockRejectedValue(new Error('selector_not_found'))
+
+    await expect(runtime.resolveActiveWorktreeContext()).resolves.toMatchObject({
+      worktreeId: mainId,
+      displayName: 'Remote main'
+    })
+  })
+
+  it('resolves the active workspace when only the scoped workspace key names it', async () => {
+    const remoteRepo = {
+      id: 'remote-repo',
+      path: '/home/user/repo',
+      displayName: 'remote',
+      badgeColor: 'blue',
+      addedAt: 1,
+      connectionId: 'ssh-missing'
+    }
+    const mainId = `${remoteRepo.id}::/home/user/repo`
+    const metaById: Record<string, WorktreeMeta> = {
+      [mainId]: makeWorktreeMeta({ displayName: 'Remote main' })
+    }
+    const runtimeStore = {
+      ...store,
+      getRepos: () => [remoteRepo],
+      getRepo: () => remoteRepo,
+      getAllWorktreeMeta: () => metaById,
+      getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
+      getWorkspaceSession: () => ({
+        activeWorktreeId: null,
+        activeWorkspaceKey: `worktree:${mainId}`,
+        activeWorkspaceExecutionHostId: 'ssh:ssh-missing'
+      })
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    vi.spyOn(
+      runtime as unknown as { resolveWorkspaceSelector: (selector: string) => Promise<unknown> },
+      'resolveWorkspaceSelector'
+    ).mockRejectedValue(new Error('selector_not_found'))
+
+    await expect(runtime.resolveActiveWorktreeContext()).resolves.toMatchObject({
+      worktreeId: mainId,
+      displayName: 'Remote main'
+    })
+  })
+
   it('does not interpret active as a runtime-global worktree selector', async () => {
     const runtime = new OrcaRuntimeService(store)
 
