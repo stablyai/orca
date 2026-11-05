@@ -14,8 +14,6 @@
 4 src/renderer/src/components/agent/AgentSettingsDialog.tsx
 1 src/renderer/src/components/automations/automation-host-client.ts
 1 src/renderer/src/components/automations/automations-page-fixtures.ts
-1 src/renderer/src/components/automations/use-automation-source-availability.ts
-1 src/renderer/src/components/automations/use-automation-source-host-availability.ts
 1 src/renderer/src/components/automations/use-automations-page-controller.ts
 1 src/renderer/src/components/automations/use-automations-page-destination-form.ts
 1 src/renderer/src/components/browser-pane/browser-reopen-on-server.ts
@@ -256,7 +254,7 @@
 1 src/renderer/src/runtime/web-runtime-session-tab-lifecycle.ts
 1 src/renderer/src/runtime/web-runtime-session-tab-move.ts
 1 src/renderer/src/runtime/web-runtime-terminal-create-operation.ts
-3 src/renderer/src/runtime/web-runtime-terminal-creation.ts
+1 src/renderer/src/runtime/web-runtime-terminal-creation.ts
 1 src/renderer/src/runtime/web-runtime-worktree-activation.ts
 1 src/renderer/src/runtime/web-session-tabs-sync/active-session-subscription.ts
 2 src/renderer/src/runtime/web-session-tabs-sync/global-session-subscription.ts

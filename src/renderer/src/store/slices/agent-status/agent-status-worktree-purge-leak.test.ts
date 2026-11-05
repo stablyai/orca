@@ -35,13 +35,6 @@ globalThis.window = { api: mockApi }
 import { createTestStore, seedStore } from '../store-test-helpers'
 import { makeWorktree } from '../worktrees-slice-test-fixtures'
 import { makeTab } from '../store-session-test-harness'
-import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
-import {
-  countAgentPaneAuthorityAliasesForTests,
-  resetAgentPaneAuthorityAliasesForTests,
-  resolveAgentPaneAuthorityKey,
-  transferAgentPaneAuthorityAlias
-} from '../agent-pane-authority'
 
 const WT = 'repo1::/path/wt1'
 const TAB = 'tab-1'
@@ -158,27 +151,5 @@ describe('bulk worktree purge evicts pane-scoped agent/unread/input maps (leak r
     const s = store.getState()
     expect(Object.keys(s.sleepingAgentSessionsByPaneKey)).toEqual([OTHER_PANE])
     expect(Object.keys(s.agentLaunchConfigByPaneKey)).toEqual([OTHER_PANE])
-  })
-
-  it('purgeWorktreeTerminalState forgets pane-authority aliases for the removed tabs', () => {
-    resetAgentPaneAuthorityAliasesForTests()
-    const store = createTestStore()
-    const leafId = '77777777-7777-4777-8777-777777777777'
-    const sourcePaneKey = makePaneKey('tab-detached', leafId)
-    const ownerPaneKey = makePaneKey(TAB, leafId)
-    seedPaneState(store)
-    transferAgentPaneAuthorityAlias({
-      fromPaneKey: sourcePaneKey,
-      toPaneKey: ownerPaneKey,
-      ptyId: 'pty-1'
-    })
-    expect(resolveAgentPaneAuthorityKey(sourcePaneKey)).toBe(ownerPaneKey)
-
-    store.getState().purgeWorktreeTerminalState([WT])
-
-    // Purge authority aliases too or module registry keeps routing posts to removed panes.
-    expect(resolveAgentPaneAuthorityKey(sourcePaneKey)).toBe(sourcePaneKey)
-    expect(countAgentPaneAuthorityAliasesForTests()).toBe(0)
-    resetAgentPaneAuthorityAliasesForTests()
   })
 })

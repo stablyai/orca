@@ -6,7 +6,7 @@ import { RuntimeClient } from '../../src/cli/runtime/client'
 import type { AgentLaunchResult } from '../../src/shared/agent-launch/contracts/agent-launch-intent'
 import { openTestAgentSessionRecordStore } from '../../src/main/runtime/agent-session/records/agent-session-record-store-test-harness'
 import { OrcaRuntimeService } from '../../src/main/runtime/orca-runtime'
-import { OrcaRuntimeRpcServer } from '../../src/main/runtime/runtime-rpc'
+import { OrcaRuntimeRpcServer } from '../../src/main/runtime/rpc/server/runtime-rpc'
 import {
   runtimeStub,
   setAgentLaunchRecordStore

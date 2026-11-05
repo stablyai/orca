@@ -45,6 +45,7 @@ export type StructuredAgentSessionLaunchIntent = {
   agent: TuiAgent
   params: StructuredAgentSessionCreateParams
   sendSelectionSupport?: boolean
+  sendSkillsSupport?: boolean
   createMessageSupport?: boolean
   createPrepared?: true
   prepareCreate?: (hostTakesExplicitOptions: boolean) => void

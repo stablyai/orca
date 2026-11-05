@@ -82,7 +82,9 @@ export function SessionMetadata({
           >
             {origin === 'antigravity-ide'
               ? translate('aiVault.antigravityIdeToCli', 'IDE → CLI')
-              : translate('aiVault.antigravity2ToCli', '2.0 → CLI')}
+              : origin === 'antigravity-acp'
+                ? translate('aiVault.antigravityChatToCli', 'Chat → CLI')
+                : translate('aiVault.antigravity2ToCli', '2.0 → CLI')}
           </Badge>
         ) : null}
         <span className="shrink-0 tabular-nums">

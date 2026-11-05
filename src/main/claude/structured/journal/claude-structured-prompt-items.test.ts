@@ -153,6 +153,43 @@ describe('Claude structured approval presentation', () => {
     )
   })
 
+  it('keeps "Allow for this session" rules out of the settings files Claude suggests', () => {
+    const prompt = approvalPrompt(
+      { command: 'touch probe.txt' },
+      {
+        toolName: 'Bash',
+        suggestions: [
+          {
+            type: 'addRules',
+            rules: [{ toolName: 'Bash', ruleContent: 'touch probe.txt' }],
+            behavior: 'allow',
+            destination: 'localSettings'
+          },
+          { type: 'addDirectories', directories: ['/repo/work'], destination: 'session' },
+          { type: 'setMode', mode: 'acceptEdits', destination: 'session' }
+        ]
+      }
+    )
+
+    expect(buildClaudePromptReply(prompt, { kind: 'option', optionId: 'allowForSession' })).toEqual(
+      {
+        behavior: 'allow',
+        updatedInput: { command: 'touch probe.txt' },
+        updatedPermissions: [
+          {
+            type: 'addRules',
+            rules: [{ toolName: 'Bash', ruleContent: 'touch probe.txt' }],
+            behavior: 'allow',
+            destination: 'session'
+          },
+          { type: 'addDirectories', directories: ['/repo/work'], destination: 'session' },
+          { type: 'setMode', mode: 'acceptEdits', destination: 'session' }
+        ],
+        toolUseID: 'tool-approval'
+      }
+    )
+  })
+
   it('asks Claude to revise a rejected plan while accepting legacy session replies', () => {
     const prompt = approvalPrompt(
       { plan: '# Release' },

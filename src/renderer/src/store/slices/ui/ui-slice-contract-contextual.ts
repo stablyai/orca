@@ -54,6 +54,7 @@ export type UISliceContextual = {
     | 'confirm-orca-yaml-hooks'
     | 'diagram-viewer'
     | 'agent-session-history'
+    | 'chat-account-usage'
     | 'node-dist-mirror'
   modalData: Record<string, unknown>
   openModal: (modal: UISliceContextual['activeModal'], data?: Record<string, unknown>) => void
@@ -74,7 +75,9 @@ export type UISliceContextual = {
   activeContextualTourWasFeaturePreviouslyInteracted: boolean
   contextualTourNavigationInteractionSnapshot: Partial<Record<ContextualTourId, boolean>>
   activeContextualTourSuppressed: boolean
-  contextualTourShownThisSession: boolean
+  // Tours started this app session. Only one informational tour may start per session; an
+  // unfinished action tour started here is paused, not over.
+  contextualToursStartedThisSession: ContextualTourId[]
   contextualToursOnboardingVisible: boolean
   contextualToursBlockingSurfaceVisible: boolean
   lastCompletedContextualTourId: ContextualTourId | null

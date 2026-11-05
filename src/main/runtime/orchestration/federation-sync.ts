@@ -1,3 +1,5 @@
+import { federationRelayPrefix } from './federation-relay-prefix'
+import { federationRelayWireItem } from './federation-relay-wire'
 import { z } from 'zod'
 import type { FederationRuntime } from './federation-runtime'
 import type { FederatedLifecycleSettlement } from './federation-lifecycle-settlement'
@@ -244,22 +246,41 @@ async function syncFederatedDispatchPages(
     db.getWorkerDispatch(dispatchId)?.state === 'ready'
       ? db.listPendingFederationRelay(dispatchId, 'to_worker')
       : []
-  if (toWorker.length > 0) {
+  let outgoing = toWorker.map(federationRelayWireItem)
+  while (outgoing.length > 0 && isCurrent()) {
+    let sentThrough = outgoing.at(-1)!.sequence
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: federationImport returns this receipt; the acknowledgment is validated below.
     const delivered = (await runtime.callOrchestrationWorkerServer(
       federated.environment_id,
       'orchestration.federationImport',
-      { dispatchId, items: toWorker },
+      { dispatchId, items: outgoing },
       15_000,
+      { orchestrationRequestId: `relay_import_${dispatchId}_${sentThrough}` },
       {
-        orchestrationRequestId: `relay_import_${dispatchId}_${toWorker.at(-1)?.sequence ?? 0}`
-      },
-      { expectedEnvironmentPairingRevision: currentServer.pairingRevision }
+        expectedEnvironmentPairingRevision: currentServer.pairingRevision,
+        prepareRequest: federationRelayPrefix(dispatchId, outgoing, (last) => {
+          sentThrough = last
+        })
+      }
     )) as { acknowledgedThrough: number }
+    if (!isCurrent()) {
+      break
+    }
+    if (!Number.isInteger(delivered.acknowledgedThrough)) {
+      throw new OrchestrationError(
+        'request_mismatch',
+        'The federation acknowledgment has an invalid sequence.'
+      )
+    }
+    if (delivered.acknowledgedThrough < outgoing[0]!.sequence) {
+      break
+    }
     db.acknowledgeFederationRelay({
       dispatchId,
       direction: 'to_worker',
       throughSequence: delivered.acknowledgedThrough
     })
+    outgoing = outgoing.filter((item) => item.sequence > delivered.acknowledgedThrough)
   }
   if (
     isCurrent() &&

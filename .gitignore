@@ -23,6 +23,7 @@ dist-electron/
 out/
 /build/
 release/
+!config/scripts/release/
 native/**/.build/
 native/windows-cli-launcher/target/
 native/windows-agent-hook/target/

@@ -78,7 +78,10 @@ vi.mock('@/store/index', async () => {
       activityBarPosition: mockAppState.activityBarPosition,
       setActivityBarPosition: vi.fn(),
       checksByWorktreeId: {},
-      keybindings: {}
+      keybindings: {},
+      activeView: 'terminal',
+      activePendingCreationId: null,
+      pendingWorktreeCreations: {}
     })
     mockAppState.snapshotCache.set(selector, selected)
     return selected

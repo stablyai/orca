@@ -1,4 +1,4 @@
-import { createCheckLogFixture } from '../../../../../../../config/scripts/check-job-log-test-fixture.mjs'
+import { createCheckLogFixture } from '../../../../../../../config/scripts/performance/check-job-log/check-job-log-test-fixture.mjs'
 import { sliceCheckLogTail } from '../../../../../../shared/source-control/checks/logs/check-job-log-tail-slice'
 
 export const capturedCheckLogFailure = createCheckLogFixture()

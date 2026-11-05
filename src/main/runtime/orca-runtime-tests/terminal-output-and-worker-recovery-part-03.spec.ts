@@ -1,8 +1,10 @@
-import { makeRuntimeOrchestrationDb } from '../runtime-orchestration-db.test-fixture'
-import { withDurableRuntimeStore } from '../runtime-durable-store-fixture'
+import { makeRuntimeOrchestrationDb } from './runtime-orchestration-db.test-fixture'
+import { withDurableRuntimeStore } from './runtime-durable-store-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
-import { OrcaRuntimeService, getDefaultWorkspaceSession } from '../orca-runtime-test-mocks.spec'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import {
   HEADLESS_LEAF_ID,
@@ -12,11 +14,11 @@ import {
   TEST_WORKTREE_PATH,
   deferred,
   makeRuntimeStoreWithWorkspaceSession
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
 import {
   makePostRevealWorkerRecoveryHarness,
   publishLegacyWorkerReveal
-} from '../orca-runtime-test-scenario-builders.spec'
+} from './orca-runtime-test-scenario-builders.spec'
 
 describe('OrcaRuntimeService', () => {
   it('retries renderer reveal before clearing an adopted legacy worker sleeping record', async () => {

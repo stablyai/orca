@@ -98,12 +98,16 @@ describe('ACP session runtime', () => {
     }
   )
 
-  it('denies autonomous permissions between attempts and allows the admitted retry to ask', async () => {
+  it('lets the agent ask from its own turn while a busy refusal holds the prompt', async () => {
+    const asked: string[] = []
     const { runtime, agent } = fixture(
       {},
       {
         retryBusyPrompts: true,
-        onPermission: () => ({ outcome: { outcome: 'selected', optionId: 'allow' } })
+        onPermission: (request) => {
+          asked.push(request.toolCall.toolCallId)
+          return { outcome: { outcome: 'selected', optionId: 'allow' } }
+        }
       }
     )
     await runtime.start(startOptions)
@@ -125,21 +129,16 @@ describe('ACP session runtime', () => {
     const pending = runtime.prompt([...textPrompt])
     await tick()
     expect(agent.frames.find((frame) => frame.id === 'same-chunk')).toMatchObject({
-      result: { outcome: { outcome: 'cancelled' } }
-    })
-    expect(await agent.request('waiting', 'session/request_permission', permission)).toMatchObject({
-      result: { outcome: { outcome: 'cancelled' } }
+      result: { outcome: { outcome: 'selected', optionId: 'allow' } }
     })
     agent.on('session/prompt', (frame) => {
-      void agent.request('admitted', 'session/request_permission', permission).then((response) => {
-        expect(response).toMatchObject({
-          result: { outcome: { outcome: 'selected', optionId: 'allow' } }
-        })
+      void agent.request('admitted', 'session/request_permission', permission).then(() => {
         agent.reply(frame, { stopReason: 'end_turn' })
       })
     })
     await vi.advanceTimersByTimeAsync(1_000)
     expect(await pending).toEqual({ stopReason: 'end_turn' })
+    expect(asked).toHaveLength(2)
   })
 
   it.each(['close', 'EOF'] as const)('ends delayed busy recovery on %s', async (action) => {

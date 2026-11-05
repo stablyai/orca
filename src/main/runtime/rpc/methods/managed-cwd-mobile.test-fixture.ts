@@ -15,9 +15,9 @@ import {
   REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES,
   serializeRemoteRuntimeRpcRequest
 } from '../../../../shared/remote-runtime/remote-runtime-memory-limits'
-import { DeviceRegistry } from '../../device-registry'
+import { DeviceRegistry } from '../server/pairing/device-registry'
 import type { OrcaRuntimeService } from '../../orca-runtime'
-import { OrcaRuntimeRpcServer } from '../../runtime-rpc'
+import { OrcaRuntimeRpcServer } from '../server/runtime-rpc'
 import { MobileSocketWiring, type MobileSocketTransport } from '../mobile-socket-wiring'
 import { AGENT_LAUNCH_METHODS } from './agent-launch'
 import { FILE_MUTATION_METHODS } from './files-mutation-methods'

@@ -16,7 +16,8 @@ const mocks: MessageSenderFixtureMocks = vi.hoisted(() => ({
 }))
 
 vi.mock('@/runtime/structured-agent-session-client', () => ({
-  callStructuredAgentSession: mocks.call
+  callStructuredAgentSession: mocks.call,
+  structuredAgentSessionHostSupports: vi.fn(async () => true)
 }))
 vi.mock('@/runtime/runtime-rpc-client', () => ({
   ensureRuntimeEnvironmentCompatible: mocks.compatible

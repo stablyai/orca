@@ -5,6 +5,10 @@ import { translate } from '@/i18n/i18n'
 import { copyTerminalHandleForPane } from './terminal-handle-copy'
 import { runTerminalCopy, runTerminalIdentityCopy } from './terminal-copy-rejection-guards'
 import { readTerminalClipboardSelection } from './terminal-clipboard-selection-text'
+import { useAppStore } from '@/store'
+import { fencedCode } from '../editor/selection-copy'
+import { formatNativeChatQuote } from '../native-chat/native-chat-quote-selection'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 
 export const copyTerminalPaneMenuSelection = async (pane: ManagedPane | null): Promise<void> => {
   if (!pane) {
@@ -16,6 +20,31 @@ export const copyTerminalPaneMenuSelection = async (pane: ManagedPane | null): P
     // Radix restores the container, but xterm needs its textarea focused for typing (#592).
     focus: () => pane.terminal.focus()
   })
+}
+
+/** The selection quoted under the terminal tab's title, for the Add to chat target list. */
+export const terminalPaneMenuAddToChat = (
+  pane: ManagedPane | null,
+  tabId: string,
+  worktreeId: string
+): { worktreeId: string; quote: string } | null => {
+  const text = pane ? readTerminalClipboardSelection(pane.terminal).replace(/\s+$/, '') : ''
+  if (!text.trim()) {
+    return null
+  }
+  const state = useAppStore.getState()
+  const tab = state.unifiedTabsByWorktree[worktreeId]?.find(
+    (candidate) => candidate.contentType === 'terminal' && candidate.entityId === tabId
+  )
+  const title = tab?.customLabel || tab?.label || 'Terminal'
+  return {
+    // The floating terminal belongs to no workspace; it floats over the one on screen.
+    worktreeId:
+      worktreeId === FLOATING_TERMINAL_WORKTREE_ID
+        ? (state.activeWorktreeId ?? worktreeId)
+        : worktreeId,
+    quote: formatNativeChatQuote(`${title}\n${fencedCode(text)}`)
+  }
 }
 
 export const copyTerminalPaneMenuPaneId = async (

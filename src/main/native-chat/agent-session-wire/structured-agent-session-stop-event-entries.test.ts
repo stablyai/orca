@@ -19,7 +19,7 @@ import { structuredQueuePauses } from './structured-agent-session-queued-pause'
 
 let rig: QueuedMessageTestRig
 afterEach(async () => rig.dispose())
-const MANUAL_IDLE_SWEEP = { idleMs: 0, intervalMs: 60 * 60 * 1000 }
+const MANUAL_IDLE_SWEEP = { idleMs: () => 0, intervalMs: 60 * 60 * 1000 }
 function journal() {
   const value = rig.host.collaboratorsForTests().sessions.get(SESSION)?.journal
   if (!value) {

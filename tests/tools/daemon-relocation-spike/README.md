@@ -109,7 +109,7 @@ though re-adding it is the more robust choice.
 ## The handshake / client
 
 `ndjson-client.mjs` is a small standalone NDJSON client (no electron/src
-imports) that mirrors `src/main/daemon/daemon-server.ts`:
+imports) that mirrors `src/main/daemon/server/daemon-server.ts`:
 
 1. Read the token the server writes to the token file after it begins listening.
 2. Open a **control** socket, send `hello {role:'control'}`, await
@@ -120,7 +120,7 @@ imports) that mirrors `src/main/daemon/daemon-server.ts`:
    read `data` events on the stream socket until the nonce appears **alone at
    line start** (executed output, distinct from the echoed input line).
 
-`PROTOCOL_VERSION` is read at runtime from `src/main/daemon/types.ts` so the
+`PROTOCOL_VERSION` is read at runtime from `src/main/daemon/protocol/daemon-rpc-contract.ts` so the
 client never drifts from the daemon.
 
 ## The handle probe
