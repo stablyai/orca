@@ -1,6 +1,7 @@
 import type { MountAdapter } from '../recording-scenario'
 import type { operationModuleLoader } from '../operation-module-loader'
 import type * as LineMutations from '../../../session/github-pr-review-line-mutations'
+import { legacyShellStatusFixture } from '../legacy-shell-status-fixture'
 
 const WORKTREE = 'repo-9::/w'
 const PR_NUMBER = 12
@@ -10,7 +11,8 @@ export function githubPrMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
   return {
-    'session.pr-reads': ({ client }) => {
+    'session.pr-reads': ({ client: suppliedClient }) => {
+      const client = legacyShellStatusFixture(suppliedClient)
       const reads = modules.load<typeof import('../../../session/github-pr-rpc')>(
         'mobile/src/session/github-pr-rpc.ts'
       )

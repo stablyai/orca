@@ -7,7 +7,7 @@ import {
   GITHUB_EXACT_WORK_ITEM_TARGET_RUNTIME_CAPABILITY as exact
 } from '../../../src/shared/source-control/runtime/source-control-runtime-capabilities'
 
-function host(capabilities: string[]) {
+function host(capabilities: string[], observed = true) {
   let generation = 1
   let state: ReturnType<RpcClient['getState']> = 'connected'
   const listeners = new Set<Parameters<RpcClient['onStateChange']>[0]>()
@@ -31,11 +31,13 @@ function host(capabilities: string[]) {
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture implements every client operation used by the contract.
   const rpcClient = client as unknown as RpcClient
-  recordRuntimeStatusProbe(rpcClient, {
-    runtimeId: 'runtime-1',
-    hostDescriptor: { installationId: 'host-1' },
-    capabilities
-  })
+  if (observed) {
+    recordRuntimeStatusProbe(rpcClient, {
+      runtimeId: 'runtime-1',
+      hostDescriptor: { installationId: 'host-1' },
+      capabilities
+    })
+  }
   return {
     client: rpcClient,
     sendRequest,
@@ -146,32 +148,37 @@ it('uses later same-epoch probe evidence after transient discovery failure witho
   adopted.retire()
 })
 
-it('coalesces concurrent discovery and leaves unknown-host reads available while status is pending', async () => {
-  const source = host([complete, exact])
-  recordRuntimeStatusProbe(source.client, null)
-  const status = Promise.withResolvers<Awaited<ReturnType<typeof source.sendRequest>>>()
-  source.sendRequest.mockReturnValueOnce(status.promise)
-  const reads = await Promise.all(
-    Array.from({ length: 100 }, () =>
-      captureMobilePRCheckContract(source.client, { repo: 'id:repo' }, true)
-    )
-  )
-  expect(reads.every((read) => !read.complete)).toBe(true)
-  expect(source.sendRequest).toHaveBeenCalledTimes(1)
-  status.resolve({
-    id: 's',
-    ok: true,
-    result: {
-      runtimeId: 'runtime-1',
-      hostDescriptor: { installationId: 'host-1' },
-      capabilities: [complete, exact]
+it.each(['ordinary', 'refresh'])(
+  'coalesces concurrent %s discovery without delaying legacy reads',
+  async (mode) => {
+    const source = host([complete, exact], mode === 'refresh')
+    if (mode === 'refresh') {
+      recordRuntimeStatusProbe(source.client, null)
     }
-  })
-  await status.promise
-  await vi.waitFor(async () => {
-    const next = await captureMobilePRCheckContract(source.client, { repo: 'id:repo' })
-    expect(next.complete).toBe(true)
-    next.retire()
-  })
-  reads.forEach((read) => read.retire())
-})
+    const status = Promise.withResolvers<Awaited<ReturnType<typeof source.sendRequest>>>()
+    source.sendRequest.mockReturnValueOnce(status.promise)
+    const reads = await Promise.all(
+      Array.from({ length: 100 }, () =>
+        captureMobilePRCheckContract(source.client, { repo: 'id:repo' }, mode === 'refresh')
+      )
+    )
+    expect(reads.every((read) => !read.complete)).toBe(true)
+    expect(source.sendRequest).toHaveBeenCalledTimes(1)
+    status.resolve({
+      id: 's',
+      ok: true,
+      result: {
+        runtimeId: 'runtime-1',
+        hostDescriptor: { installationId: 'host-1' },
+        capabilities: [complete, exact]
+      }
+    })
+    await status.promise
+    await vi.waitFor(async () => {
+      const next = await captureMobilePRCheckContract(source.client, { repo: 'id:repo' })
+      expect(next.complete).toBe(true)
+      next.retire()
+    })
+    reads.forEach((read) => read.retire())
+  }
+)
