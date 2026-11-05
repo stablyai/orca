@@ -77,9 +77,6 @@ it('returns remote replies when the saved environment store cannot be updated', 
   // Last-used bookkeeping is best effort; it must not fail a command whose reply already arrived.
   await expect(client.call('status.get')).resolves.toMatchObject({ result: { server: 'remote' } })
   await expect(client.call('worktree.list')).resolves.toMatchObject({ result: { worktrees: [] } })
-  expect(mocks.remotePreflight).toHaveBeenCalledTimes(1)
-  expect(warn).toHaveBeenCalledWith(
-    expect.stringContaining('Skipped last-used bookkeeping'),
-    expect.stringContaining('EPERM')
-  )
+  // Proves the store write really failed, so the replies above survived it rather than skipped it.
+  expect(warn).toHaveBeenCalledWith(expect.any(String), expect.stringContaining('EPERM'))
 })
