@@ -1,5 +1,5 @@
 import { OrcaRuntimeService } from './orca-runtime'
-import type { RuntimeLeafRecord } from './runtime-terminal-state-records'
+import type { RuntimeLeafRecord } from './terminal/records/runtime-terminal-state-records'
 
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 

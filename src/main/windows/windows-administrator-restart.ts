@@ -49,6 +49,6 @@ export async function restartLocalTerminalsAfterElevation(signal: AbortSignal): 
   if (signal.aborted || (await getWindowsAdministratorStatus()) !== true || signal.aborted) {
     return
   }
-  const { restartDaemon } = await import('../daemon/daemon-provider-restart')
+  const { restartDaemon } = await import('../daemon/providers/lifecycle/daemon-provider-restart')
   await restartDaemon()
 }

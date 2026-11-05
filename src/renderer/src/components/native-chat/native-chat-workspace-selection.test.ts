@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Tab } from '../../../../shared/tab-types'
-import { addQuoteToAgent, workspaceChatTargetFor } from './native-chat-workspace-selection'
+import { workspaceChatTargetFor } from './native-chat-workspace-selection'
 
 const sendMessageToAgent = vi.hoisted(() => vi.fn())
 vi.mock('@/lib/agent-message-send', () => ({ sendMessageToAgent }))
@@ -74,18 +74,5 @@ describe('workspaceChatTargetFor', () => {
         leafId: SHELL_LEAF
       })
     ).toBeNull()
-  })
-
-  // A plain terminal agent has no composer: it gets the notes send's paste, without the Enter.
-  it('pastes into a plain terminal agent without submitting', async () => {
-    sendMessageToAgent.mockResolvedValue({ status: 'sent' })
-    const target = { kind: 'terminal' as const, tabId: 'term-plain', leafId: CHAT_LEAF }
-    await expect(addQuoteToAgent('wt-1', target, '> quote')).resolves.toEqual({ status: 'sent' })
-    expect(sendMessageToAgent).toHaveBeenCalledWith({
-      worktreeId: 'wt-1',
-      target,
-      prompt: '> quote',
-      submit: false
-    })
   })
 })

@@ -79,7 +79,7 @@ import {
   appendBrowserTabOrder,
   collectBrowserGroupAssignment
 } from '../mobile-session-browser-group-projection'
-import { HeadlessEmulator } from '../../daemon/headless-emulator'
+import { HeadlessEmulator } from '../../daemon/emulation/headless-emulator'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-types'
 import '../../../shared/terminal/input/terminal-input'
 import {
@@ -116,7 +116,7 @@ import { WATCHER_REMOVAL_DRAIN_BUDGET_MS } from '../../workspaces/removal/watche
 import {
   _resetTerminalViewAttributesForTest,
   setTerminalViewAttributes
-} from '../terminal-view-attribute-store'
+} from '../terminal/view/terminal-view-attribute-store'
 import { clearConfiguredWorktreeSharedDirectoriesCacheForTests } from '../../git/worktrees/content-paths/worktree-shared-directories'
 import { setWorktreeWatcherRemoval } from '../../workspaces/removal/worktree-watcher-removal'
 import { createRootDispatch } from '../orchestration/db/root-dispatch-test-fixture'

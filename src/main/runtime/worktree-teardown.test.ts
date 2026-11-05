@@ -10,7 +10,7 @@ vi.mock('../memory/pty-registry', () => ({
 
 import { killAllProcessesForWorktree, WORKTREE_PROCESS_SWEEP_TIMEOUT_MS } from './worktree-teardown'
 import type { IPtyProvider, PtyProcessInfo } from '../providers/pty-provider-contract'
-import { DaemonPtyAdapter } from '../daemon/daemon-pty-adapter'
+import { DaemonPtyAdapter } from '../daemon/providers/adapter/daemon-pty-adapter'
 
 function createProviderStub(listProcesses: () => Promise<PtyProcessInfo[]>): IPtyProvider {
   return {

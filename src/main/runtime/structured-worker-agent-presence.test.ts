@@ -1,7 +1,7 @@
 /** Structured workers have no PTY leaf; dispatch --inject must recognize them before a stale leaf probe turns agent presence false. */
 
 import { describe, expect, it, vi } from 'vitest'
-import { RuntimeTerminalAgentPresence } from './runtime-terminal-agent-presence'
+import { RuntimeTerminalAgentPresence } from './terminal/query/runtime-terminal-agent-presence'
 
 function presence(isLiveStructuredAgent: (handle: string) => boolean) {
   const getLiveLeaf = vi.fn(() => {

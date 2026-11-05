@@ -4,7 +4,10 @@ import {
   BROWSER_PASSWORDS_GUEST_CHANNELS,
   BROWSER_PASSWORDS_TO_GUEST_CHANNELS
 } from '../shared/browser-passwords-types'
-import type { BrowserPasswordFillRequest } from '../shared/browser-passwords-types'
+import type {
+  BrowserPasswordFillRequest,
+  BrowserPasswordGuestEnable
+} from '../shared/browser-passwords-types'
 import { installBrowserPasswordDetector } from './browser-password-detector'
 import {
   PRELOAD_BROWSER_PASSWORDS_GUEST_CHANNELS,
@@ -27,8 +30,8 @@ function install(): void {
   })
 }
 
-function enable(): void {
-  listeners.get(BROWSER_PASSWORDS_TO_GUEST_CHANNELS.enable)?.(undefined)
+function enable(payload: BrowserPasswordGuestEnable = { reportPageForms: false }): void {
+  listeners.get(BROWSER_PASSWORDS_TO_GUEST_CHANNELS.enable)?.(payload)
 }
 
 function fill(request: BrowserPasswordFillRequest): unknown {
@@ -188,10 +191,21 @@ describe('browser password detector', () => {
     expect(observe).toHaveBeenCalled()
   })
 
+  it('reports no page forms unless main waits on a login that navigated here', async () => {
+    load(LOGIN_FORM)
+    install()
+    enable({ reportPageForms: false })
+    await vi.advanceTimersByTimeAsync(600)
+    document.body.insertAdjacentHTML('beforeend', '<p>unrelated</p>')
+    await vi.advanceTimersByTimeAsync(600)
+
+    expect(sentOn(CHANNEL.pageForms)).toEqual([])
+  })
+
   it('reports the page forms once after enable and again only when they change', async () => {
     load(LOGIN_FORM)
     install()
-    enable()
+    enable({ reportPageForms: true })
     await vi.advanceTimersByTimeAsync(600)
 
     expect(sentOn(CHANNEL.pageForms)).toEqual([

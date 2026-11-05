@@ -83,7 +83,9 @@ export const cmdJPaletteFeatureTipAcknowledgedSchema = z
   .strict()
 
 // Missing versions identify events emitted before the corner-card rollout.
-const chatUiLaunchTipExperimentVersionSchema = z.literal('corner-card-v2').optional()
+const chatUiLaunchTipExperimentVersionSchema = z
+  .enum(['corner-card-v2', 'corner-card-v3'])
+  .optional()
 const chatUiFeatureTipVariantSchema = z.enum(['chat_ui_off', 'chat_ui_on'])
 export const chatUiFeatureTipShownSchema = z
   .object({
@@ -131,7 +133,7 @@ export const agentDefaultSurfaceChangedSchema = z
     from_mode: nativeChatViewModeSchema,
     to_mode: nativeChatViewModeSchema,
     source: z.enum(['launch_card', 'settings']),
-    launch_tip_shown: z.boolean(),
+    launch_tip_shown: z.boolean().optional(),
     nth_repo_added: nthRepoAddedSchema
   })
   .strict()

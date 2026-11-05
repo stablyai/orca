@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { refuseWslHostWindowsDrivePath } from './wsl-host-windows-drive-guard'
+import { refuseWslHostWindowsDrivePath } from './terminal/launch/wsl-host-windows-drive-guard'
 import { mkdir } from 'node:fs/promises'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../shared/constants'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../shared/execution-host'

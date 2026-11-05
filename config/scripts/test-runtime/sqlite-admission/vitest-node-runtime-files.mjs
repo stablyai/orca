@@ -26,7 +26,7 @@ const NODE_RUNTIME_INCLUDE = [
   // Electron main bridges streams with Node's implementation.
   'src/main/host/electron-http-client.test.ts',
   'src/main/browser/extensions/native-messaging/browser-extension-native-host-process-backpressure.test.ts',
-  'src/main/daemon/daemon-init-provider-installation.test.ts',
+  'src/main/daemon/providers/lifecycle/testing/daemon-init-provider-installation.test.ts',
   'src/main/orcad/orcad-daemon-teardown-linux.test.ts',
   // Launches process.execPath as orcad's pinned runtime to measure V8 address-space reservations.
   'src/main/managed-server/install/orcad-remote-launch-address-space.test.ts',
@@ -104,8 +104,8 @@ const NODE_RUNTIME_INCLUDE = [
   'src/**/*.live-shell.test.ts',
   // These drive live zsh through node-pty and rely on Node's native PTY stream delivery.
   'src/main/pty/shell-startup/shell-startup-feature-channel.test.ts',
-  'src/main/daemon/shell-ready.test.ts',
-  'src/main/daemon/repro-13767-shell-ready-marker-lost-to-exec.test.ts',
+  'src/main/daemon/shell-readiness/testing/shell-ready.test.ts',
+  'src/main/daemon/shell-readiness/testing/repro-13767-shell-ready-marker-lost-to-exec.test.ts',
   'src/**/*real-pty*.test.ts',
   'src/**/*-native.test.ts',
   'src/**/*retention*.test.ts',

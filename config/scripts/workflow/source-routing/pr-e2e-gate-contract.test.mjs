@@ -60,7 +60,7 @@ describe('PR E2E gate contract', () => {
 })
 
 describe('Daemon mock modified-only source routing', () => {
-  const helper = 'src/main/daemon/daemon-init-dependency-mocks.ts'
+  const helper = 'src/main/daemon/providers/lifecycle/testing/daemon-init-dependency-mocks.ts'
   const verified = { allowDaemonInitTestSupport: true }
   it('omits the real D7 route only for the proven unit-support scope', () => {
     expect(selectPrE2eSpecs([helper])).toContain('tests/e2e/orcad-serve-mode-switch.spec.ts')

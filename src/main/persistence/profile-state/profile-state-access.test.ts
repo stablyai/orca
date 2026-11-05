@@ -11,10 +11,10 @@ import {
 } from './profile-state-access'
 import { profileStateAccessPaths, reclaimExitedOwner } from './profile-state-access-owner'
 import * as identity from './profile-state-access-identity'
-import * as processStart from '../../daemon/daemon-process-start-time'
+import * as processStart from '../../daemon/endpoint/identity/daemon-process-start-time'
 
 vi.mock('node:fs', async (importOriginal) => ({ ...(await importOriginal<typeof fs>()) }))
-vi.mock('../../daemon/daemon-process-start-time', async (importOriginal) => ({
+vi.mock('../../daemon/endpoint/identity/daemon-process-start-time', async (importOriginal) => ({
   ...(await importOriginal<typeof processStart>())
 }))
 vi.mock('./profile-state-access-identity', async (importOriginal) => ({
