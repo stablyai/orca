@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
-import { createTestStore, makeWorktree, seedStore } from '../../store/slices/store-test-helpers'
+import {
+  createTestStore,
+  makeWorktree,
+  seedStore,
+  TEST_REPO
+} from '../../store/slices/store-test-helpers'
 import { createStoreSessionMockApi } from '../../store/slices/store-session-test-harness'
 import type * as HostPersistence from '@/lib/workspace-session-host-persistence'
 import {
@@ -199,6 +204,24 @@ describe('runtime file opens with preview', () => {
     await openFile({ worktreeId: unowned, ...page, navigation: 'caller', preview: true })
 
     expect(browserTabs(store, unowned)).toHaveLength(0)
+    expect(hasSource(store, page.filePath)).toBe(true)
+  })
+
+  it('falls back to HTML source in an SSH workspace', async () => {
+    const { openFile, store } = await setup()
+    const ssh = 'repo2::/repo2/ssh'
+    const page = { filePath: '/repo2/ssh/index.html', relativePath: 'index.html' }
+    store.setState((s) => ({
+      repos: [...s.repos, { ...TEST_REPO, id: 'repo2', path: '/repo2', connectionId: 'ssh-1' }],
+      worktreesByRepo: {
+        ...s.worktreesByRepo,
+        repo2: [makeWorktree({ id: ssh, repoId: 'repo2', path: '/repo2/ssh' })]
+      }
+    }))
+
+    await openFile({ worktreeId: ssh, ...page, navigation: 'caller', preview: true })
+
+    expect(browserTabs(store, ssh)).toHaveLength(0)
     expect(hasSource(store, page.filePath)).toBe(true)
   })
 
