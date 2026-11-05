@@ -14,7 +14,7 @@ import type {
   PtyRegistrationClaim,
   RuntimePtyWorktreeRecord
 } from '../records/runtime-terminal-state-records'
-import type { OrchestrationCompatibilityTerminalAuthority } from '../../runtime-terminal-contracts'
+import type { OrchestrationCompatibilityTerminalAuthority } from '../../orchestration/terminal-authority/orchestration-compatibility-authority'
 import type { RuntimeMobileSessionCreateTerminalResult } from '../../../../shared/runtime-session-contracts'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { mainTerminalRegistered } from '../surface/main-terminal-surfaces'

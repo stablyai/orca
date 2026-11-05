@@ -5,13 +5,11 @@ import type { RuntimeLeafRecord } from '../records/runtime-terminal-state-record
 import type { RuntimeTerminalPromptDelivery } from '../../../../shared/runtime-terminal-send-contract'
 import { OrcaRuntimeWithResolveTerminalPane } from '../recovery/resolve-terminal-pane'
 import { wrapTerminalBracketedPasteText } from '../../../../shared/terminal/input/terminal-bracketed-paste-text'
-import { PROVEN_ABSENT_LEAF_PTY_TTL_MS } from '../../orca-runtime-core'
+import { PROVEN_ABSENT_LEAF_PTY_TTL_MS } from './proven-absent-leaf-pty'
 import { pruneExpiredProvenAbsentLeafPtyVerdicts } from '../../proven-absent-leaf-pty-verdicts'
 import type { RuntimeTerminalSend } from '../../../../shared/runtime-types'
-import type {
-  RuntimeAgentPromptWriteOptions,
-  TerminalHandleRecord
-} from '../../runtime-terminal-contracts'
+import type { RuntimeAgentPromptWriteOptions } from './agent-prompt-write-options'
+import type { TerminalHandleRecord } from '../identity/terminal-handle-records'
 import {
   assertTerminalInputWithinLimitWithYield,
   buildTerminalSendPayload

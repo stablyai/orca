@@ -30,7 +30,7 @@ export function ImageCommentSidebar({
       <p className="text-xs text-muted-foreground">
         {translate(
           'components.native-chat.imageComments.hint',
-          'Click the image to add a numbered comment. Drag a pin to move it. Hold Alt to pan.'
+          'Click the image to add a numbered comment. Drag a pin or focus it and use arrow keys to move it (Shift for larger steps). Hold Alt to pan.'
         )}
       </p>
       <div className="scrollbar-sleek min-h-0 flex-1 overflow-auto">

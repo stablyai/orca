@@ -189,6 +189,11 @@
       "sendQueueHint": "현재 턴이 끝난 뒤 실행됩니다",
       "sendSteerHint": "Agent가 지금 하고 있는 작업에 들어갑니다"
     },
+    "contextUsage": {
+      "label": "컨텍스트 {{used}}/{{window}} 토큰, {{percent}}% 사용",
+      "title": "컨텍스트",
+      "estimated": "마지막 응답 기준 추정치입니다."
+    },
     "composerAttachments": {
       "attachedImage": "첨부된 이미지",
       "file": "파일",
@@ -776,7 +781,9 @@
     },
     "markdownBlocks": {
       "copyCode": "코드 복사",
-      "openImage": "이미지 열기"
+      "openImage": "이미지 열기",
+      "wrapLines": "줄 바꿈",
+      "disableLineWrap": "줄 바꿈 끄기"
     },
     "mountedBottomDrawer": {
       "dismissDrawer": "하단 패널 닫기"
@@ -1205,6 +1212,10 @@
       "previewFile": "{{name}} 파일 미리보기",
       "retryLoading": "{{path}} 다시 불러오기",
       "unavailable": "모바일에서 사용 불가"
+    },
+    "fileExplorerRowActions": {
+      "copyName": "이름 복사",
+      "copyRelativePath": "상대 경로 복사"
     },
     "fileMarkdownPreview": {
       "copyLoadedSource": "불러온 Markdown 소스 복사",
@@ -1767,13 +1778,8 @@
       "noUpdate": "{{value0}} 동안 업데이트 없음"
     },
     "agentMessageAttribution": {
-      "from": "발신: {{sender}}",
-      "fromMore": "발신: {{sender}} 외 {{count}}명",
-      "fromUnnamed": "발신: 에이전트",
-      "messageFrom": "{{sender}}의 메시지",
-      "messageFromMore": "{{sender}} 외 {{count}}명의 메시지",
-      "messageFromUnnamed": "에이전트의 메시지",
-      "unnamedSender": "에이전트"
+      "unnamedSender": "에이전트",
+      "fromSender": "보낸 사람:"
     },
     "aiVaultResumeLaunch": {
       "createFailed": "터미널을 생성하지 못했습니다.",
@@ -1798,6 +1804,7 @@
       "countWorkflows_one": "워크플로 {{count}}개",
       "countWorkflows_other": "워크플로 {{count}}개",
       "detailsUnavailable": "이 세션에서는 작업 세부정보를 사용할 수 없습니다.",
+      "outputFile": "출력: {{value0}}",
       "groupAgents": "에이전트",
       "groupMonitors": "모니터",
       "groupShell": "셸",
@@ -2141,8 +2148,7 @@
     },
     "queuedMessageComposer": {
       "commandsNotAllowed": "대기 중인 메시지에는 명령어를 저장할 수 없습니다.",
-      "editing": "메시지 편집 중",
-      "editingAttributed": "메시지 편집 중 · {{attribution}}"
+      "editing": "메시지 편집 중"
     },
     "quickCommandEditorForm": {
       "action": "동작",

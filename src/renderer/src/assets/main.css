@@ -700,6 +700,11 @@ body[data-modal-overlay-open]
   --chat-warning: color-mix(in srgb, var(--status-warning) 70%, var(--chat-source-foreground));
   --chat-diff-added: color-mix(in srgb, var(--diff-added) 70%, var(--chat-source-foreground));
   --chat-diff-removed: color-mix(in srgb, var(--diff-removed) 70%, var(--chat-source-foreground));
+  --chat-link: color-mix(
+    in srgb,
+    var(--text-link, var(--callout-note)) 70%,
+    var(--chat-source-foreground)
+  );
 }
 
 @layer base {

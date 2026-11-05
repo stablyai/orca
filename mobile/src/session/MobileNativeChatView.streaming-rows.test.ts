@@ -246,6 +246,8 @@ function Harness({
   } as unknown as MobileNativeChatController
   return createElement(MobileNativeChatOverlay, {
     controller,
+    worktreePath: null,
+    connState: 'connected',
     onOpenFile: stable.onComposerTextChange,
     images: {
       attachments: [],

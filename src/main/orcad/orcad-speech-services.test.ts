@@ -9,8 +9,8 @@ import { SPEECH_RECOGNIZER_DIR_ENV } from '../../shared/speech-recognizer-packag
 import { isLocalSpeechModel, SPEECH_MODEL_CATALOG } from '../speech/model-catalog'
 import { setSpeechServiceFactories } from '../speech/speech-runtime-service'
 import { LOCAL_SPEECH_UNAVAILABLE_ERROR } from '../speech/stt-worker-paths'
-import { RuntimeMobileDictationController } from '../runtime/runtime-mobile-dictation-controller'
-import { RuntimeMobileSpeechCatalog } from '../runtime/runtime-mobile-speech-catalog'
+import { RuntimeMobileDictationController } from '../runtime/speech/runtime-mobile-dictation-controller'
+import { RuntimeMobileSpeechCatalog } from '../runtime/speech/runtime-mobile-speech-catalog'
 import type { RuntimeStore } from '../runtime/runtime-store-contract'
 import { orcadSpeechServiceFactories } from './orcad-speech-services'
 

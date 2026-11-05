@@ -1,6 +1,6 @@
 import './unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
-import type { RuntimeTerminalDataMeta } from '../orca-runtime'
+import type { RuntimeTerminalDataMeta } from '../terminal/output/runtime-terminal-stream-consumers'
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame,

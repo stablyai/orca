@@ -193,6 +193,11 @@
       "sendQueueHint": "S’exécute après le tour en cours",
       "sendSteerHint": "S’ajoute à ce que l’agent fait en ce moment"
     },
+    "contextUsage": {
+      "label": "Contexte : {{used}} tokens sur {{window}}, {{percent}} % utilisés",
+      "title": "Contexte",
+      "estimated": "Estimation basée sur la dernière réponse."
+    },
     "composerAttachments": {
       "attachedImage": "Image jointe",
       "file": "Fichier",
@@ -818,7 +823,9 @@
     },
     "markdownBlocks": {
       "copyCode": "Copier le code",
-      "openImage": "Ouvrir l'image"
+      "openImage": "Ouvrir l'image",
+      "wrapLines": "Retour à la ligne",
+      "disableLineWrap": "Désactiver le retour à la ligne"
     },
     "mountedBottomDrawer": {
       "dismissDrawer": "Fermer le panneau"
@@ -1248,6 +1255,10 @@
       "previewFile": "Afficher l'aperçu du fichier {{name}}",
       "retryLoading": "Réessayer de charger {{path}}",
       "unavailable": "Indisponible sur mobile"
+    },
+    "fileExplorerRowActions": {
+      "copyName": "Copier le nom",
+      "copyRelativePath": "Copier le chemin relatif"
     },
     "fileMarkdownPreview": {
       "copyLoadedSource": "Copier le code source Markdown chargé",
@@ -1824,13 +1835,8 @@
       "noUpdate": "Aucune mise à jour depuis {{value0}}"
     },
     "agentMessageAttribution": {
-      "from": "De la part de {{sender}}",
-      "fromMore": "De la part de {{sender}} +{{count}}",
-      "fromUnnamed": "D'un agent",
-      "messageFrom": "Message envoyé par {{sender}}",
-      "messageFromMore": "Message envoyé par {{sender}} +{{count}}",
-      "messageFromUnnamed": "Message d'un agent",
-      "unnamedSender": "un agent"
+      "unnamedSender": "un agent",
+      "fromSender": "De"
     },
     "aiVaultResumeLaunch": {
       "createFailed": "Impossible de créer le terminal",
@@ -1860,6 +1866,7 @@
       "countWorkflows_one": "{{count}} flux de travail",
       "countWorkflows_other": "{{count}} flux de travail",
       "detailsUnavailable": "Les détails des tâches ne sont pas disponibles pour cette session.",
+      "outputFile": "Sortie : {{value0}}",
       "groupAgents": "Agents",
       "groupMonitors": "Moniteurs",
       "groupShell": "Shell",
@@ -2213,8 +2220,7 @@
     },
     "queuedMessageComposer": {
       "commandsNotAllowed": "Les commandes ne peuvent pas être enregistrées dans un message en attente.",
-      "editing": "Modification du message",
-      "editingAttributed": "Modification du message · {{attribution}}"
+      "editing": "Modification du message"
     },
     "quickCommandEditorForm": {
       "action": "Action",

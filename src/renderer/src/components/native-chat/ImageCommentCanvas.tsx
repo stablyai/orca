@@ -186,6 +186,35 @@ export function ImageCommentCanvas({
                     left: offset.x + badge.x,
                     top: offset.y + badge.y
                   }}
+                  onKeyDown={(event) => {
+                    if (saving || event.altKey || event.ctrlKey || event.metaKey) {
+                      return
+                    }
+                    const direction = {
+                      ArrowLeft: [-1, 0],
+                      ArrowRight: [1, 0],
+                      ArrowUp: [0, -1],
+                      ArrowDown: [0, 1]
+                    }[event.key]
+                    if (!direction) {
+                      return
+                    }
+                    event.preventDefault()
+                    event.stopPropagation()
+                    const step = event.shiftKey ? 5 : 1
+                    setSelected(item.id)
+                    setPins((items) =>
+                      items.map((pin) =>
+                        pin.id === item.id
+                          ? {
+                              ...pin,
+                              x: Math.max(0, Math.min(100, pin.x + direction[0] * step)),
+                              y: Math.max(0, Math.min(100, pin.y + direction[1] * step))
+                            }
+                          : pin
+                      )
+                    )
+                  }}
                   onClick={(event) => {
                     event.stopPropagation()
                     setSelected(item.id)
