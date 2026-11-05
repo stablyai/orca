@@ -4,7 +4,7 @@ import { dirname, join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
 import { resolveCli } from './runtime-serve-terminal-smoke.mjs'
 import { NODE_RUNTIME_ASSETS } from '../../src/shared/node-runtime-pin.ts'
-import { currentTarget } from './server-build-target.mjs'
+import { currentTarget } from './orcad-distribution/prebuilds/server-build-target.mjs'
 import { ORCAD_CLI_ENTRY_FILENAME } from '../../src/shared/orcad-artifacts.ts'
 
 const roots = []

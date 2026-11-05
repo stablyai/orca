@@ -69,7 +69,7 @@ import { registerLegacyRelayBridgeIpc } from '../../ssh/legacy-relay/legacy-rela
 import {
   disposeDesktopBrowserBridge,
   installDesktopBrowserBridge
-} from '../desktop-browser-bridge-wiring'
+} from '../browser/desktop-browser-bridge-wiring'
 
 const SSH_IPC_CHANNELS = [
   'ssh:listTargets',

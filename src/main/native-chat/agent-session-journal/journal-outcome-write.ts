@@ -1,7 +1,5 @@
 import { journalInputAcceptance } from './journal-input-provenance'
-import { copyJournalNativeState } from './journal-input-conversion'
 import { journalInputOrder } from './journal-input-order'
-import type Database from '../../sqlite/sync-database'
 import { createJournalReducerState, type JournalReducerState } from './journal-reducer'
 import type { JournalRow } from './journal-row-schema'
 import {
@@ -10,6 +8,7 @@ import {
   startJournalOutcomeLog
 } from './journal-outcome-format'
 import { persistJournalOutcomeRows } from './journal-outcome-table'
+import type Database from '../../sqlite/sync-database'
 
 /** Every write stores outcome records, and nothing else: they are the saved chat. An input-only epoch
  * keeps its rows as they are and starts its records here, after them. */
@@ -17,7 +16,8 @@ export function prepareJournalOutcomeWrite(
   db: Database.Database,
   live: JournalReducerState,
   rows: readonly JournalRow[],
-  savedAt: number
+  savedAt: number,
+  finishFold?: (draft: JournalReducerState) => void
 ): { state: JournalReducerState; adopt: () => JournalReducerState } {
   const previous = journalOutcomeSource(db, live.sessionId, live.epoch)
   const source =
@@ -31,7 +31,8 @@ export function prepareJournalOutcomeWrite(
     source,
     rows,
     savedAt,
-    !previous || previous.format < 2
+    !previous || previous.format < 2,
+    finishFold
   )
   advanceJournalOutcomeSource(db, live.sessionId, live.epoch, transition.state.lastSequence)
   return transition
@@ -42,8 +43,7 @@ export function publishJournalOutcomeEpoch(
   db: Database.Database,
   sessionId: string,
   epoch: string,
-  rows: readonly JournalRow[],
-  previous?: JournalReducerState
+  rows: readonly JournalRow[]
 ): { adopt: () => JournalReducerState } {
   const first = rows[0]
   if (!first || first.seq !== 1 || first.kind !== 'epoch') {
@@ -53,9 +53,6 @@ export function publishJournalOutcomeEpoch(
   const initial = createJournalReducerState(sessionId, epoch, (id) =>
     journalInputAcceptance(db, sessionId, id)
   )
-  if (previous) {
-    copyJournalNativeState(previous, initial)
-  }
   journalInputOrder(initial).beginReconstruction()
   const transition = persistJournalOutcomeRows(
     db,

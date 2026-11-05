@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentPaneChange } from '../agent-hooks/agent-transition-detector'
-import type { AgentStatusIpcPayload } from '../../shared/agent-status-ipc-payload'
-import { AGENT_DONE_QUIET_MS, type AgentTransition } from '../../shared/agent-transitions'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
+import {
+  AGENT_DONE_QUIET_MS,
+  type AgentTransition
+} from '../../shared/agent-status/lifecycle/agent-transitions'
 import type { NotificationSettings } from '../../shared/notification-settings-types'
 import type {
   MobileNotificationDispatchEvent,
@@ -146,11 +149,17 @@ describe('TerminalAgentPhonePush', () => {
     ])
   })
 
-  it('pushes a finish with no live work seen at once, as the window does', () => {
-    const { sent, finish } = harness()
-    finish()
-    expect(sent).toHaveLength(1)
-  })
+  it.each([null, 'host-a'])(
+    'pushes windowless news with its execution owner: %s',
+    (connectionId) => {
+      const { sent, finish } = harness()
+      finish({ connectionId })
+      expect(sent).toHaveLength(1)
+      expect(sent[0]?.workspaceExecutionHostId ?? 'local').toBe(
+        connectionId ? `ssh:${connectionId}` : 'local'
+      )
+    }
+  )
 
   it('waits out the quiet window for a Pi agent even with no live work seen', () => {
     const { sent, advance, finish } = harness()

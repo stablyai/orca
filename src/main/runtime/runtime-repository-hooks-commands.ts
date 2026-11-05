@@ -13,9 +13,9 @@ import {
 import { getEffectiveSetupRunPolicy } from '../workspace-hooks/effective-hook-config'
 import { resolveHookCommandSourcePolicy } from '../../shared/hook-command-source-policy'
 import { getSetupConfig, getSetupTrustContent } from '../../shared/orca-hook-setup-config'
-import { isENOENT } from '../ipc/filesystem/filesystem-path-containment'
+import { isENOENT } from '../ipc/filesystem/access/filesystem-path-containment'
 import { isFolderRepo } from '../../shared/repo-kind'
-import { inspectSetupScriptImportCandidates } from '../../shared/setup-script-imports'
+import { inspectSetupScriptImportCandidates } from '../../shared/workspace-setup/setup-script-imports'
 import { joinWorktreeRelativePath } from './runtime-relative-paths'
 import { blockedWslDistroForPath } from '../wsl/filesystem/wsl-unc-access-gate'
 

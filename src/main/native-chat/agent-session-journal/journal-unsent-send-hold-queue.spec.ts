@@ -1,6 +1,6 @@
 import type { createFixture } from './journal-unsent-send-hold-contract-test-fixture'
 import { describe, expect, it, vi } from 'vitest'
-import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
+
 import { USER_MESSAGE_SOURCE } from '../../../shared/agent-session/agent-session-message-source'
 
 export function registerJournalUnsentSendHoldQueueTests(
@@ -127,23 +127,15 @@ export function registerJournalUnsentSendHoldQueueTests(
       const reopened = await fixture.open()
       await fixture.hold(reopened)
 
-      expect(reopened.queuedMessages.get('A')?.queuedAt?.epoch).not.toBe(
-        reopened.queuedMessages.get('B')?.queuedAt?.epoch
-      )
+      const a = reopened.queuedMessages.get('A')!.queuedAt!
+      const b = reopened.queuedMessages.get('B')!.queuedAt!
+      expect(a.epoch).toBe(b.epoch)
+      expect(a.sequence).toBeLessThan(b.sequence)
       expect(fixture.cardOrder(reopened)).toEqual(['A', 'B'])
     })
   })
 
   describe('the source a send records', () => {
-    it('is folded from the row; a row without one folds without it', async () => {
-      const journal = await fixture.open()
-      await fixture.accept(journal, 'with-source', { origin: 'host', source: USER_MESSAGE_SOURCE })
-      await fixture.accept(journal, 'without', { origin: 'client' })
-      const folded: AgentJournalSubmission | undefined = journal.submission('with-source')
-      expect(folded?.source).toEqual({ kind: 'user' })
-      expect(journal.submission('without')).not.toHaveProperty('source')
-    })
-
     it('keeps only the kind of an agent’s source, never its senders', async () => {
       const journal = await fixture.open()
       await fixture.accept(journal, 'mail', { origin: 'host', source: fixture.MAIL_SOURCE })

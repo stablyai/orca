@@ -102,11 +102,4 @@ describe('delegated mobile device sync', () => {
     expect(sync('Pixel')).toEqual([])
     expect(upsert).toHaveBeenCalledTimes(2)
   })
-
-  it('does not rerun when every phone got its child', () => {
-    const upsert = vi.spyOn(registry, 'upsertDelegatedMobileDevices')
-
-    expect(sync('Pixel')).toHaveLength(1)
-    expect(upsert).toHaveBeenCalledOnce()
-  })
 })

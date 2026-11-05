@@ -7,7 +7,7 @@ import {
   wslHostRunRefusal
 } from './wsl-host-add-admission'
 import { focusReachability } from './wsl-host-focus-reachability'
-import type { WslHostDeploymentRecord } from '../../../shared/wsl-host-deployment-store'
+import type { WslHostDeploymentRecord } from '../../../shared/remote-runtime/host-store/wsl-host-deployment-store'
 import type { WslHostStatus } from '../../../shared/wsl-host-types'
 
 /** What a paired phone may know of a host: `stopped` only once a stop was confirmed. */

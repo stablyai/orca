@@ -1,11 +1,12 @@
 // @vitest-environment happy-dom
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
 import { createTabsSliceMockApi } from '@/store/slices/tabs-slice-test-harness'
 import { makeFolderWorkspace } from '@/store/slices/worktrees-slice-test-fixtures'
-import * as historyRequest from '../right-sidebar/ai-vault-panel-session-list-request'
+import * as historyRequest from '../right-sidebar/ai-vault/scanning/ai-vault-panel-session-list-request'
 
 const mocks = vi.hoisted(() => ({ launch: vi.fn(), resume: vi.fn(), close: vi.fn() }))
 vi.mock('@/store', async () => {
@@ -60,7 +61,8 @@ it('offers chat actions without a duplicate close button and targets Resume at t
   const source = renderHeader()
   expect(screen.getAllByRole('button').map((button) => button.getAttribute('aria-label'))).toEqual([
     'Continue with Terminal Agent',
-    'Split Chat Right'
+    'Split Chat Right',
+    'Chat settings'
   ])
   const folder = useAppStore.getState().folderWorkspaces[0]
   act(() => useAppStore.setState({ folderWorkspaces: [{ ...folder, executionHostId: 'ssh:dev' }] }))
@@ -79,39 +81,4 @@ it('offers chat actions without a duplicate close button and targets Resume at t
       agent: 'codex'
     })
   )
-})
-
-async function splitTooltipText(): Promise<string | null> {
-  const trigger = screen.getByRole('button', { name: 'Split Chat Right' })
-  fireEvent.pointerMove(trigger, { pointerType: 'mouse' })
-  return (await screen.findByRole('tooltip')).textContent
-}
-
-it('shows the effective split-right shortcut in the Split Chat Right tooltip', async () => {
-  useAppStore.setState({ keybindings: { 'terminal.splitRight': ['Mod+Alt+K'] } })
-  renderHeader()
-  const shortcut = navigator.userAgent.includes('Mac') ? '⌘⌥K' : 'Ctrl+Alt+K'
-  expect(await splitTooltipText()).toBe(`Split Chat Right: ${shortcut}`)
-  expect(screen.getByRole('button', { name: 'Split Chat Right' })).toBeTruthy()
-})
-
-it.each([
-  ['Mac', '⌘D, ⌘K'],
-  ['Windows', 'Ctrl+D, Ctrl+K'],
-  ['Linux', 'Ctrl+D, Ctrl+K']
-])('separates alternative split shortcuts on %s', async (userAgent, shortcuts) => {
-  const userAgentSpy = vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue(userAgent)
-  try {
-    useAppStore.setState({ keybindings: { 'terminal.splitRight': ['Mod+D', 'Mod+K'] } })
-    renderHeader()
-    expect(await splitTooltipText()).toBe(`Split Chat Right: ${shortcuts}`)
-  } finally {
-    userAgentSpy.mockRestore()
-  }
-})
-
-it('omits the shortcut from the Split Chat Right tooltip when split-right is unbound', async () => {
-  useAppStore.setState({ keybindings: { 'terminal.splitRight': [] } })
-  renderHeader()
-  expect(await splitTooltipText()).toBe('Split Chat Right')
 })

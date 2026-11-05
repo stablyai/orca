@@ -5,15 +5,18 @@ import {
   hostTestRestingOptionsJournal as restingJournal,
   hostTestOptionsReadStore
 } from './structured-agent-session-host-test-data'
-import { CODEX_SESSION_OPTION_CATALOG } from '../../../shared/agent-session/options/agent-session-option-catalog-claude-codex'
+import {
+  CODEX_SESSION_OPTION_CATALOG,
+  CLAUDE_SESSION_OPTION_CATALOG
+} from '../../../shared/agent-session/options/agent-session-option-catalog-claude-codex'
 import {
   structuredAgentSessionMessageSelection,
   structuredAgentSessionSendSelection
 } from '../../../shared/agent-session/options/structured-agent-session-option-view'
 import { agentSessionRecordFixture } from '../agent-session-record-test-fixture'
-import { startCodexTurn } from '../../codex/codex-structured-turn-start'
-import { readLiveCodexSessionOptions } from '../../codex/codex-structured-session-options'
-import { optionSession } from '../../codex/codex-structured-option-session.test-fixture'
+import { startCodexTurn } from '../../codex/structured/turns/codex-structured-turn-start'
+import { readLiveCodexSessionOptions } from '../../codex/structured/catalog/codex-structured-session-options'
+import { optionSession } from '../../codex/structured/catalog/codex-structured-option-session.test-fixture'
 import { CodexAppServerRequestError } from '../../codex/app-server/codex-app-server-request-error'
 import { structuredAgentSessionDrawnValues } from '../../../shared/agent-session/options/structured-agent-session-option-snapshot'
 
@@ -94,7 +97,10 @@ describe('a chat at rest, read by the host', () => {
     const resting = {
       child: liveOptions ? { fence: 1 } : null,
       params: { provider: record.provider },
-      journal: restingJournal(items, wroteBeforeOpen)
+      journal: {
+        ...restingJournal(items, wroteBeforeOpen),
+        snapshot: () => ({ items: [], submissions: [] })
+      }
     }
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this read touches only the declared context fields.
     const context = {
@@ -111,47 +117,37 @@ describe('a chat at rest, read by the host', () => {
     return readStructuredAgentSessionOptions(context, SESSION, { readsWithoutModel: true })
   }
 
-  it.each<[string, RestingFacts, AgentJournalItemBody[], boolean, string[]]>([
-    ['started here names its default as its own', {}, [], false, []],
-    [
-      'taken from history',
-      { providerHandleChain: [{ ...created[0]!, origin: 'adopted' }] },
-      [],
-      true,
-      ['model']
-    ],
-    // A context clear hides the turn from the newest-turn read, not from history.
-    ['with a turn before a context clear', {}, [turn], true, ['model']],
-    [
-      'after a rewind',
-      {
-        rewind: {
-          phase: 'completed',
-          operationId: 'rewind-1',
-          callerKey: 'caller-1',
-          itemId: 'item-1',
-          expectedEpoch: 'epoch-1'
-        }
-      },
-      [],
-      true,
-      ['model']
-    ],
-    // A journal founded afresh proves nothing for a chat whose agent already ran.
-    ['whose journal went missing', { providerHandleChain: created }, [], false, ['model']]
-  ])('%s', async (_name, facts, items, wroteBeforeOpen, defaulted) => {
-    const read = await readAtRest(facts, items, wroteBeforeOpen)
-    expect(read.current).toMatchObject({ model: 'gpt-account', defaulted })
+  it('separates Claude fallback reports from the saved model and accepted send selection', async () => {
+    const saved = { model: 'claude-opus-5-5', effort: 'high' }
+    const answer = await readAtRest({ provider: 'claude', options: saved }, [], false, null, true, {
+      models: [],
+      current: { model: 'claude-opus-5-5', reportedModel: 'claude-opus-4-8', confirmed: ['model'] }
+    })
+    expect(answer.current).toMatchObject({
+      model: saved.model,
+      reportedModel: 'claude-opus-4-8',
+      effort: saved.effort,
+      acceptedInputSources: { model: 'saved', effort: 'saved' }
+    })
+    const state = applyStructuredAgentSessionOptions(
+      createStructuredAgentSessionOptionState('claude'),
+      CLAUDE_SESSION_OPTION_CATALOG,
+      answer
+    )
+    expect(structuredAgentSessionMessageSelection(state)).toEqual({ ...saved, fastMode: 'false' })
+  })
+
+  it("names a new chat's default without sending it", async () => {
+    const read = await readAtRest({}, [], false)
+    expect(read.current).toMatchObject({ model: 'gpt-account', defaulted: ['model'] })
     const state = applyStructuredAgentSessionOptions(
       createStructuredAgentSessionOptionState('codex', CODEX_SESSION_OPTION_CATALOG),
       CODEX_SESSION_OPTION_CATALOG,
       read,
       { newLaunch: true, coherentCatalog: true }
     )
-    expect(read.current.acceptedInputSources).toEqual(defaulted.length ? {} : { model: 'policy' })
-    expect(structuredAgentSessionMessageSelection(state)).toEqual(
-      defaulted.length ? {} : { model: 'gpt-account' }
-    )
+    expect(read.current.acceptedInputSources).toEqual({})
+    expect(structuredAgentSessionMessageSelection(state)).toEqual({})
   })
 
   it.each([
@@ -338,7 +334,7 @@ describe('a chat at rest, read by the host', () => {
     expect(live.current.model).toBeUndefined()
     const answer = await readAtRest({ provider: 'claude' }, [], false, installed, true, live)
     expect(answer.current.model).toBe(model)
-    expect(answer.current.defaulted).toEqual([])
+    expect(answer.current.defaulted).toEqual(model ? ['model'] : [])
     if (installed === null) {
       const atRest = await readAtRest({ provider: 'claude' }, [], false, installed)
       expect(atRest.current.model).toBeUndefined()
@@ -358,7 +354,8 @@ describe('a chat at rest, read by the host', () => {
       answer,
       launch
     )
-    expect(structuredAgentSessionSendSelection(state)).toEqual(model ? { model } : undefined)
+    // The child's own default is shown, never sent.
+    expect(structuredAgentSessionSendSelection(state)).toBeUndefined()
     const resumed = await readAtRest(
       {
         provider: 'claude',
@@ -438,7 +435,8 @@ describe('a chat at rest, read by the host', () => {
       false,
       answer.models
     )
-    expect(complete.current.effort).toBe('high')
+    expect(complete.current.effort).toBeUndefined()
+    expect(complete.current.acceptedInputSources).not.toHaveProperty('effort')
   })
 
   it.each([

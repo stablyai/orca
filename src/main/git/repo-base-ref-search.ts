@@ -1,5 +1,5 @@
 import type { BaseRefSearchResult } from '../../shared/repo-types'
-import { isForEachRefExcludeUnsupportedError } from '../../shared/git-ref-command-capabilities'
+import { isForEachRefExcludeUnsupportedError } from '../../shared/git/refs/git-ref-command-capabilities'
 import {
   clampRepoSearchRefsLimit,
   clampRepoSearchRefsScanLimit,
@@ -7,8 +7,8 @@ import {
   isRepoSearchRefsRequestLimit,
   isRepoSearchRefsScanLimit
 } from '../../shared/repo-search-limits'
-import { isSafeGitRefName } from '../../shared/git-status-upstream-ref'
-import { isRemoteHeadRef } from '../../shared/hosted-review-refs'
+import { isSafeGitRefName } from '../../shared/git/status/git-status-upstream-ref'
+import { isRemoteHeadRef } from '../../shared/source-control/hosted-review/hosted-review-refs'
 import { getLocalGitCapabilityCache } from './command-runner/git-capability-state'
 import { gitExecOptions, type LocalGitExecOptions } from './repo-default-base-ref'
 import { gitExecFileAsync } from './runner'

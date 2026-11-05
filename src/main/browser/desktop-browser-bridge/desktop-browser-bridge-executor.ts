@@ -11,7 +11,7 @@ import {
 } from '../../../shared/desktop-browser-bridge-protocol'
 import type { RpcResponse } from '../../runtime/rpc/core'
 import { runInRemoteCliBrowserScope } from '../../runtime/desktop-browser-bridge/remote-cli-browser-scope'
-import { parseCdpKeyEvent } from '../cdp-keyboard-us-layout'
+import { parseCdpKeyEvent } from '../cdp/input/cdp-keyboard-us-layout'
 
 export type DesktopBrowserBridgeOutcome =
   | { ok: true; result: unknown }

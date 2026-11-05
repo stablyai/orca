@@ -4,18 +4,18 @@ import { useState, type Dispatch, type ReactNode, type SetStateAction } from 're
 import { toast } from 'sonner'
 import { useAppStore } from '@/store/index'
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
-import { parseCustomTerminalThemeSelection } from '../../../../../../shared/terminal-custom-themes'
+import { parseCustomTerminalThemeSelection } from '../../../../../../shared/terminal-themes/terminal-custom-themes'
 import {
   terminalCustomThemeRemoval,
   type TerminalCustomThemeRemoval,
   DEFAULT_TERMINAL_THEME_DARK,
   DEFAULT_TERMINAL_THEME_LIGHT
-} from '../../../../../../shared/terminal-theme-selection'
+} from '../../../../../../shared/terminal-themes/terminal-theme-selection'
 import {
   hasTerminalColorOverrides,
   TERMINAL_COLOR_OVERRIDES_SETTING,
   type TerminalThemeSlot
-} from '../../../../../../shared/terminal-color-overrides'
+} from '../../../../../../shared/terminal-themes/terminal-color-overrides'
 import {
   ColorField,
   SettingsSegmentedControl,

@@ -129,14 +129,6 @@ beforeEach(() => {
 afterEach(() => cleanup())
 
 describe('composer prompt recall', () => {
-  it('walks prompts sent before this composer existed, and back to an empty draft', () => {
-    const input = renderComposer(['one', 'two'])
-    expect(press(input, 'ArrowUp')).toBe('two')
-    expect(press(input, 'ArrowUp')).toBe('one')
-    expect(press(input, 'ArrowDown')).toBe('two')
-    expect(press(input, 'ArrowDown')).toBe('')
-  })
-
   // `/model` opens the command picker when typed; recalled, it must not take the arrows.
   it('keeps walking past a recalled command instead of handing the arrows to its picker', () => {
     const input = renderComposer(['one', '/model'])

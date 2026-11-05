@@ -14,8 +14,8 @@ import { dirname, join } from 'node:path'
 import { runInNewContext } from 'node:vm'
 import { afterEach, expect, it, vi } from 'vitest'
 import { NODE_RUNTIME_PIN } from '../../src/shared/node-runtime-pin.ts'
-import { sha256Of } from './orcad-prebuild-slot-contents.mjs'
-import { peImage } from './windows-pe-image-fixture.mjs'
+import { sha256Of } from './orcad-distribution/prebuilds/orcad-prebuild-slot-contents.mjs'
+import { peImage } from './native-build/windows/windows-pe-image-fixture.mjs'
 import {
   benchmarkWindowsSecurityReuse,
   probeSecurityArtifact,
@@ -203,8 +203,8 @@ function hostedFixture(arch = 'x64', failure) {
     'package.json',
     '.github/actions/prepare-native-runtime/action.yml',
     'src/shared/node-runtime-pin.ts',
-    'config/scripts/build-windows-security-addon.mjs',
-    'config/scripts/ensure-native-runtime.mjs',
+    'config/scripts/native-build/windows/build-windows-security-addon.mjs',
+    'config/scripts/native-build/node-addons/ensure-native-runtime.mjs',
     'config/scripts/benchmark-windows-security-reuse.mjs'
   ]) {
     mkdirSync(dirname(join(f.root, path)), { recursive: true })

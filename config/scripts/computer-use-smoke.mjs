@@ -3,7 +3,7 @@
 import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
-import { resolveDevCliUserDataPath } from './dev-instance-isolation.mjs'
+import { resolveDevCliUserDataPath } from './development/instance-isolation/dev-instance-isolation.mjs'
 
 const repoRoot = resolve(import.meta.dirname, '..', '..')
 const cliPath =

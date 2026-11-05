@@ -30,7 +30,10 @@ import { resolveNativeChatTerminalTurn } from '../../../../shared/native-chat/na
 import { useNativeChatTerminalTurnTiming } from './use-native-chat-terminal-turn-timing'
 import { launchPromptAsMessage, shouldPruneLaunchPrompt } from './native-chat-pending'
 import { pendingSendsAsMessages } from '../../../../shared/native-chat/transcript/native-chat-pending-sends'
-import { useNativeChatPendingDelivery } from './use-native-chat-pending-delivery'
+import {
+  useNativeChatPendingDelivery,
+  useNativeChatOptimisticSend
+} from './use-native-chat-pending-delivery'
 import {
   appendCommandMarkerCache,
   applyCommandMarkerBoundaries,
@@ -115,7 +118,7 @@ export function NativeChatResolvedView({
   const rootRef = useRef<HTMLDivElement>(null)
   const composerRef = useRef<NativeChatComposerHandle>(null)
   // Keep Paste targeted while the question card replaces the composer.
-  const questionAnswerInputRef = useRef<HTMLInputElement>(null)
+  const questionAnswerInputRef = useRef<HTMLTextAreaElement>(null)
   const fileLinkContext = useNativeChatFileLinkContext(terminalTabId)
   const onPaste = useNativeChatPasteBridge({ rootRef, composerRef, questionAnswerInputRef })
 
@@ -128,6 +131,7 @@ export function NativeChatResolvedView({
     paneKey,
     agent,
     session,
+    composerRef,
     workingEpoch: sendWorkingEpoch
   })
   const { pending, record, clear } = delivery
@@ -145,13 +149,7 @@ export function NativeChatResolvedView({
     }
     clearNativeChatLaunchPrompt(terminalTabId)
   }, [clearNativeChatLaunchPrompt, paneLaunchPrompt, session.messages, terminalTabId])
-  const onOptimisticSend = useCallback(
-    (text: string, imagePaths?: string[]) => {
-      setWorkingInterrupted(false)
-      return record(text, imagePaths)
-    },
-    [record]
-  )
+  const onOptimisticSend = useNativeChatOptimisticSend(record, setWorkingInterrupted)
   const onSlashCommand = useCallback(
     (command: string, output?: string) => {
       setCommandMarkers(appendCommandMarkerCache(commandMarkerScope, command, Date.now(), output))
@@ -222,20 +220,21 @@ export function NativeChatResolvedView({
     () => pendingSendsAsMessages(pending, sessionAfterCommandBoundaries.messages, sendWorkingEpoch),
     [pending, sessionAfterCommandBoundaries.messages, sendWorkingEpoch]
   )
+  const messagesWithPending = useMemo(
+    () =>
+      pendingMessages.length === 0
+        ? sessionAfterCommandBoundaries.messages
+        : [...sessionAfterCommandBoundaries.messages, ...pendingMessages],
+    [sessionAfterCommandBoundaries.messages, pendingMessages]
+  )
   const streamingText = useMemo(() => {
     return deriveNativeChatStreamingText({
-      messages: [...sessionAfterCommandBoundaries.messages, ...pendingMessages],
+      messages: messagesWithPending,
       previewText: hookPreview,
       working: liveWorking,
       previewIsToolOutput: hookPreviewIsToolOutput
     })
-  }, [
-    sessionAfterCommandBoundaries.messages,
-    pendingMessages,
-    hookPreview,
-    liveWorking,
-    hookPreviewIsToolOutput
-  ])
+  }, [messagesWithPending, hookPreview, liveWorking, hookPreviewIsToolOutput])
   const sessionWithPending = useMemo<typeof session>(() => {
     if (pending.length === 0 && commandMarkers.length === 0 && !streamingText) {
       return sessionAfterCommandBoundaries
@@ -384,7 +383,7 @@ export function NativeChatResolvedView({
             onDismiss={promptCardPresentation.dismiss}
             onCollapse={promptCardPresentation.collapse}
             shouldFocus={shownPromptCard !== null && isVisible && isFocusedGroup}
-            answerInputRef={questionAnswerInputRef}
+            {...{ answerInputRef: questionAnswerInputRef, onLinkClick }}
           />
         </div>
       ) : null}

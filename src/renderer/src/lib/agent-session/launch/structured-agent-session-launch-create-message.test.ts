@@ -13,29 +13,35 @@ import {
   draft,
   startLegacyActionLaunch
 } from '../../structured-agent-session-launch-create-message.test-fixture'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-
-import {
-  CreateIntentParams,
-  SendParams
-} from '../../../../../shared/rpc-contract/structured-agent-session-params'
+import { registerCreateSelectionAdmissionTests } from '../../structured-agent-session-launch-selection-admission.test-fixture'
+import { registerCreateHydrationTests } from '../../structured-agent-session-launch-hydration.test-fixture'
+import { registerCreateCompletionTests } from '../../structured-agent-session-launch-completion.test-fixture'
 import { structuredAgentSessionCreateFingerprint } from '../../../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
-import { registerActionEffortCreateTests } from '../../structured-agent-session-launch-action-effort.test-fixture'
 import { isStructuredAgentSessionMainAgentWorking } from '../../../../../shared/agent-session/view/structured-agent-session-main-agent-working'
+import { structuredAgentSessionStopControl } from '../../../../../shared/agent-session/view/structured-agent-session-stop-control'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  registerActionEffortCreateTests,
+  registerCreateSelectionTests
+} from '../../structured-agent-session-launch-action-effort.test-fixture'
 
 import {
   startStructuredAgentLaunch,
   cancelStructuredAgentLaunch,
   retryStructuredAgentSessionLaunch
 } from './structured-agent-session-launch'
+import { getStructuredAgentLaunchStatus } from './structured-agent-session-launch-status'
+import { useNativeChatProvisionalLaunch } from '@/components/native-chat/use-native-chat-provisional-launch'
+import { renderHook } from '@testing-library/react'
+import { recheckUnconfirmedStructuredAgentLaunches } from './structured-agent-session-launch-unconfirmed-recheck'
 import {
-  getStructuredAgentSessionLaunchLifecycle,
+  settleStructuredAgentSessionSendsFromJournal,
+  resetStructuredAgentSessionSendsForTests
+} from '@/components/native-chat/structured-agent-session-message-sender'
+import {
   resetStructuredAgentLaunchRegistryForTests,
   getStructuredLaunchStateBySessionId
 } from './structured-agent-session-launch-registry'
-import { structuredSessionSelectionController } from '../../structured-agent-session-selection-controller'
-import { setRuntimeEnvironmentConnectionGenerationForTests } from '@/store/slices/runtime-status-connection-generation'
-import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
 import {
   holdStructuredAgentSessionLaunchOption,
   structuredLaunchOptionOverlay
@@ -50,14 +56,21 @@ import { markStructuredAgentSessionLaunchPublished } from './structured-agent-se
 import { StructuredAgentSessionCreateRefusalError } from './structured-agent-session-launch-errors'
 import { getStructuredAgentSessionReadOwner } from '@/components/native-chat/structured-agent-session-read-owner'
 import { findStructuredAgentSessionReadOwner } from '@/components/native-chat/structured-agent-session-read-owner-registry'
-import { resetStructuredAgentSessionSendsForTests } from '@/components/native-chat/structured-agent-session-message-sender'
 import {
   getStructuredAgentSessionPendingSends,
   getStructuredAgentSessionSendNotice
 } from '@/components/native-chat/structured-agent-session-pending-sends'
-import { structuredAgentSessionStopControl } from '../../../../../shared/agent-session/view/structured-agent-session-stop-control'
+
 import { writeNativeChatDraftCache } from '@/components/native-chat/native-chat-draft-cache'
 import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/native-chat-composer-draft-store'
+
+import {
+  CreateIntentParams,
+  SendParams
+} from '../../../../../shared/rpc-contract/structured-agent-session-params'
+
+import { structuredSessionSelectionController } from '../../structured-agent-session-selection-controller'
+
 let restoreCatalogStore: (() => void) | undefined
 describe('the first message owned by create', () => {
   beforeEach(() => {
@@ -129,6 +142,42 @@ describe('the first message owned by create', () => {
     expect(mocks.call.mock.calls.map(([, method]) => method)).toEqual(['agentSession.create'])
   })
 
+  it('leaves a learned configured model and its effort to the agent', async () => {
+    mocks.exactSupport.mockResolvedValue(true)
+    recordHostModelCatalogSnapshot(target, 'claude', null, {
+      origin: 'probe',
+      fetchedAt: 1,
+      listingNamesConfiguredModel: true,
+      defaultHoldsInEveryWorkspace: true,
+      models: [
+        {
+          id: 'opus',
+          label: 'Opus',
+          isDefault: true,
+          defaultEffort: 'high',
+          declaredDefaultEffort: 'low',
+          efforts: [
+            { value: 'low', label: 'Low' },
+            { value: 'high', label: 'High' }
+          ]
+        }
+      ]
+    })
+    mocks.call.mockImplementation(async () => created())
+    const launch = startStructuredAgentLaunch('workspace-1', 'claude', {
+      requestId: newAgentLaunchRequestId(),
+      executionHostId: 'local',
+      prompt: 'opening text'
+    })
+    await launch.launchResult
+    expect(createParams().options).toBeUndefined()
+    expect(createParams().firstMessage?.selection).toEqual({})
+    expect(createParams().envelope.payloadFingerprint).toBe(
+      structuredAgentSessionCreateFingerprint({ sessionId: launch.sessionId, ...createParams() })
+    )
+    expect(mocks.call.mock.calls.map(([, method]) => method)).toEqual(['agentSession.create'])
+  })
+
   it.each([
     ['new', {}],
     ['resumed', { resumeFrom: { providerSessionId: 'provider-session-1' } }]
@@ -166,6 +215,8 @@ describe('the first message owned by create', () => {
   })
 
   registerActionEffortCreateTests(mocks, created)
+  registerCreateSelectionTests()
+  registerCreateSelectionAdmissionTests()
 
   it.each(['codex', 'claude'] as const)(
     'creates %s on an unlisted explicit model without importing saved effort',
@@ -307,56 +358,55 @@ describe('the first message owned by create', () => {
     expect(mocks.call.mock.calls[2]?.[2]).toMatchObject({ key: 'effort', value: 'medium' })
   })
 
-  it('returns a refused create once after the new draft, with no later send', async () => {
-    const create = deferred<unknown>()
-    mocks.call.mockReturnValue(create.promise)
-    const launch = start()
-    const held = holdStructuredAgentSessionLaunchOption(launch.sessionId, 'model', 'gpt-5.4')!
-    const state = getStructuredLaunchStateBySessionId(launch.sessionId)
-    if (state) {
-      state.intent.surfaceAddress = { worktreeId: 'workspace-1', precedingTabIds: [] }
+  it.each([0, 30_000])(
+    'returns a refused create once after %ims and the new draft',
+    async (delay) => {
+      const create = deferred<unknown>()
+      mocks.call.mockReturnValue(create.promise)
+      const launch = start()
+      const held = !delay
+        ? holdStructuredAgentSessionLaunchOption(launch.sessionId, 'model', 'gpt-5.4')
+        : null
+      const state = getStructuredLaunchStateBySessionId(launch.sessionId)
+      if (state && !delay) {
+        state.intent.surfaceAddress = { worktreeId: 'workspace-1', precedingTabIds: [] }
+      }
+      await vi.waitFor(() => expect(mocks.call).toHaveBeenCalledOnce())
+      const raw = state?.promise
+      if (delay) {
+        await vi.advanceTimersByTimeAsync(delay)
+        await expect(launch.launchResult).rejects.toThrow('Opening message outcome unknown.')
+      }
+      writeNativeChatDraftCache(
+        structuredAgentSessionDraftScopeKey(launch.sessionId),
+        'typed meanwhile'
+      )
+      create.resolve({
+        ok: false,
+        refusal: { code: 'structured_agent_session_unsupported', message: 'unavailable' }
+      })
+      await expect(raw).rejects.toBeInstanceOf(StructuredAgentSessionCreateRefusalError)
+      await launch.promptDeliveryResult?.catch(() => undefined)
+      expect(draft(launch.sessionId)).toBe('typed meanwhile\n\nopening text')
+      expect(mocks.call.mock.calls.map(([, method]) => method)).toEqual(['agentSession.create'])
+      expect(getStructuredAgentSessionPendingSends(launch.sessionId)).toEqual([])
+      if (delay) {
+        const view = renderHook(() =>
+          useNativeChatProvisionalLaunch('workspace-1', launch.sessionId)
+        )
+        expect(view.result.current.lifecycle).toBe('failed')
+        view.unmount()
+      } else {
+        expect(findStructuredAgentSessionReadOwner(launch.sessionId, target)).toBeUndefined()
+      }
+      if (held) {
+        await expect(held).resolves.toEqual({ kind: 'superseded' })
+      }
     }
-    await vi.waitFor(() => expect(mocks.call).toHaveBeenCalledOnce())
-    writeNativeChatDraftCache(
-      structuredAgentSessionDraftScopeKey(launch.sessionId),
-      'typed meanwhile'
-    )
-    create.resolve({
-      ok: false,
-      refusal: { code: 'structured_agent_session_unsupported', message: 'unavailable' }
-    })
-    await expect(launch.launchResult).rejects.toBeInstanceOf(
-      StructuredAgentSessionCreateRefusalError
-    )
-    await launch.promptDeliveryResult?.catch(() => undefined)
-    expect(draft(launch.sessionId)).toBe('typed meanwhile\n\nopening text')
-    expect(mocks.call.mock.calls.map(([, method]) => method)).toEqual(['agentSession.create'])
-    expect(getStructuredAgentSessionPendingSends(launch.sessionId)).toEqual([])
-    expect(findStructuredAgentSessionReadOwner(launch.sessionId, target)).toBeUndefined()
-    await expect(held).resolves.toEqual({ kind: 'superseded' })
-  })
+  )
 
-  it('returns text at 30 seconds and a late create reply cannot send it again', async () => {
-    const create = deferred<unknown>()
-    mocks.call.mockReturnValue(create.promise)
-    const launch = start()
-    await vi.waitFor(() => expect(mocks.call).toHaveBeenCalledOnce())
-    await vi.advanceTimersByTimeAsync(30_000)
-    expect(draft(launch.sessionId)).toBe('opening text')
-    await expect(launch.promptDeliveryResult).resolves.toMatchObject({
-      delivered: false,
-      inComposer: true,
-      unconfirmed: true
-    })
-    expect(getStructuredAgentSessionLaunchLifecycle('workspace-1', launch.sessionId)).toBe(
-      'visibility-unknown'
-    )
-    expect(draft(launch.sessionId)).toBe('opening text')
-    create.resolve(created())
-    await launch.launchResult
-    expect(draft(launch.sessionId)).toBe('opening text')
-    expect(mocks.call.mock.calls.map(([, method]) => method)).toEqual(['agentSession.create'])
-  })
+  registerCreateCompletionTests()
+  registerCreateHydrationTests()
 
   it('keeps the old create-then-send payload for an older host', async () => {
     mocks.supports.mockResolvedValue(false)
@@ -481,24 +531,32 @@ describe('the first message owned by create', () => {
     ])
   })
 
-  it('bounds the click even if capability negotiation has not answered', async () => {
-    const support = deferred<boolean>()
-    mocks.supports.mockReturnValue(support.promise)
-    mocks.call.mockImplementation(async () => created())
-    const launch = start()
-    await vi.advanceTimersByTimeAsync(30_000)
-    expect(draft(launch.sessionId)).toBe('opening text')
-    await expect(launch.promptDeliveryResult).resolves.toMatchObject({
-      delivered: false,
-      inComposer: true
-    })
-    expect(draft(launch.sessionId)).toBe('opening text')
-    support.resolve(true)
-    await launch.launchResult
-    expect(createParams()).not.toHaveProperty('firstMessage')
-    expect(mocks.call.mock.calls.map(([, method]) => method)).toEqual(['agentSession.create'])
-    expect(draft(launch.sessionId)).toBe('opening text')
-  })
+  it.each([false, true])(
+    'bounds preissue capability waiting with caller-owned input=%s',
+    async (callerKeeps) => {
+      const support = deferred<boolean>()
+      mocks.supports.mockReturnValue(support.promise)
+      mocks.call.mockImplementation(async () => created())
+      const launch = startStructuredAgentLaunch('workspace-1', 'codex', {
+        requestId: newAgentLaunchRequestId(),
+        executionHostId: 'local',
+        prompt: 'opening text',
+        ...(callerKeeps ? { promptKeptByCaller: true as const } : {})
+      })
+      await vi.advanceTimersByTimeAsync(30_000)
+      expect(draft(launch.sessionId)).toBe(callerKeeps ? '' : 'opening text')
+      await expect(launch.promptDeliveryResult).resolves.toMatchObject({
+        delivered: false,
+        ...(callerKeeps ? {} : { inComposer: true })
+      })
+      expect(draft(launch.sessionId)).toBe(callerKeeps ? '' : 'opening text')
+      support.resolve(true)
+      await expect(launch.launchResult).rejects.toThrow('Opening input retired before create.')
+      await Promise.resolve()
+      expect(mocks.call).not.toHaveBeenCalled()
+      expect(draft(launch.sessionId)).toBe(callerKeeps ? '' : 'opening text')
+    }
+  )
 
   it('keeps the same first-message intent when the paired host reports its seed', async () => {
     mocks.admit.mockResolvedValue({ kind: 'admitted', seedOptions: { model: 'host-default' } })
@@ -562,102 +620,145 @@ describe('the first message owned by create', () => {
     await vi.waitFor(() => expect(controller.captureRead()).toHaveLength(2))
   })
 
-  it('recovers a reload by replaying the frozen create when the old row is outside history', async () => {
-    const create = deferred<unknown>()
-    mocks.call.mockReturnValue(create.promise)
-    mocks.supportsMode.mockResolvedValue(false)
-    const launch = startStructuredAgentLaunch('workspace-1', 'codex', {
+  it.each(['cached', 'disk'])(
+    'reopens %s opening content without replay on a limited history page',
+    async (source) => {
+      mocks.call.mockReturnValue(new Promise(() => {}))
+      mocks.supportsMode.mockResolvedValue(false)
+      const resumeFrom = { providerSessionId: 'provider-session-1' }
+      const launch = startStructuredAgentLaunch('workspace-1', 'codex', {
+        requestId: newAgentLaunchRequestId(),
+        executionHostId: 'local',
+        prompt: 'opening text',
+        resumeFrom,
+        launchOptions: { model: 'gpt-5.6-sol' }
+      })
+      await vi.waitFor(() => expect(mocks.call).toHaveBeenCalledOnce())
+      const original = createParams()
+      expect(original.optionsMode).toBeUndefined()
+      expect(original.options?.effort).toBe('medium')
+      expect(readStructuredAgentLaunchRecord(launch.sessionId)?.explicitLaunchOptions).toEqual({
+        model: 'gpt-5.6-sol'
+      })
+      mocks.supportsMode.mockResolvedValue(true)
+      const saved = readStructuredAgentLaunchRecord(launch.sessionId)
+      const page = created().value.page
+      page.submissions = []
+      resetStructuredAgentLaunchRegistryForTests()
+      if (source === 'disk') {
+        resetStructuredAgentLaunchPersistenceForTests()
+      }
+      resetStructuredAgentSessionSendsForTests()
+      mocks.inventory.mockResolvedValue([
+        { worktree: 'workspace-1', tabs: [{ type: 'agent-session', sessionId: launch.sessionId }] }
+      ])
+      mocks.call.mockResolvedValue({ ok: true, page })
+      markStructuredAgentSessionLaunchPublished('workspace-1', launch.sessionId, 'local')
+      await vi.waitFor(() =>
+        expect(
+          mocks.call.mock.calls.filter(([, method]) => method === 'agentSession.history')
+        ).toHaveLength(1)
+      )
+      await Promise.resolve()
+      expect(readStructuredAgentLaunchRecord(launch.sessionId)).toEqual({
+        ...saved,
+        lifecycle: 'visibility-unknown'
+      })
+      expect(getStructuredAgentSessionPendingSends(launch.sessionId)).toMatchObject([
+        {
+          clientMessageId: original.firstMessage?.clientMessageId,
+          body: original.firstMessage?.body,
+          options: original.options,
+          phase: 'unconfirmed'
+        }
+      ])
+      recheckUnconfirmedStructuredAgentLaunches('local')
+      await vi.waitFor(() =>
+        expect(
+          mocks.call.mock.calls.filter(([, method]) => method === 'agentSession.history')
+        ).toHaveLength(2)
+      )
+      expect(retryStructuredAgentSessionLaunch('workspace-1', launch.sessionId)).toBe(false)
+      const joined = startStructuredAgentLaunch('workspace-1', 'codex', {
+        requestId: newAgentLaunchRequestId(),
+        executionHostId: 'local',
+        resumeFrom
+      })
+      expect(joined.sessionId).toBe(launch.sessionId)
+      await expect(joined.launchResult).rejects.toThrow('Opening message outcome unknown.')
+      expect(
+        mocks.call.mock.calls.filter(([, method]) => method === 'agentSession.create')
+      ).toHaveLength(1)
+      expect(mocks.call.mock.calls.filter(([, method]) => method === 'agentSession.send')).toEqual(
+        []
+      )
+      for (const population of [20, 200]) {
+        let reads = 0
+        const unrelated = Array.from({ length: population }, (_, index) => ({
+          ...submission(`unrelated-${index}`),
+          get reason() {
+            reads += 1
+            return null
+          }
+        }))
+        settleStructuredAgentSessionSendsFromJournal(launch.sessionId, unrelated, [])
+        expect(reads).toBe(population)
+      }
+
+      expect(readStructuredAgentLaunchRecord(launch.sessionId)?.firstMessage).toEqual(
+        original.firstMessage
+      )
+      settleStructuredAgentSessionSendsFromJournal(
+        launch.sessionId,
+        [submission(original.firstMessage?.clientMessageId ?? '')],
+        []
+      )
+      expect(readStructuredAgentLaunchRecord(launch.sessionId)).toBeUndefined()
+      expect(getStructuredAgentSessionPendingSends(launch.sessionId)).toEqual([])
+      let completedReads = 0
+      settleStructuredAgentSessionSendsFromJournal(
+        launch.sessionId,
+        [
+          {
+            ...submission('unrelated-after-completion'),
+            get reason() {
+              completedReads += 1
+              return null
+            }
+          }
+        ],
+        []
+      )
+      expect(completedReads).toBe(0)
+      const creates = mocks.call.mock.calls.filter(([, method]) => method === 'agentSession.create')
+      expect(creates).toHaveLength(1)
+      expect(creates[0]?.[2]).toEqual(original)
+      expect(mocks.supports).toHaveBeenCalledOnce()
+      expect(draft(launch.sessionId)).toBe('')
+    }
+  )
+
+  it('coalesces the same completed uncertain create without Retry or a second issue', async () => {
+    mocks.call.mockReturnValue(new Promise(() => {}))
+    const options = {
       requestId: newAgentLaunchRequestId(),
-      executionHostId: 'local',
-      prompt: 'opening text',
-      launchOptions: { model: 'gpt-5.6-sol' }
-    })
+      executionHostId: 'local' as const,
+      prompt: 'opening text'
+    }
+    const launch = startStructuredAgentLaunch('workspace-1', 'codex', options)
     await vi.waitFor(() => expect(mocks.call).toHaveBeenCalledOnce())
     const original = createParams()
-    expect(original.optionsMode).toBeUndefined()
-    expect(original.options?.effort).toBe('medium')
-    expect(readStructuredAgentLaunchRecord(launch.sessionId)?.explicitLaunchOptions).toEqual({
-      model: 'gpt-5.6-sol'
-    })
-    mocks.supportsMode.mockResolvedValue(true)
+    await vi.advanceTimersByTimeAsync(30_000)
+    await expect(launch.launchResult).rejects.toThrow('Opening message outcome unknown.')
+    const joined = startStructuredAgentLaunch('workspace-1', 'codex', options)
+    expect(joined.sessionId).toBe(launch.sessionId)
+    await expect(joined.launchResult).rejects.toThrow('Opening message outcome unknown.')
+    expect(retryStructuredAgentSessionLaunch('workspace-1', launch.sessionId)).toBe(false)
+    expect(getStructuredAgentSessionPendingSends(launch.sessionId)).toHaveLength(1)
     expect(readStructuredAgentLaunchRecord(launch.sessionId)?.firstMessage).toEqual(
       original.firstMessage
     )
-    const response = created()
-    const receipt = response.value.page.submissions[0]
-    response.value.page.submissions = []
-    resetStructuredAgentLaunchRegistryForTests()
-    resetStructuredAgentLaunchPersistenceForTests()
-    resetStructuredAgentSessionSendsForTests()
-    mocks.inventory.mockResolvedValue([
-      { worktree: 'workspace-1', tabs: [{ type: 'agent-session', sessionId: launch.sessionId }] }
-    ])
-    mocks.call.mockImplementation(async (_target, method) =>
-      method === 'agentSession.history'
-        ? { ok: true, page: response.value.page }
-        : { ...response, replayed: true, value: { ...response.value, firstMessage: receipt } }
-    )
-    markStructuredAgentSessionLaunchPublished('workspace-1', launch.sessionId, 'local')
-    await vi.waitFor(() =>
-      expect(readStructuredAgentLaunchRecord(launch.sessionId)).toBeUndefined()
-    )
-    const creates = mocks.call.mock.calls.filter(([, method]) => method === 'agentSession.create')
-    expect(creates).toHaveLength(2)
-    expect(creates[1]?.[2]).toEqual(original)
-    expect(mocks.supports).toHaveBeenCalledOnce()
-    expect(mocks.call.mock.calls.filter(([, method]) => method === 'agentSession.send')).toEqual([])
-    expect(draft(launch.sessionId)).toBe('')
-  })
-
-  it('allows Retry after the deadline while the original create never answers', async () => {
-    const create = deferred<unknown>()
-    mocks.call.mockReturnValue(create.promise)
-    const paired = { kind: 'environment', environmentId: 'frozen-generation' } as const
-    replaceRuntimeEnvironmentRevisions([{ id: paired.environmentId, createdAt: 1 }])
-    const launch = startStructuredAgentLaunch('workspace-1', 'codex', {
-      requestId: newAgentLaunchRequestId(),
-      executionHostId: 'runtime:frozen-generation',
-      hostSeedOptions: { model: 'gpt-5.5' },
-      prompt: 'opening text'
-    })
-    const first = holdStructuredAgentSessionLaunchOption(launch.sessionId, 'model', 'gpt-5.4')!
-    await vi.waitFor(() => expect(mocks.call).toHaveBeenCalledOnce())
-    const original = createParams()
-    const owner = structuredSessionSelectionController(paired, launch.sessionId, 'codex')
-    const carried = owner.pending()[0]!
-    await vi.advanceTimersByTimeAsync(30_000)
-    await launch.promptDeliveryResult
-    setRuntimeEnvironmentConnectionGenerationForTests(paired.environmentId, 2)
-    expect(structuredSessionSelectionController(paired, launch.sessionId, 'codex')).toBe(owner)
-    const middle = holdStructuredAgentSessionLaunchOption(
-      launch.sessionId,
-      'model',
-      'gpt-5.3-codex'
-    )!
-    const newest = holdStructuredAgentSessionLaunchOption(launch.sessionId, 'model', 'gpt-5.4')!
-    await expect(middle).resolves.toEqual({ kind: 'superseded' })
-    const applied = deferred<unknown>()
-    mocks.inventory.mockResolvedValue([])
-    mocks.call.mockImplementation((_target, method) =>
-      method === 'agentSession.setOption' ? applied.promise : Promise.resolve(created())
-    )
-    expect(retryStructuredAgentSessionLaunch('workspace-1', launch.sessionId)).toBe(true)
-    await vi.waitFor(() =>
-      expect(readStructuredAgentLaunchRecord(launch.sessionId)).toBeUndefined()
-    )
-    const creates = mocks.call.mock.calls.filter(([, method]) => method === 'agentSession.create')
-    expect(creates).toHaveLength(2)
-    expect(creates[1]?.[2]).toEqual(original)
-    await expect(first).resolves.toMatchObject({ kind: 'accepted' })
-    expect(carried.outcome?.kind).toBe('accepted')
-    expect(owner.pending()).toHaveLength(1)
-    expect(owner.pending()[0]).not.toBe(carried)
-    applied.resolve({ ok: true, value: { options: { model: 'gpt-5.4' } } })
-    await expect(newest).resolves.toMatchObject({ kind: 'accepted' })
-    expect(owner.captureRead()).toHaveLength(2)
-    expect(mocks.call.mock.calls.filter(([, method]) => method === 'agentSession.send')).toEqual([])
-    expect(draft(launch.sessionId)).toBe('opening text')
-    replaceRuntimeEnvironmentRevisions([])
+    expect(mocks.call.mock.calls.map(([, method]) => method)).toEqual(['agentSession.create'])
   })
 
   it.each([
@@ -682,44 +783,9 @@ describe('the first message owned by create', () => {
     }
   )
 
-  it('keeps Retry actionable when a published tab starts an unanswered message confirmation', async () => {
-    mocks.call.mockReturnValue(new Promise(() => {}))
-    const launch = start()
-    await vi.waitFor(() => expect(mocks.call).toHaveBeenCalledOnce())
-    await vi.advanceTimersByTimeAsync(30_000)
-    await launch.promptDeliveryResult
-    mocks.inventory.mockResolvedValue([
-      {
-        worktree: 'workspace-1',
-        tabs: [{ type: 'agent-session', sessionId: launch.sessionId }]
-      }
-    ])
-    expect(
-      markStructuredAgentSessionLaunchPublished('workspace-1', launch.sessionId, 'local')
-    ).toBe(false)
-    await vi.waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(2))
-    await vi.advanceTimersByTimeAsync(30_000)
-    expect(getStructuredAgentSessionLaunchLifecycle('workspace-1', launch.sessionId)).toBe(
-      'visibility-unknown'
-    )
-    expect(draft(launch.sessionId)).toBe('opening text')
-    mocks.inventory.mockResolvedValue([])
-    mocks.call.mockImplementation(async () => created())
-    expect(retryStructuredAgentSessionLaunch('workspace-1', launch.sessionId)).toBe(true)
-    await vi.waitFor(() =>
-      expect(readStructuredAgentLaunchRecord(launch.sessionId)).toBeUndefined()
-    )
-    expect(mocks.call.mock.calls.map(([, method]) => method)).toEqual([
-      'agentSession.create',
-      'agentSession.history',
-      'agentSession.create'
-    ])
-    expect(draft(launch.sessionId)).toBe('opening text')
-  })
-
-  it.each(['create', 'history'] as const)(
-    'offers Retry again when a second %s attempt never answers, without returning text twice',
-    async (method) => {
+  it.each([false, true])(
+    'observes reconnect without rearming startup when published=%s',
+    async (published) => {
       mocks.call.mockReturnValue(new Promise(() => {}))
       const launch = start()
       await vi.waitFor(() => expect(mocks.call).toHaveBeenCalledOnce())
@@ -727,40 +793,33 @@ describe('the first message owned by create', () => {
       await vi.advanceTimersByTimeAsync(30_000)
       await launch.promptDeliveryResult
       mocks.inventory.mockResolvedValue(
-        method === 'create'
-          ? []
-          : [
+        published
+          ? [
               {
                 worktree: 'workspace-1',
                 tabs: [{ type: 'agent-session', sessionId: launch.sessionId }]
               }
             ]
+          : []
       )
-      expect(retryStructuredAgentSessionLaunch('workspace-1', launch.sessionId)).toBe(true)
-      await vi.waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(2))
+      recheckUnconfirmedStructuredAgentLaunches('local')
+      if (published) {
+        await vi.waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(2))
+      }
       await vi.advanceTimersByTimeAsync(30_000)
-      expect(getStructuredAgentSessionLaunchLifecycle('workspace-1', launch.sessionId)).toBe(
-        'visibility-unknown'
+      expect(getStructuredAgentLaunchStatus('workspace-1', 'codex')).toBe('idle')
+      expect(retryStructuredAgentSessionLaunch('workspace-1', launch.sessionId)).toBe(false)
+      expect(readStructuredAgentLaunchRecord(launch.sessionId)?.firstMessage).toEqual(
+        original.firstMessage
       )
-      expect(draft(launch.sessionId)).toBe('opening text')
-      mocks.call.mockImplementation(async () =>
-        method === 'history' ? { ok: true, page: created().value.page } : created()
-      )
-      expect(retryStructuredAgentSessionLaunch('workspace-1', launch.sessionId)).toBe(true)
-      await vi.waitFor(() =>
-        expect(readStructuredAgentLaunchRecord(launch.sessionId)).toBeUndefined()
-      )
-      expect(mocks.call.mock.calls.map(([, method]) => method)).toEqual([
-        'agentSession.create',
-        `agentSession.${method}`,
-        `agentSession.${method}`
-      ])
       expect(
-        mocks.call.mock.calls
-          .filter(([, name]) => name === 'agentSession.create')
-          .map(([, , params]) => params)
-      ).toEqual(method === 'create' ? [original, original, original] : [original])
-      expect(draft(launch.sessionId)).toBe('opening text')
+        mocks.call.mock.calls.filter(([, method]) => method === 'agentSession.create')
+      ).toHaveLength(1)
+      expect(mocks.call.mock.calls.filter(([, method]) => method === 'agentSession.send')).toEqual(
+        []
+      )
+      expect(getStructuredAgentSessionPendingSends(launch.sessionId)[0]?.phase).toBe('unconfirmed')
+      expect(draft(launch.sessionId)).toBe('')
     }
   )
 })

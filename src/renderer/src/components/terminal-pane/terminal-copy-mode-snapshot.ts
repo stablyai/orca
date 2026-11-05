@@ -3,7 +3,7 @@ import { Unicode11Addon } from '@xterm/addon-unicode11'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager'
 import { StableCellFitAddon } from '@/lib/pane-manager/terminal-stable-cell-fit-addon'
 import { repairPaneWebglCanvasDprMismatch } from '@/lib/pane-manager/terminal-canvas-dpr-repair'
-import { activateOrcaTerminalUnicodeProvider } from '../../../../shared/terminal-unicode-provider'
+import { activateOrcaTerminalUnicodeProvider } from '../../../../shared/terminal/appearance/terminal-unicode-provider'
 import { attachCopyModeRenderer } from './terminal-copy-mode-renderer'
 
 export function createTerminalCopyModeSnapshot(

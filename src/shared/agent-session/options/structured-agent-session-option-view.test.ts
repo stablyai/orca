@@ -5,6 +5,7 @@ import {
   CODEX_SESSION_OPTION_CATALOG
 } from './agent-session-option-catalog-claude-codex'
 import type { AgentSessionModelCatalogResult } from '../agent-session-wire'
+import type { AgentSessionOptionsResult } from './agent-session-options-result'
 import {
   applyStructuredAgentSessionModelCatalog,
   applyStructuredAgentSessionOptions,
@@ -163,11 +164,17 @@ describe('what a send carries', () => {
       catalog,
       launch
     )
-    // The first send still pins policy defaults on hosts that have not answered options.
-    expect(structuredAgentSessionMessageSelection(state)).toMatchObject({
-      model: 'native',
-      effort: 'low'
-    })
+    // Learning the model chooses neither the model nor an effort.
+    expect(structuredAgentSessionMessageSelection(state)).toEqual({})
+    expect(
+      structuredAgentSessionMessageSelection({
+        ...state,
+        acceptedInputSources: {
+          ...state.acceptedInputSources,
+          effort: 'saved'
+        }
+      })
+    ).toEqual({})
     state = applyStructuredAgentSessionOptions(
       state,
       CODEX_SESSION_OPTION_CATALOG,
@@ -265,6 +272,81 @@ describe('what a send carries', () => {
     }
   )
 
+  it('treats older-host policy effort as observation while retaining literal input', () => {
+    const result: AgentSessionOptionsResult = {
+      models: [{ ...SONNET, defaultEffort: 'high', declaredDefaultEffort: 'low' }],
+      current: {
+        model: 'sonnet',
+        effort: 'high',
+        defaulted: [],
+        acceptedInputSources: { model: 'policy', effort: 'policy' }
+      }
+    }
+    const state = applyStructuredAgentSessionOptions(fresh(), CLAUDE_SESSION_OPTION_CATALOG, result)
+    expect(
+      structuredAgentSessionShownSnapshot(state).find((row) => row.id === 'effort')?.kind
+        .currentValue
+    ).toBe('low')
+    expect(structuredAgentSessionMessageSelection(state)).toEqual({ model: 'sonnet' })
+    expect(structuredAgentSessionSendSelection(state)).toEqual({ model: 'sonnet' })
+    for (const source of ['saved', 'seeded'] as const) {
+      const accepted = applyStructuredAgentSessionOptions(fresh(), CLAUDE_SESSION_OPTION_CATALOG, {
+        ...result,
+        current: {
+          ...result.current,
+          effort: 'vendor/custom',
+          acceptedInputSources: { model: 'policy', effort: source }
+        }
+      })
+      expect(structuredAgentSessionMessageSelection(accepted).effort).toBe('vendor/custom')
+      expect(structuredAgentSessionSendSelection(accepted)?.effort).toBe('vendor/custom')
+    }
+    expect(result.current.effort).toBe('high')
+    expect(result.current.acceptedInputSources?.effort).toBe('policy')
+  })
+
+  it('captures literal accepted effort independently of reports, aliases and missing catalog rows', () => {
+    const literal = { model: 'opus[1m]', effort: 'vendor/custom' }
+    let state = applyStructuredAgentSessionOptions(fresh(), CLAUDE_SESSION_OPTION_CATALOG, {
+      models: CLI302,
+      current: {
+        model: 'claude-opus-5-5[1m]',
+        effort: 'high',
+        confirmed: ['effort'],
+        acceptedInputSources: { model: 'saved' },
+        defaulted: []
+      }
+    })
+    expect(structuredAgentSessionSendSelection(state)).toEqual({ model: 'claude-opus-5-5[1m]' })
+    const picked = commitStructuredAgentSessionOption(state, 'effort', literal.effort)
+    for (const view of [
+      picked,
+      structuredAgentSessionOptionView(withHostList(), literal, {}),
+      structuredAgentSessionOptionView(state, undefined, literal)
+    ]) {
+      expect(structuredAgentSessionMessageSelection(view).effort).toBe(literal.effort)
+      expect(structuredAgentSessionSendSelection(view)?.effort).toBe(literal.effort)
+    }
+    state = applyStructuredAgentSessionOptions(state, CLAUDE_SESSION_OPTION_CATALOG, {
+      models: [],
+      current: {
+        ...literal,
+        acceptedInputSources: { model: 'saved', effort: 'saved' },
+        defaulted: []
+      }
+    })
+    const capture = structuredAgentSessionMessageSelection(state)
+    state = commitStructuredAgentSessionOption(state, 'model', 'retired-unlisted')
+    expect(structuredAgentSessionMessageSelection(state)).toEqual({
+      ...literal,
+      model: 'retired-unlisted'
+    })
+    expect(capture).toEqual(literal)
+    const absent = { ...state, record: { ...state.record, values: {} } }
+    expect(structuredAgentSessionMessageSelection(absent)).not.toHaveProperty('effort')
+    expect(structuredAgentSessionSendSelection(absent)).toBeUndefined()
+  })
+
   it('carries held picks without committing them to the chat', () => {
     const listed = withHostList(fresh(), { ...LISTED, models: [OPUS, SONNET] })
     const originalRecord = structuredClone(listed.record)
@@ -331,10 +413,7 @@ describe("a chat's model and effort, apart from the defaults filling them in", (
       listingNamesConfiguredModel: true
     })
     expect(shown(state, undefined, { effort: 'xhigh' })).toEqual({ model: 'opus', effort: 'xhigh' })
-    expect(carried(state, undefined, { effort: 'xhigh' })).toEqual({
-      model: 'opus',
-      effort: 'xhigh'
-    })
+    expect(carried(state, undefined, { effort: 'xhigh' })).toEqual({ effort: 'xhigh' })
   })
 })
 
@@ -357,6 +436,26 @@ describe('Pi supported selection apart from saved intent', () => {
     applyStructuredAgentSessionModelCatalog(state, seed, catalog(efforts), { newLaunch: true })
   const effort = (state: StructuredAgentSessionOptionState) =>
     structuredAgentSessionShownSnapshot(state).find((option) => option.id === 'effort')
+
+  it('shows a sparse native report without selecting it as input', () => {
+    for (const declaredDefaultEffort of [undefined, 'low']) {
+      const state = applyStructuredAgentSessionOptions(install(), seed, {
+        models: [{ ...row, declaredDefaultEffort }],
+        current: {
+          model: row.id,
+          reportedEffort: 'medium',
+          acceptedInputSources: { model: 'saved' },
+          defaulted: []
+        }
+      })
+      expect(effort(state)).toMatchObject({
+        valueSource: 'reported',
+        kind: { currentValue: 'medium' }
+      })
+      expect(structuredAgentSessionMessageSelection(state)).toEqual({ model: row.id })
+      expect(state.record.values).not.toHaveProperty('effort')
+    }
+  })
 
   it('rederives new and restored blank controls on a late precise row and readback without restoring off', () => {
     const coarse = install(fresh(), levels('off', 'minimal', 'low', 'medium', 'high'))

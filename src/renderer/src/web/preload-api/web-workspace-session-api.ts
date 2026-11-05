@@ -8,7 +8,7 @@ import {
 import type {
   WorkspaceSessionPatch,
   WorkspaceSessionState
-} from '../../../../shared/workspace-session-state-types'
+} from '../../../../shared/workspace-session/workspace-session-state-types'
 import { sanitizeWebRuntimeWorkspaceSession } from '../web-workspace-session'
 import { readLocalWebUIState } from './web-preferences-store'
 import { requireActiveEnvironmentOrNull } from './web-runtime-session'

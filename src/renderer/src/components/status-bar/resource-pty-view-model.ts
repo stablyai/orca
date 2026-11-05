@@ -1,4 +1,7 @@
-import { ptySessionIdentity, type PtyListedSession } from '../../../../shared/pty-listed-session'
+import {
+  ptySessionIdentity,
+  type PtyListedSession
+} from '../../../../shared/terminal/pty/lifecycle/pty-listed-session'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
@@ -6,8 +9,8 @@ import {
   getRepoExecutionHostId,
   getWorktreeExecutionHostId
 } from '../../../../shared/execution-host'
-import { projectGroupIdFromRepoId } from '../../../../shared/folder-workspace-worktree'
-import { makePaneKey, isTerminalLeafId } from '../../../../shared/stable-pane-id'
+import { projectGroupIdFromRepoId } from '../../../../shared/folder-workspaces/folder-workspace-worktree'
+import { makePaneKey, isTerminalLeafId } from '../../../../shared/workspace-layout/stable-pane-id'
 import { recentStamp } from '../../../../shared/sidebar-list/stamp-order'
 import {
   buildResourceSessionBindingIndex,

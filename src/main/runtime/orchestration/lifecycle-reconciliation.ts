@@ -1,7 +1,7 @@
 import type { OrchestrationDb } from './db'
 import type { MessageRow, WorkerReportOutcome } from './types'
 import { workerReportObservation } from './worker-report-observation'
-import { parsePaneKey } from '../../../shared/stable-pane-id'
+import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 
 // Pane break-out changes tab ids; unparseable legacy keys support exact equality only.
 function isSamePane(assigneePaneKey: string, senderPaneKey: string): boolean {

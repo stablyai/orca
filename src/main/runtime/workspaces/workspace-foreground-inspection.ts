@@ -1,5 +1,5 @@
 import { OrcaRuntimeWithListManagedWorktrees } from './managed-workspace-operations'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import {
   describeLaunchedAgentHost,
   readLaunchedAgentForeground,

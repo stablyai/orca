@@ -5,7 +5,7 @@ import { afterEach, beforeAll, beforeEach, expect, it, vi } from 'vitest'
 import type {
   CrewSubscriptionAttemptArgs,
   CrewSubscriptionAttemptCallbacks
-} from '../../../../shared/runtime-environment-subscription-setup'
+} from '../../../../shared/remote-runtime/host-catalog/runtime-environment-subscription-setup'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type { RuntimeRpcSubscriptionHandlers } from '@/runtime/runtime-rpc-subscribe'
 import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'

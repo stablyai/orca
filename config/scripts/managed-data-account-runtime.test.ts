@@ -6,7 +6,7 @@ import { resolveConfig } from 'electron-vite'
 import { build } from 'vite'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { runProcess } from '@orca/process-host'
-import { stagePackagedProcessHost } from './packaged-process-host-fixture.mjs'
+import { stagePackagedProcessHost } from './desktop-distribution/runtime-verification/packaged-process-host-fixture.mjs'
 
 const projectDir = resolve(import.meta.dirname, '../..')
 const require = createRequire(import.meta.url)

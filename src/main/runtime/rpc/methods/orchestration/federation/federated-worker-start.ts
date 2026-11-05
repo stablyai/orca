@@ -1,5 +1,5 @@
 import type { FederatedWorkerStartRequest } from './federated-worker-start-request'
-import { isTuiAgent } from '../../../../../../shared/tui-agent-config'
+import { isTuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { RuntimeStatus } from '../../../../../../shared/runtime-types'
 import {
   ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,

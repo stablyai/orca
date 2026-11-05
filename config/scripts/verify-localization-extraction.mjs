@@ -166,8 +166,8 @@ async function extractToTemporaryCatalog(root, tempDir) {
   const [{ runProcessSync }, { describeProcessFailure }, { resolvePinnedBunExecutable }] =
     await Promise.all([
       import('@orca/process-host'),
-      import('./process-failure-message.mjs'),
-      import('./pinned-bun-executable.mjs')
+      import('./tool-invocation/process-failure-message.mjs'),
+      import('./tool-invocation/pinned-bun-executable.mjs')
     ])
   // Missing or unusable optional Bun keeps the existing parent runtime.
   const program = resolvePinnedBunExecutable(root, runProcessSync) ?? process.execPath

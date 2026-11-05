@@ -1,5 +1,5 @@
 import type { IncomingHttpHeaders, ServerResponse } from 'node:http'
-import type { AgentHookSource } from '../../shared/agent-hook-relay'
+import type { AgentHookSource } from '../../shared/agent-hook-listener/transport/agent-hook-relay'
 import { PLUGIN_HOOK_SPECS } from '../../shared/plugins/events/plugin-hook-payloads'
 import {
   notifyPluginHook,

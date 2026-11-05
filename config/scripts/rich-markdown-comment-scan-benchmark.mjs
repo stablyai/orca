@@ -4,13 +4,14 @@ import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { build } from 'esbuild'
-import { buildCounterbalancedSchedule } from './counterbalanced-benchmark-schedule.mjs'
+import { buildCounterbalancedSchedule } from './performance/measurement/counterbalanced-benchmark-schedule.mjs'
 
 const baseline = process.argv[2] ?? '20ab9950654'
-const file = 'src/renderer/src/components/editor/markdown-rich-mode.ts'
-async function load(contents) {
+const historicalFile = 'src/renderer/src/components/editor/markdown-rich-mode.ts'
+const file = 'src/renderer/src/components/editor/markdown/render-mode/markdown-rich-mode.ts'
+async function load(contents, sourceFile = file) {
   const result = await build({
-    stdin: { contents, loader: 'ts', resolveDir: dirname(resolve(file)) },
+    stdin: { contents, loader: 'ts', resolveDir: dirname(resolve(sourceFile)) },
     bundle: true,
     platform: 'node',
     format: 'esm',
@@ -19,6 +20,27 @@ async function load(contents) {
       {
         name: 'cached-round-trip',
         setup(bundler) {
+          const historicalDependencies = new Map([
+            [
+              './markdown-frontmatter',
+              resolve(
+                'src/renderer/src/components/editor/markdown/source-scanning/markdown-frontmatter.ts'
+              )
+            ],
+            [
+              './markdown-rich-size-limit',
+              resolve(
+                'src/renderer/src/components/editor/markdown/render-mode/markdown-rich-size-limit.ts'
+              )
+            ]
+          ])
+          bundler.onResolve({ filter: /^\.\// }, (args) => {
+            if (sourceFile !== historicalFile || args.importer !== '<stdin>') {
+              return
+            }
+            const resolvedPath = historicalDependencies.get(args.path)
+            return resolvedPath ? { path: resolvedPath } : undefined
+          })
           bundler.onResolve({ filter: /markdown-round-trip$|^@\/i18n\/i18n$/ }, (args) => ({
             path: args.path,
             namespace: 'bench'
@@ -41,7 +63,10 @@ async function load(contents) {
   )
 }
 const arms = {
-  before: await load(execFileSync('git', ['show', `${baseline}:${file}`], { encoding: 'utf8' })),
+  before: await load(
+    execFileSync('git', ['show', `${baseline}:${historicalFile}`], { encoding: 'utf8' }),
+    historicalFile
+  ),
   after: await load(readFileSync(file, 'utf8'))
 }
 const results = []

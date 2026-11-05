@@ -1,9 +1,15 @@
 import { execFileSync } from 'node:child_process'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
-import { baseRuleId, scanAstGrep } from './ast-grep-scan.mjs'
-import { resolvePullRequestDiffBase } from './git-pull-request-diff-base.mjs'
-import { listTrackedFiles, runCountRatchet } from './ratchet-baseline.mjs'
+import ts from 'typescript-api'
+import { baseRuleId, scanAstGrep } from './static-analysis/structural-scan/ast-grep-scan.mjs'
+import { resolvePullRequestDiffBase } from './git/pr-diff-base/git-pull-request-diff-base.mjs'
+import {
+  listTrackedFiles,
+  runCountRatchet
+} from './static-analysis/ratchet-baseline/ratchet-baseline.mjs'
 
 // Count each flaky-test rule per file so fixing one pattern cannot pay for adding another.
 
@@ -39,12 +45,48 @@ export function collectFlakyTestPatternCounts(root = process.cwd(), matches = un
   return countFindings(flaky, (file) => tracked.has(file))
 }
 
-function git(root, args) {
+function git(root, args, options = {}) {
   return execFileSync('git', args, {
     cwd: root,
     encoding: 'utf8',
-    stdio: ['ignore', 'pipe', 'ignore']
+    stdio: ['ignore', 'pipe', 'ignore'],
+    ...options
   })
+}
+
+function maskStaticImportPaths(file, bytes) {
+  const text = bytes.toString('utf8')
+  if (!Buffer.from(text).equals(bytes)) {
+    return null
+  }
+  const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true)
+  if (source.parseDiagnostics.length > 0) {
+    return null
+  }
+  let masked = ''
+  let offset = 0
+  for (const statement of source.statements) {
+    if (ts.isImportDeclaration(statement) && ts.isStringLiteral(statement.moduleSpecifier)) {
+      const specifier = statement.moduleSpecifier
+      masked += `${text.slice(offset, specifier.getStart(source) + 1)}<import-path>`
+      offset = specifier.end - 1
+    }
+  }
+  return masked + text.slice(offset)
+}
+
+function changesOnlyStaticImportPaths(root, base, file) {
+  if (!/\.[cm]?[jt]sx?$/.test(file)) {
+    return false
+  }
+  try {
+    const current = readFileSync(join(root, file))
+    const previous = git(root, ['show', `${base}:${file}`], { encoding: 'buffer' })
+    const maskedPrevious = maskStaticImportPaths(file, previous)
+    return maskedPrevious !== null && maskedPrevious === maskStaticImportPaths(file, current)
+  } catch {
+    return false
+  }
 }
 
 // Scope enforcement to changed files so unrelated merges cannot invalidate every PR's baseline.
@@ -67,10 +109,16 @@ export function listChangedFiles(root = process.cwd()) {
   if (!base) {
     return null
   }
-  const changed = git(root, ['diff', '--name-only', '--no-renames', '-z', base])
-    .split('\0')
-    .filter(Boolean)
-  return new Set(changed)
+  const entries = git(root, ['diff', '--name-status', '--no-renames', '-z', base]).split('\0')
+  const changed = new Set()
+  for (let index = 0; index + 1 < entries.length; index += 2) {
+    const status = entries[index]
+    const file = entries[index + 1]
+    if (status !== 'M' || !changesOnlyStaticImportPaths(root, base, file)) {
+      changed.add(file)
+    }
+  }
+  return changed
 }
 
 export function changedFileScope(changed) {

@@ -13,9 +13,7 @@ import {
 import type {
   PtyProcessCeilingOffReason,
   PtyProcessCeilingState
-} from '../../shared/pty-process-ceiling-state'
-
-export type { PtyProcessCeilingState } from '../../shared/pty-process-ceiling-state'
+} from '../../shared/terminal/pty/native-process/pty-process-ceiling-state'
 
 export const PTY_PROCESS_CEILING_ENV = 'ORCA_TERMINAL_PROCESS_CEILING'
 /** Reserve tasks for shell hooks and a build step before accepting an opt-in ceiling. */

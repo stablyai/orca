@@ -1,7 +1,7 @@
 /** E1: open a temporary bridge for incumbent census before activation. Unproven state is unverifiable, never zero; WSL has no standing deploy tunnel. */
-import { pairedRuntimeConnectionFromOffer } from '../../../shared/paired-runtime-connection'
-import { parsePairingCode } from '../../../shared/pairing'
-import type { PairingOffer } from '../../../shared/mobile-relay-pairing-offer'
+import { pairedRuntimeConnectionFromOffer } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
+import { parsePairingCode } from '../../../shared/remote-runtime/pairing/pairing'
+import type { PairingOffer } from '../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import { ORCAD_MANAGED_REMOTE_PORT } from '../../../shared/orcad-managed-runtime'
 import {
   type OrcadTerminalCensus,

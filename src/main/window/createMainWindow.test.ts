@@ -9,10 +9,13 @@ vi.mock('./macos-tahoe-release', async () =>
 vi.mock('./desktop-integration/app-icon', async () =>
   (await import('./createMainWindow-test-harness')).appIconMock()
 )
+vi.mock('../browser-passwords/browser-password-guest-service', () => ({
+  attachBrowserPasswordGuest: vi.fn()
+}))
 vi.mock('../browser/browser-manager', async () =>
   (await import('./createMainWindow-test-harness')).browserManagerMock()
 )
-vi.mock('../browser/browser-route-session-runtime', async () => ({
+vi.mock('../browser/routing/sessions/browser-route-session-runtime', async () => ({
   browserRouteSessionRegistry: {
     isAllowedPartition: (await import('./createMainWindow-test-harness')).routePartitionAllowedMock
   },
@@ -20,10 +23,10 @@ vi.mock('../browser/browser-route-session-runtime', async () => ({
     attachGuest: (await import('./createMainWindow-test-harness')).attachRouteGuestMock
   }
 }))
-vi.mock('../browser/browser-javascript-dialogs', () => ({
+vi.mock('../browser/guest-lifecycle/prompts/browser-javascript-dialogs', () => ({
   installBrowserJavaScriptDialogs: vi.fn()
 }))
-vi.mock('../browser/browser-client-page-renderer-runtime', async () => {
+vi.mock('../browser/client-pages/renderer/browser-client-page-renderer-runtime', async () => {
   const harness = await import('./createMainWindow-test-harness')
   return {
     attachBrowserClientPageRenderer: harness.attachClientPageRendererMock,
@@ -33,11 +36,11 @@ vi.mock('../browser/browser-client-page-renderer-runtime', async () => {
 
 import { createMainWindow, loadMainWindow } from './createMainWindow'
 import { ipcMain } from 'electron'
-import { getBrowserClientHostId } from '../browser/browser-client-host-id'
+import { getBrowserClientHostId } from '../browser/client-hosts/lifecycle/browser-client-host-id'
 import {
   formatBrowserClientHostIdArgument,
   readBrowserClientHostIdArgument
-} from '../../shared/browser-client-host-id-argument'
+} from '../../shared/browser/client-hosting/browser-client-host-id-argument'
 import { resetExpectedTeardownStateForTest } from '../crash-reporting/expected-teardown-state'
 import {
   attachGuestPoliciesMock,
@@ -216,7 +219,7 @@ describe('createMainWindow', () => {
     expect(allowBlankPrefs).toMatchObject({
       disableHtmlFullscreenWindowResize: true,
       partition: 'persist:orca-browser',
-      preload: expect.stringMatching(/browser-window-close-preload\.js$/),
+      preload: expect.stringMatching(/browser-guest-preload\.js$/),
       sandbox: true
     })
 
@@ -277,7 +280,7 @@ describe('createMainWindow', () => {
       untrustedPreloadParams as never
     )
     expect(untrustedPreloadParams.preload).toBeUndefined()
-    expect(hardenedPrefs.preload).toMatch(/browser-window-close-preload\.js$/)
+    expect(hardenedPrefs.preload).toMatch(/browser-guest-preload\.js$/)
     expect(hardenedPrefs.preload).not.toContain('untrusted-preload')
 
     const secondGuest = { marker: 'second-guest' }

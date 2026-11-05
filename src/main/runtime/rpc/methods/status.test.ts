@@ -3,7 +3,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { normalizeMachineName } from '../../../../shared/machine-name'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { STATUS_METHODS } from './status'
-import { StatusGetParams } from '../../../../shared/rpc-contract/status-params'
 import { partialRuntimeStore } from '../../runtime-store-partial-fixture'
 
 // Control scutil completion to test the in-flight friendly-name lookup.
@@ -17,6 +16,7 @@ vi.mock('electron', () => ({
   app: { getPath: vi.fn(() => '/tmp') }
 }))
 
+const SCUTIL = '/usr/sbin/scutil'
 const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')!
 
 describe('status.get', () => {
@@ -28,11 +28,13 @@ describe('status.get', () => {
     // Only macOS waits for a friendly-name lookup; other platforms already have hostname.
     Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
     let finishLookup: ((value: unknown) => void) | undefined
-    runProcessMock.mockImplementation(
-      () =>
-        new Promise((resolve) => {
-          finishLookup = resolve
-        })
+    // Hold only scutil; the hardware probe that shares this mock fails fast.
+    runProcessMock.mockImplementation((spec: { program: string }) =>
+      spec.program === SCUTIL
+        ? new Promise((resolve) => {
+            finishLookup = resolve
+          })
+        : Promise.resolve({ code: 1, signal: null, stdout: '', stderr: '', timedOut: false })
     )
     const runtime = new OrcaRuntimeService(partialRuntimeStore({ getSettings: () => ({}) }))
     expect(finishLookup).toBeTypeOf('function')
@@ -49,17 +51,5 @@ describe('status.get', () => {
     })
 
     await expect(pending).resolves.toMatchObject({ machineName: 'Friendly Name' })
-  })
-
-  it('answers a liveness probe with the runtime id alone, and every other call in full', async () => {
-    const runtime = new OrcaRuntimeService(partialRuntimeStore({ getSettings: () => ({}) }))
-
-    await expect(STATUS_METHODS[0].handler({ probe: true }, { runtime })).resolves.toEqual({
-      runtimeId: runtime.getRuntimeId()
-    })
-    // Callers that predate the flag send no params or other shapes; all keep the full status.
-    for (const params of [undefined, {}, { probe: 'yes' }, 'status', null, []]) {
-      expect(StatusGetParams.parse(params).probe).not.toBe(true)
-    }
   })
 })

@@ -1,7 +1,7 @@
 import {
   TerminalStreamOpcode,
   encodeTerminalStreamJson
-} from '../../../../../shared/terminal-stream-protocol'
+} from '../../../../../shared/terminal/stream/terminal-stream-protocol'
 import {
   mobileSnapshotByteBudget,
   sendMobileResizeRestream,

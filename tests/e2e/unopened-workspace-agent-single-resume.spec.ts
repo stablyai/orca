@@ -3,7 +3,7 @@
 import { chmodSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { RuntimeClient } from '../../src/cli/runtime-client'
-import { makePaneKey } from '../../src/shared/stable-pane-id'
+import { makePaneKey } from '../../src/shared/workspace-layout/stable-pane-id'
 import { PROTOCOL_VERSION } from '../../src/main/daemon/types'
 import { expect, test } from './helpers/orca-app'
 import { TEST_REPO_PATH_FILE } from './global-setup'
