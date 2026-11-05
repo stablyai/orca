@@ -106,9 +106,14 @@ export function NativeChatAssistantMessageRow({
           )}
         />
       ) : forkAction ? (
-        // Mid-turn, the next row sits too close to hang into, so the fork takes its own line.
-        <div data-native-chat-find-skip className={cn('flex items-center', revealOnHover)}>
-          {forkAction}
+        // Mid-turn the next row follows closely, so the fork floats over it from a line of no height.
+        <div data-native-chat-fork-anchor className="relative" style={{ height: 0 }}>
+          <div
+            data-native-chat-find-skip
+            className={cn('absolute left-0 top-0 z-10 flex items-center', revealOnHover)}
+          >
+            {forkAction}
+          </div>
         </div>
       ) : null}
     </div>
