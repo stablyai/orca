@@ -467,3 +467,54 @@ describe('readTerminalComposerTypedText', () => {
     ).toBeNull()
   })
 })
+
+describe('OpenCode composer', () => {
+  // Shapes from OpenCode 2.2: a `┃` gutter box closed by `╹▀…`, the agent row last, no prompt glyph.
+  const box = (textRows: string[], cursorRow: number, beforeCursor: string) => {
+    const boxRows = ['   ┃', ...textRows.map((row) => `   ┃  ${row}`), '   ┃']
+    const below = [
+      ...boxRows.slice(cursorRow + 2),
+      '   ┃  Build · gpt-6.1 · medium',
+      '   ╹▀▀▀▀▀▀▀▀'
+    ]
+    return {
+      rows: ['   /update to install', ...boxRows.slice(0, cursorRow + 2)],
+      typedRows: ['   /update to install', ...boxRows.slice(0, cursorRow + 2)],
+      promptGlyphBoldRows: boxRows.slice(0, cursorRow + 3).map(() => false),
+      rowsBelow: below,
+      typedRowsBelow: below,
+      beforeCursor: `   ┃  ${beforeCursor}`,
+      afterCursor: '',
+      rawAfterCursor: '',
+      cursorHidden: false,
+      cursorViewportRow: 10
+    }
+  }
+
+  it('reads an empty box showing the stock placeholder as no draft', () => {
+    const empty = box(['Ask anything… "Fix a TODO in the codebase"'], 0, '')
+    expect(readTerminalComposerTypedText(empty)).toBe('')
+    expect(detectTerminalComposerDraft(empty)).toBeNull()
+  })
+
+  it('reads a typed draft, including with the cursor moved to its start', () => {
+    const typed = box(['please refactor the auth module'], 0, 'please refactor the auth module')
+    expect(readTerminalComposerTypedText(typed)).toBe('please refactor the auth module')
+    expect(detectTerminalComposerDraft(typed)).toEqual({
+      text: 'please refactor the auth module',
+      promptRow: 10,
+      cursorRow: 10,
+      endRow: 10,
+      promptGlyph: '┃'
+    })
+    expect(readTerminalComposerTypedText(box(['please refactor the auth module'], 0, ''))).toBe(
+      'please refactor the auth module'
+    )
+  })
+
+  it('reads every line of a multi-line draft around the cursor', () => {
+    expect(readTerminalComposerTypedText(box(['first line', '', 'third line'], 1, ''))).toBe(
+      'first line\n\nthird line'
+    )
+  })
+})
