@@ -43,7 +43,10 @@ export class PiRpcSessionStartup {
     launch: PiRpcResolvedLaunch,
     signal: AbortSignal
   ): Promise<StructuredAgentSessionProviderOpenResult> {
-    const answer = await this.wait(this.connection.request('get_state', {}), signal)
+    const answer = await this.wait(
+      this.connection.request('get_state', {}, { timeoutMs: null }),
+      signal
+    )
     this.assertLive(signal)
     const state = piRpcStateSchema.parse(answer)
     if (state.model?.provider === 'unknown') {

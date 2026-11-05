@@ -414,7 +414,8 @@ describe('ACP startup that never answers', () => {
     expect(rig.ended).toEqual([])
   })
 
-  it('does not time out a published handshake, and closes it through the session', async () => {
+  it('closes a slow published handshake through the session', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     const rig = await openAcpAdapterRig({ script: (agent) => agent.on('session/new', () => {}) })
     const acquired = await rig.acquire({ waitForStart: false })
     const opening = rig.adapter
@@ -426,7 +427,6 @@ describe('ACP startup that never answers', () => {
       })
       .catch((error: unknown) => error)
     await rig.frame('session/new')
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     try {
       await vi.advanceTimersByTimeAsync(30 * 60_000)
       expect(rig.ended).toEqual([])

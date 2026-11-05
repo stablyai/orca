@@ -1,7 +1,6 @@
 import type { z } from 'zod'
 import { AcpAgentError, AcpInvalidResponseError, acpAuthRequiredError } from './acp-errors'
 import type { AcpJsonRpcPeer } from './acp-json-rpc-peer'
-import { acpStepBound } from './acp-peer-limits'
 
 export function callAcpSession<T>(
   peer: AcpJsonRpcPeer,
@@ -11,7 +10,7 @@ export function callAcpSession<T>(
   answered: ((signedIn: boolean) => void) | undefined
 ): Promise<T> {
   return peer.request(method, params, {
-    ...acpStepBound(method),
+    timeoutMs: null,
     settle: (response) => {
       if ('error' in response) {
         const error = response.error

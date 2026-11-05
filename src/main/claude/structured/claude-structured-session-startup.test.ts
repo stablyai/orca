@@ -11,8 +11,6 @@ import {
 } from './claude-structured-session-test-support'
 import { claudeOpened } from './claude-structured-startup-settled-test-support'
 import type { ClaudeStructuredSessionEvent } from './claude-structured-session-state'
-import { CLAUDE_INITIALIZE_TIMEOUT_MS } from './claude-structured-session-startup'
-import { providerRequestTimeoutOf } from '../../provider-process/provider-request-timeout'
 import type { ClaudeStructuredLaunch } from './launch/claude-structured-launch-resolution'
 import { claudeRecord } from './journal/claude-structured-item-translation'
 import { startupAcquisitionRefusal } from '../../native-chat/agent-session-wire/structured-agent-session-failure-text'
@@ -531,7 +529,7 @@ describe('Claude host-awaited open', () => {
   })
 
   it('rejects an advertised signed-out initialize answer for the host to close once', async () => {
-    const claude = fakeClaude({ initAccount: { tokenSource: 'none', apiKeySource: 'none' } })
+    const claude = fakeClaude({ initAccount: { tokenSource: 'none', apiProvider: 'firstParty' } })
     const { adapter } = adapterFor(claude)
     await adapter.acquire(ACQUIRE)
     await expect(claudeOpened(adapter, 'session-1')).rejects.toThrow('not signed in')
@@ -549,21 +547,26 @@ describe('Claude host-awaited open', () => {
     expect(claude.connections[0].closeCount).toBe(1)
   })
 
-  it('fails open when initialize does not answer within its own bound', async () => {
-    const claude = fakeClaude({ initDelayMs: 10 * 60_000 })
+  it('opens a healthy Claude session whose initialize takes longer than a minute', async () => {
+    const claude = fakeClaude({ initDelayMs: 75_000 })
     const { adapter } = adapterFor(claude)
     await adapter.acquire(ACQUIRE)
-    const open = claudeOpened(adapter, 'session-1').catch((error: unknown) => error)
-    await vi.advanceTimersByTimeAsync(CLAUDE_INITIALIZE_TIMEOUT_MS)
-    const error = await open
-    expect(error).toBeInstanceOf(Error)
-    expect(String(error)).toContain('did not answer initialize')
-    expect(providerRequestTimeoutOf(error)).toEqual({
-      method: 'initialize',
-      timeoutMs: CLAUDE_INITIALIZE_TIMEOUT_MS
+    const opened = expect(claudeOpened(adapter, 'session-1')).resolves.toMatchObject({
+      reportedOptions: expect.any(Object)
     })
-    await adapter.closeSession('session-1')
-    expect(claude.connections[0].closeCount).toBe(1)
+    await vi.advanceTimersByTimeAsync(75_000)
+    await opened
+    await expect(
+      adapter.dispatch({
+        sessionId: 'session-1',
+        fence: 7,
+        clientMessageId: 'slow-start',
+        body: USER_MESSAGE
+      })
+    ).resolves.toMatchObject({ state: 'admitted' })
+    expect(claude.connections[0].sent).toMatchObject([
+      { message: { content: [{ type: 'text', text: 'ship it' }] } }
+    ])
   })
 
   it('lets the host abort a silent initialize wait and close the owned process', async () => {
