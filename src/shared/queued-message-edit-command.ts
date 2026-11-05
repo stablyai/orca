@@ -25,7 +25,6 @@ export function prepareQueuedMessageEditText(
     !(
       hostCommand(text) ||
       (hostSetsGoals && isStructuredAgentSessionGoalCommand(text)) ||
-      /^\/resume(?:\s|$)/i.test(text) ||
-      (agent === 'codex' && /^\/usage\s*$/i.test(text))
+      /^\/resume(?:\s|$)/i.test(text)
     )
 }

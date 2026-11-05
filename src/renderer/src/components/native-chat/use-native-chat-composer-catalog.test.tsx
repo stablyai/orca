@@ -20,7 +20,7 @@ import capture from '../../../../shared/__fixtures__/omp-native-commands.json'
 import { useNativeChatPickerState } from './use-native-chat-picker-state'
 import { dispatchNativeChatStructuredComposerText } from './native-chat-structured-composer-dispatch'
 import type { DiscoveredSkill } from '../../../../shared/skills'
-import { withNativeChatOrcaCommands } from './use-native-chat-orca-commands'
+import { withNativeChatResumeCommand } from './use-native-chat-resume-command'
 
 function transport(sessionCommands?: NativeChatStructuredComposerTransport['sessionCommands']) {
   return { sessionCommands } as NativeChatStructuredComposerTransport
@@ -33,7 +33,7 @@ describe('composer catalog authority', () => {
     expect(pty.result.current.sessionSkills).toBeUndefined()
     const oldHost = renderHook(() => useNativeChatComposerCatalog('claude', transport()))
     expect(oldHost.result.current.agentCommands).toEqual(
-      withNativeChatOrcaCommands(structuredSlashCommands(), 'claude')
+      withNativeChatResumeCommand(structuredSlashCommands())
     )
     expect(oldHost.result.current.sessionSkills).toBeUndefined()
   })
@@ -68,7 +68,7 @@ describe('composer catalog authority', () => {
   it('offers Codex the commands its model runs from message text', () => {
     const { result } = renderHook(() => useNativeChatComposerCatalog('codex', transport()))
     expect(result.current.agentCommands).toEqual(
-      withNativeChatOrcaCommands(structuredSlashCommands([], 'codex'), 'codex')
+      withNativeChatResumeCommand(structuredSlashCommands([], 'codex'))
     )
     expect(result.current.agentCommands.map(({ name }) => name)).toContain('goal')
   })
@@ -98,15 +98,15 @@ describe('composer catalog authority', () => {
       }
     )
     expect(result.current).toEqual({
-      agentCommands: withNativeChatOrcaCommands(structuredSlashCommands(), 'claude'),
+      agentCommands: withNativeChatResumeCommand(structuredSlashCommands()),
       sessionSkills: []
     })
     rerender({ reported: [{ name: 'custom-command', kind: 'command' }] })
     expect(result.current).toEqual({
-      agentCommands: withNativeChatOrcaCommands(
-        [...structuredSlashCommands(), { name: 'custom-command' }],
-        'claude'
-      ),
+      agentCommands: withNativeChatResumeCommand([
+        ...structuredSlashCommands(),
+        { name: 'custom-command' }
+      ]),
       sessionSkills: []
     })
   })

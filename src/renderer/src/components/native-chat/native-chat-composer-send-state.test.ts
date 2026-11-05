@@ -33,14 +33,14 @@ describe('Send on a held chat host', () => {
     expect(sendDisabled('/goal pause')).toBe(false)
     expect(sendDisabled('/goal clear')).toBe(false)
     expect(sendDisabled('/model')).toBe(false)
-    expect(sendDisabled('/usage', true)).toBe(false)
+    expect(sendDisabled('/resume', true)).toBe(false)
     expect(sendDisabled('/goal resume')).toBe(true)
     expect(sendDisabled('/goal ship it')).toBe(true)
     expect(sendDisabled('/compact')).toBe(true)
     expect(sendDisabled('hello')).toBe(true)
     // Goal mode sends the draft as an objective, even one spelled like a command.
     expect(sendDisabled('/goal pause', false, true)).toBe(true)
-    expect(sendDisabled('/usage', true, true)).toBe(false)
+    expect(sendDisabled('/resume', true, true)).toBe(false)
     // An enabled button is not labelled with the hold.
     expect(sendState('/goal pause').sendBlockedReason).toBeNull()
     expect(sendState('hello').sendBlockedReason).toBe('Waiting for permission mode')

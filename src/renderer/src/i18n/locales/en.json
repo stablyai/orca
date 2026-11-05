@@ -20348,9 +20348,6 @@
         "replaceDescription": "Resuming “{{title}}” here will stop what {{agent}} is doing in this chat.",
         "replace": "Replace"
       },
-      "usageCommand": {
-        "description": "View account usage"
-      },
       "hostPermission": {
         "checkAgain": "Check again",
         "launchRefused": "Orca did not start a {{value0}} chat",
