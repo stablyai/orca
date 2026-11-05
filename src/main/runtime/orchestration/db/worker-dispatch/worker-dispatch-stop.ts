@@ -49,6 +49,14 @@ export function isWorkerStopRequested(this: OrchestrationDb, dispatchId: string)
   return state === 'stopping' || state === 'stop_unknown'
 }
 
+/** Every Dispatch this one started as its helper, oldest first. */
+export function listHelperDispatchIds(this: OrchestrationDb, creatorDispatchId: string): string[] {
+  return this.db
+    .prepare('SELECT id FROM dispatch_contexts WHERE creator_dispatch_id = ? ORDER BY rowid')
+    .all(creatorDispatchId)
+    .map((row) => String(row.id))
+}
+
 export function beginWorkerStop(
   this: OrchestrationDb,
   dispatchId: string,
@@ -284,6 +292,7 @@ export function markWorkerStopUnknown(
 export type WorkerDispatchStopMethods = {
   isDispatchProcessCurrent: typeof isDispatchProcessCurrent
   isWorkerStopRequested: typeof isWorkerStopRequested
+  listHelperDispatchIds: typeof listHelperDispatchIds
   beginWorkerStop: typeof beginWorkerStop
   settleWorkerStop: typeof settleWorkerStop
   reconcileFederatedWorkerStop: typeof reconcileFederatedWorkerStop
@@ -295,6 +304,7 @@ export function attachWorkerDispatchStop(ctor: { prototype: object }): void {
   Object.assign(ctor.prototype, {
     isDispatchProcessCurrent,
     isWorkerStopRequested,
+    listHelperDispatchIds,
     beginWorkerStop,
     settleWorkerStop,
     reconcileFederatedWorkerStop,
