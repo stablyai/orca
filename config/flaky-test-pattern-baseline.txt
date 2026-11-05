@@ -536,7 +536,6 @@
 1 test-no-wall-clock:src/renderer/src/components/settings/accounts/providers/GrokAccountsSection.test.tsx
 1 test-no-wall-clock:src/renderer/src/components/sidebar/worktree-list/listing/WorktreeList.lineage-agent-expansion-coupling.test.tsx
 1 test-no-wall-clock:src/renderer/src/components/sidebar/worktree-list/listing/WorktreeList.lineage-child-real-card.test.tsx
-1 test-no-wall-clock:src/renderer/src/components/tab-bar/open-tab-search.test.ts
 1 test-no-wall-clock:src/renderer/src/components/task-page/jira/task-page-jira-saved-filter-load-failure.test.tsx
 1 test-no-wall-clock:src/renderer/src/components/terminal-pane/cache-timer-seeding.test.ts
 1 test-no-wall-clock:src/renderer/src/components/terminal-pane/terminal-link-worktree-root-activation.test.ts
