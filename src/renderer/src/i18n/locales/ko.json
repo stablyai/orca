@@ -19399,7 +19399,9 @@
       "composerWorkspace": {
         "copyFailed": "복사하지 못했습니다",
         "copyIdentity": "{{value0}} 복사",
-        "projectCheckout": "프로젝트 체크아웃"
+        "folder": "폴더",
+        "mainCheckout": "기본 체크아웃",
+        "worktree": "작업 트리"
       }
     },
     "tab": {

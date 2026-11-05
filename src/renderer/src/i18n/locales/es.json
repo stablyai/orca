@@ -19908,7 +19908,9 @@
       "composerWorkspace": {
         "copyFailed": "No se pudo copiar",
         "copyIdentity": "Copiar {{value0}}",
-        "projectCheckout": "Checkout del proyecto"
+        "folder": "Carpeta",
+        "mainCheckout": "Checkout principal",
+        "worktree": "Worktree"
       }
     },
     "tab": {

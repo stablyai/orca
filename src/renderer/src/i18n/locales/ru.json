@@ -20771,7 +20771,9 @@
       "composerWorkspace": {
         "copyFailed": "Не удалось скопировать",
         "copyIdentity": "Копировать {{value0}}",
-        "projectCheckout": "Рабочая копия проекта"
+        "folder": "Папка",
+        "mainCheckout": "Основная рабочая копия",
+        "worktree": "Рабочее дерево"
       }
     },
     "tab": {

@@ -19340,7 +19340,9 @@
       "composerWorkspace": {
         "copyFailed": "复制失败",
         "copyIdentity": "复制 {{value0}}",
-        "projectCheckout": "项目工作副本"
+        "folder": "文件夹",
+        "mainCheckout": "主工作副本",
+        "worktree": "工作树"
       }
     },
     "tab": {

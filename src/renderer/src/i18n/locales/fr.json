@@ -20128,7 +20128,9 @@
       "composerWorkspace": {
         "copyFailed": "Échec de la copie",
         "copyIdentity": "Copier {{value0}}",
-        "projectCheckout": "Checkout du projet"
+        "folder": "Dossier",
+        "mainCheckout": "Copie principale",
+        "worktree": "Worktree"
       }
     },
     "tab": {

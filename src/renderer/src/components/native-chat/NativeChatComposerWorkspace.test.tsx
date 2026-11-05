@@ -11,6 +11,7 @@ import {
 import { makeTab } from '@/store/slices/store-session-test-harness'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { NativeChatComposerWorkspace } from './NativeChatComposerWorkspace'
+import { createGlobalSettingsFixture } from '../../../../shared/global-settings-test-fixture'
 
 vi.mock('@/store', async () => {
   const { createTestStore } = await import('@/store/slices/store-test-helpers')
@@ -33,6 +34,9 @@ beforeEach(() => {
   })
   clipboard.mockClear()
   useAppStore.setState({
+    settings: createGlobalSettingsFixture({ machineName: 'My laptop' }),
+    runtimeEnvironments: [],
+    sshTargetLabels: new Map(),
     repos: [TEST_REPO],
     worktreesByRepo: { [TEST_REPO.id]: [wt] },
     detectedWorktreesByRepo: {},
@@ -58,6 +62,36 @@ function Footer() {
 }
 
 describe('chat composer workspace', () => {
+  it('shows the machine, sidebar checkout name and branch without a separate project label', async () => {
+    useAppStore.setState({
+      settings: createGlobalSettingsFixture(),
+      worktreesByRepo: {
+        [TEST_REPO.id]: [{ ...wt, displayName: 'my-checkout', isMainWorktree: true }]
+      }
+    })
+    const getStatus = vi.fn().mockResolvedValue({ machineName: 'Detected laptop' })
+    window.api.runtime = { getStatus } as typeof window.api.runtime
+    render(<Footer />)
+    const machine = await screen.findByText('Detected laptop')
+    const checkout = screen.getByRole('button', { name: 'Copy my-checkout' })
+    const branch = screen.getByRole('button', { name: 'Copy feature/composer' })
+    expect(
+      machine.compareDocumentPosition(checkout) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy()
+    expect(checkout.compareDocumentPosition(branch) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    fireEvent.click(checkout)
+    expect(clipboard).toHaveBeenCalledWith('my-checkout')
+    act(() => checkout.focus())
+    expect((await screen.findByRole('tooltip')).textContent).toBe(wt.path)
+    expect(screen.queryByText(TEST_REPO.displayName)).toBeNull()
+    act(() =>
+      useAppStore.setState({
+        settings: createGlobalSettingsFixture({ machineName: 'Renamed laptop' })
+      })
+    )
+    expect(screen.getByText('Renamed laptop')).toBeTruthy()
+  })
+
   it('shows and copies the current branch, then follows the sidebar identity after checkout', async () => {
     render(<Footer />)
     fireEvent.click(screen.getByRole('button', { name: 'Copy feature/composer' }))
@@ -114,8 +148,10 @@ describe('chat composer workspace', () => {
         }
       })
     )
-    expect(screen.queryByRole('button')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Copy Detached HEAD · a1b2c3d' })).toBeNull()
     expect(screen.getByText('notes')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Copy notes' }))
+    expect(clipboard).toHaveBeenCalledWith('notes')
   })
 
   it('identifies a folder project by its checkout name without Git identity', () => {
@@ -135,7 +171,7 @@ describe('chat composer workspace', () => {
     })
     render(<Footer />)
     expect(screen.getByText('plain-notes-folder')).toBeTruthy()
-    expect(screen.queryByRole('button')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Copy feature/composer' })).toBeNull()
   })
 
   it('does not render for unrelated store writes or another workspace branch update', () => {
@@ -171,11 +207,24 @@ describe('chat composer workspace', () => {
   it('keeps same-ID host copies separate and leaves the other host unrendered', () => {
     const remote = { ...wt, hostId: 'runtime:box' as const, branch: 'refs/heads/remote-branch' }
     useAppStore.setState({
+      runtimeEnvironments: [
+        {
+          id: 'box',
+          name: 'Build Mac',
+          createdAt: 0,
+          updatedAt: 0,
+          lastUsedAt: null,
+          runtimeId: null,
+          endpoints: [],
+          preferredEndpointId: 'direct'
+        }
+      ],
       repos: [TEST_REPO, { ...TEST_REPO, executionHostId: 'runtime:box' }],
       worktreesByRepo: { [TEST_REPO.id]: [wt, remote] },
       activeWorkspaceExecutionHostId: 'runtime:box'
     })
     const localCommits = vi.fn()
+    const remoteCommits = vi.fn()
     render(
       <TooltipProvider>
         <Profiler id="local" onRender={localCommits}>
@@ -184,15 +233,48 @@ describe('chat composer workspace', () => {
             structuredTransport={{ worktreeId: wt.id, runtimeEnvironmentId: null }}
           />
         </Profiler>
-        <NativeChatComposerWorkspace
-          terminalTabId="remote-tab"
-          structuredTransport={{ worktreeId: wt.id, runtimeEnvironmentId: 'box' }}
-        />
+        <Profiler id="remote" onRender={remoteCommits}>
+          <NativeChatComposerWorkspace
+            terminalTabId="remote-tab"
+            structuredTransport={{ worktreeId: wt.id, runtimeEnvironmentId: 'box' }}
+          />
+        </Profiler>
       </TooltipProvider>
     )
     expect(screen.getByRole('button', { name: 'Copy feature/composer' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Copy remote-branch' })).toBeTruthy()
+    expect(screen.getByText('Build Mac')).toBeTruthy()
+    expect(screen.getByText('My laptop')).toBeTruthy()
     localCommits.mockClear()
+    remoteCommits.mockClear()
+    act(() =>
+      useAppStore
+        .getState()
+        .setEnvironmentSshConnectionState('box', 'target', {
+          targetId: 'target',
+          status: 'connecting',
+          error: null,
+          reconnectAttempt: 0
+        })
+    )
+    expect(localCommits).not.toHaveBeenCalled()
+    expect(remoteCommits).not.toHaveBeenCalled()
+    act(() =>
+      useAppStore.getState().setEnvironmentRemovedSshTargetLabels('other', { target: 'Other box' })
+    )
+    expect(localCommits).not.toHaveBeenCalled()
+    expect(remoteCommits).not.toHaveBeenCalled()
+    act(() =>
+      useAppStore.setState({
+        runtimeEnvironments: useAppStore.getState().runtimeEnvironments.map((environment) => ({
+          ...environment,
+          name: 'Renamed server'
+        }))
+      })
+    )
+    expect(screen.getByText('Renamed server')).toBeTruthy()
+    expect(remoteCommits).toHaveBeenCalledTimes(1)
+    expect(localCommits).not.toHaveBeenCalled()
     act(() =>
       useAppStore.setState({
         worktreesByRepo: { [TEST_REPO.id]: [wt, { ...remote, branch: 'refs/heads/remote-new' }] }

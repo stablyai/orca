@@ -21057,7 +21057,9 @@
       "composerWorkspace": {
         "copyFailed": "Falha ao copiar",
         "copyIdentity": "Copiar {{value0}}",
-        "projectCheckout": "Checkout do projeto"
+        "folder": "Pasta",
+        "mainCheckout": "Checkout principal",
+        "worktree": "Worktree"
       }
     },
     "tab": {

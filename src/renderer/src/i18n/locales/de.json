@@ -20102,7 +20102,9 @@
       "composerWorkspace": {
         "copyFailed": "Kopieren fehlgeschlagen",
         "copyIdentity": "{{value0}} kopieren",
-        "projectCheckout": "Projekt-Checkout"
+        "folder": "Ordner",
+        "mainCheckout": "Haupt-Checkout",
+        "worktree": "Worktree"
       }
     },
     "tab": {

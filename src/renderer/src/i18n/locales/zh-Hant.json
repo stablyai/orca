@@ -19795,7 +19795,9 @@
       "composerWorkspace": {
         "copyFailed": "複製失敗",
         "copyIdentity": "複製 {{value0}}",
-        "projectCheckout": "專案工作副本"
+        "folder": "資料夾",
+        "mainCheckout": "主要工作副本",
+        "worktree": "工作樹"
       }
     },
     "tab": {

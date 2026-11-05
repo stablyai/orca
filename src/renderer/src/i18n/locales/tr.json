@@ -20086,7 +20086,9 @@
       "composerWorkspace": {
         "copyFailed": "Kopyalanamadı",
         "copyIdentity": "{{value0}} kopyala",
-        "projectCheckout": "Proje çalışma kopyası"
+        "folder": "Klasör",
+        "mainCheckout": "Ana çalışma kopyası",
+        "worktree": "Worktree"
       }
     },
     "tab": {

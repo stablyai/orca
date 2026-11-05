@@ -20513,7 +20513,9 @@
       "composerWorkspace": {
         "copyFailed": "Failed to copy",
         "copyIdentity": "Copy {{value0}}",
-        "projectCheckout": "Project checkout"
+        "folder": "Folder",
+        "mainCheckout": "Main checkout",
+        "worktree": "Worktree"
       },
       "creationChatNotOpened": "Your worktree is ready, but the chat could not open. Retry to open it with your message."
     },
