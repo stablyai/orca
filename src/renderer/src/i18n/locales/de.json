@@ -3756,9 +3756,6 @@
             "1d3503357d": "Dieses Fenster kann geschlossen und später wieder geöffnet werden, während das Löschen fortgesetzt wird.",
             "4c2990886e": "{{value0}}/{{value1}} gelöscht",
             "86ba852118": "{{value0}}, {{value1}} fehlgeschlagen",
-            "deletingCount": "Arbeitsbereiche werden gelöscht: {{value0}}",
-            "deleteCount": "Arbeitsbereiche löschen: {{value0}}?",
-            "selectedForDeletionCount": "Zum Löschen ausgewählt: {{value0}}",
             "deleteButtonCount": "{{value0}} löschen",
             "archivedStatus": "Archiviert",
             "74f6c16279": "Zurück"

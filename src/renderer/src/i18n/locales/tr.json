@@ -3734,9 +3734,6 @@
             "1d3503357d": "Silme işlemi devam ederken bunu kapatıp geri dönebilirsiniz.",
             "4c2990886e": "{{value0}}/{{value1}} silindi",
             "86ba852118": "{{value0}}, {{value1}} başarısız oldu",
-            "deletingCount": "Silinen çalışma alanları: {{value0}}",
-            "deleteCount": "Çalışma alanları silinsin mi: {{value0}}?",
-            "selectedForDeletionCount": "Silinmek üzere seçilen: {{value0}}",
             "deleteButtonCount": "{{value0}} Sil",
             "archivedStatus": "Arşivlendi",
             "74f6c16279": "Geri"

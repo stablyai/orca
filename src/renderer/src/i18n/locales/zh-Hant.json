@@ -3683,9 +3683,6 @@
             "1d3503357d": "刪除作業會繼續進行，您可以先關閉此視窗，稍後再回來。",
             "4c2990886e": "已刪除 {{value0}}/{{value1}}",
             "86ba852118": "{{value0}}，{{value1}} 個失敗",
-            "deletingCount": "正在刪除工作區：{{value0}}",
-            "deleteCount": "刪除工作區：{{value0}}？",
-            "selectedForDeletionCount": "已選擇刪除：{{value0}}",
             "deleteButtonCount": "刪除 {{value0}}",
             "archivedStatus": "已封存",
             "74f6c16279": "返回"

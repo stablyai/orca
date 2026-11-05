@@ -3229,9 +3229,6 @@
             "1d3503357d": "削除の続行中にこれを閉じて後で戻れます。",
             "4c2990886e": "{{value0}}/{{value1}} 件を削除済み",
             "86ba852118": "{{value0}}、{{value1}} 件が失敗",
-            "deletingCount": "削除中のワークスペース: {{value0}}",
-            "deleteCount": "ワークスペースを削除しますか: {{value0}}?",
-            "selectedForDeletionCount": "削除対象として選択済み: {{value0}}",
             "deleteButtonCount": "{{value0}} を削除",
             "archivedStatus": "アーカイブ済み",
             "74f6c16279": "戻る"

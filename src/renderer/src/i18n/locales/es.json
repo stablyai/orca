@@ -3287,9 +3287,6 @@
             "1d3503357d": "Puedes cerrar esto y volver mientras la eliminación continúa.",
             "4c2990886e": "{{value0}}/{{value1}} eliminados",
             "86ba852118": "{{value0}}, {{value1}} fallidos",
-            "deletingCount": "Eliminando espacios de trabajo: {{value0}}",
-            "deleteCount": "¿Eliminar espacios de trabajo: {{value0}}?",
-            "selectedForDeletionCount": "Seleccionados para eliminar: {{value0}}",
             "deleteButtonCount": "Eliminar {{value0}}",
             "archivedStatus": "Archivado",
             "74f6c16279": "Atrás"

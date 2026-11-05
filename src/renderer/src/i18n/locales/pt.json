@@ -17498,9 +17498,6 @@
             "1d3503357d": "Você pode fechar isto e voltar enquanto a exclusão continua.",
             "4c2990886e": "{{value0}}/{{value1}} excluídos",
             "86ba852118": "{{value0}}, {{value1}} falharam",
-            "deletingCount": "Excluindo espaços de trabalho: {{value0}}",
-            "deleteCount": "Excluir espaços de trabalho: {{value0}}?",
-            "selectedForDeletionCount": "Selecionados para exclusão: {{value0}}",
             "deleteButtonCount": "Excluir {{value0}}",
             "archivedStatus": "Arquivado",
             "74f6c16279": "Voltar"

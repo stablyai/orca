@@ -3887,9 +3887,6 @@
             "1d3503357d": "You can close this and come back while deletion continues.",
             "4c2990886e": "{{value0}}/{{value1}} deleted",
             "86ba852118": "{{value0}}, {{value1}} failed",
-            "deletingCount": "Deleting workspaces: {{value0}}",
-            "deleteCount": "Delete workspaces: {{value0}}?",
-            "selectedForDeletionCount": "Selected for deletion: {{value0}}",
             "deleteButtonCount": "Delete {{value0}}",
             "archivedStatus": "Archived",
             "74f6c16279": "Back"
@@ -20788,6 +20785,12 @@
             "unpushed": "Unpushed",
             "unknown": "Unknown"
           }
+        },
+        "confirm": {
+          "deletingTitle_one": "Deleting {{count}} workspace",
+          "deletingTitle_other": "Deleting {{count}} workspaces",
+          "deleteTitle_one": "Delete {{count}} workspace?",
+          "deleteTitle_other": "Delete {{count}} workspaces?"
         }
       },
       "creation": {

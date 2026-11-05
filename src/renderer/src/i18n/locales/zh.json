@@ -3229,9 +3229,6 @@
             "1d3503357d": "删除继续期间，你可以关闭此窗口并稍后回来。",
             "4c2990886e": "已删除 {{value0}}/{{value1}}",
             "86ba852118": "{{value0}}，{{value1}} 个失败",
-            "deletingCount": "正在删除工作区：{{value0}}",
-            "deleteCount": "删除工作区：{{value0}}？",
-            "selectedForDeletionCount": "已选择删除：{{value0}}",
             "deleteButtonCount": "删除 {{value0}}",
             "archivedStatus": "已归档",
             "74f6c16279": "返回"

@@ -1933,6 +1933,12 @@
           "workspaceCount_one": "{{count}} workspace",
           "workspaceCount_other": "{{count}} workspaces"
         },
+        "confirm": {
+          "deleteTitle_one": "Delete {{count}} workspace?",
+          "deleteTitle_other": "Delete {{count}} workspaces?",
+          "deletingTitle_one": "Deleting {{count}} workspace",
+          "deletingTitle_other": "Deleting {{count}} workspaces"
+        },
         "scan": {
           "multipleErrorsCount_one": "Could not check {{count}} repository ({{names}}). Some workspaces may be missing. Refresh to try again.",
           "multipleErrorsCount_other": "Could not check {{count}} repositories ({{names}}). Some workspaces may be missing. Refresh to try again.",

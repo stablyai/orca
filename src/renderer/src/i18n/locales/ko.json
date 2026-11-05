@@ -3229,9 +3229,6 @@
             "1d3503357d": "삭제가 계속되는 동안 이 창을 닫고 나중에 돌아올 수 있습니다.",
             "4c2990886e": "{{value0}}/{{value1}}개 삭제됨",
             "86ba852118": "{{value0}}, {{value1}}개 실패",
-            "deletingCount": "삭제 중인 워크스페이스: {{value0}}",
-            "deleteCount": "워크스페이스 삭제: {{value0}}?",
-            "selectedForDeletionCount": "삭제 대상으로 선택됨: {{value0}}",
             "deleteButtonCount": "{{value0}}개 삭제",
             "archivedStatus": "보관됨",
             "74f6c16279": "뒤로"
