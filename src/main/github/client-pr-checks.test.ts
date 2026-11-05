@@ -348,6 +348,47 @@ describe('getPRChecks', () => {
     ])
   })
 
+  it('carries when each check ran, dropping GitHub’s unset zero time', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock.mockResolvedValueOnce(
+      graphQLChecksResponse({
+        contexts: [
+          {
+            ...graphQLCheckRun({ databaseId: 1, name: 'build' }),
+            startedAt: '2026-11-05T10:00:00Z',
+            completedAt: '2026-11-05T10:03:12Z'
+          },
+          {
+            ...graphQLCheckRun({ databaseId: 2, name: 'lint', status: 'QUEUED', conclusion: null }),
+            startedAt: '0001-01-01T00:00:00Z',
+            completedAt: null
+          },
+          { ...graphQLStatusContext({ state: 'FAILURE' }), createdAt: '2026-11-05T09:00:00Z' },
+          {
+            ...graphQLStatusContext({ context: 'deploy', state: 'PENDING' }),
+            createdAt: '2026-11-05T09:30:00Z'
+          }
+        ]
+      })
+    )
+
+    const checks = await getPRChecks('/repo-root', 42, 'head-oid')
+
+    expect(
+      checks.map(({ name, startedAt, completedAt }) => ({ name, startedAt, completedAt }))
+    ).toEqual([
+      { name: 'build', startedAt: '2026-11-05T10:00:00Z', completedAt: '2026-11-05T10:03:12Z' },
+      { name: 'lint', startedAt: undefined, completedAt: undefined },
+      {
+        name: 'continuous-integration/jenkins/pr-merge',
+        startedAt: undefined,
+        completedAt: '2026-11-05T09:00:00Z'
+      },
+      { name: 'deploy', startedAt: undefined, completedAt: undefined }
+    ])
+    expect(checks[1]).not.toHaveProperty('startedAt')
+  })
+
   it('surfaces an action_required check suite that has no check run', async () => {
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
     ghExecFileAsyncMock.mockResolvedValueOnce(
@@ -462,7 +503,9 @@ describe('getPRChecks', () => {
               status: 'completed',
               conclusion: 'success',
               html_url: 'https://github.com/acme/widgets/actions/runs/88',
-              details_url: null
+              details_url: null,
+              started_at: '2026-11-05T10:00:00Z',
+              completed_at: '2026-11-05T10:03:12Z'
             }
           ]
         })
@@ -474,7 +517,8 @@ describe('getPRChecks', () => {
             {
               context: 'continuous-integration/jenkins/pr-merge',
               state: 'pending',
-              target_url: 'https://jenkins.example.com/job/merge/1'
+              target_url: 'https://jenkins.example.com/job/merge/1',
+              created_at: '2026-11-05T09:30:00Z'
             }
           ]
         })
@@ -505,6 +549,8 @@ describe('getPRChecks', () => {
         status: 'completed',
         conclusion: 'success',
         url: 'https://github.com/acme/widgets/actions/runs/88',
+        startedAt: '2026-11-05T10:00:00Z',
+        completedAt: '2026-11-05T10:03:12Z',
         checkRunId: 88,
         workflowRunId: 88
       },
@@ -515,6 +561,30 @@ describe('getPRChecks', () => {
         url: 'https://jenkins.example.com/job/merge/1'
       }
     ])
+  })
+
+  it('asks an older gh without run times for the fields it knows', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock
+      .mockRejectedValueOnce(new Error('GraphQL rollup failed'))
+      .mockRejectedValueOnce(new Error('REST details failed'))
+      .mockRejectedValueOnce(
+        Object.assign(new Error('Command failed'), {
+          stderr: 'Unknown JSON field: "startedAt"\nAvailable fields:\n  link\n  name\n  state'
+        })
+      )
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify([{ name: 'lint', state: 'PASS', link: 'https://example.com/lint' }])
+      })
+
+    const checks = await getPRChecks('/repo-root', 42, 'a'.repeat(40))
+
+    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+      4,
+      ['pr', 'checks', '42', '--json', 'name,state,link', '--repo', 'acme/widgets'],
+      { cwd: '/repo-root', host: 'github.com' }
+    )
+    expect(checks.map((check) => check.name)).toEqual(['lint'])
   })
 
   it('treats gh pr checks "no checks reported" as an empty fallback list', async () => {
@@ -574,7 +644,15 @@ describe('getPRChecks', () => {
     expectGraphQLRollupCall()
     expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
       3,
-      ['pr', 'checks', '42', '--json', 'name,state,link', '--repo', 'acme/widgets'],
+      [
+        'pr',
+        'checks',
+        '42',
+        '--json',
+        'name,state,link,startedAt,completedAt',
+        '--repo',
+        'acme/widgets'
+      ],
       { cwd: '/repo-root', host: 'github.com' }
     )
     expect(checks).toEqual([
@@ -758,7 +836,15 @@ describe('getPRChecks', () => {
     expectGraphQLRollupCall()
     expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
       2,
-      ['pr', 'checks', '42', '--json', 'name,state,link', '--repo', 'acme/widgets'],
+      [
+        'pr',
+        'checks',
+        '42',
+        '--json',
+        'name,state,link,startedAt,completedAt',
+        '--repo',
+        'acme/widgets'
+      ],
       { cwd: '/repo-root', host: 'github.com' }
     )
   })
@@ -773,7 +859,7 @@ describe('getPRChecks', () => {
   })
 })
 
-it('carries the actual matching GraphQL commit identity rather than the requested head', async () => {
+it('keys the cached rollup by the expected head and carries the commit it actually read', async () => {
   vi.clearAllMocks()
   getOwnerRepoMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
   ghExecFileAsyncMock.mockResolvedValueOnce(
@@ -782,7 +868,12 @@ it('carries the actual matching GraphQL commit identity rather than the requeste
       contexts: [{ __typename: 'StatusContext', context: 'Build', state: 'SUCCESS' }]
     })
   )
-  const checks = await getPRChecks('/repo-root', 42, 'a'.repeat(40))
+  const checks = await getPRChecks('/repo-root', 42, 'A'.repeat(40))
+  expectGraphQLRollupCall()
+  // A push changes the expected head, so gh never serves a reply cached for the previous one.
+  expect(ghExecFileAsyncMock.mock.calls[0]?.[0]).toEqual(
+    expect.arrayContaining(['-f', `cacheHead=${'a'.repeat(40)}`])
+  )
   expect(JSON.parse(JSON.stringify(checks))).toEqual([
     {
       name: 'Build',

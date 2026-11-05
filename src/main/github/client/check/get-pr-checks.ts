@@ -25,6 +25,7 @@ import {
   isPendingApprovalSuiteWithoutRuns
 } from './pr-checks-response-mapping'
 import { parseActionsRunId } from './check-detail-field-mapping'
+import { checkRunTimes } from '../../../../shared/source-control/checks/pr-check-time'
 import {
   readRestPRCheckRuns,
   readRestPRCommitStatuses,
@@ -127,25 +128,43 @@ async function readPRChecks(
     await assertRateLimitBudget('graphql', ownerRepo, ghOptions)
     await acquire()
     try {
-      const fallbackArgs = ['pr', 'checks', String(prNumber), '--json', 'name,state,link']
-      if (ownerRepo) {
-        fallbackArgs.push('--repo', `${ownerRepo.owner}/${ownerRepo.repo}`)
-      }
-      const { stdout } = await ghExecFileAsync(fallbackArgs, ghOptions).catch((err: unknown) => {
-        const { stderr } = extractExecError(err)
-        // gh pr checks signals an empty run set with nonzero exit.
-        if (stderr.toLowerCase().includes('no checks reported')) {
-          return { stdout: '[]', stderr }
+      const readFallback = (fields: string) => {
+        const fallbackArgs = ['pr', 'checks', String(prNumber), '--json', fields]
+        if (ownerRepo) {
+          fallbackArgs.push('--repo', `${ownerRepo.owner}/${ownerRepo.repo}`)
         }
-        throw err
-      })
+        return ghExecFileAsync(fallbackArgs, ghOptions).catch((err: unknown) => {
+          const { stderr } = extractExecError(err)
+          // gh pr checks signals an empty run set with nonzero exit.
+          if (stderr.toLowerCase().includes('no checks reported')) {
+            return { stdout: '[]', stderr }
+          }
+          throw err
+        })
+      }
+      const { stdout } = await readFallback('name,state,link,startedAt,completedAt').catch(
+        (err: unknown) => {
+          // Older gh builds reject unknown --json fields; their rows simply have no times.
+          if (!extractExecError(err).stderr.toLowerCase().includes('unknown json field')) {
+            throw err
+          }
+          return readFallback('name,state,link')
+        }
+      )
       noteRepositoryRateLimitSpend(ownerRepo, 'graphql', 1, ghOptions)
-      const data = JSON.parse(stdout) as { name: string; state: string; link: string }[]
+      const data = JSON.parse(stdout) as {
+        name: string
+        state: string
+        link: string
+        startedAt?: string
+        completedAt?: string
+      }[]
       return data.map((d) => ({
         name: d.name,
         status: mapCheckStatus(d.state),
         conclusion: mapCheckConclusion(d.state),
         url: d.link || null,
+        ...checkRunTimes(d.startedAt, d.completedAt),
         workflowRunId: parseActionsRunId(d.link)
       }))
     } finally {
@@ -166,6 +185,7 @@ async function readPRChecks(
       try {
         // Explicit refresh bypasses the polling cache.
         const cacheArgs = options?.noCache ? [] : ['--cache', '60s']
+        const cacheHead = normalizePRCheckHeadSha(headSha)
         const { stdout } = await ghExecFileAsync(
           [
             'api',
@@ -177,6 +197,8 @@ async function readPRChecks(
             `repo=${ownerRepo.repo}`,
             '-F',
             `pr=${prNumber}`,
+            // Unused by the query, but part of gh's cache key: after a push, a reply cached for the previous head is never served.
+            ...(cacheHead ? ['-f', `cacheHead=${cacheHead}`] : []),
             '-f',
             `query=${PR_CHECKS_ROLLUP_QUERY}`
           ],

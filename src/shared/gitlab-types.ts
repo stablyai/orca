@@ -251,6 +251,9 @@ export type GitLabPipelineJob = {
   webUrl: string
   /** Duration in seconds. null when the job hasn't finished. */
   duration: number | null
+  /** Provider ISO times; absent from older Orca servers and from jobs that haven't started. */
+  startedAt?: string
+  finishedAt?: string
 }
 
 // The MR's own pipeline; its status is the pipeline verdict even when its job list is partial or empty.
@@ -260,6 +263,11 @@ export type GitLabPipeline = {
   /** Pipeline-level verdict, settled by the MR status rule from the same reply. */
   checkStatus?: CheckStatus
   webUrl?: string | null
+  /** Commit and ref the pipeline ran on; absent from older Orca servers. */
+  sha?: string
+  ref?: string
+  startedAt?: string
+  finishedAt?: string
 }
 
 // Flatten discussions into the work-item details comment list.
