@@ -168,6 +168,12 @@ export function nativeChatAppearanceStyle(
     '--chat-code-font-family': codeFont,
     ...(appearance.fontFamily
       ? { '--chat-font-family': buildAppFontFamily(appearance.fontFamily) }
+      : {}),
+    ...(!matching && appearance.strongColor
+      ? { '--chat-strong-color': appearance.strongColor }
+      : {}),
+    ...(!matching && appearance.inlineCodeColor
+      ? { '--chat-inline-code-color': appearance.inlineCodeColor }
       : {})
   }
   let light = settings?.theme === 'light' || (settings?.theme === 'system' && !systemPrefersDark)

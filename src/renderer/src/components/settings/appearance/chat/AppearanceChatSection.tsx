@@ -9,6 +9,7 @@ import { formatPrimaryShortcutLabel } from '@/hooks/useShortcutLabel'
 import { translate } from '@/i18n/i18n'
 import { AppearanceChatContrastControls } from './AppearanceChatContrastControls'
 import { ChatFontFamilySetting } from './ChatFontFamilySetting'
+import { ChatMarkdownColorSetting } from './ChatMarkdownColorSetting'
 import { Button } from '../../../ui/button'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import {
@@ -122,6 +123,20 @@ export function AppearanceChatSection({
           }
         />
       </SearchableSetting>
+      <ChatMarkdownColorSetting
+        entry={entries.strongColor}
+        value={appearance.strongColor}
+        disabled={matching}
+        forceVisible={forceVisiblePrimary}
+        onChange={(strongColor) => update({ strongColor })}
+      />
+      <ChatMarkdownColorSetting
+        entry={entries.inlineCodeColor}
+        value={appearance.inlineCodeColor}
+        disabled={matching}
+        forceVisible={forceVisiblePrimary}
+        onChange={(inlineCodeColor) => update({ inlineCodeColor })}
+      />
       <SearchableSetting
         id={entries.reset.targetSectionId}
         {...entries.reset}

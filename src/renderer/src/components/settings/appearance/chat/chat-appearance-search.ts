@@ -87,6 +87,27 @@ const getChatAppearanceCatalog = createLocalizedCatalog(
           ...getChatWidthOptions().map((option) => option.label)
         ]
       },
+      strongColor: {
+        targetSectionId: 'chat-strong-color',
+        title: translate('settings.appearance.chat.strongColor', 'Bold text color'),
+        description: translate(
+          'settings.appearance.chat.strongColorDescription',
+          'Color of bold words in messages. Leave empty to follow the theme.'
+        ),
+        keywords: [
+          translate('settings.appearance.chat.title', 'Chat UI'),
+          ...translateSearchKeyword('settings.appearance.chat.strongKeywordBold', 'bold')
+        ]
+      },
+      inlineCodeColor: {
+        targetSectionId: 'chat-inline-code-color',
+        title: translate('settings.appearance.chat.inlineCodeColor', 'Inline code color'),
+        description: translate(
+          'settings.appearance.chat.inlineCodeColorDescription',
+          'Color of inline code, such as file names and commands. Code blocks keep their colors. Leave empty to follow the theme.'
+        ),
+        keywords: [translate('settings.appearance.chat.title', 'Chat UI')]
+      },
       reset: {
         targetSectionId: 'chat-reset',
         title: translate('settings.appearance.chat.resetAppearance', 'Reset chat appearance'),

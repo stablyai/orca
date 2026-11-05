@@ -706,7 +706,14 @@
         "softer": "Softer",
         "sharper": "Sharper",
         "terminalControlledHint": "Set by terminal interface.",
-        "terminalControlledTooltip": "Matching your terminal interface. Turn off Match terminal interface to change this."
+        "terminalControlledTooltip": "Matching your terminal interface. Turn off Match terminal interface to change this.",
+        "useThemeColor": "Use theme color",
+        "themeColor": "Theme",
+        "strongColor": "Bold text color",
+        "strongColorDescription": "Color of bold words in messages. Leave empty to follow the theme.",
+        "strongKeywordBold": "bold",
+        "inlineCodeColor": "Inline code color",
+        "inlineCodeColorDescription": "Color of inline code, such as file names and commands. Code blocks keep their colors. Leave empty to follow the theme."
       },
       "editorTheme": {
         "light": "Light editor theme",
