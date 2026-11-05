@@ -715,11 +715,21 @@ describe('createRemoteRuntimePtyTransport', () => {
   })
 
   it.each([
-    { agent: 'codex' as const, delivery: 'draft' as const, submit: false },
-    { agent: 'aider' as const, delivery: 'auto-submit' as const, submit: true }
+    {
+      agent: 'codex' as const,
+      delivery: 'draft' as const,
+      submit: false,
+      command: "codex '-c' 'disable_paste_burst=true'"
+    },
+    {
+      agent: 'aider' as const,
+      delivery: 'auto-submit' as const,
+      submit: true,
+      command: "aider '--no-check-update' '--no-show-release-notes'"
+    }
   ])(
     'delivers ordinary legacy $agent text once without a recovery flag',
-    async ({ agent, delivery: promptDelivery, submit }) => {
+    async ({ agent, delivery: promptDelivery, submit, command }) => {
       const original = runtimeCall.getMockImplementation()!
       runtimeCall.mockImplementation(async (args: { method?: string }) => {
         const result = await original(args)
@@ -751,7 +761,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       expect(runtimeCall).toHaveBeenCalledWith(
         expect.objectContaining({
           method: 'terminal.create',
-          params: expect.objectContaining({ command: agent })
+          params: expect.objectContaining({ command })
         })
       )
       expect(delivery).toHaveBeenCalledExactlyOnceWith(

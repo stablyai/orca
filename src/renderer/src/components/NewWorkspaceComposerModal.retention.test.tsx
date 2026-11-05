@@ -385,6 +385,7 @@ it('pr35802 retains authored Args through same-target Settings acquisition refre
 })
 
 it('offers Reopen with the submitted target and picker and does not replace a newer modal', async () => {
+  useAppStore.setState({ modalData: { prefilledName: 'repair-check' } })
   render(
     <TooltipProvider>
       <NewWorkspaceComposerModal />
