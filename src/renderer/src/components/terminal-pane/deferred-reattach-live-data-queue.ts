@@ -1,5 +1,6 @@
 import type { PtyDataMeta } from './pty-dispatcher'
 import { flattenRetainedSlice } from '../../lib/flatten-retained-slice'
+import { keptSuffixMeta, markedAfterEviction } from './terminal-stream-position'
 
 export const MAX_DEFERRED_REATTACH_LIVE_CHARS = 512 * 1024
 export const MAX_DEFERRED_REATTACH_LIVE_CHUNKS = 1_024
@@ -34,12 +35,13 @@ export class DeferredReattachLiveDataQueue {
     this.streamGeneration = chunk.streamGeneration
 
     const oversized = chunk.data.length > MAX_DEFERRED_REATTACH_LIVE_CHARS
-    const queuedChunk = {
-      ...chunk,
-      data: oversized
-        ? flattenRetainedSlice(chunk.data.slice(-MAX_DEFERRED_REATTACH_LIVE_CHARS))
-        : chunk.data
-    }
+    const queuedChunk = oversized
+      ? {
+          ...chunk,
+          data: flattenRetainedSlice(chunk.data.slice(-MAX_DEFERRED_REATTACH_LIVE_CHARS)),
+          meta: keptSuffixMeta(chunk.meta, chunk.data.length, MAX_DEFERRED_REATTACH_LIVE_CHARS)
+        }
+      : chunk
     this.chunks.push(queuedChunk)
     this.retainedChars += queuedChunk.data.length
 
@@ -61,7 +63,8 @@ export class DeferredReattachLiveDataQueue {
 
     const oldest = this.chunks[this.head]
     if (dropped && oldest) {
-      oldest.meta = { ...oldest.meta, droppedOutput: true }
+      // App bytes after a gap start at an unknown parser boundary.
+      oldest.meta = markedAfterEviction(oldest.meta)
     }
     this.compact()
   }

@@ -2,10 +2,12 @@ import { translate } from '@/i18n/i18n'
 import type { SettingsSearchEntry } from '../search/settings-search'
 import { translateSearchKeyword } from '../search/settings-search-keywords'
 
+export const CHAT_LAUNCH_DEFAULT_SECTION_ID = 'chat-launch-default'
+
 export function getChatLaunchEntriesByKey() {
   return {
     default: {
-      targetSectionId: 'chat-launch-default',
+      targetSectionId: CHAT_LAUNCH_DEFAULT_SECTION_ID,
       title: translate('settings.chat.launch.toggle', 'Use Chat UI by default'),
       keywords: [
         ...translateSearchKeyword('settings.appearance.chat.title', 'Chat UI'),

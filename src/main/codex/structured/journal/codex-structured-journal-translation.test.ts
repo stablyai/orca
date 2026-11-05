@@ -181,6 +181,27 @@ describe('codex journal translation', () => {
     expect(tap.tombstones).toEqual([])
   })
 
+  it('stops calling an image generation running once its turn ends without completing it', () => {
+    const { translator, tap } = translatorWith()
+
+    translator.handle(TURN_STARTED)
+    translator.handle(
+      notification('item/started', {
+        item: { type: 'imageGeneration', id: 'image-1', status: 'in_progress' }
+      })
+    )
+    translator.handle(
+      notification('turn/completed', { turn: { id: TURN_ID, status: 'interrupted' } })
+    )
+
+    const image = reduced(tap.rows).find((row) => row.key.includes('image-1'))
+    expect(image?.body).toEqual({
+      kind: 'message',
+      role: 'assistant',
+      blocks: [{ type: 'text', text: 'Image generation: preview unavailable' }]
+    })
+  })
+
   it('closes every active turn when the provider session ends after a later turn starts', () => {
     const tap = recorder()
     const translator = createCodexJournalTranslator({
