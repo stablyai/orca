@@ -196,7 +196,7 @@ export function useOnboardingFlowActions({
     ]
   )
 
-  const skipToRepo = useCallback(async () => {
+  const setUpLater = useCallback(async () => {
     if (busyLabel) {
       return
     }
@@ -223,11 +223,9 @@ export function useOnboardingFlowActions({
     const stepId = currentStep.id
     const stepNumber = currentStep.stepNumber
     const valueKind = currentStep.valueKind
-    setBusyLabel(
-      translate('components.onboarding.flow.actions.openingAddProject', 'Opening Add Project...')
-    )
+    setBusyLabel(translate('components.onboarding.flow.actions.continue', 'Continue'))
     try {
-      const closed = await closeWith('completed', ONBOARDING_FINAL_STEP, 'add_project_modal')
+      const closed = await closeWith('completed', ONBOARDING_FINAL_STEP, 'workspace')
       if (!closed) {
         return
       }
@@ -251,7 +249,6 @@ export function useOnboardingFlowActions({
           })
         )
       }
-      openModal('add-repo')
     } finally {
       setBusyLabel(null)
     }
@@ -263,7 +260,6 @@ export function useOnboardingFlowActions({
     currentStep.stepNumber,
     currentStep.valueKind,
     agentSurface,
-    openModal,
     selectedAgent,
     settings,
     trackTaskSourcesSnapshot,
@@ -299,5 +295,5 @@ export function useOnboardingFlowActions({
     [setStepIndex, skipOptions, stepIndex]
   )
 
-  return { next, skipToRepo, dismissOnboarding, back, jumpToStep }
+  return { next, setUpLater, dismissOnboarding, back, jumpToStep }
 }

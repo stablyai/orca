@@ -171,7 +171,7 @@ export function useOnboardingFlow(
   useEffect(() => {
     paintedThemeRef.current = paintedTheme
   }, [paintedTheme])
-  // Why per entry: "Skip to project setup" keeps the look the user arrived with, and each pick
+  // Why per entry: "Set up later" keeps the look the user arrived with, and each pick
   // replaces only its own mode's slot from here.
   const [themeLookBaseline, setThemeLookBaseline] = useState<GlobalSettings | null>(null)
   if (currentStep.id !== 'theme' && themeLookBaseline) {
