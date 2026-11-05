@@ -7,9 +7,9 @@ import type {
   OrchestrationCompatibilityCallerAuthority,
   OrchestrationCompatibilitySshTerminal,
   OrchestrationCompatibilityTerminalAuthority
-} from '../../runtime-terminal-contracts'
+} from './orchestration-compatibility-authority'
 import { createHash } from 'node:crypto'
-import type { RuntimePtyWorktreeRecord } from '../../runtime-terminal-state-records'
+import type { RuntimePtyWorktreeRecord } from '../../terminal/records/runtime-terminal-state-records'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 
 export abstract class OrcaRuntimeWithVerifyOrchestrationCompatibilityCaller extends OrcaRuntimeWithSerializeHeadlessTerminalBuffer {

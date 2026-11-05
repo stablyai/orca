@@ -35,15 +35,14 @@ export function buildPendingCreationRow(
 
 export function buildImportedWorktreesCardRow(
   candidate: ImportedWorktreesCardCandidate,
-  placement: ImportedWorktreesCardRow['placement'],
   hostContext?: NoticeHostContext
 ): ImportedWorktreesCardRow {
   return {
     type: 'imported-worktrees-card',
-    key: `imported-worktrees-card:${placement}:${candidate.repo.id}`,
+    key: `imported-worktrees-card:repo-group:${candidate.repo.id}`,
     repo: candidate.repo,
     hiddenWorktrees: candidate.hiddenWorktrees,
-    placement,
+    placement: 'repo-group',
     ...(hostContext
       ? { hostContextLabel: hostContext.label, hostContextHostId: hostContext.hostId }
       : {})

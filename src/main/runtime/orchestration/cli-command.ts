@@ -1,4 +1,4 @@
-import type { RuntimePtyWorktreeRecord } from '../runtime-terminal-state-records'
+import type { RuntimePtyWorktreeRecord } from '../terminal/records/runtime-terminal-state-records'
 import { isStructuredWorkerHandle } from '../../../shared/structured-worker-handle'
 import { parseOrcaSessionAddress } from '../../../shared/orca-session-address'
 import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'

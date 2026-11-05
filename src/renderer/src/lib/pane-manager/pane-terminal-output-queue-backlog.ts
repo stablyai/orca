@@ -82,6 +82,7 @@ export function replaceBacklogWithWarning(
   }
   clearForegroundRelease(entry)
   recordQueueDebugPressure()
+  entry.onBacklogReplaced?.()
   if (shouldNotify) {
     entry.onBackgroundBacklogDropped?.()
   }

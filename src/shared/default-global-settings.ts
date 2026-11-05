@@ -19,6 +19,7 @@ import {
 } from './left-sidebar-appearance'
 import { DEFAULT_SOURCE_CONTROL_GROUP_ORDER } from './source-control/listing/source-control-group-order'
 import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from './terminal/replay/terminal-scrollback-policy'
+import { NESTED_WORKER_MAX_DEPTH_DEFAULT } from './nested-worker-depth'
 
 export function buildDefaultSettings(args: {
   workspaceDir: string
@@ -147,7 +148,7 @@ export function buildDefaultSettings(args: {
     terminalUrlMiddleClickBehavior: 'open',
     experimentalBrowserExtensions: false,
     agentDefaultSurface: 'terminal',
-    nativeChatResumeWorkOnRestart: false,
+    nativeChatResumeWorkOnRestart: true,
     nativeChatQueueFollowUps: true,
     nativeChatAutoContinueAfterUsageLimit: false,
     nativeChatIdleStopMinutes: DEFAULT_NATIVE_CHAT_IDLE_STOP_MINUTES,
@@ -172,7 +173,8 @@ export function buildDefaultSettings(args: {
     artifactsEnabled: true,
     artifactSharingEnabled: false,
     agentSkillSharingEnabled: false,
-    nestedWorkerMaxDepth: 1,
+    nestedWorkerMaxDepth: NESTED_WORKER_MAX_DEPTH_DEFAULT,
+    nestedWorkerMaxDepthDefaultedToFour: true,
     orchestrationWorkerAutoReleaseEnabled: true,
     showArtifactsButton: false,
     showSkillsButton: false,

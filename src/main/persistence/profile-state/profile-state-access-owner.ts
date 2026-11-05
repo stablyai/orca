@@ -17,7 +17,7 @@ import { renameFileWithWindowsRetry } from '../../codex-accounts/fs-utils'
 import {
   START_TIME_TOLERANCE_MS,
   startTimesWithinTolerance
-} from '../../daemon/daemon-process-start-time'
+} from '../../daemon/endpoint/identity/daemon-process-start-time'
 import {
   profileStateAccessBootIdentity,
   profileStateAccessMachineIdentity,

@@ -248,14 +248,12 @@ describe('chat composer workspace', () => {
     localCommits.mockClear()
     remoteCommits.mockClear()
     act(() =>
-      useAppStore
-        .getState()
-        .setEnvironmentSshConnectionState('box', 'target', {
-          targetId: 'target',
-          status: 'connecting',
-          error: null,
-          reconnectAttempt: 0
-        })
+      useAppStore.getState().setEnvironmentSshConnectionState('box', 'target', {
+        targetId: 'target',
+        status: 'connecting',
+        error: null,
+        reconnectAttempt: 0
+      })
     )
     expect(localCommits).not.toHaveBeenCalled()
     expect(remoteCommits).not.toHaveBeenCalled()

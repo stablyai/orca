@@ -180,7 +180,6 @@ function createManager(pane: Record<string, unknown>): Record<string, unknown> {
   return {
     setPaneGpuRendering: vi.fn(),
     markPaneHasComplexScriptOutput: vi.fn(),
-    rebuildPaneWebgl: vi.fn(),
     hasWebglRenderer: vi.fn(() => false),
     getPanes: vi.fn(() => [pane]),
     closePane: vi.fn(),

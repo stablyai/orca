@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type { OrcadTerminalCensus } from '../../shared/orcad-terminal-census'
 import { assessOrcadRollback, planOrcadUpdate } from './orcad-update-plan'
 import { collectOrcadTerminalCensus } from '../orcad/orcad-terminal-census'
-import type { DaemonSessionInfo } from '../daemon/types'
+import type { DaemonSessionInfo } from '../daemon/protocol/daemon-session-info'
 import {
   emptyOrcadActivationRecord,
   type OrcadActivationRecord,

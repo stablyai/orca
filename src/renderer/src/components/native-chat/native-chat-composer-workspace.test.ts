@@ -383,23 +383,19 @@ describe('composer workspace context', () => {
       read()
       expect(visits).toBe(0)
       for (const environmentId of ['unrelated-server', 'hub']) {
-        store
-          .getState()
-          .setEnvironmentSshConnectionState(environmentId, 'target', {
-            targetId: 'target',
-            status: 'connecting',
-            error: null,
-            reconnectAttempt: 0
-          })
+        store.getState().setEnvironmentSshConnectionState(environmentId, 'target', {
+          targetId: 'target',
+          status: 'connecting',
+          error: null,
+          reconnectAttempt: 0
+        })
         read()
-        store
-          .getState()
-          .setEnvironmentSshConnectionState(environmentId, 'target', {
-            targetId: 'target',
-            status: 'connected',
-            error: null,
-            reconnectAttempt: 0
-          })
+        store.getState().setEnvironmentSshConnectionState(environmentId, 'target', {
+          targetId: 'target',
+          status: 'connected',
+          error: null,
+          reconnectAttempt: 0
+        })
         read()
       }
       expect(visits).toBe(0)

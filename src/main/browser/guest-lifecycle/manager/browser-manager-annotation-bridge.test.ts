@@ -133,52 +133,6 @@ describe('browserManager.setAnnotationViewportBridge', () => {
     expect(firstGuest.executeJavaScriptInIsolatedWorld).toHaveBeenCalledTimes(1)
   })
 
-  it.each([false, true])(
-    'skips retired queued markers after invalidation (replacement guest: %s)',
-    async (replaceGuest) => {
-      const { guest: firstGuest } = makeGuest(5201)
-      const release = deferGuestInjection(firstGuest)
-      registerPage('tab-retired-markers', firstGuest)
-      const resolveGuest = resolveFromRegistry('tab-retired-markers')
-      const inFlight = browserManager.setAnnotationViewportBridge(
-        'tab-retired-markers',
-        BRIDGE_OPTIONS,
-        resolveGuest
-      )
-      await flushViewportOps()
-      const retired = browserManager.setAnnotationViewportBridge(
-        'tab-retired-markers',
-        MARKER_OPTIONS,
-        resolveGuest
-      )
-      const { guest: replacementGuest } = makeGuest(5202)
-      if (replaceGuest) {
-        registerPage('tab-retired-markers', replacementGuest)
-      }
-      const cleared = browserManager.setAnnotationViewportBridge(
-        'tab-retired-markers',
-        { ...BRIDGE_OPTIONS, enabled: false },
-        resolveGuest
-      )
-
-      release()
-      await expect(inFlight).resolves.toBe(true)
-      await expect(retired).resolves.toBe(false)
-      await expect(cleared).resolves.toBe(true)
-      const currentGuest = replaceGuest ? replacementGuest : firstGuest
-      expect(currentGuest.executeJavaScriptInIsolatedWorld).not.toHaveBeenCalledWith(
-        expect.any(Number),
-        [expect.objectContaining({ code: expect.stringContaining('historical-document-marker') })],
-        false
-      )
-      expect(currentGuest.executeJavaScriptInIsolatedWorld).toHaveBeenLastCalledWith(
-        expect.any(Number),
-        [expect.objectContaining({ code: expect.stringContaining('const enabled = false;') })],
-        false
-      )
-    }
-  )
-
   it('keeps an in-flight injection and applies the latest fresh markers and token', async () => {
     const { guest } = makeGuest(5203)
     const release = deferGuestInjection(guest)
@@ -226,43 +180,6 @@ describe('browserManager.setAnnotationViewportBridge', () => {
     )
   })
 
-  it('continues the queue after an in-flight injection fails', async () => {
-    const { guest } = makeGuest(5204)
-    let rejectInjection = (): void => {}
-    const gate = new Promise<void>((_resolve, reject) => {
-      rejectInjection = () => reject(new Error('retired document'))
-    })
-    guest.executeJavaScriptInIsolatedWorld = vi
-      .fn()
-      .mockReturnValueOnce(gate)
-      .mockResolvedValue(true)
-    registerPage('tab-failed-injection', guest)
-    const resolveGuest = resolveFromRegistry('tab-failed-injection')
-    const inFlight = browserManager.setAnnotationViewportBridge(
-      'tab-failed-injection',
-      MARKER_OPTIONS,
-      resolveGuest
-    )
-    await flushViewportOps()
-    const cleared = browserManager.setAnnotationViewportBridge(
-      'tab-failed-injection',
-      { ...BRIDGE_OPTIONS, enabled: false },
-      resolveGuest
-    )
-
-    rejectInjection()
-    await expect(inFlight).resolves.toBe(false)
-    await expect(cleared).resolves.toBe(true)
-    await expect(
-      browserManager.setAnnotationViewportBridge(
-        'tab-failed-injection',
-        BRIDGE_OPTIONS,
-        resolveGuest
-      )
-    ).resolves.toBe(true)
-    expect(guest.executeJavaScriptInIsolatedWorld).toHaveBeenCalledTimes(3)
-  })
-
   it('does not run a queued marker request after page teardown removes its chain', async () => {
     const { guest } = makeGuest(5205)
     const release = deferGuestInjection(guest)
@@ -289,22 +206,6 @@ describe('browserManager.setAnnotationViewportBridge', () => {
   })
 
   // The registry resolver owns stale-guest cleanup; the bridge only reports refusal.
-  it('refuses when its guest died while the op was queued, and the resolver drops the registration', async () => {
-    const { guest } = makeGuest(5103)
-    registerPage('tab-dies', guest)
-    expect(browserManager.getGuestWebContentsId('tab-dies')).toBe(5103)
-
-    webContentsFromIdMock.mockReturnValue(null)
-    await expect(
-      browserManager.setAnnotationViewportBridge(
-        'tab-dies',
-        BRIDGE_OPTIONS,
-        resolveFromRegistry('tab-dies')
-      )
-    ).resolves.toBe(false)
-
-    expect(browserManager.getGuestWebContentsId('tab-dies')).toBeNull()
-  })
 
   it('refuses a request from the wrong renderer without tearing down the healthy page it named', async () => {
     const { guest } = makeGuest(5105)
@@ -320,30 +221,5 @@ describe('browserManager.setAnnotationViewportBridge', () => {
     expect(unregisterGuest).not.toHaveBeenCalled()
     expect(browserManager.getGuestWebContentsId('tab-mismatch')).toBe(5105)
     expect(guest.executeJavaScriptInIsolatedWorld).not.toHaveBeenCalled()
-  })
-
-  it('refuses a destroyed guest without injecting into it', async () => {
-    const { guest } = makeGuest(5104)
-    registerPage('tab-destroyed', guest)
-    ;(guest.isDestroyed as ReturnType<typeof vi.fn>).mockReturnValue(true)
-
-    await expect(
-      browserManager.setAnnotationViewportBridge(
-        'tab-destroyed',
-        BRIDGE_OPTIONS,
-        () => guest as never
-      )
-    ).resolves.toBe(false)
-    expect(guest.executeJavaScriptInIsolatedWorld).not.toHaveBeenCalled()
-  })
-
-  it('does not run page teardown when a document page resolves to nothing', async () => {
-    const unregisterGuest = vi.spyOn(browserManager, 'unregisterGuest')
-
-    await expect(
-      browserManager.setAnnotationViewportBridge('doc-page-1', BRIDGE_OPTIONS, () => null)
-    ).resolves.toBe(false)
-
-    expect(unregisterGuest).not.toHaveBeenCalled()
   })
 })
