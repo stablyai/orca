@@ -1,4 +1,4 @@
-import { ImeInput } from '@/lib/ime-text-field'
+import { ImeTextarea } from '@/lib/ime-text-field'
 import { Textarea } from '@/components/ui/textarea'
 import { useRef, useState, type RefObject } from 'react'
 import { Check, Pencil, X } from 'lucide-react'
@@ -39,7 +39,7 @@ export type NativeChatQuestionCardProps = {
   /** Take focus when the card takes the input region; number keys pick while it holds. */
   shouldFocus?: boolean
   /** Paste target while the card replaces the composer. */
-  answerInputRef?: RefObject<HTMLInputElement | null>
+  answerInputRef?: RefObject<HTMLTextAreaElement | null>
   onLinkClick?: CommentMarkdownLinkClickHandler
 }
 
@@ -319,13 +319,24 @@ export function NativeChatQuestionCard({
                       placeholder={answerPlaceholder}
                     />
                   ) : (
-                    <ImeInput
+                    <ImeTextarea
                       ref={answerInputRef}
+                      rows={1}
                       data-native-chat-answer-field
                       data-native-chat-prompt-card-focus-target={fieldTakesFocus}
                       disabled={isSubmitting}
                       value={otherText[index]}
-                      onChange={(e) => setOther(index, e.target.value)}
+                      // Enter submits, so a line break becomes a space; edit in place so a mid-draft paste keeps the caret.
+                      onChange={(e) => {
+                        const field = e.target
+                        const oneLine = field.value.replace(/[\r\n\u2028\u2029]/g, ' ')
+                        if (oneLine !== field.value) {
+                          const { selectionStart, selectionEnd } = field
+                          field.value = oneLine
+                          field.setSelectionRange(selectionStart, selectionEnd)
+                        }
+                        setOther(index, oneLine)
+                      }}
                       // Select typed text on click; tabbing toward Submit must not replace a picked option.
                       onClick={() => {
                         autoAdvance.cancel()
@@ -341,7 +352,7 @@ export function NativeChatQuestionCard({
                       }}
                       placeholder={answerPlaceholder}
                       className={cn(
-                        'min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground disabled:cursor-default disabled:opacity-50',
+                        'scrollbar-sleek max-h-[6lh] min-w-0 flex-1 resize-none overflow-y-auto bg-transparent text-sm outline-none [field-sizing:content] placeholder:text-muted-foreground disabled:cursor-default disabled:opacity-50',
                         currentTypedAnswerChosen || !otherText[index]
                           ? 'text-foreground'
                           : 'text-muted-foreground'

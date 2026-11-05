@@ -87,9 +87,9 @@ function clickAction(text: string): void {
 }
 
 function typeAnswer(value: string): void {
-  const input = container.querySelector('input')!
+  const input = container.querySelector('textarea')!
   act(() => {
-    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
+    const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!
     setter.call(input, value)
     input.dispatchEvent(new Event('input', { bubbles: true }))
   })
@@ -185,21 +185,38 @@ describe('NativeChatQuestionCard', () => {
     const onAnswer = vi.fn()
     render(tabsOrSpaces, onAnswer)
 
-    const input = container.querySelector('input')!
-    act(() => {
-      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
-      setter.call(input, 'four spaces')
-      input.dispatchEvent(new Event('input', { bubbles: true }))
-    })
+    typeAnswer('four spaces')
     clickAction('Submit')
 
     expect(onAnswer).toHaveBeenCalledWith([{ indices: [], other: 'four spaces' }])
   })
 
+  it('keeps a pasted multi-line answer on one line and still submits on Enter', () => {
+    const onAnswer = vi.fn()
+    render(tabsOrSpaces, onAnswer)
+
+    typeAnswer('two\nspaces\u2028please')
+    const field = container.querySelector('textarea')!
+    expect(field.value).toBe('two spaces please')
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!
+      setter.call(field, 'two\nspaces please')
+      field.setSelectionRange(4, 4)
+      field.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    expect(field.value).toBe('two spaces please')
+    expect(field.selectionStart).toBe(4)
+    act(() => {
+      field.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    })
+
+    expect(onAnswer).toHaveBeenCalledExactlyOnceWith([{ indices: [], other: 'two spaces please' }])
+  })
+
   it('hides free text when the provider requires a listed option', () => {
     render(tabsOrSpaces, vi.fn(), false)
 
-    expect(container.querySelector('input')).toBeNull()
+    expect(container.querySelector('textarea')).toBeNull()
     expect(container.textContent).not.toContain('Type your answer')
   })
 
@@ -225,9 +242,9 @@ describe('NativeChatQuestionCard', () => {
       [false, true]
     )
 
-    expect(container.querySelector('input')).toBeNull()
+    expect(container.querySelector('textarea')).toBeNull()
     clickAction('Skip')
-    expect(container.querySelector('input')).not.toBeNull()
+    expect(container.querySelector('textarea')).not.toBeNull()
   })
 
   it('submits grouped multi-select and free-text answers together', () => {
@@ -256,12 +273,7 @@ describe('NativeChatQuestionCard', () => {
     clickOption('Web')
     clickOption('Mobile')
     clickAction('Next')
-    const input = container.querySelector('input')!
-    act(() => {
-      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
-      setter.call(input, 'SSH host')
-      input.dispatchEvent(new Event('input', { bubbles: true }))
-    })
+    typeAnswer('SSH host')
     clickAction('Submit')
 
     expect(onAnswer).toHaveBeenCalledWith([
@@ -288,7 +300,7 @@ describe('NativeChatQuestionCard', () => {
 
     typeAnswer('two spaces')
     clickOption('Tabs')
-    expect(container.querySelector('input')!.value).toBe('two spaces')
+    expect(container.querySelector('textarea')!.value).toBe('two spaces')
     clickAction('Submit')
 
     expect(onAnswer).toHaveBeenCalledWith([{ indices: [0], other: '' }])
@@ -301,7 +313,7 @@ describe('NativeChatQuestionCard', () => {
     typeAnswer('two spaces')
     clickOption('Tabs')
     act(() => {
-      container.querySelector('input')!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      container.querySelector('textarea')!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
     expect(optionPressed('Tabs')).toBe('false')
     clickAction('Submit')
@@ -326,8 +338,8 @@ describe('NativeChatQuestionCard', () => {
     typeAnswer('two spaces')
     clickOption('Tabs')
     renderCard(true)
-    // Chromium still delivers pointer events to a disabled input.
-    const input = container.querySelector('input')!
+    // Chromium still delivers pointer events to a disabled field.
+    const input = container.querySelector('textarea')!
     act(() => {
       input.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }))
       input.dispatchEvent(new MouseEvent('click', { bubbles: true }))
@@ -343,7 +355,9 @@ describe('NativeChatQuestionCard', () => {
     typeAnswer('two spaces')
     clickOption('Tabs')
     act(() => {
-      container.querySelector('input')!.dispatchEvent(new FocusEvent('focusin', { bubbles: true }))
+      container
+        .querySelector('textarea')!
+        .dispatchEvent(new FocusEvent('focusin', { bubbles: true }))
     })
     clickAction('Submit')
 
@@ -477,7 +491,7 @@ describe('NativeChatQuestionCard', () => {
     pressKey({ key: 'Enter', ctrlKey: true }, document.activeElement!)
     expect(optionPressed('Spaces')).toBe('false')
     pressKey({ key: 'Enter' }, document.activeElement!)
-    const input = container.querySelector('input')!
+    const input = container.querySelector('textarea')!
     act(() => input.focus())
     typeAnswer('Other')
     expect(document.activeElement).toBe(input)
@@ -615,7 +629,7 @@ describe('NativeChatQuestionCard', () => {
       true
     )
 
-    expect(document.activeElement).toBe(container.querySelector('input'))
+    expect(document.activeElement).toBe(container.querySelector('textarea'))
   })
 
   it('moves the keyboard into the answer field when a number key advances to a typed-only question', () => {
@@ -637,7 +651,7 @@ describe('NativeChatQuestionCard', () => {
     passAutoAdvanceBeat()
 
     expect(cardTitle()).toBe('Anything else?')
-    expect(document.activeElement).toBe(container.querySelector('input'))
+    expect(document.activeElement).toBe(container.querySelector('textarea'))
   })
 
   it('picks from a number key pressed anywhere inside its own chat pane', () => {
@@ -675,7 +689,7 @@ describe('NativeChatQuestionCard', () => {
     const event = pressKey(
       init,
       from === 'answer-field'
-        ? container.querySelector('input')!
+        ? container.querySelector('textarea')!
         : from === 'outside-pane'
           ? outside
           : document.body
