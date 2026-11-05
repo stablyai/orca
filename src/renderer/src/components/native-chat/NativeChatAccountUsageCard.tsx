@@ -41,10 +41,19 @@ function resetOutcomeNotice(outcome: CodexRateLimitResetOutcome): string {
 }
 
 function chatAccountLabel(account: AgentSessionUsageAccount): string {
-  return account.kind === 'system'
-    ? translate('auto.components.status.bar.StatusBar.c676918adc', 'System default')
-    : (account.email ??
-        translate('components.native-chat.usage.sharedAccount', 'Current shared account'))
+  switch (account.kind) {
+    case 'system':
+      return translate('auto.components.status.bar.StatusBar.c676918adc', 'System default')
+    case 'managed':
+      return (
+        account.email || translate('auto.lib.codex.session.restart.9f0b1c2d3e', 'Codex account')
+      )
+    case 'shared':
+      return (
+        account.email ||
+        translate('components.native-chat.usage.sharedAccount', 'Current shared account')
+      )
+  }
 }
 
 export function NativeChatAccountUsageCard({
@@ -104,19 +113,20 @@ export function NativeChatAccountUsageCard({
               usagePercentageDisplay={display}
               footer={<ChatUsageReset result={result} target={target} onRefresh={onRetry} />}
             />
-            {notice ? <div className="mt-2 text-xs text-muted-foreground">{notice}</div> : null}
           </>
         ) : (
           <div className="flex items-center gap-2">
             {result === null ? <Loader2 className="size-4 animate-spin" /> : null}
             {message}
             {result?.status === 'failed' ? (
-              <Button variant="outline" size="xs" onClick={() => onRetry()}>
+              <Button variant="outline" size="xs" onClick={() => onRetry(notice)}>
                 {translate('components.native-chat.usage.retry', 'Retry')}
               </Button>
             ) : null}
           </div>
         )}
+        {/* A reset's outcome outlives the refresh it triggered, whether that refresh succeeds or not. */}
+        {notice ? <div className="mt-2 text-xs text-muted-foreground">{notice}</div> : null}
       </div>
     </div>
   )

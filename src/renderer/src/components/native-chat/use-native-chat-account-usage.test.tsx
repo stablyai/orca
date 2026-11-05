@@ -90,6 +90,23 @@ describe('chat usage card', () => {
     await screen.findByText('Nothing to reset right now.')
   })
 
+  it('keeps the reset outcome when the refresh after it fails, through Retry', async () => {
+    mocks.read
+      .mockResolvedValueOnce(result)
+      .mockRejectedValueOnce(new Error('connection lost'))
+      .mockResolvedValueOnce(result)
+    mocks.reset.mockResolvedValueOnce({ outcome: 'reset' })
+    render(<Chat />)
+    fireEvent.click(screen.getByText('Usage'))
+    await screen.findByText('chat@example.com')
+    fireEvent.click(screen.getByRole('button', { name: 'Reset now' }))
+    await screen.findByText('Codex usage couldn’t be loaded. Try again.')
+    expect(screen.getByText('Codex limits were reset.')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+    await screen.findByText('chat@example.com')
+    expect(screen.getByText('Codex limits were reset.')).toBeTruthy()
+  })
+
   it('does not reopen a dismissed card when an already-confirmed reset completes', async () => {
     let finish!: (value: unknown) => void
     mocks.read.mockResolvedValue(result)
