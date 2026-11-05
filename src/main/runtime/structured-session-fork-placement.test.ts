@@ -247,3 +247,31 @@ for (const owner of ['saved', 'window'] as const) {
     }
   )
 }
+
+it('reads saved order from a window-owned runtime partition before any main surface graph', () => {
+  const owner = 'runtime:fork-owner'
+  const fixture = makeRuntimeStoreWithWorkspaceSession(savedSession('ordinary', false), owner)
+  const repo = { ...store.getRepos()[0]!, executionHostId: owner } as const
+  const runtime = new OrcaRuntimeService({
+    ...fixture.runtimeStore,
+    getRepo: (id) => (id === repo.id ? repo : undefined),
+    getRepos: () => [repo]
+  })
+  for (const sessionId of ['B', 'source', 'active']) {
+    runtime.projectStructuredAgentSessionTab({
+      workspaceId: WT,
+      sessionId,
+      agent: 'claude',
+      activate: false,
+      tabId: savedId(sessionId)
+    })
+  }
+  expect(
+    runtime.mobileSessionTabsByWorktree
+      .get(WT)
+      ?.tabGroups?.map((group) => [group.id, group.tabOrder])
+  ).toEqual([
+    ['G1', ['agent-session:source', 'agent-session:B']],
+    ['G2', ['agent-session:active']]
+  ])
+})

@@ -16,7 +16,7 @@ import {
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
 import { mobileChatTabId, newReopenedChatTabId } from '../agent-session/agent-session-tab-identity'
 import { isReopenedChatTabId } from '../../../shared/agent-session/view/structured-agent-session-host-tab-id'
-import type { ProjectedSessionTabs } from '../../../shared/workspace-layout/old-client/old-client-session-tabs-projection'
+import type { MainSessionTabRows } from './main-session-tab-rows'
 import { withMainTabOrder } from './main-session-tab-order'
 
 export type StructuredSessionTabPublicationInput = {
@@ -128,7 +128,7 @@ export type StructuredSessionRawPublicationInput = Pick<
   | 'tabId'
   | 'placement'
   | 'placedByWindow'
-> & { eligible?: () => boolean; savedOrder?: ProjectedSessionTabs }
+> & { eligible?: () => boolean; savedOrder?: MainSessionTabRows }
 
 export function projectStructuredSessionTab(
   runtime: Pick<OrcaRuntimeService, 'mobileSessionTabsByWorktree' | 'storeMobileSessionSnapshot'>,
@@ -203,9 +203,7 @@ export function projectStructuredSessionTab(
         priorGroups,
         existing?.activeGroupId ?? undefined,
         input.placement,
-        existing?.tabs.flatMap((row) =>
-          row.type === 'agent-session' ? [{ id: row.id, sessionId: row.sessionId }] : []
-        )
+        existing?.tabs.flatMap((row) => (row.type === 'agent-session' ? [row] : []))
       )
   const groupId =
     (input.savedOrder ? placement.groupId : (listingGroupId ?? placement.groupId)) ??

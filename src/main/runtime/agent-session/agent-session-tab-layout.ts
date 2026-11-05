@@ -13,7 +13,7 @@ import { randomUUID } from 'node:crypto'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
 import { structuredAgentSessionTabId } from '../../../shared/agent-session/view/structured-agent-session-projection'
 import { isReopenedChatTabId } from '../../../shared/agent-session/view/structured-agent-session-host-tab-id'
-import { agentSessionRowId } from '../../../shared/workspace-layout/old-client/old-client-session-row-ids'
+import { resolveChatTabActivation } from './agent-session-tab-identity'
 
 /** Placement in the creating client's host-owned group/tab ids. */
 export type ChatTabPlacement = { groupId?: string; afterTabId?: string }
@@ -23,7 +23,7 @@ export function resolveChatTabPlacement(
   groups: readonly { id: string; tabOrder: readonly string[] }[],
   activeGroupId: string | undefined,
   placement?: ChatTabPlacement,
-  chats: readonly { id: string; sessionId: string }[] = []
+  chats: readonly { id: string; sessionId: string; type: 'agent-session' }[] = []
 ): ChatTabPlacement {
   const holds = (id: string | undefined) => groups.some((group) => group.id === id)
   // A client without group ids (a phone) names only the tab to follow, so its group is the place.
@@ -34,15 +34,15 @@ export function resolveChatTabPlacement(
     !groups.some((group) => group.tabOrder.includes(captured)) &&
     !isReopenedChatTabId(captured)
   ) {
-    after = chats.find(
+    const ordinary = chats.filter(
       (tab) =>
-        !isReopenedChatTabId(tab.id) &&
-        groups.some((group) => group.tabOrder.includes(tab.id)) &&
-        [
-          agentSessionRowId(tab.sessionId),
-          structuredAgentSessionTabId(tab.sessionId),
-          chatTabId(tab.sessionId)
-        ].includes(captured)
+        !isReopenedChatTabId(tab.id) && groups.some((group) => group.tabOrder.includes(tab.id))
+    )
+    const rowAnchor = resolveChatTabActivation(ordinary, captured)
+    after = ordinary.find(
+      (tab) =>
+        tab.id === rowAnchor ||
+        [structuredAgentSessionTabId(tab.sessionId), chatTabId(tab.sessionId)].includes(captured)
     )?.id
   }
   const anchorGroupId = after
@@ -79,7 +79,9 @@ export function chatTabLayoutCommand(
     activeGroupId,
     'open' in change ? change.open.placement : undefined,
     workspace?.tabs.flatMap((tab) =>
-      tab.kind === 'agent-session' ? [{ id: tab.id, sessionId: tab.entityId }] : []
+      tab.kind === 'agent-session'
+        ? [{ id: tab.id, sessionId: tab.entityId, type: 'agent-session' as const }]
+        : []
     )
   )
   const sessionId = 'close' in change ? change.close : change.open.sessionId

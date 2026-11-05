@@ -29,12 +29,8 @@ import type { AgentLaunchRuntime } from '../../../shared/agent-launch/startup/ag
 import type { TerminalWorkspaceLaunchScope } from '../runtime-legacy-worker-terminal-recovery-types'
 import { parseAppSshPtyId } from '../../../shared/ssh-pty-id'
 import type { TerminalProcessInspection as PtyProcessInspection } from '../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
-import { loadChatTabLayout } from '../agent-session/agent-session-tab-layout'
-import {
-  projectSessionTabs,
-  type ProjectedSessionTabs
-} from '../../../shared/workspace-layout/old-client/old-client-session-tabs-projection'
-import { agentSessionRowId } from '../../../shared/workspace-layout/old-client/old-client-session-row-ids'
+import type { MainSessionTabRows } from './main-session-tab-rows'
+import { isReopenedChatTabId } from '../../../shared/agent-session/view/structured-agent-session-host-tab-id'
 
 export type AgentLaunchScope = Parameters<
   OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce['getAgentLaunchPlatformForWorkspace']
@@ -83,7 +79,7 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
         this.passiveStructuredSessionTabChangeEligible(change)
       )
     }
-    const savedOrders = new Map<string, ProjectedSessionTabs | undefined>()
+    const savedOrders = new Map<string, MainSessionTabRows | undefined>()
     for (const session of restored) {
       if (host?.isSessionTabVisible(session.sessionId)) {
         if (!savedOrders.has(session.workspaceId)) {
@@ -128,7 +124,7 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
     if (!eligible()) {
       throw new Error('Chat tab publication was superseded')
     }
-    let savedOrder: ProjectedSessionTabs | undefined
+    let savedOrder: MainSessionTabRows | undefined
     // Window creates retain the window's own placement decision.
     if (
       (ORCA_LAYOUT_OWNER_IS_MAIN || !this.getAvailableAuthoritativeWindow()) &&
@@ -149,7 +145,9 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
         if (
           !savedOrder?.tabs.some(
             (tab) =>
-              tab.type === 'agent-session' && tab.id === agentSessionRowId(input.sessionId, tabId)
+              tab.type === 'agent-session' &&
+              tab.sessionId === input.sessionId &&
+              (tab.id === tabId || (!isReopenedChatTabId(tab.id) && !isReopenedChatTabId(tabId)))
           )
         ) {
           throw new Error('Chat tab publication was superseded')
@@ -185,21 +183,6 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
     projectStructuredSessionTab(this, { ...input, savedOrder }, (snapshot) =>
       this.emitMobileSessionTabsSnapshot(snapshot)
     )
-  }
-
-  private savedStructuredSessionTabOrder(workspaceId: string): ProjectedSessionTabs | undefined {
-    const session = this.getWorkspaceSessionForWorktree(workspaceId)
-    const loaded = session
-      ? loadChatTabLayout(
-          this.getWorkspaceSessionHostIdForWorktree(workspaceId),
-          session,
-          workspaceId
-        ).loaded
-      : null
-    const workspace = loaded?.layout.workspaces[workspaceId]
-    return loaded && workspace
-      ? projectSessionTabs(workspaceId, workspace, loaded.desktopView, loaded.facts, false)
-      : undefined
   }
 
   async inspectTerminalProcess(
