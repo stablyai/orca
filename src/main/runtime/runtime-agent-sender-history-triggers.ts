@@ -40,7 +40,7 @@ const HISTORY_TRIGGERS = [
 function markDirty(row: 'NEW' | 'OLD', trigger: (typeof HISTORY_TRIGGERS)[number]): string {
   const keys = [
     ...trigger.panes.map((column) => `SELECT 'pane' AS kind, ${row}.${column} AS key`),
-    ...trigger.dispatches.map((column) => `SELECT 'dispatch', ${row}.${column}`),
+    ...trigger.dispatches.map((column) => `SELECT 'dispatch' AS kind, ${row}.${column} AS key`),
     ...('priors' in trigger
       ? [
           `SELECT 'dispatch', value FROM json_each(CASE WHEN json_valid(${row}.prior_owner_dispatch_ids) THEN ${row}.prior_owner_dispatch_ids ELSE '[]' END)`

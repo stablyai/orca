@@ -1,4 +1,4 @@
-import { BOUNDED_FRAME_CONTENT_BUDGET_BYTES } from './agent-session-history-page-bounds'
+import { BOUNDED_FRAME_ROW_BYTES } from './agent-session-bounded-frame-item'
 import { MOBILE_BRIDGE_MAX_FRAME_BYTES } from '../../../shared/mobile-bridge-frame-bytes'
 import { readPublishedQueuedMessages } from './structured-agent-session-queued-publication'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
@@ -262,7 +262,7 @@ it('fits a near-budget canonical history page and separate queue after desktop r
     },
     stateDirectory: join(fixture.root, 'bounded-reports')
   })
-  const refs = Array.from({ length: 70 }, (_, i) => ({
+  const refs = Array.from({ length: 40 }, (_, i) => ({
     messageId: `mail-${i}`,
     runId: `run-${i}-${'r'.repeat(500)}`,
     from: `external-${i}-${'s'.repeat(500)}`
@@ -282,9 +282,7 @@ it('fits a near-budget canonical history page and separate queue after desktop r
       }
     }
   }
-  const text = 'x'.repeat(
-    BOUNDED_FRAME_CONTENT_BUDGET_BYTES - Buffer.byteLength(JSON.stringify(body)) - 8192
-  )
+  const text = 'x'.repeat(BOUNDED_FRAME_ROW_BYTES - Buffer.byteLength(JSON.stringify(body)) - 1024)
   body.blocks = [{ type: 'text', text }]
   const reports = refs.map((ref) => ({
     ...ref,
@@ -295,21 +293,26 @@ it('fits a near-budget canonical history page and separate queue after desktop r
       result: { type: 'exit' as const, code: 0 }
     }
   }))
-  await journal.queuedMessages.insert(
-    { messageId: 'history-report', body },
-    journal.mailDisplayReports.receipt(body, reports)
-  )
-  await journal.appendItem({ provider: 'orca', clientMessageId: 'large-history' }, body, {
-    fence: 1,
-    turnScope: AGENT_JOURNAL_THREAD_SCOPE
-  })
-  await journal.queuedMessages.withdraw(['history-report'])
+  for (let i = 0; i < 8; i++) {
+    const messageId = `history-report-${i}`
+    await journal.queuedMessages.insert(
+      { messageId, body },
+      journal.mailDisplayReports.receipt(body, reports)
+    )
+    await journal.appendItem({ provider: 'orca', clientMessageId: `large-history-${i}` }, body, {
+      fence: 1,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
+    await journal.queuedMessages.withdraw([messageId])
+  }
   const queued: AgentJournalMessageItem = {
-    kind: 'message',
-    role: 'user',
+    ...body,
     blocks: [{ type: 'text', text: 'Waiting canonical message' }]
   }
-  await journal.queuedMessages.insert({ messageId: 'waiting', body: queued })
+  await journal.queuedMessages.insert(
+    { messageId: 'waiting', body: queued },
+    journal.mailDisplayReports.receipt(queued, reports)
+  )
   const events: AgentSessionSubscribeEvent[] = []
   const subscribers = new AgentSessionSubscribers({
     readQueuePublication: () => ({
@@ -333,7 +336,10 @@ it('fits a near-budget canonical history page and separate queue after desktop r
     )
   }
   const history = events.find((event) => event.type === 'snapshot')
-  expect(history?.type === 'snapshot' && history.page.items[0].body).toEqual(body)
+  expect(history?.type === 'snapshot' && history.page.items).toHaveLength(8)
+  expect(history?.type === 'snapshot' && history.page.items.map((item) => item.body)).toEqual(
+    Array.from({ length: 8 }, () => body)
+  )
   expect(history?.type === 'snapshot' && history.page).not.toHaveProperty('mailDisplayReports')
   const queue = events.find((event) => event.type === 'batch' && event.queuedMessages?.length)
   expect(queue?.type === 'batch' && queue.queuedMessages?.[0].body).toEqual(queued)

@@ -432,15 +432,39 @@ it('shows only a proved Dispatch invocation and withdraws proof without changing
       attachments: [],
       revision: { epoch: 'proof', revision }
     })
+  const other = status(9, 'remote')
+  useAppStore.setState({
+    repos: [TEST_REPO],
+    worktreesByRepo: {
+      [TEST_REPO.id]: [
+        makeWorktree({ id: 'remote', repoId: TEST_REPO.id, hostId: 'runtime:remote' })
+      ]
+    },
+    tabsByWorktree: {
+      ...useAppStore.getState().tabsByWorktree,
+      remote: [makeTab({ id: 'tab-9', worktreeId: 'remote' })]
+    },
+    agentStatusByPaneKey: { ...useAppStore.getState().agentStatusByPaneKey, [other.paneKey]: other }
+  })
+  render(
+    <>
+      <Probe id={1} />
+      <Probe id={9} workspace="remote" remote />
+    </>
+  )
   publish(true, 1)
   const inputs = [{ sender: saved, worktreeId: 'workspace' }]
   const single = renderHook(() => useAgentMessageSenderView(saved, 'workspace', { kind: 'local' }))
   const list = renderHook(() => useAgentMessageSenderViews(inputs, { kind: 'local' }))
   expect(single.result.current).toMatchObject({ agentType: 'codex', dot: 'working' })
   expect(list.result.current[0]).toMatchObject({ agentType: 'codex', dot: 'working' })
+  const before = new Map(renders)
   act(() => publish(false, 2))
-  expect(single.result.current).toMatchObject({ agentType: 'codex', dot: undefined })
-  expect(list.result.current[0]).toMatchObject({ agentType: 'codex', dot: undefined })
+  expect(renders).toEqual(before)
+  expect(single.result.current.agentType).toBe('codex')
+  expect(single.result.current.dot).toBeUndefined()
+  expect(list.result.current[0].agentType).toBe('codex')
+  expect(list.result.current[0].dot).toBeUndefined()
   // The current terminal alias must not bypass missing source proof.
   write(0, { state: 'waiting' })
   expect(single.result.current.dot).toBeUndefined()

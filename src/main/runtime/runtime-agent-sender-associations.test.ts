@@ -228,7 +228,7 @@ it('follows a follow-up into the pane that reopened the worker; a live old handl
   expect(h.located(`dispatch:${first.id}`)).toBeUndefined()
 })
 
-it('rejects a worker whose terminal is released, unproven or on another process, and a settled one with none', () => {
+it('rejects released or unproven custody while keeping an independently live original execution', () => {
   const h = harness(2)
   const worker = h.worker(0)
   const settled = createRootDispatch(
@@ -244,9 +244,12 @@ it('rejects a worker whose terminal is released, unproven or on another process,
     .prepare("UPDATE worker_terminal_resources SET prior_owner_dispatch_ids = 'not json'")
     .run()
   expect(h.located(`dispatch:${worker.id}`)).toBe(pane('tab-0'))
+  for (const incarnation of ['pty-0:replaced', null]) {
+    h.db.db.prepare('UPDATE worker_terminal_resources SET process_incarnation = ?').run(incarnation)
+    expect(h.located(`dispatch:${worker.id}`)).toBe(pane('tab-0'))
+  }
+  h.db.db.prepare("UPDATE worker_terminal_resources SET process_incarnation = 'pty-0:inc-1'").run()
   for (const [column, value] of [
-    ['process_incarnation', 'pty-0:replaced'],
-    ['process_incarnation', null],
     ['ownership_state', 'released'],
     ['retained_reason', 'identity_unproven']
   ] as const) {
@@ -527,8 +530,11 @@ it('keeps the last good publication when a read fails and retries on the next id
     getRecord: (id) => chats.find((r) => r.sessionId === id) ?? null,
     listRecords: () => chats
   })
-  h.worker(0)
+  const first = h.worker(0)
   const good = h.projection.build()
+  expect(good.associations.find((r) => r.identity === `dispatch:${first.id}`)?.dispatchActor).toBe(
+    true
+  )
   const prepare = h.db.db.prepare.bind(h.db.db)
   vi.spyOn(h.db.db, 'prepare').mockImplementation((sql: string) => {
     if (sql === AGENT_SENDER_PANE_READS.resources) {
@@ -538,8 +544,22 @@ it('keeps the last good publication when a read fails and retries on the next id
   })
   const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
   h.worker(1)
-  expect(h.projection.build()).toBe(good)
-  expect(h.projection.build()).toBe(good)
+  h.ptys[0].launchToken = null
+  h.ptys[0].launchIncarnationId = null
+  const safe = h.projection.build()
+  expect(safe.associations).toEqual(
+    good.associations.map(({ dispatchActor: _proof, ...row }) => row)
+  )
+  expect(h.projection.build()).toBe(safe)
+  vi.mocked(h.db.db.prepare).mockRestore()
+  // Restoring reads alone cannot reinstate expired proof at the same failed key.
+  expect(h.projection.build()).toBe(safe)
+  vi.spyOn(h.db.db, 'prepare').mockImplementation((sql: string) => {
+    if (sql === AGENT_SENDER_PANE_READS.resources) {
+      throw new Error('disk I/O error')
+    }
+    return prepare(sql)
+  })
   expect(identityReads(h).historyReads).toBe(2)
   // A chat opens in the same refresh as another failing read: the chat is published beside the
   // last good terminal rows.
@@ -553,7 +573,7 @@ it('keeps the last good publication when a read fails and retries on the next id
   h.handles.set('tab-1', 'term_fresh')
   const warned = warn.mock.calls.length
   const withChat = h.projection.build().associations
-  expect(withChat.filter((r) => !r.sessionId)).toEqual(good.associations)
+  expect(withChat.filter((r) => !r.sessionId)).toEqual(safe.associations)
   expect(withChat.map((r) => r.identity)).toContain(`orca_session_id:${chat}`)
   // The failure still reaches the build's warning.
   expect(warn.mock.calls.length).toBe(warned + 1)
@@ -561,6 +581,9 @@ it('keeps the last good publication when a read fails and retries on the next id
   const third = h.worker(2)
   expect(h.located(`dispatch:${third.id}`)).toBe(pane('tab-2'))
   expect(h.located(`orca_session_id:${chat}`)).toBeDefined()
+  expect(h.projection.build().associations.some((r) => r.identity === `dispatch:${first.id}`)).toBe(
+    false
+  )
 })
 
 it('publishes one principal per paired peer and attachments only while their worker runs there', () => {

@@ -257,7 +257,12 @@ export class RuntimeAgentSenderAssociations {
         }
       }
     } catch (error) {
-      // The last good publication stays; the next identity change retries.
+      // A failed read cannot re-prove an invocation; ordinary endpoints keep their last good rows.
+      this.terminal = {
+        ...this.terminal,
+        associations: this.terminal.associations.map(({ dispatchActor: _proof, ...row }) => row)
+      }
+      // The next identity change retries.
       this.failedKey = key
       throw error
     }
