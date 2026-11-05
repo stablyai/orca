@@ -425,7 +425,6 @@
       "src/cli/format.test.ts": 446,
       "src/cli/handler-group-manifest.test.ts": 3610,
       "src/cli/handlers/account.test.ts": 849,
-      "src/cli/handlers/agent-hooks-load-boundary.test.ts": 457,
       "src/cli/handlers/agent-hooks-prepare-codex-isolated-home.test.ts": 854,
       "src/cli/handlers/agent-hooks.test.ts": 1702,
       "src/cli/handlers/artifacts.test.ts": 471,
