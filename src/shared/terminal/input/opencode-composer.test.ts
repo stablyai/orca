@@ -38,8 +38,6 @@ describe('readOpenCodeComposerText', () => {
     ['the stock placeholder', box(['Ask anything… "Fix a TODO in the codebase"'], 0, '')],
     ['the shell placeholder', box(['Run a command… "git status"'], 0, '', { metadata: 'Shell' })],
     ['a placeholder clipped by a narrow pane', box(['Ask anything…'], 0, '', { metadata: '' })],
-    ['a placeholder cut off at the box edge', box(['Ask anythin'], 0, '', { metadata: '' })],
-    ['a cut-off shell placeholder', box(['Run a c'], 0, '', { metadata: 'Shell' })],
     ['a transparent theme', box(['Ask anything… "Fix broken tests"'], 0, '', { bottom: '' })]
   ])('reads an empty box showing %s as empty', (_label, context) => {
     expect(readOpenCodeComposerText(context)).toBe('')
@@ -56,6 +54,22 @@ describe('readOpenCodeComposerText', () => {
     ['on a transparent theme', box(['fix it'], 0, 'fix it', { bottom: '' })]
   ])('reads a typed draft %s, without the metadata row', (_label, context) => {
     expect(readOpenCodeComposerText(context)).toBe(context.rows.at(-1)?.slice(6))
+  })
+
+  it('reads a placeholder a narrow pane cut short as a draft, which only delays the wake', () => {
+    expect(readOpenCodeComposerText(box(['Ask anythin'], 0, '', { metadata: '' }))).toBe(
+      'Ask anythin'
+    )
+  })
+
+  it('reads a draft whose Shell footer wraps in a very narrow pane', () => {
+    const narrow = box(['Ask'], 0, '', { metadata: 'Shel' })
+    const wrapped = {
+      ...narrow,
+      rowsBelow: [...narrow.rowsBelow.slice(0, -1), '   ┃  l', ...narrow.rowsBelow.slice(-1)],
+      typedRowsBelow: [...narrow.rowsBelow.slice(0, -1), '   ┃  l', ...narrow.rowsBelow.slice(-1)]
+    }
+    expect(readOpenCodeComposerText(wrapped)).toBe('Ask')
   })
 
   it('reads every line of a multi-line draft around the cursor', () => {

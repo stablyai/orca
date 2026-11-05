@@ -2,19 +2,10 @@ import type { TerminalCursorContext } from './terminal-composer-draft'
 
 // Why: OpenCode draws no prompt glyph. Its composer is a `┃` gutter block (closed by `╹▀…` only on
 // opaque themes) laid out as a padding row, the textarea, a spacer row and a metadata row (agent,
-// model or `Shell`). Its placeholder is undimmed, so only its stock wording marks it.
+// model or `Shell`). Its placeholder is undimmed, so only its full stock wording marks it: a placeholder
+// a narrow pane cuts short reads as a draft, which only delays a wake, never types over a draft.
 const OPENCODE_BOX_GUTTER = '┃'
 const OPENCODE_PLACEHOLDERS = ['Ask anything…', 'Run a command…']
-const ELLIPSIS = '…'
-
-function isOpenCodePlaceholder(line: string, reachesBoxEdge: boolean): boolean {
-  // Narrow panes clip the placeholder at the box's edge, with or without an ellipsis.
-  const shown = line.endsWith(ELLIPSIS) ? line.slice(0, -ELLIPSIS.length) : line
-  return OPENCODE_PLACEHOLDERS.some(
-    (placeholder) =>
-      line.startsWith(placeholder) || (reachesBoxEdge && !!shown && placeholder.startsWith(shown))
-  )
-}
 
 /** What the user typed into OpenCode's composer: '' when it is empty, null when the cursor is not in it.
  *  This is the screen copy, so a soft-wrapped draft has a newline at each wrap; it shows that the user
@@ -43,26 +34,26 @@ export function readOpenCodeComposerText(context: TerminalCursorContext): string
     ...context.typedRowsBelow.slice(0, below)
   ].map((row) => row.slice(column + OPENCODE_BOX_GUTTER.length).trimEnd())
   const cursorLine = cursorIndex - top
-  const spacer = rows.length - 2
-  if (rows.length < 4 || rows[0]?.trim() || rows[spacer]?.trim() || cursorLine >= spacer) {
+  if (cursorLine === 0 || rows[0]?.trim()) {
     return null
   }
+  // Laid out as expected, the box ends with a spacer and a metadata row; otherwise (a footer wrapped
+  // in a very narrow pane) only the rows through the cursor are surely the textarea's.
+  const spacer = rows.length - 2
+  const laidOut = rows.length >= 4 && !rows[spacer]?.trim() && cursorLine < spacer
   // The metadata row shares the textarea's left padding; text past it is the user's.
-  const metadata = rows.at(-1) ?? ''
+  const metadata = laidOut ? (rows.at(-1) ?? '') : ''
   const padding = metadata.trim() ? metadata.length - metadata.trimStart().length : 2
   const unpad = (row: string): string =>
     row.startsWith(' '.repeat(padding)) ? row.slice(padding) : row.trimStart()
-  const lines = rows.slice(1, spacer).map(unpad)
+  const lines = rows.slice(1, laidOut ? spacer : cursorLine + 1).map(unpad)
   const first = lines.findIndex((line) => line.trim())
   const last = lines.findLastIndex((line) => line.trim())
-  // OpenCode paints the box's padding row across its full width; a clip may stop at a word boundary.
-  const textEnd = column + OPENCODE_BOX_GUTTER.length + padding + (lines[0]?.length ?? 0)
-  const reachesBoxEdge = textEnd >= (context.rows[top] ?? '').length - padding - 2
   const placeholder =
     first === 0 &&
     last === 0 &&
     cursorLine === 1 &&
     !unpad(context.beforeCursor.slice(column + OPENCODE_BOX_GUTTER.length)) &&
-    isOpenCodePlaceholder(lines[0] ?? '', reachesBoxEdge)
+    OPENCODE_PLACEHOLDERS.some((stock) => lines[0]?.startsWith(stock))
   return first === -1 || placeholder ? '' : lines.slice(first, last + 1).join('\n')
 }
