@@ -24,6 +24,7 @@ import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { Repo } from '../../../../shared/repo-types'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { getSuggestedCreatureName } from './workspace-creation/naming/worktree-name-suggestions'
+import { completeAgentSessionsParallelStep } from '../contextual-tours/workspace-creation-tour-handoff'
 import { submitFolderWorkspaceCreate } from './workspace-creation/folder/folder-workspace-composer-submit'
 import {
   getHeaderCreateWorkspaceTarget,
@@ -45,7 +46,9 @@ export type CurrentWorkspaceCreate =
     }
   | { kind: 'unavailable' }
 
-function dismissCoveringModal(): void {
+// A direct create replaces the composer, whose opening is what cleared the final + tip on every create entry point.
+function beginDirectFolderCreate(): void {
+  completeAgentSessionsParallelStep()
   const state = useAppStore.getState()
   if (state.activeModal && state.activeModal !== 'none') {
     state.closeModal()
@@ -75,7 +78,7 @@ export async function createFolderWorkspaceFromSidebar(
   if (!projectGroup.parentPath) {
     return
   }
-  dismissCoveringModal()
+  beginDirectFolderCreate()
   const { createFolderWorkspace } = useAppStore.getState()
   const runtimeEnvironmentId = source
     ? source.runtimeEnvironmentId
@@ -108,7 +111,7 @@ function directFolderProgressMode(repo: Repo): 'stepped' | 'indeterminate' {
 }
 
 function startFolderRepoWorkspace(repo: Repo): void {
-  dismissCoveringModal()
+  beginDirectFolderCreate()
   const state = useAppStore.getState()
   runBackgroundWorktreeCreation({
     repoId: repo.id,

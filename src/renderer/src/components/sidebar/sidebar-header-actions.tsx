@@ -5,10 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { formatOptionalPrimaryShortcutLabel } from '@/hooks/useShortcutLabel'
 import { translate } from '@/i18n/i18n'
-import {
-  completeAgentSessionsParallelStep,
-  openWorkspaceCreationComposerWithTourHandoff
-} from '../contextual-tours/workspace-creation-tour-handoff'
+import { openWorkspaceCreationComposerWithTourHandoff } from '../contextual-tours/workspace-creation-tour-handoff'
 import { startCreateFromCurrentWorkspace } from './folder-workspace-create'
 import SidebarWorkspaceOptionsMenu from './worktree-list/controls/SidebarWorkspaceOptionsMenu'
 
@@ -54,9 +51,7 @@ function NewWorkspaceButton({
 
   const handleCreateWorkspace = useCallback(() => {
     const create = startCreateFromCurrentWorkspace()
-    if (create.kind === 'started') {
-      completeAgentSessionsParallelStep()
-    } else if (create.kind === 'composer') {
+    if (create.kind === 'composer') {
       openWorkspaceCreationComposerWithTourHandoff({
         initialRepoId: create.initialRepoId,
         ...(create.initialWorkspaceTarget
