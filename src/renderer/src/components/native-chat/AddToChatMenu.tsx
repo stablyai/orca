@@ -49,11 +49,12 @@ export function AddToChatSubmenu(props: AddToChatSource): React.JSX.Element {
 }
 
 type PointMenu = AddToChatSource & { x: number; y: number }
+type OpenPointMenu = PointMenu & { returnFocus: HTMLElement | null; cancelled: boolean }
 
-let pointMenu: PointMenu | null = null
+let pointMenu: OpenPointMenu | null = null
 const listeners = new Set<() => void>()
 
-function setPointMenu(next: PointMenu | null): void {
+function setPointMenu(next: OpenPointMenu | null): void {
   pointMenu = next
   listeners.forEach((listener) => listener())
 }
@@ -65,7 +66,12 @@ function subscribePointMenu(listener: () => void): () => void {
 
 /** Opens the target list at a screen point, for surfaces with no menu of their own to nest it in. */
 export function openAddToChatMenuAt(menu: PointMenu): void {
-  setPointMenu(menu)
+  const focused = document.activeElement
+  setPointMenu({
+    ...menu,
+    returnFocus: focused instanceof HTMLElement && focused !== document.body ? focused : null,
+    cancelled: false
+  })
 }
 
 export function AddToChatPointMenuHost(): React.JSX.Element | null {
@@ -99,6 +105,17 @@ export function AddToChatPointMenuHost(): React.JSX.Element | null {
         className="min-w-[220px]"
         onInteractOutside={preventAgentSendTargetOutsideDismiss}
         onPointerDownOutside={preventAgentSendTargetOutsideDismiss}
+        onEscapeKeyDown={() => {
+          menu.cancelled = true
+        }}
+        onCloseAutoFocus={(event) => {
+          // The hidden anchor can't take focus back. A pick hands focus to the chosen agent and an
+          // outside click to what was clicked; only Escape returns it to where the selection was.
+          event.preventDefault()
+          if (menu.cancelled && menu.returnFocus?.isConnected) {
+            menu.returnFocus.focus()
+          }
+        }}
       >
         <AddToChatTargets {...menu} />
       </DropdownMenuContent>
