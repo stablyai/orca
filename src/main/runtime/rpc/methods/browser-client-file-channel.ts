@@ -4,9 +4,9 @@ import {
   BrowserClientFileChannelWriteParams
 } from '../../../../shared/browser/client-hosting/browser-client-file-channel-protocol'
 import { BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
-import { getBrowserClientDownloadTransferStore } from '../../browser-client-download-transfer-store'
-import { getBrowserHostLeaseRegistry } from '../../browser-host/browser-host-lease-registry-instance'
-import { getRuntimeBrowserPageRegistry } from '../../runtime-browser-page-registry'
+import { getBrowserClientDownloadTransferStore } from '../../browser/downloads/browser-client-download-transfer-store'
+import { getBrowserHostLeaseRegistry } from '../../browser-host/leases/browser-host-lease-registry-instance'
+import { getRuntimeBrowserPageRegistry } from '../../browser/client-pages/runtime-browser-page-registry'
 import { defineMethod, type RpcContext } from '../core'
 
 type FileChannelAuthorityParams = {

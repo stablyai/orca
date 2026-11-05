@@ -61,6 +61,8 @@ export type AgentSessionAttachParams = {
     /** Omit only for exact replay of an already-imported journal. */
     transcriptPath?: string
     source?: AdoptedTranscriptSource
+    /** The source conversation's title; derived, so not part of the attach fingerprint. */
+    conversationName?: string
   }
 }
 
@@ -214,6 +216,7 @@ export function reserveRequestFor(input: {
           adoptedHandleLink: adoptedProviderHandleLink(params.adopt.providerHandle, input.now)
         }
       : {}),
+    conversationName: params.adopt?.conversationName,
     expectedFence: params.envelope.expectedRuntimeFence,
     spawnToken: authority.spawnToken,
     claimKeyId: authority.claimKeyId,

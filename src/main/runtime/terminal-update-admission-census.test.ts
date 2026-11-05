@@ -18,9 +18,11 @@ vi.mock('../orcad/orcad-terminal-census', () => ({ collectOrcadTerminalCensus: c
 vi.mock('../daemon/providers/lifecycle/daemon-provider-state', () => ({ listLiveDaemonPtyIds }))
 
 // Fragments stay side-effect ordered: mocks, then lifecycle, then fixtures.
-const { OrcaRuntimeService } = await import('./orca-runtime-test-mocks.spec')
-await import('./orca-runtime-test-lifecycle.spec')
-const { TEST_WORKTREE_ID, store } = await import('./orca-runtime-test-fixtures.spec')
+await import('./orca-runtime-tests/runtime-test-module-registration.spec')
+const { OrcaRuntimeService } = await import('./orca-runtime')
+await import('./orca-runtime-tests/orca-runtime-test-lifecycle.spec')
+const { TEST_WORKTREE_ID, store } =
+  await import('./orca-runtime-tests/orca-runtime-test-fixtures.spec')
 
 const idle = { liveSessions: 0, startedSinceActivation: 0, daemonProtocolVersion: 7 }
 const target = spawnWorktreeTarget(TEST_WORKTREE_ID, null)

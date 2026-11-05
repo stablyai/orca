@@ -23,12 +23,23 @@ export function serverHostHealth(host: MobileRelayHost): ExecutionHostHealth {
   return host.relay === 'update-needed' ? 'blocked' : host.health
 }
 
+/** The desktop's own WSL host that only the desktop can bring up: stopped, or not ready there. */
+export type ServerHostDesktopReach = 'stopped' | 'unavailable'
+
+export function serverHostDesktopReach(host: MobileRelayHost): ServerHostDesktopReach | undefined {
+  if (host.stoppedOnDesktop) {
+    return 'stopped'
+  }
+  return host.unavailableOnDesktop ? 'unavailable' : undefined
+}
+
 // Why: a phone never starts or connects the desktop's own WSL host, so the badge says where to.
 export function serverHostHealthLabel(host: MobileRelayHost): string | undefined {
-  if (host.stoppedOnDesktop) {
-    return 'Start on computer'
+  const reach = serverHostDesktopReach(host)
+  if (reach === undefined) {
+    return undefined
   }
-  return host.unavailableOnDesktop ? 'Open on computer' : undefined
+  return reach === 'stopped' ? 'Start on computer' : 'Open on computer'
 }
 
 export function serverHostHealthLabels(

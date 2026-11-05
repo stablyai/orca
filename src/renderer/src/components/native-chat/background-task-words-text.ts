@@ -21,6 +21,8 @@ const PIECES: Record<BackgroundTaskCopyId, (values?: BackgroundTaskCopyValues) =
   task: () => translate('components.native-chat.backgroundTasks.task', COPY.task),
   detailsUnavailable: () =>
     translate('components.native-chat.backgroundTasks.detailsUnavailable', COPY.detailsUnavailable),
+  outputFile: (values) =>
+    translate('components.native-chat.backgroundTasks.outputFile', COPY.outputFile, values),
   countAgents: (values) =>
     translate('components.native-chat.backgroundTasks.countAgents', COPY.countAgents.other, {
       ...values,

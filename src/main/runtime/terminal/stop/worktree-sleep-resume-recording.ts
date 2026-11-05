@@ -12,7 +12,7 @@ import {
   type PaneLaunchConfigOf
 } from './hook-status-resume-records'
 import type { ResumeRecordStatus } from '../../../../shared/agent-session/lifecycle/agent-resume-record-from-status'
-import { applyWindowLayoutCommand } from '../../runtime-layout-apply'
+import { applyWindowLayoutCommand } from '../layout/runtime-layout-apply'
 import type {
   AgentStatusClearIpcPayload,
   AgentStatusIpcPayload,

@@ -12,16 +12,17 @@ import {
 import type { IPtyProvider } from '../providers/pty-provider-contract'
 import { PtyWriteUnavailableError } from '../providers/pty-write-unavailable-error'
 
-await import('./orca-runtime-test-mocks.spec')
-await import('./orca-runtime-test-lifecycle.spec')
-const { OrcaRuntimeService } = await import('./orca-runtime-test-mocks.spec')
+await import('./orca-runtime-tests/runtime-test-module-registration.spec')
+await import('./orca-runtime-tests/orca-runtime-test-lifecycle.spec')
+await import('./orca-runtime-tests/runtime-test-module-registration.spec')
+const { OrcaRuntimeService } = await import('./orca-runtime')
 const {
   HEADLESS_LEAF_ID,
   TEST_WORKTREE_ID,
   TEST_WORKTREE_PATH,
   makeRuntimeStoreWithWorkspaceSession,
   makeWorkspaceSessionWithHeadlessTerminal
-} = await import('./orca-runtime-test-fixtures.spec')
+} = await import('./orca-runtime-tests/orca-runtime-test-fixtures.spec')
 
 const providerSession = { key: 'session_id' as const, id: 'codex-conversation' }
 

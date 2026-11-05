@@ -1,6 +1,6 @@
 import { z } from 'zod'
-import type { RuntimeBrowserCommandHost } from '../runtime/browser/browser-command-contracts'
-import type { RuntimeBrowserCommands } from '../runtime/browser/browser-commands'
+import type { RuntimeBrowserCommandHost } from '../runtime/browser/commands/browser-command-contracts'
+import type { RuntimeBrowserCommands } from '../runtime/browser/commands/browser-commands'
 import { BrowserError } from '../browser/browser-error'
 import { assertUploadFilesExist } from '../browser/cdp/input/browser-upload-files'
 import {

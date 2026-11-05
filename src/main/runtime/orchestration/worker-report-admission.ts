@@ -1,5 +1,5 @@
 import { OrchestrationError } from './orchestration-error'
-import { AGENT_PROMPT_STALLED_ERROR } from '../agent-prompt-submission-verification'
+import { AGENT_PROMPT_STALLED_ERROR } from '../terminal/input/agent-prompt-submission-verification'
 import type { DispatchContextRow, TaskRow, WorkerDispatchState } from './types'
 
 // Unknown start/stop cannot prove exit; the worker's report outranks uncertainty (docs/reference/ssh-execution-boundary.md).

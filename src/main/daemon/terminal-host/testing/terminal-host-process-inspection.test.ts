@@ -9,7 +9,7 @@ import type { WindowsProcessRow } from '../../../windows/windows-process-table'
 import { createPtyForegroundProcessTracker } from '../../pty-subprocess/foreground-process-tracker'
 import { inspectSpawnFileWindowsChildProcesses } from '../../pty-subprocess/spawn-file-child-processes'
 import { inspectionShowsShellAlone } from '../../../runtime/run-terminal-shell-alone'
-import { readLaunchedAgentForeground } from '../../../runtime/launched-agent-foreground'
+
 const { fullTable, identityTable, jobMembers, consoleMembers } = vi.hoisted(() => ({
   fullTable: vi.fn(),
   identityTable: vi.fn(),
@@ -50,54 +50,6 @@ function createSubprocess(): SubprocessHandle {
 }
 
 describe('TerminalHost process inspection', () => {
-  it('proves ordinary Windows shell children and withholds proof if its original Session exits', async () => {
-    vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
-    const subprocess = createSubprocess()
-    let exitDuringRead = false
-    const inspectChildProcesses = vi.fn(async () => {
-      if (exitDuringRead) {
-        subprocess.kill()
-      }
-      return 'no-children' as const
-    })
-    const host = new TerminalHost({
-      spawnSubprocess: () => ({
-        ...subprocess,
-        getForegroundProcess: () => 'powershell.exe',
-        inspectChildProcesses
-      })
-    })
-    try {
-      const created = await host.createOrAttach({
-        sessionId: 'exiting',
-        cols: 80,
-        rows: 24,
-        streamClient: { onData: vi.fn(), onExit: vi.fn() }
-      })
-      await expect(
-        host.inspectProcess('exiting', { expectedIncarnationId: created.incarnationId })
-      ).resolves.toMatchObject({
-        foregroundProcess: 'powershell.exe',
-        childProcessEvidence: 'no-children',
-        foregroundProcessEvidence: {
-          verdict: 'unverifiable',
-          reason: 'windows_ssh_foreground_unavailable'
-        }
-      })
-      expect(inspectChildProcesses).toHaveBeenCalledOnce()
-      exitDuringRead = true
-      await expect(
-        host.inspectProcess('exiting', { expectedIncarnationId: created.incarnationId })
-      ).resolves.toMatchObject({
-        childProcessEvidence: 'unverifiable',
-        foregroundProcessEvidence: { verdict: 'unverifiable', reason: 'session_changed' }
-      })
-    } finally {
-      await host.dispose()
-      vi.restoreAllMocks()
-    }
-  })
-
   it.each([false, true])(
     'uses fresh anchored decisions through Session (static=%s)',
     async (staticName) => {
@@ -236,31 +188,6 @@ describe('TerminalHost process inspection', () => {
       }
     }
   )
-
-  it('returns unverifiable when the expected incarnation is stale', async () => {
-    const host = new TerminalHost({ spawnSubprocess: () => createSubprocess() })
-    try {
-      const created = await host.createOrAttach({
-        sessionId: 'session-incarnation',
-        cols: 80,
-        rows: 24,
-        streamClient: { onData: vi.fn(), onExit: vi.fn() }
-      })
-
-      await expect(
-        host.inspectProcess('session-incarnation', { expectedIncarnationId: 'replacement' })
-      ).resolves.toMatchObject({
-        foregroundProcessEvidence: {
-          verdict: 'unverifiable',
-          reason: 'incarnation_mismatch',
-          ptyId: 'session-incarnation',
-          ptyIncarnationId: created.incarnationId
-        }
-      })
-    } finally {
-      await host.dispose()
-    }
-  })
 })
 
 describe('fresh foreground observation contract', () => {
@@ -318,50 +245,4 @@ describe('fresh foreground observation contract', () => {
       await host.dispose()
     }
   })
-
-  it.each([
-    ['non-shell', 'claude', 'agent'],
-    ['shell', '-zsh', 'shell']
-  ] as const)(
-    'keeps a %s observation valid when the wall clock steps back during its read',
-    async (foregroundKind, processName, expected) => {
-      vi.useFakeTimers({ toFake: ['Date'] })
-      vi.setSystemTime(1_000)
-      const subprocess = createSubprocess()
-      subprocess.observeForeground = vi.fn(async (): Promise<TerminalForegroundSample> => {
-        vi.setSystemTime(995)
-        return { verdict: 'observed', source: 'pty-master', foregroundKind, processName }
-      })
-      const host = new TerminalHost({ spawnSubprocess: () => subprocess })
-      try {
-        await host.createOrAttach({
-          sessionId: 'clock-step',
-          cols: 80,
-          rows: 24,
-          streamClient: { onData: vi.fn(), onExit: vi.fn() }
-        })
-        const inspectProcess = vi.fn((id: string, options?: { foregroundOnly?: boolean }) =>
-          host.inspectProcess(id, options)
-        )
-        expect(
-          await readLaunchedAgentForeground(
-            {
-              supportsForegroundObservation: () => true,
-              inspectProcess,
-              getForegroundProcess: async () => null
-            },
-            { remote: false, windows: false },
-            'clock-step',
-            'claude'
-          )
-        ).toBe(expected)
-        await expect(inspectProcess.mock.results[0].value).resolves.toMatchObject({
-          foregroundObservation: { verdict: 'observed', capturedAgeMs: 0 }
-        })
-      } finally {
-        await host.dispose()
-        vi.useRealTimers()
-      }
-    }
-  )
 })

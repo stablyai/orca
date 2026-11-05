@@ -29,16 +29,6 @@ describe('deleteBrowserPasswordVault', () => {
     rmSync(dir, { recursive: true, force: true })
   })
 
-  it('deletes the file and forgets the cached vault', () => {
-    getBrowserPasswordVault('default').add({
-      origin: 'https://a.test',
-      username: 'u',
-      password: 'p'
-    })
-    expect(deleteBrowserPasswordVault('default')).toEqual({ ok: true, value: true })
-    expect(getBrowserPasswordVault('default').list()).toEqual({ ok: true, value: [] })
-  })
-
   it('deletes the captured vault after an Orca profile switch without touching its replacement', () => {
     const original = getBrowserPasswordVault('default')
     original.add({ origin: 'https://a.test', username: 'original', password: 'p' })

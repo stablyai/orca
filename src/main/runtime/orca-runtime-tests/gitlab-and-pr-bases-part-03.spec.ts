@@ -1,8 +1,10 @@
 import * as gitExecFile from '../../git/command-runner/git-exec-file'
 import { SshHostNotServedError } from '../../providers/ssh-host-not-served-error'
 import { describe, expect, it, vi } from 'vitest'
-import { OrcaRuntimeService, getGlabKnownHostsMock } from '../orca-runtime-test-mocks.spec'
-import { TEST_REPO_ID, store } from '../orca-runtime-test-fixtures.spec'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { getGlabKnownHostsMock } from '../orca-runtime-test-mocks/setup.spec'
+import { TEST_REPO_ID, store } from './orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
   it('refuses SSH GitLab MR bases instead of resolving them on this machine', async () => {

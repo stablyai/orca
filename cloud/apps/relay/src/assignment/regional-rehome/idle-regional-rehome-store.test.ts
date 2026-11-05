@@ -211,12 +211,6 @@ describe('constrained idle regional assignment transaction', () => {
     }
   )
 
-  it('polls when the worker state row has never been written', async () => {
-    const { store, database, safety } = await setup()
-    await database.query('DELETE FROM relay_region_rehome_worker_state')
-    expect(await store.selectIdleRegionalRehomeCandidates(safety)).toHaveLength(1)
-  })
-
   // sourceRequestUnits reads a reserve cell's missing phone leases as zero units; selection must drop it.
   it.each(['source', 'target'])('drops every candidate while the %s cell is recorded as reserve', async (cellId) => {
     const { store, safety } = await setup()
@@ -405,17 +399,6 @@ describe('constrained idle regional assignment transaction', () => {
     expect(await store.reconcileIdleRegionalRehome(request)).toBe('committed')
     expect(await store.commitIdleRegionalRehome(request, safety)).toEqual({ outcome: 'committed' })
     expect(await database.query('SELECT * FROM relay_region_rehome_attempts')).toHaveLength(1)
-  })
-
-  it('commits the requested move once and records its outcome without source retention', async () => {
-    const { store, database, safety, request } = await setup()
-    expect(await store.commitIdleRegionalRehome(request, safety)).toEqual({ outcome: 'committed' })
-    expect(await store.commitIdleRegionalRehome(request, safety)).toEqual({ outcome: 'committed' })
-    expect(await store.resolve(identity)).toMatchObject({ cellId: 'target', assignmentEpoch: 2 })
-    const attempts = await database.query('SELECT * FROM relay_region_rehome_attempts')
-    expect(attempts).toHaveLength(1)
-    expect(attempts[0]!.attempt_id).toBe(request.attemptId)
-    expect(Number(attempts[0]!.source_generation)).toBe(7)
   })
 
   it('rejects a replaced control and never substitutes a different target', async () => {

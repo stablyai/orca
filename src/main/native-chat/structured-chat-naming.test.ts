@@ -3,12 +3,12 @@ import { OrchestrationDb } from '../runtime/orchestration/db'
 import {
   structuredWorkerOpenTaskTitle,
   structuredWorkerOwesWork
-} from '../runtime/structured-worker-custody'
+} from '../runtime/orchestration/terminal-authority/structured-sessions/structured-worker-custody'
 import {
   mintStructuredWorkerHandle,
   mintStructuredWorkerPaneKey,
   structuredWorkerProcessIncarnation
-} from '../runtime/structured-worker-identity'
+} from '../runtime/orchestration/terminal-authority/structured-sessions/structured-worker-identity'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 import { agentSessionRecordFixture } from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'

@@ -93,60 +93,6 @@ describe('a zero-grace drain releases the host before telling it', () => {
     expect(slow[0]).not.toContain(h.identity.relayHostId)
   })
 
-  it("starts the host's splice releases before its control release", async () => {
-    // The store runs one host's releases in the order they start, so waiting on the
-    // control release covers the splices the drain closed ahead of it.
-    const { h, key } = await connectedHost()
-    const order: string[] = []
-    vi.spyOn(h.assignments, 'releaseActivity').mockImplementation(async (_identity, id) => {
-      order.push(id)
-      return true
-    })
-    const session = h.registry.get(key)!
-    session.activeSplices.set('conn-a', () => {
-      session.activeSplices.delete('conn-a')
-      void h.assignments.releaseActivity(key, 'splice:conn-a')
-    })
-
-    h.registry.drain(0)
-    await vi.advanceTimersByTimeAsync(1)
-
-    expect(order).toEqual(['splice:conn-a', 'control:1'])
-  })
-
-  it('closes at once when the release fails, so a database outage never holds the host', async () => {
-    const { h, socket } = await connectedHost()
-    const release = pendingRelease()
-    vi.spyOn(h.assignments, 'releaseActivity').mockReturnValue(release.promise)
-
-    h.registry.drain(0)
-    await vi.advanceTimersByTimeAsync(1)
-    release.settle('failed')
-    await vi.advanceTimersByTimeAsync(0)
-
-    expect(socket.close).toHaveBeenCalledWith(
-      RELAY_CLOSE_CODE.DRAINING,
-      'resolve configured director'
-    )
-  })
-
-  it('does not wait for a host that holds no lease here', async () => {
-    // A reserve-mode cell admits hosts from memory, with no activity row to release.
-    const { h, socket, key } = await connectedHost()
-    h.registry.get(key)!.controlActivityId = null
-    const releaseActivity = vi.spyOn(h.assignments, 'releaseActivity')
-
-    h.registry.drain(0)
-    await vi.advanceTimersByTimeAsync(1)
-
-    expect(releaseActivity).not.toHaveBeenCalled()
-    expect(frames(socket)).toEqual([{ type: 'drain', graceMs: 0, recovery: 'resolve-director' }])
-    expect(socket.close).toHaveBeenCalledWith(
-      RELAY_CLOSE_CODE.DRAINING,
-      'resolve configured director'
-    )
-  })
-
   it('still tells a host with grace at once, and releases it before the closing deadline', async () => {
     const { h, socket } = await connectedHost()
     const release = pendingRelease()

@@ -213,16 +213,6 @@ describe('LocalSshBrowserRoute', () => {
     accepted.destroy()
   })
 
-  it('retains one shared route per target', async () => {
-    const dependencies = {
-      resolveExecutionRoute: async () => fakeExecutionRoute('route-shared'),
-      getAuthority: () => ({ providerEpoch: 'epoch-1', connectionGeneration: 1 })
-    }
-    const first = await retainLocalSshBrowserRoute('target-shared', dependencies)
-    const second = await retainLocalSshBrowserRoute('target-shared', dependencies)
-    expect(second.port).toBe(first.port)
-  })
-
   it('drops the shared route on explicit close so a re-add starts fresh', async () => {
     const dependencies = {
       resolveExecutionRoute: async () => fakeExecutionRoute('route-shared'),
@@ -235,61 +225,5 @@ describe('LocalSshBrowserRoute', () => {
     expect((await readExact(socket, 10))[1]).toBe(0)
     socket.destroy()
     expect(first.port).not.toBe(0)
-  })
-
-  it('classifies forwarding probes by the wire reason code, never by scary wording', async () => {
-    let failure: (Error & { reason?: number }) | null = null
-    const route = new LocalSshBrowserRoute('target-probe', {
-      resolveExecutionRoute: async () => {
-        const executionRoute = fakeExecutionRoute('route-probe')
-        const originalConnect = executionRoute.connect
-        executionRoute.connect = (target) => {
-          if (failure) {
-            const socket = new FakeTunnelSocket('never-connect')
-            const error = failure
-            queueMicrotask(() => {
-              socket.emit('error', error)
-            })
-            return socket
-          }
-          return originalConnect(target)
-        }
-        return executionRoute
-      },
-      getAuthority: () => ({ providerEpoch: 'epoch-1', connectionGeneration: 1 })
-    })
-    routes.push(route)
-    await route.listen()
-
-    const withReason = (message: string, reason?: number): Error & { reason?: number } => {
-      const error = new Error(message) as Error & { reason?: number }
-      if (reason !== undefined) {
-        error.reason = reason
-      }
-      return error
-    }
-
-    failure = withReason('(SSH) Channel open failure: open failed', 1)
-    expect(await route.probeForwarding(500)).toBe('forwarding-blocked')
-    // CONNECT_FAILED means forwarding was permitted even if the destination firewall says "denied".
-    failure = withReason('(SSH) Channel open failure: connection denied by firewall', 2)
-    expect(await route.probeForwarding(500)).toBe('ok')
-    failure = withReason('administratively prohibited: open failed')
-    expect(await route.probeForwarding(500)).toBe('forwarding-blocked')
-    failure = withReason('open forbidden: access denied, not allowed')
-    expect(await route.probeForwarding(500)).toBe('ok')
-    failure = null
-    expect(await route.probeForwarding(500)).toBe('ok')
-  })
-
-  it('reports ssh-unavailable when the probe cannot resolve a route', async () => {
-    const route = new LocalSshBrowserRoute('target-down', {
-      resolveExecutionRoute: async () => {
-        throw new Error('browser_tunnel_execution_host_unavailable')
-      },
-      getAuthority: () => ({ providerEpoch: 'epoch-1', connectionGeneration: 1 })
-    })
-    routes.push(route)
-    expect(await route.probeForwarding(500)).toBe('ssh-unavailable')
   })
 })

@@ -2,7 +2,7 @@ import { agentSessionRecordFixture } from '../../../native-chat/agent-session-re
 import {
   createCodexStructuredLaunchResolver,
   TEST_SPAWN_TOKEN
-} from '../../../runtime/structured-agent-launch-composition.test-support'
+} from '../../../runtime/agent-session/launch/structured-agent-launch-composition.test-support'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'

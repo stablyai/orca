@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
-import { withDurableRuntimeStore } from '../../runtime/runtime-durable-store-fixture'
+import { withDurableRuntimeStore } from '../../runtime/orca-runtime-tests/runtime-durable-store-fixture'
 import { SessionNotFoundError } from '../../daemon/protocol/daemon-errors'
 import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { registerPtyHandlers } from './register-handlers'

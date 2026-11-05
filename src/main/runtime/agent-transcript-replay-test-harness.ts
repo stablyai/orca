@@ -1,12 +1,12 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { HeadlessEmulator } from '../daemon/emulation/headless-emulator'
-import { projectTerminalVisibleLines } from './orca-runtime-terminal-projection'
-import { normalizeTerminalChunk } from './terminal-ansi-normalization'
-import { appendNormalizedToTailBuffer } from './terminal-tail-buffer'
-import { buildPreview } from './terminal-tail-state'
-import { buildTerminalWaitText } from './terminal-wait-tail-state'
-import { visibleNonBlankTerminalLines } from './terminal-tail-read'
+import { projectTerminalVisibleLines } from './terminal/view/orca-runtime-terminal-projection'
+import { normalizeTerminalChunk } from './terminal/output/terminal-ansi-normalization'
+import { appendNormalizedToTailBuffer } from './terminal/output/tail/terminal-tail-buffer'
+import { buildPreview } from './terminal/output/tail/terminal-tail-state'
+import { buildTerminalWaitText } from './terminal/wait/terminal-wait-tail-state'
+import { visibleNonBlankTerminalLines } from './terminal/output/tail/terminal-tail-read'
 
 const DEFAULT_CHUNK_CHARS = 64
 

@@ -8,9 +8,9 @@ import {
 import {
   PTY_CONTROLLER_LIST_PROVIDER_MARGIN_MS,
   PTY_CONTROLLER_LIST_TIMEOUT_MS
-} from '../../orca-runtime-postlude'
+} from './pty-controller-inventory-budget'
 import { pruneOldestMapEntry } from '../../prune-oldest-map-entry'
-import { withTimeoutResult } from '../../runtime-async-boundaries'
+import { withTimeoutResult } from '../../../../shared/promise-timeout-fallback'
 
 type HostScopedPtyProcesses = { processes: PtyProcessInfo[]; hostIds: ExecutionHostId[] }
 

@@ -31,7 +31,9 @@ export function AgentLaunchPickerMenu({
   hideSearch,
   initialQuery = '',
   searchInputRef,
-  onSelectAgent
+  onSelectAgent,
+  defaultAgent,
+  onSetDefault
 }: {
   model?: NewTabAgentMenuModel
   draftScope?: object
@@ -49,6 +51,8 @@ export function AgentLaunchPickerMenu({
   /** A supplied ref gives the owning popup control of initial focus. */
   searchInputRef?: Ref<HTMLInputElement>
   onSelectAgent?: (agent: AgentPickerEntry['agent']) => void
+  defaultAgent?: AgentPickerEntry['agent'] | 'blank' | null
+  onSetDefault?: (agent: AgentPickerEntry['agent']) => void
 }) {
   useEffect(() => {
     if (setupDisabled) {
@@ -209,6 +213,8 @@ export function AgentLaunchPickerMenu({
               disabled={disabled}
               runLaunch={runLaunch}
               onSelectAgent={onSelectAgent}
+              isDefault={defaultAgent === entry.agent}
+              onSetDefault={onSetDefault}
               shortcut={mode !== 'select' ? shortcutLabels?.get(entry.agent) : undefined}
             />
           )

@@ -40,7 +40,8 @@ it('publishes only a change in the normalized host preference, including on a he
 
 it('client-events ready snapshots the same normalized setting after installing its event listener', async () => {
   const { OrcaRuntimeService } = await import('./orca-runtime')
-  const { RuntimeClientSettingsController } = await import('./runtime-client-settings')
+  const { RuntimeClientSettingsController } =
+    await import('./client/settings/runtime-client-settings')
   const { CLIENT_EVENT_METHODS } = await import('./rpc/methods/client-events')
   const runtime = new OrcaRuntimeService()
   const settings = getDefaultSettings('/tmp')

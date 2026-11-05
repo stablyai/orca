@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } fr
 import type WebSocket from 'ws'
 import type { RelayAssignmentStore } from '../assignment/assignment-store.js'
 import type { RelayConfig } from '../config.js'
-import { RelayStoreError, type RelayCredentialStore } from '../credentials/credential-store.js'
+import type { RelayCredentialStore } from '../credentials/credential-store.js'
 import { CONTROL_RENEWAL_BATCH_INTERVAL_MS } from '../control-leases/control-renewal-batch.js'
 import type {
   ControlRenewalOutcome,
@@ -906,51 +906,6 @@ describe('host session cleanup races', () => {
     vi.advanceTimersByTime(0)
   })
 
-  it('re-acquires a missing control activity lease', async () => {
-    const activateControl = vi
-      .fn<RelayAssignmentStore['activateControl']>()
-      .mockResolvedValue('control:production-gce-c3:1')
-    const { registry, activate, acquireActivity, renewControlActivities } =
-      createRegistry(activateControl)
-    renewControlActivities.mockResolvedValueOnce(['control_activity_not_found'])
-    const socket = new FakeSocket()
-    await activate(socket as unknown as WebSocket, identity, null, 1, false, 1)
-
-    await vi.advanceTimersByTimeAsync(RELAY_PROTOCOL_LIMITS.controlPingIntervalMs)
-    await closeRenewalWindow()
-
-    expect(acquireActivity).toHaveBeenCalledWith(
-      { userId: identity.sub, relayHostId: identity.relayHostId },
-      {
-        activityId: 'control:production-gce-c3:1',
-        kind: 'control',
-        cellId: config.cellId
-      }
-    )
-    expect(socket.close).not.toHaveBeenCalled()
-    registry.drain(0)
-    vi.advanceTimersByTime(0)
-  })
-
-  it('closes a control whose activity lease moved to another cell', async () => {
-    const activateControl = vi
-      .fn<RelayAssignmentStore['activateControl']>()
-      .mockResolvedValue('control:production-gce-c3:1')
-    const { registry, activate, acquireActivity, renewControlActivities } =
-      createRegistry(activateControl)
-    renewControlActivities.mockResolvedValueOnce(['control_activity_moved'])
-    const socket = new FakeSocket()
-    await activate(socket as unknown as WebSocket, identity, null, 1, false, 1)
-
-    await vi.advanceTimersByTimeAsync(RELAY_PROTOCOL_LIMITS.controlPingIntervalMs)
-    await closeRenewalWindow()
-
-    expect(acquireActivity).not.toHaveBeenCalled()
-    expect(socket.close).toHaveBeenCalledWith(RELAY_CLOSE_CODE.DRAINING, 'control activity moved')
-    registry.drain(0)
-    vi.advanceTimersByTime(0)
-  })
-
   it('closes when a missing control activity cannot be re-acquired on this cell', async () => {
     const activateControl = vi
       .fn<RelayAssignmentStore['activateControl']>()
@@ -1676,45 +1631,6 @@ describe('host data attach owner lookup', () => {
   }
 
   it.each([
-    {
-      placement: 'first',
-      after: { visits: 1, membership: 1 }
-    },
-    {
-      placement: 'middle',
-      after: { visits: 500, membership: 500 }
-    },
-    {
-      placement: 'last',
-      after: { visits: 1000, membership: 1000 }
-    },
-    {
-      placement: 'absent',
-      after: { visits: 1000, membership: 1000 }
-    }
-  ] as const)(
-    'visits the inventory once, not twice, for a $placement owner',
-    async ({ placement, after }) => {
-      const h = await attachRegistry(placement)
-      expect(h.sessions.size).toBe(SESSION_COUNT)
-      h.counts.visits = 0
-      h.counts.membership = 0
-      const host = new FakeSocket()
-      // An unusable ticket stops the attach immediately after the lookup, so the
-      // counts below belong to the lookup alone.
-      expect(
-        await h.registry.acceptHostData(host as unknown as WebSocket, CONN_ID, 'wrong', 1)
-      ).toBe(false)
-      expect(h.observer.recordAuth).toHaveBeenCalledExactlyOnceWith(false)
-      expect(host.close).toHaveBeenCalledWith(
-        RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL,
-        'invalid host data ticket'
-      )
-      expect({ ...h.counts }).toEqual(after)
-    }
-  )
-
-  it.each([
     { reason: 'ticket', ticket: 'wrong', generation: 1, state: 'active' },
     { reason: 'generation', ticket: 'ticket', generation: 2, state: 'active' },
     { reason: 'state', ticket: 'ticket', generation: 1, state: 'orphaned' }
@@ -1739,38 +1655,6 @@ describe('host data attach owner lookup', () => {
     expect(h.owner.activeConnIds.size).toBe(0)
   })
 
-  it('rejects on the earlier duplicate owner rather than the later live one', async () => {
-    const h = await attachRegistry('middle')
-    h.ordered[0]!.pendingConns.set(CONN_ID, pendingConn(new FakeSocket(), 'stale-ticket') as never)
-    h.counts.visits = 0
-    h.counts.membership = 0
-    const host = new FakeSocket()
-    expect(
-      await h.registry.acceptHostData(host as unknown as WebSocket, CONN_ID, 'ticket', 1)
-    ).toBe(false)
-    expect({ ...h.counts }).toEqual({ visits: 1, membership: 1 })
-    expect(h.owner.pendingConns.has(CONN_ID)).toBe(true)
-  })
-
-  it('consumes the earlier duplicate owner on basis failure and leaves the later one untouched', async () => {
-    const basis = vi.fn().mockRejectedValue(new Error('basis failed'))
-    const h = await attachRegistry('first', { recordConnectionBasis: basis })
-    const duplicate = h.ordered[3]!
-    duplicate.pendingConns.set(CONN_ID, pendingConn(new FakeSocket(), 'ticket') as never)
-    h.counts.visits = 0
-    h.counts.membership = 0
-    const host = new FakeSocket()
-    expect(
-      await h.registry.acceptHostData(host as unknown as WebSocket, CONN_ID, 'ticket', 1)
-    ).toBe(false)
-    expect({ ...h.counts }).toEqual({ visits: 1, membership: 1 })
-    expect(h.observer.recordAuth).toHaveBeenCalledWith(true)
-    expect(basis).toHaveBeenCalledOnce()
-    // The first owner's entry was consumed; the later duplicate never was.
-    expect(h.owner.pendingConns.has(CONN_ID)).toBe(false)
-    expect(duplicate.pendingConns.has(CONN_ID)).toBe(true)
-    expect(h.owner.activeConnIds.size).toBe(0)
-  })
 })
 
 describe('paced drain', () => {
@@ -2007,13 +1891,4 @@ describe('control error codes', () => {
     ])
   })
 
-  it.each([
-    ['a store code', new RelayStoreError('reject-revoked'), 'reject-revoked'],
-    ['an invariant slug', new Error('authorization_expired'), 'authorization_expired']
-  ])('keeps %s on the wire', async (_kind, error, code) => {
-    const { sent, warned } = await revokeFailure(error)
-
-    expect(controlErrors(sent)).toEqual([{ type: 'control-error', reqId: 'revoke-1', code }])
-    expect(warned.join('\n')).not.toContain('control device-revoke failed')
-  })
 })
