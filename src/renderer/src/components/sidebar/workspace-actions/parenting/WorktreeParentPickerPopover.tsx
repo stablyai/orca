@@ -185,7 +185,7 @@ export function WorktreeParentPickerPopover({
     (candidate: Worktree) => {
       if (child && isCrossStoreParent(child, candidate)) {
         onOpenChange(false)
-        // Refusals here (older Orca, a loop on the parent's machine) name what to do next.
+        // Refusals here (an older Orca on the child's machine, an unconfirmed parent) name what to do next.
         void assignCrossStoreWorktreeParent(child, candidate).catch((error: unknown) => {
           toast.error(
             translate(

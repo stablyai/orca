@@ -17,6 +17,17 @@ export type CrossStoreInferredSource = Extract<
   'env-workspace' | 'terminal-context' | 'cwd-context' | 'orchestration-context'
 >
 
+export function isCrossStoreInferredSource(
+  source: WorktreeLineageCaptureSource
+): source is CrossStoreInferredSource {
+  return (
+    source === 'env-workspace' ||
+    source === 'terminal-context' ||
+    source === 'cwd-context' ||
+    source === 'orchestration-context'
+  )
+}
+
 export type WorktreeLineageCapture = {
   source: WorktreeLineageCaptureSource
   confidence: WorktreeLineageCaptureConfidence

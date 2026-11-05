@@ -71,11 +71,19 @@ export function resolveWorktreeCreateParent(
   requestedParentWorktreeId: string | undefined,
   executionHostId: ExecutionHostId
 ): WorktreeCreateParentPick {
+  const isOnCreationHost = (candidate: Worktree): boolean => {
+    const repo = state.repos.find((owner) =>
+      repoMatchesHostIdentity(owner, candidate.repoId, candidate.hostId ?? executionHostId)
+    )
+    return Boolean(repo && getWorktreeExecutionHostId(candidate, repo) === executionHostId)
+  }
+  let picked: Worktree | undefined
   if (requestedParentWorktreeId && isWorktreeHostIdentity(requestedParentWorktreeId)) {
     const row = getIndexedAllWorktrees(selectWorktreesByRepo(state)).find(
       (candidate) => getWorktreeHostIdentity(candidate) === requestedParentWorktreeId
     )
-    if (row && !row.isArchived) {
+    // The pick outlives a destination change; a parent now on the creation host is an ordinary one.
+    if (row && !row.isArchived && !isOnCreationHost(row)) {
       return {
         crossStoreParentRow: row,
         pickedParentWorktreeId: row.id,
@@ -83,21 +91,18 @@ export function resolveWorktreeCreateParent(
         staleBeforeCreate: false
       }
     }
-    return {
-      pickedDisplayName: row ? resolveWorktreeDisplayName(row).trim() : null,
-      staleBeforeCreate: true
+    if (!row || row.isArchived) {
+      return {
+        pickedDisplayName: row ? resolveWorktreeDisplayName(row).trim() : null,
+        staleBeforeCreate: true
+      }
     }
+    picked = row
+  } else if (requestedParentWorktreeId) {
+    picked = getIndexedWorktreesById(selectWorktreesByRepo(state), requestedParentWorktreeId).find(
+      isOnCreationHost
+    )
   }
-  const picked = requestedParentWorktreeId
-    ? getIndexedWorktreesById(selectWorktreesByRepo(state), requestedParentWorktreeId).find(
-        (candidate) => {
-          const repo = state.repos.find((owner) =>
-            repoMatchesHostIdentity(owner, candidate.repoId, candidate.hostId ?? executionHostId)
-          )
-          return Boolean(repo && getWorktreeExecutionHostId(candidate, repo) === executionHostId)
-        }
-      )
-    : undefined
   const usable = picked && !picked.isArchived ? picked.id : undefined
   const pickedDisplayName = picked ? resolveWorktreeDisplayName(picked).trim() : null
   if (usable) {
