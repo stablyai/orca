@@ -7,7 +7,7 @@ import { MobileNativeChatMessageTime } from './MobileNativeChatMessageTime'
 import { MobileNativeChatRewindButton } from './MobileNativeChatRewindButton'
 import { styles } from './mobile-native-chat-message-styles'
 
-/** A chat turn's copy, time and, on a user row the chat can rewind to, desktop's order: copy, time, rewind. */
+/** A chat turn's time, then its actions together: copy, and rewind on a user row the chat can rewind to. */
 export function MobileNativeChatMessageMeta({
   message,
   fontScale,
@@ -21,17 +21,19 @@ export function MobileNativeChatMessageMeta({
   const copyText = nativeChatMessageCopyText(message)
   return (
     <View style={styles.meta}>
-      {copyText.length > 0 ? (
-        <View style={styles.metaCopy}>
-          <MobileSourceCopyButton
-            key={message.id}
-            text={copyText}
-            accessibilityLabel={t('chat.message.copyMessage', 'Copy message')}
-          />
+      <MobileNativeChatMessageTime timestamp={message.timestamp} fontScale={fontScale} />
+      {copyText.length > 0 || rewindable ? (
+        <View style={styles.metaActions}>
+          {copyText.length > 0 ? (
+            <MobileSourceCopyButton
+              key={message.id}
+              text={copyText}
+              accessibilityLabel={t('chat.message.copyMessage', 'Copy message')}
+            />
+          ) : null}
+          {rewindable ? <MobileNativeChatRewindButton itemId={message.id} /> : null}
         </View>
       ) : null}
-      <MobileNativeChatMessageTime timestamp={message.timestamp} fontScale={fontScale} />
-      {rewindable ? <MobileNativeChatRewindButton itemId={message.id} /> : null}
     </View>
   )
 }
