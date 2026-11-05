@@ -1,16 +1,7 @@
 import MarkdownIt from 'markdown-it'
 import cjkFriendly from 'markdown-it-cjk-friendly'
 import footnote from 'markdown-it-footnote'
-import type {
-  AlignType,
-  Nodes,
-  Paragraph,
-  Parent,
-  PhrasingContent,
-  Root,
-  RootContent,
-  Table
-} from 'mdast'
+import type { AlignType, Nodes, Parent, PhrasingContent, Root, RootContent, Table } from 'mdast'
 import remend from 'remend'
 import { codeNode } from './mobile-markdown-code-nodes'
 import { appendHtmlBlock, noteInlineHtml, popContainer } from './mobile-markdown-details'
@@ -249,7 +240,7 @@ function toTree(tokens: readonly Token[], source: string): Root {
           if (closed?.type === 'listItem') {
             readTaskMarker(closed)
           } else if (closed?.type === 'paragraph' && container) {
-            displayFormulas(container, closed as Paragraph)
+            displayFormulas(container, closed)
           }
         }
     }

@@ -1,16 +1,21 @@
-import type { Code, Paragraph, Parent, PhrasingContent, RootContent } from 'mdast'
+import type { Code, Parent, PhrasingContent, RootContent } from 'mdast'
 import type MarkdownIt from 'markdown-it'
 import { isDisplayMathOpener, markdownMathCloser } from '../../../src/shared/markdown-math-rules'
-import type { MobileMarkdownMathMeta } from './mobile-markdown-math'
 
 // The mdast nodes mobile-markdown-math's tokens become, shaped like desktop chat's math nodes.
 
 type Token = ReturnType<MarkdownIt['parse']>[number]
 
+/** Whether the formula's closing delimiter arrived; only a streaming block can lack one. */
+function mathClosed(token: Token): boolean {
+  const meta: unknown = token.meta
+  return !(typeof meta === 'object' && meta !== null && 'closed' in meta && meta.closed === false)
+}
+
 /** A formula as authored, delimiters included. */
 function mathSource(token: Token): string {
-  const { opener, closed } = token.meta as MobileMarkdownMathMeta
-  return `${opener}${token.content}${closed ? markdownMathCloser(opener) : ''}`
+  const closer = mathClosed(token) ? markdownMathCloser(token.markup) : ''
+  return `${token.markup}${token.content}${closer}`
 }
 
 export function inlineMathNode(token: Token): PhrasingContent {
@@ -23,7 +28,7 @@ export function inlineMathNode(token: Token): PhrasingContent {
 }
 
 export function mathBlockNode(token: Token): RootContent {
-  return (token.meta as MobileMarkdownMathMeta).closed
+  return mathClosed(token)
     ? { type: 'math', value: token.content.trim(), source: mathSource(token) }
     : // An unclosed block is still streaming in; it stays as its source, as on desktop.
       { type: 'paragraph', children: [{ type: 'text', value: mathSource(token) }] }
@@ -38,17 +43,19 @@ export function mathFenceNode(code: Code & { closed: boolean }): RootContent {
 
 /** Link labels keep formulas as their source, as desktop does. */
 export function withoutMath(nodes: PhrasingContent[]): PhrasingContent[] {
-  return nodes.map((node) =>
-    node.type === 'inlineMath'
-      ? { type: 'text', value: node.source }
-      : 'children' in node
-        ? ({ ...node, children: withoutMath(node.children) } as PhrasingContent)
-        : node
-  )
+  return nodes.map((node) => {
+    if (node.type === 'inlineMath') {
+      return { type: 'text', value: node.source }
+    }
+    if ('children' in node) {
+      node.children = withoutMath(node.children)
+    }
+    return node
+  })
 }
 
 /** A paragraph of nothing but `$$`/`\[` formulas shows each as a display formula, as on desktop. */
-export function displayFormulas(parent: Parent, paragraph: Paragraph): void {
+export function displayFormulas(parent: Parent, paragraph: Parent): void {
   const formulas = paragraph.children.filter((child) => child.type === 'inlineMath')
   const alone = paragraph.children.every(
     (child) =>

@@ -11,8 +11,6 @@ import {
 
 // Desktop chat's math grammar (src/renderer/src/components/sidebar/chat-markdown-math.ts) for markdown-it.
 
-export type MobileMarkdownMathMeta = { opener: string; closed: boolean }
-
 /** Where each delimiter sits in one inline source, so every opener's search is a lookup. */
 type InlineMathIndex = {
   escaped: Uint8Array
@@ -147,7 +145,6 @@ function inlineMath(state: StateInline, silent: boolean): boolean {
     const token = state.push('math_inline', 'math', 0)
     token.content = body
     token.markup = opener
-    token.meta = { opener, closed: true } satisfies MobileMarkdownMathMeta
   }
   state.pos = close + closer.length
   return true
@@ -230,7 +227,8 @@ function blockMath(
   token.content = body
   token.markup = opener
   token.map = [startLine, next]
-  token.meta = { opener, closed } satisfies MobileMarkdownMathMeta
+  // A block with no closer is still streaming in.
+  token.meta = { closed }
   state.line = next
   return true
 }
