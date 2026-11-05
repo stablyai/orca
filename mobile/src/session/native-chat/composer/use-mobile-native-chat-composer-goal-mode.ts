@@ -1,4 +1,4 @@
-import { createElement, useRef, useState, type ReactNode } from 'react'
+import { createElement, useState, type ReactNode } from 'react'
 import type { NativeChatSendFollowUp } from '../../../../../src/shared/native-chat/input/native-chat-follow-up-behavior'
 import { isBareStructuredAgentSessionGoalCommand } from '../../../../../src/shared/agent-session/view/structured-agent-session-composer'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
@@ -30,11 +30,10 @@ export function useMobileNativeChatComposerGoalMode(
   const threadGoal = editing ? null : (structured?.threadGoal ?? null)
   const hostSetsGoals = threadGoal?.changes === 'host'
   // Goal mode belongs to the composer surface it was entered on; another chat starts outside it.
-  // Each entry is its own, so a set that lands late never ends a later entry.
-  const [entered, setEntered] = useState<{ surface: string; entry: number } | null>(null)
-  const entries = useRef(0)
+  // Each entry is its own object, so a set that lands late never ends a later entry.
+  const [entered, setEntered] = useState<{ surface: string } | null>(null)
   const active = structured !== null && !editing && entered?.surface === sendSurfaceId
-  const enter = (): void => setEntered({ surface: sendSurfaceId, entry: (entries.current += 1) })
+  const enter = (): void => setEntered({ surface: sendSurfaceId })
   const exit = (): void => setEntered(null)
   return {
     // A queued edit has no goal mode, but still refuses /goal where the host sets goals.
@@ -56,11 +55,11 @@ export function useMobileNativeChatComposerGoalMode(
       if (!active) {
         return intent ? send(text, intent) : send(text)
       }
-      const entry = entered?.entry
+      const sentFrom = entered
       // Keep the caller's choice, such as Steer for an agent-owned /goal sent mid-turn.
       const accepted = await send(text, { ...intent, goal: true })
       if (accepted) {
-        setEntered((current) => (current?.entry === entry ? null : current))
+        setEntered((current) => (current === sentFrom ? null : current))
       }
       return accepted
     },

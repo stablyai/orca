@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
-import { ChevronDown, ChevronUp, Goal, Pause, Play, Trash2 } from 'lucide-react-native'
+import { Pressable, ScrollView, Text, View } from 'react-native'
+import { ChevronDown, Goal, Pause, Play, Trash2 } from 'lucide-react-native'
 import {
   agentSessionThreadGoalElapsedSeconds,
   agentSessionThreadGoalStatusChange
@@ -16,6 +16,7 @@ import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { COMPOSER_TUCK } from '../composer/mobile-native-chat-composer-styles'
+import { queuedMessageStyles } from './mobile-native-chat-queued-message-styles'
 import type { MobileStructuredThreadGoal } from '../../use-mobile-structured-thread-goal'
 
 type Translate = ReturnType<typeof useMobileTranslation>
@@ -56,23 +57,17 @@ export function MobileNativeChatThreadGoalStrip({
     agentSessionThreadGoalElapsedSeconds(goal, now - threadGoal.hostClockOffsetMs, runningTurn)
   )
   const statusChange = changes === 'host' ? agentSessionThreadGoalStatusChange(goal.status) : null
-  // An agent-owned clear is a message, so it waits for the agent like a composer send.
-  const clearDisabled = locked || (changes === 'agent' && threadGoal.working)
   const toggleLabel = expanded
     ? t('chat.goal.collapse', 'Hide full goal')
     : t('chat.goal.expand', 'Show full goal')
   const toggle = (): void => setExpanded(!expanded)
   const chevron = (
-    <View style={styles.chevron}>
-      {expanded ? (
-        <ChevronUp size={14} color={colors.textMuted} strokeWidth={2} />
-      ) : (
-        <ChevronDown size={14} color={colors.textMuted} strokeWidth={2} />
-      )}
+    <View style={[styles.chevron, expanded && styles.chevronOpen]}>
+      <ChevronDown size={14} color={colors.textMuted} strokeWidth={2} />
     </View>
   )
   return (
-    <View style={styles.tab} testID="thread-goal-strip">
+    <View style={[queuedMessageStyles.box, styles.tab]} testID="thread-goal-strip">
       {expanded ? (
         <>
           <View style={styles.openLine}>
@@ -119,7 +114,7 @@ export function MobileNativeChatThreadGoalStrip({
               <GoalAction
                 label={t('chat.goal.clear', 'Clear goal')}
                 destructive
-                disabled={clearDisabled}
+                disabled={threadGoal.clearLocked}
                 onPress={() => void threadGoal.change({ kind: 'clear' })}
                 icon={<Trash2 size={13} color={colors.statusRed} strokeWidth={2} />}
               />
@@ -182,18 +177,10 @@ const LINE_MIN_HEIGHT = 34
 const CHEVRON_SIZE = 32
 
 const styles = themedStyleSheet(() => ({
-  // Docked on the composer's top edge and tucked under it, like the queued-message box.
+  // The queued-message box, docked on the composer's top edge and tucked under it.
   tab: {
     marginHorizontal: spacing.xs,
-    marginBottom: -COMPOSER_TUCK,
-    paddingBottom: COMPOSER_TUCK,
-    backgroundColor: colors.bgPanel,
-    borderTopLeftRadius: radii.surface,
-    borderTopRightRadius: radii.surface,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderBottomWidth: 0,
-    borderColor: colors.composerBorder,
-    overflow: 'hidden'
+    marginBottom: -COMPOSER_TUCK
   },
   line: {
     minHeight: LINE_MIN_HEIGHT,
@@ -245,6 +232,9 @@ const styles = themedStyleSheet(() => ({
     height: CHEVRON_SIZE,
     alignItems: 'center',
     justifyContent: 'center'
+  },
+  chevronOpen: {
+    transform: [{ rotate: '180deg' }]
   },
   actions: {
     flexDirection: 'row',

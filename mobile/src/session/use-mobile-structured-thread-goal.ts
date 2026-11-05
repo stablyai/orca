@@ -32,8 +32,8 @@ export type MobileStructuredThreadGoal = {
   runningTurn: { startedAt: number | null } | null
   /** Phone clock minus host clock, for reading goal times on the host's clock. */
   hostClockOffsetMs: number
-  /** An agent-owned clear is a message the agent must take, so it waits while the chat works. */
-  working: boolean
+  /** As `locked`; an agent-owned clear is also a message the agent must take, so it waits while the chat works. */
+  clearLocked: boolean
   /** False when the change was refused or not sent; the error reaches the chat's error banner. */
   change: (change: AgentSessionThreadGoalChange) => Promise<boolean>
 }
@@ -123,15 +123,19 @@ export function useMobileStructuredThreadGoal<TCommands extends object>(
   )
   const hostClockOffsetMs = mobileStructuredHostClockOffsetMs(state.hostClock)
   const locked = (pending[sessionKey] ?? 0) > 0 || !session.enabled || !session.connected
+  // The report is rebuilt on every journal append; the strip changes only when its goal does.
+  const hasReport = report !== null
+  const goal = report?.goal ?? null
+  const clearLocked = locked || (changes === 'agent' && working)
   const threadGoal = useMemo<MobileStructuredThreadGoal | null>(
     () =>
-      report === null
-        ? null
-        : {
+      hasReport
+        ? {
             sessionKey,
-            goal: report.goal,
+            goal,
             changes,
             locked,
+            clearLocked,
             runningTurn:
               turnId === null
                 ? null
@@ -140,18 +144,19 @@ export function useMobileStructuredThreadGoal<TCommands extends object>(
                       workingStartedAt === null ? null : workingStartedAt - hostClockOffsetMs
                   },
             hostClockOffsetMs,
-            working,
             change
-          },
+          }
+        : null,
     [
       change,
       changes,
+      clearLocked,
+      goal,
+      hasReport,
       hostClockOffsetMs,
       locked,
-      report,
       sessionKey,
       turnId,
-      working,
       workingStartedAt
     ]
   )
