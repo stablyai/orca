@@ -50,12 +50,16 @@ function paneOwners(model: WorkspaceLayoutModel): PaneOwner[] {
 
 function checkWorkspace(
   model: WorkspaceLayoutModel,
-  workspace: WorkspaceLayout
+  workspace: WorkspaceLayout,
+  key: string
 ): WorkspaceLayoutViolation[] {
   const violations: WorkspaceLayoutViolation[] = []
   const breach = (rule: WorkspaceLayoutViolation['rule'], ids: string[], detail: string) =>
     violations.push({ rule, hostId: model.hostId, worktreeId: workspace.worktreeId, ids, detail })
   const tabIds = new Set(workspace.tabs.map((tab) => tab.id))
+  for (const page of model.records.clientHostedBrowserPagesByWorkspace?.[key] ?? []) {
+    tabIds.add(page.browserPageId)
+  }
   const groupsByTab = new Map<string, string[]>()
   for (const group of workspace.groups) {
     if (group.tabOrder.length === 0) {
@@ -144,7 +148,9 @@ export function checkWorkspaceLayoutModelRules(
     ...checkPaneOwners(paneOwnerGroups(models, paneOwners)),
     ...models.flatMap(checkTabIds),
     ...models.flatMap((model) =>
-      Object.values(model.workspaces).flatMap((workspace) => checkWorkspace(model, workspace))
+      Object.entries(model.workspaces).flatMap(([key, workspace]) =>
+        checkWorkspace(model, workspace, key)
+      )
     )
   ]
   for (const model of models) {

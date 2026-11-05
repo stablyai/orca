@@ -93,7 +93,7 @@ export function createReleasedStopNoteRig(port: ScenarioPort, ref: string) {
     host = new StructuredAgentSessionHost({
       agents: NO_STRUCTURED_AGENTS,
       store,
-      journalDatabase: openTestJournalHostDatabase(root),
+      journalDatabase: await openTestJournalHostDatabase(root),
       claimKeyId: 'key-1',
       logger: createStructuredAgentSessionLogger(),
       now: () => NOW,

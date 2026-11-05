@@ -133,7 +133,7 @@ it('detaches a mounted provider History row after clear without losing the nativ
     }
     await seedTestAgentSessionRecordStore(directory, { records: [record] })
     const store = await openTestAgentSessionRecordStore(directory)
-    const database = openTestJournalHostDatabase(directory)
+    const database = await openTestJournalHostDatabase(directory)
     const journal = new AgentSessionJournal({
       database,
       identity: {

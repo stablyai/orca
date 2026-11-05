@@ -1,6 +1,7 @@
 // Take only order/groups from main; preserve written rows and terminal/exit facts that may be newer than layout bindings.
 
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/runtime-session-contracts'
+import { mergeTerminalOrphanGroupLayout } from '../terminal-orphan-topology'
 import type { MainSessionTabRows } from './main-session-tab-rows'
 import { orderIdOf, placeInMainGroups, withStrayIn } from './main-session-tab-group-placement'
 
@@ -9,7 +10,20 @@ export function withMainTabOrder(
   written: RuntimeMobileSessionTabsSnapshot,
   projected: MainSessionTabRows
 ): RuntimeMobileSessionTabsSnapshot {
-  const mainGroups = projected.tabGroups ?? []
+  const represented = new Set((projected.tabGroups ?? []).flatMap((group) => group.tabOrder))
+  const external = new Set(
+    written.tabs
+      .filter(
+        (row) => row.type !== 'terminal' && row.type !== 'agent-session' && !represented.has(row.id)
+      )
+      .map((row) => row.id)
+  )
+  const mainGroupIds = new Set((projected.tabGroups ?? []).map((group) => group.id))
+  const externalGroups = (written.tabGroups ?? [])
+    .filter((group) => !mainGroupIds.has(group.id))
+    .map((group) => ({ ...group, tabOrder: group.tabOrder.filter((id) => external.has(id)) }))
+    .filter((group) => group.tabOrder.length > 0)
+  const mainGroups = [...(projected.tabGroups ?? []), ...externalGroups]
   if (mainGroups.length === 0 || written.tabs.length === 0) {
     return written
   }
@@ -62,6 +76,16 @@ export function withMainTabOrder(
     )
     .map(({ row }) => row)
   const activeGroupId = groups[activeIndex]?.id ?? null
+  const tabGroupLayout =
+    externalGroups.length > 0
+      ? mergeTerminalOrphanGroupLayout({
+          existingLayout: written.tabGroupLayout,
+          existingGroupIds: (written.tabGroups ?? []).map((group) => group.id),
+          proposedLayout: projected.tabGroupLayout,
+          proposedGroupIds: (projected.tabGroups ?? []).map((group) => group.id),
+          mergedGroupIds: tabGroups.map((group) => group.id)
+        })
+      : projected.tabGroupLayout
   const { tabGroupLayout: _writtenLayout, ...rest } = written
   return {
     ...rest,
@@ -69,7 +93,7 @@ export function withMainTabOrder(
       ? activeGroupId
       : (tabGroups[0]?.id ?? written.activeGroupId),
     tabGroups,
-    ...(projected.tabGroupLayout ? { tabGroupLayout: projected.tabGroupLayout } : {}),
+    ...(tabGroupLayout ? { tabGroupLayout } : {}),
     tabs
   }
 }

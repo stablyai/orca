@@ -2,6 +2,7 @@
 import { OrcaRuntimeWithRefuseUnattributedMobileSessionTabClose } from './refuse-unattributed-mobile-session-tab-close'
 import type {
   RuntimeMobileSessionTerminalTab,
+  RuntimeMobileSessionRetiredTerminalSurface,
   RuntimeSessionTabCloseReason
 } from '../../../../shared/runtime-types'
 import { startedMainTerminalSurfaces } from '../../terminal/surface/main-terminal-surfaces'
@@ -9,14 +10,23 @@ import {
   closeInMainLayout,
   type MainLayoutClose
 } from '../../session-tabs/main-layout-close-command'
-import type { ExplicitCloseStop } from '../../session-tabs/explicit-terminal-close-pty-stops'
+import type {
+  ExplicitCloseScope,
+  ExplicitCloseStop,
+  ExplicitCloseTarget
+} from '../../session-tabs/explicit-terminal-close-pty-stops'
 import { retireTerminalSurfacesFromSnapshot } from '../../mobile-session-terminal-retirement'
 
 export abstract class OrcaRuntimeWithCloseMobileRowInMainLayout extends OrcaRuntimeWithRefuseUnattributedMobileSessionTabClose {
   protected abstract stopExplicitlyClosedTabPtys(
-    ptyIds: readonly string[],
+    targets: readonly ExplicitCloseTarget[],
     addressedPtyId: string
   ): Promise<ExplicitCloseStop>
+
+  protected abstract captureExplicitCloseTargets(
+    ptyIds: readonly string[],
+    scope: ExplicitCloseScope
+  ): ExplicitCloseTarget[]
 
   /** Close parent::leaf as a pane or parent as a tab; null falls back for workspaces/rows main does not own. */
   protected async closeMobileRowInMainLayout(
@@ -30,13 +40,28 @@ export abstract class OrcaRuntimeWithCloseMobileRowInMainLayout extends OrcaRunt
     }
   ): Promise<MainLayoutClose | null> {
     const surfaces = startedMainTerminalSurfaces(this)
-    if (!surfaces?.ownsWorkspace(worktreeId)) {
+    if (!surfaces?.ownsPlacement(worktreeId)) {
       return null
     }
+    const acknowledge = this.captureTerminalTabRetirement(worktreeId, row.parentTabId)
+    const rows = (this.mobileSessionTabsByWorktree.get(worktreeId)?.tabs ?? []).flatMap(
+      (candidate) =>
+        candidate.type === 'terminal' &&
+        candidate.parentTabId === row.parentTabId &&
+        (row.id !== tabId || candidate.leafId === row.leafId)
+          ? [
+              {
+                row: candidate,
+                proof: this.getMobileSessionTerminalRetirementProof(worktreeId, candidate)
+              }
+            ]
+          : []
+    )
     const close = await closeInMainLayout(
       {
         panesOfTab: (id) => surfaces.panesOfTab(id),
         applyLayoutCommand: (command) => this.applyLayoutCommand(command),
+        capture: (ptyIds, scope) => this.captureExplicitCloseTargets(ptyIds, scope),
         stop: (ptyIds, addressed) => this.stopExplicitlyClosedTabPtys(ptyIds, addressed),
         remoteSessionIdOf: (id) =>
           this.getWorkspaceSessionForWorktree(worktreeId)?.remoteSessionIdsByTabId?.[id]
@@ -53,29 +78,27 @@ export abstract class OrcaRuntimeWithCloseMobileRowInMainLayout extends OrcaRunt
           (options.reason === undefined || options.reason === 'user')
       }
     )
-    if (close) {
-      this.retireMainClosedRows(worktreeId, row.parentTabId, close.closesTab ? null : row.leafId)
+    if (close?.outcome === 'closed' && acknowledge().matches) {
+      this.retireMainClosedRows(worktreeId, rows)
     }
     return close
   }
 
-  /** Retire rows immediately: window snapshots and exiting SSH registrations lag main's close. leafId=null retires the tab. Interim until main merges layout per commit (L260). */
-  private retireMainClosedRows(worktreeId: string, tabId: string, leafId: string | null): void {
+  private retireMainClosedRows(
+    worktreeId: string,
+    rows: readonly {
+      row: RuntimeMobileSessionTerminalTab
+      proof: RuntimeMobileSessionRetiredTerminalSurface | null
+    }[]
+  ): void {
     let snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
-    const rows = (snapshot?.tabs ?? []).filter(
-      (candidate): candidate is RuntimeMobileSessionTerminalTab =>
-        candidate.type === 'terminal' &&
-        candidate.parentTabId === tabId &&
-        (leafId === null || candidate.leafId === leafId)
-    )
-    for (const row of rows) {
-      const proof = snapshot && this.getMobileSessionTerminalRetirementProof(worktreeId, row)
+    for (const { row, proof } of rows) {
       const retired =
         snapshot &&
         retireTerminalSurfacesFromSnapshot({
           snapshot,
           ptyId: row.ptyId ?? row.parentLayout?.ptyIdsByLeafId?.[row.leafId] ?? '',
-          exactSurfaces: [{ parentTabId: tabId, leafId: row.leafId }],
+          exactSurfaces: [{ parentTabId: row.parentTabId, leafId: row.leafId }],
           exactOnly: true,
           ...(proof ? { retirementProofs: [proof] } : {})
         })

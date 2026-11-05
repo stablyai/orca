@@ -1,3 +1,4 @@
+import { runTargetOf } from '../../shared/workspace-surfaces/surface-allocation'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -53,7 +54,9 @@ afterEach(() => {
 })
 
 /** Use real store/runtime with renderer stub; lateProviderExit lets the kill reply overtake the provider exit and force a synthetic one. */
-function createHarness(opts: { lateProviderExit?: boolean; folder?: boolean } = {}) {
+function createHarness(
+  opts: { lateProviderExit?: boolean; folder?: boolean; canonical?: boolean; register?: false } = {}
+) {
   const directory = mkdtempSync(join(tmpdir(), 'orca-intentional-stop-'))
   directories.push(directory)
   const store = new Store({
@@ -75,12 +78,17 @@ function createHarness(opts: { lateProviderExit?: boolean; folder?: boolean } = 
   })
   store.setWorkspaceSession(advanceTerminalTopologyRevision(makeSession(), WORKTREE_ID))
   store.flushOrThrow()
+  if (opts.canonical) {
+    store.initializeWorkspaceSurfacesSync()
+  }
   const runtime = new OrcaRuntimeService(store)
-  runtime.registerPty(PTY_ID, WORKTREE_ID, null, {
-    tabId: TAB_ID,
-    leafId: LEAF_ID,
-    incarnationId: INCARNATION_ID
-  })
+  if (opts.register !== false) {
+    runtime.registerPty(PTY_ID, WORKTREE_ID, null, {
+      tabId: TAB_ID,
+      leafId: LEAF_ID,
+      incarnationId: INCARNATION_ID
+    })
+  }
   ptyOwnership.set(PTY_ID, 'local')
   ptyIncarnationById.set(PTY_ID, INCARNATION_ID)
   let emitProviderExit: Parameters<IPtyProvider['onExit']>[0] | undefined
@@ -108,7 +116,7 @@ function createHarness(opts: { lateProviderExit?: boolean; folder?: boolean } = 
       if (opts.lateProviderExit) {
         return false
       }
-      runtime.onPtyExit(id, 0, INCARNATION_ID, { providerExitObserved: true })
+      await runtime.onPtyExit(id, 0, INCARNATION_ID, { providerExitObserved: true })
       session.sendPtyExitToRenderer({ id, code: 0, incarnationId: INCARNATION_ID })
       return true
     },
@@ -137,7 +145,230 @@ function createHarness(opts: { lateProviderExit?: boolean; folder?: boolean } = 
   }
 }
 
+async function bindCanonicalReplacement(store: Store, ptyId = REPLACEMENT_PTY_ID): Promise<void> {
+  expect(
+    await store.applyLayoutCommand({
+      type: 'restartPane',
+      workspace: WORKTREE_ID,
+      paneKey: makePaneKey(TAB_ID, LEAF_ID)
+    })
+  ).toMatchObject({ ok: true })
+  const surface = store.readWorkspaceSurfaces().find((row) => row.hostTabId === TAB_ID)!
+  const target = runTargetOf(surface, LEAF_ID)!
+  await store.executeWorkspaceSurfaceCommand({
+    type: 'begin-run',
+    hostId: 'local',
+    target,
+    resourceId: ptyId
+  })
+  expect(
+    await store.persistPtyBinding({
+      surfaceRunTarget: target,
+      worktreeId: WORKTREE_ID,
+      tabId: TAB_ID,
+      leafId: LEAF_ID,
+      ptyId,
+      incarnationId: REPLACEMENT_INCARNATION_ID,
+      origin: 'spawn'
+    })
+  ).toBe(true)
+}
+
 describe('intentional stops keep the pane through the exit', () => {
+  it('keeps a canonical pane handle usable before a renderer graph is attached', async () => {
+    const harness = createHarness({ canonical: true, folder: true })
+    harness.runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      listProcesses: async () => [
+        { id: PTY_ID, cwd: WORKTREE_PATH, title: 'sh', incarnationId: INCARNATION_ID }
+      ]
+    })
+    harness.runtime.onPtyData(PTY_ID, 'ordinary output\r\n', 1)
+    const listed = await harness.runtime.listTerminals(`id:${WORKTREE_ID}`)
+    const terminal = listed.terminals.find((item) => item.ptyId === PTY_ID)
+    expect(terminal).toMatchObject({ tabId: TAB_ID, leafId: LEAF_ID, orphaned: false })
+    expect(await harness.runtime.showTerminal(terminal!.handle)).toMatchObject({ ptyId: PTY_ID })
+    expect(await harness.runtime.readTerminal(terminal!.handle)).toMatchObject({
+      status: 'running'
+    })
+  })
+
+  it('releases a canonically owned slept process without removing its pane or a later replacement', async () => {
+    const harness = createHarness({ canonical: true, folder: true })
+    const settle = harness.runtime.intentionalPtyStops.mark(PTY_ID, 'reversible', INCARNATION_ID)
+    try {
+      await harness.runtime.onPtyExit(PTY_ID, -1, INCARNATION_ID, {
+        cause: { kind: 'unknown', reason: 'stop_unverified' }
+      })
+      expect(harness.boundPtyId()).toBe(PTY_ID)
+      await harness.runtime.onPtyExit(PTY_ID, 0, INCARNATION_ID, { providerExitObserved: true })
+      expect(harness.tabIds()).toEqual([TAB_ID])
+      expect(harness.boundPtyId()).toBeNull()
+      await bindCanonicalReplacement(harness.store)
+      await harness.runtime.onPtyExit(PTY_ID, 0, INCARNATION_ID, { providerExitObserved: true })
+      expect(harness.boundPtyId()).toBe(REPLACEMENT_PTY_ID)
+      expect(harness.tabIds()).toEqual([TAB_ID])
+    } finally {
+      settle(true)
+    }
+  })
+
+  it('releases a canonical sleeping binding through acknowledged shutdown without a provider exit', async () => {
+    const harness = createHarness({ canonical: true, folder: true, lateProviderExit: true })
+    await stopRendererOwnedPty(harness.deps, { id: PTY_ID, keepHistory: true })
+    expect(harness.boundPtyId()).toBeNull()
+    expect(harness.tabIds()).toEqual([TAB_ID])
+    expect(harness.runtime.getPtyLivenessVerdict(PTY_ID)?.status).toBe('exited')
+  })
+
+  it.each([true, false])(
+    'keeps the old exit synchronous and its sleep pending through exact binding release (no event: %s)',
+    async (lateProviderExit) => {
+      const harness = createHarness({ canonical: true, folder: true, lateProviderExit })
+      if (!lateProviderExit) {
+        harness.deps.shutdownProviderAndDetectExit = async () => {
+          harness.emitProviderExit(INCARNATION_ID)
+          return true
+        }
+      }
+      const entered = Promise.withResolvers<void>()
+      const release = Promise.withResolvers<void>()
+      const retire = harness.store.retirePtyBinding.bind(harness.store)
+      vi.spyOn(harness.store, 'retirePtyBinding').mockImplementation(async (...args) => {
+        entered.resolve()
+        await release.promise
+        return retire(...args)
+      })
+      const oldExit = Promise.withResolvers<void>()
+      const stopWatchingOld = harness.runtime.subscribeToPtyExit(PTY_ID, oldExit.resolve)
+      let stopCompleted = false
+      const stopped = stopRendererOwnedPty(harness.deps, { id: PTY_ID, keepHistory: true }).then(
+        () => {
+          stopCompleted = true
+        }
+      )
+      await entered.promise
+      await oldExit.promise
+      expect(harness.runtime.getPtyLivenessVerdict(PTY_ID)?.status).toBe('exited')
+      expect(stopCompleted).toBe(false)
+      stopWatchingOld()
+      await bindCanonicalReplacement(harness.store, PTY_ID)
+      harness.runtime.registerPty(PTY_ID, WORKTREE_ID, null, {
+        tabId: TAB_ID,
+        leafId: LEAF_ID,
+        incarnationId: REPLACEMENT_INCARNATION_ID
+      })
+      let successorExited = false
+      const stopWatchingSuccessor = harness.runtime.subscribeToPtyExit(PTY_ID, () => {
+        successorExited = true
+      })
+      release.resolve()
+      await stopped
+      expect(successorExited).toBe(false)
+      stopWatchingSuccessor()
+      expect(harness.boundPtyId()).toBe(PTY_ID)
+      expect(harness.runtime.getPtyLivenessVerdict(PTY_ID)?.status).not.toBe('exited')
+      expect(harness.tabIds()).toEqual([TAB_ID])
+    }
+  )
+
+  it('ends a restored pre-registration exit cohort without touching its later registered successor', async () => {
+    const harness = createHarness({ canonical: true, folder: true, register: false })
+    await harness.runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
+    harness.runtime.beginPtyRegistration(PTY_ID, INCARNATION_ID)
+    const owner = harness.runtime.intentionalPtyStops.mark(PTY_ID, 'reversible', INCARNATION_ID)
+    const entered = Promise.withResolvers<void>()
+    const release = Promise.withResolvers<void>()
+    const retire = harness.store.retirePtyBinding.bind(harness.store)
+    vi.spyOn(harness.store, 'retirePtyBinding').mockImplementation(async (...args) => {
+      entered.resolve()
+      await release.promise
+      return retire(...args)
+    })
+    let oldEnded = false
+    harness.runtime.subscribeToPtyExit(PTY_ID, () => {
+      oldEnded = true
+    })
+    const exit = harness.runtime.onPtyExit(PTY_ID, 0, INCARNATION_ID, {
+      providerExitObserved: true
+    })
+    await entered.promise
+    expect(oldEnded).toBe(true)
+    await bindCanonicalReplacement(harness.store, PTY_ID)
+    harness.runtime.beginPtyRegistration(PTY_ID, REPLACEMENT_INCARNATION_ID)
+    harness.runtime.registerPty(PTY_ID, WORKTREE_ID, null, {
+      tabId: TAB_ID,
+      leafId: LEAF_ID,
+      incarnationId: REPLACEMENT_INCARNATION_ID
+    })
+    let successorEnded = false
+    const unsubscribe = harness.runtime.subscribeToPtyExit(PTY_ID, () => {
+      successorEnded = true
+    })
+    release.resolve()
+    await exit
+    await owner.joinRelease()
+    owner(true)
+    expect(harness.boundPtyId()).toBe(PTY_ID)
+    expect(harness.runtime.getPtyLivenessVerdict(PTY_ID)?.status).not.toBe('exited')
+    expect(successorEnded).toBe(false)
+    unsubscribe()
+  })
+
+  it('does not hold an observed exit or its owner open when binding release fails', async () => {
+    const harness = createHarness({ canonical: true, folder: true })
+    harness.deps.shutdownProviderAndDetectExit = async () => {
+      harness.emitProviderExit(INCARNATION_ID)
+      return true
+    }
+    vi.spyOn(harness.store, 'retirePtyBinding').mockRejectedValue(
+      new Error('fixture write refused')
+    )
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      await stopRendererOwnedPty(harness.deps, { id: PTY_ID, keepHistory: true })
+      expect(harness.runtime.getPtyLivenessVerdict(PTY_ID)?.status).toBe('exited')
+      expect(harness.boundPtyId()).toBe(PTY_ID)
+    } finally {
+      logged.mockRestore()
+    }
+  })
+
+  it('finishes the old exit before a listener registers a same-id successor', async () => {
+    const harness = createHarness()
+    const current = await harness.runtime.listTerminals(`id:${WORKTREE_ID}`)
+    const old = current.terminals.find((row) => row.ptyId === PTY_ID)!
+    const waiting = harness.runtime.waitForTerminal(old.handle, {
+      condition: 'exit',
+      timeoutMs: 1_000
+    })
+    let successorExit = false
+    let unsubscribe = () => {}
+    harness.runtime.subscribeToPtyExit(PTY_ID, () => {
+      harness.runtime.registerPty(PTY_ID, WORKTREE_ID, null, {
+        tabId: TAB_ID,
+        leafId: LEAF_ID,
+        incarnationId: REPLACEMENT_INCARNATION_ID
+      })
+      unsubscribe = harness.runtime.subscribeToPtyExit(PTY_ID, () => {
+        successorExit = true
+      })
+    })
+    await harness.runtime.onPtyExit(PTY_ID, 7, INCARNATION_ID, { providerExitObserved: true })
+    expect(await waiting).toMatchObject({ status: 'exited', exitCode: 7 })
+    const successor = (await harness.runtime.listTerminals(`id:${WORKTREE_ID}`)).terminals.find(
+      (row) => row.ptyId === PTY_ID
+    )!
+    expect(await harness.runtime.readTerminal(successor.handle)).toMatchObject({
+      status: 'running'
+    })
+    expect(harness.runtime.getPtyLivenessVerdict(PTY_ID)?.status).not.toBe('exited')
+    expect(successorExit).toBe(false)
+    unsubscribe()
+  })
+
   it('retires the pane when an ordinary close ends the process', async () => {
     const harness = createHarness()
 

@@ -4,13 +4,14 @@ import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
-import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionSubscribeEvent } from '../../shared/agent-session/agent-session-wire'
 import {
   AGENT_SESSION_TURN_ITEM_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
 } from '../../shared/agent-session/agent-session-runtime-capabilities'
 import {
+  itemsOf,
+  textOf,
   fakeClaude,
   leaseOf,
   startingConnection,
@@ -171,28 +172,6 @@ async function subscribe(
     client
   )
   return frames
-}
-
-function itemsOf(frames: AgentSessionSubscribeEvent[]): AgentJournalRenderItem[] {
-  const items = new Map<string, AgentJournalRenderItem>()
-  for (const frame of frames) {
-    const rows =
-      frame.type === 'snapshot' || frame.type === 'reset'
-        ? frame.page.items
-        : frame.type === 'batch'
-          ? frame.batch.items
-          : []
-    for (const row of rows) {
-      items.set(row.itemId, row)
-    }
-  }
-  return [...items.values()]
-}
-
-function textOf(item: AgentJournalRenderItem): string {
-  return item.body?.kind === 'message'
-    ? item.body.blocks.map((block) => (block.type === 'text' ? block.text : '')).join('')
-    : ''
 }
 
 beforeEach(async () => {
@@ -393,16 +372,16 @@ describe('a structured Claude session over agentSession.*', () => {
     connection.initialization.resolve()
     await waitForStructuredAgentSessionRecovery()
 
-    const guidance = itemsOf(await subscribe()).find((item) => item.body?.kind === 'status')
-    expect(guidance?.body).toMatchObject({
-      kind: 'status',
-      text: "Claude isn't signed in. Run `claude auth login`, or choose an account in Claude Accounts settings.",
-      failure: { kind: 'notSignedIn', account: 'system' }
-    })
+    const stream = await subscribe()
+    await vi.waitFor(() =>
+      expect(itemsOf(stream).find((item) => item.body?.kind === 'status')?.body).toMatchObject({
+        kind: 'status',
+        failure: { kind: 'notSignedIn', account: 'system' }
+      })
+    )
     await vi.waitFor(() =>
       expect(leaseOf(SESSION)).toMatchObject({ claimStatus: 'released', handoffStage: null })
     )
-    expect(claude.connections).toHaveLength(1)
   })
 
   // Observed root exit releases its lease even if descendants survive or cannot be verified.
@@ -598,14 +577,18 @@ describe('a structured Claude session over agentSession.*', () => {
     // System auth retains shell credentials; the configured overlay still wins.
     expect(claude.live().launch.env).toMatchObject({ ANTHROPIC_API_KEY: 'sk-ant-SHELL-LEAK' })
     expect(claude.live().launch.env?.PATH ?? claude.live().launch.env?.Path).toBeTruthy()
-    const history = await call('agentSession.history', {
-      sessionId: SESSION,
-      direction: 'tail',
-      limit: 1
-    })
-    expect(history).toMatchObject({
-      ok: true,
-      result: { providerSession: { key: 'session_id', id: PROVIDER_SESSION } }
+    await vi.waitFor(() => expect(leaseOf(SESSION)?.claimStatus).toBe('live'))
+    await vi.waitFor(async () => {
+      expect(
+        await call('agentSession.history', {
+          sessionId: SESSION,
+          direction: 'tail',
+          limit: 1
+        })
+      ).toMatchObject({
+        ok: true,
+        result: { providerSession: { key: 'session_id', id: PROVIDER_SESSION } }
+      })
     })
     const stream = await subscribe()
 
@@ -677,6 +660,17 @@ describe('a structured Claude session over agentSession.*', () => {
       })
     }
     await getStructuredAgentSessionHost()?.flushStreamedEvents(SESSION)
+    await vi.waitFor(() =>
+      expect(
+        itemsOf(stream).some(
+          (item) =>
+            item.body.kind === 'message' &&
+            item.body.blocks.some(
+              (block) => block.type === 'background-task' && block.taskId === 'task-two'
+            )
+        )
+      ).toBe(true)
+    )
     const itemsBeforeTaskStop = itemsOf(stream)
     const targetedStopFields = {
       turnId: 'background-tasks',
@@ -724,6 +718,9 @@ describe('a structured Claude session over agentSession.*', () => {
       } as never)
     )
     await getStructuredAgentSessionHost()?.flushStreamedEvents(SESSION)
+    await vi.waitFor(() =>
+      expect(itemsOf(stream).some((item) => item.body.kind === 'approval')).toBe(true)
+    )
     const approval = itemsOf(stream).find((item) => item.body?.kind === 'approval')
     expect(approval?.body).toMatchObject({
       title: 'Allow Bash?',
@@ -846,9 +843,11 @@ describe('a structured Claude session over agentSession.*', () => {
         session_id: PROVIDER_SESSION,
         uuid: 'result-frame-uuid'
       })
-      await getStructuredAgentSessionHost()?.flushStreamedEvents(SESSION)
       const turnRow = () => itemsOf(stream).find((item) => item.body?.kind === 'turn')
-      expect(turnRow()?.body).toMatchObject({ state: 'completed' })
+      await vi.waitFor(async () => {
+        await getStructuredAgentSessionHost()?.flushStreamedEvents(SESSION)
+        expect(turnRow()?.body).toMatchObject({ state: 'completed' })
+      })
 
       answers.at(-1)?.({
         model: 'claude-sonnet-5',

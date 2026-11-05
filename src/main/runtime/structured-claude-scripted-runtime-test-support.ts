@@ -1,3 +1,4 @@
+import '../native-chat/agent-session-journal/journal-host-database-test-support'
 // Use production runtime/adapter/store/host with only the Claude CLI process replaced.
 
 import {

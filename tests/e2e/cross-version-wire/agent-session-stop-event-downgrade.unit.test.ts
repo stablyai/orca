@@ -1,3 +1,4 @@
+import { mutateTestJournalFixture } from '../../../src/main/native-chat/agent-session-journal/journal-drained-fixture-test-support'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -99,7 +100,7 @@ test.each(['v1.4.219', 'v1.4.220', WRITABLE_BASELINE_REF])(
         fence: 1,
         turnScope: { kind: 'turn', turnItemId: agentJournalItemKey(turn) }
       })
-      const since = journal.readSince({ epoch: journal.epoch, sequence: 0 })
+      const since = await journal.readSince({ epoch: journal.epoch, sequence: 0 })
       if (!since.ok) {
         throw new Error(since.reset)
       }
@@ -169,7 +170,7 @@ test("an older build keeps every row around a Stop's event, a Resume and a reope
     await append(1, 'after the Stop')
     // As stored: a read raises each row's `v` to the newest this build reads, which the older
     // build does not.
-    const rows: JournalRow[] = storedRows(directory).map((json) => JSON.parse(json))
+    const rows: JournalRow[] = (await storedRows(directory)).map((json) => JSON.parse(json))
 
     // The older build, after a downgrade, replays the same rows from its own database.
     const checkout = await materializeReleaseCheckout(BASELINE_REF)
@@ -254,10 +255,10 @@ type OlderOpener = {
   closeAll: () => Promise<void>
 }
 
-function storedRows(directory: string): string[] {
+async function storedRows(directory: string): Promise<string[]> {
   const db = new Database(journalDatabasePath(directory), { readonly: true })
   try {
-    return liveTestJournalRows(db, IDENTITY.sessionId).map((row) => row.rowJson)
+    return (await liveTestJournalRows(db, IDENTITY.sessionId)).map((row) => row.rowJson)
   } finally {
     db.close()
   }
@@ -277,7 +278,7 @@ test("an older build opens this build's journal writable and appends to it; the 
     const wrote = { cursor: journal.cursor(), items: itemIds(journal) }
     expect(journal.queuedMessages.pauses().map((pause) => pause.reason)).toEqual(['stopped'])
     await journals.closeAll()
-    const rowsBefore = storedRows(directory)
+    const rowsBefore = await storedRows(directory)
 
     const checkout = await materializeReleaseCheckout(WRITABLE_BASELINE_REF)
     const support = await importReleaseCheckoutModule(
@@ -294,7 +295,7 @@ test("an older build opens this build's journal writable and appends to it; the 
     } finally {
       await older.closeAll()
     }
-    const rowsAfter = storedRows(directory)
+    const rowsAfter = await storedRows(directory)
     expect(rowsAfter.slice(0, rowsBefore.length)).toEqual(rowsBefore)
     expect(rowsAfter).toHaveLength(rowsBefore.length + 1)
 
@@ -314,7 +315,8 @@ test("an older build opens this build's journal writable and appends to it; the 
 test("this build keeps a newer build's row kind and refuses the load; a build before it deletes it", async () => {
   const directory = mkdtempSync(join(tmpdir(), 'orca-newer-kind-downgrade-'))
   const journals = createTrackedJournalOpener({ legacyInputs: true })
-  const newerKinds = () => storedRows(directory).filter((row) => row.includes('"future-mark"'))
+  const newerKinds = async () =>
+    (await storedRows(directory)).filter((row) => row.includes('"future-mark"'))
   try {
     const scope = { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     const journal = await journals.open({ identity: IDENTITY, stateDirectory: directory })
@@ -331,21 +333,18 @@ test("this build keeps a newer build's row kind and refuses the load; a build be
       payload: { said: 'by a newer build' }
     })
     await journals.closeAll()
-    insertTestJournalRowJson(
-      openTestJournalHostDatabase(directory).db,
-      IDENTITY.sessionId,
-      at,
-      newer
+    await mutateTestJournalFixture(await openTestJournalHostDatabase(directory), (db) =>
+      insertTestJournalRowJson(db, IDENTITY.sessionId, at, newer)
     )
     await closeTestJournalHostDatabase(directory)
-    const rowsBefore = storedRows(directory)
+    const rowsBefore = await storedRows(directory)
 
     await expect(
       journals.open({ identity: IDENTITY, stateDirectory: directory })
     ).rejects.toMatchObject(SAVED_BY_NEWER_ORCA)
     await journals.closeAll()
-    expect(storedRows(directory)).toEqual(rowsBefore)
-    expect(newerKinds()).toEqual([newer])
+    expect(await storedRows(directory)).toEqual(rowsBefore)
+    expect(await newerKinds()).toEqual([newer])
 
     const checkout = await materializeReleaseCheckout(WRITABLE_BASELINE_REF)
     const support = await importReleaseCheckoutModule(
@@ -358,7 +357,7 @@ test("this build keeps a newer build's row kind and refuses the load; a build be
     } finally {
       await older.closeAll()
     }
-    expect(newerKinds()).toEqual([])
+    expect(await newerKinds()).toEqual([])
   } finally {
     await journals.closeAll()
     rmSync(directory, { recursive: true, force: true })

@@ -1,3 +1,4 @@
+import { mutateTestJournalFixture } from '../../../src/main/native-chat/agent-session-journal/journal-drained-fixture-test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -17,7 +18,7 @@ import { structuredAgentSessionLiveFence } from '../../../src/main/native-chat/a
 import { upgradeStoredStructuredAgentSessionOwnerExitEvidence } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-lease-release'
 import { turnVerdictFromDeathEvidence } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-stale-turn-verdict'
 import { releaseStoredAgentSessionOwnerAfterSurfaceClose } from '../../../src/main/runtime/agent-session/ownership/agent-session-surface-release-transition'
-import { loadAgentSessionStoreRows } from '../../../src/main/runtime/agent-session/records/agent-session-record-rows'
+import { loadAgentSessionStoreRowsAsync } from '../../../src/main/runtime/agent-session/records/agent-session-record-rows'
 import {
   openTestAgentSessionRecordStore,
   seedTestAgentSessionRecordStore
@@ -106,10 +107,12 @@ test(`${RELEASE_REF} keeps a stopped chat readable through restart, resume and e
       lastProvenAliveAt: 35_000,
       runtimeEnd: 'quit'
     })
-    const db = openTestJournalHostDatabase(directory).db
-    const saved = db
-      .prepare('SELECT record_json FROM agent_session_records WHERE session_id = ?')
-      .get(sessionId)
+    const database = await openTestJournalHostDatabase(directory)
+    const saved = await database.read((read) =>
+      read
+        .prepare('SELECT record_json FROM agent_session_records WHERE session_id = ?')
+        .get(sessionId)
+    )
     if (typeof saved?.record_json !== 'string') {
       throw new Error('the current store must save the chat')
     }
@@ -133,7 +136,9 @@ test(`${RELEASE_REF} keeps a stopped chat readable through restart, resume and e
       importReleaseCheckoutModule(checkout, 'src/main/runtime/agent-session-store-state.ts')
     ])
     expect(exported(records, 'isPersistedAgentSessionRecord')(raw)).toBe(true)
-    const loaded = exported(rows, 'loadAgentSessionStoreRows')(db)
+    const loaded = await mutateTestJournalFixture(database, (db) =>
+      exported(rows, 'loadAgentSessionStoreRows')(db)
+    )
     expect(storeMaps(loaded).unreadableRecords.size).toBe(0)
     const old = oldRecord(storeMaps(loaded).records.get(sessionId))
     expect(
@@ -161,17 +166,18 @@ test(`${RELEASE_REF} keeps a stopped chat readable through restart, resume and e
       runtimeFence: 8,
       deathEvidence: raw.lease.deathEvidence
     })
-    const writeOld = (record: unknown) => {
-      const before = exported(rows, 'loadAgentSessionStoreRows')(db)
-      const draft = exported(drafts, 'draftAgentSessionStoreState')(before)
-      storeMaps(draft).records.set(sessionId, record)
-      exported(rows, 'writeAgentSessionStoreRows')(
-        db,
-        exported(drafts, 'agentSessionStoreDraftRowWrites')(before, draft)
-      )
-      return draft
-    }
-    const oldState = writeOld(reconciled)
+    const writeOld = (record: unknown) =>
+      mutateTestJournalFixture(database, (db) => {
+        const before = exported(rows, 'loadAgentSessionStoreRows')(db)
+        const draft = exported(drafts, 'draftAgentSessionStoreState')(before)
+        storeMaps(draft).records.set(sessionId, record)
+        exported(rows, 'writeAgentSessionStoreRows')(
+          db,
+          exported(drafts, 'agentSessionStoreDraftRowWrites')(before, draft)
+        )
+        return draft
+      })
+    const oldState = await writeOld(reconciled)
     expect(exported(views, 'listAgentSessionConversations')(oldState)).toMatchObject([
       { sessionId, currentFence: 8 }
     ])
@@ -212,7 +218,9 @@ test(`${RELEASE_REF} keeps a stopped chat readable through restart, resume and e
       },
       61_000
     )
-    expect(loadAgentSessionStoreRows(db).records.get(sessionId)?.lease).toMatchObject({
+    expect(
+      (await database.read(loadAgentSessionStoreRowsAsync)).records.get(sessionId)?.lease
+    ).toMatchObject({
       runtimeFence: 8,
       deathEvidence: { ...evidence, kind: 'exit-observed', observedAt: 60_000 }
     })
@@ -237,8 +245,10 @@ test(`${RELEASE_REF} keeps a stopped chat readable through restart, resume and e
       throw new Error('the old build must reserve a successor')
     }
     const reserved = oldRecord(reservation.record)
-    writeOld(reserved)
-    expect(loadAgentSessionStoreRows(db).records.get(sessionId)?.lease).toMatchObject({
+    await writeOld(reserved)
+    expect(
+      (await database.read(loadAgentSessionStoreRowsAsync)).records.get(sessionId)?.lease
+    ).toMatchObject({
       runtimeFence: 9,
       claimStatus: 'reserved',
       deathEvidence: null
@@ -253,8 +263,9 @@ test(`${RELEASE_REF} keeps a stopped chat readable through restart, resume and e
         now: 80_000
       })
     )
-    writeOld(replaced)
-    const replacement = loadAgentSessionStoreRows(db).records.get(sessionId)?.lease.deathEvidence
+    await writeOld(replaced)
+    const replacement = (await database.read(loadAgentSessionStoreRowsAsync)).records.get(sessionId)
+      ?.lease.deathEvidence
     expect(replacement).toEqual({
       kind: 'pid-absent',
       detail: 'reservation never spawned',

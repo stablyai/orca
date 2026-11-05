@@ -7,7 +7,10 @@ import {
 import type { WorkspaceSurface } from '../../shared/workspace-surfaces/surface-content'
 import { runTargetOf } from '../../shared/workspace-surfaces/surface-allocation'
 import { surfaceProjectionFingerprint } from '../workspace-surfaces/surface-legacy-projection'
-import { surfaceDocumentMappingBuckets } from '../workspace-surfaces/surface-cold-evidence'
+import {
+  surfaceDocumentMappingBuckets,
+  type SurfaceEvidenceSource
+} from '../workspace-surfaces/surface-cold-evidence'
 import { surfaceMappingPrefix } from '../../shared/workspace-surfaces/surface-evidence-document'
 import {
   registerSurfaceMappingReader,
@@ -111,7 +114,7 @@ export function mergeProjectSurfaces(
   target: SurfaceProfileDomain | undefined,
   incoming: SurfaceProfileDomain,
   reservedTabs: (hostId: string) => readonly string[],
-  coldDocuments: object = {}
+  coldDocuments: SurfaceEvidenceSource = {}
 ): { domain: SurfaceProfileDomain; identities: Map<string, TransferredSurfaceIdentity[]> } {
   const domain = structuredClone(target ?? emptySurfaceProfileDomain())
   const identities = new Map<string, TransferredSurfaceIdentity[]>()

@@ -595,7 +595,7 @@ it.each([
       const saved = (await current.host.journalSnapshot(COORD)).items
       await current.quitRestartHostProcess()
       await closeTestJournalHostDatabase(current.root)
-      current.crashRestartHostProcess()
+      await current.crashRestartHostProcess()
       const reopened = (await current.host.journalSnapshot(COORD)).items
       expect(
         reopened.filter(
@@ -750,12 +750,25 @@ it.each([
           from: { senders: [expect.objectContaining({ agent: 'claude' })] }
         })
       })
+      for (const send of (await current.host.journalSnapshot(WORKER)).submissions) {
+        if (send.dispatchState !== 'pending') {
+          continue
+        }
+        await eventually(() =>
+          expect(
+            current.dispatch.mock.calls.some(
+              ([input]) => input.clientMessageId === send.clientMessageId
+            )
+          ).toBe(true)
+        )
+        await current.settleAccepted(send.clientMessageId, `before-restart-${send.clientMessageId}`)
+      }
       const saved = (await current.host.journalSnapshot(WORKER)).items.filter(
         ({ body }) => body.kind === 'message' && body.from
       )
       await current.quitRestartHostProcess()
       await closeTestJournalHostDatabase(current.root)
-      current.crashRestartHostProcess()
+      await current.crashRestartHostProcess()
       expect(
         (await current.host.journalSnapshot(WORKER)).items.filter(
           ({ body }) => body.kind === 'message' && body.from

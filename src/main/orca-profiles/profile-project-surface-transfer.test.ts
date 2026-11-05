@@ -178,6 +178,7 @@ it.each(['physical-create', 'authority-read'] as const)(
           hostId: 'local',
           callerId: 'profile-move',
           commandId: tabId,
+          // ast-grep-ignore: test-no-wall-clock -- The real storage owner validates this bounded deadline against its own clock.
           expiresAt: Date.now() + 60_000,
           targets: [{ workspaceId: workspace, hostTabId: tabId, expected: null }],
           command: { type: 'createTerminalTab', workspace, tabId, leafId }
@@ -267,6 +268,7 @@ it.each(['physical-create', 'authority-read'] as const)(
         hostTabId: retiredSurface.hostTabId,
         callerId: 'source-close',
         commandId: 'before-move',
+        // ast-grep-ignore: test-no-wall-clock -- The real storage owner validates this bounded deadline against its own clock.
         expiresAt: Date.now() + 60_000,
         expected: { occurrence: retiredSurface.occurrence },
         content: null
@@ -366,6 +368,7 @@ it.each(['physical-create', 'authority-read'] as const)(
             hostTabId: surface.hostTabId,
             callerId: 'new-profile-close',
             commandId: surface.hostTabId,
+            // ast-grep-ignore: test-no-wall-clock -- The real storage owner validates this bounded deadline against its own clock.
             expiresAt: Date.now() + 60_000,
             expected: { occurrence: surface.occurrence },
             content: null
@@ -424,6 +427,7 @@ it('copies project metadata without carrying canonical sessions or physical duti
         hostId: 'local',
         callerId: 'copy',
         commandId: 'create',
+        // ast-grep-ignore: test-no-wall-clock -- The real storage owner validates this bounded deadline against its own clock.
         expiresAt: Date.now() + 60_000,
         targets: [
           { workspaceId: `${repo.id}::${repo.path}`, hostTabId: 'source-tab', expected: null }

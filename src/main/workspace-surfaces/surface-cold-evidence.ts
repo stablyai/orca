@@ -20,9 +20,11 @@ import {
   type SurfaceMappingBucket
 } from './surface-migration-identities'
 
+export type SurfaceEvidenceSource = Readonly<Record<string, unknown>>
+
 type MappingDocument = Extract<SurfaceEvidenceDocument, { kind: 'mapping' }>
 
-function documentMappingBuckets(documents: object): Map<string, MappingDocument[]> {
+function documentMappingBuckets(documents: SurfaceEvidenceSource): Map<string, MappingDocument[]> {
   const buckets = new Map<string, MappingDocument[]>()
   for (const [key, value] of Object.entries(documents)) {
     if (!isSurfaceEvidenceDomain(key)) {
@@ -53,7 +55,7 @@ function documentMappingBuckets(documents: object): Map<string, MappingDocument[
 
 /** Offline owners use the same ordered buckets before choosing imported identities. */
 export function surfaceDocumentMappingBuckets(
-  documents: object
+  documents: SurfaceEvidenceSource
 ): Map<string, SurfaceMappingBucket> {
   return new Map(
     [...documentMappingBuckets(documents)].map(([prefix, entries]) => [
@@ -68,7 +70,7 @@ export function surfaceDocumentMappingBuckets(
 
 /** A restored lineage appends distinct mappings after the selected lineage, preserving both orders. */
 export function mergeSurfaceEvidenceDocuments(
-  target: object,
+  target: SurfaceEvidenceSource,
   incoming: Record<string, unknown>
 ): Record<string, unknown> {
   const result: Record<string, unknown> = {}

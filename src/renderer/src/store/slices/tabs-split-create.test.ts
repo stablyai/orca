@@ -3,7 +3,6 @@ import type * as AgentStatusModule from '@/lib/agent-status'
 import type { AppState } from '../types'
 import { createTabsSliceMockApi } from './tabs-slice-test-harness'
 import { createTestStore, makeWorktree, seedStore } from './store-test-helpers'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 
@@ -63,11 +62,10 @@ function newGroupId(state: AppState, sourceGroupId: string): string {
 }
 
 /** Every published state's groups for WT; an empty one would render as a blank pane. */
-function recordPublishedEmptyGroups(store: Store): { emptyGroups: string[]; updates: number } {
+function recordPublishedEmptyGroups(store: Store): { emptyGroups: string[] } {
   const emptyGroups: string[] = []
-  const record = { emptyGroups, updates: 0 }
+  const record = { emptyGroups }
   store.subscribe((state) => {
-    record.updates += 1
     for (const group of state.groupsByWorktree[WT] ?? []) {
       if (group.tabOrder.length === 0) {
         record.emptyGroups.push(group.id)
@@ -105,13 +103,7 @@ describe('creating a tab directly into a new split', () => {
         split: { ...SPLIT, sourceGroupId: atomic.sourceGroupId, activate }
       })
 
-      // Switch on, a second publication marks the new pane as starting in main.
-      expect(published).toEqual({ emptyGroups: [], updates: ORCA_LAYOUT_OWNER_IS_MAIN ? 2 : 1 })
-      expect(
-        Object.keys(atomic.store.getState().terminalPaneStartsByPaneKey).filter((key) =>
-          key.startsWith('terminal-2:')
-        )
-      ).toHaveLength(ORCA_LAYOUT_OWNER_IS_MAIN ? 1 : 0)
+      expect(published).toEqual({ emptyGroups: [] })
       expect(
         layoutProjection(
           atomic.store.getState(),

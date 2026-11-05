@@ -355,9 +355,9 @@ export function registerQueuedMessageStopPauseTests(
     it('the restated Stop is the same event: its reason, turn, caller and time', async () => {
       const journal = await fixture.open()
       await journal.appendStopEvent({ reason: 'user-stop', turnId: 'turn-7', caller: 'phone' }, 0)
-      const stopped = fixture.stopEvents()
+      const stopped = await fixture.stopEvents()
       await journal.replaceEpochItems('handle_forked', 0, [])
-      expect(fixture.stopEvents()).toEqual(stopped)
+      expect(await fixture.stopEvents()).toEqual(stopped)
       expect(stopped).toEqual([
         { reason: 'user-stop', turnId: 'turn-7', caller: 'phone', at: expect.any(Number) }
       ])

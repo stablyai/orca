@@ -126,7 +126,7 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
                   ...(cwd ? { startupCwd: cwd } : {}),
                   // Why: CLI-spawned PTYs bake the pane key into env; adopt the same tab id so hook-event attribution keeps working.
                   ...(tabId !== undefined ? { id: tabId } : {}),
-                  ...(ORCA_LAYOUT_OWNER_IS_MAIN && leafId ? { initialLeafId: leafId } : {})
+                  ...(leafId ? { initialLeafId: leafId } : {})
                 })
               : store.createTab(
                   worktreeId,

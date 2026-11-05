@@ -36,9 +36,8 @@ import {
 } from '../../src/shared/agent-session/structured-agent-session-reducer'
 import { selectStructuredAgentSettledTurns } from '../../src/shared/agent-session/view/structured-agent-session-turn-timing'
 import { openTestJournalHostDatabase } from '../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
-import { restoreJournal } from '../../src/main/native-chat/agent-session-journal/journal-open'
-import { journalOutcomeSource } from '../../src/main/native-chat/agent-session-journal/journal-outcome-format'
-import { prepareJournalOutcomeWrite } from '../../src/main/native-chat/agent-session-journal/journal-outcome-write'
+import { restoreJournalAsync } from '../../src/main/native-chat/agent-session-journal/journal-async-open'
+import { prepareJournalOutcomePlan } from '../../src/main/native-chat/agent-session-journal/journal-outcome-write'
 import type { JournalRow } from '../../src/main/native-chat/agent-session-journal/journal-row-schema'
 import { hostTestAttachParams } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import { seedQueuedRigLegacyJournal } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-queued-legacy-journal.test-fixture'
@@ -201,7 +200,8 @@ it.each(cases)(
     const active = await createRestTestRig({ idleSweep: { intervalMs: MAX_TIMER_DELAY_MS } })
     rig = active
     setStructuredAgentSessionHost(active.host)
-    const pinInputs = kind === 'mixed' ? seedQueuedRigLegacyJournal(active.root, SESSION) : null
+    const pinInputs =
+      kind === 'mixed' ? await seedQueuedRigLegacyJournal(active.root, SESSION) : null
     const attached = await active.host.attach(REST_TEST_CALLER, hostTestAttachParams(null))
     if (!attached.ok) {
       throw new Error('Fixture attach refused')
@@ -295,14 +295,14 @@ it.each(cases)(
     }
     await active.host.close(SESSION, 'evict')
     expect(active.host.hasSession(SESSION)).toBe(false)
-    const database = openTestJournalHostDatabase(active.root)
-    const saved = restoreJournal(database.db, SESSION)?.state
+    const database = await openTestJournalHostDatabase(active.root)
+    const saved = (await database.read((read) => restoreJournalAsync(read, SESSION)))?.state
     if (!saved) {
       throw new Error('Missing usable projection before tail append')
     }
     const prefix = { epoch: saved.epoch, sequence: saved.lastSequence }
     expect(prefix.sequence).toBeGreaterThanOrEqual(resumeCursor.sequence)
-    database.transaction(
+    await database.transaction(
       (db) => {
         const rows: JournalRow[] = []
         for (let offset = 1; offset <= AGENT_SESSION_HISTORY_MAX_LIMIT; offset += 1) {
@@ -331,7 +331,7 @@ it.each(cases)(
           itemId: disposable.itemId,
           revision: disposable.revision + 1
         })
-        return prepareJournalOutcomeWrite(db, saved, rows, active.clock.now)
+        return prepareJournalOutcomePlan(db, saved, rows, active.clock.now)
       },
       false,
       (result) => {
@@ -339,7 +339,7 @@ it.each(cases)(
       }
     )
     // Anti-vacuous: the mixed chat's rows end at the restart and its records follow the marker.
-    expect(journalOutcomeSource(database.db, SESSION, prefix.epoch)?.prefix).toBe(
+    expect((await database.read((read) => read.source(SESSION, prefix.epoch)))?.prefix).toBe(
       kind === 'mixed' ? prefix.sequence : 0
     )
     const restoredPage = await history({ direction: 'tail' })
@@ -375,6 +375,16 @@ it.each(cases)(
       )
       expect(subscribe).toHaveBeenLastCalledWith(expect.objectContaining({ snapshotCatchUp }))
       expect(subscribe.mock.calls.at(-1)?.[0].boundedFrames === true).toBe(bounded)
+      await vi.waitFor(() => {
+        const delivered = events.at(-1)
+        const deliveredCursor =
+          delivered?.type === 'batch'
+            ? delivered.batch.cursor
+            : delivered?.type === 'snapshot' || delivered?.type === 'reset'
+              ? delivered.page.liveCursor
+              : undefined
+        expect(deliveredCursor).toEqual(restoredPage.liveCursor)
+      })
       return { events, rawFrames }
     }
     const hydrated = await stream()

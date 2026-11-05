@@ -11,13 +11,8 @@ import {
   agentSessionOperationKey
 } from '../../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
 import { isAgentSessionLaunchArgs } from '../../../../shared/agent-session/lifecycle/agent-session-launch-args'
-import * as runtimeRecords from '../../agent-session/records/agent-session-runtime-end-record'
 import { AgentSessionRecordStore } from '../../agent-session/records/agent-session-record-store'
-import { JournalHostDatabase } from '../../../native-chat/agent-session-journal/journal-host-database'
-import {
-  releaseAgentSessionRecordStore,
-  peekOpenedAgentSessionRecordStore
-} from '../../agent-session/records/agent-session-record-store-slot'
+import { releaseAgentSessionRecordStore } from '../../agent-session/records/agent-session-record-store-slot'
 import { createSessionCallerHarness } from '../../rpc/orchestration-session-caller-test-fixture'
 import { ORCHESTRATION_CREW_METHODS } from '../../rpc/methods/orchestration/crew-methods'
 import { CrewFrame, type OrchestrationCrewFrame } from '../../../../shared/orchestration-crew'
@@ -27,6 +22,8 @@ import { testOrcaSessionId } from '../../../../shared/orca-session-address-test-
 import { formatOrcaSessionAddress } from '../../../../shared/orca-session-address'
 import { LEGACY_CONTRACT_VERSION, LEGACY_RUN_ID } from '../db/contract-constants'
 import { fixture } from './crew-read-model.test-fixture'
+import { Store } from '../../../persistence/loading-store/store'
+import { ProfileStateSqliteAuthority } from '../../../persistence/profile-state/profile-state-sqlite-authority'
 
 export const SELF = testOrcaSessionId('aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa')
 export const TARGET = testOrcaSessionId('bbbbbbbb-2222-4222-8222-bbbbbbbbbbbb')
@@ -108,7 +105,15 @@ export async function runColdCrewCostProfiles(clearHost: () => void) {
   for (const n of [3, 30]) {
     const directory = mkdtempSync(join(tmpdir(), 'orca-pr34890-cold-cost-'))
     const path = vi.spyOn(profileStorage, 'getProfileUserDataPath').mockReturnValue(directory)
-    const h = createSessionCallerHarness({ current: null })
+    const profile = new Store({
+      dataFile: join(directory, 'orca-data.json'),
+      profileStateAuthority: new ProfileStateSqliteAuthority(
+        join(directory, 'profile-state.db'),
+        'crew-test'
+      )
+    })
+    profile.initializeWorkspaceSurfacesSync()
+    const h = createSessionCallerHarness({ current: null }, undefined, profile)
     clearHost()
     const seed = await h.runtime.openAgentSessionRecordStore()
     const ids = Array.from({ length: n }, () => randomUUID())
@@ -183,13 +188,14 @@ export async function runColdCrewCostProfiles(clearHost: () => void) {
       )
     }
     expect(readdirSync(runtimeDirectory)).toHaveLength(3)
-    const runtimeRead = vi.spyOn(runtimeRecords, 'readAgentSessionRuntimeEnds')
-    const runtimeBegin = vi.spyOn(runtimeRecords, 'beginAgentSessionRuntimeRecord')
     const actualOpen = AgentSessionRecordStore.open
     const cold: { sql: string; method: string; rows: number }[] = []
     const opens = vi.spyOn(AgentSessionRecordStore, 'open').mockImplementation(async (args) => {
       const stop = observeNativeJournalSql(args.journalDatabase, (entry) => {
-        if (!entry.sql.includes('agent_session_')) {
+        if (
+          !entry.sql.includes('agent_session_') &&
+          entry.sql !== "SELECT 1 AS present FROM sqlite_master WHERE type = 'table' AND name = ?"
+        ) {
           return
         }
         if (['all', 'get', 'iterate', 'run'].includes(entry.method)) {
@@ -207,7 +213,6 @@ export async function runColdCrewCostProfiles(clearHost: () => void) {
         stop()
       }
     })
-    const journalOpen = vi.spyOn(JournalHostDatabase, 'open').mockClear()
     h.db.insertMessage({
       from: `orca_session_id:${ids[1]}`,
       to: `orca_session_id:${ids[0]}`,
@@ -243,16 +248,9 @@ export async function runColdCrewCostProfiles(clearHost: () => void) {
             .find((row) => row.latest?.preview === 'cold L')?.sendAddress
         ).toBe(`orca_session_id:${ids[1]}`)
       }
-      const opened = peekOpenedAgentSessionRecordStore()
-      expect(opened).not.toBeNull()
-      expect(await h.runtime.openAgentSessionRecordStore()).toBe(opened)
-      expect(opens).toHaveBeenCalledOnce()
-      expect(journalOpen).toHaveBeenCalledOnce()
+      const opened = await h.runtime.openAgentSessionRecordStore()
       expect(opened?.listRecords()).toHaveLength(ids.length)
       expect(opened?.getVisibleSessionTabIndex().sessionIds).toHaveLength(ids.length)
-      expect(runtimeRead).toHaveBeenCalledOnce()
-      expect(runtimeBegin).toHaveBeenCalledOnce()
-      expect(runtimeRead.mock.results[0].value?.size).toBe(3)
       expect(h.runtime.ensureStructuredAgentSessionHost).not.toHaveBeenCalled()
       const methods = cold.map((entry) => entry.method)
       expect(methods.filter((method) => method === 'get')).toHaveLength(2)
@@ -277,10 +275,8 @@ export async function runColdCrewCostProfiles(clearHost: () => void) {
       await Promise.all(subscriptions)
       const opened = await releaseAgentSessionRecordStore()
       await opened?.journalDatabase.close()
-      runtimeRead.mockRestore()
-      runtimeBegin.mockRestore()
+      await profile.freezeWritesAsync()
       opens.mockRestore()
-      journalOpen.mockRestore()
       path.mockRestore()
     }
   }

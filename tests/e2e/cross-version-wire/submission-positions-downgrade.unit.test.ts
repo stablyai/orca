@@ -101,7 +101,7 @@ async function journalWithRejections(directory: string, journals: TrackedJournal
     ...agentSessionFailureWords(agentSessionFailureFact('queueFull'), { surface: 'rejection' }),
     fence: 1
   })
-  const since = journal.readSince(seen)
+  const since = await journal.readSince(seen)
   const batch = since.ok
     ? projectJournalBatch({
         rows: since.rows,

@@ -247,9 +247,12 @@ export function withCanonicalSessionSurfaces(
     ...projected.tabs.filter((row) => row.type === 'terminal' && !publishedIds.has(row.id))
   ]
   const valid = new Set(tabs.map(orderIdOf))
+  const nativeAnchors = new Set(
+    projected.tabs.filter((row) => row.type === 'agent-session').map(orderIdOf)
+  )
   const groups = (published.tabGroups ?? []).map((group) => ({
     ...group,
-    tabOrder: group.tabOrder.filter((id) => valid.has(id))
+    tabOrder: group.tabOrder.filter((id) => valid.has(id) || nativeAnchors.has(id))
   }))
   const placed = new Set(groups.flatMap((group) => group.tabOrder))
   for (const source of projected.tabGroups ?? []) {

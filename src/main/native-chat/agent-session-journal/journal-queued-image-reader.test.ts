@@ -109,7 +109,6 @@ it('delivers newly loaded saved image choices in bounded semantic batches withou
     await import('../agent-session-wire/agent-session-subscriber-frame-fields')
   const { emptyAgentSessionBatch } = await import('../agent-session-wire/agent-session-empty-batch')
   const frames: AgentSessionSubscribeEvent[] = []
-  const published = Promise.withResolvers<void>()
   for (let i = 0; i < 10; i++) {
     await send(
       `image-${i}`,
@@ -156,17 +155,12 @@ it('delivers newly loaded saved image choices in bounded semantic batches withou
     projectQueuePublication: (pub: QueuePublication) =>
       projectQueuedImageCardPublication(pub, { clientKind: 'mobile' })
   }
-  subscribers.open({
+  const unsubscribe = subscribers.open({
     id: 'old',
     sessionId: identity.sessionId,
     journal,
     fence: 7,
-    emit: (event) => {
-      frames.push(event)
-      if (event.type === 'batch' && event.batch.cursor.sequence === journal.cursor().sequence) {
-        published.resolve()
-      }
-    },
+    emit: (event) => frames.push(event),
     boundedFrames: true,
     readsCurrentRequests: false,
     snapshotCatchUp: false,
@@ -271,7 +265,16 @@ it('delivers newly loaded saved image choices in bounded semantic batches withou
   }
   expect(retryFrames.at(-1)).toMatchObject({ type: 'batch', batch: { cursor: journal.cursor() } })
   subscribers.publish(identity.sessionId, journal)
-  await published.promise
+  await vi.waitFor(() => {
+    expect(
+      new Set(
+        frames.flatMap((event) =>
+          event.type === 'batch' ? event.batch.items.map((item) => item.itemId) : []
+        )
+      ).size
+    ).toBe(10)
+    expect(frames.at(-1)).toMatchObject({ type: 'batch', batch: { cursor: journal.cursor() } })
+  })
   expect(frames.every((event) => event.type === 'batch')).toBe(true)
   const inserted = frames.flatMap((event) => (event.type === 'batch' ? event.batch.items : []))
   expect(new Set(inserted.map((item) => item.itemId)).size).toBe(10)
@@ -293,12 +296,19 @@ it('delivers newly loaded saved image choices in bounded semantic batches withou
   expect(frames.at(-1)).toMatchObject({ type: 'batch', batch: { cursor: journal.cursor() } })
   frames.length = 0
   subscribers.publish(identity.sessionId, journal, { turnId: 't', text: 'metadata only' })
+  await vi.waitFor(() =>
+    expect(frames).toContainEqual(
+      expect.objectContaining({ activity: { turnId: 't', text: 'metadata only' } })
+    )
+  )
   expect(frames.flatMap((event) => (event.type === 'batch' ? event.batch.items : []))).toEqual([])
   await journal.queuedMessages.withdraw(['recovery:image-0'])
   subscribers.publish(identity.sessionId, journal)
-  expect(
-    frames.flatMap((event) => (event.type === 'batch' ? event.batch.removedItemIds : []))
-  ).toContain(agentJournalSubmissionKey('image-0'))
+  await vi.waitFor(() =>
+    expect(
+      frames.flatMap((event) => (event.type === 'batch' ? event.batch.removedItemIds : []))
+    ).toContain(agentJournalSubmissionKey('image-0'))
+  )
   expect(frames.every((event) => event.type === 'batch')).toBe(true)
   const original = journal.submissionBody('image-1')!
   await journal.appendSubmission(
@@ -342,6 +352,7 @@ it('delivers newly loaded saved image choices in bounded semantic batches withou
     )
   ).toBe(false)
   expect(frames.every((event) => event.type === 'batch')).toBe(true)
+  unsubscribe()
   await journals.closeAll()
   journal = await journals.open({ identity, stateDirectory: root, now: () => ++clock })
   const reopenedWork = structuredAgentSessionCurrentWork(journal, {
@@ -460,7 +471,7 @@ it('projects a still-active cut source before stateless and middle-page catch-up
       })),
     readCurrentWork: () => idleWork
   })
-  subscribers.open({
+  const unsubscribe = subscribers.open({
     id: 'reconnect',
     sessionId: identity.sessionId,
     journal,
@@ -471,14 +482,17 @@ it('projects a still-active cut source before stateless and middle-page catch-up
     emit: (event) => frames.push(event),
     ...queuedImageSubscriber({ clientKind: 'mobile' })
   })
+  await vi.waitFor(() =>
+    expect(
+      frames.flatMap((event) => (event.type === 'batch' ? event.batch.items : []))
+    ).toContainEqual(expect.objectContaining({ itemId: key }))
+  )
   expect(frames.every((event) => event.type === 'batch')).toBe(true)
   expect(
     frames.flatMap((event) => (event.type === 'batch' ? event.batch.removedItemIds : []))
   ).not.toContain(key)
-  expect(
-    frames.flatMap((event) => (event.type === 'batch' ? event.batch.items : []))
-  ).toContainEqual(expect.objectContaining({ itemId: key }))
   expect(journal.item(key)).toBeNull()
+  unsubscribe()
 })
 
 it('keeps proven unwritten input waiting after both old-process hold writes fail, then preserves one exact actionable copy', async () => {

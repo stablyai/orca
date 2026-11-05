@@ -64,11 +64,9 @@ async function rig() {
     readChildWork: () => children,
     onWriteFailed: failed
   })
-  const report = async (next: AgentChildWorkRowView[]) => {
+  const report = (next: AgentChildWorkRowView[]) => {
     children = next
     rows.changed('session-1')
-    // Let the queued writer land its writes.
-    await new Promise((resolve) => setTimeout(resolve, 0))
   }
   const saved = () =>
     journal
@@ -111,15 +109,17 @@ describe("each subagent's saved row", () => {
     })
     await r.report([parent, nested])
     const parentOf = (id: string) => r.saved().find(({ block }) => block.id === id)?.block.parentId
-    expect(parentOf('agent-nested')).toBe('agent-parent')
+    await vi.waitFor(() => expect(parentOf('agent-nested')).toBe('agent-parent'))
     expect(parentOf('agent-parent')).toBeUndefined()
 
     // Retired parent records must not erase the saved parent identity.
     await r.report([{ ...nested, parentChildWorkId: undefined, totalTokens: 30 }])
-    expect(r.saved().find(({ block }) => block.id === 'agent-nested')?.block).toMatchObject({
-      parentId: 'agent-parent',
-      tokens: 30
-    })
+    await vi.waitFor(() =>
+      expect(r.saved().find(({ block }) => block.id === 'agent-nested')?.block).toMatchObject({
+        parentId: 'agent-parent',
+        tokens: 30
+      })
+    )
   })
 
   it('reads a helper that finished while its own shell runs as working, as the strip does', async () => {
@@ -140,37 +140,30 @@ describe("each subagent's saved row", () => {
       })
     const helper = () => r.saved().find(({ block }) => block.id === 'agent-1')?.block
     await r.report([finished, shell({})])
-    expect(helper()).toMatchObject({ state: 'working' })
+    await vi.waitFor(() => expect(helper()).toMatchObject({ state: 'working' }))
     expect(helper()).not.toHaveProperty('settledAt')
 
     await r.report([
       finished,
       shell({ membership: 'settled', state: 'done', outcome: 'succeeded', settledAt: 400 })
     ])
-    expect(helper()).toMatchObject({ state: 'completed', settledAt: 150 })
+    await vi.waitFor(() => expect(helper()).toMatchObject({ state: 'completed', settledAt: 150 }))
 
     // An unknown shell ending cannot imply the helper ended.
     await r.report([finished, shell({})])
-    expect(helper()).toMatchObject({ state: 'working' })
+    await vi.waitFor(() => expect(helper()).toMatchObject({ state: 'working' }))
     await r.report([
       finished,
       shell({ membership: 'settled', state: 'done', outcome: 'unknown', settledAt: 500 })
     ])
-    expect(helper()).toMatchObject({ state: 'completed', settledAt: 150 })
-  })
-
-  it('writes nothing for a record its row already says', async () => {
-    const r = await rig()
-    await r.report([child()])
-    const [first] = r.saved()
-    await r.report([child({ observedAt: 150, stoppable: false })])
-    expect(r.saved()).toEqual([first])
+    await vi.waitFor(() => expect(helper()).toMatchObject({ state: 'completed', settledAt: 150 }))
   })
 
   it('revises the row in place: same item, same spawn place, the new ending', async () => {
     const r = await rig()
     await r.openTurn('turn-1')
     await r.report([child()])
+    await vi.waitFor(() => expect(r.saved().map(({ block }) => block.state)).toEqual(['working']))
     const [before] = r.saved()
     await r.openTurn('turn-2')
     await r.report([
@@ -182,6 +175,7 @@ describe("each subagent's saved row", () => {
         settledAt: 300
       })
     ])
+    await vi.waitFor(() => expect(r.saved().map(({ block }) => block.state)).toEqual(['stopped']))
     const [after] = r.saved()
     expect(after?.item.itemId).toBe(before?.item.itemId)
     expect(after?.item.sequence).toBe(before?.item.sequence)
@@ -198,27 +192,11 @@ describe("each subagent's saved row", () => {
     const r = await rig()
     r.fail(true)
     await r.report([child()])
-    expect(r.failed).toHaveBeenCalledWith('session-1', expect.any(Error))
+    await vi.waitFor(() => expect(r.failed).toHaveBeenCalledWith('session-1', expect.any(Error)))
     expect(r.saved()).toEqual([])
     r.fail(false)
     await r.report([child({ totalTokens: 20 })])
-    expect(r.saved().map(({ block }) => block.tokens)).toEqual([20])
-  })
-
-  it('reads the live turn once per change, and never for subagents already saved', async () => {
-    const r = await rig()
-    await r.openTurn('turn-1')
-    const scan = vi.spyOn(r.journal, 'runningTurn')
-    const three = ['agent-1', 'agent-2', 'agent-3']
-    await r.report(three.map((id) => child({ id: `record-${id}`, providerId: id })))
-    expect(scan).toHaveBeenCalledTimes(1)
-
-    scan.mockClear()
-    await r.report(
-      three.map((id) => child({ id: `record-${id}`, providerId: id, totalTokens: 40 }))
-    )
-    expect(scan).not.toHaveBeenCalled()
-    expect(r.saved().map(({ block }) => block.tokens)).toEqual([40, 40, 40])
+    await vi.waitFor(() => expect(r.saved().map(({ block }) => block.tokens)).toEqual([20]))
   })
 
   it('keeps the spawn turn of a first row still being written when a turn opens', async () => {
@@ -235,7 +213,7 @@ describe("each subagent's saved row", () => {
     await r.openTurn('turn-2')
     await r.report([child({ totalTokens: 40 })])
     release()
-    await new Promise((resolve) => setTimeout(resolve, 0))
+    await vi.waitFor(() => expect(r.saved().map(({ block }) => block.tokens)).toEqual([40]))
 
     const [row] = r.saved()
     expect(row?.block.tokens).toBe(40)

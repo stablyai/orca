@@ -6,6 +6,7 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switc
 import type { MainPaneBinding } from './main-pane-verdict'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { RuntimeSyncWindowGraph } from '../../../../shared/runtime-types'
+import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../../shared/runtime-types'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/runtime-session-contracts'
 import {
   withMainSessionTabRows,
@@ -101,14 +102,28 @@ class MainSurfacePublisher {
     return projected
       ? ORCA_LAYOUT_OWNER_IS_MAIN
         ? withMainSessionTabRows(published, projected, this.host.exited)
-        : withCanonicalSessionSurfaces(published, projected, this.host.exited, nativeMembers)
+        : this.withMainOrder(
+            withCanonicalSessionSurfaces(published, projected, this.host.exited, nativeMembers)
+          )
       : published
   }
 
-  /** Rows a writer stores, ordered and grouped as main's last projection has them: no read. */
+  /** Headless canonical placement and its commands share the host's layout owner. */
+  ownsPlacement(worktreeId: string): boolean {
+    return (
+      (ORCA_LAYOUT_OWNER_IS_MAIN ||
+        this.host.readyGraphPublisher() === HEADLESS_RUNTIME_WINDOW_ID) &&
+      this.ownsWorkspace(worktreeId)
+    )
+  }
+
+  /** Ownership refreshes dirty partitions before a writer takes their current order. */
   withMainOrder(written: RuntimeMobileSessionTabsSnapshot): RuntimeMobileSessionTabsSnapshot {
+    if (!this.ownsPlacement(written.worktree)) {
+      return written
+    }
     const projected = this.index.lastSessionTabsOf(written.worktree)
-    return projected && ORCA_LAYOUT_OWNER_IS_MAIN ? withMainTabOrder(written, projected) : written
+    return projected ? withMainTabOrder(written, projected) : written
   }
 
   /** Merge main's new rows/names/order into held rows; close paths own drops, and added terminals still pass exit filters. */
@@ -125,7 +140,7 @@ class MainSurfacePublisher {
             live: this.host.live,
             keepUnlisted: true
           })
-        : withCanonicalSessionSurfaces(held, projected, this.host.exited, nativeMembers)
+        : this.withMainRows(held, nativeMembers)
       const heldIds = new Set(held.tabs.map((row) => row.id))
       const next = merged.tabs.some((row) => row.type === 'terminal' && !heldIds.has(row.id))
         ? this.host.fenceExited(merged)
@@ -222,7 +237,10 @@ class MainSurfacePublisher {
   /** Whether the window shows or parks the tab: what a reader of "the renderer lists it" asks. */
   windowListsTab(tabId: string): boolean {
     const windowId = this.host.readyGraphPublisher()
-    const last = this.lastWindowGraph?.windowId === windowId ? this.lastWindowGraph.graph : null
+    const last =
+      windowId !== HEADLESS_RUNTIME_WINDOW_ID && this.lastWindowGraph?.windowId === windowId
+        ? this.lastWindowGraph.graph
+        : null
     return (
       !!last &&
       (last.tabs.some((tab) => tab.tabId === tabId) ||
@@ -342,20 +360,8 @@ export type MainPaneRecordFacts = {
   worktreeId: string
 }
 
-/** The facts of a record before an update; undefined for a record not yet made. */
-export function mainPaneRecordFacts(
-  record: MainPaneRecordFacts | undefined
-): MainPaneRecordFacts | undefined {
-  return (
-    record && {
-      connected: record.connected,
-      incarnationId: record.incarnationId,
-      worktreeId: record.worktreeId
-    }
-  )
-}
-
 export {
+  mainPaneRecordFacts,
   noteMainPaneRecordChange,
   mainLayoutHoldsPane,
   paneHoldsSession,

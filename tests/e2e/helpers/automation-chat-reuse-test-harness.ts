@@ -199,8 +199,7 @@ export async function exerciseBusyChatReuse(
         kind: 'turn',
         turnId: 'turn-automation',
         userItemId: accepted!.providerItemId!,
-        state: 'completed',
-        outcome: 'success'
+        state: 'running'
       },
       { turnScope: AGENT_JOURNAL_THREAD_SCOPE, lifecycle: true }
     )
@@ -221,6 +220,17 @@ export async function exerciseBusyChatReuse(
         blocks: [{ type: 'text', text: 'Unrelated human output' }]
       },
       { turnScope: { kind: 'turn', turnItemId: 'human-root' } }
+    )
+    sink.appendItem(
+      ownId,
+      {
+        kind: 'turn',
+        turnId: 'turn-automation',
+        userItemId: accepted!.providerItemId!,
+        state: 'completed',
+        outcome: 'success'
+      },
+      { turnScope: AGENT_JOURNAL_THREAD_SCOPE, lifecycle: true }
     )
     sink.publish({ lifecycle: true })
     expect(await sink.written?.()).toEqual({ ok: true })

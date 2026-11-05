@@ -1,3 +1,4 @@
+import { mutateTestJournalFixture } from '../../src/main/native-chat/agent-session-journal/journal-drained-fixture-test-support'
 import {
   resolveActiveSessionTab47713,
   notificationPaneTab47713
@@ -263,9 +264,11 @@ it('legacy activating republish before close settlement keeps its old identity a
 it('failed durable hide still stops the provider, remains unconfirmed, and reuses committed identity; failed fresh show publishes nothing', async () => {
   await twoChats()
   await send(HOST_TEST_SESSION, 'start provider')
-  const db = openTestJournalHostDatabase(directory).db
-  db.exec(
-    "CREATE TRIGGER refuse_tab_hide BEFORE DELETE ON agent_session_tabs BEGIN SELECT RAISE(ABORT, 'test write failure'); END"
+  const database = await openTestJournalHostDatabase(directory)
+  await mutateTestJournalFixture(database, (db) =>
+    db.exec(
+      "CREATE TRIGGER refuse_tab_hide BEFORE DELETE ON agent_session_tabs BEGIN SELECT RAISE(ABORT, 'test write failure'); END"
+    )
   )
   try {
     const unconfirmed = await close()
@@ -280,12 +283,14 @@ it('failed durable hide still stops the provider, remains unconfirmed, and reuse
     ).toBe(false)
     expect(await reveal()).toMatchObject({ ok: true })
   } finally {
-    db.exec('DROP TRIGGER refuse_tab_hide')
+    await mutateTestJournalFixture(database, (db) => db.exec('DROP TRIGGER refuse_tab_hide'))
   }
   await close()
   const before = await snapshot()
-  db.exec(
-    "CREATE TRIGGER refuse_tab_show BEFORE INSERT ON agent_session_tabs BEGIN SELECT RAISE(ABORT, 'test write failure'); END"
+  await mutateTestJournalFixture(database, (db) =>
+    db.exec(
+      "CREATE TRIGGER refuse_tab_show BEFORE INSERT ON agent_session_tabs BEGIN SELECT RAISE(ABORT, 'test write failure'); END"
+    )
   )
   try {
     expect(await reveal()).toMatchObject({ ok: false })
@@ -297,7 +302,7 @@ it('failed durable hide still stops the provider, remains unconfirmed, and reuse
       )
     ).toBe(false)
   } finally {
-    db.exec('DROP TRIGGER refuse_tab_show')
+    await mutateTestJournalFixture(database, (db) => db.exec('DROP TRIGGER refuse_tab_show'))
   }
 })
 

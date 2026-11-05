@@ -1,7 +1,19 @@
+import type {
+  ExplicitCloseScope,
+  ExplicitCloseTarget,
+  ExplicitCloseStop
+} from './explicit-terminal-close-pty-stops'
+import type { RuntimePtyWorktreeRecord } from '../runtime-terminal-state-records'
+import type {
+  RuntimeMobileSessionTerminalTab,
+  RuntimeMobileSessionRetiredTerminalSurface
+} from '../../../shared/runtime-types'
+import type { OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs } from '../session-lifecycle/projection/build-headless-mobile-session-browser-tabs'
+import { windowListsTab } from '../terminal/surface/main-terminal-surfaces'
+import { parseAppSshPtyId } from '../../../shared/ssh-pty-id'
 import type { OrcaRuntimeWithBindPtyIncarnationHandle as BindPtyIncarnationHandleMethods } from '../terminal/identity/terminal-handle-bindings'
 import { OrcaRuntimeWithTouchMobileSessionTabsForWorktree } from './mobile-session-membership'
 import type { RetiredTerminalSurface } from '../mobile-session-terminal-retirement'
-import type { RuntimeMobileSessionRetiredTerminalSurface } from '../../../shared/runtime-types'
 import { LOCAL_EXECUTION_HOST_ID, parseExecutionHostId } from '../../../shared/execution-host'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { keepsExitedPane } from '../exited-split-pane-layout-close'
@@ -19,6 +31,49 @@ export abstract class OrcaRuntimeWithPersistTerminalSurfaceRetirements extends O
   protected abstract findHandleForPtyRecord(
     ...args: Parameters<BindPtyIncarnationHandleMethods['findHandleForPtyRecord']>
   ): ReturnType<BindPtyIncarnationHandleMethods['findHandleForPtyRecord']>
+
+  protected abstract findPtyForMobileTerminalTab(
+    worktreeId: string,
+    tab: RuntimeMobileSessionTerminalTab
+  ): RuntimePtyWorktreeRecord | null
+  protected abstract closeTerminalPane(
+    ...args: Parameters<OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs['closeTerminalPane']>
+  ): ReturnType<OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs['closeTerminalPane']>
+
+  /** A paired client's close of one pane: stops only that pane's process, commits only that pane. */
+  protected abstract captureExplicitCloseTargets(
+    ptyIds: readonly string[],
+    scope: ExplicitCloseScope
+  ): ExplicitCloseTarget[]
+  protected abstract stopExplicitlyClosedTabPtys(
+    targets: readonly ExplicitCloseTarget[],
+    addressed: string
+  ): Promise<ExplicitCloseStop>
+
+  protected async closeMobileSessionTerminalPane(
+    worktreeId: string,
+    tab: RuntimeMobileSessionTerminalTab
+  ): Promise<void> {
+    const pty = this.findPtyForMobileTerminalTab(worktreeId, tab)
+    const id =
+      pty?.ptyId ??
+      (!windowListsTab(this, this.tabs, tab.parentTabId) && tab.ptyId && parseAppSshPtyId(tab.ptyId)
+        ? tab.ptyId
+        : null)
+    const targets = this.captureExplicitCloseTargets(id ? [id] : [], {
+      worktreeId,
+      tabId: tab.parentTabId,
+      leafId: tab.leafId
+    })
+    await this.closeTerminalPane(worktreeId, {
+      kind: 'pane',
+      tabId: tab.parentTabId,
+      leafId: tab.leafId
+    })
+    if (id) {
+      await this.stopExplicitlyClosedTabPtys(targets, id)
+    }
+  }
 
   /** Retire in the owning host partition; local writes strand SSH ghosts and alter foreign epochs. accepted=held surface, unpersisted=absent/refused partition, kept=main-retained exited pane. Remove closedPane in the same write. */
   protected stageTerminalSurfaceRetirements(
@@ -70,6 +125,25 @@ export abstract class OrcaRuntimeWithPersistTerminalSurfaceRetirements extends O
       }
     }
     return { accepted, unpersisted, kept }
+  }
+
+  /** A completed reversible stop releases its exact process while retaining the canonical pane and resume record. */
+  protected async releaseStoppedPaneBindings(
+    ptyId: string,
+    incarnationId: string | undefined,
+    surfaces: readonly Pick<RetiredTerminalSurface, 'worktreeId' | 'parentTabId' | 'leafId'>[]
+  ): Promise<void> {
+    for (const surface of surfaces) {
+      const hostId = this.tryGetWorkspaceSessionHostIdForWorktree(surface.worktreeId)
+      if (!hostId || !this.store?.workspaceSurfacesInitialized?.(hostId)) {
+        continue
+      }
+      await this.store.retirePtyBinding?.(
+        { ...surface, tabId: surface.parentTabId, ptyId },
+        hostId,
+        { incarnationId }
+      )
+    }
   }
 
   // No rollback: failed writes retry retirement later, but the process is already gone.

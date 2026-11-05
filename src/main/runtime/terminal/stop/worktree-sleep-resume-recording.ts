@@ -26,8 +26,28 @@ import {
 import { type ExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
+import type { WorktreePtyHostFence } from '../../worktree-pty-host-fence'
 
 export abstract class OrcaRuntimeWithWorktreeSleepResumeRecording extends OrcaRuntimeWithStopTerminalsForWorktree {
+  protected abstract getLivePtyIdsForWorktree(
+    worktreeId: string,
+    freshPtyIds?: ReadonlySet<string>,
+    hostFence?: WorktreePtyHostFence
+  ): Set<string>
+  protected abstract getTerminalHandlesForPtyId(ptyId: string): string[]
+  protected abstract getRecordedTerminalSleepHandles(
+    ptyIds: Iterable<string>,
+    terminalHandlesByPtyId: Readonly<Record<string, readonly string[]>>
+  ): string[]
+  protected abstract commitWorktreeTerminalSleepPtys(args: {
+    worktreeId: string
+    generation: number
+    ptyIds: readonly string[]
+    pendingPtyIds: Set<string>
+    committedPtyIds: Set<string>
+    terminalHandlesByPtyId: Readonly<Record<string, readonly string[]>>
+  }): void
+
   /** Capture after earlier status writes so their saved copy participates in exact cleanup. */
   readSavedResumeSource(
     worktreeId: string,

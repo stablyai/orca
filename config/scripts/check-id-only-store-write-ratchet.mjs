@@ -25,6 +25,7 @@ export const NOT_HOST_TWINNED_PARAMS = new Map([
   ['OrcadSourceExportPersistence.targetId', 'the id names the host itself'],
   ['RemoteLayoutSnapshotPersistence.environmentId', 'the id names the host itself'],
   ['SessionHostPartitionOperations.hostId', 'the id names the host itself'],
+  ['WorkspaceSurfaceCommands.hostId', 'the id names the host itself'],
   ['SshLeaseRecoveryOperations.targetId', 'the id names the host itself'],
   ['SshProfileOperations.oldTargetId', 'the id names the host itself']
 ])

@@ -65,6 +65,8 @@ async function launchClaude(command: string | undefined, ordered = false) {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: partial store double; terminal create and send read only its repo and worktree members.
     makeStore() as never
   )
+  // Native ownership has its own real-store coverage; this rig supplies only terminal ports.
+  vi.spyOn(runtime, 'ensureStructuredAgentSessionHost').mockResolvedValue(undefined)
   const writes: string[] = []
   const write = (_ptyId: string, data: string) => {
     writes.push(data)
@@ -216,7 +218,8 @@ describe('terminal.send into a freshly launched Claude', () => {
     async (command) => {
       const { writes, send } = await launchClaude(command)
 
-      await expect(send('claude --resume abc')).resolves.toMatchObject({
+      const result = await send('claude --resume abc')
+      expect(result, JSON.stringify(result)).toMatchObject({
         ok: true,
         result: { send: { accepted: true } }
       })

@@ -94,6 +94,7 @@ describe('live profile authority admission', () => {
         hostId: 'local',
         callerId: 'ordinary',
         commandId: 'create-terminal',
+        // ast-grep-ignore: test-no-wall-clock -- The real storage owner validates this bounded deadline against its own clock.
         expiresAt: Date.now() + 60_000,
         command: { type: 'createTerminalTab', workspace, tabId: 'ordinary-tab', leafId },
         targets: [{ hostTabId: 'ordinary-tab', expected: null }]
@@ -111,6 +112,7 @@ describe('live profile authority admission', () => {
         hostTabId: terminal.hostTabId,
         callerId: 'ordinary',
         commandId: 'close-terminal',
+        // ast-grep-ignore: test-no-wall-clock -- The real storage owner validates this bounded deadline against its own clock.
         expiresAt: Date.now() + 60_000,
         expected: terminal,
         content: null
@@ -330,8 +332,8 @@ describe('live profile authority admission', () => {
               tabId: 'tab-local',
               worktreeId: 'repo-local::/fixture/local',
               connectionId: null,
-              receivedAt: Date.now(),
-              stateStartedAt: Date.now(),
+              receivedAt: 1_700_000_000_000,
+              stateStartedAt: 1_700_000_000_000,
               payload: { state: 'working', prompt: 'legacy cached', agentType: 'claude' }
             }
           }
@@ -538,6 +540,7 @@ it('publishes ordinary native show and close only after both canonical mirrors a
           content: null,
           callerId: 'native-owner-test',
           commandId: 'external-close',
+          // ast-grep-ignore: test-no-wall-clock -- The real storage owner validates this bounded deadline against its own clock.
           expiresAt: Date.now() + 60_000
         }
       }

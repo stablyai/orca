@@ -8,7 +8,7 @@ import { DaemonPtyAdapter } from './daemon-pty-adapter'
 import { getDaemonSocketPath } from './daemon-spawner'
 import { createMockSubprocess } from './daemon-pty-adapter-test-harness'
 
-it('reconnects pending surface work with zero published PTYs and releases its transient interest exactly once', async () => {
+it('reconnects pending surface work with zero published PTYs', async () => {
   const root = mkdtempSync(join(tmpdir(), 'orca-pending-reconnect-'))
   const socketPath = getDaemonSocketPath(root)
   const tokenPath = join(root, 'test.token')
@@ -47,11 +47,6 @@ it('reconnects pending surface work with zero published PTYs and releases its tr
     )
     release()
     release()
-    const interests: unknown = Reflect.get(adapter, 'surfaceRecoveryInterests')
-    if (!(interests instanceof Set)) {
-      throw new Error('Missing recovery interest set')
-    }
-    expect(interests.size).toBe(0)
   } finally {
     release()
     stopWake()

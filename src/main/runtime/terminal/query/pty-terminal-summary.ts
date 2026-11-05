@@ -25,7 +25,6 @@ import type { PtyIncarnationHandleRecord } from '../../orca-runtime-core'
 import type { TerminalHandleRecord } from '../../runtime-terminal-contracts'
 import { readTerminalTail } from '../../terminal-tail-read'
 import { structuredWorkerTerminalRefusal } from '../../structured-worker-terminal-refusal'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 
 export abstract class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntimeWithMailboxTerminalIdentity {
   protected abstract bindPtyIncarnationHandle(
@@ -228,7 +227,6 @@ export abstract class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntime
     context?: TerminalIdentityReadContext
   ): boolean {
     if (
-      !ORCA_LAYOUT_OWNER_IS_MAIN ||
       !record.ptyId ||
       !isTerminalLeafId(record.leafId) ||
       !isValidTerminalTabId(record.tabId) ||
@@ -237,9 +235,10 @@ export abstract class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntime
       return false
     }
     const pty = this.ptysById.get(record.ptyId)
+    const pane = context && pty ? context.paneOf(pty) : this.paneOfPty(pty)
     return (
-      (context && pty ? context.paneOf(pty) : this.paneOfPty(pty)).paneKey ===
-      makePaneKey(record.tabId, record.leafId)
+      pane.recordedAtGraphSequence === Number.POSITIVE_INFINITY &&
+      pane.paneKey === makePaneKey(record.tabId, record.leafId)
     )
   }
 

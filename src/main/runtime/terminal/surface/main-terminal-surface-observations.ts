@@ -64,3 +64,16 @@ export function withMainBoundLeaves(
 ): { worktreeId: string; ptyId: string | null }[] {
   return [...leaves, ...(startedMainTerminalSurfaces(runtime)?.boundLeaves() ?? [])]
 }
+
+/** The facts of a record before an update; undefined for a record not yet made. */
+export function mainPaneRecordFacts(
+  record: MainPaneRecordFacts | undefined
+): MainPaneRecordFacts | undefined {
+  return (
+    record && {
+      connected: record.connected,
+      incarnationId: record.incarnationId,
+      worktreeId: record.worktreeId
+    }
+  )
+}

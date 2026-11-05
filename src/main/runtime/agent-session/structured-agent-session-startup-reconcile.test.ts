@@ -5,9 +5,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { agentSessionRecordFixture } from '../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
-import { journalDatabasePath } from '../../native-chat/agent-session-journal/journal-host-database'
+import {
+  JournalHostDatabase,
+  journalDatabasePath
+} from '../../native-chat/agent-session-journal/journal-host-database'
+import { failNextNativeJournalStatement } from '../../native-chat/agent-session-journal/journal-native-test-instrumentation'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
-import type * as AgentSessionRecordRows from './records/agent-session-record-rows'
 import {
   seedTestAgentSessionRecordStore,
   seedTestAgentSessionStoreFromNewerBuild
@@ -20,21 +23,6 @@ import {
 } from './structured-agent-session-runtime'
 import { recordingStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 
-const writes = vi.hoisted(() => ({ failing: false }))
-
-vi.mock('./records/agent-session-record-rows', async (importOriginal) => {
-  const actual = await importOriginal<typeof AgentSessionRecordRows>()
-  return {
-    ...actual,
-    writeAgentSessionStoreRows: (...args: Parameters<typeof actual.writeAgentSessionStoreRows>) => {
-      if (writes.failing) {
-        throw new Error('disk I/O error')
-      }
-      return actual.writeAgentSessionStoreRows(...args)
-    }
-  }
-})
-
 let root: string
 
 beforeEach(async () => {
@@ -42,7 +30,6 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
-  writes.failing = false
   await stopStructuredAgentSessionRuntime().catch(() => undefined)
   await closeTestJournalHostDatabases()
   vi.restoreAllMocks()
@@ -105,7 +92,19 @@ it('finishes startup when the reconcile cannot write, and reports it', async () 
   const { sessionId } = await seedChat()
   const log = recordingStructuredAgentSessionLogger()
   const runtime = startupRuntime(log)
-  writes.failing = true
+  const open = vi.mocked(JournalHostDatabase.open).getMockImplementation()
+  if (!open) {
+    throw new Error('The native worker fixture must be installed')
+  }
+  vi.mocked(JournalHostDatabase.open).mockImplementationOnce(async (...args) => {
+    const database = await open(...args)
+    await failNextNativeJournalStatement(
+      database,
+      'INSERT INTO agent_session_records (session_id, record_json) VALUES (?, ?) ON CONFLICT(session_id) DO UPDATE SET record_json = excluded.record_json',
+      'disk I/O error'
+    )
+    return database
+  })
 
   await expect(runtime.prepareStructuredAgentSessionStartupRestoration()).resolves.toBeUndefined()
 

@@ -270,6 +270,7 @@ it('accepts terminal commands without opening a corrupt chat file and retains ex
     ...key,
     callerId: 'ordinary-window',
     commandId: 'ordinary-create',
+    // ast-grep-ignore: test-no-wall-clock -- The real storage owner validates this bounded deadline against its own clock.
     expiresAt: Date.now() + 60_000,
     command: {
       type: 'createTerminalTab' as const,
@@ -311,6 +312,7 @@ it('accepts terminal commands without opening a corrupt chat file and retains ex
       ...key,
       callerId: 'ordinary-window',
       commandId: 'ordinary-close',
+      // ast-grep-ignore: test-no-wall-clock -- The real storage owner validates this bounded deadline against its own clock.
       expiresAt: Date.now() + 60_000,
       expected: surface,
       content: null

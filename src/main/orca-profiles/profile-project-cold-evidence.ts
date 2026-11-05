@@ -1,3 +1,4 @@
+import type { PersistedState } from '../../shared/persisted-state-types'
 import { createHash } from 'node:crypto'
 import {
   isSurfaceEvidenceDomain,
@@ -8,7 +9,7 @@ import { ownerKeyBelongsToRepo, rekeyOwnerKey } from './profile-project-worktree
 export { mergeSurfaceEvidenceDocuments as mergeProjectColdEvidence } from '../workspace-surfaces/surface-cold-evidence'
 
 export function extractProjectColdEvidence(
-  state: object,
+  state: PersistedState,
   oldRepoId: string,
   newRepoId: string
 ): Record<string, unknown> {

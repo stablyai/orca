@@ -7,7 +7,9 @@ import { randomUUID } from 'node:crypto'
 import { RpcDispatcher } from '../../src/main/runtime/rpc/dispatcher'
 import { ORCHESTRATION_METHODS } from '../../src/main/runtime/rpc/methods/orchestration'
 import { TERMINAL_QUERY_METHODS } from '../../src/main/runtime/rpc/methods/terminal/terminal-query-methods'
-import { JournalHostDatabase } from '../../src/main/native-chat/agent-session-journal/journal-host-database'
+import { openTestJournalHostDatabase } from '../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
+import { Store } from '../../src/main/persistence/loading-store/store'
+import { ProfileStateSqliteAuthority } from '../../src/main/persistence/profile-state/profile-state-sqlite-authority'
 import { AgentSessionRecordStore } from '../../src/main/runtime/agent-session/records/agent-session-record-store'
 import {
   peekOpenedAgentSessionRecordStore,
@@ -38,7 +40,7 @@ vi.mock('../../src/main/native-chat/agent-session-wire/structured-agent-session-
 }))
 afterEach(async () => {
   const remaining = await releaseAgentSessionRecordStore()
-  remaining?.journalDatabase.close()
+  await remaining?.journalDatabase.close()
   vi.restoreAllMocks()
   vi.unstubAllEnvs()
 })
@@ -47,8 +49,17 @@ it('keeps imported and local peer authority through real CLI import, settlement,
   const fixtureNow = 1_700_000_000_000
   const homeRef: { current: unknown } = { current: null }
   const workerRef: { current: unknown } = { current: null }
+  const directory = mkdtempSync(join(tmpdir(), 'orca-pr34890-real-command-'))
+  const profile = new Store({
+    dataFile: join(directory, 'orca-data.json'),
+    profileStateAuthority: new ProfileStateSqliteAuthority(
+      join(directory, 'profile-state.db'),
+      'crew-test'
+    )
+  })
+  profile.initializeWorkspaceSurfacesSync()
   const home = createSessionCallerHarness(homeRef)
-  const worker = createSessionCallerHarness(workerRef)
+  const worker = createSessionCallerHarness(workerRef, undefined, profile)
   // Register test inventory through the production metadata writers; no PTY/process is launched.
   worker.runtime.registerPty('pty_f9_private', 'folder-worker-host', null, {
     tabId: 'tab_worker',
@@ -86,10 +97,9 @@ it('keeps imported and local peer authority through real CLI import, settlement,
   const mail = (h: typeof home) => h.db.db.prepare('SELECT * FROM messages ORDER BY sequence').all()
   const relay = (h: typeof home) =>
     h.db.db.prepare('SELECT * FROM federation_relay_items ORDER BY direction, sequence').all()
-  const directory = mkdtempSync(join(tmpdir(), 'orca-pr34890-real-command-'))
   vi.spyOn(profileStorage, 'getProfileUserDataPath').mockReturnValue(directory)
-  const homeJournal = JournalHostDatabase.open(join(directory, 'home-journal'))
-  const homeStore = AgentSessionRecordStore.open({
+  const homeJournal = await openTestJournalHostDatabase(join(directory, 'home-journal'))
+  const homeStore = await AgentSessionRecordStore.open({
     journalDatabase: homeJournal,
     hostId: 'local',
     legacySessionTabIds: []
@@ -550,9 +560,10 @@ it('keeps imported and local peer authority through real CLI import, settlement,
     if (pendingDone) {
       await pendingDone
     }
-    homeJournal.close()
+    await homeJournal.close()
     const released = await releaseAgentSessionRecordStore()
-    released?.journalDatabase.close()
+    await released?.journalDatabase.close()
+    await profile.freezeWritesAsync()
     home.close()
     worker.close()
     hostRef.current = null

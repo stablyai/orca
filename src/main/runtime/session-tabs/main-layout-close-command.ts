@@ -3,7 +3,11 @@
 import type { LayoutApplyReply } from '../../../shared/workspace-layout/workspace-layout-command-types'
 import type { WindowLayoutCommand } from '../runtime-layout-apply'
 // Type-only: the stops module sits late in the runtime's class chain, and this runs early in it.
-import type { ExplicitCloseStop } from './explicit-terminal-close-pty-stops'
+import type {
+  ExplicitCloseStop,
+  ExplicitCloseTarget,
+  ExplicitCloseScope
+} from './explicit-terminal-close-pty-stops'
 import { parseAppSshPtyId } from '../../../shared/ssh-pty-id'
 
 const NO_STOP: ExplicitCloseStop = { stopped: false }
@@ -12,7 +16,11 @@ export type MainLayoutCloseHost = {
   /** Every pane of a tab main owns, in pane order. */
   panesOfTab: (tabId: string) => { leafId: string; ptyId: string | null }[]
   applyLayoutCommand: (command: WindowLayoutCommand) => Promise<LayoutApplyReply>
-  stop: (ptyIds: string[], addressedPtyId: string) => Promise<ExplicitCloseStop>
+  capture: (ptyIds: string[], scope: ExplicitCloseScope) => ExplicitCloseTarget[]
+  stop: (
+    targets: readonly ExplicitCloseTarget[],
+    addressedPtyId: string
+  ) => Promise<ExplicitCloseStop>
   /** The tab's saved remote session id, which a relay may still run with no pane bound to it. */
   remoteSessionIdOf: (tabId: string) => string | undefined
 }
@@ -56,6 +64,17 @@ export async function closeInMainLayout(
     return null
   }
   const closesTab = target.wholeTab || panes.length <= 1
+  const addressedPtyId = target.addressedPtyId === undefined ? pane.ptyId : target.addressedPtyId
+  const ended = closesTab
+    ? [...new Set([...panes.flatMap((entry) => (entry.ptyId ? [entry.ptyId] : [])), ...dormant])]
+    : addressedPtyId
+      ? [addressedPtyId]
+      : []
+  const captured = host.capture(ended, {
+    worktreeId: target.worktreeId,
+    tabId: target.tabId,
+    ...(closesTab ? {} : { leafId: target.leafId })
+  })
   const reply = await host.applyLayoutCommand(
     closesTab
       ? {
@@ -83,14 +102,8 @@ export async function closeInMainLayout(
   if (reply.result.refused?.some((entry) => entry.code === 'tab_pinned')) {
     throw new Error('terminal_tab_pinned')
   }
-  const addressedPtyId = target.addressedPtyId === undefined ? pane.ptyId : target.addressedPtyId
-  const ended = closesTab
-    ? [...new Set([...panes.flatMap((entry) => (entry.ptyId ? [entry.ptyId] : [])), ...dormant])]
-    : addressedPtyId
-      ? [addressedPtyId]
-      : []
   // Every terminal the close ends stops here, addressed or not.
   const stopAddress = addressedPtyId ?? ended[0]
-  const stop = target.stopEnded && stopAddress ? await host.stop(ended, stopAddress) : NO_STOP
+  const stop = target.stopEnded && stopAddress ? await host.stop(captured, stopAddress) : NO_STOP
   return { outcome: 'closed', closesTab, addressedStop: addressedPtyId ? stop : NO_STOP }
 }

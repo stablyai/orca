@@ -110,7 +110,9 @@ async function handedOver(draftId: string): Promise<void> {
 async function handedOverUserSend(text: string): Promise<string> {
   const { id, result } = rig.send(text)
   expect(await result).toMatchObject({ ok: true, value: { submission: expect.anything() } })
-  await eventually(async () => expect((await rig.submission(id))?.handedOverAt).toBeDefined())
+  await eventually(async () =>
+    expect(await rig.submission(id)).toMatchObject({ handedOverAt: expect.any(Number) })
+  )
   return id
 }
 
@@ -336,10 +338,16 @@ describe("a Stop's queue pause", () => {
   })
 
   it('survives a restart, and a send made after the Stop still ends it when its turn starts there', async () => {
+    await rig.dispose()
+    rig = await createQueuedMessageTestRig({
+      restartable: true,
+      probeOwner: async () => ({ outcome: 'pid-absent' })
+    })
     const draftId = await stoppedDraft()
     const inFlight = await handedOverUserSend('sent before the restart')
     // Crash without close; persisted journal state must still derive both pauses.
-    rig.crashRestartHostProcess()
+    await rig.crashRestartHostProcess()
+    await rig.host.reconcileRestartLeases()
     expect(await rig.queuePause()).toBeNull()
     expect(derivedPauses()).toEqual(['stopped', 'restarted'])
     await rig.settleAccepted(inFlight, 'after-restart')
@@ -347,9 +355,8 @@ describe("a Stop's queue pause", () => {
     await eventually(async () => expect(derivedPauses()).toEqual(['restarted']))
     expect(await rig.queuePause()).toBeNull()
     expect(await rig.handoff(draftId)).toBeUndefined()
-    const next = rig.send('sent after the restart')
-    await next.result
-    await rig.settleAccepted(next.id, 'next')
+    const next = await handedOverUserSend('sent after the restart')
+    await rig.settleAccepted(next, 'next')
     await eventually(async () => expect(await rig.handoff(draftId)).toBeDefined())
   })
 
@@ -739,7 +746,7 @@ describe('Resume', () => {
 
   it("of a Stop from before a restart, which no client offers there, also lifts the restart's pause", async () => {
     const draftId = await stoppedDraft()
-    rig.crashRestartHostProcess()
+    await rig.crashRestartHostProcess()
     expect(await rig.queuePause()).toBeNull()
     expect(derivedPauses()).toEqual(['stopped', 'restarted'])
     expect(await rig.resume()).toMatchObject({ ok: true, value: { resumed: true } })

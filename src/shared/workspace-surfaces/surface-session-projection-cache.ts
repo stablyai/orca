@@ -57,7 +57,8 @@ export class SurfaceSessionProjectionCache {
     view: WorkspaceLayout | undefined,
     chatVerified: boolean,
     unresolved: ReadonlySet<string>,
-    shown: ReadonlySet<string>
+    shown: ReadonlySet<string>,
+    clientBrowserPageIds: ReadonlySet<string> = new Set()
   ): WorkspaceLayout {
     const relevant = new Set([
       ...(this.nativeIds.get(workspaceId) ?? []),
@@ -65,7 +66,13 @@ export class SurfaceSessionProjectionCache {
     ])
     const unresolvedHere = new Set([...relevant].filter((id) => unresolved.has(id)))
     const shownHere = new Set([...relevant].filter((id) => shown.has(id)))
-    const input = JSON.stringify([view, chatVerified, [...unresolvedHere], [...shownHere]])
+    const input = JSON.stringify([
+      view,
+      chatVerified,
+      [...unresolvedHere],
+      [...shownHere],
+      [...clientBrowserPageIds]
+    ])
     const prior = this.projected.get(workspaceId)
     if (prior?.input === input) {
       return structuredClone(prior.value)
@@ -76,7 +83,8 @@ export class SurfaceSessionProjectionCache {
       this.groups.get(workspaceId) ?? [],
       chatVerified,
       unresolvedHere,
-      shownHere
+      shownHere,
+      clientBrowserPageIds
     )
     this.projected.set(workspaceId, { input, value: structuredClone(value) })
     return value

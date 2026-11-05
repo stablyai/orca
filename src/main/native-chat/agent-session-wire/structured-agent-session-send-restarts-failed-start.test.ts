@@ -183,7 +183,7 @@ describe('a send into a published session whose child ended before startup', () 
     const first = await send('hello again', releasedFence)
 
     await eventually(() => expect(acquire).toHaveBeenCalledTimes(2))
-    expect(store.getRecord(SESSION)?.lease.claimStatus).toBe('live')
+    await eventually(() => expect(store.getRecord(SESSION)?.lease.claimStatus).toBe('live'))
     expect(dispatch).not.toHaveBeenCalled()
     const current = store.getRecord(SESSION)?.lease.runtimeFence ?? 0
     expect(current).toBeGreaterThan(releasedFence)
@@ -205,15 +205,19 @@ describe('a send into a published session whose child ended before startup', () 
 
   it('retires the held message with the cause after five restarted children exit before proving their starts', async () => {
     const releasedFence = store.getRecord(SESSION)?.lease.runtimeFence ?? 0
+    await eventually(async () =>
+      expect(
+        (await host.journalSnapshot(SESSION)).items.findLast((item) => item.body.kind === 'status')
+          ?.body
+      ).toMatchObject({ kind: 'status', failure: STARTUP_FAILURE })
+    )
     const rowsBefore = (await journalStatuses()).length
 
     const held = await send('still not signed in', releasedFence)
     await eventually(() => expect(acquire).toHaveBeenCalledTimes(2))
     for (let attempt = 2; attempt <= 6; attempt++) {
       await eventually(() => expect(acquire).toHaveBeenCalledTimes(attempt))
-      await eventually(() =>
-        expect(host.collaboratorsForTests().sessions.get(SESSION)?.child?.phase).toBe('starting')
-      )
+      await eventually(() => expect(store.getRecord(SESSION)?.lease.claimStatus).toBe('live'))
       expect((await journalStatuses()).length).toBe(rowsBefore)
       expect((await submission(held))?.dispatchState).toBe('pending')
       await exitBeforeProof()
@@ -223,7 +227,6 @@ describe('a send into a published session whose child ended before startup', () 
     expect((await submission(held))?.handedOverAt).toBeUndefined()
     expect(await submission(held)).toMatchObject({
       dispatchState: 'rejected',
-      reason: 'Codex stopped before it finished starting. Send your message to try again.',
       rejection: STARTUP_FAILURE,
       recovered: true
     })
@@ -232,9 +235,12 @@ describe('a send into a published session whose child ended before startup', () 
         await host.journalSnapshot(SESSION)
       ).submissions.filter((e) => e.dispatchState === 'pending')
     ).toEqual([])
-    expect((await journalStatuses()).slice(rowsBefore)).toEqual([
-      'Codex stopped before it finished starting. Send your message to try again.'
-    ])
+    expect(
+      (await host.journalSnapshot(SESSION)).items
+        .filter((item) => item.body.kind === 'status')
+        .slice(rowsBefore)
+        .map((item) => item.body)
+    ).toEqual([expect.objectContaining({ kind: 'status', failure: STARTUP_FAILURE })])
     // Accept first so the original message renders above startup failure.
     const snapshot = await host.journalSnapshot(SESSION)
     const causeRow = snapshot.items.findLast((item) => item.body.kind === 'status')?.itemId
@@ -282,7 +288,6 @@ describe('a send while the child of the first start is still proving itself', ()
     await eventually(async () => expect((await submission(held))?.dispatchState).toBe('rejected'))
     expect(await submission(held)).toMatchObject({
       dispatchState: 'rejected',
-      reason: 'Codex stopped before it finished starting. Send your message to try again.',
       rejection: STARTUP_FAILURE,
       recovered: true
     })

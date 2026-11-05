@@ -1,3 +1,4 @@
+import { windowListsTab } from '../../terminal/surface/main-terminal-surfaces'
 import type { OrcaRuntimeWithRestoreLivePairedRendererSessionOwnedMobileTerminals as RendererTerminalRescue } from '../../session-tabs/renderer-session-terminal-rescue'
 import type { OrcaRuntimeWithCloseStructuredAgentSessionTab as StructuredSessionClose } from '../../session-tabs/structured-session-tab-close'
 import type { OrcaRuntimeWithTransitionGraphReloadToTerminalState as SessionGraphAuthority } from '../../session-graph/session-graph-authority'
@@ -160,6 +161,6 @@ export abstract class OrcaRuntimeWithHasLiveOrPersistedServeOrSshOwnedPtyBinding
     if (pty && this.isServeOrSshOwnedPtyId(pty.ptyId)) {
       return true
     }
-    return !this.tabs.has(tab.parentTabId)
+    return !windowListsTab(this, this.tabs, tab.parentTabId)
   }
 }

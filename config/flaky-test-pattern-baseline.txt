@@ -1027,7 +1027,6 @@
 2 test-no-wall-clock:src/main/orcad/orcad-stale-lock-reclaim.test.ts
 2 test-no-wall-clock:src/main/persistence/migrating-orcad-catalog/orcad-source-release-upgrade.test.ts
 2 test-no-wall-clock:src/main/persistence/profile-state/profile-state-backup-temporary-files.test.ts
-2 test-no-wall-clock:src/main/persistence/profile-state/profile-state-live-store-factory.test.ts
 2 test-no-wall-clock:src/main/persistence/profile-state/profile-state-section-repair.test.ts
 2 test-no-wall-clock:src/main/persistence/tracking-repos/persistence-deregistered-repo-residue.test.ts
 2 test-no-wall-clock:src/main/persistence/tracking-repos/persistence-workspace-session-scrollback.test.ts

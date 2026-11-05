@@ -17,7 +17,7 @@ import type { RuntimeEdgeCommandSurface } from '../../runtime-edge-command-contr
 import { rendererPublicationThrottle } from '../../../window/renderer-publication-throttle'
 import { retireHeadlessMobileSessionEditorTab } from '../../mobile-session-editor-projection'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { windowListsTab } from '../../terminal/surface/main-terminal-surfaces'
 import { closeMobileStructuredSessionPresentation } from '../../session-tabs/structured-session-tab-presentation'
 import type { OrcaRuntimeWithCloseStructuredAgentSessionTab as ChatPresentation } from '../../session-tabs/structured-session-tab-close'
 
@@ -156,19 +156,16 @@ export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWi
             snapshotRepublished: !addressedDeadLeaf
           })
         }
-        if (!closingWholeParent || this.tabs.has(tab.parentTabId)) {
+        if (!closingWholeParent || windowListsTab(this, this.tabs, tab.parentTabId)) {
           // Only the renderer may retire its own tab/split leaf; remote lifecycle echoes cannot authorize kills.
           return refusedMobileSessionTabClose('retirement-owner')
         }
       }
-      if (
-        ORCA_LAYOUT_OWNER_IS_MAIN &&
-        (await this.closeMobileRowInMainLayout(worktreeId, tabId, tab, options))
-      ) {
+      if (await this.closeMobileRowInMainLayout(worktreeId, tabId, tab, options)) {
         return finishCommittedClose()
       }
       // Headless parents need local kill/de-persist or relay acknowledgments resurrect them; renderer-owned parents retain its pin guard/durable close.
-      if (closingWholeParent && !this.tabs.has(tab.parentTabId)) {
+      if (closingWholeParent && !windowListsTab(this, this.tabs, tab.parentTabId)) {
         await this.closeHeadlessMobileTerminalTab(worktreeId, snapshot, tab, {
           allowMissingPersistedTab: Boolean(ptyCloseAuthority),
           force: options.force,

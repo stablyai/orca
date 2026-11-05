@@ -392,6 +392,44 @@ describe('canonical content with device-owned presentation', () => {
     expect(merged).toMatchObject({ activeGroupId: 'device-editor', activeTabId: 'f1' })
   })
 
+  it('preserves current native anchors before their rows arrive without importing host placement', () => {
+    const native = (id: string): RuntimeMobileSessionSnapshotTab => ({
+      type: 'agent-session',
+      id,
+      sessionId: id,
+      title: id,
+      agent: 'codex',
+      isActive: false
+    })
+    const published = {
+      ...windowSnapshot(
+        [browser('b1'), terminal('t::a'), file('f1')],
+        ['b1', 'current', 'closed', 'predecessor', 't', 'f1'],
+        'f1'
+      ),
+      tabGroupLayout: { type: 'leaf' as const, groupId: 'g' }
+    }
+    const projected = {
+      ...mainProjection(
+        [terminal('t::a'), native('current'), native('unlisted')],
+        ['t', 'current', 'unlisted'],
+        't::a'
+      ),
+      tabGroups: [{ id: 'host', activeTabId: 'current', tabOrder: ['t', 'current', 'unlisted'] }]
+    }
+    const merged = withCanonicalSessionSurfaces(published, projected, NONE_EXITED)
+
+    expect(merged.tabs.map((row) => row.id)).toEqual(['b1', 't::a', 'f1'])
+    expect(merged.tabGroups).toEqual([
+      { id: 'g', activeTabId: 'f1', tabOrder: ['b1', 'current', 't', 'f1'] }
+    ])
+    expect(merged).toMatchObject({
+      activeTabId: 'f1',
+      activeTabType: 'file',
+      tabGroupLayout: published.tabGroupLayout
+    })
+  })
+
   it('treats initialized empty content as authoritative without clearing other tab kinds', () => {
     const merged = withCanonicalSessionSurfaces(
       windowSnapshot(

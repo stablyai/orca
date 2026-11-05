@@ -1,3 +1,4 @@
+import { abandonStructuredAgentSessionHost } from './structured-agent-session-host-test-abandon'
 import { settleRejectedQueuedRigMessage } from './structured-agent-session-queued-rig-turn.test-fixture'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -59,8 +60,12 @@ export async function createQueuedMessageTestRig(
   const SESSION = options.sessionId ?? DEFAULT_SESSION
   const root = await mkdtemp(join(tmpdir(), 'orca-queued-messages-'))
   resetHostTestOperationIds()
-  const store = await openTestAgentSessionRecordStore(root)
-  const provider = createQueuedRigProvider(store, options, () => host)
+  let store = await openTestAgentSessionRecordStore(root)
+  const provider = createQueuedRigProvider(
+    { getRecord: (id) => store.getRecord(id) },
+    options,
+    () => host
+  )
   const { dispatch, compact, cancelTurn, closeSession, setOption } = provider
   const makeHost = async () =>
     new StructuredAgentSessionHost({
@@ -238,6 +243,8 @@ export async function createQueuedMessageTestRig(
 
   /** Replace the host without graceful close, reusing persisted state. */
   async function crashRestartHostProcess(): Promise<void> {
+    await abandonStructuredAgentSessionHost(host)
+    store = await openTestAgentSessionRecordStore(root)
     host = await makeHost()
   }
 
@@ -284,7 +291,9 @@ export async function createQueuedMessageTestRig(
 
   return {
     root,
-    store,
+    get store() {
+      return store
+    },
     get host() {
       return host
     },

@@ -7,6 +7,7 @@ import { runProcess } from '@orca/process-host'
 import { getDefaultPersistedState } from '../../shared/constants'
 import { ORCA_PROFILE_INDEX_SCHEMA_VERSION } from '../../shared/orca-profiles'
 import type { Repo } from '../../shared/repo-types'
+import type { PersistedState } from '../../shared/persisted-state-types'
 import { openProfileStateDatabase } from '../persistence/profile-state/profile-state-database'
 import {
   hashProfileStateJson,
@@ -160,7 +161,7 @@ function preparedMove() {
 }
 
 function domainAfterImage(
-  before: object,
+  before: PersistedState,
   changes: ReturnType<typeof prepareProfileProjectDomainChanges>
 ): Record<string, unknown> {
   const after: Record<string, unknown> = { ...before }

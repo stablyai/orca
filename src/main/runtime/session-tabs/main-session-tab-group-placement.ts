@@ -3,31 +3,13 @@
 import type { RuntimeMobileSessionSnapshotTab } from '../../../shared/runtime-mobile-session-tab-contracts'
 import type { RuntimeMobileSessionTabGroup } from '../../../shared/runtime-session-contracts'
 
+import { withWindowOnlyIds } from '../../../shared/workspace-layout/tab-group-owners'
+
 type Group = RuntimeMobileSessionTabGroup
 
 /** The id a group's tab order lists a row under: a terminal pane's tab, else the row itself. */
 export function orderIdOf(row: RuntimeMobileSessionSnapshotTab): string {
   return row.type === 'terminal' ? row.parentTabId : row.id
-}
-
-/** Each side-only id placed after the id it follows in the side's group, else at the start. */
-export function withWindowOnlyIds(
-  tabOrder: readonly string[],
-  windowOrder: readonly string[],
-  windowOnly: ReadonlySet<string>
-): string[] {
-  const order = [...tabOrder]
-  windowOrder.forEach((id, index) => {
-    if (!windowOnly.has(id) || order.includes(id)) {
-      return
-    }
-    const after = windowOrder
-      .slice(0, index)
-      .toReversed()
-      .find((previous) => order.includes(previous))
-    order.splice(after === undefined ? 0 : order.indexOf(after) + 1, 0, id)
-  })
-  return order
 }
 
 /** Insert side-only ids where they stood in matching main groups; return ungrouped/unknown-group ids as stray for the active group. */

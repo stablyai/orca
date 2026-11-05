@@ -380,6 +380,7 @@ it('refuses an exact ordinary close captured before a successor instead of treat
       hostTabId: pane.tabId,
       callerId: 'test-reopen',
       commandId: 'test-successor',
+      // ast-grep-ignore: test-no-wall-clock -- The real storage owner validates this bounded deadline against its own clock.
       expiresAt: Date.now() + 60000,
       expected: null,
       content: original.content

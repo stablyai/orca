@@ -181,12 +181,13 @@ export function translateSessionTabMove(
       direction: params.splitDirection
     })
   }
-  const shownOrder = toTabIds(workspace, shown.tabOrder)
+  const placed = new Set(target.tabOrder)
+  const shownOrder = toTabIds(workspace, shown.tabOrder, placed)
   if (params.kind === 'move-to-group') {
     const rowCount = shown.tabOrder.length
     const shownIndex = Math.max(0, Math.min(params.index ?? rowCount, rowCount))
-    // Place before the next projected row main holds; pre-frame window-only rows anchor nothing. Past the end appends.
-    const before = toTabIds(workspace, shown.tabOrder.slice(shownIndex))[0]
+    // Registered client pages retain placement without becoming content owned by this model.
+    const before = toTabIds(workspace, shown.tabOrder.slice(shownIndex), placed)[0]
     const index = before === undefined ? target.tabOrder.length : target.tabOrder.indexOf(before)
     return to({
       ...on,
@@ -198,7 +199,7 @@ export function translateSessionTabMove(
   }
   // A row main holds no tab for (one drawn before main's frame) is named once, and keeps no place.
   const unheld = (rowIds: readonly string[]) =>
-    rowIds.filter((rowId) => !resolveSessionTabRow(workspace, rowId))
+    rowIds.filter((rowId) => !placed.has(rowId) && !resolveSessionTabRow(workspace, rowId))
   const shownUnheld = new Set(unheld(shown.tabOrder))
   const sentUnheld = unheld(params.tabOrder)
   if (
@@ -208,7 +209,7 @@ export function translateSessionTabMove(
   ) {
     return refused('invalid_tab_order')
   }
-  const sent = toTabIds(workspace, params.tabOrder)
+  const sent = toTabIds(workspace, params.tabOrder, placed)
   if (
     sent.length !== shownOrder.length ||
     new Set(sent).size !== sent.length ||
@@ -221,26 +222,44 @@ export function translateSessionTabMove(
   let next = 0
   const wanted = target.tabOrder.map((id) => (shownSet.has(id) ? sent[next++]! : id))
   const order = [...target.tabOrder]
+  const contentIds = new Set(workspace.tabs.map((entry) => entry.id))
+  const external = (ids: readonly string[]) => ids.filter((id) => !contentIds.has(id))
+  const externalOrder = external(order)
+  if (external(wanted).some((id, index) => id !== externalOrder[index])) {
+    return refused('invalid_tab_order')
+  }
   const commands: LayoutCommand[] = []
-  wanted.forEach((id, index) => {
-    if (order[index] !== id) {
-      order.splice(order.indexOf(id), 1)
-      order.splice(index, 0, id)
+  for (let index = wanted.length - 1; index >= 0; index--) {
+    const id = wanted[index]!
+    if (!contentIds.has(id)) {
+      continue
+    }
+    const from = order.indexOf(id)
+    order.splice(from, 1)
+    const before = wanted[index + 1]
+    const at = before === undefined ? order.length : order.indexOf(before)
+    order.splice(at, 0, id)
+    if (from !== at) {
       commands.push({
         ...on,
         type: 'moveTab',
         tabId: id,
-        index,
-        afterTabId: tabOrderAnchor(wanted, index)
+        index: at,
+        afterTabId: tabOrderAnchor(order, at)
       })
     }
-  })
+  }
   return to(...commands)
 }
 
-function toTabIds(workspace: WorkspaceLayout, rowIds: readonly string[]): string[] {
+function toTabIds(
+  workspace: WorkspaceLayout,
+  rowIds: readonly string[],
+  placed: ReadonlySet<string> = new Set()
+): string[] {
   return rowIds.flatMap((rowId) => {
-    const id = resolveSessionTabRow(workspace, rowId)?.tab.id
+    const id =
+      resolveSessionTabRow(workspace, rowId)?.tab.id ?? (placed.has(rowId) ? rowId : undefined)
     return id ? [id] : []
   })
 }

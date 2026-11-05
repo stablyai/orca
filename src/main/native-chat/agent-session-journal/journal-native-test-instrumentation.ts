@@ -175,7 +175,14 @@ export async function holdNativeJournalSql(
   }
 }
 
-function controlNativeJournal(database: JournalHostDatabase, control: object): Promise<void> {
+type NativeJournalTestControl =
+  | { failures: Parameters<typeof failNativeJournalStatements>[1] }
+  | { hold: { sql: string; buffer: SharedArrayBuffer } }
+
+function controlNativeJournal(
+  database: JournalHostDatabase,
+  control: NativeJournalTestControl
+): Promise<void> {
   const worker = database['storage'].writer['worker']
   const id = --nextControl
   return new Promise((resolve, reject) => {

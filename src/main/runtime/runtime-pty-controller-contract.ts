@@ -155,12 +155,17 @@ export type RuntimePtyController = {
   ): WriteSettlement | Promise<WriteSettlement>
   /** Attach existing local daemon output without creating, resizing or focusing; refuse uncertain, SSH-scoped or non-daemon sessions. */
   attach?(ptyId: string): Promise<boolean>
-  kill(ptyId: string): boolean
+  captureStopExpectation?(ptyId: string, addressedIncarnationId?: string): () => boolean
+  kill(ptyId: string, opts?: { isCurrent?: () => boolean }): boolean
   /** `incarnationId` is the rejected spawn's; a same-id respawn since then is left alone. */
   retireRejectedPty?(ptyId: string, stopConfirmed: boolean, incarnationId: string | undefined): void
   stopAndWait?(
     ptyId: string,
-    opts?: { keepHistory?: boolean; deadlineMs?: number }
+    opts?: {
+      keepHistory?: boolean
+      deadlineMs?: number
+      isCurrent?: () => boolean
+    }
   ): Promise<boolean>
   getCwd?(ptyId: string): Promise<string | null>
   getForegroundProcess(ptyId: string): Promise<string | null>

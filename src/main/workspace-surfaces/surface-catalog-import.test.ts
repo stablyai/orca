@@ -256,6 +256,7 @@ it('replays an initialized-empty import after committed refresh failure without 
       hostTabId: 'tab-dormant',
       callerId: 'held-before-import',
       commandId: randomUUID(),
+      // ast-grep-ignore: test-no-wall-clock -- The real storage owner validates this bounded deadline against its own clock.
       expiresAt: Date.now() + 600_000,
       expected: null,
       content: null

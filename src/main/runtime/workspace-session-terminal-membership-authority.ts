@@ -219,7 +219,13 @@ export function rebaseWorkspaceSessionTerminalMembership(
       unifiedTabs[worktreeId] = rebasedUnifiedTabs
       includeUnifiedTabs = true
     }
-    const validTabIds = new Set([...terminalTabIds, ...rebasedUnifiedTabs.map((tab) => tab.id)])
+    const validTabIds = new Set([
+      ...terminalTabIds,
+      ...rebasedUnifiedTabs.map((tab) => tab.id),
+      ...(incoming.clientHostedBrowserPagesByWorktree?.[worktreeId] ?? []).map(
+        (page) => page.browserPageId
+      )
+    ])
     const rebasedGroups = rebaseTabGroups(
       incoming.tabGroups?.[worktreeId] ?? prior.tabGroups?.[worktreeId] ?? [],
       validTabIds

@@ -1,3 +1,4 @@
+import { windowListsTab } from '../../terminal/surface/main-terminal-surfaces'
 import { publishedClientBrowserTab } from '../../session-tabs/published-client-browser-tab'
 import { persistedUnifiedSessionTabProps } from '../../session-tabs/persisted-session-tab-props'
 import { closeCanonicalTerminalSurface } from '../../canonical-terminal-surface-close'
@@ -9,7 +10,6 @@ import type {
   RuntimeMobileSessionTabsSnapshot,
   RuntimeMobileSessionTerminalTab
 } from '../../../../shared/runtime-types'
-import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import { getRuntimeBrowserPageRegistry } from '../../runtime-browser-page-registry'
 import { holdAgentSessionInventory } from '../../agent-session/structured-agent-session-inventory-hold'
 import type { Tab } from '../../../../shared/tab-types'
@@ -188,7 +188,7 @@ export abstract class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs exten
       }
     }
     return resolveTerminalCloseTarget(target, {
-      rendererListsTab: this.tabs.has(target.tabId),
+      rendererListsTab: windowListsTab(this, this.tabs, target.tabId),
       snapshotRows: (this.mobileSessionTabsByWorktree.get(worktreeId)?.tabs ?? []).filter(
         (row): row is RuntimeMobileSessionTerminalTab =>
           row.type === 'terminal' && row.parentTabId === target.tabId
@@ -218,24 +218,6 @@ export abstract class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs exten
     this.notifier?.closeTerminalPane?.(target.tabId, target.leafId)
   }
 
-  /** A paired client's close of one pane: stops only that pane's process, commits only that pane. */
-  protected async closeMobileSessionTerminalPane(
-    worktreeId: string,
-    tab: RuntimeMobileSessionTerminalTab
-  ): Promise<void> {
-    const pty = this.findPtyForMobileTerminalTab(worktreeId, tab)
-    await this.closeTerminalPane(worktreeId, {
-      kind: 'pane',
-      tabId: tab.parentTabId,
-      leafId: tab.leafId
-    })
-    if (pty) {
-      this.ptyController?.kill(pty.ptyId)
-    } else if (!this.tabs.has(tab.parentTabId) && tab.ptyId && parseAppSshPtyId(tab.ptyId)) {
-      this.ptyController?.kill(tab.ptyId)
-    }
-  }
-
   private retireClosedTerminalLeafFromMobileSnapshot(
     worktreeId: string,
     tabId: string,
@@ -249,7 +231,7 @@ export abstract class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs exten
         candidate.leafId === leafId
     )
     // Why: a renderer that lists the tab republishes its own snapshot once it drops the pane.
-    if (!snapshot || !tab || this.tabs.has(tabId)) {
+    if (!snapshot || !tab || windowListsTab(this, this.tabs, tabId)) {
       return
     }
     const proof = this.getMobileSessionTerminalRetirementProof(worktreeId, tab)

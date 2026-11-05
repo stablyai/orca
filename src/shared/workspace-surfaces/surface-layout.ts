@@ -10,7 +10,8 @@ export function projectSurfaceWorkspace(
   surfaces: readonly WorkspaceSurface[],
   chatVerified = true,
   unresolvedNativeSessionIds: ReadonlySet<string> = new Set(),
-  shownNativeSessionIds: ReadonlySet<string> = new Set()
+  shownNativeSessionIds: ReadonlySet<string> = new Set(),
+  clientBrowserPageIds: ReadonlySet<string> = new Set()
 ): WorkspaceLayout {
   const views = new Map(view?.tabs.map((tab) => [tab.id, tab]))
   const authoritative = new Set(
@@ -68,7 +69,7 @@ export function projectSurfaceWorkspace(
   const groups = (view?.groups ?? []).map((group) => ({
     ...group,
     tabOrder: group.tabOrder.filter((id) => {
-      if (!retained.has(id) || placed.has(id)) {
+      if ((!retained.has(id) && !clientBrowserPageIds.has(id)) || placed.has(id)) {
         return false
       }
       placed.add(id)

@@ -244,7 +244,12 @@ export class TerminalSurfaceIndex {
             workspace,
             partition.desktopView,
             partition.facts,
-            this.deps.generatedTitlesEnabled()
+            this.deps.generatedTitlesEnabled(),
+            new Set(
+              (partition.layout.records.clientHostedBrowserPagesByWorkspace?.[key] ?? []).map(
+                (page) => page.browserPageId
+              )
+            )
           )
         }
       }

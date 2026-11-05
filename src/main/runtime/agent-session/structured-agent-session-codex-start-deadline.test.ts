@@ -1,3 +1,4 @@
+import '../../native-chat/agent-session-journal/journal-host-database-test-support'
 // A Codex start has no per-step deadline: a slow `initialize` still delivers the held message, and
 // one that never answers is ended by the start's own overall limit ("never finished starting").
 

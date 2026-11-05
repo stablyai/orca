@@ -162,7 +162,7 @@ export async function readJournalRowsAfterCursorAsync(
       limit
     )) {
       for (const stored of page) {
-        const parsed = parseJournalRow(stored.rowJson)
+        const parsed = parseJournalRow(stored.rowJson, source?.marker !== 5)
         if (!parsed.ok) {
           return stopped()
         }

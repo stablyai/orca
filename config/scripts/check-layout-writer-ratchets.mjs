@@ -3,6 +3,7 @@ import path from 'node:path'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
 import ts from 'typescript-api'
+import { isReadKeyLiteral } from './layout-writer-domain-inputs.mjs'
 
 import {
   diffCounts,
@@ -320,6 +321,71 @@ function isSameNameCopy(property, name) {
   return ts.isPropertyAccessExpression(value) && value.name.text === name
 }
 
+// These exact edits build returned compatibility values, never publish another layout authority.
+const PROJECTION_EDITS = new Map([
+  [
+    'src/main/orca-profiles/profile-project-domain-changes.ts:projectProfileProjectSurfaceState',
+    new Set(['next.workspaceSession', 'next.workspaceSessionsByHostId'])
+  ],
+  [
+    'src/main/orca-profiles/profile-project-surface-presentation.ts:remapProjectSurfacePresentation',
+    new Set(['loaded.desktopView.activeTabIdByWorktree[before.workspaceId]'])
+  ],
+  [
+    'src/main/workspace-surfaces/surface-migration-identities.ts:reserveImportedSurfaceIdentities',
+    new Set(['leaf.facts.ptyId'])
+  ]
+])
+
+function namedOwner(node) {
+  for (let parent = node.parent; parent; parent = parent.parent) {
+    if (ts.isFunctionLike(parent) && parent.name) {
+      return staticName(parent.name)
+    }
+  }
+  return ''
+}
+
+function isProjectionEdit(node, fileName) {
+  const target = ts.isBinaryExpression(node) ? node.left : node.expression
+  return PROJECTION_EDITS.get(`${fileName}:${namedOwner(node)}`)?.has(target.getText()) === true
+}
+
+function isOwnerCommand(node, fileName) {
+  return (
+    fileName === 'src/main/runtime/session-tabs/terminal-surface-retirements.ts' &&
+    namedOwner(node) === 'releaseStoppedPaneBindings' &&
+    node.getText() === 'this.store.retirePtyBinding'
+  )
+}
+
+function isProjectionInput(node, fileName) {
+  const literal = node.parent
+  const call = literal.parent
+  return (
+    fileName === 'src/main/workspace-surfaces/surface-catalog-import.ts' &&
+    namedOwner(node) === 'admitSurfaceCatalogImports' &&
+    ts.isCallExpression(call) &&
+    call.expression.getText() === 'prepareOrcadMigrationWorkspaceSession' &&
+    staticName(node.name) === 'workspaceSession' &&
+    node.initializer.getText() === 'session'
+  )
+}
+
+/** Two arms calling the same writer still name one conditional writer site. */
+function repeatsConditionalWriter(node) {
+  const call = node.parent
+  if (
+    !ts.isCallExpression(call) ||
+    !ts.isConditionalExpression(call.parent) ||
+    call.parent.whenFalse !== call
+  ) {
+    return false
+  }
+  const first = call.parent.whenTrue
+  return ts.isCallExpression(first) && first.expression.getText() === call.expression.getText()
+}
+
 /** Layout writes in one file under one ratchet's rules. */
 export function countLayoutWrites(sourceText, ratchet, fileName = 'file.tsx') {
   const names = [...ratchet.writerNames, ...ratchet.assignedFields]
@@ -341,21 +407,31 @@ export function countLayoutWrites(sourceText, ratchet, fileName = 'file.tsx') {
         ts.isIdentifier(node.expression) &&
         ratchet.writerNames.has(node.expression.text))
     ) {
-      count += 1
+      if (
+        !repeatsConditionalWriter(node) &&
+        !(ratchet.id === 'main' && isOwnerCommand(node, fileName))
+      ) {
+        count += 1
+      }
     } else if (
       ts.isBinaryExpression(node) &&
       ASSIGNMENT_OPERATORS.has(node.operatorToken.kind) &&
       targetedField(node.left, ratchet.assignedFields) !== null
     ) {
       const field = targetedField(node.left, ratchet.assignedFields)
-      if (!(ratchet.entryContentFields.has(field) && keepsMembership(node.right))) {
+      if (
+        !(ratchet.entryContentFields.has(field) && keepsMembership(node.right)) &&
+        !(ratchet.id === 'main' && isProjectionEdit(node, fileName))
+      ) {
         count += 1
       }
     } else if (
       ts.isDeleteExpression(node) &&
       targetedField(node.expression, ratchet.assignedFields) !== null
     ) {
-      count += 1
+      if (!(ratchet.id === 'main' && isProjectionEdit(node, fileName))) {
+        count += 1
+      }
     } else if (
       ts.isShorthandPropertyAssignment(node) &&
       ratchet.keyedFields.has(node.name.text) &&
@@ -369,6 +445,7 @@ export function countLayoutWrites(sourceText, ratchet, fileName = 'file.tsx') {
         name !== null &&
         ratchet.keyedFields.has(name) &&
         !isSameNameCopy(node, name) &&
+        !(ratchet.id === 'main' && isProjectionInput(node, fileName)) &&
         !(ratchet.entryContentFields.has(name) && keepsMembership(node.initializer))
       ) {
         count += 1
@@ -376,6 +453,7 @@ export function countLayoutWrites(sourceText, ratchet, fileName = 'file.tsx') {
     } else if (
       (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) &&
       ratchet.keyedFields.has(node.text) &&
+      !(ratchet.id === 'main' && isReadKeyLiteral(node, fileName, namedOwner)) &&
       // Object keys and element reads are judged above; `'tabsByWorktree'` elsewhere feeds a
       // computed-key write (`patch[key] = …`), which cannot be resolved statically.
       !(ts.isPropertyAssignment(node.parent) && node.parent.name === node) &&
@@ -417,7 +495,15 @@ export function collectCurrentCounts(ratchet, root = process.cwd()) {
     }
     const found = countLayoutWrites(text, ratchet, rel)
     if (found > 0) {
-      counts.set(rel, found)
+      const owner =
+        ratchet.id === 'main' &&
+        [
+          'src/main/persistence/loading-store/pty-binding-session-write.ts',
+          'src/main/persistence/loading-store/pty-binding-session-retirement.ts'
+        ].includes(rel)
+          ? 'src/main/persistence/loading-store/pty-binding-persistence.ts'
+          : rel
+      counts.set(owner, (counts.get(owner) ?? 0) + found)
     }
   }
   return counts

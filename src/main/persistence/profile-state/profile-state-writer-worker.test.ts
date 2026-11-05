@@ -99,6 +99,7 @@ describe('persistent profile state write worker', () => {
         hostId: 'local',
         callerId: 'ordinary',
         commandId: 'create',
+        // ast-grep-ignore: test-no-wall-clock -- The real storage owner validates this bounded deadline against its own clock.
         expiresAt: Date.now() + 60_000,
         command: { type: 'createTerminalTab', workspace: 'folder', tabId: 'terminal', leafId },
         targets: [{ hostTabId: 'terminal', expected: null }]

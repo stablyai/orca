@@ -108,10 +108,10 @@ async function oldIndex(visible: boolean, tabId = 'chat-tab'): Promise<void> {
       probe: { outcome: 'reservation-unused' },
       operation: {
         callerKey: 'test',
-        operationId: `${Date.now()}-${randomUUID().replaceAll('-', '')}`,
+        operationId: randomUUID().replaceAll('-', ''),
         fingerprint: 'found'
       },
-      now: Date.now()
+      now: 1_700_000_000_000
     })
   }
   await store.setSessionTabVisibility(sessionId, visible, tabId)
@@ -149,6 +149,7 @@ function closeRequest(commandId: string): SurfaceStorageMutation {
       content: null,
       callerId: 'window',
       commandId,
+      // ast-grep-ignore: test-no-wall-clock -- The real storage owner validates this bounded deadline against its own clock.
       expiresAt: Date.now() + 60_000
     }
   }
@@ -236,6 +237,7 @@ it('preserves a live terminal when an older native index creates a colliding vis
       hostId: 'local',
       callerId: 'window',
       commandId: 'terminal',
+      // ast-grep-ignore: test-no-wall-clock -- The real storage owner validates this bounded deadline against its own clock.
       expiresAt: Date.now() + 60_000,
       targets: [{ workspaceId, hostTabId: 'chat-tab', expected: null }],
       command: { type: 'createTerminalTab', workspace: workspaceId, tabId: 'chat-tab', leafId }
@@ -372,6 +374,7 @@ it('writes one native projection for a joint local chat close and SSH terminal c
       hostId: 'ssh:remote',
       callerId: 'mixed-owner',
       commandId: 'remote-terminal',
+      // ast-grep-ignore: test-no-wall-clock -- The real storage owner validates this bounded deadline against its own clock.
       expiresAt: Date.now() + 60_000,
       targets: [{ workspaceId, hostTabId: 'ssh-terminal', expected: null }],
       command: {
@@ -453,7 +456,7 @@ it('streams native effects into the common commit and rolls them back with a rej
   const rows = Array.from({ length: 160 }, (_, index) => ({
     epoch: 'joint-unit',
     seq: index + 1,
-    savedAt: Date.now(),
+    savedAt: 1_700_000_000_000,
     json: JSON.stringify({ text: 'x'.repeat(2048), index })
   }))
   const transaction = { journalPath: journalDatabasePath(directory), commands: [command] }

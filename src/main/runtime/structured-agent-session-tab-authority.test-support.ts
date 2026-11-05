@@ -66,6 +66,7 @@ export async function authorityProfile(
   profile = createStore()
 ) {
   initOrcaProfilePaths()
+  await profile.executeWorkspaceSurfaceCommand({ type: 'initialize', hostId: 'local' })
   const group = profile.createProjectGroup({
     name: 'Chats',
     parentPath: root,

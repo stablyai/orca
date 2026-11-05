@@ -23,6 +23,83 @@ describe('main layout writers', () => {
     ].join('\n')
     expect(countLayoutWrites(src, mainRatchet, 'a.ts')).toBe(8)
   })
+
+  it('keeps computed writes visible while excluding proven reads and typed-owner inputs', () => {
+    const reads = `function readSession(hostId) {
+      const domain = hostId === 'local' ? 'workspaceSession' : 'workspaceSessionsByHostId'
+      const value = db.prepare('SELECT payload WHERE domain = ?').get(domain)
+      runtime.dirtyProfileStateDomains.add(hostId === 'local' ? 'workspaceSession' : 'workspaceSessionsByHostId')
+      return value
+    }`
+    expect(countLayoutWrites(reads, mainRatchet, 'a.ts')).toBe(0)
+    expect(
+      countLayoutWrites(
+        "const key = 'workspaceSession'; state[key] = replacement",
+        mainRatchet,
+        'a.ts'
+      )
+    ).toBe(1)
+    expect(
+      countLayoutWrites(
+        "for (const key of keys) if (key === 'workspaceSession') patch[key] = next",
+        mainRatchet,
+        'a.ts'
+      )
+    ).toBe(1)
+    expect(
+      countLayoutWrites(
+        `function applyReplacement(mutation) {
+      state[mutation.domain] = mutation.payload
+    }
+    applyReplacement({ domain: 'workspaceSession', payload: value })`,
+        mainRatchet,
+        'a.ts'
+      )
+    ).toBe(1)
+    expect(
+      countLayoutWrites(
+        `function surfaceSessionReplacements() {
+      return [{ domain: 'workspaceSession', payload: value }]
+    }`,
+        mainRatchet,
+        'src/main/workspace-surfaces/surface-host-profile-session.ts'
+      )
+    ).toBe(0)
+    expect(
+      countLayoutWrites(
+        `function surfaceSessionReplacements() {
+      applyReplacement({ domain: 'workspaceSession', payload: value })
+      return [{ domain: 'workspaceSession', payload: value }]
+    }`,
+        mainRatchet,
+        'src/main/workspace-surfaces/surface-host-profile-session.ts'
+      )
+    ).toBe(1)
+    expect(
+      countLayoutWrites(
+        `function protectSurfaceProfileSave() {
+      const selected = mutation.domain === 'workspaceSession'
+      return selected
+    }`,
+        mainRatchet,
+        'src/main/workspace-surfaces/surface-profile-save.ts'
+      )
+    ).toBe(0)
+    const projection = `function projectProfileProjectSurfaceState(state) {
+      const next = { ...state }
+      next.workspaceSession = projected
+      runtime.state.workspaceSession = escaped
+      store.setWorkspaceSession(escaped)
+      return next
+    }`
+    expect(
+      countLayoutWrites(
+        projection,
+        mainRatchet,
+        'src/main/orca-profiles/profile-project-domain-changes.ts'
+      )
+    ).toBe(2)
+  })
 })
 
 describe('renderer layout writes', () => {

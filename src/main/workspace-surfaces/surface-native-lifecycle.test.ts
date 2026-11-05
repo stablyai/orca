@@ -189,6 +189,7 @@ it('keeps hostless dismissal of a formerly canonical chat through normal saves a
           hostId: 'local',
           callerId: 'explicit-reopen',
           commandId: 'show-chat',
+          // ast-grep-ignore: test-no-wall-clock -- The real storage owner validates this bounded deadline against its own clock.
           expiresAt: Date.now() + 60_000
         }
       }
@@ -297,6 +298,7 @@ it('keeps exact local dismissal after healthy hide failure through graph, save a
           hostId: 'local',
           callerId: 'explicit-reopen',
           commandId: 'show-after-failure',
+          // ast-grep-ignore: test-no-wall-clock -- The real storage owner validates this bounded deadline against its own clock.
           expiresAt: Date.now() + 60_000
         }
       }

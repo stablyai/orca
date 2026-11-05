@@ -86,7 +86,14 @@ export function applySurfaceLayout(
                 workspaceId,
                 workspace,
                 affected.get(workspaceId)!,
-                view.chatVerified
+                view.chatVerified,
+                undefined,
+                undefined,
+                new Set(
+                  (view.model.records.clientHostedBrowserPagesByWorkspace?.[workspaceId] ?? []).map(
+                    (page) => page.browserPageId
+                  )
+                )
               )
             : {
                 ...workspace!,

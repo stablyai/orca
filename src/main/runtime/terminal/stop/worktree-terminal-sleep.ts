@@ -7,6 +7,7 @@ import type { RuntimeWorktreeTerminalSleepResult } from '../../../../shared/runt
 import { WORKTREE_TERMINAL_SLEEP_TIMEOUT_MS } from '../../orca-runtime-postlude'
 import { teardownRpcDeadline } from '../../worktree-teardown-deadline'
 import { sleptNothing } from './worktree-terminal-sleep-result'
+import type { TerminalIntentionalStopOwner } from '../../terminal-intentional-stops'
 import type { WorktreeSleepScope } from './worktree-terminal-sleep-key'
 
 export abstract class OrcaRuntimeWithSleepResolvedWorktreeTerminals extends OrcaRuntimeWithAgentGeneratedTabTitles {
@@ -64,7 +65,7 @@ export abstract class OrcaRuntimeWithSleepResolvedWorktreeTerminals extends Orca
     const pendingPtyIds = new Set<string>()
     let generation = 0
     let fullyCommitted = false
-    const settleReversibleStops = new Map<string, (stopped: boolean) => void>()
+    const settleReversibleStops = new Map<string, TerminalIntentionalStopOwner>()
     try {
       const resolvedWorktrees = includeTargetResolvedWorktree(
         [...(await this.getResolvedWorktreeMap()).values()],
@@ -165,14 +166,14 @@ export abstract class OrcaRuntimeWithSleepResolvedWorktreeTerminals extends Orca
             keepHistory: true,
             deadlineMs: teardownRpcDeadline(sleepDeadline)
           })
+          await settleReversibleStops.get(ptyId)?.joinRelease()
           settleReversibleStops.get(ptyId)?.(stopped)
           return { ptyId, stopped }
         })
       )
-      const successfulStopPtyIds = orderedLivePtyIds.filter((_, index) => {
-        const result = stopResults[index]
-        return result?.status === 'fulfilled' && result.value.stopped
-      })
+      const successfulStopPtyIds = stopResults.flatMap((result) =>
+        result.status === 'fulfilled' && result.value.stopped ? [result.value.ptyId] : []
+      )
       const failedStopIndex = stopResults.findIndex((result) =>
         result.status === 'rejected' ? true : !result.value.stopped
       )
@@ -265,6 +266,7 @@ export abstract class OrcaRuntimeWithSleepResolvedWorktreeTerminals extends Orca
       }
     } finally {
       for (const settleStop of settleReversibleStops.values()) {
+        await settleStop.joinRelease()
         settleStop(false)
       }
       if (!fullyCommitted && generation > 0) {

@@ -123,6 +123,7 @@ it.each<ExecutionHostId>(['local', 'ssh:host'])(
       ...key,
       callerId: 'main',
       commandId: 'close',
+      // ast-grep-ignore: test-no-wall-clock -- The real storage owner validates this bounded deadline against its own clock.
       expiresAt: Date.now() + 1000,
       expected: repository.read(key),
       content: null

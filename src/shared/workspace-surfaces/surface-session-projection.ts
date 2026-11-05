@@ -44,22 +44,31 @@ export function projectSurfaceSession(
     ...(projectionCache?.workspaceIds() ?? byWorkspace.keys())
   ])
   for (const workspaceId of scopes) {
-    loaded.layout.workspaces[workspaceId] = projectionCache
+    const externalIds = new Set(
+      (session.clientHostedBrowserPagesByWorktree?.[workspaceId] ?? []).map(
+        (page) => page.browserPageId
+      )
+    )
+    const view = loaded.layout.workspaces[workspaceId]
+    const projected = projectionCache
       ? projectionCache.project(
           workspaceId,
-          loaded.layout.workspaces[workspaceId],
+          view,
           chatVerified,
           unresolvedNativeSessionIds,
-          shownNativeSessionIds
+          shownNativeSessionIds,
+          externalIds
         )
       : projectSurfaceWorkspace(
           workspaceId,
-          loaded.layout.workspaces[workspaceId],
+          view,
           byWorkspace.get(workspaceId) ?? [],
           chatVerified,
           unresolvedNativeSessionIds,
-          shownNativeSessionIds
+          shownNativeSessionIds,
+          externalIds
         )
+    loaded.layout.workspaces[workspaceId] = projected
   }
   const activeEntities =
     projectionCache?.terminalEntityIds ??
