@@ -228,13 +228,20 @@ describe('terminal worker turn stops', () => {
     expect(ctx.mail().map((m) => m.subject)).toEqual(['Worker stopped without reporting'])
     expect(ctx.mail()[0].body).toContain('later idle turns are not reported until you write to it')
 
-    ctx.db.insertMessage({
+    const mail = ctx.db.insertMessage({
       from: 'term_coordinator',
       to: `dispatch:${ctx.dispatch.id}`,
       subject: 'check again',
       runId: ctx.run.id
     })
+    // Mail still on its way belongs to the next turn, not to a stop seen before it arrived.
     current.row = hookRow({ stateStartedAt: 500 })
+    stops.observe(moved('working', 'done'))
+    await settle()
+    expect(ctx.mail()).toHaveLength(1)
+
+    ctx.db.markAsDelivered([mail.id], `dispatch:${ctx.dispatch.id}`)
+    current.row = hookRow({ stateStartedAt: 600 })
     stops.observe(moved('working', 'done'))
     await settle()
     expect(ctx.mail()).toHaveLength(2)
@@ -425,6 +432,7 @@ describe('remote worker turn stops', () => {
   it('relays the report to the Run home under a stable id', () => {
     const db = new OrchestrationDb(':memory:')
     const enqueueFederationRelay = vi.spyOn(db, 'enqueueFederationRelay')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const attachment = { dispatch_id: 'dsp_remote', task_id: 'task_remote' }
     const stop = { from: HANDLE, stopKey: 'k', reason: 'finished' as const, lastOutput: 'bye' }
     const deps = { getDb: () => db, isWaitingForMail: () => false, notify: vi.fn() }
@@ -438,6 +446,8 @@ describe('remote worker turn stops', () => {
       kind: 'escalation'
     })
     expect(first.messageId).toBe(second.messageId)
+    // The repeat is a no-op, not a failed relay.
+    expect(warn).not.toHaveBeenCalled()
     const relayed = JSON.parse(first.payload)
     expect(relayed).toMatchObject({ type: 'escalation', priority: 'high' })
     expect(JSON.parse(relayed.payload)).toMatchObject({ stopReason: 'finished' })

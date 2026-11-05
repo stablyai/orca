@@ -75,6 +75,12 @@ function describeStop(stop: WorkerTurnStop, task: string, dispatchId: string): s
   ].join('\n')
 }
 
+// Mail still on its way (not yet delivered or read) belongs to the worker's next turn, not this stop.
+function latestReachedMailSequence(db: OrchestrationDb, dispatchId: string): number {
+  const recent = db.getAllMessages(`dispatch:${dispatchId}`, 50)
+  return recent.find((message) => message.read === 1 || message.delivered_at)?.sequence ?? 0
+}
+
 /** Tell the coordinator once that a worker is at rest with its Dispatch unsettled; never settles it. */
 export function reportWorkerTurnStop(
   db: OrchestrationDb,
@@ -93,11 +99,11 @@ export function reportWorkerTurnStop(
   ) {
     return
   }
-  // An idle finish answers the coordinator's latest mail, so it is news once per mail: a later idle turn
-  // (a worker on its own schedule, or one the user is talking to) repeats what the coordinator was told.
+  // An idle finish answers the latest mail that reached the worker, so it is news once per mail: a later
+  // idle turn (a worker on its own schedule, or one the user is talking to) repeats what the coordinator was told.
   const stopKey =
     stop.reason === 'finished'
-      ? `finished:${db.getAllMessages(`dispatch:${dispatchId}`, 1)[0]?.sequence ?? 0}`
+      ? `finished:${latestReachedMailSequence(db, dispatchId)}`
       : stop.stopKey
   const id = `msg_stop_${createHash('sha256')
     .update(JSON.stringify([dispatchId, stopKey]))
