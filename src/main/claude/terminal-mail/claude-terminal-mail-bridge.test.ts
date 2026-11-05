@@ -45,3 +45,20 @@ describe('Claude terminal mail bridge', () => {
     await expect(untaken).resolves.toBe('refused')
   })
 })
+
+describe('Claude terminal mail bridge capacity', () => {
+  afterEach(() => vi.useRealTimers())
+
+  it('forgets panes whose Claude stopped polling before refusing a new one at the cap', () => {
+    vi.useFakeTimers()
+    const bridge = new ClaudeTerminalMailBridge()
+    const paneKey = (n: number) => `tab-1:11111111-1111-4111-8111-${String(n).padStart(12, '0')}`
+    for (let n = 0; n < 1024; n += 1) {
+      bridge.receive({ paneKey: paneKey(n), sessionId: 's', instanceId: 'i', action: 'poll' })
+    }
+    vi.advanceTimersByTime(20_000)
+    bridge.receive({ paneKey: paneKey(5000), sessionId: 's', instanceId: 'i', action: 'poll' })
+
+    expect(bridge.isLive(paneKey(5000))).toBe(true)
+  })
+})

@@ -309,3 +309,32 @@ describe('mailbox pointer through the agent prompt channel', () => {
     db.close()
   })
 })
+
+describe('mailbox pointer staging when resolving the prompt channel throws', () => {
+  it('settles the flight instead of leaving the mail reserved', () => {
+    const db = new OrchestrationDb(':memory:')
+    const message = db.insertMessage({
+      runId: 'run_legacy_local',
+      from: 'a',
+      to: 'run:run-1',
+      subject: 's'
+    })
+    const state = new OrchestrationMailboxPointerState()
+    const writePty = vi.fn(() => WRITE_ACCEPTED)
+    const args = stageArgs(db, state)
+    const resolvePromptChannel = () => {
+      throw new Error('channel lookup failed')
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stub deps cover every member staging reads, as the other staging tests here rely on.
+    stageOrchestrationMailboxPointer({
+      ...args,
+      deps: { ...pointerDeps(db, writePty), resolvePromptChannel },
+      messages: [{ id: message.id, type: 'status', sequence: 1 }]
+    } as never)
+
+    expect(state.hasFlight('pty-1')).toBe(false)
+    expect(state.hasActiveWatermark('run:run-1')).toBe(false)
+    expect(writePty).not.toHaveBeenCalled()
+    db.close()
+  })
+})

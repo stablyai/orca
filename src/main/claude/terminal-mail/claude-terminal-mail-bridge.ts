@@ -67,7 +67,10 @@ export class ClaudeTerminalMailBridge {
     if (message.action === 'poll') {
       if (!same) {
         if (!session && this.sessions.size >= 1024) {
-          return {}
+          this.pruneStale()
+          if (this.sessions.size >= 1024) {
+            return {}
+          }
         }
         this.drop(message.paneKey)
         session = { ...message, seenAt: Date.now(), outbox: [] }
@@ -131,6 +134,15 @@ export class ClaudeTerminalMailBridge {
   clear(): void {
     for (const paneKey of this.sessions.keys()) {
       this.drop(paneKey)
+    }
+  }
+
+  /** A Claude that exited without `end` (its terminal closed under it) stops polling; forget it. */
+  private pruneStale(): void {
+    for (const [paneKey, session] of this.sessions) {
+      if (Date.now() - session.seenAt > 3 * CLAUDE_TERMINAL_MAIL_LIVE_MS) {
+        this.drop(paneKey)
+      }
     }
   }
 
