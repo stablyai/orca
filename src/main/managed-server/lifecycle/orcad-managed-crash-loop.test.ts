@@ -149,11 +149,9 @@ describe('a managed orcad that keeps exiting unexpectedly', () => {
     let finish = (): void => {}
     vi.mocked(wakeStoppedManagedOrcad).mockImplementationOnce(async () => {
       await new Promise<void>((resolve) => (finish = resolve))
+      const health = { previousUnexpectedExit: CRASHED }
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only health is read.
-      return {
-        outcome: 'started',
-        readiness: { health: { previousUnexpectedExit: CRASHED } } as never
-      }
+      return { outcome: 'started', readiness: { health } as never }
     })
     const pending = findStopped()
     await vi.waitFor(() => expect(wakeStoppedManagedOrcad).toHaveBeenCalledOnce())
