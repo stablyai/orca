@@ -459,14 +459,14 @@ describe('runKillAllTerminalSurfaces', () => {
   })
 
   it('revalidates remaining ownership after a yield before killing an exact PTY', async () => {
+    // Local tabs: a paired server's tabs stay out of Kill all (see the paired-server suite).
     let current = state({
       activeWorktreeId: 'wt',
-      settings: { activeRuntimeEnvironmentId: 'env-1' },
       tabsByWorktree: {
         wt: [terminal('first', 'wt'), terminal('second', 'wt'), terminal('third', 'wt')]
       },
       ptyIdsByTabId: {
-        first: ['pty-first', 'remote:terminal-1'],
+        first: ['pty-first', 'remote:env-1@@terminal-1'],
         second: ['pty-second'],
         third: ['pty-shared-after-yield', 'remote:env-1@@terminal-1']
       }
@@ -496,7 +496,6 @@ describe('runKillAllTerminalSurfaces', () => {
     const yieldToRenderer = vi.fn(async () => {
       current = state({
         activeWorktreeId: 'wt',
-        settings: { activeRuntimeEnvironmentId: 'env-1' },
         tabsByWorktree: {
           wt: [terminal('third', 'wt'), terminal('survivor', 'wt')]
         },
@@ -530,14 +529,14 @@ describe('runKillAllTerminalSurfaces', () => {
       runtimeTerminals: [],
       cleanupOnlyPtyIds: ['remote:env-1@@terminal-1']
     })
-    expect(killPty).not.toHaveBeenCalledWith('pty-first')
-    expect(killPty).not.toHaveBeenCalledWith('pty-second')
+    expect(killPty).toHaveBeenCalledWith('pty-first')
+    expect(killPty).toHaveBeenCalledWith('pty-second')
     expect(killPty).not.toHaveBeenCalledWith('pty-shared-after-yield')
     expect(snapshotKillAllTerminalSurfaceIds(current)).toEqual(['survivor'])
     expect(summary).toMatchObject({
       closeAttemptCount: 3,
       absentTargetCount: 3,
-      exactKillAcceptedCount: 0,
+      exactKillAcceptedCount: 2,
       closeYieldCount: 1
     })
   })
