@@ -1,7 +1,6 @@
 import React from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { useAppStore } from '@/store'
 import { AgentTypeIcon } from '@/lib/agent-type-icon'
 import { formatRelativeTime } from '../activity/activity-thread-presentation'
 import { revealDashboardAgent } from '../dashboard/reveal-dashboard-agent'
@@ -26,10 +25,6 @@ export function HomeAgentRow({
     <button
       type="button"
       onClick={() => {
-        const { tabsByWorktree, unifiedTabsByWorktree } = useAppStore.getState()
-        const tabOpen =
-          tabsByWorktree[card.worktreeId]?.some((tab) => tab.id === card.tabId) ||
-          unifiedTabsByWorktree[card.worktreeId]?.some((tab) => tab.id === card.tabId)
         const revealed = revealDashboardAgent({
           repoId: card.repoId,
           worktreeId: card.worktreeId,
@@ -37,8 +32,8 @@ export function HomeAgentRow({
           tabId: card.tabId,
           leafId: card.leafId
         })
-        // Why: retained cards can outlive their tab; reveal still opens the workspace, so say the agent is gone.
-        if (!revealed || !tabOpen) {
+        // Why: Home only lists live cards, whose tabs may still be hydrating, so trust the reveal result.
+        if (!revealed) {
           toast.info(
             translate(
               'auto.components.home.HomeAgentRow.revealFailed',
