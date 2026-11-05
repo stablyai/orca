@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { pluginMonacoTokenRules } from './plugin-monaco-token-rules'
+import { monacoMarkdownRules, pluginMonacoTokenRules } from './plugin-monaco-token-rules'
 
 const rules = (tokenColors: Parameters<typeof pluginMonacoTokenRules>[0]) =>
   Object.fromEntries(
@@ -17,5 +17,13 @@ describe('pluginMonacoTokenRules', () => {
     ])
     expect(result.string).toEqual({ foreground: '#333333', fontStyle: 'italic' })
     expect(result.regexp).toEqual({ foreground: '#222222', fontStyle: 'italic' })
+  })
+})
+
+describe('monacoMarkdownRules', () => {
+  it("paints the stock theme's plain text in the theme's foreground", () => {
+    const rules = monacoMarkdownRules('dark', [], (value) => value, '#e8e0ff')
+
+    expect(rules).toContainEqual({ token: 'md.meta.embedded', foreground: '#e8e0ff' })
   })
 })

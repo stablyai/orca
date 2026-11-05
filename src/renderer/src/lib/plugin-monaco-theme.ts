@@ -1,6 +1,6 @@
 import type * as Monaco from 'monaco-editor'
 import type { PluginThemeTokenColorRule } from '../../../shared/plugins/artifacts/plugin-theme-artifact'
-import { pluginMonacoTokenRules } from './plugin-monaco-token-rules'
+import { monacoMarkdownRules, pluginMonacoTokenRules } from './plugin-monaco-token-rules'
 import { contrastRatio, type ColorProbe, type Rgba } from './plugin-theme-tokens'
 
 export type PluginMonacoTheme = { name: string; data: Monaco.editor.IStandaloneThemeData }
@@ -113,24 +113,30 @@ export function derivePluginMonacoTheme(input: {
       colors[key] = hex(value)
     }
   }
+  const readableColor = (value: string): string | null => {
+    const parsed = input.probe(value)
+    if (!parsed) {
+      return null
+    }
+    // Why blend: Monaco token colors are opaque, so a translucent one is painted onto the editor.
+    const [r, g, b, a] = parsed
+    const opaque: Rgba = [
+      r * a + background[0] * (1 - a),
+      g * a + background[1] * (1 - a),
+      b * a + background[2] * (1 - a),
+      1
+    ]
+    return contrastRatio(opaque, background) >= MIN_SYNTAX_CONTRAST ? hex(opaque) : null
+  }
+  const tokenColors = input.tokenColors ?? []
   const data: Monaco.editor.IStandaloneThemeData = {
     base: input.base === 'dark' ? 'vs-dark' : 'vs',
     inherit: true,
-    rules: pluginMonacoTokenRules(input.tokenColors ?? [], (value) => {
-      const parsed = input.probe(value)
-      if (!parsed) {
-        return null
-      }
-      // Why blend: Monaco token colors are opaque, so a translucent one is painted onto the editor.
-      const [r, g, b, a] = parsed
-      const opaque: Rgba = [
-        r * a + background[0] * (1 - a),
-        g * a + background[1] * (1 - a),
-        b * a + background[2] * (1 - a),
-        1
-      ]
-      return contrastRatio(opaque, background) >= MIN_SYNTAX_CONTRAST ? hex(opaque) : null
-    }),
+    // Why the markdown rules here: Monaco's `inherit` reads its original vs / vs-dark, not their redefinition.
+    rules: [
+      ...pluginMonacoTokenRules(tokenColors, readableColor),
+      ...monacoMarkdownRules(input.base, tokenColors, readableColor, hex(foreground))
+    ],
     colors
   }
   return { name: `orca-plugin-${hashThemeContent(JSON.stringify(data))}`, data }

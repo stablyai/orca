@@ -1,7 +1,9 @@
 import type * as Monaco from 'monaco-editor'
-import type { ThemeRegistrationRaw } from 'shiki/core'
 import type { IToken } from 'shiki/textmate'
 import type { BundledLanguageInfo } from 'shiki/types'
+import { useCodeEditorThemeStore } from '@/store/code-editor-theme'
+import type { PluginMonacoTheme } from '../plugin-monaco-theme'
+import { MARKDOWN_TOKEN_PREFIX, monacoMarkdownRules } from '../plugin-monaco-token-rules'
 import { COLD_GRAMMAR_LINE_ATTEMPTS } from '../syntax-highlighting/textmate-core'
 import { createTokensProvider, loadEditorCore } from './textmate-token-provider'
 
@@ -12,8 +14,6 @@ type MonacoModule = {
 
 const MARKDOWN_LANGUAGE_ID = 'markdown'
 const MARKDOWN_SCOPE_NAME = 'text.html.markdown'
-// Why: namespaced rules color only markdown tokens, leaving every Monarch language's vs/vs-dark colors untouched.
-const MARKDOWN_TOKEN_PREFIX = 'md.'
 // The grammar's catch-all fence rule; a specific fence rule takes over once its grammar loads.
 const UNKNOWN_FENCE_LANGUAGE_SCOPE = 'fenced_code.block.language'
 // The catch-all rule captures the whole info string, e.g. `ts title="a.ts"`.
@@ -21,22 +21,27 @@ const FENCE_INFO_SEPARATOR = /[\s{,:?]/
 
 type ThemeRule = Monaco.editor.ITokenThemeRule
 
-function simpleScopeSelectors(scope: string | string[] | undefined): string[] {
-  const selectors = typeof scope === 'string' ? scope.split(',') : (scope ?? [])
-  // Monaco matches one scope by dotted prefix, so descendant and exclusion selectors cannot apply.
-  return selectors
-    .map((selector) => selector.trim())
-    .filter((selector) => /^[^\s]+$/.test(selector))
+function markdownSelectors(rules: readonly ThemeRule[]): ReadonlySet<string> {
+  return new Set(
+    rules.flatMap(({ token }) =>
+      token.startsWith(MARKDOWN_TOKEN_PREFIX) ? [token.slice(MARKDOWN_TOKEN_PREFIX.length)] : []
+    )
+  )
 }
 
-function markdownThemeRules(theme: ThemeRegistrationRaw): ThemeRule[] {
-  return (theme.tokenColors ?? []).flatMap(({ scope, settings }) =>
-    simpleScopeSelectors(scope).map((selector) => ({
-      token: `${MARKDOWN_TOKEN_PREFIX}${selector}`,
-      ...(settings.foreground ? { foreground: settings.foreground } : {}),
-      ...(settings.fontStyle !== undefined ? { fontStyle: settings.fontStyle } : {})
-    }))
-  )
+/** Why read at tokenize time: Monaco re-tokenizes on every theme change, so tokens settle the same
+ *  whether the tokenizer or the theme loaded first. */
+function createActiveSelectors(stock: ReadonlySet<string>): () => ReadonlySet<string> {
+  let lastTheme: PluginMonacoTheme | null = null
+  let selectors = stock
+  return () => {
+    const { monaco } = useCodeEditorThemeStore.getState()
+    if (monaco !== lastTheme) {
+      lastTheme = monaco
+      selectors = monaco ? markdownSelectors(monaco.data.rules) : stock
+    }
+    return selectors
+  }
 }
 
 function hasMatchingSelector(selectors: ReadonlySet<string>, scope: string): boolean {
@@ -49,8 +54,11 @@ function hasMatchingSelector(selectors: ReadonlySet<string>, scope: string): boo
 }
 
 /** Monaco takes one scope per token, so pick the innermost one a theme rule styles, as VS Code's cascade would. */
-function createScopeMapper(selectors: ReadonlySet<string>): (scopes: readonly string[]) => string {
+function createScopeMapper(
+  activeSelectors: () => ReadonlySet<string>
+): (scopes: readonly string[]) => string {
   return (scopes) => {
+    const selectors = activeSelectors()
     for (let index = scopes.length - 1; index >= 0; index -= 1) {
       if (hasMatchingSelector(selectors, scopes[index])) {
         return `${MARKDOWN_TOKEN_PREFIX}${scopes[index]}`
@@ -80,18 +88,15 @@ function fenceLanguagesByLabel(
 export async function createMarkdownTokensProvider(
   monaco: MonacoModule
 ): Promise<Monaco.languages.TokensProvider> {
-  const [editorCore, { default: markdownGrammars }, { bundledLanguagesInfo }, dark, light] =
-    await Promise.all([
-      loadEditorCore(),
-      import('shiki/langs/markdown.mjs'),
-      import('shiki/langs'),
-      import('shiki/themes/dark-plus.mjs'),
-      import('shiki/themes/light-plus.mjs')
-    ])
+  const [editorCore, { default: markdownGrammars }, { bundledLanguagesInfo }] = await Promise.all([
+    loadEditorCore(),
+    import('shiki/langs/markdown.mjs'),
+    import('shiki/langs')
+  ])
   await editorCore.core.loadLanguage(...markdownGrammars)
 
-  const darkRules = markdownThemeRules(dark.default)
-  const lightRules = markdownThemeRules(light.default)
+  const darkRules = monacoMarkdownRules('dark', [], (value) => value)
+  const lightRules = monacoMarkdownRules('light', [], (value) => value)
   // Why: Orca's editors all use the built-in theme names; redefining them keeps every setTheme caller unchanged.
   monaco.editor.defineTheme('vs-dark', {
     base: 'vs-dark',
@@ -101,9 +106,7 @@ export async function createMarkdownTokensProvider(
   })
   monaco.editor.defineTheme('vs', { base: 'vs', inherit: true, rules: lightRules, colors: {} })
   const mapScopes = createScopeMapper(
-    new Set(
-      [...darkRules, ...lightRules].map((rule) => rule.token.slice(MARKDOWN_TOKEN_PREFIX.length))
-    )
+    createActiveSelectors(markdownSelectors([...darkRules, ...lightRules]))
   )
 
   const fenceLanguages = fenceLanguagesByLabel(
