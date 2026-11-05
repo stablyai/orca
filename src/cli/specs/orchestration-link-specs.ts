@@ -18,6 +18,7 @@ export const ORCHESTRATION_LINK_COMMAND_SPECS: CommandSpec[] = [
     allowedFlags: [...GLOBAL_FLAGS, 'id', 'body', 'kind', 'reply-to', 'operation'],
     notes: [
       'Kinds: message, question, checkpoint, reply, owner-request. After a question/checkpoint, finish your turn and wait for an answer; do not poll.',
+      'Read the delivery receipt: queued or sending is not delivered. An owner-request is recorded for the owner and pauses the link.',
       'Retry an uncertain send with the same --operation and exact content. It never grants spending or other owner permissions.'
     ]
   },
@@ -25,10 +26,10 @@ export const ORCHESTRATION_LINK_COMMAND_SPECS: CommandSpec[] = [
     path: ['orchestration', 'link-control'],
     summary: 'Stop or leave your existing session link',
     usage:
-      'orca orchestration link-control --id <link_id> --action <stop|end> --turn-operation <delivery_operation> [--operation <id>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'id', 'action', 'turn-operation', 'operation'],
+      'orca orchestration link-control --id <link_id> --action <stop|end> --turn-operation <delivery_operation> [--operation <id>] [--summary <text>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'summary', 'id', 'action', 'turn-operation', 'operation'],
     notes: [
-      'Only the owner can create or resume a link. Stop pauses it and cancels only turns started by this link. End keeps the journal. Copy --turn-operation from the originating link message; an older background command cannot exempt a later turn.'
+      'Only the owner can create or resume a link. Stop pauses it and cancels only turns started by this link. End keeps the journal; the reviewer should include --summary with the acceptance decision. Copy --turn-operation from the originating link message; an older background command cannot exempt a later turn.'
     ]
   }
 ]

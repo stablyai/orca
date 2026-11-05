@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { fireEvent, render, screen, cleanup, waitFor } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
+import type * as I18nModule from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import type { Tab } from '../../../../shared/tab-types'
 import { SessionLinkParticipant, SESSION_LINK_CAPABILITY } from '../../../../shared/session-link'
@@ -15,7 +16,10 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
 vi.mock('@/runtime/structured-agent-session-status-feed', () => ({
   getStructuredAgentSessionStatusFeed: () => ({ getNamingSnapshot: () => new Map() })
 }))
-vi.mock('@/i18n/i18n', () => ({ translate: (_: string, fallback: string) => fallback }))
+vi.mock('@/i18n/i18n', async (importOriginal) => ({
+  ...(await importOriginal<typeof I18nModule>()),
+  translate: (_: string, fallback: string) => fallback
+}))
 afterEach(() => {
   cleanup()
   setLocalRuntimeCapabilitiesForTests(null)

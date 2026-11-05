@@ -4,6 +4,12 @@ import { translate as t } from '@/i18n/i18n'
 
 export function sessionLinkReason(reason: string): string {
   const labels: Record<string, string> = {
+    policy: t('components.sessionLink.policyChanged', 'Collaboration limits changed by the owner'),
+    'policy-resume': t(
+      'components.sessionLink.policyResumed',
+      'Collaboration limits changed and link continued'
+    ),
+    'owner-answered': t('components.sessionLink.ownerAnswered', 'Answered by the owner'),
     pause: t('components.sessionLink.reasonPause', 'Paused by the owner'),
     resume: t('components.sessionLink.reasonResume', 'Continued by the owner'),
     stop: t('components.sessionLink.reasonStop', 'Urgent stop requested'),
@@ -16,7 +22,7 @@ export function sessionLinkReason(reason: string): string {
     ),
     'owner-decision': t(
       'components.sessionLink.reasonOwner',
-      'Owner decision needed. Write your answer, then continue.'
+      'Owner decision needed. Answer the question below to continue.'
     ),
     'participant-changed': t(
       'components.sessionLink.reasonParticipant',

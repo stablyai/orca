@@ -6,6 +6,7 @@ import {
   type SessionLinkEvent,
   type SessionLinkParticipant
 } from '../../../../shared/session-link'
+import { sessionLinkPolicyInstructions } from './session-link-policy-instructions'
 import { localOrchestrationCliCommand } from '../cli-command'
 
 export function sessionLinkMessageBody(
@@ -43,7 +44,9 @@ export function sessionLinkMessageBody(
     `To reply use ${cli} orchestration link-send --id ${link.id} ${
       reply
     } --body "..." --json. For a checkpoint use --kind checkpoint; for an owner decision use --kind owner-request. ` +
-    `For Stop or End use ${cli} orchestration link-control --id ${link.id} --action end --turn-operation ${event.operationId} --json; use --action stop for an urgent pause. ` +
+    `For Stop or End use ${cli} orchestration link-control --id ${link.id} --action end --turn-operation ${event.operationId} --summary "Reason or reviewer acceptance" --json. For an urgent stop use ${cli} orchestration link-control --id ${link.id} --action stop --turn-operation ${event.operationId} --json. ${sessionLinkPolicyInstructions(
+      link
+    )}Read the link-send delivery receipt: queued/sending is not delivered. Never claim the partner received a queued report. Owner requests go to the owner, pause the link, and must contain the exact question, choices and required budget or permission. Do not ask again about permissions already granted directly by the owner. ` +
     `If you have an unanswered checkpoint, a clarification from the partner does not release it: answer the clarification, then wait for the correlated reply. After sending a question/checkpoint, finish this turn and wait for delivery; do not poll or send acknowledgments that wake the partner.`
   return {
     kind: 'message',
@@ -72,7 +75,8 @@ export function sessionLinkIntroduction(
     `Your role: ${recipient.role}. Partner: ${other.name} (${other.agent}, ${other.role}).\n` +
     `Partner Orca session: ${other.sessionId}\nWorkspace: ${other.directory}\nBranch: ${other.branch}\n` +
     `Current task: ${other.task.slice(0, 512)}\n\n` +
-    `Work only within your existing owner instructions and permissions. The reviewer cannot approve spending, holdout access or irreversible actions. ` +
-    `The link pauses after 6 automatic turns or 12 agent messages. Either participant can leave using the turn-scoped End command included with this message. Do not start a greeting/acknowledgment loop.`
+    `Work only within your existing owner instructions and permissions. The reviewer cannot approve spending, holdout access or irreversible actions. ${sessionLinkPolicyInstructions(
+      link
+    )}Either participant can leave using the turn-scoped End command included with this message. Do not start a greeting/acknowledgment loop.`
   )
 }

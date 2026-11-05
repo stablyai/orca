@@ -6,7 +6,7 @@ import { SessionLinkStore } from '../../../orchestration/session-links/session-l
 import { SESSION_LINK_METHODS } from './session-link-methods'
 import { stopSessionLinkTurns } from '../../../orchestration/session-links/session-link-stop'
 import { sessionLinkCandidates } from '../../../orchestration/session-links/session-link-participants'
-import { SessionLinkParticipant } from '../../../../../shared/session-link'
+import { sessionLinkTestParticipants as participants } from '../../../orchestration/session-links/session-link-test-fixture'
 import { testOrcaSessionId } from '../../../../../shared/orca-session-address-test-fixture'
 
 vi.mock('../../../orchestration/session-links/session-link-delivery', () => ({
@@ -19,32 +19,6 @@ vi.mock('../../../orchestration/session-links/session-link-participants', () => 
 vi.mock('../../../orchestration/session-links/session-link-stop', () => ({
   stopSessionLinkTurns: vi.fn()
 }))
-const participants = [
-  SessionLinkParticipant.parse({
-    sessionId: 'claude_review',
-    conversationId: 'claude_review',
-    role: 'reviewer',
-    name: 'Review',
-    agent: 'claude',
-    workspaceId: 'repo::/work/review',
-    directory: '/work/review',
-    branch: 'design',
-    task: 'Review',
-    context: ''
-  }),
-  SessionLinkParticipant.parse({
-    sessionId: 'codex_implement',
-    conversationId: 'codex_implement',
-    role: 'implementer',
-    name: 'Implement',
-    agent: 'codex',
-    workspaceId: 'repo::/work/implement',
-    directory: '/work/implement',
-    branch: 'feature',
-    task: 'Implement',
-    context: ''
-  })
-]
 
 describe('session link caller authority', () => {
   let db: OrchestrationDb

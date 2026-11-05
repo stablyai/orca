@@ -727,6 +727,7 @@ import {
   LinkListParams,
   LinkResolveParams,
   LinkSendParams,
+  LinkSetPolicyParams,
   LinkShowParams
 } from '../session-link'
 import { RepoIconDataUrlsParams } from '../sidebar-list/repo-icon-data-urls-contract'
@@ -1320,6 +1321,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'orchestration.linkCurrent': LinkListParams,
   'orchestration.linkResolve': LinkResolveParams,
   'orchestration.linkSend': LinkSendParams,
+  'orchestration.linkSetPolicy': LinkSetPolicyParams,
   'orchestration.linkShow': LinkShowParams,
   'orchestration.partyLocation': PartyLocationParams,
   'orchestration.partyOpen': PartyLocationParams,

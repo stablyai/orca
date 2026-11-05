@@ -5,7 +5,10 @@ import {
   SessionLinkEvent,
   type SessionLinkMessageKind
 } from '../../../../shared/session-link'
-import { sessionLinkWaitingFor } from '../../../../shared/session-link-wait'
+import {
+  sessionLinkWaitingFor,
+  sessionLinkOwnerRequest
+} from '../../../../shared/session-link-wait'
 import type { SessionLinkStore } from './session-link-store'
 
 export type SessionLinkAppend = {
@@ -33,7 +36,8 @@ export function appendSessionLinkMessage(
       if (
         existing.linkId !== input.linkId ||
         existing.actor !== input.actor ||
-        existing.recipient !== input.recipient ||
+        (existing.recipient !== input.recipient &&
+          !(input.kind === 'owner-request' && existing.recipient === null)) ||
         existing.kind !== input.kind ||
         existing.replyTo !== (input.replyTo ?? null) ||
         existing.body !== input.body
@@ -49,6 +53,7 @@ export function appendSessionLinkMessage(
     const agent = !['owner', 'host'].includes(input.actor)
     if (
       agent &&
+      input.kind !== 'owner-request' &&
       events.filter((e) => ['queued', 'blocked', 'dispatching'].includes(e.state)).length >= 12
     ) {
       throw new Error('The link queue is full. Wait for delivery or ask the owner.')
@@ -90,7 +95,17 @@ export function appendSessionLinkMessage(
         throw new Error('This checkpoint was already answered or superseded.')
       }
     }
-    if (agent && link.messages >= SESSION_LINK_MESSAGE_LIMIT) {
+    if (input.kind === 'owner-request' && sessionLinkOwnerRequest(events)) {
+      throw new Error(
+        'An owner decision is already pending. Finish this turn and wait for the owner.'
+      )
+    }
+    if (
+      agent &&
+      input.kind !== 'owner-request' &&
+      !link.policy &&
+      link.messages >= SESSION_LINK_MESSAGE_LIMIT
+    ) {
       throw new Error('Link message limit reached. Ask the owner to continue.')
     }
     if (agent) {
@@ -105,32 +120,35 @@ export function appendSessionLinkMessage(
         ? 'owner-decision'
         : agent && recent.length === 2 && recent.every((e) => e.body === input.body)
           ? 'repeated-messages'
-          : agent && link.messages >= SESSION_LINK_MESSAGE_LIMIT
+          : agent && !link.policy && link.messages >= SESSION_LINK_MESSAGE_LIMIT
             ? 'message-limit'
             : null
-    const message = store.orchestration.insertMessage({
-      from:
-        input.actor === 'host'
-          ? 'session-link'
-          : input.actor === 'owner'
-            ? 'owner'
-            : `orca_session_id:${input.actor}`,
-      to: `orca_session_id:${input.recipient}`,
-      subject: link.story.slice(0, 160),
-      body: input.body,
-      threadId: link.id,
-      // The link outbox owns delivery; generic mailbox nudges must never bypass its pause.
-      deliveryContract: 'audit_only'
-    })
+    const message =
+      input.kind === 'owner-request'
+        ? null
+        : store.orchestration.insertMessage({
+            from:
+              input.actor === 'host'
+                ? 'session-link'
+                : input.actor === 'owner'
+                  ? 'owner'
+                  : `orca_session_id:${input.actor}`,
+            to: `orca_session_id:${input.recipient}`,
+            subject: link.story.slice(0, 160),
+            body: input.body,
+            threadId: link.id,
+            // The link outbox owns delivery; generic mailbox nudges must never bypass its pause.
+            deliveryContract: 'audit_only'
+          })
     const event = SessionLinkEvent.parse({
       id: input.id,
       linkId: link.id,
       actor: input.actor,
-      recipient: input.recipient,
+      recipient: input.kind === 'owner-request' ? null : input.recipient,
       kind: input.kind,
       replyTo: input.replyTo ?? null,
-      messageId: message.id,
-      state: 'queued',
+      messageId: message?.id ?? null,
+      state: message ? 'queued' : 'recorded',
       operationId: mintAgentSessionOperationId(Date.now()),
       createdAt: Date.now(),
       detail: '',

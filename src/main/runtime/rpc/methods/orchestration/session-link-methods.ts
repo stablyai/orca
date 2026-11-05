@@ -6,10 +6,15 @@ import {
 } from './session-link-authority'
 import { sessionLinkIntroduction } from '../../../orchestration/session-links/session-link-message'
 import { resolveUnknownSessionLinkDelivery } from '../../../orchestration/session-links/session-link-resolution'
-import { createHash } from 'node:crypto'
+import {
+  sessionLinkEventId as eventId,
+  writeSessionLinkControl,
+  writeSessionLinkPolicy
+} from '../../../orchestration/session-links/session-link-owner-control'
 import { defineMethod, type RpcContext } from '../../core'
 import {
   LinkCreateParams,
+  LinkSetPolicyParams,
   LinkControlParams,
   LinkResolveParams,
   LinkSendParams,
@@ -35,9 +40,6 @@ function linkWrite<T>(action: () => T): T {
     )
   }
 }
-function eventId(...values: string[]): string {
-  return createHash('sha256').update(JSON.stringify(values)).digest('hex')
-}
 function snapshot(context: RpcContext, id: string) {
   const store = new SessionLinkStore(context.runtime.getOrchestrationDb())
   const link = store.get(id)
@@ -45,7 +47,52 @@ function snapshot(context: RpcContext, id: string) {
   return { link, events: store.events(id) }
 }
 
+async function verifyResumeParticipants(
+  store: SessionLinkStore,
+  id: string,
+  context: RpcContext
+): Promise<void> {
+  const link = store.get(id)
+  const candidates = await sessionLinkCandidates(context.runtime)
+  linkWrite(() => {
+    if (
+      !link.participants.every((participant) =>
+        candidates.some(
+          (candidate) =>
+            candidate.sessionId === participant.sessionId &&
+            candidate.context === participant.context &&
+            candidate.workspaceId === participant.workspaceId
+        )
+      )
+    ) {
+      throw new OrchestrationError(
+        'session_link_refused',
+        'A participant closed or changed context. End this link and select the intended chats again.',
+        { effectsApplied: false }
+      )
+    }
+  })
+}
+
 export const SESSION_LINK_METHODS = [
+  defineMethod({
+    name: 'orchestration.linkSetPolicy',
+    permission: 'workspace',
+    params: LinkSetPolicyParams,
+    handler: async (params, context) => {
+      requireSessionLinkOwner(context)
+      const store = new SessionLinkStore(context.runtime.getOrchestrationDb())
+      const replay = store.event(eventId(params.id, 'owner', params.operationId))
+      if (params.resume && !replay) {
+        await verifyResumeParticipants(store, params.id, context)
+      }
+      linkWrite(() => writeSessionLinkPolicy(store, params))
+      void redriveSessionLinks(store.orchestration).catch((error) =>
+        console.warn('[session-link] redrive unavailable', error)
+      )
+      return snapshot(context, params.id)
+    }
+  }),
   defineMethod({
     name: 'orchestration.linkCandidates',
     permission: 'workspace',
@@ -89,6 +136,7 @@ export const SESSION_LINK_METHODS = [
         linkWrite(() => {
           if (
             existing.story !== params.story ||
+            JSON.stringify(existing.policy) !== JSON.stringify(params.policy) ||
             existing.participants[0].sessionId !== params.sessionId ||
             existing.participants[1].sessionId !== params.partnerSessionId ||
             existing.participants[0].role !== params.role
@@ -116,7 +164,7 @@ export const SESSION_LINK_METHODS = [
       partner.role = params.role === 'reviewer' ? 'implementer' : 'reviewer'
       linkWrite(() =>
         store.transaction(() => {
-          const link = store.create(params.id, params.story, [source, partner])
+          const link = store.create(params.id, params.story, [source, partner], params.policy)
           for (const recipient of link.participants) {
             store.append({
               id: eventId(link.id, 'introduction', recipient.sessionId),
@@ -220,59 +268,9 @@ export const SESSION_LINK_METHODS = [
       const callingTurn = sessionLinkControlTurn(store, link, from, params.callerOperationId)
       const replay = store.event(eventId(link.id, from, params.operationId))
       if (params.action === 'resume' && !replay) {
-        const candidates = await sessionLinkCandidates(context.runtime)
-        linkWrite(() => {
-          if (
-            !link.participants.every((participant) =>
-              candidates.some(
-                (candidate) =>
-                  candidate.sessionId === participant.sessionId &&
-                  candidate.context === participant.context &&
-                  candidate.workspaceId === participant.workspaceId
-              )
-            )
-          ) {
-            throw new OrchestrationError(
-              'session_link_refused',
-              'A participant closed or changed context. End this link and select the intended chats again.',
-              { effectsApplied: false }
-            )
-          }
-        })
+        await verifyResumeParticipants(store, link.id, context)
       }
-      if (!replay && params.action === 'resume') {
-        const events = store.events(link.id)
-        if (events.some((event) => event.state === 'blocked' && event.retryable === false)) {
-          throw new OrchestrationError(
-            'session_link_refused',
-            'Review the unconfirmed delivery before resuming.',
-            { effectsApplied: false }
-          )
-        }
-        const requestIndex = events.findLastIndex((e) => e.kind === 'owner-request')
-        if (
-          requestIndex !== -1 &&
-          !events
-            .slice(requestIndex + 1)
-            .some((e) => e.actor === 'owner' && e.kind === 'owner-note')
-        ) {
-          throw new OrchestrationError(
-            'session_link_refused',
-            'Answer the owner decision before resuming the link.',
-            { effectsApplied: false }
-          )
-        }
-      }
-      linkWrite(() =>
-        store.control(
-          link.id,
-          from,
-          eventId(link.id, from, params.operationId),
-          params.version,
-          params.action,
-          params.operationId
-        )
-      )
+      linkWrite(() => writeSessionLinkControl(store, from, params))
       if (params.action === 'stop' || params.action === 'end') {
         await stopSessionLinkTurns(store, link.id, params.operationId, callingTurn)
       }

@@ -49,6 +49,9 @@ export function SessionLinkJournal({
           </p>
           <p className="whitespace-pre-wrap break-words text-sm">
             {event.body || sessionLinkReason(event.detail)}
+            {event.policy
+              ? ` · ${event.policy.turnLimit === null ? t('components.sessionLink.untilAccepted', 'Until the reviewer accepts the result') : event.policy.turnLimit}`
+              : null}
           </p>
           {event.recipient && event.kind !== 'control' ? (
             <p className="text-xs text-muted-foreground">{sessionLinkDeliveryState(event.state)}</p>

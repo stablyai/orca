@@ -1,8 +1,9 @@
 import { AI_VAULT_AGENT_LABELS } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import { Check } from 'lucide-react'
 import { useState } from 'react'
-import type { SessionLinkParticipant } from '../../../../shared/session-link'
+import { SessionLinkPolicy, type SessionLinkParticipant } from '../../../../shared/session-link'
 import { translate as t } from '@/i18n/i18n'
+import { SessionLinkPolicyField } from './SessionLinkPolicyField'
 import { SessionLinkParticipantCard } from './SessionLinkParticipantCard'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
@@ -20,17 +21,25 @@ export function SessionLinkCreate({
   candidates,
   initialPartnerSessionId,
   busy,
+  policySupported = false,
   onCreate
 }: {
   source: SessionLinkParticipant
   candidates: SessionLinkParticipant[]
   initialPartnerSessionId?: string
   busy: boolean
-  onCreate: (partner: string, story: string, role: 'reviewer' | 'implementer') => void
+  policySupported?: boolean
+  onCreate: (
+    partner: string,
+    story: string,
+    role: 'reviewer' | 'implementer',
+    policy?: SessionLinkPolicy
+  ) => void
 }): React.JSX.Element {
   const [partner, setPartner] = useState(initialPartnerSessionId ?? '')
   const [choosingPartner, setChoosingPartner] = useState(!initialPartnerSessionId)
   const [story, setStory] = useState('')
+  const [policy, setPolicy] = useState<SessionLinkPolicy>({ turnLimit: null })
   const [role, setRole] = useState<'reviewer' | 'implementer'>(
     source.agent === 'claude' ? 'reviewer' : 'implementer'
   )
@@ -146,11 +155,19 @@ export function SessionLinkCreate({
           )}
         </p>
       </div>
+      {policySupported ? (
+        <SessionLinkPolicyField value={policy} onChange={setPolicy} disabled={busy} />
+      ) : null}
       <p className="text-xs text-muted-foreground">
-        {t(
-          'components.sessionLink.limits',
-          'Up to 6 automatic turns, including introductions, or 12 agent messages before the owner continues. Agent messages do not grant permissions. Transport and journal stay on this host; model requests use each session’s provider and account.'
-        )}
+        {policySupported
+          ? t(
+              'components.sessionLink.localTransport',
+              'Agent messages do not grant permissions. Transport and journal stay on this host; model requests use each session’s provider and account.'
+            )
+          : t(
+              'components.sessionLink.limits',
+              'Up to 6 automatic turns, including introductions, or 12 agent messages before the owner continues. Agent messages do not grant permissions. Transport and journal stay on this host; model requests use each session’s provider and account.'
+            )}
       </p>
       {selected?.workspaceId === source.workspaceId ? (
         <p className="text-xs text-chat-warning">
@@ -161,8 +178,15 @@ export function SessionLinkCreate({
         </p>
       ) : null}
       <Button
-        disabled={busy || !selected || !story.trim()}
-        onClick={() => onCreate(partner, story, role)}
+        disabled={
+          busy ||
+          !selected ||
+          !story.trim() ||
+          (policySupported && !SessionLinkPolicy.safeParse(policy).success)
+        }
+        onClick={() =>
+          policySupported ? onCreate(partner, story, role, policy) : onCreate(partner, story, role)
+        }
       >
         {busy
           ? t('components.sessionLink.creating', 'Creating link…')

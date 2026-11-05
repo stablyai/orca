@@ -1,8 +1,15 @@
 import { z } from 'zod'
 import { isOrcaSessionId, type OrcaSessionId } from './orca-session-address'
 
-export { SESSION_LINK_CAPABILITY } from './orchestration-runtime-capabilities'
+export {
+  SESSION_LINK_CAPABILITY,
+  SESSION_LINK_POLICY_CAPABILITY
+} from './orchestration-runtime-capabilities'
 export const SESSION_LINK_TURN_LIMIT = 6
+export const SessionLinkPolicy = z
+  .object({ turnLimit: z.number().int().min(1).max(10000).nullable() })
+  .strict()
+export type SessionLinkPolicy = z.infer<typeof SessionLinkPolicy>
 export const SESSION_LINK_MESSAGE_LIMIT = 12
 export const SESSION_LINK_MESSAGE_BYTES = 8 * 1024
 
@@ -27,6 +34,7 @@ export type SessionLinkParticipant = z.infer<typeof SessionLinkParticipant>
 export const SessionLink = z.object({
   id: identifier,
   story: z.string().trim().min(1).max(8192),
+  policy: SessionLinkPolicy.optional(),
   participants: z.tuple([SessionLinkParticipant, SessionLinkParticipant]),
   state: z.enum(['active', 'paused', 'ended']),
   reason: z.string().max(512),
@@ -58,6 +66,7 @@ export const SessionLinkEvent = z.object({
   state: z.enum(['recorded', 'queued', 'dispatching', 'accepted', 'blocked', 'cancelled']),
   operationId: z.string(),
   requestId: identifier.optional(),
+  policy: SessionLinkPolicy.optional(),
   retryable: z.boolean().optional(),
   targetTurnId: identifier.optional(),
   createdAt: z.number(),
@@ -78,6 +87,7 @@ export const LinkCreateParams = z
     id: identifier,
     sessionId,
     partnerSessionId: sessionId,
+    policy: SessionLinkPolicy.optional(),
     story: z.string().trim().min(1).max(8192),
     role: SessionLinkRole
   })
@@ -88,7 +98,23 @@ export const LinkControlParams = z
     operationId: identifier,
     action: z.enum(['pause', 'resume', 'stop', 'end']),
     callerOperationId: identifier.optional(),
+    ownerMessage: z.string().trim().min(1).max(8192).optional(),
+    summary: z.string().trim().min(1).max(2048).optional(),
     version: z.number().int().positive()
+  })
+  .strict()
+  .refine(
+    (value) => !value.ownerMessage || value.action === 'resume',
+    'Owner answers require resume.'
+  )
+  .refine((value) => !value.summary || value.action === 'end', 'A closing summary requires end.')
+export const LinkSetPolicyParams = z
+  .object({
+    id: identifier,
+    operationId: identifier,
+    version: z.number().int().positive(),
+    policy: SessionLinkPolicy,
+    resume: z.boolean().default(false)
   })
   .strict()
 export const LinkResolveParams = z

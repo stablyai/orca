@@ -3,6 +3,7 @@ import { RuntimeClientError, RuntimeRpcFailureError } from '../../runtime-client
 import type { CommandHandler } from '../../dispatch'
 import { printResult } from '../../format'
 import { getOptionalStringFlag, getRequiredStringFlag } from '../../flags'
+import { sessionLinkSendReceipt } from '../../../shared/session-link-receipt'
 import { SessionLinkSnapshot } from '../../../shared/session-link'
 
 function linkOperationError(error: unknown, guidance: string): Error {
@@ -37,8 +38,16 @@ export const ORCHESTRATION_LINK_HANDLERS: Record<string, CommandHandler> = {
           ? { replyTo: getOptionalStringFlag(flags, 'reply-to') }
           : {})
       })
+      const snapshot = SessionLinkSnapshot.parse(result.result)
       printResult(
-        { ...result, result: { operationId, ...SessionLinkSnapshot.parse(result.result) } },
+        {
+          ...result,
+          result: {
+            operationId,
+            delivery: sessionLinkSendReceipt(snapshot, operationId),
+            ...snapshot
+          }
+        },
         json,
         (value) => JSON.stringify(value, null, 2)
       )
@@ -55,6 +64,10 @@ export const ORCHESTRATION_LINK_HANDLERS: Record<string, CommandHandler> = {
     if (action !== 'stop' && action !== 'end') {
       throw new Error('Agents may only stop or end a link.')
     }
+    const summary = getOptionalStringFlag(flags, 'summary')
+    if (summary && action !== 'end') {
+      throw new Error('A closing summary requires --action end.')
+    }
     const callerOperationId = getRequiredStringFlag(flags, 'turn-operation')
     const operationId = getOptionalStringFlag(flags, 'operation') ?? randomUUID()
     try {
@@ -64,6 +77,7 @@ export const ORCHESTRATION_LINK_HANDLERS: Record<string, CommandHandler> = {
         id,
         action,
         callerOperationId,
+        ...(summary ? { summary } : {}),
         version: current.link.version,
         operationId
       })

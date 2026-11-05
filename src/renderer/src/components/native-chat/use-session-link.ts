@@ -5,6 +5,7 @@ import {
   SessionLink,
   SessionLinkParticipant,
   SessionLinkSnapshot,
+  SESSION_LINK_POLICY_CAPABILITY,
   SESSION_LINK_CAPABILITY
 } from '../../../../shared/session-link'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
@@ -24,6 +25,7 @@ type LinkMutation = { method: string; fields: Record<string, unknown>; operation
 
 export function useSessionLink(sessionId: string, target: RuntimeClientTarget, open: boolean) {
   const [supported, setSupported] = useState(false)
+  const [policySupported, setPolicySupported] = useState(false)
   const [snapshot, setSnapshot] = useState<SessionLinkSnapshot | null>(null)
   const [candidates, setCandidates] = useState<z.infer<typeof Candidates> | null>(null)
   const [error, setError] = useState('')
@@ -89,10 +91,15 @@ export function useSessionLink(sessionId: string, target: RuntimeClientTarget, o
     setError('')
     setCandidates(null)
     setSupported(false)
+    setPolicySupported(false)
     if (destination.kind === 'local') {
-      void structuredAgentSessionHostSupports(destination, SESSION_LINK_CAPABILITY).then((ok) => {
+      void Promise.all([
+        structuredAgentSessionHostSupports(destination, SESSION_LINK_CAPABILITY),
+        structuredAgentSessionHostSupports(destination, SESSION_LINK_POLICY_CAPABILITY)
+      ]).then(([ok, policyOk]) => {
         if (!cancelled) {
           setSupported(ok)
+          setPolicySupported(policyOk)
         }
       })
     }
@@ -228,5 +235,16 @@ export function useSessionLink(sessionId: string, target: RuntimeClientTarget, o
       }
     }
   }
-  return { supported, snapshot, candidates, error, busy, uncertain, mutate, retry, show }
+  return {
+    supported,
+    policySupported,
+    snapshot,
+    candidates,
+    error,
+    busy,
+    uncertain,
+    mutate,
+    retry,
+    show
+  }
 }

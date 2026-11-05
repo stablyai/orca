@@ -1,11 +1,15 @@
+import { useAppStore } from '@/store'
+import { loadRendererUiLanguage, i18n } from '@/i18n/i18n'
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import {
   SessionLink,
   SessionLinkEvent,
   SessionLinkParticipant,
+  SESSION_LINK_POLICY_CAPABILITY,
   SESSION_LINK_CAPABILITY
 } from '../../../../shared/session-link'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
+import { SessionLinkOwnerQuestion } from './SessionLinkOwnerQuestion'
 import { SessionLinkControl } from './SessionLinkControl'
 
 const source = SessionLinkParticipant.parse({
@@ -35,6 +39,7 @@ const partner = SessionLinkParticipant.parse({
 const link = SessionLink.parse({
   id: 'demo-link',
   story: 'De-identification · slice 1b',
+  policy: { turnLimit: null },
   participants: [source, partner],
   state: 'active',
   reason: '',
@@ -60,7 +65,7 @@ const report = SessionLinkEvent.parse({
 })
 
 function setup(state: 'create' | 'waiting' | 'paused' | 'ended' | 'unknown') {
-  setLocalRuntimeCapabilitiesForTests([SESSION_LINK_CAPABILITY])
+  setLocalRuntimeCapabilitiesForTests([SESSION_LINK_CAPABILITY, SESSION_LINK_POLICY_CAPABILITY])
   const snapshot =
     state === 'create'
       ? null
@@ -78,6 +83,20 @@ function setup(state: 'create' | 'waiting' | 'paused' | 'ended' | 'unknown') {
                     : ''
           },
           events: [
+            ...(state === 'paused'
+              ? [
+                  {
+                    ...report,
+                    id: 'owner-question',
+                    actor: partner.sessionId,
+                    recipient: null,
+                    kind: 'owner-request',
+                    messageId: null,
+                    state: 'recorded',
+                    body: 'Approve a paid verification run up to $0.10, or continue with offline checks only?'
+                  }
+                ]
+              : []),
             state === 'unknown'
               ? { ...report, state: 'blocked', retryable: false, detail: 'delivery-unknown' }
               : report
@@ -169,4 +188,45 @@ export const fromTabs = defineFixture({
       />
     </div>
   )
+})
+
+export const ownerDecisionNarrow = defineFixture({
+  width: 360,
+  setup: () => setup('paused'),
+  render,
+  interact: openDialog
+})
+export const policySettings = defineFixture({
+  width: 720,
+  setup: () => setup('waiting'),
+  render,
+  interact: async (frame) => {
+    await openDialog(frame)
+    for (let i = 0; i < 10; i++) {
+      const summary = [...document.querySelectorAll('summary')].find(
+        (node) => node.textContent === 'Collaboration limits'
+      )
+      if (summary) {
+        summary.click()
+        break
+      }
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+    }
+  }
+})
+
+export const ownerQuestionInChat = defineFixture({
+  width: 360,
+  setup: () => setup('paused'),
+  render: () => <SessionLinkOwnerQuestion sessionId={source.sessionId} />
+})
+
+export const ownerQuestionRussian = defineFixture({
+  width: 360,
+  setup: async () => {
+    setup('paused')
+    useAppStore.setState((state) => ({ settings: { ...state.settings, uiLanguage: 'ru' } }))
+    await i18n.changeLanguage(await loadRendererUiLanguage('ru'))
+  },
+  render: () => <SessionLinkOwnerQuestion sessionId={source.sessionId} />
 })

@@ -95,7 +95,12 @@ export class SessionLinkStore {
       .run(JSON.stringify(checked), link.id)
   }
 
-  create(id: string, story: string, participants: SessionLink['participants']): SessionLink {
+  create(
+    id: string,
+    story: string,
+    participants: SessionLink['participants'],
+    policy?: SessionLink['policy']
+  ): SessionLink {
     return this.transaction(() => {
       const existing = this.orchestration.db
         .prepare('SELECT id FROM session_links WHERE id = ?')
@@ -104,6 +109,7 @@ export class SessionLinkStore {
         const link = this.get(id)
         if (
           link.story !== story ||
+          JSON.stringify(link.policy) !== JSON.stringify(policy) ||
           JSON.stringify(link.participants.map((p) => [p.sessionId, p.conversationId, p.role])) !==
             JSON.stringify(participants.map((p) => [p.sessionId, p.conversationId, p.role]))
         ) {
@@ -122,6 +128,7 @@ export class SessionLinkStore {
         id,
         story,
         participants,
+        ...(policy ? { policy } : {}),
         state: 'active',
         reason: '',
         version: 1,
@@ -174,13 +181,19 @@ export class SessionLinkStore {
     operationId: string,
     version: number,
     action: 'pause' | 'resume' | 'stop' | 'end',
-    requestId?: string
+    requestId?: string,
+    summary = ''
   ): SessionLink {
     return this.transaction(() => {
       const previous = this.event(operationId)
       const link = this.get(id)
       if (previous) {
-        if (previous.linkId !== id || previous.actor !== actor || previous.detail !== action) {
+        if (
+          previous.linkId !== id ||
+          previous.actor !== actor ||
+          previous.detail !== action ||
+          previous.body !== summary
+        ) {
           throw new Error('Operation belongs to another session link action.')
         }
         return link
@@ -233,7 +246,7 @@ export class SessionLinkStore {
         operationId: '',
         createdAt: Date.now(),
         detail: action,
-        body: '',
+        body: summary,
         ...(requestId ? { requestId } : {})
       })
       return link
@@ -254,7 +267,8 @@ export class SessionLinkStore {
       if (event.state === 'dispatching') {
         return event
       }
-      if (link.turns >= SESSION_LINK_TURN_LIMIT) {
+      const turnLimit = link.policy ? link.policy.turnLimit : SESSION_LINK_TURN_LIMIT
+      if (turnLimit !== null && link.turns >= turnLimit) {
         this.pause(link.id, 'turn-limit')
         return null
       }

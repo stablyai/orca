@@ -47,3 +47,13 @@ export function sessionLinkNextMessage(
       (e.kind === 'reply' && e.replyTo === waiting.id)
   )
 }
+
+export function sessionLinkOwnerRequest(
+  events: readonly SessionLinkEvent[]
+): SessionLinkEvent | null {
+  const index = events.findLastIndex((event) => event.kind === 'owner-request')
+  return index === -1 ||
+    events.slice(index + 1).some((event) => event.actor === 'owner' && event.kind === 'owner-note')
+    ? null
+    : events[index]
+}
