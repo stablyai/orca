@@ -20,6 +20,6 @@ export function seedAttachedRuntimeTerminal(
   seedHeadlessTerminalFromSpawnResult(runtime, result, null)
   seedTerminalRestoreRecordsFromSpawnResult(runtime, result)
   if (resizeLanded && sizeNow) {
-    runtime?.reflowHeadlessTerminalToPtyGrid(result.id, sizeNow.cols, sizeNow.rows)
+    runtime?.resizeHeadlessTerminalToPtyGrid(result.id, sizeNow.cols, sizeNow.rows)
   }
 }
