@@ -9,6 +9,8 @@ import { buildStatusMap } from '../../lib/git-path-decoration'
 import type { AgentDetectionTarget } from '@/hooks/useDetectedAgents'
 import { useAgentDetectionTargetForWorktree } from '@/hooks/useAgentDetectionTarget'
 import { getConnectionIdFromState } from '@/lib/connection-context'
+import { getConnectionIdForWorktreeCopy } from '@/lib/connection-owner-resolution'
+import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { isNativeChatTranscriptLocalReadable } from '../../../../shared/native-chat/transcript/native-chat-transcript-readability'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
@@ -87,11 +89,14 @@ export type TabBarRuntimeModel = {
 
 export function useTabBarRuntimeModel({
   worktreeId,
-  groupId
+  groupId,
+  executionHostId
 }: {
   worktreeId: string
   groupId?: string
+  executionHostId?: ExecutionHostId
 }): TabBarRuntimeModel {
+  const selectedHost = parseExecutionHostId(executionHostId)
   const newTerminalShortcut = useShortcutLabel('tab.newTerminal')
   const newBrowserShortcut = useShortcutLabel('tab.newBrowser')
   const newSimulatorShortcut = useShortcutLabel('tab.newSimulator')
@@ -124,11 +129,19 @@ export function useTabBarRuntimeModel({
   const settings = useAppStore((s) => s.settings)
   // Why: use the worktree's owning host so offered Windows shells match the host that actually runs the terminal.
   const ownerRuntimeEnvironmentId = useAppStore((s) =>
-    runtimeEnvironmentIdOrLocalUnlessTwin(s, worktreeId)
+    executionHostId
+      ? selectedHost?.kind === 'runtime'
+        ? selectedHost.environmentId
+        : null
+      : runtimeEnvironmentIdOrLocalUnlessTwin(s, worktreeId)
   )
   // Why: retained tab strips rerun selectors on every store write; reuse canonical indexes, don't flatten both slices here.
   const worktreeConnectionId = useAppStore(
-    (s) => getConnectionIdFromState(s, worktreeId)?.trim() || null
+    (s) =>
+      (executionHostId
+        ? getConnectionIdForWorktreeCopy(s, worktreeId, executionHostId)
+        : getConnectionIdFromState(s, worktreeId)
+      )?.trim() || null
   )
   const worktreeRemotePlatform = useAppStore((s) => {
     if (!worktreeConnectionId) {
@@ -159,12 +172,14 @@ export function useTabBarRuntimeModel({
   )
   const shellMenuHostPlatform = worktreeConnectionId
     ? (worktreeRemotePlatform ?? windowsTerminalCapabilities.hostPlatform)
-    : windowsTerminalCapabilities.hostPlatform
+    : selectedHost?.kind === 'ssh'
+      ? null
+      : windowsTerminalCapabilities.hostPlatform
   const showWindowsShellMenu = shouldShowWindowsShellMenu({
     ownerRuntimeEnvironmentId,
     hostPlatform: shellMenuHostPlatform,
     isWindowsClient: isWindows,
-    worktreeHasRemoteConnection: Boolean(worktreeConnectionId)
+    worktreeHasRemoteConnection: Boolean(worktreeConnectionId) || selectedHost?.kind === 'ssh'
   })
   // Subscribe to project/worktree maps only for the local shell menu; their routine writes otherwise repaint every retained strip.
   const needsLocalProjectRuntime =

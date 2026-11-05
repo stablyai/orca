@@ -177,11 +177,13 @@ export function createBrowserTabActions(
       return browserTab
     },
 
-    openNewBrowserTabInActiveWorkspace: async (groupId, splitDirection) => {
+    openNewBrowserTabInActiveWorkspace: async (groupId, splitDirection, targetWorktreeId) => {
       const state = get()
       // Why: the invoking group owns its workspace; global selection may already point elsewhere.
       const worktreeId =
-        findGroupAndWorktree(state.groupsByWorktree, groupId)?.worktreeId ?? state.activeWorktreeId
+        targetWorktreeId ??
+        findGroupAndWorktree(state.groupsByWorktree, groupId)?.worktreeId ??
+        state.activeWorktreeId
       if (!worktreeId) {
         return
       }

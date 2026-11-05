@@ -182,3 +182,53 @@ test('Markdown creation keeps an empty workspace after activation changes', asyn
     orcaPage.getByRole('button', { name: /^untitled(?:-\d+)?\.md .*Close tab$/ })
   ).toBeVisible()
 })
+
+test('Browser creation keeps an empty workspace after activation changes', async ({ orcaPage }) => {
+  const setup = await orcaPage.evaluate(() => {
+    const state = window.__store!.getState()
+    const worktreeId = state.activeWorktreeId!
+    const other = Object.values(state.worktreesByRepo)
+      .flat()
+      .find((row) => row.id !== worktreeId)!
+    if (!state.tabsByWorktree[other.id]?.length) {
+      state.createTab(other.id)
+    }
+    for (const tab of state.tabsByWorktree[worktreeId] ?? []) {
+      state.closeTab(tab.id, { reason: 'user' })
+    }
+    window.__store!.setState((s) => ({
+      groupsByWorktree: { ...s.groupsByWorktree, [worktreeId]: [] }
+    }))
+    return { worktreeId, other: other.id }
+  })
+  await worktreeRow(orcaPage, setup.worktreeId)
+    .getByRole('button', { name: 'New tab', exact: true })
+    .click({ force: true })
+  await expect(orcaPage.getByRole('menu')).toBeVisible()
+  await orcaPage.evaluate((id) => window.__store!.getState().setActiveWorktree(id), setup.other)
+  await orcaPage
+    .getByRole('menuitem', { name: /New Browser Tab/i })
+    .first()
+    .click({ force: true })
+  await expect
+    .poll(() =>
+      orcaPage.evaluate(
+        (id) => window.__store!.getState().browserTabsByWorktree[id]?.length ?? 0,
+        setup.worktreeId
+      )
+    )
+    .toBe(1)
+  expect(
+    await orcaPage.evaluate(
+      (id) => window.__store!.getState().browserTabsByWorktree[id] ?? [],
+      setup.other
+    )
+  ).toEqual([])
+  await orcaPage.evaluate(
+    (id) => window.__store!.getState().setActiveWorktree(id),
+    setup.worktreeId
+  )
+  await expect(
+    orcaPage.getByRole('combobox', { name: 'Search or enter URL', exact: true })
+  ).toBeVisible()
+})
