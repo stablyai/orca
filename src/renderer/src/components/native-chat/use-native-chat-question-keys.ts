@@ -7,7 +7,8 @@ export function useNativeChatQuestionKeys(
   cardRef: RefObject<HTMLElement | null>,
   enabled: boolean,
   optionCount: number,
-  onPick: (optionIndex: number) => void
+  onPick: (optionIndex: number) => void,
+  onStep: (delta: 1 | -1) => boolean
 ): void {
   const onKeyDown = useEffectEvent((event: KeyboardEvent): void => {
     const target = event.target instanceof Element ? event.target : null
@@ -71,6 +72,13 @@ export function useNativeChatQuestionKeys(
       next?.focus()
       if (field && next === field) {
         field.setSelectionRange(field.value.length, field.value.length)
+      }
+    } else if (
+      (event.key === 'ArrowLeft' || event.key === 'ArrowRight') &&
+      (focusedIndex !== -1 || target?.closest('[data-native-chat-question-step]'))
+    ) {
+      if (onStep(event.key === 'ArrowRight' ? 1 : -1)) {
+        event.preventDefault()
       }
     } else if (event.key === 'Enter' && focusedIndex !== -1) {
       event.preventDefault()
