@@ -224,7 +224,7 @@ export async function saveWebClipboardImageAsTempFile(args?: {
   if (args?.imageDataUrl !== undefined && !args.imageDataUrl.startsWith(PNG_DATA_URL_PREFIX)) {
     throw new Error('Expected a PNG data URL')
   }
-  const contentBase64 =
+  let contentBase64 =
     args?.imageDataUrl !== undefined
       ? args.imageDataUrl.slice(PNG_DATA_URL_PREFIX.length)
       : await readClipboardImagePngBase64()
@@ -233,6 +233,12 @@ export async function saveWebClipboardImageAsTempFile(args?: {
   }
   if (!contentBase64) {
     return null
+  }
+  if (args?.imageDataUrl !== undefined) {
+    const png = await convertImageBlobToPng(
+      new Blob([decodeBase64Bytes(contentBase64)], { type: 'image/png' })
+    )
+    contentBase64 = await blobToBase64(png)
   }
   if (args?.forNativeChatDraft && args.forStructuredChat && !args.agentSessionAttachment) {
     return holdBrowserAttachmentFiles([
