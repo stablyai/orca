@@ -7,7 +7,8 @@ import { defaultAgentChatLabel } from '../../../shared/agent-session/agent-sessi
 import { getHeadlessMobileSessionGroupId } from '../mobile-session-layout-projection'
 import type { StructuredSessionSurface } from '../agent-session/structured-agent-session-close'
 import type { StructuredAgentId } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
-import { chatTabId } from '../agent-session/agent-session-tab-layout'
+import { insertTabIdIntoOrder } from '../../../shared/workspace-layout/tab-order'
+import { chatTabId, resolveChatTabPlacement } from '../agent-session/agent-session-tab-layout'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
 import { mobileChatTabId, newReopenedChatTabId } from '../agent-session/agent-session-tab-identity'
 import { isReopenedChatTabId } from '../../../shared/agent-session/view/structured-agent-session-host-tab-id'
@@ -113,7 +114,7 @@ export async function admitStructuredSessionTabPublication(
 
 export type StructuredSessionRawPublicationInput = Pick<
   StructuredSessionTabPublicationInput,
-  'workspaceId' | 'sessionId' | 'agent' | 'activate' | 'notify' | 'tabId'
+  'workspaceId' | 'sessionId' | 'agent' | 'activate' | 'notify' | 'tabId' | 'placement'
 > & { eligible?: () => boolean }
 
 export function projectStructuredSessionTab(
@@ -180,17 +181,20 @@ export function projectStructuredSessionTab(
   ]
   // Why: the window can list the chat before main restores its row; keep the place it gave it.
   const listingGroupId = priorGroups.find((group) => group.tabOrder.includes(id))?.id
-  const groupId =
-    listingGroupId ??
-    (priorGroups.some((group) => group.id === existing?.activeGroupId)
-      ? existing!.activeGroupId!
-      : priorGroups[0]!.id)
+  const placement = resolveChatTabPlacement(
+    priorGroups,
+    existing?.activeGroupId ?? undefined,
+    input.placement
+  )
+  const groupId = listingGroupId ?? placement.groupId ?? priorGroups[0]!.id
   const tabGroups = priorGroups.map((group) =>
     group.id === groupId
       ? {
           ...group,
           activeTabId: input.activate ? id : group.activeTabId,
-          tabOrder: listingGroupId ? group.tabOrder : [...group.tabOrder, id]
+          tabOrder: listingGroupId
+            ? group.tabOrder
+            : insertTabIdIntoOrder(group.tabOrder, tabs, id, false, placement.afterTabId)
         }
       : group
   )
