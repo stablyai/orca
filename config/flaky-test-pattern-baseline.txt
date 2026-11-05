@@ -1306,7 +1306,7 @@
 5 test-no-wall-clock:src/main/runtime/orca-runtime-migrated-pane-restore-cwd.test.ts
 5 test-no-wall-clock:src/main/runtime/rpc/methods/agent-launch-restart-replay.test.ts
 3 test-no-wall-clock:src/renderer/src/components/native-chat/NativeChatResolvedView.turn-status.test.tsx
-5 test-no-wall-clock:src/renderer/src/components/sidebar/workspace-card/review/use-workspace-reference-details.test.tsx
+4 test-no-wall-clock:src/renderer/src/components/sidebar/workspace-card/review/use-workspace-reference-details.test.tsx
 4 test-timeout-needs-reason:src/main/agent-hooks/server-transport-interference.test.ts
 5 test-timeout-needs-reason:src/main/browser/identity/browser-session-ua-wire-identity.electron.test.ts
 5 test-timeout-needs-reason:src/main/claude-usage/scanner-incremental-reader.test.ts
