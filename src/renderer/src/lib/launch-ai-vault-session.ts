@@ -4,7 +4,7 @@ import { tuiAgentToAgentKind } from '@/lib/telemetry'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
 import { createWebRuntimeSessionTerminal } from '@/runtime/web-runtime-terminal-creation'
 import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session-environment'
-import type { AiVaultAgent } from '../../../shared/ai-vault-types'
+import type { AiVaultAgent } from '../../../shared/ai-vault/contracts/ai-vault-types'
 import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig

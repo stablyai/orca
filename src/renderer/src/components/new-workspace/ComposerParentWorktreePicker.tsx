@@ -14,17 +14,18 @@ import {
   getIndexedWorktreeMap
 } from '@/store/worktree-repo-index'
 import { compareWorktreeDisplayName } from '@/lib/worktree-display-name-order'
-import { branchDisplayName } from '@/components/sidebar/WorktreeCardHelpers'
+import '@/components/sidebar/workspace-card/activity/worktree-card-empty-inputs'
+import { branchDisplayName } from '@/components/sidebar/workspace-card/identity/worktree-branch-display'
 import { getCyclicProjectedWorktreeLineageIds } from '../../../../shared/sidebar-list/worktree-lineage-projection'
 import {
   clampWorktreeParentPickerIndex,
   filterWorktreeParentCandidates
-} from '@/components/sidebar/worktree-parent-picker-filtering'
+} from '@/components/sidebar/workspace-actions/parenting/worktree-parent-picker-filtering'
 import {
   PICKER_LIST_MAX_HEIGHT,
   PICKER_ROW_HEIGHT,
   PICKER_ROW_OVERSCAN
-} from '@/components/sidebar/worktree-parent-picker-placement'
+} from '@/components/sidebar/workspace-actions/parenting/worktree-parent-picker-placement'
 import {
   getLineageChildrenByParentId,
   getLineageChildWorktree

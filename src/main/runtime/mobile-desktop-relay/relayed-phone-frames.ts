@@ -1,9 +1,12 @@
-import { BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
-import { COMPRESSED_FRAMES_CLIENT_CAPABILITY } from '../../../shared/paired-e2ee-compressed-frame'
+import {
+  BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
+  BROWSER_SCREENCAST_RUNTIME_CAPABILITY
+} from '../../../shared/protocol-version'
+import { COMPRESSED_FRAMES_CLIENT_CAPABILITY } from '../../../shared/remote-runtime/e2ee/paired-e2ee-compressed-frame'
 import {
   readTerminalStreamFrameId,
   writeTerminalStreamFrameId
-} from '../../../shared/terminal-stream-protocol'
+} from '../../../shared/terminal/stream/terminal-stream-protocol'
 
 const STRIPPED_ENVELOPE_FIELDS = new Set(['deviceToken', 'executionHost'])
 
@@ -81,6 +84,7 @@ export class RelayedPhoneReplies {
     {
       hostStreamIds: number[]
       swallow: boolean
+      browserScreencast?: () => boolean
       settle?: (reply: unknown) => void
       cancel?: () => void
     }
@@ -89,10 +93,14 @@ export class RelayedPhoneReplies {
 
   constructor(private readonly allocateStreamId: () => number) {}
 
-  noteForwarded(requestId: string, options: { swallowReplies?: boolean } = {}): void {
+  noteForwarded(
+    requestId: string,
+    options: { swallowReplies?: boolean; browserScreencast?: () => boolean } = {}
+  ): void {
     this.openRequests.set(requestId, {
       hostStreamIds: [],
-      swallow: options.swallowReplies === true
+      swallow: options.swallowReplies === true,
+      browserScreencast: options.browserScreencast
     })
   }
 
@@ -151,10 +159,20 @@ export class RelayedPhoneReplies {
     const open = this.openRequests.get(parsed.id)
     open?.settle?.(parsed)
     const result = parsed.result
-    let renumbered = false
+    let rewritten = false
+    if (
+      open?.browserScreencast?.() &&
+      parsed.ok === true &&
+      isRecord(result) &&
+      Array.isArray(result.capabilities) &&
+      !result.capabilities.includes(BROWSER_SCREENCAST_RUNTIME_CAPABILITY)
+    ) {
+      result.capabilities = [...result.capabilities, BROWSER_SCREENCAST_RUNTIME_CAPABILITY]
+      rewritten = true
+    }
     if (open && isRecord(result) && typeof result.streamId === 'number') {
       result.streamId = this.desktopStreamId(result.streamId, open.hostStreamIds)
-      renumbered = true
+      rewritten = true
     }
     // Unsubscribe sends no end; cap retained streams until link closure.
     if (open && (parsed.streaming !== true || (isRecord(result) && result.type === 'end'))) {
@@ -163,7 +181,7 @@ export class RelayedPhoneReplies {
     if (open?.swallow) {
       return null
     }
-    return renumbered ? JSON.stringify(parsed) : plaintext
+    return rewritten ? JSON.stringify(parsed) : plaintext
   }
 
   /** Drop terminal frames for streams never announced to the phone. */

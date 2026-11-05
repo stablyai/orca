@@ -1,7 +1,7 @@
 import { collectLeafIdsInOrder } from '@/components/terminal-pane/layout-serialization'
 import { getRepoMapFromState, getWorktreeMapFromState } from '@/store/selectors'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
-import type { TerminalPaneLayoutNode } from '../../../../shared/terminal-tab-types'
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import type { TerminalPaneLayoutNode } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { AppState } from '../../store/types'
 
 type AgentStatusPaneResolution = {

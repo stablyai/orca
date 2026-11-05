@@ -58,6 +58,8 @@ export class AcpTimelineTranslator {
   }
 
   dispose(): void {
+    this.tools.dispose()
+    this.messages.dispose()
     this.subagents.dispose()
   }
 

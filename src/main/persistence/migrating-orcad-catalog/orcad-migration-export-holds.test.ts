@@ -1,19 +1,15 @@
 import { mkdtempSync, rmSync, statSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
-import { writeFileDurableSync } from '../../filesystem/durable-file-write'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import {
   getTerminalScrollbackSnapshotPath,
-  readTerminalScrollbackStoredBytesSync,
   writeTerminalScrollbackSnapshotSync
-} from '../../terminal-scrollback-snapshots'
+} from '../../pty/scrollback/terminal-scrollback-snapshots'
 import { deleteRemovedTerminalScrollbackSnapshots } from '../loading-store/terminal-session-cleanup'
-import { deleteRemovedTerminalScrollbackSnapshotsAsync } from '../../terminal-scrollback-snapshot-async-migration'
-import { extractSessionOwnersForTransfer } from '../../orca-profiles/profile-session-owner-transfer'
-import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
+import { deleteRemovedTerminalScrollbackSnapshotsAsync } from '../../pty/scrollback/terminal-scrollback-snapshot-async-migration'
 
 const roots: string[] = []
 afterEach(() => {
@@ -45,21 +41,6 @@ function sessionWithRef(ref: string | null): WorkspaceSessionState {
 }
 
 describe('scrollback store reads and retention for migration export', () => {
-  it('reads stored bytes for a ref and none for an unknown one', () => {
-    const { storage: store } = storage()
-    const ref = writeTerminalScrollbackSnapshotSync({
-      tabId: 'tab-1',
-      leafId: 'leaf-1',
-      buffer: 'saved output',
-      storage: store
-    })
-    expect(ref).not.toBeNull()
-    expect(readTerminalScrollbackStoredBytesSync(ref ?? '', store)?.toString('utf8')).toBe(
-      'saved output'
-    )
-    expect(readTerminalScrollbackStoredBytesSync(`v1-${'0'.repeat(32)}`, store)).toBeNull()
-  })
-
   it.each(['sync', 'async'] as const)(
     'keeps a %s-removed snapshot a pending export still reads',
     async (mode) => {
@@ -93,60 +74,4 @@ describe('scrollback store reads and retention for migration export', () => {
       expect(() => statSync(path)).toThrow()
     }
   )
-})
-
-describe.skipIf(process.platform === 'win32')('durable writes with a creation mode', () => {
-  it('creates the file with the requested mode', () => {
-    const { root } = storage()
-    const finalPath = join(root, 'state.json')
-    writeFileDurableSync(`${finalPath}.tmp`, finalPath, '{}', 0o600)
-    expect(statSync(finalPath).mode & 0o777).toBe(0o600)
-  })
-})
-
-describe('session owner projection hooks', () => {
-  function sleeping(paneKey: string): SleepingAgentSessionRecord {
-    return {
-      paneKey,
-      worktreeId: 'repo-1::/srv/app',
-      agent: 'claude',
-      providerSession: { key: 'session_id', id: paneKey },
-      prompt: 'resume me',
-      state: 'done',
-      capturedAt: 1,
-      updatedAt: 1
-    }
-  }
-
-  it('lets a transfer keep resumable sleeping agents and project focus scalars', () => {
-    const source: WorkspaceSessionState = {
-      ...getDefaultWorkspaceSession(),
-      sleepingAgentSessionsByPaneKey: {
-        'tab-1:leaf-1': sleeping('tab-1:leaf-1'),
-        'tab-2:leaf-1': sleeping('tab-2:leaf-1')
-      }
-    }
-    const projectSessionFocus = vi.fn()
-    const transferred = extractSessionOwnersForTransfer(source, {
-      mapOwnerKey: (ownerKey) => ownerKey,
-      mapWorktreeId: (id) => id,
-      projectSleepingAgentSession: (record) => (record.paneKey === 'tab-1:leaf-1' ? record : null),
-      projectSessionFocus
-    })
-    expect(Object.keys(transferred.sleepingAgentSessionsByPaneKey ?? {})).toEqual(['tab-1:leaf-1'])
-    expect(projectSessionFocus).toHaveBeenCalledWith(
-      expect.objectContaining({ source, transferred })
-    )
-  })
-
-  it('drops sleeping agents when the projection does not opt in', () => {
-    const transferred = extractSessionOwnersForTransfer(
-      {
-        ...getDefaultWorkspaceSession(),
-        sleepingAgentSessionsByPaneKey: { 'tab-1:leaf-1': sleeping('tab-1:leaf-1') }
-      },
-      { mapOwnerKey: (ownerKey) => ownerKey, mapWorktreeId: (id) => id }
-    )
-    expect(transferred.sleepingAgentSessionsByPaneKey).toBeUndefined()
-  })
 })

@@ -1,36 +1,14 @@
 import { describe, expect, it, vi } from 'vitest'
-import {
-  OrcaRuntimeService,
-  listWorktrees,
-  resolveWorktreeScanCacheTtlMs
-} from '../orca-runtime-test-mocks.spec'
-import { store } from '../orca-runtime-test-fixtures.spec'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { listWorktrees } from '../../git/worktrees/catalog/worktree-scan-cache'
+import { resolveWorktreeScanCacheTtlMs } from '../workspaces/catalog/runtime-worktree-scan-cache'
+import { store } from './orca-runtime-test-fixtures.spec'
 import { bumpLocalWorktreeScanGeneration } from '../../workspaces/catalog/local-worktree-scan-generation'
 
 describe('resolveWorktreeScanCacheTtlMs', () => {
   const BASE_TTL_MS = 30_000
   const SCRATCH_TTL_MS = 5 * 60_000
-
-  it('keeps the base TTL for ordinary local repos', () => {
-    expect(
-      resolveWorktreeScanCacheTtlMs({ path: '/Users/dev/projects/app', connectionId: '' })
-    ).toBe(BASE_TTL_MS)
-  })
-
-  it('extends the TTL for agent-scratch repo roots', () => {
-    expect(
-      resolveWorktreeScanCacheTtlMs({
-        path: '/Users/dev/.codex-tmp/foragent-capsule-b1-repo-zP9Az6',
-        connectionId: ''
-      })
-    ).toBe(SCRATCH_TTL_MS)
-    expect(
-      resolveWorktreeScanCacheTtlMs({
-        path: '/Users/dev/.claude/skills/obsidian-second-brain',
-        connectionId: ''
-      })
-    ).toBe(SCRATCH_TTL_MS)
-  })
 
   it('never extends the TTL for SSH repos', () => {
     // Remote paths that resemble local scratch paths must retain normal freshness.

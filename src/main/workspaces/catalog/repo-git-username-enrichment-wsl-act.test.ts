@@ -9,7 +9,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('../../git/git-username', () => ({
   resolveLocalGitUsernameDetailed: mocks.resolveLocalGitUsernameDetailed
 }))
-vi.mock('../../wsl-background-distro-gate', async (importOriginal) => ({
+vi.mock('../../wsl/discovery/wsl-background-distro-gate', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   readWslDistroRunningState: mocks.readWslDistroRunningState
 }))
@@ -19,8 +19,8 @@ const {
   flushRepoGitUsernameEnrichmentForTests,
   resetRepoGitUsernameEnrichmentForTests
 } = await import('./repo-git-username-enrichment')
-const { blockedWslDistroForPath } = await import('../../wsl/wsl-unc-access-gate')
-const { runAsWslUserAct } = await import('../../wsl/wsl-user-act-scope')
+const { blockedWslDistroForPath } = await import('../../wsl/filesystem/wsl-unc-access-gate')
+const { runAsWslUserAct } = await import('../../wsl/discovery/wsl-user-act-scope')
 
 const repo: Repo = {
   id: 'r1',

@@ -2,7 +2,7 @@ import { withGitSpan } from '../../observability/instrumentation'
 import {
   resolveGitFetchHeadCommand,
   runWithGitFetchHeadLock
-} from '../../../shared/git-fetch-head-lock'
+} from '../../../shared/git/fetch/git-fetch-head-lock'
 import { pendingWslDriveCheckoutGitRouting } from '../wsl-drive-checkout-git-routing'
 import type { ResolvedCommand } from './wsl-command-resolution'
 import { annotateWslHostFailure, isTransientWslFailure } from './wsl-host-failure'
@@ -20,12 +20,15 @@ import { prepareWindowsHostGitEnvironment } from './windows-host-git-environment
 import { buildNetworkSshPolicyEnv } from './git-ssh-policy-env'
 import { nonInteractiveGitEnv, untranslatedGitOutputEnv } from './git-process-env'
 import { acquireGitAdmission } from './git-subprocess-admission'
-import { GitCommandTimeoutError, gitCommandTimeoutMs } from './git-command-timeout'
-import { classifyGitCommand } from '../../../shared/git-command-classification'
+import {
+  GitCommandTimeoutError,
+  gitCommandTimeoutMs
+} from '../../../shared/git/commands/git-command-timeout'
+import { classifyGitCommand } from '../../../shared/git/commands/git-command-classification'
 import { createAbortError } from './abort-error'
 import { readCapturedGitBuffer, readCapturedGitString } from './captured-git-output'
 import { runUnlessGitCwdKnownMissing } from './missing-git-spawn-cwd'
-import { trackGitWorktreeMutation } from '../git-worktree-mutation-state'
+import { trackGitWorktreeMutation } from './git-worktree-mutation-state'
 import { routeLocalGitOptions, runAdmittedWslGit } from './local-git-runtime-route'
 import { gitRunsIn } from './git-runs-in'
 

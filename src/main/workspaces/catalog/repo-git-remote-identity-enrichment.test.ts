@@ -1,13 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getRepoExecutionHostId } from '../../../shared/execution-host'
-import type { GitRemoteIdentity } from '../../../shared/git-remote-identity'
+import type { GitRemoteIdentity } from '../../../shared/git/remotes/git-remote-identity'
 import type { Repo } from '../../../shared/repo-types'
 import type { RepoHostTarget } from '../../../shared/repo-host-identity'
 import { repoTarget } from '../../persistence/repo-host-target-matcher.test-fixture'
 import { type GitRemoteIdentityProbe, probeGitRemoteIdentity } from './repo-git-remote-identity'
 import { WSL_HOSTS_INTERNAL_GATE_ENV } from '../../../shared/wsl-host-internal-gate'
-import type * as DistroGate from '../../wsl-background-distro-gate'
-import type { WslDistroRunningState } from '../../wsl-background-distro-gate'
+import type * as DistroGate from '../../wsl/discovery/wsl-background-distro-gate'
+import type { WslDistroRunningState } from '../../wsl/discovery/wsl-background-distro-gate'
 import { setLocalGitRuntimeRouter } from '../../git/command-runner/local-git-runtime-route'
 import {
   enrichMissingRepoGitRemoteIdentities,
@@ -19,7 +19,7 @@ vi.mock('./repo-git-remote-identity', () => ({
   probeGitRemoteIdentity: vi.fn()
 }))
 const distroGate = vi.hoisted((): { state: WslDistroRunningState } => ({ state: 'running' }))
-vi.mock('../../wsl-background-distro-gate', async (importOriginal) => ({
+vi.mock('../../wsl/discovery/wsl-background-distro-gate', async (importOriginal) => ({
   ...(await importOriginal<typeof DistroGate>()),
   readWslDistroRunningState: async () => distroGate.state
 }))

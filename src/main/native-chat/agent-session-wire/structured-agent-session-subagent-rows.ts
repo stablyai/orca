@@ -4,13 +4,13 @@
 
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalTurnScope } from '../../../shared/agent-session/journal/agent-session-journal-turn-scope'
-import type { AgentChildWorkInput } from '../../../shared/agent-status-child-work'
-import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
+import type { AgentChildWorkInput } from '../../../shared/agent-status/child-work/agent-status-child-work'
+import type { AgentChildWorkView } from '../../../shared/agent-status/child-work/agent-status-child-work-view'
 import type {
   NativeChatSubagentBlock,
   NativeChatSubagentState
 } from '../../../shared/native-chat/native-chat-types'
-import { structuredRunningChildWork } from '../../../shared/agent-child-work-listing'
+import { structuredRunningChildWork } from '../../../shared/agent-status/child-work/agent-child-work-listing'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import {
   journaledSubagent,

@@ -7,7 +7,7 @@ import { ProfileStateSqliteAuthority } from '../persistence/profile-state/profil
 import { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { eraseRpcMethods, isStreamingMethod } from '../runtime/rpc/core'
 import { ACCOUNT_METHODS } from '../runtime/rpc/methods/accounts'
-import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
+import { installFakeAppEnvironment } from '../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 import { createOrcadAccountServices } from './orcad-account-services'
 import { USAGE_CREDENTIALS_RUNTIME_CAPABILITY } from '../../shared/account-runtime-capabilities'
 import type { OrcadRuntimeCleanup } from './orcad-runtime-lifetime'

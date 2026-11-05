@@ -1,5 +1,5 @@
 import { useCallback, type Dispatch, type SetStateAction } from 'react'
-import type { AgentType } from '../../../../shared/agent-status-types'
+import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 import {
   emitNativeChatMessageSent,
   emitNativeChatPickerItemAccepted,

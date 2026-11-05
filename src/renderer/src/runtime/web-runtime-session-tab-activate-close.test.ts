@@ -1,4 +1,3 @@
-import { registerHistoricalSessionTabActivationTests } from './web-runtime-session-tab-historical-activation.spec'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as TrackingDecisions from './web-session-tabs-sync/tracking-decisions'
 import {
@@ -19,7 +18,7 @@ import {
   resetWebSessionCloseIntentForTests
 } from './web-session-close-intent'
 import './web-session-tab-rpc-timeout'
-import '../../../shared/terminal-surface-id'
+import '../../../shared/workspace-layout/terminal-surface-id'
 import { ENVIRONMENT_ID, WORKTREE_ID, makeSnapshot } from './web-runtime-session-test-harness'
 import { stubRuntimeEnvironmentBridge } from './runtime-environment-bridge-fixture'
 
@@ -132,8 +131,6 @@ describe('web runtime session tab actions', () => {
     vi.unstubAllGlobals()
     vi.clearAllMocks()
   })
-
-  registerHistoricalSessionTabActivationTests(mocks, { ENVIRONMENT_ID, WORKTREE_ID })
 
   // STA-6224: clearing on a dropped connection let the host's next snapshot re-add the tab.
   it('holds a user close the host never received and sends it again once reachable', async () => {

@@ -2,11 +2,11 @@ import { translate } from '@/i18n/i18n'
 import {
   classifySubmodulePushFailure,
   formatSubmodulePushFailureSentence
-} from '../../../shared/git-remote-error'
+} from '../../../shared/git/remotes/git-remote-error'
 import {
   LINT_PUSH_FAILURE_SUMMARY,
   PRE_PUSH_FAILURE_SUMMARY
-} from '../../../shared/source-control-push-failure'
+} from '../../../shared/source-control/recovery/source-control-push-failure'
 
 export type PushLikeOperation = 'publish' | 'sync' | 'forcePush' | 'push'
 export type RemoteOperation = PushLikeOperation | 'fetch' | 'fastForward' | 'rebase' | 'pull'

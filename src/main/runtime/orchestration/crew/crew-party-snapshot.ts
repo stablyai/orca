@@ -22,7 +22,8 @@ import type { CrewReadDependencies } from './crew-read-dependencies'
 export type { CrewReadDependencies, CrewIdentityRead } from './crew-read-dependencies'
 
 function preview(body: string): string {
-  const bytes = Buffer.from(body)
+  // One extra UTF-16 unit distinguishes a full ASCII preview from a longer body.
+  const bytes = Buffer.from(body.slice(0, 1025))
   return bytes.length <= 1024
     ? body
     : `${bytes

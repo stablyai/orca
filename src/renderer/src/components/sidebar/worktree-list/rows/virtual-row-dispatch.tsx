@@ -5,7 +5,8 @@ import type {
   WorkspaceStatus,
   WorkspaceStatusDefinition
 } from '../../../../../../shared/worktree/types'
-import { getWorkspaceStatus } from '../../workspace-status'
+import '../../workspace-status/presentation/workspace-status'
+import { getWorkspaceStatus } from '../../../../../../shared/workspace-statuses'
 import type { WorktreeGroupBy } from '../../../../../../shared/sidebar-list/row-types'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import {
@@ -14,9 +15,9 @@ import {
   shouldUseHeaderTopSpacing
 } from '../viewport/virtual-rows'
 import type { RenderRow } from '../listing/render-row'
-import type { ImportedWorktreeCardActionState } from '../../imported-worktrees-card-actions'
-import type { NewExternalWorktreesInboxActionState } from '../../new-external-worktrees-inbox-actions'
-import type { useHostHeaderDrag } from '../../host-header-drag'
+import type { ImportedWorktreeCardActionState } from '../listing/imported-worktrees-card-actions'
+import type { NewExternalWorktreesInboxActionState } from '../listing/new-external-worktrees-inbox-actions'
+import type { useHostHeaderDrag } from '../drag/host-header-drag'
 import { HostSectionHeader } from './HostSectionHeader'
 import { renderFolderWorkspaceVirtualRow, type FolderWorkspaceRowContext } from './folder-row'
 import {
@@ -184,7 +185,7 @@ export function renderWorktreeVirtualRow(
       row,
       vItem,
       measureVirtualRowElement: ctx.measureVirtualRowElement,
-      actionState: ctx.importedWorktreeCardActionState.get(row.repo.id),
+      actionStateByProjectId: ctx.importedWorktreeCardActionState,
       onShow: ctx.onShowImportedWorktrees,
       onKeepHidden: ctx.onKeepImportedWorktreesHidden
     })

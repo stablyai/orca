@@ -11,7 +11,7 @@ const { readFileMock, realpathMock, statMock, wslHomeMock, wslHomeAsyncMock } = 
   wslHomeAsyncMock: vi.fn(async (): Promise<string | null> => null)
 }))
 
-vi.mock('../../../wsl', async (importOriginal) => ({
+vi.mock('../../../wsl/discovery/distro-catalog', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   getWslHome: wslHomeMock,
   getWslHomeAsync: wslHomeAsyncMock

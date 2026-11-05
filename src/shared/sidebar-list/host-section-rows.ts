@@ -9,7 +9,7 @@ import {
 } from '../execution-host'
 import type { ExecutionHostHealth } from '../execution-host-registry'
 import type { RuntimeCompatVerdict } from '../protocol-compat'
-import type { RuntimeHostBlockedReason } from '../runtime-host-status'
+import type { RuntimeHostBlockedReason } from '../remote-runtime/host-status/runtime-host-status'
 import type { SshConnectionStatus } from '../ssh-types'
 import type { Row } from './row-types'
 import { getFolderWorkspaceHostId } from './folder-workspace-host-id'
@@ -50,8 +50,11 @@ function getRowHostId(row: Row, defaultHostId: ExecutionHostId): ExecutionHostId
   switch (row.type) {
     case 'item':
       return getWorktreeExecutionHostId(row.worktree, row.repo, defaultHostId)
-    case 'pending-creation':
     case 'imported-worktrees-card':
+      return row.placement === 'all-projects'
+        ? row.hostId
+        : getRepoExecutionHostIdOrDefault(row.repo, defaultHostId)
+    case 'pending-creation':
     case 'new-external-worktrees-inbox':
       return getRepoExecutionHostIdOrDefault(row.repo, defaultHostId)
     case 'folder-workspace':

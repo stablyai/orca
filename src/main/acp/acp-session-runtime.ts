@@ -3,7 +3,12 @@ import { z } from 'zod'
 import { AcpRpcError } from './acp-errors'
 import { AcpPromptRequest } from './acp-prompt-request'
 import { callAcpSession } from './acp-response-settlement'
-import { AcpJsonRpcPeer, type AcpPeerOptions, type AcpRequestContext } from './acp-json-rpc-peer'
+import {
+  AcpJsonRpcPeer,
+  type AcpPeerHandlers,
+  type AcpPeerOptions,
+  type AcpRequestContext
+} from './acp-json-rpc-peer'
 import {
   answerAcpPermission,
   readAcpPermissionRequest,
@@ -54,6 +59,7 @@ export type AcpSessionRuntimeOptions = {
   onExtensionNotification?: (method: string, params: unknown) => void
   onDiagnostic?: (message: string) => void
   onClose?: (error: Error) => void
+  onOutputEnd?: AcpPeerHandlers['onOutputEnd']
   onOtherLine?: (line: string, cut?: boolean) => void
   /** Authentication answers, published synchronously as responses are accepted. */
   onAuthAnswered?: (signedIn: boolean) => void
@@ -86,6 +92,7 @@ export class AcpSessionRuntime {
           this.prompts.close(error)
           options.onClose?.(error)
         },
+        ...(options.onOutputEnd ? { onOutputEnd: options.onOutputEnd } : {}),
         onOtherLine: options.onOtherLine
       },
       options.peer
@@ -269,22 +276,11 @@ export class AcpSessionRuntime {
     if (!request) {
       throw new AcpRpcError(-32602, 'Invalid ACP permission request')
     }
-    // The caller decides whether agent-initiated turns may request permission.
+    // Only the started session asks the caller; the caller decides who can answer.
     if (request.sessionId !== this.started?.sessionId) {
       return { outcome: { outcome: 'cancelled' } }
     }
-    // Defer the decision so a preceding refusal in the same chunk takes effect.
-    return answerAcpPermission(
-      request,
-      context,
-      (request, context) =>
-        this.prompts.waitingToRetry
-          ? { outcome: { outcome: 'cancelled' } }
-          : (this.options.onPermission?.(request, context) ?? {
-              outcome: { outcome: 'cancelled' }
-            }),
-      diagnose
-    )
+    return answerAcpPermission(request, context, this.options.onPermission, diagnose)
   }
 
   private diagnose(message: string): void {

@@ -1,13 +1,16 @@
 import { mkdir, realpath, rename, writeFile } from 'node:fs/promises'
-vi.mock('../../ai-vault/session-scanner-opencode-sqlite-worker-spawn', async (original) => {
-  const query = await import('../transcript-opencode-sqlite-query')
-  return {
-    ...(await original<object>()),
-    readOpenCodeTranscriptPageViaWorker: query.readOpenCodeTranscriptPage,
-    readOpenCodeTranscriptSignalViaWorker: async (args: { dbPath: string; sessionId: string }) =>
-      query.readOpenCodeTranscriptSignal(args.dbPath, args.sessionId)
+vi.mock(
+  '../../ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-spawn',
+  async (original) => {
+    const query = await import('../transcript-opencode-sqlite-query')
+    return {
+      ...(await original<object>()),
+      readOpenCodeTranscriptPageViaWorker: query.readOpenCodeTranscriptPage,
+      readOpenCodeTranscriptSignalViaWorker: async (args: { dbPath: string; sessionId: string }) =>
+        query.readOpenCodeTranscriptSignal(args.dbPath, args.sessionId)
+    }
   }
-})
+)
 import { join } from 'node:path'
 import { expect, it, vi } from 'vitest'
 import {
@@ -22,12 +25,12 @@ import {
   codexLegacyMirrorRecords,
   writeCodexHistoryFixture
 } from '../agent-session-journal/codex-history-test-fixture'
-import { structuredAgentRuntimeMetadata } from '../../runtime/structured-agent-runtime-metadata'
+import { structuredAgentRuntimeMetadata } from '../../runtime/agent-session/installation/structured-agent-runtime-metadata'
 import {
   resolveStructuredAgentSessionAdoptionForCreate,
   structuredAgentSessionAdoptAttach
 } from '../../runtime/agent-session/structured-agent-session-create-adoption'
-import { prepareCodexAiVaultSessionResume } from '../../codex/codex-ai-vault-session-resume'
+import { prepareCodexAiVaultSessionResume } from '../../codex/history/resume/codex-ai-vault-session-resume'
 
 import { fixture } from './structured-agent-session-create-adoption-contract-test-fixture'
 

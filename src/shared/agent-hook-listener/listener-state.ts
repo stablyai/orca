@@ -1,17 +1,16 @@
-import type { AgentMainAgentStatus } from '../agent-status-types'
-import type { AgentChildWorkKind } from '../agent-status-child-work'
+import type { AgentMainAgentStatus } from '../agent-status/lifecycle/main-agent-status'
+import type { AgentChildWorkKind } from '../agent-status/child-work/agent-status-child-work'
 import type { ClaudeLeadTurnState, CodexLeadTurnState } from './main-agent-turn-state'
 
-export type { ClaudeLeadTurnState, CodexLeadTurnState } from './main-agent-turn-state'
 import {
   AGENT_STATUS_2A_CURRENT_PRODUCER_MODE,
   createAgentStatusLegacyAdapter,
   type AgentStatusLegacyAdapter,
   type AgentStatusLegacyAdapterOptions,
   type AgentStatusLegacyAdmissionMode
-} from '../agent-status-legacy-adapter'
-import type { AgentStatusLegacyIngressCaller } from '../agent-status-legacy-ingress-manifest'
-import type { ClaudeLaunchedBackgroundTasks } from '../claude-owed-task-notifications'
+} from '../agent-status/transport/agent-status-legacy-adapter'
+import type { AgentStatusLegacyIngressCaller } from '../agent-status/transport/agent-status-legacy-ingress-manifest'
+import type { ClaudeLaunchedBackgroundTasks } from './providers/claude-owed-task-notifications'
 import type { ClaudeSubagentRoster } from '../claude-subagent-roster'
 import type { CodexSubagentRoster } from '../codex-subagent-roster'
 import type { CodexSubagentTranscriptState } from '../codex-subagent-transcript'
@@ -24,7 +23,7 @@ import {
   movePaneScopedSetEntries
 } from './pane-scoped-cache-entries'
 import type { JcodeUserPromptEvidence } from '../jcode-session-files'
-import type { HookRootAttempt } from '../hook-process-root-evidence'
+import type { HookRootAttempt } from './presence/hook-process-root-evidence'
 import {
   moveOpenCodeSessionBindings,
   unbindOpenCodeSessionsOfPane,

@@ -2,8 +2,8 @@ import { useCallback, useRef } from 'react'
 import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from './pty-transport-types'
 import type { PaneCwdMap } from './resolve-split-cwd'
-import type { TerminalQuickCommand } from '../../../../shared/terminal-quick-command-types'
-import { isTerminalAgentQuickCommand } from '../../../../shared/terminal-quick-commands'
+import type { TerminalQuickCommand } from '../../../../shared/terminal/quick-commands/terminal-quick-command-types'
+import { isTerminalAgentQuickCommand } from '../../../../shared/terminal/quick-commands/terminal-quick-commands'
 import { sendTerminalQuickCommandToPane } from './terminal-quick-command-dispatch'
 import type { TerminalPasteSource } from './terminal-paste-model'
 import { runQuickCommandInNewTab } from '@/lib/run-quick-command-in-new-tab'
@@ -24,7 +24,7 @@ import {
 import { useTerminalPaneSplitActions } from './use-terminal-pane-split-actions'
 import { useTerminalContextMenuTrigger } from './use-terminal-context-menu-trigger'
 import { useAppStore } from '@/store'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { resolvePaneAgentSessionId } from './pane-agent-session-id'
 import { resetTerminalInputModes } from './terminal-input-mode-reset'
 import { equalizeTerminalPanes } from './terminal-pane-layout-owner-commands'
@@ -57,6 +57,7 @@ type TerminalMenuState = {
   menuOpenedAtRef: React.RefObject<number>
   paneCount: number
   menuPaneId: number | null
+  menuPane: ManagedPane | null
   onContextMenuCapture: (event: React.MouseEvent<HTMLDivElement>) => void
   onMouseDownCapture: (event: React.MouseEvent<HTMLDivElement>) => void
   onPaneTitleContextMenu: (event: React.MouseEvent<HTMLElement>, paneId: number) => void
@@ -293,7 +294,8 @@ export function useTerminalPaneContextMenu({
 
   // Closed menus need neither pane counts nor target identity; avoid wrapper allocation on every retained-tab render.
   const paneCount = open ? (managerRef.current?.getPanes().length ?? 1) : 1
-  const menuPaneId = open ? (resolveMenuPane()?.id ?? null) : null
+  const menuPane = open ? resolveMenuPane() : null
+  const menuPaneId = menuPane?.id ?? null
 
   return {
     open,
@@ -302,6 +304,7 @@ export function useTerminalPaneContextMenu({
     menuOpenedAtRef,
     paneCount,
     menuPaneId,
+    menuPane,
     onContextMenuCapture,
     onMouseDownCapture,
     onPaneTitleContextMenu,

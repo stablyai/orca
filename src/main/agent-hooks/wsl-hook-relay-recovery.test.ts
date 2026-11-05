@@ -1,3 +1,4 @@
+import type * as WslBackgroundDistroGate from '../wsl/discovery/wsl-background-distro-gate'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { WslRelayRecovery, type WslRelayRecoveryState } from './wsl-hook-relay-recovery'
@@ -12,8 +13,11 @@ import {
 const { noteWslDistroMayHaveStoppedMock } = vi.hoisted(() => ({
   noteWslDistroMayHaveStoppedMock: vi.fn()
 }))
-vi.mock('../wsl/wsl-unc-access-gate', () => ({
-  noteWslDistroMayHaveStopped: noteWslDistroMayHaveStoppedMock
+vi.mock('../wsl/discovery/wsl-background-distro-gate', async (importOriginal) => ({
+  ...(await importOriginal<typeof WslBackgroundDistroGate>()),
+  ...(await (() => ({
+    noteWslDistroMayHaveStopped: noteWslDistroMayHaveStoppedMock
+  }))())
 }))
 
 beforeEach(() => vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] }))

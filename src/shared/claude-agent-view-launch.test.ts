@@ -1,6 +1,9 @@
 import { expect, it } from 'vitest'
 import { withClaudeAgentViewPlugin } from './claude-agent-view-launch'
-import { tokenizeStartupCommand, type AgentStartupShell } from './tui-agent-startup-shell'
+import {
+  tokenizeStartupCommand,
+  type AgentStartupShell
+} from './agent-launch/startup/tui-agent-startup-shell'
 
 it.each(['posix', 'powershell', 'cmd'] as const)(
   'preserves existing plugin arguments and prompts in %s',

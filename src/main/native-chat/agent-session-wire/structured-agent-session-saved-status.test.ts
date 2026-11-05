@@ -33,7 +33,7 @@ import {
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import type { AgentSessionResumeMarker } from '../../../shared/agent-session/lifecycle/agent-session-resume-marker'
 import { structuredAgentSessionAgentStatus } from '../../../shared/agent-session/view/structured-agent-session-agent-status'
-import { agentVerdictDisplayMark } from '../../../shared/agent-main-agent-verdict'
+import { agentVerdictDisplayMark } from '../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 import { savedStatusContracts } from '../../../shared/agent-session/lifecycle/agent-session-saved-status.test-fixture'
 
 afterEach(() => vi.restoreAllMocks())

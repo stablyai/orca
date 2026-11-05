@@ -5,7 +5,7 @@ import {
   isCliCreatedWorkspace,
   isDetachedHeadWorkspace
 } from '../../../shared/worktree/workspace-kinds'
-import { revealRepoInProjectFilter } from '@/components/sidebar/project-filter-reveal'
+import { revealRepoInProjectFilter } from '@/components/sidebar/worktree-list/controls/project-filter-reveal'
 
 /** Lifts the workspace-list filters hiding an activated worktree; its reveal needs the card rendered, else it silently no-ops. */
 export function liftSidebarFiltersHidingWorktree(wt: Worktree): void {

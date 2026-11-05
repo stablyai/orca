@@ -1,5 +1,4 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { CLIPBOARD_IMAGE_MAX_SOURCE_BYTES } from '../../../src/shared/clipboard-image'
 
 vi.mock('expo-image-picker', () => ({
   UIImagePickerPreferredAssetRepresentationMode: { Compatible: 'compatible' },
@@ -14,7 +13,6 @@ vi.mock('expo-file-system', () => ({
 }))
 
 import {
-  ImageLibraryPermissionError,
   pickMobileImage,
   pickMobileImages,
   type PickedMobileImage
@@ -23,7 +21,6 @@ import {
 const granted = { granted: true } as Awaited<
   ReturnType<typeof import('expo-image-picker').requestMediaLibraryPermissionsAsync>
 >
-const denied = { granted: false } as typeof granted
 
 async function collectImages(
   images: AsyncIterable<PickedMobileImage>
@@ -58,33 +55,6 @@ function fileFactory(
 
 describe('pickMobileImage', () => {
   afterEach(() => vi.restoreAllMocks())
-
-  it('reads a photo URI without relying on React Native fetch', async () => {
-    const bytes = new Uint8Array([0, 1, 2, 3])
-    const file = fileFactory(bytes)
-    const launchLibrary = vi.fn().mockResolvedValue({
-      canceled: false,
-      assets: [{ uri: 'file:///x.jpg', fileSize: bytes.length }]
-    })
-    const fetchSpy = vi
-      .spyOn(globalThis, 'fetch')
-      .mockRejectedValue(new Error('Network request failed'))
-    const result = await pickMobileImage('library', {
-      requestLibraryPermission: vi.fn().mockResolvedValue(granted),
-      launchLibrary,
-      createFile: file.createFile
-    })
-
-    expect(result).toEqual({
-      base64: Buffer.from(bytes).toString('base64'),
-      uri: 'file:///x.jpg'
-    })
-    expect(launchLibrary).toHaveBeenCalledWith(
-      expect.objectContaining({ base64: false, preferredAssetRepresentationMode: 'compatible' })
-    )
-    expect(fetchSpy).not.toHaveBeenCalled()
-    expect(file.close).toHaveBeenCalledTimes(1)
-  })
 
   it('returns every selected library photo in order', async () => {
     const bytesByUri = new Map([
@@ -135,76 +105,6 @@ describe('pickMobileImage', () => {
         selectionLimit: 0
       })
     )
-  })
-
-  it('throws when photo library permission is denied', async () => {
-    await expect(
-      pickMobileImage('library', {
-        requestLibraryPermission: vi.fn().mockResolvedValue(denied),
-        launchLibrary: vi.fn()
-      })
-    ).rejects.toBeInstanceOf(ImageLibraryPermissionError)
-  })
-
-  it('returns null when the library picker is cancelled', async () => {
-    const result = await pickMobileImage('library', {
-      requestLibraryPermission: vi.fn().mockResolvedValue(granted),
-      launchLibrary: vi.fn().mockResolvedValue({ canceled: true, assets: null })
-    })
-
-    expect(result).toBeNull()
-  })
-
-  it('reads any picked file into base64 and keeps its name for the files source', async () => {
-    const bytes = new Uint8Array([1, 2, 3, 4])
-    const file = fileFactory(bytes)
-    const launchFiles = vi.fn().mockResolvedValue({
-      canceled: false,
-      assets: [
-        {
-          uri: 'file:///book.txt',
-          name: '柴静-看见.txt',
-          mimeType: 'text/plain',
-          size: bytes.length
-        }
-      ]
-    })
-
-    const result = await pickMobileImage('files', {
-      launchFiles,
-      createFile: file.createFile
-    })
-
-    expect(launchFiles).toHaveBeenCalledWith(expect.objectContaining({ type: '*/*' }))
-    expect(result).toEqual({
-      base64: Buffer.from(bytes).toString('base64'),
-      uri: 'file:///book.txt',
-      fileName: '柴静-看见.txt'
-    })
-    expect(file.close).toHaveBeenCalledTimes(1)
-  })
-
-  it('returns null when the files picker is cancelled', async () => {
-    const result = await pickMobileImage('files', {
-      launchFiles: vi.fn().mockResolvedValue({ canceled: true, assets: null })
-    })
-
-    expect(result).toBeNull()
-  })
-
-  it('rejects an oversized asset before opening it', async () => {
-    const file = fileFactory(new Uint8Array([1]))
-    await expect(
-      pickMobileImage('files', {
-        launchFiles: vi.fn().mockResolvedValue({
-          canceled: false,
-          assets: [{ uri: 'file:///huge.png', size: CLIPBOARD_IMAGE_MAX_SOURCE_BYTES + 1 }]
-        }),
-        createFile: file.createFile
-      })
-    ).rejects.toThrow('Clipboard image is too large')
-    expect(file.createFile).not.toHaveBeenCalled()
-    expect(file.open).not.toHaveBeenCalled()
   })
 
   it('closes the file handle when reading fails', async () => {

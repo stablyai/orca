@@ -23,7 +23,7 @@ vi.mock('child_process', () => ({
   execFileSync: vi.fn()
 }))
 
-vi.mock('../wsl/wsl-runner', () => ({
+vi.mock('../wsl/execution/wsl-runner', () => ({
   runWslProcess: runWslProcessMock
 }))
 

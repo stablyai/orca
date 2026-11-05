@@ -1,5 +1,5 @@
 import type { AgentJournalSnapshot } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import { agentTurnVerdict } from '../../../shared/agent-turn-outcome'
+import { agentTurnVerdict } from '../../../shared/agent-status/lifecycle/agent-turn-outcome'
 import { isAgentSessionContextClear } from '../../../shared/agent-session/agent-session-context-clear'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { isRootAgentJournalItem } from '../../../shared/agent-session/journal/agent-session-journal-producer'
@@ -105,8 +105,11 @@ export class StructuredAgentSessionRequestFailures {
       })
       this.baselines.set(sessionId, baseline)
       journal.visitItems((id) => items.add(id))
-      for (const submission of journal.submissions()) {
-        submissions.add(submission.clientMessageId)
+      for (const itemId of items) {
+        const submission = journal.inputOrder.inputForItem(itemId)
+        if (submission) {
+          submissions.add(submission.clientMessageId)
+        }
       }
     }
     if (!baseline) {
@@ -228,10 +231,7 @@ export class StructuredAgentSessionRequestFailures {
         ? readAgentJournalTurn(journal.itemBody(request.id) ?? undefined)?.userItemId
         : request.id) ?? ''
     )
-    const { clientMessageId } =
-      journal
-        .submissions()
-        .find(({ clientMessageId: id }) => agentJournalSubmissionKey(id) === opener) ?? {}
+    const { clientMessageId } = journal.inputOrder.inputForItem(opener) ?? {}
     const generation = child?.fence === fence ? child?.generation : undefined
     const end = outcome === 'interruption' ? session?.lastEndedChild : undefined
     this.deps.onFailure({

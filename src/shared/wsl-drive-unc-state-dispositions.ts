@@ -1,6 +1,6 @@
 /**
  * What converting a UNC Windows-drive project to its drive path (D1c) does with each saved field;
- * src/main/wsl/wsl-drive-unc-state-rewrite.ts applies it.
+ * src/main/wsl/filesystem/wsl-drive-unc-state-rewrite.ts applies it.
  */
 import type { PersistedState } from './persisted-state-types'
 

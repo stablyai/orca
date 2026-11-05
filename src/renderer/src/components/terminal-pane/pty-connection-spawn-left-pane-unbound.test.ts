@@ -10,7 +10,11 @@ import {
   createManager,
   type MockTransport
 } from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
 import {
@@ -146,6 +150,8 @@ describe('fresh spawn leaves a local pane unbound', () => {
     'mounts and remounts the tab owner while an unrelated workspace is active (%s)',
     async (reverse) => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
       const local = makeWorktree({ id: 'wt-1', repoId: 'repo1', path: '/local', hostId: 'local' })
       const remote = { ...local, path: '/remote', hostId: 'runtime:server' as const }
@@ -191,7 +197,13 @@ describe('fresh spawn leaves a local pane unbound', () => {
         const pane = createPane(1)
         const transport = createMockTransport('remote:server@@pty-1')
         transportFactoryQueue.push(transport)
-        const binding = connectPanePty(...mockPanePtyArgs(pane, createManager(1), createDeps()))
+        const binding = connectPanePty(
+          ...mockPanePtyArgs(
+            pane,
+            createManager(1),
+            bindPaneAgentTitleMocks(createDeps(), agentTitleMocks)
+          )
+        )
         await flushAsyncTicks(40)
         expect(createRemoteRuntimePtyTransport).toHaveBeenLastCalledWith(
           'server',
@@ -211,6 +223,8 @@ describe('fresh spawn leaves a local pane unbound', () => {
     'continues a recorded live folder owner despite ambiguous inventory (%s)',
     async (host) => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks2 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const worktreeId = 'folder:ambiguous'
       Object.assign(mockStoreState, {
         folderWorkspaces: [{ id: 'ambiguous', projectGroupId: 'mixed', folderPath: '/work' }],
@@ -237,7 +251,11 @@ describe('fresh spawn leaves a local pane unbound', () => {
         transportFactoryQueue.push(transport)
         const pane = createPane(1)
         const binding = connectPanePty(
-          ...mockPanePtyArgs(pane, createManager(1), createDeps({ worktreeId }))
+          ...mockPanePtyArgs(
+            pane,
+            createManager(1),
+            bindPaneAgentTitleMocks(createDeps({ worktreeId }), agentTitleMocks2)
+          )
         )
         await flushAsyncTicks(40)
         if (host === 'local') {

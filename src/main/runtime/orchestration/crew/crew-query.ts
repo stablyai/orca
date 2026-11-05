@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status-freshness'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status/contracts/agent-status-freshness'
 import type { OrchestrationCoordinatorKey } from '../orchestration-caller-identity'
 import type { OrchestrationDb } from '../db'
 import { currentRunCoordinatorOrcaSessionIdSql } from '../db/runs/run-coordinator-orca-session'

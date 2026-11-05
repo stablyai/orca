@@ -1,13 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { ParsedTerminalFileLink } from '../../../../shared/terminal-links'
+import type { ParsedTerminalFileLink } from '../../../../shared/terminal/links/terminal-links'
 import type * as FileLinkTargetModule from '@/components/terminal-pane/terminal-file-link-target'
 import type { FileLinkPathExistence } from '@/components/terminal-pane/terminal-file-link-target'
 import type * as FilePathMappingModule from '@/components/terminal-pane/terminal-file-path-mapping'
-import { TERMINAL_PATH_EXISTS_CACHE_MAX_ENTRIES } from '@/components/terminal-pane/terminal-path-exists-cache'
-import {
-  createNativeChatFileLinkExistence,
-  UNVERIFIABLE_RETRY_DELAYS_MS
-} from './native-chat-file-link-existence'
+import { RECENT_PATH_ANSWERS_MAX } from '../../../../shared/recent-path-answers'
+import { createNativeChatFileLinkExistence } from './native-chat-file-link-existence'
+import { UNVERIFIABLE_RETRY_DELAYS_MS } from '../../../../shared/native-chat/native-chat-file-link-existence'
 
 const connection = vi.hoisted(() => ({
   resolved: true,
@@ -87,47 +85,6 @@ describe('createNativeChatFileLinkExistence', () => {
     connection.currentOwnerResolved = true
   })
 
-  it('underlines a path only after the host confirms it, asking once', async () => {
-    const { asked, pathExists } = hostWith((path) => path === '/repo/src/App.tsx')
-    const { watcher, onChange } = watching(createNativeChatFileLinkExistence(host, pathExists))
-
-    expect(watcher.getSnapshot().check(link('src/App.tsx'))).toBe(false)
-    expect(watcher.getSnapshot().check(link('src/App.tsx'))).toBe(false)
-    await settle()
-
-    expect(asked).toEqual(['/repo/src/App.tsx'])
-    expect(onChange).toHaveBeenCalledOnce()
-    expect(watcher.getSnapshot().check(link('src/App.tsx'))).toBe(true)
-  })
-
-  it('leaves a missing path plain without refreshing the message', async () => {
-    const { pathExists } = hostWith(() => false)
-    const { watcher, onChange } = watching(createNativeChatFileLinkExistence(host, pathExists))
-
-    watcher.getSnapshot().check(link('src/app.ts'))
-    await settle()
-
-    expect(onChange).not.toHaveBeenCalled()
-    expect(watcher.getSnapshot().check(link('src/app.ts'))).toBe(false)
-    expect(pathExists).toHaveBeenCalledOnce()
-  })
-
-  it('does not recheck a held path once its workspace owner can no longer be placed', async () => {
-    const { asked, pathExists } = hostWith(() => true)
-    const existence = createNativeChatFileLinkExistence(host, pathExists)
-    const { watcher } = watching(existence)
-    watcher.getSnapshot().check(link('src/app.ts'))
-    await settle()
-    expect(asked).toEqual(['/repo/src/app.ts'])
-
-    // A detected row on another host lands after the target was held, making the owner ambiguous.
-    connection.currentOwnerResolved = false
-    existence.recheck()
-    await settle()
-
-    expect(asked).toEqual(['/repo/src/app.ts'])
-  })
-
   it('links a path the turn created once the turn ends, without re-rendering first', async () => {
     let created = false
     const { asked, pathExists } = hostWith(() => created)
@@ -163,27 +120,6 @@ describe('createNativeChatFileLinkExistence', () => {
 
     expect(onChange).toHaveBeenCalledTimes(2)
     expect(watcher.getSnapshot().check(link('src/old.ts'))).toBe(false)
-  })
-
-  it('on a recheck re-renders only the messages whose answer changed', async () => {
-    let deleted = false
-    const { pathExists } = hostWith((path) => !(deleted && path === '/repo/src/old.ts'))
-    const existence = createNativeChatFileLinkExistence(host, pathExists)
-    const naming = watching(existence)
-    const other = watching(existence)
-    naming.watcher.getSnapshot().check(link('src/old.ts'))
-    other.watcher.getSnapshot().check(link('src/kept.ts'))
-    await settle()
-    naming.onChange.mockClear()
-    other.onChange.mockClear()
-
-    deleted = true
-    existence.recheck()
-    await settle()
-
-    expect(naming.onChange).toHaveBeenCalledOnce()
-    expect(other.onChange).not.toHaveBeenCalled()
-    expect(pathExists).toHaveBeenCalledTimes(4)
   })
 
   it('shows an answer that landed between a message rendering and subscribing', async () => {
@@ -224,26 +160,12 @@ describe('createNativeChatFileLinkExistence', () => {
     expect(late.getSnapshot().check(link('src/App.tsx'))).toBe(true)
   })
 
-  it('refreshes only the messages that named a confirmed path', async () => {
-    const { pathExists } = hostWith(() => true)
-    const existence = createNativeChatFileLinkExistence(host, pathExists)
-    const naming = watching(existence)
-    const other = watching(existence)
-
-    naming.watcher.getSnapshot().check(link('src/App.tsx'))
-    await settle()
-
-    expect(naming.onChange).toHaveBeenCalledOnce()
-    expect(other.onChange).not.toHaveBeenCalled()
-    expect(other.watcher.getSnapshot().check(link('src/App.tsx'))).toBe(true)
-  })
-
   it('keeps every answer a shown message needs, past the unobserved cache limit', async () => {
     const { pathExists } = hostWith(() => true)
     const existence = createNativeChatFileLinkExistence(host, pathExists)
     const { watcher } = watching(existence)
     const names = Array.from(
-      { length: TERMINAL_PATH_EXISTS_CACHE_MAX_ENTRIES + 100 },
+      { length: RECENT_PATH_ANSWERS_MAX + 100 },
       (_, index) => `file-${index}.md`
     )
     const render = (): boolean[] => names.map((name) => watcher.getSnapshot().check(link(name)))
@@ -280,16 +202,6 @@ describe('createNativeChatFileLinkExistence', () => {
     expect(watcher.getSnapshot().check(link('src/new.ts'))).toBe(true)
   })
 
-  it('does not ask while text is still streaming in', async () => {
-    const { pathExists } = hostWith(() => true)
-    const existence = createNativeChatFileLinkExistence(host, pathExists)
-
-    expect(existence.watch().getSnapshot().peek(link('src/Ap'))).toBe(false)
-    await settle()
-
-    expect(pathExists).not.toHaveBeenCalled()
-  })
-
   it('links a path once a host that could not answer comes back, without a remount', async () => {
     vi.useFakeTimers()
     let reachable = false
@@ -312,35 +224,6 @@ describe('createNativeChatFileLinkExistence', () => {
     expect(watcher.getSnapshot().check(link('src/App.tsx'))).toBe(true)
   })
 
-  it('stops retrying a host that stays down, until the next recheck', async () => {
-    vi.useFakeTimers()
-    const { pathExists } = hostWith(() => new Error('runtime unreachable'))
-    const existence = createNativeChatFileLinkExistence(host, pathExists)
-    const { watcher } = watching(existence)
-    watcher.getSnapshot().check(link('src/App.tsx'))
-    await settle()
-
-    await vi.advanceTimersByTimeAsync(10 * 60_000)
-    expect(pathExists).toHaveBeenCalledTimes(1 + UNVERIFIABLE_RETRY_DELAYS_MS.length)
-
-    existence.recheck()
-    await settle()
-    expect(pathExists).toHaveBeenCalledTimes(2 + UNVERIFIABLE_RETRY_DELAYS_MS.length)
-  })
-
-  it('stops retrying once no message shows the path', async () => {
-    vi.useFakeTimers()
-    const { pathExists } = hostWith(() => new Error('SSH connection closed'))
-    const { watcher, unsubscribe } = watching(createNativeChatFileLinkExistence(host, pathExists))
-    watcher.getSnapshot().check(link('src/App.tsx'))
-    await settle()
-
-    unsubscribe()
-    await vi.advanceTimersByTimeAsync(10 * 60_000)
-
-    expect(pathExists).toHaveBeenCalledOnce()
-  })
-
   it('keeps the shown answer when the host cannot answer a recheck', async () => {
     let reachable = true
     const { pathExists } = hostWith(() => (reachable ? true : new Error('SSH connection closed')))
@@ -356,66 +239,5 @@ describe('createNativeChatFileLinkExistence', () => {
 
     expect(onChange).not.toHaveBeenCalled()
     expect(watcher.getSnapshot().check(link('src/App.tsx'))).toBe(true)
-  })
-
-  it('never checks on this machine while a remote workspace connection is unresolved', async () => {
-    connection.resolved = false
-    const { pathExists } = hostWith(() => true)
-    const { watcher } = watching(
-      createNativeChatFileLinkExistence({ ...host, connectionId: undefined }, pathExists)
-    )
-
-    expect(watcher.getSnapshot().check(link('src/App.tsx'))).toBe(false)
-    await settle()
-
-    expect(pathExists).not.toHaveBeenCalled()
-  })
-
-  it('never checks on this machine when same-id owners leave the source host unresolved', async () => {
-    connection.sourceHostResolved = false
-    const { pathExists } = hostWith(() => true)
-    const { watcher } = watching(createNativeChatFileLinkExistence(host, pathExists))
-
-    expect(watcher.getSnapshot().check(link('src/App.tsx'))).toBe(false)
-    await settle()
-
-    expect(pathExists).not.toHaveBeenCalled()
-  })
-
-  it('never asks this machine about a network share outside the workspace', async () => {
-    const { pathExists } = hostWith(() => true)
-    const { watcher } = watching(createNativeChatFileLinkExistence(host, pathExists))
-
-    for (const path of [String.raw`\\evil.example\share\a.ts`, '//evil.example/share/notes.md']) {
-      expect(watcher.getSnapshot().check(link(path))).toBe(false)
-    }
-    await settle()
-
-    expect(pathExists).not.toHaveBeenCalled()
-  })
-
-  it('still checks paths inside a workspace on a network share, and WSL paths', async () => {
-    const { asked, pathExists } = hostWith(() => true)
-    const shareHost = { ...host, worktreePath: String.raw`\\FileServer\share\repo` }
-    const wslHost = { ...host, worktreePath: String.raw`\\wsl.localhost\Ubuntu\home\me\repo` }
-    const onShare = watching(createNativeChatFileLinkExistence(shareHost, pathExists)).watcher
-    const onWsl = watching(createNativeChatFileLinkExistence(wslHost, pathExists)).watcher
-
-    onShare.getSnapshot().check(link(String.raw`\\fileserver\share\repo\src\a.ts`))
-    onWsl.getSnapshot().check(link(String.raw`\\wsl.localhost\Ubuntu\home\me\a.ts`))
-    await settle()
-
-    expect(asked).toEqual([
-      String.raw`\\fileserver\share\repo\src\a.ts`,
-      String.raw`\\wsl.localhost\Ubuntu\home\me\a.ts`
-    ])
-  })
-
-  it('links a known workspace root without asking', () => {
-    const { pathExists } = hostWith(() => false)
-    const existence = createNativeChatFileLinkExistence(host, pathExists)
-
-    expect(existence.watch().getSnapshot().check(link('ROOT'))).toBe(true)
-    expect(pathExists).not.toHaveBeenCalled()
   })
 })

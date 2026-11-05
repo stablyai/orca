@@ -4,7 +4,7 @@ import {
   type CrashReportDetailValue
 } from '../../shared/crash-reporting'
 import { getSystemMemoryDetails, memoryKBFieldMB } from './system-memory-details'
-import { getStartupRtPrioOutcome, readZeroRtTimeLimit } from '../linux-rttime-limit'
+import { getStartupRtPrioOutcome, readZeroRtTimeLimit } from '../startup/linux-rttime-limit'
 import {
   PRE_GONE_SYSTEM_MEMORY_SAMPLE_INTERVAL_MS,
   preGoneSystemMemoryDetails,

@@ -1,4 +1,4 @@
-import { getDetachedWorkspaceReviewRequest } from '@/components/sidebar/workspace-detached-review-request'
+import { getDetachedWorkspaceReviewRequest } from '@/components/sidebar/workspace-card/review/workspace-detached-review-request'
 import type { AppState } from '../types'
 import {
   getHostedReviewCacheKey,

@@ -204,7 +204,7 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
     insets,
     router,
     setRootRef,
-    worktreeLabel,
+    worktreeLabel: status ? branchLabel : worktreeLabel,
     screenState,
     branchCompareState,
     busyAction,

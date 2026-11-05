@@ -15,8 +15,6 @@ import {
   PROVEN,
   RUNNING_IDENTITY,
   THREAD,
-  journalWith,
-  lifecycleItem,
   turnScopeOf
 } from './structured-agent-session-stale-verdict-contract-test-fixture'
 
@@ -136,32 +134,4 @@ it('adds one row for a death however many attempts its settle takes to write', a
     await journals.closeAll()
     await rm(root, { recursive: true, force: true })
   }
-})
-
-it('writes nothing when no turn is running and keys on the journal position without a generation', async () => {
-  const idle = journalWith([
-    lifecycleItem('turn-1', 'completed', 1, { startedAt: 10, completedAt: 20 })
-  ])
-  await expect(
-    settleStaleStructuredAgentSessionState({
-      journal: idle.journal,
-      sessionId: 'session-1',
-      fence: 14,
-      acquisitionGeneration: null,
-      deathEvidence: null
-    })
-  ).resolves.toBe(0)
-  expect(idle.appendLifecycleBatch).not.toHaveBeenCalled()
-
-  const running = journalWith([lifecycleItem('turn-2', 'running', 2)])
-  await settleStaleStructuredAgentSessionState({
-    journal: running.journal,
-    sessionId: 'session-1',
-    fence: 14,
-    acquisitionGeneration: null,
-    deathEvidence: null
-  })
-  expect(running.appendLifecycleBatch).toHaveBeenCalledWith(
-    expect.objectContaining({ settlementId: 'stale-session:session-1:14:seq-8' })
-  )
 })

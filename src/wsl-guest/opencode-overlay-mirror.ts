@@ -1,6 +1,6 @@
 import { mkdirSync, readdirSync, realpathSync, statSync } from 'node:fs'
 import { join } from 'node:path'
-import { mirrorEntry } from '../main/pty/overlay-mirror'
+import { mirrorEntry } from '../main/pty/scrollback/overlay-mirror'
 
 export function mirrorOpenCodeConfig(
   sourceDir: string,

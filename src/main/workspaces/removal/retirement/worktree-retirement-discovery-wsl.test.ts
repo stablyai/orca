@@ -16,7 +16,7 @@ vi.mock('../../../native-chat/wsl-transcript-fs-gate', async (importOriginal) =>
 }))
 
 // Keep parseWslPath and hasCachedWslHome real for the backfill path under test.
-vi.mock('../../../wsl', async (importOriginal) => ({
+vi.mock('../../../wsl/discovery/distro-catalog', async (importOriginal) => ({
   ...((await importOriginal()) as Record<string, unknown>),
   getWslHomeAsync: getWslHomeAsyncMock
 }))

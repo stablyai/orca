@@ -8,7 +8,7 @@ import type {
 } from '../../../../shared/runtime-types'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import { findSavedBrowserPage } from '../../serve-browser-tab-layout'
-import { getRuntimeBrowserPageRegistry } from '../../runtime-browser-page-registry'
+import { getRuntimeBrowserPageRegistry } from '../../browser/client-pages/runtime-browser-page-registry'
 import { holdAgentSessionInventory } from '../../agent-session/structured-agent-session-inventory-hold'
 import type { Tab } from '../../../../shared/tab-types'
 import {
@@ -17,15 +17,15 @@ import {
   type PaneCloseResolution,
   type RendererTerminalClose,
   type TerminalSurfaceCloseOptions
-} from '../../terminal-surface-close'
+} from '../../terminal/surface/terminal-surface-close'
 import type {
   TerminalPaneCloseTarget,
   TerminalSurfaceCloseTarget
-} from '../../../../shared/terminal-surface-close-target'
-import { retireTerminalSurfacesFromSnapshot } from '../../mobile-session-terminal-retirement'
+} from '../../../../shared/workspace-layout/terminal-surface-close-target'
+import { retireTerminalSurfacesFromSnapshot } from '../../terminal/surface/mobile-session-terminal-retirement'
 import type { PtyControllerInventory } from '../../runtime-pty-controller-contract'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
-import { captureAcknowledgedTerminalTabRetirement } from '../../workspace-session-terminal-tab-retirement-identity'
+import { captureAcknowledgedTerminalTabRetirement } from '../../terminal/surface/workspace-session-terminal-tab-retirement-identity'
 import { closeLeafOrTab } from '../../../persistence/terminal-topology/terminal-topology-commit'
 import { markAgentLaunchesClosedByUser } from '../../../agent-launch/agent-launch-pane-attachment'
 

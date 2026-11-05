@@ -1,4 +1,5 @@
-import type * as WslAvailabilityTypes from '../../wsl-availability'
+import type * as WslPathOwner from '../../../shared/wsl-paths'
+import type * as WslAvailabilityTypes from '../../wsl/discovery/wsl-availability'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as MacosTccLoginShell from '../macos-tcc-login-shell'
 import type { ShellSpawnParams } from './local-pty-executable-spawn'
@@ -31,6 +32,13 @@ const {
   isWslAvailableAsyncMock: vi.fn(),
   wslUncDirectoryExistsAsyncMock: vi.fn(),
   createShellPromptReadinessProbeMock: vi.fn()
+}))
+
+vi.mock('../../../shared/wsl-paths', async (importOriginal) => ({
+  ...(await importOriginal<typeof WslPathOwner>()),
+  toLinuxPath: (path: string) => path.replace(/^C:\\/i, '/mnt/c/').replace(/\\/g, '/'),
+  toWindowsWslPath: (path: string, distro: string) =>
+    `\\\\wsl.localhost\\${distro}${path.replace(/\//g, '\\')}`
 }))
 
 vi.mock('fs', () => ({
@@ -69,7 +77,7 @@ vi.mock('../macos-tcc-login-shell', async (importOriginal) => ({
   prepareMacosTccLoginShell: prepareMacosTccLoginShellMock
 }))
 
-vi.mock('../../pty-descendant-termination', () => ({
+vi.mock('../../pty/process-retirement/pty-descendant-termination', () => ({
   killWithDescendantSweep: killWithDescendantSweepMock
 }))
 
@@ -97,7 +105,7 @@ vi.mock('../windows-pty-job-membership', () => ({
   isWindowsPtyJobReadable: () => true
 }))
 
-vi.mock('../../wsl', () => ({
+vi.mock('../../wsl/filesystem/unc-path-access', () => ({
   parseWslPath: (path: string) => {
     const match = path.match(/^\\\\wsl\.localhost\\([^\\]+)(.*)$/)
     if (!match) {
@@ -108,21 +116,18 @@ vi.mock('../../wsl', () => ({
       linuxPath: (match[2] || '').replace(/\\/g, '/') || '/'
     }
   },
-  toLinuxPath: (path: string) => path.replace(/^C:\\/i, '/mnt/c/').replace(/\\/g, '/'),
-  toWindowsWslPath: (path: string, distro: string) =>
-    `\\\\wsl.localhost\\${distro}${path.replace(/\//g, '\\')}`,
-  getDefaultWslDistro: () => 'Ubuntu',
-  isWslAvailableAsync: () => isWslAvailableAsyncMock(),
-  // Fixture WSL UNC directories exist; avoid launching wsl.exe to validate them.
   wslUncDirectoryExistsAsync: (...args: unknown[]) => wslUncDirectoryExistsAsyncMock(...args)
 }))
+vi.mock('../../wsl/discovery/distro-catalog', () => ({
+  getDefaultWslDistro: () => 'Ubuntu'
+}))
 
-vi.mock('../../wsl-availability', async (importOriginal) => ({
+vi.mock('../../wsl/discovery/wsl-availability', async (importOriginal) => ({
   ...(await importOriginal<typeof WslAvailabilityTypes>()),
   isWslAvailableAsync: () => isWslAvailableAsyncMock()
 }))
 
-vi.mock('../../shell-prompt-readiness-probe', () => ({
+vi.mock('../../pty/shell-startup/shell-prompt-readiness-probe', () => ({
   createShellPromptReadinessProbe: createShellPromptReadinessProbeMock
 }))
 

@@ -27,7 +27,7 @@ import {
   computeValidatedBranchName
 } from './worktree-branch-name'
 import { mergeWorktree } from './worktree-metadata-merge'
-import { areWorktreePathsEqual } from '../git/worktree-path-comparison'
+import { areWorktreePathsEqual } from '../git/worktrees/catalog/worktree-path-comparison'
 
 describe('sanitizeWorktreeName', () => {
   it('replaces spaces with hyphens', () => {

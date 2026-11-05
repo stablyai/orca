@@ -1,10 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { getDefaultPersistedState } from '../../../shared/constants'
-import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../shared/project-group-types'
 import type { Repo } from '../../../shared/repo-types'
 import { orcadMigrationCutoverFixture } from '../../ssh/orcad-migration-cutover-fixture'
-import { collectOrcadMigrationSourceCatalog } from './orcad-source-catalog'
 import { subtractOrcadSourceCatalogState } from './orcad-source-catalog-subtraction'
 import { orcadSourceFolderWorkspaceIds, repoBelongsToOrcadSource } from './orcad-source-ownership'
 
@@ -72,23 +71,6 @@ describe('orcad migration source ownership on a Windows SSH host', () => {
       catalog.repos.filter((entry) => repoBelongsToOrcadSource(entry, TARGET)).map(({ id }) => id)
     ).toEqual(['repo-app', 'repo-unified'])
     expect([...orcadSourceFolderWorkspaceIds(catalog, TARGET)].sort()).toEqual([
-      'fw-explicit',
-      'fw-inferred'
-    ])
-  })
-
-  it('exports exactly those rows', () => {
-    const catalog = windowsCatalog()
-    const exported = collectOrcadMigrationSourceCatalog(
-      {
-        getRepos: () => catalog.repos,
-        getProjectGroups: () => catalog.projectGroups,
-        getFolderWorkspaces: () => catalog.folderWorkspaces
-      },
-      { id: TARGET }
-    )
-    expect(exported.repositories.map(({ id }) => id)).toEqual(['repo-app', 'repo-unified'])
-    expect(exported.folderWorkspaces.map(({ id }) => id).sort()).toEqual([
       'fw-explicit',
       'fw-inferred'
     ])

@@ -1,7 +1,7 @@
 import { agentProviderSessionsEqual } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { AgentSessionStatusSummary } from '../../../shared/agent-session/agent-session-wire'
 import { agentSessionBackgroundTasksEqual } from '../../../shared/agent-session/agent-session-background-task-wire'
-import { isAgentStatusHeldOpenByChildWork } from '../../../shared/agent-lead-status-fold'
+import { isAgentStatusHeldOpenByChildWork } from '../../../shared/agent-status/lifecycle/agent-lead-status-fold'
 import { structuredAgentSessionAgentStatus } from '../../../shared/agent-session/view/structured-agent-session-agent-status'
 import { structuredStatusChildrenEqual } from './structured-agent-session-status-child-work'
 
@@ -27,6 +27,7 @@ export function structuredStatusSummariesEqual(
       (a.statusStartedAt !== undefined && !isIdleHeldOpenByChildWork(b))) &&
     a.latestPrompt === b.latestPrompt &&
     a.model === b.model &&
+    a.reportedModel === b.reportedModel &&
     a.permissionMode === b.permissionMode &&
     a.runtimePermission?.fence === b.runtimePermission?.fence &&
     a.runtimePermission?.mode === b.runtimePermission?.mode &&

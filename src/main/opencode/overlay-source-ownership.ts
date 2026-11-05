@@ -1,6 +1,6 @@
 import { lstat, readlink } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, parse, relative, resolve, sep } from 'node:path'
-import { isSafeDescendCandidate } from '../pty/overlay-mirror'
+import { isSafeDescendCandidate } from '../pty/scrollback/overlay-mirror'
 import type { OpenCodeOverlayManifest } from './opencode-overlay-manifest'
 import { sourceOverlayDirName } from './overlay-dir-names'
 

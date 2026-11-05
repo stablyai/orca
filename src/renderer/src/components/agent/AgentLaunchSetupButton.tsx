@@ -1,12 +1,4 @@
-import {
-  useLayoutEffect,
-  useRef,
-  useState,
-  useSyncExternalStore,
-  useCallback,
-  type KeyboardEvent,
-  type ReactElement
-} from 'react'
+import { useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactElement } from 'react'
 import { flushSync } from 'react-dom'
 import { ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -15,18 +7,30 @@ import { AgentLaunchSetupSubmenu } from './AgentLaunchSetupSubmenu'
 import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { translate } from '@/i18n/i18n'
 import { AgentLaunchSetupPanel } from './AgentLaunchSetupPanel'
-import {
-  agentPickerDraft,
-  type AgentPickerDraft,
-  type AgentPickerEntry
-} from '../../../../shared/agent-launch-picker'
+import type {
+  AgentPickerDraft,
+  AgentPickerEntry,
+  AgentPickerDraftOwner
+} from '../../../../shared/agent-launch/picker/agent-launch-picker'
 
-import { agentLaunchPromptScopeKey } from './AgentLaunchPromptComposer'
-import { readLaunchSetupOptions } from '../native-chat/native-chat-launch-draft-source'
-import {
-  subscribeToNativeChatComposerDraft,
-  writeLaunchSetupOptions
-} from '../native-chat/native-chat-composer-draft-store'
+import { useAgentPickerSetup, type AgentPickerSetupIdentity } from './agent-launch-picker-drafts'
+
+export {
+  invalidateAgentPickerDrafts,
+  retireAgentPickerDrafts,
+  useAgentPickerDraftScope
+} from './agent-launch-picker-drafts'
+export type { AgentPickerSetupIdentity } from './agent-launch-picker-drafts'
+
+export type AgentLaunchSetupPanelProps = {
+  entry: AgentPickerEntry
+  draft: AgentPickerDraft
+  getDraft: () => AgentPickerDraft | undefined
+  mode?: 'launch' | 'select'
+  disabled?: boolean
+  onDraftChange: (draft: AgentPickerDraft) => void
+  onUse: (draft: AgentPickerDraft) => boolean | void | Promise<boolean>
+}
 
 function setupKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
   if (event.key === 'Enter' || event.key === ' ') {
@@ -48,7 +52,13 @@ function setupKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
 
 export function AgentLaunchSetupButton({
   entry,
+  draftScope,
+  draftId = 'agent',
+  preset,
   initial,
+  seed,
+  surface,
+  mode = 'launch',
   renderAnchor,
   disabled,
   submenu = false,
@@ -58,7 +68,13 @@ export function AgentLaunchSetupButton({
   onUse
 }: {
   entry: AgentPickerEntry
+  draftScope?: AgentPickerDraftOwner
+  draftId?: string
+  preset?: AgentPickerSetupIdentity
   initial?: AgentPickerDraft
+  seed?: AgentPickerDraft
+  surface?: AgentPickerDraft['surface']
+  mode?: 'launch' | 'select'
   renderAnchor?: (trigger: ReactElement) => ReactElement
   disabled?: boolean
   submenu?: boolean
@@ -67,23 +83,19 @@ export function AgentLaunchSetupButton({
   onOpenChange?: (open: boolean) => void
   onUse: (draft: AgentPickerDraft) => boolean | void | Promise<boolean>
 }) {
-  const draftKey = agentLaunchPromptScopeKey(entry)
   const [localOpen, setOpen] = useState(false)
   const open = controlledOpen ?? localOpen
-  // Only the open panel reads options, so a closed row holds no subscription.
-  const subscribe = useCallback(
-    (listener: () => void) =>
-      open ? subscribeToNativeChatComposerDraft(draftKey, listener) : () => {},
-    [draftKey, open]
-  )
-  // Each search preset keeps its own options slot, keyed by what the search parsed (never by
-  // defaults, which can change between renders); the plain row is the empty slot.
-  const slot = initial ? JSON.stringify(initial.choices) : ''
-  const retained = useSyncExternalStore(subscribe, () => readLaunchSetupOptions(draftKey, slot))
-  const authored = retained ?? initial ?? agentPickerDraft(entry)
-  const draft =
-    authored.arguments === undefined ? authored : { ...authored, argumentsOwner: entry.ownerKey }
-
+  const setup = useAgentPickerSetup({
+    entry,
+    initial,
+    seed,
+    surface,
+    draftScope,
+    draftId,
+    preset,
+    mode,
+    open
+  })
   const closeFocus = useRef({ open, restore: true })
   useLayoutEffect(() => {
     if (closeFocus.current.open && !open) {
@@ -113,7 +125,7 @@ export function AgentLaunchSetupButton({
           const available = Number.parseFloat(
             style.getPropertyValue('--radix-popover-content-available-width')
           )
-          if (available < Number.parseFloat(style.minWidth)) {
+          if (available < 416) {
             setPlacement('bottom')
           }
         })
@@ -132,6 +144,7 @@ export function AgentLaunchSetupButton({
   }, [open, submenu])
   const changeOpen = (next: boolean) => {
     if (next) {
+      setup.activate()
       setPlacement('right')
     }
     if (controlledOpen === undefined) {
@@ -141,20 +154,28 @@ export function AgentLaunchSetupButton({
   }
   const panel = (
     <div className="min-h-0 overflow-y-auto scrollbar-sleek">
-      <AgentLaunchSetupPanel
-        key={`${draftKey}${slot}`}
-        entry={entry}
-        value={draft}
-        disabled={disabled}
-        onDraftChange={(draft) => writeLaunchSetupOptions(draftKey, draft, slot)}
-        onUse={(draft) => {
-          const accepted = onUse(draft)
-          if (accepted !== false) {
-            changeOpen(false)
-          }
-          return accepted
-        }}
-      />
+      {setup.ready ? (
+        <AgentLaunchSetupPanel
+          entry={entry}
+          mode={mode}
+          draft={setup.draft}
+          getDraft={setup.getDraft}
+          disabled={disabled}
+          onDraftChange={setup.change}
+          onUse={(draft) => {
+            const options = { ...draft, surface: setup.draft.surface }
+            delete options.prompt
+            if (!setup.accept(mode === 'select' ? draft : options)) {
+              return false
+            }
+            const accepted = onUse(draft)
+            if (accepted !== false) {
+              changeOpen(false)
+            }
+            return accepted
+          }}
+        />
+      ) : null}
     </div>
   )
   const label = translate('agentPicker.configure', 'Configure {{agent}}', { agent: entry.label })

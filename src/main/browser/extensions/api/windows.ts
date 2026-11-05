@@ -5,12 +5,12 @@ import {
   defineBrowserExtensionMethod,
   registerBrowserExtensionNamespace,
   type BrowserExtensionCaller
-} from '../browser-extension-namespace-registry'
+} from '../api-runtime/browser-extension-namespace-registry'
 import {
   describeBrowserExtensionTab,
   listBrowserExtensionTabs,
   resolveCallerWindowId
-} from '../browser-extension-tab-model'
+} from '../tabs-and-windows/browser-extension-tab-model'
 import {
   WINDOW_ID_CURRENT,
   createBrowserExtensionPopout,
@@ -20,7 +20,7 @@ import {
   listBrowserExtensionWindows,
   presentBrowserExtensionWindow,
   type BrowserExtensionWindowEntry
-} from '../browser-extension-window-model'
+} from '../tabs-and-windows/browser-extension-window-model'
 import { requireOpenableUrl } from './tabs'
 
 const windowIdSchema = z.number().int()

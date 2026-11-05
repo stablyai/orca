@@ -16,7 +16,7 @@ import {
 } from '../../claude/structured/claude-structured-session-test-support'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
-import { structuredClaudeLifecycleEvent } from '../../runtime/structured-claude-runtime-adapter'
+import { structuredClaudeLifecycleEvent } from '../../runtime/agent-session/installation/structured-claude-runtime-adapter'
 import {
   closeTestJournalHostDatabases,
   openTestJournalHostDatabase
@@ -208,19 +208,21 @@ it.each(['result', 'stderr exit', 'result then exit', 'stderr exit then result']
 )
 
 // Real order: the result lands before the exit, so its own error decides the attempt.
+// Claude's answer is final; only an exit with no answer retries.
 it.each([
-  ['result', 'startFailed', "Claude couldn't start. Send your message to try again."],
-  ['result then exit', 'startFailed', "Claude couldn't start. Send your message to try again."],
+  ['result', 1, 'startFailed', "Claude couldn't start. Send your message to try again."],
+  ['result then exit', 1, 'startFailed', "Claude couldn't start. Send your message to try again."],
   [
     'stderr exit',
+    5,
     'providerStartFailed',
     'Claude stopped before it finished starting. Send your message to try again.'
   ]
 ] as const)(
-  'retries a generic startup failure (%s) up to five times, then shows one row',
-  async (order, kind, text) => {
+  'ends a generic startup failure (%s) after %i start(s) with one row',
+  async (order, starts, kind, text) => {
     const id = await send('continue this chat')
-    for (let attempt = 1; attempt <= 5; attempt += 1) {
+    for (let attempt = 1; attempt <= starts; attempt += 1) {
       const connection = await starting(attempt)
       if (order !== 'stderr exit') {
         frame(connection, GENERIC)
@@ -234,7 +236,7 @@ it.each([
       }
     }
     const errors = await settled(id)
-    expect(claude.connections).toHaveLength(5)
+    expect(claude.connections).toHaveLength(starts)
     if (order === 'result') {
       // The host stops each failed child; the result itself is no exit evidence.
       for (const connection of claude.connections) {
@@ -247,6 +249,17 @@ it.each([
       text,
       failure: { kind, detail: { text: expect.stringContaining(GENERIC_TEXT), audience: 'log' } }
     })
+    if (order !== 'stderr exit') {
+      // The ended start logs what Claude said.
+      expect(log.entries).toContainEqual(
+        expect.objectContaining({
+          message: 'a provider could not finish starting',
+          fields: expect.objectContaining({
+            error: expect.objectContaining({ message: expect.stringContaining(GENERIC_TEXT) })
+          })
+        })
+      )
+    }
   }
 )
 
@@ -271,9 +284,9 @@ it('leaves a Stop during startup to Stop when Claude then reports a startup fail
   expect(claude.connections).toHaveLength(1)
 })
 
-it('recovers from a generic startup failure with no failure row, logging what Claude said', async () => {
+it('recovers from an unanswered startup exit with no failure row', async () => {
   await send('continue this chat')
-  frame(await starting(1), GENERIC)
+  exit(await starting(1), GENERIC_TEXT)
   const recovered = await starting(2)
   recovered.initialization.resolve({})
   // The queued send reaches the recovered Claude.
@@ -282,13 +295,5 @@ it('recovers from a generic startup failure with no failure row, logging what Cl
   const { items } = await host.journalSnapshot(SESSION)
   expect(items.filter((item) => item.body.kind === 'status' && item.body.tone === 'error')).toEqual(
     []
-  )
-  expect(log.entries).toContainEqual(
-    expect.objectContaining({
-      message: 'a provider could not finish starting',
-      fields: expect.objectContaining({
-        error: expect.objectContaining({ message: expect.stringContaining(GENERIC_TEXT) })
-      })
-    })
   )
 })

@@ -9,10 +9,8 @@ vi.mock('node:child_process', () => ({
 }))
 
 import { gitExecFileAsync } from './runner'
-import {
-  GitAdmissionScheduler,
-  _resetGitAdmissionForTests
-} from './command-runner/git-subprocess-admission'
+import { GitAdmissionScheduler } from '../../shared/git/admission/git-admission-scheduler'
+import { _resetGitAdmissionForTests } from './command-runner/git-subprocess-admission'
 
 class MockChildProcess extends EventEmitter {
   stdout = new EventEmitter()

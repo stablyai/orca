@@ -1,8 +1,7 @@
-import type { WorkspaceKey } from '../../../shared/folder-workspace-types'
 import type { BrowserPage, BrowserWorkspace } from '../../../shared/browser-workspace-types'
 import { remapBrowserPageDocLocation } from '../../../shared/browser-page-doc-location'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
-import { worktreeWorkspaceKey } from '../../../shared/workspace-scope'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
+import { type WorkspaceKey, worktreeWorkspaceKey } from '../../../shared/workspace-scope'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import {
   getWorktreeIdFromHostIdentity,

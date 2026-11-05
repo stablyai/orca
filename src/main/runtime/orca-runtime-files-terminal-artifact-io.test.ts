@@ -22,7 +22,7 @@ vi.mock(
   './file-watcher-host',
   async () => (await import('./orca-runtime-files-mock-registry')).fileWatcherHostMock
 )
-vi.mock('../ipc/filesystem/filesystem-auth', async () =>
+vi.mock('../ipc/filesystem/access/filesystem-auth', async () =>
   (await import('./orca-runtime-files-mock-registry')).filesystemAuthModuleMock()
 )
 vi.mock('../git/runner', async () =>
@@ -75,6 +75,20 @@ describe('RuntimeFileCommands', () => {
           'client-b'
         )
       ).rejects.toThrow('terminal_file_grant_mismatch')
+    })
+
+    it('reports the granted file size and whether it can serve the file as text', async () => {
+      const { commands } = createRuntimeFileCommands({ path: '/repo' })
+      resolveAuthorizedPathMock.mockImplementation(async (p: string) => p)
+      const textPath = await tempFile('notes.md', '# hi')
+      const binaryPath = await tempFile('blob.dat', 'a\0b')
+
+      const text = await resolveTerminalArtifactPath(commands, textPath)
+      const binary = await resolveTerminalArtifactPath(commands, binaryPath)
+
+      expect(text.openTarget).toMatchObject({ byteLength: 4 })
+      expect(text.openTarget).not.toHaveProperty('binary')
+      expect(binary.openTarget).toMatchObject({ byteLength: 3, binary: true })
     })
 
     it('revokes absolute terminal artifact grants when the owning client disconnects', async () => {

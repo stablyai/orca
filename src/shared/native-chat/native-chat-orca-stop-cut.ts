@@ -15,7 +15,10 @@ import {
   readAgentJournalTurn,
   readAgentJournalTurnOutcome
 } from '../agent-session/lifecycle/agent-session-turn-record'
-import { agentTurnVerdict, type AgentTurnOutcome } from '../agent-turn-outcome'
+import {
+  agentTurnVerdict,
+  type AgentTurnOutcome
+} from '../agent-status/lifecycle/agent-turn-outcome'
 import {
   isStructuredAgentSessionCommandTurn,
   structuredAgentSessionCommandTurnItemIds

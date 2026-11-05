@@ -74,7 +74,12 @@ describe('NativeChatResumeStatusSegment', () => {
     consumeNativeChatResumeOnRestartDialogRequest()
     useAppStore.setState({
       ...useAppStore.getInitialState(),
-      settings: { ...getDefaultSettings(''), nativeChatProviders: EVERY_AGENT_CHAT }
+      // These cases cover the review flow, which runs while automatic resume is off.
+      settings: {
+        ...getDefaultSettings(''),
+        nativeChatProviders: EVERY_AGENT_CHAT,
+        nativeChatResumeWorkOnRestart: false
+      }
     })
   })
 
@@ -196,7 +201,11 @@ describe('NativeChatResumeStatusSegment', () => {
   it('offers to continue the chats this machine holds while the setting is off', async () => {
     rpc.mockResolvedValue({ sessions: candidates })
     useAppStore.setState({
-      settings: { ...getDefaultSettings(''), nativeChatProviders: {} }
+      settings: {
+        ...getDefaultSettings(''),
+        nativeChatProviders: {},
+        nativeChatResumeWorkOnRestart: false
+      }
     })
     stageLocalHost(true)
     await mount()

@@ -3,9 +3,9 @@
  * operationId adds durable at-most-once execution and recorded replay; unknown outcomes refuse, while stranded-surface recovery remains separate. */
 
 import { agentLaunchFeatureRequirement } from '../agent-launch-feature-requirement'
-import { AgentLaunchTabClosedError } from '../../../../shared/agent-launch-tab-closed'
-import { computeAgentLaunchFingerprint } from '../../../../shared/agent-launch-operation'
-import type { AgentLaunchResult } from '../../../../shared/agent-launch-intent'
+import { AgentLaunchTabClosedError } from '../../../../shared/agent-launch/contracts/agent-launch-tab-closed'
+import { computeAgentLaunchFingerprint } from '../../../../shared/agent-launch/contracts/agent-launch-operation'
+import type { AgentLaunchResult } from '../../../../shared/agent-launch/contracts/agent-launch-intent'
 import { agentSessionOperationKey } from '../../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
 import {
   WorktreeCreateCollisionError,

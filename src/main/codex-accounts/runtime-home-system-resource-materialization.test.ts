@@ -21,10 +21,13 @@ import {
 } from './runtime-home-service-test-harness'
 
 // Keep asserted config bytes independent of platform socket-path limits.
-vi.mock('../codex/codex-daemon-socket-path-guard', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  applyCodexDaemonSocketGuard: (config: string) => config
-}))
+vi.mock(
+  '../codex/configuration/shared-server/codex-daemon-socket-path-guard',
+  async (importOriginal) => ({
+    ...(await importOriginal<object>()),
+    applyCodexDaemonSocketGuard: (config: string) => config
+  })
+)
 
 vi.mock('electron', () => ({
   app: {
@@ -230,7 +233,7 @@ describe('CodexRuntimeHomeService', () => {
     const store = createStore(createSettings())
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     const { startSystemCodexSessionBridgeInBackground } =
-      await import('../codex/codex-session-bridge')
+      await import('../codex/history/bridges/codex-session-bridge')
     const service = new CodexRuntimeHomeService(store as never)
 
     service.prepareForCodexLaunch()

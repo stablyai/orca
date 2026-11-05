@@ -2,8 +2,8 @@ import {
   TerminalStreamOpcode,
   encodeTerminalStreamJson,
   encodeTerminalStreamText
-} from '../../../shared/terminal-stream-protocol'
-import { TERMINAL_STREAM_CHUNK_BYTES } from '../../../shared/terminal-multiplex-flow-control'
+} from '../../../shared/terminal/stream/terminal-stream-protocol'
+import { TERMINAL_STREAM_CHUNK_BYTES } from '../../../shared/terminal/stream/terminal-multiplex-flow-control'
 import { terminalStreamByteLength } from './terminal-stream-byte-length'
 
 export type TerminalOutputMeta = {

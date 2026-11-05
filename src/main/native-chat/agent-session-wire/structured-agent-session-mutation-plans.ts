@@ -2,8 +2,8 @@ import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle
 // Command receipts prove acceptance; other plans use ledger rows and journal replay.
 
 import { readNoChoiceOptionResult } from './structured-agent-session-option-observation'
-import type { AgentChildWorkEvidence } from '../../../shared/agent-status-child-work-evidence'
-import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
+import type { AgentChildWorkEvidence } from '../../../shared/agent-status/child-work/agent-status-child-work-evidence'
+import type { AgentChildWorkView } from '../../../shared/agent-status/child-work/agent-status-child-work-view'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   AGENT_MESSAGE_SOURCE,
@@ -174,9 +174,7 @@ export function sendPlan(
       if (queued) {
         return queued
       }
-      const submission = ctx.journal
-        .submissions()
-        .find((entry) => entry.clientMessageId === clientMessageId)
+      const submission = ctx.journal.submission(clientMessageId)
       if (submission) {
         return { clientMessageId, submission: { ...submission } }
       }
@@ -245,7 +243,7 @@ export function conversationCommandPlan(params: {
           ? { queued: queued.queued }
           : { clientMessageId: queued.submission.clientMessageId }
       }
-      if (ctx.journal.submissions().some((entry) => entry.clientMessageId === clientMessageId)) {
+      if (ctx.journal.submission(clientMessageId) !== undefined) {
         return { clientMessageId }
       }
       const prior = params.priorRecord()

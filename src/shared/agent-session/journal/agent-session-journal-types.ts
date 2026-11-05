@@ -7,7 +7,7 @@ import type { AgentSessionProviderContextBoundary } from '../agent-session-provi
 import type { UnreadAgentSessionFailureFact } from '../failures/agent-session-failure'
 import type { AgentSessionFailureRowWords } from '../failures/agent-session-failure-words'
 import type { AgentSessionQuestionAnswer } from '../agent-session-question-answer'
-import type { AgentJournalTurnOutcome } from '../../agent-turn-outcome'
+import type { AgentJournalTurnOutcome } from '../../agent-status/lifecycle/agent-turn-outcome'
 import type { NativeChatToolMetadata } from '../../native-chat/tools/native-chat-tool-identity'
 import type { AgentSessionContextUsage } from '../agent-session-context-usage'
 import type { NativeChatBlock, NativeChatRole } from '../../native-chat/native-chat-types'
@@ -128,6 +128,8 @@ export type AgentJournalResolution = {
   answers?: AgentSessionQuestionAnswer[]
   /** Opaque client identity of the resolver, for "answered on <device>". */
   resolvedBy: string | null
+  /** Read-time device description; never written back into the journal. */
+  resolvedByDevice?: { kind: 'current' } | { kind: 'named'; name: string }
   resolvedAt: number | null
 }
 

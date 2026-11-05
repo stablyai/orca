@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { RUNTIME_NAVIGATION_TARGETS } from '../runtime-navigation'
-import { BrowserPageCreationPlacement } from '../browser-client-host-placement'
+import { BrowserPageCreationPlacement } from '../browser/client-hosting/browser-client-host-placement'
 import { OptionalString } from './rpc-param-primitives'
 import { BROWSER_TAB_SPLIT_DIRECTIONS } from '../browser-tab-split-direction'
 

@@ -43,7 +43,9 @@ export function captureChatStopTarget(
   if (reached === 'late') {
     return null
   }
-  const queued = ctx.journal.submissions().some(isQueuedAgentJournalSubmission)
+  const queued = ctx.journal.inputOrder
+    .recoverableSubmissions()
+    .some(isQueuedAgentJournalSubmission)
   const target = {
     child,
     turnId: structuredAgentSessionStoppedTurnId(

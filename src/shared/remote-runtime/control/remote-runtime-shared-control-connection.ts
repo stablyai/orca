@@ -1,6 +1,6 @@
-import type { PairedE2EEClientHandshake } from '../../paired-e2ee-client-handshake'
+import type { PairedE2EEClientHandshake } from '../e2ee/paired-e2ee-client-handshake'
 import type WebSocket from 'ws'
-import type { PairedRuntimeConnection } from '../../paired-runtime-connection'
+import type { PairedRuntimeConnection } from '../pairing/paired-runtime-connection'
 import { remoteRuntimeClientCapabilities } from '../remote-runtime-client-capabilities'
 import { remoteRuntimeUnavailableError } from '../requests/remote-runtime-request-frames'
 import { openSharedControlSocket } from './remote-runtime-shared-control-open'

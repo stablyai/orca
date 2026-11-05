@@ -9,7 +9,7 @@ import {
   isCommandAvailable,
   isCommandOnPath
 } from './preflight-command-exec'
-import { quotePosixShell } from '../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../shared/shell/launch/shell-argument-quoting'
 
 const COMMAND = 'orca-22975-gh'
 const BROKEN_SHIM = 'echo broken-shim >&2\nexit 126\n'

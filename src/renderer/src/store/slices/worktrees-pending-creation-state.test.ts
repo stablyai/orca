@@ -59,19 +59,51 @@ describe('pending worktree creation state', () => {
     resetRemoteRuntimeMocks()
   })
 
-  it('removePendingWorktreeCreation clears the active surface only when it points at the removed entry', () => {
-    const store = createTestStore()
-    store.getState().beginPendingWorktreeCreation(makePendingCreation('c1'))
-    store.getState().beginPendingWorktreeCreation(makePendingCreation('c2'))
-    // c2 is active now; removing the background c1 must not steal the surface.
-    store.getState().removePendingWorktreeCreation('c1')
+  it.each([false, true])(
+    'keeps composer picks when preparation publishes an older request, prior chat projection: %s',
+    (hasChatProjection) => {
+      const store = createTestStore()
+      const request = {
+        ...makePendingCreation('c1').request,
+        agent: 'codex' as const,
+        launchInputs: {
+          sessionOptions: { effort: 'high', permissionMode: 'ask' },
+          ...(hasChatProjection ? { chatSessionOptions: { effort: 'high' } } : {})
+        }
+      }
+      store.getState().beginPendingWorktreeCreation(makePendingCreation('c1', { request }))
+      store.getState().updatePendingWorktreeCreation('c1', {
+        chatSessionOptions: { effort: 'low' }
+      })
+      store.getState().updatePendingWorktreeCreation('c1', {
+        chatSessionOptions: { fastMode: 'true' }
+      })
 
-    expect(store.getState().pendingWorktreeCreations.c1).toBeUndefined()
-    expect(store.getState().activePendingCreationId).toBe('c2')
+      store.getState().updatePendingWorktreeCreation('c1', {
+        request: {
+          ...request,
+          setupDecision: 'skip',
+          hookPreparation: undefined,
+          executionHostId: 'runtime:host-1',
+          launchInputs: { ...request.launchInputs, agentArgs: '--sandbox workspace-write' }
+        },
+        phase: 'creating'
+      })
 
-    store.getState().removePendingWorktreeCreation('c2')
-    expect(store.getState().activePendingCreationId).toBeNull()
-  })
+      const current = store.getState().pendingWorktreeCreations.c1
+      expect(current?.request).toMatchObject({
+        setupDecision: 'skip',
+        executionHostId: 'runtime:host-1',
+        launchInputs: {
+          sessionOptions: { effort: 'high', permissionMode: 'ask' },
+          agentArgs: '--sandbox workspace-write',
+          chatSessionOptions: { effort: 'low', fastMode: 'true' }
+        }
+      })
+      expect(current?.request.launchInputs?.chatSessionOptions?.model).toBeUndefined()
+      expect(current?.phase).toBe('creating')
+    }
+  )
 
   it('removePendingWorktreeCreation cleans up a provisioned-root setup and VM runtime', async () => {
     const store = createTestStore()

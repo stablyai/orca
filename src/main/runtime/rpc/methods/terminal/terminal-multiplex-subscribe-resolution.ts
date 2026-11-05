@@ -1,8 +1,8 @@
-import { TerminalStreamOpcode } from '../../../../../shared/terminal-stream-protocol'
+import { TerminalStreamOpcode } from '../../../../../shared/terminal/stream/terminal-stream-protocol'
 import {
   TERMINAL_MULTIPLEX_MAX_ACTIVE_STREAMS_PER_CONNECTION,
   TERMINAL_MULTIPLEX_STREAM_LIMIT_ERROR
-} from '../../../../../shared/terminal-multiplex-flow-control'
+} from '../../../../../shared/terminal/stream/terminal-multiplex-flow-control'
 import type {
   MultiplexSubscribeRequest,
   TerminalMultiplexConnection

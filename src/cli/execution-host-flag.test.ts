@@ -10,9 +10,12 @@ const { listEnvironmentsMock, resolveEnvironmentMock, getDefaultUserDataPathMock
 
 vi.mock('./runtime/environments', () => ({
   addEnvironmentFromPairingCode: vi.fn(),
-  listEnvironments: listEnvironmentsMock,
   removeEnvironment: vi.fn(),
   resolveEnvironment: resolveEnvironmentMock
+}))
+
+vi.mock('../shared/remote-runtime/host-store/runtime-environment-store', () => ({
+  listEnvironments: listEnvironmentsMock
 }))
 
 vi.mock('./runtime-client', () => ({

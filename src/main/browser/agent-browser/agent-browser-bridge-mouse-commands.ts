@@ -1,15 +1,15 @@
-import type { BrowserMouseModifier } from './agent-browser-bridge-types'
+import type { BrowserMouseModifier } from '../cdp/input/cdp-pointer-targets'
 import { BrowserError } from '../browser-error'
 import {
   normalizeCdpMouseButton,
   cdpPointerButtonMask,
   cdpMouseModifierMask,
   resolveMobileTouchClickPoint
-} from './agent-browser-bridge-mouse'
-import { acquireElectronDebugger } from '../electron-debugger-lease'
-import { assertExpectedPageUrlForStep } from '../browser-expected-page-url'
-import { sendGuestCdpCommand } from '../guest-cdp-command'
-import { touchEmulationParams } from '../guest-touch-emulation'
+} from '../cdp/input/cdp-pointer-targets'
+import { acquireElectronDebugger } from '../cdp/debugger/electron-debugger-lease'
+import { assertExpectedPageUrlForStep } from '../cdp/input/browser-expected-page-url'
+import { sendGuestCdpCommand } from '../cdp/debugger/guest-cdp-command'
+import { touchEmulationParams } from '../cdp/input/guest-touch-emulation'
 import { assertRemoteCliBrowserAccess } from '../../runtime/desktop-browser-bridge/remote-cli-browser-scope'
 import { AgentBrowserBridgePointerCommands } from './agent-browser-bridge-pointer-commands'
 import { agentBrowserSetMediaArguments } from './agent-browser-set-media-arguments'

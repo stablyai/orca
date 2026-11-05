@@ -184,7 +184,6 @@ export function appendOrderedGroups(
             result.push(
               buildImportedWorktreesCardRow(
                 candidate,
-                'repo-group',
                 ctx.noticeHostContextLabelByRepoId?.get(repoId)
               )
             )

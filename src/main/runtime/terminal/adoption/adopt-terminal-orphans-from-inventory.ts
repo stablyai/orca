@@ -3,23 +3,23 @@ import {
   recordPtySurface,
   spawnSurfaceClaimSequence,
   SURFACE_CLAIM_WITHOUT_STANDING
-} from '../../pty-recorded-surface-topology'
-import { resolveStructuredWorkerAuthority } from '../../structured-worker-authority'
-import type { RuntimeLeafRecord } from '../../runtime-terminal-state-records'
+} from '../surface/pty-recorded-surface-topology'
+import { resolveStructuredWorkerAuthority } from '../../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
+import type { RuntimeLeafRecord } from '../records/runtime-terminal-state-records'
 import { OrcaRuntimeWithSubscribeToTerminalResize } from '../layout/terminal-resize-listeners'
 import type {
   RuntimeMobileSessionTabsResult,
   RuntimeTerminalOrphanAdoptionRequest,
   RuntimeTerminalOrphanAdoptionResult
 } from '../../../../shared/runtime-types'
-import type { TerminalWorkspaceLaunchScope } from '../../runtime-legacy-worker-terminal-recovery-types'
+import type { TerminalWorkspaceLaunchScope } from '../../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import type { PtyControllerInventory } from '../../runtime-pty-controller-contract'
-import { resolveTerminalSessionWorktreeId } from '../../runtime-worktree-path-identity'
+import { resolveTerminalSessionWorktreeId } from '../../workspaces/catalog/runtime-worktree-path-identity'
 import { getLocalProjectWorktreeGitOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
-import { adoptRuntimeTerminalOrphansFromInventory } from '../../runtime-terminal-orphan-adoption'
+import { adoptRuntimeTerminalOrphansFromInventory } from './runtime-terminal-orphan-adoption'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
-import { getLatestPtyTitle } from '../../runtime-worktree-status-projection'
-import type { PtyLivenessVerdict } from '../../../../shared/pty-liveness-verdict'
+import { getLatestPtyTitle } from '../../workspaces/process-listing/runtime-worktree-status-projection'
+import type { PtyLivenessVerdict } from '../../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 
 export abstract class OrcaRuntimeWithAdoptTerminalOrphansFromInventory extends OrcaRuntimeWithSubscribeToTerminalResize {
   protected abstract issueHandle(

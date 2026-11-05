@@ -1,7 +1,10 @@
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { hostedReviewRepoOwnerTarget } from '@/store/slices/hosted-review-cache-state'
 import { getRepoExecutionHostId } from '../../../shared/execution-host'
-import type { HostedReviewForBranchArgs, HostedReviewInfo } from '../../../shared/hosted-review'
+import type {
+  HostedReviewForBranchArgs,
+  HostedReviewInfo
+} from '../../../shared/source-control/hosted-review/hosted-review-contracts'
 import type { Repo } from '../../../shared/repo-types'
 
 export function readHostedReviewForRepo(

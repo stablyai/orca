@@ -1,4 +1,4 @@
-import { withFreshOmpLaunch } from '../../../shared/omp-fresh-launch'
+import { withFreshOmpLaunch } from '../../../shared/agent-launch/startup/omp-fresh-launch'
 import { describe, expect, it, vi } from 'vitest'
 import {
   piBuildPtyEnvMock,
@@ -8,8 +8,8 @@ import {
 import { TEST_CODEX_HOME } from './pty-ipc-test-constants'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { LocalPtyProvider } from '../../providers/local-pty/local-pty-provider'
-import { __resetPersistedWindowsPathCacheForTests } from '../../pty/windows-environment-path'
-import { __setWindowsPathRegistryLoaderForTests } from '../../pty/windows-path-registry-reader'
+import { __resetPersistedWindowsPathCacheForTests } from '../../pty/environment/windows-environment-path'
+import { __setWindowsPathRegistryLoaderForTests } from '../../pty/environment/windows-path-registry-reader'
 import { wslHookRelayManager } from '../../agent-hooks/wsl-hook-relay-manager'
 import { registerPtyHandlers } from './register-handlers'
 import { buildPtyHostEnv } from './host-env/assembly'
@@ -17,8 +17,8 @@ import {
   buildJcodeRuntimeDir,
   shouldInjectJcodeRuntimeDir
 } from '../../../shared/jcode-runtime-dir'
-import { makePaneKey } from '../../../shared/stable-pane-id'
-import { selectShellStartupFeatures } from '../../shell-startup-features'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
+import { selectShellStartupFeatures } from '../../pty/shell-startup/shell-startup-features'
 import {
   REMOTE_VIEWER_CLIPBOARD_ENV,
   CODEX_REMOTE_VIEWER_SSH_CONNECTION
@@ -48,8 +48,10 @@ vi.mock('../../agent-hooks/server', () =>
 vi.mock('../../pi/titlebar-extension-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
 )
-vi.mock('../../pwsh', () => import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
-vi.mock('../../wsl', async (importOriginal) =>
+vi.mock('../../pty/shell-startup/pwsh', () =>
+  import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock())
+)
+vi.mock('../../wsl/filesystem/unc-path-access', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
 )
 vi.mock('../../telemetry/client', () =>
@@ -67,10 +69,10 @@ vi.mock('../../memory/pty-registry', () =>
 vi.mock('../../agent-hooks/migration-unsupported-pty-state', () =>
   import('./pty-ipc-mock-registry').then((m) => m.migrationUnsupportedPtyModuleMock())
 )
-vi.mock('../../codex/codex-pane-account-registry', () =>
+vi.mock('../../codex/configuration/homes/codex-pane-account-registry', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexPaneAccountRegistryModuleMock())
 )
-vi.mock('../../codex/codex-state-db-backfill-recovery', () =>
+vi.mock('../../codex/history/index/codex-state-db-backfill-recovery', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
 

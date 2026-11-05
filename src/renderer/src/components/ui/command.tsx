@@ -8,6 +8,7 @@ import * as DialogPrimitive from 'radix-ui/dialog'
 
 import { cn } from '@/lib/utils'
 import { handleOverlayCloseAutoFocus } from '@/lib/overlay-focus-ownership'
+import { getWheelScrollDeltaY } from '@/lib/wheel-scroll-delta'
 import { OverlayFocusScope, useOverlayFocusScope } from './use-overlay-focus-scope'
 import { handleImeOverlayEscape } from '@/lib/ime-overlay-escape'
 import { useImeTextFieldProps } from '@/lib/ime-text-field'
@@ -188,7 +189,7 @@ function CommandList({
         return
       }
       e.preventDefault()
-      el.scrollTop += e.deltaY
+      el.scrollTop += getWheelScrollDeltaY(e, el.clientHeight)
     }
     el.addEventListener('wheel', onWheel, { passive: false })
     return () => el.removeEventListener('wheel', onWheel)

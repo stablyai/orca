@@ -1,7 +1,7 @@
 /** User deletion clears drafts using pre-RPC keys; host removal announcements may purge listings before reply, while non-user purges must retain drafts. */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
-import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 
 import '../../../../shared/execution-host'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'

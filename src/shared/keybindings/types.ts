@@ -1,5 +1,5 @@
 import type { KeybindingReasonCode } from './keybinding-diagnostic-copy'
-import type { TuiAgent } from '../tui-agent'
+import type { TuiAgent } from '../agent-launch/catalog/tui-agent'
 
 export type KeybindingScope =
   | 'global'

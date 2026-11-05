@@ -3,7 +3,7 @@
  * the host could not turn back on yet. A pass runs at startup and after each move; this covers the
  * host coming back later in the same run. Backs off, and stops once nothing is left.
  */
-import { wslHostsServing } from '../../wsl/wsl-host-gate'
+import { wslHostsServing } from '../../wsl/host-lifecycle/wsl-host-gate'
 import { listWslMoveCutovers } from './wsl-move-cutover-journal'
 import { runWslMoveDesktopRewritePass } from './wsl-move-desktop-rewrite'
 import { pendingWslMoveDesktopRewriteStores } from './wsl-move-desktop-rewrite-stores'

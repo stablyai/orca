@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { ORCA_SCRUB_SAFE_PANE_ENV } from '../../shared/agent-hook-scrub-safe-env'
+import { ORCA_SCRUB_SAFE_PANE_ENV } from '../../shared/agent-hook-listener/transport/agent-hook-scrub-safe-env'
 import { CONNECTOR_REPLY_UNAVAILABLE } from '../../shared/rpc-contract/connector-params'
 import type { CommandHandler, HandlerContext } from '../dispatch'
 import {

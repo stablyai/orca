@@ -7,12 +7,12 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import type { AgentSessionMutationEnvelope } from '../../../shared/agent-session/agent-session-wire'
-import { CODEX_STRUCTURED_AGENT } from '../../codex/codex-structured-agent-definition'
+import { CODEX_STRUCTURED_AGENT } from '../../codex/structured/launch/codex-structured-agent-definition'
 import type { StructuredAgentDefinition } from '../../native-chat/agent-session-wire/structured-agent-definition'
 import {
   CODEX_SCRIPTED_THREAD,
   codexScriptedChild
-} from '../../codex/codex-scripted-child.test-fixture'
+} from '../../codex/structured/session-lifecycle/codex-scripted-child.test-fixture'
 import type { StructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-host'
 import {
   HOST_TEST_SESSION as SESSION,
@@ -20,7 +20,7 @@ import {
   hostTestMessage
 } from '../../native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import { createStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/structured-agent-session-logger'
-import type { ScriptedAgentChild } from '../structured-agent-scripted-child.test-fixture'
+import type { ScriptedAgentChild } from './installation/structured-agent-scripted-child.test-fixture'
 import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime

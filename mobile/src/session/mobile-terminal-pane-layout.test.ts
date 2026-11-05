@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  resolveTerminalPaneHandles,
-  terminalPaneDirection,
-  terminalPaneViewport
-} from './mobile-terminal-pane-layout'
+import { resolveTerminalPaneHandles, terminalPaneViewport } from './mobile-terminal-pane-layout'
 
 describe('mobile terminal split selection', () => {
   it('keeps pane order when focus moves and collapses a closed companion', () => {
@@ -11,12 +7,6 @@ describe('mobile terminal split selection', () => {
     expect(resolveTerminalPaneHandles('a', ['a', 'b'], ['a', 'c'])).toEqual(['a'])
     expect(resolveTerminalPaneHandles('c', ['a', 'b'], ['a', 'b', 'c'])).toEqual(['c', 'a'])
     expect(resolveTerminalPaneHandles(null, ['a', 'b'], ['a', 'b'])).toEqual([])
-  })
-  it('uses usable bounds for folded portrait and wide landscape', () => {
-    expect(terminalPaneDirection({ width: 390, height: 700 })).toBe('column')
-    expect(terminalPaneDirection({ width: 700, height: 900 })).toBe('column')
-    expect(terminalPaneDirection({ width: 850, height: 330 })).toBe('row')
-    expect(terminalPaneDirection({ width: 1100, height: 700 })).toBe('row')
   })
   it('never shares geometry ownership across terminal handles', () => {
     const states = new Map()

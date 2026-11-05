@@ -1,7 +1,7 @@
 import { ProducerRevision } from './producer-revision'
 import { toRuntimeExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
-import { describePairedServerHosts } from '../../../shared/paired-server-hosts'
-import type { MobileRelayServerWorktreeRow } from '../../../shared/mobile-relay-hosts-contract'
+import { describePairedServerHosts } from '../../../shared/remote-runtime/host-catalog/paired-server-hosts'
+import type { MobileRelayServerWorktreeRow } from '../../../shared/remote-runtime/relay/mobile-relay-hosts-contract'
 import {
   normalizePairedServerRow,
   type PairedServerRowsSnapshot

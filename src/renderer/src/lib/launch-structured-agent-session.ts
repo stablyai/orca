@@ -1,5 +1,5 @@
 import type { StructuredLaunchSurfaceAddress } from './agent-session/launch/structured-agent-session-launch-record'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import {
   createStructuredAgentSessionId,
   structuredAgentSessionCreateParams,
@@ -45,6 +45,7 @@ export type StructuredAgentSessionLaunchIntent = {
   agent: TuiAgent
   params: StructuredAgentSessionCreateParams
   sendSelectionSupport?: boolean
+  sendSkillsSupport?: boolean
   createMessageSupport?: boolean
   createPrepared?: true
   prepareCreate?: (hostTakesExplicitOptions: boolean) => void

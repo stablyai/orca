@@ -1,4 +1,4 @@
-import type { AgentStatusState } from '../../shared/agent-status-types'
+import type { AgentStatusState } from '../../shared/agent-status/contracts/agent-status-types'
 
 export const AGENT_AWAKE_STATUS_STALE_AFTER_MS = 2 * 60 * 60 * 1000
 

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import type React from 'react'
-import type { DiffSection } from '../../diff-section-types'
+import type { DiffSection } from '../../diff/sections/diff-section-types'
 import { combinedDiffViewPreferences } from '../remember-view/combined-diff-view-memory'
 import { getInitialCombinedDiffSectionLoadIndices } from '../load-sections/combined-diff-initial-section-load'
 import type { CombinedDiffSectionLoadRegistry } from '../load-sections/combined-diff-section-load-registry'

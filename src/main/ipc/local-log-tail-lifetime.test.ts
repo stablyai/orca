@@ -13,7 +13,9 @@ vi.mock('electron', () => ({
     handle: (name: string, handler: (...args: unknown[]) => unknown) => handlers.set(name, handler)
   }
 }))
-vi.mock('./local-file-access-resolution', () => ({ resolveUserNamedRegularFile: authorize }))
+vi.mock('./filesystem/access/local-file-access-resolution', () => ({
+  resolveUserNamedRegularFile: authorize
+}))
 import {
   closeAllLocalLogTailWatchers,
   getActiveLocalLogTailWatcherCount,

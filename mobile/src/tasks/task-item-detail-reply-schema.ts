@@ -6,7 +6,8 @@ import {
   prCount,
   prNullableText,
   prStringList,
-  prText
+  prText,
+  prRepoIdentity
 } from '../session/github-pr-entity-reply-schema'
 import {
   assignableUserListSchema,
@@ -24,6 +25,10 @@ export const githubWorkItemDetailSchema = z
     item: salvagedOptional(
       'item',
       z.looseObject({
+        url: z.string(),
+        number: z.number(),
+        type: z.enum(['issue', 'pr']),
+        prRepo: prRepoIdentity('prRepo'),
         labels: prStringList('labels'),
         reviewDecision: prNullableText('reviewDecision'),
         reviewRequests: salvagedOptional('reviewRequests', assignableUserListSchema),

@@ -1,4 +1,4 @@
-import type { TuiAgent } from '../../shared/tui-agent'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import { findTerminalWaitBlockedSignal } from './agent-state-rules/blocked-text-layer'
 import { evaluateAgentStateRules } from './agent-state-rules/agent-state-rules-engine'
 

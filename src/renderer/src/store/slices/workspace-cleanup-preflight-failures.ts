@@ -1,10 +1,11 @@
 import type { ExecutionHostId } from '../../../../shared/execution-host'
-import type {
-  WorkspaceCleanupCandidate,
-  WorkspaceCleanupScanError,
-  WorkspaceCleanupUnverifiedRemovalConsent
-} from '../../../../shared/workspace-cleanup'
-import { shouldForceWorkspaceCleanupRemoval } from '../../../../shared/workspace-cleanup'
+
+import {
+  type WorkspaceCleanupCandidate,
+  type WorkspaceCleanupScanError,
+  type WorkspaceCleanupUnverifiedRemovalConsent,
+  shouldForceWorkspaceCleanupRemoval
+} from '../../../../shared/workspace-cleanup/workspace-cleanup'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import { translate } from '@/i18n/i18n'
 import type { WorkspaceCleanupFailure } from './workspace-cleanup'

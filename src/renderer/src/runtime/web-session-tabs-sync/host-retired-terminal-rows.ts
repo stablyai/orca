@@ -1,5 +1,8 @@
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
-import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
+import type {
+  TerminalLayoutSnapshot,
+  TerminalTab
+} from '../../../../shared/workspace-layout/terminal-tab-types'
 import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { terminalLayoutLeafIds } from '../web-session-terminal-orphan-recovery-surface-index'
 import { isMirroredTerminalSurfaceId } from './terminal-surfaces'

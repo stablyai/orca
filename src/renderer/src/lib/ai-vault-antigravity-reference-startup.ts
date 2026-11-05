@@ -1,20 +1,18 @@
 import { isAntigravityReferenceSession } from '../../../shared/antigravity-session-origin'
-import { canResumeAiVaultSessionOnTarget } from '../../../shared/ai-vault-resume-target'
+import { canResumeAiVaultSessionOnTarget } from '../../../shared/ai-vault/resume/ai-vault-resume-target'
 import {
   getAiVaultResumeWorkspaceExecutionHostId,
   getAiVaultResumeWorkspaceTargetStatus
 } from './ai-vault-resume-target'
 import { getAiVaultResumeWorkspaceWslDistro } from './ai-vault-resume-shell'
-import { buildAiVaultResumeCommand } from '../../../shared/ai-vault-resume-command'
-import { resolveAgentStartupPlanInputs } from '../../../shared/agent-startup-plan-inputs'
-import { buildAgentStartupPlan } from '../../../shared/tui-agent-startup'
-import type { AgentLaunchProfileSettings } from '../../../shared/tui-agent-launch-defaults'
-import type { AgentStartupShell } from '../../../shared/tui-agent-startup-shell'
+import { buildAiVaultResumeCommand } from '../../../shared/ai-vault/resume/ai-vault-resume-command'
+import { resolveAgentStartupPlanInputs } from '../../../shared/agent-launch/startup/agent-startup-plan-inputs'
+import { buildAgentStartupPlan } from '../../../shared/agent-launch/startup/tui-agent-startup'
+import type { AgentLaunchProfileSettings } from '../../../shared/agent-launch/choices/tui-agent-launch-defaults'
+import type { AgentStartupShell } from '../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
-import type {
-  AiVaultResumeStartup,
-  buildAiVaultResumeStartupForWorktree
-} from './ai-vault-resume-command'
+import type { buildAiVaultResumeStartupForWorktree } from './ai-vault-resume-command'
+import type { AiVaultResumeStartup } from '../../../shared/ai-vault/resume/ai-vault-resume-startup'
 
 /** References are fresh launches, so preserve normal model arguments and environment. */
 export function buildAntigravityReferenceStartup(args: {

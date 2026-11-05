@@ -7,9 +7,9 @@ import { RelayAgentHookServer } from '../../wsl-guest/agent-hook-server'
 import { seedLegacyAgentStatusForTests } from '../../shared/agent-hook-listener/listener-state'
 import { seedClaudeSubagentRosterFromSnapshots } from '../../shared/agent-hook-listener/providers/claude-roster-state'
 import type { AgentHookEventPayload } from '../../shared/agent-hook-listener/listener-event'
-import type { AgentHookRelayEnvelope } from '../../shared/agent-hook-relay'
-import type { AgentSubagentSnapshot } from '../../shared/agent-status-types'
-import { makePaneKey } from '../../shared/stable-pane-id'
+import type { AgentHookRelayEnvelope } from '../../shared/agent-hook-listener/transport/agent-hook-relay'
+import type { AgentSubagentSnapshot } from '../../shared/agent-status/contracts/agent-status-subagent-snapshot'
+import { makePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import { AgentHookServer } from './server'
 
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))

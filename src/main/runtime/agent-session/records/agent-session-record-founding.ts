@@ -2,7 +2,7 @@ import {
   AGENT_SESSION_FOUNDING_FENCE,
   agentSessionNeverStarted
 } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
-import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../shared/agent-chat-permission-mode'
+import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import {
   AGENT_SESSION_RECORD_SCHEMA_VERSION,
   type AgentSessionRecord

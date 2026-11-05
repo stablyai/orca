@@ -22,7 +22,7 @@ const { appMetricsMock, rtTimeLimitMock, rtPrioOutcomeMock } = vi.hoisted(() => 
 }))
 
 // Keep fixtures independent of the test host's own RLIMIT_RTTIME.
-vi.mock('../linux-rttime-limit', () => ({
+vi.mock('../startup/linux-rttime-limit', () => ({
   readZeroRtTimeLimit: rtTimeLimitMock,
   getStartupRtPrioOutcome: rtPrioOutcomeMock
 }))

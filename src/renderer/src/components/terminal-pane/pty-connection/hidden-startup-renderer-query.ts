@@ -1,4 +1,4 @@
-import { containsCsiRendererQuery } from '../../../../../shared/terminal-reply-query-extraction'
+import { containsCsiRendererQuery } from '../../../../../shared/terminal/protocol/queries/terminal-reply-query-extraction'
 import { isKnownTuiAgentTerminalStartupCommand } from '../terminal-startup-command-classifier'
 import type { PtyConnectionDeps } from '../pty-connection-types'
 

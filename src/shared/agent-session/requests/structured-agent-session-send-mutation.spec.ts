@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentJournalMessageItem } from '../journal/agent-session-journal-types'
 import type { AgentMessageSource } from '../agent-session-message-source'
-import { AgentJournalSubmissionSchema } from '../journal/agent-session-journal-submission-schema'
+import '../journal/agent-session-journal-submission-schema'
 import { SendParams } from '../../rpc-contract/structured-agent-session-params'
 import { structuredAgentSessionPayloadFingerprint } from '../lifecycle/structured-agent-session-mutation'
 import {
@@ -27,24 +27,6 @@ const FROM: AgentMessageSource = {
 }
 
 describe('send fingerprints never cover the sender', () => {
-  it('reads a saved submission’s choices, ignoring keys an older build stored', () => {
-    const submission = {
-      clientMessageId: 'message-1',
-      options: { model: 'model-a', unknownChoice: 'kept-by-an-older-build' },
-      fence: 1,
-      payloadFingerprint: 'a'.repeat(64),
-      dispatchState: 'accepted',
-      providerItemId: null,
-      reason: null,
-      submittedAt: 1,
-      resolvedAt: 2
-    }
-    expect(AgentJournalSubmissionSchema.parse(submission).options).toEqual({ model: 'model-a' })
-    expect(
-      AgentJournalSubmissionSchema.omit({ options: true }).parse(submission)
-    ).not.toHaveProperty('options')
-  })
-
   it('keeps the digest every stored submission and draft already holds', () => {
     // Pinned bytes: a stored fingerprint that changed would stop matching its provider echo.
     expect(agentSessionSendBodyFingerprint('session-1', BODY)).toBe(

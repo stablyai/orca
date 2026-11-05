@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { buildBrowserSessionData } from '@/lib/workspace-session-browser-tabs'
-import { workspaceSessionStateSchema } from '../../../../shared/workspace-session-schema'
+import { workspaceSessionStateSchema } from '../../../../shared/workspace-session/workspace-session-schema'
 import { getDefaultWorkspaceSession } from '../../../../shared/constants'
 import { createBrowserMockApi } from './browser-slice-test-harness'
 import {

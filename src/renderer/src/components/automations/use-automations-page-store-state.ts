@@ -1,5 +1,8 @@
 import { useCallback } from 'react'
-import { filterEnabledTuiAgents, isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
+import {
+  filterEnabledTuiAgents,
+  isTuiAgentEnabled
+} from '../../../../shared/agent-launch/catalog/tui-agent-selection'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { getAgentCatalog } from '@/lib/agent-catalog'

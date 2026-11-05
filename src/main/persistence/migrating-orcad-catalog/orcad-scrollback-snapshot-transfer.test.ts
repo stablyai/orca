@@ -21,7 +21,7 @@ import type {
 import {
   getTerminalScrollbackSnapshotPath,
   type TerminalScrollbackSnapshotStorage
-} from '../../terminal-scrollback-snapshots'
+} from '../../pty/scrollback/terminal-scrollback-snapshots'
 import {
   abortOrcadMigrationSnapshots,
   assertOrcadMigrationSnapshotsReady,

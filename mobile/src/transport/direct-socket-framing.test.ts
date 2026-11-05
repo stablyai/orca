@@ -1,6 +1,6 @@
 import nacl from 'tweetnacl'
 import { describe, expect, it, vi } from 'vitest'
-import { PairedE2EEDowngradeError } from '../../../src/shared/paired-e2ee-client-handshake'
+import { PairedE2EEDowngradeError } from '../../../src/shared/remote-runtime/e2ee/paired-e2ee-client-handshake'
 
 vi.mock('expo-crypto', () => ({
   getRandomBytes: (length: number) => new Uint8Array(length).fill(9)

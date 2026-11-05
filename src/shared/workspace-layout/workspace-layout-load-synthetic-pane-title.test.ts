@@ -3,8 +3,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../execution-host'
 import type { Tab } from '../tab-types'
-import type { TerminalLayoutSnapshot } from '../terminal-tab-types'
-import type { WorkspaceSessionState } from '../workspace-session-state-types'
+import type { TerminalLayoutSnapshot } from './terminal-tab-types'
+import type { WorkspaceSessionState } from '../workspace-session/workspace-session-state-types'
 import { loadWorkspaceLayout } from './workspace-layout-load'
 import { checkLayoutRoundTrip } from './workspace-layout-round-trip-check'
 import {

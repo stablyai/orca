@@ -1,12 +1,12 @@
 /** Bare repoId::path IDs collide across hosts (STA-4343); folding both into local let the last writer permanently erase the other workspace’s tabs. */
 import { describe, expect, it, vi, type Mock } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
-import type { TerminalTab } from '../../../shared/terminal-tab-types'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import './workspace-session-host-contention'
-import '../../../shared/workspace-session-contested-primary-host'
+import '../../../shared/workspace-session/workspace-session-contested-primary-host'
 import { fetchWorkspaceSessionWithRuntimeHostOwners } from './workspace-session-host-hydration'
 import {
   patchWorkspaceSessionByHost,

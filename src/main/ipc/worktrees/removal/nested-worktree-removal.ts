@@ -3,7 +3,7 @@ import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
 import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
 import { isFolderRepo } from '../../../../shared/repo-kind'
-import { listWorktreesStrict } from '../../../git/worktree'
+import { listWorktreesStrict } from '../../../git/worktrees/catalog/worktree-listing'
 import { getLocalProjectWorktreeGitOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
 import {
   SshHostNotServedError,

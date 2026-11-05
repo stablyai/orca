@@ -53,12 +53,7 @@ describe('work-item cache for a repo id on this computer and over SSH', () => {
 
     const entries = selectTaskPageWorkItemsCacheEntries(
       store.getState().workItemsCache,
-      [localRow, sshRow].map(({ id, path, connectionId, executionHostId }) => ({
-        id,
-        path,
-        connectionId,
-        executionHostId
-      })),
+      [localRow, sshRow],
       24,
       ''
     )

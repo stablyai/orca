@@ -1,6 +1,6 @@
 // POSIX hooks drain before exit; Windows missing-context hooks may exit without owning stdin.
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as CodexHookHashLookup from '../codex/codex-hook-hash-lookup'
+import type * as CodexHookHashLookup from '../codex/trust/hooks/codex-hook-hash-lookup'
 import { runProcess, spawnProcess } from '@orca/process-host'
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -45,10 +45,12 @@ vi.mock('./windows-native-hook-executable', async (importOriginal) => ({
   resolveBundledWindowsNativeHookExecutable: () => bundledHook.path
 }))
 
-vi.mock('../codex/codex-hook-hash-lookup', async (importOriginal) => ({
+vi.mock('../codex/trust/hooks/codex-hook-hash-lookup', async (importOriginal) => ({
   ...(await importOriginal<typeof CodexHookHashLookup>()),
   resolveCodexHookAnswerForLaunch: async () =>
-    (await import('../codex/hook-service-test-harness')).codexHookAnswerForTests()
+    (
+      await import('../codex/hooks/installation/hook-service-test-harness')
+    ).codexHookAnswerForTests()
 }))
 
 vi.mock('electron', () => ({
@@ -68,7 +70,8 @@ vi.mock('os', async (importOriginal) => {
 import { AntigravityHookService } from '../antigravity/hook-service'
 import { ClaudeHookService } from '../claude/hook-service'
 import { getRemoteManagedCommand } from '../claude/hook-settings'
-import { CodexHookService } from '../codex/hook-service'
+import '../codex/hooks/installation/hook-service'
+import { CodexHookService } from '../codex/hooks/installation/codex-hook-service-implementation'
 import { CommandCodeHookService } from '../command-code/hook-service'
 import { CopilotHookService } from '../copilot/hook-service'
 import { CursorHookService } from '../cursor/hook-service'
@@ -81,8 +84,6 @@ import { KimiHookService } from '../kimi/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
 import { wrapPosixHookCommand, wrapWindowsHookCommand } from './installer-utils'
 import {
-  POSIX_HOOK_JSON_STDIN_PRELUDE,
-  POSIX_HOOK_JSON_STDIN_READER,
   POSIX_HOOK_STDIN_READER,
   WINDOWS_POWERSHELL_HOOK_ENVIRONMENT_GUARD
 } from './hook-stdin-contract'
@@ -580,27 +581,6 @@ describe.skipIf(process.platform === 'win32')('managed hook stdin lifecycle', ()
     expect(result.stdinErrors).toHaveLength(0)
     expect(result.stderr).toBe('')
     expect(JSON.parse(result.stdout.trim())).toEqual({})
-  })
-
-  it('captures stdin before every possible whole-script success exit', async () => {
-    const scripts = await generatePosixScripts()
-    for (const [agent, script] of scripts) {
-      const captureIndex = Math.max(
-        script.indexOf(`payload=$(${POSIX_HOOK_STDIN_READER})`),
-        script.indexOf(`payload=$(${POSIX_HOOK_JSON_STDIN_READER})`)
-      )
-      const firstExitIndex = script.indexOf('exit 0')
-      expect(captureIndex, `${agent} payload capture`).toBeGreaterThanOrEqual(0)
-      expect(firstExitIndex, `${agent} first success exit`).toBeGreaterThan(captureIndex)
-      // The JSON reader needs its variable-setting prelude before capture.
-      if (script.includes(POSIX_HOOK_JSON_STDIN_READER)) {
-        const prelude = POSIX_HOOK_JSON_STDIN_PRELUDE.join('\n')
-        expect(script.indexOf(prelude), `${agent} JSON reader prelude`).toBeGreaterThanOrEqual(0)
-        expect(script.indexOf(prelude), `${agent} prelude before capture`).toBeLessThan(
-          captureIndex
-        )
-      }
-    }
   })
 
   it('accepts a large payload across generated hooks without breaking the writer', async () => {

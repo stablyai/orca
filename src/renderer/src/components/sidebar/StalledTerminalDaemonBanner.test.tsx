@@ -5,7 +5,7 @@ import { StalledTerminalDaemonBanner } from './StalledTerminalDaemonBanner'
 import type { DaemonAsyncIoStatus } from '../../../../shared/daemon-async-io-health'
 
 const { openManageSessions } = vi.hoisted(() => ({ openManageSessions: vi.fn() }))
-vi.mock('../settings/open-terminal-manage-sessions', () => ({
+vi.mock('../settings/terminal/session-management/open-terminal-manage-sessions', () => ({
   openTerminalManageSessions: openManageSessions
 }))
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))

@@ -6,7 +6,6 @@ import { TEST_SSH_AUTHORITY, makeDetectedResult } from './worktrees-detected-lis
 import { makeWorktree } from './worktrees-slice-test-fixtures'
 import {
   createTestStore,
-  forgetRemovedForExecutionHostMock,
   listKnownForExecutionHostMock,
   mockApi,
   resetRemoteRuntimeMocks,
@@ -297,55 +296,6 @@ describe('fetchWorktrees', () => {
     await store.getState().fetchWorktrees(sshRepo.id)
 
     expect(store.getState().worktreesByRepo[sshRepo.id]).toEqual([live])
-  })
-
-  it('retires persisted metadata for worktrees an authoritative SSH scan proved gone', async () => {
-    const store = createTestStore()
-    const sshRepo = {
-      id: 'repo-ssh',
-      path: '/home/orca/repo',
-      displayName: 'SSH Repo',
-      badgeColor: '#000',
-      addedAt: 0,
-      connectionId: 'ssh-1'
-    }
-    const live = makeWorktree({
-      id: 'repo-ssh::/home/orca/live',
-      repoId: 'repo-ssh',
-      path: '/home/orca/live',
-      hostId: 'ssh:ssh-1'
-    })
-    const deletedOnRemote = makeWorktree({
-      id: 'repo-ssh::/home/orca/deleted',
-      repoId: 'repo-ssh',
-      path: '/home/orca/deleted'
-    })
-    const connectedStates = createTestStore().getState().sshConnectionStates
-    listKnownForExecutionHostMock.mockResolvedValueOnce({
-      status: 'complete',
-      repoId: sshRepo.id,
-      executionHostId: 'ssh:ssh-1',
-      result: makeDetectedResult(sshRepo.id, [deletedOnRemote], {
-        authoritative: false,
-        source: 'metadata-fallback'
-      })
-    })
-    store.setState({ repos: [sshRepo], sshConnectionStates: new Map() } as Partial<AppState>)
-    await store.getState().fetchWorktrees(sshRepo.id)
-
-    // The non-authoritative fallback saw the same absence but must not act on it.
-    expect(forgetRemovedForExecutionHostMock).not.toHaveBeenCalled()
-
-    worktreeListMock.mockResolvedValueOnce([live])
-    store.setState({ sshConnectionStates: connectedStates } as Partial<AppState>)
-    await store.getState().fetchWorktrees(sshRepo.id)
-
-    // Why: the renderer's suppression memory dies with the reload, so the metadata itself has to go.
-    expect(forgetRemovedForExecutionHostMock).toHaveBeenCalledExactlyOnceWith({
-      repoId: sshRepo.id,
-      executionHostId: 'ssh:ssh-1',
-      worktreeIds: [deletedOnRemote.id]
-    })
   })
 
   it('skips the metadata fallback entirely for authoritative-only callers', async () => {

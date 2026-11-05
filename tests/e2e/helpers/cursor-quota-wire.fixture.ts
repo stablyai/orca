@@ -5,7 +5,7 @@ import { writeFileSync } from 'node:fs'
 import {
   LOCAL_HTTPS_TEST_CERTIFICATE,
   LOCAL_HTTPS_TEST_PRIVATE_KEY
-} from '../../../src/main/browser/browser-local-https-test-certificate'
+} from '../../../src/main/browser/electron-fixtures/browser-local-https-test-certificate'
 import { fetchCursorRateLimits } from '../../../src/main/rate-limits/cursor-fetcher'
 import {
   cursorSessionCookie,

@@ -1,11 +1,10 @@
 // @vitest-environment happy-dom
 
-import type { ISearchOptions } from '@xterm/addon-search'
-import { SearchAddon } from '@xterm/addon-search'
+import { type ISearchOptions, SearchAddon } from '@xterm/addon-search'
 import { Terminal } from '@xterm/xterm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_MAX } from '../../../shared/terminal-scrollback-policy'
+import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_MAX } from '../../../shared/terminal/replay/terminal-scrollback-policy'
 import { safeFind } from './terminal-search-safe-find'
 
 /** Wrapped-line rewind once recursed per row, overflowing V8 and killing the terminal surface (crash 012eb5be; xtermjs/xterm.js#6149). Drive real Terminal/SearchAddon through safeFind, which must rethrow non-decoration failures. */

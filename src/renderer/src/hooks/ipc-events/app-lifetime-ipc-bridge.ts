@@ -1,6 +1,6 @@
 import { observeJiraImageHostStatus } from '@/runtime/runtime-jira-image-cache'
 import { observeRuntimeHostStatusForPendingRemovals } from '@/store/repos/pending-runtime-repo-removal-replay'
-import type { RuntimeHostStatusSnapshot } from '../../../../shared/runtime-host-status'
+import type { RuntimeHostStatusSnapshot } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { getTabIdsAwaitingHostHydrationRemount } from '@/lib/parked-terminal-host-hydration'
 import { emitAutomationsChangedWindowEvent } from '@/lib/automations-changed-window-event'
 import { createBackgroundSleepingAgentWakeDispatcher } from '@/lib/wake-sleeping-agents-in-background'

@@ -1,7 +1,7 @@
-import { resolveTerminalFileLink } from '../../../../shared/terminal-links'
+import { resolveTerminalFileLink } from '../../../../shared/terminal/links/terminal-links'
 import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
 import type { LinkHandlerDeps } from './terminal-link-handlers'
-import { classifyTerminalOscLinkTarget } from '../../../../shared/terminal-osc-link-target'
+import { classifyTerminalOscLinkTarget } from '../../../../shared/terminal/links/terminal-osc-link-target'
 import {
   isTerminalLinkActionActivation,
   isTerminalLinkDirectActivation

@@ -29,6 +29,7 @@
       "workspaceHostAmbiguous": "Its workspace spans more than one host, so it has no single owner."
     },
     "runFailures": {
+      "agentInterrupted": "The agent was interrupted before it finished this run.",
       "agentNeverStarted": "Automation agent never started after the prompt was submitted.",
       "agentNoCompletion": "Automation agent did not report completion.",
       "automationChanged": "The automation changed before this run could launch.",
@@ -56,6 +57,9 @@
     }
   },
   "chat": {
+    "notice": {
+      "modelFallback": "Claude switched models: {{from}} → {{to}}."
+    },
     "subagentGroup": {
       "ran_one": "Ran {{count}} subagent",
       "ran_other": "Ran {{count}} subagents",
@@ -143,6 +147,16 @@
     "diffReviewFileSummary": {
       "threadsWhenInSync_one": "Its GitHub comment shows here once this branch matches the pull request.",
       "threadsWhenInSync_other": "Its {{count}} GitHub comments show here once this branch matches the pull request."
+    },
+    "hostCard": {
+      "needsYou_one": "{{count}} needs you",
+      "needsYou_other": "{{count}} need you"
+    },
+    "native-chat": {
+      "turnDiff": {
+        "changedFiles_one": "{{count}} changed file",
+        "changedFiles_other": "{{count}} changed files"
+      }
     },
     "worktreeAgentList": {
       "hideChildAgents_one": "Hide {{count}} child agent",
@@ -280,10 +294,6 @@
     "queuedMessageCardRow": {
       "images_one": "{{count}} image",
       "images_other": "{{count}} images"
-    },
-    "structuredOpen": {
-      "worktreeDeleted": "The worktree was deleted.",
-      "folderWorkspaceRemoved": "The folder workspace was removed."
     }
   },
   "settings": {

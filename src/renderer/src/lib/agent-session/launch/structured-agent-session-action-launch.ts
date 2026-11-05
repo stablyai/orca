@@ -44,14 +44,15 @@ export function openDeclinedTerminal(
   })
 }
 
-/** Only a foreground action without a prompt to deliver may open before admission. */
+/** Explicit chats keep their input if admission fails; empty foreground actions can also open immediately. */
 export function opensAtAction(args: ProvisionalLaunchArgs): boolean {
   const { plan } = args
   return (
-    args.focusIntent !== undefined &&
-    args.activate !== false &&
-    !plan.resumeFrom &&
-    (!plan.prompt?.trim() || plan.promptDelivery === 'draft')
+    plan.requestedSurface === 'chat' ||
+    (args.focusIntent !== undefined &&
+      args.activate !== false &&
+      !plan.resumeFrom &&
+      (!plan.prompt?.trim() || plan.promptDelivery === 'draft'))
   )
 }
 
