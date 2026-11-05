@@ -1206,6 +1206,10 @@
       "retryLoading": "{{path}} 다시 불러오기",
       "unavailable": "모바일에서 사용 불가"
     },
+    "fileExplorerRowActions": {
+      "copyName": "이름 복사",
+      "copyRelativePath": "상대 경로 복사"
+    },
     "fileMarkdownPreview": {
       "copyLoadedSource": "불러온 Markdown 소스 복사",
       "copySource": "Markdown 소스 복사",

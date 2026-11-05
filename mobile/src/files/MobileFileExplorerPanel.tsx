@@ -24,6 +24,7 @@ import { fileDirectoryRead, legacyFileListRead } from './mobile-file-explorer-op
 import { fileExplorerStyles as styles } from './mobile-file-explorer-styles'
 import { useMobileFileExplorerRows } from './mobile-file-explorer-rows'
 import { MobileFileExplorerRow } from './mobile-file-explorer-row'
+import { useMobileFileExplorerRowActions } from './mobile-file-explorer-row-actions-sheet'
 import { navigateToMobileFilePreview } from './mobile-file-preview-navigation'
 import {
   MobileLoadErrorState,
@@ -64,6 +65,7 @@ export function MobileFileExplorerPanel(props: {
   const [error, setError] = useState<string | null>(null)
   const [legacyListTruncated, setLegacyListTruncated] = useState(false)
   const [filterBarHeight, setFilterBarHeight] = useState(0)
+  const { openRowActions, rowActionsSheet } = useMobileFileExplorerRowActions()
   const insets = useSafeAreaInsets()
   const worktreeLabel = getWorktreeLabel(name, worktreeId)
 
@@ -313,6 +315,7 @@ export function MobileFileExplorerPanel(props: {
         onPreviewFile={previewFile}
         onRetryDirectory={retryDirectory}
         onToggleDirectory={onToggleDirectory}
+        onOpenActions={openRowActions}
       />
     )
   }
@@ -412,6 +415,7 @@ export function MobileFileExplorerPanel(props: {
           onCoveredHeightChange={setFilterBarHeight}
         />
       ) : null}
+      {rowActionsSheet}
     </View>
   )
 }

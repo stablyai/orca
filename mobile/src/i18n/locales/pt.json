@@ -1249,6 +1249,10 @@
       "retryLoading": "Tentar carregar {{path}} novamente",
       "unavailable": "Indisponível no celular"
     },
+    "fileExplorerRowActions": {
+      "copyName": "Copiar Nome",
+      "copyRelativePath": "Copiar Caminho Relativo"
+    },
     "fileMarkdownPreview": {
       "copyLoadedSource": "Copiar código-fonte Markdown carregado",
       "copySource": "Copiar código-fonte Markdown",
