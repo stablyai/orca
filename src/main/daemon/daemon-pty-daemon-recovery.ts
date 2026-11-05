@@ -4,7 +4,7 @@ import { getMacDaemonSystemResolverHealth } from './daemon-health'
 import { getMacDaemonTccAttributionHealth } from './daemon-tcc-attribution'
 import { isDaemonStaleForCurrentBundle } from './daemon-bundle-staleness'
 import { isDaemonGoneError, isUnknownRequestTypeError } from './daemon-endpoint-errors'
-import { DaemonPtyCheckpointPersistence } from './daemon-pty-checkpoint-persistence'
+import { DaemonPtyLegacyHostLoss } from './daemon-pty-legacy-host-loss'
 import type { DaemonRespawnReason } from './daemon-pty-runtime-state'
 import type { ListSessionsResult } from './types'
 import type { PtyBackgroundStreamEvent } from '../providers/pty-provider-contract'
@@ -14,7 +14,7 @@ import type {
 } from '../../shared/terminal/runtime-policy/terminal-limit-policy'
 import type { DaemonEndpointIdentity } from './daemon-hello-protocol'
 
-export abstract class DaemonPtyDaemonRecovery extends DaemonPtyCheckpointPersistence {
+export abstract class DaemonPtyDaemonRecovery extends DaemonPtyLegacyHostLoss {
   abstract getDaemonIdentity(): DaemonEndpointIdentity | null
 
   async terminalLimit(update?: TerminalLimitUpdate): Promise<TerminalLimitStatus | null> {
@@ -102,9 +102,14 @@ export abstract class DaemonPtyDaemonRecovery extends DaemonPtyCheckpointPersist
 
   // Reconnect on endpoint loss without waiting for input; only daemon-gone errors permit respawn.
   protected recoverAfterEndpointLoss(): void {
-    if (this.activeSessionIds.size > 0) {
-      this.reconnectAfterWriteFailure()
+    if (this.activeSessionIds.size === 0) {
+      return
     }
+    if (!this.respawnFn) {
+      void this.reportHostLossIfEndpointGone()
+      return
+    }
+    this.reconnectAfterWriteFailure()
   }
 
   protected notifyActiveSessionsWriteUnavailable(): void {
