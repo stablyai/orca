@@ -237,6 +237,9 @@ importers:
       jsonc-parser:
         specifier: ^3.3.1
         version: 3.3.1
+      mime-types:
+        specifier: 3.0.2
+        version: 3.0.2
       node-pty:
         specifier: ^1.1.0
         version: 1.1.0(patch_hash=37dc98d9a4bcfc67153fa2fbf30689563ff49dcf8e6f0578484cbacdf1e38af5)
@@ -529,9 +532,6 @@ importers:
       mermaid:
         specifier: ^11.17.2
         version: 11.17.2
-      mime-types:
-        specifier: 3.0.2
-        version: 3.0.2
       monaco-editor:
         specifier: ^0.55.1
         version: 0.55.1(patch_hash=53b71f7d8a7c00b76ffdb73ce83d18e31692f193f5fafa6a390e48f5b3fdd636)
