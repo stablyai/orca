@@ -3741,7 +3741,6 @@
             "e8b3741ff7": "Ignoriert",
             "a9957007eb": "{{value0}} ignorieren",
             "bef0adef9b": "Branch",
-            "0b1766738a": "Repo",
             "bbb1ab6a6f": "{{value0}} auswählen",
             "b771c92598": "Ausgewählte löschen",
             "7eee951968": "Arbeitsbereiche werden durchsucht",
@@ -3750,7 +3749,6 @@
             "b2c1331844": "Inaktive Arbeitsbereiche löschen",
             "7f451a3e2c": "Bereinigungsvorschlag konnte nicht ignoriert werden",
             "662b8ec3f8": "Suche nach zu bereinigenden Arbeitsbereichen fehlgeschlagen",
-            "4d0b72481c": "Ignorieren",
             "9cc26c019d": "Entfernen",
             "0e2d235c63": "Suche in Arbeitsbereichen abgeschlossen",
             "4a35c08764": "Prüfen",
@@ -3758,9 +3756,6 @@
             "1d3503357d": "Dieses Fenster kann geschlossen und später wieder geöffnet werden, während das Löschen fortgesetzt wird.",
             "4c2990886e": "{{value0}}/{{value1}} gelöscht",
             "86ba852118": "{{value0}}, {{value1}} fehlgeschlagen",
-            "deletingCount": "Arbeitsbereiche werden gelöscht: {{value0}}",
-            "deleteCount": "Arbeitsbereiche löschen: {{value0}}?",
-            "selectedForDeletionCount": "Zum Löschen ausgewählt: {{value0}}",
             "deleteButtonCount": "{{value0}} löschen",
             "archivedStatus": "Archiviert",
             "74f6c16279": "Zurück"
@@ -3775,7 +3770,6 @@
           },
           "candidateRow": {
             "gitLabel": "Git",
-            "commitsLabel": "Commits",
             "contextLabel": "Kontext",
             "flagsLabel": "Labels",
             "collapseDetails": "Details einklappen",
@@ -20142,9 +20136,7 @@
         "browse": {
           "noSizes": "Es wurden noch keine Arbeitsbereichsgrößen gemessen.",
           "noSizesDescription": "Die Größen werden nach der Messung des Speicherplatzbedarfs angezeigt.",
-          "measureSizes": "Scannen",
           "measureSizesTitle": "Arbeitsbereichsgrößen erfassen",
-          "measureSizesDescription": "Speicherplatzbedarf erfassen, um Arbeitsbereiche nach Größe zu vergleichen, zu sortieren und zu filtern.",
           "sizeOnDisk": "Speicherplatzbedarf: {{value0}}",
           "checkingGitRow": "Git-Status wird geprüft",
           "searchPlaceholder": "Name, Repo, Branch, Pfad, Host suchen",

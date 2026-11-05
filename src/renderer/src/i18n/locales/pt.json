@@ -17478,7 +17478,6 @@
             "e8b3741ff7": "Ignorado",
             "a9957007eb": "Ignorar {{value0}}",
             "bef0adef9b": "Branch",
-            "0b1766738a": "Repo",
             "bbb1ab6a6f": "Selecionar {{value0}}",
             "b771c92598": "Excluir selecionados",
             "7eee951968": "Escaneando espaços de trabalho",
@@ -17487,7 +17486,6 @@
             "b2c1331844": "Excluir Espaços de Trabalho Inativos",
             "7f451a3e2c": "Não foi possível ignorar a sugestão de limpeza",
             "662b8ec3f8": "Falha na varredura de limpeza de espaços de trabalho",
-            "4d0b72481c": "Ignorar",
             "9cc26c019d": "Remover",
             "0e2d235c63": "Varredura de espaços de trabalho pronta",
             "4a35c08764": "Revisar",
@@ -17495,9 +17493,6 @@
             "1d3503357d": "Você pode fechar isto e voltar enquanto a exclusão continua.",
             "4c2990886e": "{{value0}}/{{value1}} excluídos",
             "86ba852118": "{{value0}}, {{value1}} falharam",
-            "deletingCount": "Excluindo espaços de trabalho: {{value0}}",
-            "deleteCount": "Excluir espaços de trabalho: {{value0}}?",
-            "selectedForDeletionCount": "Selecionados para exclusão: {{value0}}",
             "deleteButtonCount": "Excluir {{value0}}",
             "archivedStatus": "Arquivado",
             "74f6c16279": "Voltar"
@@ -17512,7 +17507,6 @@
           },
           "candidateRow": {
             "gitLabel": "Git",
-            "commitsLabel": "Commits",
             "contextLabel": "Contexto",
             "flagsLabel": "Flags",
             "collapseDetails": "Recolher detalhes",
@@ -21094,9 +21088,7 @@
         "browse": {
           "noSizes": "Nenhum tamanho de espaço de trabalho medido ainda.",
           "noSizesDescription": "Os tamanhos aparecem após o uso de disco ser medido.",
-          "measureSizes": "Verificar",
           "measureSizesTitle": "Verificar tamanhos dos espaços de trabalho",
-          "measureSizesDescription": "Verifique o uso de disco para comparar, ordenar e filtrar espaços de trabalho por tamanho.",
           "sizeOnDisk": "Tamanho em disco: {{value0}}",
           "checkingGitRow": "Verificando status do git",
           "searchPlaceholder": "Pesquisar nome, repositório, branch, caminho, host",
