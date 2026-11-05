@@ -8,7 +8,7 @@ import {
   parseCountBaseline,
   pruneCountBaseline,
   totalCount
-} from './ratchet-baseline.mjs'
+} from './static-analysis/ratchet-baseline/ratchet-baseline.mjs'
 
 // Ratchet tests/ type errors downward: missing helpers otherwise hide until gated hosts run their specs (#30231).
 

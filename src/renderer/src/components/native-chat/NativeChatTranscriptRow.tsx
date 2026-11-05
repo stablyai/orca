@@ -11,7 +11,10 @@ import { NativeChatSubagentEntries } from './NativeChatSubagentRun'
 import type { NativeChatSubagentDisclosure } from './native-chat-subagent-sections'
 import type { NativeChatTaskListPredecessors } from '../../../../shared/native-chat/input/native-chat-task-list-history'
 import type { NativeChatTranscriptSlot } from './native-chat-transcript-slots'
-import type { NativeChatDiffReveal, NativeChatDiffTarget } from './native-chat-turn-diffs'
+import type {
+  NativeChatDiffReveal,
+  NativeChatDiffTarget
+} from '../../../../shared/native-chat/tools/native-chat-turn-diffs'
 import { NativeChatRewindContext } from './native-chat-rewind-context'
 import { nativeChatRowOffersRewind } from './native-chat-rewind-eligibility'
 import { NativeChatForkContext } from './native-chat-fork-context'
@@ -158,7 +161,7 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
       )}
       {slot.statusAbove ? null : statusRow}
       {turnDiff ? (
-        <NativeChatTurnDiffRollup diff={turnDiff} onReveal={context.onRevealDiff} />
+        <NativeChatTurnDiffRollup diff={turnDiff} onLinkClick={context.onLinkClick} />
       ) : null}
     </div>
   )

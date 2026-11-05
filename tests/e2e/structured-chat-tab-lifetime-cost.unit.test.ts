@@ -310,7 +310,8 @@ it('keeps failed advisory legacy insertion and retention while the actual inner 
   const { store: profile, authority } = await fixture()
   const { root, B, holdStartup, rejectVisibility, savedIds } =
     await import('../../src/main/runtime/structured-agent-session-tab-authority.test-support')
-  const { installFakeAppEnvironment } = await import('../../config/scripts/vitest-host-ports-setup')
+  const { installFakeAppEnvironment } =
+    await import('../../config/scripts/test-runtime/environment/vitest-host-ports-setup')
   installFakeAppEnvironment({ getPath: () => root })
   const base = await authorityProfile([B], { visible: [B] }, profile)
   const { workspace } = base
@@ -612,7 +613,7 @@ it.each([10, 100])(
     const { root, B, rejectVisibility } =
       await import('../../src/main/runtime/structured-agent-session-tab-authority.test-support')
     const { installFakeAppEnvironment } =
-      await import('../../config/scripts/vitest-host-ports-setup')
+      await import('../../config/scripts/test-runtime/environment/vitest-host-ports-setup')
     installFakeAppEnvironment({ getPath: () => root })
     const ids = Array.from({ length: p }, (_, i) =>
       i === 0 ? B : `pending-${i.toString().padStart(5, '0')}`

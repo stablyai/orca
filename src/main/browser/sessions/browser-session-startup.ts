@@ -6,6 +6,7 @@ import { configureBrowserSitePermissionStore } from '../site-settings/browser-si
 import { configureBrowserSiteDisplayStore } from '../site-settings/browser-site-display-store'
 import { configureBrowserExtensionProfileDataDirectory } from '../extensions/profile-storage/browser-extension-profile-data-directory'
 import { configurePairedRuntimeBrowserClientHostsForOrcaProfile } from '../client-hosts/lifecycle/paired-runtime-browser-client-host-runtime'
+import { configureBrowserPasswordVaults } from '../../browser-passwords/browser-password-vaults'
 
 let initialized = false
 
@@ -23,6 +24,7 @@ export function initializeBrowserSessionsForApp(
     configureBrowserSitePermissionStore(activeProfile.profileDirectory)
     configureBrowserSiteDisplayStore(activeProfile.profileDirectory)
     configureBrowserExtensionProfileDataDirectory(activeProfile.profileDirectory)
+    configureBrowserPasswordVaults(activeProfile.profileDirectory)
     configureRouteSessionsForOrcaProfile({
       orcaProfileId: activeProfile.orcaProfileId,
       profileDirectory: activeProfile.profileDirectory

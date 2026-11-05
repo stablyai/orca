@@ -135,8 +135,9 @@ function writeFixture(filePath, eventCount) {
 async function runComparison() {
   const { build, version: esbuildVersion } = await import('esbuild')
   const { runProcessSync } = await import('@orca/process-host')
-  const { describeProcessFailure } = await import('./process-failure-message.mjs')
-  const { buildCounterbalancedSchedule } = await import('./counterbalanced-benchmark-schedule.mjs')
+  const { describeProcessFailure } = await import('./tool-invocation/process-failure-message.mjs')
+  const { buildCounterbalancedSchedule } =
+    await import('./performance/measurement/counterbalanced-benchmark-schedule.mjs')
   const eventCount = positiveInteger(argument('--events', '100000'), 'events')
   const pairCount = positiveInteger(argument('--pairs', '2'), 'pairs')
   const intervalMs = positiveInteger(argument('--sample-ms', '35'), 'sample-ms')
@@ -277,8 +278,11 @@ async function runComparison() {
         [
           import.meta.filename,
           fileURLToPath(import.meta.resolve('@orca/process-host')),
-          join(import.meta.dirname, 'process-failure-message.mjs'),
-          join(import.meta.dirname, 'counterbalanced-benchmark-schedule.mjs')
+          join(import.meta.dirname, 'tool-invocation/process-failure-message.mjs'),
+          join(
+            import.meta.dirname,
+            'performance/measurement/counterbalanced-benchmark-schedule.mjs'
+          )
         ].map((path) => [relative(root, path).split(sep).join('/'), digest(readFileSync(path))])
       ),
       baselineCommit,

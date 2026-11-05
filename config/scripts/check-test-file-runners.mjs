@@ -8,7 +8,7 @@ import process from 'node:process'
 import { pathToFileURL } from 'node:url'
 import ts from 'typescript-api'
 import { defaultExclude } from 'vitest/config'
-import { UNIT_EXCLUDE, UNIT_INCLUDE } from './ci-unit-files.mjs'
+import { UNIT_EXCLUDE, UNIT_INCLUDE } from './ci/unit-selection/dependency-graph/ci-unit-files.mjs'
 
 const VITEST_DEFAULT_INCLUDE = '**/*.{test,spec}.?(c|m)[jt]s?(x)'
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { findRunnerDrift, findUncollectedTestFiles } from './check-test-file-runners.mjs'
-import { classifyPrJobs } from './pr-code-change-scope.mjs'
+import { classifyPrJobs } from './workflow/source-routing/pr-code-change-scope.mjs'
 
 const RUNNERS = [
   { name: 'unit', include: ['src/**/*.test.ts'], exclude: ['src/live/**'] },

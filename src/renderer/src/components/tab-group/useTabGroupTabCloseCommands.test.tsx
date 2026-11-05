@@ -286,10 +286,12 @@ describe('shared tab close policies', () => {
     const { result } = renderHook(() => useTabGroupTabCloseCommands({ worktreeId: 'worktree-a' }))
     result.current.closeItem(terminal.id)
     expect(mocks.closeTerminalTab).toHaveBeenLastCalledWith('terminal-entity', {
+      reason: 'user',
       onClosed: expect.any(Function)
     })
     result.current.closeMany([terminal.id])
     expect(mocks.closeTerminalTab).toHaveBeenLastCalledWith('terminal-entity', {
+      reason: 'user',
       skipRunningProcessConfirm: true
     })
   })

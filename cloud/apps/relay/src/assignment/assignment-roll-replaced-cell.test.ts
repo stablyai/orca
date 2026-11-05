@@ -8,9 +8,9 @@ import {
   encodeMembership,
   type CellAdmissionMembership,
   type CellAdmissionState
-} from '../cell-admission-selector.js'
+} from '../cell/admission/cell-admission-selector.js'
 import type { RelayCellConfig } from '../config.js'
-import { openInMemoryRelayDatabase, type RelayDatabase } from '../database.js'
+import { openInMemoryRelayDatabase, type RelayDatabase } from '../database/database.js'
 
 // 2026-10-24, production-gce-c15: offline hosts redialed during the ~45s gap between draining a same-cap roll and replacement readiness.
 const HEARTBEAT_TTL_MS = 45_000

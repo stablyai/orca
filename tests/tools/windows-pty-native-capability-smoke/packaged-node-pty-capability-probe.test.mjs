@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { runProcess } from '@orca/process-host'
-import { stagePackagedProcessHost } from '../../../config/scripts/packaged-process-host-fixture.mjs'
+import { stagePackagedProcessHost } from '../../../config/scripts/desktop-distribution/runtime-verification/packaged-process-host-fixture.mjs'
 
 const require = createRequire(import.meta.url)
 const probePath = require.resolve('./packaged-node-pty-capability-probe.cjs')

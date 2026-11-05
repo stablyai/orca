@@ -8,7 +8,7 @@ import {
   pruneCountBaseline,
   readTrackedSources,
   totalCount
-} from './ratchet-baseline.mjs'
+} from './static-analysis/ratchet-baseline/ratchet-baseline.mjs'
 
 // Count direct Active Server reads and discovered caller-returning wrappers so changing syntax cannot hide host-misrouting growth.
 // Route work by resource host; counts only decrease, and deleted helpers stay banned.
