@@ -451,5 +451,17 @@ describe('where a strip reveal lands', () => {
     expect(rowBottom).toBeLessThanOrEqual(viewBottom + 1)
     expect(rowBottom).toBeGreaterThan(viewBottom - row!.offsetHeight)
     expect(screen.getByText('Lane a step 5.')).toBeInTheDocument()
+
+    // A row above it measures taller only after the jump settled (late markdown, fonts): the end stays put.
+    const above = screen.getByText('Opening lane b.').closest<HTMLElement>('[data-index]')!
+    const heights: number[] = []
+    heights[Number(above.dataset.index)] = above.offsetHeight + 120
+    layout.measuredRowHeights = Array.from(heights, (height) => height ?? row!.offsetHeight)
+    paint()
+    const settledBottom = scroller().scrollTop + scroller().clientHeight
+    const settledRowBottom = transcriptRowOffset(row!) + row!.offsetHeight
+    expect(settledRowBottom).toBeLessThanOrEqual(settledBottom + 1)
+    expect(settledRowBottom).toBeGreaterThan(settledBottom - row!.offsetHeight)
+    layout.measuredRowHeights = []
   })
 })

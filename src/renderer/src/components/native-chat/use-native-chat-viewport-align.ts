@@ -52,6 +52,8 @@ export function useNativeChatViewportAlign({
   endAlign: () => void
   /** Whether the view is still the jump's: settling, or resting where it landed. */
   isAlignHeld: () => boolean
+  /** The row an end-aligned jump holds at the viewport's bottom, until something else takes the scroll. */
+  heldEndIndex: () => number | null
 } {
   /** The row or offset `alignToViewportTop` scrolled to, until something else takes the scroll. */
   const alignRef = useRef<
@@ -119,6 +121,10 @@ export function useNativeChatViewportAlign({
     alignRef.current = null
   }, [])
   const isAlignHeld = useCallback(() => alignRef.current !== null, [])
+  const heldEndIndex = useCallback(() => {
+    const held = alignRef.current
+    return held !== null && 'index' in held && held.edge === 'end' ? held.index : null
+  }, [])
 
-  return { alignToViewportTop, isAlignPending, endAlign, isAlignHeld }
+  return { alignToViewportTop, isAlignPending, endAlign, isAlignHeld, heldEndIndex }
 }

@@ -199,19 +199,27 @@ export function useNativeChatTranscriptWindow({
     [readScrollMargin]
   )
 
-  const { alignToViewportTop, isAlignPending, endAlign, isAlignHeld } = useNativeChatViewportAlign({
-    scrollRef,
-    virtualizer,
-    finishReaderTakeover,
-    programmaticScrollMarks
-  })
+  const { alignToViewportTop, isAlignPending, endAlign, isAlignHeld, heldEndIndex } =
+    useNativeChatViewportAlign({
+      scrollRef,
+      virtualizer,
+      finishReaderTakeover,
+      programmaticScrollMarks
+    })
 
   // Compensate rows above the reader, excluding visible/first jump-target measurements, unseen scroll writes and backward-reader scrolling; preserve landed jumps.
   virtualizer.shouldAdjustScrollPositionOnItemSizeChange = (item, _delta, instance) => {
     const offset = instance.scrollOffset ?? 0
     const written = scrollRef.current?.scrollTop ?? offset
+    if (Math.abs(written - offset) > UNSEEN_SCROLL_PX) {
+      return false
+    }
+    // An end-aligned jump keeps its row's end at the bottom: rows measured late above it, visible or not, and the row itself push it down.
+    const pinnedEnd = heldEndIndex()
+    if (pinnedEnd !== null && item.index <= pinnedEnd) {
+      return true
+    }
     return (
-      Math.abs(written - offset) <= UNSEEN_SCROLL_PX &&
       !(item.index === revealIndex && !instance.itemSizeCache.has(item.key)) &&
       item.end <= offset &&
       (instance.scrollDirection !== 'backward' ||
