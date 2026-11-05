@@ -82,6 +82,14 @@ describe('a home-relative path printed in a paired-server terminal', () => {
     expect(hostWasAskedFor()).toEqual([VIDEO])
   })
 
+  it('asks the host for a doubled separator after home as one', async () => {
+    hostHoldsVideoInSibling()
+
+    await provideLinks('/data/m/work/project', `Saved ${VIDEO.replace('~/', '~//')}`)
+
+    expect(hostWasAskedFor()).toEqual([VIDEO])
+  })
+
   it('never substitutes a home guessed from the cwd for the host’s own', async () => {
     hostHoldsVideoInSibling()
 

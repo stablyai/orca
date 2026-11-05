@@ -81,7 +81,9 @@ export function resolveFileLinkPath(
   ).connectionId
 ): ResolvedTerminalFileLink | null {
   if (hostExpandsTilde(parsed.pathText, host, connectionId)) {
-    return { absolutePath: parsed.pathText, line: parsed.line, column: parsed.column }
+    // Why: hosts join what follows `~/` onto home, so a doubled separator would make it absolute.
+    const homeRelative = parsed.pathText.replace(/^(~[\\/])[\\/]+/, '$1')
+    return { absolutePath: homeRelative, line: parsed.line, column: parsed.column }
   }
   return host.cwd ? resolveTerminalFileLink(parsed, host.cwd, host.homePath) : null
 }
