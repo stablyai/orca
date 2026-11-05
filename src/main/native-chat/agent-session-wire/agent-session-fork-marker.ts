@@ -39,8 +39,8 @@ export function readForkMarker(
 type MarkerPosition = { sequence: number; index: number; observedAt: number }
 type MarkerReader = () => ForkMarker | undefined
 
-// Remember the last derived group across readers; retries reuse it and epoch changes discard it.
-type ProjectedPosition = { epoch: string; cursor: number; sequence?: number; restored?: number }
+// Retain the former group for delayed readers until an epoch change discards it.
+type ProjectedPosition = { epoch: string; sequence?: number; restored?: number }
 const projectedPositions = new WeakMap<AgentSessionJournal, ProjectedPosition>()
 const projections = new WeakMap<
   readonly AgentJournalRenderItem[],
@@ -133,17 +133,15 @@ export function withForkMarker(
       const raw = snapshot ?? journal.itemsRead()
       const position = markerPosition(raw, marker)
       const previous = projectedPositions.get(journal)
-      const oldSequence =
-        previous?.epoch !== raw.cursor.epoch
-          ? undefined
-          : previous.sequence !== position?.sequence
-            ? previous.sequence
-            : previous.cursor === raw.cursor.sequence
-              ? previous.restored
-              : undefined
+      const sameEpoch = previous?.epoch === raw.cursor.epoch
+      const moved = sameEpoch && previous.sequence !== position?.sequence
+      const oldSequence = sameEpoch
+        ? moved
+          ? (previous.sequence ?? previous.restored)
+          : previous.restored
+        : undefined
       projectedPositions.set(journal, {
         epoch: raw.cursor.epoch,
-        cursor: raw.cursor.sequence,
         sequence: position?.sequence,
         restored: oldSequence
       })
@@ -152,15 +150,14 @@ export function withForkMarker(
       }
       const live = journalItemsById(raw.items)
       const boundary = marker.forkedFrom.childBoundary
-      const moved = oldSequence !== undefined && oldSequence !== position?.sequence
       const affected =
-        moved ||
+        (moved && oldSequence !== undefined) ||
         touched.has(FORK_MARKER_ITEM_ID) ||
         (boundary.kind === 'item' && touched.has(boundary.itemId)) ||
         (position && [...touched].some((id) => live.get(id)?.sequence === position.sequence))
       if (affected) {
         touched.add(FORK_MARKER_ITEM_ID)
-        for (const sequence of new Set([position?.sequence, moved ? oldSequence : undefined])) {
+        for (const sequence of new Set([position?.sequence, oldSequence])) {
           if (sequence !== undefined) {
             for (const row of journalItemsAtSequence(raw.items, sequence)) {
               touched.add(row.itemId)

@@ -223,6 +223,29 @@ it('restores the surviving anchor group and removes the marker when its anchor i
       rowReplay: true
     })
   ).toEqual(delta)
+  await fixture.journal.appendItem(item(3), body('later stream'), {
+    fence: 1,
+    turnScope: { kind: 'thread' }
+  })
+  const unrelated = readAgentSessionHistory(
+    fixture.journal,
+    {
+      sessionId: 'session-1',
+      direction: 'after',
+      cursor: delta.page.window.nextCursor
+    },
+    { reader, rowReplay: true }
+  )
+  expect(unrelated.page.items.map((row) => row.itemId)).toEqual([agentJournalItemKey(item(3))])
+  const delayed = readAgentSessionHistory(fixture.journal, request, {
+    reader: withForkMarker(undefined, () => read()),
+    rowReplay: true
+  })
+  expect(delayed.page.items).toMatchObject([
+    { itemId: agentJournalItemKey(item(2)), sequenceIndex: 1 },
+    { itemId: agentJournalItemKey(item(3)) }
+  ])
+  expect(delayed.page.removedItemIds).toEqual([agentJournalItemKey(item(1)), FORK_MARKER_ITEM_ID])
 })
 
 it('moves the marker on an idle same-epoch remap and restores the former group', async () => {
