@@ -3,10 +3,10 @@ import { SshConnectionStore } from '../../ssh/connection/ssh-connection-store'
 import { createMockStore } from '../../ssh/connection/ssh-connection-store-test-fixture'
 import { emptyDependentStateStore } from '../../ssh/targets/ssh-target-orcad-dependents-fixture'
 
-const { registry, environments } = vi.hoisted(() => ({
-  registry: { store: null as unknown },
-  environments: new Map<string, unknown>()
-}))
+const { registry, environments } = vi.hoisted(() => {
+  const registry: { store: unknown } = { store: null }
+  return { registry, environments: new Map<string, unknown>() }
+})
 
 vi.mock('electron', () => ({ webContents: { fromId: vi.fn() } }))
 vi.mock('../../browser/browser-manager', () => ({ browserManager: {} }))

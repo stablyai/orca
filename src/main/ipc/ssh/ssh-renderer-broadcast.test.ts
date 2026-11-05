@@ -1,10 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { reconcile, send, target } = vi.hoisted(() => ({
-  reconcile: vi.fn(),
-  send: vi.fn(),
-  target: { current: undefined as unknown }
-}))
+const { reconcile, send, target } = vi.hoisted(() => {
+  const target: { current: unknown } = { current: undefined }
+  return { reconcile: vi.fn(), send: vi.fn(), target }
+})
 
 vi.mock('../browser/desktop-browser-bridge-reconcile', () => ({
   requestDesktopBrowserBridgeReconcile: reconcile
