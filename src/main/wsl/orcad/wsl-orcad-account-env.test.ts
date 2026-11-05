@@ -106,32 +106,51 @@ describe('withWslOrcadAccountEnv', () => {
   })
 
   it("launches a WSL host project's sessions on the accounts its repo pins", async () => {
-    const PINNED = '~/.local/share/orca/claude-profiles/acct-w/project-pointer'
-    const deps = dependencies({ claudeProjectPointer: vi.fn(async () => PINNED) })
-    const showRepo = vi.fn(async (_repoId: string) => ({
-      ok: true,
-      result: { repo: { claudeAccountId: 'acct-w', codexAccountId: 'codex-w' } }
-    }))
-    const env = await withWslOrcadAccountEnv(
-      {
-        environmentId: 'wsl:ubuntu',
-        method: 'terminal.create',
-        params: { worktree: 'id:repo-1::/home/u/app' },
-        hostSupports: async () => 'supported',
-        readProjectPins: (repoId) => readWslHostProjectPins(() => showRepo(repoId))
-      },
-      deps,
-      wsl
-    )
-    expect(showRepo).toHaveBeenCalledWith('repo-1')
-    expect(env).toMatchObject({ params: { env: { ORCA_CLAUDE_PROFILE_POINTER: PINNED } } })
-    expect(deps.claudeProjectPointer).toHaveBeenCalledWith(
-      expect.objectContaining({ wslDistro: 'Ubuntu', projectAccountId: 'acct-w' })
-    )
-    expect(deps.prepareCodexHome).toHaveBeenCalledWith(
-      expect.objectContaining({ projectAccountId: 'codex-w' })
-    )
-    // A malformed or missing pin falls back to the distro's selection.
+    // Each fake answers for the account it is handed, so the env shows which pin reached it.
+    const deps = dependencies({
+      claudeProjectPointer: async (target) =>
+        target.projectAccountId ? `~/pointers/${target.projectAccountId}` : null,
+      prepareCodexHome: async (target) =>
+        `\\\\wsl.localhost\\Ubuntu\\home\\u\\.orca\\${target.projectAccountId ?? 'selected'}`
+    })
+    const launch = (worktree: string) =>
+      withWslOrcadAccountEnv(
+        {
+          environmentId: 'wsl:ubuntu',
+          method: 'terminal.create',
+          params: { worktree },
+          hostSupports: async () => 'supported',
+          // Only this host's repo-1 pins accounts.
+          readProjectPins: (repoId) =>
+            readWslHostProjectPins(async () => ({
+              ok: true,
+              result: {
+                repo:
+                  repoId === 'repo-1'
+                    ? { claudeAccountId: 'acct-w', codexAccountId: 'codex-w' }
+                    : {}
+              }
+            }))
+        },
+        deps,
+        wsl
+      )
+
+    await expect(launch('id:repo-1::/home/u/app')).resolves.toMatchObject({
+      params: {
+        env: {
+          ORCA_CLAUDE_PROFILE_POINTER: '~/pointers/acct-w',
+          CODEX_HOME: '/home/u/.orca/codex-w'
+        }
+      }
+    })
+    // Another project on the same host keeps the distro's selection.
+    await expect(launch('id:repo-2::/home/u/other')).resolves.toMatchObject({
+      params: {
+        env: { ORCA_CLAUDE_PROFILE_POINTER: POINTER, CODEX_HOME: '/home/u/.orca/selected' }
+      }
+    })
+    // A malformed pin is not a pin.
     await expect(
       readWslHostProjectPins(async () => ({
         ok: true,

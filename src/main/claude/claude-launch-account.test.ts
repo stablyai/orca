@@ -60,14 +60,16 @@ it("launches a pinned project's chat on its account and reads that same home bac
     })
 
   const pinned = await prepareClaudeLaunchAccount(router, {}, '/record', 'work::/repo')
-  expect(pinned).toMatchObject({ route: 'managed', accountId: 'b', home: router.accountHome('b') })
-  expect(await desiredHome('work::/repo')).toBe(pinned.home)
+  const homeB = join(root, 'data', 'claude-profiles', 'b', 'home')
+  expect(pinned).toMatchObject({ route: 'managed', accountId: 'b', home: homeB })
+  expect(await desiredHome('work::/repo')).toBe(homeB)
 
   const other = await prepareClaudeLaunchAccount(router, {}, '/record', 'personal::/repo')
-  expect(other).toMatchObject({ route: 'managed', accountId: 'a' })
-  expect(await desiredHome('personal::/repo')).toBe(other.home)
+  const homeA = join(root, 'data', 'claude-profiles', 'a', 'home')
+  expect(other).toMatchObject({ route: 'managed', accountId: 'a', home: homeA })
+  expect(await desiredHome('personal::/repo')).toBe(homeA)
 
   // Moving the selection leaves the pinned chat where it runs.
   settings.activeClaudeManagedAccountId = null
-  expect(await desiredHome('work::/repo')).toBe(pinned.home)
+  expect(await desiredHome('work::/repo')).toBe(homeB)
 })
