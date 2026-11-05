@@ -45,15 +45,23 @@ describe('readPluginFocusedSurface', () => {
       session('browser', { id: 'b1', label: 'https://internal.example.com/admin?token=abc' }),
       true
     )
+    const fileUrl = readPluginFocusedSurface(
+      session('editor', { id: 'f1', label: 'file:///home/me/report.txt?token=abc#top' }),
+      true
+    )
     expect(editor).toEqual({ kind: 'editor', title: 'secret-plan.md' })
     expect(browser).toEqual({ kind: 'browser', title: 'internal.example.com' })
-    expect(JSON.stringify([editor, browser])).not.toContain('/home/me')
+    expect(fileUrl).toEqual({ kind: 'editor', title: 'report.txt' })
+    expect(JSON.stringify([editor, browser, fileUrl])).not.toMatch(/\/home\/me|token/)
   })
 
-  it('is null while the window is unfocused or the tab kind is not shared', () => {
+  it('is null while the window is unfocused, no tab is active, or the tab kind is not shared', () => {
     const terminal = session('terminal', { id: 't1', label: 'zsh' })
     expect(readPluginFocusedSurface(terminal, true)).toEqual({ kind: 'terminal', title: 'zsh' })
     expect(readPluginFocusedSurface(terminal, false)).toBeNull()
+    const emptyGroup = session('terminal', { id: 't1', label: 'zsh' })
+    emptyGroup.tabGroups![WT]![1]!.activeTabId = null
+    expect(readPluginFocusedSurface(emptyGroup, true)).toBeNull()
     expect(
       readPluginFocusedSurface(session('simulator', { id: 's1', label: 'iPhone' }), true)
     ).toBeNull()

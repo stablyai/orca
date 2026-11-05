@@ -55,11 +55,14 @@ export function readPluginFocusedSurface(
   const activeGroupId = session.activeGroupIdByWorktree?.[worktreeId]
   const group = groups.find((entry) => entry.id === activeGroupId) ?? groups[0]
   const tab = session.unifiedTabs?.[worktreeId]?.find((entry) => entry.id === group?.activeTabId)
-  const title = projectPluginFocusedTitle(tab?.customLabel ?? tab?.generatedLabel ?? tab?.label)
+  if (!tab) {
+    return null
+  }
+  const title = projectPluginFocusedTitle(tab.customLabel ?? tab.generatedLabel ?? tab.label)
   return {
     kind,
     title,
-    ...(kind === 'agent' && tab && tab.id.length <= PLUGIN_FOCUSED_AGENT_ID_MAX_LENGTH
+    ...(kind === 'agent' && tab.id.length <= PLUGIN_FOCUSED_AGENT_ID_MAX_LENGTH
       ? { agentId: tab.id }
       : {})
   }
@@ -81,7 +84,8 @@ function sanitizeTitle(value: string): string {
   if (!/[\\/]/.test(value)) {
     return value
   }
-  const withoutTrailing = value.replace(/[\\/]+$/, '')
+  // Why: a non-http URL (file:, ssh:) reaches this branch with its query or fragment still attached.
+  const withoutTrailing = value.replace(/[?#].*$/, '').replace(/[\\/]+$/, '')
   return withoutTrailing.split(/[\\/]/).pop() || withoutTrailing
 }
 
