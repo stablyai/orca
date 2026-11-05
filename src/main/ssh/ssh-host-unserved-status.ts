@@ -1,6 +1,10 @@
 import type { NodeDistMirrorAttempt } from '../../shared/node-dist-mirror'
 import type { SshManagedServerStatus } from '../../shared/ssh-types'
 import type { HostServerOnConnectResult } from './ssh-host-server-on-connect'
+import {
+  sshHostServerSetupRemedy,
+  type SshHostServerSetupRemedy
+} from '../../shared/ssh-host-server-setup-remedy'
 
 type UnservedDecision = Extract<HostServerOnConnectResult, { route: 'unserved' }>
 
@@ -12,6 +16,7 @@ export function unservedServerStatus(
     kind: 'relay',
     reason: decision.reason,
     ...(decision.detail ? { detail: decision.detail } : {}),
+    ...(decision.code ? { code: decision.code } : {}),
     ...(decision.terminals !== undefined ? { terminals: decision.terminals } : {}),
     ...(decision.terminalsElsewhere ? { terminalsElsewhere: true } : {}),
     ...(decision.canLeaveBehind ? { canLeaveBehind: true } : {}),
@@ -47,6 +52,18 @@ const NODE_DOWNLOAD_BLOCKED_MESSAGES: Record<NodeDistMirrorAttempt, string> = {
     'Neither this computer nor this host could download Node.js, which Orca’s server needs. Check the network or proxy on both machines, then connect again.'
 }
 
+const SETUP_REMEDY_MESSAGES: Record<SshHostServerSetupRemedy, string> = {
+  retry: 'Orca couldn’t start its server on this host. Try connecting again.',
+  recover:
+    'An interrupted update or stop of Orca’s server on this host needs recovering before it can start. Use Recover in Settings > Orca on your SSH hosts, then connect again.',
+  'free-host-space':
+    'This host doesn’t have enough free disk space for Orca to keep a backup of its server data while starting it. Free up space on the host, then connect again.',
+  'stop-unmanaged-runtime':
+    'An Orca server this app didn’t start is still using this host’s Orca data. Stop it on the host, then connect again. This host’s Details, in Settings > SSH Hosts, names its process.',
+  'see-details':
+    'Orca couldn’t start its server on this host. The cause is in this host’s Details, in Settings > SSH Hosts.'
+}
+
 /** Reuse untranslated status wording for logs/clients without the catalog. */
 export function unservedHostServerMessage(decision: UnservedDecision): string {
   if (decision.held && (decision.reason === 'failed' || decision.reason === 'deferred')) {
@@ -72,6 +89,6 @@ export function unservedHostServerMessage(decision: UnservedDecision): string {
       }
       return decision.nodeDownloadBlocked
         ? NODE_DOWNLOAD_BLOCKED_MESSAGES[decision.nodeDownloadBlocked.mirror]
-        : 'Orca couldn’t start its server on this host. Try connecting again.'
+        : SETUP_REMEDY_MESSAGES[sshHostServerSetupRemedy(decision.code)]
   }
 }

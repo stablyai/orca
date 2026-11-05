@@ -10,7 +10,7 @@ import {
   type HostServerOnConnectDeps
 } from './ssh-host-server-on-connect'
 import { hostServerDepsStub } from './ssh-host-server-on-connect-test-deps'
-import { unservedServerStatus } from './ssh-host-unserved-status'
+import { unservedHostServerMessage, unservedServerStatus } from './ssh-host-unserved-status'
 import { admitSshManagedServerStatus } from '../../shared/ssh-managed-server-status-admission'
 
 // Read the final callback because retry eligibility is decided under lifecycle lock.
@@ -399,6 +399,47 @@ describe('which server an SSH host runs on connect', () => {
     await expect(resolveHostServerOnConnect(target, d)).resolves.toMatchObject({
       reason: 'failed'
     })
+    warn.mockRestore()
+  })
+
+  it('says what to fix when setup stops on a cause a retry cannot clear', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const deferredOn = async (code: string) => {
+      const decision = await resolveHostServerOnConnect(
+        target,
+        deps({
+          isEmptyHost: () => true,
+          deploy: async () => ({
+            outcome: 'deferred' as const,
+            candidateVersion: '1.0.0',
+            code,
+            reason: `host said ${code}`
+          })
+        })
+      )
+      if (decision.route !== 'unserved') {
+        throw new Error('expected an unserved host')
+      }
+      // Older renderers and mobile read the published status and main's message.
+      const { managedServer } = admitSshManagedServerStatus(unservedServerStatus(decision))
+      return { status: managedServer, message: unservedHostServerMessage(decision) }
+    }
+
+    const full = await deferredOn('orcad_snapshot_space_insufficient')
+    expect(full.status).toMatchObject({
+      reason: 'deferred',
+      code: 'orcad_snapshot_space_insufficient',
+      detail: 'host said orcad_snapshot_space_insufficient'
+    })
+    expect(full.message).toContain('Free up space on the host')
+    expect((await deferredOn('orcad_activation_recovery_required')).message).toContain('Recover')
+    expect((await deferredOn('orcad_initial_runtime_live')).message).toContain(
+      'Stop it on the host'
+    )
+    expect((await deferredOn('orcad_activation_no_readiness')).message).not.toContain(
+      'Try connecting'
+    )
+    expect((await deferredOn('orcad_activation_fence_busy')).message).toContain('Try connecting')
     warn.mockRestore()
   })
 

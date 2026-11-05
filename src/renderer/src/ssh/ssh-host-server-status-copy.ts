@@ -16,6 +16,8 @@ import { blockedNodeDownload, nodeDownloadBlockedText } from './ssh-host-node-do
 import { settingUpLabel, sshHostServerReassurance } from './ssh-host-server-setup-copy'
 import { hostFixableUnavailableText } from './ssh-host-fixable-unavailable-copy'
 import { leaveBehindLine, REFUSAL_INLINE_CHARS, refusedLine } from './ssh-host-refused-move-copy'
+import { sshHostServerSetupRemedy } from '../../../shared/ssh-host-server-setup-remedy'
+import { sshHostSetupRemedyText } from './ssh-host-setup-remedy-copy'
 
 export type SshHostServerStatusLine = {
   text: string
@@ -196,13 +198,11 @@ function tunnelUnavailableLine(): SshHostServerStatusLine {
   }
 }
 
-function retryLine(): SshHostServerStatusLine {
+function setupStoppedLine(code: string | undefined): SshHostServerStatusLine {
+  const remedy = sshHostServerSetupRemedy(code)
   return {
-    tone: 'warning',
-    text: translate(
-      'auto.components.settings.sshHostServer.setupRetry',
-      'Orca couldn’t start its server on this host. Try connecting again.'
-    )
+    tone: remedy === 'retry' ? 'warning' : 'destructive',
+    text: sshHostSetupRemedyText(remedy)
   }
 }
 
@@ -305,7 +305,7 @@ function unservedLine(
             ? heldMoveLine()
             : status.contactLost
               ? contactLostLine()
-              : retryLine()),
+              : setupStoppedLine(status.code)),
         ...withDetail(status.detail)
       }
     }
