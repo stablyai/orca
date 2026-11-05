@@ -75,6 +75,7 @@ test.describe('setup tab auto-close', () => {
     orcaPage,
     registerPostElectronShutdownCleanup
   }) => {
+    // Why: three workspaces each run a real setup script, one of them sleeping 4s while the tab is checked.
     test.setTimeout(240_000)
     const cleanups: string[] = []
     registerPostElectronShutdownCleanup(async () => {
@@ -133,6 +134,7 @@ test.describe('setup tab auto-close', () => {
     await expect.poll(() => setupTabIds(orcaPage, failed), { timeout: 30_000 }).toHaveLength(1)
     await visit(orcaPage, failed)
     // Give a wrongly-closing exit path time to act before asserting the tab survived.
+    // ast-grep-ignore: test-no-real-time-wait -- proving a close never happens has no condition to wait on
     await orcaPage.waitForTimeout(5_000)
     expect(await setupTabIds(orcaPage, failed)).toHaveLength(1)
   })
