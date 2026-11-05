@@ -9,12 +9,12 @@ import {
   listEnvironments,
   removeEnvironment,
   resolveEnvironment
-} from '../../../shared/runtime-environment-store'
+} from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import {
   redactRuntimeEnvironment,
   type PublicKnownRuntimeEnvironment,
   type RuntimeEnvironmentRemoval
-} from '../../../shared/runtime-environments'
+} from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import {
   connectThroughOwningService,
   removeThroughOwningService
@@ -38,7 +38,7 @@ import { callRuntimeEnvironment } from './runtime-environment-transport-routing'
 import { getRuntimeEnvironmentStatus } from './runtime-environment-status-probe'
 import { noteRuntimeEnvironmentConnectRequested } from './runtime-environment-pairing-refusal-registry'
 import { publicRuntimeEnvironmentWithHostKey } from './runtime-environment-host-key'
-import { withWslOrcadAccountEnv } from '../../wsl/wsl-orcad-account-env'
+import { withWslOrcadAccountEnv } from '../../wsl/orcad/wsl-orcad-account-env'
 import { clearSshCredentialDeclinedForEnvironment } from '../../ssh/ssh-credential-decline'
 import {
   disconnectManagedHostOfEnvironmentForUser,
@@ -48,8 +48,8 @@ import {
 import {
   observeWslOrcadHostResponse,
   wslOrcadHostSupports
-} from '../../wsl/wsl-orcad-host-environments'
-import { assertWslHostReachable, isGatedOffWslHost } from '../../wsl/wsl-host-gate'
+} from '../../wsl/orcad/wsl-orcad-host-environments'
+import { assertWslHostReachable, isGatedOffWslHost } from '../../wsl/host-lifecycle/wsl-host-gate'
 import {
   isHostSpawnFencedForWslMoveUndo,
   wslMoveUndoSpawnFencedResponse

@@ -7,7 +7,7 @@ import { createRuntimePath } from '@/runtime/runtime-file-mutation-client'
 import { runtimePathExists } from '@/runtime/runtime-file-metadata-client'
 import { executeOpenEditorPathMove } from '@/lib/execute-open-editor-path-move'
 import { acquireEditorFileOperation } from '@/lib/editor-file-operation-owner'
-import { requestEditorFileSave, requestEditorSaveQuiesce } from './editor-autosave'
+import { requestEditorFileSave, requestEditorSaveQuiesce } from './autosave/editor-autosave'
 import { getUntitledFileRoot } from './untitled-file-rename-path'
 
 type UseUntitledFileRenameParams = {

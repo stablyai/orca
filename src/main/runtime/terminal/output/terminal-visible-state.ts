@@ -15,7 +15,7 @@ import {
 import { projectTerminalVisibleLines } from '../../orca-runtime-terminal-projection'
 import { visibleNonBlankTerminalLines } from '../../terminal-tail-read'
 import type { RuledScreen } from '../../screen-input-veto'
-import { HeadlessEmulator } from '../../../daemon/headless-emulator'
+import { HeadlessEmulator } from '../../../daemon/emulation/headless-emulator'
 import { withTimeout } from '../../runtime-async-boundaries'
 
 export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeWithCaptureProviderTerminalBuffer {

@@ -7,8 +7,8 @@
  * `nohup`, `disown`), no daemon it started (`setsid` keeps the key), and no script it runs (a waiting
  * `read` is still a script). The move's Sleep ends all of those, so any of them blocks.
  */
-import { recognizeAgentProcess } from '../../../shared/agent-process-recognition'
-import { isShellProcess } from '../../../shared/shell-process-detection'
+import { recognizeAgentProcess } from '../../../shared/agent-status/process/agent-process-recognition'
+import { isShellProcess } from '../../../shared/agent-status/process/shell-process-detection'
 
 /**
  * `agent`: the shell's one foreground job is an agent CLI and everything else running is its own

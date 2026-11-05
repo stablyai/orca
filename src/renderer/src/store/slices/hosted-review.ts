@@ -5,7 +5,7 @@ import type {
   HostedReviewCreationEligibility,
   HostedReviewCreationEligibilityArgs,
   HostedReviewInfo
-} from '../../../../shared/hosted-review'
+} from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import type { AppState } from '../types'
 import { nextLookupGeneration } from '../lookup-generation-sequence'

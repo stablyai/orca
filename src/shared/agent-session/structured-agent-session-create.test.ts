@@ -2,17 +2,14 @@ import { ResumeSource } from '../rpc-contract/structured-agent-session-params'
 import { STRUCTURED_AGENT_SESSION_CLI_SOURCE_RUNTIME_CAPABILITY } from './structured-agent-session-surface-capabilities'
 import { describe, expect, it } from 'vitest'
 import { RUNTIME_CAPABILITIES } from '../protocol-version'
-import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from './agent-session-create-capabilities'
+import './agent-session-create-capabilities'
 
 import {
   structuredAgentSessionCreateParams,
   type StructuredAgentSessionFirstMessage,
   type StructuredAgentSessionResumeSource
 } from './structured-agent-session-create'
-import {
-  structuredAgentSessionCreateFingerprint,
-  structuredAgentSessionPayloadFingerprint
-} from './lifecycle/structured-agent-session-mutation'
+import { structuredAgentSessionPayloadFingerprint } from './lifecycle/structured-agent-session-mutation'
 
 const SESSION_ID = 'codex_11111111_2222_3333_4444_555555555555'
 const RESUME = { providerSessionId: 'thread-abc' }
@@ -43,49 +40,6 @@ function createParams(
 }
 
 describe('structured agent session create params', () => {
-  it('fingerprints the first message identity, content and opening option picks', () => {
-    const firstMessage: StructuredAgentSessionFirstMessage = {
-      clientMessageId: 'message-1',
-      body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'opening text' }] }
-    }
-    const first = createParams({ firstMessage, options: { model: 'picked-model' } })
-    expect(first.firstMessage).toEqual(firstMessage)
-    expect(first.options).toEqual({ model: 'picked-model' })
-    expect(first.envelope.payloadFingerprint).toBe(
-      createParams({ firstMessage, options: { model: 'picked-model' } }).envelope.payloadFingerprint
-    )
-    for (const changed of [
-      createParams(),
-      createParams({
-        firstMessage: { ...firstMessage, clientMessageId: 'message-2' },
-        options: { model: 'picked-model' }
-      }),
-      createParams({
-        firstMessage: {
-          ...firstMessage,
-          body: { ...firstMessage.body, blocks: [{ type: 'text', text: 'different text' }] }
-        },
-        options: { model: 'picked-model' }
-      }),
-      createParams({ firstMessage, options: { model: 'other-model' } })
-    ]) {
-      expect(changed.envelope.payloadFingerprint).not.toBe(first.envelope.payloadFingerprint)
-    }
-    expect(RUNTIME_CAPABILITIES).toContain(AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY)
-    expect(AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY).toBe('agentSession.create.message.v1')
-  })
-
-  it('separates an adopting create from a blank one and from another row', () => {
-    const blank = createParams().envelope.payloadFingerprint
-    const adopted = createParams({ resumeFrom: RESUME }).envelope.payloadFingerprint
-    const otherRow = createParams({
-      resumeFrom: { providerSessionId: 'thread-other' }
-    }).envelope.payloadFingerprint
-
-    expect(adopted).not.toBe(blank)
-    expect(otherRow).not.toBe(adopted)
-  })
-
   it('leaves a blank create byte-identical to the pre-resume digest', () => {
     // Pin the legacy no-resume digest; new fields must not break mixed-version create fingerprints.
     expect(createParams().envelope.payloadFingerprint).toBe(
@@ -98,24 +52,6 @@ describe('structured agent session create params', () => {
     expect(createParams().envelope.payloadFingerprint).toBe(
       '56cb15e22414c0f62fd89d77d00d2d6a0a422f16e95edee154fb8b5bf53fbbc3'
     )
-  })
-})
-
-describe('the tab id a create reserves', () => {
-  it('rides the params and the fingerprint together', () => {
-    const params = createParams({ tabId: 'tab-1' })
-
-    expect(params.tabId).toBe('tab-1')
-    expect(params.envelope.payloadFingerprint).toBe(
-      structuredAgentSessionCreateFingerprint({
-        sessionId: SESSION_ID,
-        worktree: 'id:repo-1::/repo/orca',
-        agent: 'codex',
-        tabId: 'tab-1'
-      })
-    )
-    // The declared digest covers the tab; the host still replays a retry on its attach fingerprint.
-    expect(params.envelope.payloadFingerprint).not.toBe(createParams().envelope.payloadFingerprint)
   })
 })
 

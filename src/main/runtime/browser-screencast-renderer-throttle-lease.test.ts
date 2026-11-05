@@ -1,6 +1,6 @@
 /** Hidden host compositors must keep drawing while remote streams need guest frames. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { BrowserScreencastOptions } from '../browser/browser-screencast-stream-types'
+import type { BrowserScreencastOptions } from '../browser/cdp/screencast/browser-screencast-stream-types'
 import { createScreencastHarness } from './browser-screencast-subscriber-test-harness'
 import { RuntimeBrowserCommands } from './browser/browser-commands'
 import { createSinglePageBrowserCommandsHost } from './single-page-browser-commands-host-test-double'
@@ -14,7 +14,7 @@ vi.mock('electron', () => ({
   ipcMain: { on: vi.fn(), removeListener: vi.fn(), handle: vi.fn(), removeHandler: vi.fn() },
   webContents: { fromId: webContentsFromId }
 }))
-vi.mock('../browser/browser-screencast-stream', () => ({ startBrowserScreencast }))
+vi.mock('../browser/cdp/screencast/browser-screencast-stream', () => ({ startBrowserScreencast }))
 
 type PageStream = { options: BrowserScreencastOptions; close: () => void }
 

@@ -17,8 +17,8 @@ import {
   type WorktreeVirtualRowContext
 } from '../rows/virtual-row-dispatch'
 import type { SectionHeaderRowContext } from '../rows/SectionHeader'
-import { INITIAL_REPO_DRAG_STATE } from '../../project-header-drag-contract'
-import { INITIAL_PROJECT_GROUP_DRAG_STATE } from '../../project-group-header-drag-contract'
+import { INITIAL_REPO_DRAG_STATE } from '../drag/project-header-drag-contract'
+import { INITIAL_PROJECT_GROUP_DRAG_STATE } from '../drag/project-group-header-drag-contract'
 import { environment, publish, ssh } from '../listing/host-status-test-fixtures'
 
 const initial = useAppStore.getInitialState()

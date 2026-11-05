@@ -58,6 +58,7 @@ function workRunSlot(
         hasReceipt: false,
         hasStatus: head.status !== undefined,
         hasTurnDiff: turnDiff !== undefined,
+        turnDiffFileCount: turnDiff?.files.length,
         inSubagentSection: head.depth > 0
       },
       typography

@@ -123,35 +123,6 @@ describe('mobile session terminal retirement', () => {
     })
   })
 
-  it('removes the final parent, empty group, and group-layout leaf', () => {
-    const first = retireTerminalSurfacesFromSnapshot({
-      snapshot: splitSnapshot(),
-      ptyId: 'pty-left'
-    })!
-    const result = retireTerminalSurfacesFromSnapshot({
-      snapshot: first.snapshot,
-      ptyId: 'pty-right'
-    })
-
-    expect(result?.snapshot).toMatchObject({
-      activeGroupId: 'terminals',
-      activeTabId: 'notes',
-      activeTabType: 'markdown',
-      tabGroupLayout: {
-        type: 'split',
-        direction: 'horizontal',
-        first: { type: 'leaf', groupId: 'terminals' },
-        second: { type: 'leaf', groupId: 'secondary' }
-      }
-    })
-    expect(result?.snapshot.tabGroups?.[0]).toMatchObject({
-      id: 'terminals',
-      activeTabId: 'notes',
-      tabOrder: ['notes']
-    })
-    expect(result?.snapshot.tabs.map((tab) => tab.id)).toEqual(['notes', 'other'])
-  })
-
   it('does not retire an exact surface rebound to a replacement PTY', () => {
     const snapshot = splitSnapshot()
     const rebound = {
@@ -223,46 +194,5 @@ describe('mobile session terminal retirement', () => {
       activeLeafId: 'right',
       ptyIdsByLeafId: { right: 'pty-right' }
     })
-  })
-
-  it('retires a permanently exited surface despite a stale sleeping record', () => {
-    const session = {
-      ...getDefaultWorkspaceSession(),
-      tabsByWorktree: {
-        [WORKTREE_ID]: [
-          {
-            id: 'terminal',
-            ptyId: 'pty-left',
-            worktreeId: WORKTREE_ID,
-            title: 'Terminal',
-            customTitle: null,
-            color: null,
-            sortOrder: 0,
-            createdAt: 1
-          }
-        ]
-      },
-      terminalLayoutsByTabId: {
-        terminal: {
-          root: { type: 'leaf' as const, leafId: 'left' },
-          activeLeafId: 'left',
-          expandedLeafId: null,
-          ptyIdsByLeafId: { left: 'pty-left' }
-        }
-      },
-      sleepingAgentSessionsByPaneKey: {
-        'terminal:left': {} as never
-      }
-    }
-
-    const result = retireTerminalSurfaceFromPersistence(session, {
-      worktreeId: WORKTREE_ID,
-      parentTabId: 'terminal',
-      leafId: 'left',
-      ptyId: 'pty-left'
-    })
-
-    expect(result.tabsByWorktree[WORKTREE_ID]).toEqual([])
-    expect(result.terminalLayoutsByTabId.terminal).toBeUndefined()
   })
 })

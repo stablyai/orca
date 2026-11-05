@@ -1,5 +1,5 @@
-import type { PtyChildProcessVerdict } from '../../../shared/terminal-process-inspection'
-import { recognizeAgentProcessFromCommandLine } from '../../../shared/agent-process-recognition'
+import type { PtyChildProcessVerdict } from '../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
+import { recognizeAgentProcessFromCommandLine } from '../../../shared/agent-status/process/agent-process-recognition'
 import { getCheapProcessTableSnapshot } from '../../../shared/cheap-process-table-snapshot-reader'
 import {
   getProcessTableSnapshot,
@@ -16,7 +16,7 @@ import {
   inspectSpawnFileWindowsChildProcesses
 } from '../../daemon/pty-subprocess/spawn-file-child-processes'
 import { buildPaneProcessFingerprint } from '../posix-pane-foreground-fingerprint'
-import { isRetiredPtyMaster } from '../../pty/node-pty-master-fd-retirement'
+import { isRetiredPtyMaster } from '../../pty/process-retirement/node-pty-master-fd-retirement'
 import { ptyShellProcessId } from '../../windows/windows-pty-job'
 import { resolveForegroundFallbackProcess } from './local-pty-launch-context'
 import {

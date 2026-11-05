@@ -1,4 +1,4 @@
-import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../agent-chat-permission-mode'
+import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../agent-launch/permissions/agent-chat-permission-mode'
 import type { AgentSessionWriteFailure } from '../failures/agent-session-write-failure'
 import type {
   SessionOptionDescriptor,
@@ -23,6 +23,8 @@ type WriteContext = {
   snapshot: SessionOptionDescriptor[]
   ready: boolean
   providerStarting: boolean
+  /** Reopened, or past its first turn or send: its value picks never adopt a new-chat model. */
+  existingChat: boolean
   isCurrentContext: () => boolean
   hold?: (
     id: string,
@@ -129,15 +131,26 @@ export function createStructuredAgentSessionOptionsWriteOwner(read: () => WriteC
         return held !== null
       }
       const presents = context.capturePresentation?.()
-      const model = structuredAgentSessionOptionPicks(view, { [id]: encoded })[0]?.modelId ?? null
-      const operation = controller.issue(id, encoded, model, undefined, (operation) => {
-        receipt = {
-          operation,
-          controller,
-          record: context.record,
-          providerStarting: context.providerStarting
-        }
-      })
+      const pick = structuredAgentSessionOptionPicks(
+        view,
+        { [id]: encoded },
+        context.existingChat
+      )[0]
+      const operation = controller.issue(
+        id,
+        encoded,
+        pick?.modelId ?? null,
+        undefined,
+        (operation) => {
+          receipt = {
+            operation,
+            controller,
+            record: context.record,
+            providerStarting: context.providerStarting
+          }
+        },
+        pick?.adoptModelAsLaunchDefault === false ? false : undefined
+      )
       context.flush(isCurrent)
       const outcome = await operation.result
       settled(outcome, presents?.() ?? true)

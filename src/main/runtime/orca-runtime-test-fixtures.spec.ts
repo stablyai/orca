@@ -4,14 +4,14 @@ import { forgetInstalledPaneSession } from './bind-first-pane.test-fixture'
 import { announceSessionWrites } from './profile-session-store.test-fixture'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import { createHash } from 'node:crypto'
-import { HeadlessEmulator } from '../daemon/headless-emulator'
+import { HeadlessEmulator } from '../daemon/emulation/headless-emulator'
 import { OrcaRuntimeService } from './orca-runtime'
 import {
   buildAgentPromptPasteBytes,
   getTerminalPasteIngestMs
-} from '../../shared/agent-prompt-injection'
+} from '../../shared/agent-launch/startup/agent-prompt-injection'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
-import { makePaneKey } from '../../shared/stable-pane-id'
+import { makePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import type { LayoutCommand } from '../../shared/workspace-layout/workspace-layout-command-types'
 import { applyCommandToSession } from '../persistence/terminal-topology/terminal-pane-admission'
 import { resolveHostId } from '../persistence/loading-store/session-host-partitions'
@@ -19,20 +19,18 @@ import { toComparableRelaySshPtyId } from '../../shared/ssh-pty-id'
 import { spawnedPtyEnv } from './spawned-pty-env-fixtures'
 import {
   computeWorktreePathMock,
-  ensurePathWithinWorkspaceMock
+  ensurePathWithinWorkspaceMock,
+  type ProjectGroup,
+  type RpcRequest,
+  type WorktreeMeta
 } from './orca-runtime-test-mocks.spec'
+import type { TerminalLayoutSnapshot } from '../../shared/workspace-layout/terminal-tab-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 
-import type {
-  FolderWorkspace,
-  ProjectGroup,
-  RpcRequest,
-  TerminalLayoutSnapshot,
-  WorkspaceSessionState,
-  WorktreeMeta
-} from './orca-runtime-test-mocks.spec'
+import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-workspace-types'
 import { InMemoryOrchestrationMessages } from './orca-runtime-test-orchestration-messages.spec'
 import type { OrchestrationDb } from './orchestration/db'
-import type { PtyProcessInspection } from '../providers/pty-process-inspection'
+import type { TerminalProcessInspection as PtyProcessInspection } from '../../shared/terminal/pty/lifecycle/terminal-process-inspection'
 import type { Store } from '../persistence/loading-store/store'
 import type { HostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 

@@ -1,4 +1,4 @@
-import type { TuiAgent } from '../../../src/shared/tui-agent'
+import type { TuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent'
 import type { RpcClient } from '../transport/rpc-client'
 import { resolveComposerMrBase, resolveComposerPrBase } from './composer-source-base-resolve'
 import type {

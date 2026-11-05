@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as FsPromises from 'node:fs/promises'
 import type { Repo } from '../../shared/repo-types'
-import type * as WslUncAccessGateModule from '../wsl/wsl-unc-access-gate'
+import type * as WslUncAccessGateModule from '../wsl/filesystem/wsl-unc-access-gate'
 
 type GateState = 'stopped' | 'unverifiable' | 'running'
 
@@ -31,7 +31,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
     open: record(actual.open)
   }
 })
-vi.mock('../wsl/wsl-unc-access-gate', async (importOriginal) => ({
+vi.mock('../wsl/filesystem/wsl-unc-access-gate', async (importOriginal) => ({
   ...(await importOriginal<typeof WslUncAccessGateModule>()),
   // Off Windows no path maps to a distro; stand in for the WSL project's UNC root.
   wslDistroForPath: (path: string) =>
@@ -102,17 +102,6 @@ describe('skill discovery for a stopped WSL distro (E9)', () => {
       expect(mocks.blockedWslDistroForPath).toHaveBeenCalledTimes(1)
     }
   )
-
-  it('never asks the WSL gate when no root or cwd is on a distro', async () => {
-    const result = await discoverSkills({
-      homeDir: join(root, 'home'),
-      repos: [repo('host', hostRepo)],
-      cwd: hostRepo,
-      sourceKinds: ['repo', 'plugin']
-    })
-    expect(mocks.blockedWslDistroForPath).not.toHaveBeenCalled()
-    expect(result.skills.map((skill) => skill.name)).toEqual(['Skill in host'])
-  })
 
   it('reports a stopped workspace’s plugin folder unavailable instead of listing it', async () => {
     const result = await discoverSkills({

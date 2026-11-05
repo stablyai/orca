@@ -4,6 +4,7 @@ import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline
 import { openAcpFixtureRig, readAcpFixture } from './acp-timeline-fixture.test-support'
 import { AcpTimelineTranslator } from './acp-timeline-translator'
 import { GROK_ACP_DIALECT } from './acp-dialects/grok-dialect'
+import { GENERIC_ACP_DIALECT } from './acp-dialects/acp-dialect'
 
 afterEach(closeProviderTimelineRigs)
 
@@ -55,10 +56,10 @@ describe('ACP reviewed traffic and recovery', () => {
     }
   )
 
-  it('degrades tool snapshots under forty large concurrent tools without throwing or losing later updates', () => {
+  it('retains full late tool updates through more than 128 concurrent tools', () => {
     const lane = new AcpTimelineTranslator({ sessionId: 'session-1', dialect: GROK_ACP_DIALECT })
     const big = 'x"\\'.repeat(12000)
-    for (let index = 0; index < 40; index += 1) {
+    for (let index = 0; index < 160; index += 1) {
       expect(() =>
         lane.notification(
           'session/update',
@@ -77,7 +78,7 @@ describe('ACP reviewed traffic and recovery', () => {
         )
       ).not.toThrow()
     }
-    for (let index = 0; index < 40; index += 1) {
+    for (let index = 0; index < 160; index += 1) {
       expect(
         lane.notification(
           'session/update',
@@ -91,9 +92,106 @@ describe('ACP reviewed traffic and recovery', () => {
           },
           50 + index
         )
-      ).toMatchObject([{ type: 'item.close', body: { state: 'completed' } }])
+      ).toMatchObject([
+        {
+          type: 'item.close',
+          body: {
+            state: 'completed',
+            name: 'Write',
+            input: { content: big },
+            output: { head: big, truncated: false }
+          }
+        }
+      ])
     }
   })
+
+  it.each(['Original text', ' '])(
+    'keeps the first message on its original turn after more than 128 newer IDs (%j)',
+    async (text) => {
+      const f = await openAcpFixtureRig(GENERIC_ACP_DIALECT)
+      const lane = f.lane()
+      f.apply(lane.openPrompt('send-1', 1_000).events)
+      for (let index = 0; index < 160; index += 1) {
+        f.apply(
+          lane.notification(
+            'session/update',
+            {
+              sessionId: 'session-1',
+              update: {
+                sessionUpdate: 'agent_message_chunk',
+                messageId: `m${index}`,
+                content: { type: 'text', text }
+              }
+            },
+            1_001 + index
+          )
+        )
+      }
+      f.apply(lane.promptResult('send-1', { stopReason: 'end_turn' }, 2_000))
+      f.apply(lane.openPrompt('send-2', 3_000).events)
+      const before = await f.rig.rows()
+      f.apply(
+        lane.notification(
+          'session/update',
+          {
+            sessionId: 'session-1',
+            update: {
+              sessionUpdate: 'agent_message_chunk',
+              messageId: 'm0',
+              content: { type: 'text', text: 'Must not move turns' }
+            }
+          },
+          3_001
+        )
+      )
+      f.rig.assembler.flush()
+      expect(await f.rig.rows()).toEqual(before)
+    }
+  )
+
+  it.each(['in_progress', 'completed'])(
+    'keeps late permissions on the ended tool turn after 160 %s tools',
+    async (status) => {
+      const f = await openAcpFixtureRig(GENERIC_ACP_DIALECT)
+      const lane = f.lane()
+      f.apply(lane.openPrompt('send-1', 1_000).events)
+      for (let index = 0; index < 160; index += 1) {
+        f.apply(
+          lane.notification(
+            'session/update',
+            {
+              sessionId: 'session-1',
+              update: {
+                sessionUpdate: 'tool_call',
+                toolCallId: `t${index}`,
+                title: 'Read',
+                status,
+                rawInput: { path: `file-${index}` },
+                rawOutput: 'Full output'.repeat(4096)
+              }
+            },
+            1_001 + index
+          )
+        )
+      }
+      f.apply(lane.promptResult('send-1', { stopReason: 'end_turn' }, 2_000))
+      f.apply(lane.openPrompt('send-2', 3_000).events)
+      const before = await f.rig.rows()
+      f.apply(
+        lane.request(
+          'session/request_permission',
+          {
+            sessionId: 'session-1',
+            toolCall: { toolCallId: 't0', title: 'Run?' },
+            options: [{ optionId: 'allow', name: 'Allow', kind: 'allow_once' }]
+          },
+          'late-permission'
+        ).events
+      )
+      expect(await f.rig.rows()).toEqual(before)
+    }
+  )
 
   it('ignores stray replay and both extension method aliases by default', async () => {
     const f = await openAcpFixtureRig()

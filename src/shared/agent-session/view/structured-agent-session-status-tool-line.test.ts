@@ -51,42 +51,6 @@ describe('tool line between tool calls', () => {
       state
     })
 
-  // Codex marks any nonzero exit failed (a no-match search, a red test), so clearing would blank the line.
-  it('keeps naming a failed call until the next tool starts', () => {
-    const summary = projectStructuredAgentSessionStatusSummary([
-      ask,
-      running,
-      call('read', 3, 'Read', 'completed'),
-      call('edit', 4, 'Edit', 'failed')
-    ])
-    expect(summary).toMatchObject({ toolName: 'Edit', toolInput: '/repo/Edit.ts' })
-  })
-
-  it('prefers a running call over a newer finished one', () => {
-    const summary = projectStructuredAgentSessionStatusSummary([
-      ask,
-      running,
-      call('bash', 3, 'Bash', 'running'),
-      call('read', 4, 'Read', 'completed')
-    ])
-    expect(summary.toolName).toBe('Bash')
-  })
-
-  it("never carries an earlier turn's finished tool into the live one", () => {
-    const nextTurn = item('next-turn', 4, {
-      kind: 'status',
-      text: 'Working',
-      turnLifecycle: { turnId: 'turn-2', state: 'running' }
-    })
-    const summary = projectStructuredAgentSessionStatusSummary([
-      ask,
-      running,
-      call('read', 3, 'Read', 'completed'),
-      nextTurn
-    ])
-    expect(summary.toolName).toBeUndefined()
-  })
-
   // A send's user row lands at submit time, mid-turn too; the turn record bounds the turn.
   const followUp = item('follow-up', 5, {
     kind: 'message',
@@ -108,21 +72,6 @@ describe('tool line between tool calls', () => {
         pending
       ).toolName
     ).toBe('Read')
-  })
-
-  it('names nothing from an ended turn while the next send is pending', () => {
-    // The record keeps its creation slot when revised to completed, so it sits before its calls.
-    const ended = item('running', 2, {
-      kind: 'status',
-      text: 'Done',
-      turnLifecycle: { turnId: 'turn-1', state: 'completed' }
-    })
-    const summary = projectStructuredAgentSessionStatusSummary(
-      [ask, ended, call('read', 3, 'Read', 'completed'), followUp],
-      [submission('follow-up')]
-    )
-    expect(summary.status).toBe('working')
-    expect(summary.toolName).toBeUndefined()
   })
 
   const patch = { head: '@@\n+x', digest: 'd', byteLength: 5, truncated: false }

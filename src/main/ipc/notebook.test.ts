@@ -18,7 +18,7 @@ vi.mock('electron', () => ({
       handlers.set(channel, handler)
   }
 }))
-vi.mock('./local-file-access-resolution', () => ({
+vi.mock('./filesystem/access/local-file-access-resolution', () => ({
   resolveUserNamedRegularFile: resolveAuthorizedPathMock,
   resolveDesktopAuthorizedPath: resolveAuthorizedPathMock
 }))
@@ -34,7 +34,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
 
 import { registerNotebookHandlers } from './notebook'
 import type { Store } from '../persistence/loading-store/store'
-import type * as FileAccessResolution from './local-file-access-resolution'
+import type * as FileAccessResolution from './filesystem/access/local-file-access-resolution'
 
 function fakeKernel() {
   let onFrame: (frame: KernelFrame) => void = () => {}
@@ -140,7 +140,7 @@ describe('notebook IPC', () => {
 
   it('starts a kernel for a notebook outside every project, and refuses a relative path', async () => {
     const actual = await vi.importActual<typeof FileAccessResolution>(
-      './local-file-access-resolution'
+      './filesystem/access/local-file-access-resolution'
     )
     resolveAuthorizedPathMock.mockImplementation(actual.resolveUserNamedRegularFile)
     const folder = await mkdtemp(join(await realpath(tmpdir()), 'orca-notebook-'))

@@ -2,11 +2,11 @@ import { revealTerminalPane } from '@/lib/reveal-terminal-pane'
 import { runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
 import { useAppStore } from '../../store'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
-import type { TerminalPaneRevealTarget } from '../../../../shared/terminal-pane-reveal'
+import type { TerminalPaneRevealTarget } from '../../../../shared/workspace-layout/terminal-pane-reveal'
 import {
   isWebTerminalSurfaceTabId,
   toWebTerminalSurfaceTabId
-} from '../../../../shared/terminal-surface-id'
+} from '../../../../shared/workspace-layout/terminal-surface-id'
 
 /** Map host terminal IDs to prefixed client mirrors before reveal; leaf IDs remain stable. */
 function toWindowTabId(target: TerminalPaneRevealTarget): string {

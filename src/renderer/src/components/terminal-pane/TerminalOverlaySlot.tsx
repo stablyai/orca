@@ -1,7 +1,7 @@
 import { memo, useLayoutEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useAppStore } from '../../store'
-import { isProvenProcessExit } from '../../../../shared/terminal-exit-cause'
+import { isProvenProcessExit } from '../../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 import { RetainedPaneHost } from '../tab-group/RetainedPaneHost'
 import type { ActivityTerminalPortalTarget } from '../activity/activity-terminal-portal'
 import TerminalPane from './TerminalPane'
@@ -90,9 +90,9 @@ export const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
           onClosed: captureEmptiedReaction()
         })
       }}
-      onCloseTab={() => {
+      onCloseTab={(reason) => {
         // Use the guarded close path so pinned terminals still require confirmation.
-        closeTerminalTab(terminalTabId, { onClosed: captureEmptiedReaction() })
+        closeTerminalTab(terminalTabId, { reason, onClosed: captureEmptiedReaction() })
       }}
     />
   )

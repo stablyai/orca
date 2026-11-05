@@ -7,7 +7,7 @@ import type {
   AgentAttentionSurfaceSubject,
   AgentAttentionLiveness
 } from '@/attention/agent-attention-contract'
-import { isTerminalLeafId, makePaneKey } from '../../../../shared/stable-pane-id'
+import { isTerminalLeafId, makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
   getPaneKeyTabId,
   hasLivePtyForNotification,

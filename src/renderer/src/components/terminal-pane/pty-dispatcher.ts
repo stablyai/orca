@@ -1,4 +1,4 @@
-import { TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT } from '../../../../shared/terminal-scrollback-limits'
+import { TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT } from '../../../../shared/terminal/replay/terminal-scrollback-limits'
 import {
   clearProcessedPtyCharTotal,
   deliverPtyDataWithDeferredAck,
@@ -54,8 +54,8 @@ export type PtyDataMeta = {
   background?: boolean
   /** Main dropped this PTY's buffered output at the pending cap; repaint from the main-owned snapshot, not the live stream. */
   droppedOutput?: boolean
-  /** Escape main's dropped bytes left open where this chunk begins; only an abandoned restore uses it. */
-  gapEscapeState?: string
+  /** Main can't prove this chunk starts at escape-parser ground: inside an escape, or 'unknown' after bytes it never saw. */
+  midEscape?: true | 'unknown'
 }
 
 /** Sidecar PTY-data observers, invoked AFTER the primary handler so a side-effect-only watcher can't delay xterm rendering. */
@@ -110,16 +110,17 @@ function attachPtyPushListeners(): void {
   attachPtySecondaryPushListeners(unsubscribes)
 }
 
-function handleDispatchedPtyData(payload: {
-  id: string
-  data: string
-  seq?: number
-  rawLength?: number
-  transformed?: boolean
-  background?: boolean
-  droppedOutput?: boolean
-  gapEscapeState?: string
-}): void {
+function handleDispatchedPtyData(
+  payload: {
+    id: string
+    data: string
+    seq?: number
+    rawLength?: number
+    transformed?: boolean
+    background?: boolean
+    droppedOutput?: boolean
+  } & Pick<PtyDataMeta, 'midEscape'>
+): void {
   let meta: PtyDataMeta | undefined
   if (typeof payload.seq === 'number') {
     meta ??= {}
@@ -141,9 +142,8 @@ function handleDispatchedPtyData(payload: {
     meta ??= {}
     meta.droppedOutput = true
   }
-  if (typeof payload.gapEscapeState === 'string' && payload.gapEscapeState.length > 0) {
-    meta ??= {}
-    meta.gapEscapeState = payload.gapEscapeState
+  if (payload.midEscape) {
+    meta = { ...meta, midEscape: payload.midEscape }
   }
   const chars = payload.rawLength ?? payload.data.length
   const dispatch = (): void => {

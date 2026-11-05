@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { SessionInfo } from '../daemon/daemon-session-info'
+import type { SessionInfo } from '../daemon/protocol/daemon-session-info'
 import { daemonBridgeSessionVerdict } from './wsl-bridge-daemon-sessions'
 
 function session(fields: Partial<SessionInfo>): SessionInfo {

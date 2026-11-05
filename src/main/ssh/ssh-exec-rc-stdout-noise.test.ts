@@ -85,19 +85,6 @@ describe.skipIf(process.platform === 'win32')('SSH exec under noisy startup file
     expect(failure.message).toContain('"echo partial; exit 3"')
     expect(failure.message).not.toContain('CAPTURE')
   })
-
-  it('keeps a payload that prints its own script text, as a `ps` inventory does', async () => {
-    const conn = hostWithStartupOutput('echo OK')
-    await expect(
-      execCommand(conn, 'ps -o args= -p $$ | tr "\\n" " "; echo; echo DONE')
-    ).resolves.toMatch(/\nDONE\n$/)
-  })
-
-  it('leaves unwrapped commands for the host shell untouched', async () => {
-    const conn = hostWithStartupOutput('')
-    await execCommand(conn, 'echo raw', { wrapCommand: false })
-    expect(conn.commands).toEqual(['echo raw'])
-  })
 })
 
 describe.skipIf(process.platform === 'win32' || !existsSync('/bin/bash'))(

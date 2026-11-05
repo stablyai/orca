@@ -16,6 +16,7 @@ import {
   structuredAgentSessionPaneKey,
   projectStructuredAgentSessionStatusState
 } from '../../src/shared/agent-session/view/structured-agent-session-projection'
+import { getStructuredAgentSessionHost } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-registry'
 import { StructuredAgentSessionTurnCompletionFeed } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-turn-completion-feed'
 import {
   RuntimeMobileNotificationController,
@@ -184,6 +185,11 @@ beforeEach(() => {
   vi.spyOn(document, 'hasFocus').mockReturnValue(true)
   const directory = mkdtempSync(join(tmpdir(), 'orca-renderer-read-'))
   installStructuredHostStub()
+  const host = getStructuredAgentSessionHost()
+  if (!host) {
+    throw new Error('structured host not installed')
+  }
+  vi.spyOn(host.attentionReads, 'sessionLocation').mockReturnValue(SCOPE)
   const controller = new RuntimeMobileNotificationController()
   controller.configureDismissalStore(directory)
   const events: MobileNotificationEvent[] = []
@@ -302,7 +308,7 @@ beforeEach(() => {
       })
     }
     const reply = await call(method, params, STRUCTURED_CLIENT, {
-      retireStructuredAttention: fixture.controller.retireStructuredAttention.bind(
+      acknowledgeNotificationAttention: fixture.controller.acknowledgeAttention.bind(
         fixture.controller
       )
     })

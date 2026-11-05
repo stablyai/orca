@@ -8,9 +8,9 @@ import { ANTIGRAVITY_ACP_DIALECT } from './acp-dialects/antigravity-dialect'
 import { directoryAccountBinding, type AcpAccountBinding } from './acp-account-binding'
 import { openCodeAcpAccountBinding } from '../opencode/opencode-structured-account-home'
 import { scrubOpenCodeAcpEnvironment } from '../opencode/opencode-acp-environment'
-import type { TuiAgent } from '../../shared/tui-agent'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type { AgentSessionModelOption } from '../../shared/agent-session/agent-session-wire'
-import type { AgentChatPermissionMode } from '../../shared/agent-chat-permission-mode'
+import type { AgentChatPermissionMode } from '../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import type { InitializeResponse } from './generated/acp-protocol.generated'
 import { compareAppVersions } from '../../shared/app-version'
 import type { ManagedRuntime } from '../node-runtime/managed-runtime-release'
@@ -124,6 +124,8 @@ export type AcpLaunchSpec = {
   }
   /** Enables /compact as a prompt command. */
   compaction?: true
+  /** The agent's `/compact` honours text after the command; others would silently drop it. */
+  compactionInstructions?: true
   /** Rejects copy arguments that route the CLI away from the copy's store. */
   assertCopyLaunchArgs?: (args: readonly string[], prefixArgs?: readonly string[]) => void
   /** How the agent names each turn its reopen replays, when a reopened chat catches up on the
@@ -247,6 +249,7 @@ const OMP_LAUNCH_SPEC: AcpLaunchSpec = {
   },
   visualsSkill: loadOmpVisualsSkill,
   compaction: true,
+  compactionInstructions: true,
   transcriptImport: OMP_TRANSCRIPT_IMPORT,
   sessionHistory: OMP_SESSION_HISTORY
 }

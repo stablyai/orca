@@ -1,4 +1,4 @@
-import type { TuiAgent } from '../../shared/tui-agent'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import { resolveDraftPasteReadyTimeoutMs } from '../../shared/draft-paste-ready-timeout'
 import type { LaunchedAgentForeground } from './launched-agent-foreground'
 import { readFreshComposerHold } from './launched-agent-composer-readiness'
