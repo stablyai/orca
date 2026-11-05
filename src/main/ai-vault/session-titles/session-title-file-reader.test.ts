@@ -117,6 +117,17 @@ describe('readAiVaultSessionTitlesFromFiles', () => {
     // The classified title replaces the cache entry, so the transcript is read only once.
     await expect(read()).resolves.toEqual({ titles: [named] })
     expect(parseAgentSessionFileCached).toHaveBeenCalledTimes(1)
+
+    // When the transcript cannot be read, the cached title still comes back, unclassified.
+    cached.set('session-1', {
+      agent: 'claude',
+      sessionId: 'session-1',
+      title: 'Login cleanup',
+      transcriptPath: `${path}.missing`
+    })
+    await expect(read()).resolves.toEqual({
+      titles: [{ agent: 'claude', sessionId: 'session-1', title: 'Login cleanup' }]
+    })
   })
 
   it('rejects a transcript whose parsed identity does not match the request', async () => {

@@ -40,8 +40,9 @@ async function readOneTitle(
     const { transcriptPath: cachedPath, ...title } = cached
     // Why: History caches titles from parse rows saved before titles carried a kind; reading that
     // transcript here classifies it once (the result replaces the cached entry, so this cannot repeat).
+    // A failed reread (a stalled WSL distro) still returns the cached title, unclassified.
     return !title.kind && cachedPath
-      ? readOneTitle({ ...request, transcriptPath: cachedPath }, signal, cache)
+      ? ((await readOneTitle({ ...request, transcriptPath: cachedPath }, signal, cache)) ?? title)
       : title
   }
   try {
