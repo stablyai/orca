@@ -71,7 +71,8 @@ export function useMobileStructuredThreadGoal<TCommands extends object>(
   const reported = chat.report?.reported
   // The agent-owned clear sends through the chat, which is built after this.
   const sendRef = useRef<ChatSend>(async () => 'rejected')
-  const [pendingCount, setPendingCount] = useState(0)
+  // One hook serves every chat tab, so each conversation counts only its own changes.
+  const [pending, setPending] = useState<Readonly<Record<string, number>>>({})
   const report = useMemo(
     () => agentSessionThreadGoalReport({ journalItems, support, reported, journalEpoch }),
     [journalItems, support, reported, journalEpoch]
@@ -85,40 +86,40 @@ export function useMobileStructuredThreadGoal<TCommands extends object>(
         : null
   const change = useCallback(
     async (next: AgentSessionThreadGoalChange): Promise<boolean> => {
-      if (changes === 'agent') {
-        return (
-          next.kind === 'clear' &&
-          (await sendRef.current(AGENT_OWNED_THREAD_GOAL_CLEAR_COMMAND)) !== 'rejected'
-        )
-      }
-      if (changes !== 'host') {
+      if (changes === null || (changes === 'agent' && next.kind !== 'clear')) {
         return false
       }
-      setPendingCount((count) => count + 1)
+      const count = (by: number) =>
+        setPending(({ [sessionKey]: mine = 0, ...others }) =>
+          mine + by > 0 ? { ...others, [sessionKey]: mine + by } : others
+        )
+      count(1)
       try {
+        if (changes === 'agent') {
+          return (await sendRef.current(AGENT_OWNED_THREAD_GOAL_CLEAR_COMMAND)) !== 'rejected'
+        }
         const result = await mutate<AgentSessionThreadGoalResult>(
           'agentSession.threadGoal',
           'agentSession.threadGoal',
           { change: next }
         )
         if (result.status === 'unknown') {
-          // It may have landed; the strip shows what the host holds once it reports.
+          // As on desktop, an objective it may not hold stays in the composer; the strip shows what landed.
           onSendError(
             mobileAgentSessionWriteNoticeText(
               agentSessionWriteNoticeParts({ kind: 'unconfirmed' }, 'goal')
             )
           )
-          return true
         }
         return result.status === 'accepted'
       } finally {
-        setPendingCount((count) => count - 1)
+        count(-1)
       }
     },
-    [changes, mutate, onSendError]
+    [changes, mutate, onSendError, sessionKey]
   )
   const hostClockOffsetMs = mobileStructuredHostClockOffsetMs(state.hostClock)
-  const locked = pendingCount > 0 || !session.enabled || !session.connected
+  const locked = (pending[sessionKey] ?? 0) > 0 || !session.enabled || !session.connected
   const threadGoal = useMemo<MobileStructuredThreadGoal | null>(
     () =>
       report === null

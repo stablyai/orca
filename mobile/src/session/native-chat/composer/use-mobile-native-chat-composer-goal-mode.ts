@@ -1,4 +1,4 @@
-import { createElement, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { createElement, useRef, useState, type ReactNode } from 'react'
 import type { NativeChatSendFollowUp } from '../../../../../src/shared/native-chat/input/native-chat-follow-up-behavior'
 import { isBareStructuredAgentSessionGoalCommand } from '../../../../../src/shared/agent-session/view/structured-agent-session-composer'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
@@ -30,14 +30,12 @@ export function useMobileNativeChatComposerGoalMode(
   const threadGoal = editing ? null : (structured?.threadGoal ?? null)
   const hostSetsGoals = threadGoal?.changes === 'host'
   // Goal mode belongs to the composer surface it was entered on; another chat starts outside it.
-  const [enteredOn, setEnteredOn] = useState<string | null>(null)
-  const active = structured !== null && !editing && enteredOn === sendSurfaceId
-  const surfaceRef = useRef(sendSurfaceId)
-  useLayoutEffect(() => {
-    surfaceRef.current = sendSurfaceId
-  }, [sendSurfaceId])
-  const enter = (): void => setEnteredOn(sendSurfaceId)
-  const exit = (): void => setEnteredOn(null)
+  // Each entry is its own, so a set that lands late never ends a later entry.
+  const [entered, setEntered] = useState<{ surface: string; entry: number } | null>(null)
+  const entries = useRef(0)
+  const active = structured !== null && !editing && entered?.surface === sendSurfaceId
+  const enter = (): void => setEntered({ surface: sendSurfaceId, entry: (entries.current += 1) })
+  const exit = (): void => setEntered(null)
   return {
     menu: structured && !editing ? { hostSetsGoals, enter } : undefined,
     consumeBareGoal: (draft, clearDraft) => {
@@ -52,10 +50,11 @@ export function useMobileNativeChatComposerGoalMode(
       if (!active) {
         return intent ? send(text, intent) : send(text)
       }
-      const surface = sendSurfaceId
-      const accepted = await send(text, { goal: true })
-      if (accepted && surfaceRef.current === surface) {
-        exit()
+      const entry = entered?.entry
+      // Keep the caller's choice, such as Steer for an agent-owned /goal sent mid-turn.
+      const accepted = await send(text, { ...intent, goal: true })
+      if (accepted) {
+        setEntered((current) => (current?.entry === entry ? null : current))
       }
       return accepted
     },
