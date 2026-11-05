@@ -62,7 +62,7 @@ export function useTerminalBulkCloseActions(
           unifiedTab?.contentType === 'terminal' &&
           isWebRuntimeSessionActive(getActiveWorktreeRuntimeEnvironmentId(activeWorktreeId))
         ) {
-          closeTerminalTab(unifiedTab.entityId, { skipRunningProcessConfirm: true })
+          closeTerminalTab(unifiedTab.entityId, { reason: 'user', skipRunningProcessConfirm: true })
           continue
         }
         if (unifiedTab?.contentType === 'agent-session') {

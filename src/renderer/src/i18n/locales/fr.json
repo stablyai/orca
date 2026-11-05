@@ -5876,9 +5876,6 @@
           "hiding_one": "{{count}} worktree détecté masqué",
           "hiding_other": "{{count}} worktrees détectés masqués",
           "hiding_many": "{{count}} worktrees détectés masqués",
-          "hidingInRepo_one": "{{count}} worktree détecté masqué dans {{repo}}",
-          "hidingInRepo_other": "{{count}} worktrees détectés masqués dans {{repo}}",
-          "hidingInRepo_many": "{{count}} worktrees détectés masqués dans {{repo}}",
           "keepHiddenAriaLabel_one": "Garder {{count}} worktree détecté masqué pour {{repo}} ; récupérez-le depuis le menu du projet",
           "keepHiddenAriaLabel_other": "Garder {{count}} worktrees détectés masqués pour {{repo}} ; récupérez-les depuis le menu du projet",
           "keepHiddenAriaLabel_many": "Garder {{count}} worktrees détectés masqués pour {{repo}} ; récupérez-les depuis le menu du projet",
@@ -19638,8 +19635,6 @@
       },
       "turnDiff": {
         "partial": "Différence partielle",
-        "showDiff": "Afficher les différences",
-        "hideDiff": "Masquer les différences",
         "changedFiles_one": "{{count}} fichier modifié",
         "changedFiles_other": "{{count}} fichiers modifiés",
         "changedFiles_many": "{{count}} fichiers modifiés"
