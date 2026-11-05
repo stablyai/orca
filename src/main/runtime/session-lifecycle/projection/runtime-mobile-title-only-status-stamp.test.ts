@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentStatusEntry } from '../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { buildRuntimeMobileAgentStatus } from './runtime-mobile-agent-status-builder'
 import {
   demoteRuntimeMobileAgentStatus,
   renewRuntimeMobileAgentStatusFromPtyTitle
 } from './runtime-mobile-agent-status-projection'
-import { makeTuiIdlePty } from './tui-idle-wait-test-harness'
+import { makeTuiIdlePty } from '../../terminal/wait/tui-idle-wait-test-harness'
 
 const titleChangedAt = 1_700_000_000_000
 
