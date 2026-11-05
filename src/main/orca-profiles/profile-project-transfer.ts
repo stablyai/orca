@@ -16,6 +16,7 @@ import { removeSourceRepo } from './profile-project-source-removal'
 import {
   applyPayloadToTarget,
   createTargetRepo,
+  assertRepoHasNoCrossStoreLinkedWorkspace,
   createTransferPayload
 } from './profile-project-transfer-payload'
 import { repoPhysicalKey } from './profile-project-worktree-identity'
@@ -45,8 +46,11 @@ export function transferOrcaProfileProject(
   args: TransferOrcaProfileProjectArgs,
   userDataPath: string
 ): TransferOrcaProfileProjectResult {
-  recoverPendingProfileProjectMoves(userDataPath)
   assertKnownProfiles(args, userDataPath)
+  // Refuse a linked move before recovery or storage migration can write anything.
+  const unrecoveredSource = readProfileProjectTransferState(args.sourceProfileId, userDataPath)
+  assertRepoHasNoCrossStoreLinkedWorkspace(unrecoveredSource.state, args.repoId)
+  recoverPendingProfileProjectMoves(userDataPath)
   let sourceSnapshot = readProfileProjectTransferState(args.sourceProfileId, userDataPath)
   let targetSnapshot = readProfileProjectTransferState(args.targetProfileId, userDataPath)
   const sourceRepo = sourceSnapshot.state.repos.find((repo) => repo.id === args.repoId)
