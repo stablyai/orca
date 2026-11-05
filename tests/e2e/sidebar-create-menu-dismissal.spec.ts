@@ -38,7 +38,11 @@ test('the sidebar terminal entry keeps its workspace when activation changes', a
     if (!state.tabsByWorktree[other.id]?.length) {
       state.createTab(other.id)
     }
-    return { worktreeId, other: other.id, before: state.tabsByWorktree[worktreeId]?.length ?? 0 }
+    return {
+      worktreeId,
+      other: other.id,
+      before: state.tabsByWorktree[worktreeId]?.map((tab) => tab.id) ?? []
+    }
   })
   await orcaPage
     .getByRole('button', { name: 'New tab', exact: true })
@@ -61,11 +65,67 @@ test('the sidebar terminal entry keeps its workspace when activation changes', a
         setup.worktreeId
       )
     )
-    .toBe(setup.before + 1)
+    .toBe(setup.before.length + 1)
   expect(
     await orcaPage.evaluate(
       (id) => window.__store!.getState().tabsByWorktree[id]?.length ?? 0,
       setup.other
     )
   ).toBe(otherCount)
+  const createdId = await orcaPage.evaluate((setup) => {
+    const state = window.__store!.getState()
+    const created = state.tabsByWorktree[setup.worktreeId].find(
+      (tab) => !setup.before.includes(tab.id)
+    )!
+    state.setActiveWorktree(setup.worktreeId)
+    return created.id
+  }, setup)
+  await expect(
+    orcaPage.locator(`[data-testid="sortable-tab"][data-tab-id="${createdId}"]`)
+  ).toBeVisible()
+})
+
+test('an async Markdown selection does not also seed a terminal', async ({ orcaPage }) => {
+  const worktreeId = await orcaPage.evaluate(() => {
+    const state = window.__store!.getState()
+    const id = state.activeWorktreeId!
+    for (const tab of state.tabsByWorktree[id] ?? []) {
+      state.closeTab(tab.id, { reason: 'user' })
+    }
+    const original = state.openNewMarkdownInActiveWorkspace
+    window.__store!.setState({
+      openNewMarkdownInActiveWorkspace: async (groupId) => {
+        await new Promise<void>((resolve) =>
+          window.addEventListener('test-release-markdown', () => resolve(), { once: true })
+        )
+        return original(groupId)
+      }
+    })
+    return id
+  })
+  await orcaPage
+    .getByRole('button', { name: 'New tab', exact: true })
+    .first()
+    .click({ force: true })
+  await expect(orcaPage.getByRole('menu')).toBeVisible()
+  await orcaPage
+    .getByRole('menuitem', { name: /New Markdown/i })
+    .first()
+    .click({ force: true })
+  await expect(orcaPage.getByRole('menu')).toBeHidden()
+  await orcaPage.evaluate(() => window.dispatchEvent(new Event('test-release-markdown')))
+  await expect
+    .poll(() =>
+      orcaPage.evaluate(
+        (id) =>
+          window.__store!.getState().openFiles.filter((file) => file.worktreeId === id).length,
+        worktreeId
+      )
+    )
+    .toBe(1)
+  expect(
+    await orcaPage.evaluate((id) => window.__store!.getState().tabsByWorktree[id] ?? [], worktreeId)
+  ).toEqual([])
+  await expect(orcaPage.getByRole('button', { name: /^untitled\.md .*Close tab$/ })).toBeVisible()
+  await expect(orcaPage.locator('[data-testid="sortable-tab"]')).toHaveCount(0)
 })

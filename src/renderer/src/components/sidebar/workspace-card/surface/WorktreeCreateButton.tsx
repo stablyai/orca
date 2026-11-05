@@ -1,5 +1,6 @@
+import { afterPendingWorkspaceTabs } from '@/runtime/layout-owner-pending-tabs'
 import { restoreWorktreeCreateMenuSurface } from './restore-worktree-create-menu-surface'
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { workspaceRootGroupId } from '../../../../../../shared/workspace-layout/workspace-layout-minted-ids'
 import { Plus } from 'lucide-react'
@@ -50,6 +51,7 @@ export function WorktreeCreateButton({
         <WorktreeCreateMenu
           worktreeId={worktreeId}
           groupId={groupId}
+          executionHostId={executionHostId}
           onClose={() => {
             setGroupId(null)
             restoreWorktreeCreateMenuSurface(worktreeId, executionHostId)
@@ -81,6 +83,7 @@ export function WorktreeCreateButton({
 }
 
 function WorktreeCreateMenu({
+  executionHostId,
   worktreeId,
   groupId,
   onClose
@@ -88,7 +91,19 @@ function WorktreeCreateMenu({
   worktreeId: string
   groupId: string
   onClose: () => void
+  executionHostId: ExecutionHostId
 }): React.JSX.Element {
+  const pending = useRef(new Set<Promise<unknown>>())
+  function track<Result>(action: () => Result): Result {
+    const result = action()
+    const completion = Promise.resolve(result)
+    pending.current.add(completion)
+    void completion.then(
+      () => pending.current.delete(completion),
+      () => pending.current.delete(completion)
+    )
+    return result
+  }
   const model = useTabGroupWorkspaceModel({ worktreeId, groupId })
   const runtime = useTabBarRuntimeModel({ worktreeId, groupId })
   const { commands } = model
@@ -104,12 +119,19 @@ function WorktreeCreateMenu({
     onCloseOthers: commands.closeOthers,
     onCloseToRight: commands.closeToRight,
     onCloseToLeft: commands.closeToLeft,
-    onNewTerminalTab: commands.newTerminalTab,
-    onNewTerminalWithShell: commands.newTerminalWithShell,
-    onNewBrowserTab: commands.newBrowserTab,
-    onNewSimulatorTab: commands.newSimulatorTab,
-    onNewFileTab: commands.newFileTab,
-    onOpenEntry: commands.openEntry,
+    onNewTerminalTab: () =>
+      track(() =>
+        useAppStore
+          .getState()
+          .openNewTerminalTabInActiveWorkspace(groupId, worktreeId, executionHostId)
+      ),
+    onNewTerminalWithShell: (shell) => track(() => commands.newTerminalWithShell(shell)),
+    onNewBrowserTab: () => track(commands.newBrowserTab),
+    onNewSimulatorTab: commands.newSimulatorTab
+      ? () => track(() => commands.newSimulatorTab?.())
+      : undefined,
+    onNewFileTab: () => track(commands.newFileTab),
+    onOpenEntry: (entry) => track(() => commands.openEntry(entry)),
     onSetCustomTitle: commands.setTabCustomTitle,
     onSetTabColor: commands.setTabColor,
     onTogglePaneExpand: commands.toggleTerminalPaneExpand
@@ -138,10 +160,18 @@ function WorktreeCreateMenu({
       createMenu={{
         ...controller,
         createMenuOptions: plugins.menuOptions,
-        handleSelectCreateMenuOption: plugins.onSelectMenuOption
+        handleSelectCreateMenuOption: (option) => track(() => plugins.onSelectMenuOption(option)),
+        launchAgentRow: (...args: Parameters<typeof controller.launchAgentRow>) =>
+          track(() => controller.launchAgentRow(...args)),
+        launchAgentFromNewTabEntry: (option) =>
+          track(() => controller.launchAgentFromNewTabEntry(option))
       }}
       trigger={<Trigger />}
-      onClosed={onClose}
+      onClosed={() => {
+        void Promise.allSettled(pending.current).then(() =>
+          afterPendingWorkspaceTabs(worktreeId, onClose)
+        )
+      }}
     />
   )
 }

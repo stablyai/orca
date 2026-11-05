@@ -11,6 +11,11 @@ import {
 import { resolveWorktreeOperationRouteForHost } from '@/lib/worktree-operation-route'
 import { resolveTerminalPaneOwnerContext } from '@/components/terminal-pane/terminal-pane-owner-context'
 
+const remoteCreate = vi.hoisted(() => vi.fn(async () => ({ status: 'created' })))
+vi.mock('@/runtime/web-runtime-terminal-creation', () => ({
+  createWebRuntimeSessionTerminal: remoteCreate
+}))
+
 const mockUnregisterPtyDataHandlers = vi.hoisted(() => vi.fn<() => unknown[]>(() => []))
 const mockRestorePtyDataHandlersAfterFailedShutdown = vi.hoisted(() => vi.fn())
 
@@ -194,4 +199,33 @@ describe('explicit workspace terminal creation', () => {
       expect(store.getState().tabsByWorktree[other] ?? []).toEqual([])
     }
   )
+})
+
+it('routes a captured host despite a same-id workspace on another host', async () => {
+  const store = createTestStore()
+  const id = 'repo1::/path/twin'
+  seedStore(store, {
+    worktreesByRepo: {
+      repo1: [
+        makeWorktree({ id, repoId: 'repo1', path: '/path/twin', hostId: 'local' }),
+        makeWorktree({
+          id,
+          repoId: 'repo1',
+          path: '/path/twin',
+          hostId: 'runtime:peer',
+          runtimeOwnerEnvironmentId: 'peer'
+        })
+      ]
+    },
+    activeWorktreeId: 'another-workspace',
+    activeWorkspaceExecutionHostId: 'local'
+  })
+  await store.getState().openNewTerminalTabInActiveWorkspace('menu-group', id, 'runtime:peer')
+  expect(remoteCreate).toHaveBeenCalledWith(
+    { worktreeId: id, environmentId: 'peer', targetGroupId: 'menu-group', activate: true },
+    { userAct: true }
+  )
+  expect(store.getState().tabsByWorktree[id] ?? []).toEqual([])
+  await store.getState().openNewTerminalTabInActiveWorkspace('menu-group', id, 'local')
+  expect(store.getState().unifiedTabsByWorktree[id]?.[0]?.executionHostId).toBe('local')
 })

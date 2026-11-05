@@ -2,7 +2,10 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
-import { resolveWorktreeOperationRouteResult } from '@/lib/worktree-operation-route'
+import {
+  resolveWorktreeOperationRouteResult,
+  resolveWorktreeOperationRouteResultForHost
+} from '@/lib/worktree-operation-route'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 
@@ -11,7 +14,7 @@ export function createActiveWorkspaceTerminalActions(
   get: TerminalStoreGet
 ): Pick<TerminalSlice, 'openNewTerminalTabInActiveWorkspace'> {
   return {
-    openNewTerminalTabInActiveWorkspace: async (groupId, targetWorktreeId) => {
+    openNewTerminalTabInActiveWorkspace: async (groupId, targetWorktreeId, executionHostId) => {
       const state = get()
       const worktreeId = targetWorktreeId ?? state.activeWorktreeId
       if (!worktreeId) {
@@ -21,7 +24,9 @@ export function createActiveWorkspaceTerminalActions(
       const worktreeRoute =
         worktreeId === FLOATING_TERMINAL_WORKTREE_ID || workspaceScope?.type === 'folder'
           ? null
-          : resolveWorktreeOperationRouteResult(state, worktreeId)
+          : executionHostId
+            ? resolveWorktreeOperationRouteResultForHost(state, worktreeId, executionHostId)
+            : resolveWorktreeOperationRouteResult(state, worktreeId)
       if (worktreeRoute && worktreeRoute.kind !== 'resolved') {
         return
       }
@@ -45,7 +50,12 @@ export function createActiveWorkspaceTerminalActions(
       if (isWebClientLocation() && worktreeId !== FLOATING_TERMINAL_WORKTREE_ID) {
         return
       }
-      const terminal = get().createTab(worktreeId, groupId)
+      const terminal = get().createTab(
+        worktreeId,
+        groupId,
+        undefined,
+        executionHostId ? { executionHostId } : undefined
+      )
       get().setActiveTab(terminal.id)
       get().setActiveTabType('terminal', worktreeId)
       const latest = get()

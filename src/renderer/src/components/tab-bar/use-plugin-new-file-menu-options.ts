@@ -26,14 +26,11 @@ export function usePluginNewFileMenuOptions(
     menuOptions: options,
     onSelectMenuOption: (option) => {
       if (option.kind !== 'new-plugin-file') {
-        onSelectMenuOption(option)
-        return
+        return onSelectMenuOption(option)
       }
-      if (option.pluginNewFile) {
-        void useAppStore
-          .getState()
-          .openNewPluginFileInActiveWorkspace(option.pluginNewFile, groupId)
-      }
+      return option.pluginNewFile
+        ? useAppStore.getState().openNewPluginFileInActiveWorkspace(option.pluginNewFile, groupId)
+        : undefined
     }
   }
 }

@@ -187,7 +187,9 @@ export function createTerminalTabCreationActions(
           groupId: group.id,
           worktreeId,
           contentType: 'terminal' as const,
-          ...(facts || folder ? { executionHostId: facts?.hostId ?? folder?.hostId } : {}),
+          ...(facts || folder || options?.executionHostId
+            ? { executionHostId: facts?.hostId ?? folder?.hostId ?? options?.executionHostId }
+            : {}),
           label: tab.title,
           ...(tab.quickCommandLabel?.trim()
             ? { quickCommandLabel: tab.quickCommandLabel.trim() }

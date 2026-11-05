@@ -1,3 +1,4 @@
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { TerminalState } from './terminal-state'
 import type { Tab } from '../../../../shared/tab-types'
 import type { TabSplitTarget } from '../slices/tabs/tabs-slice-contract'
@@ -73,6 +74,7 @@ export type TerminalActions = {
     options?: {
       pendingActivationSpawn?: boolean
       initialPtyId?: string
+      executionHostId?: ExecutionHostId
       executionFacts?: TerminalCreationExecutionFacts
       /** Stable leaf identity: an already-live pane's, or a host launch's pane before its process. */
       initialLeafId?: string
@@ -96,7 +98,11 @@ export type TerminalActions = {
       forceHostRuntime?: boolean
     }
   ) => TerminalTab
-  openNewTerminalTabInActiveWorkspace: (groupId: string, worktreeId?: string) => Promise<void>
+  openNewTerminalTabInActiveWorkspace: (
+    groupId: string,
+    worktreeId?: string,
+    executionHostId?: ExecutionHostId
+  ) => Promise<void>
   /** Synchronous retirement: provider teardown starts before state removal but is never awaited. */
   closeTab: (
     tabId: string,

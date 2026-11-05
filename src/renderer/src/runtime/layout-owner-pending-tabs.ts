@@ -122,3 +122,13 @@ export function afterPendingTabs(
 export function _resetPendingTabsForTests(): void {
   pending.clear()
 }
+
+/** A dismissed creation menu must not seed over a surface still awaiting its owner frame. */
+export function afterPendingWorkspaceTabs(worktreeId: string, run: () => void): void {
+  afterPendingTabs(
+    [...pending]
+      .filter(([, entry]) => entry.worktreeId === worktreeId && entry.ask.kind === 'open')
+      .map(([id]) => id),
+    run
+  )
+}
