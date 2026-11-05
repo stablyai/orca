@@ -62,13 +62,13 @@ export function WorkspaceCleanupSortHeader({
             })}
           </span>
           <Button
-            variant="destructive"
+            variant="outline"
             size="sm"
             className="shrink-0"
             onClick={onDeleteSelected}
             disabled={deleteDisabled}
           >
-            <Trash2 className="size-3.5" />
+            <Trash2 className="size-3.5 text-destructive" />
             {translate(
               'auto.components.workspace.cleanup.WorkspaceCleanupDialog.b771c92598',
               'Delete selected'

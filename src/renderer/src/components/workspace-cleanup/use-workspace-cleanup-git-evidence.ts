@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useMountedRef } from '@/hooks/useMountedRef'
 
 import { getWorkspaceCleanupCandidateIdentity } from '../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
@@ -118,7 +118,8 @@ export function useWorkspaceCleanupGitEvidence({
     publish()
   }, [publish])
 
-  useEffect(() => {
+  // Layout effect: queue targets before first paint so unchecked rows open as "Checking", not "unknown".
+  useLayoutEffect(() => {
     const wasEnabled = enabledRef.current
     const snapshotChanged = scannedAtRef.current !== scannedAt
     enabledRef.current = enabled
