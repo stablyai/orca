@@ -99,7 +99,7 @@ jobs:
           fi
           git diff --name-only --no-renames -z HEAD^1 HEAD > "$RUNNER_TEMP/wsl-changed"
           git diff --name-only --no-renames --diff-filter=M -z HEAD^1 HEAD > "$RUNNER_TEMP/wsl-modified"
-          node config/scripts/wsl-orcad-qualification.mjs "$RUNNER_TEMP/wsl-changed" "$RUNNER_TEMP/wsl-modified"
+          node config/scripts/orcad-distribution/qualification/wsl-orcad-qualification.mjs "$RUNNER_TEMP/wsl-changed" "$RUNNER_TEMP/wsl-modified"
 
       - uses: ./.github/actions/build-mobile-web-bundle
       - name: Build the template

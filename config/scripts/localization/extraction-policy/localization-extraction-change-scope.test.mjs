@@ -11,7 +11,7 @@ it.each([
   'src/main/notifications.ts',
   'src/renderer/src/i18n/locales/en.json',
   'config/i18next.config.ts',
-  'config/scripts/verify-localization-extraction.mjs',
+  'config/scripts/localization/source-extraction/verify-localization-extraction.mjs',
   'config/scripts/localization/extraction-policy/localization-extraction-change-scope.mjs',
   'config/patches/i18next-cli.patch',
   'package.json',
@@ -77,7 +77,7 @@ it('avoids extraction for unrelated CI, documentation, and native changes', () =
   expect(
     affectsLocalizationExtraction([
       '.github/workflows/e2e.yml',
-      'config/scripts/run-terminal-scale-perf-e2e.mjs',
+      'config/scripts/runtime-verification/terminal-e2e/run-terminal-scale-perf-e2e.mjs',
       'docs/reference/ci-runner-efficiency.md',
       'native/windows-registry/src/addon.cc'
     ])
@@ -156,7 +156,9 @@ it.skipIf(process.platform === 'win32')(
         }
       )
       expect(readFileSync(calls, 'utf8')).toBe(
-        expected ? 'config/scripts/verify-localization-extraction.mjs\n' : ''
+        expected
+          ? 'config/scripts/localization/source-extraction/verify-localization-extraction.mjs\n'
+          : ''
       )
     }
 

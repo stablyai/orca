@@ -50,9 +50,9 @@ const ALWAYS_ON_CODE_JOBS = new Set(['static_analysis', 'typecheck', 'test'])
 const MOBILE_CI_TOOL_FILES = new Set([
   '.github/workflows/mobile.yml',
   'config/mobile-ci.vitest.config.mjs',
-  'config/scripts/run-mobile-ci-tests.mjs',
-  'config/scripts/mobile-release-check-scope.test.mjs',
-  'config/scripts/mobile-test-change-scope.test.mjs'
+  'config/scripts/mobile-web/check-entry/run-mobile-ci-tests.mjs',
+  'config/scripts/mobile-web/check-entry/mobile-release-check-scope.test.mjs',
+  'config/scripts/mobile-web/check-entry/mobile-test-change-scope.test.mjs'
 ])
 
 const GLOBAL_FORCE_PREFIXES = [
@@ -142,6 +142,7 @@ const DEPENDENCY_ISOLATION_PREFIXES = [
   'pnpm-workspace.yaml',
   'config/pnpmfile.cjs',
   'config/scripts/undeclared-dependency-resolution',
+  'config/scripts/dependency-security/runtime-resolution/undeclared-dependency-resolution',
   'config/build-plugins/markdown-parser-exports',
   'config/tsconfig',
   'src/packages/',
@@ -160,6 +161,11 @@ const MOBILE_WEB_APP_PREFIXES = [
   'config/scripts/build/mobile-web-app/verify-mobile-web-app-bundle',
   'config/scripts/mobile-web-app-',
   'config/scripts/mobile-web-app/',
+  'config/scripts/mobile-web-app/shell/',
+  'config/scripts/mobile-web-app/session/',
+  'config/scripts/mobile-web-app/routing/',
+  'config/scripts/mobile-web-app/terminal/',
+  'config/scripts/mobile-web-app/workspace/',
   'config/scripts/mobile-web-bundle-',
   'config/scripts/build/mobile-web-app/mobile-web-bundle-',
   'config/scripts/verify-packaged-mobile-web-bundle',
@@ -188,12 +194,15 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   // COMPAT(legacy-relay-bridge): the bridge is proven against a real 1.4.224 relay here.
   'src/main/ssh/legacy-relay/',
   'config/scripts/stable-release-tags',
+  'config/scripts/release/versioning/stable-release-tags',
   // The R1 daemon protocol crossing gate runs in this job.
   'config/scripts/daemon-protocol-facts',
   'config/scripts/daemon-protocol/schema-facts/daemon-protocol-facts',
   'config/scripts/check-daemon-protocol-crossing',
+  'config/scripts/daemon-protocol/admission/check-daemon-protocol-crossing',
   // R3 runtime launcher protocol ratchet; a bump always routes here via the protocol file.
   'config/scripts/check-runtime-launcher-protocol-ratchet',
+  'config/scripts/daemon-protocol/admission/check-runtime-launcher-protocol-ratchet',
   'src/main/daemon/daemon-protocol-version.ts',
   'src/shared/protocol-version',
   'src/shared/terminal/stream/terminal-stream-protocol',
@@ -287,6 +296,7 @@ const CROSS_VERSION_WIRE_PREFIXES = [
 
 const MANAGED_HOOK_PREFIXES = [
   'config/scripts/smoke-process-host-node18',
+  'config/scripts/desktop-distribution/runtime-verification/smoke-process-host-node18',
   'config/scripts/packaged-process-host-fixture',
   'config/scripts/desktop-distribution/runtime-verification/packaged-process-host-fixture',
   'src/packages/process-host/',
@@ -432,7 +442,7 @@ export const DAEMON_INIT_TEST_SUPPORT = 'src/main/daemon/daemon-init-dependency-
 const DAEMON_INIT_TEST_SCOPE = new Set([
   DAEMON_INIT_TEST_SUPPORT,
   'src/main/native-chat/agent-session-wire/structured-agent-session-claude-queued-stop.test.ts',
-  'config/scripts/process-host-build-dist.test.mjs'
+  'config/scripts/desktop-distribution/runtime-verification/process-host-build-dist.test.mjs'
 ])
 
 export function isDaemonInitTestSupportChange(files, modifiedOnly = false) {

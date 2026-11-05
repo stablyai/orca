@@ -38,6 +38,8 @@ export type CommitMessageModel = {
   isDefault?: boolean
   /** Tokens the model's context window holds, where the listing states it. */
   contextWindowTokens?: number
+  /** The versioned model an alias row runs; absent from older remote hosts. */
+  resolvedModel?: string
 }
 
 export type TextGenerationFlag = {
@@ -89,6 +91,8 @@ export type CommitMessageModelCapability = {
   isDefault?: boolean
   /** Absent from an older remote host; readers then treat the window as unknown. */
   contextWindowTokens?: number
+  /** The versioned model an alias row runs; absent from an older remote host. */
+  resolvedModel?: string
 }
 
 export type CommitMessageAgentCapability = {
