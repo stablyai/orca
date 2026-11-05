@@ -3,7 +3,9 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, expect, it, vi } from 'vitest'
 import { AGENT_SESSION_CREATE_FORK_RUNTIME_CAPABILITY } from '../../../../src/shared/agent-session/agent-session-create-capabilities'
 import type { RpcClient } from '../../transport/rpc-client'
-import { useMobileNativeChatFork } from './use-mobile-native-chat-fork'
+import type { AgentJournalRenderItem } from '../../../../src/shared/agent-session/journal/agent-session-journal-types'
+import type { NativeChatMessage } from '../../../../src/shared/native-chat/native-chat-types'
+import { useMobileNativeChatFork, type MobileNativeChatFork } from './use-mobile-native-chat-fork'
 
 let renderer: ReactTestRenderer | null = null
 
@@ -45,14 +47,38 @@ function connection(failures: number | readonly boolean[]) {
   return { client, sendRequest, reconnect, migrate }
 }
 
-function Probe({ client }: { client: RpcClient }): null {
-  useMobileNativeChatFork({
+const reply: AgentJournalRenderItem = {
+  itemId: 'reply',
+  sequence: 1,
+  revision: 1,
+  observedAt: 1,
+  body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'ok' }] }
+}
+const message: NativeChatMessage = {
+  id: 'reply',
+  role: 'assistant',
+  blocks: [{ type: 'text', text: 'ok' }],
+  timestamp: 1,
+  source: 'transcript',
+  journalPosition: { sequence: 1, index: 0 }
+}
+const FORK_HOST = [AGENT_SESSION_CREATE_FORK_RUNTIME_CAPABILITY]
+let latest: MobileNativeChatFork | null = null
+
+function Probe({
+  client,
+  hostCapabilities = FORK_HOST
+}: {
+  client: RpcClient
+  hostCapabilities?: readonly string[]
+}): null {
+  latest = useMobileNativeChatFork({
     client,
-    hostCapabilities: [AGENT_SESSION_CREATE_FORK_RUNTIME_CAPABILITY],
+    hostCapabilities,
     agent: 'claude',
     sessionId: 'session-1',
-    messages: [],
-    turnJournal: null,
+    messages: [message],
+    turnJournal: { items: [reply], submissions: [] },
     agentWorking: false,
     sessionForkSupport: 'supported',
     createFork: async () => {}
@@ -131,4 +157,39 @@ it('gives a new connection its own retries after an earlier one used them up', a
     vi.advanceTimersByTime(120_000)
   })
   expect(sendRequest).toHaveBeenCalledTimes(6)
+})
+
+it('gives a resumed spell of fork support its own retries, and the reply becomes forkable', async () => {
+  vi.useFakeTimers()
+  const { client, sendRequest } = connection([true, true, true, true, false])
+  act(() => {
+    renderer = create(createElement(Probe, { client }))
+  })
+  await settle()
+  for (const wait of [2_000, 8_000]) {
+    await act(async () => {
+      vi.advanceTimersByTime(wait)
+    })
+    await settle()
+  }
+  // Three failures; the 30-second retry is pending when the host's status drops fork support.
+  expect(sendRequest).toHaveBeenCalledTimes(3)
+  expect(latest?.offerFor(message)).toBe('disabled')
+  act(() => renderer!.update(createElement(Probe, { client, hostCapabilities: [] })))
+  await act(async () => {
+    vi.advanceTimersByTime(30_000)
+  })
+  await settle()
+  expect(sendRequest).toHaveBeenCalledTimes(3)
+
+  // Support returns on the same connection: a fresh first read, which fails once.
+  act(() => renderer!.update(createElement(Probe, { client })))
+  await settle()
+  expect(sendRequest).toHaveBeenCalledTimes(4)
+  await act(async () => {
+    vi.advanceTimersByTime(2_000)
+  })
+  await settle()
+  expect(sendRequest).toHaveBeenCalledTimes(5)
+  expect(latest?.offerFor(message)).toBe('available')
 })
