@@ -28,6 +28,8 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/browser/extensions/native-messaging/browser-extension-native-host-process-backpressure.test.ts',
   'src/main/daemon/daemon-init-provider-installation.test.ts',
   'src/main/orcad/orcad-daemon-teardown-linux.test.ts',
+  // Launches process.execPath as orcad's pinned runtime to measure V8 address-space reservations.
+  'src/main/managed-server/install/orcad-remote-launch-address-space.test.ts',
   'src/renderer/src/components/terminal-pane/pty-input-write-queue.test.ts',
   'src/renderer/src/lib/react-commit-cascade-observer.test.ts',
   'src/renderer/src/lib/react-commit-cascade-telemetry.test.ts',
