@@ -1,7 +1,8 @@
 // @vitest-environment happy-dom
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
-import { AddToChatPointMenuHost, openAddToChatMenuAt } from './AddToChatMenu'
+import { AddToChatPointMenuHost } from './AddToChatMenu'
+import { openAddToChatMenuAt } from './add-to-chat-point-menu'
 
 vi.mock('@/components/editor/review-note-delivery/ReviewNotesSendMenuContent', () => ({
   ReviewNotesSendMenuContent: () => <div role="menuitem">Chat A</div>

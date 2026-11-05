@@ -29,7 +29,7 @@ export async function sendMessageToAgent(args: {
       worktreeId,
       prompt,
       noteTarget: { tabId: target.tabId, leafId: target.leafId },
-      submit
+      ...(submit ? {} : { submit: false })
     })
   }
   // A chat's unsent text belongs in its composer; this path only sends to it.

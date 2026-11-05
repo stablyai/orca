@@ -14,7 +14,7 @@ import type { VirtualMarkdownPreviewNavigation } from '../viewport/use-markdown-
 import { useMarkdownPreviewViewport } from '../viewport/use-markdown-preview-viewport'
 import { readMarkdownPreviewChatSelection } from '../review/markdown-preview-chat-selection'
 import { SelectionAddToChatPopover } from '../../../native-chat/SelectionAddToChatPopover'
-import { openAddToChatMenuAt } from '../../../native-chat/AddToChatMenu'
+import { openAddToChatMenuAt } from '../../../native-chat/add-to-chat-point-menu'
 import { formatNativeChatQuote } from '../../../native-chat/native-chat-quote-selection'
 
 const EMPTY_MARKDOWN_DOCUMENTS: MarkdownDocument[] = []

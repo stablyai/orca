@@ -12,9 +12,12 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { ReviewNotesSendMenuContent } from '@/components/editor/review-note-delivery/ReviewNotesSendMenuContent'
 import { preventAgentSendTargetOutsideDismiss } from '@/components/browser-pane/annotate/prevent-agent-send-target-outside-dismiss'
-import type { LaunchSource } from '../../../../shared/telemetry-property-schemas'
-
-type AddToChatSource = { worktreeId: string; quote: string; launchSource: LaunchSource }
+import {
+  readPointMenu,
+  setPointMenu,
+  subscribePointMenu,
+  type AddToChatSource
+} from './add-to-chat-point-menu'
 
 /** The notes target list, adding the quote unsent to the chat or new agent the user picks. */
 function AddToChatTargets({ worktreeId, quote, launchSource }: AddToChatSource): React.JSX.Element {
@@ -48,34 +51,8 @@ export function AddToChatSubmenu(props: AddToChatSource): React.JSX.Element {
   )
 }
 
-type PointMenu = AddToChatSource & { x: number; y: number }
-type OpenPointMenu = PointMenu & { returnFocus: HTMLElement | null; cancelled: boolean }
-
-let pointMenu: OpenPointMenu | null = null
-const listeners = new Set<() => void>()
-
-function setPointMenu(next: OpenPointMenu | null): void {
-  pointMenu = next
-  listeners.forEach((listener) => listener())
-}
-
-function subscribePointMenu(listener: () => void): () => void {
-  listeners.add(listener)
-  return () => listeners.delete(listener)
-}
-
-/** Opens the target list at a screen point, for surfaces with no menu of their own to nest it in. */
-export function openAddToChatMenuAt(menu: PointMenu): void {
-  const focused = document.activeElement
-  setPointMenu({
-    ...menu,
-    returnFocus: focused instanceof HTMLElement && focused !== document.body ? focused : null,
-    cancelled: false
-  })
-}
-
 export function AddToChatPointMenuHost(): React.JSX.Element | null {
-  const menu = useSyncExternalStore(subscribePointMenu, () => pointMenu)
+  const menu = useSyncExternalStore(subscribePointMenu, readPointMenu)
   if (!menu) {
     return null
   }
