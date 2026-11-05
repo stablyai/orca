@@ -6,7 +6,7 @@ export const NativeChatLinkClickContext = createContext<
   CommentMarkdownLinkClickHandler | undefined
 >(undefined)
 
-/** Every chat surface that renders a link reads the handler here, so no card or row can be mounted without it. */
+/** Every chat surface that renders a link reads the handler here; outside a session view there is none. */
 export function useNativeChatLinkClick(): CommentMarkdownLinkClickHandler | undefined {
   return useContext(NativeChatLinkClickContext)
 }
