@@ -164,8 +164,6 @@ export const WINDOWS_BOUNDARY_TESTS = [
   'src/main/daemon/executable-host/windows/testing/daemon-host-process-package.test.ts',
   'src/shared/windows-security-addon.win32.test.ts',
   'src/shared/windows-private-credential-file.test.ts',
-  'config/scripts/native-build/windows/windows-process-tree-gyp-path.test.mjs',
-  'config/scripts/native-build/windows/windows-process-tree-gyp-rebuild.test.mjs',
   'config/scripts/desktop-distribution/runtime-verification/package-electron-runtime-contract.test.mjs',
   'config/scripts/desktop-distribution/runtime-verification/electron-builder-runtime-resources.test.mjs',
   'src/main/browser/client-pages/renderer/browser-client-page-renderer-lifecycle.electron.test.ts',
