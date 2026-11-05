@@ -1,5 +1,5 @@
+import { showWorktreeCreateWarningToast } from './worktree-create-warning-toast'
 import { createWorktreeOnRuntimeHost } from './host-planned-agent-launch'
-import { toast } from 'sonner'
 import { runtimeRpcTargetForAuthorityKey } from '@/runtime/runtime-client-target'
 import { repoHostId } from '../listing/worktree-host-ownership'
 import {
@@ -32,7 +32,7 @@ import {
   WORKTREE_OPEN_EXISTING_BRANCH_V2_REQUEST_RUNTIME_CAPABILITY
 } from '../../../../../../shared/worktree-runtime-capabilities'
 import { ensureLocalRuntimeCapabilities } from '../../../../runtime/local-runtime-capabilities'
-import { showLocalBaseRefUpdateSuggestionToast } from '@/components/sidebar/local-base-ref-suggestion-toast'
+import { showLocalBaseRefUpdateSuggestionToast } from '@/components/sidebar/workspace-creation/base-ref-update/local-base-ref-suggestion-toast'
 import { requestWorktreeBaseFallbackNotice } from '@/components/worktree-base-fallback-notice'
 import { showLocalBaseRefRefreshToast } from './local-base-ref-refresh-toast'
 import { applyCreatedWorktree } from './created-worktree-state-merge'
@@ -278,9 +278,7 @@ export function createCreateWorktree(
             holdCreatedSidebarWorkspace({ worktree: created })
           }
           const { result } = outcome
-          if (result.warning) {
-            toast.warning(result.warning)
-          }
+          showWorktreeCreateWarningToast(result.warning)
           showLocalBaseRefRefreshToast(result.localBaseRefRefresh, result.worktree, {
             updateSettings: get().updateSettings,
             executionHostId: creationHostId

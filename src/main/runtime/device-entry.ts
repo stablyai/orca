@@ -1,5 +1,5 @@
 import type { DeviceScope } from '../../shared/runtime-types'
-import type { MobilePairingConnectionMode } from '../../shared/mobile-pairing-connection-mode'
+import type { MobilePairingConnectionMode } from '../../shared/remote-runtime/pairing/mobile-pairing-connection-mode'
 import type { MobilePushRegistration } from '../../shared/mobile-push-contract'
 import type { RuntimePairingReach } from '../../shared/runtime-pairing-reach'
 import type { RelayDeviceBinding } from './mobile-cloud-relay/relay-revoke-outbox'
@@ -44,6 +44,7 @@ export type DeviceKeyLookup =
   | { kind: 'unknown' }
   // An unusable key is not revocation evidence.
   | { kind: 'not-keyed' }
+  | { kind: 'refused' }
   | { kind: 'unavailable' }
 
 // Only unscanned token rows are rotatable pairing offers; keyed rows never are.
@@ -59,13 +60,19 @@ export function sameGrants(entry: DeviceEntry, grants: readonly RuntimeDeviceGra
 }
 
 // Clients erase keys on unknown; reserve that verdict for readable absence.
-export function lookupDeviceKeyRow(device: DeviceEntry | null): DeviceKeyLookup {
+export function lookupDeviceKeyRow(
+  device: DeviceEntry | null,
+  devices: readonly DeviceEntry[]
+): DeviceKeyLookup {
   if (!device) {
     return { kind: 'unknown' }
   }
-  return device.credentialKind === 'device-key' && device.devicePublicKeyB64
+  if (device.credentialKind !== 'device-key' || !device.devicePublicKeyB64) {
+    return { kind: 'not-keyed' }
+  }
+  return withPairedParent(device, devices)
     ? { kind: 'found', device: { ...device, devicePublicKeyB64: device.devicePublicKeyB64 } }
-    : { kind: 'not-keyed' }
+    : { kind: 'refused' }
 }
 
 export type AuthenticatedPrincipalBinding = {
@@ -84,6 +91,45 @@ export function isStillAuthenticated(
     // A keyed socket cannot survive replacement by a bearer row.
     (principal.deviceToken !== undefined || device.credentialKind === 'device-key')
   )
+}
+
+// Forks and delegated phones lose authority with any ancestor pairing.
+function withPairedParent(
+  device: DeviceEntry,
+  devices: readonly DeviceEntry[],
+  ancestors = new Set<string>()
+): DeviceEntry | null {
+  if (ancestors.has(device.deviceId)) {
+    return null
+  }
+  ancestors.add(device.deviceId)
+  const paired = [device.parentDeviceId, device.forkedFrom].every((parentId) => {
+    if (parentId === undefined) {
+      return true
+    }
+    const parent = devices.find((candidate) => candidate.deviceId === parentId)
+    return parent !== undefined && withPairedParent(parent, devices, ancestors) !== null
+  })
+  ancestors.delete(device.deviceId)
+  return paired ? device : null
+}
+
+export function findTokenDevice(
+  devices: readonly DeviceEntry[],
+  token: string
+): DeviceEntry | null {
+  const device = token && devices.find((d) => d.credentialKind === undefined && d.token === token)
+  return device ? withPairedParent(device, devices) : null
+}
+
+export function findPrincipalDevice(
+  devices: readonly DeviceEntry[],
+  principal: AuthenticatedPrincipalBinding
+): DeviceEntry | null {
+  const device = devices.find((d) => d.deviceId === principal.deviceId)
+  return device && isStillAuthenticated(device, principal)
+    ? withPairedParent(device, devices)
+    : null
 }
 
 export function mobilePairingConnectionModeOf(

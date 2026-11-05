@@ -3,14 +3,17 @@ import { Plug, ChevronDown, ChevronRight, LoaderCircle } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
-import { refreshWorkspacePortScanForTarget } from '@/lib/workspace-port-scan-refresh'
+import { refreshWorkspacePortScanForTarget } from '@/lib/workspace-ports/workspace-port-scan-refresh'
 import { useWorktreeRuntimeTarget } from '@/runtime/use-worktree-runtime-target'
 import {
   getUnavailableWorkspacePortHosts,
   type WorkspacePortHostRef
-} from '@/lib/workspace-port-host-availability'
+} from '@/lib/workspace-ports/workspace-port-host-availability'
 import { getLocalExecutionHostLabel } from '../../../../shared/execution-host'
-import { getExternalWorkspacePorts, getWorkspacePortGroups } from '@/lib/workspace-port-groups'
+import {
+  getExternalWorkspacePorts,
+  getWorkspacePortGroups
+} from '@/lib/workspace-ports/workspace-port-groups'
 import { SelectedTextCopyMenu } from '@/components/SelectedTextCopyMenu'
 import { STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS } from './status-bar-context-menu-policy'
 import { PortRow, WorkspaceGroupRows } from './ports-status-popover-rows'

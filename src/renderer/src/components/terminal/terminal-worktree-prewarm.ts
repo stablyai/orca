@@ -1,4 +1,4 @@
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 
 /** Each stage is its own task so a slow pointer sweep never stacks mount, style/layout and WebGL into one long frame. */
 export type TerminalPrewarmStage = 'mount' | 'layout' | 'warm'

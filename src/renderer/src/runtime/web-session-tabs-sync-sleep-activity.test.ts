@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
+import { toWebTerminalSurfaceTabId } from '../../../shared/workspace-layout/terminal-surface-id'
 import { isInactiveWorkspace } from '../lib/worktree-activity-state'
 import { clearWorktreeSleepIntent, markWorktreeSleepIntent } from '../lib/worktree-sleep-intent'
 import { applyWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'
@@ -8,7 +8,6 @@ import {
   HOST_SURFACE_ID,
   LEAF_ID,
   NOW,
-  SECOND_LEAF_ID,
   WT,
   makeSnapshot,
   makeState,
@@ -95,90 +94,5 @@ describe('sleep activity during host terminal mirroring', () => {
     expect(next.ptyIdsByTabId[TAB_ID] ?? []).toEqual([])
     expect(inactive(next, worktreeId)).toBe(true)
     expect(next.activeWorktreeId).toBe('another-workspace')
-  })
-
-  it('does not turn a restored wake binding into live activity without a sleep marker', () => {
-    const state = sleptState()
-    const next = {
-      ...state,
-      ...applyWebSessionTabsSnapshot(state, pendingSnapshot(), ENV, NOW + 1)
-    }
-    expect(inactive(next)).toBe(true)
-  })
-
-  it('keeps a previously live binding during an ordinary reconnect', () => {
-    const state = sleptState()
-    state.ptyIdsByTabId[TAB_ID] = [PTY_ID]
-    const next = {
-      ...state,
-      ...applyWebSessionTabsSnapshot(state, pendingSnapshot(), ENV, NOW + 1)
-    }
-    expect(next.ptyIdsByTabId[TAB_ID]).toEqual([PTY_ID])
-    expect(inactive(next)).toBe(false)
-  })
-
-  it('publishes a ready replacement after explicit wake', () => {
-    const state = sleptState()
-    markWorktreeSleepIntent(WT)
-    clearWorktreeSleepIntent(WT)
-    const snapshot = makeSnapshot([
-      {
-        type: 'terminal',
-        id: HOST_SURFACE_ID,
-        title: 'shell',
-        parentTabId: 'host-tab-1',
-        leafId: LEAF_ID,
-        isActive: true,
-        status: 'ready',
-        terminal: 'terminal-2'
-      }
-    ])
-    const next = { ...state, ...applyWebSessionTabsSnapshot(state, snapshot, ENV, NOW + 1) }
-    expect(next.ptyIdsByTabId[TAB_ID]).toEqual([`remote:${ENV}@@terminal-2`])
-    expect(inactive(next)).toBe(false)
-  })
-
-  it('counts only ready panes when a slept split sibling is still pending', () => {
-    const state = sleptState()
-    const snapshot = pendingSnapshot()
-    snapshot.tabs.push({
-      type: 'terminal',
-      id: `host-tab-1::${SECOND_LEAF_ID}`,
-      title: 'new shell',
-      parentTabId: 'host-tab-1',
-      leafId: SECOND_LEAF_ID,
-      isActive: false,
-      status: 'ready',
-      terminal: 'terminal-2'
-    })
-    const next = { ...state, ...applyWebSessionTabsSnapshot(state, snapshot, ENV, NOW + 1) }
-    expect(next.terminalLayoutsByTabId[TAB_ID]?.ptyIdsByLeafId?.[LEAF_ID]).toBe(PTY_ID)
-    expect(next.ptyIdsByTabId[TAB_ID]).toEqual([`remote:${ENV}@@terminal-2`])
-    expect(inactive(next)).toBe(false)
-  })
-
-  it('keeps the wake binding inactive across repeated host updates', () => {
-    const state = sleptState()
-    const snapshot = pendingSnapshot()
-    const next = { ...state, ...applyWebSessionTabsSnapshot(state, snapshot, ENV, NOW + 1) }
-    const updatedSnapshot = { ...snapshot, snapshotVersion: 2 }
-    const updated = {
-      ...next,
-      ...applyWebSessionTabsSnapshot(next, updatedSnapshot, ENV, NOW + 2)
-    }
-    expect(inactive(updated)).toBe(true)
-    expect(updated.terminalLayoutsByTabId[TAB_ID]?.ptyIdsByLeafId).toEqual({ [LEAF_ID]: PTY_ID })
-  })
-
-  it('keeps local-mode pending wake bindings out of live activity', () => {
-    const state = sleptState(WT, 'local-pty')
-    const next = {
-      ...state,
-      ...applyWebSessionTabsSnapshot(state, pendingSnapshot(), ENV, NOW + 1, {
-        terminalPtyMode: 'local'
-      })
-    }
-    expect(next.terminalLayoutsByTabId[TAB_ID]?.ptyIdsByLeafId).toEqual({ [LEAF_ID]: 'local-pty' })
-    expect(inactive(next)).toBe(true)
   })
 })

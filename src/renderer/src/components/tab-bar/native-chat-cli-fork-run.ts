@@ -12,8 +12,8 @@ import {
   buildAiVaultForkStartupForWorktree
 } from '@/lib/ai-vault-session-fork-startup'
 import { launchAiVaultSessionAndReveal } from '@/lib/launch-ai-vault-session-and-reveal'
-import { notifyAiVaultSessionPreparationFailure } from '../right-sidebar/ai-vault-session-launch-feedback'
-import { describeAiVaultCliForkFailure } from '../right-sidebar/ai-vault-session-cli-fork'
+import { notifyAiVaultSessionPreparationFailure } from '../right-sidebar/ai-vault/session-actions/ai-vault-session-launch-feedback'
+import { describeAiVaultCliForkFailure } from '../right-sidebar/ai-vault/session-actions/ai-vault-session-cli-fork'
 import {
   captureWebSessionIntentOwner,
   matchesWebSessionIntentOwner
@@ -22,7 +22,7 @@ import {
   onRuntimeEnvironmentsRetired,
   onRuntimeEnvironmentRevisionsChanged
 } from '@/runtime/runtime-environment-revision'
-import type { AiVaultAgent } from '../../../../shared/ai-vault-types'
+import type { AiVaultAgent } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import {
   resolveNativeChatCliForkIdentity,
   type NativeChatCliForkIdentity

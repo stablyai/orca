@@ -19,6 +19,7 @@ export const FILES_RUNTIME_CAPABILITIES = [
   'files.pathsExist',
   'files.resolve-terminal-path.cross-workspace.v1',
   'files.resolve-terminal-path.absolute-files.v1',
+  'files.resolve-terminal-path.in-place-files.v1',
   FILE_DOC_PREVIEW_RUNTIME_CAPABILITY,
   FILE_READ_DIR_PAGED_RUNTIME_CAPABILITY,
   FILE_WRITE_DISK_PRECONDITION_RUNTIME_CAPABILITY,

@@ -21,6 +21,8 @@ export type NativeChatTranscriptScroll = {
   showJump: boolean
   onScroll: UIEventHandler<HTMLDivElement>
   scrollToBottom: () => void
+  /** Following, or close enough to the end that Jump to latest stays hidden. */
+  readerAtEnd: () => boolean
   scrollMessageToTop: (element: HTMLElement) => void
   /** A reader gesture left the end: the only thing besides a row jump that stops following. */
   readerLeavesEnd: () => void

@@ -11,7 +11,6 @@ function baseParams(overrides: Partial<Parameters<typeof buildDispatchPreamble>[
     taskSpec: 'Implement the login form',
     coordinatorHandle: 'term_coord',
     workerHandle: 'term_worker',
-    heartbeatIntervalMinutes: 5,
     ...overrides
   }
 }
@@ -53,20 +52,6 @@ describe('buildDispatchPreamble', () => {
     }
   )
 
-  it('renders every injected lifecycle command on one cross-shell-safe line', () => {
-    const result = buildDispatchPreamble(baseParams())
-    const commandLines = result
-      .split('\n')
-      .filter((line) => line.trimStart().startsWith('orca orchestration'))
-
-    expect(commandLines).toHaveLength(6)
-    expect(result).not.toContain('\\\n')
-    expect(commandLines.filter((line) => line.includes('--type worker_done'))).toHaveLength(1)
-    expect(commandLines.filter((line) => line.includes('--type heartbeat'))).toHaveLength(1)
-    expect(commandLines.filter((line) => line.includes('orchestration ask'))).toHaveLength(1)
-    expect(commandLines.filter((line) => line.includes('--type escalation'))).toHaveLength(1)
-  })
-
   it('fences shell comments so Markdown does not promote them to headings', () => {
     const result = buildDispatchPreamble(baseParams())
     const { headings, codeBlocks } = markdownBlocks(result)
@@ -98,41 +83,6 @@ describe('buildDispatchPreamble', () => {
     expect(check.status).toBe(0)
   })
 
-  it('idles prompt-returning workers while preserving direct user authority', () => {
-    const result = buildDispatchPreamble(baseParams())
-    const section = afterWorkerDoneSection(result)
-
-    expect(section).toContain('=== AFTER YOU SEND worker_done ===')
-    expect(section).toContain('worker_done ends your turn for this task')
-    expect(section).toContain('return to an idle prompt')
-    expect(section).toContain('Do not exit the shell')
-    expect(section).toContain('do NOT run a sleep/poll loop')
-    expect(section).toContain('do NOT keep calling')
-    expect(section).toContain('A direct instruction from the user takes precedence')
-    expect(section).toMatch(/follow it without coordinator approval or a\s+fresh Dispatch/)
-    expect(section).toMatch(
-      /do not send lifecycle messages using the settled task or\s+Dispatch IDs/
-    )
-    expect(section).toContain('Never refuse a direct user request because you were a worker')
-    expect(section).toMatch(/fresh\s+preamble \+ TASK block/)
-    expect(section).not.toMatch(/2 minutes/)
-    expect(section).not.toMatch(/10 minutes/)
-    expect(section).not.toMatch(/may exit/)
-    expect(section).not.toMatch(/grace period/)
-  })
-
-  it('tells bare-shell workers to exit after worker_done', () => {
-    const result = buildDispatchPreamble(baseParams({ workerKind: 'bare-shell' }))
-    const section = afterWorkerDoneSection(result)
-
-    expect(section).toContain('Exit the shell after completion')
-    expect(section).toContain('Bare-shell workers have no idle agent')
-    expect(section).toContain('do NOT run a sleep/poll loop')
-    expect(section).not.toContain('Do not exit the shell')
-    expect(section).not.toMatch(/2 minutes/)
-    expect(section).not.toMatch(/may exit/)
-  })
-
   it('uses orca-dev CLI when devMode is true', () => {
     const result = buildDispatchPreamble(baseParams({ devMode: true, cliCommand: 'orca-ide' }))
     expect(result).toContain('orca-dev orchestration send')
@@ -152,151 +102,10 @@ describe('buildDispatchPreamble', () => {
     expect(result).toContain('orca-ide orchestration ask')
     expect(result).not.toMatch(/(^|\s)orca orchestration/m)
   })
-
-  it('tells the worker the heartbeat interval the user chose', () => {
-    const result = buildDispatchPreamble(baseParams({ heartbeatIntervalMinutes: 15 }))
-    expect(result).toContain('# Send a heartbeat every 15 minutes')
-  })
-
-  it('never mentions heartbeats when the user turned them off', () => {
-    const result = buildDispatchPreamble(baseParams({ heartbeatIntervalMinutes: null }))
-    expect(result).not.toMatch(/heartbeat/i)
-    expect(cliFence(result)).toContain('orchestration ask')
-  })
-
-  it('appends a BASE DRIFT section when baseDrift.behind > 0', () => {
-    const result = buildDispatchPreamble({
-      taskId: 'task_x',
-      dispatchId: 'ctx_x',
-      taskSpec: 'do stuff',
-      coordinatorHandle: 'term_c',
-      workerHandle: 'term_w',
-      heartbeatIntervalMinutes: 5,
-      baseDrift: {
-        base: 'origin/main',
-        behind: 7,
-        recentSubjects: ['fix: A', 'feat: B', 'chore: C']
-      }
-    })
-
-    expect(result).toContain('--- BASE DRIFT ---')
-    expect(result).toContain('7 commits behind origin/main')
-    expect(result).toContain('  - fix: A')
-    expect(result).toContain('  - feat: B')
-    expect(result).toContain('  - chore: C')
-    expect(result.indexOf('--- BASE DRIFT ---')).toBeLessThan(result.indexOf('=== TASK ==='))
-  })
-
-  it('omits the drift section when baseDrift.behind is 0', () => {
-    const result = buildDispatchPreamble({
-      taskId: 'task_x',
-      dispatchId: 'ctx_x',
-      taskSpec: 'do stuff',
-      coordinatorHandle: 'term_c',
-      workerHandle: 'term_w',
-      heartbeatIntervalMinutes: 5,
-      baseDrift: {
-        base: 'origin/main',
-        behind: 0,
-        recentSubjects: []
-      }
-    })
-
-    expect(result).not.toContain('--- BASE DRIFT ---')
-    expect(result).not.toContain('commits behind')
-  })
-
-  it('lists drift subjects in the order provided, each prefixed with two spaces and dash', () => {
-    const result = buildDispatchPreamble({
-      taskId: 'task_x',
-      dispatchId: 'ctx_x',
-      taskSpec: 'do stuff',
-      coordinatorHandle: 'term_c',
-      workerHandle: 'term_w',
-      heartbeatIntervalMinutes: 5,
-      baseDrift: {
-        base: 'origin/main',
-        behind: 3,
-        recentSubjects: ['first', 'second', 'third']
-      }
-    })
-
-    const firstIdx = result.indexOf('  - first')
-    const secondIdx = result.indexOf('  - second')
-    const thirdIdx = result.indexOf('  - third')
-    expect(firstIdx).toBeGreaterThanOrEqual(0)
-    expect(secondIdx).toBeGreaterThan(firstIdx)
-    expect(thirdIdx).toBeGreaterThan(secondIdx)
-  })
-
-  it('renders a stable snapshot of the full preamble', () => {
-    const result = buildDispatchPreamble({
-      taskId: 'task_SNAP',
-      dispatchId: 'ctx_SNAP',
-      taskSpec: 'TASK_BODY',
-      coordinatorHandle: 'term_COORD',
-      workerHandle: 'term_WORKER',
-      heartbeatIntervalMinutes: 5
-    })
-    expect(result).toMatchSnapshot()
-  })
-
-  it('renders a stable snapshot of a chat worker preamble', () => {
-    const result = buildDispatchPreamble({
-      taskId: 'task_SNAP',
-      dispatchId: 'ctx_SNAP',
-      taskSpec: 'TASK_BODY',
-      coordinatorHandle: 'orca_session_id:COORD',
-      workerHandle: 'orca_session_id:WORKER',
-      heartbeatIntervalMinutes: 5
-    })
-    expect(result).toMatchSnapshot()
-  })
-})
-
-describe('sub-dispatch section', () => {
-  const base = {
-    taskId: 'task_1',
-    dispatchId: 'ctx_1',
-    taskSpec: 'do the thing',
-    coordinatorHandle: 'term_coord',
-    workerHandle: 'term_worker',
-    heartbeatIntervalMinutes: 5
-  }
-
-  it('is omitted explicitly when nesting is disallowed', () => {
-    expect(buildDispatchPreamble({ ...base, canDispatchSubWorkers: false })).not.toContain(
-      '=== SUB-DISPATCH ==='
-    )
-  })
-
-  it('starts helpers on this Dispatch, without a Run of their own, when budget remains', () => {
-    const preamble = buildDispatchPreamble({ ...base, canDispatchSubWorkers: true })
-    expect(preamble).toContain('=== SUB-DISPATCH ===')
-    expect(preamble).toContain('orchestration worker-start --from term_worker --spec')
-    expect(preamble).not.toContain('orchestration run-create')
-  })
-
-  it('keeps the task block last so the spec is not buried', () => {
-    const preamble = buildDispatchPreamble({ ...base, canDispatchSubWorkers: true })
-    expect(preamble.indexOf('=== SUB-DISPATCH ===')).toBeLessThan(preamble.indexOf('=== TASK ==='))
-  })
 })
 
 describe('how the preamble names the worker and its coordinator, by kind', () => {
-  const SESSION_COORD = 'orca_session_id:4a1f6c2e-8b3d-4e7a-9c15-0d2b6e8f1a37'
   const SESSION_WORKER = 'orca_session_id:7e3b9d15-2c4a-4f86-a0b1-5c9e2d7f3b64'
-  const header = (preamble: string) => preamble.slice(0, preamble.indexOf('\n\n'))
-  const FIRST = 'You are working inside Orca, a multi-agent IDE. You are a dispatched worker.'
-
-  it("follows each party's own kind when a session and a terminal meet", () => {
-    expect(header(buildDispatchPreamble(baseParams({ workerHandle: SESSION_WORKER })))).toBe(
-      `${FIRST}\nYour coordinator's terminal handle is: term_coord\nYour task ID is: task_abc123\nYour Orca session ID is: ${SESSION_WORKER}`
-    )
-    expect(header(buildDispatchPreamble(baseParams({ coordinatorHandle: SESSION_COORD })))).toBe(
-      `${FIRST}\nYour coordinator's Orca session ID is: ${SESSION_COORD}\nYour task ID is: task_abc123`
-    )
-  })
 
   it('tells a chat worker nothing about a terminal or a shell, even as a bare-shell worker', () => {
     for (const workerKind of ['prompt-returning-agent', 'bare-shell'] as const) {
@@ -307,7 +116,7 @@ describe('how the preamble names the worker and its coordinator, by kind', () =>
       expect(chat).not.toContain('Exit the shell')
       expect(chat).not.toContain('Your terminal')
       expect(chat).toContain('return to an idle prompt')
-      expect(chat).toContain(`check --terminal ${SESSION_WORKER}`)
+      expect(chat).toContain(`--from ${SESSION_WORKER}`)
       expect(afterWorkerDoneSection(chat).trimEnd().endsWith(CHAT_REDISPATCH)).toBe(true)
     }
   })

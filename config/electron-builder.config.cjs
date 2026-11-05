@@ -4,18 +4,18 @@ const { join, resolve } = require('node:path')
 const {
   MACOS_FOLDER_USAGE_DESCRIPTIONS,
   applyMacHelperFolderUsageDescriptions
-} = require('./scripts/macos-folder-usage-descriptions.cjs')
-const electronBuilderNativeRebuild = require('./scripts/electron-builder-native-rebuild.cjs')
+} = require('./scripts/desktop-distribution/macos/macos-folder-usage-descriptions.cjs')
+const electronBuilderNativeRebuild = require('./scripts/desktop-distribution/runtime-verification/electron-builder-native-rebuild.cjs')
 const {
   assertPackagedDaemonEntryExists,
   verifyPackagedDaemonEntryBoots,
   verifyPackagedMacTerminalHostBoots
-} = require('./scripts/verify-packaged-daemon-entry.cjs')
+} = require('./scripts/desktop-distribution/runtime-verification/verify-packaged-daemon-entry.cjs')
 const {
   buildMacTerminalHost,
   macTerminalHostSignIgnore,
   verifyMacTerminalHost
-} = require('./scripts/macos-terminal-host-bundle.cjs')
+} = require('./scripts/macos/terminal-host-bundle/macos-terminal-host-bundle.cjs')
 const {
   assertPackagedNativeVariantsInstalled,
   assertProcessHostOutputBuilt,
@@ -26,24 +26,30 @@ const {
 const {
   assertNoWindowsExecutablesInRuntimeNodeModules
 } = require('./packaged-windows-only-runtime-files.cjs')
-const { verifyLinuxGlibcFloor } = require('./scripts/verify-linux-glibc-floor.cjs')
+const {
+  verifyLinuxGlibcFloor
+} = require('./scripts/native-build/linux/verify-linux-glibc-floor.cjs')
 const {
   verifyPackagedWindowsAgentHook
-} = require('./scripts/verify-packaged-windows-agent-hook.cjs')
+} = require('./scripts/desktop-distribution/runtime-verification/verify-packaged-windows-agent-hook.cjs')
 const {
   ensureBundledWaylandClipboard,
   finalizePackagedWaylandClipboard
 } = require('./wayland-clipboard-resources.cjs')
-const { writeMacBuildCompatibility } = require('./scripts/mac-build-compatibility.cjs')
+const {
+  writeMacBuildCompatibility
+} = require('./scripts/desktop-distribution/macos/mac-build-compatibility.cjs')
 const {
   MOBILE_WEB_BUNDLE_DIR,
   assertMobileWebBundleBuilt
-} = require('./scripts/verify-packaged-mobile-web-bundle.cjs')
-const { verifyPackagedPluginResources } = require('./scripts/verify-packaged-plugin-resources.cjs')
+} = require('./scripts/desktop-distribution/runtime-verification/verify-packaged-mobile-web-bundle.cjs')
+const {
+  verifyPackagedPluginResources
+} = require('./scripts/desktop-distribution/runtime-verification/verify-packaged-plugin-resources.cjs')
 const {
   assertPackagedServeSelectionEntry,
   assertPackagedWebClient
-} = require('./scripts/verify-packaged-serve-payload.cjs')
+} = require('./scripts/desktop-distribution/runtime-verification/verify-packaged-serve-payload.cjs')
 const {
   assertBundledRipgrepInstalled,
   bundledRipgrepExtraResources,
@@ -52,24 +58,32 @@ const {
 } = require('./bundled-ripgrep-resources.cjs')
 const {
   verifyPackagedWindowsNodePty
-} = require('./scripts/verify-packaged-node-pty-job-ownership.cjs')
+} = require('./scripts/desktop-distribution/runtime-verification/verify-packaged-node-pty-job-ownership.cjs')
 const {
   assertOrcadTemplateBuilt,
   finalizePackagedOrcadTemplate,
   orcadTemplateExtraResource,
   orcadTemplateNodeModulesExtraResource,
   orcadTemplateMacSignIgnore
-} = require('./scripts/packaged-orcad-template.cjs')
-const { verifySkillsCliRuntime } = require('./scripts/verify-skills-cli-runtime.cjs')
+} = require('./scripts/orcad-distribution/template/packaged-orcad-template.cjs')
+const {
+  verifySkillsCliRuntime
+} = require('./scripts/runtime-verification/skills-cli/verify-skills-cli-runtime.cjs')
 const { assertNotDarkBuild } = require('./dark-build-switches.cjs')
-const { verifyStaticAppImagePackage } = require('./scripts/static-appimage-package-contract.cjs')
+const {
+  verifyStaticAppImagePackage
+} = require('./scripts/desktop-distribution/appimage/static-appimage-package-contract.cjs')
 const {
   appImageNodeRuntimeFpmArgs,
   placeAppImageNodeRuntime,
   verifyAppImageNodeRuntimeServesPty
-} = require('./scripts/appimage-node-runtime.cjs')
-const { signWindowsUninstallerViaSignPath } = require('./scripts/windows-uninstaller-signing.cjs')
-const { buildMacShipItScheduling } = require('./scripts/macos-shipit-scheduling.cjs')
+} = require('./scripts/desktop-distribution/linux/appimage-node-runtime.cjs')
+const {
+  signWindowsUninstallerViaSignPath
+} = require('./scripts/desktop-distribution/windows/windows-uninstaller-signing.cjs')
+const {
+  buildMacShipItScheduling
+} = require('./scripts/desktop-distribution/macos/macos-shipit-scheduling.cjs')
 
 // Dev channels need release bundle ID/signature/notarization so Squirrel.Mac accepts updates and macOS retains app identity.
 const isMacHourly = process.env.ORCA_MAC_HOURLY === '1'
@@ -330,10 +344,16 @@ module.exports = {
     'out/main/gitlab/project-ref-parser.js',
     'out/main/grok/**',
     'out/main/hermes/**',
-    'out/main/asar-transparent-fs.js',
-    'out/main/macos-tree-clone.js',
+    'out/main/filesystem/asar-transparent-fs.js',
+    'out/main/filesystem/macos-tree-clone.js',
     'out/main/orca-profiles/profile-index-store.js',
     'out/main/persistence/profile-state/**',
+    'out/main/plugins/plugin-authoring-checks.js',
+    // `orca plugin types` copies the author typings from here in Node mode.
+    'resources/plugins/declarative/orca*.d.ts',
+    // `orca plugin test` and `orca plugin check` load the runtime, kit and hooks in Node.
+    'resources/plugins/declarative/*.mjs',
+    'resources/plugins/types/*.d.ts',
     'out/main/skills/bundled-skill-install/cli-entry.js',
     'out/main/startup/http1-compatibility-marker.js',
     'out/main/daemon-entry.js',
@@ -580,7 +600,9 @@ module.exports = {
     icon: 'resources/build/icon.icns',
     entitlements: 'resources/build/entitlements.mac.plist',
     entitlementsInherit: 'resources/build/entitlements.mac.plist',
-    ...(isMacRelease ? { sign: resolve(__dirname, 'scripts/sign-mac-app.mjs') } : {}),
+    ...(isMacRelease
+      ? { sign: resolve(__dirname, './scripts/desktop-distribution/macos/sign-mac-app.mjs') }
+      : {}),
     signIgnore: [
       ...bundledRipgrepMacSignIgnore,
       ...orcadTemplateMacSignIgnore,

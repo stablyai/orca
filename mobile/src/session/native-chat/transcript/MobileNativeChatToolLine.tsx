@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { Pressable, Text, View } from 'react-native'
-import { MobileNativeChatOwnedScrollView } from '../../MobileNativeChatOwnedScrollView'
+import { MobileNativeChatOwnedScrollView } from './MobileNativeChatOwnedScrollView'
 import { ChevronRight } from 'lucide-react-native'
 import {
   diffFromText,
@@ -17,16 +17,16 @@ import { nativeChatToolLineView } from '../../../../../src/shared/native-chat/to
 import type {
   NativeChatToolCallBlock,
   NativeChatToolResultBlock
-} from '../../../../../src/shared/native-chat-types'
+} from '../../../../../src/shared/native-chat/native-chat-types'
 import { MobileSourceCopyButton } from '../../../components/MobileSourceCopyButton'
 import { MobileSyntaxSegments } from '../../../components/MobileSyntaxSegments'
 import { INLINE_TEXT_SELECTION } from '../../../components/inline-text-selection'
 import { openExternalLink } from '../../../platform/external-link'
-import { colors } from '../../../theme/mobile-theme'
+import { colors, pressedStyle } from '../../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { highlightMobileCode } from '../../mobile-file-syntax'
 import { MobileNativeChatToolGlyph } from './MobileNativeChatToolIcon'
-import { MobileNativeChatToolOutput } from '../../MobileNativeChatFullContent'
+import { MobileNativeChatToolOutput } from '../MobileNativeChatFullContent'
 import { useMobileNativeChatOpenedDetail } from '../visual/mobile-native-chat-opened-detail'
 import { useMobileNativeChatDisclosure } from './mobile-native-chat-disclosure-store'
 import { toolStyles as styles, toolType } from './mobile-native-chat-tool-styles'
@@ -219,7 +219,7 @@ export function MobileNativeChatToolLine({
     <View testID={memberId}>
       <View style={styles.line}>
         <Pressable
-          style={[styles.line, styles.cardToggle]}
+          style={({ pressed }) => [styles.line, styles.cardToggle, pressed && pressedStyle]}
           onPress={() => hasDetail && setExpanded(!expanded)}
           disabled={!hasDetail}
           accessibilityRole="button"

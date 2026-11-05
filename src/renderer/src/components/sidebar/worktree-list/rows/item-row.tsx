@@ -6,19 +6,18 @@ import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import { isActiveSidebarWorkspace } from '../../../../../../shared/sidebar-list/active-workspace'
-import WorktreeCard, { type ActiveSurfaceVariant } from '../../WorktreeCard'
+import WorktreeCard from '../../workspace-card/surface/WorktreeCard'
+import type { ActiveSurfaceVariant } from '../../workspace-card/controller/worktree-card-model'
 import { PINNED_GROUP_KEY } from '../../../../../../shared/sidebar-list/group-keys'
 import type { WorktreeGroupBy } from '../../../../../../shared/sidebar-list/row-types'
 import {
-  getFolderBackedRepoWorktreeCardContentIndent,
-  getFolderBackedRepoWorktreeCardSurfaceInset,
   getLineageChildrenInlineStyle,
   getWorktreeCardContentIndent,
   getWorktreeCardSurfaceInset,
   LINEAGE_CHILDREN_INLINE_OFFSET,
   LINEAGE_NESTED_ROW_SURFACE_INSET
 } from './indentation'
-import type { LineageToggleHandler } from '../../worktree-lineage-toggle-handler-cache'
+import type { LineageToggleHandler } from '../../workspace-card/identity/worktree-lineage-toggle-handler-cache'
 import { stopNestedWorktreeCardBubble } from './header-event-guards'
 import type { WorktreeItemRow } from '../listing/renderable-rows'
 import { forwardOptionPressToCardSurface, getWorktreeOptionId } from './option-dom'
@@ -27,7 +26,6 @@ import type { WorktreeRowDragState } from '../drag/row-state'
 export type WorktreeItemRowContext = {
   settings: AppState['settings']
   groupBy: WorktreeGroupBy
-  folderBackedProjectGroupIds: ReadonlySet<string>
   groupKeyByRowKey: ReadonlyMap<string, string>
   groupIndexByRowKey: ReadonlyMap<string, number>
   agentSendTargetWorktreeId: string | null
@@ -62,7 +60,7 @@ export type WorktreeItemRowContext = {
   onCardDragEnd: () => void
 }
 
-// Handle plain rows, inherited lineage offsets and folder-backed project geometry separately.
+// Handle plain rows and inherited lineage offsets separately.
 function getWorktreeItemRowGeometry(
   ctx: WorktreeItemRowContext,
   itemRow: WorktreeItemRow,
@@ -73,31 +71,13 @@ function getWorktreeItemRowGeometry(
     return { surfaceInset: LINEAGE_NESTED_ROW_SURFACE_INSET, cardContentIndent: 0 }
   }
 
-  const projectGroupId = itemRow.repo?.projectGroupId
-  const isFolderBackedRepoChild =
-    ctx.groupBy === 'repo' &&
-    Boolean(projectGroupId && ctx.folderBackedProjectGroupIds.has(projectGroupId))
-  const getCardContentIndent = (lineageDepth: number): number =>
-    isFolderBackedRepoChild
-      ? getFolderBackedRepoWorktreeCardContentIndent({
-          groupDepth: itemRow.groupDepth,
-          lineageDepth
-        })
-      : getWorktreeCardContentIndent({
-          isGrouped: ctx.groupBy !== 'none',
-          groupDepth: itemRow.groupDepth,
-          lineageDepth
-        })
-  const paddingLeft = getCardContentIndent(itemRow.depth)
-  const surfaceInset = isFolderBackedRepoChild
-    ? getFolderBackedRepoWorktreeCardSurfaceInset({
-        groupDepth: itemRow.groupDepth,
-        lineageDepth: itemRow.depth
-      })
-    : getWorktreeCardSurfaceInset({
-        isGrouped: ctx.groupBy !== 'none',
-        groupDepth: itemRow.groupDepth
-      })
+  const isGrouped = ctx.groupBy !== 'none'
+  const paddingLeft = getWorktreeCardContentIndent({
+    isGrouped,
+    groupDepth: itemRow.groupDepth,
+    lineageDepth: itemRow.depth
+  })
+  const surfaceInset = getWorktreeCardSurfaceInset({ isGrouped, groupDepth: itemRow.groupDepth })
   return {
     surfaceInset,
     cardContentIndent: Math.max(0, paddingLeft - surfaceInset)
@@ -143,7 +123,7 @@ export function renderWorktreeItemRow(
       className={cn(
         // Why: don't transition 'transform' — it lags/flashes when TanStack Virtual repositions adjacent rows.
         'relative transition-[opacity,filter] duration-150 ease-out',
-        ctx.worktreeDragState.draggingWorktreeId === itemRow.worktree.id &&
+        ctx.worktreeDragState.draggingWorktreeId === worktreeIdentity &&
           // Why: the fixed drag preview is the affordance; a translucent source row would bleed through sticky headers/footers.
           'pointer-events-none opacity-0'
       )}
@@ -205,6 +185,7 @@ export function renderWorktreeItemRow(
         inPinnedSection={itemRow.sectionKey === PINNED_GROUP_KEY}
         renameRowKey={itemRow.rowKey}
         lineageChildCount={itemRow.lineageChildCount}
+        lineageChildWorktreeIds={itemRow.lineageChildWorktreeIds}
         lineageCollapsed={itemRow.lineageCollapsed}
         lineageChildren={lineageChildren}
         lineageChildrenStyle={lineageChildrenStyle}

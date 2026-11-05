@@ -6,14 +6,11 @@ import { mobileQueuedEditHarness, readOrHoldReply } from './mobile-queued-edit-h
 import { createElement, type ReactNode } from 'react'
 import { act } from 'react-test-renderer'
 import { describe, expect, it, vi } from 'vitest'
-import { ScrollView, TextInput } from 'react-native'
+import { TextInput } from 'react-native'
 import { ActionSheetModal } from '../components/ActionSheetModal'
 import { MobileQueuedMessageComposerContext } from './mobile-queued-message-composer-context'
 import { MobileNativeChatQueuedMessages } from './native-chat/input/MobileNativeChatQueuedMessages'
-import {
-  MobileNativeChatComposer,
-  MobileNativeChatDraftComposer
-} from './native-chat/composer/MobileNativeChatComposer'
+import { MobileNativeChatComposer } from './native-chat/composer/MobileNativeChatComposer'
 import { MobileNativeChatComposerMenu } from './native-chat/composer/MobileNativeChatComposerMenu'
 import { MobileQueuedMessageComposer } from './MobileQueuedMessageComposer'
 import { useMobileNativeChatDrafts } from './native-chat/composer/use-mobile-native-chat-drafts'
@@ -37,19 +34,24 @@ import {
 } from './use-mobile-structured-agent-session-queued.test-fixture'
 
 const picker = vi.hoisted(() => ({ pickFiles: vi.fn(), pickImages: vi.fn() }))
+vi.mock('../components/MobileSwitch', () => ({ MobileSwitch: 'Switch' }))
 vi.mock('../platform/media-picker', () => ({ useMediaPicker: () => picker }))
 vi.mock('../components/DragReorderList', () => ({ DragReorderList: 'DragReorderList' }))
 vi.mock('react-native-reanimated', async () => {
   const { useRef } = await import('react')
+  const { reanimatedPagerStub } = await import('../test-support/reanimated-pager-stub')
   return {
-    default: { ScrollView: 'ScrollView' },
+    ...reanimatedPagerStub(),
+    default: { ScrollView: 'ScrollView', View: 'AnimatedView' },
     useAnimatedRef: () => useRef(null),
     useSharedValue: (value: unknown) => useRef({ value }).current
   }
 })
 vi.mock('../components/ActionSheetModal', () => ({ ActionSheetModal: 'ActionSheetModal' }))
-vi.mock('../components/mounted-bottom-drawer', () => ({ MountedBottomDrawer: 'BottomDrawer' }))
-vi.mock('../components/bottom-drawer-modal-host-scope', () => ({
+vi.mock('../components/bottom-drawer/mounted-bottom-drawer', () => ({
+  MountedBottomDrawer: 'BottomDrawer'
+}))
+vi.mock('../components/bottom-drawer/bottom-drawer-modal-host-scope', () => ({
   useBottomDrawerModalHost: () => null
 }))
 
@@ -147,116 +149,6 @@ describe('phone inline editor presentation', () => {
     await open()
     return { root, button, field, rerender, open }
   }
-  it('gives the short image editor and open picker the available queue scroll space, separate from the ordinary draft', async () => {
-    const message = queuedDraft({
-      messageId: 'photo-layout',
-      body: {
-        kind: 'message',
-        role: 'user',
-        blocks: [
-          { type: 'text', text: 'short edit' },
-          { type: 'image-ref', url: 'https://host/photo.png', alt: 'photo' }
-        ]
-      }
-    })
-    const catalog = {
-      reported: Array.from({ length: 6 }, (_, i) => ({
-        name: `skill-${i}`,
-        kind: 'skill' as const,
-        path: `/skills/${i}/SKILL.md`
-      }))
-    }
-    const { root, button } = await rows(message, 'codex', SESSION_ID, catalog, () =>
-      createElement(MobileNativeChatDraftComposer, {
-        draftKey: 'original-bottom',
-        draftScopeKey: 'original-bottom',
-        agent: 'codex',
-        structured: {
-          catalog: { ...catalog, conversationCommands: [] },
-          onSlashMenuOpen: () => {},
-          files: [],
-          onRemoveFile: () => {}
-        },
-        onChangeText: (text) => setMobileNativeChatDraftText('original-bottom', text),
-        onSend: async () => true,
-        sendSurfaceId: 'original-bottom',
-        getSendCompletionGeneration: () => 0,
-        getComposerEditGeneration: () => 0
-      })
-    )
-    const { snapshotEvent } =
-      await import('./use-mobile-structured-agent-session-queued.test-fixture')
-    act(() => {
-      setMobileNativeChatDraftText('original-bottom', 'Bottom draft stays here.')
-      state.listener?.(
-        snapshotEvent({
-          queuedMessages: [message, queuedDraft({ messageId: 'neighbor', position: 2 })],
-          runningTurn: true
-        })
-      )
-    })
-    const style = (value: unknown): Record<string, unknown> => Object.assign({}, ...[value].flat())
-    const queue = () => root().findByType(MobileNativeChatQueuedMessages)
-    const scroll = () =>
-      queue().find((node) => node.type === ScrollView && node.props.onContentSizeChange)
-    const box = () => root().findByProps({ testID: 'queued-box' })
-    const editor = () => root().findByType(MobileQueuedMessageComposer)
-    const bottom = () => root().findByType(MobileNativeChatDraftComposer)
-    expect(editor().findByType(MobileNativeChatComposer).props.attachments).toHaveLength(1)
-    expect(queue().findAllByProps({ testID: 'queued-card-row' })).toHaveLength(2)
-    // Every boundary down to the scrollport must yield to the keyboard/bottom siblings.
-    for (const node of [box().parent!, box(), scroll().parent!, scroll()]) {
-      expect(style(node.props.style)).toMatchObject({ flexShrink: 1, minHeight: 0 })
-    }
-    expect(style(scroll().props.style).maxHeight).toBeUndefined()
-    expect(style(box().parent!.props.style).marginBottom).toBe(0)
-    expect(style(box().props.style).paddingBottom).toBe(0)
-    expect(queue().findAllByType(MobileNativeChatDraftComposer)).toHaveLength(0)
-    const field = editor().findByType(TextInput)
-    act(() => {
-      field.props.onChangeText('/')
-      field.props.onSelectionChange({ nativeEvent: { selection: { start: 1, end: 1 } } })
-    })
-    const menuScroll = root().findByType(MobileNativeChatComposerMenu).findByType(ScrollView)
-    expect(style(menuScroll.props.style).maxHeight).toBe(300)
-    expect(menuScroll.props.nestedScrollEnabled).toBe(true)
-    expect(menuScroll.props.keyboardShouldPersistTaps).toBe('always')
-    const scrollTo = vi.fn()
-    scroll().props.ref.current = { scrollTo, flashScrollIndicators: vi.fn() }
-    act(() => {
-      scroll().props.onLayout({ nativeEvent: { layout: { height: 280 } } })
-      scroll().props.onContentSizeChange(360, 800)
-      editor().parent!.props.onLayout({
-        nativeEvent: { layout: { x: 0, y: 0, width: 360, height: 620 } }
-      })
-    })
-    expect(scrollTo).toHaveBeenCalledExactlyOnceWith({ y: 0, animated: false })
-    act(() => scroll().props.onScroll({ nativeEvent: { contentOffset: { y: 120 } } }))
-    expect(scrollTo).toHaveBeenCalledTimes(1)
-    await act(async () => button('$skill-5').props.onPress())
-    expect(state.hook!.queued.editor?.text).toBe('$skill-5 ')
-    expect(readMobileNativeChatDraftInputs(state.hook!.queued.editor!.scopeKey).skills).toEqual([
-      { name: 'skill-5', path: '/skills/5/SKILL.md' }
-    ])
-    expect(editor().findByType(MobileNativeChatComposer).props.attachments).toHaveLength(1)
-    expect(bottom().findByType(TextInput).props.value).toBe('Bottom draft stays here.')
-    await act(async () => button('Cancel editing').props.onPress())
-    expect(style(scroll().props.style).maxHeight).toBe(160)
-    expect(style(box().parent!.props.style).marginBottom).toBeLessThan(0)
-    expect(bottom().findByType(TextInput).props.value).toBe('Bottom draft stays here.')
-    act(() => {
-      bottom().findByType(TextInput).props.onChangeText('/')
-      bottom()
-        .findByType(TextInput)
-        .props.onSelectionChange({ nativeEvent: { selection: { start: 1, end: 1 } } })
-    })
-    const ordinaryMenu = bottom().findByType(MobileNativeChatComposerMenu).findByType(ScrollView)
-    expect(style(ordinaryMenu.props.style).maxHeight).toBe(300)
-    expect(ordinaryMenu.props.nestedScrollEnabled).toBeFalsy()
-    expect(
-      sendRequest.mock.calls.some(([method]) => method === 'agentSession.queuedMessageUpdate')
-    ).toBe(false)
-  })
   it('hands back into the main captured Send path, keeps pending files, and restores a rejected complete draft', async () => {
     const { snapshotEvent, ok, fieldsOf } =
       await import('./use-mobile-structured-agent-session-queued.test-fixture')

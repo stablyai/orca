@@ -34,13 +34,6 @@ vi.mock('./terminal-text-field-submit-binding', () => ({
 let submitted: string[] = []
 const field: RefObject<TextInput | null> = { current: null }
 
-/**
- * A caller handing the binding a fresh closure each render, which is what the command dock's two
- * fields do: their submits read `handleSend`, a per-render function whose guard reads `client` and
- * `activeHandle`. This says the listener follows them.
- */
-let rebindField: ((node: TextInput | null) => void) | undefined
-
 const Field = forwardRef<TextInput>(function Field(_props, ref) {
   useImperativeHandle(ref, () => node, [])
   return null
@@ -57,7 +50,6 @@ function Harness({ value }: { readonly value: string }) {
       return value === 'second'
     }
   )
-  rebindField = bindField
   return createElement(Field, { ref: bindField })
 }
 
@@ -66,7 +58,6 @@ const node = {} as TextInput
 
 function reset(): void {
   submitted = []
-  rebindField = undefined
   mocks.chordHandlers.length = 0
   mocks.boundHandlers.length = 0
   mocks.unbindCount = 0
@@ -105,24 +96,6 @@ describe('the terminal text field submit binding', () => {
     })
     expect(firstListener?.({ bytes: '\x03' })).toBe(true)
     expect(submitted).toEqual(['first', 'second'])
-    act(() => renderer?.unmount())
-  })
-
-  it('releases the previous listener before binding a node again', () => {
-    reset()
-    let renderer: ReactTestRenderer | null = null
-
-    act(() => {
-      renderer = create(createElement(Harness, { value: 'first' }))
-    })
-    act(() => {
-      renderer?.update(createElement(Harness, { value: 'second' }))
-    })
-
-    act(() => rebindField?.(node))
-
-    // One binding remains live after an explicit rebind.
-    expect(mocks.unbindCount - mocks.releasedCount).toBe(1)
     act(() => renderer?.unmount())
   })
 

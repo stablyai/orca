@@ -12,7 +12,7 @@ import {
 } from './orcad-managed-stop-request'
 import { claimOrcadManagedStopDecision } from './orcad-managed-stop-decision'
 import { withdrawOrcadManagedStopRequest } from './orcad-managed-stop-cancellation'
-import { hasErrorCode } from '../daemon/daemon-process-inspection'
+import { hasErrorCode } from '../daemon/endpoint/identity/daemon-process-inspection'
 
 export type OrcadStopRequestListener = { close(): void }
 

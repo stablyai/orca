@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { loadScheduler } from './pane-terminal-output-scheduler-test-harness'
+import { createTerminal, loadScheduler } from './pane-terminal-output-scheduler-test-harness'
 
 vi.mock('@/lib/e2e-config', () => ({
   e2eConfig: { exposeStore: true }
@@ -25,6 +25,23 @@ describe('pane terminal output scheduler', () => {
     delete (globalThis as { __terminalOutputSchedulerDebug?: unknown })
       .__terminalOutputSchedulerDebug
     vi.unstubAllGlobals()
+  })
+
+  it('reports every backlog replacement, even one a writer without the hook triggers', async () => {
+    // The warning's CAN moves xterm's parser off the stream the pane tracks.
+    vi.useFakeTimers()
+    const { writeTerminalOutput } = await loadScheduler()
+    const terminal = createTerminal()
+    const onBacklogReplaced = vi.fn()
+    const chunk = 'x'.repeat(512 * 1024)
+
+    writeTerminalOutput(terminal, chunk, { foreground: false, onBacklogReplaced })
+    for (let i = 0; i < 8; i++) {
+      // Notices and idle resets write without the hook.
+      writeTerminalOutput(terminal, chunk, { foreground: false })
+    }
+
+    expect(onBacklogReplaced.mock.calls.length).toBeGreaterThan(1)
   })
 
   describe('queue memory retention (STA-3567)', () => {

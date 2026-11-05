@@ -1,21 +1,27 @@
-// agent.launch shares desktop/mobile policy; absent --surface uses the host's Chat UI setting.
+// agent.launch shares desktop/mobile policy; absent --surface uses the host's Chat | CLI choice for the agent.
 
 import { randomUUID } from 'node:crypto'
-import type { AgentLaunchPrompt, AgentLaunchResult } from '../shared/agent-launch-intent'
-import { AGENT_LAUNCH_SURFACES, type AgentLaunchSurface } from '../shared/agent-launch-surface'
-import { checkAgentLaunchModelPreferences } from '../shared/agent-launch-model-preferences'
+import type {
+  AgentLaunchPrompt,
+  AgentLaunchResult
+} from '../shared/agent-launch/contracts/agent-launch-intent'
+import {
+  AGENT_LAUNCH_SURFACES,
+  type AgentLaunchSurface
+} from '../shared/agent-launch/contracts/agent-launch-surface'
+import { checkAgentLaunchModelPreferences } from '../shared/agent-launch/choices/agent-launch-model-preferences'
 import {
   AGENT_LAUNCH_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_PROMPT_CARRY_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_LOCAL_PRESENTATION_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_REPLAY_REQUIRED_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY
-} from '../shared/agent-launch-runtime-capability'
-import { createStructuredAgentSessionOperationId } from '../shared/structured-agent-session-mutation'
-import { parseAgentSessionOperationTimestamp } from '../shared/agent-session-host-authority'
+} from '../shared/agent-launch/contracts/agent-launch-runtime-capability'
+import { createStructuredAgentSessionOperationId } from '../shared/agent-session/lifecycle/structured-agent-session-mutation'
+import { parseAgentSessionOperationTimestamp } from '../shared/agent-session/agent-session-host-authority'
 import type { RuntimeStatus } from '../shared/runtime-types'
-import type { TuiAgent } from '../shared/tui-agent'
-import { isTuiAgent } from '../shared/tui-agent-config'
+import type { TuiAgent } from '../shared/agent-launch/catalog/tui-agent'
+import { isTuiAgent } from '../shared/agent-launch/catalog/tui-agent-config'
 import {
   getOptionalStringFlag,
   getRequiredStringFlag,

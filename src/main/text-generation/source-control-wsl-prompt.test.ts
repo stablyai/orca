@@ -4,7 +4,7 @@ import { rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { Writable } from 'node:stream'
 import { afterEach, expect, it, vi } from 'vitest'
-import { planCommitMessageGeneration } from '../../shared/commit-message-plan'
+import { planCommitMessageGeneration } from '../../shared/source-control/ai/generation/commit-message-plan'
 import { prepareWslPrompt } from './source-control-prompt-files'
 import { producePromptRecords } from './source-control-prompt-producer'
 import { runLocalSourceControlPlan } from './source-control-local-process'
@@ -25,10 +25,10 @@ vi.mock('../../shared/windows-transient-lock-removal', async (original) => ({
   ...(await original<typeof Removal>()),
   removeTree: removeTreeMock
 }))
-vi.mock('../windows-process-tree-kill', () => ({
+vi.mock('../pty/process-retirement/windows-process-tree-kill', () => ({
   terminateWindowsProcessTree: vi.fn(async () => true)
 }))
-vi.mock('../wsl-background-distro-gate', () => ({ noteWslDistroLaunched: vi.fn() }))
+vi.mock('../wsl/discovery/wsl-background-distro-gate', () => ({ noteWslDistroLaunched: vi.fn() }))
 
 afterEach(() => {
   vi.useRealTimers()

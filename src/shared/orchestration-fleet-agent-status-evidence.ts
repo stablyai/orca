@@ -1,8 +1,8 @@
 // Internal fleet evidence makes missing identity/clock explicit union arms; optional IPC fields previously silently lost binding or freshness.
 // Runtime resolves identity; wire AgentStatusIpcPayload stays unchanged (L-1, W1-14/RR-W-P1A).
 
-import type { AgentStatusIpcPayload } from './agent-status-ipc-payload'
-import type { AgentStatusState, AgentType } from './agent-status-types'
+import type { AgentStatusIpcPayload } from './agent-status/contracts/agent-status-ipc-payload'
+import type { AgentStatusState, AgentType } from './agent-status/contracts/agent-status-types'
 
 /** Why a row could not be tied to a terminal. No catch-all member: a new gap needs a name. */
 export type FleetEvidenceBindingGap =

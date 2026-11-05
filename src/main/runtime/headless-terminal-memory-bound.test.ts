@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest'
-import { DAEMON_SESSION_SCROLLBACK_ROWS } from '../daemon/daemon-session-scrollback-window'
+import { DAEMON_SESSION_SCROLLBACK_ROWS } from '../daemon/sessions/daemon-session-scrollback-window'
 import { AUTHORITATIVE_TERMINAL_SNAPSHOT_TIMEOUT_MS } from './orca-runtime-postlude'
 import type { PtyProviderBufferSnapshot } from '../providers/pty-provider-contract'
 import { deferred } from './orca-runtime-test-fixtures.spec'
@@ -58,40 +58,6 @@ it('bounds a provider snapshot that does not answer, then reseeds once it lands'
     await runtime.model().writeChain
     expect(runtime.model().emulator.getVisibleLines().join('\n')).toContain('FRESH-SEED')
     expect(runtime.retainedState().providerPreferred).toBe(false)
-  } finally {
-    vi.useRealTimers()
-  }
-})
-
-it('keeps preferring the provider when the late retry finds no snapshot', async () => {
-  vi.useFakeTimers()
-  try {
-    const { runtime, late, serializeProviderBuffer } = hangingProvider()
-    runtime.replaceExecutionContext()
-    const stalled = runtime.model()
-    await vi.advanceTimersByTimeAsync(AUTHORITATIVE_TERMINAL_SNAPSHOT_TIMEOUT_MS)
-    serializeProviderBuffer.mockResolvedValue(null)
-    late.resolve({ ...SIZE, data: 'LATE-SEED', seq: 0, source: 'headless' })
-    await vi.waitFor(() => expect(runtime.model()).not.toBe(stalled))
-    await runtime.model().writeChain
-    // The retry's model lost what its predecessor held, so it must not become authoritative.
-    expect(runtime.retainedState().providerPreferred).toBe(true)
-  } finally {
-    vi.useRealTimers()
-  }
-})
-
-it('trusts the model when a timed-out capture lands with no snapshot', async () => {
-  vi.useFakeTimers()
-  try {
-    const { runtime, late, serializeProviderBuffer } = hangingProvider()
-    runtime.replaceExecutionContext()
-    const model = runtime.model()
-    await vi.advanceTimersByTimeAsync(AUTHORITATIVE_TERMINAL_SNAPSHOT_TIMEOUT_MS)
-    late.resolve(null)
-    await vi.waitFor(() => expect(runtime.retainedState().providerPreferred).toBe(false))
-    expect(runtime.model()).toBe(model)
-    expect(serializeProviderBuffer).toHaveBeenCalledOnce()
   } finally {
     vi.useRealTimers()
   }

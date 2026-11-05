@@ -10,6 +10,8 @@ export type RuntimeDesktopSurface = {
   isAwayForMobileNotifications?(): boolean | undefined
   /** Show a native notification. Returns false when the host cannot, so callers can say so. */
   showNotification(input: { title: string; body: string }): boolean
+  /** Sends to every open renderer window. Absent where there is no desktop. */
+  sendToRenderers?(channel: string, payload: unknown): void
   /** The renderer window with this id, or null when there is no desktop. */
   findWindowById(id: number): BrowserWindow | null
   isResourceViewVisible?(sender: WebContents): boolean

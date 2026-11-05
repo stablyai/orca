@@ -1,8 +1,9 @@
+import { CrewChanges } from './orchestration/crew/crew-changes'
 import { settledWriteStub } from '../providers/settled-pty-write-stub'
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 
 // Stale graphs can advertise writable PTYs no provider owns. Refuse only controller-proven absence; unknown restored-daemon liveness still permits writes.
 
@@ -418,6 +419,7 @@ function makeOrchestrationDbStub(toHandle: () => string) {
       })
     },
     db: {
+      crewChanges: new CrewChanges(),
       listSessionDispatchesForPresentation: () => [],
       // Mirrors the real query: `read = 0 AND delivered_at IS NULL`.
       getUndeliveredUnreadMessages: (handle: string) =>
@@ -436,6 +438,7 @@ function makeOrchestrationDbStub(toHandle: () => string) {
       ],
       getActiveCoordinatorRun: () => null,
       getCurrentRunForPane: () => ({ id: 'run_test' }),
+      runsBoundToPane: () => [{ id: 'run_test' }],
       getRun: () => ({ id: 'run_test', coordinator_handle: toHandle() }),
       hasUndeliveredDirectMessageForRun: (runId: string, handle: string) =>
         rows.some(
@@ -461,6 +464,7 @@ function makeOrchestrationDbStub(toHandle: () => string) {
         ),
       // Consulted by onPtyExit's dispatch-failure path.
       getActiveDispatchForTerminal: () => null,
+      findActiveRemoteAttachmentForPane: () => undefined,
       stageMailboxPointerEnter,
       markMailboxPointerWriteAttempted,
       markMailboxPointerEnterAttempted,

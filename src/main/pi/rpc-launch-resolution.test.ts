@@ -4,13 +4,18 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
-import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
-import type { AgentSessionProviderHandleLink } from '../../shared/agent-session-provider-handle'
-import { agentSessionProviderHandleKey } from '../../shared/agent-session-provider-handle'
+import type { AgentSessionJournalIdentity } from '../../shared/agent-session/journal/agent-session-journal-identity'
+import type { AgentSessionProviderHandleLink } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import { agentSessionProviderHandleKey } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { closeTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
-import { openTestAgentSessionRecordStore } from '../runtime/agent-session-record-store-test-harness'
+import { openTestAgentSessionRecordStore } from '../runtime/agent-session/records/agent-session-record-store-test-harness'
 import { buildPiRpcLaunch } from './rpc-launch'
 import { piRpcProviderLink } from './rpc-launch-resolution'
+import {
+  PI_BACKGROUND_WORK_BRIDGE_FILE,
+  PI_BACKGROUND_WORK_DIR_ENV
+} from './rpc-background-work-bridge-source'
+import { getAppEnvironment } from '../../shared/app-environment'
 
 const probeVersion = vi.fn(async (..._input: unknown[]): Promise<{ version: string | null }> => ({
   version: '0.84.0'
@@ -29,7 +34,7 @@ beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-pi-resolver-'))
 })
 afterEach(async () => {
-  closeTestJournalHostDatabase(root)
+  await closeTestJournalHostDatabase(root)
   await rm(root, { recursive: true, force: true })
 })
 
@@ -92,6 +97,9 @@ async function setup() {
   }
   return { store, record, workspace, resolver, resolveCommand, settings, prior, withPrior }
 }
+
+const bridge = (): string =>
+  join(getAppEnvironment().getPath('userData'), 'pi-native-chat', PI_BACKGROUND_WORK_BRIDGE_FILE)
 
 describe('Pi host launch resolution', () => {
   it('refuses acquisition if the selected binary was replaced by a too-old version', async () => {
@@ -159,7 +167,8 @@ describe('Pi host launch resolution', () => {
     expect(launch.sessionFile).toBeUndefined()
     expect(launch.forkFile).toBeUndefined()
     expect(launch.replacement).toBeUndefined()
-    expect(buildPiRpcLaunch(launch).args).toEqual(['--mode', 'rpc'])
+    expect(buildPiRpcLaunch(launch).args).toEqual(['--mode', 'rpc', '--extension', bridge()])
+    expect(buildPiRpcLaunch(launch).env?.[PI_BACKGROUND_WORK_DIR_ENV]).toEqual(expect.any(String))
     expect(piRpcProviderLink(launch, join(root, 'fresh.jsonl'), 3, 'fresh', 101).origin).toBe(
       'created'
     )
@@ -222,7 +231,7 @@ describe('Pi host launch resolution', () => {
       link: { ...h.prior(file), mintedAtFence: fence },
       now: 1_800_000_000_002
     })
-    closeTestJournalHostDatabase(root)
+    await closeTestJournalHostDatabase(root)
     const reopened = await openTestAgentSessionRecordStore(root)
     const launch = await createPiRpcLaunchResolver({
       store: reopened,
@@ -232,7 +241,14 @@ describe('Pi host launch resolution', () => {
       probeVersion
     })(identity)
     expect(launch.sessionFile).toBe(file)
-    expect(buildPiRpcLaunch(launch).args).toEqual(['--mode', 'rpc', '--session', file])
+    expect(buildPiRpcLaunch(launch).args).toEqual([
+      '--mode',
+      'rpc',
+      '--extension',
+      bridge(),
+      '--session',
+      file
+    ])
   })
 
   it('distinguishes an unsaved creation from an existing session that could not restore', async () => {

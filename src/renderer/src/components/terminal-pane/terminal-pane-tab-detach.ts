@@ -2,8 +2,8 @@ import { toast } from 'sonner'
 import type { AppState } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { createBrowserUuid } from '@/lib/browser-uuid'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
-import type { TerminalLeafMoveRequest } from '../../../../shared/terminal-leaf-move'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
+import type { TerminalLeafMoveRequest } from '../../../../shared/workspace-layout/terminal-leaf-move'
 import { commitTerminalSurfaceClose } from '@/store/terminals/terminal-surface-close-intent'
 import type { PaneCwdEntry } from './resolve-split-cwd'
 import { detachTerminalLayoutLeaf } from './terminal-layout-leaf-detach'
@@ -12,7 +12,7 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switc
 import {
   isWebTerminalSurfaceTabId,
   toWebTerminalSurfaceTabId
-} from '../../../../shared/terminal-surface-id'
+} from '../../../../shared/workspace-layout/terminal-surface-id'
 import {
   moveWebRuntimeLeafToNewTab,
   resolvePaneMoveHost,

@@ -3,7 +3,7 @@ import { useAppStore } from '@/store'
 import { useProjectHeaderHostContexts } from './use-project-header-host-contexts'
 import { translate } from '@/i18n/i18n'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
-import { WorktreeListScrollToTopButton } from '../../WorktreeListScrollToTopButton'
+import { WorktreeListScrollToTopButton } from './WorktreeListScrollToTopButton'
 import { renderWorktreeSidebarDropIndicators } from './drop-indicators'
 import { useWorktreeListScrollToTop } from './use-scroll-to-top'
 import { getActiveDescendantOptionId } from '../navigation/active-descendant-option'
@@ -116,15 +116,6 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     () => renderRows.findIndex((row) => row.type === 'header' || row.type === 'host-header'),
     [renderRows]
   )
-  const folderBackedProjectGroupIds = useMemo(
-    () =>
-      new Set(
-        projectGroups
-          .filter((group) => group.createdFrom === 'folder-scan')
-          .map((group) => group.id)
-      ),
-    [projectGroups]
-  )
 
   const headerDrag = useWorktreeSidebarHeaderDrag({
     rows,
@@ -231,11 +222,9 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
 
   const { handleContainerKeyDown, keyboardPreview } = useWorktreeListKeyboardNavigation({
     rows,
-    renderRows,
     activeWorktreeId,
     activeWorkspaceExecutionHostId: props.activeWorkspaceExecutionHostId,
     pinnedDisplayPolicy,
-    virtualizer: virtualization.virtualizer,
     scrollRef,
     activeModal: props.activeModal,
     markDirectScrollInput
@@ -352,7 +341,6 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     settings,
     projectActions,
     newCardStyle,
-    folderBackedProjectGroupIds,
     projectGroups,
     session,
     runtime,

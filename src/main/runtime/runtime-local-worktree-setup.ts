@@ -1,8 +1,14 @@
 import type { CreateWorktreeResult, SetupDecision } from '../../shared/worktree/create-types'
 import type { Repo } from '../../shared/repo-types'
-import { getEffectiveHooks, loadHooks, runHook } from '../hooks'
-import { createSetupRunnerScript, resolveSetupRunnerShell } from '../worktree-runner-script'
-import { getDefaultTabsLaunch, shouldRunSetupForCreate } from '../effective-hook-config'
+import { getEffectiveHooks, loadHooks, runHook } from '../workspace-hooks/hooks'
+import {
+  createSetupRunnerScript,
+  resolveSetupRunnerShell
+} from '../workspace-hooks/worktree-runner-script'
+import {
+  getDefaultTabsLaunch,
+  shouldRunSetupForCreate
+} from '../workspace-hooks/effective-hook-config'
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
 import type { RuntimeStore } from './runtime-store-contract'
 
@@ -57,7 +63,7 @@ export async function prepareRuntimeLocalWorktreeSetup(args: {
   if (shouldRunSetup && hooks?.scripts.setup) {
     if (args.shouldUseSetupRunner) {
       try {
-        setup = createSetupRunnerScript(
+        setup = await createSetupRunnerScript(
           repo,
           worktreePath,
           hooks.scripts.setup,

@@ -1,6 +1,6 @@
 import type { GitHubOwnerRepo, GitHubPRFile } from '../../shared/github/pull-request-types'
 import type { Repo } from '../../shared/repo-types'
-import type { LocalProjectGhExecOptions } from '../project-runtime-git-options'
+import type { LocalProjectGhExecOptions } from '../workspaces/execution-host/project-runtime-git-options'
 import { getIssue, getPRCheckDetails, getPRChecks, getPRComments } from '../github/client'
 import { getPRFileContents } from '../github/work-item-details'
 import { getRepoRoutingConnectionId } from '../../shared/execution-host'
@@ -33,7 +33,7 @@ export class RuntimeGitHubReviewQueryCommands {
     prNumber: number,
     headSha?: string,
     prRepo?: GitHubOwnerRepo | null,
-    options?: { noCache?: boolean }
+    options?: { noCache?: boolean; userRefresh?: boolean }
   ): Promise<Awaited<ReturnType<typeof getPRChecks>>> {
     const repo = await this.deps.resolveRepo(repoSelector)
     return getPRChecks(

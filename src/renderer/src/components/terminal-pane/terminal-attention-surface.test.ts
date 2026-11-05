@@ -7,7 +7,7 @@ import {
   makeTabGroup,
   makeUnifiedTab
 } from '@/store/slices/store-test-helpers'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../../shared/constants'
 import { resolveAgentAttention } from '@/attention/agent-attention-policy'
 

@@ -1,5 +1,5 @@
-import { TerminalShellLifecycleScanner } from '../daemon/terminal-shell-lifecycle-scanner'
-import type { TerminalOwner } from '../../shared/terminal-owner'
+import { TerminalShellLifecycleScanner } from '../daemon/shell-readiness/terminal-shell-lifecycle-scanner'
+import type { TerminalOwner } from '../../shared/terminal/pty/lifecycle/terminal-owner'
 
 // Bound serialization latency independently of slow RPC/process inspection; late proof remains generation-fenced.
 const SETTLE_DEADLINE_MS = 750
@@ -41,6 +41,13 @@ export class PtyShellOwnershipMirror {
 
   get owner(): TerminalOwner | undefined {
     return this.scanner.owner
+  }
+
+  /** Consume the marker hint: true at most once per clean prompt cycle. */
+  claimIdlePrompt(): boolean {
+    const idle = this.scanner.isIdleAtPrompt
+    this.scanner.forgetIdlePrompt()
+    return idle
   }
 
   seedOwner(owner: TerminalOwner | undefined, opts: { alternateScreen?: boolean } = {}): void {

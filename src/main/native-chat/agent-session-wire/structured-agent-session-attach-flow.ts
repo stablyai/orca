@@ -1,4 +1,4 @@
-import { refuse } from '../../../shared/agent-session-wire-refusals'
+import { refuse } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import {
   settlePostAcquisitionAttachFailure,
   settleUnsupportedReservation
@@ -13,10 +13,11 @@ import type { StructuredAgentSessionAdapter } from './structured-agent-session-a
 import type {
   AgentSessionAttachResult,
   AgentSessionMutationResult
-} from '../../../shared/agent-session-wire'
-import { agentSessionLeaseAdmitsWriter } from '../../../shared/agent-session-lease-adjudication'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
-import type { AgentChatPermissionChoice } from '../../../shared/agent-chat-permission-mode'
+} from '../../../shared/agent-session/agent-session-wire'
+import { agentSessionLeaseAdmitsWriter } from '../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
+import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
+import type { AgentChatPermissionChoice } from '../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import {
   admitAttachOrRefuse,
   attachJournal,
@@ -26,7 +27,7 @@ import {
   type AgentSessionAttachParams,
   type AttachedJournal
 } from './structured-agent-session-attach'
-import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
 import {
   adapterSupportsCreateIfDeclared,
   hostCanStartRecord
@@ -86,7 +87,9 @@ export type AttachFlowInput = {
   onAttached: (
     attached: AttachedJournal,
     acquisitionGeneration: string | null,
-    owner: AttachedOwner
+    owner: AttachedOwner,
+    /** The account home the spawned child launched under, when its adapter reports one. */
+    accountHome?: AgentSessionAccountHome
   ) => Promise<void> | void
   /** Wait outside commits for sink drains/provider reads. */
   beforePublish?: (owner: AttachedOwner) => Promise<void>
@@ -137,6 +140,7 @@ export async function performAttach(
 
   let record: AgentSessionRecord
   let acquisitionGeneration: string | null = null
+  let accountHome: AgentSessionAccountHome | undefined
   let owner: AttachedOwner = 'kept'
   let reservedRecord: AgentSessionRecord | null = null
   let unsupportedReservationSettlementAttempted = false
@@ -204,6 +208,7 @@ export async function performAttach(
       )
       record = acquired.record
       acquisitionGeneration = acquired.acquisitionGeneration
+      accountHome = acquired.accountHome
       owner = 'acquired'
     }
   } catch (error) {
@@ -262,7 +267,7 @@ export async function performAttach(
         openConversation: input.openConversation
       })
       await importAdoptedTranscript(params, journal, acquired, preparedTranscript.items)
-      await input.onAttached(journal, acquisitionGeneration, owner)
+      await input.onAttached(journal, acquisitionGeneration, owner, accountHome)
       return journal
     })
     await lock.wait(input.beforePublish?.(owner) ?? Promise.resolve())
@@ -281,6 +286,9 @@ export async function performAttach(
 
   const fence = record.lease.runtimeFence
   const tabId = store.getSessionTabId(sessionId)
+  const view = attached.journal.publicRead()
+  const work = heldStructuredAgentSessionCurrentWork(store, sessionId, attached.journal, undefined)
+  let page: ReturnType<typeof readAgentSessionHydrationPage> | undefined
   return {
     ok: true,
     replayed,
@@ -289,10 +297,12 @@ export async function performAttach(
     value: {
       sessionId,
       fence,
-      page: withPublishedWork(
-        readAgentSessionHydrationPage(attached.journal, fence),
-        heldStructuredAgentSessionCurrentWork(store, sessionId, attached.journal, undefined)
-      ),
+      get page() {
+        return (page ??= withPublishedWork(
+          readAgentSessionHydrationPage(attached.journal, fence, undefined, view.currentSnapshot()),
+          work
+        ))
+      },
       unconfirmedClientMessageIds: attached.unconfirmedClientMessageIds,
       ...(tabId ? { tabId } : {})
     }

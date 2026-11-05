@@ -1,5 +1,5 @@
 import { translate } from '@/i18n/i18n'
-import { AGENT_SESSION_GOAL_CONTROL_COPY as COPY } from '../../../../shared/agent-session-goal-control-copy'
+import { AGENT_SESSION_GOAL_CONTROL_COPY as COPY } from '../../../../shared/agent-session/view/agent-session-goal-control-copy'
 
 const WORDS = new Map<string, () => string>([
   [
@@ -18,7 +18,8 @@ const WORDS = new Map<string, () => string>([
   [
     COPY.stopUnconfirmed,
     () => translate('components.native-chat.goalControl.stopUnconfirmed', COPY.stopUnconfirmed)
-  ]
+  ],
+  [COPY.noGoal, () => translate('components.native-chat.goalControl.noGoal', COPY.noGoal)]
 ])
 
 export function agentSessionGoalControlWords(text: string): string {

@@ -1,10 +1,14 @@
 import type { SmartTier } from './sidebar-list/sort-stamps'
-import type { AgentStatusState, AgentType, AgentWorkingMode } from './agent-status-types'
-import type { AgentMainAgentStatus } from './main-agent-status'
+import type {
+  AgentStatusState,
+  AgentType,
+  AgentWorkingMode
+} from './agent-status/contracts/agent-status-types'
+import type { AgentMainAgentStatus } from './agent-status/lifecycle/main-agent-status'
 import type { ProgramStatusFacet } from './program-status/facet'
-import type { CheckStatus } from './github/pull-request-types'
-import type { AgentChildWorkView } from './agent-status-child-work-view'
-import type { AgentSubagentSnapshot } from './agent-status-subagent-snapshot'
+import type { CheckStatus, ProviderCheckSummary } from './github/pull-request-types'
+import type { AgentChildWorkView } from './agent-status/child-work/agent-status-child-work-view'
+import type { AgentSubagentSnapshot } from './agent-status/contracts/agent-status-subagent-snapshot'
 import type { RuntimeTerminalInteractiveWait } from './runtime-terminal-contracts'
 import type { BaseRefSearchResult, Repo } from './repo-types'
 import type { CreateWorktreeResult, RemoveWorktreeResult } from './worktree/create-types'
@@ -33,6 +37,8 @@ export type RuntimeWorktreeAgentRow = {
   prompt: string
   taskTitle: string | null
   displayName: string | null
+  /** The name desktop's compact row leads with (rename, chat or live title). Old hosts omit it. */
+  conversationName?: string
   lastAssistantMessage: string | null
   toolName: string | null
   toolInput: string | null
@@ -95,6 +101,7 @@ export type RuntimeWorktreePsSummary = {
     title?: string
     url?: string
     checksStatus?: CheckStatus
+    checksSummary?: ProviderCheckSummary
   } | null
   linkedLinearIssue: string | null
   linkedGitLabMR: number | null
@@ -194,17 +201,6 @@ export type RuntimeWorktreePsResult = {
   /** Absent from hosts that predate the field; treat that scope as unverifiable. */
   hostScope?: RuntimeListingHostScope
 }
-
-export type RuntimeWorktreePsSnapshotResult = RuntimeWorktreePsResult & { snapshotId: string }
-
-export type RuntimeWorktreePsUnchangedResult = {
-  unchanged: true
-  snapshotId: string
-}
-
-export type RuntimeWorktreePsConditionalResult =
-  | RuntimeWorktreePsSnapshotResult
-  | RuntimeWorktreePsUnchangedResult
 
 export type RuntimeRepoList = { repos: Repo[] }
 

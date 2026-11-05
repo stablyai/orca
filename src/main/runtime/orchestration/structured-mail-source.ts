@@ -2,15 +2,20 @@
 
 import type {
   AgentMessageSource,
-  AgentMessageSender
+  AgentMessageSender,
+  OrchestrationMailNotice
 } from '../../../shared/agent-session/agent-session-message-source'
-import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { MessageRow, OrchestrationDb } from './db'
 import { agentMessageRelation } from './agent-message-relation'
-import { agentMessageSender, type SenderNameResolver } from './agent-message-sender'
+import { agentMessageSender, type SenderSnapshotResolver } from './agent-message-sender'
 import type { OrchestrationCliCommand } from './cli-command'
-import { formatMessagePointer } from './formatter'
-import type { OrchestrationPointerBatch } from './mailbox-pointer-eligibility'
+import {
+  formatMessageBanner,
+  formatMessageBannerWithContent,
+  formatMessagePointer
+} from './formatter'
+import { structuredAgentSessionBlocksTooLarge } from '../../../shared/rpc-contract/structured-agent-session-message-params'
 
 export type MailSourceMessage = Pick<
   MessageRow,
@@ -22,8 +27,8 @@ export function structuredMailSource(input: {
   mailboxHandle: string
   dispatchId: string | null
   batch: readonly MailSourceMessage[]
-  senderName: SenderNameResolver
-}): AgentMessageSource {
+  senderSnapshot: SenderSnapshotResolver
+}): AgentMessageSource & { orchestration: OrchestrationMailNotice } {
   const groups = new Map<string, { message: MailSourceMessage; report: ReportFact }[]>()
   for (const message of input.batch) {
     let group = groups.get(message.from_handle)
@@ -39,7 +44,7 @@ export function structuredMailSource(input: {
     const sender = agentMessageSender(
       address,
       input.db,
-      input.senderName,
+      input.senderSnapshot,
       reported?.kind === 'valid' ? reported.dispatchId : undefined
     )
     const relations = new Map<string, AgentMessageSender['relation']>()
@@ -85,28 +90,60 @@ export function structuredMailSource(input: {
   }
 }
 
-/** The chat turn a structured pointer sends: a terminal's pointer text, with who the mail is from. */
-export function structuredMailNotice(input: {
+/** One orchestration message as one chat message: the whole message, with who it is from.
+ *  `whole` is false when it would exceed a chat message's limit; that one then points at `check`
+ *  and stays unread there. */
+export function structuredMailMessage(input: {
   db: OrchestrationDb
   mailboxHandle: string
   dispatchId: string | null
-  batch: OrchestrationPointerBatch
+  message: MessageRow
   cliCommand: OrchestrationCliCommand
-  senderName: SenderNameResolver
-}): AgentJournalMessageItem {
-  const { messages, heldDeliveryId } = input.batch
-  const text = formatMessagePointer(
-    messages.length,
-    input.mailboxHandle,
-    input.cliCommand,
-    heldDeliveryId
-  )
-  return {
-    kind: 'message',
-    role: 'user',
-    blocks: [{ type: 'text', text: text.trim() }],
-    from: structuredMailSource({ ...input, batch: messages })
+  senderSnapshot: SenderSnapshotResolver
+}): { body: AgentJournalMessageItem; whole: boolean } {
+  const from = structuredMailSource({ ...input, batch: [input.message] })
+  const formatted = formatMessageBannerWithContent(input.message, { cliCommand: input.cliCommand })
+  const whole = [{ type: 'text' as const, text: formatted.text }]
+  if (!structuredAgentSessionBlocksTooLarge(whole)) {
+    return {
+      body: {
+        kind: 'message',
+        role: 'user',
+        blocks: whole,
+        from: {
+          ...from,
+          orchestration: {
+            ...from.orchestration,
+            messages: from.orchestration.messages.map((message) => ({
+              ...message,
+              content: formatted.content
+            }))
+          }
+        }
+      },
+      whole: true
+    }
   }
+  const pointer = formatMessagePointer(1, input.mailboxHandle, input.cliCommand).trim()
+  return {
+    body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: pointer }], from },
+    whole: false
+  }
+}
+
+/** Whether a message goes to a chat whole, rather than as a pointer at `check`. */
+export function structuredMailFitsWhole(
+  message: MessageRow,
+  cliCommand: OrchestrationCliCommand
+): boolean {
+  return !structuredAgentSessionBlocksTooLarge(wholeMailBlocks(message, cliCommand))
+}
+
+function wholeMailBlocks(
+  message: MessageRow,
+  cliCommand: OrchestrationCliCommand
+): AgentJournalMessageItem['blocks'] {
+  return [{ type: 'text', text: formatMessageBanner(message, { cliCommand }) }]
 }
 
 type ReportFact = { kind: 'mail' } | { kind: 'invalid' } | { kind: 'valid'; dispatchId: string }

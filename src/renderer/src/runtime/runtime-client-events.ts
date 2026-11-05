@@ -2,6 +2,7 @@ import type {
   RuntimeClientEvent,
   RuntimeClientEventStreamMessage
 } from '../../../shared/runtime-client-events'
+import { isNotificationAttentionAcknowledgement } from '../../../shared/notification-settings-types'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import { isRuntimeSubscriptionReplayResponse } from '../../../shared/runtime-subscription-replay'
 import { admitSshConnectionState } from '../../../shared/ssh-retained-payload-admission'
@@ -82,6 +83,8 @@ function isRuntimeClientEvent(
   message: RuntimeClientEventStreamMessage
 ): message is RuntimeClientEvent {
   return (
+    (message.type === 'notificationAttentionAcknowledged' &&
+      isNotificationAttentionAcknowledgement(message.acknowledgement)) ||
     message.type === 'reposChanged' ||
     message.type === 'worktreesChanged' ||
     message.type === 'nativeChatLaunchDraftResolved' ||

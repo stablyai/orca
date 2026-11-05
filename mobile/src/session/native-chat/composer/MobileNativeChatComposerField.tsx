@@ -4,9 +4,9 @@ import {
   mobileNativeChatComposerSkillStyles as styles,
   type MobileNativeChatComposerFieldProps
 } from './mobile-native-chat-composer-field-skill'
-import { mobileNativeChatInputStyles as inputStyles } from './mobile-native-chat-input-styles'
 import { MobileNativeChatComposerFieldCopy } from './MobileNativeChatComposerFieldCopy'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
+import { composerInputStyles } from '../../../components/composer-input/composer-input-styles'
 
 export function MobileNativeChatComposerField({
   value,
@@ -14,6 +14,7 @@ export function MobileNativeChatComposerField({
   dictationPreview,
   placeholder,
   ref,
+  onKeyboardSubmit: _onKeyboardSubmit,
   ...props
 }: MobileNativeChatComposerFieldProps) {
   useMobileColorScheme()
@@ -25,7 +26,12 @@ export function MobileNativeChatComposerField({
       onLayout={(event) => setFieldHeight(event.nativeEvent.layout.height)}
     >
       {skillToken && !dictationPreview ? (
-        <TextInput ref={ref} style={inputStyles.input} placeholder={placeholder} {...props}>
+        <TextInput
+          ref={ref}
+          style={composerInputStyles.messageText}
+          placeholder={placeholder}
+          {...props}
+        >
           <Text style={styles.token}>{skillToken}</Text>
           {value.slice(skillToken.length)}
         </TextInput>
@@ -34,7 +40,11 @@ export function MobileNativeChatComposerField({
         <TextInput
           ref={ref}
           value={value}
-          style={dictationPreview ? [inputStyles.input, frameStyles.hiddenText] : inputStyles.input}
+          style={
+            dictationPreview
+              ? [composerInputStyles.messageText, frameStyles.hiddenText]
+              : composerInputStyles.messageText
+          }
           placeholder={dictationPreview ? undefined : placeholder}
           {...props}
         />

@@ -1,16 +1,34 @@
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import { makeTab } from '@/store/slices/store-test-helpers'
 import type { AgentMessageSource } from '../../../../shared/agent-session/agent-session-message-source'
 import { NativeChatAgentMessageCard } from './NativeChatAgentMessageCard'
+import { MessageRow } from './NativeChatMessageRow'
+import { projectStructuredAgentStartItem } from '../../../../shared/structured-agent-start-projection'
 import { NativeChatUserMessageRow } from './NativeChatUserMessageRow'
+import { orchestrationMailFixture } from '../../../../shared/agent-session/orchestration-mail.test-fixture'
 
 const workspace = 'agent-message-fixture'
 const image =
   'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAPAAAAA8CAIAAADXHaAKAAAAvklEQVR4nO3SUQkAIBTAwBfUAAawP5YQhHFwAfaxWftAxnwvgIcMTYqhSTE0KYYmxdCkGJoUQ5NiaFIMTYqhSTE0KYYmxdCkGJoUQ5NiaFIMTYqhSTE0KYYmxdCkGJoUQ5NiaFIMTYqhSTE0KYYmxdCkGJoUQ5NiaFIMTYqhSTE0KYYmxdCkGJoUQ5NiaFIMTYqhSTE0KYYmxdCkGJoUQ5NiaFIMTYqhSTE0KYYmxdCkGJoUQ5NiaFIMTYqhSbm/mJH95bvMnAAAAABJRU5ErkJggg=='
 const prose =
   'First paragraph with **real Markdown**, a [web link](https://example.com) and inline `code`.\n\nSecond paragraph keeps its own spacing. This longer line wraps differently in the narrow frame, so Show more is based on rendered lines.\n\n![Example image](data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAPAAAAA8CAIAAADXHaAKAAAAvklEQVR4nO3SUQkAIBTAwBfUAAawP5YQhHFwAfaxWftAxnwvgIcMTYqhSTE0KYYmxdCkGJoUQ5NiaFIMTYqhSTE0KYYmxdCkGJoUQ5NiaFIMTYqhSTE0KYYmxdCkGJoUQ5NiaFIMTYqhSTE0KYYmxdCkGJoUQ5NiaFIMTYqhSTE0KYYmxdCkGJoUQ5NiaFIMTYqhSTE0KYYmxdCkGJoUQ5NiaFIMTYqhSTE0KYYmxdCkGJoUQ5NiaFIMTYqhSbm/mJH95bvMnAAAAABJRU5ErkJggg==)\n\nLast paragraph after the image.'
+const started = projectStructuredAgentStartItem({
+  itemId: 'started',
+  revision: 1,
+  sequence: 7,
+  observedAt: 1_800_000_000_000,
+  body: {
+    kind: 'agent-start',
+    dispatchId: 'fixture-dispatch',
+    task: prose,
+    worker: {
+      party: { address: 'term_sender', terminalHandle: 'term_sender', orcaSessionId: null },
+      name: 'Parser worker'
+    }
+  }
+})!
 function cards() {
   const human: NativeChatMessage = {
     id: 'human',
@@ -21,6 +39,12 @@ function cards() {
   }
   return (
     <div className="space-y-4 p-4">
+      <MessageRow
+        message={started}
+        expandSignal={false}
+        onScrollMessageToTop={() => {}}
+        runtimeContext={{ worktreeId: workspace, worktreePath: null, target: { kind: 'local' } }}
+      />
       {(['task', 'coordinator', 'worker', 'generic'] as const).map((kind, i) => {
         const from: AgentMessageSource = {
           kind: 'agent',
@@ -124,13 +148,34 @@ const store = {
 
 export const wide = defineFixture({ width: 720, store, render: cards })
 export const narrow = defineFixture({ width: 340, store, render: cards })
+export const medium = defineFixture({ width: 440, store, render: cards })
+export const mail = defineFixture({
+  width: 720,
+  render: () => {
+    const message = orchestrationMailFixture({
+      body: 'The message now shows the result directly.\n\nAll relevant checks passed. Open [the report](https://example.com/report) for details.'
+    })
+    return (
+      <div className="p-4">
+        <NativeChatAgentMessageCard
+          message={message}
+          from={message.from}
+          allowFileUriLinks={false}
+          onRefolded={() => {}}
+        />
+      </div>
+    )
+  },
+  interact: (frame) =>
+    frame.querySelector<HTMLButtonElement>('button[aria-expanded="false"]')?.click()
+})
 export const expanded = defineFixture({
   width: 720,
   store,
   render: cards,
   interact: (frame) => {
     for (const button of frame.querySelectorAll('button')) {
-      if (button.textContent === 'Show more') {
+      if (button.getAttribute('aria-expanded') === 'false') {
         button.click()
       }
     }

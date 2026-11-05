@@ -3,11 +3,11 @@ import type {
   AgentJournalItemBody,
   AgentJournalRenderItem,
   AgentJournalSubmission
-} from '../../../../shared/agent-session-journal-types'
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { projectAgentSessionConversationOutline } from '../../../../shared/agent-session/agent-session-conversation-outline'
-import { agentJournalSubmissionKey } from '../../../../shared/agent-session-journal-item-key'
-import type { StructuredAgentSessionOptimisticMessage } from '../../../../shared/structured-agent-session-message-projection'
-import { structuredAgentSessionSendBody } from '../../../../shared/structured-agent-session-send-mutation'
+import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { StructuredAgentSessionOptimisticMessage } from '../../../../shared/agent-session/view/structured-agent-session-message-projection'
+import { structuredAgentSessionSendBody } from '../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { createNativeChatMessageListProjection } from './native-chat-message-list-projection'
 import { projectStructuredAgentSessionMessages } from './structured-agent-session-message-projection'
 
@@ -106,6 +106,23 @@ describe('structured transcript order', () => {
       journalItem('reply', 2, 200, said('assistant', 'Working on it'))
     ]
     expect(drawn(items, outbox)).toEqual(['ask', 'reply', agentJournalSubmissionKey('queued')])
+  })
+
+  it('keeps a retained ordinary send ahead of later host rows despite their earlier clocks', () => {
+    const first = { ...queued('first', 'Original', 150), afterSequence: 2 }
+    const second = { ...queued('second', 'Later', 151), afterSequence: 2 }
+    const items = [
+      journalItem('ask', 1, 100, said('user', 'Start')),
+      journalItem('stopped', 2, 140, { kind: 'status', text: 'Interrupted' }),
+      journalItem('later-host-input', 3, 120, said('user', 'Newer input'))
+    ]
+    expect(drawn(items, [first, second])).toEqual([
+      'ask',
+      'stopped',
+      agentJournalSubmissionKey('first'),
+      agentJournalSubmissionKey('second'),
+      'later-host-input'
+    ])
   })
 
   it('keeps a send the journal recorded and the provider refused at its journal place', () => {

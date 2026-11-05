@@ -69,12 +69,14 @@ export const TAP_KEY_LABEL = 'Escape'
 export function commandDockProbeRouteSource({
   commandDockModule,
   keyDefinitionsModule,
-  accessorySelectionModule
+  accessorySelectionModule,
+  dockKeysModule
 }) {
   return `import { useLayoutEffect, useRef, useState } from 'react'
 import { MobileSessionCommandDock } from ${JSON.stringify(commandDockModule)}
 import { TERMINAL_ACCESSORY_KEY_DEFINITIONS } from ${JSON.stringify(keyDefinitionsModule)}
 import { useMobileSessionAccessorySelection } from ${JSON.stringify(accessorySelectionModule)}
+import { useTerminalDockKeys } from ${JSON.stringify(dockKeysModule)}
 
 const noop = () => {}
 const KEYS = TERMINAL_ACCESSORY_KEY_DEFINITIONS
@@ -110,6 +112,8 @@ export default function CommandDockProbeRoute() {
     worktreeId: 'held-press-workspace',
     handleAccessoryKey: send
   })
+  const dockKeys = useTerminalDockKeys({ activeHandle, sendInput: send })
+  const liveInputRef = useRef(null)
   globalThis.__orcaHeldPressProbe = {
     sent: () => [...sentRef.current],
     deliveries: () => [...deliveriesRef.current],
@@ -119,10 +123,12 @@ export default function CommandDockProbeRoute() {
   }
   const controller = {
     insets: { top: 0, bottom: 0, left: 0, right: 0 },
-    bufferedTerminalDraftState: { input: '', setInput: noop },
-    autocompleteEnabled: false,
     liveInputCapture: '',
     activeHandle,
+    activeSessionTab: null,
+    dockKeys,
+    liveInputRef,
+    liveDictationText: '',
     customKeys: [],
     setShowCustomKeyModal: noop,
     setDeleteKeyTarget: noop,
@@ -130,14 +136,11 @@ export default function CommandDockProbeRoute() {
     terminalModes: new Map(),
     canPaste: false,
     dictationMode: 'toggle',
-    bindCommandField: noop,
     handleLiveInputChange: noop,
     handleLiveInputKeyPress: noop,
     bindLiveInputField: noop,
     submitLiveInput: noop,
     canSend: true,
-    canCompose: true,
-    liveInputEnabled: false,
     showNativeChat: false,
     dictation: IDLE,
     cancelDictation: noop,
@@ -145,10 +148,8 @@ export default function CommandDockProbeRoute() {
     handleDictationPressIn: noop,
     handleDictationPressOut: noop,
     toggleDisplayMode: noop,
-    handleSend: () => Promise.resolve(),
     handleAccessoryKey: send,
     dismissSoftwareKeyboard: noop,
-    toggleLiveInput: noop,
     stopAccessoryRepeat: () => {
       repeatRef.current.push({ kind: 'stop' })
       accessory.stopAccessoryRepeat()

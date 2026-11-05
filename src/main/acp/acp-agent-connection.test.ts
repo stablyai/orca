@@ -11,7 +11,11 @@ import {
   type AcpAgentConnection,
   type AcpAgentConnectionOptions
 } from './acp-agent-connection'
-import { AcpAuthRequiredError } from './acp-errors'
+import { AcpAgentExitedError, AcpAuthRequiredError } from './acp-errors'
+import { acpStartFailure } from './acp-startup-outcome'
+import captures from '../native-chat/agent-session-wire/__fixtures__/startup-protocol-rejections.json'
+import { PROVIDER_SPAWN_FAILURE_MARKER } from '../provider-process/provider-spawn-failure-report'
+import { providerExecutableMissing } from '../provider-process/provider-executable-missing'
 import { AcpScriptedAgent, deferred, tick } from './acp-scripted-agent.test-support'
 
 const teardown = vi.hoisted(() =>
@@ -30,10 +34,16 @@ const grace =
   process.platform === 'win32' ? ROOT_ONLY_GRACEFUL_EXIT_MS : PROVIDER_SUPERVISOR_MAX_STOP_MS
 const start = { cwd: '/execution-host/folder', mcpServers: [] }
 const prompt = [{ type: 'text', text: 'hello' }] as const
+/** What the supervisor writes when it cannot spawn the agent's CLI. */
+const SPAWN_ENOENT_REPORT = `${PROVIDER_SPAWN_FAILURE_MARKER}${JSON.stringify({
+  thrown: false,
+  code: 'ENOENT',
+  message: 'spawn fixture-acp-agent ENOENT'
+})}\n`
 
 function fixture(
   options: AcpAgentConnectionOptions = {},
-  behavior: { pid?: number | null; exitOnEnd?: boolean } = {}
+  behavior: { pid?: number | null; exitOnEnd?: boolean; cwd?: string } = {}
 ) {
   const agent = new AcpScriptedAgent()
   const child = Object.assign(createFakePipedChild(), {
@@ -55,7 +65,7 @@ function fixture(
     {
       command: 'fixture-acp-agent',
       args: ['--acp'],
-      cwd: start.cwd,
+      cwd: behavior.cwd ?? start.cwd,
       env: { ACP_ACCOUNT_HOME: '/host/account', STRIPPED: 'overlay' },
       envToDelete: ['STRIPPED']
     },
@@ -76,6 +86,22 @@ afterEach(async () => {
 })
 
 describe('ACP process-owning connection', () => {
+  // The supervisor (POSIX only) reports the failed spawn on stderr and exits 127.
+  it.skipIf(process.platform === 'win32')(
+    'marks the exit of a CLI the supervisor could not spawn as a missing executable',
+    async () => {
+      const onExit = vi.fn()
+      const { connection, child } = fixture({ onExit }, { cwd: process.cwd() })
+      child.stderr.write(SPAWN_ENOENT_REPORT)
+      await tick()
+      child.emit('exit', 127, null)
+      child.emit('close', 127, null)
+      await vi.waitFor(() => expect(onExit).toHaveBeenCalledOnce())
+      expect(providerExecutableMissing(onExit.mock.calls[0][0])).toBe(true)
+      expect(connection.spawnAbsence).toBe('executable')
+    }
+  )
+
   it('spawns through the supervisor with the host launch and exposes typed session calls', async () => {
     const { connection, spawn, child, agent } = fixture()
     await connection.spawned
@@ -212,6 +238,8 @@ describe('ACP process-owning connection', () => {
     const rejected = expect(connection.prompt([...prompt])).rejects.toThrow('broken pipe')
     child.stdin.emit('error', new Error('broken pipe'))
     child.emit('close', 0, null)
+    // The call waits the drain bound for an answer the agent may already have written.
+    await vi.advanceTimersByTimeAsync(1_000)
     await rejected
     expect(connection.closed).toBe(true)
     expect(connection.rootVerdict).toBe('live')
@@ -283,6 +311,33 @@ describe('ACP process-owning connection', () => {
     }
   )
 
+  it('keeps the final answer an agent wrote just before it exited, and only then reads its exit', async () => {
+    const { response } = captures.acp
+    const onExit = vi.fn()
+    const { connection, agent, child } = fixture({ onExit }, { exitOnEnd: false })
+    // The recorded refusal answers this start's session request just after the agent exited.
+    agent.on('session/new', (frame) => {
+      child.emit('exit', 0, null)
+      setImmediate(() => agent.send({ ...response, jsonrpc: '2.0', id: frame.id }))
+    })
+    const loaded = connection.start(start).catch((error: unknown) => error)
+    expect(await loaded).toMatchObject({ code: response.error.code, data: response.error.data })
+    expect(acpStartFailure(await loaded).retry).toBe('never')
+    agent.stdout.end()
+    await vi.waitFor(() => expect(onExit).toHaveBeenCalledOnce())
+  })
+
+  it('answers an unanswered call with the drained exit, which may start once more', async () => {
+    const { connection, agent, child } = fixture({}, { exitOnEnd: false })
+    agent.on('session/new', () => {
+      child.emit('exit', 1, null)
+      agent.stdout.end()
+    })
+    const loaded = connection.start(start).catch((error: unknown) => error)
+    expect(await loaded).toBeInstanceOf(AcpAgentExitedError)
+    expect(acpStartFailure(await loaded).retry).toBe('safe')
+  })
+
   it('isolates early and late exit subscribers and continues delivering exit', () => {
     const onDiagnostic = vi.fn(() => {
       throw new Error('diagnostic')
@@ -295,11 +350,11 @@ describe('ACP process-owning connection', () => {
     connection.onExit(failing)
     connection.onExit(early)
     expect(() => child.emit('exit', 0, null)).not.toThrow()
-    expect(early).toHaveBeenCalledExactlyOnceWith({
-      code: 0,
-      signal: null,
-      processless: false
-    })
+    expect(early).toHaveBeenCalledExactlyOnceWith(
+      { code: 0, signal: null, processless: false },
+      false,
+      undefined
+    )
     expect(() => connection.onExit(failing)).not.toThrow()
     const late = vi.fn()
     connection.onExit(late)

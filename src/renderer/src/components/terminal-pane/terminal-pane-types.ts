@@ -1,3 +1,5 @@
+import type { TerminalTabCloseIntent } from '../terminal/terminal-tab-close-intent'
+
 /** 'layout' fits the hidden pane at real size; 'warm' also keeps its renderer live. */
 export type HiddenTerminalPrewarm = 'layout' | 'warm'
 
@@ -17,5 +19,6 @@ export type TerminalPaneProps = {
   // Why: one-off command terminals keep split shortcuts but hide the prominent header button.
   showSplitButton?: boolean
   onPtyExit: (ptyId: string, exitCode?: number) => void
-  onCloseTab: () => void
+  /** Closing the tab's last pane closes the tab; the caller names who asked. */
+  onCloseTab: (reason: TerminalTabCloseIntent) => void
 }

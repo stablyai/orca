@@ -1,14 +1,14 @@
 import { useMemo } from 'react'
 import { shallow } from 'zustand/shallow'
 import type { AppState } from '@/store/types'
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../../shared/sidebar-inputs-switch'
 import { useAppStore } from '@/store'
 import { getAgentStatusEpochNow } from '@/lib/agent-status-epoch-clock'
 import { getWorktreeIdsWithLiveAgent } from '@/lib/worktree-activity-state'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import { computeVisibleWorktrees } from '../../visible-worktrees'
+import './visible-worktrees'
+import { computeVisibleWorktrees } from './compute-visible-worktrees'
 import {
   EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
   getPairedDeviceIdsByEnvironment
@@ -17,7 +17,7 @@ import {
   getVisibleWorktreeBrowserActivityTabs,
   getVisibleWorktreeTerminalActivityTabs,
   getStructuredChatWorktreeIds
-} from '../../visible-worktree-activity-inputs'
+} from './visible-worktree-activity-inputs'
 import type { SortBy } from '../../../../../../shared/sidebar-list/smart-sort'
 import type { SidebarWorktreeFilters } from './use-filters'
 import { useReusedArrayIdentity } from './use-reused-array-identity'
@@ -144,8 +144,8 @@ export function useVisibleSidebarWorktrees(args: {
       defaultHostId,
       worktreeLineageById,
       preserveLineageParentOrder: sortBy === 'manual',
-      // Switch point: the stamp sort ranks by host identity (use-sort-order.ts).
-      sortedByHostIdentity: ORCA_SIDEBAR_INPUTS_IS_MAIN,
+      // Both sorts rank by host identity (use-sort-order.ts).
+      sortedByHostIdentity: true,
       forcedVisibleWorktreeIds: args.agentSendTargetWorktreeId
         ? [args.agentSendTargetWorktreeId]
         : undefined

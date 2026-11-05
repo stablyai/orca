@@ -1,6 +1,6 @@
-import { parseTerminalAttachmentLaunchResult } from '../../../../shared/terminal-attachment-launch-result'
+import { parseTerminalAttachmentLaunchResult } from '../../../../shared/terminal/pty/lifecycle/terminal-attachment-launch-result'
 import { REMOTE_RUNTIME_PTY_HONOURS_TAB_SHELL_OVERRIDE } from './remote-runtime-pty-shell'
-import { terminalLaunchFacts } from '../../../../shared/agent-session-resume'
+import { terminalLaunchFacts } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { isRuntimeCompatBlockError } from '@/runtime/runtime-protocol-compat'
 import { runtimeEnvironmentSupportsCapability } from '@/runtime/runtime-rpc-client'
 import { readTerminalSpawnDeferral } from '../../../../shared/host-spawn-admission'
@@ -17,7 +17,7 @@ import {
   type RemoteRuntimeInputSegment
 } from './remote-runtime-input-journal'
 import type { AcceptedInputOptions } from './pty-preconnect-input-buffer'
-import type { TerminalInputKind } from '../../../../shared/terminal-input-kind'
+import type { TerminalInputKind } from '../../../../shared/terminal/input/terminal-input-kind'
 import { isSshSignInPendingTerminalError } from './terminal-ssh-sign-in-error'
 import { terminalCreateThemeParams } from './terminal-view-attributes-publisher'
 /* eslint-disable max-lines -- Why: remote PTY transport keeps lifecycle, JSON fallback, and binary stream wiring together so reconnect/destroy ordering stays testable as one behavior surface. */
@@ -30,7 +30,7 @@ import {
 import type {
   RuntimeCreateAgentSessionResult,
   RuntimeEnsureAgentSessionResult
-} from '../../../../shared/agent-session-host-authority'
+} from '../../../../shared/agent-session/agent-session-host-authority'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { TabActivationIntent } from '../../../../shared/tab-activation-intent'
 import type {
@@ -42,15 +42,13 @@ import type {
   RuntimeTerminalSend,
   RuntimeTerminalShow
 } from '../../../../shared/runtime-types'
-import {
-  SAVED_RESUME_ORIGIN_RUNTIME_CAPABILITY,
-  TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY
-} from '../../../../shared/protocol-version'
+import { SAVED_RESUME_ORIGIN_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import { TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY } from '../../../../shared/terminal/runtime-policy/terminal-runtime-capabilities'
 import { agentResumeHostAuthorityCapability } from '../../runtime/agent-resume-host-authority-capability'
 import {
   isTerminalInputTooLargeWithDeferredMeasurement,
   iterateTerminalInputChunks
-} from '../../../../shared/terminal-input'
+} from '../../../../shared/terminal/input/terminal-input'
 import type {
   IpcPtyTransportOptions,
   PtyConnectResult,
@@ -59,6 +57,7 @@ import type {
   PtyTransportRecoveryState
 } from './pty-transport-types'
 import { createPtyOutputProcessor } from './pty-output-processor'
+import { localizeWslDistroHoldText } from '@/lib/wsl-distro-hold-copy'
 import { isSshSessionGoneError } from './pty-connection/pty-connect-limits'
 import { RuntimeRpcCallError, unwrapRuntimeRpcResult } from '../../runtime/runtime-rpc-result'
 import {
@@ -103,7 +102,7 @@ import { replaceDriverPtyId, setDriverForPty } from '@/lib/pane-manager/mobile-d
 import {
   isWebTerminalSurfaceTabId,
   toHostSessionTabId
-} from '../../../../shared/terminal-surface-id'
+} from '../../../../shared/workspace-layout/terminal-surface-id'
 import { listRemoteRuntimeSessionTabsAfterCurrentInFlight } from '@/runtime/remote-runtime-session-tabs-inflight'
 import { subscribeAcceptedWebSessionTerminalHandle } from '@/runtime/web-session-terminal-handle-events'
 import { hostSnapshotAffirmsWorktreeContents } from '@/runtime/host-session-snapshot-authority'
@@ -700,7 +699,7 @@ export function createRemoteRuntimePtyTransport(
       surfacedErrorMessages.delete(oldest)
     }
     surfacedErrorMessages.add(message)
-    storedCallbacks.onError?.(message)
+    storedCallbacks.onError?.(localizeWslDistroHoldText(message))
   }
 
   function markRecoveryHealthy(result?: PtyConnectResult): void {
@@ -3927,6 +3926,14 @@ export function createRemoteRuntimePtyTransport(
     // Why: dedup exists to stop one outage spamming the surface; once the user dismisses it, the next occurrence is new information again.
     notifyErrorSurfaceDismissed() {
       surfacedErrorMessages.clear()
+    },
+
+    reopenAfterHostReturned() {
+      // Why only an idle pane: one already retrying or connected owns its own path back.
+      if (connecting || recovery.currentPhase !== 'idle') {
+        return false
+      }
+      return replayLastTransportEntryPoint()
     },
 
     retryRecovery() {

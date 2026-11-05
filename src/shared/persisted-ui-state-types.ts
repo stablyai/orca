@@ -2,7 +2,7 @@ import type { JiraQuickFilterState } from './jira/jira-quick-filters'
 import type { BrowserDevToolsDockLayout } from './browser-devtools-dock'
 import type { JiraSavedFilterState } from './jira/jira-saved-filters'
 import type { ReleaseChannel } from './release-channel'
-import type { WorkspaceCleanupUIState } from './workspace-cleanup'
+import type { WorkspaceCleanupUIState } from './workspace-cleanup/workspace-cleanup'
 import type { FeatureTipId } from './feature-tips'
 import type { ContextualTourId } from './contextual-tours'
 import type { FeatureInteractionState } from './feature-interactions'
@@ -110,6 +110,7 @@ export type PersistedUIState = {
   worktreeCardProperties: WorktreeCardProperty[]
   /** One-shot migration flag for deriving card properties from the two worktree card modes. */
   _worktreeCardModeDefaulted?: boolean
+  showAgentModels?: boolean
   agentActivityDisplayMode?: AgentActivityDisplayMode
   workspaceStatuses?: WorkspaceStatusDefinition[]
   workspaceBoardOpacity?: number

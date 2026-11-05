@@ -1,0 +1,133 @@
+// @vitest-environment happy-dom
+// @vitest-environment happy-dom
+import { useRef, useState } from 'react'
+import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { getDefaultSettings } from '../../../../../shared/constants'
+import { buildSettingsNavigationMetadata } from '@/hooks/useSettingsNavigationMetadata'
+import { ChatSettingsSection } from './ChatSettingsSection'
+import { TooltipProvider } from '../../ui/tooltip'
+import { ActiveSettingsSectionProvider } from '../section-layout/SettingsSection'
+import { getChatAppearanceSearchEntries } from '../appearance/chat/chat-appearance-search'
+import { getChatNamingSearchEntry } from './chat-naming-search'
+import { getChatInlineVisualsSearchEntry } from './chat-inline-visuals-search'
+import { useSettingsRepoScrollEffects } from '../navigation/use-settings-repo-scroll-effects'
+import type { SettingsStoreModel } from '../page/use-settings-store-model'
+import type { SettingsInteractionController } from '../page/use-settings-interaction-controller'
+import type { SettingsNavigationModel } from '../navigation/use-settings-navigation-model'
+import type { SettingsTerminalModel } from '../page/use-settings-terminal-model'
+import { useAppStore } from '@/store/index'
+
+vi.mock('@/lib/host-chat-program-acquisition', () => ({ useChatProgramFacts: () => {} }))
+beforeEach(() => {
+  useAppStore.setState(useAppStore.getInitialState(), true)
+  useAppStore.setState({ ensureNativeDetectedAgents: vi.fn(async () => []) })
+})
+
+afterEach(() => {
+  cleanup()
+  vi.restoreAllMocks()
+})
+
+function NavigationHarness({
+  initialSection,
+  targetSection = 'chat-code-text-size'
+}: {
+  initialSection: string
+  targetSection?: string
+}) {
+  const [activeSectionId, setActiveSectionId] = useState(initialSection)
+  const settings = getDefaultSettings('/tmp')
+  const sections = buildSettingsNavigationMetadata({
+    isMac: false,
+    isWindows: false,
+    isWebClient: false,
+    repos: []
+  })
+  const pendingNavSectionRef = useRef<string | null>('chat')
+  const pendingScrollTargetRef = useRef<string | null>(targetSection)
+  const contentScrollRef = useRef<HTMLDivElement>(null)
+  const pendingScrollTargetWatchRef = useRef(null)
+  const pendingSubsectionScrollFrameRef = useRef<number | null>(null)
+  const repoHooksRequestSeqRef = useRef(0)
+  const model: Pick<
+    SettingsStoreModel,
+    | 'activeSectionId'
+    | 'setActiveSectionId'
+    | 'pendingNavRequestTick'
+    | 'setPendingNavRequestTick'
+    | 'repos'
+    | 'setRepoHooksMap'
+    | 'settingsSearchQuery'
+    | 'setSettingsSearchQuery'
+  > = {
+    activeSectionId,
+    setActiveSectionId,
+    pendingNavRequestTick: 0,
+    setPendingNavRequestTick: vi.fn(),
+    repos: [],
+    setRepoHooksMap: vi.fn(),
+    settingsSearchQuery: '',
+    setSettingsSearchQuery: vi.fn()
+  }
+  const interactions = {
+    contentScrollRef,
+    pendingNavSectionRef,
+    pendingScrollTargetRef,
+    pendingScrollTargetWatchRef,
+    pendingSubsectionScrollFrameRef,
+    repoHooksRequestSeqRef
+  }
+  const terminal: Pick<SettingsTerminalModel, 'neededRepos'> = { neededRepos: [] }
+  useSettingsRepoScrollEffects(
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Supplies every model field read by this hook; no repos need loading.
+    model as SettingsStoreModel,
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Supplies every interaction ref read by this hook.
+    interactions as SettingsInteractionController,
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This hook only reads the visible navigation sections and IDs.
+    {
+      visibleNavSections: sections,
+      visibleSectionIds: new Set(sections.map((s) => s.id))
+    } as SettingsNavigationModel,
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This hook only reads neededRepos; an empty list skips remote loading.
+    terminal as SettingsTerminalModel
+  )
+  return (
+    <TooltipProvider>
+      <ActiveSettingsSectionProvider value={activeSectionId}>
+        <output aria-label="Selected settings page">{activeSectionId}</output>
+        <ChatSettingsSection
+          settings={settings}
+          updateSettings={vi.fn()}
+          writeSourceControlAiSettings={async () => {}}
+          searchEntries={[
+            ...getChatAppearanceSearchEntries(),
+            getChatNamingSearchEntry(),
+            getChatInlineVisualsSearchEntry()
+          ]}
+          showDesktopOnlySettings
+          isMounted
+        />
+      </ActiveSettingsSectionProvider>
+    </TooltipProvider>
+  )
+}
+
+describe('Chat settings deep links', () => {
+  it('activates Chat and scrolls to Inline visuals from another settings page', async () => {
+    const scrollIntoView = vi.spyOn(HTMLElement.prototype, 'scrollIntoView')
+    const { container } = render(
+      <NavigationHarness initialSection="appearance" targetSection="chat-inline-visuals" />
+    )
+    await waitFor(() => {
+      expect(screen.getByRole('status', { name: 'Selected settings page' }).textContent).toBe(
+        'chat'
+      )
+    })
+    const visuals = container.querySelector('#chat-inline-visuals')
+    expect(visuals?.querySelector('[role="switch"]')).toBe(
+      screen.getByRole('switch', { name: 'Toggle inline visuals' })
+    )
+    await waitFor(() => expect(scrollIntoView.mock.contexts).toContain(visuals))
+  })
+})

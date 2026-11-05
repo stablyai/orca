@@ -3,14 +3,18 @@ import { createRequire } from 'node:module'
 import { resolve } from 'node:path'
 import { normalizePath, transformWithOxc, type Plugin } from 'vite'
 import { configDefaults, defaultExclude, defineConfig } from 'vitest/config'
-import { UNIT_INCLUDE, UNIT_EXCLUDE, UNIT_SETUP_FILES } from './scripts/ci-unit-files.mjs'
-import TimingSequencer from './scripts/ci-unit-sequencer.mjs'
-import RuntimeSequencer from './scripts/vitest-runtime-sequencer.mjs'
-import { getNodeRuntimeInclude } from './scripts/vitest-node-runtime-files.mjs'
-import { nodeRuntimePool } from './scripts/vitest-node-runtime-pool'
-import { readRunFilters } from './scripts/vitest-run-filters.mjs'
-import { createWorkspaceSourceResolver } from './scripts/workspace-source-exports.mjs'
-import { moduleCacheResolutionKey } from './scripts/vitest-module-cache-resolution-key'
+import {
+  UNIT_INCLUDE,
+  UNIT_EXCLUDE,
+  UNIT_SETUP_FILES
+} from './scripts/ci/unit-selection/dependency-graph/ci-unit-files.mjs'
+import TimingSequencer from './scripts/ci/sharding/ci-unit-sequencer.mjs'
+import RuntimeSequencer from './scripts/test-runtime/execution-policy/vitest-runtime-sequencer.mjs'
+import { getNodeRuntimeInclude } from './scripts/test-runtime/sqlite-admission/vitest-node-runtime-files.mjs'
+import { nodeRuntimePool } from './scripts/test-runtime/node-worker/vitest-node-runtime-pool'
+import { readRunFilters } from './scripts/test-runtime/execution-policy/vitest-run-filters.mjs'
+import { createWorkspaceSourceResolver } from './scripts/workspace/source-exports/workspace-source-exports.mjs'
+import { moduleCacheResolutionKey } from './scripts/test-runtime/module-cache/vitest-module-cache-resolution-key'
 
 const nodeRuntimeInclude = process.versions.bun
   ? getNodeRuntimeInclude({ filters: readRunFilters() })
@@ -18,11 +22,11 @@ const nodeRuntimeInclude = process.versions.bun
 const balancedShards = process.env.ORCA_BALANCE_UNIT_SHARDS === '1'
 const moduleCachePath = process.env.ORCA_UNIT_MODULE_CACHE_PATH
 const measurementFile = 'src/main/foreign-sqlite-readers/foreign-sqlite-reader-event-loop.test.ts'
-const paletteMeasurementFile =
-  'src/renderer/src/lib/palette-match/palette-match-performance.test.ts'
-const measurementFiles = [measurementFile, paletteMeasurementFile]
+const measurementFiles = [measurementFile]
 const phoneContractPattern = /\/mobile\/src\/.*\.(?:ts|tsx)(?:\?.*)?$/
 const transforms = {
+  // Auto-discovery climbs past the repo for files no in-repo tsconfig owns, into an enclosing checkout.
+  tsconfig: resolve(import.meta.dirname, 'tsconfig.vitest-transform.json'),
   oxc: { exclude: [/\.js$/, phoneContractPattern] },
   plugins: [
     {
@@ -120,7 +124,6 @@ const bunProject = {
     sequence: { groupOrder: 1 }
   }
 }
-const paletteRuntimeProject = process.versions.bun ? bunProject : nodeProject
 const projects = [
   ...(process.versions.bun ? [bunProject] : []),
   nodeProject,
@@ -134,18 +137,6 @@ const projects = [
       exclude: testOptions.exclude,
       maxWorkers: 1,
       sequence: { groupOrder: 2 }
-    }
-  },
-  // Preserve the palette test's runtime and budgets while keeping other suites off its CPU.
-  {
-    ...paletteRuntimeProject,
-    test: {
-      ...paletteRuntimeProject.test,
-      name: 'palette-measurement',
-      include: [paletteMeasurementFile],
-      exclude: testOptions.exclude,
-      maxWorkers: 1,
-      sequence: { groupOrder: 3 }
     }
   }
 ]
@@ -165,7 +156,7 @@ export default defineConfig({
     sequence: { sequencer: balancedShards ? TimingSequencer : RuntimeSequencer },
     ...(balancedShards
       ? {
-          reporters: ['default', resolve('config/scripts/ci-unit-timing-reporter.mjs')]
+          reporters: ['default', resolve('config/scripts/ci/sharding/ci-unit-timing-reporter.mjs')]
         }
       : {}),
     projects,

@@ -1,4 +1,7 @@
-import { joinResolvedWorktreeScans } from './workspaces/resolved-worktree-scan-join'
+import {
+  joinResolvedWorktreeScans,
+  projectResolvedWorktreeScans
+} from './workspaces/resolved-worktree-scan-join'
 import { getRepoHostIdentityForParts } from '../../shared/repo-host-identity'
 import { WorkspaceGitIdentity } from './sidebar-inputs/workspace-git-identity'
 import { describe, expect, it, vi } from 'vitest'
@@ -7,7 +10,7 @@ import type { Repo } from '../../shared/repo-types'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import type { WorktreeLineage } from '../../shared/worktree/lineage-types'
 import type { GitWorktreeInfo, Worktree } from '../../shared/worktree/types'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { mergeWorktreeMetaForWrite } from '../persistence/loading-store/worktree-meta-write-normalization'
 import { buildDetectedGitWorktrees } from '../ipc/worktrees/listing/ssh-worktree-fallback'
 import {
@@ -455,7 +458,7 @@ it('stamps the scan/sidebar join while cached catalog projection stays pure acro
   const scans = new Map([
     [key, { ok: true as const, worktrees: [gitWorktree('/repo/work')], gitRun: {} }]
   ])
-  joinResolvedWorktreeScans(deps.store, () => deps, scans, true)
+  projectResolvedWorktreeScans(deps.store, () => deps, scans)
   expect(writes).not.toHaveBeenCalled()
   const first = joinResolvedWorktreeScans(deps.store, () => deps, scans)
   expect(writes).toHaveBeenCalledOnce()
@@ -471,6 +474,6 @@ it('stamps the scan/sidebar join while cached catalog projection stays pure acro
   identity.observeScan(rows(detached), detached.scannedRepoKeys)
   expect(identity.title(detached.worktrees[0]!)).toBe(first.worktrees[0]!.displayName)
   expect(writes).toHaveBeenCalledOnce()
-  joinResolvedWorktreeScans(deps.store, () => deps, scans, true)
+  projectResolvedWorktreeScans(deps.store, () => deps, scans)
   expect(writes).toHaveBeenCalledOnce()
 })

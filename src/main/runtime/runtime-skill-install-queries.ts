@@ -9,7 +9,7 @@ import {
   previewSharedSkillInstall,
   removeSharedSkillInstall
 } from '../skills/skill-install-management-service'
-import { toLinuxPath } from '../wsl'
+import { toLinuxPath } from '../../shared/wsl-paths'
 import type { SkillBundleInstallPreviewRequest } from '../../shared/skill-bundle-install-contract'
 import type {
   SkillInstallPreviewRequest,

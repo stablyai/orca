@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { usageLimitResetsAt } from '../../../shared/agent-session-usage-limit'
+import { usageLimitResetsAt } from '../../../shared/agent-session/failures/agent-session-usage-limit'
 import type { AcpAgentError } from '../acp-errors'
 import type { ToolCallUpdate } from '../generated/acp-protocol.generated'
 import type { AcpDialect } from './acp-dialect'
@@ -22,6 +22,28 @@ const promptFailureDataSchema = z.object({
   retryAfterMs: z.number().nonnegative().optional().catch(undefined)
 })
 
+// OpenCode names a failed model-provider call with these; its local refusals use other names.
+const providerErrorDataSchema = z.looseObject({
+  service: z.literal('session'),
+  errorName: z.enum([
+    'APIError',
+    'provider.error',
+    'provider.rate-limit',
+    'provider.quota',
+    'provider.chatgpt-limit',
+    'provider.free-limit',
+    'provider.budget-limit',
+    'provider.model-budget-limit',
+    'provider.go-limit',
+    'provider.transport',
+    'provider.internal',
+    'provider.invalid-output',
+    'provider.invalid-request',
+    'provider.unknown',
+    'provider.timeout'
+  ])
+})
+
 // ACP omits HTTP status; documented billing and entitlement instructions survive in the message.
 const NON_RESET_QUOTA_FAILURES = [
   /\b(?:insufficient (?:balance|account funds)|credit limit exceeded|payment required|account invoice is overdue|billing_error)\b/i,
@@ -37,7 +59,10 @@ function promptFailure(error: AcpAgentError, at: number) {
     parsed.data.status === 402 ||
     NON_RESET_QUOTA_FAILURES.some((pattern) => pattern.test(error.message))
   ) {
-    return undefined
+    // Billing refusals and other provider errors have no reset, but stay the provider's.
+    return providerErrorDataSchema.safeParse(error.data).success
+      ? { stopReason: 'error', providerFailure: true }
+      : undefined
   }
   const { resetsAt, retryAfterMs } = parsed.data
   const reset = usageLimitResetsAt(

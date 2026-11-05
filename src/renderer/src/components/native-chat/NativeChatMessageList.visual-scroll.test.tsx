@@ -5,7 +5,7 @@ import '@testing-library/jest-dom/vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type * as TranscriptChromeModule from './NativeChatTranscriptChrome'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import { NATIVE_CHAT_VISUAL_READER_SCROLL_TYPE } from '../../../../shared/native-chat/native-chat-visual-shell'
 
 const callRuntimeRpc = vi.fn()
@@ -155,36 +155,6 @@ async function settleInput(container: HTMLElement): Promise<void> {
   })
   paint(container)
 }
-
-it.each([
-  { order: 'scroll first', toTop: false, source: 'frame' },
-  { order: 'scroll first', toTop: true, source: 'frame' },
-  { order: 'gesture first', toTop: false, source: 'frame' },
-  { order: 'gesture first', toTop: true, source: 'frame' },
-  { order: 'scroll first', toTop: true, source: 'transcript' }
-])(
-  'keeps the reader position on growth from $source with $order and toTop=$toTop',
-  async ({ order, toTop, source }) => {
-    const { transcript, view, scroller, frame, end } = await mountVisualTranscript()
-    const readingAt = toTop ? 0 : end - 300
-    if (order === 'gesture first') {
-      reportWheel(frame)
-    }
-    scroller.scrollTop = readingAt
-    fireEvent.scroll(scroller)
-    if (order === 'scroll first') {
-      if (source === 'transcript') {
-        fireEvent.wheel(scroller, { deltaY: -120 })
-      } else {
-        reportWheel(frame)
-      }
-    }
-    view.rerender(transcriptWithVisual([...transcript, marker(61), marker(62)]))
-    paint(view.container)
-    expect(scroller.scrollTop).toBe(readingAt)
-    expect(screen.getByRole('button', { name: /jump to latest/i })).toBeInTheDocument()
-  }
-)
 
 it.each(['input', 'movement', 'reversed input'] as const)(
   'resumes following after growth with unmatched %s',

@@ -1,13 +1,14 @@
+import { useNativeChatUsageLimitAutoContinue } from './use-native-chat-usage-limit-auto-continue'
 import { useCallback, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Play } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
-import { structuredAgentLabel } from '@/lib/structured-agent-session-launch-label'
+
 import { wslHostDistroForTarget } from '@/lib/wsl-host-account-owner'
 import { useAppStore } from '@/store'
-import type { AgentType } from '../../../../shared/agent-status-types'
-import { AGENT_SESSION_SEND_USAGE_LIMIT_CONTINUATION_RUNTIME_CAPABILITY } from '../../../../shared/agent-session-create-capabilities'
+import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
+import { AGENT_SESSION_SEND_USAGE_LIMIT_CONTINUATION_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/agent-session-create-capabilities'
 import { completeNativeChatStructuredUserAction } from './native-chat-structured-user-action'
 import {
   getStructuredAgentSessionPendingSends,
@@ -20,13 +21,13 @@ import type { RuntimeClientTarget } from '../../../../shared/runtime-client-targ
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
-} from '../../../../shared/agent-session-journal-types'
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { latestNativeChatOrcaStopCut } from '../../../../shared/native-chat/native-chat-orca-stop-cut'
 import {
   latestNativeChatUsageLimitCut,
   NATIVE_CHAT_USAGE_LIMIT_CONTINUE_MESSAGE
 } from '../../../../shared/native-chat/native-chat-usage-limit-cut'
-import { AGENT_SESSION_CONTINUE_INTERRUPTED_RUNTIME_CAPABILITY } from '../../../../shared/agent-session-continue-interrupted-capability'
+import { AGENT_SESSION_CONTINUE_INTERRUPTED_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/agent-session-continue-interrupted-capability'
 import type { NativeChatOrcaStopView } from './native-chat-orca-stop-context'
 import { useStructuredAgentSessionHostLabel } from './use-structured-agent-session-host-label'
 import { useNativeChatTargetRestartResuming } from '../native-chat-restart-runtimes'
@@ -87,14 +88,16 @@ export function useNativeChatInterruptedContinuation(input: {
     () => latestNativeChatUsageLimitCut(input.journalItems, input.submissions),
     [input.journalItems, input.submissions]
   )
+  const usageLimitAutoContinue = useNativeChatUsageLimitAutoContinue(
+    target,
+    sessionId,
+    usageLimitCut
+  )
   // The cut this client already asked to continue: hidden until the journal shows what came of it.
   const [asked, setAsked] = useState<string | null>(null)
-  const [usageFailure, setUsageFailure] = useState<{
-    turnItemId: string
-    unconfirmed: boolean
-  } | null>(null)
+  const [usageFailure, setUsageFailure] = useState<string | null>(null)
   const [failedOn, setFailedOn] = useState<string | null>(null)
-  if (usageFailure !== null && input.pending.length > 0) {
+  if (usageFailure !== null && input.pending.some((entry) => entry.phase === 'sending')) {
     setUsageFailure(null)
   }
   const offered =
@@ -105,7 +108,7 @@ export function useNativeChatInterruptedContinuation(input: {
     usageLimitCut &&
     !input.isWorking &&
     !resuming &&
-    input.pending.length === 0 &&
+    !input.pending.some((entry) => entry.phase === 'sending') &&
     !transport.sendOut &&
     transport.sendBlockedReason === undefined
       ? usageLimitCut.turnItemId
@@ -115,7 +118,7 @@ export function useNativeChatInterruptedContinuation(input: {
       if (
         usageLimitTurnItemId === null ||
         usageCapability === 'unknown' ||
-        getStructuredAgentSessionPendingSends(sessionId).length > 0
+        getStructuredAgentSessionPendingSends(sessionId).some((entry) => entry.phase === 'sending')
       ) {
         return
       }
@@ -131,15 +134,19 @@ export function useNativeChatInterruptedContinuation(input: {
           ? { usageLimitContinuationOfTurnItemId: turnItemId }
           : {}),
         onSettled: (outcome) => {
-          if (outcome === 'returned' || outcome === 'unconfirmed') {
-            setUsageFailure({ turnItemId, unconfirmed: outcome === 'unconfirmed' })
+          if (outcome === 'returned') {
+            setUsageFailure(turnItemId)
           }
         }
       })
       if (admission === false) {
-        setUsageFailure({ turnItemId, unconfirmed: false })
+        setUsageFailure(turnItemId)
       } else {
-        completeNativeChatStructuredUserAction(agent, transport, admission === true)
+        completeNativeChatStructuredUserAction(
+          agent,
+          transport,
+          admission === true ? transport.onSubmitted : undefined
+        )
         if (hadFocus) {
           focusComposer()
         }
@@ -177,6 +184,9 @@ export function useNativeChatInterruptedContinuation(input: {
       offeredTurnItemId: offered,
       continueNow,
       usageLimitTurnItemId,
+      usageLimitAutoContinue,
+      onUsageLimitHandOffStarted:
+        usageLimitAutoContinue?.kind === 'scheduled' ? usageLimitAutoContinue.cancel : undefined,
       usageLimitContinueDisabled: usageCapability === 'unknown',
       continueUsageLimit
     }),
@@ -188,6 +198,7 @@ export function useNativeChatInterruptedContinuation(input: {
       offered,
       continueNow,
       usageLimitTurnItemId,
+      usageLimitAutoContinue,
       usageCapability,
       continueUsageLimit
     ]
@@ -200,17 +211,11 @@ export function useNativeChatInterruptedContinuation(input: {
         )
       : null
   const usageFailedHere =
-    usageFailure?.turnItemId === usageLimitCut?.turnItemId && usageFailure
-      ? usageFailure.unconfirmed
-        ? translate(
-            'components.native-chat.interruptedContinue.unconfirmed',
-            "Couldn't confirm whether {{agent}} received Continue. Check the chat before trying again.",
-            { agent: structuredAgentLabel(agent) }
-          )
-        : translate(
-            'components.native-chat.interruptedContinue.failed',
-            "Couldn't continue this chat. Try again, or send a message."
-          )
+    usageFailure !== null && usageFailure === usageLimitCut?.turnItemId
+      ? translate(
+          'components.native-chat.interruptedContinue.failed',
+          "Couldn't continue this chat. Try again, or send a message."
+        )
       : null
   return {
     view,
@@ -225,10 +230,12 @@ export function useNativeChatInterruptedContinuation(input: {
 export function NativeChatInterruptedContinueButton({
   onContinue,
   disabled,
+  label,
   explanation: shownExplanation
 }: {
   onContinue: (hadFocus?: boolean) => void
   disabled?: boolean
+  label?: string
   /** What Continue does here, when it is not picking up a reply Orca's stop cut off. */
   explanation?: string
 }): React.JSX.Element {
@@ -253,7 +260,7 @@ export function NativeChatInterruptedContinueButton({
             disabled={disabled}
           >
             <Play />
-            {translate('components.native-chat.interruptedContinue.continue', 'Continue')}
+            {label ?? translate('components.native-chat.interruptedContinue.continue', 'Continue')}
           </Button>
         </TooltipTrigger>
         <TooltipContent side="top" sideOffset={4}>

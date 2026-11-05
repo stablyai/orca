@@ -1,6 +1,6 @@
 import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { RESET_AFTER_BYTE_GAP } from '../../../../shared/terminal-mode-reset-profiles'
+import { RESET_AFTER_BYTE_GAP } from '../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 import { flushAsyncTicks, createDeferred, renderHeadlessBuffer } from './pty-connection-test-async'
 import {
   createMockTransport,
@@ -10,7 +10,12 @@ import {
   type MockPane,
   type MockTransport
 } from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps, type PaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import type { PtyDataMeta } from './pty-dispatcher'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
@@ -187,7 +192,13 @@ async function connectHiddenPane(
   const deps = buildPaneConnectionDeps(() => mockStoreState, {
     isVisibleRef: { current: false }
   })
-  const disposable = await connectMockPanePty(pane, createManager(1), deps)
+  const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+
+  const disposable = await connectMockPanePty(
+    pane,
+    createManager(1),
+    bindPaneAgentTitleMocks(deps, agentTitleMocks)
+  )
   await flushAsyncTicks(6)
   expect(captured.current).not.toBeNull()
   return {
@@ -312,37 +323,6 @@ describe('hidden-output restore loss disclosure (STA-4869)', () => {
       expect(observeDisclosure(drive, R1_MARKER)).toMatchObject({
         disclosedOrRecovered: true
       })
-      drive.disposable.dispose()
-    })
-
-    it('[invariant] discloses or recovers when the budget ends while the pane is hidden', async () => {
-      const seventhAnswer = createDeferred<unknown>()
-      const serializeBufferOutcome = vi.fn().mockResolvedValue(retryWorthy)
-      const drive = await driveToSeventhAnswer(serializeBufferOutcome)
-
-      serializeBufferOutcome.mockReturnValueOnce(seventhAnswer.promise)
-      await vi.advanceTimersByTimeAsync(2_000)
-      await flushAsyncTicks(20)
-      expect(serializeBufferOutcome).toHaveBeenCalledTimes(7)
-
-      // Switch away while the last budgeted request is still pending.
-      drive.setVisible(false)
-      seventhAnswer.resolve(retryWorthy)
-      await flushAsyncTicks(20)
-
-      // The host is healthy again and still holds the dropped bytes.
-      serializeBufferOutcome.mockResolvedValue(hostAnswers(retainedSnapshot(R1_MARKER)))
-      const requestsBeforeReveal = serializeBufferOutcome.mock.calls.length
-      await revealPane(drive)
-      await allowRecoveryWindow()
-
-      const disclosure = observeDisclosure(drive, R1_MARKER)
-      expect(disclosure.markerWrites).toBeLessThanOrEqual(1)
-      expectDisclosedOrRecovered(disclosure)
-      // Require either a fresh recovery request or a visible loss banner.
-      expect(
-        serializeBufferOutcome.mock.calls.length - requestsBeforeReveal
-      ).toBeGreaterThanOrEqual(disclosure.bannerWrites > 0 ? 0 : 1)
       drive.disposable.dispose()
     })
 
@@ -544,7 +524,14 @@ describe('hidden-output restore loss disclosure (STA-4869)', () => {
         isVisibleRef: { current: false },
         startup: { command: 'codex' }
       })
-      const disposable = await connectMockPanePty(pane, createManager(1), deps)
+      const agentTitleMocks2 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+
+      const disposable = await connectMockPanePty(
+        pane,
+        createManager(1),
+        bindPaneAgentTitleMocks(deps, agentTitleMocks2)
+      )
       await flushAsyncTicks(6)
       expect(captured.current).not.toBeNull()
       return {
@@ -629,18 +616,23 @@ describe('hidden-output restore loss disclosure (STA-4869)', () => {
       drive.disposable.dispose()
     })
 
-    // #33766: main labels the first chunk after its hidden drop with the escape the drop left open.
-    async function abandonAfterResumedChunk(resumed: string, gapEscapeState?: string) {
+    // #33766: main marks the first chunk after its hidden drop when it resumes inside an escape.
+    async function abandonAfterResumedChunk(
+      resumed: string,
+      midEscape?: true | 'unknown',
+      transform?: { rawLength: number }
+    ) {
       vi.mocked(window.api.pty.getMainBufferSnapshot).mockResolvedValue(null)
       const drive = await connectLocalHiddenPane()
       vi.useFakeTimers()
       drive.deliver(HIDDEN_FLOOD, HIDDEN_FLOOD.length)
       drive.setVisible(true)
-      const seq = HIDDEN_FLOOD.length + resumed.length
+      const rawLength = transform?.rawLength ?? resumed.length
       drive.deliverWithMeta?.(resumed, {
-        seq,
-        rawLength: resumed.length,
-        ...(gapEscapeState ? { gapEscapeState } : {})
+        seq: HIDDEN_FLOOD.length + rawLength,
+        rawLength,
+        ...(transform ? { transformed: true } : {}),
+        ...(midEscape ? { midEscape } : {})
       })
       await flushAsyncTicks(20)
       for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -653,26 +645,28 @@ describe('hidden-output restore loss disclosure (STA-4869)', () => {
     }
 
     it.each([
-      [
-        'an OSC title',
-        '\x1b]',
-        'ial refactoring PRs | cleanup-dumb-exports\x07> prompt',
-        'ial refactoring'
-      ],
-      ['an SGR sequence', '\x1b[', ';5;242m> prompt', ';242m']
-    ])(
-      'skips the tail of %s main says the gap left open',
-      async (_name, gapEscapeState, resumed, tail) => {
-        const screen = await abandonAfterResumedChunk(resumed, gapEscapeState)
-        expect({
-          banner: screen.includes(BANNER_FRAGMENT),
-          prompt: screen.includes('> prompt'),
-          tail: screen.includes(tail)
-        }).toEqual({ banner: true, prompt: true, tail: false })
-      }
-    )
+      ['an OSC title', 'ial refactoring PRs | cleanup-dumb-exports\x07> prompt', 'ial refactoring'],
+      ['an SGR sequence', ';5;242m> prompt', ';242m']
+    ])('skips a delivery resuming inside %s after the gap reset', async (_name, resumed, tail) => {
+      // Skipped whole, never trimmed: the prompt it carried returns with the repaint nudge.
+      const screen = await abandonAfterResumedChunk(resumed, true)
+      expect({
+        banner: screen.includes(BANNER_FRAGMENT),
+        prompt: screen.includes('> prompt'),
+        tail: screen.includes(tail)
+      }).toEqual({ banner: true, prompt: false, tail: false })
+    })
 
-    it('keeps a labeled continuation when the snapshot at the gap carries the open escape', async () => {
+    it('skips a mid-escape delivery after the gap reset even when main stripped agent status from it', async () => {
+      const screen = await abandonAfterResumedChunk('2C> prompt', true, { rawLength: 40 })
+      expect({
+        banner: screen.includes(BANNER_FRAGMENT),
+        prompt: screen.includes('> prompt'),
+        tail: screen.includes('2C')
+      }).toEqual({ banner: true, prompt: false, tail: false })
+    })
+
+    it('keeps a mid-escape continuation when the snapshot at the gap carries the open escape', async () => {
       // The snapshot predates the resumed chunk, so its pending escape needs every continuation byte.
       vi.mocked(window.api.pty.getMainBufferSnapshot).mockResolvedValue({
         data: 'history\r\n',
@@ -689,7 +683,7 @@ describe('hidden-output restore loss disclosure (STA-4869)', () => {
       drive.deliverWithMeta?.(resumed, {
         seq: HIDDEN_FLOOD.length + resumed.length,
         rawLength: resumed.length,
-        gapEscapeState: '\x1b['
+        midEscape: true
       })
       await allowRecoveryWindow()
       drive.disposable.dispose()

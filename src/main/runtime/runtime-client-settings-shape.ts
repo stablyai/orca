@@ -2,7 +2,7 @@
 
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
-import type { SourceControlAiActionDefaults } from '../../shared/source-control-ai-actions'
+import type { SourceControlAiActionDefaults } from '../../shared/source-control/ai/recipes/source-control-ai-actions'
 
 export type RuntimeClientSettings = Pick<
   GlobalSettings,
@@ -23,7 +23,6 @@ export type RuntimeClientSettings = Pick<
   | 'defaultLinearTeamSelection'
   | 'githubProjects'
   | 'experimentalNewWorktreeCardStyle'
-  | 'experimentalNativeChat'
   | 'compactWorktreeCards'
   | 'minimaxGroupId'
   | 'minimaxUsageModels'
@@ -35,14 +34,12 @@ export type RuntimeClientSettings = Pick<
   | 'agentSkillSharingEnabled'
   | 'machineName'
   | 'nativeChatPermissionMode'
+  | 'nativeChatAutoContinueAfterUsageLimit'
   | 'nativeChatQueueFollowUps'
   | 'sourceControlGroupOrder'
   | 'sourceControlCompareAgainstUpstream'
   | 'diffShowWhitespace'
 > & {
-  /** Older clients still read these; neither is persisted or accepted as an update. */
-  openAgentTabsInChatByDefault?: boolean
-  experimentalStructuredNativeChat?: boolean
   hostSettingOverrides: RuntimeHostDisplayLabelOverrides
   sourceControlAi: RuntimeClientSourceControlAi
 }
@@ -80,4 +77,5 @@ export type RuntimeClientSettingsUpdate = Pick<
   | 'worktreeVisibilityDefaults'
   | 'machineName'
   | 'nativeChatPermissionMode'
+  | 'nativeChatAutoContinueAfterUsageLimit'
 >

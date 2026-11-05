@@ -1,3 +1,9 @@
+import {
+  capturedAutomationOwner,
+  type AutomationCapturedOwner,
+  type AutomationRowAction
+} from './automation-captured-owner'
+import type { RuntimeEnvironmentSshBucket } from '../../store/slices/runtime-environment-ssh'
 import React from 'react'
 import { MoreHorizontal, Pause, Pencil, Play, Trash2 } from 'lucide-react'
 import {
@@ -30,9 +36,7 @@ import type { SshConnectionState } from '../../../../shared/ssh-types'
 import type { ProjectHostSetup } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import type { RuntimeEnvironmentStatus } from '../../../../shared/runtime-host-status'
-import type { TaskSourceHostAvailability } from '../task-source-context-summary'
-import type { AutomationRowAction } from './automation-captured-owner'
+import type { RuntimeEnvironmentStatus } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { AutomationHostTarget } from './automation-host-client'
 import {
   getAutomationRowLastRunSnapshot,
@@ -43,11 +47,7 @@ import { formatAutomationDateTimeWithRelative } from './automation-page-parts'
 import { getAutomationTargetAvailability } from './automation-target-availability'
 import { getAgentLabel } from './automation-draft-model'
 import type { AutomationListRow } from './automation-list-row-identity'
-import {
-  formatAutomationCost,
-  formatAutomationTokens,
-  type AutomationUsageSummary
-} from './automation-usage-model'
+import { formatAutomationUsageSummary } from './automation-usage-model'
 import { AUTOMATIONS_TABLE_GRID_CLASS } from './automations-table-layout'
 import {
   LIST_TABLE_ROW_CLASS,
@@ -62,6 +62,7 @@ import { wslMovedProjectForAutomation } from '@/store/repos/wsl-moved-projects'
 
 export type AutomationListLocalRowProps = {
   row: AutomationListRow
+  capturedOwners?: ReadonlyMap<string, AutomationCapturedOwner>
   selectedRowKey: string | null | undefined
   isSelectedLocal: boolean
   lastRunByAutomationId: ReadonlyMap<string, AutomationRun>
@@ -72,9 +73,9 @@ export type AutomationListLocalRowProps = {
   worktreeForRow?: (row: AutomationListRow, repo: Repo | undefined) => Worktree | undefined
   projectHostSetups: readonly ProjectHostSetup[]
   sshConnectionStates: ReadonlyMap<string, Pick<SshConnectionState, 'status'>>
+  sshStateByEnvironment?: ReadonlyMap<string, RuntimeEnvironmentSshBucket>
   runtimeStatusByEnvironmentId: ReadonlyMap<string, RuntimeEnvironmentStatus>
   hostTargetFor: (row: AutomationListRow) => AutomationHostTarget | null
-  automationSourceHostAvailabilityByRowKey: ReadonlyMap<string, TaskSourceHostAvailability[]>
   hostLabelById?: ReadonlyMap<string, string>
   isActionEnabled?: (row: AutomationListRow, action: AutomationRowAction) => boolean
   onSelect: (rowKey: string) => void
@@ -86,34 +87,8 @@ export type AutomationListLocalRowProps = {
 
 const EMPTY_HOST_LABELS: ReadonlyMap<string, string> = new Map()
 
-function automationUsageText(summary: AutomationUsageSummary | undefined): string {
-  if (!summary || summary.unavailableRuns > 0) {
-    return summary?.knownRuns
-      ? usageAmountText(summary)
-      : translate(
-          'auto.components.automations.AutomationsPage.usageUnavailable',
-          'Usage unavailable'
-        )
-  }
-  return summary.knownRuns > 0
-    ? usageAmountText(summary)
-    : translate('auto.components.automations.AutomationsPage.noRunUsageYet', 'No run usage yet')
-}
-
-function usageAmountText(summary: AutomationUsageSummary): string {
-  return translate(
-    'auto.components.automations.AutomationsPage.runUsageSummaryTokens',
-    '{{cost}} est. · {{tokens}} tokens',
-    {
-      count: summary.totalTokens,
-      cost: formatAutomationCost(summary.estimatedCostUsd),
-      tokens: formatAutomationTokens(summary.totalTokens),
-      defaultValue_one: '{{cost}} est. · {{tokens}} token'
-    }
-  )
-}
-
 export function AutomationListLocalRow({
+  capturedOwners,
   row,
   selectedRowKey,
   isSelectedLocal,
@@ -125,9 +100,9 @@ export function AutomationListLocalRow({
   worktreeForRow,
   projectHostSetups,
   sshConnectionStates,
+  sshStateByEnvironment,
   runtimeStatusByEnvironmentId,
   hostTargetFor,
-  automationSourceHostAvailabilityByRowKey,
   hostLabelById = EMPTY_HOST_LABELS,
   isActionEnabled,
   onSelect,
@@ -139,19 +114,24 @@ export function AutomationListLocalRow({
   const allows = (row: AutomationListRow, action: AutomationRowAction): boolean =>
     isActionEnabled?.(row, action) ?? true
   const { automation } = row
-  const automationRepo = repoForRow?.(row) ?? repoMap.get(getAutomationRunRepoId(automation))
+  const automationRepo = repoForRow
+    ? repoForRow(row)
+    : repoMap.get(getAutomationRunRepoId(automation))
   const automationWorktree = automation.workspaceId
-    ? (worktreeForRow?.(row, automationRepo) ?? worktreeMap.get(automation.workspaceId))
+    ? worktreeForRow
+      ? worktreeForRow(row, automationRepo)
+      : worktreeMap.get(automation.workspaceId)
     : null
   const automationRunAvailability = getAutomationTargetAvailability({
     automation,
+    capturedOwner: capturedAutomationOwner(capturedOwners, row.key),
     repo: automationRepo,
     workspace: automationWorktree,
     projectHostSetups,
     sshConnectionStates,
+    sshStateByEnvironment,
     runtimeStatusByEnvironmentId,
-    automationHostTarget: hostTargetFor(row),
-    sourceHostAvailability: automationSourceHostAvailabilityByRowKey.get(row.key)
+    automationHostTarget: hostTargetFor(row)
   })
   const projectLabel =
     automationRepo?.displayName ??
@@ -173,7 +153,7 @@ export function AutomationListLocalRow({
     (hostId
       ? (hostLabelById.get(hostId) ?? getExecutionHostLabel(hostId))
       : getLocalExecutionHostLabel())
-  const agentTooltipLabel = `${agentLabel} · ${hostLabel} · ${automationUsageText(row.usageSummary ?? undefined)}`
+  const agentTooltipLabel = `${agentLabel} · ${hostLabel} · ${formatAutomationUsageSummary(row.usageSummary ?? undefined)}`
   const canRunNow = automationRunAvailability.canRunNow && allows(row, 'run')
   const lastRun = lastRunByAutomationId.get(automation.id)
   // Use the projected newest retained run when history is absent; the list does not download history.
@@ -181,10 +161,31 @@ export function AutomationListLocalRow({
     ? getLocalAutomationLastRunSnapshot(automation, lastRun)
     : getAutomationRowLastRunSnapshot(row)
 
+  const dropdownRunItem = (
+    <DropdownMenuItem
+      disabled={!canRunNow}
+      onSelect={() => {
+        if (canRunNow) {
+          onRunNow(row)
+        }
+      }}
+    >
+      <Play className="size-3.5" />
+      <span className="min-w-0 truncate">
+        {automationRunAvailability.canRunNow
+          ? translate('auto.components.automations.AutomationsPage.2faecab10b', 'Run Now')
+          : automationRunAvailability.message}
+      </span>
+    </DropdownMenuItem>
+  )
+
   const actionItems = (
     <>
       <MenuRunItem
         disabled={!canRunNow}
+        disabledReason={
+          automationRunAvailability.canRunNow ? undefined : automationRunAvailability.message
+        }
         label={
           automationRunAvailability.canRunNow
             ? translate('auto.components.automations.AutomationsPage.2faecab10b', 'Run Now')
@@ -294,21 +295,11 @@ export function AutomationListLocalRow({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuItem
-                disabled={!canRunNow}
-                onSelect={() => {
-                  if (canRunNow) {
-                    onRunNow(row)
-                  }
-                }}
-              >
-                <Play className="size-3.5" />
-                <span className="min-w-0 truncate">
-                  {automationRunAvailability.canRunNow
-                    ? translate('auto.components.automations.AutomationsPage.2faecab10b', 'Run Now')
-                    : automationRunAvailability.message}
-                </span>
-              </DropdownMenuItem>
+              {automationRunAvailability.canRunNow ? (
+                dropdownRunItem
+              ) : (
+                <div title={automationRunAvailability.message}>{dropdownRunItem}</div>
+              )}
               <DropdownMenuItem disabled={!allows(row, 'edit')} onSelect={() => onEdit(row)}>
                 <Pencil className="size-3.5" />
                 {translate('auto.components.automations.AutomationsPage.f4612e3f78', 'Edit')}
@@ -343,14 +334,16 @@ export function AutomationListLocalRow({
 
 function MenuRunItem({
   disabled,
+  disabledReason,
   label,
   onSelect
 }: {
   disabled: boolean
+  disabledReason?: string
   label: string
   onSelect: () => void
 }): React.JSX.Element {
-  return (
+  const item = (
     <ContextMenuItem
       disabled={disabled}
       onSelect={(event) => {
@@ -365,6 +358,8 @@ function MenuRunItem({
       <span className="min-w-0 truncate">{label}</span>
     </ContextMenuItem>
   )
+  // Disabled items ignore pointer events; put explanatory titles on a wrapper.
+  return disabledReason ? <div title={disabledReason}>{item}</div> : item
 }
 
 function MenuItem({

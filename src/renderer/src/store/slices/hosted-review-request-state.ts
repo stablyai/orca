@@ -1,5 +1,5 @@
-import type { HostedReviewInfo } from '../../../../shared/hosted-review'
-import { slowTaskRequiredIdleMs } from '@/components/right-sidebar/coalesced-poll-runner'
+import type { HostedReviewInfo } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
+import { slowTaskRequiredIdleMs } from '@/lib/repository-refresh/coalesced-poll-runner'
 
 const HOSTED_REVIEW_REVALIDATION_IDLE_MULTIPLIER = 5
 const HOSTED_REVIEW_REVALIDATION_MAX_INTERVAL_MS = 5 * 60_000
@@ -176,10 +176,26 @@ export function _clearHostedReviewRequestGenerationsForTest(): void {
 
 /** A forced request needs a forced flight; an explicit Refresh (wake) needs one that may start the WSL distro (E9). */
 export function canJoinHostedReviewFlight(
-  inflight: { force: boolean; wakeWslDistro: boolean },
-  options: { force?: boolean; wakeWslDistro?: boolean } | undefined
+  inflight: { force: boolean; wakeWslDistro: boolean; currentHeadOid?: string | null },
+  options:
+    | {
+        force?: boolean
+        wakeWslDistro?: boolean
+        userRefresh?: boolean
+        currentHeadOid?: string | null
+      }
+    | undefined
 ): boolean {
-  return (!options?.force || inflight.force) && (!options?.wakeWslDistro || inflight.wakeWslDistro)
+  return (
+    !options?.userRefresh &&
+    !(
+      options?.currentHeadOid != null &&
+      inflight.currentHeadOid != null &&
+      options.currentHeadOid !== inflight.currentHeadOid
+    ) &&
+    (!options?.force || inflight.force) &&
+    (!options?.wakeWslDistro || inflight.wakeWslDistro)
+  )
 }
 
 /** Records a freshly issued request in the in-flight map and supersedes any queued revalidation for its key. */
@@ -190,7 +206,7 @@ export function registerInflightHostedReviewRequest(
     ...entry
   }: {
     promise: Promise<HostedReviewInfo | null>
-    options: { force?: boolean; wakeWslDistro?: boolean } | undefined
+    options: { force?: boolean; wakeWslDistro?: boolean; userRefresh?: boolean } | undefined
     currentHeadOid: string | null
     generation: number
     startedAt: number

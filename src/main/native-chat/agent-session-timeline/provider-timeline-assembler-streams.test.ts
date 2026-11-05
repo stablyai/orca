@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { parseAgentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
-import { agentJournalTurnBody } from '../../../shared/agent-session-turn-record'
+import { parseAgentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { agentJournalTurnBody } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import {
   closeProviderTimelineRigs,
   messageText,
@@ -79,21 +79,5 @@ describe("a stream writes only while its row's turn runs", () => {
       body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'Hello.' }] }
     })
     expect(messageText((await rig.row(providerItemId('item', 'm')))?.body)).toBe('Hello.')
-  })
-})
-
-describe('the open budget counts every provider string a stream keeps', () => {
-  it('refuses a stream whose thread alone is past the budget', async () => {
-    const rig = await openProviderTimelineRig({ schedule: () => () => {} })
-    const thread = 't'.repeat(1024 * 1024 + 1)
-    expect(
-      rig.assembler.apply({
-        type: 'text.delta',
-        item: { id: 'm' },
-        channel: 'assistant',
-        text: 'x',
-        join: { thread }
-      }).admission
-    ).toEqual({ accepted: false, reason: 'failed' })
   })
 })

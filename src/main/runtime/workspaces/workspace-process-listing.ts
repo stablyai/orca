@@ -1,5 +1,7 @@
+import { getRepoHostIdentityForParts } from '../../../shared/repo-host-identity'
+import { createRepoRowExecutionHostLookup } from '../../../shared/worktree-execution-host-resolution'
+import { resolveWorktreeHostRouting } from '../worktree-launch-host-repo'
 import { resolveHostStructuredAgentLaunchEnvironment } from '../structured-agent-launch-support'
-import { resolveStructuredCodexAccountKind } from '../structured-agent-account-home'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
 import { collectRuntimeWorktreeAgentSources } from '../runtime-worktree-agent-sources'
 import { OrcaRuntimeWithWorktreePsDependencies } from './workspace-process-listing-dependencies'
@@ -20,37 +22,32 @@ import { attachRuntimeWorktreeAgentRows } from '../runtime-worktree-agent-rows'
 import { attachRuntimeWorktreeAgentRowWaits } from '../runtime-worktree-agent-row-waits'
 import { compareWorktreePs } from '../runtime-worktree-status-projection'
 import type { Repo } from '../../../shared/repo-types'
-import { enrichMissingRepoGitRemoteIdentities } from '../../repo-git-remote-identity-enrichment'
-import { ensureStructuredAgentSessionHost as installStructuredAgentSessionHost } from '../structured-agent-session-runtime'
+import { enrichMissingRepoGitRemoteIdentities } from '../../workspaces/catalog/repo-git-remote-identity-enrichment'
+import { ensureStructuredAgentSessionHost as installStructuredAgentSessionHost } from '../agent-session/structured-agent-session-runtime'
 import {
   createStructuredAttentionMobileDelivery,
   readStructuredAttentionWorkspaceLabels
-} from '../structured-agent-session-mobile-attention'
+} from '../agent-session/structured-agent-session-mobile-attention'
 import {
   createStructuredAgentSessionLogger,
   neverThrowingStructuredAgentSessionLogger
 } from '../../native-chat/agent-session-wire/structured-agent-session-logger'
-import { openAgentSessionRecordStoreOnce } from '../agent-session-record-store-slot'
-import type { AgentSessionRecordStore } from '../agent-session-record-store'
+import { openAgentSessionRecordStoreOnce } from '../agent-session/records/agent-session-record-store-slot'
+import type { AgentSessionRecordStore } from '../agent-session/records/agent-session-record-store'
 import { maybeAutoRenameWorkspaceOnFirstStructuredTurn } from '../../agent-hooks/first-work-structured-session-rename'
 import { firstWorkRenameDeps } from '../../agent-hooks/first-work-rename-runtime'
 import { createStructuredChatNamingHandler } from '../../native-chat/structured-chat-naming'
 import { structuredChatNamingDeps } from '../structured-chat-naming-runtime'
 import { getProfileUserDataPath } from '../../orca-profiles/profile-storage-paths'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
-import { escalateChatWorkerError } from '../orchestration/chat-worker-error-escalation'
-import type { StructuredAgentSessionRequestFailure } from '../../native-chat/agent-session-wire/structured-agent-session-request-failures'
+import { chatWorkerTurnStopReporter } from '../orchestration/chat-worker-turn-stops'
 import { buildWorktreeListingPage } from '../worktree-listing-host-scope'
 import {
   structuredWorkerOpenTaskTitle,
   structuredWorkerOwesWork
 } from '../structured-worker-custody'
-import { preModeChatGetsFullAccess } from '../../../shared/agent-chat-permission-mode'
-import { isTuiAgent } from '../../../shared/tui-agent-config'
-import { nativeChatShellEnvironmentPolicy } from '../../../shared/native-chat/native-chat-shell-environment'
-import { claudeStructuredAuthPolicyForSettings } from '../../claude-accounts/claude-structured-auth-policy'
-import { resolveStructuredAgentCommand } from '../../native-chat/structured-agent-command-resolution'
-import { structuredAgentConfiguredArgs } from '../../native-chat/structured-agent-configured-args'
+import { preModeChatGetsFullAccess } from '../../../shared/agent-launch/permissions/agent-chat-permission-mode'
+import { isTuiAgent } from '../../../shared/agent-launch/catalog/tui-agent-config'
 import { claudeCliFlagSupport } from '../../claude/claude-cli-flag-support'
 import {
   runtimeHiddenHostIds,
@@ -59,8 +56,14 @@ import {
   withoutHiddenHosts
 } from '../runtime-visible-catalog'
 import { isWorkspaceNotificationMuted } from '../workspace-notification-mute'
+import { WorkerAutoReleaseActivity } from '../orchestration/worker-auto-release-activity'
+import { nativeChatIdleStopMs } from '../../../shared/native-chat/native-chat-idle-stop'
 
 export abstract class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithWorktreePsDependencies {
+  protected readonly workerAutoReleaseActivity = new WorkerAutoReleaseActivity(
+    () => this._orchestrationDb
+  )
+
   async getWorktreePs(
     limit = DEFAULT_WORKTREE_PS_LIMIT,
     sourceDefaultsSupported = true,
@@ -128,7 +131,8 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithWorktr
       terminalTitleEvidenceByWorktreeId,
       rowSources,
       orchestrationByPaneKey: this.agentOrchestrationProjection.buildByPaneKey(),
-      getSummary
+      getSummary,
+      conversationName: this.orchestrationSenderNames.agentRowNamer()
     })
 
     const sorted = [...summaries.values()].sort(compareWorktreePs)
@@ -147,29 +151,31 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithWorktr
     sourceDefaultsSupported = true
   ): ResolvedWorktreeSnapshot {
     const visibilitySettings = this.store?.getSettings()
-    const visibilitySourceMatchersByRepoId = this.buildRuntimeVisibilitySourceMatchersByRepoId(
+    const sourceMatchersByRepoId = this.buildRuntimeVisibilitySourceMatchersByRepoId(
       snapshot.worktrees,
       sourceDefaultsSupported,
       visibilitySettings
     )
     const hiddenRepos = runtimeHiddenRepos(this.store)
+    const repos = this.store?.getRepos() ?? []
+    const repoOwners = createRepoRowExecutionHostLookup(repos)
     return {
       ...snapshot,
-      worktrees: snapshot.worktrees.filter(
-        (worktree) =>
-          !hiddenRepos.hasWorktree(worktree) &&
-          this.isRuntimeWorktreeVisible(
-            worktree,
-            visibilitySourceMatchersByRepoId.get(worktree.repoId),
-            sourceDefaultsSupported,
-            visibilitySettings
-          )
-      )
+      worktrees: snapshot.worktrees.filter((worktree) => {
+        const owner = resolveWorktreeHostRouting(repos, worktree, repoOwners)
+        if (owner.kind === 'ambiguous' || hiddenRepos.hasWorktree(worktree)) {
+          return false
+        }
+        return this.isRuntimeWorktreeVisible(
+          worktree,
+          owner.kind === 'resolved'
+            ? sourceMatchersByRepoId.get(getRepoHostIdentityForParts(worktree.repoId, owner.hostId))
+            : undefined,
+          sourceDefaultsSupported,
+          visibilitySettings
+        )
+      })
     }
-  }
-
-  listRepos(): Repo[] {
-    return this.store?.getRepos() ?? []
   }
 
   /** Exclude retained migration sources from client listings. */
@@ -191,13 +197,8 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithWorktr
 
   isWorkspaceNotificationMuted(workspaceId: string): boolean {
     const store = this.store
-    return (
-      !!store &&
-      isWorkspaceNotificationMuted(
-        { store, resolvedWorktrees: this.resolvedWorktrees.peek()?.worktrees ?? null },
-        workspaceId
-      )
-    )
+    const resolvedWorktrees = this.resolvedWorktrees.peek()?.worktrees ?? null
+    return !!store && isWorkspaceNotificationMuted({ store, resolvedWorktrees }, workspaceId)
   }
 
   /** Admission needs only the ledger; a later chat host must reuse this store. */
@@ -233,48 +234,31 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithWorktr
         logger
       )
     )
+    const { stateDirectory, ...catalogDeps } = this.structuredAgentCatalogDependencies()
     await installStructuredAgentSessionHost({
-      stateDirectory: getProfileUserDataPath(),
+      stateDirectory,
       legacySessionTabIds: this.legacyStructuredSessionTabIds,
       hostId: LOCAL_EXECUTION_HOST_ID,
       claimKeyId: this.agentSessionClaimSigner.keyId,
       logger,
-      // Resolve plain folder workspaces as well as git worktrees.
-      resolveWorkspacePath: async (workspaceId) =>
-        (await this.resolveRuntimeFileTarget(`id:${workspaceId}`)).worktree.path,
-      resolveClaudeCommand: (options) =>
-        resolveStructuredAgentCommand('claude', this.requireStore().getSettings(), options),
-      resolveCodexCommand: (options) =>
-        resolveStructuredAgentCommand('codex', this.requireStore().getSettings(), options),
-      resolveLaunchArgs: (agent) =>
-        structuredAgentConfiguredArgs(agent, this.requireStore().getSettings()),
-      // Production-only wiring prevents test runtimes from probing a real Claude CLI.
+      ...catalogDeps,
       claudeCliFlags: claudeCliFlagSupport,
+      usageLimitAutoContinue: this.usageLimitAutoContinueHostDeps(),
+      idleSweep: { idleMs: () => nativeChatIdleStopMs(this.requireStore().getSettings()) },
       nativeChatVisuals: {
         isEnabled: () => this.requireStore().getSettings().nativeChatInlineVisuals !== false
       },
-      resolveShellEnvironmentPolicy: () =>
-        nativeChatShellEnvironmentPolicy(this.requireStore().getSettings()),
-      resolveClaudeAuthPolicy: () =>
-        claudeStructuredAuthPolicyForSettings(this.requireStore().getSettings()),
       resolveAgentFullAccess: (agent) =>
         isTuiAgent(agent) &&
         preModeChatGetsFullAccess(agent, this.requireStore().getSettings(), process.platform),
-      resolveAgentLaunchEnv: (agent) =>
-        isTuiAgent(agent)
-          ? this.structuredAgentLaunchEnv(agent, this.requireStore().getSettings())
-          : {},
-      resolveAgentCommandSettings: () => this.requireStore().getSettings(),
-      resolveCodexAccountKind: (home) =>
-        resolveStructuredCodexAccountKind(home, this.requireStore().getSettings()),
-      resolveAgentAccountHome: (agent) => this.resolveStructuredAgentAccountHome(agent),
-      ...(this.prepareCodexCatalogProbeHomeFn
-        ? { prepareCodexCatalogProbeHome: this.prepareCodexCatalogProbeHomeFn }
-        : {}),
+      launchAccountHome: (record, purpose) =>
+        this.resolveStructuredAgentLaunchAccountHome(record, purpose),
       onRequestFailure: (failure) => this.onStructuredRequestFailureForErrorMail(failure),
       // Structured chat has no CLI hooks; this projection drives first-work renaming.
       onSessionStatusChanged: (summary, options) => {
+        this.crewChanges.notify(new Set(['status', 'names']))
         this.onStructuredSessionStatusForMail(summary)
+        this.workerAutoReleaseActivity.observeChat(summary)
         nameChat(summary, options)
         void maybeAutoRenameWorkspaceOnFirstStructuredTurn(
           summary,
@@ -285,28 +269,25 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithWorktr
       ...(this.structuredAgentStatusSinkFn ? { statusSink: this.structuredAgentStatusSinkFn } : {}),
       conversationNaming: nameChat,
       onSessionTabHidden: (sessionId) => this.onStructuredSessionTabHidden(sessionId),
+      queuedAgentMessageOwed: (sessionId, from, peek) =>
+        this.structuredChatMailOwed(sessionId, from, peek),
       assertNoTerminalWriter: (record) => this.assertStructuredChatAcquireAdmissible(record),
       attentionDelivery: createStructuredAttentionMobileDelivery({
         readNotificationSettings: () => this.requireStore().getSettings().notifications,
         readWorkspaceLabels: (scope) =>
           readStructuredAttentionWorkspaceLabels(this.requireStore(), scope),
         isWorkspaceMuted: (scope) => this.isWorkspaceNotificationMuted(scope.workspaceId),
+        // The same contexts the session's chat row carries.
+        readOrchestration: (paneKey) =>
+          this.agentOrchestrationProjection.buildByPaneKey()?.[paneKey],
         dispatch: (event) => this.mobileNotifications.dispatch(event),
         reconcile: (state) => this.mobileNotifications.reconcileStructuredPromptAttention(state),
         now: () => Date.now()
       }),
+      onTurnAttention: chatWorkerTurnStopReporter(this.workerTurnStopReportDeps),
       // Re-read dispatch ownership each sweep; absence of a database cannot keep the worker alive.
       hasOpenDispatch: (record) =>
         structuredWorkerOwesWork(this.getOrchestrationDbIfAvailable?.() ?? null, record)
-    })
-  }
-
-  /** A chat worker whose request settled failed tells the Run that dispatched it. */
-  onStructuredRequestFailureForErrorMail(failure: StructuredAgentSessionRequestFailure): void {
-    void escalateChatWorkerError(failure, {
-      enabled: () => this.isChatWorkerErrorEscalationEnabled(),
-      db: () => this.getOrchestrationDbIfAvailable(),
-      notify: (handle, messageType) => this.notifyMessageArrived(handle, messageType)
     })
   }
 }

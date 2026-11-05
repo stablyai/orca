@@ -1,5 +1,5 @@
-import type { TerminalPanePlacement } from '../../../shared/terminal-pane-placement'
-import type { TerminalPaneLayoutNode } from '../../../shared/terminal-tab-types'
+import type { TerminalPanePlacement } from '../../../shared/workspace-layout/terminal-pane-placement'
+import type { TerminalPaneLayoutNode } from '../../../shared/workspace-layout/terminal-tab-types'
 import {
   collectLayoutLeafIdsInOrder,
   insertLeafBeside,

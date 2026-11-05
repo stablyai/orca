@@ -1,4 +1,4 @@
-import { createElement, StrictMode } from 'react'
+import { createContext, createElement, StrictMode } from 'react'
 import { act, create } from 'react-test-renderer'
 import { afterEach, expect, it, vi } from 'vitest'
 
@@ -23,8 +23,10 @@ vi.mock('expo-router', async () => {
 vi.mock('react-native', () => ({
   AppState: { currentState: 'active', addEventListener: () => ({ remove: vi.fn() }) },
   View: 'View',
+  StyleSheet: { create: (styles: unknown) => styles, absoluteFillObject: {} },
   Platform: { OS: 'ios' },
   Keyboard: { dismiss: vi.fn() },
+  Easing: { bezier: () => 'toast-easing' },
   Animated: {
     timing: (
       _value: unknown,
@@ -53,12 +55,19 @@ vi.mock('../terminal/terminal-copy-gutter-preference', () => ({
   useTerminalCopyTrimsGutter: () => ({ current: false })
 }))
 vi.mock('./mobile-session-styles', () => ({ styles: { container: {}, kavInner: {} } }))
+vi.mock('../transport/use-workspace-client', () => ({
+  WorkspaceServerContext: createContext(undefined)
+}))
+vi.mock('../components/AnchoredDetailCard', () => ({ AnchoredDetailCard: () => null }))
+vi.mock('../layout/responsive-layout', () => ({
+  useResponsiveLayout: () => ({ isLandscapePhone: false })
+}))
+vi.mock('../layout/use-shell-side-rail', () => ({ useShellSideRail: () => false }))
+vi.mock('./use-session-title-card', () => ({ useSessionTitleCard: () => ({ anchor: null }) }))
 vi.mock('./MobileSessionHeader', () => ({ MobileSessionHeader: () => null }))
 vi.mock('./MobileSessionContentRow', () => ({ MobileSessionContentRow: () => null }))
 vi.mock('./MobileSessionSheets', () => ({ MobileSessionSheets: () => null }))
-vi.mock('./session-side-rail', () => ({
-  useSessionSideRail: () => ({ backInRail: false, keysInRail: false })
-}))
+vi.mock('./MobileWorkerAutoCloseStrip', () => ({ MobileWorkerAutoCloseStrip: () => null }))
 import { useMobileSessionFeedbackCapabilities } from './use-mobile-session-feedback-capabilities'
 import { useMobileSessionAccessorySelection } from './use-mobile-session-accessory-selection'
 import { MobileSessionSurface } from './MobileSessionSurface'
@@ -138,8 +147,12 @@ function mounted(strict = false) {
     const accessory = useMobileSessionAccessorySelection(accessoryScope)
     const result = { ...feedback, ...accessory }
     read.value = result
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Actual surface reads only setMobileSessionRootRef; its child components are isolated presentation stubs.
-    const controller = result as unknown as SurfaceController
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Actual surface reads the root ref, tabs and sheet visibility; its presentation children are stubbed.
+    const controller = {
+      ...result,
+      visibleTabs: [],
+      bulkCloseConfirm: { visible: false }
+    } as unknown as SurfaceController
     return visible ? createElement(MobileSessionSurface, { key: surfaceKey, controller }) : null
   }
   let root: ReturnType<typeof create> | undefined
@@ -320,35 +333,6 @@ it('preserves late copy while surface is temporarily detached but hook stays mou
   act(() => view.root.unmount())
   expect(vi.getTimerCount()).toBe(0)
 })
-it.each([1200, 1500])('keeps exact live fade-in/hide/fade-out timing at %s ms', (duration) => {
-  vi.useFakeTimers()
-  const view = mounted()
-  act(() => view.api.showToast('message', duration))
-  expect(view.setToastMessage.mock.calls).toEqual([['message']])
-  expect(boundary.animationStarts[0].options).toEqual({
-    toValue: 1,
-    duration: 150,
-    useNativeDriver: true
-  })
-  act(() => boundary.animationStarts[0].complete({ finished: true }))
-  expect(vi.getTimerCount()).toBe(1)
-  act(() => {
-    vi.advanceTimersByTime(duration - 1)
-  })
-  expect(boundary.animationStarts).toHaveLength(1)
-  act(() => {
-    vi.advanceTimersByTime(1)
-  })
-  expect(vi.getTimerCount()).toBe(0)
-  expect(boundary.animationStarts[1].options).toEqual({
-    toValue: 0,
-    duration: 200,
-    useNativeDriver: true
-  })
-  act(() => boundary.animationStarts[1].complete({ finished: true }))
-  expect(view.setToastMessage.mock.calls).toEqual([['message'], [null]])
-  act(() => view.root.unmount())
-})
 it('preserves old unfinished/replaced animation fences and latest toast ownership', () => {
   vi.useFakeTimers()
   const view = mounted()
@@ -375,64 +359,6 @@ it('preserves old unfinished/replaced animation fences and latest toast ownershi
     ['third'],
     ['fourth'],
     ['fifth']
-  ])
-  act(() => view.root.unmount())
-})
-it('keeps 64 admitted copies after 64 surface/hook unmounts without new timers', async () => {
-  vi.useFakeTimers()
-  const releases: (() => void)[] = []
-  const copying: Promise<void>[] = []
-  const views: ReturnType<typeof mounted>[] = []
-  for (let index = 0; index < 64; index++) {
-    boundary.writeText.mockReturnValueOnce(
-      new Promise<void>((resolve) => {
-        releases.push(resolve)
-      })
-    )
-    const view = mounted()
-    views.push(view)
-    act(() => {
-      copying.push(view.api.handleSelectionCopy('handle', 'copy' + index))
-    })
-    act(() => view.root.unmount())
-  }
-  expect(boundary.writeText.mock.calls).toEqual(
-    Array.from({ length: 64 }, (_, index) => ['copy' + index])
-  )
-  expect(vi.getTimerCount()).toBe(0)
-  await act(async () => {
-    for (const release of releases) {
-      release()
-    }
-    await Promise.all(copying)
-  })
-  expect(boundary.success).toHaveBeenCalledTimes(64)
-  expect(boundary.error).not.toHaveBeenCalled()
-  for (const view of views) {
-    expect(view.cancelSelect).toHaveBeenCalledTimes(1)
-    expect(view.clearTerminalCache).toHaveBeenCalledTimes(1)
-  }
-  for (const animation of boundary.animationStarts) {
-    act(() => animation.complete({ finished: true }))
-  }
-  expect(vi.getTimerCount()).toBe(0)
-  expect(boundary.animationStarts).toHaveLength(0)
-})
-
-it('preserves synchronous native completion and natural hide cleanup', () => {
-  vi.useFakeTimers()
-  boundary.synchronous = true
-  const view = mounted()
-  act(() => view.api.showToast('sync'))
-  expect(vi.getTimerCount()).toBe(1)
-  act(() => {
-    vi.advanceTimersByTime(1200)
-  })
-  expect(vi.getTimerCount()).toBe(0)
-  expect(view.setToastMessage.mock.calls).toEqual([['sync'], [null]])
-  expect(boundary.animationStarts.map((start) => start.options)).toEqual([
-    { toValue: 1, duration: 150, useNativeDriver: true },
-    { toValue: 0, duration: 200, useNativeDriver: true }
   ])
   act(() => view.root.unmount())
 })

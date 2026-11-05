@@ -10,17 +10,17 @@ import {
   buildAgentSessionContinuationPrompt,
   type AgentSessionContinuationRequest
 } from '@/lib/agent-session-continuation'
-import { isTuiAgent } from '../../../../shared/tui-agent-config'
+import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import {
   callStructuredAgentSession,
   supportsStructuredAgentSessionContinuationContext
 } from '@/runtime/structured-agent-session-client'
-import type { AgentSessionContinuationContext } from '../../../../shared/agent-session-wire'
+import type { AgentSessionContinuationContext } from '../../../../shared/agent-session/agent-session-wire'
 import { executionHostIdForStructuredTarget } from '@/runtime/structured-agent-session-owner'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import type { NativeChatStructuredViewProps } from './native-chat-view-types'
 import type { NativeChatFileLinkContext } from './native-chat-file-link'
-import { nativeChatMessageCopyText } from '../../../../shared/native-chat-message-copy-text'
+import { buildAgentSessionHandoffContext } from '../../../../shared/agent-session-handoff-context'
 
 export type NativeChatHandOff = {
   /** This chat can seed another agent from its owning workspace. */
@@ -141,14 +141,7 @@ export function useNativeChatHandOff({
       sourceTitle: chatTab?.customLabel?.trim() || conversationName || chatTab?.label,
       sourceWorkingDirectory: directory.worktreePath,
       transcriptPath,
-      capturedText: saved
-        ? (context.capturedText ?? '')
-        : messages
-            .flatMap((message) => {
-              const text = nativeChatMessageCopyText(message).trim()
-              return text ? [`${message.role}: ${text}`] : []
-            })
-            .join('\n\n')
+      capturedText: saved ? (context.capturedText ?? '') : buildAgentSessionHandoffContext(messages)
     }
     if (buildAgentSessionContinuationPrompt(source, 'focused')) {
       const prepared: Attempt = {

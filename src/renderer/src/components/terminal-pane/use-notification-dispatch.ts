@@ -4,18 +4,25 @@ import {
 } from '@/attention/notification-subject-owner'
 import {
   notificationExecutionHostForOwner,
+  notificationWorkspaceExecutionHostForOwner,
   notificationSourceForOwner
 } from '../../../../shared/notification-source'
 import { useCallback } from 'react'
 import { useAppStore } from '@/store'
 import { resolveCommittedTitleAgentType } from '@/lib/pane-agent-evidence'
 import { buildAgentNotificationId } from '../../../../shared/agent-notification-id'
-import { agentMainAgentVerdict } from '../../../../shared/agent-main-agent-verdict'
-import { shareCompatibleTitleIdentityGroup } from '../../../../shared/agent-title-owner'
+import { agentMainAgentVerdict } from '../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
+import { shareCompatibleTitleIdentityGroup } from '../../../../shared/agent-status/title/agent-title-owner'
+import { isFreshNonDoneAgentStatus } from '../../../../shared/agent-status/contracts/agent-status-freshness'
+import type {
+  AgentStatusEntry,
+  AgentStatusState
+} from '../../../../shared/agent-status/contracts/agent-status-types'
 import {
-  isFreshNonDoneAgentStatus,
-  type AgentStatusEntry
-} from '../../../../shared/agent-status-types'
+  isCoordinatorOnlyNews,
+  withApprovalTitle
+} from '../../../../shared/dispatched-worker-attention'
+import { canonicalOrchestrationForRow } from '@/runtime/visible-agent-orchestration'
 import { isSupersededAgentCompletionSnapshot } from './agent-completion-snapshot-staleness'
 import { isAutoApprovedAntigravityPermission } from './antigravity-auto-approved-permission'
 import type {
@@ -36,6 +43,15 @@ import {
 } from '@/attention/agent-attention-notification-delivery'
 
 const AGENT_NOTIFICATION_SNAPSHOT_MAX_AGE_MS = 10_000
+
+/** Only a hook row proves a finish its coordinator hears about; a title waiting for approval outranks one. */
+function completionTurnState(
+  event: TerminalNotificationEvent,
+  agentStatus: Pick<AgentStatusEntry, 'state'> | undefined
+): AgentStatusState | undefined {
+  // A title-only stop, or an agent that died mid-turn, reported to no one, so the person hears it.
+  return withApprovalTitle(agentStatus?.state, event.terminalTitle)
+}
 
 function agentSnapshotMatchesExplicitTitle(
   snapshot: { agentType?: string | null } | undefined,
@@ -127,7 +143,14 @@ export function dispatchTerminalNotification(
       reason: event.source === 'agent-task-complete' ? 'agent-completion' : 'terminal-bell',
       settlesTurn: event.source === 'agent-task-complete',
       // Fresh accepted hooks can arrive before inactive-worktree PTY hydration; title/BEL-only completion still requires live surface evidence.
-      hasFreshActivityEvidence: Boolean(agentStatus)
+      hasFreshActivityEvidence: Boolean(agentStatus),
+      coordinatorOnlyNews:
+        event.source === 'agent-task-complete' &&
+        isCoordinatorOnlyNews(completionTurnState(event, agentStatus), () =>
+          event.paneKey === undefined
+            ? undefined
+            : canonicalOrchestrationForRow(state, event.paneKey)
+        )
     },
     createTerminalAttentionSurface(state)
   )
@@ -170,6 +193,7 @@ export function dispatchTerminalNotification(
         source: event.source,
         ...(notificationId ? { notificationId } : {}),
         worktreeId: request.workspaceId,
+        workspaceExecutionHostId: notificationWorkspaceExecutionHostForOwner(owner),
         ...(executionHost ? { executionHost } : {}),
         paneKey: request.subjectKey ?? undefined,
         ...getNotificationWorkspaceLabels(state, request.workspaceId, event.terminalTitle),

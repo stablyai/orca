@@ -1,9 +1,14 @@
+import {
+  LINEAR_AUTHENTICATION_ERROR,
+  isIntegrationCredentialDecryptionError
+} from '../../shared/integration-credential-errors'
 import type { LinearIssue } from '../../shared/linear/issue-types'
 import type { LinearWorkspaceSelection } from '../../shared/linear/workspace-types'
 import { acquire, release } from './linear-request-concurrency'
 import { clearToken } from './linear-token-store'
 import { getClients, isAuthError } from './client'
 import { getRequiredEntry } from './issue-context/client'
+import { readLinearIssueDetail } from './linear-issue-detail'
 import { getDescriptionImageUrls } from './linear-description-images'
 import {
   ATTACHMENT_BY_UUID_QUERY,
@@ -17,7 +22,6 @@ import {
   type LinearRawVariables
 } from './linear-issue-query-documents'
 import {
-  mapIssueForWorkspace,
   mapRawIssueForWorkspace,
   shouldThrowAuthError,
   sortAndLimitIssues
@@ -63,11 +67,10 @@ async function readIssueWithSignal(
   for (const entry of entries) {
     await acquire(signal)
     try {
-      const issue = await entry.client.issue(id)
-      const mapped = await mapIssueForWorkspace(entry, issue, {
-        includeChildren: true,
-        includeProject: true
-      })
+      const mapped = await readLinearIssueDetail(entry, id)
+      if (!mapped) {
+        continue
+      }
       const descriptionImageUrls = await getDescriptionImageUrls(
         entry,
         mapped.id,
@@ -81,7 +84,7 @@ async function readIssueWithSignal(
       if (isAuthError(error)) {
         clearToken(entry.workspace.id)
         if (shouldThrowAuthError(workspaceId)) {
-          throw error
+          throw new Error(LINEAR_AUTHENTICATION_ERROR)
         }
       } else {
         console.warn('[linear] getIssue failed:', error)
@@ -189,7 +192,7 @@ export async function searchIssues(
     return []
   }
 
-  const results = await Promise.all(
+  const results = await Promise.allSettled(
     entries.map(async (entry) => {
       await acquire()
       try {
@@ -202,21 +205,31 @@ export async function searchIssues(
       } catch (error) {
         if (isAuthError(error)) {
           clearToken(entry.workspace.id)
-          if (shouldThrowAuthError(workspaceId)) {
-            throw error
-          }
         } else {
           console.warn('[linear] searchIssues failed:', error)
         }
-        return []
+        throw error
       } finally {
         release()
       }
     })
   )
+  const successful = results.flatMap((result) =>
+    result.status === 'fulfilled' ? result.value : []
+  )
+  const failure = results.find((result) => result.status === 'rejected')
+  if (failure?.status === 'rejected' && results.every((result) => result.status === 'rejected')) {
+    if (isIntegrationCredentialDecryptionError(failure.reason)) {
+      throw failure.reason
+    }
+    if (results.some((result) => result.status === 'rejected' && isAuthError(result.reason))) {
+      throw new Error(LINEAR_AUTHENTICATION_ERROR)
+    }
+    throw new Error('Unable to load Linear issues. Try again.')
+  }
   // Single-workspace results must retain Linear relevance ranking instead of updatedAt order.
   if (entries.length === 1) {
-    return results.flat().slice(0, limit)
+    return successful.slice(0, limit)
   }
-  return sortAndLimitIssues(results.flat(), limit)
+  return sortAndLimitIssues(successful, limit)
 }

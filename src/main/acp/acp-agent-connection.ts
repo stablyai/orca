@@ -6,7 +6,15 @@ import {
   type ProviderProcessExit
 } from '../provider-process/managed-provider-process'
 import type { ProviderProcessLaunch } from '../provider-process/provider-process-launch'
-import { AcpConnectionClosedError, AcpSignInPromptError } from './acp-errors'
+import {
+  afterProviderOutputDrains,
+  PROVIDER_EXIT_OUTPUT_DRAIN_MS
+} from '../provider-process/provider-exit-output-drain'
+import {
+  withProviderSpawnAbsence,
+  type ProviderSpawnAbsence
+} from '../provider-process/provider-executable-missing'
+import { AcpAgentExitedError, AcpConnectionClosedError, AcpSignInPromptError } from './acp-errors'
 import { resolveAcpPeerOptions, type AcpPeerOptions } from './acp-peer-limits'
 import { AcpSessionRuntime, type AcpSessionRuntimeOptions } from './acp-session-runtime'
 
@@ -38,9 +46,21 @@ export function createAcpAgentConnection(
   return new AcpAgentConnection(launch, options, spawnImpl)
 }
 
+type AcpConnectionLifecycle = {
+  closing: boolean
+  error?: Error
+  /** The process's own failure, such as its spawn; it is no refusal by Orca. */
+  processError?: Error
+  /** Why the connection closed before the process exited, unless Orca closed it or the process
+   *  itself failed. Taken when it closed. */
+  lost?: Error
+  finishExit?: () => void
+  outputEndTimer?: ReturnType<typeof setTimeout>
+}
+
 export class AcpAgentConnection extends AcpSessionRuntime {
   private readonly managed: ManagedProviderProcess
-  private readonly lifecycle: { closing: boolean; error?: Error }
+  private readonly lifecycle: AcpConnectionLifecycle
   private readonly diagnoseLifecycle: (message: string) => void
   readonly spawned: Promise<void>
 
@@ -82,7 +102,7 @@ export class AcpAgentConnection extends AcpSessionRuntime {
           }
         : {})
     })
-    const lifecycle: { closing: boolean; error?: Error } = { closing: false }
+    const lifecycle: AcpConnectionLifecycle = { closing: false }
     const diagnose = (message: string): void => {
       try {
         options.onDiagnostic?.(message)
@@ -95,7 +115,21 @@ export class AcpAgentConnection extends AcpSessionRuntime {
       peer,
       onOtherLine: (line, cut) => signInLine(line, 'stdout', cut),
       onAuthAnswered: (signedIn) => signIn?.answered?.(signedIn),
+      // A closed stdin usually means the agent is exiting; its exit settles calls once its output
+      // drained, so the bound only covers an agent that stopped reading without exiting.
+      onOutputEnd: (_error, finish) => {
+        lifecycle.outputEndTimer = setTimeout(finish, PROVIDER_EXIT_OUTPUT_DRAIN_MS)
+        lifecycle.outputEndTimer.unref()
+      },
       onClose: (error) => {
+        if (
+          !lifecycle.error &&
+          !lifecycle.closing &&
+          managed.rootVerdict !== 'exited' &&
+          error !== lifecycle.processError
+        ) {
+          lifecycle.lost = error
+        }
         lifecycle.error ??= error
         if (lifecycle.closing || managed.rootVerdict === 'exited') {
           return
@@ -128,7 +162,10 @@ export class AcpAgentConnection extends AcpSessionRuntime {
       child.once('spawn', done)
       child.once('error', done)
     })
-    child.on('error', (error) => super.close(error))
+    child.on('error', (error) => {
+      lifecycle.processError ??= error
+      super.close(error)
+    })
     signedOut = () => {
       signIn?.answered?.(false)
       super.close(new AcpSignInPromptError('The agent asked to sign in in a browser'))
@@ -138,14 +175,31 @@ export class AcpAgentConnection extends AcpSessionRuntime {
       super.close(new AcpConnectionClosedError('The agent printed a sign-in link Orca cannot read'))
     child.stderr.on('error', (error) => super.close(error))
     managed.onExit((exit) => {
-      const error =
-        lifecycle.error ??
-        new AcpConnectionClosedError(managed.stderrTail().trim() || `${launch.command} exited`)
-      super.close(error)
-      try {
-        options.onExit?.(error, { expected: lifecycle.closing, exit })
-      } catch (failure) {
-        diagnose(`ACP exit listener failed: ${String(failure)}`)
+      const expected = lifecycle.closing
+      const finish = (): void => {
+        clearTimeout(lifecycle.outputEndTimer)
+        const detail = managed.stderrTail().trim() || `${launch.command} exited`
+        // Only an exit Orca neither caused nor preceded with its own refusal leaves calls unanswered.
+        const error = withProviderSpawnAbsence(
+          lifecycle.error ??
+            (expected
+              ? new AcpConnectionClosedError(detail)
+              : new AcpAgentExitedError(detail, managed.stderrTail().trim())),
+          managed.spawnAbsence
+        )
+        super.close(error)
+        try {
+          options.onExit?.(error, { expected, exit })
+        } catch (failure) {
+          diagnose(`ACP exit listener failed: ${String(failure)}`)
+        }
+      }
+      // A closed connection has no call left for the agent's output to answer.
+      if (lifecycle.closing || exit.processless || this.closed) {
+        finish()
+      } else {
+        // An answer written just before exit must still settle its call.
+        lifecycle.finishExit = afterProviderOutputDrains(child.stdout, finish, child)
       }
     })
   }
@@ -160,6 +214,11 @@ export class AcpAgentConnection extends AcpSessionRuntime {
 
   get rootVerdict(): ManagedProviderProcess['rootVerdict'] {
     return this.managed.rootVerdict
+  }
+
+  /** What a spawn ENOENT proved absent: the agent's CLI or its launch folder. */
+  get spawnAbsence(): ProviderSpawnAbsence | null {
+    return this.managed.spawnAbsence
   }
 
   /** Null tree means no observation. */
@@ -182,10 +241,18 @@ export class AcpAgentConnection extends AcpSessionRuntime {
     return this.managed.exitStatus
   }
 
-  onExit(listener: (exit: ProviderProcessExit) => void): void {
+  /** Why the connection closed before the process exited, such as Orca refusing what the agent
+   *  wrote; never the process's own failure or its exit. Kept from the moment it closed. */
+  get lostBeforeExit(): Error | undefined {
+    return this.lifecycle.lost
+  }
+
+  /** `requested`: Orca was closing the agent when it exited. `lost`: why the connection had
+   *  already closed before the exit, such as Orca refusing what the agent wrote. */
+  onExit(listener: (exit: ProviderProcessExit, requested?: boolean, lost?: Error) => void): void {
     this.managed.onExit((exit) => {
       try {
-        listener(exit)
+        listener(exit, this.lifecycle.closing, this.lifecycle.lost)
       } catch (failure) {
         this.diagnoseLifecycle(`ACP exit listener failed: ${String(failure)}`)
       }
@@ -202,6 +269,8 @@ export class AcpAgentConnection extends AcpSessionRuntime {
 
   override close(error?: Error): Promise<boolean> {
     this.lifecycle.closing ||= this.managed.rootVerdict !== 'exited'
+    clearTimeout(this.lifecycle.outputEndTimer)
+    this.lifecycle.finishExit?.()
     this.drainNotifications(error)
     return this.managed
       .close()
