@@ -40,6 +40,7 @@ export function useMobileNativeChatComposerMenu(input: {
   /** A picked skill; a send carries its file while its token stays, and treats a leading one as chat. */
   onPickSkill?: (skill: { token: string; path?: string }) => void
   editing?: boolean
+  interactionModeSupported?: boolean
   refuseCommand?: (text: string) => boolean
   focusField: () => void
 }) {
@@ -61,8 +62,13 @@ export function useMobileNativeChatComposerMenu(input: {
   )
   const catalog = useMemo(
     () =>
-      mobileComposerCatalog({ agent, structured: structuredCatalog, discovery: skillDiscovery }),
-    [agent, skillDiscovery, structuredCatalog]
+      mobileComposerCatalog({
+        agent,
+        structured: structuredCatalog,
+        discovery: skillDiscovery,
+        interactionModeSupported: input.interactionModeSupported
+      }),
+    [agent, skillDiscovery, structuredCatalog, input.interactionModeSupported]
   )
   const skillTokens = useMemo(() => mobileComposerSkillTokens(catalog), [catalog])
   const skillToken = leadingSkillToken(value, skillTokens)

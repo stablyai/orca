@@ -660,3 +660,33 @@ it.each(['claude', 'codex'] as const)('bounds %s capture and display work', (age
   expect(work[1].verified).toBeLessThanOrEqual(11 * work[0].verified)
   console.info(`${agent}-shown-projection-visits`, JSON.stringify(work))
 })
+
+it('captures only accepted planning intent and keeps held Plan independent of model discovery', () => {
+  const supported = applyStructuredAgentSessionOptions(fresh(), CLAUDE_SESSION_OPTION_CATALOG, {
+    models: [],
+    modelsKnown: false,
+    current: { interactionMode: 'default', acceptedInputSources: {} }
+  })
+  expect(structuredAgentSessionMessageSelection(supported)).not.toHaveProperty('interactionMode')
+  const held = structuredAgentSessionOptionView({ ...supported, catalog: null }, undefined, {
+    interactionMode: 'plan'
+  })
+  expect(structuredAgentSessionMessageSelection(held)).toEqual({ interactionMode: 'plan' })
+  const changed = structuredAgentSessionOptionView(
+    { ...held, catalog: CLAUDE_SESSION_OPTION_CATALOG },
+    undefined,
+    { model: 'unlisted-model' }
+  )
+  expect(structuredAgentSessionMessageSelection(changed)).toMatchObject({
+    model: 'unlisted-model',
+    interactionMode: 'plan'
+  })
+  const older = applyStructuredAgentSessionOptions(held, CLAUDE_SESSION_OPTION_CATALOG, {
+    models: [],
+    current: {}
+  })
+  expect(
+    structuredAgentSessionOptionSnapshot(older).some((entry) => entry.id === 'interactionMode')
+  ).toBe(false)
+  expect(structuredAgentSessionMessageSelection(older)).not.toHaveProperty('interactionMode')
+})

@@ -1,3 +1,4 @@
+import { agentSessionInteractionCommand } from '../../../../shared/agent-session/options/agent-session-interaction-mode'
 import { serializeNativeChatAgentReferences } from './native-chat-agent-reference-send'
 import { mayHoldAgentReferences } from '../../../../shared/orchestration-agent-reference'
 import { getAgentLabel } from '@/lib/agent-catalog'
@@ -77,10 +78,17 @@ export function useNativeChatStructuredComposerSend({
       const submitted = readNativeChatComposerDraft(draftScopeKey)
       const submittedText = text
       text = projectNativeChatPastedText(text, submitted.pastedTextFiles)
-      const hostCommand = isStructuredAgentSessionHostCommand(
-        text,
-        structuredTransport.threadGoal !== undefined
-      )
+      const pickedModeSkill =
+        agentSessionInteractionCommand(agent, text) !== null &&
+        promptSkillRefs(submitted.document).some((skill) => text.trimEnd() === `/${skill.name}`)
+      const hostCommand =
+        !pickedModeSkill &&
+        isStructuredAgentSessionHostCommand(
+          text,
+          structuredTransport.threadGoal !== undefined,
+          agent,
+          structuredTransport.optionSnapshot
+        )
       // Blocked hosts cannot take turns/conversation commands; option commands only configure later turns.
       if (
         structuredTransport.sendBlockedReason !== undefined &&

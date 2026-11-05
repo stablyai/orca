@@ -270,6 +270,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       terminalTabId
     })
     const submission = useNativeChatComposerSubmit({
+      agent,
       structuredTransport,
       draftScopeKey,
       draft,

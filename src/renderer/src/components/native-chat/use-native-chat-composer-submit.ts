@@ -1,3 +1,4 @@
+import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { serializeNativeChatAgentReferences } from './native-chat-agent-reference-send'
 import { mayHoldAgentReferences } from '../../../../shared/orchestration-agent-reference'
 import { useCallback, useMemo, useState } from 'react'
@@ -41,6 +42,7 @@ export type NativeChatComposerGoalMode = {
 /** Reuse goal entry for host controls and native commands, preserving each submission path. */
 export function useNativeChatComposerSubmit(args: {
   structuredTransport?: NativeChatStructuredComposerTransport
+  agent?: AgentType
   draftScopeKey: string
   draft: string
   caret: number
@@ -215,7 +217,9 @@ export function useNativeChatComposerSubmit(args: {
       structuredTransport &&
       isStructuredAgentSessionHostCommand(
         resolveNativeChatPastedText(draftScopeKey, draft),
-        threadGoal !== undefined
+        threadGoal !== undefined,
+        args.agent,
+        structuredTransport.optionSnapshot
       )
     )
   return { send, goalMode, messageDelivery }

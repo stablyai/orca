@@ -1,3 +1,8 @@
+import {
+  captureStructuredExecutionOptions,
+  openingMessageOptions
+} from './structured-agent-session-execution-options'
+import { claudeAndCodexAgents } from './structured-agent-session-adapter-router-test-support'
 import type { StructuredAgentSessionFirstMessage } from '../../../shared/agent-session/structured-agent-session-create'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -372,5 +377,22 @@ it('captures the shown tuple despite unseen saved picks, preserves personality, 
   expect(await rig.host.send(CALLER, changed)).toMatchObject({
     ok: false,
     refusal: { code: 'agent_session_operation_conflict' }
+  })
+})
+
+it('inherits a saved Plan for older phone selections without adding model intent', () => {
+  expect(
+    captureStructuredExecutionOptions(
+      {
+        agents: claudeAndCodexAgents(),
+        agent: 'claude',
+        persistedOptions: { interactionMode: 'plan' }
+      },
+      undefined,
+      {}
+    )
+  ).toEqual({ options: { interactionMode: 'plan', fastMode: 'false' } })
+  expect(openingMessageOptions({ interactionMode: 'plan' })).toEqual({
+    options: { interactionMode: 'plan' }
   })
 })

@@ -1,3 +1,4 @@
+import { agentSessionInteractionCommand } from './agent-session/options/agent-session-interaction-mode'
 import type { AgentType } from './agent-status/contracts/agent-status-types'
 import type { AgentSessionSlashCommand } from './agent-session/agent-session-wire'
 import {
@@ -24,6 +25,7 @@ export function prepareQueuedMessageEditText(
   return (text) =>
     !(
       hostCommand(text) ||
+      agentSessionInteractionCommand(agent, text) !== null ||
       (hostSetsGoals && isStructuredAgentSessionGoalCommand(text)) ||
       /^\/resume(?:\s|$)/i.test(text)
     )

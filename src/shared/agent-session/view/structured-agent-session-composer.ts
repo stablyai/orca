@@ -1,3 +1,4 @@
+import { agentSessionInteractionCommand } from '../options/agent-session-interaction-mode'
 import { getTextDrivenNativeChatCommands } from '../../native-chat/native-chat-agent-profiles'
 import type { AgentType } from '../../agent-status/contracts/agent-status-types'
 import type {
@@ -123,9 +124,23 @@ export function structuredSessionSlashCommands(
   agent: AgentType,
   conversationCommands: readonly AgentSessionConversationCommand[] | undefined,
   reported: readonly AgentSessionSlashCommand[] | undefined,
-  compactInstructions?: boolean
+  compactInstructions?: boolean,
+  interactionModeSupported = false
 ): readonly SlashCommandSuggestion[] {
-  const hostOwned = structuredSlashCommands(conversationCommands, agent, compactInstructions)
+  const modeCommands: SlashCommandSuggestion[] = interactionModeSupported
+    ? [
+        { name: 'plan', description: 'Switch to Plan mode', orcaOwned: true },
+        ...(agent === 'codex'
+          ? [{ name: 'default', description: 'Switch to Build mode', orcaOwned: true }]
+          : [])
+      ]
+    : []
+  const hostOwned = [
+    ...modeCommands,
+    ...structuredSlashCommands(conversationCommands, agent, compactInstructions).filter(
+      ({ name }) => !modeCommands.some((entry) => entry.name === name)
+    )
+  ]
   if (reported === undefined) {
     return hostOwned
   }
@@ -145,19 +160,27 @@ function structuredRecognizedCommands(): readonly SlashCommandSuggestion[] {
  *  would be silently dropped, whereas a pass-through command is a real send. */
 export function isStructuredAgentSessionComposerCommand(
   text: string,
-  _agent: AgentType = 'codex',
-  _reported?: readonly AgentSessionSlashCommand[]
+  agent: AgentType = 'codex',
+  _reported?: readonly AgentSessionSlashCommand[],
+  snapshot: readonly SessionOptionDescriptor[] = []
 ): boolean {
   const command = commandParts(text)
   return Boolean(
-    command && structuredRecognizedCommands().some((entry) => entry.name === command.name)
+    (command && structuredRecognizedCommands().some((entry) => entry.name === command.name)) ||
+    (agentSessionInteractionCommand(agent, text) !== null &&
+      snapshot.some((entry) => entry.id === 'interactionMode'))
   )
 }
 
 /** Host actions send no message; /goal is an action only on hosts that set goals. */
-export function isStructuredAgentSessionHostCommand(text: string, hostSetsGoals: boolean): boolean {
+export function isStructuredAgentSessionHostCommand(
+  text: string,
+  hostSetsGoals: boolean,
+  agent?: AgentType,
+  snapshot?: readonly SessionOptionDescriptor[]
+): boolean {
   return (
-    isStructuredAgentSessionComposerCommand(text) ||
+    isStructuredAgentSessionComposerCommand(text, agent, undefined, snapshot) ||
     (hostSetsGoals && isStructuredAgentSessionGoalCommand(text))
   )
 }
@@ -222,6 +245,14 @@ export async function dispatchStructuredAgentSessionComposerCommand(
   text: string,
   controller: StructuredAgentSessionComposerOptions
 ): Promise<StructuredAgentSessionCommandOutcome> {
+  const interaction = agentSessionInteractionCommand(controller.agent ?? '', text)
+  if (interaction !== null && controller.snapshot.some((entry) => entry.id === 'interactionMode')) {
+    return {
+      handled: true,
+      accepted: await controller.setOption('interactionMode', interaction),
+      error: null
+    }
+  }
   const command = commandParts(text)
   if (command?.name === 'goal' && controller.setThreadGoalObjective) {
     if (!command.argument) {

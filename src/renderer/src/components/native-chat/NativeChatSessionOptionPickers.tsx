@@ -318,9 +318,9 @@ function NativeChatSessionOptionPickersInner({
     return null
   }
   const model = withPendingValue(reportedModel, pending.get(reportedModel.id) ?? null)
-  const options = sortNativeChatSessionOptions(snapshot).map((descriptor) =>
-    withPendingValue(descriptor, pending.get(descriptor.id) ?? null)
-  )
+  const options = sortNativeChatSessionOptions(snapshot)
+    .filter((descriptor) => descriptor.id !== 'interactionMode')
+    .map((descriptor) => withPendingValue(descriptor, pending.get(descriptor.id) ?? null))
 
   const markPending = (id: string) => (pick: PendingPick | null) => {
     setPending((current) => {

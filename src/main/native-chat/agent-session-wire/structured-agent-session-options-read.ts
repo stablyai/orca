@@ -177,6 +177,12 @@ export async function readStructuredAgentSessionOptions(
     effort: saved.effort ?? options.current.effort,
     fastMode: selected.current.fastMode ?? options.current.fastMode,
     // The saved tier as the shared speed rule runs it under the saved model.
+    ...(context.deps.agents.definition(agent)?.restingOptions.acceptsKey('interactionMode')
+      ? {
+          interactionMode:
+            saved.interactionMode === 'plan' ? ('plan' as const) : ('default' as const)
+        }
+      : {}),
     serviceTier:
       saved.serviceTier !== undefined
         ? selected.current.serviceTier
@@ -194,7 +200,7 @@ export async function readStructuredAgentSessionOptions(
   const pinsDefaults = neverSent && (agent !== 'codex' || !live || !!options.current.model)
   const defaulted = defaultKeys.filter((key) => key === 'effort' || !pinsDefaults)
   const acceptedInputSources: AgentSessionAcceptedInputSources = {}
-  for (const key of ['model', 'effort', 'fastMode', 'serviceTier'] as const) {
+  for (const key of ['model', 'effort', 'fastMode', 'serviceTier', 'interactionMode'] as const) {
     if (current[key] !== undefined && saved[key] !== undefined) {
       acceptedInputSources[key] = 'saved'
     }

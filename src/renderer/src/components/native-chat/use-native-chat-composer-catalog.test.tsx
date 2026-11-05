@@ -23,7 +23,7 @@ import type { DiscoveredSkill } from '../../../../shared/skills'
 import { withNativeChatResumeCommand } from './use-native-chat-resume-command'
 
 function transport(sessionCommands?: NativeChatStructuredComposerTransport['sessionCommands']) {
-  return { sessionCommands } as NativeChatStructuredComposerTransport
+  return { sessionCommands, optionSnapshot: [] } as NativeChatStructuredComposerTransport
 }
 
 describe('composer catalog authority', () => {

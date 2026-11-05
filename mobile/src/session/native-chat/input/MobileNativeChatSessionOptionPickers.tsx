@@ -160,10 +160,10 @@ export function MobileNativeChatSessionOptionPickers({
   }, [showWorkingNotice])
 
   const options = sortNativeChatSessionOptions(snapshot)
-  if (!model && !permission) {
+  if (!model && !permission && options.length === 0) {
     return null
   }
-  const home = model ?? permission!
+  const home = model ?? permission ?? options[0]!
   const homeView = activeDescriptor !== undefined && activeDescriptor === home
   const busy = pendingId !== null || sendInFlight
   // Structured picks and permission mode affect the next send, not the running turn.
@@ -186,6 +186,7 @@ export function MobileNativeChatSessionOptionPickers({
     // A permission report can match a new explicit pick while the saved intent is Own.
     if (
       descriptor !== permission &&
+      descriptor.id !== 'interactionMode' &&
       descriptor.valueSource !== 'unknown' &&
       descriptor.valueSource !== 'default' &&
       descriptor.kind.type === 'select' &&

@@ -752,3 +752,39 @@ it.each([false, true])(
     await adapter.closeAll()
   }
 )
+
+it('applies explicit planning at fresh turns, preserves startup permission fallback, and leaves steers alone', async () => {
+  const claude = fakeClaude({ initPermissionMode: 'default' })
+  const adapter = await acquired(claude)
+  const connection = claude.connections[0]!
+  claudeFrame(connection, {
+    type: 'system',
+    subtype: 'init',
+    model: 'claude-opus-5-5',
+    permissionMode: 'default'
+  })
+  const setMode = vi.spyOn(connection, 'setPermissionMode').mockResolvedValue(undefined)
+  const send = (id: string, mode?: 'plan' | 'default') =>
+    adapter.dispatch({
+      sessionId: 'session-1',
+      clientMessageId: id,
+      body: USER_MESSAGE,
+      fence: 7,
+      executionOptions: mode ? { interactionMode: mode } : {}
+    })
+  await send('own')
+  expect(setMode).not.toHaveBeenCalled()
+  claudeTurnEnds(connection)
+  await send('plan', 'plan')
+  expect(setMode).toHaveBeenLastCalledWith('plan', { timeoutMs: undefined })
+  await send('steer', 'default')
+  expect(setMode).toHaveBeenCalledTimes(1)
+  claudeTurnEnds(connection)
+  await send('build', 'default')
+  expect(setMode).toHaveBeenLastCalledWith('default', { timeoutMs: undefined })
+  claudeTurnEnds(connection)
+  claudeFrame(connection, { type: 'system', subtype: 'status', permissionMode: 'plan' })
+  await send('build-again', 'default')
+  expect(setMode).toHaveBeenCalledTimes(3)
+  await adapter.closeAll()
+})

@@ -159,6 +159,33 @@ describe('MobileNativeChatSessionOptionPickers', () => {
     renderer = null
   })
 
+  it('applies an explicit Build pick during a reply even when saved Build is already shown', async () => {
+    mount(
+      [
+        {
+          id: 'interactionMode',
+          label: 'Mode',
+          category: 'mode',
+          kind: {
+            type: 'select',
+            currentValue: 'default',
+            choices: [
+              { value: 'default', label: 'Build' },
+              { value: 'plan', label: 'Plan' }
+            ]
+          },
+          valueSource: 'dispatched',
+          transport: 'agent-session',
+          settable: true
+        }
+      ],
+      true,
+      'interactionMode'
+    )
+    await act(async () => rowByText('Build').props.onPress())
+    expect(setOption).toHaveBeenCalledWith('interactionMode', 'default')
+  })
+
   it('consumes a refused page without replay, then permits a fresh open and permission pick', async () => {
     const placeholder: SessionOptionDescriptor = {
       ...MODEL_DESCRIPTOR,

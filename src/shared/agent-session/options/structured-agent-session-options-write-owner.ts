@@ -83,7 +83,7 @@ export function createStructuredAgentSessionOptionsWriteOwner(read: () => WriteC
       if (
         !context.isCurrentContext() ||
         !context.ready ||
-        !view.catalog ||
+        (!view.catalog && id !== 'interactionMode') ||
         encoded === null ||
         (id === AGENT_CHAT_PERMISSION_MODE_OPTION_ID &&
           value === 'own' &&

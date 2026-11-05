@@ -5,6 +5,7 @@ import {
 import { refuse } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { AgentSessionOptionResult } from '../../../shared/agent-session/agent-session-wire'
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../shared/agent-launch/permissions/agent-chat-permission-mode'
+import { isAgentSessionInteractionMode } from '../../../shared/agent-session/options/agent-session-interaction-mode'
 import { agentChatPermissionModes } from '../../../shared/agent-launch/permissions/agent-chat-permission-support'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
 import type { StructuredAgentRegistry } from './structured-agent-registry'
@@ -28,7 +29,8 @@ function acceptsOptionPick(
         agentChatPermissionModes(provider) !== null &&
         (value === 'own' ||
           agentChatPermissionModes(provider)?.modes.some((mode) => mode === value) === true)
-    : definition?.restingOptions.acceptsKey(key) === true
+    : definition?.restingOptions.acceptsKey(key) === true &&
+        (key !== 'interactionMode' || isAgentSessionInteractionMode(value))
 }
 
 export function structuredAgentSessionOptionOverridesRefusal(

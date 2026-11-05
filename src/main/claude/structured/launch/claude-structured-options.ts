@@ -59,7 +59,7 @@ export function restoredClaudeStructuredSessionOptions(
   )
 }
 
-const CLAUDE_STRUCTURED_OPTION_KEYS = new Set(['model', 'effort', 'fastMode'])
+const CLAUDE_STRUCTURED_OPTION_KEYS = new Set(['model', 'effort', 'fastMode', 'interactionMode'])
 
 export function isClaudeStructuredOptionKey(key: string): boolean {
   return CLAUDE_STRUCTURED_OPTION_KEYS.has(key)

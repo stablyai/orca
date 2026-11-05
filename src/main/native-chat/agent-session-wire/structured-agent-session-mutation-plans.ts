@@ -15,7 +15,6 @@ import type {
   AgentSessionCancelResult,
   AgentSessionMutationEnvelope,
   AgentSessionOptionResult,
-  AgentSessionPromptResult,
   AgentSessionQueuedSendReceipt,
   AgentSessionSendResult
 } from '../../../shared/agent-session/agent-session-wire'
@@ -35,25 +34,18 @@ import {
   structuredAgentSessionCompactBody
 } from './structured-agent-session-command-turn'
 import {
-  performPrompt,
   performSend,
   type AgentSessionTurnContext,
   type AgentSessionReplayContext,
   type TurnOutcome
 } from './structured-agent-session-turns'
-import {
-  acceptedPromptAnswer,
-  promptAnswerReceipt,
-  promptRowAnswer,
-  type AgentSessionPromptRequest
-} from './structured-agent-session-turns-prompt'
 import { queuedSendAnswer } from './structured-agent-session-queued-send-answer'
 import { STOP_COMMAND_RECEIPT } from './structured-agent-session-stop-acceptance'
 import { runTargetedCancel } from './structured-agent-session-targeted-cancel'
 import type { JournalOperationReceipt } from '../agent-session-journal/journal-row-writer'
 import type { CommandReceiptResult } from '../agent-session-journal/command-receipt-schema'
 import type { JournalRow } from '../agent-session-journal/journal-row-schema'
-import { refusingNewerOrcaJournal } from '../agent-session-journal/journal-open-failure'
+export { promptPlan } from './structured-agent-session-prompt-plan'
 
 export type MutationPlan<TValue> = {
   method: string
@@ -281,27 +273,6 @@ export function cancelPlan(params: {
       runTargetedCancel(ctx, { ...params, clientOperationId: params.envelope.clientOperationId }),
     // Retry must not interrupt again and accidentally cut a later turn.
     replay: () => ({ ...named, cancelled: false })
-  }
-}
-
-export function promptPlan(
-  params: AgentSessionPromptRequest
-): MutationPlan<AgentSessionPromptResult> {
-  return {
-    method: `agentSession.respondTo:${params.kind}`,
-    fields: {
-      itemId: params.itemId,
-      expectedRevision: params.expectedRevision,
-      optionId: params.optionId,
-      answers: params.answers
-    },
-    // Retain the resolved or previously recorded prompt answer in the receipt.
-    commandReceipt: {
-      result: (row) => promptAnswerReceipt(promptRowAnswer(row)),
-      unwritten: (value) => promptAnswerReceipt(value)
-    },
-    run: (ctx) => refusingNewerOrcaJournal(performPrompt(ctx, params)),
-    replay: (_ctx, _outcome, receipt) => acceptedPromptAnswer(receipt)
   }
 }
 

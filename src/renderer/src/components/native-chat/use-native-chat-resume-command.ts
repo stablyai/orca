@@ -144,7 +144,12 @@ export function useNativeChatResumeCommand(args: {
       (item: TItem) => {
         const leading = autocomplete.mode === 'slash' && autocomplete.dispatchable
         // An explicit Orca command pick overrides an earlier same-named skill pick.
-        if (leading && item.kind === 'command' && item.orcaOwned) {
+        if (
+          leading &&
+          item.kind === 'command' &&
+          item.orcaOwned &&
+          item.name === NATIVE_CHAT_RESUME_COMMAND
+        ) {
           clearSkillOrigin()
           // The caret can sit right after `/resume` with a search already typed past it.
           open(parseNativeChatResumeDraft(textareaRef.current?.value ?? '') ?? '')

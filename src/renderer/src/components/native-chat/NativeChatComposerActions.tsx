@@ -10,6 +10,7 @@ import type {
   SessionOptionDescriptor,
   SessionOptionsSurface
 } from '../../../../shared/native-chat/input/native-chat-session-options'
+import { NativeChatInteractionModeToggle } from './NativeChatInteractionModeToggle'
 import { NativeChatSessionOptionPickers } from './NativeChatSessionOptionPickers'
 import { NativeChatComposerPermissionPicker } from './NativeChatPermissionModePicker'
 import { NativeChatComposerGoalChip } from './NativeChatComposerGoalChip'
@@ -235,6 +236,11 @@ export const NativeChatComposerActions = memo(function NativeChatComposerActions
           snapshot={sessionOptionsSnapshot}
           isWorking={isWorking}
           pickerRequest={sessionOptionsPickerRequest}
+          focusComposer={focusComposer}
+        />
+        <NativeChatInteractionModeToggle
+          surface={sessionOptionsSurface}
+          snapshot={sessionOptionsSnapshot}
           focusComposer={focusComposer}
         />
         {contextUsage ? <NativeChatContextUsageRing usage={contextUsage} /> : null}

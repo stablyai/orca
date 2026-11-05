@@ -1,3 +1,4 @@
+import { claudeProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { beforeEach, describe, expect, it, type Mock } from 'vitest'
 import { AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS } from '../../../shared/agent-session/agent-session-host-authority'
 import {
@@ -15,6 +16,7 @@ import type { StructuredAgentSessionAdapter } from './structured-agent-session-a
 import type { StructuredAgentSessionHost } from './structured-agent-session-host'
 import {
   attach,
+  attachParams,
   CALLER,
   envelope,
   hostTestState,
@@ -429,3 +431,77 @@ describe('a prompt answer', () => {
     })
   })
 })
+
+it.each(['allow', 'deny'])(
+  'commits Claude plan intent with %s and rolls back or replays without overwriting newer picks',
+  async (choice) => {
+    const originalAcquire = acquire.getMockImplementation()!
+    acquire.mockImplementation(async (input) => {
+      const result = await originalAcquire(input)
+      return { ...result, link: { ...result.link!, handle: claudeProviderHandle(THREAD, null) } }
+    })
+    expect(
+      await host.attach(
+        CALLER,
+        attachParams({
+          provider: 'claude',
+          agent: 'claude',
+          accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: '/test-claude' },
+          providerHandle: { kind: 'claude', sessionId: THREAD, leafUuid: null }
+        })
+      )
+    ).toMatchObject({ ok: true })
+    const before = choice === 'allow' ? 'plan' : 'default'
+    const after = choice === 'allow' ? 'default' : 'plan'
+    const pick = (interactionMode: string) =>
+      store.replaceSessionOptions({
+        sessionId: SESSION,
+        fence: store.getRecord(SESSION)!.lease.runtimeFence,
+        now: NOW,
+        options: { model: 'opus[1m]', interactionMode }
+      })
+    await pick(before)
+    const identity = {
+      provider: 'orca' as const,
+      threadId: THREAD,
+      turnId: 'plan-turn',
+      ordinal: 1
+    }
+    acquire.mock.calls.at(-1)![0].events.appendItem(
+      identity,
+      {
+        kind: 'approval',
+        title: 'Plan',
+        detail: null,
+        subject: { kind: 'plan', text: 'Implement this plan' },
+        options: [
+          { id: 'allow', label: 'Allow' },
+          { id: 'deny', label: 'Keep planning' }
+        ],
+        resolution: { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
+      },
+      { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+    )
+    await host.flushStreamedEvents(SESSION)
+    const itemId = agentJournalItemKey(identity)
+    const page = await host.history({ sessionId: SESSION, direction: 'tail' })
+    const prompt = page.ok ? page.page.items.find((item) => item.itemId === itemId)! : null
+    expect(prompt).not.toBeNull()
+    const params = answer(prompt!, opId(), choice)
+    const restore = failReceiptWrites()
+    await expect(host.respondToPrompt(CALLER, params)).rejects.toThrow('receipt unavailable')
+    restore()
+    expect(store.getRecord(SESSION)?.options).toEqual({
+      model: 'opus[1m]',
+      interactionMode: before
+    })
+    expect(await host.respondToPrompt(CALLER, params)).toMatchObject({ ok: true })
+    expect(store.getRecord(SESSION)?.options).toEqual({ model: 'opus[1m]', interactionMode: after })
+    await pick(before)
+    expect(await host.respondToPrompt(CALLER, params)).toMatchObject({ ok: true, replayed: true })
+    expect(store.getRecord(SESSION)?.options).toEqual({
+      model: 'opus[1m]',
+      interactionMode: before
+    })
+  }
+)

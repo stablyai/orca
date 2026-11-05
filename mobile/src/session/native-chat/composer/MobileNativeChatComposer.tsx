@@ -176,6 +176,9 @@ export function MobileNativeChatComposer({
     editing: editSession !== undefined,
     agent,
     structuredCatalog: structured?.catalog,
+    interactionModeSupported: sessionOptions?.controller.snapshot.some(
+      (entry) => entry.id === 'interactionMode'
+    ),
     filePaths,
     onNeedFiles,
     skillDiscovery,
