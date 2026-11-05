@@ -101,6 +101,7 @@ export function useStructuredAgentSessionOptionState(args: {
               supported: false as const,
               reason: 'unsupported' as const
             },
+            forkSupport: acceptedSupport.result.forkSupport,
             fence: acceptedSupport.fence
           }
         : null,

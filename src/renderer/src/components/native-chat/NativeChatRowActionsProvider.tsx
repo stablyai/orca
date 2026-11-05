@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { openDesktopStructuredSession } from '@/lib/activate-ai-vault-structured-session'
 import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionOptionsResult } from '../../../../shared/agent-session/options/agent-session-options-result'
 import type { NativeChatStructuredViewProps } from './native-chat-view-types'
 import { NativeChatForkContext, NativeChatForkedFromContext } from './native-chat-fork-context'
 import { NativeChatRewindContext } from './native-chat-rewind-context'
@@ -22,6 +23,7 @@ export function NativeChatRowActionsProvider({
     journalItems: readonly AgentJournalRenderItem[]
     epoch: string | null
     contextFloor: AgentJournalCursor | undefined
+    forkSupport: AgentSessionOptionsResult['forkSupport']
   }
   children: React.ReactNode
 }): React.JSX.Element {
@@ -34,7 +36,8 @@ export function NativeChatRowActionsProvider({
     worktreeId,
     items: chat.journalItems,
     epoch: chat.epoch,
-    contextFloor: chat.contextFloor
+    contextFloor: chat.contextFloor,
+    sessionForkSupport: chat.forkSupport
   })
   const { agent, target } = pane
   // A fork and its source share a workspace and host.

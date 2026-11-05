@@ -40,6 +40,7 @@ export function MobileNativeChatForkProvider({
     messages: chat.nativeChatSession.messages,
     turnJournal: chat.nativeChatTurnJournal,
     agentWorking: chat.nativeChatTurnActive,
+    sessionForkSupport: chat.nativeChatForkSupport,
     createFork
   })
   const openSource = useMobileForkSourceNavigation(

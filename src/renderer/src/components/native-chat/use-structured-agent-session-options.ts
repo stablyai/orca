@@ -176,6 +176,8 @@ export function useStructuredAgentSessionOptions(args: StructuredAgentSessionOpt
     sessionSupport,
     /** Undefined until this fence's options read answers. */
     rewind: support?.fence === fence ? support.rewind : undefined,
+    /** Undefined until this fence's options read answers, or from a host that predates forks. */
+    forkSupport: support?.fence === fence ? support.forkSupport : undefined,
     optionSnapshot,
     optionSurface,
     setStructuredOption,

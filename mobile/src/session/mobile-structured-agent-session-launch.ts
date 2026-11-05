@@ -40,13 +40,15 @@ export type MobileStructuredAgentLaunchResult =
 function createParamsFor(
   agent: AgentSessionHandleProvider,
   worktree: string,
-  forkFrom: StructuredAgentSessionForkSource | undefined
+  forkFrom: StructuredAgentSessionForkSource | undefined,
+  tabPlacement: StructuredAgentSessionCreateParams['tabPlacement']
 ): StructuredAgentSessionCreateParams {
   return structuredAgentSessionCreateParams({
     sessionId: createStructuredAgentSessionId(agent, randomV4Uuid),
     worktree,
     agent,
     ...(forkFrom ? { forkFrom } : {}),
+    ...(tabPlacement ? { tabPlacement } : {}),
     randomUuid: randomV4Uuid
   })
 }
@@ -84,7 +86,9 @@ export async function createMobileStructuredAgentSession(
   worktreeId: string,
   agent: AgentSessionHandleProvider,
   /** Sent only to a host advertising forks. */
-  forkFrom?: StructuredAgentSessionForkSource
+  forkFrom?: StructuredAgentSessionForkSource,
+  /** Sent only to a host advertising create placement; the replay keeps it. */
+  tabPlacement?: StructuredAgentSessionCreateParams['tabPlacement']
 ): Promise<MobileStructuredAgentLaunchResult> {
   const worktree = `id:${worktreeId}`
   let supportResponse
@@ -125,7 +129,7 @@ export async function createMobileStructuredAgentSession(
     return { kind: 'unsupported', reason: support?.reason }
   }
 
-  const params = createParamsFor(agent, worktree, forkFrom)
+  const params = createParamsFor(agent, worktree, forkFrom, tabPlacement)
   rememberMobileCreatedStructuredSession(params.envelope.sessionId, worktree)
   let response
   try {
