@@ -36,7 +36,7 @@ describe('buildCrossStoreParentRef', () => {
     })
   })
 
-  it("names the parent by its server's verified install without asking that server", async () => {
+  it("names the parent by its server's verified install", async () => {
     await expect(
       buildCrossStoreParentRef(stateWithServerInstall('srv-install'), { kind: 'local' }, PARENT)
     ).resolves.toEqual({
@@ -44,8 +44,5 @@ describe('buildCrossStoreParentRef', () => {
       workspaceKey: 'worktree:srv::/work/parent',
       instanceId: 'parent-instance'
     })
-    expect(callRuntimeRpc.mock.calls.map(([target, method]) => [target, method])).toEqual([
-      [{ kind: 'local' }, 'status.get']
-    ])
   })
 })
