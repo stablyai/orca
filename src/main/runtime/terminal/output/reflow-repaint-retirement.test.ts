@@ -100,6 +100,17 @@ describe('reflow distrust boundaries', () => {
     expect(runtime['readRuledScreen'](PTY_ID)).not.toBeNull()
   })
 
+  it('credits an erase next to a multi-parameter buffer toggle to neither buffer', async () => {
+    const runtime = reflowed()
+    runtime.onPtyData(PTY_ID, '\x1b[?25;47h\x1b[2J', 2)
+    await settle(runtime)
+    const state = runtime['headlessTerminals'].get(PTY_ID)!
+    expect(state.reflowRepaintTrust?.normalRepainted).toBe(false)
+    runtime.onPtyData(PTY_ID, '\x1b[?47l', 3)
+    await settle(runtime)
+    expect(runtime['readRuledScreen'](PTY_ID)).toBeNull()
+  })
+
   it.each([
     { mode: '47', enter: '\x1b[?47h', leave: '\x1b[?47l' },
     { mode: '1047', enter: '\x1b[?1047h', leave: '\x1b[?1047l' },

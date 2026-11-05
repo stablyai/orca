@@ -19,6 +19,7 @@ import {
 } from '../../../../shared/agent-status/title/agent-title-status'
 import { shouldModelAnswerHiddenPtyQueries } from '../../terminal-model-query-authority'
 import { advancePartialEscapeTail } from '../../../../shared/terminal/protocol/escape/terminal-partial-escape-tail'
+import { scanRepaintSignals } from './repaint-signals'
 
 export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends OrcaRuntimeWithSerializeMainTerminalBuffer {
   protected abstract getOrCreateHeadlessTerminal(ptyId: string): RuntimeHeadlessTerminal
@@ -251,10 +252,9 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
         // buffer toggle (even one split across chunks) is ambiguous, so it retires nothing (#38418).
         const trust = state.reflowRepaintTrust
         if (trust && outputSequence > trust.boundarySequence) {
-          const followed = `${trust.signalCarry}${chunk}`
-          trust.signalCarry = incompleteRepaintSignalCarry(followed)
-          const toggled = ALTERNATE_SCREEN_TOGGLES.some((toggle) => followed.includes(toggle))
-          if (followed.includes(FULL_SCREEN_ERASE) && !toggled) {
+          const signals = scanRepaintSignals(`${trust.signalCarry}${chunk}`)
+          trust.signalCarry = signals.carry
+          if (signals.fullErase && !signals.bufferToggle) {
             if (alternateAtStart) {
               trust.alternateRepainted = true
             } else {
@@ -317,31 +317,4 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
       this.paneOfPty(pty).paneKey
     return paneKey ? this.getAgentStatusSnapshotForPaneFn?.(paneKey)[0] : undefined
   }
-}
-
-const FULL_SCREEN_ERASE = '\u001b[2J'
-// xterm.js switches buffers for modes 47, 1047 and 1049; 1048 only saves the cursor.
-const ALTERNATE_SCREEN_TOGGLES = [
-  '\u001b[?47h',
-  '\u001b[?47l',
-  '\u001b[?1047h',
-  '\u001b[?1047l',
-  '\u001b[?1049h',
-  '\u001b[?1049l'
-]
-
-/**
- * Suffix of `text` that begins a paint signal, so a signal split across chunks is still recognized
- * while a completed one is never re-detected.
- */
-function incompleteRepaintSignalCarry(text: string): string {
-  const signals = [FULL_SCREEN_ERASE, ...ALTERNATE_SCREEN_TOGGLES]
-  const longest = Math.max(...signals.map((signal) => signal.length)) - 1
-  for (let length = Math.min(longest, text.length); length > 0; length -= 1) {
-    const suffix = text.slice(-length)
-    if (signals.some((signal) => signal.length > suffix.length && signal.startsWith(suffix))) {
-      return suffix
-    }
-  }
-  return ''
 }
