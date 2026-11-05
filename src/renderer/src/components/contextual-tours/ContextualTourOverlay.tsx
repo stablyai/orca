@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type JSX } from 'react'
+import { hasUndoneContextualTourAction } from '../../../../shared/contextual-tour-action-steps'
 import { useAppStore } from '@/store'
 import { runActiveNativeChatSplit } from '@/components/native-chat/native-chat-layout-actions'
 import {
   getContextualTour,
-  hasUndoneContextualTourAction,
   type ContextualTourId,
   type ContextualTourStepAction
 } from '../../../../shared/contextual-tours'
