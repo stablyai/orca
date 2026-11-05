@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import type { CachedAiVaultSessionTitle } from './session-title-file-reader'
 import * as transcriptFs from '../../native-chat/wsl-transcript-fs-access'
 
 const parseAgentSessionFileCached = vi.hoisted(() => vi.fn())
@@ -88,6 +89,34 @@ describe('readAiVaultSessionTitlesFromFiles', () => {
     })
     expect(parseAgentSessionFileCached).toHaveBeenCalledTimes(2)
     expect(parseAgentSessionFileCached.mock.calls[1]?.[3]).toBe('whole')
+  })
+
+  it('classifies a History-cached title from an old parse row when the request has only a session id', async () => {
+    const path = await transcriptPath()
+    parseAgentSessionFileCached.mockResolvedValue({
+      agent: 'claude',
+      sessionId: 'session-1',
+      title: 'Login cleanup',
+      titleKind: 'named'
+    })
+    const cached = new Map<string, CachedAiVaultSessionTitle>([
+      [
+        'session-1',
+        { agent: 'claude', sessionId: 'session-1', title: 'Login cleanup', transcriptPath: path }
+      ]
+    ])
+    const cache = {
+      get: (request: { sessionId: string }) => cached.get(request.sessionId) ?? null,
+      set: (title: CachedAiVaultSessionTitle) => cached.set(title.sessionId, title)
+    }
+    const read = () =>
+      readAiVaultSessionTitlesFromFiles([{ agent: 'claude', sessionId: 'session-1' }], { cache })
+
+    const named = { agent: 'claude', sessionId: 'session-1', title: 'Login cleanup', kind: 'named' }
+    await expect(read()).resolves.toEqual({ titles: [named] })
+    // The classified title replaces the cache entry, so the transcript is read only once.
+    await expect(read()).resolves.toEqual({ titles: [named] })
+    expect(parseAgentSessionFileCached).toHaveBeenCalledTimes(1)
   })
 
   it('rejects a transcript whose parsed identity does not match the request', async () => {

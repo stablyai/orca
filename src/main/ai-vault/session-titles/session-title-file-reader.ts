@@ -15,8 +15,11 @@ import {
 
 const TITLE_PARSE_CONCURRENCY = 4
 
+/** A title the scanner already saw, with its transcript when the title's kind is not known yet. */
+export type CachedAiVaultSessionTitle = AiVaultSessionTitle & { transcriptPath?: string }
+
 export type AiVaultSessionTitleCache = {
-  get(request: AiVaultSessionTitleRequest): AiVaultSessionTitle | null
+  get(request: AiVaultSessionTitleRequest): CachedAiVaultSessionTitle | null
   set(title: AiVaultSessionTitle): void
 }
 
@@ -30,7 +33,16 @@ async function readOneTitle(
   }
   const transcriptPath = request.transcriptPath?.trim()
   if (!transcriptPath) {
-    return cache?.get(request) ?? null
+    const cached = cache?.get(request)
+    if (!cached) {
+      return null
+    }
+    const { transcriptPath: cachedPath, ...title } = cached
+    // Why: History caches titles from parse rows saved before titles carried a kind; reading that
+    // transcript here classifies it once (the result replaces the cached entry, so this cannot repeat).
+    return !title.kind && cachedPath
+      ? readOneTitle({ ...request, transcriptPath: cachedPath }, signal, cache)
+      : title
   }
   try {
     const home = request.agent === 'codex' ? codexHomeFromSessionFilePath(transcriptPath) : null
