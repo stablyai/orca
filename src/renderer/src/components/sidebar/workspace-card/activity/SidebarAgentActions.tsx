@@ -1,7 +1,8 @@
+import { parsePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import { closeSidebarAgent } from './sidebar-agent-close'
 import { NativeChatCliForkMenuItems } from '@/components/tab-bar/NativeChatCliForkMenuItems'
 import { SidebarAgentRenameDialog } from './SidebarAgentRenameDialog'
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { MoreHorizontal, Pencil, SquareTerminal, X } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
@@ -22,6 +23,7 @@ export function SidebarAgentActions({
   agent: DashboardAgentRow
   onActivate: (tabId: string, paneKey: string) => void
 }): React.JSX.Element | null {
+  const triggerRef = useRef<HTMLButtonElement>(null)
   const [open, setOpen] = useState(false)
   const [renaming, setRenaming] = useState(false)
   const liveTab = useAppStore((state) =>
@@ -29,6 +31,11 @@ export function SidebarAgentActions({
       (tab) => tab.id === agent.tab.id || tab.entityId === agent.tab.id
     )
   )
+  const layout = useAppStore((state) =>
+    liveTab?.contentType === 'terminal' ? state.terminalLayoutsByTabId[liveTab.entityId] : undefined
+  )
+  const leafId = parsePaneKey(agent.paneKey)?.leafId
+  const ownsChat = layout?.root?.type !== 'split' || Boolean(leafId && leafId === layout.chatLeafId)
   if (agent.rowSource === 'subagent') {
     return null
   }
@@ -43,6 +50,7 @@ export function SidebarAgentActions({
       <DropdownMenu modal={false} open={open} onOpenChange={setOpen}>
         <DropdownMenuTrigger asChild>
           <Button
+            ref={triggerRef}
             type="button"
             variant="ghost"
             size="icon-sm"
@@ -76,7 +84,7 @@ export function SidebarAgentActions({
               onComplete={() => setOpen(false)}
             />
           ) : null}
-          {liveTab?.contentType === 'terminal' && liveTab.viewMode === 'chat' ? (
+          {liveTab?.contentType === 'terminal' && liveTab.viewMode === 'chat' && ownsChat ? (
             <DropdownMenuItem
               onSelect={() => {
                 useAppStore.getState().setTabViewMode(liveTab.id, 'terminal')
@@ -98,7 +106,11 @@ export function SidebarAgentActions({
         </DropdownMenuContent>
       </DropdownMenu>
       {renaming ? (
-        <SidebarAgentRenameDialog agent={agent} onClose={() => setRenaming(false)} />
+        <SidebarAgentRenameDialog
+          returnFocusRef={triggerRef}
+          agent={agent}
+          onClose={() => setRenaming(false)}
+        />
       ) : null}
     </span>
   )

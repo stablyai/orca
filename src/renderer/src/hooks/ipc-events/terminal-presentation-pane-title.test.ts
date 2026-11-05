@@ -1,3 +1,5 @@
+import { applyRuntimePaneTitle } from './terminal-pane-title-ipc-bridge'
+import { resolveAgentRowPaneLiveTitle } from '@/components/dashboard/agent-row-pane-live-title'
 import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import {
   createTestStore,
@@ -162,4 +164,47 @@ describe('a revealed terminal’s title, while the window owns the layout', () =
 
     expect(state.terminalLayoutsByTabId[TAB]?.titlesByLeafId).toEqual({ [LEAF]: 'Build' })
   })
+})
+
+it('keeps a local split sidebar name in sync on rename and reset', async () => {
+  mocks.layoutOwner.isMain = false
+  await setup(true)
+  const second = '22222222-2222-4222-8222-222222222222'
+  const state = testStore().getState()
+  state.setTabLayout(TAB, {
+    activeLeafId: LEAF,
+    expandedLeafId: null,
+    root: {
+      type: 'split',
+      direction: 'vertical',
+      first: { type: 'leaf', leafId: LEAF },
+      second: { type: 'leaf', leafId: second }
+    }
+  })
+  testStore().setState({ runtimePaneTitlesByTabId: { [TAB]: { 1: 'Old name', 2: 'Sibling' } } })
+  applyRuntimePaneTitle({ tabId: TAB, leafId: LEAF, title: 'Renamed' })
+  let current = testStore().getState()
+  expect(
+    resolveAgentRowPaneLiveTitle(
+      current.terminalLayoutsByTabId[TAB],
+      current.runtimePaneTitlesByTabId[TAB],
+      LEAF
+    )
+  ).toBe('Renamed')
+  applyRuntimePaneTitle({ tabId: TAB, leafId: LEAF, title: null })
+  current = testStore().getState()
+  expect(
+    resolveAgentRowPaneLiveTitle(
+      current.terminalLayoutsByTabId[TAB],
+      current.runtimePaneTitlesByTabId[TAB],
+      LEAF
+    )
+  ).toBeNull()
+  expect(
+    resolveAgentRowPaneLiveTitle(
+      current.terminalLayoutsByTabId[TAB],
+      current.runtimePaneTitlesByTabId[TAB],
+      second
+    )
+  ).toBe('Sibling')
 })

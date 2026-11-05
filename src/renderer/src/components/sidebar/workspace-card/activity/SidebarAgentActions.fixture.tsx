@@ -67,3 +67,28 @@ export const open = defineFixture({
     await new Promise((resolve) => setTimeout(resolve, 200))
   }
 })
+
+function splitFixture(chatLeafId: string) {
+  return defineFixture({
+    width: 420,
+    store: {
+      ...store,
+      terminalLayoutsByTabId: {
+        [agent.tab.id]: {
+          root: {
+            type: 'split',
+            direction: 'vertical',
+            first: { type: 'leaf', leafId: '11111111-1111-4111-8111-111111111111' },
+            second: { type: 'leaf', leafId: '22222222-2222-4222-8222-222222222222' }
+          },
+          activeLeafId: chatLeafId,
+          expandedLeafId: null,
+          chatLeafId
+        }
+      }
+    },
+    render
+  })
+}
+export const splitOwner = splitFixture('11111111-1111-4111-8111-111111111111')
+export const splitSibling = splitFixture('22222222-2222-4222-8222-222222222222')

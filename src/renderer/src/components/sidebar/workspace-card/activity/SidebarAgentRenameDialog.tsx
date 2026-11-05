@@ -1,4 +1,4 @@
-import { useId, useState } from 'react'
+import { useId, useState, type RefObject } from 'react'
 import { toast } from 'sonner'
 import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
 import { useAgentRowConversationName } from '@/components/dashboard/use-agent-row-conversation-name'
@@ -18,9 +18,11 @@ import { renameSidebarAgent } from './sidebar-agent-rename'
 
 export function SidebarAgentRenameDialog({
   agent,
+  returnFocusRef,
   onClose
 }: {
   agent: DashboardAgentRow
+  returnFocusRef?: RefObject<HTMLButtonElement | null>
   onClose: () => void
 }): React.JSX.Element {
   const name = useAgentRowConversationName(agent)
@@ -47,7 +49,15 @@ export function SidebarAgentRenameDialog({
         }
       }}
     >
-      <DialogContent className="sm:max-w-md">
+      <DialogContent
+        className="sm:max-w-md"
+        onCloseAutoFocus={(event) => {
+          if (returnFocusRef?.current?.isConnected) {
+            event.preventDefault()
+            returnFocusRef.current.focus()
+          }
+        }}
+      >
         <DialogHeader>
           <DialogTitle>{translate('sidebar.agentActions.renameTitle', 'Rename agent')}</DialogTitle>
           <DialogDescription>

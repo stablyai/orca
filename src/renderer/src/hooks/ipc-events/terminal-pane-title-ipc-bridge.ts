@@ -1,3 +1,4 @@
+import { resolveRuntimePaneTitleLeafId } from '../../../../shared/runtime-pane-title-leaf-id'
 import {
   SET_TERMINAL_PANE_TITLE_EVENT,
   type SetTerminalPaneTitleDetail
@@ -30,6 +31,17 @@ function showRuntimePaneTitle(tabId: string, leafId: string, title: string | nul
       ? { ...layoutWithoutTitles, titlesByLeafId }
       : layoutWithoutTitles
   store.setTabLayout(tabId, nextLayout)
+  const paneTitles = Object.fromEntries(
+    Object.entries(store.runtimePaneTitlesByTabId[tabId] ?? {}).filter(
+      ([key]) => resolveRuntimePaneTitleLeafId(layout, key) !== leafId
+    )
+  )
+  if (title) {
+    paneTitles[leafId] = title
+  }
+  useAppStore.setState((state) => ({
+    runtimePaneTitlesByTabId: { ...state.runtimePaneTitlesByTabId, [tabId]: paneTitles }
+  }))
   const detail: SetTerminalPaneTitleDetail = { tabId, leafId, title }
   window.dispatchEvent(new CustomEvent(SET_TERMINAL_PANE_TITLE_EVENT, { detail }))
 }
