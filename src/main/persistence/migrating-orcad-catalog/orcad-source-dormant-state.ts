@@ -21,8 +21,7 @@ import {
 import { collectOrcadMigrationSourceClientState } from './orcad-source-client-state'
 import { inspectOrcadSourceWorktreeMetadata } from './orcad-source-worktree-metadata'
 import { compareKeys } from './orcad-source-key-order'
-import { collectOrcadMigrationCrossStoreLineage } from './orcad-source-cross-store-lineage'
-import { uniqueDestinationRows } from './orcad-source-destination-rows'
+import { assertNoCrossStoreLinkedWorkspaceInMove } from '../../../shared/worktree/cross-store-lineage-move-refusal'
 
 export const ORCAD_MIGRATION_TRANSFERRED_DORMANT_KINDS = [
   'worktree-metadata',
@@ -77,6 +76,9 @@ export function collectOrcadMigrationSourceDormantState(
   daemonHistoryLeaf?: (tabId: string, leafId: string) => boolean
 ): OrcadMigrationSourceDormantInspection {
   const scope = createOrcadMigrationExportScope({ source, catalog, repos: state.repos })
+  assertNoCrossStoreLinkedWorkspaceInMove(state, (childKey) =>
+    orcadMigrationOwnerMatchesScope(childKey, scope)
+  )
   const blockedCounts = emptyBlockedCounts()
   const destinationRepos = catalog.repositories.map(toOrcadDestinationRepository)
   const setupByRepoId = new Map(
@@ -164,11 +166,6 @@ export function collectOrcadMigrationSourceDormantState(
     (entry) => entry.childWorkspaceKey,
     () => (blockedCounts['workspace-lineage'] += 1)
   )
-  const crossStoreLineage = collectOrcadMigrationCrossStoreLineage(
-    state,
-    scope,
-    () => (blockedCounts['workspace-lineage'] += 1)
-  )
   // Bare repo IDs shared across hosts cannot prove ownership.
   const ownedRepoIds = [...scope.repoIds].filter((repoId) => !scope.sharedRepoIds.has(repoId))
   const sparsePresets = ownedRepoIds
@@ -239,7 +236,6 @@ export function collectOrcadMigrationSourceDormantState(
       workspaceLineage: workspaceLineage.sort((left, right) =>
         compareKeys(left.childWorkspaceKey, right.childWorkspaceKey)
       ),
-      ...(crossStoreLineage.length > 0 ? { crossStoreLineage } : {}),
       sparsePresets,
       retiredWorktreeNames,
       retiredWorktreeNamespaces: collectOrcadMigrationRetiredWorktreeNamespaces(state, catalog),
@@ -277,6 +273,28 @@ export function emptyDormantPayload(): OrcadMigrationDormantStatePayload {
     retiredWorktreeNames: [],
     retiredWorktreeNamespaces: []
   }
+}
+
+function uniqueDestinationRows<T>(
+  rows: T[],
+  key: (row: T) => string,
+  onDuplicate: () => void
+): T[] {
+  const unique = new Map<string, T>()
+  const duplicates = new Set<string>()
+  for (const row of rows) {
+    const rowKey = key(row)
+    if (duplicates.has(rowKey)) {
+      onDuplicate()
+    } else if (unique.has(rowKey)) {
+      unique.delete(rowKey)
+      duplicates.add(rowKey)
+      onDuplicate()
+    } else {
+      unique.set(rowKey, row)
+    }
+  }
+  return [...unique.values()]
 }
 
 function emptyBlockedCounts(): Record<TransferredDormantKind, number> {

@@ -41,9 +41,6 @@ function catalogClaims(manifest: OrcadMigrationManifest): Set<string> {
     dormant.workspaceLineage.forEach((entry) =>
       claims.add(`workspace-lineage:${entry.childWorkspaceKey}`)
     )
-    dormant.crossStoreLineage?.forEach((entry) =>
-      claims.add(`cross-store-lineage:${entry.childWorkspaceKey}`)
-    )
     dormant.sparsePresets.forEach((preset) =>
       claims.add(`sparse-preset:${preset.repoId}:${preset.id}`)
     )
