@@ -73,14 +73,15 @@ export function runAcpSessionDiscovery<T>(
   return { answer, completion }
 }
 
-/** Reads the commands a throwaway session reports; `deletesSession` removes it from the agent's history. */
+/** Reads the commands a throwaway session reports, deleting it when the agent can; without
+ *  `disposableStorage` an agent that cannot delete is not asked. */
 export async function readAcpSessionCommands(input: {
   connection: AcpDiscoveryConnection
   dialect: AcpDialect
   cwd: string
   signal: AbortSignal
   check: () => void
-  deletesSession: boolean
+  disposableStorage: boolean
   logger?: StructuredAgentSessionLogger
 }): Promise<AtRestCommandScan> {
   const { connection, signal, check } = input
@@ -115,7 +116,8 @@ export async function readAcpSessionCommands(input: {
     const initialized = await awaitAcpDiscovery(connection.initialize(), signal)
     options.adoptInitialize(initialized)
     check()
-    if (input.deletesSession && !initialized.agentCapabilities?.sessionCapabilities?.delete) {
+    const deletes = Boolean(initialized.agentCapabilities?.sessionCapabilities?.delete)
+    if (!deletes && !input.disposableStorage) {
       return { commands: undefined, fromAgent: false }
     }
     const started = await awaitAcpDiscovery(
@@ -134,7 +136,7 @@ export async function readAcpSessionCommands(input: {
       return { commands: options.readCommands(), fromAgent: true }
     } finally {
       // Best effort: a cancelled scan can close the agent before the delete lands.
-      if (input.deletesSession) {
+      if (deletes) {
         await connection.deleteSession(started.sessionId).catch((error: unknown) => {
           input.logger?.warn('ACP command discovery kept its session', {
             scope: 'acp-command-discovery',

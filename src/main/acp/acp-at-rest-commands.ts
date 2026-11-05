@@ -15,7 +15,11 @@ import {
   LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV,
   NATIVE_CHAT_SCRATCH_DIR_ENV
 } from '../native-chat/native-chat-visuals-delivery'
-import { acpModelListingForRelease, type AcpLaunchSpec } from './acp-launch-specs'
+import {
+  acpListingDependsOnRelease,
+  acpModelListingForRelease,
+  type AcpLaunchSpec
+} from './acp-launch-specs'
 import { createAcpAgentConnection } from './acp-agent-connection'
 import { acpRunFolder } from './acp-private-temp'
 import { supportsAcpStructuredLocation } from './acp-structured-location-support'
@@ -132,28 +136,23 @@ export class AcpAtRestCommandCatalog extends AtRestCommandCatalog {
                 LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV
               ]
             }
-            const modelDiscovery = spec.modelDiscovery
             // A version reader owns work too; retain admission until it drains after cancellation.
             const version = await checkAcpLaunchVersion(
               spec,
               launch,
-              modelDiscovery.kind === 'command' && modelDiscovery.supportsVersion !== undefined,
+              acpListingDependsOnRelease(spec.modelDiscovery),
               deps.probeVersion
             )
             check()
             if (version.status === 'tooOld') {
               throw new Error('ACP command discovery unavailable')
             }
-            const listing =
-              modelDiscovery.kind === 'unavailable'
-                ? null
-                : acpModelListingForRelease(modelDiscovery, version.version)
+            const listing = acpModelListingForRelease(spec.modelDiscovery, version.version)
             // Releases that list without a session (OpenCode 1.x) report commands only in chats.
             if (listing?.kind !== 'session') {
               answer({ commands: undefined, fromAgent: false })
               return
             }
-            const folderArgs = listing.sessionFolderArgs
             const location = spec.visualsSkill
               ? await awaitAcpDiscovery(
                   (deps.resolveVisualsSkill ?? resolveNativeChatVisualsSkillLocation)(),
@@ -173,11 +172,13 @@ export class AcpAtRestCommandCatalog extends AtRestCommandCatalog {
                   )
                 : null
             check()
-            if (folderArgs) {
+            let folderArgs: string[] = []
+            if (listing.sessionFolderArgs) {
               folder = await acpRunFolder(
                 join(deps.dataDirectory, 'acp-command-sessions', spec.agent),
                 deps.logger
               )
+              folderArgs = listing.sessionFolderArgs(folder.path)
               check()
             }
             const connection = (deps.connect ?? createAcpAgentConnection)({
@@ -186,7 +187,7 @@ export class AcpAtRestCommandCatalog extends AtRestCommandCatalog {
               args: [
                 ...invocation.prefixArgs,
                 ...spec.args({ fullAccess: false, pluginDir: skill?.pluginDir ?? null }),
-                ...(folder && folderArgs ? folderArgs(folder.path) : [])
+                ...folderArgs
               ]
             })
             owned = connection
@@ -201,7 +202,7 @@ export class AcpAtRestCommandCatalog extends AtRestCommandCatalog {
                   checkSession()
                   check()
                 },
-                deletesSession: !folder,
+                disposableStorage: folder !== undefined,
                 logger: deps.logger
               })
             )

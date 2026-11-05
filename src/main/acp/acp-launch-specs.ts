@@ -94,11 +94,19 @@ export function acpListingNeedsChatFolder(discovery: AcpModelDiscovery): boolean
 
 export type AcpModelListing = Exclude<AcpModelDiscovery, { kind: 'unavailable' }>
 
+/** Whether `acpModelListingForRelease` needs the installed version. */
+export function acpListingDependsOnRelease(discovery: AcpModelDiscovery): boolean {
+  return discovery.kind === 'command' && discovery.supportsVersion !== undefined
+}
+
 /** How the installed release lists; null when only its chats can. */
 export function acpModelListingForRelease(
-  discovery: AcpModelListing,
+  discovery: AcpModelDiscovery,
   version: string | null
 ): AcpModelListing | null {
+  if (discovery.kind === 'unavailable') {
+    return null
+  }
   if (discovery.kind !== 'command' || !discovery.supportsVersion) {
     return discovery
   }

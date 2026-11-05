@@ -16,6 +16,7 @@ import type { AgentSessionModelOption } from '../../shared/agent-session/agent-s
 import { createAcpAgentConnection } from './acp-agent-connection'
 import { acpRunFolder } from './acp-private-temp'
 import {
+  acpListingDependsOnRelease,
   acpListingNeedsChatFolder,
   acpModelListingForRelease,
   type AcpLaunchSpec,
@@ -91,7 +92,7 @@ export function createAcpModelCatalogProbe(
     const release = await checkAcpLaunchVersion(
       spec,
       { command, prefixArgs, cwd, env },
-      discovery.kind === 'command' && discovery.supportsVersion !== undefined,
+      acpListingDependsOnRelease(discovery),
       deps.probeVersion
     )
     assertStructuredAgentResolutionCurrent(operation)
