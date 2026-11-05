@@ -10,7 +10,7 @@ import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { colors, spacing, typography } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
-import { toolType } from '../transcript/mobile-native-chat-tool-styles'
+import { toolStyles, toolType } from '../transcript/mobile-native-chat-tool-styles'
 import { MobileNativeChatChecklist } from './MobileNativeChatTaskList'
 import { nativeChatTaskListCopy } from './native-chat-task-list-copy'
 import { trayStripStyles as strip } from './mobile-native-chat-tray-strip-styles'
@@ -75,7 +75,11 @@ function MobileNativeChatDockedTaskListImpl({
             nestedScrollEnabled
           >
             <MobileNativeChatChecklist list={list} fontScale={1} />
-            {list.explanation ? <Text style={styles.explanation}>{list.explanation}</Text> : null}
+            {list.explanation ? (
+              <Text style={[toolStyles.lineMeta, toolType(1).meta, styles.explanation]}>
+                {list.explanation}
+              </Text>
+            ) : null}
           </ScrollView>
         ) : null}
       </View>
@@ -107,8 +111,6 @@ const styles = themedStyleSheet(() => ({
     paddingBottom: spacing.sm
   },
   explanation: {
-    ...toolType(1).meta,
-    color: colors.textMuted,
     paddingTop: spacing.xs
   }
 }))

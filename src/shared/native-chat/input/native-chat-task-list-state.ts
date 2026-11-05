@@ -37,12 +37,11 @@ function latestSnapshot(message: NativeChatMessage): NativeChatTaskList | null {
 export function nativeChatDockedTaskList(
   messages: readonly NativeChatMessage[]
 ): NativeChatTaskList | null {
-  let list: NativeChatTaskList | null = null
-  for (const message of messages) {
-    const snapshot = latestSnapshot(message)
-    if (snapshot) {
-      list = snapshot
+  for (let index = messages.length - 1; index >= 0; index--) {
+    const list = latestSnapshot(messages[index])
+    if (list) {
+      return list.tasks.length > 0 ? list : null
     }
   }
-  return list && list.tasks.length > 0 ? list : null
+  return null
 }
