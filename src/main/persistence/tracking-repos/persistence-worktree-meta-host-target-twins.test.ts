@@ -14,7 +14,7 @@ import { getDefaultPersistedState } from '../../../shared/constants'
 import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 import { worktreeWorkspaceKey } from '../../../shared/workspace-scope'
 import { removeWorktreeMetaRow, resolveWorktreeMetaOwner } from '../host-qualified-worktree-meta'
-import { persistRuntimeManagedWorktreeSortOrder } from '../../runtime/runtime-managed-worktree-metadata'
+import { persistRuntimeManagedWorktreeSortOrder } from '../../runtime/workspaces/metadata/runtime-managed-worktree-metadata'
 
 vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },

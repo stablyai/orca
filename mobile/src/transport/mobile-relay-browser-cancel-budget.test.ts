@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { RuntimeBrowserScreencastController } from '../../../src/main/runtime/runtime-browser-screencast-controller'
+import { RuntimeBrowserScreencastController } from '../../../src/main/runtime/browser/screencast/runtime-browser-screencast-controller'
 import type { BrowserScreencastResult } from '../../../src/shared/runtime-types'
 import type { RpcBinarySender } from '../../../src/main/runtime/rpc/rpc-binary-sender'
 import { MobileRelayRpcStreams } from './mobile-relay-rpc-streams'

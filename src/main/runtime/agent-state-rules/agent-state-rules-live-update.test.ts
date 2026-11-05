@@ -5,10 +5,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   AGENT_STATE_RULES_ASSET,
   buildAgentStateRulesBundle
-} from '../../../../config/scripts/agent-state-rules-bundle.mjs'
-import { agentStateRulesTag } from '../../../../config/scripts/release-tag-patterns.mjs'
+} from '../../../../config/scripts/release/agent-state-rules/agent-state-rules-bundle.mjs'
+import { agentStateRulesTag } from '../../../../config/scripts/release/versioning/release-tag-patterns.mjs'
 import { MAIN_RELEASE_REPO } from '../../../shared/release-channel'
-import { getTerminalTailSentinelMatches } from '../terminal-tail-sentinel-index'
+import { getTerminalTailSentinelMatches } from '../terminal/output/tail/terminal-tail-sentinel-index'
 import {
   activateAgentStateRules,
   BUNDLED_AGENT_STATE_RULES,
@@ -24,7 +24,7 @@ import {
   agentStateRulesDownloadUrl,
   type AgentStateRulesLiveUpdateDeps
 } from './agent-state-rules-live-update'
-import { detectExplicitIdleStatusFromTitle } from '../terminal-wait-detection'
+import { detectExplicitIdleStatusFromTitle } from '../terminal/wait/terminal-wait-detection'
 import { showsIdleTitleAnchor } from './agent-state-title-anchors'
 
 const NEWER = 9999

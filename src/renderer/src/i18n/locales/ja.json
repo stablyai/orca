@@ -14849,8 +14849,6 @@
           "AiCommitPrSettingsCard": {
             "8d4152701a": "例: ollama run llama3.1 {{value0}}",
             "9ee54037a4": "カスタムコマンド",
-            "4b2fc4b80c": "考える努力",
-            "be8917699e": "モデル",
             "560d4feb00": "カスタム",
             "29d119fe95": "Agent",
             "f9382b48a1": "AI 著者を有効にする",
@@ -19943,7 +19941,10 @@
       "workerAutoClose": {
         "running": "一時的なオーケストレーションワーカー · 完了の2分後に閉じます",
         "finished": "一時的なオーケストレーションワーカーが完了 · {{countdown}}後に閉じます",
-        "keepOpen": "開いたままにする"
+        "keepOpen": "開いたままにする",
+        "bannerRunning": "オーケストレーションワーカー · 完了の2分後に閉じます",
+        "bannerFinished": "オーケストレーションワーカーが完了 · {{countdown}}後に閉じます",
+        "temporaryBadge": "一時的"
       }
     },
     "wslHostMark": {

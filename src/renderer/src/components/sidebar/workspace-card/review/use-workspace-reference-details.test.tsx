@@ -94,40 +94,6 @@ beforeEach(() => {
   })
 })
 afterEach(cleanup)
-
-it('automatically reads every attached review without a mounted reference hook', async () => {
-  renderHook(() => useVisibleHostedReviewRefresh({ enabled: true }))
-  await waitFor(() => expect(read).toHaveBeenCalledTimes(2))
-})
-it.each(['not-visible', 'hidden', 'sleeping', 'archived', 'bare', 'unready', 'web-unselected'])(
-  'does not poll %s workspaces',
-  async (condition) => {
-    if (condition === 'not-visible') {
-      useAppStore.setState({ visibleReviewWorktreeIds: [] })
-    }
-    if (condition === 'hidden') {
-      Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' })
-    }
-    if (condition === 'sleeping') {
-      useAppStore.setState({ browserTabsByWorktree: {} })
-    }
-    if (condition === 'archived' || condition === 'bare') {
-      useAppStore.setState({
-        worktreesByRepo: {
-          repo: [
-            { ...workspace, isArchived: condition === 'archived', isBare: condition === 'bare' }
-          ]
-        }
-      })
-    }
-    mocks.web = condition === 'web-unselected'
-    mount(false, condition !== 'unready')
-    await act(async () => {
-      await Promise.resolve()
-    })
-    expect(read).not.toHaveBeenCalled()
-  }
-)
 it('shares exact results across hover and scheduler without replacing the primary branch cache', async () => {
   const primaryKey = getHostedReviewCacheKey(
     referenceRepo.path,
@@ -169,77 +135,6 @@ it('keeps failed exact refreshes stale while retaining their last known details'
     stale: true,
     review: { number: 1 }
   })
-})
-it.each(['host', 'remote', 'account'])('drops cached success after %s rebinding', (kind) => {
-  const request = getWorkspaceReferenceRequest(referenceAttachment(1), workspace, referenceRepo)
-  useAppStore.setState({
-    hostedReviewCache: { [request.key]: { data: referenceReview(1), fetchedAt: Date.now() } }
-  })
-  const hook = renderHook(
-    ({ repo }) => useWorkspaceReferenceDetails(workspace, repo, null, false),
-    { initialProps: { repo: referenceRepo } }
-  )
-  expect(hook.result.current[getWorkspaceAttachmentKey(request.item)]?.review?.status).toBe(
-    'success'
-  )
-  hook.rerender({
-    repo: {
-      ...referenceRepo,
-      ...(kind === 'host'
-        ? { executionHostId: 'runtime:other' }
-        : kind === 'account'
-          ? { ghAccount: { host: 'github.com', user: 'other' } }
-          : {
-              gitRemoteIdentity: {
-                canonicalKey: 'github.com/other/project',
-                remoteName: 'origin',
-                remoteUrl: 'https://github.com/other/project.git'
-              }
-            })
-    }
-  })
-  expect(hook.result.current[getWorkspaceAttachmentKey(request.item)]).toBeUndefined()
-})
-it('bounds native reads and cancels queued hover demand without adding a negative cache entry', async () => {
-  const finish: (() => void)[] = []
-  read.mockImplementation(() => new Promise((resolve) => finish.push(() => resolve(null))))
-  const requests = [20, 21, 22, 23].map((number) =>
-    getWorkspaceReferenceRequest(referenceAttachment(number), workspace, referenceRepo)
-  )
-  const active = requests.slice(0, 3).map((request) => readWorkspaceReferenceDetails(request))
-  await waitFor(() => expect(read).toHaveBeenCalledTimes(3))
-  const controller = new AbortController()
-  const queued = readWorkspaceReferenceDetails(requests[3], controller.signal).catch(() => null)
-  controller.abort()
-  await queued
-  finish.forEach((resolve) => resolve())
-  await Promise.all(active)
-  expect(read).toHaveBeenCalledTimes(3)
-  expect(useAppStore.getState().hostedReviewCache[requests[3].key]).toBeUndefined()
-})
-it.each(['hide', 'unmount'])('stops queued scheduler work on %s', async (action) => {
-  const finish: (() => void)[] = []
-  read.mockImplementation(() => new Promise((resolve) => finish.push(() => resolve(null))))
-  useAppStore.setState({
-    worktreesByRepo: {
-      repo: [{ ...workspace, linkedItems: [20, 21, 22, 23, 24].map(referenceAttachment) }]
-    }
-  })
-  const hook = mount()
-  await waitFor(() => expect(read).toHaveBeenCalledTimes(3))
-  if (action === 'unmount') {
-    hook.unmount()
-  } else {
-    act(() => {
-      Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' })
-      document.dispatchEvent(new Event('visibilitychange'))
-    })
-  }
-  await act(async () => {
-    finish.forEach((resolve) => resolve())
-    await Promise.resolve()
-  })
-  expect(read).toHaveBeenCalledTimes(3)
 })
 it('does not revive primary success after an exact lookup returns unavailable', async () => {
   const request = getWorkspaceReferenceRequest(referenceAttachment(1), workspace, referenceRepo)

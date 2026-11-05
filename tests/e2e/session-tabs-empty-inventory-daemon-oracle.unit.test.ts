@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { SubprocessHandle } from '../../src/main/daemon/session-subprocess-handle'
-import { TerminalHost } from '../../src/main/daemon/terminal-host'
+import type { SubprocessHandle } from '../../src/main/daemon/sessions/session-subprocess-handle'
+import { TerminalHost } from '../../src/main/daemon/terminal-host/terminal-host'
 
-vi.mock('../../src/renderer/src/store', () => ({
+vi.mock('../../src/renderer/src/store/index', () => ({
   useAppStore: {
     setState: vi.fn(),
     getState: vi.fn(() => ({ updateAgentStatusState: vi.fn() })),

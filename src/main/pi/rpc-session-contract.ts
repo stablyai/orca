@@ -60,8 +60,12 @@ export type PiRpcSessionDeps = PiHistoryCaptureDeps & {
     dialogs?: (
       lane: JsonlRpcTimelineLane,
       send: (frame: JsonlRpcRecord) => Promise<void>,
-      fail: (error: Error) => void
-    ) => Pick<PiRpcDialogCallbacks, 'receive' | 'respond' | 'cancelAll'>
+      fail: (error: Error) => void,
+      backgroundWorkDirectory: string | null
+    ) => Pick<
+      PiRpcDialogCallbacks,
+      'receive' | 'respond' | 'cancelAll' | 'close' | 'backgroundWork'
+    >
     receive?: (frame: JsonlRpcRecord, session: PiRpcSession) => boolean
   }
   openConnection?: (

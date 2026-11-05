@@ -18,7 +18,7 @@ import type { SshTarget } from '../../../shared/ssh-types'
 import { AUTOMATION_ORPHAN_ISSUES } from '../../../shared/automation-list-scope'
 import { getDefaultPersistedState } from '../../../shared/constants'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
-import { installFakeAppEnvironment } from '../../../../config/scripts/vitest-host-ports-setup'
+import { installFakeAppEnvironment } from '../../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 import { resetRetirementCollisionKeyCacheForTests } from '../../workspaces/removal/retirement/worktree-name-retirement'
 
 let hasCreatedStoreInCase = false

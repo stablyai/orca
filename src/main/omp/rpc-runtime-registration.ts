@@ -1,11 +1,11 @@
 import type {
   StructuredAgentAdapterContext,
   StructuredAgentRuntimeAdapter
-} from '../runtime/structured-agent-runtime-registration-types'
+} from '../runtime/agent-session/installation/structured-agent-runtime-registration-types'
 import {
   composeStructuredLaunch,
   structuredAgentLaunchSources
-} from '../runtime/structured-agent-launch-composition'
+} from '../runtime/agent-session/launch/structured-agent-launch-composition'
 import { reviseAgentSessionProviderResumePoint } from '../runtime/agent-session/ownership/agent-session-provider-handle-transition'
 import { OMP_RPC_AGENT } from './rpc-agent-definition'
 import { ompRpcLaunchPart } from './rpc-launch'

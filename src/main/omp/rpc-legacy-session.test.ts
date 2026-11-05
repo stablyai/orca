@@ -7,7 +7,7 @@ import { agentSessionConversationView } from '../../shared/agent-session/lifecyc
 import { createAgentModelCatalogService } from '../native-chat/agent-model-catalog/agent-model-catalog-service'
 import { AgentModelCatalogStore } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 import { agentDrivesSession } from '../native-chat/agent-session-wire/structured-agent-session-provider-support'
-import { composeStructuredLaunchRead } from '../runtime/structured-agent-launch-composition'
+import { composeStructuredLaunchRead } from '../runtime/agent-session/launch/structured-agent-launch-composition'
 import { OMP_RPC_AGENT } from './rpc-agent-definition'
 import { ompRpcProviderLink, resolveOmpRpcResume } from './rpc-launch'
 import { recordAgentSessionProviderHandle } from '../runtime/agent-session/ownership/agent-session-provider-handle-transition'

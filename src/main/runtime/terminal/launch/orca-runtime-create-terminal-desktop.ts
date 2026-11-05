@@ -1,0 +1,85 @@
+import { applyRemoteViewerLaunchEnv } from './remote-viewer-launch-env'
+import type { TerminalCreateOptions } from '../../runtime-terminal-contracts'
+import type { RuntimeTerminalCreate } from '../../../../shared/runtime-terminal-create-contract'
+import { randomUUID } from 'node:crypto'
+import { getRuntimeDesktopSurface } from '../../runtime-desktop-surface'
+import type { IpcMainEvent } from 'electron'
+import { ownerSurfacing } from '../../orca-runtime-core'
+import type { OrcaRuntimeWithCreateTerminal } from './terminal-create'
+import type { RuntimeTerminalPresentation } from '../../../../shared/runtime-terminal-contracts'
+
+// Without a window, the missing piece the caller can supply is the workspace, so name that.
+const NO_WORKSPACE_OR_WINDOW_MESSAGE =
+  'No workspace was given or found for this terminal, and this Orca host has no open app window to create one in. Pass --worktree to choose a workspace. No terminal was created.'
+
+// Workspace-less creates target the window's current view, so only it can perform them.
+export async function createDesktopTerminal(
+  runtime: OrcaRuntimeWithCreateTerminal,
+  opts: TerminalCreateOptions,
+  presentation: RuntimeTerminalPresentation | undefined
+): Promise<RuntimeTerminalCreate> {
+  // Without a workspace there is no host on which to resolve a shell.
+  if (opts.shellOverride) {
+    throw new Error(
+      `--shell ${opts.shellOverride} needs a workspace, because the shell is resolved on the workspace's execution host. No terminal was created.`
+    )
+  }
+  opts = applyRemoteViewerLaunchEnv(opts, opts.terminalImageViewerSupported)
+  runtime.assertGraphReady()
+  const rendererWebContents = runtime.getAuthoritativeWindow(
+    NO_WORKSPACE_OR_WINDOW_MESSAGE
+  ).webContents
+  const requestId = randomUUID()
+  const reply = await new Promise<{ tabId: string; title: string }>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      getRuntimeDesktopSurface().removeIpcListener('terminal:tabCreateReply', handler)
+      reject(new Error('Terminal creation timed out'))
+    }, 10000)
+    const handler = (
+      event: IpcMainEvent,
+      response: {
+        requestId: string
+        tabId?: string
+        title?: string
+        error?: string
+      }
+    ): void => {
+      if (event.sender !== rendererWebContents || response.requestId !== requestId) {
+        return
+      }
+      clearTimeout(timer)
+      getRuntimeDesktopSurface().removeIpcListener('terminal:tabCreateReply', handler)
+      if (response.error) {
+        reject(new Error(response.error))
+      } else {
+        resolve({ tabId: response.tabId!, title: response.title ?? opts.title ?? '' })
+      }
+    }
+    getRuntimeDesktopSurface().onIpc('terminal:tabCreateReply', handler)
+    rendererWebContents.send('terminal:requestTabCreate', {
+      requestId,
+      command: opts.command,
+      cwd: opts.cwd,
+      ...(opts.env ? { env: opts.env } : {}),
+      ...(opts.launchConfig ? { launchConfig: opts.launchConfig } : {}),
+      ...(opts.resumeProviderSession ? { resumeProviderSession: opts.resumeProviderSession } : {}),
+      ...(opts.launchToken ? { launchToken: opts.launchToken } : {}),
+      ...(opts.launchAgent ? { launchAgent: opts.launchAgent } : {}),
+      ...(opts.viewMode ? { viewMode: opts.viewMode } : {}),
+      startupCommandDelivery: opts.startupCommandDelivery,
+      title: opts.title,
+      activate: presentation === 'focused',
+      ...(presentation ? { presentation } : {}),
+      ...ownerSurfacing(opts.surfaceOwner !== false)
+    })
+  })
+  const handle = await runtime.waitForTerminalHandle(reply.tabId)
+  return {
+    handle,
+    tabId: reply.tabId,
+    worktreeId: '',
+    title: reply.title,
+    ...runtime.getPtyExecutionHostMetadata(runtime.handles.get(handle)?.ptyId ?? null),
+    surface: 'visible'
+  }
+}

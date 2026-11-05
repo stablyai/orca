@@ -9,7 +9,7 @@ import {
 } from '../../../persistence/terminal-topology/terminal-topology-profile-fixture'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { FIRST_SURFACE_PLACEMENT_WAIT_MS } from './restored-terminal-placement'
-import type { ResolvedWorktree } from '../../runtime-worktree-path-identity'
+import type { ResolvedWorktree } from '../catalog/runtime-worktree-path-identity'
 
 vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 vi.mock('../../../telemetry/client', () => ({ track: vi.fn() }))

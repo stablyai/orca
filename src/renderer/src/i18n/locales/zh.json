@@ -14849,8 +14849,6 @@
           "AiCommitPrSettingsCard": {
             "8d4152701a": "例如llama 运行 llama3.1 {{value0}}",
             "9ee54037a4": "自定义命令",
-            "4b2fc4b80c": "思考努力",
-            "be8917699e": "模型",
             "560d4feb00": "自定义",
             "29d119fe95": "智能体",
             "f9382b48a1": "启用AI作者",
@@ -19944,7 +19942,10 @@
       "workerAutoClose": {
         "running": "临时编排工作代理 · 完成后 2 分钟关闭",
         "finished": "临时编排工作代理已完成 · {{countdown}}后关闭",
-        "keepOpen": "保持打开"
+        "keepOpen": "保持打开",
+        "bannerRunning": "编排工作代理 · 完成后 2 分钟关闭",
+        "bannerFinished": "编排工作代理已完成 · {{countdown}}后关闭",
+        "temporaryBadge": "临时"
       }
     },
     "wslHostMark": {

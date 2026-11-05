@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { isOrcaSessionId } from '../../../../../shared/orca-session-address'
-import { mintStructuredWorkerHandle } from '../../../structured-worker-identity'
+import { mintStructuredWorkerHandle } from '../../terminal-authority/structured-sessions/structured-worker-identity'
 import { OrchestrationDb } from '../orchestration-db'
 
 const EARLIER_ORCA_SESSION_ID = '7d9f1b3e-5a2c-4e6b-8f0a-1c3e5a7b9d42'

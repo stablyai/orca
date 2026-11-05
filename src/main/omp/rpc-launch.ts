@@ -18,7 +18,7 @@ import {
   type StructuredAgentResolutionOperation
 } from '../native-chat/structured-agent-command-resolution'
 import { isWindowsProcessStartTimeAvailable } from '../windows/windows-process-table'
-import type { StructuredAgentLaunchPartResolver } from '../runtime/structured-agent-launch-composition'
+import type { StructuredAgentLaunchPartResolver } from '../runtime/agent-session/launch/structured-agent-launch-composition'
 import {
   piRpcProviderLink,
   readPiSessionHeader,

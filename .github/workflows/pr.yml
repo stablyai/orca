@@ -66,7 +66,7 @@ jobs:
           fetch-depth: 50
           filter: blob:none
           sparse-checkout: |
-            /config/scripts/git-pull-request-diff-base.mjs
+            /config/scripts/git/pr-diff-base/git-pull-request-diff-base.mjs
             /package.json
             /README.md
             /docs/readme/
@@ -74,20 +74,21 @@ jobs:
             /.github/scripts/check-required-pr-context.mjs
             /.github/workflows/
             /config/.bun-version
-            /config/scripts/check-readme-local-links.mjs
-            /config/scripts/pr-code-change-scope.mjs
-            /config/scripts/pr-shell-contract-prefixes.mjs
+            /config/scripts/static-analysis/repository-layout/check-readme-local-links.mjs
+            /config/scripts/workflow/source-routing/pr-code-change-scope.mjs
+            /config/scripts/workflow/source-routing/pr-xterm-patch-prefixes.mjs
+            /config/scripts/workflow/source-routing/pr-shell-contract-prefixes.mjs
             /.oxfmtrc.json
-            /config/scripts/pr-package-test-paths.mjs
-            /config/scripts/pr-layout-oracle-route.mjs
-            /config/scripts/pr-e2e-source-routing.mjs
-            /config/scripts/pr-browser-e2e-source-routes.mjs
-            /config/scripts/pr-editor-preview-e2e-source-routes.mjs
-            /config/scripts/pr-feature-area-e2e-source-routes.mjs
-            /config/scripts/pr-plugin-e2e-source-routes.mjs
-            /config/scripts/pr-wsl-e2e-source-routes.mjs
-            /config/scripts/ci-e2e-job-selection.mjs
-            /config/scripts/pr-ready-check-reuse.mjs
+            /config/scripts/workflow/source-routing/pr-package-test-paths.mjs
+            /config/scripts/workflow/source-routing/pr-layout-oracle-route.mjs
+            /config/scripts/workflow/source-routing/pr-e2e-source-routing.mjs
+            /config/scripts/workflow/source-routing/pr-browser-e2e-source-routes.mjs
+            /config/scripts/workflow/source-routing/pr-editor-preview-e2e-source-routes.mjs
+            /config/scripts/workflow/source-routing/pr-feature-area-e2e-source-routes.mjs
+            /config/scripts/workflow/source-routing/pr-plugin-e2e-source-routes.mjs
+            /config/scripts/workflow/source-routing/pr-wsl-e2e-source-routes.mjs
+            /config/scripts/ci/e2e-selection/ci-e2e-job-selection.mjs
+            /config/scripts/workflow/pr-admission/pr-ready-check-reuse.mjs
           sparse-checkout-cone-mode: false
           persist-credentials: false
 
@@ -95,12 +96,12 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
-          DIFF_BASE="$(node config/scripts/git-pull-request-diff-base.mjs "$BASE_SHA")"
+          DIFF_BASE="$(node config/scripts/git/pr-diff-base/git-pull-request-diff-base.mjs "$BASE_SHA")"
           node .github/scripts/check-root-directory-entries.mjs "$DIFF_BASE" HEAD
 
       # The full Git index retains link targets outside the sparse working tree.
       - name: Check README local links
-        run: node config/scripts/check-readme-local-links.mjs
+        run: node config/scripts/static-analysis/repository-layout/check-readme-local-links.mjs
 
       - name: Set up Bun for required workflow validation
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
@@ -118,7 +119,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           PR_CHECK_WORKFLOW_SHA: ${{ github.workflow_sha }}
-        run: node config/scripts/pr-ready-check-reuse.mjs
+        run: node config/scripts/workflow/pr-admission/pr-ready-check-reuse.mjs
 
       - name: Classify changed paths
         id: filter
@@ -127,7 +128,7 @@ jobs:
         run: |
           set -euo pipefail
           # PR merge HEAD’s first parent is the base; --merge-base would require the payload SHA/full history.
-          DIFF_BASE="$(node config/scripts/git-pull-request-diff-base.mjs "$BASE_SHA")"
+          DIFF_BASE="$(node config/scripts/git/pr-diff-base/git-pull-request-diff-base.mjs "$BASE_SHA")"
           # --no-renames retains code-side deletions when files move into docs.
           CHANGED="$(git diff --name-only --no-renames --diff-filter=ACDMR "$DIFF_BASE" HEAD)"
           echo "Changed paths:"
@@ -136,7 +137,7 @@ jobs:
           if git diff --quiet --no-renames --diff-filter=ACDRTUXB "$DIFF_BASE" HEAD; then
             MOBILE_CI_ARGS=(--mobile-ci-tools --daemon-init-test-support)
           fi
-          printf '%s\n' "$CHANGED" | node config/scripts/pr-code-change-scope.mjs "${MOBILE_CI_ARGS[@]}" | tee -a "$GITHUB_OUTPUT"
+          printf '%s\n' "$CHANGED" | node config/scripts/workflow/source-routing/pr-code-change-scope.mjs "${MOBILE_CI_ARGS[@]}" | tee -a "$GITHUB_OUTPUT"
 
       # Reuse the path-detector checkout instead of queuing another runner.
       - name: Filter changed E2E specs
@@ -145,24 +146,24 @@ jobs:
         run: |
           set -euo pipefail
           BASE="${{ github.event.pull_request.base.sha }}"
-          DIFF_BASE="$(node config/scripts/git-pull-request-diff-base.mjs "$BASE")"
+          DIFF_BASE="$(node config/scripts/git/pr-diff-base/git-pull-request-diff-base.mjs "$BASE")"
           CHANGED="$(git diff --name-only --diff-filter=AMCR "$DIFF_BASE" HEAD)"
           E2E_SCOPE_ARGS=()
           if git diff --quiet --no-renames --diff-filter=ACDRTUXB "$DIFF_BASE" HEAD; then
             E2E_SCOPE_ARGS=(--daemon-init-test-support)
           fi
           # Executable routes let tests prove authorities/exclusions/sentinels without evaluating shell.
-          TEST_FILES_JSON="$(printf '%s\n' "$CHANGED" | node config/scripts/pr-e2e-source-routing.mjs "${E2E_SCOPE_ARGS[@]}")"
+          TEST_FILES_JSON="$(printf '%s\n' "$CHANGED" | node config/scripts/workflow/source-routing/pr-e2e-source-routing.mjs "${E2E_SCOPE_ARGS[@]}")"
           echo "test_files=$TEST_FILES_JSON" >> "$GITHUB_OUTPUT"
-          printf '%s\n' "$TEST_FILES_JSON" | node config/scripts/ci-e2e-job-selection.mjs --job-outputs >> "$GITHUB_OUTPUT"
+          printf '%s\n' "$TEST_FILES_JSON" | node config/scripts/ci/e2e-selection/ci-e2e-job-selection.mjs --job-outputs >> "$GITHUB_OUTPUT"
           # Real IME runs an entire IBus session; route it by IME source, independently of spec lists.
-          NATIVE_IME_SOURCE_CHANGED="$(printf '%s\n' "$CHANGED" | node config/scripts/pr-e2e-source-routing.mjs --native-ime-source)"
+          NATIVE_IME_SOURCE_CHANGED="$(printf '%s\n' "$CHANGED" | node config/scripts/workflow/source-routing/pr-e2e-source-routing.mjs --native-ime-source)"
           echo "native_ime_source_changed=$NATIVE_IME_SOURCE_CHANGED" >> "$GITHUB_OUTPUT"
           WSL_CHANGED="$(git diff --name-only --no-renames --diff-filter=ACDMR "$DIFF_BASE" HEAD)"
-          WSL_SOURCE_CHANGED="$(printf '%s\n' "$WSL_CHANGED" | node config/scripts/pr-e2e-source-routing.mjs --wsl-source)"
+          WSL_SOURCE_CHANGED="$(printf '%s\n' "$WSL_CHANGED" | node config/scripts/workflow/source-routing/pr-e2e-source-routing.mjs --wsl-source)"
           echo "wsl_source_changed=$WSL_SOURCE_CHANGED" >> "$GITHUB_OUTPUT"
           echo "Native IME source changed: $NATIVE_IME_SOURCE_CHANGED"
-          SHOULD_RUN="$(printf '%s\n' "$CHANGED" | node config/scripts/pr-e2e-source-routing.mjs --reusable-workflow "${E2E_SCOPE_ARGS[@]}")"
+          SHOULD_RUN="$(printf '%s\n' "$CHANGED" | node config/scripts/workflow/source-routing/pr-e2e-source-routing.mjs --reusable-workflow "${E2E_SCOPE_ARGS[@]}")"
           if [ "$SHOULD_RUN" = true ]; then
             echo "should_run=true" >> "$GITHUB_OUTPUT"
             echo "Changed E2E specs: $TEST_FILES_JSON"
@@ -237,7 +238,7 @@ jobs:
           PREFLIGHT_PRIOR_SUCCESS: ${{ job.status == 'success' }}
         run: |
           if [ "$PREFLIGHT_PHASE_SELECTED" != true ] || [ "$PREFLIGHT_PRIOR_SUCCESS" != true ]; then exit 0; fi
-          bun config/scripts/check-import-boundaries.mjs
+          bun config/scripts/static-analysis/process-boundaries/check-import-boundaries.mjs
 
       - name: Check main-process sync launches
         if: '!cancelled()'
@@ -248,7 +249,7 @@ jobs:
           PREFLIGHT_PRIOR_SUCCESS: ${{ job.status == 'success' }}
         run: |
           if [ "$PREFLIGHT_PHASE_SELECTED" != true ] || [ "$PREFLIGHT_PRIOR_SUCCESS" != true ]; then exit 0; fi
-          bun config/scripts/check-main-sync-spawn-ratchet.mjs
+          bun config/scripts/static-analysis/process-boundaries/check-main-sync-spawn-ratchet.mjs
 
       # Keep each check in its own log while sharing this runner.
       - name: Lint
@@ -284,14 +285,14 @@ jobs:
           PREFLIGHT_PRIOR_SUCCESS: ${{ job.status == 'success' }}
         run: |
           if [ "$PREFLIGHT_PHASE_SELECTED" != true ] || [ "$PREFLIGHT_PRIOR_SUCCESS" != true ]; then exit 0; fi
-          node config/scripts/sync-anti-slop-plugin.mjs
+          node config/scripts/static-analysis/oxlint-contracts/sync-anti-slop-plugin.mjs
           bun --smol node_modules/oxlint/bin/oxlint --config config/oxlint-anti-slop.json src config tests mobile --deny-warnings
 
       - name: Enforce ast-grep rules
         if: needs.code_paths.outputs.static_analysis == 'true'
         run: |
           node_modules/.bin/ast-grep test --config config/sgconfig.yml --skip-snapshot-tests
-          node config/scripts/ast-grep-gates.mjs --format=github
+          node config/scripts/static-analysis/structural-scan/ast-grep-gates.mjs --format=github
 
       # Why the full tree: it takes ~2s, and the pre-commit hook is skippable.
       - name: Check formatting
@@ -334,17 +335,17 @@ jobs:
           PREFLIGHT_PRIOR_SUCCESS: ${{ job.status == 'success' }}
         run: |
           if [ "$PREFLIGHT_PHASE_SELECTED" != true ] || [ "$PREFLIGHT_PRIOR_SUCCESS" != true ]; then exit 0; fi
-          node config/scripts/check-changed-code-quality.mjs "${{ github.event.pull_request.base.sha }}"
+          node config/scripts/preflight/changed-checks/check-changed-code-quality.mjs "${{ github.event.pull_request.base.sha }}"
 
       - name: Verify locked audit tools
         if: needs.code_paths.outputs.static_analysis == 'true'
         env:
           ORCA_BACKGROUND_LAUNCH: '1'
-        run: node config/scripts/verify-locked-audit-tools.mjs
+        run: node config/scripts/dependency-security/audit-tools/verify-locked-audit-tools.mjs
 
       - name: Enforce React Doctor on changed lines
         if: needs.code_paths.outputs.static_analysis == 'true'
-        run: node config/scripts/check-react-doctor-changed.mjs "${{ github.event.pull_request.base.sha }}"
+        run: node config/scripts/static-analysis/react-doctor/check-react-doctor-changed.mjs "${{ github.event.pull_request.base.sha }}"
 
       - wait: changed-code-quality
 
@@ -373,12 +374,12 @@ jobs:
         run: |
           if [ "$PREFLIGHT_PHASE_SELECTED" != true ] || [ "$PREFLIGHT_PRIOR_SUCCESS" != true ]; then exit 0; fi
           # Detection failures run the full check; renames retain the removed input path.
-          DIFF_BASE="$(node config/scripts/git-pull-request-diff-base.mjs "$BASE_SHA")"
+          DIFF_BASE="$(node config/scripts/git/pr-diff-base/git-pull-request-diff-base.mjs "$BASE_SHA")"
           if git diff --name-only --no-renames -z "$DIFF_BASE" HEAD > "$RUNNER_TEMP/localization-changes" &&
-            scope="$(node config/scripts/localization-extraction-change-scope.mjs "$RUNNER_TEMP/localization-changes")" && [ "$scope" = false ]; then
+            scope="$(node config/scripts/localization/extraction-policy/localization-extraction-change-scope.mjs "$RUNNER_TEMP/localization-changes")" && [ "$scope" = false ]; then
             echo "Localization extraction inputs are unchanged."
           else
-            bun config/scripts/verify-localization-extraction.mjs
+            bun config/scripts/localization/source-extraction/verify-localization-extraction.mjs
           fi
 
       # Runs every config/scripts/check-*-ratchet(s).mjs, so a new ratchet needs no step here.
@@ -392,19 +393,19 @@ jobs:
           PREFLIGHT_PRIOR_SUCCESS: ${{ job.status == 'success' }}
         run: |
           if [ "$PREFLIGHT_PHASE_SELECTED" != true ] || [ "$PREFLIGHT_PRIOR_SUCCESS" != true ]; then exit 0; fi
-          node config/scripts/run-ratchets.mjs
+          node config/scripts/static-analysis/ratchet-runner/run-ratchets.mjs
 
       - name: Check Zustand selector fan-out budget
         if: needs.code_paths.outputs.static_analysis == 'true'
-        run: node config/scripts/zustand-selector-fanout-benchmark.mjs --check
+        run: node config/scripts/performance/renderer-projection/zustand-selector-fanout-benchmark.mjs --check
 
       - name: Check reliability gate manifest
         if: needs.code_paths.outputs.static_analysis == 'true'
-        run: node config/scripts/check-reliability-gates.mjs
+        run: node config/scripts/static-analysis/reliability-policy/check-reliability-gates.mjs
 
       - name: Check compiled CSS :has() restyle scope
         if: needs.code_paths.outputs.static_analysis == 'true'
-        run: node config/scripts/check-has-restyle-scope.mjs
+        run: node config/scripts/static-analysis/renderer-styles/check-has-restyle-scope.mjs
 
       - name: Enforce dead design-system classes
         if: needs.code_paths.outputs.static_analysis == 'true'
@@ -415,7 +416,7 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
-          DIFF_BASE="$(node config/scripts/git-pull-request-diff-base.mjs "$BASE_SHA")"
+          DIFF_BASE="$(node config/scripts/git/pr-diff-base/git-pull-request-diff-base.mjs "$BASE_SHA")"
           if git diff --quiet "$DIFF_BASE" HEAD -- \
             src/shared/ephemeral-vm-runtime-store.ts \
             src/shared/ephemeral-vm-runtime-feature-store.ts \
@@ -423,20 +424,20 @@ jobs:
             src/shared/ephemeral-vm-runtimes.ts \
             src/shared/ephemeral-vm-recipes.ts \
             src/shared/orca-yaml-hook-types.ts \
-            config/scripts/run-ephemeral-vm-runtime-store-rollback-repro.mjs \
-            config/scripts/ephemeral-vm-runtime-store-cross-version.test.ts \
+            config/scripts/runtime-verification/ephemeral-store/run-ephemeral-vm-runtime-store-rollback-repro.mjs \
+            config/scripts/runtime-verification/ephemeral-store/ephemeral-vm-runtime-store-cross-version.test.ts \
             src/main/ephemeral-vm/runtime-service.ts \
             src/main/ephemeral-vm/runtime-provisioning-persistence.ts \
             src/main/ephemeral-vm/failed-start-cleanup.ts; then
             echo "VM runtime persistence is unchanged."
             exit 0
           fi
-          node config/scripts/run-ephemeral-vm-runtime-store-rollback-repro.mjs \
-            config/scripts/ephemeral-vm-runtime-store-cross-version.test.ts
+          node config/scripts/runtime-verification/ephemeral-store/run-ephemeral-vm-runtime-store-rollback-repro.mjs \
+            config/scripts/runtime-verification/ephemeral-store/ephemeral-vm-runtime-store-cross-version.test.ts
 
       - name: Check Node runtime pin
         if: needs.code_paths.outputs.static_analysis == 'true'
-        run: node config/scripts/check-node-runtime-pin.mjs
+        run: node config/scripts/node-runtime/pin-policy/check-node-runtime-pin.mjs
 
       # A ~7s single-threaded tree walk; it overlaps the remaining checks.
       - name: Check every test file has a runner
@@ -448,11 +449,11 @@ jobs:
           PREFLIGHT_PRIOR_SUCCESS: ${{ job.status == 'success' }}
         run: |
           if [ "$PREFLIGHT_PHASE_SELECTED" != true ] || [ "$PREFLIGHT_PRIOR_SUCCESS" != true ]; then exit 0; fi
-          node config/scripts/check-test-file-runners.mjs
+          node config/scripts/ci/unit-selection/check-test-file-runners.mjs
 
       - name: Check root and mobile lock the same shared dependencies
         if: needs.code_paths.outputs.static_analysis == 'true'
-        run: node config/scripts/check-mobile-shared-dependency-versions.mjs
+        run: node config/scripts/package-manager/lockfile-contracts/check-mobile-shared-dependency-versions.mjs
 
       - name: Decide whether the orcad terminal smoke runs
         id: orcad-smoke-scope
@@ -461,9 +462,9 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           # Detection failures run the smoke; renames retain the removed input path.
-          DIFF_BASE="$(node config/scripts/git-pull-request-diff-base.mjs "$BASE_SHA")"
+          DIFF_BASE="$(node config/scripts/git/pr-diff-base/git-pull-request-diff-base.mjs "$BASE_SHA")"
           if git diff --name-only --no-renames -z "$DIFF_BASE" HEAD > "$RUNNER_TEMP/orcad-smoke-changes" &&
-            scope="$(node config/scripts/orcad-terminal-smoke-change-scope.mjs "$RUNNER_TEMP/orcad-smoke-changes")" && [ "$scope" = false ]; then
+            scope="$(node config/scripts/orcad-distribution/qualification/orcad-terminal-smoke-change-scope.mjs "$RUNNER_TEMP/orcad-smoke-changes")" && [ "$scope" = false ]; then
             echo "Orcad terminal smoke inputs are unchanged."
             echo 'run=false' >> "$GITHUB_OUTPUT"
           else
@@ -483,7 +484,7 @@ jobs:
 
       - name: Verify the generated RPC params catalog
         if: needs.code_paths.outputs.static_analysis == 'true'
-        run: node config/scripts/generate-rpc-params-catalog.mjs --check
+        run: node config/scripts/plugin-authoring/rpc-catalog/generate-rpc-params-catalog.mjs --check
 
       - name: Verify the generated ACP protocol schema
         if: needs.code_paths.outputs.static_analysis == 'true'
@@ -491,11 +492,11 @@ jobs:
 
       - name: Verify bundled skill guides
         if: needs.code_paths.outputs.static_analysis == 'true'
-        run: node config/scripts/generate-bundled-skill-guides.mjs --check
+        run: node config/scripts/skills/bundle-generation/generate-bundled-skill-guides.mjs --check
 
       - name: Verify skill freshness manifest
         if: needs.code_paths.outputs.static_analysis == 'true'
-        run: node config/scripts/generate-skill-bundle-manifest.mjs
+        run: node config/scripts/skills/bundle-generation/generate-skill-bundle-manifest.mjs
 
       - name: Verify localization catalogs
         if: '!cancelled()'
@@ -506,15 +507,15 @@ jobs:
           PREFLIGHT_PRIOR_SUCCESS: ${{ job.status == 'success' }}
         run: |
           if [ "$PREFLIGHT_PHASE_SELECTED" != true ] || [ "$PREFLIGHT_PRIOR_SUCCESS" != true ]; then exit 0; fi
-          bun config/scripts/verify-localization-catalogs.mjs
+          bun config/scripts/localization/catalog-validation/verify-localization-catalogs.mjs
 
       - name: Verify localization coverage
         if: needs.code_paths.outputs.static_analysis == 'true'
-        run: bun config/scripts/audit-localization-coverage.mjs --check
+        run: bun config/scripts/localization/source-extraction/audit-localization-coverage.mjs --check
 
       - name: Verify mobile localization
         if: needs.code_paths.outputs.static_analysis == 'true'
-        run: bun config/scripts/verify-mobile-localization.mjs
+        run: bun config/scripts/localization/catalog-validation/verify-mobile-localization.mjs
 
       - name: Verify mobile localization coverage
         if: needs.code_paths.outputs.static_analysis == 'true'
@@ -538,11 +539,11 @@ jobs:
 
       - name: Check feature wall asset budget
         if: needs.code_paths.outputs.static_analysis == 'true'
-        run: node config/scripts/check-feature-wall-assets.mjs
+        run: node config/scripts/assets/feature-wall/check-feature-wall-assets.mjs
 
       - name: Verify macOS entitlements
         if: needs.code_paths.outputs.static_analysis == 'true'
-        run: node config/scripts/verify-macos-entitlements.mjs
+        run: node config/scripts/desktop-distribution/macos/verify-macos-entitlements.mjs
 
       - wait: typecheck
 
@@ -562,14 +563,14 @@ jobs:
           ORCA_BACKGROUND_LAUNCH: '1'
           ORCA_BALANCE_UNIT_SHARDS: '1'
         run: >-
-          node config/scripts/run-vitest.mjs run --config config/vitest.config.ts
+          node config/scripts/test-runtime/execution-policy/run-vitest.mjs run --config config/vitest.config.ts
           --maxWorkers=4 --isolate --retry=0 --bail=0
-          config/scripts/mobile-release-check-scope.test.mjs
-          config/scripts/mobile-test-change-scope.test.mjs
-          config/scripts/pr-ready-check-reuse.test.mjs
-          config/scripts/win32-test-lane-registration.test.mjs
-          config/scripts/vitest-node-runtime-boundary.test.ts
-          config/scripts/vitest-sqlite-runtime-boundary.test.ts
+          config/scripts/mobile-web/check-entry/mobile-release-check-scope.test.mjs
+          config/scripts/mobile-web/check-entry/mobile-test-change-scope.test.mjs
+          config/scripts/workflow/pr-admission/pr-ready-check-reuse.test.mjs
+          config/scripts/ci/unit-selection/win32-test-lane-registration.test.mjs
+          config/scripts/test-runtime/node-worker/vitest-node-runtime-boundary.test.ts
+          config/scripts/test-runtime/sqlite-admission/vitest-sqlite-runtime-boundary.test.ts
 
       # Report failure through the separate required check without blocking unrelated consumers.
       - name: Smoke process-host package on Node 18
@@ -581,7 +582,7 @@ jobs:
           ORCA_BACKGROUND_LAUNCH: '1'
         run: |
           test -n "$NODE18_EXECUTABLE"
-          "$NODE18_EXECUTABLE" config/scripts/smoke-process-host-node18.mjs
+          "$NODE18_EXECUTABLE" config/scripts/desktop-distribution/runtime-verification/smoke-process-host-node18.mjs
 
   git_compatibility:
     name: Git compatibility
@@ -757,7 +758,7 @@ jobs:
       - name: Verify xterm patches match the pinned upstream build
         env:
           WORK_DIR: ${{ runner.temp }}/xterm-patch-build
-        run: node config/scripts/regenerate-xterm-patches.mjs --check --work-dir="$WORK_DIR"
+        run: node config/scripts/terminal-dependencies/xterm-patches/regenerate-xterm-patches.mjs --check --work-dir="$WORK_DIR"
 
   shell_contracts:
     name: shell contracts
@@ -845,9 +846,9 @@ jobs:
       - name: Test real shell contracts
         run: |
           pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 \
-            src/main/daemon/repro-13767-shell-ready-marker-lost-to-exec.test.ts \
-            src/main/daemon/shell-ready.test.ts \
-            src/main/daemon/node-pty-fd-leak.test.ts \
+            src/main/daemon/shell-readiness/testing/repro-13767-shell-ready-marker-lost-to-exec.test.ts \
+            src/main/daemon/shell-readiness/testing/shell-ready.test.ts \
+            src/main/daemon/pty-subprocess/testing/node-pty-fd-leak.test.ts \
             src/main/providers/local-pty/local-pty-shell-ready-zsh-launch-environment.test.ts \
             src/main/pty/shell-startup/codex-shell-launch-preflight.test.ts \
             src/main/pty/shell-startup/codex-shell-no-daemon.test.ts \
@@ -859,7 +860,7 @@ jobs:
             src/main/pty/history/terminal-history-fish-session.node-pty.test.ts \
             src/main/pty/shell-startup/zsh-scoped-histfile.live-shell.test.ts \
             src/main/pty/shell-startup/zsh-startup-hook-user-config-equivalence.live-shell.test.ts \
-            src/main/runtime/structured-session-cli-login-shell.live-shell.test.ts \
+            src/main/runtime/agent-session/environment/structured-session-cli-login-shell.live-shell.test.ts \
             src/renderer/src/components/terminal-pane/fish-color-scheme-child-stdin.node-pty.test.ts \
             src/shared/fish-query-reply-child-stdin.node-pty.test.ts \
             src/shared/fish-wsl-cwd-report.node-pty.test.ts \
@@ -943,7 +944,7 @@ jobs:
       - name: Prepare mobile route snapshot
         id: mobile-routes
         background: true
-        run: node config/scripts/run-mobile-web-app-checks.mjs --prepare-route-snapshot "$RUNNER_TEMP/mobile-routes.json"
+        run: node config/scripts/mobile-web/check-entry/run-mobile-web-app-checks.mjs --prepare-route-snapshot "$RUNNER_TEMP/mobile-routes.json"
 
       # Require runner Google Chrome: Ubuntu’s AppArmor userns profile covers its .deb, unlike downloaded Chromium; missing render checks must fail.
       - name: Resolve Chrome for the render check
@@ -969,7 +970,7 @@ jobs:
           ORCA_MOBILE_WEB_APP_DEPS_REQUIRED: '1'
           ORCA_MOBILE_WEB_PREPARED_ROUTE_SNAPSHOT: ${{ runner.temp }}/mobile-routes.json
         run: |
-          node config/scripts/run-mobile-web-app-checks.mjs
+          node config/scripts/mobile-web/check-entry/run-mobile-web-app-checks.mjs
 
   cross-version-wire:
     name: cross-version wire compatibility
@@ -1007,7 +1008,7 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           ORCA_ALLOW_RUNTIME_LAUNCHER_PROTOCOL_BUMP: ${{ contains(github.event.pull_request.labels.*.name, 'allow-runtime-launcher-protocol-bump') }}
         run: |
-          DIFF_BASE="$(node config/scripts/git-pull-request-diff-base.mjs "$BASE_SHA")"
+          DIFF_BASE="$(node config/scripts/git/pr-diff-base/git-pull-request-diff-base.mjs "$BASE_SHA")"
           pnpm run check:runtime-launcher-protocol-ratchet -- --base "$DIFF_BASE"
 
       # Run the entire directory; zero matches fail so new contracts cannot be omitted silently.
@@ -1098,7 +1099,7 @@ jobs:
         env:
           ORCA_BACKGROUND_LAUNCH: '1'
           ORCA_DAEMON_SHUTDOWN_FIXTURE_CACHE_IMAGE: ${{ steps.daemon-fixture-cache.outputs.image }}
-        run: node config/scripts/run-daemon-shutdown-descendants-docker.mjs
+        run: node config/scripts/runtime-verification/daemon-lifecycle/run-daemon-shutdown-descendants-docker.mjs
 
       # Serialize dual-Electron lifecycle files: four concurrent probes on four vCPUs starve each other past their own deadlines.
       - name: Test Linux Electron lifecycle boundary
@@ -1215,7 +1216,7 @@ jobs:
         # Prepare once with every hook, then isolate the format-specific mutations.
         run: |
           pnpm exec electron-builder --config config/electron-builder.config.cjs --linux dir --x64 --publish never
-          node config/scripts/package-linux-formats.mjs
+          node config/scripts/desktop-distribution/linux/package-linux-formats.mjs
 
       - name: Verify root-package marker payloads
         run: |
@@ -1229,7 +1230,7 @@ jobs:
           rpm_marker="$(rpm2cpio "$rpm" | cpio --quiet --extract --to-stdout ./opt/Orca/resources/package-type)"
           [[ "$deb_marker" == deb ]] || { echo "Expected deb marker, got: $deb_marker"; exit 1; }
           [[ "$rpm_marker" == rpm ]] || { echo "Expected rpm marker, got: $rpm_marker"; exit 1; }
-          # Only the AppImage carries the pinned Node (config/scripts/appimage-node-runtime.cjs).
+          # Only the AppImage carries the pinned Node (config/scripts/desktop-distribution/linux/appimage-node-runtime.cjs).
           if dpkg-deb --fsys-tarfile "$deb" | tar -t | grep '/resources/node-runtime' >/dev/null; then
             echo "The deb must not carry the AppImage's Node"; exit 1
           fi
@@ -1257,7 +1258,7 @@ jobs:
         env:
           ORCA_SHUTDOWN_FIXTURE_CACHE_IMAGE: ${{ steps.shutdown-fixture-cache.outputs.image }}
         run: >-
-          node config/scripts/run-headless-serve-shutdown-docker.mjs
+          node config/scripts/runtime-verification/daemon-lifecycle/run-headless-serve-shutdown-docker.mjs
           --appimage dist/orca-linux.AppImage --all-entrypoints
 
       # A default container reproduces the hostile AppImage launch environment.
@@ -1266,13 +1267,13 @@ jobs:
       - name: Verify Linux CLI launch contract
         env:
           ORCA_CLI_FIXTURE_CACHE_IMAGE: ${{ steps.cli-fixture-cache.outputs.image }}
-        run: node config/scripts/run-linux-cli-launch-contract-docker.mjs --appimage dist/orca-linux.AppImage
+        run: node config/scripts/runtime-verification/desktop-transport/run-linux-cli-launch-contract-docker.mjs --appimage dist/orca-linux.AppImage
 
       - name: Smoke packaged CLI
-        run: node config/scripts/smoke-packaged-cli.mjs --app-dir=dist/linux-unpacked
+        run: node config/scripts/desktop-distribution/runtime-verification/smoke-packaged-cli.mjs --app-dir=dist/linux-unpacked
 
       - name: Smoke packaged hang watchdog worker
-        run: xvfb-run --auto-servernum node config/scripts/smoke-packaged-hang-watchdog-worker.mjs --app-dir=dist/linux-unpacked
+        run: xvfb-run --auto-servernum node config/scripts/desktop-distribution/runtime-verification/smoke-packaged-hang-watchdog-worker.mjs --app-dir=dist/linux-unpacked
 
   package_windows:
     name: package (windows)
@@ -1328,13 +1329,13 @@ jobs:
         run: >-
           pnpm exec vitest run --config config/vitest.config.ts
           --no-file-parallelism
-          config/scripts/nsis-process-check.test.mjs
-          config/scripts/idle-cpu-process-sampling.test.mjs
+          config/scripts/desktop-distribution/nsis/nsis-process-check.test.mjs
+          config/scripts/performance/idle-cpu/idle-cpu-process-sampling.test.mjs
 
       - name: Resolve the Windows Rust build scope
         id: rust-scope
         shell: bash
-        run: node config/scripts/windows-rust-build-scope.mjs >> "$GITHUB_OUTPUT"
+        run: node config/scripts/native-build/windows/windows-rust-build-scope.mjs >> "$GITHUB_OUTPUT"
 
       # Real inputs only: older restores are safe because the build re-checks each exe's fingerprint.
       - name: Cache Windows CLI launcher
@@ -1347,7 +1348,7 @@ jobs:
             native/windows-agent-hook/.build
             native/windows-agent-hook/target
             ~/.cargo/registry
-          key: windows-cli-launcher-v2-${{ runner.os }}-${{ runner.arch }}-${{ steps.rust-scope.outputs.toolchain }}-${{ steps.rust-scope.outputs.app-version }}-${{ hashFiles('native/windows-cli-launcher/src/**', 'native/windows-cli-launcher/build.rs', 'native/windows-cli-launcher/Cargo.toml', 'native/windows-cli-launcher/Cargo.lock', 'native/windows-cli-launcher/app.manifest', 'native/windows-cli-launcher/.cargo/**', 'native/windows-agent-hook/src/**', 'native/windows-agent-hook/build.rs', 'native/windows-agent-hook/Cargo.toml', 'native/windows-agent-hook/Cargo.lock', 'native/windows-agent-hook/app.manifest', 'native/windows-agent-hook/.cargo/**', 'config/scripts/build-windows-cli-launcher.mjs', 'config/scripts/build-windows-agent-hook.mjs', 'config/scripts/windows-rust-executable-build.mjs', 'config/scripts/windows-pe-imports.mjs', 'resources/build/icon.ico') }}
+          key: windows-cli-launcher-v2-${{ runner.os }}-${{ runner.arch }}-${{ steps.rust-scope.outputs.toolchain }}-${{ steps.rust-scope.outputs.app-version }}-${{ hashFiles('native/windows-cli-launcher/src/**', 'native/windows-cli-launcher/build.rs', 'native/windows-cli-launcher/Cargo.toml', 'native/windows-cli-launcher/Cargo.lock', 'native/windows-cli-launcher/app.manifest', 'native/windows-cli-launcher/.cargo/**', 'native/windows-agent-hook/src/**', 'native/windows-agent-hook/build.rs', 'native/windows-agent-hook/Cargo.toml', 'native/windows-agent-hook/Cargo.lock', 'native/windows-agent-hook/app.manifest', 'native/windows-agent-hook/.cargo/**', 'config/scripts/native-build/windows/build-windows-cli-launcher.mjs', 'config/scripts/native-build/windows/build-windows-agent-hook.mjs', 'config/scripts/native-build/windows/windows-rust-executable-build.mjs', 'config/scripts/native-build/windows/windows-pe-imports.mjs', 'resources/build/icon.ico') }}
           restore-keys: |
             windows-cli-launcher-v2-${{ runner.os }}-${{ runner.arch }}-${{ steps.rust-scope.outputs.toolchain }}-
 
@@ -1363,14 +1364,14 @@ jobs:
 
       # Build agent-hook once before tests so suites share the binary instead of compiling concurrently.
       - name: Build the Windows agent hook
-        run: node config/scripts/build-windows-agent-hook.mjs
+        run: node config/scripts/native-build/windows/build-windows-agent-hook.mjs
 
       - name: Build the Windows CLI launcher
-        run: node config/scripts/build-windows-cli-launcher.mjs
+        run: node config/scripts/native-build/windows/build-windows-cli-launcher.mjs
 
       # Install Electron once: otherwise each Electron test's require('electron') extracts it into one dist concurrently (EBUSY, 0xC0000005).
       - name: Install the Electron binary
-        run: node config/scripts/install-electron-package-binary.mjs
+        run: node config/scripts/electron-installation/platform-layout/install-electron-package-binary.mjs
 
       # Files come from WINDOWS_BOUNDARY_TESTS, the same list that decides whether this job runs.
       - name: Test Windows-specific boundaries
@@ -1378,7 +1379,7 @@ jobs:
           ORCA_BACKGROUND_LAUNCH: '1'
           ORCA_REAL_WINDOWS_SKILL_TEST: '1'
         run: |
-          $files = node config/scripts/pr-package-test-paths.mjs
+          $files = node config/scripts/workflow/source-routing/pr-package-test-paths.mjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node node_modules/vitest/vitest.mjs run --config config/vitest.config.ts @files
 
@@ -1411,7 +1412,7 @@ jobs:
         run: pnpm run smoke:windows-pty-native-capability -- --exe=dist/win-unpacked/Orca.exe
 
       - name: Smoke packaged CLI
-        run: node config/scripts/smoke-packaged-cli.mjs --app-dir=dist/win-unpacked
+        run: node config/scripts/desktop-distribution/runtime-verification/smoke-packaged-cli.mjs --app-dir=dist/win-unpacked
 
   e2e:
     name: e2e
@@ -1527,11 +1528,10 @@ jobs:
             pnpm rebuild bun
           fi
 
-      - name: Typecheck and check undeclared dependency resolution
+      - name: Typecheck under isolated dependency resolution
         run: |
           set -euo pipefail
           pnpm tc
-          pnpm exec vitest run --config config/vitest.config.ts config/scripts/undeclared-dependency-resolution.test.ts
           # Pointless if any pnpm command above fell back to the hoisted layout or another store.
           case "$(realpath node_modules/zod)" in
             "$(realpath "$pnpm_config_store_dir")"/*) ;;

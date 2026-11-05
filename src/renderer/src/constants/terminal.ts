@@ -27,6 +27,8 @@ export type FocusTerminalPaneDetail = {
   flashFocusedPane?: boolean
   /** Follow live agent output when activation is explicitly about that agent. */
   scrollToBottomIfOutputSinceLastView?: boolean
+  /** Collapse another expanded pane first, so the target is not hidden behind it. */
+  collapseExpandedPane?: boolean
 }
 
 export type PasteTerminalTextDetail = {

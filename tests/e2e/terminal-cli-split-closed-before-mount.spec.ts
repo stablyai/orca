@@ -32,7 +32,7 @@ async function runCliSplit(
     await execFileAsync(
       process.execPath,
       [
-        path.join(repoRoot, 'config', 'scripts', 'orca-dev.mjs'),
+        path.join(repoRoot, 'config', 'scripts', 'development', 'launch', 'orca-dev.mjs'),
         'terminal',
         'split',
         '--terminal',

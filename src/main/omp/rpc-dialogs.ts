@@ -113,10 +113,10 @@ export function createOmpRpcDialogs(
   lane: JsonlRpcTimelineLane,
   send: (frame: JsonlRpcRecord) => Promise<void>,
   fail: (error: Error) => void
-): Pick<PiRpcDialogCallbacks, 'receive' | 'respond' | 'cancelAll'> {
+): Pick<PiRpcDialogCallbacks, 'receive' | 'respond' | 'cancelAll' | 'close' | 'backgroundWork'> {
   let notice = 0
   const groups = new OmpRpcAskGroups(ompRpcDialogPresentation, send)
-  const callbacks = new PiRpcDialogCallbacks(lane, groups.reply, fail, {
+  const callbacks = new PiRpcDialogCallbacks(lane, groups.reply, fail, null, {
     present: ompRpcDialogPresentation,
     receive: (frame, callbacks) => {
       if (frame.method === 'cancel' && typeof frame.targetId === 'string') {
@@ -188,6 +188,11 @@ export function createOmpRpcDialogs(
     }
   })
   return {
+    backgroundWork: callbacks.backgroundWork,
+    close: () => {
+      callbacks.close()
+      groups.clear()
+    },
     receive: (frame) => callbacks.receive(frame),
     respond: async (...args) => {
       await callbacks.respond(...args)

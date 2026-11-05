@@ -9,7 +9,7 @@ import { createOmpRpcAtRestCommands } from './rpc-at-rest-commands'
 import { FakeConnection } from '../pi/rpc-session-adapter.test-fixture'
 import { agentSessionRecordFixture } from '../native-chat/agent-session-record-test-fixture'
 import { isWindowsProcessStartTimeAvailable } from '../windows/windows-process-table'
-import type { StructuredAgentModelCatalogContext } from '../runtime/structured-agent-runtime-registration-types'
+import type { StructuredAgentModelCatalogContext } from '../runtime/agent-session/installation/structured-agent-runtime-registration-types'
 
 vi.mock('./rpc-connection', () => ({ openOmpRpcConnection: vi.fn() }))
 vi.mock('./rpc-launch', async (importOriginal) => ({

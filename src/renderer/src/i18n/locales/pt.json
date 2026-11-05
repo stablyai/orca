@@ -15234,8 +15234,6 @@
           "AiCommitPrSettingsCard": {
             "8d4152701a": "ex.: ollama run llama3.1 {{value0}}",
             "9ee54037a4": "Comando personalizado",
-            "4b2fc4b80c": "Esforço de raciocínio",
-            "be8917699e": "Modelo",
             "560d4feb00": "Personalizado",
             "29d119fe95": "Agente",
             "f9382b48a1": "Ativar autor de IA",
@@ -21604,7 +21602,10 @@
       "workerAutoClose": {
         "running": "Worker temporário de orquestração · Fecha 2 minutos após terminar",
         "finished": "Worker temporário de orquestração concluído · Fecha em {{countdown}}",
-        "keepOpen": "Manter aberto"
+        "keepOpen": "Manter aberto",
+        "bannerRunning": "Worker de orquestração · Fecha 2 minutos após terminar",
+        "bannerFinished": "Worker de orquestração concluído · Fecha em {{countdown}}",
+        "temporaryBadge": "Temporário"
       }
     },
     "wslHostMark": {

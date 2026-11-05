@@ -24,7 +24,7 @@ const bundle = join(root, 'omp-rpc-smoke.cjs')
 await build({
   stdin: {
     resolveDir: process.cwd(),
-    contents: `export {OmpRpcSessionAdapter} from './src/main/omp/rpc-session-adapter'; export {ompRpcLaunchPart} from './src/main/omp/rpc-launch'; export {OMP_RPC_AGENT} from './src/main/omp/rpc-agent-definition'; export {composeStructuredLaunch} from './src/main/runtime/structured-agent-launch-composition'; export {foundAgentSessionRecord} from './src/main/runtime/agent-session/records/agent-session-record-founding'; export {openProviderTimelineRig, closeProviderTimelineRigs} from './src/main/native-chat/agent-session-timeline/provider-timeline-assembler-test-support';`
+    contents: `export {OmpRpcSessionAdapter} from './src/main/omp/rpc-session-adapter'; export {ompRpcLaunchPart} from './src/main/omp/rpc-launch'; export {OMP_RPC_AGENT} from './src/main/omp/rpc-agent-definition'; export {composeStructuredLaunch} from './src/main/runtime/agent-session/launch/structured-agent-launch-composition'; export {foundAgentSessionRecord} from './src/main/runtime/agent-session/records/agent-session-record-founding'; export {openProviderTimelineRig, closeProviderTimelineRigs} from './src/main/native-chat/agent-session-timeline/provider-timeline-assembler-test-support';`
   },
   bundle: true,
   platform: 'node',

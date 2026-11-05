@@ -261,7 +261,7 @@ describe('ClaudeStructuredSessionAdapter turns and controls', () => {
       reportedModel: 'claude-sonnet-5',
       effort: 'high',
       reportedPermissionMode: undefined,
-      confirmed: ['model', 'effort']
+      confirmed: ['model']
     })
     expect(options.models.some((model) => model.label === 'Default')).toBe(false)
   })
@@ -297,7 +297,7 @@ describe('ClaudeStructuredSessionAdapter turns and controls', () => {
       reportedModel: 'custom-model',
       effort: 'high',
       reportedPermissionMode: undefined,
-      confirmed: ['model', 'effort']
+      confirmed: ['model']
     })
   })
 })
