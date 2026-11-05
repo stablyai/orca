@@ -25,6 +25,7 @@ import type {
   AgentSessionOptionsResult
 } from './agent-session-options-result'
 import { labelFromModelId } from '../../model-id-label'
+import { withListedModelDetails } from '../../native-chat/input/native-chat-model-details'
 import type { AgentSessionModelCatalogResult } from '../agent-session-wire'
 import { listingVerifiedModelIds } from './structured-agent-session-listing-verified-ids'
 import {
@@ -184,10 +185,9 @@ export function applyStructuredAgentSessionOptions(
   const keepCatalog = installed || result.modelsKnown === false
   let answeredCatalog = structuredAgentSessionOptionCatalog(seed, result, state.record.agent)
   if (usesModelSpecificAcpEfforts(state.record.agent)) {
-    answeredCatalog = {
-      ...answeredCatalog,
-      models: fillUnknownCatalogEfforts(answeredCatalog.models, state.catalog?.models ?? [])
-    }
+    const known = state.catalog?.models ?? []
+    const models = fillUnknownCatalogEfforts(answeredCatalog.models, known)
+    answeredCatalog = { ...answeredCatalog, models: withListedModelDetails(models, known) }
   }
   // Catalog defaults supply picker context without claiming the chat chose them.
   replaceStructuredAgentSessionAnsweredValues(

@@ -77,6 +77,7 @@ export function discoveredModel(
     ...(model.description ? { description: model.description } : {}),
     ...(model.isDefault ? { isDefault: true } : {}),
     ...(model.supportsAutoMode !== undefined ? { supportsAutoMode: model.supportsAutoMode } : {}),
+    ...(model.details ? { details: model.details } : {}),
     options: [
       ...(effort ? [effort] : []),
       ...(serviceTier

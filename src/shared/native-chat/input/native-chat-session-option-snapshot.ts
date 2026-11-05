@@ -18,6 +18,7 @@ import {
   type NativeChatSessionOptionRecord,
   type TrackedNativeChatSessionOption
 } from './native-chat-session-option-state'
+import { catalogModelChoiceDetails } from './native-chat-model-details'
 
 export type NativeChatSessionOptionMode = 'draft' | 'live'
 
@@ -223,6 +224,15 @@ export function nativeChatSessionOptionDescriptors(args: {
 }): SessionOptionDescriptor[] {
   const { catalog, models, mode, modelLabel, liveTransport, model } = args
   // Callers reconcile tracked models into choices first; the trigger must never show an unlisted selection.
+  const modelChoices = models.map((catalogModel) => {
+    const details = catalogModelChoiceDetails(catalogModel)
+    return {
+      value: catalogModel.id,
+      label: catalogModel.label,
+      ...(catalogModel.description ? { description: catalogModel.description } : {}),
+      ...(details ? { details } : {})
+    }
+  })
   // An alias whose versioned row is listed stays reachable by search, unless the chat is on it.
   const modelChoices = models.map(({ id, label, description, resolvedModel }) => ({
     value: id,

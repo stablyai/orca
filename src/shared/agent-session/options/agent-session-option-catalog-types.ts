@@ -5,6 +5,7 @@ import type {
   SessionOptionSelectChoice,
   SessionOptionValue
 } from '../../native-chat/input/native-chat-session-options'
+import type { NativeChatModelDetails } from '../../native-chat/input/native-chat-model-details'
 
 export type CatalogAgentInteractionDetection = 'claude-model-switch-confirmation'
 export type CatalogCommandDelivery = 'type'
@@ -59,6 +60,7 @@ export type CatalogModel = {
   contextWindowTokens?: number
   /** The listing says the model runs Approve for me; absent is unknown, which offers it nowhere. */
   supportsAutoMode?: boolean
+  details?: NativeChatModelDetails
   options: CatalogOption[]
 }
 

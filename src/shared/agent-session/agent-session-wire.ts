@@ -27,6 +27,7 @@ import type { AgentTurnOutcome } from '../agent-status/lifecycle/agent-turn-outc
 import type { AgentSessionRecord } from './lifecycle/agent-session-record'
 import type { AgentProviderSessionMetadata } from './lifecycle/agent-session-resume'
 import type { NativeChatSubagentEntry } from '../native-chat/native-chat-types'
+import type { NativeChatModelDetails } from '../native-chat/input/native-chat-model-details'
 import type { StructuredAgentSessionProjectedStatus } from './view/structured-agent-session-projection'
 
 export type AgentSessionTurnActivity = {
@@ -379,6 +380,8 @@ export type AgentSessionModelOption = {
   supportsAutoMode?: boolean
   /** Provider tier IDs beyond standard; capable clients replace Fast with one speed choice including default. Absence means unknown. */
   serviceTiers?: AgentSessionOptionChoice[]
+  /** Listing facts shown on hover in the model picker. Older hosts omit this. */
+  details?: NativeChatModelDetails
 }
 
 export type AgentSessionFastModeState = 'off' | 'cooldown' | 'on'

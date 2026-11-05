@@ -1,4 +1,5 @@
 import type { AgentType } from '../../agent-status/contracts/agent-status-types'
+import type { NativeChatModelDetails } from './native-chat-model-details'
 
 export type SessionOptionValue = string | boolean
 
@@ -6,6 +7,8 @@ export type SessionOptionSelectChoice = {
   value: string
   label: string
   description?: string
+  /** Model choices only: what the host's listing states about the model. */
+  details?: NativeChatModelDetails
   /** An alias of a listed versioned row: listed only for a matching search. */
   searchOnly?: true
 }
