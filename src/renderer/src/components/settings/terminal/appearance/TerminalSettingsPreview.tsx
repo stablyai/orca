@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Terminal } from '@xterm/xterm'
-import { LigaturesAddon } from '@xterm/addon-ligatures'
+import { TerminalLigaturesAddon } from '@/lib/pane-manager/terminal-ligatures-addon'
 import { Moon, Sun } from 'lucide-react'
 import '@xterm/xterm/css/xterm.css'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -8,10 +8,10 @@ import { buildDefaultTerminalOptions } from '@/lib/pane-manager/pane-terminal-op
 import { buildFontFamily } from '@/lib/monospace-font-family'
 import { composeActiveTerminalTheme } from '@/components/terminal-pane/terminal-appearance'
 import { clampNumber, resolveEffectiveTerminalAppearance } from '@/lib/terminal-theme'
-import { resolveTerminalMinimumContrastRatio } from '../../../../../../shared/terminal-contrast-correction'
-import { resolveTerminalFontWeights } from '../../../../../../shared/terminal-fonts'
-import { resolveTerminalLigaturesEnabled } from '../../../../../../shared/terminal-ligatures'
-import { normalizeTerminalLineHeight } from '../../../../../../shared/terminal-line-height-settings'
+import { resolveTerminalMinimumContrastRatio } from '../../../../../../shared/terminal-themes/terminal-contrast-correction'
+import { resolveTerminalFontWeights } from '../../../../../../shared/terminal/appearance/terminal-fonts'
+import { resolveTerminalLigaturesEnabled } from '../../../../../../shared/terminal/appearance/terminal-ligatures'
+import { normalizeTerminalLineHeight } from '../../../../../../shared/terminal/appearance/terminal-line-height-settings'
 import { PREVIEW_BUFFER } from './terminal-preview-content'
 import { SettingsSwitch } from '../../form-controls/SettingsFormControls'
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
@@ -60,7 +60,7 @@ export function TerminalSettingsPreview({
 }: TerminalSettingsPreviewProps): React.JSX.Element {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const terminalRef = useRef<Terminal | null>(null)
-  const ligaturesAddonRef = useRef<LigaturesAddon | null>(null)
+  const ligaturesAddonRef = useRef<TerminalLigaturesAddon | null>(null)
   const skipInitialOptionMutationRef = useRef(false)
   const skipInitialThemeRewriteRef = useRef(false)
 
@@ -228,7 +228,7 @@ export function TerminalSettingsPreview({
     const enabled = resolveTerminalLigaturesEnabled(settings.terminalLigatures, effectiveFontFamily)
     const current = ligaturesAddonRef.current
     if (enabled && !current) {
-      const addon = new LigaturesAddon()
+      const addon = new TerminalLigaturesAddon()
       try {
         terminal.loadAddon(addon)
         ligaturesAddonRef.current = addon

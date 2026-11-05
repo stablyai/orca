@@ -83,6 +83,15 @@ export function decryptCookieValueRaw(
   keyResult: EncryptionKeyResult,
   hostKey: string
 ): Buffer | null {
+  const decrypted = decryptChromiumEncryptedValue(encryptedBuffer, keyResult)
+  return decrypted && stripHmac(decrypted, hostKey)
+}
+
+/** Decrypts a v10/v11 `os_crypt` value with no cookie-specific prefix handling (e.g. saved passwords). */
+export function decryptChromiumEncryptedValue(
+  encryptedBuffer: Buffer,
+  keyResult: EncryptionKeyResult
+): Buffer | null {
   if (!encryptedBuffer || encryptedBuffer.length === 0) {
     return null
   }
@@ -92,7 +101,7 @@ export function decryptCookieValueRaw(
   }
 
   if (keyResult.mode === 'aes-256-gcm') {
-    return decryptAes256Gcm(encryptedBuffer.subarray(3), keyResult.key, hostKey)
+    return decryptAes256Gcm(encryptedBuffer.subarray(3), keyResult.key)
   }
 
   const key = version === 'v10' || version === 'v11' ? keyResult.keysByVersion[version] : undefined
@@ -109,14 +118,13 @@ export function decryptCookieValueRaw(
     const iv = Buffer.alloc(16, ' ')
     const decipher = createDecipheriv('aes-128-cbc', key, iv)
     decipher.setAutoPadding(true)
-    const decrypted = Buffer.concat([decipher.update(ciphertext), decipher.final()])
-    return stripHmac(decrypted, hostKey)
+    return Buffer.concat([decipher.update(ciphertext), decipher.final()])
   } catch {
     return null
   }
 }
 
-function decryptAes256Gcm(payload: Buffer, key: Buffer, hostKey: string): Buffer | null {
+function decryptAes256Gcm(payload: Buffer, key: Buffer): Buffer | null {
   // Windows GCM payload: 12-byte nonce, ciphertext, then 16-byte authentication tag.
   if (payload.length < 12 + 16) {
     return null
@@ -127,8 +135,7 @@ function decryptAes256Gcm(payload: Buffer, key: Buffer, hostKey: string): Buffer
   try {
     const decipher = createDecipheriv('aes-256-gcm', key, nonce)
     decipher.setAuthTag(authTag)
-    const decrypted = Buffer.concat([decipher.update(ciphertext), decipher.final()])
-    return stripHmac(decrypted, hostKey)
+    return Buffer.concat([decipher.update(ciphertext), decipher.final()])
   } catch {
     return null
   }

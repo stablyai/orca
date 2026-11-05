@@ -3,8 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   RESET_KITTY_KEYBOARD_PROTOCOL,
   RESET_TERMINAL_CURSOR_STYLE
-} from '../../../../shared/terminal-mode-reset-profiles'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+} from '../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
   temporarilySetNavigatorUserAgent,
   sendTerminalInputThroughPane
@@ -13,7 +13,8 @@ import {
   LEAF_1,
   createMockTransport,
   createPane,
-  createManager
+  createManager,
+  type MockTransport
 } from './pty-connection-test-pane-fixtures'
 import {
   buildPaneConnectionDeps,
@@ -22,7 +23,7 @@ import {
 } from './pty-connection-test-deps'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
-import type { MockTransport } from './pty-connection-test-pane-fixtures'
+
 import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals

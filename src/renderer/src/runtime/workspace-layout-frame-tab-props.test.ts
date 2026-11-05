@@ -2,7 +2,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { applyLayoutCommand } from '../../../shared/workspace-layout/workspace-layout-commands'
 import type { LayoutCommand } from '../../../shared/workspace-layout/workspace-layout-command-types'
 import { testContext } from '../../../shared/workspace-layout/workspace-layout-command.test-fixture'

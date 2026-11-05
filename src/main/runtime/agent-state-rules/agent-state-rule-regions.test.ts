@@ -5,8 +5,8 @@ import {
   isKnownReadyPromptBody,
   isKnownReadyPromptPreview,
   isKnownReadyPromptSettled
-} from '../terminal-wait-detection'
-import { nameOnlyIdleNeedsCorroboration } from '../tui-idle-evidence'
+} from '../terminal/wait/terminal-wait-detection'
+import { nameOnlyIdleNeedsCorroboration } from '../terminal/wait/tui-idle-evidence'
 import {
   compileAgentRules,
   evaluateCompiledRules,

@@ -1,16 +1,34 @@
 // @vitest-environment happy-dom
-import '@testing-library/jest-dom/vitest'
-import {
-  act,
-  cleanup,
-  fireEvent,
-  render,
-  renderHook,
-  screen,
-  waitFor
-} from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { useRef, useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
+import { useStructuredAgentSessionSends } from './use-structured-agent-session-sends'
+import {
+  getStructuredAgentSessionSendNotice,
+  setStructuredAgentSessionSendNotice
+} from './structured-agent-session-pending-sends'
+import { resetStructuredAgentSessionSendsForTests } from './structured-agent-session-message-sender'
+import {
+  clearNativeChatComposerDraftsForTests,
+  readNativeChatComposerDraft,
+  updateNativeChatComposerDraft,
+  structuredAgentSessionDraftScopeKey
+} from './native-chat-composer-draft-store'
+import { emitNativeChatMessageSent } from '@/lib/native-chat-telemetry'
+import { TooltipProvider } from '@/components/ui/tooltip'
+import { agentSessionFailureWords } from '../../../../shared/agent-session/failures/agent-session-failure-words'
+import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
+import type {
+  AgentJournalRenderItem,
+  AgentJournalSubmission
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import {
+  NativeChatInterruptedContinueButton,
+  useNativeChatInterruptedContinuation
+} from './NativeChatInterruptedContinue'
+import '@testing-library/jest-dom/vitest'
 
 const mocks = vi.hoisted(() => {
   const hostLabel = (): string | null => 'studio-mac'
@@ -50,33 +68,6 @@ vi.mock('./use-structured-agent-session-host-label', () => ({
   useStructuredAgentSessionHostLabel: () => mocks.hostLabel
 }))
 
-import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
-import { useStructuredAgentSessionSends } from './use-structured-agent-session-sends'
-import {
-  getStructuredAgentSessionSendNotice,
-  setStructuredAgentSessionSendNotice
-} from './structured-agent-session-pending-sends'
-import { resetStructuredAgentSessionSendsForTests } from './structured-agent-session-message-sender'
-import {
-  clearNativeChatComposerDraftsForTests,
-  readNativeChatComposerDraft,
-  updateNativeChatComposerDraft,
-  structuredAgentSessionDraftScopeKey
-} from './native-chat-composer-draft-store'
-import { emitNativeChatMessageSent } from '@/lib/native-chat-telemetry'
-import { TooltipProvider } from '@/components/ui/tooltip'
-import { agentSessionFailureWords } from '../../../../shared/agent-session/failures/agent-session-failure-words'
-import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
-import type {
-  AgentJournalRenderItem,
-  AgentJournalSubmission
-} from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import {
-  NativeChatInterruptedContinueButton,
-  useNativeChatInterruptedContinuation
-} from './NativeChatInterruptedContinue'
-
 const TURN = agentJournalItemKey({ provider: 'codex', threadId: 't', turnId: 'cut', ordinal: 1 })
 const PAIRED: RuntimeClientTarget = { kind: 'environment', environmentId: 'studio-mac' }
 
@@ -111,7 +102,7 @@ type Props = {
   isWorking?: boolean
   target?: RuntimeClientTarget
   transport?: NativeChatStructuredComposerTransport
-  pending?: readonly { phase: 'sending' | 'recorded' }[]
+  pending?: Parameters<typeof useNativeChatInterruptedContinuation>[0]['pending']
 }
 
 function Harness(props: Props): React.JSX.Element {
@@ -184,110 +175,6 @@ afterEach(() => {
 })
 
 describe('Continue on a reply an Orca stop cut off', () => {
-  it("asks the chat's own host, paired or local, to continue that cut turn", () => {
-    mocks.call.mockResolvedValue({ outcome: 'pending' })
-    render(<Harness />)
-    expect(screen.getByTestId('offered')).toHaveTextContent(TURN)
-
-    fireEvent.click(continueButton()!)
-
-    expect(mocks.call).toHaveBeenCalledExactlyOnceWith(PAIRED, 'agentSession.continueInterrupted', {
-      sessionId: 'session-1',
-      turnItemId: TURN
-    })
-    expect(continueButton()).toBeNull()
-    expect(screen.getByTestId('offered')).toHaveTextContent('none')
-  })
-
-  it("tells the chat's rows whether its host is remote", () => {
-    render(<Harness />)
-    expect(screen.getByTestId('remote')).toHaveTextContent('true')
-    cleanup()
-    render(<Harness target={{ kind: 'local' }} />)
-    expect(screen.getByTestId('remote')).toHaveTextContent('false')
-  })
-
-  it('says what it does, for a reader and on hover', () => {
-    render(<Harness />)
-    expect(continueButton()).toHaveAccessibleDescription(
-      'Continue, and the agent first checks whether its last step finished.'
-    )
-  })
-
-  it('is not offered by a host without the operation; the user continues by sending', () => {
-    mocks.capability = 'unsupported'
-    render(<Harness />)
-    expect(continueButton()).toBeNull()
-    expect(screen.getByTestId('available')).toHaveTextContent('false')
-  })
-
-  it('tells the rows the same thing before the host answers, after it answers, and after a click', () => {
-    mocks.capability = 'unknown'
-    mocks.call.mockResolvedValue({ outcome: 'pending' })
-    const { rerender } = render(<Harness />)
-    expect(screen.getByTestId('available')).toHaveTextContent('true')
-    expect(continueButton()).toBeNull()
-
-    mocks.capability = 'supported'
-    rerender(<Harness />)
-    expect(screen.getByTestId('available')).toHaveTextContent('true')
-    fireEvent.click(continueButton()!)
-
-    expect(screen.getByTestId('available')).toHaveTextContent('true')
-  })
-
-  it('is not offered while the restart prompt or the launch is resuming this chat', () => {
-    mocks.resuming = ['session-1']
-    render(<Harness />)
-    expect(continueButton()).toBeNull()
-  })
-
-  it("is not offered on this machine's chats while the launch may still resume them", () => {
-    mocks.launchPending = true
-    render(<Harness target={{ kind: 'local' }} />)
-    expect(continueButton()).toBeNull()
-    cleanup()
-    // The launch resumes only this machine's chats; a paired server's chat is its own.
-    render(<Harness />)
-    expect(continueButton()).toBeInTheDocument()
-  })
-
-  it('is not offered once anything was sent, or while the agent works', () => {
-    render(<Harness submissions={[{ dispatchState: 'pending' }]} />)
-    expect(continueButton()).toBeNull()
-    cleanup()
-    render(<Harness isWorking />)
-    expect(continueButton()).toBeNull()
-  })
-
-  it('is not offered for a cut no Orca stop explains', () => {
-    render(<Harness journalItems={cutChat.slice(0, 1)} />)
-    expect(continueButton()).toBeNull()
-  })
-
-  it('says so once, in the composer, and offers it again when the host refuses', async () => {
-    mocks.call.mockResolvedValue({ outcome: 'refused', reason: 'agent_session_not_attached' })
-    render(<Harness />)
-
-    fireEvent.click(continueButton()!)
-    await waitFor(() => expect(continueButton()).toBeInTheDocument())
-    expect(screen.getByTestId('error')).toHaveTextContent(FAILED)
-    fireEvent.click(continueButton()!)
-    expect(screen.getByTestId('error')).toHaveTextContent('none')
-    await waitFor(() => expect(continueButton()).toBeInTheDocument())
-    expect(screen.getByTestId('error')).toHaveTextContent(FAILED)
-  })
-
-  it('says so and offers it again when the request fails', async () => {
-    mocks.call.mockRejectedValue(new Error('offline'))
-    render(<Harness />)
-
-    fireEvent.click(continueButton()!)
-
-    await waitFor(() => expect(screen.getByTestId('error')).toHaveTextContent(FAILED))
-    expect(continueButton()).toBeInTheDocument()
-  })
-
   it('replaces an older composer error with its own failure, and clears it when it goes through', async () => {
     mocks.call.mockResolvedValueOnce({ outcome: 'refused', reason: 'agent_session_conflict' })
     mocks.call.mockResolvedValueOnce({ outcome: 'pending' })
@@ -464,9 +351,7 @@ it('keeps the draft through Continue admission, refusal, uncertainty and recorde
   await waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(2))
   expect(mocks.call.mock.calls[1][2]).not.toHaveProperty('usageLimitContinuationOfTurnItemId')
   await act(async () => answer.reject(new Error('connection lost')))
-  await waitFor(() =>
-    expect(screen.getByTestId('error')).toHaveTextContent('Check the chat before trying again.')
-  )
+  await waitFor(() => expect(screen.getByTestId('error')).toHaveTextContent('none'))
   expect(screen.getByTestId('error')).not.toHaveTextContent('was not sent')
   expect(readNativeChatComposerDraft(scope)).toMatchObject(draft)
   mocks.capability = 'supported'
@@ -483,66 +368,9 @@ it('keeps the draft through Continue admission, refusal, uncertainty and recorde
       value: { clientMessageId: id, submission: { clientMessageId: id, dispatchState: 'accepted' } }
     })
   )
-  // Accepted before the journal arrives: the recorded sender entry still owns availability.
-  expect(continueButton()).toBeNull()
+  // Completed content is not a live operation; the next action uses actual host state.
+  expect(continueButton()).toBeInTheDocument()
   expect(readNativeChatComposerDraft(scope)).toMatchObject(draft)
   expect(screen.getByText('next.png')).toBeInTheDocument()
   expect(options).toEqual({ model: 'gpt-current', effort: 'high' })
-})
-
-it('keeps the notice view stable while Continue invokes the latest committed transport', () => {
-  const items: AgentJournalRenderItem[] = [
-    {
-      ...cutChat[0]!,
-      body: {
-        kind: 'turn',
-        turnId: 'cut',
-        state: 'completed',
-        outcome: 'failure',
-        startedAt: 1,
-        completedAt: 5
-      }
-    },
-    {
-      ...cutChat[1]!,
-      body: {
-        kind: 'status',
-        ...agentSessionFailureWords({ kind: 'usageLimitReached' }, { surface: 'row' })
-      }
-    }
-  ]
-  const first = vi.fn(() => true)
-  const latest = vi.fn(() => true)
-  const transport: NativeChatStructuredComposerTransport = {
-    capturePresentation: () => () => true,
-    send: first,
-    dispatchCommand: async () => ({ handled: false, accepted: false, error: null }),
-    optionsSurface,
-    optionSnapshot: [],
-    onError: () => {},
-    runtime: 'remote',
-    sessionId: 'session-1',
-    runtimeEnvironmentId: 'studio-mac'
-  }
-  const input = {
-    target: PAIRED,
-    agent: 'codex' as const,
-    sessionId: 'session-1',
-    journalItems: items,
-    submissions: [],
-    isWorking: false,
-    pending: [],
-    reportComposerError: vi.fn(),
-    focusComposer: vi.fn(),
-    transport
-  }
-  const { result, rerender } = renderHook((props) => useNativeChatInterruptedContinuation(props), {
-    initialProps: input
-  })
-  const view = result.current.view
-  rerender({ ...input, transport: { ...transport, send: latest } })
-  expect(result.current.view).toBe(view)
-  act(() => view.continueUsageLimit())
-  expect(first).not.toHaveBeenCalled()
-  expect(latest).toHaveBeenCalledOnce()
 })

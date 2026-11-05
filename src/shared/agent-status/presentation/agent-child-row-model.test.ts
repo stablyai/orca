@@ -1,174 +1,73 @@
 import { describe, expect, it } from 'vitest'
-import {
-  agentChildRowContextForParent,
-  buildAgentChildRowModels,
-  buildLegacyAgentChildRowModels,
-  buildLegacyTaskRowModels,
-  flattenAgentChildRowModels,
-  type AgentChildRowContext,
-  type AgentChildRowModel
-} from './agent-child-row-model'
-import type { AgentChildWorkView } from '../child-work/agent-status-child-work-view'
+import { buildLegacyAgentChildRowModels, buildLegacyTaskRowModels } from './agent-child-row-model'
+import { agentChildRowName } from './agent-child-row-lead-trail'
+import { childName } from './agent-child-row-name'
 
-const FRESH: AgentChildRowContext = {
+const context = {
   parentEvidenceFresh: true,
-  transportObservation: 'live',
-  parentObservedAt: 900,
+  transportObservation: 'live' as const,
+  parentObservedAt: 1_000,
   hostClockOffsetMs: 0
 }
-const STALE: AgentChildRowContext = { ...FRESH, parentEvidenceFresh: false }
-const LOST: AgentChildRowContext = { ...FRESH, transportObservation: 'unverifiable' }
 
-function view(id: string, overrides: Partial<AgentChildWorkView> = {}): AgentChildWorkView {
-  return {
-    id,
-    providerId: `task-${id}`,
-    kind: 'agent',
-    description: `child ${id}`,
-    agentType: 'general-purpose',
-    state: 'working',
-    membership: 'live',
-    firstObservedAt: 100,
-    observedAt: 500,
-    stoppable: true,
-    invocation: { invocationId: `spawn-${id}`, generation: 1 },
-    ...overrides
-  }
-}
-
-function settled(
-  id: string,
-  outcome: NonNullable<AgentChildWorkView['outcome']>,
-  overrides: Partial<AgentChildWorkView> = {}
-): AgentChildWorkView {
-  return view(id, {
-    state: 'done',
-    membership: 'settled',
-    outcome,
-    settledAt: 450,
-    ...overrides
-  })
-}
-
-function shell(id: string, owner: string, overrides: Partial<AgentChildWorkView> = {}) {
-  return view(id, {
-    kind: 'command',
-    description: 'npm run dev',
-    agentType: undefined,
-    state: 'monitoring',
-    parentChildWorkId: owner,
-    ...overrides
-  })
-}
-
-function only(views: AgentChildWorkView[], context = FRESH): AgentChildRowModel {
-  const [row] = buildAgentChildRowModels(views, context)
-  return row
-}
-
-describe('buildAgentChildRowModels: the display vocabulary', () => {
-  it('suppresses the tool line while monitoring, even when a stale operation arrives', () => {
-    const row = only([
-      view('a', {
-        state: 'idle',
-        operation: { toolName: 'Bash', input: 'npm test', basis: 'reported', observedAt: 400 }
-      }),
-      shell('s', 'a')
-    ])
-    expect(row.displayState).toBe('monitoring')
-    expect(row.detail).toEqual({ kind: 'monitoring' })
-  })
-
-  it('makes every live claim unverifiable under a stale parent or a lost transport', () => {
-    for (const context of [STALE, LOST]) {
-      expect(only([view('a')], context)).toMatchObject({
-        displayState: 'unverifiable',
-        detail: { kind: 'no-update' }
-      })
-      // A finished child's monitoring is a claim about live work; its outcome is history.
-      expect(only([settled('a', 'succeeded'), shell('s', 'a')], context).displayState).toBe(
-        'unverifiable'
-      )
-      expect(only([settled('a', 'failed')], context).displayState).toBe('failed')
-      expect(only([view('a', { state: 'idle' })], context).displayState).toBe('idle')
-    }
-  })
-
-  it('nests owned work under its owner and keeps host order', () => {
-    const rows = buildAgentChildRowModels(
-      [
-        view('a'),
-        shell('s', 'a', { state: 'working' }),
-        view('b'),
-        view('grandchild', { parentChildWorkId: 'a' })
-      ],
-      FRESH
-    )
-    expect(rows.map((row) => row.id)).toEqual(['a', 'b'])
-    expect(rows[0].owned.map((row) => row.id)).toEqual(['s', 'grandchild'])
-    expect(flattenAgentChildRowModels(rows).map((row) => row.id)).toEqual([
-      'a',
-      's',
-      'grandchild',
-      'b'
-    ])
-    // A shell names itself; only an agent's own tool line can go stale.
-    expect(rows[0].owned[0]).toMatchObject({ displayState: 'working', detail: null })
-  })
-})
-
-describe('buildLegacyAgentChildRowModels', () => {
-  it('decays live legacy states under a stale parent, as before', () => {
+describe('child row names', () => {
+  it('keeps same-role children without a task name apart and leaves named children alone', () => {
     const rows = buildLegacyAgentChildRowModels(
       [
-        { id: 'w', state: 'working', startedAt: 10 },
-        { id: 'q', state: 'waiting', startedAt: 10 },
-        { id: 'i', state: 'idle', startedAt: 10 }
+        {
+          id: '019fa65f-3144-7151-9c02-cff7a28f316f',
+          agentType: 'worker',
+          state: 'working',
+          startedAt: 1
+        },
+        {
+          id: '019fa65f-3144-7151-9c02-0a1b2c3d4e5f',
+          agentType: 'worker',
+          state: 'working',
+          startedAt: 2
+        },
+        {
+          id: '019fa65f-3144-7151-9c02-aaaaaaaaaaaa',
+          agentType: 'worker',
+          description: 'lifecycle_audit',
+          state: 'working',
+          startedAt: 3
+        }
       ],
-      STALE
+      context
     )
-    expect(rows.map((row) => row.displayState)).toEqual(['unverifiable', 'unverifiable', 'idle'])
-  })
-})
 
-describe('buildLegacyTaskRowModels', () => {
-  it('lets a resumed live task replace its retained settled row', () => {
+    expect(rows.map((row) => agentChildRowName(row, () => 'Working'))).toEqual([
+      'worker (cff7a28f316f)',
+      'worker (0a1b2c3d4e5f)',
+      'lifecycle_audit'
+    ])
+  })
+
+  it('treats a role published as the name as no name', () => {
+    expect(
+      childName({
+        name: 'general-purpose',
+        agentType: 'general-purpose',
+        kind: 'agent',
+        id: 'toolu_01AbCdEfGhIjKlMnOp'
+      })
+    ).toEqual({ name: 'general-purpose', idSuffix: 'EfGhIjKlMnOp' })
+  })
+
+  it('suffixes role-named tasks from a task-only roster but keeps an unnamed task plain', () => {
     const rows = buildLegacyTaskRowModels(
-      [{ id: 'r', kind: 'agent', state: 'working' }],
-      [{ id: 'r', kind: 'agent', state: 'done' }]
+      [
+        { id: 'task_a1b2', kind: 'agent', name: 'general-purpose' },
+        { id: 'task_c3d4', kind: 'agent', name: 'general-purpose' },
+        { id: 'task_e5f6', kind: 'agent' }
+      ],
+      []
     )
-    expect(rows).toHaveLength(1)
-    expect(rows[0]).toMatchObject({ settled: false, displayState: 'working' })
-  })
-})
-
-describe('agentChildRowContextForParent: the reader clock', () => {
-  const MIRRORED_PARENT = {
-    // The host's clock runs 20 minutes ahead of this machine's.
-    updatedAt: 1_200_000 + 20 * 60_000,
-    evidenceObservedAt: 1_190_000 + 20 * 60_000,
-    mirroredEvidenceReceivedAt: 1_190_000
-  }
-
-  it("measures a mirrored parent on this machine's receipt clock, never the host's", () => {
-    const context = agentChildRowContextForParent(MIRRORED_PARENT, false)
-    expect(context).toEqual({
-      parentEvidenceFresh: false,
-      transportObservation: 'live',
-      parentObservedAt: 1_190_000,
-      hostClockOffsetMs: -20 * 60_000
-    })
-    const [legacy] = buildLegacyAgentChildRowModels(
-      [{ id: 'a', state: 'working', startedAt: 10 }],
-      context
-    )
-    expect(legacy.recencyAt).toBe(1_190_000)
-    // A view's own host stamp moves onto the reader clock; its host-clock age is kept.
-    const [child] = buildAgentChildRowModels(
-      [view('a', { observedAt: 1_100_000 + 20 * 60_000 })],
-      context
-    )
-    expect(child.recencyAt).toBe(1_100_000)
-    expect(child.observedAt).toBe(1_100_000 + 20 * 60_000)
+    expect(rows.map((row) => agentChildRowName(row, () => 'Working'))).toEqual([
+      'general-purpose (task_a1b2)',
+      'general-purpose (task_c3d4)',
+      'Working'
+    ])
   })
 })

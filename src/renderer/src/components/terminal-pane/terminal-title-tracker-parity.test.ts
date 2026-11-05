@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 // Feed identical bytes through renderer parsing and main’s OSC-9999-strip/title-tracker path; ordered title/status facts must match for mobile, waiters and desktop consumers.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createAgentStatusOscProcessor } from '../../../../shared/agent-status/transport/agent-status-osc'
-import { createTerminalTitleTracker } from '../../../../shared/terminal-output-side-effects'
+import { createTerminalTitleTracker } from '../../../../shared/terminal/output/terminal-output-side-effects'
 import { createPtyOutputProcessor } from './pty-output-processor'
 
 const ESC = '\x1b'

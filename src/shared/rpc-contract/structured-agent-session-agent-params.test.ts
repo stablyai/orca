@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   AttachParams,
+  CancelParams,
   CreateIntentParams,
   CreateSupportParams,
   ModelCatalogParams,
@@ -112,5 +113,16 @@ describe('structured agent params', () => {
     }
     expect(AttachParams.safeParse(attach).success).toBe(true)
     expect(AttachParams.safeParse({ ...attach, provider: 'grok' }).success).toBe(false)
+  })
+
+  it('lets a card with no running turn cancel by itself, while background-task Stop still names its turn', () => {
+    const prompt = { itemId: 'request-1', expectedRevision: 2 }
+    expect(CancelParams.safeParse({ envelope: ENVELOPE, prompt }).success).toBe(true)
+    expect(CancelParams.safeParse({ envelope: ENVELOPE, turnId: 'turn-1', prompt }).success).toBe(
+      true
+    )
+    expect(CancelParams.safeParse({ envelope: ENVELOPE, scope: 'background-tasks' }).success).toBe(
+      false
+    )
   })
 })

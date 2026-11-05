@@ -7,7 +7,7 @@ import {
 } from '../../shared/execution-host'
 import type { Repo } from '../../shared/repo-types'
 import type { FleetAgentStatusEvidence } from '../../shared/orchestration-fleet-agent-status-evidence'
-import type { PtyLivenessVerdict } from '../../shared/pty-liveness-verdict'
+import type { PtyLivenessVerdict } from '../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 import { composeWorktreeHostIdentity } from '../../shared/worktree/host-qualified-identity'
 import {
   structuredAgentSessionPaneKey,
@@ -23,8 +23,8 @@ import {
   readAgentSessionRecordStore,
   type AgentSessionRecordReader
 } from './orchestration/structured-session-lineage'
-import { observeStructuredSession } from './structured-worker-authority'
-import { structuredWorkerHostScope } from './structured-worker-identity'
+import { observeStructuredSession } from './orchestration/terminal-authority/structured-sessions/structured-worker-authority'
+import { structuredWorkerHostScope } from './orchestration/terminal-authority/structured-sessions/structured-worker-identity'
 import type { ReferenceAgentCandidate, ReferenceAgentIndex } from './runtime-reference-find'
 
 export type ReferenceAgentSource = {

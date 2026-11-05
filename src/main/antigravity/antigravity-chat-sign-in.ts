@@ -17,7 +17,7 @@ import { prepareAcpLaunch } from '../acp/acp-structured-launch-preparation'
 import { AcpAgentError, AcpConnectionClosedError } from '../acp/acp-errors'
 import { captureSignInModelPublisher } from './antigravity-sign-in-models'
 import { isAgentSessionPreSpawnError } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
-import type { structuredAgentHostLaunchSources } from '../runtime/structured-agent-launch-support'
+import type { structuredAgentHostLaunchSources } from '../runtime/agent-session/launch/structured-agent-launch-support'
 import {
   AntigravitySignInCloseUnprovenError,
   AntigravitySignInSentence,

@@ -15,7 +15,7 @@ import {
 import type { RuntimeFileCommandHost } from './file-command-host'
 import type { RuntimeFileOpenResult } from '../../../shared/runtime-types'
 import type { RuntimeNavigationTarget } from '../../../shared/runtime-navigation'
-import { joinWorktreeRelativePath } from '../runtime-relative-paths'
+import { joinWorktreeRelativePath } from './paths/runtime-relative-paths'
 import { isENOENT } from '../../ipc/filesystem/access/filesystem-path-containment'
 import {
   requireRuntimeFileProvider,
@@ -24,7 +24,7 @@ import {
 } from './file-target'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 import type { FileStat } from '../../providers/filesystem-provider-contract'
-import { assertRuntimeReadWslDistroRunning } from '../runtime-wsl-background-read-gate'
+import { assertRuntimeReadWslDistroRunning } from '../integrations/git/runtime-wsl-background-read-gate'
 
 type RuntimeFileAccessHost = Pick<
   RuntimeFileCommandHost,

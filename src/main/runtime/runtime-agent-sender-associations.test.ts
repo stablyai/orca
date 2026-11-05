@@ -3,18 +3,18 @@ import { z } from 'zod'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { writeEnvironmentStore } from '../../shared/runtime-environment-store-file'
+import { writeEnvironmentStore } from '../../shared/remote-runtime/host-store/runtime-environment-store-file'
 import { createRuntimeAgentProjections } from './construction/runtime-agent-projections'
 import {
   fingerprintOrchestrationPeer,
   pairedOrchestrationPeers
 } from './orchestration/environment-transport'
-import { devicePrincipalOf } from './device-principal'
+import { devicePrincipalOf } from './rpc/server/pairing/device-principal'
 import { OrchestrationDb } from './orchestration/db'
 import { createRootDispatch } from './orchestration/db/root-dispatch-test-fixture'
 import { MIRROR_LEAVES_STEP_1 } from './runtime-leaf-record-projection.test-fixture'
-import type { RuntimeLeafRecord } from './runtime-terminal-state-records'
-import { makeTuiIdlePty } from './tui-idle-wait-test-harness'
+import type { RuntimeLeafRecord } from './terminal/records/runtime-terminal-state-records'
+import { makeTuiIdlePty } from './terminal/wait/tui-idle-wait-test-harness'
 import {
   conversationRecordReader,
   type AgentSessionRecordReader
@@ -27,7 +27,7 @@ import {
 import {
   mintStructuredWorkerHandle,
   mintStructuredWorkerPaneKey
-} from './structured-worker-identity'
+} from './orchestration/terminal-authority/structured-sessions/structured-worker-identity'
 import { testOrcaSessionId } from '../../shared/orca-session-address-test-fixture'
 import { projectSessionTabsForClient } from './rpc/methods/session-tabs-inventory'
 import { AGENT_SENDER_PANE_READS } from './runtime-agent-sender-worker-history'

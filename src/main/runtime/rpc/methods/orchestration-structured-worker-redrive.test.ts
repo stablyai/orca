@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../../../shared/constants'
-import { partialRuntimeStore } from '../../runtime-store-partial-fixture'
+import { partialRuntimeStore } from '../../orca-runtime-tests/runtime-store-partial-fixture'
 import { withChatTabChanges } from '../../agent-session/agent-session-tab-layout'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import * as historyPages from '../../../native-chat/agent-session-wire/agent-session-history-page'
@@ -15,17 +15,17 @@ import { setStructuredAgentSessionHost } from '../../../native-chat/agent-sessio
 import {
   structuredWorkerIdentities,
   type StructuredWorkerIdentity
-} from '../../structured-worker-identity'
+} from '../../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
 import { createOrchestrationRpcHarness } from './orchestration/rpc-test-harness'
 import {
   createStructuredWorkerSession,
   releaseStructuredWorkerSession
 } from './orchestration-structured-worker-session'
 import { stopStructuredWorker } from './orchestration-structured-worker-lifecycle'
-import { OrcaRuntimeRpcServer } from '../../runtime-rpc'
+import { OrcaRuntimeRpcServer } from '../server/runtime-rpc'
 import { ORCHESTRATION_METHODS } from './orchestration'
 import { STATUS_METHODS } from './status'
-import { createKeyedTrailingEdgeCoalescer } from '../../keyed-trailing-edge-coalescer'
+import { createKeyedTrailingEdgeCoalescer } from '../../client/events/keyed-trailing-edge-coalescer'
 import { subscribeForRedrive } from '../../orchestration/structured-session-journal-redrive'
 import { idOf, resultOf } from '../orchestration-session-caller-test-fixture'
 import { createStructuredWorkerSessionForWorktree } from './orchestration/worker/worker-topology'
@@ -238,7 +238,7 @@ async function reattach(sessionId: string) {
 
 describe('the structured redrive publication edge', () => {
   it.each(['stream', 'journal'] as const)(
-    '%s queues real CLI mail behind the running turn, retains failed sends and cancels teardown',
+    '%s steers real CLI mail into the running turn, retains failed sends and cancels teardown',
     async (carrier) => {
       vi.useRealTimers()
       vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
@@ -346,22 +346,18 @@ describe('the structured redrive publication edge', () => {
         // A send that throws keeps its reservation; the session's next journal edge finds it never
         // admitted and sends it again under the same id.
         const send = vi.spyOn(host, 'send').mockRejectedValueOnce(new Error('provider unavailable'))
-        const messageId = await sendMail('Continue after the current turn')
+        const messageId = await sendMail('Continue during the current turn')
         expect(send).toHaveBeenCalledTimes(1)
         expect(state.db.getMessageById(messageId)).toMatchObject({ read: 0 })
         expect(state.db.getStructuredMailSends(mailbox)).toHaveLength(1)
         await worker.append('provider-available')
         await vi.advanceTimersByTimeAsync(300)
         expect(send).toHaveBeenCalledTimes(2)
-        // Queued behind the running turn, like a person's message: delivered, not yet handed over.
+        // Retried mail joins the current turn through the host's automatic drain.
         expect(state.db.getMessageById(messageId)).toMatchObject({
           read: 0,
           delivered_at: expect.any(String)
         })
-        expect(dispatch).not.toHaveBeenCalled()
-        // The turn ends and the chat's own drain hands the card over.
-        await worker.journal.appendTombstone(turn, { fence })
-        await vi.advanceTimersByTimeAsync(300)
         expect(dispatch).toHaveBeenCalledTimes(1)
         expect(dispatch.mock.calls[0]![0].body).toMatchObject({
           kind: 'message',
@@ -369,7 +365,7 @@ describe('the structured redrive publication edge', () => {
           blocks: [
             {
               type: 'text',
-              text: expect.stringContaining('Subject: Continue after the current turn')
+              text: expect.stringContaining('Subject: Continue during the current turn')
             }
           ],
           from: {

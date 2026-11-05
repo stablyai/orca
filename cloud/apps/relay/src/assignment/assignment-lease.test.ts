@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { EventEmitter } from 'node:events'
-import { RELAY_CLOSE_CODE } from '@orca-cloud/relay-contract'
+import { RELAY_CLOSE_CODE } from '@orca-cloud/relay-contract/close-codes'
 import { SignJWT } from 'jose'
 import nacl from 'tweetnacl'
 import { describe, expect, it, vi } from 'vitest'
@@ -13,10 +13,10 @@ import {
 import { AssignmentLeaseShadow } from './assignment-lease-shadow.js'
 import type { RelayAssignmentStore } from './assignment-store.js'
 import type { RelayConfig } from '../config.js'
-import type { RelayCredentialStore } from '../credential-store.js'
-import { HostSessionRegistry } from '../host-session-registry.js'
-import type { RelayTokenClaims } from '../relay-token-verifier.js'
-import { ProcessQueuedByteBudget } from '../splice-forwarder.js'
+import type { RelayCredentialStore } from '../credentials/credential-store.js'
+import { HostSessionRegistry } from '../connections/host-session-registry.js'
+import type { RelayTokenClaims } from '../authentication/relay-token-verifier.js'
+import { ProcessQueuedByteBudget } from '../connections/splice-forwarder.js'
 
 const KEY = new TextEncoder().encode('0123456789abcdef0123456789abcdef')
 const OTHER_KEY = new TextEncoder().encode('fedcba9876543210fedcba9876543210')

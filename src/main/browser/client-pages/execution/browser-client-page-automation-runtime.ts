@@ -1,4 +1,4 @@
-import type { BrowserClientAutomationMethod } from '../../../../shared/browser-client-automation-protocol'
+import type { BrowserClientAutomationMethod } from '../../../../shared/browser/client-hosting/browser-client-automation-protocol'
 import type { AgentBrowserBridge } from '../../agent-browser/agent-browser-bridge'
 import type { BrowserGuestRegistration } from '../../guest-lifecycle/manager/browser-manager-types'
 import type { BrowserManager } from '../../browser-manager'
@@ -11,6 +11,7 @@ type AutomationPageInput = {
   browserProfileId: string
   method: BrowserClientAutomationMethod
   params: Record<string, unknown>
+  agent: boolean
   registration: BrowserRoutePageGuestIdentity
 }
 
@@ -28,6 +29,7 @@ type AutomationRuntimeDependencies = {
   executeRpc(
     method: BrowserClientAutomationMethod,
     params: Record<string, unknown>,
+    agent: boolean,
     signal: AbortSignal
   ): Promise<unknown>
 }
@@ -51,6 +53,7 @@ export class BrowserClientPageAutomationRuntime {
     return this.dependencies.executeRpc(
       input.method,
       { ...params, page: input.browserPageId },
+      input.agent,
       signal
     )
   }

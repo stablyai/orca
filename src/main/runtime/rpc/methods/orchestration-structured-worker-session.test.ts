@@ -10,7 +10,7 @@ import type { AgentMessageSource } from '../../../../shared/agent-session/agent-
 import { getAppEnvironment } from '../../../../shared/app-environment'
 import { DISPATCH_REJECTED_WRITE_FAILED } from '../../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import { agentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
-import { codexDispatchRejection } from '../../../codex/codex-structured-turn-end-settlement'
+import { codexDispatchRejection } from '../../../codex/structured/turns/codex-structured-turn-end-settlement'
 
 type WorkerHost = Pick<
   StructuredAgentSessionHost,
@@ -46,8 +46,10 @@ const {
   sendStructuredWorkerPreamble
 } = await import('./orchestration-structured-worker-session')
 const { isUnknownWorkerStartOutcome } = await import('./orchestration/worker/worker-topology')
-const { structuredWorkerIdentities } = await import('../../structured-worker-identity')
-const { sealedChildEnv } = await import('../../structured-session-child-env.test-support')
+const { structuredWorkerIdentities } =
+  await import('../../orchestration/terminal-authority/structured-sessions/structured-worker-identity')
+const { sealedChildEnv } =
+  await import('../../agent-session/environment/structured-session-child-env.test-support')
 
 function installHost(
   location: Pick<AgentSessionExecutionLocation, 'executionHostId' | 'wslDistro'> = {

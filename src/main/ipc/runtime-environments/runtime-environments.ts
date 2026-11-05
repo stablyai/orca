@@ -7,7 +7,7 @@ import {
 } from './runtime-environment-subscription-handlers'
 import { ipcMain } from 'electron'
 import { getRuntimeEnvironmentRegistryRoot } from './runtime-environment-registry-root'
-import { listEnvironments } from '../../../shared/runtime-environment-store'
+import { listEnvironments } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import type { Store } from '../../persistence/loading-store/store'
 import { recordRemoteLayoutFrame } from '../../remote-layout-snapshot/remote-layout-snapshot-recorder'
 import { recordHostRepoCatalogAnswer } from '../../host-repo-catalog-snapshot/host-repo-catalog-snapshot-recorder'
@@ -26,7 +26,7 @@ import {
   recoverRefusedManagedPairing
 } from './runtime-environment-managed-pairing-refusal'
 import { setManagedOrcadPairingRepairedListener } from '../../managed-server/lifecycle/orcad-managed-pairing-repaired-listener'
-import { forgetFailedManagedOrcadPairingRepair } from '../../managed-server/lifecycle/orcad-managed-tunnel'
+import { forgetManagedOrcadAutomaticFailures } from '../../managed-server/lifecycle/orcad-managed-tunnel'
 import { registerRuntimeEnvironmentRecoveryHandler } from './runtime-environment-recovery-handler'
 import { registerRuntimeEnvironmentRepairHandler } from './runtime-environment-repair-handler'
 import { advanceRuntimeEnvironmentTransportGeneration } from './runtime-environment-transport-generation'
@@ -163,7 +163,7 @@ export function registerRuntimeEnvironmentHandlers(store: Store): void {
     sharedControl: (environmentId) =>
       handleManagedSharedControlRefusal(getUserDataPath(), environmentId),
     connectRequested: (environmentId) =>
-      forgetFailedManagedOrcadPairingRepair(getUserDataPath(), environmentId)
+      forgetManagedOrcadAutomaticFailures(getUserDataPath(), environmentId)
   })
   for (const environment of listEnvironments(getUserDataPath())) {
     if (

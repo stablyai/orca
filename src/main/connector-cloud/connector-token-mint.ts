@@ -4,7 +4,7 @@ import type { OrcaCloudAuthConfig } from '../orca-profiles/profile-cloud-auth-co
 import { OrcaCloudRequestError } from '../orca-profiles/profile-cloud-client'
 import { runWithFreshOrcaCloudSession } from '../orca-profiles/profile-cloud-session-refresh'
 import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
-import { loadOrCreateHostInstallationId } from '../runtime/host-descriptor'
+import { loadOrCreateHostInstallationId } from '../runtime/hosts/platform-probe/host-descriptor'
 import { requestConnector, type ConnectorFailure } from './connector-cloud-request'
 import type { ConnectorTokenMint } from './connector-transport'
 

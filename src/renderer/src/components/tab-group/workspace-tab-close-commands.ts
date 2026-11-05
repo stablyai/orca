@@ -2,8 +2,8 @@ import { createBrowserUuid } from '@/lib/browser-uuid'
 import type { Tab } from '../../../../shared/tab-types'
 import { useAppStore } from '../../store'
 import { needsSavePromptOnClose } from '@/store/slices/editor/buffers/editor-buffer-close-rule'
-import { requestEditorFileClose } from '../editor/editor-autosave'
-import { runAfterEditorFramesFlush } from '../editor/editor-pending-flush'
+import { requestEditorFileClose } from '../editor/autosave/editor-autosave'
+import { runAfterEditorFramesFlush } from '../editor/save/flush/editor-pending-flush'
 import { closeTerminalTab } from '../terminal/terminal-tab-actions'
 import { closeWorkspaceBrowserTab } from '@/lib/workspace-browser-tab-close'
 import { isEditorTabContentType } from '@/store/slices/editor/tabs/editor-tab-content-type'
@@ -98,6 +98,7 @@ export function createWorkspaceTabCloseCommands({
     if (item.contentType === 'terminal') {
       // Run the empty check only after deferred pin/process confirmations actually close the tab.
       closeTerminalTab(item.entityId, {
+        reason: 'user',
         ...(opts?.skipRunningProcessConfirm ? { skipRunningProcessConfirm: true } : {}),
         ...(whenEmptied ? { onClosed: whenEmptied } : {})
       })

@@ -24,7 +24,7 @@ vi.mock('./agent-trust-presets', () => ({
   markAntigravityWorkspaceTrusted: mocks.antigravity,
   markKimiWorkspaceTrusted: mocks.kimi
 }))
-vi.mock('../../codex/codex-home-paths', () => ({
+vi.mock('../../codex/configuration/homes/codex-home-paths', () => ({
   getLocalCodexTrustConfigFiles: mocks.codexConfigFiles
 }))
 vi.mock('../../qoder/workspace-trust', () => ({ markQoderWorkspaceTrusted: mocks.qoder }))

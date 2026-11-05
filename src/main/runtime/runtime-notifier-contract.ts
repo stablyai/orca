@@ -5,15 +5,15 @@ import type {
 import type { ClaudeAccountSelectionChange } from '../../shared/managed-account-types'
 import type { AgentLaunchPaneVerdictEvent } from '../../shared/agent-launch/contracts/agent-launch-pane-verdict'
 import type { SleepingAgentLaunchConfig } from '../../shared/agent-session/lifecycle/agent-session-resume'
-import type { PaneLaunchRecipe } from '../../shared/terminal-attachment-launch-result'
+import type { PaneLaunchRecipe } from '../../shared/terminal/pty/lifecycle/terminal-attachment-launch-result'
 import type {
   AgentLaunchTabPublished,
   AgentLaunchTabViewerRule,
   AgentLaunchTabPublishRequest
 } from '../../shared/agent-launch/contracts/agent-launch-tab-publication'
 import type { TerminalPaneSplitSource } from '../../shared/feature-education-telemetry'
-import type { TerminalRevealIdentity } from '../../shared/terminal-reveal-identity'
-import type { TerminalPaneRevealTarget } from '../../shared/terminal-pane-reveal'
+import type { TerminalRevealIdentity } from '../../shared/workspace-layout/terminal-reveal-identity'
+import type { TerminalPaneRevealTarget } from '../../shared/workspace-layout/terminal-pane-reveal'
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type { WorkspaceSleepNotice } from '../../shared/workspace-sleep'
 import type { RuntimeNavigationTarget } from '../../shared/runtime-navigation'
@@ -27,9 +27,9 @@ import type { WorktreeStartupLaunch } from '../../shared/worktree/launch-types'
 import type {
   RuntimeBrowserDriverState,
   RuntimeMobileSessionTabMove,
-  RuntimeTerminalDriverState,
-  RuntimeTerminalPresentation
-} from '../../shared/runtime-types'
+  RuntimeTerminalDriverState
+} from '../../shared/runtime-session-contracts'
+import type { RuntimeTerminalPresentation } from '../../shared/runtime-terminal-contracts'
 
 type DriverState = RuntimeTerminalDriverState
 

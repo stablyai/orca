@@ -6,38 +6,38 @@ on:
     paths:
       - '.github/workflows/computer-e2e.yml'
       - 'config/electron-builder.config.cjs'
-      - 'config/scripts/build-computer-macos.mjs'
-      - 'config/scripts/build-native-for-platform.mjs'
-      - 'config/scripts/build-native-for-platform.test.mjs'
-      - 'config/scripts/pnpm-cli-invocation.mjs'
-      - 'config/scripts/build-windows-cli-launcher.mjs'
-      - 'config/scripts/windows-rust-executable-build.mjs'
-      - 'config/scripts/build-windows-cli-launcher.test.mjs'
-      - 'config/scripts/macos-computer-helper-owner-loss-benchmark.mjs'
-      - 'config/scripts/macos-computer-helper-owner-loss-group-recovery.test.mjs'
-      - 'config/scripts/macos-computer-helper-owner-loss-metrics.mjs'
-      - 'config/scripts/macos-computer-helper-owner-loss-processes.mjs'
-      - 'config/scripts/macos-computer-helper-owner-loss-processes.test.mjs'
-      - 'config/scripts/macos-computer-helper-owner-loss-trial-cleanup.mjs'
-      - 'config/scripts/computer-use-smoke.mjs'
-      - 'config/scripts/computer-use-smoke.test.mjs'
-      - 'config/scripts/daemon-boot-smoke.mjs'
-      - 'config/scripts/daemon-endpoint-handover-smoke.mjs'
-      - 'config/scripts/windows-daemon-workspace-close-repro.mjs'
-      - 'config/scripts/verify-computer-native.mjs'
+      - 'config/scripts/native-build/macos/build-computer-macos.mjs'
+      - 'config/scripts/native-build/composition/build-native-for-platform.mjs'
+      - 'config/scripts/native-build/composition/build-native-for-platform.test.mjs'
+      - 'config/scripts/tool-invocation/pnpm-cli-invocation.mjs'
+      - 'config/scripts/native-build/windows/build-windows-cli-launcher.mjs'
+      - 'config/scripts/native-build/windows/windows-rust-executable-build.mjs'
+      - 'config/scripts/native-build/windows/build-windows-cli-launcher.test.mjs'
+      - 'config/scripts/performance/macos-computer-owner/macos-computer-helper-owner-loss-benchmark.mjs'
+      - 'config/scripts/performance/macos-computer-owner/macos-computer-helper-owner-loss-group-recovery.test.mjs'
+      - 'config/scripts/performance/macos-computer-owner/macos-computer-helper-owner-loss-metrics.mjs'
+      - 'config/scripts/performance/macos-computer-owner/macos-computer-helper-owner-loss-processes.mjs'
+      - 'config/scripts/performance/macos-computer-owner/macos-computer-helper-owner-loss-processes.test.mjs'
+      - 'config/scripts/performance/macos-computer-owner/macos-computer-helper-owner-loss-trial-cleanup.mjs'
+      - 'config/scripts/runtime-verification/desktop-transport/computer-use-smoke.mjs'
+      - 'config/scripts/runtime-verification/desktop-transport/computer-use-smoke.test.mjs'
+      - 'config/scripts/runtime-verification/daemon-lifecycle/daemon-boot-smoke.mjs'
+      - 'config/scripts/runtime-verification/daemon-lifecycle/daemon-endpoint-handover-smoke.mjs'
+      - 'config/scripts/diagnostics/runtime-lifecycle/windows-daemon-workspace-close-repro.mjs'
+      - 'config/scripts/runtime-verification/desktop-transport/verify-computer-native.mjs'
       # Re-smoke daemon bundle/build changes under plain Node; v1.4.129-rc.1 shipped a module-load outage despite green CI.
       - 'electron.vite.config.ts'
       - 'config/build-plugins/**'
       - 'src/main/daemon/**'
       - '!src/main/daemon/**/*.test.ts'
-      - '!src/main/daemon/daemon-init-dependency-mocks.ts'
-      - '!src/main/daemon/daemon-init-test-harness.ts'
-      - '!src/main/daemon/daemon-init-fresh-import.ts'
-      - '!src/main/daemon/daemon-init-mock-types.ts'
-      - '!src/main/daemon/serialize-grid-roundtrip.ts'
-      - '!src/main/daemon/mock-descendant-sweep.ts'
-      - '!src/main/daemon/daemon-host-relocation.test-fixture.ts'
-      - '!src/main/daemon/daemon-endpoint-reachability-test-harness.ts'
+      - '!src/main/daemon/providers/lifecycle/testing/daemon-init-dependency-mocks.ts'
+      - '!src/main/daemon/providers/lifecycle/testing/daemon-init-test-harness.ts'
+      - '!src/main/daemon/providers/lifecycle/testing/daemon-init-fresh-import.ts'
+      - '!src/main/daemon/providers/lifecycle/testing/daemon-init-mock-types.ts'
+      - '!src/main/daemon/emulation/testing/serialize-grid-roundtrip.ts'
+      - '!src/main/daemon/pty-subprocess/testing/mock-descendant-sweep.ts'
+      - '!src/main/daemon/executable-host/windows/testing/daemon-host-relocation.test-fixture.ts'
+      - '!src/main/daemon/endpoint/publication/testing/daemon-endpoint-reachability-test-harness.ts'
       - 'src/main/providers/local-pty/local-pty-provider.ts'
       - 'src/main/providers/windows-shell-args.ts'
       - 'src/main/providers/windows-shell-preflight-runtime.windows.test.ts'
@@ -91,16 +91,15 @@ jobs:
       # Use shared Vitest config: bare invocation misses config/ and its timeout/Windows worker cap, breaking real csc.exe tests.
       - run: >-
           pnpm vitest run --config config/vitest.config.ts
-          config/scripts/macos-computer-helper-owner-loss-group-recovery.test.mjs
-          config/scripts/macos-computer-helper-owner-loss-processes.test.mjs
-          config/scripts/computer-use-smoke.test.mjs
+          config/scripts/performance/macos-computer-owner/macos-computer-helper-owner-loss-group-recovery.test.mjs
+          config/scripts/performance/macos-computer-owner/macos-computer-helper-owner-loss-processes.test.mjs
+          config/scripts/runtime-verification/desktop-transport/computer-use-smoke.test.mjs
           src/main/computer/sidecar-client.test.ts
           src/main/computer/macos-native-provider-client.test.ts
           src/main/computer/macos-native-provider-socket.test.ts
           src/main/computer/macos-computer-use-permissions.test.ts
           src/main/computer/macos-computer-use-permission-status.test.ts
           src/main/providers/windows-shell-preflight-runtime.windows.test.ts
-          src/main/computer/desktop-script-provider-cache.test.ts
           src/main/computer/desktop-script-provider-actions.test.ts
           src/main/computer/desktop-script-provider-cache-lifecycle.test.ts
           src/main/computer/desktop-script-provider-errors.test.ts
@@ -123,14 +122,14 @@ jobs:
       - run: pnpm run build:electron-vite:parallel
       # Boot built daemon-entry under plain Node on Ubuntu/Windows, catching leaked electron requires like v1.4.129-rc.1.
       - name: Daemon boot smoke
-        run: node config/scripts/daemon-boot-smoke.mjs
+        run: node config/scripts/runtime-verification/daemon-lifecycle/daemon-boot-smoke.mjs
       # Race real daemon processes on one endpoint; a loser must not unlink the replacement’s socket.
       - name: Daemon endpoint handover smoke
-        run: node config/scripts/daemon-endpoint-handover-smoke.mjs
+        run: node config/scripts/runtime-verification/daemon-lifecycle/daemon-endpoint-handover-smoke.mjs
       # Exercise workspace removal’s renderer teardown plus forced main sweep against real ConPTY.
       - name: Windows daemon workspace-close repro
         if: runner.os == 'Windows'
-        run: node config/scripts/windows-daemon-workspace-close-repro.mjs
+        run: node config/scripts/diagnostics/runtime-lifecycle/windows-daemon-workspace-close-repro.mjs
   linux:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-22.04

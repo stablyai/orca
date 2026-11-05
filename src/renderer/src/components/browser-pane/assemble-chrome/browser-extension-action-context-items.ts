@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { BrowserExtensionContextMenuPayload } from '../../../../../shared/browser-extension-context-menu-types'
+import type { BrowserExtensionContextMenuPayload } from '../../../../../shared/browser/extensions/browser-extension-context-menu-types'
 
 /**
  * The extension's own items for its toolbar button menu (chrome.contextMenus, contexts: ['action']).

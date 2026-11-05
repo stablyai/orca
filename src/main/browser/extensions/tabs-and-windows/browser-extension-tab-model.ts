@@ -1,10 +1,10 @@
 /// <reference types="chrome" />
 import { webContents } from 'electron'
-import { getChromeExtensionOrigin } from '../../../../shared/browser-extension-url'
+import { getChromeExtensionOrigin } from '../../../../shared/browser/extensions/browser-extension-url'
 import { browserManager } from '../../browser-manager'
-import { createBrowserTabInRenderer } from '../../../runtime/browser/browser-tab-renderer-create'
-import { closeBrowserTabInRenderer } from '../../../runtime/browser/browser-tab-renderer-close'
-import { activateBrowserTabInRenderer } from '../../../runtime/browser/browser-tab-renderer-activate'
+import { createBrowserTabInRenderer } from '../../../runtime/browser/tabs/browser-tab-renderer-create'
+import { closeBrowserTabInRenderer } from '../../../runtime/browser/tabs/browser-tab-renderer-close'
+import { activateBrowserTabInRenderer } from '../../../runtime/browser/tabs/browser-tab-renderer-activate'
 import { waitForTabRegistration } from '../../../ipc/browser/browser-tab-registration-wait'
 import { emitBrowserExtensionEvent } from '../api-runtime/browser-extension-api-host'
 import {

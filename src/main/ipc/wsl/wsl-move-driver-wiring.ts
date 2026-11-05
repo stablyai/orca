@@ -5,21 +5,21 @@
  */
 import { randomUUID } from 'node:crypto'
 import { app } from 'electron'
-import { encodePairingOffer } from '../../../shared/pairing'
-import { getPreferredPairingOffer } from '../../../shared/runtime-environments'
-import { resolveEnvironment } from '../../../shared/runtime-environment-store'
-import { findWslHostDeployment } from '../../../shared/runtime-environment-wsl-host-store'
+import { encodePairingOffer } from '../../../shared/remote-runtime/pairing/pairing'
+import { getPreferredPairingOffer } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
+import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
+import { findWslHostDeployment } from '../../../shared/remote-runtime/host-store/runtime-environment-wsl-host-store'
 import {
   WSL_MOVE_PROGRESS_CHANNEL,
   type WslMoveProgressEvent
 } from '../../../shared/wsl-move/wsl-move-driver-types'
 import { agentHookServer } from '../../agent-hooks/server'
-import { getDaemonHistoryDir } from '../../daemon/daemon-launch-paths'
+import { getDaemonHistoryDir } from '../../daemon/launch/daemon-launch-paths'
 import {
   countInProcessFallbackTerminals,
   listLiveDaemonSessions
-} from '../../daemon/daemon-provider-state'
-import { HistoryReader } from '../../daemon/history-reader'
+} from '../../daemon/providers/lifecycle/daemon-provider-state'
+import { HistoryReader } from '../../daemon/history/restoration/history-reader'
 import { orcadMigrationDestinationFor } from '../../managed-server/lifecycle/orcad-runtime-conversion-wiring'
 import type { Store } from '../../persistence/loading-store/store'
 import { exportWslMoveManifest } from '../../persistence/moving-wsl-projects/wsl-move-manifest-export'

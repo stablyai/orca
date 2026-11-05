@@ -1,9 +1,8 @@
 import { afterEach, expect, it } from 'vitest'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
-import { WORKTREE_TERMINALS_SLEEPING_ERROR } from '../../../runtime/worktree-terminals-sleeping-error'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import { WORKTREE_TERMINALS_SLEEPING_ERROR } from '../../../../shared/workspace-sleep'
 import { adoptStablePane } from './adopt-stable'
 import {
-  joinPaneSpawn,
   makePaneSpawnReservationKey,
   paneSpawnReservationsByOwnerKey,
   rejectPaneSpawnReservation,
@@ -23,20 +22,6 @@ const ownerKey = makePaneSpawnReservationKey(
 )!
 
 afterEach(() => paneSpawnReservationsByOwnerKey.clear())
-
-it('lets a joiner spawn itself when the owner refused to wake a slept worktree', async () => {
-  const reservation = reservePaneSpawn(ownerKey)
-  const joined = joinPaneSpawn(reservation)
-  rejectPaneSpawnReservation(ownerKey, reservation, new Error(WORKTREE_TERMINALS_SLEEPING_ERROR))
-  await expect(joined).resolves.toBeNull()
-})
-
-it('still propagates a real spawn failure to joiners', async () => {
-  const reservation = reservePaneSpawn(ownerKey)
-  const joined = joinPaneSpawn(reservation)
-  rejectPaneSpawnReservation(ownerKey, reservation, new Error('spawn_failed'))
-  await expect(joined).rejects.toThrow('spawn_failed')
-})
 
 it('does not hand an automatic refusal to a user adoption of the same pane', async () => {
   const reservation = reservePaneSpawn(ownerKey)

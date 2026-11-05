@@ -4,9 +4,9 @@ import type {
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTabsSnapshot
 } from '../../shared/runtime-types'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import { OrcaRuntimeService } from './orca-runtime'
-import * as mobileSessionTerminalProjection from './mobile-session-terminal-projection'
+import * as mobileSessionTerminalProjection from './terminal/surface/mobile-session-terminal-projection'
 
 const WT = 'repo-1::/tmp/worktree-a'
 const WT_B = 'repo-1::/tmp/worktree-b'

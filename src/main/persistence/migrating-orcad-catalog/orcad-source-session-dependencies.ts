@@ -1,6 +1,6 @@
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { PersistedState } from '../../../shared/persisted-state-types'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { sessionPartitions } from './orcad-source-workspace-session-fragments'
 
 export type OrcadMigrationSourceSessionInspection = {

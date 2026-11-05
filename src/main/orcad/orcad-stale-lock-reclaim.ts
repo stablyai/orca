@@ -16,11 +16,11 @@ import { orcadLockHolderLocality } from './orcad-lock-holder-locality'
 import { ORCAD_LOCK_FRESH_MS, orcadLockPeer, orcadLockSelf } from './orcad-lock-clone-machine'
 import { orcadDataRootIsOnLocalDisk } from './orcad-data-root-locality'
 import { readOrcadProcessIncarnation } from './orcad-process-start-time'
-import { hasErrorCode } from '../daemon/daemon-process-inspection'
+import { hasErrorCode } from '../daemon/endpoint/identity/daemon-process-inspection'
 import { resolveUserDataPath } from './orcad-app-paths'
 import { profileStateAccessMachineIdentity } from '../persistence/profile-state/profile-state-access-identity'
-import { readRuntimeMetadata } from '../runtime/runtime-metadata'
-import { RUNTIME_SOCKET_NAME_REGEX } from '../runtime/runtime-rpc/runtime-rpc-socket-metadata'
+import { readRuntimeMetadata } from '../runtime/rpc/server/runtime-metadata'
+import { RUNTIME_SOCKET_NAME_REGEX } from '../runtime/rpc/server/runtime-rpc-socket-metadata'
 import {
   ORCAD_RECLAIM_STALE_LOCK_FLAG,
   ORCAD_STALE_LOCK_DATA_ROOT_FLAG,

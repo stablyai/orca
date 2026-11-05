@@ -1,21 +1,23 @@
-import type { AppState } from '@/store'
-import { useAppStore } from '@/store'
+import { type AppState, useAppStore } from '@/store'
 import {
   confirmRuntimeTerminalForegroundProcess,
-  inspectRuntimeTerminalProcess,
-  type RuntimeTerminalProcessInspection
+  inspectRuntimeTerminalProcess
 } from '@/runtime/runtime-terminal-inspection'
+
 import { translate } from '@/i18n/i18n'
 import {
   getCodexAccountDisplayLabel,
   normalizeCodexAccountEmail
 } from './codex-account-display-label'
-import { isShellProcess } from '../../../shared/shell-process-detection'
+import { isShellProcess } from '../../../shared/agent-status/process/shell-process-detection'
 import {
   isCodexForegroundProcess,
   isCodexRestartEligiblePane
 } from './codex-pane-restart-eligibility'
-import { isClientOnlyUnverifiableInspection } from '../../../shared/terminal-process-inspection'
+import {
+  type TerminalProcessInspection as RuntimeTerminalProcessInspection,
+  isClientOnlyUnverifiableInspection
+} from '../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
 import {
   getCodexAccountSwitchLaneMatcher,
   isForeignMachineCodexPtyId,

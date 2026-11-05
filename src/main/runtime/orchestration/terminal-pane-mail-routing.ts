@@ -2,17 +2,17 @@ import {
   ptyRecordForPaneKey,
   type TerminalIdentityReadContext
 } from '../terminal/query/terminal-identity-read-context'
-import type { RuntimeTerminalAgentPresenceOptions } from '../runtime-terminal-agent-presence'
+import type { RuntimeTerminalAgentPresenceOptions } from '../terminal/query/runtime-terminal-agent-presence'
 import { OrcaRuntimeWithPruneMobileSessionTabGroupLayout } from '../session-lifecycle/projection/prune-mobile-session-tab-group-layout'
-import type { RuntimePtyWorktreeRecord } from '../runtime-terminal-state-records'
-import { isTerminalLeafId, makePaneKey } from '../../../shared/stable-pane-id'
+import type { RuntimePtyWorktreeRecord } from '../terminal/records/runtime-terminal-state-records'
+import { isTerminalLeafId, makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { detectAgentStatusFromTitle } from '../../../shared/agent-status/title/agent-title-status'
 import { isClaudeManagementTitle } from '../../../shared/agent-status/title/agent-title-core'
 import {
   GENERIC_PROCESS_NAME_AGENTS,
   recognizeAgentProcess
 } from '../../../shared/agent-status/process/agent-process-recognition'
-import { resolveStructuredWorkerAuthority } from '../structured-worker-authority'
+import { resolveStructuredWorkerAuthority } from './terminal-authority/structured-sessions/structured-worker-authority'
 import type { StructuredPointerTarget } from './structured-mailbox-pointer-delivery'
 import type { OrchestrationDb } from './db'
 import {
@@ -26,7 +26,7 @@ import {
   type StructuredMailboxCustody
 } from './structured-session-mail-target'
 import { exitedChatDispatchesForSession } from './chat-assignee'
-import { OPERATOR_CLOSE_EXIT_CAUSE } from '../../../shared/terminal-exit-cause'
+import { OPERATOR_CLOSE_EXIT_CAUSE } from '../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 import { resolveTerminalIdentityFromProbes } from '../terminal-identity-probe'
 
 export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeWithPruneMobileSessionTabGroupLayout {

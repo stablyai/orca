@@ -12,7 +12,7 @@ import type {
   openClaudeStreamJsonConnection
 } from '../claude-stream-json-connection'
 import type { ClaudeStructuredLaunch } from './launch/claude-structured-launch-resolution'
-import type { StructuredLaunchRequest } from '../../runtime/structured-agent-launch-composition'
+import type { StructuredLaunchRequest } from '../../runtime/agent-session/launch/structured-agent-launch-composition'
 import type { ClaudeJournalTranslator } from '../claude-journal-translator-contract'
 import type { ClaudePendingPrompt, ClaudePromptRegistry } from '../claude-prompt-registry'
 import { cancelProcessAcquisition } from '@orca/process-host/cancel-process-acquisition'
@@ -174,7 +174,7 @@ export type ClaudeSession = {
     reportedPermissionMode?: string | null
   }
   /** CLI-resolved env/settings for the next request; lower priority than held options and turn reports. */
-  appliedOptions?: { model?: string; effort?: string }
+  appliedOptions?: { model?: string; effort?: string; ultracode?: boolean }
   /** CLI settings resolved before a turn changed them, when no launch override hid that value. */
   configuredDefaults?: { model?: string; effort?: string }
   fastModeState?: AgentSessionFastModeState

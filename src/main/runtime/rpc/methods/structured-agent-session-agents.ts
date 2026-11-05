@@ -9,7 +9,7 @@ import {
   AGENT_SESSION_AVAILABILITY_METHOD,
   type AgentSessionAvailabilityFrame
 } from '../../../../shared/agent-session/agent-session-agent-availability'
-import { STRUCTURED_AGENT_RUNTIME_METADATA } from '../../structured-agent-runtime-metadata'
+import { STRUCTURED_AGENT_RUNTIME_METADATA } from '../../agent-session/installation/structured-agent-runtime-metadata'
 import { defineMethod, defineStreamingMethod } from '../core'
 import { requireStructuredCapability } from './structured-agent-session-gate'
 import { AgentsParams, AvailabilityParams } from './structured-agent-session-schemas'

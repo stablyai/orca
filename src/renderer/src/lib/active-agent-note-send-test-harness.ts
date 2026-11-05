@@ -1,5 +1,5 @@
 import type { AgentStatusEntry } from '../../../shared/agent-status/contracts/agent-status-types'
-import type { TerminalLayoutSnapshot } from '../../../shared/terminal-tab-types'
+import type { TerminalLayoutSnapshot } from '../../../shared/workspace-layout/terminal-tab-types'
 
 export const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 export const OTHER_LEAF_ID = '22222222-2222-4222-8222-222222222222'

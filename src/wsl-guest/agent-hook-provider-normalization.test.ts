@@ -7,7 +7,7 @@ import type {
   AgentHookRelayEnvelope,
   AgentHookSource
 } from '../shared/agent-hook-listener/transport/agent-hook-relay'
-import { makePaneKey } from '../shared/stable-pane-id'
+import { makePaneKey } from '../shared/workspace-layout/stable-pane-id'
 
 const PANE = makePaneKey('tab-1', '11111111-1111-4111-8111-111111111111')
 

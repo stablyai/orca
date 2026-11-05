@@ -3,7 +3,7 @@ import { EventEmitter } from 'node:events'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BrowserPage, BrowserWorkspace } from '../../../../shared/browser-workspace-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
-import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import type { BrowserExtensionCaller } from '../api-runtime/browser-extension-namespace-registry'
 
 type FakeSession = { name: string }
@@ -49,11 +49,11 @@ vi.mock('../../browser-manager', () => ({
     getWorktreeIdForTab: () => undefined
   }
 }))
-vi.mock('../../../runtime/browser/browser-tab-renderer-create', () => ({}))
-vi.mock('../../../runtime/browser/browser-tab-renderer-close', () => ({
+vi.mock('../../../runtime/browser/tabs/browser-tab-renderer-create', () => ({}))
+vi.mock('../../../runtime/browser/tabs/browser-tab-renderer-close', () => ({
   closeBrowserTabInRenderer: mocks.close
 }))
-vi.mock('../../../runtime/browser/browser-tab-renderer-activate', () => ({
+vi.mock('../../../runtime/browser/tabs/browser-tab-renderer-activate', () => ({
   activateBrowserTabInRenderer: mocks.activate
 }))
 vi.mock('../../../ipc/browser/browser-tab-registration-wait', () => ({}))

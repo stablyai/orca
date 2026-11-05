@@ -48,10 +48,10 @@ vi.mock('../../browser-manager', () => ({
 vi.mock('../../../ipc/browser/browser-tab-registration-wait', () => ({
   waitForTabRegistration: vi.fn()
 }))
-vi.mock('../../../runtime/browser/browser-tab-renderer-create', () => ({
+vi.mock('../../../runtime/browser/tabs/browser-tab-renderer-create', () => ({
   createBrowserTabInRenderer: vi.fn()
 }))
-vi.mock('../../../runtime/browser/browser-tab-renderer-close', () => ({
+vi.mock('../../../runtime/browser/tabs/browser-tab-renderer-close', () => ({
   closeBrowserTabInRenderer: vi.fn()
 }))
 vi.mock('../permissions/browser-extension-permission-prompt', () => ({
@@ -61,7 +61,7 @@ vi.mock('../permissions/browser-extension-permission-prompt', () => ({
 mocks.userData = mkdtempSync(join(tmpdir(), 'orca-extension-apis-'))
 
 const { BROWSER_EXTENSION_EVENT_CHANNEL, BROWSER_EXTENSION_INVOKE_CHANNEL } =
-  await import('../../../../shared/browser-extension-channels')
+  await import('../../../../shared/browser/extensions/browser-extension-channels')
 const registry = await import('../api-runtime/browser-extension-namespace-registry')
 const host = await import('../api-runtime/browser-extension-api-host')
 const { registerBrowserExtensionNamespaces } =

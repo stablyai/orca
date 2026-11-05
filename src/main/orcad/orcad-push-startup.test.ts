@@ -5,8 +5,8 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { ProfilePreferences } from '../persistence/loading-store/profile-preferences'
 import type { RuntimeConstructionDependencies } from '../runtime/construction/runtime-construction-dependencies'
 import type { GlobalSettings } from '../../shared/global-settings-types'
-import { DeviceRegistry } from '../runtime/device-registry'
-import { RuntimeMobileNotificationController } from '../runtime/runtime-mobile-notification-controller'
+import { DeviceRegistry } from '../runtime/rpc/server/pairing/device-registry'
+import { RuntimeMobileNotificationController } from '../runtime/push/notifications/runtime-mobile-notification-controller'
 import { PushUnregisterOutbox } from '../runtime/push/push-unregister-outbox'
 import { createPushHostKeypair } from '../runtime/push/push-host-challenge-fixtures'
 import { acquireProfileStateMaintenance } from '../persistence/profile-state/profile-state-access'
@@ -44,7 +44,7 @@ const profile = vi.hoisted(() => {
   return value
 })
 // Reconciliation writes user-global agent configs; isolate it from the real home.
-vi.mock('../codex/codex-hook-reconcile', async (importOriginal) => ({
+vi.mock('../codex/hooks/reconciliation/codex-hook-reconcile', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   startCodexHooks: state.startCodexHooks
 }))
@@ -98,7 +98,9 @@ vi.mock('./orcad-automations', () => ({
 vi.mock('../runtime/agent-state-rules/agent-state-rules-live-update', () => ({
   startAgentStateRulesLiveUpdates: () => {}
 }))
-vi.mock('../daemon/daemon-provider-state', () => ({ daemonOwnsFreshPersistentPtys: () => false }))
+vi.mock('../daemon/providers/lifecycle/daemon-provider-state', () => ({
+  daemonOwnsFreshPersistentPtys: () => false
+}))
 vi.mock('../ipc/pty/register-headless-runtime', () => ({
   registerHeadlessPtyRuntime: async () => {}
 }))
@@ -189,7 +191,7 @@ vi.mock('../runtime/orca-runtime', () => ({
     }
   }
 }))
-vi.mock('../runtime/runtime-rpc', () => ({
+vi.mock('../runtime/rpc/server/runtime-rpc', () => ({
   OrcaRuntimeRpcServer: class {
     async start() {
       state.rpcStarted = true

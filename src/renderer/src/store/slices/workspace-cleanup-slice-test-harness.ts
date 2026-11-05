@@ -4,7 +4,7 @@ import type { AppState } from '../types'
 import {
   applyWorkspaceCleanupPolicy,
   type WorkspaceCleanupCandidate
-} from '../../../../shared/workspace-cleanup'
+} from '../../../../shared/workspace-cleanup/workspace-cleanup'
 import { createWorkspaceCleanupSlice } from './workspace-cleanup'
 
 export const WORKTREE_ID = 'repo1::/tmp/old-workspace'

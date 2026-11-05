@@ -6,11 +6,15 @@ import {
   validateMobileE2EEV2Handshake,
   type MobileE2EEV2Hello,
   type MobileE2EEV2Ready
-} from '../../../shared/mobile-e2ee-v2-contract'
-import { sealMobileE2EEV2Frame } from '../../../shared/mobile-e2ee-v2-framing'
-import type { DeviceRegistry } from '../device-registry'
-import { deriveSharedKey, encrypt, generateKeyPair } from '../../../shared/e2ee-crypto'
-import { deriveMobileE2EEV2KeySchedule } from '../../../shared/mobile-e2ee-v2-node-key-schedule'
+} from '../../../shared/remote-runtime/e2ee/mobile-e2ee-v2-contract'
+import { sealMobileE2EEV2Frame } from '../../../shared/remote-runtime/e2ee/mobile-e2ee-v2-framing'
+import type { DeviceRegistry } from './server/pairing/device-registry'
+import {
+  deriveSharedKey,
+  encrypt,
+  generateKeyPair
+} from '../../../shared/remote-runtime/e2ee/node/e2ee-crypto'
+import { deriveMobileE2EEV2KeySchedule } from '../../../shared/remote-runtime/e2ee/node/mobile-e2ee-v2-node-key-schedule'
 import {
   MobileSocketWiring,
   type MobileSocketTransport,

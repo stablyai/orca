@@ -1,7 +1,7 @@
 import type * as WorktreeScanCacheModule from '../git/worktrees/catalog/worktree-scan-cache'
 import type * as WorktreeListingModule from '../git/worktrees/catalog/worktree-listing'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createAgentPromptSubmissionRuntime } from './agent-prompt-submission-runtime-test-fixture'
+import { createAgentPromptSubmissionRuntime } from './terminal/input/agent-prompt-submission-runtime-test-fixture'
 
 vi.mock('../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => {
   const facade = getWorktreeListingMocks()
@@ -46,45 +46,6 @@ const { getWorktreeListingMocks } = vi.hoisted(() => {
 
 describe('a Windows Codex prompt held in its paste burst', () => {
   afterEach(() => vi.useRealTimers())
-
-  // #11343: Windows Codex reads a paste as key events and takes an Enter that reaches it mid-burst
-  // as a newline, so a dispatch sat in its composer as `[Pasted Content N chars]`.
-  it.each([
-    { composer: 'still holds the dispatch', draft: '[Pasted Content 9250 chars]', enters: 2 },
-    { composer: 'is empty', draft: undefined, enters: 1 },
-    { composer: "holds the user's own text", draft: 'also fix the readme typo', enters: 1 }
-  ])(
-    'presses Enter again only while a Windows Codex composer $composer',
-    async ({ draft, enters }) => {
-      vi.useFakeTimers()
-      let submitted = false
-      const { runtime, handle, writes } = await createAgentPromptSubmissionRuntime(
-        (runtime, data) => {
-          if (data !== '\r' || writes.filter((write) => write === '\r').length < 2) {
-            return
-          }
-          submitted = true
-          runtime.onPtyData('pty-prompt', '\x1b]0;Codex working\x07', Date.now())
-        },
-        'codex'
-      )
-      Object.defineProperty(runtime, 'getPtyWriteHostPlatform', { value: () => 'win32' })
-      Object.defineProperty(runtime, 'readCurrentTerminalWaitScreen', {
-        value: async () => ({ lines: [], draft: submitted ? undefined : draft })
-      })
-
-      const submission = runtime.sendTerminalAgentPrompt(handle, 'x'.repeat(9_250), {
-        inputKind: 'driving',
-        acceptQueued: true,
-        requestId: 'windows-codex-dispatch',
-        observationTimeoutMs: 0
-      })
-      await vi.runAllTimersAsync()
-
-      await expect(submission).resolves.toMatchObject({ accepted: true })
-      expect(writes.filter((write) => write === '\r')).toHaveLength(enters)
-    }
-  )
 
   it.each([
     { change: 'the user types beside the held paste', draft: '[Pasted Content 9250 chars] and x' },

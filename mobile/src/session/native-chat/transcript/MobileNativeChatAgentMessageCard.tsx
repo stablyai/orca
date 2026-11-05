@@ -16,7 +16,7 @@ import {
   type AgentMessageHeading
 } from '../../../../../src/shared/agent-session/agent-message-presentation'
 import { mobileNativeChatDisplayCopyText } from './mobile-native-chat-display-copy'
-import { MobileMarkdown } from '../../../components/MobileMarkdown'
+import { MobileNativeChatMarkdown } from '../MobileNativeChatMarkdown'
 import { MobileAgentIcon } from '../../../components/MobileAgentIcon'
 import { AgentStateDot } from '../../../components/AgentStateDot'
 import { MobileSourceCopyButton } from '../../../components/MobileSourceCopyButton'
@@ -50,7 +50,6 @@ function CompactAgentMessageCard({
   from,
   fontScale,
   attachments,
-  onOpenFile,
   onLongPress,
   status
 }: React.ComponentProps<typeof PreviewAgentMessageCard>) {
@@ -117,25 +116,14 @@ function CompactAgentMessageCard({
       {expandable && open ? (
         <View style={styles.compactBody}>
           {attachments}
-          <MobileMarkdown
+          <MobileNativeChatMarkdown
             content={text}
             rangeSelectable
             textScale={CHAT_PROSE_SCALE * fontScale}
-            onOpenFile={onOpenFile}
             onLongPress={onLongPress}
           />
           {status}
           <MobileNativeChatMessageTime timestamp={message.timestamp} fontScale={fontScale} />
-          <Pressable
-            style={({ pressed }) => [styles.refold, pressed && pressedStyle]}
-            accessibilityRole="button"
-            accessibilityState={{ expanded: true }}
-            onPress={() => setOpen(false)}
-          >
-            <Text style={styles.toggle}>
-              {t('chat.nativeChatUserMessageFold.showLess', 'Show less')}
-            </Text>
-          </Pressable>
         </View>
       ) : null}
     </View>
@@ -147,7 +135,6 @@ const PreviewAgentMessageCard = memo(function PreviewAgentMessageCard({
   from,
   fontScale,
   attachments,
-  onOpenFile,
   onLongPress,
   status
 }: {
@@ -155,7 +142,6 @@ const PreviewAgentMessageCard = memo(function PreviewAgentMessageCard({
   from: AgentMessageSource
   fontScale: number
   attachments: React.ReactNode
-  onOpenFile?: (path: string) => void
   onLongPress?: () => void
   status?: React.ReactNode
 }) {
@@ -231,11 +217,10 @@ const PreviewAgentMessageCard = memo(function PreviewAgentMessageCard({
               )
             }}
           >
-            <MobileMarkdown
+            <MobileNativeChatMarkdown
               content={text}
               rangeSelectable
               textScale={CHAT_PROSE_SCALE * fontScale}
-              onOpenFile={onOpenFile}
               onLongPress={onLongPress}
             />
           </View>

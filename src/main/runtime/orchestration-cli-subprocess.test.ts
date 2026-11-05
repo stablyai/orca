@@ -8,7 +8,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { Store } from '../persistence/loading-store/store'
 import { createSqliteTestStore, closeTestStores } from '../persistence/persistence-test-harness'
 import { hostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
-import { parseWorkspaceReferenceUrl } from '../../shared/workspace-reference-identity'
+import { parseWorkspaceReferenceUrl } from '../../shared/workspace-attachments/workspace-reference-identity'
 import { structuredAgentSessionTabId } from '../../shared/agent-session/view/structured-agent-session-projection'
 import { formatOrcaSessionAddress } from '../../shared/orca-session-address'
 import { testOrcaSessionId } from '../../shared/orca-session-address-test-fixture'
@@ -44,7 +44,7 @@ function loadRuntimeModules() {
   return Promise.all([
     import('./orca-runtime'),
     import('./orchestration/db'),
-    import('./runtime-rpc')
+    import('./rpc/server/runtime-rpc')
   ])
 }
 

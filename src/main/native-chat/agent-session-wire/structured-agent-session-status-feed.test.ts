@@ -12,7 +12,7 @@ import type {
 } from '../../../shared/agent-session/agent-session-wire'
 import type { AgentChildWorkView } from '../../../shared/agent-status/child-work/agent-status-child-work-view'
 import { createClaudeJournalTranslator } from '../../claude/structured/journal/claude-structured-journal-translation'
-import { publishCodexTurnLifecycle } from '../../codex/codex-structured-journal-translation-turns'
+import { publishCodexTurnLifecycle } from '../../codex/structured/journal/codex-structured-journal-translation-turns'
 import { createDeferredStructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'
 import {
@@ -659,7 +659,7 @@ describe('StructuredAgentSessionStatusFeed', () => {
       { kind: 'status', text: 'Working', turnLifecycle: { turnId: 'turn-1', state: 'running' } },
       { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
-    const snapshot = vi.spyOn(journal, 'snapshot')
+    const snapshot = vi.spyOn(journal, 'statusRead')
     let taskState: 'working' | 'waiting' = 'working'
     const { feed, events } = feedFor(new Map([[SESSION, { journal }]]), null, undefined, () => [
       statusFeedChildView({ state: taskState })

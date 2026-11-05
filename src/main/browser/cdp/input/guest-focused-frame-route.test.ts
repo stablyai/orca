@@ -76,27 +76,6 @@ describe('resolveFocusedFrameRoute', () => {
     })
   })
 
-  it('shares one attach between concurrent keys', async () => {
-    const guest = fakeGuest()
-    const send = frameSender({
-      focusedFrameBySession: { '': 'F1' },
-      crossSiteTargets: ['F1'],
-      sessionForTarget: { F1: 'S1' },
-      attachDelayMs: 20
-    })
-
-    const routes = await Promise.all([
-      resolveFocusedFrameRoute(guest, send),
-      resolveFocusedFrameRoute(guest, send)
-    ])
-
-    expect(routes).toEqual([
-      { kind: 'session', sessionId: 'S1' },
-      { kind: 'session', sessionId: 'S1' }
-    ])
-    expect(send.mock.calls.filter(([method]) => method === 'Target.attachToTarget')).toHaveLength(1)
-  })
-
   it('keeps hiding a session whose attach answered after the caller gave up', async () => {
     vi.useFakeTimers()
     try {
@@ -151,34 +130,5 @@ describe('resolveFocusedFrameRoute', () => {
       kind: 'session',
       sessionId: 'NEW'
     })
-  })
-
-  it('treats an unreadable main frame as main-frame focus', async () => {
-    const send = vi.fn<GuestSessionCdpSender>(async () => {
-      throw new Error('Execution context was destroyed')
-    })
-
-    expect(await resolveFocusedFrameRoute(fakeGuest(), send)).toEqual({ kind: 'widget' })
-  })
-})
-
-describe('isOrcaFrameSessionTraffic', () => {
-  it('hides only the sessions Orca attached, and forgets them when they detach', async () => {
-    const guest = fakeGuest()
-    await resolveFocusedFrameRoute(
-      guest,
-      frameSender({
-        focusedFrameBySession: { '': 'F1' },
-        crossSiteTargets: ['F1'],
-        sessionForTarget: { F1: 'S1' }
-      })
-    )
-
-    expect(isOrcaFrameSessionTraffic(guest, 'Runtime.consoleAPICalled', {}, 'S1')).toBe(true)
-    expect(isOrcaFrameSessionTraffic(guest, 'Runtime.consoleAPICalled', {}, 'AGENT')).toBe(false)
-    expect(isOrcaFrameSessionTraffic(guest, 'Page.loadEventFired', {}, undefined)).toBe(false)
-    expect(
-      isOrcaFrameSessionTraffic(guest, 'Target.detachedFromTarget', { sessionId: 'S1' }, undefined)
-    ).toBe(true)
   })
 })

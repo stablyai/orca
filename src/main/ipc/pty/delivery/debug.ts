@@ -3,7 +3,7 @@ import {
   type PtyMainDeliveryDiagnostics,
   EMPTY_PTY_MAIN_DELIVERY_DIAGNOSTICS,
   createPtyDeliveryBreadcrumbRing
-} from '../../../../shared/pty-delivery-diagnostics'
+} from '../../../../shared/terminal/pty/diagnostics/pty-delivery-diagnostics'
 
 export type PtyRendererDeliveryDebugSnapshot = {
   pendingPtyCount: number

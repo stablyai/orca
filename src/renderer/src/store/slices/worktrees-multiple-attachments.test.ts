@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   getWorkspaceAttachments,
   normalizeWorkspaceAttachmentUpdate
-} from '../../../../shared/workspace-attachments'
+} from '../../../../shared/workspace-attachments/workspace-attachments'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import { makeFolderWorkspace, makeWorktree } from './worktrees-slice-test-fixtures'
 import {

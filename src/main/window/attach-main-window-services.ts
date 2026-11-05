@@ -1,5 +1,5 @@
-import { ipcMain, nativeTheme } from 'electron'
-import type { BrowserWindow, IpcMainInvokeEvent } from 'electron'
+import { ipcMain, nativeTheme, type BrowserWindow, type IpcMainInvokeEvent } from 'electron'
+
 import type { Store } from '../persistence/loading-store/store'
 import {
   acknowledgePendingTccPromptNotice,
@@ -25,14 +25,15 @@ import {
   hasSystemMediaAccess,
   requestSystemMediaAccess
 } from '../browser/site-settings/browser-media-access'
-import type { OrcaRuntimeService, RuntimeWorktreeLifecycleEvent } from '../runtime/orca-runtime'
+import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import type { RuntimeWorktreeLifecycleEvent } from '../runtime/workspaces/lifecycle/worktree-lifecycle-event'
 import type {
   PreQuitCleanupFailureMode,
   UpdateInstallMode
 } from '../updater/lifecycle/updater-state'
 import { scheduleHistoryGc } from '../pty/history/terminal-history-gc'
 import { openCodeHookService, openCode2HookService } from '../opencode/hook-service'
-import { listLiveDaemonPtyIds } from '../daemon/daemon-provider-state'
+import { listLiveDaemonPtyIds } from '../daemon/providers/lifecycle/daemon-provider-state'
 import { hydrateLocalPtyRegistryAtBoot } from '../memory/hydrate-local-pty-registry'
 import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth-service'
 import { getKnownWorktreeIdsForHistoryGc } from './history-gc-worktree-ids'

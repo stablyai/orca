@@ -2,9 +2,12 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import { encodePairingOffer, parsePairingCode } from '../../../shared/pairing'
-import { pairedRuntimeConnectionToken } from '../../../shared/paired-runtime-connection'
-import { DeviceRegistry } from '../../runtime/device-registry'
+import {
+  encodePairingOffer,
+  parsePairingCode
+} from '../../../shared/remote-runtime/pairing/pairing'
+import { pairedRuntimeConnectionToken } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
+import { DeviceRegistry } from '../../runtime/rpc/server/pairing/device-registry'
 import { ORCAD_UPDATE_ADMISSION_FENCE_MS } from '../../../shared/orcad-terminal-census'
 import { emptyOrcadActivationRecord } from '../../managed-server/activation/orcad-activation-record'
 import type { OrcadRemoteContext } from '../../managed-server/install/orcad-remote-context'

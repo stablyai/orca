@@ -60,12 +60,11 @@ export class AcpStructuredTurns {
     return this.active !== null
   }
 
-  /** Interactive requests require an active Orca prompt with no Stop or steer cancellation. */
+  /** Interactive requests wait for the person, including in turns the agent began itself, unless Stop or a steer cuts them short. */
   get acceptsRequests(): boolean {
     return (
       this.stopAt === null &&
-      this.active !== null &&
-      this.steerCancelled !== this.active &&
+      (this.active === null || this.steerCancelled !== this.active) &&
       !this.ended
     )
   }
@@ -87,8 +86,19 @@ export class AcpStructuredTurns {
     return this.stopAt
   }
 
+  /** A Stop covers the running prompt or the agent's own open turn; later work may ask again. */
   stop(at: number): boolean {
-    this.stopAt ??= at
+    const agentTurn = this.active ? null : this.deps.lane.openTurnId
+    if ((this.active || agentTurn !== null) && this.stopAt === null) {
+      this.stopAt = at
+      if (agentTurn !== null) {
+        void this.deps.lane.whenTurnLeaves(agentTurn).then(() => {
+          if (this.stopAt === at) {
+            this.stopAt = null
+          }
+        })
+      }
+    }
     return this.withdrawSteers()
   }
 
@@ -139,6 +149,7 @@ export class AcpStructuredTurns {
       requestedAt: this.deps.now()
     }
     lane.beginCommand(command)
+    this.stopAt = null
     try {
       const opened = lane.translator.openPrompt(
         send.clientMessageId,
@@ -193,6 +204,8 @@ export class AcpStructuredTurns {
 
   private start(send: Send): void {
     const { lane } = this.deps
+    // A new message is not covered by a Stop of the agent's own earlier turn.
+    this.stopAt = null
     this.active = send
     const opened = lane.translator.openPrompt(send.clientMessageId, send.requestedAt)
     lane.apply(opened.events)
@@ -268,6 +281,7 @@ export class AcpStructuredTurns {
   private finish(send: Send): void {
     if (this.active === send) {
       this.active = null
+      this.stopAt = null
     }
     if (this.steerCancelled === send) {
       this.steerCancelled = null

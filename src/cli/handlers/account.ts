@@ -8,7 +8,7 @@ import { RuntimeClientError } from '../runtime-client'
 import { stripElectronRunAsNode } from '../runtime/orca-app-executable'
 import { rejectRemoteSelectionFlags } from '../remote-selection-flag-rejection'
 import { buildWslExecArgs, buildWslLoginShellCommand } from '../../shared/wsl-login-shell-command'
-import { quotePosixShell } from '../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../shared/shell/launch/shell-argument-quoting'
 import { isWindowsFnmDefaultAliasDir } from '../../shared/fnm-default-alias-dirs'
 import {
   getVersionManagerBinPaths,
@@ -265,9 +265,10 @@ export const ACCOUNT_HANDLERS: Record<string, CommandHandler> = {
       return
     }
     const { client, json } = ctx
-    // Listing shows no usage, so avoid a serial provider refresh for every account.
+    // JSON carries usage: refresh stale windows within throttles; a forced refresh bypasses Retry-After.
     const result = await client.call<AccountsListSnapshot>('accounts.list', {
-      refreshUsage: false
+      refreshUsage: false,
+      ...(json ? { refreshStaleUsage: true } : {})
     })
     printResult(result, json, (snapshot) =>
       [

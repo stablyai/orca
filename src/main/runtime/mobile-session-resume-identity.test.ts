@@ -2,10 +2,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { agentHookServer } from '../agent-hooks/server'
 
 // Preserve side-effect order: mocks, lifecycle, fixtures.
-const { OrcaRuntimeService } = await import('./orca-runtime-test-mocks.spec')
-await import('./orca-runtime-test-lifecycle.spec')
-const { TEST_REPO_ID, TEST_WORKTREE_ID, store } = await import('./orca-runtime-test-fixtures.spec')
-const { bindPaneFirst, committingSpawn } = await import('./bind-first-pane.test-fixture')
+await import('./orca-runtime-tests/runtime-test-module-registration.spec')
+const { OrcaRuntimeService } = await import('./orca-runtime')
+await import('./orca-runtime-tests/orca-runtime-test-lifecycle.spec')
+const { TEST_REPO_ID, TEST_WORKTREE_ID, store } =
+  await import('./orca-runtime-tests/orca-runtime-test-fixtures.spec')
+const { bindPaneFirst, committingSpawn } =
+  await import('./orca-runtime-tests/bind-first-pane.test-fixture')
 const { toSshExecutionHostId } = await import('../../shared/execution-host')
 
 const SESSION = { key: 'session_id', id: 'codex-history-session' } as const

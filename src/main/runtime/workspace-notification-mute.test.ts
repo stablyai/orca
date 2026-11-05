@@ -4,14 +4,14 @@ import type { PersistedState } from '../../shared/persisted-state-types'
 import type { Worktree } from '../../shared/worktree/types'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import type { WorktreeLineage } from '../../shared/worktree/lineage-types'
-import type { FolderWorkspace } from '../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-workspace-types'
 import { getDefaultNotificationSettings } from '../../shared/notification-settings-defaults'
 import { normalizeNotificationSettings } from '../persistence/applying-settings/onboarding-normalization'
 import {
   isWorkspaceHiddenBySidebarFilters,
   isWorkspaceNotificationMuted,
   type WorkspaceNotificationMuteDeps
-} from './workspace-notification-mute'
+} from './push/notifications/workspace-notification-mute'
 
 const WORKSPACE_ID = 'repo-1::/work/feature'
 const SCOPE = WORKSPACE_ID

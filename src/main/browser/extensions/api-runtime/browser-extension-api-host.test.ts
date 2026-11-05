@@ -56,10 +56,10 @@ vi.mock('../../browser-manager', () => ({ browserManager: {} }))
 vi.mock('../../../ipc/browser/browser-tab-registration-wait', () => ({
   waitForTabRegistration: vi.fn()
 }))
-vi.mock('../../../runtime/browser/browser-tab-renderer-create', () => ({
+vi.mock('../../../runtime/browser/tabs/browser-tab-renderer-create', () => ({
   createBrowserTabInRenderer: vi.fn()
 }))
-vi.mock('../../../runtime/browser/browser-tab-renderer-close', () => ({
+vi.mock('../../../runtime/browser/tabs/browser-tab-renderer-close', () => ({
   closeBrowserTabInRenderer: vi.fn()
 }))
 
@@ -72,7 +72,7 @@ const {
   BROWSER_EXTENSION_EVENT_CHANNEL,
   BROWSER_EXTENSION_INVOKE_CHANNEL,
   BROWSER_EXTENSION_FRAME_LIFETIME_CHANNEL
-} = await import('../../../../shared/browser-extension-channels')
+} = await import('../../../../shared/browser/extensions/browser-extension-channels')
 const surface = await import('../../../../preload/browser-extension-api-surface')
 const registry = await import('./browser-extension-namespace-registry')
 const host = await import('./browser-extension-api-host')

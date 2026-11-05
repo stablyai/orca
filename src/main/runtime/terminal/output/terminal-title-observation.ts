@@ -1,9 +1,9 @@
 import type { AgentStatus } from '../../../../shared/agent-status/title/agent-title-core'
-import type { RuntimePtyWorktreeRecord } from '../../runtime-terminal-state-records'
+import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 import { OrcaRuntimeWithGetUnpersistedTrackedTitleForPty } from './terminal-title-tracker'
-import type { TerminalTitleFactMeta } from '../../../../shared/terminal-output-side-effects'
+import type { TerminalTitleFactMeta } from '../../../../shared/terminal/output/terminal-output-side-effects'
 import { detectAgentStatusFromTitle } from '../../../../shared/agent-status/title/agent-title-status'
-import { terminalTitleBlocksExplicitAgentStatus } from '../../runtime-worktree-status-projection'
+import { terminalTitleBlocksExplicitAgentStatus } from '../../workspaces/process-listing/runtime-worktree-status-projection'
 import type { ClaudeTerminalEvidence } from '../../../../shared/claude-terminal-interrupt'
 import { agentStatusTakesTypedInput } from '../../orchestration/mailbox-owner'
 

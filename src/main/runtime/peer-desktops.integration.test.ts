@@ -4,8 +4,9 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { pairedRuntimeConnectionFromOffer } from '../../shared/paired-runtime-connection'
-import { encodePairingOffer, parsePairingCode, type PairingOffer } from '../../shared/pairing'
+import { pairedRuntimeConnectionFromOffer } from '../../shared/remote-runtime/pairing/paired-runtime-connection'
+import { encodePairingOffer, parsePairingCode } from '../../shared/remote-runtime/pairing/pairing'
+import type { PairingOffer } from '../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import { sendRemoteRuntimeRequest } from '../../shared/remote-runtime/remote-runtime-client'
 import {
   ORCAD_DECLARE_CLIENT_METHOD,
@@ -15,17 +16,17 @@ import {
 import { ORCAD_PEER_DESKTOPS_RUNTIME_CAPABILITY } from '../../shared/orcad-runtime-capabilities'
 import type { RuntimeStatus } from '../../shared/runtime-types'
 import { OrcaRuntimeService } from './orca-runtime'
-import { OrcaRuntimeRpcServer } from './runtime-rpc'
+import { OrcaRuntimeRpcServer } from './rpc/server/runtime-rpc'
 import {
   authenticateMobileWsSession,
   createEncryptedWsResponseReader,
   sendEncryptedWsRequest,
   waitForWsClose,
   type AuthenticatedMobileWs
-} from './runtime-rpc-mobile-ws-test-harness'
-import { makeStore } from './runtime-rpc-worktree-store-fixtures'
+} from './rpc/server/runtime-rpc-mobile-ws-test-harness'
+import { makeStore } from './rpc/server/runtime-rpc-worktree-store-fixtures'
 import { DECLARED_CLIENT_RECONNECT_GRACE_MS } from './declared-desktop-clients'
-import { partialRuntimeStore } from './runtime-store-partial-fixture'
+import { partialRuntimeStore } from './orca-runtime-tests/runtime-store-partial-fixture'
 
 vi.mock('../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => {
   const facade = getWorktreeListingMocks()

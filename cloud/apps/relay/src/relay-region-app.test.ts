@@ -5,13 +5,13 @@ const fakes = vi.hoisted(() => ({
   verifyRelayToken: vi.fn(async (token: string) => ({ sub: 'user-1', relayHostId: token }))
 }))
 
-vi.mock('./relay-token-verifier.js', () => ({
+vi.mock('./authentication/relay-token-verifier.js', () => ({
   createRelayTokenVerifier: () => fakes.verifyRelayToken,
   readBearer: (value: string | undefined) => value?.replace(/^Bearer /, '') ?? null
 }))
 
 import { createRelayApp } from './app.js'
-import { ReservePaceError } from './reserve-assignment.js'
+import { ReservePaceError } from './assignment/reserve-placement/reserve-assignment.js'
 
 describe('Relay region API', () => {
   it('passes a valid preference to placement and records coarse outcomes', async () => {

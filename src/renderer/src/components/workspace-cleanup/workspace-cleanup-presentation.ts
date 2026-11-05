@@ -8,9 +8,10 @@ import type {
 } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup'
+import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup/workspace-cleanup'
 import { isGitHubPRSuppressed } from '../../../../shared/worktree/github-pr-suppression'
-import { getWorkspaceCleanupCandidateHostId } from './workspace-cleanup-host-identity'
+import './workspace-cleanup-host-identity'
+import { getWorkspaceCleanupCandidateHostId } from '../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
 import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 export type WorkspaceCleanupSortKey = 'activity' | 'name' | 'repo' | 'review' | 'git'
@@ -64,7 +65,7 @@ export function getWorkspaceCleanupReviewInfo(
   state: WorkspaceCleanupRendererStateInputs,
   lookup: WorkspaceCleanupReviewLookup = buildWorkspaceCleanupReviewLookup(state)
 ): WorkspaceCleanupReviewInfo {
-  const repo = findCandidateRepo(candidate, lookup)
+  const repo = findWorkspaceCleanupCandidateRepo(candidate, lookup.reposById)
   const worktree = findCandidateWorktree(candidate, repo, lookup)
   const cachedHostedReview = getCachedHostedReview(candidate, worktree, repo, state)
   const hostedReview =
@@ -106,12 +107,7 @@ export function getWorkspaceCleanupReviewInfo(
 export function buildWorkspaceCleanupReviewLookup(
   state: Pick<WorkspaceCleanupRendererStateInputs, 'repos' | 'worktreesByRepo'>
 ): WorkspaceCleanupReviewLookup {
-  const reposById = new Map<string, Repo[]>()
-  for (const repo of state.repos) {
-    const matches = reposById.get(repo.id) ?? []
-    matches.push(repo)
-    reposById.set(repo.id, matches)
-  }
+  const reposById = groupWorkspaceCleanupReposById(state.repos)
   const worktreesByRepoAndId = new Map<string, Worktree[]>()
   for (const [repoId, worktrees] of Object.entries(selectWorktreesByRepo(state))) {
     for (const worktree of worktrees) {
@@ -145,11 +141,24 @@ function getCachedHostedReview(
   return state.hostedReviewCache[cacheKey]?.data ?? null
 }
 
-function findCandidateRepo(
+/** Repo ids repeat across hosts, so a candidate's repo is resolved per host. */
+export function groupWorkspaceCleanupReposById(
+  repos: readonly Repo[]
+): ReadonlyMap<string, readonly Repo[]> {
+  const reposById = new Map<string, Repo[]>()
+  for (const repo of repos) {
+    const matches = reposById.get(repo.id) ?? []
+    matches.push(repo)
+    reposById.set(repo.id, matches)
+  }
+  return reposById
+}
+
+export function findWorkspaceCleanupCandidateRepo(
   candidate: WorkspaceCleanupCandidate,
-  lookup: WorkspaceCleanupReviewLookup
+  reposById: ReadonlyMap<string, readonly Repo[]>
 ): Repo | null {
-  const matches = lookup.reposById.get(candidate.repoId) ?? []
+  const matches = reposById.get(candidate.repoId) ?? []
   if (!candidate.executionHostId && !candidate.connectionId) {
     return matches.length === 1 ? matches[0] : null
   }

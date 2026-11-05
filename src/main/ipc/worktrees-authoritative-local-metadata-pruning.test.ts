@@ -15,7 +15,7 @@ import { pruneMetadataMissingFromAuthoritativeLocalScan } from './worktrees/list
 import { listDetectedWorktreesForCapturedRepo } from './worktrees/listing/detected-provider-listing'
 import { getLocalWorktreeScanGeneration } from '../workspaces/catalog/local-worktree-scan-generation'
 import { agentHookServer } from '../agent-hooks/server'
-import { makePaneKey } from '../../shared/stable-pane-id'
+import { makePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import {
   isRegisteredWorktreePath,
   registerWorktreeRootsForRepo
@@ -110,6 +110,9 @@ vi.mock('../git/git-username', async (importOriginal) => ({
 vi.mock('../github/client', async () =>
   (await import('./worktrees-test-module-mocks')).githubClientModuleMock()
 )
+vi.mock('../github/client/lookup/get-pr-for-branch', async () =>
+  (await import('./worktrees-test-module-mocks')).githubClientModuleMock()
+)
 vi.mock('../source-control/hosted-review', async () =>
   (await import('./worktrees-test-module-mocks')).hostedReviewModuleMock()
 )
@@ -169,7 +172,7 @@ vi.mock('../workspaces/catalog/local-worktree-path-presence', async (importOrigi
   ...(await importOriginal<Record<string, unknown>>()),
   localWorktreePathsExistOrAreUnverifiable: localWorktreePathPresenceMock
 }))
-vi.mock('../runtime/worktree-teardown', async () =>
+vi.mock('../runtime/workspaces/removal/worktree-teardown', async () =>
   (await import('./worktrees-test-module-mocks')).worktreeTeardownModuleMock()
 )
 vi.mock('./pty/provider/registry', async () =>

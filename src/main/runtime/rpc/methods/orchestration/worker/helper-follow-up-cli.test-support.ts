@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, vi, type MockInstance } from 'vitest'
 import { z } from 'zod'
-import { OrcaRuntimeRpcServer } from '../../../../runtime-rpc'
+import { OrcaRuntimeRpcServer } from '../../../server/runtime-rpc'
 import { ORCHESTRATION_METHODS } from '../../orchestration'
 import { STATUS_METHODS } from '../../status'
 import { TERMINAL_QUERY_METHODS } from '../../terminal/terminal-query-methods'
@@ -20,7 +20,7 @@ import {
   mintStructuredWorkerPaneKey,
   structuredWorkerIdentities,
   structuredWorkerProcessIncarnation
-} from '../../../../structured-worker-identity'
+} from '../../../../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
 import { testOrcaSessionId } from '../../../../../../shared/orca-session-address-test-fixture'
 import * as placement from './worker-start-agent-placement'
 

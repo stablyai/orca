@@ -1,9 +1,9 @@
 import { app, ipcMain, shell, type IpcMainInvokeEvent } from 'electron'
 import type { RuntimeAccessGrant } from '../../shared/runtime-access-grants'
-import type { MobilePairingConnectionMode } from '../../shared/mobile-pairing-connection-mode'
-import { classifyRemotePairingHostname } from '../../shared/remote-pairing-address'
+import type { MobilePairingConnectionMode } from '../../shared/remote-runtime/pairing/mobile-pairing-connection-mode'
+import { classifyRemotePairingHostname } from '../../shared/remote-runtime/pairing/remote-pairing-address'
 import type { RuntimePairingReach } from '../../shared/runtime-pairing-reach'
-import type { DeviceEntry } from '../runtime/device-registry'
+import type { DeviceEntry } from '../runtime/rpc/server/pairing/device-entry'
 import { NETWORK_EXPOSURE_FAILED_GUIDANCE } from '../runtime/network-exposure-guidance'
 import {
   getDefaultPairingAddress,
@@ -12,9 +12,12 @@ import {
   type NetworkInterface
 } from '../runtime/pairing-network-interfaces'
 import { resolveAdvertisedPairingHostname } from '../runtime/pairing-endpoint'
-import type { OrcaRuntimeRpcServer } from '../runtime/runtime-rpc'
-import type { MobileRelayStatusDetail } from '../../shared/mobile-relay-status'
-import { encodeMobilePairingQr, type MobilePairingQrResult } from '../runtime/mobile-pairing-qr'
+import type { OrcaRuntimeRpcServer } from '../runtime/rpc/server/runtime-rpc'
+import type { MobileRelayStatusDetail } from '../../shared/remote-runtime/relay/mobile-relay-status'
+import {
+  encodeMobilePairingQr,
+  type MobilePairingQrResult
+} from '../runtime/rpc/server/pairing/mobile-pairing-qr'
 import { getWindowsDefaultRouteInterfaceNames } from '../runtime/windows-default-route-interfaces'
 import {
   getWebSocketPort,

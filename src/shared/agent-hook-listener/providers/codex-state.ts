@@ -20,7 +20,8 @@ import {
   type CodexSubagentTranscriptState
 } from '../../codex-subagent-transcript'
 import type { AgentHookEventPayload } from '../listener-event'
-import type { CodexLeadTurnState, HookListenerState } from '../listener-state'
+import type { HookListenerState } from '../listener-state'
+import type { CodexLeadTurnState } from '../main-agent-turn-state'
 
 export function getOrCreateCodexSubagentRoster(
   state: HookListenerState,

@@ -1,5 +1,5 @@
 import { useAppStore } from '../store'
-import { useClosedEditorTabCleanup } from '../components/editor/useClosedEditorTabCleanup'
+import { useClosedEditorTabCleanup } from '../components/editor/model-lifetime/retention/useClosedEditorTabCleanup'
 import { useIpcEvents } from '../hooks/useIpcEvents'
 import { useAutomationDispatchEvents } from '../hooks/useAutomationDispatchEvents'
 import { useReadOnScreenAttention } from '../hooks/useReadOnScreenAttention'

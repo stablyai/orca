@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 
-import { BrowserClientFileChannelReadParams } from '../../../../shared/browser-client-file-channel-protocol'
+import { BrowserClientFileChannelReadParams } from '../../../../shared/browser/client-hosting/browser-client-file-channel-protocol'
 import { BrowserClientFileChannelTransport } from './browser-client-file-channel-transport'
 import { BrowserClientPageCommandExecutor } from '../../client-pages/execution/browser-client-page-command-executor'
 import {

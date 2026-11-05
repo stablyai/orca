@@ -4,7 +4,7 @@ import { RpcDispatcher } from '../dispatcher'
 import type { RpcRequest } from '../core'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import type { RuntimeStore } from '../../runtime-store-contract'
-import { RuntimeRpcPairing } from '../../runtime-rpc/runtime-rpc-pairing'
+import { RuntimeRpcPairing } from '../server/runtime-rpc-pairing'
 import { REPO_METHODS } from './repo'
 import { AGENT_HOOK_METHODS } from './agent-hooks'
 import { CLIENT_UI_METHODS } from './client-ui'
@@ -17,9 +17,9 @@ import {
   expectSettingsWorkScale,
   createGlobalSettingsFixture
 } from '../../../../shared/global-settings-test-fixture'
-import { partialRuntimeStore } from '../../runtime-store-partial-fixture'
+import { partialRuntimeStore } from '../../orca-runtime-tests/runtime-store-partial-fixture'
 
-vi.mock('../../../codex/managed-wsl-home-shell-preflight', () => ({
+vi.mock('../../../codex/hooks/installation/managed-wsl-home-shell-preflight', () => ({
   prepareManagedWslCodexHomeBeforeShellLaunch: async ({
     hooksEnabled
   }: {
