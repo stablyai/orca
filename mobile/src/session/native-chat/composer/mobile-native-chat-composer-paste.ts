@@ -13,7 +13,7 @@ import { resizeMobileClipboardImage } from '../../mobile-clipboard-image-resize'
 /** Reads the images one paste carried, sized for upload. */
 export type MobilePastedImages = () => Promise<readonly PickedMobileImage[]>
 
-export type MobileNativeChatComposerPasteTargets = {
+type MobileNativeChatComposerPasteTargets = {
   /** Null when this chat takes no images. */
   readonly attachImages: ((read: MobilePastedImages) => void) | null
   /** Null when the host keeps no phone files, so a long paste stays prompt text. */
@@ -63,7 +63,7 @@ async function readClipboardImage(
 }
 
 /** Text pastes stay native unless long; images attach as chips like Photos picks. */
-export function handleMobileNativeChatComposerPaste(
+function handleMobileNativeChatComposerPaste(
   event: PasteEvent,
   { attachImages, attachPastedText, clipboard }: MobileNativeChatComposerPasteTargets
 ): void {
