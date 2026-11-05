@@ -8,16 +8,13 @@ import { assertCrewSourceCurrent } from './runtime-environment-subscription-setu
 import { getRuntimeEnvironmentStatus } from './runtime-environment-status-probe'
 import { getPreferredPairedRuntimeConnection } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
-import {
-  resolveEnvironment,
-  markEnvironmentUsed
-} from '../../../shared/remote-runtime/host-store/runtime-environment-store'
+import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import {
   requireWslHostWithoutStart,
   resolveManagedRuntimeEnvironment,
   type ManagedRuntimeCallPreparation
 } from './runtime-environment-managed-tunnel'
-import { recordRuntimeEnvironmentUsage } from './runtime-environment-usage-record'
+import { recordRuntimeEnvironmentUsage } from '../../../shared/remote-runtime/host-store/runtime-environment-usage-record'
 import type * as Rpc from '../../../shared/runtime-rpc-envelope'
 import {
   subscribeRemoteRuntimeRequest,
@@ -297,7 +294,9 @@ function markEnvironmentUsedFromResponse(
   response: Rpc.RuntimeRpcResponse<unknown>
 ): void {
   if (response.ok === true) {
-    markEnvironmentUsed(userDataPath, environmentId, { runtimeId: response._meta.runtimeId })
+    recordRuntimeEnvironmentUsage(userDataPath, environmentId, {
+      runtimeId: response._meta.runtimeId
+    })
   }
 }
 
