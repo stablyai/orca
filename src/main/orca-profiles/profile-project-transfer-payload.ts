@@ -130,6 +130,15 @@ function rekeyWorkspaceLineageRecord(
   return next
 }
 
+export function assertRepoHasNoCrossStoreLinkedWorkspace(
+  state: TransferProfileState,
+  repoId: string
+): void {
+  assertNoCrossStoreLinkedWorkspaceInMove(state, (childKey) =>
+    ownerKeyBelongsToRepo(childKey, repoId)
+  )
+}
+
 export function createTransferPayload(args: {
   sourceState: TransferProfileState
   sourceRepo: Repo
@@ -139,9 +148,7 @@ export function createTransferPayload(args: {
   const { sourceState, sourceRepo, targetRepo, includeSessions } = args
   const oldRepoId = sourceRepo.id
   const newRepoId = targetRepo.id
-  assertNoCrossStoreLinkedWorkspaceInMove(sourceState, (childKey) =>
-    ownerKeyBelongsToRepo(childKey, oldRepoId)
-  )
+  assertRepoHasNoCrossStoreLinkedWorkspace(sourceState, oldRepoId)
   const worktreeIds = collectTransferWorktreeIds(sourceState, oldRepoId)
   const targetProjection = projectHostSetupProjectionFromRepos([targetRepo])
   const targetProjectId =
