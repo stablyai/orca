@@ -12,7 +12,8 @@ import { nativeChatPinnedRowIndexes, nativeChatTranscriptRange } from './native-
 import { nativeChatSlotKey, type NativeChatTranscriptSlot } from './native-chat-transcript-slots'
 import {
   nativeChatScrollOffsetWithin,
-  useNativeChatViewportAlign
+  useNativeChatViewportAlign,
+  type NativeChatAlignEdge
 } from './use-native-chat-viewport-align'
 
 /** Overscan by row because chat rows vary widely in height and rendering cost. */
@@ -31,7 +32,7 @@ export type NativeChatTranscriptWindow = {
   sizerRef: (node: HTMLDivElement | null) => void
   measureRow: (node: HTMLElement | null) => void
   /** Scroll so this element's top meets the top of the viewport. */
-  alignToViewportTop: (element: HTMLElement) => void
+  alignToViewportTop: (element: HTMLElement, edge?: NativeChatAlignEdge) => void
   /** Whether a jump is still settling as its target row is measured. */
   isAlignPending: () => boolean
   /** A reader gesture releases the jump's target. */

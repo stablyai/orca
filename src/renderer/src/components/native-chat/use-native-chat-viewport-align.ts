@@ -23,6 +23,8 @@ export function nativeChatScrollOffsetWithin(
   return node === container ? top : null
 }
 
+export type NativeChatAlignEdge = 'start' | 'end'
+
 /** Fallback when layout provides no offset-parent chain. */
 function rectOffsetWithin(element: HTMLElement, container: HTMLElement): number {
   return (
@@ -43,7 +45,8 @@ export function useNativeChatViewportAlign({
   finishReaderTakeover: () => void
   programmaticScrollMarks: ProgrammaticScrollMarks
 }): {
-  alignToViewportTop: (element: HTMLElement) => void
+  /** `end` brings the row's end to the viewport's bottom instead, for the newest of a run. */
+  alignToViewportTop: (element: HTMLElement, edge?: NativeChatAlignEdge) => void
   isAlignPending: () => boolean
   /** Another write, or the reader, took the scroll. */
   endAlign: () => void
@@ -51,12 +54,13 @@ export function useNativeChatViewportAlign({
   isAlignHeld: () => boolean
 } {
   /** The row or offset `alignToViewportTop` scrolled to, until something else takes the scroll. */
-  const alignRef = useRef<(({ index: number } | { offset: number }) & { arrived: boolean }) | null>(
-    null
-  )
+  const alignRef = useRef<
+    | (({ index: number; edge: NativeChatAlignEdge } | { offset: number }) & { arrived: boolean })
+    | null
+  >(null)
 
   const alignToViewportTop = useCallback(
-    (element: HTMLElement) => {
+    (element: HTMLElement, edge: NativeChatAlignEdge = 'start') => {
       const container = scrollRef.current
       if (!container) {
         return
@@ -66,12 +70,14 @@ export function useNativeChatViewportAlign({
       // Use the virtualizer to replace its pending jump reconciliation instead of racing it.
       if (virtualizer.scrollElement && !Number.isNaN(index)) {
         // Target the row's index so measurements can correct its landing offset.
-        alignRef.current = { index, arrived: false }
-        virtualizer.scrollToIndex(index, { align: 'start', behavior: 'auto' })
+        alignRef.current = { index, edge, arrived: false }
+        virtualizer.scrollToIndex(index, { align: edge, behavior: 'auto' })
         return
       }
-      const top =
+      const start =
         nativeChatScrollOffsetWithin(element, container) ?? rectOffsetWithin(element, container)
+      const top =
+        edge === 'end' ? Math.max(0, start + element.offsetHeight - container.clientHeight) : start
       alignRef.current = { offset: top, arrived: false }
       if (virtualizer.scrollElement) {
         virtualizer.scrollToOffset(top, { align: 'start', behavior: 'auto' })
@@ -96,7 +102,7 @@ export function useNativeChatViewportAlign({
     }
     const target =
       'index' in pending
-        ? virtualizer.getOffsetForIndex(pending.index, 'start')?.[0]
+        ? virtualizer.getOffsetForIndex(pending.index, pending.edge)?.[0]
         : pending.offset
     const max = Math.max(0, container.scrollHeight - container.clientHeight)
     if (

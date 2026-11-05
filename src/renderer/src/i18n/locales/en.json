@@ -20152,7 +20152,8 @@
         "stateIdleCount_one": "{{value0}} stopped",
         "stateIdleCount_other": "{{value0}} stopped",
         "stateUnverifiableCount_one": "{{value0}} with status unavailable",
-        "stateUnverifiableCount_other": "{{value0}} with status unavailable"
+        "stateUnverifiableCount_other": "{{value0}} with status unavailable",
+        "showAgent": "Show {{value0}} in the conversation"
       },
       "jumpToLatest": "Jump to latest",
       "find": {

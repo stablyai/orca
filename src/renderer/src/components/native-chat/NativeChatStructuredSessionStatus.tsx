@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { NativeChatBackgroundTasksStatus } from './NativeChatBackgroundTasksStatus'
+import type { NativeChatMessageListHandle } from './use-native-chat-reveal-latest'
 import type { AgentSessionCancelResult } from '../../../../shared/agent-session/agent-session-wire'
 import {
   structuredSessionConfirmedStopsStillListed,
@@ -27,6 +28,8 @@ export function NativeChatStructuredSessionStatus(props: {
   isVisible: boolean
   backgroundTasks: StructuredSessionBackgroundTasksView
   stopBackgroundTask: (taskId?: string) => Promise<AgentSessionCancelResult | null>
+  /** The pane's transcript, where an agent picked in the strip opens. */
+  messageListRef?: React.RefObject<NativeChatMessageListHandle | null>
 }): React.JSX.Element {
   const [stopping, setStopping] = useState<StoppingBackgroundTasks | null>(null)
   // Keep confirmed Stop buttons pending until that specific run leaves the strip.
@@ -112,6 +115,7 @@ export function NativeChatStructuredSessionStatus(props: {
           expanded={expanded?.sessionId === props.sessionId && expanded.expanded}
           onExpandedChange={(value) => setExpanded({ sessionId: props.sessionId, expanded: value })}
           onStop={onStop}
+          onShowAgent={(providerId) => props.messageListRef?.current?.revealSubagent(providerId)}
         />
       ) : null}
     </>

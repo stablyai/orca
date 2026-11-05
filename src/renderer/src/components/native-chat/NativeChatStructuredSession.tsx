@@ -347,6 +347,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
             isVisible={props.isVisible}
             backgroundTasks={controller.backgroundTasks}
             stopBackgroundTask={controller.stopBackgroundTask}
+            messageListRef={submits.messageListRef}
           />
           {prompt ? null : (
             <NativeChatStructuredComposerTabStrips

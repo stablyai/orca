@@ -105,7 +105,8 @@ export function NativeChatSubagentEntries({
           </>
         )
         return (
-          <li key={agent.id}>
+          // Named so a reveal from the agents strip can bring this entry into view.
+          <li key={agent.id} data-native-chat-subagent-entry={agent.id}>
             {sectionOpen === undefined ? (
               <div className="flex items-center gap-1.5 py-0.5">{entry}</div>
             ) : (

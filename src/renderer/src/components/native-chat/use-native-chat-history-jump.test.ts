@@ -5,7 +5,11 @@ import { useMemo, useSyncExternalStore } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import type { NativeChatRailItem } from './native-chat-message-rail-items'
 import type { NativeChatOlderPageResult } from './native-chat-pagination'
-import { useNativeChatRailHistoryJump } from './use-native-chat-rail-history-jump'
+import {
+  nativeChatRailJumpStep,
+  useNativeChatHistoryJump,
+  type NativeChatHistoryJumpTarget
+} from './use-native-chat-history-jump'
 
 type LaneSnapshot = { loaded: number; messages: readonly string[]; streamed: number }
 
@@ -97,19 +101,19 @@ function createLane({
         ...current.messages.map((id, slotIndex) => ({ id, slotIndex, text: id, hasImages: false }))
       ]
     }, [current])
-    return useNativeChatRailHistoryJump({
-      items,
+    return useNativeChatHistoryJump({
+      step: (target) =>
+        target.kind === 'rail' ? nativeChatRailJumpStep(items, target.id, jumpToLoaded) : 'stop',
       sessionKey,
       isVisible,
-      loadEarlier: lane.loadEarlier,
-      jumpToLoaded
+      loadEarlier: lane.loadEarlier
     })
   }
   return { lane, useLaneRailJump }
 }
 
-function outlineItem(id: string): NativeChatRailItem {
-  return { id, slotIndex: null, text: id, hasImages: false }
+function outlineItem(id: string): NativeChatHistoryJumpTarget {
+  return { kind: 'rail', id }
 }
 
 async function releasePage(lane: { releasePage: () => void }): Promise<void> {
@@ -129,7 +133,7 @@ describe('rail jump through unloaded history', () => {
     act(() => result.current.start(outlineItem('m25')))
     await waitFor(() => expect(lane.reads.count).toBe(1))
     act(() => result.current.start(outlineItem('m2')))
-    expect(result.current.pendingId).toBe('m2')
+    expect(result.current.pending).toEqual(outlineItem('m2'))
     for (let page = 0; page < 3; page += 1) {
       await releasePage(lane)
     }
@@ -149,7 +153,7 @@ describe('rail jump through unloaded history', () => {
       result.current.start(outlineItem('m2'))
     })
 
-    await waitFor(() => expect(result.current.pendingId).toBeNull())
+    await waitFor(() => expect(result.current.pending).toBeNull())
     expect(jumpToLoaded).toHaveBeenCalledTimes(1)
     expect(jumpToLoaded).toHaveBeenCalledWith(expect.objectContaining({ id: 'm2' }))
     expect(lane.reads.count).toBe(3)
@@ -167,7 +171,7 @@ describe('rail jump through unloaded history', () => {
     act(() => result.current.start(outlineItem('m25')))
     await waitFor(() => expect(lane.reads.count).toBe(1))
     rerender({ sessionKey: 'session-2' })
-    expect(result.current.pendingId).toBeNull()
+    expect(result.current.pending).toBeNull()
     await releasePage(lane)
 
     expect(lane.reads.count).toBe(1)
