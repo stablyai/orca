@@ -116,11 +116,15 @@ export function MobileSessionActiveContent({
     isFloatingWorkspaceRoute
   } = controller
   const [tappedLink, setTappedLink] = useState<string | null>(null)
-  // Why: a browser tab needs a real worktree and a host that streams it; elsewhere only the phone's.
+  // Why: a browser tab needs a real worktree and a connected host known to stream it; elsewhere
+  // only the phone's browser is offered, so the sheet never shows a choice that would refuse.
   const openInOrca =
-    isFloatingWorkspaceRoute || browserScreencastSupported === false
-      ? undefined
-      : (url: string) => void handleCreateBrowser(url)
+    client &&
+    !controller.showOfflineState &&
+    !isFloatingWorkspaceRoute &&
+    browserScreencastSupported === true
+      ? (url: string) => void handleCreateBrowser(url)
+      : undefined
   const hostProfile = useHostProfile(hostId)
   const hostTitle = useHostDisplay(hostProfile).title
   const nativeChatImageSource = useMemo(
