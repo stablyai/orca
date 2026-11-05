@@ -255,10 +255,10 @@ describe('resolveWorktreeSidebarStatusDropCommitTarget', () => {
   it('uses the current status target when pointerup hit-testing succeeds', () => {
     expect(
       resolveWorktreeSidebarStatusDropCommitTarget({
-        currentTarget: { status: 'completed', isPinDrop: false, lineageParentId: null },
+        currentTarget: { status: 'completed', isPinDrop: false, lineageParentIdentity: null },
         currentPreview: preview,
         latestTrackedTarget: {
-          target: { status: 'in-progress', isPinDrop: false, lineageParentId: null },
+          target: { status: 'in-progress', isPinDrop: false, lineageParentIdentity: null },
           preview: null,
           x: 100,
           y: 100
@@ -267,7 +267,7 @@ describe('resolveWorktreeSidebarStatusDropCommitTarget', () => {
         y: 100
       })
     ).toEqual({
-      target: { status: 'completed', isPinDrop: false, lineageParentId: null },
+      target: { status: 'completed', isPinDrop: false, lineageParentIdentity: null },
       preview
     })
   })
@@ -275,10 +275,10 @@ describe('resolveWorktreeSidebarStatusDropCommitTarget', () => {
   it('reuses the latest status target when pointerup hit-testing blanks at the same point', () => {
     expect(
       resolveWorktreeSidebarStatusDropCommitTarget({
-        currentTarget: { status: null, isPinDrop: false, lineageParentId: null },
+        currentTarget: { status: null, isPinDrop: false, lineageParentIdentity: null },
         currentPreview: null,
         latestTrackedTarget: {
-          target: { status: 'completed', isPinDrop: false, lineageParentId: null },
+          target: { status: 'completed', isPinDrop: false, lineageParentIdentity: null },
           preview,
           x: 100,
           y: 100
@@ -287,7 +287,7 @@ describe('resolveWorktreeSidebarStatusDropCommitTarget', () => {
         y: 101
       })
     ).toEqual({
-      target: { status: 'completed', isPinDrop: false, lineageParentId: null },
+      target: { status: 'completed', isPinDrop: false, lineageParentIdentity: null },
       preview
     })
   })
@@ -295,10 +295,10 @@ describe('resolveWorktreeSidebarStatusDropCommitTarget', () => {
   it('reuses the latest lineage target when pointerup hit-testing blanks at the same point', () => {
     expect(
       resolveWorktreeSidebarStatusDropCommitTarget({
-        currentTarget: { status: null, isPinDrop: false, lineageParentId: null },
+        currentTarget: { status: null, isPinDrop: false, lineageParentIdentity: null },
         currentPreview: null,
         latestTrackedTarget: {
-          target: { status: null, isPinDrop: false, lineageParentId: 'parent-worktree' },
+          target: { status: null, isPinDrop: false, lineageParentIdentity: 'parent-worktree' },
           preview: null,
           x: 100,
           y: 100
@@ -307,7 +307,7 @@ describe('resolveWorktreeSidebarStatusDropCommitTarget', () => {
         y: 101
       })
     ).toEqual({
-      target: { status: null, isPinDrop: false, lineageParentId: 'parent-worktree' },
+      target: { status: null, isPinDrop: false, lineageParentIdentity: 'parent-worktree' },
       preview: null
     })
   })
@@ -315,10 +315,10 @@ describe('resolveWorktreeSidebarStatusDropCommitTarget', () => {
   it('does not reuse a stale status target after the pointer has moved away', () => {
     expect(
       resolveWorktreeSidebarStatusDropCommitTarget({
-        currentTarget: { status: null, isPinDrop: false, lineageParentId: null },
+        currentTarget: { status: null, isPinDrop: false, lineageParentIdentity: null },
         currentPreview: null,
         latestTrackedTarget: {
-          target: { status: 'completed', isPinDrop: false, lineageParentId: null },
+          target: { status: 'completed', isPinDrop: false, lineageParentIdentity: null },
           preview,
           x: 100,
           y: 100
@@ -327,7 +327,7 @@ describe('resolveWorktreeSidebarStatusDropCommitTarget', () => {
         y: 100
       })
     ).toEqual({
-      target: { status: null, isPinDrop: false, lineageParentId: null },
+      target: { status: null, isPinDrop: false, lineageParentIdentity: null },
       preview: null
     })
   })

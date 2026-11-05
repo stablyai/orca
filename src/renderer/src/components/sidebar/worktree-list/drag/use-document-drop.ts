@@ -35,12 +35,12 @@ export function useWorktreeDocumentDrop(args: {
                 y: event.clientY
               })
             : NO_WORKTREE_SIDEBAR_DROP_TARGET,
-          session.draggedIds
+          session.pickedCopies
         )
-        if (target.lineageParentId) {
+        if (target.lineageParentIdentity) {
           event.preventDefault()
           event.stopPropagation()
-          ctx.commitWorktreeLineageParentDrop(session.draggedIds, target.lineageParentId)
+          ctx.commitWorktreeLineageParentDrop(session.pickedCopies, target.lineageParentIdentity)
           clearWorktreeDrag()
           return
         }

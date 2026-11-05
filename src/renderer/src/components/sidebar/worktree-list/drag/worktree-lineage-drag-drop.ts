@@ -25,7 +25,7 @@ export function isWorktreeLineageDropZoneHit(args: {
   return args.pointerY >= zoneTop && args.pointerY <= zoneBottom
 }
 
-export function getWorktreeLineageDropTargetId(args: {
+export function getWorktreeLineageDropTargetIdentity(args: {
   container: HTMLElement
   target: Element
   pointerY: number
@@ -55,7 +55,8 @@ export function getWorktreeLineageDropTargetId(args: {
     return null
   }
 
-  return rowTarget.getAttribute('data-worktree-drag-id')
+  // Host identity, so a drop names the row's own machine even when a twin shares its id.
+  return rowTarget.getAttribute('data-worktree-host-identity')
 }
 
 export function getReorderedWorktreeIdsToUnnest(args: {

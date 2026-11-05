@@ -179,6 +179,7 @@ describe('worktree sidebar drag geometry under mid-drag card growth', () => {
         draggingWorktreeId: 'a',
         sourceGroupKey: 'repo:one',
         draggedIds: ['a'],
+        pickedCopies: [],
         draggedCopies: [],
         reorderDraggedIds: ['a'],
         reorderDraggedKeys: ['a'],

@@ -20,7 +20,7 @@ import { WorktreeParentPickerRow } from './WorktreeParentPickerRow'
 import { getEligibleWorktreeParents } from './worktree-parent-candidates'
 import { selectSidebarLineageParentIdentities } from '@/store/cross-store-lineage-parents'
 import { isCrossStoreParent } from '@/store/slices/worktrees/metadata/cross-store-parent-ref'
-import { selectWorktreeParent } from './worktree-parent-selection'
+import { selectWorktreeParent, showCrossStoreParentError } from './worktree-parent-selection'
 
 export { selectWorktreeParent }
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
@@ -185,16 +185,7 @@ export function WorktreeParentPickerPopover({
     (candidate: Worktree) => {
       if (child && isCrossStoreParent(child, candidate)) {
         onOpenChange(false)
-        // Refusals here (older Orca, a loop on the parent's machine) name what to do next.
-        void assignCrossStoreWorktreeParent(child, candidate).catch((error: unknown) => {
-          toast.error(
-            translate(
-              'auto.components.sidebar.WorktreeParentPickerPopover.failedSetParent',
-              'Failed to set parent worktree'
-            ),
-            { description: error instanceof Error ? error.message : undefined }
-          )
-        })
+        void assignCrossStoreWorktreeParent(child, candidate).catch(showCrossStoreParentError)
         return
       }
       selectWorktreeParent({

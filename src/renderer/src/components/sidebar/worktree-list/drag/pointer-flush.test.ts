@@ -43,6 +43,7 @@ function setup() {
       worktreeId: 'child',
       worktreeKey: 'child',
       draggedIds: ['child'],
+      pickedCopies: [],
       draggedCopies: [],
       reorderDraggedIds: ['child'],
       reorderDraggedKeys: ['child'],
@@ -96,7 +97,7 @@ function setup() {
     offsets,
     state: () => state,
     nest: (id: string | null) => {
-      target = { ...NO_WORKTREE_SIDEBAR_DROP_TARGET, lineageParentId: id }
+      target = { ...NO_WORKTREE_SIDEBAR_DROP_TARGET, lineageParentIdentity: id }
     },
     tick: (ms: number) => {
       time += ms
@@ -114,10 +115,10 @@ describe('combined nesting and animated reordering', () => {
     expect(t.state().previewOffsetsByWorktreeId.size).toBe(0)
     t.nest('parent')
     t.tick(80)
-    expect(t.state().lineageDropTargetId).toBe('parent')
+    expect(t.state().lineageDropTargetIdentity).toBe('parent')
     expect(t.state().previewOffsetsByWorktreeId.size).toBe(0)
     t.tick(200)
-    expect(t.state().lineageDropTargetId).toBe('parent')
+    expect(t.state().lineageDropTargetIdentity).toBe('parent')
     expect(t.state().dropIndicatorY).toBeNull()
   })
 
@@ -129,13 +130,13 @@ describe('combined nesting and animated reordering', () => {
     expect(t.state().dropIndicatorY).toBe(300)
     t.nest('parent')
     flushWorktreePointerDragFrame(t.args)
-    expect(t.state().lineageDropTargetId).toBe('parent')
+    expect(t.state().lineageDropTargetIdentity).toBe('parent')
     expect(t.state().previewOffsetsByWorktreeId).toBe(t.offsets)
     expect(t.state().dropIndicatorY).toBeNull()
     t.nest(null)
     flushWorktreePointerDragFrame(t.args)
     t.tick(160)
-    expect(t.state().lineageDropTargetId).toBeNull()
+    expect(t.state().lineageDropTargetIdentity).toBeNull()
     expect(t.state().previewOffsetsByWorktreeId).toBe(t.offsets)
     expect(t.state().dropIndicatorY).toBe(300)
   })

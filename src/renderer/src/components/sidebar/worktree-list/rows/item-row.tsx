@@ -33,7 +33,7 @@ export type WorktreeItemRowContext = {
   groupIndexByRowKey: ReadonlyMap<string, number>
   agentSendTargetWorktreeId: string | null
   worktreeDragState: WorktreeRowDragState
-  nativeLineageDropTargetId: string | null
+  nativeLineageDropTargetIdentity: string | null
   activeWorktreeId: string | null
   activeWorkspaceExecutionHostId: ExecutionHostId | null
   currentWorktreeId: string | null
@@ -121,8 +121,8 @@ export function renderWorktreeItemRow(
   const isMultiSelected = ctx.selectedWorktreeIds.has(worktreeIdentity)
   const isLineageDropTarget =
     ctx.worktreeDragState.draggingWorktreeId &&
-    (ctx.worktreeDragState.lineageDropTargetId === itemRow.worktree.id ||
-      ctx.nativeLineageDropTargetId === itemRow.worktree.id)
+    (ctx.worktreeDragState.lineageDropTargetIdentity === worktreeIdentity ||
+      ctx.nativeLineageDropTargetIdentity === worktreeIdentity)
   const isActiveWorktree = isActiveSidebarWorkspace(itemRow.worktree, {
     worktreeId: ctx.activeWorktreeId,
     hostId: ctx.activeWorkspaceExecutionHostId ?? null

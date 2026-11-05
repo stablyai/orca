@@ -6,7 +6,7 @@ import type { Worktree } from '../../../../../../shared/worktree/types'
 import { getCyclicProjectedWorktreeLineageIds } from '../../../../../../shared/sidebar-list/worktree-lineage-projection'
 import {
   getReorderedWorktreeIdsToUnnest,
-  getWorktreeLineageDropTargetId,
+  getWorktreeLineageDropTargetIdentity,
   isWorktreeLineageDropZoneHit
 } from './worktree-lineage-drag-drop'
 
@@ -44,12 +44,14 @@ describe('isWorktreeLineageDropZoneHit', () => {
   })
 })
 
-describe('getWorktreeLineageDropTargetId', () => {
+describe('getWorktreeLineageDropTargetIdentity', () => {
   it('returns the row id only when the pointer is away from the reorder gutters', () => {
     const { container, target } = makeTarget({ worktreeId: 'parent', top: 100, bottom: 200 })
 
-    expect(getWorktreeLineageDropTargetId({ container, target, pointerY: 107 })).toBeNull()
-    expect(getWorktreeLineageDropTargetId({ container, target, pointerY: 150 })).toBe('parent')
+    expect(getWorktreeLineageDropTargetIdentity({ container, target, pointerY: 107 })).toBeNull()
+    expect(getWorktreeLineageDropTargetIdentity({ container, target, pointerY: 150 })).toBe(
+      'ssh:box|parent'
+    )
   })
 
   it('ignores content targets outside the sidebar container', () => {
@@ -60,7 +62,7 @@ describe('getWorktreeLineageDropTargetId', () => {
       contained: false
     })
 
-    expect(getWorktreeLineageDropTargetId({ container, target, pointerY: 150 })).toBeNull()
+    expect(getWorktreeLineageDropTargetIdentity({ container, target, pointerY: 150 })).toBeNull()
   })
 
   it.each(['status', 'agent'] as const)(
@@ -73,7 +75,9 @@ describe('getWorktreeLineageDropTargetId', () => {
         targetRole
       })
 
-      expect(getWorktreeLineageDropTargetId({ container, target, pointerY: 150 })).toBe('parent')
+      expect(getWorktreeLineageDropTargetIdentity({ container, target, pointerY: 150 })).toBe(
+        'ssh:box|parent'
+      )
     }
   )
 
@@ -83,11 +87,15 @@ describe('getWorktreeLineageDropTargetId', () => {
     const padding = document.createElement('div')
     row.append(padding)
 
-    expect(getWorktreeLineageDropTargetId({ container, target: padding, pointerY: 120 })).toBe(
-      'parent'
+    expect(
+      getWorktreeLineageDropTargetIdentity({ container, target: padding, pointerY: 120 })
+    ).toBe('ssh:box|parent')
+    expect(getWorktreeLineageDropTargetIdentity({ container, target: row, pointerY: 180 })).toBe(
+      'ssh:box|parent'
     )
-    expect(getWorktreeLineageDropTargetId({ container, target: row, pointerY: 180 })).toBe('parent')
-    expect(getWorktreeLineageDropTargetId({ container, target: padding, pointerY: 201 })).toBeNull()
+    expect(
+      getWorktreeLineageDropTargetIdentity({ container, target: padding, pointerY: 201 })
+    ).toBeNull()
   })
 
   it.each([true, false])(
@@ -108,15 +116,17 @@ describe('getWorktreeLineageDropTargetId', () => {
       childRow.getBoundingClientRect = () => ({ top: 220, bottom: 300 }) as DOMRect
 
       expect(
-        getWorktreeLineageDropTargetId({ container, target: child.target, pointerY: 250 })
-      ).toBe('child')
-      expect(getWorktreeLineageDropTargetId({ container, target: childRow, pointerY: 250 })).toBe(
-        'child'
-      )
+        getWorktreeLineageDropTargetIdentity({ container, target: child.target, pointerY: 250 })
+      ).toBe('ssh:box|child')
       expect(
-        getWorktreeLineageDropTargetId({ container, target: children, pointerY: 250 })
+        getWorktreeLineageDropTargetIdentity({ container, target: childRow, pointerY: 250 })
+      ).toBe('ssh:box|child')
+      expect(
+        getWorktreeLineageDropTargetIdentity({ container, target: children, pointerY: 250 })
       ).toBeNull()
-      expect(getWorktreeLineageDropTargetId({ container, target, pointerY: 120 })).toBe('parent')
+      expect(getWorktreeLineageDropTargetIdentity({ container, target, pointerY: 120 })).toBe(
+        'ssh:box|parent'
+      )
     }
   )
 
@@ -124,13 +134,16 @@ describe('getWorktreeLineageDropTargetId', () => {
     const { container, target } = makeTarget({ worktreeId: 'child', top: 100, bottom: 200 })
     const parentRow = document.createElement('div')
     parentRow.setAttribute('data-worktree-drag-id', 'parent')
+    parentRow.setAttribute('data-worktree-host-identity', 'ssh:box|parent')
     parentRow.append(container.firstElementChild!)
     container.append(parentRow)
 
     expect(
-      getWorktreeLineageDropTargetId({ container, target: parentRow, pointerY: 150 })
+      getWorktreeLineageDropTargetIdentity({ container, target: parentRow, pointerY: 150 })
     ).toBeNull()
-    expect(getWorktreeLineageDropTargetId({ container, target, pointerY: 150 })).toBe('child')
+    expect(getWorktreeLineageDropTargetIdentity({ container, target, pointerY: 150 })).toBe(
+      'ssh:box|child'
+    )
   })
 })
 
@@ -264,6 +277,7 @@ function makeTarget(args: {
   const container = document.createElement('div')
   const row = document.createElement('div')
   row.setAttribute('data-worktree-drag-id', args.worktreeId)
+  row.setAttribute('data-worktree-host-identity', `ssh:box|${args.worktreeId}`)
   const content = document.createElement('div')
   content.setAttribute('data-worktree-card-parent-content', '')
   content.getBoundingClientRect = () => ({ top: args.top, bottom: args.bottom }) as DOMRect
