@@ -1338,7 +1338,7 @@
 6 test-no-real-time-wait:src/main/runtime/rpc/ws-transport.test.ts
 6 test-no-real-time-wait:src/main/runtime/runtime-rpc-long-poll-transport.test.ts
 2 test-no-real-time-wait:src/main/windows/windows-pty-job.win32.test.ts
-6 test-no-real-time-wait:src/renderer/src/components/native-chat/native-chat-composer-draft-store.test.ts
+4 test-no-real-time-wait:src/renderer/src/components/native-chat/native-chat-composer-draft-store.test.ts
 6 test-no-real-time-wait:src/wsl-guest/agent-hook-server.test.ts
 6 test-no-real-time-wait:tests/e2e/paired-instant-browser-tab.spec.ts
 6 test-no-wall-clock:src/main/agent-hooks/server-launch-resume-identity.test.ts
