@@ -222,11 +222,21 @@ describe('a managed orcad that keeps exiting unexpectedly', () => {
     })
   })
 
-  it('wakes it again once the host rebooted since the run it braked on', async () => {
-    startsReporting(CRASHED)
+  it.each([
+    ['crashed after serving', () => startsReporting(CRASHED)],
+    [
+      'never became ready',
+      () =>
+        stoppedSlotLaunches(async () => {
+          throw new OrcadLaunchReadinessError('rejected', 'orcad did not become ready')
+        })
+    ]
+  ])('wakes it again once the host rebooted since runs that %s', async (_case, failEachRun) => {
+    failEachRun()
     for (let i = 0; i < 3; i++) {
-      await findStopped()
+      await findStopped().catch(() => undefined)
     }
+    startsReporting(null)
     const lockOnBootA = JSON.stringify({
       pid: 4343,
       startedAtMs: 1,

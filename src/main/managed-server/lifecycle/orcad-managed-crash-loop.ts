@@ -196,14 +196,11 @@ async function wakeUnlessEngaged(
   }
 }
 
-/** A run that served releases orcad.lock on a clean exit; a lock from an earlier boot ended by reboot. */
+/** A served run releases orcad.lock on a clean exit; any run's lock from an earlier boot ended by reboot. */
 async function latchedRunEndedWithoutCrash(
   environmentId: string,
   slot: ManagedOrcadSlot
 ): Promise<boolean> {
-  if (!brake.latchedOnServingRunOf(environmentId)) {
-    return false
-  }
   try {
     const lock = await readBoundedOrcadRemoteRecord(
       slot,
@@ -211,7 +208,8 @@ async function latchedRunEndedWithoutCrash(
       MAX_ORCAD_LOCK_BYTES
     )
     if (lock.state === 'absent') {
-      return true
+      // A start that died before readiness may never have taken the lock, so absence proves nothing there.
+      return brake.latchedOnServingRunOf(environmentId)
     }
     const lockBoot = parseOrcadInstanceLockRecord(lock.raw)?.bootId
     // Only Linux records a boot id; elsewhere a reconnect re-arms the host.
