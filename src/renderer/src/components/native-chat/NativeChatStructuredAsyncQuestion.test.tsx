@@ -101,9 +101,11 @@ describe('NativeChatStructuredAsyncQuestion', () => {
       body: answerItem.body
     }
     render(projectStructuredAgentSessionMessages([askedItem], [], []))
-    const input = container.querySelector<HTMLInputElement>('input[data-native-chat-answer-field]')!
+    const input = container.querySelector<HTMLTextAreaElement>(
+      'textarea[data-native-chat-answer-field]'
+    )!
     act(() => {
-      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(
         input,
         'Green'
       )
@@ -116,7 +118,7 @@ describe('NativeChatStructuredAsyncQuestion', () => {
     const selected = container.querySelector<HTMLButtonElement>('button[aria-pressed="true"]')!
     const sameCard = (disabled: boolean) => {
       expect(container.querySelector('button[aria-pressed="true"]')).toBe(selected)
-      expect(container.querySelector('input[data-native-chat-answer-field]')).toBe(input)
+      expect(container.querySelector('textarea[data-native-chat-answer-field]')).toBe(input)
       expect(input.value).toBe('Green')
       expect(selected.disabled).toBe(disabled)
     }
@@ -168,7 +170,7 @@ describe('NativeChatStructuredAsyncQuestion', () => {
         ]
       )
     )
-    expect(container.querySelector('input[data-native-chat-answer-field]')).toBeNull()
+    expect(container.querySelector('textarea[data-native-chat-answer-field]')).toBeNull()
   })
 
   it.each([false, true])(
@@ -294,11 +296,11 @@ describe('NativeChatStructuredAsyncQuestion', () => {
           )
         )
       render([asked])
-      const input = container.querySelector<HTMLInputElement>(
-        'input[data-native-chat-answer-field]'
+      const input = container.querySelector<HTMLTextAreaElement>(
+        'textarea[data-native-chat-answer-field]'
       )!
       act(() => {
-        const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
+        const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!
         setter.call(input, 'Green')
         input.dispatchEvent(new Event('input', { bubbles: true }))
       })
@@ -342,7 +344,8 @@ describe('NativeChatStructuredAsyncQuestion', () => {
       )
       expect(container.querySelector('button[aria-pressed="true"]')?.textContent).toContain('Blue')
       expect(
-        container.querySelector<HTMLInputElement>('input[data-native-chat-answer-field]')?.value
+        container.querySelector<HTMLTextAreaElement>('textarea[data-native-chat-answer-field]')
+          ?.value
       ).toBe('Green')
       act(() => vi.runAllTimers())
 
