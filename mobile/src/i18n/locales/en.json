@@ -2896,7 +2896,9 @@
       "reset": "Marked pending: {{task}}",
       "updated": "Updated {{task}}",
       "unchanged": "Tasks unchanged",
-      "showAll": "Full task list"
+      "showAll": "Full task list",
+      "cancelled": "Cancelled",
+      "cancelledTask": "Cancelled {{task}}"
     },
     "sessionOptionCopy": {
       "ultracode": "Ultracode",

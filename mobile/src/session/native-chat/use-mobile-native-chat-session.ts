@@ -1,4 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import type { NativeChatTaskSeedList } from '../../../../src/shared/native-chat/input/native-chat-claude-task-updates'
+import {
+  nextMobileNativeChatTaskSeed,
+  type MobileNativeChatTaskSeed
+} from './mobile-native-chat-task-seed'
 import {
   EMPTY_NATIVE_CHAT_TRANSCRIPT,
   encodeNativeChatTranscriptIdentity
@@ -52,6 +57,8 @@ export type MobileNativeChatSession = {
   loadEarlier: () => void
   /** Latest provider turn boundary from the transcript feed; absent from older hosts. */
   transcriptLifecycle?: NativeChatTurnLifecycle
+  /** Tasks from history outside the loaded tail. */
+  taskList?: NativeChatTaskSeedList | null
 }
 
 const INITIAL_LIMIT = 40
@@ -114,6 +121,7 @@ export function useMobileNativeChatSession(args: {
     identity: string
     lifecycle: NativeChatTurnLifecycle | undefined
   } | null>(null)
+  const [taskSeed, setTaskSeed] = useState<MobileNativeChatTaskSeed | null>(null)
   const [hasMore, setHasMore] = useState(false)
   const { phase: olderPages, load: loadOlderPages, supersede } = useMobileOlderPageLoader()
   const beforeOffsetRef = useRef<number | null>(null)
@@ -168,7 +176,7 @@ export function useMobileNativeChatSession(args: {
         limit: limitRef.current,
         // Use a distinct token per screen so another viewer cannot evict this host feed.
         subscriptionId: buildNativeChatSubscriptionId(agent, sessionId, randomV4Uuid()),
-        capabilities: { transcriptPending: 1, transcriptSourceOrder: 1 },
+        capabilities: { transcriptPending: 1, transcriptSourceOrder: 1, taskList: 1 },
         ...(transcriptPath ? { transcriptPath } : {}),
         ...(resumeAfter ? { resumeAfter } : {})
       },
@@ -177,6 +185,7 @@ export function useMobileNativeChatSession(args: {
           return
         }
         const frame = raw as MobileNativeChatStreamFrame
+        setTaskSeed((seed) => nextMobileNativeChatTaskSeed(frame, identity, seed))
         // No file yet says nothing about rows this subscription already holds: unsettle the read, keep the rows.
         if (resumeAfter && frame.type === 'snapshot' && frame.pending) {
           setRead({ client, identity, status: 'awaiting-transcript' })
@@ -329,6 +338,7 @@ export function useMobileNativeChatSession(args: {
     loadingEarlier: olderPages === 'loading',
     olderPages,
     loadEarlier,
-    transcriptLifecycle: lifecycle?.identity === identity ? lifecycle.lifecycle : undefined
+    transcriptLifecycle: lifecycle?.identity === identity ? lifecycle.lifecycle : undefined,
+    taskList: taskSeed?.identity === identity ? taskSeed.taskList : undefined
   }
 }
