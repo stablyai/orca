@@ -115,7 +115,9 @@ export function resolveCommand(
     command === 'git'
       ? `${GIT_OUTPUT_LOCALE_SHELL_PREFIX} ${wslGitObjectStorePrefix(options.env)}`
       : ''
-  const escapedCommand = options.wslShellCommand ?? quotePosixShell(command)
+  // `command` skips rc-defined git functions (e.g. git.exe under /mnt) that would misread Linux paths.
+  const escapedCommand =
+    options.wslShellCommand ?? `${command === 'git' ? 'command ' : ''}${quotePosixShell(command)}`
   // Quote each argument against shell splitting and expansion.
   const escapedArgs = translatedArgs.map(quotePosixShell)
   const linuxCwd = cwdWsl?.linuxPath ?? (cwd && wslDistroOverride ? translateArgForWsl(cwd) : null)
