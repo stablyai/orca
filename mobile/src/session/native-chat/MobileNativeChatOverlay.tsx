@@ -3,6 +3,7 @@ import { useCallback, useLayoutEffect, useMemo } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { MobileNativeChatView, type MobileNativeChatInputLockReason } from './MobileNativeChatView'
 import { foldMobileNativeChatMessages } from './mobile-native-chat-render-data'
+import { nativeChatDockedTaskList } from '../../../../src/shared/native-chat/input/native-chat-task-list-state'
 import type { MobileNativeChatImageAttachments } from './composer/use-mobile-native-chat-image-attachments'
 import type { MobileNativeChatController } from './mobile-native-chat-controller-contract'
 import type { MobileNativeChatStructuredComposer } from './composer/MobileNativeChatComposer'
@@ -84,6 +85,7 @@ export function MobileNativeChatOverlay({
     () => foldMobileNativeChatMessages(fullContent.messages, agent),
     [fullContent.messages, agent]
   )
+  const taskList = useMemo(() => nativeChatDockedTaskList(folded), [folded])
   const streaming = controller.nativeChatStreamingText ?? null
   const queued = controller.nativeChatQueued
   const composerTray = useMobileNativeChatComposerTray({
@@ -102,6 +104,7 @@ export function MobileNativeChatOverlay({
       steerHeld: controller.nativeChatTurnIndicator?.stopping === true,
       agentWorking: controller.nativeChatTurnActive
     },
+    taskList,
     backgroundTasks: controller.nativeChatBackgroundTasks
   })
   const visuals = useMobileNativeChatVisualRenderer(controller.nativeChatVisualSource)
@@ -250,6 +253,11 @@ export function MobileNativeChatOverlay({
                         ? () => void images.attachImage('library')
                         : undefined
                     }
+                    onPasteImages={
+                      controller.nativeChatAcceptsImages
+                        ? (paste) => void images.attachImage(paste)
+                        : undefined
+                    }
                     attachments={images.attachments}
                     onRemoveAttachment={images.removeAttachment}
                     isAttaching={images.isAttaching}
@@ -268,6 +276,7 @@ export function MobileNativeChatOverlay({
                     skillDiscovery={controller.nativeChatSkills}
                     onNeedSkills={controller.loadNativeChatSkills}
                     sessionOptions={controller.nativeChatSessionOptions}
+                    contextUsage={controller.nativeChatContextUsage}
                     structuredComposer={structuredComposer}
                     keyboardInset={keyboardInset}
                   />

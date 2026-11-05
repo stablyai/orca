@@ -29,15 +29,6 @@ vi.mock('../native-chat/codex-rollout-history-stream', async (importOriginal) =>
 vi.mock('../native-chat/session-file-resolver', () => ({
   resolveSessionFilePath: async (_agent: string, id: string) => state.paths.get(id) ?? null
 }))
-vi.mock('./structured/session-lifecycle/codex-provider-session-invocation', () => ({
-  codexProviderSessionInvocation: async () => ({
-    command: 'codex',
-    args: [],
-    cliPath: 'codex',
-    cwd: state.home,
-    timeoutMs: 60_000
-  })
-}))
 vi.mock('./app-server/codex-app-server-session', async (importOriginal) => ({
   ...(await importOriginal<typeof AppServerSession>()),
   runCodexAppServerSession: async (
@@ -99,7 +90,8 @@ function copy(selected = `${SOURCE}:a1`, settled = true) {
       record: agentSessionRecordFixture({
         sessionId: 'orca-source',
         provider: 'codex',
-        accountHome: { variable: 'CODEX_HOME', path: root }
+        accountHome: { variable: 'CODEX_HOME', path: root },
+        launchArgs: ['--model', 'saved-model']
       }),
       identity: {
         sessionId: 'orca-source',
@@ -121,7 +113,11 @@ function copy(selected = `${SOURCE}:a1`, settled = true) {
         settled
       }
     },
-    { resolveLaunchArgs: () => [], resolveWorkspacePath: async () => root }
+    {
+      resolveLaunchArgs: () => ['--model', 'configured-model'],
+      resolveWorkspacePath: async () => root,
+      resolveCommand: () => ({ command: 'codex', prefixArgs: [] })
+    }
   )
 }
 
@@ -129,6 +125,28 @@ it('uses a persisted terminal canonical boundary for an idle imported latest rep
   await history(SOURCE, turn('canonical', 1))
   state.request.mockResolvedValue({ thread: { id: CHILD } })
   await expect(copy(undefined, false)).resolves.toEqual({ sessionId: CHILD })
+  expect(state.initialize).toHaveBeenCalledWith(
+    expect.objectContaining({
+      command: 'codex',
+      args: [
+        '--model',
+        'saved-model',
+        '-c',
+        'approval_policy=never',
+        '-c',
+        'features.plugins=false',
+        '-s',
+        'read-only',
+        '-a',
+        'never',
+        'app-server'
+      ],
+      cwd: root,
+      env: { CODEX_HOME: root },
+      timeoutMs: 60_000
+    })
+  )
+  expect(state.request).toHaveBeenCalledWith('thread/fork', expect.objectContaining({ cwd: root }))
   expect(state.request.mock.calls.map(([method]) => method)).toEqual(['thread/fork'])
   expect(state.request).toHaveBeenCalledWith(
     'thread/fork',

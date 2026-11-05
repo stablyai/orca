@@ -90,6 +90,7 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     setStructuredOption,
     sendSource,
     unavailable,
+    accountUsage,
     threadGoal: threadGoalSupport,
     reportedThreadGoal,
     contextUsage: usageSupport,
@@ -229,6 +230,7 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     readCurrent: transportEnabled && readCurrent,
     rewind,
     conversationCommands,
+    accountUsage,
     compactInstructions,
     ...structuredConversationCommandRunner({
       agentName,

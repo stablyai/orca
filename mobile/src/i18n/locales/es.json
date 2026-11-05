@@ -193,6 +193,11 @@
       "sendQueueHint": "Se ejecuta después del turno actual",
       "sendSteerHint": "Entra en lo que el agente está haciendo ahora"
     },
+    "contextUsage": {
+      "label": "Contexto: {{used}} de {{window}} tokens, {{percent}} % usados",
+      "title": "Contexto",
+      "estimated": "Estimado a partir de la última respuesta."
+    },
     "composerAttachments": {
       "attachedImage": "Imagen adjunta",
       "file": "Archivo",
@@ -1828,13 +1833,8 @@
       "noUpdate": "Sin actualizaciones desde hace {{value0}}"
     },
     "agentMessageAttribution": {
-      "from": "De {{sender}}",
-      "fromMore": "De {{sender}} +{{count}}",
-      "fromUnnamed": "De un agente",
-      "messageFrom": "Mensaje de {{sender}}",
-      "messageFromMore": "Mensaje de {{sender}} +{{count}}",
-      "messageFromUnnamed": "Mensaje de un agente",
-      "unnamedSender": "un agente"
+      "unnamedSender": "un agente",
+      "fromSender": "De"
     },
     "aiVaultResumeLaunch": {
       "createFailed": "No se pudo crear la terminal",
@@ -1864,6 +1864,7 @@
       "countWorkflows_one": "{{count}} flujo de trabajo",
       "countWorkflows_other": "{{count}} flujos de trabajo",
       "detailsUnavailable": "Los detalles de la tarea no están disponibles para esta sesión.",
+      "outputFile": "Salida: {{value0}}",
       "groupAgents": "Agentes",
       "groupMonitors": "Monitores",
       "groupShell": "Shell",
@@ -2217,8 +2218,7 @@
     },
     "queuedMessageComposer": {
       "commandsNotAllowed": "No se pueden guardar comandos en un mensaje en cola.",
-      "editing": "Editando mensaje",
-      "editingAttributed": "Editando mensaje · {{attribution}}"
+      "editing": "Editando mensaje"
     },
     "quickCommandEditorForm": {
       "action": "Acción",

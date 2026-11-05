@@ -16,6 +16,7 @@ import type {
 } from '../../../../src/shared/native-chat/transcript/native-chat-turn-status'
 import type { NativeChatTurnJournal } from '../../../../src/shared/native-chat/transcript/native-chat-turn-membership'
 import type { NativeChatResolvedPrompt } from '../../../../src/shared/native-chat/native-chat-resolution-receipt'
+import type { NativeChatContextUsageSummary } from '../../../../src/shared/native-chat/native-chat-context-usage-summary'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { styles } from './mobile-native-chat-view-styles'
@@ -40,6 +41,7 @@ import { MobileNativeChatAwaitingInputRow } from './transcript/MobileNativeChatA
 import type { NativeChatAwaitingInput } from '../../../../src/shared/native-chat/native-chat-terminal-turn'
 import { MobileNativeChatFloatingControls } from './MobileNativeChatFloatingControls'
 import type { PendingNativeChatImage } from './composer/mobile-native-chat-image-attachment'
+import type { MobilePastedImages } from './composer/mobile-native-chat-composer-paste'
 import {
   MobileNativeChatDraftComposer,
   type MobileNativeChatSendProps,
@@ -103,6 +105,7 @@ type ChatViewProps = MobileNativeChatSendProps &
     draftKey: string | null
     onComposerTextChange: (text: string) => void
     onAttachImage?: () => void
+    onPasteImages?: (paste: MobilePastedImages) => void
     attachments?: PendingNativeChatImage[]
     onRemoveAttachment?: (id: string) => void
     isAttaching?: boolean
@@ -115,6 +118,7 @@ type ChatViewProps = MobileNativeChatSendProps &
     skillDiscovery?: NativeChatSkillDiscoverySnapshot
     onNeedSkills?: () => void
     sessionOptions?: MobileNativeChatSessionOptionPickersProps | null
+    contextUsage?: NativeChatContextUsageSummary | null
     structuredComposer?: MobileNativeChatStructuredComposer | null
     askRequiresTerminal?: boolean
     promptKey?: string | null
@@ -156,6 +160,7 @@ export function MobileNativeChatView({
   composerScopeKey,
   onComposerTextChange,
   onAttachImage,
+  onPasteImages,
   attachments,
   onRemoveAttachment,
   isAttaching,
@@ -174,6 +179,7 @@ export function MobileNativeChatView({
   skillDiscovery,
   onNeedSkills,
   sessionOptions,
+  contextUsage = null,
   structuredComposer: structured = null,
   ask,
   askKey,
@@ -393,7 +399,9 @@ export function MobileNativeChatView({
             {...{ getSendCompletionGeneration, getComposerEditGeneration, inputRef, sendFollowUp }}
             agent={agent}
             sessionOptions={sessionOptions}
+            contextUsage={contextUsage}
             onAttachImage={onAttachImage}
+            onPasteImages={onPasteImages}
             attachments={attachments}
             onRemoveAttachment={onRemoveAttachment}
             isAttaching={isAttaching}

@@ -10,13 +10,12 @@ import { resolveSessionFilePath } from '../native-chat/session-file-resolver'
 import { decodeCodexTranscriptLine } from '../native-chat/transcript-line-decoders-codex'
 import {
   CodexAppServerTimeoutError,
-  runCodexAppServerSession,
   type CodexAppServerRpc
 } from './app-server/codex-app-server-session'
 import {
-  codexProviderSessionInvocation,
-  type CodexProviderSessionInvocationDeps
-} from './structured/session-lifecycle/codex-provider-session-invocation'
+  runCodexProviderAppServer,
+  type CodexProviderInvocationDeps
+} from './structured/session-lifecycle/codex-provider-session-rename'
 
 type CopyInput = Parameters<NonNullable<StructuredAgentSessionAdapter['copyConversation']>>[0]
 type Root = { id?: string; terminal: boolean; prompt: boolean }
@@ -144,7 +143,7 @@ async function turns(
 
 export async function copyCodexConversation(
   input: CopyInput,
-  invocation: CodexProviderSessionInvocationDeps | undefined
+  invocation: CodexProviderInvocationDeps | undefined
 ) {
   if (!input.record || !input.checkpoint || !invocation) {
     return unavailable()
@@ -171,11 +170,6 @@ export async function copyCodexConversation(
     sessionId: input.providerSessionId,
     signal
   })
-  const launch = await codexProviderSessionInvocation(
-    record,
-    { ...invocation, resolveLaunchArgs: () => record.launchArgs ?? invocation.resolveLaunchArgs() },
-    60_000
-  )
   const beforeTurnId = history.roots[history.index + 1]?.id
   const lastTurnId = history.selected.id
   if (!checkpoint.settled && !history.selected.terminal && !beforeTurnId) {
@@ -183,15 +177,17 @@ export async function copyCodexConversation(
       "Codex hasn't finished this response yet. Wait for it to finish, then try again."
     )
   }
-  return runCodexAppServerSession(
-    { ...launch, signal, experimentalApi: !lastTurnId && Boolean(beforeTurnId) },
-    async (rpc) => {
+  return runCodexProviderAppServer(
+    record,
+    { ...invocation, resolveLaunchArgs: () => record.launchArgs ?? invocation.resolveLaunchArgs() },
+    { timeoutMs: 60_000, signal, experimentalApi: !lastTurnId && Boolean(beforeTurnId) },
+    async (rpc, cwd) => {
       const fork = asRecord(
         await rpc.request('thread/fork', {
           threadId: input.providerSessionId,
           ...(lastTurnId ? { lastTurnId } : beforeTurnId ? { beforeTurnId } : {}),
           excludeTurns: true,
-          cwd: launch.cwd
+          cwd
         })
       )
       const thread = asRecord(fork?.thread)

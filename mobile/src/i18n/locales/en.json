@@ -1949,7 +1949,6 @@
     },
     "queuedMessageComposer": {
       "commandsNotAllowed": "Commands can't be saved in a queued message.",
-      "editingAttributed": "Editing message · {{attribution}}",
       "editing": "Editing message"
     },
     "accessoryKeys": {
@@ -2158,13 +2157,8 @@
       "agent": "Agent"
     },
     "agentMessageAttribution": {
-      "messageFromUnnamed": "Message from an agent",
-      "fromUnnamed": "From an agent",
       "unnamedSender": "an agent",
-      "messageFromMore": "Message from {{sender}} +{{count}}",
-      "fromMore": "From {{sender}} +{{count}}",
-      "messageFrom": "Message from {{sender}}",
-      "from": "From {{sender}}"
+      "fromSender": "From"
     },
     "backgroundTask": {
       "monitoring": "Monitoring background tasks",
@@ -2177,6 +2171,7 @@
       "monitor": "Background monitor",
       "task": "Background task",
       "detailsUnavailable": "Task details are unavailable for this session.",
+      "outputFile": "Output: {{value0}}",
       "countAgents_one": "{{count}} agent",
       "countAgents_other": "{{count}} agents",
       "countShell_one": "{{count}} shell",
@@ -2792,6 +2787,11 @@
       "sendSteer": "Steer",
       "sendQueueHint": "Runs after the current turn",
       "sendSteerHint": "Goes into what the agent is doing now"
+    },
+    "contextUsage": {
+      "label": "Context {{used}} of {{window}} tokens, {{percent}}% used",
+      "title": "Context",
+      "estimated": "Estimated from the last response."
     },
     "composerAttachments": {
       "file": "File",
