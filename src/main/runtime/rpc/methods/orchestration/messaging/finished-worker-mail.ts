@@ -140,8 +140,8 @@ function finishedRemoteSender(
 }
 
 /** A finished worker on a paired host cannot reach its coordinator yet; say why instead of a bare refusal. A
- *  local worker working in that process speaks instead, since a terminal takes one Dispatch at a time; once both
- *  finished, nothing records which came last, so it must name the local Dispatch rather than guess. */
+ *  terminal can also hold a local Dispatch, and nothing records which one a message is from, so it must name
+ *  the local recipient rather than have Orca guess. */
 export function refuseFinishedRemoteWorker(
   db: OrchestrationDb,
   sender: FinishedSender,
@@ -152,15 +152,16 @@ export function refuseFinishedRemoteWorker(
     return
   }
   const paneKey = sender.paneKey ?? undefined
-  const working = db.getActiveDispatchForIdentity(sender.address, paneKey)
-  if (working && speaksAs(db, sender, working)) {
-    return
-  }
-  const local = db.getLatestDispatchForTerminal(sender.address, paneKey)
-  if (local && speaksAs(db, sender, local)) {
+  const local = [
+    db.getActiveDispatchForIdentity(sender.address, paneKey),
+    db.getLatestDispatchForTerminal(sender.address, paneKey)
+  ].find((dispatch) => dispatch && speaksAs(db, sender, dispatch))
+  if (local) {
+    const working = local.status === 'pending' || local.status === 'dispatched'
+    const recipient = working ? dispatchReportMailbox(db, local) : `dispatch:${local.id}`
     throw new OrchestrationError(
       'recipient_ambiguous',
-      `This terminal finished Dispatch ${local.id} here and Dispatch ${attachment.dispatch_id} for a coordinator on another computer. Nothing was sent; to reach this computer's coordinator, use orca orchestration send --to dispatch:${local.id}.`
+      `This terminal holds Dispatch ${local.id} here and Dispatch ${attachment.dispatch_id}, which has finished, for a coordinator on another computer. Nothing was sent; to reach this computer's coordinator, use --to ${recipient}.`
     )
   }
   throw new OrchestrationError(

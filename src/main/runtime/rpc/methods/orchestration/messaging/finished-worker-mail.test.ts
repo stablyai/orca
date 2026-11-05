@@ -264,7 +264,7 @@ describe('a worker after its worker_done', () => {
     }
   })
 
-  it('never guesses between a remote and a local worker that finished in one process', async () => {
+  it('never guesses between a remote and a local Dispatch the terminal holds', async () => {
     const { db, runtime, ctx } = harness.setup(false)
     vi.mocked(runtime.getTerminalPaneKey).mockImplementation((handle) =>
       handle === 'term_worker' ? PANE : null
@@ -288,10 +288,12 @@ describe('a worker after its worker_done', () => {
       message: { to_handle: `run:${local.runId}` }
     })
 
-    // A local worker working in that process speaks and asks for it.
+    // A local worker working there names its coordinator the same way.
     const working = await localWorker(db, ctx, 'runtime_test:term_worker:1', false)
-    await expect(send()).resolves.toMatchObject({ message: { run_id: working.runId } })
-    await expect(ask()).resolves.toMatchObject({ messageId: expect.any(String) })
+    const refused = send().catch((error: unknown) => error)
+    await expect(refused).resolves.toMatchObject({ code: 'recipient_ambiguous' })
+    const named = String(((await refused) as Error).message).match(/--to (\S+)\.$/)?.[1]
+    await expect(send({ to: named })).resolves.toMatchObject({ message: { run_id: working.runId } })
   })
 
   it('finds the remote worker by the process it ran in, not the newest remote row', async () => {

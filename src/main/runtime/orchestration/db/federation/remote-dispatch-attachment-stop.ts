@@ -100,21 +100,6 @@ export function findRemoteAttachmentForPaneProcess(
   )
 }
 
-/** A remote Dispatch still working in this terminal, for callers that have no pane to match. */
-export function findActiveRemoteAttachmentForHandle(
-  this: OrchestrationDb,
-  terminalHandle: string
-): RemoteDispatchAttachmentRow | undefined {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The schema-pinned attachment projection returns RemoteDispatchAttachmentRow rows; the adapter exposes unknown.
-  return this.db
-    .prepare(
-      `SELECT ${REMOTE_DISPATCH_ATTACHMENT_COLUMN_LIST} FROM remote_dispatch_attachments
-       WHERE ${potentiallyLiveRemoteAttachmentSql()} AND terminal_handle = ?
-       ORDER BY rowid DESC LIMIT 1`
-    )
-    .get(terminalHandle) as RemoteDispatchAttachmentRow | undefined
-}
-
 function findRemoteAttachmentForPane(
   db: OrchestrationDb,
   paneKey: string,
@@ -149,7 +134,6 @@ export type RemoteDispatchAttachmentStopMethods = {
   markRemoteAttachmentStopUnknown: typeof markRemoteAttachmentStopUnknown
   findActiveRemoteAttachmentForPane: typeof findActiveRemoteAttachmentForPane
   findRemoteAttachmentForPaneProcess: typeof findRemoteAttachmentForPaneProcess
-  findActiveRemoteAttachmentForHandle: typeof findActiveRemoteAttachmentForHandle
 }
 
 export function attachRemoteDispatchAttachmentStop(ctor: { prototype: object }): void {
@@ -158,7 +142,6 @@ export function attachRemoteDispatchAttachmentStop(ctor: { prototype: object }):
     settleRemoteAttachmentStop,
     markRemoteAttachmentStopUnknown,
     findActiveRemoteAttachmentForPane,
-    findRemoteAttachmentForPaneProcess,
-    findActiveRemoteAttachmentForHandle
+    findRemoteAttachmentForPaneProcess
   })
 }

@@ -1,6 +1,5 @@
 import { OrchestrationError } from '../../orchestration-error'
 import type { OrchestrationDb } from '../orchestration-db'
-import { assertNoActiveRemoteWorker } from '../terminal-dispatch-exclusivity'
 import { dispatchAssigneeOrcaSessionId } from '../../dispatch-assignee-orca-session-id'
 
 export function prepareStartingWorkerAuthority(
@@ -47,7 +46,6 @@ export function prepareStartingWorkerAuthority(
         `Terminal ${params.handle} already has an active dispatch (${existing.id} for task ${existing.task_id})`
       )
     }
-    assertNoActiveRemoteWorker(this, params.handle, params.paneKey)
     const endpointId = this.getWorkerDispatch(params.dispatchId)?.runtime_epoch ?? null
     const contextUpdate = this.db
       .prepare(
