@@ -80,7 +80,6 @@ async function render(options: {
         sshConnectionStates={new Map()}
         runtimeStatusByEnvironmentId={new Map()}
         hostTargetFor={() => null}
-        automationSourceHostAvailabilityByRowKey={new Map()}
         onSelect={vi.fn()}
         onRunNow={vi.fn()}
         onEdit={vi.fn()}

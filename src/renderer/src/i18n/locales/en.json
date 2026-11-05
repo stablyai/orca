@@ -6195,8 +6195,6 @@
           "expandAriaLabel": "Expand hidden worktrees for {{repo}}",
           "hiding_one": "Hiding {{count}} discovered worktree",
           "hiding_other": "Hiding {{count}} discovered worktrees",
-          "hidingInRepo_one": "Hiding {{count}} discovered worktree in {{repo}}",
-          "hidingInRepo_other": "Hiding {{count}} discovered worktrees in {{repo}}",
           "keepHiddenAriaLabel_one": "Keep {{count}} discovered worktree hidden for {{repo}}; recover from the project menu",
           "keepHiddenAriaLabel_other": "Keep {{count}} discovered worktrees hidden for {{repo}}; recover from the project menu",
           "keepHiddenTooltip": "Keep hidden - recover from the project menu",
@@ -14490,7 +14488,8 @@
             "9fffaf17c1": "Toggle right sidebar ({{value0}})",
             "aiVaultSessionHistory": "Agents",
             "folderWorkspaces": "Attached worktrees",
-            "parentPrChecks": "PR Checks"
+            "parentPrChecks": "PR Checks",
+            "creatingWorkspace": "Available when the workspace is ready"
           },
           "right": {
             "panel": {
@@ -19457,7 +19456,8 @@
         "opensInTerminalFit": "<em>{{agent}} opens in a terminal</em>, so Terminal fits better.",
         "useTerminalInstead": "Use Terminal instead",
         "terminalTipHow": "Show how to start an agent in a terminal",
-        "terminalTip": "You can also start any agent in a terminal from the <em>+</em> menu.",
+        "terminalTip": "Switch back any time in <em>Settings → Chat UI</em>. You can also start any agent in a terminal from the <em>+</em> menu.",
+        "terminalTipWeb": "Switch back any time in <em>Settings → Onboarding checklist</em>. You can also start any agent in a terminal from the <em>+</em> menu.",
         "terminalTipCaption": "Click <em>+</em> in the tab bar, then pick an agent marked <em>(CLI)</em>. If a chat agent's CLI is installed, hover its row and click the terminal icon to use the CLI.",
         "chatTip": "Want chat too? Turn it on any time in <em>Settings → Chat UI</em>.",
         "turnOnChat": "Turn on now"
@@ -20512,7 +20512,8 @@
         "scheduled": "Orca will continue this chat at {{time}}.",
         "cancel": "Don't continue"
       },
-      "settings": "Chat settings"
+      "settings": "Chat settings",
+      "creationChatNotOpened": "Your worktree is ready, but the chat could not open. Retry to open it with your message."
     },
     "tab": {
       "bar": {
@@ -21318,12 +21319,13 @@
       "offTerminal": "Prefer the terminal? It stays fully supported. Your agents keep opening there until you choose Chat.",
       "onIntro": "Chat UI is out of Experimental and now part of Orca. Your agents keep opening as chats, with rich messages, visuals and images.",
       "onTerminal": "The terminal stays fully supported too. Switch any agent back anytime.",
-      "changeInSettings": "Change anytime in <link>Settings → Agents</link>.",
+      "changeInSettings": "Change anytime in <link>Settings → Chat UI</link>.",
       "stayInTerminal": "Stay in terminal",
       "switchToTerminal": "Switch to terminal",
       "cta": "Use Chat UI",
-      "saveFailed": "Could not turn on Chat UI. Choose Chat in Settings → Agents.",
-      "terminalSaveFailed": "Could not switch to terminal. Choose Terminal in Settings → Agents.",
+      "saveFailed": "Could not turn on Chat UI. Turn it on in Settings → Chat UI.",
+      "terminalSaveFailed": "Could not switch to terminal. Turn off Chat UI in Settings → Chat UI.",
+      "switched": "Chat UI is now the default for new agents. You can switch back any time in Settings → Chat UI.",
       "dismiss": "Dismiss",
       "demoTabTitle": "Explain login",
       "demoPrompt": "Map out how login works",
