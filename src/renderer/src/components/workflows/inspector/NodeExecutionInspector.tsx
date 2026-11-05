@@ -147,6 +147,7 @@ export function NodeExecutionInspector({
     task && (task.status === 'failed' || task.status === 'unknown' || task.status === 'cancelled')
   // A worker can end its turn on an error without reporting; it still holds the Dispatch.
   const stoppable = task?.status === 'running'
+  const answer = task?.dispatches.at(-1)?.answer
   const messages = run.messages.filter(
     (message) => message.sourceNodeId === nodeId || message.destinationNodeId === nodeId
   )
@@ -273,6 +274,39 @@ export function NodeExecutionInspector({
           ) : null}
         </div>
       </InspectorSection>
+      {answer ? (
+        <InspectorSection
+          title={translate(
+            'auto.components.workflows.inspector.NodeExecutionInspector.answerTitle',
+            'Answer'
+          )}
+        >
+          <p
+            className={cn(
+              'max-h-96 overflow-auto whitespace-pre-wrap text-xs leading-5 scrollbar-sleek',
+              answer.source === 'terminal' && 'font-mono text-2xs'
+            )}
+          >
+            {answer.text}
+          </p>
+          {answer.source === 'terminal' ? (
+            <InspectorNote>
+              {translate(
+                'auto.components.workflows.inspector.NodeExecutionInspector.answerFromTerminal',
+                'Captured from the terminal screen because the agent’s session log could not be read.'
+              )}
+            </InspectorNote>
+          ) : null}
+          {answer.truncated ? (
+            <InspectorNote>
+              {translate(
+                'auto.components.workflows.inspector.NodeExecutionInspector.answerTruncated',
+                'Earlier output was left out; open the terminal for the full history.'
+              )}
+            </InspectorNote>
+          ) : null}
+        </InspectorSection>
+      ) : null}
       {task?.report ? (
         <InspectorSection
           title={translate(

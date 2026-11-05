@@ -17,11 +17,15 @@ const ENDED_WORKER_STATES = new Set(['failed', 'stopped', 'abandoned'])
 type TimedOut = { task: WorkflowTask; dispatch: WorkflowDispatch; limitMs: number }
 
 /** Settle from Orca's own Task and Dispatch rows; mail only wakes this sooner. */
-function reconcileTurn(session: WorkflowRunSession): TimedOut[] {
+function reconcileTurn(session: WorkflowRunSession): {
+  timedOut: TimedOut[]
+  settled: WorkflowDispatch[]
+} {
   const { run, deps } = session
   const at = session.at()
   const now = Date.parse(at)
   const timedOut: TimedOut[] = []
+  const settled: WorkflowDispatch[] = []
   for (const node of run.definition.nodes) {
     if (!isWorkflowAgentNode(node)) {
       continue
@@ -49,6 +53,7 @@ function reconcileTurn(session: WorkflowRunSession): TimedOut[] {
       )
       dispatch.state = report.outcome === 'succeeded' ? 'succeeded' : 'failed'
       dispatch.settledAt = at
+      settled.push(dispatch)
       if (
         node.agent.prompt.outputFormat === 'json' &&
         report.outcome === 'succeeded' &&
@@ -75,6 +80,7 @@ function reconcileTurn(session: WorkflowRunSession): TimedOut[] {
       dispatch.error =
         snapshot.lastFailure ??
         `The worker ${snapshot.workerState ?? snapshot.status} without reporting.`
+      settled.push(dispatch)
       failWorkflowTaskAttempt(run, task.key, dispatch.error, at)
       continue
     }
@@ -104,18 +110,44 @@ function reconcileTurn(session: WorkflowRunSession): TimedOut[] {
       timedOut.push({ task, dispatch, limitMs: limit })
     }
   }
-  return timedOut
+  return { timedOut, settled }
+}
+
+/** Keep what each settled worker wrote, before scheduling can finalize the run output. */
+async function captureAnswers(
+  session: WorkflowRunSession,
+  dispatches: readonly WorkflowDispatch[]
+): Promise<void> {
+  for (const dispatch of dispatches) {
+    if (!dispatch.orcaDispatchId) {
+      continue
+    }
+    const answer = await session.deps.adapter
+      .readWorkerAnswer({
+        orcaDispatchId: dispatch.orcaDispatchId,
+        terminalHandle: dispatch.orcaTerminalHandle,
+        startedAtMs: Date.parse(dispatch.startedAt)
+      })
+      .catch(() => null)
+    if (answer) {
+      await session.exclusive(() => {
+        dispatch.answer = { ...answer, capturedAt: session.at() }
+        session.persist()
+      })
+    }
+  }
 }
 
 export async function reconcileWorkflowRun(session: WorkflowRunSession): Promise<void> {
   if (session.isClosed || session.terminal) {
     return
   }
-  const timedOut = await session.exclusive(() => {
+  const { timedOut, settled } = await session.exclusive(() => {
     const found = reconcileTurn(session)
     session.persist()
     return found
   })
+  await captureAnswers(session, settled)
   for (const { task, dispatch, limitMs } of timedOut) {
     let stopState = 'unknown'
     try {
@@ -145,6 +177,10 @@ export async function reconcileWorkflowRun(session: WorkflowRunSession): Promise
       session.persist()
     })
   }
+  await captureAnswers(
+    session,
+    timedOut.map(({ dispatch }) => dispatch)
+  )
   const maxDuration = session.run.definition.policies.maxRunDurationMs
   const overDuration = 'The workflow exceeded its maximum run duration.'
   if (

@@ -45,6 +45,17 @@ export type WorkflowDispatch = {
   startedAt: string
   settledAt: string | null
   error: string | null
+  /** What the agent wrote while working, captured when the attempt settled; absent on older runs. */
+  answer?: WorkflowWorkerAnswer | null
+}
+
+export type WorkflowWorkerAnswer = {
+  /** transcript: the agent's own session log; terminal: its screen, when no transcript was readable. */
+  source: 'transcript' | 'terminal'
+  text: string
+  /** Earlier output was left out to fit; the end of the answer is always kept. */
+  truncated: boolean
+  capturedAt: string
 }
 
 /** One execution of a node in one loop iteration, backed by its own Orca Task. */

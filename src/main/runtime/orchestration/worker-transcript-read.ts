@@ -45,6 +45,8 @@ export async function readWorkerTranscript(args: {
   expectedSourceFingerprint?: string
   /** Hash of the bounded content immediately before a cursor offset. */
   expectedBoundaryCheckpoint?: string
+  /** false keeps whole message text for in-process owners; the wire payload bounds stay the default. */
+  clip?: false
 }): Promise<WorkerTranscriptReadResult> {
   const transcriptAgent = resolveNativeChatTranscriptAgent(args.agent)
   if (!transcriptAgent) {
@@ -87,7 +89,10 @@ export async function readWorkerTranscript(args: {
     ) {
       return { ok: false, reason: 'source_changed', warnings: [] }
     }
-    const bounded = boundWorkerTranscriptMessages(page.messages, filePath)
+    const bounded =
+      args.clip === false
+        ? { messages: page.messages, limited: false, warnings: [] }
+        : boundWorkerTranscriptMessages(page.messages, filePath)
     return {
       ok: true,
       filePath,

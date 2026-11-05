@@ -4,6 +4,7 @@ import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { RpcDispatcher } from '../runtime/rpc/dispatcher'
 import { parseMail, parseStartReceipt, record, text } from './workflow-orca-receipts'
 import type { WorkflowOrcaAdapter } from './workflow-orca-adapter-contract'
+import { captureWorkflowWorkerAnswer } from './workflow-worker-answer-capture'
 
 export class WorkflowOrcaCallError extends Error {
   constructor(
@@ -219,6 +220,16 @@ export function createWorkflowOrcaAdapter(runtime: OrcaRuntimeService): Workflow
       } catch {
         return null
       }
+    },
+    readWorkerAnswer({ orcaDispatchId, terminalHandle, startedAtMs }) {
+      return captureWorkflowWorkerAnswer({
+        runtime,
+        readTerminal: (dispatch, limit) =>
+          call('orchestration.workerRead', { dispatch, source: 'terminal', limit }),
+        orcaDispatchId,
+        terminalHandle,
+        startedAtMs
+      })
     },
     readTask(orcaTaskId) {
       const task = runtime.getOrchestrationDb().getTask(orcaTaskId)

@@ -5,6 +5,7 @@ import type {
   WorkflowOrcaTaskSnapshot,
   WorkflowWorkerStartReceipt
 } from './workflow-orca-receipts'
+import type { CapturedWorkflowAnswer } from './workflow-worker-answer-capture'
 
 export type WorkflowOrcaAdapter = {
   createCoordinatorTerminal(args: {
@@ -86,6 +87,12 @@ export type WorkflowOrcaAdapter = {
   detectAgents(): Promise<string[] | null>
   /** Installed skill names on this host; null when discovery could not answer. */
   installedSkills(): Promise<string[] | null>
+  /** What the worker wrote while working; null when nothing readable remains. */
+  readWorkerAnswer(args: {
+    orcaDispatchId: string
+    terminalHandle: string | null
+    startedAtMs: number
+  }): Promise<CapturedWorkflowAnswer | null>
   readTask(orcaTaskId: string): WorkflowOrcaTaskSnapshot | null
   readDispatch(orcaDispatchId: string): WorkflowOrcaDispatchSnapshot | null
   terminalExists(handle: string): boolean
