@@ -59,7 +59,10 @@ function DropdownMenuContent({
   sideOffset = 4,
   style,
   ...props
-}: React.ComponentProps<typeof DropdownMenuPrimitive.Content>) {
+}: React.ComponentProps<typeof DropdownMenuPrimitive.Content> & {
+  // Radix consumes this at its opening focus scope but omits it from the public Menu props.
+  onOpenAutoFocus?: (event: Event) => void
+}) {
   const pointerHighlight = useMenuPointerHighlight(props)
   const { ref: focusScopeRef, scope } = useOverlayFocusScope(pointerHighlight.ref)
   return (

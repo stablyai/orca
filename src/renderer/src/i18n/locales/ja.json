@@ -3214,7 +3214,6 @@
             "e8b3741ff7": "無視済み",
             "a9957007eb": "{{value0}} を無視する",
             "bef0adef9b": "ブランチ",
-            "0b1766738a": "Repo",
             "bbb1ab6a6f": "{{value0}} を選択",
             "b771c92598": "選択したものを削除",
             "7eee951968": "作業場の安全性の確認",
@@ -3223,7 +3222,6 @@
             "b2c1331844": "非アクティブなワークスペースの削除",
             "7f451a3e2c": "クリーンアップの提案を無視できませんでした",
             "662b8ec3f8": "ワークスペースのクリーンアップスキャンに失敗しました",
-            "4d0b72481c": "無視",
             "9cc26c019d": "削除",
             "0e2d235c63": "非アクティブなワークスペースのスキャン準備完了",
             "4a35c08764": "レビュー",
@@ -3231,9 +3229,6 @@
             "1d3503357d": "削除の続行中にこれを閉じて後で戻れます。",
             "4c2990886e": "{{value0}}/{{value1}} 件を削除済み",
             "86ba852118": "{{value0}}、{{value1}} 件が失敗",
-            "deletingCount": "削除中のワークスペース: {{value0}}",
-            "deleteCount": "ワークスペースを削除しますか: {{value0}}?",
-            "selectedForDeletionCount": "削除対象として選択済み: {{value0}}",
             "deleteButtonCount": "{{value0}} を削除",
             "archivedStatus": "アーカイブ済み",
             "74f6c16279": "戻る"
@@ -3248,7 +3243,6 @@
           },
           "candidateRow": {
             "gitLabel": "Git",
-            "commitsLabel": "コミット",
             "contextLabel": "コンテキスト",
             "flagsLabel": "フラグ",
             "collapseDetails": "詳細を折りたたむ",
@@ -19439,9 +19433,7 @@
         "browse": {
           "noSizes": "ワークスペースのサイズはまだ測定されていません。",
           "noSizesDescription": "サイズは、ディスク使用量が測定された後に表示されます。",
-          "measureSizes": "スキャン",
           "measureSizesTitle": "スキャンワークスペースのサイズ",
-          "measureSizesDescription": "ディスク使用量をスキャンして、サイズ別にワークスペースを比較、並べ替え、フィルター処理します。",
           "sizeOnDisk": "ディスク上のサイズ: {{value0}}",
           "checkingGitRow": "gitのステータスを確認する",
           "searchPlaceholder": "名前、リポジトリ、ブランチ、パス、ホストを検索します",
