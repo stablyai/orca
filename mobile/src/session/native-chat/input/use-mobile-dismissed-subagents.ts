@@ -1,0 +1,135 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { NativeChatSubagentActivity } from '../../../../../src/shared/native-chat/input/native-chat-activity'
+import {
+  nativeChatDismissSubagents,
+  nativeChatReconcileDismissals,
+  nativeChatVisibleDismissedSubagents,
+  type DismissedSubagentStates
+} from '../../../../../src/shared/native-chat/input/native-chat-subagent-dismissals'
+import {
+  readMirroredKeyOrStore,
+  subscribeMirroredKey
+} from '../../../storage/mirrored-storage-keys'
+import {
+  dismissedSubagentsInSession,
+  dismissedSubagentsStorageKey,
+  writeDismissedSubagentSession
+} from '../../../storage/dismissed-subagents'
+
+export type MobileDismissedSubagentScope = {
+  hostId: string
+  worktreeId: string
+  sessionId: string | null
+}
+
+function persistDismissals(
+  pendingWrites: { current: number },
+  hostId: string,
+  worktreeId: string,
+  sessionId: string,
+  next: DismissedSubagentStates
+): void {
+  pendingWrites.current += 1
+  writeDismissedSubagentSession(hostId, worktreeId, sessionId, next)
+    .catch(() => {
+      // Persistence failed. The dismissal stays in memory for this session.
+    })
+    .finally(() => {
+      pendingWrites.current -= 1
+    })
+}
+
+function sameDismissals(left: DismissedSubagentStates, right: DismissedSubagentStates): boolean {
+  const leftIds = Object.keys(left)
+  return (
+    leftIds.length === Object.keys(right).length && leftIds.every((id) => left[id] === right[id])
+  )
+}
+
+export function useMobileDismissedSubagents(
+  scope: MobileDismissedSubagentScope | null,
+  listed: readonly NativeChatSubagentActivity[]
+): {
+  visible: NativeChatSubagentActivity[]
+  dismiss: (agents: readonly NativeChatSubagentActivity[]) => void
+} {
+  const hostId = scope?.hostId ?? null
+  const worktreeId = scope?.worktreeId ?? null
+  const sessionId = scope?.sessionId ?? null
+  const key =
+    hostId && worktreeId && sessionId ? dismissedSubagentsStorageKey(hostId, worktreeId) : null
+  const scopeKey = key && sessionId ? `${key}\0${sessionId}` : ''
+  const signature = listed.map((agent) => `${agent.id}\t${agent.state}`).join('\n')
+  const listedRef = useRef(listed)
+  listedRef.current = listed
+  const pendingWrites = useRef(0)
+  const [dismissed, setDismissed] = useState<DismissedSubagentStates>({})
+  const dismissedRef = useRef(dismissed)
+  dismissedRef.current = dismissed
+  const scopeKeyRef = useRef(scopeKey)
+  if (scopeKeyRef.current !== scopeKey) {
+    scopeKeyRef.current = scopeKey
+    setDismissed({})
+  }
+
+  useEffect(() => {
+    if (!key || !hostId || !worktreeId || !sessionId) {
+      return
+    }
+    let stale = false
+    const apply = (raw: string | null) => {
+      if (stale || pendingWrites.current > 0) {
+        return
+      }
+      const stored = dismissedSubagentsInSession(raw, sessionId)
+      const next = nativeChatReconcileDismissals(stored, listedRef.current)
+      setDismissed((current) => (sameDismissals(current, next) ? current : next))
+      if (next !== stored) {
+        persistDismissals(pendingWrites, hostId, worktreeId, sessionId, next)
+      }
+    }
+    const unsubscribe = subscribeMirroredKey(key, apply)
+    void readMirroredKeyOrStore(key)
+      .then(apply)
+      .catch(() => {
+        if (!stale) {
+          setDismissed({})
+        }
+      })
+    return () => {
+      stale = true
+      unsubscribe()
+    }
+  }, [hostId, key, sessionId, worktreeId])
+
+  useEffect(() => {
+    const current = dismissedRef.current
+    const next = nativeChatReconcileDismissals(current, listedRef.current)
+    if (sameDismissals(current, next)) {
+      return
+    }
+    dismissedRef.current = next
+    setDismissed(next)
+    if (hostId && worktreeId && sessionId) {
+      persistDismissals(pendingWrites, hostId, worktreeId, sessionId, next)
+    }
+  }, [hostId, sessionId, signature, worktreeId])
+
+  const dismiss = useCallback(
+    (agents: readonly NativeChatSubagentActivity[]) => {
+      const next = nativeChatDismissSubagents(dismissedRef.current, agents)
+      dismissedRef.current = next
+      setDismissed(next)
+      if (hostId && worktreeId && sessionId) {
+        persistDismissals(pendingWrites, hostId, worktreeId, sessionId, next)
+      }
+    },
+    [hostId, sessionId, worktreeId]
+  )
+
+  const visible = useMemo(
+    () => nativeChatVisibleDismissedSubagents(listed, dismissed),
+    [dismissed, listed]
+  )
+  return { visible, dismiss }
+}
