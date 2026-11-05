@@ -159,7 +159,8 @@ export function mapGraphQLPRChecksResponse(
   const provedHead =
     observedHeadSha &&
     observedHeadSha === normalizePRCheckHeadSha(pullRequest.headRefOid) &&
-    !response.errors?.length
+    (response.errors === undefined ||
+      (Array.isArray(response.errors) && response.errors.length === 0))
       ? observedHeadSha
       : undefined
   return [...checkRuns, ...legacyStatuses, ...pendingApprovalChecks].map((check) =>
