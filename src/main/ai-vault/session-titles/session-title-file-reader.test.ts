@@ -89,6 +89,16 @@ describe('readAiVaultSessionTitlesFromFiles', () => {
     })
     expect(parseAgentSessionFileCached).toHaveBeenCalledTimes(2)
     expect(parseAgentSessionFileCached.mock.calls[1]?.[3]).toBe('whole')
+
+    // A failed reread keeps the cached title, unclassified.
+    parseAgentSessionFileCached.mockResolvedValueOnce(cached).mockResolvedValueOnce(null)
+    await expect(
+      readAiVaultSessionTitlesFromFiles([
+        { agent: 'claude', sessionId: 'session-1', transcriptPath: path }
+      ])
+    ).resolves.toEqual({
+      titles: [{ agent: 'claude', sessionId: 'session-1', title: 'Renamed' }]
+    })
   })
 
   it('classifies a History-cached title from an old parse row when the request has only a session id', async () => {

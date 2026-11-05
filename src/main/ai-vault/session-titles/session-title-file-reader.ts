@@ -93,13 +93,15 @@ async function readOneTitle(
       !session.titleKind &&
       !signal?.aborted
     ) {
-      session = await parseAgentSessionFileCached(
-        candidate,
-        process.platform,
-        undefined,
-        'whole',
-        signal
-      )
+      // A failed reread keeps the first result, unclassified.
+      session =
+        (await parseAgentSessionFileCached(
+          candidate,
+          process.platform,
+          undefined,
+          'whole',
+          signal
+        )) ?? session
     }
     if (
       signal?.aborted ||
