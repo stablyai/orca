@@ -57,22 +57,6 @@ export class CrossStoreLineagePersistence {
     scheduleSave(this[crossStoreLineagePersistenceContext].scheduling)
     return lineage
   }
-
-  removeCrossStoreWorkspaceLineage(
-    lineage: CrossStoreWorkspaceLineage,
-    childHostId: ExecutionHostId
-  ): void {
-    const { state } = this[crossStoreLineagePersistenceContext].runtime
-    const { childWorkspaceKey } = lineage
-    if (
-      !state.crossStoreLineageByChildKey?.[childWorkspaceKey] ||
-      !ownsChildBucket(state, childWorkspaceKey, childHostId)
-    ) {
-      return
-    }
-    delete state.crossStoreLineageByChildKey[childWorkspaceKey]
-    scheduleSave(this[crossStoreLineagePersistenceContext].scheduling)
-  }
 }
 
 function ownsChildBucket(
