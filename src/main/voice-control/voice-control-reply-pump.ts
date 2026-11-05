@@ -53,6 +53,13 @@ export const CONTROL_WAKE_TYPES: MessageType[] = [
   'merge_ready'
 ]
 
+/**
+ * The only wake type that settles a dispatch — lifecycle reconciliation completes a
+ * dispatch on worker_done and ignores the rest. Status, questions, and escalations are
+ * progress: the work is still owed, so ledgers and dormant watchers must stay armed.
+ */
+export const COMPLETION_MESSAGE_TYPE: MessageType = 'worker_done'
+
 const WAIT_SLICE_MS = 30_000
 
 export class VoiceControlReplyPump {

@@ -6,6 +6,7 @@ import type {
   VoiceControlToolActivityEvent
 } from '../../shared/voice-control-types'
 import type { SidebandEventHandler } from './realtime-sideband-socket'
+import type { ControlMailboxMessage } from './voice-control-reply-pump'
 import type { VoiceControlSessionBackend } from './voice-control-session-backend'
 import { VoiceControlService, type VoiceControlServiceDeps } from './voice-control-service'
 import type { VoiceTranscriptEntry } from './voice-control-transcript-log'
@@ -75,19 +76,24 @@ function fakeBackendFactory() {
     disposed: boolean
     toolCalls: { name: string; args: string; callId: string }[]
     observed: Record<string, unknown>[]
-    outstanding: boolean
-    runId: string
+    /** Panes with unfinished follow-through — the dormant watcher's drain set. */
+    panes: string[]
+    /** Old-run mail handed to the live backend (one entry per ingest call). */
+    ingested: ControlMailboxMessage[][]
   } = {
     started: false,
     disposed: false,
     toolCalls: [],
     observed: [],
-    outstanding: false,
-    runId: 'run-1'
+    panes: [],
+    ingested: []
   }
   const createCalls: Parameters<VoiceControlServiceDeps['createBackend']>[0][] = []
   const create: VoiceControlServiceDeps['createBackend'] = (args) => {
     createCalls.push(args)
+    // One run per session, like the real openVoiceControlRun — old-run mail can only
+    // ever arrive through the dormant watcher.
+    const runId = `run-${createCalls.length}`
     const backend: VoiceControlSessionBackend = {
       start: () => {
         state.started = true
@@ -99,8 +105,12 @@ function fakeBackendFactory() {
       observeEvent: (event) => {
         state.observed.push(event)
       },
-      hasOutstandingWork: () => state.outstanding,
-      runId: () => state.runId,
+      hasOutstandingWork: () => state.panes.length > 0,
+      outstandingPanes: () => state.panes,
+      runId: () => runId,
+      ingestDormantMail: (messages) => {
+        state.ingested.push(messages)
+      },
       dispose: () => {
         state.disposed = true
       }
@@ -614,11 +624,20 @@ describe('VoiceControlService', () => {
       senderPaneKey: 'wt-1:1',
       dispatchId: 'd1'
     }
+    const REPLY_2 = {
+      id: 'm2',
+      fromHandle: 'term_pine',
+      type: 'worker_done',
+      subject: 'done',
+      body: 'schema migration is done',
+      senderPaneKey: 'wt-2:2',
+      dispatchId: 'd2'
+    }
 
     function dormantHarness() {
       const watchers: {
         runId: string
-        onMessages: (messages: typeof REPLY[]) => void
+        onMessages: (messages: (typeof REPLY)[]) => void
         stopped: boolean
       }[] = []
       const wakes: number[] = []
@@ -643,12 +662,13 @@ describe('VoiceControlService', () => {
       const { service, backend, watchers, wakes } = dormantHarness()
       await service.start('s1')
       await service.exchangeSdp('s1', 'v=0 offer')
-      backend.state.outstanding = true
+      backend.state.panes = ['wt-1:1']
       await service.stop()
       expect(watchers).toHaveLength(1)
       expect(watchers[0].runId).toBe('run-1')
 
       watchers[0].onMessages([REPLY])
+      // The single outstanding pane reported done — the watcher's work is over.
       expect(watchers[0].stopped).toBe(true)
       expect(wakes).toHaveLength(1)
 
@@ -666,11 +686,11 @@ describe('VoiceControlService', () => {
       expect(watchers).toHaveLength(0)
     })
 
-    it('records without waking when a session is already live', async () => {
-      const { service, backend, watchers, wakes, transcript } = dormantHarness()
+    it('hands old-run mail to the live session instead of waking', async () => {
+      const { service, backend, watchers, wakes } = dormantHarness()
       await service.start('s1')
       await service.exchangeSdp('s1', 'v=0 offer')
-      backend.state.outstanding = true
+      backend.state.panes = ['wt-1:1']
       await service.stop()
       await service.start('s2')
       await service.exchangeSdp('s2', 'v=0 offer')
@@ -678,9 +698,75 @@ describe('VoiceControlService', () => {
 
       watchers[0].onMessages([REPLY])
       expect(wakes).toHaveLength(0)
-      expect(transcript).toEqual([
-        expect.objectContaining({ kind: 'update', text: REPLY.body })
-      ])
+      // The live session speaks and records it like its own mail — its pump watches a
+      // different run's mailbox, so this is the reply's only route to the user.
+      expect(backend.state.ingested).toEqual([[REPLY]])
+      expect(backend.createCalls.at(-1)?.wakeMessages).toBeUndefined()
+    })
+
+    // Live failure this guards: two agents finished at different times after an idle
+    // suspend — the first reply disarmed the watcher, and the second sat in a mailbox
+    // no session reads (each session opens its own run).
+    it('stays armed until every outstanding pane reports done — each batch lands exactly once', async () => {
+      const { service, backend, watchers, wakes } = dormantHarness()
+      await service.start('s1')
+      await service.exchangeSdp('s1', 'v=0 offer')
+      backend.state.panes = ['wt-1:1', 'wt-2:2']
+      await service.stop()
+      expect(watchers).toHaveLength(1)
+
+      // First agent finishes: wake fires, but the watcher keeps watching for the second.
+      watchers[0].onMessages([REPLY])
+      expect(watchers[0].stopped).toBe(false)
+      expect(wakes).toHaveLength(1)
+
+      // The woken session speaks the first reply on start — and only that one.
+      await service.start('s2')
+      await service.exchangeSdp('s2', 'v=0 offer')
+      expect(backend.createCalls.at(-1)?.wakeMessages).toEqual([REPLY])
+
+      // Second agent finishes mid-session: routed to the live backend, no second wake,
+      // and the drained watcher disarms.
+      watchers[0].onMessages([REPLY_2])
+      expect(backend.state.ingested).toEqual([[REPLY_2]])
+      expect(wakes).toHaveLength(1)
+      expect(watchers[0].stopped).toBe(true)
+    })
+
+    it('progress mail does not disarm the watcher while completion is still owed', async () => {
+      const { service, backend, watchers, wakes } = dormantHarness()
+      await service.start('s1')
+      await service.exchangeSdp('s1', 'v=0 offer')
+      backend.state.panes = ['wt-1:1']
+      await service.stop()
+
+      watchers[0].onMessages([{ ...REPLY, id: 'm0', type: 'status', body: 'still on it' }])
+      expect(watchers[0].stopped).toBe(false)
+      expect(wakes).toHaveLength(1)
+
+      watchers[0].onMessages([REPLY])
+      expect(watchers[0].stopped).toBe(true)
+      expect(wakes).toHaveLength(2)
+    })
+
+    it('a later session’s outstanding work does not evict another run’s watcher', async () => {
+      const { service, backend, watchers } = dormantHarness()
+      await service.start('s1')
+      await service.exchangeSdp('s1', 'v=0 offer')
+      backend.state.panes = ['wt-1:1']
+      await service.stop()
+      expect(watchers.map((w) => w.runId)).toEqual(['run-1'])
+
+      await service.start('s2')
+      await service.exchangeSdp('s2', 'v=0 offer')
+      backend.state.panes = ['wt-3:3']
+      await service.stop()
+      // run-1's watch survives — its pane never reported done; run-2 gets its own.
+      expect(watchers.map((w) => w.runId)).toEqual(['run-1', 'run-2'])
+      expect(watchers[0].stopped).toBe(false)
+
+      watchers[0].onMessages([REPLY])
+      expect(watchers[0].stopped).toBe(true)
     })
   })
 })

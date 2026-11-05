@@ -84,7 +84,9 @@ export class VoiceScreenDriver {
         : `${capped}\n(One or more terminal panes are visible but not in this tree; read_terminal shows their visible text.)`
     } catch (error) {
       // A detach mid-snapshot (user opened DevTools) reads as "can't see it", not a crash.
-      this.attachedTo = null
+      // attachedTo is released only by the real 'detach' event: clearing it here while our
+      // debugger is still attached would make the next call refuse its own session as
+      // DevTools-held — one transient CDP error would blind every later read.
       traceVoiceScreenDriver('snapshot-failed', errorDetail(error))
       return null
     }
@@ -200,7 +202,7 @@ export class VoiceScreenDriver {
         ? lines.slice(-TERMINAL_LINE_LIMIT).join('\n')
         : result.value
     } catch (error) {
-      this.attachedTo = null
+      // Same ownership rule as seeScreen: only the 'detach' event releases attachedTo.
       traceVoiceScreenDriver('read-terminal-failed', errorDetail(error))
       return null
     }

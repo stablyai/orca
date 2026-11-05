@@ -40,6 +40,10 @@ export function registerVoiceControlHandlers(store: Store, runtime: OrcaRuntimeS
   // Cached at claim time — a getAllWindows().find() scan per push fires on every
   // state/tool/transcript event of a live session.
   let ownerWebContents: WebContents | null = null
+  // The window whose ended session still has work outstanding. Stopping a session
+  // releases the owner slot, so without this snapshot the wake-on-reply event for that
+  // session's replies would be sent to no one.
+  let wakeRecipient: WebContents | null = null
   const releaseOwner = (): void => {
     ownerWebContentsId = null
     ownerWebContents = null
@@ -134,6 +138,9 @@ export function registerVoiceControlHandlers(store: Store, runtime: OrcaRuntimeS
     // The ended session's run mailbox keeps receiving its agents' reports; a dormant
     // pump (same deps as the live one) wakes the owner window so the reply is spoken.
     openDormantWatcher: (runId, onMessages) => {
+      // Snapshot the wake target now: the stop that opens this watcher releases the live
+      // owner slot right after, and the reply may arrive long after that.
+      wakeRecipient = ownerWebContents
       const db = runtime.getOrchestrationDb()
       const pump = new VoiceControlReplyPump(
         {
@@ -148,7 +155,14 @@ export function registerVoiceControlHandlers(store: Store, runtime: OrcaRuntimeS
       pump.start()
       return pump
     },
-    emitWakeForReply: () => sendToOwner('voice-control:wakeForReply', {}),
+    emitWakeForReply: () => {
+      // Prefer the current owner (a restart may already be in flight there); otherwise
+      // the window that dispatched the work, captured when the watcher opened.
+      const target = [ownerWebContents, wakeRecipient].find(
+        (candidate) => candidate && !candidate.isDestroyed()
+      )
+      target?.send('voice-control:wakeForReply', {})
+    },
     createBackend: createVoiceControlBackendFactory({
       store,
       runtime,

@@ -81,8 +81,17 @@ function register(): void {
   serviceStartMock.mockReset()
   serviceStopMock.mockClear()
   const store = { getSettings: () => ({ voice: {} }) }
-  const runtime = { getWorktreePs: async () => ({ worktrees: [] }) }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handlers under test read only getSettings().voice.control and getWorktreePs(); the full Store/Runtime surface is fixture weight.
+  const runtime = {
+    getWorktreePs: async () => ({ worktrees: [] }),
+    // The dormant watcher's pump seam: a mailbox that never wakes on its own.
+    getOrchestrationDb: () => ({
+      getRun: () => null,
+      getOrCreateRunDelivery: () => undefined,
+      acknowledgeRunDelivery: () => undefined
+    }),
+    waitForMessage: () => new Promise(() => {})
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handlers under test read only getSettings().voice.control, getWorktreePs(), and the dormant-watch pump seam above; the full Store/Runtime surface is fixture weight.
   registerVoiceControlHandlers(store as never, runtime as never)
 }
 
@@ -159,6 +168,50 @@ describe('power resume', () => {
     resumeHandlers[0]!()
     await Promise.resolve()
     expect(serviceStopMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('wake-on-reply recipient', () => {
+  beforeEach(register)
+
+  async function startAndOpenDormantWatcher(owner: ReturnType<typeof fakeSender>) {
+    serviceStartMock.mockImplementation(async (sessionId: string) => {
+      serviceState.state = 'live'
+      serviceState.sessionId = sessionId
+      return null
+    })
+    const started: unknown = await handlers.get('voice-control:start')?.({ sender: owner })
+    expect(started).toMatchObject({ ok: true })
+    const deps = serviceDepsCapture
+    if (!deps?.openDormantWatcher) {
+      throw new Error('service deps were not captured')
+    }
+    // What the service does inside stop() when work is outstanding: open the watcher
+    // while the owner slot is still set.
+    deps.openDormantWatcher('run-1', () => {})
+    await handlers.get('voice-control:stop')?.({ sender: { id: 7 } }, serviceState.sessionId)
+    return deps
+  }
+
+  // Live failure this guards: stop with outstanding work released the owner slot, so the
+  // reply's wake event was sent to no one and the promised spoken update never happened.
+  it('the wake reaches the owner window even after stop released ownership', async () => {
+    const owner = fakeSender(7)
+    const deps = await startAndOpenDormantWatcher(owner)
+
+    deps.emitWakeForReply?.()
+    expect(owner.send).toHaveBeenCalledWith('voice-control:wakeForReply', {})
+  })
+
+  it('drops the wake when the window that dispatched the work is gone', async () => {
+    const owner = fakeSender(7)
+    let destroyed = false
+    owner.isDestroyed = () => destroyed
+    const deps = await startAndOpenDormantWatcher(owner)
+
+    destroyed = true
+    deps.emitWakeForReply?.()
+    expect(owner.send).not.toHaveBeenCalledWith('voice-control:wakeForReply', {})
   })
 })
 

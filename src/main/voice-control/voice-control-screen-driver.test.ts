@@ -114,6 +114,53 @@ describe('VoiceScreenDriver', () => {
     expect(dbg.attach).not.toHaveBeenCalled()
   })
 
+  it('a failed read keeps ownership — the next read reuses the session, not refuses it', async () => {
+    const { dbg } = fakeDebugger()
+    let attached = false
+    dbg.isAttached = () => attached
+    dbg.attach = vi.fn(() => {
+      attached = true
+    })
+    let failNextTree = true
+    const original = dbg.sendCommand
+    dbg.sendCommand = (method, params) => {
+      // One transient CDP failure (a timeout), then the session is healthy again.
+      if (failNextTree && method === 'Accessibility.getFullAXTree') {
+        failNextTree = false
+        return Promise.reject(new Error('timed out'))
+      }
+      return original(method, params)
+    }
+    const driver = new VoiceScreenDriver({ getDebugger: () => dbg, settleMs: 0 })
+    expect(await driver.seeScreen()).toBeNull()
+    // The still-attached session is OURS; mistaking it for the user's DevTools and
+    // refusing was the live bug.
+    expect(await driver.seeScreen()).toContain('[@e1] button "Assigned to me"')
+    expect(dbg.attach).toHaveBeenCalledTimes(1)
+  })
+
+  it('a failed read_terminal likewise keeps ownership of the session', async () => {
+    const { dbg } = fakeDebugger()
+    let attached = false
+    dbg.isAttached = () => attached
+    dbg.attach = vi.fn(() => {
+      attached = true
+    })
+    let failNextEvaluate = true
+    const original = dbg.sendCommand
+    dbg.sendCommand = (method, params) => {
+      if (failNextEvaluate && method === 'Runtime.evaluate') {
+        failNextEvaluate = false
+        return Promise.reject(new Error('timed out'))
+      }
+      return original(method, params)
+    }
+    const driver = new VoiceScreenDriver({ getDebugger: () => dbg, settleMs: 0 })
+    expect(await driver.readTerminalText()).toBeNull()
+    expect(await driver.readTerminalText()).toContain('42 passing')
+    expect(dbg.attach).toHaveBeenCalledTimes(1)
+  })
+
   it('excludes xterm panes from the tree and folds in their visible tail', async () => {
     const withTerminal: AXNode[] = [
       ...AX_TREE,
