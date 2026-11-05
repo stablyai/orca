@@ -28,27 +28,45 @@ const OPENCODE_TEXT_GENERATION_PERMISSION = {
   list: 'allow'
 }
 
+/** The agent a run selects; the policy must sit on this agent, whichever one recipe args chose. */
+export function openCodeSelectedAgent(args: readonly string[]): string {
+  return findOptionOccurrence(args, ['--agent'], true)?.value ?? 'build'
+}
+
 /**
- * OpenCode applies the last matching rule and evaluates agent rules after top-level ones, so only rules on the build
+ * OpenCode applies the last matching rule and evaluates agent rules after top-level ones, so only rules on the selected
  * agent itself beat project agent config and native `permissions`. Inline config outranks project config, but within
- * it `agents` and `mode` entries replace `agent` entries, so theirs are dropped. Malformed content is replaced, since
- * running without the policy is unsafe.
+ * it `agents` and `mode` entries replace `agent` entries, so theirs are dropped, keeping only a model the run may rely
+ * on. Malformed content is replaced, since running without the policy is unsafe.
  */
-export function withOpenCodeTextGenerationPolicy(content: string | undefined): string {
+export function withOpenCodeTextGenerationPolicy(
+  content: string | undefined,
+  agent = 'build'
+): string {
   const errors: ParseError[] = []
   const config: unknown = parse(content ?? '', errors, { allowTrailingComma: true })
   const base = isRecord(config) && errors.length === 0 ? config : {}
+  const entries = ['agents', 'mode', 'agent'].flatMap((key) => {
+    const map = base[key]
+    return isRecord(map) ? [[key, map] as const] : []
+  })
+  const model = entries
+    .map(([, map]) => map[agent])
+    .find((entry) => isRecord(entry) && typeof entry.model === 'string')
   const agentMaps = Object.fromEntries(
-    ['agent', 'agents', 'mode'].flatMap((key) => {
-      const map = base[key]
-      return isRecord(map) ? [[key, { ...map, build: undefined }]] : []
-    })
+    entries.map(([key, map]) => [key, { ...map, [agent]: undefined }])
   )
   return JSON.stringify({
     ...base,
     ...agentMaps,
     permission: OPENCODE_TEXT_GENERATION_PERMISSION,
-    agent: { ...agentMaps.agent, build: { permission: OPENCODE_TEXT_GENERATION_PERMISSION } }
+    agent: {
+      ...agentMaps.agent,
+      [agent]: {
+        ...(isRecord(model) ? { model: model.model } : {}),
+        permission: OPENCODE_TEXT_GENERATION_PERMISSION
+      }
+    }
   })
 }
 
@@ -58,12 +76,16 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 export function openCodeTextGenerationEnv(
   agentId: string,
-  env: Record<string, string> | undefined
+  env: Record<string, string> | undefined,
+  args: readonly string[]
 ): Record<string, string> | undefined {
   return agentId === 'opencode' || agentId === 'opencode2'
     ? {
         ...env,
-        OPENCODE_CONFIG_CONTENT: withOpenCodeTextGenerationPolicy(env?.OPENCODE_CONFIG_CONTENT)
+        OPENCODE_CONFIG_CONTENT: withOpenCodeTextGenerationPolicy(
+          env?.OPENCODE_CONFIG_CONTENT,
+          openCodeSelectedAgent(args)
+        )
       }
     : env
 }

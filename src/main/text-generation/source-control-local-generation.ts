@@ -1,6 +1,9 @@
 import { wslDistroForCommand } from '../../shared/wsl-paths'
 import { mergeCommandEnvironment } from '../../shared/command-environment'
-import { withOpenCodeTextGenerationPolicy } from '../../shared/opencode-generation-command'
+import {
+  openCodeSelectedAgent,
+  withOpenCodeTextGenerationPolicy
+} from '../../shared/opencode-generation-command'
 import type { CommitMessagePlan } from '../../shared/source-control/ai/generation/commit-message-plan'
 import {
   resolveCodexHomeProcessLockKeyForSpawnEnv,
@@ -146,14 +149,18 @@ function withInheritedOpenCodeConfig(
   env: Record<string, string | undefined> | undefined
 ): CommitMessagePlan {
   const inherited = (env ?? process.env).OPENCODE_CONFIG_CONTENT
+  const agent = openCodeSelectedAgent(plan.args)
   if (
     !inherited ||
-    plan.env?.OPENCODE_CONFIG_CONTENT !== withOpenCodeTextGenerationPolicy(undefined)
+    plan.env?.OPENCODE_CONFIG_CONTENT !== withOpenCodeTextGenerationPolicy(undefined, agent)
   ) {
     return plan
   }
   return {
     ...plan,
-    env: { ...plan.env, OPENCODE_CONFIG_CONTENT: withOpenCodeTextGenerationPolicy(inherited) }
+    env: {
+      ...plan.env,
+      OPENCODE_CONFIG_CONTENT: withOpenCodeTextGenerationPolicy(inherited, agent)
+    }
   }
 }

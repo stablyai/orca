@@ -127,9 +127,28 @@ describe('OpenCode text-generation tool policy', () => {
     })
     expect(JSON.parse(withOpenCodeTextGenerationPolicy(content))).toEqual({
       permission,
-      agent: { other: allow, build: { permission } },
+      agent: { other: allow, build: { model: 'x/y', permission } },
       agents: { other: allow },
       mode: { other: allow }
+    })
+  })
+
+  it('pins the policy to the agent recipe args select, keeping only its model', () => {
+    const result = planCommitMessageGeneration(
+      {
+        agentId: 'opencode2',
+        model: 'default',
+        agentArgs: '--agent writer',
+        agentCommandOverride: `OPENCODE_CONFIG_CONTENT='{"agent":{"writer":{"model":"x/y","permission":{"*":"allow"}}}}' opencode2`
+      },
+      'PROMPT'
+    )
+    if (!result.ok) {
+      throw new Error(result.error)
+    }
+    expect(JSON.parse(result.plan.env?.OPENCODE_CONFIG_CONTENT ?? '')).toEqual({
+      permission,
+      agent: { writer: { model: 'x/y', permission } }
     })
   })
 
