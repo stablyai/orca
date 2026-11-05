@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import { dispatchReportMailbox } from '../reports/dispatch-report-mailbox'
-import { latestReadCoordinatorMailSequence } from '../../db/messages/dispatch-read-mail'
+import { readCoordinatorMailCount } from '../../db/messages/dispatch-read-mail'
 import type {
   DispatchContextRow,
   RemoteDispatchAttachmentRow
@@ -97,11 +97,11 @@ export function reportWorkerTurnStop(
   ) {
     return
   }
-  // An idle finish answers the coordinator's latest mail the worker took, so it is news once per mail: a later
+  // An idle finish answers the coordinator's mail the worker took, so it is news once per mail taken: a later
   // idle turn (a worker on its own schedule, or one the user is talking to) repeats what the coordinator was told.
   const stopKey =
     stop.reason === 'finished'
-      ? `finished:${latestReadCoordinatorMailSequence(db, dispatchId)}`
+      ? `finished:${readCoordinatorMailCount(db, dispatchId)}`
       : stop.stopKey
   const id = `msg_stop_${createHash('sha256')
     .update(JSON.stringify([dispatchId, stopKey]))
