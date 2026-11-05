@@ -3,10 +3,16 @@ import {
   quotePosixShellUnlessPlainNoAt
 } from './shell/launch/shell-argument-quoting'
 import { isWindowsAbsolutePathLike } from './cross-platform-path'
+import type { GlobalSettings } from './global-settings-types'
 import {
   buildWindowsCmdRunnerDelayedLaunchCommand,
   windowsRunnerPathNeedsCmdGuard
 } from './windows-cmd-runner-delayed-launch'
+
+export type SetupAutoCloseSettings = {
+  /** Closes the dedicated Setup tab when the setup script exits 0; a failure stays open. Default off. */
+  closeSetupTabOnSuccess: boolean
+}
 
 export type SetupRunnerCommandPlatform = 'windows' | 'posix'
 export type SetupRunnerShellFamily = 'posix' | 'cmd'
@@ -138,4 +144,65 @@ function nativeWindowsPathToWslShellPath(value: string): string {
 function isWslExecutable(value: string | undefined): boolean {
   const basename = value?.trim().replaceAll('\\', '/').split('/').pop()?.toLowerCase() ?? ''
   return basename === 'wsl.exe' || basename === 'wsl'
+}
+
+/**
+ * Exit code the success clause exits with. Only that clause produces it, so a shell that quits on
+ * its own before setup is delivered (rc file runs `exit`) cannot pass for a successful setup.
+ */
+export const SETUP_SUCCESS_EXIT_CODE = 79
+const SETUP_SUCCESS_EXIT_SUFFIX = ` && exit ${SETUP_SUCCESS_EXIT_CODE}`
+// Why: Windows PowerShell 5.1 cannot parse `&&`; this form also runs in pwsh.
+const POWERSHELL_SETUP_SUCCESS_EXIT_SUFFIX = `; if ($LASTEXITCODE -eq 0) { exit ${SETUP_SUCCESS_EXIT_CODE} }`
+
+/**
+ * Appends a clause that exits the pane's shell when the setup command succeeds, so the pane
+ * closes the way a typed `exit` closes it. `windowsTerminalShell` is the configured terminal
+ * shell, needed because a cmd-family launch only says the runner is batch, not what types it.
+ */
+function appendShellExitOnSetupSuccess(
+  command: string,
+  platform: SetupRunnerCommandPlatform,
+  shell: SetupRunnerShell | undefined,
+  windowsTerminalShell: string | undefined
+): string {
+  if (platform === 'posix' || shell?.family === 'posix') {
+    return `${command}${SETUP_SUCCESS_EXIT_SUFFIX}`
+  }
+  // Why: no launch shell means a remote Windows host whose shell we cannot name; leave it open.
+  if (!shell) {
+    return command
+  }
+  const basename =
+    windowsTerminalShell?.trim().replaceAll('\\', '/').split('/').pop()?.toLowerCase() ?? ''
+  if (['cmd', 'cmd.exe', 'wsl', 'wsl.exe'].includes(basename)) {
+    return `${command}${SETUP_SUCCESS_EXIT_SUFFIX}`
+  }
+  // Why: PowerShell is the default and also the fallback when a configured Git Bash is missing.
+  return `${command}${POWERSHELL_SETUP_SUCCESS_EXIT_SUFFIX}`
+}
+
+/** Honours the "Close setup tab when it succeeds" setting for a command that launches setup. */
+export function applySetupAutoCloseSetting(
+  command: string,
+  platform: SetupRunnerCommandPlatform,
+  shell: SetupRunnerShell | undefined,
+  settings:
+    | Partial<Pick<GlobalSettings, 'closeSetupTabOnSuccess' | 'terminalWindowsShell'>>
+    | null
+    | undefined
+): string {
+  return settings?.closeSetupTabOnSuccess === true
+    ? appendShellExitOnSetupSuccess(command, platform, shell, settings.terminalWindowsShell)
+    : command
+}
+
+/** True when a shell launched with `command` exited through the setup success clause. */
+export function exitedOnSetupSuccess(command: string | undefined, exitCode: number): boolean {
+  return (
+    exitCode === SETUP_SUCCESS_EXIT_CODE &&
+    command !== undefined &&
+    (command.endsWith(SETUP_SUCCESS_EXIT_SUFFIX) ||
+      command.endsWith(POWERSHELL_SETUP_SUCCESS_EXIT_SUFFIX))
+  )
 }

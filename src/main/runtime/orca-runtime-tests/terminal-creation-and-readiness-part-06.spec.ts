@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import './runtime-test-module-registration.spec'
 import { OrcaRuntimeService } from '../orca-runtime'
+import { SETUP_SUCCESS_EXIT_CODE } from '../../../shared/setup-runner-command'
 import {
   TEST_WORKTREE_ID,
   TEST_WORKTREE_PATH,
@@ -102,6 +103,27 @@ describe('OrcaRuntimeService', () => {
     runtime.onPtyExit('pty-legacy-setup', 9)
 
     await expect(waiting).resolves.toEqual({ exitCode: 9 })
+  })
+
+  it('reads the auto-close success exit as success when it beats the completion marker', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn: vi.fn().mockResolvedValue({ id: 'pty-autoclose-setup' }),
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+    ;(
+      runtime as unknown as { setupCompletionTokenByPtyId: Map<string, string> }
+    ).setupCompletionTokenByPtyId.set('pty-autoclose-setup', 'token-autoclose')
+
+    const waiting = runtime.waitForSetupTerminalCompletion(handle)
+    runtime.onPtyExit('pty-autoclose-setup', SETUP_SUCCESS_EXIT_CODE)
+
+    await expect(waiting).resolves.toEqual({ exitCode: 0 })
   })
 
   it('cancels setup completion observation when the caller aborts', async () => {
