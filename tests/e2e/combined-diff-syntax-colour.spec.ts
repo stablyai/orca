@@ -6,18 +6,10 @@ import type { Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { waitForSessionReady } from './helpers/store'
 
-const FILE_COUNT = 16
-
-type SectionColourSample = {
-  key: string
-  linesAt: number
-  tokensAt: number | null
-}
+const FILE_COUNT = 8
 
 declare global {
-  var __colourProbe:
-    | { samples: Map<string, SectionColourSample>; observer: MutationObserver }
-    | undefined
+  var __colouredWhenLaidOut: Record<string, boolean> | undefined
 }
 
 function runGit(repoPath: string, args: string[]): void {
@@ -79,83 +71,73 @@ async function openCombinedDiff(page: Page, repoPath: string): Promise<void> {
   )
 }
 
-// Record per section when its modified pane is laid out and when it first shows a coloured token.
-async function startColourProbe(page: Page): Promise<void> {
-  await page.evaluate(() => {
-    const samples = new Map<string, SectionColourSample>()
-    const scan = (): void => {
-      const now = performance.now()
-      for (const row of document.querySelectorAll<HTMLElement>(
-        '[data-combined-diff-section-row]'
-      )) {
-        const key = row.dataset.combinedDiffSectionKey ?? ''
-        const pane = row.querySelector('.editor.modified .view-lines')
-        // Wait for layout: a pane renders one placeholder line before Monaco measures it.
-        if (!pane || pane.querySelectorAll('.view-line').length < 10) {
-          continue
-        }
-        const coloured = [...pane.querySelectorAll('.view-line span span')].some((token) =>
-          [...token.classList].some((name) => /^mtk([2-9]|\d\d)/.test(name))
-        )
-        const sample = samples.get(key) ?? { key, linesAt: now, tokensAt: null }
-        if (coloured && sample.tokensAt === null) {
-          sample.tokensAt = now
-        }
-        samples.set(key, sample)
-      }
-    }
-    const observer = new MutationObserver(scan)
-    observer.observe(document.body, { childList: true, subtree: true })
-    globalThis.__colourProbe = { samples, observer }
-  })
-}
-
-async function countProbedSections(page: Page): Promise<number> {
-  return page.evaluate(() => globalThis.__colourProbe?.samples.size ?? 0)
-}
-
-async function stopColourProbe(page: Page): Promise<SectionColourSample[]> {
-  return page.evaluate(() => {
-    const probe = globalThis.__colourProbe
-    probe?.observer.disconnect()
-    return [...(probe?.samples.values() ?? [])]
-  })
-}
-
 test.describe('Combined diff syntax colour', () => {
   test.use({ seedTestRepo: false })
 
-  test('sections scrolled into view are coloured in the first frame they are laid out', async ({
+  test('a section scrolled into view already has syntax colours when its lines are laid out', async ({
     orcaPage
   }) => {
     await waitForSessionReady(orcaPage)
     const repoPath = createRepo()
     try {
       await openCombinedDiff(orcaPage, repoPath)
-      const container = orcaPage.locator('.combined-diff-scroll-container')
-      // Start once the first section is coloured; Monaco loads a language's tokenizer on first use.
-      await expect(
-        container.locator('.view-line span[class*="mtk"]:not(.mtk1)').first()
-      ).toBeVisible()
-      await startColourProbe(orcaPage)
-      const box = (await container.boundingBox())!
-      await orcaPage.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
-      // Wheel one step per poll so each section scrolls into view rather than being skipped.
+      // Monaco loads a language's tokenizer on first use; start once the first section is coloured.
+      await expect
+        .poll(() =>
+          orcaPage.evaluate(() =>
+            [...document.querySelectorAll('.combined-diff-scroll-container .view-line')].some(
+              (line) =>
+                new Set(
+                  [...line.querySelectorAll('span span')]
+                    // Bracket-pair colours appear without syntax tokens.
+                    .filter((t) => !/^[(){}]$/.test(t.textContent ?? ''))
+                    .map((t) => getComputedStyle(t).color)
+                ).size > 1
+            )
+          )
+        )
+        .toBe(true)
+
+      await orcaPage.evaluate(() => {
+        const seen: Record<string, boolean> = {}
+        globalThis.__colouredWhenLaidOut = seen
+        // Record each section once, at the first DOM mutation where its first added line exists.
+        new MutationObserver(() => {
+          for (const row of document.querySelectorAll<HTMLElement>(
+            '[data-combined-diff-section-row]'
+          )) {
+            const key = row.dataset.combinedDiffSectionKey ?? ''
+            const line = [...row.querySelectorAll('.editor.modified .view-line')].find(
+              (candidate) => candidate.textContent?.startsWith('export\u00a0function')
+            )
+            if (key in seen || !line) {
+              continue
+            }
+            const colours = new Set(
+              [...line.querySelectorAll('span span')]
+                // Bracket-pair colours appear without syntax tokens.
+                .filter((t) => !/^[(){}]$/.test(t.textContent ?? ''))
+                .map((t) => getComputedStyle(t).color)
+            )
+            seen[key] = colours.size > 1
+          }
+        }).observe(document.body, { childList: true, subtree: true })
+      })
       await expect
         .poll(
-          async () => {
-            await orcaPage.mouse.wheel(0, 400)
-            return countProbedSections(orcaPage)
-          },
-          { intervals: [40], timeout: 15_000 }
+          () =>
+            orcaPage.evaluate(() => {
+              const container = document.querySelector<HTMLElement>(
+                '.combined-diff-scroll-container'
+              )!
+              container.scrollTop += 400
+              return Object.keys(globalThis.__colouredWhenLaidOut ?? {}).length
+            }),
+          { intervals: [50], timeout: 15_000 }
         )
-        .toBeGreaterThanOrEqual(FILE_COUNT - 4)
-      const samples = await stopColourProbe(orcaPage)
-      const gaps = samples.map((s) => ({
-        key: s.key,
-        gapMs: s.tokensAt === null ? null : Math.round(s.tokensAt - s.linesAt)
-      }))
-      expect(gaps.filter((gap) => gap.gapMs !== 0)).toEqual([])
+        .toBe(FILE_COUNT)
+      const coloured = await orcaPage.evaluate(() => globalThis.__colouredWhenLaidOut)
+      expect(Object.entries(coloured ?? {}).filter(([, value]) => !value)).toEqual([])
     } finally {
       rmSync(repoPath, { recursive: true, force: true })
     }

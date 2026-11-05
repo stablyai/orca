@@ -1,26 +1,18 @@
 import type * as Monaco from 'monaco-editor'
 
-// Combined-diff panes are as tall as their file, so larger spans keep Monaco's incremental idle
-// tokenization instead of repainting thousands of coloured lines in one frame.
-const MAX_EAGER_TOKENIZED_LINES = 1_000
+// Eager tokenizing costs up to the last visible line; deeper panes keep Monaco's idle tokenizer.
+const MAX_EAGER_TOKENIZED_LINE = 1_000
 
-function countVisibleLines(pane: Monaco.editor.ICodeEditor): number {
-  return pane
-    .getVisibleRanges()
-    .reduce((total, range) => total + range.endLineNumber - range.startLineNumber + 1, 0)
-}
-
-// Standalone Monaco tokenizes visible lines only when a pane scrolls itself, so outer-scrolled
-// and newly mounted diff panes would paint uncoloured until idle tokenization catches up.
+// Outer-scrolled diff panes never scroll themselves, so publish their viewport before first render.
 export function installMonacoDiffViewportTokenization(monaco: typeof Monaco): void {
   monaco.editor.onDidCreateDiffEditor((diffEditor) => {
     for (const pane of [diffEditor.getOriginalEditor(), diffEditor.getModifiedEditor()]) {
       const tokenizeVisibleLines = (): void => {
-        if (countVisibleLines(pane) <= MAX_EAGER_TOKENIZED_LINES) {
+        const lastVisibleLine = pane.getVisibleRanges().at(-1)?.endLineNumber ?? 0
+        if (lastVisibleLine <= MAX_EAGER_TOKENIZED_LINE) {
           pane.handleInitialized?.()
         }
       }
-      // Pane disposal drops these listeners with its emitters.
       pane.onDidChangeModel(tokenizeVisibleLines)
       pane.onDidChangeHiddenAreas(tokenizeVisibleLines)
       pane.onDidLayoutChange(tokenizeVisibleLines)
