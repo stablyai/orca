@@ -35,7 +35,9 @@ it('projects the captured Enterprise choice into the actual launch home, replaci
   vi.spyOn(browser, 'antigravityBrowserHelperWorks').mockResolvedValue(true)
   const home = await mkdtemp(join(tmpdir(), 'orca-agy-auth-config-'))
   folders.push(home)
-  const source = { antigravityChatAuth: { ...enterprise } }
+  const source: { antigravityChatAuth: NonNullable<GlobalSettings['antigravityChatAuth']> } = {
+    antigravityChatAuth: { ...enterprise }
+  }
   const launch = await resolveAcpLaunchInvocation(
     ANTIGRAVITY_LAUNCH_SPEC,
     { variable: 'GEMINI_HOME', path: home },
