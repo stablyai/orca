@@ -122,7 +122,6 @@ export function MobileNativeChatSessionOptionPickers({
   useEffect(() => {
     if (open && !wasOpen.current) {
       controller.optionSurface?.demandModelCatalog?.()
-      setMoreModelsShown(false)
     }
     wasOpen.current = open
   }, [open, controller.optionSurface])
