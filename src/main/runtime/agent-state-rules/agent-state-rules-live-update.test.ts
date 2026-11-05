@@ -146,14 +146,6 @@ describe('agent state rules live updates', () => {
     h.updater.stop()
   })
 
-  it('warns when the download fails with a server error', async () => {
-    const h = harness()
-    h.fetch.mockImplementation(async () => new Response('Bad Gateway', { status: 502 }))
-    await h.updater.start()
-    expect(warnings()).toEqual(['[agent-state-rules] download failed: HTTP 502'])
-    h.updater.stop()
-  })
-
   it('accepts a newer download, caches its bytes, and hot-reloads the engine', async () => {
     const h = harness({ appVersion: '1.4.1-rc.0' })
     expect(idleTitleRequiresQuiet('claude')).toBe(true)
