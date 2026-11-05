@@ -189,7 +189,7 @@ describe('canAssignWorktreeParent', () => {
     ).toEqual([sameRepo.id, otherRepo.id])
   })
 
-  it('offers a same-repo candidate on another machine, which its own store names', () => {
+  it('offers a same-repo candidate on another machine', () => {
     const child = makeWorktree('child', 'repo-a')
     const sameHost = makeWorktree('same-host', 'repo-a')
     const otherHost = makeWorktree('other-host', 'repo-a')
@@ -209,6 +209,34 @@ describe('canAssignWorktreeParent', () => {
         ])
       }).map((worktree) => worktree.id)
     ).toEqual(['same-host', 'other-host'])
+  })
+
+  it('offers a chain across three machines but hides one nested under the child', () => {
+    const child = makeWorktree('child', 'repo-a')
+    const chained = makeWorktree('chained', 'repo-a')
+    const nestedUnderChild = makeWorktree('nested', 'repo-a')
+    const third = makeWorktree('third', 'repo-a')
+    child.hostId = 'runtime:env-a'
+    chained.hostId = 'runtime:env-b'
+    nestedUnderChild.hostId = 'runtime:env-b'
+    third.hostId = 'runtime:env-c'
+    const worktrees = [child, chained, nestedUnderChild, third]
+
+    expect(
+      getEligibleWorktreeParents({
+        child,
+        worktrees,
+        lineageById: {},
+        worktreeMap: makeMap(worktrees),
+        repoMap: makeRepoMap([
+          { id: 'repo-a', connectionId: null, executionHostId: 'runtime:env-a' }
+        ]),
+        parentIdentities: new Map([
+          ['runtime:env-b|chained', 'runtime:env-c|third'],
+          ['runtime:env-b|nested', 'runtime:env-a|child']
+        ])
+      }).map((worktree) => worktree.id)
+    ).toEqual(['chained', 'third'])
   })
 
   it('allows another project for picker and direct drop checks', () => {

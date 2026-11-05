@@ -45,7 +45,7 @@ import {
   type WorktreeCreateRequest
 } from './worktree-create-payload'
 import { holdCreatedSidebarWorkspace } from '@/lib/sidebar-pending-layer'
-import { mintCrossStoreParentRef } from '../metadata/cross-store-parent-ref'
+import { buildCrossStoreParentRef } from '../metadata/cross-store-parent-ref'
 import {
   lostRequestedParent,
   notifyWorktreeParentDropped,
@@ -212,9 +212,7 @@ export function createCreateWorktree(
       }
       // Refuses the whole create (older Orca, unconfirmed parent) rather than create it unnested.
       const crossStoreParent = parent.crossStoreParentRow
-        ? await mintCrossStoreParentRef(get(), target, parent.crossStoreParentRow, {
-            reparent: false
-          })
+        ? await buildCrossStoreParentRef(get(), target, parent.crossStoreParentRow)
         : undefined
       if (
         target.kind === 'environment' &&

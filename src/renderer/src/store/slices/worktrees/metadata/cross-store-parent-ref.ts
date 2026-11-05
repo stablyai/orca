@@ -3,22 +3,13 @@ import type { RuntimeClientTarget } from '../../../../../../shared/runtime-clien
 import type { RuntimeStatus } from '../../../../../../shared/runtime-types'
 import type { CrossStoreParentRef } from '../../../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import {
-  lineageStoreKeyOfRow,
-  OWN_LINEAGE_STORE_KEY
-} from '../../../../../../shared/worktree/cross-store-lineage-resolution'
+import { lineageStoreKeyOfRow } from '../../../../../../shared/worktree/cross-store-lineage-resolution'
 import { assertCrossStoreLineageSupported } from '../../../../../../shared/worktree-runtime-capabilities'
 import { callRuntimeRpc } from '../../../../runtime/runtime-rpc-client'
-import { toRuntimeWorktreeSelector } from '../../../../runtime/runtime-worktree-selector'
+import { parseWorkspaceKey, worktreeWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { getRuntimeEnvironmentDisplayName } from '../../../repos/owner-routing'
 import { selectLineageStoreInstallationId } from '../../../cross-store-lineage-parents'
 import { lineageStoreKeyOfTarget } from './cross-store-lineage-state'
-
-function targetOfStore(storeKey: string): RuntimeClientTarget {
-  return storeKey === OWN_LINEAGE_STORE_KEY
-    ? { kind: 'local' }
-    : { kind: 'environment', environmentId: storeKey }
-}
 
 /** Whether a parent lives in another Orca store than the child, so the link needs a cross-store ref. */
 export function isCrossStoreParent(child: Worktree, parent: Worktree): boolean {
@@ -27,52 +18,39 @@ export function isCrossStoreParent(child: Worktree, parent: Worktree): boolean {
   return childStore !== undefined && parentStore !== undefined && childStore !== parentStore
 }
 
-async function assertStoreSupportsCrossStoreLineage(
-  state: AppState,
-  target: RuntimeClientTarget
-): Promise<void> {
-  const status = await callRuntimeRpc<RuntimeStatus>(target, 'status.get')
-  assertCrossStoreLineageSupported(
-    status.capabilities,
-    target.kind === 'environment'
-      ? getRuntimeEnvironmentDisplayName(state, target.environmentId)
-      : 'this computer'
-  )
-}
-
 /**
- * The parent's own store names it for a child in `childTarget`'s store. Refuses before any write when
- * either store predates cross-machine parents, or the named install isn't the one this window verified.
+ * The ref a child in `childTarget`'s store saves, built from ids this window already verified: the
+ * parent store's installationId and the picked row. Refuses before any write when the child's store
+ * predates cross-machine parents or the parent's machine is unconfirmed.
  */
-export async function mintCrossStoreParentRef(
+export async function buildCrossStoreParentRef(
   state: AppState,
   childTarget: RuntimeClientTarget,
-  parent: Worktree,
-  options: { reparent: boolean }
+  parent: Worktree
 ): Promise<CrossStoreParentRef> {
-  await assertStoreSupportsCrossStoreLineage(state, childTarget)
+  const childStatus = await callRuntimeRpc<RuntimeStatus>(childTarget, 'status.get')
+  assertCrossStoreLineageSupported(
+    childStatus.capabilities,
+    childTarget.kind === 'environment'
+      ? getRuntimeEnvironmentDisplayName(state, childTarget.environmentId)
+      : 'this computer'
+  )
   const parentStore = lineageStoreKeyOfRow(parent)
   if (parentStore === undefined || parentStore === lineageStoreKeyOfTarget(childTarget)) {
     throw new Error('That parent is on the same machine. Choose it as a parent there instead.')
   }
-  // Why: an older paired server lacks the mint method; name it instead of a raw unknown-method error.
-  if (parentStore !== OWN_LINEAGE_STORE_KEY) {
-    await assertStoreSupportsCrossStoreLineage(state, targetOfStore(parentStore))
+  if (parseWorkspaceKey(parent.id)?.type === 'folder') {
+    throw new Error("A folder workspace can't parent a workspace on another machine yet.")
   }
-  const { parent: ref } = await callRuntimeRpc<{ parent: CrossStoreParentRef }>(
-    targetOfStore(parentStore),
-    'worktree.crossStoreParentRef',
-    {
-      worktree: toRuntimeWorktreeSelector(parent.id),
-      ...(options.reparent ? { reparent: true } : {})
-    },
-    { timeoutMs: 15_000 }
-  )
-  const verified = selectLineageStoreInstallationId(state, parentStore)
-  if (!verified || ref.installationId !== verified || ref.instanceId !== parent.instanceId) {
+  const installationId = selectLineageStoreInstallationId(state, parentStore)
+  if (!installationId || !parent.instanceId) {
     throw new Error(
       "Couldn't confirm the parent's machine. Refresh the workspace list and try again."
     )
   }
-  return ref
+  return {
+    installationId,
+    workspaceKey: worktreeWorkspaceKey(parent.id),
+    instanceId: parent.instanceId
+  }
 }

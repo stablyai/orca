@@ -11,7 +11,7 @@ import {
 import { hostRouteForWorktreeOwner } from '../listing/worktree-owner-target'
 import { callRuntimeRpc } from '../../../../runtime/runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from '../../../../runtime/runtime-worktree-selector'
-import { mintCrossStoreParentRef } from './cross-store-parent-ref'
+import { buildCrossStoreParentRef } from './cross-store-parent-ref'
 
 // Why: this runs inside a catch, so letting the refresh reject would replace the failure it recovers from.
 async function refreshWorktreeLineageBestEffort(
@@ -99,7 +99,7 @@ export function createAssignWorktreeParent(
   }
 }
 
-/** Set Parent to a workspace on another machine: the parent's store names it, the child's store saves it. */
+/** Set Parent to a workspace on another machine: the child's store saves a ref built from verified ids. */
 export function createAssignCrossStoreWorktreeParent(
   set: WorktreeSliceSet,
   get: WorktreeSliceGet
@@ -107,9 +107,7 @@ export function createAssignCrossStoreWorktreeParent(
   return async (child, parent) => {
     const ownerRoute = hostRouteForWorktreeOwner(get(), child.id, child.hostId)
     try {
-      const crossStoreParent = await mintCrossStoreParentRef(get(), ownerRoute.target, parent, {
-        reparent: true
-      })
+      const crossStoreParent = await buildCrossStoreParentRef(get(), ownerRoute.target, parent)
       await callRuntimeRpc(
         ownerRoute.target,
         'worktree.set',

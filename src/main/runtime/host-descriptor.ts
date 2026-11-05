@@ -119,27 +119,6 @@ export function getPublishedHostDescriptor(runtimeId: string): RuntimeHostDescri
   return publishedByRuntimeId.get(runtimeId) ?? null
 }
 
-const peekedInstallationIdByPath = new Map<string, string>()
-
-/** This store's identity for synchronous readers (sidebar feed facts); never creates the file, which
- * startup's descriptor load does. Undefined leaves cross-store children standalone until it exists. */
-export function peekStoreInstallationId(userDataPath: string): string | undefined {
-  const cached = peekedInstallationIdByPath.get(userDataPath)
-  if (cached) {
-    return cached
-  }
-  try {
-    const read = readInstallation(join(userDataPath, HOST_INSTALLATION_FILENAME))
-    if (read.kind === 'valid') {
-      peekedInstallationIdByPath.set(userDataPath, read.installationId)
-      return read.installationId
-    }
-  } catch (error) {
-    console.warn('[runtime] Store installation id unreadable:', error)
-  }
-  return undefined
-}
-
 /** This store's lineage identity: the published descriptor's installationId, else the profile's own file. */
 export async function readStoreInstallationId(
   runtimeId: string | null,

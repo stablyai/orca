@@ -15,7 +15,7 @@ import type { WorkspaceRowsProducer } from './workspace-rows-producer'
 import type { RepoIconDataUrls } from './repo-icon-data-urls'
 import type { SidebarInputsFeedDomain } from './sidebar-inputs-feed'
 import { readDesktopSidebarFacts } from './desktop-sidebar-facts'
-import { peekStoreInstallationId } from '../host-descriptor'
+import { readStoreInstallationId } from '../host-descriptor'
 import { getCanonicalUserDataPath } from '../../persistence/loading-store/user-data-path'
 import { readSidebarProjectCatalog } from './sidebar-project-catalog'
 import {
@@ -27,13 +27,16 @@ import { parseExecutionHostId } from '../../../shared/execution-host'
 import { keyWorkspaceActivityByRow } from '../../../shared/sidebar-list/workspace-activity-facts'
 
 /** This host's store and connection registries, read the way sidebarInputs.desktopFacts reads them. */
-export function readRuntimeDesktopSidebarFacts(store: RuntimeStore): DesktopSidebarFacts {
+export function readRuntimeDesktopSidebarFacts(
+  store: RuntimeStore,
+  installationId: string | undefined
+): DesktopSidebarFacts {
   return readDesktopSidebarFacts({
     store,
     sshTargets: listRegisteredSshTargets(),
     sshStateOf: getRegisteredSshState,
     wslStatuses: getWslHostService()?.getStatuses() ?? [],
-    installationId: peekStoreInstallationId(getCanonicalUserDataPath())
+    installationId
   })
 }
 
@@ -96,6 +99,13 @@ export function sidebarInputsFeedDomains(
       },
       { consumesTerminalSideEffects: false }
     )
+  // Why: until the id loads, cross-store children stay standalone; its arrival is a desktop change.
+  let installationId: string | undefined
+  const installationLoaded = readStoreInstallationId(null, getCanonicalUserDataPath()).then(
+    (id) => {
+      installationId = id
+    }
+  )
   const requireStore = (): RuntimeStore => {
     const store = sources.store()
     if (!store) {
@@ -211,7 +221,7 @@ export function sidebarInputsFeedDomains(
     {
       name: 'desktop',
       // Each field its own entity.
-      read: () => readRuntimeDesktopSidebarFacts(requireStore()),
+      read: () => readRuntimeDesktopSidebarFacts(requireStore(), installationId),
       watch: (changed) => {
         const store = sources.store()
         const detaches = [
@@ -228,7 +238,16 @@ export function sidebarInputsFeedDomains(
           }),
           getWslHostService()?.onStatusesChanged(changed)
         ]
-        return () => detaches.forEach((detach) => detach?.())
+        let watching = true
+        void installationLoaded.then(() => {
+          if (watching && installationId !== undefined) {
+            changed()
+          }
+        })
+        return () => {
+          watching = false
+          detaches.forEach((detach) => detach?.())
+        }
       }
     },
     {

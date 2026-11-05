@@ -44,23 +44,25 @@ export function getEligibleWorktreeParents({
   const childHostId = getWorktreeOwnerHostId(child, repoMap)
   const cyclicLineageIds =
     precomputedCyclicLineageIds ?? getCyclicProjectedWorktreeLineageIds(lineageById, worktreeMap)
-  const isCrossStoreParent = crossStoreParentEligibility(child, worktrees, parentIdentities)
+  const isCrossStoreParent = crossStoreParentEligibility(child, parentIdentities)
+  const closesLoop = closesResolvedLoop(child, worktrees, parentIdentities)
   return worktrees.filter(
     (candidate) =>
-      isCrossStoreParent(candidate) ||
-      isEligibleWorktreeParent({
-        child,
-        candidateParent: candidate,
-        lineageById,
-        worktreeMap,
-        repoMap,
-        cyclicLineageIds,
-        childHostId
-      })
+      !closesLoop(candidate) &&
+      (isCrossStoreParent(candidate) ||
+        isEligibleWorktreeParent({
+          child,
+          candidateParent: candidate,
+          lineageById,
+          worktreeMap,
+          repoMap,
+          cyclicLineageIds,
+          childHostId
+        }))
   )
 }
 
-/** A create-time parent in another Orca store; its own store names it when the workspace is created. */
+/** A create-time parent in another Orca store; the create saves a ref to it built from verified ids. */
 export function isCrossStoreCreateParent(
   childHostId: ExecutionHostId | undefined,
   candidate: Worktree
@@ -75,48 +77,56 @@ export function isCrossStoreCreateParent(
   )
 }
 
-/** Parents in another Orca store. Its own store refuses one whose chain already reaches a third
- * store (a loop could close there), so those and the child's own descendants are left out here too. */
+/** Parents in another Orca store; chains may cross any number of machines. */
 function crossStoreParentEligibility(
   child: Worktree,
-  worktrees: readonly Worktree[],
   parentIdentities: SidebarLineageParentIdentities | undefined
 ): (candidate: Worktree) => boolean {
   const childStore = lineageStoreKeyOfRow(child)
   if (childStore === undefined || !child.instanceId) {
     return () => false
   }
+  const currentParent = parentIdentities?.get(getWorktreeHostIdentity(child))
+  return (candidate) => {
+    const store = lineageStoreKeyOfRow(candidate)
+    return (
+      store !== undefined &&
+      store !== childStore &&
+      !candidate.isArchived &&
+      Boolean(candidate.instanceId) &&
+      getWorktreeHostIdentity(candidate) !== currentParent
+    )
+  }
+}
+
+/** A candidate already nested under the child in the resolved parent map would close a loop. */
+function closesResolvedLoop(
+  child: Worktree,
+  worktrees: readonly Worktree[],
+  parentIdentities: SidebarLineageParentIdentities | undefined
+): (candidate: Worktree) => boolean {
+  if (!parentIdentities) {
+    return () => false
+  }
   const childIdentity = getWorktreeHostIdentity(child)
   const rowsByIdentity = new Map<string, Worktree>(
     worktrees.map((row) => [getWorktreeHostIdentity(row), row])
   )
-  const currentParent = parentIdentities?.get(childIdentity)
   return (candidate) => {
-    const store = lineageStoreKeyOfRow(candidate)
-    if (
-      store === undefined ||
-      store === childStore ||
-      candidate.isArchived ||
-      !candidate.instanceId ||
-      getWorktreeHostIdentity(candidate) === currentParent
-    ) {
-      return false
-    }
     const seen = new Set<string>()
-    let cursor: Worktree | undefined = candidate
-    while (cursor) {
-      const identity = getWorktreeHostIdentity(cursor)
-      if (identity === childIdentity || seen.has(identity)) {
-        return false
+    let identity: string | undefined = getWorktreeHostIdentity(candidate)
+    while (identity !== undefined && !seen.has(identity)) {
+      if (identity === childIdentity) {
+        return true
       }
       seen.add(identity)
-      const parentIdentity = parentIdentities?.get(identity)
-      cursor = parentIdentity === undefined ? undefined : rowsByIdentity.get(parentIdentity)
-      if (cursor && lineageStoreKeyOfRow(cursor) !== store) {
-        return false
-      }
+      const parentIdentity = parentIdentities.get(identity)
+      identity =
+        parentIdentity !== undefined && rowsByIdentity.has(parentIdentity)
+          ? parentIdentity
+          : undefined
     }
-    return true
+    return false
   }
 }
 

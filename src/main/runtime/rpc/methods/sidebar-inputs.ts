@@ -29,7 +29,11 @@ export const SIDEBAR_INPUT_METHODS = [
     name: 'sidebarInputs.desktopFacts',
     permission: 'workspace',
     params: null,
-    handler: async (_params, { runtime }) => readRuntimeDesktopSidebarFacts(runtime.requireStore())
+    handler: async (_params, { runtime }) =>
+      readRuntimeDesktopSidebarFacts(
+        runtime.requireStore(),
+        await runtime.readStoreInstallationId()
+      )
   }),
   defineMethod({
     name: 'sidebarInputs.pairedServerRows',
