@@ -51,14 +51,13 @@ export function findLaunchRepo(
   return repoId && state.repos ? getIndexedRepoMap(state.repos).get(repoId) : undefined
 }
 
-/** The launch config a GUI launch carries: Claude's gets the pick, the sentinel or the saved account. */
-export function stampClaudeLaunchAccount(
+/** The account a GUI launch runs on: Claude's gets the pick, the sentinel or the saved account. */
+export function claudeLaunchAccountId(
   state: Parameters<typeof claudeAccountPinningUnsupportedReasonInState>[0],
-  launch: { agent: TuiAgent; worktreeId: string; claudeAccountId?: string },
-  config: SleepingAgentLaunchConfig
-): SleepingAgentLaunchConfig {
+  launch: { agent: TuiAgent; worktreeId: string; claudeAccountId?: string }
+): string | undefined {
   if (launch.agent !== 'claude') {
-    return config
+    return undefined
   }
   const repo = findLaunchRepo(state, { worktreeId: launch.worktreeId })
   // Why: main never pins a saved default on SSH or WSL, so recording one would mislabel the tab.
@@ -67,9 +66,17 @@ export function stampClaudeLaunchAccount(
     repo &&
     claudeAccountPinningUnsupportedReasonInState(state, repo)
   ) {
-    return config
+    return undefined
   }
-  return withClaudeLaunchAccount(config, resolveLaunchClaudeAccountId(repo, launch.claudeAccountId))
+  return resolveLaunchClaudeAccountId(repo, launch.claudeAccountId)
+}
+
+export function stampClaudeLaunchAccount(
+  state: Parameters<typeof claudeAccountPinningUnsupportedReasonInState>[0],
+  launch: { agent: TuiAgent; worktreeId: string; claudeAccountId?: string },
+  config: SleepingAgentLaunchConfig
+): SleepingAgentLaunchConfig {
+  return withClaudeLaunchAccount(config, claudeLaunchAccountId(state, launch))
 }
 
 /** A retry is a new user action, so it mints its own request id and replans the route. */

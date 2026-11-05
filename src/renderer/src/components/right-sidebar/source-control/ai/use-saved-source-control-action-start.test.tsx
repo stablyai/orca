@@ -101,7 +101,6 @@ it.each(
 )(
   'dispatches the exact newly authored $agent $surface recipe through saved start against opposite Settings',
   async ({ agent, surface }) => {
-    // Same stored tuple asserted by source-control-ai-settings-persistence.test.tsx's actual writers.
     const recipe = {
       agentId: agent,
       surface,

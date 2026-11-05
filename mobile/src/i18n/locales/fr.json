@@ -1590,7 +1590,7 @@
       "notificationsTitle": "Soyez averti quand un agent a besoin de vous",
       "openInChatUi": "Ouvrir les sessions dans l'interface de chat",
       "openInTerminal": "Ouvrir les sessions dans le terminal",
-      "sessionViewDescription": "Choisissez si les sessions d'agent compatibles s'ouvrent dans le terminal ou l'interface de chat sur cet appareil. Appuyez longuement sur l'onglet d'une session pour changer de vue, ou modifiez le choix par défaut plus tard dans les paramètres.",
+      "sessionViewDescription": "Choisissez si les sessions d'agent compatibles s'ouvrent dans le terminal ou l'interface de chat sur cet appareil. Appuyez longuement sur l'onglet d'une session pour changer de vue, ou modifiez le choix par défaut à tout moment dans Paramètres → Chat UI.",
       "sessionViewTitle": "Comment ouvrir les sessions ?",
       "skipNotifications": "Ignorer les notifications pour le moment",
       "useChatUi": "Utiliser le chat"

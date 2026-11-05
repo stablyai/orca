@@ -198,7 +198,7 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
   const handleCloseExitedPane = useCallback(
     (paneId: number) => {
       clearPaneProcessExit(paneId)
-      executeClosePane(paneId)
+      executeClosePane(paneId, 'user')
     },
     [clearPaneProcessExit, executeClosePane]
   )

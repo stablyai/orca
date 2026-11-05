@@ -316,10 +316,10 @@ describe("a new chat's effort pill before its agent starts", () => {
       expect(atRest.current).toStrictEqual({
         model,
         effort: undefined,
-        defaulted: [],
+        defaulted: ['model'],
         ...modeOf(agent),
         ...AT_REST_METADATA,
-        acceptedInputSources: { model: 'policy' }
+        acceptedInputSources: {}
       })
     }
   )
@@ -353,10 +353,10 @@ describe("a new chat's effort pill before its agent starts", () => {
     expect(atRest.current).toStrictEqual({
       model: 'gpt-5.5',
       effort: undefined,
-      defaulted: [],
+      defaulted: ['model'],
       permissionMode: 'ask',
       ...AT_REST_METADATA,
-      acceptedInputSources: { model: 'policy' }
+      acceptedInputSources: {}
     })
     expect(atRest.conversationCommands).toEqual(['clear', 'compact'])
   })
@@ -367,10 +367,10 @@ describe("a new chat's effort pill before its agent starts", () => {
     expect(atRest.current).toStrictEqual({
       model: 'gpt-5.5',
       effort: undefined,
-      defaulted: [],
+      defaulted: ['model'],
       permissionMode: 'ask',
       ...AT_REST_METADATA,
-      acceptedInputSources: { model: 'policy' }
+      acceptedInputSources: {}
     })
   })
 
@@ -380,10 +380,10 @@ describe("a new chat's effort pill before its agent starts", () => {
     expect(atRest.current).toStrictEqual({
       model: 'grok-4',
       effort: 'high',
-      defaulted: [],
+      defaulted: ['model'],
       ...modeOf('grok'),
       ...AT_REST_METADATA,
-      acceptedInputSources: { model: 'policy', effort: 'saved' }
+      acceptedInputSources: { effort: 'saved' }
     })
     expect(settled.effort?.value).toBe('high')
   })

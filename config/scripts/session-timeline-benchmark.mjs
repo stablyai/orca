@@ -3,8 +3,8 @@ import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { build } from 'esbuild'
-import { buildCounterbalancedSchedule } from './counterbalanced-benchmark-schedule.mjs'
-import { summarizeBenchmarkSamples } from './benchmark-sample-summary.mjs'
+import { buildCounterbalancedSchedule } from './performance/measurement/counterbalanced-benchmark-schedule.mjs'
+import { summarizeBenchmarkSamples } from './performance/measurement/benchmark-sample-summary.mjs'
 
 // git show <ref>:src/main/ai-vault/session-scanner-accumulator.ts | node config/scripts/session-timeline-benchmark.mjs
 const target = resolve('src/main/ai-vault/session-scanner-accumulator.ts')

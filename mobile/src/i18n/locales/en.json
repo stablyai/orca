@@ -784,7 +784,7 @@
     "onboardingPage": {
       "sessionViewTitle": "How should sessions open?",
       "notificationsTitle": "Don’t miss when an agent needs you",
-      "sessionViewDescription": "Choose whether supported agent sessions open in the terminal or Chat UI on this device. Press and hold a session tab to switch its view, or change the default later in Settings.",
+      "sessionViewDescription": "Choose whether supported agent sessions open in the terminal or Chat UI on this device. Press and hold a session tab to switch its view, or change the default any time in Settings → Chat UI.",
       "notificationsDescription": "Get a notification on this phone when an agent finishes or is waiting — even if you aren’t using the app.",
       "notificationsDisclosure": "Delivered through Orca’s push service after your desktop has been idle for 3 minutes. Change this anytime in Settings.",
       "useChatUi": "Use Chat UI",
@@ -1377,6 +1377,14 @@
       "noMatches": "No files match",
       "current": "current",
       "viewedFile": "{{path}} viewed"
+    },
+    "native-chat": {
+      "turnDiff": {
+        "changedFiles_one": "{{count}} changed file",
+        "changedFiles_other": "{{count}} changed files",
+        "partial": "Partial diff",
+        "showMoreFiles": "Show {{count}} more"
+      }
     }
   },
   "pullRequest": {

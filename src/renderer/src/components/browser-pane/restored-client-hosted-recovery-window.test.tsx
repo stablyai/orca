@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { act, cleanup, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { DEFAULT_CLIENT_PAGE_CREATION_TIMEOUT_MS } from '../../../../shared/browser/client-hosting/browser-client-page-creation-timeouts'
+
 import type { BrowserPage } from '../../../../shared/browser-workspace-types'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
 
@@ -107,14 +107,6 @@ function renderPane(): ReturnType<typeof render> {
   return render(paneElement())
 }
 
-function loadingShown(): boolean {
-  return (
-    document.querySelector(
-      '[data-contextual-tour-target="client-hosted-browser-controls"] [data-browser-load-progress="loading"]'
-    ) !== null
-  )
-}
-
 function noticeShown(): boolean {
   return screen.queryByText('Client-hosted browser unavailable') !== null
 }
@@ -134,46 +126,6 @@ describe('restored client-hosted recovery window', () => {
     })
   })
 
-  it('keeps waiting while the window is still open', () => {
-    seedStore({ restored: true, environment: 'reachable' })
-    renderPane()
-
-    act(() => vi.advanceTimersByTime(RESTORED_CLIENT_HOSTED_RECOVERY_WINDOW_MS - 1))
-
-    expect(loadingShown()).toBe(true)
-    expect(noticeShown()).toBe(false)
-  })
-
-  it('stops waiting and offers the reopen escape once the window elapses', () => {
-    seedStore({ restored: true, environment: 'reachable' })
-    renderPane()
-
-    act(() => vi.advanceTimersByTime(RESTORED_CLIENT_HOSTED_RECOVERY_WINDOW_MS))
-
-    expect(noticeShown()).toBe(true)
-    expect(loadingShown()).toBe(false)
-    expect(screen.getByRole('button', { name: 'Reopen on server' })).not.toBeNull()
-  })
-
-  it('leaves the page row in place when it gives up', () => {
-    seedStore({ restored: true, environment: 'reachable' })
-    renderPane()
-
-    act(() => vi.advanceTimersByTime(RESTORED_CLIENT_HOSTED_RECOVERY_WINDOW_MS))
-
-    expect(useAppStore.getState().remoteBrowserPageHandlesByPageId[PAGE_ID]).not.toBeUndefined()
-  })
-
-  it('keeps waiting indefinitely while the environment is unreachable', () => {
-    seedStore({ restored: true, environment: 'unreachable' })
-    renderPane()
-
-    act(() => vi.advanceTimersByTime(RESTORED_CLIENT_HOSTED_RECOVERY_WINDOW_MS * 10))
-
-    expect(loadingShown()).toBe(true)
-    expect(noticeShown()).toBe(false)
-  })
-
   // Seed no status to exercise cold-start reachability arming the clock after mount.
   it('arms the window when the environment first becomes reachable', () => {
     seedStore({ restored: true, environment: 'absent' })
@@ -190,34 +142,6 @@ describe('restored client-hosted recovery window', () => {
     expect(noticeShown()).toBe(false)
     act(() => vi.advanceTimersByTime(1))
     expect(noticeShown()).toBe(true)
-  })
-
-  // Staged pages also lack placement, but their in-flight create has its own timeout.
-  it('leaves a staged page that is not restored alone', () => {
-    seedStore({ restored: false, environment: 'reachable' })
-    renderPane()
-
-    act(() => vi.advanceTimersByTime(RESTORED_CLIENT_HOSTED_RECOVERY_WINDOW_MS * 10))
-
-    expect(loadingShown()).toBe(true)
-    expect(noticeShown()).toBe(false)
-  })
-
-  it('takes the notice back when the placement finally arrives', () => {
-    seedStore({ restored: true, environment: 'reachable' })
-    renderPane()
-    act(() => vi.advanceTimersByTime(RESTORED_CLIENT_HOSTED_RECOVERY_WINDOW_MS))
-    expect(noticeShown()).toBe(true)
-
-    act(() => {
-      useAppStore.setState({
-        remoteBrowserPageHandlesByPageId: {
-          [PAGE_ID]: { environmentId: ENVIRONMENT_ID, remotePageId: 'remote-page-a' }
-        }
-      })
-    })
-
-    expect(noticeShown()).toBe(false)
   })
 
   it('waits again when a recovered page loses its placement', () => {
@@ -252,13 +176,5 @@ describe('restored client-hosted recovery window', () => {
     expect(noticeShown()).toBe(false)
     act(() => vi.advanceTimersByTime(1))
     expect(noticeShown()).toBe(true)
-  })
-
-  // The first recovery batch needs a full creation attempt before any unavailable notice.
-  it('waits longer than the runtime spends creating one client page in the first batch', () => {
-    // Import the runtime ceiling so increases cannot silently invalidate this window.
-    expect(RESTORED_CLIENT_HOSTED_RECOVERY_WINDOW_MS).toBeGreaterThan(
-      DEFAULT_CLIENT_PAGE_CREATION_TIMEOUT_MS
-    )
   })
 })

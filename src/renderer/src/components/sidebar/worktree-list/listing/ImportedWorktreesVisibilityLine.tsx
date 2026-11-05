@@ -10,8 +10,6 @@ import { getExternalWorktreeParentPath } from '../../../../../../shared/external
 import { normalizeRuntimePathForComparison } from '../../../../../../shared/cross-platform-path'
 import { translate } from '@/i18n/i18n'
 
-export type ImportedWorktreesVisibilityPlacement = 'repo-group' | 'pinned-fallback'
-
 export type ImportedWorktreeVisibilityPreview = {
   id?: string
   displayName: string
@@ -20,12 +18,12 @@ export type ImportedWorktreeVisibilityPreview = {
 }
 
 type ImportedWorktreesVisibilityLineProps = {
-  repoDisplayName: string
+  /** Absent on the all-projects line, which names no single project. */
+  repoDisplayName?: string
   /** Disambiguates checkouts when the project appears on multiple hosts. */
   hostContextLabel?: string
   hostContextHostId?: ExecutionHostId
   hiddenWorktrees: readonly ImportedWorktreeVisibilityPreview[]
-  placement: ImportedWorktreesVisibilityPlacement
   pending: boolean
   error: string | null
   onShow?: () => void
@@ -77,7 +75,6 @@ export default function ImportedWorktreesVisibilityLine({
   hostContextLabel,
   hostContextHostId,
   hiddenWorktrees,
-  placement,
   pending,
   error,
   onShow,
@@ -91,13 +88,24 @@ export default function ImportedWorktreesVisibilityLine({
   const visibleWorktreeGroups = worktreeGroups.slice(0, GROUP_LIMIT)
   const remainingGroupCount = Math.max(0, worktreeGroups.length - visibleWorktreeGroups.length)
   // Host labels distinguish otherwise identical project notice rows.
-  const repoScopeLabel = hostContextLabel
-    ? translate(
-        'auto.components.sidebar.ImportedWorktreesVisibilityLine.repoOnHost',
-        '{{repo}} on {{host}}',
-        { repo: repoDisplayName, host: hostContextLabel }
-      )
-    : repoDisplayName
+  const repoScopeLabel =
+    repoDisplayName && hostContextLabel
+      ? translate(
+          'auto.components.sidebar.ImportedWorktreesVisibilityLine.repoOnHost',
+          '{{repo}} on {{host}}',
+          { repo: repoDisplayName, host: hostContextLabel }
+        )
+      : repoDisplayName
+
+  if (hiddenCount === 0) {
+    return null
+  }
+
+  const lineText = translate(
+    'auto.components.sidebar.ImportedWorktreesVisibilityLine.hiding',
+    'Hiding {{count}} discovered worktrees',
+    { count: hiddenCount, defaultValue_one: 'Hiding {{count}} discovered worktree' }
+  )
   const keepHiddenAriaLabel = translate(
     'auto.components.sidebar.ImportedWorktreesVisibilityLine.keepHiddenAriaLabel',
     'Keep {{count}} discovered worktrees hidden for {{repo}}; recover from the project menu',
@@ -108,27 +116,6 @@ export default function ImportedWorktreesVisibilityLine({
         'Keep {{count}} discovered worktree hidden for {{repo}}; recover from the project menu'
     }
   )
-
-  if (hiddenCount === 0) {
-    return null
-  }
-
-  const lineText =
-    placement === 'pinned-fallback'
-      ? translate(
-          'auto.components.sidebar.ImportedWorktreesVisibilityLine.hidingInRepo',
-          'Hiding {{count}} discovered worktrees in {{repo}}',
-          {
-            count: hiddenCount,
-            repo: repoScopeLabel,
-            defaultValue_one: 'Hiding {{count}} discovered worktree in {{repo}}'
-          }
-        )
-      : translate(
-          'auto.components.sidebar.ImportedWorktreesVisibilityLine.hiding',
-          'Hiding {{count}} discovered worktrees',
-          { count: hiddenCount, defaultValue_one: 'Hiding {{count}} discovered worktree' }
-        )
 
   const toggleGroupExpanded = (path: string): void => {
     const key = normalizeRuntimePathForComparison(path)
@@ -161,17 +148,19 @@ export default function ImportedWorktreesVisibilityLine({
           disabled={pending}
           aria-expanded={isExpanded}
           aria-label={
-            isExpanded
-              ? translate(
-                  'auto.components.sidebar.ImportedWorktreesVisibilityLine.collapseAriaLabel',
-                  'Collapse hidden worktrees for {{repo}}',
-                  { repo: repoScopeLabel }
-                )
-              : translate(
-                  'auto.components.sidebar.ImportedWorktreesVisibilityLine.expandAriaLabel',
-                  'Expand hidden worktrees for {{repo}}',
-                  { repo: repoScopeLabel }
-                )
+            !repoScopeLabel
+              ? lineText
+              : isExpanded
+                ? translate(
+                    'auto.components.sidebar.ImportedWorktreesVisibilityLine.collapseAriaLabel',
+                    'Collapse hidden worktrees for {{repo}}',
+                    { repo: repoScopeLabel }
+                  )
+                : translate(
+                    'auto.components.sidebar.ImportedWorktreesVisibilityLine.expandAriaLabel',
+                    'Expand hidden worktrees for {{repo}}',
+                    { repo: repoScopeLabel }
+                  )
           }
           onClick={() => setIsExpanded((value) => !value)}
           className="shrink-0 rounded-[4px] text-muted-foreground hover:bg-worktree-sidebar-accent hover:text-worktree-sidebar-accent-foreground"
@@ -182,7 +171,7 @@ export default function ImportedWorktreesVisibilityLine({
           />
         </Button>
         <span className="min-w-0 flex-1 truncate">{lineText}</span>
-        {hostContextLabel && placement !== 'pinned-fallback' ? (
+        {hostContextLabel ? (
           <span className="inline-flex min-w-0 shrink items-center gap-1">
             {hostContextHostId ? (
               <NoticeHostGlyph

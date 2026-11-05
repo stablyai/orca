@@ -869,8 +869,6 @@
           "workspaceCount_other": "{{count}} workspaces"
         },
         "ImportedWorktreesVisibilityLine": {
-          "hidingInRepo_one": "Hiding {{count}} discovered worktree in {{repo}}",
-          "hidingInRepo_other": "Hiding {{count}} discovered worktrees in {{repo}}",
           "hiding_one": "Hiding {{count}} discovered worktree",
           "hiding_other": "Hiding {{count}} discovered worktrees",
           "keepHiddenAriaLabel_one": "Keep {{count}} discovered worktree hidden for {{repo}}; recover from the project menu",
@@ -1649,7 +1647,8 @@
         "pauseUnconfirmed": "Codex stopped running, but its goal pause was not confirmed. Check the goal before continuing.",
         "settingsRejected": "Codex could not apply the selected model and effort. This goal change was not sent. Check the selection and try again.",
         "settingsUnconfirmed": "Codex did not confirm the selected model and effort. This goal change was not sent. Check the chat and try again.",
-        "stopUnconfirmed": "Codex could not confirm Stop. Check the chat before continuing."
+        "stopUnconfirmed": "Codex could not confirm Stop. Check the chat before continuing.",
+        "noGoal": "Codex has no goal to change in this chat. Set one with /goal followed by the objective."
       },
       "notices": {
         "compaction": "Context compacted",
@@ -1934,7 +1933,15 @@
           "selectionVanishedCount_one": "{{count}} selected workspace no longer exists.",
           "selectionVanishedCount_other": "{{count}} selected workspaces no longer exist.",
           "selectionWithheldCount_one": "{{count}} selected workspace is hidden by the current filters and was deselected.",
-          "selectionWithheldCount_other": "{{count}} selected workspaces are hidden by the current filters and were deselected."
+          "selectionWithheldCount_other": "{{count}} selected workspaces are hidden by the current filters and were deselected.",
+          "workspaceCount_one": "{{count}} workspace",
+          "workspaceCount_other": "{{count}} workspaces"
+        },
+        "confirm": {
+          "deleteTitle_one": "Delete {{count}} workspace?",
+          "deleteTitle_other": "Delete {{count}} workspaces?",
+          "deletingTitle_one": "Deleting {{count}} workspace",
+          "deletingTitle_other": "Deleting {{count}} workspaces"
         },
         "scan": {
           "multipleErrorsCount_one": "Could not check {{count}} repository ({{names}}). Some workspaces may be missing. Refresh to try again.",

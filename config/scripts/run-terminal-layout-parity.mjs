@@ -17,8 +17,8 @@ import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { parseArgs } from 'node:util'
 import { runProcessSync } from '@orca/process-host'
-import { describeProcessFailure } from './process-failure-message.mjs'
-import { resolvePnpmCliInvocation } from './pnpm-cli-invocation.mjs'
+import { describeProcessFailure } from './tool-invocation/process-failure-message.mjs'
+import { resolvePnpmCliInvocation } from './tool-invocation/pnpm-cli-invocation.mjs'
 const repoRoot = resolve(import.meta.dirname, '../..')
 const BUILD_STAMP = join('out', '.terminal-layout-parity-build')
 
@@ -125,7 +125,14 @@ function captureSide(label, side, outRoot) {
   mkdirSync(outDir, { recursive: true })
   run(
     process.execPath,
-    ['config/scripts/ensure-native-runtime.mjs', '--runtime=electron'],
+    [
+      existsSync(
+        join(side.tree, 'config/scripts/native-build/node-addons/ensure-native-runtime.mjs')
+      )
+        ? 'config/scripts/native-build/node-addons/ensure-native-runtime.mjs'
+        : 'config/scripts/ensure-native-runtime.mjs',
+      '--runtime=electron'
+    ],
     side.tree
   )
   // A failed scenario still compares (as missing) but fails the run, so two failures cannot pass.

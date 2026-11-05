@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process'
 import { readFile } from 'node:fs/promises'
 import { performance } from 'node:perf_hooks'
 import { transform } from 'esbuild'
-import { buildCounterbalancedSchedule } from './counterbalanced-benchmark-schedule.mjs'
+import { buildCounterbalancedSchedule } from './performance/measurement/counterbalanced-benchmark-schedule.mjs'
 
 const sourcePath = 'src/renderer/src/components/dashboard/agent-row-lineage-model.ts'
 const baseline = process.argv[2] ?? '20ab9950654'

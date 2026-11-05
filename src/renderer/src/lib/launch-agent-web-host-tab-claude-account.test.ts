@@ -12,7 +12,11 @@ vi.mock('sonner', () => ({ toast: { error: mockToastError } }))
 
 vi.mock('@/store', () => ({
   useAppStore: {
-    getState: () => ({ setActiveWorktree: vi.fn(), setActiveTabType: vi.fn() })
+    getState: () => ({
+      setActiveWorktree: vi.fn(),
+      setActiveTabType: vi.fn(),
+      runtimeStatusByEnvironmentId: new Map()
+    })
   }
 }))
 
@@ -54,6 +58,7 @@ async function launch(relaunch?: (claudeAccountId?: string) => void) {
     }),
     prompt: '',
     promptDelivery: 'auto-submit',
+    claudeAccountId: 'acct-2',
     ...(relaunch ? { relaunch } : {})
   })
 }
@@ -68,7 +73,7 @@ it('carries the Claude account to the host even without a prompt', async () => {
   expect(mockCreateTerminal).toHaveBeenCalledWith(
     expect.objectContaining({
       launchAgent: 'claude',
-      launchConfig: expect.objectContaining({ claudeAccountId: 'acct-2' })
+      claudeAccountId: 'acct-2'
     })
   )
 })

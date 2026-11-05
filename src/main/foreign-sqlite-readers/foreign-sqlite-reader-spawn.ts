@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs'
 import { stat } from 'node:fs/promises'
-import { Worker } from 'node:worker_threads'
+import type { Worker } from 'node:worker_threads'
+import { spawnWorkerThread } from '../worker-threads/worker-thread-spawn'
 import { currentWorkerEntryLayout } from '../worker-threads/worker-thread-entry-path'
 import type { CursorDesktopProfileReadResult } from './cursor-profile-result'
 import { ForeignSqliteReaderClient } from './foreign-sqlite-reader-client'
@@ -16,7 +17,7 @@ function defaultWorkerFactory(): Worker {
   if (!existsSync(workerPath)) {
     throw new Error(`Foreign SQLite reader entry not found: ${workerPath}`)
   }
-  return new Worker(workerPath)
+  return spawnWorkerThread(workerPath)
 }
 
 let sharedClient: ForeignSqliteReaderClient | null = null

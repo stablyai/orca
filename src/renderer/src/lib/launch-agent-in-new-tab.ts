@@ -22,7 +22,11 @@ import { TUI_AGENT_CONFIG } from '../../../shared/agent-launch/catalog/tui-agent
 import { resolveAgentLaunchExecutionContext } from '@/lib/launch-agent-execution-context'
 import { launchStructuredAgentFromNewTab } from '@/lib/launch-agent-in-new-tab-structured-route'
 import { workspaceKindForWorktreeId } from '@/lib/agent-launch-route-input'
-import { relaunchWithClaudeAccount, stampClaudeLaunchAccount } from '@/lib/claude-launch-account'
+import {
+  claudeLaunchAccountId,
+  relaunchWithClaudeAccount,
+  stampClaudeLaunchAccount
+} from '@/lib/claude-launch-account'
 import {
   launchOnceHostAnswered,
   routeNewTabLaunch,
@@ -182,10 +186,14 @@ export function launchAgentInNewTabWithOutcome(
       sessionOptions,
       prompt: trimmedPrompt,
       promptDelivery,
-      agentArgs,
+      agentArgs: args.actionAgentArgs === undefined ? agentArgs : undefined,
+      actionAgentArgs: args.actionAgentArgs,
+      launchPlatform: resolvedLaunchPlatform,
+      launchShell: queuedShell,
       viewMode: 'terminal',
       ...(activate === false ? { activate } : {}),
       onPromptDelivered,
+      claudeAccountId: claudeLaunchAccountId(store, args),
       relaunch: relaunchWithClaudeAccount(launchAgentInNewTabWithOutcome, args)
     })
     return {

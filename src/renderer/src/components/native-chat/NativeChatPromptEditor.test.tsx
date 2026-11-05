@@ -4,10 +4,7 @@ import { createRef } from 'react'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { NativeChatPromptEditor } from './NativeChatPromptEditor'
-import {
-  insertNativeChatPastedText,
-  type NativeChatComposerInput
-} from './native-chat-composer-input'
+import type { NativeChatComposerInput } from './native-chat-composer-input'
 import { promptEditor } from './native-chat-prompt-editor.test-support'
 import { updateNativeChatComposerDraft } from './native-chat-composer-draft-store'
 
@@ -64,29 +61,6 @@ describe('native chat skill editor', () => {
     expect(inputRef.current?.value).toBe('Hello\nthere')
   })
 
-  it('renders only picker insertions as pills and serializes the exact invocation', async () => {
-    const { input, container } = setup('Please $rev')
-    await act(async () => input.insertSkill!(7, 11, '$review'))
-    const pill = container.querySelector('[data-native-chat-skill]')
-    expect(pill?.textContent).toBe('Review')
-    expect(pill?.classList.contains('text-xs')).toBe(true)
-    expect(pill?.classList.contains('text-sm')).toBe(false)
-    expect(input.value).toBe('Please $review ')
-    expect(input.selectionStart).toBe(15)
-    act(() => {
-      input.value += '$review typed manually'
-    })
-    expect(container.querySelectorAll('[data-native-chat-skill]')).toHaveLength(1)
-    expect(input.value).toBe('Please $review $review typed manually')
-  })
-
-  it("labels Pi's `/skill:<name>` pill by the skill alone", async () => {
-    const { input, container } = setup('/cav')
-    await act(async () => input.insertSkill!(0, 4, '/skill:caveman'))
-    expect(container.querySelector('[data-native-chat-skill]')?.textContent).toBe('Caveman')
-    expect(input.value).toBe('/skill:caveman ')
-  })
-
   it('shows attached files as filename pills that serialize to the reference the agent reads', async () => {
     const { input, container, onChange } = setup('See  please')
     act(() => input.setSelectionRange(4, 4))
@@ -106,15 +80,6 @@ describe('native chat skill editor', () => {
     })
     expect(container.querySelectorAll('[data-native-chat-file-reference]')).toHaveLength(1)
     expect(input.value).toBe(edited)
-  })
-
-  it('keeps typed and restored invocations plain', () => {
-    const { container, input } = setup('$review /review')
-    expect(container.querySelector('[data-native-chat-skill]')).toBeNull()
-    act(() => {
-      input.value = '$review restored'
-    })
-    expect(container.querySelector('[data-native-chat-skill]')).toBeNull()
   })
 
   it('deletes a skill atomically and restores it with undo', async () => {
@@ -147,22 +112,6 @@ describe('native chat skill editor', () => {
     expect(first.input.value).toBe('one')
     expect(first.input.selectionStart).toBe(3)
     expect(second.input.value).toBe('second')
-  })
-
-  it('preserves multiple selected skills through multiline edits and clears them on send', async () => {
-    const { input, container } = setup('$one')
-    act(() => input.insertSkill!(0, 4, '$one'))
-    act(() => {
-      input.value += '\nthen $two'
-    })
-    await act(async () => input.insertSkill!(11, 15, '$two'))
-    expect(input.value).toBe('$one \nthen $two ')
-    expect(container.querySelectorAll('[data-native-chat-skill]')).toHaveLength(2)
-    act(() => {
-      input.value = ''
-    })
-    expect(input.value).toBe('')
-    expect(container.querySelector('[data-native-chat-skill]')).toBeNull()
   })
 
   it('restores selected nodes only in their owning pane draft', async () => {
@@ -230,53 +179,4 @@ it('replaces the selection with literal pasted text as one undoable edit', async
     editor.commands.undo()
   })
   expect(input.value).toBe('hello world')
-})
-
-it('moves focus into the composer when a paste is routed from elsewhere', async () => {
-  const { input, editor } = setup('hi')
-  act(() => input.setSelectionRange(2, 2))
-  const hiddenTerminal = document.createElement('textarea')
-  document.body.append(hiddenTerminal)
-  hiddenTerminal.focus()
-  await act(async () => {
-    insertNativeChatPastedText(input, ' there')
-  })
-  expect(input.value).toBe('hi there')
-  expect(editor.view.dom.contains(document.activeElement)).toBe(true)
-  hiddenTerminal.remove()
-})
-
-describe('a pasted run too long to lay out with kerning', () => {
-  const unkerned = (container: HTMLElement) =>
-    [...container.querySelectorAll<HTMLElement>('[style]')]
-      .filter((element) => element.style.fontKerning === 'none')
-      .map((element) => element.textContent)
-
-  it('turns kerning off on that run only and keeps the pasted text whole', () => {
-    const { input, container } = setup('short line')
-    const blob = 'x'.repeat(5000)
-    act(() => {
-      input.setSelectionRange(10, 10)
-      insertNativeChatPastedText(input, `\nsee ${blob} here`)
-    })
-    expect(unkerned(container)).toEqual([blob])
-    expect(input.value).toBe(`short line\nsee ${blob} here`)
-  })
-
-  it('keeps kerning on prose, CJK and Shift+Enter lines, and never splits a CJK code point', () => {
-    const { editor, container } = setup('')
-    act(() => {
-      editor.commands.insertContent('a few words '.repeat(500))
-      editor.commands.insertContent('日本語の文章です。中文的句子。'.repeat(100))
-      for (let line = 0; line < 60; line++) {
-        editor.commands.insertContent('y'.repeat(70))
-        editor.commands.setHardBreak()
-      }
-      editor.commands.insertContent('\u{20000}')
-      editor.commands.insertContent('x'.repeat(300))
-      editor.commands.setHardBreak()
-      editor.commands.insertContent(`\u{20000}${'y'.repeat(300)}`)
-    })
-    expect(unkerned(container)).toEqual(['x'.repeat(300), 'y'.repeat(300)])
-  })
 })

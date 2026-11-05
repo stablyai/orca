@@ -6,7 +6,7 @@ import path from 'node:path'
 import { performance } from 'node:perf_hooks'
 import ts from 'typescript-api'
 import { build } from 'esbuild'
-import { buildCounterbalancedSchedule } from './counterbalanced-benchmark-schedule.mjs'
+import { buildCounterbalancedSchedule } from './performance/measurement/counterbalanced-benchmark-schedule.mjs'
 
 const baselineSource = ts.createSourceFile(
   'session-scanner.ts',

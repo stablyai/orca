@@ -174,7 +174,11 @@ jobs:
       - name: Build app
         run: |
           if [ -n "$ORCA_RELEASE_JAVASCRIPT_SOURCE_SHA" ]; then
-            node config/scripts/release-javascript-artifact.mjs restore
+            RELEASE_JAVASCRIPT_ARTIFACT='config/scripts/release/javascript-artifacts/release-javascript-artifact.mjs'
+            if [ ! -f "$RELEASE_JAVASCRIPT_ARTIFACT" ]; then
+              RELEASE_JAVASCRIPT_ARTIFACT='config/scripts/release-javascript-artifact.mjs'
+            fi
+            node "$RELEASE_JAVASCRIPT_ARTIFACT" restore
             pnpm run build:release:host
           else
             pnpm run build:release
@@ -191,7 +195,7 @@ jobs:
       # Design D2: the parent release-cut run merged it from every node-server lane at this tag.
       - name: Download the orcad deployment template from the release run
         # Why: release-cut skips the template for a tag that predates it.
-        if: hashFiles('config/scripts/packaged-orcad-template.cjs') != ''
+        if: hashFiles('config/scripts/orcad-distribution/template/packaged-orcad-template.cjs', 'config/scripts/packaged-orcad-template.cjs') != ''
         uses: actions/download-artifact@v8
         with:
           name: orcad-template
@@ -225,7 +229,7 @@ jobs:
           timeout_minutes: 45
           max_attempts: 3
           retry_wait_seconds: 30
-          command: node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON config/scripts/pinned-node-downloads.mjs darwin-arm64 darwin-x64 && node config/scripts/ensure-native-runtime.mjs --runtime=electron && if [ -f config/scripts/build-mac-notarization-overlap.mjs ]; then ORCA_MAC_RELEASE=1 node config/scripts/build-mac-notarization-overlap.mjs --publish "$ORCA_MAC_PUBLISH" --draft; else ORCA_MAC_RELEASE=1 pnpm exec electron-builder --config config/electron-builder.config.cjs --mac --publish "$ORCA_MAC_PUBLISH" -c.publish.releaseType=draft; fi
+          command: node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON "$(if [ -f config/scripts/orcad-distribution/prebuilds/pinned-node-downloads.mjs ]; then printf %s config/scripts/orcad-distribution/prebuilds/pinned-node-downloads.mjs; else printf %s config/scripts/pinned-node-downloads.mjs; fi)" darwin-arm64 darwin-x64 && node "$(if [ -f config/scripts/native-build/node-addons/ensure-native-runtime.mjs ]; then printf %s config/scripts/native-build/node-addons/ensure-native-runtime.mjs; else printf %s config/scripts/ensure-native-runtime.mjs; fi)" --runtime=electron && if { [ -f config/scripts/desktop-distribution/macos/build-mac-notarization-overlap.mjs ] || [ -f config/scripts/build-mac-notarization-overlap.mjs ]; }; then ORCA_MAC_RELEASE=1 node "$(if [ -f config/scripts/desktop-distribution/macos/build-mac-notarization-overlap.mjs ]; then printf %s config/scripts/desktop-distribution/macos/build-mac-notarization-overlap.mjs; else printf %s config/scripts/build-mac-notarization-overlap.mjs; fi)" --publish "$ORCA_MAC_PUBLISH" --draft; else ORCA_MAC_RELEASE=1 pnpm exec electron-builder --config config/electron-builder.config.cjs --mac --publish "$ORCA_MAC_PUBLISH" -c.publish.releaseType=draft; fi
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ORCA_REQUIRE_ORCAD_TEMPLATE: '1'

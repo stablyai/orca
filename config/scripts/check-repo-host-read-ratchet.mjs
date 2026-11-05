@@ -1,7 +1,10 @@
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
 import { stripSlashComments } from './check-path-literal-ratchet.mjs'
-import { readTrackedSources, runCountRatchet } from './ratchet-baseline.mjs'
+import {
+  readTrackedSources,
+  runCountRatchet
+} from './static-analysis/ratchet-baseline/ratchet-baseline.mjs'
 
 // Legacy repo.connectionId can misclassify executionHostId:'ssh:<target>' as local; ratchet reads downward.
 // Lower bound: misses destructuring, indexed access, non-repo-named rows and renderer code.

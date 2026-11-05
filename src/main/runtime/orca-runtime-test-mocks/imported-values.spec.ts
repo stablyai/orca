@@ -10,7 +10,7 @@ import {
 import { __cancelLegacyWorkerTerminalRecoveryRetriesForTests } from '../runtime-legacy-worker-terminal-recovery-controller'
 import { setRuntimeTerminalUnavailableCause } from '../native-terminal-availability'
 import { setRuntimeDesktopSurface } from '../runtime-desktop-surface'
-import { installFakeAppEnvironment } from '../../../../config/scripts/vitest-host-ports-setup'
+import { installFakeAppEnvironment } from '../../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 import { performance } from 'node:perf_hooks'
 import { EventEmitter as NodeEventEmitter } from 'node:events'
 import { createHash, randomUUID } from 'node:crypto'
