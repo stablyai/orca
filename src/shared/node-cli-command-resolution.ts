@@ -44,7 +44,7 @@ export function pathEnvRelativeTo(pathEnv: string | undefined, cwd: string): str
     .join(delimiter)
 }
 
-const CWD_RELATIVE = /(^|=)\.\.?([\\/]|$)/
+const CWD_RELATIVE = /(^|=)["']?\.\.?([\\/]|$)/
 
 /** Whether a command line names files relative to where it runs, so it means something else
  *  from another working directory. */

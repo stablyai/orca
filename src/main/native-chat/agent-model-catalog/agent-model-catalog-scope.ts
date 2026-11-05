@@ -1,5 +1,4 @@
 import type { StructuredAgentResolutionOperation } from '../structured-agent-command-resolution'
-import { homedir } from 'node:os'
 import { resolveHiddenProbeCwd } from '../../rate-limits/hidden-probe-cwd'
 import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
 import { isNativeLocalLocation } from '../../../shared/execution-host'
@@ -59,16 +58,6 @@ export async function resolveAgentModelCatalogScope(
       ...(resolved ? { resolved } : {})
     }
   }
-  const cwd =
-    params.workspacePath === null
-      ? null
-      : (params.workspacePath ?? (record ? await sessionWorkspacePath(deps, record) : homedir()))
-  if (!current()) {
-    return null
-  }
-  if (!cwd) {
-    return { base, fingerprint: base, exact: false }
-  }
   // The list belongs to the account and the CLI a chat here would launch, not to this folder:
   // resolve the executable where the chat runs, but list from an empty Orca-owned folder so the
   // listing reads only account settings (a home folder can hold another account's settings as
@@ -77,6 +66,16 @@ export async function resolveAgentModelCatalogScope(
   try {
     listIn = resolveHiddenProbeCwd()
   } catch {
+    return { base, fingerprint: base, exact: false }
+  }
+  const cwd =
+    params.workspacePath === null
+      ? null
+      : (params.workspacePath ?? (record ? await sessionWorkspacePath(deps, record) : listIn))
+  if (!current()) {
+    return null
+  }
+  if (!cwd) {
     return { base, fingerprint: base, exact: false }
   }
   const resolve = (lookup: AgentModelCatalogLookup) =>

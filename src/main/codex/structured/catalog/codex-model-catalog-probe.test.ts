@@ -143,6 +143,36 @@ describe('codex model catalog probe', () => {
     )
   })
 
+  it.each([
+    [[], '/orca-probe'],
+    [['./bin/codex.js'], '/chat'],
+    [['-c', 'model_instructions_file="./prompt.md"'], '/chat']
+  ])('lists a command line with arguments %j from %s', async (prefixArgs, listedIn) => {
+    // Files named relative to the chat's folder only mean the same thing there.
+    const invocations: CodexAppServerInvocation[] = []
+    const probe = createCodexModelCatalogProbe({
+      resolveEnvironment: async () => ({ PATH: '/bin' }),
+      resolveCommand: () => ({ command: '/bin/codex', prefixArgs }),
+      runSession: async (invocation, body) => {
+        invocations.push(invocation)
+        return body({
+          request: async () => ({ data: [MODEL_ROW], nextCursor: null }),
+          notify: () => {}
+        })
+      }
+    })
+    const resolved = await probe.resolve?.(
+      { variable: 'CODEX_HOME', path: '/homes/a' },
+      '/orca-probe',
+      'snapshot',
+      undefined,
+      '/chat'
+    )
+    expect(resolved?.identity).toMatchObject({ cwd: listedIn })
+    await resolved?.run()
+    expect(invocations[0]?.cwd).toBe(listedIn)
+  })
+
   it.each(['launcher $SECRET codex', 'FOO=1 codex', '/missing/codex', './codex'])(
     'lists nothing, and never probes the stock CLI, for Command %s',
     async (command) => {

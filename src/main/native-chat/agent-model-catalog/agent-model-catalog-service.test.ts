@@ -680,6 +680,7 @@ it('answers a folder-scoped agent for the folder a selector names now, even whil
 })
 
 it('lets another folder sharing the account listing finish it after the first reader gives up', async () => {
+  vi.useFakeTimers()
   const abandoned = Promise.withResolvers<AgentModelCatalogSuccess>()
   const run = vi
     .fn<() => Promise<AgentModelCatalogSuccess>>()
@@ -694,12 +695,13 @@ it('lets another folder sharing the account listing finish it after the first re
     probes: { codex: Object.assign(run, { resolve: async () => ({ identity: 'codex', run }) }) }
   })
   onTestFinished(() => {
+    vi.useRealTimers()
     abandoned.resolve(listing('late'))
     return service.stop()
   })
-  void service.demand({ agent: 'codex', workspacePath: '/a', deadline: Date.now() + 50 })
+  void service.demand({ agent: 'codex', workspacePath: '/a', deadline: Date.now() + 60_000 })
   await vi.waitFor(() => expect(run).toHaveBeenCalledOnce())
-  await new Promise((resolve) => setTimeout(resolve, 80))
+  await vi.advanceTimersByTimeAsync(60_000)
   expect(
     await service.read({ agent: 'codex', workspacePath: '/b', waitForListing: true })
   ).toMatchObject({ models: [{ id: 'shared' }] })
