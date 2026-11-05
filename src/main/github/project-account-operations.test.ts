@@ -26,7 +26,7 @@ vi.mock('./rate-limit', () => ({
 vi.mock('./client/list/work-item-search-page', () => ({ usesGraphqlWorkItemSearch: () => false }))
 vi.mock('./client/lookup/pr-lookup-rate-limit', () => ({ assertRateLimitBudget: async () => {} }))
 
-vi.mock('../source-control/forge-provider', () => ({
+vi.mock('../source-control/forge-provider-detection', () => ({
   detectHostedReviewProvider: async () => 'github',
   getForgeProviderForRepository: async () => ({
     id: 'github',
