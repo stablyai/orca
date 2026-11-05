@@ -409,7 +409,11 @@ it('imports early and late Claude history with an absent locator and captured na
   expect(find).not.toHaveBeenCalled()
   const adoption = await lookup()
   expect(resumeFrom.cliSource).toEqual({ workspaceId: 'folder', paneKey: 'tab:leaf' })
-  expect(adoption).toEqual({ accountHome: selectedAccountHome, transcriptPath })
+  expect(adoption).toEqual({
+    accountHome: selectedAccountHome,
+    transcriptPath,
+    conversationName: 'early Claude request'
+  })
   expect(store).toHaveBeenCalledOnce()
   const prepared = await prepareAdoptedTranscript(params('claude', adoption.transcriptPath))
   expect(prepared).toMatchObject({ ok: true })

@@ -106,7 +106,8 @@ it.each([
             }) ?? undefined,
           transcriptPath: adoption.transcriptPath,
           providerSessionId: THREAD,
-          workspaceCwd: fixture.rig.root
+          workspaceCwd: fixture.rig.root,
+          conversationName: 'Fix the flaky login test'
         })
       })
     )
@@ -153,6 +154,7 @@ it.each([
     )
     expect(result.value.page.items).toEqual(snapshot.items)
     expect(fixture.rig.store.getRecord(SESSION)?.accountHome).toEqual(accountHome)
+    expect(fixture.rig.store.getRecord(SESSION)?.conversationName).toBe('Fix the flaky login test')
     expect(fixture.rig.store.getRecord(SESSION)?.providerHandleChain).toMatchObject([
       { origin: 'adopted', mintedAtFence: 1, handle: { nativeId: THREAD } }
     ])
