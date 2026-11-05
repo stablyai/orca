@@ -206,8 +206,8 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     showOllama
   const anyVisible = hasVisibleUsageMeters || showResourceUsage
   // Why: include Settings so durable managed accounts count — a configured user isn't shown the empty state while snapshots hydrate.
-  const isEmptyUsageState = isUsageEmptyState(rateLimits, usageSettings)
   // Why: one-time nudge — once dismissed, stays hidden even if providers reconnect later.
+  const isEmptyUsageState = isUsageEmptyState(rateLimits, usageSettings)
   const showEmptyUsageCta = isEmptyUsageState && !usageEmptyStateDismissed
   const anyFetching =
     claude?.status === 'fetching' ||
