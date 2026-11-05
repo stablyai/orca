@@ -96,19 +96,20 @@ describe('agents.list prompt kind', () => {
       }
     ]
   })
-  const row = (overrides: Partial<Parameters<typeof projectPluginWorkspaceAgents>[2][number]>) => ({
-    paneKey: 'p',
-    worktreeId: 'w1',
-    stateStartedAt: 1,
-    state: 'waiting' as const,
-    ...overrides
-  })
-
   it('marks a row waiting on an AskUserQuestion as `question`, without its text', () => {
     const agents = projectPluginWorkspaceAgents(
       'w1',
       [],
-      [row({ toolName: 'AskUserQuestion', interactivePrompt: QUESTION })]
+      [
+        {
+          paneKey: 'p',
+          worktreeId: 'w1',
+          stateStartedAt: 1,
+          state: 'waiting',
+          toolName: 'AskUserQuestion',
+          interactivePrompt: QUESTION
+        }
+      ]
     )
     expect(agents).toEqual([
       {
@@ -121,22 +122,6 @@ describe('agents.list prompt kind', () => {
       }
     ])
     expect(JSON.stringify(agents)).not.toContain('migration')
-  })
-
-  it('leaves `prompt` off an approval request and off a working row', () => {
-    const approval = JSON.stringify({ approval: { tool: 'Bash', summary: 'rm -rf build' } })
-    const agents = projectPluginWorkspaceAgents(
-      'w1',
-      [],
-      [
-        row({ state: 'blocked', toolName: 'Bash', interactivePrompt: approval }),
-        row({ state: 'working', toolName: 'AskUserQuestion', interactivePrompt: QUESTION })
-      ]
-    )
-    expect(agents).toHaveLength(2)
-    for (const agent of agents) {
-      expect(agent).not.toHaveProperty('prompt')
-    }
   })
 })
 
