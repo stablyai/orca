@@ -13,8 +13,11 @@ const { recordedEffortCase } = await vi.importActual<AcpDeclaredEffortFixtureMod
 
 it('renders trustworthy context through the phone consumer while capturing only accepted input', async () => {
   for (const input of ['low', 'max', 'opencode', 'absent'] as const) {
-    const { agent, model, display, live, resting, catalog } = await recordedEffortCase(input)
-    for (const answer of [live, resting]) {
+    const { agent, model, display, live, resting, launch, catalog } =
+      await recordedEffortCase(input)
+    for (const answer of [live, resting, launch]) {
+      // Only the chats that saved the model send it.
+      const sent = answer === launch ? {} : { model }
       let response = Promise.resolve(answer)
       const { client } = optionsClient(
         () => response,
@@ -29,19 +32,22 @@ it('renders trustworthy context through the phone consumer while capturing only 
         sendSelection: true
       })
       const effort = descriptorFor(harness.current().optionSnapshot, 'effort')
-      if (answer.models.find((row) => row.id === model)!.efforts.length > 0) {
+      // A readback without this model's effort menu shows no effort, whatever the declaration.
+      const offersEffort = answer.models.find((row) => row.id === model)!.efforts.length > 0
+      const shown = offersEffort ? display : null
+      if (offersEffort) {
         expect(effort?.valueSource).toBe(display ? 'default' : 'unknown')
       } else {
         expect(effort).toBeUndefined()
       }
-      expect(effort?.kind.currentValue).toBe(display ?? undefined)
-      expect(harness.current().sendSelection()).toEqual({ selection: { model } })
+      expect(effort?.kind.currentValue).toBe(shown ?? undefined)
+      expect(harness.current().sendSelection()).toEqual({ selection: sent })
       response = new Promise(() => {})
       await harness.rerender({ fence: 2 })
       expect(descriptorFor(harness.current().optionSnapshot, 'effort')?.kind.currentValue).toBe(
-        display ?? undefined
+        shown ?? undefined
       )
-      expect(harness.current().sendSelection()).toEqual({ selection: { model } })
+      expect(harness.current().sendSelection()).toEqual({ selection: sent })
       await harness.unmount()
     }
   }

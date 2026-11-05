@@ -1,5 +1,5 @@
 import { parseExecutionHostId } from '../../../shared/execution-host'
-import { getPtyExecutionHost } from '../../../shared/terminal-execution-host'
+import { getPtyExecutionHost } from '../../../shared/terminal/pty/lifecycle/terminal-execution-host'
 import type { AppState } from '@/store/types'
 import { collectPtyIdsForTab } from '@/store/slices/terminal-tab-retirement'
 import { resolveTerminalWorktreeRoute, type TerminalWorktreeRoute } from './terminal-worktree-route'

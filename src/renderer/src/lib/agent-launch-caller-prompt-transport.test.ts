@@ -1,7 +1,7 @@
 // Cross each caller’s delivery mode with agent injection policy to verify argv, paste or environment transport and submission.
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 
 import {
   createLaunchFunnelStore,
@@ -36,7 +36,7 @@ vi.mock('@/lib/telemetry', () => ({
   track: vi.fn(),
   tuiAgentToAgentKind: (agent: string) => agent
 }))
-vi.mock('@/components/native-chat/native-chat-session-option-cache', () => ({
+vi.mock('../../../shared/native-chat/input/native-chat-session-option-cache', () => ({
   seedNativeChatAppliedSessionOptions: vi.fn()
 }))
 vi.mock('@/lib/agent-paste-draft', () => ({
@@ -191,3 +191,35 @@ describe('agent launch caller prompt transport', () => {
     expect(onPromptDelivered).not.toHaveBeenCalled()
   })
 })
+
+it.each(['openclaude', 'zcode'] as const)(
+  'delivers %s input without seeding a retired chat',
+  async (agent) => {
+    resetLaunchFunnelStore(store)
+    const seedPrompt = vi.spyOn(store, 'seedNativeChatLaunchPrompt')
+    const seedDraft = vi.spyOn(store, 'seedNativeChatLaunchDraft')
+    const { deliverLaunchPromptToAgentTab } = await import('./agent-launch-prompt-delivery')
+    try {
+      for (const submit of [false, true]) {
+        mockPasteDraftWhenAgentReady.mockClear().mockResolvedValue(true)
+        await expect(
+          deliverLaunchPromptToAgentTab({
+            tabId: 'removed',
+            agent,
+            content: 'real draft',
+            submit,
+            forcePaste: true
+          })
+        ).resolves.toBe(true)
+        expect(mockPasteDraftWhenAgentReady).toHaveBeenCalledExactlyOnceWith(
+          expect.objectContaining({ agent, content: 'real draft', submit })
+        )
+      }
+      expect(seedPrompt).not.toHaveBeenCalled()
+      expect(seedDraft).not.toHaveBeenCalled()
+    } finally {
+      seedPrompt.mockRestore()
+      seedDraft.mockRestore()
+    }
+  }
+)

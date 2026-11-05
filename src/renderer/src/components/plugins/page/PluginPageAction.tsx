@@ -126,6 +126,7 @@ export function usePluginPageAction({
           trust={trust ?? installedPluginTrust(plugin, null)}
           capabilities={plugin.capabilities}
           shortcuts={model.shortcuts}
+          replacements={model.replacements}
           editorFileTypes={model.editorFileTypes}
           installed={plugin}
           official={plugin.official}
@@ -225,6 +226,7 @@ export function usePluginPageAction({
           trust={trust ?? installedPluginTrust({ panels: [], hasWorker: false }, null)}
           capabilities={model.capabilities}
           shortcuts={model.shortcuts}
+          replacements={model.replacements}
           editorFileTypes={model.editorFileTypes}
           reading={preview === null && !model.stale}
           failed={model.previewFailed}

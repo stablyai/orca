@@ -1,3 +1,7 @@
+import type { WorkerFollowUp } from './worker-follow-up-placement'
+import { createWorkerFollowUpQualification } from './worker-follow-up-admission'
+import { liveDispatchCreatorEvaluation } from '../../../../orchestration/db/dispatch-depth'
+import { selectExistingWorkerStartRun } from './worker-start-run-authority'
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import type {
@@ -9,8 +13,9 @@ import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { resolveDispatchCreator } from '../runs/dispatch-creator'
 import { createBoundRun } from '../runs/runs'
 import { ROOT_DISPATCH_DEPTH } from '../../../../../../shared/nested-worker-depth'
-import { previousCustodianLookup } from '../../../../orchestration/db/worker-terminal/worker-terminal-transfer'
-import type { WorkerFollowUp } from './worker-follow-up-placement'
+import { readCustodyCohort } from '../../../../orchestration/db/worker-terminal/worker-terminal-transfer'
+import { createHelperStartScope } from './helper-start-scope'
+import { requireOrchestrationAdmission } from '../../../../orchestration/orchestration-admission'
 
 export type WorkerStartRunBinding = { run: RunRow; created: boolean }
 
@@ -31,26 +36,26 @@ export function resolveWorkerStartRun(
   const db = runtime.getOrchestrationDb()
   const coordinator = args.coordinator
   const coordinated = coordinator ? db.getCurrentRunForCoordinator(coordinator) : undefined
-  if (coordinator && coordinated) {
-    const run = args.runId ? db.getCoordinatedRun(coordinator, args.runId) : coordinated
-    if (!run) {
-      throw fenced(`This caller coordinates Run ${coordinated.id}, not ${args.runId}.`)
+  let dispatchCreator: ReturnType<typeof resolveDispatchCreator> | undefined
+  const authority = selectExistingWorkerStartRun(
+    coordinated,
+    args.runId,
+    () => (coordinator && args.runId ? db.getCoordinatedRun(coordinator, args.runId) : undefined),
+    () => {
+      dispatchCreator = resolveDispatchCreator(runtime, args.from, args.callerSession)
+      const creatorId = db.resolveCreatorDispatchId(dispatchCreator)
+      const creator = creatorId ? db.getDispatchContextById(creatorId) : undefined
+      const run = creator ? db.getRun(creator.run_id) : undefined
+      return creator && run ? { creator, run } : undefined
     }
-    return { bindRun: () => ({ run, created: false }) }
-  }
-  // Use the same active delegated Dispatch for authority and creator/reporting identity; remote Dispatches have no local row.
-  const dispatchCreator = resolveDispatchCreator(runtime, args.from, args.callerSession)
-  const creatorId = db.resolveCreatorDispatchId(dispatchCreator)
-  const creator = creatorId ? db.getDispatchContextById(creatorId) : undefined
-  const run = creator ? db.getRun(creator.run_id) : undefined
-  if (creator && run && run.legacy !== 1) {
-    if (args.runId && args.runId !== run.id) {
-      throw fenced(
-        `This worker's Dispatch ${creator.id} is in Run ${run.id}; it starts helpers only there.`
-      )
+  )
+  if (authority) {
+    return {
+      bindRun: () => ({ run: authority.run, created: false }),
+      ...(authority.creator ? { helperCreator: authority.creator } : {})
     }
-    return { bindRun: () => ({ run, created: false }), helperCreator: creator }
   }
+  dispatchCreator ??= resolveDispatchCreator(runtime, args.from, args.callerSession)
   // Only a root caller gets a new Run, so a worker can never reset its depth this way.
   if (
     args.coordinator &&
@@ -82,7 +87,7 @@ export function resolveWorkerStartRun(
   )
 }
 
-/** Workers may launch fresh local helpers or retry their own helper's latest Attempt, never coordinator Tasks or another party's pane. */
+/** Workers may start only their own helpers; caller options remain separate from private placement. */
 export function assertHelperStartScope(
   db: OrchestrationDb,
   creator: DispatchContextRow,
@@ -92,87 +97,44 @@ export function assertHelperStartScope(
     followUp?: Pick<WorkerFollowUp, 'of' | 'addressed' | 'custodian'>
   }
 ): void {
-  if (args.params.on || args.params.terminal) {
-    // Remote reports reach the Run home mailbox, so a helper there could not report to its creator.
-    throw new OrchestrationError(
-      'invalid_argument',
-      'A worker starts helpers in a new agent on this host; omit --on and --terminal. No effects were applied.',
-      { effectsApplied: false }
-    )
-  }
-  if (args.task && db.getDispatchContext(args.task.id)?.creator_dispatch_id !== creator.id) {
-    throw new OrchestrationError(
-      'task_not_found',
-      `Task ${args.task.id} was not last run by a helper of Dispatch ${creator.id}; start new helper work with --spec.`
-    )
-  }
-  if (args.followUp) {
-    const { of, addressed, custodian } = args.followUp
-    const holder = custodian
-      ? db.getDispatchContextById(custodian)
-      : creationRoot(db, of, creator.run_id)
-    const owner = holder?.run_id === creator.run_id ? holder.creator_dispatch_id : null
-    if (!owner || !continuesDispatch(db, creator, owner)) {
-      const target =
-        of === addressed
-          ? `Dispatch ${addressed}`
-          : `Dispatch ${addressed}'s latest work, Dispatch ${of},`
-      throw new OrchestrationError(
-        'task_not_found',
-        `${target} is not a helper of Dispatch ${creator.id}, so only the coordinator or the worker that started it can give it more work; to hand this to a helper, start new helper work with worker-start --spec. No effects were applied.`,
-        { effectsApplied: false }
-      )
-    }
-  }
-}
-
-/** With no agent ever placed in the lineage, the helper is still its requester's: the first Dispatch of its follow-up chain. */
-function creationRoot(
-  db: OrchestrationDb,
-  latestId: string,
-  runId: string
-): DispatchContextRow | undefined {
-  const seen = new Set<string>()
-  let row = db.getDispatchContextById(latestId)
-  while (row && row.run_id === runId && !seen.has(row.id)) {
-    if (!row.follow_up_of_dispatch_id) {
-      return row
-    }
-    seen.add(row.id)
-    row = db.getDispatchContextById(row.follow_up_of_dispatch_id)
-  }
-  return undefined
-}
-
-/** Whether `ancestorId` is `from` or an earlier Dispatch of the same worker in its Run: one it continued with a
- *  follow-up, or whose exact process it took over in saved custody. Each hop is read, so another Run in between ends
- *  the walk. */
-function continuesDispatch(
-  db: OrchestrationDb,
-  from: DispatchContextRow,
-  ancestorId: string
-): boolean {
-  const seen = new Set<string>()
-  const previousCustodian = previousCustodianLookup(db)
-  const pending: (DispatchContextRow | undefined)[] = [from]
-  while (pending.length > 0) {
-    const row = pending.pop()
-    if (!row || row.run_id !== from.run_id || seen.has(row.id)) {
-      continue
-    }
-    if (row.id === ancestorId) {
-      return true
-    }
-    seen.add(row.id)
-    for (const id of new Set([row.follow_up_of_dispatch_id, previousCustodian(row)])) {
-      if (id && !seen.has(id)) {
-        pending.push(db.getDispatchContextById(id))
-      }
-    }
-  }
-  return false
+  requireOrchestrationAdmission(
+    createHelperStartScope(
+      {
+        dispatch: (id) => db.getDispatchContextById(id),
+        taskDispatch: (id) => db.getDispatchContext(id),
+        owned: (id) => db.getWorkerTerminalResourceByOwner(id),
+        cohort: (incarnation, host) => readCustodyCohort(db, incarnation, host)
+      },
+      creator
+    )(args)
+  )
 }
 
 function fenced(message: string): OrchestrationError {
   return new OrchestrationError('consumer_fenced', message)
+}
+
+export function qualifyLiveWorkerFollowUp(
+  runtime: OrcaRuntimeService,
+  coordinator: OrchestrationCallerIdentity | null,
+  from: string,
+  session: OrchestrationSessionCaller | undefined,
+  runId: string,
+  followUp: Parameters<ReturnType<typeof createWorkerFollowUpQualification>>[1]
+) {
+  const db = runtime.getOrchestrationDb()
+  return requireOrchestrationAdmission(
+    createWorkerFollowUpQualification({
+      coordinated: () => (coordinator ? db.getCurrentRunForCoordinator(coordinator) : undefined),
+      named: (id) => (coordinator ? db.getCoordinatedRun(coordinator, id) : undefined),
+      run: (id) => db.getRun(id),
+      dispatch: (id) => db.getDispatchContextById(id),
+      taskDispatch: (id) => db.getDispatchContext(id),
+      owned: (id) => db.getWorkerTerminalResourceByOwner(id),
+      cohort: (incarnation, host) => readCustodyCohort(db, incarnation, host),
+      caller: () =>
+        liveDispatchCreatorEvaluation(db, resolveDispatchCreator(runtime, from, session)),
+      maxDepth: () => runtime.getNestedWorkerMaxDepth()
+    })(runId, followUp)
+  )
 }

@@ -1,15 +1,19 @@
 import { z } from 'zod'
 import { safePluginDisplayText } from '../manifest/plugin-display-text'
 import { pluginIdSchema, pluginRelativePathSchema } from '../manifest/plugin-manifest-fields'
+import { PLUGIN_ENUM_SINCE_KEY } from '../manifest/plugin-engine-floor-keys'
 import {
   pluginPathFieldDoc,
   pluginFieldDoc,
-  PLUGIN_SCHEMA_SINCE_V1
+  PLUGIN_PANEL_UI_SINCE,
+  PLUGIN_SCHEMA_SINCE_V1,
+  PLUGIN_SOURCE_MODULES_SINCE
 } from '../manifest/plugin-schema-field-docs'
 
 export const PLUGIN_PANEL_LIMIT = 64
 
-/** Icons a panel may name; the renderer bundles exactly these. Grow additively. */
+/** Icons a panel (and a component panel's controls) may name; the renderer bundles exactly
+ *  these. One vocabulary for manifests and components. Grow additively, with a since below. */
 export const PLUGIN_PANEL_ICONS = [
   'activity',
   'bar-chart-3',
@@ -37,8 +41,44 @@ export const PLUGIN_PANEL_ICONS = [
   'star',
   'terminal',
   'wrench',
-  'zap'
+  'zap',
+  'add',
+  'remove',
+  'delete',
+  'edit',
+  'refresh',
+  'search',
+  'settings',
+  'check',
+  'close',
+  'info',
+  'warning',
+  'error',
+  'open-external',
+  'copy',
+  'download',
+  'upload',
+  'play',
+  'pause',
+  'stop',
+  'more',
+  'expand',
+  'collapse',
+  'next',
+  'filter',
+  'branch',
+  'file',
+  'agent',
+  'link'
 ] as const
+
+/** Icons added after the first set; older Orcas refuse them, so they raise the engine floor. */
+const PLUGIN_PANEL_ICON_SINCE: Record<string, string> = Object.fromEntries(
+  PLUGIN_PANEL_ICONS.slice(PLUGIN_PANEL_ICONS.indexOf('add')).map((name) => [
+    name,
+    PLUGIN_PANEL_UI_SINCE
+  ])
+)
 
 export type PluginPanelIconName = (typeof PLUGIN_PANEL_ICONS)[number]
 
@@ -50,6 +90,12 @@ const PANEL_ICON_BY_FOLDED_NAME = new Map<string, PluginPanelIconName>(
 export function canonicalPluginPanelIcon(name: string): PluginPanelIconName | null {
   return PANEL_ICON_BY_FOLDED_NAME.get(name.replaceAll('-', '').toLowerCase()) ?? null
 }
+
+/** `html`: the entry is a web page in an isolated frame. `components`: the entry is a module whose
+ *  component tree Orca draws with its own controls. */
+export const PLUGIN_PANEL_UI_KINDS = ['html', 'components'] as const
+export type PluginPanelUi = (typeof PLUGIN_PANEL_UI_KINDS)[number]
+const COMPONENTS_PANEL_ENTRY = /\.(?:m?js|tsx?|mts|jsx)$/i
 
 export const pluginPanelContributionSchema = z
   .object({
@@ -68,22 +114,37 @@ export const pluginPanelContributionSchema = z
     icon: z
       .enum(PLUGIN_PANEL_ICONS)
       .optional()
-      .meta(
-        pluginFieldDoc(
+      .meta({
+        ...pluginFieldDoc(
           'Icon shown in the right-sidebar activity bar. Defaults to `plug`.',
           PLUGIN_SCHEMA_SINCE_V1,
           ['database']
-        )
-      ),
+        ),
+        [PLUGIN_ENUM_SINCE_KEY]: PLUGIN_PANEL_ICON_SINCE
+      }),
     entry: pluginRelativePathSchema.meta(
       pluginPathFieldDoc(
-        'HTML file, relative to the plugin root, rendered inside a panel frame. It is trusted code: install panels you trust.',
+        `What the panel runs: an HTML page for \`ui: "html"\`, a \`.js\`/\`.mjs\` module for \`ui: "components"\`. Either may instead be a \`.ts\`/\`.tsx\`/\`.mts\`/\`.jsx\` file, which Orca transpiles when it loads (needs \`engines.orca\` \`>=${PLUGIN_SOURCE_MODULES_SINCE}\`; an \`html\` panel then gets a generated page around it). It is trusted code: install panels you trust.`,
         PLUGIN_SCHEMA_SINCE_V1,
         ['dist/panel.html']
       )
-    )
+    ),
+    ui: z
+      .enum(PLUGIN_PANEL_UI_KINDS)
+      .optional()
+      .meta(
+        pluginFieldDoc(
+          'How the panel draws its UI. `html` (default) shows `entry` as a web page in an isolated frame; `components` runs `entry` as a hidden module and Orca draws the component tree it returns with its own controls.',
+          PLUGIN_PANEL_UI_SINCE,
+          ['components']
+        )
+      )
   })
   .strict()
+  .refine((panel) => panel.ui !== 'components' || COMPONENTS_PANEL_ENTRY.test(panel.entry), {
+    path: ['entry'],
+    message: 'a components panel entry must be a .js, .mjs, .ts, .tsx, .mts or .jsx module'
+  })
   .meta({
     id: 'PanelContribution',
     description: 'A sidebar panel. Requires the `sandboxed-ui` execution profile or higher.'

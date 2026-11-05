@@ -1,12 +1,6 @@
 import type { GitAdmissionTier } from '../../shared/rpc-contract/git-admission-tier-params'
 import { gitExecFileAsync } from './runner'
-import { resolveDefaultBaseRefViaExec } from '../../shared/git-default-base-ref'
-
-export {
-  DEFAULT_BASE_REF_PROBES,
-  resolveDefaultBaseRefViaExec
-} from '../../shared/git-default-base-ref'
-export type { GitExec } from '../../shared/git-default-base-ref'
+import { resolveDefaultBaseRefViaExec } from '../../shared/git/refs/git-default-base-ref'
 
 export type LocalGitExecOptions = {
   wslDistro?: string

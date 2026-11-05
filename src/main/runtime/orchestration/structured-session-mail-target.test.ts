@@ -1,4 +1,5 @@
-import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
+import { CrewChanges } from './crew/crew-changes'
+import { agentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -9,11 +10,14 @@ import {
   setAppEnvironment,
   type AppEnvironment
 } from '../../../shared/app-environment'
-import type { AgentSessionLease, AgentSessionRecord } from '../../../shared/agent-session-record'
+import type {
+  AgentSessionLease,
+  AgentSessionRecord
+} from '../../../shared/agent-session/lifecycle/agent-session-record'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../../shared/agent-session-record.test-fixture'
+} from '../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { formatOrcaSessionAddress, type OrcaSessionId } from '../../../shared/orca-session-address'
 import { testOrcaSessionId } from '../../../shared/orca-session-address-test-fixture'
 
@@ -31,7 +35,7 @@ const {
   mintStructuredWorkerPaneKey,
   structuredWorkerIdentities,
   structuredWorkerProcessIncarnation
-} = await import('../structured-worker-identity')
+} = await import('./terminal-authority/structured-sessions/structured-worker-identity')
 
 const CHAT = testOrcaSessionId('4a1f6c2e-8b3d-4e7a-9c15-0d2b6e8f1a37')
 const CHAT_ADDRESS = formatOrcaSessionAddress(CHAT)
@@ -85,7 +89,9 @@ let db: InstanceType<typeof OrchestrationDb>
 function probe(extra: Record<string, unknown> = {}): MailTargetProbe {
   return Object.assign(Object.create(MailTargetProbe.prototype), {
     _orchestrationDb: db,
+    crewChanges: new CrewChanges(),
     ptysById: new Map(),
+    orchestrationStructuredMailboxPointerDelivery: { statusChanged: () => true },
     ...extra
   })
 }

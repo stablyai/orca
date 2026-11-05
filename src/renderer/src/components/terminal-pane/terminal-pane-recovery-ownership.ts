@@ -1,7 +1,7 @@
 import { useAppStore } from '@/store'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { findRegisteredTerminalTab } from '@/runtime/mounted-terminal-tab-registry'
-import { nativeChatPresentationPolicy } from '../../../../shared/native-chat-availability'
+import { nativeChatPresentationPolicy } from '../../../../shared/native-chat/native-chat-availability'
 import {
   nativeChatLaunchAgentForLeaf,
   resolveNativeChatLeafRoute

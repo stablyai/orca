@@ -1,4 +1,4 @@
-import { sameAgentStatusTerminalOwner } from '../../../shared/agent-status-terminal-owner'
+import { sameAgentStatusTerminalOwner } from '../../../shared/agent-status/identity/agent-status-terminal-owner'
 import { structuralValuesEqualIgnoringUndefined } from '../../../shared/structural-value-equality'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 import type {
@@ -50,6 +50,22 @@ function semanticRowsEqual(
 }
 
 export abstract class AgentHookServerRowOwnership extends AgentHookServerListeners {
+  /** Set only for the direct applyNormalizedStatus call of applyRestatedStatus. */
+  protected restatingStatus = false
+
+  /** Orca's own restatement of a row (an inferred settle, a timer or poll republish) carries the
+   *  row's evidence; only the agent's own events may name or replace the pane's owner. */
+  protected applyRestatedStatus(
+    incoming: AgentHookEventPayload
+  ): EnrichedAgentHookEventPayload | undefined {
+    this.restatingStatus = true
+    try {
+      return this.applyNormalizedStatus(incoming)
+    } finally {
+      this.restatingStatus = false
+    }
+  }
+
   _resetRowOwnershipForTests(): void {
     this.paneKeyByTerminalHandle.clear()
   }

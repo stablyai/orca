@@ -1,8 +1,9 @@
+import { CrewChanges } from './orchestration/crew/crew-changes'
 import { settledWriteStub } from '../providers/settled-pty-write-stub'
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 
 // Stale graphs can advertise writable PTYs no provider owns. Refuse only controller-proven absence; unknown restored-daemon liveness still permits writes.
 
@@ -418,6 +419,7 @@ function makeOrchestrationDbStub(toHandle: () => string) {
       })
     },
     db: {
+      crewChanges: new CrewChanges(),
       listSessionDispatchesForPresentation: () => [],
       // Mirrors the real query: `read = 0 AND delivered_at IS NULL`.
       getUndeliveredUnreadMessages: (handle: string) =>

@@ -17,10 +17,13 @@ vi.mock('../../ssh/connection/ssh-connection-manager', () => mocks.sshConnection
 vi.mock('../../ssh/ssh-channel-multiplexer', () => mocks.sshChannelMultiplexer)
 vi.mock('../../ssh/port-forwarding/ssh-port-forward', () => mocks.sshPortForward)
 vi.mock('../ssh/ssh-port-scanner', () => mocks.sshPortScanner)
-vi.mock('../../../shared/runtime-environment-store', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  listEnvironments: () => runtime.environments
-}))
+vi.mock(
+  '../../../shared/remote-runtime/host-store/runtime-environment-store',
+  async (importOriginal) => ({
+    ...(await importOriginal<object>()),
+    listEnvironments: () => runtime.environments
+  })
+)
 vi.mock(
   '../runtime-environments/runtime-environment-request-connections',
   async (importOriginal) => ({
@@ -35,7 +38,9 @@ vi.mock('../runtime-environments/runtime-environments', () => ({
 import type { SshConnectionState, SshTarget } from '../../../shared/ssh-types'
 import {
   clearRuntimeEnvironmentManualDisconnect,
-  isRuntimeEnvironmentManuallyDisconnected
+  isRuntimeEnvironmentManuallyDisconnected,
+  RUNTIME_MANUALLY_DISCONNECTED_MESSAGE,
+  runtimeEnvironmentManualDisconnectReason
 } from '../runtime-environments/runtime-environment-manual-disconnect'
 import { isSshUserDisconnected } from '../../ssh/ssh-user-disconnect'
 import {
@@ -177,13 +182,24 @@ describe('a host opted out of reconnect on launch', () => {
   it('is not dialed at launch, nor is its managed server, until the user connects it', async () => {
     // Handler registration already took this process's hold with no hosts; take it again here.
     resetLaunchReconnectOptOutsForTests()
-    holdLaunchReconnectOptOuts([{ ...target, reconnectOnLaunch: false }, { id: 'ssh-2' }], '/tmp')
+    holdLaunchReconnectOptOuts(
+      [
+        { ...target, reconnectOnLaunch: false },
+        { id: 'ssh-2', label: 'Other' }
+      ],
+      '/tmp'
+    )
 
     await expect(
       handlers.get('ssh:connect')!(null, { targetId: target.id, automatic: true })
     ).rejects.toThrow('Server was disconnected. Connect to use it again.')
     expect(mockConnectionManager.connect).not.toHaveBeenCalled()
     expect(isRuntimeEnvironmentManuallyDisconnected(managedServer.id)).toBe(true)
+    // The server's status names the setting, not a Disconnect the user never made.
+    expect(runtimeEnvironmentManualDisconnectReason(managedServer.id)).not.toBe(
+      RUNTIME_MANUALLY_DISCONNECTED_MESSAGE
+    )
+    expect(runtimeEnvironmentManualDisconnectReason(managedServer.id)).toContain(target.label)
     expect(isSshUserDisconnected('ssh-2')).toBe(false)
 
     await Promise.resolve(handlers.get('ssh:connect')!(null, { targetId: target.id })).catch(

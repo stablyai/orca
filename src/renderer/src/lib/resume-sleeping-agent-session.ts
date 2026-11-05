@@ -3,9 +3,9 @@ import { isWorkspaceSleepRecord } from '../../../shared/workspace-sleep'
 import {
   agentProviderSessionsEqual,
   type SleepingAgentSessionRecord
-} from '../../../shared/agent-session-resume'
-import { AGENT_STATUS_STALE_AFTER_MS } from '../../../shared/agent-status-types'
-import { parsePaneKey } from '../../../shared/stable-pane-id'
+} from '../../../shared/agent-session/lifecycle/agent-session-resume'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../../shared/agent-status/contracts/agent-status-freshness'
+import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import {
   getProviderSessionClaimKey,
   activationTreatsNoteAsFinished,

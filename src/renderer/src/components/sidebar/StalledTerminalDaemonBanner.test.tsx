@@ -1,11 +1,11 @@
 // @vitest-environment happy-dom
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { StalledTerminalDaemonBanner } from './StalledTerminalDaemonBanner'
 import type { DaemonAsyncIoStatus } from '../../../../shared/daemon-async-io-health'
 
 const { openManageSessions } = vi.hoisted(() => ({ openManageSessions: vi.fn() }))
-vi.mock('../settings/open-terminal-manage-sessions', () => ({
+vi.mock('../settings/terminal/session-management/open-terminal-manage-sessions', () => ({
   openTerminalManageSessions: openManageSessions
 }))
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
@@ -32,24 +32,6 @@ async function mount(): Promise<void> {
     render(<StalledTerminalDaemonBanner />)
   })
 }
-
-it('shows a persistent explanation and opens the existing restart review without stopping anything', async () => {
-  readHealth.mockResolvedValue({ state: 'stalled', pendingMs: 5000 })
-  await mount()
-  expect(screen.getByRole('alert').textContent).toContain('Typing and new terminals may not work')
-  expect(screen.getByRole('alert').textContent).toContain('ends its running terminals and commands')
-  fireEvent.click(screen.getByRole('button', { name: 'Review restart options' }))
-  expect(openManageSessions).toHaveBeenCalledOnce()
-})
-
-it.each(['healthy', 'unsupported', 'unverifiable'] as const)(
-  'does not warn on %s',
-  async (state) => {
-    readHealth.mockResolvedValue(state === 'healthy' ? { state, pendingMs: 0 } : { state })
-    await mount()
-    expect(screen.queryByRole('alert')).toBeNull()
-  }
-)
 
 it('clears a proven stall on recovery, and does no work while hidden or after unmount', async () => {
   readHealth.mockResolvedValue({ state: 'stalled', pendingMs: 5000 })

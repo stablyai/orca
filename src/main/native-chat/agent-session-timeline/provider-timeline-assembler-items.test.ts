@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import type {
   AgentJournalItemBody,
   AgentJournalPlainStatusItem
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   assistantText,
   backgroundTask,

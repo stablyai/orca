@@ -1,8 +1,8 @@
-import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { _internals } from '../agent-hooks/server'
-import { isBackgroundTaskBlock, isSubagentBlock } from '../../shared/native-chat-types'
-import type { AgentChildWorkView } from '../../shared/agent-status-child-work-view'
+import { isBackgroundTaskBlock, isSubagentBlock } from '../../shared/native-chat/native-chat-types'
+import type { AgentChildWorkView } from '../../shared/agent-status/child-work/agent-status-child-work-view'
 import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import {
   CALLER,

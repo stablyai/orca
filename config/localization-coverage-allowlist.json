@@ -1,90 +1,111 @@
 [
   {
-    "filePath": "src/renderer/src/components/settings/appearance-search.ts",
+    "filePath": "src/renderer/src/components/settings/appearance/appearance-search.ts",
     "kind": "object-property:keywords",
     "text": "Idioma",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "src/renderer/src/components/settings/appearance-search.ts",
+    "filePath": "src/renderer/src/components/settings/appearance/appearance-search.ts",
     "kind": "object-property:keywords",
     "text": "Langue",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "src/renderer/src/components/settings/appearance-search.ts",
+    "filePath": "src/renderer/src/components/settings/appearance/appearance-search.ts",
     "kind": "object-property:keywords",
     "text": "Dil",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "src/renderer/src/components/settings/appearance-search.ts",
+    "filePath": "src/renderer/src/components/settings/appearance/appearance-search.ts",
     "kind": "object-property:keywords",
     "text": "Sprache",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "src/renderer/src/components/settings/appearance-search.ts",
+    "filePath": "src/renderer/src/components/settings/appearance/appearance-search.ts",
     "kind": "object-property:keywords",
     "text": "언어",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "src/renderer/src/components/settings/appearance-search.ts",
+    "filePath": "src/renderer/src/components/settings/appearance/appearance-search.ts",
     "kind": "object-property:keywords",
     "text": "言語",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "src/renderer/src/components/settings/appearance-search.ts",
+    "filePath": "src/renderer/src/components/settings/appearance/appearance-search.ts",
     "kind": "object-property:keywords",
     "text": "語言",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "src/renderer/src/components/settings/appearance-search.ts",
+    "filePath": "src/renderer/src/components/settings/appearance/appearance-search.ts",
     "kind": "object-property:keywords",
     "text": "语言",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "src/renderer/src/components/settings/terminal-advanced-platform-search.ts",
+    "filePath": "src/renderer/src/components/settings/terminal/platform/terminal-advanced-platform-search.ts",
     "kind": "object-property:keywords",
     "text": "ghostty",
     "dynamic": false,
     "count": 2
   },
   {
-    "filePath": "src/renderer/src/components/settings/terminal-advanced-platform-search.ts",
+    "filePath": "src/renderer/src/components/settings/terminal/platform/terminal-advanced-platform-search.ts",
     "kind": "object-property:keywords",
     "text": "Ghostty",
     "dynamic": false,
     "count": 2
   },
   {
-    "filePath": "src/renderer/src/components/settings/terminal-pane-appearance-search.ts",
+    "filePath": "src/renderer/src/components/settings/terminal/platform/terminal-advanced-platform-search.ts",
+    "kind": "object-property:keywords",
+    "text": "Kitty",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/terminal/platform/terminal-advanced-platform-search.ts",
+    "kind": "object-property:keywords",
+    "text": "kitty",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/terminal/platform/terminal-advanced-platform-search.ts",
+    "kind": "object-property:keywords",
+    "text": "kitty.conf",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/terminal/appearance/terminal-pane-appearance-search.ts",
     "kind": "object-property:keywords",
     "text": "ghostty",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "src/renderer/src/components/settings/terminal-pane-appearance-search.ts",
+    "filePath": "src/renderer/src/components/settings/terminal/appearance/terminal-pane-appearance-search.ts",
     "kind": "object-property:keywords",
     "text": "Ghostty",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "src/renderer/src/components/sidebar/worktree-card-meta-row.tsx",
+    "filePath": "src/renderer/src/components/sidebar/workspace-card/metadata/worktree-card-meta-row.tsx",
     "kind": "jsx-attribute:label",
     "text": "sidebar",
     "dynamic": false,
@@ -112,7 +133,7 @@
     "count": 1
   },
   {
-    "filePath": "src/renderer/src/components/settings/ChatFontFamilySetting.tsx",
+    "filePath": "src/renderer/src/components/settings/appearance/chat/ChatFontFamilySetting.tsx",
     "kind": "jsx-text",
     "text": "fontFamily",
     "dynamic": false,
@@ -154,7 +175,7 @@
     "count": 1
   },
   {
-    "filePath": "src/renderer/src/components/settings/AgentDefaultSurfacePreviews.tsx",
+    "filePath": "src/renderer/src/components/agent/launch-settings/AgentDefaultSurfacePreviews.tsx",
     "kind": "jsx-attribute:title",
     "text": "Claude",
     "dynamic": false,
@@ -162,7 +183,7 @@
     "reason": "Canonical agent brand in the approved Claude CLI still; preserve the exact brand."
   },
   {
-    "filePath": "src/renderer/src/components/settings/AgentDefaultSurfacePreviews.tsx",
+    "filePath": "src/renderer/src/components/agent/launch-settings/AgentDefaultSurfacePreviews.tsx",
     "kind": "jsx-text",
     "text": "Claude Code",
     "dynamic": false,
@@ -170,7 +191,7 @@
     "reason": "Canonical CLI product name in the approved terminal still; preserve the exact brand."
   },
   {
-    "filePath": "src/renderer/src/components/settings/AgentDefaultSurfacePreviews.tsx",
+    "filePath": "src/renderer/src/components/agent/launch-settings/AgentDefaultSurfacePreviews.tsx",
     "kind": "jsx-text",
     "text": "· ~/projects/acme-web",
     "dynamic": false,
@@ -178,7 +199,7 @@
     "reason": "Literal sample workspace path and CLI separator in the terminal still; paths are not translated."
   },
   {
-    "filePath": "src/renderer/src/components/settings/AgentDefaultSurfacePreviews.tsx",
+    "filePath": "src/renderer/src/components/agent/launch-settings/AgentDefaultSurfacePreviews.tsx",
     "kind": "jsx-text",
     "text": "&gt;",
     "dynamic": false,
@@ -186,7 +207,7 @@
     "reason": "Literal Claude CLI prompt marker in the terminal still; preserve command-line syntax."
   },
   {
-    "filePath": "src/renderer/src/components/settings/AgentDefaultSurfacePreviews.tsx",
+    "filePath": "src/renderer/src/components/agent/launch-settings/AgentDefaultSurfacePreviews.tsx",
     "kind": "jsx-text",
     "text": "Read",
     "dynamic": false,
@@ -194,7 +215,7 @@
     "reason": "Actual Claude CLI tool label in the terminal still; preserve the external interface text."
   },
   {
-    "filePath": "src/renderer/src/components/settings/AgentDefaultSurfacePreviews.tsx",
+    "filePath": "src/renderer/src/components/agent/launch-settings/AgentDefaultSurfacePreviews.tsx",
     "kind": "jsx-text",
     "text": "(src/",
     "dynamic": false,
@@ -202,11 +223,32 @@
     "reason": "Literal tool-argument path prefix in the terminal still; preserve path and CLI syntax."
   },
   {
-    "filePath": "src/renderer/src/components/settings/AgentDefaultSurfacePreviews.tsx",
+    "filePath": "src/renderer/src/components/agent/launch-settings/AgentDefaultSurfacePreviews.tsx",
     "kind": "jsx-text",
     "text": "⎿ Read 84 lines",
     "dynamic": false,
     "count": 1,
     "reason": "Actual Claude CLI tool-result line in the terminal still; preserve the illustrative output and line count."
+  },
+  {
+    "filePath": "src/renderer/src/components/emulator-pane/use-emulator-video-stream.ts",
+    "kind": "object-property:error",
+    "text": "This build does not support WebCodecs H.264 decoding.",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/sidebar/workspace-card/template/card-identity-parts.tsx",
+    "kind": "jsx-attribute:label",
+    "text": "sidebar",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/sidebar/workspace-card/template/card-primitives.tsx",
+    "kind": "object-property:title",
+    "text": "text-[13px] leading-5",
+    "dynamic": false,
+    "count": 1
   }
 ]

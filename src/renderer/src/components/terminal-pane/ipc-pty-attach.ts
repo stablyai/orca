@@ -1,4 +1,4 @@
-import { RELEASE_SYNCHRONIZED_OUTPUT } from '../../../../shared/terminal-mode-reset-profiles'
+import { RELEASE_SYNCHRONIZED_OUTPUT } from '../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 import { ensurePtyDispatcher, getEagerPtyBufferHandle } from './pty-dispatcher'
 import {
   hasTerminalDisplayContent,

@@ -28,6 +28,8 @@ import {
   getReplaceablePreviewFileId,
   removeEditorStateForReplacedPreview
 } from '../tabs/workspace-editor-item'
+import { createBrowserUuid } from '@/lib/browser-uuid'
+import { emptySplitGroup, insertSplitGroup } from '../../tabs/tabs-group-actions'
 
 export type OpenFileApplyScratch = {
   editorItemFileId: string
@@ -97,9 +99,16 @@ export function applyOpenFileToState(
   const isPreview = resolveEditorPreviewIntent(s, options?.preview)
   scratch.editorItemIsPreview = isPreview
   const recordReplacedPreview = options?.recordReplacedPreview ?? false
+  const splitGroup =
+    linkPlacement?.kind === 'split' ? emptySplitGroup(worktreeId, createBrowserUuid()) : undefined
+  const splitState =
+    splitGroup && linkPlacement?.kind === 'split'
+      ? insertSplitGroup(s, worktreeId, linkPlacement.split, splitGroup)
+      : undefined
   // Why: resolve the target group up-front so preview replacement is scoped to it (group B open must not evict group A's preview).
   const requestedGroupId =
-    linkPlacement?.kind === 'group' ? linkPlacement.groupId : options?.targetGroupId
+    splitGroup?.id ??
+    (linkPlacement?.kind === 'group' ? linkPlacement.groupId : options?.targetGroupId)
   const targetGroupId = resolveEditorOpenTargetGroupId(s, worktreeId, requestedGroupId) ?? undefined
   scratch.editorItemTargetGroupId = targetGroupId
   const activeResult =
@@ -145,9 +154,10 @@ export function applyOpenFileToState(
       existing.readOnly !== nextReadOnly ||
       existing.liveTail !== nextLiveTail
     if (!needsExistingUpdate) {
-      return activeResult
+      return { ...splitState, ...activeResult }
     }
     return {
+      ...splitState,
       openFiles: s.openFiles.map((f) =>
         f.id === id
           ? {
@@ -249,6 +259,7 @@ export function applyOpenFileToState(
         )
       }
       return {
+        ...splitState,
         openFiles: newFiles,
         editorDrafts: nextEditorDrafts,
         editorCursorLine: nextEditorCursorLine,
@@ -286,6 +297,7 @@ export function applyOpenFileToState(
   }
 
   return {
+    ...splitState,
     openFiles: [
       ...newFiles,
       {

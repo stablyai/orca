@@ -1,11 +1,36 @@
 import type {
   NativeChatMessage,
   NativeChatToolCallBlock
-} from '../../../../../src/shared/native-chat-types'
+} from '../../../../../src/shared/native-chat/native-chat-types'
 import type { NativeChatTaskListPredecessors } from '../../../../../src/shared/native-chat/input/native-chat-task-list-history'
-import type { NativeChatResolvedPrompt } from '../../../../../src/shared/native-chat-resolution-receipt'
-import { isActionableStructuredAgentSessionPrompt } from '../../../../../src/shared/structured-agent-session-live-turn'
-import type { MobileNativeChatTurnRow } from './use-mobile-native-chat-turn-disclosure'
+import type { NativeChatResolvedPrompt } from '../../../../../src/shared/native-chat/native-chat-resolution-receipt'
+import { isActionableStructuredAgentSessionPrompt } from '../../../../../src/shared/agent-session/view/structured-agent-session-live-turn'
+import type { NativeChatTurnStatus } from '../../../../../src/shared/native-chat/transcript/native-chat-turn-status'
+import type { NativeChatTurnDiff } from '../../../../../src/shared/native-chat/tools/native-chat-turn-diffs'
+
+export type MobileNativeChatTurnRow = {
+  turnDiff?: NativeChatTurnDiff
+  turnStatus: NativeChatTurnStatus | null
+  turnStatusAbove?: boolean
+  turnExpanded: boolean
+  turnKey?: string
+  activeTurnIsWorking: boolean
+  trailingRun: boolean
+  workRun?: readonly NativeChatMessage[]
+  joinsWorkRun?: boolean
+  foldedAway?: boolean
+  openReasoning?: ReadonlySet<string>
+  mayStillGrow: boolean
+  reasoningIsLive: boolean
+  reasoningExpanded: boolean
+  onToggleReasoning: (key: string) => void
+  // Pass roster disclosure only to roster rows so toggles cannot rerender every transcript row.
+  subagentGroupsOpen?: ReadonlySet<string>
+  onToggleSubagentGroup: (groupId: string) => void
+  // Hold expanded user messages above recycled rows so scrolling away cannot collapse them.
+  userMessageOpen: boolean
+  onToggleUserMessage: (messageId: string) => void
+}
 
 /** The message and its derived render inputs share one reuse boundary. */
 export type MobileNativeChatRowProps = MobileNativeChatTurnRow & {

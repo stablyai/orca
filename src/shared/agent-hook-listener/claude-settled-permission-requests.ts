@@ -1,5 +1,5 @@
 import type { AgentHookEventPayload } from './listener-event'
-import { isRecord } from '../agent-status-child-work-value-guards'
+import { isRecord } from '../agent-status/child-work/agent-status-child-work-value-guards'
 
 /** One Claude tool request the execution host saw end, keyed exactly as a permission wait is. */
 export type ClaudeSettledRequest = {

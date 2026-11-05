@@ -1,7 +1,7 @@
 import { connectMountedMockPanePty } from './pty-connection-test-connect-mock-pane'
 import { bindPtyConnectionTestMocks } from './pty-connection-mocks.spec'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { RESET_AFTER_BYTE_GAP } from '../../../../shared/terminal-mode-reset-profiles'
+import { RESET_AFTER_BYTE_GAP } from '../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 import { flushAsyncTicks, createDeferred } from './pty-connection-test-async'
 import {
   createMockTransport,
@@ -10,7 +10,11 @@ import {
   type ConnectCallbacks,
   type MockTransport
 } from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
 import {
@@ -81,6 +85,8 @@ export function registerPtyConnectionHiddenDeliveryGateTests(): void {
         ) => void
         binding: { syncProcessTracking: () => void; dispose: () => void }
       }> {
+        const agentTitleMocks =
+          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
         const transport = createMockTransport('pty-id')
         const capturedDataCallback: {
           current:
@@ -99,7 +105,11 @@ export function registerPtyConnectionHiddenDeliveryGateTests(): void {
         transportFactoryQueue.push(transport)
         const pane = createPane(1)
         const manager = createManager(1)
-        const binding = await connectMountedMockPanePty(pane, manager, deps)
+        const binding = await connectMountedMockPanePty(
+          pane,
+          manager,
+          bindPaneAgentTitleMocks(deps, agentTitleMocks)
+        )
         mountedBindings.push(binding)
         await flushAsyncTicks(6)
         expect(capturedDataCallback.current).not.toBeNull()

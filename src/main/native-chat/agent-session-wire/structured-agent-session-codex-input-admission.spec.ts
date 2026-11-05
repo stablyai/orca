@@ -1,6 +1,7 @@
-import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
-import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
-import * as autoSandbox from '../../codex/codex-structured-auto-sandbox'
+import { CodexAppServerRequestError } from '../../codex/app-server/codex-app-server-request-error'
+import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import * as autoSandbox from '../../codex/structured/launch/codex-structured-auto-sandbox'
 import { expect, it, vi } from 'vitest'
 import { codexInputFinalizationFixture } from './structured-agent-session-codex-input-host.test'
 import {
@@ -13,8 +14,8 @@ import {
   hostTestMessage,
   hostTestOperationId
 } from './structured-agent-session-host-test-data'
-import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
+import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
 
 it.each(CODEX_INPUT_FINALIZATION_ADMISSION_CASES)(
   'keeps input unwritten across %s at final admission with %i earlier cards',
@@ -544,4 +545,103 @@ it('keeps earlier B before historically forced proven-unrun A through close and 
     preparation.resolve(config)
     await adapter.closeAll()
   }
+})
+
+it('settles a changed running policy before compiling Auto, while unchanged input still steers', async () => {
+  const { codex, turns, permissionSend, began, pick, starts } = codexInputFinalizationFixture()
+  Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+  const running = await permissionSend('running')
+  await began(running)
+  const same = await permissionSend('same policy')
+  await vi.waitFor(() =>
+    expect(codex.connections[0]?.calls.some((r) => r.method === 'turn/steer')).toBe(true)
+  )
+  turns.echo(same)
+  await pick('auto')
+  const changed = await permissionSend('new policy')
+  await vi.waitFor(() => expect(starts()).toHaveLength(2))
+  expect(codex.connections[0]?.calls.filter((r) => r.method === 'turn/steer')).toHaveLength(1)
+  expect(codex.connections[0]?.calls.some((r) => r.method === 'turn/interrupt')).toBe(true)
+  expect(codex.connections).toHaveLength(2)
+  expect(starts()[1]?.params).toMatchObject({
+    clientUserMessageId: changed,
+    sandboxPolicy: { type: 'workspaceWrite' }
+  })
+  expect(starts().filter((r) => r.params?.clientUserMessageId === changed)).toHaveLength(1)
+  await began(changed)
+})
+
+it('retains the process but starts a new turn for an explicit running permission change', async () => {
+  const { host, codex, permissionSend, began, pick, starts, row } = codexInputFinalizationFixture()
+  await began(await permissionSend('running full access'))
+  const child = host.collaboratorsForTests().sessions.get(SESSION)!.child
+  await pick('ask')
+  const changed = await permissionSend('ask on the next turn')
+  await vi.waitFor(() => expect(starts()).toHaveLength(2))
+  expect(codex.connections).toHaveLength(1)
+  expect(host.collaboratorsForTests().sessions.get(SESSION)!.child).toBe(child)
+  expect(codex.connections[0]?.calls.filter((r) => r.method === 'turn/steer')).toHaveLength(0)
+  expect(starts()[1]?.params).toMatchObject({
+    clientUserMessageId: changed,
+    approvalPolicy: 'on-request',
+    sandboxPolicy: { type: 'readOnly' }
+  })
+  await began(changed)
+  expect((await row(changed))?.dispatchState).toBe('accepted')
+})
+
+it.each(['refused', 'grace'] as const)(
+  'keeps new input unwritten when interruption is %s',
+  async (failure) => {
+    const { adapter, codex, permissionSend, began, pick, starts, row } =
+      codexInputFinalizationFixture()
+    await began(await permissionSend('running'))
+    if (failure === 'refused') {
+      codex.routes['turn/interrupt'] = () => {
+        throw new CodexAppServerRequestError('turn/interrupt', -32600, 'refused')
+      }
+    } else {
+      codex.routes['turn/interrupt'] = () => ({})
+      vi.spyOn(adapter, 'awaitStoppedRequestEnd').mockResolvedValue()
+    }
+    await pick('ask')
+    const id = await permissionSend('must not inherit old grant')
+    await vi.waitFor(async () => expect((await row(id))?.dispatchState).toBe('rejected'))
+    expect((await row(id))?.rejection).toMatchObject({
+      kind: 'restartFailed',
+      neverReachedAgent: true
+    })
+    expect(starts()).toHaveLength(1)
+    expect(codex.connections[0]?.calls.some((r) => r.method === 'turn/steer')).toBe(false)
+  }
+)
+
+it('settles the old policy when a steer refused after the saved choice changed falls back to start', async () => {
+  const { codex, permissionSend, began, pick, starts, row } = codexInputFinalizationFixture()
+  await began(await permissionSend('running full access'))
+  const refusal = Promise.withResolvers<unknown>()
+  codex.routes['turn/steer'] = () => refusal.promise
+  const changed = await permissionSend('exact pending input')
+  await vi.waitFor(() =>
+    expect(codex.connections[0]?.calls.some((call) => call.method === 'turn/steer')).toBe(true)
+  )
+  await pick('ask')
+  refusal.reject(new CodexAppServerRequestError('turn/steer', -32600, 'steer refused'))
+  await vi.waitFor(() => expect(starts()).toHaveLength(2))
+  const calls = codex.connections[0]!.calls
+  const interrupt = calls.findIndex((call) => call.method === 'turn/interrupt')
+  const fresh = calls.findIndex(
+    (call) => call.method === 'turn/start' && call.params?.clientUserMessageId === changed
+  )
+  expect(interrupt).toBeGreaterThan(-1)
+  expect(fresh).toBeGreaterThan(interrupt)
+  expect(starts()[1]?.params).toMatchObject({
+    clientUserMessageId: changed,
+    approvalPolicy: 'on-request',
+    sandboxPolicy: { type: 'readOnly' }
+  })
+  expect(codex.connections).toHaveLength(1)
+  await began(changed)
+  expect((await row(changed))?.dispatchState).toBe('accepted')
+  expect(starts().filter((call) => call.params?.clientUserMessageId === changed)).toHaveLength(1)
 })

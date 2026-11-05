@@ -2,8 +2,8 @@ import { z } from 'zod'
 import {
   isJournalOpenUnionFallback,
   isJournalTag
-} from '../../../shared/agent-session-journal-open-union'
-import type { AgentJournalUnknownKind } from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-open-union'
+import type { AgentJournalUnknownKind } from '../../../shared/agent-session/journal/agent-session-journal-types'
 
 // The wire reads a peer's or an older build's value openly. A saved value is different: a build
 // that kept a key it does not declare would restate the value without it, so storage refuses the

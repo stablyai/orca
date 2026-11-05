@@ -2,11 +2,11 @@ import { randomUUID } from 'node:crypto'
 import { realpath } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { ipcMain, type WebContents } from 'electron'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import {
   resolveDesktopAuthorizedPath,
   resolveUserNamedRegularFile
-} from './local-file-access-resolution'
+} from './filesystem/access/local-file-access-resolution'
 import { createSenderScopedRequestCancellations } from './sender-scoped-request-cancellation'
 import { startNotebookKernel, type NotebookKernel } from '../notebook/notebook-kernel'
 import {

@@ -1,9 +1,9 @@
 import { vi, type Mock } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
-import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
+import { toWebTerminalSurfaceTabId } from '../../../shared/workspace-layout/terminal-surface-id'
 import type { AppState } from '@/store'
 import { makeTerminalTab } from '@/store/slices/worktrees-slice-test-fixtures'
-import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
 
 /** Shared with the frame-ordering suites through their `vi.mock` factories, so
  *  this module must stay free of runtime imports that would form a cycle. */

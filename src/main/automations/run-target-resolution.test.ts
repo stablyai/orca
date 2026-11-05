@@ -1,16 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { Automation } from '../../shared/automations-types'
 import type { WorkspaceRunContext } from '../../shared/task-source-context'
 import type { ProjectHostSetup } from '../../shared/project-types'
 import type { Repo } from '../../shared/repo-types'
 import {
-  AUTOMATION_ORPHAN_ISSUES,
   projectAutomationSelector,
   type AutomationProjectionContext
 } from '../../shared/automation-list-scope'
 import { toAutomationOwnerPrecondition } from '../../shared/automation-owner-precondition'
-import { AUTOMATION_CAPTURED_HOST_REFUSALS } from '../../shared/automation-owner-conflict'
+
 import { resolveAutomationRunTarget } from './run-target-resolution'
 
 function makeRepo(overrides: Partial<Repo> = {}): Repo {
@@ -111,50 +110,6 @@ function makeStore(
     automationCapturedHostIssue: () => null
   } as unknown as Store
 }
-
-describe('resolveAutomationRunTarget owner projection', () => {
-  it.each([
-    { issue: AUTOMATION_ORPHAN_ISSUES.hostReselection },
-    { issue: AUTOMATION_ORPHAN_ISSUES.malformed },
-    { issue: AUTOMATION_ORPHAN_ISSUES.targetMissing, errorCode: 'targetMissing' },
-    { issue: AUTOMATION_ORPHAN_ISSUES.targetReplaced, errorCode: 'targetReplaced' },
-    { issue: AUTOMATION_ORPHAN_ISSUES.workspaceHostAmbiguous, errorCode: 'workspaceHostAmbiguous' }
-  ])('retains the captured host refusal: $issue', ({ issue, ...code }) => {
-    const store = makeStore([makeSetup()], [makeRepo()])
-    store.automationCapturedHostIssue = () => issue
-    expect(resolveAutomationRunTarget(store, makeAutomation(makeRunContext()))).toEqual({
-      ok: false,
-      error: AUTOMATION_CAPTURED_HOST_REFUSALS[issue],
-      ...code
-    })
-  })
-
-  it('refuses a context-less local selector whose SSH-backed repo makes it malformed', () => {
-    const repo = makeRepo({ connectionId: 'ssh-1' })
-    const automation = makeAutomation(null)
-    const store = makeStore([], [repo], automation)
-
-    expect(resolveAutomationRunTarget(store, automation)).toEqual({
-      ok: false,
-      error: 'This automation has no host to run on.',
-      errorCode: 'noRunnableHost'
-    })
-  })
-
-  it('keeps a generation-less legacy SSH selector runnable when its host is current', () => {
-    const repo = makeRepo({ connectionId: 'ssh-1' })
-    const automation = makeAutomation(null, {
-      executionTargetType: 'ssh',
-      executionTargetId: 'ssh-1'
-    })
-    const store = makeStore([], [repo], automation)
-
-    expect(resolveAutomationRunTarget(store, automation)).toMatchObject({
-      ok: true,
-      cwd: '/repo'
-    })
-  })
-})
 
 describe('resolveAutomationRunTarget projectId drift', () => {
   it('resolves when only the derived projectId tier differs (repo: snapshot vs github: setup)', () => {

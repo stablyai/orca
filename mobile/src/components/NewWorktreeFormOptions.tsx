@@ -5,7 +5,7 @@ import type { useMobileComposerSource } from '../tasks/use-mobile-composer-sourc
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { AutoHeight } from './AutoHeight'
 import { TextField } from './composer-input/TextField'
-import { SectionHeader } from './list/SectionHeader'
+import { SectionHeader } from './list/ListGroup'
 import { newWorktreeFormStyles as styles } from './new-worktree-form-styles'
 import type { SetupRunPolicy } from './new-worktree-modal-types'
 import { NewWorkspaceSetupScriptField } from './NewWorkspaceSetupScriptField'
@@ -38,38 +38,36 @@ export function NewWorktreeFormOptions(props: {
         expanded={props.expanded}
         onToggle={() => props.onExpandedChange(!props.expanded)}
       />
-      <AutoHeight>
-        {props.expanded ? (
-          <View style={styles.options}>
-            <SmartWorkspaceAdvancedFields
-              composer={props.composer}
-              selectedRepoIsGit={props.selectedRepoIsGit}
+      <AutoHeight open={props.expanded}>
+        <View style={styles.options}>
+          <SmartWorkspaceAdvancedFields
+            composer={props.composer}
+            selectedRepoIsGit={props.selectedRepoIsGit}
+          />
+          <View>
+            <Text style={styles.fieldLabel}>
+              {t('components.newWorktreeFormSheet.note', 'Note')}
+            </Text>
+            <TextField
+              value={props.note}
+              onChangeText={props.onNoteChange}
+              placeholder={t('components.newWorktreeFormSheet.notePlaceholder', 'Write a note')}
+              autoCapitalize="none"
+              autoCorrect={false}
             />
-            <View>
-              <Text style={styles.fieldLabel}>
-                {t('components.newWorktreeFormSheet.note', 'Note')}
-              </Text>
-              <TextField
-                value={props.note}
-                onChangeText={props.onNoteChange}
-                placeholder={t('components.newWorktreeFormSheet.notePlaceholder', 'Write a note')}
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-            </View>
-            {props.setupCommand ? (
-              <NewWorkspaceSetupScriptField
-                command={props.setupCommand}
-                source={props.setupSource}
-                runPolicy={props.setupRunPolicy}
-                decision={props.setupDecisionChoice}
-                runSetup={props.runSetup}
-                onDecisionChange={props.onSetupDecisionChange}
-                onRunSetupChange={props.onRunSetupChange}
-              />
-            ) : null}
           </View>
-        ) : null}
+          {props.setupCommand ? (
+            <NewWorkspaceSetupScriptField
+              command={props.setupCommand}
+              source={props.setupSource}
+              runPolicy={props.setupRunPolicy}
+              decision={props.setupDecisionChoice}
+              runSetup={props.runSetup}
+              onDecisionChange={props.onSetupDecisionChange}
+              onRunSetupChange={props.onRunSetupChange}
+            />
+          ) : null}
+        </View>
       </AutoHeight>
     </>
   )

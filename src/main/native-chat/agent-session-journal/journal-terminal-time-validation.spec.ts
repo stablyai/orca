@@ -1,9 +1,9 @@
 import type { createFixture } from './journal-terminal-validation-test-fixture'
 import { expect, it, vi } from 'vitest'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
-import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
-import { AgentJournalItemBodySchema } from '../../../shared/agent-session-journal-schemas'
-import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { AgentJournalItemBodySchema } from '../../../shared/agent-session/journal/agent-session-journal-schemas'
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import {
   liveTestJournalRows,
   openTestJournalHostDatabase

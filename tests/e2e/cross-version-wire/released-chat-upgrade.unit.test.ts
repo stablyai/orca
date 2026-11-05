@@ -12,11 +12,15 @@ import {
 import { restoreJournal } from '../../../src/main/native-chat/agent-session-journal/journal-open'
 import { JOURNAL_PREFIX_ORDINAL } from '../../../src/main/native-chat/agent-session-journal/journal-outcome-codec'
 import { journalOutcomeSource } from '../../../src/main/native-chat/agent-session-journal/journal-outcome-format'
-import type { AgentJournalSnapshot } from '../../../src/shared/agent-session-journal-types'
+import type { AgentJournalSnapshot } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
 import { parseJournalRow } from '../../../src/main/native-chat/agent-session-journal/journal-row-schema'
-import type { JournalStoredRow } from '../../../src/main/native-chat/agent-session-journal/journal-row-table'
+import {
+  readJournalSessionEpoch,
+  type JournalStoredRow
+} from '../../../src/main/native-chat/agent-session-journal/journal-row-table'
 import { JournalWriteProjection } from '../../../src/main/native-chat/agent-session-journal/journal-write-projection'
-import { resolveRecentStableReleaseRefs } from './release-checkout'
+import { readPublishedQueuedMessages } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-queued-publication'
+import { resolveBaselineReleaseRef } from './release-checkout'
 import {
   editReleasedCard,
   rewindReleasedChat,
@@ -30,16 +34,18 @@ import {
   type Agent
 } from './released-chat-writers'
 
-// Each release in the downgrade window, and the oldest release whose chat database this build still
+// The two releases before outcome storage, and the oldest release whose chat database this build still
 // reads, writes a Claude and a Codex chat through its own writers. This build admits every row as
 // written, opens the chat as that release had it, then edits a queued card (its first write, over
 // a key the old rows hold), sends, and rewinds, which saves the kept chat again in this build's
 // form. Every commit restores to the live chat. What this build does after the open is checked on
 // its own result, never against a release, so main stays free to change it.
 const SUITE_TIMEOUT_MS = 180_000
+// v1.4.246 shipped outcome storage, so its chats hold no rows to upgrade; the writers pin the two
+// releases before it, and the newest release stays the reader this build must match.
 const RELEASES = {
-  'the newest release': () => resolveRecentStableReleaseRefs(2)[0]!,
-  'the release before it': () => resolveRecentStableReleaseRefs(2)[1]!,
+  'the last release before outcome storage': () => 'v1.4.245',
+  'the release before it': () => 'v1.4.244',
   // The first release with one chat database per host (schema 3, the oldest this build opens);
   // earlier releases kept a file per chat, which nothing reads any more. It never changes.
   'the oldest release with this chat database': () => 'v1.4.219'
@@ -55,7 +61,9 @@ afterEach(() => {
 
 const view = (journal: ContinuedJournal) => ({
   snapshot: journal.snapshot(),
-  cards: [...journal.queuedMessages.list()]
+  cards: [...journal.queuedMessages.displayState().queue.cards.values()].sort(
+    (a, b) => a.position - b.position
+  )
 })
 
 /** What the release wrote: its items, sends and cards, in order. Fields a later build adds to them
@@ -117,16 +125,29 @@ async function carryOn(
       expect(sent.snapshot.submissions).toContainEqual(
         expect.objectContaining({ clientMessageId: 'after-upgrade', dispatchState: 'accepted' })
       )
+      const beforeRewind = journal.cursor()
+      const database = openTestJournalHostDatabase(stateDirectory)
+      const physicalEpoch = readJournalSessionEpoch(database.db, options.identity.sessionId)
+      expect(physicalEpoch).not.toBeNull()
       await rewindReleasedChat(journal, new Set(opened.snapshot.items.map((item) => item.itemId)))
-      expect(journal.epoch).toBe('epoch-rewound')
+      expect(journal.epoch).toMatch(/^context-v1:/)
+      expect(journal.epoch).not.toBe(beforeRewind.epoch)
+      expect(readJournalSessionEpoch(database.db, options.identity.sessionId)).toBe(physicalEpoch)
+      expect(journal.readSince(beforeRewind)).toEqual({ ok: false, reset: 'epoch_changed' })
       const seen = view(journal)
       // The rewind keeps every message the release wrote and every card not taken back, the edit
       // included.
       expect(kept(seen.snapshot.items)).toEqual(kept(opened.snapshot.items))
-      expect(seen.cards.map((card) => card.messageId)).toEqual(
+      const active = seen.cards.filter((card) => card.state !== 'withdrawn')
+      expect(active.map((card) => card.messageId)).toEqual(
         opened.cards.filter((card) => card.state !== 'withdrawn').map((card) => card.messageId)
       )
-      expect(seen.cards).toHaveLength(1)
+      expect(active).toHaveLength(1)
+      expect(active).toEqual(sent.cards.filter((card) => card.state !== 'withdrawn'))
+      expect(seen.cards.filter((card) => card.state === 'withdrawn')).toEqual(
+        opened.cards.filter((card) => card.state === 'withdrawn')
+      )
+      expect(readPublishedQueuedMessages(journal).map((card) => card.messageId)).toEqual(['card-2'])
       for (const result of [sent, seen]) {
         expect(result.cards.find((card) => card.messageId === 'card-2')?.body.blocks).toEqual([
           { type: 'text', text: 'second, edited after the upgrade' }
@@ -137,7 +158,10 @@ async function carryOn(
     .finally(() => opener.closeAll())
   const reopened = await opener
     .open(options)
-    .then(view)
+    .then((journal) => {
+      expect(readPublishedQueuedMessages(journal).map((card) => card.messageId)).toEqual(['card-2'])
+      return view(journal)
+    })
     .finally(() => opener.closeAll())
   expect(reopened).toEqual(carried.seen)
   return carried
@@ -145,8 +169,8 @@ async function carryOn(
 
 describe('a chat a shipped release wrote, carried on by this build', () => {
   it.each([
-    ['the newest release', 'claude'],
-    ['the newest release', 'codex'],
+    ['the last release before outcome storage', 'claude'],
+    ['the last release before outcome storage', 'codex'],
     ['the release before it', 'claude'],
     ['the release before it', 'codex'],
     ['the oldest release with this chat database', 'claude'],
@@ -186,6 +210,11 @@ describe('a chat a shipped release wrote, carried on by this build', () => {
 
         const ours = await carryOn(createTrackedJournalOpener(), agent, directory, written, rows)
         if (build !== 'the oldest release with this chat database') {
+          expect(
+            ours.seen.cards
+              .filter((card) => card.state === 'withdrawn')
+              .map((card) => card.messageId)
+          ).toEqual(['card-1'])
           // A release in the window wrote the shapes this build reads, so it opens as written,
           // and the edit records the card the old rows hold in its place among them.
           expect(releaseWritten(ours.opened)).toMatchObject(releaseWritten(written))
@@ -197,7 +226,7 @@ describe('a chat a shipped release wrote, carried on by this build', () => {
           await closeTestJournalHostDatabase(directory)
         }
         // This build opens the chat as the newest release does.
-        const newest = await releasedJournalOpener(RELEASES['the newest release']())
+        const newest = await releasedJournalOpener(resolveBaselineReleaseRef())
         expect(releaseWritten(ours.opened)).toMatchObject(
           releaseWritten(await openedBy(newest, agent, shipped))
         )

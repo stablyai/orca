@@ -3,15 +3,14 @@ import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
 import { locateTerminalTab } from '@/store/terminals/terminal-tab-location'
 import {
   admitTerminalRecoveryRemount,
-  captureTabRecoveryGeneration
+  captureTabRecoveryGeneration,
+  type TerminalRecoveryDecline,
+  type TerminalRecoveryRemountRequest,
+  type TerminalRecoveryRemountResult,
+  type TerminalRecoveryTrigger
 } from '@/store/terminals/terminal-tab-recovery-ledger'
-import type {
-  TerminalRecoveryDecline,
-  TerminalRecoveryRemountRequest,
-  TerminalRecoveryRemountResult,
-  TerminalRecoveryTrigger
-} from '@/store/terminals/terminal-tab-recovery-ledger'
-import type { TerminalPaneRecoveryReason } from '../../../../shared/terminal-tab-types'
+
+import type { TerminalPaneRecoveryReason } from '../../../../shared/workspace-layout/terminal-tab-types'
 import {
   _resetTerminalInputQuarantineForTests,
   armTerminalInputQuarantine
@@ -19,8 +18,6 @@ import {
 import { notifyTerminalInputNotSent } from './terminal-input-not-sent-notice'
 
 // Renderer death can leave the PTY alive; remount rebuilds xterm and reattaches/replays without restarting the shell (#2836, #8104). Store budget/epoch on the durable tab row, with only concrete xterm registration module-local.
-
-export type { TerminalPaneRecoveryReason }
 
 type RecoveryRequest = {
   tabId: string

@@ -2,7 +2,7 @@ import { Buffer } from 'node:buffer'
 import { describe, expect, it } from 'vitest'
 
 import { resolvePairConfirmRouteState } from './pair-confirm-state'
-import type { PairingOffer } from './types'
+import type { PairingOffer } from '../../../src/shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 
 function encodeOffer(offer: PairingOffer): string {
   return Buffer.from(JSON.stringify(offer))

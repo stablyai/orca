@@ -131,7 +131,7 @@
     },
     {
       "file": "src/terminal/terminal-webview-html.web.ts",
-      "reason": "The native file composes the whole WebView document, which splices in the 612 KiB minified xterm engine string. On the page that string is unusable — the shell's CSP is script-src 'self' with frame-src 'none', so there is no nested document to load it into — and it would be the largest single module in the session route's closure. The web file answers the caret options, the markup and the stylesheet, which is everything the page mounts, and nothing else; mobile-web-terminal-engine-closure.test.mjs is the fence."
+      "reason": "The native file composes the whole WebView document, which splices in the 612 KiB minified xterm engine string. On the page that string is unusable — the shell's CSP is script-src 'self' with frame-src 'none', so there is no nested document to load it into — and it would be the largest single module in the session route's closure. The web file answers the caret options, the markup and the stylesheet, which is everything the page mounts, and nothing else."
     },
     {
       "file": "src/platform/dictation-capture.web.ts",
@@ -200,6 +200,10 @@
     {
       "file": "src/session/shell-terminal-key-rail.web.ts",
       "reason": "The iPhone Duo key rail is drawn by the shell in a side inset strip the page cannot reach. The native file has no shell around it and answers no rail; this one reads whether the shell shows one from `init` and takes its presses from the bridge."
+    },
+    {
+      "file": "src/components/use-working-motion.web.ts",
+      "reason": "React Native Web has no native animation driver, so every working ring and live tool-run pulse ran as its own JS loop writing a style each frame on the page's main thread, which is busiest while a reply streams. The native file keeps the native-driver loops; this one runs the same spin and pulse as Web Animations on the element, which the compositor plays, with one shared phase like desktop's spinner."
     },
     {
       "file": "src/platform/shell-storage.web.ts",

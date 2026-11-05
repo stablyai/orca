@@ -1,8 +1,8 @@
 import { EventEmitter } from 'node:events'
 import type { BrowserWindow } from 'electron'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Store } from '../persistence'
-import type { UpdaterSetupOptions } from '../updater'
+import type { Store } from '../persistence/loading-store/store'
+import type { UpdaterSetupOptions } from '../updater/lifecycle/updater-setup'
 
 const { setupMock, milestoneMock, getMainWindowMock } = vi.hoisted(() => ({
   getMainWindowMock: vi.fn<() => BrowserWindow | null>(() => null),
@@ -11,8 +11,8 @@ const { setupMock, milestoneMock, getMainWindowMock } = vi.hoisted(() => ({
 }))
 
 vi.mock('electron', () => ({ app: {}, ipcMain: {} }))
-vi.mock('../updater', () => ({ setupAutoUpdater: setupMock }))
-vi.mock('../updater/electron-updater-proxy-session', () => ({
+vi.mock('../updater/updater-service', () => ({ setupAutoUpdater: setupMock }))
+vi.mock('../updater/lifecycle/electron-updater-proxy-session', () => ({
   applyProxyToElectronUpdaterSession: vi.fn()
 }))
 vi.mock('../ipc/ui', () => ({
@@ -408,6 +408,7 @@ describe('completed deferred updater setup ownership', () => {
       'setPendingUpdateNudgeId',
       'setDismissedUpdateNudgeId',
       'getReleaseChannelOverride',
+      'getUpdateDelayDays',
       'onBeforeQuitFailure',
       'installMode'
     ])
@@ -415,6 +416,9 @@ describe('completed deferred updater setup ownership', () => {
     expect(options.getPendingUpdateNudgeId?.()).toBe('pending')
     expect(options.getDismissedUpdateNudgeId?.()).toBe('dismissed')
     expect(options.getReleaseChannelOverride?.()).toBe('rc')
+    expect(options.getUpdateDelayDays?.()).toBe(0)
+    owner.store.getSettings.mockReturnValue({ updateDelayDays: 7 })
+    expect(options.getUpdateDelayDays?.()).toBe(7)
     owner.store.getUI.mockReturnValue({ ...owner.store.getUI(), lastUpdateCheckAt: 456 })
     expect(options.getLastUpdateCheckAt?.()).toBe(456)
     options.setLastUpdateCheckAt?.(789)

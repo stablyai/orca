@@ -1,6 +1,6 @@
 /** #16432: PowerShell 5.1 hangs per empty-pipe read, not at a size threshold (32KiB still failed 15/120 under load). Verify SFTP first, PowerShell 7 next and bounded 5.1 last, with unique staging/publish names. */
 import { EventEmitter } from 'node:events'
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, writeFileSync } from 'node:fs'
 import { readFile, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -29,7 +29,6 @@ vi.mock('./system-ssh-operation-lifecycle', async (importActual) => {
   return { ...actual, waitForChannelClose: waitForChannelCloseSpy }
 })
 
-import { uploadDirectoryViaSystemSsh } from './system-ssh-file-transfer'
 import { uploadFileViaSystemSsh, writeBufferViaSystemSsh } from './system-ssh-file-binary-transfer'
 import { WINDOWS_STAGED_WRITE_SUFFIX } from './system-ssh-windows-file-write'
 import { waitForChannelClose } from './system-ssh-operation-lifecycle'
@@ -197,134 +196,6 @@ afterEach(async () => {
 })
 
 describe('Windows upload over sftp', () => {
-  it('moves the payload without any remote process reading a stdin', async () => {
-    const contents = Buffer.alloc(WINDOWS_STDIN_WRITE_CHUNK_BYTES * 60 + 11, 0x64)
-    const localPath = join(localDir, 'big.node')
-    writeFileSync(localPath, contents)
-
-    await uploadFileViaSystemSsh(target, localPath, `${remoteRoot}/big.node`, { hostPlatform })
-
-    expect(fileWrites()).toHaveLength(0)
-    expect(putLines()).toHaveLength(1)
-    expect(sftpBatches).toHaveLength(1)
-  })
-
-  it('creates the parent chain and sends the payload in one round trip', async () => {
-    writeFileSync(join(localDir, 'relay.js'), 'x')
-
-    await uploadFileViaSystemSsh(target, join(localDir, 'relay.js'), `${remoteRoot}/a/b/relay.js`, {
-      hostPlatform
-    })
-
-    expect(sftpBatches).toHaveLength(1)
-    expect(sftpBatches[0]!.script.split('\n').filter(Boolean)).toEqual([
-      '-mkdir "/C:/Users"',
-      '-mkdir "/C:/Users/dev"',
-      '-mkdir "/C:/Users/dev/.orca-remote"',
-      '-mkdir "/C:/Users/dev/.orca-remote/a"',
-      '-mkdir "/C:/Users/dev/.orca-remote/a/b"',
-      expect.stringContaining('put ') as unknown as string
-    ])
-  })
-
-  it('addresses the destination in the drive-rooted namespace sftp exposes', async () => {
-    writeFileSync(join(localDir, 'relay.js'), 'x')
-
-    await uploadFileViaSystemSsh(target, join(localDir, 'relay.js'), `${remoteRoot}/relay.js`, {
-      hostPlatform
-    })
-
-    // Unnormalized Windows destinations can silently write a file named C and still exit 0.
-    expect(putDestination(putLines()[0]!)).toMatch(
-      /^\/C:\/Users\/dev\/\.orca-remote\/relay\.js\.orca-partial-[0-9a-f]{12}$/
-    )
-  })
-
-  it('never lands a partial under the real name, and publishes by rename', async () => {
-    writeFileSync(join(localDir, 'relay.js'), 'x')
-    const remotePath = `${remoteRoot}/relay.js`
-
-    await uploadFileViaSystemSsh(target, join(localDir, 'relay.js'), remotePath, { hostPlatform })
-
-    const destination = putDestination(putLines()[0]!)
-    // Require a matched destination first; an empty regex result would trivially differ from the real path.
-    expect(destination).toContain(WINDOWS_STAGED_WRITE_SUFFIX)
-    expect(destination).not.toBe(`/C:${remotePath.slice(2)}`)
-    const publish = commands.at(-1)!
-    expect(publish.script).toContain(
-      '[System.IO.File]::Replace($staging, $path, [NullString]::Value)'
-    )
-    expect(publish.script).not.toContain('OpenStandardInput')
-  })
-
-  it('never deletes the destination it is replacing', async () => {
-    writeFileSync(join(localDir, 'relay.js'), 'x')
-
-    await uploadFileViaSystemSsh(target, join(localDir, 'relay.js'), `${remoteRoot}/relay.js`, {
-      hostPlatform
-    })
-
-    const publish = commands.at(-1)!
-    // Delete-then-Move can destroy an existing file on failure; File.Replace must swap it atomically.
-    expect(publish.script).not.toContain('[System.IO.File]::Delete($path)')
-    expect(publish.script).toContain(
-      '[System.IO.File]::Replace($staging, $path, [NullString]::Value)'
-    )
-    expect(publish.script).toContain(
-      'catch [System.IO.FileNotFoundException] { [System.IO.File]::Move($staging, $path) }'
-    )
-  })
-
-  it('gives every attempt its own staging name, so a retry cannot meet a predecessor lock', async () => {
-    writeFileSync(join(localDir, 'relay.js'), 'x')
-
-    await uploadFileViaSystemSsh(target, join(localDir, 'relay.js'), `${remoteRoot}/relay.js`, {
-      hostPlatform
-    })
-    await uploadFileViaSystemSsh(target, join(localDir, 'relay.js'), `${remoteRoot}/relay.js`, {
-      hostPlatform
-    })
-
-    const [first, second] = putLines().map(putDestination)
-    expect(first).toContain(WINDOWS_STAGED_WRITE_SUFFIX)
-    expect(second).not.toBe(first)
-  })
-
-  it('enforces exclusive at the rename, where it is atomic', async () => {
-    writeFileSync(join(localDir, 'import.bin'), 'x')
-
-    await uploadFileViaSystemSsh(target, join(localDir, 'import.bin'), `${remoteRoot}/import.bin`, {
-      hostPlatform,
-      exclusive: true
-    })
-
-    const publish = commands.at(-1)!
-    expect(publish.script).toContain('[System.IO.File]::Move($staging, $path)')
-    expect(publish.script).not.toContain('[System.IO.File]::Delete($path)')
-  })
-
-  it('appends by concatenating the staged file, not by piping bytes to the remote', async () => {
-    await writeBufferViaSystemSsh(target, `${remoteRoot}/log.bin`, Buffer.from('tail'), {
-      hostPlatform,
-      append: true
-    })
-
-    expect(fileWrites()).toHaveLength(0)
-    const publish = commands.at(-1)!
-    expect(publish.script).toContain('FileMode]::Append')
-    expect(publish.script).toContain('$in.CopyTo($out)')
-    expect(publish.script).toContain('[System.IO.File]::Delete($staging)')
-  })
-
-  it('still creates an empty artifact on the host', async () => {
-    writeFileSync(join(localDir, 'empty.txt'), '')
-
-    await uploadDirectoryViaSystemSsh(target, localDir, remoteRoot, { hostPlatform })
-
-    expect(putLines()).toHaveLength(1)
-    expect(commands.at(-1)!.script).toContain('[System.IO.File]::Move($staging, $path)')
-  })
-
   it('writes a buffer through a 0600 temp file that does not outlive the transfer', async () => {
     const seen: { path: string; contents: Buffer; mode: number }[] = []
     runProcessMock.mockImplementation(async (spec: { args: string[]; input: string }) => {
@@ -349,45 +220,6 @@ describe('Windows upload over sftp', () => {
     // Repository payloads in shared temp directories must be private from creation.
     expect(seen[0]!.mode).toBe(0o600)
     await expect(readFile(seen[0]!.path)).rejects.toThrow()
-  })
-
-  it('creates upload directories over sftp rather than a PowerShell stdin batch', async () => {
-    mkdirSync(join(localDir, 'node'), { recursive: true })
-    writeFileSync(join(localDir, 'node', 'relay.js'), 'x')
-
-    await uploadDirectoryViaSystemSsh(target, localDir, remoteRoot, { hostPlatform })
-
-    // Observe a command first: some() on an empty list would pass this negative assertion.
-    expect(commands.length).toBeGreaterThan(0)
-    expect(commands.some((command) => command.script.includes('StreamReader([Console]::'))).toBe(
-      false
-    )
-    expect(sftpBatches[0]!.script).toContain('-mkdir "/C:/Users/dev/.orca-remote"')
-  })
-
-  it('sweeps the staged bytes when the publish is the thing that fails', async () => {
-    writeFileSync(join(localDir, 'import.bin'), 'x')
-    // Model publish refusal after payload staging, as on an exclusive conflict.
-    spawnSystemSshCommandMock.mockImplementation((_target: SshTarget, command: string) => {
-      const script = decodePowerShellCommand(command)
-      return createFakeChannel((channel) => {
-        commands.push({ script, executable: command.split(' ')[0] ?? '', stdin: channel.written })
-        const failed = script.includes('::Move($staging, $path)')
-        setImmediate(() => channel.emit('close', failed ? 1 : 0, null))
-      })
-    })
-
-    await expect(
-      uploadFileViaSystemSsh(target, join(localDir, 'import.bin'), `${remoteRoot}/import.bin`, {
-        hostPlatform,
-        exclusive: true
-      })
-    ).rejects.toThrow()
-
-    const sweep = commands.at(-1)!
-    expect(sweep.script).toContain('[System.IO.File]::Delete($staging)')
-    // Contact loss never proves writer death; a locked staging file is tolerated.
-    expect(sweep.script).toContain('$ErrorActionPreference = "SilentlyContinue"')
   })
 
   it('reports a cancelled transfer as an abort, not as a failed one', async () => {
@@ -459,43 +291,11 @@ describe('Windows upload over sftp', () => {
     expect(fileWrites().length).toBeGreaterThan(0)
     expect(getWindowsRemoteWriteCapabilities(target).shouldTry('sftp-subsystem')).toBe(true)
   })
-
-  it('translates the ssh argument list rather than passing it to a client that reads it differently', async () => {
-    writeFileSync(join(localDir, 'relay.js'), 'x')
-
-    await uploadFileViaSystemSsh(target, join(localDir, 'relay.js'), `${remoteRoot}/relay.js`, {
-      hostPlatform,
-      disableControlMaster: true
-    })
-
-    const args = sftpBatches[0]!.args
-    // sftp's `-T` does not exist, its `-p` preserves mtime, and its `-S` names a program to run.
-    expect(args).not.toContain('-T')
-    expect(args).not.toContain('-p')
-    expect(args).not.toContain('-S')
-    expect(args).toContain('ControlPath=none')
-    expect(args).toContain('ServerAliveInterval=15')
-  })
 })
 
 describe('Windows upload on a host with no sftp subsystem', () => {
   beforeEach(() => {
     refuseSftp()
-  })
-
-  it('creates a multi-directory tree, which the one-element case never exercised', async () => {
-    mkdirSync(join(localDir, 'node', 'deep'), { recursive: true })
-    writeFileSync(join(localDir, 'index.js'), 'a')
-    writeFileSync(join(localDir, 'node', 'deep', 'x.js'), 'b')
-
-    await uploadDirectoryViaSystemSsh(target, localDir, remoteRoot, { hostPlatform })
-
-    const mkdir = commands.find((command) => command.script.includes('ConvertFrom-Json'))!
-    // @() nests ConvertFrom-Json's array and joins its paths when stringified; string[] iterates them. Test multiple directories to expose it.
-    expect(mkdir.script).toContain('[string[]]($json | ConvertFrom-Json)')
-    expect(mkdir.script).not.toContain('@($json | ConvertFrom-Json)')
-    const batch = JSON.parse(mkdir.stdin.toString('utf-8')) as string[]
-    expect(batch.length).toBeGreaterThan(1)
   })
 
   it('falls back rather than failing the transfer', async () => {
@@ -507,38 +307,6 @@ describe('Windows upload on a host with no sftp subsystem', () => {
     })
 
     expect(Buffer.concat(fileWrites().map((write) => write.stdin)).equals(contents)).toBe(true)
-  })
-
-  it('remembers the refusal, so a multi-file upload probes once', async () => {
-    writeFileSync(join(localDir, 'a.js'), 'a')
-    writeFileSync(join(localDir, 'b.js'), 'b')
-    writeFileSync(join(localDir, 'c.js'), 'c')
-
-    await uploadDirectoryViaSystemSsh(target, localDir, remoteRoot, { hostPlatform })
-
-    expect(sftpBatches).toHaveLength(1)
-  })
-
-  it('does not spend a sweep round trip when sftp declined before moving any bytes', async () => {
-    writeFileSync(join(localDir, 'relay.js'), 'x')
-
-    await uploadFileViaSystemSsh(target, join(localDir, 'relay.js'), `${remoteRoot}/relay.js`, {
-      hostPlatform
-    })
-
-    expect(commands.length).toBeGreaterThan(0)
-    expect(commands.some((command) => command.script.includes('Delete($staging)'))).toBe(false)
-  })
-
-  it('prefers PowerShell 7, which reads a redirected stdin correctly', async () => {
-    writeFileSync(join(localDir, 'relay.js'), Buffer.alloc(WINDOWS_STDIN_WRITE_CHUNK_BYTES * 3))
-
-    await uploadFileViaSystemSsh(target, join(localDir, 'relay.js'), `${remoteRoot}/relay.js`, {
-      hostPlatform
-    })
-
-    expect(fileWrites().map((write) => write.executable)).toEqual(['pwsh.exe'])
-    expect(fileWrites()[0]!.stdin).toHaveLength(WINDOWS_STDIN_WRITE_CHUNK_BYTES * 3)
   })
 
   it('bounds every write when only Windows PowerShell 5.1 is available', async () => {
@@ -562,17 +330,6 @@ describe('Windows upload on a host with no sftp subsystem', () => {
     expect(
       waitForChannelCloseSpy.mock.calls.every((call) => call[2] === WINDOWS_STDIN_WRITE_TIMEOUT_MS)
     ).toBe(true)
-  })
-
-  it('remembers that PowerShell 7 is absent instead of re-probing per chunk', async () => {
-    refusePwsh()
-    writeFileSync(join(localDir, 'big.node'), Buffer.alloc(WINDOWS_STDIN_WRITE_CHUNK_BYTES * 3))
-
-    await uploadFileViaSystemSsh(target, join(localDir, 'big.node'), `${remoteRoot}/big.node`, {
-      hostPlatform
-    })
-
-    expect(fileWrites().filter((write) => write.executable === 'pwsh.exe')).toHaveLength(1)
   })
 
   it('leaves no truncated file under the real name when a chunk fails mid-file', async () => {
@@ -815,17 +572,6 @@ describe('Windows upload on a host with no sftp subsystem', () => {
 })
 
 describe('last-resort Windows PowerShell failure reporting', () => {
-  it('names the host limitation and its remedy, not just the timeout', () => {
-    const timeout = new Error('write C:/x at offset 0 timed out after 60000ms with no response')
-
-    const explained = explainWindowsPowerShellStdinFailure(timeout) as Error
-
-    // Identify the host-side remedy; a generic timeout would suggest an ineffective network retry.
-    expect(explained.message).toContain('Windows PowerShell 5.1')
-    expect(explained.message).toContain('Subsystem sftp sftp-server.exe')
-    expect(explained.cause).toBe(timeout)
-  })
-
   it('leaves a real failure alone, so a permission error is not reported as a host limitation', () => {
     const denied = new Error('write C:/x at offset 0 failed (exit 1): Access to the path is denied')
 

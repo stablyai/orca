@@ -1,17 +1,22 @@
+import { journalInputOrder } from './journal-input-order'
+import {
+  journalInputSourceBody,
+  journalInputSourceFamily,
+  journalInputSourceId,
+  journalInputSourceSequence
+} from './journal-input-source'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
-import type {
-  AgentJournalMessageItem,
-  AgentSessionJournalIdentity
-} from '../../../shared/agent-session-journal-types'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionJournalIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import {
   agentJournalItemKey,
   agentJournalSubmissionKey
-} from '../../../shared/agent-session-journal-item-key'
-import { agentSessionSendBodyFingerprint } from '../../../shared/structured-agent-session-send-mutation'
+} from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { agentSessionSendBodyFingerprint } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { SQLITE_TABLE_DISPOSITIONS } from '../../../shared/wsl-move/wsl-move-storage-dispositions'
 import {
   MAX_JOURNAL_APPLIED_SETTLEMENT_IDS,
@@ -91,6 +96,40 @@ function expectSameState(actual: JournalReducerState, expected: JournalReducerSt
     } else if (field === 'queue') {
       expect([...actual.queue.cards]).toStrictEqual([...expected.queue.cards])
       expect(actual.queue.revision).toBe(expected.queue.revision)
+    } else if (field === 'inputs') {
+      const sourceValues = (state: JournalReducerState) =>
+        [...state.inputs.sources].map(([id, source]) => ({
+          id,
+          originalId: journalInputSourceId(source),
+          body: journalInputSourceBody(source),
+          family: journalInputSourceFamily(source),
+          sequence: journalInputSourceSequence(source),
+          epoch: source.epoch,
+          fence: source.fence
+        }))
+      expect(sourceValues(actual)).toStrictEqual(sourceValues(expected))
+      const familyValues = (state: JournalReducerState) =>
+        [
+          ...new Set(
+            [...state.inputs.sources.values()]
+              .map(journalInputSourceFamily)
+              .filter((id) => id !== undefined)
+          )
+        ].map((family) => [
+          family,
+          journalInputOrder(state).familyOriginal(family)?.clientMessageId
+        ])
+      expect(familyValues(actual)).toStrictEqual(familyValues(expected))
+      expect([...actual.inputs.presentations.keys()]).toStrictEqual([
+        ...expected.inputs.presentations.keys()
+      ])
+      expect([...actual.inputs.echoes]).toStrictEqual([...expected.inputs.echoes])
+      expect([...actual.inputs.candidates.keys()]).toStrictEqual([
+        ...expected.inputs.candidates.keys()
+      ])
+      for (const [id, candidate] of actual.inputs.candidates) {
+        expect(candidate).toBe(actual.submissions.get(id))
+      }
     } else if (field === 'derivedTurnScope') {
       expect(actual.derivedTurnScope.snapshot()).toBe(expected.derivedTurnScope.snapshot())
     } else {

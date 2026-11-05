@@ -1,5 +1,5 @@
-import { activeProviderContext } from '../../shared/agent-session-provider-context'
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
+import { activeProviderContext } from '../../shared/agent-session/agent-session-provider-context'
+import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 import { claudeSessionIdForOrcaSession } from './structured/claude-structured-session-id'
 import {
   createClaudeNamingGeneration,

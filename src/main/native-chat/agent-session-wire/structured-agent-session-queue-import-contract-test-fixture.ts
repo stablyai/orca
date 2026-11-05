@@ -1,13 +1,13 @@
 import { afterEach, beforeEach, expect } from 'vitest'
-import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
+import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalAnsweredTurnIdentity,
   type AgentJournalMessageItem
-} from '../../../shared/agent-session-journal-types'
-import { activeProviderContext } from '../../../shared/agent-session-provider-context'
-import { agentSessionSendBodyFingerprint } from '../../../shared/structured-agent-session-send-mutation'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { activeProviderContext } from '../../../shared/agent-session/agent-session-provider-context'
+import { agentSessionSendBodyFingerprint } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import {
   openTestJournalHostDatabase,
   readTestQueueChanges

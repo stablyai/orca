@@ -23,8 +23,7 @@ import {
   cardPropertyChoices,
   cardDisplayChoices
 } from './workspace-option-controls-copy'
-import { ListGroup } from '../components/list/ListGroup'
-import { SectionHeader } from '../components/list/SectionHeader'
+import { ListGroup, SectionHeader } from '../components/list/ListGroup'
 import { CheckRow, ChoiceRows, SwitchRow } from './workspace-option-rows'
 import { choiceLabel, summarizeChecklist } from './workspace-option-values'
 import type { Translate } from '../i18n/mobile-i18n'

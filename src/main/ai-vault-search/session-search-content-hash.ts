@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import type { TranscriptMessage } from '../ai-vault/session-transcript-consumers'
+import type { TranscriptMessage } from '../ai-vault/transcripts/session-transcript-consumers'
 
 // Forked transcripts share an opening prefix even after their tails diverge.
 const CONTENT_HASH_MESSAGE_LIMIT = 8

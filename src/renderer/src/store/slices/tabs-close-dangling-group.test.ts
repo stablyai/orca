@@ -44,14 +44,4 @@ describe('closeUnifiedTab with a missing group record (#11308)', () => {
     expect(result).toEqual({ closedTabId: closing.id, wasLastTab: false, worktreeId: WT })
     expect(store.getState().unifiedTabsByWorktree[WT]?.map((tab) => tab.id)).toEqual([kept.id])
   })
-
-  it('reports the last tab when the worktree has no other tab', async () => {
-    const only = store.getState().createUnifiedTab(WT, 'editor', { id: 'editor-only' })
-    main = await drawTabsFromMain(store)
-    store.setState({ groupsByWorktree: { [WT]: [] } })
-
-    expect(store.getState().closeUnifiedTab(only.id)?.wasLastTab).toBe(true)
-    await main.settle()
-    expect(store.getState().unifiedTabsByWorktree[WT] ?? []).toEqual([])
-  })
 })

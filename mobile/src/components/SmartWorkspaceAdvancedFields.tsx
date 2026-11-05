@@ -6,8 +6,7 @@ import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { MobileSwitch } from './MobileSwitch'
 import { TextField } from './composer-input/TextField'
-import { LIST_ROW_PADDING, ListGroup } from './list/ListGroup'
-import { ListRow } from './list/ListRow'
+import { LIST_ROW_PADDING, ListGroup, ListRow } from './list/ListGroup'
 import { newWorktreeFormStyles } from './new-worktree-form-styles'
 
 type Props = {

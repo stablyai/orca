@@ -12,16 +12,17 @@ export function useMobileNativeChatStructuredComposer(args: {
   /** The host keeps files a phone uploads; an older one refuses the upload. */
   acceptsFiles: boolean
   conversationCommands: readonly AgentSessionConversationCommand[] | undefined
+  compactInstructions?: boolean | undefined
   files: MobileNativeChatFileAttachments
 }): MobileNativeChatStructuredComposer | null {
-  const { structured, acceptsFiles, files } = args
+  const { structured, acceptsFiles, compactInstructions, files } = args
   const conversationCommands = args.conversationCommands ?? NO_COMMANDS
   const { commands, refresh, setMenuOpen } = args.sessionCommands
-  const { files: pendingFiles, attachFiles, removeFiles } = files
+  const { files: pendingFiles, attachFiles, attachPastedText, removeFiles } = files
   // Memoize commands separately so attachment changes cannot rebuild the menu catalog.
   const catalog = useMemo(
-    () => ({ reported: commands, conversationCommands }),
-    [commands, conversationCommands]
+    () => ({ reported: commands, conversationCommands, compactInstructions }),
+    [commands, compactInstructions, conversationCommands]
   )
   return useMemo(
     () =>
@@ -30,7 +31,11 @@ export function useMobileNativeChatStructuredComposer(args: {
             catalog,
             onSlashMenuOpen: refresh,
             onSlashMenuDemand: setMenuOpen,
-            ...(acceptsFiles ? { onAttachFiles: () => void attachFiles() } : {}),
+            onAttachFiles: acceptsFiles ? () => void attachFiles() : undefined,
+            onAttachPastedText:
+              acceptsFiles && attachPastedText
+                ? (text: string) => void attachPastedText(text)
+                : undefined,
             files: pendingFiles,
             onRemoveFile: (id: string) => removeFiles([id])
           }
@@ -38,6 +43,7 @@ export function useMobileNativeChatStructuredComposer(args: {
     [
       acceptsFiles,
       attachFiles,
+      attachPastedText,
       catalog,
       pendingFiles,
       refresh,

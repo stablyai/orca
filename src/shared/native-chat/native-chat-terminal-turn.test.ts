@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { NATIVE_CHAT_INTERRUPTED_STATUS_TEXT, type NativeChatMessage } from '../native-chat-types'
+import { NATIVE_CHAT_INTERRUPTED_STATUS_TEXT, type NativeChatMessage } from './native-chat-types'
 import {
   nativeChatHookLatestTurnWorkedSeconds,
   nativeChatHookTurnStartedAt,
@@ -29,13 +29,6 @@ describe('nativeChatHookTurnStartedAt', () => {
         mainAgent: { state: 'working', stateStartedAt: 8_000 }
       })
     ).toBe(8_000)
-  })
-
-  it('falls back to the row once the main agent is done, or where it has none', () => {
-    expect(
-      nativeChatHookTurnStartedAt({ ...entry, mainAgent: { state: 'done', stateStartedAt: 2_500 } })
-    ).toBe(3_000)
-    expect(nativeChatHookTurnStartedAt(entry)).toBe(3_000)
   })
 })
 

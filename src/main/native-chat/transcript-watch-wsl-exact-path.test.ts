@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as NodeFsPromisesModule from 'node:fs/promises'
-import type * as WslRunningPathFilterModule from '../wsl-running-path-filter'
+import type * as WslRunningPathFilterModule from '../wsl/filesystem/wsl-running-path-filter'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 
 const UBUNTU_HOME = '\\\\wsl.localhost\\Ubuntu\\home\\ada'
@@ -26,19 +26,19 @@ vi.mock('./transcript-watch-engine', () => ({
 }))
 // These cases cover root and path policy; the E9 gate has its own suite.
 vi.mock('./wsl-transcript-running-admission', () => ({ admitWslTranscriptPath: async () => {} }))
-vi.mock('../wsl/wsl-home-unless-stopped', async () => {
-  const wsl = await import('../wsl')
+vi.mock('../wsl/discovery/wsl-home-unless-stopped', async () => {
+  const wsl = await import('../wsl/discovery/distro-catalog')
   return {
     wslHomeUnlessStopped: (distro: string) => wsl.getWslHomeAsync(distro),
     listRunningWslHomeDirsUnlessStopped: () => wsl.listRunningWslHomeDirsAsync()
   }
 })
-vi.mock('../wsl', () => ({
+vi.mock('../wsl/discovery/distro-catalog', () => ({
   getWslHomeAsync: mocks.getWslHomeAsync,
   listRunningWslDistrosAsync: mocks.listRunningWslDistrosAsync,
   listRunningWslHomeDirsAsync: vi.fn(async () => [UBUNTU_HOME])
 }))
-vi.mock('../wsl-running-path-filter', async (importOriginal) => ({
+vi.mock('../wsl/filesystem/wsl-running-path-filter', async (importOriginal) => ({
   ...(await importOriginal<typeof WslRunningPathFilterModule>()),
   filterPathsToRunningWslDistrosAsync: mocks.filterPathsToRunningWslDistrosAsync
 }))

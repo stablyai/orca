@@ -6,7 +6,7 @@ import type {
   PRConflictSummary,
   ProviderCheckSummary
 } from './github/pull-request-types'
-import type { HostedReviewDecision } from './hosted-review'
+import type { HostedReviewDecision } from './source-control/hosted-review/hosted-review-contracts'
 
 // Why: flat owner/repo is inadequate — projects nest (`group/subgroup/project`) and self-hosted hosts must travel with the path for URL/glab targeting.
 export type GitLabProjectRef = { host: string; path: string }
@@ -253,6 +253,15 @@ export type GitLabPipelineJob = {
   duration: number | null
 }
 
+// The MR's own pipeline; its status is the pipeline verdict even when its job list is partial or empty.
+export type GitLabPipeline = {
+  id: number
+  status: string
+  /** Pipeline-level verdict, settled by the MR status rule from the same reply. */
+  checkStatus?: CheckStatus
+  webUrl?: string | null
+}
+
 // Flatten discussions into the work-item details comment list.
 export type GitLabWorkItemDetails = {
   /** repoId is stamped by the renderer's caller — the main process doesn't know Orca's Repo.id. */
@@ -264,6 +273,7 @@ export type GitLabWorkItemDetails = {
   baseSha?: string
   startSha?: string
   files?: GitLabMRFile[]
+  pipeline?: GitLabPipeline
   /** MR-only — populated when the MR's head_pipeline exists. */
   pipelineJobs?: GitLabPipelineJob[]
   /** MR-only reviewers and approval status. */

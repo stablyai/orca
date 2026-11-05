@@ -1,10 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import { readAgentSessionFailureFact } from '../../shared/agent-session-failure'
-import {
-  agentSessionProviderHandleChainHead,
-  agentSessionProviderHandleKey
-} from '../../shared/agent-session-provider-handle'
+import { readAgentSessionFailureFact } from '../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionProviderHandleChainHead } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import { agentSessionProviderHandleKey } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import { CALLER } from '../native-chat/agent-session-wire/structured-agent-session-host-test-harness'
 import { HOST_TEST_SESSION as SESSION } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
@@ -13,7 +11,7 @@ import { GROK, GROK_CONFIG_OPTIONS, PROVIDER_SESSION } from './acp-structured-ad
 import { ACP_HANDLE_TRANSPORT } from './acp-structured-agent-definitions'
 import { restoreJournal } from '../native-chat/agent-session-journal/journal-open'
 import { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
-import { createAcpStructuredLaunchResolver } from '../runtime/structured-agent-launch-composition.test-support'
+import { createAcpStructuredLaunchResolver } from '../runtime/agent-session/launch/structured-agent-launch-composition.test-support'
 import {
   attachParams,
   openHostRig,

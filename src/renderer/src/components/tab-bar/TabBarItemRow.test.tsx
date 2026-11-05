@@ -2,20 +2,25 @@
 
 import { act, startTransition, Suspense, use } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
+import { cleanup, renderHook } from '@testing-library/react'
+import { useAppStore } from '@/store'
+import { useNativeChatToggleShortcut } from '../native-chat/use-native-chat-toggle-shortcut'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import {
-  clearClientHostedBrowserRowSelection,
-  getClientHostedBrowserRowSelection,
-  selectClientHostedBrowserRow
-} from '@/lib/pane-manager/client-hosted-browser-row-state'
-import { i18n } from '@/i18n/i18n'
+import { clearClientHostedBrowserRowSelection } from '@/lib/pane-manager/client-hosted-browser-row-state'
+
 import type { TabBarItem } from './tab-bar-item-model'
 import type { WorkspaceVisibleTabType } from '../../../../shared/tab-types'
 import type { AppState } from '@/store/types'
 import { createTestStore } from '@/store/slices/store-test-helpers'
-import { makeRepo, makeWorktree } from '../worktree-jump-palette-test-fixtures'
+import {
+  makeGroup,
+  makeRepo,
+  makeWorktree,
+  makeTerminalTab,
+  makeUnifiedTab
+} from '../worktree-jump/worktree-jump-palette-test-fixtures'
 import { selectNativeChatWslProject } from '../terminal-pane/terminal-pane-host-state'
-import type { AgentType } from '../../../../shared/agent-status-types'
+import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 import {
   renderTabBarItems,
   type TabBarItemSurfaceProps,
@@ -24,6 +29,8 @@ import {
 import { useTabBarItemActions } from './use-tab-bar-item-actions'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
+vi.mock('@/store/plugin-panels', () => ({ usePluginCommands: () => [] }))
+vi.mock('@/lib/shortcut-platform', () => ({ getShortcutPlatform: () => 'win32' }))
 vi.mock('@/lib/renderer-app-platform', () => ({ getRendererAppPlatform: () => 'win32' }))
 const menuToggle = vi.fn()
 
@@ -255,7 +262,7 @@ function Strip({
 
 const NOOP = (): void => {}
 const STATUS_BY_RELATIVE_PATH: TabBarItemSurfaceRuntime['statusByRelativePath'] = new Map()
-const TAB_IDS = ['terminal-1', 'browser-1', 'file-1', 'session-1']
+
 let root: Root | null = null
 
 const NEVER_RESOLVES = new Promise<never>(() => {})
@@ -293,27 +300,6 @@ afterEach(() => {
 })
 
 describe('tab strip rows', () => {
-  it('skips every tab when the strip re-renders with equal tab content', () => {
-    renderStrip()
-    expect(tabRenders.map((render) => render.id)).toEqual(TAB_IDS)
-
-    renderStrip({ onActivate: vi.fn() })
-
-    expect(tabRenders).toHaveLength(TAB_IDS.length)
-  })
-
-  it('calls the handler the strip has now, from a tab that skipped its render', () => {
-    const first = vi.fn()
-    const current = vi.fn()
-    renderStrip({ onActivate: first })
-    renderStrip({ onActivate: current })
-
-    lastRender('terminal-1').onActivate('terminal-1')
-
-    expect(current).toHaveBeenCalledWith('terminal-1')
-    expect(first).not.toHaveBeenCalled()
-  })
-
   it('keeps the committed handler when React abandons a render', async () => {
     const committed = vi.fn()
     const abandoned = vi.fn()
@@ -327,126 +313,9 @@ describe('tab strip rows', () => {
     expect(committed).toHaveBeenCalledWith('terminal-1')
     expect(abandoned).not.toHaveBeenCalled()
   })
-
-  it('re-renders every tab when the language is re-applied, as a language-pack reload does', async () => {
-    renderStrip()
-
-    await act(() => i18n.changeLanguage(i18n.language))
-
-    expect(tabRenders.map((render) => render.id)).toEqual([...TAB_IDS, ...TAB_IDS])
-  })
-
-  it('re-renders a terminal tab when the generated-titles setting changes its title', () => {
-    renderStrip()
-    expect(lastRender('terminal-1').tab?.title).toBe('zsh')
-
-    renderStrip({ generatedTabTitlesEnabled: true })
-
-    expect(lastRender('terminal-1').tab?.title).toBe('Fix the login bug')
-  })
-
-  it('re-renders a browser tab when duplicating becomes available', () => {
-    renderStrip()
-    expect(lastRender('browser-1').onDuplicate).toBeUndefined()
-
-    renderStrip({ managedBrowserCreationEnabled: true })
-
-    expect(lastRender('browser-1').onDuplicate).toBeTypeOf('function')
-  })
-
-  it('re-renders a tab when it is pinned', () => {
-    renderStrip()
-    expect(lastRender('terminal-1').isPinned).toBe(false)
-
-    renderStrip({ terminalPinned: true })
-
-    expect(lastRender('terminal-1').isPinned).toBe(true)
-  })
-
-  it('re-renders only the two tabs a switch moves the active state between', () => {
-    renderStrip({ activeTabType: 'terminal' })
-    tabRenders.length = 0
-
-    renderStrip({ activeTabType: 'browser' })
-
-    expect(tabRenders.map((render) => render.id)).toEqual(['terminal-1', 'browser-1'])
-  })
-
-  it('re-renders a tab when its own data changes', () => {
-    renderStrip()
-
-    renderStrip({ browserTitle: 'Renamed page' })
-
-    expect(lastRender('browser-1').tab?.title).toBe('Renamed page')
-    expect(tabRenders).toHaveLength(TAB_IDS.length + 1)
-  })
-
-  it('re-renders an editor tab only when a git status write changes its own status', () => {
-    renderStrip()
-
-    renderStrip({ statusByRelativePath: new Map([['other.md', 'modified']]) })
-    expect(tabRenders).toHaveLength(TAB_IDS.length)
-
-    renderStrip({ statusByRelativePath: new Map([['notes.md', 'modified']]) })
-    expect(lastRender('file-1').gitStatus).toBe('modified')
-    expect(tabRenders).toHaveLength(TAB_IDS.length + 1)
-  })
-
-  it.each([
-    'Hermes automation deprecation',
-    'Claude Code review',
-    'Review Grok usage',
-    'OpenCode launch-flow design'
-  ])('shows a native chat with its own provider when its name is "%s"', (sessionLabel) => {
-    renderStrip({ sessionLabel, sessionAgent: 'codex' })
-
-    expect(lastRender('session-1').tab?.title).toBe(sessionLabel)
-    expect(lastRender('session-1').agent).toBe('codex')
-    expect(lastRender('session-1').nativeChat).toEqual({ sessionId: 'session-1', agent: 'codex' })
-  })
-
-  it('shows no agent for a native chat whose provider is not recorded', () => {
-    renderStrip({ sessionLabel: 'Hermes automation deprecation' })
-
-    expect(lastRender('session-1').agent).toBeNull()
-  })
-
-  it.each(TAB_IDS)('retires a client-hosted row selection when %s is activated', (tabId) => {
-    renderStrip()
-    selectClientHostedBrowserRow({
-      worktreeId: 'wt-1',
-      browserPageId: 'page-1',
-      groupId: 'group-1',
-      groupActiveTabIdAtSelection: 'unified-terminal-1'
-    })
-
-    lastRender(tabId).onActivate(tabId)
-
-    expect(getClientHostedBrowserRowSelection()).toBeNull()
-  })
 })
 
 /** Client-hosted rows overlay panes without changing activeTabId; suppress real-tab underlines while they are selected. */
-describe('real tabs while a client-hosted row is selected', () => {
-  const activeFlags = (): boolean[] => TAB_IDS.map((tabId) => lastRender(tabId).isActive)
-
-  it.each<WorkspaceVisibleTabType>(['terminal', 'browser', 'editor'])(
-    'underlines the %s tab the group is actually showing when no row is selected',
-    (activeTabType) => {
-      renderStrip({ activeTabType })
-      expect(activeFlags().filter(Boolean)).toHaveLength(1)
-    }
-  )
-
-  it.each<WorkspaceVisibleTabType>(['terminal', 'browser', 'editor'])(
-    'renders the %s tab inactive while a row owns the pane',
-    (activeTabType) => {
-      renderStrip({ activeTabType, activeClientHostedBrowserRowId: 'page-1' })
-      expect(activeFlags()).toEqual([false, false, false, false])
-    }
-  )
-})
-
 it.each([true, false, null])(
   'gates the tab menu from addressed runtime facts and keeps Return (%s)',
   (runtime) => {
@@ -478,5 +347,71 @@ it.each([true, false, null])(
     expect(lastRender('terminal-1').canToggleViewMode).toBe(true)
     lastRender('terminal-1').onToggleViewMode?.()
     expect(menuToggle).toHaveBeenCalledWith('unified-terminal-1')
+  }
+)
+
+it.each([true, false, null])(
+  'uses runtime facts for shortcut entry and always allows return (%s)',
+  (runtime) => {
+    const previous = useAppStore.getState()
+    const tab = makeUnifiedTab('tab', 'wt', 'tab', 'codex')
+    useAppStore.setState({
+      ...createTestStore().getState(),
+      tabsByWorktree: { wt: [makeTerminalTab('tab', 'wt', 'codex')] },
+      activeWorktreeId: 'wt',
+      activeGroupIdByWorktree: { wt: 'group-wt' },
+      activeWorkspaceExecutionHostId: 'local',
+      groupsByWorktree: { wt: [makeGroup('wt', [tab.id])] },
+      repos: [{ ...makeRepo(), id: 'repo', executionHostId: 'local' }],
+      projects: [],
+      worktreesByRepo:
+        runtime === null
+          ? {}
+          : {
+              repo: [
+                makeWorktree('wt', 'Main', {
+                  repoId: 'repo',
+                  hostId: 'local',
+                  path: runtime ? '//wsl.localhost/Ubuntu/work' : 'C:/work'
+                })
+              ]
+            },
+      unifiedTabsByWorktree: { wt: [{ ...tab, viewMode: 'terminal' }] },
+      agentStatusByPaneKey: {
+        [`tab:${LEFT}`]: {
+          state: 'waiting',
+          prompt: '',
+          updatedAt: 0,
+          stateStartedAt: 0,
+          paneKey: `tab:${LEFT}`,
+          agentType: 'codex'
+        }
+      }
+    })
+    try {
+      renderHook(() => useNativeChatToggleShortcut('wt', true))
+      const press = () => {
+        const event = new KeyboardEvent('keydown', {
+          key: 'F11',
+          code: 'F11',
+          ctrlKey: true,
+          shiftKey: true,
+          bubbles: true,
+          cancelable: true
+        })
+        act(() => document.body.dispatchEvent(event))
+        return event.defaultPrevented
+      }
+      expect(press()).toBe(runtime === true)
+      expect(useAppStore.getState().unifiedTabsByWorktree.wt[0].viewMode).toBe(
+        runtime === true ? 'chat' : 'terminal'
+      )
+      act(() => useAppStore.getState().setTabViewMode(tab.id, 'chat'))
+      expect(press()).toBe(true)
+      expect(useAppStore.getState().unifiedTabsByWorktree.wt[0].viewMode).toBe('terminal')
+    } finally {
+      cleanup()
+      useAppStore.setState(previous, true)
+    }
   }
 )

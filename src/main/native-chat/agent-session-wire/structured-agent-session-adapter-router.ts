@@ -1,7 +1,7 @@
 import type { StructuredAgentSessionAtRestCommands } from './structured-agent-session-at-rest-commands'
-import type { AgentChatPermissionChoice } from '../../../shared/agent-chat-permission-mode'
-import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-types'
-import type { AgentSessionExecutionLocation } from '../../../shared/agent-session-record'
+import type { AgentChatPermissionChoice } from '../../../shared/agent-launch/permissions/agent-chat-permission-mode'
+import type { AgentSessionJournalIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
+import type { AgentSessionExecutionLocation } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import type { StructuredAgentSessionAcquisitionReceipt } from './structured-agent-session-startup-attempt-contract'
 import type {
@@ -57,6 +57,12 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
     mode: AgentChatPermissionChoice
   ): boolean | undefined =>
     this.liveOwnerOrNull(sessionId)?.permissionModeRequiresAcquisition?.(sessionId, mode)
+
+  settlePermissionTransition: NonNullable<
+    StructuredAgentSessionAdapter['settlePermissionTransition']
+  > = (input) =>
+    this.liveOwnerOrNull(input.sessionId)?.settlePermissionTransition?.(input) ??
+    Promise.resolve(true)
 
   /** Session support may narrow the owner’s declared rewind, never widen it. */
   rewindSupport: NonNullable<StructuredAgentSessionAdapter['rewindSupport']> = (
@@ -138,6 +144,8 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
   holdsDispatch = (sessionId: string): boolean =>
     this.liveOwnerOrNull(sessionId)?.holdsDispatch?.(sessionId) ?? false
 
+  confirmIdle = (id: string) => this.liveOwnerOrNull(id)?.confirmIdle?.(id)
+
   liveTurnId = (sessionId: string): string | null | undefined =>
     this.liveOwnerOrNull(sessionId)?.liveTurnId?.(sessionId)
 
@@ -155,6 +163,16 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
   holdsLiveProviderProcess = (sessionId: string, acquisitionGeneration: string): boolean =>
     this.liveOwnerOrNull(sessionId)?.holdsLiveProviderProcess?.(sessionId, acquisitionGeneration) ??
     false
+
+  // A start's owner outlives its route: exit acknowledgment may drop the route while the owner
+  // still reads its ending, so both calls reach the adapters by exact generation, not by route.
+  startupEnding = (sessionId: string, acquisitionGeneration: string) =>
+    this.adapters()
+      .map((adapter) => adapter.startupEnding?.(sessionId, acquisitionGeneration))
+      .find((ending) => ending !== undefined)
+
+  retireStartup = (sessionId: string, acquisitionGeneration: string): void =>
+    this.adapters().forEach((adapter) => adapter.retireStartup?.(sessionId, acquisitionGeneration))
 
   awaitStoppedRequestEnd = async (sessionId: string, stoppedAt: number) =>
     this.liveOwnerOrNull(sessionId)?.awaitStoppedRequestEnd?.(sessionId, stoppedAt)

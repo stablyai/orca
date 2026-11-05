@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
 import {
   closeProviderTimelineRigs,
   providerTurnId,
   SESSION
 } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
-import { agentSessionLaunchFolderMissing } from '../runtime/agent-session-launch-directory'
+import { agentSessionLaunchFolderMissing } from '../runtime/agent-session/agent-session-launch-directory'
 import { tick } from './acp-scripted-agent.test-support'
 import {
   GROK,

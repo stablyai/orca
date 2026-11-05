@@ -2,20 +2,20 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
-} from '../../../../shared/protocol-version'
+} from '../../../../shared/agent-session/agent-session-runtime-capabilities'
 import {
   HOST_TEST_SESSION,
   hostTestAttachParams,
   hostTestOperationId
 } from '../../../native-chat/agent-session-wire/structured-agent-session-host-test-data'
-import { seedTestAgentSessionStoreFromNewerBuild } from '../../agent-session-record-store-test-harness'
-import { OrcaRuntimeRpcServer } from '../../runtime-rpc'
-import { DeviceRegistry } from '../../device-registry'
+import { seedTestAgentSessionStoreFromNewerBuild } from '../../agent-session/records/agent-session-record-store-test-harness'
+import { OrcaRuntimeRpcServer } from '../server/runtime-rpc'
+import { DeviceRegistry } from '../server/pairing/device-registry'
 import WebSocket from 'ws'
 import { SESSION_TAB_METHODS } from './session-tabs'
 import { STRUCTURED_AGENT_SESSION_METHODS } from './structured-agent-session'
 import { closeStructuredAgentSessionChild } from '../../agent-session/structured-agent-session-close'
-import { devicePrincipalOf } from '../../device-principal'
+import { devicePrincipalOf } from '../server/pairing/device-principal'
 import {
   WORKTREE,
   SOURCE_TAB,

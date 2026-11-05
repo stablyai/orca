@@ -14,13 +14,13 @@ import type {
   StructuredAgentSessionQueuedMessagesController
 } from './use-structured-agent-session-queued-messages'
 import { NativeChatPendingIcon } from './NativeChatPendingIcon'
-import type { AgentSessionFailureFact } from '../../../../shared/agent-session-failure'
+import type { AgentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
 import { NATIVE_CHAT_ROOT_SELECTOR } from '@/lib/native-chat-paste-request'
 import { focusNativeChatPromptCard } from './use-native-chat-prompt-card-focus'
 import {
   headSteerableQueuedMessageCard,
   queuedMessageCardNeedsAttention
-} from '../../../../shared/structured-agent-session-queued-cards'
+} from '../../../../shared/agent-session/view/structured-agent-session-queued-cards'
 import type { QueuedEditAttachTarget } from './NativeChatQueuedMessageComposer'
 
 /** Keep host-held drafts outside the transcript until consumed; keep the live region mounted for the first card. */

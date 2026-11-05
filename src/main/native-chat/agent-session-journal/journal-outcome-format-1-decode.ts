@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { createJournalReducerState, type JournalReducerState } from './journal-reducer'
 import { JournalDerivedTurnScope } from './journal-derived-turn-scope'
 import {
@@ -78,6 +78,9 @@ function applyScalar(state: JournalReducerState, key: string, value: unknown): v
       return
     case 'oldestSequence':
       state.oldestSequence = f.oldestSequence.parse(value)
+      return
+    case 'contextBoundary':
+      state.contextBoundary = f.contextBoundary.parse(value) ?? 1
       return
     case 'highestFence':
       state.highestFence = f.highestFence.parse(value)

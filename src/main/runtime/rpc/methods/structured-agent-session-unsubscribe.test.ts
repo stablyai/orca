@@ -2,7 +2,7 @@ import '../unused-default-rpc-methods.test-fixture'
 // Unsubscribe stops only that transcript's projection/sends; sibling streams continue.
 
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/agent-session-runtime-capabilities'
 import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import {
   createRestTestRig,

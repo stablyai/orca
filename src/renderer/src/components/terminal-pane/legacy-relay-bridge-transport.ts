@@ -111,6 +111,7 @@ export function createLegacyRelayBridgeTransport(ptyId: string, inner: PtyTransp
       if (result.status === 'attached') {
         adoptViewer(seq, result.acquisitionId)
         clearUnreachable()
+        callbacks?.onConnect?.()
       } else if (result.status === 'exited' || result.status === 'not-bridged') {
         clearUnreachable()
         callbacks?.onExit?.(-1)
@@ -205,6 +206,10 @@ export function createLegacyRelayBridgeTransport(ptyId: string, inner: PtyTransp
   }
 
   const bridged = (): boolean => mode === 'bridge'
+  const writeBridged = (data: string): boolean => {
+    api?.write({ ptyId, data })
+    return viewer !== null
+  }
   const innerRecoveryState = inner.getRecoveryState?.bind(inner)
   const innerSnapshotOutcome = inner.serializeBufferOutcome?.bind(inner)
 
@@ -231,6 +236,7 @@ export function createLegacyRelayBridgeTransport(ptyId: string, inner: PtyTransp
     getConnectionId: () => (bridged() ? null : inner.getConnectionId?.()),
     ownsRecovery: () => (bridged() ? false : (inner.ownsRecovery?.() ?? false)),
     retryRecovery: () => (bridged() ? false : (inner.retryRecovery?.() ?? false)),
+    reopenAfterHostReturned: () => !bridged() && (inner.reopenAfterHostReturned?.() ?? false),
     setOutputPaused: (paused) => {
       if (!bridged()) {
         return inner.setOutputPaused?.(paused) ?? false
@@ -265,24 +271,12 @@ export function createLegacyRelayBridgeTransport(ptyId: string, inner: PtyTransp
       }
       inner.disconnect()
     },
-    sendInput: (data, inputKind) => {
-      if (bridged()) {
-        api?.write({ ptyId, data })
-        return viewer !== null
-      }
-      return inner.sendInput(data, inputKind)
-    },
-    sendInputImmediate: (data) => {
-      if (bridged()) {
-        api?.write({ ptyId, data })
-        return viewer !== null
-      }
-      return inner.sendInputImmediate(data)
-    },
+    sendInput: (data, inputKind) =>
+      bridged() ? writeBridged(data) : inner.sendInput(data, inputKind),
+    sendInputImmediate: (data) => (bridged() ? writeBridged(data) : inner.sendInputImmediate(data)),
     sendInputAccepted: async (data, inputKind, options) => {
       if (bridged()) {
-        api?.write({ ptyId, data })
-        return viewer !== null
+        return writeBridged(data)
       }
       return inner.sendInputAccepted
         ? inner.sendInputAccepted(data, inputKind, options)

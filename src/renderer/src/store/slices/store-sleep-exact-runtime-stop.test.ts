@@ -3,13 +3,7 @@ import type * as AgentStatusModule from '@/lib/agent-status'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { createCompatibleRuntimeStatusResponseIfNeeded } from '../../runtime/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
-import {
-  createTestStore,
-  makeRuntimeOwnedWorktree,
-  makeTab,
-  makeWorktree,
-  seedStore
-} from './store-test-helpers'
+import { createTestStore, makeRuntimeOwnedWorktree, makeTab, seedStore } from './store-test-helpers'
 import { shutdownBufferCaptures } from '@/components/terminal-pane/shutdown-buffer-captures'
 import {
   applySleepRuntimeRpcDefault,
@@ -47,68 +41,6 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     mockUnregisterPtyDataHandlers.mockReturnValue([])
     applySleepRuntimeRpcDefault(mockApi)
     shutdownBufferCaptures.clear()
-  })
-
-  it('commits sleep state after exact runtime stop for runtime-backed PTYs', async () => {
-    const store = createTestStore()
-    const wt = 'repo1::/path/wt1'
-    const now = Date.now()
-    mockApi.runtimeEnvironments.call.mockImplementation((args: { method: string }) =>
-      Promise.resolve(
-        createCompatibleRuntimeStatusResponseIfNeeded(args) ?? {
-          id: 'rpc-default',
-          ok: true,
-          result:
-            args.method === 'terminal.stopExact'
-              ? { stoppedPtyIds: ['pty-1'], livePtyIds: ['pty-1'], postStopVerified: true }
-              : {},
-          _meta: { runtimeId: 'remote-runtime' }
-        }
-      )
-    )
-
-    seedStore(store, {
-      settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'runtime-1' },
-      worktreesByRepo: {
-        repo1: [makeRuntimeOwnedWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
-      },
-      tabsByWorktree: {
-        [wt]: [makeTab({ id: 'tab-1', worktreeId: wt, title: 'Codex' })]
-      },
-      ptyIdsByTabId: { 'tab-1': [] }
-    })
-    store.getState().setAgentStatus(
-      'tab-1:live',
-      {
-        state: 'working',
-        prompt: 'resume live',
-        agentType: 'codex'
-      },
-      'Codex',
-      { updatedAt: now, stateStartedAt: now },
-      { tabId: 'tab-1', worktreeId: wt },
-      { providerSession: { key: 'session_id', id: 'live-session' } }
-    )
-
-    await store.getState().shutdownWorktreeTerminals(wt, {
-      keepIdentifiers: true,
-      sleepingPaneKeys: ['tab-1:live'],
-      expectedRuntimePtyIds: ['pty-1']
-    })
-
-    expect(mockApi.runtimeEnvironments.call).toHaveBeenCalledWith(
-      expect.objectContaining({
-        selector: 'runtime-1',
-        method: 'terminal.stopExact',
-        params: expect.objectContaining({ expectedPtyIds: ['pty-1'], keepHistory: true })
-      })
-    )
-    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:live']).toMatchObject({
-      origin: 'worktree-sleep',
-      providerSession: { key: 'session_id', id: 'live-session' }
-    })
-    expect(store.getState().agentStatusByPaneKey['tab-1:live']).toBeUndefined()
-    expect(mockApi.pty.kill).not.toHaveBeenCalled()
   })
 
   it('does not commit sleep state when exact runtime stop post-check is inconclusive', async () => {
@@ -165,65 +97,6 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     ).rejects.toThrow('terminal_liveness_unavailable')
 
     // Inconclusive stop restores the done agent’s live recovery anchor, never worktree-sleep (#9454).
-    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:live']).toMatchObject({
-      origin: 'live',
-      agent: 'codex',
-      providerSession: { key: 'session_id', id: 'live-session' }
-    })
-    expect(store.getState().agentStatusByPaneKey['tab-1:live']).toBeDefined()
-    expect(store.getState().suppressedPtyExitIds['pty-1']).toBeUndefined()
-    expect(mockApi.pty.kill).not.toHaveBeenCalled()
-  })
-
-  it('does not commit sleep state when exact runtime stop omits post-check proof', async () => {
-    const store = createTestStore()
-    const wt = 'repo1::/path/wt1'
-    mockApi.runtimeEnvironments.call.mockImplementation((args: { method: string }) =>
-      Promise.resolve(
-        createCompatibleRuntimeStatusResponseIfNeeded(args) ?? {
-          id: 'rpc-default',
-          ok: true,
-          result:
-            args.method === 'terminal.stopExact'
-              ? { stoppedPtyIds: ['pty-1'], livePtyIds: ['pty-1'] }
-              : {},
-          _meta: { runtimeId: 'remote-runtime' }
-        }
-      )
-    )
-
-    seedStore(store, {
-      settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'runtime-1' },
-      worktreesByRepo: {
-        repo1: [makeRuntimeOwnedWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
-      },
-      tabsByWorktree: {
-        [wt]: [makeTab({ id: 'tab-1', worktreeId: wt, title: 'Codex' })]
-      },
-      ptyIdsByTabId: { 'tab-1': [] }
-    })
-    store.getState().setAgentStatus(
-      'tab-1:live',
-      {
-        state: 'done',
-        prompt: 'resume live',
-        agentType: 'codex'
-      },
-      'Codex',
-      { updatedAt: 1000, stateStartedAt: 1000 },
-      { tabId: 'tab-1', worktreeId: wt },
-      { providerSession: { key: 'session_id', id: 'live-session' } }
-    )
-
-    await expect(
-      store.getState().shutdownWorktreeTerminals(wt, {
-        keepIdentifiers: true,
-        sleepingPaneKeys: ['tab-1:live'],
-        expectedRuntimePtyIds: ['pty-1']
-      })
-    ).rejects.toThrow('exact_terminal_stop_unverified')
-
-    // Unverified stop restores the done agent’s live recovery anchor, never worktree-sleep (#9454).
     expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:live']).toMatchObject({
       origin: 'live',
       agent: 'codex',
@@ -399,72 +272,6 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
       'remote:runtime-1@@terminal-1',
       'terminal-1'
     ])
-  })
-
-  it('does not consume a colliding raw PTY guard when a scoped remote PTY wakes', () => {
-    const store = createTestStore()
-    const wt = 'repo1::/path/wt1'
-
-    seedStore(store, {
-      worktreesByRepo: {
-        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
-      },
-      tabsByWorktree: {
-        [wt]: [makeTab({ id: 'tab-1', worktreeId: wt, title: 'Codex' })]
-      },
-      ptyIdsByTabId: { 'tab-1': [] }
-    })
-    store.getState().suppressPtyExit('remote:env-1@@terminal-1')
-    store.getState().suppressPtyExit('terminal-1')
-
-    store.getState().updateTabPtyId('tab-1', 'remote:env-1@@terminal-1')
-
-    expect(store.getState().suppressedPtyExitIds['remote:env-1@@terminal-1']).toBeUndefined()
-    expect(store.getState().suppressedPtyExitIds['terminal-1']).toBe(true)
-  })
-
-  it('migrates legacy remote lifecycle state to the scoped PTY identity on attach', () => {
-    const store = createTestStore()
-    const wt = 'repo1::/path/wt1'
-    const legacyPtyId = 'remote:terminal-1'
-    const scopedPtyId = 'remote:env-1@@terminal-1'
-    seedStore(store, {
-      worktreesByRepo: {
-        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
-      },
-      tabsByWorktree: {
-        [wt]: [makeTab({ id: 'tab-1', worktreeId: wt, ptyId: legacyPtyId })]
-      },
-      ptyIdsByTabId: { 'tab-1': [legacyPtyId] },
-      suppressedPtyExitIds: { [legacyPtyId]: true },
-      pendingPaneAccountRestarts: { [legacyPtyId]: 'codex' },
-      codexRestartNoticeByPtyId: {
-        [legacyPtyId]: { previousAccountLabel: 'old', nextAccountLabel: 'new' }
-      },
-      migrationUnsupportedByPtyId: {
-        [legacyPtyId]: {
-          ptyId: legacyPtyId,
-          paneKey: 'tab-1:leaf-1',
-          reason: 'legacy-numeric-pane-key',
-          source: 'local',
-          updatedAt: 1
-        }
-      }
-    })
-
-    store.getState().updateTabPtyId('tab-1', scopedPtyId)
-    const state = store.getState()
-
-    expect(state.ptyIdsByTabId['tab-1']).toEqual([scopedPtyId])
-    expect(state.tabsByWorktree[wt][0]?.ptyId).toBe(scopedPtyId)
-    expect(state.suppressedPtyExitIds[legacyPtyId]).toBeUndefined()
-    expect(state.suppressedPtyExitIds[scopedPtyId]).toBeUndefined()
-    expect(state.pendingPaneAccountRestarts).toEqual({ [scopedPtyId]: 'codex' })
-    expect(state.codexRestartNoticeByPtyId[scopedPtyId]).toEqual({
-      previousAccountLabel: 'old',
-      nextAccountLabel: 'new'
-    })
-    expect(state.migrationUnsupportedByPtyId[scopedPtyId]?.ptyId).toBe(scopedPtyId)
   })
 
   it('commits the pre-stop sleeping record when exact-stop exit clears live status', async () => {

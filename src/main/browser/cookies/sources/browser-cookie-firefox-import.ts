@@ -11,7 +11,7 @@ import {
   type CookieImportOptions
 } from '../browser-cookie-import-pipeline'
 import { databaseSameSite, deriveUrl, type ValidatedCookie } from './browser-cookie-validation'
-import type { DetectedBrowser } from './browser-cookie-detection-types'
+import type { DetectedBrowser } from './browser-cookie-source-profiles'
 import { diag } from '../browser-cookie-import-diagnostics'
 
 export async function importCookiesFromFirefox(

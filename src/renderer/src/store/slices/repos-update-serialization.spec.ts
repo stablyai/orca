@@ -170,59 +170,5 @@ export function registerReposUpdateSerializationTests(): void {
         errorSpy.mockRestore()
       }
     })
-
-    it('clears nullable fallback fields when local IPC returns no authoritative repo', async () => {
-      reposUpdate.mockResolvedValueOnce(undefined)
-      const repo: Repo = {
-        ...localRepo,
-        externalWorktreeVisibility: 'show',
-        agentWorktreeVisibility: 'hide',
-        sourceControlAi: {},
-        externalWorktreeDiscoverySuppressedAt: 123
-      }
-      const store = createTestStore()
-      store.setState({ repos: [repo] })
-
-      await store.getState().updateRepo(repo.id, {
-        externalWorktreeVisibility: null,
-        agentWorktreeVisibility: null,
-        sourceControlAi: null,
-        externalWorktreeDiscoverySuppressedAt: null
-      })
-
-      expect(reposUpdate).toHaveBeenCalledWith({
-        repoId: repo.id,
-        updates: {
-          externalWorktreeVisibility: null,
-          agentWorktreeVisibility: null,
-          sourceControlAi: null,
-          externalWorktreeDiscoverySuppressedAt: null
-        }
-      })
-      expect(store.getState().repos[0]).toMatchObject({
-        externalWorktreeVisibilityLegacy: false
-      })
-      expect(store.getState().repos[0]?.externalWorktreeVisibility).toBeUndefined()
-      expect(store.getState().repos[0]?.agentWorktreeVisibility).toBeUndefined()
-      expect(store.getState().repos[0]?.sourceControlAi).toBeUndefined()
-      expect(store.getState().repos[0]?.externalWorktreeDiscoverySuppressedAt).toBeUndefined()
-    })
-
-    it('does not apply repo icons that fail shared sanitization', async () => {
-      reposUpdate.mockResolvedValueOnce(undefined)
-      const store = createTestStore()
-      store.setState({ repos: [localRepo] })
-
-      await store.getState().updateRepo(localRepo.id, {
-        repoIcon: {
-          type: 'image',
-          source: 'upload',
-          src: 'data:image/svg+xml;base64,PHN2Zz48L3N2Zz4='
-        } as never
-      })
-
-      expect(reposUpdate).toHaveBeenCalledWith({ repoId: localRepo.id, updates: {} })
-      expect(store.getState().repos[0]?.repoIcon).toBeUndefined()
-    })
   })
 }

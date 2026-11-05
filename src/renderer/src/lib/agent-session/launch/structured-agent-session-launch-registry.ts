@@ -1,31 +1,32 @@
 import { launchStateLifecycle } from '../../structured-agent-session-launch-lifecycle'
-export { launchStateLifecycle } from '../../structured-agent-session-launch-lifecycle'
 import { forgetStructuredSessionSelection } from '../../structured-agent-session-selection-controller'
 import { useSyncExternalStore } from 'react'
-import type { TuiAgent } from '../../../../../shared/tui-agent'
-import type { StructuredLaunchFailure } from '../../structured-agent-session-launch-failure'
-import type { StructuredAgentSessionResumeSource } from '../../../../../shared/structured-agent-session-create'
+import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
+import type { StructuredLaunchFailure } from './structured-agent-session-launch-failure'
+import type { StructuredAgentSessionResumeSource } from '../../../../../shared/agent-session/structured-agent-session-create'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../../shared/execution-host'
 import type { StructuredLaunchRecoveryState } from './structured-agent-session-launch-recovery'
-import type { StructuredLaunchSelection } from '../../structured-agent-session-launch-options'
+import type { StructuredLaunchSelection } from './structured-agent-session-launch-options'
 import type {
   StructuredAgentLaunchOptions,
   StructuredLaunchCallerGroup
-} from '../../structured-agent-session-launch-callers'
+} from './structured-agent-session-launch-callers'
 import {
   deleteStructuredAgentLaunchRecord,
   hasStructuredAgentLaunchCancellationTombstonePersisted,
   readStructuredAgentLaunchRecord,
   writeStructuredAgentLaunchRecord
 } from './structured-agent-session-launch-persistence'
-import type { StructuredAgentLaunchPersistedRecord } from './structured-agent-session-launch-record'
-import { structuredAgentLaunchRecordFor } from './structured-agent-session-launch-record'
+import {
+  type StructuredAgentLaunchPersistedRecord,
+  structuredAgentLaunchRecordFor
+} from './structured-agent-session-launch-record'
 import {
   resetStructuredAgentLaunchCancellationForTests,
   retireAbsentStructuredAgentLaunchCancellations,
   retireStructuredAgentLaunchCancellation
 } from '../../launch-cancel-tombstones-compat/structured-agent-session-launch-cancellation'
-import { resetStructuredAgentLocalLaunchCancelsForTests } from '../../structured-agent-session-local-launch-cancel'
+import { resetStructuredAgentLocalLaunchCancelsForTests } from './structured-agent-session-local-launch-cancel'
 
 export type StructuredLaunchState = StructuredLaunchRecoveryState & {
   identity: string
@@ -38,6 +39,8 @@ export type StructuredLaunchState = StructuredLaunchRecoveryState & {
   selection: StructuredLaunchSelection
   /** A host list showed the chat, so its create reply needs no protection from older lists. */
   hostListed?: true
+  /** The bounded caller finished; this identity may still observe exact late evidence. */
+  operationEnded?: true
 }
 
 export type StructuredAgentLaunchStatus = 'idle' | 'pending' | 'unknown'
@@ -144,6 +147,12 @@ export function getStructuredAgentSessionLaunchLifecycle(
   return getPersistedStructuredAgentLaunchRecord(sessionId)?.lifecycle ?? null
 }
 
+export {
+  getStructuredAgentSessionLaunchResumes,
+  structuredAgentSessionLaunchHasRetainedInput,
+  settleStructuredLaunchFirstMessageFromJournal
+} from './structured-agent-session-launch-input'
+
 /** The host a launch still owed an outcome was sent to, in memory or persisted across a reload. */
 export function getStructuredAgentSessionLaunchOwner(
   sessionId: string
@@ -152,15 +161,6 @@ export function getStructuredAgentSessionLaunchOwner(
     getStructuredLaunchStateBySessionId(sessionId)?.intent.executionHostId ??
     getPersistedStructuredAgentLaunchRecord(sessionId)?.executionHostId
   )
-}
-
-/** The launch adopts an existing conversation, which may keep a model of its own. */
-export function getStructuredAgentSessionLaunchResumes(sessionId: string): boolean {
-  const state = getStructuredLaunchStateBySessionId(sessionId)
-  const resumeFrom = state
-    ? state.intent.params.resumeFrom
-    : getPersistedStructuredAgentLaunchRecord(sessionId)?.resumeFrom
-  return resumeFrom !== undefined
 }
 
 export function getStructuredAgentSessionLaunchFailure(
@@ -237,8 +237,3 @@ export function retireAbsentStructuredAgentSessionLaunchCancellationTombstones(
   }
   return changed
 }
-
-export {
-  markStructuredAgentSessionLaunchCancelled,
-  markStructuredAgentSessionLaunchCancelledSilently
-} from './structured-agent-session-launch-cancel'

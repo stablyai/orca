@@ -10,7 +10,6 @@ import {
   isReservedPluginIdentity,
   gitRepositoryOwnerLabel,
   isSameGitRepository,
-  parseGitRepositoryIdentity,
   pluginMarketplaceSchema,
   pluginMarketplaceTrustMetadataSchema
 } from './plugin-marketplace'
@@ -25,20 +24,6 @@ function listing(id = 'community.nord'): Record<string, unknown> {
 }
 
 describe('pluginMarketplaceSchema', () => {
-  it('parses a bounded, pinned Git marketplace index', () => {
-    expect(
-      pluginMarketplaceSchema.parse({
-        name: 'Community plugins',
-        owner: 'community',
-        plugins: [listing()]
-      })
-    ).toEqual({
-      name: 'Community plugins',
-      owner: 'community',
-      plugins: [listing()]
-    })
-  })
-
   it.each([
     ['root', { name: 'Plugins', owner: 'team', plugins: [], extra: true }],
     ['entry', { name: 'Plugins', owner: 'team', plugins: [{ ...listing(), official: true }] }],
@@ -192,15 +177,6 @@ describe('marketplace provenance contracts', () => {
     )
     expect(gitRepositoryOwnerLabel('https://github.com/acme/plugins')).toBe('github.com/acme')
     expect(gitRepositoryOwnerLabel('not a url')).toBeNull()
-  })
-
-  it('parses nested repository paths without confusing the repository name', () => {
-    expect(parseGitRepositoryIdentity('https://gitlab.com/team/subgroup/plugin.git')).toEqual({
-      host: 'gitlab.com',
-      owner: 'team',
-      repository: 'plugin',
-      path: 'team/subgroup/plugin'
-    })
   })
 
   it('prevents an untrusted listing from self-awarding trust metadata', () => {

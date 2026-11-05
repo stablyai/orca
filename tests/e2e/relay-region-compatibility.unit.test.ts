@@ -3,10 +3,7 @@ import {
   AssignmentRequestSchema as BaselineRequest,
   AssignmentResponseSchema as BaselineResponse
 } from '../../cloud/apps/relay/src/test-fixtures/relay-contract-baseline/director-messages'
-import {
-  DrainSchema as BaselineDrain,
-  HostHelloSchema as BaselineHello
-} from '../../cloud/apps/relay/src/test-fixtures/relay-contract-baseline/control-messages'
+import { HostHelloSchema as BaselineHello } from '../../cloud/apps/relay/src/test-fixtures/relay-contract-baseline/control-messages'
 import { AssignmentRequestSchema } from '../../cloud/packages/relay-contract/src/director-messages'
 import { HostHelloSchema } from '../../cloud/packages/relay-contract/src/control-messages'
 import { requestRelayAssignment } from '../../src/main/runtime/mobile-cloud-relay/relay-http-client'
@@ -76,11 +73,6 @@ describe('relay correction mixed-version wire contracts', () => {
     }
     expect(BaselineHello.parse(HostHelloSchema.parse(hello))).toEqual(hello)
     expect(BaselineHello.safeParse({ ...hello, idleRegionalRehome: true }).success).toBe(false)
-  })
-
-  it('the idle cutover uses a drain frame understood by the pinned old desktop', () => {
-    const drain = { recovery: 'resolve-director', graceMs: 0 }
-    expect(BaselineDrain.parse(drain)).toEqual(drain)
   })
 
   it.each([

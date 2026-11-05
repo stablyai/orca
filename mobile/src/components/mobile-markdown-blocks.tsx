@@ -1,4 +1,4 @@
-import type { Code, List, RootContent, Table } from 'mdast'
+import type { Code, List, PhrasingContent, RootContent, Table } from 'mdast'
 import { Fragment, type ReactNode } from 'react'
 import {
   Pressable,
@@ -22,7 +22,9 @@ import { MarkdownText } from './mobile-markdown-text'
 import { codeFenceClosed, plainText } from './mobile-markdown-tree'
 import { MermaidDiagram } from './pr-sidebar/MermaidDiagram'
 import { MobileMarkdownCodeBlock } from './MobileMarkdownCodeBlock'
+import { MobileMarkdownDetails } from './MobileMarkdownDetails'
 import { translate } from '../i18n/mobile-i18n'
+import { pressedStyle } from '../theme/mobile-theme'
 
 /** Prose base size — passed to MermaidDiagram fallback mono text. */
 const MERMAID_BASE = 13
@@ -34,9 +36,11 @@ export type MarkdownBlockContext = MarkdownInlineContext & {
   /** The text is still arriving: a diagram stays code until it stops. */
   growing: boolean
   listText: StyleProp<TextStyle>
+  listMarker: StyleProp<TextStyle>
   /** Interactive children own their touches and must forward the row action. */
   rowLongPress?: () => void
   directives: readonly NativeChatVisualDirective[]
+  /** Null or undefined leaves the image a link. */
   renderImage?: (href: string, alt: string) => ReactNode
   renderVisual?: (directive: NativeChatVisualDirective, index: number) => ReactNode
   mermaidOccurrences: Map<string, number>
@@ -60,6 +64,7 @@ function renderCode(node: Code, key: number, ctx: MarkdownBlockContext): ReactNo
       code={node.value}
       language={node.lang ?? undefined}
       textScale={ctx.textScale}
+      sourceLine={node.position?.start.line}
     />
   )
 }
@@ -70,7 +75,7 @@ function renderList(node: List, key: number, ctx: MarkdownBlockContext, depth: n
     <View key={key} style={styles.list}>
       {node.children.map((item, itemIndex) => (
         <View key={itemIndex} style={styles.listItem}>
-          <NativeText style={[styles.listMarker, ctx.tone.secondary]}>
+          <NativeText style={ctx.listMarker}>
             {item.checked == null
               ? node.ordered
                 ? `${(node.start ?? 1) + itemIndex}.`
@@ -128,6 +133,78 @@ function renderTable(node: Table, key: number, ctx: MarkdownBlockContext): React
   )
 }
 
+function isBlankInline(node: PhrasingContent): boolean {
+  return node.type === 'break' || (node.type === 'text' && node.value.trim() === '')
+}
+
+/** Images draw as blocks between the paragraph's text runs; an image `renderImage` declines stays a link. */
+function renderImageParagraph(
+  children: PhrasingContent[],
+  key: number,
+  ctx: MarkdownBlockContext,
+  text: ParagraphText
+): ReactNode {
+  const { renderImage } = ctx
+  if (!renderImage || !children.some((child) => child.type === 'image')) {
+    return null
+  }
+  const parts: ReactNode[] = []
+  let drewImage = false
+  let run: PhrasingContent[] = []
+  const flushRun = (): void => {
+    if (!run.every(isBlankInline)) {
+      parts.push(
+        <MarkdownText key={parts.length} selectable={text.selectable} style={text.style}>
+          {renderInline(trimRunEdges(run), ctx)}
+        </MarkdownText>
+      )
+    }
+    run = []
+  }
+  for (const child of children) {
+    const image = child.type === 'image' ? renderImage(child.url, child.alt ?? '') : null
+    if (image === null || image === undefined) {
+      run.push(child)
+      continue
+    }
+    flushRun()
+    parts.push(<Fragment key={parts.length}>{image}</Fragment>)
+    drewImage = true
+  }
+  if (!drewImage) {
+    return null
+  }
+  flushRun()
+  // One wrapper whatever the part count, so a growing paragraph never remounts its images.
+  return (
+    <View key={key} style={styles.imageParagraph}>
+      {parts}
+    </View>
+  )
+}
+
+// The line breaks beside an image would otherwise leave blank lines in the text around it.
+function trimRunEdges(run: PhrasingContent[]): PhrasingContent[] {
+  let start = 0
+  let end = run.length
+  while (start < end && run[start]?.type === 'break') {
+    start += 1
+  }
+  while (end > start && run[end - 1]?.type === 'break') {
+    end -= 1
+  }
+  const trimmed = run.slice(start, end)
+  const first = trimmed[0]
+  if (first?.type === 'text') {
+    trimmed[0] = { ...first, value: first.value.trimStart() }
+  }
+  const last = trimmed.at(-1)
+  if (last?.type === 'text') {
+    trimmed[trimmed.length - 1] = { ...last, value: last.value.trimEnd() }
+  }
+  return trimmed
+}
+
 function renderBlock(
   node: RootContent,
   key: number,
@@ -157,15 +234,16 @@ function renderBlock(
           </Fragment>
         ) : null
       }
-      if (node.children.length === 1 && only?.type === 'image' && ctx.renderImage) {
-        return <Fragment key={key}>{ctx.renderImage(only.url, only.alt ?? '')}</Fragment>
+      const withImages = renderImageParagraph(node.children, key, ctx, text)
+      if (withImages) {
+        return withImages
       }
       if (node.children.length === 1 && only?.type === 'image' && /^https?:\/\//i.test(only.url)) {
         return (
           <Pressable
             key={key}
-            style={styles.imageFrame}
-            onPress={() => openMarkdownHref(only.url, ctx.onOpenFile)}
+            style={({ pressed }) => [styles.imageFrame, pressed && pressedStyle]}
+            onPress={() => openMarkdownHref(only.url, ctx)}
             onLongPress={ctx.rowLongPress}
           >
             <NativeText style={styles.link}>
@@ -227,12 +305,25 @@ function renderBlock(
       return renderTable(node, key, ctx)
     case 'thematicBreak':
       return <View key={key} style={styles.rule} />
+    case 'details':
+      return (
+        <MobileMarkdownDetails
+          key={key}
+          open={node.open}
+          summaryStyle={text.style}
+          summary={
+            node.summary.length > 0
+              ? renderInline(node.summary, ctx)
+              : translate('pullRequest.markdownBlocks.details', 'Details')
+          }
+        >
+          {renderBlocks(node.children, ctx, text, depth + 1)}
+        </MobileMarkdownDetails>
+      )
     case 'footnoteDefinition':
       return (
         <View key={key} style={styles.listItem}>
-          <NativeText style={[styles.listMarker, ctx.tone.secondary]}>
-            {`[${node.label ?? node.identifier}]`}
-          </NativeText>
+          <NativeText style={ctx.listMarker}>{`[${node.label ?? node.identifier}]`}</NativeText>
           <View style={styles.listItemBody}>
             {renderBlocks(node.children, ctx, { style: ctx.listText, selectable: true }, depth + 1)}
           </View>

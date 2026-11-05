@@ -1,7 +1,7 @@
 import { mainI18n, translateMain } from '../i18n/main-i18n'
 import { app, BrowserWindow, nativeTheme, type WebContents, type Event } from 'electron'
 import { join } from 'node:path'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { isBackgroundLaunch, showWindowWithoutStealingFocus } from './foreground-activation-policy'
 import { rectHasVisibleAreaOnAnyDisplay } from './window-bounds-validation'
 import { sendToTrustedUIRenderer } from '../ipc/ui'
@@ -14,7 +14,7 @@ import {
   type KeybindingInput,
   type KeybindingOverrides
 } from '../../shared/keybindings'
-import { wslHostsWindowArguments } from '../wsl/wsl-host-gate'
+import { wslHostsWindowArguments } from '../wsl/host-lifecycle/wsl-host-gate'
 
 const MIN_WIDTH = 480
 const MIN_HEIGHT = 360

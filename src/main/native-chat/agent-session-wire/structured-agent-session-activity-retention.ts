@@ -1,4 +1,4 @@
-import type { AgentSessionTurnActivity } from '../../../shared/agent-session-wire'
+import type { AgentSessionTurnActivity } from '../../../shared/agent-session/agent-session-wire'
 
 export const MAX_RETAINED_SESSION_ACTIVITIES = 512
 

@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 import { chmodSync, existsSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { quotePosixShell } from '../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../shared/shell/launch/shell-argument-quoting'
 import {
   REMOTE_COMMAND_DECODER_UNAVAILABLE,
   REMOTE_COMMAND_DECODER_UNAVAILABLE_EXIT,

@@ -1,16 +1,18 @@
-import { createAcpStructuredLaunchResolver } from '../runtime/structured-agent-launch-composition.test-support'
+import { createAcpStructuredLaunchResolver } from '../runtime/agent-session/launch/structured-agent-launch-composition.test-support'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
+import { agentSessionProviderHandleKey } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import type { AgentSessionProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
+import { agentSessionRecordFixture } from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import {
-  agentSessionProviderHandleKey,
-  type AgentSessionProviderHandle
-} from '../../shared/agent-session-provider-handle'
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
-import { agentSessionRecordFixture } from '../../shared/agent-session-record.test-fixture'
-import { replayJournal, restoreJournal } from '../native-chat/agent-session-journal/journal-open'
+  replayJournal,
+  restoreJournal,
+  type JournalLoad
+} from '../native-chat/agent-session-journal/journal-open'
 import {
   openTestJournalHostDatabase,
   closeTestJournalHostDatabase,
@@ -18,19 +20,18 @@ import {
   insertTestJournalRow,
   insertTestJournalRowJson
 } from '../native-chat/agent-session-journal/journal-host-database-test-support'
-import type { JournalLoad } from '../native-chat/agent-session-journal/journal-open'
 import { publishJournalOutcomeEpoch } from '../native-chat/agent-session-journal/journal-outcome-write'
 import { JOURNAL_OUTCOME_FORMAT } from '../native-chat/agent-session-journal/journal-outcome-format'
 import type { JournalRow } from '../native-chat/agent-session-journal/journal-row-schema'
 import { createJournalReducerState } from '../native-chat/agent-session-journal/journal-reducer'
-import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
+import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   createLegacyProviderTimelineIdentityScheme,
   spellProviderTimelineKey
 } from '../native-chat/agent-session-timeline/provider-timeline-identity'
 import { createProviderSpawnSpec } from '../provider-process/provider-process-supervisor'
 import { acpLaunchSpecFor } from './acp-launch-specs'
-import { STRUCTURED_CHILD_ENV_TO_DELETE } from '../runtime/structured-session-child-env'
+import { STRUCTURED_CHILD_ENV_TO_DELETE } from '../runtime/agent-session/environment/structured-session-child-env'
 import { acpSessionNotRestoredItem } from './acp-session-reopen-failure'
 
 const GROK = acpLaunchSpecFor('grok')!

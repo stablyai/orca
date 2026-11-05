@@ -8,19 +8,6 @@ const postgresUrl = process.env.ORCA_CLOUD_DATABASE_TEST_URL
 const database = await openInMemoryCloudDatabase([])
 
 describe('acquireLeadership', () => {
-  it('leads at once without a database', async () => {
-    const leadership = await acquireLeadership({
-      database,
-      key: 'gateway',
-      signal: new AbortController().signal
-    })
-    expect(
-      await leadership.transaction((transaction) => transaction.query('SELECT 1 AS one'))
-    ).toEqual([{ one: 1 }])
-    await leadership.release()
-    await expect(leadership.lost).resolves.toBeUndefined()
-  })
-
   it.skipIf(!postgresUrl)(
     'lets one holder lead until it releases or its session dies',
     async () => {

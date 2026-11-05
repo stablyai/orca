@@ -9,7 +9,7 @@ import { testOrcaSessionId } from '../../shared/orca-session-address-test-fixtur
 import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId
-} from '../../shared/structured-agent-session-projection'
+} from '../../shared/agent-session/view/structured-agent-session-projection'
 import {
   installSqlVisitCounters,
   traceDispatchPredicateVisits,

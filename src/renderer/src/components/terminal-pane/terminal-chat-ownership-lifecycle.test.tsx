@@ -3,10 +3,14 @@ import { act, cleanup, renderHook } from '@testing-library/react'
 import { useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '../../store'
-import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
+import type { TerminalLayoutSnapshot } from '../../../../shared/workspace-layout/terminal-tab-types'
 import { useTerminalPaneChatState } from './use-terminal-pane-chat-state'
 import { useTerminalPaneLayoutPersistence } from './use-terminal-pane-layout-persistence'
-import { makeGroup, makeTerminalTab, makeUnifiedTab } from '../worktree-jump-palette-test-fixtures'
+import {
+  makeGroup,
+  makeTerminalTab,
+  makeUnifiedTab
+} from '../worktree-jump/worktree-jump-palette-test-fixtures'
 import { selectNativeChatWslProject } from './terminal-pane-host-state'
 import { makeFolderWorkspace } from '@/store/slices/worktrees-slice-test-fixtures'
 import { createGlobalSettingsFixture } from '../../../../shared/global-settings-test-fixture'
@@ -30,10 +34,10 @@ import { resolveActiveNativeChatSplitTarget } from '../native-chat/native-chat-l
 import type { PtyTransport } from './pty-transport-types'
 import { createTabsLabelActions } from '../../store/slices/tabs/tabs-label-actions'
 import { detachTerminalLayoutLeaf } from './terminal-layout-leaf-detach'
-import { parseWorkspaceSession } from '../../../../shared/workspace-session-schema'
+import { parseWorkspaceSession } from '../../../../shared/workspace-session/workspace-session-schema'
 import type { RemotePaneLayoutPusher } from './remote-pane-layout-push'
 import type * as TabsHostMirroring from '../../store/slices/tabs/tabs-host-mirroring'
-import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
+import { isTerminalLeafId } from '../../../../shared/workspace-layout/stable-pane-id'
 
 vi.mock('@/lib/renderer-app-platform', () => ({ getRendererAppPlatform: () => 'win32' }))
 
@@ -73,7 +77,8 @@ const mocks = vi.hoisted(() => {
 })
 vi.mock('../../store', async () => {
   const { create } = await import('zustand')
-  const { terminalLayoutEqual } = await import('../../../../shared/terminal-layout-equality')
+  const { terminalLayoutEqual } =
+    await import('../../../../shared/workspace-layout/terminal-layout-equality')
   mocks.state.setTabLayout = (id, layout) => {
     const previous = mocks.state.terminalLayoutsByTabId
     if (layout ? terminalLayoutEqual(previous[id], layout) : !(id in previous)) {

@@ -12,6 +12,14 @@ const storage = vi.hoisted(
   } => ({ values: new Map() })
 )
 
+vi.mock(
+  './settings-screen-frame',
+  async () => (await import('../test-support/settings-chrome-test-double')).settingsFrameDouble
+)
+vi.mock(
+  '../components/list/ListGroup',
+  async () => (await import('../test-support/settings-chrome-test-double')).listGroupDouble
+)
 vi.mock('@react-native-async-storage/async-storage', () => ({
   default: {
     getItem: vi.fn(async (key: string) => {
@@ -35,6 +43,7 @@ vi.mock('react-native', () => ({
 }))
 vi.mock('../components/MobileSwitch', () => ({ MobileSwitch: 'Switch' }))
 vi.mock('react-native-safe-area-context', () => ({
+  SafeAreaView: 'View',
   useSafeAreaInsets: () => ({ top: 0, bottom: 0 })
 }))
 vi.mock('react-native-gesture-handler', () => ({ GestureHandlerRootView: 'View' }))
@@ -53,7 +62,7 @@ vi.mock('lucide-react-native', () => ({
 }))
 vi.mock('../components/PickerModal', () => ({ PickerModal: () => null }))
 vi.mock('../components/TerminalShortcutSettings', () => ({ TerminalShortcutSettings: () => null }))
-vi.mock('../transport/host-store', () => ({ loadHosts: async () => [] }))
+vi.mock('../transport/host-store', () => ({ loadHosts: async () => [], peekHosts: () => null }))
 vi.mock('../transport/settings-host-client-connections', () => ({
   useFocusedSettingsHostClients: () => ({ clients: [], focused: true })
 }))

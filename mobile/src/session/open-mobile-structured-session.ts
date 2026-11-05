@@ -5,11 +5,12 @@ import {
   type StructuredSessionOpenTab,
   type StructuredSessionOpenTarget
 } from '../../../src/shared/open-structured-agent-session'
-import { isStructuredAgentId } from '../../../src/shared/agent-session-provider-handle'
-import { structuredAgentSessionPaneKey } from '../../../src/shared/structured-agent-session-projection'
+import { isStructuredAgentId } from '../../../src/shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { structuredAgentSessionPaneKey } from '../../../src/shared/agent-session/view/structured-agent-session-projection'
 import type { RpcClient } from '../transport/rpc-client'
 import {
   structuredOpenLocation,
+  structuredOpenParty,
   structuredOpenReveal,
   structuredOpenTabs
 } from './mobile-structured-session-open-rpc'
@@ -62,24 +63,30 @@ export async function openMobileStructuredSession(args: {
   const tabs = new Map<string, readonly StructuredSessionOpenTab[]>(
     args.inventory ? [[args.inventory.worktreeId, args.inventory.tabs]] : []
   )
+  const party = async (
+    operation: typeof structuredOpenLocation | typeof structuredOpenParty,
+    address: string,
+    messageIds: readonly string[]
+  ) => {
+    const reply = await stage((options) =>
+      operation.request(
+        args.client,
+        { address, ...(messageIds.length ? { messageIds: [...messageIds] } : {}) },
+        options
+      )
+    )
+    if (!reply.ok) {
+      return structuredSessionOpenFailure(reply.error)
+    }
+    return operation.interpret(reply)
+  }
   return openStructuredAgentSession(args.source, {
     current: () =>
       args.current() &&
       args.client.getState() === 'connected' &&
       args.client.getGeneration?.() === generation,
-    locate: async (address, messageIds) => {
-      const reply = await stage((options) =>
-        structuredOpenLocation.request(
-          args.client,
-          { address, ...(messageIds.length ? { messageIds: [...messageIds] } : {}) },
-          options
-        )
-      )
-      if (!reply.ok) {
-        return structuredSessionOpenFailure(reply.error)
-      }
-      return structuredOpenLocation.interpret(reply)
-    },
+    locate: (address, messageIds) => party(structuredOpenLocation, address, messageIds),
+    open: (address, messageIds) => party(structuredOpenParty, address, messageIds),
     tabs: (target) => tabs.get(target.worktreeId) ?? [],
     refresh: async (target) => {
       const reply = await stage((options) =>

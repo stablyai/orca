@@ -1,3 +1,4 @@
+import { insertAgentReferences, NativeChatAgentReference } from './native-chat-agent-reference'
 import { nativeChatDraftPositions } from './native-chat-composer-draft-memory'
 import { createNativeChatPastedTextHistory } from './native-chat-pasted-text-history'
 import { resolveNativeChatPastedText } from './native-chat-composer-pasted-text-references'
@@ -34,10 +35,13 @@ import type {
   NativeChatPromptEditorProps
 } from './native-chat-composer-input'
 import { NativeChatImageRowProvider } from './NativeChatImageReferencePill'
-import { mountedEditorView } from './native-chat-mounted-editor-view'
+import { focusMountedNativeChatEditor, mountedEditorView } from './native-chat-mounted-editor-view'
 import { NativeChatUnkernedRunDecorations } from './native-chat-unkerned-run-decorations'
 
+import { useNativeChatComposerMount } from './native-chat-composer-mount'
+
 const NO_IMAGES: readonly string[] = []
+const NOT_COMPOSING = (): boolean => false
 
 // `initialValue` only seeds the editor at mount; keep the other props referentially stable or this memo stops helping.
 export const NativeChatPromptEditor = memo(
@@ -51,6 +55,7 @@ function NativePromptEditor({
   positionTarget,
   imageRow = NO_IMAGES,
   inputRef,
+  isComposing = NOT_COMPOSING,
   initialValue,
   disabled,
   placeholder,
@@ -66,7 +71,7 @@ function NativePromptEditor({
   const claimSelection = () => {
     userOwned.current = true
     const position = adopted.current && nativeChatDraftPositions.get(adopted.current)
-    if (position?.at === 'end' && position.target === positionTarget) {
+    if (position && position.at !== 'start' && position.target === positionTarget) {
       position.pending = false
     }
   }
@@ -93,6 +98,7 @@ function NativePromptEditor({
           underline: false,
           trailingNode: false
         }),
+        NativeChatAgentReference,
         NativeChatSkill,
         NativeChatFileReference,
         NativeChatImageReference,
@@ -182,12 +188,12 @@ function NativePromptEditor({
         !editor ||
         !position?.pending ||
         appliedPosition.current === position ||
-        (position.at === 'end' && position.target !== positionTarget)
+        (position.at !== 'start' && position.target !== positionTarget)
       ) {
         return
       }
       if (userOwned.current) {
-        if (position.at === 'end') {
+        if (position.at !== 'start') {
           position.pending = false
         } else if (previousRange) {
           editor.commands.setTextSelection({
@@ -201,13 +207,19 @@ function NativePromptEditor({
       editor.view.dispatch(
         editor.state.tr
           .setSelection(
-            position.at === 'end'
-              ? TextSelection.atEnd(editor.state.doc)
-              : TextSelection.atStart(editor.state.doc)
+            position.at === 'selection'
+              ? TextSelection.create(
+                  editor.state.doc,
+                  promptTextPosition(editor.state.doc, position.from),
+                  promptTextPosition(editor.state.doc, position.to)
+                )
+              : position.at === 'end'
+                ? TextSelection.atEnd(editor.state.doc)
+                : TextSelection.atStart(editor.state.doc)
           )
           .setMeta('preventUpdate', true)
       )
-      if (position.at === 'end') {
+      if (position.at !== 'start') {
         position.pending = false
       }
     },
@@ -224,14 +236,13 @@ function NativePromptEditor({
     return subscribeToNativeChatComposerDraft(scopeKey, capture)
   }, [editor, scopeKey, historyPaths])
 
-  useLayoutEffect(() => {
-    editor?.setEditable(!disabled, false)
-  }, [disabled, editor])
+  useLayoutEffect(() => editor?.setEditable(!disabled, false), [disabled, editor])
 
   const input = useMemo<NativeChatComposerInput | null>(
     () =>
       editor
         ? {
+            insertAgentReferences: (references) => insertAgentReferences(editor, references),
             insertText: (text) => {
               const content = editor.schema.nodeFromJSON(promptTextContent(text))
               editor.view.dispatch(
@@ -303,16 +314,7 @@ function NativePromptEditor({
             get selectionEnd() {
               return promptTextOffset(editor.state.doc, editor.state.selection.to)
             },
-            focus: () => {
-              // A focus request can arrive before the view mounts (a chat opened while its
-              // workspace switches in); tiptap throws then, so wait for the next reveal instead.
-              const view = mountedEditorView(editor)
-              // Focus the editor view so an inserted caret replaces the stale DOM selection.
-              view?.focus()
-              if (view && !editor.isEditable) {
-                view.dom.focus()
-              }
-            },
+            focus: () => focusMountedNativeChatEditor(editor),
             contains: (node) => mountedEditorView(editor)?.dom.contains(node) === true,
             isCaretOnVisualEdge: (edge) => {
               const { selection, doc } = editor.state
@@ -392,6 +394,7 @@ function NativePromptEditor({
     [editor, scopeKey, applyPosition]
   )
   useImperativeHandle(inputRef, () => input!, [input])
+  useNativeChatComposerMount(scopeKey ?? '', input, isComposing, disabled)
 
   return (
     <NativeChatPastedTextScopeProvider value={scopeKey ?? ''}>

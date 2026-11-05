@@ -4,17 +4,18 @@ import { useAppStore } from '../../store'
 import { getCachedTerminalTabForWorktree } from './terminal-tab-lookup'
 import { selectTerminalTabAgentTypesByLeaf } from './terminal-tab-agent-type-index'
 import { collectLeafIdsInOrder, EMPTY_LAYOUT } from './layout-serialization'
-import { sanitizeTerminalLayoutPaneTitles } from '../../../../shared/terminal-pane-title-sanitization'
+import { sanitizeTerminalLayoutPaneTitles } from '../../../../shared/workspace-layout/terminal-pane-title-sanitization'
 import { resolveNativeChatLeafTitleAgent } from './native-chat-leaf-title-agent'
 import { useTerminalPaneStoreActions } from './use-terminal-pane-store-actions'
 import { selectUnifiedTerminalTabFields } from './terminal-unified-tab-lookup'
-import { nativeChatPresentationPolicy } from '../../../../shared/native-chat-availability'
+import { nativeChatPresentationPolicy } from '../../../../shared/native-chat/native-chat-availability'
 import {
   nativeChatLaunchAgentForLeaf,
   resolveNativeChatLeafRoute,
   type NativeChatLeafRoute
 } from '../native-chat/native-chat-leaf-routing'
 import type { TerminalPaneTitleController } from './use-terminal-pane-title-state'
+import { useTerminalPaneChatReadback } from './use-terminal-pane-chat-readback'
 
 export function useTerminalPaneChatState(controller: TerminalPaneTitleController) {
   const {
@@ -263,10 +264,10 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
       setTabViewMode(unifiedTabId, 'terminal')
     }
   }, [setChatLeafId, setTabViewMode, unifiedTabId])
-  const readNativeChatTerminalScreen = useCallback((): string | null => {
-    const pane = managerRef.current?.getPanes().find((candidate) => candidate.leafId === chatLeafId)
-    return pane?.serializeAddon.serialize({ scrollback: 0 }) ?? null
-  }, [chatLeafId, managerRef])
+  const { readNativeChatTerminalScreen, readNativeChatTerminalDraft } = useTerminalPaneChatReadback(
+    managerRef,
+    chatLeafId
+  )
 
   return {
     setTabPaneExpanded,
@@ -297,7 +298,8 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
     handleToggleNativeChat,
     applyNativeChatLeafRoute,
     switchNativeChatToTerminal,
-    readNativeChatTerminalScreen
+    readNativeChatTerminalScreen,
+    readNativeChatTerminalDraft
   }
 }
 

@@ -2,8 +2,8 @@ import { useCallback, useState } from 'react'
 import { RefreshControl, SectionList, View } from 'react-native'
 import { colors, spacing } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import { SectionHeader } from '../components/list/SectionHeader'
-import type { AiVaultSession } from '../../../src/shared/ai-vault-types'
+import { SectionHeader } from '../components/list/ListGroup'
+import type { AiVaultSession } from '../../../src/shared/ai-vault/contracts/ai-vault-types'
 import type { MobileAgentHistorySection } from './agent-history-sections'
 import type {
   MobileAgentHistoryCard,

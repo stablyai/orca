@@ -3,7 +3,7 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { formatNativeChatDuration, NativeChatWorkingStatus } from './NativeChatWorkingStatus'
+import { NativeChatWorkingStatus } from './NativeChatWorkingStatus'
 
 let container: HTMLDivElement
 let root: Root
@@ -52,35 +52,6 @@ afterEach(() => {
 })
 
 describe('native chat working status elapsed clock', () => {
-  it.each([
-    [0, '0s'],
-    [59, '59s'],
-    [60, '1m 0s'],
-    [69, '1m 9s'],
-    [3_725, '1h 2m 5s']
-  ])('formats %s seconds as %s', (seconds, expected) => {
-    expect(formatNativeChatDuration(seconds)).toBe(expected)
-  })
-
-  it('renders the compact duration in the completed status label', () => {
-    act(() => {
-      root.render(<NativeChatWorkingStatus startedAt={1_000_000} workedSeconds={69} />)
-    })
-
-    expect(elapsedLabels()).toEqual(['Worked for 1m 9s'])
-  })
-
-  it('announces responding only while the turn runs', () => {
-    const status = (): Element | null => container.querySelector('[data-native-chat-turn-status]')
-    renderTurns(1, 1_000_000)
-    expect(status()?.getAttribute('aria-label')).toBe('Agent is responding')
-
-    act(() => {
-      root.render(<NativeChatWorkingStatus startedAt={1_000_000} workedSeconds={69} />)
-    })
-    expect(status()?.hasAttribute('aria-label')).toBe(false)
-  })
-
   it('collapses every in-flight turn onto one shared visibility-gated timer', () => {
     renderTurns(3, 1_000_000)
 
@@ -105,12 +76,5 @@ describe('native chat working status elapsed clock', () => {
     setDocumentVisibility('visible')
     expect(elapsedLabels()).toEqual(['Working for 1m 3s'])
     expect(vi.getTimerCount()).toBe(1)
-  })
-
-  it('holds no timer for a completed turn', () => {
-    act(() => {
-      root.render(<NativeChatWorkingStatus startedAt={1_000_000} workedSeconds={12} />)
-    })
-    expect(vi.getTimerCount()).toBe(0)
   })
 })

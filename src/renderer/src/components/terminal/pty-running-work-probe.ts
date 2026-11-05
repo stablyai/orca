@@ -2,12 +2,7 @@ import { inspectRuntimeTerminalProcess } from '@/runtime/runtime-terminal-inspec
 import {
   probePtyRunningWorkWithInspection,
   type PtyRunningWorkProbe
-} from '../../../../shared/pty-running-work-probe'
-
-export type {
-  PtyRunningWorkProbe,
-  PtyRunningWorkVerdict
-} from '../../../../shared/pty-running-work-probe'
+} from '../../../../shared/terminal/pty/lifecycle/pty-running-work-probe'
 
 export function probePtyRunningWork(
   ptyIds: readonly string[],

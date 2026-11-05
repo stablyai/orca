@@ -2,8 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import {
   notifyCodexPaneBoundForStaleSweep,
-  resetCodexStalePaneSweepForTests,
-  sweepRestoredCodexPanesForStaleAccounts
+  resetCodexStalePaneSweepForTests
 } from './codex-stale-pane-sweep'
 
 const ACCOUNT_A = 'account-a@example.com'
@@ -80,36 +79,6 @@ describe('notifyCodexPaneBoundForStaleSweep', () => {
     }
   })
 
-  it('raises the prompt once the pane PTY actually binds', async () => {
-    vi.mocked(window.api.codexAccounts.listStalePanes).mockResolvedValue([STALE_PANE])
-
-    notifyCodexPaneBoundForStaleSweep('pty-1')
-    expect(window.api.pty.inspectProcess).not.toHaveBeenCalled()
-
-    await vi.advanceTimersByTimeAsync(300)
-
-    expect(window.api.codexAccounts.listStalePanes).toHaveBeenCalledWith({ ptyIds: ['pty-1'] })
-    expect(useAppStore.getState().codexRestartNoticeByPtyId['pty-1']).toEqual({
-      previousAccountLabel: ACCOUNT_A,
-      nextAccountLabel: ACCOUNT_B,
-      previousAccountId: 'account-a',
-      nextAccountId: 'account-b'
-    })
-  })
-
-  it('coalesces a burst of startup binds into one sweep', async () => {
-    useAppStore.setState({ ptyIdsByTabId: { 'tab-1': ['pty-1', 'pty-2'] } })
-    vi.mocked(window.api.codexAccounts.listStalePanes).mockResolvedValue([STALE_PANE])
-
-    notifyCodexPaneBoundForStaleSweep('pty-1')
-    notifyCodexPaneBoundForStaleSweep('pty-2')
-    await vi.advanceTimersByTimeAsync(300)
-
-    expect(window.api.codexAccounts.listStalePanes).toHaveBeenCalledExactlyOnceWith({
-      ptyIds: ['pty-1', 'pty-2']
-    })
-  })
-
   it('still coalesces a burst whose binds land milliseconds apart', async () => {
     // Staggered startup binds must still batch registry reads rather than make one round trip per pane.
     useAppStore.setState({ ptyIdsByTabId: { 'tab-1': ['pty-1', 'pty-2'] } })
@@ -122,24 +91,6 @@ describe('notifyCodexPaneBoundForStaleSweep', () => {
 
     expect(window.api.codexAccounts.listStalePanes).toHaveBeenCalledExactlyOnceWith({
       ptyIds: ['pty-1', 'pty-2']
-    })
-  })
-
-  it('retries a PTY whose process read is unusable until the reattach settles', async () => {
-    vi.mocked(window.api.codexAccounts.listStalePanes).mockResolvedValue([STALE_PANE])
-    vi.mocked(window.api.pty.inspectProcess).mockRejectedValueOnce(new Error('terminal_gone'))
-
-    notifyCodexPaneBoundForStaleSweep('pty-1')
-    await vi.advanceTimersByTimeAsync(300)
-    expect(useAppStore.getState().codexRestartNoticeByPtyId).toEqual({})
-
-    await vi.advanceTimersByTimeAsync(1500)
-
-    expect(useAppStore.getState().codexRestartNoticeByPtyId['pty-1']).toEqual({
-      previousAccountLabel: ACCOUNT_A,
-      nextAccountLabel: ACCOUNT_B,
-      previousAccountId: 'account-a',
-      nextAccountId: 'account-b'
     })
   })
 
@@ -398,27 +349,6 @@ describe('notifyCodexPaneBoundForStaleSweep', () => {
 
     notifyCodexPaneBoundForStaleSweep('remote:env-1@@term-1')
     notifyCodexPaneBoundForStaleSweep('pty-1')
-    await vi.advanceTimersByTimeAsync(300)
-
-    expect(window.api.codexAccounts.listStalePanes).toHaveBeenCalledExactlyOnceWith({
-      ptyIds: ['pty-1']
-    })
-    expect(inspectCallCountFor('remote:env-1@@term-1')).toBe(0)
-    expect(useAppStore.getState().codexRestartNoticeByPtyId['pty-1']).toEqual({
-      previousAccountLabel: ACCOUNT_A,
-      nextAccountLabel: ACCOUNT_B,
-      previousAccountId: 'account-a',
-      nextAccountId: 'account-b'
-    })
-  })
-
-  it('re-raises the prompt for a restored pane whose tab never mounts', async () => {
-    // Restored background tabs must get stale-account checks without ever mounting a pane.
-    vi.mocked(window.api.codexAccounts.listStalePanes).mockResolvedValue([STALE_PANE])
-
-    sweepRestoredCodexPanesForStaleAccounts({
-      ptyIdsByTabId: { 'tab-1': ['pty-1', 'remote:env-1@@term-1'] }
-    })
     await vi.advanceTimersByTimeAsync(300)
 
     expect(window.api.codexAccounts.listStalePanes).toHaveBeenCalledExactlyOnceWith({

@@ -1,6 +1,6 @@
-import { agentJournalLinkageFields } from '../../../src/shared/agent-session-journal-producer'
-import { parseAgentJournalItemKey } from '../../../src/shared/agent-session-journal-item-key'
-import type { AgentJournalMessageItem } from '../../../src/shared/agent-session-journal-types'
+import { agentJournalLinkageFields } from '../../../src/shared/agent-session/journal/agent-session-journal-producer'
+import { parseAgentJournalItemKey } from '../../../src/shared/agent-session/journal/agent-session-journal-item-key'
+import type { AgentJournalMessageItem } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
 import type { JournalReplacementItem } from '../../../src/main/native-chat/agent-session-journal/journal-epoch-replacement'
 import type { AgentSessionJournal } from '../../../src/main/native-chat/agent-session-journal/journal-store'
 

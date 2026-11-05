@@ -1,5 +1,5 @@
-import { isTuiAgent } from '../../../../../../shared/tui-agent-config'
-import type { TuiAgent } from '../../../../../../shared/tui-agent'
+import { isTuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
+import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import type { FederationAttachStartInput } from '../federation/federation-start-schema'

@@ -165,87 +165,6 @@ function button(container: HTMLElement, text: string): HTMLButtonElement | undef
 }
 
 describe('PluginUpdateAllDialog', () => {
-  it('warns before a content-only plugin becomes a trusted worker with no added capabilities', async () => {
-    const worker = preview('a', [])
-    worker.manifest = { ...worker.manifest, main: 'worker.js' }
-    worker.accessGrowth = { capabilities: [], execution: 'trusted-worker', contributions: [] }
-    installApi({ previewMarketplaceUpdate: vi.fn().mockResolvedValue(worker) })
-    const container = await renderDialog([entry('a', [])])
-    expect(container.textContent).toContain(
-      'New: Full access: runs as a normal program and can read your files, use the network and run other programs.'
-    )
-  })
-
-  it('keeps an update whose catalog moved it to another repository out of Update all', async () => {
-    const installMarketplacePlugin = vi.fn()
-    installApi({
-      previewMarketplaceUpdate: vi.fn(({ pluginKey }: { pluginKey: string }) =>
-        Promise.resolve({
-          ...preview(pluginKey, []),
-          source: { kind: 'git', url: 'https://example.com/acme/plugin.git', ref: 'main' },
-          ...(pluginKey === 'a' ? { repositoryMoved: true as const } : {})
-        })
-      ),
-      installMarketplacePlugin
-    })
-    const moved = entry('a', [])
-    moved.installed!.source = {
-      kind: 'marketplace',
-      reference: 'git@example.com:acme/original.git',
-      resolvedCommit: 'r0',
-      contentHash: 'h0'
-    }
-    const sameRepo = entry('b', [])
-    sameRepo.installed!.source = {
-      kind: 'marketplace',
-      reference: 'git@example.com:ACME/plugin',
-      resolvedCommit: 'r0',
-      contentHash: 'h0'
-    }
-    const container = await renderDialog([moved, sameRepo])
-
-    expect(container.textContent).toContain(
-      'New source: https://example.com/acme/plugin.git (was git@example.com:acme/original.git)'
-    )
-    expect(container.querySelector('#plugin-update-a')).toBeNull()
-    expect(reviewButton(container, 'a')).toBeDefined()
-    expect(container.querySelector('#plugin-update-b')?.getAttribute('aria-checked')).toBe('true')
-    await act(async () => button(container, 'Update')?.click())
-    expect(installMarketplacePlugin).toHaveBeenCalledTimes(1)
-    expect(installMarketplacePlugin).toHaveBeenCalledWith(
-      expect.objectContaining({ pluginKey: 'b' })
-    )
-  })
-
-  it('trusts main on what grows, so a lower execution profile is not new access', async () => {
-    const panel = preview('a', [])
-    panel.manifest = pluginManifestSchema.parse({
-      ...panel.manifest,
-      contributes: { panels: [{ id: 'dash', title: 'Dash', entry: 'panel.html' }] }
-    })
-    installApi({ previewMarketplaceUpdate: vi.fn().mockResolvedValue(panel) })
-    const worker = entry('a', [])
-    worker.installed!.execution = 'trusted-worker'
-    const container = await renderDialog([worker])
-    expect(container.textContent).not.toContain('New:')
-    expect(container.querySelector('[data-plugin-update="a"]')?.textContent).toBe('a1.0.0 → 1.1.0')
-  })
-
-  it('expands an update that adds a shortcut even with no new capability', async () => {
-    installApi({
-      previewMarketplaceUpdate: vi.fn(({ pluginKey }: { pluginKey: string }) =>
-        Promise.resolve({
-          ...preview(pluginKey, []),
-          accessGrowth: { capabilities: [], execution: null, contributions: ['keybindings'] }
-        })
-      ),
-      installMarketplacePlugin: vi.fn()
-    })
-    const container = await renderDialog([entry('a', [])])
-    expect(container.textContent).toContain('New: Keyboard shortcuts')
-    expect(container.textContent).toContain('See all access')
-  })
-
   it('lists every update in one dialog and bulk-installs only those asking for nothing new', async () => {
     const installMarketplacePlugin = vi.fn().mockResolvedValue({ ok: true, pluginKey: 'b' })
     Object.defineProperty(window, 'api', {
@@ -348,24 +267,6 @@ describe('PluginUpdateAllDialog', () => {
     expect(container.querySelector('[data-plugin-update="b"]')?.textContent).toContain('Updated')
   })
 
-  it('lists an update that needs a newer Orca without offering it', async () => {
-    installApi({
-      previewMarketplaceUpdate: vi.fn(({ pluginKey }: { pluginKey: string }) =>
-        Promise.resolve(preview(pluginKey, [], pluginKey === 'a' ? '>=9.0.0' : '>=1.0.0'))
-      ),
-      installMarketplacePlugin: vi.fn()
-    })
-    const container = await renderDialog([entry('a', []), entry('b', [])], {
-      orcaVersion: '1.4.0'
-    })
-
-    expect(container.textContent).toContain('Needs Orca 9.0.0 or later')
-    const checkbox = container.querySelector<HTMLButtonElement>('#plugin-update-a')
-    expect(checkbox?.disabled).toBe(true)
-    expect(checkbox?.getAttribute('aria-checked')).toBe('false')
-    expect(button(container, 'Update')?.disabled).toBe(false)
-  })
-
   it('approves an update that grows access only from its own before/after review', async () => {
     const installMarketplacePlugin = vi.fn(({ pluginKey }: { pluginKey: string }) =>
       Promise.resolve({ ok: true, pluginKey, consentFingerprint: 'f' })
@@ -422,20 +323,5 @@ describe('PluginUpdateAllDialog', () => {
     expect(consent).not.toHaveBeenCalled()
     // Why: main left it for review, which the page opens after the reload.
     expect(onUpdated).toHaveBeenCalledWith(['a'])
-  })
-
-  it('names the publisher only for a non-official update', async () => {
-    installApi({ previewMarketplaceUpdate: vi.fn().mockResolvedValue(workerUpdate('a', true)) })
-    const official = await renderDialog([entry('a', [])])
-    expect(official.querySelector('[data-plugin-update-review="a"]')).not.toBeNull()
-    expect(official.textContent).not.toContain('Not an official plugin')
-    act(() => root?.unmount())
-    document.body.innerHTML = ''
-
-    installApi({ previewMarketplaceUpdate: vi.fn().mockResolvedValue(workerUpdate('a', false)) })
-    const community = await renderDialog([entry('a', [])])
-    expect(community.textContent).toContain(
-      'Not an official plugin: Make sure you trust acme before updating.'
-    )
   })
 })

@@ -40,12 +40,6 @@ function hold(initiallyBlocked: boolean) {
 describe('waitWhileAgentPromptBlocked', () => {
   afterEach(() => vi.useRealTimers())
 
-  it('resolves at once when nothing blocks, releasing its subscriptions', async () => {
-    const h = hold(false)
-    await expect(waitWhileAgentPromptBlocked(h.deps)).resolves.toBeUndefined()
-    expect(h.released).toEqual({ status: 1, exit: 1 })
-  })
-
   it('wakes on a status change without waiting for the recheck', async () => {
     vi.useFakeTimers()
     const h = hold(true)

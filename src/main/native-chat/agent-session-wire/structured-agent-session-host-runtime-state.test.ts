@@ -5,8 +5,8 @@ import { afterAll, describe, expect, it, vi } from 'vitest'
 import {
   AGENT_SESSION_RECORD_SCHEMA_VERSION,
   type AgentSessionRecord
-} from '../../../shared/agent-session-record'
-import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+} from '../../../shared/agent-session/lifecycle/agent-session-record'
+import { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
 import {
   closeTestJournalHostDatabases,
   openTestJournalHostDatabase

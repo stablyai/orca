@@ -1,6 +1,6 @@
 // Idle ends turns even when results are missing; requires_action stays open for pending user input.
 
-import { claudeText } from './claude-structured-item-translation'
+import { claudeText } from './structured/journal/claude-structured-item-translation'
 import type { ClaudeJournalTranslator } from './claude-journal-translator-contract'
 
 function isClaudeSessionStateFrame(message: Record<string, unknown>): boolean {

@@ -8,7 +8,6 @@ import {
   ScrollView,
   Pressable,
   Platform,
-  ActivityIndicator,
   type ListRenderItem
 } from 'react-native'
 import { Copy, MessageSquare, Send } from 'lucide-react-native'
@@ -22,7 +21,7 @@ import {
 import { MobileHtmlPreview } from '../components/MobileHtmlPreview'
 import { MobilePanZoomImage } from '../components/MobilePanZoomImage'
 import { MobileSvgPreview } from '../components/MobileSvgPreview'
-import { colors } from '../theme/mobile-theme'
+import { colors, pressedStyle } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { styles } from './mobile-session-styles'
@@ -36,7 +35,7 @@ import type {
 } from './mobile-session-route-types'
 import { DiffLineRow } from './MobileSessionDiffLineRow'
 import { sendableMobileDiffComments } from './mobile-diff-comments'
-import { MobileLoadErrorState } from '../components/MobileLoadErrorState'
+import { MobileLoadErrorState, MobileStateView } from '../components/MobileStateView'
 
 type FileReaderProps = {
   doc: FileDocState | undefined
@@ -187,14 +186,10 @@ function FileReaderDocument({
   }, [doc, syntaxLanguage])
 
   if (!doc || doc.status === 'loading') {
-    return (
-      <View style={styles.markdownState}>
-        <ActivityIndicator size="small" color={colors.textSecondary} />
-      </View>
-    )
+    return <MobileStateView loading title={t('session.fileReader.loading', 'Loading file…')} />
   }
   if (doc.status === 'error') {
-    return <MobileLoadErrorState message={doc.message} />
+    return <MobileLoadErrorState error={doc.message} />
   }
 
   if (doc.kind === 'diff') {
@@ -228,9 +223,10 @@ function FileReaderDocument({
             </View>
             <View style={styles.diffNotesActions}>
               <Pressable
-                style={[
+                style={({ pressed }) => [
                   styles.diffNotesActionButton,
-                  !canCopyNotes && styles.diffCommentButtonDisabled
+                  !canCopyNotes && styles.diffCommentButtonDisabled,
+                  pressed && pressedStyle
                 ]}
                 disabled={!canCopyNotes}
                 onPress={() => void diffCommentActions.onCopyAll()}
@@ -240,9 +236,10 @@ function FileReaderDocument({
                 <Text style={styles.diffNotesActionText}>{t('common.copy', 'Copy')}</Text>
               </Pressable>
               <Pressable
-                style={[
+                style={({ pressed }) => [
                   styles.diffNotesActionButton,
-                  !canSendNotes && styles.diffCommentButtonDisabled
+                  !canSendNotes && styles.diffCommentButtonDisabled,
+                  pressed && pressedStyle
                 ]}
                 disabled={!canSendNotes}
                 onPress={diffCommentActions.onSendAll}

@@ -1,9 +1,11 @@
 import { assertRuntimeFileMutationExpectation } from './file-mutation-expectation'
+import { formatEditorText } from '../../editor/format-editor-text'
 import {
   requireLocalRuntimeFileRoute,
   requireRuntimeFileProvider,
   resolveFileExplorerPath,
-  resolveFileExplorerPaths
+  resolveFileExplorerPaths,
+  runtimeFileRouteForTarget
 } from './file-target'
 import type { RuntimeFileCommandHost } from './file-command-host'
 import { resolveRuntimeAuthorizedPath } from './chat-scratch-file-root'
@@ -23,6 +25,28 @@ type RuntimeFileMutationHost = Pick<
 
 export class RuntimeFileMutations {
   constructor(private readonly host: RuntimeFileMutationHost) {}
+
+  async formatFileExplorerText(
+    worktreeSelector: string,
+    relativePath: string,
+    text: string,
+    expectedSshConnectionGeneration?: number,
+    expectedSshTargetId?: string,
+    expectedExecutionHostId?: string
+  ) {
+    const target = await resolveFileExplorerPath(this.host, worktreeSelector, relativePath)
+    assertRuntimeFileMutationExpectation(
+      target.executionHostId,
+      expectedExecutionHostId,
+      expectedSshTargetId,
+      expectedSshConnectionGeneration
+    )
+    return formatEditorText(this.host.requireStore(), target, text, () => {
+      if (runtimeFileRouteForTarget(target).kind !== 'local') {
+        throw new Error('Format on Save does not support SSH-hosted files yet.')
+      }
+    })
+  }
 
   async writeFileExplorerFile(
     worktreeSelector: string,

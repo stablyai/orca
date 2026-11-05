@@ -1,12 +1,14 @@
 // Shared host/command/plan notice presentation: desktop translates the copy; mobile renders it directly.
 
+import { readClaudeModelFallbackFrame } from './claude-model-fallback'
+import { AGENT_SESSION_TURN_NOTICE_PRESENTATION } from '../agent-session/journal/agent-session-turn-notice'
 import {
   isAgentSessionHostStatusPresentation,
   type AgentSessionHostStatusPresentation
-} from '../agent-session-host-status-rows'
-import { AGENT_SESSION_ORCA_STOP_PRESENTATION } from '../agent-session-orca-stop'
+} from '../agent-session/view/agent-session-host-status-rows'
+import { AGENT_SESSION_ORCA_STOP_PRESENTATION } from '../agent-session/lifecycle/agent-session-orca-stop'
 import { NATIVE_CHAT_STOPPED_BEFORE_START_PRESENTATION } from './native-chat-stopped-before-start'
-import type { NativeChatBlock, NativeChatTextBlock } from '../native-chat-types'
+import type { NativeChatBlock, NativeChatTextBlock } from './native-chat-types'
 
 export const NATIVE_CHAT_NOTICE_COPY = {
   compaction: 'Context compacted',
@@ -24,6 +26,7 @@ export type NativeChatNoticeLook =
   /** The host's line in the reader's words, drawn faint. */
   | { kind: 'host-status'; presentation: AgentSessionHostStatusPresentation }
   | { kind: 'plan' }
+  | { kind: 'model-fallback'; from: string; to: string }
   /** Faint, as a system row with no notice of its own is. */
   | { kind: 'aside' }
   | {
@@ -68,6 +71,16 @@ export function nativeChatNoticeLook(block: NativeChatTextBlock): NativeChatNoti
   // Orca stopped the reply, not the agent: stored red for clients that predate it, read as a notice.
   if (presentation === AGENT_SESSION_ORCA_STOP_PRESENTATION) {
     return { kind: 'line', tone: 'notice' }
+  }
+  const modelFallback =
+    !block.failure &&
+    !block.orcaStop &&
+    (presentation === undefined || presentation === AGENT_SESSION_TURN_NOTICE_PRESENTATION) &&
+    (block.tone === undefined || block.tone === 'notice')
+      ? readClaudeModelFallbackFrame(block.providerFrame)
+      : null
+  if (modelFallback) {
+    return { kind: 'model-fallback', ...modelFallback }
   }
   // Declared notification kinds select disclosure; prose and nested failures do not.
   if (presentation === undefined && !block.failure && !block.orcaStop) {

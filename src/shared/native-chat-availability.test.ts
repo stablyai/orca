@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { canToggleNativeChat } from './native-chat-availability'
+import { canToggleNativeChat } from './native-chat/native-chat-availability'
 
 it('offers the old view only for supported WSL agents and always allows returning to terminal', () => {
   for (const [isWslProject, launchAgent, available] of [

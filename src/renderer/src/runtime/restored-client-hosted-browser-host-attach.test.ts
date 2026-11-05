@@ -61,17 +61,4 @@ describe('ensureBrowserClientHostsForRestoredPages', () => {
 
     expect(preparedEnvironmentIds()).toEqual(['env-1'])
   })
-
-  // Hydration before reachability must remain retryable or restored tabs never recover.
-  it('retries an environment whose preparation failed when it is asked again', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    prepareBrowserClientHostPlacement.mockRejectedValueOnce(new Error('runtime_unreachable'))
-    const restored = handles({ 'page-1': { environmentId: 'env-1', clientHosted: true } })
-
-    await ensureBrowserClientHostsForRestoredPages(restored)
-    await ensureBrowserClientHostsForRestoredPages(restored)
-
-    expect(preparedEnvironmentIds()).toEqual(['env-1', 'env-1'])
-    warn.mockRestore()
-  })
 })

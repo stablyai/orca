@@ -1,6 +1,6 @@
 import type { createFixture } from './journal-unsent-send-hold-contract-test-fixture'
 import { describe, expect, it } from 'vitest'
-import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { USER_MESSAGE_SOURCE } from '../../../shared/agent-session/agent-session-message-source'
 import { structuredAgentSessionCompactBody } from '../agent-session-wire/structured-agent-session-command-turn'
 import { unsentSendKeptAsCard } from './journal-unsent-send-hold'
@@ -36,7 +36,7 @@ export function registerJournalUnsentSendHoldRecoveryTests(
       }
     })
 
-    it('rejects mail, a dispatch preamble, a continuation, /compact, an image, and a send no one can attribute', async () => {
+    it('keeps a personal image and rejects mail, a dispatch preamble, a continuation, /compact, and a send no one can attribute', async () => {
       const image: AgentJournalMessageItem = {
         kind: 'message',
         role: 'user',
@@ -64,21 +64,34 @@ export function registerJournalUnsentSendHoldRecoveryTests(
       })
       await fixture.hold(journal)
 
-      expect(journal.queuedMessages.list()).toEqual([])
+      expect(journal.queuedMessages.list()).toEqual([
+        expect.objectContaining({
+          messageId: 'image',
+          body: image,
+          state: 'waiting'
+        })
+      ])
+      expect(journal.submission('image')).toMatchObject({
+        dispatchState: 'rejected',
+        ...fixture.HOST_RESTARTED,
+        keptAsQueuedMessageId: 'image'
+      })
+      await journal.close()
+      const reopened = await fixture.open()
+      expect(reopened.queuedMessages.get('image')?.body).toEqual(image)
       for (const id of [
         'mail',
         'dispatch',
         'continuation',
         'compact',
-        'image',
         'legacy-host',
         'no-origin'
       ]) {
-        expect(journal.submission(id)).toMatchObject({
+        expect(reopened.submission(id)).toMatchObject({
           dispatchState: 'rejected',
           ...fixture.HOST_RESTARTED
         })
-        expect(journal.submission(id)).not.toHaveProperty('keptAsQueuedMessageId')
+        expect(reopened.submission(id)).not.toHaveProperty('keptAsQueuedMessageId')
       }
     })
 

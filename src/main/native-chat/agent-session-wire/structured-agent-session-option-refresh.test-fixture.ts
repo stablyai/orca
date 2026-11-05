@@ -2,13 +2,13 @@ import { expect, it } from 'vitest'
 import { piOptionActualContract } from './structured-agent-session-option-actual.test-fixture'
 import type {
   AgentSessionModelCatalogResult,
-  AgentSessionOptionResult,
-  AgentSessionOptionsResult
-} from '../../../shared/agent-session-wire'
+  AgentSessionOptionResult
+} from '../../../shared/agent-session/agent-session-wire'
+import type { AgentSessionOptionsResult } from '../../../shared/agent-session/options/agent-session-options-result'
 import type {
   PiRefreshHarness,
   PiRefreshMount
-} from '../../../shared/structured-agent-session-option-refresh.test-fixture-contract'
+} from '../../../shared/agent-session/options/structured-agent-session-option-refresh.test-fixture-contract'
 import type { AgentModelCatalogService } from '../agent-model-catalog/agent-model-catalog-service'
 import type { StructuredAgentSessionMutationContext } from './structured-agent-session-host-mutations'
 import type { StructuredAgentSessionLiveOptions } from './structured-agent-session-option-models'

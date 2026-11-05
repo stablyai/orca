@@ -1,17 +1,15 @@
 import { agentPromptObservationSignal } from './agent-prompt-signals'
-import type { RuntimeTerminalWriteOptions } from '../../runtime-terminal-writer'
-import type { WriteSettlement } from '../../../../shared/pty-write-settlement'
-import type { RuntimeLeafRecord } from '../../runtime-terminal-state-records'
+import type { RuntimeTerminalWriteOptions } from './runtime-terminal-writer'
+import type { WriteSettlement } from '../../../../shared/terminal/pty/lifecycle/pty-write-settlement'
+import type { RuntimeLeafRecord } from '../records/runtime-terminal-state-records'
 import type { RuntimeTerminalPromptDelivery } from '../../../../shared/runtime-terminal-send-contract'
 import { OrcaRuntimeWithResolveTerminalPane } from '../recovery/resolve-terminal-pane'
-import { wrapTerminalBracketedPasteText } from '../../../../shared/terminal-bracketed-paste-text'
-import { PROVEN_ABSENT_LEAF_PTY_TTL_MS } from '../../orca-runtime-core'
+import { wrapTerminalBracketedPasteText } from '../../../../shared/terminal/input/terminal-bracketed-paste-text'
+import { PROVEN_ABSENT_LEAF_PTY_TTL_MS } from './proven-absent-leaf-pty'
 import { pruneExpiredProvenAbsentLeafPtyVerdicts } from '../../proven-absent-leaf-pty-verdicts'
 import type { RuntimeTerminalSend } from '../../../../shared/runtime-types'
-import type {
-  RuntimeAgentPromptWriteOptions,
-  TerminalHandleRecord
-} from '../../runtime-terminal-contracts'
+import type { RuntimeAgentPromptWriteOptions } from './agent-prompt-write-options'
+import type { TerminalHandleRecord } from '../identity/terminal-handle-records'
 import {
   assertTerminalInputWithinLimitWithYield,
   buildTerminalSendPayload
@@ -19,7 +17,7 @@ import {
 import {
   agentPromptTakesLeadLine,
   buildAgentPromptPasteBytes
-} from '../../../../shared/agent-prompt-injection'
+} from '../../../../shared/agent-launch/startup/agent-prompt-injection'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 
 export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntimeWithResolveTerminalPane {
@@ -127,13 +125,10 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
     return probe
   }
 
-  async sendTerminal(
+  /** sendTerminal once plugin hooks decided (terminal-plugin-hooked-input.ts). */
+  protected async sendTerminalAfterPluginHooks(
     handle: string,
-    action: {
-      text?: string
-      enter?: boolean
-      interrupt?: boolean
-    },
+    action: { text?: string; enter?: boolean; interrupt?: boolean },
     options: RuntimeTerminalWriteOptions
   ): Promise<RuntimeTerminalSend> {
     // Switch point: a saved pane main holds with no terminal yet starts first (once, shared).
@@ -142,7 +137,7 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
       : null
     if (starting) {
       const target = await starting
-      return { ...(await this.sendTerminal(target, action, options)), handle }
+      return { ...(await this.sendTerminalAfterPluginHooks(target, action, options)), handle }
     }
     const pty = this.getLivePtyForHandle(handle)
     if (pty) {
@@ -222,7 +217,8 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
     )
   }
 
-  async sendTerminalAgentPrompt(
+  /** sendTerminalAgentPrompt once plugin hooks decided. */
+  protected async sendAgentPromptAfterPluginHooks(
     handle: string,
     prompt: string,
     options: RuntimeAgentPromptWriteOptions
@@ -246,7 +242,7 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
       : null
     if (starting) {
       const target = await starting
-      return { ...(await this.sendTerminalAgentPrompt(target, prompt, options)), handle }
+      return { ...(await this.sendAgentPromptAfterPluginHooks(target, prompt, options)), handle }
     }
     const pty = this.getLivePtyForHandle(handle)
     if (pty) {

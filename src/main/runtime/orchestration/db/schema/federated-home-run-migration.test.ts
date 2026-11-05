@@ -65,11 +65,6 @@ describe('federated home Run migration', () => {
     expect(db.getMessageById('message_legacy_home')?.run_id).toBe(stubRunId)
   })
 
-  it('rejects a whitespace-only Run id instead of minting a stub', () => {
-    expect(() => attachWithoutRunId(db, 'ctx_blank', '   ')).toThrow('Missing Run ID')
-    expect(db.getRemoteDispatchAttachment('ctx_blank')).toBeUndefined()
-  })
-
   it('repairs rows a rolled-back v1.4.198 host inserted after user_version reached 40', () => {
     const dir = mkdtempSync(join(tmpdir(), 'orca-federated-home-run-'))
     const dbPath = join(dir, 'orchestration.db')

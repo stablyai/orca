@@ -1,9 +1,9 @@
-import type { AgentJournalMessageItem } from './agent-session-journal-types'
+import type { AgentJournalMessageItem } from './agent-session/journal/agent-session-journal-types'
 import type {
   AgentSessionQueuedMessage,
   AgentSessionQueuedMessageEditHoldResult,
   AgentSessionQueuedMessageUpdateResult
-} from './agent-session-wire'
+} from './agent-session/requests/agent-session-queued-message-wire'
 import type { QueuedMessageEdit } from './queued-message-edit'
 
 type LeaseKey = { callerKey: string; editId: string }

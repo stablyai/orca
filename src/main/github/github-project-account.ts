@@ -8,8 +8,8 @@ import { parseWslUncPath } from '../../shared/wsl-paths'
 import {
   resolveLocalProjectRuntimesForRepos,
   type ProjectRuntimeResolutionStore
-} from '../local-project-runtime-resolution'
-import { getStoredRepoExecutionHostId } from '../repo-execution-host'
+} from '../workspaces/execution-host/local-project-runtime-resolution'
+import { getStoredRepoExecutionHostId } from '../workspaces/execution-host/repo-execution-host'
 import type { GitHubRepoContext } from './github-repository-identity'
 
 type AccountStore = ProjectRuntimeResolutionStore & {

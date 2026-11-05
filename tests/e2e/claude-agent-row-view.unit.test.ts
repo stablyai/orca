@@ -5,25 +5,25 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
 import type { HostAuthority } from '../../src/shared/host-authority'
-import type { AgentStatusEntry } from '../../src/shared/agent-status-types'
+import type { AgentStatusEntry } from '../../src/shared/agent-status/contracts/agent-status-types'
 import type { ClaudeAgentViewResult } from '../../src/shared/claude-agent-view'
 import { TerminalViewClaudeAgent } from '../../src/shared/rpc-contract/terminal-unary-params'
 import { createHookListenerState } from '../../src/shared/agent-hook-listener/listener-state'
 import { seedClaudeSubagentRosterFromSnapshots } from '../../src/shared/agent-hook-listener/providers/claude-roster-state'
 import { claudeRosterToSnapshots } from '../../src/shared/claude-subagent-roster'
-import { decodeAgentSubagentsField } from '../../src/shared/agent-status-subagent-snapshot'
-import { makePaneKey } from '../../src/shared/stable-pane-id'
-import { ClaudeAgentViewBridge } from '../../src/main/claude/agent-view-bridge'
+import { decodeAgentSubagentsField } from '../../src/shared/agent-status/contracts/agent-status-subagent-snapshot'
+import { makePaneKey } from '../../src/shared/workspace-layout/stable-pane-id'
+import { ClaudeAgentViewBridge } from '../../src/main/claude/agent-view/agent-view-bridge'
 import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
 import { RUNTIME_PROTOCOL_VERSION } from '../../src/shared/protocol-version'
-import { buildSubagentChildRows } from '@/components/sidebar/worktree-subagent-child-rows'
+import { buildSubagentChildRows } from '@/components/sidebar/workspace-card/activity/worktree-subagent-child-rows'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { CompactAgentRow } from '@/components/sidebar/worktree-card-compact-agent-row'
+import { CompactAgentRow } from '@/components/sidebar/workspace-card/activity/worktree-card-compact-agent-row'
 import FullAgentRow from '@/components/dashboard/DashboardAgentRow'
 import { opensClaudeParentConversation, viewClaudeAgentFromRow } from '@/lib/claude-agent-row-view'
 import type * as WorktreeRuntimeOwner from '@/lib/worktree-runtime-owner'
 import { makeWorktree, TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
-import WorktreeCardAgents from '@/components/sidebar/WorktreeCardAgents'
+import WorktreeCardAgents from '@/components/sidebar/workspace-card/activity/WorktreeCardAgents'
 import { i18n, translate } from '@/i18n/i18n'
 
 const mocks = vi.hoisted(() => ({ info: vi.fn(), transport: vi.fn(), owner: vi.fn() }))
@@ -63,7 +63,7 @@ vi.mock('@/components/sidebar/comment-markdown-lazy', () => ({
   preloadCommentMarkdown: () => {},
   CommentMarkdownAsync: () => null
 }))
-vi.mock('@/components/sidebar/CacheTimer', () => ({
+vi.mock('@/components/sidebar/workspace-card/activity/CacheTimer', () => ({
   default: () => null,
   usePromptCacheCountdownForPane: () => null
 }))
@@ -447,6 +447,7 @@ it.each(
     })
     rows('compact', child('restored'))
     await act(async () => {})
+    expect(visits.worktrees).toBeGreaterThanOrEqual(population)
     visits.worktrees = 0
     visits.repos = 0
     await click(2)
@@ -461,12 +462,9 @@ it.each(
         takeAndSettle()
       })
     }
-    // Count real catalog reads before observation-driven renders; R stays fixed at one.
-    const passBound = fallback ? 8 : 6
-    expect(visits.worktrees).toBeGreaterThanOrEqual(population)
-    expect(visits.worktrees).toBeLessThanOrEqual(passBound * population)
-    expect(visits.repos).toBeGreaterThan(0)
-    expect(visits.repos).toBeLessThanOrEqual(passBound)
+    // Owner indexes are warm; clicks must not rescan either catalog.
+    expect(visits.worktrees).toBe(0)
+    expect(visits.repos).toBe(0)
     expect(requests).toHaveLength(fallback ? 2 : 1)
     expect(bridge.receive({ ...identity(), action: 'take' })).toEqual({})
     expect(mocks.info).not.toHaveBeenCalled()

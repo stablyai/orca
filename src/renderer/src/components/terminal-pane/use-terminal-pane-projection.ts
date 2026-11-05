@@ -1,12 +1,14 @@
-import { useCallback, useEffect } from 'react'
-import type { CSSProperties } from 'react'
+import { useCallback, useEffect, type CSSProperties } from 'react'
+
 import {
   DEFAULT_TERMINAL_DIVIDER_DARK,
-  isTerminalBackgroundLight,
   normalizeColor,
-  resolveEffectiveTerminalAppearance,
-  resolveOpaqueTerminalBackground
+  resolveEffectiveTerminalAppearance
 } from '@/lib/terminal-theme'
+import {
+  isTerminalBackgroundLight,
+  resolveOpaqueTerminalBackground
+} from '../../../../shared/terminal-themes/terminal-title-contrast'
 import { stripSshReconnectOwnedErrorLines } from './TerminalErrorToast'
 import { agentLaunchPaneOutcomeForLeaf } from './agent-launch-pane-notice-text'
 import { mapPaneTerminalErrors, terminalErrorForPane } from './terminal-error-accumulation'
@@ -19,7 +21,7 @@ import { canContinueAgentSessionInNewSession } from './terminal-agent-session-co
 import type { TerminalPaneMobileController } from './use-terminal-pane-mobile-actions'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { resolvePaneAgentSessionId } from './pane-agent-session-id'
 import { canPaneOfferResumeInNewChat } from '../tab-bar/tab-session-history-switch'
 

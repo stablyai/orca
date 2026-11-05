@@ -20,7 +20,7 @@ import {
   AGENT_HOOK_INSTALL_PLUGINS_METHOD,
   AGENT_HOOK_NOTIFICATION_METHOD,
   AGENT_HOOK_REQUEST_REPLAY_METHOD
-} from '../../shared/agent-hook-relay'
+} from '../../shared/agent-hook-listener/transport/agent-hook-relay'
 
 type GuestHarness = {
   transport: MultiplexerTransport

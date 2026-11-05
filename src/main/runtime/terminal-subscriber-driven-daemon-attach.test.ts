@@ -12,7 +12,7 @@ import {
   decodeTerminalStreamText,
   encodeTerminalStreamFrame,
   encodeTerminalStreamJson
-} from '../../shared/terminal-stream-protocol'
+} from '../../shared/terminal/stream/terminal-stream-protocol'
 
 const WORKTREE_ID = 'repo-1::/tmp/wt'
 const PTY_ID = `${WORKTREE_ID}@@1a2b3c4d`

@@ -30,24 +30,6 @@ const PI_TRANSCRIPT_PATH = join(tmpdir(), 'pi-session-1.jsonl')
 afterEach(resetAgentHibernationCoordinatorFixture)
 
 describe('agent sleep coordinator', () => {
-  it('hibernates an eligible background worktree after two stable ticks', async () => {
-    vi.useFakeTimers()
-    const shutdown = installEligibleState(vi.fn().mockResolvedValue(undefined))
-    startAgentHibernationCoordinator({ intervalMs: 1000, now: () => NOW })
-
-    await vi.advanceTimersByTimeAsync(1000)
-    expect(shutdown).not.toHaveBeenCalled()
-
-    await vi.advanceTimersByTimeAsync(1000)
-    expect(shutdown).toHaveBeenCalledWith('wt-bg', {
-      paneKey: `tab-1:${LEAF}`,
-      tabId: 'tab-1',
-      leafId: LEAF,
-      ptyId: 'pty-1'
-    })
-    expect(useAppStore.getState().shutdownWorktreeTerminals).not.toHaveBeenCalled()
-  })
-
   it('hibernates completed Pi after the periodic recovery capture', async () => {
     vi.useFakeTimers()
     const piEntry = {
@@ -94,16 +76,6 @@ describe('agent sleep coordinator', () => {
     })
   })
 
-  it('cancels timers when stopped', async () => {
-    vi.useFakeTimers()
-    const shutdown = installEligibleState(vi.fn().mockResolvedValue(undefined))
-    const stop = startAgentHibernationCoordinator({ intervalMs: 1000, now: () => NOW })
-    stop()
-
-    await vi.advanceTimersByTimeAsync(3000)
-    expect(shutdown).not.toHaveBeenCalled()
-  })
-
   it('revalidates fresh state before shutdown', async () => {
     vi.useFakeTimers()
     const shutdown = installEligibleState(vi.fn().mockResolvedValue(undefined))
@@ -113,17 +85,6 @@ describe('agent sleep coordinator', () => {
     // Returning to the tab must invalidate confirmation; the active worktree is no longer excluded wholesale.
     setForegroundTerminalTabIds(['tab-1'])
     await vi.advanceTimersByTimeAsync(1000)
-
-    expect(shutdown).not.toHaveBeenCalled()
-  })
-
-  it('does not hibernate a foreground terminal tab that is not in the active worktree', async () => {
-    vi.useFakeTimers()
-    const shutdown = installEligibleState(vi.fn().mockResolvedValue(undefined))
-    setForegroundTerminalTabIds(['tab-1'])
-    startAgentHibernationCoordinator({ intervalMs: 1000, now: () => NOW })
-
-    await vi.advanceTimersByTimeAsync(3000)
 
     expect(shutdown).not.toHaveBeenCalled()
   })

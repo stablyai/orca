@@ -6,7 +6,7 @@ import { act, cleanup, renderHook } from '@testing-library/react'
 import { useAppStore } from '@/store'
 import { createGlobalSettingsFixture } from '../../../../shared/global-settings-test-fixture'
 import { createCompatibleRuntimeStatusResponse } from '@/runtime/runtime-compatibility-test-fixture'
-import type { RuntimeEnvironmentStatus } from '../../../../shared/runtime-host-status'
+import type { RuntimeEnvironmentStatus } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 import type * as LocalRuntime from '@/lib/local-preflight-context'
 import type { AppState } from '@/store/types'
 import {

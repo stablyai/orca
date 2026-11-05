@@ -1,8 +1,9 @@
+import './journal-input-order-recovery.spec'
 import { journalInputOrder } from './journal-input-order'
 import { insertCommandReceiptIfAbsent, readCommandReceipt } from './command-receipt-table'
 import { writeCommandReceiptTestRecord } from './command-receipt-test-support'
 import type { JournalRow } from './journal-row-schema'
-import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentSessionJournal } from './journal-store'
 import type { JournalReducerState } from './journal-reducer'
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -12,8 +13,8 @@ import { expect, it, vi } from 'vitest'
 import {
   agentSessionJournalProviderHandle,
   claudeProviderHandle
-} from '../../../shared/agent-session-provider-handle-encoding'
-import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { holdUnsentSends } from './journal-unsent-send-hold'
 import {
   createTrackedJournalOpener,
@@ -78,7 +79,7 @@ it('preserves the forced queue place through command removal, two epoch replacem
       await journal.replaceEpochItems('unreconcilable_prefix', 0, [])
       expect(knownPredecessors(journal, 'M')).toEqual(['D'])
       expect(journal.inputOrder.forced('M')).toBe(true)
-      expect(journal.queuedMessages.get('C')).toBeNull()
+      expect(journal.queuedMessages.get('C')).toMatchObject({ state: 'withdrawn' })
       expect(selectStructuredAgentSessionInput(journal)).toMatchObject({
         kind: 'card',
         card: { messageId: 'D' }
@@ -158,6 +159,11 @@ it.each(['resume', 'accepted'] as const)(
       const floor = journal.reopenFloor()!
       const before = journal.cursor()
       let committed = 0
+      const captureLifetime = new AbortController()
+      const capturedKeys = journal.inputOrder.captureKeys(new Set(), captureLifetime.signal)
+      const mKey = agentJournalSubmissionKey('M')
+      expect(capturedKeys.has(mKey)).toBe(false)
+      expect(capturedKeys.has(agentJournalSubmissionKey('forced'))).toBe(true)
       await expect(
         append('M', {
           write: () => {
@@ -170,6 +176,8 @@ it.each(['resume', 'accepted'] as const)(
       ).rejects.toThrow('receipt transaction fails')
       expect(journal.cursor()).toEqual(before)
       expect(journal.submission('M')).toBeUndefined()
+      expect(capturedKeys.changes.size).toBe(0)
+      expect(capturedKeys.has(mKey)).toBe(false)
       expect(journal.reopenFloor()).toEqual(floor)
       expect(
         loadTestJournal(root, identity.sessionId)!.state.queuePauseMarks.reopenedSequence
@@ -202,6 +210,12 @@ it.each(['resume', 'accepted'] as const)(
         }
       })
       expect(target).toEqual(cursor)
+      const committedKeys = journal.inputOrder.captureKeys(new Set(), captureLifetime.signal)
+      expect(capturedKeys.has(mKey)).toBe(false)
+      expect(committedKeys.has(mKey)).toBe(true)
+      expect(capturedKeys.same(committedKeys)).toBe(false)
+      expect([...capturedKeys.changes]).toEqual([[mKey, false]])
+      captureLifetime.abort()
       expect(committed).toBe(1)
       expect(journal.reopenFloor()).toBeNull()
       const marks = readTestJournalOutcomes(
@@ -228,6 +242,8 @@ it.each(['resume', 'accepted'] as const)(
       } else {
         expect(journal.queuedMessages.pauses()).toEqual([])
       }
+      expect([...capturedKeys.changes]).toEqual([[mKey, false]])
+      expect(committedKeys.changes.size).toBe(0)
       const beforePrefixes = ['forced', 'M', 'ordinary-held'].map((id) =>
         knownPredecessors(journal, id)
       )
@@ -247,8 +263,9 @@ it.each(['resume', 'accepted'] as const)(
       expect(journal.reopenFloor()).toEqual(foreignFloor)
       expect(foreignFloor.epoch).not.toBe(journal.epoch)
       const beforeForeign = journal.cursor()
-      await append('new-epoch')
-      expect(journal.cursor().sequence).toBe(beforeForeign.sequence + 1)
+      const appended = await append('new-epoch')
+      expect(journal.cursor()).toEqual(appended)
+      expect(appended.sequence).toBe(beforeForeign.sequence + 2) // Same physical epoch commits the reopen mark before admission.
       expect(knownPredecessors(journal, 'new-epoch')).toEqual([])
       expect(['forced', 'M', 'ordinary-held'].map((id) => knownPredecessors(journal, id))).toEqual(
         beforePrefixes
@@ -564,3 +581,82 @@ it('retries partial keeps from committed facts and carries rank moves on the fir
     await rm(root, { recursive: true, force: true })
   }
 })
+
+// A sent card's released lineage leaves the history an observed send was placed behind
+// once the queue next pauses, however many pauses came before that send.
+it.each([0, 1])(
+  'recovers an older direct send ahead of a newer card after a sent card settles, %s pauses before it',
+  async (pauses) => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-settled-order-'))
+    const journals = createTrackedJournalOpener()
+    const journal = await journals.open({
+      identity: {
+        sessionId: 'settled',
+        workspaceId: 'folder',
+        hostId: 'ssh',
+        agent: 'claude',
+        providerHandle: claudeProviderHandle('thread', null)
+      },
+      stateDirectory: root
+    })
+    try {
+      await journal.queuedMessages.insert({
+        messageId: 'C',
+        body: { ...message('/compact'), command: { name: 'compact' } }
+      })
+      await journal.queuedMessages.insert({ messageId: 'A', body: message('old waiting') })
+      const sent = await journal.queuedMessages.insert({ messageId: 'S', body: message('sent') })
+      await journal.appendSubmission(
+        {
+          clientMessageId: 'sent-S',
+          body: sent.body,
+          payloadFingerprint: sent.fingerprint,
+          fence: 0,
+          handoverRecorded: true,
+          origin: 'client'
+        },
+        { messageId: 'S', expect: 'waiting' }
+      )
+      await journal.resolveDispatch({
+        clientMessageId: 'sent-S',
+        state: 'accepted',
+        providerIdentity: null,
+        fence: 0
+      })
+      expect(journal.inputOrder.lineage.cards.has('S')).toBe(false)
+      for (let n = 0; n < pauses; n++) {
+        await journal.appendStopEvent({ reason: 'user-stop' }, 0)
+        journal.queuedMessages.nextInputCard()
+        await journal.appendQueueResume(0)
+        journal.queuedMessages.nextInputCard()
+      }
+      await journal.appendSubmission({
+        clientMessageId: 'M',
+        body: message('unhanded direct send'),
+        payloadFingerprint: 'M',
+        fence: 0,
+        handoverRecorded: true,
+        origin: 'client'
+      })
+      expect(journal.inputOrder.forced('M')).toBe(true)
+      await journal.queuedMessages.insert({ messageId: 'L', body: message('newer card') })
+      await journal.queuedMessages.move({ messageId: 'L', beforeMessageId: 'A' })
+      await journal.queuedMessages.withdraw(['A'])
+      const position = () =>
+        journal.inputOrder.predecessors(journal.queuedMessages.inputState(), 'M').position
+      expect(position()).toBe(3)
+      await journal.appendStopEvent({ reason: 'user-stop' }, 0)
+      expect(position()).toBe(1)
+      await holdUnsentSends(journal, { fence: 0, hold: { cause: 'chatClosed' } })
+      expect(
+        journal.queuedMessages
+          .list()
+          .filter((card) => card.state === 'waiting')
+          .map((card) => card.messageId)
+      ).toEqual(['C', 'M', 'L'])
+    } finally {
+      await journals.closeAll()
+      await rm(root, { recursive: true, force: true })
+    }
+  }
+)

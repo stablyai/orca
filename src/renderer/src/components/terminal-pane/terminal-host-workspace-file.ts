@@ -14,7 +14,13 @@ import {
   type RuntimeTerminalPathResolution
 } from '../../../../shared/runtime-file-contracts'
 import { HostFileRefusal, hostAbsentRefusal } from './host-file-refusal'
-import { hostSavesGrantedFiles } from '@/runtime/runtime-terminal-artifact-grant'
+import { isHtmlFilePath } from './local-html-file-destinations'
+import {
+  grantServesInPlace,
+  hostOpensGrantedFilesInPlace,
+  hostSavesGrantedFiles,
+  isSshWorkspaceGrantRefusal
+} from '@/runtime/runtime-terminal-artifact-grant'
 
 export type HostWorkspaceFile = {
   kind: 'host'
@@ -91,11 +97,59 @@ async function statClientLocalFile(
   return { kind: 'client', isDirectory: stat.isDirectory }
 }
 
+/**
+ * Opens a file another workspace holds in the clicked one, through a grant: the user can already run
+ * anything on the host, so its workspace boundary guards nothing. The holder answers first, as before,
+ * so missing paths, folders and this computer's files resolve unchanged; only an existing file another
+ * workspace holds asks again for a grant here, and keeps the holder where a grant can't serve it.
+ */
+async function resolveInClickedWorkspace(
+  resolveOnHost: (crossWorkspace: boolean) => Promise<RuntimeTerminalPathResolution>,
+  clickedWorktreeId: string
+): Promise<RuntimeTerminalPathResolution> {
+  const holder = await resolveOnHost(true)
+  if (
+    holder.relativePath === null ||
+    holder.worktree === clickedWorktreeId ||
+    !holder.exists ||
+    holder.isDirectory
+  ) {
+    return holder
+  }
+  let inPlace: RuntimeTerminalPathResolution
+  try {
+    inPlace = await resolveOnHost(false)
+  } catch (error) {
+    // Why: only the host's SSH refusal means "no grant here"; any other failure surfaces, not a switch.
+    if (isSshWorkspaceGrantRefusal(error)) {
+      return holder
+    }
+    throw error
+  }
+  return inPlace.openTarget?.kind === 'absolute-file' && grantServesInPlace(inPlace.openTarget)
+    ? inPlace
+    : holder
+}
+
+/** An unanswered probe opens the file where it lives, as before. */
+async function opensInPlace(environmentId: string): Promise<boolean> {
+  try {
+    return await hostOpensGrantedFilesInPlace(environmentId)
+  } catch {
+    return false
+  }
+}
+
 /** For paired paths outside the source workspace, ask the server for an owning workspace or a file grant; only paths the host lacks fall to this computer. Null when inapplicable; rejects when neither can open. */
 export async function resolveHostWorkspaceFile(
   context: RuntimeFileOperationArgs,
   absolutePath: string,
-  source: { terminalHandle?: string | null; hostFileOnly?: boolean } = {}
+  source: {
+    terminalHandle?: string | null
+    hostFileOnly?: boolean
+    existenceOnly?: boolean
+    openWithSystemDefault?: boolean
+  } = {}
 ): Promise<HostWorkspaceFile | HostGrantedFile | ClientLocalFile | null> {
   const environmentId = runtimeTargetEnvironmentId(context.target)
   if (
@@ -105,18 +159,30 @@ export async function resolveHostWorkspaceFile(
   ) {
     return null
   }
-  const resolved = await callHostRoute<RuntimeTerminalPathResolution>(
-    hostRouteForAuthority({ endpoint: { kind: 'environment', environmentId }, at: 'local' }),
-    'files.resolveTerminalPath',
-    {
-      worktree: toRuntimeWorktreeSelector(context.worktreeId),
-      pathText: absolutePath,
-      crossWorkspace: true,
-      // Why: older hosts grant a file outside their workspaces only to the terminal that printed it.
-      ...(source.terminalHandle ? { terminal: source.terminalHandle } : {})
-    },
-    { timeoutMs: 15_000 }
-  )
+  const worktree = toRuntimeWorktreeSelector(context.worktreeId)
+  const resolveOnHost = (crossWorkspace: boolean): Promise<RuntimeTerminalPathResolution> =>
+    callHostRoute<RuntimeTerminalPathResolution>(
+      hostRouteForAuthority({ endpoint: { kind: 'environment', environmentId }, at: 'local' }),
+      'files.resolveTerminalPath',
+      {
+        worktree,
+        pathText: absolutePath,
+        ...(crossWorkspace ? { crossWorkspace: true } : {}),
+        // Why: older hosts grant a file outside their workspaces only to the terminal that printed it.
+        ...(source.terminalHandle ? { terminal: source.terminalHandle } : {})
+      },
+      { timeoutMs: 15_000 }
+    )
+  // Why the holder: a hover needs only a stat (a grant hashes the file); a download reads the holding
+  // workspace's file, which a grant can't hand to the default app; and an HTML page already previews
+  // in the clicked workspace, with its relative assets served from the holder.
+  const resolved =
+    !source.existenceOnly &&
+    !source.openWithSystemDefault &&
+    !isHtmlFilePath(absolutePath) &&
+    (await opensInPlace(environmentId))
+      ? await resolveInClickedWorkspace(resolveOnHost, context.worktreeId)
+      : await resolveOnHost(true)
   const relativePath = resolved.relativePath
   if (relativePath === null || !resolved.absolutePath) {
     const openTarget = resolved.openTarget

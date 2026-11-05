@@ -1,14 +1,19 @@
-import { setRuntimeBrowserCommandsFactory } from '../runtime/runtime-browser-commands-factory'
-import { markHostShuttingDown } from '../host-shutdown-state'
+import { setRuntimeBrowserCommandsFactory } from '../runtime/browser/installation/runtime-browser-commands-factory'
+import { markHostShuttingDown } from '../startup/quit/host-shutdown-state'
 import { setDesktopBrowserBridgeHostEnabled } from '../runtime/desktop-browser-bridge/desktop-browser-bridge-registry'
 import { ORCAD_MANAGED_ACTIVATION_ROOT_ENV } from '../../shared/orcad-managed-launch-env'
 import { startOrcadBrowserProvider } from './orcad-browser-startup'
 import { OrcadRuntimeLifetime, type OrcadRuntimeCleanup } from './orcad-runtime-lifetime'
 import type { OrcadManagedStopInstance } from '../../shared/orcad-stop-request'
 import { acquireOrcadInstanceLock } from './orcad-instance-lock'
+import {
+  markOrcadRunFailed,
+  orcadRunFailed,
+  recordOrcadPreviousUnexpectedExit
+} from './orcad-unexpected-exit'
 import { ORCAD_BUNDLED_LAUNCHER_ENV } from './orcad-bundled-runtime'
 import { resolveOrcadExitCode } from './orcad-exit-code'
-import { recordAgentSessionRuntimeEnd } from '../runtime/agent-session-runtime-end-record'
+import { recordAgentSessionRuntimeEnd } from '../runtime/agent-session/records/agent-session-runtime-end-record'
 import { ORCAD_SHUTDOWN_DEADLINE_MS } from './orcad-stop-deadlines'
 import { holdOrcadTerminalAdmissionUntilExit } from './orcad-stop-terminal-admission'
 import {
@@ -50,6 +55,9 @@ export function installOrcadShutdownSignals(
     }
   }
   const shutdown: OrcadShutdownTrigger = (signal, onFailed, stoppedExitCode = 0) => {
+    if (stoppedExitCode !== 0) {
+      markOrcadRunFailed()
+    }
     if (stopping) {
       // Fatal faults must escalate an in-progress clean stop to failure.
       if (stoppedExitCode !== 0 && exitCode === 0) {
@@ -95,7 +103,7 @@ export function installOrcadShutdownSignals(
 
 export async function stopOrcadStructuredAgentSessions(): Promise<void> {
   const { stopStructuredAgentSessionRuntime } =
-    await import('../runtime/structured-agent-session-runtime')
+    await import('../runtime/agent-session/structured-agent-session-runtime')
   await stopStructuredAgentSessionRuntime({ trigger: 'quit' })
 }
 
@@ -138,6 +146,13 @@ export async function startOrcadWithHost<T extends object>(
   runQuitHandlers: () => void | Promise<void>
 ): Promise<T & { stop(): Promise<void>; instance: OrcadManagedStopInstance }> {
   const instanceLock = acquireOrcadInstanceLock(userDataPath)
+  const previous = instanceLock.previousUnexpectedExit
+  recordOrcadPreviousUnexpectedExit(previous)
+  if (previous) {
+    console.error(
+      `[orcad] the previous run (pid ${previous.pid}, ${previous.version}) exited without stopping cleanly`
+    )
+  }
   const { pid, startedAtMs, nonce } = instanceLock.record
   const instance = { pid, startedAtMs, nonce, lockPath: instanceLock.path }
   let admission: ProfileStateRuntimeAdmission | undefined
@@ -154,7 +169,7 @@ export async function startOrcadWithHost<T extends object>(
     async (runtimeCleanupSucceeded) => {
       // Failed cleanup retains both ownership fences until process exit.
       const host = new OrcadRuntimeLifetime(() => {
-        if (runtimeCleanupSucceeded) {
+        if (runtimeCleanupSucceeded && !orcadRunFailed()) {
           instanceLock.release()
         }
       })

@@ -1,8 +1,8 @@
 import { nativeChatAntigravitySignInContent } from './native-chat-antigravity-settings'
 import { translate } from '@/i18n/i18n'
-import type { StructuredAgentSessionLaunchLifecycle } from '@/lib/structured-agent-session-launch'
-import { agentSessionRefusalCauseParts } from '../../../../shared/agent-session-refusal-notice'
-import type { StructuredLaunchFailure } from '@/lib/structured-agent-session-launch-failure'
+import type { StructuredAgentSessionLaunchLifecycle } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
+import { agentSessionRefusalCauseParts } from '../../../../shared/agent-session/failures/agent-session-refusal-notice'
+import type { StructuredLaunchFailure } from '@/lib/agent-session/launch/structured-agent-session-launch-failure'
 import { joinSentences } from '../../../../shared/sentence-joining'
 import { agentSessionWriteNoticeText } from './agent-session-write-notice-text'
 import {

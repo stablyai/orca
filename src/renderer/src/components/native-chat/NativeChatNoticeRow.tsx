@@ -1,9 +1,13 @@
+import {
+  CLAUDE_MODEL_FALLBACK_COPY,
+  claudeModelFallbackLabels
+} from '../../../../shared/native-chat/claude-model-fallback'
+import { NativeChatUsageLimitAutoContinue } from './NativeChatUsageLimitAutoContinue'
 import { NativeChatUsageLimitActions } from './NativeChatUsageLimitActions'
 import { agentSessionGoalControlWords } from './agent-session-goal-control-words'
 import { AlertCircle, AlertTriangle, Info } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useSyncExternalStore } from 'react'
-import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 import { NativeChatMarkdown } from './NativeChatMarkdown'
 import { NativeChatCodeBlock } from './NativeChatCodeBlock'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -12,8 +16,8 @@ import { cn } from '@/lib/utils'
 import {
   AGENT_SESSION_HOST_STATUS_COPY as HOST_STATUS_COPY,
   type AgentSessionHostStatusPresentation
-} from '../../../../shared/agent-session-host-status-rows'
-import type { NativeChatTextBlock } from '../../../../shared/native-chat-types'
+} from '../../../../shared/agent-session/view/agent-session-host-status-rows'
+import type { NativeChatTextBlock } from '../../../../shared/native-chat/native-chat-types'
 import {
   NATIVE_CHAT_NOTICE_COPY,
   nativeChatNoticeLook
@@ -32,11 +36,11 @@ import {
 import {
   agentSessionFailureDetailText,
   readWholeAgentSessionFailureFact
-} from '../../../../shared/agent-session-failure'
-import { agentSessionFailureSentence } from '../../../../shared/agent-session-failure-words'
+} from '../../../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureSentence } from '../../../../shared/agent-session/failures/agent-session-failure-words'
 import { sayAgentSessionFailureTranslated } from './agent-session-failure-words-text'
 import { nativeChatAntigravitySignInContent } from './native-chat-antigravity-settings'
-import { formatUsageLimitResetClock } from '../../../../shared/agent-session-usage-limit'
+import { formatUsageLimitResetClock } from '../../../../shared/agent-session/failures/agent-session-usage-limit'
 
 const HOST_STATUS_WORDS: Record<AgentSessionHostStatusPresentation, () => string> = {
   'history-repaired': () =>
@@ -64,16 +68,12 @@ const HOST_STATUS_WORDS: Record<AgentSessionHostStatusPresentation, () => string
 export function NativeChatNoticeRow({
   block,
   messageId,
-  agentName,
-  onLinkClick,
-  allowFileUriLinks = false
+  agentName
 }: {
   block: NativeChatTextBlock
   /** The transcript row's message, so a plan's code blocks keep their wrap past the row's mount. */
   messageId?: string
   agentName?: string
-  onLinkClick?: CommentMarkdownLinkClickHandler
-  allowFileUriLinks?: boolean
 }): React.JSX.Element {
   useTranslation()
   const orcaStopView = useNativeChatOrcaStopView()
@@ -115,6 +115,17 @@ export function NativeChatNoticeRow({
       </p>
     )
   }
+  if (look.kind === 'model-fallback') {
+    return (
+      <p className="min-w-0 max-w-full select-text text-sm text-chat-foreground-faint [overflow-wrap:anywhere]">
+        {translate(
+          'components.native-chat.notices.modelFallback',
+          CLAUDE_MODEL_FALLBACK_COPY,
+          claudeModelFallbackLabels(look)
+        )}
+      </p>
+    )
+  }
   if (look.kind === 'plan') {
     return (
       <Card className="gap-3 py-3 shadow-xs">
@@ -130,9 +141,7 @@ export function NativeChatNoticeRow({
             variant="document"
             renderCodeBlock={NativeChatCodeBlock}
             className="text-sm text-chat-foreground"
-            onLinkClick={onLinkClick}
-            allowFileUriLinks={allowFileUriLinks}
-            linkifyFilePaths={onLinkClick !== undefined}
+            linkifyFilePaths
           />
         </CardContent>
       </Card>
@@ -185,9 +194,9 @@ export function NativeChatNoticeRow({
   const usageLimitContinue =
     block.usageLimitTurnItemId !== undefined &&
     block.usageLimitTurnItemId === orcaStopView.usageLimitTurnItemId
-  // Only reword auth text fully described by its fact; host text may also carry command advice.
-  const authSurface =
-    failure?.kind === 'notSignedIn'
+  // Only reword auth and missing-conversation text fully described by its fact; host text may also carry command advice.
+  const factSurface =
+    failure?.kind === 'notSignedIn' || failure?.kind === 'savedConversationMissing'
       ? (['row', 'rejection'] as const).find(
           (surface) => block.text === agentSessionFailureSentence(failure, surface, { agentName })
         )
@@ -216,10 +225,10 @@ export function NativeChatNoticeRow({
           },
           sayAgentSessionFailureTranslated
         )
-      : failure && authSurface
+      : failure && factSurface
         ? agentSessionFailureSentence(
             failure,
-            authSurface,
+            factSurface,
             { agentName },
             sayAgentSessionFailureTranslated
           )
@@ -268,6 +277,9 @@ export function NativeChatNoticeRow({
         ) : null}
       </div>
       {usageLimitContinue ? <NativeChatUsageLimitActions /> : null}
+      {usageLimitContinue && orcaStopView.usageLimitAutoContinue ? (
+        <NativeChatUsageLimitAutoContinue state={orcaStopView.usageLimitAutoContinue} />
+      ) : null}
       {claudeSignIn && isClaudeSignInFailureKind(block.failure?.kind) ? (
         <Button
           type="button"

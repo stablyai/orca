@@ -13,6 +13,11 @@ const repo: Repo = {
   badgeColor: '#000',
   addedAt: 1,
   kind: 'git',
+  hookSettings: {
+    mode: 'auto',
+    scripts: { setup: 'echo setup', archive: '' },
+    setupRunPolicy: 'ask'
+  },
   executionHostId: 'ssh:ssh-target-1'
 }
 

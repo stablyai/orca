@@ -63,7 +63,7 @@ import type { WorkerTerminalArchiveMethods } from './worker-terminal/worker-term
 import type { WorkerTerminalAutoReleaseMethods } from './worker-terminal/worker-terminal-auto-release'
 import type { WorkerTerminalListingMethods } from './worker-terminal/worker-terminal-listing'
 import type { WorkerTerminalReleaseMethods } from './worker-terminal/worker-terminal-release'
-import type { StructuredPointerOperationStoreMethods } from './messages/structured-pointer-operation-store'
+import type { StructuredMailSendStoreMethods } from './messages/structured-mail-send-store'
 import type { WorkerTerminalResourceStoreMethods } from './worker-terminal/worker-terminal-resource-store'
 import type { WorkerTerminalTransferMethods } from './worker-terminal/worker-terminal-transfer'
 
@@ -120,7 +120,7 @@ export type OrchestrationDbMethods = AttemptObservationStoreMethods &
   FederationRelayImportMethods &
   RemoteQuestionStoreMethods &
   FederationRelayItemMethods &
-  StructuredPointerOperationStoreMethods &
+  StructuredMailSendStoreMethods &
   WorkerTerminalResourceStoreMethods &
   WorkerTerminalTransferMethods &
   WorkerTerminalReleaseMethods &

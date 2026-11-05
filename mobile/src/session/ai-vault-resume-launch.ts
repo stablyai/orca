@@ -1,18 +1,18 @@
 import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
-} from '../../../src/shared/agent-session-resume'
+} from '../../../src/shared/agent-session/lifecycle/agent-session-resume'
 import {
   buildAiVaultLocalResumeStartup,
   type AiVaultResumeCommandSession,
   type AiVaultResumeLaunchSettings
-} from '../../../src/shared/ai-vault-resume-startup'
+} from '../../../src/shared/ai-vault/resume/ai-vault-resume-startup'
 import {
   buildAiVaultRemoteResumeStartup,
   resolveAiVaultResumeHostShell
-} from '../../../src/shared/ai-vault-resume-host-startup'
-import { isTuiAgent } from '../../../src/shared/tui-agent-config'
-import type { TuiAgent } from '../../../src/shared/tui-agent'
+} from '../../../src/shared/ai-vault/resume/ai-vault-resume-host-startup'
+import { isTuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent-config'
+import type { TuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent'
 import { parseWslUncPath } from '../../../src/shared/wsl-paths'
 import { resolveWindowsShellStartupFamily } from '../../../src/shared/windows-terminal-shell'
 import { RESUME_RPC_TIMEOUT_MS } from './ai-vault-resume-preparation'
@@ -20,7 +20,7 @@ import type { RpcOperationSender } from '../transport/rpc-operation-sender'
 import { interpretOrThrowRefusalMessage } from '../transport/rpc-refusal-message'
 import { reviewTerminalCreateRun, reviewTerminalSendRun } from './mobile-review-terminal-operations'
 import type { MobileReviewTerminalTab } from './review-terminal-reply-schema'
-import type { AiVaultResumeTargetStatus } from '../../../src/shared/ai-vault-resume-target'
+import type { AiVaultResumeTargetStatus } from '../../../src/shared/ai-vault/resume/ai-vault-resume-target'
 import { QODER_OWNED_TERMINAL_CREATE_CAPABILITY } from '../../../src/shared/qoder-terminal-create-capability'
 import { agentHistoryHostStatusSchema } from '../agent-history/agent-history-reply-schema'
 import { readMobileRuntimeHostPlatform } from '../transport/mobile-runtime-host-platform'

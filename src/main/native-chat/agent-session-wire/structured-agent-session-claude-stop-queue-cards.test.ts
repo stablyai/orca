@@ -1,9 +1,9 @@
 import { expect, it } from 'vitest'
-import { activeStructuredAgentSessionTurnId } from '../../../shared/structured-agent-session-live-turn'
+import { activeStructuredAgentSessionTurnId } from '../../../shared/agent-session/view/structured-agent-session-live-turn'
 import {
   claudeFrame as frame,
   claudeWasSent as wrote
-} from '../../claude/claude-structured-session-test-support'
+} from '../../claude/structured/claude-structured-session-test-support'
 import {
   HOST_TEST_SESSION as SESSION,
   hostTestMessage

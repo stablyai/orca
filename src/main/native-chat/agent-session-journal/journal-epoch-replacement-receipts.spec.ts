@@ -1,11 +1,14 @@
 import type { createFixture } from './journal-epoch-replacement-contract-test-fixture'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { readFile } from 'node:fs/promises'
 import { describe, expect, it, vi } from 'vitest'
-import type { JournalLoad } from './journal-open'
+import type { JournalReplacementItem } from './journal-epoch-replacement'
 import type { AgentSessionJournal } from './journal-store'
 import { readJournalSessionEpoch } from './journal-row-table'
-import { openTestJournalHostDatabase } from './journal-host-database-test-support'
+import {
+  openTestJournalHostDatabase,
+  readTestJournalRows
+} from './journal-host-database-test-support'
 import { markUnclaimedUploadForSweep } from '../agent-session-attachments/agent-session-attachment-claims'
 import { JournalGoalAttachmentInverse } from './journal-goal-attachment-inverse'
 import * as attachmentReferences from '../agent-session-attachments/agent-session-attachment-references'
@@ -14,25 +17,42 @@ export function registerJournalEpochReplacementReceiptsTests(
   fixture: ReturnType<typeof createFixture>
 ): void {
   describe('journal epoch replacement', () => {
-    it('publishes one observable replacement', () => {
-      const published: JournalLoad[] = []
-
-      fixture.replace({
-        items: [
-          {
-            identity: fixture.item(1),
-            body: { kind: 'status', text: 'republished' },
-            ownerFence: 1
-          }
-        ],
-        onPublished: (loaded) => published.push(loaded)
+    it('publishes one observable replacement and rolls back a failed receipt', async () => {
+      const journal = await fixture.journals.open({
+        identity: fixture.IDENTITY,
+        stateDirectory: fixture.root
       })
-
-      expect(published).toHaveLength(1)
-      const epoch = readJournalSessionEpoch(fixture.database.db, fixture.IDENTITY.sessionId)
-      expect(epoch).toBe(published[0]?.state.epoch)
-      expect(fixture.storedRows(fixture.IDENTITY.sessionId, epoch ?? '')).toBe(1)
-      expect(published[0]?.state.lastSequence).toBe(2)
+      const items: JournalReplacementItem[] = [
+        { identity: fixture.item(1), body: { kind: 'status', text: 'republished' }, ownerFence: 1 }
+      ]
+      const before = journal.cursor()
+      await expect(
+        journal.replaceEpochItems('legacy_import', 1, items, () => ({
+          write: () => {
+            throw new Error('receipt failed')
+          },
+          committed: () => {}
+        }))
+      ).rejects.toThrow('receipt failed')
+      expect(journal.cursor()).toEqual(before)
+      let acknowledged = before
+      await journal.replaceEpochItems('legacy_import', 1, items, (cursor) => ({
+        write: () => {
+          acknowledged = cursor
+        },
+        committed: () => {}
+      }))
+      expect(acknowledged).toEqual(journal.cursor())
+      expect(journal.readSince(before)).toEqual({ ok: false, reset: 'epoch_changed' })
+      expect(readJournalSessionEpoch(fixture.database.db, fixture.IDENTITY.sessionId)).toBe(
+        before.epoch
+      )
+      const reopened = await fixture.journals.open({
+        identity: fixture.IDENTITY,
+        stateDirectory: fixture.root
+      })
+      expect(reopened.cursor()).toEqual(journal.cursor())
+      expect(reopened.snapshot()).toEqual(journal.snapshot())
     })
 
     it.each([
@@ -48,7 +68,7 @@ export function registerJournalEpochReplacementReceiptsTests(
           ])
       ],
       ['a rollover', (journal: AgentSessionJournal) => journal.rollEpoch('handle_forked', 1)]
-    ])('discards every superseded row in the same transaction as %s', async (_name, retire) => {
+    ])('retains canonical order while replacing presentation in %s', async (_name, retire) => {
       const journal = await fixture.journals.open({
         identity: fixture.IDENTITY,
         stateDirectory: fixture.root
@@ -62,13 +82,47 @@ export function registerJournalEpochReplacementReceiptsTests(
       await journal.appendItem(fixture.item(2), { kind: 'status', text: 'older' }, scope)
       await peer.appendItem(fixture.item(1), { kind: 'status', text: 'peer' }, scope)
       const before = journal.epoch
+      const physical = readJournalSessionEpoch(fixture.database.db, fixture.IDENTITY.sessionId)
+      const oldCursor = journal.cursor()
+      const oldRows = readTestJournalRows(
+        fixture.database.db,
+        fixture.IDENTITY.sessionId,
+        physical!
+      )
+      const oldOutcomes = fixture.database.db
+        .prepare(
+          'SELECT * FROM journal_outcomes WHERE seq<=? ORDER BY generation,seq,field,entry_key'
+        )
+        .all(oldCursor.sequence)
 
       await retire(journal)
 
       expect(journal.epoch).not.toBe(before)
-      expect(fixture.storedRows(fixture.IDENTITY.sessionId, before)).toBe(0)
-      expect(fixture.storedRows(fixture.IDENTITY.sessionId, journal.epoch)).toBe(1)
+      expect(readJournalSessionEpoch(fixture.database.db, fixture.IDENTITY.sessionId)).toBe(
+        physical
+      )
+      expect(journal.readSince(oldCursor)).toEqual({ ok: false, reset: 'epoch_changed' })
+      expect(fixture.storedRows(fixture.IDENTITY.sessionId, before)).toBeGreaterThan(0)
+      expect(
+        readTestJournalRows(fixture.database.db, fixture.IDENTITY.sessionId, physical!).slice(
+          0,
+          oldRows.length
+        )
+      ).toEqual(oldRows)
+      expect(
+        fixture.database.db
+          .prepare(
+            'SELECT * FROM journal_outcomes WHERE seq<=? ORDER BY generation,seq,field,entry_key'
+          )
+          .all(oldCursor.sequence)
+      ).toEqual(oldOutcomes)
+      expect(
+        journal
+          .snapshot()
+          .items.some((row) => row.body.kind === 'status' && row.body.text === 'old')
+      ).toBe(false)
       expect(fixture.storedRows(fixture.PEER.sessionId, peer.epoch)).toBe(1)
+      expect(peer.snapshot().items).toHaveLength(1)
     })
   })
 
@@ -148,6 +202,7 @@ export function registerJournalEpochReplacementReceiptsTests(
         await journal.replaceEpochItems('legacy_import', 1, [
           {
             identity: fixture.item(9),
+            echoOf: null,
             body: card.body,
             ownerFence: 1,
             turnScope: AGENT_JOURNAL_THREAD_SCOPE

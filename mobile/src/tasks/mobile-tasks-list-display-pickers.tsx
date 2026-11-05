@@ -1,8 +1,8 @@
 import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-presentation'
 import { translate } from '../i18n/mobile-i18n'
-import { BottomDrawer, View, Text } from './mobile-tasks-dependencies'
-import { ListGroup } from '../components/list/ListGroup'
-import { ListRow } from '../components/list/ListRow'
+import { BottomDrawer } from '../components/bottom-drawer/BottomDrawer'
+import { View, Text } from './mobile-tasks-dependencies'
+import { ListGroup, ListRow } from '../components/list/ListGroup'
 import { styles } from './mobile-tasks-legacy-styles'
 import { LINEAR_DISPLAY_OPTIONS } from './mobile-tasks-legacy-foundation'
 

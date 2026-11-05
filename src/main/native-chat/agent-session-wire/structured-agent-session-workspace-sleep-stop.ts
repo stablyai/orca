@@ -1,9 +1,9 @@
-import { recordAgentSessionAcquisitionExit } from '../../runtime/agent-session-acquisition-exit-transition'
+import { recordAgentSessionAcquisitionExit } from '../../runtime/agent-session/agent-session-acquisition-exit-transition'
 import {
   agentSessionLeaseIsReleased,
   agentSessionLeaseOwnerVerdict
-} from '../../../shared/agent-session-lease-adjudication'
-import { structuredSessionNeverStarted } from '../../runtime/agent-session-record-founding'
+} from '../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
+import { structuredSessionNeverStarted } from '../../runtime/agent-session/records/agent-session-record-founding'
 import type { StructuredAgentSessionConversations } from './structured-agent-session-conversations'
 import type { StructuredAgentSessionStopEnding } from './structured-agent-session-host-lifetime'
 import type {

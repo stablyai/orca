@@ -1,10 +1,10 @@
 import type {
   WorkspaceSessionPatch,
   WorkspaceSessionState
-} from '../../../shared/workspace-session-state-types'
-import { pruneLocalTerminalScrollbackBuffers } from '../../../shared/workspace-session-terminal-buffers'
-import { normalizeBrowserHistoryEntries } from '../../../shared/workspace-session-browser-history'
-import { normalizeWorkspaceDocHistoryEntries } from '../../../shared/workspace-doc-history'
+} from '../../../shared/workspace-session/workspace-session-state-types'
+import { pruneLocalTerminalScrollbackBuffers } from '../../../shared/workspace-session/workspace-session-terminal-buffers'
+import { normalizeBrowserHistoryEntries } from '../../../shared/workspace-session/workspace-session-browser-history'
+import { normalizeWorkspaceDocHistoryEntries } from '../../../shared/workspace-session/workspace-doc-history'
 import {
   buildActiveConnectionIdsAtShutdown,
   buildEditorSessionData,

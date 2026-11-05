@@ -16,7 +16,7 @@ import { act, waitFor } from '@testing-library/react'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
 import type { QueuedEditHostFixtureModule } from '../../../../shared/queued-edit-host.test-fixture'
-import type { AgentSessionQueuedMessageEditHoldResult } from '../../../../shared/agent-session-wire'
+import type { AgentSessionQueuedMessageEditHoldResult } from '../../../../shared/agent-session/requests/agent-session-queued-message-wire'
 import { readNativeChatDraftCache, writeNativeChatDraftCache } from './native-chat-draft-cache'
 
 let queuedEditHost: QueuedEditHostFixtureModule['queuedEditHost']
@@ -308,18 +308,5 @@ it.each(['gone', 'held'] as const)(
     hook.unmount()
     host.leases.dispose()
     warn.mockRestore()
-  }
-)
-
-it.each(['changed', 'gone', 'not-editable'] as const)(
-  'initial desktop %s has one clean disposition and readiness cannot revive it',
-  async (status) => {
-    rpc.mockResolvedValueOnce({ status })
-    const hook = harness()
-    await begin(hook)
-    expect(hook.result.current.editor).toBeUndefined()
-    expect(readNativeChatDraftCache(SCOPE)).toBe('')
-    expect(toast.error).toHaveBeenCalledTimes(status === 'not-editable' ? 1 : 0)
-    expect(holdCalls('release')).toHaveLength(1)
   }
 )

@@ -2,7 +2,7 @@ import { z } from 'zod'
 import {
   AgentJournalProducerLinkageFields,
   AgentJournalTurnScopeSchema
-} from '../../../shared/agent-session-journal-schemas'
+} from '../../../shared/agent-session/journal/agent-session-journal-schemas'
 import type { JournalRow } from './journal-row-schema'
 import {
   storedFailureFact,
@@ -48,24 +48,29 @@ const itemMutation = {
 }
 const tombstoneMutation = { kind: z.literal('tombstone'), itemId: value, revision: value }
 
-const queueChange = z.discriminatedUnion('op', [
-  z.object({
-    op: z.literal('queued'),
-    body: storedMessageBody,
-    position: value,
-    queuedAt: z.object({ epoch: value, sequence: value }).nullable(),
-    holdReason: value,
-    options: legacyOptions,
-    attempt: value,
-    returned: z.object({ reason: value, rejection: storedFailureFact.optional() }).optional()
-  }),
+const queuedChange = z.object({
+  op: z.literal('queued'),
+  body: storedMessageBody,
+  position: value,
+  queuedAt: z.object({ epoch: value, sequence: value }).nullable(),
+  holdReason: value,
+  options: legacyOptions,
+  attempt: value,
+  returned: z.object({ reason: value, rejection: storedFailureFact.optional() }).optional()
+})
+const otherQueueChanges = [
   z.object({ op: z.literal('edited'), body: storedMessageBody }),
   z.object({ op: z.literal('moved'), position: value }),
   z.object({ op: z.literal('held'), holdReason: value }),
   z.object({ op: z.literal('withdrawn') })
+] as const
+const queueChange = z.discriminatedUnion('op', [queuedChange, ...otherQueueChanges])
+const sourceQueueChange = z.discriminatedUnion('op', [
+  queuedChange.extend({ recovers: z.string().optional() }),
+  ...otherQueueChanges
 ])
 
-const storedRow = z.discriminatedUnion('kind', [
+const commonRows = [
   z.object({
     ...envelope,
     kind: z.literal('epoch'),
@@ -129,17 +134,25 @@ const storedRow = z.discriminatedUnion('kind', [
     mutations: z.array(
       z.discriminatedUnion('kind', [z.object(itemMutation), z.object(tombstoneMutation)])
     )
-  }),
+  })
+] as const
+const storedRow = z.discriminatedUnion('kind', [
+  ...commonRows,
   z.object({ ...envelope, kind: z.literal('queue'), messageId: value, change: queueChange })
 ])
 const strictRow = strictStorage(storedRow)
+const sourceRowDeclaration = z.discriminatedUnion('kind', [
+  ...commonRows,
+  z.object({ ...envelope, kind: z.literal('queue'), messageId: value, change: sourceQueueChange })
+])
+const sourceRow = strictStorage(sourceRowDeclaration)
 
 /** True when an input row holds a key or union tag this build does not declare; main's reader
  * judges every value. */
-export function journalRowDeclaresMore(row: unknown): boolean {
-  return storageVerdict(strictRow, row) === 'newer'
+export function journalRowDeclaresMore(row: unknown, sourceAnnotations = false): boolean {
+  return storageVerdict(sourceAnnotations ? sourceRow : strictRow, row) === 'newer'
 }
 
 export type JournalRowsAreDeclared = StorageDeclaresAll<
-  UndeclaredStorageKeys<JournalRow, z.output<typeof storedRow>>
+  UndeclaredStorageKeys<JournalRow, z.output<typeof sourceRowDeclaration>>
 >

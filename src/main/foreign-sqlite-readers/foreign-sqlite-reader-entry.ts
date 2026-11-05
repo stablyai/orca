@@ -1,6 +1,6 @@
 import { parentPort } from 'node:worker_threads'
-import { handleOpenCodeSqliteRequest } from '../ai-vault/session-scanner-opencode-sqlite-dispatch'
-import type { OpenCodeSqliteWorkerRequest } from '../ai-vault/session-scanner-opencode-sqlite-worker-protocol'
+import { handleOpenCodeSqliteRequest } from '../ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-dispatch'
+import type { OpenCodeSqliteWorkerRequest } from '../ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-protocol'
 import { handleForeignSqliteReaderRequest } from './foreign-sqlite-reader-dispatch'
 import type {
   ForeignSqliteReaderRequest,

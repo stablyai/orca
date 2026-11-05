@@ -1,11 +1,11 @@
-import { openOpenCodeDatabaseReadonly } from '../ai-vault/session-scanner-opencode-sqlite-open'
-import { zcodeVisibleMessageFilter } from '../ai-vault/session-scanner-zcode-visibility'
-import { zcodeTranscriptOrder } from '../ai-vault/session-scanner-zcode-order'
+import { openOpenCodeDatabaseReadonly } from '../ai-vault/scanners/opencode/sqlite/session-scanner-opencode-sqlite-open'
+import { zcodeVisibleMessageFilter } from '../ai-vault/scanners/zcode/session-scanner-zcode-visibility'
+import { zcodeTranscriptOrder } from '../ai-vault/scanners/zcode/session-scanner-zcode-order'
 import {
   readOpenCode2TranscriptPage,
   readOpenCode2TranscriptSignal
 } from './transcript-opencode2-sqlite'
-import type { NativeChatMessage } from '../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../shared/native-chat/native-chat-types'
 import { openCodeTranscriptPageLimit } from '../../shared/opencode-transcript-page-limit'
 import { columnExists, tableExists } from '../opencode-usage/schema-helpers'
 import { asRecord, extractString, parseJsonObject } from '../ai-vault/session-scanner-values'

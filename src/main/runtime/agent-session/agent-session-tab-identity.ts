@@ -1,7 +1,6 @@
-import { isReopenedChatTabId } from '../../../shared/structured-agent-session-host-tab-id'
-export { isReopenedChatTabId } from '../../../shared/structured-agent-session-host-tab-id'
+import { isReopenedChatTabId } from '../../../shared/agent-session/view/structured-agent-session-host-tab-id'
 import { randomUUID } from 'node:crypto'
-import { isAgentSessionSurfaceTabId } from '../../../shared/agent-session-surface-tab-id'
+import { isAgentSessionSurfaceTabId } from '../../../shared/agent-session/view/agent-session-surface-tab-id'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/runtime-types'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
 

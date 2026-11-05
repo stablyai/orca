@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { WorkerRequestTransport } from '../lazy-worker-thread-host'
+import type { WorkerRequestTransport } from '../worker-threads/worker-thread-transport'
 import { ForeignSqliteReaderClient, ForeignSqliteReaderLane } from './foreign-sqlite-reader-client'
 import type { ForeignSqliteReaderRequest } from './foreign-sqlite-reader-protocol'
 

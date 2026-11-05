@@ -7,7 +7,7 @@ import {
   projectWorktreeListRemovals,
   projectWorktreePsRemovals
 } from '../worktree-removal-marker-projection'
-import { snapshotPendingWorktreeRemovals } from '../../../worktree-removal-listing'
+import { snapshotPendingWorktreeRemovals } from '../../../workspaces/removal/worktree-removal-listing'
 import {
   WorktreeDetectedListParams,
   WorktreeListParams,
@@ -36,16 +36,12 @@ export const WORKTREE_CATALOG_METHODS = [
         ),
         context
       )
-      // Why: callers that send neither field get the byte-exact legacy response.
+      // Why: legacy callers keep exact activity; only snapshot pollers are coarsened.
       if (params.afterSnapshotId === undefined && params.acceptRowDelta !== true) {
         return result
       }
       // Why: pollers get activity at poll-friendly granularity so the id survives terminal output.
-      return resolveWorktreeCatalogSnapshot(
-        params.exactActivity === true ? result : coarsenWorktreePsActivity(result),
-        params.afterSnapshotId ?? null,
-        { acceptRowDelta: params.acceptRowDelta === true }
-      )
+      return resolveWorktreeCatalogSnapshot(coarsenWorktreePsActivity(result), params)
     }
   }),
   defineMethod({

@@ -1,4 +1,5 @@
 import type { Mock } from 'vitest'
+import type { ExecutionHostId } from '../shared/execution-host'
 
 type OkFixture = {
   id: string
@@ -34,7 +35,7 @@ export function buildWorktree(
   branch: string,
   head = 'abc',
   repoId = 'repo'
-): WorktreeFixture {
+): WorktreeFixture & { hostId?: ExecutionHostId } {
   return {
     id: `${repoId}::${path}`,
     repoId,

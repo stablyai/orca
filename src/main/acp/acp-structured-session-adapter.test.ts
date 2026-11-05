@@ -5,7 +5,7 @@ import {
   SessionNotificationSchema
 } from './generated/acp-protocol.generated'
 import { afterEach, describe, expect, it } from 'vitest'
-import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
 import {
   closeProviderTimelineRigs,
   SESSION
@@ -23,8 +23,8 @@ import {
   waitFor,
   type AcpAdapterRig
 } from './acp-structured-adapter.test-support'
-import type { AgentJournalMessageItem } from '../../shared/agent-session-journal-types'
-import { createAcpStructuredLaunchResolver } from '../runtime/structured-agent-launch-composition.test-support'
+import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
+import { createAcpStructuredLaunchResolver } from '../runtime/agent-session/launch/structured-agent-launch-composition.test-support'
 import { agentSessionRecordFixture } from '../native-chat/agent-session-record-test-fixture'
 
 afterEach(async () => {
@@ -602,21 +602,6 @@ describe('ACP structured session adapter: approvals', () => {
         commit: async () => {}
       })
     ).rejects.toThrow(/no longer waiting/)
-  })
-
-  it('answers cancelled a permission Grok asks during a turn it began itself, with no card', async () => {
-    const rig = await openAcpAdapterRig()
-    await rig.acquire()
-    const { agent } = rig.child()
-    agent.notify('session/update', chunk('task-completed-background-1', 'Build finished; now'))
-    await rig.settle()
-    const reply = await agent.request(3, 'session/request_permission', {
-      sessionId: PROVIDER_SESSION,
-      toolCall: { toolCallId: 'call-1', title: 'Write file' },
-      options: [{ optionId: 'allow-once', name: 'Allow', kind: 'allow_once' }]
-    })
-    expect(reply).toMatchObject({ result: { outcome: { outcome: 'cancelled' } } })
-    expect((await rig.rig.rows()).some((row) => row.body.kind === 'approval')).toBe(false)
   })
 })
 

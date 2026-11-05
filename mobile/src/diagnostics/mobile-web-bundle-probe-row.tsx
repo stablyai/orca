@@ -12,6 +12,7 @@ import {
 import type { HostProfile } from '../transport/types'
 import type { Translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { ListGroup, ListRow } from '../components/list/ListGroup'
 
 function buttonLabel(
   state: MobileWebBundleProbeState,
@@ -28,11 +29,13 @@ function buttonLabel(
 
 function ProbeLine({ label, detail, failed }: { label: string; detail: string; failed?: boolean }) {
   useMobileColorScheme()
-  return (
-    <View style={styles.checkRow}>
-      <Text style={styles.checkLabel}>{label}</Text>
-      <Text style={[styles.checkDetail, failed === true && styles.checkDetailFail]}>{detail}</Text>
-    </View>
+  return failed === true ? (
+    <ListRow
+      title={label}
+      detail={<Text style={[styles.checkDetail, styles.checkDetailFail]}>{detail}</Text>}
+    />
+  ) : (
+    <ListRow title={label} value={detail} />
   )
 }
 
@@ -44,41 +47,46 @@ function ProbeResult({ state, hostName }: { state: MobileWebBundleProbeState; ho
   }
   if (state.status === 'failed') {
     return (
-      <View style={styles.section}>
+      <ListGroup style={styles.group}>
         <ProbeLine
+          key="bundle"
           label={t('diagnostics.mobileWebBundleProbeRow.bundle', 'Bundle')}
           detail={state.detail}
           failed
         />
-      </View>
+      </ListGroup>
     )
   }
   return (
-    <View style={styles.section}>
-      <ProbeLine label={t('diagnostics.mobileWebBundleProbeRow.host', 'Host')} detail={hostName} />
-      <View style={styles.separator} />
+    <ListGroup style={styles.group}>
       <ProbeLine
+        key="host"
+        label={t('diagnostics.mobileWebBundleProbeRow.host', 'Host')}
+        detail={hostName}
+      />
+      <ProbeLine
+        key="build"
         label={t('diagnostics.mobileWebBundleProbeRow.build', 'Build')}
         detail={state.buildId.slice(0, 12)}
       />
-      <View style={styles.separator} />
       <ProbeLine
+        key="assets"
         label={t('diagnostics.mobileWebBundleProbeRow.assets', 'Assets')}
         detail={`${state.assetCount}`}
       />
-      <View style={styles.separator} />
       <ProbeLine
+        key="bytes"
         label={t('diagnostics.mobileWebBundleProbeRow.bytes', 'Bytes')}
         detail={`${state.totalBytes}`}
       />
-      <View style={styles.separator} />
       <ProbeLine
+        key="elapsed"
         label={t('diagnostics.mobileWebBundleProbeRow.elapsed', 'Elapsed')}
         detail={t('diagnostics.mobileWebBundleProbeRow.elapsedMilliseconds', '{{elapsedMs}} ms', {
           elapsedMs: state.elapsedMs
         })}
       />
-    </View>
+    </ListGroup>
   )
 }
 

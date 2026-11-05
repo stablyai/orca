@@ -14,11 +14,12 @@ import { expect, it, vi } from 'vitest'
 import {
   claudeProviderHandle,
   agentSessionJournalProviderHandle
-} from '../../../shared/agent-session-provider-handle-encoding'
+} from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import type { JournalRow } from './journal-row-schema'
 import type { JournalReducerState } from './journal-reducer'
-import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { holdUnsentSends } from './journal-unsent-send-hold'
+import { agentSessionSendBodyFingerprint } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import {
   createTrackedJournalOpener,
   loadTestJournal,
@@ -33,7 +34,8 @@ const message = (text: string): AgentJournalMessageItem => ({
   blocks: [{ type: 'text', text }]
 })
 
-it.each([10, 100])(
+// Bounds are linear in n plus small constants; 4x already exposes superlinear indexing.
+it.each([10, 40])(
   'indexes the initial legacy writer shape without promoting foreign/null comparison N=%i',
   async (n) => {
     const root = await mkdtemp(join(tmpdir(), 'orca-legacy-baseline-'))
@@ -214,10 +216,10 @@ it.each([10, 100])(
             journalInputOrder(replay.state).predecessors(replay.state, id)
           }
           expect(domainQueries).toHaveBeenCalledTimes(2 * n)
-          // Each independent fold adds at most one command-witness transition beyond the frozen baseline; each update traverses at most 54 introduction nodes.
+          // Each independent fold adds at most one command-witness transition; logical replacement also retains the prefix cohort, indexed once in each coordinate index.
           expect(domainSets.mock.calls.length).toBeLessThanOrEqual(4 * (n + 6) + 2 * rows.length)
           expect(indexSets.mock.calls.length).toBeLessThanOrEqual(
-            54 * domainSets.mock.calls.length + 8 * rows.length
+            54 * domainSets.mock.calls.length + 8 * rows.length + 2 * (n + 6)
           )
           console.info(
             'legacy-normalized-output',
@@ -277,7 +279,9 @@ it.each([10, 100])(
           (card) => !card.baseline
         )
       ).toBe(true)
-      expect(journal.inputOrder['cards']['domains']).toBeUndefined()
+      expect(journal.inputOrder['cards']['domains']['root']).toEqual({
+        index: new JournalInputPlaceIndex('')
+      })
       expect(journal.queuedMessages.displayState().inputEntries.size).toBe(0)
       expect(finished.state.inputEntries.size).toBe(0)
       expect(
@@ -289,6 +293,63 @@ it.each([10, 100])(
       domainQueries.mockRestore()
       indexSets.mockRestore()
       release.spy.mockRestore()
+      await journals.closeAll()
+      await rm(root, { recursive: true, force: true })
+    }
+  }
+)
+
+// A failed import leaves an older build's card beside a canonical one at the same position: the
+// introduction, then the id, decides which comes first, and a returned card stays a barrier.
+it.each(['waiting', 'returned'] as const)(
+  'keeps a tied %s card from a failed import ahead of a canonical card',
+  async (legacyState) => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-legacy-tie-'))
+    const journals = createTrackedJournalOpener({ legacyInputs: true })
+    const identity = {
+      sessionId: 'tie',
+      workspaceId: 'folder',
+      hostId: 'ssh',
+      agent: 'claude' as const,
+      providerHandle: claudeProviderHandle('thread', null)
+    }
+    const warned = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const body = message('message')
+    try {
+      let journal = await journals.open({ identity, stateDirectory: root })
+      await journal.queuedMessages.insert({ messageId: 'z-canonical', body })
+      await journal.close()
+      const { db } = openTestJournalHostDatabase(root)
+      db.prepare(
+        `INSERT INTO queued_messages (session_id, message_id, position, body_json, fingerprint,
+           created_at, host_instance, state, returned_reason)
+         VALUES (?, 'a-legacy', 1, ?, ?, 0, 'earlier', ?, ?)`
+      ).run(
+        identity.sessionId,
+        JSON.stringify(body),
+        agentSessionSendBodyFingerprint(identity.sessionId, body),
+        legacyState,
+        legacyState === 'returned' ? 'refused before start' : null
+      )
+      db.exec(`CREATE TEMP TRIGGER fail_import BEFORE DELETE ON queued_messages
+        BEGIN SELECT RAISE(ABORT, 'disk full'); END`)
+      journal = await journals.open({ identity, stateDirectory: root })
+      expect(warned).toHaveBeenCalled()
+      const state = journal.queuedMessages.inputState()
+      const owner = journalInputOrder(state)
+      const source = { epoch: state.epoch, sequence: state.lastSequence + 1 }
+      const observed = owner['cards'].query({
+        coordinate: source,
+        context: { basis: 'observed', source, cut: owner.lineage.at(state.lastSequence) + 1 }
+      })
+      expect(journal.queuedMessages.list().map((card) => card.position)).toEqual([1, 1])
+      expect(owner.head(state, null)?.messageId).toBe('a-legacy')
+      expect(observed.head?.messageId).toBe('a-legacy')
+      expect(journal.queuedMessages.nextInputCard()?.messageId).toBe(
+        legacyState === 'waiting' ? 'a-legacy' : undefined
+      )
+    } finally {
+      warned.mockRestore()
       await journals.closeAll()
       await rm(root, { recursive: true, force: true })
     }

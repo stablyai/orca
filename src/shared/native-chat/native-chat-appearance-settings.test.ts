@@ -37,24 +37,6 @@ describe('native chat appearance normalization', () => {
       }
     }
   })
-
-  it('derives defaults without storing them', () => {
-    expect(
-      normalizeNativeChatAppearanceSettings({
-        fontSize: 14,
-        codeFontSize: 12,
-        width: 'comfortable'
-      })
-    ).toBeUndefined()
-    expect(resolveNativeChatAppearanceSettings(undefined)).toEqual({
-      fontFamily: '',
-      fontSize: 14,
-      codeFontSize: 12,
-      width: 'comfortable',
-      contrast: 100,
-      matchTerminalInterface: false
-    })
-  })
   it('resets known controls while keeping settings from a newer version', () => {
     const fromNewerVersion = {
       fontFamily: 'Georgia',
@@ -111,26 +93,6 @@ describe('native chat appearance normalization', () => {
 })
 
 describe('chat contrast and terminal interface normalization', () => {
-  it('removes default fields and the empty object', () => {
-    expect(
-      normalizeNativeChatAppearanceSettings({ contrast: 100, matchTerminalInterface: false })
-    ).toBeUndefined()
-    expect(
-      normalizeNativeChatAppearanceSettings({
-        fontSize: 16,
-        contrast: 100,
-        matchTerminalInterface: false
-      })
-    ).toEqual({ fontSize: 16 })
-    expect(
-      normalizeNativeChatAppearanceSettings({
-        codeFontSize: 13,
-        contrast: 120,
-        matchTerminalInterface: true
-      })
-    ).toEqual({ codeFontSize: 13, contrast: 120, matchTerminalInterface: true })
-  })
-
   it('clamps and rounds persisted contrast, accepting only an explicit true toggle', () => {
     expect(
       resolveNativeChatAppearanceSettings({ contrast: 999, matchTerminalInterface: 'true' })

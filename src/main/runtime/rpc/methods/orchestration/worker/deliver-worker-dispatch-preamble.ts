@@ -12,7 +12,7 @@ import {
 } from '../../../../orchestration/orchestration-party'
 import { buildDispatchPreamble } from '../../../../orchestration/preamble'
 import { sendAgentTurn } from '../../../../orchestration/send-agent-turn'
-import { createWorkerBriefWriteGuard } from '../../../../launched-agent-write-guard'
+import { createWorkerBriefWriteGuard } from '../../../../terminal/wait/launched-agent-write-guard'
 import { sendStructuredWorkerPreamble } from '../../orchestration-structured-worker-session'
 import { chatAssigneeOf } from '../chat-assignee-admission'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
@@ -157,6 +157,7 @@ function workerTaskSource(args: {
     db: args.db,
     dispatch: { id: args.dispatchId, run_id: args.runId, task_id: args.taskId },
     from: args.coordinatorHandle,
-    senderName: (party, reported) => args.runtime.orchestrationSenderNames.nameOf(party, reported)
+    senderSnapshot: (party, reported) =>
+      args.runtime.orchestrationSenderNames.snapshotOf(party, reported)
   })
 }

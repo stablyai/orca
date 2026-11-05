@@ -63,7 +63,6 @@ export const styles = themedStyleSheet(() => ({
     fontSize: typography.metaSize,
     fontVariant: ['tabular-nums']
   },
-  chevronExpanded: { transform: [{ rotate: '180deg' }] },
   lastMessage: {
     color: colors.textSecondary,
     fontSize: 13,

@@ -1,5 +1,5 @@
-import { listRunningWslDistrosAsync } from '../wsl'
-import { filterPathsToWslDistros } from '../wsl-running-path-filter'
+import { listRunningWslDistrosAsync } from '../wsl/discovery/distro-catalog'
+import { filterPathsToWslDistros } from '../wsl/filesystem/wsl-running-path-filter'
 
 /** Every watched WSL transcript shares one running-list read on this cadence, and reuses any
  *  read another caller started within it, so watching never adds a `wsl.exe` per watcher. */

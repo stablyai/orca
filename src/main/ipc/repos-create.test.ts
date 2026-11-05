@@ -1,3 +1,4 @@
+import type * as GitExecFileModule from '../git/command-runner/git-exec-file'
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { join } from 'node:path'
 import { DEFAULT_REPO_BADGE_COLOR, getDefaultWorkspaceDir } from '../../shared/constants'
@@ -34,6 +35,14 @@ const {
   prepareLocalWorktreeRootForRepoMock: vi.fn()
 }))
 
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => {
+  const facade = await vi.importMock<typeof GitExecFileModule>('../git/runner')
+  return {
+    ...(await importOriginal<typeof GitExecFileModule>()),
+    gitExecFileAsync: facade.gitExecFileAsync
+  }
+})
+
 vi.mock('electron', () => ({
   dialog: { showOpenDialog: vi.fn() },
   ipcMain: {
@@ -46,6 +55,8 @@ vi.mock('fs/promises', () => ({
   mkdir: mkdirMock,
   access: accessMock,
   readdir: readdirMock,
+  // Fixture paths are not symlinks.
+  realpath: async (path: string) => path,
   rm: rmMock
 }))
 
@@ -64,14 +75,19 @@ vi.mock('../git/repo', () => ({
   isGitRepo: vi.fn().mockReturnValue(true),
   getRepoName: vi.fn().mockImplementation((path: string) => path.split('/').pop()),
   getBaseRefDefault: vi.fn().mockResolvedValue('origin/main'),
-  searchBaseRefs: vi.fn().mockResolvedValue([])
+  searchBaseRefs: vi.fn().mockResolvedValue([]),
+  inspectGitRepoForRegistrationAsync: vi.fn().mockImplementation(async (path: string) => ({
+    isRepo: true,
+    rootPath: path,
+    mainRepoPath: null
+  }))
 }))
 
-vi.mock('./registered-worktree-roots-cache', () => ({
+vi.mock('./worktrees/removal/registered-worktree-roots-cache', () => ({
   invalidateAuthorizedRootsCache: invalidateAuthorizedRootsCacheMock
 }))
 
-vi.mock('../worktree-root-preparation', () => ({
+vi.mock('../workspaces/creation/worktree-root-preparation', () => ({
   prepareLocalWorktreeRootForRepo: prepareLocalWorktreeRootForRepoMock
 }))
 
@@ -450,6 +466,24 @@ describe('repos:create', () => {
     expect(mkdirMock).not.toHaveBeenCalled()
     expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
     expect(mockStore.addRepo).not.toHaveBeenCalled()
+  })
+
+  it('creates a local project when only an SSH project is saved at the target path', async () => {
+    const remote = {
+      id: 'ssh-repo',
+      path: tmpPath('shared-name'),
+      displayName: 'shared-name',
+      kind: 'git',
+      connectionId: 'devbox'
+    }
+    mockStore.getRepos.mockReturnValue([remote])
+
+    const result = await callCreate({ parentPath: '/tmp', name: 'shared-name', kind: 'git' })
+
+    expect(result).not.toEqual({ repo: remote })
+    expect(mockStore.addRepo).toHaveBeenCalledWith(
+      expect.objectContaining({ path: tmpPath('shared-name') })
+    )
   })
 
   it('returns existing badgeColor unchanged on repos:create dedupe', async () => {

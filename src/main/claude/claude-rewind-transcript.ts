@@ -2,8 +2,12 @@ import type { SessionStoreEntry } from '@anthropic-ai/claude-agent-sdk'
 import { createReadStream } from 'node:fs'
 import { rm } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
-import type { AgentSessionRewindFork } from '../../shared/agent-session-rewind'
-import { durableWriteTempPath, renameDurable, writeTempFileDurable } from '../durable-file-write'
+import type { AgentSessionRewindFork } from '../../shared/agent-session/lifecycle/agent-session-rewind'
+import {
+  durableWriteTempPath,
+  renameDurable,
+  writeTempFileDurable
+} from '../filesystem/durable-file-write'
 import { splitTranscriptStreamLines } from '../native-chat/transcript-stream-lines'
 import { loadClaudeAgentSdk } from './claude-stream-json-connection'
 

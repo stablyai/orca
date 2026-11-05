@@ -8,15 +8,19 @@ import { createFakePipedChild } from '../../shared/__fixtures__/fake-spawned-chi
 import { PROVIDER_SUPERVISOR_MAX_STOP_MS } from './provider-process-supervisor'
 import { PROVIDER_SPAWN_FAILURE_MARKER } from './provider-spawn-failure-report'
 import { spawnManagedProviderProcess } from './managed-provider-process'
-import type { DescendantTreeVerdict } from '../pty-descendant-exit-verification'
+import type { DescendantTreeVerdict } from '../pty/process-retirement/pty-descendant-exit-verification'
 import type { ProviderProcessTree } from './provider-process-close'
 
 const mocks = vi.hoisted(() => ({
   capture: vi.fn(async () => null),
   windowsTree: vi.fn(async () => {})
 }))
-vi.mock('../pty-descendant-termination', () => ({ captureDescendantSnapshot: mocks.capture }))
-vi.mock('../windows-process-tree-kill', () => ({ terminateWindowsProcessTree: mocks.windowsTree }))
+vi.mock('../pty/process-retirement/pty-descendant-termination', () => ({
+  captureDescendantSnapshot: mocks.capture
+}))
+vi.mock('../pty/process-retirement/windows-process-tree-kill', () => ({
+  terminateWindowsProcessTree: mocks.windowsTree
+}))
 
 afterEach(() => {
   vi.useRealTimers()

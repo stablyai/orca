@@ -24,6 +24,9 @@ export type OrcaMobileWebShellViewProps = ViewProps & {
   onExternalNavigation?: (
     event: NativeSyntheticEvent<MobileWebShellExternalNavigationPayload>
   ) => void
+  // iOS only: a left-edge swipe fires onBackEdgeSwipe instead of reaching the page. Android has the hardware key.
+  backEdgeSwipe?: boolean
+  onBackEdgeSwipe?: () => void
 }
 
 /** What a ref on the view carries. Expo puts the view's functions on the component prototype. */

@@ -10,11 +10,14 @@ import {
   PREFLIGHT_WORKSPACE_SCOPED_RUNTIME_CAPABILITY,
   RUNTIME_PROTOCOL_VERSION
 } from '../../../shared/protocol-version'
-import type { PublicKnownRuntimeEnvironment } from '../../../shared/runtime-environments'
+import type { PublicKnownRuntimeEnvironment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
 import { createGlobalSettingsFixture } from '../../../shared/global-settings-test-fixture'
 import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
-import { makeRepo, makeWorktree } from '../components/worktree-jump-palette-test-fixtures'
+import {
+  makeRepo,
+  makeWorktree
+} from '../components/worktree-jump/worktree-jump-palette-test-fixtures'
 import {
   getActiveWorkspaceOwnerTarget,
   getResolvedWorktreeExecutionOwner

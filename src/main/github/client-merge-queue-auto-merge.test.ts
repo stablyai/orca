@@ -1,3 +1,5 @@
+import type * as GitExecFileModule from '../git/command-runner/git-exec-file'
+import type * as GhExecFileModule from '../git/command-runner/gh-exec-file'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as GithubApiRepositoryModule from './github-api-repository'
 import type * as GitHubEnterpriseRepositoryModule from './github-enterprise-repository'
@@ -9,6 +11,16 @@ const { clientMocks, moduleMocks } = await vi.hoisted(async () => {
 
 vi.mock('./gh-utils', () => moduleMocks.ghUtilsModuleMock(clientMocks))
 vi.mock('../git/runner', () => moduleMocks.gitRunnerModuleMock(clientMocks))
+
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<typeof GitExecFileModule>()),
+  gitExecFileAsync: clientMocks.gitExecFileAsyncMock
+}))
+
+vi.mock('../git/command-runner/gh-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<typeof GhExecFileModule>()),
+  ghExecFileAsync: clientMocks.ghExecFileAsyncMock
+}))
 vi.mock('../git/local-git-object-quarantine', () =>
   moduleMocks.localGitObjectQuarantineModuleMock()
 )
@@ -35,10 +47,12 @@ import { resolveReviewThread } from './client/update/resolve-review-thread'
 import { setPRAutoMerge } from './client/merge/pr-auto-merge'
 import { updatePRTitle } from './client/update/pr-details'
 import { _getMergeQueueCacheSizeForTests } from './client/detect/repository-merge-metadata-cache'
-import { resetGraphQLRateLimitGuardMocks } from './client-test-harness'
+import {
+  installIndependentCheckFixtures,
+  resetGraphQLRateLimitGuardMocks
+} from './client-test-harness'
 
 const {
-  ghExecFileAsyncMock,
   getOwnerRepoMock,
   resolvePRRepositoryCandidatesMock,
   gitExecFileAsyncMock,
@@ -47,15 +61,20 @@ const {
   acquireMock
 } = clientMocks
 
+const metadataRequests = vi.fn()
+const unexpectedChecks: string[][] = []
+afterEach(() => expect(unexpectedChecks).toEqual([]))
+
 describe('GitHub GraphQL rate-limit guard', () => {
   beforeEach(() => {
     resetGraphQLRateLimitGuardMocks(clientMocks)
+    installIndependentCheckFixtures(clientMocks, metadataRequests, unexpectedChecks)
   })
 
   afterEach(() => vi.restoreAllMocks())
 
   it('uses explicit PR repo for merge and title mutations', async () => {
-    ghExecFileAsyncMock
+    metadataRequests
       .mockResolvedValueOnce({
         stdout: JSON.stringify({
           number: 7,
@@ -99,7 +118,7 @@ describe('GitHub GraphQL rate-limit guard', () => {
     ).resolves.toBe(true)
 
     expect(getOwnerRepoMock).not.toHaveBeenCalled()
-    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+    expect(metadataRequests).toHaveBeenNthCalledWith(
       1,
       ['api', 'repos/stablyai/orca/pulls/7', '--include'],
       {
@@ -107,7 +126,7 @@ describe('GitHub GraphQL rate-limit guard', () => {
         host: 'github.com'
       }
     )
-    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+    expect(metadataRequests).toHaveBeenNthCalledWith(
       2,
       [
         'pr',
@@ -116,11 +135,11 @@ describe('GitHub GraphQL rate-limit guard', () => {
         '--repo',
         'stablyai/orca',
         '--json',
-        'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable,reviewDecision,mergeStateStatus,autoMergeRequest,baseRefName,headRefName,baseRefOid,headRefOid,headRepositoryOwner,headRepository,isCrossRepository'
+        'number,title,state,url,updatedAt,isDraft,mergeable,reviewDecision,mergeStateStatus,autoMergeRequest,baseRefName,headRefName,baseRefOid,headRefOid,headRepositoryOwner,headRepository,isCrossRepository'
       ],
       { cwd: '/repo-root', host: 'github.com' }
     )
-    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+    expect(metadataRequests).toHaveBeenNthCalledWith(
       3,
       ['pr', 'merge', '7', '--squash', '--repo', 'stablyai/orca'],
       expect.objectContaining({
@@ -129,7 +148,7 @@ describe('GitHub GraphQL rate-limit guard', () => {
         host: 'github.com'
       })
     )
-    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+    expect(metadataRequests).toHaveBeenNthCalledWith(
       4,
       [
         'api',
@@ -144,7 +163,7 @@ describe('GitHub GraphQL rate-limit guard', () => {
   })
 
   it('sets and disables PR auto-merge with explicit PR repos and SSH context', async () => {
-    ghExecFileAsyncMock
+    metadataRequests
       .mockResolvedValueOnce({ stdout: JSON.stringify({ stack: null }) })
       .mockResolvedValueOnce({
         stdout: JSON.stringify({ id: 'PR_kwDO123', headRefOid: 'head-oid' })
@@ -166,19 +185,19 @@ describe('GitHub GraphQL rate-limit guard', () => {
       })
     ).resolves.toEqual({ ok: true })
 
-    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+    expect(metadataRequests).toHaveBeenNthCalledWith(
       1,
       ['api', 'repos/stablyai/orca/pulls/7', '--include'],
       {
         host: 'github.com'
       }
     )
-    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+    expect(metadataRequests).toHaveBeenNthCalledWith(
       2,
       ['pr', 'view', '7', '--json', 'id,headRefOid,baseRefName', '--repo', 'stablyai/orca'],
       { host: 'github.com' }
     )
-    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+    expect(metadataRequests).toHaveBeenNthCalledWith(
       3,
       expect.arrayContaining([
         'api',
@@ -195,7 +214,7 @@ describe('GitHub GraphQL rate-limit guard', () => {
         host: 'github.com'
       })
     )
-    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+    expect(metadataRequests).toHaveBeenNthCalledWith(
       4,
       ['pr', 'merge', '7', '--disable-auto', '--repo', 'stablyai/orca'],
       expect.objectContaining({
@@ -203,11 +222,11 @@ describe('GitHub GraphQL rate-limit guard', () => {
         host: 'github.com'
       })
     )
-    expect(ghExecFileAsyncMock.mock.calls[0]?.[1]).not.toHaveProperty('cwd')
+    expect(metadataRequests.mock.calls[0]?.[1]).not.toHaveProperty('cwd')
   })
 
   it('enables auto-merge without invoking the direct merge command', async () => {
-    ghExecFileAsyncMock
+    metadataRequests
       .mockResolvedValueOnce({ stdout: JSON.stringify({ stack: null }) })
       .mockResolvedValueOnce({
         stdout: JSON.stringify({ id: 'PR_kwDO123', headRefOid: 'head-oid' })
@@ -223,12 +242,12 @@ describe('GitHub GraphQL rate-limit guard', () => {
     ).resolves.toEqual({ ok: true })
 
     expect(
-      ghExecFileAsyncMock.mock.calls.some((call) =>
+      metadataRequests.mock.calls.some((call) =>
         (call[0] as string[]).some((arg) => arg.includes('enablePullRequestAutoMerge'))
       )
     ).toBe(true)
     expect(
-      ghExecFileAsyncMock.mock.calls.some(
+      metadataRequests.mock.calls.some(
         (call) =>
           call[0][0] === 'pr' && call[0][1] === 'merge' && (call[0] as string[]).includes('--auto')
       )
@@ -236,7 +255,7 @@ describe('GitHub GraphQL rate-limit guard', () => {
   })
 
   it('rejects auto-merge for GitHub-registered stacks', async () => {
-    ghExecFileAsyncMock.mockResolvedValueOnce({
+    metadataRequests.mockResolvedValueOnce({
       stdout: JSON.stringify({
         number: 202,
         title: 'Stack API',
@@ -262,11 +281,11 @@ describe('GitHub GraphQL rate-limit guard', () => {
       ok: false,
       error: 'GitHub does not support auto-merge for stacked pull requests.'
     })
-    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1)
+    expect(metadataRequests).toHaveBeenCalledTimes(1)
   })
 
   it('translates the GitHub clean-status rejection into an actionable message', async () => {
-    ghExecFileAsyncMock
+    metadataRequests
       .mockResolvedValueOnce({ stdout: JSON.stringify({ stack: null }) })
       .mockResolvedValueOnce({
         stdout: JSON.stringify({ id: 'PR_kwDO123', headRefOid: 'head-oid' })
@@ -288,7 +307,7 @@ describe('GitHub GraphQL rate-limit guard', () => {
   it('preserves a provider rejection when eligibility changes before enabling auto-merge', async () => {
     const providerError =
       'gh: Pull request Pull request is in unstable status (enablePullRequestAutoMerge)'
-    ghExecFileAsyncMock
+    metadataRequests
       .mockResolvedValueOnce({ stdout: JSON.stringify({ stack: null }) })
       .mockResolvedValueOnce({
         stdout: JSON.stringify({ id: 'PR_kwDO123', headRefOid: 'head-oid' })
@@ -306,12 +325,12 @@ describe('GitHub GraphQL rate-limit guard', () => {
       error: `Failed to enable auto-merge for pull request: ${providerError}`
     })
     expect(
-      ghExecFileAsyncMock.mock.calls.some(([args]) => args[0] === 'pr' && args[1] === 'merge')
+      metadataRequests.mock.calls.some(([args]) => args[0] === 'pr' && args[1] === 'merge')
     ).toBe(false)
   })
 
   it('names a failed disable-auto-merge operation', async () => {
-    ghExecFileAsyncMock.mockRejectedValueOnce(new Error('gh: pull request is already closed'))
+    metadataRequests.mockRejectedValueOnce(new Error('gh: pull request is already closed'))
     await expect(
       setPRAutoMerge('/repo-root', 7, false, 'squash', undefined, {
         owner: 'stablyai',
@@ -328,7 +347,7 @@ describe('GitHub GraphQL rate-limit guard', () => {
 
   it('preserves REST merge eligibility and an existing auto-merge request in PR details', async () => {
     getOwnerRepoMock.mockResolvedValue({ owner: 'stablyai', repo: 'orca' })
-    ghExecFileAsyncMock
+    metadataRequests
       .mockRejectedValueOnce(new Error('GraphQL unavailable'))
       .mockResolvedValueOnce({
         stdout: JSON.stringify({
@@ -365,7 +384,7 @@ describe('GitHub GraphQL rate-limit guard', () => {
   })
 
   it('uses the queue-aware gh merge path when the base branch has a merge queue', async () => {
-    ghExecFileAsyncMock
+    metadataRequests
       .mockResolvedValueOnce({ stdout: JSON.stringify({ stack: null }) })
       .mockResolvedValueOnce({
         stdout: JSON.stringify({ id: 'PR_kwDO123', headRefOid: 'head-oid', baseRefName: 'main' })
@@ -383,12 +402,12 @@ describe('GitHub GraphQL rate-limit guard', () => {
       })
     ).resolves.toEqual({ ok: true })
 
-    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+    expect(metadataRequests).toHaveBeenNthCalledWith(
       3,
       expect.arrayContaining(['api', 'graphql', '-f', 'branch=main']),
       { cwd: '/repo-root', host: 'github.com' }
     )
-    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+    expect(metadataRequests).toHaveBeenNthCalledWith(
       4,
       ['pr', 'merge', '7', '--auto', '--squash', '--repo', 'stablyai/orca'],
       expect.objectContaining({
@@ -398,14 +417,14 @@ describe('GitHub GraphQL rate-limit guard', () => {
       })
     )
     expect(
-      ghExecFileAsyncMock.mock.calls.some((call) =>
+      metadataRequests.mock.calls.some((call) =>
         (call[0] as string[]).some((arg) => arg.includes('enablePullRequestAutoMerge'))
       )
     ).toBe(false)
   })
 
   it('enqueues instead of gh pr merge --auto when a required merge queue disallows auto-merge', async () => {
-    ghExecFileAsyncMock
+    metadataRequests
       .mockResolvedValueOnce({ stdout: JSON.stringify({ stack: null }) })
       .mockResolvedValueOnce({
         stdout: JSON.stringify({ id: 'PR_kwDO123', headRefOid: 'head-oid', baseRefName: 'main' })
@@ -425,8 +444,8 @@ describe('GitHub GraphQL rate-limit guard', () => {
       })
     ).resolves.toEqual({ ok: true })
 
-    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(4)
-    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+    expect(metadataRequests).toHaveBeenCalledTimes(4)
+    expect(metadataRequests).toHaveBeenNthCalledWith(
       4,
       [
         'api',
@@ -447,7 +466,7 @@ describe('GitHub GraphQL rate-limit guard', () => {
   })
 
   it('blocks direct merge when GitHub reports required approval', async () => {
-    ghExecFileAsyncMock
+    metadataRequests
       .mockResolvedValueOnce({ stdout: JSON.stringify({ stack: null }) })
       .mockResolvedValueOnce({
         stdout: JSON.stringify({
@@ -479,8 +498,8 @@ describe('GitHub GraphQL rate-limit guard', () => {
       error: 'This pull request requires review approval before it can be merged.'
     })
 
-    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(3)
-    expect(ghExecFileAsyncMock.mock.calls[2]?.[0]).toContain('graphql')
+    expect(metadataRequests).toHaveBeenCalledTimes(3)
+    expect(metadataRequests.mock.calls[2]?.[0]).toContain('graphql')
   })
 
   it('detects merge queues once per base branch and blocks direct merges', async () => {
@@ -500,7 +519,7 @@ describe('GitHub GraphQL rate-limit guard', () => {
       baseRefOid: 'base-oid',
       headRefOid: 'head-oid'
     }
-    ghExecFileAsyncMock
+    metadataRequests
       .mockResolvedValueOnce({ stdout: JSON.stringify({ stack: null }) })
       .mockResolvedValueOnce({ stdout: JSON.stringify(prView) })
       .mockResolvedValueOnce({
@@ -524,13 +543,13 @@ describe('GitHub GraphQL rate-limit guard', () => {
       mergePR('/repo-root', 7, 'squash', undefined, { owner: 'stablyai', repo: 'orca' })
     ).resolves.toMatchObject({ ok: false })
 
-    expect(
-      ghExecFileAsyncMock.mock.calls.filter((call) => call[0].includes('graphql'))
-    ).toHaveLength(1)
-    expect(ghExecFileAsyncMock.mock.calls[2]?.[0]).toEqual(
+    expect(metadataRequests.mock.calls.filter((call) => call[0].includes('graphql'))).toHaveLength(
+      1
+    )
+    expect(metadataRequests.mock.calls[2]?.[0]).toEqual(
       expect.arrayContaining(['-f', 'owner=stablyai', '-f', 'repo=orca', '-f', 'branch=true'])
     )
-    expect(ghExecFileAsyncMock.mock.calls[2]?.[0]).not.toContain('-F')
+    expect(metadataRequests.mock.calls[2]?.[0]).not.toContain('-F')
   })
 
   it('caches unknown merge queue probes after GraphQL failures', async () => {
@@ -551,7 +570,7 @@ describe('GitHub GraphQL rate-limit guard', () => {
       baseRefOid: 'base-oid',
       headRefOid: 'head-oid'
     }
-    ghExecFileAsyncMock
+    metadataRequests
       .mockResolvedValueOnce({ stdout: JSON.stringify(prView) })
       .mockRejectedValueOnce(new Error('network is down'))
       .mockResolvedValueOnce({ stdout: '{}' })
@@ -565,9 +584,9 @@ describe('GitHub GraphQL rate-limit guard', () => {
       mergeQueueRequired: null
     })
 
-    expect(
-      ghExecFileAsyncMock.mock.calls.filter((call) => call[0].includes('graphql'))
-    ).toHaveLength(1)
+    expect(metadataRequests.mock.calls.filter((call) => call[0].includes('graphql'))).toHaveLength(
+      1
+    )
   })
 
   it('reuses repository metadata between PR details and sidebar refreshes', async () => {
@@ -587,7 +606,7 @@ describe('GitHub GraphQL rate-limit guard', () => {
       baseRefName: 'main',
       headRefOid: 'head-oid'
     }
-    ghExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+    metadataRequests.mockImplementation(async (args: string[]) => {
       if (args.includes('graphql')) {
         return {
           stdout: JSON.stringify({
@@ -606,15 +625,13 @@ describe('GitHub GraphQL rate-limit guard', () => {
       autoMergeAllowed: true
     })
 
-    expect(
-      ghExecFileAsyncMock.mock.calls.filter(([args]) => args.includes('graphql'))
-    ).toHaveLength(1)
+    expect(metadataRequests.mock.calls.filter(([args]) => args.includes('graphql'))).toHaveLength(1)
   })
 
   it('bounds merge metadata cache entries across many base branches', async () => {
     getOwnerRepoMock.mockResolvedValue({ owner: 'stablyai', repo: 'orca' })
     let prViewCount = 0
-    ghExecFileAsyncMock.mockImplementation(async (args) => {
+    metadataRequests.mockImplementation(async (args) => {
       if (args.includes('graphql')) {
         return { stdout: JSON.stringify({ data: { repository: { mergeQueue: null } } }) }
       }
@@ -666,7 +683,7 @@ describe('GitHub GraphQL rate-limit guard', () => {
       baseRefName: 'main',
       headRefOid: 'head-oid'
     }
-    ghExecFileAsyncMock.mockImplementation(async (args, options) => {
+    metadataRequests.mockImplementation(async (args, options) => {
       if (args.includes('graphql')) {
         const enterprise = options?.host === 'github.acme-corp.com'
         return {
@@ -698,7 +715,7 @@ describe('GitHub GraphQL rate-limit guard', () => {
 
     expect(githubDotCom?.autoMergeAllowed).toBe(true)
     expect(enterprise?.autoMergeAllowed).toBe(false)
-    const graphqlCalls = ghExecFileAsyncMock.mock.calls.filter(([args]) => args.includes('graphql'))
+    const graphqlCalls = metadataRequests.mock.calls.filter(([args]) => args.includes('graphql'))
     expect(graphqlCalls).toHaveLength(2)
     expect(graphqlCalls[1]?.[1]).toEqual(expect.objectContaining({ host: 'github.acme-corp.com' }))
   })
@@ -719,11 +736,11 @@ describe('GitHub GraphQL rate-limit guard', () => {
     ).resolves.toBeNull()
 
     expect(acquireMock).not.toHaveBeenCalled()
-    expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
+    expect(metadataRequests).not.toHaveBeenCalled()
   })
 
   it('returns conflicting file details instead of running gh merge when PR is dirty', async () => {
-    ghExecFileAsyncMock
+    metadataRequests
       .mockResolvedValueOnce({ stdout: JSON.stringify({ stack: null }) })
       .mockResolvedValueOnce({
         stdout: JSON.stringify({
@@ -763,11 +780,11 @@ describe('GitHub GraphQL rate-limit guard', () => {
         '- src/conflict.ts'
     })
 
-    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
+    expect(metadataRequests).toHaveBeenCalledTimes(2)
   })
 
   it('does not run merge conflict preflight for SSH-backed repos', async () => {
-    ghExecFileAsyncMock
+    metadataRequests
       .mockResolvedValueOnce({ stdout: JSON.stringify({ stack: null }) })
       .mockResolvedValueOnce({
         stdout: JSON.stringify({
@@ -794,15 +811,15 @@ describe('GitHub GraphQL rate-limit guard', () => {
       })
     ).resolves.toEqual({ ok: true })
 
-    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(3)
-    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+    expect(metadataRequests).toHaveBeenCalledTimes(3)
+    expect(metadataRequests).toHaveBeenNthCalledWith(
       3,
       ['pr', 'merge', '7', '--squash', '--repo', 'stablyai/orca'],
       expect.objectContaining({
         env: expect.objectContaining({ GH_PROMPT_DISABLED: '1' })
       })
     )
-    expect(ghExecFileAsyncMock.mock.calls[0]?.[1]).not.toHaveProperty('cwd')
+    expect(metadataRequests.mock.calls[0]?.[1]).not.toHaveProperty('cwd')
     expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
   })
 
@@ -816,7 +833,7 @@ describe('GitHub GraphQL rate-limit guard', () => {
 
     await expect(resolveReviewThread('/repo-root', 'thread-1', true)).resolves.toBe(false)
 
-    expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
+    expect(metadataRequests).not.toHaveBeenCalled()
     expect(noteRateLimitSpendMock).not.toHaveBeenCalled()
   })
 })

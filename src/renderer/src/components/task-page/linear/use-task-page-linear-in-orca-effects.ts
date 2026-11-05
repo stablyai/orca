@@ -1,4 +1,4 @@
-import { observeLinearIssueRead } from '@/store/slices/linear/linear-issue-publication'
+import { observeLinearIssueRead } from '@/store/slices/linear/linear-issue-read-lifecycle'
 import type { TaskPageLinearListEffectsModel } from './use-task-page-linear-list-effects'
 import { useEffect } from 'react'
 import {

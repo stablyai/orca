@@ -7,21 +7,18 @@ import {
   normalizeTerminalCustomThemes,
   terminalCustomThemeToXtermTheme,
   type TerminalCustomTheme
-} from '../../../shared/terminal-custom-themes'
+} from '../../../shared/terminal-themes/terminal-custom-themes'
 import {
-  DEFAULT_TERMINAL_THEME_DARK,
-  DEFAULT_TERMINAL_THEME_LIGHT,
   lookupTerminalTheme,
   resolveTerminalPalette,
   type TerminalPaletteSettings,
   type TerminalThemeLookupSettings
-} from '../../../shared/terminal-theme-selection'
+} from '../../../shared/terminal-themes/terminal-theme-selection'
 
 export const BUILTIN_TERMINAL_THEME_NAMES = getThemeNames()
 
-export { DEFAULT_TERMINAL_THEME_DARK, DEFAULT_TERMINAL_THEME_LIGHT }
 export const DEFAULT_TERMINAL_DIVIDER_DARK = '#3f3f46'
-const DEFAULT_TERMINAL_DIVIDER_LIGHT = '#d4d4d8'
+export const DEFAULT_TERMINAL_DIVIDER_LIGHT = '#d4d4d8'
 
 export type EffectiveTerminalAppearance = {
   mode: 'dark' | 'light'
@@ -155,8 +152,3 @@ export function resolvePaneStyleOptions(
     focusFollowsMouse: settings.terminalFocusFollowsMouse
   }
 }
-
-export {
-  isTerminalBackgroundLight,
-  resolveOpaqueTerminalBackground
-} from '../../../shared/terminal-title-contrast'

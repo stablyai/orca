@@ -6,7 +6,7 @@ import type {
   AcpDeclaredEffortFixtureModule,
   DeclaredEffortCase
 } from '../../shared/acp-declared-effort.test-fixture-contract'
-import type { AgentSessionModelCatalogResult } from '../../shared/agent-session-wire'
+import type { AgentSessionModelCatalogResult } from '../../shared/agent-session/agent-session-wire'
 import recordedGrok from './fixtures/grok-v1-model.json'
 import { AcpStructuredOptions, readAcpLiveOptions } from './acp-structured-options'
 import { grokModelCatalogFromState, grokModelEfforts } from './acp-dialects/grok-model-catalog'
@@ -30,7 +30,7 @@ import { agentSessionRecordFixture } from '../native-chat/agent-session-record-t
 import {
   openTestAgentSessionRecordStore,
   seedTestAgentSessionRecordStore
-} from '../runtime/agent-session-record-store-test-harness'
+} from '../runtime/agent-session/records/agent-session-record-store-test-harness'
 import {
   openTestJournalHostDatabase,
   closeTestJournalHostDatabase
@@ -239,7 +239,8 @@ export const recordedEffortCase: AcpDeclaredEffortFixtureModule['recordedEffortC
     agent: source.agent,
     model: source.model,
     policy: source.agent === 'grok' ? 'high' : 'low',
-    display: input === 'low' ? 'low' : input === 'absent' ? undefined : null,
+    display:
+      input === 'low' || input === 'opencode' ? 'low' : input === 'absent' ? undefined : null,
     catalog: source.catalog,
     live,
     resting,

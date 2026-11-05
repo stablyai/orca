@@ -1,13 +1,19 @@
 import { isOrchestrationMutation } from '../../../shared/orchestration-rpc-contract'
 import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
-import type { PairedRuntimeConnection } from '../../../shared/paired-runtime-connection'
+import type { PairedRuntimeConnection } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import type {
   RuntimeOrchestrationEnvelope,
   RuntimeRpcResponse
 } from '../../../shared/runtime-rpc-envelope'
-import type { KnownRuntimeEnvironment } from '../../../shared/runtime-environments'
-import { getPreferredPairedRuntimeConnection } from '../../../shared/runtime-environments'
-import { markEnvironmentUsed, resolveEnvironment } from '../../../shared/runtime-environment-store'
+
+import {
+  type KnownRuntimeEnvironment,
+  getPreferredPairedRuntimeConnection
+} from '../../../shared/remote-runtime/host-catalog/runtime-environments'
+import {
+  markEnvironmentUsed,
+  resolveEnvironment
+} from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { recordRuntimeEnvironmentUsage } from './runtime-environment-usage-record'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
 import {

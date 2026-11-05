@@ -14,7 +14,7 @@ import { openProfileStateDatabaseReadOnly } from '../profile-state/profile-state
 import { profileStateDatabaseFile } from '../../../shared/profile-state-storage-paths'
 import { ProfileStateSqliteAuthority } from '../profile-state/profile-state-sqlite-authority'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
-import { makePaneKey } from '../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 
 vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },

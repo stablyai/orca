@@ -1,5 +1,7 @@
 import { createHash } from 'node:crypto'
+import { fingerprintAuthenticatedPairingCredential } from '../rpc/server/pairing/device-principal'
 import type {
+  RuntimeRequestPreparation,
   RuntimeOrchestrationEnvelope,
   RuntimeRpcResponse
 } from '../../../shared/runtime-rpc-envelope'
@@ -8,11 +10,13 @@ export type OrchestrationWorkerServer = {
   environmentId: string
   name: string
   peerFingerprint: string
+  homePeerFingerprint?: string
   pairingRevision?: number
 }
 
 /** Callers that already proved the contract, or that pin the pairing generation they resolved against. */
 export type OrchestrationEnvironmentCallOptions = {
+  prepareRequest?: RuntimeRequestPreparation
   contractVerified?: boolean
   expectedEnvironmentPairingRevision?: number
 }
@@ -25,10 +29,20 @@ export type OrchestrationEnvironmentTransport = {
     params: unknown,
     timeoutMs?: number,
     envelope?: RuntimeOrchestrationEnvelope,
-    expectedEnvironmentPairingRevision?: number
+    expectedEnvironmentPairingRevision?: number,
+    prepareRequest?: RuntimeRequestPreparation
   ): Promise<RuntimeRpcResponse<unknown>>
 }
 
 export function fingerprintOrchestrationPeer(publicKeyB64: string): string {
   return createHash('sha256').update(Buffer.from(publicKeyB64, 'base64')).digest('base64url')
+}
+
+/** How a home names a paired runtime and itself; the runtime derives the same pair from its own
+ *  pairing key and from the home's credential when it authenticates the home's socket. */
+export function pairedOrchestrationPeers(hostPublicKeyB64: string, deviceToken: string) {
+  return {
+    peerFingerprint: fingerprintOrchestrationPeer(hostPublicKeyB64),
+    homePeerFingerprint: fingerprintAuthenticatedPairingCredential(deviceToken)
+  }
 }

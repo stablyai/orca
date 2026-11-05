@@ -3,8 +3,8 @@ import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import * as path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { DEFAULT_GIT_STATUS_LIMIT } from '../../../shared/git-status-limit'
-import { getStatus } from '../status'
+import { DEFAULT_GIT_STATUS_LIMIT } from '../../../shared/git/status/git-status-limit'
+import { getStatus } from './status-read'
 import { bulkStageFiles, stageWorktreeChanges } from './staging'
 
 const tempRoots: string[] = []
