@@ -1,9 +1,13 @@
 import type { Terminal } from '@xterm/xterm'
 import { useAppStore } from '@/store'
-import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../../shared/execution-host'
-import { buildWindowsPtyCompatibilityOptions } from '@/lib/pane-manager/windows-pty-compatibility'
+import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import {
-  resolveRemotePtyOwnerMachinePlatform,
+  buildWindowsPtyCompatibilityOptions,
+  isLocalPtyOwner
+} from '@/lib/pane-manager/windows-pty-compatibility'
+import {
+  remotePtyOwnerMachinePlatform,
+  resolveRemotePtyOwnerMachine,
   type PaneOwnerTransport,
   type PtyOwnerMachineState
 } from '../pty-owner-machine-platform'
@@ -40,11 +44,16 @@ export function createPaneWindowsPtyModel(
   }
   const applyKnown = (): boolean => {
     const { terminal, owner, transport } = readContext()
-    const isLocal = owner.executionHostId === LOCAL_EXECUTION_HOST_ID && owner.connectionId === null
-    const remoteOwnerPlatform = isLocal
-      ? null
-      : resolveRemotePtyOwnerMachinePlatform(store.getState(), owner, transport)
-    if (!isLocal && remoteOwnerPlatform === null) {
+    const isLocal = isLocalPtyOwner(owner)
+    const machine = isLocal ? null : resolveRemotePtyOwnerMachine(owner, transport)
+    if (!isLocal && !machine) {
+      // No owner to name, so no OS will ever arrive: keep the creation-time model.
+      return true
+    }
+    const remoteOwnerPlatform = machine
+      ? remotePtyOwnerMachinePlatform(store.getState(), machine)
+      : null
+    if (machine && remoteOwnerPlatform === null) {
       return false
     }
     const { windowsPty } = buildWindowsPtyCompatibilityOptions({

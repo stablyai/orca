@@ -144,6 +144,48 @@ describe('pane resize model on a Mac client', () => {
     expect(await scrollbackAfterShrinkAndGrow(terminal)).toBeLessThanOrEqual(0)
   })
 
+  it("falls back to the pane's own SSH owner while the transport cannot name its host", async () => {
+    const terminal = newTerminal()
+    const store = fakeStore({
+      ...EMPTY,
+      runtimeStatusByEnvironmentId: new Map([['env-1', serverStatus('linux')]]),
+      sshStateByEnvironment: new Map([
+        [
+          'env-1',
+          {
+            connectionStates: new Map([['target-1', sshState('win32')]]),
+            targetLabels: new Map(),
+            targetGenerations: new Map(),
+            removedTargetLabels: new Map(),
+            targetsHydrated: true
+          }
+        ]
+      ])
+    })
+    const transport = {
+      getRuntimeEnvironmentId: () => 'env-1',
+      getExecutionHostId: () => null
+    }
+    createPaneWindowsPtyModel(paneContext(terminal, 'ssh:target-1', transport), store).apply()
+    expect(await scrollbackAfterShrinkAndGrow(terminal)).toBeGreaterThan(0)
+  })
+
+  it('does not watch the store for an owner it can never name', () => {
+    const terminal = newTerminal()
+    terminal.options.windowsPty = { backend: 'conpty' }
+    const store = fakeStore(EMPTY)
+    createPaneWindowsPtyModel(
+      () => ({
+        terminal,
+        owner: { executionHostId: 'local', runtimeEnvironmentId: null, connectionId: 'legacy' },
+        transport: null
+      }),
+      store
+    ).apply()
+    expect(terminal.options.windowsPty).toEqual({ backend: 'conpty' })
+    expect(store.listenerCount()).toBe(0)
+  })
+
   it('stays Unix until a late server status arrives, then switches once without touching the drawn grid', async () => {
     const terminal = newTerminal()
     const store = fakeStore(EMPTY)

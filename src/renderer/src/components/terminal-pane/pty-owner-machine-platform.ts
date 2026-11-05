@@ -35,29 +35,49 @@ export type PaneOwnerTransport = Partial<
   Pick<PtyTransport, 'getRuntimeEnvironmentId' | 'getExecutionHostId'>
 > | null
 
+export type RemotePtyOwnerMachine =
+  | { kind: 'ssh'; targetId: string; runtimeEnvironmentId: string | null }
+  | { kind: 'runtime'; environmentId: string }
+
 /**
- * OS of the remote machine whose process owns the pane's PTY, or null for local or not yet known.
- * A paired server's transport names the PTY's own host: a pane mirrored as `runtime:<env>` can be
- * that server's SSH target, whose OS is not the server's.
+ * The remote machine whose process owns the pane's PTY, or null when none can be named. A paired
+ * server's transport names the PTY's own host: a pane mirrored as `runtime:<env>` can be that
+ * server's SSH target, whose OS is not the server's. A transport that cannot name its host yet
+ * falls back to the pane's own owner.
  */
-export function resolveRemotePtyOwnerMachinePlatform(
-  state: PtyOwnerMachineState,
+export function resolveRemotePtyOwnerMachine(
   owner: { executionHostId: string; runtimeEnvironmentId: string | null },
   transport: PaneOwnerTransport = null
-): NodeJS.Platform | null {
+): RemotePtyOwnerMachine | null {
   const transportEnvironmentId = transport?.getRuntimeEnvironmentId?.() ?? null
   if (transportEnvironmentId) {
-    const transportHost = parseExecutionHostId(transport?.getExecutionHostId?.())
-    return transportHost?.kind === 'ssh'
-      ? sshTargetRemotePlatform(state, transportHost.targetId, transportEnvironmentId)
-      : runtimeHostPlatform(state, transportEnvironmentId)
+    const host =
+      parseExecutionHostId(transport?.getExecutionHostId?.()) ??
+      parseExecutionHostId(owner.executionHostId)
+    return host?.kind === 'ssh'
+      ? { kind: 'ssh', targetId: host.targetId, runtimeEnvironmentId: transportEnvironmentId }
+      : { kind: 'runtime', environmentId: transportEnvironmentId }
   }
   const host = parseExecutionHostId(owner.executionHostId)
   if (host?.kind === 'runtime') {
-    return runtimeHostPlatform(state, host.environmentId)
+    return { kind: 'runtime', environmentId: host.environmentId }
   }
   if (host?.kind === 'ssh') {
-    return sshTargetRemotePlatform(state, host.targetId, owner.runtimeEnvironmentId)
+    return {
+      kind: 'ssh',
+      targetId: host.targetId,
+      runtimeEnvironmentId: owner.runtimeEnvironmentId
+    }
   }
   return null
+}
+
+/** OS of a remote PTY owner, or null until its SSH state or server status reports it. */
+export function remotePtyOwnerMachinePlatform(
+  state: PtyOwnerMachineState,
+  machine: RemotePtyOwnerMachine
+): NodeJS.Platform | null {
+  return machine.kind === 'ssh'
+    ? sshTargetRemotePlatform(state, machine.targetId, machine.runtimeEnvironmentId)
+    : runtimeHostPlatform(state, machine.environmentId)
 }

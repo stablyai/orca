@@ -30,6 +30,17 @@ function isWslShellOverride(shellOverride: string | null | undefined): boolean {
 }
 
 /**
+ * A pane whose PTY this client's own machine runs. An undefined connectionId means the owner is
+ * still unresolved (e.g. a rowless pane), not local, matching `isLocalNativeWindowsPty`.
+ */
+export function isLocalPtyOwner(owner: {
+  executionHostId: ExecutionHostId
+  connectionId: string | null | undefined
+}): boolean {
+  return owner.executionHostId === LOCAL_EXECUTION_HOST_ID && owner.connectionId === null
+}
+
+/**
  * xterm's ConPTY model for every pane a Windows machine owns, this one or a remote one, WSL shells
  * included: the same owner-backend rule as the daemon's and main's emulators. Native-only
  * workarounds (cursor, CJK, keyboard) stay behind `isLocalNativeWindowsConpty`. executionHostId
@@ -38,9 +49,7 @@ function isWslShellOverride(shellOverride: string | null | undefined): boolean {
 export function buildWindowsPtyCompatibilityOptions(
   context: WindowsPtyCompatibilityContext & { executionHostId: ExecutionHostId }
 ): Partial<ITerminalOptions> {
-  const isLocalPane =
-    context.executionHostId === LOCAL_EXECUTION_HOST_ID && context.connectionId === null
-  const windowsPty = isLocalPane
+  const windowsPty = isLocalPtyOwner(context)
     ? windowsPtyForOwnerMachine(
         isWindowsUserAgent(context.userAgent) ? 'win32' : null,
         context.osRelease
