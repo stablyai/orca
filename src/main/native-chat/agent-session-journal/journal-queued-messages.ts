@@ -1,3 +1,4 @@
+import { JournalQueuedMessageList } from './journal-queued-message-list'
 import type { JournalReducerState } from './journal-reducer'
 import { journalInputAttemptEnded, type JournalInputWork } from './journal-input-obligations'
 import {
@@ -24,7 +25,7 @@ import type { AgentSessionExecutionOptions } from '../../../shared/agent-session
 import type { JournalQueueCardChange } from './journal-queue-events'
 import { LegacyQueuedCards } from './journal-queue-import'
 import {
-  settleJournalCommit,
+  settleJournalCommitAsync,
   composeJournalOperationReceipts,
   type JournalOperationReceipt
 } from './journal-row-writer'
@@ -58,10 +59,11 @@ export class JournalQueuedMessages {
   )
   private readonly legacy: LegacyQueuedCards
   inputWork: () => JournalInputWork | null = () => null
-  private viewed: { key: string; cards: readonly QueuedMessageRow[] } | null = null
+  private readonly listed: JournalQueuedMessageList
 
   constructor(private readonly deps: JournalQueuedMessagesDeps) {
     this.legacy = new LegacyQueuedCards(deps)
+    this.listed = new JournalQueuedMessageList(this.legacy, () => this.inputState(), deps.state)
   }
 
   initialize = (): Promise<void> => this.legacy.initialize()
@@ -86,13 +88,11 @@ export class JournalQueuedMessages {
   }
 
   list(): readonly QueuedMessageRow[] {
-    const key = this.revision()
-    if (this.viewed?.key !== key) {
-      const state = this.inputState()
-      const cards = [...journalInputOrder(state).liveCards(state)]
-      this.viewed = { key, cards: cards.sort((a, b) => a.position - b.position) }
-    }
-    return this.viewed.cards
+    return this.listed.list()
+  }
+
+  listAsync(state?: JournalReducerState): Promise<readonly QueuedMessageRow[]> {
+    return this.listed.listAsync(state)
   }
 
   attemptEnded(clientMessageId: string): boolean {
@@ -321,10 +321,10 @@ export class JournalQueuedMessages {
             await receipt?.write(db, row)
           },
           committed: () => {
-            settleJournalCommit(
+            return settleJournalCommitAsync([
               () => planned?.plan.receipt.committed(),
               () => receipt?.committed()
-            )
+            ])
           }
         }
       )

@@ -1,6 +1,7 @@
 import { journalTransferBatches, receiveJournalResult } from './journal-unit-transfer'
 import type { JournalEffectResult } from './journal-persistence-plan'
-import { Worker } from 'node:worker_threads'
+import type { Worker } from 'node:worker_threads'
+import { spawnWorkerThread } from '../../worker-threads/worker-thread-spawn'
 import type { SQLInputValue } from 'node:sqlite'
 import type { SqliteRow } from '../../sqlite/sqlite-statement'
 import {
@@ -45,7 +46,7 @@ export class JournalSqlOwner {
   onFault: (error: Error) => void = () => {}
 
   constructor(filename: string, options: { reader?: boolean } = {}) {
-    this.worker = new Worker(
+    this.worker = spawnWorkerThread(
       resolveWorkerThreadEntryPath(
         currentWorkerEntryLayout(__dirname),
         'journal-sql-worker-entry.js'

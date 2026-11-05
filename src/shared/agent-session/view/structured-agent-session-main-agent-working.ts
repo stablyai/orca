@@ -1,5 +1,6 @@
+import { finishAgentSessionSteps } from '../agent-session-projection-steps'
 import type { AgentJournalSubmission } from '../journal/agent-session-journal-types'
-import { hasUnansweredStructuredAgentSessionDispatch } from '../requests/structured-agent-session-unanswered-dispatch'
+import { isUnansweredStructuredAgentSessionDispatch } from '../requests/structured-agent-session-unanswered-dispatch'
 
 /** Host operational projections scope current generations; clients without scope retain legacy running-turn/pending-prompt/unanswered-send reads. */
 export type StructuredAgentSessionWorkScope = {
@@ -16,10 +17,29 @@ export function isStructuredAgentSessionMainAgentWorking(
   currentFence?: number | null,
   scope?: StructuredAgentSessionWorkScope
 ): boolean {
-  return (
-    activeTurnId !== null ||
-    (scope
-      ? submissions.some(scope.owesSend)
-      : hasUnansweredStructuredAgentSessionDispatch(submissions, currentFence))
+  return finishAgentSessionSteps(
+    isStructuredAgentSessionMainAgentWorkingSteps(activeTurnId, submissions, currentFence, scope)
   )
+}
+
+export function* isStructuredAgentSessionMainAgentWorkingSteps(
+  activeTurnId: string | null,
+  submissions: readonly AgentJournalSubmission[],
+  currentFence?: number | null,
+  scope?: StructuredAgentSessionWorkScope
+): Generator<void, boolean> {
+  if (activeTurnId !== null) {
+    return true
+  }
+  for (const submission of submissions) {
+    yield
+    if (
+      scope
+        ? scope.owesSend(submission)
+        : isUnansweredStructuredAgentSessionDispatch(submission, currentFence)
+    ) {
+      return true
+    }
+  }
+  return false
 }

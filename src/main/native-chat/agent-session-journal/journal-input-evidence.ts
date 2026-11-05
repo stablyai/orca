@@ -1,3 +1,4 @@
+import { finishJournalSteps, sortJournalSteps } from './journal-reconstruction-steps'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   refusedBeforeWrite,
@@ -85,7 +86,18 @@ export class JournalInputEvidence extends JournalInputObservations {
     items: readonly AgentJournalRenderItem[],
     afterStop?: number
   ): AgentJournalSubmission[] {
-    const ids = new Set<string>(this.statusPending.keys())
+    return finishJournalSteps(this.statusInputSteps(state, items, afterStop))
+  }
+  *statusInputSteps(
+    state: JournalReducerState,
+    items: readonly AgentJournalRenderItem[],
+    afterStop?: number
+  ): Generator<void, AgentJournalSubmission[]> {
+    const ids = new Set<string>()
+    for (const id of this.statusPending.keys()) {
+      ids.add(id)
+      yield
+    }
     const add = (id: string | undefined) => {
       if (id !== undefined) {
         ids.add(id)
@@ -100,17 +112,22 @@ export class JournalInputEvidence extends JournalInputObservations {
       add(this.inputIds.get(item.itemId))
       // One latest steer preserves existence across the helper's actual clear-divider filter.
       add(this.steers.get(item.itemId)?.lastId())
+      yield
     }
-    return [...ids]
-      .flatMap((id) => {
-        const entry = state.submissions.get(id)
-        return entry ? [entry] : []
-      })
-      .sort(
-        (a, b) =>
-          a.submittedAt - b.submittedAt ||
-          this.inputOrdinal(a.clientMessageId) - this.inputOrdinal(b.clientMessageId)
-      )
+    const submissions: AgentJournalSubmission[] = []
+    for (const id of ids) {
+      const entry = state.submissions.get(id)
+      if (entry) {
+        submissions.push(entry)
+      }
+      yield
+    }
+    return yield* sortJournalSteps(
+      submissions,
+      (a, b) =>
+        a.submittedAt - b.submittedAt ||
+        this.inputOrdinal(a.clientMessageId) - this.inputOrdinal(b.clientMessageId)
+    )
   }
 
   stoppedHistoryInputs(excluding: string, afterSequence = 0): AgentJournalSubmission[] {

@@ -23,6 +23,6 @@ export type StructuredAgentSessionCurrentWorkJournal = Pick<
   AgentSessionJournal,
   'runningTurn' | 'itemFence' | 'visitItems' | 'submissions' | 'wroteBeforeOpen' | 'item' | 'cursor'
 > &
-  Partial<Pick<AgentSessionJournal, 'readSince'>> & {
+  Partial<Pick<AgentSessionJournal, 'readSince' | 'visitItemSteps'>> & {
     inputOrder: Pick<AgentSessionJournal['inputOrder'], 'recoverableSubmissions'>
   }

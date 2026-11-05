@@ -1,3 +1,4 @@
+import { finishAgentSessionSteps } from './agent-session-projection-steps'
 import type { AgentJournalCursor } from './journal/agent-session-journal-identity'
 import type {
   AgentJournalItemBody,
@@ -40,8 +41,16 @@ export function agentSessionContextSequenceFor(
 export function latestAgentSessionContextClearSequence(
   items: Iterable<Pick<AgentJournalRenderItem, 'sequence' | 'body'>>
 ): number {
+  return finishAgentSessionSteps(latestAgentSessionContextClearSequenceSteps(items))
+}
+
+export function* latestAgentSessionContextClearSequenceSteps(
+  items: Iterable<Pick<AgentJournalRenderItem, 'sequence' | 'body'>>
+): Generator<void, number> {
   let sequence = 0
   for (const item of items) {
+    yield
+
     if (item.sequence > sequence && isAgentSessionContextClear(item.body)) {
       sequence = item.sequence
     }
@@ -76,14 +85,40 @@ export function agentSessionCurrentContextRows(
   items: readonly AgentJournalRenderItem[],
   submissions: readonly AgentJournalSubmission[] = [],
   minimumSequence = 0
-) {
-  const sequence = Math.max(minimumSequence, latestAgentSessionContextClearSequence(items))
-  return sequence > 0
-    ? {
-        items: items.filter((item) => item.sequence > sequence),
-        submissions: submissions.filter(
-          (submission) => (submission.acceptedSequence ?? 0) > sequence
-        )
-      }
-    : { items, submissions }
+): { items: readonly AgentJournalRenderItem[]; submissions: readonly AgentJournalSubmission[] } {
+  return finishAgentSessionSteps(
+    agentSessionCurrentContextRowsSteps(items, submissions, minimumSequence)
+  )
+}
+
+export function* agentSessionCurrentContextRowsSteps(
+  items: readonly AgentJournalRenderItem[],
+  submissions: readonly AgentJournalSubmission[] = [],
+  minimumSequence = 0
+): Generator<
+  void,
+  { items: readonly AgentJournalRenderItem[]; submissions: readonly AgentJournalSubmission[] }
+> {
+  const sequence = Math.max(
+    minimumSequence,
+    yield* latestAgentSessionContextClearSequenceSteps(items)
+  )
+  if (sequence === 0) {
+    return { items, submissions }
+  }
+  const currentItems: AgentJournalRenderItem[] = []
+  const currentSubmissions: AgentJournalSubmission[] = []
+  for (const item of items) {
+    if (item.sequence > sequence) {
+      currentItems.push(item)
+    }
+    yield
+  }
+  for (const submission of submissions) {
+    if ((submission.acceptedSequence ?? 0) > sequence) {
+      currentSubmissions.push(submission)
+    }
+    yield
+  }
+  return { items: currentItems, submissions: currentSubmissions }
 }

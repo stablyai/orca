@@ -1,4 +1,4 @@
-import { finishJournalSteps } from './journal-reconstruction-steps'
+import { finishJournalSteps, sortJournalSteps } from './journal-reconstruction-steps'
 import { journalContextCursor } from './journal-context-cursor'
 import { journalDispatchRowApplies } from './journal-dispatch-settlement'
 import {
@@ -201,11 +201,20 @@ export function rememberAppliedSettlementId(
 }
 
 export function renderJournalItems(state: JournalReducerState): AgentJournalSnapshot['items'] {
-  // Map insertion order changes on recreation; journal position alone orders the timeline.
-  return [...state.items.values()]
-    .filter((item) => journalInputPresentationMember(state, item.itemId))
-    .map((item) => projectJournalStopNote(item, state.items))
-    .sort(compareAgentJournalItems)
+  return finishJournalSteps(renderJournalItemSteps(state))
+}
+
+export function* renderJournalItemSteps(
+  state: JournalReducerState
+): Generator<void, AgentJournalSnapshot['items']> {
+  const items: AgentJournalSnapshot['items'] = []
+  for (const item of state.items.values()) {
+    if (journalInputPresentationMember(state, item.itemId)) {
+      items.push(projectJournalStopNote(item, state.items))
+    }
+    yield
+  }
+  return yield* sortJournalSteps(items, compareAgentJournalItems)
 }
 
 export function renderJournalState(state: JournalReducerState): AgentJournalSnapshot {

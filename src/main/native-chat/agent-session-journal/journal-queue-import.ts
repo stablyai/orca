@@ -33,41 +33,45 @@ export class LegacyQueuedCards {
   private revision = 0
   private stored: { revision: number; rows: readonly QueuedMessageRow[] } | null = null
   private readonly witnesses = new Map<string, { messageId: string; change: JournalQueuedChange }>()
-  private viewed: {
-    owner: JournalReducerState
-    key: string
-    cards: readonly QueuedMessageRow[]
-    byId: ReadonlyMap<string, QueuedMessageRow>
-    display?: JournalReducerState
-    displayThrough?: number
-    handedOff: readonly { card: QueuedMessageRow; submission: AgentJournalSubmission }[]
-  } | null = null
+  private readonly views = new WeakMap<
+    JournalReducerState,
+    {
+      owner: JournalReducerState
+      key: string
+      cards: readonly QueuedMessageRow[]
+      byId: ReadonlyMap<string, QueuedMessageRow>
+      display?: JournalReducerState
+      displayThrough?: number
+      handedOff: readonly { card: QueuedMessageRow; submission: AgentJournalSubmission }[]
+    }
+  >()
+  private get viewed() {
+    return this.views.get(this.deps.state()) ?? null
+  }
 
   constructor(private readonly deps: LegacyDeps) {}
 
   /** Disable fallback when no readable legacy cards remain; classify retained cards through the live fold. */
-  key(): string {
+  key(state = this.deps.state()): string {
     if (this.rows().length === 0) {
       return ''
     }
-    const state = this.deps.state()
     return `${this.revision}:${state.epoch}:${journalInputOrder(state).linkedVersion()}`
   }
 
   cards(): readonly QueuedMessageRow[] {
     return finishJournalSteps(this.cardSteps())
   }
-  cardsAsync(): Promise<readonly QueuedMessageRow[]> {
-    return finishJournalStepsAsync(this.cardSteps())
+  cardsAsync(state = this.deps.state()): Promise<readonly QueuedMessageRow[]> {
+    return finishJournalStepsAsync(this.cardSteps(state))
   }
-  private *cardSteps(): Generator<void, readonly QueuedMessageRow[]> {
-    const key = this.key()
+  private *cardSteps(state = this.deps.state()): Generator<void, readonly QueuedMessageRow[]> {
+    const key = this.key(state)
     if (key === '') {
-      this.viewed = null
+      this.views.delete(state)
       return []
     }
-    const state = this.deps.state()
-    if (this.viewed?.key !== key || this.viewed.owner !== state) {
+    if (this.views.get(state)?.key !== key) {
       const cards: QueuedMessageRow[] = []
       const handedOff: { card: QueuedMessageRow; submission: AgentJournalSubmission }[] = []
       const byId = new Map<string, QueuedMessageRow>()
@@ -84,9 +88,9 @@ export class LegacyQueuedCards {
         }
         yield
       }
-      this.viewed = { owner: state, key, cards, handedOff, byId }
+      this.views.set(state, { owner: state, key, cards, handedOff, byId })
     }
-    return this.viewed.cards
+    return this.views.get(state)!.cards
   }
 
   get(messageId: string): QueuedMessageRow | undefined {
@@ -96,18 +100,22 @@ export class LegacyQueuedCards {
 
   // Failed adoption cannot hide spent sends; derive display changes only on copied state.
   displayState(): JournalReducerState {
-    const state = this.deps.state()
-    this.cards()
-    if (this.viewed?.display && this.viewed.displayThrough === state.lastSequence) {
-      return this.viewed.display
+    return finishJournalSteps(this.displaySteps(this.deps.state()))
+  }
+  async preparePublication(state: JournalReducerState): Promise<void> {
+    await finishJournalStepsAsync(this.displaySteps(state))
+  }
+  private *displaySteps(state: JournalReducerState): Generator<void, JournalReducerState> {
+    yield* this.cardSteps(state)
+    const viewed = this.views.get(state)
+    if (viewed?.display && viewed.displayThrough === state.lastSequence) {
+      return viewed.display
     }
-    const handedOff = this.viewed?.handedOff ?? []
-    if (this.viewed) {
-      this.viewed.displayThrough = state.lastSequence
-    }
+    const handedOff = viewed?.handedOff ?? []
     if (handedOff.length === 0) {
-      if (this.viewed) {
-        this.viewed.display = state
+      if (viewed) {
+        viewed.displayThrough = state.lastSequence
+        viewed.display = state
       }
       return state
     }
@@ -124,9 +132,11 @@ export class LegacyQueuedCards {
       display.inputs.presentations.set(send.clientMessageId, card)
       foldQueuedHandOffInDoubt(send)
       placeQueuedHandOffInDoubt(display, send)
+      yield
     }
-    if (this.viewed) {
-      this.viewed.display = display
+    if (viewed) {
+      viewed.displayThrough = state.lastSequence
+      viewed.display = display
     }
     return display
   }

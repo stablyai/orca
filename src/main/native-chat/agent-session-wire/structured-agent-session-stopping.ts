@@ -1,3 +1,5 @@
+import { activeStructuredAgentSessionTurnIdSteps } from '../../../shared/agent-session/view/structured-agent-session-live-turn'
+import { finishAgentSessionSteps } from '../../../shared/agent-session/agent-session-projection-steps'
 // Derive Stopping from the Stop event and settlement; clear it when the bound turn ends.
 // A settled no-op binds no turn, so later work cannot inherit Stopping.
 
@@ -6,7 +8,7 @@ import type {
   AgentJournalSubmission
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
-import { activeStructuredAgentSessionTurnId } from '../../../shared/agent-session/view/structured-agent-session-live-turn'
+
 import type { StructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 import type { StructuredAgentSessionWorkScope } from '../../../shared/agent-session/view/structured-agent-session-main-agent-working'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
@@ -17,9 +19,19 @@ export function structuredAgentSessionStopping(
   journal: Pick<AgentSessionJournal, 'stopMarks'>,
   items: readonly AgentJournalRenderItem[],
   submissions: readonly AgentJournalSubmission[] = [],
-  /** A Stop bound to an ended generation’s turn is over. */
   scope?: StructuredAgentSessionWorkScope
 ): boolean {
+  return finishAgentSessionSteps(
+    structuredAgentSessionStoppingSteps(journal, items, submissions, scope)
+  )
+}
+
+export function* structuredAgentSessionStoppingSteps(
+  journal: Pick<AgentSessionJournal, 'stopMarks'>,
+  items: readonly AgentJournalRenderItem[],
+  submissions: readonly AgentJournalSubmission[] = [],
+  scope?: StructuredAgentSessionWorkScope
+): Generator<void, boolean> {
   const stop = journal.stopMarks.latest()
   if (stop === null || !stopIsAPersons(stop.event.reason)) {
     return false
@@ -32,7 +44,7 @@ export function structuredAgentSessionStopping(
     stop.event.turnId ??
     stop.settle?.turnId ??
     (failed && 'turnId' in failed ? failed.turnId : undefined)
-  const live = activeStructuredAgentSessionTurnId(
+  const live = yield* activeStructuredAgentSessionTurnIdSteps(
     items,
     scope && ((item) => scope.isCurrentItem(item.itemId))
   )
@@ -41,19 +53,21 @@ export function structuredAgentSessionStopping(
   }
   if (failed && 'openedAfter' in failed) {
     // Later handed-over sends open independent turns and cannot inherit this failed Stop.
-    const sentSince = firstSendHandedOverAfter(submissions, failed.openedAfter)
-    const first = firstTurnOpenedAfter(items, failed.openedAfter, sentSince)
+    const sentSince = yield* firstSendHandedOverAfterSteps(submissions, failed.openedAfter)
+    const first = yield* firstTurnOpenedAfterSteps(items, failed.openedAfter, sentSince)
     return first === null ? sentSince === Infinity : first === live
   }
   return false
 }
 
-function firstSendHandedOverAfter(
+export function* firstSendHandedOverAfterSteps(
   submissions: readonly AgentJournalSubmission[],
   sequence: number
-): number {
+): Generator<void, number> {
   let first = Infinity
   for (const submission of submissions) {
+    yield
+
     const at = submission.acceptedSequence
     if (submission.dispatchState !== 'rejected' && at !== undefined && at > sequence) {
       first = Math.min(first, at)
@@ -71,13 +85,15 @@ export function structuredAgentSessionFailedStopMark(
   return live !== null ? { turnId: live } : { openedAfter: journal.cursor().sequence }
 }
 
-function firstTurnOpenedAfter(
+export function* firstTurnOpenedAfterSteps(
   items: readonly AgentJournalRenderItem[],
   sequence: number,
   before: number
-): string | null {
+): Generator<void, string | null> {
   let first: string | null = null
   for (let index = items.length - 1; index >= 0; index -= 1) {
+    yield
+
     const item = items[index]
     if (!item || item.sequence <= sequence) {
       break

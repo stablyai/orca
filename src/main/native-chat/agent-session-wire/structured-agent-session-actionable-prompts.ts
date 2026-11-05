@@ -1,3 +1,10 @@
+import { sortJournalSteps } from '../agent-session-journal/journal-reconstruction-steps'
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { compareAgentJournalItems } from '../../../shared/agent-session/journal/agent-session-journal-position'
+import type {
+  StructuredAgentSessionCurrentWorkJournal,
+  StructuredAgentSessionCurrentWork
+} from './structured-agent-session-current-work'
 import type { JournalRow } from '../agent-session-journal/journal-row-schema'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
@@ -61,4 +68,64 @@ export function advancePromptProjection(
   } else {
     promptProjections.delete(journal)
   }
+}
+
+export function* prepareActionablePromptSteps(
+  journal: StructuredAgentSessionCurrentWorkJournal,
+  work: Pick<StructuredAgentSessionCurrentWork, 'liveFence' | 'isCurrentItem'>,
+  current?: () => boolean
+): Generator<void, AgentJournalRenderItem[]> {
+  const cursor = journal.cursor()
+  const prior = promptProjections.get(journal)
+  const reusable = reusePromptProjection(journal, prior, cursor, work.liveFence)
+  if (reusable) {
+    return reusable
+  }
+  const dependencies = new Set<string>()
+  const items: AgentJournalRenderItem[] = []
+  const visit: Parameters<typeof journal.visitItems>[0] = (itemId, _sequence, body) => {
+    if (
+      (body.kind === 'approval' || body.kind === 'question') &&
+      body.resolution.state === 'pending'
+    ) {
+      const item = journal.item(itemId)
+      dependencies.add(itemId)
+      if (item?.turnScope?.kind === 'turn') {
+        dependencies.add(item.turnScope.turnItemId)
+        const turn = readAgentJournalTurn(journal.item(item.turnScope.turnItemId)?.body)
+        if (turn?.userItemId) {
+          dependencies.add(turn.userItemId)
+        }
+      }
+      if (item && work.isCurrentItem(itemId)) {
+        items.push(item)
+      }
+    }
+  }
+  if (current && journal.visitItemSteps) {
+    yield* journal.visitItemSteps(visit)
+  } else {
+    journal.visitItems(visit)
+  }
+  const sorted = yield* sortJournalSteps(items, compareAgentJournalItems)
+  let stable = sorted
+  if (prior?.items.length === sorted.length) {
+    let same = true
+    for (let index = 0; index < sorted.length; index++) {
+      same &&= sorted[index] === prior.items[index]
+      yield
+    }
+    if (same) {
+      stable = prior.items
+    }
+  }
+  if (!current || current()) {
+    promptProjections.set(journal, {
+      ...cursor,
+      fence: work.liveFence,
+      items: stable,
+      dependencies
+    })
+  }
+  return stable
 }

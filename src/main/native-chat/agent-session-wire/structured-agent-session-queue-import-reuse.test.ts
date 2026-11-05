@@ -55,10 +55,12 @@ it.each([100])('raw selection reuse: %i waiting cards', async (size) => {
     })
   )
   let visits = 0
-  const classify = legacyChange.legacyQueuedChange
-  const scans = vi.spyOn(legacyChange, 'legacyQueuedChange').mockImplementation((...args) => {
+  const classify = legacyChange.legacyQueuedChangeSteps
+  const scans = vi.spyOn(legacyChange, 'legacyQueuedChangeSteps').mockImplementation(function* (
+    ...args
+  ) {
     visits++
-    return classify(...args)
+    return yield* classify(...args)
   })
   try {
     const turn = { provider: 'codex' as const, threadId: 'progress', turnId: 't', ordinal: 0 }
@@ -86,6 +88,7 @@ it.each([100])('raw selection reuse: %i waiting cards', async (size) => {
     feed.publish(SESSION, journal)
     await settleTestSubscriberDeliveries(feed)
     const view = journal.publicRead()
+    expect(visits).toBeGreaterThanOrEqual(2 * size)
     expect(view.normalizationKey).not.toBe('')
     expect(view.snapshot.submissions.find((s) => s.clientMessageId === 'u')).toMatchObject({
       dispatchState: 'unknown',

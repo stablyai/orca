@@ -17,7 +17,15 @@ export function createStructuredAgentSessionPublicationWiring(input: {
   return new StructuredAgentSessionConversations({
     advanceStatusProjection: (journal, rows) =>
       input.client().advanceStatusProjection(journal, rows),
-    observe: (id, journal, rows) => input.client().requestFailures.observe(id, journal, rows),
+    observe: (id, journal, rows, replacement) => {
+      const client = input.client()
+      if (!replacement) {
+        return client.requestFailures.observe(id, journal, rows)
+      }
+      return client.requestFailures
+        .observeAsync(id, journal, rows)
+        .finally(() => client.prepareReplacementStatus(id, journal))
+    },
     forget: (id) => input.client().requestFailures.forget(id),
     deliver: (id, journal, inputChanged) => {
       input.client().subscribers.deliverFrames(id, journal)

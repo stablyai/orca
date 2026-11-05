@@ -1,3 +1,5 @@
+import { finishJournalStepsAsync } from './journal-reconstruction-steps'
+import { createQueuedMessageTestRig } from '../agent-session-wire/structured-agent-session-queued-message-rig.test-fixture'
 import type { JournalReplacementItem } from './journal-epoch-replacement'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -18,17 +20,21 @@ import {
   projectionSessionId,
   seedOutcomeRows
 } from './journal-projection-test-support'
+import { prepareJournalOutcomeWrite } from './journal-outcome-write'
 import { restoreJournalAsync } from './journal-open'
 import { encodeJournalState } from './journal-state-codec'
-import { JournalWriteProjection } from './journal-write-projection'
 import { JournalSqlOwner } from './journal-sql-owner'
 import { countReconstructionWork } from './journal-reconstruction-work-test-support'
 import type { JournalRow } from './journal-row-schema'
 
 let root: string
 const journals = createTrackedJournalOpener()
+const rigs: Awaited<ReturnType<typeof createQueuedMessageTestRig>>[] = []
 afterEach(async () => {
   vi.restoreAllMocks()
+  for (const rig of rigs.splice(0)) {
+    await rig.dispose()
+  }
   await journals.closeAll()
   await closeTestJournalHostDatabases()
   await rm(root, { recursive: true, force: true })
@@ -36,6 +42,7 @@ afterEach(async () => {
 
 it('keeps logical replacement preparation finite and retained evidence reads paged at N and 10N', async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-journal-merge-bounds-'))
+  const totals: number[] = []
   for (const size of [256, 2560]) {
     const database = await openTestJournalHostDatabase(join(root, String(size)))
     const rows: JournalRow[] = [projectionEpochRow]
@@ -55,11 +62,76 @@ it('keeps logical replacement preparation finite and retained evidence reads pag
         clientMessageId: id,
         body,
         handoverRecorded: true,
+        inputOrderContext: {
+          source: { epoch: projectionEpochRow.epoch, sequence: rows.length + 1 },
+          basis: 'observed',
+          cut: rows.length + 1
+        },
         providerHandle: { kind: 'codex', threadId: 'thread-1' },
         payloadFingerprint: agentSessionSendBodyFingerprint(projectionSessionId, body)
       })
     }
-    const expected = encodeJournalState(seedOutcomeRows(database, rows))
+    for (let index = 0; index < size; index++) {
+      rows.push({
+        ...projectionBase(rows.length + 1),
+        kind: 'queue',
+        messageId: `card-${index}`,
+        change: {
+          op: 'queued',
+          body: {
+            kind: 'message',
+            role: 'user',
+            blocks: [{ type: 'text', text: `card-${index}` }]
+          },
+          position: index,
+          queuedAt: { epoch: projectionEpochRow.epoch, sequence: rows.length + 1 }
+        }
+      })
+    }
+    const turnIdentity = {
+      provider: 'codex' as const,
+      threadId: 'thread-1',
+      turnId: 'replacement-turn',
+      ordinal: 0
+    }
+    const turnBody = {
+      kind: 'turn' as const,
+      turnId: 'replacement-turn',
+      state: 'running' as const,
+      startedAt: 10_000
+    }
+    items.push({ identity: turnIdentity, body: turnBody, ownerFence: 1 })
+    rows.push({
+      ...projectionBase(rows.length + 1),
+      kind: 'item',
+      itemId: agentJournalItemKey(turnIdentity),
+      revision: 1,
+      body: turnBody
+    })
+    const oldIdentity = { provider: 'orca' as const, clientMessageId: 'old-only' }
+    const newIdentity = { provider: 'orca' as const, clientMessageId: 'new-only' }
+    rows.push({
+      ...projectionBase(rows.length + 1),
+      kind: 'item',
+      itemId: agentJournalItemKey(oldIdentity),
+      revision: 1,
+      body: { kind: 'status', text: 'old' }
+    })
+    items.push({ identity: newIdentity, body: { kind: 'status', text: 'new' }, ownerFence: 1 })
+    rows.push({
+      ...projectionBase(rows.length + 1),
+      kind: 'tombstone',
+      itemId: agentJournalItemKey({ provider: 'orca', clientMessageId: 'stop' }),
+      revision: 1,
+      stopEvent: { reason: 'user-stop', at: 10_000 }
+    })
+    let seeded = seedOutcomeRows(database, [projectionEpochRow])
+    for (let offset = 1; offset < rows.length; offset += 64) {
+      seeded = database.fixtureTransaction((db) =>
+        prepareJournalOutcomeWrite(db, seeded, rows.slice(offset, offset + 64), 10_000).adopt()
+      )
+    }
+    const expected = encodeJournalState(seeded)
     let requests = 0
     const request = JournalSqlOwner.prototype.request
     const spy = vi.spyOn(JournalSqlOwner.prototype, 'request').mockImplementation(function (
@@ -97,41 +169,123 @@ it('keeps logical replacement preparation finite and retained evidence reads pag
         providerHandle: codexProviderHandle('peer')
       }
     })
+    await finishJournalStepsAsync(journal.inputOrder.markOpeningRecoverySteps())
     const peerView = peer.publicRead()
     const before = journal.publicRead()
-    let peerReads = 0
-    const preparation = Promise.withResolvers<void>()
-    const prepare = JournalWriteProjection.prototype.prepare
-    const preparing = vi
-      .spyOn(JournalWriteProjection.prototype, 'prepare')
-      .mockImplementation(function (this: JournalWriteProjection, ...args) {
-        preparation.resolve()
-        return prepare.apply(this, args)
-      })
-    let replacement: Promise<unknown> | undefined
-    // Measure through row materialization, before the projection's separate fold/adoption path.
-    const work = await countReconstructionWork(
-      async () => {
-        replacement = journal.replaceEpochItems('handle_forked', 1, items)
-        await Promise.race([preparation.promise, replacement])
+    const oldSnapshot = before.snapshot
+    const retainedSnapshot = structuredClone(oldSnapshot)
+    const recovery = [...journal.inputOrder.recoverableSubmissionValues()].map((entry) => [
+      entry.clientMessageId,
+      journal.inputOrder.recoveryPending(entry.clientMessageId)
+    ])
+    const rig = await createQueuedMessageTestRig({ sessionId: projectionSessionId })
+    rigs.push(rig)
+    await rig.workingSend()
+    const sessions = rig.host.collaboratorsForTests().sessions
+    sessions.set(projectionSessionId, { ...sessions.get(projectionSessionId)!, journal })
+    let publicationCount = 0
+    const releasePublication = sessions.observeConversationPublications(projectionSessionId, {
+      next: (hint) => {
+        if (hint.kind === 'commit') {
+          publicationCount++
+        }
       },
+      error: (error) => {
+        throw error
+      }
+    })
+    const settle = journal.stopMarks.beginSettle(true)
+    const conversation = rig.store.getConversation.bind(rig.store)
+    let releasedLease = false
+    const leaseRead = vi.spyOn(rig.store, 'getConversation').mockImplementation((id) => {
+      const record = conversation(id)
+      return releasedLease && record?.ownerObservation
+        ? { ...record, ownerObservation: { ...record.ownerObservation, claimStatus: 'released' } }
+        : record
+    })
+    let projectingStatus = false
+    let changedEvidence = false
+    const statusSteps = journal.statusReadSteps.bind(journal)
+    const statusPreparation = vi.spyOn(journal, 'statusReadSteps').mockImplementation(function* () {
+      projectingStatus = true
+      try {
+        return yield* statusSteps()
+      } finally {
+        projectingStatus = false
+      }
+    })
+    let oldReads = 0
+    let newReads = 0
+    let peerReads = 0
+    const work = await countReconstructionWork(
+      () => journal.replaceEpochItems('handle_forked', 1, items),
       () => {
         if (peer.publicRead() !== peerView) {
           throw new Error('unrelated chat changed')
         }
         peerReads++
+        if (projectingStatus && !changedEvidence) {
+          changedEvidence = true
+          releasedLease = true
+          journal.stopMarks.settled(settle)
+          const session = sessions.get(projectionSessionId)!
+          session.operationalRevision = (session.operationalRevision ?? 0) + 1
+        }
+        const old = journal.item(agentJournalItemKey(oldIdentity))
+        const fresh = journal.item(agentJournalItemKey(newIdentity))
+        if (old && !fresh) {
+          oldReads++
+        } else if (!old && fresh) {
+          newReads++
+        } else {
+          throw new Error('replacement exposed mixed history')
+        }
       }
     )
-    preparing.mockRestore()
-    await replacement
+    statusPreparation.mockRestore()
+    expect(changedEvidence).toBe(true)
+    expect(rig.host['clientDelivery'].readStatusSummary(projectionSessionId)?.status).toBe('idle')
+    leaseRead.mockRestore()
     expect(work.maximum, work.site).toBeLessThanOrEqual(65_536)
+    totals.push(work.total)
+    expect(work.total).toBeLessThanOrEqual(size * 4096)
     expect(peerReads).toBeGreaterThan(0)
+    expect(oldReads).toBeGreaterThan(0)
+    expect(publicationCount).toBe(1)
+    expect(oldSnapshot).toEqual(retainedSnapshot)
+    expect(before.snapshot).toEqual(retainedSnapshot)
+    expect(
+      [...journal.inputOrder.recoverableSubmissionValues()].map((entry) => [
+        entry.clientMessageId,
+        journal.inputOrder.recoveryPending(entry.clientMessageId)
+      ])
+    ).toEqual(recovery)
+    expect(journal.queuedMessages.list().map((card) => card.messageId)).toEqual(
+      Array.from({ length: size }, (_, index) => `card-${index}`)
+    )
     expect(journal.publicRead()).not.toBe(before)
     expect(journal.snapshot().items.map((item) => item.itemId)).toEqual(
       items.map((item) => agentJournalItemKey(item.identity))
     )
+    releasePublication()
+    sessions.delete(projectionSessionId)
+    const published = journal.snapshot()
+    const reopened = await journals.open({
+      stateDirectory: database.stateDirectory,
+      identity: {
+        sessionId: projectionSessionId,
+        workspaceId: 'ws',
+        hostId: 'local',
+        agent: 'codex',
+        providerHandle: codexProviderHandle('thread-1')
+      }
+    })
+    expect(reopened.snapshot()).toEqual(published)
+    expect(reopened.queuedMessages.list()).toEqual(journal.queuedMessages.list())
+    expect(work.result).toEqual(journal.cursor())
     process.stdout.write(
-      `merge bounds population=${size} nativeEvidenceRequests=${requests} maximumHostWork=${work.maximum} yields=${work.yields}\n`
+      `merge bounds population=${size} nativeEvidenceRequests=${requests} maximumHostWork=${work.maximum} yields=${work.yields} totalHostWork=${work.total} oldReads=${oldReads} newReads=${newReads}\n`
     )
   }
+  expect(totals[1]).toBeLessThanOrEqual(totals[0] * 14)
 })

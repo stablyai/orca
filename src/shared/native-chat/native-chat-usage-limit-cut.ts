@@ -1,3 +1,6 @@
+import { findInNativeChatTurnSteps } from './native-chat-orca-stop-cut'
+import { latestNativeChatTurnSinceRequestSteps } from './native-chat-orca-stop-cut'
+import { finishAgentSessionSteps } from '../agent-session/agent-session-projection-steps'
 // Derive usage-limit cuts from journal rows on each read for Continue; never store derived state.
 
 import { readAgentJournalTurn } from '../agent-session/lifecycle/agent-session-turn-record'
@@ -9,7 +12,7 @@ import type {
 } from '../agent-session/journal/agent-session-journal-types'
 import type { AgentSessionUsageLimit } from '../agent-session/failures/agent-session-usage-limit'
 import type { UsageLimitContinueIdentity } from '../agent-session/lifecycle/agent-session-usage-limit-continue'
-import { findInNativeChatTurn, latestNativeChatTurnSinceRequest } from './native-chat-orca-stop-cut'
+import type { latestNativeChatTurnSinceRequest } from './native-chat-orca-stop-cut'
 
 /** What the agent is sent when the person continues a turn its usage limit ended. */
 export const NATIVE_CHAT_USAGE_LIMIT_CONTINUE_MESSAGE = 'Continue where you left off.'
@@ -52,11 +55,19 @@ export function latestNativeChatUsageLimitCut(
   submissions: readonly Pick<AgentJournalSubmission, 'dispatchState'>[],
   bodyOf?: Parameters<typeof latestNativeChatTurnSinceRequest>[2]
 ): NativeChatUsageLimitCut | null {
-  const latest = latestNativeChatTurnSinceRequest(items, submissions, bodyOf)
+  return finishAgentSessionSteps(latestNativeChatUsageLimitCutSteps(items, submissions, bodyOf))
+}
+
+export function* latestNativeChatUsageLimitCutSteps(
+  items: readonly AgentJournalRenderItem[],
+  submissions: readonly Pick<AgentJournalSubmission, 'dispatchState'>[],
+  bodyOf?: Parameters<typeof latestNativeChatTurnSinceRequest>[2]
+): Generator<void, NativeChatUsageLimitCut | null> {
+  const latest = yield* latestNativeChatTurnSinceRequestSteps(items, submissions, bodyOf)
   if (!latest || latest.verdict !== 'failure') {
     return null
   }
-  const limit = findInNativeChatTurn(items, latest.turnItem.itemId, usageLimitOfRow)
+  const limit = yield* findInNativeChatTurnSteps(items, latest.turnItem.itemId, usageLimitOfRow)
   if (limit === null) {
     return null
   }

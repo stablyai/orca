@@ -1,15 +1,11 @@
+import { finishJournalSteps } from '../agent-session-journal/journal-reconstruction-steps'
 import type {
   StructuredAgentSessionWorkEvidence,
   StructuredAgentSessionCurrentWorkJournal,
   StructuredAgentSessionSeenEnd,
   StructuredAgentSessionReplacedEnd
 } from './structured-agent-session-work-evidence'
-import {
-  reusePromptProjection,
-  promptProjections
-} from './structured-agent-session-actionable-prompts'
-import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
-import { compareAgentJournalItems } from '../../../shared/agent-session/journal/agent-session-journal-position'
+import { prepareActionablePromptSteps } from './structured-agent-session-actionable-prompts'
 
 import { isHistoricalProviderTimelineItem } from '../agent-session-timeline/provider-timeline-history'
 import { currentRequestsProjection } from './agent-session-current-requests'
@@ -234,46 +230,10 @@ export class StructuredAgentSessionCurrentWork {
   }
 
   actionablePrompts(): AgentJournalRenderItem[] {
-    const cursor = this.journal.cursor()
-    const prior = promptProjections.get(this.journal)
-    const reusable = reusePromptProjection(this.journal, prior, cursor, this.liveFence)
-    if (reusable) {
-      return reusable
-    }
-    const dependencies = new Set<string>()
-    const items: AgentJournalRenderItem[] = []
-    this.journal.visitItems((itemId, _sequence, body) => {
-      if (
-        (body.kind === 'approval' || body.kind === 'question') &&
-        body.resolution.state === 'pending'
-      ) {
-        const item = this.journal.item(itemId)
-        dependencies.add(itemId)
-        if (item?.turnScope?.kind === 'turn') {
-          dependencies.add(item.turnScope.turnItemId)
-          const turn = readAgentJournalTurn(this.journal.item(item.turnScope.turnItemId)?.body)
-          if (turn?.userItemId) {
-            dependencies.add(turn.userItemId)
-          }
-        }
-        if (item && this.isCurrentItem(itemId)) {
-          items.push(item)
-        }
-      }
-    })
-    items.sort(compareAgentJournalItems)
-    const stable =
-      prior?.items.length === items.length &&
-      items.every((item, index) => item === prior.items[index])
-        ? prior.items
-        : items
-    promptProjections.set(this.journal, {
-      ...cursor,
-      fence: this.liveFence,
-      items: stable,
-      dependencies
-    })
-    return stable
+    return finishJournalSteps(this.actionablePromptSteps())
+  }
+  actionablePromptSteps(current?: () => boolean): Generator<void, AgentJournalRenderItem[]> {
+    return prepareActionablePromptSteps(this.journal, this, current)
   }
 
   requestProjection(sessionId: string) {

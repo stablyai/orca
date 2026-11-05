@@ -1,3 +1,4 @@
+import { finishAgentSessionSteps } from '../agent-session-projection-steps'
 // Date status from own turn/send/prompt edges, never newest-row time: child output would keep redating an idle lead.
 // Turn records need no producer filter because they never carry child linkage (structured-agent-session-live-turn.ts).
 
@@ -22,14 +23,32 @@ export function structuredAgentSessionStatusStartedAt(
   currentFence: number | null | undefined,
   latestRequest: Pick<StructuredAgentSessionLatestRequest, 'settledAt'> | null
 ): number | undefined {
+  return finishAgentSessionSteps(
+    structuredAgentSessionStatusStartedAtSteps(
+      status,
+      items,
+      submissions,
+      currentFence,
+      latestRequest
+    )
+  )
+}
+
+export function* structuredAgentSessionStatusStartedAtSteps(
+  status: StructuredAgentSessionProjectedStatus,
+  items: readonly AgentJournalRenderItem[],
+  submissions: readonly AgentJournalSubmission[],
+  currentFence: number | null | undefined,
+  latestRequest: Pick<StructuredAgentSessionLatestRequest, 'settledAt'> | null
+): Generator<void, number | undefined> {
   if (status === 'attention') {
-    return oldestPendingPromptAt(items)
+    return yield* oldestPendingPromptAtSteps(items)
   }
   if (status === 'idle') {
     // The session went idle when the request it reports settled, not when its newest turn did.
     return latestRequest?.settledAt
   }
-  const turnItem = newestTurnItem(items)
+  const turnItem = yield* newestTurnItemSteps(items)
   const turn = readAgentJournalTurn(turnItem?.body)
   if (turnItem && turn?.state === 'running') {
     // A mid-turn send joins the running turn; it does not restart the stretch.
@@ -37,6 +56,8 @@ export function structuredAgentSessionStatusStartedAt(
   }
   let earliest: number | undefined
   for (const submission of submissions) {
+    yield
+
     if (
       isUnansweredStructuredAgentSessionDispatch(submission, currentFence) &&
       (earliest === undefined || submission.submittedAt < earliest)
@@ -47,8 +68,12 @@ export function structuredAgentSessionStatusStartedAt(
   return earliest
 }
 
-function newestTurnItem(items: readonly AgentJournalRenderItem[]): AgentJournalRenderItem | null {
+export function* newestTurnItemSteps(
+  items: readonly AgentJournalRenderItem[]
+): Generator<void, AgentJournalRenderItem | null> {
   for (let index = items.length - 1; index >= 0; index -= 1) {
+    yield
+
     const item = items[index]
     if (item && readAgentJournalTurn(item.body)) {
       return item
@@ -58,10 +83,15 @@ function newestTurnItem(items: readonly AgentJournalRenderItem[]): AgentJournalR
 }
 
 /** The session's own ask when it has one; a subagent's only when that alone holds the session. */
-function oldestPendingPromptAt(items: readonly AgentJournalRenderItem[]): number | undefined {
+
+export function* oldestPendingPromptAtSteps(
+  items: readonly AgentJournalRenderItem[]
+): Generator<void, number | undefined> {
   let own: number | undefined
   let subagent: number | undefined
   for (const item of items) {
+    yield
+
     if (
       (item.body.kind !== 'approval' && item.body.kind !== 'question') ||
       item.body.resolution.state !== 'pending'

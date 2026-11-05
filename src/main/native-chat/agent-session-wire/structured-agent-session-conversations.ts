@@ -37,8 +37,9 @@ export class StructuredAgentSessionConversations extends Map<
       observe?: (
         sessionId: string,
         journal: AgentSessionJournal,
-        rows?: readonly JournalRow[]
-      ) => void
+        rows?: readonly JournalRow[],
+        replacement?: boolean
+      ) => void | Promise<void>
       forget?: (sessionId: string) => void
       deliver: (sessionId: string, journal: AgentSessionJournal, inputChanged?: boolean) => void
       /** Settle edges write no row and renew no activity clock. */
@@ -74,64 +75,93 @@ export class StructuredAgentSessionConversations extends Map<
       }
     }
     const current = () => this.attachments.get(sessionId) === source
-    const releaseCommit = journal.observeCommits((rows, affectsInput = true) => {
-      if (!current()) {
-        return
-      }
-      advancePromptProjection(journal, rows)
-      this.delivery.advanceStatusProjection?.(journal, rows)
-      this.publish(sessionId, rows === undefined ? 'reset' : 'commit', rows)
-      try {
-        this.delivery.observe?.(sessionId, journal, rows)
-      } catch (error) {
-        this.delivery.logger.warn('observing committed requests failed', {
-          scope: 'request-outcomes',
-          sessionId,
-          error
-        })
-      }
-      inputChanged ||= affectsInput
-      if (queued) {
-        return
-      }
-      queued = true
-      queueMicrotask(() => {
-        queued = false
-        const affectsInput = inputChanged
-        inputChanged = false
+    const releaseCommit = journal.observeCommits(
+      (rows, affectsInput = true, replacement = false): void | Promise<void> => {
         if (!current()) {
           return
         }
-        try {
-          this.delivery.deliver(sessionId, journal, affectsInput)
-        } catch (error) {
-          this.delivery.logger.warn('delivering a journal commit failed', {
-            scope: 'journal-delivery',
-            sessionId,
-            error
-          })
+        advancePromptProjection(journal, rows)
+        this.delivery.advanceStatusProjection?.(journal, rows)
+        const observe = async () => {
+          try {
+            await this.delivery.observe?.(sessionId, journal, rows, replacement)
+          } catch (error) {
+            this.delivery.logger.warn('observing committed requests failed', {
+              scope: 'request-outcomes',
+              sessionId,
+              error
+            })
+          }
         }
-      })
-    })
+        if (replacement) {
+          return observe()
+            .then(() => {
+              if (current()) {
+                this.publish(sessionId, rows === undefined ? 'reset' : 'commit', rows)
+                this.delivery.deliver(sessionId, journal, affectsInput)
+              }
+            })
+            .catch((error) => {
+              this.delivery.logger.warn('delivering a journal commit failed', {
+                scope: 'journal-delivery',
+                sessionId,
+                error
+              })
+            })
+        }
+        this.publish(sessionId, rows === undefined ? 'reset' : 'commit', rows)
+        void observe()
+        inputChanged ||= affectsInput
+        if (queued) {
+          return
+        }
+        queued = true
+        queueMicrotask(() => {
+          queued = false
+          const affectsInput = inputChanged
+          inputChanged = false
+          if (!current()) {
+            return
+          }
+          try {
+            this.delivery.deliver(sessionId, journal, affectsInput)
+          } catch (error) {
+            this.delivery.logger.warn('delivering a journal commit failed', {
+              scope: 'journal-delivery',
+              sessionId,
+              error
+            })
+          }
+        })
+      }
+    )
     const releaseSettle = journal.stopMarks.observeSettleEdges(() => {
       if (!current()) {
         return
       }
       this.publish(sessionId, 'operational')
-      queueMicrotask(() => {
-        if (!current()) {
-          return
-        }
-        try {
-          this.delivery.deliverSettleEdge?.(sessionId, journal)
-        } catch (error) {
+      void journal
+        .readInOrder(() => {
+          if (!current()) {
+            return
+          }
+          try {
+            this.delivery.deliverSettleEdge?.(sessionId, journal)
+          } catch (error) {
+            this.delivery.logger.warn("delivering a Stop's settle edge failed", {
+              scope: 'stop-settle-delivery',
+              sessionId,
+              error
+            })
+          }
+        })
+        .catch((error) =>
           this.delivery.logger.warn("delivering a Stop's settle edge failed", {
             scope: 'stop-settle-delivery',
             sessionId,
             error
           })
-        }
-      })
+        )
     })
     this.attachments.set(sessionId, source)
     this.activity.set(sessionId, this.delivery.now())

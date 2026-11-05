@@ -12,7 +12,11 @@ export type JournalAttachmentClaim = (
   goalId?: string
 ) => Promise<(() => void) | void>
 
-import { composeJournalOperationReceipts, type JournalOperationReceipt } from './journal-row-writer'
+import {
+  composeJournalOperationReceipts,
+  settleJournalCommitAsync,
+  type JournalOperationReceipt
+} from './journal-row-writer'
 
 /** Committed accepted inputs revoke any live permission to retract their protection. */
 export function journalAttachmentClaimsReceipt(
@@ -23,14 +27,19 @@ export function journalAttachmentClaimsReceipt(
   const commits: (() => void)[] = []
   const claims: JournalOperationReceipt = {
     write: async (db) => {
+      let work = 0
       for (const body of bodies) {
         const commit = await claim(db, body, false)
         if (commit) {
           commits.push(commit)
         }
+        if (++work === 128) {
+          work = 0
+          await new Promise<void>((resolve) => setImmediate(resolve))
+        }
       }
     },
-    committed: () => commits.forEach((commit) => commit())
+    committed: () => settleJournalCommitAsync(commits)
   }
   return receipt ? composeJournalOperationReceipts(claims, receipt) : claims
 }

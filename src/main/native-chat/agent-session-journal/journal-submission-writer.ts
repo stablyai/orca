@@ -1,4 +1,4 @@
-import { settleJournalCommit } from './journal-row-writer'
+import { settleJournalCommitAsync } from './journal-row-writer'
 import type {
   AgentJournalCursor,
   AgentSessionJournalIdentity
@@ -79,11 +79,11 @@ export class JournalSubmissionWriter {
             await receipt?.write(db, row)
           },
           committed: () => {
-            settleJournalCommit(
+            return settleJournalCommitAsync([
               () => claimsCommitted?.(),
               () => card?.receipt.committed(),
               () => receipt?.committed()
-            )
+            ])
           }
         },
         (rows) => rows.at(-1)

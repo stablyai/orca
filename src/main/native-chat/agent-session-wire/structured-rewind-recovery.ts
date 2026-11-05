@@ -279,8 +279,8 @@ function inheritForkName(
   return {
     fold: receipt.fold,
     write: receipt.write,
-    committed: () => {
-      receipt.committed()
+    committed: async () => {
+      await receipt.committed()
       const record = deps.store.getRecord(sessionId)
       if (record?.rewind?.providerFork?.materialized) {
         deps.nameProviderConversation?.(record)

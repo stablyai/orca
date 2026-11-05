@@ -133,48 +133,52 @@ export class JournalHostDatabase {
       this.transactionNumber += 1
       const lease = await this.preparationReaders.acquire()
       const plan = new JournalPersistencePlan(lease.read)
-      let result: T
       try {
-        result = await prepare(plan)
-      } finally {
-        await lease.close()
-      }
-      if (plan.effects.length === 0) {
-        await committed?.(result)
-        return result
-      }
-      await this.owner.request({ type: 'discard' })
-      for (const packets of journalTransferBatches(journalUnitPackets(plan.effects))) {
-        await this.owner.request({ type: 'upload', packets })
-      }
-      const reply = await this.owner.request({
-        type: 'unit',
-        normal: typeof streamed === 'function' ? streamed() : streamed,
-        count: plan.effects.length
-      })
-      if (reply.type !== 'committed') {
-        throw new Error('journal owner did not acknowledge COMMIT')
-      }
-      const failures: unknown[] = []
-      try {
-        await plan.settle(reply.values)
-      } catch (error) {
-        failures.push(error)
-      }
-      try {
-        await committed?.(result)
-      } catch (error) {
-        failures.push(error)
-      }
-      if (reply.postcommit) {
-        this.report(restoreJournalSqlFailure(reply.postcommit))
-      }
-      if (failures.length) {
-        throw new JournalCommittedEffectError('journal committed but mandatory effects failed', {
-          cause: new AggregateError(failures, 'mandatory journal commit effects failed')
+        let result: T
+        try {
+          result = await prepare(plan)
+        } finally {
+          await lease.close()
+        }
+        if (plan.effects.length === 0) {
+          await committed?.(result)
+          return result
+        }
+        await this.owner.request({ type: 'discard' })
+        for (const packets of journalTransferBatches(journalUnitPackets(plan.effects))) {
+          await this.owner.request({ type: 'upload', packets })
+        }
+        const reply = await this.owner.request({
+          type: 'unit',
+          normal: typeof streamed === 'function' ? streamed() : streamed,
+          count: plan.effects.length
         })
+        if (reply.type !== 'committed') {
+          throw new Error('journal owner did not acknowledge COMMIT')
+        }
+        const failures: unknown[] = []
+        try {
+          await plan.settle(reply.values)
+        } catch (error) {
+          failures.push(error)
+        }
+        try {
+          await committed?.(result)
+        } catch (error) {
+          failures.push(error)
+        }
+        if (reply.postcommit) {
+          this.report(restoreJournalSqlFailure(reply.postcommit))
+        }
+        if (failures.length) {
+          throw new JournalCommittedEffectError('journal committed but mandatory effects failed', {
+            cause: new AggregateError(failures, 'mandatory journal commit effects failed')
+          })
+        }
+        return result
+      } finally {
+        plan.releaseReplacement?.()
       }
-      return result
     })
   }
 

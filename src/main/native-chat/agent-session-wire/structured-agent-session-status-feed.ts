@@ -9,7 +9,6 @@ import type { AgentChildWorkEvidence } from '../../../shared/agent-status/child-
 import type { AgentChildWorkRecord } from '../../../shared/agent-status/child-work/agent-status-child-work'
 
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
-import type { JournalRow } from '../agent-session-journal/journal-row-schema'
 import {
   structuredAgentSessionNamingSnapshot,
   emitStructuredStatusEvent,
@@ -168,10 +167,12 @@ export class StructuredAgentSessionStatusFeed {
     () => this.deps.statusSink?.()
   )
 
-  advanceJournalProjection = (journal: AgentSessionJournal, rows?: readonly JournalRow[]): void =>
-    this.projections.advance(journal, rows)
+  advanceJournalProjection = this.projections.advance.bind(this.projections)
 
   /** Share per-commit projection with completion and steer-hold readers to avoid repeated snapshots. */
+  prepareJournalProjection = (id: string, journal: AgentSessionJournal): Promise<void> =>
+    this.projections.prepare(this.deps, id, journal)
+
   journalProjection(
     sessionId: string,
     journal?: AgentSessionJournal

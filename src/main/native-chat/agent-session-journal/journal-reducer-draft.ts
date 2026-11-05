@@ -1,3 +1,7 @@
+import {
+  materializeJournalReplacementSteps,
+  type JournalReplacementGraph
+} from './journal-reducer-materialization'
 import { finishJournalSteps } from './journal-reconstruction-steps'
 import {
   JournalDraftMap,
@@ -242,6 +246,15 @@ export class JournalDraft {
       yield* apply()
     }
     return result
+  }
+
+  materializeReplacementSteps(
+    graph: JournalReplacementGraph
+  ): Generator<void, JournalReplacementGraph> {
+    return materializeJournalReplacementSteps(graph, (value) => {
+      const node = this.proxies.get(value) ?? this.originals.get(value)
+      return { identity: node?.original ?? value, source: node?.current() ?? value }
+    })
   }
 
   private resolve<T>(value: T): T {

@@ -324,7 +324,7 @@ describe('restart observation and disposal', () => {
 
 // The provider is scripted; queue ownership, journal, catch-up and publication are real.
 describe('real host queue publication and operation bounds', () => {
-  // Two history sizes pin every per-history coefficient below; 1000 turns only made seeding outlast the timeout under load.
+  // Pin each observer term against the same async workload without the observer.
   it.each([20, 100])(
     'observes Q→S at %i prior turns without token-triggered history scans',
     async (history) => {
@@ -563,10 +563,6 @@ describe('real host queue publication and operation bounds', () => {
           displayRelease()
           expect(registration).toHaveBeenCalledTimes(mode === 'internal' ? 2 : 0)
           expect(observerReads.mock.calls.length).toBeLessThanOrEqual(12)
-          const { copied, iteratorYields, projectedRows, scannedRows } = metrics.details()
-          expect(copied + iteratorYields + projectedRows + scannedRows).toBeLessThan(
-            (history + 30) * 4000
-          )
           const sessions = rig.host.collaboratorsForTests().sessions
           expect(sessions['observers'].size).toBe(0)
           expect(sessions['attachments'].size).toBe(1)
@@ -582,6 +578,37 @@ describe('real host queue publication and operation bounds', () => {
           vi.restoreAllMocks()
         }
       }
+      const added = totals[1].map((value, i) => value - totals[0][i])
+      expect(added.slice(0, 15)).toEqual([
+        0,
+        10 * history + 18,
+        5,
+        15 * history + 27,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        7,
+        0,
+        0
+      ])
+      expect(added[1]).toBe(outputIterations[1] - outputIterations[0])
+      expect(totals[0].slice(17, 21)).toEqual([1, 2 * history + 5, 0, 0])
+      expect(totals[1].slice(17, 21)).toEqual([6, 12 * history + 25, 2, 2 * history + 2])
+      expect(added.slice(15)).toEqual([
+        12 * history + 25,
+        2 * history + 2,
+        5,
+        10 * history + 20,
+        2,
+        2 * history + 2,
+        2 * history + 5
+      ])
+      process.stdout.write(`${JSON.stringify({ history, added, totals, outputIterations })}\n`)
     }
   )
   it.each(['withdraw', 'return', 'missing', 'end'] as const)(

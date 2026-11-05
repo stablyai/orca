@@ -1,3 +1,4 @@
+import { prepareJournalRunningTurnSteps } from './journal-public-read'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { finishJournalStepsAsync, sortJournalSteps } from './journal-reconstruction-steps'
 import { journalInputOrder } from './journal-input-order'
@@ -16,7 +17,7 @@ import type { JournalLoad } from './journal-open'
 import { JournalQueuedMessages } from './journal-queued-messages'
 import { JournalStopMarks } from './journal-stop-marks'
 import { JournalStopAcceptor } from './journal-stop-acceptance'
-import { projectJournalRows } from './journal-context-cursor'
+import { projectJournalRowSteps } from './journal-context-cursor'
 import type { JournalReducerState } from './journal-reducer'
 import { JournalRowWriter, type JournalOperationReceipt } from './journal-row-writer'
 import { JournalStepWriter } from './journal-step-writer'
@@ -107,9 +108,13 @@ export function createJournalStoreCollaborators(host: JournalStoreHost): Journal
     highestFence: () => host.state().highestFence,
     nextSequence: () => host.state().lastSequence + 1,
     prepare: host.prepare,
+    preparePublication: async (state) => {
+      await queuedMessages.listAsync(state)
+      await finishJournalStepsAsync(prepareJournalRunningTurnSteps(state))
+    },
     commit: host.commit,
     verify: host.verify,
-    project: (rows) => projectJournalRows(host.state(), rows),
+    projectSteps: (rows) => projectJournalRowSteps(host.state(), rows),
     streamedTextRevision: (row) => isJournalStreamedTextRevision(host.state(), row),
     outputRevision: (row) => isJournalOutputRevision(host.state(), row)
   })
@@ -129,10 +134,11 @@ export function createJournalStoreCollaborators(host: JournalStoreHost): Journal
   const rewindReceipt = async (rows: readonly JournalRow[], receipt?: JournalOperationReceipt) => {
     const state = host.state()
     const order = journalInputOrder(state)
+    const cards = await queuedMessages.listAsync()
     const bodies = await finishJournalStepsAsync(
       (function* () {
         const bodies: AgentJournalMessageItem[] = []
-        for (const card of queuedMessages.list()) {
+        for (const card of cards) {
           bodies.push(card.body)
           yield
         }

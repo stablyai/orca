@@ -1,4 +1,4 @@
-import { settleJournalCommit } from './journal-row-writer'
+import { settleJournalCommitAsync } from './journal-row-writer'
 import { journalContextCursor } from './journal-context-cursor'
 import type { AgentSessionProviderContextBoundary } from '../../../shared/agent-session/agent-session-provider-context'
 import type { JournalReducerState } from './journal-reducer'
@@ -61,10 +61,10 @@ export function appendJournalContextClear(input: {
           await input.receipt.write(db)
         },
         committed: () => {
-          settleJournalCommit(
+          return settleJournalCommitAsync([
             () => commands?.receipt.committed(),
             () => input.receipt.committed()
-          )
+          ])
         }
       }
     )

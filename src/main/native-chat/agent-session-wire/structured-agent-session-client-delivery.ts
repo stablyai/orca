@@ -1,3 +1,4 @@
+import { publishStructuredGenerationEnded } from './structured-agent-session-generation-publication'
 import type { JournalRow } from '../agent-session-journal/journal-row-schema'
 import { StructuredAgentSessionJournalObservers } from './structured-agent-session-journal-observers'
 import type { StructuredAgentSessionConversations } from './structured-agent-session-conversations'
@@ -25,12 +26,10 @@ import {
   sendSettlementReading
 } from './structured-agent-session-send-settlement'
 import { heldStructuredAgentSessionCurrentWork } from './structured-agent-session-host-current-work'
-import { structuredAgentSessionConversationFence } from './structured-agent-session-provider-child'
 import type {
   StructuredAgentSessionStatusFeed,
   StructuredAgentSessionStatusSubscriber
 } from './structured-agent-session-status-feed'
-import type { CapturedChildWorkStops } from './structured-agent-session-status-ownership'
 import { createStructuredAgentSessionHostStatusFeed } from './structured-agent-session-host-status-feed'
 import type { StructuredAgentSessionChildWorkProducer } from './structured-agent-session-subagent-rows'
 import {
@@ -207,10 +206,8 @@ export class StructuredAgentSessionClientDelivery {
 
   childWorkOpen = (sessionId: string): boolean => this.statusFeed.childWorkOpen(sessionId)
 
-  captureChildWorkStops = (
-    sessionId: string,
-    handleIds: readonly string[]
-  ): CapturedChildWorkStops => this.statusFeed.captureChildWorkStops(sessionId, handleIds)
+  captureChildWorkStops: StructuredAgentSessionStatusFeed['captureChildWorkStops'] = (...args) =>
+    this.statusFeed.captureChildWorkStops(...args)
 
   childWorkIncomplete = (id: string): boolean => this.statusFeed.childWorkIncomplete(id)
 
@@ -226,32 +223,12 @@ export class StructuredAgentSessionClientDelivery {
 
   /** Publish generation-end evidence even without cleanup rows; wake queue without renewing idle time.
    * restate rebaselines readers after fence movement. */
-  publishGenerationEnded = (sessionId: string, options: { restate?: boolean } = {}): void => {
-    const session = this.sessions.get(sessionId)
-    if (!session) {
-      return
-    }
-    try {
-      this.requestFailures.generationEnded(sessionId)
-    } catch (error) {
-      this.deps().logger.warn('observing a request death failed', {
-        scope: 'request-outcomes',
-        sessionId,
-        error
-      })
-    }
-    // Invalidate cached work before every reader re-derives.
-    session.operationalRevision = (session.operationalRevision ?? 0) + 1
-    const { journal } = session
-    this.publications?.publish(sessionId, 'operational')
-    if (options.restate) {
-      const fence = structuredAgentSessionConversationFence(this.deps().store, sessionId)
-      this.subscribers.snapshot(sessionId, journal, fence)
-      return
-    }
-    this.subscribers.deliverFrames(sessionId, journal)
-    this.publishJournal(sessionId, journal, false)
-  }
+  publishGenerationEnded = (sessionId: string, options: { restate?: boolean } = {}): void =>
+    publishStructuredGenerationEnded(
+      { sessions: this.sessions, publications: this.publications, client: this, deps: this.deps() },
+      sessionId,
+      options
+    )
 
   readCurrentWork = (sessionId: string) => {
     const journal = this.sessions.get(sessionId)?.journal
@@ -309,6 +286,10 @@ export class StructuredAgentSessionClientDelivery {
     this.sendSettlement.closeAll()
     this.journalObservers.clear()
   }
+
+  prepareReplacementStatus: StructuredAgentSessionStatusFeed['prepareJournalProjection'] = (
+    ...args
+  ) => this.statusFeed.prepareJournalProjection(...args)
 
   publishJournal(
     sessionId: string,

@@ -42,83 +42,90 @@ afterEach(async () => {
 })
 
 it.each([
-  ['outcome', 'BEFORE INSERT ON journal_outcomes'],
-  ['coverage', 'BEFORE UPDATE ON journal_outcome_epochs'],
-  ['native receipt', 'BEFORE INSERT ON agent_session_command_receipts']
-])('rolls back a multirow projection on %s failure, then retries', async (_name, point) => {
-  const body: AgentJournalMessageItem = {
-    kind: 'message',
-    role: 'user',
-    blocks: [{ type: 'text', text: 'Continue' }]
-  }
-  const send =
-    (id: string) =>
-    (seq: number, ts: number): JournalRow => ({
-      ...base(seq),
-      ts,
-      kind: 'submission',
-      clientMessageId: id,
-      body,
-      handoverRecorded: true,
-      inputOrderContext: { source: { epoch, sequence: seq }, basis: 'observed', cut: seq },
-      providerHandle: { kind: 'codex', threadId: 'thread-1' },
-      payloadFingerprint: agentSessionSendBodyFingerprint(sessionId, body)
+  ['outcome', 'BEFORE INSERT ON journal_outcomes', false],
+  ['private outcome', 'BEFORE INSERT ON journal_outcomes', true],
+  ['coverage', 'BEFORE UPDATE ON journal_outcome_epochs', false],
+  ['private coverage', 'BEFORE UPDATE ON journal_outcome_epochs', true],
+  ['native receipt', 'BEFORE INSERT ON agent_session_command_receipts', false],
+  ['private native receipt', 'BEFORE INSERT ON agent_session_command_receipts', true]
+])(
+  'rolls back a multirow projection on %s failure, then retries',
+  async (_name, point, replacement) => {
+    const body: AgentJournalMessageItem = {
+      kind: 'message',
+      role: 'user',
+      blocks: [{ type: 'text', text: 'Continue' }]
+    }
+    const send =
+      (id: string) =>
+      (seq: number, ts: number): JournalRow => ({
+        ...base(seq),
+        ts,
+        kind: 'submission',
+        clientMessageId: id,
+        body,
+        handoverRecorded: true,
+        inputOrderContext: { source: { epoch, sequence: seq }, basis: 'observed', cut: seq },
+        providerHandle: { kind: 'codex', threadId: 'thread-1' },
+        payloadFingerprint: agentSessionSendBodyFingerprint(sessionId, body)
+      })
+    seedOutcomeRows(database, [projectionEpochRow, send('original')(2, 1002)])
+    rig = projectionWriter(database, restoreJournal(database.db, sessionId)!.state)
+    writeCommandReceiptTestRecord(database.db, sessionId)
+    const before = encodeJournalState(rig.state())
+    const published = renderJournalState(rig.state())
+    const retained = [...rig.state().inputs.sources]
+    const ownership = () =>
+      [...journalInputOrder(rig.state()).unsettledSubmissions()].map((send) => send.clientMessageId)
+    expect(ownership()).toEqual(['original'])
+    const receipts = () => database.db.prepare('SELECT * FROM agent_session_command_receipts').all()
+    const savedReceipts = receipts()
+    const persisted = () => ({
+      outcomes: database.db
+        .prepare('SELECT * FROM journal_outcomes ORDER BY generation,seq,field,entry_key')
+        .all(),
+      coverage: database.db.prepare('SELECT * FROM journal_outcome_epochs').all()
     })
-  seedOutcomeRows(database, [projectionEpochRow, send('original')(2, 1002)])
-  rig = projectionWriter(database, restoreJournal(database.db, sessionId)!.state)
-  writeCommandReceiptTestRecord(database.db, sessionId)
-  const before = encodeJournalState(rig.state())
-  const published = renderJournalState(rig.state())
-  const retained = [...rig.state().inputs.sources]
-  const ownership = () =>
-    [...journalInputOrder(rig.state()).unsettledSubmissions()].map((send) => send.clientMessageId)
-  expect(ownership()).toEqual(['original'])
-  const receipts = () => database.db.prepare('SELECT * FROM agent_session_command_receipts').all()
-  const savedReceipts = receipts()
-  const persisted = () => ({
-    outcomes: database.db
-      .prepare('SELECT * FROM journal_outcomes ORDER BY generation,seq,field,entry_key')
-      .all(),
-    coverage: database.db.prepare('SELECT * FROM journal_outcome_epochs').all()
-  })
-  const saved = persisted()
-  const attempt = () =>
-    rig.writer.enqueueRows(
-      () => [
-        (seq, ts): JournalRow => ({
-          ...base(seq),
-          ts,
-          kind: 'dispatch',
-          clientMessageId: 'original',
-          state: 'accepted',
-          providerItemId: null,
-          reason: null
-        }),
-        send('retry')
-      ],
-      {
-        write: (plan, row) => stageTestJournalRowReceipt(plan, sessionId, row),
-        committed: () => {}
-      },
-      (rows) => rows.at(-1)
-    )
+    const saved = persisted()
+    const attempt = () =>
+      rig.writer.enqueueRows(
+        () => [
+          (seq, ts): JournalRow => ({
+            ...base(seq),
+            ts,
+            kind: 'dispatch',
+            clientMessageId: 'original',
+            state: 'accepted',
+            providerItemId: null,
+            reason: null
+          }),
+          send('retry')
+        ],
+        {
+          ...(replacement ? { replacement: true as const } : {}),
+          write: (plan, row) => stageTestJournalRowReceipt(plan, sessionId, row),
+          committed: () => {}
+        },
+        (rows) => rows.at(-1)
+      )
 
-  database.db.exec(`CREATE TRIGGER projection_failure ${point}
+    database.db.exec(`CREATE TRIGGER projection_failure ${point}
     BEGIN SELECT RAISE(ABORT, 'projection failed'); END`)
-  await expect(attempt()).rejects.toThrow('projection failed')
-  database.db.exec('DROP TRIGGER projection_failure')
-  expect(encodeJournalState(rig.state())).toEqual(before)
-  expect(renderJournalState(rig.state())).toEqual(published)
-  expect(ownership()).toEqual(['original'])
-  expect([...rig.state().inputs.sources]).toEqual(retained)
-  expect(receipts()).toEqual(savedReceipts)
-  expect(persisted()).toEqual(saved)
-  expectProjectionMatches(database, rig.state())
+    await expect(attempt()).rejects.toThrow('projection failed')
+    database.db.exec('DROP TRIGGER projection_failure')
+    expect(encodeJournalState(rig.state())).toEqual(before)
+    expect(renderJournalState(rig.state())).toEqual(published)
+    expect(ownership()).toEqual(['original'])
+    expect([...rig.state().inputs.sources]).toEqual(retained)
+    expect(receipts()).toEqual(savedReceipts)
+    expect(persisted()).toEqual(saved)
+    expectProjectionMatches(database, rig.state())
 
-  await expect(attempt()).resolves.toHaveLength(2)
-  expect(rig.state().submissions.get('original')?.dispatchState).toBe('accepted')
-  expect(ownership()).toEqual(['retry'])
-  expect(renderJournalState(rig.state()).cursor.sequence).toBe(4)
-  expect(receipts()).toHaveLength(savedReceipts.length + 1)
-  expectProjectionMatches(database, rig.state())
-})
+    await expect(attempt()).resolves.toHaveLength(2)
+    expect(rig.state().submissions.get('original')?.dispatchState).toBe('accepted')
+    expect(ownership()).toEqual(['retry'])
+    expect(renderJournalState(rig.state()).cursor.sequence).toBe(4)
+    expect(receipts()).toHaveLength(savedReceipts.length + 1)
+    expectProjectionMatches(database, rig.state())
+  }
+)

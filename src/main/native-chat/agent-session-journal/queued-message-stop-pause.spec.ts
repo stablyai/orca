@@ -221,6 +221,7 @@ export function registerQueuedMessageStopPauseTests(
     it('rides a tombstone of an id no item takes, so an older build reads it and changes nothing', async () => {
       const journal = await fixture.open()
       await fixture.turn(journal, 'typed')
+      fixture.clock = 12_000
       await journal.appendStopEvent(
         { reason: 'user-stop', turnId: 'turn-1', caller: 'client-1' },
         0
@@ -239,7 +240,8 @@ export function registerQueuedMessageStopPauseTests(
       if (!parsed.ok || parsed.row.kind !== 'tombstone') {
         throw new Error('expected a tombstone row')
       }
-      expect(parsed.row.stopEvent?.at).toBe(parsed.row.ts)
+      expect(parsed.row.stopEvent?.at).toBe(12_001)
+      expect(parsed.row.ts).toBe(12_002)
       // Older readers ignore the annotation and remove a nonexistent item.
       const { stopEvent: _ignored, ...asOlderBuildReadsIt } = parsed.row
       const state = createJournalReducerState(fixture.IDENTITY.sessionId, parsed.row.epoch)

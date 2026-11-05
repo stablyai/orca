@@ -1,3 +1,4 @@
+import { finishAgentSessionSteps } from '../agent-session-projection-steps'
 // Scan the newest turn’s own work, stopping at its typed/legacy turn record; child output never describes the root agent.
 // Read turn records before producer filters only because turn rows carry no linkage: Claude/Codex primary turns, compact fences,
 // and stale/dead-generation revisions all preserve that invariant. Recheck before adding producers to any turn-writing site.
@@ -25,7 +26,16 @@ export function activeStructuredAgentSessionTurnId(
   items: readonly AgentJournalRenderItem[],
   current?: (item: AgentJournalRenderItem) => boolean
 ): string | null {
+  return finishAgentSessionSteps(activeStructuredAgentSessionTurnIdSteps(items, current))
+}
+
+export function* activeStructuredAgentSessionTurnIdSteps(
+  items: readonly AgentJournalRenderItem[],
+  current?: (item: AgentJournalRenderItem) => boolean
+): Generator<void, string | null> {
   for (let index = items.length - 1; index >= 0; index -= 1) {
+    yield
+
     const item = items[index]
     if (isAgentSessionContextClear(item?.body)) {
       return null
@@ -73,8 +83,16 @@ export function liveStructuredAgentSessionTurnScope(
 export function runningStructuredAgentSessionTurnItemBySequence(
   items: Iterable<AgentJournalRenderItem>
 ): { item: AgentJournalRenderItem; turnId: string } | null {
+  return finishAgentSessionSteps(runningStructuredAgentSessionTurnItemBySequenceSteps(items))
+}
+
+export function* runningStructuredAgentSessionTurnItemBySequenceSteps(
+  items: Iterable<AgentJournalRenderItem>
+): Generator<void, { item: AgentJournalRenderItem; turnId: string } | null> {
   let newest: AgentJournalRenderItem | null = null
   for (const item of items) {
+    yield
+
     if (
       (newest === null || item.sequence >= newest.sequence) &&
       (readAgentJournalTurn(item.body) || isAgentSessionContextClear(item.body))
@@ -251,9 +269,17 @@ export function isStructuredAgentSessionThinking({ items, latestTurn }: HostTurn
 export function statusStructuredAgentSessionToolCall(
   items: readonly AgentJournalRenderItem[]
 ): NativeChatToolCallBlock | null {
+  return finishAgentSessionSteps(statusStructuredAgentSessionToolCallSteps(items))
+}
+
+export function* statusStructuredAgentSessionToolCallSteps(
+  items: readonly AgentJournalRenderItem[]
+): Generator<void, NativeChatToolCallBlock | null> {
   let newest: { action: StructuredAgentSessionToolAction; itemId: string } | null = null
   let running: { action: StructuredAgentSessionToolAction; itemId: string } | null = null
   for (let index = items.length - 1; index >= 0; index -= 1) {
+    yield
+
     const item = items[index]
     if (!item) {
       continue

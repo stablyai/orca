@@ -156,7 +156,7 @@ export function createRetainedReadCounters() {
       querying--
     }
   })
-  const status = JournalInputOrder.prototype.statusInputs
+  const status = JournalInputOrder.prototype.statusInputSteps
   const stoppedInputs = JournalInputOrder.prototype.stoppedHistoryInputs
   const stoppedReads = vi
     .spyOn(JournalInputOrder.prototype, 'stoppedHistoryInputs')
@@ -172,9 +172,9 @@ export function createRetainedReadCounters() {
       })
     })
   const statuses = vi
-    .spyOn(JournalInputOrder.prototype, 'statusInputs')
-    .mockImplementation(function (this: JournalInputOrder, ...args) {
-      const result = status.apply(this, args)
+    .spyOn(JournalInputOrder.prototype, 'statusInputSteps')
+    .mockImplementation(function* (this: JournalInputOrder, ...args) {
+      const result = yield* status.apply(this, args)
       return new Proxy(result, {
         get(target, key) {
           const value = counterProperty(target, key)
@@ -194,18 +194,25 @@ export function createRetainedReadCounters() {
     count().fullRenders++
     return renderState(...args)
   })
-  const renderItems = reducer.renderJournalItems
-  const rendered = vi.spyOn(reducer, 'renderJournalItems').mockImplementation(
-    (...args) =>
-      new Proxy(renderItems(...args), {
-        get(target, key) {
-          if (typeof key === 'string' && /^\d+$/.test(key)) {
-            count().statusItems++
-          }
-          return counterProperty(target, key)
+  const renderedValues = <T>(items: T[]): T[] =>
+    new Proxy(items, {
+      get(target, key) {
+        if (typeof key === 'string' && /^\d+$/.test(key)) {
+          count().statusItems++
         }
-      })
-  )
+        return counterProperty(target, key)
+      }
+    })
+  const renderItems = reducer.renderJournalItems
+  const rendered = vi
+    .spyOn(reducer, 'renderJournalItems')
+    .mockImplementation((...args) => renderedValues(renderItems(...args)))
+  const renderSteps = reducer.renderJournalItemSteps
+  const renderedSteps = vi.spyOn(reducer, 'renderJournalItemSteps').mockImplementation(function* (
+    ...args
+  ) {
+    return renderedValues(yield* renderSteps(...args))
+  })
   const get = Map.prototype.get
   const mg = vi.spyOn(Map.prototype, 'get').mockImplementation(function (
     this: Map<unknown, unknown>,
@@ -241,15 +248,14 @@ export function createRetainedReadCounters() {
       visit(args[1])
       return index.apply(this, args)
     })
-  const restore = JournalInputOrder.prototype.restore
-  const restores = vi.spyOn(JournalInputOrder.prototype, 'restore').mockImplementation(function (
-    this: JournalInputOrder,
-    ...args
-  ) {
-    inputMaps.add(args[0].submissions)
-    count().restores++
-    return restore.apply(this, args)
-  })
+  const restore = JournalInputOrder.prototype.restoreSteps
+  const restores = vi
+    .spyOn(JournalInputOrder.prototype, 'restoreSteps')
+    .mockImplementation(function* (this: JournalInputOrder, ...args) {
+      inputMaps.add(args[0].submissions)
+      count().restores++
+      return yield* restore.apply(this, args)
+    })
   const reflect = Reflect.get
   const nodes = vi.spyOn(Reflect, 'get').mockImplementation((...args) => {
     if ('height' in args[0] && 'entry' in args[0]) {
@@ -279,20 +285,13 @@ export function createRetainedReadCounters() {
     },
     dispose: () => {
       materializers.dispose()
-      for (const spy of [
-        mg,
-        lists,
-        indexed,
-        restores,
-        nodes,
-        drafts,
-        statuses,
-        stoppedReads,
-        rendered,
-        fullRenders,
-        queries,
-        ...pathSpies
-      ]) {
+      for (const spy of [mg, lists, indexed, restores, nodes, drafts, queries]) {
+        spy.mockRestore()
+      }
+      for (const spy of [statuses, stoppedReads, rendered, renderedSteps, fullRenders]) {
+        spy.mockRestore()
+      }
+      for (const spy of pathSpies) {
         spy.mockRestore()
       }
     }

@@ -51,7 +51,7 @@ export async function runCommandReceiptMutation<TValue>(
       write: receipt.write,
       committed: () => {
         committed = true
-        receipt.committed()
+        return receipt.committed()
       }
     }
   }

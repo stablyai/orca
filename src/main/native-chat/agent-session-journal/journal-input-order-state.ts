@@ -35,8 +35,8 @@ export function readJournalInputPlace(
   if (!own || !entry) {
     return undefined
   }
-  if (own.context.basis === 'legacy' && !originals.has(id)) {
-    originals.set(id, originalAcceptance?.(id))
+  if (own.context.basis === 'legacy' && !originals.has(id) && originalAcceptance) {
+    originals.set(id, originalAcceptance(id))
   }
   const original = originals.get(id)
   return {

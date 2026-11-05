@@ -58,6 +58,7 @@ export type JournalEffectResult =
 export class JournalPersistencePlan {
   readonly effects: JournalPersistenceEffect[] = []
   preparedState: JournalReducerState | undefined
+  releaseReplacement: (() => void) | undefined
   private readonly results: ((result: JournalEffectResult) => void)[] = []
 
   constructor(readonly read: JournalReadConnection) {}

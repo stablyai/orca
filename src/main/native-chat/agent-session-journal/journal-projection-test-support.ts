@@ -76,7 +76,8 @@ export function projectionWriter(database: JournalHostDatabase, initial: Journal
     readOnly: () => false,
     highestFence: () => state.highestFence,
     nextSequence: () => state.lastSequence + 1,
-    prepare: (db, rows, savedAt, finishFold) => projection.prepare(db, rows, savedAt, finishFold),
+    prepare: (db, rows, savedAt, finishFold, replacement) =>
+      projection.prepare(db, rows, savedAt, finishFold, replacement),
     commit: () => undefined
   })
   return { writer, projection, state: () => state, queue }

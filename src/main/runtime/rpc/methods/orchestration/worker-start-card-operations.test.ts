@@ -309,6 +309,8 @@ it.each([10, 100])(
     expect(tabVisits).toBe(2 * visitsPerPass)
     expect(tabVisits).toBeLessThanOrEqual(2 * count * tabs.length)
     expect(dedupe).toHaveBeenCalledTimes(2 * count)
+    expect(statusSources.filter((source) => source !== 'status-projection')).toEqual([])
+    expect(statusRead.mock.calls.length).toBeLessThanOrEqual(1)
     expect(scan).not.toHaveBeenCalled()
     expect(snapshot).not.toHaveBeenCalled()
     expect(

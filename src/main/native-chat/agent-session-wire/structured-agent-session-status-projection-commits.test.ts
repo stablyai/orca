@@ -42,7 +42,7 @@ it('reuses status for creation cards but reprojects an existing item replaced by
   const projections = new StructuredAgentSessionJournalProjections()
   const previous = projections.read(journal, null).state
   journal.observeCommits((rows) => projections.advance(journal, rows))
-  const snapshots = vi.spyOn(journal, 'snapshot')
+  const statusReads = vi.spyOn(journal, 'statusRead')
   for (let index = 0; index < 10; index++) {
     await journal.appendItem(
       { provider: 'orca', clientMessageId: `card-${index}` },
@@ -59,7 +59,7 @@ it('reuses status for creation cards but reprojects an existing item replaced by
     )
     expect(projections.read(journal, null).state).toEqual(previous)
   }
-  expect(snapshots).not.toHaveBeenCalled()
+  expect(statusReads).not.toHaveBeenCalled()
   expect(projections.read(journal, null).sequence).toBe(journal.cursor().sequence)
   await journal.appendItem(
     answer,
@@ -75,7 +75,7 @@ it('reuses status for creation cards but reprojects an existing item replaced by
     options
   )
   const replaced = projections.read(journal, null)
-  expect(snapshots).toHaveBeenCalledTimes(1)
+  expect(statusReads).toHaveBeenCalledTimes(1)
   expect(replaced.state.summary.lastAssistantMessage).toBeUndefined()
   expect(replaced.state).toEqual(
     new StructuredAgentSessionJournalProjections().read(journal, null).state
@@ -106,7 +106,7 @@ it('does not advance across an unobserved relevant commit', async () => {
     options
   )
   journal.observeCommits((rows) => projections.advance(journal, rows))
-  const snapshots = vi.spyOn(journal, 'snapshot')
+  const statusReads = vi.spyOn(journal, 'statusRead')
   await journal.appendItem(
     { provider: 'orca', clientMessageId: 'card' },
     {
@@ -121,7 +121,7 @@ it('does not advance across an unobserved relevant commit', async () => {
     options
   )
   const projected = projections.read(journal, null)
-  expect(snapshots).toHaveBeenCalledTimes(1)
+  expect(statusReads).toHaveBeenCalledTimes(1)
   expect(projected.state.summary.lastAssistantMessage).toBe('Unobserved answer')
   expect(projected.state).toEqual(
     new StructuredAgentSessionJournalProjections().read(journal, null).state

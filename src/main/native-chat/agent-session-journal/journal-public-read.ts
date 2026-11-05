@@ -1,7 +1,14 @@
+import { runningStructuredAgentSessionTurnItemBySequenceSteps } from '../../../shared/agent-session/view/structured-agent-session-live-turn'
+import { finishJournalSteps } from './journal-reconstruction-steps'
 import type { AgentJournalSnapshot } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { JournalInputOrder } from './journal-input-order'
-import { renderJournalItems, renderJournalState, type JournalReducerState } from './journal-reducer'
+import {
+  renderJournalItemSteps,
+  renderJournalItems,
+  renderJournalState,
+  type JournalReducerState
+} from './journal-reducer'
 import { journalContextCursor } from './journal-context-cursor'
 
 /** Only a committed journal owner can certify reuse across public reads. */
@@ -127,14 +134,39 @@ function journalNormalizationKey(
 }
 
 export function renderJournalStatus(state: JournalReducerState, owner: JournalInputOrder) {
+  return finishJournalSteps(renderJournalStatusSteps(state, owner))
+}
+
+export function* renderJournalStatusSteps(
+  state: JournalReducerState,
+  owner: JournalInputOrder
+): Generator<
+  void,
+  { items: AgentJournalSnapshot['items']; submissions: AgentJournalSnapshot['submissions'] }
+> {
   const failed = state.queuePauseMarks.latestStop?.settle?.failedOn
-  const items = renderJournalItems(state)
-  return {
+  const items = yield* renderJournalItemSteps(state)
+  const submissions = yield* owner.statusInputSteps(
+    state,
     items,
-    submissions: owner.statusInputs(
-      state,
-      items,
-      failed && 'openedAfter' in failed ? failed.openedAfter : undefined
-    )
+    failed && 'openedAfter' in failed ? failed.openedAfter : undefined
+  )
+  return { items, submissions }
+}
+
+type RunningTurn = { item: AgentJournalSnapshot['items'][number]; turnId: string } | null
+const runningTurns = new WeakMap<JournalReducerState, { sequence: number; turn: RunningTurn }>()
+export function readJournalRunningTurn(state: JournalReducerState): RunningTurn {
+  return finishJournalSteps(prepareJournalRunningTurnSteps(state))
+}
+export function* prepareJournalRunningTurnSteps(
+  state: JournalReducerState
+): Generator<void, RunningTurn> {
+  let cached = runningTurns.get(state)
+  if (cached?.sequence !== state.lastSequence) {
+    const turn = yield* runningStructuredAgentSessionTurnItemBySequenceSteps(state.items.values())
+    cached = { sequence: state.lastSequence, turn }
+    runningTurns.set(state, cached)
   }
+  return cached.turn
 }

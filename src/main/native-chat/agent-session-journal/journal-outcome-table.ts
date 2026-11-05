@@ -78,6 +78,7 @@ function* prepareJournalOutcomeSteps(
     state: JournalReducerState
     adopt: () => JournalReducerState
     adoptPrivate: () => Promise<JournalReducerState>
+    materializeReplacement: () => Promise<JournalReducerState>
     values: JournalEncodedOutcome[]
   }
 > {
@@ -180,6 +181,7 @@ function* prepareJournalOutcomeSteps(
     state: transition.state,
     adopt: transition.adopt,
     adoptPrivate: transition.adoptPrivate,
+    materializeReplacement: transition.materializeReplacement,
     values
   }
 }

@@ -17,6 +17,7 @@ export function isolateJournalTransition<T>(
   untracked: (key: string, value: unknown) => unknown
   adopt: () => JournalReducerState
   adoptPrivate: () => Promise<JournalReducerState>
+  materializeReplacement: () => Promise<JournalReducerState>
   tracked: () => number
   input: <V>(value: V) => V
   trackedDerived: () => number
@@ -46,6 +47,13 @@ export function isolateJournalTransition<T>(
       const adopted = await finishJournalStepsAsync(draft.adoptSteps({ state: candidate, order }))
       setJournalInputOrder(adopted.state, adopted.order)
       return adopted.state
+    },
+    materializeReplacement: async () => {
+      const privateGraph = await finishJournalStepsAsync(
+        draft.materializeReplacementSteps({ state: candidate, order })
+      )
+      setJournalInputOrder(privateGraph.state, privateGraph.order)
+      return privateGraph.state
     },
     trackedDerived: () => draft.derivedNodes,
     tracked: () => draft.nodes

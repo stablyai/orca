@@ -54,7 +54,8 @@ export async function prepareJournalOutcomeWriteAsync(
   live: JournalReducerState,
   rows: readonly JournalRow[],
   savedAt: number,
-  finishFold?: JournalFinishFold
+  finishFold?: JournalFinishFold,
+  replacement = false
 ) {
   const previous = await plan.source(live.sessionId, live.epoch)
   if (previous && previous.through !== live.lastSequence) {
@@ -90,6 +91,21 @@ export async function prepareJournalOutcomeWriteAsync(
     values: transition.values,
     through: transition.state.lastSequence
   })
+  if (replacement) {
+    const state = await transition.materializeReplacement()
+    const owner = journalInputOrder(state)
+    plan.releaseReplacement = () => owner.releaseReplacementCaptures()
+    await finishJournalStepsAsync(owner.prepareReplacementCapturesSteps(journalInputOrder(live)))
+    plan.preparedState = state
+    return {
+      ...transition,
+      state,
+      adopt: () => {
+        owner.publishReplacementCaptures()
+        return state
+      }
+    }
+  }
   plan.preparedState = transition.state
   return {
     ...transition,

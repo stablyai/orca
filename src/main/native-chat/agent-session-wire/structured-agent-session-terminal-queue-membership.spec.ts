@@ -581,7 +581,13 @@ it.each([10, 100])(
         expect(c.fullViews, name).toBe(0)
         expect(c.fullInputs, name).toBe(0)
         expect(c.fullIterations, name).toBe(0)
-        expect(c.archived, name).toBe(0)
+        // Private rewind copies retained ownership finitely; ordinary queue actions never scan it.
+        if (name.startsWith('rewind-')) {
+          expect(c.archived, name).toBeGreaterThanOrEqual(2 * h)
+          expect(c.archived, name).toBeLessThanOrEqual(100 * h)
+        } else {
+          expect(c.archived, name).toBe(0)
+        }
         expect(c.restores, name).toBe(0)
         expect(c.indexed, name).toBeLessThanOrEqual(200)
         expect(c.records, name).toBeLessThanOrEqual(5000)
@@ -596,6 +602,7 @@ it.each([10, 100])(
       expect(phases['recovery-1'].statusItems).toBeGreaterThan(0)
       expect(phases['cycles-1'].statusRecords).toBeGreaterThan(0)
       expect(phases['cycles-1'].endpoints).toBeGreaterThan(0)
+      expect(phases['cold-reopen'].restores).toBeGreaterThan(0)
       expect(phases['cold-reopen'].archived).toBeGreaterThanOrEqual(2 * h)
     } finally {
       counters.setPhase('cleanup')

@@ -1,3 +1,4 @@
+import { finishAgentSessionSteps } from './agent-session-projection-steps'
 // Conversation commands (e.g. /compact) are not user requests; previews/verdicts/completion/resume skip their entries and turns.
 
 import type {
@@ -25,9 +26,21 @@ export function isStructuredAgentSessionCommandTurn(
 export function structuredAgentSessionCommandTurnItemIds(
   items: readonly AgentJournalRenderItem[]
 ): ReadonlySet<string> {
-  const bodies = new Map(items.map((item) => [item.itemId, item.body]))
+  return finishAgentSessionSteps(structuredAgentSessionCommandTurnItemIdsSteps(items))
+}
+
+export function* structuredAgentSessionCommandTurnItemIdsSteps(
+  items: readonly AgentJournalRenderItem[]
+): Generator<void, ReadonlySet<string>> {
+  const bodies = new Map<string, AgentJournalItemBody>()
+  for (const item of items) {
+    bodies.set(item.itemId, item.body)
+    yield
+  }
   const ids = new Set<string>()
   for (const item of items) {
+    yield
+
     if (
       isStructuredAgentSessionCommandTurn(readAgentJournalTurn(item.body), (id) => bodies.get(id))
     ) {

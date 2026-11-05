@@ -7,7 +7,7 @@ import type { JournalRow } from './journal-row-schema'
 import { prepareJournalOutcomeWriteAsync } from './journal-outcome-write'
 import { encodeJournalState } from './journal-state-codec'
 import { restoreJournalAsync } from './journal-open'
-import { settleJournalCommit, type JournalOperationReceipt } from './journal-row-writer'
+import { settleJournalCommitAsync, type JournalOperationReceipt } from './journal-row-writer'
 import { journalStoppedUsageLimitCut } from './journal-stopped-usage-limit-cut'
 import type { UsageLimitContinueIdentity } from '../../../shared/agent-session/lifecycle/agent-session-usage-limit-continue'
 
@@ -35,24 +35,26 @@ export class JournalWriteProjection {
     db: JournalPersistencePlan,
     rows: readonly JournalRow[],
     savedAt: number,
-    finishFold?: JournalFinishFold
-  ): Promise<() => void> {
+    finishFold?: JournalFinishFold,
+    replacement = false
+  ): Promise<() => void | Promise<void>> {
     const transition = await prepareJournalOutcomeWriteAsync(
       db,
       this.deps.state(),
       rows,
       savedAt,
-      finishFold
+      finishFold,
+      replacement
     )
     // A stopped cut and its withdrawal commit together, so no reader sees it schedulable.
     const cut = this.deps.withdrawStoppedCut && journalStoppedUsageLimitCut(transition.state, rows)
     const withdrawal = cut ? this.deps.withdrawStoppedCut?.(cut) : undefined
     await withdrawal?.write(db)
     return () => {
-      settleJournalCommit(
+      return settleJournalCommitAsync([
         () => this.deps.adopt(transition.adopt()),
         () => withdrawal?.committed()
-      )
+      ])
     }
   }
 

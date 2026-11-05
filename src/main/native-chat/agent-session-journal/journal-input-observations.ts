@@ -11,6 +11,21 @@ export type JournalInputKeys = {
   same: (other: JournalInputKeys) => boolean
 }
 
+type CaptureOwner = {
+  current: JournalInputObservations
+  preparing?: JournalInputObservations
+  replacementChanges?: Map<string, boolean>
+}
+const captureOwners = new WeakMap<JournalInputObservations, CaptureOwner>()
+function captureOwner(owner: JournalInputObservations): CaptureOwner {
+  let registered = captureOwners.get(owner)
+  if (!registered) {
+    registered = { current: owner }
+    captureOwners.set(owner, registered)
+  }
+  return registered
+}
+
 /** Derived named lifecycle queries on the input owner, refreshed in its isolated draft. */
 export abstract class JournalInputObservations {
   private readonly keyReads = new Map<symbol, Map<string, boolean>>()
@@ -34,28 +49,106 @@ export abstract class JournalInputObservations {
 
   /** A finite catch-up owns only keys changed while it awaits provider history. */
   captureKeys(present: ReadonlySet<string>, signal: AbortSignal): JournalInputKeys {
-    const changes = new Map<string, boolean>()
+    let changes = new Map<string, boolean>()
     const token = Symbol()
-    this.keyReads.set(token, changes)
-    signal.addEventListener('abort', () => this.keyReads.delete(token), { once: true })
-    if (signal.aborted) {
-      this.keyReads.delete(token)
+    const owner = captureOwner(this)
+    owner.current.keyReads.set(token, changes)
+    if (owner.preparing && owner.replacementChanges) {
+      owner.preparing.keyReads.set(token, owner.replacementChanges)
     }
-    const has = (key: string) => present.has(key) || (changes.get(key) ?? this.inputIds.has(key))
+    const currentChanges = () => {
+      changes = owner.current.keyReads.get(token) ?? changes
+      return changes
+    }
+    const close = () => {
+      currentChanges()
+      owner.current.keyReads.delete(token)
+      owner.preparing?.keyReads.delete(token)
+    }
+    signal.addEventListener('abort', close, { once: true })
+    if (signal.aborted) {
+      close()
+    }
+    const has = (key: string) =>
+      present.has(key) || (currentChanges().get(key) ?? owner.current.inputIds.has(key))
     return {
       has,
       present,
-      changes,
+      get changes() {
+        return currentChanges()
+      },
       same(other) {
         const keys = new Set([
           ...present,
           ...other.present,
-          ...changes.keys(),
+          ...currentChanges().keys(),
           ...other.changes.keys()
         ])
         return [...keys].every((key) => has(key) === other.has(key))
       }
     }
+  }
+
+  /** New captures during the reservation all see the same old committed membership. */
+  *prepareReplacementCapturesSteps(previous: JournalInputObservations): Generator<void> {
+    const owner = captureOwner(previous)
+    const live = owner.current
+    const changed = new Map<string, boolean>()
+    for (const key of live.inputIds.keys()) {
+      if (!this.inputIds.has(key)) {
+        changed.set(key, true)
+      }
+      yield
+    }
+    for (const key of this.inputIds.keys()) {
+      if (!live.inputIds.has(key)) {
+        changed.set(key, false)
+      }
+      yield
+    }
+    owner.preparing = this
+    owner.replacementChanges = changed
+    captureOwners.set(this, owner)
+    for (const token of this.keyReads.keys()) {
+      if (!live.keyReads.has(token)) {
+        this.keyReads.delete(token)
+      }
+      yield
+    }
+    for (const [token, prior] of live.keyReads) {
+      let next = this.keyReads.get(token)
+      if (!next) {
+        next = changed
+        this.keyReads.set(token, next)
+      }
+      for (const [key, value] of prior) {
+        if (!next.has(key)) {
+          next.set(key, value)
+        }
+        yield
+      }
+      for (const [key, value] of changed) {
+        if (!next.has(key)) {
+          next.set(key, value)
+        }
+        yield
+      }
+    }
+  }
+
+  releaseReplacementCaptures(): void {
+    const owner = captureOwner(this)
+    if (owner.preparing === this) {
+      owner.preparing = undefined
+      owner.replacementChanges = undefined
+    }
+  }
+
+  publishReplacementCaptures(): void {
+    const owner = captureOwner(this)
+    owner.current = this
+    owner.preparing = undefined
+    owner.replacementChanges = undefined
   }
 
   submissionExtremaAfterFence(afterFence: number): AgentJournalSubmission[] {
