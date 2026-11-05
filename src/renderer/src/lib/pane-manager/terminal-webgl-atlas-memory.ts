@@ -26,24 +26,17 @@ type AtlasWebglContext = {
 }
 
 type XtermTextureAtlas = {
-  constructor: {
-    maxTextureSize?: number
-  }
-  pages?: {
-    canvas: HTMLCanvasElement
-    version: number
-  }[]
-  _config?: {
-    deviceMaxTextureSize?: number
-  }
+  constructor: { maxTextureSize?: number }
+  pageLayoutVersion?: number
+  pages?: { canvas: HTMLCanvasElement; version: number }[]
+  _config?: { deviceMaxTextureSize?: number }
+  clearTexture?: () => void
+  _createNewPage?: () => unknown
 }
 
 type XtermGlyphRenderer = {
   _atlas?: XtermTextureAtlas
-  _atlasTextures?: {
-    texture: WebGLTexture
-    version: number
-  }[]
+  _atlasTextures?: { texture: WebGLTexture; version: number }[]
   beginFrame?: () => boolean
   invalidateAtlasTextures?: () => void
 }
@@ -52,9 +45,9 @@ type XtermWebglRendererInternals = {
   _gl?: AtlasWebglContext
   _deviceMaxTextureSize?: number
   _charAtlas?: XtermTextureAtlas
-  _glyphRenderer?: {
-    value?: XtermGlyphRenderer
-  }
+  _glyphRenderer?: { value?: XtermGlyphRenderer }
+  _refreshCharAtlas?: () => void
+  dispose?: () => void
 }
 
 type XtermWebglAddonWithInternals = WebglAddon & {
@@ -64,6 +57,11 @@ type XtermWebglAddonWithInternals = WebglAddon & {
 }
 
 const patchedGlyphRenderers = new WeakSet<XtermGlyphRenderer>()
+const patchedRenderers = new WeakSet<XtermWebglRendererInternals>()
+const patchedAtlases = new WeakSet<XtermTextureAtlas>()
+const renderersByAtlas = new WeakMap<XtermTextureAtlas, Set<XtermWebglRendererInternals>>()
+const atlasByRenderer = new WeakMap<XtermWebglRendererInternals, XtermTextureAtlas>()
+const lastShrunkLayoutVersionByRenderer = new WeakMap<XtermWebglRendererInternals, number>()
 
 /** Narrow a WebGL addon reference before reading private xterm renderer fields. */
 function hasAddonInternals(
@@ -113,6 +111,99 @@ function shrinkWebglAtlasTexturesFrom(
   }
 }
 
+/** Invalidate and shrink a renderer's idle atlas texture slots once per shared atlas layout version. */
+function invalidateRendererForAtlasLayout(
+  renderer: XtermWebglRendererInternals,
+  atlas: XtermTextureAtlas | undefined
+): void {
+  const layoutVersion = atlas?.pageLayoutVersion
+  if (typeof layoutVersion === 'number') {
+    if (lastShrunkLayoutVersionByRenderer.get(renderer) === layoutVersion) {
+      return
+    }
+    lastShrunkLayoutVersionByRenderer.set(renderer, layoutVersion)
+  }
+  const glyphRenderer = renderer._glyphRenderer?.value
+  if (typeof glyphRenderer?.invalidateAtlasTextures === 'function') {
+    glyphRenderer.invalidateAtlasTextures()
+    return
+  }
+  shrinkWebglAtlasTexturesFrom(renderer, atlas?.pages?.length ?? 0)
+}
+
+/** Shrink idle GPU texture slots across all renderers sharing `atlas`, including hidden sibling panes. */
+function shrinkSharedAtlasRenderers(
+  atlas: XtermTextureAtlas | undefined,
+  excludingRenderer?: XtermWebglRendererInternals
+): void {
+  const peers = atlas ? renderersByAtlas.get(atlas) : undefined
+  if (!atlas || !peers) {
+    return
+  }
+  for (const peerRenderer of peers) {
+    if (peerRenderer !== excludingRenderer) {
+      invalidateRendererForAtlasLayout(peerRenderer, atlas)
+    }
+  }
+}
+
+/** Track which renderers share an xterm TextureAtlas and hook atlas page removals to shrink hidden siblings. */
+function registerRendererAtlas(
+  renderer: XtermWebglRendererInternals,
+  atlas: XtermTextureAtlas | undefined
+): void {
+  const previousAtlas = atlasByRenderer.get(renderer)
+  if (previousAtlas && previousAtlas !== atlas) {
+    renderersByAtlas.get(previousAtlas)?.delete(renderer)
+    atlasByRenderer.delete(renderer)
+  }
+  if (!atlas) {
+    return
+  }
+  if (
+    typeof atlas.constructor.maxTextureSize === 'number' &&
+    atlas.constructor.maxTextureSize > MAX_WEBGL_ATLAS_TEXTURE_SIZE
+  ) {
+    atlas.constructor.maxTextureSize = MAX_WEBGL_ATLAS_TEXTURE_SIZE
+  }
+  let peers = renderersByAtlas.get(atlas)
+  if (!peers) {
+    peers = new Set()
+    renderersByAtlas.set(atlas, peers)
+  }
+  peers.add(renderer)
+  atlasByRenderer.set(renderer, atlas)
+  if (
+    previousAtlas !== atlas &&
+    typeof atlas.pageLayoutVersion === 'number' &&
+    !lastShrunkLayoutVersionByRenderer.has(renderer)
+  ) {
+    lastShrunkLayoutVersionByRenderer.set(renderer, atlas.pageLayoutVersion)
+  }
+  if (patchedAtlases.has(atlas)) {
+    return
+  }
+  patchedAtlases.add(atlas)
+  if (typeof atlas.clearTexture === 'function') {
+    const originalClearTexture = atlas.clearTexture.bind(atlas)
+    atlas.clearTexture = () => {
+      originalClearTexture()
+      shrinkSharedAtlasRenderers(atlas)
+    }
+  }
+  if (typeof atlas._createNewPage === 'function') {
+    const originalCreateNewPage = atlas._createNewPage.bind(atlas)
+    atlas._createNewPage = () => {
+      const versionBefore = atlas.pageLayoutVersion
+      const page = originalCreateNewPage()
+      if (atlas.pageLayoutVersion !== versionBefore) {
+        shrinkSharedAtlasRenderers(atlas)
+      }
+      return page
+    }
+  }
+}
+
 /** Clamp xterm's WebGL atlas page limit to 2048 and hook invalidation/frame layout changes to shrink idle texture slots. */
 function capXtermWebglAtlasRenderer(renderer: XtermWebglRendererInternals): void {
   if (
@@ -120,21 +211,28 @@ function capXtermWebglAtlasRenderer(renderer: XtermWebglRendererInternals): void
     renderer._deviceMaxTextureSize > MAX_WEBGL_ATLAS_TEXTURE_SIZE
   ) {
     renderer._deviceMaxTextureSize = MAX_WEBGL_ATLAS_TEXTURE_SIZE
+    if (typeof renderer._refreshCharAtlas === 'function') {
+      // Re-acquire through CharAtlasCache with 2048 before touching _config so panes share one 2048 entry.
+      renderer._refreshCharAtlas()
+    }
   }
   const atlas = renderer._charAtlas ?? renderer._glyphRenderer?.value?._atlas
   if (
+    typeof renderer._refreshCharAtlas !== 'function' &&
     atlas?._config &&
     typeof atlas._config.deviceMaxTextureSize === 'number' &&
     atlas._config.deviceMaxTextureSize > MAX_WEBGL_ATLAS_TEXTURE_SIZE
   ) {
     atlas._config.deviceMaxTextureSize = MAX_WEBGL_ATLAS_TEXTURE_SIZE
   }
-  if (
-    atlas &&
-    typeof atlas.constructor.maxTextureSize === 'number' &&
-    atlas.constructor.maxTextureSize > MAX_WEBGL_ATLAS_TEXTURE_SIZE
-  ) {
-    atlas.constructor.maxTextureSize = MAX_WEBGL_ATLAS_TEXTURE_SIZE
+  registerRendererAtlas(renderer, atlas)
+  if (typeof renderer.dispose === 'function' && !patchedRenderers.has(renderer)) {
+    patchedRenderers.add(renderer)
+    const originalDispose = renderer.dispose.bind(renderer)
+    renderer.dispose = () => {
+      registerRendererAtlas(renderer, undefined)
+      originalDispose()
+    }
   }
   const glyphRenderer = renderer._glyphRenderer?.value
   if (
@@ -146,17 +244,20 @@ function capXtermWebglAtlasRenderer(renderer: XtermWebglRendererInternals): void
     const originalInvalidate = glyphRenderer.invalidateAtlasTextures.bind(glyphRenderer)
     glyphRenderer.invalidateAtlasTextures = () => {
       originalInvalidate()
+      const currentAtlas = glyphRenderer._atlas ?? renderer._charAtlas
+      registerRendererAtlas(renderer, currentAtlas)
+      if (typeof currentAtlas?.pageLayoutVersion === 'number') {
+        lastShrunkLayoutVersionByRenderer.set(renderer, currentAtlas.pageLayoutVersion)
+      }
       // render() only re-uploads 0..pages.length - 1; shrink higher slots after merges/evictions.
-      const activePages = (glyphRenderer._atlas ?? renderer._charAtlas)?.pages?.length ?? 0
-      shrinkWebglAtlasTexturesFrom(renderer, activePages)
+      shrinkWebglAtlasTexturesFrom(renderer, currentAtlas?.pages?.length ?? 0)
     }
     if (typeof glyphRenderer.beginFrame === 'function') {
       const originalBeginFrame = glyphRenderer.beginFrame.bind(glyphRenderer)
       glyphRenderer.beginFrame = () => {
         const layoutChanged = originalBeginFrame()
         if (layoutChanged) {
-          // A sibling clear bumps pageLayoutVersion before this pane's retry loop runs.
-          glyphRenderer.invalidateAtlasTextures?.()
+          invalidateRendererForAtlasLayout(renderer, glyphRenderer._atlas ?? renderer._charAtlas)
         }
         return layoutChanged
       }
@@ -185,11 +286,17 @@ export function boundXtermWebglAtlasMemory(webglAddon: WebglAddon): void {
   } catch {}
 }
 
-/** Shrink all GPU atlas texture slots to 1x1 after clearing an addon's glyph atlas. */
+/** Shrink all GPU atlas texture slots to 1x1 after clearing an addon's glyph atlas and reclaim idle sibling slots. */
 export function shrinkClearedWebglAtlasTextures(webglAddon: WebglAddon | null): void {
   if (!hasAddonInternals(webglAddon) || !webglAddon._renderer) {
     return
   }
+  const renderer = webglAddon._renderer
+  const atlas = renderer._charAtlas ?? renderer._glyphRenderer?.value?._atlas
+  if (typeof atlas?.pageLayoutVersion === 'number') {
+    lastShrunkLayoutVersionByRenderer.set(renderer, atlas.pageLayoutVersion)
+  }
   // Hidden panes do not redraw on clear; shrink every slot to 1x1 until reveal re-uploads page 0.
-  shrinkWebglAtlasTexturesFrom(webglAddon._renderer, 0)
+  shrinkWebglAtlasTexturesFrom(renderer, 0)
+  shrinkSharedAtlasRenderers(atlas, renderer)
 }
