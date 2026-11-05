@@ -1253,8 +1253,9 @@ export function createRemoteRuntimePtyTransport(
       if (await endRetiredHostSurface(hostHandle, endedHandle, notifySpawn, isCurrent)) {
         return undefined
       }
-      // Why: the host no longer confirms the retirement, so the pane's process is unknown again.
+      // Why: the host no longer confirms the retirement, so the pane's process is unknown again and its retry must stay parkable.
       hostHandle = undefined
+      waitOutcome.boundedWaitEnded = true
     }
     if (!isCurrent()) {
       return undefined
