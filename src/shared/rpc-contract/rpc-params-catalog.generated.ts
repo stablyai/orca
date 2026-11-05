@@ -464,6 +464,7 @@ import {
 } from './orchestration-federation-control-params'
 import {
   FederationAckParams,
+  FederationFinishedMailParams,
   FederationImportParams,
   FederationPullParams
 } from './orchestration-federation-relay-params'
@@ -1293,6 +1294,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'orchestration.dispatchShow': DispatchShowParams,
   'orchestration.federationAck': FederationAckParams,
   'orchestration.federationAttachStart': FederationAttachStartParams,
+  'orchestration.federationFinishedMail': FederationFinishedMailParams,
   'orchestration.federationFleetSnapshot': FederationFleetSnapshotParams,
   'orchestration.federationImport': FederationImportParams,
   'orchestration.federationPull': FederationPullParams,

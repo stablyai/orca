@@ -1,3 +1,4 @@
+import { takesFinishedWorkerMail } from './finished-worker-relay'
 import { z } from 'zod'
 import type { FederationRuntime } from './federation-runtime'
 import type { FederatedLifecycleSettlement } from './federation-lifecycle-settlement'
@@ -240,8 +241,12 @@ async function syncFederatedDispatchPages(
       () => undefined
     )
   }
+  const workerState = db.getWorkerDispatch(dispatchId)?.state
+  // A finished worker's host still takes the answer its waiting ask expects.
   const toWorker =
-    db.getWorkerDispatch(dispatchId)?.state === 'ready'
+    workerState === 'ready' ||
+    (workerState !== undefined &&
+      takesFinishedWorkerMail({ state: workerState, protocol_version: federated.protocol_version }))
       ? db.listPendingFederationRelay(dispatchId, 'to_worker')
       : []
   if (toWorker.length > 0) {

@@ -1,3 +1,5 @@
+import { potentiallyLiveRemoteAttachmentSql } from './remote-attachment-liveness'
+import { ORCHESTRATION_FEDERATION_FINISHED_WORKER_MAIL_PROTOCOL_VERSION } from '../../../../../shared/orchestration-runtime-capabilities'
 import type {
   WorkerReportOutcome,
   FederationRelayDirection,
@@ -204,6 +206,23 @@ export function hasPendingFederatedWorkerReport(
   )
 }
 
+/** Finished workers on this host whose mail their Run home has not taken yet. */
+export function listFinishedRemoteWorkersWithMail(
+  this: OrchestrationDb,
+  homePeerFingerprint: string
+): string[] {
+  return this.db
+    .prepare(
+      `SELECT DISTINCT a.dispatch_id AS dispatchId FROM remote_dispatch_attachments a
+       JOIN federation_relay_items r ON r.dispatch_id = a.dispatch_id
+         AND r.direction = 'to_home' AND r.acked_at IS NULL
+       WHERE a.home_peer_fingerprint = ? AND a.protocol_version >= ?
+         AND NOT (${potentiallyLiveRemoteAttachmentSql('a.state')})`
+    )
+    .all(homePeerFingerprint, ORCHESTRATION_FEDERATION_FINISHED_WORKER_MAIL_PROTOCOL_VERSION)
+    .flatMap((row) => (typeof row?.dispatchId === 'string' ? [row.dispatchId] : []))
+}
+
 export type FederationRelayAckMethods = {
   listFederationRelay: typeof listFederationRelay
   listPendingFederationRelay: typeof listPendingFederationRelay
@@ -211,6 +230,7 @@ export type FederationRelayAckMethods = {
   setFederatedHomeImportSequence: typeof setFederatedHomeImportSequence
   recordFederatedHomeAcknowledgment: typeof recordFederatedHomeAcknowledgment
   hasPendingFederatedWorkerReport: typeof hasPendingFederatedWorkerReport
+  listFinishedRemoteWorkersWithMail: typeof listFinishedRemoteWorkersWithMail
 }
 
 export function attachFederationRelayAck(ctor: { prototype: object }): void {
@@ -220,6 +240,7 @@ export function attachFederationRelayAck(ctor: { prototype: object }): void {
     acknowledgeFederationRelay,
     setFederatedHomeImportSequence,
     recordFederatedHomeAcknowledgment,
-    hasPendingFederatedWorkerReport
+    hasPendingFederatedWorkerReport,
+    listFinishedRemoteWorkersWithMail
   })
 }

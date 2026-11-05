@@ -9,6 +9,8 @@ const MORE_MAIL = 'More mail is waiting: run check again.'
 const AWAIT_WORKER_REPORTS =
   'Orca wakes you when a worker reports. Once every worker you need is started, end your turn. Do not poll.'
 export const WORKER_DONE_RECORDED_NEXT = 'Recorded. End your turn.'
+export const FINISHED_WORKER_DONE_NEXT =
+  'Delivered to your coordinator as a message; your finished task is unchanged. End your turn.'
 
 const ReadyWorkerStart = z.looseObject({
   state: z.literal('ready'),

@@ -34,7 +34,7 @@ import { sendFederatedControlMail } from './send-control-mail'
 import { orchestrationCallerIdentity } from '../runs/run-scope'
 import { assertLifecycleCallerIsNotAnotherParty } from './lifecycle-caller-fence'
 import { planWorkerFollowUp, startWorkerFollowUp } from './worker-follow-up'
-import { finishedWorkerSend, refuseFinishedRemoteWorker } from './finished-worker-mail'
+import { finishedWorkerSend, remoteSenderAttachment } from './finished-worker-mail'
 import {
   followThroughWorkerReport,
   passHeldWorkerMail,
@@ -108,23 +108,22 @@ export const ORCHESTRATION_SEND_METHODS = [
         attestedCaller?.processIncarnation ??
         runtime.getTerminalProcessIncarnation(from) ??
         undefined
-      const remoteAttachment = senderPaneKey
-        ? db.findActiveRemoteAttachmentForPane(senderPaneKey)
+      const remote = senderPaneKey
+        ? remoteSenderAttachment(db, senderPaneKey, params, processIncarnation)
         : undefined
-      if (remoteAttachment && senderPaneKey) {
+      if (remote && senderPaneKey) {
         return sendRemoteMessage({
           params,
           runtime,
           db,
           from,
           senderPaneKey,
-          remoteAttachment,
+          ...remote,
           processIncarnation: processIncarnation(),
           signal
         })
       }
 
-      refuseFinishedRemoteWorker(db, senderPaneKey, params.to)
       const runGroup =
         params.to && isGroupAddress(params.to) && !params.to.toLowerCase().startsWith('@worktree:')
       // Run groups validate their own audience; message scope cannot select a parent Dispatch.

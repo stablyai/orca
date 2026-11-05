@@ -6,10 +6,9 @@ import { waitForFederatedLifecycleSettlement } from '../../../../orchestration/f
 import { bindCoordinatorMutationPayload } from '../../../../orchestration/dispatch-message-binding'
 import { ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION } from '../../../../../../shared/protocol-version'
 import type { z } from 'zod'
-import { parseRemoteWorkerPayload } from '../schemas'
+import { isDispatchMutationMessageType, parseRemoteWorkerPayload } from '../schemas'
 import type { SendParams } from '../schemas'
-import { rejectFederatedExplicitTarget } from '../routing'
-import { WORKER_DONE_RECORDED_NEXT } from '../receipt-next'
+import { FINISHED_WORKER_DONE_NEXT, WORKER_DONE_RECORDED_NEXT } from '../receipt-next'
 import { assertWorkerCanReport } from '../../../../orchestration/worker-report-admission'
 
 type SendParamsInput = z.infer<typeof SendParams>
@@ -27,22 +26,31 @@ export async function sendRemoteMessage(args: {
   db: OrchestrationDb
   from: string
   senderPaneKey: string
-  remoteAttachment: RemoteAttachment
+  attachment: RemoteAttachment
+  /** Its Dispatch has settled: the message goes to its coordinator as ordinary mail and changes nothing. */
+  finished: boolean
   processIncarnation?: string | null
   signal?: AbortSignal
 }) {
-  const { params, runtime, db, from, senderPaneKey, remoteAttachment } = args
-  rejectFederatedExplicitTarget(params, remoteAttachment.home_run_id)
-  assertWorkerCanReport({
-    dispatchId: remoteAttachment.dispatch_id,
-    from,
-    workerState: remoteAttachment.state,
-    processCurrent: db.isRemoteAttachmentProcessCurrent({
+  const { runtime, db, from, senderPaneKey, attachment: remoteAttachment, finished } = args
+  const params = finished
+    ? {
+        ...args.params,
+        type: isDispatchMutationMessageType(args.params.type) ? 'status' : args.params.type
+      }
+    : args.params
+  if (!finished) {
+    assertWorkerCanReport({
       dispatchId: remoteAttachment.dispatch_id,
-      paneKey: senderPaneKey,
-      processIncarnation: args.processIncarnation ?? null
+      from,
+      workerState: remoteAttachment.state,
+      processCurrent: db.isRemoteAttachmentProcessCurrent({
+        dispatchId: remoteAttachment.dispatch_id,
+        paneKey: senderPaneKey,
+        processIncarnation: args.processIncarnation ?? null
+      })
     })
-  })
+  }
 
   const type = (params.type ?? 'status') as MessageType
   const payload = parseRemoteWorkerPayload(params.payload)
@@ -102,14 +110,26 @@ export async function sendRemoteMessage(args: {
       'worker_done was queued, but the Run-home runtime did not confirm settlement. Verify the Task and Dispatch before retrying.'
     )
   }
+  const relayed = {
+    messageId: relay.message_id,
+    sequence: relay.sequence,
+    dispatchId: relay.dispatch_id,
+    destination: 'run_home' as const,
+    accepted: true as const
+  }
+  if (finished && args.params.type === 'worker_done') {
+    // Older CLIs confirm a worker_done only by a verdict; the Task's recorded one stands.
+    return {
+      relay: relayed,
+      lifecycle: {
+        action: remoteAttachment.state === 'succeeded' ? 'completed' : 'failed',
+        authority: 'run_home'
+      },
+      next: FINISHED_WORKER_DONE_NEXT
+    }
+  }
   return {
-    relay: {
-      messageId: relay.message_id,
-      sequence: relay.sequence,
-      dispatchId: relay.dispatch_id,
-      destination: 'run_home',
-      accepted: true
-    },
+    relay: relayed,
     ...(lifecycle ? { lifecycle } : {}),
     ...(lifecycle && lifecycle.action !== 'rejected' ? { next: WORKER_DONE_RECORDED_NEXT } : {})
   }

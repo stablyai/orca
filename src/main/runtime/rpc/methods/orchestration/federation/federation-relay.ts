@@ -8,8 +8,10 @@ import {
   type FederatedLifecycleSettlement
 } from '../../../../orchestration/federation-lifecycle-settlement'
 import { defineMethod, type RpcMethod } from '../../../core'
+import { takesFinishedWorkerMail } from '../../../../orchestration/finished-worker-relay'
 import {
   FederationAckParams,
+  FederationFinishedMailParams,
   FederationImportParams,
   FederationPullParams
 } from '../../../../../../shared/rpc-contract/orchestration-federation-relay-params'
@@ -36,6 +38,18 @@ export const ORCHESTRATION_FEDERATION_RELAY_METHODS = [
             })
       }
     }
+  }),
+  defineMethod({
+    name: 'orchestration.federationFinishedMail',
+    permission: 'workspace',
+    params: FederationFinishedMailParams,
+    handler: (_params, { runtime, authenticatedCallerFingerprint }) => ({
+      dispatchIds: authenticatedCallerFingerprint
+        ? runtime
+            .getOrchestrationDb()
+            .listFinishedRemoteWorkersWithMail(authenticatedCallerFingerprint)
+        : []
+    })
   }),
   defineMethod({
     name: 'orchestration.federationAck',
@@ -131,7 +145,11 @@ export const ORCHESTRATION_FEDERATION_RELAY_METHODS = [
           params.dispatchId,
           authenticatedCallerFingerprint
         )
-        if (currentAttachment.state !== 'ready') {
+        // A finished worker's waiting ask still takes its answer; nothing else reaches it.
+        if (
+          currentAttachment.state !== 'ready' &&
+          !(item.kind === 'reply' && takesFinishedWorkerMail(currentAttachment))
+        ) {
           throw new OrchestrationError(
             'dispatch_inactive',
             `Remote Dispatch ${params.dispatchId} is not active.`

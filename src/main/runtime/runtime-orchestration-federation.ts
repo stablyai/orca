@@ -19,6 +19,7 @@ import {
   releaseFederationAckCheckpoint
 } from './orchestration/federation-ack-checkpoints'
 import { syncFederatedDispatch } from './orchestration/federation-sync'
+import { pullFinishedWorkerMail } from './orchestration/finished-worker-relay'
 import type { OrchestrationDb } from './orchestration/db'
 import type { FederationRuntime } from './orchestration/federation-runtime'
 
@@ -30,6 +31,7 @@ export class RuntimeOrchestrationFederation {
   private terminalRecoveryInFlight: Promise<void> | null = null
   private terminalRecoveryRowId = 0
   private relayGeneration = 0
+  private finishedMailTimer: ReturnType<typeof setInterval> | null = null
 
   constructor(
     private readonly runtime: FederationRuntime,
@@ -38,6 +40,7 @@ export class RuntimeOrchestrationFederation {
 
   resetForDatabaseChange(): void {
     this.relayGeneration += 1
+    this.stopFinishedWorkerMail()
     for (const timer of this.timers.values()) {
       clearInterval(timer)
     }
@@ -184,6 +187,7 @@ export class RuntimeOrchestrationFederation {
           }
           this.timers.delete(dispatch.dispatch_id)
           this.warnings.delete(dispatch.dispatch_id)
+          this.ensureFinishedWorkerMail()
           return
         }
         void this.syncDispatch(dispatch.dispatch_id).catch(() => undefined)
@@ -194,6 +198,50 @@ export class RuntimeOrchestrationFederation {
       tick()
     }
     this.ensureTerminalHistoryRecovery()
+    this.ensureFinishedWorkerMail()
+  }
+
+  // Slower than a live worker's tick, and one request per host, since nothing is waiting on it.
+  private ensureFinishedWorkerMail(): void {
+    if (this.finishedMailTimer || !this.transport) {
+      return
+    }
+    let pulling = false
+    const timer = setInterval(() => {
+      if (pulling) {
+        return
+      }
+      pulling = true
+      void pullFinishedWorkerMail(
+        this.runtime.getOrchestrationDb(),
+        (environmentId) =>
+          this.runtime.callOrchestrationWorkerServer(
+            environmentId,
+            'orchestration.federationFinishedMail',
+            {},
+            15_000
+          ),
+        (dispatchId) => this.syncDispatch(dispatchId)
+      )
+        .then((pending) => {
+          if (!pending && this.finishedMailTimer === timer) {
+            this.stopFinishedWorkerMail()
+          }
+        })
+        .catch(() => undefined)
+        .finally(() => {
+          pulling = false
+        })
+    }, 5_000)
+    timer.unref?.()
+    this.finishedMailTimer = timer
+  }
+
+  private stopFinishedWorkerMail(): void {
+    if (this.finishedMailTimer) {
+      clearInterval(this.finishedMailTimer)
+    }
+    this.finishedMailTimer = null
   }
 
   private ensureTerminalHistoryRecovery(): void {
@@ -240,6 +288,7 @@ export class RuntimeOrchestrationFederation {
 
   stopRelay(): void {
     this.relayGeneration += 1
+    this.stopFinishedWorkerMail()
     for (const timer of this.timers.values()) {
       clearInterval(timer)
     }

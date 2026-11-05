@@ -4,7 +4,6 @@ import { clampOrchestrationAskTimeoutMs } from '../../../../../../shared/orchest
 import { isGroupAddress } from '../../../../orchestration/groups'
 import { dispatchReportMailbox } from '../../../../orchestration/dispatch-report-mailbox'
 import { AskParams } from '../schemas'
-import { rejectFederatedExplicitTarget } from '../routing'
 import { askRemoteRunHome } from './ask-remote'
 import {
   mailboxAddressOf,
@@ -13,7 +12,7 @@ import {
 import { resolveOrchestrationParty } from '../../../../orchestration/orchestration-party'
 import { assertLifecycleCallerIsNotAnotherParty } from './lifecycle-caller-fence'
 import { assertWorkerCanReport } from '../../../../orchestration/worker-report-admission'
-import { finishedWorkerDispatch, refuseFinishedRemoteWorker } from './finished-worker-mail'
+import { finishedWorkerDispatch, remoteSenderAttachment } from './finished-worker-mail'
 import { isDispatchAssignee } from '../../../../orchestration/db/dispatch-context/dispatch-lookup'
 import {
   askedQuestionReceipt,
@@ -55,19 +54,24 @@ export const ORCHESTRATION_ASK_METHODS = [
           evidence: orchestrationCompatibilityEvidence
         })
       }
-      const remoteAttachment = paneKey ? db.findActiveRemoteAttachmentForPane(paneKey) : undefined
-      if (remoteAttachment && paneKey) {
-        rejectFederatedExplicitTarget(params, remoteAttachment.home_run_id)
+      const remote = paneKey
+        ? remoteSenderAttachment(
+            db,
+            paneKey,
+            params,
+            () => runtime.getTerminalProcessIncarnation(from) ?? undefined
+          )
+        : undefined
+      if (remote && paneKey) {
         return askRemoteRunHome({
-          params: { ...params, timeoutMs },
+          // A finished worker has no turn for a later answer to wake, so it waits for it here.
+          params: { ...params, timeoutMs, ...(remote.finished ? { wait: undefined } : {}) },
           runtime,
           signal,
           recordMutationReceipt,
           from,
           paneKey,
-          dispatchId: remoteAttachment.dispatch_id,
-          taskId: remoteAttachment.task_id,
-          workerState: remoteAttachment.state
+          ...remote
         })
       }
       const workingDispatch = db.getActiveDispatchForIdentity(from, paneKey)
@@ -86,7 +90,6 @@ export const ORCHESTRATION_ASK_METHODS = [
           'question'
         )
       if (!askingDispatch) {
-        refuseFinishedRemoteWorker(db, paneKey, undefined)
         throw new OrchestrationError(
           'dispatch_inactive',
           'ask requires an active supervised Dispatch.'

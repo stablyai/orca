@@ -1,3 +1,4 @@
+import { ORCHESTRATION_FEDERATION_FINISHED_WORKER_MAIL_PROTOCOL_VERSION } from '../../../../../shared/orchestration-runtime-capabilities'
 import type { FederatedDispatchRow } from '../../types'
 import { OrchestrationError } from '../../orchestration-error'
 import type { OrchestrationDb } from '../orchestration-db'
@@ -42,6 +43,35 @@ export function listActiveFederatedDispatches(
        ORDER BY fd.rowid`
     )
     .all(runId ?? null, runId ?? null) as FederatedDispatchRow[]
+}
+
+/** Settled Dispatches whose host keeps their finished worker, which can still mail its coordinator. */
+export function listFinishedFederatedWorkers(
+  this: OrchestrationDb
+): { dispatchId: string; environmentId: string; answerPending: boolean }[] {
+  return this.db
+    .prepare(
+      `SELECT fd.dispatch_id AS dispatchId, fd.environment_id AS environmentId,
+         EXISTS (SELECT 1 FROM federation_relay_items r
+                  WHERE r.dispatch_id = fd.dispatch_id AND r.direction = 'to_worker'
+                    AND r.acked_at IS NULL) AS answerPending
+       FROM federated_dispatches fd
+       INNER JOIN worker_dispatches wd ON wd.dispatch_id = fd.dispatch_id
+       WHERE fd.protocol_version >= ? AND fd.remote_terminal_handle IS NOT NULL
+         AND wd.state NOT IN ('starting', 'ready', 'stopping', 'start_unknown', 'stop_unknown')`
+    )
+    .all(ORCHESTRATION_FEDERATION_FINISHED_WORKER_MAIL_PROTOCOL_VERSION)
+    .flatMap((row) =>
+      typeof row?.dispatchId === 'string' && typeof row.environmentId === 'string'
+        ? [
+            {
+              dispatchId: row.dispatchId,
+              environmentId: row.environmentId,
+              answerPending: row.answerPending === 1
+            }
+          ]
+        : []
+    )
 }
 
 export function findNextTerminalFederatedDispatchPendingAcknowledgment(
@@ -129,6 +159,7 @@ export type FederatedDispatchStoreMethods = {
   getFederatedDispatch: typeof getFederatedDispatch
   listFederatedDispatchesByIds: typeof listFederatedDispatchesByIds
   listActiveFederatedDispatches: typeof listActiveFederatedDispatches
+  listFinishedFederatedWorkers: typeof listFinishedFederatedWorkers
   findNextTerminalFederatedDispatchPendingAcknowledgment: typeof findNextTerminalFederatedDispatchPendingAcknowledgment
   isFederatedDispatchRelayEligible: typeof isFederatedDispatchRelayEligible
   updateFederatedDispatchResources: typeof updateFederatedDispatchResources
@@ -140,6 +171,7 @@ export function attachFederatedDispatchStore(ctor: { prototype: object }): void 
     getFederatedDispatch,
     listFederatedDispatchesByIds,
     listActiveFederatedDispatches,
+    listFinishedFederatedWorkers,
     findNextTerminalFederatedDispatchPendingAcknowledgment,
     isFederatedDispatchRelayEligible,
     updateFederatedDispatchResources,
