@@ -100,6 +100,13 @@ describe('Chat UI corner card', () => {
     expect(onClose).not.toHaveBeenCalled()
     expect(button('Use Chat UI').disabled).toBe(false)
     await act(async () => button('Use Chat UI').click())
+    expect(onClose).not.toHaveBeenCalled()
+    expect(container.textContent).toContain(
+      'Prefer the terminal? Switch back anytime: search Chat UI in Settings.'
+    )
+    act(() => button('Open Settings').click())
     expect(onClose).toHaveBeenCalledOnce()
+    expect(openSettingsPage).toHaveBeenCalledOnce()
+    expect(useAppStore.getState().settingsSearchInputQuery).toBe('Chat UI')
   })
 })

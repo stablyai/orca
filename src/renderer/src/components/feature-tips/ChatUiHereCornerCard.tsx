@@ -10,6 +10,7 @@ import { ChatSurfacePreview } from '../agent/launch-settings/AgentDefaultSurface
 import { getChatUiHereVariantCopy } from './chat-ui-here-copy'
 import { FeatureTipActions } from './FeatureTipActions'
 import { FeatureTipSettingsLine } from './FeatureTipDialogFrame'
+import { ChatUiSwitchedCornerNote } from './ChatUiSwitchedCornerNote'
 import { trackChatUiFeatureTipAction } from './feature-tip-telemetry'
 import {
   setAgentDefaultSurfaceFromFeatureTip,
@@ -21,9 +22,13 @@ export function ChatUiHereCornerCard({ onClose }: { onClose: () => void }): JSX.
   const mountedRef = useMountedRef()
   const settings = useAppStore((s) => s.settings)
   const [busy, setBusy] = useState(false)
+  const [switched, setSwitched] = useState(false)
   const tip = FEATURE_TIPS.find((entry) => entry.id === 'chat-ui-here')
   if (!tip) {
     return null
+  }
+  if (switched) {
+    return <ChatUiSwitchedCornerNote onClose={onClose} />
   }
   const { paragraphs, secondaryLabel, primaryLabel } = getChatUiHereVariantCopy('chat-ui-off')
   const [intro = ''] = paragraphs
@@ -34,8 +39,11 @@ export function ChatUiHereCornerCard({ onClose }: { onClose: () => void }): JSX.
     }
     setBusy(true)
     try {
-      if ((await setAgentDefaultSurfaceFromFeatureTip('chat')) && mountedRef.current) {
-        onClose()
+      if (
+        (await setAgentDefaultSurfaceFromFeatureTip('chat', { confirmWithToast: false })) &&
+        mountedRef.current
+      ) {
+        setSwitched(true)
       }
     } finally {
       if (mountedRef.current) {

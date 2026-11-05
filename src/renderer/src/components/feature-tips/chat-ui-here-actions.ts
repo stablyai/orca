@@ -10,7 +10,8 @@ import {
 } from './feature-tip-telemetry'
 
 export async function setAgentDefaultSurfaceFromFeatureTip(
-  surface: AgentDefaultSurface
+  surface: AgentDefaultSurface,
+  { confirmWithToast = true }: { confirmWithToast?: boolean } = {}
 ): Promise<boolean> {
   const { settings, updateSettingsOrThrow } = useAppStore.getState()
   const fromSurface = normalizeAgentDefaultSurface(settings?.agentDefaultSurface)
@@ -27,7 +28,7 @@ export async function setAgentDefaultSurfaceFromFeatureTip(
       source: 'launch_card',
       launch_tip_shown: true
     })
-    if (surface === 'chat') {
+    if (surface === 'chat' && confirmWithToast) {
       toast.success(
         translate(
           'featureTips.chatUiHere.switched',
@@ -56,4 +57,13 @@ export function openChatUiFeatureTipSettings(): void {
   const { openSettingsTarget, openSettingsPage } = useAppStore.getState()
   openSettingsTarget({ pane: 'chat', repoId: null, sectionId: CHAT_LAUNCH_DEFAULT_SECTION_ID })
   openSettingsPage()
+}
+
+/** Opens Settings already searching "Chat UI", the term the switched note tells users to search. */
+export function openChatUiSettingsSearch(): void {
+  const { openSettingsPage, openSettingsTarget, setSettingsSearchQuery } = useAppStore.getState()
+  // Why this order: openSettingsPage clears the search query.
+  openSettingsPage()
+  openSettingsTarget({ pane: 'chat', repoId: null })
+  setSettingsSearchQuery(translate('settings.appearance.chat.title', 'Chat UI'))
 }
