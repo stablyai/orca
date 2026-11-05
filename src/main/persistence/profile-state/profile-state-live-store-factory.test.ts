@@ -334,13 +334,14 @@ describe('live profile authority admission', () => {
               tabId: 'tab-local',
               worktreeId: 'repo-local::/fixture/local',
               connectionId: null,
-              receivedAt: Date.now(),
-              stateStartedAt: Date.now(),
+              receivedAt: 1_700_000_000_000,
+              stateStartedAt: 1_700_000_000_000,
               payload: { state: 'working', prompt: 'legacy cached', agentType: 'claude' }
             }
           }
         })
       )
+      const clock = vi.spyOn(Date, 'now').mockReturnValue(1_700_000_000_000)
       try {
         await agentHookServer.start({ env: 'production', userDataPath })
         expect(agentHookServer.getStatusSnapshot()).toContainEqual(
@@ -351,6 +352,7 @@ describe('live profile authority admission', () => {
         )
       } finally {
         agentHookServer.stop()
+        clock.mockRestore()
       }
     }
   )
