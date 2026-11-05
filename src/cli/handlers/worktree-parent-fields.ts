@@ -96,7 +96,13 @@ export async function resolveCreateParentFields(
       !explicitParent.parentWorktree && !explicitParent.parentWorkspace && !noParent
     return {
       ...targetParent,
-      ...(inferParent ? await inferCallerCrossStoreParent(client, inferredParent, args.cwd) : {})
+      ...(inferParent
+        ? await inferCallerCrossStoreParent(
+            client,
+            { envParentWorkspace: inferredParent, callerTerminalHandle: args.callerTerminalHandle },
+            args.cwd
+          )
+        : {})
     }
   }
   return {
@@ -109,16 +115,23 @@ export async function resolveCreateParentFields(
   }
 }
 
-/** The caller's workspace on this machine (env, else cwd, as on the same machine) parents a create
- * on the server. Anything short of a verified link creates unnested with one note. */
+type InferredParentSource = 'env-workspace' | 'terminal-context' | 'cwd-context'
+
+/** The caller's workspace on this machine (env and terminal, else cwd, as on the same machine) parents
+ * a create on the server. Short of a verified link it creates unnested with one note, and noParent
+ * keeps the server's own create-time inference from nesting it anyway. */
 async function inferCallerCrossStoreParent(
   client: RuntimeClient,
-  envParentWorkspace: string | undefined,
+  context: { envParentWorkspace: string | undefined; callerTerminalHandle: string | undefined },
   cwd: string
 ): Promise<Record<string, unknown>> {
-  const caller = await findCallerWorkspace(client, envParentWorkspace, cwd)
+  const caller = await findCallerWorkspace(client, context, cwd)
   if (!caller) {
     return {}
+  }
+  if ('unresolved' in caller) {
+    console.error(`note: not nested: ${caller.unresolved}`)
+    return { noParent: true }
   }
   try {
     const status = (await client.call<RuntimeStatus>('status.get')).result
@@ -128,7 +141,7 @@ async function inferCallerCrossStoreParent(
         caller.selector,
         `${serverLabel(client)} needs an Orca update to nest across machines.`
       )
-      return {}
+      return { noParent: true }
     }
     return {
       crossStoreParent: await readCallerParentRef(client, caller.selector),
@@ -140,29 +153,54 @@ async function inferCallerCrossStoreParent(
       caller.selector,
       error instanceof Error ? error.message : String(error)
     )
-    return {}
+    return { noParent: true }
   }
 }
 
+/** Undefined only with no Orca workspace evidence at all, which stays silent. */
 async function findCallerWorkspace(
   client: RuntimeClient,
-  envParentWorkspace: string | undefined,
+  context: { envParentWorkspace: string | undefined; callerTerminalHandle: string | undefined },
   cwd: string
-): Promise<{ selector: string; source: 'env-workspace' | 'cwd-context' } | undefined> {
-  if (envParentWorkspace) {
-    const scope = parseWorkspaceKey(envParentWorkspace)
-    return {
-      selector: scope?.type === 'worktree' ? `id:${scope.worktreeId}` : envParentWorkspace,
-      source: 'env-workspace'
+): Promise<
+  { selector: string; source: InferredParentSource } | { unresolved: string } | undefined
+> {
+  const local = callerOrcaClient(client)
+  const { envParentWorkspace, callerTerminalHandle } = context
+  const envScope = envParentWorkspace ? parseWorkspaceKey(envParentWorkspace) : undefined
+  const envSelector =
+    envScope?.type === 'worktree' ? `id:${envScope.worktreeId}` : envParentWorkspace
+  let terminalSelector: string | undefined
+  if (callerTerminalHandle) {
+    const worktreeId = await local
+      .call<{ terminal: { worktreeId: string } }>('terminal.show', {
+        terminal: callerTerminalHandle
+      })
+      .then((shown) => shown.result.terminal.worktreeId)
+      .catch(() => undefined)
+    if (!worktreeId) {
+      return { unresolved: "Orca couldn't find this terminal's workspace." }
     }
+    terminalSelector = isWorkspaceKey(worktreeId) ? worktreeId : `id:${worktreeId}`
+  }
+  // Same-machine inference also refuses to pick between disagreeing contexts.
+  if (envSelector && terminalSelector && envSelector !== terminalSelector) {
+    return { unresolved: 'this terminal and its environment name different workspaces.' }
+  }
+  if (envSelector) {
+    return { selector: envSelector, source: 'env-workspace' }
+  }
+  if (terminalSelector) {
+    return { selector: terminalSelector, source: 'terminal-context' }
   }
   // No Orca running here, or cwd outside its workspaces: nothing to infer.
-  const cwdContext = await resolveWorktreeCreateCwdContext(
-    cwd,
-    callerOrcaClient(client),
-    false
-  ).catch(() => ({}) as Awaited<ReturnType<typeof resolveWorktreeCreateCwdContext>>)
-  return cwdContext.parentWorktree && !cwdContext.parentAmbiguous
+  const cwdContext = await resolveWorktreeCreateCwdContext(cwd, local, false).catch(
+    () => ({}) as Awaited<ReturnType<typeof resolveWorktreeCreateCwdContext>>
+  )
+  if (cwdContext.parentAmbiguous) {
+    return { unresolved: 'more than one workspace contains this directory.' }
+  }
+  return cwdContext.parentWorktree
     ? { selector: cwdContext.parentWorktree.selector, source: 'cwd-context' }
     : undefined
 }
