@@ -168,3 +168,28 @@ it('reruns a failed shell once its last attempt is older, and keeps a captured o
     vi.useRealTimers()
   }
 })
+
+it('answers a lookup from a finished capture that started after it, without another shell', async () => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  try {
+    const spawner = vi
+      .fn<(shell: string, env: NodeJS.ProcessEnv) => Promise<NodeJS.ProcessEnv | null>>()
+      .mockResolvedValueOnce({ PATH: '/first' })
+      .mockResolvedValueOnce({ PATH: '/second' })
+    const options = { shellOverride: '/bin/bash', env: { HOME: '/host' }, spawner }
+    const before = Date.now()
+    vi.advanceTimersByTime(1)
+    await resolveLoginShellEnvironment(options)
+    vi.advanceTimersByTime(1)
+    await expect(
+      resolveLoginShellEnvironment({ ...options, startedAfter: before })
+    ).resolves.toEqual({ PATH: '/first' })
+    expect(spawner).toHaveBeenCalledTimes(1)
+    await expect(
+      resolveLoginShellEnvironment({ ...options, startedAfter: Date.now() })
+    ).resolves.toEqual({ PATH: '/second' })
+    expect(spawner).toHaveBeenCalledTimes(2)
+  } finally {
+    vi.useRealTimers()
+  }
+})

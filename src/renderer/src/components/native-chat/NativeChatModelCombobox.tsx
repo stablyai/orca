@@ -1,4 +1,5 @@
 import { useId, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { Check } from 'lucide-react'
 import {
   Command,
@@ -55,6 +56,7 @@ export function NativeChatModelCombobox({
   const navigatingByKey = useRef(false)
   // Controlled because cmdk reports highlight moves only to a controlled root.
   const [highlighted, setHighlighted] = useState(currentValue ?? '')
+  const [query, setQuery] = useState('')
   return (
     <Command
       surface="inline"
@@ -80,6 +82,7 @@ export function NativeChatModelCombobox({
           }
         }}
       />
+      <CommandInput ref={search} placeholder={searchLabel} value={query} onValueChange={setQuery} />
       {readOnly && readOnlyReason ? (
         <div className="px-3 py-1.5 text-xs text-muted-foreground">{readOnlyReason}</div>
       ) : null}
@@ -163,6 +166,36 @@ export function NativeChatModelCombobox({
                 </HoverCard>
               )
             })}
+            {choices
+              .filter((choice) => !choice.searchOnly || query.trim())
+              .map((choice) => {
+                const label = nativeChatSessionChoiceLabel(choice, say)
+                const current = choice.value === currentValue
+                return (
+                  <CommandItem
+                    key={choice.value}
+                    value={choice.value}
+                    keywords={[label, choice.description ?? '']}
+                    selection="palette"
+                    disabled={readOnly}
+                    aria-current={current || undefined}
+                    onSelect={() => {
+                      if (!current) {
+                        onSelect(choice.value)
+                      }
+                    }}
+                  >
+                    <NativeChatSessionOptionChoiceBody
+                      label={label}
+                      description={nativeChatModelDescription(choice.value, choice.description)}
+                    />
+                    {/* Reserve the check slot so selecting a model cannot rewrap its label. */}
+                    <span className="ml-auto flex size-3.5 shrink-0 items-center justify-center">
+                      {current ? <Check className="size-3.5 text-muted-foreground" /> : null}
+                    </span>
+                  </CommandItem>
+                )
+              })}
           </CommandGroup>
         </NativeChatSessionOptionWriteGroup>
       </CommandList>

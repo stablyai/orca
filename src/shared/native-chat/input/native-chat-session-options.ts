@@ -9,6 +9,8 @@ export type SessionOptionSelectChoice = {
   description?: string
   /** Model choices only: what the host's listing states about the model. */
   details?: NativeChatModelDetails
+  /** An alias of a listed versioned row: listed only for a matching search. */
+  searchOnly?: true
 }
 
 /** default describes catalog display, never running-agent evidence. dispatched is sent but unread and may be corrected by reports.

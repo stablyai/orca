@@ -4,7 +4,7 @@ import { closeEarlierHookReviewRunTerminals } from './hook-review-blocked-run-te
 import {
   createTranscriptPane,
   TRANSCRIPT_PANE_PTY_ID
-} from '../runtime/agent-transcript-pane-test-harness'
+} from '../runtime/orca-runtime-tests/agent-transcript-pane-test-harness'
 import { AGENT_HOOKS_REVIEW_BLOCKED_ERROR } from './runtime-terminal-run-observer'
 
 function makeRun(id: string, dispatchedAt: number): AutomationRun {

@@ -1,4 +1,4 @@
-import { BrowserWindow } from 'electron'
+import { getRuntimeDesktopSurface } from '../../runtime/runtime-desktop-surface'
 import { sendRemoteRuntimeRequest } from '../../../shared/remote-runtime/remote-runtime-client'
 import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../../shared/protocol-version'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
@@ -140,16 +140,7 @@ export function createRuntimeEnvironmentStatusOwner(
       return capable && active
     },
     publish: (snapshot) => {
-      for (const window of BrowserWindow.getAllWindows()) {
-        if (window.isDestroyed()) {
-          continue
-        }
-        try {
-          window.webContents.send(RUNTIME_HOST_STATUS_CHANNEL, snapshot)
-        } catch {
-          /* A renderer can close during publication. */
-        }
-      }
+      getRuntimeDesktopSurface().sendToRenderers?.(RUNTIME_HOST_STATUS_CHANNEL, snapshot)
       for (const listener of statusListeners) {
         listener()
       }

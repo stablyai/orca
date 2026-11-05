@@ -1,5 +1,4 @@
 import { useMemo } from 'react'
-import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 import type {
   NativeChatBlock,
   NativeChatToolCallBlock
@@ -11,7 +10,7 @@ import { NativeChatTaskList } from './NativeChatTaskList'
 import { NativeChatToolLine } from './NativeChatToolLine'
 import { buildEditCards } from '../../../../shared/native-chat/tools/native-chat-edit-cards'
 import { buildNativeChatTaskListRows } from '../../../../shared/native-chat/input/native-chat-task-list-history'
-import type { NativeChatDiffReveal } from './native-chat-turn-diffs'
+import type { NativeChatDiffReveal } from '../../../../shared/native-chat/tools/native-chat-turn-diffs'
 import type { NativeChatToolRunAsides } from './NativeChatToolRun'
 
 /** Mount only while expanded so collapsed runs avoid member pairing and diff work. */
@@ -23,7 +22,6 @@ export function NativeChatToolRunMemberList({
   revealedDiff,
   onRevealDiff,
   disclosureId,
-  onLinkClick,
   asides
 }: {
   /** Every tool block of the run; `headerBlocks` is those minus its asks. */
@@ -36,7 +34,6 @@ export function NativeChatToolRunMemberList({
   revealedDiff?: NativeChatDiffReveal
   onRevealDiff?: (element: HTMLElement) => void
   disclosureId?: string
-  onLinkClick?: CommentMarkdownLinkClickHandler
 }): React.JSX.Element {
   const taskLists = useMemo(
     () =>
@@ -75,7 +72,6 @@ export function NativeChatToolRunMemberList({
                   : undefined
               }
               onReveal={onRevealDiff}
-              onLinkClick={onLinkClick}
               disclosureKey={
                 disclosureId === undefined
                   ? undefined
@@ -96,7 +92,6 @@ export function NativeChatToolRunMemberList({
         key={lineIdentity}
         block={block}
         result={block.type === 'tool-call' ? resultByCall.get(block) : undefined}
-        onLinkClick={onLinkClick}
         disclosureKey={
           disclosureId === undefined ? undefined : `line:${disclosureId}:${lineIdentity}`
         }

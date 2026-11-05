@@ -2,17 +2,14 @@ import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { FileText } from 'lucide-react'
 import { ExpandableMarkdownImage } from '@/components/sidebar/MarkdownImageLightbox'
-import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 import {
   GitHubUserAttachmentImage,
   isGitHubUserAttachmentUrl
 } from '@/components/sidebar/comment-markdown-github-attachment-media'
 import {
   getLocalImageCacheKey,
-  getLocalImageSrcCacheKey,
   useLocalImageSrc
 } from '@/components/editor/document-images/useLocalImageSrc'
-import { releaseLocalImageBlob as releaseLocalImageSrcByKey } from '@/components/editor/document-images/local-image-src-cache'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
@@ -39,6 +36,7 @@ import { resolveNativeChatFileLink } from './native-chat-file-link'
 import { useNativeChatFileLinkClick } from './use-native-chat-file-link-click'
 import { observeTranscriptVisibility } from './NativeChatTranscriptChrome'
 import { useNativeChatMediaHref } from './use-native-chat-media-href'
+import { useNativeChatLinkClick } from './native-chat-link-click-context'
 
 export const NativeChatMarkdownImageLinkContext = createContext<string | undefined>(undefined)
 const IMAGE_ACCESS = chatImageAccess()
@@ -46,7 +44,6 @@ const IMAGE_ACCESS = chatImageAccess()
 type MarkdownImageProps = {
   src?: string
   alt?: string
-  onLinkClick?: CommentMarkdownLinkClickHandler
 }
 
 export function NativeChatMarkdownImage(props: MarkdownImageProps): React.JSX.Element | null {
@@ -78,11 +75,8 @@ export function NativeChatMarkdownImage(props: MarkdownImageProps): React.JSX.El
   )
 }
 
-function NativeChatMarkdownImagePreview({
-  src,
-  alt,
-  onLinkClick
-}: MarkdownImageProps): React.JSX.Element {
+function NativeChatMarkdownImagePreview({ src, alt }: MarkdownImageProps): React.JSX.Element {
+  const onLinkClick = useNativeChatLinkClick()
   const owner = useContext(NativeChatMarkdownImageOwnerContext)
   const linkedHref = useContext(NativeChatMarkdownImageLinkContext)
   const [open, setOpen] = useState(false)
@@ -138,13 +132,6 @@ function NativeChatMarkdownImagePreview({
     IMAGE_ACCESS,
     retryKey
   )
-  const releaseKey = getLocalImageSrcCacheKey(
-    localSrc,
-    target?.absolutePath ?? '',
-    runtimeContext?.connectionId,
-    imageRuntimeContext,
-    IMAGE_ACCESS
-  )
   useEffect(() => {
     const element = triggerRef.current
     if (!element) {
@@ -160,15 +147,6 @@ function NativeChatMarkdownImagePreview({
       setNear(nextNear)
     })
   }, [])
-  useEffect(() => {
-    if (!releaseKey) {
-      return
-    }
-    if (!leaseActive) {
-      releaseLocalImageSrcByKey(releaseKey)
-    }
-    return () => releaseLocalImageSrcByKey(releaseKey)
-  }, [leaseActive, releaseKey])
   const imageSrc = external || attachment ? src : leaseActive ? loadedSrc : undefined
   const displaySrc = imageSrc === failedSrc ? undefined : imageSrc
   const onFileLinkClick = useNativeChatFileLinkClick(fileLinkContext)

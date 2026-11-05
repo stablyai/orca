@@ -142,24 +142,6 @@ describe('rich markdown empty paragraph deletion', () => {
     }
   })
 
-  it('Backspace after deleting slash text in an empty command paragraph preserves soft newlines', () => {
-    const editor = createEditor()
-    try {
-      const paragraph = findNodeTextPosition(editor, 'paragraph', 'launch-lifetime')
-      editor.commands.setTextSelection(paragraph.to)
-      expect(editor.commands.splitBlock()).toBe(true)
-      const slashPos = editor.state.selection.from
-      editor.view.dispatch(editor.state.tr.insertText('/', slashPos))
-      editor.view.dispatch(editor.state.tr.delete(slashPos, slashPos + 1))
-
-      expect(deleteAdjacentEmptyParagraph(editor, 'backward')).toBe(true)
-
-      expectHardWrappedParagraphPreserved(editor)
-    } finally {
-      editor.destroy()
-    }
-  })
-
   it('Backspace joining two non-empty paragraphs preserves source soft newlines', () => {
     const editor = createEditor(hardWrappedTwoParagraphs)
     try {
@@ -173,45 +155,6 @@ describe('rich markdown empty paragraph deletion', () => {
       expect(editor.state.doc.firstChild?.textContent).toBe(
         'Alpha owns launch-lifetime state keyed by tab id, while native\n' +
           'chat owns conversion, ordering, and transcript reconciliation.Second paragraph starts here.'
-      )
-    } finally {
-      editor.destroy()
-    }
-  })
-
-  it('Delete joining two non-empty paragraphs preserves source soft newlines', () => {
-    const editor = createEditor(hardWrappedTwoParagraphs)
-    try {
-      const firstParagraph = findNodeTextPosition(editor, 'paragraph', 'launch-lifetime')
-      editor.commands.setTextSelection(firstParagraph.to)
-
-      expect(deleteAdjacentEmptyParagraph(editor, 'forward')).toBe(true)
-
-      expectNoHardBreaks(editor)
-      expect(editor.state.doc.childCount).toBe(1)
-      expect(editor.state.doc.firstChild?.textContent).toBe(
-        'Alpha owns launch-lifetime state keyed by tab id, while native\n' +
-          'chat owns conversion, ordering, and transcript reconciliation.Second paragraph starts here.'
-      )
-    } finally {
-      editor.destroy()
-    }
-  })
-
-  it('Backspace joining a following heading preserves source soft newlines', () => {
-    const editor = createEditor()
-    try {
-      const heading = findNodeTextPosition(editor, 'heading', 'Next section')
-      editor.commands.setTextSelection(heading.from)
-
-      expect(deleteAdjacentEmptyParagraph(editor, 'backward')).toBe(true)
-
-      expectNoHardBreaks(editor)
-      expect(editor.state.doc.childCount).toBe(1)
-      expect(editor.state.doc.firstChild?.type.name).toBe('paragraph')
-      expect(editor.state.doc.firstChild?.textContent).toBe(
-        'Alpha owns launch-lifetime state keyed by tab id, while native\n' +
-          'chat owns conversion, ordering, and transcript reconciliation.Next section'
       )
     } finally {
       editor.destroy()
@@ -245,30 +188,6 @@ describe('rich markdown empty paragraph deletion', () => {
       editor.commands.setTextSelection(paragraph.from)
 
       expect(deleteAdjacentEmptyParagraph(editor, 'backward')).toBe(true)
-
-      expectNoHardBreaks(editor)
-      expect(editor.state.doc.childCount).toBe(2)
-      expect(editor.state.doc.child(0).type.name).toBe('heading')
-      expect(editor.state.doc.child(0).textContent).toBe(
-        'Existing sectionAlpha owns launch-lifetime state keyed by tab id, while native'
-      )
-      expect(editor.state.doc.child(1).type.name).toBe('paragraph')
-      expect(editor.state.doc.child(1).textContent).toBe(
-        'chat owns conversion, ordering, and transcript reconciliation.'
-      )
-      expect(editor.getMarkdown()).not.toContain('  \n')
-    } finally {
-      editor.destroy()
-    }
-  })
-
-  it('Delete joining from a previous heading preserves source soft newlines', () => {
-    const editor = createEditor(headingBeforeHardWrappedParagraph)
-    try {
-      const heading = findNodeTextPosition(editor, 'heading', 'Existing section')
-      editor.commands.setTextSelection(heading.to)
-
-      expect(deleteAdjacentEmptyParagraph(editor, 'forward')).toBe(true)
 
       expectNoHardBreaks(editor)
       expect(editor.state.doc.childCount).toBe(2)

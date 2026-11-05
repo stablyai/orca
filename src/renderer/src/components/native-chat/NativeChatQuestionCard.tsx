@@ -1,10 +1,9 @@
-import { ImeInput } from '@/lib/ime-text-field'
+import { ImeTextarea } from '@/lib/ime-text-field'
 import { Textarea } from '@/components/ui/textarea'
 import { useRef, useState, type RefObject } from 'react'
 import { Check, Pencil, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
-import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 import { NativeChatQuestionText } from './NativeChatQuestionText'
 import { NativeChatQuestionOption } from './NativeChatQuestionOption'
 import type { AskAnswerSelection } from '../../../../shared/native-chat/input/native-chat-ask-answer'
@@ -39,12 +38,12 @@ export type NativeChatQuestionCardProps = {
   /** Take focus when the card takes the input region; number keys pick while it holds. */
   shouldFocus?: boolean
   /** Paste target while the card replaces the composer. */
-  answerInputRef?: RefObject<HTMLInputElement | null>
-  onLinkClick?: CommentMarkdownLinkClickHandler
+  answerInputRef?: RefObject<HTMLTextAreaElement | null>
 }
 
 // Reserve a non-option index so single-select holds either an option or typed text.
 const TYPED_ANSWER = -1
+const LINE_BREAKS = /[\r\n\u2028\u2029]/g
 
 const CONFIRM_LABEL = {
   submit: () => translate('components.native-chat.question.send', 'Submit'),
@@ -63,8 +62,7 @@ export function NativeChatQuestionCard({
   onCancel,
   onCollapse,
   shouldFocus = false,
-  answerInputRef,
-  onLinkClick
+  answerInputRef
 }: NativeChatQuestionCardProps): React.JSX.Element {
   const cardRef = useRef<HTMLDivElement>(null)
   const autoAdvance = useNativeChatQuestionAutoAdvance(isSubmitting || isCancelling)
@@ -256,7 +254,6 @@ export function NativeChatQuestionCard({
             <NativeChatQuestionText
               data-testid="native-chat-question-card-title"
               content={q.question}
-              onLinkClick={onLinkClick}
               className="min-w-0 flex-1 break-words text-sm font-semibold text-foreground [&_p]:my-0 [&_p+p]:mt-2"
             />
             {collapse ? (
@@ -310,6 +307,7 @@ export function NativeChatQuestionCard({
                   {/* Deliver free text verbatim as a tool result; composer slash commands and autocomplete do not apply. */}
                   {freeTextInput?.multiline ? (
                     <Textarea
+                      data-native-chat-answer-field
                       data-native-chat-prompt-card-focus-target={fieldTakesFocus}
                       disabled={isSubmitting}
                       value={otherText[index]}
@@ -318,13 +316,24 @@ export function NativeChatQuestionCard({
                       placeholder={answerPlaceholder}
                     />
                   ) : (
-                    <ImeInput
+                    <ImeTextarea
                       ref={answerInputRef}
+                      rows={1}
                       data-native-chat-answer-field
                       data-native-chat-prompt-card-focus-target={fieldTakesFocus}
                       disabled={isSubmitting}
                       value={otherText[index]}
-                      onChange={(e) => setOther(index, e.target.value)}
+                      // Enter submits, so a line break becomes a space; edit in place so a mid-draft paste keeps the caret.
+                      onChange={(e) => {
+                        const field = e.target
+                        const oneLine = field.value.replace(LINE_BREAKS, ' ')
+                        if (oneLine !== field.value) {
+                          const { selectionStart, selectionEnd } = field
+                          field.value = oneLine
+                          field.setSelectionRange(selectionStart, selectionEnd)
+                        }
+                        setOther(index, oneLine)
+                      }}
                       // Select typed text on click; tabbing toward Submit must not replace a picked option.
                       onClick={() => {
                         autoAdvance.cancel()
@@ -340,7 +349,7 @@ export function NativeChatQuestionCard({
                       }}
                       placeholder={answerPlaceholder}
                       className={cn(
-                        'min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground disabled:cursor-default disabled:opacity-50',
+                        'scrollbar-sleek max-h-[6lh] min-w-0 flex-1 resize-none overflow-y-auto bg-transparent text-sm outline-none [field-sizing:content] placeholder:text-muted-foreground disabled:cursor-default disabled:opacity-50',
                         currentTypedAnswerChosen || !otherText[index]
                           ? 'text-foreground'
                           : 'text-muted-foreground'

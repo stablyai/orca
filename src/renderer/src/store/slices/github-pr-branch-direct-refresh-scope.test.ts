@@ -203,7 +203,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
         fetchedAt: Date.now()
       })
 
-      await expect(request).resolves.toMatchObject({ title: 'Same-ms direct PR refresh' })
+      await expect(request).resolves.toBeNull()
       expect(store.getState().prCache[`${repoId}::${branch}`]).toBeUndefined()
       expect(store.getState().hostedReviewCache[hostedReviewCacheKey]).toEqual({
         data: externalReview,

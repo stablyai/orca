@@ -5,10 +5,13 @@
       "connecting": "Connexion à l'hôte…",
       "connectingTo": "Connexion à {{name}}…",
       "default": "Valeur par défaut du système",
+      "fableWindow": "Fable",
       "hostNotFound": "Hôte introuvable",
       "invalidSnapshot": "État des comptes invalide reçu de l'hôte",
       "loadingAccounts": "Chargement des comptes…",
       "manageAccountsHint": "Ajoutez ou réauthentifiez des comptes dans Paramètres → Comptes sur l'ordinateur.",
+      "mcpWindow": "MCP",
+      "otherAgents": "Autres agents",
       "refreshAccounts": "Actualiser les comptes",
       "sessionWindow": "5 h",
       "switchFailed": "Impossible de changer de compte",
@@ -376,7 +379,9 @@
     },
     "sessionOptionRows": {
       "defaultMarker": "Par défaut",
-      "notReportedMarker": "Non communiqué"
+      "notReportedMarker": "Non communiqué",
+      "moreModels": "Plus de modèles",
+      "fewerModels": "Moins de modèles"
     },
     "sessionOptionSegments": {
       "dispatchUnconfirmed": "Envoyé à l'agent — non confirmé"
@@ -777,6 +782,9 @@
     },
     "hostCard": {
       "hostActions": "Actions pour {{title}}",
+      "needsYou_many": "{{count}} ont besoin de vous",
+      "needsYou_one": "{{count}} a besoin de vous",
+      "needsYou_other": "{{count}} ont besoin de vous",
       "openHost": "Ouvrir {{title}}",
       "pairingInvalid": "Appairage invalide",
       "pairingTemporarilyUnavailable": "Appairage temporairement indisponible",
@@ -1241,6 +1249,10 @@
       "retryLoading": "Réessayer de charger {{path}}",
       "unavailable": "Indisponible sur mobile"
     },
+    "fileExplorerRowActions": {
+      "copyName": "Copier le nom",
+      "copyRelativePath": "Copier le chemin relatif"
+    },
     "fileMarkdownPreview": {
       "copyLoadedSource": "Copier le code source Markdown chargé",
       "copySource": "Copier le code source Markdown",
@@ -1311,10 +1323,30 @@
     }
   },
   "home": {
+    "agents": {
+      "activeCount": "{{count}} en activité",
+      "heading": "Agents",
+      "showAll": "Tout afficher ({{count}})",
+      "showFewer": "Afficher moins"
+    },
     "appUpdateCard": {
       "dismissAccessibilityLabel": "Ignorer la mise à jour Orca {{version}}",
       "title": "Orca {{version}} est disponible",
       "updateAccessibilityLabel": "Orca {{version}} est disponible, touchez pour mettre à jour"
+    },
+    "automationsTab": {
+      "connectDesktop": "Connectez {{desktop}} pour afficher et exécuter des automatisations.",
+      "createHint": "Touchez + pour planifier un agent.",
+      "emptyTitle": "Planifier le travail des agents",
+      "lastStatus": "Dernière : {{status}}",
+      "newAutomation": "Nouvelle automatisation",
+      "noAutomations": "Aucune automatisation pour l'instant",
+      "pairDesktop": "Appairez un ordinateur pour afficher et exécuter des automatisations.",
+      "paused": "En pause",
+      "scheduled": "Planifiées",
+      "showFor": "Afficher les automatisations de",
+      "toggleFailed": "Impossible de mettre à jour {{name}}",
+      "updateDesktop": "Mettez à jour Orca sur {{desktop}} pour utiliser les automatisations."
     },
     "emptyState": {
       "connectedDescription": "Votre ordinateur apparaîtra ici. Tout est chiffré de bout en bout.",
@@ -1326,9 +1358,7 @@
       "title": "Connectez votre ordinateur"
     },
     "listFooter": {
-      "hostPickerTitle": "Ouvrir les tâches sur",
-      "automationsHeading": "Automatisations",
-      "automationsHostPickerTitle": "Ouvrir les automatisations sur"
+      "hostPickerTitle": "Ouvrir les tâches sur"
     },
     "listHeader": {
       "desktopsHeading": "Ordinateurs"
@@ -1339,6 +1369,33 @@
       "removeHostMessage": "Supprimer « {{name}} » ? Vous pourrez l'appairer à nouveau plus tard.",
       "removeHostTitle": "Supprimer l'hôte",
       "tryAgain": "Veuillez réessayer."
+    },
+    "stats": {
+      "agentTime": "Temps agent",
+      "agentsSpawned": "Agents lancés",
+      "days": "{{days}} j",
+      "heading": "Vos statistiques",
+      "hours": "{{hours}} h",
+      "minutes": "{{minutes}} min",
+      "prsCreated": "PRs créées"
+    },
+    "tabs": {
+      "automations": "Automatisations",
+      "chooseDesktop": "{{desktop}}, choisir un autre ordinateur",
+      "feed": "Activité",
+      "usage": "Utilisation"
+    },
+    "usage": {
+      "active": "Actif",
+      "addAccounts": "Ajoutez des comptes dans Paramètres → Comptes sur l'ordinateur.",
+      "connectDesktop": "Connectez {{desktop}} pour voir l'utilisation des comptes d'agent.",
+      "emptyTitle": "Aucune utilisation pour l'instant",
+      "openAccountsHint": "Ouvre les comptes de cet ordinateur",
+      "pairDesktop": "Appairez un ordinateur pour voir l'utilisation des comptes d'agent.",
+      "refresh": "Actualiser l'utilisation",
+      "showUsageFor": "Afficher l'utilisation de",
+      "updatedAgo": "Mis à jour il y a {{time}}",
+      "updatedJustNow": "Mis à jour à l'instant"
     }
   },
   "hooks": {
@@ -1539,7 +1596,7 @@
       "notificationsTitle": "Soyez averti quand un agent a besoin de vous",
       "openInChatUi": "Ouvrir les sessions dans l'interface de chat",
       "openInTerminal": "Ouvrir les sessions dans le terminal",
-      "sessionViewDescription": "Choisissez si les sessions d'agent compatibles s'ouvrent dans le terminal ou l'interface de chat sur cet appareil. Appuyez longuement sur l'onglet d'une session pour changer de vue, ou modifiez le choix par défaut plus tard dans les paramètres.",
+      "sessionViewDescription": "Choisissez si les sessions d'agent compatibles s'ouvrent dans le terminal ou l'interface de chat sur cet appareil. Appuyez longuement sur l'onglet d'une session pour changer de vue, ou modifiez le choix par défaut à tout moment dans Paramètres → Chat UI.",
       "sessionViewTitle": "Comment ouvrir les sessions ?",
       "skipNotifications": "Ignorer les notifications pour le moment",
       "useChatUi": "Utiliser le chat"
@@ -3983,7 +4040,6 @@
       "unknownResult": "Résultat inconnu",
       "notReported": "Non communiqué",
       "searchOptions": "Rechercher des options",
-      "scheduleAgentWorkAndViewRuns": "Planifier le travail des agents et voir les exécutions",
       "task": "Tâche",
       "review": "Vérifier"
     },

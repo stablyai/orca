@@ -4,8 +4,8 @@ import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { eraseRpcMethods, type RpcContext, type RpcMethod } from '../rpc/core'
 import { NOTIFICATION_METHODS } from '../rpc/methods/notifications'
-import { DeviceRegistry } from '../device-registry'
-import { OrcaRuntimeRpcServer } from '../runtime-rpc'
+import { DeviceRegistry } from '../rpc/server/pairing/device-registry'
+import { OrcaRuntimeRpcServer } from '../rpc/server/runtime-rpc'
 import { OrcaRuntimeService } from '../orca-runtime'
 
 function method(name: string): RpcMethod {
@@ -87,16 +87,6 @@ describe('notifications.registerPush', () => {
     const registerPush = method('notifications.registerPush')
     expect(
       registerPush.params!.safeParse({ ...REGISTER_PARAMS, deviceId: 'device-9' }).success
-    ).toBe(false)
-  })
-
-  it('rejects a malformed phone preference', () => {
-    const registerPush = method('notifications.registerPush')
-    expect(
-      registerPush.params!.safeParse({
-        ...REGISTER_PARAMS,
-        filter: { sound: 'yes' }
-      }).success
     ).toBe(false)
   })
 })

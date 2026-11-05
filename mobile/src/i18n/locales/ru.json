@@ -5,10 +5,13 @@
       "connecting": "Подключение к серверу…",
       "connectingTo": "Подключение к {{name}}…",
       "default": "Как в системе",
+      "fableWindow": "Fable",
       "hostNotFound": "Сервер не найден",
       "invalidSnapshot": "Некорректные данные учётных записей от сервера",
       "loadingAccounts": "Загрузка учётных записей…",
       "manageAccountsHint": "Для добавления учётных записей или повторного входа откройте «Настройки → Учётные записи» в приложении на компьютере.",
+      "mcpWindow": "MCP",
+      "otherAgents": "Другие агенты",
       "refreshAccounts": "Обновить учётные записи",
       "sessionWindow": "5 ч",
       "switchFailed": "Не удалось переключить учётную запись",
@@ -380,7 +383,9 @@
     },
     "sessionOptionRows": {
       "defaultMarker": "По умолчанию",
-      "notReportedMarker": "Нет данных"
+      "notReportedMarker": "Нет данных",
+      "moreModels": "Другие модели",
+      "fewerModels": "Меньше моделей"
     },
     "sessionOptionSegments": {
       "dispatchUnconfirmed": "Отправлено агенту — получение не подтверждено"
@@ -814,6 +819,10 @@
     },
     "hostCard": {
       "hostActions": "Действия для {{title}}",
+      "needsYou_few": "{{count}} требуют внимания",
+      "needsYou_many": "{{count}} требуют внимания",
+      "needsYou_one": "{{count}} требует внимания",
+      "needsYou_other": "{{count}} требуют внимания",
       "openHost": "Открыть {{title}}",
       "pairingInvalid": "Сопряжение недействительно",
       "pairingTemporarilyUnavailable": "Сопряжение временно недоступно",
@@ -1279,6 +1288,10 @@
       "retryLoading": "Повторить загрузку {{path}}",
       "unavailable": "Недоступно на мобильном устройстве"
     },
+    "fileExplorerRowActions": {
+      "copyName": "Копировать имя",
+      "copyRelativePath": "Копировать относительный путь"
+    },
     "fileMarkdownPreview": {
       "copyLoadedSource": "Скопировать загруженный исходный код Markdown",
       "copySource": "Скопировать исходный код Markdown",
@@ -1349,10 +1362,30 @@
     }
   },
   "home": {
+    "agents": {
+      "activeCount": "Активных: {{count}}",
+      "heading": "Агенты",
+      "showAll": "Показать все ({{count}})",
+      "showFewer": "Свернуть"
+    },
     "appUpdateCard": {
       "dismissAccessibilityLabel": "Скрыть уведомление об обновлении Orca {{version}}",
       "title": "Доступна Orca {{version}}",
       "updateAccessibilityLabel": "Доступна Orca {{version}}. Нажмите, чтобы обновить"
+    },
+    "automationsTab": {
+      "connectDesktop": "Подключите {{desktop}}, чтобы просматривать и запускать автоматизации.",
+      "createHint": "Нажмите +, чтобы запланировать агента.",
+      "emptyTitle": "Планируйте работу агентов",
+      "lastStatus": "Последний: {{status}}",
+      "newAutomation": "Новая автоматизация",
+      "noAutomations": "Автоматизаций пока нет",
+      "pairDesktop": "Выполните сопряжение с компьютером, чтобы просматривать и запускать автоматизации.",
+      "paused": "Приостановлена",
+      "scheduled": "По расписанию",
+      "showFor": "Показать автоматизации для",
+      "toggleFailed": "Не удалось обновить {{name}}",
+      "updateDesktop": "Обновите Orca на {{desktop}}, чтобы использовать автоматизации."
     },
     "emptyState": {
       "connectedDescription": "Здесь появится ваш компьютер. Все данные защищены сквозным шифрованием.",
@@ -1364,9 +1397,7 @@
       "title": "Подключите компьютер"
     },
     "listFooter": {
-      "hostPickerTitle": "Открыть задачи на сервере",
-      "automationsHeading": "Автоматизации",
-      "automationsHostPickerTitle": "Открыть автоматизации на"
+      "hostPickerTitle": "Открыть задачи на сервере"
     },
     "listHeader": {
       "desktopsHeading": "Компьютеры"
@@ -1377,6 +1408,33 @@
       "removeHostMessage": "Удалить «{{name}}»? Позже его можно подключить снова.",
       "removeHostTitle": "Удалить сервер",
       "tryAgain": "Попробуйте ещё раз."
+    },
+    "stats": {
+      "agentTime": "Время агентов",
+      "agentsSpawned": "Запущено агентов",
+      "days": "{{days}} дн.",
+      "heading": "Ваша статистика",
+      "hours": "{{hours}} ч",
+      "minutes": "{{minutes}} мин",
+      "prsCreated": "Создано PR"
+    },
+    "tabs": {
+      "automations": "Автоматизации",
+      "chooseDesktop": "{{desktop}}, выбрать другой компьютер",
+      "feed": "Лента",
+      "usage": "Использование"
+    },
+    "usage": {
+      "active": "Активна",
+      "addAccounts": "Добавьте учётные записи в разделе «Настройки → Учётные записи» в приложении на компьютере.",
+      "connectDesktop": "Подключите {{desktop}}, чтобы видеть использование учётных записей агентов.",
+      "emptyTitle": "Данных об использовании пока нет",
+      "openAccountsHint": "Открывает учётные записи этого компьютера",
+      "pairDesktop": "Выполните сопряжение с компьютером, чтобы видеть использование учётных записей агентов.",
+      "refresh": "Обновить данные об использовании",
+      "showUsageFor": "Показать использование для",
+      "updatedAgo": "Обновлено {{time}} назад",
+      "updatedJustNow": "Обновлено только что"
     }
   },
   "hooks": {
@@ -1577,7 +1635,7 @@
       "notificationsTitle": "Узнавайте, когда агенту нужна ваша помощь",
       "openInChatUi": "Открывать сессии в интерфейсе чата",
       "openInTerminal": "Открывать сессии в терминале",
-      "sessionViewDescription": "Выберите, где на этом устройстве открывать поддерживаемые сессии агентов: в терминале или интерфейсе чата. Чтобы сменить режим просмотра, нажмите и удерживайте вкладку сессии. Режим по умолчанию можно позже изменить в настройках.",
+      "sessionViewDescription": "Выберите, где на этом устройстве открывать поддерживаемые сессии агентов: в терминале или интерфейсе чата. Чтобы сменить режим просмотра, нажмите и удерживайте вкладку сессии. Режим по умолчанию можно изменить в любой момент в разделе Настройки → Интерфейс чата.",
       "sessionViewTitle": "Как открывать сессии?",
       "skipNotifications": "Пока не включать уведомления",
       "useChatUi": "Использовать чат"
@@ -4080,7 +4138,6 @@
       "unknownResult": "Неизвестный результат",
       "notReported": "Не сообщено",
       "searchOptions": "Поиск вариантов",
-      "scheduleAgentWorkAndViewRuns": "Планируйте работу агентов и просматривайте запуски",
       "task": "Задача",
       "review": "Проверка"
     },

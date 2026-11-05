@@ -8,7 +8,7 @@ import type {
   RuntimeFileReadChunkResult
 } from '../../../shared/runtime-types'
 import { isMobileBinaryPath, isSafeMobileRelativePath } from './mobile-file-kind'
-import { joinWorktreeRelativePath } from '../runtime-relative-paths'
+import { joinWorktreeRelativePath } from './paths/runtime-relative-paths'
 import { truncateMobileFilePreview } from '../terminal/artifacts/artifact-integrity'
 import {
   requireLocalRuntimeFileRoute,

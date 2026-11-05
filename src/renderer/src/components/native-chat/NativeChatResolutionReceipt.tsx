@@ -1,4 +1,3 @@
-import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 import { NativeChatQuestionText } from './NativeChatQuestionText'
 import { translate } from '@/i18n/i18n'
 import { NativeChatMessageTimestamp } from './NativeChatMessageTimestamp'
@@ -15,22 +14,19 @@ import {
 export function NativeChatResolutionReceipt({
   body,
   disclosureId,
-  awaiting = true,
-  onLinkClick
+  awaiting = true
 }: {
   body: NativeChatResolvedPrompt
   /** Message this receipt stands in for; keys the question row's disclosure. */
   disclosureId?: string
   /** False once the prompting agent ends: report the pending question without implying anyone still waits. */
   awaiting?: boolean
-  onLinkClick?: CommentMarkdownLinkClickHandler
 }): React.JSX.Element | null {
   const askDisclosureKey = disclosureId === undefined ? undefined : `ask:${disclosureId}`
   const subject = nativeChatReceiptSubject(body)
   if (body.resolution.state === 'pending') {
     return body.kind === 'question' ? (
       <NativeChatAwaitingInputRow
-        onLinkClick={onLinkClick}
         subject={subject}
         pending={awaiting}
         disclosureKey={askDisclosureKey}
@@ -54,7 +50,6 @@ export function NativeChatResolutionReceipt({
       {body.kind === 'question' ? (
         <NativeChatAwaitingInputRow
           pending={false}
-          onLinkClick={onLinkClick}
           subject={subject}
           disclosureKey={askDisclosureKey}
           listsQuestions={answers.length === 0}
@@ -71,9 +66,7 @@ export function NativeChatResolutionReceipt({
           <div
             key={body.kind === 'question' ? (body.questions?.[index]?.id ?? 'answer') : 'answer'}
           >
-            {heading ? (
-              <NativeChatQuestionText content={heading} onLinkClick={onLinkClick} />
-            ) : null}
+            {heading ? <NativeChatQuestionText content={heading} /> : null}
             <p className="line-clamp-3 whitespace-pre-wrap break-words">
               {answer.answer === ''
                 ? translate(

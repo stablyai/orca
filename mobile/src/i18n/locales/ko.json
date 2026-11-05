@@ -5,10 +5,13 @@
       "connecting": "호스트에 연결 중…",
       "connectingTo": "{{name}}에 연결 중…",
       "default": "시스템 기본값",
+      "fableWindow": "Fable",
       "hostNotFound": "호스트를 찾을 수 없습니다.",
       "invalidSnapshot": "호스트에서 받은 계정 스냅샷이 유효하지 않습니다.",
       "loadingAccounts": "계정 로드 중…",
       "manageAccountsHint": "데스크톱의 설정 → 계정에서 계정을 추가하거나 다시 인증하세요.",
+      "mcpWindow": "MCP",
+      "otherAgents": "기타 에이전트",
       "refreshAccounts": "계정 새로고침",
       "sessionWindow": "5시간",
       "switchFailed": "계정을 전환하지 못했습니다.",
@@ -372,7 +375,9 @@
     },
     "sessionOptionRows": {
       "defaultMarker": "기본값",
-      "notReportedMarker": "보고되지 않음"
+      "notReportedMarker": "보고되지 않음",
+      "moreModels": "모델 더 보기",
+      "fewerModels": "모델 간단히 보기"
     },
     "sessionOptionSegments": {
       "dispatchUnconfirmed": "에이전트에 전송됨 — 확인되지 않음"
@@ -736,6 +741,8 @@
     },
     "hostCard": {
       "hostActions": "{{title}} 관련 작업",
+      "needsYou_one": "확인 필요 {{count}}개",
+      "needsYou_other": "확인 필요 {{count}}개",
       "openHost": "{{title}} 열기",
       "pairingInvalid": "페어링이 유효하지 않음",
       "pairingTemporarilyUnavailable": "페어링 일시 사용 불가",
@@ -1199,6 +1206,10 @@
       "retryLoading": "{{path}} 다시 불러오기",
       "unavailable": "모바일에서 사용 불가"
     },
+    "fileExplorerRowActions": {
+      "copyName": "이름 복사",
+      "copyRelativePath": "상대 경로 복사"
+    },
     "fileMarkdownPreview": {
       "copyLoadedSource": "불러온 Markdown 소스 복사",
       "copySource": "Markdown 소스 복사",
@@ -1269,10 +1280,30 @@
     }
   },
   "home": {
+    "agents": {
+      "activeCount": "활성 {{count}}개",
+      "heading": "에이전트",
+      "showAll": "{{count}}개 모두 보기",
+      "showFewer": "접기"
+    },
     "appUpdateCard": {
       "dismissAccessibilityLabel": "Orca {{version}} 업데이트 알림 닫기",
       "title": "Orca {{version}} 업데이트 가능",
       "updateAccessibilityLabel": "Orca {{version}} 업데이트가 있습니다. 탭하여 업데이트하세요."
+    },
+    "automationsTab": {
+      "connectDesktop": "자동화를 보고 실행하려면 {{desktop}}에 연결하세요.",
+      "createHint": "+를 탭하여 에이전트를 예약하세요.",
+      "emptyTitle": "에이전트 작업 예약",
+      "lastStatus": "최근: {{status}}",
+      "newAutomation": "새 자동화",
+      "noAutomations": "아직 자동화가 없습니다",
+      "pairDesktop": "자동화를 보고 실행하려면 데스크톱을 페어링하세요.",
+      "paused": "일시 중지됨",
+      "scheduled": "예약됨",
+      "showFor": "자동화를 볼 데스크톱",
+      "toggleFailed": "{{name}}을(를) 업데이트할 수 없습니다",
+      "updateDesktop": "자동화를 사용하려면 {{desktop}}의 Orca를 업데이트하세요."
     },
     "emptyState": {
       "connectedDescription": "데스크톱이 여기에 표시됩니다. 모든 데이터는 종단 간 암호화로 보호됩니다.",
@@ -1284,9 +1315,7 @@
       "title": "데스크톱을 연결하세요"
     },
     "listFooter": {
-      "hostPickerTitle": "작업을 열 호스트",
-      "automationsHeading": "자동화",
-      "automationsHostPickerTitle": "자동화를 열 호스트"
+      "hostPickerTitle": "작업을 열 호스트"
     },
     "listHeader": {
       "desktopsHeading": "데스크탑"
@@ -1297,6 +1326,33 @@
       "removeHostMessage": "\"{{name}}\"을(를) 제거하시겠습니까? 나중에 다시 페어링할 수 있습니다.",
       "removeHostTitle": "호스트 제거",
       "tryAgain": "다시 시도하세요."
+    },
+    "stats": {
+      "agentTime": "Agent 시간",
+      "agentsSpawned": "시작된 Agents",
+      "days": "{{days}}일",
+      "heading": "내 통계",
+      "hours": "{{hours}}시간",
+      "minutes": "{{minutes}}분",
+      "prsCreated": "생성된 PR"
+    },
+    "tabs": {
+      "automations": "자동화",
+      "chooseDesktop": "{{desktop}}, 다른 데스크톱 선택",
+      "feed": "피드",
+      "usage": "사용량"
+    },
+    "usage": {
+      "active": "사용 중",
+      "addAccounts": "데스크톱의 설정 → 계정에서 계정을 추가하세요.",
+      "connectDesktop": "에이전트 계정 사용량을 보려면 {{desktop}}에 연결하세요.",
+      "emptyTitle": "아직 사용량이 없습니다",
+      "openAccountsHint": "이 데스크톱의 계정을 엽니다",
+      "pairDesktop": "에이전트 계정 사용량을 보려면 데스크톱을 페어링하세요.",
+      "refresh": "사용량 새로고침",
+      "showUsageFor": "사용량을 볼 데스크톱",
+      "updatedAgo": "{{time}} 전 업데이트됨",
+      "updatedJustNow": "방금 업데이트됨"
     }
   },
   "hooks": {
@@ -1497,7 +1553,7 @@
       "notificationsTitle": "에이전트의 요청을 놓치지 마세요",
       "openInChatUi": "채팅 UI에서 세션 열기",
       "openInTerminal": "터미널에서 세션 열기",
-      "sessionViewDescription": "지원되는 에이전트 세션을 이 기기에서 터미널로 열지, 채팅 UI로 열지 선택하세요. 세션 탭을 길게 눌러 보기를 전환하거나, 나중에 설정에서 기본값을 변경할 수 있습니다.",
+      "sessionViewDescription": "지원되는 에이전트 세션을 이 기기에서 터미널로 열지, 채팅 UI로 열지 선택하세요. 세션 탭을 길게 눌러 보기를 전환하거나, 언제든지 설정 → 채팅 UI에서 기본값을 변경할 수 있습니다.",
       "sessionViewTitle": "세션을 어떻게 열까요?",
       "skipNotifications": "지금은 알림 설정 건너뛰기",
       "useChatUi": "채팅 UI 사용"
@@ -3882,7 +3938,6 @@
       "unknownResult": "알 수 없는 결과",
       "notReported": "보고되지 않음",
       "searchOptions": "옵션 검색",
-      "scheduleAgentWorkAndViewRuns": "에이전트 작업 예약 및 실행 보기",
       "task": "작업",
       "review": "확인"
     },

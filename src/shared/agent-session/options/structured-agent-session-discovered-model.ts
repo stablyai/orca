@@ -72,6 +72,7 @@ export function discoveredModel(
       ? { declaredDefaultEffort: model.declaredDefaultEffort }
       : {}),
     id: model.id,
+    ...(model.resolvedModel ? { resolvedModel: model.resolvedModel } : {}),
     label: model.label,
     ...(model.description ? { description: model.description } : {}),
     ...(model.isDefault ? { isDefault: true } : {}),

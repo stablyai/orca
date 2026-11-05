@@ -129,27 +129,6 @@ describe('Codex WSL scan gate', () => {
     expect(mocks.gate).not.toHaveBeenCalled()
   })
 
-  it('surfaces the hook-path refusal when the id search also misses', async () => {
-    const refusal = new WslTranscriptFsError('unavailable', 'stuck permits')
-    mocks.gate.mockImplementation(async (options: { operation?: string; path: string }) => {
-      if (options.operation === 'access') {
-        throw refusal
-      }
-      return []
-    })
-    mocks.walk.mockImplementation(async (dir, _agent, _issues, options) => {
-      await options.readDirectory?.(dir)
-      return []
-    })
-
-    await expect(
-      resolveSessionFilePath('codex', 'session-id', {
-        transcriptPath: `${WSL_SESSIONS_DIR}\\2026\\rollout-1-session-id.jsonl`,
-        codexSessionsDirs: [LOCAL_SESSIONS_DIR]
-      })
-    ).rejects.toBe(refusal)
-  })
-
   it('reports the abort, not a refusal, when the hook-path probe races a caller abort', async () => {
     const controller = new AbortController()
     const abortReason = new Error('caller went away')

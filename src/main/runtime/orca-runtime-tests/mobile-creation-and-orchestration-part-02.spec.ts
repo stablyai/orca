@@ -1,14 +1,16 @@
 import { settledWriteStub } from '../../providers/settled-pty-write-stub'
 import { describe, expect, it, vi } from 'vitest'
-import { OrcaRuntimeService, OrchestrationDb } from '../orca-runtime-test-mocks.spec'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { OrchestrationDb } from '../orchestration/db/orchestration-db'
 import {
-  InMemoryOrchestrationMessages,
   bindSinglePtyRun,
   pendingMailPointerRepoints,
   setInMemoryOrchestrationMessages,
   store,
   syncSinglePty
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
+import { InMemoryOrchestrationMessages } from '../orca-runtime-test-orchestration-messages.spec'
 import { MessageWake } from '../runtime-message-waiters'
 
 describe('OrcaRuntimeService', () => {

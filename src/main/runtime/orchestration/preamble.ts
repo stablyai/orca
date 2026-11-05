@@ -1,5 +1,5 @@
 import type { OrchestrationCliCommand } from './cli-command'
-import type { RuntimeAgentPromptWriteOptions } from '../runtime-terminal-contracts'
+import type { RuntimeAgentPromptWriteOptions } from '../terminal/input/agent-prompt-write-options'
 import { ORCA_DISPATCH_PROMPT_LEAD_LINE } from '../../../shared/orca-dispatch-status-prompt'
 import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../shared/orca-session-address-prefix'
 
@@ -67,7 +67,6 @@ ${dispatchIdentityLines(params)}
 The coordinator cannot see this ${surface}. Reach it with the \`${cli} orchestration\` commands
 below, and message it only to ask, report a blocker, or finish; it needs no progress updates
 unless the task asks.
-Don't post to Slack, GitHub, or other channels during the run.
 Do only this task, yourself: no subagents or helper workers unless the task asks.
 
 === CLI COMMANDS ===

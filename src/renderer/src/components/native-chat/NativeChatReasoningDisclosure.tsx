@@ -1,21 +1,16 @@
 import { ChevronRight } from 'lucide-react'
-import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 import { NativeChatCodeBlock } from './NativeChatCodeBlock'
 import { NativeChatMarkdown } from './NativeChatMarkdown'
 
 /** Bound reasoning height so expanded streaming output cannot grow the transcript indefinitely. */
 export function NativeChatReasoningBody({
   markdown,
-  onLinkClick,
-  allowFileUriLinks,
   rowKey,
   streaming = false
 }: {
   markdown: string
   /** The reasoning block's disclosure key, shared by its live line and finished row. */
   rowKey?: string
-  onLinkClick?: CommentMarkdownLinkClickHandler
-  allowFileUriLinks?: boolean
   /** The block is still arriving under the live activity line. */
   streaming?: boolean
 }): React.JSX.Element {
@@ -30,9 +25,7 @@ export function NativeChatReasoningBody({
         variant="document"
         className="text-sm"
         renderCodeBlock={NativeChatCodeBlock}
-        onLinkClick={onLinkClick}
-        allowFileUriLinks={allowFileUriLinks}
-        linkifyFilePaths={onLinkClick !== undefined}
+        linkifyFilePaths
         streaming={streaming}
       />
     </div>

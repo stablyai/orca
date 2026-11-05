@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
-import { OrcaRuntimeService } from './orca-runtime-test-mocks.spec'
-import { store, TEST_WORKTREE_ID, TEST_WORKTREE_PATH } from './orca-runtime-test-fixtures.spec'
+import './orca-runtime-tests/runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from './orca-runtime'
+import {
+  store,
+  TEST_WORKTREE_ID,
+  TEST_WORKTREE_PATH
+} from './orca-runtime-tests/orca-runtime-test-fixtures.spec'
 
 type RuntimeInternals = {
   recordPtyWorktree: (

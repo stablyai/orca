@@ -1,15 +1,13 @@
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { describe, expect, it, vi } from 'vitest'
-import { committingSpawn, registerBoundPty } from '../bind-first-pane.test-fixture'
-import {
-  MOCK_GIT_WORKTREES,
-  OrcaRuntimeService,
-  electronMocks,
-  getRuntimeBrowserPageRegistry,
-  ipcMain,
-  listWorktrees
-} from '../orca-runtime-test-mocks.spec'
-import type { RuntimeMobileSessionTabsResult } from '../orca-runtime-test-mocks.spec'
+import { committingSpawn, registerBoundPty } from './bind-first-pane.test-fixture'
+import './runtime-test-module-registration.spec'
+import { MOCK_GIT_WORKTREES, electronMocks } from '../orca-runtime-test-mocks/setup.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { getRuntimeBrowserPageRegistry } from '../browser/client-pages/runtime-browser-page-registry'
+import { ipcMain } from 'electron'
+import { listWorktrees } from '../../git/worktrees/catalog/worktree-scan-cache'
+import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-session-contracts'
 import {
   TEST_WORKTREE_ID,
   TEST_WORKTREE_PATH,
@@ -17,7 +15,7 @@ import {
   deferred,
   makeRuntimeStoreWithWorkspaceSession,
   store
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import {
   SPLIT_LEFT,

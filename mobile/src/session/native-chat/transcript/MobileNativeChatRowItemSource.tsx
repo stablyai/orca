@@ -1,3 +1,8 @@
+import {
+  sameNativeChatTurnDiff,
+  type NativeChatTurnDiff
+} from '../../../../../src/shared/native-chat/tools/native-chat-turn-diffs'
+import { MobileNativeChatTurnDiffRollup } from './MobileNativeChatTurnDiffRollup'
 import { memo, useContext, useMemo, type ComponentProps } from 'react'
 import {
   MobileNativeChatItemSourceContext,
@@ -23,13 +28,21 @@ type Recovery = MobileNativeChatVisualSource & {
 }
 export type MobileNativeChatRowContentProps = ComponentProps<typeof MobileNativeChatMessage> & {
   scope: string
+  turnDiff?: NativeChatTurnDiff
   source: Recovery | null
 }
+
+const TurnDiffOutcome = memo(
+  MobileNativeChatTurnDiffRollup,
+  (previous, next) =>
+    sameNativeChatTurnDiff(previous.diff, next.diff) && previous.fontScale === next.fontScale
+)
 
 // React's mounted content props are the sole reuse baseline.
 export const MobileNativeChatRowContent = memo(function MobileNativeChatRowContent({
   source,
   scope: _scope,
+  turnDiff,
   ...props
 }: MobileNativeChatRowContentProps) {
   const value = useMemo(() => {
@@ -50,6 +63,7 @@ export const MobileNativeChatRowContent = memo(function MobileNativeChatRowConte
   return (
     <MobileNativeChatItemSourceContext.Provider value={value}>
       <MobileNativeChatMessage {...props} />
+      {turnDiff ? <TurnDiffOutcome diff={turnDiff} fontScale={props.fontScale ?? 1} /> : null}
     </MobileNativeChatItemSourceContext.Provider>
   )
 }, equalMobileNativeChatRowContent)
@@ -61,7 +75,7 @@ export function MobileNativeChatRow({
   ...outer
 }: Pick<
   MobileNativeChatRowContentProps,
-  'scope' | 'fontScale' | 'onOpenFile' | 'structuredActivityUi' | 'onToggleTurn'
+  'scope' | 'fontScale' | 'structuredActivityUi' | 'onToggleTurn'
 > & { message: NativeChatMessage; index: number; lookups: MobileNativeChatRowLookups }) {
   const current = useContext(MobileNativeChatRootItemSourceContext)
   const props = resolveMobileNativeChatRowProps(index, message, lookups)

@@ -1,5 +1,6 @@
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../agent-launch/permissions/agent-chat-permission-mode'
 import { labelFromModelId } from '../../model-id-label'
+import { isCoveredModelAlias } from '../../model-alias-rows'
 import type {
   AgentSessionOptionCatalog,
   CatalogMidSessionApply,
@@ -232,6 +233,15 @@ export function nativeChatSessionOptionDescriptors(args: {
       ...(details ? { details } : {})
     }
   })
+  // An alias whose versioned row is listed stays reachable by search, unless the chat is on it.
+  const modelChoices = models.map(({ id, label, description, resolvedModel }) => ({
+    value: id,
+    label,
+    ...(description ? { description } : {}),
+    ...(id !== model.currentId && isCoveredModelAlias({ id, resolvedModel }, models)
+      ? { searchOnly: true as const }
+      : {})
+  }))
   const modelAction = actionForApply(catalog.modelApply, model.tracked, mode, liveTransport)
   const snapshot: SessionOptionDescriptor[] = [
     {

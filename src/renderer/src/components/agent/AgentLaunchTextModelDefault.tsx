@@ -20,13 +20,15 @@ export function AgentLaunchTextModelDefault({
   }
   return (
     <>
-      <CommandItem
-        value={TEXT_ACTION_DEFAULT_MODEL}
-        disabled={disabled}
-        onSelect={() => onSelect({ kind: 'choice', patch: { model: TEXT_ACTION_DEFAULT_MODEL } })}
-      >
-        {entry.textGeneration.defaultLabel}
-      </CommandItem>
+      {entry.textGeneration.defaultLabel !== undefined ? (
+        <CommandItem
+          value={TEXT_ACTION_DEFAULT_MODEL}
+          disabled={disabled}
+          onSelect={() => onSelect({ kind: 'choice', patch: { model: TEXT_ACTION_DEFAULT_MODEL } })}
+        >
+          {entry.textGeneration.defaultLabel}
+        </CommandItem>
+      ) : null}
       {modelInArguments ? (
         <div className="px-2 py-1.5 text-xs text-muted-foreground">
           {translate('agentPicker.setByArguments', 'Set by your Arguments')}

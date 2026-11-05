@@ -3,10 +3,9 @@ import type {
   AgentSenderPublication,
   AgentSenderRevision
 } from '../../shared/agent-sender-associations'
-import { isStructuredWorkerHandle } from '../../shared/structured-worker-handle'
-import { parsePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import type { RuntimeAgentOrchestrationDependencies } from './runtime-agent-orchestration-projection'
 import {
+  readLiveAgentSenderPanes,
   readAgentSenderPrincipals,
   readAgentSenderSessions,
   type AgentSenderPane,
@@ -18,7 +17,10 @@ import {
 } from './runtime-agent-sender-worker-history'
 import { readAgentSenderGeneration } from './runtime-agent-sender-history-triggers'
 import type { OrchestrationDb } from './orchestration/db'
-import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
+import type {
+  RuntimeLeafRecord,
+  RuntimePtyWorktreeRecord
+} from './terminal/records/runtime-terminal-state-records'
 import { AgentSenderPublisher, type AgentSenderScope } from './runtime-agent-sender-publication'
 
 /** The handles terminals already hold, read without issuing one: display bookkeeping never
@@ -90,11 +92,24 @@ export class RuntimeAgentSenderAssociations {
   readonly publisher = new AgentSenderPublisher((id) => this.deps.hasPublishedScope?.(id) ?? false)
   constructor(private readonly deps: Dependencies) {}
 
-  /** Display bookkeeping: a failure keeps the last good publication and never fails a caller. */
+  /** Display bookkeeping: a failure preserves ordinary rows but withdraws unproved workers. */
   build(worktreeId?: string): AgentSenderPublication {
     try {
       this.refresh()
     } catch (error) {
+      this.terminal = {
+        ...this.terminal,
+        associations: this.terminal.associations.filter((row) => row.dispatchActor !== true)
+      }
+      const current = this.publisher.current()
+      if (current.associations.some((row) => row.dispatchActor === true)) {
+        // Unread custody cannot prove any worker, including historical aliases; a relevant change retries.
+        this.publisher.publish({
+          ...current,
+          associations: current.associations.filter((row) => row.dispatchActor !== true),
+          attachments: [...current.attachments]
+        })
+      }
       console.warn('[runtime] Sender identity publication failed', error)
     }
     return worktreeId ? this.publisher.scope(worktreeId) : this.publisher.current()
@@ -146,54 +161,10 @@ export class RuntimeAgentSenderAssociations {
     return this.publisher.changedScopes(worktreeIds)
   }
 
-  private livePanes(): Map<string, AgentSenderPane & { original: boolean }> {
-    const panes = new Map<string, AgentSenderPane & { original: boolean }>()
-    const ptys = new Map([...this.deps.getPtys()].map((pty) => [pty.ptyId, pty]))
-    const terminal = (
-      handle: string | null,
-      paneKey: string | null,
-      worktreeId: string | null,
-      ptyId: string | null
-    ) => {
-      if (
-        !handle ||
-        !paneKey ||
-        !worktreeId ||
-        isStructuredWorkerHandle(handle) ||
-        !parsePaneKey(paneKey)
-      ) {
-        return
-      }
-      const pty = ptyId ? ptys.get(ptyId) : undefined
-      const processIncarnation = pty?.incarnationId ? `${pty.ptyId}:${pty.incarnationId}` : null
-      panes.set(paneKey, {
-        paneKey,
-        worktreeId,
-        handle,
-        processIncarnation,
-        original: this.originalExecution(handle, processIncarnation)
-      })
-    }
-    for (const leaf of this.deps.getLeaves()) {
-      this.work.leafVisits++
-      if (leaf.ptyId) {
-        terminal(
-          this.deps.readLeafHandle(leaf),
-          this.deps.makePaneKey(leaf),
-          leaf.worktreeId,
-          leaf.ptyId
-        )
-      }
-    }
-    const readPtyHandle = this.deps.readPtyHandles()
-    for (const pty of ptys.values()) {
-      this.work.ptyVisits++
-      const paneKey = this.deps.paneOf(pty).paneKey
-      if (paneKey && !panes.has(paneKey)) {
-        terminal(readPtyHandle(pty), paneKey, pty.worktreeId, pty.ptyId)
-      }
-    }
-    return panes
+  private livePanes() {
+    return readLiveAgentSenderPanes(this.deps, this.work, (handle, incarnation) =>
+      this.originalExecution(handle, incarnation)
+    )
   }
 
   /** A handle names the execution it was issued to; restart reattach keeps both, but a respawn
@@ -235,7 +206,15 @@ export class RuntimeAgentSenderAssociations {
       peerFingerprint
     ]
     for (const p of panes.values()) {
-      terminalKey.push(p.paneKey, p.worktreeId, p.handle, p.processIncarnation, p.original)
+      terminalKey.push(
+        p.paneKey,
+        p.worktreeId,
+        p.handle,
+        p.processIncarnation,
+        p.hostScope,
+        p.launchTokenHash,
+        p.original
+      )
     }
     const records = this.deps.getSessionRecords()
     // A store says when what chats read changed; a reader without it is listed.
@@ -294,18 +273,23 @@ export class RuntimeAgentSenderAssociations {
         }
       }
     } catch (error) {
-      // The last good publication stays; the next identity change retries.
+      // The next identity change retries.
       this.failedKey = key
       throw error
     }
     this.terminalKey = key
     this.failedKey = []
     const rows = new Map<string, AgentSenderAssociation>()
-    const add = (identity: string, paneKey: string) => {
+    const add = (identity: string, paneKey: string, dispatchActor?: true) => {
       const pane = panes.get(paneKey)
       // A live handle names its own pane before any worker lineage that once used it.
       if (pane && !rows.has(identity)) {
-        rows.set(identity, { identity, paneKey, worktreeId: pane.worktreeId })
+        rows.set(identity, {
+          identity,
+          paneKey,
+          worktreeId: pane.worktreeId,
+          ...(dispatchActor ? { dispatchActor } : {})
+        })
       }
     }
     for (const pane of panes.values()) {
@@ -314,7 +298,7 @@ export class RuntimeAgentSenderAssociations {
       }
     }
     for (const worker of read.workers) {
-      add(worker.identity, worker.paneKey)
+      add(worker.identity, worker.paneKey, worker.dispatchActor)
     }
     this.terminal = {
       associations: [...rows.values()],

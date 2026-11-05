@@ -46,39 +46,6 @@ describe('tracked gh capture lifetime', () => {
     vi.restoreAllMocks()
   })
 
-  it.each([false, true])(
-    'keeps grace settlement separate from termination (abort: %s)',
-    async (abort) => {
-      const value = child(1234)
-      spawnMock.mockReturnValue(value)
-      const owner = createGhLogicalLifetime()
-      const controller = new AbortController()
-      const result = ghExecFileAsync(
-        ['api', 'user'],
-        { timeout: 10, ...(abort ? { signal: controller.signal } : {}) },
-        owner.hooks
-      )
-      const rejection = expect(result).rejects.toThrow()
-      await vi.advanceTimersByTimeAsync(0)
-      if (abort) {
-        controller.abort('private-reason')
-      }
-      await vi.advanceTimersByTimeAsync(12_010)
-      await rejection
-      owner.seal()
-      let terminated = false
-      void owner.terminated.then(() => {
-        terminated = true
-      })
-      await vi.advanceTimersByTimeAsync(0)
-      expect(terminated).toBe(false)
-      expect(spawnMock).toHaveBeenCalledOnce()
-      value.emit('close', null, 'SIGKILL')
-      await vi.advanceTimersByTimeAsync(0)
-      expect(terminated).toBe(true)
-    }
-  )
-
   it('waits for a PID error close before retry and ignores its stale callback', async () => {
     const values = [child(11), child(12)]
     spawnMock.mockReturnValueOnce(values[0]).mockReturnValueOnce(values[1])

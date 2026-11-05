@@ -3,7 +3,7 @@ import {
   ARCHIVE_SCREEN_LINES,
   createTerminalArchiveFixture
 } from './worker-terminal-archive.test-support'
-import { syncSinglePty } from './orca-runtime-test-fixtures.spec'
+import { syncSinglePty } from './orca-runtime-tests/orca-runtime-test-fixtures.spec'
 
 afterEach(() => vi.restoreAllMocks())
 

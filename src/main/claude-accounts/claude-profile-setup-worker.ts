@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { Worker } from 'node:worker_threads'
+import { spawnWorkerThread } from '../worker-threads/worker-thread-spawn'
 import {
   currentWorkerEntryLayout,
   resolveWorkerThreadEntryPath
@@ -32,7 +32,7 @@ export function runClaudeProfileSetupInWorker(
   timeoutMs = 60_000
 ): Promise<ClaudeProfileSetupReport> {
   return new Promise((resolve, reject) => {
-    const worker = new Worker(path, { workerData: job })
+    const worker = spawnWorkerThread(path, { workerData: job })
     // Bound the wait for launches blocked on this setup.
     const timer = setTimeout(() => {
       reject(new Error('Claude account setup timed out'))

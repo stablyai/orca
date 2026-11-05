@@ -1,5 +1,5 @@
 import type { StructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-host'
-import { createKeyedTrailingEdgeCoalescer } from '../keyed-trailing-edge-coalescer'
+import { createKeyedTrailingEdgeCoalescer } from '../client/events/keyed-trailing-edge-coalescer'
 import type { AgentSessionJournal } from '../../native-chat/agent-session-journal/journal-store'
 
 /** Coalesce streaming batches until quiet; settled turns stop emitting, so the final nudge still lands promptly. */

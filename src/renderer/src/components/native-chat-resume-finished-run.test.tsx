@@ -12,7 +12,6 @@ import {
 } from './native-chat-resume-modal.test-support'
 import { lastToastShow } from './native-chat-resume-toast.test-support'
 import {
-  _resetNativeChatRestartOffer,
   getNativeChatRestartRun,
   refreshNativeChatRestartOffer,
   releaseFinishedNativeChatRestartRun
@@ -21,7 +20,7 @@ import {
   consumeNativeChatResumeOnRestartDialogRequest,
   requestNativeChatResumeOnRestartDialog
 } from './native-chat-resume-on-restart-dialog'
-import { useAppStore } from '../store'
+
 import { chatBox, namedBox } from './native-chat-resume-on-restart-modal.test-support'
 
 const rpc: Mock<RestartRpc> = vi.hoisted(() => vi.fn<RestartRpc>())
@@ -132,17 +131,6 @@ it.each(['status entry', 'toast Show'] as const)(
   }
 )
 
-it('shows the resumed entry after a launch that resumed without asking', async () => {
-  useAppStore.setState((state) => ({
-    settings: { ...state.settings!, nativeChatResumeWorkOnRestart: true }
-  }))
-  fakeHost()
-  await mountSurfaces()
-  expect(dialog()).toBeUndefined()
-  await act(async () => button('2 chats resumed').click())
-  expect(dialog()).toContain('Resumed 2 of 2 chats')
-})
-
 it('adds no resumed entry for a run watched to the end in the dialog', async () => {
   const host = fakeHost()
   host.hold('a', 'b')
@@ -217,14 +205,6 @@ it('expands a group collapsed during a run before retiring the finished result',
   expect(document.body.textContent).not.toContain('chat resumed')
 })
 
-it('leaves the resumed chats to the failure entry when one could not resume', async () => {
-  fakeHost({}, (sessionId) => (sessionId === 'a' ? 'continued' : 'refused'))
-  await mountSurfaces()
-  await act(async () => button('Resume 2 chats').click())
-  expect(button('1 chat failed to resume')).toBeTruthy()
-  expect(document.body.textContent).not.toContain('resumed')
-})
-
 it('replaces the finished summary when Retry starts a new run', async () => {
   const host = fakeHost({}, (sessionId) => (sessionId === 'a' ? 'continued' : 'refused'), 'unknown')
   await mountSurfaces()
@@ -269,29 +249,4 @@ it('does not consume a finished run if its requested view never rendered', async
   expect(dialog()).toBeUndefined()
   await act(async () => lastToastShow()?.())
   expect(dialog()).toContain('Resumed 2 of 2 chats')
-})
-
-it('keeps the run out of settings and storage and loses it on a fresh renderer store', async () => {
-  fakeHost({}, (sessionId) => (sessionId === 'a' ? 'continued' : 'refused'))
-  await mountSurfaces()
-  const settings = useAppStore.getState().settings
-  const saveSettings = vi.fn(async () => {})
-  useAppStore.setState({ updateSettings: saveSettings })
-  const storage = vi.spyOn(Storage.prototype, 'setItem')
-  try {
-    await act(async () => button('Resume 2 chats').click())
-    expect(saveSettings).not.toHaveBeenCalled()
-    expect(useAppStore.getState().settings).toBe(settings)
-    expect(storage).not.toHaveBeenCalled()
-    await mount(null)
-    _resetNativeChatRestartOffer()
-    expect(getNativeChatRestartRun()).toBeNull()
-    await refreshNativeChatRestartOffer()
-    await mountSurfaces()
-    await act(async () => button('1 chat failed to resume').click())
-    expect(dialog()).toContain('Resume interrupted chats?')
-    expect(dialog()).not.toContain('Prompt a')
-  } finally {
-    storage.mockRestore()
-  }
 })

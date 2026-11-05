@@ -77,7 +77,11 @@ export function status(runtimeId = 'runtime-1'): RuntimeEnvironmentStatus {
 beforeEach(() => {
   clearRuntimeCompatibilityCache()
   Object.assign(payloadWork, { entries: 0, bytes: 0, count: 0 })
-  rpc.call.mockReset().mockImplementation(() => payload())
+  rpc.call
+    .mockReset()
+    .mockImplementation((_target, method) =>
+      method === 'settings.get' ? { settings: raw } : payload()
+    )
   rpc.supports.mockReset().mockResolvedValue(true)
   replaceRuntimeEnvironmentRevisions([{ id: 'alpha', createdAt: 7 }])
   setLocalRuntimeCapabilitiesForTests([CHAT, CLIENT])

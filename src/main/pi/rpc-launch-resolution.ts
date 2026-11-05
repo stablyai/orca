@@ -24,7 +24,7 @@ import {
   type StructuredAgentCommand,
   type StructuredAgentCommandSettings
 } from '../native-chat/structured-agent-command-resolution'
-import type { StructuredAgentLaunchPartResolver } from '../runtime/structured-agent-launch-composition'
+import type { StructuredAgentLaunchPartResolver } from '../runtime/agent-session/launch/structured-agent-launch-composition'
 import { isWindowsProcessStartTimeAvailable } from '../windows/windows-process-table'
 import { sessionIdFromFileName } from '../ai-vault/session-scanner-accumulator'
 import {
@@ -32,6 +32,11 @@ import {
   withoutPiCallerEnv,
   type PiRpcLaunchOptions
 } from './rpc-launch'
+import {
+  ensurePiBackgroundWorkBridge,
+  type PiBackgroundWorkLaunch
+} from './rpc-background-work-bridge'
+import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 
 export type PiRpcResolvedLaunch = PiRpcLaunchOptions & {
   previous: AgentSessionProviderHandleLink | null
@@ -43,6 +48,8 @@ export type PiRpcLaunchPartDeps = {
   resolveCommand?: typeof resolveCliCommand
   probeVersion?: AgentCliVersionReader
   resolveFullAccess?: () => boolean
+  ensureBackgroundWorkBridge?: () => Promise<PiBackgroundWorkLaunch | null>
+  logger?: StructuredAgentSessionLogger
 }
 
 // RPC turns require agent_settled (Pi 0.84+); older versions remain terminal-only.
@@ -204,6 +211,16 @@ export function piRpcLaunchPart(
     if (launchVersion.status === 'tooOld') {
       throw AgentCliInstallationError.tooOld('pi', launchVersion)
     }
+    const backgroundWork = await (
+      deps.ensureBackgroundWorkBridge ??
+      (() =>
+        ensurePiBackgroundWorkBridge((error) =>
+          deps.logger?.warn('Pi chat starts without its background-work bridge', {
+            scope: 'pi-background-work',
+            error
+          })
+        ))
+    )()
     return {
       launch: {
         command,
@@ -215,7 +232,8 @@ export function piRpcLaunchPart(
           : {}),
         ...(sessionFile ? { sessionFile } : {}),
         ...(forkFile ? { forkFile } : {}),
-        ...(replacement ? { replacement } : {})
+        ...(replacement ? { replacement } : {}),
+        ...(backgroundWork ? { backgroundWork } : {})
       },
       env: withoutPiCallerEnv(env),
       inheritedEnvToDelete: PI_RPC_SESSION_ENV_TO_DELETE

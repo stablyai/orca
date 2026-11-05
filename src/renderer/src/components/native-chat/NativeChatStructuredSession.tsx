@@ -29,6 +29,7 @@ import { NativeChatFindBar } from './NativeChatFindBar'
 import { nativeChatQueueFollowUps } from '../../../../shared/native-chat/input/native-chat-follow-up-behavior'
 import { LinkActionPopover } from '@/components/link-actions/LinkActionPopover'
 import { useNativeChatLinkActions } from './use-native-chat-link-actions'
+import { NativeChatLinkClickContext } from './native-chat-link-click-context'
 import { useNativeChatFileLinkContext } from './use-native-chat-file-link-context'
 import { useRecheckNativeChatFileLinksWhenTurnEnds } from './use-native-chat-file-link-existence'
 import { useNativeChatTabOwnerWorktreeId } from './use-native-chat-tab-owner'
@@ -83,7 +84,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
   const queueFollowUps = useAppStore((store) => nativeChatQueueFollowUps(store.settings))
   const composerRef = useRef<NativeChatComposerHandle>(null)
   // Paste target while a question card replaces the composer.
-  const questionAnswerInputRef = useRef<HTMLInputElement>(null)
+  const questionAnswerInputRef = useRef<HTMLTextAreaElement>(null)
   const { rewindHost, focusComposer } = useNativeChatRewindHost(props, composerRef)
   const controller = useStructuredAgentSession({
     ...props,
@@ -155,7 +156,6 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
     rootRef,
     { sessionId: props.sessionId, isVisible: props.isVisible }
   )
-  const links = { onLinkClick, allowFileUriLinks: onLinkClick !== undefined }
   const handOff = useNativeChatHandOff({
     pane: props,
     directory: fileLinkContext,
@@ -185,7 +185,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
   const install = useNativeChatInstallSlot(props, agentLabel, installLayout)
   const canMention = composerShown && install.unavailableHint === undefined
   const approval = prompt?.body.kind === 'approval' ? chatApprovalFromJournal(prompt.body) : null
-  const cancelPrompt = () => cancelStructuredPrompt(controller, prompt, props.agent)
+  const cancelPrompt = () => cancelStructuredPrompt(controller, prompt)
   const rootInput = useNativeChatRootInputRouting({
     tabId: props.tabId,
     rootRef,
@@ -207,7 +207,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
     optionPickerRequest,
     setOptionPickerRequest,
     onError: reportComposerError,
-    onSubmitted: submits.revealLatest,
+    reveal: submits,
     sendBlockedReason: hostSendGate.sendBlockedReason ?? install.sendBlockedReason
   })
   const continuation = useNativeChatInterruptedContinuation({
@@ -251,7 +251,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
   if (hostNotice) {
     notices.push(hostNotice)
   }
-  return (
+  const root = (
     <div
       ref={rootRef}
       data-native-chat-root="true"
@@ -319,7 +319,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
                     awaitingInput={prompt === null ? null : 'shown'}
                     turnActivity={controller.turnActivity}
                     stopping={stopControls.stopping}
-                    {...{ ...links, structuredAttachments: true }}
+                    structuredAttachments
                     runtimeContext={imageRuntimeContext}
                     deliveryNotices={deliveryNotices}
                   />
@@ -371,7 +371,6 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
               isSubmitting={promptResponse.holds(prompt)}
               onCancel={cancelPrompt}
               shouldFocus={!promptsUnanswerable && props.isVisible && props.isFocusedGroup}
-              {...links}
             />
           ) : null}
           {prompt && questionBody ? (
@@ -383,10 +382,9 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
               onCancel={cancelPrompt}
               shouldFocus={!promptsUnanswerable && props.isVisible && props.isFocusedGroup}
               answerInputRef={questionAnswerInputRef}
-              {...links}
             />
           ) : null}
-          {nativeChatStructuredAsyncQuestion(props, controller, session, transport, submits, links)}
+          {nativeChatStructuredAsyncQuestion(props, controller, session, transport, submits)}
           {composerShown && <NativeChatInstallSlot slot={install.slot} agentLabel={agentLabel} />}
           {composerShown ? (
             <NativeChatComposer
@@ -411,4 +409,5 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
       <LinkActionPopover request={linkActionRequest} onClose={closeLinkActions} />
     </div>
   )
+  return <NativeChatLinkClickContext value={onLinkClick}>{root}</NativeChatLinkClickContext>
 }

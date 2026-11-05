@@ -5,10 +5,13 @@
       "connecting": "正在連線至主機…",
       "connectingTo": "正在連線至 {{name}}…",
       "default": "系統預設",
+      "fableWindow": "Fable",
       "hostNotFound": "找不到主機",
       "invalidSnapshot": "主機傳回的帳戶快照無效",
       "loadingAccounts": "正在載入帳戶…",
       "manageAccountsHint": "請至桌面版的「設定」→「帳戶」，新增帳戶或重新驗證。",
+      "mcpWindow": "MCP",
+      "otherAgents": "其他代理程式",
       "refreshAccounts": "重新整理帳戶",
       "sessionWindow": "5 小時",
       "switchFailed": "無法切換帳戶",
@@ -372,7 +375,9 @@
     },
     "sessionOptionRows": {
       "defaultMarker": "預設",
-      "notReportedMarker": "未回報"
+      "notReportedMarker": "未回報",
+      "moreModels": "更多模型",
+      "fewerModels": "較少模型"
     },
     "sessionOptionSegments": {
       "dispatchUnconfirmed": "已傳送給代理程式 — 尚未確認"
@@ -736,6 +741,8 @@
     },
     "hostCard": {
       "hostActions": "{{title}} 的操作",
+      "needsYou_one": "{{count}} 個需要您處理",
+      "needsYou_other": "{{count}} 個需要您處理",
       "openHost": "開啟 {{title}}",
       "pairingInvalid": "配對已失效",
       "pairingTemporarilyUnavailable": "配對暫時無法使用",
@@ -1199,6 +1206,10 @@
       "retryLoading": "重新嘗試載入 {{path}}",
       "unavailable": "行動版無法使用"
     },
+    "fileExplorerRowActions": {
+      "copyName": "複製名稱",
+      "copyRelativePath": "複製相對路徑"
+    },
     "fileMarkdownPreview": {
       "copyLoadedSource": "複製已載入的 Markdown 原始碼",
       "copySource": "複製 Markdown 原始碼",
@@ -1269,10 +1280,30 @@
     }
   },
   "home": {
+    "agents": {
+      "activeCount": "{{count}} 個使用中",
+      "heading": "代理程式",
+      "showAll": "顯示全部 {{count}} 個",
+      "showFewer": "收合"
+    },
     "appUpdateCard": {
       "dismissAccessibilityLabel": "關閉 Orca {{version}} 更新提示",
       "title": "Orca {{version}} 已推出",
       "updateAccessibilityLabel": "Orca {{version}} 已推出，點一下即可更新"
+    },
+    "automationsTab": {
+      "connectDesktop": "請連線 {{desktop}}，才能檢視及執行自動化。",
+      "createHint": "點一下 + 即可排定代理程式。",
+      "emptyTitle": "排定代理程式工作",
+      "lastStatus": "上次：{{status}}",
+      "newAutomation": "新增自動化",
+      "noAutomations": "尚無自動化",
+      "pairDesktop": "請先配對電腦，才能檢視及執行自動化。",
+      "paused": "已暫停",
+      "scheduled": "已排定",
+      "showFor": "選擇要顯示自動化的電腦",
+      "toggleFailed": "無法更新 {{name}}",
+      "updateDesktop": "請更新 {{desktop}} 上的 Orca，以使用自動化。"
     },
     "emptyState": {
       "connectedDescription": "您的電腦會顯示在這裡。所有資料皆採端對端加密。",
@@ -1284,9 +1315,7 @@
       "title": "連線至您的電腦"
     },
     "listFooter": {
-      "hostPickerTitle": "選擇開啟任務的主機",
-      "automationsHeading": "自動化",
-      "automationsHostPickerTitle": "選擇主機以開啟自動化"
+      "hostPickerTitle": "選擇開啟任務的主機"
     },
     "listHeader": {
       "desktopsHeading": "電腦"
@@ -1297,6 +1326,33 @@
       "removeHostMessage": "要移除「{{name}}」嗎？之後可重新配對。",
       "removeHostTitle": "移除主機",
       "tryAgain": "請再試一次。"
+    },
+    "stats": {
+      "agentTime": "代理程式時間",
+      "agentsSpawned": "已啟動代理程式",
+      "days": "{{days}} 天",
+      "heading": "你的統計",
+      "hours": "{{hours}} 小時",
+      "minutes": "{{minutes}} 分鐘",
+      "prsCreated": "已建立 PR"
+    },
+    "tabs": {
+      "automations": "自動化",
+      "chooseDesktop": "{{desktop}}，選擇其他電腦",
+      "feed": "動態",
+      "usage": "用量"
+    },
+    "usage": {
+      "active": "使用中",
+      "addAccounts": "請至桌面版的「設定」→「帳戶」新增帳戶。",
+      "connectDesktop": "請連線 {{desktop}}，才能查看代理程式帳戶用量。",
+      "emptyTitle": "尚無用量",
+      "openAccountsHint": "開啟這台電腦的帳戶",
+      "pairDesktop": "請先配對電腦，才能查看代理程式帳戶用量。",
+      "refresh": "重新整理用量",
+      "showUsageFor": "選擇要顯示用量的電腦",
+      "updatedAgo": "{{time}}前更新",
+      "updatedJustNow": "剛剛更新"
     }
   },
   "hooks": {
@@ -1497,7 +1553,7 @@
       "notificationsTitle": "代理程式需要您時，別錯過通知",
       "openInChatUi": "以聊天介面開啟工作階段",
       "openInTerminal": "在終端機中開啟工作階段",
-      "sessionViewDescription": "選擇在此裝置上以終端機或聊天介面開啟支援此功能的代理程式工作階段。長按工作階段分頁可切換檢視方式，也可稍後在「設定」中變更預設值。",
+      "sessionViewDescription": "選擇在此裝置上以終端機或聊天介面開啟支援此功能的代理程式工作階段。長按工作階段分頁可切換檢視方式，也可隨時在「設定」→「聊天介面」中變更預設值。",
       "sessionViewTitle": "如何開啟工作階段？",
       "skipNotifications": "暫不啟用通知",
       "useChatUi": "使用聊天介面"
@@ -3882,7 +3938,6 @@
       "unknownResult": "未知結果",
       "notReported": "未回報",
       "searchOptions": "搜尋選項",
-      "scheduleAgentWorkAndViewRuns": "排定代理程式工作並查看執行",
       "task": "任務",
       "review": "檢查"
     },

@@ -86,7 +86,10 @@ function cards() {
               role: 'user',
               source: 'transcript',
               blocks: [
-                { type: 'text', text: i === 0 ? 'A short task fits without a disclosure.' : prose },
+                {
+                  type: 'text',
+                  text: i === 0 ? 'A short task opens from its one-line header.' : prose
+                },
                 ...(kind === 'generic'
                   ? [{ type: 'image-ref' as const, url: image, alt: 'Attached diagram' }]
                   : [])
@@ -100,7 +103,6 @@ function cards() {
               worktreePath: null,
               target: { kind: 'local' }
             }}
-            allowFileUriLinks={false}
             onRefolded={() => {}}
           />
         )
@@ -110,7 +112,6 @@ function cards() {
         markdown="An ordinary human message."
         prose={human.blocks}
         rowRef={{ current: null }}
-        allowFileUriLinks={false}
         onRefolded={() => {}}
       />
     </div>
@@ -157,12 +158,7 @@ export const mail = defineFixture({
     })
     return (
       <div className="p-4">
-        <NativeChatAgentMessageCard
-          message={message}
-          from={message.from}
-          allowFileUriLinks={false}
-          onRefolded={() => {}}
-        />
+        <NativeChatAgentMessageCard message={message} from={message.from} onRefolded={() => {}} />
       </div>
     )
   },

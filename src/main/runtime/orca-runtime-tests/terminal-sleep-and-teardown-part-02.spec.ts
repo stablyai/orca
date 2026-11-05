@@ -1,12 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import { spawnWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
-import {
-  MOCK_GIT_WORKTREES,
-  OrcaRuntimeService,
-  listWorktrees
-} from '../orca-runtime-test-mocks.spec'
-import type { RuntimeClientEvent } from '../orca-runtime-test-mocks.spec'
-import { refusedMobileSessionTabClose } from '../mobile-session-tab-close-outcome'
+import './runtime-test-module-registration.spec'
+import { MOCK_GIT_WORKTREES } from '../orca-runtime-test-mocks/setup.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { listWorktrees } from '../../git/worktrees/catalog/worktree-scan-cache'
+import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'
+import { refusedMobileSessionTabClose } from '../session-lifecycle/close/mobile-session-tab-close-outcome'
 import {
   HEADLESS_LEAF_ID,
   TEST_REPO_ID,
@@ -17,7 +16,7 @@ import {
   makeRuntimeStoreWithWorkspaceSession,
   makeWorkspaceSessionWithHeadlessTerminal,
   store
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
   it('does not stop a provider-owned foreign PTY referenced by stale target state', async () => {
