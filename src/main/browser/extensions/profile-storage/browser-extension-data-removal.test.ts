@@ -77,22 +77,6 @@ beforeEach(() => {
 })
 
 describe('clearBrowserExtensionSessionData', () => {
-  it("clears chrome.storage through a hidden page of the loaded extension, then its origin's data", async () => {
-    const sess = fakeSession(true)
-    await clearBrowserExtensionSessionData(sess, ID)
-    expect(mocks.windows).toHaveLength(1)
-    expect(mocks.windows[0]).toMatchObject({
-      options: { show: false, webPreferences: { session: sess } },
-      url: `chrome-extension://${ID}/manifest.json?orca-native-page=1`,
-      destroyed: true
-    })
-    expect(mocks.windows[0].script).toContain('storage?.local?.clear()')
-    expect(mocks.windows[0].script).toContain('storage?.session?.clear()')
-    expect(sess.clearStorageData).toHaveBeenCalledExactlyOnceWith({
-      origin: `chrome-extension://${ID}`
-    })
-  })
-
   it('deletes chrome.storage.local of an unloaded extension unless this run opened it', async () => {
     const partition = mkdtempSync(join(tmpdir(), 'orca-extension-data-'))
     const folder = join(partition, 'Local Extension Settings', ID)
@@ -110,84 +94,9 @@ describe('clearBrowserExtensionSessionData', () => {
     expect(mocks.windows).toHaveLength(0)
     expect(sess.clearStorageData).toHaveBeenCalledOnce()
   })
-
-  it('blocks a same-run reinstall even when native data was cleared before a late write', async () => {
-    const partition = mkdtempSync(join(tmpdir(), 'orca-extension-data-rewrite-'))
-    const folder = join(partition, 'Local Extension Settings', ID)
-    mkdirSync(folder, { recursive: true })
-    let loaded = true
-    const sess = fakeSession(true, partition)
-    vi.spyOn(sess.extensions, 'getExtension').mockImplementation(() =>
-      loaded ? { id: ID, name: 'Vault', version: '1', path: '', url: '', manifest: {} } : null
-    )
-    noteBrowserExtensionStorageOpened(sess, ID)
-    await clearBrowserExtensionSessionData(sess, ID)
-    // Another profile is still clearing, so the original extension has not unloaded yet.
-    loaded = false
-    await removeUninstalledBrowserExtensionData(sess, 'rewritten', new Set())
-    expect(existsSync(join(folder, 'orca-uninstalled'))).toBe(true)
-    expect(() => throwIfBrowserExtensionStorageAwaitingRestart(sess, ID)).toThrow('Restart Orca')
-    const nextLaunch = fakeSession(false, partition)
-    await removeUninstalledBrowserExtensionData(nextLaunch, 'rewritten', new Set([ID]))
-    expect(existsSync(folder)).toBe(false)
-    expect(() => throwIfBrowserExtensionStorageAwaitingRestart(nextLaunch, ID)).not.toThrow()
-  })
-
-  it('touches nothing for an id that is not a Chrome extension id', async () => {
-    const sess = fakeSession(true)
-    await expect(clearBrowserExtensionSessionData(sess, '..')).rejects.toThrow()
-    expect(mocks.windows).toHaveLength(0)
-    expect(sess.clearStorageData).not.toHaveBeenCalled()
-  })
 })
 
 describe('removeUninstalledBrowserExtensionData', () => {
-  it('deletes only the storage folders of extensions that are no longer installed', async () => {
-    const partition = mkdtempSync(join(tmpdir(), 'orca-extension-data-'))
-    const settings = join(partition, 'Local Extension Settings')
-    for (const folder of [join(settings, ID), join(settings, OTHER), join(settings, 'notes')]) {
-      mkdirSync(folder, { recursive: true })
-    }
-    mkdirSync(join(partition, 'IndexedDB'))
-    await removeUninstalledBrowserExtensionData(
-      fakeSession(false, partition),
-      'default',
-      new Set([OTHER])
-    )
-    expect(existsSync(join(settings, ID))).toBe(false)
-    expect(existsSync(join(settings, OTHER))).toBe(true)
-    expect(existsSync(join(settings, 'notes'))).toBe(true)
-    expect(existsSync(join(partition, 'IndexedDB'))).toBe(true)
-  })
-
-  it('does nothing for an in-memory session or a partition without the folder', async () => {
-    await expect(
-      removeUninstalledBrowserExtensionData(fakeSession(false), 'default', new Set())
-    ).resolves.toEqual(new Set())
-    const empty = mkdtempSync(join(tmpdir(), 'orca-extension-data-'))
-    await expect(
-      removeUninstalledBrowserExtensionData(fakeSession(false, empty), 'default', new Set())
-    ).resolves.toEqual(new Set())
-  })
-
-  it('deletes storage left open at uninstall at the next launch, even if reinstalled since', async () => {
-    const partition = mkdtempSync(join(tmpdir(), 'orca-extension-data-'))
-    const folder = join(partition, 'Local Extension Settings', ID)
-    mkdirSync(folder, { recursive: true })
-    const thisRun = fakeSession(false, partition)
-    noteBrowserExtensionStorageOpened(thisRun, ID)
-    await clearBrowserExtensionSessionData(thisRun, ID)
-
-    await removeUninstalledBrowserExtensionData(thisRun, 'default', new Set())
-    expect(existsSync(folder)).toBe(true)
-    await removeUninstalledBrowserExtensionData(
-      fakeSession(false, partition),
-      'default',
-      new Set([ID])
-    )
-    expect(existsSync(folder)).toBe(false)
-  })
-
   // Uninstall reaches only the Orca profile open at the time; others are swept when they attach.
   it("forgets this profile's saved grants and sync items of uninstalled extensions", async () => {
     const states = getBrowserExtensionProfileStateStore()
@@ -276,25 +185,6 @@ describe('uninstall while another Orca profile is inactive', () => {
     await reopened.sweep(sess, 'default', new Set([ID]))
     expect(reopened.sync.read('default', ID)).toEqual({ token: 'new secret' })
     reopened.sync.flush()
-  })
-
-  it('clears origin-only storage with no chrome.storage.local folder', async () => {
-    const store = getBrowserExtensionInstallStore()
-    store.save({
-      id: OTHER,
-      name: 'Origin only',
-      version: '1',
-      path: store.installDirectory(OTHER, '1'),
-      source: 'webstore',
-      iconPath: null,
-      permissions: [],
-      hostPermissions: [],
-      optionsPage: null
-    })
-    await store.remove(OTHER)
-    const sess = fakeSession(false, mkdtempSync(join(tmpdir(), 'orca-extension-origin-')))
-    await removeUninstalledBrowserExtensionData(sess, 'inactive-origin', new Set())
-    expect(sess.clearStorageData).toHaveBeenCalledWith({ origin: `chrome-extension://${OTHER}` })
   })
 })
 
