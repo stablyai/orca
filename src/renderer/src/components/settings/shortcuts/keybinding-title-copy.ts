@@ -74,6 +74,7 @@ const STATIC_TITLE_COPY = {
   'tab.newSimulator': () =>
     translate('keybindings.title.tabNewSimulator', 'New mobile emulator tab'),
   'tab.newMarkdown': () => translate('keybindings.title.tabNewMarkdown', 'New markdown tab'),
+  'tab.newFile': () => translate('keybindings.title.tabNewFile', 'New file…'),
   'tab.openMarkdown': () => translate('keybindings.title.tabOpenMarkdown', 'Open markdown tab'),
   'tab.close': () => translate('keybindings.title.tabClose', 'Close active tab'),
   'tab.closeAll': () => translate('keybindings.title.tabCloseAll', 'Close all editor tabs'),
