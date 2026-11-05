@@ -109,13 +109,15 @@ export class RuntimeWorktreeLineageController {
     return retained
   }
 
-  /** Read-only: the parent a same-store create would infer from this caller context, as a ref
-   * for a child in another store. A reason replaces it when none is valid or contexts conflict. */
+  /** The parent a same-store create would infer from this caller context, as a ref for a child in
+   * another store. `installationId` is the runtime's published identity, never created here. A
+   * reason replaces the ref when none is valid or contexts conflict. */
   async resolveCallerParentForAnotherStore(
     input: Pick<
       WorktreeLineageInput,
       'envParentWorkspace' | 'callerTerminalHandle' | 'cwdParentWorktree' | 'cwdParentAmbiguous'
-    >
+    >,
+    installationId: string | undefined
   ): Promise<
     { parent: CrossStoreParentRef; source: CrossStoreInferredSource } | { reason: string }
   > {
@@ -139,7 +141,6 @@ export class RuntimeWorktreeLineageController {
     if (parent.type !== 'worktree') {
       return { reason: "a folder workspace can't parent a workspace on another machine yet." }
     }
-    const installationId = await this.readStoreInstallationId()
     if (!parent.instanceId || !installationId) {
       return { reason: "Orca couldn't confirm this workspace's identity." }
     }

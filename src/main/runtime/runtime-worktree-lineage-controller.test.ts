@@ -439,13 +439,14 @@ describe('caller parent for a create on another machine', () => {
   it('skips a stale terminal and keeps the valid environment parent, as a same-machine create does', async () => {
     const { controller, showTerminal } = fixture()
     showTerminal.mockRejectedValue(new Error('terminal_not_found'))
-    vi.spyOn(controller, 'readStoreInstallationId').mockResolvedValue('mac-install')
-
     await expect(
-      controller.resolveCallerParentForAnotherStore({
-        envParentWorkspace: 'id:repo-a::/tmp/env-parent',
-        callerTerminalHandle: 'term_stale'
-      })
+      controller.resolveCallerParentForAnotherStore(
+        {
+          envParentWorkspace: 'id:repo-a::/tmp/env-parent',
+          callerTerminalHandle: 'term_stale'
+        },
+        'mac-install'
+      )
     ).resolves.toEqual({
       parent: {
         installationId: 'mac-install',
