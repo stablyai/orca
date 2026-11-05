@@ -22,6 +22,17 @@ describe('terminal tail CRLF chunk boundaries', () => {
     expect(newline.pendingAnsi).toBe('')
   })
 
+  it('keeps the text of a CRLF line completed inside one chunk', () => {
+    const normalized = normalizeTerminalChunk('VAR_CRLF:a\r\nVAR_LF:b\n')
+    const appended = appendNormalizedToTailBuffer([], '', normalized.text)
+    expect(appended.lines).toEqual(['VAR_CRLF:a', 'VAR_LF:b'])
+  })
+
+  it('drops the CR of a CRLF terminator when a caller feeds raw segments', () => {
+    const appended = appendNormalizedToTailBuffer([], '', 'VAR_CRLF:a\r\nVAR_LF:b\n')
+    expect(appended.lines).toEqual(['VAR_CRLF:a', 'VAR_LF:b'])
+  })
+
   it.each([false, true])(
     'updates PTY and leaf transcripts when leaf diverged=%s',
     async (diverged) => {
@@ -54,5 +65,17 @@ describe('terminal tail CRLF chunk boundaries', () => {
     await runtime.onPtyExit(ptyId, 0)
     expect(leaf.tailPartialLine).toBe('last output')
     expect(leaf.tailLinesTotal).toBe(0)
+  })
+
+  it('keeps same-chunk CRLF lines through the PTY tail read', async () => {
+    const ptyId = 'pty-crlf-same-chunk'
+    const { runtime, leaf } = runtimeWithLeaf(ptyId)
+    try {
+      runtime.onPtyData(ptyId, 'VAR_CRLF:a\r\nVAR_LF:b\n', 1)
+      expect(readPtyTail(runtime, ptyId)).toEqual(['VAR_CRLF:a', 'VAR_LF:b'])
+      expect(leaf.tailTranscriptBuffer).toEqual(['VAR_CRLF:a', 'VAR_LF:b'])
+    } finally {
+      await runtime.onPtyExit(ptyId, 0)
+    }
   })
 })

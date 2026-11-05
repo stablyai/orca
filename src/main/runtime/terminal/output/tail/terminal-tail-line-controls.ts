@@ -51,7 +51,10 @@ export function splitRetainedTerminalTailSegments(value: string): {
     if (value[index] !== '\n') {
       continue
     }
-    completeSegments.push(value.slice(segmentStart, index))
+    // A CR immediately before LF is the line terminator, not a redraw; callers that skip
+    // terminal normalization must still get the line's text instead of an empty string.
+    const segment = value.slice(segmentStart, index)
+    completeSegments.push(segment.endsWith('\r') ? segment.slice(0, -1) : segment)
     segmentStart = index + 1
   }
 
