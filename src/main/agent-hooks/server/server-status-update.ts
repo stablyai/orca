@@ -18,8 +18,12 @@ import type { EnrichedAgentHookEventPayload, IncomingAgentHookEvent } from './se
 import type { AgentStatusObservationOrigin } from '../../../shared/agent-status/contracts/agent-status-observation'
 import { ClaudeOwedNotificationExpiryTimers } from '../../../shared/agent-hook-listener/providers/claude-owed-notification-expiry-timers'
 import { setClaudeMainAgentTurnState } from '../../../shared/agent-hook-listener/providers/claude-roster-state'
-import { pairedClaudeNonAgentWork, withHeldChildWaitMainAgent } from './server-claude-status-rules'
-import { ClaudePermissionHold } from './server-claude-permission-hold'
+import {
+  pairedClaudeNonAgentWork,
+  shouldKeepClaudePermissionVisible,
+  withHeldChildWaitMainAgent
+} from './server-claude-status-rules'
+import { ClaudePendingToolUses } from './server-claude-pending-tool-uses'
 import { isForeignTurnHook } from './server-foreign-turn-hook'
 import { resolveCancelVerdictLatch } from '../../../shared/agent-hook-listener/state/agent-hook-cancel-verdict-latch'
 import { AgentHookServerStatusApplication } from './server-status-application'
@@ -30,7 +34,7 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
     this.state
   )
   protected readonly relaySessions = new RelaySessionGenerations()
-  private readonly claudePermissionHold = new ClaudePermissionHold()
+  protected readonly claudeToolUses = new ClaudePendingToolUses()
 
   // Every row mutation passes here, including cancellation and pane moves.
   protected override commitStatusRowMutation(
@@ -38,7 +42,6 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
     after: EnrichedAgentHookEventPayload | null | undefined,
     emit = true
   ): boolean {
-    this.claudePermissionHold.forgetVacatedPane(before, after)
     if (after) {
       this.claudeOwedNotificationExpiry.arm(after.paneKey, (row) => {
         if (this.server) {
@@ -210,10 +213,7 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
             ...rootContextPreservingPayload,
             payload: { ...rootContextPreservingPayload.payload, agentType: identity.agentType }
           }
-    const attachedPayload = this.claudePermissionHold.attachToolUseId(
-      previous,
-      identityResolvedPayload
-    )
+    const attachedPayload = this.claudeToolUses.attach(previous, identityResolvedPayload)
     // Resolve cancellation before permission holds adopt a replayed main-agent observation.
     const latch = resolveCancelVerdictLatch(previous, attachedPayload, Date.now())
     if (latch.hold) {
@@ -236,8 +236,8 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
       this.commitStatusRowMutation(rowBefore, previous)
       return previous
     }
-    const effectivePayload = latch.event
-    if (this.claudePermissionHold.keeps(previous, effectivePayload)) {
+    const effectivePayload = this.claudeToolUses.observe(latch.event)
+    if (previous && shouldKeepClaudePermissionVisible(previous, effectivePayload)) {
       const held = withHeldChildWaitMainAgent(previous, effectivePayload)
       // Child prompts preserve main-agent progress and its paired shell evidence; the main agent's own waits do not.
       if (previous.toolAgentId) {

@@ -65,7 +65,19 @@ describe('Claude permission wait after a PermissionRequest hook denies', () => {
   it.each([
     ['directly', []],
     ['after an unrelated tool starts', [UNRELATED_READ]],
-    ['after a parallel request takes the row', PARALLEL_REQUEST]
+    ['after a parallel request takes the row', PARALLEL_REQUEST],
+    [
+      'after a parallel request is approved first',
+      [
+        ...PARALLEL_REQUEST,
+        {
+          hook_event_name: 'PostToolUse',
+          tool_name: 'Bash',
+          tool_input: PARALLEL,
+          tool_use_id: 'toolu-parallel'
+        }
+      ]
+    ]
   ])('clears the wait when the retried request is approved %s', async (_, between) => {
     await withClaudeHookServer(async (post, server) => {
       await post({
@@ -91,6 +103,34 @@ describe('Claude permission wait after a PermissionRequest hook denies', () => {
         tool_name: 'Bash',
         tool_input: RETRIED,
         tool_use_id: 'toolu-retried'
+      })
+
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({ paneKey: PANE, state: 'working', agentType: 'claude' })
+      ])
+    })
+  })
+
+  it('clears the wait for the first request of a parallel batch', async () => {
+    await withClaudeHookServer(async (post, server) => {
+      await post({
+        hook_event_name: 'PreToolUse',
+        tool_name: 'Bash',
+        tool_input: RETRIED,
+        tool_use_id: 'toolu-first'
+      })
+      await post({
+        hook_event_name: 'PreToolUse',
+        tool_name: 'Bash',
+        tool_input: PARALLEL,
+        tool_use_id: 'toolu-second'
+      })
+      await post({ hook_event_name: 'PermissionRequest', tool_name: 'Bash', tool_input: RETRIED })
+      await post({
+        hook_event_name: 'PostToolUse',
+        tool_name: 'Bash',
+        tool_input: RETRIED,
+        tool_use_id: 'toolu-first'
       })
 
       expect(server.getStatusSnapshot()).toEqual([
