@@ -14,7 +14,7 @@ const guard = vi.hoisted(() => ({
     }
   })
 }))
-vi.mock('./wsl-host-windows-drive-guard', () => ({
+vi.mock('./terminal/launch/wsl-host-windows-drive-guard', () => ({
   refuseWslHostWindowsDrivePath: guard.refuse
 }))
 

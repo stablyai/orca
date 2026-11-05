@@ -16,7 +16,7 @@ import { resolveAgentStartupPlanInputs } from '../../../../shared/agent-launch/s
 import {
   resolveWslHostAgentLaunchInputs,
   resolveWslHostAgentResumeInputs
-} from '../../wsl-host-agent-terminal-launch'
+} from './wsl-host-agent-terminal-launch'
 import {
   agentLaunchQuotingShell,
   type AgentLaunchRuntime

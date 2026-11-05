@@ -4,7 +4,7 @@ import type { TerminalHandleRecord } from '../../runtime-terminal-contracts'
 import type {
   RuntimeLeafRecord,
   RuntimePtyWorktreeRecord
-} from '../../runtime-terminal-state-records'
+} from '../records/runtime-terminal-state-records'
 
 type IssuedHandleSource = {
   leafHandle(leaf: RuntimeLeafRecord): string | undefined

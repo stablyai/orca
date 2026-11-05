@@ -1,4 +1,4 @@
-import { terminalImageViewerSupported } from '../../terminal-image-viewer-env'
+import { terminalImageViewerSupported } from '../../terminal/launch/terminal-image-viewer-env'
 /** Use ordinary user-facing terminal/chat creation; worker factories add redrive, mailbox and background-tab behavior.
  * The executor selects surface and prompt delivery; this factory supplies the wire-shaped runtime calls. */
 
@@ -22,7 +22,7 @@ import { AgentLaunchSessionAlreadyExistsError } from '../../../../shared/agent-l
 import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/agent-session-create-capabilities'
 import { createStructuredAgentSessionId } from '../../../../shared/agent-session/structured-agent-session-create'
 import { toAgentLaunchPreferences } from '../../../../shared/agent-launch/choices/agent-launch-preferences'
-import { paneIdentity } from '../../runtime-terminal-pane-identity'
+import { paneIdentity } from '../../terminal/identity/runtime-terminal-pane-identity'
 import {
   trackTerminalSpawnDispatch,
   type TerminalSpawnDispatch

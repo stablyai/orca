@@ -16,7 +16,7 @@ import type { AgentLaunchRuntime } from '../../../../shared/agent-launch/startup
 import type { RuntimeMobileSessionCreateTerminalResult } from '../../../../shared/runtime-session-contracts'
 import type { RuntimeMobileSessionTerminalTab } from '../../../../shared/runtime-types'
 import type { RuntimeTerminalCreate } from '../../../../shared/runtime-terminal-create-contract'
-import { buildHeadlessMobileSessionTerminalTabs } from '../../mobile-session-terminal-projection'
+import { buildHeadlessMobileSessionTerminalTabs } from '../../terminal/surface/mobile-session-terminal-projection'
 import {
   RestoredPaneStarter,
   type RestoredPane,
@@ -26,7 +26,7 @@ import {
 import { isPublishedHeld, reopenHeldPanes } from '../../terminal/recovery/held-pane-reopen'
 import { reopenNewerDaemonTerminals } from '../../../daemon/providers/routing/daemon-newer-protocol-hold'
 import type { NewerDaemonReopenResult } from '../../../../shared/newer-daemon-hold'
-import type { WorkspaceLayoutStream } from '../../workspace-layout-stream'
+import type { WorkspaceLayoutStream } from '../../terminal/surface/workspace-layout-stream'
 import { getDaemonHistoryDir } from '../../../daemon/launch/daemon-launch-paths'
 import { HistoryReader } from '../../../daemon/history/restoration/history-reader'
 import { servesWslMovedPaneHistory } from '../../../orcad/orcad-migration-wsl-destination'

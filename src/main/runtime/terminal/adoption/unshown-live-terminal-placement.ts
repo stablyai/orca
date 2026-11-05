@@ -9,7 +9,7 @@ import type {
   LayoutApplyReply
 } from '../../../../shared/workspace-layout/workspace-layout-command-types'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
-import type { RuntimePtyWorktreeRecord } from '../../runtime-terminal-state-records'
+import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 import type { PtyPaneOf, PtyPaneSource } from '../surface/pty-pane-query'
 
 type PlacementPty = PtyPaneSource &

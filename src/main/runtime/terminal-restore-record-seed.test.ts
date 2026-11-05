@@ -9,7 +9,7 @@ import type {
   RuntimePtyTabCloseAuthority,
   HeadlessSeedMetadata,
   RuntimeTerminalBufferSnapshot
-} from './runtime-terminal-state-records'
+} from './terminal/records/runtime-terminal-state-records'
 import type { RuntimeMobileSessionCreateTerminalResult } from '../../shared/runtime-session-contracts'
 import type { PtyProviderBufferSnapshot } from '../providers/pty-provider-contract'
 

@@ -7,7 +7,7 @@ import type {
   TerminalTab
 } from '../../shared/workspace-layout/terminal-tab-types'
 import { makePaneKey } from '../../shared/workspace-layout/stable-pane-id'
-import { spawnSurfaceClaimSequence } from './pty-recorded-surface-topology'
+import { spawnSurfaceClaimSequence } from './terminal/surface/pty-recorded-surface-topology'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import { bindPaneFirst } from './bind-first-pane.test-fixture'
 import { partialRuntimeStore } from './runtime-store-partial-fixture'

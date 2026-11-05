@@ -1,7 +1,7 @@
 import { mobilePresenceStore as store } from './orca-runtime-test-mocks/mobile-presence-store'
 import type * as WorktreeScanCacheModule from '../git/worktrees/catalog/worktree-scan-cache'
 import type * as WorktreeListingModule from '../git/worktrees/catalog/worktree-listing'
-import * as inputAdmission from './terminal-input-admission'
+import * as inputAdmission from './terminal/input/terminal-input-admission'
 import './mobile-subscribe-integration.spec'
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { listWorktrees } from '../git/worktrees/catalog/worktree-scan-cache'

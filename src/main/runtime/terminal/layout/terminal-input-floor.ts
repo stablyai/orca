@@ -7,7 +7,7 @@ import {
 } from '../../../../shared/terminal/input/terminal-input-kind'
 import { isUntypedTerminalInput } from '../../../../shared/terminal/input/terminal-untyped-input'
 import { clampTerminalViewport } from '../../../../shared/terminal/viewport/terminal-viewport'
-import { getPtyTerminalState, getTerminalState } from '../../terminal-wait-results'
+import { getPtyTerminalState, getTerminalState } from '../wait/terminal-wait-results'
 
 // Orphaned verdicts are bounded; active PTYs retain theirs until new evidence resolves them.
 const MAX_TRACKED_PTY_LIVENESS_VERDICTS = 256
