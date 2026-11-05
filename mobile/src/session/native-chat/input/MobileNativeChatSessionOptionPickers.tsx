@@ -249,7 +249,10 @@ export function MobileNativeChatSessionOptionPickers({
       <BottomDrawer
         visible={activeDescriptor !== undefined}
         onClose={closePicker}
-        onAfterClose={onDrawerAfterClose}
+        onAfterClose={() => {
+          setMoreModelsShown(false)
+          onDrawerAfterClose?.()
+        }}
       >
         {activeDescriptor ? (
           <View style={styles.sheet}>
