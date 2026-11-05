@@ -478,7 +478,7 @@ describe('MobileNativeChatComposer on a structured chat', () => {
     )
     const sends = () =>
       sendRequest.mock.calls.filter(([method]) => method === 'agentSession.send').map(([, p]) => p)
-    const send = () => labelled('Queue')[0]!
+    const send = () => labelled('Send message')[0]!
     await act(async () => send().props.onLongPress())
     const steer = drawers()[0]!.findAll(
       (node) =>
