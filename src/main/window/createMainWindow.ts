@@ -7,6 +7,8 @@ import { getAppIconPath } from './desktop-integration/app-icon'
 import { browserManager } from '../browser/guest-lifecycle/manager/browser-manager'
 import { getBrowserClientHostId } from '../browser/client-hosts/lifecycle/browser-client-host-id'
 import { formatBrowserClientHostIdArgument } from '../../shared/browser/client-hosting/browser-client-host-id-argument'
+import { resolveOnDeviceModelHelperPath } from '../on-device-model/on-device-model-paths'
+import { formatOnDeviceModelArgument } from '../../shared/on-device-text-generation'
 import { formatWindowMaterialArgument, resolveWindowMaterial } from '../../shared/window-material'
 import { windowMaterialOptions } from './window-material-options'
 import { rememberWindowMaterial } from './window-material-suppression'
@@ -164,6 +166,7 @@ export function createMainWindow(
       additionalArguments: [
         formatBrowserClientHostIdArgument(getBrowserClientHostId()),
         ...(windowMaterial === 'off' ? [] : [formatWindowMaterialArgument(windowMaterial)]),
+        formatOnDeviceModelArgument(resolveOnDeviceModelHelperPath() !== null),
         ...(pumpHiddenFrames ? [formatHiddenWindowFramePumpArgument()] : []),
         ...wslHostsWindowArguments()
       ]

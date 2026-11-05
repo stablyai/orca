@@ -44,6 +44,7 @@ import {
   type AgentPickerDraft
 } from '../../../../../../shared/agent-launch/picker/agent-launch-picker'
 import { AgentLaunchPicker } from '@/components/agent/AgentLaunchPicker'
+import { pickerAgent } from '@/components/feature-wall/ai-commit-pr-picker'
 import { getAgentCatalogForAction } from '../source-control-action-recipe-options'
 import { DropdownMenuItem } from '../../../ui/dropdown-menu'
 
@@ -311,7 +312,7 @@ const TextActionPicker = memo(
       <AgentLaunchPicker
         {...{
           draftScope: props.draftScope,
-          agent: activeAgent,
+          agent: pickerAgent(activeAgent),
           disabled: props.disabled || !settings || Boolean(props.repoId && (!repo || !host)),
           entries,
           draftForEntry,

@@ -356,6 +356,23 @@ function prepareMacDevElectronApp() {
 
   buildDevSwiftCliHelpers(path.join(appPath, 'Contents', 'MacOS'))
 
+  // On-device text generation stays optional: an older SDK simply leaves the provider hidden.
+  try {
+    execFileSync(
+      process.execPath,
+      [
+        path.join(repoRoot, 'config', 'scripts', 'build-on-device-model-macos.mjs'),
+        '--output',
+        path.join(appPath, 'Contents', 'MacOS', 'orca-on-device-model')
+      ],
+      { stdio: 'inherit' }
+    )
+  } catch (error) {
+    console.warn(
+      `[orca-dev] on-device model helper build failed (provider stays hidden): ${error?.message ?? error}`
+    )
+  }
+
   // Re-sign after copy/plist edits or macOS rejects notification registration (UNErrorDomain 1); signing failure stays nonfatal for dev.
   let signed = true
   try {

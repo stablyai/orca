@@ -3,7 +3,7 @@ import type {
   CommitMessageAiModelCapability
 } from '../generation/commit-message-ai-types'
 import { LOCAL_COMMIT_MESSAGE_HOST_KEY } from '../generation/commit-message-host-key'
-import type { TuiAgent } from '../../../agent-launch/catalog/tui-agent'
+import type { TextGenerationAgentId } from '../../../on-device-text-generation'
 import type {
   RepoSourceControlAiOverrides,
   SourceControlAiModelChoice,
@@ -14,7 +14,7 @@ import type {
 export function readSourceControlAiModelChoiceForHost(
   choice: SourceControlAiModelChoice | null | undefined,
   hostKey: string,
-  agentId: TuiAgent
+  agentId: TextGenerationAgentId
 ): string | undefined {
   return (
     choice?.selectedModelByAgentByHost?.[hostKey]?.[agentId] ??
@@ -27,7 +27,7 @@ export function readSourceControlAiModelChoiceForHost(
 export function selectSourceControlAiModelChoiceForHost(
   choice: SourceControlAiModelChoice | undefined,
   hostKey: string,
-  agentId: TuiAgent,
+  agentId: TextGenerationAgentId,
   modelId: string
 ): SourceControlAiModelChoice {
   return {
@@ -49,7 +49,7 @@ export function selectSourceControlAiModelChoiceForHost(
 export function clearSourceControlAiModelChoiceForHost(
   choice: SourceControlAiModelChoice | undefined,
   hostKey: string,
-  agentId: TuiAgent
+  agentId: TextGenerationAgentId
 ): SourceControlAiModelChoice | undefined {
   if (!choice) {
     return undefined
@@ -83,9 +83,9 @@ export function clearSourceControlAiModelChoiceForHost(
 }
 
 export function mergeSelectedModelByAgentByHost(
-  base: Partial<Record<string, Partial<Record<TuiAgent, string>>>> | undefined,
-  override: Partial<Record<string, Partial<Record<TuiAgent, string>>>> | undefined
-): Partial<Record<string, Partial<Record<TuiAgent, string>>>> {
+  base: Partial<Record<string, Partial<Record<TextGenerationAgentId, string>>>> | undefined,
+  override: Partial<Record<string, Partial<Record<TextGenerationAgentId, string>>>> | undefined
+): Partial<Record<string, Partial<Record<TextGenerationAgentId, string>>>> {
   const merged = base === undefined ? {} : structuredClone(base)
   for (const [hostKey, hostModels] of Object.entries(override ?? {})) {
     merged[hostKey] = { ...merged[hostKey], ...hostModels }
@@ -97,7 +97,7 @@ export function getDiscoveredModels(
   source: SourceControlAiSettings,
   legacy: CommitMessageAiSettings | null | undefined,
   hostKey: string,
-  agentId: TuiAgent
+  agentId: TextGenerationAgentId
 ): CommitMessageAiModelCapability[] {
   return (
     source.discoveredModelsByAgentByHost?.[hostKey]?.[agentId] ??
@@ -120,7 +120,7 @@ export function savedDiscoveredModels(
 /** Save a host's discovered models where generation, and older builds, read them. */
 export function withDiscoveredModels(
   config: SourceControlAiSettings,
-  agentId: TuiAgent,
+  agentId: TextGenerationAgentId,
   discovered: CommitMessageAiModelCapability[],
   hostKey: string
 ): Pick<SourceControlAiSettings, 'discoveredModelsByAgent' | 'discoveredModelsByAgentByHost'> {
@@ -143,7 +143,7 @@ export function getTextGenerationModels<T extends CommitMessageAiModelCapability
   source: SourceControlAiSettings,
   legacy: CommitMessageAiSettings | null | undefined,
   hostKey: string,
-  agentId: TuiAgent
+  agentId: TextGenerationAgentId
 ): (T | CommitMessageAiModelCapability)[] {
   const specIds = new Set(specModels.map((model) => model.id))
   return [
@@ -160,7 +160,7 @@ export function selectPersistedModelId(args: {
   repoOverrides: RepoSourceControlAiOverrides | null | undefined
   operation: AiTextOperation
   hostKey: string
-  agentId: TuiAgent
+  agentId: TextGenerationAgentId
   defaultModelId: string
 }): string {
   const { source, legacy, repoOverrides, operation, hostKey, agentId, defaultModelId } = args

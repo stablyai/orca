@@ -15,7 +15,7 @@ import type {
   AgentPickerEntry
 } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
-import { aiCommitPrPickerDraft, commitMessagePickerModel } from './ai-commit-pr-picker'
+import { aiCommitPrPickerDraft, commitMessagePickerModel, pickerAgent } from './ai-commit-pr-picker'
 import { useTranslate } from '@/i18n/use-translate'
 
 type AiCommitPrSettingsFieldsProps = {
@@ -52,7 +52,7 @@ export function AiCommitPrSettingsFields({
         <AgentLaunchPicker
           model={model}
           entries={pickerEntries}
-          agent={activeCapability?.id ?? null}
+          agent={pickerAgent(activeCapability?.id ?? null)}
           draftForEntry={aiCommitPrPickerDraft}
           portalContainer={selectPortalRoot}
           onPick={onPick}

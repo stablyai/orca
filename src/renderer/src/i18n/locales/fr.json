@@ -302,6 +302,7 @@
         "recipe": "Nom du chat",
         "useChatAgent": "Utiliser l’agent du chat",
         "configuredCliAgent": "Utiliser l’agent CLI configuré ({{agent}})",
+        "onDeviceAgent": "Use on-device model",
         "configuredCliAgentUnknown": "Utiliser l’agent CLI configuré",
         "clearCliArguments": "Effacez les arguments CLI pour utiliser l’agent de chaque chat.",
         "cliArgumentsPlaceholder": "Arguments facultatifs pour un agent CLI de nommage configuré",

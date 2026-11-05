@@ -12,6 +12,7 @@ import { getDefaultSourceControlAiSettings } from '../../../../shared/source-con
 import { getTextGenerationModels } from '../../../../shared/source-control/ai/settings/source-control-ai-model-selection'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
+import { useOnDeviceTextGenerationAvailable } from '@/hooks/use-on-device-text-generation-available'
 import { useAppStore } from '@/store/index'
 import type {
   AgentPickerDraft,
@@ -50,6 +51,7 @@ export function useAiCommitPrSettings(): AiCommitPrSettingsViewModel {
   const settings = useAppStore((s) => s.settings)
   const updateSettings = useAppStore((s) => s.updateSettings)
   const [selectPortalRoot, setSelectPortalRoot] = useState<HTMLElement | null>(null)
+  const onDeviceAvailable = useOnDeviceTextGenerationAvailable()
   const setSelectPortalHost = useCallback((node: HTMLDivElement | null) => {
     setSelectPortalRoot(
       node?.closest<HTMLElement>('[data-onboarding-overlay], [data-slot="dialog-content"]') ?? node
@@ -73,17 +75,19 @@ export function useAiCommitPrSettings(): AiCommitPrSettingsViewModel {
       discoveredModelsByAgent: legacyModels,
       discoveredModelsByAgentByHost: { [LOCAL_COMMIT_MESSAGE_HOST_KEY]: legacyHostModels }
     }
-    return listCommitMessageAgentCapabilities().map((capability) => ({
-      ...capability,
-      models: getTextGenerationModels(
-        capability.models,
-        source,
-        legacy,
-        LOCAL_COMMIT_MESSAGE_HOST_KEY,
-        capability.id
-      )
-    }))
-  }, [sourceModels, sourceHostModels, legacyModels, legacyHostModels])
+    return listCommitMessageAgentCapabilities({ onDevice: onDeviceAvailable }).map(
+      (capability) => ({
+        ...capability,
+        models: getTextGenerationModels(
+          capability.models,
+          source,
+          legacy,
+          LOCAL_COMMIT_MESSAGE_HOST_KEY,
+          capability.id
+        )
+      })
+    )
+  }, [sourceModels, sourceHostModels, legacyModels, legacyHostModels, onDeviceAvailable])
   const resolvedAgentId = resolveCommitMessageAgentChoice(
     config.agentId,
     settings?.defaultTuiAgent,

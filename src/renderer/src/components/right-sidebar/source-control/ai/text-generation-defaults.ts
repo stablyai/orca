@@ -1,3 +1,4 @@
+import { isOnDeviceTextGenerationId } from '../../../../../../shared/on-device-text-generation'
 import { normalizeRepoSourceControlAiOverrides } from '../../../../../../shared/source-control/ai/settings/source-control-ai-repo-settings'
 import type { ResolvedSourceControlAiGenerationParams } from '../../../../../../shared/source-control/ai/source-control-ai-operation-resolution'
 import {
@@ -36,7 +37,8 @@ export function generationParamsToActionRecipe(
   params: ResolvedSourceControlAiGenerationParams
 ): SourceControlActionRecipe {
   return {
-    agentId: params.agentId,
+    // Recipes launch agent CLIs, so the provider omits the key and source.agentId keeps the choice.
+    ...(isOnDeviceTextGenerationId(params.agentId) ? {} : { agentId: params.agentId }),
     commandInputTemplate: params.commandInputTemplate ?? '{basePrompt}',
     ...(params.agentArgs !== undefined ? { agentArgs: params.agentArgs } : {})
   }

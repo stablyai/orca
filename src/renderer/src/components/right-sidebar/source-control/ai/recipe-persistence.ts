@@ -2,6 +2,7 @@ import { repoMatchesHostIdentity } from '@/store/repos/repo-host-identity'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { AppState } from '@/store/types'
 import { isCustomAgentId } from '../../../../../../shared/source-control/ai/generation/commit-message-agent-spec'
+import { isOnDeviceTextGenerationId } from '../../../../../../shared/on-device-text-generation'
 import type { ResolvedSourceControlAiGenerationParams } from '../../../../../../shared/source-control/ai/source-control-ai-operation-resolution'
 import type {
   SourceControlActionRecipe,
@@ -81,6 +82,9 @@ export async function saveSourceControlTextGenerationDefaults({
   actionId: SourceControlTextActionId
   params: ResolvedSourceControlAiGenerationParams
 }): Promise<void> {
+  if (isOnDeviceTextGenerationId(params.agentId)) {
+    throw new Error('Per-action defaults cannot store the on-device provider.')
+  }
   await saveActionRecipeForTarget(
     target,
     actionId,

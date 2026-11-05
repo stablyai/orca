@@ -14,6 +14,7 @@ import type {
   SourceControlAiSettings
 } from '../settings/source-control-ai-settings-types'
 import type { TuiAgent } from '../../../agent-launch/catalog/tui-agent'
+import { isOnDeviceTextGenerationId } from '../../../on-device-text-generation'
 
 export function commandTemplateFromInstruction(instruction: string | null | undefined): string {
   const trimmed = instruction?.trim()
@@ -54,9 +55,11 @@ export function actionRecipeFromLegacyCommitMessageAi(legacy: CommitMessageAiSet
       ? { agentId: null }
       : isCustomAgentId(legacy.agentId)
         ? { agentId: CUSTOM_AGENT_ID }
-        : legacy.agentId
-          ? { agentId: legacy.agentId }
-          : {}),
+        : isOnDeviceTextGenerationId(legacy.agentId)
+          ? {}
+          : legacy.agentId
+            ? { agentId: legacy.agentId }
+            : {}),
     commandInputTemplate: commandTemplateFromInstruction(legacy.customPrompt)
   }
 }
@@ -87,6 +90,9 @@ export function applyLegacyAgentToActionRecipe(
     next.agentId = null
   } else if (isCustomAgentId(agentId)) {
     next.agentId = CUSTOM_AGENT_ID
+  } else if (isOnDeviceTextGenerationId(agentId)) {
+    // Per-action recipes launch agent CLIs; omit the key so source.agentId keeps the choice.
+    delete next.agentId
   } else if (agentId) {
     next.agentId = agentId
   } else {

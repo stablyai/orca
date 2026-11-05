@@ -2,6 +2,12 @@ import { OMP_MODEL_LIST_ARGS, parseOmpModelList } from '../../../omp-model-list-
 import type { TuiAgent } from '../../../agent-launch/catalog/tui-agent'
 import { isTuiAgentEnabled } from '../../../agent-launch/catalog/tui-agent-selection'
 import { labelFromModelId } from '../../../model-id-label'
+import {
+  ON_DEVICE_TEXT_GENERATION_ID,
+  ON_DEVICE_TEXT_GENERATION_MODEL_ID,
+  isOnDeviceTextGenerationId,
+  type TextGenerationAgentId
+} from '../../../on-device-text-generation'
 import { buildPrimaryCommitMessageAgentSpecs } from './commit-message-agent-specs-primary'
 import { buildSecondaryCommitMessageAgentSpecs } from './commit-message-agent-specs-secondary'
 import {
@@ -101,7 +107,7 @@ export type CommitMessageModelCapability = {
 }
 
 export type CommitMessageAgentCapability = {
-  id: TuiAgent
+  id: TextGenerationAgentId
   label: string
   modelSource: 'static' | 'dynamic'
   models: CommitMessageModelCapability[]
@@ -157,7 +163,7 @@ export const DEFAULT_COMMIT_MESSAGE_AGENT_ID: TuiAgent = 'claude'
 // Keep custom-command sentinel separate from TuiAgent, whose PTY/workspace flows do not accept user templates.
 export const CUSTOM_AGENT_ID = 'custom' as const
 export type CustomAgentId = typeof CUSTOM_AGENT_ID
-export type CommitMessageAgentChoice = TuiAgent | CustomAgentId
+export type CommitMessageAgentChoice = TextGenerationAgentId | CustomAgentId
 export type DefaultTuiAgentPreference = TuiAgent | 'blank' | null | undefined
 
 export function isCustomAgentId(id: string | null | undefined): id is CustomAgentId {
@@ -224,9 +230,21 @@ function toCommitMessageAgentCapability(
   }
 }
 
+/** Static capability for the on-device provider: one model, no binary, no discovery. */
+export const ON_DEVICE_TEXT_GENERATION_CAPABILITY: CommitMessageAgentCapability = {
+  id: ON_DEVICE_TEXT_GENERATION_ID,
+  label: 'On-device (Apple Intelligence)',
+  modelSource: 'static',
+  models: [{ id: ON_DEVICE_TEXT_GENERATION_MODEL_ID, label: 'Apple Foundation Model' }],
+  defaultModelId: ON_DEVICE_TEXT_GENERATION_MODEL_ID
+}
+
 export function getCommitMessageAgentCapability(
-  agentId: TuiAgent
+  agentId: TextGenerationAgentId
 ): CommitMessageAgentCapability | undefined {
+  if (isOnDeviceTextGenerationId(agentId)) {
+    return ON_DEVICE_TEXT_GENERATION_CAPABILITY
+  }
   const spec = getCommitMessageAgentSpec(agentId)
   return spec ? toCommitMessageAgentCapability(spec) : undefined
 }
@@ -236,8 +254,19 @@ export function listCommitMessageAgentIds(): TuiAgent[] {
   return Object.keys(COMMIT_MESSAGE_AGENT_SPECS) as TuiAgent[]
 }
 
-export function listCommitMessageAgentCapabilities(): CommitMessageAgentCapability[] {
-  return listCommitMessageAgentIds()
+/** Every id a stored choice may hold, including providers this host cannot run. */
+export function listTextGenerationAgentIds(): TextGenerationAgentId[] {
+  return [...listCommitMessageAgentIds(), ON_DEVICE_TEXT_GENERATION_ID]
+}
+
+export function listCommitMessageAgentCapabilities(
+  options: {
+    /** Only where the provider can actually run; stored ids from another host stay valid without it. */
+    onDevice?: boolean
+  } = {}
+): CommitMessageAgentCapability[] {
+  const agents = options.onDevice ? listTextGenerationAgentIds() : listCommitMessageAgentIds()
+  return agents
     .map((id) => getCommitMessageAgentCapability(id))
     .filter((capability): capability is CommitMessageAgentCapability => Boolean(capability))
 }

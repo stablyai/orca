@@ -9,7 +9,8 @@ import {
   type CustomAgentId,
   getCommitMessageAgentCapability,
   isCustomAgentId,
-  listCommitMessageAgentCapabilities
+  listCommitMessageAgentCapabilities,
+  listTextGenerationAgentIds
 } from '../../../../../shared/source-control/ai/generation/commit-message-agent-spec'
 import { getAgentCatalog, type AgentCatalogEntry } from '@/lib/agent-catalog/agent-catalog'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
@@ -18,9 +19,7 @@ import type { Translate } from '@/i18n/use-translate'
 
 export const AI_TEXT_ACTION_ID_SET = new Set<string>(AI_TEXT_ACTION_IDS)
 export const SOURCE_CONTROL_TEXT_ACTION_ID_SET = new Set<string>(SOURCE_CONTROL_TEXT_ACTION_IDS)
-const TEXT_GENERATION_AGENT_ID_SET = new Set(
-  listCommitMessageAgentCapabilities().map((capability) => capability.id)
-)
+const TEXT_GENERATION_AGENT_ID_SET = new Set<string>(listTextGenerationAgentIds())
 
 export const getActionDescriptions = createLocalizedCatalog((): Record<AiActionId, string> => ({
   conversationName: translate(
