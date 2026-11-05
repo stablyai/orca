@@ -4,6 +4,7 @@ import type { BrowserClientAutomationResult as BrowserClientHostCommandResult } 
 import { BrowserHostLeaseRegistry } from './browser-host/browser-host-lease-registry'
 import { routeRuntimeBrowserClientAutomation } from './runtime-browser-client-automation'
 import { RuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
+import { LOCAL_CLI_RPC_CALLER } from './rpc/rpc-caller-identity'
 
 describe('runtime browser client automation routing', () => {
   it('surfaces missing host capability and exact client execution failures', async () => {
@@ -12,6 +13,7 @@ describe('runtime browser client automation routing', () => {
       routeRuntimeBrowserClientAutomation({
         method: 'browser.click',
         params: { page: 'page-a', x: 10 },
+        caller: LOCAL_CLI_RPC_CALLER,
         pages: legacy.pages,
         leases: legacy.leases,
         resolveWorkspace: legacy.resolveWorkspace
@@ -22,6 +24,7 @@ describe('runtime browser client automation routing', () => {
     const routing = routeRuntimeBrowserClientAutomation({
       method: 'browser.click',
       params: { page: 'page-a', x: 10 },
+      caller: LOCAL_CLI_RPC_CALLER,
       pages: failed.pages,
       leases: failed.leases,
       resolveWorkspace: failed.resolveWorkspace
@@ -31,12 +34,34 @@ describe('runtime browser client automation routing', () => {
     await expect(routing).rejects.toThrow('browser_client_page_automation_failed')
   })
 
+  it('marks only an agent caller’s command as agent-driven on the desktop', async () => {
+    for (const [caller, agent] of [
+      [LOCAL_CLI_RPC_CALLER, true],
+      [{ kind: 'paired-device', deviceId: 'device-a' }, false]
+    ] as const) {
+      const fixture = await createFixture()
+      const routing = routeRuntimeBrowserClientAutomation({
+        method: 'browser.goto',
+        params: { page: 'page-a', url: 'https://example.test/next' },
+        caller,
+        pages: fixture.pages,
+        leases: fixture.leases,
+        resolveWorkspace: fixture.resolveWorkspace
+      })
+      const event = await fixture.waitForCommand()
+      expect(event.command).toMatchObject({ type: 'automation', method: 'browser.goto', agent })
+      fixture.settle({ status: 'completed' })
+      await routing
+    }
+  })
+
   it('refuses --expect-url for a client that would drop it, without sending the command', async () => {
     const older = await createFixture()
     await expect(
       routeRuntimeBrowserClientAutomation({
         method: 'browser.click',
         params: { page: 'page-a', element: '@e1', expectUrl: 'https://example.test/a' },
+        caller: LOCAL_CLI_RPC_CALLER,
         pages: older.pages,
         leases: older.leases,
         resolveWorkspace: older.resolveWorkspace
@@ -55,6 +80,7 @@ describe('runtime browser client automation routing', () => {
     const routing = routeRuntimeBrowserClientAutomation({
       method: 'browser.click',
       params: { page: 'page-a', element: '@e1', expectUrl: mismatch.expectedUrl },
+      caller: LOCAL_CLI_RPC_CALLER,
       pages: fixture.pages,
       leases: fixture.leases,
       resolveWorkspace: fixture.resolveWorkspace
