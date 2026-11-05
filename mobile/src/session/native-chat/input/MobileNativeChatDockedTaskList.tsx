@@ -25,8 +25,9 @@ function useConversationOpen(conversationKey: string): [boolean, (open: boolean)
   const remember = (next: boolean): void => {
     openByConversation.delete(conversationKey)
     openByConversation.set(conversationKey, next)
-    if (openByConversation.size > MAX_REMEMBERED) {
-      openByConversation.delete(openByConversation.keys().next().value as string)
+    const oldest = openByConversation.keys().next().value
+    if (openByConversation.size > MAX_REMEMBERED && oldest !== undefined) {
+      openByConversation.delete(oldest)
     }
     setOpen(next)
   }
