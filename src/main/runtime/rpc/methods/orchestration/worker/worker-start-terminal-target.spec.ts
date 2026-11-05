@@ -49,31 +49,32 @@ export function registerWorkerStartTerminalTargetTests(): void {
     })
 
     it('runs a terminal from another worktree in that worktree unless --worktree names one', async () => {
-      vi.mocked(harness.runtime.showTerminal).mockImplementation(
-        async (handle) =>
-          ({
-            handle,
-            worktreeId: handle === 'term_worker' ? 'repo::other' : 'repo::worktree',
-            status: 'running'
-          }) as never
-      )
-      vi.mocked(harness.runtime.showManagedTerminalWorkspace).mockImplementation(
-        async (selector) =>
-          ({ id: selector === 'id:repo::other' ? 'repo::other' : 'repo::worktree' }) as never
-      )
+      const show = vi.mocked(harness.runtime.showTerminal).getMockImplementation()!
+      vi.mocked(harness.runtime.showTerminal).mockImplementation(async (handle) => ({
+        ...(await show(handle)),
+        worktreeId: handle === 'term_worker' ? 'repo::other' : 'repo::worktree'
+      }))
+      const workspace = vi.mocked(harness.runtime.showManagedTerminalWorkspace)
+      const showWorkspace = workspace.getMockImplementation()!
+      workspace.mockImplementation(async (selector) => ({
+        ...(await showWorkspace(selector)),
+        id: selector === 'id:repo::other' ? 'repo::other' : 'repo::worktree'
+      }))
+      const task = harness.db.createTask({ spec: 'reuse', runId: harness.activeRunId })
       const start = (worktree?: string) =>
         harness.call('orchestration.workerStart', {
-          task: harness.db.createTask({ spec: 'reuse', runId: harness.activeRunId }).id,
+          task: task.id,
           from: 'term_coord',
           terminal: 'term_worker',
           ...(worktree ? { worktree } : {})
         })
 
       await expect(start('current')).rejects.toMatchObject({ code: 'terminal_worktree_mismatch' })
-      const started = await start()
-      expect(
-        harness.db.getWorkerDispatch((started as { dispatchId: string }).dispatchId)
-      ).toMatchObject({ worktree_id: 'repo::other' })
+      await start()
+      const dispatch = harness.db.getDispatchContext(task.id)!
+      expect(harness.db.getWorkerDispatch(dispatch.id)).toMatchObject({
+        worktree_id: 'repo::other'
+      })
     })
   })
 

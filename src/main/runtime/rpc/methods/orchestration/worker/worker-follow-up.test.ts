@@ -471,16 +471,16 @@ describe('a follow-up to a finished terminal worker', () => {
   it('continues the worker when the coordinator replies to its report', async () => {
     h.setup()
     const { taskId, dispatchId } = await h.startWorker()
-    const report = await h.call('orchestration.send', {
+    await h.call('orchestration.send', {
       from: 'term_worker',
       type: 'worker_done',
       subject: 'Done',
       payload: JSON.stringify({ taskId, dispatchId, outcome: 'succeeded' })
     })
-    const reportId = (report as { message: { id: string } }).message.id
+    const [report] = h.db.getUnreadMessages(`run:${h.activeRunId}`, ['worker_done'])
 
     await expect(
-      h.call('orchestration.reply', { id: reportId, from: 'term_coord', body: 'fix the lint too' })
+      h.call('orchestration.reply', { id: report.id, from: 'term_coord', body: 'fix the lint too' })
     ).resolves.toMatchObject({
       delivery: 'follow_up',
       followUpOf: dispatchId,
