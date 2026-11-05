@@ -98,6 +98,7 @@ export class RepoUpdatePersistenceOperations {
         | 'worktreeBaseRef'
         | 'worktreeBasePath'
         | 'kind'
+        | 'vcs'
         | 'folderUpgradeGitRootPath'
         | 'executionHostId'
         | 'symlinkPaths'

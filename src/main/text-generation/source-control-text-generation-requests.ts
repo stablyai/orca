@@ -99,12 +99,14 @@ export async function generateCommitMessage(input: {
   params: GenerateParams
   target: CommitMessageGenerationTarget
   spawnAgent: SpawnSourceControlAgent
+  /** Replaces the git commit prompt and keeps the agent's line layout (used for Perforce descriptions). */
+  promptOverride?: string
 }): Promise<GenerateCommitMessageResult> {
   const { context, params } = input
   const prompt = fitPromptToLocalCommandLine(params, input.target, (diffBudget) =>
     params.commandInputTemplate !== undefined
       ? renderSourceControlActionCommandTemplate(params.commandInputTemplate, {
-          basePrompt: buildCommitMessagePrompt(context, '', diffBudget),
+          basePrompt: input.promptOverride ?? buildCommitMessagePrompt(context, '', diffBudget),
           branch: context.branch ?? '(detached)',
           stagedFiles: context.stagedSummary,
           stagedPatch: context.stagedPatch,
@@ -128,7 +130,11 @@ export async function generateCommitMessage(input: {
   try {
     return {
       success: true,
-      message: trimGeneratedCommitMessage(splitGeneratedCommitMessage(result.rawOutput).message),
+      message: trimGeneratedCommitMessage(
+        input.promptOverride !== undefined
+          ? cleanGeneratedCommitMessage(result.rawOutput)
+          : splitGeneratedCommitMessage(result.rawOutput).message
+      ),
       agentLabel: result.agentLabel
     }
   } catch {

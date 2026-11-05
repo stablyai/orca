@@ -49,6 +49,11 @@ export function isBackgroundRuntimeMethod(method: string): boolean {
     method === 'git.conflictOperation' ||
     method === 'git.branchCompare' ||
     method === 'git.upstreamStatus' ||
+    method === 'perforce.detect' ||
+    method === 'perforce.status' ||
+    method === 'perforce.history' ||
+    method === 'perforce.detectProject' ||
+    method === 'perforce.syncCopies' ||
     method === 'worktree.prefetchCreateBase'
   )
 }
@@ -62,6 +67,18 @@ function isLongWaitRuntimeMethod(method: string): boolean {
 // Byte-range reads (media, paged files, downloads) are bulk: a playing video must not hold terminal or workspace slots.
 function isBulkReadRuntimeMethod(method: string): boolean {
   return method === 'files.readChunk' || method === 'files.readDocPreviewChunk'
+}
+
+// Why: p4 scans, syncs and copy removals run for minutes on large workspaces, so Perforce gets its
+// own queue rather than holding the slots Git status and listing refreshes share.
+function runtimeCallQueueLane(method: string): string | null {
+  if (isLongWaitRuntimeMethod(method)) {
+    return 'long-wait'
+  }
+  if (isBulkReadRuntimeMethod(method)) {
+    return 'bulk-read'
+  }
+  return method.startsWith('perforce.') ? 'perforce' : null
 }
 
 export class RuntimeRpcCallQueuePool {
@@ -88,12 +105,9 @@ export class RuntimeRpcCallQueuePool {
       return Promise.reject(abortSignalReason(signal))
     }
     // Same concurrency bound, counted apart from the selector's other calls; global caps still apply.
-    const bulkRead = isBulkReadRuntimeMethod(method)
-    const queueKey = isLongWaitRuntimeMethod(method)
-      ? `${selector}\u0000long-wait`
-      : bulkRead
-        ? `${selector}\u0000bulk-read`
-        : selector
+    const lane = runtimeCallQueueLane(method)
+    const bulkRead = lane === 'bulk-read'
+    const queueKey = lane ? `${selector}\u0000${lane}` : selector
     if (this.queuedCallCount >= this.maxQueuedTotal) {
       return Promise.reject(new RuntimeRpcCallQueueOverloadError('global'))
     }

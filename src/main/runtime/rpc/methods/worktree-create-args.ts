@@ -63,6 +63,7 @@ export function buildManagedWorktreeCreateArgs(
     telemetrySource: params.telemetrySource,
     workspaceStatus: params.workspaceStatus,
     manualOrder: params.manualOrder,
+    ...(params.perforceCopy ? { perforceCopy: params.perforceCopy } : {}),
     ...(params.nestWorkspaces !== undefined ? { nestWorkspaces: params.nestWorkspaces } : {}),
     ...(params.refreshLocalBaseRefOnWorktreeCreate !== undefined
       ? { refreshLocalBaseRefOnWorktreeCreate: params.refreshLocalBaseRefOnWorktreeCreate }

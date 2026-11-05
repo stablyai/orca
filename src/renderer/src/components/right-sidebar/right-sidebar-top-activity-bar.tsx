@@ -23,7 +23,8 @@ export function RightSidebarTopActivityBar({
   checksStatus,
   closeButton,
   activityBarPosition,
-  onChangeActivityBarPosition
+  onChangeActivityBarPosition,
+  onDetectPerforce
 }: {
   hasDesktopWindowChrome: boolean
   topActivityStripRef: (node: HTMLDivElement | null) => void
@@ -34,6 +35,7 @@ export function RightSidebarTopActivityBar({
   closeButton: React.ReactNode
   activityBarPosition: ActivityBarPosition
   onChangeActivityBarPosition: (pos: ActivityBarPosition) => void
+  onDetectPerforce?: () => void
 }): React.JSX.Element {
   return (
     <ContextMenu>
@@ -128,6 +130,7 @@ export function RightSidebarTopActivityBar({
       <ActivityBarPositionMenu
         currentPosition={activityBarPosition}
         onChangePosition={onChangeActivityBarPosition}
+        onDetectPerforce={onDetectPerforce}
       />
     </ContextMenu>
   )

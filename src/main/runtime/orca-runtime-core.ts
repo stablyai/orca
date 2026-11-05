@@ -15,6 +15,7 @@ import type { RuntimeRepositoryCommandSurface } from './repositories/runtime-rep
 import type { RuntimeReviewCommandSurface } from './runtime-review-command-surface'
 import type { RuntimeServiceCommandSurface } from './runtime-service-command-surface'
 import type { RuntimeSkillCommandSurface } from './integrations/skill/runtime-skill-command-contract'
+import type { RuntimePerforceCommandSurface } from './runtime-perforce-commands'
 
 export type PtyIncarnationHandleRecord = Readonly<{
   handle: string
@@ -294,7 +295,8 @@ export type RuntimeInstalledCommandSurfaces = RuntimeEdgeCommandSurface &
   RuntimeRepositoryCommandSurface &
   RuntimeReviewCommandSurface &
   RuntimeServiceCommandSurface &
-  RuntimeSkillCommandSurface
+  RuntimeSkillCommandSurface &
+  RuntimePerforceCommandSurface
 
 export type RuntimeCommandSurfaceHost<T> = T & RuntimeInstalledCommandSurfaces
 

@@ -6,12 +6,11 @@ import { GitCompareArrows, Eye, ShieldAlert, Pin, ListChecks, Smartphone } from 
 import { Input } from '@/components/ui/input'
 import { TabHoverCard } from './TabHoverCard'
 import { basename } from '@/lib/path'
-import { getEditorDisplayLabel } from '@/components/editor/editor-labels'
+import { useEditorTabTarget } from './use-editor-tab-target'
 import { renameFileOnDisk } from '@/lib/rename-file'
 import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import { detectLanguage } from '@/lib/language-detect'
 import { FileTypeIcon } from '@/components/FileTypeIcon'
-import { useRepoById, useWorktreeById } from '@/store/selectors'
 import { useAppStore } from '@/store'
 import { STATUS_COLORS } from '../../lib/git-path-decoration'
 import { STATUS_LABELS } from '../../../../shared/git/status/git-status-labels'
@@ -59,8 +58,7 @@ export default function EditorFileTab({
   dropIndicator,
   includeTopTabBorder = true
 }: EditorFileTabProps): React.JSX.Element {
-  const worktree = useWorktreeById(file.worktreeId)
-  const repo = useRepoById(worktree?.repoId ?? null)
+  const { worktree, repo, tabLabel } = useEditorTabTarget(file)
   // Keep dragged tabs anchored; only the insertion bar moves.
   const { attributes, listeners, setNodeRef } = useSortable({
     // Split copies share a file entity; unified tab IDs keep each copy independently draggable.
@@ -317,7 +315,7 @@ export default function EditorFileTab({
               openRenameInput()
             }}
           >
-            {getEditorDisplayLabel(file)}
+            {tabLabel}
           </span>
         )}
         {isMissingFileMutation && !isRenaming && (
@@ -364,7 +362,7 @@ export default function EditorFileTab({
             tabRoot
           ) : (
             <TabHoverCard
-              title={getEditorDisplayLabel(file)}
+              title={tabLabel}
               programName={customEditor?.title ?? translate('tabHoverCard.editor', 'Editor')}
               icon={tabIcon('size-4')}
               description={file.relativePath}

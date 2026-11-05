@@ -197,6 +197,7 @@ export type WorktreeSlice = {
       request?: PendingWorktreeCreation['request']
       chatSessionOptions?: Readonly<Record<string, string>>
       provisioningLog?: string
+      progressDetail?: string
       checkoutProgress?: PendingWorktreeCreation['checkoutProgress']
       worktreeId?: string
       heldChatMessage?: string

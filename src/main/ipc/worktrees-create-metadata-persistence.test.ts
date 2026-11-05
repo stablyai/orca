@@ -51,7 +51,8 @@ const WORKTREE_HANDLER_CHANNELS = [
   'hooks:check',
   'hooks:inspectSetupScriptImports',
   'hooks:readIssueCommand',
-  'hooks:writeIssueCommand'
+  'hooks:writeIssueCommand',
+  'perforce:runCopy'
 ] as const
 
 vi.mock('../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => {

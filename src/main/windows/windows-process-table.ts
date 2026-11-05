@@ -1,10 +1,13 @@
-import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { createProcessTableSnapshotReader } from '../../shared/process-table-snapshot-reader'
 import { ORCAD_WINDOWS_PROCESS_TREE_FILENAME } from '../../shared/orcad-artifacts'
 import { reportWindowsCommandLineRecoveryHealth } from './windows-command-line-recovery-health'
 import { readWindowsProcessRowsWithCim } from './windows-process-table-cim-scan'
 import { WindowsProcessTableTimeoutError } from './windows-process-table-timeout-error'
+import {
+  FLAGGED_ADDON_IMPORT,
+  stagedRelayAddonIsUnpatched
+} from './windows-process-tree-unpatched-addon'
 
 /** Shared Windows snapshots: serialized native identity/command-line views, with CIM fallback only when no usable binding exists. Both views request creation times through limited query handles; Memory stays off. See docs/reference/windows-process-enumeration.md. */
 
@@ -31,6 +34,9 @@ type NativeProcessInfo = {
   creationTimeMs?: number
 }
 
+/** Pids with a handle open on each path; null where a path could not be queried. */
+type PathUsersQuery = (paths: string[]) => Promise<(number[] | null)[]>
+
 type WindowsProcessTreeModule = {
   ProcessDataFlag: {
     None: number
@@ -40,6 +46,7 @@ type WindowsProcessTreeModule = {
   /** Compiled addon capabilities; patched JS enums may sit above an older prebuilt binary. */
   supportedProcessDataFlags?: number
   getProcessCreationTime?: (pid: number) => number | undefined
+  getProcessIdsUsingPaths?: PathUsersQuery
   getAllProcesses: (
     callback: (processes: NativeProcessInfo[] | undefined) => void,
     flags?: number
@@ -59,6 +66,7 @@ let requireNative: NativeRequire = requireFromMain
 /** Bare relay addon has no queue; nativeReadGate must serialize it to prevent concurrent native snapshots. The npm wrapper adds its own coalescing queue. */
 type WindowsProcessTreeAddon = {
   getProcessCreationTime?: (pid: number) => number | undefined
+  getProcessIdsUsingPaths?: PathUsersQuery
   getProcessList: (
     callback: (processes: NativeProcessInfo[] | undefined) => void,
     flags: number
@@ -71,23 +79,6 @@ const PROCESS_DATA_FLAG = { None: 0, Memory: 1, CommandLine: 2, CreationTime: 4 
 
 /** Staged beside the orcad bundle by orcad-windows-process-tree.mjs. */
 const RELAY_ADDON_FILENAME = `./${ORCAD_WINDOWS_PROCESS_TREE_FILENAME}`
-
-/** The import whose absence tells the patched binary from the published prebuilt. */
-const FLAGGED_ADDON_IMPORT = 'ReadProcessMemory'
-
-/** Reject staged addons importing ReadProcessMemory: independently deployed old binaries can load yet restore EDR-flagged PEB reads. Match the build inspector without importing its node-gyp/child_process dependencies; fall back to CIM. */
-function stagedRelayAddonIsUnpatched(): boolean {
-  // Missing resolver denotes a test double; production resolves the binary it just loaded.
-  const addonPath = requireNative.resolve?.(RELAY_ADDON_FILENAME)
-  if (!addonPath) {
-    return false
-  }
-  try {
-    return readFileSync(addonPath).includes(FLAGGED_ADDON_IMPORT)
-  } catch {
-    return false
-  }
-}
 
 /** Warn once where stderr survives; daemon startup reports capability through daemonLog instead. */
 let warnedAboutCimFallback = false
@@ -102,6 +93,7 @@ function adaptAddon(addon: WindowsProcessTreeAddon): WindowsProcessTreeModule {
     ProcessDataFlag: PROCESS_DATA_FLAG,
     supportedProcessDataFlags: addon.supportedProcessDataFlags,
     getProcessCreationTime: addon.getProcessCreationTime,
+    getProcessIdsUsingPaths: addon.getProcessIdsUsingPaths,
     getAllProcesses: (callback, flags) => addon.getProcessList(callback, flags ?? 0)
   }
 }
@@ -129,7 +121,7 @@ function loadWindowsProcessTree(): WindowsProcessTreeModule | null {
       cachedModule = null
       return cachedModule
     }
-    if (stagedRelayAddonIsUnpatched()) {
+    if (stagedRelayAddonIsUnpatched(requireNative.resolve?.(RELAY_ADDON_FILENAME))) {
       console.warn(
         `[windows-process-table] the addon staged beside the relay bundle still imports ` +
           `${FLAGGED_ADDON_IMPORT}, so it was built from unpatched source and reads every ` +
@@ -345,6 +337,15 @@ export function readWindowsProcessCreationTime(pid: number): number | null {
   } catch {
     return null
   }
+}
+
+/**
+ * The pids with a handle open on each path, from the kernel's per-file list; opens only the paths,
+ * never another process. Null when this host's addon predates the query (rebuild with pnpm install).
+ */
+export function readProcessIdsUsingPaths(paths: string[]): ReturnType<PathUsersQuery> | null {
+  const query = process.platform === 'win32' ? moduleLoader()?.getProcessIdsUsingPaths : undefined
+  return query ? query(paths) : null
 }
 
 function resetSnapshotReaders(): void {

@@ -1,10 +1,30 @@
 import { CommitMessageAiPane } from '../source-control/CommitMessageAiPane'
 import { GitPane } from '../source-control/GitPane'
 import { GitProviderApiBudgetPane } from '../source-control/GitProviderApiBudgetPane'
+import { PerforcePane } from '../PerforcePane'
 import { TasksPane } from '../tasks/TasksPane'
 import { SettingsSection } from '../section-layout/SettingsSection'
 import { translate } from '@/i18n/i18n'
 import type { SettingsRenderContext } from './settings-render-context'
+
+export function renderPerforceSettingsSection(context: SettingsRenderContext): React.JSX.Element {
+  const { model, navigation, view } = context
+  return (
+    <SettingsSection
+      id="perforce"
+      title={translate('perforce.settings.navTitle', 'Perforce')}
+      description={translate(
+        'perforce.settings.navDescription',
+        'Connection, Source Control behavior, changelists, and shelves.'
+      )}
+      searchEntries={navigation.getSectionSearchEntries('perforce')}
+    >
+      {view.isSectionMounted('perforce') ? (
+        <PerforcePane settings={model.settings} updateSettings={model.updateSettings} />
+      ) : null}
+    </SettingsSection>
+  )
+}
 
 export function renderGitSettingsSection(context: SettingsRenderContext): React.JSX.Element {
   const { model, interactions, navigation, view } = context

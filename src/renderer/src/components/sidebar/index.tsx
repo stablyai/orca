@@ -20,6 +20,7 @@ import { useWorkspaceBoardPanel } from './workspace-board/surface/useWorkspaceBo
 import { useWorkspaceRevealBodyRedirect } from './worktree-list/navigation/use-workspace-reveal-body-redirect'
 import { resolveLeftSidebarStyleVariables } from '@/lib/left-sidebar-appearance'
 import { lazyWithRetry } from '@/lib/lazy-with-retry'
+import { usePerforceCopySync } from '../perforce-copies/use-perforce-copy-sync'
 import { LocalGitToolchainScanBanner } from './LocalGitToolchainScanBanner'
 import { SeveredTerminalDaemonBanner } from './SeveredTerminalDaemonBanner'
 import { StalledTerminalDaemonBanner } from './StalledTerminalDaemonBanner'
@@ -41,6 +42,14 @@ const WorktreeVisibilityDialog = lazyWithRetry(
 const OrcaYamlTrustDialog = lazyWithRetry(() => import('./OrcaYamlTrustDialog'))
 const ForgetSshWorkspaceDialog = lazyWithRetry(
   () => import('./workspace-actions/deletion/ForgetSshWorkspaceDialog')
+)
+const PerforceCopyDeleteModal = lazyWithRetry(
+  () => import('../perforce-copies/PerforceCopyDeleteModal')
+)
+const PerforceCopyUpModal = lazyWithRetry(() => import('../perforce-copies/PerforceCopyUpModal'))
+const PerforceCopiesModal = lazyWithRetry(() => import('../perforce-copies/PerforceCopiesModal'))
+const PerforceOpenForEditDialog = lazyWithRetry(
+  () => import('../right-sidebar/perforce/PerforceOpenForEditDialog')
 )
 const AgentDashboardSidebarHost = lazyWithRetry(() => import('./AgentDashboardSidebarHost'))
 
@@ -102,6 +111,7 @@ function Sidebar({
   )
   const fetchAllWorktrees = useAppStore((s) => s.fetchAllWorktrees)
   const activeModal = useAppStore((s) => s.activeModal)
+  usePerforceCopySync()
   const statusBarVisible = useAppStore((s) => s.statusBarVisible)
   const leftSidebarStyle = useMemo(() => resolveLeftSidebarStyleVariables(settings), [settings])
   const { dropOwnerRef, dropHandlers, affordance } = useSidebarProjectDrop()
@@ -280,6 +290,10 @@ function Sidebar({
         {activeModal === 'worktree-visibility' ? <WorktreeVisibilityDialog /> : null}
         {activeModal === 'confirm-orca-yaml-hooks' ? <OrcaYamlTrustDialog /> : null}
         {activeModal === 'forget-ssh-workspace' ? <ForgetSshWorkspaceDialog /> : null}
+        {activeModal === 'delete-perforce-copy' ? <PerforceCopyDeleteModal /> : null}
+        {activeModal === 'copy-up-perforce-copy' ? <PerforceCopyUpModal /> : null}
+        {activeModal === 'perforce-copies' ? <PerforceCopiesModal /> : null}
+        {activeModal === 'perforce-open-for-edit' ? <PerforceOpenForEditDialog /> : null}
       </React.Suspense>
       {sidebarOpen ? (
         <WorkspaceKanbanDrawer

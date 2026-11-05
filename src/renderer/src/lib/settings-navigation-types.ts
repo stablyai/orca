@@ -19,6 +19,7 @@ const SETTINGS_NAV_TARGETS = [
   'accounts',
   'browser',
   'git',
+  'perforce',
   'tasks',
   'appearance',
   'chat',

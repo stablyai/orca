@@ -6,6 +6,7 @@ import { WorktreeHostContextBadge } from '../host/WorktreeHostContextBadge'
 import { useWslHostDistro, WslHostMark } from '@/components/wsl-host-mark/WslHostMark'
 import { getWorktreeExecutionHostId } from '../../../../../../shared/execution-host'
 import { TruncatedSidebarLabel } from '../../truncated-sidebar-label'
+import { streamShortName } from '../../../../../../shared/perforce/workspace-copy/workspace-copy-name-rules'
 import {
   WorktreeCardConflictBadge,
   WorktreeCardFolderPath,
@@ -68,7 +69,16 @@ export function WorktreeCardMetaRow({
             tooltipEnabled={!hasHoverDetails}
           />
         ) : isFolder && !newCardStyle ? (
-          <WorktreeCardFolderPath path={worktree.path} />
+          worktree.perforceStream ? (
+            <span
+              className="min-w-0 truncate font-mono text-[11px] leading-none text-muted-foreground"
+              title={worktree.path}
+            >
+              {streamShortName(worktree.perforceStream)}
+            </span>
+          ) : (
+            <WorktreeCardFolderPath path={worktree.path} />
+          )
         ) : showBranch ? (
           <TruncatedSidebarLabel
             text={branch}
