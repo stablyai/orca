@@ -123,6 +123,7 @@ describe.skipIf(process.platform === 'win32')(
         expect(await later()!.prepare('a')).not.toBeNull()
         vi.spyOn(console, 'warn').mockImplementation(() => {})
         const binary = join(f.root, 'bin', 'claude')
+        // ast-grep-ignore: test-no-wall-clock -- the CLI binary's real mtime must move forward
         utimesSync(binary, new Date(), new Date(Date.now() + 60_000))
         expect(await later()!.prepare('a')).toBeNull()
       } finally {

@@ -117,6 +117,7 @@ async function fixture(
       ...state,
       codex: usage[0],
       inactiveCodexAccounts: [
+        // ast-grep-ignore: test-no-wall-clock -- production judges usage freshness against the real clock
         { accountId: 'b', rateLimits: usage[1], updatedAt: Date.now(), isFetching: false }
       ]
     })
@@ -405,6 +406,7 @@ describe.skipIf(process.platform === 'win32')(
     })
     it('rejects stale usage rather than treating reset windows as empty', async () => {
       const f = await fixture()
+      // ast-grep-ignore: test-no-wall-clock -- a reset already passed by the real clock makes usage stale
       f.usage[1].session!.resetsAt = Date.now() - 1
       f.refresh.mockResolvedValue(undefined)
       expect(await f.run()).toMatchObject({ success: false, subscriptionQuotaRefused: true })

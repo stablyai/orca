@@ -84,7 +84,7 @@ describe('OpenCode text account refresh sharing', () => {
         environment,
         cwd,
         accountIds: ['account-a'],
-        freshUntil: Date.now()
+        freshUntil: 1_700_000_000_000
       })
     const calls = [
       refresh({ XDG_DATA_HOME: '/home-a', PATH: '/bin' }),
