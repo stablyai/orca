@@ -196,7 +196,8 @@ describe('a Claude chat saved on the model id its listing names by alias', () =>
     })
   })
 
-  it('matches the 1M id only through its own row, and the first of two aliases', () => {
+  it('matches the 1M id only through its own row, an exact row first, then the first alias', () => {
+    // `best` is hypothetical: two aliases resolving to one id; no recorded listing has one.
     const oneM = [
       alias('opus[1m]', 'claude-opus-5-5[1m]', { efforts: levels('low', 'high') }),
       alias('best', 'claude-opus-5-5[1m]', { efforts: levels('max') }),
@@ -205,8 +206,18 @@ describe('a Claude chat saved on the model id its listing names by alias', () =>
     expect(
       effortRow(coherent(answer('claude-opus-5-5[1m]', oneM, null, 'low'), oneM))
     ).toMatchObject({ settable: true, kind: { choices: levels('low', 'high') } })
+    const exact = [
+      alias('claude-opus-5-5', 'claude-opus-5-5', { efforts: levels('low', 'max') }),
+      ...LISTING
+    ]
+    expect(effortRow(coherent(answer('claude-opus-5-5', exact, null, 'low'), exact))).toMatchObject(
+      {
+        kind: { choices: levels('low', 'max') }
+      }
+    )
   })
 
+  // The next two guard the lookup's fallbacks: neither changes with the fix.
   it('stays read-only without listing evidence for the alias', () => {
     // An older host answers with its placeholder and no listed ids: the placeholder is the model's own row.
     const older = applyStructuredAgentSessionOptions(
