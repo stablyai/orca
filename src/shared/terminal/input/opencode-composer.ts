@@ -5,7 +5,8 @@ import type { TerminalCursorContext } from './terminal-composer-draft'
 // model or `Shell`). Its placeholder is undimmed, so only its full stock wording marks it: a placeholder
 // a narrow pane cuts short reads as a draft, which only delays a wake, never types over a draft.
 const OPENCODE_BOX_GUTTER = '┃'
-const OPENCODE_PLACEHOLDERS = ['Ask anything…', 'Run a command…']
+// A stock prompt, then a quoted example that a narrow box may cut short.
+const OPENCODE_PLACEHOLDER = /^(?:Ask anything\u2026|Run a command\u2026)(?: "[^"]*"?)?$/
 
 /** Whether OpenCode's composer shows a typed draft, so mail must wait. False when the cursor is not
  *  in a box laid out as OpenCode's. Callers check that OpenCode is the pane's agent. */
@@ -46,6 +47,6 @@ export function openCodeComposerHoldsDraft(context: TerminalCursorContext): bool
     cursorLine === 1 &&
     textarea.every(Boolean) &&
     !context.beforeCursor.slice(column + OPENCODE_BOX_GUTTER.length).trim() &&
-    OPENCODE_PLACEHOLDERS.some((stock) => shown.startsWith(stock))
+    OPENCODE_PLACEHOLDER.test(shown)
   return !!shown && !placeholder
 }

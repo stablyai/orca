@@ -60,7 +60,11 @@ describe('openCodeComposerHoldsDraft', () => {
     ['under a model-only metadata row', box(['fix it'], 0, 'fix it', { metadata: 'Big Pickle' })],
     ['on a transparent theme', box(['fix it'], 0, 'fix it', { bottom: '' })],
     ['that a narrow pane cut to look like a clipped placeholder', box(['Ask anythin'], 0, '')],
-    ['on a line below the cursor', box(['', 'second line'], 0, '')]
+    ['on a line below the cursor', box(['', 'second line'], 0, '')],
+    [
+      'that starts with the placeholder on its own line',
+      box(['Ask anything…', 'please fix the auth'], 0, '')
+    ]
   ])('holds mail for a typed draft %s', (_label, context) => {
     expect(openCodeComposerHoldsDraft(context)).toBe(true)
   })
