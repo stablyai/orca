@@ -149,7 +149,7 @@ function parseAgentStatusPaneKey(paneKey: string): { tabId: string; paneId: stri
 
 const EMPTY_PANE_IDS: ReadonlySet<string> = new Set()
 
-export type TerminalTabActivityInput = {
+type TerminalTabActivityInput = {
   // Carry launchAgent to attribute providerless spinner titles; omitting this optional field compiles but loses the status signal.
   tab: Pick<TerminalTab, 'id' | 'title' | 'launchAgent'>
   agentStatusByPaneKey?: Record<string, AgentStatusEntry>
