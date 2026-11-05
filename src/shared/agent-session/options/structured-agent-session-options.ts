@@ -60,6 +60,9 @@ export type StructuredAgentSessionOptionState = {
   verifiedModelIds?: readonly string[]
   record: StructuredAgentSessionOptionRecord
   optionsAnswerPresent?: true
+  sessionNeverStarted?: boolean
+  /** Latest catalog observation, separate from static old-host seed knowledge. */
+  catalogNamesConfiguredModel?: boolean
   acceptedInputSources?: Partial<
     Record<keyof AgentSessionAcceptedInputSources, 'saved' | 'seeded' | 'policy' | 'picked'>
   >
@@ -113,8 +116,15 @@ export function applyStructuredAgentSessionModelCatalog(
 ): StructuredAgentSessionOptionState {
   const installed = usesInstalledAgentModelCatalog(state.record.agent, options.coherentCatalog)
   const listingInProgress = catalog.listingInProgress === true
-  if (Boolean(state.listingInProgress) !== listingInProgress) {
-    state = { ...state, listingInProgress }
+  const catalogNamesConfiguredModel =
+    catalog.origin === 'unknown' || catalog.unavailable
+      ? undefined
+      : catalog.listingNamesConfiguredModel
+  if (
+    Boolean(state.listingInProgress) !== listingInProgress ||
+    state.catalogNamesConfiguredModel !== catalogNamesConfiguredModel
+  ) {
+    state = { ...state, listingInProgress, catalogNamesConfiguredModel }
   }
   if (state.catalogSource === 'live' && !installed) {
     return enrichStructuredAgentEfforts(state, catalog)
@@ -139,7 +149,7 @@ export function applyStructuredAgentSessionModelCatalog(
     catalog: {
       ...(state.catalogSource === 'live' ? (state.catalog ?? seed) : seed),
       models,
-      ...(namesDefault ? { defaultModelIsCliDefault: true } : {})
+      defaultModelIsCliDefault: namesDefault
     },
     ...(installed ? { verifiedModelIds } : {}),
     catalogSource: state.catalogSource === 'live' ? 'live' : 'host',
@@ -201,6 +211,7 @@ export function applyStructuredAgentSessionOptions(
   return {
     ...state,
     optionsAnswerPresent: true,
+    sessionNeverStarted: result.sessionNeverStarted,
     reportedModel: current.reportedModel,
     reportedEffort: state.record.agent === 'pi' ? current.reportedEffort : undefined,
     catalog: keepCatalog ? state.catalog : answeredCatalog,

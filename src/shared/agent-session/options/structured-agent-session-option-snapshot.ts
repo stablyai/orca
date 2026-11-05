@@ -126,7 +126,14 @@ function drawnModelControls(state: StructuredAgentSessionOptionState) {
     return null
   }
   // Before discovery, name only accepted input; static rows cannot supply installed capabilities.
-  const catalog = state.catalogSource === 'seed' ? { ...state.catalog, models: [] } : state.catalog
+  const catalog =
+    state.catalogSource === 'seed'
+      ? { ...state.catalog, models: [] }
+      : state.sessionNeverStarted === true &&
+          state.catalogNamesConfiguredModel === true &&
+          state.catalog.models.some((model) => model.isDefault)
+        ? { ...state.catalog, defaultModelIsCliDefault: true }
+        : state.catalog
   const models = withTrackedNativeChatModel(catalog, catalog.models, { model: record.values.model })
   const shown = structuredAgentSessionShownModel(catalog, models, record)
   // A listed row describes the chat's model by id or resolved name; stand-ins keep their own options.

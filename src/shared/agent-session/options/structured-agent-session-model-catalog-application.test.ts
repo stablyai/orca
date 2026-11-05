@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { structuredAgentSessionSendSelection } from './structured-agent-session-option-view'
+import {
+  structuredAgentSessionMessageSelection,
+  structuredAgentSessionShownSnapshot,
+  structuredAgentSessionSendSelection
+} from './structured-agent-session-option-view'
 import { getAgentSessionOptionCatalog } from './agent-session-option-catalog'
 import { structuredAgentSessionSeedCatalog } from './structured-agent-session-seed-catalog'
 import type { AgentSessionModelCatalogResult } from '../agent-session-wire'
@@ -244,5 +248,68 @@ it('keeps one flat selection across inventory/answer arrival order and child rep
       model: 'omitted',
       effort: 'high'
     })
+  }
+})
+
+it('requires current session and explicit catalog proof, replacing each observation without inferring inputs', () => {
+  const launch = { newLaunch: false, coherentCatalog: true }
+  const value = (state: ReturnType<typeof createStructuredAgentSessionOptionState>) =>
+    structuredAgentSessionShownSnapshot(state).find(({ id }) => id === 'model')?.kind.currentValue
+  for (const catalogFirst of [false, true]) {
+    const answer = (
+      state: ReturnType<typeof createStructuredAgentSessionOptionState>,
+      sessionNeverStarted?: boolean
+    ) =>
+      applyStructuredAgentSessionOptions(
+        state,
+        SEED,
+        {
+          models: [],
+          modelsKnown: false,
+          sessionNeverStarted,
+          current: { defaulted: [], acceptedInputSources: {} }
+        },
+        launch
+      )
+    const listing = (
+      state: ReturnType<typeof createStructuredAgentSessionOptionState>,
+      listingNamesConfiguredModel?: boolean
+    ) =>
+      applyStructuredAgentSessionModelCatalog(
+        state,
+        SEED,
+        { ...HOST_CATALOG, listingNamesConfiguredModel },
+        launch
+      )
+    const start = createStructuredAgentSessionOptionState('codex', SEED)
+    const known = catalogFirst
+      ? answer(listing(start, true), true)
+      : listing(answer(start, true), true)
+    expect(value(known)).toBe('gpt-hosted')
+    expect(structuredAgentSessionMessageSelection(known)).toEqual({})
+    for (const proof of [false, undefined]) {
+      expect(value(listing(answer(known, proof), true))).toBeUndefined()
+      expect(value(answer(listing(known, proof), true))).toBeUndefined()
+    }
+    const unknown = applyStructuredAgentSessionModelCatalog(
+      known,
+      SEED,
+      { origin: 'unknown' },
+      launch
+    )
+    expect(value(answer(unknown, true))).toBeUndefined()
+    const unavailable = applyStructuredAgentSessionModelCatalog(
+      known,
+      SEED,
+      {
+        ...HOST_CATALOG,
+        listingNamesConfiguredModel: true,
+        unavailable: { reason: 'cliMissing' }
+      },
+      launch
+    )
+    expect(value(answer(unavailable, true))).toBeUndefined()
+    const own = commitStructuredAgentSessionOption(known, 'model', 'own-unlisted')
+    expect(value(listing(own, false))).toBe('own-unlisted')
   }
 })
