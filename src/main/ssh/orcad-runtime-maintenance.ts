@@ -109,6 +109,7 @@ export function updateManagedOrcadEnvironment(
   })
 }
 
+/** Install or activate the managed build on the host; a refused activation is recorded as a deferral. */
 export async function runManagedOrcadUpdate(
   userDataPath: string,
   { environment, deployment }: ReturnType<typeof requireManagedOrcadEnvironment>,
@@ -151,15 +152,11 @@ export async function runManagedOrcadUpdate(
       result,
       isForceableOrcadDeferral(result.code) || result.code === ORCAD_ACTIVATION_POLICY_REFUSED_CODE
     )
+    const { connection, host, remoteHome } = context
     await recordManagedOrcadUpdateDeferralFromHost(
       environment.id,
       deferral,
-      {
-        conn: context.connection,
-        host: context.host,
-        remoteHome: context.remoteHome,
-        signal: args.signal
-      },
+      { conn: connection, host, remoteHome, signal: args.signal },
       context.activationRecord.active,
       result.code !== ORCAD_ACTIVATION_POLICY_REFUSED_CODE
     )
