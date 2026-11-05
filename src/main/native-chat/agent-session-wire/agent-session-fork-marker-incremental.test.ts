@@ -1,7 +1,9 @@
 import { expect, it, vi } from 'vitest'
+import { agentSessionRecordFixture } from '../agent-session-record-test-fixture'
 import { sessionCrewChanges } from '../../runtime/orchestration/crew/crew-changes'
 import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session/agent-session-wire'
 import { AgentSessionSubscribers } from './structured-agent-session-subscribers'
+import type { HistoryReader } from './agent-session-history-page-bounds'
 import {
   agentJournalItemKey,
   agentJournalSubmissionKey
@@ -10,7 +12,12 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSnapshot
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import { withForkMarker, FORK_MARKER_ITEM_ID, type ForkMarker } from './agent-session-fork-marker'
+import {
+  readForkMarker,
+  withForkMarker,
+  FORK_MARKER_ITEM_ID,
+  type ForkMarker
+} from './agent-session-fork-marker'
 import { projectJournalBatch } from './agent-session-journal-batch'
 import { readAgentSessionHistory } from './agent-session-history-page'
 import { fixture, appendItems, item, body } from './agent-session-history-contract-test-fixture'
@@ -206,3 +213,102 @@ it('refreshes an idle source name from the boundary group without revisiting the
     itemsRead.mockRestore()
   }
 })
+
+it.each([10, 100])(
+  'bounds ID-less crew refreshes to %s active fork children rather than all records or subscribers',
+  async (count) => {
+    await appendItems(2)
+    const records = new Map<string, ReturnType<typeof agentSessionRecordFixture>>()
+    for (let index = 0; index < count * 100; index++) {
+      const id = `unrelated-${index}`
+      records.set(id, agentSessionRecordFixture({ sessionId: id }))
+    }
+    for (let index = 0; index < count; index++) {
+      const sourceId = `source-${Math.floor(index / 2)}`
+      records.set(
+        sourceId,
+        agentSessionRecordFixture({ sessionId: sourceId, conversationName: 'Source' })
+      )
+      const id = `child-${index}`
+      records.set(
+        id,
+        agentSessionRecordFixture({
+          sessionId: id,
+          forkedFrom: { ...marker().forkedFrom, sessionId: sourceId }
+        })
+      )
+    }
+    const store = { getRecord: vi.fn((id: string) => records.get(id) ?? null) }
+    const readJournal = vi.fn(() => fixture.journal)
+    const project = vi.fn<NonNullable<HistoryReader['snapshot']>>(
+      (journal, snapshot) => snapshot ?? journal.currentRead()
+    )
+    const emit = vi.fn<(event: AgentSessionSubscribeEvent) => void>()
+    const subscribers = new AgentSessionSubscribers({
+      readForkMarker: (id) => readForkMarker(store, id),
+      readForkJournal: readJournal
+    })
+    const closes: (() => void)[] = []
+    const reset = () => {
+      store.getRecord.mockClear()
+      readJournal.mockClear()
+      project.mockClear()
+      emit.mockClear()
+    }
+    try {
+      for (let index = 0; index < count * 11; index++) {
+        const id = index < count ? `child-${index}` : `unrelated-${index - count}`
+        closes.push(
+          subscribers.open({
+            id,
+            sessionId: id,
+            journal: fixture.journal,
+            fence: 1,
+            readHistorySnapshot: project,
+            emit
+          })
+        )
+      }
+      reset()
+      sessionCrewChanges.notify(new Set(['status', 'traffic']))
+      expect(readJournal).not.toHaveBeenCalled()
+      expect(store.getRecord).not.toHaveBeenCalled()
+      for (let index = 0; index < count / 2; index++) {
+        records.get(`source-${index}`)!.conversationName = 'Renamed source'
+      }
+      sessionCrewChanges.notify(new Set(['names', 'records']))
+      expect(readJournal).toHaveBeenCalledTimes(count)
+      expect(store.getRecord).toHaveBeenCalledTimes(count * 4)
+      expect(project).toHaveBeenCalledTimes(count)
+      expect(emit).toHaveBeenCalledTimes(count)
+      for (const [event] of emit.mock.calls) {
+        expect(event).toMatchObject({
+          type: 'batch',
+          sessionId: expect.stringMatching(/^child-/),
+          batch: {
+            cursor: fixture.journal.cursor(),
+            items: [
+              { itemId: agentJournalItemKey(item(1)) },
+              { itemId: FORK_MARKER_ITEM_ID, body: { text: 'Forked from Renamed source' } }
+            ]
+          }
+        })
+      }
+      reset()
+      // A second relevant change still sweeps once, but unchanged names need no projection.
+      sessionCrewChanges.notify(new Set(['records']))
+      expect(readJournal).toHaveBeenCalledTimes(count)
+      expect(store.getRecord).toHaveBeenCalledTimes(count * 2)
+      expect(project).not.toHaveBeenCalled()
+      expect(emit).not.toHaveBeenCalled()
+    } finally {
+      for (const close of closes) {
+        close()
+      }
+    }
+    reset()
+    sessionCrewChanges.notify(new Set(['names']))
+    expect(readJournal).not.toHaveBeenCalled()
+    expect(store.getRecord).not.toHaveBeenCalled()
+  }
+)
