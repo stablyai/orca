@@ -10,6 +10,7 @@ import { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationDb } from '../../../../orchestration/db'
 import type { OrchestrationEnvironmentTransport } from '../../../../orchestration/environment-transport'
 import { pullFinishedWorkerMail } from '../../../../orchestration/finished-worker-relay'
+import { FINISHED_WORKER_LISTENING_GRACE_MS } from '../../../../orchestration/finished-worker-listening'
 import { RpcDispatcher } from '../../../dispatcher'
 import { fingerprintAuthenticatedPairingCredential } from '../../../../device-principal'
 import { ORCHESTRATION_METHODS } from '../../orchestration'
@@ -23,6 +24,7 @@ describe('a finished worker on a paired host', () => {
   let workerDb: OrchestrationDb
   let homeRuntime: OrcaRuntimeService
   let homeDispatcher: RpcDispatcher
+  let workerRuntime: OrcaRuntimeService
   let workerDispatcher: RpcDispatcher
   let dispatchId: string
   let taskId: string
@@ -30,7 +32,7 @@ describe('a finished worker on a paired host', () => {
 
   function setup(protocolVersion: number): void {
     workerDb = new OrchestrationDb(':memory:')
-    const workerRuntime = new OrcaRuntimeService()
+    workerRuntime = new OrcaRuntimeService()
     workerRuntime.setOrchestrationDb(workerDb)
     vi.spyOn(workerRuntime, 'getTerminalPaneKey').mockImplementation((handle) =>
       handle === 'term_worker' ? workerPaneKey : null
@@ -139,7 +141,7 @@ describe('a finished worker on a paired host', () => {
   const report = (outcome: string) => JSON.stringify({ taskId, dispatchId, outcome })
   // The home's per-host round for finished workers, as its timer runs it.
   const homePull = () =>
-    pullFinishedWorkerMail(homeDb, {
+    pullFinishedWorkerMail(homeDb, 'env_worker', {
       ask: (environmentId) =>
         homeRuntime.callOrchestrationWorkerServer(
           environmentId,
@@ -167,6 +169,7 @@ describe('a finished worker on a paired host', () => {
   }
 
   beforeEach(() => vi.clearAllMocks())
+  afterEach(() => vi.useRealTimers())
 
   it('still reaches its coordinator, and an ask gets its answer', async () => {
     setup(ORCHESTRATION_FEDERATION_FINISHED_WORKER_MAIL_PROTOCOL_VERSION)
@@ -183,7 +186,7 @@ describe('a finished worker on a paired host', () => {
       ok: true,
       result: { lifecycle: { action: 'completed', authority: 'run_home' } }
     })
-    expect(await homePull()).toBe(true)
+    expect(await homePull()).toBe('listening')
     expect(
       homeDb.getUnreadMessages(`run:${runId}`).map((message) => [message.type, message.subject])
     ).toEqual([
@@ -234,6 +237,24 @@ describe('a finished worker on a paired host', () => {
       ok: false,
       error: { code: 'run_home_unreachable' }
     })
-    expect(await homePull()).toBe(false)
+    expect(await homePull()).toBe('done')
+  })
+
+  it('stops the home listening once the worker rests, but not while it works', async () => {
+    setup(ORCHESTRATION_FEDERATION_FINISHED_WORKER_MAIL_PROTOCOL_VERSION)
+    await finish()
+    const inTurn = vi.spyOn(workerRuntime, 'isWorkerAgentInTurn').mockReturnValue(true)
+    vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + FINISHED_WORKER_LISTENING_GRACE_MS })
+    expect(await homePull()).toBe('listening')
+
+    inTurn.mockReturnValue(false)
+    vi.setSystemTime(Date.now() + FINISHED_WORKER_LISTENING_GRACE_MS)
+    expect(await homePull()).toBe('done')
+    await expect(
+      workerCall('orchestration.send', { subject: 'Hours later' })
+    ).resolves.toMatchObject({
+      ok: false,
+      error: { code: 'run_home_unreachable' }
+    })
   })
 })

@@ -15,47 +15,106 @@ export function takesFinishedWorkerMail(
   )
 }
 
-/** One question per host, never per worker, every host at once: which finished workers left mail, and which
- *  closed. Only those are synced, plus any with an answer to deliver; a closed one is drained, then retired.
- *  False once no finished worker is left to pull for. */
+export type FinishedWorkerHostRound = 'listening' | 'done' | 'unreachable'
+
+/** One question to one host, never per worker: which of its finished workers are still open, left mail, or
+ *  closed. Only those are synced, plus open ones with an answer to deliver; a closed one is drained, then
+ *  retired. 'listening' while the host keeps any worker open, so the home stops once all of them rest. */
 export async function pullFinishedWorkerMail(
   db: OrchestrationDb,
+  environmentId: string,
   host: {
     ask: (environmentId: string) => Promise<unknown>
     sync: (dispatchId: string) => Promise<void>
     retire: (dispatchId: string) => void
     isCurrent: () => boolean
   }
-): Promise<boolean> {
-  const finished = db.listFinishedFederatedWorkers()
-  const environments = new Set(finished.map((worker) => worker.environmentId))
-  await Promise.allSettled(
-    [...environments].map(async (environmentId) => {
-      const reply = FinishedWorkersReply.safeParse(await host.ask(environmentId).catch(() => null))
-      const mail = reply.success ? reply.data.dispatchIds : []
-      const released = reply.success ? reply.data.released : []
-      for (const worker of finished) {
-        const { dispatchId } = worker
-        if (
-          worker.environmentId !== environmentId ||
-          !(worker.answerPending || mail.includes(dispatchId) || released.includes(dispatchId))
-        ) {
-          continue
-        }
-        if (!host.isCurrent()) {
-          return
-        }
-        await host.sync(dispatchId).catch(() => undefined)
-        if (released.includes(dispatchId) && host.isCurrent()) {
-          host.retire(dispatchId)
-        }
-      }
-    })
-  )
-  return finished.length > 0
+): Promise<FinishedWorkerHostRound> {
+  const finished = db
+    .listFinishedFederatedWorkers()
+    .filter((worker) => worker.environmentId === environmentId)
+  if (finished.length === 0) {
+    return 'done'
+  }
+  const reply = FinishedWorkersReply.safeParse(await host.ask(environmentId).catch(() => null))
+  if (!reply.success) {
+    return 'unreachable'
+  }
+  const { open, mail, released } = reply.data
+  for (const { dispatchId, answerPending } of finished) {
+    if (
+      !(
+        mail.includes(dispatchId) ||
+        released.includes(dispatchId) ||
+        (answerPending && open.includes(dispatchId))
+      )
+    ) {
+      continue
+    }
+    if (!host.isCurrent()) {
+      return 'done'
+    }
+    await host.sync(dispatchId).catch(() => undefined)
+    if (released.includes(dispatchId) && host.isCurrent()) {
+      host.retire(dispatchId)
+    }
+  }
+  return finished.some(({ dispatchId }) => open.includes(dispatchId)) ? 'listening' : 'done'
 }
 
 const FinishedWorkersReply = z.object({
-  dispatchIds: z.array(z.string()),
+  open: z.array(z.string()),
+  mail: z.array(z.string()),
   released: z.array(z.string())
 })
+
+const FINISHED_MAIL_INTERVAL_MS = 5_000
+const FINISHED_MAIL_RETRIES = 5
+
+/** One round per host at a time, the next only after it, slower than a live worker's tick. A host that keeps
+ *  failing is retried less often, then left until one of its workers finishes again. */
+export class FinishedWorkerMailRounds {
+  private readonly hosts = new Map<string, ReturnType<typeof setTimeout>>()
+  private generation = 0
+
+  constructor(
+    private readonly round: (environmentId: string) => Promise<FinishedWorkerHostRound>
+  ) {}
+
+  ensure(environmentIds: Iterable<string>): void {
+    for (const environmentId of environmentIds) {
+      if (!this.hosts.has(environmentId)) {
+        this.schedule(environmentId, 0, 0)
+      }
+    }
+  }
+
+  stop(): void {
+    this.generation += 1
+    for (const timer of this.hosts.values()) {
+      clearTimeout(timer)
+    }
+    this.hosts.clear()
+  }
+
+  private schedule(environmentId: string, delayMs: number, failures: number): void {
+    const generation = this.generation
+    const timer = setTimeout(() => {
+      void this.round(environmentId)
+        .catch((): FinishedWorkerHostRound => 'unreachable')
+        .then((round) => {
+          if (generation !== this.generation) {
+            return
+          }
+          this.hosts.delete(environmentId)
+          if (round === 'listening') {
+            this.schedule(environmentId, FINISHED_MAIL_INTERVAL_MS, 0)
+          } else if (round === 'unreachable' && failures < FINISHED_MAIL_RETRIES) {
+            this.schedule(environmentId, FINISHED_MAIL_INTERVAL_MS * 2 ** failures, failures + 1)
+          }
+        })
+    }, delayMs)
+    timer.unref?.()
+    this.hosts.set(environmentId, timer)
+  }
+}

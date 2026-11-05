@@ -3,7 +3,8 @@ import { ORCHESTRATION_FEDERATION_FINISHED_WORKER_MAIL_PROTOCOL_VERSION } from '
 import type {
   WorkerReportOutcome,
   FederationRelayDirection,
-  FederationRelayItemRow
+  FederationRelayItemRow,
+  RemoteDispatchAttachmentRow
 } from '../../types'
 import { OrchestrationError } from '../../orchestration-error'
 import { ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION } from '../../../../../shared/protocol-version'
@@ -206,14 +207,19 @@ export function hasPendingFederatedWorkerReport(
   )
 }
 
-/** For a Run home: its finished workers here with mail it has not taken, and those whose terminal has closed. */
+export type FinishedRemoteWorker = Pick<
+  RemoteDispatchAttachmentRow,
+  'dispatch_id' | 'pane_key' | 'terminal_handle' | 'updated_at'
+> & { mail: boolean; released: boolean }
+
+/** For a Run home: its finished workers here, whether each left mail it has not taken, and whether its terminal closed. */
 export function listFinishedRemoteWorkers(
   this: OrchestrationDb,
   homePeerFingerprint: string
-): { dispatchIds: string[]; released: string[] } {
-  const rows = this.db
+): FinishedRemoteWorker[] {
+  return this.db
     .prepare(
-      `SELECT a.dispatch_id AS dispatchId,
+      `SELECT a.dispatch_id, a.pane_key, a.terminal_handle, a.updated_at,
          EXISTS (SELECT 1 FROM federation_relay_items r WHERE r.dispatch_id = a.dispatch_id
                   AND r.direction = 'to_home' AND r.acked_at IS NULL) AS mail,
          EXISTS (SELECT 1 FROM worker_terminal_resources t WHERE t.owner_dispatch_id = a.dispatch_id
@@ -223,11 +229,20 @@ export function listFinishedRemoteWorkers(
          AND NOT (${potentiallyLiveRemoteAttachmentSql('a.state')})`
     )
     .all(homePeerFingerprint, ORCHESTRATION_FEDERATION_FINISHED_WORKER_MAIL_PROTOCOL_VERSION)
-  const ids = (flag: 'mail' | 'released') =>
-    rows.flatMap((row) =>
-      typeof row?.dispatchId === 'string' && row[flag] === 1 ? [row.dispatchId] : []
+    .flatMap((row) =>
+      typeof row?.dispatch_id === 'string' && typeof row.updated_at === 'string'
+        ? [
+            {
+              dispatch_id: row.dispatch_id,
+              pane_key: typeof row.pane_key === 'string' ? row.pane_key : null,
+              terminal_handle: typeof row.terminal_handle === 'string' ? row.terminal_handle : null,
+              updated_at: row.updated_at,
+              mail: row.mail === 1,
+              released: row.released === 1
+            }
+          ]
+        : []
     )
-  return { dispatchIds: ids('mail'), released: ids('released') }
 }
 
 export type FederationRelayAckMethods = {

@@ -19,7 +19,11 @@ import {
   releaseFederationAckCheckpoint
 } from './orchestration/federation-ack-checkpoints'
 import { syncFederatedDispatch } from './orchestration/federation-sync'
-import { pullFinishedWorkerMail } from './orchestration/finished-worker-relay'
+import {
+  FinishedWorkerMailRounds,
+  pullFinishedWorkerMail,
+  type FinishedWorkerHostRound
+} from './orchestration/finished-worker-relay'
 import { applyConfirmedFederatedReleaseHomeProjection } from './rpc/methods/orchestration/federation/federated-worker-release'
 import type { OrchestrationDb } from './orchestration/db'
 import type { FederationRuntime } from './orchestration/federation-runtime'
@@ -32,7 +36,9 @@ export class RuntimeOrchestrationFederation {
   private terminalRecoveryInFlight: Promise<void> | null = null
   private terminalRecoveryRowId = 0
   private relayGeneration = 0
-  private finishedMailTimer: ReturnType<typeof setInterval> | null = null
+  private readonly finishedMail = new FinishedWorkerMailRounds((environmentId) =>
+    this.pullFinishedWorkerMail(environmentId)
+  )
 
   constructor(
     private readonly runtime: FederationRuntime,
@@ -41,7 +47,7 @@ export class RuntimeOrchestrationFederation {
 
   resetForDatabaseChange(): void {
     this.relayGeneration += 1
-    this.stopFinishedWorkerMail()
+    this.finishedMail.stop()
     for (const timer of this.timers.values()) {
       clearInterval(timer)
     }
@@ -202,51 +208,29 @@ export class RuntimeOrchestrationFederation {
     this.ensureFinishedWorkerMail()
   }
 
-  // Slower than a live worker's tick, and one request per host, since nothing is waiting on it.
   private ensureFinishedWorkerMail(): void {
-    if (this.finishedMailTimer || !this.transport) {
-      return
+    if (this.transport) {
+      const finished = this.runtime.getOrchestrationDb().listFinishedFederatedWorkers()
+      this.finishedMail.ensure(finished.map((worker) => worker.environmentId))
     }
-    let pulling = false
-    const timer = setInterval(() => {
-      if (pulling) {
-        return
-      }
-      pulling = true
-      const generation = this.relayGeneration
-      const db = this.runtime.getOrchestrationDb()
-      void pullFinishedWorkerMail(db, {
-        ask: (environmentId) =>
-          this.runtime.callOrchestrationWorkerServer(
-            environmentId,
-            'orchestration.federationFinishedMail',
-            {},
-            15_000
-          ),
-        sync: (dispatchId) => this.syncDispatch(dispatchId),
-        retire: (dispatchId) => applyConfirmedFederatedReleaseHomeProjection(db, dispatchId),
-        isCurrent: () =>
-          generation === this.relayGeneration && this.runtime.getOrchestrationDb() === db
-      })
-        .then((pending) => {
-          if (!pending && this.finishedMailTimer === timer) {
-            this.stopFinishedWorkerMail()
-          }
-        })
-        .catch(() => undefined)
-        .finally(() => {
-          pulling = false
-        })
-    }, 5_000)
-    timer.unref?.()
-    this.finishedMailTimer = timer
   }
 
-  private stopFinishedWorkerMail(): void {
-    if (this.finishedMailTimer) {
-      clearInterval(this.finishedMailTimer)
-    }
-    this.finishedMailTimer = null
+  private pullFinishedWorkerMail(environmentId: string): Promise<FinishedWorkerHostRound> {
+    const generation = this.relayGeneration
+    const db = this.runtime.getOrchestrationDb()
+    return pullFinishedWorkerMail(db, environmentId, {
+      ask: (id) =>
+        this.runtime.callOrchestrationWorkerServer(
+          id,
+          'orchestration.federationFinishedMail',
+          {},
+          15_000
+        ),
+      sync: (dispatchId) => this.syncDispatch(dispatchId),
+      retire: (dispatchId) => applyConfirmedFederatedReleaseHomeProjection(db, dispatchId),
+      isCurrent: () =>
+        generation === this.relayGeneration && this.runtime.getOrchestrationDb() === db
+    })
   }
 
   private ensureTerminalHistoryRecovery(): void {
@@ -293,7 +277,7 @@ export class RuntimeOrchestrationFederation {
 
   stopRelay(): void {
     this.relayGeneration += 1
-    this.stopFinishedWorkerMail()
+    this.finishedMail.stop()
     for (const timer of this.timers.values()) {
       clearInterval(timer)
     }
