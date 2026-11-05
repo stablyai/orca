@@ -283,8 +283,12 @@ describe('RuntimeFileCommands', () => {
       const target = absoluteFileTarget(await resolveTerminalArtifactPath(commands, artifactPath))
 
       const handle = await open(artifactPath, 'r+')
-      await handle.write(Buffer.alloc(16, 0xcd), 0, 16, 0)
-      await handle.utimes(pinnedSeconds, pinnedSeconds)
+      const grantedCtimeMs = (await handle.stat()).ctimeMs
+      // Why: coarse-tick filesystems can stamp a quick rewrite with the granted ctime; rewrite until it moves.
+      do {
+        await handle.write(Buffer.alloc(16, 0xcd), 0, 16, 0)
+        await handle.utimes(pinnedSeconds, pinnedSeconds)
+      } while ((await handle.stat()).ctimeMs === grantedCtimeMs)
       await handle.close()
 
       await expect(
