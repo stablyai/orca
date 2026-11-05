@@ -33,6 +33,14 @@ export function prepareRemoteAttachmentAuthority(
         `Terminal ${params.terminalHandle} already has active remote Dispatch ${active.dispatch_id}.`
       )
     }
+    // One terminal works for one Dispatch at a time, local or remote, so its later mail has one owner.
+    const local = this.findActiveDispatchForAssignee(params.terminalHandle, params.paneKey)
+    if (local) {
+      throw new OrchestrationError(
+        'dispatch_inactive',
+        `Terminal ${params.terminalHandle} already has active Dispatch ${local.id}.`
+      )
+    }
     const result = this.db
       .prepare(
         `UPDATE remote_dispatch_attachments

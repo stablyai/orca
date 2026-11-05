@@ -1,4 +1,5 @@
 import type { DispatchContextRow } from '../../types'
+import { assertNoActiveRemoteWorker } from '../terminal-dispatch-exclusivity'
 import { OrchestrationError } from '../../orchestration-error'
 import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { CURRENT_CONTRACT_VERSION } from '../contract-constants'
@@ -43,6 +44,7 @@ export function createDispatchContext(
   }
 
   assertTakesNewWork(this, params, taskId)
+  assertNoActiveRemoteWorker(this, assigneeHandle, assigneePaneKey)
 
   // Accumulate failure_count across task retries.
   const prior = this.db

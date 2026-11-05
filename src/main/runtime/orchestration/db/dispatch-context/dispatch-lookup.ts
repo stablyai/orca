@@ -26,12 +26,14 @@ const assigneeLookups = (status: string) => ({
   byPaneSuffix: assigneeSql(BY_PANE_SUFFIX, status)
 })
 const ACTIVE_ASSIGNEE_SQL = assigneeLookups("AND status IN ('pending', 'dispatched')")
-// The newest Dispatch across the handle and every equivalent pane, so an older row never masks a later one.
-const LATEST_SQL = {
-  byHandle: assigneeSql('assignee_handle = ?', ''),
-  orPane: assigneeSql('(assignee_handle = ? OR assignee_pane_key = ?)', ''),
-  orLeaf: assigneeSql(`(assignee_handle = ? OR (${BY_PANE_SUFFIX}))`, '')
-}
+// The newest Dispatch across the handle and every equivalent pane, each arm by its own indexed maximum.
+const newestOf = (pane: string) =>
+  `SELECT ${DISPATCH_CONTEXT_COLUMN_LIST} FROM dispatch_contexts WHERE rowid = (SELECT MAX(n) FROM (
+     SELECT MAX(rowid) AS n FROM dispatch_contexts WHERE assignee_handle = ?
+     UNION ALL SELECT MAX(rowid) FROM dispatch_contexts WHERE ${pane}))`
+const LATEST_BY_HANDLE = assigneeSql('assignee_handle = ?', '')
+const LATEST_OR_PANE = newestOf('assignee_pane_key = ?')
+const LATEST_OR_LEAF = newestOf(BY_PANE_SUFFIX)
 
 function presentationAddressKey(column: string, address: string | null): string {
   return `${column}:${address}`
@@ -260,7 +262,18 @@ export function findActiveDispatchForAssignee(
   assigneeHandle: string,
   assigneePaneKey?: string
 ): DispatchContextRow | undefined {
-  return findDispatchForAssignee(this, assigneeHandle, assigneePaneKey)
+  const read = (statement: string, value: string) =>
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: each statement selects the schema-pinned Dispatch projection.
+    this.db.prepare(statement).get(value) as DispatchContextRow | undefined
+  const byHandle = read(ACTIVE_ASSIGNEE_SQL.byHandle, assigneeHandle)
+  if (byHandle || !assigneePaneKey) {
+    return byHandle
+  }
+  const exactPane = read(ACTIVE_ASSIGNEE_SQL.byPaneKey, assigneePaneKey)
+  if (exactPane || !parsePaneKey(assigneePaneKey)) {
+    return exactPane
+  }
+  return read(ACTIVE_ASSIGNEE_SQL.byPaneSuffix, paneKeyMatchSuffix(assigneePaneKey))
 }
 
 /** The newest Dispatch, settled or not; with a pane, also after the handle was reminted. */
@@ -270,31 +283,11 @@ export function getLatestDispatchForTerminal(
   paneKey?: string
 ): DispatchContextRow | undefined {
   const leaf = paneKey && parsePaneKey(paneKey) ? paneKeyMatchSuffix(paneKey) : undefined
-  const statement = !paneKey ? LATEST_SQL.byHandle : leaf ? LATEST_SQL.orLeaf : LATEST_SQL.orPane
+  const statement = !paneKey ? LATEST_BY_HANDLE : leaf ? LATEST_OR_LEAF : LATEST_OR_PANE
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: each statement selects the schema-pinned Dispatch projection.
   return this.db.prepare(statement).get(handle, ...(paneKey ? [leaf ?? paneKey] : [])) as
     | DispatchContextRow
     | undefined
-}
-
-function findDispatchForAssignee(
-  db: OrchestrationDb,
-  handle: string,
-  paneKey: string | undefined
-): DispatchContextRow | undefined {
-  const sql = ACTIVE_ASSIGNEE_SQL
-  const read = (statement: string, value: string) =>
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: each statement selects the schema-pinned Dispatch projection.
-    db.db.prepare(statement).get(value) as DispatchContextRow | undefined
-  const byHandle = read(sql.byHandle, handle)
-  if (byHandle || !paneKey) {
-    return byHandle
-  }
-  const exactPane = read(sql.byPaneKey, paneKey)
-  if (exactPane || !parsePaneKey(paneKey)) {
-    return exactPane
-  }
-  return read(sql.byPaneSuffix, paneKeyMatchSuffix(paneKey))
 }
 
 /** Helpers this Dispatch started that have not settled; their reports wake their creator. */

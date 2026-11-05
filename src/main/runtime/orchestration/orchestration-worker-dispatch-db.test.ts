@@ -448,6 +448,55 @@ describe('OrchestrationDb worker Dispatch state', () => {
     }
   )
 
+  it('gives a terminal to one Dispatch at a time, local or remote', () => {
+    const d = createDb()
+    const paneKey = 'tab_shared:22222222-2222-4222-8222-222222222222'
+    const attach = (dispatchId: string) => {
+      d.createRemoteDispatchAttachment({
+        runId: 'run-home',
+        dispatchId,
+        taskId: `task_${dispatchId}`,
+        homePeerFingerprint: 'home_peer',
+        protocolVersion: 1,
+        runtimeEpoch: 'worker_epoch',
+        mutationReceipt: {
+          callerFingerprint: 'home_peer',
+          requestId: `request_${dispatchId}`,
+          method: 'orchestration.federationAttachStart',
+          payloadHash: `payload_${dispatchId}`
+        }
+      })
+      return () =>
+        d.prepareRemoteAttachmentAuthority({
+          dispatchId,
+          paneKey,
+          processIncarnation: 'process_shared',
+          worktreeId: 'repo::worktree',
+          terminalHandle: 'term_shared',
+          setupState: 'not_applicable',
+          effects: []
+        })
+    }
+    const local = (spec: string) =>
+      d.createDispatchContext({
+        taskId: d.createTask({ runId: 'run_legacy_local', spec }).id,
+        assigneeHandle: 'term_shared',
+        assigneePaneKey: paneKey,
+        processIncarnation: 'process_shared',
+        creator: { kind: 'system' },
+        maxDepth: Number.MAX_SAFE_INTEGER
+      })
+
+    const working = local('working here')
+    expect(attach('ctx_remote_late')).toThrow(`already has active Dispatch ${working.id}`)
+
+    d.db.prepare("UPDATE dispatch_contexts SET status = 'completed' WHERE id = ?").run(working.id)
+    attach('ctx_remote_owner')()
+    expect(() => local('while remote works')).toThrow(
+      'already has active remote Dispatch ctx_remote_owner'
+    )
+  })
+
   it('bounds remote attachment lookup across pane remints and malformed suffix collisions', () => {
     const d = createDb()
     const leafId = '11111111-1111-4111-8111-111111111111'
