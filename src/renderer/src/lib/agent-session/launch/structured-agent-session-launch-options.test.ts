@@ -110,6 +110,13 @@ import {
   forgetStructuredSessionSelection
 } from '../../structured-agent-session-selection-controller'
 
+import { CLAUDE_SESSION_OPTION_CATALOG } from '../../../../../shared/agent-session/options/agent-session-option-catalog-claude-codex'
+import {
+  applyStructuredAgentSessionModelCatalog,
+  applyStructuredAgentSessionOptions,
+  createStructuredAgentSessionOptionState
+} from '../../../../../shared/agent-session/options/structured-agent-session-options'
+
 const WORKTREE_ID = 'wt-1'
 const SESSION_ID = 'session-1'
 
@@ -266,6 +273,48 @@ describe('picks made while a chat launches', () => {
       { method: 'agentSession.send' }
     ])
     expect(lifecycle()).toBeNull()
+  })
+
+  it('remembers a held effort on a resolved-id chat without adopting a new-chat model', async () => {
+    const created = deferred<{ sessionId: string; fence: number }>()
+    mocks.launch.mockReturnValue(created.promise)
+    startStructuredAgentLaunch(WORKTREE_ID, 'codex', { requestId: 'request-1', prompt: 'first' })
+    // The picker draws a chat on the id Claude ran; its listing names that model as `opus`.
+    const efforts = [
+      { value: 'low', label: 'Low' },
+      { value: 'high', label: 'High' }
+    ]
+    const opus = {
+      id: 'opus',
+      label: 'Opus',
+      resolvedModel: 'claude-opus-5-5',
+      isDefault: false,
+      efforts
+    }
+    const picker = applyStructuredAgentSessionOptions(
+      applyStructuredAgentSessionModelCatalog(
+        createStructuredAgentSessionOptionState('claude', CLAUDE_SESSION_OPTION_CATALOG),
+        CLAUDE_SESSION_OPTION_CATALOG,
+        { origin: 'probe', fetchedAt: 1, models: [opus] },
+        { newLaunch: false, coherentCatalog: true }
+      ),
+      CLAUDE_SESSION_OPTION_CATALOG,
+      { models: [opus], current: { model: 'claude-opus-5-5', effort: 'low' } },
+      { newLaunch: false, coherentCatalog: true }
+    )
+    const pick = holdStructuredAgentSessionLaunchOption(SESSION_ID, 'effort', 'high', picker)
+    created.resolve({ sessionId: SESSION_ID, fence: 7 })
+    await settle()
+    setOptionReplies[0]!.resolve({ ok: true, value: { key: 'effort', value: 'high' } })
+    await expect(pick).resolves.toMatchObject({ kind: 'accepted' })
+    await settle()
+    expect(mocks.settingsWrite).toHaveBeenLastCalledWith(expect.anything(), {
+      type: 'apply-picks',
+      agent: 'codex',
+      picks: [
+        { modelId: 'opus', optionId: 'effort', value: 'high', adoptModelAsLaunchDefault: false }
+      ]
+    })
   })
 
   it('applies a pick made while the earlier ones are being applied', async () => {

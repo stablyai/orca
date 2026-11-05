@@ -15,9 +15,6 @@ import {
   resolveNativeChatSessionOptionDefaults
 } from '../../native-chat/input/native-chat-session-option-defaults'
 
-type RememberedPicks = Parameters<
-  Parameters<typeof createStructuredSessionSelectionController>[0]
->[0][number][]
 import type { AgentSessionModelCatalogResult } from '../agent-session-wire'
 import type { AgentSessionOptionsResult } from './agent-session-options-result'
 import {
@@ -37,6 +34,10 @@ import {
   structuredAgentSessionSendSelection,
   structuredAgentSessionShownSnapshot
 } from './structured-agent-session-option-view'
+
+type RememberedPicks = Parameters<
+  Parameters<typeof createStructuredSessionSelectionController>[0]
+>[0][number][]
 
 const levels = (...values: string[]) => values.map((value) => ({ value, label: value }))
 const OPUS = { id: 'opus[1m]', label: 'Opus', isDefault: false, efforts: levels('low', 'xhigh') }
@@ -219,9 +220,10 @@ describe('a Claude chat saved on the model id its listing names by alias', () =>
     expect(
       effortRow(coherent(answer('claude-opus-5-5[1m]', oneM, null, 'low'), oneM))
     ).toMatchObject({ settable: true, kind: { choices: levels('low', 'high') } })
+    // Listed after the alias that resolves to it, so only exact-first precedence picks it.
     const exact = [
-      alias('claude-opus-5-5', 'claude-opus-5-5', { efforts: levels('low', 'max') }),
-      ...LISTING
+      ...LISTING,
+      alias('claude-opus-5-5', 'claude-opus-5-5', { efforts: levels('low', 'max') })
     ]
     expect(effortRow(coherent(answer('claude-opus-5-5', exact, null, 'low'), exact))).toMatchObject(
       {
