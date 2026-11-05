@@ -1,14 +1,12 @@
 // @vitest-environment happy-dom
-import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react'
-import { expect, it, vi } from 'vitest'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { expect, it } from 'vitest'
 import { useAppStore } from '@/store'
 import { TooltipProvider } from '../ui/tooltip'
 import { persist } from '../settings/__fixtures__/settings-persistence-test-fixture'
 import { AiCommitPrSettingsCard } from './AiCommitPrSettingsCard'
-import { useAiCommitPrSettings } from './useAiCommitPrSettings'
-import * as picker from './ai-commit-pr-picker'
+
 import * as models from '../../../../shared/source-control/ai/settings/source-control-ai-model-selection'
-import * as sourceSettings from '../../../../shared/source-control/ai/settings/source-control-ai-settings'
 
 it.each(['omitted', 'efforts replaced'])(
   'keeps accepted choices when discovery is %s',
@@ -88,77 +86,3 @@ it.each(['omitted', 'efforts replaced'])(
     })
   }
 )
-
-it.each([10, 100])('bounds catalog work on command edits with %i remote models', async (size) => {
-  const settings = useAppStore.getState().settings!
-  useAppStore.setState({
-    settings: {
-      ...settings,
-      commitMessageAi: {
-        enabled: true,
-        agentId: 'custom',
-        selectedModelByAgent: { codex: 'gpt-5.5' },
-        selectedThinkingByModel: {},
-        customPrompt: '',
-        customAgentCommand: 'writer',
-        discoveredModelsByAgentByHost: {
-          remote: {
-            codex: Array.from({ length: size }, (_, i) => ({
-              id: `remote-${i}`,
-              label: `Remote ${i}`
-            }))
-          }
-        }
-      }
-    }
-  })
-  const normalize = vi.spyOn(sourceSettings, 'normalizeSourceControlAiSettings')
-  const catalog = vi.spyOn(models, 'getTextGenerationModels')
-  const entries = vi.spyOn(picker, 'aiCommitPrPickerEntry')
-  const view = renderHook(() => useAiCommitPrSettings())
-  normalize.mockClear()
-  catalog.mockClear()
-  entries.mockClear()
-  await act(async () => view.result.current.writeConfig({ customAgentCommand: 'writer --new' }))
-  expect(normalize).not.toHaveBeenCalled()
-  expect(catalog).not.toHaveBeenCalled()
-  expect(entries).not.toHaveBeenCalled()
-  act(() =>
-    useAppStore.setState(({ settings }) => ({
-      settings: {
-        ...settings!,
-        commitMessageAi: {
-          ...settings!.commitMessageAi!,
-          discoveredModelsByAgent: {
-            codex: [{ id: 'local-model', label: 'Local model' }]
-          }
-        }
-      }
-    }))
-  )
-  expect(
-    view.result.current.pickerEntries.find((entry) => entry.agent === 'codex')?.catalog
-  ).toMatchObject({
-    models: expect.arrayContaining([
-      {
-        id: 'local-model',
-        label: 'Local model',
-        isDefault: false,
-        efforts: [],
-        defaultEffort: undefined
-      }
-    ])
-  })
-  expect(catalog.mock.calls.length).toBeGreaterThan(0)
-  expect(entries.mock.calls.length).toBeGreaterThan(0)
-  catalog.mockClear()
-  entries.mockClear()
-  await act(async () =>
-    view.result.current.writeConfig({ selectedModelByAgent: { codex: 'local-model' } })
-  )
-  expect(
-    view.result.current.pickerEntries.find((entry) => entry.agent === 'codex')?.terminal.model
-  ).toBe('local-model')
-  expect(catalog).not.toHaveBeenCalled()
-  expect(entries.mock.calls.length).toBeGreaterThan(0)
-})

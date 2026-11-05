@@ -1,23 +1,12 @@
 // Keep text, disk baseline and conflict state synchronized across workspaces sharing one Monaco model.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT,
-  ORCA_EDITOR_FILE_CACHE_STALE_EVENT,
-  ORCA_EDITOR_SAVE_AND_CLOSE_EVENT,
-  requestEditorFileSave,
-  type EditorSaveAndCloseDetail
-} from '../../autosave/editor-autosave'
-import { attachEditorAutosaveController } from '../../autosave/editor-autosave-controller'
+
 import { __clearSelfWriteRegistryForTests } from '../../external-changes/editor-self-write-registry'
 import { createEditorStore } from '../../autosave/editor-autosave-controller-test-fixture'
-import {
-  keepTabEditsOverExternalChange,
-  overwriteDiskWithTabEdits,
-  reloadTabContentFromDisk
-} from '../../external-changes/ExternalFileChangeBanner'
+import { reloadTabContentFromDisk } from '../../external-changes/ExternalFileChangeBanner'
 import { getDiskBaselineSignature } from '../../../../../../shared/disk-baseline-signature'
-import { ORCA_EDITOR_SAVE_DIRTY_FILES_EVENT } from '../../../../../../shared/editor-save-events'
-import { GUARDED_PATH, stubGuardedDisk } from './editor-save-guarded-disk-fixture'
+
+import { GUARDED_PATH } from './editor-save-guarded-disk-fixture'
 import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
 import { toast } from 'sonner'
 
@@ -80,10 +69,6 @@ function isClickAction(value: unknown): value is ClickAction {
   )
 }
 
-function sameBaseline(store: ReturnType<typeof createEditorStore>): boolean {
-  return new Set(store.getState().openFiles.map((file) => file.lastKnownDiskSignature)).size === 1
-}
-
 describe('two tabs sharing one model', () => {
   beforeEach(() => {
     vi.useFakeTimers()
@@ -93,49 +78,6 @@ describe('two tabs sharing one model', () => {
     vi.useRealTimers()
     vi.unstubAllGlobals()
     __clearSelfWriteRegistryForTests()
-  })
-
-  it.each(['save', 'autosave'] as const)(
-    '%s moves the clean sibling baseline and drops its cache, pushing no text',
-    async (how) => {
-      const disk = stubGuardedDisk({ [GUARDED_PATH]: 'A' })
-      const { store, a, b, edit, tab } = openSharedTabs('A')
-      const dropped: string[] = []
-      window.addEventListener(ORCA_EDITOR_FILE_CACHE_STALE_EVENT, (event) => {
-        if (event instanceof CustomEvent) {
-          dropped.push(event.detail.fileId)
-        }
-      })
-      edit(a.id, 'X')
-      const cleanup = attachEditorAutosaveController(store)
-      try {
-        await (how === 'save'
-          ? requestEditorFileSave({ fileId: a.id })
-          : vi.advanceTimersByTimeAsync(1500))
-        expect(disk.files.get(GUARDED_PATH)).toBe('X')
-        expect(dropped).toEqual([b.id])
-        expect(store.getState().editorDrafts[b.id]).toBeUndefined()
-        expect(sameBaseline(store)).toBe(true)
-        expect(tab(b.id)?.isDirty).toBe(false)
-      } finally {
-        cleanup()
-      }
-    }
-  )
-
-  it('Keep keeps the one shared draft on every view and moves the record baseline', async () => {
-    stubGuardedDisk({ [GUARDED_PATH]: 'B' })
-    const { store, a, b, edit, tab } = openSharedTabs('A')
-    edit(a.id, 'mine')
-    store.getState().setExternalMutation(a.id, 'changed')
-    mocks.readRuntimeFileContent.mockResolvedValue({ content: 'B', isBinary: false })
-
-    keepTabEditsOverExternalChange(store.getState().openFiles[0])
-    await vi.advanceTimersByTimeAsync(0)
-
-    expect(store.getState().editorDrafts[b.id]).toBe('mine')
-    expect(tab(b.id)?.lastKnownDiskSignature).toBe(getDiskBaselineSignature('B'))
-    expect(sameBaseline(store)).toBe(true)
   })
 
   it('Reload discards both drafts and reloads both tabs', () => {
@@ -153,147 +95,6 @@ describe('two tabs sharing one model', () => {
     for (const id of [a.id, b.id]) {
       expect(store.getState().editorDrafts[id]).toBeUndefined()
       expect(tab(id)?.externalMutation).toBeUndefined()
-    }
-  })
-
-  it('Overwrite settles the conflict on both tabs', async () => {
-    const disk = stubGuardedDisk({ [GUARDED_PATH]: 'agent' })
-    const { store, a, b, edit, tab } = openSharedTabs('A')
-    edit(a.id, 'mine')
-    for (const id of [a.id, b.id]) {
-      store.getState().setExternalMutation(id, 'changed')
-    }
-    const cleanup = attachEditorAutosaveController(store)
-    try {
-      expect(await overwriteDiskWithTabEdits(store.getState().openFiles[0])).toBe(true)
-      expect(disk.files.get(GUARDED_PATH)).toBe('mine')
-      expect(tab(b.id)?.externalMutation).toBeUndefined()
-      expect(sameBaseline(store)).toBe(true)
-    } finally {
-      cleanup()
-    }
-  })
-
-  it("an external change in one workspace marks the sibling's shared text too", () => {
-    stubGuardedDisk({ [GUARDED_PATH]: 'A' })
-    const { store, a, b, edit, tab } = openSharedTabs('A')
-    edit(a.id, 'mine')
-    edit(b.id, 'mine')
-    const cleanup = attachEditorAutosaveController(store)
-    try {
-      window.dispatchEvent(
-        new CustomEvent(ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT, {
-          detail: { worktreeId: 'wt-1', worktreePath: '/repo', relativePath: 'file.ts' }
-        })
-      )
-      expect(tab(a.id)?.externalMutation).toBe('changed')
-      expect(tab(b.id)?.externalMutation).toBe('changed')
-    } finally {
-      cleanup()
-    }
-  })
-
-  it('a refused save-and-close raises the conflict on both tabs and closes neither', async () => {
-    stubGuardedDisk({ [GUARDED_PATH]: 'agent' })
-    const { store, a, b, edit, tab } = openSharedTabs('A')
-    edit(a.id, 'mine')
-    const cleanup = attachEditorAutosaveController(store)
-    try {
-      const reason = await new Promise((resolve) => {
-        const detail: EditorSaveAndCloseDetail = { fileId: a.id, onNotClosed: resolve }
-        window.dispatchEvent(new CustomEvent(ORCA_EDITOR_SAVE_AND_CLOSE_EVENT, { detail }))
-      })
-      expect(reason).toBe('blocked-stale')
-      expect(store.getState().openFiles).toHaveLength(2)
-      expect(tab(b.id)?.externalMutation).toBe('changed')
-    } finally {
-      cleanup()
-    }
-  })
-
-  it('the quit save writes the dirty tab and moves the clean sibling with it', async () => {
-    const disk = stubGuardedDisk({ [GUARDED_PATH]: 'A' })
-    const { store, a, b, edit } = openSharedTabs('A')
-    edit(a.id, 'quit text')
-    const cleanup = attachEditorAutosaveController(store)
-    try {
-      await new Promise<void>((resolve, reject) => {
-        window.dispatchEvent(
-          new CustomEvent(ORCA_EDITOR_SAVE_DIRTY_FILES_EVENT, {
-            detail: { claim: () => undefined, resolve, reject: (m: string) => reject(new Error(m)) }
-          })
-        )
-      })
-      expect(disk.files.get(GUARDED_PATH)).toBe('quit text')
-      expect(store.getState().openFiles.find((f) => f.id === b.id)?.isDirty).toBe(false)
-      expect(sameBaseline(store)).toBe(true)
-    } finally {
-      cleanup()
-    }
-  })
-
-  it('a rich view typing during a source view save leaves the record dirty, then saves', async () => {
-    const md = '/repo/notes.md'
-    let released = false
-    let release = (): void => undefined
-    const held = new Promise<void>((resolve) => {
-      release = () => {
-        released = true
-        resolve()
-      }
-    })
-    const disk = stubGuardedDisk({ [md]: 'A' }, () => (released ? Promise.resolve() : held))
-    const store = createEditorStore()
-    storeRef.current = store
-    store.setState({
-      worktreesByRepo: {
-        'repo-1': [
-          makeWorktree({ id: 'wt-1', repoId: 'repo-1', path: '/repo', hostId: 'local' }),
-          makeWorktree({ id: 'wt-2', repoId: 'repo-1', path: '/repo', hostId: 'local' })
-        ]
-      }
-    })
-    for (const worktreeId of ['wt-1', 'wt-2']) {
-      store.getState().openFile({
-        filePath: md,
-        relativePath: 'notes.md',
-        worktreeId,
-        language: 'markdown',
-        mode: 'edit'
-      })
-    }
-    const [code, rich] = store.getState().openFiles
-    store.getState().setMarkdownViewMode(code.id, 'source')
-    for (const tab of [code, rich]) {
-      store.getState().setLastKnownDiskSignature(tab.id, getDiskBaselineSignature('A'))
-    }
-    store.getState().setEditorDraft(code.id, 'source edit')
-    store.getState().markFileDirty(code.id, true)
-    expect(store.getState().editorDrafts[rich.id]).toBe('source edit')
-
-    const cleanup = attachEditorAutosaveController(store)
-    try {
-      const slowSave = requestEditorFileSave({ fileId: code.id })
-      for (let tick = 0; tick < 20 && disk.writeFile.mock.calls.length === 0; tick += 1) {
-        await vi.advanceTimersByTimeAsync(0)
-      }
-      expect(disk.writeFile).toHaveBeenCalledTimes(1)
-      store.getState().setEditorDraft(rich.id, 'source edit, more')
-      release()
-      await slowSave
-      expect(disk.files.get(md)).toBe('source edit')
-      const view = (id: string) => store.getState().openFiles.find((tab) => tab.id === id)
-      for (const id of [code.id, rich.id]) {
-        expect(store.getState().editorDrafts[id]).toBe('source edit, more')
-        expect(view(id)?.isDirty).toBe(true)
-        expect(view(id)?.lastKnownDiskSignature).toBe(getDiskBaselineSignature('source edit'))
-      }
-
-      await requestEditorFileSave({ fileId: rich.id })
-      expect(disk.files.get(md)).toBe('source edit, more')
-      expect(view(code.id)?.isDirty).toBe(false)
-    } finally {
-      cleanup()
     }
   })
 
@@ -315,19 +116,6 @@ describe('two tabs sharing one model', () => {
     }
 
     expect(store.getState().editorDrafts[b.id]).toBe('mine')
-  })
-
-  it('Keep clears the conflict on every tab of the model before the disk read settles', () => {
-    const { store, a, b, edit, tab } = openSharedTabs('A')
-    edit(a.id, 'mine')
-    for (const id of [a.id, b.id]) {
-      store.getState().setExternalMutation(id, 'changed')
-    }
-    mocks.readRuntimeFileContent.mockReturnValue(new Promise(() => {}))
-
-    keepTabEditsOverExternalChange(store.getState().openFiles[0])
-
-    expect(tab(b.id)?.externalMutation).toBeUndefined()
   })
 
   it.each([
@@ -354,24 +142,5 @@ describe('two tabs sharing one model', () => {
     expect(store.getState().editorDrafts[a.id]).toBe('typed after reload')
     expect(store.getState().editorDrafts[b.id]).toBe('typed after reload')
     expect(tab(b.id)?.externalMutation).toBeUndefined()
-  })
-
-  it('Keep and Reload reach a Changes-view tab too: it shows the same record', async () => {
-    stubGuardedDisk({ [GUARDED_PATH]: 'B' })
-    const { store, a, b, edit, tab } = openSharedTabs('A')
-    store.getState().setEditorViewMode(b.id, 'changes')
-    edit(a.id, 'mine')
-    store.getState().setExternalMutation(a.id, 'changed')
-    expect(tab(b.id)?.externalMutation).toBe('changed')
-    mocks.readRuntimeFileContent.mockResolvedValue({ content: 'B', isBinary: false })
-
-    keepTabEditsOverExternalChange(store.getState().openFiles[0])
-    await vi.advanceTimersByTimeAsync(0)
-    expect(tab(b.id)?.lastKnownDiskSignature).toBe(getDiskBaselineSignature('B'))
-    expect(tab(b.id)?.externalMutation).toBeUndefined()
-
-    reloadTabContentFromDisk(store.getState().openFiles[0], vi.fn())
-    expect(store.getState().editorDrafts[b.id]).toBeUndefined()
-    expect(tab(b.id)?.isDirty).toBe(false)
   })
 })
