@@ -16,6 +16,10 @@ vi.mock('../activation/orcad-activation-record-store', () => ({
 vi.mock('../../ssh/orcad-recovery-slot', () => ({
   orcadSlotDir: (_slot: unknown, version: string) => `/home/u/.orca-remote/${version}`
 }))
+vi.mock('../install/orcad-remote-record-file', () => ({
+  // The latched run's lock: left behind when it died, removed when it stopped cleanly.
+  readBoundedOrcadRemoteRecord: vi.fn(async () => ({ state: 'present', raw: '{}' }))
+}))
 vi.mock('../install/orcad-remote-log-tail', () => ({
   withOrcadLogTail: vi.fn(
     async (_target: unknown, _slotDir: string, message: string) =>
@@ -24,8 +28,12 @@ vi.mock('../install/orcad-remote-log-tail', () => ({
 }))
 
 import { wakeStoppedManagedOrcad } from './orcad-managed-wake'
+import { readBoundedOrcadRemoteRecord } from '../install/orcad-remote-record-file'
 import { OrcadLaunchReadinessError } from '../../ssh/orcad-active-readiness'
-import { OrcadWindowsLaunchFailedError } from '../install/orcad-remote-launch-windows'
+import {
+  OrcadWindowsLaunchFailedError,
+  OrcadWindowsLaunchRefusedError
+} from '../install/orcad-remote-launch-windows'
 import {
   ensureManagedOrcadServing,
   setManagedOrcadStartListener,
@@ -119,7 +127,7 @@ describe('a managed orcad that keeps exiting unexpectedly', () => {
     expect(wakeStoppedManagedOrcad).toHaveBeenCalledTimes(4)
   })
 
-  it('also stops after the Windows launcher reports failing to start it', async () => {
+  it('also stops after the Windows launcher reports failing to start it, and says how', async () => {
     vi.mocked(wakeStoppedManagedOrcad).mockRejectedValue(
       new OrcadWindowsLaunchFailedError('CreateProcess failed (code 5)')
     )
@@ -127,8 +135,32 @@ describe('a managed orcad that keeps exiting unexpectedly', () => {
       await findStopped()
     }
 
-    expect(await findStopped()).toMatchObject({ state: 'unverifiable' })
+    expect(await findStopped()).toMatchObject({
+      state: 'unverifiable',
+      detail: expect.stringContaining(
+        "Last failed start: orcad's Windows launcher did not start the candidate: CreateProcess failed (code 5)."
+      )
+    })
     expect(wakeStoppedManagedOrcad).toHaveBeenCalledTimes(3)
+  })
+
+  // Nothing ran, and the refusal's own message says what to change on the host.
+  it('keeps showing a Windows host-policy refusal instead of braking on it', async () => {
+    const refusal = new OrcadWindowsLaunchRefusedError('breakaway-denied')
+    vi.mocked(wakeStoppedManagedOrcad).mockRejectedValue(refusal)
+    for (let i = 0; i < 4; i++) {
+      expect(await findStopped()).toEqual({ state: 'unverifiable', detail: refusal.message })
+    }
+  })
+
+  it('wakes it again once the run it braked on later stopped cleanly', async () => {
+    startsReporting(CRASHED)
+    for (let i = 0; i < 3; i++) {
+      await findStopped()
+    }
+    vi.mocked(readBoundedOrcadRemoteRecord).mockResolvedValueOnce({ state: 'absent' })
+
+    expect(await findStopped()).toMatchObject({ state: 'started' })
   })
 
   it('does not let overlapping checks launch past the cap', async () => {

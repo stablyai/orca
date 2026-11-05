@@ -2,17 +2,16 @@
 import { OrcadUnexpectedExitSchema } from '../../../shared/orcad-unexpected-exit'
 import type { OrcadHealth } from '../../orcad/orcad-health'
 import { OrcadLaunchReadinessError } from '../../ssh/orcad-active-readiness'
-import { orcadSlotDir } from '../../ssh/orcad-recovery-slot'
+import { orcadSlotDir, type OrcadSlotOptions } from '../../ssh/orcad-recovery-slot'
 import { joinRemotePath } from '../../ssh/ssh-remote-platform'
 import { readOrcadActivationRecord } from '../activation/orcad-activation-record-store'
 import { ORCAD_LOG_FILENAME } from '../install/orcad-remote-host-support'
 import { withOrcadLogTail } from '../install/orcad-remote-log-tail'
-import {
-  OrcadWindowsLaunchFailedError,
-  OrcadWindowsLaunchRefusedError
-} from '../install/orcad-remote-launch-windows'
+import { readBoundedOrcadRemoteRecord } from '../install/orcad-remote-record-file'
+import { ORCAD_LOCK_FILE_NAME } from '../../orcad/orcad-instance-lock'
+import { MAX_ORCAD_LOCK_BYTES } from '../../orcad/orcad-instance-lock-reclaim'
+import { OrcadWindowsLaunchFailedError } from '../install/orcad-remote-launch-windows'
 import { ManagedOrcadEventWindow } from './orcad-managed-event-window'
-import type { managedOrcadSlot } from './orcad-managed-runtime-context'
 import { wakeStoppedManagedOrcad } from './orcad-managed-wake'
 
 export const MAX_FAILED_RUNS_PER_WINDOW = 3
@@ -27,16 +26,18 @@ export class ManagedOrcadCrashLoopBrake {
   private readonly countedFailedStarts = new Set<string>()
   // Wakes begun before an explicit reconnect must not undo its reset.
   private readonly resets = new Map<string, number>()
+  private readonly latchedOnServingRun = new Set<string>()
+  private readonly lastFailedStart = new Map<string, string>()
 
   constructor(now: () => number = Date.now) {
     this.failures = new ManagedOrcadEventWindow(FAILED_RUN_WINDOW_MS, now)
   }
 
-  /** Older orcad builds omit the report, so they are never braked. */
   resetEpoch(environmentId: string): number {
     return this.resets.get(environmentId) ?? 0
   }
 
+  /** Older orcad builds omit the report, so they are never braked. */
   noteStarted(environmentId: string, epoch: number, health: OrcadHealth | undefined): void {
     if (epoch !== this.resetEpoch(environmentId)) {
       return
@@ -47,15 +48,29 @@ export class ManagedOrcadCrashLoopBrake {
       OrcadUnexpectedExitSchema.safeParse(health?.previousUnexpectedExit).success
     ) {
       this.record(environmentId)
+      if (this.engaged(environmentId)) {
+        this.latchedOnServingRun.add(environmentId)
+      }
     }
   }
 
-  noteFailedStart(environmentId: string, epoch: number): void {
+  noteFailedStart(environmentId: string, epoch: number, reason: string): void {
     if (epoch !== this.resetEpoch(environmentId)) {
       return
     }
     this.countedFailedStarts.add(environmentId)
+    this.lastFailedStart.set(environmentId, reason)
+    this.latchedOnServingRun.delete(environmentId)
     this.record(environmentId)
+  }
+
+  /** True when the latch came from a run that served, whose own exit decides whether it still holds. */
+  latchedOnServingRunOf(environmentId: string): boolean {
+    return this.latchedOnServingRun.has(environmentId)
+  }
+
+  lastFailedStartOf(environmentId: string): string | null {
+    return this.lastFailedStart.get(environmentId) ?? null
   }
 
   engaged(environmentId: string): boolean {
@@ -76,6 +91,8 @@ export class ManagedOrcadCrashLoopBrake {
     this.failures.forget(environmentId)
     this.engagedHosts.delete(environmentId)
     this.countedFailedStarts.delete(environmentId)
+    this.latchedOnServingRun.delete(environmentId)
+    this.lastFailedStart.delete(environmentId)
     this.resets.set(environmentId, this.resetEpoch(environmentId) + 1)
   }
 
@@ -93,7 +110,7 @@ export function getManagedOrcadCrashLoopBrake(): ManagedOrcadCrashLoopBrake {
   return brake
 }
 
-type ManagedOrcadSlot = ReturnType<typeof managedOrcadSlot>
+type ManagedOrcadSlot = OrcadSlotOptions
 
 type BrakedWake =
   | Awaited<ReturnType<typeof wakeStoppedManagedOrcad>>
@@ -133,6 +150,9 @@ async function wakeUnlessEngaged(
   slot: ManagedOrcadSlot,
   onStarting?: () => void
 ): Promise<BrakedWake> {
+  if (brake.engaged(environmentId) && (await latchedRunExitedCleanly(environmentId, slot))) {
+    brake.forget(environmentId)
+  }
   if (brake.engaged(environmentId)) {
     return { outcome: 'crash-loop', detail: await crashLoopDetail(environmentId, hostLabel, slot) }
   }
@@ -144,14 +164,35 @@ async function wakeUnlessEngaged(
     return wake
   } catch (error) {
     // A launch that never became ready, or that the host reported failing, also ends a run.
+    // A host-policy refusal is not: nothing ran, and its own message says what to change.
     if (
       error instanceof OrcadLaunchReadinessError ||
-      error instanceof OrcadWindowsLaunchRefusedError ||
       error instanceof OrcadWindowsLaunchFailedError
     ) {
-      brake.noteFailedStart(environmentId, epoch)
+      brake.noteFailedStart(environmentId, epoch, error.message)
     }
     throw error
+  }
+}
+
+/** A run that served releases orcad.lock on a clean exit, so an absent lock means the loop ended. */
+async function latchedRunExitedCleanly(
+  environmentId: string,
+  slot: ManagedOrcadSlot
+): Promise<boolean> {
+  if (!brake.latchedOnServingRunOf(environmentId)) {
+    return false
+  }
+  try {
+    const lock = await readBoundedOrcadRemoteRecord(
+      slot,
+      joinRemotePath(slot.host, slot.userDataDir, ORCAD_LOCK_FILE_NAME),
+      MAX_ORCAD_LOCK_BYTES
+    )
+    return lock.state === 'absent'
+  } catch {
+    // Unreadable proves nothing; stay braked.
+    return false
   }
 }
 
@@ -164,7 +205,12 @@ async function crashLoopDetail(
   if (known) {
     return known
   }
-  let detail = crashLoopMessage(hostLabel, `the active server's ${ORCAD_LOG_FILENAME}`)
+  const lastFailure = brake.lastFailedStartOf(environmentId)
+  const withLastFailure = (message: string): string =>
+    lastFailure ? `${message}\nLast failed start: ${lastFailure}` : message
+  let detail = withLastFailure(
+    crashLoopMessage(hostLabel, `the active server's ${ORCAD_LOG_FILENAME}`)
+  )
   try {
     const active = (await readOrcadActivationRecord(slot)).active
     if (active) {
@@ -174,7 +220,7 @@ async function crashLoopDetail(
         joinRemotePath(slot.host, slotDir, ORCAD_LOG_FILENAME)
       )
       // The log is appended across launches, so its tail still holds the last run's error.
-      detail = await withOrcadLogTail(slot, slotDir, message)
+      detail = await withOrcadLogTail(slot, slotDir, withLastFailure(message))
     }
   } catch (error) {
     console.warn(`[ssh] Could not read the managed Orca server's log on ${hostLabel}:`, error)

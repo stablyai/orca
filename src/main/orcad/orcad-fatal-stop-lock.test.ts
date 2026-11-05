@@ -12,6 +12,8 @@ import { installOrcadShutdownSignals, startOrcadWithHost } from './orcad-lifecyc
 
 const roots: string[] = []
 afterEach(() => {
+  // Drops the shutdown deadline timer so it cannot call the real process.exit later.
+  vi.useRealTimers()
   vi.restoreAllMocks()
   for (const root of roots.splice(0)) {
     rmSync(root, { recursive: true, force: true })
@@ -33,9 +35,11 @@ describe('a fatal orcad stop', () => {
       () => {}
     )
 
+    vi.useFakeTimers()
     installOrcadShutdownSignals(() => handle.stop())('uncaught exception', undefined, 1)
-
-    await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(1))
+    // Under fake timers waitFor advances the clock by its interval, far short of the deadline.
+    await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(1), { interval: 1 })
+    expect(exit).toHaveBeenCalledOnce()
     expect(existsSync(join(root, ORCAD_LOCK_FILE_NAME))).toBe(true)
   })
 })
