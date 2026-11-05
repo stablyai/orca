@@ -19,6 +19,7 @@ import { planLaunchAgentStartupPrompt } from './launch-agent-startup-prompt-plan
 import { TUI_AGENT_CONFIG } from '../../../shared/agent-launch/catalog/tui-agent-config'
 import type { LaunchAgentStartupPromptPlan } from '@/lib/launch-agent-startup-prompt-plan'
 import type { Tab } from '../../../shared/tab-types'
+import type { AgentStartupShell } from '../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import { translate } from '@/i18n/i18n'
 import { toWebTerminalSurfaceTabId } from '../../../shared/workspace-layout/terminal-surface-id'
@@ -38,6 +39,7 @@ export async function launchAgentInWebHostTab(args: {
   agentArgs?: string | null
   actionAgentArgs?: string
   launchPlatform?: NodeJS.Platform
+  launchShell?: AgentStartupShell
   viewMode?: Tab['viewMode']
   /** False opens the host's tab without selecting it. */
   activate?: boolean
@@ -73,7 +75,7 @@ export async function launchAgentInWebHostTab(args: {
         })
       : { capable: false, complete: false }
     const inputs = environmentId
-      ? await pairedAgentLaunchInputs({ ...args, environmentId, complete })
+      ? await pairedAgentLaunchInputs({ ...args, environmentId, complete, capable })
       : { preparedAgentCommand: true }
     // Why: only prompt delivery is client-owned; desktop launch settings belong to legacy preparation.
     startup = planLaunchAgentStartupPrompt({

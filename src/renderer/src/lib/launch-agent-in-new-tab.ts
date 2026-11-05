@@ -170,6 +170,7 @@ export function launchAgentInNewTabWithOutcome(
       agentArgs: args.actionAgentArgs === undefined ? agentArgs : undefined,
       actionAgentArgs: args.actionAgentArgs,
       launchPlatform: resolvedLaunchPlatform,
+      launchShell: queuedShell,
       viewMode: 'terminal',
       ...(activate === false ? { activate } : {}),
       onPromptDelivered

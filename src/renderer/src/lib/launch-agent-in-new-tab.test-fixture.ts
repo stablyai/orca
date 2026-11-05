@@ -130,7 +130,6 @@ vi.mock('@/lib/telemetry', () => ({
 }))
 
 const mockCreateWebRuntimeSessionTerminal: Mock = vi.fn()
-const mockCreateWebRuntimeAgentSessionTerminalWithLaunchDraft: Mock = vi.fn()
 const mockIsWebRuntimeSessionActive = vi.fn(() => false)
 
 vi.mock('@/runtime/web-runtime-terminal-create-operation', () => ({
@@ -140,8 +139,7 @@ vi.mock('@/runtime/web-runtime-terminal-create-operation', () => ({
 }))
 vi.mock('@/runtime/web-runtime-terminal-creation', () => ({
   createWebRuntimeSessionTerminal: mockCreateWebRuntimeSessionTerminal,
-  createWebRuntimeAgentSessionTerminalWithLaunchDraft:
-    mockCreateWebRuntimeAgentSessionTerminalWithLaunchDraft
+  deliverCreatedWebRuntimeAgentSessionPrompt: vi.fn(async () => true)
 }))
 vi.mock('@/runtime/web-runtime-session-environment', () => ({
   isWebRuntimeSessionActive: mockIsWebRuntimeSessionActive
@@ -155,7 +153,6 @@ beforeEach(() => {
   setLocalRuntimeCapabilitiesForTests([])
   mockIsWebRuntimeSessionActive.mockReturnValue(false)
   mockCreateWebRuntimeSessionTerminal.mockResolvedValue({ status: 'created' })
-  mockCreateWebRuntimeAgentSessionTerminalWithLaunchDraft.mockResolvedValue({ status: 'created' })
   store.activeRepoId = 'repo-1'
   store.activeWorktreeId = 'wt-1'
   store.settings = {
@@ -201,7 +198,6 @@ beforeEach(() => {
 export {
   LEAF_ID,
   mockCreateTab,
-  mockCreateWebRuntimeAgentSessionTerminalWithLaunchDraft,
   mockCreateWebRuntimeSessionTerminal,
   mockIsWebRuntimeSessionActive,
   mockPasteDraftWhenAgentReady,

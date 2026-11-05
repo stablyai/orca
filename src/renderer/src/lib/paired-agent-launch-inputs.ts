@@ -12,7 +12,11 @@ import { sourceControlActionAgentArgs } from '../../../shared/source-control/ai/
 import { liftAgentPermissionArgs } from '../../../shared/agent-launch/permissions/tui-agent-permission-lift'
 import { readLaunchPermissionChoice } from '../../../shared/agent-launch/permissions/tui-agent-permission-choice'
 import { YOLO_TUI_AGENT_ENV } from '../../../shared/agent-launch/permissions/tui-agent-permissions'
-import { resolveStartupShell } from '../../../shared/agent-launch/startup/tui-agent-startup-shell'
+import {
+  resolveStartupShell,
+  type AgentStartupShell
+} from '../../../shared/agent-launch/startup/tui-agent-startup-shell'
+import { resolveHostAgentStartupShell } from '../../../shared/windows-terminal-shell'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { SessionOptionValue } from '../../../shared/native-chat/input/native-chat-session-options'
 
@@ -20,6 +24,9 @@ export async function pairedAgentLaunchInputs(args: {
   environmentId: string
   agent: TuiAgent
   complete: boolean
+  capable: boolean
+  launchPlatform?: NodeJS.Platform
+  launchShell?: AgentStartupShell
   sessionOptions?: Readonly<Record<string, SessionOptionValue>>
   actionAgentArgs?: string
   agentArgs?: string | null
@@ -35,11 +42,14 @@ export async function pairedAgentLaunchInputs(args: {
       launchPreferences
     }
   }
-  const needsArguments = agentLaunchNeedsPreparedCommand(agent, sessionOptions)
+  const permissionMode = readLaunchPermissionChoice(sessionOptions)
+  const needsArguments =
+    agentLaunchNeedsPreparedCommand(agent, sessionOptions) ||
+    (!args.capable && permissionMode !== undefined)
   if (!needsArguments && !hasActionArgs) {
     return { ...explicitArgs, launchPreferences }
   }
-  // Why: old hosts cannot express these combinations without the existing prepared launch.
+  // Why: old paired servers keep their prepared launch for inputs they cannot express.
   if (
     (needsArguments && args.agentArgs !== undefined) ||
     (!args.complete &&
@@ -67,7 +77,16 @@ export async function pairedAgentLaunchInputs(args: {
   ) {
     return { preparedAgentCommand: true }
   }
-  const shell = resolveStartupShell(status?.hostPlatform)
+  const platform = args.launchPlatform ?? status?.hostPlatform ?? 'linux'
+  const shell = resolveStartupShell(
+    platform,
+    args.launchShell ??
+      resolveHostAgentStartupShell({
+        platform,
+        isRemote: true,
+        hostTerminalWindowsShell: status?.terminalWindowsShell
+      })
+  )
   const legacyPermission = liftAgentPermissionArgs(agent, snapshot.agentDefaultArgs[agent])
   // Why: snapshots with no readable permission cannot safely replace the action's Arguments.
   if (
@@ -79,8 +98,8 @@ export async function pairedAgentLaunchInputs(args: {
   }
   const settings = {
     agentDefaultArgs:
-      snapshot.agentPermission?.userArgs ??
       snapshot.agentChoices?.userArgs ??
+      snapshot.agentPermission?.userArgs ??
       snapshot.agentDefaultArgs,
     agentLaunchChoices: snapshot.agentChoices?.defaults,
     agentCmdOverrides: snapshot.agentCmdOverrides,
@@ -101,7 +120,8 @@ export async function pairedAgentLaunchInputs(args: {
             : {})
         },
         agent,
-        settings
+        settings,
+        shell
       )
     : args.agentArgs
   if (args.complete) {
@@ -113,14 +133,14 @@ export async function pairedAgentLaunchInputs(args: {
   const inputs = resolveAgentStartupPlanInputs({
     agent,
     settings,
-    platform: status?.hostPlatform ?? 'linux',
+    platform,
     isRemote: true,
     shell,
     agentArgs,
     sessionOptions
   })
   const { model, ...options } = inputs.sessionOptions ?? {}
-  const permissionMode = readLaunchPermissionChoice(inputs.sessionOptions)
+  const compiledPermission = readLaunchPermissionChoice(inputs.sessionOptions)
   return {
     agentArgs: projectAgentLaunchProfile(
       agent,
@@ -136,7 +156,7 @@ export async function pairedAgentLaunchInputs(args: {
               .filter(([key]) => key !== 'permissionMode')
               .map(([key, value]) => [key, String(value)])
           ),
-          ...(permissionMode ? { permissionMode } : {})
+          ...(compiledPermission ? { permissionMode: compiledPermission } : {})
         }
       }
     ).args

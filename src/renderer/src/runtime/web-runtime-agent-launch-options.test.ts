@@ -229,7 +229,20 @@ it('keeps host authority on older hosts and composes inexpressible picks only fr
     sessionOptions: { model: 'sonnet', effort: 'high', permissionMode: 'accept-edits' }
   })
   expect(params('terminal.createAgentSession')).toMatchObject({
-    launchPreferences: { model: 'sonnet', effort: 'high', mode: 'accept-edits' }
+    agentArgs: '--model sonnet --effort high --permission-mode acceptEdits --add-dir /host-tools'
+  })
+  expect(params('terminal.createAgentSession')).not.toHaveProperty('launchPreferences')
+  call.mockClear()
+  await launch({ actionAgentArgs: '--verbose', sessionOptions: { permissionMode: 'full-access' } })
+  expect(params('terminal.createAgentSession').agentArgs).toBe(
+    '--dangerously-skip-permissions --verbose'
+  )
+  expect(params('terminal.createAgentSession')).not.toHaveProperty('launchPreferences')
+  call.mockClear()
+  capabilities.push('settings.agent-launch.choices.v1')
+  await launch({ sessionOptions: { model: 'sonnet', permissionMode: 'accept-edits' } })
+  expect(params('terminal.createAgentSession')).toMatchObject({
+    launchPreferences: { model: 'sonnet', mode: 'accept-edits' }
   })
   expect(params('terminal.createAgentSession')).not.toHaveProperty('agentArgs')
   call.mockClear()
@@ -257,7 +270,54 @@ it('keeps host authority on older hosts and composes inexpressible picks only fr
   const pinned = params('terminal.createAgentSession')
   expect(pinned.agentArgs).toBe('--effort high --permission-mode auto --verbose')
   expect(pinned).not.toHaveProperty('launchPreferences')
+  call.mockClear()
+  await launch({ sessionOptions: { effort: 'high' } })
+  const nonAction = params('terminal.createAgentSession')
+  expect(nonAction.agentArgs).toBe('--effort high --permission-mode auto --add-dir /host-tools')
+  expect(nonAction).not.toHaveProperty('launchPreferences')
+  expect(`claude --model opus ${nonAction.agentArgs}`.match(/--model/g)).toHaveLength(1)
 })
+
+it.each([
+  {
+    launchPlatform: 'win32' as const,
+    hostShell: 'cmd.exe',
+    expected:
+      '--model "model with space" --effort high --permission-mode auto --add-dir "C:\\host tools"'
+  },
+  {
+    launchPlatform: 'linux' as const,
+    hostShell: 'wsl.exe',
+    expected:
+      "--model 'model with space' --effort high --permission-mode auto --add-dir /host-tools"
+  }
+])(
+  'uses the host execution platform and shell for snapshot arguments ($hostShell)',
+  async ({ launchPlatform, hostShell, expected }) => {
+    capabilities = ['agent-session.host-authority.v1']
+    mocks.getState().runtimeStatusByEnvironmentId = new Map([
+      [ENVIRONMENT_ID, { status: { hostPlatform: 'win32', terminalWindowsShell: hostShell } }]
+    ])
+    vi.mocked(settingsTransport.readHostAgentLaunchSettings).mockResolvedValue(
+      projectAgentLaunchSettings(
+        {
+          agentPermissionDefault: 'auto',
+          agentLaunchChoices: {},
+          agentDefaultArgs: {
+            claude:
+              launchPlatform === 'win32' ? '--add-dir "C:\\host tools"' : '--add-dir /host-tools'
+          }
+        },
+        launchPlatform
+      )
+    )
+    await launch({
+      launchPlatform,
+      sessionOptions: { model: 'model with space', effort: 'high', permissionMode: 'auto' }
+    })
+    expect(params('terminal.createAgentSession').agentArgs).toBe(expected)
+  }
+)
 
 it('preserves empty action text and inherits permission from text-only host snapshots', async () => {
   await launch({ actionAgentArgs: '' })
@@ -283,12 +343,28 @@ it('preserves empty action text and inherits permission from text-only host snap
   )
 })
 
-it('keeps the prepared launch when an older host snapshot is unavailable', async () => {
+it.each<Record<string, string>>([{ effort: 'high' }, { permissionMode: 'full-access' }])(
+  'keeps the prepared launch when an older host snapshot is unavailable (%j)',
+  async (sessionOptions) => {
+    capabilities = ['agent-session.host-authority.v1']
+    vi.mocked(settingsTransport.readHostAgentLaunchSettings).mockResolvedValue(null)
+    await launch({ sessionOptions })
+    expect(params('session.tabs.createTerminal').command).toContain('desktop-claude')
+    expect(params('session.tabs.createTerminal').command).toContain(
+      sessionOptions.effort ? "'high'" : '--dangerously-skip-permissions'
+    )
+  }
+)
+
+it('keeps the prepared permission environment for an older host', async () => {
   capabilities = ['agent-session.host-authority.v1']
-  vi.mocked(settingsTransport.readHostAgentLaunchSettings).mockResolvedValue(null)
-  await launch({ sessionOptions: { effort: 'high' } })
-  expect(params('session.tabs.createTerminal').command).toContain('desktop-claude')
-  expect(params('session.tabs.createTerminal').command).toContain("'high'")
+  await launch({ agent: 'goose', sessionOptions: { permissionMode: 'full-access' } })
+  expect(params('session.tabs.createTerminal')).toMatchObject({
+    env: { GOOSE_MODE: 'auto' }
+  })
+  expect(
+    call.mock.calls.some(([request]) => request.method === 'terminal.createAgentSession')
+  ).toBe(false)
 })
 
 it.each(['legacy', 'agent_session_legacy_required', 'method_not_found'])(

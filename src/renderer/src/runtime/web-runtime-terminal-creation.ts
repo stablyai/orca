@@ -40,38 +40,6 @@ export async function createWebRuntimeSessionTerminal(
   return created.outcome
 }
 
-export async function createWebRuntimeAgentSessionTerminal(
-  args: CreateWebRuntimeSessionTerminalArgs & {
-    agent: TuiAgent
-    promptAfterReady: string
-    submitPrompt: boolean
-    forcePromptPaste: boolean
-  }
-): Promise<{
-  outcome: WebRuntimeTerminalCreateOutcome
-  promptDelivered: boolean
-}> {
-  const created = await createWebRuntimeSessionTerminalResult(args)
-  return {
-    outcome: created.outcome,
-    promptDelivered: await deliverCreatedWebRuntimeAgentSessionPrompt(created, args)
-  }
-}
-
-/** Argv-prefill carries draft in the command without post-ready paste; seed the composer once mirrored host tab ID is known. */
-export async function createWebRuntimeAgentSessionTerminalWithLaunchDraft(
-  args: CreateWebRuntimeSessionTerminalArgs & {
-    agent: TuiAgent
-    launchDraft: string
-  }
-): Promise<{ outcome: WebRuntimeTerminalCreateOutcome; promptDelivered: boolean }> {
-  const created = await createWebRuntimeSessionTerminalResult(args)
-  return {
-    outcome: created.outcome,
-    promptDelivered: await deliverCreatedWebRuntimeAgentSessionPrompt(created, args)
-  }
-}
-
 /** Deliver only after the selected create route has settled its startup recipe. */
 export async function deliverCreatedWebRuntimeAgentSessionPrompt(
   created: CreatedWebRuntimeSessionTerminal,

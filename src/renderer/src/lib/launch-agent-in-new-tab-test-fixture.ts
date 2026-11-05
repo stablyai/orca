@@ -6,10 +6,7 @@ import type { pasteDraftWhenAgentReady } from './agent-paste-draft'
 import type { waitForAgentReady } from './agent-ready-wait'
 import type { track } from './telemetry'
 import type { toast } from 'sonner'
-import type {
-  createWebRuntimeSessionTerminal,
-  createWebRuntimeAgentSessionTerminalWithLaunchDraft
-} from '@/runtime/web-runtime-terminal-creation'
+import type { createWebRuntimeSessionTerminal } from '@/runtime/web-runtime-terminal-creation'
 import type { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session-environment'
 import type { Project } from '../../../shared/project-types'
 
@@ -147,8 +144,6 @@ vi.mock('@/lib/telemetry', () => ({
 }))
 
 export const mockCreateWebRuntimeSessionTerminal = vi.fn<typeof createWebRuntimeSessionTerminal>()
-export const mockCreateWebRuntimeAgentSessionTerminalWithLaunchDraft =
-  vi.fn<typeof createWebRuntimeAgentSessionTerminalWithLaunchDraft>()
 export const mockIsWebRuntimeSessionActive = vi.fn<typeof isWebRuntimeSessionActive>(() => false)
 
 vi.mock('@/runtime/web-runtime-terminal-create-operation', () => ({
@@ -160,8 +155,7 @@ vi.mock('@/runtime/web-runtime-terminal-create-operation', () => ({
 }))
 vi.mock('@/runtime/web-runtime-terminal-creation', () => ({
   createWebRuntimeSessionTerminal: mockCreateWebRuntimeSessionTerminal,
-  createWebRuntimeAgentSessionTerminalWithLaunchDraft:
-    mockCreateWebRuntimeAgentSessionTerminalWithLaunchDraft
+  deliverCreatedWebRuntimeAgentSessionPrompt: vi.fn(async () => true)
 }))
 vi.mock('@/runtime/web-runtime-session-environment', () => ({
   isWebRuntimeSessionActive: mockIsWebRuntimeSessionActive
@@ -181,10 +175,6 @@ beforeEach(() => {
   setLocalRuntimeCapabilitiesForTests([])
   mockIsWebRuntimeSessionActive.mockReturnValue(false)
   mockCreateWebRuntimeSessionTerminal.mockResolvedValue({ status: 'created' })
-  mockCreateWebRuntimeAgentSessionTerminalWithLaunchDraft.mockResolvedValue({
-    outcome: { status: 'created' },
-    promptDelivered: true
-  })
   store.activeRepoId = 'repo-1'
   store.activeWorktreeId = 'wt-1'
   store.settings = {
