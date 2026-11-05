@@ -1,3 +1,4 @@
+import { observeCodexSubscriptionWindows } from './codex-subscription-observation'
 import type { ProviderRateLimits } from '../../shared/rate-limit-types'
 import { cancelUnreadResponseBody } from '../lib/unread-response-body'
 import { abortSignalWithTimeout } from '../lib/abort-signal-with-timeout'
@@ -75,31 +76,35 @@ export async function fetchCodexRateLimitsViaBackend(
   if (typeof payload.plan_type !== 'string') {
     return null
   }
-  const classified = classifyCodexRateLimitWindows({
+  const windows = {
     primary: backendWindowToSnapshot(payload.rate_limit?.primary_window),
     secondary: backendWindowToSnapshot(payload.rate_limit?.secondary_window)
-  })
-  return {
-    provider: 'codex',
-    session: mapCodexRateLimitWindow(
-      classified.session,
-      snapshotWindowMinutes(classified.session, CODEX_SESSION_WINDOW_MINUTES)
-    ),
-    weekly: mapCodexRateLimitWindow(
-      classified.weekly,
-      snapshotWindowMinutes(classified.weekly, CODEX_WEEKLY_WINDOW_MINUTES)
-    ),
-    planType: payload.plan_type,
-    ...(payload.rate_limit_reset_credits !== undefined
-      ? {
-          rateLimitResetCredits:
-            mapBackendRateLimitResetCredits(payload.rate_limit_reset_credits) ?? null
-        }
-      : {}),
-    updatedAt: Date.now(),
-    error: null,
-    status: 'ok'
   }
+  const classified = classifyCodexRateLimitWindows(windows)
+  return observeCodexSubscriptionWindows(
+    {
+      provider: 'codex',
+      session: mapCodexRateLimitWindow(
+        classified.session,
+        snapshotWindowMinutes(classified.session, CODEX_SESSION_WINDOW_MINUTES)
+      ),
+      weekly: mapCodexRateLimitWindow(
+        classified.weekly,
+        snapshotWindowMinutes(classified.weekly, CODEX_WEEKLY_WINDOW_MINUTES)
+      ),
+      planType: payload.plan_type,
+      ...(payload.rate_limit_reset_credits !== undefined
+        ? {
+            rateLimitResetCredits:
+              mapBackendRateLimitResetCredits(payload.rate_limit_reset_credits) ?? null
+          }
+        : {}),
+      updatedAt: Date.now(),
+      error: null,
+      status: 'ok'
+    },
+    windows
+  )
 }
 
 export async function supplementCodexSessionWindow(

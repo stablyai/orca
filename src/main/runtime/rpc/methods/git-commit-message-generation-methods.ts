@@ -1,11 +1,12 @@
 import { defineMethod } from '../core'
+import { generationOwner } from '../authenticated-generation-owner'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { ResolvedSourceControlAiGenerationParams } from '../../../../shared/source-control-ai'
 import {
   GitDiscoverCommitMessageModels,
   GitGenerateCommitMessage,
   GitGeneratePullRequestFields,
-  WorktreeSelector
+  GitCancelGeneration
 } from '../../../../shared/rpc-contract/git-params'
 
 type CommitMessageGenerationOverride = {
@@ -67,8 +68,15 @@ export const GIT_COMMIT_MESSAGE_GENERATION_METHODS = [
     requires: ['accounts'],
     permission: 'workspace',
     params: GitGenerateCommitMessage,
-    handler: async (params, { runtime }) => {
+    handler: async (params, context) => {
+      const { runtime } = context
       const override = buildCommitMessageGenerationOverride(params)
+      if (params.generationId !== undefined) {
+        return runtime.generateRuntimeCommitMessage(params.worktree, override, {
+          owner: generationOwner(context, 'source control', true),
+          generationId: params.generationId
+        })
+      }
       if (override === undefined) {
         return runtime.generateRuntimeCommitMessage(params.worktree)
       }
@@ -93,15 +101,21 @@ export const GIT_COMMIT_MESSAGE_GENERATION_METHODS = [
   defineMethod({
     name: 'git.cancelGenerateCommitMessage',
     permission: 'workspace',
-    params: WorktreeSelector,
-    handler: async (params, { runtime }) =>
-      runtime.cancelRuntimeGenerateCommitMessage(params.worktree)
+    params: GitCancelGeneration,
+    handler: async (params, context) =>
+      params.generationId === undefined
+        ? context.runtime.cancelRuntimeGenerateCommitMessage(params.worktree)
+        : context.runtime.cancelRuntimeGenerateCommitMessage(params.worktree, {
+            owner: generationOwner(context, 'source control', true),
+            generationId: params.generationId
+          })
   }),
   defineMethod({
     name: 'git.generatePullRequestFields',
     permission: 'workspace',
     params: GitGeneratePullRequestFields,
-    handler: async (params, { runtime }) => {
+    handler: async (params, context) => {
+      const { runtime } = context
       const input = {
         base: params.base,
         title: params.title,
@@ -111,6 +125,12 @@ export const GIT_COMMIT_MESSAGE_GENERATION_METHODS = [
         useTemplate: params.useTemplate
       }
       const override = buildCommitMessageGenerationOverride(params)
+      if (params.generationId !== undefined) {
+        return runtime.generateRuntimePullRequestFields(params.worktree, input, override, {
+          owner: generationOwner(context, 'source control', true),
+          generationId: params.generationId
+        })
+      }
       if (override === undefined) {
         return runtime.generateRuntimePullRequestFields(params.worktree, input)
       }
@@ -120,8 +140,13 @@ export const GIT_COMMIT_MESSAGE_GENERATION_METHODS = [
   defineMethod({
     name: 'git.cancelGeneratePullRequestFields',
     permission: 'workspace',
-    params: WorktreeSelector,
-    handler: async (params, { runtime }) =>
-      runtime.cancelRuntimeGeneratePullRequestFields(params.worktree)
+    params: GitCancelGeneration,
+    handler: async (params, context) =>
+      params.generationId === undefined
+        ? context.runtime.cancelRuntimeGeneratePullRequestFields(params.worktree)
+        : context.runtime.cancelRuntimeGeneratePullRequestFields(params.worktree, {
+            owner: generationOwner(context, 'source control', true),
+            generationId: params.generationId
+          })
   })
 ]

@@ -20,21 +20,20 @@ const MAX_INLINE_AUTH_BYTES = 64 * 1024
 
 type InlineAuthBaseline = { value: string; selections: Set<string> }
 
+const accountSchema = z.object({
+  id: z.uuid(),
+  label: z.string().min(1).max(120),
+  integrations: z.array(z.string()).max(64),
+  createdAt: z.number()
+})
 const stateSchema = z.object({
-  accounts: z
-    .array(
-      z.object({
-        id: z.uuid(),
-        label: z.string().min(1).max(120),
-        integrations: z.array(z.string()).max(64),
-        createdAt: z.number()
-      })
-    )
-    .max(64),
+  accounts: z.array(accountSchema).max(64),
   activeAccountId: z.uuid().nullable()
 })
 
 export class ManagedDataAccountService {
+  revision = 0
+
   private pending: Promise<unknown> = Promise.resolve()
   private readonly listeners = new Set<() => void>()
   private readonly inlineAuthBaselines = new Map<string, InlineAuthBaseline>()
@@ -281,6 +280,7 @@ export class ManagedDataAccountService {
   }
 
   private notifyChanged(): void {
+    this.revision += 1
     for (const listener of this.listeners) {
       try {
         listener()

@@ -24,6 +24,7 @@ import {
   sweepPersistedUnattachedTerminalRows
 } from '../restoring-sessions/tab-terminal-pane-binding-repair'
 import { scheduleSave } from './write-scheduling'
+import { trackSettingsKeyRevisions } from '../applying-settings/settings-key-revisions'
 import {
   migrateLegacyOpenCodeGoApiKey,
   type OpenCodeGoApiKeyTarget
@@ -132,6 +133,7 @@ export class Store {
       this.state = bindPersistedTabTerminalPanes(sweepPersistedUnattachedTerminalRows(this.state))
       this.runtime.state = this.state
     }
+    trackSettingsKeyRevisions(this.state.settings)
     // Imported snapshots cannot own the live hook server or write their source file.
     if (!imported) {
       // Finish interrupted blob installs; shell history waits for post-attach live-process evidence.

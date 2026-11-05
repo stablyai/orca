@@ -136,7 +136,7 @@ describe('useChecksPanelGeneration outcome', () => {
       setPullRequestGenerationRecord,
       updatePullRequestGenerationRecord
     }
-    const { result } = renderHook(() => useChecksPanelGeneration(input))
+    const { result, unmount } = renderHook(() => useChecksPanelGeneration(input))
     const fields = { base: 'main', title: 'Feature', body: '', draft: false }
 
     const outcome = result.current.handleGeneratePullRequestFieldsForActive(
@@ -145,6 +145,12 @@ describe('useChecksPanelGeneration outcome', () => {
       undefined,
       { autoSubmit }
     )
+    const isCanceled = runtime.generate.mock.calls[0][3]
+    if (!stop) {
+      unmount()
+      expect(isCanceled()).toBe(false)
+      expect(runtime.cancel).not.toHaveBeenCalled()
+    }
     if (stop) {
       updatePullRequestGenerationRecord(generationKey, resolvePullRequestGenerationCancel)
     }
@@ -268,7 +274,16 @@ describe('useChecksPanelGeneration outcome', () => {
       )
     })
 
+    const generationContext =
+      useAppStore.getState().pullRequestGenerationRecords[generationKey].context
+    const isCanceled = runtime.generate.mock.calls[0][3]
+    expect(generationContext.generationId).toMatch(/^[0-9a-f-]{36}$/)
+    expect(isCanceled()).toBe(false)
     act(() => result.current.handleCancelGeneratePullRequestFieldsForActive())
+    expect(isCanceled()).toBe(true)
+    expect(runtime.cancel).toHaveBeenCalledWith(
+      expect.objectContaining({ generationId: generationContext.generationId })
+    )
     expect(runtime.cancel).toHaveBeenCalledTimes(1)
     const stillPending = new Promise((resolve) => setTimeout(() => resolve('still pending'), 50))
     await expect(Promise.race([outcome, stillPending])).resolves.toEqual({ result: null })

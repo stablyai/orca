@@ -9,7 +9,11 @@ import type { RuntimeClientTarget } from '../../../../shared/runtime-client-targ
 export type UsageHostSettings = Partial<
   Pick<
     GlobalSettings,
-    'minimaxEndpoint' | 'minimaxGroupId' | 'minimaxUsageModels' | 'zcodePlanSite'
+    | 'minimaxEndpoint'
+    | 'minimaxGroupId'
+    | 'minimaxUsageModels'
+    | 'zcodePlanSite'
+    | 'textGenerationSubscriptionFailoverEnabled'
   >
 >
 
@@ -24,6 +28,7 @@ function pickUsageHostSettings(settings: Partial<GlobalSettings>): UsageHostSett
     minimaxEndpoint: settings.minimaxEndpoint,
     minimaxGroupId: settings.minimaxGroupId,
     minimaxUsageModels: settings.minimaxUsageModels,
+    textGenerationSubscriptionFailoverEnabled: settings.textGenerationSubscriptionFailoverEnabled,
     zcodePlanSite: settings.zcodePlanSite
   }
 }

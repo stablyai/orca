@@ -187,8 +187,9 @@ describe('first-work rename while a WSL move takes the project', () => {
   })
 
   it('renames a project the move is not taking', async () => {
+    const otherRepo = { ...LOCAL_REPO, id: 'other-repo' }
     const { deps, setDisplayName } = makeDeps({
-      getRepo: () => ({ ...LOCAL_REPO, id: 'other-repo' })
+      getRepo: () => otherRepo
     })
 
     await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)

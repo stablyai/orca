@@ -1,10 +1,15 @@
+import type { CommitMessagePlan } from '../../shared/commit-message-plan'
+import { runGenerationRequest } from './agent-generation-request'
+import {
+  beginTextGenerationRequest,
+  cancelLocalGeneration
+} from './source-control-generation-lanes'
 import * as supervisedStop from '../provider-process/supervised-child-process-stop'
 import { createMockDiscoveryChild } from './commit-message-text-generation-test-harness'
 import {
   MAX_SOURCE_CONTROL_AGENT_OUTPUT_BYTES,
   SOURCE_CONTROL_GENERATION_TIMEOUT_MS
 } from './source-control-generation-limits'
-import { cancelLocalGeneration } from './source-control-generation-lanes'
 import { generateConversationName } from './conversation-name-generation-request'
 import { EventEmitter } from 'node:events'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -605,3 +610,86 @@ setInterval(() => {}, 60000)
     })
   }
 )
+
+describe('subscription attempt settlement', () => {
+  it('waits for close and prompt cleanup before delivering B to the runner', async () => {
+    const request = beginTextGenerationRequest('branch-name', '/settled', 60000, () => true)
+    const children = [createMockDiscoveryChild(), createMockDiscoveryChild()]
+    const directories: string[] = []
+    const spawnAgent = vi.fn((input: Parameters<typeof spawnSourceControlAgent>[0]) => {
+      const attachment = input.args.find((arg: string) => arg.startsWith('@'))
+      if (!attachment) {
+        throw new Error('Runner did not receive a prompt attachment')
+      }
+      const directory = join(attachment.slice(1), '..')
+      if (directories.length) {
+        expect(existsSync(directories[0])).toBe(false)
+      }
+      directories.push(directory)
+      return children[spawnAgent.mock.calls.length - 1]!
+    })
+    const params = { agentId: 'opencode' as const, model: 'opencode-go/fixture-model' }
+    const prepare = vi.fn(async (id: string) => ({
+      accountId: id,
+      identity: id,
+      model: params.model,
+      env: { ACCOUNT: id },
+      valid: () => true,
+      configurePlan: (plan: CommitMessagePlan) => ({
+        ...plan,
+        args: [...plan.args, 'prompt-placeholder'],
+        promptFile: { content: 'Fixed context', argIndex: plan.args.length },
+        outputFormat: 'opencode-subscription-json' as const
+      })
+    }))
+    try {
+      const pending = runGenerationRequest({
+        params,
+        prompt: 'Fixed context',
+        operation: 'branch-name',
+        spawnAgent,
+        target: {
+          kind: 'local',
+          cwd: '/settled',
+          request,
+          subscription: {
+            params,
+            current: request.current,
+            initialAccountId: 'a',
+            prepare,
+            candidates: () => ['b']
+          }
+        }
+      })
+      await vi.waitFor(() => expect(spawnAgent).toHaveBeenCalledTimes(1))
+      const first = children[0]!
+      first.stdout.emit(
+        'data',
+        Buffer.from(
+          readFileSync(
+            join(import.meta.dirname, '__fixtures__/opencode-1.19.4-quota-refusal.jsonl'),
+            'utf8'
+          )
+        )
+      )
+      first.emit('exit', 1)
+      expect(existsSync(directories[0])).toBe(true)
+      expect(prepare.mock.calls.map(([id]) => id)).toEqual(['a'])
+      first.emit('close', 1)
+      await vi.waitFor(() => expect(spawnAgent).toHaveBeenCalledTimes(2))
+      expect(spawnAgent.mock.calls[1]![0].env).toMatchObject({ ACCOUNT: 'b' })
+      children[1]!.stdout.emit(
+        'data',
+        Buffer.from(JSON.stringify({ type: 'text', part: { text: 'fix-auth' } }))
+      )
+      children[1]!.emit('close', 0)
+      expect(await pending).toMatchObject({ success: true, rawOutput: 'fix-auth' })
+      expect(directories.every((directory) => !existsSync(directory))).toBe(true)
+    } finally {
+      request.finish()
+      for (const directory of directories) {
+        rmSync(directory, { force: true, recursive: true })
+      }
+    }
+  })
+})

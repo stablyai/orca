@@ -1,3 +1,4 @@
+import { runtimeGitGenerationTargetCurrent } from './runtime-git-generation-context'
 import { setImmediate as nextTurn } from 'node:timers/promises'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GlobalSettings } from '../../shared/global-settings-types'
@@ -250,3 +251,40 @@ describe('RuntimeGitGenerationCommands admission', () => {
     })
   })
 })
+
+it.each(['host', 'wsl', 'deleted', 'recreated', 'unchanged'] as const)(
+  'revalidates the original generation owner after %s',
+  async (change) => {
+    const original = makeTarget('/repo', {
+      repo: {
+        id: 'repo',
+        path: '/repo',
+        displayName: 'repo',
+        badgeColor: '',
+        addedAt: 0
+      }
+    })
+    let current = original
+    const host: RuntimeGitCommandHost = {
+      getRuntimeSettings: () => ({}),
+      resolveRuntimeGitTarget: async () => {
+        if (change === 'deleted') {
+          throw new Error('deleted workspace')
+        }
+        return current
+      }
+    }
+    if (change === 'host') {
+      current = { ...original, executionHostId: 'ssh:other' }
+    }
+    if (change === 'wsl') {
+      current = { ...original, localGitOptions: { wslDistro: 'other' } }
+    }
+    if (change === 'recreated' && original.repo) {
+      current = { ...original, repo: { ...original.repo } }
+    }
+    expect(await runtimeGitGenerationTargetCurrent(host, 'id:wt-1', original)).toBe(
+      change === 'unchanged'
+    )
+  }
+)

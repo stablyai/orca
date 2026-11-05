@@ -3,6 +3,7 @@ import { translate } from '@/i18n/i18n'
 import { useCallback, useEffect, type Dispatch, type RefObject, type SetStateAction } from 'react'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { getConnectionId } from '@/lib/connection-context'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 import { useAppStore, type AppState } from '@/store'
 import {
   cancelRuntimeGeneratePullRequestFields,
@@ -134,6 +135,9 @@ export function useCreatePullRequestFieldGeneration({
           options
         )
       }
+      if (generateInFlightRef.current) {
+        return
+      }
       if (!target) {
         setGenerateError(
           translate(
@@ -152,14 +156,15 @@ export function useCreatePullRequestFieldGeneration({
         prefs: settings,
         worktreeId,
         worktreePath,
-        connectionId
+        connectionId,
+        generationId: createBrowserUuid(),
+        generationCancellation: { canceled: false }
       }
-      const seed = {
+      generationSeedRef.current = {
         requestId,
         fieldRevisions: { ...fieldRevisionsRef.current },
         context: requestContext
       }
-      generationSeedRef.current = seed
       generateInFlightRef.current = true
       setGenerating(true)
       setGenerateError(null)
@@ -174,7 +179,8 @@ export function useCreatePullRequestFieldGeneration({
             provider: eligibility?.provider,
             useTemplate: resolvedPrDefaults.useTemplate
           },
-          overrides
+          overrides,
+          () => requestContext.generationCancellation.canceled
         )
         if (result.branchChangedByPreparation) {
           await onBranchChangedByGeneration?.()
@@ -249,6 +255,9 @@ export function useCreatePullRequestFieldGeneration({
     const requestContext = generationSeedRef.current?.context
     if (!requestContext?.worktreePath || !generateInFlightRef.current) {
       return
+    }
+    if (requestContext.generationCancellation) {
+      requestContext.generationCancellation.canceled = true
     }
     generationRequestIdRef.current += 1
     generateInFlightRef.current = false

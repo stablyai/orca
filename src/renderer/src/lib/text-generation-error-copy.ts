@@ -4,6 +4,7 @@ import {
   type TextGenerationFailureCode
 } from '../../../shared/text-generation-failure-copy'
 import { AGENT_OUTPUT_ERROR_COPY } from './agent-output-error-copy'
+import { TEXT_GENERATION_SETTLEMENT_ERROR_COPY } from './text-generation-settlement-error-copy'
 
 type CopyValues = Record<string, string | number>
 
@@ -252,7 +253,8 @@ const COPY: Record<TextGenerationFailureCode, (values: CopyValues) => string> = 
       EN.planThinkingLevelInvalid,
       values
     ),
-  ...AGENT_OUTPUT_ERROR_COPY
+  ...AGENT_OUTPUT_ERROR_COPY,
+  ...TEXT_GENERATION_SETTLEMENT_ERROR_COPY
 }
 
 function isTextGenerationFailureCode(code: unknown): code is TextGenerationFailureCode {

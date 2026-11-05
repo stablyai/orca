@@ -13,6 +13,10 @@ export async function killSourceControlAgentProcess(
   }
   if (child.supervised) {
     await stopSupervisedChildProcess(child, { site: SOURCE_CONTROL_KILL_SITE })
+    if (child.exitCode !== null || child.signalCode !== null) {
+      // Pipe-holding grandchildren outlive the supervisor until its orphan-group sweep runs.
+      await child.groupSwept
+    }
     return
   }
   if (process.platform === 'win32') {

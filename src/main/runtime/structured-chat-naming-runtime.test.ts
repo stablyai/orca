@@ -17,6 +17,8 @@ import type {
   AgentJournalSnapshot
 } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type * as TextGeneration from '../text-generation/commit-message-text-generation'
+import type * as GenerationTarget from '../agent-hooks/first-work-generation-target'
+import type { TextGenerationRequest } from '../text-generation/source-control-generation-lanes'
 
 const mocks = vi.hoisted(() => ({
   account: vi.fn((_provider: string, id: string) => ({
@@ -24,8 +26,14 @@ const mocks = vi.hoisted(() => ({
     XDG_STATE_HOME: `/profiles/${id}/state`
   })),
   native: vi.fn(async () => 'Native title'),
-  generate: vi.fn(async () => ({ success: true as const, name: 'Login repair' })),
-  target: vi.fn(async (cwd: string) => ({ kind: 'local' as const, cwd })),
+  generate: vi.fn<typeof TextGeneration.generateConversationNameFromContext>(async () => ({
+    success: true,
+    name: 'Login repair'
+  })),
+  target: vi.fn<typeof GenerationTarget.resolveGenerationTarget>(async (cwd: string) => ({
+    kind: 'local',
+    cwd
+  })),
   publishConversationName: vi.fn<(sessionId: string) => void>(),
   journalSnapshot: vi.fn<(sessionId: string) => Promise<AgentJournalSnapshot>>()
 }))
@@ -53,6 +61,7 @@ vi.mock('../managed-data-accounts/service', () => ({
 }))
 const roots: string[] = []
 afterEach(async () => {
+  vi.useRealTimers()
   installClaudeProfileRouter(undefined)
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
 })
@@ -212,6 +221,48 @@ describe('structured chat naming runtime', () => {
       undefined
     )
   })
+
+  it.each([
+    { reason: 'deadline', owned: true, expected: { error: 'Generation timed out after 60s.' } },
+    { reason: 'canceled', owned: true, expected: null },
+    { reason: 'deadline', owned: false, expected: null }
+  ])(
+    'reports an expired failover budget as a failure ($reason, owned $owned)',
+    async ({ reason, owned, expected }) => {
+      const state = rig()
+      state.settings.sourceControlAi = {
+        ...normalizeSourceControlAiSettings(state.settings.sourceControlAi),
+        actions: {
+          conversationName: { agentId: 'claude', commandInputTemplate: 'Name {firstPrompt}' }
+        }
+      }
+      const now = 1_700_000_000_000
+      vi.useFakeTimers({ toFake: ['Date'] })
+      vi.setSystemTime(now)
+      const finish = vi.fn()
+      const request = {
+        validate: async () => false,
+        signal: AbortSignal.abort(reason),
+        cancel: () => {},
+        deadline: reason === 'deadline' ? now - 1 : now + 60_000,
+        current: () => false,
+        ownsResult: () => owned,
+        finish,
+        claimSpawn: () => false,
+        remainingSpawns: () => 0
+      } satisfies TextGenerationRequest
+      mocks.target.mockResolvedValueOnce({ kind: 'local', cwd: '/workspace/folder', request })
+      mocks.generate.mockResolvedValueOnce({
+        success: false,
+        error: 'Generation canceled.',
+        canceled: true
+      })
+      expect(
+        await state.deps.generate(agentSessionRecordFixture(), 'Repair login', () => true)
+      ).toEqual(expected)
+      expect(finish).toHaveBeenCalledOnce()
+    }
+  )
 
   it.each(
     STRUCTURED_AGENT_RUNTIME_CATALOG.map(({ metadata }) => metadata.definition.agent).filter(

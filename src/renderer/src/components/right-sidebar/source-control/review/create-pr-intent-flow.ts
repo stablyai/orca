@@ -10,6 +10,10 @@ import {
 import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
 import { summarizeCommitFailure } from '../commit/commit-failure-summary'
 import { getStageAllPaths } from '../../../../../../shared/source-control-discard-all-sequence'
+import type {
+  RuntimeGitContext,
+  SourceControlGenerationCancellation
+} from '@/runtime/runtime-git-client-context'
 
 export type CreatePrIntentRunToken = {
   repoId: string
@@ -24,6 +28,9 @@ export type CreatePrIntentRunToken = {
    */
   pinnedCopy: WorktreeGitCopy | null
   startedAt: number
+  commitMessageGeneration?: RuntimeGitContext & {
+    generationCancellation: SourceControlGenerationCancellation
+  }
 }
 
 export type CreatePrIntentCurrentTarget = {

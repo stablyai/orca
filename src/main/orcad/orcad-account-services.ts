@@ -1,3 +1,4 @@
+import { hostTextSubscriptionResolvers } from '../text-generation/text-subscription-failover'
 import type { Store } from '../persistence/loading-store/store'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type {
@@ -16,7 +17,6 @@ import { createCodexRuntimeHomeLaunchPreparation } from '../codex/codex-runtime-
 import { createCodexSessionResumeLaunchPreparation } from '../codex/codex-session-resume-launch-preparation'
 import { prepareCodexAiVaultSessionResume } from '../codex/codex-ai-vault-session-resume'
 import { resolveHostCodexSessionSourceHome } from '../codex/codex-session-source-home'
-import { resolveHostAgentBaseEnvironment } from '../runtime/structured-agent-shell-environment'
 import { isWslHostOrcadProcess } from '../ipc/wsl-guest-windows-drive-path'
 import type { OrcadRuntimeCleanup } from './orcad-runtime-lifetime'
 
@@ -118,7 +118,12 @@ export function createOrcadAccountServices(args: {
       runtime.setCommitMessageAgentEnvironmentResolvers({
         prepareForCodexLaunch: prepareCodexHome,
         prepareForClaudeLaunch: prepareClaudeAuth,
-        resolveBaseEnvironment: () => resolveHostAgentBaseEnvironment(store.getSettings())
+        ...hostTextSubscriptionResolvers({
+          home: services.codexRuntimeHome,
+          store,
+          auth: services.claudeRuntimeAuth,
+          rateLimits: services.rateLimits
+        })
       })
     }
   }

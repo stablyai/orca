@@ -58,13 +58,14 @@ export async function renameCreatedWorktreeOnFirstWork(
     badgeColor: '',
     addedAt: 0
   }
+  const settings = {
+    ...getDefaultSettings('/tmp/pr-32919-fixture'),
+    autoRenameBranchFromWork: true,
+    branchPrefix: 'none' as const
+  }
   const deps = firstWorkRenameDeps(
     {
-      getSettings: () => ({
-        ...getDefaultSettings('/tmp/pr-32919-fixture'),
-        autoRenameBranchFromWork: true,
-        branchPrefix: 'none'
-      }),
+      getSettings: () => settings,
       getRepo: () => repo,
       getRepos: () => [repo],
       getWorktreeMeta: () => meta,

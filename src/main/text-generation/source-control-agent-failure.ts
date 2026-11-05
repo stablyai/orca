@@ -1,3 +1,6 @@
+import { parseOpenCodeSubscriptionOutput } from './opencode-subscription-output'
+import { parseCodexSubscriptionOutput } from './codex-subscription-output'
+import { parseClaudeSubscriptionOutput } from './claude-subscription-output'
 import {
   cleanGeneratedCommitMessage,
   excerptAgentFailureOutput,
@@ -114,8 +117,42 @@ export function finalizeFromAgentOutput(args: {
   includeLocalMacDnsHint?: boolean
   includeStdoutDetail?: boolean
   outputFormat?: CommitMessagePlan['outputFormat']
+  subscriptionQuotaExhausted?: boolean
 }): InternalTextGenerationResult {
   const { code, stdout, stderr, label } = args
+  if (
+    args.outputFormat === 'claude-subscription-stream-json' ||
+    args.outputFormat === 'codex-subscription-json' ||
+    args.outputFormat === 'opencode-subscription-json'
+  ) {
+    const outcome =
+      args.outputFormat === 'claude-subscription-stream-json'
+        ? parseClaudeSubscriptionOutput(stdout, code)
+        : args.outputFormat === 'codex-subscription-json'
+          ? parseCodexSubscriptionOutput(stdout, code, args.subscriptionQuotaExhausted === true)
+          : parseOpenCodeSubscriptionOutput(stdout, code)
+    if (outcome.ok) {
+      const rawOutput = cleanGeneratedCommitMessage(outcome.text)
+      if (rawOutput) {
+        return { success: true, rawOutput, agentLabel: label }
+      }
+    }
+    return {
+      success: false,
+      ...(code === 0
+        ? textGenerationFailure('agentReportedError', { label })
+        : // Structured provider errors are not prompt echoes, so they stay visible for naming too.
+          agentCliFailure(label, (!outcome.ok && outcome.message) || '', stderr, code, {
+            ...args,
+            includeStdoutDetail: true
+          })),
+      subscriptionQuotaRefused: !outcome.ok && outcome.quota,
+      ...('diagnostic' in outcome && outcome.diagnostic
+        ? { subscriptionQuotaDiagnostic: true }
+        : {}),
+      failureOutput: captureFailureOutput(label, code, stdout, stderr)
+    }
+  }
   const parsed =
     args.outputFormat === 'opencode-json'
       ? parseOpenCodeGenerationOutput(stdout)

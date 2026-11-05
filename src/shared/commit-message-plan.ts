@@ -1,3 +1,4 @@
+import type { AgentGenerationOutputFormat } from './commit-message-agent-output'
 import {
   textGenerationFailure,
   type TextGenerationFailureFields
@@ -46,7 +47,8 @@ export type CommitMessagePlan = {
   label: string
   /** Leading command assignments, applied on the execution host. */
   env?: Record<string, string>
-  outputFormat?: 'opencode-json' | 'antigravity-stream-json' | 'kimi-stream-json'
+  subscriptionQuotaExhausted?: boolean
+  outputFormat?: AgentGenerationOutputFormat
 }
 
 export type CommitMessagePlanResult =

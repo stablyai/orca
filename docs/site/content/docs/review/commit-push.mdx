@@ -38,6 +38,21 @@ Templates can include variables such as `{basePrompt}`, `{branch}`, `{stagedFile
 
 When a repository has its own recipe for an action, saving changes to the global default won't touch it — the settings pane surfaces a **Repository overrides** note listing which repos diverge and what they override (agent, CLI arguments, or command template), with a **Review** link that jumps to that repository's settings so you can update or remove the override.
 
+## Stopping a generation
+
+**Stop** cancels an AI generation at any point, including before the agent process has started (SSH worktrees keep their existing Stop behavior). Orca also drops the result if the repository or worktree it was generated for is removed or moved while it runs.
+
+## When a subscription limit is reached
+
+If a Claude, Codex, or OpenCode subscription account hits its usage limit while Orca is generating a commit message, pull request details, a branch, workspace, or chat name, or a Jira title, the generation fails with that limit's error. Turn on **Retry AI-generated text on another account after quota limits** in [Settings → Agents](/docs/settings#agents) (it sits with the account lists, and is off by default) to have Orca retry on your other saved accounts instead.
+
+- Orca only retries when the agent's output confirms a quota refusal. Other failures, such as a temporary server error, are reported as usual.
+- The retry keeps the same agent, model, prompt, and permissions. Each account uses its own billing settings, and your active account does not change.
+- Changing the agent, model, or this setting while a retry is underway stops the generation instead of finishing with the old choice.
+- If no account can finish, the error says why: every eligible account reached its limit, Orca reached its per-request attempt limit, no other eligible account was available, or the generation budget ran out.
+- The setting belongs to the Orca host that runs the generation. On a [Remote Orca Server](/docs/remote-servers) it applies to that server's accounts. Older servers that don't support it show the toggle as disabled.
+- Generations started from Orca Mobile follow the same host setting. The phone has no toggle of its own.
+
 ## Amend
 
 Amending is explicit — **Commit → Amend**. Orca won't amend commits that have already been pushed unless you confirm.

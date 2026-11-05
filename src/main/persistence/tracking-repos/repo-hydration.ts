@@ -1,3 +1,4 @@
+import { inheritRepoRegistrationIdentity } from './repo-registration-identity'
 import type { Repo } from '../../../shared/repo-types'
 import { getRepoExecutionHostId } from '../../../shared/execution-host'
 import { getDefaultRepoHookSettings } from '../../../shared/constants'
@@ -61,7 +62,7 @@ export function hydrateRepo(repo: Repo, gitUsernameCache: ReadonlyMap<string, st
     ? ''
     : (gitUsernameCache.get(repoGitUsernameCacheKey(repo)) ?? repo.gitUsername ?? '')
 
-  return {
+  const hydrated: Repo = {
     ...repoWithoutIcon,
     ...(typeof folderUpgradeGitRootPath === 'string' && folderUpgradeGitRootPath
       ? { folderUpgradeGitRootPath }
@@ -90,4 +91,6 @@ export function hydrateRepo(repo: Repo, gitUsernameCache: ReadonlyMap<string, st
       }
     }
   }
+  inheritRepoRegistrationIdentity(repo, hydrated)
+  return hydrated
 }

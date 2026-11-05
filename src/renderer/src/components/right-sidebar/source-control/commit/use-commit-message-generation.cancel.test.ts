@@ -36,6 +36,7 @@ function Probe(): null {
   const state = useAppStore.getState()
   latest = useSourceControlCommitMessageGeneration({
     activeRepo: null,
+    createPrIntentRunTokenRef: { current: {} },
     activeRepoTarget: { kind: 'local' },
     activeWorktreeId: WORKTREE_ID,
     allocateCommitMessageGenerationRequestId: state.allocateCommitMessageGenerationRequestId,

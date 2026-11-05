@@ -51,13 +51,23 @@ describe('Jira title host ownership', () => {
     expect(mocks.resolve).toHaveBeenCalledWith(settings, 'local', 'branchName', null)
     expect(mocks.prepare).toHaveBeenCalledWith(
       'custom',
-      expect.objectContaining({ prepareForCodexLaunch: expect.any(Function) })
+      expect.objectContaining({ prepareForCodexLaunch: expect.any(Function) }),
+      undefined
     )
     expect(mocks.generate).toHaveBeenCalledWith(
       args,
       expect.anything(),
       expect.objectContaining({ kind: 'local', env: { CODEX_HOME: 'host-codex-home' } })
     )
+  })
+  it('reports the account preparation failure instead of a generic environment error', async () => {
+    const error = 'Failed to prepare the selected agent account for commit message generation.'
+    mocks.prepare.mockResolvedValueOnce({ ok: false, error })
+    expect(await generateJiraIssueSummaryRequest(host, 'owner-1', args)).toEqual({
+      success: false,
+      error
+    })
+    expect(mocks.generate).not.toHaveBeenCalled()
   })
   it('does not launch a replaced request after its environment finishes', async () => {
     const slow = deferred<{ ok: true }>()
@@ -120,8 +130,27 @@ describe('Jira title host ownership', () => {
   it('rechecks a disconnected Jira account before spawning', async () => {
     mocks.status.mockReturnValueOnce({ sites: [{ id: 'site-1' }] }).mockReturnValue({ sites: [] })
     expect(await generateJiraIssueSummaryRequest(host, 'owner-1', args)).toMatchObject({
-      success: false
+      success: false,
+      errorCode: 'jiraAccountDisconnected'
     })
     expect(mocks.generate).not.toHaveBeenCalled()
+  })
+  it.each([
+    ['an unrelated settings write keeps', { theme: 'light' as const }, { success: true }],
+    [
+      'turning failover on cancels',
+      { textGenerationSubscriptionFailoverEnabled: true },
+      { canceled: true }
+    ]
+  ])('%s the request during preparation', async (_label, change, expected) => {
+    let current = settings
+    const live = { ...host, getSettings: () => current }
+    const pending = deferred<{ ok: true }>()
+    mocks.prepare.mockReturnValueOnce(pending.promise)
+    const result = generateJiraIssueSummaryRequest(live, 'owner-1', args)
+    await vi.waitFor(() => expect(mocks.prepare).toHaveBeenCalledOnce())
+    current = { ...settings, ...change }
+    pending.resolve({ ok: true })
+    expect(await result).toMatchObject(expected)
   })
 })

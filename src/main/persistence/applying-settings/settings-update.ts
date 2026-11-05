@@ -1,4 +1,5 @@
 import { publishSettingsUpdate } from './settings-update-effects'
+import { recordSettingsReplacement } from './settings-key-revisions'
 import { legacyChatPermissionWrite } from './legacy-chat-permission-write'
 import { stampDefaultOnMigrationGuards } from './default-on-migration-guards'
 import { normalizeNativeChatAppearanceSettings } from '../../../shared/native-chat/native-chat-appearance-settings'
@@ -73,6 +74,10 @@ export function updateSettings(
     sanitizedUpdates.windowBackgroundBlur = windowMaterial !== 'off'
   }
   // Normalize at the store boundary so every writer rejects truthy non-booleans.
+  if ('textGenerationSubscriptionFailoverEnabled' in updates) {
+    sanitizedUpdates.textGenerationSubscriptionFailoverEnabled =
+      updates.textGenerationSubscriptionFailoverEnabled === true
+  }
   if ('minimizeToTrayOnClose' in updates) {
     sanitizedUpdates.minimizeToTrayOnClose = updates.minimizeToTrayOnClose === true
   }
@@ -275,6 +280,7 @@ export function updateSettings(
     }),
     ...(mergedTelemetry !== undefined ? { telemetry: mergedTelemetry } : {})
   }
+  recordSettingsReplacement(previousSettings, operations.state.settings)
   publishSettingsUpdate(operations, updates, sanitizedUpdates, previousSettings, options)
   return operations.state.settings
 }

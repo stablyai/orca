@@ -1,3 +1,11 @@
+import type {
+  TextSubscriptionAttempt,
+  TextSubscriptionFailover
+} from './text-subscription-failover'
+import type {
+  LocalGenerationRequest,
+  TextGenerationRequest
+} from './source-control-generation-lanes'
 import type { AgentSessionUnavailable } from '../../shared/agent-session/agent-session-availability'
 import type { spawnProcess } from '@orca/process-host'
 import type { AgentGenerationFailureOutput } from './agent-failure-output'
@@ -52,7 +60,16 @@ export type TextGenerationOperation =
   | 'conversation-name'
 
 export type CommitMessageGenerationTarget =
-  | { kind: 'local'; cwd: string; env?: NodeJS.ProcessEnv; wslDistro?: string }
+  | {
+      kind: 'local'
+      cwd: string
+      env?: NodeJS.ProcessEnv
+      wslDistro?: string
+      generationRequest?: LocalGenerationRequest
+      request?: TextGenerationRequest
+      subscription?: TextSubscriptionFailover
+      accountAttempt?: TextSubscriptionAttempt
+    }
   | {
       kind: 'remote'
       cwd: string
@@ -71,6 +88,21 @@ export type InternalTextGenerationResult =
       success: false
       canceled?: boolean
       failureOutput?: AgentGenerationFailureOutput
+      subscriptionQuotaRefused?: boolean
+      subscriptionQuotaDiagnostic?: boolean
+      /** The prepared account stopped being valid before spawn; failover skips it, not a user cancel. */
+      subscriptionAccountChanged?: boolean
+      subscriptionRecovery?: {
+        attemptedCount: number
+        reason:
+          | 'no-eligible-alternate'
+          | 'attempt-limit'
+          | 'exhausted'
+          | 'non-quota-failure'
+          | 'budget-ended'
+        firstError: string
+        firstErrorCode?: string
+      }
     } & TextGenerationFailureFields)
 
 export type GenerateBranchNameResult =
@@ -99,6 +131,8 @@ export type LocalProcessExecution<T> = {
 export type SpawnedSourceControlAgentProcess = ReturnType<typeof spawnProcess> & {
   /** True when the child is the POSIX provider supervisor: SIGTERM stops the agent's group, then itself. */
   readonly supervised?: boolean
+  /** Settles once the post-exit orphan-group sweep has run (or nothing was guarded). */
+  readonly groupSwept?: Promise<void>
 }
 
 export type LocalGenerationTarget = Extract<CommitMessageGenerationTarget, { kind: 'local' }>
@@ -128,4 +162,7 @@ export type LocalSourceControlPlanInput = {
   operation: TextGenerationOperation
   wslDistro?: string
   spawnAgent: SpawnSourceControlAgent
+  generationRequest?: LocalGenerationRequest
+  request?: TextGenerationRequest
+  timeoutMs?: number
 }

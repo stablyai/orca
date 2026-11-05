@@ -1,3 +1,4 @@
+import { observeCodexSubscriptionWindows } from './codex-subscription-observation'
 import type { ProviderRateLimits } from '../../shared/rate-limit-types'
 import { extractCodexAuthError } from '../../shared/codex-auth-errors'
 import { codexSpawnEnoent, isSpawnEnoent } from '../codex-cli/windows-only-agent-cli'
@@ -246,16 +247,19 @@ export function readCodexRateLimitsViaRpc(
           const credits = mapRpcRateLimitResetCredits(wrapper?.rateLimitResetCredits)
           const extraUsage = mapCodexCredits(wrapper?.rateLimits?.credits)
           settle(
-            {
-              provider: 'codex',
-              session: mapCodexRateLimitWindow(classified.session, CODEX_SESSION_WINDOW_MINUTES),
-              weekly: mapCodexRateLimitWindow(classified.weekly, CODEX_WEEKLY_WINDOW_MINUTES),
-              ...(credits !== undefined ? { rateLimitResetCredits: credits } : {}),
-              ...(extraUsage ? { extraUsage } : {}),
-              updatedAt: Date.now(),
-              error: null,
-              status: 'ok'
-            },
+            observeCodexSubscriptionWindows(
+              {
+                provider: 'codex',
+                session: mapCodexRateLimitWindow(classified.session, CODEX_SESSION_WINDOW_MINUTES),
+                weekly: mapCodexRateLimitWindow(classified.weekly, CODEX_WEEKLY_WINDOW_MINUTES),
+                ...(credits !== undefined ? { rateLimitResetCredits: credits } : {}),
+                ...(extraUsage ? { extraUsage } : {}),
+                updatedAt: Date.now(),
+                error: null,
+                status: 'ok'
+              },
+              wrapper?.rateLimits
+            ),
             { kill: true }
           )
         } catch {

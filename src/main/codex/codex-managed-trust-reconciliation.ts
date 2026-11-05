@@ -86,7 +86,7 @@ type CodexManagedHookTrustOwnershipOptions = {
   codexHashes?: readonly CodexHookHashes[]
 }
 
-function getCodexManagedHookTrustEntryKeys(
+export function getCodexManagedHookTrustEntryKeys(
   existingEntries: ReadonlyMap<string, CodexHookTrustState>,
   options: CodexManagedHookTrustOwnershipOptions
 ): string[] {

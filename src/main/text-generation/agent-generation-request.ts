@@ -1,4 +1,9 @@
-import { textGenerationFailureCodeFields } from '../../shared/text-generation-failure-copy'
+import { SOURCE_CONTROL_GENERATION_TIMEOUT_MS } from './source-control-generation-limits'
+import { runTextSubscriptionRequest } from './text-subscription-request'
+import {
+  textGenerationFailure,
+  textGenerationFailureCodeFields
+} from '../../shared/text-generation-failure-copy'
 import { runClaudeGenerationAttempts } from '../../shared/claude-background-run-isolation'
 import {
   cleanGeneratedCommitMessage,
@@ -14,6 +19,7 @@ import type { ResolvedSourceControlAiGenerationParams } from '../../shared/sourc
 import { openCodeVariantRetryPlan } from '../../shared/opencode-generation-command'
 import { copilotUnavailableModelRetryPlan } from './copilot-unavailable-model-retry'
 import { runLocalPlanForAgent } from './source-control-local-generation'
+import { localGenerationCanceledResult } from './source-control-generation-lanes'
 import { emptyResultFailure } from './source-control-agent-failure'
 import { runRemoteSourceControlPlan } from './source-control-remote-generation'
 import type {
@@ -40,6 +46,37 @@ export async function runGenerationRequest(input: {
   spawnAgent: SpawnSourceControlAgent
   shouldExecute?: () => boolean
 }): Promise<InternalTextGenerationResult> {
+  if (
+    input.target.kind === 'local' &&
+    !input.target.request &&
+    input.target.generationRequest?.budget
+  ) {
+    input = {
+      ...input,
+      target: { ...input.target, request: input.target.generationRequest.budget }
+    }
+  }
+  if (input.target.kind === 'local' && input.target.generationRequest?.canceled) {
+    return localGenerationCanceledResult()
+  }
+  if (input.target.kind === 'local' && input.target.subscription) {
+    if (JSON.stringify(input.params) !== JSON.stringify(input.target.subscription.params)) {
+      return {
+        success: false,
+        canceled: true,
+        ...textGenerationFailure('generationRequestChanged')
+      }
+    }
+    return runTextSubscriptionRequest({
+      target: input.target,
+      execute: (target, model) =>
+        runGenerationRequest({
+          ...input,
+          target,
+          params: { ...input.params, ...(model ? { model } : {}) }
+        })
+    })
+  }
   const params = {
     ...input.params,
     backslash: commandBackslashMode(input.target)
@@ -48,9 +85,32 @@ export async function runGenerationRequest(input: {
   if (!planned.ok) {
     return { success: false, error: planned.error, ...textGenerationFailureCodeFields(planned) }
   }
-  const plan = planned.plan
-  const execute = (plan: CommitMessagePlan): Promise<InternalTextGenerationResult> =>
-    input.target.kind === 'remote'
+  const configure =
+    input.target.kind === 'local' ? input.target.accountAttempt?.configurePlan : undefined
+  const plan = configure ? configure(planned.plan) : planned.plan
+  const execute = async (plan: CommitMessagePlan): Promise<InternalTextGenerationResult> => {
+    if (input.target.kind === 'local' && input.target.generationRequest?.canceled) {
+      return localGenerationCanceledResult()
+    }
+    if (
+      input.target.kind === 'local' &&
+      input.target.request &&
+      !(await input.target.request.validate())
+    ) {
+      return localGenerationCanceledResult()
+    }
+    if (
+      input.target.kind === 'local' &&
+      input.target.accountAttempt &&
+      !(await Promise.resolve(input.target.accountAttempt.valid()).catch(() => false))
+    ) {
+      return {
+        success: false,
+        subscriptionAccountChanged: true,
+        ...textGenerationFailure('generationAccountChanged')
+      }
+    }
+    const result = await (input.target.kind === 'remote'
       ? runRemoteSourceControlPlan({
           plan,
           target: input.target,
@@ -63,7 +123,17 @@ export async function runGenerationRequest(input: {
           operation: input.operation,
           spawnAgent: input.spawnAgent,
           shouldExecute: input.shouldExecute
-        })
+        }))
+    return input.target.kind === 'local' && input.target.request?.signal.reason === 'deadline'
+      ? {
+          success: false,
+          ...textGenerationFailure('timedOut', {
+            seconds: SOURCE_CONTROL_GENERATION_TIMEOUT_MS / 1000
+          })
+        }
+      : result
+  }
+  // Compatibility steps stay bounded per account; each reapplies the account plan and rechecks ownership.
   let result = await runClaudeGenerationAttempts({
     agentId: input.params.agentId,
     run: (attempt): Promise<InternalTextGenerationResult> => {
@@ -72,7 +142,7 @@ export async function runGenerationRequest(input: {
       }
       const retry = planCommitMessageGeneration(params, input.prompt, attempt)
       return retry.ok
-        ? execute(retry.plan)
+        ? execute(configure ? configure(retry.plan) : retry.plan)
         : Promise.resolve({
             success: false,
             error: retry.error,
@@ -82,6 +152,7 @@ export async function runGenerationRequest(input: {
     failedExit: (outcome) => (outcome.success ? undefined : outcome.failureOutput)
   })
   if (
+    !(input.target.kind === 'local' && input.target.accountAttempt) &&
     input.operation !== 'jira-issue-summary' &&
     !result.success &&
     input.params.agentId === 'opencode'
@@ -96,6 +167,20 @@ export async function runGenerationRequest(input: {
     if (retry) {
       result = await execute(retry)
     }
+  }
+  if (
+    input.target.kind === 'local' &&
+    (input.target.generationRequest?.canceled ||
+      (input.target.request && !(await input.target.request.validate())))
+  ) {
+    return input.target.request?.signal.reason === 'deadline'
+      ? {
+          success: false,
+          ...textGenerationFailure('timedOut', {
+            seconds: SOURCE_CONTROL_GENERATION_TIMEOUT_MS / 1000
+          })
+        }
+      : localGenerationCanceledResult()
   }
   // Custom raw models can omit the opening think tag; built-in replies may mention it literally. PR JSON strips only after parsing fails.
   if (

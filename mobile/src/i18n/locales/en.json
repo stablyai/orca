@@ -3564,7 +3564,15 @@
       "planAgentUnsupported": "Agent \"{{agent}}\" does not support AI commit messages.",
       "planModelUnavailable": "Model \"{{model}}\" is not available for {{label}}.",
       "planModelWithoutThinking": "Model \"{{model}}\" does not support a thinking effort level.",
-      "planThinkingLevelInvalid": "Thinking level \"{{level}}\" is not valid for {{model}}."
+      "planThinkingLevelInvalid": "Thinking level \"{{level}}\" is not valid for {{model}}.",
+      "generationCanceled": "Generation canceled.",
+      "generationAttemptBudgetEnded": "Generation attempt budget ended.",
+      "generationRequestChanged": "Generation request changed.",
+      "generationAccountChanged": "Generation account changed.",
+      "subscriptionAccountsExhausted": "All {{attempted}} eligible accounts reached their subscription limit. Try again after a limit resets, or choose another account in Settings.",
+      "subscriptionAttemptLimit": "{{attempted}} accounts reached their subscription limit, the most Orca tries for one request. Try again later, or choose another account in Settings.",
+      "subscriptionNoEligibleAlternate": "Subscription limits were reached and no other eligible account was available. Try again after a limit resets, or choose another account in Settings.",
+      "subscriptionBudgetEnded": "The account reached its subscription limit and the generation budget ended before another account could finish. Try again."
     },
     "conflictActions": {
       "resolveFile": "{{action}}: {{path}}",

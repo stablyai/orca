@@ -437,22 +437,36 @@ describe.each(['claude', 'codex'] as const)('structured %s chat naming', (provid
     expect(state.deps.generate).toHaveBeenCalledTimes(2)
   })
 
-  it('protects a name changed while generation runs', async () => {
-    const state = rig(provider)
-    const generation = deferred<StructuredChatNameGeneration>()
-    state.deps.generate = vi.fn(() => generation.promise)
-    state.handle(state.summary, { replay: false })
-    await settle()
-    const current = state.read()
-    if (!current) {
-      throw new Error('Missing fixture')
+  it.each(['name', 'workspace', 'account', 'deleted'])(
+    'protects a changed %s while generation runs',
+    async (change) => {
+      const state = rig(provider)
+      const generation = deferred<StructuredChatNameGeneration>()
+      state.deps.generate = vi.fn(() => generation.promise)
+      state.handle(state.summary, { replay: false })
+      await settle()
+      const current = state.read()
+      if (!current) {
+        throw new Error('Missing fixture')
+      }
+      const next =
+        change === 'deleted'
+          ? null
+          : change === 'name'
+            ? { ...current, conversationName: 'User name' }
+            : change === 'workspace'
+              ? { ...current, location: { ...current.location, workspaceId: 'other-workspace' } }
+              : {
+                  ...current,
+                  accountHome: { variable: 'CODEX_HOME' as const, path: '/other-account' }
+                }
+      state.replace(next)
+      generation.resolve({ name: 'Late agent name' })
+      await settle()
+      expect(state.read()).toEqual(next)
+      expect(state.deps.onNamed).toHaveBeenCalledTimes(3)
     }
-    state.replace({ ...current, conversationName: 'User name' })
-    generation.resolve({ name: 'Late agent name' })
-    await settle()
-    expect(state.read()?.conversationName).toBe('User name')
-    expect(state.deps.onNamed).toHaveBeenCalledTimes(3)
-  })
+  )
 
   it('protects a name changed while the first prompt is read', async () => {
     const state = rig(provider)

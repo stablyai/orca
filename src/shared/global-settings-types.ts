@@ -61,6 +61,7 @@ export type GlobalSettings = GlobalSettingsBase & {
   refreshLocalBaseRefOnWorktreeCreate: boolean
   /** Permanently dismisses the suggestion to enable local base refresh. */
   localBaseRefSuggestionDismissed: boolean
+  textGenerationSubscriptionFailoverEnabled?: boolean
   /** Rename generated creature branches from first-prompt work; users can disable this in global Git settings. */
   autoRenameBranchFromWork: boolean
   /** One-shot migration guard for the default-on rollout. Existing profiles

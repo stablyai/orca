@@ -24,6 +24,9 @@ import {
   resolveTextGenerationParams
 } from '../text-generation/commit-message-text-generation'
 import { resolveGenerationTarget } from '../agent-hooks/first-work-generation-target'
+import { createResolvedTextGenerationParamsFence } from '../text-generation/text-generation-settings-fence'
+import { textGenerationFailure } from '../../shared/text-generation-failure-copy'
+import { SOURCE_CONTROL_GENERATION_TIMEOUT_MS } from '../text-generation/source-control-generation-limits'
 
 type StructuredChatNamingRuntime = {
   resolveWorkspace: (
@@ -134,6 +137,15 @@ export function structuredChatNamingDeps(
         logger.warn(settings.error, log)
         return { error: settings.error }
       }
+      const settingsCurrent = useChatAgent
+        ? () => true
+        : createResolvedTextGenerationParamsFence(
+            () => getStore().getSettings(),
+            { settings: current, resolved: settings },
+            LOCAL_COMMIT_MESSAGE_HOST_KEY,
+            'conversationName',
+            null
+          )
       const target = useChatAgent
         ? await chatNamingAgentTarget(
             record,
@@ -141,23 +153,67 @@ export function structuredChatNamingDeps(
             runtime.resolveNamingEnvironment,
             current
           )
-        : await resolveGenerationTarget(workspace.path, settings.params.agentId, runtime)
+        : await resolveGenerationTarget(workspace.path, settings.params.agentId, runtime, {
+            operation: 'conversation-name',
+            params: settings.params,
+            ownerId: record.sessionId,
+            canFailover: !!shouldExecute,
+            current: () => (!shouldExecute || shouldExecute()) && settingsCurrent(),
+            validate: async () => {
+              try {
+                const latest = await runtime.resolveWorkspace(record.location.workspaceId)
+                return (
+                  latest.path === workspace.path &&
+                  latest.executionHostId === workspace.executionHostId
+                )
+              } catch {
+                return false
+              }
+            }
+          })
       if (!target) {
         const failure = chatNamingFailure('noAgentAvailable')
         logger.warn(failure.error, log)
         return failure
       }
-      const result = await generateConversationNameFromContext(
-        { firstPrompt },
-        settings.params,
-        target,
-        shouldExecute
-      )
-      if (result.success) {
-        return { name: result.name }
+      try {
+        const result = await generateConversationNameFromContext(
+          { firstPrompt },
+          settings.params,
+          target,
+          shouldExecute
+        )
+        const request = target.kind === 'local' ? target.request : undefined
+        if (request && !(await request.validate())) {
+          const timedOut = request.signal.aborted
+            ? request.signal.reason === 'deadline'
+            : Date.now() >= request.deadline
+          // Only Stop or ownership loss is silent; an expired budget keeps naming retry/backoff.
+          if (!timedOut || !request.ownsResult()) {
+            return null
+          }
+          const failure =
+            result.success || result.canceled
+              ? textGenerationFailure('timedOut', {
+                  seconds: SOURCE_CONTROL_GENERATION_TIMEOUT_MS / 1000
+                })
+              : result
+          logger.warn(failure.error, log)
+          return {
+            error: failure.error,
+            failureOutput: result.success ? undefined : result.failureOutput
+          }
+        }
+        if (result.success) {
+          return { name: result.name }
+        }
+        logger.warn(result.error, log)
+        return result.canceled ? null : { error: result.error, failureOutput: result.failureOutput }
+      } finally {
+        if (target.kind === 'local') {
+          target.request?.finish()
+        }
       }
-      logger.warn(result.error, log)
-      return result.canceled ? null : { error: result.error, failureOutput: result.failureOutput }
     },
     onNamed: (workspaceId, sessionId) => {
       try {

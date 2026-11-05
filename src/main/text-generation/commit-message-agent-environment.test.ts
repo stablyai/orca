@@ -120,9 +120,29 @@ describe('prepareLocalCommitMessageAgentEnv', () => {
     expect(result).toEqual({
       ok: true,
       env: expect.objectContaining({
-        CODEX_HOME: 'C:\\Users\\tester\\AppData\\Roaming\\Orca\\codex-accounts\\a\\home'
+        CODEX_HOME: 'C:\\Users\\tester\\AppData\\Roaming\\Orca\\codex-accounts\\a\\home',
+        ORCA_CODEX_HOME: 'C:\\Users\\tester\\AppData\\Roaming\\Orca\\codex-accounts\\a\\home'
       })
     })
+  })
+
+  it.each([
+    { CODEX_HOME: '/old-managed', ORCA_CODEX_HOME: '/old-managed', expected: '/selected-managed' },
+    { CODEX_HOME: '/custom', ORCA_CODEX_HOME: '/old-managed', expected: '/old-managed' },
+    { CODEX_HOME: '/custom', ORCA_CODEX_HOME: undefined, expected: undefined }
+  ])('preserves Codex home provenance for $CODEX_HOME and $ORCA_CODEX_HOME', async (base) => {
+    const result = await prepareLocalCommitMessageAgentEnv('codex', {
+      resolveBaseEnvironment: async () =>
+        Object.fromEntries(
+          Object.entries({
+            CODEX_HOME: base.CODEX_HOME,
+            ORCA_CODEX_HOME: base.ORCA_CODEX_HOME
+          }).filter((entry): entry is [string, string] => entry[1] !== undefined)
+        ),
+      prepareForCodexLaunch: () => '/selected-managed'
+    })
+    expect(result).toMatchObject({ ok: true, env: { CODEX_HOME: '/selected-managed' } })
+    expect(result.ok && result.env?.ORCA_CODEX_HOME).toBe(base.expected)
   })
 
   // STA-4422: failed managed-home preparation must not fall through to the user's real account while UI shows a managed account.

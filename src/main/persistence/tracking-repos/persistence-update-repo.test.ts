@@ -1,3 +1,5 @@
+import { captureFirstWorkBranchOwner } from '../../agent-hooks/first-work-branch-revision'
+import { makeBranchRenameDeps } from '../../agent-hooks/first-work-branch-rename-test-harness'
 import {
   closeTestStores,
   testState,
@@ -76,6 +78,41 @@ describe('Store', () => {
   afterEach(async () => {
     await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
+  })
+
+  it('keeps naming ownership across hydrated reads but rejects a recreated registration', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+    const original = store.getRepo('r1')!
+    expect(store.getRepo('r1')).not.toBe(original)
+    const { deps } = makeBranchRenameDeps(vi.fn, {
+      getSettings: () => store.getSettings(),
+      getRepo: (id) => store.getRepo(id)
+    })
+    const current = captureFirstWorkBranchOwner('r1::/repo', original, deps, () => true)
+    expect(current()).toBe(true)
+    store.removeProjectForHost(original)
+    expect(current()).toBe(false)
+    store.addRepo(makeRepo())
+    expect(current()).toBe(false)
+  })
+
+  it.each([
+    { path: '/moved' },
+    { executionHostId: 'runtime:other' as const },
+    { kind: 'folder' as const }
+  ])('invalidates naming ownership after a persisted route change %j', async (update) => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+    const original = store.getRepo('r1')!
+    const { deps } = makeBranchRenameDeps(vi.fn, {
+      getSettings: () => store.getSettings(),
+      getRepo: (id) => store.getRepo(id)
+    })
+    const current = captureFirstWorkBranchOwner('r1::/repo', original, deps, () => true)
+    expect(current()).toBe(true)
+    store.updateRepo({ id: 'r1' }, update)
+    expect(current()).toBe(false)
   })
 
   it('updateRepo modifies the repo in place', async () => {

@@ -1,3 +1,4 @@
+import { removeTree } from '../../shared/windows-transient-lock-removal'
 import { randomUUID } from 'node:crypto'
 import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -137,4 +138,10 @@ export function prepareWslPrompt(plan: CommitMessagePlan, distro: string) {
       yield `X${nonce}\n`
     }
   }
+}
+
+export function removeLocalPromptDirectory(directory: string): Promise<void> {
+  return removeTree(directory).catch((error: unknown) => {
+    console.error('[commit-message] Failed to remove generation prompt:', error)
+  })
 }

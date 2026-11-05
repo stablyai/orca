@@ -927,7 +927,23 @@
     "followSymlinkedDirectories": "Follow symlinked directories",
     "followSymlinkedDirectoriesDescription": "Search linked folders in Quick Open and expand local linked folders in File Explorer.",
     "accounts": {
-      "claudeRemoveFolder": "Orca deletes this account's Claude folder and its sign-in from this computer. Chat history shared with System default stays. If it is selected, the next Claude you start uses System default."
+      "claudeRemoveFolder": "Orca deletes this account's Claude folder and its sign-in from this computer. Chat history shared with System default stays. If it is selected, the next Claude you start uses System default.",
+      "textRecovery": {
+        "label": "Retry AI-generated text on another account after quota limits",
+        "description": "When a subscription limit stops branch, workspace or chat names, commit messages, pull request details or Jira titles, retry on another saved account when supported. Keeps the chosen agent and model, using each account’s existing billing settings.",
+        "keywords": {
+          "account": "account",
+          "quota": "quota",
+          "failover": "failover",
+          "naming": "naming",
+          "branch": "branch",
+          "workspace": "workspace",
+          "commit": "commit message",
+          "pr": "pull request",
+          "jira": "Jira",
+          "chat": "chat name"
+        }
+      }
     },
     "sourceControl": {
       "gitOperationInAnotherWorkspace": "Git operation running elsewhere",
@@ -21308,6 +21324,14 @@
         "agentFailedToStart": "{{label}} failed to start. Check the agent command in Settings and try again.",
         "agentBinaryNotFound": "{{binary}} not found on PATH. Install {{label}} to use AI commit messages.",
         "timedOut": "Generation timed out after {{seconds}}s.",
+        "generationCanceled": "Generation canceled.",
+        "generationAttemptBudgetEnded": "Generation attempt budget ended.",
+        "generationRequestChanged": "Generation request changed.",
+        "generationAccountChanged": "Generation account changed.",
+        "subscriptionAccountsExhausted": "All {{attempted}} eligible accounts reached their subscription limit. Try again after a limit resets, or choose another account in Settings.",
+        "subscriptionAttemptLimit": "{{attempted}} accounts reached their subscription limit, the most Orca tries for one request. Try again later, or choose another account in Settings.",
+        "subscriptionNoEligibleAlternate": "Subscription limits were reached and no other eligible account was available. Try again after a limit resets, or choose another account in Settings.",
+        "subscriptionBudgetEnded": "The account reached its subscription limit and the generation budget ended before another account could finish. Try again.",
         "outputTooLarge": "{{label}} CLI command produced too much output. Check the agent CLI configuration and try again.",
         "windowsBatchUnsafeArguments": "{{label}} runs through a Windows batch script that cannot take the multi-line prompt as an argument. Point Settings at the agent's executable, or use a custom command without {prompt} so Orca sends the prompt on stdin.",
         "cliTerminated": "{{label}} CLI command was terminated before exiting.",

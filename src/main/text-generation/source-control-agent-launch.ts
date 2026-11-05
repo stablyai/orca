@@ -122,9 +122,14 @@ function spawnSupervisedAgent(
     detached: spec.detached,
     stdio: ['pipe', 'pipe', 'pipe', ...spec.groupReportStdio]
   })
-  guardSupervisedProviderGroup(child, {
+  const swept = Promise.withResolvers<void>()
+  const guarded = guardSupervisedProviderGroup(child, {
     site: SOURCE_CONTROL_KILL_SITE,
-    supervised: spec.supervised
+    supervised: spec.supervised,
+    onSwept: () => swept.resolve()
   })
-  return Object.assign(child, { supervised: spec.supervised })
+  if (!guarded) {
+    swept.resolve()
+  }
+  return Object.assign(child, { supervised: spec.supervised, groupSwept: swept.promise })
 }

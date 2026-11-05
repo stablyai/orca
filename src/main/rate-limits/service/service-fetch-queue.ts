@@ -63,7 +63,13 @@ export abstract class RateLimitServiceFetchQueue extends RateLimitServiceProvide
     }
   }
 
-  protected async fetchCodexOnly(options?: { force?: boolean }): Promise<void> {
+  protected async fetchCodexOnly(options?: {
+    force?: boolean
+    signal?: AbortSignal
+  }): Promise<void> {
+    if (options?.signal?.aborted) {
+      return
+    }
     if (this.isFetching) {
       if (options?.force) {
         this.codexOnlyFetchQueued = true
@@ -75,10 +81,15 @@ export abstract class RateLimitServiceFetchQueue extends RateLimitServiceProvide
 
     try {
       let shouldContinue = true
+      // Queued reruns belong to other callers, so only the first cycle obeys this caller's signal.
+      let externalSignal = options?.signal
       while (shouldContinue) {
-        const signal = await this.runWithFetchAbortSignal((fetchSignal) =>
-          this.runFetchCodexOnlyCycle(fetchSignal)
+        const signal = await this.runProviderCycleWithExternalSignal(
+          'codex',
+          (fetchSignal) => this.runFetchCodexOnlyCycle(fetchSignal),
+          externalSignal
         )
+        externalSignal = undefined
         shouldContinue = false
         if (signal.aborted) {
           break
@@ -122,7 +133,13 @@ export abstract class RateLimitServiceFetchQueue extends RateLimitServiceProvide
     }
   }
 
-  protected async fetchClaudeOnly(options?: { force?: boolean }): Promise<void> {
+  protected async fetchClaudeOnly(options?: {
+    force?: boolean
+    signal?: AbortSignal
+  }): Promise<void> {
+    if (options?.signal?.aborted) {
+      return
+    }
     if (this.isFetching) {
       if (options?.force) {
         this.claudeOnlyFetchQueued = true
@@ -136,10 +153,14 @@ export abstract class RateLimitServiceFetchQueue extends RateLimitServiceProvide
       let shouldContinue = true
       // Only user-forced refreshes bypass Retry-After; queued reruns inherit that force.
       let cycleForce = options?.force ?? false
+      let externalSignal = options?.signal
       while (shouldContinue) {
-        const signal = await this.runWithFetchAbortSignal((fetchSignal) =>
-          this.runFetchClaudeOnlyCycle(fetchSignal, { force: cycleForce })
+        const signal = await this.runProviderCycleWithExternalSignal(
+          'claude',
+          (fetchSignal) => this.runFetchClaudeOnlyCycle(fetchSignal, { force: cycleForce }),
+          externalSignal
         )
+        externalSignal = undefined
         shouldContinue = false
         cycleForce = true
         if (signal.aborted) {
@@ -241,5 +262,34 @@ export abstract class RateLimitServiceFetchQueue extends RateLimitServiceProvide
       this.isFetching = false
       this.resolveFetchIdleWaiters()
     }
+  }
+
+  private async runProviderCycleWithExternalSignal(
+    provider: 'claude' | 'codex',
+    run: (signal: AbortSignal) => Promise<void>,
+    externalSignal: AbortSignal | undefined
+  ): Promise<AbortSignal> {
+    const before = this.state[provider]
+    const generation = this.providerFetchGeneration(provider)
+    const signal = await this.runWithFetchAbortSignal(run, externalSignal)
+    const current = this.state[provider]
+    // An externally aborted cycle skips its apply step; settle the loading chip it set.
+    if (
+      externalSignal?.aborted &&
+      !signal.aborted &&
+      current !== before &&
+      current?.status === 'fetching' &&
+      generation === this.providerFetchGeneration(provider)
+    ) {
+      this.updateState({
+        ...this.state,
+        [provider]: before?.status === 'fetching' ? null : before
+      })
+    }
+    return signal
+  }
+
+  private providerFetchGeneration(provider: 'claude' | 'codex'): number {
+    return provider === 'claude' ? this.claudeFetchGeneration : this.codexFetchGeneration
   }
 }

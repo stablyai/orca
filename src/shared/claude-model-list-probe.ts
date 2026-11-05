@@ -31,6 +31,7 @@ export type ClaudeListedModel = {
   id: string
   /** The CLI's own picker label (e.g. `Opus (1M context)`). */
   label: string
+  resolvedModel?: string
   /** Names what the value resolves to on this host (e.g. `Opus 5 with 1M context …`). */
   description?: string
   /** `--effort` values this model accepts; empty when it has no effort control. */
@@ -56,6 +57,7 @@ type RawControlResponse = {
 }
 
 type RawListedModel = {
+  resolvedModel?: unknown
   value?: unknown
   displayName?: unknown
   description?: unknown
@@ -86,6 +88,7 @@ function toListedModel(value: unknown): ClaudeListedModel | null {
   return {
     id,
     label,
+    ...(typeof raw.resolvedModel === 'string' ? { resolvedModel: raw.resolvedModel } : {}),
     ...(description ? { description } : {}),
     effortLevels,
     supportsFastMode: raw.supportsFastMode === true,

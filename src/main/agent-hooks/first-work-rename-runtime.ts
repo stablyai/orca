@@ -5,6 +5,7 @@ import type { FirstWorkBranchRenameDeps } from './first-work-branch-rename'
 import { rememberBranchRenameFailureOutput } from './branch-rename-failure-output'
 import { renameWorktreeFolderOnFirstWork } from './first-work-folder-rename'
 import { moveWorktree } from '../git/worktree'
+import { aliasLocalGenerationTargetPath } from '../text-generation/source-control-generation-lanes'
 import { isWslMoveFolderWorkspaceBlocked } from '../persistence/moving-wsl-projects/wsl-move-background-backoff'
 import type { Store } from '../persistence/loading-store/store'
 import type { RuntimeStore } from '../runtime/runtime-store-contract'
@@ -37,6 +38,32 @@ export function firstWorkRenameDeps(
     getSettings: () => store.getSettings(),
     getRepo: (repoId) => store.getRepo(repoId),
     getAgentEnvResolvers: () => runtime.getCommitMessageAgentEnvironmentResolvers(),
+    // Only instance/ownership fields: sidebar sort stamps rewrite meta mid-turn and must not stale a rename.
+    getRenameOwnerRevision: (worktreeId) => {
+      const scope = parseWorkspaceKey(worktreeId)
+      if (scope?.type === 'folder') {
+        const folder = store.getFolderWorkspace!(scope.folderWorkspaceId)
+        return folder
+          ? JSON.stringify([
+              folder.id,
+              folder.createdAt,
+              folder.folderPath,
+              folder.connectionId ?? null,
+              folder.executionHostId ?? null
+            ])
+          : undefined
+      }
+      const meta = store.getWorktreeMeta(worktreeId)
+      return meta
+        ? JSON.stringify([
+            meta.instanceId ?? null,
+            meta.createdAt ?? null,
+            meta.orcaCreatedAt ?? null,
+            meta.orcaCreationSource ?? null,
+            meta.preserveBranchOnDelete === true
+          ])
+        : undefined
+    },
     getCurrentDisplayName: (worktreeId) => {
       const scope = parseWorkspaceKey(worktreeId)
       return scope?.type === 'folder'
@@ -101,7 +128,10 @@ export function firstWorkRenameDeps(
             notifyWorktreeRenamed: (repoId, oldId, newId) =>
               runtime.notifyWorktreeFolderRenamed(repoId, oldId, newId),
             pathExists: async (candidate) => existsSync(candidate),
-            moveWorktree
+            moveWorktree: async (repoPath, oldPath, newPath) => {
+              await moveWorktree(repoPath, oldPath, newPath)
+              aliasLocalGenerationTargetPath(oldPath, newPath)
+            }
           })
       : undefined,
     setRenameError: (worktreeId, error, failureOutput) => {

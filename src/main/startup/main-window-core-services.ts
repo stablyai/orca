@@ -1,3 +1,4 @@
+import { hostTextSubscriptionResolvers } from '../text-generation/text-subscription-failover'
 import type { BrowserWindow } from 'electron'
 import { registerCoreHandlers } from '../ipc/register-core-handlers/register-core-handlers'
 import { attachMainWindowServices } from '../window/attach-main-window-services'
@@ -15,7 +16,6 @@ import {
   handlePtyExit
 } from './main-process-pty-startup'
 import { prepareCodexRuntimeHomeForLaunch } from './codex-launch-preparation'
-import { resolveHostAgentBaseEnvironment } from '../runtime/structured-agent-shell-environment'
 import {
   prepareCodexPinnedLaunchHome,
   prepareCodexSessionResumeForLaunch
@@ -81,7 +81,12 @@ export function attachMainWindowCoreServices(
     {
       prepareForCodexLaunch: prepareCodexRuntimeHomeForLaunch,
       prepareForClaudeLaunch: (target) => claudeRuntimeAuth.prepareForClaudeLaunch(target),
-      resolveBaseEnvironment: () => resolveHostAgentBaseEnvironment(store.getSettings())
+      ...hostTextSubscriptionResolvers({
+        home: state.codexRuntimeHome!,
+        store,
+        auth: claudeRuntimeAuth,
+        rateLimits
+      })
     },
     state.agentAwakeService ?? undefined,
     state.crashReports ?? undefined,

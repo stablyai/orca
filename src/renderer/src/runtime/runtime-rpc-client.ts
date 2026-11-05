@@ -39,9 +39,10 @@ export async function callRuntimeRpc<TResult>(
     expectedEnvironmentRuntimeId?: string
     beforeSend?: () => void
     paramsForStatus?: (status: RuntimeStatus | null) => unknown
+    isCanceled?: () => boolean
   } = {}
 ): Promise<TResult> {
-  if (options.signal?.aborted) {
+  if (options.signal?.aborted || options.isCanceled?.()) {
     throw createRuntimeRpcAbortError()
   }
   const expectedEnvironmentPairingRevision =
@@ -63,7 +64,7 @@ export async function callRuntimeRpc<TResult>(
           options.signal
         )
       : null
-  if (options.signal?.aborted) {
+  if (options.signal?.aborted || options.isCanceled?.()) {
     throw createRuntimeRpcAbortError()
   }
   const selectedParams = options.paramsForStatus

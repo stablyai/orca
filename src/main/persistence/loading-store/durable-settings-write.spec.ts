@@ -91,6 +91,7 @@ export function registerDurableSettingsWriteTests(): void {
   it('rejects a failed disk write and rolls back without publishing the preference', async () => {
     const { store, authority, readState } = await createWorkerMaintenanceFixture()
     const previous = store.getSettings().alwaysForceDeleteWorktrees
+    const revision = store.getSettingsKeyRevision('alwaysForceDeleteWorktrees')
     vi.spyOn(authority, 'writeSerializedDomains').mockRejectedValueOnce(new Error('Disk full'))
     const onChanged = vi.fn()
     store.onSettingsChanged(onChanged)
@@ -98,6 +99,8 @@ export function registerDurableSettingsWriteTests(): void {
       store.updateSettingsAndFlush({ alwaysForceDeleteWorktrees: true }, { notifyListeners: true })
     ).rejects.toThrow('Disk full')
     expect(store.getSettings().alwaysForceDeleteWorktrees).toBe(previous)
+    // The rollback is a second change, so a fence captured before the write stays invalid.
+    expect(store.getSettingsKeyRevision('alwaysForceDeleteWorktrees')).toBeGreaterThan(revision)
     expect(readState().settings.alwaysForceDeleteWorktrees).toBe(previous)
     expect(onChanged).not.toHaveBeenCalled()
   })
