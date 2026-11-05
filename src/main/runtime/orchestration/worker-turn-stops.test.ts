@@ -282,6 +282,29 @@ describe('terminal worker turn stops', () => {
     stops.observe(moved('working', 'done'))
     await settle()
     expect(ctx.mail()).toHaveLength(2)
+
+    // The coordinator later taking a Dispatch of its own does not turn its earlier guidance into worker mail.
+    const later = createRootDispatch(
+      ctx.db,
+      ctx.db.createTask({ spec: 'later', runId: ctx.run.id }).id,
+      'term_coordinator'
+    )
+    ctx.db.db
+      .prepare(
+        "UPDATE dispatch_contexts SET created_at = datetime('now', '+1 minute') WHERE id = ?"
+      )
+      .run(later.id)
+    const next = ctx.db.insertMessage({
+      from: 'term_run_owner',
+      to: `dispatch:${ctx.dispatch.id}`,
+      subject: 'one more',
+      runId: ctx.run.id
+    })
+    ctx.db.markAsRead([next.id])
+    current.row = hookRow({ stateStartedAt: 800 })
+    stops.observe(moved('working', 'done'))
+    await settle()
+    expect(ctx.mail()).toHaveLength(3)
   })
 
   it('stays quiet after the worker asks and ends its turn, until the answer arrives', async () => {
