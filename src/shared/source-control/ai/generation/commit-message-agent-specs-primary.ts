@@ -168,6 +168,8 @@ export function buildPrimaryCommitMessageAgentSpecs({
       promptDelivery: 'stdin',
       buildArgs: ({ model, thinkingLevel }) => [
         'run',
+        // 2.x otherwise runs the turn in the shared service, which ignores this run's env and outlives its kill; 1.x ignores the flag.
+        '--standalone',
         ...(model && model !== 'default' ? ['--model', model] : []),
         '--agent',
         'build',
@@ -197,6 +199,8 @@ export function buildPrimaryCommitMessageAgentSpecs({
       promptDelivery: 'stdin',
       buildArgs: ({ model, thinkingLevel }) => [
         'run',
+        // 2.x otherwise runs the turn in the shared service, which ignores this run's env and outlives its kill; 1.x ignores the flag.
+        '--standalone',
         ...(model && model !== 'default'
           ? ['--model', thinkingLevel ? `${model}#${thinkingLevel}` : model]
           : []),

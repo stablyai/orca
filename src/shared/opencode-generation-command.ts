@@ -18,6 +18,39 @@ export function mergeOpenCodeGenerationArgs(
   return [...prefixArgs, ...args]
 }
 
+// Prompts carry their context, but saved templates may name repo files to read (matches Claude's text-generation tools).
+const OPENCODE_TEXT_GENERATION_PERMISSION = {
+  '*': 'deny',
+  read: 'allow',
+  grep: 'allow',
+  glob: 'allow',
+  list: 'allow'
+}
+
+/** Inline config outranks project config; unparseable content (JSONC) is replaced, since running without the policy is unsafe. */
+export function withOpenCodeTextGenerationPolicy(content: string | undefined): string {
+  let config: unknown = {}
+  try {
+    config = content?.trim() ? JSON.parse(content) : {}
+  } catch {
+    config = {}
+  }
+  const base = typeof config === 'object' && config !== null && !Array.isArray(config) ? config : {}
+  return JSON.stringify({ ...base, permission: OPENCODE_TEXT_GENERATION_PERMISSION })
+}
+
+export function openCodeTextGenerationEnv(
+  agentId: string,
+  env: Record<string, string> | undefined
+): Record<string, string> | undefined {
+  return agentId === 'opencode' || agentId === 'opencode2'
+    ? {
+        ...env,
+        OPENCODE_CONFIG_CONTENT: withOpenCodeTextGenerationPolicy(env?.OPENCODE_CONFIG_CONTENT)
+      }
+    : env
+}
+
 export function openCodeVariantRetryPlan(
   plan: CommitMessagePlan,
   stderr: string

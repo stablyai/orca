@@ -19,7 +19,10 @@ import {
   compactRecipeOptions
 } from './commit-message-generation-options'
 import type { TuiAgent } from '../../../agent-launch/catalog/tui-agent'
-import { mergeOpenCodeGenerationArgs } from '../../../opencode-generation-command'
+import {
+  mergeOpenCodeGenerationArgs,
+  openCodeTextGenerationEnv
+} from '../../../opencode-generation-command'
 import { buildAntigravityGenerationInput } from '../../../antigravity-generation-stream'
 
 // Share pure request/prompt-to-spawn validation and argv planning between local main and SSH JSON-RPC generators.
@@ -283,6 +286,7 @@ export function planCommitMessageGeneration(
     input.agentId === 'opencode' || input.agentId === 'opencode2'
       ? findOptionOccurrence(generationArgs, ['--format'], true)
       : null
+  const env = openCodeTextGenerationEnv(input.agentId, command.env)
   const kimiFormatOption =
     input.agentId === 'kimi'
       ? findRecipeOption(generationArgs, ['--output-format'], KIMI_VALUE_OPTIONS)
@@ -314,7 +318,7 @@ export function planCommitMessageGeneration(
       ...(input.agentId === 'antigravity'
         ? { outputFormat: 'antigravity-stream-json' as const }
         : {}),
-      ...(command.env ? { env: command.env } : {})
+      ...(env ? { env } : {})
     }
   }
 }

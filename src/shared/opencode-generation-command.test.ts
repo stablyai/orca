@@ -14,7 +14,7 @@ describe('OpenCode generation commands', () => {
       expect(result).toMatchObject({
         ok: true,
         plan: {
-          args: ['run', '--auto', '--agent', 'build', '--format', 'json'],
+          args: ['run', '--auto', '--standalone', '--agent', 'build', '--format', 'json'],
           stdinPayload: 'PROMPT',
           outputFormat: 'opencode-json'
         }
@@ -42,7 +42,16 @@ describe('OpenCode generation commands', () => {
       throw new Error(result.error)
     }
     expect(openCodeVariantRetryPlan(result.plan, rejection)).toMatchObject({
-      args: ['run', '--model', 'fixture/chat#high', '--agent', 'build', '--format', 'json'],
+      args: [
+        'run',
+        '--standalone',
+        '--model',
+        'fixture/chat#high',
+        '--agent',
+        'build',
+        '--format',
+        'json'
+      ],
       stdinPayload: 'PROMPT'
     })
     expect(openCodeVariantRetryPlan(result.plan, 'provider rejected the request')).toBeNull()
@@ -90,5 +99,27 @@ describe('OpenCode generation commands', () => {
         rejection
       )
     ).toBeNull()
+  })
+})
+
+describe('OpenCode text-generation tool policy', () => {
+  it.each([
+    [
+      `OPENCODE_CONFIG_CONTENT='{"model":"x/y","permission":{"*":"allow"}}' opencode2`,
+      '"model":"x/y",'
+    ],
+    [`OPENCODE_CONFIG_CONTENT='{ // jsonc' opencode2`, '']
+  ])('keeps override config but replaces its permissions in %s', (agentCommandOverride, kept) => {
+    const result = planCommitMessageGeneration(
+      { agentId: 'opencode2', model: 'default', agentCommandOverride },
+      'PROMPT'
+    )
+    if (!result.ok) {
+      throw new Error(result.error)
+    }
+    expect(result.plan.args.slice(0, 2)).toEqual(['run', '--standalone'])
+    expect(result.plan.env?.OPENCODE_CONFIG_CONTENT).toBe(
+      `{${kept}"permission":{"*":"deny","read":"allow","grep":"allow","glob":"allow","list":"allow"}}`
+    )
   })
 })
