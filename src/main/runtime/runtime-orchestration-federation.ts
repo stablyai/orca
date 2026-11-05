@@ -24,9 +24,9 @@ import {
   pullFinishedWorkerMail,
   type FinishedWorkerHostRound
 } from './orchestration/finished-worker-relay'
-import { applyConfirmedFederatedReleaseHomeProjection } from './rpc/methods/orchestration/federation/federated-worker-release'
 import type { OrchestrationDb } from './orchestration/db'
 import type { FederationRuntime } from './orchestration/federation-runtime'
+import { ORCHESTRATION_FEDERATION_FINISHED_WORKER_MAIL_PROTOCOL_VERSION } from '../../shared/orchestration-runtime-capabilities'
 
 export class RuntimeOrchestrationFederation {
   private readonly timers = new Map<string, ReturnType<typeof setInterval>>()
@@ -36,6 +36,7 @@ export class RuntimeOrchestrationFederation {
   private terminalRecoveryInFlight: Promise<void> | null = null
   private terminalRecoveryRowId = 0
   private relayGeneration = 0
+  private finishedMailGeneration = -1
   private readonly finishedMail = new FinishedWorkerMailRounds((environmentId) =>
     this.pullFinishedWorkerMail(environmentId)
   )
@@ -194,7 +195,12 @@ export class RuntimeOrchestrationFederation {
           }
           this.timers.delete(dispatch.dispatch_id)
           this.warnings.delete(dispatch.dispatch_id)
-          this.ensureFinishedWorkerMail()
+          if (
+            dispatch.protocol_version >=
+            ORCHESTRATION_FEDERATION_FINISHED_WORKER_MAIL_PROTOCOL_VERSION
+          ) {
+            this.finishedMail.ensure([dispatch.environment_id])
+          }
           return
         }
         void this.syncDispatch(dispatch.dispatch_id).catch(() => undefined)
@@ -208,11 +214,15 @@ export class RuntimeOrchestrationFederation {
     this.ensureFinishedWorkerMail()
   }
 
+  // Ask every host once per database, then only a host with an answer to deliver, so a routine call never
+  // restarts rounds a host already ended.
   private ensureFinishedWorkerMail(): void {
-    if (this.transport) {
-      const finished = this.runtime.getOrchestrationDb().listFinishedFederatedWorkers()
-      this.finishedMail.ensure(finished.map((worker) => worker.environmentId))
-    }
+    const all = this.finishedMailGeneration !== this.relayGeneration
+    this.finishedMailGeneration = this.relayGeneration
+    const finished = this.runtime.getOrchestrationDb().listFinishedFederatedWorkers()
+    this.finishedMail.ensure(
+      finished.flatMap((worker) => (all || worker.answerPending ? [worker.environmentId] : []))
+    )
   }
 
   private pullFinishedWorkerMail(environmentId: string): Promise<FinishedWorkerHostRound> {
@@ -227,7 +237,6 @@ export class RuntimeOrchestrationFederation {
           15_000
         ),
       sync: (dispatchId) => this.syncDispatch(dispatchId),
-      retire: (dispatchId) => applyConfirmedFederatedReleaseHomeProjection(db, dispatchId),
       isCurrent: () =>
         generation === this.relayGeneration && this.runtime.getOrchestrationDb() === db
     })

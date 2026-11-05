@@ -7,7 +7,6 @@ export type WorkerTerminalReleaseRuntime = StructuredSessionSurfaceRuntime &
     | 'forgetStructuredSessionMail'
     | 'resolveOrchestrationWorkerServer'
     | 'callOrchestrationWorkerServer'
-    | 'syncOrchestrationFederatedDispatch'
     | 'getOrchestrationFleetAgentStatusSnapshot'
     | 'getOrchestrationDb'
     | 'showTerminal'

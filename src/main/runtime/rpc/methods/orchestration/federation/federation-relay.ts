@@ -9,7 +9,6 @@ import {
 } from '../../../../orchestration/federation-lifecycle-settlement'
 import { defineMethod, type RpcMethod } from '../../../core'
 import { takesFinishedWorkerMail } from '../../../../orchestration/finished-worker-relay'
-import { reportFinishedWorkers } from '../../../../orchestration/finished-worker-listening'
 import {
   FederationAckParams,
   FederationFinishedMailParams,
@@ -45,12 +44,7 @@ export const ORCHESTRATION_FEDERATION_RELAY_METHODS = [
     permission: 'workspace',
     params: FederationFinishedMailParams,
     handler: (_params, { runtime, authenticatedCallerFingerprint }) =>
-      reportFinishedWorkers(
-        runtime.getOrchestrationDb(),
-        authenticatedCallerFingerprint ?? '',
-        ({ pane_key, terminal_handle }) =>
-          terminal_handle !== null && runtime.isWorkerAgentInTurn({ pane_key, terminal_handle })
-      )
+      runtime.getOrchestrationDb().listFinishedRemoteWorkers(authenticatedCallerFingerprint ?? '')
   }),
   defineMethod({
     name: 'orchestration.federationAck',

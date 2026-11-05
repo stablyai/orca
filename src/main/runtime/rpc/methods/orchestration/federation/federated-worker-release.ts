@@ -179,8 +179,6 @@ export async function releaseFederatedWorker(
   try {
     // Converge the home projection idempotently without repeating a host-confirmed terminal close.
     applyConfirmedFederatedReleaseHomeProjection(args.runtime.getOrchestrationDb(), args.dispatchId)
-    // The closed worker can send nothing more; take what it sent before closing.
-    void args.runtime.syncOrchestrationFederatedDispatch(args.dispatchId).catch(() => undefined)
     return receipt
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error)

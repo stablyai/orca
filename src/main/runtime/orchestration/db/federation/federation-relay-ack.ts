@@ -3,8 +3,7 @@ import { ORCHESTRATION_FEDERATION_FINISHED_WORKER_MAIL_PROTOCOL_VERSION } from '
 import type {
   WorkerReportOutcome,
   FederationRelayDirection,
-  FederationRelayItemRow,
-  RemoteDispatchAttachmentRow
+  FederationRelayItemRow
 } from '../../types'
 import { OrchestrationError } from '../../orchestration-error'
 import { ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION } from '../../../../../shared/protocol-version'
@@ -207,42 +206,51 @@ export function hasPendingFederatedWorkerReport(
   )
 }
 
-export type FinishedRemoteWorker = Pick<
-  RemoteDispatchAttachmentRow,
-  'dispatch_id' | 'pane_key' | 'terminal_handle' | 'updated_at'
-> & { mail: boolean; released: boolean }
+/** A finished worker here is heard for this long after its last message to its Run home; the home keeps
+ *  asking a little longer, so mail accepted at the edge is still taken. */
+export const FINISHED_WORKER_HEARD_SECONDS = 120
+const FINISHED_WORKER_ASKED_SECONDS = FINISHED_WORKER_HEARD_SECONDS + 30
 
-/** For a Run home: its finished workers here, whether each left mail it has not taken, and whether its terminal closed. */
+const LAST_MAIL_SQL = `(SELECT MAX(r.created_at) FROM federation_relay_items r
+  WHERE r.dispatch_id = a.dispatch_id AND r.direction = 'to_home')`
+
+/** For a Run home: its finished workers here still heard, and those with mail it has not taken. Durable and
+ *  read from this host's clock alone, so either side restarting changes nothing. */
 export function listFinishedRemoteWorkers(
   this: OrchestrationDb,
   homePeerFingerprint: string
-): FinishedRemoteWorker[] {
-  return this.db
+): { open: string[]; mail: string[] } {
+  const rows = this.db
     .prepare(
-      `SELECT a.dispatch_id, a.pane_key, a.terminal_handle, a.updated_at,
+      `SELECT a.dispatch_id AS dispatchId,
+         ${LAST_MAIL_SQL} > datetime('now', ?) AS open,
          EXISTS (SELECT 1 FROM federation_relay_items r WHERE r.dispatch_id = a.dispatch_id
-                  AND r.direction = 'to_home' AND r.acked_at IS NULL) AS mail,
-         EXISTS (SELECT 1 FROM worker_terminal_resources t WHERE t.owner_dispatch_id = a.dispatch_id
-                  AND t.release_state = 'released') AS released
+                  AND r.direction = 'to_home' AND r.acked_at IS NULL) AS mail
        FROM remote_dispatch_attachments a
        WHERE a.home_peer_fingerprint = ? AND a.protocol_version >= ?
          AND NOT (${potentiallyLiveRemoteAttachmentSql('a.state')})`
     )
-    .all(homePeerFingerprint, ORCHESTRATION_FEDERATION_FINISHED_WORKER_MAIL_PROTOCOL_VERSION)
-    .flatMap((row) =>
-      typeof row?.dispatch_id === 'string' && typeof row.updated_at === 'string'
-        ? [
-            {
-              dispatch_id: row.dispatch_id,
-              pane_key: typeof row.pane_key === 'string' ? row.pane_key : null,
-              terminal_handle: typeof row.terminal_handle === 'string' ? row.terminal_handle : null,
-              updated_at: row.updated_at,
-              mail: row.mail === 1,
-              released: row.released === 1
-            }
-          ]
-        : []
+    .all(
+      `-${FINISHED_WORKER_ASKED_SECONDS} seconds`,
+      homePeerFingerprint,
+      ORCHESTRATION_FEDERATION_FINISHED_WORKER_MAIL_PROTOCOL_VERSION
     )
+  const ids = (flag: 'open' | 'mail') =>
+    rows.flatMap((row) =>
+      typeof row?.dispatchId === 'string' && row[flag] === 1 ? [row.dispatchId] : []
+    )
+  return { open: ids('open'), mail: ids('mail') }
+}
+
+/** Whether a finished worker's next message will still be read by its Run home. */
+export function isFinishedRemoteWorkerHeard(this: OrchestrationDb, dispatchId: string): boolean {
+  const row = this.db
+    .prepare(
+      `SELECT ${LAST_MAIL_SQL} > datetime('now', ?) AS heard
+       FROM remote_dispatch_attachments a WHERE a.dispatch_id = ?`
+    )
+    .get(`-${FINISHED_WORKER_HEARD_SECONDS} seconds`, dispatchId)
+  return row?.heard === 1
 }
 
 export type FederationRelayAckMethods = {
@@ -253,6 +261,7 @@ export type FederationRelayAckMethods = {
   recordFederatedHomeAcknowledgment: typeof recordFederatedHomeAcknowledgment
   hasPendingFederatedWorkerReport: typeof hasPendingFederatedWorkerReport
   listFinishedRemoteWorkers: typeof listFinishedRemoteWorkers
+  isFinishedRemoteWorkerHeard: typeof isFinishedRemoteWorkerHeard
 }
 
 export function attachFederationRelayAck(ctor: { prototype: object }): void {
@@ -263,6 +272,7 @@ export function attachFederationRelayAck(ctor: { prototype: object }): void {
     setFederatedHomeImportSequence,
     recordFederatedHomeAcknowledgment,
     hasPendingFederatedWorkerReport,
-    listFinishedRemoteWorkers
+    listFinishedRemoteWorkers,
+    isFinishedRemoteWorkerHeard
   })
 }

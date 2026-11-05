@@ -10,7 +10,7 @@ import { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationDb } from '../../../../orchestration/db'
 import type { OrchestrationEnvironmentTransport } from '../../../../orchestration/environment-transport'
 import { pullFinishedWorkerMail } from '../../../../orchestration/finished-worker-relay'
-import { FINISHED_WORKER_LISTENING_GRACE_MS } from '../../../../orchestration/finished-worker-listening'
+import { FINISHED_WORKER_HEARD_SECONDS } from '../../../../orchestration/db/federation/federation-relay-ack'
 import { RpcDispatcher } from '../../../dispatcher'
 import { fingerprintAuthenticatedPairingCredential } from '../../../../device-principal'
 import { ORCHESTRATION_METHODS } from '../../orchestration'
@@ -24,7 +24,6 @@ describe('a finished worker on a paired host', () => {
   let workerDb: OrchestrationDb
   let homeRuntime: OrcaRuntimeService
   let homeDispatcher: RpcDispatcher
-  let workerRuntime: OrcaRuntimeService
   let workerDispatcher: RpcDispatcher
   let dispatchId: string
   let taskId: string
@@ -32,7 +31,7 @@ describe('a finished worker on a paired host', () => {
 
   function setup(protocolVersion: number): void {
     workerDb = new OrchestrationDb(':memory:')
-    workerRuntime = new OrcaRuntimeService()
+    const workerRuntime = new OrcaRuntimeService()
     workerRuntime.setOrchestrationDb(workerDb)
     vi.spyOn(workerRuntime, 'getTerminalPaneKey').mockImplementation((handle) =>
       handle === 'term_worker' ? workerPaneKey : null
@@ -150,7 +149,6 @@ describe('a finished worker on a paired host', () => {
           5_000
         ),
       sync: (id) => homeRuntime.syncOrchestrationFederatedDispatchAfterCurrent(id),
-      retire: () => {},
       isCurrent: () => true
     })
 
@@ -169,7 +167,6 @@ describe('a finished worker on a paired host', () => {
   }
 
   beforeEach(() => vi.clearAllMocks())
-  afterEach(() => vi.useRealTimers())
 
   it('still reaches its coordinator, and an ask gets its answer', async () => {
     setup(ORCHESTRATION_FEDERATION_FINISHED_WORKER_MAIL_PROTOCOL_VERSION)
@@ -240,21 +237,29 @@ describe('a finished worker on a paired host', () => {
     expect(await homePull()).toBe('done')
   })
 
-  it('stops the home listening once the worker rests, but not while it works', async () => {
+  it('stops the home listening once the worker stops writing', async () => {
     setup(ORCHESTRATION_FEDERATION_FINISHED_WORKER_MAIL_PROTOCOL_VERSION)
     await finish()
-    const inTurn = vi.spyOn(workerRuntime, 'isWorkerAgentInTurn').mockReturnValue(true)
-    vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + FINISHED_WORKER_LISTENING_GRACE_MS })
     expect(await homePull()).toBe('listening')
 
-    inTurn.mockReturnValue(false)
-    vi.setSystemTime(Date.now() + FINISHED_WORKER_LISTENING_GRACE_MS)
-    expect(await homePull()).toBe('done')
+    ageWorkerMail(FINISHED_WORKER_HEARD_SECONDS)
     await expect(
       workerCall('orchestration.send', { subject: 'Hours later' })
     ).resolves.toMatchObject({
       ok: false,
       error: { code: 'run_home_unreachable' }
     })
+    expect(await homePull()).toBe('listening')
+    ageWorkerMail(30)
+    expect(await homePull()).toBe('done')
   })
+
+  // Moves the worker's mail back in time on its host's clock, as if it had stopped writing that long ago.
+  function ageWorkerMail(seconds: number): void {
+    workerDb.db
+      .prepare(
+        `UPDATE federation_relay_items SET created_at = datetime(created_at, ?) WHERE direction = 'to_home'`
+      )
+      .run(`-${seconds} seconds`)
+  }
 })

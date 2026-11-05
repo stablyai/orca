@@ -5,7 +5,6 @@ import type {
   RemoteDispatchAttachmentRow
 } from '../../../../orchestration/types'
 import { takesFinishedWorkerMail } from '../../../../orchestration/finished-worker-relay'
-import { isFinishedWorkerHeard } from '../../../../orchestration/finished-worker-listening'
 import { dispatchReportMailbox } from '../../../../orchestration/dispatch-report-mailbox'
 import { reportCorrectsUnobservedPrompt } from '../../../../orchestration/worker-report-admission'
 import { isDispatchAssignee } from '../../../../orchestration/db/dispatch-context/dispatch-lookup'
@@ -131,7 +130,10 @@ function finishedRemoteAttachment(
   ) {
     return undefined
   }
-  if (!takesFinishedWorkerMail(attachment) || !isFinishedWorkerHeard(db, attachment)) {
+  if (
+    !takesFinishedWorkerMail(attachment) ||
+    !db.isFinishedRemoteWorkerHeard(attachment.dispatch_id)
+  ) {
     throw new OrchestrationError(
       'run_home_unreachable',
       `Dispatch ${attachment.dispatch_id} has finished, and its coordinator runs on another computer that is no longer taking mail from this worker. Nothing was sent; give the message to the user instead.`

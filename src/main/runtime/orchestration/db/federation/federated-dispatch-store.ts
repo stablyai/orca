@@ -45,7 +45,7 @@ export function listActiveFederatedDispatches(
     .all(runId ?? null, runId ?? null) as FederatedDispatchRow[]
 }
 
-/** Settled Dispatches whose host keeps their finished worker, which can still mail its coordinator. */
+/** Settled Dispatches whose finished worker may still mail its coordinator through its host. */
 export function listFinishedFederatedWorkers(
   this: OrchestrationDb
 ): { dispatchId: string; environmentId: string; answerPending: boolean }[] {
@@ -57,7 +57,7 @@ export function listFinishedFederatedWorkers(
                     AND r.acked_at IS NULL) AS answerPending
        FROM federated_dispatches fd
        INNER JOIN worker_dispatches wd ON wd.dispatch_id = fd.dispatch_id
-       WHERE fd.protocol_version >= ? AND fd.remote_terminal_handle IS NOT NULL
+       WHERE fd.protocol_version >= ?
          AND wd.state NOT IN ('starting', 'ready', 'stopping', 'start_unknown', 'stop_unknown')`
     )
     .all(ORCHESTRATION_FEDERATION_FINISHED_WORKER_MAIL_PROTOCOL_VERSION)
