@@ -27,13 +27,14 @@ export function TransientToast({
   bottomInset: number
 }) {
   useMobileColorScheme()
-  return message ? (
+  // The live region stays mounted so a screen reader hears the message appear; the page has no announceForAccessibility.
+  return (
     <View
       accessibilityLiveRegion="polite"
       pointerEvents="none"
       style={[mobileSessionReviewCommentStyles.toast, { bottom: bottomInset + spacing.lg }]}
     >
-      <Text style={mobileSessionReviewCommentStyles.toastText}>{message}</Text>
+      {message ? <Text style={mobileSessionReviewCommentStyles.toastText}>{message}</Text> : null}
     </View>
-  ) : null
+  )
 }
