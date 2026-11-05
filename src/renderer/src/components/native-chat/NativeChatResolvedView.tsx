@@ -121,7 +121,7 @@ export function NativeChatResolvedView({
   const rootRef = useRef<HTMLDivElement>(null)
   const composerRef = useRef<NativeChatComposerHandle>(null)
   // Keep Paste targeted while the question card replaces the composer.
-  const questionAnswerInputRef = useRef<HTMLInputElement>(null)
+  const questionAnswerInputRef = useRef<HTMLTextAreaElement>(null)
   const fileLinkContext = useNativeChatFileLinkContext(terminalTabId)
   const onPaste = useNativeChatPasteBridge({ rootRef, composerRef, questionAnswerInputRef })
 

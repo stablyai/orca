@@ -1,5 +1,5 @@
 import { OrcaRuntimeWithResolveExitWaiters } from './terminal/wait/terminal-wait-settlements'
-import type { TerminalWaiter } from './runtime-terminal-contracts'
+import type { TerminalWaiter } from './terminal/wait/terminal-waiter'
 import type { RuntimeTerminalWait } from '../../shared/runtime-terminal-contracts'
 import type { BrowserWindow } from 'electron'
 import { getRuntimeDesktopSurface } from './runtime-desktop-surface'

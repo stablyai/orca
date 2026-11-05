@@ -10,6 +10,7 @@ import {
   type AgentChildDisplayState
 } from '../../../../../../shared/agent-status/child-work/agent-status-child-work-display'
 import { buildRunningAgentChildRowModels } from '../../../../../../shared/running-agent-child-rows'
+import { agentChildRowName } from '@/components/agent-child-row-text'
 import type { TerminalTab } from '../../../../../../shared/workspace-layout/terminal-tab-types'
 
 /** NUL prevents collision with real pane keys; synthetic keys are never parsed for activation, which uses the parent pane. */
@@ -35,7 +36,8 @@ function childDashboardRow(
   const entry: AgentStatusEntry = {
     state: state === 'idle' || state === 'unverifiable' ? 'done' : state,
     ...(row.displayState === 'monitoring' ? { workingMode: 'monitoring' as const } : {}),
-    prompt: row.name,
+    // An unnamed child still needs its id tail, so it reads as the compact row does.
+    prompt: row.name || row.idSuffix ? agentChildRowName(row) : '',
     // The parent's delivery clock; the child's own evidence clock rides `evidenceObservedAt`.
     updatedAt: parentEntry.updatedAt,
     ...(row.observedAt !== undefined ? { evidenceObservedAt: row.observedAt } : {}),
@@ -56,7 +58,7 @@ function childDashboardRow(
     orchestration: {
       taskId: `subagent:${row.id}`,
       dispatchId: `subagent:${row.id}`,
-      displayName: row.name || undefined,
+      displayName: row.name || row.idSuffix ? agentChildRowName(row) : undefined,
       parentPaneKey: parentEntry.paneKey
     }
   }

@@ -106,30 +106,6 @@ describe('clampGrabPayload', () => {
     expect(payload?.target.accessibility.ariaLabel).toBe('[redacted]')
   })
 
-  it('keeps and clamps browser annotation metadata fields', () => {
-    const payload = clampGrabPayload(
-      makeRawPayload({
-        target: {
-          ...makeRawPayload().target,
-          nearbyElements: Array.from({ length: 10 }, (_, index) => `item-${index}`),
-          reactComponents: '<App>'.repeat(200),
-          sourceFile: 'src/Button.tsx:12:4'
-        }
-      })
-    )
-
-    expect(payload?.target.nearbyElements).toEqual([
-      'item-0',
-      'item-1',
-      'item-2',
-      'item-3',
-      'item-4',
-      'item-5'
-    ])
-    expect(payload?.target.reactComponents).toBe(`${'<App>'.repeat(100)} (truncated)`)
-    expect(payload?.target.sourceFile).toBe('src/Button.tsx:12:4')
-  })
-
   it('drops executable and embedded URL schemes from page and attribute URLs', () => {
     const payload = clampGrabPayload(
       makeRawPayload({

@@ -74,6 +74,12 @@ export const POSIX_HOOK_JSON_STDIN: PosixHookStdinReader = {
   prelude: POSIX_HOOK_JSON_STDIN_PRELUDE
 }
 
+/** Same bytes as the default reader; the capture subshell becomes cat itself instead of forking it. */
+export const POSIX_HOOK_STDIN_EXEC: PosixHookStdinReader = {
+  reader: `if [ -x /bin/cat ]; then exec /bin/cat 2>/dev/null; fi; ${POSIX_HOOK_STDIN_READER}`,
+  prelude: []
+}
+
 // POSIX hooks must drain stdin before any no-op exit to prevent agent-side broken pipes.
 export function buildPosixHookPayloadCapture(
   emptyPayloadPolicy: PosixHookEmptyPayloadPolicy = 'exit',

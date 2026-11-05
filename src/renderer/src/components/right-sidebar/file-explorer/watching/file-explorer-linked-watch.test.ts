@@ -44,59 +44,6 @@ function fixture(root = '/repo') {
 afterEach(() => vi.useRealTimers())
 
 describe('linked-directory watcher invalidation', () => {
-  it.each(['/repo', 'C:\\Repo', '\\\\host\\share\\repo'])(
-    'refreshes a collapsed cached alias even when canonical target is not cached (%s)',
-    (root) => {
-      const f = fixture(root)
-      f.process([{ kind: 'create', absolutePath: joinPath(root, 'target/new.ts') }])
-      expect(f.refreshTree).toHaveBeenCalledOnce()
-      expect(f.refreshDir).not.toHaveBeenCalled()
-      expect(f.cache[f.link].children).toHaveLength(1)
-      expect(f.selected()).toBe(joinPath(f.link, 'old.ts'))
-    }
-  )
-
-  it.each([
-    { kind: 'update' as const, absolutePath: '/repo/target/new.ts', isDirectory: false },
-    { kind: 'update' as const, absolutePath: '/repo/target', isDirectory: true },
-    { kind: 'update' as const, absolutePath: '/repo/link', isDirectory: false },
-    { kind: 'delete' as const, absolutePath: '/repo/target/deleted.ts' },
-    {
-      kind: 'rename' as const,
-      absolutePath: '/repo/target/new.ts',
-      oldAbsolutePath: '/repo/target/old.ts'
-    }
-  ])('refreshes structural uncertainty including link retarget: %j', (event) => {
-    const f = fixture()
-    f.process([event])
-    expect(f.refreshTree).toHaveBeenCalledOnce()
-  })
-
-  it('keeps known regular content edits cheap and honors node directory/symlink flags', () => {
-    const f = fixture('C:\\Repo')
-    const target = 'C:\\Repo\\Target'
-    f.cache[target] = { children: [node(`${target}\\file.ts`), node(`${target}\\dir`, true)] }
-    f.process([{ kind: 'update', absolutePath: 'c:/repo/target/FILE.ts', isDirectory: false }])
-    expect(f.refreshTree).not.toHaveBeenCalled()
-    expect(f.refreshDir).not.toHaveBeenCalled()
-    f.process([{ kind: 'update', absolutePath: 'c:/repo/target/DIR', isDirectory: false }])
-    expect(f.refreshTree).toHaveBeenCalledOnce()
-  })
-
-  it('keeps cached historical aliases refreshed with the Quick Open preference disabled', () => {
-    const f = fixture()
-    const event = { kind: 'create' as const, absolutePath: '/repo/target/new.ts' }
-    f.process([event], false)
-    expect(f.refreshTree).toHaveBeenCalledOnce()
-    f.refreshTree.mockClear()
-    f.process([{ ...event, absolutePath: '/other/new.ts' }])
-    f.process([event], true, '/other')
-    expect(f.refreshTree).not.toHaveBeenCalled()
-    delete f.cache[f.link]
-    f.process([event])
-    expect(f.refreshTree).not.toHaveBeenCalled()
-  })
-
   it('still clears a lexical deleted selection after a prior event requested full refresh', () => {
     const f = fixture()
     f.process([

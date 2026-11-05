@@ -50,12 +50,13 @@ vi.mock('../ipc/worktrees/removal/registered-worktree-roots-cache', () => ({
   invalidateAuthorizedRootsCache: vi.fn(),
   invalidateAuthorizedRootsCacheForRepo: vi.fn()
 }))
+const repoBranchConflictMock = vi.hoisted(() => vi.fn().mockResolvedValue(null))
 vi.mock('../git/repo', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>
   return {
     ...actual,
     getDefaultBaseRef: vi.fn().mockReturnValue('origin/main'),
-    getBranchConflictKind: vi.fn().mockResolvedValue(null)
+    getBranchConflictKind: repoBranchConflictMock
   }
 })
 vi.mock('../git/git-username', async () => {
@@ -792,3 +793,8 @@ describe('terminal layout runtime dispatch and ownership', () => {
     expect(runtime.getTerminalFitOverride('pty')).toBeNull()
   })
 })
+
+vi.mock('../git/repo-branch-conflict', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  getBranchConflictKind: repoBranchConflictMock
+}))

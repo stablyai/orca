@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
-import { OrcaRuntimeService, setPlatform } from '../orca-runtime-test-mocks.spec'
-import type { HeadlessEmulator } from '../../daemon/headless-emulator'
-import type { RuntimeTerminalAgentStatusEvent } from '../orca-runtime-test-mocks.spec'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { setPlatform } from '../orca-runtime-test-mocks/setup.spec'
+import type { RuntimeTerminalAgentStatusEvent } from '../terminal/output/terminal-agent-status-events'
+import type { HeadlessEmulator } from '../../daemon/emulation/headless-emulator'
+
 import {
   TEST_WORKTREE_ID,
   createRuntime,
@@ -11,7 +14,7 @@ import {
   referenceStatusFrameLines,
   store,
   syncSinglePty
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
   it('returns OSC titles from headless main terminal snapshots', async () => {

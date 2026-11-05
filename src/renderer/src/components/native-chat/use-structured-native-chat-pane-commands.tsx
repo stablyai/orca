@@ -35,7 +35,7 @@ export function useStructuredNativeChatPaneCommands({
   ownerWorktreeId: string | null
   rootRef: RefObject<HTMLDivElement | null>
   composerRef: RefObject<NativeChatComposerHandle | null>
-  questionAnswerInputRef: RefObject<HTMLInputElement | null>
+  questionAnswerInputRef: RefObject<HTMLInputElement | HTMLTextAreaElement | null>
 } & NativeChatContextMenuTargetArgs) {
   const { tabId, groupId, isVisible, sessionId, target } = pane
   const terminalPaneActions = pane.contextMenuActions

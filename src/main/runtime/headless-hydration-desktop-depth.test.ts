@@ -1,5 +1,9 @@
 import { expect, it, vi } from 'vitest'
-import { createHydrationRuntime, PTY_ID, SIZE } from './headless-hydration-ownership-test-fixture'
+import {
+  createHydrationRuntime,
+  PTY_ID,
+  SIZE
+} from './orca-runtime-tests/headless-hydration-ownership-test-fixture'
 
 const LINES = Array.from({ length: 1500 }, (_, i) => `L${String(i + 1).padStart(4, '0')} line`)
 

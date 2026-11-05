@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest'
 import { NOTIFICATION_METHODS } from './notifications'
-import { RuntimeMobileNotificationController } from '../../runtime-mobile-notification-controller'
+import { RuntimeMobileNotificationController } from '../../push/notifications/runtime-mobile-notification-controller'
 import type { RpcContext, RpcStreamingMethod, RpcMethod } from '../core'
 
 it('keeps desktop-disabled events out of legacy live and replay streams', async () => {

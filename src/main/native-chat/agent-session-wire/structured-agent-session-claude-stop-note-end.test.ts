@@ -17,7 +17,7 @@ import {
 } from '../../claude/structured/claude-structured-session-test-support'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
-import { structuredClaudeLifecycleEvent } from '../../runtime/structured-claude-runtime-adapter'
+import { structuredClaudeLifecycleEvent } from '../../runtime/agent-session/installation/structured-claude-runtime-adapter'
 import {
   closeTestJournalHostDatabases,
   openTestJournalHostDatabase
@@ -101,7 +101,7 @@ beforeEach(async () => {
     mintSpawnToken: () => 'spawn-a',
     logger: log.logger,
     // Tick manually with no idle threshold to reap resting agents.
-    idleSweep: { intervalMs: 3_600_000, idleMs: 0 },
+    idleSweep: { intervalMs: 3_600_000, idleMs: () => 0 },
     now: () => NOW
   })
   const params = hostTestAttachParams(null, {

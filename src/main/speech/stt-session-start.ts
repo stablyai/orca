@@ -1,4 +1,4 @@
-import { Worker } from 'node:worker_threads'
+import { spawnWorkerThread } from '../worker-threads/worker-thread-spawn'
 import { getCatalogModel } from './model-catalog'
 import { OpenAiTranscriptionSession } from './openai-transcription-client'
 import { readOpenAiSpeechApiKey } from './openai-api-key-store'
@@ -132,7 +132,7 @@ async function startSttSession(
   if (!sherpaModulePath) {
     throw new Error(LOCAL_SPEECH_UNAVAILABLE_ERROR)
   }
-  const worker = new Worker(getSttWorkerPath(), { workerData: { sherpaModulePath } })
+  const worker = spawnWorkerThread(getSttWorkerPath(), { workerData: { sherpaModulePath } })
   state.worker = worker
   state.activeModelId = modelId
   state.activeHotwordsFilePath = hotwordsFilePath

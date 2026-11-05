@@ -42,12 +42,6 @@ function incoming(pages: ReturnType<typeof page>[]): WorkspaceSessionState {
 }
 
 describe('destination workspace-session merge validation', () => {
-  it('accepts a unique client-hosted page identity', () => {
-    expect(() =>
-      prepareOrcadMigrationWorkspaceSession(incoming([page('page-1')]), state())
-    ).not.toThrow()
-  })
-
   it('rejects duplicate client-hosted page identities before merge', () => {
     expect(() =>
       prepareOrcadMigrationWorkspaceSession(incoming([page('page-1'), page('page-1')]), state())

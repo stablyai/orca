@@ -1,8 +1,8 @@
 # Files outside src/main/ssh/legacy-relay/ tagged COMPAT(legacy-relay-bridge). RATCHET: may only SHRINK.
 # Each tag marks code the relay retirement (2027-01-15) deletes or edits.
 # Prune: pnpm check:legacy-relay-fence-ratchet --prune
-config/scripts/pr-code-change-scope.mjs
-config/scripts/pr-e2e-source-routing.mjs
+config/scripts/workflow/source-routing/pr-code-change-scope.mjs
+config/scripts/workflow/source-routing/pr-e2e-source-routing.mjs
 src/main/ipc/ssh/ssh-connect-flow.ts
 src/main/ipc/ssh/ssh-host-server-connect.ts
 src/main/ipc/ssh/ssh-host-server-on-connect-wiring.test.ts
@@ -10,7 +10,7 @@ src/main/ipc/ssh/ssh-host-server-on-connect-wiring.ts
 src/main/ipc/ssh/ssh-session-teardown.ts
 src/main/ipc/ssh/ssh.ts
 src/main/runtime/orchestration/terminal-authority/verify-orchestration-compatibility-caller.ts
-src/main/runtime/runtime-terminal-contracts.ts
+src/main/runtime/orchestration/terminal-authority/orchestration-compatibility-authority.ts
 src/main/ssh/orcad-migration-delta-move.test.ts
 src/main/ssh/orcad-migration-delta-move.ts
 src/main/ssh/orcad-migration-repository-link.test.ts

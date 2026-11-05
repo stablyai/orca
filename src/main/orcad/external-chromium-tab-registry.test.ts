@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import type { RuntimeBrowserCommandHost } from '../runtime/browser/browser-command-contracts'
+import type { RuntimeBrowserCommandHost } from '../runtime/browser/commands/browser-command-contracts'
 import type { ExternalChromiumBrowserSession } from './external-chromium-browser-session'
 import { ExternalChromiumTabRegistry } from './external-chromium-tab-registry'
 

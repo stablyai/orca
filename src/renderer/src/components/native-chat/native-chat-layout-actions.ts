@@ -90,6 +90,8 @@ export function runNativeChatSplitTarget(
     focusIntent.cancel()
     return false
   }
+  // Every chat split path (chat or terminal) lands here, so this is the one place it counts (and advances the tour).
+  state.recordFeatureInteraction('tab-splits')
   const closePaneIfEmpty = (): void => {
     useAppStore.getState().closeEmptyGroup(source.worktreeId, groupId)
   }

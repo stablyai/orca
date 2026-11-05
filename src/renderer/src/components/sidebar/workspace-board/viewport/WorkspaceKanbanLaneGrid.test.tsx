@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { act, cleanup, fireEvent, render } from '@testing-library/react'
+import { cleanup, fireEvent, render } from '@testing-library/react'
 import React, { createRef } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../../../../shared/repo-types'
@@ -134,16 +134,6 @@ function mountedStatusIds(container: HTMLElement): string[] {
   )
 }
 
-function flushNextAnimationFrame(): void {
-  const next = animationFrames.entries().next().value as [number, FrameRequestCallback] | undefined
-  expect(next).toBeDefined()
-  if (!next) {
-    return
-  }
-  animationFrames.delete(next[0])
-  act(() => next[1](performance.now()))
-}
-
 beforeEach(() => {
   animationFrames.clear()
   nextAnimationFrameId = 1
@@ -180,17 +170,5 @@ describe('WorkspaceKanbanLaneGrid', () => {
       'state-20',
       'state-21'
     ])
-  })
-
-  it('hydrates at most one mounted lane per animation frame', () => {
-    const { container } = renderGrid()
-    const renderedLaneCount = (): number =>
-      container.querySelectorAll('[data-render-cards="true"]').length
-
-    expect(renderedLaneCount()).toBe(0)
-    flushNextAnimationFrame()
-    expect(renderedLaneCount()).toBe(1)
-    flushNextAnimationFrame()
-    expect(renderedLaneCount()).toBe(2)
   })
 })

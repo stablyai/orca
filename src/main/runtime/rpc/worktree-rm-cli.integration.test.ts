@@ -7,7 +7,11 @@ import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../orca-runtime'
-import { partialRuntimeStore, storeRepo, storeWorktreeMeta } from '../runtime-store-partial-fixture'
+import {
+  partialRuntimeStore,
+  storeRepo,
+  storeWorktreeMeta
+} from '../orca-runtime-tests/runtime-store-partial-fixture'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import type { Repo } from '../../../shared/repo-types'
 import type { HostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
@@ -28,7 +32,7 @@ import { RpcDispatcher } from './dispatcher'
 import { WORKTREE_METHODS } from './methods/worktree'
 import { STATUS_METHODS } from './methods/status'
 import type { RpcRequest } from './core'
-import { WorkspaceLifecycleQueue } from '../workspaces/workspace-lifecycle-queue'
+import { WorkspaceLifecycleQueue } from '../workspaces/lifecycle/workspace-lifecycle-queue'
 import { installRealWorkerThreadChildProcesses } from '../../worker-thread-child-process/worker-thread-child-process-real.test-fixtures'
 import { removeTree } from '../../../shared/windows-transient-lock-removal'
 import {

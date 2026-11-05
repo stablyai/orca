@@ -39,6 +39,7 @@ function getSetupRunnerCommandPlatformForLaunch(setup: WorktreeSetupLaunch): 'wi
 export type GatedEmptyWorkspaceReseedIntent = {
   callerProvidesSurface: boolean
   seedUserDefaultSurface: boolean
+  initialCwd?: string
   executionHostId?: ExecutionHostId
 }
 
@@ -47,7 +48,7 @@ export function reseedGatedEmptyWorkspace(
   workspaceKey: string,
   intent: GatedEmptyWorkspaceReseedIntent
 ): void {
-  const { callerProvidesSurface, seedUserDefaultSurface, executionHostId } = intent
+  const { callerProvidesSurface, seedUserDefaultSurface, executionHostId, initialCwd } = intent
   const state = useAppStore.getState()
   if (
     callerProvidesSurface === true ||
@@ -66,6 +67,7 @@ export function reseedGatedEmptyWorkspace(
     undefined,
     {
       reseedEmptiedWorkspace: true,
+      ...(initialCwd ? { initialCwd } : {}),
       ...(seedUserDefaultSurface ? { seedUserDefaultSurface: true } : {})
     }
   )
@@ -75,7 +77,7 @@ export function ensureFolderWorkspaceInitialTerminal(
   folderWorkspace: FolderWorkspace,
   startup?: WorktreeStartupPayload,
   providesInitialSurface?: boolean,
-  seedUserDefaultSurface?: boolean
+  opts?: Pick<InitialTerminalOptions, 'seedUserDefaultSurface'>
 ): string | null {
   if (providesInitialSurface === true && startup === undefined) {
     return null
@@ -91,7 +93,7 @@ export function ensureFolderWorkspaceInitialTerminal(
     undefined,
     {
       reseedEmptiedWorkspace: providesInitialSurface !== true,
-      ...(seedUserDefaultSurface ? { seedUserDefaultSurface: true } : {})
+      ...opts
     }
   )
   return primaryTabId
@@ -267,7 +269,8 @@ export function ensureWorktreeHasInitialTerminal(
           issueCommand,
           defaultTabs,
           { ...opts, seedUserDefaultSurface: false }
-        ) !== null
+        ) !== null,
+      opts.initialCwd
     )
     if (defaultChat) {
       return defaultChat.primaryTabId
@@ -287,6 +290,9 @@ export function ensureWorktreeHasInitialTerminal(
     ...(opts?.activateCreatedTabs === false ? { activate: false } : {}),
     ...(sequencedStartup ? { pendingStartup: sequencedStartup } : {})
   })
+  if (opts?.initialCwd) {
+    store.queueTabInitialCwd(terminalTab.id, opts.initialCwd)
+  }
   if (opts?.activateCreatedTabs !== false) {
     store.setActiveTab(terminalTab.id)
   }

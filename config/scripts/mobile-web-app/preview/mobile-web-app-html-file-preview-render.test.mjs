@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { chromium, webkit } from 'playwright-core'
-import { buildMobileWebAppBundle } from '../../build-mobile-web-app-bundle.mjs'
+import { buildMobileWebAppBundle } from '../../build/mobile-web-app/build-mobile-web-app-bundle.mjs'
 import { mobileWebAppDependenciesPresent } from '../mobile-web-app-bundle-dependencies.mjs'
 import {
   createBundleServer,
@@ -16,7 +16,7 @@ import {
   readShellDocumentHeaders
 } from './mobile-web-app-render-harness.mjs'
 import { probePreviewPixel } from './mobile-web-app-preview-frame-readings.mjs'
-import { MOBILE_WEB_PAGE_ROUTES } from '../../mobile-web-page-routes.mjs'
+import { MOBILE_WEB_PAGE_ROUTES } from '../../build/mobile-web-app/mobile-web-page-routes.mjs'
 
 const MARKER = 'ORCA_HTML_FILE_RENDERED'
 const PAINT_RGB = '0,128,255'

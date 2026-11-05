@@ -9,10 +9,8 @@ import {
 } from '@/components/sidebar/comment-markdown-github-attachment-media'
 import {
   getLocalImageCacheKey,
-  getLocalImageSrcCacheKey,
   useLocalImageSrc
 } from '@/components/editor/document-images/useLocalImageSrc'
-import { releaseLocalImageBlob as releaseLocalImageSrcByKey } from '@/components/editor/document-images/local-image-src-cache'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
@@ -138,13 +136,6 @@ function NativeChatMarkdownImagePreview({
     IMAGE_ACCESS,
     retryKey
   )
-  const releaseKey = getLocalImageSrcCacheKey(
-    localSrc,
-    target?.absolutePath ?? '',
-    runtimeContext?.connectionId,
-    imageRuntimeContext,
-    IMAGE_ACCESS
-  )
   useEffect(() => {
     const element = triggerRef.current
     if (!element) {
@@ -160,15 +151,6 @@ function NativeChatMarkdownImagePreview({
       setNear(nextNear)
     })
   }, [])
-  useEffect(() => {
-    if (!releaseKey) {
-      return
-    }
-    if (!leaseActive) {
-      releaseLocalImageSrcByKey(releaseKey)
-    }
-    return () => releaseLocalImageSrcByKey(releaseKey)
-  }, [leaseActive, releaseKey])
   const imageSrc = external || attachment ? src : leaseActive ? loadedSrc : undefined
   const displaySrc = imageSrc === failedSrc ? undefined : imageSrc
   const onFileLinkClick = useNativeChatFileLinkClick(fileLinkContext)
