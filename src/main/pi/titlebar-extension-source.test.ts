@@ -3,7 +3,7 @@ import { runInNewContext } from 'node:vm'
 import ts from 'typescript-api'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { detectAgentStatusFromTitle } from '../../shared/agent-detection'
+import { detectAgentStatusFromTitle } from '../../shared/agent-status/title/agent-title-status'
 import type { PiAgentKind } from '../../shared/pi-agent-kind'
 import { getPiTitlebarExtensionSource } from './titlebar-extension-source'
 

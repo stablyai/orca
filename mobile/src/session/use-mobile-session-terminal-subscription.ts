@@ -1,5 +1,5 @@
 import { useCallback } from 'react'
-import { isTerminalOscLinkRanges } from '../../../src/shared/terminal-osc-link-ranges'
+import { isTerminalOscLinkRanges } from '../../../src/shared/terminal/links/terminal-osc-link-ranges'
 import * as nativeChatTerminalStream from './native-chat/mobile-native-chat-terminal-stream'
 import {
   createMobileTerminalStreamLifetime,

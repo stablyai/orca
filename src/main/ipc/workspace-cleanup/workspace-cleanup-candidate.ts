@@ -10,7 +10,7 @@ import {
   type WorkspaceCleanupBlocker,
   type WorkspaceCleanupCandidate,
   type WorkspaceCleanupReason
-} from '../../../shared/workspace-cleanup'
+} from '../../../shared/workspace-cleanup/workspace-cleanup'
 import {
   createEmptyWorkspaceCleanupGitEvidence,
   readWorkspaceCleanupGitEvidence

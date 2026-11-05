@@ -2,7 +2,7 @@ import { useEffect, useMemo } from 'react'
 import type {
   HostedReviewCreationEligibility,
   HostedReviewInfo
-} from '../../../../../../shared/hosted-review'
+} from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import {
   buildLoadingHostedReviewCreationEligibility,
   resolveHostedReviewCreationProviderForTarget

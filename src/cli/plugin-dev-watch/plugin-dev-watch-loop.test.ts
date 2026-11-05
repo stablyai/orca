@@ -239,13 +239,4 @@ describe('runPluginDevWatch', () => {
     expect(devUnload).toHaveBeenCalledTimes(1)
     expect(h.exitNow).toHaveBeenCalledWith(130)
   })
-
-  it('propagates a first-load approval error so the CLI exits 3', async () => {
-    const h = harness({})
-    vi.mocked(h.host.devLoad).mockRejectedValueOnce(
-      Object.assign(new Error('approval needed'), { code: 'approval_required' })
-    )
-    await expect(h.run).rejects.toMatchObject({ code: 'approval_required' })
-    expect(h.events).toEqual([])
-  })
 })

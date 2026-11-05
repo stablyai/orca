@@ -1,7 +1,7 @@
 import { useAppStore } from '@/store'
 import { notifyTerminalTypingDiscardedBeforeBind } from '../terminal-input-not-sent-notice'
 import { terminalShowsReplayedHistory } from '../replayed-history-terminals'
-import { isWebTerminalSurfaceTabId } from '../../../../../shared/terminal-surface-id'
+import { isWebTerminalSurfaceTabId } from '../../../../../shared/workspace-layout/terminal-surface-id'
 import { shouldRetainDisposedPaneSpawn } from './disposed-spawn-retention'
 import { findColdRestoreResumeSource } from './cold-restore-resume-startup'
 import { mainStartsPane } from './main-starts-pane'

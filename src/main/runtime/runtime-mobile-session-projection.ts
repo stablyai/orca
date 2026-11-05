@@ -1,15 +1,21 @@
 import {
   normalizeCompatibleAgentStatusEntryForOwner,
+  normalizeCompatibleAgentTitleForOwner,
   resolveCompatibleAgentTypeForOwner
-} from '../../shared/agent-title-owner'
-import { resolvePaneAgentOwnerRecord } from '../../shared/pane-agent-owner'
-import type { AgentStatusEntry, AgentStatusIpcPayload } from '../../shared/agent-status-types'
+} from '../../shared/agent-status/title/agent-title-owner'
+import { resolvePaneAgentOwnerRecord } from '../../shared/agent-status/identity/pane-agent-owner'
+import {
+  effectiveAgentStatusOwnerType,
+  type AgentStatusEntry
+} from '../../shared/agent-status/contracts/agent-status-types'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type {
   RuntimeMobileSessionClientTab,
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTabsSnapshot
 } from '../../shared/runtime-types'
-import { isTerminalLeafId, makePaneKey } from '../../shared/stable-pane-id'
+import { isTerminalLeafId, makePaneKey } from '../../shared/workspace-layout/stable-pane-id'
+import { resolveTerminalTabTitle } from '../../shared/tab-title-resolution'
 import { indexAgentStatusRowsByPaneKey } from '../agent-hooks/agent-status-pane-index'
 import {
   demoteRuntimeMobileAgentStatus,
@@ -22,7 +28,7 @@ import {
 } from './runtime-mobile-session-result-finalization'
 import { withStructuredChatStatus } from './runtime-mobile-structured-tab-status'
 import type { RuntimeMobileSessionProjectionHost } from './runtime-mobile-session-projection-contract'
-import { resolveProjectedMobileTerminalTitle } from './manual-terminal-title'
+import { resolveManualTerminalTitle } from './manual-terminal-title'
 import {
   getLatestAgentCandidateTitle,
   getLeafDisplayRecord,
@@ -66,19 +72,12 @@ export function projectRuntimeMobileSessionTabs(
       statusRowsByPaneKey = new Map()
       statusRowsByTerminalHandle = new Map()
       for (const row of host.getStatusSnapshot()) {
-        const paneRows = statusRowsByPaneKey.get(row.paneKey)
-        if (paneRows) {
-          paneRows.push(row)
-        } else {
-          statusRowsByPaneKey.set(row.paneKey, [row])
-        }
+        statusRowsByPaneKey.set(row.paneKey, [...(statusRowsByPaneKey.get(row.paneKey) ?? []), row])
         if (row.terminalHandle) {
-          const handleRows = statusRowsByTerminalHandle.get(row.terminalHandle)
-          if (handleRows) {
-            handleRows.push(row)
-          } else {
-            statusRowsByTerminalHandle.set(row.terminalHandle, [row])
-          }
+          statusRowsByTerminalHandle.set(row.terminalHandle, [
+            ...(statusRowsByTerminalHandle.get(row.terminalHandle) ?? []),
+            row
+          ])
         }
       }
     }
@@ -176,8 +175,10 @@ export function projectRuntimeMobileSessionTabs(
     const ownerRecord = resolvePaneAgentOwnerRecord({
       launchAgent: launchOwnerAgent,
       hookAgent:
-        tab.agentStatus?.agentType ??
+        effectiveAgentStatusOwnerType(tab.agentStatus) ??
+        hookAgentStatus?.paneOwner?.agent ??
         hookAgentStatus?.agentType ??
+        retainedAgentStatus?.paneOwner?.agent ??
         retainedAgentStatus?.payload.agentType ??
         null
     })
@@ -185,17 +186,29 @@ export function projectRuntimeMobileSessionTabs(
       ownerRecord?.agent ?? liveLeafPty?.foregroundAgent ?? pty?.foregroundAgent ?? null
     const ownerOptions = { ownerIsLaunch: ownerRecord?.ownerIsLaunch === true }
     const liveTitle = trackerOnlyTitle ?? leafTitle ?? ptyTitle ?? syncedTab?.title ?? tab.title
-    const { manualTitle, normalizedLiveTitle, title } = resolveProjectedMobileTerminalTitle(
-      [liveLeafPty ?? pty, syncedTab, tab],
+    // Why: agents repaint their title constantly, so a user's rename must outrank it.
+    const manualTitle = resolveManualTerminalTitle(liveLeafPty ?? pty, syncedTab, tab)
+    const normalizedLiveTitle = normalizeCompatibleAgentTitleForOwner(
       liveTitle,
-      tab,
       ownerAgent,
       ownerOptions
     )
+    // Why: the desktop's ranking over main's fresher live title; the window sends a generated
+    // name only while the desktop shows it, so it is passed as enabled.
+    const desktopTitle = resolveTerminalTabTitle(
+      { ...tab, title: normalizedLiveTitle },
+      true,
+      normalizedLiveTitle
+    )
+    const title = manualTitle ?? desktopTitle
     const liveTitleEvidence = leafTitle ?? ptyTitle
     // Renderer status may precede hook session identity; native chat still needs a transcript address.
     const rendererStatusAgent =
-      resolveCompatibleAgentTypeForOwner(tab.agentStatus?.agentType, ownerAgent, ownerOptions) ??
+      resolveCompatibleAgentTypeForOwner(
+        effectiveAgentStatusOwnerType(tab.agentStatus),
+        ownerAgent,
+        ownerOptions
+      ) ??
       ownerAgent ??
       undefined
     const hookSessionAgent = resolveCompatibleAgentTypeForOwner(
@@ -272,22 +285,14 @@ export function projectRuntimeMobileSessionTabs(
         retainedAgentStatus,
         getHookRowsForPane
       )
-    const projectedStatusEntry = projectedAgentStatus.agentStatus as
-      | (AgentStatusEntry & { turnCompletedAt?: number })
-      | undefined
-    const { turnCompletedAt: projectedTurnCompletedAt, ...clientStatusFields } =
-      projectedStatusEntry ?? {}
+    const projectedStatusEntry = projectedAgentStatus.agentStatus as (AgentStatusEntry & { turnCompletedAt?: number }) | undefined
+    const { turnCompletedAt: projectedTurnCompletedAt, ...clientStatusFields } = projectedStatusEntry ?? {}
     const rawTurnCompletedAt =
       hookAgentStatus?.live?.payload.turnCompletedAt ??
       selectRuntimeHookAgentRowForPane(getHookRowsForPane(paneKey)).live?.payload.turnCompletedAt ??
       projectedTurnCompletedAt
-    const turnCompletedAt =
-      typeof rawTurnCompletedAt === 'number' && Number.isFinite(rawTurnCompletedAt)
-        ? rawTurnCompletedAt
-        : undefined
-    const clientAgentStatus: { agentStatus?: AgentStatusEntry } = projectedStatusEntry
-      ? { agentStatus: clientStatusFields as AgentStatusEntry }
-      : {}
+    const turnCompletedAt = typeof rawTurnCompletedAt === 'number' && Number.isFinite(rawTurnCompletedAt) ? rawTurnCompletedAt : undefined
+    const clientAgentStatus: { agentStatus?: AgentStatusEntry } = projectedStatusEntry ? { agentStatus: clientStatusFields as AgentStatusEntry } : {}
     tabs.push(
       buildProjectedMobileTerminalClientTab({
         tab,

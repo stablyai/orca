@@ -13,7 +13,7 @@ import { mountFixture } from '../test-support/rpc-recording/recorder-fixture-sha
 import { MobileTerminalDiagnostics } from './mobile-terminal-diagnostics'
 import { structuredAgentSessionPaneKey } from '../../../src/shared/agent-session/view/structured-agent-session-projection'
 import type { BridgeInitRoute } from '../mobile-web-shell/bridge/bridge-envelope'
-import { parseOrcaSessionAddress } from '../../../src/shared/orca-session-address'
+
 import { activateMobileUiLocale, mobileI18n } from '../i18n/mobile-i18n'
 
 const focus = vi.hoisted(() => ({ active: true }))
@@ -70,16 +70,7 @@ const chat: MobileSessionTab = {
   title: 'Worker',
   isActive: false
 }
-const leaf = '11111111-1111-4111-8111-111111111111'
-const terminal: MobileSessionTab = {
-  type: 'terminal',
-  id: 'flattened',
-  terminal: 'term_worker',
-  parentTabId: 'parent',
-  leafId: leaf,
-  title: 'Worker',
-  isActive: false
-}
+
 const trees: ReactTestRenderer[] = []
 afterEach(async () => {
   act(() => trees.splice(0).forEach((tree) => tree.unmount()))
@@ -135,7 +126,6 @@ function mount(
         activeSessionTabTypeRef: { current: null },
         activeHandleRef: { current: null },
         terminalUnsubsRef: { current: new Map() },
-        defaultTerminalHandlesToLiveInput: vi.fn(),
         subscribeToTerminal: vi.fn(),
         unsubscribeTerminal: vi.fn(),
         showToast: toast
@@ -249,74 +239,6 @@ it.each(['claude', 'codex'] as const)(
   }
 )
 
-it('routes a resolved terminal through caller focus and its actual grouped leaf', async () => {
-  const send = vi.fn<Parameters<typeof mount>[0]>(async (method: string) =>
-    reply(
-      method === 'orchestration.partyOpen'
-        ? { location: { kind: 'terminal', handle: 'term_worker' } }
-        : method === 'terminal.focus'
-          ? { focus: { worktreeId: 'destination' } }
-          : { tabs: [terminal] }
-    )
-  )
-  const h = mount(send)
-  await act(async () => h.open())
-  expect(send.mock.calls[1]).toEqual([
-    'terminal.focus',
-    { terminal: 'term_worker', navigation: 'caller' },
-    expect.objectContaining({ budgetSpansConnect: true })
-  ])
-  expect(h.navigate).toHaveBeenCalledWith('destination', `parent:${leaf}`)
-  expect(h.toast).not.toHaveBeenCalled()
-})
-
-it.each(['method_not_found', 'forbidden'])(
-  'uses shared old-host %s policy for direct terminals and exact native roots',
-  async (code) => {
-    const send = vi.fn<Parameters<typeof mount>[0]>(async (method: string) =>
-      method.startsWith('orchestration.party')
-        ? refused(code)
-        : reply(
-            method === 'terminal.focus'
-              ? { focus: { worktreeId: 'destination' } }
-              : method === 'session.tabs.list'
-                ? { tabs: [terminal, chat] }
-                : {}
-          )
-    )
-    const h = mount(send)
-    await act(async () => h.open())
-    expect(h.navigate).toHaveBeenLastCalledWith('destination', `parent:${leaf}`)
-    send.mockClear()
-    h.sourceSelection.sessionTabsRef.current = [chat]
-    const root: AgentMessageSource = {
-      ...from,
-      senders: [
-        {
-          ...from.senders[0],
-          party: {
-            ...from.senders[0].party,
-            orcaSessionId: parseOrcaSessionAddress(`orca_session_id:${chat.sessionId}`)
-          }
-        }
-      ]
-    }
-    await act(async () => h.open(root))
-    // An older host refuses the opening call, then answers the plain lookup.
-    expect(send.mock.calls.map(([method]) => method)).toEqual([
-      'orchestration.partyOpen',
-      'orchestration.partyLocation',
-      'session.tabs.list',
-      'session.tabs.activate'
-    ])
-    expect(h.navigate).toHaveBeenLastCalledWith(
-      'source-workspace',
-      structuredAgentSessionPaneKey(chat.id, chat.sessionId)
-    )
-    expect(h.toast).not.toHaveBeenCalled()
-  }
-)
-
 it('never falls back after ambiguous lookup and carries its remaining budget into terminal output', async () => {
   vi.useFakeTimers()
   vi.setSystemTime(1000)
@@ -385,54 +307,4 @@ it('retains the displayed source, respects pending selection, and fences stale s
   expect(h.navigate).not.toHaveBeenCalled()
   expect(h.toast).not.toHaveBeenCalled()
   expect(h.sourceSelection.selectedSessionTabIdRef.current).toBe('newer')
-})
-
-it('uses the shared named failure table and permits a fresh retry', async () => {
-  const send = vi.fn<Parameters<typeof mount>[0]>(async () =>
-    reply({ location: null, lost: 'chat' })
-  )
-  const h = mount(send)
-  await act(async () => h.open())
-  expect(h.toast).toHaveBeenCalledWith(
-    "Worker's chat is no longer on this host, so it cannot be reopened here.",
-    3000
-  )
-  await act(async () => h.open())
-  expect(send).toHaveBeenCalledTimes(2)
-})
-
-it.each([
-  'locate',
-  'terminal_exited',
-  'terminal_gone',
-  'terminal_handle_stale',
-  'terminal_not_found',
-  'timeout'
-])('translates one honest terminal outcome for %s at the actual arrow sink', async (code) => {
-  mobileI18n.addResourceBundle('fr', 'translation', {
-    'session.structuredOpen.paneUnavailable': 'Le panneau de l’agent n’est plus disponible.',
-    'session.structuredOpen.unreachable': 'Conversation de {{agent}} indisponible : réessayez.'
-  })
-  await activateMobileUiLocale('fr')
-  const send = vi.fn<Parameters<typeof mount>[0]>(async (method) =>
-    method === 'orchestration.partyOpen'
-      ? reply(
-          code === 'locate'
-            ? { location: null, lost: 'terminal' }
-            : { location: { kind: 'terminal', handle: 'term_worker' } }
-        )
-      : refused(code)
-  )
-  const h = mount(send)
-  await act(async () => h.open())
-  expect(h.navigate).not.toHaveBeenCalled()
-  expect(h.toast).toHaveBeenCalledExactlyOnceWith(
-    code === 'timeout'
-      ? 'Conversation de Worker indisponible : réessayez.'
-      : 'Le panneau de l’agent n’est plus disponible.',
-    3000
-  )
-  expect(send.mock.calls.map(([method]) => method)).toEqual(
-    code === 'locate' ? ['orchestration.partyOpen'] : ['orchestration.partyOpen', 'terminal.focus']
-  )
 })

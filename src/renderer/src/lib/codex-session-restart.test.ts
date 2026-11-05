@@ -10,7 +10,7 @@ const markForFocusedHost = (
     owner: defaultScopeHost(useAppStore.getState().settings),
     ...args
   })
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import { markLiveCodexSessionsForRestart } from './codex-session-restart'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,

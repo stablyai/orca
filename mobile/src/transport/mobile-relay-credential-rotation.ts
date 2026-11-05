@@ -2,7 +2,7 @@ import * as ExpoCrypto from 'expo-crypto'
 import type {
   DeviceResumeConfirmed,
   MobileRelayEndpoint
-} from '../../../src/shared/mobile-relay-credential-contract'
+} from '../../../src/shared/remote-runtime/relay/mobile-relay-credential-contract'
 import {
   MobileRelayCredentialBundleSchema,
   type MobileRelayCredentialBundle

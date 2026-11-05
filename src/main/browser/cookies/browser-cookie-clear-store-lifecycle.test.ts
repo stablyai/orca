@@ -39,7 +39,7 @@ vi.mock('electron', () => ({
   BrowserWindow: electron.BrowserWindow,
   webContents: { getAllWebContents: electron.getAllWebContents }
 }))
-vi.mock('../electron-debugger-lease', () => ({
+vi.mock('../cdp/debugger/electron-debugger-lease', () => ({
   acquireElectronDebugger: vi.fn(() => lease)
 }))
 

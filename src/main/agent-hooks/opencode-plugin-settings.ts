@@ -1,5 +1,5 @@
 import type { PluginSources } from '../../wsl-guest/plugin-overlay'
-import { isAgentStatusHooksEnabledForAgent } from '../../shared/agent-status-hooks-setting'
+import { isAgentStatusHooksEnabledForAgent } from '../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 import type { ManagedHookDetectionSettings } from './managed-hook-detection-commands'
 
 function enabled(settings: ManagedHookDetectionSettings, agent: 'opencode' | 'opencode2'): boolean {

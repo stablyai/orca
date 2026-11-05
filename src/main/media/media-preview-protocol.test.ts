@@ -12,7 +12,7 @@ const { authorize } = vi.hoisted(() => ({
 vi.mock('electron', () => ({
   protocol: { handle: vi.fn(), registerSchemesAsPrivileged: vi.fn() }
 }))
-vi.mock('../ipc/local-file-access-resolution', () => ({
+vi.mock('../ipc/filesystem/access/local-file-access-resolution', () => ({
   resolveLocalFileRequestPath: authorize
 }))
 

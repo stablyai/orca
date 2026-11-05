@@ -1,5 +1,5 @@
-import type { TerminalPanePlacement } from '../../shared/terminal-pane-placement'
-import type { TerminalPaneSplitDirection } from '../../shared/terminal-tab-types'
+import type { TerminalPanePlacement } from '../../shared/workspace-layout/terminal-pane-placement'
+import type { TerminalPaneSplitDirection } from '../../shared/workspace-layout/terminal-tab-types'
 import type { RuntimeTerminalPresentation } from '../../shared/runtime-terminal-contracts'
 import type { RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 

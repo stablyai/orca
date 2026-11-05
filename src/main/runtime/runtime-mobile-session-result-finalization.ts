@@ -3,11 +3,11 @@ import type {
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTerminalTab
 } from '../../shared/runtime-types'
-import type { AgentStatusEntry } from '../../shared/agent-status-types'
-import { resolveExplicitTerminalTitleAgentType } from '../../shared/terminal-title-agent-type'
-import type { TuiAgent } from '../../shared/tui-agent'
-import { isTuiAgent } from '../../shared/tui-agent-config'
-import { dropRetirementProofsForLiveSurfaces } from '../../shared/terminal-retirement-proof-ledger'
+import type { AgentStatusEntry } from '../../shared/agent-status/contracts/agent-status-types'
+import { resolveExplicitTerminalTitleAgentType } from '../../shared/agent-status/title/terminal-title-agent-type'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
+import { isTuiAgent } from '../../shared/agent-launch/catalog/tui-agent-config'
+import { dropRetirementProofsForLiveSurfaces } from '../../shared/workspace-layout/terminal-retirement-proof-ledger'
 import {
   publishedCustomTitle,
   resolveSessionBackedManualTerminalTitle

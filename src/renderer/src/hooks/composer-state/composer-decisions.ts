@@ -2,17 +2,20 @@ import {
   getLinkedWorkItemSuggestedName,
   getLinkedWorkItemWorkspaceName
 } from '../../../../shared/workspace-name'
-import { normalizeExecutionHostId } from '../../../../shared/execution-host'
+import { normalizeExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import { shouldApplyWorkspaceSourceAutoName } from '../../../../shared/new-workspace/workspace-source'
 import { resolveGitHubWorkItemIdentity } from '@/lib/github-work-item-identity'
-import { isWorkspaceLinkedItemSourceContextMatch } from '../../../../shared/workspace-linked-item-source-context'
-import { getGitHubLinkedWorkItemIdentity } from './source-selection-decisions'
+import { isWorkspaceLinkedItemSourceContextMatch } from '../../../../shared/workspace-attachments/workspace-linked-item-source-context'
+import {
+  getGitHubLinkedWorkItemIdentity,
+  type SmartGitHubPrStartPointSelection
+} from './source-selection-decisions'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+
 import type { JiraIssueKeyCasing } from '../../../../shared/ui-chrome-types'
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
-import type { SmartGitHubPrStartPointSelection } from './source-selection-decisions'
+
 import type { WorkspaceCreationTargetHint } from '@/lib/project-host-workspace-target'
 
 export type ComposerDecisions = {

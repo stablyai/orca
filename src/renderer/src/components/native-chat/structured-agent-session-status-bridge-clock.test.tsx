@@ -8,8 +8,8 @@ import type {
   AgentSessionStatusEvent,
   AgentSessionStatusSummary
 } from '../../../../shared/agent-session/agent-session-wire'
-import { agentEntryCompletionAt } from '../../../../shared/agent-completion-time'
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import { agentEntryCompletionAt } from '../../../../shared/agent-status/lifecycle/agent-completion-time'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { Tab } from '../../../../shared/tab-types'
 import type { AppState } from '@/store/types'
 import { countActivityUnread } from '../activity/useActivityUnreadCount'

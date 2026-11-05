@@ -47,7 +47,8 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAtta
 
   syncWindowGraph(
     windowId: number,
-    graph: RuntimeSyncWindowGraph | RuntimeRendererSyncWindowGraph
+    graph: RuntimeSyncWindowGraph | RuntimeRendererSyncWindowGraph,
+    options?: { includeAgentSenders?: boolean }
   ): RuntimeSyncWindowGraphResult {
     // Reject duplicate bare tab ids before mutating authority/state or indexes could route PTYs to the wrong worktree.
     assertUniqueRuntimeGraphTabIds(graph.tabs)
@@ -320,6 +321,9 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAtta
       )
     return {
       ...this.getStatus(),
+      ...(options?.includeAgentSenders === false || windowId === HEADLESS_RUNTIME_WINDOW_ID
+        ? {}
+        : this.agentSenderGraphReply(graph.agentSenderBase)),
       ...(agentOrchestrationByPaneKey ? { agentOrchestrationByPaneKey } : {}),
       ...(nativeChatLaunchDraftResolutions.length > 0 ? { nativeChatLaunchDraftResolutions } : {}),
       ...(mobileSessionResyncWorktrees.size > 0

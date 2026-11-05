@@ -3,9 +3,9 @@ import { OrcaRuntimeWithCloseStructuredAgentSessionTab } from './structured-sess
 import type {
   AgentLaunchTabPublished,
   AgentLaunchTabPublishRequest
-} from '../../../shared/agent-launch-tab-publication'
-import type { AgentLaunchPlacementReceipt } from '../../../shared/agent-launch-intent'
-import type { AgentLaunchPaneAddress } from '../../../shared/agent-launch-pane-verdict'
+} from '../../../shared/agent-launch/contracts/agent-launch-tab-publication'
+import type { AgentLaunchPlacementReceipt } from '../../../shared/agent-launch/contracts/agent-launch-intent'
+import type { AgentLaunchPaneAddress } from '../../../shared/agent-launch/contracts/agent-launch-pane-verdict'
 import { parseExecutionHostId } from '../../../shared/execution-host'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import type { RuntimePtyWorktreeRecord } from '../runtime-terminal-state-records'

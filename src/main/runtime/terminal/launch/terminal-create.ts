@@ -16,6 +16,7 @@ import { agentLaunchTokenFor, withAgentLaunchToken } from '../../../agent-launch
 import { finishCreatedTerminalPty, type CreatedTerminalPtyHost } from './pty-launch-title'
 import { migratedPaneRestoreHint } from '../../migrated-pane-restore-cwd'
 import { paneSize, resolvePtyFirstSize } from '../../../ipc/pty/pty-first-size'
+import * as dependenciesOwner1 from '../../../../shared/workspace-layout/stable-pane-id'
 
 export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreateDeduplication {
   protected abstract paneStartStatusArgs: dependencies.PaneStartArgsOf
@@ -217,7 +218,7 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
         })
         if (launch.surface) {
           ;({ terminalHandle: preAllocatedHandle, tabId, leafId } = launch.surface)
-          paneKey = dependencies.makePaneKey(tabId, leafId)
+          paneKey = dependenciesOwner1.makePaneKey(tabId, leafId)
         }
         this.assertCreatedPtyRegistrationAllowed(result)
         // Provider reattachment still needs this runtime's handle and workspace binding.

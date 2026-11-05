@@ -1,5 +1,5 @@
 import type { WorktreeOccurrence } from '../worktree-occurrence-plan'
-import type { FolderWorkspace } from '../folder-workspace-types'
+import type { FolderWorkspace } from '../folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../project-group-types'
 import type { Repo } from '../repo-types'
 import type { DetectedWorktree, WorkspaceStatus, Worktree } from '../worktree/types'
@@ -77,13 +77,18 @@ export type ImportedWorktreesCardCandidate = {
 export type ImportedWorktreesCardRow = {
   type: 'imported-worktrees-card'
   key: string
-  repo: Repo
-  hiddenWorktrees: DetectedWorktree[]
-  placement: 'repo-group' | 'pinned-fallback'
-  /** Set only when the row's project is checked out on more than one host. */
+  /** Set only when the row's project, or this line's host, needs naming among several hosts. */
   hostContextLabel?: string
   hostContextHostId?: ExecutionHostId
-}
+} & (
+  | { placement: 'repo-group'; repo: Repo; hiddenWorktrees: DetectedWorktree[] }
+  // Outside project grouping no header owns a project, so one line covers a host's projects.
+  | {
+      placement: 'all-projects'
+      hostId: ExecutionHostId
+      projects: ImportedWorktreesCardCandidate[]
+    }
+)
 
 export type NewExternalWorktreesInboxCandidate = {
   repo: Repo

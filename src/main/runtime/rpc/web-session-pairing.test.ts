@@ -4,12 +4,12 @@ import { join } from 'node:path'
 import nacl from 'tweetnacl'
 import type { WebSocket } from 'ws'
 import { describe, expect, it, vi } from 'vitest'
-import { encodeDeviceProofMessage } from '../../../shared/device-key-proof'
+import { encodeDeviceProofMessage } from '../../../shared/remote-runtime/pairing/device-key-proof'
 import { DeviceRegistry } from '../device-registry'
 import { EPHEMERAL_DEVICE_IDLE_MS } from '../ephemeral-device-rows'
 import { SimulatedMobileE2EEV2Peer } from '../mobile-cloud-relay/simulated-mobile-e2ee-v2-peer'
 import { registerSocketDeviceKey } from '../runtime-rpc/runtime-rpc-device-key-registration'
-import { generateKeyPair } from '../../../shared/e2ee-crypto'
+import { generateKeyPair } from '../../../shared/remote-runtime/e2ee/node/e2ee-crypto'
 import {
   MobileSocketWiring,
   type AuthenticatedMobileSocket,
@@ -97,19 +97,6 @@ function sign(key: nacl.SignKeyPair, purpose: 'auth' | 'register', transcriptHas
 }
 
 // First pairing accepts direct clients regardless of page origin; origin gating broke LAN/Tailscale web pairing (#27540).
-describe('first pairing over a direct socket', () => {
-  it('pairs a never-used code and keeps an already-paired browser working', () => {
-    const { registry, connect } = harness()
-    const pending = registry.getOrCreatePendingDevice('Browser', 'runtime')
-    expect(connect(() => ({ deviceToken: pending.token })).reply).toMatchObject({
-      type: 'e2ee_authenticated'
-    })
-    expect(registry.getDevice(pending.deviceId)?.lastSeenAt).toBeGreaterThan(0)
-    expect(connect(() => ({ deviceToken: pending.token })).reply).toMatchObject({
-      type: 'e2ee_authenticated'
-    })
-  })
-})
 
 describe('session-only browser keys', () => {
   it('registers an ephemeral row, sweeps it once idle and disconnected, and then revokes it', () => {

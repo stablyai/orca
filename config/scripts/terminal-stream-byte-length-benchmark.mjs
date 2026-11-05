@@ -55,7 +55,8 @@ function requireCallForm(source, needle, label) {
 }
 
 const { TERMINAL_OUTPUT_BATCH_MAX_BYTES, TERMINAL_STREAM_CHUNK_BYTES } = await import(
-  new URL('../../src/shared/terminal-multiplex-flow-control.ts', import.meta.url).href
+  new URL('../../src/shared/terminal/stream/terminal-multiplex-flow-control.ts', import.meta.url)
+    .href
 )
 const { measureClipboardTextByteLength } = await import(
   new URL('../../src/shared/clipboard-text.ts', import.meta.url).href

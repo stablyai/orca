@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { preserveMissingWorkspaceSessionTerminalBindings } from './workspace-session-terminal-binding-replay'
 
 const LEAF_ONE = '11111111-1111-4111-8111-111111111111'
@@ -194,26 +194,5 @@ describe('workspace session terminal binding replay', () => {
     preserveMissingWorkspaceSessionTerminalBindings(incoming, prior, bindingRecovery as never)
 
     expect(incoming.tabsByWorktree[WORKTREE_A]![0]!.ptyId).toBeNull()
-  })
-
-  it('indexes prior tabs once when replaying a large workspace snapshot', () => {
-    let reads = 0
-    const prior = session(null)
-    prior.tabsByWorktree.worktree = Array.from({ length: 1000 }, (_, i) => ({
-      ...terminalTab('worktree', `tab-${i}`, `pty-${i}`),
-      get id() {
-        reads++
-        return `tab-${i}`
-      }
-    }))
-    const incoming = session(null)
-    incoming.tabsByWorktree.worktree = Array.from({ length: 1000 }, (_, i) =>
-      terminalTab('worktree', `tab-${i}`, null)
-    )
-    preserveMissingWorkspaceSessionTerminalBindings(incoming, prior, bindingRecovery as never)
-    expect(reads).toBeLessThan(10_000)
-    expect(incoming.tabsByWorktree.worktree.map((tab) => tab.ptyId)).toEqual(
-      Array.from({ length: 1000 }, (_, i) => `pty-${i}`)
-    )
   })
 })

@@ -1,4 +1,3 @@
-import type { AutomationSourceAvailability } from './use-automation-source-availability'
 import type { AutomationsPageListState } from './use-automations-page-list-state'
 import type { AutomationsPageLocalState } from './use-automations-page-local-state'
 import type { AutomationsPagePresentationState } from './use-automations-page-presentation-state'
@@ -15,7 +14,6 @@ export type AutomationsPageActionContext = {
   setup: AutomationsPageSetupState
   destination: AutomationsPageDestinationState
   destinationForm: AutomationsPageDestinationFormState
-  sourceAvailability: AutomationSourceAvailability
   presentation: AutomationsPagePresentationState
   pageRefresh: AutomationsPageRefresh
 }

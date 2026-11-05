@@ -2,11 +2,11 @@
 import { renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store/types'
-import { getWorkspaceCleanupCandidateIdentity } from '../../../../shared/workspace-cleanup-host-identity'
+import { getWorkspaceCleanupCandidateIdentity } from '../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
 import {
   createDefaultWorkspaceCleanupFilterState,
   DEFAULT_WORKSPACE_CLEANUP_SORT
-} from '../../../../shared/workspace-cleanup-filter-model'
+} from '../../../../shared/workspace-cleanup/workspace-cleanup-filter-model'
 import { cloneDefaultWorkspaceStatuses } from '../../../../shared/workspace-statuses'
 import type * as FacetModule from './workspace-cleanup-facets'
 import type * as QueryModule from './workspace-cleanup-query'

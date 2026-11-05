@@ -7,6 +7,7 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { emptyCrew, type OrchestrationCrewRow } from '../../../../shared/orchestration-crew'
 import { OrchestrationCrewPanel } from './OrchestrationCrewPanel'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import { i18n, loadRendererUiLanguage, translate } from '@/i18n/i18n'
 
 const rig = vi.hoisted(() => ({
   snapshot: {},
@@ -37,7 +38,12 @@ const worker: OrchestrationCrewRow = {
     sequence: 1
   }
 }
-function mount(row = worker, section: 'managing' | 'talkingWith' = 'managing', canMention = false) {
+function mount(
+  row = worker,
+  section: 'managing' | 'talkingWith' = 'managing',
+  canMention = false,
+  surface: 'chat' | 'terminal' = 'chat'
+) {
   rig.snapshot = {
     ...emptyCrew('ok'),
     sections: {
@@ -60,16 +66,57 @@ function mount(row = worker, section: 'managing' | 'talkingWith' = 'managing', c
             party="term_coordinator"
             canMention={canMention}
             mention={rig.mention}
+            surface={surface}
           />
         </div>
       </fieldset>
     </TooltipProvider>
   )
 }
-afterEach(() => {
+afterEach(async () => {
   cleanup()
   vi.restoreAllMocks()
   vi.clearAllMocks()
+  await i18n.changeLanguage('en')
+})
+
+it.each([
+  ['chat', 'en'],
+  ['chat', 'de'],
+  ['terminal', 'en'],
+  ['terminal', 'de']
+] as const)('keeps the %s panel and tab opaque and outlined in %s', async (surface, language) => {
+  await i18n.changeLanguage(await loadRendererUiLanguage(language))
+  const user = userEvent.setup()
+  mount(worker, 'managing', false, surface)
+  const tab = screen.getByRole('button', { expanded: false })
+  const root = tab.closest('[data-orchestration-crew]')
+  expect(root).toHaveClass(
+    '[--crew-border:color-mix(in_srgb,var(--foreground)_20%,var(--border))]',
+    '[--crew-surface:color-mix(in_srgb,var(--foreground)_7%,var(--card))]'
+  )
+  expect(tab).toHaveClass(
+    'border-(--crew-border)',
+    'bg-(--crew-surface)',
+    'text-card-foreground',
+    'shadow-floating',
+    'dark:border-(--crew-border)',
+    'dark:bg-(--crew-surface)',
+    'dark:hover:bg-accent',
+    'dark:hover:text-accent-foreground'
+  )
+  expect(tab).not.toHaveClass('dark:bg-input/30')
+  await user.click(tab)
+  expect(
+    screen.getByRole('complementary', {
+      name: translate('components.orchestrationCrew.title', 'Orchestration')
+    })
+  ).toHaveClass(
+    'border-(--crew-border)',
+    'bg-(--crew-surface)',
+    'text-card-foreground',
+    'shadow-floating'
+  )
 })
 
 it('keeps disabled/enabled mentions, keyboard disclosure, Open, Copy, Escape and collapse independent', async () => {

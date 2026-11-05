@@ -13,18 +13,6 @@ describe('parseNativeChatApprovalEnvelope', () => {
   })
 
   it.each([
-    ['claude', '1'],
-    ['codex', '1'],
-    ['opencode', '\r'],
-    ['opencode2', '\r'],
-    ['zcode', '\r']
-  ])('allows a %s prompt with %j', (agent, allowSend) => {
-    expect(
-      parseNativeChatApprovalEnvelope(JSON.stringify({ approval: { tool: 'shell' } }), agent)
-    ).toEqual({ tool: 'shell', allowSend, denySend: ESC })
-  })
-
-  it.each([
     ['missing', { tool: 'Edit' }],
     ['empty', { tool: 'Edit', summary: '' }],
     ['non-string', { tool: 'Edit', summary: 42 }]

@@ -1,7 +1,7 @@
 import {
   MOBILE_RELAY_CLOSE_CODE,
   MOBILE_RELAY_PHONE_CLOSE_REASON
-} from '../../../src/shared/mobile-relay-close-codes'
+} from '../../../src/shared/remote-runtime/relay/mobile-relay-close-codes'
 import { RelayOuterError } from './mobile-relay-e2ee-link'
 
 export class RelayRecoveryFailureCount {

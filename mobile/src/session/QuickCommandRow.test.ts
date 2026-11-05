@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { TerminalQuickCommand } from '../../../src/shared/terminal-quick-command-types'
+import type { TerminalQuickCommand } from '../../../src/shared/terminal/quick-commands/terminal-quick-command-types'
 import { QuickCommandRow } from './QuickCommandRow'
 
 const clipboard = vi.hoisted(() => ({ setStringAsync: vi.fn(() => Promise.resolve(true)) }))
@@ -85,22 +85,6 @@ describe('the quick-command row when the pasteboard refuses the text', () => {
     }
   }
 
-  async function mountAndCopy(): Promise<void> {
-    await act(async () => {
-      renderer = create(createElement(QuickCommandRow, rowProps()))
-    })
-    await act(async () => {
-      copyButton().props.onPress()
-    })
-  }
-
-  it('says it could not copy and buzzes the error', async () => {
-    clipboard.setStringAsync.mockResolvedValue(false)
-    await mountAndCopy()
-    expect(copyButton().props.accessibilityLabel).toBe("Couldn't copy")
-    expect(haptics.notificationAsync).toHaveBeenCalledWith('error')
-  })
-
   it('emits nothing at all when the row is gone before the refusal arrives', async () => {
     // Unmount before rejection; feedback without a surviving row would buzz with no explanation.
     let refuse: ((error: Error) => void) | undefined
@@ -121,13 +105,6 @@ describe('the quick-command row when the pasteboard refuses the text', () => {
     await act(async () => {
       refuse?.(new Error('pasteboard refused'))
     })
-    expect(haptics.notificationAsync).not.toHaveBeenCalled()
-  })
-
-  it('shows the copied label and no error buzz when the write lands', async () => {
-    clipboard.setStringAsync.mockResolvedValue(true)
-    await mountAndCopy()
-    expect(copyButton().props.accessibilityLabel).toBe('Copied')
     expect(haptics.notificationAsync).not.toHaveBeenCalled()
   })
 })

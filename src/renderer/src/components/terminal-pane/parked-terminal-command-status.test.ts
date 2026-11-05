@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentStatusEntry, AgentType } from '../../../../shared/agent-status-types'
+import type {
+  AgentStatusEntry,
+  AgentType
+} from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-agent'
 
 const PTY_ID_LOCAL = 'pty-1'

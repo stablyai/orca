@@ -24,7 +24,7 @@ import {
 import type {
   TerminalPaneCloseTarget,
   TerminalSurfaceCloseTarget
-} from '../../../../shared/terminal-surface-close-target'
+} from '../../../../shared/workspace-layout/terminal-surface-close-target'
 import { retireTerminalSurfacesFromSnapshot } from '../../mobile-session-terminal-retirement'
 import type { PtyControllerInventory } from '../../runtime-pty-controller-contract'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
@@ -262,14 +262,10 @@ export abstract class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs exten
     if (this.mobileSessionTabListeners.size === 0) {
       return
     }
-    const result = this.toMobileSessionTabsResult(snapshot)
-    const changeSequence = ++this.mobileSessionTabsChangeSequence
-    for (const subscription of this.mobileSessionTabListeners) {
-      subscription.listener(
-        this.projectMobileSessionTabsForClient(result, subscription.clientNavigationId),
-        changeSequence
-      )
-    }
+    this.createMobileSessionTabsDelivery()(
+      this.toMobileSessionTabsResult(snapshot),
+      ++this.mobileSessionTabsChangeSequence
+    )
   }
 
   /** Recompute this client's reconciliation holds and selection, setting and clearing flags so earlier frames or other clients cannot leak authority. */

@@ -8,12 +8,11 @@ import {
   join,
   mkdtemp,
   tmpdir,
-  waitForMobileSessionTabsEvents
+  waitForMobileSessionTabsEvents,
+  type RuntimeMobileSessionTabsResult
 } from '../orca-runtime-test-mocks.spec'
-import type {
-  RuntimeMobileSessionTabsResult,
-  WorkspaceSessionState
-} from '../orca-runtime-test-mocks.spec'
+
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import {
   HEADLESS_LEAF_ID,
   TEST_FOLDER_PROJECT_GROUP_ID,

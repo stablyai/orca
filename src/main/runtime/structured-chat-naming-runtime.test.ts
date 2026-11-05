@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../shared/constants'
 import { agentSessionRecordFixture } from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { toSshExecutionHostId } from '../../shared/execution-host'
-import { normalizeSourceControlAiSettings } from '../../shared/source-control-ai-settings'
+import { normalizeSourceControlAiSettings } from '../../shared/source-control/ai/settings/source-control-ai-settings'
 import { structuredChatNamingDeps } from './structured-chat-naming-runtime'
 import { STRUCTURED_AGENT_RUNTIME_CATALOG } from './structured-agent-runtime-metadata'
 import type {
@@ -27,7 +27,7 @@ const mocks = vi.hoisted(() => ({
   generate: vi.fn(async () => ({ success: true as const, name: 'Login repair' })),
   target: vi.fn(async (cwd: string) => ({ kind: 'local' as const, cwd })),
   publishConversationName: vi.fn<(sessionId: string) => void>(),
-  journalSnapshot: vi.fn<(sessionId: string) => Promise<AgentJournalSnapshot>>()
+  journalCurrentRead: vi.fn<(sessionId: string) => Promise<AgentJournalSnapshot>>()
 }))
 
 vi.mock('../text-generation/commit-message-text-generation', async (importOriginal) => {
@@ -41,7 +41,7 @@ vi.mock('../native-chat/agent-session-wire/structured-agent-session-registry', (
   getStructuredAgentSessionHost: () => ({
     deps: { adapter: { generateText: mocks.native } },
     publishConversationName: mocks.publishConversationName,
-    journalSnapshot: mocks.journalSnapshot
+    journalCurrentRead: mocks.journalCurrentRead
   })
 }))
 
@@ -155,7 +155,7 @@ describe('structured chat naming runtime', () => {
           }
         })
       )
-      mocks.journalSnapshot.mockResolvedValue({
+      mocks.journalCurrentRead.mockResolvedValue({
         sessionId: 'chat',
         cursor: { epoch: 'epoch', sequence: count + 2 },
         items,

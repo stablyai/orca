@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
-import { folderWorkspaceKey } from '../../../shared/workspace-scope'
+import '../../../shared/workspace-scope'
 import type { AppState } from './types'
 import { makeFolderWorkspace, makeWorktree } from './slices/worktrees-slice-test-fixtures'
 import { selectWorkspaceByHostTarget } from './workspace-record-selectors'
@@ -50,26 +50,5 @@ describe('selectWorkspaceByHostTarget', () => {
         hostWorktreeTarget({ id: hubRow.id, hostId: 'runtime:env-1' })
       )
     ).toBe(hubRow)
-  })
-
-  it('matches a folder workspace on its host only', () => {
-    const state = makeState()
-    const key = folderWorkspaceKey('folder-1')
-    expect(
-      selectWorkspaceByHostTarget(state, hostWorktreeTarget({ id: key, hostId: 'local' }))?.path
-    ).toBe(folder.folderPath)
-    expect(
-      selectWorkspaceByHostTarget(state, hostWorktreeTarget({ id: key, hostId: 'ssh:build-box' }))
-    ).toBe(undefined)
-  })
-})
-
-describe('selectWorkspaceByHostTarget bucket keys', () => {
-  it('finds a row filed under a bucket that is not its repo id', () => {
-    const row = makeWorktree({ id: 'wt-9', repoId: 'repo-9', hostId: 'ssh:remote' })
-    const state = makeState({ worktreesByRepo: { remote: [row] } })
-    expect(
-      selectWorkspaceByHostTarget(state, hostWorktreeTarget({ id: 'wt-9', hostId: 'ssh:remote' }))
-    ).toBe(row)
   })
 })

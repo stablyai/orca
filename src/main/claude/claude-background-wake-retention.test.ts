@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalSubmission } from '../../shared/agent-session/journal/agent-session-journal-types'
-import { structuredRunningChildWork } from '../../shared/agent-child-work-listing'
+import { structuredRunningChildWork } from '../../shared/agent-status/child-work/agent-child-work-listing'
 import type { AgentHookServer } from '../agent-hooks/server'
 import type { StructuredAgentSessionJournalProjections } from '../native-chat/agent-session-wire/structured-agent-session-status-journal-projection'
 import { StructuredAgentSessionStatusFeed } from '../native-chat/agent-session-wire/structured-agent-session-status-feed'
@@ -30,6 +30,15 @@ async function wiredSession() {
     item: (itemId: string): ReturnType<Journal['item']> => {
       const item = run.journalItems.get(itemId)
       return item ? { ...item, revision: 1, observedAt: run.now() } : null
+    },
+    statusRead(): ReturnType<Journal['statusRead']> {
+      return this.snapshot()
+    },
+    inputOrder: {
+      inputCount: () => submissions.length,
+      inputOrdinal: (id: string) => submissions.findIndex((s) => s.clientMessageId === id),
+      recoverableSubmissions: () =>
+        submissions.filter((s) => s.dispatchState === 'pending' || s.dispatchState === 'unknown')
     },
     context: { floor: () => null },
     stopMarks: { latest: () => null, revision: () => 0 },

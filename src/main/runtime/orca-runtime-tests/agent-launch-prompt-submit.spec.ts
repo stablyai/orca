@@ -5,7 +5,7 @@ import {
   acknowledgeAgentPromptSubmit
 } from '../orca-runtime-test-mocks.spec'
 import { TEST_WORKTREE_PATH, store } from '../orca-runtime-test-fixtures.spec'
-import { wrapTerminalBracketedPasteText } from '../../../shared/terminal-bracketed-paste-text'
+import { wrapTerminalBracketedPasteText } from '../../../shared/terminal/input/terminal-bracketed-paste-text'
 
 // Match desktop paste: submit Enter one turn after paste, without waiting for render quiescence.
 async function launchedAgentPane(agent: 'claude' | 'codex' | 'qwen-code', startsTurn = true) {

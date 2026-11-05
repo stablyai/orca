@@ -17,10 +17,14 @@ import { syncTabCustomTitles } from './session-window-graph-titles'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-types'
 import { ActiveGroupViewFacts } from '../view-facts/active-group-view-facts'
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import type { RuntimePtyWorktreeRecord } from '../runtime-terminal-state-records'
 
 export abstract class OrcaRuntimeWithAttachWindow extends OrcaRuntimeWithNotifySshStateChanged {
+  protected abstract agentSenderGraphReply(
+    ...args: Parameters<ScheduleMobileSessionTabsChangedMethods['agentSenderGraphReply']>
+  ): ReturnType<ScheduleMobileSessionTabsChangedMethods['agentSenderGraphReply']>
+
   protected abstract mainDecidesLiveness(worktreeId: string): boolean
 
   /** Main-owned panes do not prove liveness or override certified exits; terminal records decide (L80). */

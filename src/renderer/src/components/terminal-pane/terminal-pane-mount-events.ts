@@ -10,7 +10,7 @@ import { consumePendingWebRuntimeSplitMirrorTelemetry } from '@/runtime/web-runt
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { closeTerminalTab } from '../terminal/terminal-tab-actions'
 import { useAppStore } from '@/store'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
   splitPaneWithOneShotStartup,
   recordRuntimeCreatedTerminalPaneSplit
@@ -94,7 +94,8 @@ export function installTerminalPaneMountEvents(args: {
       manager: mgr,
       getPtyIdForLeaf: (leafId) =>
         useAppStore.getState().terminalLayoutsByTabId[deps.tabId]?.ptyIdsByLeafId?.[leafId],
-      closeTab: () => closeTerminalTab(deps.tabId, { skipRunningProcessConfirm: true }),
+      closeTab: (reason) =>
+        closeTerminalTab(deps.tabId, { reason, skipRunningProcessConfirm: true }),
       closeTabPreservingPty: () => {
         const store = useAppStore.getState()
         if (detail.retireSurface && detail.leafId) {

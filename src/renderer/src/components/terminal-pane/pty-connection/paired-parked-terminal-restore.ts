@@ -1,10 +1,11 @@
 import { useAppStore } from '@/store'
-import { TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY } from '../../../../../shared/protocol-version'
+import '../../../../../shared/protocol-version'
+import { TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY } from '../../../../../shared/terminal/runtime-policy/terminal-runtime-capabilities'
 import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/runtime-terminal-stream'
 import {
   isRuntimeHostContactRevoked,
   lastVerifiedRuntimeStatus
-} from '../../../../../shared/runtime-host-status'
+} from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
 
 export function canRestorePairedParkedTerminal(ptyId: string): boolean {
   const environmentId = getRemoteRuntimePtyEnvironmentId(ptyId)
@@ -21,4 +22,4 @@ export function canRestorePairedParkedTerminal(ptyId: string): boolean {
 }
 
 // Daemon worktreeId@@shortUuid IDs prevent cross-workspace reattach.
-export { isPtySessionIdOwnedByWorktree as isSessionOwnedByWorktree } from '../../../../../shared/pty-session-id-format'
+import '../../../../../shared/terminal/pty/lifecycle/pty-session-id-format'
