@@ -82,7 +82,7 @@ export function PreviousMessageCell({
       bag.heights.delete(key)
     }
   }, [bag, key])
-  // SAFETY: VirtualizedList hands the cell onFocusCapture so a focused row stays rendered. View's public props omit it.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: VirtualizedList hands the cell onFocusCapture so a focused row stays rendered. View's public props omit it.
   const focusProps = { onFocusCapture } as ViewProps
   return (
     <View

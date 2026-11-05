@@ -212,7 +212,7 @@ function MobileNativeChatNativeRowList({
     <NativeJumpContext.Provider value={jump}>
       <FlatList
         ref={flatRef}
-        // SAFETY: CellRendererProps is not exported to app code, and its focus event is not the DOM FocusEvent. The cell forwards style, layout, and focus.
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: CellRendererProps is not exported to app code, and its focus event is not the DOM FocusEvent. The cell forwards style, layout, and focus.
         CellRendererComponent={PreviousMessageCell as never}
         data={rows}
         keyExtractor={rowKeys.keyOf}

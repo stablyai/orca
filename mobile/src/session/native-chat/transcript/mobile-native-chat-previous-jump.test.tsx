@@ -11,9 +11,12 @@ import type {
 } from './use-mobile-native-chat-tail-follow'
 
 const platform = vi.hoisted(() => ({ OS: 'web' }))
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Test stub slot starts empty and is filled with the scroller node.
 const scrollerSlot = vi.hoisted(() => ({ current: null as ScrollNode | null }))
 const nativeApi = vi.hoisted(() => ({
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Typed empty recording array.
   offsets: [] as { offset: number; animated: boolean }[],
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Typed empty recording array.
   indexes: [] as { index: number; animated: boolean }[],
   drags: 0
 }))
@@ -110,6 +113,7 @@ function pageScroller(): ScrollNode {
   const node = {
     scrollHeight: 1_400,
     clientHeight: 400,
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Typed empty recording array.
     writes: [] as number[],
     top: 0,
     get scrollTop(): number {
@@ -143,6 +147,7 @@ function pageScroller(): ScrollNode {
       }
     }
   }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The stub implements the scroll fields the code under test reads.
   return node as ScrollNode
 }
 
@@ -164,6 +169,7 @@ const messages: NativeChatMessage[] = ['m0', 'm1', 'm2'].map((id) => ({
   blocks: [{ type: 'text', text: id }]
 }))
 
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The fixture implements the row-key fields the list reads.
 const rowKeys = {
   scope: 'chat',
   sourceHead: undefined,
