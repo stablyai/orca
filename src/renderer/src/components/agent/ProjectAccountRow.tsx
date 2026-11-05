@@ -20,6 +20,7 @@ import {
 } from '../ui/dropdown-menu'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { parseWslUncPath } from '../../../../shared/wsl-paths'
+import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import { PROJECT_AGENT_ACCOUNT_PIN_RUNTIME_CAPABILITY } from '../../../../shared/account-runtime-capabilities'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type { AgentPickerEntry } from '../../../../shared/agent-launch/picker/agent-launch-picker'
@@ -89,7 +90,11 @@ export function ProjectAccountRow({
 }): React.JSX.Element | null {
   const agent: PinAgent | null =
     entry.agent === 'claude' || entry.agent === 'codex' ? entry.agent : null
-  const repoId = entry.draftTarget?.repoId
+  // The tab bar's picker names only the workspace; its id carries the project's.
+  const draftWorktreeId = entry.draftTarget?.worktreeId
+  const repoId =
+    entry.draftTarget?.repoId ??
+    (draftWorktreeId ? getRepoIdFromWorktreeId(draftWorktreeId) : undefined)
   const repoHostId = entry.draftTarget?.executionHostId
   // The draft names its project's host; route by that owner, never by the focused host.
   const repo = useAppStore((s) =>
