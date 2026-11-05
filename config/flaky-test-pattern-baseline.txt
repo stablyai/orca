@@ -289,7 +289,6 @@
 1 test-no-real-time-wait:src/main/wsl/orcad/wsl-orcad-stdio-bridge.test.ts
 1 test-no-real-time-wait:src/renderer/src/components/UpdateCard.error-card.test.tsx
 1 test-no-real-time-wait:src/renderer/src/components/activity/activity-portal-readiness-loop.react185.test.tsx
-1 test-no-real-time-wait:src/renderer/src/components/dashboard-popout/useDashboardSnapshot.test.tsx
 1 test-no-real-time-wait:src/renderer/src/components/editor/DiagramViewerModal.test.tsx
 1 test-no-real-time-wait:src/renderer/src/components/editor/combined-diff/load-sections/combined-diff-stale-analysis-work-budget.test.tsx
 1 test-no-real-time-wait:src/renderer/src/components/native-chat/NativeChatModelCombobox.test.tsx
