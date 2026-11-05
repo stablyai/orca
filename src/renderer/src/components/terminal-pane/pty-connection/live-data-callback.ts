@@ -5,6 +5,7 @@ import { recordAgentHibernationPaneOutput } from '@/lib/agent-hibernation-output
 import { observeTerminalBracketedPasteModeOutput } from '../terminal-bracketed-paste'
 import type { PtyDataMeta } from '../pty-dispatcher'
 import { sendTerminalOscColorQueryReplies } from '../terminal-capability-replies'
+import { isDropSentinelMeta } from '../terminal-stream-position'
 
 import { shouldWritePtyOutputForeground } from './foreground-output-scan'
 import { registerE2eTerminalPtyDataInjection } from './e2e-terminal-pty-harness'
@@ -27,8 +28,7 @@ export function bindLiveDataCallback(session: ConnectPanePtySession): void {
       carvedRemainder: string,
       streamChunk: Parameters<typeof session.admitStreamBytes>[1]
     ): string | null => {
-      if (arrivedMeta?.droppedOutput === true && !arrivedMeta.midEscape) {
-        // Main's drop sentinel is Orca's recovery bytes, not stream bytes.
+      if (isDropSentinelMeta(arrivedMeta)) {
         return session.admitRecoveryBytes(bytes)
       }
       if (carvedRemainder !== streamChunk.data) {

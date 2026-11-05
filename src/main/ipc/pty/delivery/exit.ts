@@ -99,7 +99,7 @@ function preparePtyExitForRenderer(
             remaining.containsBackgroundOutput,
             remaining.rawLength,
             remaining.transformed,
-            remaining.startEscapeState
+            remaining.startEscapeBoundary
           )
         )
       }

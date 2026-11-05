@@ -12,9 +12,9 @@ export function makePtyDataPayload(
   containsBackgroundOutput: boolean | undefined,
   rawLength = data.length,
   transformed = false,
-  startEscapeState?: PtyEscapeBoundary
+  startEscapeBoundary?: PtyEscapeBoundary
 ): PtyDataPayload {
-  const payload: PtyDataPayload = { id, data, ...escapeBoundaryFields(startEscapeState) }
+  const payload: PtyDataPayload = { id, data, ...escapeBoundaryFields(startEscapeBoundary) }
   if (typeof startSeq === 'number') {
     payload.seq = startSeq + rawLength
   }

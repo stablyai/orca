@@ -175,9 +175,14 @@ export function keptSuffixMeta(
   return next
 }
 
+/** Main's drop sentinel: Orca's recovery bytes (salvaged queries, mode releases), not stream bytes. */
+export function isDropSentinelMeta(meta: PtyDataMeta | undefined): boolean {
+  return meta?.droppedOutput === true && !meta.midEscape
+}
+
 /** Mark a kept chunk that follows evicted bytes; main's drop sentinel stays recovery bytes. */
 export function markedAfterEviction(meta: PtyDataMeta | undefined): PtyDataMeta {
-  if (meta?.droppedOutput === true && !meta.midEscape) {
+  if (meta && isDropSentinelMeta(meta)) {
     return meta
   }
   return { ...meta, droppedOutput: true, midEscape: 'unknown' }

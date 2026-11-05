@@ -129,7 +129,7 @@ export function appendPendingPtyData(
   containsBackgroundOutput: boolean,
   rawLength = data.length,
   transformed = false,
-  startEscapeState: PtyEscapeBoundary = ''
+  startEscapeBoundary: PtyEscapeBoundary = ''
 ): PendingPtyData {
   // Once dropped, keep bounded query/mode state while the restore sentinel supersedes ordinary output.
   if (existing?.droppedOutput === true) {
@@ -163,7 +163,7 @@ export function appendPendingPtyData(
       ...(rawLength !== data.length ? { rawLength } : {}),
       ...(transformed ? { transformed: true } : {}),
       ...(nextContainsBackgroundOutput ? { containsBackgroundOutput: true } : {}),
-      ...(startEscapeState !== '' ? { startEscapeState } : {})
+      ...(startEscapeBoundary !== '' ? { startEscapeBoundary } : {})
     }
     return dropOversizedPendingPtyData(session, id, pending)
   }
@@ -175,8 +175,8 @@ export function appendPendingPtyData(
       : {}),
     ...(nextContainsBackgroundOutput ? { containsBackgroundOutput: true } : {}),
     // Describes the batch start; gaps discard the batch, so appended bytes continue it.
-    ...(existing.startEscapeState !== undefined
-      ? { startEscapeState: existing.startEscapeState }
+    ...(existing.startEscapeBoundary !== undefined
+      ? { startEscapeBoundary: existing.startEscapeBoundary }
       : {})
   }
   if (typeof existing.startSeq === 'number') {

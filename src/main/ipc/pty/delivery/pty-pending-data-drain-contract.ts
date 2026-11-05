@@ -9,7 +9,7 @@ export type PendingPtyData = {
   transformed?: true
   containsBackgroundOutput?: boolean
   /** Escape-parser boundary where `data` begins when not ground (null = unknown); see pty-escape-boundary. */
-  startEscapeState?: PtyEscapeBoundary
+  startEscapeBoundary?: PtyEscapeBoundary
   droppedOutput?: true
   droppedMode2031Data?: string
   droppedMode2031ScanState?: Mode2031ReplyScanState

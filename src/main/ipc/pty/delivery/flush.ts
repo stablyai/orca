@@ -130,7 +130,6 @@ export function flushPendingData(session: PtyIpcSession): void {
         session.pendingData.remove(selection)
         session.updateProducerFlowControl(id)
         // A pending-cap gap requires snapshot repaint; only salvaged query bytes remain in data.
-        // Release DEC 2026 before salvaged partial mode-2031 CSI so a later ESC cannot abort it.
         if (!sendPtyDataToRenderer(session, id, makeDroppedOutputPayload(id, pending))) {
           sendFailed = true
           break
@@ -154,12 +153,12 @@ export function flushPendingData(session: PtyIpcSession): void {
         if (pending.containsBackgroundOutput === true) {
           nextPending.containsBackgroundOutput = true
         }
-        const remainderEscapeState = advanceEscapeBoundary(
-          pending.startEscapeState === undefined ? '' : pending.startEscapeState,
+        const remainderEscapeBoundary = advanceEscapeBoundary(
+          pending.startEscapeBoundary === undefined ? '' : pending.startEscapeBoundary,
           chunk
         )
-        if (remainderEscapeState !== '') {
-          nextPending.startEscapeState = remainderEscapeState
+        if (remainderEscapeBoundary !== '') {
+          nextPending.startEscapeBoundary = remainderEscapeBoundary
         }
         session.pendingData.replaceWithRemainder(selection, nextPending)
       } else {
@@ -177,7 +176,7 @@ export function flushPendingData(session: PtyIpcSession): void {
           pending.containsBackgroundOutput,
           pending.rawLength,
           pending.transformed,
-          pending.startEscapeState
+          pending.startEscapeBoundary
         )
       )
       if (!sent) {

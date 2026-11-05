@@ -6,14 +6,7 @@ import { TerminalStreamPosition } from '../terminal-stream-position'
 import { createTerminalInputEchoDelay } from './terminal-input-echo-delay'
 
 vi.mock('@/lib/pane-manager/pane-terminal-output-scheduler', () => ({
-  writeTerminalOutput: (terminal: Terminal, data: string) => terminal.write(data),
-  flushTerminalOutput: vi.fn()
-}))
-vi.mock('../replay-guard', () => ({
-  replayIntoTerminal: (pane: { terminal: Terminal }, _replaying: unknown, data: string) =>
-    pane.terminal.write(data),
-  replayIntoTerminalAsync: (pane: { terminal: Terminal }, _replaying: unknown, data: string) =>
-    new Promise<void>((resolve) => pane.terminal.write(data, resolve))
+  writeTerminalOutput: (terminal: Terminal, data: string) => terminal.write(data)
 }))
 vi.mock('@/lib/pane-manager/terminal-render-pause-release', () => ({
   forceFullViewportPresent: vi.fn()
@@ -69,8 +62,6 @@ function createSession() {
     admitRecoveryBytes: (_data: string): string => _data,
     writePtyOutputToXterm: (_data: string, _foreground: boolean): void => {},
     queueAgentIdleTerminalModeReset: (): void => {},
-    writeReplayData: (_data: string): void => {},
-    writeReplayDataAsync: async (_data: string): Promise<void> => {},
     pane: { terminal }
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture supplies the fields used by this binding; xterm itself is real.

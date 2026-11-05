@@ -8,13 +8,7 @@ import {
   activeRendererPtys
 } from './visibility-state'
 import { PTY_BATCH_INTERVAL_MS } from './constants'
-import {
-  appendPendingPtyData,
-  makeDroppedOutputPayload,
-  toDroppedOutputSentinel,
-  getDroppedMode2031RendererData,
-  getDroppedSynchronizedOutputRendererData
-} from './pending'
+import { appendPendingPtyData, makeDroppedOutputPayload, toDroppedOutputSentinel } from './pending'
 import { sendModelRestoreNeededMarker, sendPtyDataToRenderer } from './payload'
 import { shouldSendInteractiveOutputNow } from './interactive'
 import { requestDeliveryResyncForGatedPty } from './accounting'
@@ -77,7 +71,7 @@ export function acceptPtyDataForRenderer(
   // Advance before any early return: bytes accepted without a renderer still move the stream's parser.
   // Zero-sequence payloads are query copies salvaged from a provider gap, not stream bytes.
   const isQueryCopy = payload.sequenceChars === 0
-  const startEscapeState = isQueryCopy ? '' : advancePtyEscapeBoundary(payload.id, payload.data)
+  const startEscapeBoundary = isQueryCopy ? '' : advancePtyEscapeBoundary(payload.id, payload.data)
   if (!session.mainWindow || session.mainWindow.isDestroyed()) {
     if (session.flushTimer) {
       clearTimeout(session.flushTimer)
@@ -132,17 +126,16 @@ export function acceptPtyDataForRenderer(
     containsBackgroundOutput,
     rawLength,
     payload.transformed === true,
-    startEscapeState
+    startEscapeBoundary
   )
   const shouldEmitPendingCapRestoreMarker =
     pending.droppedOutput === true &&
     !overflowMarkedBeforeAppend &&
     session.pendingOverflowMarkedPtys.has(payload.id)
-  // Emit DEC 2026 release first; an ESC after the salvaged partial mode-2031 CSI would abort its continuation.
   const nextData =
-    pending.data +
-    getDroppedSynchronizedOutputRendererData(pending) +
-    getDroppedMode2031RendererData(pending)
+    pending.droppedOutput === true
+      ? makeDroppedOutputPayload(payload.id, pending).data
+      : pending.data
   const isInteractiveOutput = shouldSendInteractiveOutputNow(
     payload.id,
     nextData,
@@ -181,7 +174,7 @@ export function acceptPtyDataForRenderer(
                 : {}),
               ...(pending.transformed ? { transformed: true } : {}),
               ...(pending.containsBackgroundOutput === true ? { background: true } : {}),
-              ...escapeBoundaryFields(pending.startEscapeState)
+              ...escapeBoundaryFields(pending.startEscapeBoundary)
             }
       )
     } finally {

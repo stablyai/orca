@@ -23,8 +23,6 @@ function firstResyncIndex(data: string): number {
 }
 
 // xterm also parses 8-bit C1 controls (CSI U+009B, ST U+009C, ...), which the scanner does not follow.
-const C1_CONTROL = /[\u0080-\u009f]/
-
 function lastC1Index(data: string): number {
   for (let i = data.length - 1; i >= 0; i--) {
     const code = data.charCodeAt(i)
@@ -36,9 +34,10 @@ function lastC1Index(data: string): number {
 }
 
 export function advanceEscapeBoundary(before: PtyEscapeBoundary, data: string): PtyEscapeBoundary {
-  if (C1_CONTROL.test(data)) {
+  const lastC1 = lastC1Index(data)
+  if (lastC1 !== -1) {
     // Past a C1 control the boundary is unknown until ESC, CAN or SUB re-establishes it.
-    return advanceEscapeBoundary(null, data.slice(lastC1Index(data) + 1))
+    return advanceEscapeBoundary(null, data.slice(lastC1 + 1))
   }
   if (before !== null) {
     return advanceTerminalEscapeBoundary(before, data)
@@ -60,7 +59,7 @@ export function advancePtyEscapeBoundary(id: string, data: string): PtyEscapeBou
 }
 
 /** The boundary at the stream's current position, without consuming bytes. */
-export function peekPtyEscapeBoundary(id: string): PtyEscapeBoundary {
+function peekPtyEscapeBoundary(id: string): PtyEscapeBoundary {
   return boundaryByPty.has(id) ? (boundaryByPty.get(id) ?? null) : ''
 }
 
