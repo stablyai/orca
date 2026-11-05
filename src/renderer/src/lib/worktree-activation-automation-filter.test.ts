@@ -1,5 +1,4 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { Worktree } from '../../../shared/worktree/types'
 import { useAppStore } from '@/store'
 import {
   activateAndRevealWorkspace,
@@ -10,6 +9,7 @@ import { reportAgentWorkspaceActivation } from './worktree-activation-outcome'
 
 const { toastError } = vi.hoisted(() => ({ toastError: vi.fn() }))
 vi.mock('sonner', () => ({ toast: { error: toastError } }))
+import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
 import './workspace-switch-user-act'
 
 // Main's answer to the window's layout commands, as a switch-on build sends them.
@@ -26,25 +26,10 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
-function makeAutomationWorktree(): Worktree {
-  return {
+function makeAutomationWorktree() {
+  return makeWorktree({
     id: 'repo-1::/workspace/automation-run',
     repoId: 'repo-1',
-    path: '/workspace/automation-run',
-    head: 'abc123',
-    branch: 'refs/heads/automation-run',
-    isBare: false,
-    isMainWorktree: false,
-    displayName: 'automation-run',
-    comment: '',
-    linkedIssue: null,
-    linkedPR: null,
-    linkedLinearIssue: null,
-    isArchived: false,
-    isUnread: false,
-    isPinned: false,
-    sortOrder: 0,
-    lastActivityAt: 0,
     automationProvenance: {
       kind: 'created-by-automation',
       automationId: 'automation-1',
@@ -58,11 +43,11 @@ function makeAutomationWorktree(): Worktree {
       repoId: 'repo-1',
       hostId: 'local'
     }
-  }
+  })
 }
 
 function seedAutomationWorktreeState(
-  worktree: Worktree,
+  worktree: ReturnType<typeof makeWorktree>,
   overrides: Partial<ReturnType<typeof useAppStore.getState>> = {}
 ): void {
   useAppStore.setState({

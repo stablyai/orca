@@ -1,6 +1,6 @@
 import React from 'react'
 import { CheckCircle2, ChevronDown, CircleDashed, MinusCircle, XCircle } from 'lucide-react'
-import { CheckJobLogTail } from '@/components/right-sidebar/check-job-log-tail'
+import { CheckJobLogTail } from '@/components/right-sidebar/checks-panel/logs/check-job-log-tail'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import type { PRCheckJob, PRCheckStep } from '../../../../../../shared/github/check-types'

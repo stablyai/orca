@@ -1,7 +1,7 @@
 import { handleDaemonTerminalKill } from './daemon-terminal-kill'
 import { handleDaemonFencedTermination } from './daemon-fenced-termination'
 import { performance } from 'node:perf_hooks'
-import { setPtyOwnerHostColors } from '../../shared/pty-owner-color-query-colors'
+import { setPtyOwnerHostColors } from '../../shared/terminal/pty/ingress/pty-owner-color-query-colors'
 import type { ConnectedDaemonClient, DaemonClientConnections } from './daemon-client-connections'
 import type { DaemonFileLog } from './daemon-file-log'
 import type { DaemonPtySpawnPreparations } from './daemon-pty-spawn-preparations'

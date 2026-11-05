@@ -1,7 +1,7 @@
 import type { DaemonPtyRouterDataEvent } from './daemon-pty-router-events'
 import { removeDaemonListener } from './daemon-listener-registry'
 import { emitPtyListeners } from './daemon-pty-listener-emission'
-import type { PtyIncarnationId } from '../../shared/pty-incarnation'
+import type { PtyIncarnationId } from '../../shared/terminal/pty/lifecycle/pty-incarnation'
 import { DaemonPtySessionInventory } from './daemon-pty-session-inventory'
 import {
   CLEAN_DISCONNECT_PROTOCOL_VERSION,

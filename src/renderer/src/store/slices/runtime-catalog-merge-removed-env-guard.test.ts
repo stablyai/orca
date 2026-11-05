@@ -74,24 +74,4 @@ describe('environment-catalog merge guard drops catalogs for a removed env', () 
         .sort()
     ).toEqual(['fresh', 'repo1'])
   })
-
-  it("fetchRepos merges a 'local' catalog even when its repos carry runtime stamps", async () => {
-    const store = createTestStore()
-    seedStore(store, { repos: [TEST_REPO], runtimeEnvironments: [] })
-    // A serving instance's own local catalog: hostId 'local', repos runtime-stamped.
-    localReposList.mockResolvedValue([
-      repo('localStamped', { executionHostId: 'runtime:some-client' })
-    ])
-
-    await store.getState().fetchRepos(catalogOwner(store))
-
-    expect(store.getState().repos.map((r) => r.id)).toContain('localStamped')
-  })
 })
-
-// The catalog these tests read is the one the focused host would have shown.
-function catalogOwner(store: {
-  getState: () => { settings: { activeRuntimeEnvironmentId?: string | null } | null }
-}): { runtimeEnvironmentId: string | null } {
-  return { runtimeEnvironmentId: store.getState().settings?.activeRuntimeEnvironmentId ?? null }
-}

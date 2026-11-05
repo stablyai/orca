@@ -1,6 +1,6 @@
 /** Chat defaults may fall back; explicit chat is refused only conclusively before launch effects. */
 
-import { requestsCwdOutsideWorkspaceRoot } from '../../shared/terminal-startup-cwd'
+import { requestsCwdOutsideWorkspaceRoot } from '../../shared/shell/launch/terminal-startup-cwd'
 import type {
   AgentLaunchModeReason,
   AgentLaunchModeReceipt

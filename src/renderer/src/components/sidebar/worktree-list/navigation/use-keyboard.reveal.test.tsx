@@ -15,7 +15,7 @@ import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces
 import type { HostSectionRow } from '../../../../../../shared/sidebar-list/host-section-rows'
 import { useSidebarRevealHighlight } from './use-reveal-highlight'
 import { useSidebarRevealRequests } from './use-reveal-requests'
-import { repo, worktree } from '../../worktree-list-groups-test-fixtures'
+import { repo, worktree } from '../grouping/worktree-list-groups-test-fixtures'
 
 import { type WorktreeItemRow, buildRenderableRows } from '../listing/renderable-rows'
 import { getWorktreeOptionId } from '../rows/option-dom'

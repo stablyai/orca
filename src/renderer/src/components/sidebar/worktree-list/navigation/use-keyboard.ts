@@ -11,11 +11,8 @@ import { keybindingMatchesAction } from '../../../../../../shared/keybindings'
 import type { HostSectionRow } from '../../../../../../shared/sidebar-list/host-section-rows'
 import type { PinnedWorktreeDisplayPolicy } from '../../../../../../shared/sidebar-list/row-types'
 import { getWorktreeExecutionHostId } from '../../../../../../shared/execution-host'
-import type { RenderedWorkspaceRow } from '../../worktree-sidebar-row-preference'
-import {
-  resolveCycledWorkspaceRow,
-  type LastActiveCycleWorkspace
-} from '../../worktree-keyboard-cycle'
+import type { RenderedWorkspaceRow } from './worktree-sidebar-row-preference'
+import { resolveCycledWorkspaceRow, type LastActiveCycleWorkspace } from './worktree-keyboard-cycle'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
 import { useWorkspaceNeighborPrewarm } from './use-neighbor-prewarm'
 

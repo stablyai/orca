@@ -98,7 +98,7 @@
       "sourceClosureSha256": "08558478f5a5a6c0aa2e4e4d92d609ff55c11564d04a957f999f2302c478ae80"
     },
     {
-      "file": "src/shared/workspace-session-browser-history.ts",
+      "file": "src/shared/workspace-session/workspace-session-browser-history.ts",
       "inputs": [],
       "emptyEnv": [],
       "reason": "Reviewed URL/data projection only; no indirect repository reads. The entire local source closure and dependency/runtime context are fingerprinted.",

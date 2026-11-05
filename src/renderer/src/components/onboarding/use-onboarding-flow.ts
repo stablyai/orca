@@ -10,7 +10,8 @@ import { buildAgentPickedPayload } from './agent-picked-payload'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { OnboardingState } from '../../../../shared/onboarding-state-types'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
-import { STEPS } from './use-onboarding-flow-types'
+import { STEPS, stepIndexAfterCompletedStep } from './use-onboarding-flow-types'
+import { useOnboardingAgentSurface } from './use-onboarding-agent-surface'
 import { persistStep, useCloseWith, usePersistCurrentStep } from './use-onboarding-flow-persistence'
 import { resolveOnboardingSettingsHydration } from './onboarding-settings-hydration'
 import { translate } from '@/i18n/i18n'
@@ -26,17 +27,13 @@ import {
 
 import { useOnboardingFlowActions } from './use-onboarding-flow-actions'
 import { useOnboardingFlowTelemetry } from './use-onboarding-flow-telemetry'
-export { STEPS } from './use-onboarding-flow-types'
-export type { StepId, StepNumber } from './use-onboarding-flow-types'
 
 export function useOnboardingFlow(
   onboarding: OnboardingState,
   onOnboardingChange: (state: OnboardingState) => void
 ) {
   const settings = useAppStore((s) => s.settings)
-  const updateSettings = useAppStore((s) => s.updateSettings)
   const updateSettingsOrThrow = useAppStore((s) => s.updateSettingsOrThrow)
-  const refreshDetectedAgents = useAppStore((s) => s.refreshDetectedAgents)
   const detectedAgentIds = useAppStore((s) => s.detectedAgentIds)
   const isDetectingAgents = useAppStore((s) => s.isDetectingAgents || s.isRefreshingAgents)
   const pathSource = useAppStore((s) => s.pathSource)
@@ -45,7 +42,6 @@ export function useOnboardingFlow(
   const selectedWorkspaceId = useAppStore((s) =>
     selectKnownWorktreeById(s, s.activeWorktreeId) ? s.activeWorktreeId : null
   )
-  const hasSelectedWorkspace = selectedWorkspaceId !== null
   const preflightStatus = useAppStore((s) => s.preflightStatus)
   const preflightStatusChecked = useAppStore((s) => s.preflightStatusChecked)
   const preflightStatusLoading = useAppStore((s) => s.preflightStatusLoading)
@@ -63,7 +59,7 @@ export function useOnboardingFlow(
   )
   const remappedLastCompletedStep = remapOpenOnboardingLastCompletedStep(onboarding)
   const initialStep = resolveStepIndex(
-    Math.min(Math.max(remappedLastCompletedStep, 0), STEPS.length - 1),
+    stepIndexAfterCompletedStep(remappedLastCompletedStep),
     skipOptions,
     'forward'
   )
@@ -141,6 +137,14 @@ export function useOnboardingFlow(
     []
   )
 
+  const { agentSurface, setAgentSurface, chatAgents, chatDetected, refreshDetectedAgents } =
+    useOnboardingAgentSurface({
+      settings,
+      selectedAgent,
+      agentInteractedRef,
+      setSelectedAgent
+    })
+
   const detectedSet = useMemo(() => new Set(detectedAgentIds ?? []), [detectedAgentIds])
   const currentStep = STEPS[stepIndex]
   // Omit skipped steps so the stepper shows only reachable pages.
@@ -167,20 +171,14 @@ export function useOnboardingFlow(
   useEffect(() => {
     paintedThemeRef.current = paintedTheme
   }, [paintedTheme])
-  const themeStepEntryThemeRef = useRef<GlobalSettings['theme'] | null>(null)
-  const themeStepEntryCapturedRef = useRef(false)
-  useEffect(() => {
-    if (currentStep.id !== 'theme') {
-      themeStepEntryCapturedRef.current = false
-      return
-    }
-    if (!settings || themeStepEntryCapturedRef.current) {
-      return
-    }
-    // Why: capture entry theme so "Set up later" keeps the preference the user arrived with.
-    themeStepEntryCapturedRef.current = true
-    themeStepEntryThemeRef.current = settings.theme
-  }, [currentStep.id, settings])
+  // Why per entry: "Set up later" keeps the look the user arrived with, and each pick
+  // replaces only its own mode's slot from here.
+  const [themeLookBaseline, setThemeLookBaseline] = useState<GlobalSettings | null>(null)
+  if (currentStep.id !== 'theme' && themeLookBaseline) {
+    setThemeLookBaseline(null)
+  } else if (currentStep.id === 'theme' && settings && !themeLookBaseline) {
+    setThemeLookBaseline(settings)
+  }
 
   const previewTheme = resolvePaintedTheme(settings, theme)
   useEffect(() => {
@@ -265,7 +263,9 @@ export function useOnboardingFlow(
 
   const persistCurrentStep = usePersistCurrentStep({
     currentStepId: currentStep.id,
+    agentSurface,
     selectedAgent,
+    agentInteractedRef,
     yoloPermissions,
     yoloPermissionsChosen,
     theme,
@@ -293,7 +293,8 @@ export function useOnboardingFlow(
     stepIndex,
     setStepIndex,
     selectedAgent,
-    themeStepEntryThemeRef,
+    agentSurface,
+    themeLookBaseline,
     setTheme,
     updateSettings: updateSettingsOrThrow,
     skipOptions
@@ -301,19 +302,25 @@ export function useOnboardingFlow(
 
   return {
     settings,
-    updateSettings,
+    updateSettings: useAppStore((s) => s.updateSettings),
     stepIndex,
     progressSteps,
     progressStepIndex,
     currentStep,
+    agentSurface,
+    setAgentSurface,
+    chatAgents,
+    chatDetected,
     selectedAgent,
     setSelectedAgent: setSelectedAgentInteractive,
     yoloPermissions,
     setYoloPermissions: setYoloPermissionsInteractive,
     theme,
     setTheme: setThemeInteractive,
+    themeLookBaseline,
+    setThemeLookBaseline,
     busyLabel,
-    hasSelectedWorkspace,
+    hasSelectedWorkspace: selectedWorkspaceId !== null,
     detectedSet,
     isDetectingAgents,
     next,

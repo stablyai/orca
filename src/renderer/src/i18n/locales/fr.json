@@ -4344,7 +4344,6 @@
             "5c938d39ac": "sem.",
             "54e8d6bb2d": "Fable",
             "a79c64f87e": "Fable",
-            "c98ea88392": "Aucun autre compte",
             "d450654fa2": "Compte Claude",
             "11e2354daf": "Runtime d'utilisation Claude",
             "3dd7ddfae1": "Ouvrir les détails Claude et le sélecteur de compte",
@@ -7837,9 +7836,6 @@
           "browserExtensions": {
             "copy": "Ajoute Paramètres › Navigateur › Extensions pour les profils de navigateur locaux.",
             "toggleLabel": "Activer ou désactiver les extensions de navigateur"
-          },
-          "orchestrationPanel": {
-            "toggleLabel": "Activer ou désactiver le panneau d’orchestration"
           }
         },
         "FloatingWorkspacePane": {
@@ -10041,14 +10037,6 @@
               "extension": "extension",
               "chrome": "chrome",
               "password": "gestionnaire de mots de passe"
-            },
-            "orchestrationPanel": {
-              "title": "Panneau d’orchestration",
-              "description": "Affiche les agents avec lesquels chaque agent travaille, à côté de son chat ou de son terminal.",
-              "orchestration": "orchestration",
-              "agents": "agents",
-              "workers": "agents exécutants",
-              "manager": "gestionnaire"
             }
           }
         },
@@ -15012,9 +15000,7 @@
           "ae3b00ca82": "Configurer les tâches GitHub",
           "ff92d15436": "Orca vous préviendra quand les agents auront terminé ou auront besoin d'aide.",
           "b054332836": "Configurer les notifications",
-          "04ae28d8ca": "Choisissez le look que vous allez contempler pendant des heures.",
           "f396db9f20": "Donnez-lui vos couleurs",
-          "322fc50a18": "Orca fonctionne avec tous les agents CLI. Choisissez celui que vous solliciterez le plus. Changez quand vous voulez.",
           "198b148b3c": "Choisissez votre agent par défaut",
           "windowsTerminalTitle": "Définir les valeurs par défaut du terminal Windows",
           "windowsTerminalSubtitle": "Choisissez le shell PAR DÉFAUT des nouveaux volets et le comportement du clic droit dans le terminal.",
@@ -17989,6 +17975,9 @@
         },
         "automationTargetAvailability": {
           "hostMismatch": "L’hôte d’exécution enregistré ne correspond plus à cette configuration du projet."
+        },
+        "launchSettings": {
+          "needsFreshSession": "Les paramètres de lancement de l’agent nécessitent une nouvelle session à chaque exécution."
         }
       },
       "agent": {
@@ -19862,7 +19851,6 @@
       "dismissDeliveryNotice": "Ignorer",
       "addSelectionToChat": "Ajouter au chat",
       "messageNotSent": "Message non envoyé",
-      "deliveryUnconfirmed": "Livraison non confirmée — vérifiez le chat avant de réessayer",
       "messageSending": "Envoi…",
       "userMessage": {
         "showFull": "Afficher le message complet",
@@ -19926,7 +19914,6 @@
         "continue": "Continuer",
         "failed": "Impossible de poursuivre cette conversation. Réessayez ou envoyez un message.",
         "explanation": "Continuez, et l'agent vérifiera d'abord si sa dernière étape s'est terminée.",
-        "unconfirmed": "Impossible de confirmer si {{agent}} a reçu Continuer. Vérifiez le chat avant de réessayer.",
         "usageLimitExplanation": "Demande à l’agent de reprendre là où il s’était arrêté. À utiliser une fois la limite réinitialisée."
       },
       "rewind": {
@@ -20521,7 +20508,32 @@
           "system": "Faire correspondre le système d'exploitation",
           "dark": "Agréable pour les yeux",
           "light": "Lumineux et net"
-        }
+        },
+        "looks": {
+          "activeNow": "actuel",
+          "browsePlugins": "Parcourir les plugins",
+          "browseThemePlugins": "Parcourir les plugins de thèmes",
+          "colorMode": "Mode de couleur",
+          "colorModeCaption": "Clair, sombre ou selon votre système.",
+          "darkLook": "Style sombre",
+          "darkLooks": "Styles sombres",
+          "lightLook": "Style clair",
+          "lightLooks": "Styles clairs",
+          "moreThemes": "Plus de thèmes",
+          "next": "Plus de styles",
+          "orcaDark": "Orca sombre",
+          "orcaLight": "Orca clair",
+          "pluginsHint": "D’autres thèmes sont disponibles sous forme de plugins.",
+          "previous": "Styles précédents",
+          "showsWhenDark": "Affiché quand votre système est en mode sombre",
+          "showsWhenLight": "Affiché quand votre système est en mode clair",
+          "slotLabel": "Style à modifier",
+          "sourceBuiltIn": "Intégré",
+          "sourceCommunity": "Palette de terminal",
+          "themes": "Thème",
+          "themesCaption": "Facultatif. Allez plus loin avec des thèmes d’app et des palettes de terminal."
+        },
+        "subtitle": "Choisissez clair ou sombre, puis un thème si vous le souhaitez. Modifiable à tout moment dans les Réglages."
       },
       "integrations": {
         "capabilities": {
@@ -20582,6 +20594,9 @@
       },
       "nativeChat": {
         "followUpBehaviorTitle": "Mettre les messages suivants en file d’attente",
+        "scrollToLatestOnSendTitle": "Défiler jusqu’au dernier message à l’envoi",
+        "scrollToLatestOnSendCopy": "Envoyer après avoir remonté le fil fait défiler jusqu’au dernier message et suit la réponse. Désactivez cette option pour garder votre position.",
+        "scrollToLatestOnSendSearchPosition": "position",
         "followUpBehaviorCopy": "Les messages envoyés pendant que l’agent travaille attendent sous forme de cartes jusqu’à la fin du tour, au lieu d’entrer dans le tour en cours. Cmd/Ctrl+Entrée fait l’inverse pour un message.",
         "inlineVisualsTitle": "Visuels intégrés",
         "inlineVisualsCopy": "Laissez l'agent afficher des graphiques, des diagrammes et des maquettes dans ses réponses. S'applique aux nouveaux chats.",
@@ -20598,7 +20613,13 @@
         "usageLimitContinueCopy": "Orca envoie « Continue where you left off. » quand la limite est réinitialisée. S’applique à tous les chats dont l’heure de réinitialisation est connue.",
         "usageLimitContinueSearchLimit": "limite d’utilisation",
         "usageLimitContinueSearchReset": "réinitialisation",
-        "usageLimitContinueToggleLabel": "Activer ou désactiver la reprise des chats à la réinitialisation d’une limite"
+        "usageLimitContinueToggleLabel": "Activer ou désactiver la reprise des chats à la réinitialisation d’une limite",
+        "idleStopTitle": "Arrêter les agents inactifs après",
+        "idleStopCopy": "Arrête l'agent d'un chat une fois que le chat est resté inactif aussi longtemps, pour libérer de la mémoire. Le chat est conservé et votre prochain message relance l'agent. Choisissez Jamais pour les agents qui continuent de travailler en arrière-plan entre les tours.",
+        "idleStopSearchIdle": "idle",
+        "idleStopSearchTimeout": "délai",
+        "idleStopSearchKeepAlive": "maintenir actif",
+        "idleStopNever": "Jamais"
       }
     },
     "agentChildRow": {

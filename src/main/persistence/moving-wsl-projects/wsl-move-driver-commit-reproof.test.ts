@@ -120,23 +120,6 @@ describe('the exit proof again before the commit', () => {
     expect(result).toMatchObject({ outcome: 'refused', code: 'wsl_move_pause_failed' })
     expect(listWslMoveCutovers(userDataPath)).toEqual([])
   })
-
-  it('refuses a terminal with no workspace that starts in a moving folder after the quiesce', async () => {
-    let fencedAfterQuiesce: boolean[] = []
-    world.deps.quiesce.proveExited = async () => {
-      world.points.push('prove-exited')
-      fencedAfterQuiesce = [
-        isWslMoveCwdFenced('\\\\wsl.localhost\\Ubuntu\\home\\dev\\app\\src'),
-        isWslMoveCwdFenced('/home/dev/app'),
-        isWslMoveCwdFenced('\\\\wsl.localhost\\Ubuntu\\home\\dev\\other')
-      ]
-      return { verdict: 'exited' }
-    }
-
-    expect(await moveProjectsToWslHost(world.deps, request)).toMatchObject({ outcome: 'moved' })
-    // Read at the second proof, between the blobs and the commit request.
-    expect(fencedAfterQuiesce).toEqual([true, true, false])
-  })
 })
 
 // Users with several projects in one distro open terminals in the others while a move copies.

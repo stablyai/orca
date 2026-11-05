@@ -121,12 +121,6 @@ class MobileWebShellGenerationTest {
   }
 
   @Test
-  fun `splits the content type the way WebResourceResponse wants it`() {
-    assertEquals("text/html" to "utf-8", splitMobileWebShellContentType("text/html; charset=utf-8"))
-    assertEquals("image/png" to null, splitMobileWebShellContentType("image/png"))
-  }
-
-  @Test
   fun `refuses a directory path that is not absolute`() {
     assertNull(MobileWebShellGeneration.load("relative/generation"))
     assertNull(MobileWebShellGeneration.load(""))

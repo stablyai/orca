@@ -80,7 +80,8 @@ function renderActions(
       stepIndex,
       setStepIndex: vi.fn(),
       selectedAgent,
-      themeStepEntryThemeRef: { current: null },
+      agentSurface: 'terminal',
+      themeLookBaseline: null,
       setTheme: vi.fn(),
       updateSettings,
       skipOptions: { skipIntegrations: true, skipWindowsTerminal: true }

@@ -3,7 +3,7 @@ import {
   isQuarterCircleSpinnerOnlyAgentTitle
 } from '../../shared/agent-status/title/agent-title-status'
 import { isOpenCodeNativeTitle } from '../../shared/agent-status/title/providers/opencode-terminal-title'
-import { isShellProcess } from '../../shared/shell-process-detection'
+import { isShellProcess } from '../../shared/agent-status/process/shell-process-detection'
 import type { AgentStatus } from '../../shared/agent-status/title/agent-title-core'
 import { recognizeAgentProcess } from '../../shared/agent-status/process/agent-process-recognition'
 import type { RuntimeTerminalAgentStatus } from '../../shared/runtime-types'

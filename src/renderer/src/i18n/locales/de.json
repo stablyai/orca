@@ -4579,7 +4579,6 @@
             "5c938d39ac": "Wo.",
             "54e8d6bb2d": "Fable",
             "a79c64f87e": "Fable",
-            "c98ea88392": "Keine weiteren Konten",
             "d450654fa2": "Claude-Konto",
             "11e2354daf": "Claude-Nutzung: Laufzeitumgebung",
             "3dd7ddfae1": "Claude-Details und Kontowechsel öffnen",
@@ -10166,14 +10165,6 @@
               "extension": "Erweiterung",
               "chrome": "chrome",
               "password": "Passwortmanager"
-            },
-            "orchestrationPanel": {
-              "title": "Orchestrierungs-Panel",
-              "description": "Zeigt neben dem Chat oder Terminal jedes Agenten, mit welchen Agenten er zusammenarbeitet.",
-              "orchestration": "Orchestrierung",
-              "agents": "Agenten",
-              "workers": "Worker",
-              "manager": "Manager"
             }
           }
         },
@@ -15070,9 +15061,7 @@
           "ae3b00ca82": "GitHub-Aufgaben einrichten",
           "ff92d15436": "Orca zeigt Benachrichtigungen an, wenn Agenten fertig sind oder Hilfe benötigen.",
           "b054332836": "Benachrichtigungen einrichten",
-          "04ae28d8ca": "Ein Erscheinungsbild auswählen, das auch nach Stunden noch gefällt.",
           "f396db9f20": "Vertraute Umgebung einrichten",
-          "322fc50a18": "Orca funktioniert mit jedem CLI-Agenten. Den bevorzugten Agenten auswählen. Ein Wechsel ist jederzeit möglich.",
           "198b148b3c": "Standardagenten auswählen",
           "windowsTerminalTitle": "Standardeinstellungen für Windows-Terminals festlegen",
           "windowsTerminalSubtitle": "Die Standard-Shell für neue Bereiche und das Verhalten bei Rechtsklicks im Terminal auswählen.",
@@ -18017,6 +18006,9 @@
         },
         "automationTargetAvailability": {
           "hostMismatch": "Der gespeicherte Ausführungshost stimmt nicht mehr mit dieser Projekteinrichtung überein."
+        },
+        "launchSettings": {
+          "needsFreshSession": "Agent-Starteinstellungen erfordern für jeden Durchlauf eine neue Sitzung."
         }
       },
       "agent": {
@@ -19086,7 +19078,32 @@
           "system": "An Betriebssystem anpassen",
           "dark": "Angenehm für die Augen",
           "light": "Hell & klar"
-        }
+        },
+        "looks": {
+          "activeNow": "jetzt",
+          "browsePlugins": "Plugins durchsuchen",
+          "browseThemePlugins": "Design-Plugins durchsuchen",
+          "colorMode": "Farbmodus",
+          "colorModeCaption": "Hell, dunkel oder wie dein System.",
+          "darkLook": "Dunkler Look",
+          "darkLooks": "Dunkle Looks",
+          "lightLook": "Heller Look",
+          "lightLooks": "Helle Looks",
+          "moreThemes": "Weitere Designs",
+          "next": "Weitere Looks",
+          "orcaDark": "Orca Dunkel",
+          "orcaLight": "Orca Hell",
+          "pluginsHint": "Weitere Designs gibt es als Plugins.",
+          "previous": "Vorherige Looks",
+          "showsWhenDark": "Wird angezeigt, wenn dein System dunkel ist",
+          "showsWhenLight": "Wird angezeigt, wenn dein System hell ist",
+          "slotLabel": "Zu bearbeitender Look",
+          "sourceBuiltIn": "Integriert",
+          "sourceCommunity": "Terminal-Palette",
+          "themes": "Design",
+          "themesCaption": "Optional. Geh weiter mit App-Designs und Terminal-Paletten."
+        },
+        "subtitle": "Wähle hell oder dunkel und optional ein Design. Beides kannst du jederzeit in den Einstellungen ändern."
       },
       "integrations": {
         "capabilities": {
@@ -19838,7 +19855,6 @@
       "dismissDeliveryNotice": "Ausblenden",
       "addSelectionToChat": "Zum Chat hinzufügen",
       "messageNotSent": "Nachricht nicht gesendet",
-      "deliveryUnconfirmed": "Zustellung unbestätigt — vor erneutem Versuch den Chat prüfen",
       "messageSending": "Wird gesendet…",
       "userMessage": {
         "showFull": "Vollständige Nachricht anzeigen",
@@ -19910,8 +19926,7 @@
       "interruptedContinue": {
         "continue": "Fortfahren",
         "failed": "Dieser Chat konnte nicht fortgesetzt werden. Erneut versuchen oder eine Nachricht senden.",
-        "explanation": "Beim Fortfahren prüft der Agent zuerst, ob sein letzter Schritt abgeschlossen wurde.",
-        "unconfirmed": "Es konnte nicht bestätigt werden, ob {{agent}} „Fortfahren“ erhalten hat. Vor einem erneuten Versuch den Chat prüfen."
+        "explanation": "Beim Fortfahren prüft der Agent zuerst, ob sein letzter Schritt abgeschlossen wurde."
       },
       "antigravitySignIn": {
         "sentence": "Antigravity ist nicht angemeldet. Unter <settings>Einstellungen → Konten → Antigravity</settings> anmelden. Danach die Nachricht erneut senden."
@@ -20477,6 +20492,9 @@
       },
       "nativeChat": {
         "followUpBehaviorTitle": "Folgenachrichten einreihen",
+        "scrollToLatestOnSendTitle": "Beim Senden zur neuesten Nachricht scrollen",
+        "scrollToLatestOnSendCopy": "Senden im hochgescrollten Zustand springt zur neuesten Nachricht und folgt der Antwort. Deaktiviere dies, um deine Position zu behalten.",
+        "scrollToLatestOnSendSearchPosition": "Position",
         "inlineVisualsTitle": "Eingebettete Grafiken",
         "inlineVisualsCopy": "Dem Agenten erlauben, Diagramme, Schaubilder und Mockups in seinen Antworten anzuzeigen. Gilt für neu gestartete Chats.",
         "inlineVisualsToggleLabel": "Eingebettete Grafiken umschalten",
@@ -20488,7 +20506,13 @@
         "queueSearchSteer": "Steuern",
         "shellEnvSearchVariables": "Umgebungsvariablen",
         "shellEnvSearchPath": "PATH",
-        "shellEnvSearchProxy": "Proxy"
+        "shellEnvSearchProxy": "Proxy",
+        "idleStopTitle": "Inaktive Agenten beenden nach",
+        "idleStopCopy": "Beendet den Agenten eines Chats, sobald der Chat so lange inaktiv war, um Speicher freizugeben. Der Chat bleibt erhalten, und deine nächste Nachricht startet den Agenten erneut. Wähle Nie für Agenten, die zwischen Durchgängen im Hintergrund weiterarbeiten.",
+        "idleStopSearchIdle": "idle",
+        "idleStopSearchTimeout": "Zeitlimit",
+        "idleStopSearchKeepAlive": "aktiv halten",
+        "idleStopNever": "Nie"
       }
     },
     "agentChildRow": {

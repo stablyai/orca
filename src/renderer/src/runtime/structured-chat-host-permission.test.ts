@@ -13,7 +13,7 @@ vi.mock('./runtime-rpc-client', () => ({
   runtimeEnvironmentSupportsCapability: mocks.supportsCapability,
   callRuntimeRpc: mocks.callRuntimeRpc
 }))
-vi.mock('@/store', () => {
+vi.mock('@/store/index', () => {
   const state = { settings: mocks.settings }
   const useAppStore = (select: (s: typeof state) => unknown) => select(state)
   useAppStore.getState = () => state

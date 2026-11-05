@@ -18,9 +18,9 @@ import { removeDiffSectionMeasuredHeight } from '../../diff/sections/diff-sectio
 import type { DiffSection } from '../../diff/sections/diff-section-types'
 import type { DiffSectionItemProps } from '../../diff/sections/diff-section-item-props'
 import { getDiskBaselineSignature } from '../../../../../../shared/disk-baseline-signature'
-import { writeEditorSave } from '../../editor-save-disk-precondition'
-import { withEditorFileWriteLock } from '../../editor-file-write-lock'
-import { editorPathHoldKey } from '../../editor-autosave-holds'
+import { writeEditorSave } from '../../save/queue/editor-save-disk-precondition'
+import { withEditorFileWriteLock } from '../../save/queue/editor-file-write-lock'
+import { editorPathHoldKey } from '../../autosave/editor-autosave-holds'
 
 export type CombinedDiffSectionActions = {
   handleSectionSaveRef: DiffSectionItemProps['handleSectionSaveRef']

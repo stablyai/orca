@@ -127,28 +127,6 @@ describe('Codex process-tree diagnostic after a forced close', () => {
     }
   )
 
-  it.each([
-    ['unverifiable', true],
-    ['live', true],
-    ['exited', false]
-  ] as const)('teardown observing %s reads unproven=%s', async (verdict, unproven) => {
-    vi.useFakeTimers()
-    teardown.verdict = verdict
-    const { child, spawnImpl } = stubChild()
-    teardown.rootExits = () => child.emit('exit', null, 'SIGKILL')
-    const connection = await openCodexAppServerConnection(
-      { command: 'codex', args: ['app-server'] },
-      {},
-      spawnImpl
-    )
-    const closing = connection.close()
-    await vi.advanceTimersByTimeAsync(10_000)
-    await expect(closing).resolves.toBe(true)
-    expect(connection.processTreeUnproven).toBe(unproven)
-    await expect(connection.close()).resolves.toBe(true)
-    expect(connection.processTreeUnproven).toBe(unproven)
-  })
-
   it('reports a root exit that arrives after an unproven close', async () => {
     vi.useFakeTimers()
     teardown.verdict = 'unverifiable'

@@ -9,7 +9,7 @@ import type {
 } from '../../agent-status/process/agent-process-presence'
 import { hasControllingTty } from '../../posix-controlling-terminal'
 import { unreadableArgvName, type ProcessTableRow } from '../../process-table-snapshot'
-import { isShellProcess } from '../../shell-process-detection'
+import { isShellProcess } from '../../agent-status/process/shell-process-detection'
 import type { TmuxHookPane } from '../../tmux-client-attachment'
 
 /** What the execution host can prove about a hook's process relative to the pane it names.

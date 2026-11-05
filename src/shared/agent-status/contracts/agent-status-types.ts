@@ -8,7 +8,7 @@ import { isAgentTurnOutcome } from '../lifecycle/agent-turn-outcome'
 import type { OrchestrationFleetAttention } from '../../orchestration-fleet-attention'
 import type { AgentStatusRowFacets } from './agent-status-observation'
 import type { AgentChildWorkView } from '../child-work/agent-status-child-work-view'
-import type { TerminalAgent } from '../../terminal-agent'
+import type { TerminalAgent } from '../identity/terminal-agent'
 import {
   AGENT_MODEL_MAX_LENGTH,
   AGENT_STATUS_TOOL_INPUT_MAX_LENGTH,

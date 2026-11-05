@@ -4,7 +4,7 @@ import type { ActiveRightSidebarTab } from '@/store/slices/editor'
 import type { PluginPanelsFetchStatus } from '@/store/plugin-panels'
 import { normalizeRightSidebarRoute } from '@/store/right-sidebar-route'
 import { resolveRightSidebarEffectiveTab } from './right-sidebar-effective-tab'
-import { useInstalledPluginRouteReconciliation } from './use-installed-plugin-route-reconciliation'
+import { useInstalledPluginRouteReconciliation } from './plugin-panels/use-installed-plugin-route-reconciliation'
 import type { ActivityBarItem } from './activity-bar-buttons'
 
 export type RightSidebarTabRouting = {

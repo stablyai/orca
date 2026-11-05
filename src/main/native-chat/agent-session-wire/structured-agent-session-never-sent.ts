@@ -5,13 +5,15 @@ import type { AgentSessionJournal } from '../agent-session-journal/journal-store
 /** Prove local unsent history; adoption, prior turns, rewind or a replacement journal defeat proof. */
 export function structuredAgentSessionNeverSent(
   record: Pick<AgentSessionRecord, 'providerHandleChain' | 'rewind'> | null,
-  journal: Pick<AgentSessionJournal, 'submissions' | 'visitItems' | 'wroteBeforeOpen'>
+  journal: Pick<AgentSessionJournal, 'visitItems' | 'wroteBeforeOpen'> & {
+    inputOrder: Pick<AgentSessionJournal['inputOrder'], 'hasInputs'>
+  }
 ): boolean {
   if (
     !record ||
     record.providerHandleChain[0]?.origin === 'adopted' ||
     record.rewind !== undefined ||
-    journal.submissions().length > 0 ||
+    journal.inputOrder.hasInputs() ||
     (record.providerHandleChain.length > 0 && !journal.wroteBeforeOpen(1))
   ) {
     return false

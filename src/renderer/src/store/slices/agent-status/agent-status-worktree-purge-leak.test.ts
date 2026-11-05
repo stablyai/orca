@@ -35,7 +35,7 @@ globalThis.window = { api: mockApi }
 import { createTestStore, seedStore } from '../store-test-helpers'
 import { makeWorktree } from '../worktrees-slice-test-fixtures'
 import { makeTab } from '../store-session-test-harness'
-import { makePaneKey } from '../../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import {
   countAgentPaneAuthorityAliasesForTests,
   resetAgentPaneAuthorityAliasesForTests,

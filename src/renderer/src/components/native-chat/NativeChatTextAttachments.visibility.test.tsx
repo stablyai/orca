@@ -95,7 +95,6 @@ function Host() {
     getEffectiveLayoutForWorktree: vi.fn(),
     effectiveActiveLayout: undefined,
     activeWorktreeBrowserTabIdsKey: '',
-    hasSplitTerminalPane: false,
     terminalProviderSnapshotCapabilityRevision: 0,
     saveDialogFileId: null,
     setSaveDialogFileId: vi.fn(),

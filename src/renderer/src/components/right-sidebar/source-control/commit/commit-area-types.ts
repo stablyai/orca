@@ -2,7 +2,7 @@ import type {
   DropdownActionKind,
   DropdownEntry
 } from '../../../../../../shared/source-control/dropdown/source-control-dropdown-item-types'
-import type { PrimaryAction, RemoteOpKind } from '../../source-control-primary-action'
+import type { PrimaryAction, RemoteOpKind } from '../review/source-control-primary-action-types'
 import type { SourceControlPushRecovery } from '../sync/push-recovery'
 import type {
   SourceControlActionRecipe,

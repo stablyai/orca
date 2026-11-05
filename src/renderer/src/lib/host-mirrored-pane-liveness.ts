@@ -1,8 +1,11 @@
 import type { useAppStore } from '@/store'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import { parseRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
-import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
-import { isWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
+import {
+  parseLegacyNumericPaneKey,
+  parsePaneKey
+} from '../../../shared/workspace-layout/stable-pane-id'
+import { isWebTerminalSurfaceTabId } from '../../../shared/workspace-layout/terminal-surface-id'
 import { hasHostSessionMirrorHydrated } from '@/runtime/host-session-mirror-hydration'
 import { hasHostMirrorHandleWaitExpired } from './host-mirror-handle-gap-wait'
 import { runtimeEnvironmentIdForWorkspaceOwner } from './resolve-owner'

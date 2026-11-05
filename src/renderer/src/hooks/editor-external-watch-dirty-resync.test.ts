@@ -1,11 +1,14 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { createEditorStore } from '@/components/editor/editor-autosave-controller-test-fixture'
-import { openGuardedFile, GUARDED_PATH } from '@/components/editor/editor-save-guarded-disk-fixture'
+import { createEditorStore } from '@/components/editor/autosave/editor-autosave-controller-test-fixture'
+import {
+  openGuardedFile,
+  GUARDED_PATH
+} from '@/components/editor/save/queue/editor-save-guarded-disk-fixture'
 import { createGlobalSettingsFixture } from '../../../shared/global-settings-test-fixture'
 import {
   __clearSelfWriteRegistryForTests,
   recordSelfWrite
-} from '@/components/editor/editor-self-write-registry'
+} from '@/components/editor/external-changes/editor-self-write-registry'
 
 const storeRef = vi.hoisted((): { current: ReturnType<typeof createEditorStore> | null } => ({
   current: null

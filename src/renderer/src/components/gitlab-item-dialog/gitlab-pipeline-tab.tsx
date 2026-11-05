@@ -7,7 +7,10 @@ import type { GitLabItemDialogState } from './use-gitlab-item-dialog-state'
 import type { GitLabPipelineActions } from './use-gitlab-pipeline-actions'
 import { gitLabPipelineToPRCheck } from '../../../../shared/source-control/checks/gitlab/gitlab-pipeline-checks'
 import { getCheckStatusLabel } from '@/components/github/pr-check-presentation'
-import { CHECK_COLOR, CHECK_ICON } from '@/components/right-sidebar/checks-panel/check-presentation'
+import {
+  CHECK_COLOR,
+  CHECK_ICON
+} from '@/components/right-sidebar/checks-panel/presentation/check-presentation'
 import { openAppHttpLinkFromAnchor } from '@/lib/app-http-link-open'
 
 type Props = {

@@ -2,6 +2,7 @@
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { toast } from 'sonner'
 import { useOnboardingFlow } from './use-onboarding-flow'
+import { usePersistCurrentStep } from './use-onboarding-flow-persistence'
 import type { ComponentProps } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -77,6 +78,7 @@ describe('OnboardingFlow', () => {
     useAppStore.setState({
       settings: { ...getDefaultSettings('/tmp'), defaultTuiAgent: 'claude' },
       refreshDetectedAgents: vi.fn().mockResolvedValue(['claude']),
+      refreshNativeDetectedAgents: vi.fn().mockResolvedValue(['claude']),
       refreshPreflightStatus: vi.fn().mockResolvedValue(undefined),
       openModal
     })
@@ -98,6 +100,73 @@ describe('OnboardingFlow', () => {
     expect(onOnboardingChange).not.toHaveBeenCalled()
     expect(openModal).not.toHaveBeenCalled()
     expect(notify).toHaveBeenCalledExactlyOnceWith('Could not save progress')
+  })
+
+  it.each([
+    ['claude', 'claude'],
+    [null, 'blank']
+  ] as const)(
+    'saves the visible %s selection when completing without visiting the agent page',
+    async (selectedAgent, expectedAgent) => {
+      const savedProgress = getDefaultOnboardingState()
+      const saveProgress = vi.fn().mockResolvedValue(savedProgress)
+      Object.defineProperty(window, 'api', {
+        configurable: true,
+        value: { onboarding: { update: saveProgress } }
+      })
+      vi.spyOn(useAppStore.getState(), 'recordFeatureInteraction').mockResolvedValue(undefined)
+      const updateSettings = vi.fn().mockResolvedValue(undefined)
+      const onOnboardingChange = vi.fn()
+      const { result } = renderHook(() =>
+        usePersistCurrentStep({
+          currentStepId: 'notifications',
+          agentSurface: 'terminal',
+          selectedAgent,
+          agentInteractedRef: { current: false },
+          yoloPermissions: true,
+          yoloPermissionsChosen: { current: false },
+          theme: 'dark',
+          settings: {
+            ...getDefaultSettings('/tmp'),
+            defaultTuiAgent: 'codex',
+            agentDefaultSurface: 'chat'
+          },
+          updateSettings,
+          onboardingChecklist: savedProgress.checklist,
+          onOnboardingChange,
+          setError: vi.fn()
+        })
+      )
+
+      await act(async () => {
+        expect(await result.current()).toEqual({ ok: true })
+      })
+      expect(updateSettings).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ defaultTuiAgent: expectedAgent, agentDefaultSurface: 'terminal' })
+      )
+      expect(saveProgress).toHaveBeenCalledWith(
+        expect.objectContaining({
+          lastCompletedStep: 5,
+          checklist: expect.objectContaining({ choseAgent: selectedAgent !== null })
+        })
+      )
+      expect(onOnboardingChange).toHaveBeenCalledWith(savedProgress)
+    }
+  )
+
+  it('opens on the Chat or Terminal choice and resumes past both step-1 pages', () => {
+    const fresh = renderOnboardingFlow({
+      onboarding: getDefaultOnboardingState(),
+      onOnboardingChange: vi.fn()
+    })
+    expect(fresh).toContain('How do you want to work with agents?')
+    expect(fresh).toContain('1 of 5')
+
+    const resumed = renderOnboardingFlow({
+      onboarding: { ...getDefaultOnboardingState(), lastCompletedStep: 1 },
+      onOnboardingChange: vi.fn()
+    })
+    expect(resumed).toContain('Make it feel like home')
   })
 
   it('does not render the removed agent setup or tour steps', () => {
@@ -223,7 +292,7 @@ describe('OnboardingFlow', () => {
     })
 
     expect(html).toContain('Set Windows terminal defaults')
-    expect(html).toContain('4 of 5')
+    expect(html).toContain('5 of 6')
   })
 
   it('drops the skipped integrations step from the stepper on Windows', () => {
@@ -245,8 +314,8 @@ describe('OnboardingFlow', () => {
     })
 
     expect(html).toContain('Set Windows terminal defaults')
-    // Installed gh skips Integrations entirely; Windows terminal is step three of the four visible steps.
-    expect(html).toContain('3 of 4')
+    // Installed gh skips Integrations entirely; Windows terminal is page four of the five visible pages.
+    expect(html).toContain('4 of 5')
     expect(html).not.toContain('Set up GitHub tasks')
     expect(html).not.toContain('Integrations')
   })
@@ -273,8 +342,8 @@ describe('OnboardingFlow', () => {
     expect(html).not.toContain('Set up GitHub tasks')
     expect(html).not.toContain('Connect your task sources')
     expect(html).not.toContain('Point Orca at some code')
-    // Installed gh and macOS skip Integrations/Windows terminal, leaving three visible steps.
-    expect(html).toContain('3 of 3')
+    // Installed gh and macOS skip Integrations/Windows terminal, leaving four visible pages.
+    expect(html).toContain('4 of 4')
     expect(html).not.toContain('Integrations')
   })
 

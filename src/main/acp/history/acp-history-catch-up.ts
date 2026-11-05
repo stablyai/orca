@@ -202,7 +202,7 @@ function journalView(
       all.push(item)
     }
   })
-  const submissions = history.submissions()
+  const submissions = history.currentRead().submissions
   const eligible = submissions.filter(
     (send) => send.handedOverAt !== undefined || send.handoverRecorded !== true
   )

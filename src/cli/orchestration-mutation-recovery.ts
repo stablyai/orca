@@ -1,4 +1,4 @@
-import { quotePosixShellDoubleQuotedApostrophe } from '../shared/shell-argument-quoting'
+import { quotePosixShellDoubleQuotedApostrophe } from '../shared/shell/launch/shell-argument-quoting'
 import { RuntimeClientError, RuntimeRpcFailureError } from './runtime-client'
 import {
   recoverableOrchestrationArgs,

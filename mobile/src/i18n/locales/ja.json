@@ -5,10 +5,13 @@
       "connecting": "ホストに接続中…",
       "connectingTo": "「{{name}}」に接続中…",
       "default": "システムのデフォルト",
+      "fableWindow": "Fable",
       "hostNotFound": "ホストが見つかりません",
       "invalidSnapshot": "ホストからのアカウントスナップショットが無効です",
       "loadingAccounts": "アカウントを読み込み中…",
       "manageAccountsHint": "デスクトップの「設定」→「アカウント」から、アカウントの追加や再認証を行ってください。",
+      "mcpWindow": "MCP",
+      "otherAgents": "その他の Agent",
       "refreshAccounts": "アカウントを更新",
       "sessionWindow": "5時間",
       "switchFailed": "アカウントを切り替えられませんでした",
@@ -110,13 +113,8 @@
       "tryAgain": "再試行"
     },
     "terminalSettings": {
-      "autocomplete": "自動補完と自動修正",
-      "autocompleteOff": "オフ",
-      "autocompleteOn": "オン",
       "defaultText": "標準（100%）",
       "keepPhoneSize": "スマートフォンサイズを維持（デフォルト）",
-      "keyboardInputDescription": "自動補完、自動修正、スペル候補は、バッファー方式のコマンド入力にのみ適用されます。キーボード上部の二重矢印ボタンでリアルタイム入力から切り替えると、「送信」をタップする前にコマンドを編集できます。コマンド、フラグ、パスが書き換わるのを防ぐため、デフォルトではオフです。",
-      "keyboardInputHeading": "キーボード入力",
       "largeText": "大（125%）",
       "largerText": "特大（150%）",
       "largestText": "最大 (200%)",
@@ -741,6 +739,8 @@
     },
     "hostCard": {
       "hostActions": "「{{title}}」の操作",
+      "needsYou_one": "{{count}} 件が対応待ち",
+      "needsYou_other": "{{count}} 件が対応待ち",
       "openHost": "「{{title}}」を開く",
       "pairingInvalid": "ペアリングが無効",
       "pairingTemporarilyUnavailable": "ペアリングが一時的に利用できません",
@@ -1274,10 +1274,30 @@
     }
   },
   "home": {
+    "agents": {
+      "activeCount": "{{count}} 件がアクティブ",
+      "heading": "Agent",
+      "showAll": "{{count}} 件をすべて表示",
+      "showFewer": "折りたたむ"
+    },
     "appUpdateCard": {
       "dismissAccessibilityLabel": "Orca {{version}} の更新通知を閉じる",
       "title": "Orca {{version}} が利用可能です",
       "updateAccessibilityLabel": "Orca {{version}} が利用可能です。タップして更新してください。"
+    },
+    "automationsTab": {
+      "connectDesktop": "自動化を表示・実行するには、{{desktop}} に接続してください。",
+      "createHint": "+ をタップすると Agent の実行を予定できます。",
+      "emptyTitle": "Agent の作業を予定",
+      "lastStatus": "前回：{{status}}",
+      "newAutomation": "新しい自動化",
+      "noAutomations": "自動化はまだありません",
+      "pairDesktop": "自動化を表示・実行するには、デスクトップとペアリングしてください。",
+      "paused": "一時停止中",
+      "scheduled": "スケジュール実行",
+      "showFor": "自動化を表示するデスクトップ",
+      "toggleFailed": "{{name}} を更新できませんでした",
+      "updateDesktop": "自動化を使用するには、{{desktop}} の Orca を更新してください。"
     },
     "emptyState": {
       "connectedDescription": "デスクトップがここに表示されます。すべての通信はエンドツーエンドで暗号化されます。",
@@ -1289,9 +1309,7 @@
       "title": "デスクトップに接続"
     },
     "listFooter": {
-      "hostPickerTitle": "タスクを開くホスト",
-      "automationsHeading": "自動化",
-      "automationsHostPickerTitle": "オートメーションを開くホスト"
+      "hostPickerTitle": "タスクを開くホスト"
     },
     "listHeader": {
       "desktopsHeading": "デスクトップ"
@@ -1302,6 +1320,33 @@
       "removeHostMessage": "「{{name}}」を削除しますか？後で再度ペアリングできます。",
       "removeHostTitle": "ホストを削除",
       "tryAgain": "再試行してください。"
+    },
+    "stats": {
+      "agentTime": "Agent 時間",
+      "agentsSpawned": "起動した Agent",
+      "days": "{{days}}日",
+      "heading": "あなたの統計",
+      "hours": "{{hours}}時間",
+      "minutes": "{{minutes}}分",
+      "prsCreated": "作成された PR"
+    },
+    "tabs": {
+      "automations": "自動化",
+      "chooseDesktop": "{{desktop}}、別のデスクトップを選択",
+      "feed": "フィード",
+      "usage": "使用状況"
+    },
+    "usage": {
+      "active": "使用中",
+      "addAccounts": "デスクトップの「設定」→「アカウント」からアカウントを追加してください。",
+      "connectDesktop": "Agent アカウントの使用状況を表示するには、{{desktop}} に接続してください。",
+      "emptyTitle": "使用状況はまだありません",
+      "openAccountsHint": "このデスクトップのアカウントを開きます",
+      "pairDesktop": "Agent アカウントの使用状況を表示するには、デスクトップとペアリングしてください。",
+      "refresh": "使用状況を更新",
+      "showUsageFor": "使用状況を表示するデスクトップ",
+      "updatedAgo": "{{time}}前に更新",
+      "updatedJustNow": "たった今更新"
     }
   },
   "hooks": {
@@ -1685,15 +1730,18 @@
     "accessoryKeys": {
       "dismissKeyboard": "キーボードを閉じる",
       "sendKey": "{{label}} を送信",
-      "modifierHint": "次のキーに適用されます。ダブルタップすると維持されます。",
       "typeCharacter": "{{character}}を入力",
       "interrupt": "ターミナルを中断",
       "keysModeLabel": "キーモード：入力はターミナルに直接送られます。メッセージモードに切り替える",
       "messageModeLabel": "メッセージモード：入力してから送信します。キーモードに切り替える",
-      "keysMode": "キー",
-      "messageMode": "メッセージ",
       "moreKeys": "その他のキーと操作",
-      "showKeyboard": "キーボードを表示"
+      "showKeyboard": "キーボードを表示",
+      "dismissKeyboardHint": "現在のターミナルセッションを開いたまま、ソフトウェアキーボードを非表示にします。",
+      "switchToDesktopMode": "デスクトップモードに切り替え",
+      "switchToPhoneMode": "スマートフォンモードに切り替え",
+      "pasteFromClipboard": "クリップボードから貼り付け",
+      "paste": "貼り付け",
+      "addCustomShortcut": "カスタムショートカットを追加"
     },
     "activeContent": {
       "createTab": "タブを作成",
@@ -1804,11 +1852,7 @@
     },
     "commandDock": {
       "liveInputHint": "入力したテキストは、選択中のターミナルに直接送信されます。",
-      "liveInputLabel": "ターミナルへのリアルタイム入力",
-      "sendCommand": "コマンドを送信",
-      "messageAgentPlaceholder": "{{agent}}にメッセージ",
-      "writeCommandPlaceholder": "コマンドを入力して送信",
-      "theAgent": "Agent"
+      "liveInputLabel": "ターミナルへのリアルタイム入力"
     },
     "contentRow": {
       "dismissCreationWarning": "ワークスペース作成の警告を閉じる"
@@ -2490,14 +2534,6 @@
     "terminalSplitLayout": {
       "saveFailedTitle": "レイアウトを保存できませんでした",
       "saveFailedMessage": "このレイアウトは一時的に適用されます。もう一度選択すると保存を再試行できます。"
-    },
-    "terminalArrowPad": {
-      "label": "矢印キー",
-      "hint": "端をタップすると矢印キーを1回押し、長押ししてドラッグすると繰り返します",
-      "up": "上",
-      "down": "下",
-      "left": "左",
-      "right": "右"
     },
     "terminalMoreKeys": {
       "sendKey": "{{label}}を送信",
@@ -3896,7 +3932,6 @@
       "unknownResult": "不明な結果",
       "notReported": "未報告",
       "searchOptions": "オプションを検索",
-      "scheduleAgentWorkAndViewRuns": "Agentの作業を予定し、実行を確認",
       "task": "タスク",
       "review": "確認"
     },

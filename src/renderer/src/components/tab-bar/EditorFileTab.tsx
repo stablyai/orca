@@ -13,7 +13,7 @@ import { detectLanguage } from '@/lib/language-detect'
 import { FileTypeIcon } from '@/components/FileTypeIcon'
 import { useRepoById, useWorktreeById } from '@/store/selectors'
 import { useAppStore } from '@/store'
-import { STATUS_COLORS } from '../right-sidebar/status-display'
+import { STATUS_COLORS } from '../../lib/git-path-decoration'
 import { STATUS_LABELS } from '../../../../shared/git/status/git-status-labels'
 
 import { getUntitledFileRoot } from '@/components/editor/untitled-file-rename-path'
@@ -26,7 +26,7 @@ import {
   getTabRootStateClasses,
   getTabStripBorderClasses
 } from './drop-indicator'
-import { canOpenMarkdownPreview } from '@/components/editor/markdown-preview-controls'
+import { canOpenMarkdownPreview } from '@/components/editor/view-mode/markdown-preview-controls'
 import { EditorFileTabContextMenu } from './EditorFileTabContextMenu'
 import { translate } from '@/i18n/i18n'
 import { TAB_LABEL_WIDTH_CLASSES } from './tab-width-rules'

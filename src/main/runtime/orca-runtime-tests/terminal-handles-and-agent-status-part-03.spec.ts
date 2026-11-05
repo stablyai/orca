@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService, electronMocks } from '../orca-runtime-test-mocks.spec'
-import type { TerminalLayoutSnapshot } from '../orca-runtime-test-mocks.spec'
+import type { TerminalLayoutSnapshot } from '../../../shared/workspace-layout/terminal-tab-types'
 import {
   TEST_WORKTREE_ID,
   TEST_WORKTREE_PATH,

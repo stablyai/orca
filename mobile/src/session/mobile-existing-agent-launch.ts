@@ -11,7 +11,7 @@ import type {
 } from '../../../src/shared/agent-launch/contracts/agent-launch-intent'
 import { isStructuredAgentId } from '../../../src/shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { AGENT_LAUNCH_TAB_CLOSED_CODE } from '../../../src/shared/agent-launch/contracts/agent-launch-tab-closed'
-import { makePaneKey } from '../../../src/shared/stable-pane-id'
+import { makePaneKey } from '../../../src/shared/workspace-layout/stable-pane-id'
 import { createStructuredAgentSessionId } from '../../../src/shared/agent-session/structured-agent-session-create'
 import type { TuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent'
 import type { RpcClient } from '../transport/rpc-client'
