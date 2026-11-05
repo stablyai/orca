@@ -1,6 +1,6 @@
 import type { ParsedAgentStatusPayload } from '../../agent-status/contracts/agent-status-types'
 import { readClaudeBatchSettledRequests } from '../claude-settled-permission-requests'
-import { claudeHasPendingPermission } from '../claude-tool-request-identity'
+import { claudeHasRequestAwaitingUser } from '../claude-tool-request-identity'
 import type { HookListenerState } from '../listener-state'
 import type { ClaudeLeadTurnState } from '../main-agent-turn-state'
 import { buildClaudeCachedLeadStatusPayload } from './claude-lifecycle-events'
@@ -17,6 +17,10 @@ export function settleClaudeToolBatch(
   hookPayload: Record<string, unknown>,
   eventAgentId: string | undefined
 ): ParsedAgentStatusPayload | null {
+  // Until overlapping prompts are tracked one by one, leave every held row alone while another still waits.
+  if (claudeHasRequestAwaitingUser(state, paneKey)) {
+    return null
+  }
   const lead = state.claudeLeadStateByPaneKey.get(paneKey)
   const waitingToolUseId = lead?.state === 'waiting' ? lead.waitingToolUseId : undefined
   const settlesWait =
@@ -30,10 +34,6 @@ export function settleClaudeToolBatch(
     return lead?.state === 'waiting'
       ? null
       : buildClaudeCachedLeadStatusPayload(state, eventName, paneKey, hookPayload)
-  }
-  // The single wait slot holds only the newest prompt; while another is still open, keep the held row.
-  if (claudeHasPendingPermission(state, paneKey)) {
-    return null
   }
   const restored = setClaudeMainAgentTurnState(
     state,

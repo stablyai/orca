@@ -212,6 +212,155 @@ describe('Claude permission wait that Claude denies itself', () => {
     expect(states.at(-1)).toBe('PostToolBatch:waiting')
   })
 
+  it('keeps a subagent prompt while the lead works and another subagent request ends', async () => {
+    const childA = { agent_id: 'agent-a', agent_type: 'general-purpose' }
+    const childB = { agent_id: 'agent-b', agent_type: 'general-purpose' }
+    const commandA = { command: 'touch /private/tmp/orca-permcap-a' }
+    const commandB = { command: 'touch /private/tmp/orca-permcap-b' }
+    const states = await replay([
+      { hook_event_name: 'UserPromptSubmit', prompt: 'work' },
+      {
+        hook_event_name: 'PreToolUse',
+        tool_name: 'Bash',
+        tool_input: commandA,
+        tool_use_id: 'toolu-a',
+        ...childA
+      },
+      { hook_event_name: 'PermissionRequest', tool_name: 'Bash', tool_input: commandA, ...childA },
+      {
+        hook_event_name: 'PreToolUse',
+        tool_name: 'Bash',
+        tool_input: commandB,
+        tool_use_id: 'toolu-b',
+        ...childB
+      },
+      { hook_event_name: 'PermissionRequest', tool_name: 'Bash', tool_input: commandB, ...childB },
+      {
+        hook_event_name: 'PreToolUse',
+        tool_name: 'Bash',
+        tool_input: { command: 'ls' },
+        tool_use_id: 'toolu-ls'
+      },
+      {
+        hook_event_name: 'PostToolBatch',
+        tool_calls: [{ tool_name: 'Bash', tool_input: commandB, tool_use_id: 'toolu-b' }],
+        ...childB
+      },
+      {
+        hook_event_name: 'PostToolUse',
+        tool_name: 'Bash',
+        tool_input: { command: 'ls' },
+        tool_use_id: 'toolu-ls'
+      }
+    ])
+    expect(states.slice(-2)).toEqual(['PostToolBatch:waiting', 'PostToolUse:waiting'])
+  })
+
+  it("ends a subagent's self-denied wait after an earlier subagent stopped with its prompt open", async () => {
+    const childA = { agent_id: 'agent-a', agent_type: 'general-purpose' }
+    const childB = { agent_id: 'agent-b', agent_type: 'general-purpose' }
+    const commandA = { command: 'touch /private/tmp/orca-permcap-a' }
+    const commandB = { command: 'touch /private/tmp/orca-permcap-b' }
+    const states = await replay([
+      { hook_event_name: 'UserPromptSubmit', prompt: 'work' },
+      { hook_event_name: 'SubagentStart', ...childA },
+      {
+        hook_event_name: 'PreToolUse',
+        tool_name: 'Bash',
+        tool_input: commandA,
+        tool_use_id: 'toolu-a',
+        ...childA
+      },
+      { hook_event_name: 'PermissionRequest', tool_name: 'Bash', tool_input: commandA, ...childA },
+      { hook_event_name: 'SubagentStop', ...childA },
+      { hook_event_name: 'SubagentStart', ...childB },
+      {
+        hook_event_name: 'PreToolUse',
+        tool_name: 'Bash',
+        tool_input: commandB,
+        tool_use_id: 'toolu-b',
+        ...childB
+      },
+      { hook_event_name: 'PermissionRequest', tool_name: 'Bash', tool_input: commandB, ...childB },
+      {
+        hook_event_name: 'PostToolBatch',
+        tool_calls: [{ tool_name: 'Bash', tool_input: commandB, tool_use_id: 'toolu-b' }],
+        ...childB
+      }
+    ])
+    expect(states.at(-1)).toBe('PostToolBatch:working')
+  })
+
+  it("keeps the pane waiting on the lead's unanswered question when a subagent's request ends", async () => {
+    const child = { agent_id: 'agent-child', agent_type: 'general-purpose' }
+    const command = { command: 'touch /private/tmp/orca-permcap-q' }
+    const question = { questions: [{ question: 'Which file?', options: [{ label: 'a' }] }] }
+    const states = await replay([
+      { hook_event_name: 'UserPromptSubmit', prompt: 'work' },
+      {
+        hook_event_name: 'PreToolUse',
+        tool_name: 'AskUserQuestion',
+        tool_input: question,
+        tool_use_id: 'toolu-q'
+      },
+      {
+        hook_event_name: 'PreToolUse',
+        tool_name: 'Bash',
+        tool_input: command,
+        tool_use_id: 'toolu-b',
+        ...child
+      },
+      { hook_event_name: 'PermissionRequest', tool_name: 'Bash', tool_input: command, ...child },
+      {
+        hook_event_name: 'PostToolBatch',
+        tool_calls: [{ tool_name: 'Bash', tool_input: command, tool_use_id: 'toolu-b' }],
+        ...child
+      }
+    ])
+    // The card shows the newest prompt, as on main; showing each open prompt's card is the follow-up.
+    expect(states.at(-1)).toBe('PostToolBatch:waiting')
+  })
+
+  it("keeps the lead's open prompt however many subagent calls follow it", async () => {
+    const child = { agent_id: 'agent-child', agent_type: 'general-purpose' }
+    const leadCommand = { command: 'touch /private/tmp/orca-permcap-lead' }
+    const reads = Array.from({ length: 40 }, (_, index) => ({
+      hook_event_name: 'PreToolUse',
+      tool_name: 'Read',
+      tool_input: { file_path: `/tmp/file-${index}` },
+      tool_use_id: `toolu-read-${index}`,
+      ...child
+    }))
+    const last = reads.at(-1)!
+    const states = await replay([
+      { hook_event_name: 'UserPromptSubmit', prompt: 'work' },
+      {
+        hook_event_name: 'PreToolUse',
+        tool_name: 'Bash',
+        tool_input: leadCommand,
+        tool_use_id: 'toolu-lead'
+      },
+      { hook_event_name: 'PermissionRequest', tool_name: 'Bash', tool_input: leadCommand },
+      ...reads,
+      {
+        hook_event_name: 'PermissionRequest',
+        tool_name: 'Read',
+        tool_input: last.tool_input,
+        ...child
+      },
+      {
+        hook_event_name: 'PostToolBatch',
+        tool_calls: reads.map(({ tool_name, tool_input, tool_use_id }) => ({
+          tool_name,
+          tool_input,
+          tool_use_id
+        })),
+        ...child
+      }
+    ])
+    expect(states.at(-1)).toBe('PostToolBatch:waiting')
+  })
+
   it("ends a subagent's self-denied wait when the listener has no earlier record of the lead", async () => {
     const child = { agent_id: 'agent-child', agent_type: 'general-purpose' }
     const command = { command: 'touch /private/tmp/orca-permcap-fresh' }

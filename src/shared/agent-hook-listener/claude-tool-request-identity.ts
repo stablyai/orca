@@ -1,4 +1,5 @@
 import { readFirstString } from './interactive-tool'
+import { isAskUserQuestionTool } from '../agent-status/lifecycle/agent-question-answered-intent'
 import type { HookListenerState } from './listener-state'
 import { deriveToolInputPreview, readString } from './tool-input-preview'
 import { readClaudeBatchSettledRequests } from './claude-settled-permission-requests'
@@ -13,8 +14,8 @@ export type ClaudeToolRequestFields = {
 
 export type ClaudeToolRequest = ClaudeToolRequestFields & {
   toolUseId: string
-  /** A PermissionRequest asked about this call and no Post* or batch end has settled it. */
-  permissionPending?: true
+  /** A permission request or question about this call waits on the user; no Post*, batch end or stop has settled it. */
+  awaitingUser?: true
 }
 
 /** PermissionRequest omits tool_use_id; it asks about a PreToolUse with the same owner, tool and input. */
@@ -61,7 +62,12 @@ export function withClaudeToolRequestId(
       ? []
       : (state.claudeOpenToolUsesByPaneKey.get(paneKey) ?? []).filter((call) => !ended(call))
   if (eventName === 'PreToolUse' && toolUseId) {
-    open.push({ ...fields, toolUseId })
+    // A question waits on the user from its PreToolUse, with or without a PermissionRequest.
+    open.push({
+      ...fields,
+      toolUseId,
+      ...(isAskUserQuestionTool(fields.toolName) ? { awaitingUser: true as const } : {})
+    })
   }
   // Parallel calls interleave their hooks, so the request is the open call it matches, never just the latest.
   const asked =
@@ -72,10 +78,11 @@ export function withClaudeToolRequestId(
         )
   for (const call of asked) {
     // An ambiguous request marks every call it could be, so none is cleared while it may still be on screen.
-    call.permissionPending = true
+    call.awaitingUser = true
   }
-  if (open.length > 0) {
-    state.claudeOpenToolUsesByPaneKey.set(paneKey, open.slice(-MAX_OPEN_TOOL_USES))
+  const kept = boundOpenToolUses(open)
+  if (kept.length > 0) {
+    state.claudeOpenToolUsesByPaneKey.set(paneKey, kept)
   } else {
     state.claudeOpenToolUsesByPaneKey.delete(paneKey)
   }
@@ -84,11 +91,19 @@ export function withClaudeToolRequestId(
     : hookPayload
 }
 
-/** True while some open call still has a permission request nobody has settled. */
-export function claudeHasPendingPermission(state: HookListenerState, paneKey: string): boolean {
-  return (
-    state.claudeOpenToolUsesByPaneKey.get(paneKey)?.some((call) => call.permissionPending) === true
-  )
+/** True while some open call still waits on the user: a permission request or question nobody has settled. */
+export function claudeHasRequestAwaitingUser(state: HookListenerState, paneKey: string): boolean {
+  return state.claudeOpenToolUsesByPaneKey.get(paneKey)?.some((call) => call.awaitingUser) === true
+}
+
+// Evicting a call that waits on the user would read as settled, so the bound drops only calls nobody is asked about.
+function boundOpenToolUses(open: ClaudeToolRequest[]): ClaudeToolRequest[] {
+  const idle = open.filter((call) => !call.awaitingUser)
+  if (idle.length <= MAX_OPEN_TOOL_USES) {
+    return open
+  }
+  const evicted = new Set(idle.slice(0, idle.length - MAX_OPEN_TOOL_USES))
+  return open.filter((call) => !evicted.has(call))
 }
 
 function endedToolUseIds(
@@ -106,6 +121,10 @@ function endedToolUseIds(
   }
   if (eventName === 'PostToolUse' || eventName === 'PostToolUseFailure') {
     return (call) => call.toolUseId === toolUseId
+  }
+  // A stopped subagent can no longer be asked anything.
+  if ((eventName === 'SubagentStop' || eventName === 'StopFailure') && toolAgentId !== undefined) {
+    return (call) => call.toolAgentId === toolAgentId
   }
   if (eventName === 'PostToolBatch') {
     const settled = new Set(readClaudeBatchSettledRequests(hookPayload)?.map((r) => r.toolUseId))
