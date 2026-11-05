@@ -8,6 +8,7 @@ import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { toWebTerminalSurfaceTabId } from '../../../shared/workspace-layout/terminal-surface-id'
 import { deriveGeneratedTabTitle } from '../../../shared/agent-status/presentation/agent-tab-title'
 import { getDefaultSettings } from '../../../shared/constants'
+import { resolveTerminalTabTitle } from '../../../shared/tab-title-resolution'
 import type { AppState } from '../store/types'
 import { createTestStore, makeWorktree, seedStore } from '../store/slices/store-test-helpers'
 import {
@@ -52,6 +53,7 @@ function makeHostSnapshot(args: {
   hostNow: number
   includeAgentStatus: boolean
   agentStatusOverrides?: Partial<AgentStatusEntry>
+  aiVaultTitle?: { agent: 'claude'; sessionId: string; title: string }
 }): RuntimeMobileSessionTabsResult {
   return {
     worktree: WT,
@@ -70,6 +72,7 @@ function makeHostSnapshot(args: {
         isActive: true,
         status: 'ready',
         terminal: 'terminal-1',
+        ...(args.aiVaultTitle ? { aiVaultTitle: args.aiVaultTitle } : {}),
         ...(args.includeAgentStatus
           ? {
               agentStatus: {
@@ -431,5 +434,43 @@ describe('remote-paired pane: host snapshot mirror vs client byte-derived status
         prompt: CLIENT_PROMPT
       })
     })
+  })
+})
+
+describe('remote-paired pane: host session name', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(T0)
+    resetWebSessionTabsSnapshotFreshnessForTests()
+    resetRendererOwnedAgentStatusPanesForTests()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    resetRendererOwnedAgentStatusPanesForTests()
+  })
+
+  it('labels the mirrored tab with the host session name over the client first-prompt title', () => {
+    const store = seedPairedClientStore()
+    applyHostSnapshot(
+      store,
+      makeHostSnapshot({ snapshotVersion: 1, hostNow: T0, includeAgentStatus: true }),
+      T0
+    )
+    replayClientOscWorking(store, T0 + 1_000)()
+    applyHostSnapshot(
+      store,
+      makeHostSnapshot({
+        snapshotVersion: 2,
+        hostNow: T0 + 2_000,
+        includeAgentStatus: true,
+        aiVaultTitle: { agent: 'claude', sessionId: 'session-1', title: 'Login cleanup' }
+      }),
+      T0 + 2_000
+    )
+
+    const tab = (store.getState().tabsByWorktree[WT] ?? []).find((t) => t.id === MIRROR_TAB_ID)
+    expect(tab?.generatedTitle).toBe(EXPECTED_GENERATED_TITLE)
+    expect(resolveTerminalTabTitle(tab!, true)).toBe('Login cleanup')
   })
 })

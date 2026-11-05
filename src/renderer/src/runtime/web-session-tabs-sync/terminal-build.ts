@@ -180,7 +180,10 @@ export function buildMirroredTerminalTabs(
         defaultTitle: existing?.defaultTitle ?? title,
         // Host omits generated titles; retain client agent-prompt labels across rebuilds.
         ...(existing?.generatedTitle ? { generatedTitle: existing.generatedTitle } : {}),
-        ...(existing?.aiVaultTitle ? { aiVaultTitle: existing.aiVaultTitle } : {}),
+        // The host's session name wins; older hosts omit it, so keep the client's own.
+        ...((activeSurface.aiVaultTitle ?? existing?.aiVaultTitle)
+          ? { aiVaultTitle: activeSurface.aiVaultTitle ?? existing?.aiVaultTitle }
+          : {}),
         // Host omits client recovery ledger; preserve it or every snapshot rearms remount allowance (b5cfc6ca).
         ...(existing?.recovery ? { recovery: existing.recovery } : {}),
         ...(quickCommandLabel ? { quickCommandLabel } : {}),
