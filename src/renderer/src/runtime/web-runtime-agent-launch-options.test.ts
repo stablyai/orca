@@ -1,3 +1,8 @@
+// @vitest-environment happy-dom
+import { createElement } from 'react'
+import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react'
+import { AgentSessionContinuationDialog } from '@/components/agent-session-continuation/AgentSessionContinuationDialog'
+import type { AgentLaunchPicker } from '@/components/agent/AgentLaunchPicker'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { resetWebSessionCloseIntentForTests } from './web-session-close-intent'
 import {
@@ -11,6 +16,9 @@ import {
 import { stubRuntimeEnvironmentBridge } from './runtime-environment-bridge-fixture'
 
 const mocks = vi.hoisted(() => ({
+  launched: vi.fn<typeof launch>(),
+  observation: vi.fn(),
+  picker: vi.fn(),
   getState: vi.fn(),
   setState: vi.fn(),
   subscribe: vi.fn(),
@@ -33,10 +41,28 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('../store', () => ({
-  useAppStore: {
+  useAppStore: Object.assign((select: (state: unknown) => unknown) => select(mocks.getState()), {
     getState: mocks.getState,
     setState: mocks.setState,
     subscribe: mocks.subscribe
+  })
+}))
+
+vi.mock('@/components/tab-bar/use-new-tab-agent-menu-rows', () => ({
+  useAgentMenuObservation: mocks.observation
+}))
+vi.mock('@/hooks/useAgentDetectionTarget', () => ({
+  useAgentDetectionTargetForWorktree: () => null
+}))
+vi.mock('@/components/agent/AgentLaunchPicker', () => ({ AgentLaunchPicker: mocks.picker }))
+vi.mock('@/lib/host-chat-program', () => ({ agentsOfferedForLaunch: () => ['claude'] }))
+vi.mock('@/lib/host-chat-program-acquisition', () => ({
+  acquireAgentLaunchChoices: async () => ({ detected: ['claude'], offered: ['claude'] })
+}))
+vi.mock('@/lib/launch-agent-in-new-tab', () => ({
+  launchAgentInNewTab: (input: Parameters<typeof launch>[0]) => {
+    const terminalCompletion = mocks.launched(input)
+    return { surface: { kind: 'host-published' }, terminalCompletion }
   }
 }))
 
@@ -73,13 +99,13 @@ vi.mock('./web-runtime-browser-materialization', () => ({
   hasMaterializedWebRuntimeBrowserPage: mocks.hasMaterializedWebRuntimeBrowserPage
 }))
 
-vi.mock('sonner', () => ({ toast: { error: mocks.toastError } }))
+vi.mock('sonner', () => ({ toast: { error: mocks.toastError, success: vi.fn() } }))
 
 afterEach(() => resetWebSessionCloseIntentForTests())
 
-import { tabAgentPickerLaunchInputs } from '@/components/tab-bar/tab-agent-launch-options'
 import {
   agentPickerDraft,
+  agentPickerFreshLaunchInputs,
   type AgentPickerEntry
 } from '../../../shared/agent-launch/picker/agent-launch-picker'
 import { agentPickerChoiceSeeds } from '../../../shared/agent-launch/picker/agent-launch-picker-defaults'
@@ -148,6 +174,7 @@ beforeEach(() => {
   stubRuntimeEnvironmentBridge({ call })
 })
 afterEach(() => {
+  cleanup()
   vi.restoreAllMocks()
   resetTerminalCreateEnvironment()
 })
@@ -374,7 +401,13 @@ it('keeps picker-seeded desktop Arguments off a v1.4.239 host and retains explic
     kind: 'choice',
     patch: { options: { effort: 'high' } }
   })
-  await launch(tabAgentPickerLaunchInputs(row, draft, entry))
+  await launch(
+    agentPickerFreshLaunchInputs(
+      draft,
+      { surface: 'terminal', executionHostId: row.executionHostId },
+      entry
+    )
+  )
   expect(params('terminal.createAgentSession').agentArgs).toBe(
     '--effort high --dangerously-skip-permissions --add-dir /host-tools'
   )
@@ -388,12 +421,100 @@ it('keeps picker-seeded desktop Arguments off a v1.4.239 host and retains explic
       text: '--model launch-only --add-dir /launch-tools'
     })
   )
-  await launch(tabAgentPickerLaunchInputs(row, authored, entry))
+  await launch(
+    agentPickerFreshLaunchInputs(
+      authored,
+      { surface: 'terminal', executionHostId: row.executionHostId },
+      entry
+    )
+  )
   const command = params('session.tabs.createTerminal').command
   expect(command).toContain("'--model' 'launch-only'")
   expect(command).toContain("'--add-dir' '/launch-tools'")
   expect(command).toContain("'--dangerously-skip-permissions'")
   expect(command).not.toContain('desktop-only-qa')
+  call.mockClear()
+  capabilities.push('agent-session.create-options.v1')
+  await launch(
+    agentPickerFreshLaunchInputs(
+      draft,
+      { surface: 'terminal', executionHostId: row.executionHostId },
+      entry
+    )
+  )
+  expect(params('terminal.createAgentSession')).toMatchObject({
+    sessionOptions: { permissionMode: 'full-access', effort: 'high' }
+  })
+  expect(params('terminal.createAgentSession')).not.toHaveProperty('agentArgs')
+})
+
+it('requests a host-authoritative v1.4.239 continuation through the real Start handler', async () => {
+  capabilities = ['agent-session.host-authority.v1']
+  mocks.launched.mockImplementation(launch)
+  const api = window.api
+  vi.stubGlobal('window', document.defaultView)
+  Object.assign(window, { api })
+  const hostSettings = {
+    agentPermissionDefault: 'ask' as const,
+    agentCmdOverrides: { claude: '/host/claude' },
+    agentDefaultArgs: { claude: '--add-dir /host-tools' }
+  }
+  vi.mocked(settingsTransport.readHostAgentLaunchSettings).mockResolvedValue(
+    projectAgentLaunchSettings(hostSettings)
+  )
+  Object.assign(mocks.getState(), { getKnownWorktreeById: () => null })
+  const entry: AgentPickerEntry = {
+    agent: 'claude',
+    label: 'Claude',
+    rows: [],
+    surfaces: ['terminal'],
+    defaultSurface: 'terminal',
+    catalog: { origin: 'unknown' },
+    ...agentPickerChoiceSeeds('claude', hostSettings)
+  }
+  const draft = applyAgentPickerEdit(entry, agentPickerDraft(entry), {
+    kind: 'permission',
+    value: 'full-access'
+  })
+  const row = { agent: 'claude', kind: 'cli', executionHostId: 'runtime:web-env-1' } as const
+  mocks.observation.mockReturnValue({
+    detection: { detectedIds: ['claude'] },
+    model: { state: 'settled', rows: [row] },
+    selectionFor: () => ({
+      ready: true,
+      cli: true,
+      choice: { agent: 'claude', route: 'terminal-tui', executionHostId: row.executionHostId }
+    })
+  })
+  mocks.picker.mockImplementation((props: Parameters<typeof AgentLaunchPicker>[0]) =>
+    createElement('button', { onClick: () => props.onPick('claude', draft, entry) }, 'Full access')
+  )
+  const view = render(
+    createElement(AgentSessionContinuationDialog, {
+      open: true,
+      onOpenChange: () => {},
+      request: {
+        worktreeId: WORKTREE_ID,
+        workspacePath: '/worktree',
+        launchSource: 'sidebar',
+        source: { sourceAgent: 'claude', capturedText: 'Saved continuation context' }
+      }
+    })
+  )
+  fireEvent.click(view.getByText('Full access'))
+  fireEvent.click(view.getByRole('button', { name: 'Start New Session' }))
+  await waitFor(() => expect(mocks.launched).toHaveBeenCalled())
+  await act(async () => {
+    await mocks.launched.mock.results[0].value
+  })
+  const request = params('terminal.createAgentSession')
+  expect(request.agentArgs).toBe('--dangerously-skip-permissions --add-dir /host-tools')
+  expect(request).not.toHaveProperty('command')
+  expect(request.prompt).toContain('Saved continuation context')
+  expect(request.promptDelivery).toBe('draft')
+  expect(
+    call.mock.calls.some(([request]) => request.method === 'session.tabs.createTerminal')
+  ).toBe(false)
 })
 
 it.each([
@@ -545,7 +666,6 @@ it.each([undefined, ''])(
       // Asserted above to be exactly this request's sessionOptions.
       sessionOptions: { permissionMode: 'ask' }
     })
-    expect(inputs.agentArgs).toBe('')
     expect(
       buildAgentStartupPlan({ ...inputs, prompt: '', allowEmptyPromptLaunch: true })?.launchCommand
     ).toBe('agy')

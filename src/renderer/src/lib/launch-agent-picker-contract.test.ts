@@ -19,6 +19,7 @@ import {
   type AgentPickerEntry,
   agentPickerDraft,
   agentPickerLaunchInputs,
+  agentPickerFreshLaunchInputs,
   agentPickerEntriesFromRows
 } from '../../../shared/agent-launch/picker/agent-launch-picker'
 
@@ -62,6 +63,43 @@ vi.mock('@/runtime/runtime-rpc-client', () => ({
 vi.mock('@/runtime/structured-agent-session-client', () => ({
   callStructuredAgentSession: inventory.session
 }))
+
+it('preserves authored and explicitly empty Arguments for fresh terminal and chat launches', () => {
+  const entry: AgentPickerEntry = {
+    agent: 'codex',
+    label: 'Codex',
+    rows: [],
+    surfaces: ['terminal', 'chat'],
+    defaultSurface: 'terminal',
+    terminal: {},
+    structured: {},
+    arguments: '',
+    catalog: { origin: 'unknown' }
+  }
+  for (const { text, expected } of [
+    { text: '--add-dir docs', expected: '--add-dir docs' },
+    { text: '', expected: null }
+  ]) {
+    const draft = acceptAgentPickerArguments(
+      entry,
+      applyAgentPickerEdit(entry, agentPickerDraft(entry), {
+        kind: 'arguments',
+        text
+      })
+    )
+    for (const surface of ['terminal', 'chat'] as const) {
+      const launch = agentPickerFreshLaunchInputs(
+        { ...draft, surface },
+        {
+          surface,
+          executionHostId: 'runtime:paired'
+        },
+        entry
+      )
+      expect(launch.agentArgs).toBe(expected)
+    }
+  }
+})
 
 describe('picker window launch contract', () => {
   it.each(['claude', 'codex'] as const)(

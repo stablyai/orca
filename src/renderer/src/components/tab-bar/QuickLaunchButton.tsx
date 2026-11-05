@@ -1,10 +1,10 @@
 import { SubscribedAgentLaunchPickerMenu } from '@/components/agent/AgentLaunchPickerMenu'
-import type {
-  AgentPickerEntry,
-  AgentPickerDraft
+import {
+  agentPickerFreshLaunchInputs,
+  type AgentPickerEntry,
+  type AgentPickerDraft
 } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 import React, { useCallback, useRef } from 'react'
-import { tabAgentPickerLaunchInputs } from './tab-agent-launch-options'
 import { toast } from 'sonner'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
@@ -95,7 +95,16 @@ export function useTabAgentMenuLaunch({
             }
           : {}),
         agent,
-        ...(draft ? tabAgentPickerLaunchInputs(row, draft, pickerEntry) : {}),
+        ...(draft
+          ? agentPickerFreshLaunchInputs(
+              draft,
+              {
+                surface: row.kind === 'chat' ? 'chat' : 'terminal',
+                executionHostId: row.executionHostId
+              },
+              pickerEntry
+            )
+          : {}),
         worktreeId,
         groupId,
         // A caller's prompt (notes) owns the launch; otherwise the picker panel's typed one.

@@ -1,9 +1,7 @@
-import { parseExecutionHostId } from '../../../../shared/execution-host'
 import { searchAgentPickerSetups } from '../../../../shared/agent-launch/picker/agent-launch-picker-search'
-import {
-  agentPickerLaunchInputs,
-  type AgentPickerDraft,
-  type AgentPickerEntry
+import type {
+  AgentPickerDraft,
+  AgentPickerEntry
 } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 import type { AgentPickerSetupIdentity } from '../agent/agent-launch-picker-drafts'
 import { rowLabel, rowId, chatUnavailableLabel } from './tab-agent-row-presentation'
@@ -14,22 +12,6 @@ import {
 } from '../../../../shared/agent-launch/picker/agent-launch-picker-rows'
 import { normalizeMatchQuery, tokenizeMatchValue } from './query-token-match'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
-
-export function tabAgentPickerLaunchInputs(
-  row: NewTabAgentMenuRow,
-  draft: AgentPickerDraft,
-  entry?: AgentPickerEntry
-) {
-  if (
-    row.kind !== 'chat' &&
-    parseExecutionHostId(row.executionHostId)?.kind === 'runtime' &&
-    draft.acceptedEdits?.arguments === undefined
-  ) {
-    // Why: choosing a control can materialize settings text without authoring Arguments.
-    return agentPickerLaunchInputs({ ...draft, arguments: undefined })
-  }
-  return agentPickerLaunchInputs(draft, entry)
-}
 
 export type TabAgentLaunchOption = {
   agent: TuiAgent
