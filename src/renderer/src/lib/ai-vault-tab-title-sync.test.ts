@@ -151,4 +151,102 @@ describe('AI Vault tab title sync', () => {
     completions[2]!()
     await pending
   })
+
+  it('recovers a missing sleeping name after failure and a transcript path arrives for the same session', async () => {
+    const store = makeState({
+      executionHostId: 'runtime:server-1',
+      worktreeId: 'worktree-1',
+      path: '/workspace/albacore',
+      sleeping: true
+    })
+    const paneKey = 'tab-1:00000000-0000-4000-8000-000000000001'
+    const record = store.getState().sleepingAgentSessionsByPaneKey[paneKey]!
+    store.update({
+      sleepingAgentSessionsByPaneKey: {
+        [paneKey]: { ...record, providerSession: { key: 'session_id', id: 'codex-session' } }
+      }
+    })
+    const resolveSessionTitles = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('Host connecting'))
+      .mockResolvedValueOnce({ titles: [] })
+      .mockResolvedValue(titleResult('codex', 'Recovered conversation'))
+    const stop = startAiVaultTabTitleSync({ ...store, resolveSessionTitles })
+    try {
+      await vi.waitFor(() => expect(resolveSessionTitles).toHaveBeenCalledTimes(1))
+      store.update({
+        sleepingAgentSessionsByPaneKey: {
+          [paneKey]: {
+            ...record,
+            providerSession: {
+              key: 'session_id',
+              id: 'codex-session',
+              transcriptPath: '/sessions/arrived.jsonl'
+            }
+          }
+        }
+      })
+      await vi.waitFor(() => expect(resolveSessionTitles).toHaveBeenCalledTimes(2))
+      store.update({
+        tabsByWorktree: {
+          'worktree-1': [
+            ...store.getState().tabsByWorktree['worktree-1'],
+            { ...store.getState().tabsByWorktree['worktree-1'][0], id: 'unrelated-tab' }
+          ]
+        }
+      })
+      await vi.waitFor(() =>
+        expect(store.getState().tabsByWorktree['worktree-1'][0].aiVaultTitle?.title).toBe(
+          'Recovered conversation'
+        )
+      )
+      expect(resolveSessionTitles.mock.calls[1]![0].requests[0].transcriptPath).toBe(
+        '/sessions/arrived.jsonl'
+      )
+    } finally {
+      stop()
+    }
+  })
+
+  it('paces repeated failed live refreshes after a success and preserves the last name', async () => {
+    vi.useFakeTimers()
+    const store = makeState({
+      executionHostId: 'local',
+      worktreeId: 'worktree-1',
+      path: '/workspace/albacore'
+    })
+    const attempts: number[] = []
+    const resolveSessionTitles = async () => {
+      attempts.push(Date.now())
+      if (attempts.length === 1) {
+        return titleResult('codex', 'Stable conversation')
+      }
+      throw new Error('Host unavailable')
+    }
+    const delays: number[] = []
+    const stop = startAiVaultTabTitleSync({
+      ...store,
+      resolveSessionTitles,
+      setTimer: (callback, delay) => {
+        delays.push(delay)
+        if (delay === 0) {
+          throw new Error('Expired attempt scheduled an immediate retry')
+        }
+        return setTimeout(callback, delay)
+      }
+    })
+    try {
+      await vi.advanceTimersByTimeAsync(0)
+      const started = attempts[0]!
+      await vi.advanceTimersByTimeAsync(60_000)
+      expect(attempts.map((time) => time - started)).toEqual([0, 20_000, 40_000, 60_000])
+      expect(delays).toEqual([20_000, 20_000, 20_000, 20_000])
+      expect(store.getState().tabsByWorktree['worktree-1'][0].aiVaultTitle?.title).toBe(
+        'Stable conversation'
+      )
+    } finally {
+      stop()
+      vi.useRealTimers()
+    }
+  })
 })

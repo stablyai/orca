@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks'
 import { basename, dirname, join } from 'node:path'
 import type { Stats } from 'node:fs'
 import { readCodexIndexUpdate, type CodexIndexRead } from './session-scanner-codex-index-read'
@@ -17,6 +18,12 @@ type CodexSessionIndexTitleCacheEntry = {
   signature: string
   titles: Map<string, string>
   read?: CodexIndexRead
+}
+
+const titleLookupScope = new AsyncLocalStorage<Map<string, Promise<Map<string, string>>>>()
+
+export function withCodexSessionIndexTitles<T>(read: () => Promise<T>): Promise<T> {
+  return titleLookupScope.run(new Map(), read)
 }
 
 const codexSessionIndexTitleCache = new Map<string, Promise<CodexSessionIndexTitleCacheEntry>>()
@@ -80,7 +87,18 @@ export function codexHomeFromSessionFilePath(sessionFilePath: string): string | 
   return null
 }
 
-export async function readCodexSessionIndexTitles(codexHome: string): Promise<Map<string, string>> {
+export function readCodexSessionIndexTitles(codexHome: string): Promise<Map<string, string>> {
+  const scope = titleLookupScope.getStore()
+  const existing = scope?.get(codexHome)
+  if (existing) {
+    return existing
+  }
+  const pending = readCodexSessionIndexTitlesForHome(codexHome)
+  scope?.set(codexHome, pending)
+  return pending
+}
+
+async function readCodexSessionIndexTitlesForHome(codexHome: string): Promise<Map<string, string>> {
   const indexPath = join(codexHome, CODEX_SESSION_INDEX_FILE)
   let signature: string
   let indexStat: Stats

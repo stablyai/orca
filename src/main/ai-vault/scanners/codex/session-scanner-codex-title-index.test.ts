@@ -1,3 +1,4 @@
+import { readAiVaultSessionTitlesFromFiles } from '../../session-titles/session-title-file-reader'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import * as transcriptFs from '../../../native-chat/wsl-transcript-fs-access'
@@ -89,6 +90,73 @@ describe('incremental Codex session names', () => {
     await writeFile(path, entry('short', 'Short'))
     cached = await readCodexIndexUpdate(path, await stat(path), cached)
     expect([...cached.titles]).toEqual([['short', 'Short']])
+  })
+
+  it.each(['dev', 'ino'] as const)(
+    'rereads an A,B index replaced by A,C,D when %s is unavailable',
+    async (missing) => {
+      const { path } = await indexHome()
+      await writeFile(path, entry('A', 'Title A') + entry('B', 'Title B'))
+      const first = await readCodexIndexUpdate(
+        path,
+        Object.assign(await stat(path), { [missing]: 0 })
+      )
+      await writeFile(
+        `${path}.replacement`,
+        entry('A', 'Title A') + entry('C', 'Title C') + entry('D', 'Title D')
+      )
+      await rename(`${path}.replacement`, path)
+      const next = await readCodexIndexUpdate(
+        path,
+        Object.assign(await stat(path), { [missing]: 0 }),
+        first
+      )
+      expect([...next.titles]).toEqual([
+        ['A', 'Title A'],
+        ['C', 'Title C'],
+        ['D', 'Title D']
+      ])
+    }
+  )
+
+  it('shares negative home lookups across cold and cached fallbacks, but refreshes them on a later call', async () => {
+    const { root, path } = await indexHome()
+    await mkdir(join(root, 'sessions'))
+    await writeFile(path, entry('unrelated', 'Other thread'))
+    const requests = await Promise.all(
+      Array.from({ length: 5 }, async (_, index) => {
+        const sessionId = `fallback-${index}`
+        const transcriptPath = join(root, 'sessions', `${sessionId}.jsonl`)
+        await writeFile(
+          transcriptPath,
+          `${JSON.stringify({ timestamp: '2026-11-05T10:00:00.000Z', type: 'session_meta', payload: { id: sessionId, title: 'Metadata name', cwd: '/repo/app' } })}\n`
+        )
+        return { agent: 'codex' as const, sessionId, transcriptPath }
+      })
+    )
+    const indexStats = vi.spyOn(transcriptFs, 'wslGatedStat')
+    for (const phase of ['cold', 'cached', 'renamed']) {
+      if (phase === 'renamed') {
+        await appendFile(
+          path,
+          requests.map((request) => entry(request.sessionId, 'Indexed rename')).join('')
+        )
+      }
+      indexStats.mockClear()
+      const result = await readAiVaultSessionTitlesFromFiles(requests)
+      expect(result.titles.map((title) => title.title)).toEqual(
+        phase === 'renamed'
+          ? [
+              'Indexed rename',
+              'Indexed rename',
+              'Indexed rename',
+              'Indexed rename',
+              'Indexed rename'
+            ]
+          : ['Metadata name', 'Metadata name', 'Metadata name', 'Metadata name', 'Metadata name']
+      )
+      expect(indexStats.mock.calls.filter(([file]) => file === path)).toHaveLength(1)
+    }
   })
 
   it('keeps the indexed rename over a recorded session_meta title when the rollout grows', async () => {

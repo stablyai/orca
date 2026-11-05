@@ -6,19 +6,15 @@ import { startAiVaultTabTitleSync } from './ai-vault-tab-title-sync'
 import { settleAiVaultTitleRequestBatches } from './ai-vault-tab-title-batches'
 import { collectAiVaultTitleRequests } from './ai-vault-tab-title-requests'
 
-vi.mock('@/runtime/sync-runtime-graph/mobile-session-capture', () => ({
-  captureMountedTerminalSurfaces: () =>
-    new Map([
-      [
-        'tab-1',
-        {
-          numericPaneIdByLeafId: new Map([
-            ['00000000-0000-4000-8000-000000000001', 7],
-            ['00000000-0000-4000-8000-000000000002', 8]
-          ])
-        }
-      ]
-    ])
+vi.mock('@/runtime/mounted-terminal-tab-registry', () => ({
+  findRegisteredTerminalTab: () => ({
+    tab: {
+      getManager: () => ({
+        getNumericIdForLeaf: (leafId: string) =>
+          leafId === '00000000-0000-4000-8000-000000000001' ? 7 : 8
+      })
+    }
+  })
 }))
 let stop: (() => void) | undefined
 afterEach(() => {
@@ -68,12 +64,49 @@ describe('session title freshness', () => {
       })
       await vi.advanceTimersByTimeAsync(0)
       title = 'Renamed conversation'
-      await vi.advanceTimersByTimeAsync(20_000)
+      await vi.advanceTimersByTimeAsync(10_000)
+      const statuses = store.getState().runtimeStatusByEnvironmentId
+      if (host === 'capable') {
+        store.update({
+          runtimeStatusByEnvironmentId: new Map([
+            ['server-1', { ...statuses.get('server-1')!, checkedAt: 2 }]
+          ])
+        })
+        await vi.advanceTimersByTimeAsync(0)
+        expect(store.getState().tabsByWorktree['worktree-1'][0].aiVaultTitle?.title).toBe(
+          'First name'
+        )
+      }
+      await vi.advanceTimersByTimeAsync(10_000)
       expect(store.getState().tabsByWorktree['worktree-1'][0].aiVaultTitle?.title).toBe(
         host === 'legacy' ? 'First name' : 'Renamed conversation'
       )
       if (host === 'legacy') {
-        await vi.advanceTimersByTimeAsync(280_000)
+        await vi.advanceTimersByTimeAsync(130_000)
+        const state = store.getState()
+        const paneKey = 'tab-2:00000000-0000-4000-8000-000000000001'
+        store.update({
+          tabsByWorktree: {
+            'worktree-1': [
+              ...state.tabsByWorktree['worktree-1'],
+              { ...state.tabsByWorktree['worktree-1'][0], id: 'tab-2' }
+            ]
+          },
+          agentStatusByPaneKey: {
+            ...state.agentStatusByPaneKey,
+            [paneKey]: {
+              ...state.agentStatusByPaneKey['tab-1:00000000-0000-4000-8000-000000000001'],
+              paneKey,
+              tabId: 'tab-2',
+              providerSession: { key: 'session_id', id: 'other-session' }
+            }
+          }
+        })
+        await vi.advanceTimersByTimeAsync(0)
+        expect(store.getState().tabsByWorktree['worktree-1'][0].aiVaultTitle?.title).toBe(
+          'First name'
+        )
+        await vi.advanceTimersByTimeAsync(150_000)
         expect(store.getState().tabsByWorktree['worktree-1'][0].aiVaultTitle?.title).toBe(
           'Renamed conversation'
         )
@@ -128,6 +161,11 @@ describe('session title freshness', () => {
       })
       await vi.advanceTimersByTimeAsync(0)
       title = 'Renamed conversation'
+      titles('[ . ] Action Required', 'Shell')
+      await vi.advanceTimersByTimeAsync(0)
+      expect(store.getState().tabsByWorktree['worktree-1'][0].aiVaultTitle?.title).toBe(
+        'First name'
+      )
       titles('[ . ] Action Required', 'Building')
       await vi.advanceTimersByTimeAsync(0)
       expect(store.getState().tabsByWorktree['worktree-1'][0].aiVaultTitle?.title).toBe(

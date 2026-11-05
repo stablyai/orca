@@ -13,7 +13,8 @@ import { aiVaultTitleSyncInputsChanged } from './ai-vault-tab-title-sync-inputs'
 import {
   aiVaultTitleRequestKey,
   changedOwningPaneTitleRequests,
-  titleRefreshInterval
+  titleRefreshInterval,
+  supportsSessionTitleRefresh
 } from './ai-vault-tab-title-freshness'
 
 function requestIdentity(request: AiVaultTitleRequest): string {
@@ -54,7 +55,7 @@ export function startAiVaultTabTitleSync(dependencies: SyncDependencies): () => 
   let cancelScheduled: (() => void) | null = null
   let stopped = false
   let writing = false
-  const lastResolvedAt = new Map<string, number>()
+  const lastSettledAttemptAt = new Map<string, number>()
   const dirty = new Set<string>()
 
   const writeTitle = (request: AiVaultTitleRequest, title: string | null): void => {
@@ -104,7 +105,7 @@ export function startAiVaultTabTitleSync(dependencies: SyncDependencies): () => 
     for (const request of requests) {
       const current = currentByTabId.get(request.tabId)
       const title = titleByIdentity.get(requestIdentity(request))
-      if (current && requestIdentity(current) === requestIdentity(request) && title) {
+      if (current && aiVaultTitleRequestKey(current) === aiVaultTitleRequestKey(request) && title) {
         writeTitle(request, title)
       }
     }
@@ -132,9 +133,9 @@ export function startAiVaultTabTitleSync(dependencies: SyncDependencies): () => 
     )
     const requests = collectAiVaultTitleRequests(state)
     const currentKeys = new Set(requests.map(aiVaultTitleRequestKey))
-    for (const key of lastResolvedAt.keys()) {
+    for (const key of lastSettledAttemptAt.keys()) {
       if (!currentKeys.has(key)) {
-        lastResolvedAt.delete(key)
+        lastSettledAttemptAt.delete(key)
       }
     }
     for (const key of dirty) {
@@ -150,12 +151,16 @@ export function startAiVaultTabTitleSync(dependencies: SyncDependencies): () => 
       if (stored && !identityMatches) {
         writeTitle(request, null)
       }
-      const last = lastResolvedAt.get(aiVaultTitleRequestKey(request))
+      const last = lastSettledAttemptAt.get(aiVaultTitleRequestKey(request))
       return (
-        (last === undefined && (request.refresh || !identityMatches || !stored?.title.trim())) ||
+        !identityMatches ||
+        !stored?.title.trim() ||
+        (request.refresh && last === undefined) ||
         (request.refresh &&
           (dirty.has(aiVaultTitleRequestKey(request)) ||
-            now - last! >= titleRefreshInterval(state, request) / 2))
+            now - last! >=
+              titleRefreshInterval(state, request) /
+                (supportsSessionTitleRefresh(state, request) ? 2 : 1)))
       )
     })
 
@@ -170,8 +175,9 @@ export function startAiVaultTabTitleSync(dependencies: SyncDependencies): () => 
           try {
             await resolveBatch(batch)
           } finally {
+            // Failed attempts pace live refreshes without settling a missing name.
             for (const request of batch) {
-              lastResolvedAt.set(aiVaultTitleRequestKey(request), Date.now())
+              lastSettledAttemptAt.set(aiVaultTitleRequestKey(request), Date.now())
             }
           }
         },
@@ -191,7 +197,7 @@ export function startAiVaultTabTitleSync(dependencies: SyncDependencies): () => 
         .map((request) =>
           Math.max(
             0,
-            (lastResolvedAt.get(aiVaultTitleRequestKey(request)) ?? Date.now()) +
+            (lastSettledAttemptAt.get(aiVaultTitleRequestKey(request)) ?? Date.now()) +
               titleRefreshInterval(currentState, request) -
               Date.now()
           )
@@ -218,17 +224,18 @@ export function startAiVaultTabTitleSync(dependencies: SyncDependencies): () => 
       return
     }
     if (state.runtimePaneTitlesByTabId !== previous.runtimePaneTitlesByTabId) {
-      for (const key of changedOwningPaneTitleRequests(
-        state,
-        previous,
-        collectAiVaultTitleRequests(state)
-      )) {
+      for (const key of changedOwningPaneTitleRequests(state, previous)) {
         dirty.add(key)
       }
     }
     if (
       dirty.size > 0 ||
-      state.runtimeStatusByEnvironmentId !== previous.runtimeStatusByEnvironmentId ||
+      (state.runtimeStatusByEnvironmentId !== previous.runtimeStatusByEnvironmentId &&
+        collectAiVaultTitleRequests(state).some(
+          (request) =>
+            supportsSessionTitleRefresh(state, request) !==
+            supportsSessionTitleRefresh(previous, request)
+        )) ||
       aiVaultTitleSyncInputsChanged(state, previous)
     ) {
       schedule()

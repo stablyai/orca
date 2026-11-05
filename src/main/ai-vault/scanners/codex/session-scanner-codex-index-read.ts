@@ -42,8 +42,12 @@ export async function readCodexIndexUpdate(
   if (
     previous?.firstRecord &&
     stat.size > previous.size &&
-    (!(stat.dev && stat.ino && previous.dev && previous.ino) ||
-      (stat.dev === previous.dev && stat.ino === previous.ino))
+    stat.dev !== 0 &&
+    stat.ino !== 0 &&
+    previous.dev !== 0 &&
+    previous.ino !== 0 &&
+    stat.dev === previous.dev &&
+    stat.ino === previous.ino
   ) {
     try {
       const prefix = await firstRecordSignature(path, previous.firstRecord.length)

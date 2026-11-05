@@ -9,7 +9,8 @@ import { parseAgentSessionFileCached } from '../parse-cache/session-scanner-pars
 
 import {
   codexHomeFromSessionFilePath,
-  readCodexSessionIndexTitles
+  readCodexSessionIndexTitles,
+  withCodexSessionIndexTitles
 } from '../scanners/codex/session-scanner-codex-title-index'
 
 const TITLE_PARSE_CONCURRENCY = 4
@@ -22,8 +23,7 @@ export type AiVaultSessionTitleCache = {
 async function readOneTitle(
   request: AiVaultSessionTitleRequest,
   signal: AbortSignal | undefined,
-  cache?: AiVaultSessionTitleCache,
-  indexByHome?: Map<string, Promise<Map<string, string>>>
+  cache?: AiVaultSessionTitleCache
 ): Promise<AiVaultSessionTitle | null> {
   if (signal?.aborted) {
     return null
@@ -34,13 +34,8 @@ async function readOneTitle(
   }
   try {
     const home = request.agent === 'codex' ? codexHomeFromSessionFilePath(transcriptPath) : null
-    if (home && indexByHome) {
-      let indexed = indexByHome.get(home)
-      if (!indexed) {
-        indexed = readCodexSessionIndexTitles(home)
-        indexByHome.set(home, indexed)
-      }
-      const title = (await indexed).get(request.sessionId)
+    if (home) {
+      const title = (await readCodexSessionIndexTitles(home)).get(request.sessionId)
       if (signal?.aborted) {
         return null
       }
@@ -91,7 +86,14 @@ async function readOneTitle(
   }
 }
 
-export async function readAiVaultSessionTitlesFromFiles(
+export function readAiVaultSessionTitlesFromFiles(
+  requests: AiVaultSessionTitleRequest[],
+  options: { cache?: AiVaultSessionTitleCache; signal?: AbortSignal } = {}
+): Promise<AiVaultSessionTitlesResult> {
+  return withCodexSessionIndexTitles(() => readSessionTitles(requests, options))
+}
+
+async function readSessionTitles(
   requests: AiVaultSessionTitleRequest[],
   options: { cache?: AiVaultSessionTitleCache; signal?: AbortSignal } = {}
 ): Promise<AiVaultSessionTitlesResult> {
@@ -100,17 +102,11 @@ export async function readAiVaultSessionTitlesFromFiles(
     { length: bounded.length },
     () => null
   )
-  const indexByHome = new Map<string, Promise<Map<string, string>>>()
   let nextIndex = 0
   const parseNext = async (): Promise<void> => {
     while (nextIndex < bounded.length && !options.signal?.aborted) {
       const index = nextIndex++
-      resolved[index] = await readOneTitle(
-        bounded[index]!,
-        options.signal,
-        options.cache,
-        indexByHome
-      )
+      resolved[index] = await readOneTitle(bounded[index]!, options.signal, options.cache)
     }
   }
   await Promise.all(
