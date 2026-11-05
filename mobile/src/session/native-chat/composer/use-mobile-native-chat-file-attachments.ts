@@ -22,8 +22,8 @@ type ShowToast = (message: string, durationMs?: number) => void
 export type MobileNativeChatFileAttachments = {
   readonly files: readonly PendingNativeChatFile[]
   readonly attachFiles: () => Promise<void>
-  /** Stores a long paste as a "Pasted text" file, as desktop does. */
-  readonly attachPastedText: (text: string) => Promise<void>
+  /** Stores a long paste as a "Pasted text" file, as desktop does; null when no upload can start. */
+  readonly attachPastedText: ((text: string) => Promise<void>) | null
   // Drop only files removed or carried by this send; attachments added while sending must survive.
   readonly removeFiles: (
     ids: readonly string[],
@@ -127,5 +127,11 @@ export function useMobileNativeChatFileAttachments(args: {
     [scopeKey, updateScope]
   )
 
-  return { files, attachFiles, attachPastedText, removeFiles }
+  const canAttach = Boolean(client && sessionId && scopeKey && enabled)
+  return {
+    files,
+    attachFiles,
+    attachPastedText: canAttach ? attachPastedText : null,
+    removeFiles
+  }
 }

@@ -34,7 +34,9 @@ export function useMobileNativeChatStructuredComposer(args: {
             ...(acceptsFiles
               ? {
                   onAttachFiles: () => void attachFiles(),
-                  onAttachPastedText: (text: string) => void attachPastedText(text)
+                  ...(attachPastedText
+                    ? { onAttachPastedText: (text: string) => void attachPastedText(text) }
+                    : {})
                 }
               : {}),
             files: pendingFiles,
