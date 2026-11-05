@@ -1,6 +1,8 @@
 import type { BlockContent, DefinitionContent, Parent, PhrasingContent } from 'mdast'
 
-// The node types MobileMarkdown adds to mdast, registered by declaration merging.
+// The node types MobileMarkdown adds to mdast, registered by declaration merging. Merging needs
+// interfaces, which React Doctor's root rules flag; mobile's lint config ignores this file because
+// it turns that rule off and would report these disable comments as unused.
 
 declare module 'mdast' {
   // oxlint-disable-next-line typescript/consistent-type-definitions -- Declaration merging registers the node.
