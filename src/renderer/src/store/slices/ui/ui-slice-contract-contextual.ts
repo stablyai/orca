@@ -68,7 +68,6 @@ export type UISliceContextual = {
   contextualToursSeenIds: ContextualTourId[]
   contextualToursAutoEligible: boolean | null
   activeContextualTourId: ContextualTourId | null
-  pendingContextualTourContinuation: { tourId: ContextualTourId; resumeStepId: string } | null
   activeContextualTourStepIndex: number
   activeContextualTourSource: string | null
   activeContextualTourSourceDetached: boolean

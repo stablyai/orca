@@ -21119,6 +21119,10 @@
       }
     },
     "contextualTours": {
+      "addProject": {
+        "title": "Add a project",
+        "body": "Add a folder or Git repository to start working on your project."
+      },
       "agentSessions": {
         "newTab": {
           "title": "New agents start here",
