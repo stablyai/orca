@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { judgeTerminalForeground, readTerminalProcessRows } from './terminal-foreground-group'
 import { resolvePtyForegroundMembers } from '../pty/process-retirement/pty-master-foreground-observation'
-import { readLaunchedAgentForeground } from './launched-agent-foreground'
+import { readLaunchedAgentForeground } from './terminal/wait/launched-agent-foreground'
 import { createAdapter } from '../daemon/providers/routing/testing/daemon-pty-router-test-fixture'
 import { DaemonPtyRouter } from '../daemon/providers/routing/daemon-pty-router'
 

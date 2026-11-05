@@ -19,7 +19,7 @@ import { prepareLocalWorktreeRootForRepo } from '../workspaces/creation/worktree
 import type { RuntimeStore } from './runtime-store-contract'
 import { runtimePathsEqual } from './runtime-worktree-path-identity'
 import { runtimeRepoIsRegistrationCandidate } from './runtime-worktree-selection'
-import { refuseWslHostWindowsDrivePath } from './wsl-host-windows-drive-guard'
+import { refuseWslHostWindowsDrivePath } from './terminal/launch/wsl-host-windows-drive-guard'
 import {
   WslHostWindowsDriveRefusalError,
   type WslHostWindowsDriveRefusal

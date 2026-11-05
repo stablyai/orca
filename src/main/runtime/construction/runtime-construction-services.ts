@@ -7,12 +7,12 @@ import type {
   RuntimeHeadlessTerminal,
   RuntimeVisibleTerminalState,
   RuntimeLeafRecord
-} from '../runtime-terminal-state-records'
+} from '../terminal/records/runtime-terminal-state-records'
 import type { TerminalAgent } from '../../../shared/agent-status/identity/terminal-agent'
 import type { AgentStatus } from '../../../shared/agent-status/title/agent-title-core'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
-import type { TuiIdleHookTurn } from '../tui-idle-hook-lane'
-import type { RuledScreen } from '../screen-input-veto'
+import type { TuiIdleHookTurn } from '../terminal/wait/tui-idle-hook-lane'
+import type { RuledScreen } from '../terminal/wait/screen-input-veto'
 import type {
   TerminalHandlePty,
   TerminalHandleLeaf,
@@ -34,7 +34,7 @@ import type { Repo } from '../../../shared/repo-types'
 import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
 import type { RuntimeWorktreeScanResult } from '../repo-worktree-resolution-scan'
 import type { ProcessedAgentStatusChunk } from '../../../shared/agent-status/transport/agent-status-osc'
-import type { RuntimeTerminalAgentPresenceOptions } from '../runtime-terminal-agent-presence'
+import type { RuntimeTerminalAgentPresenceOptions } from '../terminal/query/runtime-terminal-agent-presence'
 import type { resolveTerminalOrchestrationCliCommand } from '../orchestration/cli-command'
 import type { OrchestrationMailboxTerminal } from '../orchestration/mailbox-owner'
 import type { OrchestrationMailboxPointerSubmitTarget } from '../orchestration/mailbox-pointer-submit'

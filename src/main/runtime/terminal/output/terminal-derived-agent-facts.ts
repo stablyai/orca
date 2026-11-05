@@ -2,7 +2,7 @@ import { OrcaRuntimeWithApplyTrackedPtyTitle } from './terminal-title-observatio
 import type {
   RuntimePtyTitleTrackerEntry,
   RuntimePtyWorktreeRecord
-} from '../../runtime-terminal-state-records'
+} from '../records/runtime-terminal-state-records'
 import { createCommandCodeOutputStatusDetector } from '../../../../shared/command-code-output-status'
 import {
   extractLastOsc7Uri,

@@ -56,7 +56,7 @@ import { configureAiVaultSessionSources } from '../../ai-vault/cached-session-li
 import { configureHostReadableTranscriptPathSources } from '../../native-chat/host-readable-transcript-path'
 import { createEphemeralAgentSessionClaimSigner } from '../agent-session/ownership/agent-session-claim-identity'
 import { registerConptyDa1OverrideInstaller } from '../terminal-model-query-authority'
-import { registerTerminalViewAttributesApplier } from '../terminal-view-attribute-store'
+import { registerTerminalViewAttributesApplier } from '../terminal/view/terminal-view-attribute-store'
 import { RuntimeMachineName } from '../runtime-machine-name'
 import { setPRConflictSummaryRemoteFetches } from '../../github/conflict-summary'
 import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from '../../../shared/terminal/replay/terminal-scrollback-policy'

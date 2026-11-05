@@ -10,7 +10,7 @@ import type {
 } from '../../../../providers/pty-provider-contract'
 import type { PtyProcessInspectionOptions } from '../../../../providers/pty-process-inspection'
 import type { TerminalProcessInspection as PtyProcessInspection } from '../../../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
-import { readLaunchedAgentForeground } from '../../../../runtime/launched-agent-foreground'
+import { readLaunchedAgentForeground } from '../../../../runtime/terminal/wait/launched-agent-foreground'
 import {
   SessionNotFoundError,
   TerminalSessionOwnerUnverifiedError

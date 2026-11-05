@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   launchHostProvesAgentInFront,
   nameLocalTypedLineShell
-} from './agent-launch-typed-line-shell'
+} from './terminal/launch/agent-launch-typed-line-shell'
 
 describe('naming the shell a local launch line is typed into', () => {
   it('takes the request’s shell first, then the setting, then SHELL, as the spawn does', () => {

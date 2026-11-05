@@ -1,7 +1,7 @@
 import type { TerminalViewAttributes } from '../../../../shared/terminal/protocol/queries/terminal-view-attributes'
 import type { PtySpawnSizeSeed } from '../spawn-options-assembly'
 import type { PtySpawnOutcome } from '../spawn-outcome'
-import type { PtyRegistrationClaim } from '../../../runtime/runtime-terminal-state-records'
+import type { PtyRegistrationClaim } from '../../../runtime/terminal/records/runtime-terminal-state-records'
 import type { PaneSpawnOperation } from '../pane/pane-spawn-operation'
 import type { AgentLaunchRuntime } from '../../../../shared/agent-launch/startup/agent-launch-runtime'
 import type { SpawnIntent } from '../../../../shared/host-spawn-admission'

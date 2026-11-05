@@ -173,6 +173,7 @@ const {
   listGitHubLabelsMock,
   listGitHubAssignableUsersMock,
   applyAgentStatusHooksEnabledMock,
+  detectAgentCommandsOnHostMock,
   detectInstalledAgentsWithShellPathHydrationMock,
   markCodexProjectTrustedMock,
   markCopilotFolderTrustedMock,
@@ -260,6 +261,7 @@ const {
     listGitHubLabelsMock: vi.fn() as TestMock,
     listGitHubAssignableUsersMock: vi.fn() as TestMock,
     applyAgentStatusHooksEnabledMock: vi.fn() as TestMock,
+    detectAgentCommandsOnHostMock: vi.fn(async () => new Set(['qodercli'])),
     detectInstalledAgentsWithShellPathHydrationMock: vi.fn() as TestMock,
     markCodexProjectTrustedMock: vi.fn() as TestMock,
     markCopilotFolderTrustedMock: vi.fn() as TestMock,
@@ -383,8 +385,12 @@ vi.mock('../../ssh/targets/ssh-target-registry', () => ({
   getRegisteredSshState: () => ({ remotePlatform: 'linux' })
 }))
 
+vi.mock('../../preflight/agent-command-detection', () => ({
+  detectAgentCommandsOnHost: detectAgentCommandsOnHostMock
+}))
+
 vi.mock('../../preflight/agent-detection', () => ({
-  detectAgentCommandsOnHost: vi.fn(async () => new Set(['qodercli'])),
+  detectAgentCommandsOnHost: detectAgentCommandsOnHostMock,
   detectInstalledAgentsWithShellPathHydration: detectInstalledAgentsWithShellPathHydrationMock
 }))
 

@@ -1,4 +1,4 @@
-import { applyRemoteViewerLaunchEnv } from '../remote-viewer-launch-env'
+import { applyRemoteViewerLaunchEnv } from '../terminal/launch/remote-viewer-launch-env'
 import type { RuntimeManagedWorktreeCreateArgs } from '../runtime-managed-worktree-create-types'
 import { isTuiAgentEnabled } from '../../../shared/agent-launch/catalog/tui-agent-selection'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'

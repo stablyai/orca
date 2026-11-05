@@ -1,4 +1,7 @@
-import { isTerminalInputPaused, TerminalInputPausedError } from '../../../terminal-input-admission'
+import {
+  isTerminalInputPaused,
+  TerminalInputPausedError
+} from '../../../terminal/input/terminal-input-admission'
 import { assertLegacyAiVaultResumeCommandAllowed } from '../../../../ai-vault/structured-session-ownership'
 import { InvalidArgumentError, defineMethod } from '../../core'
 import { isTerminalQueryReply } from '../../../../../shared/terminal/protocol/queries/terminal-query-reply'

@@ -9,7 +9,7 @@ import { isStructuredAgentSessionHostTabId } from '../../shared/agent-session/vi
 import {
   collectHeadlessParentTabOrder,
   getHeadlessMobileSessionGroupId
-} from './mobile-session-layout-projection'
+} from './terminal/surface/mobile-session-layout-projection'
 
 export function mergeMobileSessionSnapshotTabs(
   baseTabs: readonly RuntimeMobileSessionSnapshotTab[],
