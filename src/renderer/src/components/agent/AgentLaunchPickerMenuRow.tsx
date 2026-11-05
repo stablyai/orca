@@ -44,6 +44,7 @@ export const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
   openSetup,
   onSetupOpenChange,
   label = entry.label,
+  searchDefault,
   source,
   selected,
   mode,
@@ -68,6 +69,8 @@ export const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
     } | null
   ) => void
   label?: string
+  /** The row Enter in the search field would pick. */
+  searchDefault?: boolean
   source?: AgentPickerDraft
   selected?: AgentPickerDraft
   mode?: 'launch' | 'select'
@@ -95,6 +98,7 @@ export const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
     return (
       <DropdownMenuItem
         disabled={disabled || !entry.surfaces.length}
+        className={searchDefault ? 'bg-black/8 text-accent-foreground dark:bg-white/14' : undefined}
         onSelect={() => {
           onSelectAgent?.(entry.agent)
           runLaunch(pickerLaunchRow(entry, selected?.surface ?? entry.defaultSurface))
@@ -147,6 +151,7 @@ export const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
       renderAnchor={(trigger) => (
         <div
           data-agent-launch-row
+          className={searchDefault ? 'bg-accent text-accent-foreground' : undefined}
           onClick={(event) => {
             event.preventDefault()
             if (disabled || !entry.surfaces.length) {
