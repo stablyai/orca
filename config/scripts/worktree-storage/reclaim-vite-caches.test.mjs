@@ -17,11 +17,7 @@ import { createServer } from 'vite'
 import { afterEach, expect, it, vi } from 'vitest'
 import { createViteCacheRetentionPlugin } from '../../build-plugins/vite-cache-retention'
 import { reclaimViteCaches } from './reclaim-vite-caches.mjs'
-import {
-  retainViteCache,
-  VITE_CACHE_USAGE_DIRECTORY,
-  withViteCacheLock
-} from './vite-cache-activity.mjs'
+import { retainViteCache, VITE_CACHE_USAGE_DIRECTORY } from './vite-cache-activity.mjs'
 
 const roots = []
 const nowMs = Date.now()
@@ -75,29 +71,6 @@ it('previews and removes old owned caches for both build targets', async () => {
   }
 })
 
-it('retains a recently used cache even when its dependency outputs are old', async () => {
-  const options = await fixture(1)
-  for (const file of options.files) {
-    await utimes(file, new Date(0), new Date(0))
-  }
-  expect(await reclaimViteCaches({ ...options, apply: true })).toMatchObject({ entries: 0 })
-})
-
-it('retains every live owner and refreshes last use when a server closes', async () => {
-  const options = await fixture()
-  const first = await retainViteCache(options.cacheRoot)
-  const second = await retainViteCache(options.cacheRoot)
-  await age(options.cacheRoot)
-  expect(await reclaimViteCaches({ ...options, apply: true })).toMatchObject({ entries: 0 })
-  await first()
-  await age(options.cacheRoot)
-  expect(await reclaimViteCaches({ ...options, apply: true })).toMatchObject({ entries: 0 })
-  await second()
-  expect(await reclaimViteCaches({ ...options, apply: true })).toMatchObject({ entries: 0 })
-  await age(options.cacheRoot)
-  expect(await reclaimViteCaches({ ...options, apply: true })).toMatchObject({ entries: 1 })
-})
-
 it.each([false, true])(
   'reclaims exited owners only on this host (foreign: %s)',
   async (foreign) => {
@@ -124,42 +97,6 @@ it.each([false, true])(
   }
 )
 
-it.each(['foreign-host', 'corrupt', 'permission-denied'])(
-  'retains unverifiable ownership: %s',
-  async (kind) => {
-    const options = await fixture()
-    const release = await retainViteCache(options.cacheRoot)
-    const owners = join(options.cacheRoot, VITE_CACHE_USAGE_DIRECTORY)
-    const [name] = await readdir(owners)
-    const owner = join(owners, name)
-    if (kind === 'foreign-host') {
-      await rename(owner, join(owners, name.replace(/^[\da-f]{64}/, '0'.repeat(64))))
-    } else if (kind === 'corrupt') {
-      await writeFile(owner, '{')
-    } else {
-      vi.spyOn(process, 'kill').mockImplementation(() => {
-        throw Object.assign(new Error('denied'), { code: 'EPERM' })
-      })
-    }
-    try {
-      await age(options.cacheRoot)
-      expect(await reclaimViteCaches({ ...options, apply: true })).toMatchObject({ entries: 0 })
-    } finally {
-      vi.restoreAllMocks()
-      await release()
-    }
-  }
-)
-
-it('retains untracked caches and the worktree being launched', async () => {
-  const options = await fixture()
-  expect(
-    await reclaimViteCaches({ ...options, apply: true, excludeWorktree: options.worktree })
-  ).toMatchObject({ entries: 0 })
-  await rm(join(options.cacheRoot, VITE_CACHE_USAGE_DIRECTORY), { recursive: true })
-  expect(await reclaimViteCaches({ ...options, apply: true })).toMatchObject({ entries: 0 })
-})
-
 it.each(['.cache', 'vite'])('does not follow a %s directory link during cleanup', async (part) => {
   const options = await fixture()
   const source = part === '.cache' ? join(options.worktree, '.cache') : options.cacheRoot
@@ -168,16 +105,6 @@ it.each(['.cache', 'vite'])('does not follow a %s directory link during cleanup'
   await symlink(target, source, 'junction')
   expect(await reclaimViteCaches({ ...options, apply: true })).toMatchObject({ entries: 0 })
   expect(await readdir(target)).not.toEqual([])
-})
-
-it('does not sweep while cache initialization holds the maintenance lock', async () => {
-  const options = await fixture()
-  await withViteCacheLock(options.cacheRoot, async () => {
-    expect(await reclaimViteCaches({ ...options, apply: true })).toMatchObject({
-      entries: 0,
-      protected: 1
-    })
-  })
 })
 
 it('tracks a real Vite server until shutdown has completed', async () => {

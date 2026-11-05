@@ -1143,7 +1143,7 @@
 3 test-no-real-time-wait:tests/e2e/workspace-sleep-main-resume.spec.ts
 3 test-no-real-time-wait:tests/e2e/worktree-switch-first-paint.spec.ts
 3 test-no-real-time-wait:tests/e2e/worktree.spec.ts
-3 test-no-wall-clock:config/scripts/worktree-storage/reclaim-dev-electron-bundles.test.ts
+1 test-no-wall-clock:config/scripts/worktree-storage/reclaim-dev-electron-bundles.test.ts
 3 test-no-wall-clock:mobile/src/transport/mobile-relay-resume-director.test.ts
 3 test-no-wall-clock:mobile/src/transport/rpc-client-live-recovery.test.ts
 3 test-no-wall-clock:src/main/agent-hooks/server-ingest-structured-status.test.ts
