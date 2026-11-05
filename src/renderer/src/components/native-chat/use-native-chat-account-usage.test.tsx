@@ -217,6 +217,81 @@ describe('chat usage card', () => {
     expect(screen.getByText('chat@example.com')).toBeTruthy()
   })
 
+  it('retires a queued background re-read with its card, so another chat keeps its own usage', async () => {
+    let finish!: (value: AgentSessionAccountUsage) => void
+    const other: AgentSessionAccountUsage = {
+      ...result,
+      account: { kind: 'managed', email: 'other@example.com' }
+    }
+    mocks.read
+      .mockResolvedValueOnce(result)
+      .mockImplementationOnce(
+        () =>
+          new Promise<AgentSessionAccountUsage>((resolve) => {
+            finish = resolve
+          })
+      )
+      .mockResolvedValueOnce(other)
+    const host = (account: string) => ({
+      codex: { accounts: [], activeAccountId: account },
+      rateLimits: {
+        codexTarget: { runtime: 'host', wslDistro: null },
+        codex: { status: 'ok', rateLimitResetCredits: { availableCount: 1, nextExpiresAt: 2_000 } }
+      }
+    })
+    const view = render(<Chat />)
+    fireEvent.click(screen.getByText('Usage'))
+    await screen.findByText('chat@example.com')
+    act(() => hostStream.snapshot?.(host('chat')))
+    act(() => hostStream.snapshot?.(host('other')))
+    act(() => hostStream.snapshot?.(host('chat')))
+    expect(mocks.read).toHaveBeenCalledTimes(2)
+    view.rerender(<Chat sessionId="other" />)
+    fireEvent.click(screen.getByText('Usage'))
+    await screen.findByText('other@example.com')
+    await act(async () => finish(result))
+    expect(mocks.read).toHaveBeenCalledTimes(3)
+    expect(mocks.read.mock.calls[2]?.[2]).toEqual({ sessionId: 'other' })
+    expect(screen.getByText('other@example.com')).toBeTruthy()
+  })
+
+  it.each(['dismiss', 'unmount'] as const)(
+    'sends no queued background re-read after the card is retired by %s',
+    async (retire) => {
+      let finish!: (value: AgentSessionAccountUsage) => void
+      mocks.read.mockResolvedValueOnce(result).mockImplementationOnce(
+        () =>
+          new Promise<AgentSessionAccountUsage>((resolve) => {
+            finish = resolve
+          })
+      )
+      const host = (account: string) => ({
+        codex: { accounts: [], activeAccountId: account },
+        rateLimits: {
+          codexTarget: { runtime: 'host', wslDistro: null },
+          codex: {
+            status: 'ok',
+            rateLimitResetCredits: { availableCount: 1, nextExpiresAt: 2_000 }
+          }
+        }
+      })
+      const view = render(<Chat />)
+      fireEvent.click(screen.getByText('Usage'))
+      await screen.findByText('chat@example.com')
+      act(() => hostStream.snapshot?.(host('chat')))
+      act(() => hostStream.snapshot?.(host('other')))
+      act(() => hostStream.snapshot?.(host('chat')))
+      expect(mocks.read).toHaveBeenCalledTimes(2)
+      if (retire === 'dismiss') {
+        fireEvent.click(screen.getByRole('button', { name: 'Dismiss Codex usage' }))
+      } else {
+        view.unmount()
+      }
+      await act(async () => finish(result))
+      expect(mocks.read).toHaveBeenCalledTimes(2)
+    }
+  )
+
   it('does not reopen a dismissed card when an already-confirmed reset completes', async () => {
     let finish!: (value: unknown) => void
     mocks.read.mockResolvedValue(result)

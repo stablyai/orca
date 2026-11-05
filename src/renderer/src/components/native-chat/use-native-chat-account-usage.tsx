@@ -73,37 +73,50 @@ export function useNativeChatAccountUsage(args: {
   useEffect(() => {
     resultShown.current = panel?.result != null
   }, [panel])
-  // One background read at a time; changes during it collapse into one follow-up read.
-  const reconciling = useRef<'idle' | 'reading' | 'again'>('idle')
-  const reconcile = useCallback(() => {
-    if (reconciling.current !== 'idle') {
-      reconciling.current = 'again'
-      return
-    }
-    reconciling.current = 'reading'
-    const request = ++nextRequest.current
-    setPanel((current) => (current ? { ...current, request } : current))
-    void callStructuredAgentSession<AgentSessionAccountUsage>(target, 'agentSession.accountUsage', {
-      sessionId
-    })
-      .catch(() => null)
-      .then((result) => {
-        // A failed background read keeps what the card already shows; a card still loading shows it.
-        setPanel((current) =>
-          current?.request === request && (result?.status === 'ok' || current.result === null)
-            ? { ...current, result: result ?? { status: 'failed' } }
-            : current
-        )
-        const again = reconciling.current === 'again'
-        reconciling.current = 'idle'
-        if (again) {
-          reconcile()
-        }
-      })
-  }, [sessionId, target])
+  // One background read per opening at a time; changes during it collapse into one follow-up.
+  // The read belongs to its opening: retiring the card (dismissal, chat or turn change, unmount)
+  // stops its follow-up and drops its reply.
+  const reconciling = useRef<{ opening: number; again: boolean } | null>(null)
+  const reconcile = useCallback(
+    (opening: number) => {
+      if (reconciling.current?.opening === opening) {
+        reconciling.current.again = true
+        return
+      }
+      reconciling.current = { opening, again: false }
+      const request = ++nextRequest.current
+      setPanel((current) => (current?.opening === opening ? { ...current, request } : current))
+      void callStructuredAgentSession<AgentSessionAccountUsage>(
+        target,
+        'agentSession.accountUsage',
+        { sessionId }
+      )
+        .catch(() => null)
+        .then((result) => {
+          // A failed background read keeps what the card shows; a card still loading shows it.
+          setPanel((current) =>
+            current?.opening === opening &&
+            current.request === request &&
+            (result?.status === 'ok' || current.result === null)
+              ? { ...current, result: result ?? { status: 'failed' } }
+              : current
+          )
+          const run = reconciling.current
+          if (run?.opening !== opening) {
+            return
+          }
+          reconciling.current = null
+          if (run.again && shownOpening.current === opening) {
+            reconcile(opening)
+          }
+        })
+    },
+    [sessionId, target]
+  )
   useEffect(() => {
     if (!watching) {
       seenAuthority.current = null
+      reconciling.current = null
     }
   }, [watching])
   useEffect(() => {
@@ -117,8 +130,9 @@ export function useNativeChatAccountUsage(args: {
       return
     }
     // A first observation after the reply may postdate the state the host built the offer from.
-    if (previous !== null || resultShown.current) {
-      reconcile()
+    const opening = shownOpening.current
+    if (opening !== null && (previous !== null || resultShown.current)) {
+      reconcile(opening)
     }
   }, [authority, reconcile])
   return {
