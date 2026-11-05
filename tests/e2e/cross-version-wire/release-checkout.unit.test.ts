@@ -263,6 +263,45 @@ afterEach(() => {
 })
 
 describe('release checkout materialization', () => {
+  it('publishes moved wire modules and leaves module requirements to imports', async () => {
+    const cacheRoot = temporaryCacheRoot()
+    const checkout = await materializeReleaseCheckout('HEAD', {
+      cacheRoot,
+      testHooks: {
+        populateStaging: async ({ staging }) => {
+          const stream = join(staging, 'src', 'shared', 'terminal', 'stream')
+          mkdirSync(stream, { recursive: true })
+          writeFileSync(
+            join(stream, 'terminal-stream-protocol.ts'),
+            "export const releaseMarker = 'released-moved-protocol'\n"
+          )
+          for (const owner of ['first', 'second']) {
+            const directory = join(staging, 'src', 'shared', owner)
+            mkdirSync(directory, { recursive: true })
+            writeFileSync(join(directory, 'ambiguous-wire.ts'), 'export const marker = true\n')
+          }
+        }
+      }
+    })
+    expect(
+      await importReleaseCheckoutModule(checkout, '/src/shared/terminal-stream-protocol.ts')
+    ).toMatchObject({ releaseMarker: 'released-moved-protocol' })
+    await expect(
+      importReleaseCheckoutModule(checkout, '/src/shared/ambiguous-wire.ts')
+    ).rejects.toThrow()
+    const reused = await materializeReleaseCheckout('HEAD', {
+      cacheRoot,
+      testHooks: {
+        populateStaging: async () => {
+          throw new Error('Published release is unavailable for extraction')
+        }
+      }
+    })
+    expect(
+      await importReleaseCheckoutModule(reused, '/src/shared/terminal-stream-protocol.ts')
+    ).toMatchObject({ releaseMarker: 'released-moved-protocol' })
+  })
+
   it('keeps an import live while another colliding release label materializes', async () => {
     // Squash-merged history has no merge parents; create two distinct refs with colliding labels.
     const scope = `refs/orca-checkout-test/${randomUUID()}`

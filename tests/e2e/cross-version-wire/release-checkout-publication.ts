@@ -1,5 +1,4 @@
-import { constants } from 'node:fs'
-import { access, mkdtemp, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { lock } from 'proper-lockfile'
 import { scavengeReleaseCheckoutStaging } from './release-checkout-tree.ts'
@@ -70,26 +69,7 @@ async function readStamp(root: string): Promise<CheckoutStamp | null> {
 
 async function checkoutMatches(root: string, commit: string): Promise<boolean> {
   const stamp = await readStamp(root)
-  if (stamp?.commit !== commit || stamp.format !== CHECKOUT_FORMAT) {
-    return false
-  }
-  try {
-    await assertCheckoutWireSurface(root, commit)
-    return true
-  } catch {
-    return false
-  }
-}
-
-async function assertCheckoutWireSurface(root: string, ref: string): Promise<void> {
-  try {
-    await access(join(root, 'src', 'shared', 'terminal-stream-protocol.ts'), constants.F_OK)
-  } catch {
-    throw new Error(
-      `Cross-version checkout for ${ref} is missing the terminal stream protocol; ` +
-        'the wire surface moved and the harness needs updating.'
-    )
-  }
+  return stamp?.commit === commit && stamp.format === CHECKOUT_FORMAT
 }
 
 export async function publishReleaseCheckout({
@@ -150,7 +130,6 @@ export async function publishReleaseCheckout({
     await (hooks?.populateStaging
       ? hooks.populateStaging(stagingContext)
       : populateStaging(staging))
-    await assertCheckoutWireSurface(staging, ref)
     await writeFile(
       join(staging, 'checkout-stamp.json'),
       `${JSON.stringify({ commit, format: CHECKOUT_FORMAT } satisfies CheckoutStamp, null, 2)}\n`
@@ -170,6 +149,4 @@ export async function publishReleaseCheckout({
     }
     await releaseLock()
   }
-
-  await assertCheckoutWireSurface(root, ref)
 }
