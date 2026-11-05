@@ -9,6 +9,7 @@ import type { GhExecOptions } from './../github-exec-scope'
 import { isNoPullRequestError } from './../gh-error-predicates'
 import {
   PR_LOOKUP_JSON_FIELDS,
+  normalizePullRequestLookupData,
   PR_BRANCH_LIST_JSON_FIELDS,
   mapRestPullRequest,
   pullRequestMatchesHeadRepository,
@@ -198,7 +199,11 @@ export async function lookupPRByBranchName(args: {
           args.ghOptions,
           args.executionScope
         )
-      : { ...parsedData, statusCheckRollup: [], checksUnavailable: true }
+      : {
+          ...normalizePullRequestLookupData(parsedData),
+          statusCheckRollup: [],
+          checksUnavailable: true
+        }
     const lookup = { data, dataRepo: null }
     return !args.policy || (await args.policy.accepts(lookup.data, null))
       ? lookup

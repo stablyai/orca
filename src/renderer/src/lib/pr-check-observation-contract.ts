@@ -83,7 +83,7 @@ export function capturePRCheckContract(
         scope: scope(now),
         complete: captured.complete || now.complete,
         current: sourceCurrent(),
-        trusted: current()
+        trusted: captured.complete && current()
       }
     },
     rpcOptions: optionsFor(current),

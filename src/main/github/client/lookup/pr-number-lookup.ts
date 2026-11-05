@@ -9,6 +9,7 @@ import {
 } from './../gh-error-predicates'
 import {
   PR_LOOKUP_JSON_FIELDS,
+  normalizePullRequestLookupData,
   mapRestPullRequest,
   type PullRequestLookupData,
   type PullRequestLookupPolicy,
@@ -222,7 +223,11 @@ export async function lookupPRByNumber(args: {
           args.ghOptions,
           args.executionScope
         )
-      : { ...parsedData, statusCheckRollup: [], checksUnavailable: true }
+      : {
+          ...normalizePullRequestLookupData(parsedData),
+          statusCheckRollup: [],
+          checksUnavailable: true
+        }
     const lookup = { data, dataRepo: null }
     return !args.policy || (await args.policy.accepts(lookup.data, null))
       ? lookup

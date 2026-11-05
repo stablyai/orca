@@ -430,3 +430,58 @@ it.each([false, true])(
     )
   }
 )
+
+it.each(['direct', 'event'] as const)(
+  'keeps accepted same-head checks when support is absent before the next %s capture',
+  async (delivery) => {
+    const store = makeStore()
+    await publish(store, failedPR())
+    setLocalRuntimeCapabilitiesForTests([])
+    vi.setSystemTime(now + 1)
+    const incoming = {
+      ...failedPR(),
+      title: 'Updated metadata without proof',
+      checksStatus: 'success' as const,
+      checksSummary: { ...summary, state: 'success' as const, passed: 101, failed: 0 }
+    }
+    if (delivery === 'direct') {
+      mockApi.gh.refreshPRNow.mockResolvedValueOnce({
+        kind: 'found',
+        pr: incoming,
+        fetchedAt: now + 2
+      })
+      expect(
+        await store.getState().fetchPRForBranch(repo.path, branch, { repoId: repo.id, force: true })
+      ).toMatchObject({
+        title: 'Updated metadata without proof',
+        checksStatus: 'failure',
+        checksSummary: summary
+      })
+    } else {
+      const alias = { cacheKey, repoId: repo.id, repoPath: repo.path, branch }
+      store.getState().applyGitHubPRRefreshEvent({
+        sequence: 160,
+        aliases: [alias],
+        reason: 'manual',
+        requestStartedAt: now + 1,
+        status: 'in-flight'
+      })
+      store.getState().applyGitHubPRRefreshEvent({
+        sequence: 160,
+        aliases: [alias],
+        reason: 'manual',
+        outcome: { kind: 'found', pr: incoming, fetchedAt: now + 2 }
+      })
+    }
+    expect(store.getState().prCache[cacheKey].data).toMatchObject({
+      title: 'Updated metadata without proof',
+      checksStatus: 'failure',
+      checksSummary: summary
+    })
+    expect(Object.values(store.getState().hostedReviewCache)[0].data).toMatchObject({
+      title: 'Updated metadata without proof',
+      status: 'failure',
+      checksSummary: summary
+    })
+  }
+)
