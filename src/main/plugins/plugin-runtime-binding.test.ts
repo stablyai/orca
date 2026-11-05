@@ -164,4 +164,37 @@ describe('ui.focus.changed', () => {
       vi.useRealTimers()
     }
   })
+
+  it('does not swallow a change back when a plugin subscribed right after an unheard one', async () => {
+    vi.useFakeTimers()
+    try {
+      let listening = false
+      const events = { wantsEvent: vi.fn(() => listening), emitEvent: vi.fn() }
+      const a = { kind: 'terminal' as const, title: 'a' }
+      let surface: { kind: 'terminal'; title: string } = a
+      let changed: () => void = () => undefined
+      const stop = watchPluginUiFocus({
+        events,
+        readFocusedSurface: () => surface,
+        onFocusInputChanged: (listener) => {
+          changed = listener
+          return () => undefined
+        },
+        delayMs: 10
+      })
+      surface = { kind: 'terminal', title: 'b' }
+      changed()
+      listening = true
+      surface = a
+      changed()
+      await vi.advanceTimersByTimeAsync(20)
+      expect(events.emitEvent).toHaveBeenCalledWith('ui.focus.changed', {
+        focusedSurface: a,
+        receivedAt: expect.any(Number)
+      })
+      stop()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })

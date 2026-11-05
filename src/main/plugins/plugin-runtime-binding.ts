@@ -181,6 +181,11 @@ export function watchPluginUiFocus(input: {
     }
   }
   const stop = input.onFocusInputChanged(() => {
+    if (!input.events.wantsEvent('ui.focus.changed')) {
+      // Why now, not debounced: a plugin may read focus and subscribe before the timer would run.
+      last = JSON.stringify(input.readFocusedSurface())
+      return
+    }
     // Why debounce: blur then focus fire back to back when moving between Orca's own windows.
     timer ??= setTimeout(check, input.delayMs ?? WORKSPACE_CHANGE_DEBOUNCE_MS)
   })

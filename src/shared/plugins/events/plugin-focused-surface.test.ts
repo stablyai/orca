@@ -54,6 +54,14 @@ describe('readPluginFocusedSurface', () => {
       session('browser', { id: 'b2', label: 'mailto:alice@example.com?subject=secret' }),
       true
     )
+    const bareHttps = readPluginFocusedSurface(
+      session('browser', { id: 'b3', label: 'https:example.com?token=abc' }),
+      true
+    )
+    const colonTitle = readPluginFocusedSurface(
+      session('terminal', { id: 't2', label: 'Task: fix bug' }),
+      true
+    )
     const share = readPluginFocusedSurface(
       session('editor', { id: 'f2', label: 'file://fileserver/share/report.txt' }),
       true
@@ -66,9 +74,11 @@ describe('readPluginFocusedSurface', () => {
     expect(browser).toEqual({ kind: 'browser', title: 'internal.example.com' })
     expect(fileUrl).toEqual({ kind: 'editor', title: 'report.txt' })
     expect(share).toEqual({ kind: 'editor', title: 'report.txt' })
+    expect(bareHttps).toEqual({ kind: 'browser', title: 'example.com' })
+    expect(colonTitle).toEqual({ kind: 'terminal', title: 'Task: fix bug' })
     expect(ssh).toEqual({ kind: 'terminal', title: 'build.example.com' })
     expect(mail).toEqual({ kind: 'browser', title: null })
-    expect(JSON.stringify([editor, browser, fileUrl, share, ssh, mail])).not.toMatch(
+    expect(JSON.stringify([editor, browser, fileUrl, share, bareHttps, ssh, mail])).not.toMatch(
       /\/home\/me|token|alice|hunter2|subject|fileserver/
     )
   })

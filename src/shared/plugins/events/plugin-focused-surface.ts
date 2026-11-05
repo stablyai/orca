@@ -74,7 +74,8 @@ export function projectPluginFocusedTitle(raw: string | null | undefined): strin
 
 /** A hostname for `scheme://` URLs, a basename for other paths, null for mail and phone links. */
 function sanitizeTitle(value: string): string | null {
-  if (/^[a-z][a-z\d+.-]*:\/\//i.test(value)) {
+  // Why the http family too: `https:host?query` parses as a URL without the slashes.
+  if (/^[a-z][a-z\d+.-]*:\/\//i.test(value) || /^(https?|wss?|ftp):/i.test(value)) {
     return urlTitle(value)
   }
   if (/^(mailto|tel|sms):/i.test(value)) {
