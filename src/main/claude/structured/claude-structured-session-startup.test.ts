@@ -566,6 +566,21 @@ describe('Claude host-awaited open', () => {
     expect(claude.connections[0].closeCount).toBe(1)
   })
 
+  it('opens when initialize answers after the old one-minute bound', async () => {
+    // 90 s: past the old 60 s deadline, inside the current 180 s one (#38369).
+    const claude = fakeClaude({ initDelayMs: 90_000 })
+    const { adapter } = adapterFor(claude)
+    await adapter.acquire(ACQUIRE)
+    const open = claudeOpened(adapter, 'session-1')
+    await vi.advanceTimersByTimeAsync(90_000)
+    await expect(open).resolves.toMatchObject({
+      link: expect.objectContaining({ handle: expect.objectContaining({ agent: 'claude' }) }),
+      reportedOptions: expect.any(Object)
+    })
+    await adapter.closeSession('session-1')
+    expect(claude.connections[0].closeCount).toBe(1)
+  })
+
   it('lets the host abort a silent initialize wait and close the owned process', async () => {
     const claude = fakeClaude({ initDelayMs: 12_000 })
     const { adapter } = adapterFor(claude)
