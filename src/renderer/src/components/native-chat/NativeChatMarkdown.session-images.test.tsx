@@ -53,7 +53,7 @@ function Transcript({ content, owner = localOwner }: { content: string; owner?: 
   return (
     <TooltipProvider>
       <NativeChatMarkdownImageOwnerContext.Provider value={owner}>
-        <NativeChatMarkdown content={content} variant="document" allowFileUriLinks />
+        <NativeChatMarkdown content={content} variant="document" />
       </NativeChatMarkdownImageOwnerContext.Provider>
     </TooltipProvider>
   )
@@ -86,31 +86,6 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 describe('session image source resolution', () => {
-  it('leaves WSL images on the existing guarded reader without an automatic path probe', async () => {
-    render(
-      <Transcript
-        owner={{
-          ...localOwner,
-          fileLinkContext: {
-            ...localOwner.fileLinkContext,
-            worktreePath: '//wsl.localhost/Ubuntu/repo'
-          },
-          runtimeContext: {
-            ...localOwner.runtimeContext,
-            worktreePath: '//wsl.localhost/Ubuntu/repo'
-          }
-        }}
-        content="![Chart](images/chart.png)"
-      />
-    )
-    await screen.findByRole('img')
-    expect(mocks.callRuntimeRpc).not.toHaveBeenCalled()
-    expect(mocks.readRuntimeFilePreview).toHaveBeenCalledExactlyOnceWith(
-      expect.anything(),
-      '//wsl.localhost/Ubuntu/repo/images/chart.png',
-      { kind: 'chat-image' }
-    )
-  })
   it('keeps source resolution and image bytes on one pairing and never reuses the old host blob', async () => {
     mocks.callRuntimeRpc.mockResolvedValue({
       exists: true,
@@ -153,40 +128,6 @@ describe('session image source resolution', () => {
       '/session/images/chart.png',
       expect.anything()
     )
-  })
-  it('loads session screenshots and uses the selected literal path for preview and file actions', async () => {
-    const path = '/home/test/.grok/sessions/%2Frepo/session/images/chart.png'
-    mocks.callRuntimeRpc.mockResolvedValue({ exists: true, isDirectory: false, absolutePath: path })
-    render(
-      <Transcript
-        owner={{ ...localOwner, sessionId: 'grok-session' }}
-        content="![Chart](images/chart.png)"
-      />
-    )
-    await screen.findByRole('img', { name: 'Chart' })
-    expect(mocks.callRuntimeRpc).toHaveBeenCalledExactlyOnceWith(
-      { kind: 'local' },
-      'files.resolveTerminalPath',
-      expect.objectContaining({
-        pathText: 'images/chart.png',
-        nativeChatContext: { tabId: 'tab-1', sessionId: 'grok-session' }
-      }),
-      expect.anything()
-    )
-    expect(mocks.readRuntimeFilePreview).toHaveBeenCalledWith(expect.anything(), path, {
-      kind: 'chat-image'
-    })
-    fireEvent.click(screen.getByRole('button', { name: 'View image: Chart' }), { metaKey: true })
-    expect(mocks.openDetectedFilePath).toHaveBeenLastCalledWith(path, null, null, expect.anything())
-    fireEvent.click(screen.getByRole('button', { name: 'View image: Chart' }))
-    expect(await within(screen.getByRole('dialog')).findByRole('img')).toHaveAttribute(
-      'src',
-      expect.stringMatching(/^blob:/)
-    )
-    const user = userEvent.setup()
-    await user.click(screen.getByRole('button', { name: 'File actions' }))
-    await user.click(screen.getByRole('menuitem', { name: 'Open file' }))
-    expect(mocks.openDetectedFilePath).toHaveBeenLastCalledWith(path, null, null, expect.anything())
   })
 
   it.each(['matched', 'missing'] as const)(
@@ -294,27 +235,4 @@ describe('session image source resolution', () => {
       { kind: 'chat-image' }
     )
   })
-
-  it.each([2, 20])(
-    'bounds %i session image resolutions to visible sources and explicit retries',
-    async (count) => {
-      mocks.callRuntimeRpc.mockImplementation(async (_target, _method, params) => ({
-        exists: true,
-        absolutePath: `/session/${params.pathText}`
-      }))
-      const content = Array.from(
-        { length: count },
-        (_, i) => `![Image ${i}](images/chart-${i}.png)`
-      ).join('\n\n')
-      const owner = { ...localOwner, sessionId: 'grok-session' }
-      const { rerender } = render(
-        <Transcript owner={{ ...owner, isVisible: false }} content={content} />
-      )
-      expect(mocks.callRuntimeRpc).not.toHaveBeenCalled()
-      rerender(<Transcript owner={owner} content={content} />)
-      await waitFor(() => expect(screen.getAllByRole('img')).toHaveLength(count))
-      rerender(<Transcript owner={{ ...owner }} content={content} />)
-      expect(mocks.callRuntimeRpc).toHaveBeenCalledTimes(count)
-    }
-  )
 })

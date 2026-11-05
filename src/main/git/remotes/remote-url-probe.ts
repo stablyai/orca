@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks'
 import { gitExecFileAsync } from '../command-runner/git-exec-file'
 import { isStableMissingGitRemoteError } from './stable-missing-git-remote-error'
 import type { GitAdmissionTier } from '../../../shared/rpc-contract/git-admission-tier-params'
@@ -14,6 +15,22 @@ export type RemoteUrlProbeContext = {
   admissionTier?: GitAdmissionTier
 }
 
+type SharedRemoteUrlReads = { open: boolean; reads: Map<string, Promise<string>> }
+
+const sharedRemoteUrlReads = new AsyncLocalStorage<SharedRemoteUrlReads>()
+
+/** Reads each remote URL at most once while `work` runs, so a provider-by-provider scan shares one read. */
+export async function withSharedRemoteUrlReads<T>(work: () => Promise<T>): Promise<T> {
+  const scope: SharedRemoteUrlReads = { open: true, reads: new Map() }
+  try {
+    return await sharedRemoteUrlReads.run(scope, work)
+  } finally {
+    // Work scheduled from inside the scope must read fresh Git config later.
+    scope.open = false
+    scope.reads.clear()
+  }
+}
+
 /** Reads a remote URL, or null for an SSH repo, which this process does not serve. */
 export async function readRemoteUrl(
   context: RemoteUrlProbeContext,
@@ -22,6 +39,28 @@ export async function readRemoteUrl(
   if (context.connectionId) {
     return null
   }
+  const scope = sharedRemoteUrlReads.getStore()
+  if (!scope?.open) {
+    return readUncachedRemoteUrl(context, remoteName)
+  }
+  const key = [
+    context.wslDistro ?? '',
+    context.admissionTier ?? '',
+    context.repoPath,
+    remoteName
+  ].join('\0')
+  let read = scope.reads.get(key)
+  if (!read) {
+    read = readUncachedRemoteUrl(context, remoteName)
+    scope.reads.set(key, read)
+  }
+  return read
+}
+
+async function readUncachedRemoteUrl(
+  context: RemoteUrlProbeContext,
+  remoteName: string
+): Promise<string> {
   const { stdout } = await gitExecFileAsync(['remote', 'get-url', remoteName], {
     cwd: context.repoPath,
     timeout: REMOTE_URL_PROBE_TIMEOUT_MS,

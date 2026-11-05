@@ -308,6 +308,7 @@ async function releaseCompletedWorker(terminalState: 'running' | 'exited'): Prom
   })
   const closeTerminal = vi.spyOn(runtime, 'closeTerminal').mockImplementation(async () => {
     closeTerminalTab(ORIGINAL_TAB_ID, {
+      reason: 'requested',
       force: true,
       skipRunningProcessConfirm: true,
       localPtyTeardownOwnedExternally: true
@@ -407,6 +408,7 @@ describe('completed background-worker retirement resume matrix', () => {
     seedWorkspace()
     recordCompletedWorker()
     closeTerminalTab(ORIGINAL_TAB_ID, {
+      reason: 'requested',
       force: true,
       skipRunningProcessConfirm: true,
       localPtyTeardownOwnedExternally: true
@@ -495,6 +497,7 @@ describe('completed background-worker retirement resume matrix', () => {
       makeLayout(ORIGINAL_LEAF_ID, ORIGINAL_PTY_ID)
     )
     closeTerminalTab(HELPER_TAB_ID, {
+      reason: 'requested',
       force: true,
       skipRunningProcessConfirm: true,
       localPtyTeardownOwnedExternally: true

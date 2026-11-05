@@ -65,7 +65,7 @@ describe('ACP dialect request and turn boundaries', () => {
     expect(await rig.turns()).toHaveLength(1)
   })
 
-  it('preserves provider permission labels, validates selected ids, and cancels unanswered rows on turn end', async () => {
+  it('preserves provider permission labels, validates selected ids, and keeps unanswered rows until withdrawn', async () => {
     const { rig, translator, apply } = await dialectRig()
     apply(translator.openPrompt('send-1', 1000).events)
     apply(
@@ -103,9 +103,16 @@ describe('ACP dialect request and turn boundaries', () => {
       'offered option'
     )
     apply(translator.promptResult('send-1', { stopReason: 'cancelled' }, 1200))
-    expect((await rig.rows()).find((row) => row.body.kind === 'approval')?.body).toMatchObject({
-      resolution: { state: 'cancelled' }
-    })
+    const approval = async () =>
+      (await rig.rows()).find((row) => row.body.kind === 'approval')?.body
+    expect(await approval()).toMatchObject({ resolution: { state: 'pending' } })
+    const opened = request.events.find((event) => event.type === 'request.open')
+    apply(
+      opened?.type === 'request.open'
+        ? [{ type: 'request.withdrawn', request: opened.request }]
+        : []
+    )
+    expect(await approval()).toMatchObject({ resolution: { state: 'cancelled' } })
   })
 
   it('encodes labels and free text under the question text, validates grouped choices, and settles a plan without a gate', async () => {

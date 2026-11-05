@@ -103,7 +103,9 @@ const BrowserClientAutomationResultValue = z
 export const BrowserClientAutomationCommand = z.object({
   type: z.literal('automation'),
   method: BrowserClientAutomationMethod,
-  params: BrowserClientAutomationParams
+  params: BrowserClientAutomationParams,
+  /** The host's caller was an agent's CLI; older hosts omit it and every command counts as one. */
+  agent: z.boolean().optional()
 })
 export type BrowserClientAutomationCommand = z.infer<typeof BrowserClientAutomationCommand>
 

@@ -8,11 +8,6 @@ import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/ag
 import type { StructuredAgentSessionCommandRun } from '../agent-session-wire/structured-agent-session-adapter'
 import type { AgentSessionDeltaCoalescerDeps } from '../agent-session-wire/agent-session-delta-coalescer'
 import type { StructuredAgentSessionSinkAdmission } from '../agent-session-wire/structured-agent-session-event-sink'
-import {
-  PROVIDER_TIMELINE_OVER_BUDGET,
-  providerTimelineBudgetAdmits,
-  type ProviderTimelineHold
-} from './provider-timeline-budget'
 import type { ProviderTimelineContext } from './provider-timeline-context'
 import {
   decideProviderTimelineEvent,
@@ -94,12 +89,8 @@ export function createProviderTimelineAssembler(
     sink: deps.sink,
     state,
     streams,
-    journal,
-    admits: (hold) => admits(hold, journal)
+    journal
   })
-
-  const admits = (hold: ProviderTimelineHold, journal: ProviderTimelineTextHost['journal']) =>
-    providerTimelineBudgetAdmits({ hold, state, streams, journal })
 
   const applyDecided = (
     event: ProviderTimelineDecidedEvent,
@@ -113,9 +104,6 @@ export function createProviderTimelineAssembler(
     )
     if (decision.dropped) {
       return { admission: ADMITTED, dropped: decision.dropped }
-    }
-    if (decision.hold && !admits(decision.hold, journal)) {
-      return { admission: PROVIDER_TIMELINE_OVER_BUDGET }
     }
     const plan = new ProviderTimelinePlan()
     planProviderTimelineBarrier({ streams, state }, plan, event, decision)

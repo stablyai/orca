@@ -16,7 +16,7 @@ import {
 import {
   buildHeadlessMobileSessionTabGroups,
   cloneTerminalLayoutSnapshot
-} from '../../mobile-session-layout-projection'
+} from '../../terminal/surface/mobile-session-layout-projection'
 
 export abstract class OrcaRuntimeWithApplyMobileSessionTabNavigation extends OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh {
   protected abstract createMobileSessionTabsDelivery(): ReturnType<

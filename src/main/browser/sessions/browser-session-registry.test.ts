@@ -14,6 +14,7 @@ const {
   getMediaAccessStatusMock: vi.fn(),
   removeCertificateRequestGuardMock: vi.fn()
 }))
+const forgetBrowserPasswordVaultMock = vi.hoisted(() => vi.fn(() => true))
 const processUserAgentMode = vi.hoisted(() => {
   const state: { value: 'clean' | 'native' } = { value: 'clean' }
   return state
@@ -51,6 +52,10 @@ vi.mock('../browser-manager', () => ({
     removeCertificateRequestGuard: removeCertificateRequestGuardMock,
     resolvePagePromptTarget: vi.fn(() => null)
   }
+}))
+
+vi.mock('../../browser-passwords/browser-password-vaults', () => ({
+  forgetBrowserPasswordVault: forgetBrowserPasswordVaultMock
 }))
 
 import { browserSessionRegistry } from './browser-session-registry'
@@ -361,6 +366,14 @@ describe('BrowserSessionRegistry', () => {
     expect(browserSessionRegistry.isAllowedPartition(profile!.partition)).toBe(false)
     expect(browserSessionRegistry.getProfile(profile!.id)).toBeNull()
     expect(listBrowserSitePermissions(profile!.id)).toEqual([])
+  })
+
+  it('keeps a profile whose saved logins could not be deleted', async () => {
+    const profile = await browserSessionRegistry.createProfile('isolated', 'Vault Stuck')
+    forgetBrowserPasswordVaultMock.mockReturnValueOnce(false)
+
+    await expect(browserSessionRegistry.deleteProfile(profile!.id)).resolves.toBe(false)
+    expect(browserSessionRegistry.getProfile(profile!.id)).not.toBeNull()
   })
 
   it('retains session security policies when deleting a profile', async () => {

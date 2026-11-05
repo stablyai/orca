@@ -117,18 +117,6 @@ describe.each([Input, Textarea, ImeInput, ImeTextarea])('IME text field %s', (Fi
     }
   })
 
-  it('preserves ordinary keys, Shift+Enter, and modifier submits after a confirmation', () => {
-    const action = vi.fn()
-    const { getByRole } = render(<Field onKeyDown={action} />)
-    const field = getByRole('textbox')
-    fireEvent.keyDown(field, { ...enter, keyCode: 229 })
-    expect(fireEvent.keyDown(field, { ...enter, shiftKey: true })).toBe(true)
-    expect(fireEvent.keyDown(field, { ...enter, ctrlKey: true })).toBe(true)
-    fireEvent.keyDown(field, { key: 'Escape' })
-    fireEvent.keyDown(field, { key: 'a' })
-    expect(action).toHaveBeenCalledTimes(4)
-  })
-
   it('does not carry ownership into a replaced field', () => {
     const action = vi.fn()
     const { getByRole, rerender } = render(<Field key="first" onKeyDown={action} />)

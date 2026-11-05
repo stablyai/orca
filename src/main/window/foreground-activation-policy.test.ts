@@ -6,9 +6,6 @@ vi.mock('electron', () => ({ app: { dock: { hide: vi.fn() }, setActivationPolicy
 const {
   applyBackgroundActivationPolicy,
   applyServeDesktopWindowActivationPolicy,
-  isBackgroundLaunch,
-  isOrcadSidecarLaunch,
-  isWindowlessLaunch,
   showWindowWithoutStealingFocus
 } = await import('./foreground-activation-policy')
 
@@ -25,30 +22,6 @@ function makeWindow(destroyed = false): BrowserWindow & {
     showInactive: ReturnType<typeof vi.fn>
   }
 }
-
-describe('isBackgroundLaunch', () => {
-  it('treats the orcad browser sidecar as an explicit background launch', () => {
-    expect(isOrcadSidecarLaunch({ ORCA_ORCAD_SIDECAR: '1' })).toBe(true)
-    expect(isOrcadSidecarLaunch({})).toBe(false)
-    expect(isBackgroundLaunch({ ORCA_ORCAD_SIDECAR: '1', ORCA_E2E_FOREGROUND: '1' })).toBe(true)
-    expect(isWindowlessLaunch({ ORCA_ORCAD_SIDECAR: '1', ORCA_E2E_HEADFUL: '1' })).toBe(true)
-  })
-})
-
-describe('isWindowlessLaunch', () => {
-  it('keeps explicit background launches hidden while headful E2E can paint', () => {
-    expect(isWindowlessLaunch({ ORCA_E2E_HEADLESS: '1' })).toBe(true)
-    expect(isWindowlessLaunch({ ORCA_E2E_HEADLESS: '1', ORCA_E2E_HEADFUL: '1' })).toBe(false)
-    expect(isWindowlessLaunch({ ORCA_BACKGROUND_LAUNCH: '1' })).toBe(true)
-    expect(
-      isWindowlessLaunch({
-        ORCA_BACKGROUND_LAUNCH: '1',
-        ORCA_E2E_HEADFUL: '1',
-        ORCA_E2E_FOREGROUND: '1'
-      })
-    ).toBe(true)
-  })
-})
 
 describe('showWindowWithoutStealingFocus', () => {
   it('never reveals an explicitly background window', () => {

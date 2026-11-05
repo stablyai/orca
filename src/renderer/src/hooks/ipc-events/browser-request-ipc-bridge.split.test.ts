@@ -76,38 +76,6 @@ describe('browser tab create with a split pane', () => {
     registerBrowserRequestIpcBridge([])
   })
 
-  it("opens the tab in a new pane beside the caller's terminal without taking focus", () => {
-    mocks.createListener?.({
-      requestId: 'r1',
-      worktreeId: WT,
-      url: 'https://example.com',
-      split: 'right',
-      splitFromTabId: 'term-1'
-    })
-
-    const options = mocks.createBrowserTab.mock.calls[0]?.[2]
-    expect(options).toMatchObject({
-      split: { sourceGroupId: 'g-terminal', splitDirection: 'right', activate: false },
-      activate: false
-    })
-    expect(options).not.toHaveProperty('targetGroupId')
-    expect(mocks.replyTabCreate).toHaveBeenCalledWith({ requestId: 'r1', browserPageId: 'ws-new' })
-  })
-
-  it('splits beside the active pane when the caller tab is unknown', () => {
-    mocks.createListener?.({
-      requestId: 'r2',
-      worktreeId: WT,
-      url: 'about:blank',
-      split: 'down',
-      splitFromTabId: 'stale-tab'
-    })
-
-    expect(mocks.createBrowserTab.mock.calls[0]?.[2]).toMatchObject({
-      split: { sourceGroupId: 'g-active', splitDirection: 'down' }
-    })
-  })
-
   it("opens in the caller's workspace when the CLI names none", () => {
     mocks.getState.mockReturnValue({ ...storeState(), activeWorktreeId: 'other-workspace' })
 

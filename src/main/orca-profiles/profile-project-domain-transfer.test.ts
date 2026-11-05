@@ -273,21 +273,18 @@ describe('profile domain transfers', () => {
           marker !== undefined
         )
         expect(settings.futureSetting).toEqual({ retained: true })
-        vi.useFakeTimers()
         const loaded = new Store({
           dataFile: join(root, 'profiles', id, 'orca-data.json'),
           profileStateAuthority: new ProfileStateSqliteAuthority(dbPath(id), id)
         })
         try {
-          vi.advanceTimersByTime(5000)
-          await loaded.waitForPendingWrite()
+          await loaded.flushPendingOrThrowAsync()
           expect(JSON.parse(raw(id).json).settings).toMatchObject({
             uiLanguage: marker === true ? plugin : 'pt',
             uiLanguagePortugueseMigrationApplied: true
           })
         } finally {
           await loaded.freezeWritesAsync()
-          vi.useRealTimers()
         }
         const reopened = new Store({
           dataFile: join(root, 'profiles', id, 'orca-data.json'),
