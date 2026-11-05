@@ -22,9 +22,9 @@ import {
 } from './terminal-agent-phone-push'
 import { ClaudeTerminalSessionNameSync } from './claude-terminal-session-name-sync'
 import { readClaudeTranscriptCustomTitle } from '../claude/claude-terminal-session-name'
-import { createLaunchedAgentWriteGuard } from './launched-agent-write-guard'
+import { createLaunchedAgentWriteGuard } from './terminal/wait/launched-agent-write-guard'
 import type { ExecutionHostId } from '../../shared/execution-host'
-import { terminalIdOf, type WindowLayoutCommand } from './runtime-layout-apply'
+import { terminalIdOf, type WindowLayoutCommand } from './terminal/layout/runtime-layout-apply'
 import type { LayoutApplyReply } from '../../shared/workspace-layout/workspace-layout-command-types'
 import type { RuntimeTerminalRename } from '../../shared/runtime-terminal-contracts'
 
