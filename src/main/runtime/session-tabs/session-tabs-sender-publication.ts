@@ -30,11 +30,12 @@ export abstract class OrcaRuntimeWithSessionTabSenders extends OrcaRuntimeWithSt
             continue
           }
           const desktop = subscription.clientKind !== 'mobile'
+          const frame = desktop ? desktopFrame : tabsOnly
+          // A frame for one client is already its projection; projecting again stacks the epoch suffix and revision, so the client fences it.
           subscription.listener(
-            this.projectMobileSessionTabsForClient(
-              desktop ? desktopFrame : tabsOnly,
-              subscription.clientNavigationId
-            ),
+            clientNavigationId === undefined
+              ? this.projectMobileSessionTabsForClient(frame, subscription.clientNavigationId)
+              : frame,
             changeSequence
           )
           desktopDelivered ||= desktop

@@ -1319,91 +1319,12 @@
       ],
       "demotionRule": "Remain experimental until repeated independent or CI evidence; investigate ordering or unbounded-wait regressions without weakening the hold or deadline assertions."
     },
-    {
-      "id": "settings.general-section-lifetime",
-      "title": "General settings search preserves matching section state",
-      "maturity": "experimental",
-      "protection": "partial",
-      "owner": "renderer-settings",
-      "layer": "renderer-unit",
-      "surfaces": [
-        "General settings search",
-        "app version and remote update display",
-        "autosave settings draft"
-      ],
-      "platforms": ["macos", "linux", "windows"],
-      "providers": ["local", "remote-runtime", "ssh", "wsl"],
-      "coveredPlatforms": ["macos"],
-      "coveredProviders": [],
-      "coverageNotes": "Actual GeneralPane, update/version and remote-status components with mocked store/API; actual autosave form. Windows runtime on/off simulated. No physical updater, paired host, settings write or native input.",
-      "motivatingLinks": [
-        "https://github.com/stablyai/orca/blob/main/src/renderer/src/components/settings/general/GeneralPane.tsx"
-      ],
-      "invariant": "A matching General settings section retains its owner and state as preceding search results disappear; an actually removed section releases its owner and reloads when shown again.",
-      "oracle": "Across 14 matching searches the Updates section keeps the same DOM node and the version-read and remote-refresh counts do not grow, instead of six each. Store-published remote update state still reaches the retained section. Explicit refresh and genuine hide/reopen still read; drafts yield to externally changed saved settings; a removed owner cannot publish its late version.",
-      "commands": [
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/settings/general/GeneralPane.section-lifetime.test.tsx"
-      ],
-      "testFiles": [
-        "src/renderer/src/components/settings/general/GeneralPane.section-lifetime.test.tsx"
-      ],
-      "assertionRefs": [
-        {
-          "file": "src/renderer/src/components/settings/general/GeneralPane.section-lifetime.test.tsx",
-          "assertions": [
-            "keeps showing store-published remote update state without a remount",
-            "keeps explicit remote refresh and true hide/reopen reads",
-            "preserves an autosave draft until external settings change or the section hides",
-            "does not publish a version result from a genuinely unmounted section"
-          ]
-        }
-      ],
-      "evidenceRuns": [
-        {
-          "date": "2026-09-26",
-          "runner": "local",
-          "platform": "macos",
-          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/settings/GeneralPane.section-lifetime.test.tsx",
-          "currentCommand": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/settings/general/GeneralPane.section-lifetime.test.tsx",
-          "result": "passed",
-          "durationSeconds": 1.89,
-          "summary": "7 tests/1 suite pass after the shared SettingsSectionStack adoption. Read-count oracles restated as node identity plus non-growing counts; original main fails both retained-section cases, the draft, the release-picker reveal and the late-version publish."
-        }
-      ],
-      "runtimeBudget": {
-        "p95Seconds": 10,
-        "scope": "Focused renderer-unit suites, p95 not established."
-      },
-      "flakeHistory": {
-        "status": "not-started",
-        "evidence": "Author and independent local evidence only; no CI soak."
-      },
-      "redGreenEvidence": {
-        "status": "complete",
-        "evidence": "Candidate permanent6pass versus original4fail2controls. Additional independent pending-version/error-context/store-refresh3pass versus original2fail1control."
-      },
-      "performanceBudget": {
-        "required": true,
-        "evidence": "Actual version and remote-refresh admissions 6 to 1 across 14 matching queries, which also stops one paired-host update probe per keystroke. Section map now lives in the shared SettingsSectionStack; no added poll, cache, listener or subprocess. No packaged CPU/frame/heap claim."
-      },
-      "knownGaps": [
-        "CI soak pending.",
-        "Physical updater/install, local/daemon PTYs and mobile are unaffected; no execution-host routing, process authority or wire change.",
-        "Native Linux/Windows, SSH/WSL and paired remote-runtime behavior not exercised; synthetic runtime flags cover renderer branches only.",
-        "Matching search no longer incidentally refreshes version/remote-status/CLI discovery; explicit checks and real hide/reopen remain. The installed version cannot change in-process and remote update entries are store-published, so neither goes stale without a signal.",
-        "Retained drafts, release reveal and pending/error context last until a real hide or their own transition; programmatic-query draft test does not reproduce ordinary mouse-search blur/commit.",
-        "Hidden Electron actual-form proof is separate; no packaged latency, heap or native focus evidence."
-      ],
-      "promotionCriteria": [
-        "Retain count, draft, owner cleanup and refresh controls; collect CI soak and relevant full-app/provider evidence before promotion."
-      ],
-      "demotionRule": "Keep experimental until soak; investigate state or cleanup regressions without weakening owner, read-count or draft assertions."
-    },
+
     {
       "id": "settings.accounts-section-lifetime",
       "title": "Accounts search preserves matching account section owners",
       "maturity": "experimental",
-      "protection": "partial",
+      "protection": "none",
       "owner": "renderer-settings",
       "layer": "renderer-unit",
       "surfaces": [
@@ -1413,53 +1334,29 @@
       ],
       "platforms": ["macos", "linux", "windows"],
       "providers": ["local", "remote-runtime", "ssh", "wsl"],
-      "coveredPlatforms": ["macos"],
+      "coveredPlatforms": [],
       "coveredProviders": [],
-      "coverageNotes": "Actual AccountsPane, Grok, Cursor and Codex login components; synthetic APIs/store with Windows account support enabled/disabled. No real account, keychain or provider action.",
+      "coverageNotes": "Audit1437 removes AccountsPane.section-lifetime.test.tsx: DOM identity, mock status/read/subscription counts and simulated platform variants are intentionally retired. No equivalent replacement coverage is claimed. Historical coverage account: Actual AccountsPane, Grok, Cursor and Codex login components; synthetic APIs/store with Windows account support enabled/disabled. No real account, keychain or provider action.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/blob/main/src/renderer/src/components/settings/accounts/AccountsPane.tsx"
       ],
       "invariant": "Matching sections retain their owners as earlier search results disappear; genuine removal releases the Codex subscription and reopens fresh status reads.",
-      "oracle": "Across nine matching Grok, ten matching Cursor and eleven matching Codex queries each matched section keeps the same DOM node and its status-read, watcher and subscription counts do not grow, against four to six reads each before. Explicit refresh, store-published usage updates, pushed login URLs and genuine removal all still reach the retained section.",
-      "commands": [
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/settings/accounts/AccountsPane.section-lifetime.test.tsx"
-      ],
-      "testFiles": [
-        "src/renderer/src/components/settings/accounts/AccountsPane.section-lifetime.test.tsx"
-      ],
-      "assertionRefs": [
-        {
-          "file": "src/renderer/src/components/settings/accounts/AccountsPane.section-lifetime.test.tsx",
-          "assertions": [
-            "preserves explicit Grok refresh and real hide/reopen status reads",
-            "keeps the login subscription until Codex genuinely hides",
-            "keeps Cursor refresh driven by usage updates and genuine reopen"
-          ]
-        }
-      ],
-      "evidenceRuns": [
-        {
-          "date": "2026-09-26",
-          "runner": "local",
-          "platform": "macos",
-          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/settings/AccountsPane.section-lifetime.test.tsx",
-          "currentCommand": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/settings/accounts/AccountsPane.section-lifetime.test.tsx",
-          "result": "passed",
-          "durationSeconds": 1.84,
-          "summary": "10 tests/1 suite pass after the shared SettingsSectionStack adoption. Read-count oracles restated as node identity plus non-growing counts; original main fails the three retained-section cases and the retained Codex subscription, and passes the explicit-refresh, usage-driven and genuine-removal controls."
-        }
-      ],
+      "oracle": "No current automated oracle is claimed after Audit1437 removed this suite. Historical oracle account: Across nine matching Grok, ten matching Cursor and eleven matching Codex queries each matched section keeps the same DOM node and its status-read, watcher and subscription counts do not grow, against four to six reads each before. Explicit refresh, store-published usage updates, pushed login URLs and genuine removal all still reach the retained section.",
+      "commands": [],
+      "testFiles": [],
+      "assertionRefs": [],
+      "evidenceRuns": [],
       "runtimeBudget": {
         "p95Seconds": 10,
         "scope": "Focused renderer-unit suites, p95 not established."
       },
       "flakeHistory": {
         "status": "not-started",
-        "evidence": "Author and independent local evidence only; no CI soak."
+        "evidence": "No current suite remains. Historical account: Author and independent local evidence only; no CI soak."
       },
       "redGreenEvidence": {
-        "status": "complete",
-        "evidence": "Candidate ten pass; current-main original seven fail and three controls pass."
+        "status": "missing",
+        "evidence": "Historical red/green only after suite removal. Candidate ten pass; current-main original seven fail and three controls pass."
       },
       "performanceBudget": {
         "required": true,
@@ -1470,7 +1367,8 @@
         "No native Linux/Windows or live SSH/WSL/paired provider behavior; platform flags are simulated.",
         "Hidden Electron Grok proof uses the original audit baseline and synthetic status; current-main Cursor addition has unit evidence only.",
         "Matching search no longer incidentally refreshes Grok/Cursor status or pending Codex URLs. Every one of those surfaces is store-subscribed or push-subscribed, so the retained section still tracks usage updates, pushed login URLs, explicit refresh and true hide/reopen; there is no bounded automatic freshness deadline and none of them relied on one before.",
-        "Child drafts, errors, copied feedback and timers remain until their own transition or real removal."
+        "Child drafts, errors, copied feedback and timers remain until their own transition or real removal.",
+        "Audit1437 removes AccountsPane.section-lifetime.test.tsx: DOM identity, mock status/read/subscription counts and simulated platform variants are intentionally retired. No equivalent replacement coverage is claimed. Original complete gate record: {\"id\":\"settings.accounts-section-lifetime\",\"title\":\"Accounts search preserves matching account section owners\",\"maturity\":\"experimental\",\"protection\":\"partial\",\"owner\":\"renderer-settings\",\"layer\":\"renderer-unit\",\"surfaces\":[\"Accounts settings search\",\"Grok and Cursor account status\",\"Codex pending sign-in link\"],\"platforms\":[\"macos\",\"linux\",\"windows\"],\"providers\":[\"local\",\"remote-runtime\",\"ssh\",\"wsl\"],\"coveredPlatforms\":[\"macos\"],\"coveredProviders\":[],\"coverageNotes\":\"Actual AccountsPane, Grok, Cursor and Codex login components; synthetic APIs/store with Windows account support enabled/disabled. No real account, keychain or provider action.\",\"motivatingLinks\":[\"https://github.com/stablyai/orca/blob/main/src/renderer/src/components/settings/accounts/AccountsPane.tsx\"],\"invariant\":\"Matching sections retain their owners as earlier search results disappear; genuine removal releases the Codex subscription and reopens fresh status reads.\",\"oracle\":\"Across nine matching Grok, ten matching Cursor and eleven matching Codex queries each matched section keeps the same DOM node and its status-read, watcher and subscription counts do not grow, against four to six reads each before. Explicit refresh, store-published usage updates, pushed login URLs and genuine removal all still reach the retained section.\",\"commands\":[\"ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/settings/accounts/AccountsPane.section-lifetime.test.tsx\"],\"testFiles\":[\"src/renderer/src/components/settings/accounts/AccountsPane.section-lifetime.test.tsx\"],\"assertionRefs\":[{\"file\":\"src/renderer/src/components/settings/accounts/AccountsPane.section-lifetime.test.tsx\",\"assertions\":[\"preserves explicit Grok refresh and real hide/reopen status reads\",\"keeps the login subscription until Codex genuinely hides\",\"keeps Cursor refresh driven by usage updates and genuine reopen\"]}],\"evidenceRuns\":[{\"date\":\"2026-09-26\",\"runner\":\"local\",\"platform\":\"macos\",\"command\":\"ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/settings/AccountsPane.section-lifetime.test.tsx\",\"currentCommand\":\"ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/settings/accounts/AccountsPane.section-lifetime.test.tsx\",\"result\":\"passed\",\"durationSeconds\":1.84,\"summary\":\"10 tests/1 suite pass after the shared SettingsSectionStack adoption. Read-count oracles restated as node identity plus non-growing counts; original main fails the three retained-section cases and the retained Codex subscription, and passes the explicit-refresh, usage-driven and genuine-removal controls.\"}],\"runtimeBudget\":{\"p95Seconds\":10,\"scope\":\"Focused renderer-unit suites, p95 not established.\"},\"flakeHistory\":{\"status\":\"not-started\",\"evidence\":\"Author and independent local evidence only; no CI soak.\"},\"redGreenEvidence\":{\"status\":\"complete\",\"evidence\":\"Candidate ten pass; current-main original seven fail and three controls pass.\"},\"performanceBudget\":{\"required\":true,\"evidence\":\"Actual renderer status-read/subscription admissions counted; the section map now lives in the shared SettingsSectionStack and no cache, poll, listener or process is added. No CPU, latency or heap claim. Matching sections retain local state and lose only the incidental search-driven refresh that duplicated an existing subscription.\"},\"knownGaps\":[\"CI soak pending.\",\"No native Linux/Windows or live SSH/WSL/paired provider behavior; platform flags are simulated.\",\"Hidden Electron Grok proof uses the original audit baseline and synthetic status; current-main Cursor addition has unit evidence only.\",\"Matching search no longer incidentally refreshes Grok/Cursor status or pending Codex URLs. Every one of those surfaces is store-subscribed or push-subscribed, so the retained section still tracks usage updates, pushed login URLs, explicit refresh and true hide/reopen; there is no bounded automatic freshness deadline and none of them relied on one before.\",\"Child drafts, errors, copied feedback and timers remain until their own transition or real removal.\"],\"promotionCriteria\":[\"Retain read/subscription counts and genuine-removal controls; collect CI soak and relevant full-app provider evidence.\"],\"demotionRule\":\"Keep experimental until soak; investigate owner and refresh regressions without weakening assertions or adding retries.\"}"
       ],
       "promotionCriteria": [
         "Retain read/subscription counts and genuine-removal controls; collect CI soak and relevant full-app provider evidence."
