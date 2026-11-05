@@ -281,8 +281,15 @@ export function projectRuntimeMobileSessionTabs(
       typeof rawTurnCompletedAt === 'number' && Number.isFinite(rawTurnCompletedAt)
         ? rawTurnCompletedAt
         : undefined
+    // Why: the pane is this worktree's; a restored row without a live PTY names none, and clients
+    // decide row ownership (and retraction) by worktree.
     const clientAgentStatus: { agentStatus?: AgentStatusEntry } = projectedStatusEntry
-      ? { agentStatus: clientStatusFields as AgentStatusEntry }
+      ? {
+          agentStatus: {
+            ...(clientStatusFields as AgentStatusEntry),
+            worktreeId: snapshot.worktree
+          }
+        }
       : {}
     tabs.push({
       type: 'terminal',
