@@ -387,7 +387,19 @@ describe('OMP auto-learn capture', () => {
     // A user turn started before the capture settles is primary work again.
     await harness.callHook('agent_start')
     await harness.callHook('tool_execution_start', { toolName: 'read', args: {} })
+    await nextTurn()
+    expect(postedHookNames(harness.fetchMock).at(-1)).toBe('tool_execution_start')
+    await harness.callHook('tool_call', { toolName: 'read', input: {} })
+    await nextTurn()
+    expect(postedHookNames(harness.fetchMock).at(-1)).toBe('tool_call')
+    await harness.callHook('tool_execution_end', { toolName: 'read' })
+    await nextTurn()
+    expect(postedHookNames(harness.fetchMock).at(-1)).toBe('tool_execution_end')
+
+    // Once the capture settles, tool activity after agent_end is reported again.
     await harness.callHook('autolearn_capture_end', { outcome: 'completed' })
+    await harness.callHook('agent_end', {})
+    await harness.callHook('tool_execution_start', { toolName: 'read', args: {} })
     await nextTurn()
     expect(postedHookNames(harness.fetchMock).at(-1)).toBe('tool_execution_start')
   })
