@@ -84,13 +84,21 @@ function sgrParamCodeAt(data: string, start: number, end: number): number | null
 }
 
 function sgrParamEnd(data: string, start: number, paramsEnd: number): number {
-  const separator = data.indexOf(';', start)
-  return separator === -1 || separator > paramsEnd ? paramsEnd : separator
+  for (let index = start; index < paramsEnd; index++) {
+    if (data.charCodeAt(index) === SEMICOLON) {
+      return index
+    }
+  }
+  return paramsEnd
 }
 
 function sgrParamHasColon(data: string, start: number, end: number): boolean {
-  const colon = data.indexOf(':', start)
-  return colon !== -1 && colon < end
+  for (let index = start; index < end; index++) {
+    if (data.charCodeAt(index) === COLON) {
+      return true
+    }
+  }
+  return false
 }
 
 // Walks `params` in place; allocating per SGR made this scan cost as much as xterm's own parse on coloured floods.
