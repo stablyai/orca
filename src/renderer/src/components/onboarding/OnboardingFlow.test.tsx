@@ -113,7 +113,7 @@ describe('OnboardingFlow', () => {
         configurable: true,
         value: { onboarding: { update: saveProgress } }
       })
-      vi.spyOn(useAppStore.getState(), 'recordFeatureInteraction').mockImplementation(() => {})
+      vi.spyOn(useAppStore.getState(), 'recordFeatureInteraction').mockResolvedValue(undefined)
       const updateSettings = vi.fn().mockResolvedValue(undefined)
       const onOnboardingChange = vi.fn()
       const { result } = renderHook(() =>
