@@ -1,4 +1,5 @@
 import { expect, it } from 'vitest'
+import { withOpenCodeTextGenerationPolicy } from '../../shared/opencode-generation-command'
 import { planCommitMessageGeneration } from '../../shared/source-control/ai/generation/commit-message-plan'
 import { createMockDiscoveryChild } from './commit-message-text-generation-test-harness'
 import { runLocalPlanForAgent } from './source-control-local-generation'
@@ -20,8 +21,9 @@ it('keeps inherited OpenCode config under the text-generation tool policy', asyn
     operation: 'conversation-name',
     spawnAgent: (input) => {
       expect(input.commandEnv?.OPENCODE_CONFIG_CONTENT).toBe(
-        '{"provider":{"p":{}},"permission":{"*":"deny","read":"allow","grep":"allow","glob":"allow","list":"allow"}}'
+        withOpenCodeTextGenerationPolicy('{"provider":{"p":{}}}')
       )
+      expect(input.commandEnv?.OPENCODE_CONFIG_CONTENT).toContain('"provider"')
       queueMicrotask(() => {
         child.stdout.emit(
           'data',

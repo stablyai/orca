@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { planCommitMessageGeneration } from './commit-message-plan'
+import { withOpenCodeTextGenerationPolicy } from '../../../opencode-generation-command'
 import { planAgentBinary } from '../../../agent-launch/startup/agent-command-plan'
 
 describe('planCommitMessageGeneration', () => {
@@ -107,8 +108,7 @@ describe('planCommitMessageGeneration', () => {
         label: 'OpenCode',
         outputFormat: 'opencode-json',
         env: {
-          OPENCODE_CONFIG_CONTENT:
-            '{"permission":{"*":"deny","read":"allow","grep":"allow","glob":"allow","list":"allow"}}'
+          OPENCODE_CONFIG_CONTENT: withOpenCodeTextGenerationPolicy(undefined)
         }
       }
     })
@@ -143,8 +143,7 @@ describe('planCommitMessageGeneration', () => {
         label: 'OpenCode',
         outputFormat: 'opencode-json',
         env: {
-          OPENCODE_CONFIG_CONTENT:
-            '{"permission":{"*":"deny","read":"allow","grep":"allow","glob":"allow","list":"allow"}}'
+          OPENCODE_CONFIG_CONTENT: withOpenCodeTextGenerationPolicy(undefined)
         }
       }
     })

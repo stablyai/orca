@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { planCommitMessageGeneration } from './source-control/ai/generation/commit-message-plan'
-import { openCodeVariantRetryPlan } from './opencode-generation-command'
+import {
+  openCodeVariantRetryPlan,
+  withOpenCodeTextGenerationPolicy
+} from './opencode-generation-command'
 
 const rejection = 'Unrecognized flag: --variant in command opencode run'
 describe('OpenCode generation commands', () => {
@@ -103,23 +106,49 @@ describe('OpenCode generation commands', () => {
 })
 
 describe('OpenCode text-generation tool policy', () => {
+  const permission = { '*': 'deny', read: 'allow', grep: 'allow', glob: 'allow', list: 'allow' }
+  const policy = { permission, agent: { build: { permission } } }
+
   it.each([
-    [
-      `OPENCODE_CONFIG_CONTENT='{"model":"x/y","permission":{"*":"allow"}}' opencode2`,
-      '"model":"x/y",'
-    ],
-    [`OPENCODE_CONFIG_CONTENT='{ // jsonc' opencode2`, '']
-  ])('keeps override config but replaces its permissions in %s', (agentCommandOverride, kept) => {
+    ['replaces permissions', '{"model":"x/y","permission":{"*":"allow"}}', { model: 'x/y' }],
+    ['reads JSONC', '{ // note\n"model":"x/y",}', { model: 'x/y' }],
+    ['replaces malformed content', '{ "model":"x/y"', {}],
+    ['keeps native rules ordered before the build agent', '{"permissions":[]}', { permissions: [] }]
+  ])('%s', (_name, content, kept) => {
+    expect(JSON.parse(withOpenCodeTextGenerationPolicy(content))).toEqual({ ...kept, ...policy })
+  })
+
+  it('drops every inline build agent because agents and mode entries replace agent entries', () => {
+    const allow = { permission: { '*': 'allow' } }
+    const content = JSON.stringify({
+      agent: { build: allow, other: allow },
+      agents: { build: { model: 'x/y' }, other: allow },
+      mode: { build: { model: 'x/y' }, other: allow }
+    })
+    expect(JSON.parse(withOpenCodeTextGenerationPolicy(content))).toEqual({
+      permission,
+      agent: { other: allow, build: { permission } },
+      agents: { other: allow },
+      mode: { other: allow }
+    })
+  })
+
+  it('applies the policy on top of a command override', () => {
     const result = planCommitMessageGeneration(
-      { agentId: 'opencode2', model: 'default', agentCommandOverride },
+      {
+        agentId: 'opencode2',
+        model: 'default',
+        agentCommandOverride: `OPENCODE_CONFIG_CONTENT='{"model":"x/y"}' opencode2`
+      },
       'PROMPT'
     )
     if (!result.ok) {
       throw new Error(result.error)
     }
     expect(result.plan.args.slice(0, 2)).toEqual(['run', '--standalone'])
-    expect(result.plan.env?.OPENCODE_CONFIG_CONTENT).toBe(
-      `{${kept}"permission":{"*":"deny","read":"allow","grep":"allow","glob":"allow","list":"allow"}}`
-    )
+    expect(JSON.parse(result.plan.env?.OPENCODE_CONFIG_CONTENT ?? '')).toEqual({
+      model: 'x/y',
+      ...policy
+    })
   })
 })

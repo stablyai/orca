@@ -1,3 +1,4 @@
+import { parse, type ParseError } from 'jsonc-parser'
 import { findOptionOccurrence } from './command-option-occurrence'
 import type { CommitMessagePlan } from './source-control/ai/generation/commit-message-plan'
 
@@ -27,16 +28,32 @@ const OPENCODE_TEXT_GENERATION_PERMISSION = {
   list: 'allow'
 }
 
-/** Inline config outranks project config; unparseable content (JSONC) is replaced, since running without the policy is unsafe. */
+/**
+ * OpenCode applies the last matching rule and evaluates agent rules after top-level ones, so only rules on the build
+ * agent itself beat project agent config and native `permissions`. Inline config outranks project config, but within
+ * it `agents` and `mode` entries replace `agent` entries, so theirs are dropped. Malformed content is replaced, since
+ * running without the policy is unsafe.
+ */
 export function withOpenCodeTextGenerationPolicy(content: string | undefined): string {
-  let config: unknown = {}
-  try {
-    config = content?.trim() ? JSON.parse(content) : {}
-  } catch {
-    config = {}
-  }
-  const base = typeof config === 'object' && config !== null && !Array.isArray(config) ? config : {}
-  return JSON.stringify({ ...base, permission: OPENCODE_TEXT_GENERATION_PERMISSION })
+  const errors: ParseError[] = []
+  const config: unknown = parse(content ?? '', errors, { allowTrailingComma: true })
+  const base = isRecord(config) && errors.length === 0 ? config : {}
+  const agentMaps = Object.fromEntries(
+    ['agent', 'agents', 'mode'].flatMap((key) => {
+      const map = base[key]
+      return isRecord(map) ? [[key, { ...map, build: undefined }]] : []
+    })
+  )
+  return JSON.stringify({
+    ...base,
+    ...agentMaps,
+    permission: OPENCODE_TEXT_GENERATION_PERMISSION,
+    agent: { ...agentMaps.agent, build: { permission: OPENCODE_TEXT_GENERATION_PERMISSION } }
+  })
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 export function openCodeTextGenerationEnv(
