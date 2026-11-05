@@ -201,6 +201,8 @@ it.each(['options-first', 'catalog-first', 'cached'] as const)(
       await act(async () => options.resolve(answer))
       expect(value('model')).toBeNull()
       await act(async () => catalog.resolve(discovered))
+    } else if (order === 'cached') {
+      await act(async () => options.resolve(answer))
     } else {
       await act(async () => catalog.resolve(discovered))
       expect(value('model')).toBeNull()
