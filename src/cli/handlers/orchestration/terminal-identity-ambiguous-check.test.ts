@@ -28,9 +28,11 @@ it('checks its own Run with A identity but refuses ambiguous identity before cho
   vi.mocked(runtime.getTerminalPaneKey).mockImplementation((handle) =>
     handle === 'term_coord' ? h.coordinatorPaneKey : handle === 'term_other' ? paneB : null
   )
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: resolveActiveTerminal only reads tabs and the supplied terminal selection fields.
   vi.spyOn(runtime, 'listAllMobileSessionTabs').mockResolvedValue([
     { tabs: [{ type: 'terminal', isActive: true, status: 'ready', terminal: 'term_other' }] }
   ] as never)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: resolveActiveTerminal only reads terminals.length and terminal handles from this fixture.
   vi.spyOn(runtime, 'listTerminals').mockResolvedValue({
     terminals: [{ handle: 'term_coord' }, { handle: 'term_other' }]
   } as never)
@@ -45,6 +47,7 @@ it('checks its own Run with A identity but refuses ambiguous identity before cho
       try {
         const handle = await runtime.resolveActiveTerminal(
           undefined,
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: getTerminalHandle supplies an object whose requireUnambiguous field is boolean when present.
           params as { requireUnambiguous?: boolean }
         )
         return okFixture('req_active', { handle })
@@ -56,6 +59,7 @@ it('checks its own Run with A identity but refuses ambiguous identity before cho
       }
     }
     if (method === 'orchestration.check') {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the check handler supplies an object, and h.call validates its fields with the RPC schema.
       return okFixture('req_check', await h.call(method, params as Record<string, unknown>, ctx))
     }
     throw new Error(`Unexpected RPC: ${method}`)
