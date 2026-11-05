@@ -68,6 +68,8 @@ export function dispatchTerminalWebViewNotification(
     handlers.onTerminalInteraction?.()
   } else if (msg.type === 'terminal-tap') {
     handlers.onTerminalTap?.()
+  } else if (msg.type === 'terminal-swipe-down') {
+    handlers.onTerminalSwipeDown?.()
   } else if (msg.type === 'terminal-file-tap') {
     const candidates = parseFileTapCandidates(msg.candidates)
     if (candidates.length > 0) {

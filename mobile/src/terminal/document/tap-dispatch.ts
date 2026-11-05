@@ -212,10 +212,24 @@ function onDocumentTouchEnd(scope: TerminalDocumentScope, e: TouchEvent) {
     return
   }
   if (scope.touchDispatch.mode === 'surface') {
+    // A flick can lift far from its start with no touchmove in between.
+    const released = scope.tapCandidate
+      ? touchById(
+          e.changedTouches ? touchesInRoot(scope.root, e.changedTouches) : [],
+          scope.tapCandidate.identifier
+        )
+      : null
+    const releasedBeyondSlop =
+      !!released &&
+      !!scope.tapCandidate &&
+      Math.abs(released.clientX - scope.tapCandidate.x) +
+        Math.abs(released.clientY - scope.tapCandidate.y) >
+        TAP_SLOP
     // Use the tap candidate’s origin; long-press origin may be cleared by harmless finger jitter.
     if (
       touches.length === 0 &&
       scope.tapCandidate &&
+      !releasedBeyondSlop &&
       scope.selMode !== 'select' &&
       Date.now() - scope.tapCandidate.t <= TAP_MAX_MS &&
       // Release can precede a queued row-scroll frame; cancelled-out movement remains a tap.
