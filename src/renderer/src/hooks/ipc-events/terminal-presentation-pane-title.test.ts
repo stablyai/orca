@@ -199,7 +199,7 @@ it('keeps a local split sidebar name in sync on rename and reset', async () => {
       current.runtimePaneTitlesByTabId[TAB],
       LEAF
     )
-  ).toBeNull()
+  ).toBe('Old name')
   expect(
     resolveAgentRowPaneLiveTitle(
       current.terminalLayoutsByTabId[TAB],
