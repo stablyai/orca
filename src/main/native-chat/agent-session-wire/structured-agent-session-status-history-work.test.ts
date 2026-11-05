@@ -10,6 +10,7 @@ import {
 import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'
 import * as publicRead from '../agent-session-journal/journal-public-read'
+import * as stopNotes from '../agent-session-journal/journal-stop-note-projection'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { StructuredAgentSessionJournalProjections } from './structured-agent-session-status-journal-projection'
 
@@ -68,11 +69,10 @@ const prompt = (text: string): AgentJournalItemBody => ({
   blocks: [{ type: 'text', text }]
 })
 
-/** One streamed write on a chat with `turns` finished turns behind a running one. */
-async function measure(turns: number, withCommand: boolean) {
-  const journal = await journals.open({
+function openJournal(sessionId: string) {
+  return journals.open({
     identity: {
-      sessionId: `session-${turns}-${withCommand}`,
+      sessionId,
       workspaceId: 'workspace-1',
       hostId: 'local',
       agent: 'codex',
@@ -81,6 +81,11 @@ async function measure(turns: number, withCommand: boolean) {
     stateDirectory: directory,
     now: () => 100
   })
+}
+
+/** One streamed write on a chat with `turns` finished turns behind a running one. */
+async function measure(turns: number, withCommand: boolean) {
+  const journal = await openJournal(`session-${turns}-${withCommand}`)
   if (withCommand) {
     await turn(
       journal,
@@ -121,10 +126,14 @@ async function measure(turns: number, withCommand: boolean) {
   })
   const statusItem = vi.spyOn(publicRead, 'renderJournalStatusItem')
   statusItem.mockClear()
+  const rendered = vi.spyOn(stopNotes, 'projectJournalStopNote')
+  rendered.mockClear()
   const projection = projections.read(journal, null)
+  const renders = rendered.mock.calls.length
   const snapshot = statusRead()
   return {
     bodyReads,
+    renders,
     indexedReads: statusItem.mock.calls.length,
     rows: snapshot.items.length,
     state: projection.state,
@@ -151,5 +160,81 @@ it.each([false, true])(
     // The remaining derivation is linear: a fixed number of body reads per historical row.
     const perRow = (large.bodyReads - small.bodyReads) / (large.rows - small.rows)
     expect(perRow).toBeLessThanOrEqual(6)
+    // The journal still renders every row once per status read; recorded here, not removed.
+    for (const run of [small, large]) {
+      expect(run.renders).toBe(run.rows + run.indexedReads)
+    }
   }
 )
+
+it('reads a command turn from before /clear as the current context does', async () => {
+  const journal = await openJournal('session-clear')
+  await turn(
+    journal,
+    'compact',
+    { kind: 'message', role: 'user', blocks: [], command: { name: 'compact' } },
+    'completed'
+  )
+  await append(journal, 'clear', {
+    kind: 'status',
+    text: 'Context cleared',
+    presentation: 'context-cleared',
+    contextClear: { operationId: 'clear', afterFence: 7, clearedAt: 100 }
+  })
+  await append(
+    journal,
+    'late',
+    { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'Late output' }] },
+    'turn-compact'
+  )
+  const snapshot = journal.statusRead()
+  const { state } = new StructuredAgentSessionJournalProjections().read(journal, null)
+  expect(state).toEqual(
+    projectStructuredAgentSessionStatusState(snapshot.items, snapshot.submissions, 7)
+  )
+  expect(state.summary.lastAssistantMessage).toBe('Late output')
+})
+
+it('keeps the interruption verdict and stays current as a command turn it skips changes', async () => {
+  const journal = await openJournal('session-interrupted')
+  const projections = new StructuredAgentSessionJournalProjections()
+  const expectScanned = () => {
+    const snapshot = journal.statusRead()
+    const { state } = projections.read(journal, null)
+    expect(state).toEqual(
+      projectStructuredAgentSessionStatusState(snapshot.items, snapshot.submissions, 7)
+    )
+    return state
+  }
+  await append(journal, 'user-cut', prompt('Go'))
+  await append(journal, 'turn-cut', {
+    kind: 'turn',
+    turnId: 'cut',
+    state: 'interrupted',
+    userItemId: 'orca:user-cut'
+  })
+  await append(
+    journal,
+    'stop-cut',
+    { kind: 'status', text: 'Stopped for an update', orcaStop: { cause: 'update' } },
+    'turn-cut'
+  )
+  const compact = {
+    kind: 'message' as const,
+    role: 'user' as const,
+    blocks: [],
+    command: { name: 'compact' }
+  }
+  await turn(journal, 'compact', compact, 'running')
+  expectScanned()
+  // The skipped command turn is revised in place: a new write, read through the same lookup.
+  await append(journal, 'turn-compact', {
+    kind: 'turn',
+    turnId: 'compact',
+    state: 'completed',
+    outcome: 'success',
+    userItemId: 'orca:user-compact'
+  })
+  const state = expectScanned()
+  expect(state.summary).toMatchObject({ status: 'idle', turnOutcome: 'cancellation' })
+})

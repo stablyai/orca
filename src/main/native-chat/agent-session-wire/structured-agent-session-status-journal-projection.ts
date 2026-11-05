@@ -87,6 +87,7 @@ export class StructuredAgentSessionJournalProjections {
     ) {
       // Journal sequence captures sends; lease/live-work/Stop keys capture row-free changes.
       const snapshot = journal.statusRead()
+      const display = journal.queuedMessages.displayState()
       const sameContext =
         projection?.epoch === cursor.epoch && projection.contextId === contextId
           ? projection
@@ -141,7 +142,7 @@ export class StructuredAgentSessionJournalProjections {
             snapshot.submissions,
             fence,
             work.scope,
-            (itemId) => renderJournalStatusItem(journal.queuedMessages.displayState(), itemId)
+            (itemId) => renderJournalStatusItem(display, itemId)
           ),
           work.diedTurn()
         ),
