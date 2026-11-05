@@ -1,7 +1,6 @@
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import type { AgentSessionWorkspaceKind } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
-import { composeWorktreeHostIdentity } from '../../../shared/worktree/host-qualified-identity'
 import { projectGroupIdFromRepoId } from '../../../shared/folder-workspaces/folder-workspace-worktree'
 import type { RepoIcon } from '../../../shared/repo-icon'
 import type { AgentSessionRestartActivity } from '../../../shared/agent-session/lifecycle/agent-session-restart-activity'
@@ -78,10 +77,6 @@ export function groupResumeCandidatesByHost(
   return [...groups].map(([hostId, entries]) => ({ hostId, candidates: entries }))
 }
 
-export function resumeWorkspaceHostId(group: ResumeWorkspaceGroup): ExecutionHostId {
-  return group.candidates[0]?.executionHostId ?? LOCAL_EXECUTION_HOST_ID
-}
-
 /** Groups by workspace, preserving the order the host offered them so the list is stable. */
 export function groupResumeCandidates(
   candidates: readonly ResumeCandidate[]
@@ -101,11 +96,11 @@ export function groupResumeCandidates(
 /** Group by owner in first-seen order; unresolved workspaces share one null group. */
 export function groupResumeWorkspacesByRepo(
   workspaces: readonly ResumeWorkspaceGroup[],
-  repoIdFor: (group: ResumeWorkspaceGroup) => string | null
+  repoIdFor: (workspaceId: string) => string | null
 ): ResumeRepoGroup[] {
   const groups = new Map<string, ResumeRepoGroup>()
   for (const workspace of workspaces) {
-    const repoId = repoIdFor(workspace)
+    const repoId = repoIdFor(workspace.workspaceId)
     const key = repoId ?? '\0none'
     const existing = groups.get(key)
     if (existing) {
@@ -125,19 +120,16 @@ export type ResumeWorkspaceNode = {
 /** Nest under the nearest listed ancestor, skipping ancestors without offers and preserving offer order. */
 export function nestResumeWorkspaces(
   workspaces: readonly ResumeWorkspaceGroup[],
-  ancestorsOf: (key: string) => readonly string[],
-  keyOf: (group: ResumeWorkspaceGroup) => string = (group) => group.workspaceId,
-  canNest: (child: ResumeWorkspaceGroup, parent: ResumeWorkspaceGroup) => boolean = () => true
+  ancestorsOf: (workspaceId: string) => readonly string[]
 ): ResumeWorkspaceNode[] {
   const nodes = new Map<string, ResumeWorkspaceNode>(
-    workspaces.map((group) => [keyOf(group), { group, children: [] }])
+    workspaces.map((group) => [group.workspaceId, { group, children: [] }])
   )
   const parentOf = new Map<ResumeWorkspaceNode, ResumeWorkspaceNode>()
-  for (const [key, node] of nodes) {
-    const parentId = ancestorsOf(key).find((id) => {
-      const candidate = id === key ? undefined : nodes.get(id)
-      return candidate !== undefined && canNest(node.group, candidate.group)
-    })
+  for (const node of nodes.values()) {
+    const parentId = ancestorsOf(node.group.workspaceId).find(
+      (id) => id !== node.group.workspaceId && nodes.has(id)
+    )
     const parent = parentId === undefined ? undefined : nodes.get(parentId)
     if (parent) {
       parentOf.set(node, parent)
@@ -167,9 +159,11 @@ export function nestResumeWorkspaces(
   return roots
 }
 
-/** The offer's own machine and workspace; never a catalog row, so twins on two machines stay apart. */
-export function resumeWorkspaceKey(group: ResumeWorkspaceGroup): string {
-  return composeWorktreeHostIdentity(resumeWorkspaceHostId(group), group.workspaceId)
+export function resumeGroupHostId(
+  group: ResumeWorkspaceGroup,
+  fallback: ExecutionHostId
+): ExecutionHostId {
+  return group.candidates[0]?.executionHostId ?? fallback
 }
 
 export type ResumeMachineSection = {
@@ -177,31 +171,63 @@ export type ResumeMachineSection = {
   projects: { repoGroup: ResumeRepoGroup; roots: ResumeWorkspaceNode[] }[]
 }
 
-/** Per-machine, per-project nesting; only a parent on another machine (a cross-store link) pulls a child out of its own section. */
-export function nestResumeMachines(
+/** Per-machine, per-project nesting; then a root whose resolved cross-store parent is offered on
+ * another machine moves under it. Without such parents the sections are exactly that nesting. */
+export function nestResumeSections(
   machines: readonly { hostId: ExecutionHostId; workspaces: readonly ResumeWorkspaceGroup[] }[],
-  ancestorsOf: (key: string) => readonly string[],
-  repoIdOf: (group: ResumeWorkspaceGroup) => string | null
+  ancestorsOf: (group: ResumeWorkspaceGroup) => readonly string[],
+  repoIdOf: (group: ResumeWorkspaceGroup) => string | null,
+  crossStoreParentOf: (group: ResumeWorkspaceGroup) => ResumeWorkspaceGroup | undefined
 ): ResumeMachineSection[] {
-  const roots = nestResumeWorkspaces(
-    machines.flatMap((machine) => machine.workspaces),
-    ancestorsOf,
-    resumeWorkspaceKey,
-    (child, parent) =>
-      resumeWorkspaceHostId(child) !== resumeWorkspaceHostId(parent) ||
-      repoIdOf(child) === repoIdOf(parent)
-  )
-  return machines
-    .map((machine) => ({
+  const sections = machines.map((machine) => {
+    const byId = new Map(machine.workspaces.map((group) => [group.workspaceId, group]))
+    const lookup =
+      <T>(read: (group: ResumeWorkspaceGroup) => T, fallback: T) =>
+      (id: string) => {
+        const group = byId.get(id)
+        return group ? read(group) : fallback
+      }
+    return {
       hostId: machine.hostId,
-      projects: groupResumeWorkspacesByRepo(machine.workspaces, repoIdOf)
-        .map((repoGroup) => ({
+      projects: groupResumeWorkspacesByRepo(machine.workspaces, lookup(repoIdOf, null)).map(
+        (repoGroup) => ({
           repoGroup,
-          roots: roots.filter((root) => repoGroup.workspaces.includes(root.group))
-        }))
-        .filter((project) => project.roots.length > 0)
-    }))
-    .filter((section) => section.projects.length > 0)
+          roots: nestResumeWorkspaces(repoGroup.workspaces, lookup(ancestorsOf, []))
+        })
+      )
+    }
+  })
+  const nodeOf = new Map<ResumeWorkspaceGroup, ResumeWorkspaceNode>()
+  const parentOf = new Map<ResumeWorkspaceNode, ResumeWorkspaceNode>()
+  const index = (node: ResumeWorkspaceNode): void => {
+    nodeOf.set(node.group, node)
+    for (const child of node.children) {
+      parentOf.set(child, node)
+      index(child)
+    }
+  }
+  sections.forEach((section) => section.projects.forEach((project) => project.roots.forEach(index)))
+  for (const section of sections) {
+    for (const project of section.projects) {
+      project.roots = project.roots.filter((root) => {
+        const parentGroup = crossStoreParentOf(root.group)
+        const parent = parentGroup ? nodeOf.get(parentGroup) : undefined
+        let up = parent
+        while (up && up !== root) {
+          up = parentOf.get(up)
+        }
+        // Why: never under its own subtree, or the chats would vanish with no root.
+        if (!parent || up) {
+          return true
+        }
+        parent.children.push(root)
+        parentOf.set(root, parent)
+        return false
+      })
+    }
+    section.projects = section.projects.filter((project) => project.roots.length > 0)
+  }
+  return sections.filter((section) => section.projects.length > 0)
 }
 
 export function resumeWorkspaceCandidates(node: ResumeWorkspaceNode): ResumeCandidate[] {

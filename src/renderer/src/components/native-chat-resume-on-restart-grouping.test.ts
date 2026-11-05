@@ -4,7 +4,7 @@ import {
   groupResumeCandidates,
   groupResumeCandidatesByHost,
   groupResumeWorkspacesByRepo,
-  nestResumeMachines,
+  nestResumeSections,
   nestResumeWorkspaces,
   resolveResumeGroupHeader,
   resumeSelectionState,
@@ -57,10 +57,7 @@ describe('arranging the offer the way the sidebar does', () => {
       candidate({ sessionId: 'c', workspaceId: 'repo-1::/w/three' })
     ])
 
-    const repoGroups = groupResumeWorkspacesByRepo(
-      workspaces,
-      (group) => group.workspaceId.split('::')[0] ?? null
-    )
+    const repoGroups = groupResumeWorkspacesByRepo(workspaces, (id) => id.split('::')[0] ?? null)
 
     expect(repoGroups.map((group) => group.repoId)).toEqual(['repo-1', 'repo-2'])
     expect(repoGroups[0]?.workspaces).toHaveLength(2)
@@ -177,8 +174,8 @@ describe('nesting child workspaces', () => {
   })
 })
 
-describe('nesting across machines', () => {
-  const layout = (sections: ReturnType<typeof nestResumeMachines>): unknown =>
+describe('resume sections', () => {
+  const layout = (sections: ReturnType<typeof nestResumeSections>): unknown =>
     sections.map((section) => [
       section.hostId,
       section.projects.map((project) => [
@@ -186,38 +183,39 @@ describe('nesting across machines', () => {
         project.roots.map((root) => resumeWorkspaceCandidates(root).map((c) => c.sessionId))
       ])
     ])
+  const machines = (...candidates: ResumeCandidate[]) =>
+    groupResumeCandidatesByHost(candidates).map((machine) => ({
+      hostId: machine.hostId,
+      workspaces: groupResumeCandidates(machine.candidates)
+    }))
+  const noCrossStoreParent = () => undefined
 
-  it("puts a server child under its local parent, not the server's same-id workspace", () => {
-    const local = groupResumeCandidates([candidate({ sessionId: 'l', workspaceId: 'p' })])
-    const server = groupResumeCandidates([
-      candidate({ sessionId: 's1', workspaceId: 'p', executionHostId: 'runtime:srv' }),
-      candidate({ sessionId: 's2', workspaceId: 'c', executionHostId: 'runtime:srv' })
-    ])
-    const ancestors: Record<string, string[]> = { 'runtime:srv|c': ['local|p'] }
-    const sections = nestResumeMachines(
-      [
-        { hostId: 'local', workspaces: local },
-        { hostId: 'runtime:srv', workspaces: server }
-      ],
-      (key) => ancestors[key] ?? [],
-      () => 'repo'
+  it('keeps a local chat apart from a server workspace its hostless catalog parent shares an id with', () => {
+    const sections = nestResumeSections(
+      machines(
+        candidate({ sessionId: 'local-c', workspaceId: 'c', executionHostId: undefined }),
+        candidate({ sessionId: 'server-p', workspaceId: 'p', executionHostId: 'runtime:srv' })
+      ),
+      (group) => (group.workspaceId === 'c' ? ['p'] : []),
+      () => 'repo',
+      noCrossStoreParent
     )
 
     expect(layout(sections)).toEqual([
-      ['local', [['repo', [['l', 's2']]]]],
-      ['runtime:srv', [['repo', [['s1']]]]]
+      ['local', [['repo', [['local-c']]]]],
+      ['runtime:srv', [['repo', [['server-p']]]]]
     ])
   })
 
   it('keeps a same-machine child in its own project', () => {
-    const local = groupResumeCandidates([
-      candidate({ sessionId: 'a1', workspaceId: 'a' }),
-      candidate({ sessionId: 'b1', workspaceId: 'b' })
-    ])
-    const sections = nestResumeMachines(
-      [{ hostId: 'local', workspaces: local }],
-      (key) => (key === 'local|b' ? ['local|a'] : []),
-      (group) => (group.workspaceId === 'a' ? 'repo-a' : 'repo-b')
+    const sections = nestResumeSections(
+      machines(
+        candidate({ sessionId: 'a1', workspaceId: 'a' }),
+        candidate({ sessionId: 'b1', workspaceId: 'b' })
+      ),
+      (group) => (group.workspaceId === 'b' ? ['a'] : []),
+      (group) => (group.workspaceId === 'a' ? 'repo-a' : 'repo-b'),
+      noCrossStoreParent
     )
 
     expect(layout(sections)).toEqual([
@@ -229,6 +227,22 @@ describe('nesting across machines', () => {
         ]
       ]
     ])
+  })
+
+  it('moves a server chat under its cross-store parent on this computer', () => {
+    const offered = machines(
+      candidate({ sessionId: 'local-p', workspaceId: 'p' }),
+      candidate({ sessionId: 'server-c', workspaceId: 'c', executionHostId: 'runtime:srv' })
+    )
+    const [local, server] = offered
+    const sections = nestResumeSections(
+      offered,
+      () => [],
+      () => 'repo',
+      (group) => (group === server?.workspaces[0] ? local?.workspaces[0] : undefined)
+    )
+
+    expect(layout(sections)).toEqual([['local', [['repo', [['local-p', 'server-c']]]]]])
   })
 })
 

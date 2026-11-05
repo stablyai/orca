@@ -12,15 +12,14 @@ import {
   composeWorktreeHostIdentity,
   getWorktreeHostIdentity
 } from '../../../shared/worktree/host-qualified-identity'
-import type { ExecutionHostId } from '../../../shared/execution-host'
-import { useAppStore } from '../store'
+import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
 import {
-  resumeWorkspaceKey,
-  type ResumeWorkspaceGroup
-} from './native-chat-resume-on-restart-grouping'
-import type { Worktree } from '../../../shared/worktree/types'
+  selectCrossStoreLineageParentIdentities,
+  selectSidebarLineageParentIdentities
+} from '@/store/cross-store-lineage-parents'
+import { useAppStore } from '../store'
+import type { ResumeWorkspaceGroup } from './native-chat-resume-on-restart-grouping'
 import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
-import { selectSidebarLineageParentIdentities } from '@/store/cross-store-lineage-parents'
 
 /** The store's row for a workspace on its own host; folder workspaces included. Stable per row. */
 export function useWorkspaceWorktree(workspaceId: string, hostId: ExecutionHostId | undefined) {
@@ -44,14 +43,13 @@ export function useRepoIdByWorkspace(
   }
 }
 
-/** Each offer's ancestors as offer keys (see resumeWorkspaceKey), nearest first, by the sidebar's own nesting rule. */
-export function useResumeLineageAncestors(
+/** Each workspace's lineage ancestors, nearest first, by the sidebar's own nesting rule. */
+export function useLineageAncestors(
   workspaces: readonly ResumeWorkspaceGroup[]
-): (key: string) => readonly string[] {
+): (group: ResumeWorkspaceGroup) => readonly string[] {
   const worktreesByRepo = useAppStore((store) => selectWorktreesByRepo(store))
   const worktreeLineageById = useAppStore((store) => store.worktreeLineageById)
-  const parentIdentities = useAppStore(selectSidebarLineageParentIdentities)
-  return useMemo(() => {
+  const ancestors = useMemo(() => {
     const state = { worktreesByRepo }
     // Why: archived rows never render in the sidebar, so nothing nests under them.
     const rows = new Map(
@@ -63,35 +61,60 @@ export function useResumeLineageAncestors(
       worktreeLineageById,
       getWorktreeMapFromState(state)
     )
-    // Why: a hostless (older) row names an offer only when exactly one machine offers that id.
-    const soleOfferById = new Map<string, ResumeWorkspaceGroup | null>()
-    for (const group of workspaces) {
-      soleOfferById.set(group.workspaceId, soleOfferById.has(group.workspaceId) ? null : group)
+    return new Map(
+      workspaces.map((group) => {
+        // Why: a row with no host id (older metadata) is still the chat's workspace.
+        const target =
+          getWorktreeOnHostFromState(
+            state,
+            group.workspaceId,
+            group.candidates[0]?.executionHostId
+          ) ?? rows.get(composeWorktreeHostIdentity(undefined, group.workspaceId))
+        const parents = target
+          ? getSidebarLineageAncestors(target, worktreeLineageById, rows, cyclic)
+          : []
+        return [group, parents.map((parent) => parent.id)]
+      })
+    )
+  }, [workspaces, worktreesByRepo, worktreeLineageById])
+  return (group) => ancestors.get(group) ?? []
+}
+
+/** The offered workspace a chat's resolved cross-store parent chain reaches on another machine.
+ * Only cross-store records start a chain; hostless offers are this computer's. */
+export function useCrossStoreResumeParents(
+  workspaces: readonly ResumeWorkspaceGroup[]
+): (group: ResumeWorkspaceGroup) => ResumeWorkspaceGroup | undefined {
+  const parents = useAppStore(selectSidebarLineageParentIdentities)
+  const crossStoreParents = useAppStore(selectCrossStoreLineageParentIdentities)
+  const parentByGroup = useMemo(() => {
+    const result = new Map<ResumeWorkspaceGroup, ResumeWorkspaceGroup>()
+    if (!parents || !crossStoreParents) {
+      return result
     }
-    const offerKeyOfRow = (row: Worktree): string | undefined => {
-      if (row.hostId) {
-        return composeWorktreeHostIdentity(row.hostId, row.id)
-      }
-      const sole = soleOfferById.get(row.id)
-      return sole ? resumeWorkspaceKey(sole) : undefined
-    }
-    const ancestors = new Map<string, readonly string[]>()
+    const hostOf = (group: ResumeWorkspaceGroup): ExecutionHostId =>
+      group.candidates[0]?.executionHostId ?? LOCAL_EXECUTION_HOST_ID
+    const offerByIdentity = new Map<string, ResumeWorkspaceGroup>(
+      workspaces.map((group) => [
+        composeWorktreeHostIdentity(hostOf(group), group.workspaceId),
+        group
+      ])
+    )
     for (const group of workspaces) {
-      // Why: a row with no host id (older metadata) is still the chat's workspace.
-      const target =
-        getWorktreeOnHostFromState(
-          state,
-          group.workspaceId,
-          group.candidates[0]?.executionHostId
-        ) ?? rows.get(composeWorktreeHostIdentity(undefined, group.workspaceId))
-      const parents = target
-        ? getSidebarLineageAncestors(target, worktreeLineageById, rows, cyclic, parentIdentities)
-        : []
-      ancestors.set(
-        resumeWorkspaceKey(group),
-        parents.flatMap((parent) => offerKeyOfRow(parent) ?? [])
+      let identity = crossStoreParents.get(
+        composeWorktreeHostIdentity(hostOf(group), group.workspaceId)
       )
+      const seen = new Set<string>()
+      while (identity !== undefined && !offerByIdentity.has(identity) && !seen.has(identity)) {
+        seen.add(identity)
+        identity = parents.get(identity)
+      }
+      const parent = identity === undefined ? undefined : offerByIdentity.get(identity)
+      if (parent && hostOf(parent) !== hostOf(group)) {
+        result.set(group, parent)
+      }
     }
-    return (key) => ancestors.get(key) ?? []
-  }, [workspaces, worktreesByRepo, worktreeLineageById, parentIdentities])
+    return result
+  }, [workspaces, parents, crossStoreParents])
+  return (group) => parentByGroup.get(group)
 }

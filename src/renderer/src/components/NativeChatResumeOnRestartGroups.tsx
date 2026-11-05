@@ -15,8 +15,9 @@ import {
 import { useAppStore } from '../store'
 import * as workspaceDisplay from './native-chat-resume-workspace-display'
 import {
+  useCrossStoreResumeParents,
+  useLineageAncestors,
   useRepoIdByWorkspace,
-  useResumeLineageAncestors,
   useWorkspaceWorktree
 } from './native-chat-resume-workspace-lookups'
 import { ResumeCandidateRow } from './NativeChatResumeOnRestartAgentRow'
@@ -33,12 +34,12 @@ import {
 import {
   groupResumeCandidates,
   groupResumeCandidatesByHost,
-  nestResumeMachines,
+  nestResumeSections,
+  resumeGroupHostId,
   resolveResumeGroupHeader,
   resumeSelectionState,
   resumeWorkspaceKind,
   resumeWorkspaceCandidates,
-  resumeWorkspaceHostId,
   toggleResumeSelection,
   type ResumeCandidate,
   type ResumeMachineSection,
@@ -47,7 +48,7 @@ import {
 
 export type { ResumeCandidate } from './native-chat-resume-on-restart-grouping'
 
-/** Group by machine/project/workspace/chat, nesting child workspaces (any machine) after parent chats. Show machine nodes for remote/multiple hosts; name unknown workspaces by their encoded folder. */
+/** Group by machine/project/workspace/chat, nesting child workspaces after parent chats. Show machine nodes for remote/multiple hosts; name unknown workspaces by their encoded folder. */
 
 function GroupNode({
   nodeKey,
@@ -97,19 +98,21 @@ function GroupNode({
 
 function WorkspaceNode({
   node,
-  parentHostId,
+  hostId,
+  parentHostId = hostId,
   depth,
   tree,
   fallbackDisplays
 }: {
   node: ResumeWorkspaceNode
-  parentHostId: ExecutionHostId
+  hostId: ExecutionHostId
+  /** A chat moved under a parent on another machine names its own machine. */
+  parentHostId?: ExecutionHostId
   depth: number
   tree: TreeProps
   fallbackDisplays?: workspaceDisplay.WorkspaceFallbacks
 }): React.JSX.Element {
   const { group } = node
-  const hostId = resumeWorkspaceHostId(group)
   const first = group.candidates[0]
   const worktree = useWorkspaceWorktree(group.workspaceId, first?.executionHostId)
   const kind = first ? resumeWorkspaceKind(first) : 'git-worktree'
@@ -174,8 +177,9 @@ function WorkspaceNode({
       </ResumeTreeDepthContext.Provider>
       {node.children.map((child) => (
         <WorkspaceNode
-          key={`${resumeWorkspaceHostId(child.group)}:${child.group.workspaceId}`}
+          key={`${resumeGroupHostId(child.group, hostId)}:${child.group.workspaceId}`}
           node={child}
+          hostId={resumeGroupHostId(child.group, hostId)}
           parentHostId={hostId}
           depth={depth + 1}
           tree={tree}
@@ -235,7 +239,7 @@ function ProjectNode({
         <WorkspaceNode
           key={node.group.workspaceId}
           node={node}
-          parentHostId={hostId}
+          hostId={hostId}
           depth={depth + 1}
           tree={tree}
         />
@@ -266,7 +270,7 @@ function MachineContents({
             <WorkspaceNode
               key={node.group.workspaceId}
               node={node}
-              parentHostId={hostId}
+              hostId={hostId}
               depth={depth}
               tree={tree}
               fallbackDisplays={fallbackDisplays}
@@ -359,8 +363,9 @@ export function ResumeOnRestartGroups({
   )
   const allWorkspaces = useMemo(() => machines.flatMap((machine) => machine.workspaces), [machines])
   const repoIdOf = useRepoIdByWorkspace(allWorkspaces)
-  const ancestorsOf = useResumeLineageAncestors(allWorkspaces)
-  const sections = nestResumeMachines(machines, ancestorsOf, repoIdOf)
+  const ancestorsOf = useLineageAncestors(allWorkspaces)
+  const crossStoreParentOf = useCrossStoreResumeParents(allWorkspaces)
+  const sections = nestResumeSections(machines, ancestorsOf, repoIdOf, crossStoreParentOf)
   const { hostOptions } = useSidebarHostScopeOptions()
   const hostLabelById = useMemo(
     () => new Map(hostOptions.map((host) => [host.id, host.label])),
