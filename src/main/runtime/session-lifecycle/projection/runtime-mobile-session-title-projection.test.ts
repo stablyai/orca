@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import type { RuntimeMobileSessionTerminalTab } from '../../shared/runtime-types'
+import type { RuntimeMobileSessionTerminalTab } from '../../../../shared/runtime-types'
 import { projectRuntimeMobileSessionTitle } from './runtime-mobile-session-title-projection'
-import { resolveTerminalTabTitle } from '../../shared/tab-title-resolution'
+import { resolveTerminalTabTitle } from '../../../../shared/tab-title-resolution'
 
 const tab: RuntimeMobileSessionTerminalTab = {
   type: 'terminal',

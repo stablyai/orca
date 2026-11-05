@@ -1,7 +1,7 @@
 import type {
   RuntimeMobileSessionTabsSnapshot,
   RuntimeMobileSessionTerminalTab
-} from '../../shared/runtime-types'
+} from '../../../../shared/runtime-types'
 import type { RuntimeMobileSessionProjectionHost } from './runtime-mobile-session-projection-contract'
 
 export function projectRuntimeMobileSessionTitle(
