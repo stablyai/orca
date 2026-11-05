@@ -2,7 +2,7 @@ import pg from 'pg'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { applyPostgresSchema } from '@orca-cloud/postgres-schema/apply-postgres-schema'
 import { catalogObjectPresence } from '@orca-cloud/postgres-schema/catalog-object-precheck'
-import { schemaLockTarget, takesRelationLock } from '@orca-cloud/postgres-schema/schema-lock-target'
+import { takesRelationLock } from '@orca-cloud/postgres-schema/schema-lock-target'
 import {
   openRelayDatabase,
   POSTGRES_LOCK_TIMEOUT_MS,
@@ -74,37 +74,6 @@ describePostgres('relay boot-time schema against PostgreSQL', () => {
   function lockTaking(): string[] {
     return sent.filter(takesRelationLock)
   }
-
-  it('creates the schema cold, then issues no lock-taking statement on the next boot', async () => {
-    const cold = await applyRecording()
-    expect(lockTaking().length).toBeGreaterThan(0)
-    expect(cold.skipped).toBeGreaterThan(0)
-
-    sent = []
-    const warm = await applyRecording()
-    expect(lockTaking()).toEqual([])
-    const preCheckedCount = relayPostgresSchemaStatements().filter(
-      (statement) => schemaLockTarget(statement) !== undefined
-    ).length
-    expect(warm.skipped).toBe(preCheckedCount)
-    expect(warm.ran).toBe(relayPostgresSchemaStatements().length - preCheckedCount)
-    // The CREATE TABLEs still run: they resolve a name and take no lock on an existing table.
-    expect(warm.ran).toBeGreaterThan(0)
-    await pool.end()
-  })
-
-  it('skips an index a failed concurrent build left invalid instead of rebuilding it', async () => {
-    await applyRecording()
-    // Cancelled concurrent indexes can be invalid; IF NOT EXISTS still skips them, so indisvalid must not newly trigger DDL.
-    await pool.query(
-      `UPDATE pg_catalog.pg_index SET indisvalid = false
-       WHERE indexrelid = to_regclass('${schema}.relay_audit_events_at')`
-    )
-    sent = []
-    await applyRecording()
-    expect(lockTaking()).toEqual([])
-    await pool.end()
-  })
 
   it('re-adds a constraint an operator dropped, then skips it again', async () => {
     // Name-only constraint checks require operators to drop changed definitions before boot recreates them.

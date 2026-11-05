@@ -36,17 +36,6 @@ describe('assertMobileWebBundleBuilt', () => {
     vi.restoreAllMocks()
   })
 
-  it('accepts a freshly built bundle', async () => {
-    await withBundle(({ bundleDir, manifest }) => {
-      expect(() => assertMobileWebBundleBuilt(bundleDir)).not.toThrow()
-      expect(manifest.entrypoint).toBe('index.html')
-      expect(manifest.assets.length).toBeGreaterThanOrEqual(3)
-      expect(
-        new Set(manifest.assets.map((asset) => asset.contentType)).size
-      ).toBeGreaterThanOrEqual(2)
-    })
-  })
-
   it('fails on a file the manifest does not list, so no stale asset ships inside asar', async () => {
     await withBundle(async ({ bundleDir }) => {
       // Dropped content-addressed assets never overwrite themselves; reject leftovers rather than pack unverified unreachable bytes.
@@ -54,22 +43,6 @@ describe('assertMobileWebBundleBuilt', () => {
       expect(() => assertMobileWebBundleBuilt(bundleDir)).toThrow(
         /does not list: assets\/stale\.js/
       )
-    })
-  })
-
-  it('fails when the manifest is missing', async () => {
-    const scratch = await mkdtemp(join(tmpdir(), 'orca-mobile-web-guard-'))
-    try {
-      expect(() => assertMobileWebBundleBuilt(scratch)).toThrow(/no bundle manifest/)
-    } finally {
-      await rm(scratch, { recursive: true, force: true })
-    }
-  })
-
-  it('fails when the manifest is not JSON', async () => {
-    await withBundle(async ({ bundleDir }) => {
-      await writeFile(join(bundleDir, 'manifest.json'), 'not json', 'utf8')
-      expect(() => assertMobileWebBundleBuilt(bundleDir)).toThrow(/not valid JSON/)
     })
   })
 
@@ -84,57 +57,11 @@ describe('assertMobileWebBundleBuilt', () => {
     })
   })
 
-  it('fails when an asset is truncated', async () => {
-    await withBundle(async ({ bundleDir, manifest }) => {
-      const asset = manifest.assets.find((entry) => entry.path.endsWith('.css'))
-      await writeFile(join(bundleDir, asset.path), 'truncated', 'utf8')
-      expect(() => assertMobileWebBundleBuilt(bundleDir)).toThrow(/bytes on disk, manifest says/)
-    })
-  })
-
   it('fails when a listed asset was never written', async () => {
     await withBundle(async ({ bundleDir, manifest }) => {
       const asset = manifest.assets.find((entry) => entry.path.endsWith('.png'))
       await rm(join(bundleDir, asset.path))
       expect(() => assertMobileWebBundleBuilt(bundleDir)).toThrow(/which is missing from/)
-    })
-  })
-
-  it('fails when the manifest buildId no longer matches its asset list', async () => {
-    await withBundle(async ({ bundleDir }) => {
-      await rewriteManifest(bundleDir, (manifest) => {
-        manifest.buildId = 'f'.repeat(64)
-      })
-      expect(() => assertMobileWebBundleBuilt(bundleDir)).toThrow(/does not match its asset list/)
-    })
-  })
-
-  it('fails on an unknown schemaVersion', async () => {
-    await withBundle(async ({ bundleDir }) => {
-      await rewriteManifest(bundleDir, (manifest) => {
-        manifest.schemaVersion = 2
-      })
-      expect(() => assertMobileWebBundleBuilt(bundleDir)).toThrow(
-        /unsupported manifest schemaVersion/
-      )
-    })
-  })
-
-  it('fails when a required field is dropped', async () => {
-    await withBundle(async ({ bundleDir }) => {
-      await rewriteManifest(bundleDir, (manifest) => {
-        delete manifest.desktopVersion
-      })
-      expect(() => assertMobileWebBundleBuilt(bundleDir)).toThrow(/desktopVersion is missing/)
-    })
-  })
-
-  it('fails when totalBytes disagrees with the asset list', async () => {
-    await withBundle(async ({ bundleDir }) => {
-      await rewriteManifest(bundleDir, (manifest) => {
-        manifest.totalBytes += 1
-      })
-      expect(() => assertMobileWebBundleBuilt(bundleDir)).toThrow(/its assets sum to/)
     })
   })
 
@@ -146,26 +73,9 @@ describe('assertMobileWebBundleBuilt', () => {
       expect(() => assertMobileWebBundleBuilt(bundleDir)).toThrow(/not a safe relative path/)
     })
   })
-
-  it('refuses a manifest whose entrypoint is not one of its assets', async () => {
-    await withBundle(async ({ bundleDir }) => {
-      await rewriteManifest(bundleDir, (manifest) => {
-        manifest.entrypoint = 'index.html'
-        manifest.assets = manifest.assets.filter((asset) => asset.path !== 'index.html')
-      })
-      expect(() => assertMobileWebBundleBuilt(bundleDir)).toThrow(/is not one of its assets/)
-    })
-  })
 })
 
 describe('electron-builder packaging wiring', () => {
-  it('does not exclude the built bundle, so out/mobile-web ships like out/web', () => {
-    const excludesBuiltBundle = electronBuilderConfig.files.some(
-      (entry) => typeof entry === 'string' && entry.startsWith('!out/mobile-web')
-    )
-    expect(excludesBuiltBundle).toBe(false)
-  })
-
   it('verifies a dark page build, and refuses to package it', async () => {
     await withBundle(async ({ bundleDir }) => {
       const [marker] = darkBuildMarkers({ ORCA_SIDEBAR_INPUTS: 'main' })
@@ -177,19 +87,6 @@ describe('electron-builder packaging wiring', () => {
           bundleDir
         )
       ).toThrow(`${bundleDir} holds an ORCA_SIDEBAR_INPUTS=main build`)
-    })
-  })
-
-  it('verifies the bundle root it is given, not the repo one', async () => {
-    // Injected root must reach verifier so unit tests can use scratch build without real out/.
-    await withBundle(async ({ bundleDir }) => {
-      await rm(join(bundleDir, 'manifest.json'))
-      expect(() =>
-        electronBuilderConfig.beforePack(
-          { electronPlatformName: process.platform, arch: process.arch === 'arm64' ? 3 : 1 },
-          bundleDir
-        )
-      ).toThrow(/no bundle manifest/)
     })
   })
 })

@@ -1,4 +1,4 @@
-import type { TerminalCreateOptions } from '../../runtime-terminal-contracts'
+import type { TerminalCreateOptions } from './terminal-create-options'
 import { PaneOwnerContentionError } from '../../../ipc/pty/pane/pane-spawn-operation'
 import {
   LOCAL_EXECUTION_HOST_ID,

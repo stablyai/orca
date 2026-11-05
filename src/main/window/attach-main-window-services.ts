@@ -26,7 +26,8 @@ import {
   hasSystemMediaAccess,
   requestSystemMediaAccess
 } from '../browser/site-settings/browser-media-access'
-import type { OrcaRuntimeService, RuntimeWorktreeLifecycleEvent } from '../runtime/orca-runtime'
+import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import type { RuntimeWorktreeLifecycleEvent } from '../runtime/workspaces/lifecycle/worktree-lifecycle-event'
 import type {
   PreQuitCleanupFailureMode,
   UpdateInstallMode

@@ -5,8 +5,8 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { ProfilePreferences } from '../persistence/loading-store/profile-preferences'
 import type { RuntimeConstructionDependencies } from '../runtime/construction/runtime-construction-dependencies'
 import type { GlobalSettings } from '../../shared/global-settings-types'
-import { DeviceRegistry } from '../runtime/device-registry'
-import { RuntimeMobileNotificationController } from '../runtime/runtime-mobile-notification-controller'
+import { DeviceRegistry } from '../runtime/rpc/server/pairing/device-registry'
+import { RuntimeMobileNotificationController } from '../runtime/push/notifications/runtime-mobile-notification-controller'
 import { PushUnregisterOutbox } from '../runtime/push/push-unregister-outbox'
 import { createPushHostKeypair } from '../runtime/push/push-host-challenge-fixtures'
 import { acquireProfileStateMaintenance } from '../persistence/profile-state/profile-state-access'
@@ -191,7 +191,7 @@ vi.mock('../runtime/orca-runtime', () => ({
     }
   }
 }))
-vi.mock('../runtime/runtime-rpc', () => ({
+vi.mock('../runtime/rpc/server/runtime-rpc', () => ({
   OrcaRuntimeRpcServer: class {
     async start() {
       state.rpcStarted = true

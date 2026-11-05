@@ -15,7 +15,7 @@ import type { RuntimeTerminalCreate } from '../../../../shared/runtime-terminal-
 import type {
   AgentSessionCreateOperation,
   AgentSessionCreateReclaimIdentity
-} from '../../runtime-terminal-contracts'
+} from './agent-session-create-operation'
 import {
   deterministicAgentSessionUuid,
   isAgentSessionOperationOutcomeUnknown

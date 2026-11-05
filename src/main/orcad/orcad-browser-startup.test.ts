@@ -6,12 +6,12 @@ import {
   runtimeBrowserCommandsFactoryIsHeadless,
   setRuntimeBrowserCommandsFactory,
   setRuntimeBrowserUnavailableCause
-} from '../runtime/runtime-browser-commands-factory'
+} from '../runtime/browser/installation/runtime-browser-commands-factory'
 
-import type { RuntimeBrowserCommandHost } from '../runtime/browser/browser-command-contracts'
-import type { RuntimeBrowserCommands } from '../runtime/browser/browser-commands'
-import { RuntimeBrowserPageRegistry } from '../runtime/runtime-browser-page-registry'
-import { RESTORED_CLIENT_HOSTED_BROWSER_PLACEMENT } from '../runtime/client-hosted-browser-page-persistence'
+import type { RuntimeBrowserCommandHost } from '../runtime/browser/commands/browser-command-contracts'
+import type { RuntimeBrowserCommands } from '../runtime/browser/commands/browser-commands'
+import { RuntimeBrowserPageRegistry } from '../runtime/browser/client-pages/runtime-browser-page-registry'
+import { RESTORED_CLIENT_HOSTED_BROWSER_PLACEMENT } from '../runtime/browser/client-pages/client-hosted-browser-page-persistence'
 
 vi.mock('./orcad-browser-provider', () => ({ resolveOrcadBrowserProvider: vi.fn() }))
 afterEach(() => {

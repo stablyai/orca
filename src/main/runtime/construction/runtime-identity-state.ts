@@ -14,7 +14,7 @@ import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { TerminalAgent } from '../../../shared/agent-status/identity/terminal-agent'
 import { isTuiAgent } from '../../../shared/agent-launch/catalog/tui-agent-config'
 import type { RuntimeStore } from '../runtime-store-contract'
-import type { RuntimeClientSettingsController } from '../runtime-client-settings'
+import type { RuntimeClientSettingsController } from '../client/settings/runtime-client-settings'
 import type { RuntimeAutomationController } from '../runtime-automation-controller'
 import { RuntimeArtifactController } from '../runtime-artifact-controller'
 import type { OrchestrationEnvironmentTransport } from '../orchestration/environment-transport'
@@ -38,11 +38,11 @@ import { WorktreeTerminalMutationLock } from '../workspaces/lifecycle/worktree-t
 import { RemoteRuntimeTerminalCreateIdempotency } from '../terminal/identity/remote-runtime-terminal-create-idempotency'
 import type { PtyIncarnationId } from '../../../shared/terminal/pty/lifecycle/pty-incarnation'
 
-import type { MobileSessionTabsNotifyCoalescer } from '../mobile-session-tabs-notify-coalescer'
-import { createMobileSessionTabsNotifyCoalescer } from '../mobile-session-tabs-notify-coalescer'
+import type { KeyedTrailingEdgeCoalescer } from '../client/events/keyed-trailing-edge-coalescer'
+import { createMobileSessionTabsNotifyCoalescer } from '../session-lifecycle/publication/mobile-session-tabs-notify-coalescer'
 
-import type { MobileSessionTabsAgentStatusHeartbeat } from '../mobile-session-tabs-agent-status-heartbeat'
-import { createMobileSessionTabsAgentStatusHeartbeat } from '../mobile-session-tabs-agent-status-heartbeat'
+import type { MobileSessionTabsAgentStatusHeartbeat } from '../session-lifecycle/publication/mobile-session-tabs-agent-status-heartbeat'
+import { createMobileSessionTabsAgentStatusHeartbeat } from '../session-lifecycle/publication/mobile-session-tabs-agent-status-heartbeat'
 import { TerminalFocusNavigationCoalescer } from '../terminal-focus-navigation-coalescer'
 import type {
   PtyControllerInventory,
@@ -66,7 +66,7 @@ import {
   TUI_IDLE_DEFAULT_TIMEOUT_MS,
   TUI_IDLE_POLL_INTERVAL_MS,
   TUI_IDLE_QUIESCENCE_MS
-} from '../orca-runtime-postlude'
+} from '../terminal/wait/terminal-idle-policy'
 import { RuntimeTerminalWait as RuntimeTerminalWaitController } from '../terminal/wait/terminal-wait'
 import type { PtyLivenessVerdict } from '../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 import type { HostScopedWorktreeKey } from '../../../shared/worktree/host-qualified-identity'
@@ -258,7 +258,7 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
     this.intentionalPtyStops.noteSpawnCommit(commit.id)
   }
 
-  protected readonly mobileSessionTabsNotifyCoalescer: MobileSessionTabsNotifyCoalescer =
+  protected readonly mobileSessionTabsNotifyCoalescer: KeyedTrailingEdgeCoalescer =
     createMobileSessionTabsNotifyCoalescer((worktreeId) =>
       this.flushScheduledMobileSessionTabsChanged(worktreeId)
     )

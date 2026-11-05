@@ -1,10 +1,10 @@
 import { applyRemoteViewerLaunchEnv } from './remote-viewer-launch-env'
-import type { TerminalCreateOptions } from '../../runtime-terminal-contracts'
+import type { TerminalCreateOptions } from './terminal-create-options'
 import type { RuntimeTerminalCreate } from '../../../../shared/runtime-terminal-create-contract'
 import { randomUUID } from 'node:crypto'
 import { getRuntimeDesktopSurface } from '../../runtime-desktop-surface'
 import type { IpcMainEvent } from 'electron'
-import { ownerSurfacing } from '../../orca-runtime-core'
+import { ownerSurfacing } from './terminal-presentation'
 import type { OrcaRuntimeWithCreateTerminal } from './terminal-create'
 import type { RuntimeTerminalPresentation } from '../../../../shared/runtime-terminal-contracts'
 

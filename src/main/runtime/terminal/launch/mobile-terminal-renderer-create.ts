@@ -9,9 +9,9 @@ import { getRuntimeDesktopSurface } from '../../runtime-desktop-surface'
 import type { IpcMainEvent } from 'electron'
 import {
   MOBILE_TERMINAL_READY_FALLBACK_MS,
-  MOBILE_TERMINAL_SURFACE_TIMEOUT_MS,
-  isClientDisconnectedError
-} from '../../orca-runtime-core'
+  MOBILE_TERMINAL_SURFACE_TIMEOUT_MS
+} from '../view/terminal-surface-deadlines'
+import { isClientDisconnectedError } from '../../client/runtime-client-disconnect'
 import { rendererPublicationThrottle } from '../../../window/renderer-publication-throttle'
 import { deterministicAgentSessionUuid } from './runtime-agent-launch-resolution'
 import { assertMobileTerminalShellSupported } from './mobile-terminal-shell-refusal'
