@@ -134,6 +134,34 @@ describe('orca linear CLI handlers', () => {
     expect(vi.mocked(console.error)).not.toHaveBeenCalled()
   })
 
+  it('forwards --milestone to the MCP-compatible issue list', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_list_milestone', {
+        issues: [],
+        truncated: false,
+        meta: {
+          limit: null,
+          returned: 0,
+          hasMore: false,
+          orderBy: 'updatedAt',
+          partial: false,
+          workspaceErrors: []
+        }
+      })
+    )
+
+    await main(
+      ['linear', 'list-issues', '--project', 'PDS', '--milestone', 'Phase 1', '--json'],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledWith(
+      'linear.mcpListIssues',
+      expect.objectContaining({ project: 'PDS', milestone: 'Phase 1' })
+    )
+  })
+
   it('passes verified current-context hints without resolving cwd for remote runtimes', async () => {
     process.env.ORCA_TERMINAL_HANDLE = 'term_123'
     process.env.ORCA_WORKTREE_ID = 'repo::/srv/app'

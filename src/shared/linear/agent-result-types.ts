@@ -19,6 +19,8 @@ export type LinearIssueSummary = {
   team?: (LinearNamedEntity & { key?: string | null }) | null
   project?: LinearNamedEntity | null
   cycle?: LinearNamedEntity | null
+  // Older hosts omit projectMilestone; absence means unknown, null means no milestone.
+  projectMilestone?: LinearIssueProjectMilestone | null
   assignee?: LinearUserSummary | null
   labels: LinearNamedEntity[]
   priority?: number | null
@@ -35,6 +37,12 @@ export type LinearNamedEntity = {
   name?: string | null
   color?: string | null
   type?: string | null
+}
+
+export type LinearIssueProjectMilestone = {
+  id?: string | null
+  name?: string | null
+  targetDate?: string | null
 }
 
 export type LinearUserSummary = {

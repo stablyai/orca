@@ -118,6 +118,8 @@ describe('MCP-compatible Linear issue listing', () => {
             title: 'Fix auth',
             url: `https://linear.app/acme/issue/ENG-${index + 1}`,
             labels: { nodes: [] },
+            projectMilestone:
+              index === 0 ? { id: 'milestone-1', name: 'Phase 1', targetDate: '2026-12-01' } : null,
             createdAt: '2026-07-01T00:00:00.000Z',
             updatedAt: '2026-07-20T00:00:00.000Z'
           })),
@@ -133,6 +135,7 @@ describe('MCP-compatible Linear issue listing', () => {
       state: 'started',
       assignee: 'me',
       project: 'Launch',
+      milestone: 'Phase 1',
       priority: 2,
       query: 'auth',
       updatedAt: '-P7D',
@@ -162,7 +165,8 @@ describe('MCP-compatible Linear issue listing', () => {
           },
           project: {
             or: expect.arrayContaining([{ slugId: { eqIgnoreCase: 'Launch' } }])
-          }
+          },
+          projectMilestone: { or: [{ name: { eqIgnoreCase: 'Phase 1' } }] }
         })
       })
     )
@@ -180,8 +184,10 @@ describe('MCP-compatible Linear issue listing', () => {
     expect(result.meta.nextCursor).toMatch(/^orca\.linear\.v1\./)
     expect(result.issues[0]).toMatchObject({
       identifier: 'ENG-1',
+      projectMilestone: { id: 'milestone-1', name: 'Phase 1', targetDate: '2026-12-01' },
       workspace: { id: 'workspace-1', name: 'Acme' }
     })
+    expect(result.issues[1]?.projectMilestone).toBeNull()
   })
 
   it('uses null filters and pages at the Linear per-request maximum', async () => {
@@ -190,11 +196,16 @@ describe('MCP-compatible Linear issue listing', () => {
     })
     const { listMcpIssues } = await import('./mcp-issue-list')
 
-    const result = await listMcpIssues({ assignee: 'null', parentId: 'null', limit: 999 })
+    const result = await listMcpIssues({
+      assignee: 'null',
+      parentId: 'null',
+      milestone: 'null',
+      limit: 999
+    })
 
     expect(rawRequest.mock.calls[0]?.[1]).toMatchObject({
       first: 250,
-      filter: { assignee: { null: true }, parent: { null: true } }
+      filter: { assignee: { null: true }, parent: { null: true }, projectMilestone: { null: true } }
     })
     expect(result.meta.workspaceId).toBe('workspace-1')
   })
@@ -207,12 +218,14 @@ describe('MCP-compatible Linear issue listing', () => {
     const teamId = 'edece093-2649-4b21-9bf6-ff9192adf4f7'
     const assigneeId = '256097b4-4dc3-4722-b5c3-888faa672554'
     const parentId = 'c1097b4f-fa53-49da-ab5d-a38c596fbb5f'
+    const milestoneId = '4b1d3c55-7f2a-4c1e-9d0b-2e6f8a9c1d23'
 
-    await listMcpIssues({ team: teamId, assignee: assigneeId, parentId })
+    await listMcpIssues({ team: teamId, assignee: assigneeId, parentId, milestone: milestoneId })
 
     expect(rawRequest.mock.calls[0]?.[1]).toMatchObject({
       filter: {
         team: { or: expect.arrayContaining([{ id: { eq: teamId } }]) },
+        projectMilestone: { or: expect.arrayContaining([{ id: { eq: milestoneId } }]) },
         assignee: { or: expect.arrayContaining([{ id: { eq: assigneeId } }]) },
         parent: { id: { eq: parentId } }
       }
