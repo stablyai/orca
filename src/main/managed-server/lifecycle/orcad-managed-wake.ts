@@ -32,16 +32,26 @@ type OrcadManagedWake =
   | { outcome: 'fenced'; launchFailure?: Error }
   | { outcome: 'started'; readiness: ServeReadiness }
   | { outcome: 'recovery-refused'; reason: string; launchFailure?: Error }
-  /** Proven stopped, but the caller's gate refused a new launch. */
-  | { outcome: 'launch-refused' }
+
+/** Proven stopped, but the caller's gate refused a new launch; only gated wakes can see it. */
+type OrcadManagedGatedWake = OrcadManagedWake | { outcome: 'launch-refused' }
 
 /** Start only proven-stopped active slots; leave live or unverifiable processes alone. */
 export function wakeStoppedManagedOrcad(
   options: OrcadSlotOptions,
+  onStarting?: () => void
+): Promise<OrcadManagedWake>
+/** `mayLaunch` is checked under the fence, at the launch decision itself. */
+export function wakeStoppedManagedOrcad(
+  options: OrcadSlotOptions,
+  onStarting: (() => void) | undefined,
+  mayLaunch: () => boolean
+): Promise<OrcadManagedGatedWake>
+export function wakeStoppedManagedOrcad(
+  options: OrcadSlotOptions,
   onStarting: () => void = () => {},
-  /** Checked under the fence, at the launch decision itself. */
   mayLaunch: () => boolean = () => true
-): Promise<OrcadManagedWake> {
+): Promise<OrcadManagedGatedWake> {
   return serializedWake(options, (host) => wakeAfterPrior(options, host, onStarting, mayLaunch))
 }
 
@@ -112,7 +122,7 @@ async function wakeAfterPrior(
   host: string,
   onStarting: () => void,
   mayLaunch: () => boolean
-): Promise<OrcadManagedWake> {
+): Promise<OrcadManagedGatedWake> {
   const before = await readOrcadActivationRecord(options)
   if (!before.active) {
     return { outcome: 'not-activated' }
@@ -139,7 +149,7 @@ async function wakeAfterPrior(
   interruptedWakes.set(host, token)
   const result = await withOrcadActivationLock(
     options,
-    async (): Promise<OrcadManagedWake> => {
+    async (): Promise<OrcadManagedGatedWake> => {
       // Other clients may change the active slot; reread under the fence.
       const active = (await readOrcadActivationRecord(options)).active
       if (!active) {
