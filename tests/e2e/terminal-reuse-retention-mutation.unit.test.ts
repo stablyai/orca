@@ -1,3 +1,4 @@
+import { verifiedWorktreeSleep } from '../../src/main/runtime/terminal/stop/worktree-terminal-sleep-result'
 import { retentionNow } from './terminal-reuse-retention.test-fixture'
 import { expect, it, vi } from 'vitest'
 import { getAutomationRunOperations } from '../../src/main/persistence/loading-store/automation-persistence'
@@ -26,7 +27,7 @@ it('bounds added derivation from real drain and timer triggers while preserving 
         h.runtime.sleepTerminalsForWorktree = vi.fn(async (_selector, options) => {
           options!.beforeAction!()
           const pty = options!.soleLivePtyId!
-          return { livePtyIds: [pty], stoppedPtyIds: [pty], remainingLivePtyIds: [] }
+          return verifiedWorktreeSleep([pty], [pty])
         })
       }
       if (trigger === 'dead') {

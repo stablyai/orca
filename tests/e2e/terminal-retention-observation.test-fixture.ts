@@ -214,14 +214,15 @@ export function observeFleet(h: Awaited<ReturnType<typeof fleet>>) {
     }
   })
   const apply = RunTerminalRetentionIndex.prototype.apply
-  const local = vi
-    .spyOn(RunTerminalRetentionIndex.prototype, 'apply')
-    .mockImplementation(function (mutation) {
-      if (active) {
-        counts.local++
-      }
-      return apply.call(this, mutation)
-    })
+  const local = vi.spyOn(RunTerminalRetentionIndex.prototype, 'apply').mockImplementation(function (
+    this: RunTerminalRetentionIndex,
+    mutation
+  ) {
+    if (active) {
+      counts.local++
+    }
+    return apply.call(this, mutation)
+  })
   const get = h.records.getOperationRow.bind(h.records)
   const provenance = vi.spyOn(h.records, 'getOperationRow').mockImplementation((...args) => {
     if (active) {

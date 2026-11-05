@@ -1,3 +1,4 @@
+import { hostWorktreeTarget } from '../../src/shared/worktree/host-qualified-identity'
 import { buildAutomationWorkspaceProvenance } from '../../src/shared/automation-workspace-provenance'
 import { expect, vi } from 'vitest'
 import { OrcaRuntimeService } from '../../src/main/runtime/orca-runtime'
@@ -94,14 +95,11 @@ export async function fleet(population: number, sameAutomation = false, ownWorks
     vi.spyOn(Date, 'now').mockReturnValue(base + n * 1000)
     const seed = await h.service.runNow(automation.id)
     if (ownWorkspaces) {
-      h.store.setWorktreeMeta(
-        { id: seed.workspaceId!, hostId: 'local' },
-        {
-          automationProvenance: buildAutomationWorkspaceProvenance(automation, seed, {
-            executionHostId: 'local'
-          })
-        }
-      )
+      h.store.setWorktreeMeta(hostWorktreeTarget({ id: seed.workspaceId!, hostId: 'local' }), {
+        automationProvenance: buildAutomationWorkspaceProvenance(automation, seed, {
+          executionHostId: 'local'
+        })
+      })
     }
     expect(readAutomationRunReceipt(h.records, seed)).toMatchObject({
       kind: 'terminal',
