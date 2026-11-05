@@ -155,7 +155,7 @@ const POWERSHELL_SETUP_SUCCESS_EXIT_SUFFIX = '; if ($LASTEXITCODE -eq 0) { exit 
  * closes the way a typed `exit` closes it. `windowsTerminalShell` is the configured terminal
  * shell, needed because a cmd-family launch only says the runner is batch, not what types it.
  */
-export function appendShellExitOnSetupSuccess(
+function appendShellExitOnSetupSuccess(
   command: string,
   platform: SetupRunnerCommandPlatform,
   shell: SetupRunnerShell | undefined,
