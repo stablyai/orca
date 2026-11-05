@@ -6,10 +6,7 @@ import type { pasteDraftWhenAgentReady } from './agent-paste-draft'
 import type { waitForAgentReady } from './agent-ready-wait'
 import type { track } from './telemetry'
 import type { toast } from 'sonner'
-import type {
-  createWebRuntimeSessionTerminal,
-  createWebRuntimeAgentSessionTerminalWithLaunchDraft
-} from '@/runtime/web-runtime-terminal-creation'
+import type { createWebRuntimeSessionTerminal } from '@/runtime/web-runtime-terminal-creation'
 import type { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session-environment'
 import type { Project } from '../../../shared/project-types'
 
@@ -106,8 +103,11 @@ export const store = {
 
 vi.mock('@/lib/browser-uuid', () => ({ createBrowserUuid: () => 'tab-1' }))
 
+export const mockRuntimeEnvironmentSupportsCapabilities = vi.fn(async () => [false, false])
+
 vi.mock('@/runtime/runtime-rpc-client', () => ({
   runtimeEnvironmentSupportsCapability: async () => false,
+  runtimeEnvironmentSupportsCapabilities: mockRuntimeEnvironmentSupportsCapabilities,
   callRuntimeRpc: vi.fn()
 }))
 vi.mock('@/store', () => ({
@@ -146,21 +146,26 @@ vi.mock('@/lib/telemetry', () => ({
 }))
 
 export const mockCreateWebRuntimeSessionTerminal = vi.fn<typeof createWebRuntimeSessionTerminal>()
-export const mockCreateWebRuntimeAgentSessionTerminalWithLaunchDraft =
-  vi.fn<typeof createWebRuntimeAgentSessionTerminalWithLaunchDraft>()
 export const mockIsWebRuntimeSessionActive = vi.fn<typeof isWebRuntimeSessionActive>(() => false)
 
 vi.mock('@/runtime/web-runtime-terminal-create-operation', () => ({
   createWebRuntimeSessionTerminalResult: async (
     args: Parameters<typeof createWebRuntimeSessionTerminal>[0]
-  ) => ({
-    outcome: await mockCreateWebRuntimeSessionTerminal(args)
-  })
+  ) => {
+    const { legacyAgentLaunch, ...request } = args
+    return {
+      outcome: await mockCreateWebRuntimeSessionTerminal({
+        ...request,
+        ...(args.preparedAgentCommand || !args.agentSessionCreateCapability
+          ? await legacyAgentLaunch?.()
+          : {})
+      })
+    }
+  }
 }))
 vi.mock('@/runtime/web-runtime-terminal-creation', () => ({
   createWebRuntimeSessionTerminal: mockCreateWebRuntimeSessionTerminal,
-  createWebRuntimeAgentSessionTerminalWithLaunchDraft:
-    mockCreateWebRuntimeAgentSessionTerminalWithLaunchDraft
+  deliverCreatedWebRuntimeAgentSessionPrompt: vi.fn(async () => true)
 }))
 vi.mock('@/runtime/web-runtime-session-environment', () => ({
   isWebRuntimeSessionActive: mockIsWebRuntimeSessionActive
@@ -177,13 +182,10 @@ export const COMMAND_CODE_CLICK = {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  mockRuntimeEnvironmentSupportsCapabilities.mockResolvedValue([false, false])
   setLocalRuntimeCapabilitiesForTests([])
   mockIsWebRuntimeSessionActive.mockReturnValue(false)
   mockCreateWebRuntimeSessionTerminal.mockResolvedValue({ status: 'created' })
-  mockCreateWebRuntimeAgentSessionTerminalWithLaunchDraft.mockResolvedValue({
-    outcome: { status: 'created' },
-    promptDelivered: true
-  })
   store.activeRepoId = 'repo-1'
   store.activeWorktreeId = 'wt-1'
   store.settings = {

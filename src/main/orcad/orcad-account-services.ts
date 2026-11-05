@@ -65,7 +65,6 @@ export function createOrcadAccountServices(args: {
   const services = createProviderAccountServices(store, {
     setClaudeStatusLineListener: args.setClaudeStatusLineListener
   })
-  // Refresh usage on demand through list/subscribe rather than starting a background poller.
   args.registerCleanup(() => {
     services.rateLimits.stop()
     args.setClaudeStatusLineListener(null)

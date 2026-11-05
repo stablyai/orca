@@ -5,7 +5,7 @@ import {
   prepareRouteSnapshot,
   withPreparedRouteSnapshot,
   withRouteSnapshot
-} from '../run-mobile-web-app-checks.mjs'
+} from '../mobile-web/check-entry/run-mobile-web-app-checks.mjs'
 import { PAGE_ROUTE_MODULES } from './mobile-web-app-page-route-modules.mjs'
 
 const collect = async (entries) => ({

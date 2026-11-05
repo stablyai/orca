@@ -189,10 +189,9 @@ async function startOrcadRuntime(
 
   const { loadAgentSessionClaimSigner } =
     await import('../runtime/agent-session/ownership/agent-session-claim-identity')
-  let runtimeRpc: InstanceType<typeof OrcaRuntimeRpcServer> | null = null
+  const { createOrcadPairedEnvironmentOptions } = await import('./orcad-paired-environment-options')
+  const pairedEnvironments = createOrcadPairedEnvironmentOptions()
   const runtime = new OrcaRuntimeService(profileStore, stats, {
-    getPairedDeviceName: (deviceId) =>
-      runtimeRpc?.getDeviceRegistry()?.getDevice(deviceId)?.name ?? null,
     // Persistent signatures let restarted runtimes adopt PTYs owned before restart.
     agentSessionClaimSigner: loadAgentSessionClaimSigner(runtimeUserDataPath, runtimeUserDataPath),
     getAdditionalAiVaultCodexHomePaths: () => [
@@ -206,6 +205,7 @@ async function startOrcadRuntime(
     ),
     // Resolve lazily because daemon swaps replace the provider after construction.
     getLocalProvider: () => getLocalPtyProvider(),
+    ...pairedEnvironments.runtimeOptions,
     // Read current daemon ownership; failed/degraded launch cannot claim fresh PTY persistence.
     canRecoverPersistentLocalPtys: () => daemonOwnsFreshPersistentPtys(),
     // Node hosts cannot promote into desktop windows; override the constructor’s openable default.
@@ -304,7 +304,7 @@ async function startOrcadRuntime(
     webClientRoot: resolveOrcadWebClientRoot(options.webClientRoot),
     ...orcadWsPortOptions(options.port)
   })
-  runtimeRpc = rpc
+  pairedEnvironments.bindRpc(rpc)
   runtime.setAgentSenderPeerKey(() => rpc.getE2EEPublicKey())
   // Stop RPC before cleanup can tear down writers and runtime state.
   registerCleanup(() => rpc.stop())

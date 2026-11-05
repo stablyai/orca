@@ -97,7 +97,7 @@ vi.mock('../../orca-profiles/profile-storage-paths', async (importOriginal) => (
 }))
 
 import { registerOrcaProfileHandlers } from './orca-profiles'
-import { installFakeAppEnvironment } from '../../../../config/scripts/vitest-host-ports-setup'
+import { installFakeAppEnvironment } from '../../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 
 const ipcEvent = { sender: { isDestroyed: () => false, send: vi.fn() } }
 

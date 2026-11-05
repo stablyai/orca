@@ -44,11 +44,11 @@ on:
       # Rerun the only Fastfile-loading checks for release-workflow/Fastfile edits.
       - '.github/workflows/mobile.yml'
       - 'config/mobile-ci.vitest.config.mjs'
-      - 'config/scripts/run-mobile-ci-tests.mjs'
+      - 'config/scripts/mobile-web/check-entry/run-mobile-ci-tests.mjs'
       # Mobile typechecks run through the root compiler selection.
-      - 'config/scripts/run-typecheck-projects-in-parallel.mjs'
-      - 'config/scripts/tsrs-typecheck-compiler.mjs'
-      - 'config/scripts/pinned-bun-executable.mjs'
+      - 'config/scripts/typecheck/project-execution/run-typecheck-projects-in-parallel.mjs'
+      - 'config/scripts/typecheck/project-execution/tsrs-typecheck-compiler.mjs'
+      - 'config/scripts/tool-invocation/pinned-bun-executable.mjs'
       - 'config/oxlint-code-quality-native-plugins.json'
       - 'config/.bun-version'
       - '.github/actions/install-node-dependencies/**'
@@ -57,10 +57,11 @@ on:
       - '.github/workflows/mobile-ios-release.yml'
       - 'config/scripts/mobile-release-check-scope*'
       - 'config/scripts/mobile-test-change-scope*'
-      - 'config/scripts/pr-code-change-scope.mjs'
-      - 'config/scripts/pr-package-test-paths.mjs'
-      - 'config/scripts/pr-layout-oracle-route.mjs'
-      - 'config/scripts/pr-shell-contract-prefixes.mjs'
+      - 'config/scripts/workflow/source-routing/pr-code-change-scope.mjs'
+      - 'config/scripts/workflow/source-routing/pr-xterm-patch-prefixes.mjs'
+      - 'config/scripts/workflow/source-routing/pr-package-test-paths.mjs'
+      - 'config/scripts/workflow/source-routing/pr-layout-oracle-route.mjs'
+      - 'config/scripts/workflow/source-routing/pr-shell-contract-prefixes.mjs'
       # Desktop suites do not feed mobile; keep fixtures and test/toolchain config inputs.
       - '!src/shared/**/*.test.[jt]s'
       - '!src/shared/**/*.test.[jt]sx'
@@ -107,10 +108,10 @@ on:
       - 'src/main/runtime/structured-attention-original-delivery.test-fixture.ts'
       - '.github/workflows/mobile.yml'
       - 'config/mobile-ci.vitest.config.mjs'
-      - 'config/scripts/run-mobile-ci-tests.mjs'
-      - 'config/scripts/run-typecheck-projects-in-parallel.mjs'
-      - 'config/scripts/tsrs-typecheck-compiler.mjs'
-      - 'config/scripts/pinned-bun-executable.mjs'
+      - 'config/scripts/mobile-web/check-entry/run-mobile-ci-tests.mjs'
+      - 'config/scripts/typecheck/project-execution/run-typecheck-projects-in-parallel.mjs'
+      - 'config/scripts/typecheck/project-execution/tsrs-typecheck-compiler.mjs'
+      - 'config/scripts/tool-invocation/pinned-bun-executable.mjs'
       - 'config/.bun-version'
       - '.github/actions/install-node-dependencies/**'
       - '.github/actions/setup-pnpm/**'
@@ -170,7 +171,7 @@ jobs:
           # Keep deletions when release files move into an application directory.
           if ! git diff --name-only --no-renames -z HEAD^1 HEAD > "$RUNNER_TEMP/mobile-release-changes"; then
             echo 'should_run=true' >> "$GITHUB_OUTPUT"
-          elif ! node config/scripts/mobile-release-check-scope.mjs "$RUNNER_TEMP/mobile-release-changes"; then
+          elif ! node config/scripts/mobile-web/check-entry/mobile-release-check-scope.mjs "$RUNNER_TEMP/mobile-release-changes"; then
             echo 'should_run=true' >> "$GITHUB_OUTPUT"
           fi
 
@@ -224,7 +225,7 @@ jobs:
       - name: Typecheck
         id: production-types
         background: true
-        run: node ../config/scripts/run-typecheck-projects-in-parallel.mjs --compiler=bun --bun-threads=2 --project=mobile/tsconfig.json
+        run: node ../config/scripts/typecheck/project-execution/run-typecheck-projects-in-parallel.mjs --compiler=bun --bun-threads=2 --project=mobile/tsconfig.json
 
       # Why a ratchet and not the raw typecheck: mobile/tsconfig.json excludes test files, so until
       # tsconfig.test.json existed nothing checked them, and at introduction 127 of the 632 had
@@ -244,7 +245,7 @@ jobs:
         run: |
           if ! git diff --name-only --no-renames -z HEAD^1 HEAD > "$RUNNER_TEMP/mobile-test-changes"; then
             echo 'should_run=true' >> "$GITHUB_OUTPUT"
-          elif ! node config/scripts/mobile-test-change-scope.mjs "$RUNNER_TEMP/mobile-test-changes"; then
+          elif ! node config/scripts/mobile-web/check-entry/mobile-test-change-scope.mjs "$RUNNER_TEMP/mobile-test-changes"; then
             echo 'should_run=true' >> "$GITHUB_OUTPUT"
           fi
 
@@ -262,7 +263,7 @@ jobs:
         if: steps.test-scope.outputs.should_run != 'false'
         env:
           ORCA_BACKGROUND_LAUNCH: '1'
-        run: node ../config/scripts/run-mobile-ci-tests.mjs
+        run: node ../config/scripts/mobile-web/check-entry/run-mobile-ci-tests.mjs
 
       # The Ruby checks below read the completed fastlane install.
       - wait: ruby-tools
@@ -376,7 +377,7 @@ jobs:
       - name: Typecheck
         id: production-types
         background: true
-        run: node ../config/scripts/run-typecheck-projects-in-parallel.mjs --compiler=bun --bun-threads=2 --project=mobile/tsconfig.json
+        run: node ../config/scripts/typecheck/project-execution/run-typecheck-projects-in-parallel.mjs --compiler=bun --bun-threads=2 --project=mobile/tsconfig.json
 
       - name: Typecheck tests (ratchet)
         id: test-types
@@ -395,4 +396,4 @@ jobs:
       - name: Test
         env:
           ORCA_BACKGROUND_LAUNCH: '1'
-        run: node ../config/scripts/run-mobile-ci-tests.mjs
+        run: node ../config/scripts/mobile-web/check-entry/run-mobile-ci-tests.mjs

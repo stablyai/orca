@@ -35,9 +35,6 @@ export type ProviderTimelineOpenItem = {
   /** Request rows are chosen later by their queued write. */
   row: ProviderTimelineRowId | null
   turnItemId: string | null
-  bytes: number
-  /** Closed items hold no budget; reopen permits new work. */
-  closed: boolean
 }
 
 export class ProviderTimelineState {
@@ -50,6 +47,8 @@ export class ProviderTimelineState {
   inputs: ProviderTimelinePendingInput[] = []
   /** Items use row IDs; requests use request:key across incarnations. */
   items = new Map<string, ProviderTimelineOpenItem>()
+  /** Closed history never requires traversing the live population. */
+  readonly closedItems = new Map<string, string | null>()
   /** Advance only on admission. */
   serial = 0
 
@@ -70,7 +69,7 @@ export class ProviderTimelineState {
   /** Read any writer’s settlement; queued writes without rows remain open. */
   settledInJournal(key: string, journal: StructuredAgentSessionTransitionJournal): boolean {
     const entry = this.items.get(key)
-    if (!entry || entry.closed || !entry.row) {
+    if (!entry || !entry.row) {
       return false
     }
     const body = journal.itemBody(entry.row.itemId)
@@ -102,10 +101,13 @@ export class ProviderTimelineState {
 
   close(key: string, turnItemId: string | null): void {
     this.items.delete(key)
-    this.items.set(key, { kind: 'item', row: null, turnItemId, bytes: 0, closed: true })
-    const closed = [...this.items].filter(([, entry]) => entry.closed)
-    for (const [oldest] of closed.slice(0, Math.max(0, closed.length - MAX_CLOSED_ITEMS))) {
-      this.items.delete(oldest)
+    this.closedItems.delete(key)
+    this.closedItems.set(key, turnItemId)
+    if (this.closedItems.size > MAX_CLOSED_ITEMS) {
+      const oldest = this.closedItems.keys().next()
+      if (!oldest.done) {
+        this.closedItems.delete(oldest.value)
+      }
     }
   }
 
@@ -118,6 +120,11 @@ export class ProviderTimelineState {
       this.stopped = null
     }
     this.forget(turn, () => true)
+    for (const [key, turnItemId] of this.closedItems) {
+      if (turnItemId === turn.itemId) {
+        this.closedItems.delete(key)
+      }
+    }
   }
 
   /** Cancel prompts after external settlement; keep running work until the provider ends the turn. */
@@ -135,6 +142,7 @@ export class ProviderTimelineState {
     this.open = null
     this.stopped = null
     this.items.clear()
+    this.closedItems.clear()
   }
 
   private forget(

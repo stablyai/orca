@@ -108,14 +108,18 @@ export function useNativeChatProvisionalLaunch(
   }, [sessionId, worktreeId])
   const starting = lifecycle === 'pending' || lifecycle === 'visibility-unknown'
   const sendThroughLaunch = useCallback(
-    (text: string, withImages: boolean, send: () => boolean | 'queued'): boolean | 'queued' => {
+    (
+      text: string,
+      requiresSession: boolean,
+      send: () => boolean | 'queued'
+    ): boolean | 'queued' => {
       if (starting) {
         return false
       }
       if (lifecycle !== 'failed' || !worktreeId) {
         return send()
       }
-      if (!withImages && text.trim()) {
+      if (!requiresSession && text.trim()) {
         return relaunchFailedStructuredAgentSessionWithMessage(worktreeId, sessionId, text) !== null
       }
       relaunchFailedStructuredAgentSessionForMessage(worktreeId, sessionId)

@@ -1,1 +1,1 @@
-(^|/)cloud/apps/relay/src/postgres-idle-client-error\.test\.ts$
+(^|/)cloud/apps/relay/src/database/postgres-idle-client-error\.test\.ts$
