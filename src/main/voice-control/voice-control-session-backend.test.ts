@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { MessageType } from '../runtime/orchestration/types'
+import type { MessageRow, MessageType } from '../runtime/orchestration/types'
+import { MessageWake, type MessageWaitResult } from '../runtime/runtime-message-waiters'
 import {
   VoiceControlSessionBackendImpl,
   type VoiceControlSessionBackendDeps
@@ -568,6 +569,49 @@ describe('VoiceControlSessionBackendImpl', () => {
     const create = sent.find((e) => e.type === 'response.create')
     expect(JSON.stringify(create)).toContain('in first person')
   })
+
+  // Live failure this guards: a progress update cleared the pane's ledger entry, so a
+  // later stop opened no dormant watcher and the eventual completion never woke anyone.
+  it('a progress reply keeps the work outstanding; only completion clears it', async () => {
+    const { deps } = harness()
+    const batches: MessageRow[][] = [
+      [mailRow({ type: 'status', sender_pane_key: PANE, body: 'still on it' })],
+      [mailRow({ type: 'worker_done', sender_pane_key: PANE, body: 'login fix shipped' })]
+    ]
+    // A pump the test drives by hand: each releaseWake delivers the next batch.
+    let releaseWake: () => void = () => {}
+    deps.pump = {
+      waitForMessage: () =>
+        new Promise<MessageWaitResult>((resolve) => {
+          releaseWake = () => resolve(new MessageWake())
+        }),
+      getRunConsumerGeneration: () => 1,
+      getRunDelivery: () => {
+        const messages = batches.shift()
+        return messages ? { delivery: { id: 'd1' }, messages } : undefined
+      },
+      acknowledgeRunDelivery: () => undefined
+    }
+    const backend = new VoiceControlSessionBackendImpl(deps)
+    backend.start()
+    await backend.dispatchToolCall(
+      'message_agent',
+      JSON.stringify({ name: 'oak', message: 'run the tests' }),
+      'c1'
+    )
+    expect(backend.hasOutstandingWork()).toBe(true)
+    expect(backend.outstandingPanes()).toEqual([PANE])
+
+    releaseWake()
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    // Status is progress, not completion — the follow-through is still owed.
+    expect(backend.hasOutstandingWork()).toBe(true)
+
+    releaseWake()
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    expect(backend.hasOutstandingWork()).toBe(false)
+    backend.dispose()
+  })
 })
 
 describe('watchdog', () => {
@@ -610,6 +654,26 @@ describe('watchdog', () => {
     await vi.advanceTimersByTimeAsync(60_000)
     // Settled on first announcement: the ledger entry is gone, no second turn.
     expect(watchdogItems()).toHaveLength(1)
+    backend.dispose()
+  })
+
+  // Live failure this guards: task 2 to the same pane inherited task 1's announced
+  // `${pane}:done` key, so the watchdog stayed silent when task 2 actually finished.
+  it('a re-dispatch to the same pane announces the new task’s completion too', async () => {
+    const { deps, sent } = harness({ agentState: 'done' })
+    const { backend, watchdogItems } = await dispatchWork(deps, sent)
+    const doneAnnouncements = () =>
+      watchdogItems().filter((e) => JSON.stringify(e).includes('reports done'))
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(doneAnnouncements()).toHaveLength(1)
+
+    await backend.dispatchToolCall(
+      'message_agent',
+      JSON.stringify({ name: 'oak', message: 'now the cleanup' }),
+      'c2'
+    )
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(doneAnnouncements()).toHaveLength(2)
     backend.dispose()
   })
 

@@ -159,7 +159,10 @@ export function VoiceControlController() {
       if (event.state === 'error' || event.state === 'idle') {
         // Main ended the session (hangup budget, sideband loss). Tear down local audio
         // without a stop round-trip: on error it would erase the classified error state
-        // the pill is showing.
+        // the pill is showing. Bumping the run id also cancels an in-flight start — a
+        // late-resolving createVoiceControlSession must hit the guard and stop, not
+        // install a live mic under an error/idle pill.
+        runIdRef.current += 1
         stopMeterRef.current?.()
         stopMeterRef.current = null
         stopOutputMeterRef.current?.()
@@ -239,7 +242,10 @@ export function VoiceControlController() {
         publishVoiceControlMicMuted(muted)
       } else if (
         getVoiceControlUiState().state === 'live' ||
-        getVoiceControlUiState().state === 'minting'
+        getVoiceControlUiState().state === 'minting' ||
+        // Toggle must also cancel a connecting session; 'stopping' intentionally falls
+        // through to startControl, which no-ops until main settles.
+        getVoiceControlUiState().state === 'awaiting-sdp'
       ) {
         void stopControl()
       } else {

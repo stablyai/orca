@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ProcessResult } from '@orca/process-host/process-spec'
-import { quoteWindowsCmdArgument } from '@orca/process-host/windows-command-line'
 import type { VoiceCommandResult } from './voice-control-command-runner'
 
 vi.mock('@orca/process-host', () => ({
@@ -67,15 +66,16 @@ describe('runVoiceCommand', () => {
     expect(result.stderr).toContain('multi-line')
   })
 
-  it('encodes the Windows line with the shared cmd encoder, not hand-rolled quoting', async () => {
+  it('passes the Windows shell line to cmd.exe verbatim — %VAR% must still expand', async () => {
     Object.defineProperty(process, 'platform', { value: 'win32' })
-    // Backslash-adjacent %VAR% and an embedded quote: the two shapes hand-rolled
-    // quoting corrupts (escaped quote to CommandLineToArgvW; odd cmd quote count).
+    // A shell command is not an argv element: /s /c takes the line verbatim inside one
+    // stripped outer quote pair; argument encoding (percent-breaking) would change its
+    // meaning — %USERPROFILE% would reach cmd.exe as literal text.
     const command = String.raw`cd %USERPROFILE%\src && echo "hi"`
     await runVoiceCommand({ command, cwd: 'C:\\x' })
     const [spec] = runProcessMock.mock.calls[0] ?? []
     expect(spec?.program).toBe(process.env.ComSpec ?? 'cmd.exe')
-    expect(spec?.args).toEqual(['/d', '/v:off', '/s', '/c', quoteWindowsCmdArgument(command)])
+    expect(spec?.args).toEqual(['/d', '/v:off', '/s', '/c', `"${command}"`])
     expect(spec?.windowsVerbatimArguments).toBe(true)
   })
 
