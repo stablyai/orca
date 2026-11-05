@@ -27,8 +27,6 @@ type RetainedPaneHostProps = {
   /** Unfocused side of a split: overlays sit outside the group's DOM, so they take its dim here. */
   dimmed?: boolean
   onFocusOwningGroup?: (groupId: string) => void
-  /** The user clicked or typed in this pane: it counts as used, unlike focus a restore moves here. */
-  onUse?: () => void
   children: React.ReactNode
   'data-terminal-overlay-tab-id'?: string
   'data-structured-agent-session-overlay-tab-id'?: string
@@ -41,7 +39,6 @@ export function RetainedPaneHost({
   fitTerminal = false,
   dimmed = false,
   onFocusOwningGroup,
-  onUse,
   children,
   ...identity
 }: RetainedPaneHostProps): React.JSX.Element {
@@ -142,16 +139,6 @@ export function RetainedPaneHost({
       onFocusOwningGroup(groupId)
     }
   }, [groupId, onFocusOwningGroup])
-  // Why: a key an app shortcut already handled (Cmd+W closing this tab) is not typing in the pane,
-  // and recording it after the close would revive the closed tab's use.
-  const recordKeyUse = useCallback(
-    (event: React.KeyboardEvent) => {
-      if (!event.defaultPrevented) {
-        onUse?.()
-      }
-    },
-    [onUse]
-  )
 
   return (
     <div
@@ -165,8 +152,6 @@ export function RetainedPaneHost({
       aria-hidden={!isVisible}
       onPointerDown={focusGroup}
       onFocusCapture={focusGroup}
-      onPointerDownCapture={onUse}
-      onKeyDownCapture={recordKeyUse}
     >
       {awaitsFirstFallbackRect ? null : children}
     </div>

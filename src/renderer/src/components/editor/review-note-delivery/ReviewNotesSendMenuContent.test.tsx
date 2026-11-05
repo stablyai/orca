@@ -32,6 +32,9 @@ describe('ReviewNotesSendMenuContent', () => {
     harness.worktreeAgentRows = []
     harness.noteTargets = []
     harness.now = 600_000
+    harness.addQuoteToWorkspaceChat.mockReset()
+    harness.addQuoteToWorkspaceChat.mockReturnValue(true)
+    harness.composerTabIds = []
     setStore()
   })
 
@@ -501,5 +504,50 @@ describe('ReviewNotesSendMenuContent', () => {
       true
     )
     expect(findByType(render(), 'QuickLaunchAgentMenuItems').props.disabled).toBe(false)
+  })
+
+  // Add to chat reuses this list but puts the text in the picked chat's composer, never sending it.
+  it('adds to the picked chat unsent, and a new agent gets the text as a draft', () => {
+    const chatTarget: NotesSendAgentTarget = {
+      paneKey: makePaneKey(TAB_A, LEAF_A),
+      tabId: TAB_A,
+      messageTarget: { kind: 'terminal', tabId: TAB_A, leafId: LEAF_A },
+      agentType: 'claude',
+      tabTitle: 'Chat',
+      status: 'eligible'
+    }
+    setStore({
+      tabsByWorktree: { 'wt-1': [tab(TAB_A, { title: 'Chat' }), tab(TAB_B, { title: 'TUI' })] },
+      terminalLayoutsByTabId: {
+        [TAB_A]: leafLayout(LEAF_A, 'pty-a'),
+        [TAB_B]: leafLayout(LEAF_B, 'pty-b')
+      }
+    })
+    harness.noteTargets = [
+      chatTarget,
+      {
+        ...chatTarget,
+        paneKey: makePaneKey(TAB_B, LEAF_B),
+        tabId: TAB_B,
+        messageTarget: { kind: 'terminal', tabId: TAB_B, leafId: LEAF_B },
+        tabTitle: 'TUI'
+      }
+    ]
+    harness.composerTabIds = [TAB_A]
+
+    const tree = render({ mode: 'add-to-chat', prompt: '> quote' })
+    const [chat, tui] = findAllByType(tree, 'DropdownMenuItem')
+    expect(collectText(findByType(tree, 'DropdownMenuLabel'))).toBe('Add to chat')
+    expect(tui.props.disabled).toBe(true)
+    expect(tui.props.title).toBe('No composer')
+    ;(chat.props.onSelect as () => void)()
+
+    expect(harness.addQuoteToWorkspaceChat).toHaveBeenCalledWith(
+      'wt-1',
+      chatTarget.messageTarget,
+      '> quote'
+    )
+    expect(harness.sendMessageToAgent).not.toHaveBeenCalled()
+    expect(findByType(tree, 'QuickLaunchAgentMenuItems').props.promptDelivery).toBe('draft')
   })
 })

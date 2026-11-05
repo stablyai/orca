@@ -14,7 +14,8 @@ import type { VirtualMarkdownPreviewNavigation } from '../viewport/use-markdown-
 import { useMarkdownPreviewViewport } from '../viewport/use-markdown-preview-viewport'
 import { readMarkdownPreviewChatSelection } from '../review/markdown-preview-chat-selection'
 import { SelectionAddToChatPopover } from '../../../native-chat/SelectionAddToChatPopover'
-import { addSelectionToWorkspaceChatOrExplain } from '../../../native-chat/native-chat-workspace-selection'
+import { openAddToChatMenuAt } from '../../../native-chat/AddToChatMenu'
+import { formatNativeChatQuote } from '../../../native-chat/native-chat-quote-selection'
 
 const EMPTY_MARKDOWN_DOCUMENTS: MarkdownDocument[] = []
 
@@ -116,8 +117,15 @@ export default function MarkdownPreview({
             ? null
             : readMarkdownPreviewChatSelection(root, displayedContent, chatRelativePath)
         }
-        onAdd={(text) =>
-          chatWorktreeId && addSelectionToWorkspaceChatOrExplain(chatWorktreeId, text)
+        onAdd={(text, button) =>
+          chatWorktreeId &&
+          openAddToChatMenuAt({
+            worktreeId: chatWorktreeId,
+            quote: formatNativeChatQuote(text),
+            launchSource: 'native_chat',
+            x: button.left,
+            y: button.bottom
+          })
         }
       />
     </>

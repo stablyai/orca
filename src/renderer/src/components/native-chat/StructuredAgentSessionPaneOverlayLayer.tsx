@@ -9,7 +9,6 @@ import {
 } from '@/runtime/structured-agent-session-owner'
 import { RetainedPaneHost } from '../tab-group/RetainedPaneHost'
 import NativeChatView from './NativeChatView'
-import { recordPaneUse } from './chat-pane-use'
 import { isStructuredTab } from '../../../../shared/agent-session/view/structured-agent-session-tab'
 
 type StructuredAgentSessionTab = Tab & {
@@ -39,10 +38,6 @@ const StructuredAgentSessionOverlaySlot = memo(function StructuredAgentSessionOv
   const owner = useAppStore((state) => structuredAgentSessionOwnerForTab(state, tab))
   const target = useMemo(() => structuredAgentSessionTargetForHost(owner), [owner])
   const themeBackgroundActive = useThemeBackgroundStore((state) => state.active)
-  const recordUse = useCallback(
-    () => recordPaneUse(tab.worktreeId, tab.entityId),
-    [tab.entityId, tab.worktreeId]
-  )
   if (!target) {
     return null
   }
@@ -54,7 +49,6 @@ const StructuredAgentSessionOverlaySlot = memo(function StructuredAgentSessionOv
       dimmed={hasSplitGroups && !isFocusedGroup && !themeBackgroundActive}
       data-structured-agent-session-overlay-tab-id={tab.id}
       onFocusOwningGroup={onFocusOwningGroup}
-      onUse={recordUse}
     >
       <NativeChatView
         mode="structured"

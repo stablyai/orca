@@ -28,7 +28,8 @@ export function SelectionAddToChatPopover({
   readQuotable: (root: HTMLElement) => QuotableSelection | null
   /** Runs once per changed selection, before the offer is read. */
   onSelectionSettled?: (root: HTMLElement) => void
-  onAdd: (text: string) => void
+  /** `button` is where the offer was clicked, for a surface that opens a menu from it. */
+  onAdd: (text: string, button: DOMRect) => void
 }): React.JSX.Element {
   const [request, setRequest] = useState<QuoteRequest | null>(null)
   const contentRef = useRef<HTMLDivElement>(null)
@@ -146,9 +147,9 @@ export function SelectionAddToChatPopover({
             <Button
               variant="ghost"
               size="xs"
-              onClick={() => {
+              onClick={(event) => {
                 // Taken or not (the composer may have locked since), the offer is spent.
-                onAdd(request.text)
+                onAdd(request.text, event.currentTarget.getBoundingClientRect())
                 setRequest(null)
               }}
             >

@@ -5,7 +5,8 @@ import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { getMonacoCodebaseSearchQuery } from './monaco-codebase-search'
 import { formatSelectionReference } from './selection-copy'
-import { addSelectionToWorkspaceChatOrExplain } from '../native-chat/native-chat-workspace-selection'
+import { openAddToChatMenuAt } from '../native-chat/AddToChatMenu'
+import { formatNativeChatQuote } from '../native-chat/native-chat-quote-selection'
 import { getDiffCommentPopoverLeft } from '../diff-comments/diff-comment-popover-position'
 import {
   installEditorAddReviewNoteShortcut,
@@ -112,22 +113,30 @@ export function installMonacoEditorInputBindings(params: MonacoEditorInputBindin
       const selections = (editorInstance.getSelections() ?? [])
         .filter((selection) => !selection.isEmpty())
         .sort((a, b) => a.startLineNumber - b.startLineNumber || a.startColumn - b.startColumn)
-      if (!worktreeId || !model || selections.length === 0) {
+      const last = selections.at(-1)
+      if (!worktreeId || !model || !last) {
         return
       }
-      addSelectionToWorkspaceChatOrExplain(
+      const reference = selections
+        .map((selection) =>
+          formatSelectionReference({
+            relativePath: propsRef.current.relativePath,
+            language: propsRef.current.language,
+            selection,
+            selectedText: model.getValueInRange(selection)
+          })
+        )
+        .join('\n\n')
+      // The target list opens under the end of the last range, where the user's eye already is.
+      const visible = editorInstance.getScrolledVisiblePosition(last.getEndPosition())
+      const box = editorDomNode.getBoundingClientRect()
+      openAddToChatMenuAt({
         worktreeId,
-        selections
-          .map((selection) =>
-            formatSelectionReference({
-              relativePath: propsRef.current.relativePath,
-              language: propsRef.current.language,
-              selection,
-              selectedText: model.getValueInRange(selection)
-            })
-          )
-          .join('\n\n')
-      )
+        quote: formatNativeChatQuote(reference),
+        launchSource: 'native_chat',
+        x: box.left + (visible?.left ?? 0),
+        y: box.top + (visible ? visible.top + visible.height : 0)
+      })
     }
   })
   const onLargeTextPaste = (event: ClipboardEvent): void => {

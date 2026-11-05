@@ -7,7 +7,8 @@ import { runTerminalCopy, runTerminalIdentityCopy } from './terminal-copy-reject
 import { readTerminalClipboardSelection } from './terminal-clipboard-selection-text'
 import { useAppStore } from '@/store'
 import { fencedCode } from '../editor/selection-copy'
-import { addSelectionToWorkspaceChatOrExplain } from '../native-chat/native-chat-workspace-selection'
+import { formatNativeChatQuote } from '../native-chat/native-chat-quote-selection'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 
 export const copyTerminalPaneMenuSelection = async (pane: ManagedPane | null): Promise<void> => {
   if (!pane) {
@@ -21,23 +22,29 @@ export const copyTerminalPaneMenuSelection = async (pane: ManagedPane | null): P
   })
 }
 
-/** Quotes the selection under the terminal tab's title into the workspace's chat. */
-export const addTerminalPaneMenuSelectionToChat = (
+/** The selection quoted under the terminal tab's title, for the Add to chat target list. */
+export const terminalPaneMenuAddToChat = (
   pane: ManagedPane | null,
   tabId: string,
   worktreeId: string
-): void => {
+): { worktreeId: string; quote: string } | null => {
   const text = pane ? readTerminalClipboardSelection(pane.terminal).replace(/\s+$/, '') : ''
   if (!text.trim()) {
-    return
+    return null
   }
-  const tab = useAppStore
-    .getState()
-    .unifiedTabsByWorktree[worktreeId]?.find(
-      (candidate) => candidate.contentType === 'terminal' && candidate.entityId === tabId
-    )
+  const state = useAppStore.getState()
+  const tab = state.unifiedTabsByWorktree[worktreeId]?.find(
+    (candidate) => candidate.contentType === 'terminal' && candidate.entityId === tabId
+  )
   const title = tab?.customLabel || tab?.label || 'Terminal'
-  addSelectionToWorkspaceChatOrExplain(worktreeId, `${title}\n${fencedCode(text)}`)
+  return {
+    // The floating terminal belongs to no workspace; it floats over the one on screen.
+    worktreeId:
+      worktreeId === FLOATING_TERMINAL_WORKTREE_ID
+        ? (state.activeWorktreeId ?? worktreeId)
+        : worktreeId,
+    quote: formatNativeChatQuote(`${title}\n${fencedCode(text)}`)
+  }
 }
 
 export const copyTerminalPaneMenuPaneId = async (
