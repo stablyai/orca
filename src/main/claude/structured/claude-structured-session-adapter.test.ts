@@ -7,6 +7,7 @@ import type { ClaudeStreamJsonConnection } from '../claude-stream-json-connectio
 import { ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV as SPAWN_TOKEN_ENV } from '../../../shared/agent-session/lifecycle/agent-session-caller-env'
 import type { ClaudeStructuredSessionAdapter } from './claude-structured-session-adapter'
 import type { ClaudeStructuredSessionEvent } from './claude-structured-session-state'
+import { CLAUDE_INITIALIZE_TIMEOUT_MS } from './claude-structured-session-startup'
 import {
   acquired,
   adapterFor,
@@ -27,9 +28,9 @@ import { claudeProviderHandle } from '../../../shared/agent-session/lifecycle/ag
 import { providerRequestTimeoutOf } from '../../provider-process/provider-request-timeout'
 
 describe('ClaudeStructuredSessionAdapter.acquire', () => {
-  it('ends a stalled initialize at its 60-second deadline with the timed-out step', async () => {
+  it('ends a stalled initialize at its deadline with the timed-out step', async () => {
     vi.useFakeTimers()
-    const claude = fakeClaude({ initDelayMs: 60_001 })
+    const claude = fakeClaude({ initDelayMs: CLAUDE_INITIALIZE_TIMEOUT_MS + 1 })
     const adapter = adapterFor(claude)
     let result: Promise<unknown> | undefined
     try {
@@ -40,12 +41,12 @@ describe('ClaudeStructuredSessionAdapter.acquire', () => {
           settled = true
           return error
         })
-      await vi.advanceTimersByTimeAsync(59_999)
+      await vi.advanceTimersByTimeAsync(CLAUDE_INITIALIZE_TIMEOUT_MS - 1)
       expect(settled).toBe(false)
       await vi.advanceTimersByTimeAsync(1)
       expect(providerRequestTimeoutOf(await result)).toEqual({
         method: 'initialize',
-        timeoutMs: 60_000
+        timeoutMs: CLAUDE_INITIALIZE_TIMEOUT_MS
       })
       expect(claude.connections).toHaveLength(1)
     } finally {
