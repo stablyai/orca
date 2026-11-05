@@ -1,4 +1,5 @@
 import React from 'react'
+import { getWorktreeExecutionHostId } from '../../../../../../shared/execution-host'
 
 import { shouldBeginWorktreeRename } from '../controller/worktree-card-model'
 import type { WorktreeCardPresentation } from './worktree-card-presentation'
@@ -107,6 +108,7 @@ export function WorktreeCardHeader({
         {!affiliateListMode && !titleRenaming ? (
           <WorktreeCreateButton
             worktreeId={worktree.id}
+            executionHostId={getWorktreeExecutionHostId(worktree, repo)}
             disabled={isDeleting || isRuntimeDisconnected}
           />
         ) : null}

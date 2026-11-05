@@ -5,7 +5,7 @@ describe('shouldShowWindowsShellMenu', () => {
   it('shows local Windows shells for a local Windows client without a runtime owner', () => {
     expect(
       shouldShowWindowsShellMenu({
-        activeRuntimeEnvironmentId: null,
+        ownerRuntimeEnvironmentId: null,
         hostPlatform: null,
         isWindowsClient: true,
         worktreeHasRemoteConnection: false
@@ -16,7 +16,7 @@ describe('shouldShowWindowsShellMenu', () => {
   it('keeps the menu hidden while a runtime host platform is unknown', () => {
     expect(
       shouldShowWindowsShellMenu({
-        activeRuntimeEnvironmentId: 'serve-env-1',
+        ownerRuntimeEnvironmentId: 'serve-env-1',
         hostPlatform: null,
         isWindowsClient: true,
         worktreeHasRemoteConnection: false
@@ -27,7 +27,7 @@ describe('shouldShowWindowsShellMenu', () => {
   it('shows runtime Windows shells only after the runtime host is known to be Windows', () => {
     expect(
       shouldShowWindowsShellMenu({
-        activeRuntimeEnvironmentId: 'serve-env-1',
+        ownerRuntimeEnvironmentId: 'serve-env-1',
         hostPlatform: 'win32',
         isWindowsClient: false,
         worktreeHasRemoteConnection: false
@@ -38,7 +38,7 @@ describe('shouldShowWindowsShellMenu', () => {
   it('hides local Windows shells for a non-Windows runtime host', () => {
     expect(
       shouldShowWindowsShellMenu({
-        activeRuntimeEnvironmentId: 'serve-env-1',
+        ownerRuntimeEnvironmentId: 'serve-env-1',
         hostPlatform: 'linux',
         isWindowsClient: true,
         worktreeHasRemoteConnection: false
@@ -49,7 +49,7 @@ describe('shouldShowWindowsShellMenu', () => {
   it('shows Windows shells for SSH worktrees when the remote host is Windows', () => {
     expect(
       shouldShowWindowsShellMenu({
-        activeRuntimeEnvironmentId: null,
+        ownerRuntimeEnvironmentId: null,
         hostPlatform: 'win32',
         isWindowsClient: true,
         worktreeHasRemoteConnection: true
@@ -60,7 +60,7 @@ describe('shouldShowWindowsShellMenu', () => {
   it('hides Windows shells for SSH worktrees when the remote host is Linux', () => {
     expect(
       shouldShowWindowsShellMenu({
-        activeRuntimeEnvironmentId: null,
+        ownerRuntimeEnvironmentId: null,
         hostPlatform: 'linux',
         isWindowsClient: true,
         worktreeHasRemoteConnection: true

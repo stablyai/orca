@@ -57,6 +57,7 @@ function title(props: Readonly<Record<string, unknown>>, card: Card): React.Reac
       {!affiliateListMode && !card.titleRenaming ? (
         <WorktreeCreateButton
           worktreeId={worktree.id}
+          executionHostId={getWorktreeExecutionHostId(worktree, card.repo)}
           disabled={card.isDeleting || card.isRuntimeDisconnected}
         />
       ) : null}

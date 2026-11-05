@@ -26,7 +26,7 @@ import {
 } from './tab-agent-types-by-tab-id'
 import { shouldShowWindowsShellMenu } from './windows-shell-menu-visibility'
 import { createUnifiedTabLookup } from './tab-bar-item-model'
-import { getClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
+import { getWorkspaceClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
 import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 const isWindows = navigator.userAgent.includes('Windows')
@@ -123,7 +123,7 @@ export function useTabBarRuntimeModel({
   )
   const settings = useAppStore((s) => s.settings)
   // Why: use the worktree's owning host so offered Windows shells match the host that actually runs the terminal.
-  const activeRuntimeEnvironmentId = useAppStore((s) =>
+  const ownerRuntimeEnvironmentId = useAppStore((s) =>
     runtimeEnvironmentIdOrLocalUnlessTwin(s, worktreeId)
   )
   // Why: retained tab strips rerun selectors on every store write; reuse canonical indexes, don't flatten both slices here.
@@ -138,16 +138,16 @@ export function useTabBarRuntimeModel({
   })
   const isWebClient = (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ === true
   const windowsTerminalCapabilityOwnerKey = getWindowsTerminalCapabilityOwnerKey(
-    activeRuntimeEnvironmentId,
+    ownerRuntimeEnvironmentId,
     worktreeConnectionId
   )
   const runtimeTarget = useMemo(
-    () => runtimeTargetForOwnerEnvironment(activeRuntimeEnvironmentId),
-    [activeRuntimeEnvironmentId]
+    () => runtimeTargetForOwnerEnvironment(ownerRuntimeEnvironmentId),
+    [ownerRuntimeEnvironmentId]
   )
   const shouldProbeWindowsShellCapabilities =
     isWindows ||
-    Boolean(activeRuntimeEnvironmentId?.trim()) ||
+    Boolean(ownerRuntimeEnvironmentId?.trim()) ||
     isWebClient ||
     Boolean(worktreeConnectionId)
   const windowsTerminalCapabilities = useWindowsTerminalCapabilities(
@@ -161,14 +161,14 @@ export function useTabBarRuntimeModel({
     ? (worktreeRemotePlatform ?? windowsTerminalCapabilities.hostPlatform)
     : windowsTerminalCapabilities.hostPlatform
   const showWindowsShellMenu = shouldShowWindowsShellMenu({
-    activeRuntimeEnvironmentId,
+    ownerRuntimeEnvironmentId,
     hostPlatform: shellMenuHostPlatform,
     isWindowsClient: isWindows,
     worktreeHasRemoteConnection: Boolean(worktreeConnectionId)
   })
   // Subscribe to project/worktree maps only for the local shell menu; their routine writes otherwise repaint every retained strip.
   const needsLocalProjectRuntime =
-    showWindowsShellMenu && !activeRuntimeEnvironmentId?.trim() && !worktreeConnectionId
+    showWindowsShellMenu && !ownerRuntimeEnvironmentId?.trim() && !worktreeConnectionId
   const projects = useAppStore((s) => (needsLocalProjectRuntime ? s.projects : EMPTY_PROJECTS))
   const repos = useAppStore((s) => (needsLocalProjectRuntime ? s.repos : EMPTY_REPOS))
   const worktreesByRepo = useAppStore((s) =>
@@ -222,7 +222,7 @@ export function useTabBarRuntimeModel({
   )
   const [managedBrowserCreationEnabled, mobileEmulatorCreationEnabled] = useAppStore(
     useShallow((state) => {
-      const policy = getClientCreationActionPolicy(state, worktreeId)
+      const policy = getWorkspaceClientCreationActionPolicy(state, worktreeId)
       return [
         policy['managed-browser'].state === 'enabled',
         policy['mobile-emulator'].state === 'enabled'
