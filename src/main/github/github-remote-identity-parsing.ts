@@ -1,11 +1,12 @@
-import type { GitHubOwnerRepo } from '../../shared/types'
+import { normalizeGitHubRemoteHost } from '../../shared/git/remotes/git-remote-host-alias'
+import type { GitHubOwnerRepo } from '../../shared/github/pull-request-types'
 
 export type GitHubRemoteIdentity = GitHubOwnerRepo & { host: string }
 
-function normalizeGitHubRemoteHost(host: string): string {
-  const normalizedHost = host.toLowerCase()
-  // Why: GitHub documents ssh.github.com:443 as SSH-over-HTTPS for github.com repos.
-  return normalizedHost === 'ssh.github.com' ? 'github.com' : normalizedHost
+// HTTP ports identify API endpoints; SSH/git ports are transport-only.
+function hostFromRemoteUrl(url: URL): string {
+  const protocol = url.protocol.toLowerCase()
+  return protocol === 'http:' || protocol === 'https:' ? url.host : url.hostname
 }
 
 function parseGitHubRemotePath(path: string): Pick<GitHubRemoteIdentity, 'owner' | 'repo'> | null {
@@ -21,9 +22,52 @@ function parseGitHubRemotePath(path: string): Pick<GitHubRemoteIdentity, 'owner'
   return { owner, repo }
 }
 
+/** SCP-style / ssh:// / git+ssh:// remotes may use an OpenSSH Host alias. */
+export function remoteUrlUsesSshTransport(remoteUrl: string): boolean {
+  const trimmed = remoteUrl.trim().toLowerCase()
+  return (
+    isScpStyleRemote(trimmed) || trimmed.startsWith('ssh://') || trimmed.startsWith('git+ssh://')
+  )
+}
+
+/** GitHub SSH certificate users can be org-<id>, not just git. */
+function isScpStyleRemote(remoteUrl: string): boolean {
+  return /^[^@\s/:]+@[^:\s/]+:[^\s]+$/.test(remoteUrl)
+}
+
+/** SSH transport host as written, preserving SCP alias case. */
+export function rawSshTransportHost(remoteUrl: string): string | null {
+  const trimmed = remoteUrl.trim()
+  const scpMatch = trimmed.match(/^[^@\s/:]+@([^:]+):/i)
+  if (scpMatch) {
+    return scpMatch[1]
+  }
+  try {
+    const url = new URL(trimmed)
+    if (!['ssh:', 'git+ssh:'].includes(url.protocol.toLowerCase())) {
+      return null
+    }
+    return url.hostname || null
+  } catch {
+    return null
+  }
+}
+
+/** Non-GitHub SSH host that may need OpenSSH alias expansion. */
+export function gitHubSshConfigHostAlias(remoteUrl: string): string | null {
+  if (!remoteUrlUsesSshTransport(remoteUrl)) {
+    return null
+  }
+  const identity = parseGitHubRemoteIdentity(remoteUrl)
+  if (!identity || identity.host === 'github.com') {
+    return null
+  }
+  return rawSshTransportHost(remoteUrl) ?? identity.host
+}
+
 export function parseGitHubRemoteIdentity(remoteUrl: string): GitHubRemoteIdentity | null {
   const trimmed = remoteUrl.trim()
-  const sshMatch = trimmed.match(/^git@([^:]+):([^/]+)\/([^/]+?)(?:\.git)?$/i)
+  const sshMatch = trimmed.match(/^[^@\s/:]+@([^:]+):([^/]+)\/([^/]+?)(?:\.git)?$/i)
   if (sshMatch) {
     return { host: normalizeGitHubRemoteHost(sshMatch[1]), owner: sshMatch[2], repo: sshMatch[3] }
   }
@@ -34,7 +78,7 @@ export function parseGitHubRemoteIdentity(remoteUrl: string): GitHubRemoteIdenti
       return null
     }
     const path = parseGitHubRemotePath(url.pathname)
-    return path ? { host: normalizeGitHubRemoteHost(url.hostname), ...path } : null
+    return path ? { host: normalizeGitHubRemoteHost(hostFromRemoteUrl(url)), ...path } : null
   } catch {
     return null
   }
@@ -46,4 +90,38 @@ export function parseGitHubOwnerRepo(remoteUrl: string): GitHubOwnerRepo | null 
     return null
   }
   return { owner: identity.owner, repo: identity.repo }
+}
+
+/** Parse github.com identity using an expanded SSH HostName. */
+export function parseGitHubOwnerRepoWithResolvedSshHostname(
+  remoteUrl: string,
+  resolvedSshHostname: string | null | undefined
+): GitHubOwnerRepo | null {
+  const direct = parseGitHubOwnerRepo(remoteUrl)
+  if (direct) {
+    return direct
+  }
+  if (!remoteUrlUsesSshTransport(remoteUrl)) {
+    return null
+  }
+  if (!resolvedSshHostname?.trim()) {
+    return null
+  }
+  const identity = parseGitHubRemoteIdentity(remoteUrl)
+  if (!identity) {
+    return null
+  }
+  if (normalizeGitHubRemoteHost(resolvedSshHostname.trim()) !== 'github.com') {
+    return null
+  }
+  return { owner: identity.owner, repo: identity.repo }
+}
+
+/** Effective forge host after optional SSH config HostName expansion. */
+export function effectiveGitHubRemoteHost(
+  parsedHost: string,
+  resolvedSshHostname?: string | null
+): string {
+  const candidate = resolvedSshHostname?.trim() || parsedHost
+  return normalizeGitHubRemoteHost(candidate)
 }

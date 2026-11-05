@@ -1,135 +1,127 @@
 import { StyleSheet } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet, themedStyles } from '../theme/themed-styles'
 import { diffStyles } from './mobile-source-control-diff-styles'
 import { listStyles } from './mobile-source-control-list-styles'
 
-const baseStyles = StyleSheet.create({
+const baseStyles = themedStyleSheet(() => ({
   container: {
     flex: 1,
     backgroundColor: colors.bgBase
   },
+  // NavBar draws the bar and its border; this fills the safe-area inset above it.
   header: {
-    backgroundColor: colors.bgPanel,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderSubtle
+    backgroundColor: colors.bgBase
   },
-  topBar: {
-    minHeight: 58,
+  statusLine: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: spacing.sm
+    gap: spacing.sm,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.xs
   },
-  backButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing.xs
-  },
-  backButtonPressed: {
-    backgroundColor: colors.bgRaised
-  },
-  titleBlock: {
-    flex: 1,
-    minWidth: 0
-  },
-  title: {
-    color: colors.textPrimary,
-    fontSize: 16,
-    fontWeight: '700'
-  },
-  meta: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize,
-    marginTop: 2
-  },
-  refreshButton: {
-    width: 36,
-    height: 36,
-    borderRadius: radii.button,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: spacing.xs
-  },
-  refreshButtonPressed: {
-    backgroundColor: colors.bgRaised
-  },
-  refreshButtonDisabled: {
-    opacity: 0.45
-  },
-  summaryCard: {
-    margin: spacing.lg,
-    marginBottom: spacing.sm,
-    padding: spacing.md,
-    borderRadius: radii.card,
-    backgroundColor: colors.bgPanel,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle
-  },
-  summaryHeader: {
+  branchButton: {
+    flexShrink: 1,
+    minHeight: 32,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.md
-  },
-  branchLine: {
-    flex: 1,
-    minWidth: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs
+    gap: 6
   },
   branchText: {
+    flexShrink: 1,
+    color: colors.textPrimary,
+    fontSize: typography.bodySize,
+    fontWeight: '600'
+  },
+  conflictBanner: {
+    marginTop: spacing.sm,
+    padding: spacing.md,
+    gap: spacing.sm,
+    borderRadius: radii.surface,
+    backgroundColor: colors.bgPanel,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.statusAmber
+  },
+  conflictBannerTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm
+  },
+  conflictBannerTitle: {
     flex: 1,
     color: colors.textPrimary,
     fontSize: typography.bodySize,
     fontWeight: '600'
   },
-  syncText: {
+  conflictBannerText: {
     color: colors.textSecondary,
     fontSize: typography.metaSize
   },
-  countRow: {
-    flexDirection: 'row',
-    gap: spacing.md,
-    marginTop: spacing.sm
-  },
-  countText: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize
-  },
-  conflictRow: {
+  commitsRow: {
+    minHeight: 48,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm
+    gap: spacing.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.borderSubtle
   },
-  conflictText: {
-    color: colors.statusAmber,
-    fontSize: typography.metaSize,
-    textTransform: 'capitalize'
+  commitsRowText: {
+    flex: 1,
+    color: colors.textPrimary,
+    fontSize: typography.bodySize
+  },
+  syncText: {
+    marginLeft: 'auto',
+    color: colors.textSecondary,
+    fontSize: typography.metaSize
   },
   abortButton: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderRadius: radii.button,
+    minHeight: 32,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: radii.control,
     borderWidth: 1,
-    borderColor: colors.statusAmber
+    borderColor: colors.statusAmber,
+    backgroundColor: colors.bgRaised,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0
   },
   abortPressed: {
-    backgroundColor: colors.bgRaised
+    opacity: 0.75
+  },
+  abortButtonDisabled: {
+    opacity: 0.45
   },
   abortText: {
     color: colors.statusAmber,
-    fontSize: typography.metaSize,
+    fontSize: typography.bodySize,
     fontWeight: '600',
     textTransform: 'capitalize'
+  },
+  reconnectBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.lg,
+    marginBottom: -spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radii.surface,
+    backgroundColor: colors.bgRaised,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.statusAmber
+  },
+  reconnectBannerText: {
+    color: colors.textPrimary,
+    fontSize: typography.metaSize
   },
   actionError: {
     marginTop: spacing.sm,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-    borderRadius: radii.button,
+    borderRadius: radii.surface,
     backgroundColor: colors.bgRaised,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.statusRed
@@ -138,41 +130,7 @@ const baseStyles = StyleSheet.create({
     color: colors.textPrimary,
     fontSize: typography.metaSize,
     lineHeight: 16
-  },
-  bulkRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    marginTop: spacing.md
-  },
-  bulkButton: {
-    flex: 1,
-    minHeight: 36,
-    borderRadius: radii.button,
-    backgroundColor: colors.bgRaised,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-    gap: spacing.xs
-  },
-  bulkMenuButton: {
-    width: 42,
-    minHeight: 36,
-    borderRadius: radii.button,
-    backgroundColor: colors.bgRaised,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  bulkButtonDisabled: {
-    opacity: 0.45
-  },
-  bulkButtonPressed: {
-    opacity: 0.75
-  },
-  bulkButtonText: {
-    color: colors.textPrimary,
-    fontSize: typography.bodySize,
-    fontWeight: '600'
   }
-})
+}))
 
-export const styles = { ...baseStyles, ...listStyles, ...diffStyles }
+export const styles = themedStyles(() => ({ ...baseStyles, ...listStyles, ...diffStyles }))

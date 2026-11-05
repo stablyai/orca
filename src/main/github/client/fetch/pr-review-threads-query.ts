@@ -1,0 +1,77 @@
+// REST review comments omit thread IDs and resolution status; fetch them through GraphQL.
+export const REVIEW_THREADS_QUERY = `
+query($owner: String!, $repo: String!, $pr: Int!) {
+  repository(owner: $owner, name: $repo) {
+    pullRequest(number: $pr) {
+      reviewThreads(first: 100) {
+        nodes {
+          id
+          isResolved
+          line
+          startLine
+          originalLine
+          originalStartLine
+          diffSide
+          rootHunk: comments(first: 1) {
+            nodes {
+              diffHunk
+            }
+          }
+          comments(first: 100) {
+            nodes {
+              id
+              databaseId
+              author { __typename login avatarUrl(size: 48) }
+              body
+              createdAt
+              url
+              path
+              reactionGroups {
+                content
+                viewerHasReacted
+                reactors {
+                  totalCount
+                }
+              }
+            }
+          }
+        }
+      }
+      comments(first: 100) {
+        nodes {
+          id
+          databaseId
+          author { __typename login avatarUrl(size: 48) }
+          body
+          createdAt
+          url
+          reactionGroups {
+            content
+            viewerHasReacted
+            reactors {
+              totalCount
+            }
+          }
+        }
+      }
+      reviews(first: 100) {
+        nodes {
+          id
+          databaseId
+          author { __typename login avatarUrl(size: 48) }
+          body
+          createdAt
+          submittedAt
+          url
+          reactionGroups {
+            content
+            viewerHasReacted
+            reactors {
+              totalCount
+            }
+          }
+        }
+      }
+    }
+  }
+}`

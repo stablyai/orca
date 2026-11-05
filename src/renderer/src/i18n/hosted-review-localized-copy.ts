@@ -1,8 +1,8 @@
-import type { HostedReviewProvider } from '../../../shared/hosted-review'
+import type { HostedReviewProvider } from '../../../shared/source-control/hosted-review/hosted-review-contracts'
 import {
   resolveHostedReviewCreationProvider,
   type HostedReviewCreationProvider
-} from '../../../shared/hosted-review-creation-providers'
+} from '../../../shared/source-control/hosted-review/hosted-review-creation-providers'
 import { translate } from '@/i18n/i18n'
 
 export type SupportedHostedReviewCopyProvider = HostedReviewCreationProvider
@@ -45,6 +45,14 @@ export function localizedHostedReviewCopy(
       reviewLabel: translate('auto.i18n.hostedReview.copy.e9f3a7b1c0', 'pull request'),
       titleLabel: translate('auto.i18n.hostedReview.copy.d8e2f6a0b9', 'Pull Request'),
       providerName: 'Gitea'
+    }
+  }
+  if (provider === 'bitbucket') {
+    return {
+      shortLabel: translate('auto.i18n.hostedReview.copy.f0a4b8c2d1', 'PR'),
+      reviewLabel: translate('auto.i18n.hostedReview.copy.e9f3a7b1c0', 'pull request'),
+      titleLabel: translate('auto.i18n.hostedReview.copy.d8e2f6a0b9', 'Pull Request'),
+      providerName: 'Bitbucket'
     }
   }
   return {

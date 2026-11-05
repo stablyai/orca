@@ -3,10 +3,7 @@ import { ORCA_BROWSER_BLANK_URL } from './constants'
 const LOCAL_ADDRESS_PATTERN =
   /^(?:localhost|127(?:\.\d{1,3}){3}|0\.0\.0\.0|\[[0-9a-f:]+\])(?::\d+)?(?:[/?#].*)?$/i
 
-// Why: bare words like "react hooks" should trigger a search, but inputs that
-// look like domain names ("example.com", "foo.bar/path") should navigate directly.
-// A single-word input containing a dot with a valid TLD-like suffix is treated as
-// a URL attempt, not a search query.
+// Treat dotted domain-like inputs as navigation; bare prose such as react hooks remains search.
 const LOOKS_LIKE_URL_PATTERN = /^[^\s]+\.[a-z]{2,}(\/.*)?$/i
 const WINDOWS_ABSOLUTE_PATH_PATTERN = /^[A-Za-z]:[\\/].*$/
 const WINDOWS_UNC_PATH_PATTERN = /^\\\\[^\s\\/]+[\\/][^\\/]+(?:[\\/].*)?$/
@@ -34,6 +31,114 @@ const SEARCH_ENGINE_URLS: Record<SearchEngine, string> = {
 
 export const DEFAULT_SEARCH_ENGINE: SearchEngine = 'google'
 
+export function classifySchemeLessLocalDevAddress(rawInput: string): URL | null {
+  const trimmed = rawInput.trim()
+  if (!LOCAL_ADDRESS_PATTERN.test(trimmed)) {
+    return null
+  }
+  try {
+    return new URL(`http://${trimmed}`)
+  } catch {
+    return null
+  }
+}
+
+function normalizeCertificateHostname(hostname: string): string {
+  const lower = hostname.trim().toLowerCase()
+  const unbracketed = lower.startsWith('[') && lower.endsWith(']') ? lower.slice(1, -1) : lower
+  return unbracketed.endsWith('.') ? unbracketed.slice(0, -1) : unbracketed
+}
+
+function isValidDnsName(name: string): boolean {
+  if (name.length === 0 || name.length > 253) {
+    return false
+  }
+  return name
+    .split('.')
+    .every(
+      (label) =>
+        label.length > 0 && label.length <= 63 && /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(label)
+    )
+}
+
+/** Avoids parsing a dotted host and port as a scheme; .localhost defaults to HTTP. */
+function classifySchemeLessDomainPortAddress(input: string): URL | null {
+  const match = /^([^\s/\\:@?#]+):\d+(?:[/?#].*)?$/.exec(input)
+  if (!match || !match[1].includes('.')) {
+    return null
+  }
+  try {
+    const url = new URL(`https://${input}`)
+    const hostname = normalizeCertificateHostname(url.hostname)
+    if (!isValidDnsName(hostname)) {
+      return null
+    }
+    return hostname.endsWith('.localhost') ? new URL(`http://${input}`) : url
+  } catch {
+    return null
+  }
+}
+
+function isIpv4Loopback(hostname: string): boolean {
+  const octets = hostname.split('.')
+  if (octets.length !== 4 || octets.some((octet) => !/^\d{1,3}$/.test(octet))) {
+    return false
+  }
+  const values = octets.map(Number)
+  return (
+    values[0] === 127 &&
+    values.every((value, index) => value >= 0 && value <= 255 && octets[index] === String(value))
+  )
+}
+
+export function isEligibleLocalCertificateHost(hostname: string): boolean {
+  const normalized = normalizeCertificateHostname(hostname)
+  if (normalized === '::1' || isIpv4Loopback(normalized)) {
+    return true
+  }
+  if (!isValidDnsName(normalized)) {
+    return false
+  }
+  return normalized === 'localhost' || normalized.endsWith('.localhost')
+}
+
+export function isWildcardBindHost(hostname: string): boolean {
+  const normalized = normalizeCertificateHostname(hostname)
+  return normalized === '0.0.0.0' || normalized === '::'
+}
+
+export function toSecureCertificateEndpoint(rawUrl: string): string | null {
+  try {
+    const parsed = new URL(rawUrl)
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'wss:') {
+      return null
+    }
+    const normalizedHostname = normalizeCertificateHostname(parsed.hostname)
+    if (!normalizedHostname) {
+      return null
+    }
+    const endpointHost = normalizedHostname.includes(':')
+      ? `[${normalizedHostname}]`
+      : normalizedHostname
+    return `https://${endpointHost}:${parsed.port || '443'}`
+  } catch {
+    return null
+  }
+}
+
+// Offer remote-page external opening only for public URLs; remote loopback is unreachable from the desktop browser.
+export function resolveRemoteFailureExternalUrl(rawUrl: string): string | null {
+  try {
+    const parsed = new URL(rawUrl)
+    if (isWildcardBindHost(parsed.hostname) || isEligibleLocalCertificateHost(parsed.hostname)) {
+      return null
+    }
+  } catch {
+    return null
+  }
+  return normalizeExternalBrowserUrl(rawUrl)
+}
+
 export function normalizeKagiSessionLink(rawLink: string): string | null {
   const trimmed = rawLink.trim()
   if (!trimmed) {
@@ -43,10 +148,7 @@ export function normalizeKagiSessionLink(rawLink: string): string | null {
     const parsed = new URL(trimmed)
     const hostname = parsed.hostname.toLowerCase()
     const token = parsed.searchParams.get('token')?.trim()
-    // Why: reject user-info credentials and non-default ports so a hostile
-    // paste cannot smuggle alternate auth or a redirected origin into the
-    // saved session URL. Accept /search and /search/ since Kagi's settings
-    // page emits both.
+    // Reject credentials/nondefault ports in saved Kagi session URLs; accept /search and /search/ emitted by settings.
     const pathOk = parsed.pathname === '/search' || parsed.pathname === '/search/'
     if (
       parsed.protocol !== 'https:' ||
@@ -60,8 +162,7 @@ export function normalizeKagiSessionLink(rawLink: string): string | null {
       return null
     }
     parsed.searchParams.delete('q')
-    // Why: collapse any duplicate token params so we don't echo two bearer
-    // values back to Kagi on every search.
+    // Collapse duplicate token params so Kagi receives one bearer value per search.
     parsed.searchParams.set('token', token)
     parsed.hash = ''
     return parsed.toString()
@@ -80,8 +181,7 @@ export function redactKagiSessionToken(rawUrl: string): string {
       (parsed.pathname === '/search' || parsed.pathname === '/search/') &&
       parsed.searchParams.has('token')
     ) {
-      // Why: Kagi private-session links carry an account bearer token. Strip it
-      // before URLs reach display, history, or persisted browser-tab state.
+      // Strip Kagi bearer tokens before display, history or persisted tab state.
       parsed.searchParams.delete('token')
       return parsed.toString()
     }
@@ -118,7 +218,7 @@ export function buildSearchUrl(
       return sessionSearchUrl
     }
   }
-  return `${SEARCH_ENGINE_URLS[engine]}${encodeURIComponent(query)}`
+  return `${SEARCH_ENGINE_URLS[engine]}${encodeURIComponent(query.toWellFormed())}`
 }
 
 export function looksLikeSearchQuery(input: string): boolean {
@@ -132,6 +232,15 @@ export function looksLikeSearchQuery(input: string): boolean {
     return false
   }
   return true
+}
+
+/** True for input shaped like an absolute filesystem path (POSIX, Windows drive, or UNC). */
+export function isAbsoluteFilesystemPathInput(input: string): boolean {
+  return (
+    UNIX_ABSOLUTE_PATH_PATTERN.test(input) ||
+    WINDOWS_ABSOLUTE_PATH_PATTERN.test(input) ||
+    WINDOWS_UNC_PATH_PATTERN.test(input)
+  )
 }
 
 function absolutePathToFileUrl(filePath: string): string {
@@ -163,12 +272,9 @@ export function normalizeBrowserNavigationUrl(
     return ORCA_BROWSER_BLANK_URL
   }
 
-  if (LOCAL_ADDRESS_PATTERN.test(trimmed)) {
-    try {
-      return new URL(`http://${trimmed}`).toString()
-    } catch {
-      return null
-    }
+  const localDevAddress = classifySchemeLessLocalDevAddress(trimmed)
+  if (localDevAddress) {
+    return localDevAddress.toString()
   }
 
   if (WINDOWS_UNC_PATH_PATTERN.test(trimmed)) {
@@ -179,25 +285,21 @@ export function normalizeBrowserNavigationUrl(
     return absolutePathToFileUrl(trimmed)
   }
 
+  const domainPortAddress = classifySchemeLessDomainPortAddress(trimmed)
+  if (domainPortAddress) {
+    return domainPortAddress.toString()
+  }
+
   try {
     const parsed = new URL(trimmed)
-    // Why: file:// is allowed so the browser pane can render local files the
-    // user already has access to via the editor (e.g. "Open Preview to the
-    // Side" on an HTML file). The guest webview is still sandboxed
-    // (nodeIntegration off, contextIsolation on, webSecurity on; see
-    // createMainWindow.ts will-attach-webview), so the loaded page cannot
-    // escalate privileges. Other non-web schemes (javascript:, arbitrary
-    // data: URIs) remain rejected.
+    // Allow local file previews only in sandboxed guests (no Node, isolated context, web security); continue rejecting javascript/arbitrary data schemes.
     return parsed.protocol === 'http:' ||
       parsed.protocol === 'https:' ||
       parsed.protocol === 'file:'
       ? parsed.toString()
       : null
   } catch {
-    // Why: search fallback is opt-in. The main process calls this function for
-    // URL validation (will-attach-webview, will-navigate) where non-URL text
-    // must be rejected, not converted to a search query. Only the address bar
-    // passes a search engine to enable the fallback.
+    // Only address bars opt into search fallback; main navigation/webview validation must reject non-URLs.
     const searchEnabled = searchEngine !== undefined
     try {
       const withScheme = new URL(`https://${trimmed}`)
@@ -220,10 +322,7 @@ export function normalizeExternalBrowserUrl(rawUrl: string): string | null {
   if (normalized === null || normalized === ORCA_BROWSER_BLANK_URL) {
     return null
   }
-  // Why: external-link opening (shell.openExternal, will-navigate) must only
-  // hand off http(s) targets to the OS. file:// is allowed for the in-app
-  // browser pane (local HTML preview), but forwarding it to openExternal
-  // would let a remote page smuggle arbitrary file paths into Finder/Explorer.
+  // OS handoff accepts HTTP(S) only; file URLs stay in sandboxed previews so remote pages cannot open arbitrary Finder/Explorer paths.
   if (normalized.startsWith('file:')) {
     return null
   }

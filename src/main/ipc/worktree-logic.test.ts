@@ -1,28 +1,33 @@
-/* eslint-disable max-lines -- Why: these worktree path/name tests share a
-single setup-free pure-logic module, and splitting them would make the related
-edge cases harder to audit together. */
-import { posix, resolve } from 'path'
+import { posix, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   sanitizeWorktreeName,
-  sanitizeWorktreeDisplayName,
   ensurePathWithinWorkspace,
-  computeBranchName,
-  getConfiguredBranchPrefix,
   computeWorktreePath,
   computeRemoteWorktreePath,
   computeWorkspaceRoot,
   getWorktreeCreationLayout,
   getWorktreePathSettings,
-  shouldSetDisplayName,
-  mergeWorktree,
   parseWorktreeId,
   formatWorktreeRemovalError,
   isWindowsLongPathWorktreeRemovalError,
   isOrphanCompatiblePreflightError,
-  isOrphanedWorktreeError,
-  areWorktreePathsEqual
+  isOrphanedWorktreeError
 } from './worktree-logic'
+import {
+  sanitizeWorktreeDisplayName,
+  resolveWorktreeCreateDisplayName,
+  resolveWorktreeCreateDisplayNameRequest,
+  resolveWorktreeCreateDisplayNameMeta,
+  shouldSetDisplayName
+} from './worktree-display-name'
+import {
+  computeBranchName,
+  getConfiguredBranchPrefix,
+  computeValidatedBranchName
+} from './worktree-branch-name'
+import { mergeWorktree } from './worktree-metadata-merge'
+import { areWorktreePathsEqual } from '../git/worktrees/catalog/worktree-path-comparison'
 
 describe('sanitizeWorktreeName', () => {
   it('replaces spaces with hyphens', () => {
@@ -54,18 +59,16 @@ describe('sanitizeWorktreeName', () => {
   })
 
   it('collapses internal consecutive dots so git check-ref-format accepts the branch', () => {
-    // Why: a prompt containing `../../` used to slugify to `..-..-foo` and
-    // survive sanitization with `..` intact. `git branch` then rejected it
-    // with "is not a valid branch name", breaking worktree creation from the
-    // composer's auto-named branches.
+    // Slugification can preserve internal .., which Git rejects even without path separators.
     expect(sanitizeWorktreeName('for-..-..-feature')).toBe('for-.-.-feature')
     expect(sanitizeWorktreeName('a..b...c')).toBe('a.b.c')
   })
 
+  it('keeps a trailing .lock so the folder name matches the request', () => {
+    expect(sanitizeWorktreeName('mise.lock')).toBe('mise.lock')
+  })
+
   it('preserves non-ASCII letters and numbers', () => {
-    // Why: users name workspaces in their own language (CJK, accented Latin,
-    // Cyrillic, etc.). Stripping these to ASCII left the name empty and threw
-    // "Invalid worktree name" on every non-Latin keyboard input.
     expect(sanitizeWorktreeName('中文')).toBe('中文')
     expect(sanitizeWorktreeName('日本語 テスト')).toBe('日本語-テスト')
     expect(sanitizeWorktreeName('café-déjà')).toBe('café-déjà')
@@ -74,6 +77,27 @@ describe('sanitizeWorktreeName', () => {
 
   it('still strips git-unsafe punctuation around Unicode names', () => {
     expect(sanitizeWorktreeName('feat: 中文 (v2)')).toBe('feat-中文-v2')
+  })
+
+  it('uses readable git-safe shortcodes for known emoji', () => {
+    expect(sanitizeWorktreeName('🚀')).toBe('rocket')
+    expect(sanitizeWorktreeName('👩‍💻✨')).toBe('woman-technologist-sparkles')
+    expect(sanitizeWorktreeName('🇯🇵')).toBe('japan')
+    expect(sanitizeWorktreeName('👎')).toBe('thumbsdown')
+    expect(sanitizeWorktreeName('1️⃣')).toBe('one')
+  })
+
+  it('keeps readable text and emoji shortcodes in branch and path names', () => {
+    expect(sanitizeWorktreeName('Ship it 🚀')).toBe('Ship-it-rocket')
+  })
+
+  it('uses a git-safe fallback for emoji newer than the shortcode catalog', () => {
+    // Unassigned in Unicode 17, so no emojibase shortcode can cover it yet.
+    expect(sanitizeWorktreeName('\u{1faeb}')).toBe('workspace')
+  })
+
+  it('does not treat arbitrary punctuation as a workspace name', () => {
+    expect(() => sanitizeWorktreeName('!!!')).toThrow('Invalid worktree name')
   })
 
   it('throws for empty name', () => {
@@ -86,6 +110,11 @@ describe('sanitizeWorktreeName', () => {
 })
 
 describe('sanitizeWorktreeDisplayName', () => {
+  it('preserves emoji in display names', () => {
+    expect(sanitizeWorktreeDisplayName('  Ship it 🚀  ')).toBe('Ship it 🚀')
+    expect(sanitizeWorktreeDisplayName('👩‍💻')).toBe('👩‍💻')
+  })
+
   it('keeps readable punctuation while collapsing unsafe controls and whitespace', () => {
     expect(sanitizeWorktreeDisplayName('  Fix: login / callback\n\tregression\u0000  ')).toBe(
       'Fix: login / callback regression'
@@ -103,6 +132,101 @@ describe('sanitizeWorktreeDisplayName', () => {
 
   it('returns undefined when nothing displayable remains', () => {
     expect(sanitizeWorktreeDisplayName('\u0000\n\t')).toBeUndefined()
+  })
+
+  it('returns undefined for an unusable user label', () => {
+    expect(resolveWorktreeCreateDisplayName('\u0000\u202e', 'user')).toBeUndefined()
+  })
+})
+
+describe('worktree create display-name provenance', () => {
+  it('recovers the name-only contract from an older CLI request', () => {
+    expect(resolveWorktreeCreateDisplayNameRequest(undefined, undefined, 'feature', true)).toEqual({
+      value: 'feature',
+      kind: 'user'
+    })
+  })
+
+  it('recovers a legacy name-only user create without CLI provenance', () => {
+    expect(resolveWorktreeCreateDisplayNameRequest(undefined, undefined, 'feature', false)).toEqual(
+      {
+        value: 'feature',
+        kind: 'user'
+      }
+    )
+    expect(
+      resolveWorktreeCreateDisplayNameMeta('feature', 'feature', 'user', {
+        requestedName: 'feature',
+        sanitizedName: 'feature'
+      })
+    ).toEqual({ displayName: 'feature', displayNameIsPinned: true })
+  })
+
+  it('keeps a legacy generated name automatic when nameWasGenerated is set', () => {
+    expect(
+      resolveWorktreeCreateDisplayNameRequest(undefined, undefined, 'nautilus', false, true)
+    ).toEqual({
+      value: undefined,
+      kind: 'generated'
+    })
+  })
+
+  it('keeps a legacy artifact display name generated when its kind is absent', () => {
+    expect(
+      resolveWorktreeCreateDisplayNameRequest('Issue title', undefined, 'feature', false)
+    ).toEqual({ value: 'Issue title', kind: 'generated' })
+  })
+
+  it('treats a CLI name as intentional even if a caller supplies generated provenance', () => {
+    expect(
+      resolveWorktreeCreateDisplayNameRequest('Agent label', 'generated', 'feature', true)
+    ).toEqual({ value: 'Agent label', kind: 'user' })
+  })
+
+  it('preserves exact user text apart from edge whitespace and controls', () => {
+    expect(resolveWorktreeCreateDisplayName('  My  Label\n', 'user')).toBe('My  Label')
+  })
+
+  it('pins user labels without adding collision suffixes to visible text', () => {
+    expect(
+      resolveWorktreeCreateDisplayNameMeta('My Label', 'my-label-2', 'user', {
+        requestedName: 'My Label',
+        sanitizedName: 'my-label-2'
+      })
+    ).toEqual({ displayName: 'My Label', displayNameIsPinned: true })
+  })
+
+  it('keeps generated labels automatic only when they equal the branch', () => {
+    expect(
+      resolveWorktreeCreateDisplayNameMeta('Issue title', 'feature-2', 'generated', {
+        requestedName: 'feature-2',
+        sanitizedName: 'feature-2'
+      })
+    ).toEqual({ displayName: 'Issue title', displayNameIsPinned: true })
+    expect(
+      resolveWorktreeCreateDisplayNameMeta('feature-2', 'feature-2', 'generated', {
+        requestedName: 'feature-2',
+        sanitizedName: 'feature-2'
+      })
+    ).toEqual({})
+  })
+
+  it('keeps a slashy branch label automatic when only its folder is sanitized', () => {
+    expect(
+      resolveWorktreeCreateDisplayNameMeta(undefined, 'feature/login', undefined, {
+        requestedName: 'feature/login',
+        sanitizedName: 'feature-login'
+      })
+    ).toEqual({ displayName: 'feature/login', displayNameIsPinned: false })
+  })
+
+  it('keeps a user label that sanitizes away automatic', () => {
+    expect(
+      resolveWorktreeCreateDisplayNameMeta(undefined, 'feature-2', 'user', {
+        requestedName: 'feature',
+        sanitizedName: 'feature-2'
+      })
+    ).toEqual({ displayNameIsPinned: false })
   })
 })
 
@@ -151,31 +275,89 @@ describe('computeBranchName', () => {
   it('returns bare name when branchPrefix is none', () => {
     expect(computeBranchName('feature', { branchPrefix: 'none' }, 'jdoe')).toBe('feature')
   })
+
+  it('does not double the slash when a custom prefix ends in one', () => {
+    expect(
+      computeBranchName('feature', { branchPrefix: 'custom', branchPrefixCustom: 'team/' }, null)
+    ).toBe('team/feature')
+  })
+
+  it('normalizes a trailing slash on a git username prefix', () => {
+    expect(computeBranchName('feature', { branchPrefix: 'git-username' }, 'jdoe/')).toBe(
+      'jdoe/feature'
+    )
+  })
 })
 
 describe('getConfiguredBranchPrefix', () => {
-  it('returns the git username for the git-username strategy', () => {
-    expect(getConfiguredBranchPrefix({ branchPrefix: 'git-username' }, 'jdoe')).toBe('jdoe')
-  })
-
-  it('returns null for git-username when no username is available', () => {
-    expect(getConfiguredBranchPrefix({ branchPrefix: 'git-username' }, null)).toBeNull()
-  })
-
-  it('returns the custom value for the custom strategy', () => {
-    expect(
-      getConfiguredBranchPrefix({ branchPrefix: 'custom', branchPrefixCustom: 'team' }, null)
-    ).toBe('team')
-  })
-
   it('returns null for custom strategy with an empty value', () => {
     expect(
       getConfiguredBranchPrefix({ branchPrefix: 'custom', branchPrefixCustom: '' }, null)
     ).toBeNull()
   })
 
-  it('returns null when no prefix strategy applies', () => {
-    expect(getConfiguredBranchPrefix({ branchPrefix: 'none' }, 'jdoe')).toBeNull()
+  it('normalizes a trailing slash out of the custom prefix', () => {
+    expect(
+      getConfiguredBranchPrefix({ branchPrefix: 'custom', branchPrefixCustom: 'team/' }, null)
+    ).toBe('team')
+  })
+
+  it('returns null when the custom prefix normalizes away to empty', () => {
+    expect(
+      getConfiguredBranchPrefix({ branchPrefix: 'custom', branchPrefixCustom: '/' }, null)
+    ).toBeNull()
+  })
+})
+
+describe('computeValidatedBranchName', () => {
+  it('rewrites a trailing .lock so git check-ref-format accepts the branch', () => {
+    const none = { branchPrefix: 'none' } as const
+    expect(computeValidatedBranchName(sanitizeWorktreeName('adopt mise.lock'), none, null)).toBe(
+      'adopt-mise-lock'
+    )
+    expect(computeValidatedBranchName(sanitizeWorktreeName('mise.lock!'), none, null)).toBe(
+      'mise-lock'
+    )
+    expect(computeValidatedBranchName('mise-.lock', none, null)).toBe('mise-lock')
+    expect(computeValidatedBranchName('mise.lock.json', none, null)).toBe('mise.lock.json')
+    expect(computeValidatedBranchName('mise.LOCK', none, null)).toBe('mise.LOCK')
+    expect(
+      computeValidatedBranchName(
+        'mise.lock',
+        { branchPrefix: 'custom', branchPrefixCustom: 'team' },
+        null
+      )
+    ).toBe('team/mise-lock')
+  })
+
+  it('returns the computed branch name when the prefix is valid', () => {
+    expect(
+      computeValidatedBranchName(
+        'feature',
+        { branchPrefix: 'custom', branchPrefixCustom: 'team' },
+        null
+      )
+    ).toBe('team/feature')
+  })
+
+  it('throws when the configured prefix is invalid', () => {
+    expect(() =>
+      computeValidatedBranchName(
+        'feature',
+        { branchPrefix: 'custom', branchPrefixCustom: 'team x' },
+        null
+      )
+    ).toThrow('contains characters git rejects')
+  })
+
+  it('skips an invalid git-username prefix instead of blocking create', () => {
+    expect(
+      computeValidatedBranchName(
+        'feature',
+        { branchPrefix: 'git-username' },
+        '{\n"message": "API rate limit exceeded"}'
+      )
+    ).toBe('feature')
   })
 })
 
@@ -245,13 +427,38 @@ describe('computeWorktreePath', () => {
     ).toBe('C:\\Projects\\app\\worktrees\\feature')
   })
 
-  it('keeps legacy SSH sibling paths for global absolute workspace directories', () => {
+  it('qualifies SSH sibling paths with the repo name for global absolute workspace directories', () => {
     expect(
-      computeRemoteWorktreePath('feature', '/remote/repo', {
+      computeRemoteWorktreePath('main', '/remote/bioinformatist.github.io', {
         nestWorkspaces: false,
         workspaceDir: '/local/workspaces'
       })
-    ).toBe('/remote/feature')
+    ).toBe('/remote/bioinformatist.github.io-main')
+
+    expect(
+      computeRemoteWorktreePath('main-2', '/remote/dotfiles', {
+        nestWorkspaces: false,
+        workspaceDir: '/local/workspaces'
+      })
+    ).toBe('/remote/dotfiles-main-2')
+  })
+
+  it('qualifies SSH sibling paths with the repo name on Windows remote paths', () => {
+    expect(
+      computeRemoteWorktreePath('main', 'C:\\Remote\\dotfiles', {
+        nestWorkspaces: false,
+        workspaceDir: 'C:\\Local\\workspaces'
+      })
+    ).toBe('C:\\Remote\\dotfiles-main')
+  })
+
+  it('strips .git suffix from qualified SSH sibling paths', () => {
+    expect(
+      computeRemoteWorktreePath('main', '/remote/project.git', {
+        nestWorkspaces: false,
+        workspaceDir: '/local/workspaces'
+      })
+    ).toBe('/remote/project-main')
   })
 
   it('applies repo-specific SSH workspace directories on the remote path', () => {
@@ -277,6 +484,20 @@ describe('computeWorktreePath', () => {
         { useConfiguredAbsolutePath: true }
       )
     ).toBe('C:\\Remote\\worktrees\\feature')
+  })
+
+  it('keeps repo-specific absolute SSH workspace directories unqualified', () => {
+    expect(
+      computeRemoteWorktreePath(
+        'feature',
+        '/remote/project/repo',
+        {
+          nestWorkspaces: false,
+          workspaceDir: '/remote/worktrees'
+        },
+        { useConfiguredAbsolutePath: true }
+      )
+    ).toBe('/remote/worktrees/feature')
   })
 })
 
@@ -340,6 +561,7 @@ describe('mergeWorktree', () => {
   it('merges with full metadata', () => {
     const meta = {
       displayName: 'My Feature',
+      displayNameIsPinned: true,
       comment: 'WIP',
       linkedIssue: 42,
       linkedPR: 10,
@@ -381,6 +603,7 @@ describe('mergeWorktree', () => {
       isBare: false,
       isMainWorktree: false,
       displayName: 'My Feature',
+      displayNameMode: 'fixed',
       comment: 'WIP',
       linkedIssue: 42,
       linkedPR: 10,
@@ -392,6 +615,8 @@ describe('mergeWorktree', () => {
       linkedBitbucketPR: null,
       linkedAzureDevOpsPR: null,
       linkedGiteaPR: null,
+      linkedWorkItem: null,
+      linkedTaskSourceContext: null,
       mobileDiffReview: undefined,
       projectId: 'github:stablyai/orca',
       hostId: 'ssh:openclaw-2',

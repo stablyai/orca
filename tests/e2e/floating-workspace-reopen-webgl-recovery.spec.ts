@@ -3,22 +3,17 @@ import { test, expect } from './helpers/orca-app'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { sendToTerminal } from './helpers/terminal'
 
-// Why: mirrors FLOATING_TERMINAL_WORKTREE_ID in src/shared/constants.ts.
-// e2e specs avoid importing renderer/shared modules into the Playwright runner.
+// Mirror FLOATING_TERMINAL_WORKTREE_ID without loading renderer/shared modules into Playwright.
 const FLOATING_WORKTREE_ID = 'global-floating-terminal'
 const PANEL_SELECTOR = '[data-floating-terminal-panel]'
 
-// Why: the floating panel toggles via this window event
-// (src/renderer/src/lib/floating-terminal.ts); dispatching it exercises the
-// same code path as the status bar button and the keyboard shortcut.
+// Dispatch the same toggle event as the status bar and shortcut.
 const TOGGLE_EVENT = 'orca-toggle-floating-terminal'
 
-// Why: a silent foreground command blocks the shell so no prompt framework
-// (e.g. async p10k segments) repaints while screenshots are compared.
+// Block shell prompt repaints so screenshot comparisons stay stable.
 const SILENT_FOREGROUND_COMMAND = 'node -e "setInterval(() => {}, 1000)"\r'
 
-// Why: matches the local-cast pattern used by terminal-image-paste-webgl-recovery.spec;
-// a global Window augmentation would leak into every spec in the suite.
+// Keep probe counters local; global Window augmentation would leak into every spec.
 type RecoveryCounterWindow = typeof window & {
   __floatingManagerResets?: number
   __floatingRenderResumes?: number
@@ -46,9 +41,7 @@ async function enableFloatingWorkspaceWithWebgl(page: Page): Promise<void> {
       store.getState().activateTab(tab.id)
     }
   }, FLOATING_WORKTREE_ID)
-  // Why: the toggle event listener closes over floatingTerminalEnabled; wait
-  // for the (lazy) panel to mount so React has committed the enabled state
-  // before the toggle event is dispatched, otherwise the event is dropped.
+  // Wait for React’s enabled-state commit or the closure-backed toggle drops the event.
   await page.waitForFunction(
     (panelSelector) => Boolean(document.querySelector(panelSelector)),
     PANEL_SELECTOR,
@@ -96,8 +89,7 @@ async function toggleFloatingPanel(page: Page, open: boolean): Promise<void> {
 }
 
 async function waitForFloatingWebglPane(page: Page): Promise<boolean> {
-  // Why: a pane that mounted before the GPU setting landed needs the manager
-  // call too — mirrors forceWebgl in terminal-image-paste-webgl-recovery.spec.
+  // Force GPU attachment when the pane mounted before its setting committed.
   await page
     .waitForFunction(
       (worktreeId) => {
@@ -116,9 +108,7 @@ async function waitForFloatingWebglPane(page: Page): Promise<boolean> {
     const manager = tab ? window.__paneManagers?.get(tab.id) : null
     manager?.setTerminalGpuAcceleration?.('on')
   }, FLOATING_WORKTREE_ID)
-  // Why: getPanes()/getActivePane() return a public projection without
-  // webglAddon; getRenderingDiagnostics() is the supported way to observe
-  // whether WebGL is attached.
+  // Use supported rendering diagnostics; public pane projections omit webglAddon.
   const attached = await page
     .waitForFunction(
       (worktreeId) => {
@@ -165,9 +155,7 @@ async function writeStaticContent(page: Page, marker: string): Promise<void> {
     },
     {
       worktreeId: FLOATING_WORKTREE_ID,
-      // Why: clear screen + scrollback and hide the cursor so screenshots are
-      // time-invariant, then render dense mixed glyphs so the WebGL atlas
-      // origin region is populated.
+      // Clear screen/history and hide the cursor, then populate the atlas with stable dense glyphs.
       content: `\x1b[2J\x1b[3J\x1b[H\x1b[?25l${Array.from(
         { length: 14 },
         (_, row) =>
@@ -175,20 +163,13 @@ async function writeStaticContent(page: Page, marker: string): Promise<void> {
       ).join('')}`
     }
   )
-  // Why: let xterm's renderer paint the new content before baseline capture.
+  // Wait for xterm paint before capturing the baseline.
   await page.evaluate(
     () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
   )
 }
 
-/**
- * Corrupts the live glyph-atlas textures of the floating terminal's WebGL
- * context by overwriting texels in every bound TEXTURE_2D, without raising a
- * context-loss event. This simulates the in-the-wild Chromium failure that
- * #5042 documents ("rapid TUI redraws can corrupt xterm's WebGL glyph atlas
- * without a context-loss event") so recovery triggers can be tested
- * deterministically.
- */
+// Corrupt live atlas textures without context loss to reproduce silent Chromium glyph corruption (#5042).
 async function corruptFloatingAtlas(page: Page): Promise<number> {
   return page.evaluate(
     ({ worktreeId, panelSelector }) => {
@@ -223,8 +204,7 @@ async function corruptFloatingAtlas(page: Page): Promise<number> {
           if (!bound) {
             continue
           }
-          // Why: glyphs rasterize from the atlas origin outward, so noise
-          // tiles across the top-left region garble the visible text.
+          // Corrupt the top-left atlas region where glyph allocation begins.
           for (const [x, y] of [
             [0, 0],
             [64, 0],
@@ -266,8 +246,7 @@ async function instrumentRecoveryCounters(page: Page): Promise<boolean> {
       counterWindow.__floatingManagerResets = (counterWindow.__floatingManagerResets ?? 0) + 1
       originalReset()
     }
-    // Why: a suspend/resume cycle also rebuilds the atlas; count it so any
-    // future fix routed through resumeRendering() is recognized as recovery.
+    // Count resumeRendering recovery too because suspend/resume also rebuilds the atlas.
     const originalResume = manager.resumeRendering.bind(manager)
     manager.resumeRendering = () => {
       counterWindow.__floatingRenderResumes = (counterWindow.__floatingRenderResumes ?? 0) + 1
@@ -296,15 +275,12 @@ async function screenshotFloatingTerminal(page: Page): Promise<Buffer> {
 }
 
 async function settleRecoveryWindows(page: Page): Promise<void> {
-  // Why: #5042-style recovery schedules resets up to 500ms after its trigger;
-  // waiting past that window keeps "no recovery fired" assertions honest.
+  // Outwait the 500ms delayed resets so no-recovery assertions cannot race pending work.
   await page.waitForTimeout(800)
 }
 
 async function captureStableBaseline(page: Page): Promise<Buffer> {
-  // Why: shell startup output can still be painting when content lands; two
-  // consecutive identical captures prove the surface is byte-stable before
-  // corruption comparisons begin.
+  // Require consecutive identical screenshots before comparing corruption or healing.
   let previous = await screenshotFloatingTerminal(page)
   for (let attempt = 0; attempt < 10; attempt += 1) {
     await page.waitForTimeout(250)
@@ -330,13 +306,10 @@ async function setUpCorruptedFloatingTerminal(
   }
   const ptyId = await waitForFloatingPanePtyId(page)
   await sendToTerminal(page, ptyId, SILENT_FOREGROUND_COMMAND)
-  // Why: give the shell a beat to echo the command and start blocking before
-  // the screen is cleared; later captures verify stability explicitly.
+  // Let the foreground command block before clearing; later captures explicitly prove stability.
   await page.waitForTimeout(1_000)
   await writeStaticContent(page, marker)
-  // Why: glyphs rasterized during startup can predate web font readiness; a
-  // clean atlas rebuild here makes the baseline byte-identical to any later
-  // recovery re-rasterization, so equality is a sound "healed" oracle.
+  // Rebuild after fonts settle so baseline and recovered glyph rasterization can match exactly.
   await page.evaluate((worktreeId) => {
     const state = window.__store?.getState()
     const tab = (state?.tabsByWorktree?.[worktreeId] ?? [])[0]
@@ -349,10 +322,7 @@ async function setUpCorruptedFloatingTerminal(
   if (corruptedTiles === 0) {
     return null
   }
-  // Why: xterm paints on the next animation frame after refresh(); poll until
-  // the injected noise is actually visible so later "still corrupted" and
-  // "healed" comparisons are meaningful. Skip if the noise landed outside the
-  // atlas region glyphs are drawn from.
+  // Wait for corrupted pixels to paint; skip if noise missed the active glyph region.
   for (let attempt = 0; attempt < 8; attempt += 1) {
     await page.waitForTimeout(250)
     const shot = await screenshotFloatingTerminal(page)
@@ -368,10 +338,7 @@ test.describe('floating workspace reopen WebGL recovery @headful', () => {
   test('reopening the floating workspace recovers a corrupted glyph atlas', async ({
     orcaPage
   }, testInfo) => {
-    // Why: the floating panel hides via CSS visibility only. Gating the
-    // terminal's isVisible on `open` suspends its WebGL renderer while
-    // hidden, so a glyph atlas corrupted with no context-loss event is
-    // discarded with the context and the resume on reopen repaints clean.
+    // Closing must suspend WebGL so reopen discards silently corrupted atlas state.
     const shots = await setUpCorruptedFloatingTerminal(orcaPage, 'REOPEN')
     test.skip(!shots, 'WebGL was not active or atlas corruption could not be injected')
     const { baseline, corrupted } = shots!
@@ -380,9 +347,7 @@ test.describe('floating workspace reopen WebGL recovery @headful', () => {
     expect(await instrumentRecoveryCounters(orcaPage)).toBe(true)
 
     await toggleFloatingPanel(orcaPage, false)
-    // Why: the prevention invariant — closing the panel suspends rendering,
-    // so no live WebGL context (or corruptible glyph atlas) exists while the
-    // floating terminal is hidden.
+    // Hidden floating terminals must retain no live WebGL context to corrupt.
     const webglAttachedWhileClosed = await orcaPage.evaluate((worktreeId) => {
       const state = window.__store?.getState()
       const tab = (state?.tabsByWorktree?.[worktreeId] ?? [])[0]
@@ -420,24 +385,27 @@ test.describe('floating workspace reopen WebGL recovery @headful', () => {
     expect(afterReopen.equals(baseline), 'reopened terminal should render clean glyphs').toBe(true)
   })
 
-  test('window focus regain recovers the corrupted atlas (harness control)', async ({
-    orcaPage
+  test('system resume recovers the corrupted atlas (harness control)', async ({
+    orcaPage,
+    electronApp
   }) => {
-    // Why: control proving the injected corruption is exactly the class the
-    // existing recovery machinery heals — isolating the reopen gap above as a
-    // missing trigger rather than a broken harness or unrecoverable state.
+    // Prove existing recovery heals this exact corruption so reopen failure cannot be blamed on the harness.
     const shots = await setUpCorruptedFloatingTerminal(orcaPage, 'CONTROL')
     test.skip(!shots, 'WebGL was not active or atlas corruption could not be injected')
     const { baseline, corrupted } = shots!
     expect(corrupted.equals(baseline)).toBe(false)
 
-    await orcaPage.evaluate(() => {
-      window.dispatchEvent(new Event('focus'))
+    await electronApp.evaluate(({ BrowserWindow }) => {
+      const mainWindow = BrowserWindow.getAllWindows()[0]
+      if (!mainWindow) {
+        throw new Error('Orca window unavailable for system resume')
+      }
+      mainWindow.webContents.send('system:resumed')
     })
     await settleRecoveryWindows(orcaPage)
 
-    const afterFocus = await screenshotFloatingTerminal(orcaPage)
-    console.log(`[floating-control] healedByFocus=${afterFocus.equals(baseline)}`)
-    expect(afterFocus.equals(baseline), 'window focus should heal the atlas').toBe(true)
+    const afterResume = await screenshotFloatingTerminal(orcaPage)
+    console.log(`[floating-control] healedByResume=${afterResume.equals(baseline)}`)
+    expect(afterResume.equals(baseline), 'system resume should heal the atlas').toBe(true)
   })
 })

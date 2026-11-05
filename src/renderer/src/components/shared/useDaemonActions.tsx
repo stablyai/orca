@@ -12,14 +12,16 @@ import {
   DialogTitle
 } from '../ui/dialog'
 import { translate } from '@/i18n/i18n'
+import {
+  runKillAllTerminalSurfaces,
+  snapshotKillAllTerminalSurfaceIds,
+  type KillAllTerminalSurfacesSummary
+} from './kill-all-terminal-surfaces'
 
 export type DaemonActionKind = 'restart' | 'killAll'
 
 export type DaemonActionCallbacks = {
-  // Why: ManageSessionsSection owns an optimistic setSessions([]) + rollback
-  // pattern. Exposing lifecycle hooks lets each caller keep the state that
-  // belongs to it (the settings pane's list; the status bar's badge) instead
-  // of pulling unrelated concerns into this module.
+  // Keep optimistic list/badge ownership with callers by exposing mutation lifecycle callbacks.
   onKillAllStart?: () => void
   onKillAllError?: () => void
   onKillAllSettled?: () => void
@@ -36,6 +38,90 @@ export type DaemonActionsApi = {
   runRestart: () => Promise<void>
   runKillAll: () => Promise<void>
   runConfirmed: () => void
+}
+
+function showKillAllTerminalSurfacesResult(summary: KillAllTerminalSurfacesSummary): void {
+  const surfaceDescription =
+    summary.targetCount > 0
+      ? translate(
+          'auto.components.shared.useDaemonActions.71a8d342b0',
+          'Terminal tabs absent: {{value0}}/{{value1}}. Failed close attempts: {{value2}}. Exact PTY shutdown requests accepted: {{value3}}; failed: {{value4}}.',
+          {
+            value0: summary.absentTargetCount,
+            value1: summary.targetCount,
+            value2: summary.failedCloseAttemptCount,
+            value3: summary.exactKillAcceptedCount,
+            value4: summary.exactKillRejectedCount
+          }
+        )
+      : null
+  const daemonDescription =
+    summary.daemon.status === 'rejected'
+      ? translate(
+          'auto.components.shared.useDaemonActions.2e57c1a940',
+          'The daemon shutdown result is unverified because its management request failed.'
+        )
+      : translate(
+          'auto.components.shared.useDaemonActions.993af6052c',
+          'Daemon management reported exited: {{value0}}/{{value1}}; still present before exact cleanup: {{value2}}.',
+          {
+            value0: summary.daemon.killedCount,
+            value1: summary.daemon.killedCount + summary.daemon.remainingCount,
+            value2: summary.daemon.remainingCount
+          }
+        )
+  const description = [surfaceDescription, daemonDescription].filter(Boolean).join(' ')
+  if (summary.daemon.status === 'rejected') {
+    toast.error(
+      translate(
+        'auto.components.shared.useDaemonActions.1f0d8ac762',
+        'Terminal cleanup finished with errors.'
+      ),
+      { description }
+    )
+    return
+  }
+  if (summary.failedCloseAttemptCount > 0 || summary.exactKillRejectedCount > 0) {
+    toast.error(
+      translate(
+        'auto.components.shared.useDaemonActions.1f0d8ac762',
+        'Terminal cleanup finished with errors.'
+      ),
+      { description }
+    )
+    return
+  }
+  if (summary.daemon.remainingCount > 0) {
+    toast.warning(
+      translate(
+        'auto.components.shared.useDaemonActions.80b6ea14cf',
+        'Terminal cleanup finished with warnings.'
+      ),
+      { description }
+    )
+    return
+  }
+  if (summary.targetCount === 0 && summary.daemon.killedCount === 0) {
+    toast.info(
+      translate(
+        'auto.components.shared.useDaemonActions.47cd2a50e9',
+        'No sessions or terminal tabs were reported.'
+      )
+    )
+    return
+  }
+  toast.success(
+    summary.targetCount > 0
+      ? translate(
+          'auto.components.shared.useDaemonActions.c34fb1098d',
+          'Terminal tabs closed and shutdown requested.'
+        )
+      : translate(
+          'auto.components.shared.useDaemonActions.d9657ac204',
+          'Terminal session shutdown requested.'
+        ),
+    { description }
+  )
 }
 
 export function useDaemonActions(callbacks?: DaemonActionCallbacks): DaemonActionsApi {
@@ -83,61 +169,25 @@ export function useDaemonActions(callbacks?: DaemonActionCallbacks): DaemonActio
   }, [callbacks, clearPendingAction, mountedRef])
 
   const runKillAll = useCallback(async () => {
+    // Snapshot confirmed surfaces before callbacks/awaits so newly created tabs stay outside the destructive scope.
+    const targetSurfaceIds = snapshotKillAllTerminalSurfaceIds()
     setBusyKind('killAll')
     callbacks?.onKillAllStart?.()
     try {
-      const { killedCount, remainingCount } = await window.api.pty.management.killAll()
-      if (remainingCount > 0 && killedCount > 0) {
-        toast.warning(
-          translate(
-            'auto.components.shared.useDaemonActions.fe2ab66d45',
-            'Killed {{value0}} of {{value1}} sessions. {{value2}} refused to exit.',
-            { value0: killedCount, value1: killedCount + remainingCount, value2: remainingCount }
-          )
-        )
-      } else if (killedCount === 1) {
-        toast.success(
-          translate(
-            'auto.components.shared.useDaemonActions.87412c2a68',
-            'Killed {{value0}} session.',
-            { value0: killedCount }
-          )
-        )
-      } else if (killedCount > 0) {
-        toast.success(
-          translate(
-            'auto.components.shared.useDaemonActions.a2f040ac1c',
-            'Killed {{value0}} sessions.',
-            { value0: killedCount }
-          )
-        )
-      } else if (remainingCount === 0) {
-        toast.info(
-          translate('auto.components.shared.useDaemonActions.baad8cd651', 'No sessions running.')
-        )
-      } else if (remainingCount === 1) {
-        toast.error(
-          translate(
-            'auto.components.shared.useDaemonActions.63520148e2',
-            '{{value0}} session refused to exit.',
-            { value0: remainingCount }
-          )
-        )
-      } else {
-        toast.error(
-          translate(
-            'auto.components.shared.useDaemonActions.cc0a26cb14',
-            '{{value0}} sessions refused to exit.',
-            { value0: remainingCount }
-          )
-        )
+      const summary = await runKillAllTerminalSurfaces(targetSurfaceIds)
+      if (summary.daemon.status === 'rejected' && mountedRef.current) {
+        callbacks?.onKillAllError?.()
       }
+      showKillAllTerminalSurfacesResult(summary)
     } catch (err) {
       if (mountedRef.current) {
         callbacks?.onKillAllError?.()
       }
       toast.error(
-        translate('auto.components.shared.useDaemonActions.2b4efdc162', 'Couldn’t kill sessions.'),
+        translate(
+          'auto.components.shared.useDaemonActions.e8f25bd903',
+          'Couldn’t finish terminal cleanup.'
+        ),
         {
           description: err instanceof Error ? err.message : undefined
         }
@@ -169,30 +219,30 @@ export function useDaemonActions(callbacks?: DaemonActionCallbacks): DaemonActio
   }
 }
 
-type CopyShape = {
+type DaemonActionCopy = {
   title: string
   description: React.ReactNode
   confirmLabel: string
   busyLabel: string
 }
 
-function getCopy(kind: DaemonActionKind): CopyShape {
+function getCopy(kind: DaemonActionKind): DaemonActionCopy {
   if (kind === 'restart') {
     return {
       title: translate(
         'auto.components.shared.useDaemonActions.922548bc66',
-        'Restart the terminal daemon?'
+        'Restart the terminal service?'
       ),
       description: (
         <>
           {translate(
             'auto.components.shared.useDaemonActions.01d6b7c64e',
-            'Kills every running terminal pane and restarts the daemon process. Panes show "Process exited" and can be reopened immediately. Legacy-protocol sessions from a previous app version are preserved. This can\'t be undone.'
+            'Open terminals and agents will restart. Terminals on remote hosts are not affected.'
           )}
         </>
       ),
-      confirmLabel: 'Restart daemon',
-      busyLabel: 'Restarting…'
+      confirmLabel: translate('auto.components.shared.useDaemonActions.confirmRestart', 'Restart'),
+      busyLabel: translate('auto.components.shared.useDaemonActions.busyRestarting', 'Restarting…')
     }
   }
   return {
@@ -203,20 +253,22 @@ function getCopy(kind: DaemonActionKind): CopyShape {
     description: (
       <>
         {translate(
-          'auto.components.shared.useDaemonActions.28c8e53176',
-          "This force-quits every running terminal pane across all workspaces. Any unsaved work in those sessions is lost. The daemon itself keeps running, and new terminals can be opened immediately. This can't be undone."
+          'auto.components.shared.useDaemonActions.a702d4196e',
+          "This closes every terminal tab across all workspaces and requests shutdown for its current terminal sessions. Any unsaved terminal work is lost. The daemon itself keeps running, and new terminals can be opened immediately. This can't be undone."
         )}
       </>
     ),
-    confirmLabel: 'Kill all sessions',
-    busyLabel: 'Killing…'
+    confirmLabel: translate(
+      'auto.components.shared.useDaemonActions.confirmKillAll',
+      'Kill all sessions'
+    ),
+    busyLabel: translate('auto.components.shared.useDaemonActions.busyKilling', 'Killing…')
   }
 }
 
 export function DaemonActionDialog({
   api,
-  // Why: when mounted under a Popover, we need the confirm to stay open while
-  // the mutation runs. The caller wires `onOpenChange` here to gate dismissal.
+  // Popover callers gate dismissal so confirmation remains mounted during mutation.
   extraDescription
 }: {
   api: DaemonActionsApi
@@ -238,7 +290,8 @@ export function DaemonActionDialog({
       }}
     >
       <DialogContent
-        className="max-w-md"
+        className="z-[80] max-w-md"
+        overlayClassName="z-[80]"
         showCloseButton={!isBusy}
         onPointerDownOutside={(e) => {
           if (isBusy) {

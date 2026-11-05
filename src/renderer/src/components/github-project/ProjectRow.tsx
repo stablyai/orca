@@ -1,3 +1,4 @@
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import React from 'react'
 import { ExternalLink, Play } from 'lucide-react'
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
@@ -11,8 +12,7 @@ import type {
   GitHubProjectField,
   GitHubProjectFieldMutationValue,
   GitHubProjectRow as GitHubProjectRowType
-} from '../../../../shared/github-project-types'
-import type { GlobalSettings } from '../../../../shared/types'
+} from '../../../../shared/github/project-types'
 import { translate } from '@/i18n/i18n'
 
 const PROJECT_FROZEN_COLUMN_SURFACE_CLASS =
@@ -34,7 +34,8 @@ type Props = {
   onEditIssueType?: (issueType: GitHubIssueType | null) => void
   onStartWork?: () => void
   onOpenInBrowser?: () => void
-  sourceSettings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
+  sourceHost?: string
+  sourceTarget: RuntimeClientTarget
 }
 
 export default function ProjectRow({
@@ -51,12 +52,11 @@ export default function ProjectRow({
   onEditIssueType,
   onStartWork,
   onOpenInBrowser,
-  sourceSettings
+  sourceHost,
+  sourceTarget
 }: Props): React.JSX.Element {
   const disabled = row.itemType === 'REDACTED'
-  // Why: design doc §Row actions — draft-issue rows have no URL or number, so
-  // the title is non-interactive. Surface the draft body in a hover card so
-  // the user can still read context without round-tripping to GitHub.
+  // Drafts lack a navigable URL/number; expose their body on hover without fetching GitHub details.
   const draftBody =
     row.itemType === 'DRAFT_ISSUE' && row.content.body && row.content.body.trim().length > 0
       ? row.content.body
@@ -100,7 +100,8 @@ export default function ProjectRow({
                 onEditLabels={onEditLabels}
                 onEditIssueType={onEditIssueType}
                 onOpenDialog={f.dataType === 'TITLE' ? onOpenDialog : undefined}
-                sourceSettings={sourceSettings}
+                sourceHost={sourceHost}
+                sourceTarget={sourceTarget}
               />
             </div>
             {next ? (

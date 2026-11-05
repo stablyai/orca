@@ -1,13 +1,9 @@
-import type { TabGroup, TabGroupLayoutNode } from '../../../../shared/types'
+import type { TabGroup, TabGroupLayoutNode } from '../../../../shared/tab-types'
 
-/**
- * Derive the effective layout for a worktree: either its explicit layout
- * or a synthetic leaf wrapping its first/active group.
- */
 export function getEffectiveLayoutForWorktree(
   worktreeId: string,
   layoutByWorktree: Record<string, TabGroupLayoutNode | undefined>,
-  groupsByWorktree: Record<string, TabGroup[]>,
+  groupsByWorktree: Record<string, readonly Pick<TabGroup, 'id'>[]>,
   activeGroupIdByWorktree: Record<string, string | undefined>
 ): TabGroupLayoutNode | undefined {
   const layout = layoutByWorktree[worktreeId]
@@ -22,14 +18,7 @@ export function getEffectiveLayoutForWorktree(
   return { type: 'leaf', groupId: fallbackGroupId } as const
 }
 
-/**
- * Returns true if any mounted worktree has a split-group layout.
- *
- * Why: the split-group container hosts ALL mounted worktrees' pane trees.
- * Gating it on only the *active* worktree's layout causes the entire tree
- * to unmount when switching to a newly-activated worktree that has no
- * groups yet — destroying PaneManagers, xterm buffers, and PTY connections.
- */
+/** The container owns every mounted worktree’s panes; gating on the active layout alone destroys background PaneManagers, buffers and PTYs during switches. */
 export function anyMountedWorktreeHasLayout(
   allWorktreeIds: string[],
   mountedWorktreeIds: ReadonlySet<string>,

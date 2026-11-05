@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from 'react'
+import { useId, useState } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -13,9 +13,7 @@ import { Label } from '@/components/ui/label'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 
-/** Confirmation prompt shown when a pinned tab is about to be closed. Driven by
- *  store state so every close path (keyboard, native menu, CLI) can route a
- *  pinned tab through it without threading React context. */
+/** Store-driven confirmation lets keyboard, native menu and CLI closes share the pinned-tab guard outside React context. */
 export default function PinnedTabCloseDialog(): React.JSX.Element {
   const checkboxId = useId()
   const request = useAppStore((state) => state.pinnedTabCloseConfirm)
@@ -23,14 +21,17 @@ export default function PinnedTabCloseDialog(): React.JSX.Element {
   const dismissPinnedTabClose = useAppStore((state) => state.dismissPinnedTabClose)
   const updateSettings = useAppStore((state) => state.updateSettings)
   const [dontAskAgain, setDontAskAgain] = useState(false)
+  const [previousRequest, setPreviousRequest] = useState(request)
 
   const tabLabel = request?.tabLabel.trim()
 
-  useEffect(() => {
+  // Reset new requests before paint without reviving a cancelled request’s checkbox state.
+  if (request !== previousRequest) {
+    setPreviousRequest(request)
     if (request !== null) {
       setDontAskAgain(false)
     }
-  }, [request])
+  }
 
   const handleConfirm = (): void => {
     if (dontAskAgain) {

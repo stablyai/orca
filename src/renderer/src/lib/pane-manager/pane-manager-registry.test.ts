@@ -1,22 +1,14 @@
-import { afterEach, describe, expect, it, vi, type Mock } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
-  refitAndRefreshAllTerminalPanes,
+  getLivePaneMemoryProfileCounts,
   registerLivePaneManager,
-  resetAllTerminalWebglAtlases,
+  resetAndRefreshAllTerminalWebglAtlases,
   unregisterLivePaneManager
 } from './pane-manager-registry'
 
 describe('pane manager registry', () => {
-  // Why: the registry is module-global; unregister in afterEach so a failed
-  // assertion cannot leak fake managers into later tests.
+  // Unregister module-global fake managers even after failures so they cannot leak into later tests.
   const registeredManagers: { resetWebglTextureAtlases(): void }[] = []
-
-  function registerManager(): { resetWebglTextureAtlases: Mock<() => void> } {
-    const manager = { resetWebglTextureAtlases: vi.fn<() => void>() }
-    registerLivePaneManager(manager)
-    registeredManagers.push(manager)
-    return manager
-  }
 
   afterEach(() => {
     for (const manager of registeredManagers.splice(0)) {
@@ -24,88 +16,62 @@ describe('pane manager registry', () => {
     }
   })
 
-  it('resets atlases on every registered manager', () => {
-    const first = registerManager()
-    const second = registerManager()
-
-    resetAllTerminalWebglAtlases()
-
-    expect(first.resetWebglTextureAtlases).toHaveBeenCalledTimes(1)
-    expect(second.resetWebglTextureAtlases).toHaveBeenCalledTimes(1)
-  })
-
-  it('stops resetting managers after they unregister', () => {
-    const manager = registerManager()
-    unregisterLivePaneManager(manager)
-
-    resetAllTerminalWebglAtlases()
-
-    expect(manager.resetWebglTextureAtlases).not.toHaveBeenCalled()
-  })
-
-  it('continues resetting later managers when one manager throws', () => {
-    const broken = {
-      resetWebglTextureAtlases: vi.fn<() => void>(() => {
-        throw new Error('pane disposed')
+  it('bounds manager and pane sampling while extrapolating totals', () => {
+    let sampledPaneWrappers = 0
+    const managers = Array.from({ length: 100 }, () => ({
+      resetWebglTextureAtlases: vi.fn<() => void>(),
+      getPaneCount: vi.fn(() => 100),
+      getPanes: vi.fn((limit = 100) => {
+        const count = Math.min(limit, 100)
+        sampledPaneWrappers += count
+        return Array.from({ length: count }, (_, id) => ({
+          id,
+          terminal: { cols: 100, buffer: { active: { length: 64 } } }
+        }))
       })
+    }))
+    for (const manager of managers) {
+      registerLivePaneManager(manager)
+      registeredManagers.push(manager)
     }
-    registerLivePaneManager(broken)
-    registeredManagers.push(broken)
-    const healthy = registerManager()
 
-    expect(() => resetAllTerminalWebglAtlases()).not.toThrow()
-
-    expect(broken.resetWebglTextureAtlases).toHaveBeenCalledTimes(1)
-    expect(healthy.resetWebglTextureAtlases).toHaveBeenCalledTimes(1)
+    expect(getLivePaneMemoryProfileCounts()).toEqual({
+      managers: 100,
+      estPanes: 10_000,
+      estBufferKB: 1_000_000
+    })
+    expect(managers.reduce((sum, manager) => sum + manager.getPaneCount.mock.calls.length, 0)).toBe(
+      64
+    )
+    expect(managers.reduce((sum, manager) => sum + manager.getPanes.mock.calls.length, 0)).toBe(3)
+    expect(sampledPaneWrappers).toBe(256)
+    expect(managers[0].getPanes).toHaveBeenCalledWith(256)
+    expect(managers[1].getPanes).toHaveBeenCalledWith(156)
+    expect(managers[2].getPanes).toHaveBeenCalledWith(56)
+    expect(managers[3].getPanes).not.toHaveBeenCalled()
   })
 
-  it('fits and refreshes every registered manager', () => {
-    const first = {
+  it('clears hidden atlases without painting them only when asked to include hidden managers', () => {
+    const createManager = (visible: boolean) => ({
       resetWebglTextureAtlases: vi.fn<() => void>(),
-      fitAllPanes: vi.fn<() => void>(),
-      refreshAllPanes: vi.fn<() => void>()
+      clearWebglTextureAtlases: vi.fn<() => void>(),
+      presentViewports: vi.fn<() => void>(),
+      isVisibleForAtlasRecovery: () => visible
+    })
+    const visible = createManager(true)
+    const hidden = createManager(false)
+    for (const manager of [visible, hidden]) {
+      registerLivePaneManager(manager)
+      registeredManagers.push(manager)
     }
-    const second = {
-      resetWebglTextureAtlases: vi.fn<() => void>(),
-      fitAllPanes: vi.fn<() => void>(),
-      refreshAllPanes: vi.fn<() => void>()
-    }
-    registerLivePaneManager(first)
-    registeredManagers.push(first)
-    registerLivePaneManager(second)
-    registeredManagers.push(second)
 
-    refitAndRefreshAllTerminalPanes()
+    resetAndRefreshAllTerminalWebglAtlases('test')
+    expect(hidden.clearWebglTextureAtlases).not.toHaveBeenCalled()
 
-    expect(first.fitAllPanes).toHaveBeenCalledTimes(1)
-    expect(first.refreshAllPanes).toHaveBeenCalledTimes(1)
-    expect(second.fitAllPanes).toHaveBeenCalledTimes(1)
-    expect(second.refreshAllPanes).toHaveBeenCalledTimes(1)
-  })
-
-  it('continues refitting later managers when one manager throws', () => {
-    const broken = {
-      resetWebglTextureAtlases: vi.fn<() => void>(),
-      fitAllPanes: vi.fn<() => void>(() => {
-        throw new Error('pane disposed')
-      }),
-      refreshAllPanes: vi.fn<() => void>()
-    }
-    registerLivePaneManager(broken)
-    registeredManagers.push(broken)
-    const healthy = {
-      resetWebglTextureAtlases: vi.fn<() => void>(),
-      fitAllPanes: vi.fn<() => void>(),
-      refreshAllPanes: vi.fn<() => void>()
-    }
-    registerLivePaneManager(healthy)
-    registeredManagers.push(healthy)
-
-    expect(() => refitAndRefreshAllTerminalPanes()).not.toThrow()
-
-    expect(broken.fitAllPanes).toHaveBeenCalledTimes(1)
-    expect(broken.refreshAllPanes).not.toHaveBeenCalled()
-    expect(healthy.fitAllPanes).toHaveBeenCalledTimes(1)
-    expect(healthy.refreshAllPanes).toHaveBeenCalledTimes(1)
+    resetAndRefreshAllTerminalWebglAtlases('test', { includeHidden: true })
+    expect(hidden.clearWebglTextureAtlases).toHaveBeenCalledTimes(1)
+    expect(hidden.presentViewports).not.toHaveBeenCalled()
+    expect(visible.clearWebglTextureAtlases).toHaveBeenCalledTimes(2)
+    expect(visible.presentViewports).toHaveBeenCalledTimes(2)
   })
 })

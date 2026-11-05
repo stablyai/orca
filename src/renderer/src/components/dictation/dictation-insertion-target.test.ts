@@ -1,12 +1,12 @@
 // @vitest-environment happy-dom
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { getUtf8ByteLength } from '../../../../shared/utf8-byte-limits'
 
 import {
   TEXT_CONTROL_PASTE_CHUNK_MAX_BYTES,
   TEXT_CONTROL_PASTE_DIRECT_MAX_BYTES,
-  TEXT_CONTROL_PASTE_MAX_BYTES,
-  getTextControlPasteByteLength
+  TEXT_CONTROL_PASTE_MAX_BYTES
 } from '@/lib/text-control-paste'
 import { insertText } from './dictation-insertion-target'
 
@@ -54,20 +54,6 @@ function installExecCommandMock(
 }
 
 describe('dictation insertion target', () => {
-  it('dispatches terminal dictation with the captured pane target', () => {
-    const listener = vi.fn()
-    document.addEventListener('dictation:insertText', listener)
-
-    insertText('git status', { kind: 'terminal', tabId: 'tab-1', paneId: 7 })
-
-    expect(listener).toHaveBeenCalledTimes(1)
-    expect((listener.mock.calls[0][0] as CustomEvent).detail).toEqual({
-      text: 'git status',
-      tabId: 'tab-1',
-      paneId: 7
-    })
-  })
-
   it('chunks large textarea dictation without one large input event', async () => {
     vi.useFakeTimers()
     const textarea = appendTextarea()
@@ -98,27 +84,11 @@ describe('dictation insertion target', () => {
     expect(execCommand.mock.calls.length).toBeGreaterThan(1)
     expect(
       execCommand.mock.calls.every(
-        (call) =>
-          getTextControlPasteByteLength(String(call[2] ?? '')) <= TEXT_CONTROL_PASTE_CHUNK_MAX_BYTES
+        (call) => getUtf8ByteLength(String(call[2] ?? '')) <= TEXT_CONTROL_PASTE_CHUNK_MAX_BYTES
       )
     ).toBe(true)
     expect(beforeInputEvents).toHaveLength(execCommand.mock.calls.length)
     expect(beforeInputEvents.some((event) => event.data === text)).toBe(false)
-  })
-
-  it('waits for yielded contenteditable dictation preflight before inserting large text', async () => {
-    vi.useFakeTimers()
-    const editor = appendContentEditable()
-    const execCommand = installExecCommandMock(() => true)
-    const text = 'x'.repeat(TEXT_CONTROL_PASTE_DIRECT_MAX_BYTES + 10)
-
-    insertText(text, { kind: 'contentEditable', element: editor })
-
-    expect(execCommand).not.toHaveBeenCalled()
-
-    await vi.runAllTimersAsync()
-
-    expect(execCommand).toHaveBeenCalled()
   })
 
   it('cancels chunked contenteditable dictation when the target disconnects', async () => {

@@ -29,3 +29,14 @@ export function logStartupDiagnostic(
     .join(' ')
   writeStartupDiagnosticLine(`[startup] ${event}${detailText ? ` ${detailText}` : ''}`, write)
 }
+
+// Use in-process elapsed milliseconds; stderr-arrival timestamps include pipe buffering jitter.
+export function logStartupMilestone(
+  event: string,
+  details: Record<string, unknown> | (() => Record<string, unknown>) = {}
+): void {
+  if (isStartupDiagnosticsEnabled()) {
+    const t = Math.round(performance.now())
+    logStartupDiagnostic(event, { t, ...(typeof details === 'function' ? details() : details) })
+  }
+}

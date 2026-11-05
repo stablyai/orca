@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import type { Locator, Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
@@ -108,7 +108,7 @@ async function addAndActivateRepo(page: Page, repoPath: string): Promise<string>
     state.setActiveWorktree(worktree.id)
     state.setSidebarOpen(true)
     return addedRepo.id
-  }, repoPath)
+  }, realpathSync.native(repoPath))
 }
 
 async function openRepoSettings(page: Page, repoId: string): Promise<Locator> {
@@ -128,8 +128,7 @@ async function openRepoSettings(page: Page, repoId: string): Promise<Locator> {
 async function openImportedSetupSettingsFromToast(page: Page, repoId: string): Promise<Locator> {
   const viewInSettings = page.getByRole('button', { name: "project's settings", exact: true })
   await expect(viewInSettings).toBeAttached({ timeout: 10_000 })
-  // Why: in hidden Electron CI windows, the Sonner action can be laid out just
-  // outside Playwright's viewport even though the action is mounted and wired.
+  // Hidden-window layout can leave the mounted Sonner action just outside Playwright’s viewport.
   await viewInSettings.evaluate((button) => (button as HTMLButtonElement).click())
   const setupCommand = page.locator(`[id="repo-${repoId}-local-commands"]`)
   await expect(setupCommand).toBeVisible({ timeout: 10_000 })

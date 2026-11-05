@@ -3,10 +3,9 @@
 import { spawn } from 'node:child_process'
 import path from 'node:path'
 import process from 'node:process'
-import { fileURLToPath } from 'node:url'
 import { ensureMobileExpoCli } from './mobile-expo-cli.mjs'
 
-const scriptDir = path.dirname(fileURLToPath(import.meta.url))
+const scriptDir = import.meta.dirname
 const mobileDir = path.resolve(scriptDir, '..')
 
 function pnpmCommand(args) {

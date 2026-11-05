@@ -1,0 +1,90 @@
+{
+  "goldenFormatVersion": 6,
+  "operation": "aiVault.resume-preparation",
+  "family": "aiVault.resume-preparation",
+  "namedDeltas": [],
+  "values": {
+    "88c8bb20eb6f": {
+      "name": "aiVault.prepareSessionResume#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"aiVault.prepareSessionResume\",\"params\":{\"agent\":\"codex\",\"filePath\":\"/sessions/rollout.jsonl\",\"codexHome\":\"/hosts/codex-runtime-home/home\",\"executionHostId\":\"local\"}}"
+    },
+    "e839ea279e77": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "agent": "codex",
+        "codexHome": "/hosts/codex-runtime-home/home",
+        "executionHostId": "local",
+        "filePath": "/sessions/rollout.jsonl"
+      }
+    },
+    "e8fdd9c76c0f": {
+      "name": "aiVault.prepareSessionResume#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "aiVault.prepareSessionResume"
+        },
+        {
+          "name": "params",
+          "value": {
+            "agent": "codex",
+            "codexHome": "/hosts/codex-runtime-home/home",
+            "executionHostId": "local",
+            "filePath": "/sessions/rollout.jsonl"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "forbidden",
+            "message": "Method 'aiVault.prepareSessionResume' is not available to mobile clients"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "f9dc8bff0bbd": {
+      "failure": {
+        "$rpc": "null"
+      },
+      "prepared": {
+        "agent": "codex",
+        "codexHome": "/hosts/codex-runtime-home/home",
+        "executionHostId": "local",
+        "filePath": "/sessions/rollout.jsonl"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "aivault-resume-prepare-unavailable",
+    "checkpoints": [
+      {
+        "id": "degraded-to-legacy",
+        "observation": {
+          "sender": ["e8fdd9c76c0f"],
+          "payloads": ["88c8bb20eb6f"],
+          "settlements": {
+            "prepare": "e839ea279e77"
+          },
+          "state": "f9dc8bff0bbd",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

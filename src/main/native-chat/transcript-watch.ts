@@ -1,254 +1,263 @@
-// Live transcript tailing: watch a resolved session JSONL file and emit only
-// the messages parsed from bytes appended since the last read. Modeled on the
-// incremental byte-offset read in codex-usage/scanner.ts (parseCodexUsageFile's
-// skipInitialBytes), but specialized to the NativeChatMessage record decoders.
-//
-// Teardown discipline (plan U4 risk: file-watch fd leaks): every subscription
-// owns exactly one fs.FSWatcher and one debounce timer. unsubscribe() closes
-// the watcher and clears the timer synchronously, and the module tracks the live
-// watcher count so tests can assert no watcher survives teardown.
+import { UNFLUSHED_SETTLE_MS } from './transcript-watch-contract'
+import { subscribeOpenCodeNativeChatTranscript } from './transcript-opencode-subscribe'
+import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat/native-chat-agent-support'
+import { extname } from 'node:path'
+import type { NativeChatMessage } from '../../shared/native-chat/native-chat-types'
+import {
+  needsWslHostResolution,
+  toHostReadableTranscriptPath,
+  type WslTranscriptResolutionSnapshot
+} from './host-readable-transcript-path'
+import { resolveSessionFilePath } from './session-file-resolver'
+import { installTranscriptWatcher } from './transcript-watch-engine'
+import type {
+  NativeChatTranscriptSubscription,
+  SubscribeNativeChatTranscriptArgs
+} from './transcript-watch-contract'
+import { nativeChatLineDecoderForAgent } from './transcript-tail-reader'
+import { WslTranscriptFsError, wslTranscriptFsRefusal } from './wsl-transcript-fs-gate'
+import { observeRunningWslDistros } from './wsl-transcript-running-observer'
 
-import { watch, type FSWatcher } from 'fs'
-import { open, stat } from 'fs/promises'
-import type { Readable } from 'stream'
-import type { AgentType, NativeChatMessage } from '../../shared/native-chat-types'
-import { resolveSessionFilePath, type ResolveSessionFileOptions } from './session-file-resolver'
-import { decodeClaudeTranscriptLine, decodeCodexTranscriptLine } from './transcript-line-decoders'
+export { readNativeChatTranscriptTail } from './transcript-tail-reader'
+export { getActiveNativeChatWatcherCount } from './transcript-watcher-count'
+export type {
+  NativeChatTranscriptSubscription,
+  SubscribeNativeChatTranscriptArgs
+} from './transcript-watch-contract'
 
-export type SubscribeNativeChatTranscriptArgs = ResolveSessionFileOptions & {
-  agent: AgentType
-  sessionId: string
-  /** Called with the newly-appended messages whenever the file grows. Never
-   *  called with an empty array. */
-  onAppend: (messages: NativeChatMessage[]) => void
-  /** Resolve directly to this file, skipping path discovery (used by tests). */
-  filePath?: string
-  /** Coalesce window for rapid fs.watch events (ms). Defaults to 40ms. */
-  debounceMs?: number
+/** Unresolved files retry; native watch failure still permits reconciliation-only mode. */
+async function attemptInstall(
+  args: SubscribeNativeChatTranscriptArgs,
+  decode: (line: string, fallbackId: string) => NativeChatMessage | null,
+  signal?: AbortSignal
+): Promise<NativeChatTranscriptSubscription | null> {
+  const filePath =
+    args.filePath ?? (await resolveSessionFilePath(args.agent, args.sessionId, args, signal))
+  signal?.throwIfAborted()
+  if (!filePath) {
+    return null
+  }
+  const installed = await installTranscriptWatcher(filePath, decode, args, signal)
+  if (signal?.aborted) {
+    installed?.unsubscribe()
+    signal.throwIfAborted()
+  }
+  return installed
 }
 
-export type NativeChatTranscriptSubscription = {
-  /** Closes the watcher and releases the file handle. Idempotent. */
-  unsubscribe: () => void
+// First flush may take minutes; poll exact hook paths often and expensive session-ID discovery less often.
+const INITIAL_RESOLVE_POLL_MS = 500
+const MAX_RESOLVE_POLL_MS = 5_000
+const FALLBACK_RESOLVE_POLL_MS = 5_000
+
+function exactTranscriptPath(args: SubscribeNativeChatTranscriptArgs): string | null {
+  const path = args.transcriptPath?.trim()
+  return path && extname(path) === '.jsonl' ? path : null
 }
 
-// Why: a single watch event can fire several times for one append; we read from
-// the last byte offset so re-entrant reads never re-emit prior messages. Each
-// decoder is stateless per-line, so tailing reuses the same record→message
-// mapping the full reader uses.
-const DEFAULT_DEBOUNCE_MS = 40
-
-// Why: process-wide count of live FSWatchers opened by this module. The U4 leak
-// test asserts this returns to zero after unsubscribe so a forgotten handle is
-// caught deterministically rather than relying on OS fd inspection.
-let activeWatcherCount = 0
-
-/** Test-only: number of fs watchers this module currently holds open. */
-export function getActiveNativeChatWatcherCount(): number {
-  return activeWatcherCount
-}
-
-function lineDecoderForAgent(
-  agent: AgentType
-): ((line: string, fallbackId: string) => NativeChatMessage | null) | null {
-  if (agent === 'claude') {
-    return decodeClaudeTranscriptLine
-  }
-  if (agent === 'codex') {
-    return decodeCodexTranscriptLine
-  }
-  return null
-}
-
-async function fileSize(filePath: string): Promise<number> {
-  try {
-    return (await stat(filePath)).size
-  } catch {
-    return 0
-  }
-}
-
-/**
- * Read bytes [start, end) of the file and decode each complete line into a
- * NativeChatMessage. Opens its own fd and always closes it (no leak on the read
- * path, distinct from the long-lived watcher). Returns the messages plus the
- * byte offset actually consumed so a partially-written trailing line is re-read
- * on the next append rather than dropped.
- */
-async function readAppendedMessages(
-  filePath: string,
-  start: number,
-  decode: (line: string, fallbackId: string) => NativeChatMessage | null
-): Promise<{ messages: NativeChatMessage[]; consumedTo: number }> {
-  const end = await fileSize(filePath)
-  if (end <= start) {
-    // File shrank (rotation/replacement) or unchanged — caller resets offset.
-    return { messages: [], consumedTo: end }
-  }
-
-  const handle = await open(filePath, 'r')
-  try {
-    const stream = handle.createReadStream({
-      encoding: 'utf-8',
-      start,
-      end: end - 1,
-      autoClose: false
-    })
-    const { messages, consumedBytes } = await decodeStreamLines(stream, filePath, start, decode)
-    return { messages, consumedTo: start + consumedBytes }
-  } finally {
-    await handle.close()
-  }
-}
-
-async function decodeStreamLines(
-  stream: Readable,
-  filePath: string,
-  start: number,
-  decode: (line: string, fallbackId: string) => NativeChatMessage | null
-): Promise<{ messages: NativeChatMessage[]; consumedBytes: number }> {
-  const text = await readStreamText(stream)
-  const completeEnd = text.lastIndexOf('\n')
-  if (completeEnd === -1) {
-    return { messages: [], consumedBytes: 0 }
-  }
-
-  // Why: transcript writers can flush mid-record. Only advance through
-  // newline-terminated JSONL so invalid partial JSON is retried on the next
-  // append instead of being lost forever.
-  const completeText = text.slice(0, completeEnd + 1)
-  const lines = completeText.split('\n')
-  const messages: NativeChatMessage[] = []
-  for (const [index, line] of lines.entries()) {
-    if (!line) {
-      continue
-    }
-    // Fallback id embeds the byte offset so ids stay stable+unique across
-    // appends even when a record carries no intrinsic id.
-    const message = decode(line, `${filePath}:${start}:${index}`)
-    if (message) {
-      messages.push(message)
-    }
-  }
-  return { messages, consumedBytes: Buffer.byteLength(completeText, 'utf8') }
-}
-
-async function readStreamText(stream: Readable): Promise<string> {
-  const chunks: string[] = []
-  for await (const chunk of stream) {
-    chunks.push(typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8'))
-  }
-  return chunks.join('')
-}
-
-/**
- * Subscribe to live appends on an agent's transcript file. Returns an
- * unsubscribe fn that tears the watcher down completely.
- *
- * Handles file rotation/replacement: when the file shrinks (a new session id
- * resolved to a smaller/newer file, or the file was truncated), the offset is
- * reset to 0 so the replacement's content is read from the top.
- */
-export async function subscribeNativeChatTranscript(
-  args: SubscribeNativeChatTranscriptArgs
-): Promise<NativeChatTranscriptSubscription> {
-  const { agent, sessionId, onAppend, debounceMs } = args
-  const decode = lineDecoderForAgent(agent)
-  const filePath = args.filePath ?? (await resolveSessionFilePath(agent, sessionId, args))
-
-  if (!filePath || !decode) {
-    // Nothing watchable — return a no-op teardown so callers can unconditionally
-    // unsubscribe without null-checks.
-    return { unsubscribe: () => {} }
-  }
-
-  // Why: seed the offset at 0 so the FIRST drain re-reads the whole file. This
-  // closes the read/subscribe race — a turn appended between the caller's
-  // readSession EOF and the watcher install is still emitted. Re-emitted lines
-  // collapse by deterministic id in the assembler (no dup, no drop). Subsequent
-  // drains use the incremental offset so the full re-read happens only once.
-  let offset = 0
+/** Return a live subscription while resolve/install retries; pending feedback must not claim settled history. */
+function subscribeViaResolvePoll(
+  args: SubscribeNativeChatTranscriptArgs,
+  decode: (line: string, fallbackId: string) => NativeChatMessage | null,
+  initialRefusal: WslTranscriptFsError | null = null
+): NativeChatTranscriptSubscription {
   let closed = false
-  let reading = false
-  let pendingReadRequested = false
-  let debounceTimer: ReturnType<typeof setTimeout> | null = null
+  let installed: NativeChatTranscriptSubscription | null = null
+  let pollTimer: ReturnType<typeof setTimeout> | null = null
+  let delay = args.resolvePollIntervalMs ?? INITIAL_RESOLVE_POLL_MS
+  let lastFallbackResolveAt = Date.now()
+  const exactPath = exactTranscriptPath(args)
+  const exactPathNeedsWslResolution = exactPath !== null && needsWslHostResolution(exactPath)
+  // Lazily translate WSL guest paths so exact-path retries avoid the slower ID scan.
+  let hostReadableExactPath: string | null = null
+  // Latch only after actual delivery; absent callbacks must not suppress future feedback.
+  let gateErrorEmitted = false
+  let settled = false
+  let settleTimer: ReturnType<typeof setTimeout> | null = null
+  const resolveController = new AbortController()
+  let stopWslObservation = (): void => {}
 
-  async function drain(): Promise<void> {
-    if (closed) {
+  function stopSettleTimer(): void {
+    if (settleTimer) {
+      clearTimeout(settleTimer)
+      settleTimer = null
+    }
+  }
+
+  /** Pending is not an empty snapshot: retained history and transcript-dependent consumers must stay intact. */
+  function settleUnflushed(): void {
+    settleTimer = null
+    if (closed || settled || installed || !args.onTranscriptPending) {
       return
     }
-    if (reading) {
-      // A read is already in flight; mark that another pass is needed so rapid
-      // successive appends coalesce without dropping the trailing one.
-      pendingReadRequested = true
+    settled = true
+    args.onTranscriptPending()
+  }
+
+  if (args.onTranscriptPending) {
+    settleTimer = setTimeout(settleUnflushed, UNFLUSHED_SETTLE_MS)
+    settleTimer.unref?.()
+  }
+
+  function emitGateError(error: WslTranscriptFsError): void {
+    if (gateErrorEmitted || !args.onInitialSnapshot) {
       return
     }
-    reading = true
+    gateErrorEmitted = true
+    settled = true
+    stopSettleTimer()
+    args.onInitialSnapshot([], false, 0, error.message)
+  }
+
+  function scheduleAttempt(): void {
+    if (closed || exactPathNeedsWslResolution) {
+      return
+    }
+    const untilFallbackResolve = exactPath
+      ? Math.max(0, FALLBACK_RESOLVE_POLL_MS - (Date.now() - lastFallbackResolveAt))
+      : delay
+    pollTimer = setTimeout(
+      () => {
+        pollTimer = null
+        void runAttempt()
+      },
+      Math.min(delay, untilFallbackResolve)
+    )
+    // Unresolved sessions must not keep headless host shutdown alive.
+    pollTimer.unref?.()
+    if (args.resolvePollIntervalMs === undefined) {
+      delay = Math.min(delay * 2, MAX_RESOLVE_POLL_MS)
+    }
+  }
+
+  async function runAttempt(wslSnapshot?: WslTranscriptResolutionSnapshot): Promise<void> {
+    if (closed || installed) {
+      return
+    }
+    let result: NativeChatTranscriptSubscription | null
+    const now = Date.now()
+    const fallbackDue = !exactPath || now - lastFallbackResolveAt >= FALLBACK_RESOLVE_POLL_MS
     try {
-      do {
-        pendingReadRequested = false
-        try {
-          const currentSize = await fileSize(filePath!)
-          if (currentSize < offset) {
-            // Rotation/replacement/truncation: re-read from the top.
-            offset = 0
-          }
-          const { messages, consumedTo } = await readAppendedMessages(filePath!, offset, decode!)
-          offset = consumedTo
-          if (!closed && messages.length > 0) {
-            onAppend(messages)
-          }
-        } catch {
-          // Why: a transient read failure (EACCES/EIO/ENOENT during rotation)
-          // must not leave the subscription permanently deaf. Stop this drain;
-          // the finally resets `reading` so a later fs event re-arms the read.
-          break
+      if (exactPath && !hostReadableExactPath) {
+        if (!exactPathNeedsWslResolution) {
+          // Native install handles missing paths; avoid another probe per tick.
+          hostReadableExactPath = exactPath
+        } else if (wslSnapshot) {
+          // Raw guest paths on Windows can bind a local look-alike on the current drive.
+          hostReadableExactPath = await toHostReadableTranscriptPath(exactPath, {
+            signal: resolveController.signal,
+            wslSnapshot
+          })
         }
-      } while (pendingReadRequested && !closed)
-    } finally {
-      reading = false
+      }
+      result = hostReadableExactPath
+        ? await attemptInstall(
+            { ...args, filePath: hostReadableExactPath },
+            decode,
+            resolveController.signal
+          )
+        : null
+      if (!result && exactPathNeedsWslResolution) {
+        hostReadableExactPath = null
+      }
+      if (!result && fallbackDue && !exactPathNeedsWslResolution) {
+        lastFallbackResolveAt = now
+        result = await attemptInstall(args, decode, resolveController.signal)
+      }
+    } catch (error) {
+      if (exactPathNeedsWslResolution) {
+        hostReadableExactPath = null
+      }
+      // Retry transient failures without escaping void runAttempt; show WSL refusal once while recovery continues.
+      // Use instanceof: wslTranscriptFsRefusal rethrows unrelated errors and would kill this loop.
+      if (error instanceof WslTranscriptFsError) {
+        emitGateError(error)
+      }
+      result = null
     }
-  }
-
-  function scheduleDrain(): void {
     if (closed) {
+      result?.unsubscribe()
       return
     }
-    if (debounceTimer) {
-      clearTimeout(debounceTimer)
+    if (result) {
+      installed = result
+      stopWslObservation()
+      stopWslObservation = () => {}
+      stopSettleTimer()
+      return
     }
-    debounceTimer = setTimeout(() => {
-      debounceTimer = null
-      void drain()
-    }, debounceMs ?? DEFAULT_DEBOUNCE_MS)
+    scheduleAttempt()
   }
 
-  let watcher: FSWatcher
-  try {
-    watcher = watch(filePath, scheduleDrain)
-  } catch {
-    // File vanished between resolve and watch — return a no-op teardown.
-    return { unsubscribe: () => {} }
+  // A stopped distro shows its refusal now, not a pending transcript, while recovery continues.
+  if (initialRefusal && args.onInitialSnapshot) {
+    emitGateError(initialRefusal)
   }
-  activeWatcherCount++
-
-  // Why: on some platforms fs.watch can miss the very first append that lands
-  // between offset-seed and watcher install. Kick one debounced drain so a
-  // turn written immediately after subscribe is still picked up.
-  scheduleDrain()
+  if (exactPathNeedsWslResolution) {
+    stopWslObservation = observeRunningWslDistros((runningDistros) =>
+      runAttempt({ runningDistros: [...runningDistros] })
+    )
+  } else {
+    scheduleAttempt()
+  }
 
   return {
+    watching: true,
     unsubscribe: () => {
       if (closed) {
         return
       }
       closed = true
-      if (debounceTimer) {
-        clearTimeout(debounceTimer)
-        debounceTimer = null
+      resolveController.abort()
+      stopWslObservation()
+      stopWslObservation = () => {}
+      stopSettleTimer()
+      if (pollTimer) {
+        clearTimeout(pollTimer)
+        pollTimer = null
       }
-      watcher.close()
-      activeWatcherCount--
+      installed?.unsubscribe()
+      installed = null
     }
   }
+}
+
+/** Tail appends and reset offsets on replacement; unresolved first flushes retry until teardown. */
+export async function subscribeNativeChatTranscript(
+  args: SubscribeNativeChatTranscriptArgs,
+  setupSignal?: AbortSignal
+): Promise<NativeChatTranscriptSubscription> {
+  setupSignal?.throwIfAborted()
+  if (resolveNativeChatTranscriptAgent(args.agent) === 'opencode') {
+    return subscribeOpenCodeNativeChatTranscript(
+      args,
+      setupSignal,
+      {},
+      args.agent === 'zcode' ? 'zcode' : undefined
+    )
+  }
+  const decode = nativeChatLineDecoderForAgent(args.agent)
+  if (!decode) {
+    return { unsubscribe: () => {}, watching: false }
+  }
+  // Blank targets can never resolve; do not poll forever.
+  if (!args.filePath && !args.sessionId.trim()) {
+    return { unsubscribe: () => {}, watching: false }
+  }
+
+  let installed: NativeChatTranscriptSubscription | null
+  let refusal: WslTranscriptFsError | null = null
+  try {
+    installed = await attemptInstall(args, decode, setupSignal)
+  } catch (error) {
+    setupSignal?.throwIfAborted()
+    // Gate refusal must enter retry polling rather than fail subscription setup.
+    refusal = wslTranscriptFsRefusal(error) // rethrows non-gate failures
+    installed = null
+  }
+  if (installed) {
+    return installed
+  }
+  setupSignal?.throwIfAborted()
+  return subscribeViaResolvePoll(args, decode, refusal)
 }

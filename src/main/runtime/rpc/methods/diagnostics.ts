@@ -1,8 +1,9 @@
-import { defineMethod, type RpcMethod } from '../core'
+import { defineMethod } from '../core'
 
-export const DIAGNOSTICS_METHODS: RpcMethod[] = [
+export const DIAGNOSTICS_METHODS = [
   defineMethod({
     name: 'diagnostics.memory',
+    permission: 'workspace',
     params: null,
     handler: async (_params, { runtime }) => {
       return await runtime.getMemorySnapshot()

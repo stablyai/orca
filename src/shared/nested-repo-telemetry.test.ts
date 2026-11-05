@@ -9,7 +9,7 @@ import {
   createNestedRepoTelemetryAttemptId,
   shouldEmitNestedRepoImportSubmitTelemetry
 } from './nested-repo-telemetry'
-import type { NestedRepoScanResult, ProjectGroupImportResult } from './types'
+import type { NestedRepoScanResult, ProjectGroupImportResult } from './project-group-types'
 
 const scanResult: NestedRepoScanResult = {
   selectedPath: '/workspace/platform',

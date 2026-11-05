@@ -1,0 +1,894 @@
+import type * as WorktreeScanCacheModule from '../../git/worktrees/catalog/worktree-scan-cache'
+import { vi, type Mock } from 'vitest'
+
+import type * as GitUsernameModule from '../../git/git-username'
+import type * as GitRepoDefaultBaseRefModule from '../../git/repo-default-base-ref'
+import type * as WslUncAccessGateModule from '../../wsl/filesystem/wsl-unc-access-gate'
+import type * as FilesystemPathContainmentModule from '../../ipc/filesystem/access/filesystem-path-containment'
+import { reviewHeadRemoteRefComponent } from '../../../shared/review-head-tracking-ref'
+
+export const ORIGIN_REMOTE_URL = 'git@example.com:group/repo.git'
+export const ORIGIN_HEAD_COMPONENT = reviewHeadRemoteRefComponent('origin', ORIGIN_REMOTE_URL)
+import type { OrcaRuntimeService as OrcaRuntimeServiceConstructor } from '../orca-runtime'
+import { setWorktreeWatcherRemoval } from '../../workspaces/removal/worktree-watcher-removal'
+
+type TestMock = Mock
+
+const reconcileClaudeAgentViewMock = vi.hoisted(() => vi.fn(async () => {}))
+vi.mock('../../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => {
+  const facade = await getWorktreeOwnerMocks()
+  return {
+    ...(await importOriginal<typeof WorktreeScanCacheModule>()),
+    listWorktrees: facade.listWorktrees,
+    listWorktreesSharedStrict: (await getWorktreeOwnerMocks()).listWorktreesSharedStrict
+  }
+})
+
+vi.mock('../../claude/agent-view/agent-view-service', () => ({
+  getClaudeAgentViewService: () => ({
+    reconcile: reconcileClaudeAgentViewMock,
+    ready: async () => {},
+    readyForLaunch: async () => {},
+    prepareProfile: async () => {},
+    read: () => undefined
+  })
+}))
+
+export const ORIGINAL_PLATFORM = process.platform
+export const ORIGINAL_PLATFORM_DESCRIPTOR = Object.getOwnPropertyDescriptor(process, 'platform')
+const removeWorktreeLinkedPathsMock: ReturnType<typeof vi.fn> = vi.hoisted(() => vi.fn())
+const findExistingWorktreeSymlinkPathsMock: TestMock = vi.hoisted(() => vi.fn())
+const resolveLocalGitUsernameMock: TestMock = vi.hoisted(() => vi.fn(async () => ''))
+
+vi.mock('../../ipc/worktree-symlinks', () => ({
+  createWorktreeCopiedPaths: vi.fn(),
+  createWorktreeLinkedPaths: vi.fn(),
+  createWorktreeSharedPaths: vi.fn(),
+  findExistingWorktreeSymlinkPaths: findExistingWorktreeSymlinkPathsMock,
+  removeWorktreeLinkedPaths: removeWorktreeLinkedPathsMock
+}))
+
+vi.mock('../../git/worktrees/content-paths/worktree-symlink-detection', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  findExistingWorktreeSymlinkPaths: findExistingWorktreeSymlinkPathsMock
+}))
+
+export function setPlatform(platform: NodeJS.Platform): void {
+  Object.defineProperty(process, 'platform', {
+    configurable: true,
+    value: platform
+  })
+}
+
+export function resetPlatform(): void {
+  if (ORIGINAL_PLATFORM_DESCRIPTOR) {
+    Object.defineProperty(process, 'platform', ORIGINAL_PLATFORM_DESCRIPTOR)
+  }
+}
+
+export function acknowledgeAgentPromptSubmit(
+  runtime: InstanceType<typeof OrcaRuntimeServiceConstructor>,
+  ptyId: string,
+  data: string
+): void {
+  if (data === '\r') {
+    runtime.onPtyData(ptyId, '\x1b]0;Codex working\x07', Date.now())
+  }
+}
+
+const electronMocks = vi.hoisted(() => {
+  type Listener = (...args: unknown[]) => void
+  const listeners = new Map<string, Set<Listener>>()
+  const ipcMain = {
+    on: vi.fn((channel: string, listener: Listener) => {
+      const existing = listeners.get(channel) ?? new Set<Listener>()
+      existing.add(listener)
+      listeners.set(channel, existing)
+      return ipcMain
+    }),
+    removeListener: vi.fn((channel: string, listener: Listener) => {
+      listeners.get(channel)?.delete(listener)
+      return ipcMain
+    }),
+    emit: vi.fn((channel: string, ...args: unknown[]) => {
+      for (const listener of listeners.get(channel) ?? []) {
+        listener(...args)
+      }
+      return true
+    })
+  }
+  return {
+    BrowserWindow: { fromId: vi.fn((_id: number): unknown => null) },
+    webContents: { fromId: vi.fn((_id: number): unknown => null) },
+    ipcMain,
+    app: { getPath: vi.fn(() => '/tmp'), isPackaged: false }
+  }
+})
+
+const closeLocalWatcherForWorktreePathMock: TestMock = vi.hoisted(() => vi.fn())
+const restoreLocalWatcherAfterFailedRemovalMock: TestMock = vi.hoisted(() => vi.fn())
+const forgetLocalWatcherRemovalSnapshotMock: TestMock = vi.hoisted(() => vi.fn())
+const scanLocalRepoWorktreesForResolutionMock: TestMock = vi.hoisted(() => vi.fn())
+
+vi.mock('electron', () => electronMocks)
+// Runtime calls the WorktreeWatcherRemoval port; filesystem-watcher module mocks would be inert.
+setWorktreeWatcherRemoval({
+  closeLocal: closeLocalWatcherForWorktreePathMock,
+  restoreLocal: restoreLocalWatcherAfterFailedRemovalMock,
+  forgetLocal: forgetLocalWatcherRemovalSnapshotMock
+})
+
+const {
+  MOCK_GIT_WORKTREES,
+  addSparseWorktreeMock,
+  addWorktreeMock,
+  removeWorktreeMock,
+  forceDeleteLocalBranchMock,
+  computeWorktreePathMock,
+  ensurePathWithinWorkspaceMock,
+  invalidateAuthorizedRootsCacheMock,
+  prepareLocalWorktreeRootForRepoMock,
+  createHostedReviewMock,
+  createStackedHostedReviewMock,
+  getHostedReviewCreationEligibilityMock,
+  getHostedReviewForBranchMock,
+  getPRForBranchMock,
+  getPRForBranchOutcomeMock,
+  getRepoSlugMock,
+  getRepoUpstreamMock,
+  getGitHubWorkItemMock,
+  getPullRequestPushTargetMock,
+  getGitHubWorkItemByOwnerRepoMock,
+  getGitHubWorkItemDetailsMock,
+  getGitHubPRFileContentsMock,
+  getGitHubPRChecksMock,
+  rerunGitHubPRChecksMock,
+  getGitHubPRCheckDetailsMock,
+  getGitHubPRCommentsMock,
+  resolveGitHubReviewThreadMock,
+  setGitHubPRFileViewedMock,
+  updateGitHubPRTitleMock,
+  updateGitHubPRDetailsMock,
+  mergeGitHubPRMock,
+  setGitHubPRAutoMergeMock,
+  updateGitHubPRStateMock,
+  requestGitHubPRReviewersMock,
+  removeGitHubPRReviewersMock,
+  addGitHubPRReviewCommentMock,
+  addGitHubPRReviewCommentReplyMock,
+  listGitHubIssuesMock,
+  listGitHubWorkItemsMock,
+  countGitHubWorkItemsMock,
+  createGitHubIssueMock,
+  updateGitHubIssueMock,
+  addGitHubIssueCommentMock,
+  listGitHubLabelsMock,
+  listGitHubAssignableUsersMock,
+  applyAgentStatusHooksEnabledMock,
+  detectAgentCommandsOnHostMock,
+  detectInstalledAgentsWithShellPathHydrationMock,
+  markCodexProjectTrustedMock,
+  markCopilotFolderTrustedMock,
+  markCursorWorkspaceTrustedMock,
+  listGitLabMergeRequestsMock,
+  listGitLabWorkItemsMock,
+  listGitLabIssuesMock,
+  listGitLabLabelsMock,
+  listGitLabAssignableUsersMock,
+  listGitLabTodosMock,
+  getGitLabProjectRefForRemoteMock,
+  getGitLabWorkItemByProjectRefMock,
+  createGitLabIssueMock,
+  updateGitLabIssueMock,
+  addGitLabIssueCommentMock,
+  addGitLabMRCommentMock,
+  addGitLabMRInlineCommentMock,
+  resolveGitLabMRDiscussionMock,
+  getGitLabJobTraceMock,
+  retryGitLabJobMock,
+  mergeGitLabMRMock,
+  closeGitLabMRMock,
+  reopenGitLabMRMock,
+  updateGitLabMRMock,
+  getGlabKnownHostsMock,
+  getGitLabWorkItemDetailsMock,
+  updateGitLabMRReviewersMock,
+  getIssueMock,
+  deleteWorktreeHistoryDirMock
+} = vi.hoisted(() => {
+  return {
+    MOCK_GIT_WORKTREES: [
+      {
+        path: '/tmp/worktree-a',
+        head: 'abc',
+        branch: 'feature/foo',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ],
+    addSparseWorktreeMock: vi.fn() as TestMock,
+    addWorktreeMock: vi.fn() as TestMock,
+    removeWorktreeMock: vi.fn() as TestMock,
+    forceDeleteLocalBranchMock: vi.fn() as TestMock,
+    computeWorktreePathMock: vi.fn() as TestMock,
+    ensurePathWithinWorkspaceMock: vi.fn() as TestMock,
+    invalidateAuthorizedRootsCacheMock: vi.fn() as TestMock,
+    prepareLocalWorktreeRootForRepoMock: vi.fn() as TestMock,
+    createHostedReviewMock: vi.fn() as TestMock,
+    createStackedHostedReviewMock: vi.fn() as TestMock,
+    getHostedReviewCreationEligibilityMock: vi.fn() as TestMock,
+    getHostedReviewForBranchMock: vi.fn() as TestMock,
+    getPRForBranchMock: vi.fn().mockResolvedValue(null) as TestMock,
+    getPRForBranchOutcomeMock: vi
+      .fn()
+      .mockResolvedValue({ kind: 'no-pr', fetchedAt: 0 }) as TestMock,
+    getRepoSlugMock: vi.fn().mockResolvedValue(null) as TestMock,
+    getRepoUpstreamMock: vi.fn().mockResolvedValue(null) as TestMock,
+    getGitHubWorkItemMock: vi.fn() as TestMock,
+    getPullRequestPushTargetMock: vi.fn() as TestMock,
+    getGitHubWorkItemByOwnerRepoMock: vi.fn() as TestMock,
+    getGitHubWorkItemDetailsMock: vi.fn() as TestMock,
+    getGitHubPRFileContentsMock: vi.fn() as TestMock,
+    getGitHubPRChecksMock: vi.fn() as TestMock,
+    rerunGitHubPRChecksMock: vi.fn() as TestMock,
+    getGitHubPRCheckDetailsMock: vi.fn() as TestMock,
+    getGitHubPRCommentsMock: vi.fn() as TestMock,
+    resolveGitHubReviewThreadMock: vi.fn() as TestMock,
+    setGitHubPRFileViewedMock: vi.fn() as TestMock,
+    updateGitHubPRTitleMock: vi.fn() as TestMock,
+    updateGitHubPRDetailsMock: vi.fn() as TestMock,
+    mergeGitHubPRMock: vi.fn() as TestMock,
+    setGitHubPRAutoMergeMock: vi.fn() as TestMock,
+    updateGitHubPRStateMock: vi.fn() as TestMock,
+    requestGitHubPRReviewersMock: vi.fn() as TestMock,
+    removeGitHubPRReviewersMock: vi.fn() as TestMock,
+    addGitHubPRReviewCommentMock: vi.fn() as TestMock,
+    addGitHubPRReviewCommentReplyMock: vi.fn() as TestMock,
+    listGitHubIssuesMock: vi.fn() as TestMock,
+    listGitHubWorkItemsMock: vi.fn() as TestMock,
+    countGitHubWorkItemsMock: vi.fn() as TestMock,
+    createGitHubIssueMock: vi.fn() as TestMock,
+    updateGitHubIssueMock: vi.fn() as TestMock,
+    addGitHubIssueCommentMock: vi.fn() as TestMock,
+    listGitHubLabelsMock: vi.fn() as TestMock,
+    listGitHubAssignableUsersMock: vi.fn() as TestMock,
+    applyAgentStatusHooksEnabledMock: vi.fn() as TestMock,
+    detectAgentCommandsOnHostMock: vi.fn(async () => new Set(['qodercli'])),
+    detectInstalledAgentsWithShellPathHydrationMock: vi.fn() as TestMock,
+    markCodexProjectTrustedMock: vi.fn() as TestMock,
+    markCopilotFolderTrustedMock: vi.fn() as TestMock,
+    markCursorWorkspaceTrustedMock: vi.fn() as TestMock,
+    listGitLabMergeRequestsMock: vi.fn() as TestMock,
+    listGitLabWorkItemsMock: vi.fn() as TestMock,
+    listGitLabIssuesMock: vi.fn() as TestMock,
+    listGitLabLabelsMock: vi.fn() as TestMock,
+    listGitLabAssignableUsersMock: vi.fn<TestMock>(),
+    listGitLabTodosMock: vi.fn() as TestMock,
+    getGitLabProjectRefForRemoteMock: vi.fn() as TestMock,
+    getGitLabWorkItemByProjectRefMock: vi.fn() as TestMock,
+    createGitLabIssueMock: vi.fn() as TestMock,
+    updateGitLabIssueMock: vi.fn() as TestMock,
+    addGitLabIssueCommentMock: vi.fn() as TestMock,
+    addGitLabMRCommentMock: vi.fn() as TestMock,
+    addGitLabMRInlineCommentMock: vi.fn() as TestMock,
+    resolveGitLabMRDiscussionMock: vi.fn() as TestMock,
+    getGitLabJobTraceMock: vi.fn() as TestMock,
+    retryGitLabJobMock: vi.fn() as TestMock,
+    mergeGitLabMRMock: vi.fn() as TestMock,
+    closeGitLabMRMock: vi.fn() as TestMock,
+    reopenGitLabMRMock: vi.fn() as TestMock,
+    updateGitLabMRMock: vi.fn() as TestMock,
+    getGlabKnownHostsMock: vi.fn() as TestMock,
+    getGitLabWorkItemDetailsMock: vi.fn() as TestMock,
+    updateGitLabMRReviewersMock: vi.fn() as TestMock,
+    getIssueMock: vi.fn() as TestMock,
+    deleteWorktreeHistoryDirMock: vi.fn() as TestMock
+  }
+})
+
+const listWorktreesStrictMock = vi.hoisted(() => vi.fn().mockResolvedValue(MOCK_GIT_WORKTREES))
+
+vi.mock('../../git/worktrees/catalog/worktree-listing', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  listWorktreesStrict: listWorktreesStrictMock,
+  describeCreatedWorktree: (await getWorktreeOwnerMocks()).describeCreatedWorktree
+}))
+
+const { getWorktreeOwnerMocks } = vi.hoisted(() => {
+  function createWorktreeOwnerMocks() {
+    return (() => ({
+      listWorktrees: vi.fn().mockResolvedValue(MOCK_GIT_WORKTREES),
+      listWorktreesSharedStrict: vi.fn().mockResolvedValue(MOCK_GIT_WORKTREES),
+      listWorktreesStrict: listWorktreesStrictMock,
+      describeCreatedWorktree: vi.fn().mockResolvedValue(undefined),
+      assertWorktreeCleanForRemoval: vi.fn().mockResolvedValue(undefined),
+      addSparseWorktree: addSparseWorktreeMock,
+      addWorktree: addWorktreeMock,
+      removeWorktree: removeWorktreeMock,
+      forceDeleteLocalBranch: forceDeleteLocalBranchMock
+    }))()
+  }
+  let fixture: ReturnType<typeof createWorktreeOwnerMocks> | undefined
+  return { getWorktreeOwnerMocks: () => (fixture ??= createWorktreeOwnerMocks()) }
+})
+
+vi.mock('../../git/worktrees/removal/worktree-removal-preflight', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  assertWorktreeCleanForRemoval: (await getWorktreeOwnerMocks()).assertWorktreeCleanForRemoval
+}))
+
+vi.mock('../../git/worktrees/creation/worktree-sparse-add', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  addSparseWorktree: (await getWorktreeOwnerMocks()).addSparseWorktree
+}))
+
+vi.mock('../../git/worktrees/creation/worktree-add', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  addWorktree: (await getWorktreeOwnerMocks()).addWorktree
+}))
+
+vi.mock('../../git/worktrees/removal/worktree-removal', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  removeWorktree: (await getWorktreeOwnerMocks()).removeWorktree
+}))
+
+vi.mock('../../git/worktrees/removal/worktree-branch-removal', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  forceDeleteLocalBranch: (await getWorktreeOwnerMocks()).forceDeleteLocalBranch
+}))
+
+vi.mock('../workspaces/catalog/repo-worktree-resolution-scan', () => ({
+  scanLocalRepoWorktreesForResolution: scanLocalRepoWorktreesForResolutionMock
+}))
+
+// Fake-win32 runtime tests have no wsl.exe: treat every distro as running unless a test says otherwise.
+vi.mock('../../wsl/filesystem/wsl-unc-access-gate', async (importOriginal) => {
+  const actual = await importOriginal<typeof WslUncAccessGateModule>()
+  const blockedWslDistroForPath = vi.fn<typeof actual.blockedWslDistroForPath>(async () => null)
+  return {
+    ...actual,
+    blockedWslDistroForPath,
+    // The real guard asks its own module's check, which this mock can't reach; ask the mocked one.
+    guardWslUncPathAccess: vi.fn(
+      async <T>(
+        path: string,
+        access: () => Promise<T>,
+        options: { wake?: boolean; wslDistro?: string | null } = {}
+      ): Promise<T> => {
+        const blocked = options.wake ? null : await blockedWslDistroForPath(path, options.wslDistro)
+        if (blocked?.state === 'stopped') {
+          throw new actual.WslDistroStoppedError(blocked.distro)
+        }
+        if (blocked) {
+          throw new actual.WslDistroUnverifiableError(blocked.distro)
+        }
+        return access()
+      }
+    )
+  }
+})
+
+vi.mock('../../pty/history/terminal-history-deletion', () => ({
+  deleteWorktreeHistoryDir: deleteWorktreeHistoryDirMock
+}))
+
+vi.mock('../../ssh/targets/ssh-target-registry', () => ({
+  getSshConnectionManager: () => null,
+  getRegisteredSshState: () => ({ remotePlatform: 'linux' })
+}))
+
+vi.mock('../../preflight/agent-command-detection', () => ({
+  detectAgentCommandsOnHost: detectAgentCommandsOnHostMock
+}))
+
+vi.mock('../../preflight/agent-detection', () => ({
+  detectAgentCommandsOnHost: detectAgentCommandsOnHostMock,
+  detectInstalledAgentsWithShellPathHydration: detectInstalledAgentsWithShellPathHydrationMock
+}))
+
+vi.mock('../../agent-hooks/managed-agent-hook-controls', () => ({
+  applyAgentStatusHooksEnabled: applyAgentStatusHooksEnabledMock
+}))
+
+vi.mock('../../agent-launch/trust/agent-trust-presets', () => ({
+  markCodexProjectTrusted: markCodexProjectTrustedMock,
+  markCopilotFolderTrusted: markCopilotFolderTrustedMock,
+  markCursorWorkspaceTrusted: markCursorWorkspaceTrustedMock
+}))
+
+const parseOrcaYamlMock = vi.hoisted(() => vi.fn().mockReturnValue(null))
+vi.mock('../../../shared/orca-yaml', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  parseOrcaYaml: parseOrcaYamlMock
+}))
+
+vi.mock('../../workspace-hooks/hooks', () => ({
+  getEffectiveHooks: vi.fn().mockReturnValue(null),
+  loadHooks: vi.fn().mockReturnValue(null),
+  runHook: vi.fn().mockResolvedValue({ success: true, output: '' }),
+  hasHooksFile: vi.fn().mockReturnValue(false)
+}))
+
+vi.mock('../../workspace-hooks/setup-runner-script-text', () => ({
+  buildPosixRunnerScript: (script: string) => `#!/usr/bin/env bash\nset -e\n${script}\n`,
+  buildWindowsRunnerScript: (script: string) => `@echo off\r\n${script}\r\n`
+}))
+
+vi.mock('../../workspace-hooks/worktree-runner-script', () => ({
+  createSetupRunnerScript: vi.fn(),
+  resolveSetupRunnerShell: vi.fn().mockReturnValue(undefined)
+}))
+
+vi.mock('../../workspace-hooks/setup-hook-env-vars', () => ({
+  getSetupRunnerEnvVars: (_repo: never, worktreePath: string) => ({
+    ORCA_ROOT_PATH: '/remote/repo',
+    ORCA_WORKTREE_PATH: worktreePath
+  })
+}))
+
+vi.mock('../../workspace-hooks/effective-hook-config', () => ({
+  getEffectiveHooksFromConfig: vi.fn().mockReturnValue(null),
+  getDefaultTabsLaunch: vi.fn().mockReturnValue(undefined),
+  shouldRunSetupForCreate: vi
+    .fn()
+    .mockImplementation((_repo: never, decision: string) => decision === 'run'),
+  getEffectiveSetupRunPolicy: vi.fn().mockReturnValue('auto')
+}))
+
+vi.mock('../../ipc/worktree-logic', async (importOriginal) => {
+  const actual = (await importOriginal()) as Record<string, unknown>
+  return {
+    ...actual,
+    computeWorktreePath: computeWorktreePathMock,
+    ensurePathWithinWorkspace: ensurePathWithinWorkspaceMock
+  }
+})
+
+vi.mock('../../ipc/filesystem/access/filesystem-auth', () => ({
+  resolveAuthorizedPath: vi.fn(async (pathValue: string) => pathValue)
+}))
+
+vi.mock('../../ipc/worktrees/removal/registered-worktree-roots-cache', () => ({
+  invalidateAuthorizedRootsCache: invalidateAuthorizedRootsCacheMock
+}))
+
+vi.mock('../../ipc/worktrees/removal/registered-worktree-roots-scoped-invalidation', () => ({
+  invalidateAuthorizedRootsCacheForRepo: invalidateAuthorizedRootsCacheMock
+}))
+
+// Relay-rebuilt ENOENT errors may retain only the message.
+vi.mock('../../ipc/filesystem/access/filesystem-path-containment', async () => {
+  const actual = await vi.importActual<typeof FilesystemPathContainmentModule>(
+    '../../ipc/filesystem/access/filesystem-path-containment'
+  )
+  return { isENOENT: actual.isENOENT }
+})
+
+vi.mock('../../workspaces/creation/worktree-root-preparation', () => ({
+  prepareLocalWorktreeRootForRepo: prepareLocalWorktreeRootForRepoMock
+}))
+
+vi.mock('../../source-control/hosted-review-creation', () => ({
+  createHostedReview: createHostedReviewMock,
+  getHostedReviewCreationEligibility: getHostedReviewCreationEligibilityMock
+}))
+
+vi.mock('../../source-control/stacked-hosted-review-creation', () => ({
+  createStackedHostedReview: createStackedHostedReviewMock
+}))
+
+vi.mock('../../source-control/hosted-review', () => ({
+  getHostedReviewForBranch: getHostedReviewForBranchMock,
+  // Handlers read through this; keep asserting on the one mock.
+  readHostedReviewForBranch: vi.fn(async (input: unknown) => ({
+    review: await getHostedReviewForBranchMock(input),
+    readOutcome: 'cached'
+  }))
+}))
+
+vi.mock('../../github/client/fetch/repo-slug-upstream', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  getRepoSlug: getRepoSlugMock,
+  getRepoUpstream: getRepoUpstreamMock
+}))
+
+vi.mock('../../github/client', async (importOriginal) => {
+  const actual = (await importOriginal()) as Record<string, unknown>
+  return {
+    ...actual,
+    getPRForBranch: getPRForBranchMock,
+    getPRForBranchOutcome: getPRForBranchOutcomeMock,
+    getRepoSlug: getRepoSlugMock,
+    getRepoUpstream: getRepoUpstreamMock,
+    getWorkItem: getGitHubWorkItemMock,
+    getPullRequestPushTarget: getPullRequestPushTargetMock,
+    getWorkItemByOwnerRepo: getGitHubWorkItemByOwnerRepoMock,
+    getPRChecks: getGitHubPRChecksMock,
+    rerunPRChecks: rerunGitHubPRChecksMock,
+    getPRCheckDetails: getGitHubPRCheckDetailsMock,
+    getPRComments: getGitHubPRCommentsMock,
+    resolveReviewThread: resolveGitHubReviewThreadMock,
+    setPRFileViewed: setGitHubPRFileViewedMock,
+    updatePRTitle: updateGitHubPRTitleMock,
+    updatePRDetails: updateGitHubPRDetailsMock,
+    mergePR: mergeGitHubPRMock,
+    setPRAutoMerge: setGitHubPRAutoMergeMock,
+    updatePRState: updateGitHubPRStateMock,
+    requestPRReviewers: requestGitHubPRReviewersMock,
+    removePRReviewers: removeGitHubPRReviewersMock,
+    addPRReviewComment: addGitHubPRReviewCommentMock,
+    addPRReviewCommentReply: addGitHubPRReviewCommentReplyMock,
+    listIssues: listGitHubIssuesMock,
+    listWorkItems: listGitHubWorkItemsMock,
+    countWorkItems: countGitHubWorkItemsMock,
+    getIssue: getIssueMock,
+    createIssue: createGitHubIssueMock,
+    updateIssue: updateGitHubIssueMock,
+    addIssueComment: addGitHubIssueCommentMock,
+    listLabels: listGitHubLabelsMock,
+    listAssignableUsers: listGitHubAssignableUsersMock
+  }
+})
+
+vi.mock('../../gitlab/client', async (importOriginal) => {
+  const actual = (await importOriginal()) as Record<string, unknown>
+  return {
+    ...actual,
+    listMergeRequests: listGitLabMergeRequestsMock,
+    listWorkItems: listGitLabWorkItemsMock,
+    listIssues: listGitLabIssuesMock,
+    listLabels: listGitLabLabelsMock,
+    listAssignableUsers: listGitLabAssignableUsersMock,
+    listTodos: listGitLabTodosMock,
+    getProjectRefForRemote: getGitLabProjectRefForRemoteMock,
+    getWorkItemByProjectRef: getGitLabWorkItemByProjectRefMock,
+    createIssue: createGitLabIssueMock,
+    updateIssue: updateGitLabIssueMock,
+    addIssueComment: addGitLabIssueCommentMock,
+    addMRComment: addGitLabMRCommentMock,
+    addMRInlineComment: addGitLabMRInlineCommentMock,
+    resolveMRDiscussion: resolveGitLabMRDiscussionMock,
+    getJobTrace: getGitLabJobTraceMock,
+    retryJob: retryGitLabJobMock,
+    mergeMR: mergeGitLabMRMock,
+    closeMR: closeGitLabMRMock,
+    reopenMR: reopenGitLabMRMock,
+    updateMR: updateGitLabMRMock,
+    updateMRReviewers: updateGitLabMRReviewersMock
+  }
+})
+
+vi.mock('../../gitlab/gl-utils', async (importOriginal) => {
+  const actual = (await importOriginal()) as Record<string, unknown>
+  return {
+    ...actual,
+    getGlabKnownHosts: getGlabKnownHostsMock
+  }
+})
+
+vi.mock('../../gitlab/work-item-details', async (importOriginal) => {
+  const actual = (await importOriginal()) as Record<string, unknown>
+  return {
+    ...actual,
+    getWorkItemDetails: getGitLabWorkItemDetailsMock
+  }
+})
+
+vi.mock('../../github/work-item-details', async (importOriginal) => {
+  const actual = (await importOriginal()) as Record<string, unknown>
+  return {
+    ...actual,
+    getWorkItemDetails: getGitHubWorkItemDetailsMock,
+    getPRFileContents: getGitHubPRFileContentsMock
+  }
+})
+
+vi.mock('../../github/issues', async (importOriginal) => {
+  const actual = (await importOriginal()) as Record<string, unknown>
+  return {
+    ...actual,
+    getIssue: getIssueMock,
+    listIssues: listGitHubIssuesMock
+  }
+})
+
+// Fabricated repo paths need deterministic async default-ref resolution.
+vi.mock('../../git/repo-default-base-ref', async (importOriginal) => {
+  const actual = await importOriginal<typeof GitRepoDefaultBaseRefModule>()
+  const actualGetBaseRefDefault = actual.getBaseRefDefault
+  return {
+    ...actual,
+    // Keep fake local defaults deterministic while WSL exercises real async Git options.
+    getBaseRefDefault: vi
+      .fn()
+      .mockImplementation((path: string, options?: { wslDistro?: string }) =>
+        options?.wslDistro ? actualGetBaseRefDefault(path, options) : Promise.resolve('origin/main')
+      ),
+    resolveDefaultBaseRefWithLocalGit: vi
+      .fn()
+      .mockImplementation((options: { cwd: string; wslDistro?: string }) =>
+        options.wslDistro
+          ? actualGetBaseRefDefault(options.cwd, options)
+          : Promise.resolve('origin/main')
+      )
+  }
+})
+
+vi.mock('../../git/repo-branch-conflict', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  getBranchConflictKind: vi.fn().mockResolvedValue(null)
+}))
+
+vi.mock('../../git/git-username', async () => {
+  const actual = await vi.importActual<typeof GitUsernameModule>('../../git/git-username')
+  return { ...actual, resolveLocalGitUsername: resolveLocalGitUsernameMock }
+})
+
+export {
+  electronMocks,
+  removeWorktreeLinkedPathsMock,
+  findExistingWorktreeSymlinkPathsMock,
+  resolveLocalGitUsernameMock,
+  closeLocalWatcherForWorktreePathMock,
+  restoreLocalWatcherAfterFailedRemovalMock,
+  forgetLocalWatcherRemovalSnapshotMock,
+  scanLocalRepoWorktreesForResolutionMock,
+  MOCK_GIT_WORKTREES,
+  addSparseWorktreeMock,
+  addWorktreeMock,
+  removeWorktreeMock,
+  forceDeleteLocalBranchMock,
+  computeWorktreePathMock,
+  ensurePathWithinWorkspaceMock,
+  invalidateAuthorizedRootsCacheMock,
+  prepareLocalWorktreeRootForRepoMock,
+  createHostedReviewMock,
+  createStackedHostedReviewMock,
+  getHostedReviewCreationEligibilityMock,
+  getHostedReviewForBranchMock,
+  getPRForBranchMock,
+  getPRForBranchOutcomeMock,
+  getRepoSlugMock,
+  getRepoUpstreamMock,
+  getGitHubWorkItemMock,
+  getPullRequestPushTargetMock,
+  getGitHubWorkItemByOwnerRepoMock,
+  getGitHubWorkItemDetailsMock,
+  getGitHubPRFileContentsMock,
+  getGitHubPRChecksMock,
+  rerunGitHubPRChecksMock,
+  getGitHubPRCheckDetailsMock,
+  getGitHubPRCommentsMock,
+  resolveGitHubReviewThreadMock,
+  setGitHubPRFileViewedMock,
+  updateGitHubPRTitleMock,
+  updateGitHubPRDetailsMock,
+  mergeGitHubPRMock,
+  setGitHubPRAutoMergeMock,
+  updateGitHubPRStateMock,
+  requestGitHubPRReviewersMock,
+  removeGitHubPRReviewersMock,
+  addGitHubPRReviewCommentMock,
+  addGitHubPRReviewCommentReplyMock,
+  listGitHubIssuesMock,
+  listGitHubWorkItemsMock,
+  countGitHubWorkItemsMock,
+  createGitHubIssueMock,
+  updateGitHubIssueMock,
+  addGitHubIssueCommentMock,
+  listGitHubLabelsMock,
+  listGitHubAssignableUsersMock,
+  applyAgentStatusHooksEnabledMock,
+  detectInstalledAgentsWithShellPathHydrationMock,
+  markCodexProjectTrustedMock,
+  markCopilotFolderTrustedMock,
+  markCursorWorkspaceTrustedMock,
+  listGitLabMergeRequestsMock,
+  listGitLabWorkItemsMock,
+  listGitLabIssuesMock,
+  listGitLabLabelsMock,
+  listGitLabAssignableUsersMock,
+  listGitLabTodosMock,
+  getGitLabProjectRefForRemoteMock,
+  getGitLabWorkItemByProjectRefMock,
+  createGitLabIssueMock,
+  updateGitLabIssueMock,
+  addGitLabIssueCommentMock,
+  addGitLabMRCommentMock,
+  addGitLabMRInlineCommentMock,
+  resolveGitLabMRDiscussionMock,
+  getGitLabJobTraceMock,
+  retryGitLabJobMock,
+  mergeGitLabMRMock,
+  closeGitLabMRMock,
+  reopenGitLabMRMock,
+  updateGitLabMRMock,
+  getGlabKnownHostsMock,
+  getGitLabWorkItemDetailsMock,
+  updateGitLabMRReviewersMock,
+  getIssueMock,
+  deleteWorktreeHistoryDirMock
+}
+
+export { reconcileClaudeAgentViewMock }
+
+vi.mock(import('../../preflight/installed-agent-detection'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  detectInstalledAgentsWithShellPathHydration: detectInstalledAgentsWithShellPathHydrationMock
+}))
+
+vi.mock(import('../../github/client/lookup/pr-for-branch-outcome'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  getPRForBranchOutcome: getPRForBranchOutcomeMock
+}))
+
+vi.mock(import('../../github/client/fetch/get-work-item'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  getWorkItem: getGitHubWorkItemMock,
+  getWorkItemByOwnerRepo: getGitHubWorkItemByOwnerRepoMock
+}))
+
+vi.mock(import('../../github/client/check/get-pr-checks'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  getPRChecks: getGitHubPRChecksMock
+}))
+
+vi.mock(import('../../github/client/check/rerun-pr-checks'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  rerunPRChecks: rerunGitHubPRChecksMock
+}))
+
+vi.mock(import('../../github/client/check/get-pr-check-details'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  getPRCheckDetails: getGitHubPRCheckDetailsMock
+}))
+
+vi.mock(import('../../github/client/fetch/get-pr-comments'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  getPRComments: getGitHubPRCommentsMock
+}))
+
+vi.mock(import('../../github/client/update/resolve-review-thread'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  resolveReviewThread: resolveGitHubReviewThreadMock
+}))
+
+vi.mock(import('../../github/client/update/pr-file-viewed'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  setPRFileViewed: setGitHubPRFileViewedMock
+}))
+
+vi.mock(import('../../github/client/update/pr-details'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  updatePRTitle: updateGitHubPRTitleMock,
+  updatePRDetails: updateGitHubPRDetailsMock
+}))
+
+vi.mock(import('../../github/client/merge/merge-pr'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  mergePR: mergeGitHubPRMock
+}))
+
+vi.mock(import('../../github/client/merge/pr-auto-merge'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  setPRAutoMerge: setGitHubPRAutoMergeMock
+}))
+
+vi.mock(import('../../github/client/update/pr-state'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  updatePRState: updateGitHubPRStateMock
+}))
+
+vi.mock(import('../../github/client/update/pr-reviewers'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  requestPRReviewers: requestGitHubPRReviewersMock,
+  removePRReviewers: removeGitHubPRReviewersMock
+}))
+
+vi.mock(import('../../github/client/create/add-pr-review-comment'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  addPRReviewComment: addGitHubPRReviewCommentMock,
+  addPRReviewCommentReply: addGitHubPRReviewCommentReplyMock
+}))
+
+vi.mock(import('../../github/client/list/list-work-items'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  listWorkItems: listGitHubWorkItemsMock
+}))
+
+vi.mock(import('../../github/client/list/count-work-items'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  countWorkItems: countGitHubWorkItemsMock
+}))
+
+vi.mock(import('../../github/issue-create'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  createIssue: createGitHubIssueMock
+}))
+
+vi.mock(import('../../github/issue-update'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  updateIssue: updateGitHubIssueMock
+}))
+
+vi.mock(import('../../github/issue-comment'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  addIssueComment: addGitHubIssueCommentMock
+}))
+
+vi.mock(import('../../github/issue-field-options'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  listLabels: listGitHubLabelsMock,
+  listAssignableUsers: listGitHubAssignableUsersMock
+}))
+
+vi.mock(import('../../gitlab/merge-request-list'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  listMergeRequests: listGitLabMergeRequestsMock
+}))
+
+vi.mock(import('../../gitlab/work-item-queries'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  listWorkItems: listGitLabWorkItemsMock,
+  listTodos: listGitLabTodosMock,
+  getWorkItemByProjectRef: getGitLabWorkItemByProjectRefMock
+}))
+
+vi.mock(import('../../gitlab/issues'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  listIssues: listGitLabIssuesMock,
+  createIssue: createGitLabIssueMock,
+  addIssueComment: addGitLabIssueCommentMock
+}))
+
+vi.mock(import('../../gitlab/project-label-and-member-lookup'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  listLabels: listGitLabLabelsMock,
+  listAssignableUsers: listGitLabAssignableUsersMock
+}))
+
+vi.mock(import('../../gitlab/gitlab-project-ref-resolution'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  getProjectRefForRemote: getGitLabProjectRefForRemoteMock
+}))
+
+vi.mock(import('../../gitlab/issue-update'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  updateIssue: updateGitLabIssueMock
+}))
+
+vi.mock(import('../../gitlab/merge-request-review-mutations'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  addMRComment: addGitLabMRCommentMock,
+  addMRInlineComment: addGitLabMRInlineCommentMock,
+  resolveMRDiscussion: resolveGitLabMRDiscussionMock,
+  updateMRReviewers: updateGitLabMRReviewersMock
+}))
+
+vi.mock(import('../../gitlab/pipeline-job-mutations'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  getJobTrace: getGitLabJobTraceMock,
+  retryJob: retryGitLabJobMock
+}))
+
+vi.mock(import('../../gitlab/merge-request-state-mutations'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  mergeMR: mergeGitLabMRMock,
+  closeMR: closeGitLabMRMock,
+  reopenMR: reopenGitLabMRMock
+}))
+
+vi.mock(import('../../gitlab/merge-request-update'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  updateMR: updateGitLabMRMock
+}))
+
+vi.mock(import('../../gitlab/gitlab-known-host-probe'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  getGlabKnownHosts: getGlabKnownHostsMock
+}))
+
+vi.mock(import('../../github/client/lookup/get-pr-for-branch'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  getPRForBranch: getPRForBranchMock
+}))

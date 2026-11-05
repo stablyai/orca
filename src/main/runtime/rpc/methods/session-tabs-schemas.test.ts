@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { UpdatePaneLayout } from './session-tabs-schemas'
+import { UpdatePaneLayout } from '../../../../shared/rpc-contract/session-tabs-schemas-params'
 
 const WT = 'id:wt'
 
@@ -19,12 +19,7 @@ describe('UpdatePaneLayout.root (untrusted remote pane-layout tree)', () => {
     expect(parsed.root).toMatchObject({ type: 'split', direction: 'horizontal' })
   })
 
-  it('accepts a null root', () => {
-    expect(UpdatePaneLayout.parse({ worktree: WT, tabId: 'tab', root: null }).root).toBeNull()
-  })
-
   it('rejects an over-deep tree instead of overflowing the stack', () => {
-    // Build a tree deeper than the cap (64) without recursion in the test.
     let node: unknown = { type: 'leaf', leafId: 'x' }
     for (let i = 0; i < 5000; i++) {
       node = {

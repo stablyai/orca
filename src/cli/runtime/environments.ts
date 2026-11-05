@@ -1,34 +1,28 @@
 import {
   addEnvironmentFromPairingCode as addEnvironmentFromPairingCodeInStore,
-  getEnvironmentStorePath,
-  listEnvironments,
   markEnvironmentUsed as markEnvironmentUsedInStore,
   removeEnvironment as removeEnvironmentFromStore,
   resolveEnvironment as resolveEnvironmentFromStore,
-  resolveEnvironmentPairingOffer as resolveEnvironmentPairingOfferFromStore,
+  resolveEnvironmentPairingOffer as resolveEnvironmentPairingOfferFromStore
+} from '../../shared/remote-runtime/host-store/runtime-environment-store'
+import {
   RuntimeEnvironmentStoreError,
   type RuntimeEnvironmentStoreErrorCode
-} from '../../shared/runtime-environment-store'
+} from '../../shared/remote-runtime/host-store/runtime-environment-store-records'
 import type {
   KnownRuntimeEnvironment,
   PublicKnownRuntimeEnvironment
-} from '../../shared/runtime-environments'
-import type { PairingOffer } from '../../shared/pairing'
+} from '../../shared/remote-runtime/host-catalog/runtime-environments'
+import type { PairingOffer } from '../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import { RuntimeClientError } from './types'
 
 export type EnvironmentAddResult = {
   environment: PublicKnownRuntimeEnvironment
 }
 
-export type EnvironmentListResult = {
-  environments: PublicKnownRuntimeEnvironment[]
-}
-
 export type EnvironmentRemoveResult = {
   removed: PublicKnownRuntimeEnvironment
 }
-
-export { getEnvironmentStorePath, listEnvironments }
 
 export function addEnvironmentFromPairingCode(
   userDataPath: string,

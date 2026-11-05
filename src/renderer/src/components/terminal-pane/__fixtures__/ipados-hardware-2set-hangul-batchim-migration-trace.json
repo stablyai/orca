@@ -1,0 +1,282 @@
+{
+  "source": "iPadOS 26 hardware keyboard, Korean 2-set, xterm helper textarea",
+  "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.3 Safari/605.1.15",
+  "maxTouchPoints": 5,
+  "typed": "gksrmfRownla",
+  "expected": "한글깨쥠",
+  "observedSent": ["한", "글", "깨쥠"],
+  "events": [
+    {
+      "type": "keydown",
+      "key": "ㅎ",
+      "keyCode": 71,
+      "inputType": null,
+      "data": "",
+      "value": ""
+    },
+    {
+      "type": "input",
+      "key": "",
+      "keyCode": null,
+      "inputType": "insertText",
+      "data": "ㅎ",
+      "value": "ㅎ"
+    },
+    {
+      "type": "keydown",
+      "key": "ㅏ",
+      "keyCode": 75,
+      "inputType": null,
+      "data": "",
+      "value": "ㅎ"
+    },
+    {
+      "type": "input",
+      "key": "",
+      "keyCode": null,
+      "inputType": "deleteContentBackward",
+      "data": "",
+      "value": ""
+    },
+    {
+      "type": "input",
+      "key": "",
+      "keyCode": null,
+      "inputType": "insertText",
+      "data": "하",
+      "value": "하"
+    },
+    {
+      "type": "keydown",
+      "key": "ㄴ",
+      "keyCode": 83,
+      "inputType": null,
+      "data": "",
+      "value": "하"
+    },
+    {
+      "type": "input",
+      "key": "",
+      "keyCode": null,
+      "inputType": "deleteContentBackward",
+      "data": "",
+      "value": ""
+    },
+    {
+      "type": "input",
+      "key": "",
+      "keyCode": null,
+      "inputType": "insertText",
+      "data": "한",
+      "value": "한"
+    },
+    {
+      "type": "keydown",
+      "key": "ㄱ",
+      "keyCode": 82,
+      "inputType": null,
+      "data": "",
+      "value": "한"
+    },
+    {
+      "type": "input",
+      "key": "",
+      "keyCode": null,
+      "inputType": "insertText",
+      "data": "ㄱ",
+      "value": "한ㄱ"
+    },
+    {
+      "type": "keydown",
+      "key": "ㅡ",
+      "keyCode": 77,
+      "inputType": null,
+      "data": "",
+      "value": "한ㄱ"
+    },
+    {
+      "type": "input",
+      "key": "",
+      "keyCode": null,
+      "inputType": "deleteContentBackward",
+      "data": "",
+      "value": "한"
+    },
+    {
+      "type": "input",
+      "key": "",
+      "keyCode": null,
+      "inputType": "insertText",
+      "data": "그",
+      "value": "한그"
+    },
+    {
+      "type": "keydown",
+      "key": "ㄹ",
+      "keyCode": 70,
+      "inputType": null,
+      "data": "",
+      "value": "한그"
+    },
+    {
+      "type": "input",
+      "key": "",
+      "keyCode": null,
+      "inputType": "deleteContentBackward",
+      "data": "",
+      "value": "한"
+    },
+    {
+      "type": "input",
+      "key": "",
+      "keyCode": null,
+      "inputType": "insertText",
+      "data": "글",
+      "value": "한글"
+    },
+    {
+      "type": "keydown",
+      "key": "Shift",
+      "keyCode": 16,
+      "inputType": null,
+      "data": "",
+      "value": "한글"
+    },
+    {
+      "type": "keydown",
+      "key": "ㄲ",
+      "keyCode": 82,
+      "inputType": null,
+      "data": "",
+      "value": "한글"
+    },
+    {
+      "type": "input",
+      "key": "",
+      "keyCode": null,
+      "inputType": "insertText",
+      "data": "ㄲ",
+      "value": "한글ㄲ"
+    },
+    {
+      "type": "keydown",
+      "key": "ㅐ",
+      "keyCode": 79,
+      "inputType": null,
+      "data": "",
+      "value": "한글ㄲ"
+    },
+    {
+      "type": "input",
+      "key": "",
+      "keyCode": null,
+      "inputType": "deleteContentBackward",
+      "data": "",
+      "value": "한글"
+    },
+    {
+      "type": "input",
+      "key": "",
+      "keyCode": null,
+      "inputType": "insertText",
+      "data": "깨",
+      "value": "한글깨"
+    },
+    {
+      "type": "keydown",
+      "key": "ㅈ",
+      "keyCode": 87,
+      "inputType": null,
+      "data": "",
+      "value": "한글깨"
+    },
+    {
+      "type": "input",
+      "key": "",
+      "keyCode": null,
+      "inputType": "deleteContentBackward",
+      "data": "",
+      "value": "한글"
+    },
+    {
+      "type": "input",
+      "key": "",
+      "keyCode": null,
+      "inputType": "insertText",
+      "data": "깾",
+      "value": "한글깾"
+    },
+    {
+      "type": "keydown",
+      "key": "ㅜ",
+      "keyCode": 78,
+      "inputType": null,
+      "data": "",
+      "value": "한글깾"
+    },
+    {
+      "type": "input",
+      "key": "",
+      "keyCode": null,
+      "inputType": "deleteContentBackward",
+      "data": "",
+      "value": "한글"
+    },
+    {
+      "type": "input",
+      "key": "",
+      "keyCode": null,
+      "inputType": "insertText",
+      "data": "깨주",
+      "value": "한글깨주"
+    },
+    {
+      "type": "keydown",
+      "key": "ㅣ",
+      "keyCode": 76,
+      "inputType": null,
+      "data": "",
+      "value": "한글깨주"
+    },
+    {
+      "type": "input",
+      "key": "",
+      "keyCode": null,
+      "inputType": "deleteContentBackward",
+      "data": "",
+      "value": "한글깨"
+    },
+    {
+      "type": "input",
+      "key": "",
+      "keyCode": null,
+      "inputType": "insertText",
+      "data": "쥐",
+      "value": "한글깨쥐"
+    },
+    {
+      "type": "keydown",
+      "key": "ㅁ",
+      "keyCode": 65,
+      "inputType": null,
+      "data": "",
+      "value": "한글깨쥐"
+    },
+    {
+      "type": "input",
+      "key": "",
+      "keyCode": null,
+      "inputType": "deleteContentBackward",
+      "data": "",
+      "value": "한글깨"
+    },
+    {
+      "type": "input",
+      "key": "",
+      "keyCode": null,
+      "inputType": "insertText",
+      "data": "쥠",
+      "value": "한글깨쥠"
+    }
+  ]
+}

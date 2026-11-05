@@ -139,7 +139,7 @@ async function chooseWorktree(ws: WebSocket): Promise<string> {
 }
 
 async function chooseTerminal(ws: WebSocket, worktree: string): Promise<string> {
-  const list = await send(ws, 'terminal.list', { worktree })
+  const list = await send(ws, 'terminal.list', { worktree, includeVisualLayouts: false })
   if (!list.ok) {
     throw new Error(`terminal.list failed: ${formatResponse(list)}`)
   }
@@ -273,8 +273,7 @@ ws.on('message', (data) => {
   try {
     plaintext = decrypt(data.toString())
   } catch {
-    // Plaintext handshake/control frames such as e2ee_ready are handled by the
-    // connect flow above. The global listener only cares about encrypted RPC.
+    // Global listener handles encrypted RPC; connect flow owns plaintext handshake/control frames such as e2ee_ready.
     return
   }
   if (!plaintext) {

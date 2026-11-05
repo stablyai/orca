@@ -1,7 +1,8 @@
 /* oxlint-disable typescript-eslint/no-explicit-any -- sherpa-onnx native addon has no type definitions */
-import { parentPort, workerData } from 'worker_threads'
-import { readdirSync } from 'fs'
+import { parentPort, workerData } from 'node:worker_threads'
 import { resampleToRate } from './stt-audio-resample'
+import { OfflineAudioChunker } from './stt-offline-audio-chunker'
+import { buildHotwordsConfig, resolveFile, resolveTokens } from './stt-worker-model-config'
 
 type WorkerMessage =
   | {
@@ -16,18 +17,15 @@ type WorkerMessage =
     }
   | { type: 'feed'; samples: Float32Array; sampleRate: number }
   | { type: 'stop' }
+  | { type: 'discard' }
   | { type: 'teardown' }
 
-// Why: the main sherpa-onnx npm package uses WASM which cannot access the host
-// filesystem to load model files. We use the platform-specific native addon
-// (e.g. sherpa-onnx-darwin-arm64) which has a flat C-style API and direct
-// filesystem access. The main thread resolves the correct absolute path
-// (dev vs packaged) and passes it via workerData.
+// Use the platform native addon: the main sherpa-onnx WASM package cannot load host model files. Main supplies its resolved path.
 let sherpa: any = null
 let recognizer: any = null
 let stream: any = null
 let isStreaming = false
-let offlineBuffer: Float32Array[] = []
+let offlineChunker: OfflineAudioChunker | null = null
 let offlineSampleRate = 16000
 
 function loadSherpa(): any {
@@ -38,80 +36,13 @@ function loadSherpa(): any {
   return require(modulePath)
 }
 
-// Why: different models name their ONNX files differently (e.g.
-// encoder.int8.onnx vs tiny-encoder.onnx vs encoder-epoch-99-avg-1.onnx).
-// We resolve the actual path from the manifest's files list by searching
-// for the role name anywhere in the filename.
-function resolveFile(files: string[], role: string, modelDir: string, ext = '.onnx'): string {
-  const match = files.find((f) => f.includes(role) && f.endsWith(ext))
-  if (!match) {
-    throw new Error(`No *${role}*${ext} found in model files: ${files.join(', ')}`)
-  }
-  return `${modelDir}/${match}`
-}
-
-function resolveTokens(files: string[], modelDir: string): string {
-  const match = files.find((f) => f.endsWith('tokens.txt'))
-  if (!match) {
-    throw new Error(`No *tokens.txt found in model files: ${files.join(', ')}`)
-  }
-  return `${modelDir}/${match}`
-}
-
-// Why: BPE models need a vocab file for hotwords token matching. The file
-// ships in the model archive but isn't listed in the manifest. We discover
-// it at runtime to avoid breaking existing downloads.
-function discoverBpeVocab(modelDir: string): string | undefined {
-  try {
-    const entries = readdirSync(modelDir)
-    const vocabFile = entries.find((f) => f.endsWith('.vocab'))
-    return vocabFile ? `${modelDir}/${vocabFile}` : undefined
-  } catch {
-    return undefined
-  }
-}
-
-function buildHotwordsConfig(msg: Extract<WorkerMessage, { type: 'init' }>): {
-  decodingMethod: string
-  hotwordsFile?: string
-  hotwordsScore?: number
-  modelingUnit?: string
-  bpeVocab?: string
-} {
-  if (msg.modelType !== 'transducer' || !msg.hotwordsFilePath) {
-    return { decodingMethod: 'greedy_search' }
-  }
-
-  const unit = msg.modelingUnit
-  if (unit?.includes('bpe')) {
-    const bpeVocab = discoverBpeVocab(msg.modelDir)
-    if (!bpeVocab) {
-      return { decodingMethod: 'greedy_search' }
-    }
-    return {
-      decodingMethod: 'modified_beam_search',
-      hotwordsFile: msg.hotwordsFilePath,
-      hotwordsScore: 1.5,
-      modelingUnit: unit,
-      bpeVocab
-    }
-  }
-
-  return {
-    decodingMethod: 'modified_beam_search',
-    hotwordsFile: msg.hotwordsFilePath,
-    hotwordsScore: 1.5,
-    modelingUnit: unit
-  }
-}
-
 function handleInit(msg: Extract<WorkerMessage, { type: 'init' }>): void {
   try {
     sherpa = loadSherpa()
 
     const { modelDir, modelType, streaming, sampleRate, files } = msg
     isStreaming = streaming
-    offlineBuffer = []
+    offlineChunker = streaming ? null : new OfflineAudioChunker(sampleRate)
     offlineSampleRate = sampleRate
 
     const tokens = resolveTokens(files, modelDir)
@@ -177,6 +108,41 @@ function handleInit(msg: Extract<WorkerMessage, { type: 'init' }>): void {
       }
       recognizer = sherpa.createOfflineRecognizer(config)
       stream = sherpa.createOfflineStream(recognizer)
+    } else if (modelType === 'nemo-ctc') {
+      const config = {
+        featConfig: { sampleRate, featureDim: 80 },
+        modelConfig: {
+          nemoCtc: {
+            model: resolveFile(files, 'model', modelDir)
+          },
+          tokens,
+          numThreads: 2,
+          provider: 'cpu',
+          debug: 0
+        },
+        decodingMethod: 'greedy_search'
+      }
+      recognizer = sherpa.createOfflineRecognizer(config)
+      stream = sherpa.createOfflineStream(recognizer)
+    } else if (modelType === 'senseVoice') {
+      const config = {
+        featConfig: { sampleRate, featureDim: 80 },
+        modelConfig: {
+          senseVoice: {
+            model: resolveFile(files, 'model', modelDir),
+            // Empty string = auto-detect language (supports zh/en/ja/ko/yue).
+            language: '',
+            useInverseTextNormalization: 1
+          },
+          tokens,
+          numThreads: 2,
+          provider: 'cpu',
+          debug: 0
+        },
+        decodingMethod: 'greedy_search'
+      }
+      recognizer = sherpa.createOfflineRecognizer(config)
+      stream = sherpa.createOfflineStream(recognizer)
     } else {
       const config = {
         featConfig: { sampleRate, featureDim: 80 },
@@ -203,6 +169,38 @@ function handleInit(msg: Extract<WorkerMessage, { type: 'init' }>): void {
   }
 }
 
+// Offline streams are single-use; refresh even after failed decodes on a warm worker.
+function decodeOfflineChunk(samples: Float32Array): string {
+  try {
+    sherpa.acceptWaveformOffline(stream, { sampleRate: offlineSampleRate, samples })
+    sherpa.decodeOfflineStream(recognizer, stream)
+    const resultJson = sherpa.getOfflineStreamResultAsJson(stream)
+    const result = JSON.parse(resultJson)
+    return result?.text?.trim() ?? ''
+  } finally {
+    if (sherpa && recognizer) {
+      stream = sherpa.createOfflineStream(recognizer)
+    }
+  }
+}
+
+// Discard residual audio and spent streams so a warm worker never carries one session into the next.
+function resetSessionState(): void {
+  try {
+    if (!isStreaming) {
+      offlineChunker = new OfflineAudioChunker(offlineSampleRate)
+    }
+    if (sherpa && recognizer) {
+      stream = isStreaming
+        ? sherpa.createOnlineStream(recognizer)
+        : sherpa.createOfflineStream(recognizer)
+    }
+  } catch {
+    // The old stream still holds the last session's audio; exiting settles stop and forces a fresh worker.
+    process.exit(1)
+  }
+}
+
 function handleFeed(msg: Extract<WorkerMessage, { type: 'feed' }>): void {
   if (!recognizer || !stream) {
     return
@@ -210,9 +208,7 @@ function handleFeed(msg: Extract<WorkerMessage, { type: 'feed' }>): void {
 
   try {
     const inputRate = msg.sampleRate || offlineSampleRate
-    // Why: sherpa's native stream aborts the process if one recognizer sees
-    // different input rates across chunks. Normalize before crossing the
-    // native boundary so device/context changes become recoverable JS state.
+    // Normalize rates before native decode: mixed rates on one recognizer abort the process.
     const samples = resampleToRate(msg.samples, inputRate, offlineSampleRate)
     if (isStreaming) {
       sherpa.acceptWaveformOnline(stream, { sampleRate: offlineSampleRate, samples })
@@ -236,9 +232,23 @@ function handleFeed(msg: Extract<WorkerMessage, { type: 'feed' }>): void {
         sherpa.reset(recognizer, stream)
       }
     } else {
-      // Why: offline recognizers cannot decode incrementally — they need all
-      // audio buffered first, then decoded in one shot when dictation stops.
-      offlineBuffer.push(new Float32Array(samples))
+      // Bound ONNX allocations below Chromium's >=2GiB crash threshold (#7925); consumers append final segments.
+      const readyChunks = offlineChunker?.push(new Float32Array(samples)) ?? []
+      // push() already consumed these windows; decode later ones after failures using the refreshed stream.
+      let firstError: unknown = null
+      for (const chunk of readyChunks) {
+        try {
+          const text = decodeOfflineChunk(chunk)
+          if (text) {
+            parentPort?.postMessage({ type: 'final', text })
+          }
+        } catch (err) {
+          firstError ??= err
+        }
+      }
+      if (firstError) {
+        throw firstError
+      }
     }
   } catch (err) {
     parentPort?.postMessage({ type: 'error', error: String(err) })
@@ -263,34 +273,28 @@ function handleStop(): void {
       if (text) {
         parentPort?.postMessage({ type: 'final', text })
       }
-      stream = sherpa.createOnlineStream(recognizer)
     } else {
-      // Why: offline recognizer decodes all audio at once — concatenate
-      // buffered chunks into a single Float32Array and feed it to the stream.
-      const totalLength = offlineBuffer.reduce((sum, chunk) => sum + chunk.length, 0)
-      if (totalLength > 0) {
-        const combined = new Float32Array(totalLength)
-        let offset = 0
-        for (const chunk of offlineBuffer) {
-          combined.set(chunk, offset)
-          offset += chunk.length
-        }
-        sherpa.acceptWaveformOffline(stream, { sampleRate: offlineSampleRate, samples: combined })
-        sherpa.decodeOfflineStream(recognizer, stream)
-        const resultJson = sherpa.getOfflineStreamResultAsJson(stream)
-        const result = JSON.parse(resultJson)
-        const text = result?.text?.trim()
+      // flush() leaves less than one bounded chunk.
+      const remaining = offlineChunker?.flush()
+      if (remaining && remaining.length > 0) {
+        const text = decodeOfflineChunk(remaining)
         if (text) {
           parentPort?.postMessage({ type: 'final', text })
         }
       }
-      offlineBuffer = []
-      stream = sherpa.createOfflineStream(recognizer)
     }
   } catch (err) {
     parentPort?.postMessage({ type: 'error', error: String(err) })
+  } finally {
+    resetSessionState()
+    // Recovery must not suppress the stopped signal awaited by stopDictation.
+    parentPort?.postMessage({ type: 'stopped' })
   }
+}
 
+// A canceled dictation drops its audio undecoded so the warm worker is free at once.
+function handleDiscard(): void {
+  resetSessionState()
   parentPort?.postMessage({ type: 'stopped' })
 }
 
@@ -298,7 +302,7 @@ function handleTeardown(): void {
   stream = null
   recognizer = null
   sherpa = null
-  offlineBuffer = []
+  offlineChunker = null
   process.exit(0)
 }
 
@@ -312,6 +316,9 @@ parentPort?.on('message', (msg: WorkerMessage) => {
       break
     case 'stop':
       handleStop()
+      break
+    case 'discard':
+      handleDiscard()
       break
     case 'teardown':
       handleTeardown()

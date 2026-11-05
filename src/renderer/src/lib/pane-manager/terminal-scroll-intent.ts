@@ -1,34 +1,46 @@
-import type { IDisposable } from '@xterm/xterm'
+import {
+  addTerminalFollowOutputWaiter,
+  notifyTerminalFollowOutputWaiters
+} from './terminal-follow-output-waiters'
+import { isTerminalScrollIntentRebuildInFlight } from './terminal-scroll-intent-rebuild'
+import {
+  anchorPinnedScrollIntent,
+  resolvePinnedScrollRestore
+} from './terminal-scroll-intent-anchor'
+import {
+  readKeyedTerminalScrollIntent,
+  readKeyedTerminalScrollIntentBinding,
+  writeKeyedTerminalScrollIntent,
+  writeKeyedTerminalScrollIntentBinding,
+  type TerminalScrollIntent,
+  type TerminalScrollIntentKey,
+  type TerminalScrollIntentKind
+} from './terminal-scroll-intent-key-store'
+import {
+  clampTerminalViewportY,
+  isTerminalViewportAtBottom,
+  readTerminalScrollBufferSnapshot,
+  safeTerminalScrollCall,
+  type TerminalScrollBufferType
+} from './terminal-scroll-buffer-snapshot'
 
-type TerminalScrollIntentKind = 'followOutput' | 'pinnedViewport'
-
-type BufferType = 'normal' | 'alternate'
-
-type TerminalScrollIntentTarget = {
-  buffer?: {
-    active?: {
-      type?: string
-      viewportY?: number
-      baseY?: number
-    }
-  }
+export type TerminalScrollIntentTarget = {
+  buffer?: Parameters<typeof readTerminalScrollBufferSnapshot>[0]['buffer']
   scrollToBottom?: () => void
   scrollToLine?: (line: number) => void
 }
 
-type TerminalScrollIntentKey = string
-
-type TerminalScrollIntent = {
+export type TerminalStructuralScrollIntentSnapshot = {
   kind: TerminalScrollIntentKind
-  bufferType: BufferType
+  bufferType: TerminalScrollBufferType
   viewportY: number
   baseY: number
+  revision: number
 }
 
-type TerminalScrollIntentWriteSnapshot = {
-  kind: TerminalScrollIntentKind
-  bufferType: BufferType
-  viewportY: number
+type TerminalScrollIntentEnforceOptions = {
+  // viewportLine preserves growing-buffer absolute lines; bottomOffset survives renumbering by replay/reflow.
+  restoreBy?: 'viewportLine' | 'bottomOffset'
 }
 
 const terminalScrollIntentByTerminal = new WeakMap<
@@ -39,43 +51,49 @@ const terminalScrollIntentKeyByTerminal = new WeakMap<
   TerminalScrollIntentTarget,
   TerminalScrollIntentKey
 >()
-const terminalScrollIntentByKey = new Map<TerminalScrollIntentKey, TerminalScrollIntent>()
+const terminalScrollIntentKeyBindingByTerminal = new WeakMap<TerminalScrollIntentTarget, number>()
 
-const BOTTOM_TOLERANCE_ROWS = 1
+let nextTerminalScrollIntentRevision = 1
+let nextTerminalScrollIntentKeyBinding = 1
 
-function readBufferSnapshot(
-  terminal: TerminalScrollIntentTarget
-): { bufferType: BufferType; viewportY: number; baseY: number } | null {
-  const buffer = terminal.buffer?.active
-  const viewportY = buffer?.viewportY
-  const baseY = buffer?.baseY
-  if (typeof viewportY !== 'number' || typeof baseY !== 'number') {
-    return null
+/** Runs `listener` once the terminal's intent next becomes follow-output; returns a canceller. Fires immediately when already following. */
+export function onTerminalScrollIntentFollowOutput(
+  terminal: TerminalScrollIntentTarget,
+  listener: () => void
+): () => void {
+  if (getTerminalScrollIntentKind(terminal) === 'followOutput') {
+    listener()
+    return () => {}
   }
-  return {
-    bufferType: buffer?.type === 'alternate' ? 'alternate' : 'normal',
-    viewportY,
-    baseY
-  }
-}
-
-function isAtBottom(viewportY: number, baseY: number): boolean {
-  return viewportY >= baseY - BOTTOM_TOLERANCE_ROWS
+  return addTerminalFollowOutputWaiter(terminal, listener)
 }
 
 function writeIntent(
   terminal: TerminalScrollIntentTarget,
   kind: TerminalScrollIntentKind
 ): TerminalScrollIntent | null {
-  const snapshot = readBufferSnapshot(terminal)
+  const snapshot = readTerminalScrollBufferSnapshot(terminal)
   if (!snapshot) {
     return null
   }
-  const intent = { kind, ...snapshot }
+  return writeIntentSnapshot(terminal, kind, snapshot)
+}
+
+function writeIntentSnapshot(
+  terminal: TerminalScrollIntentTarget,
+  kind: TerminalScrollIntentKind,
+  snapshot: { bufferType: TerminalScrollBufferType; viewportY: number; baseY: number }
+): TerminalScrollIntent {
+  const intent = { kind, ...snapshot, revision: nextTerminalScrollIntentRevision }
+  nextTerminalScrollIntentRevision += 1
   terminalScrollIntentByTerminal.set(terminal, intent)
+  anchorPinnedScrollIntent(terminal, intent)
   const key = terminalScrollIntentKeyByTerminal.get(terminal)
   if (key) {
-    terminalScrollIntentByKey.set(key, intent)
+    writeKeyedTerminalScrollIntent(key, intent)
+  }
+  if (kind === 'followOutput') {
+    notifyTerminalFollowOutputWaiters(terminal)
   }
   return intent
 }
@@ -86,10 +104,10 @@ function readStoredIntent(terminal: TerminalScrollIntentTarget): TerminalScrollI
     return terminalIntent
   }
   const key = terminalScrollIntentKeyByTerminal.get(terminal)
-  return key ? terminalScrollIntentByKey.get(key) : undefined
+  return key ? readKeyedTerminalScrollIntent(key) : undefined
 }
 
-function bindTerminalScrollIntentKey(
+export function bindTerminalScrollIntentKey(
   terminal: TerminalScrollIntentTarget,
   key: TerminalScrollIntentKey | undefined
 ): TerminalScrollIntent | undefined {
@@ -97,27 +115,28 @@ function bindTerminalScrollIntentKey(
     return terminalScrollIntentByTerminal.get(terminal)
   }
   terminalScrollIntentKeyByTerminal.set(terminal, key)
-  const existing = terminalScrollIntentByKey.get(key)
+  const binding = nextTerminalScrollIntentKeyBinding
+  nextTerminalScrollIntentKeyBinding += 1
+  terminalScrollIntentKeyBindingByTerminal.set(terminal, binding)
+  writeKeyedTerminalScrollIntentBinding(key, binding)
+  const existing = readKeyedTerminalScrollIntent(key)
   if (existing) {
     terminalScrollIntentByTerminal.set(terminal, existing)
   }
   return existing
 }
 
-function clampViewportY(viewportY: number, baseY: number): number {
-  return Math.max(0, Math.min(viewportY, baseY))
-}
-
-function safeScrollCall(fn: () => void): boolean {
-  try {
-    fn()
+export function isTerminalScrollIntentKeyBindingCurrent(
+  terminal: TerminalScrollIntentTarget
+): boolean {
+  const key = terminalScrollIntentKeyByTerminal.get(terminal)
+  if (!key) {
     return true
-  } catch (err) {
-    if (err instanceof TypeError && /dimensions/.test(err.message)) {
-      return false
-    }
-    throw err
   }
+  return (
+    terminalScrollIntentKeyBindingByTerminal.get(terminal) ===
+    readKeyedTerminalScrollIntentBinding(key)
+  )
 }
 
 export function markTerminalFollowOutput(terminal: TerminalScrollIntentTarget): void {
@@ -130,41 +149,49 @@ export function markTerminalPinnedViewport(terminal: TerminalScrollIntentTarget)
 
 export function syncTerminalScrollIntentFromViewport(
   terminal: TerminalScrollIntentTarget,
-  options: { preservePinnedAtBottom?: boolean } = {}
+  options: { allowBufferShrink?: boolean; preservePinnedAtBottom?: boolean } = {}
 ): void {
-  const snapshot = readBufferSnapshot(terminal)
+  if (isTerminalScrollIntentRebuildInFlight(terminal)) {
+    return
+  }
+  const snapshot = readTerminalScrollBufferSnapshot(terminal)
   if (!snapshot) {
     return
   }
   const existing = readStoredIntent(terminal)
-  // Why: a remounted/replayed terminal can briefly report an empty or shorter
-  // scrollback. That transient state must not erase a durable pinned viewport.
-  if (existing?.kind === 'pinnedViewport' && snapshot.baseY < existing.baseY) {
+  // Transient empty/short scrollback after replay/remount must not erase a durable pin.
+  if (
+    !options.allowBufferShrink &&
+    existing?.kind === 'pinnedViewport' &&
+    snapshot.baseY < existing.baseY
+  ) {
     terminalScrollIntentByTerminal.set(terminal, existing)
     return
   }
   if (
     options.preservePinnedAtBottom &&
     existing?.kind === 'pinnedViewport' &&
-    isAtBottom(snapshot.viewportY, snapshot.baseY)
+    isTerminalViewportAtBottom(snapshot.viewportY, snapshot.baseY)
   ) {
     return
   }
-  writeIntent(
-    terminal,
-    isAtBottom(snapshot.viewportY, snapshot.baseY) ? 'followOutput' : 'pinnedViewport'
-  )
-}
-
-export function syncTerminalScrollIntentSoon(
-  terminal: TerminalScrollIntentTarget,
-  options: { preservePinnedAtBottom?: boolean } = {}
-): void {
-  const sync = (): void => syncTerminalScrollIntentFromViewport(terminal, options)
-  queueMicrotask(sync)
-  requestAnimationFrame(sync)
-  requestAnimationFrame(() => requestAnimationFrame(sync))
-  setTimeout(sync, 80)
+  const kind = isTerminalViewportAtBottom(snapshot.viewportY, snapshot.baseY)
+    ? 'followOutput'
+    : 'pinnedViewport'
+  // Parser replies and repeated settle samples can be no-ops; invented revisions cancel valid structural restores and amplify output bursts.
+  if (
+    existing?.kind === kind &&
+    existing.bufferType === snapshot.bufferType &&
+    (kind === 'followOutput' ||
+      resolvePinnedScrollRestore(terminal, existing).viewportY === snapshot.viewportY)
+  ) {
+    if (kind === 'pinnedViewport') {
+      // Refresh geometry after native baseY growth or trimming without inventing user intent; keyed remount must retain content rather than stale offset.
+      Object.assign(existing, snapshot)
+    }
+    return
+  }
+  writeIntent(terminal, kind)
 }
 
 export function getTerminalScrollIntentKind(
@@ -174,120 +201,129 @@ export function getTerminalScrollIntentKind(
   if (existing) {
     return existing.kind
   }
-  const snapshot = readBufferSnapshot(terminal)
+  const snapshot = readTerminalScrollBufferSnapshot(terminal)
   if (!snapshot) {
     return 'followOutput'
   }
-  return isAtBottom(snapshot.viewportY, snapshot.baseY) ? 'followOutput' : 'pinnedViewport'
+  return isTerminalViewportAtBottom(snapshot.viewportY, snapshot.baseY)
+    ? 'followOutput'
+    : 'pinnedViewport'
 }
 
-export function captureTerminalWriteScrollIntent(
+export function captureTerminalStructuralScrollIntent(
   terminal: TerminalScrollIntentTarget
-): TerminalScrollIntentWriteSnapshot | null {
-  const snapshot = readBufferSnapshot(terminal)
+): TerminalStructuralScrollIntentSnapshot | null {
+  if (isTerminalScrollIntentRebuildInFlight(terminal)) {
+    return null
+  }
+  const snapshot = readTerminalScrollBufferSnapshot(terminal)
   if (!snapshot) {
     return null
   }
   const existing = readStoredIntent(terminal)
-  const kind =
+  let kind =
     existing?.kind ??
-    (isAtBottom(snapshot.viewportY, snapshot.baseY) ? 'followOutput' : 'pinnedViewport')
+    (isTerminalViewportAtBottom(snapshot.viewportY, snapshot.baseY)
+      ? 'followOutput'
+      : 'pinnedViewport')
+  // A pin still at bottom is phantom and would freeze stale content; trust that reading only when scrollback is at least as long as the pin, never during shorter replay.
+  if (
+    kind === 'pinnedViewport' &&
+    isTerminalViewportAtBottom(snapshot.viewportY, snapshot.baseY) &&
+    (!existing || snapshot.baseY >= existing.baseY)
+  ) {
+    kind = 'followOutput'
+  }
+  // Keyed remount starts 0/0; preserve pre-remount coordinates or bottom-offset restore loses the pin.
+  const capturedCoordinates =
+    existing?.kind === 'pinnedViewport' && snapshot.baseY < existing.baseY ? existing : snapshot
   return {
+    ...capturedCoordinates,
     kind,
-    bufferType: snapshot.bufferType,
-    viewportY: snapshot.viewportY
+    revision: existing?.revision ?? 0
   }
 }
 
-export function enforceTerminalWriteScrollIntent(
+export function isTerminalStructuralScrollIntentCurrent(
   terminal: TerminalScrollIntentTarget,
-  snapshot: TerminalScrollIntentWriteSnapshot | null
-): void {
+  snapshot: TerminalStructuralScrollIntentSnapshot | null
+): boolean {
   if (!snapshot) {
+    return false
+  }
+  return (readStoredIntent(terminal)?.revision ?? 0) === snapshot.revision
+}
+
+export function restoreTerminalStructuralScrollIntent(
+  terminal: TerminalScrollIntentTarget,
+  snapshot: TerminalStructuralScrollIntentSnapshot | null,
+  options: TerminalScrollIntentEnforceOptions = {}
+): void {
+  if (
+    !snapshot ||
+    !isTerminalStructuralScrollIntentCurrent(terminal, snapshot) ||
+    isTerminalScrollIntentRebuildInFlight(terminal)
+  ) {
     return
   }
-  const current = readBufferSnapshot(terminal)
+  const current = readTerminalScrollBufferSnapshot(terminal)
   if (!current || current.bufferType !== snapshot.bufferType) {
     return
   }
   if (snapshot.kind === 'followOutput') {
-    if (safeScrollCall(() => terminal.scrollToBottom?.())) {
+    if (safeTerminalScrollCall(() => terminal.scrollToBottom?.())) {
       writeIntent(terminal, 'followOutput')
     }
     return
   }
-  const targetY = clampViewportY(snapshot.viewportY, current.baseY)
+  const requestedY =
+    options.restoreBy === 'bottomOffset'
+      ? current.baseY - Math.max(0, snapshot.baseY - snapshot.viewportY)
+      : snapshot.viewportY
+  const targetY = clampTerminalViewportY(requestedY, current.baseY)
   if (current.viewportY !== targetY) {
-    safeScrollCall(() => terminal.scrollToLine?.(targetY))
+    if (!safeTerminalScrollCall(() => terminal.scrollToLine?.(targetY))) {
+      // Renderer teardown can reject scrolling; retain the intended pin for retry instead of latching transient bottom geometry.
+      writeIntentSnapshot(terminal, 'pinnedViewport', {
+        bufferType: current.bufferType,
+        viewportY: targetY,
+        baseY: current.baseY
+      })
+      return
+    }
+  }
+  const existing = readStoredIntent(terminal)
+  // Shorter scrollback indicates rebuild; relatching would overwrite the durable pin with cleared line zero.
+  if (existing?.kind === 'pinnedViewport' && current.baseY < existing.baseY) {
+    return
   }
   writeIntent(terminal, 'pinnedViewport')
 }
 
 export function enforceTerminalCurrentScrollIntent(terminal: TerminalScrollIntentTarget): void {
+  if (isTerminalScrollIntentRebuildInFlight(terminal)) {
+    return
+  }
   const existing = readStoredIntent(terminal)
-  const snapshot = existing
-    ? {
-        kind: existing.kind,
-        bufferType: existing.bufferType,
-        viewportY: existing.viewportY
-      }
-    : captureTerminalWriteScrollIntent(terminal)
-  enforceTerminalWriteScrollIntent(terminal, snapshot)
-}
-
-export function attachTerminalScrollIntentTracking(
-  terminal: TerminalScrollIntentTarget,
-  host: HTMLElement,
-  intentKey?: TerminalScrollIntentKey
-): IDisposable {
-  if (!bindTerminalScrollIntentKey(terminal, intentKey)) {
-    syncTerminalScrollIntentFromViewport(terminal)
+  if (!existing) {
+    restoreTerminalStructuralScrollIntent(terminal, captureTerminalStructuralScrollIntent(terminal))
+    return
   }
-  let pointerScrollActive = false
-
-  const onWheel = (event: WheelEvent): void => {
-    if (event.deltaY < 0) {
-      markTerminalPinnedViewport(terminal)
-      syncTerminalScrollIntentSoon(terminal, { preservePinnedAtBottom: true })
-      return
-    }
-    syncTerminalScrollIntentSoon(terminal)
+  const snapshot = {
+    kind: existing.kind,
+    bufferType: existing.bufferType,
+    viewportY: existing.viewportY,
+    baseY: existing.baseY,
+    revision: existing.revision
   }
-
-  const onPointerDown = (event: PointerEvent): void => {
-    const target = event.target
-    pointerScrollActive =
-      typeof Element !== 'undefined' &&
-      target instanceof Element &&
-      (target.classList.contains('xterm-viewport') || target.closest('.xterm-viewport') !== null)
+  if (
+    snapshot.kind === 'pinnedViewport' &&
+    isTerminalViewportAtBottom(snapshot.viewportY, snapshot.baseY)
+  ) {
+    // A pin recorded at bottom never detached; resume must follow output instead of freezing that stale line.
+    snapshot.kind = 'followOutput'
   }
-
-  const onPointerDone = (): void => {
-    if (!pointerScrollActive) {
-      return
-    }
-    pointerScrollActive = false
-    syncTerminalScrollIntentFromViewport(terminal)
-  }
-
-  const onScroll = (): void => {
-    if (pointerScrollActive) {
-      syncTerminalScrollIntentFromViewport(terminal)
-    }
-  }
-
-  host.addEventListener('wheel', onWheel, { capture: true, passive: true })
-  host.addEventListener('pointerdown', onPointerDown, true)
-  host.addEventListener('scroll', onScroll, true)
-  globalThis.addEventListener?.('pointerup', onPointerDone, true)
-  globalThis.addEventListener?.('pointercancel', onPointerDone, true)
-  return {
-    dispose: () => {
-      host.removeEventListener('wheel', onWheel, true)
-      host.removeEventListener('pointerdown', onPointerDown, true)
-      host.removeEventListener('scroll', onScroll, true)
-      globalThis.removeEventListener?.('pointerup', onPointerDone, true)
-      globalThis.removeEventListener?.('pointercancel', onPointerDone, true)
-    }
-  }
+  const restore = resolvePinnedScrollRestore(terminal, existing)
+  snapshot.viewportY = restore.viewportY
+  restoreTerminalStructuralScrollIntent(terminal, snapshot, { restoreBy: restore.restoreBy })
 }

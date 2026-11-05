@@ -1,24 +1,56 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as ResolveOwnerModule from '@/lib/resolve-owner'
 
 const closeWebRuntimeSessionTabMock = vi.fn()
-const getRuntimeEnvironmentIdForWorktreeMock = vi.fn()
+const ownerLookup = vi.hoisted(() => ({ calls: 0 }))
 
-vi.mock('./web-runtime-session', () => ({
+vi.mock('./web-runtime-session-tab-lifecycle', () => ({
   closeWebRuntimeSessionTab: (args: unknown) => closeWebRuntimeSessionTabMock(args)
 }))
 
-vi.mock('@/lib/worktree-runtime-owner', () => ({
-  getRuntimeEnvironmentIdForWorktree: (...args: unknown[]) =>
-    getRuntimeEnvironmentIdForWorktreeMock(...args)
-}))
+vi.mock('@/lib/resolve-owner', async (importOriginal) => {
+  const actual = await importOriginal<typeof ResolveOwnerModule>()
+  return {
+    ...actual,
+    runtimeEnvironmentIdUnlessTwin: (
+      ...args: Parameters<typeof actual.runtimeEnvironmentIdUnlessTwin>
+    ) => {
+      ownerLookup.calls += 1
+      return actual.runtimeEnvironmentIdUnlessTwin(...args)
+    }
+  }
+})
 
 import {
   notifyHostOfMirroredEditorClose,
   type MirroredEditorCloseState
 } from './close-mirrored-editor-tab'
+import {
+  isWebSessionCloseIntentPending,
+  resetWebSessionCloseIntentForTests
+} from './web-session-close-intent'
+import { toHostSessionTabId } from '../../../shared/workspace-layout/terminal-surface-id'
+
+type OwnerHost = 'local' | 'runtime:env-1'
+
+function ownerRows(...hostIds: OwnerHost[]): Partial<MirroredEditorCloseState> {
+  return {
+    repos: hostIds.map((hostId) => ({ id: 'repo', executionHostId: hostId })),
+    worktreesByRepo: {
+      repo: hostIds.map((hostId) => ({
+        id: 'wt-1',
+        repoId: 'repo',
+        hostId,
+        ...(hostId === 'local' ? {} : { runtimeOwnerEnvironmentId: 'env-1' })
+      }))
+    }
+  }
+}
 
 function buildState(overrides: Partial<MirroredEditorCloseState> = {}): MirroredEditorCloseState {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fixture rows carry only the fields notifyHostOfMirroredEditorClose and the owner resolver read.
   return {
+    ...ownerRows('runtime:env-1'),
     openFiles: [{ id: 'file-1', worktreeId: 'wt-1', mirroredFromRuntimeSession: true }],
     unifiedTabsByWorktree: {
       'wt-1': [{ id: 'host-tab-1', entityId: 'file-1', contentType: 'editor' }]
@@ -30,43 +62,31 @@ function buildState(overrides: Partial<MirroredEditorCloseState> = {}): Mirrored
 describe('notifyHostOfMirroredEditorClose', () => {
   beforeEach(() => {
     closeWebRuntimeSessionTabMock.mockReset()
-    getRuntimeEnvironmentIdForWorktreeMock.mockReset()
-    getRuntimeEnvironmentIdForWorktreeMock.mockReturnValue('env-1')
+    ownerLookup.calls = 0
+    resetWebSessionCloseIntentForTests()
   })
 
-  it('closes the mirrored editor tab on the host using the host tab id', async () => {
-    const handled = notifyHostOfMirroredEditorClose(buildState(), 'wt-1', 'file-1')
+  it('routes to the captured file owner when the workspace catalog disagrees', async () => {
+    const state = buildState()
+    state.openFiles = state.openFiles.map((file) => ({ ...file, runtimeEnvironmentId: 'env-2' }))
 
-    expect(handled).toBe(true)
-    await vi.waitFor(() => {
-      expect(closeWebRuntimeSessionTabMock).toHaveBeenCalled()
-    })
-    expect(closeWebRuntimeSessionTabMock).toHaveBeenCalledWith({
-      worktreeId: 'wt-1',
-      tabId: 'host-tab-1',
-      environmentId: 'env-1'
-    })
-  })
-
-  it('does not route locally-opened (non-mirrored) files to the host', () => {
-    const state = buildState({
-      openFiles: [
-        { id: 'file-1', worktreeId: 'wt-1' }
-      ] as unknown as MirroredEditorCloseState['openFiles']
-    })
-
-    const handled = notifyHostOfMirroredEditorClose(state, 'wt-1', 'file-1')
-
-    expect(handled).toBe(false)
-    expect(closeWebRuntimeSessionTabMock).not.toHaveBeenCalled()
-  })
-
-  it('does nothing when no web runtime session is active', () => {
-    getRuntimeEnvironmentIdForWorktreeMock.mockReturnValue(null)
-
-    const handled = notifyHostOfMirroredEditorClose(buildState(), 'wt-1', 'file-1')
-
-    expect(handled).toBe(false)
-    expect(closeWebRuntimeSessionTabMock).not.toHaveBeenCalled()
+    expect(notifyHostOfMirroredEditorClose(state, 'wt-1', 'file-1')).toBe(true)
+    expect(
+      isWebSessionCloseIntentPending(
+        { environmentId: 'env-2' },
+        'wt-1',
+        toHostSessionTabId('host-tab-1'),
+        Date.now()
+      )
+    ).toBe(true)
+    await vi.waitFor(() =>
+      expect(closeWebRuntimeSessionTabMock).toHaveBeenCalledWith({
+        worktreeId: 'wt-1',
+        tabId: 'host-tab-1',
+        environmentId: 'env-2',
+        reason: 'user'
+      })
+    )
+    expect(ownerLookup.calls).toBe(0)
   })
 })

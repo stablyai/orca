@@ -1,8 +1,9 @@
-const LEGACY_DEFAULT_STATUS_LABELS: Record<string, string> = {
-  todo: 'Todo',
-  'in-progress': 'In progress',
-  'in-review': 'In review',
-  completed: 'Completed'
+const DEFAULT_STATUS_LABELS: Record<string, readonly string[]> = {
+  todo: ['Todo'],
+  'in-progress': ['In progress'],
+  'in-review': ['In review'],
+  // Why: both labels have shipped as defaults; either raw shape is safe to migrate.
+  completed: ['Completed', 'Done']
 }
 
 const CONDUCTOR_DEFAULT_STATUS_VISUALS: Record<string, { color: string; icon: string }> = {
@@ -45,7 +46,7 @@ function isLegacyDefaultStatusPayload(
     return (
       Object.keys(raw).length === 4 &&
       raw.id === expectedId &&
-      raw.label === LEGACY_DEFAULT_STATUS_LABELS[expectedId] &&
+      DEFAULT_STATUS_LABELS[expectedId]?.includes(raw.label as string) === true &&
       raw.color === expectedVisual?.color &&
       raw.icon === expectedVisual?.icon
     )

@@ -1,9 +1,13 @@
-import { useCallback, useRef } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import type { EmulatorDeviceVisualOrientation } from './emulator-device-frame-layout'
 import type { EmulatorGesturePoint } from './emulator-screen-gesture'
 
-export function useEmulatorPaneControls(worktreeId: string) {
+export function useEmulatorPaneControls(worktreeId: string, onRotateSettled?: () => void) {
   const nextRotateOrientationRef = useRef<'landscape_left' | 'portrait'>('landscape_left')
+  const visualOrientationEpochRef = useRef(0)
+  const [visualOrientation, setVisualOrientation] =
+    useState<EmulatorDeviceVisualOrientation>('portrait')
 
   const sendTap = useCallback(
     async (x: number, y: number) => {
@@ -28,13 +32,27 @@ export function useEmulatorPaneControls(worktreeId: string) {
 
   const sendRotate = useCallback(async () => {
     const orientation = nextRotateOrientationRef.current
+    const epoch = visualOrientationEpochRef.current
     await callRuntimeRpc({ kind: 'local' }, 'emulator.rotate', {
       orientation,
       worktree: worktreeId
     })
+    if (visualOrientationEpochRef.current !== epoch) {
+      return null
+    }
+    const nextVisualOrientation = orientation === 'landscape_left' ? 'landscape' : 'portrait'
+    setVisualOrientation(nextVisualOrientation)
     nextRotateOrientationRef.current =
       orientation === 'landscape_left' ? 'portrait' : 'landscape_left'
-  }, [worktreeId])
+    onRotateSettled?.()
+    return nextVisualOrientation
+  }, [onRotateSettled, worktreeId])
 
-  return { sendTap, sendButton, sendGesture, sendRotate }
+  const resetVisualOrientation = useCallback(() => {
+    visualOrientationEpochRef.current += 1
+    nextRotateOrientationRef.current = 'landscape_left'
+    setVisualOrientation('portrait')
+  }, [])
+
+  return { sendTap, sendButton, sendGesture, sendRotate, visualOrientation, resetVisualOrientation }
 }

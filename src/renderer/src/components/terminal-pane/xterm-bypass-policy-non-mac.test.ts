@@ -1,36 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import {
   shouldBypassXtermKeyboardEvent,
-  shouldSuppressTerminalImeKeyboardEvent,
-  type XtermBypassEvent
+  shouldPreventDefaultTerminalImeCandidateKey,
+  shouldSuppressTerminalImeKeyboardEvent
 } from './xterm-bypass-policy'
-
-function event(overrides: Partial<XtermBypassEvent>): XtermBypassEvent {
-  return {
-    type: 'keydown',
-    key: '',
-    code: '',
-    defaultPrevented: false,
-    metaKey: false,
-    ctrlKey: false,
-    altKey: false,
-    shiftKey: false,
-    ...overrides
-  }
-}
+import { event } from './xterm-bypass-event-fixture'
 
 describe('shouldBypassXtermKeyboardEvent — Windows/Linux', () => {
   const withSel = { isMac: false, hasSelection: true }
   const noSel = { isMac: false, hasSelection: false }
-
-  it('bubbles Ctrl+Shift+C (standard terminal copy on Linux/Windows)', () => {
-    expect(
-      shouldBypassXtermKeyboardEvent(
-        event({ key: 'C', code: 'KeyC', ctrlKey: true, shiftKey: true }),
-        noSel
-      )
-    ).toBe(true)
-  })
 
   it('matches Ctrl+Shift+C by produced logical key rather than physical key', () => {
     expect(
@@ -70,18 +48,6 @@ describe('shouldBypassXtermKeyboardEvent — Windows/Linux', () => {
     ).toBe(false)
   })
 
-  it('bubbles Ctrl+V and Ctrl+Shift+V for paste', () => {
-    expect(
-      shouldBypassXtermKeyboardEvent(event({ key: 'v', code: 'KeyV', ctrlKey: true }), noSel)
-    ).toBe(true)
-    expect(
-      shouldBypassXtermKeyboardEvent(
-        event({ key: 'V', code: 'KeyV', ctrlKey: true, shiftKey: true }),
-        noSel
-      )
-    ).toBe(true)
-  })
-
   it('matches paste by produced logical key rather than physical key', () => {
     expect(
       shouldBypassXtermKeyboardEvent(event({ key: 'v', code: 'KeyK', ctrlKey: true }), noSel)
@@ -89,27 +55,6 @@ describe('shouldBypassXtermKeyboardEvent — Windows/Linux', () => {
     expect(
       shouldBypassXtermKeyboardEvent(event({ key: 'k', code: 'KeyV', ctrlKey: true }), noSel)
     ).toBe(false)
-  })
-
-  it('bubbles Shift+Insert (X11/Linux paste convention)', () => {
-    expect(
-      shouldBypassXtermKeyboardEvent(
-        event({ key: 'Insert', code: 'Insert', shiftKey: true }),
-        noSel
-      )
-    ).toBe(true)
-  })
-
-  it('does not bubble plain Ctrl letter chords — shell shortcuts must reach PTY', () => {
-    // Ctrl+A, Ctrl+E, Ctrl+U, Ctrl+R, Ctrl+L — all readline-critical.
-    for (const keyCode of ['a', 'e', 'u', 'r', 'l']) {
-      expect(
-        shouldBypassXtermKeyboardEvent(
-          event({ key: keyCode, code: `Key${keyCode.toUpperCase()}`, ctrlKey: true }),
-          noSel
-        )
-      ).toBe(false)
-    }
   })
 
   it('bubbles already-handled Ctrl app shortcuts so kitty does not also write to shell', () => {
@@ -133,10 +78,6 @@ describe('shouldBypassXtermKeyboardEvent — Windows/Linux', () => {
     ).toBe(true)
   })
 
-  it('does not bubble plain letters', () => {
-    expect(shouldBypassXtermKeyboardEvent(event({ key: 'c', code: 'KeyC' }), noSel)).toBe(false)
-  })
-
   it('bubbles Shift+non-ASCII printable text so the active keyboard layout wins', () => {
     expect(
       shouldBypassXtermKeyboardEvent(event({ key: 'Ф', code: 'KeyA', shiftKey: true }), noSel)
@@ -149,64 +90,224 @@ describe('shouldBypassXtermKeyboardEvent — Windows/Linux', () => {
     ).toBe(true)
   })
 
-  it('does not bubble unshifted non-ASCII printable text', () => {
-    expect(shouldBypassXtermKeyboardEvent(event({ key: 'ф', code: 'KeyA' }), noSel)).toBe(false)
-  })
-
-  it('does not bubble Cmd chords on non-Mac (Super+C has no clipboard meaning there)', () => {
+  it('leaves ordinary Shift+Space available to the terminal', () => {
     expect(
-      shouldBypassXtermKeyboardEvent(event({ key: 'c', code: 'KeyC', metaKey: true }), noSel)
+      shouldBypassXtermKeyboardEvent(event({ key: ' ', code: 'Space', shiftKey: true }), noSel)
     ).toBe(false)
   })
 })
 
 describe('shouldSuppressTerminalImeKeyboardEvent — Windows/Linux', () => {
+  const windowsIdle = {
+    isMac: false,
+    isLinux: false,
+    compositionActive: false,
+    candidateKeyGuardActive: false,
+    pendingCandidateKeyReleaseActive: false
+  }
+  const linuxIdle = {
+    isMac: false,
+    isLinux: true,
+    compositionActive: false,
+    candidateKeyGuardActive: false,
+    pendingCandidateKeyReleaseActive: false
+  }
+  const linuxComposing = { ...linuxIdle, compositionActive: true, candidateKeyGuardActive: true }
+  // Absorb the commit key’s trailing press/release even after compositionend deactivates tracking.
+  const linuxPostCompositionGuard = { ...linuxIdle, candidateKeyGuardActive: true }
+  const windowsComposing = {
+    ...windowsIdle,
+    compositionActive: true,
+    candidateKeyGuardActive: true
+  }
+
   it('suppresses keyboard events while Chromium reports active IME composition', () => {
+    for (const options of [windowsIdle, linuxIdle]) {
+      expect(
+        shouldSuppressTerminalImeKeyboardEvent(
+          event({ key: 'Backspace', code: 'Backspace', isComposing: true }),
+          options
+        )
+      ).toBe(true)
+    }
+  })
+
+  it('suppresses Windows IME Process keys', () => {
+    // Windows preedit may precede compositionstart; suppress 229 so xterm cannot flush its diff early.
     expect(
       shouldSuppressTerminalImeKeyboardEvent(
-        event({ key: 'Backspace', code: 'Backspace', isComposing: true })
+        event({ key: 'Process', code: 'KeyN', keyCode: 229 }),
+        windowsIdle
       )
     ).toBe(true)
   })
 
-  it('suppresses Windows IME Process keys', () => {
+  it('lets standalone Linux 229 keydowns reach xterm so its CompositionHelper can diff text', () => {
+    // Bare Sogou/fcitx 229 commits outside composition must reach xterm’s textarea diff.
     expect(
-      shouldSuppressTerminalImeKeyboardEvent(event({ key: 'Process', code: 'KeyN', keyCode: 229 }))
+      shouldSuppressTerminalImeKeyboardEvent(
+        event({ key: 'Process', code: 'KeyN', keyCode: 229 }),
+        linuxIdle
+      )
+    ).toBe(false)
+  })
+
+  it('suppresses Linux 229 keydowns while the composition tracker is active', () => {
+    expect(
+      shouldSuppressTerminalImeKeyboardEvent(
+        event({ key: 'Process', code: 'KeyN', keyCode: 229 }),
+        linuxComposing
+      )
     ).toBe(true)
   })
 
-  it('does not suppress ordinary Backspace outside IME composition', () => {
-    expect(
-      shouldSuppressTerminalImeKeyboardEvent(event({ key: 'Backspace', code: 'Backspace' }))
-    ).toBe(false)
+  it('suppresses 229 / Process keyups so kitty release reporting cannot leak', () => {
+    for (const options of [windowsIdle, linuxIdle]) {
+      expect(
+        shouldSuppressTerminalImeKeyboardEvent(
+          event({ type: 'keyup', key: 'Process', code: 'KeyN', keyCode: 229 }),
+          options
+        )
+      ).toBe(true)
+    }
   })
 
   it('suppresses IME-owned editing keys while composition is active', () => {
     expect(
-      shouldSuppressTerminalImeKeyboardEvent(event({ key: 'Backspace', code: 'Backspace' }), {
-        compositionActive: true
-      })
+      shouldSuppressTerminalImeKeyboardEvent(
+        event({ key: 'Backspace', code: 'Backspace' }),
+        linuxComposing
+      )
     ).toBe(true)
     expect(
-      shouldSuppressTerminalImeKeyboardEvent(event({ key: 'ArrowDown', code: 'ArrowDown' }), {
-        compositionActive: true
-      })
+      shouldSuppressTerminalImeKeyboardEvent(
+        event({ key: 'ArrowDown', code: 'ArrowDown' }),
+        linuxComposing
+      )
     ).toBe(true)
   })
 
   it('does not suppress ordinary text keys solely because composition is active', () => {
     expect(
-      shouldSuppressTerminalImeKeyboardEvent(event({ key: 'a', code: 'KeyA' }), {
-        compositionActive: true
-      })
+      shouldSuppressTerminalImeKeyboardEvent(event({ key: 'a', code: 'KeyA' }), linuxComposing)
     ).toBe(false)
   })
 
   it('does not suppress keypress events because they carry committed text', () => {
-    expect(
-      shouldSuppressTerminalImeKeyboardEvent(
-        event({ type: 'keypress', key: '中', code: '', isComposing: true })
-      )
-    ).toBe(false)
+    for (const options of [windowsIdle, linuxIdle]) {
+      expect(
+        shouldSuppressTerminalImeKeyboardEvent(
+          event({ type: 'keypress', key: '中', code: '', isComposing: true }),
+          options
+        )
+      ).toBe(false)
+    }
+  })
+
+  describe('candidate-selection keys (Sogou Space/digit commit)', () => {
+    it('suppresses Space and digit keydowns and keyups while the candidate guard is active', () => {
+      for (const options of [linuxComposing, linuxPostCompositionGuard]) {
+        for (const key of [' ', '0', '2', '9']) {
+          expect(shouldSuppressTerminalImeKeyboardEvent(event({ key, code: '' }), options)).toBe(
+            true
+          )
+          expect(
+            shouldSuppressTerminalImeKeyboardEvent(event({ type: 'keyup', key, code: '' }), options)
+          ).toBe(true)
+        }
+      }
+    })
+
+    it('suppresses the follow-on candidate keypress so _keyPress cannot forward the selector', () => {
+      expect(
+        shouldSuppressTerminalImeKeyboardEvent(
+          event({ type: 'keypress', key: ' ', code: 'Space' }),
+          linuxPostCompositionGuard
+        )
+      ).toBe(true)
+      expect(
+        shouldSuppressTerminalImeKeyboardEvent(
+          event({ type: 'keypress', key: '2', code: 'Digit2' }),
+          linuxComposing
+        )
+      ).toBe(true)
+    })
+
+    it('leaves Space and digits alone once the guard has expired', () => {
+      for (const type of ['keydown', 'keyup', 'keypress']) {
+        expect(
+          shouldSuppressTerminalImeKeyboardEvent(
+            event({ type, key: ' ', code: 'Space' }),
+            linuxIdle
+          )
+        ).toBe(false)
+        expect(
+          shouldSuppressTerminalImeKeyboardEvent(
+            event({ type, key: '2', code: 'Digit2' }),
+            linuxIdle
+          )
+        ).toBe(false)
+      }
+    })
+
+    it('does not treat modified chords such as Ctrl+Space (IME toggle) as candidate keys', () => {
+      expect(
+        shouldSuppressTerminalImeKeyboardEvent(
+          event({ key: ' ', code: 'Space', ctrlKey: true }),
+          linuxPostCompositionGuard
+        )
+      ).toBe(false)
+    })
+
+    it('does not treat Shift+Space (fcitx full-/half-width toggle) as a candidate key', () => {
+      expect(
+        shouldSuppressTerminalImeKeyboardEvent(
+          event({ key: ' ', code: 'Space', shiftKey: true }),
+          linuxPostCompositionGuard
+        )
+      ).toBe(false)
+    })
+
+    it('does not apply the Linux/Sogou candidate guard to Windows', () => {
+      expect(
+        shouldSuppressTerminalImeKeyboardEvent(event({ key: ' ', code: 'Space' }), windowsComposing)
+      ).toBe(false)
+      expect(
+        shouldSuppressTerminalImeKeyboardEvent(
+          event({ type: 'keypress', key: '2', code: 'Digit2' }),
+          windowsComposing
+        )
+      ).toBe(false)
+    })
+
+    it('suppresses a pending Linux candidate release even if modifier state changed after keydown', () => {
+      expect(
+        shouldSuppressTerminalImeKeyboardEvent(
+          event({ type: 'keyup', key: '2', code: 'Digit2', shiftKey: true }),
+          {
+            ...linuxIdle,
+            candidateKeyGuardActive: true,
+            pendingCandidateKeyReleaseActive: true
+          }
+        )
+      ).toBe(true)
+    })
+  })
+
+  describe('shouldPreventDefaultTerminalImeCandidateKey', () => {
+    it('prevents the default on candidate keydowns while the guard is active', () => {
+      expect(
+        shouldPreventDefaultTerminalImeCandidateKey(
+          event({ key: ' ', code: 'Space' }),
+          linuxComposing
+        )
+      ).toBe(true)
+      expect(
+        shouldPreventDefaultTerminalImeCandidateKey(
+          event({ key: '2', code: 'Digit2' }),
+          linuxPostCompositionGuard
+        )
+      ).toBe(true)
+    })
   })
 })

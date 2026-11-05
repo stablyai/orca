@@ -11,6 +11,7 @@ import {
 } from '../flags'
 import { getEmulatorCommandTarget } from '../selectors'
 import { RuntimeClientError } from '../runtime-client'
+import { EMULATOR_ATTACH_RPC_TIMEOUT_MS } from '../../shared/emulator-attach-timeouts'
 
 type EmulatorAttachResult = {
   info?: {
@@ -128,7 +129,12 @@ export const EMULATOR_HANDLERS: Record<string, CommandHandler> = {
     const target = await getEmulatorCommandTarget(flags, cwd, client)
     const device = getOptionalStringFlag(flags, 'device')
     const focus = flags.get('focus') === true
-    const res = await client.call('emulator.attach', { device, worktree: target.worktree, focus })
+    // Cold boots and wedged-simulator recovery can exceed the normal RPC timeout.
+    const res = await client.call(
+      'emulator.attach',
+      { device, worktree: target.worktree, focus },
+      { timeoutMs: EMULATOR_ATTACH_RPC_TIMEOUT_MS }
+    )
     printResult(res, json, (r: unknown) => {
       const result = r as EmulatorAttachResult
       const info = result.info ?? result

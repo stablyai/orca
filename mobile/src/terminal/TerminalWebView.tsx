@@ -1,423 +1,111 @@
-import { useRef, useCallback, forwardRef, useImperativeHandle, useEffect, useMemo } from 'react'
-import { StyleSheet, type StyleProp, type ViewStyle } from 'react-native'
-import { WebView } from 'react-native-webview'
-import type { WebViewMessageEvent } from 'react-native-webview'
-import type { RuntimeMobileTerminalTheme } from '../../../src/shared/runtime-types'
-import { colors } from '../theme/mobile-theme'
-import type { TerminalOscLinkRange } from './terminal-osc-link-ranges'
-import { XTERM_HTML } from './terminal-webview-html'
+import { useRef, useCallback, useState, forwardRef, useImperativeHandle } from 'react'
+import { Platform, View } from 'react-native'
+import { WebView, type WebViewMessageEvent } from 'react-native-webview'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import type { TerminalWebViewHandle, TerminalWebViewProps } from './terminal-webview-contract'
+import { TerminalWebViewEngineErrorOverlay } from './terminal-webview-engine-error-state'
+import { TERMINAL_WEBVIEW_FRAME_STYLES } from './terminal-webview-frame-styles'
+import { xtermWebViewSource } from './terminal-webview-html'
 import type { TerminalWebViewCommand } from './terminal-webview-messages'
-import { createTerminalWebViewPendingMessages } from './terminal-webview-pending-messages'
+import { useTerminalWebViewController } from './use-terminal-webview-controller'
 
-type TerminalMouseTrackingMode = 'none' | 'x10' | 'vt200' | 'drag' | 'any'
-type TerminalOscLinks = TerminalOscLinkRange[]
+type Props = TerminalWebViewProps
 
-export type TerminalModes = {
-  bracketedPasteMode: boolean
-  altScreen: boolean
-  mouseTrackingMode: TerminalMouseTrackingMode
-  sgrMouseMode: boolean
-  sgrMousePixelsMode: boolean
-}
+export type { TerminalWebViewHandle } from './terminal-webview-contract'
 
-export type TerminalKeyboardAvoidanceMetrics = {
-  cursorY: number
-  rows: number
-  altScreen: boolean
-}
+export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(
+  function TerminalWebView(props, ref) {
+    const t = useMobileTranslation()
+    const webViewRef = useRef<WebView>(null)
 
-export type MobileTerminalTheme = RuntimeMobileTerminalTheme
+    const post = useCallback((command: TerminalWebViewCommand & { id: number }) => {
+      webViewRef.current?.postMessage(JSON.stringify(command))
+    }, [])
 
-export type TerminalSelectionEvents = {
-  onSelectionMode?: (active: boolean) => void
-  onSelectionCopy?: (text: string) => void
-  onSelectionEvicted?: () => void
-  onModesChanged?: (modes: TerminalModes) => void
-  onKeyboardAvoidanceMetrics?: (metrics: TerminalKeyboardAvoidanceMetrics) => void
-  onHaptic?: (kind: 'selection' | 'success' | 'error' | 'edge-bump') => void
-  onTerminalInput?: (bytes: string) => void
-  onTerminalTap?: () => void
-  // Tap landed on a detected file path; RN resolves + opens it.
-  onFileTap?: (pathText: string, line: number | null, column: number | null) => void
-  // WebView-detected URL tap; RN chooses the mobile routing destination.
-  onOpenUrl?: (url: string) => void
-  // Why: pinch-to-zoom in the terminal snaps to a text-size preset and reports it
-  // here so the app persists it and keeps Settings + other panes in sync.
-  onTextScaleChange?: (scale: number) => void
-}
+    const {
+      clearEngineError,
+      engineError,
+      handle,
+      receive,
+      reportNativeEngineError,
+      resetReadiness
+    } = useTerminalWebViewController(props, {
+      post,
+      // iOS can preserve the native view while discarding its JS/backing-store state.
+      pingsOnForegroundRecovery: () => Platform.OS === 'ios'
+    })
 
-export type TerminalWebViewHandle = {
-  write: (data: string) => void
-  init: (
-    cols: number,
-    rows: number,
-    initialData?: string,
-    preserveScroll?: boolean,
-    oscLinks?: TerminalOscLinks
-  ) => void
-  resize: (cols: number, rows: number) => void
-  // Why: reflow the local xterm buffer (scrollback included) to a new width
-  // after a server-side PTY reflow, so older wrapped lines rewrap to match the
-  // latest output. No-op on the alternate screen.
-  reflow: (cols: number, rows: number) => void
-  clear: () => void
-  measureFitDimensions: (containerHeight?: number) => Promise<{ cols: number; rows: number } | null>
-  resetZoom: () => void
-  cancelSelect: () => void
-  doSelectAll: () => void
-  // Why: lets callers await the WebView-side `init` rAF chain (term.open
-  // → renderService population → first paint) so a follow-up measure
-  // doesn't race ahead and find term=null or cellWidth=0. Resolves on
-  // the next 'ready' notify after the most recent init.
-  awaitReady: () => Promise<void>
-}
+    useImperativeHandle(ref, () => handle, [handle])
+    // Seed scale in page source before document startup; Android injected scripts may run too late.
+    const [source] = useState(() =>
+      xtermWebViewSource({ textScale: props.textScale ?? 1, shown: props.shownAtMount ?? true })
+    )
 
-type Props = {
-  style?: StyleProp<ViewStyle>
-  terminalTheme?: MobileTerminalTheme
-  // Why: baseline zoom multiplier ("text size") applied on top of the fit-to-width
-  // scale; raw xterm fontSize can't drive apparent size because the fit cancels it.
-  textScale?: number
-  onWebReady?: () => void
-} & TerminalSelectionEvents
-
-// Why: WebView treats source identity as page identity on some platforms; keep
-// parent/session re-renders from reloading xterm and forcing fresh snapshots.
-const XTERM_WEBVIEW_SOURCE = { html: XTERM_HTML }
-
-export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function TerminalWebView(
-  {
-    style,
-    terminalTheme,
-    textScale = 1,
-    onWebReady,
-    onSelectionMode,
-    onSelectionCopy,
-    onSelectionEvicted,
-    onModesChanged,
-    onKeyboardAvoidanceMetrics,
-    onHaptic,
-    onTerminalInput,
-    onTerminalTap,
-    onFileTap,
-    onOpenUrl,
-    onTextScaleChange
-  },
-  ref
-) {
-  const webViewRef = useRef<WebView>(null)
-  const isWebReadyRef = useRef(false)
-  const pendingMessages = useMemo(() => createTerminalWebViewPendingMessages(), [])
-  const messageIdRef = useRef(0)
-  const terminalThemeKey = useMemo(() => JSON.stringify(terminalTheme ?? null), [terminalTheme])
-  const measureResolveRef = useRef<
-    ((result: { cols: number; rows: number } | null) => void) | null
-  >(null)
-  // Why: each init() call posts 'init' to the WebView and arms a fresh
-  // ready promise. WebView's init() rAF chain ends with a 'ready' notify
-  // that resolves it. measureFitDimensions awaits this so it doesn't
-  // race ahead of term.open() / renderService population.
-  const readyPromiseRef = useRef<Promise<void> | null>(null)
-  const readyResolveRef = useRef<(() => void) | null>(null)
-
-  const sendToWebView = useCallback((msg: TerminalWebViewCommand) => {
-    messageIdRef.current += 1
-    webViewRef.current?.postMessage(JSON.stringify({ ...msg, id: messageIdRef.current }))
-  }, [])
-
-  const flushPendingMessages = useCallback(() => {
-    pendingMessages.flush(sendToWebView)
-  }, [pendingMessages, sendToWebView])
-
-  const postMessage = useCallback(
-    (msg: TerminalWebViewCommand) => {
-      if (!isWebReadyRef.current) {
-        pendingMessages.queue(msg)
-        return
-      }
-      sendToWebView(msg)
-    },
-    [pendingMessages, sendToWebView]
-  )
-
-  const handleMessage = useCallback(
-    (event: WebViewMessageEvent) => {
-      let msg: Record<string, unknown>
-      try {
-        msg = JSON.parse(event.nativeEvent.data) as Record<string, unknown>
-      } catch {
-        return
-      }
-
-      if (msg.type === 'web-ready') {
-        isWebReadyRef.current = true
-        onWebReady?.()
-        flushPendingMessages()
-      } else if (msg.type === 'ready') {
-        // Why: the WebView's init() rAF chain has run — term is open,
-        // renderService is populated, first paint has happened. Resolve
-        // any pending awaitReady() so a queued measure can now safely
-        // read cell dims.
-        const resolve = readyResolveRef.current
-        readyResolveRef.current = null
-        readyPromiseRef.current = null
-        resolve?.()
-      } else if (msg.type === 'measure-result') {
-        const resolve = measureResolveRef.current
-        measureResolveRef.current = null
-        if (resolve) {
-          const cols = typeof msg.cols === 'number' ? msg.cols : null
-          const rows = typeof msg.rows === 'number' ? msg.rows : null
-          resolve(cols && rows && cols >= 20 && rows >= 8 ? { cols, rows } : null)
-        }
-      } else if (msg.type === 'log') {
-        // Surface fit-scale diagnostics in the RN/Metro console.
-        const tag = typeof msg.tag === 'string' ? msg.tag : '[fit]'
-        // eslint-disable-next-line no-console
-        console.log(tag, msg.payload)
-      } else if (msg.type === 'set-select-mode') {
-        onSelectionMode?.(!!msg.enabled)
-      } else if (msg.type === 'selection') {
-        const text = typeof msg.text === 'string' ? msg.text : ''
-        onSelectionCopy?.(text)
-      } else if (msg.type === 'selection-evicted') {
-        onSelectionEvicted?.()
-      } else if (msg.type === 'modes') {
-        const mouseTrackingMode =
-          msg.mouseTrackingMode === 'x10' ||
-          msg.mouseTrackingMode === 'vt200' ||
-          msg.mouseTrackingMode === 'drag' ||
-          msg.mouseTrackingMode === 'any'
-            ? msg.mouseTrackingMode
-            : 'none'
-        onModesChanged?.({
-          bracketedPasteMode: !!msg.bracketedPasteMode,
-          altScreen: !!msg.altScreen,
-          mouseTrackingMode,
-          sgrMouseMode: !!msg.sgrMouseMode,
-          sgrMousePixelsMode: !!msg.sgrMousePixelsMode
-        })
-      } else if (msg.type === 'terminal-input') {
-        const bytes = typeof msg.bytes === 'string' ? msg.bytes : ''
-        if (bytes.length > 0) {
-          onTerminalInput?.(bytes)
-        }
-      } else if (msg.type === 'terminal-tap') {
-        onTerminalTap?.()
-      } else if (msg.type === 'terminal-file-tap') {
-        const pathText = typeof msg.pathText === 'string' ? msg.pathText : ''
-        if (pathText.length > 0) {
-          const line = typeof msg.line === 'number' ? msg.line : null
-          const column = typeof msg.column === 'number' ? msg.column : null
-          onFileTap?.(pathText, line, column)
-        }
-      } else if (msg.type === 'open-url') {
-        const url = typeof msg.url === 'string' ? msg.url : ''
-        if (url.length > 0) {
-          onOpenUrl?.(url)
-        }
-      } else if (msg.type === 'keyboard-avoidance-metrics') {
-        const cursorY = typeof msg.cursorY === 'number' ? msg.cursorY : 0
-        const rows = typeof msg.rows === 'number' ? msg.rows : 0
-        onKeyboardAvoidanceMetrics?.({
-          cursorY,
-          rows,
-          altScreen: !!msg.altScreen
-        })
-      } else if (msg.type === 'haptic') {
-        const kind = msg.kind
-        if (
-          kind === 'selection' ||
-          kind === 'success' ||
-          kind === 'error' ||
-          kind === 'edge-bump'
-        ) {
-          onHaptic?.(kind)
-        }
-      } else if (msg.type === 'font-scale-changed') {
-        const scale = typeof msg.fontScale === 'number' ? msg.fontScale : 0
-        if (scale > 0) {
-          onTextScaleChange?.(scale)
-        }
-      } else if (msg.type === 'mobile-clip-cancel-by-pinch') {
-        // eslint-disable-next-line no-console
-        console.warn('[mobile-clip] selection cancelled by pinch')
-      }
-    },
-    [
-      flushPendingMessages,
-      onWebReady,
-      onSelectionMode,
-      onSelectionCopy,
-      onSelectionEvicted,
-      onModesChanged,
-      onKeyboardAvoidanceMetrics,
-      onHaptic,
-      onTerminalInput,
-      onTerminalTap,
-      onFileTap,
-      onOpenUrl,
-      onTextScaleChange
-    ]
-  )
-
-  const handleLoadStart = useCallback(() => {
-    isWebReadyRef.current = false
-    // Why: messages queued for a previous WebView generation are stale after a reload;
-    // dropping them avoids replaying terminal chunks before the next init snapshot.
-    pendingMessages.clear()
-  }, [pendingMessages])
-
-  useEffect(() => {
-    postMessage({ type: 'set-theme', terminalTheme })
-  }, [postMessage, terminalThemeKey, terminalTheme])
-
-  // Why: live-apply text-size changes to an already-mounted terminal (the pane
-  // stays alive while the user visits Settings), so no terminal reload is needed.
-  useEffect(() => {
-    postMessage({ type: 'set-font-scale', fontScale: textScale })
-  }, [postMessage, textScale])
-
-  useImperativeHandle(
-    ref,
-    () => ({
-      write(data: string) {
-        postMessage({ type: 'write', data })
-      },
-      init(
-        cols: number,
-        rows: number,
-        initialData?: string,
-        preserveScroll?: boolean,
-        oscLinks?: TerminalOscLinks
-      ) {
-        // Why: arm a fresh ready promise BEFORE posting init. The WebView
-        // resolves it via the 'ready' notify at the end of its rAF chain.
-        // Resolve any prior in-flight ready first so awaiters from the
-        // previous generation don't sit on the 3s setTimeout fallback —
-        // each leaked timer + closure pinned an awaiting measure caller
-        // for the full 3s under rapid re-init (orientation change,
-        // multiple resubscribes), delaying cold-start fit chains.
-        const priorResolve = readyResolveRef.current
-        if (priorResolve) {
-          readyResolveRef.current = null
-          readyPromiseRef.current = null
-          priorResolve()
-        }
-        readyPromiseRef.current = new Promise<void>((resolve) => {
-          readyResolveRef.current = resolve
-        })
-        postMessage({
-          type: 'init',
-          cols,
-          rows,
-          initialData,
-          oscLinks,
-          terminalTheme,
-          fontScale: textScale,
-          preserveScroll
-        })
-      },
-      resize(cols: number, rows: number) {
-        postMessage({ type: 'resize', cols, rows })
-      },
-      reflow(cols: number, rows: number) {
-        postMessage({ type: 'reflow', cols, rows })
-      },
-      clear() {
-        postMessage({ type: 'clear' })
-      },
-      measureFitDimensions(
-        containerHeight?: number
-      ): Promise<{ cols: number; rows: number } | null> {
-        if (!isWebReadyRef.current) {
-          return Promise.resolve(null)
-        }
-        return new Promise((resolve) => {
-          measureResolveRef.current?.(null)
-          let timeout: ReturnType<typeof setTimeout> | null = null
-          const finish = (result: { cols: number; rows: number } | null) => {
-            if (timeout) {
-              clearTimeout(timeout)
-              timeout = null
-            }
-            if (measureResolveRef.current === finish) {
-              measureResolveRef.current = null
-            }
-            resolve(result)
-          }
-          measureResolveRef.current = finish
-          sendToWebView({ type: 'measure', containerHeight })
-          // Why: if the WebView doesn't respond within 2s (e.g., xterm
-          // failed to load), resolve null so the caller can disable
-          // Fit to Phone rather than hanging indefinitely.
-          timeout = setTimeout(() => {
-            if (measureResolveRef.current === finish) {
-              finish(null)
-            }
-          }, 2000)
-        })
-      },
-      resetZoom() {
-        postMessage({ type: 'reset-zoom' })
-      },
-      cancelSelect() {
-        postMessage({ type: 'cancel-select' })
-      },
-      doSelectAll() {
-        postMessage({ type: 'do-select-all' })
-      },
-      async awaitReady(): Promise<void> {
-        // Why: returns the in-flight ready promise (set by init); resolves
-        // immediately if no init is pending. Capped at 3s so a stuck
-        // WebView doesn't hang the caller.
-        const p = readyPromiseRef.current
-        if (!p) {
+    const handleMessage = useCallback(
+      (event: WebViewMessageEvent) => {
+        let msg: Record<string, unknown>
+        try {
+          msg = JSON.parse(event.nativeEvent.data) as Record<string, unknown>
+        } catch {
           return
         }
-        await new Promise<void>((resolve) => {
-          let settled = false
-          const timeout = setTimeout(() => {
-            settled = true
-            resolve()
-          }, 3000)
-          void p.finally(() => {
-            if (!settled) {
-              clearTimeout(timeout)
-              settled = true
-              resolve()
-            }
-          })
-        })
-      }
-    }),
-    [postMessage, sendToWebView, terminalTheme, textScale]
-  )
+        receive(msg)
+      },
+      [receive]
+    )
 
-  return (
-    <WebView
-      ref={webViewRef}
-      source={XTERM_WEBVIEW_SOURCE}
-      style={[styles.webview, style]}
-      originWhitelist={['*']}
-      javaScriptEnabled
-      scrollEnabled={false}
-      // Why: Android parent gesture containers can intercept vertical drags
-      // before the injected xterm scroll router sees them.
-      nestedScrollEnabled
-      scalesPageToFit={false}
-      // Why: Android WebView defaults textZoom to the system font scale, inflating
-      // xterm's DOM glyphs past its canvas-measured cell grid (#4579). iOS ignores it.
-      textZoom={100}
-      onLoadStart={handleLoadStart}
-      onMessage={handleMessage}
-    />
-  )
-})
+    const handleReload = useCallback(() => {
+      clearEngineError()
+      webViewRef.current?.reload()
+    }, [clearEngineError])
 
-const styles = StyleSheet.create({
-  webview: {
-    flex: 1,
-    backgroundColor: colors.terminalBg
+    const handleContentProcessDidTerminate = useCallback(() => {
+      // Content-process recovery must discard dead-document commands and prove new readiness before replay.
+      resetReadiness()
+      clearEngineError()
+      webViewRef.current?.reload()
+    }, [clearEngineError, resetReadiness])
+
+    return (
+      <View style={[TERMINAL_WEBVIEW_FRAME_STYLES.container, props.style]}>
+        <WebView
+          ref={webViewRef}
+          source={source}
+          style={TERMINAL_WEBVIEW_FRAME_STYLES.webview}
+          originWhitelist={['*']}
+          javaScriptEnabled
+          scrollEnabled={false}
+          // Prevent Android parent gestures from intercepting drags before xterm sees them.
+          nestedScrollEnabled
+          scalesPageToFit={false}
+          // Fix Android textZoom at 100 so OS font scaling cannot exceed xterm’s canvas-measured grid.
+          textZoom={100}
+          onLoadStart={resetReadiness}
+          onMessage={handleMessage}
+          onError={(event) =>
+            reportNativeEngineError(
+              t('terminal.webView.loadFailed', 'Terminal WebView load failed'),
+              event
+            )
+          }
+          onHttpError={(event) =>
+            reportNativeEngineError(
+              t('terminal.webView.httpError', 'Terminal WebView HTTP error'),
+              event
+            )
+          }
+          onRenderProcessGone={(event) =>
+            reportNativeEngineError(
+              t('terminal.webView.renderProcessEnded', 'Terminal WebView render process ended'),
+              event
+            )
+          }
+          onContentProcessDidTerminate={handleContentProcessDidTerminate}
+        />
+        {engineError ? (
+          <TerminalWebViewEngineErrorOverlay message={engineError} onReload={handleReload} />
+        ) : null}
+      </View>
+    )
   }
-})
+)

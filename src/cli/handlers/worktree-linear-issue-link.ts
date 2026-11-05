@@ -1,63 +1,36 @@
-import { parseLinearIssueInput } from '../../shared/linear-links'
+import {
+  buildLinearIssueLinkUpdates,
+  LINEAR_ISSUE_LINK_CLEARED,
+  type LinearIssueLinkUpdates
+} from '../../shared/linear/links'
 import { RuntimeClientError } from '../runtime-client'
-
-type LinearIssueLinkParams = {
-  linkedLinearIssue: string | null
-  linkedLinearIssueWorkspaceId: string | null
-  linkedLinearIssueOrganizationUrlKey: string | null
-}
+import { getOptionalWorktreeLinkFlagValue } from './worktree-link-flag-value'
 
 export function getOptionalLinearIssueLinkFlag(
   flags: Map<string, string | boolean>,
   name: string,
   options: { allowNull?: boolean } = {}
-): LinearIssueLinkParams | undefined {
-  const value = getPresentStringFlag(flags, name)
+): LinearIssueLinkUpdates | undefined {
+  const value = getOptionalWorktreeLinkFlagValue(flags, name, {
+    ...options,
+    createHint: 'a Linear issue identifier or URL'
+  })
   if (value === undefined) {
     return undefined
   }
 
-  if (value.trim().toLowerCase() === 'null') {
-    if (!options.allowNull) {
-      throw new RuntimeClientError(
-        'invalid_argument',
-        'Omit --linear-issue on create, or pass a Linear issue identifier or URL.'
-      )
-    }
-    return {
-      linkedLinearIssue: null,
-      linkedLinearIssueWorkspaceId: null,
-      linkedLinearIssueOrganizationUrlKey: null
-    }
+  if (value === null) {
+    return { ...LINEAR_ISSUE_LINK_CLEARED }
   }
 
-  const parsed = parseLinearIssueInput(value)
-  if (!parsed) {
+  // Only literal null unlinks; blank flag values must not inherit the text-field builder's clear behavior.
+  const updates = value.trim() === '' ? null : buildLinearIssueLinkUpdates(value)
+  if (!updates) {
     throw new RuntimeClientError(
       'invalid_argument',
       'Pass a Linear issue identifier like STA-335, a Linear issue URL, or null to clear.'
     )
   }
 
-  return {
-    linkedLinearIssue: parsed.identifier,
-    // Why: changing a link must not keep a workspace id from a previous issue.
-    // The org key from URLs is enough for current-resolution to safely rehydrate it.
-    linkedLinearIssueWorkspaceId: null,
-    linkedLinearIssueOrganizationUrlKey: parsed.organizationUrlKey ?? null
-  }
-}
-
-function getPresentStringFlag(
-  flags: Map<string, string | boolean>,
-  name: string
-): string | undefined {
-  if (!flags.has(name)) {
-    return undefined
-  }
-  const value = flags.get(name)
-  if (typeof value === 'string' && value.length > 0) {
-    return value
-  }
-  throw new RuntimeClientError('invalid_argument', `Missing value for --${name}`)
+  return updates
 }

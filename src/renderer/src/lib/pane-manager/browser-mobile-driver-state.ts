@@ -5,6 +5,9 @@ export type BrowserDriverState = RuntimeBrowserDriverState
 
 const driverByBrowserPageId = new Map<string, BrowserDriverState>()
 
+// Why: a shared instance keeps getDriverForBrowserPage referentially stable for useSyncExternalStore snapshots.
+export const IDLE_BROWSER_DRIVER: BrowserDriverState = { kind: 'idle' }
+
 type BrowserDriverChangeEvent = {
   browserPageId: string
   driver: BrowserDriverState
@@ -55,7 +58,14 @@ export function setDriverForBrowserPage(browserPageId: string, driver: BrowserDr
 }
 
 export function getDriverForBrowserPage(browserPageId: string): BrowserDriverState {
-  return driverByBrowserPageId.get(browserPageId) ?? { kind: 'idle' }
+  return driverByBrowserPageId.get(browserPageId) ?? IDLE_BROWSER_DRIVER
+}
+
+export function useBrowserDriverForPage(
+  browserPageId: string | null | undefined
+): BrowserDriverState {
+  useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot)
+  return browserPageId ? getDriverForBrowserPage(browserPageId) : IDLE_BROWSER_DRIVER
 }
 
 export function isBrowserPageMobileDriven(browserPageId: string): boolean {
@@ -107,8 +117,7 @@ export function hydrateBrowserDrivers(
     }
   }
 
-  // Why: browser panes can mount before IPC hydration returns after reload.
-  // Notify all known pages so a stale desktop input surface cannot stay active.
+  // Notify every known page after late hydration so mounted panes cannot retain stale desktop input ownership.
   for (const browserPageId of affectedPageIds) {
     notifyChange({ browserPageId, driver: getDriverForBrowserPage(browserPageId) })
   }

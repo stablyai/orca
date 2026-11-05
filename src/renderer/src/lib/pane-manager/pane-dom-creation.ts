@@ -1,22 +1,25 @@
-import { FitAddon } from '@xterm/addon-fit'
 import { SearchAddon } from '@xterm/addon-search'
 import { SerializeAddon } from '@xterm/addon-serialize'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
 import { WebLinksAddon } from '@xterm/addon-web-links'
-import { Terminal } from '@xterm/xterm'
-import type { ITerminalOptions } from '@xterm/xterm'
-import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
+import { Terminal, type ILink, type ITerminalOptions } from '@xterm/xterm'
+
+import { createWrappedTerminalHttpLinkProvider } from '../../components/terminal-pane/wrapped-terminal-http-link-provider'
+import { TERMINAL_HTTP_URL_REGEX } from '../../../../shared/terminal/links/terminal-http-url-extraction'
+import type { TerminalLeafId } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { DragReorderCallbacks, DragReorderState } from './pane-drag-reorder'
 import { attachPaneDrag } from './pane-drag-pointer'
 import type { ManagedPaneInternal, PaneManagerOptions } from './pane-manager-types'
-import { buildDefaultTerminalOptions } from './pane-terminal-options'
+import { PANE_TERMINAL_VT_EXTENSIONS, buildDefaultTerminalOptions } from './pane-terminal-options'
 import { shouldFocusTerminalFromPanePointerDown } from './pane-pointer-focus'
 import { ENABLE_WEBGL_RENDERER } from './pane-webgl-renderer'
+import { installGuardedLinkProviderRegistration } from './terminal-link-provider-guard'
+import { installWindowsCtrlAltChordRepair } from './terminal-windows-ctrl-alt-chord-classification'
+import { installTerminalMouseEncodingTracker } from './terminal-mouse-encoding-tracker'
+import { StableCellFitAddon } from './terminal-stable-cell-fit-addon'
 
-function getTerminalUrlOpenHint(): string {
-  return navigator.userAgent.includes('Mac')
-    ? 'click to open or ⇧+click for system browser'
-    : 'click to open or Shift+click for system browser'
+function defaultLinkTooltipText(uri: string, openLinkHint: string): string {
+  return `${uri} (${openLinkHint})`
 }
 
 export function createPaneDOM(
@@ -39,45 +42,75 @@ export function createPaneDOM(
   container.appendChild(xtermContainer)
 
   const userOpts = options.terminalOptions?.(id) ?? {}
+  const defaultOpts = buildDefaultTerminalOptions()
   const terminalOpts: ITerminalOptions = {
-    ...buildDefaultTerminalOptions(),
-    ...userOpts
+    ...defaultOpts,
+    ...userOpts,
+    vtExtensions: {
+      ...defaultOpts.vtExtensions,
+      ...userOpts.vtExtensions,
+      ...PANE_TERMINAL_VT_EXTENSIONS
+    }
   }
 
   const terminal = new Terminal(terminalOpts)
-  const fitAddon = new FitAddon()
+  // Contain every provider’s synchronous provideLinks errors, including pathological web-links RangeError, before they reach window.onerror and terminate the renderer.
+  installGuardedLinkProviderRegistration(terminal)
+  installWindowsCtrlAltChordRepair(terminal)
+  // Why here: the tracker must see every byte, including the first snapshot replay.
+  const mouseEncodingTrackerDisposable = installTerminalMouseEncodingTracker(terminal)
+  const fitAddon = new StableCellFitAddon()
   const searchAddon = new SearchAddon()
   const unicode11Addon = new Unicode11Addon()
-  const openLinkHint = getTerminalUrlOpenHint()
+  // Reject late tooltip results after hover changes so they cannot overwrite the current link.
+  let linkTooltipHoverToken = 0
 
   const linkTooltip = document.createElement('div')
-  linkTooltip.className = 'pane-link-tooltip'
-  linkTooltip.classList.add('xterm-hover')
-  linkTooltip.style.cssText =
-    'display:none;position:absolute;bottom:4px;left:8px;z-index:40;' +
-    'padding:5px 8px;border-radius:4px;font-size:11px;font-family:inherit;' +
-    'color:#a1a1aa;background:rgba(24,24,27,0.85);border:1px solid rgba(63,63,70,0.6);' +
-    'pointer-events:none;max-width:80%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'
+  // Keep tooltip corner geometry in terminal.css rather than drifting inline padding/offsets.
+  linkTooltip.className = 'pane-link-tooltip xterm-hover'
+  linkTooltip.style.display = 'none'
 
   const dragHandle = document.createElement('div')
   dragHandle.className = 'pane-drag-handle'
   container.appendChild(dragHandle)
   const paneDragCleanup = attachPaneDrag(dragHandle, id, dragState, dragCallbacks)
 
-  const webLinksAddon = new WebLinksAddon(
-    options.onLinkClick ? (event, uri) => options.onLinkClick!(event, uri) : undefined,
-    {
-      hover: (_event, uri) => {
-        if (uri) {
-          linkTooltip.textContent = `${uri} (${openLinkHint})`
-          linkTooltip.style.display = ''
+  const linkHandlers = {
+    activate: (event, uri) => options.onLinkClick?.(id, event, uri),
+    hover: (_event, uri) => {
+      if (uri) {
+        linkTooltipHoverToken += 1
+        const hoverToken = linkTooltipHoverToken
+        const openLinkHint = options.linkOpenHint(id)
+        linkTooltip.textContent = defaultLinkTooltipText(uri, openLinkHint)
+        linkTooltip.style.display = ''
+        const formatted = options.formatLinkTooltip?.(id, uri, openLinkHint)
+        if (formatted && typeof formatted === 'object' && 'then' in formatted) {
+          void formatted.then(
+            (nextText) => {
+              if (hoverToken === linkTooltipHoverToken && nextText) {
+                linkTooltip.textContent = nextText
+              }
+            },
+            () => undefined
+          )
+        } else if (formatted) {
+          linkTooltip.textContent = formatted
         }
-      },
-      leave: () => {
-        linkTooltip.style.display = 'none'
       }
+    },
+    leave: () => {
+      linkTooltipHoverToken += 1
+      linkTooltip.style.display = 'none'
     }
-  )
+  } satisfies Pick<ILink, 'activate' | 'hover' | 'leave'>
+  if (options.onLinkClick) {
+    terminal.registerLinkProvider(createWrappedTerminalHttpLinkProvider(terminal, linkHandlers))
+  }
+  const webLinksAddon = new WebLinksAddon(options.onLinkClick ? linkHandlers.activate : undefined, {
+    ...linkHandlers,
+    urlRegex: TERMINAL_HTTP_URL_REGEX
+  })
 
   const panePointerDownHandler = (event: PointerEvent): void => {
     onPointerDown(id, {
@@ -99,6 +132,7 @@ export function createPaneDOM(
     gpuRenderingEnabled: ENABLE_WEBGL_RENDERER,
     webglAttachmentDeferred: false,
     webglDisabledAfterContextLoss: false,
+    webglRebuildDeferred: false,
     hasComplexScriptOutput: false,
     fitAddon,
     fitResizeObserver: null,
@@ -111,12 +145,18 @@ export function createPaneDOM(
     webLinksAddon,
     webglAddon: null,
     ligaturesAddon: null,
+    imageAddon: null,
+    imageAttachmentDeferred: false,
     panePointerDownHandler,
     paneMouseEnterHandler,
     paneDragCleanup,
     compositionHandler: null,
     focusClassSyncCleanup: null,
+    domBlockFillCleanup: null,
     terminalScrollIntentDisposable: null,
+    mouseEncodingTrackerDisposable,
+    linkifierMouseLeaveResetDisposable: null,
+    arabicShapingJoinerCleanup: null,
     pendingSplitScrollState: null,
     pendingSplitScrollRafIds: [],
     pendingSplitScrollTimerId: null,

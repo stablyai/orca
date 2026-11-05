@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Dirent } from 'node:fs'
-import type * as FsPromises from 'fs/promises'
-import type * as NodeOs from 'os'
-import { join } from 'path'
+import type * as FsPromises from 'node:fs/promises'
+import type * as NodeOs from 'node:os'
+import { join } from 'node:path'
 
 const { homedirMock, readdirMock } = vi.hoisted(() => ({
   homedirMock: vi.fn<() => string>(),
@@ -59,7 +59,7 @@ describe('listClaudeTranscriptFiles large directories', () => {
       throw new Error(`Unexpected readdir path: ${dirPath}`)
     })
 
-    const { listClaudeTranscriptFiles } = await import('./scanner')
+    const { listClaudeTranscriptFiles } = await import('./transcript-file-discovery')
 
     await expect(listClaudeTranscriptFiles()).resolves.toHaveLength(FILE_COUNT)
   })

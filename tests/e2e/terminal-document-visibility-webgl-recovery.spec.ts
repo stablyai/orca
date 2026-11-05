@@ -273,15 +273,14 @@ async function dispatchDocumentVisibilityCycle(page: Page): Promise<void> {
       setVisibilityState('visible')
       document.dispatchEvent(new Event('visibilitychange'))
     } finally {
-      // Why: the e2e harness may not naturally report hidden visibility, so
-      // restore the document to the visible state expected by later cleanup.
+      // Restore visible document state for cleanup because the hidden harness may never report it naturally.
       setVisibilityState('visible')
     }
   })
 }
 
-test.describe('terminal document visibility WebGL recovery @headful', () => {
-  test('clears the WebGL atlas and keeps terminal text painted after document visibility resumes', async ({
+test.describe('terminal document visibility WebGL recovery', () => {
+  test('@headful preserves the WebGL atlas and keeps terminal text painted after document visibility resumes', async ({
     electronApp,
     orcaPage
   }, testInfo) => {
@@ -293,7 +292,7 @@ test.describe('terminal document visibility WebGL recovery @headful', () => {
     await waitForPaneCount(orcaPage, 2)
 
     const webglActive = await forceWebgl(orcaPage)
-    test.skip(!webglActive, 'WebGL was not active in this headful environment')
+    test.skip(!webglActive, 'WebGL was not active in this Electron environment')
 
     await writeStableTerminalContent(orcaPage)
     expect(await patchAtlasCounter(orcaPage)).toBe(true)
@@ -306,9 +305,7 @@ test.describe('terminal document visibility WebGL recovery @headful', () => {
     }
 
     try {
-      // Why: this is the app-level background/foreground path where the
-      // TerminalPane stays mounted and visible, so React pane visibility does
-      // not run its normal resume recovery.
+      // Exercise app background/foreground while the pane stays mounted, bypassing React’s usual visibility-resume path.
       await resetAtlasResetCount(orcaPage)
       const browserWindowVisibilityWorked = await tryBrowserWindowVisibilityCycle(
         electronApp,
@@ -317,25 +314,16 @@ test.describe('terminal document visibility WebGL recovery @headful', () => {
       console.log(
         `[visibility-webgl] browserWindowVisibilityWorked=${browserWindowVisibilityWorked}`
       )
-      if (browserWindowVisibilityWorked) {
-        await expect
-          .poll(() => readAtlasResetCount(orcaPage), {
-            timeout: 2_000,
-            message: 'BrowserWindow visibility resume did not clear the WebGL atlas'
-          })
-          .toBeGreaterThan(0)
-      } else {
+      if (!browserWindowVisibilityWorked) {
         await resetAtlasResetCount(orcaPage)
         await dispatchDocumentVisibilityCycle(orcaPage)
-        await expect
-          .poll(() => readAtlasResetCount(orcaPage), {
-            timeout: 2_000,
-            message: 'document visibility resume did not clear the WebGL atlas'
-          })
-          .toBeGreaterThan(0)
       }
 
       await waitForTerminalPaint(orcaPage)
+      expect(
+        await readAtlasResetCount(orcaPage),
+        'ordinary document visibility resume cleared the shared WebGL atlas'
+      ).toBe(0)
 
       const afterResume = await terminalScreenshots(orcaPage)
       for (const [index, baselineShot] of baseline.entries()) {

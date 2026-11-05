@@ -1,0 +1,207 @@
+{
+  "recordedFrom": "issue #11170, probe page in Chromium on macOS (reporter's hardware, Korean input source active)",
+  "platform": "macos",
+  "note": "Exactly one case is recorded: `remapped`, the reporter's verbatim capture, where keydown and keypress both still carry the layout character and only charCode and the input event's data carry the substituted one. Every other case is DERIVED from it by changing one thing - the layout character, or the substitution's presence - and is marked `recorded: false` with its own note saying what was changed and why. Do not read the four derived cases as independent captures. No beforeinput record exists in the capture; none is invented here.",
+  "cases": [
+    {
+      "name": "remapped",
+      "note": "Verbatim from the issue. ~/Library/KeyBindings/DefaultKeyBinding.dict maps the character the Korean layout puts on Backquote to a backtick. keydown.key is the raw layout character; charCode 96 and input.data carry the OS substitution.",
+      "recorded": true,
+      "expectedPty": "`",
+      "dom": [
+        {
+          "type": "keydown",
+          "key": "₩",
+          "code": "Backquote",
+          "keyCode": 192,
+          "isComposing": false,
+          "value": ""
+        },
+        {
+          "type": "keypress",
+          "key": "₩",
+          "code": "Backquote",
+          "keyCode": 96,
+          "charCode": 96,
+          "isComposing": false,
+          "value": ""
+        },
+        {
+          "type": "input",
+          "data": "`",
+          "inputType": "insertText",
+          "isComposing": false,
+          "value": "`"
+        },
+        {
+          "type": "keyup",
+          "key": "₩",
+          "code": "Backquote",
+          "keyCode": 192,
+          "isComposing": false,
+          "value": "`"
+        }
+      ]
+    },
+    {
+      "name": "remapped-other-korean-layout",
+      "note": "DERIVED, not separately recorded: the `remapped` capture with the layout character changed to the one 세벌식 최종 puts on the same physical key. Korean layouts disagree about that position - 두벌식 and 세벌식 390 give U+20A9, 세벌식 최종 gives an asterisk - so one dict entry has to survive either. Honouring the substitution by listing characters can only cover the ones someone remembered to list.",
+      "recorded": false,
+      "expectedPty": "`",
+      "dom": [
+        {
+          "type": "keydown",
+          "key": "*",
+          "code": "Backquote",
+          "keyCode": 192,
+          "isComposing": false,
+          "value": ""
+        },
+        {
+          "type": "keypress",
+          "key": "*",
+          "code": "Backquote",
+          "keyCode": 96,
+          "charCode": 96,
+          "isComposing": false,
+          "value": ""
+        },
+        {
+          "type": "input",
+          "data": "`",
+          "inputType": "insertText",
+          "isComposing": false,
+          "value": "`"
+        },
+        {
+          "type": "keyup",
+          "key": "*",
+          "code": "Backquote",
+          "keyCode": 192,
+          "isComposing": false,
+          "value": "`"
+        }
+      ]
+    },
+    {
+      "name": "no-remap-korean",
+      "note": "DERIVED, not separately recorded: the `remapped` capture with the dict substitution removed, so the layout's own character is what the text system commits. charCode and input.data become U+20A9 to match keydown.key. This is the paired negative - the same physical key with no remap in play must still deliver the layout character.",
+      "recorded": false,
+      "expectedPty": "₩",
+      "dom": [
+        {
+          "type": "keydown",
+          "key": "₩",
+          "code": "Backquote",
+          "keyCode": 192,
+          "isComposing": false,
+          "value": ""
+        },
+        {
+          "type": "keypress",
+          "key": "₩",
+          "code": "Backquote",
+          "keyCode": 8361,
+          "charCode": 8361,
+          "isComposing": false,
+          "value": ""
+        },
+        {
+          "type": "input",
+          "data": "₩",
+          "inputType": "insertText",
+          "isComposing": false,
+          "value": "₩"
+        },
+        {
+          "type": "keyup",
+          "key": "₩",
+          "code": "Backquote",
+          "keyCode": 192,
+          "isComposing": false,
+          "value": "₩"
+        }
+      ]
+    },
+    {
+      "name": "no-remap-ascii",
+      "note": "DERIVED, not separately recorded. The issue states that with ABC selected keydown.key is already the backtick and nothing is wrong; this is that sequence. Guards the case where a fix rewrites the Backquote position unconditionally.",
+      "recorded": false,
+      "expectedPty": "`",
+      "dom": [
+        {
+          "type": "keydown",
+          "key": "`",
+          "code": "Backquote",
+          "keyCode": 192,
+          "isComposing": false,
+          "value": ""
+        },
+        {
+          "type": "keypress",
+          "key": "`",
+          "code": "Backquote",
+          "keyCode": 96,
+          "charCode": 96,
+          "isComposing": false,
+          "value": ""
+        },
+        {
+          "type": "input",
+          "data": "`",
+          "inputType": "insertText",
+          "isComposing": false,
+          "value": "`"
+        },
+        {
+          "type": "keyup",
+          "key": "`",
+          "code": "Backquote",
+          "keyCode": 192,
+          "isComposing": false,
+          "value": "`"
+        }
+      ]
+    },
+    {
+      "name": "remapped-neighbour-key",
+      "note": "DERIVED, not separately recorded. An ordinary letter pressed straight after the remapped key, to catch a fix that leaves the claim armed and swallows or duplicates the next keystroke.",
+      "recorded": false,
+      "expectedPty": "a",
+      "dom": [
+        {
+          "type": "keydown",
+          "key": "a",
+          "code": "KeyA",
+          "keyCode": 65,
+          "isComposing": false,
+          "value": ""
+        },
+        {
+          "type": "keypress",
+          "key": "a",
+          "code": "KeyA",
+          "keyCode": 97,
+          "charCode": 97,
+          "isComposing": false,
+          "value": ""
+        },
+        {
+          "type": "input",
+          "data": "a",
+          "inputType": "insertText",
+          "isComposing": false,
+          "value": "a"
+        },
+        {
+          "type": "keyup",
+          "key": "a",
+          "code": "KeyA",
+          "keyCode": 65,
+          "isComposing": false,
+          "value": "a"
+        }
+      ]
+    }
+  ]
+}

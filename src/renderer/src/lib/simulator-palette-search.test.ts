@@ -1,9 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import type { Tab, TabGroup, Worktree } from '../../../shared/types'
+import type { Tab } from '../../../shared/tab-types'
+import type { Worktree } from '../../../shared/worktree/types'
+import { getWorktreeHostIdentity } from '../../../shared/worktree/host-qualified-identity'
+import { buildPaletteTabDocument } from '../../../shared/palette-match/tab-document'
+import '../../../shared/palette-match/palette-query'
+
 import {
   SIMULATOR_PALETTE_QUERY_MAX_BYTES,
+  SIMULATOR_TYPE_SEARCH_ALIASES,
   buildSearchableSimulatorTabs,
-  isSimulatorPaletteQueryTooLarge,
   searchSimulatorTabs,
   type SearchableSimulatorTab
 } from './simulator-palette-search'
@@ -47,111 +52,80 @@ function makeTab(overrides: Partial<Tab> = {}): Tab {
   }
 }
 
-function makeGroup(overrides: Partial<TabGroup> = {}): TabGroup {
-  return {
-    id: 'group-1',
-    worktreeId: 'wt-1',
-    activeTabId: 'sim-1',
-    tabOrder: ['sim-1'],
-    ...overrides
-  }
-}
+/** Mirrors buildSearchableSimulatorTabs so hand-built rows index the same fields. */
 
 describe('simulator-palette-search', () => {
-  it('keeps empty-query ordering deterministic and context-first', () => {
-    const results = searchSimulatorTabs(
-      [
-        {
-          tab: makeTab({ id: 'sim-other', worktreeId: 'wt-other' }),
-          worktree: makeWorktree({ id: 'wt-other', displayName: 'Other WT' }),
-          repoName: 'repo/other',
-          worktreeSortIndex: 2,
-          isCurrentTab: false,
-          isCurrentWorktree: false
-        },
-        {
-          tab: makeTab({ id: 'sim-current-worktree' }),
-          worktree: makeWorktree({ displayName: 'Current WT' }),
-          repoName: 'repo/current',
-          worktreeSortIndex: 1,
-          isCurrentTab: false,
-          isCurrentWorktree: true
-        },
-        {
-          tab: makeTab({ id: 'sim-current-tab' }),
-          worktree: makeWorktree({ displayName: 'Current WT' }),
-          repoName: 'repo/current',
-          worktreeSortIndex: 1,
-          isCurrentTab: true,
-          isCurrentWorktree: true
-        }
-      ],
-      ''
-    )
+  it('keeps same-id simulator tabs isolated by execution host', () => {
+    const sharedId = 'repo-shared::/workspace'
+    const local = makeWorktree({ id: sharedId, hostId: 'local', displayName: 'Local workspace' })
+    const remote = makeWorktree({
+      id: sharedId,
+      hostId: 'runtime:host-b',
+      displayName: 'Remote workspace'
+    })
+    const entries = buildSearchableSimulatorTabs({
+      worktrees: [local, remote],
+      repoMap: new Map([[local.repoId, { displayName: 'repo/mobile' }]]),
+      worktreeOrder: new Map([
+        [getWorktreeHostIdentity(local), 0],
+        [getWorktreeHostIdentity(remote), 1]
+      ]),
+      unifiedTabsByWorktree: {
+        [sharedId]: [
+          makeTab({
+            id: 'sim-local',
+            worktreeId: sharedId,
+            executionHostId: 'local',
+            label: 'Local emulator'
+          }),
+          makeTab({
+            id: 'sim-remote',
+            worktreeId: sharedId,
+            executionHostId: 'runtime:host-b',
+            label: 'Remote emulator'
+          })
+        ]
+      },
+      activeGroupIdByWorktree: {},
+      groupsByWorktree: {},
+      activeWorktreeId: null,
+      activeTabType: 'terminal'
+    })
 
-    expect(results.map((result) => result.tabId)).toEqual([
-      'sim-current-tab',
-      'sim-current-worktree',
-      'sim-other'
+    expect(entries.map((entry) => [entry.tab.id, entry.worktree.hostId])).toEqual([
+      ['sim-local', 'local'],
+      ['sim-remote', 'runtime:host-b']
+    ])
+    expect(
+      searchSimulatorTabs(entries, 'emulator').map((result) => [
+        result.tabId,
+        result.executionHostId
+      ])
+    ).toEqual([
+      ['sim-local', 'local'],
+      ['sim-remote', 'runtime:host-b']
     ])
   })
 
-  it('matches mobile emulator and simulator aliases', () => {
-    const entries = [
-      {
-        tab: makeTab({ label: 'Phone Preview' }),
-        worktree: makeWorktree(),
-        repoName: 'repo/mobile',
-        worktreeSortIndex: 1,
-        isCurrentTab: false,
-        isCurrentWorktree: false
-      }
-    ]
-
-    expect(searchSimulatorTabs(entries, 'mobile')[0]?.secondaryRange).toEqual({ start: 0, end: 6 })
-    expect(searchSimulatorTabs(entries, 'simulator')).toHaveLength(1)
-    expect(searchSimulatorTabs(entries, 'ios')).toHaveLength(1)
-  })
-
-  it('searches worktree and repo metadata', () => {
-    const entries = [
-      {
-        tab: makeTab({ label: 'Phone Preview' }),
-        worktree: makeWorktree({ displayName: 'Checkout Flow' }),
-        repoName: 'orca/mobile-client',
-        worktreeSortIndex: 1,
-        isCurrentTab: false,
-        isCurrentWorktree: false
-      }
-    ]
-
-    expect(searchSimulatorTabs(entries, 'checkout')[0]?.worktreeRange).toEqual({
-      start: 0,
-      end: 8
-    })
-    expect(searchSimulatorTabs(entries, 'client')[0]?.repoRange).toEqual({ start: 12, end: 18 })
-  })
-
-  it('marks the current simulator tab from the active unified group', () => {
-    const worktree = makeWorktree()
+  it('does not route one ambiguous legacy simulator bucket to both hosts', () => {
+    const sharedId = 'repo-shared::/workspace'
     const entries = buildSearchableSimulatorTabs({
-      worktrees: [worktree],
-      repoMap: new Map([[worktree.repoId, { displayName: 'repo/mobile' }]]),
-      worktreeOrder: new Map([[worktree.id, 0]]),
+      worktrees: [
+        makeWorktree({ id: sharedId, hostId: 'local' }),
+        makeWorktree({ id: sharedId, hostId: 'runtime:host-b' })
+      ],
+      repoMap: new Map(),
+      worktreeOrder: new Map(),
       unifiedTabsByWorktree: {
-        [worktree.id]: [makeTab({ id: 'sim-1', groupId: 'group-sim' })]
+        [sharedId]: [makeTab({ worktreeId: sharedId })]
       },
-      activeGroupIdByWorktree: { [worktree.id]: 'group-sim' },
-      groupsByWorktree: {
-        [worktree.id]: [makeGroup({ id: 'group-sim', activeTabId: 'sim-1' })]
-      },
-      activeWorktreeId: worktree.id,
-      activeTabType: 'simulator'
+      activeGroupIdByWorktree: {},
+      groupsByWorktree: {},
+      activeWorktreeId: null,
+      activeTabType: 'terminal'
     })
 
-    expect(entries).toHaveLength(1)
-    expect(entries[0].isCurrentTab).toBe(true)
-    expect(searchSimulatorTabs(entries, '')[0]?.score).toBe(-2)
+    expect(entries).toEqual([])
   })
 
   it('rejects oversized pasted queries before scanning simulator tabs', () => {
@@ -164,14 +138,18 @@ describe('simulator-palette-search', () => {
       repoName: 'repo/mobile',
       worktreeSortIndex: 0,
       isCurrentTab: false,
-      isCurrentWorktree: false
+      isCurrentWorktree: false,
+      document: buildPaletteTabDocument({
+        id: 'sim-1',
+        title: 'Mobile Emulator',
+        secondaryTexts: [],
+        worktreeName: 'Mobile Worktree',
+        branch: 'feature/mobile-emulator',
+        repoName: 'repo/mobile',
+        typeAliases: SIMULATOR_TYPE_SEARCH_ALIASES
+      })
     } as SearchableSimulatorTab
 
-    expect(isSimulatorPaletteQueryTooLarge(oversizedQuery)).toBe(true)
     expect(searchSimulatorTabs([entry], oversizedQuery)).toEqual([])
-  })
-
-  it('rejects oversized whitespace before trimming simulator palette queries', () => {
-    expect(searchSimulatorTabs([], ' '.repeat(SIMULATOR_PALETTE_QUERY_MAX_BYTES + 1))).toEqual([])
   })
 })

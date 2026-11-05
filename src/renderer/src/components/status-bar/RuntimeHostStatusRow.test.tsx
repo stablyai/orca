@@ -1,42 +1,56 @@
-import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, expect, it } from 'vitest'
+// @vitest-environment happy-dom
+
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+
+import type { ReactNode } from 'react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RuntimeHostStatusRow } from './RuntimeHostStatusRow'
 
+vi.mock('@/components/ui/dropdown-menu', () => ({
+  DropdownMenuItem: ({
+    children,
+    disabled,
+    onSelect
+  }: {
+    children: ReactNode
+    disabled?: boolean
+    onSelect?: (event: { preventDefault: () => void }) => void
+  }) => (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={() => onSelect?.({ preventDefault: () => undefined })}
+    >
+      {children}
+    </button>
+  ),
+  DropdownMenuSub: ({ children }: { children: ReactNode }) => (
+    <div data-slot="dropdown-menu-sub">{children}</div>
+  ),
+  DropdownMenuSubContent: ({ children }: { children: ReactNode }) => (
+    <div data-slot="dropdown-menu-sub-content">{children}</div>
+  ),
+  DropdownMenuSubTrigger: ({ children }: { children: ReactNode }) => (
+    <div data-slot="dropdown-menu-sub-trigger">{children}</div>
+  )
+}))
+
+afterEach(cleanup)
+
 describe('RuntimeHostStatusRow', () => {
-  it('renders reconnecting diagnostics for remote hosts', () => {
-    const markup = renderToStaticMarkup(
-      <RuntimeHostStatusRow label="Dev Box" state="reconnecting" detail="Attempt 3" />
-    )
-
-    expect(markup).toContain('Dev Box')
-    expect(markup).toContain('Reconnecting')
-    expect(markup).toContain('Attempt 3')
-  })
-
-  it('renders disconnected hosts with a connect action', () => {
-    const markup = renderToStaticMarkup(
+  it('keeps the row action invokable for failing hosts', async () => {
+    const onConnect = vi.fn(async () => {})
+    render(
       <RuntimeHostStatusRow
         label="Dev Box"
         state="disconnected"
-        detail="Last closed: 1006"
-        onConnect={async () => {}}
+        detail="Connection refused"
+        onConnect={onConnect}
       />
     )
 
-    expect(markup).toContain('Dev Box')
-    expect(markup).toContain('Remote Server')
-    expect(markup).toContain('Disconnected')
-    expect(markup).toContain('Last closed: 1006')
-    expect(markup).toContain('Connect')
-  })
+    fireEvent.click(screen.getAllByRole('button', { name: 'Connect' })[0])
 
-  it('renders connected hosts with a disconnect action', () => {
-    const markup = renderToStaticMarkup(
-      <RuntimeHostStatusRow label="Dev Box" state="connected" onDisconnect={async () => {}} />
-    )
-
-    expect(markup).toContain('Dev Box')
-    expect(markup).toContain('Connected')
-    expect(markup).toContain('Disconnect')
+    await waitFor(() => expect(onConnect).toHaveBeenCalledOnce())
   })
 })

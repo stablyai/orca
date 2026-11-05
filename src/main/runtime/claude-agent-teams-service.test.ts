@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { ClaudeAgentTeamsService, type AgentTeamsTerminalApi } from './claude-agent-teams-service'
+import { ClaudeAgentTeamsService } from './claude-agent-teams-service'
+import type { AgentTeamsTerminalApi } from './claude-agent-teams-types'
 
 function createServiceWithLeader(): {
   service: ClaudeAgentTeamsService
@@ -141,6 +142,148 @@ describe('ClaudeAgentTeamsService', () => {
     ])
   })
 
+  it('relaunches a teammate via respawn-pane after a cat holding split', async () => {
+    const { service, teamId, token, leaderPane, api, splitCalls } = createServiceWithLeader()
+    const request = (argv: string[], envPane = leaderPane) =>
+      service.handleTmuxCompat({ teamId, token, envPane, argv }, api)
+
+    // Claude first splits a cat placeholder, then respawns the real teammate command.
+    await expect(
+      request([
+        'split-window',
+        '-d',
+        '-t',
+        leaderPane,
+        '-h',
+        '-l',
+        '70%',
+        '-P',
+        '-F',
+        '#{pane_id}',
+        '--',
+        'cat'
+      ])
+    ).resolves.toMatchObject({ stdout: '%2\n', exitCode: 0 })
+
+    await request(['set-option', '-p', '-t', '%2', 'remain-on-exit', 'failed'])
+
+    const teammateCommand = 'cd /repo && env CLAUDECODE=1 claude --agent-id a --teammate-mode auto'
+    await expect(
+      request(['respawn-pane', '-k', '-t', '%2', '--', teammateCommand])
+    ).resolves.toMatchObject({ stdout: '', exitCode: 0 })
+
+    expect(api.closeTerminal).toHaveBeenCalledWith('teammate-1')
+    expect(splitCalls).toEqual([
+      { handle: 'leader-handle', direction: 'vertical', command: 'cat', envPane: '%2' },
+      { handle: 'leader-handle', direction: 'vertical', command: teammateCommand, envPane: '%2' }
+    ])
+
+    await expect(
+      request(['list-panes', '-t', 'orca:0', '-F', '#{pane_id}'])
+    ).resolves.toMatchObject({ stdout: '%1\n%2\n' })
+
+    await request(['kill-pane', '-t', '%2'])
+    expect(api.closeTerminal).toHaveBeenLastCalledWith('teammate-2')
+  })
+
+  it('removes the pane when replacement split fails after a confirmed placeholder stop', async () => {
+    const { service, teamId, token, leaderPane, api } = createServiceWithLeader()
+    const request = (argv: string[], envPane = leaderPane) =>
+      service.handleTmuxCompat({ teamId, token, envPane, argv }, api)
+
+    await request([
+      'split-window',
+      '-d',
+      '-t',
+      leaderPane,
+      '-h',
+      '-P',
+      '-F',
+      '#{pane_id}',
+      '--',
+      'cat'
+    ])
+
+    vi.mocked(api.splitTerminal).mockRejectedValueOnce(new Error('no space for new pane'))
+    await expect(
+      request(['respawn-pane', '-k', '-t', '%2', '--', 'claude --agent-id a'])
+    ).resolves.toMatchObject({ ok: false, exitCode: 1 })
+
+    expect(api.closeTerminal).toHaveBeenCalledWith('teammate-1')
+    await expect(
+      request(['list-panes', '-t', 'orca:0', '-F', '#{pane_id}'])
+    ).resolves.toMatchObject({ stdout: '%1\n' })
+  })
+
+  it('keeps a pane registered when its process stop is unconfirmed', async () => {
+    const { service, teamId, token, leaderPane, api } = createServiceWithLeader()
+    const request = (argv: string[], envPane = leaderPane) =>
+      service.handleTmuxCompat({ teamId, token, envPane, argv }, api)
+
+    await request(['split-window', '-t', leaderPane, '-h', '-P', '-F', '#{pane_id}'])
+    vi.mocked(api.closeTerminal).mockResolvedValueOnce({
+      handle: 'teammate-1',
+      tabId: 'tab-1',
+      ptyKilled: false
+    })
+
+    await expect(request(['kill-pane', '-t', '%2'])).resolves.toMatchObject({
+      ok: false,
+      exitCode: 1
+    })
+    await expect(
+      request(['list-panes', '-t', 'orca:0', '-F', '#{pane_id}'])
+    ).resolves.toMatchObject({ stdout: '%1\n%2\n' })
+  })
+
+  it('does not launch a replacement when the placeholder stop is unconfirmed', async () => {
+    const { service, teamId, token, leaderPane, api, splitCalls } = createServiceWithLeader()
+    const request = (argv: string[], envPane = leaderPane) =>
+      service.handleTmuxCompat({ teamId, token, envPane, argv }, api)
+
+    await request(['split-window', '-t', leaderPane, '-h', '-P', '-F', '#{pane_id}', 'cat'])
+    vi.mocked(api.closeTerminal).mockResolvedValueOnce({
+      handle: 'teammate-1',
+      tabId: 'tab-1',
+      ptyKilled: false,
+      ptyStopVerdict: 'live'
+    })
+
+    await expect(
+      request(['respawn-pane', '-k', '-t', '%2', '--', 'claude --agent-id a'])
+    ).resolves.toMatchObject({ ok: false, exitCode: 1 })
+    expect(api.closeTerminal).toHaveBeenNthCalledWith(1, 'teammate-1')
+    expect(splitCalls).toHaveLength(1)
+
+    await expect(
+      request(['respawn-pane', '-k', '-t', '%2', '--', 'claude --agent-id a'])
+    ).resolves.toMatchObject({ ok: false, exitCode: 1 })
+    expect(splitCalls).toHaveLength(1)
+
+    await request(['kill-pane', '-t', '%2'])
+    expect(api.closeTerminal).toHaveBeenLastCalledWith('teammate-1')
+  })
+
+  it('refuses to respawn the leader pane', async () => {
+    const { service, teamId, token, leaderPane, api } = createServiceWithLeader()
+
+    await expect(
+      service.handleTmuxCompat(
+        {
+          teamId,
+          token,
+          envPane: leaderPane,
+          argv: ['respawn-pane', '-k', '-t', leaderPane, '--', 'cat']
+        },
+        api
+      )
+    ).resolves.toMatchObject({
+      ok: false,
+      exitCode: 1,
+      stderr: 'tmux: refusing to respawn leader pane\n'
+    })
+  })
+
   it('rejects stale or unauthorized shim calls', async () => {
     const { service, teamId, leaderPane, api } = createServiceWithLeader()
 
@@ -150,5 +293,25 @@ describe('ClaudeAgentTeamsService', () => {
         api
       )
     ).resolves.toMatchObject({ ok: false, exitCode: 1 })
+  })
+
+  it('keeps the inherited Windows `Path` instead of minting a truncated `PATH`', () => {
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    try {
+      const launch = new ClaudeAgentTeamsService().createLaunchEnv({
+        leaderHandle: 'leader-handle',
+        baseEnv: { Path: 'C:\\Windows\\system32' },
+        shimDir: 'C:\\orca-shim',
+        shimBin: 'C:\\orca.exe'
+      })
+
+      expect(Object.keys(launch.env).filter((key) => /^path$/i.test(key))).toEqual(['Path'])
+      expect(launch.env.Path).toBe('C:\\orca-shim;C:\\Windows\\system32')
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
   })
 })

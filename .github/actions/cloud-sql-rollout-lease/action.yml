@@ -1,0 +1,41 @@
+name: Cloud SQL rollout lease
+description: >-
+  Serialize Cloud SQL connection-budget rollouts across repositories with a compare-and-swap lease
+  on a Cloud Storage object. Fails immediately when another run holds the lease; never queues,
+  never steals.
+
+inputs:
+  bucket:
+    description: Terraform state bucket that holds the lease object.
+    required: true
+  object:
+    description: Lease object name, e.g. terraform/state/cloud-sql-rollout/production.lock
+    required: true
+  holder-key:
+    description: >-
+      Identity that owns the lease. Every job in one run must pass the same value; a job that finds
+      its own holder key on a live lease re-enters it instead of failing.
+    required: false
+    default: ${{ github.repository }}/${{ github.run_id }}
+  release:
+    description: >-
+      Release the lease in the post step. Set to "false" on every job of a multi-job wave except the
+      final always() job, which sets "true".
+    required: false
+    default: 'true'
+
+outputs:
+  holder-key:
+    description: The holder key written to the lease object.
+  generation:
+    description: Cloud Storage generation of the lease object after acquisition.
+  expires-at:
+    description: ISO-8601 instant at which the lease expires without renewal.
+  reentrant:
+    description: '"true" when this job re-entered a lease its own run already held.'
+
+runs:
+  using: node24
+  main: main.mjs
+  post: post.mjs
+  post-if: always()

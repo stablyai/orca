@@ -1,4 +1,4 @@
-import type { OnboardingState } from '../../../../shared/types'
+import type { OnboardingState } from '../../../../shared/onboarding-state-types'
 
 const ONBOARDING_REOPENED_EVENT = 'orca:onboarding-reopened'
 
@@ -7,8 +7,7 @@ export async function showOnboardingFromRenderer(): Promise<void> {
     closedAt: null,
     outcome: null,
     lastCompletedStep: -1,
-    // Why: this is a manual re-open of the wizard, not a reset of the
-    // user's activation history. Only clear the dismissed UI flag.
+    // Manual reopening clears dismissal while preserving activation history.
     checklist: { dismissed: false }
   })
   window.dispatchEvent(

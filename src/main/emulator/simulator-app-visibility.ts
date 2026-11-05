@@ -1,5 +1,5 @@
-import { execFile } from 'child_process'
-import { platform } from 'os'
+import { execFile } from 'node:child_process'
+import { platform } from 'node:os'
 
 export async function hideNativeSimulatorApp(): Promise<void> {
   if (platform() !== 'darwin') {
@@ -7,8 +7,7 @@ export async function hideNativeSimulatorApp(): Promise<void> {
   }
 
   await new Promise<void>((resolve) => {
-    // Why: Simulator.app does not expose a direct hide command, but System Events
-    // can hide the process after CoreSimulator/serve-sim surfaces a native window.
+    // Simulator has no hide command; use System Events to hide the native process.
     execFile(
       'osascript',
       [

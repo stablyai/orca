@@ -1,8 +1,8 @@
-import { execFileSync } from 'child_process'
-import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'fs'
-import os from 'os'
-import path from 'path'
-import { randomUUID } from 'crypto'
+import { execFileSync } from 'node:child_process'
+import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+import { randomUUID } from 'node:crypto'
 
 export type IsolatedLargeDiffRepo = {
   repoPath: string
@@ -60,6 +60,53 @@ function modifyLocaleLikeJson(content: string, fileIndex: number): string {
   lines[changedLineIndex] = lines[changedLineIndex].replace('original', 'updated')
   lines.splice(changedLineIndex + 4, 1)
   return lines.join('\n')
+}
+
+function buildSourceLikeFile(fileIndex: number, lineCount: number, revision: number): string {
+  const lines: string[] = []
+  for (let i = 0; i < lineCount; i += 1) {
+    const changed = i % 12 === 0
+    lines.push(
+      changed
+        ? `export const value_${fileIndex}_${i} = 'rev${revision} ${'payload '.repeat(6).trim()}'`
+        : `export const value_${fileIndex}_${i} = 'base ${'payload '.repeat(6).trim()}'`
+    )
+  }
+  return `${lines.join('\n')}\n`
+}
+
+/** Many staged sections, each with a real multi-hunk diff — the shape a rebase invalidates. */
+export function createIsolatedManyFileStagedDiffRepo(
+  fileCount = 120,
+  lineCount = 600
+): IsolatedStagedLocaleDiffRepo {
+  const repoPath = realpathSync(mkdtempSync(path.join(os.tmpdir(), 'orca-many-file-repro-')))
+  runGit(repoPath, ['init'])
+  runGit(repoPath, ['config', 'user.email', 'e2e@test.local'])
+  runGit(repoPath, ['config', 'user.name', 'E2E Test'])
+
+  mkdirSync(path.join(repoPath, 'src'), { recursive: true })
+  const relativePaths: string[] = []
+  for (let fileIndex = 0; fileIndex < fileCount; fileIndex += 1) {
+    const relativePath = path.posix.join('src', `module-${String(fileIndex).padStart(4, '0')}.ts`)
+    writeFileSync(
+      path.join(repoPath, ...relativePath.split(path.posix.sep)),
+      buildSourceLikeFile(fileIndex, lineCount, 0)
+    )
+    relativePaths.push(relativePath)
+  }
+  runGit(repoPath, ['add', '-A'])
+  runGit(repoPath, ['commit', '-m', 'Initial many-file fixture'])
+
+  for (let fileIndex = 0; fileIndex < fileCount; fileIndex += 1) {
+    writeFileSync(
+      path.join(repoPath, ...relativePaths[fileIndex].split(path.posix.sep)),
+      buildSourceLikeFile(fileIndex, lineCount, 1)
+    )
+  }
+  runGit(repoPath, ['add', '-A'])
+
+  return { repoPath, relativePaths }
 }
 
 export function createIsolatedStagedLocaleDiffRepo(): IsolatedStagedLocaleDiffRepo {

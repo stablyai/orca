@@ -1,7 +1,9 @@
+import { supportsHostedReviewCreation } from '../../shared/source-control/hosted-review/hosted-review-creation-providers'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
   createGitHubPullRequestMock,
+  createBitbucketPullRequestMock,
   createGitLabMergeRequestMock,
   createAzureDevOpsPullRequestMock,
   createGiteaPullRequestMock,
@@ -11,9 +13,12 @@ const {
   getMergeRequestForBranchMock,
   getProjectSlugMock,
   getPRForBranchOutcomeMock,
-  getRepoSlugMock
+  getRepoSlugMock,
+  getGitHubPRLookupRateLimitBlockMock,
+  getEnterpriseGitHubRepoSlugMock
 } = vi.hoisted(() => ({
   createGitHubPullRequestMock: vi.fn(),
+  createBitbucketPullRequestMock: vi.fn(),
   createGitLabMergeRequestMock: vi.fn(),
   createAzureDevOpsPullRequestMock: vi.fn(),
   createGiteaPullRequestMock: vi.fn(),
@@ -23,12 +28,16 @@ const {
   getMergeRequestForBranchMock: vi.fn(),
   getProjectSlugMock: vi.fn(),
   getPRForBranchOutcomeMock: vi.fn(),
-  getRepoSlugMock: vi.fn()
+  getRepoSlugMock: vi.fn(),
+  getGitHubPRLookupRateLimitBlockMock: vi.fn(async () => null),
+  getEnterpriseGitHubRepoSlugMock: vi.fn()
 }))
 
 vi.mock('../gitlab/client', () => ({
   getProjectSlug: getProjectSlugMock,
   getMergeRequestForBranch: getMergeRequestForBranchMock,
+  // Lookup failures must remain unavailable, never false absence.
+  getMergeRequestForBranchOrThrow: getMergeRequestForBranchMock,
   getMergeRequest: vi.fn()
 }))
 
@@ -39,13 +48,22 @@ vi.mock('../gitlab/merge-request-creation', () => ({
 vi.mock('../github/client', () => ({
   createGitHubPullRequest: createGitHubPullRequestMock,
   getRepoSlug: getRepoSlugMock,
-  getPRForBranchOutcome: getPRForBranchOutcomeMock
+  getPRForBranchOutcome: getPRForBranchOutcomeMock,
+  getGitHubPRLookupRateLimitBlock: getGitHubPRLookupRateLimitBlockMock
+}))
+
+vi.mock('../github/github-enterprise-repository', () => ({
+  getEnterpriseGitHubRepoSlug: getEnterpriseGitHubRepoSlugMock
 }))
 
 vi.mock('../bitbucket/client', () => ({
   getBitbucketRepoSlug: getBitbucketRepoSlugMock,
   getBitbucketPullRequestForBranch: vi.fn(),
   getBitbucketPullRequest: vi.fn()
+}))
+
+vi.mock('../bitbucket/pull-request-creation', () => ({
+  createBitbucketPullRequest: createBitbucketPullRequestMock
 }))
 
 vi.mock('../azure-devops/client', () => ({
@@ -68,17 +86,24 @@ vi.mock('../gitea/pull-request-creation', () => ({
   createGiteaPullRequest: createGiteaPullRequestMock
 }))
 
+import { FORGE_PROVIDERS, getForgeProviderById } from './forge-provider'
 import {
-  FORGE_PROVIDERS,
   detectHostedReviewProvider,
-  getForgeProviderById,
   getForgeProviderForRepository
-} from './forge-provider'
+} from './forge-provider-detection'
+
+import { _resetOriginGitHubApiRepositoryCache } from '../github/github-api-repository'
+
+// Isolate module-level origin repository identities between tests.
+beforeEach(() => {
+  _resetOriginGitHubApiRepositoryCache()
+})
 
 describe('forge provider interface', () => {
   beforeEach(() => {
     createGitHubPullRequestMock.mockReset()
     createGitLabMergeRequestMock.mockReset()
+    createBitbucketPullRequestMock.mockReset()
     createAzureDevOpsPullRequestMock.mockReset()
     createGiteaPullRequestMock.mockReset()
     getAzureDevOpsRepoSlugMock.mockReset()
@@ -88,17 +113,64 @@ describe('forge provider interface', () => {
     getProjectSlugMock.mockReset()
     getPRForBranchOutcomeMock.mockReset()
     getRepoSlugMock.mockReset()
+    getEnterpriseGitHubRepoSlugMock.mockReset()
+    getGitHubPRLookupRateLimitBlockMock.mockReset()
+    getGitHubPRLookupRateLimitBlockMock.mockResolvedValue(null)
   })
 
   it('preserves the existing hosted provider detection order', async () => {
     getProjectSlugMock.mockResolvedValue({ host: 'gitlab.com', path: 'team/orca' })
     getRepoSlugMock.mockResolvedValue({ owner: 'team', repo: 'orca' })
 
-    await expect(detectHostedReviewProvider({ repoPath: '/repo' })).resolves.toBe('gitlab')
-    await expect(getForgeProviderForRepository({ repoPath: '/repo' })).resolves.toMatchObject({
+    await expect(
+      detectHostedReviewProvider({ executionHostId: 'local', repoPath: '/repo' })
+    ).resolves.toBe('gitlab')
+    await expect(
+      getForgeProviderForRepository({ executionHostId: 'local', repoPath: '/repo' })
+    ).resolves.toMatchObject({
       id: 'gitlab'
     })
     expect(getRepoSlugMock).not.toHaveBeenCalled()
+  })
+
+  it('detects a GitHub Enterprise Server remote as the GitHub provider, not Gitea', async () => {
+    // #8312: authenticated GHES belongs to GitHub; never fall through to Gitea token requirements.
+    getProjectSlugMock.mockResolvedValue(null)
+    getRepoSlugMock.mockResolvedValue({
+      owner: 'team',
+      repo: 'orca',
+      host: 'github.acme-corp.com'
+    })
+
+    await expect(
+      detectHostedReviewProvider({ executionHostId: 'local', repoPath: '/repo' })
+    ).resolves.toBe('github')
+    await expect(
+      getForgeProviderForRepository({ executionHostId: 'local', repoPath: '/repo' })
+    ).resolves.toMatchObject({
+      id: 'github'
+    })
+    expect(getGiteaRepoSlugMock).not.toHaveBeenCalled()
+  })
+
+  it('leaves a genuinely non-GitHub remote for later providers when gh is not authenticated', async () => {
+    getProjectSlugMock.mockResolvedValue(null)
+    getRepoSlugMock.mockResolvedValue(null)
+    // Without host authentication, enterprise detection declines so Gitea may claim its own server.
+    getEnterpriseGitHubRepoSlugMock.mockResolvedValue(null)
+    getBitbucketRepoSlugMock.mockResolvedValue(null)
+    getAzureDevOpsRepoSlugMock.mockResolvedValue(null)
+    getGiteaRepoSlugMock.mockResolvedValue({
+      host: 'gitea.example.com',
+      owner: 'team',
+      repo: 'orca',
+      apiBaseUrl: 'https://gitea.example.com/api/v1',
+      webBaseUrl: 'https://gitea.example.com'
+    })
+
+    await expect(
+      detectHostedReviewProvider({ executionHostId: 'local', repoPath: '/repo' })
+    ).resolves.toBe('gitea')
   })
 
   it('keeps review creation capability scoped to providers with creation support', async () => {
@@ -107,10 +179,14 @@ describe('forge provider interface', () => {
     ).toEqual([
       ['gitlab', true],
       ['github', true],
-      ['bitbucket', false],
+      ['bitbucket', true],
       ['azure-devops', true],
       ['gitea', true]
     ])
+    // Keep renderer/Create capability declarations aligned with provider implementations.
+    for (const provider of FORGE_PROVIDERS) {
+      expect(supportsHostedReviewCreation(provider.id)).toBe(provider.supportsReviewCreation)
+    }
     createGitHubPullRequestMock.mockResolvedValue({
       ok: true,
       number: 12,
@@ -119,23 +195,53 @@ describe('forge provider interface', () => {
 
     const provider = getForgeProviderById('github')
     await expect(
-      provider.createReview?.('/repo', {
-        provider: 'github',
-        base: 'main',
-        head: 'feature/provider-interface',
-        title: 'Add provider interface'
-      })
+      provider.createReview?.(
+        '/repo',
+        {
+          provider: 'github',
+          base: 'main',
+          head: 'feature/provider-interface',
+          title: 'Add provider interface'
+        },
+        'local'
+      )
     ).resolves.toEqual({
       ok: true,
       number: 12,
       url: 'https://github.com/team/orca/pull/12'
     })
-    expect(createGitHubPullRequestMock).toHaveBeenCalledWith('/repo', {
-      provider: 'github',
+    expect(createGitHubPullRequestMock).toHaveBeenCalledWith(
+      '/repo',
+      {
+        provider: 'github',
+        base: 'main',
+        head: 'feature/provider-interface',
+        title: 'Add provider interface'
+      },
+      'local'
+    )
+  })
+
+  it('routes Bitbucket review creation through the shared provider contract', async () => {
+    createBitbucketPullRequestMock.mockResolvedValue({
+      ok: true,
+      number: 23,
+      url: 'https://bitbucket.org/team/orca/pull-requests/23'
+    })
+
+    const provider = getForgeProviderById('bitbucket')
+    const input = {
+      provider: 'bitbucket' as const,
       base: 'main',
       head: 'feature/provider-interface',
       title: 'Add provider interface'
+    }
+    await expect(provider.createReview?.('/repo', input, 'local')).resolves.toEqual({
+      ok: true,
+      number: 23,
+      url: 'https://bitbucket.org/team/orca/pull-requests/23'
     })
+    expect(createBitbucketPullRequestMock).toHaveBeenCalledWith('/repo', input, 'local')
   })
 
   it('routes GitLab review creation through the shared provider contract', async () => {
@@ -155,7 +261,7 @@ describe('forge provider interface', () => {
           head: 'feature/provider-interface',
           title: 'Add provider interface'
         },
-        'ssh-1'
+        'ssh:ssh-1'
       )
     ).resolves.toEqual({
       ok: true,
@@ -170,7 +276,7 @@ describe('forge provider interface', () => {
         head: 'feature/provider-interface',
         title: 'Add provider interface'
       },
-      'ssh-1'
+      'ssh:ssh-1'
     )
   })
 
@@ -191,7 +297,7 @@ describe('forge provider interface', () => {
           head: 'feature/provider-interface',
           title: 'Add provider interface'
         },
-        'ssh-1'
+        'ssh:ssh-1'
       )
     ).resolves.toEqual({
       ok: true,
@@ -206,7 +312,7 @@ describe('forge provider interface', () => {
         head: 'feature/provider-interface',
         title: 'Add provider interface'
       },
-      'ssh-1'
+      'ssh:ssh-1'
     )
   })
 
@@ -227,7 +333,7 @@ describe('forge provider interface', () => {
           head: 'feature/provider-interface',
           title: 'Add provider interface'
         },
-        'ssh-1'
+        'ssh:ssh-1'
       )
     ).resolves.toEqual({
       ok: true,
@@ -242,7 +348,7 @@ describe('forge provider interface', () => {
         head: 'feature/provider-interface',
         title: 'Add provider interface'
       },
-      'ssh-1'
+      'ssh:ssh-1'
     )
   })
 
@@ -264,7 +370,7 @@ describe('forge provider interface', () => {
     await expect(
       getForgeProviderById('github').getReviewForBranch({
         repoPath: '/repo',
-        connectionId: 'ssh-1',
+        executionHostId: 'ssh:ssh-1',
         branch: '',
         fallbackReviewNumber: 7
       })
@@ -284,7 +390,7 @@ describe('forge provider interface', () => {
 
     await getForgeProviderById('github').getReviewForBranch({
       repoPath: '/repo',
-      connectionId: null,
+      executionHostId: 'local',
       branch: 'feature/x',
       githubCurrentHeadOid: 'abc1234'
     })
@@ -300,7 +406,7 @@ describe('forge provider interface', () => {
     await expect(
       getForgeProviderById('github').getReviewForBranch({
         repoPath: '/repo',
-        connectionId: null,
+        executionHostId: 'local',
         branch: 'feature/x'
       })
     ).resolves.toBeNull()
@@ -317,9 +423,52 @@ describe('forge provider interface', () => {
     await expect(
       getForgeProviderById('github').getReviewForBranch({
         repoPath: '/repo',
-        connectionId: null,
+        executionHostId: 'local',
         branch: 'feature/x'
       })
     ).rejects.toThrow(/network/)
+  })
+
+  it('refuses a GitHub branch lookup while the rate-limit budget is exhausted (#11532)', async () => {
+    getGitHubPRLookupRateLimitBlockMock.mockResolvedValueOnce({
+      resetAt: 1_800_000_000
+    } as never)
+
+    await expect(
+      getForgeProviderById('github').getReviewForBranch({
+        repoPath: '/repo',
+        executionHostId: 'local',
+        branch: 'feature/x'
+      })
+    ).rejects.toThrow(/rate_limited/)
+    expect(getPRForBranchOutcomeMock).not.toHaveBeenCalled()
+  })
+
+  it('refuses a GitHub lookup by number while the rate-limit budget is exhausted (#11532)', async () => {
+    getGitHubPRLookupRateLimitBlockMock.mockResolvedValueOnce({
+      resetAt: 1_800_000_000
+    } as never)
+
+    await expect(
+      getForgeProviderById('github').getReviewByNumber({
+        repoPath: '/repo',
+        executionHostId: 'local',
+        number: 42
+      })
+    ).rejects.toThrow(/rate_limited/)
+    expect(getPRForBranchOutcomeMock).not.toHaveBeenCalled()
+  })
+
+  it('does not gate non-GitHub providers on the GitHub rate limit', async () => {
+    getGitHubPRLookupRateLimitBlockMock.mockResolvedValue({ resetAt: 1_800_000_000 } as never)
+    getMergeRequestForBranchMock.mockResolvedValue(null)
+
+    await expect(
+      getForgeProviderById('gitlab').getReviewForBranch({
+        repoPath: '/repo',
+        executionHostId: 'local',
+        branch: 'feature/x'
+      })
+    ).resolves.toBeNull()
   })
 })

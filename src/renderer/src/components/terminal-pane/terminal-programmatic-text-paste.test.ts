@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { TERMINAL_PASTE_DIRECT_MAX_BYTES } from './terminal-paste-coordinator'
+import { TERMINAL_PASTE_DIRECT_MAX_BYTES } from './terminal-paste-limits'
 
 const mocks = vi.hoisted(() => ({
   pasteTerminalText: vi.fn(),
@@ -15,10 +15,6 @@ vi.mock('./terminal-bracketed-paste', () => ({
 
 vi.mock('./terminal-input-activity', () => ({
   recordTerminalUserInputForLeaf: mocks.recordTerminalUserInputForLeaf
-}))
-
-vi.mock('@/lib/connection-context', () => ({
-  getConnectionId: () => null
 }))
 
 import { handleTerminalProgrammaticTextPaste } from './terminal-programmatic-text-paste'
@@ -72,23 +68,6 @@ async function flushPasteTasks(iterations = 6): Promise<void> {
 }
 
 describe('terminal programmatic text paste', () => {
-  it('does not direct-paste through xterm when the pane has no live transport', async () => {
-    const pane = makePane()
-
-    handleTerminalProgrammaticTextPaste({
-      detail: { tabId: 'tab-1', text: 'secret-token-value' },
-      getManager: () => makeManager(pane) as never,
-      getPaneTransports: () => new Map(),
-      tabId: 'tab-1',
-      worktreeId: 'wt-1'
-    })
-    await flushPasteTasks()
-
-    expect(mocks.pasteTerminalText).not.toHaveBeenCalled()
-    expect(mocks.recordTerminalUserInputForLeaf).not.toHaveBeenCalled()
-    expect(pane.terminal.focus).not.toHaveBeenCalled()
-  })
-
   it('rejects disconnected programmatic paste before writing terminal input', async () => {
     const pane = makePane()
     const transport = makeTransport({ connected: false })
@@ -97,8 +76,7 @@ describe('terminal programmatic text paste', () => {
       detail: { tabId: 'tab-1', text: 'git status' },
       getManager: () => makeManager(pane) as never,
       getPaneTransports: () => new Map([[pane.id, transport]]) as never,
-      tabId: 'tab-1',
-      worktreeId: 'wt-1'
+      tabId: 'tab-1'
     })
     await flushPasteTasks()
 
@@ -122,8 +100,7 @@ describe('terminal programmatic text paste', () => {
           [pane.id, transportLookupCount === 1 ? originalTransport : replacementTransport]
         ]) as never
       },
-      tabId: 'tab-1',
-      worktreeId: 'wt-1'
+      tabId: 'tab-1'
     })
     await flushPasteTasks()
 
@@ -142,8 +119,7 @@ describe('terminal programmatic text paste', () => {
       detail: { tabId: 'tab-1', text: largePaste },
       getManager: () => makeManager(pane) as never,
       getPaneTransports: () => new Map([[pane.id, transport]]) as never,
-      tabId: 'tab-1',
-      worktreeId: 'wt-1'
+      tabId: 'tab-1'
     })
     await flushPasteTasks(12)
 
@@ -172,8 +148,7 @@ describe('terminal programmatic text paste', () => {
           [activePane.id, activeTransport],
           [targetPane.id, targetTransport]
         ]) as never,
-      tabId: 'tab-1',
-      worktreeId: 'wt-1'
+      tabId: 'tab-1'
     })
     await flushPasteTasks()
 

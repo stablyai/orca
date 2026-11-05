@@ -1,0 +1,66 @@
+[8m[?u]11;?\[>q[>4;?m[c[2K[0m]0;◇ Qoder CLI | Ready                                                             ]8;;[0m7[r8[J
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[H[?25h[?25l[?1006l[?1002l[?1004h]0;◇ Qoder CLI | Ready                                                             [?2004h[?2004h[?1004h[0m
+[2G[38;5;78m [39m[4G[38;5;78m██████[39m[38G╭─[41G[38;5;78m[1mTips[22m[39m[46G[38;5;78m[1mfor[22m[39m[50G[38;5;78m[1mgetting[22m[39m[58G[38;5;78m[1mstarted[22m[39m[66G────────────────────────────────╮
+[2G[38;5;78m██[39m[10G[38;5;78m██[39m[38G│[40G1.[43GUse[47GAGENTS.md[57Gfiles[63Gto[66Gcustomize[76Ginteractions[98G│
+[2G[38;5;78m██[39m[6G[38;5;78m██[39m[10G[38;5;78m██[39m[14G[1mQoder[22m[20G[1mCLI[22m[24Gv1.1.64[38G│[40G2.[43G/help[49Gfor[53Gmore[58Ginformation[98G│
+[2G[38;5;78m██[39m[8G[38;5;78m██[39m[38G│[40G3.[43GAsk[47Gcoding[54Gquestions,[65Gedit[70Gcode[75Gor[78Grun[82Gcommands[98G│
+[2G[38;5;78m [39m[4G[38;5;78m████[39m[10G[38;5;78m██[39m[14G[1mNot[22m[18G[1mLogin[22m[24GPlease[31GAuth[38G│[40G4.[43GBe[46Gspecific[55Gfor[59Gthe[63Gbest[68Gresults[98G│
+[38G╰───────────────────────────────────────────────────────────╯
+
+
+[1m Authenticating[22m
+────────────────────────────────────────────────────────────────────────────────────────────────────
+
+[2G⠋[4GWaiting[12Gfor[16Gauthentication...
+
+[2G[3mEsc[23m[6G[3mback[23m
+[0m[>0q[c[0m[1C[6A[1mW[22m[1me[22m[1ml[22m[1mc[22m[1mo[22m[1mm[22m[1me[22m[1m [22m[1mt[22m[1mo[22m[1m [22m[1mQ[22m[1mo[22m[1md[22m[1me[22m[1mr[22m[1m [22m[1mC[22m[1mL[22m[1mI[22m[1C[2BSign[7Gin[10Gto[13Gget[17Gstarted,[26Gor[29Gexit[34Gthe[38Gapplication.[1C[1B[K[2C[1B❯[5G1.[8GSign[13Gin[16Gto[19Gcontinue[1C[1B   2. Exit[13Gthe[17Gapplication
+
+[2G[3m↑/↓[23m[6G[3mnavigate[23m[15G[3m·[23m[17G[3mEnter[23m[23G[3mselect[23m[30G[3m·[23m[32G[3mEsc[23m[36G[3mback[23m
+[0m]0;✦ Qoder CLI | Working                                                           [0m[8A > Reply with hello.[K[1B[K[1B[1m [22m[1mW[22m[1me[22m[1ml[22m[1mc[22m[1mo[22m[1mm[22m[1me[22m[1m [22m[1mt[22m[1mo[22m[1m [22m[1mQ[22m[1mo[22m[1md[22m[1me[22m[1mr[22m[1m [22m[1mC[22m[1mL[22m[1mI[22m[K[1B────────────────────────────────────────────────────────────────────────────────────────────────────[1C[1BSign in to[13Gget started, or[29Gexit[34Gthe[38Gapplication.[4C[1B[K[2C[1B❯[5G1.[8GSign[13Gin[16Gto[19Gcontinue[1C[1B   2. Exit the application[K
+
+[2G[3m↑/↓[23m[6G[3mnavigate[23m[15G[3m·[23m[17G[3mEnter[23m[23G[3mselect[23m[30G[3m·[23m[32G[3mEsc[23m[36G[3mback[23m
+[0m]0;✦ Reply with hello. | Working                                                   ]0;◇ Reply with hello. | Ready                                                     [0m[8A x Qoder authentication[25Gis[28Gnot[32Gready.[39GPlease[46Gsign[51Gin[54Gagain[60G(e.g.[66Gvia[70G/login)[78Gbefore[85Gsending[93Ga[1B   message.[K[1B[1m [22m[1mW[22m[1me[22m[1ml[22m[1mc[22m[1mo[22m[1mm[22m[1me[22m[1m [22m[1mt[22m[1mo[22m[1m [22m[1mQ[22m[1mo[22m[1md[22m[1me[22m[1mr[22m[1m [22m[1mC[22m[1mL[22m[1mI[22m[K[1B────────────────────────────────────────────────────────────────────────────────────────────────────[1C[1BSign in to[13Gget started, or[29Gexit[34Gthe[38Gapplication.[4C[1B[K[2C[1B❯[5G1.[8GSign[13Gin[16Gto[19Gcontinue[1C[1B   2. Exit the application[K
+
+[2G[3m↑/↓[23m[6G[3mnavigate[23m[15G[3m·[23m[17G[3mEnter[23m[23G[3mselect[23m[30G[3m·[23m[32G[3mEsc[23m[36G[3mback[23m
+[0m[0m[3C[9A[K
+
+
+
+
+
+
+
+
+[0m

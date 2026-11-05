@@ -1,20 +1,11 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
+
 import {
-  reconcileDeadSessions,
+  shouldReconcileMissingSession,
   shouldReconcileDeadSession
 } from './terminal-dead-session-reconcile'
 
 describe('shouldReconcileDeadSession', () => {
-  it('reconciles a local, non-remote id genuinely absent from the live set', () => {
-    expect(
-      shouldReconcileDeadSession({
-        ptyId: 'wt@@dead',
-        connectionId: null,
-        liveSessionIds: new Set(['wt@@alive'])
-      })
-    ).toBe(true)
-  })
-
   it('does not reconcile when the bound id is still live', () => {
     expect(
       shouldReconcileDeadSession({
@@ -64,45 +55,118 @@ describe('shouldReconcileDeadSession', () => {
       })
     ).toBe(true)
   })
+
+  it('does NOT reconcile a newborn pane bound after the snapshot was requested', () => {
+    // A snapshot requested before this bind cannot prove the newborn PTY dead.
+    expect(
+      shouldReconcileDeadSession({
+        ptyId: 'wt@@newborn',
+        connectionId: null,
+        liveSessionIds: new Set(['wt@@alive']),
+        ptyBoundAt: 1000,
+        snapshotRequestedAt: 900
+      })
+    ).toBe(false)
+  })
+
+  it('does NOT reconcile when the binding and snapshot request share a tick (boundAt === requestedAt)', () => {
+    // Coarse performance.now can tie request and bind; inclusive comparison must retain that newborn.
+    expect(
+      shouldReconcileDeadSession({
+        ptyId: 'wt@@newborn',
+        connectionId: null,
+        liveSessionIds: new Set(['wt@@alive']),
+        ptyBoundAt: 1000,
+        snapshotRequestedAt: 1000
+      })
+    ).toBe(false)
+  })
+
+  it('reconciles when the binding predates the snapshot request (boundAt < requestedAt)', () => {
+    expect(
+      shouldReconcileDeadSession({
+        ptyId: 'wt@@dead',
+        connectionId: null,
+        liveSessionIds: new Set(['wt@@alive']),
+        ptyBoundAt: 900,
+        snapshotRequestedAt: 1000
+      })
+    ).toBe(true)
+  })
+
+  it('ignores the freshness guard when either timestamp is omitted (back-compat)', () => {
+    expect(
+      shouldReconcileDeadSession({
+        ptyId: 'wt@@dead',
+        connectionId: null,
+        liveSessionIds: new Set(['wt@@alive']),
+        ptyBoundAt: 1000
+      })
+    ).toBe(true)
+    expect(
+      shouldReconcileDeadSession({
+        ptyId: 'wt@@dead',
+        connectionId: null,
+        liveSessionIds: new Set(['wt@@alive']),
+        ptyBoundAt: null,
+        snapshotRequestedAt: 1000
+      })
+    ).toBe(true)
+  })
 })
 
-describe('reconcileDeadSessions', () => {
-  function createBinding() {
-    return { reconcileIfSessionDead: vi.fn<(liveSessionIds: Set<string>) => void>() }
-  }
+describe('shouldReconcileMissingSession', () => {
+  it('reconciles only an authoritative missing local PTY', () => {
+    expect(
+      shouldReconcileMissingSession({
+        ptyId: 'wt@@dead',
+        connectionId: null,
+        isLive: false
+      })
+    ).toBe(true)
 
-  it('invokes each binding with the resolved live-session id set', async () => {
-    const bindingA = createBinding()
-    const bindingB = createBinding()
-    await reconcileDeadSessions({
-      bindings: [bindingA, bindingB],
-      listSessions: async () => [
-        { id: 'wt@@alive', cwd: '/a', title: 'a' },
-        { id: 'wt@@other', cwd: '/b', title: 'b' }
-      ]
-    })
-    const expectedSet = new Set(['wt@@alive', 'wt@@other'])
-    expect(bindingA.reconcileIfSessionDead).toHaveBeenCalledWith(expectedSet)
-    expect(bindingB.reconcileIfSessionDead).toHaveBeenCalledWith(expectedSet)
+    expect(
+      shouldReconcileMissingSession({
+        ptyId: 'wt@@alive',
+        connectionId: null,
+        isLive: true
+      })
+    ).toBe(false)
+
+    expect(
+      shouldReconcileMissingSession({
+        ptyId: 'wt@@unknown',
+        connectionId: null,
+        isLive: null
+      })
+    ).toBe(false)
   })
 
-  it('treats a rejected listSessions as "unknown" and reconciles nothing', async () => {
-    const binding = createBinding()
-    await reconcileDeadSessions({
-      bindings: [binding],
-      listSessions: async () => {
-        throw new Error('IPC failed')
-      }
-    })
-    expect(binding.reconcileIfSessionDead).not.toHaveBeenCalled()
-  })
+  it('keeps the remote, SSH, and newborn guards from the broad reconcile path', () => {
+    expect(
+      shouldReconcileMissingSession({
+        ptyId: 'remote:env-1:abc',
+        connectionId: null,
+        isLive: false
+      })
+    ).toBe(false)
 
-  it('treats a resolved empty list as authoritative (still reconciles)', async () => {
-    const binding = createBinding()
-    await reconcileDeadSessions({
-      bindings: [binding],
-      listSessions: async () => []
-    })
-    expect(binding.reconcileIfSessionDead).toHaveBeenCalledWith(new Set())
+    expect(
+      shouldReconcileMissingSession({
+        ptyId: 'wt@@ssh-dead',
+        connectionId: 'ssh-target-1',
+        isLive: false
+      })
+    ).toBe(false)
+
+    expect(
+      shouldReconcileMissingSession({
+        ptyId: 'wt@@newborn',
+        connectionId: null,
+        isLive: false,
+        ptyBoundAt: 1000,
+        livenessRequestedAt: 900
+      })
+    ).toBe(false)
   })
 })

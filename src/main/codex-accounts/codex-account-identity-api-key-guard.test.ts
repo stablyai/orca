@@ -1,0 +1,57 @@
+import { mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { describe, expect, it } from 'vitest'
+import { CodexAccountIdentity } from './codex-account-identity'
+import { readCodexAuthIdentity } from './codex-auth-identity'
+
+function idTokenWithClaims(claims: Record<string, unknown>): string {
+  const payload = Buffer.from(JSON.stringify(claims), 'utf-8').toString('base64url')
+  return `header.${payload}.signature`
+}
+
+function homeWithAuthJson(auth: Record<string, unknown>): string {
+  const home = mkdtempSync(join(tmpdir(), 'codex-identity-'))
+  writeFileSync(join(home, 'auth.json'), JSON.stringify(auth), 'utf-8')
+  return home
+}
+
+describe('managed-home Codex identity', () => {
+  const identity = new CodexAccountIdentity(async (candidatePath) => candidatePath)
+
+  it('resolves no identity for an API-key login that still holds a stale tokens blob', async () => {
+    const home = homeWithAuthJson({
+      OPENAI_API_KEY: 'sk-test',
+      tokens: {
+        account_id: 'stale-account',
+        id_token: idTokenWithClaims({ email: 'stale@example.com' })
+      }
+    })
+
+    expect(await identity.readFromHome(home, 'account-1')).toEqual({
+      email: null,
+      providerAccountId: null,
+      workspaceLabel: null,
+      workspaceAccountId: null
+    })
+  })
+})
+
+describe('readCodexAuthIdentity account-id fallback', () => {
+  it('falls through to the auth claim for providerAccountId when tokens.account_id is blank', async () => {
+    const contents = JSON.stringify({
+      tokens: {
+        account_id: '   ',
+        id_token: idTokenWithClaims({
+          'https://api.openai.com/auth': { chatgpt_account_id: 'claim-account' }
+        })
+      }
+    })
+
+    expect(readCodexAuthIdentity(contents)).toMatchObject({
+      providerAccountId: 'claim-account',
+      // workspaceAccountId uses the top-level claim, not the provider-account claim.
+      workspaceAccountId: null
+    })
+  })
+})

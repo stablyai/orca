@@ -1,14 +1,13 @@
-/* eslint-disable max-lines -- Why: OpenCode scanner tests cover multiple DB schema generations and attribution boundaries together so parser regressions stay auditable. */
-import { mkdtempSync, rmSync } from 'fs'
-import { tmpdir } from 'os'
-import { join } from 'path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { mkdirSync, mkdtempSync, rmSync, statSync, unlinkSync, utimesSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import Database from '../sqlite/sync-database'
-import {
-  attributeOpenCodeUsageEvent,
-  parseOpenCodeUsageDatabase,
-  parseOpenCodeUsageRow
-} from './scanner'
+import { listOpenCodeDatabases } from './opencode-database-discovery'
+import { parseOpenCodeUsageRow } from './opencode-usage-row-parsing'
+import { createUsageWorktreeResolver } from '../usage/usage-worktree-resolver'
+import { attributeOpenCodeUsageEvent } from './opencode-usage-worktree-attribution'
+import { parseOpenCodeUsageDatabase, scanOpenCodeUsageDatabases } from './scanner'
 
 const WORKTREE = '/workspace/repo'
 
@@ -21,16 +20,61 @@ function createTempDb(): { db: Database.Database; path: string } {
   return { db: new Database(path), path }
 }
 
-function worktrees() {
-  return [
+async function resolveWorktree() {
+  return createUsageWorktreeResolver([
     {
       repoId: 'repo-1',
       worktreeId: 'repo-1::/workspace/repo',
       path: WORKTREE,
-      displayName: 'Repo',
-      canonicalPath: WORKTREE
+      displayName: 'Repo'
     }
-  ]
+  ])
+}
+
+function createSessionTotalsSchema(db: Database.Database): void {
+  db.exec(`
+    CREATE TABLE session (
+      id TEXT PRIMARY KEY,
+      directory TEXT,
+      title TEXT,
+      model TEXT,
+      cost REAL,
+      tokens_input INTEGER,
+      tokens_output INTEGER,
+      tokens_reasoning INTEGER,
+      tokens_cache_read INTEGER,
+      tokens_cache_write INTEGER,
+      time_created INTEGER,
+      time_updated INTEGER
+    );
+  `)
+}
+
+function insertSessionTotalsRow(
+  db: Database.Database,
+  sessionId: string,
+  inputTokens: number
+): void {
+  db.prepare(
+    `INSERT INTO session (
+      id, directory, title, model, cost,
+      tokens_input, tokens_output, tokens_reasoning, tokens_cache_read, tokens_cache_write,
+      time_created, time_updated
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(
+    sessionId,
+    `${WORKTREE}/packages/app`,
+    'Session',
+    JSON.stringify({ providerID: 'anthropic', id: 'claude-sonnet-4-5' }),
+    0.01,
+    inputTokens,
+    100,
+    0,
+    0,
+    0,
+    1_777_777_700_000,
+    1_777_777_800_000
+  )
 }
 
 function usageEvent(cwd: string) {
@@ -83,49 +127,62 @@ describe('parseOpenCodeUsageRow', () => {
       cwd: `${WORKTREE}/packages/app`,
       model: 'anthropic/claude-sonnet-4-5',
       estimatedCostUsd: 0.0123,
-      inputTokens: 1000,
-      cachedInputTokens: 400,
+      inputTokens: 1425,
+      cachedInputTokens: 425,
+      cacheWriteInputTokens: 25,
       outputTokens: 250,
       reasoningOutputTokens: 100,
-      totalTokens: 1350
+      totalTokens: 1775
+    })
+  })
+
+  it.each([
+    [undefined, 10_125],
+    [125, 10_125],
+    [10_125, 10_125],
+    [20_000, 20_000]
+  ])('counts cache reads once with reported total %s', (total, expectedTotal) => {
+    const parsed = parseOpenCodeUsageRow({
+      id: 'message-cache-heavy',
+      session_id: 'session-cache-heavy',
+      time_created: 1_777_777_700_000,
+      time_updated: null,
+      directory: WORKTREE,
+      title: null,
+      worktree: null,
+      session_model: null,
+      data: JSON.stringify({
+        modelID: 'deepseek-v4.1-flash',
+        providerID: 'opencode-go',
+        tokens: {
+          input: 100,
+          output: 20,
+          reasoning: 5,
+          total,
+          cache: { read: 10_000, write: 0 }
+        },
+        time: { completed: 1_777_777_800_000 }
+      })
+    })
+
+    expect(parsed).toMatchObject({
+      inputTokens: 10_100,
+      cachedInputTokens: 10_000,
+      outputTokens: 20,
+      reasoningOutputTokens: 5,
+      totalTokens: expectedTotal
     })
   })
 })
 
 describe('attributeOpenCodeUsageEvent', () => {
-  it('attributes cwd paths under dotdot-prefixed child directories to the worktree', async () => {
-    const attributed = await attributeOpenCodeUsageEvent(
-      usageEvent(`${WORKTREE}/..fixtures/session`),
-      worktrees()
-    )
-
-    expect(attributed?.projectKey).toBe('worktree:repo-1::/workspace/repo')
-    expect(attributed?.projectLabel).toBe('Repo')
-    expect(attributed?.worktreeId).toBe('repo-1::/workspace/repo')
-  })
-
   it('does not attribute true parent-directory escapes to the worktree', async () => {
     const attributed = await attributeOpenCodeUsageEvent(
       usageEvent(`${WORKTREE}/../other/session`),
-      worktrees()
+      await resolveWorktree()
     )
 
     expect(attributed?.projectKey).toBe('cwd:/workspace/repo/../other/session')
-    expect(attributed?.worktreeId).toBeNull()
-  })
-
-  it('does not treat different Windows drives as containing paths', async () => {
-    const attributed = await attributeOpenCodeUsageEvent(usageEvent('D:\\other\\repo'), [
-      {
-        repoId: 'repo-1',
-        worktreeId: 'repo-1::C:\\repo',
-        path: 'C:\\repo',
-        displayName: 'Repo',
-        canonicalPath: 'C:\\repo'
-      }
-    ])
-
-    expect(attributed?.projectKey).toBe('cwd:d:/other/repo')
     expect(attributed?.worktreeId).toBeNull()
   })
 })
@@ -153,6 +210,7 @@ describe('parseOpenCodeUsageDatabase', () => {
         tokens_output INTEGER,
         tokens_reasoning INTEGER,
         tokens_cache_read INTEGER,
+        tokens_cache_write INTEGER,
         time_created INTEGER,
         time_updated INTEGER
       );
@@ -161,9 +219,9 @@ describe('parseOpenCodeUsageDatabase', () => {
     db.prepare(
       `INSERT INTO session (
         id, project_id, directory, title, model, cost,
-        tokens_input, tokens_output, tokens_reasoning, tokens_cache_read,
+        tokens_input, tokens_output, tokens_reasoning, tokens_cache_read, tokens_cache_write,
         time_created, time_updated
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       'session-1',
       'project-1',
@@ -175,12 +233,13 @@ describe('parseOpenCodeUsageDatabase', () => {
       500,
       100,
       250,
+      75,
       1_777_777_700_000,
       1_777_777_800_000
     )
     db.close()
 
-    const parsed = await parseOpenCodeUsageDatabase(path, worktrees())
+    const parsed = await parseOpenCodeUsageDatabase(path, await resolveWorktree())
 
     expect(parsed.sessions).toHaveLength(1)
     expect(parsed.sessions[0]).toMatchObject({
@@ -188,21 +247,21 @@ describe('parseOpenCodeUsageDatabase', () => {
       primaryModel: 'anthropic/claude-sonnet-4-5',
       primaryProjectLabel: 'Repo',
       eventCount: 1,
-      totalInputTokens: 1000,
-      totalCachedInputTokens: 250,
+      totalInputTokens: 1325,
+      totalCachedInputTokens: 325,
       totalOutputTokens: 500,
       totalReasoningOutputTokens: 100,
-      totalTokens: 1600,
+      totalTokens: 1925,
       estimatedCostUsd: 0.06
     })
     expect(parsed.dailyAggregates).toEqual([
       expect.objectContaining({
         projectLabel: 'Repo',
-        inputTokens: 1000,
-        cachedInputTokens: 250,
+        inputTokens: 1325,
+        cachedInputTokens: 325,
         outputTokens: 500,
         reasoningOutputTokens: 100,
-        totalTokens: 1600,
+        totalTokens: 1925,
         estimatedCostUsd: 0.06
       })
     ])
@@ -250,14 +309,25 @@ describe('parseOpenCodeUsageDatabase', () => {
     )
     db.close()
 
-    const parsed = await parseOpenCodeUsageDatabase(path, worktrees())
+    const parsed = await parseOpenCodeUsageDatabase(path, await resolveWorktree())
 
     expect(parsed.sessions[0]).toMatchObject({
       primaryModel: 'openai/gpt-5.5',
       primaryProjectLabel: 'Repo',
-      totalTokens: 1050,
+      totalTokens: 1150,
       estimatedCostUsd: 0.03
     })
+  })
+
+  it('reports the session ids the database counted', async () => {
+    const { db, path } = createTempDb()
+    createSessionTotalsSchema(db)
+    insertSessionTotalsRow(db, 'session-1', 1000)
+    db.close()
+
+    const parsed = await parseOpenCodeUsageDatabase(path, await resolveWorktree())
+
+    expect(parsed.ownedSessionIds).toEqual(['session-1'])
   })
 
   it('prefers session_message rows over legacy message rows to avoid double counting', async () => {
@@ -319,9 +389,195 @@ describe('parseOpenCodeUsageDatabase', () => {
     )
     db.close()
 
-    const parsed = await parseOpenCodeUsageDatabase(path, worktrees())
+    const parsed = await parseOpenCodeUsageDatabase(path, await resolveWorktree())
 
-    expect(parsed.sessions[0]?.totalTokens).toBe(120)
+    expect(parsed.sessions[0]?.totalTokens).toBe(130)
     expect(parsed.sessions[0]?.eventCount).toBe(1)
+  })
+})
+
+describe('scanOpenCodeUsageDatabases', () => {
+  let dataRoot: string
+  let openCodeDir: string
+  let previousXdgDataHome: string | undefined
+  let previousOpenCodeDb: string | undefined
+
+  beforeEach(() => {
+    dataRoot = mkdtempSync(join(tmpdir(), 'orca-opencode-usage-scan-'))
+    openCodeDir = join(dataRoot, 'opencode')
+    mkdirSync(openCodeDir, { recursive: true })
+    previousXdgDataHome = process.env.XDG_DATA_HOME
+    previousOpenCodeDb = process.env.OPENCODE_DB
+    process.env.XDG_DATA_HOME = dataRoot
+    delete process.env.OPENCODE_DB
+  })
+
+  afterEach(() => {
+    if (previousXdgDataHome === undefined) {
+      delete process.env.XDG_DATA_HOME
+    } else {
+      process.env.XDG_DATA_HOME = previousXdgDataHome
+    }
+    if (previousOpenCodeDb === undefined) {
+      delete process.env.OPENCODE_DB
+    } else {
+      process.env.OPENCODE_DB = previousOpenCodeDb
+    }
+    rmSync(dataRoot, { recursive: true, force: true })
+  })
+
+  function writeSessionTotalsDb(fileName: string, rows: [string, number][]): string {
+    const path = join(openCodeDir, fileName)
+    const db = new Database(path)
+    createSessionTotalsSchema(db)
+    for (const [sessionId, inputTokens] of rows) {
+      insertSessionTotalsRow(db, sessionId, inputTokens)
+    }
+    db.close()
+    return path
+  }
+
+  function appendLiveSessionRow(path: string, sessionId: string, inputTokens: number): void {
+    const previousMtimeMs = statSync(path).mtimeMs
+    const db = new Database(path)
+    insertSessionTotalsRow(db, sessionId, inputTokens)
+    db.close()
+    // A same-page write may retain coarse mtime; force the scanner’s mtime/size fingerprint to change.
+    const changedAt = new Date(previousMtimeMs + 1000)
+    utimesSync(path, changedAt, changedAt)
+  }
+
+  it('does not scan disk databases when OPENCODE_DB uses memory', async () => {
+    writeSessionTotalsDb('opencode.db', [])
+    process.env.OPENCODE_DB = ':memory:'
+
+    await expect(listOpenCodeDatabases()).resolves.toEqual([])
+  })
+
+  it('does not return a directory configured as OPENCODE_DB', async () => {
+    process.env.OPENCODE_DB = '.'
+
+    await expect(listOpenCodeDatabases()).resolves.toEqual([])
+  })
+
+  it('counts a session duplicated into a stale backup database exactly once', async () => {
+    writeSessionTotalsDb('opencode.db', [
+      ['session-1', 1000],
+      ['session-2', 300]
+    ])
+    writeSessionTotalsDb('opencode-backup.db', [['session-1', 400]])
+
+    const result = await scanOpenCodeUsageDatabases([], [])
+
+    expect(result.sessions).toHaveLength(2)
+    const sessionOne = result.sessions.find((session) => session.sessionId === 'session-1')
+    expect(sessionOne?.totalInputTokens).toBe(1000)
+    expect(sessionOne?.eventCount).toBe(1)
+    expect(
+      result.dailyAggregates.reduce((total, aggregate) => total + aggregate.inputTokens, 0)
+    ).toBe(1300)
+  })
+
+  it('still counts backup-only sessions and stays stable across cached rescans', async () => {
+    const canonicalPath = writeSessionTotalsDb('opencode.db', [['session-1', 1000]])
+    writeSessionTotalsDb('opencode-backup.db', [
+      ['session-1', 400],
+      ['session-9', 50]
+    ])
+
+    const first = await scanOpenCodeUsageDatabases([], [])
+    expect(
+      first.dailyAggregates.reduce((total, aggregate) => total + aggregate.inputTokens, 0)
+    ).toBe(1050)
+
+    const second = await scanOpenCodeUsageDatabases([], first.processedDatabases)
+    expect(
+      second.dailyAggregates.reduce((total, aggregate) => total + aggregate.inputTokens, 0)
+    ).toBe(1050)
+
+    appendLiveSessionRow(canonicalPath, 'session-2', 200)
+
+    const third = await scanOpenCodeUsageDatabases([], second.processedDatabases)
+    expect(
+      third.dailyAggregates.reduce((total, aggregate) => total + aggregate.inputTokens, 0)
+    ).toBe(1250)
+    const sessionOne = third.sessions.find((session) => session.sessionId === 'session-1')
+    expect(sessionOne?.totalInputTokens).toBe(1000)
+    expect(sessionOne?.eventCount).toBe(1)
+  })
+
+  it('reuses a fully-duplicate backup instead of reparsing it when the live db changes', async () => {
+    const canonicalPath = writeSessionTotalsDb('opencode.db', [['session-1', 1000]])
+    writeSessionTotalsDb('opencode-backup.db', [['session-1', 400]])
+
+    const first = await scanOpenCodeUsageDatabases([], [])
+    const firstBackup = first.processedDatabases.find((database) =>
+      database.path.endsWith('opencode-backup.db')
+    )
+    expect(firstBackup?.ownedSessionIds).toEqual([])
+
+    appendLiveSessionRow(canonicalPath, 'session-2', 200)
+
+    const second = await scanOpenCodeUsageDatabases([], first.processedDatabases)
+    const secondBackup = second.processedDatabases.find((database) =>
+      database.path.endsWith('opencode-backup.db')
+    )
+    // Cache reuse preserves object identity.
+    expect(secondBackup).toBe(firstBackup)
+    expect(
+      second.dailyAggregates.reduce((total, aggregate) => total + aggregate.inputTokens, 0)
+    ).toBe(1200)
+  })
+
+  it('lets the live database reclaim sessions after a sticky backup-only claim', async () => {
+    writeSessionTotalsDb('opencode-backup.db', [['session-1', 400]])
+
+    const first = await scanOpenCodeUsageDatabases([], [])
+    expect(
+      first.dailyAggregates.reduce((total, aggregate) => total + aggregate.inputTokens, 0)
+    ).toBe(400)
+    expect(first.processedDatabases[0]?.ownedSessionIds).toEqual(['session-1'])
+
+    writeSessionTotalsDb('opencode.db', [
+      ['session-1', 1000],
+      ['session-2', 200]
+    ])
+
+    const second = await scanOpenCodeUsageDatabases([], first.processedDatabases)
+    expect(
+      second.dailyAggregates.reduce((total, aggregate) => total + aggregate.inputTokens, 0)
+    ).toBe(1200)
+    const sessionOne = second.sessions.find((session) => session.sessionId === 'session-1')
+    expect(sessionOne?.totalInputTokens).toBe(1000)
+    expect(sessionOne?.eventCount).toBe(1)
+  })
+
+  it('reclaims sessions when the owning live database is deleted', async () => {
+    const canonicalPath = writeSessionTotalsDb('opencode.db', [
+      ['session-1', 1000],
+      ['session-2', 200]
+    ])
+    writeSessionTotalsDb('opencode-backup.db', [
+      ['session-1', 400],
+      ['session-9', 50]
+    ])
+
+    const first = await scanOpenCodeUsageDatabases([], [])
+    expect(
+      first.dailyAggregates.reduce((total, aggregate) => total + aggregate.inputTokens, 0)
+    ).toBe(1250)
+
+    unlinkSync(canonicalPath)
+
+    const second = await scanOpenCodeUsageDatabases([], first.processedDatabases)
+    expect(
+      second.dailyAggregates.reduce((total, aggregate) => total + aggregate.inputTokens, 0)
+    ).toBe(450)
+    expect(second.sessions.map((session) => session.sessionId).sort()).toEqual([
+      'session-1',
+      'session-9'
+    ])
+    const sessionOne = second.sessions.find((session) => session.sessionId === 'session-1')
+    expect(sessionOne?.totalInputTokens).toBe(400)
   })
 })

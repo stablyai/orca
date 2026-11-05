@@ -18,7 +18,7 @@ type DiffOperation =
 
 const EXACT_DIFF_CELL_LIMIT = 160_000
 
-function splitContentLines(value: string): string[] {
+function splitContentLines(value: string | undefined): string[] {
   if (!value) {
     return []
   }
@@ -100,8 +100,7 @@ function appendMiddleDiff(
     appendExactLineDiff(original, modified, appendOperation)
     return
   }
-  // Why: the Tasks diff UI renders a capped preview. Stream fallback rows so a
-  // generated PR file does not allocate thousands of discarded row objects.
+  // Stream capped preview rows so large generated files cannot allocate discarded diff rows.
   for (const oldLine of original) {
     appendOperation({ kind: 'removed', oldLine })
   }
@@ -118,8 +117,8 @@ export function buildGitHubPrFileDiffLines(
 }
 
 export function buildGitHubPrFileDiffPreview(
-  originalContent: string,
-  modifiedContent: string,
+  originalContent: string | undefined,
+  modifiedContent: string | undefined,
   maxLines = Number.POSITIVE_INFINITY
 ): GitHubPrFileDiffPreview {
   const originalLines = splitContentLines(originalContent)

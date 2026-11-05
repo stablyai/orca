@@ -1,10 +1,12 @@
 import type { RepoIcon } from '../../../src/shared/repo-icon'
 import type { ExecutionHostId } from '../../../src/shared/execution-host'
 
-// Locally-typed subset of the desktop status payload read from status.get.
 export type DesktopStatus = {
+  appVersion?: string
   protocolVersion?: number
   minCompatibleMobileVersion?: number
+  // Older hosts omit this capability; hide Floating Workspace when absent.
+  floatingWorkspaceEnabled?: boolean
 }
 
 export type RepoSummary = {

@@ -1,0 +1,70 @@
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { createManagedHookLocalFilesystem } from '../agent-hooks/managed-hook-local-filesystem.test-fixture'
+import { HermesHookService } from './hook-service'
+
+describe('Hermes remote installer through a local filesystem adapter (no SSH)', () => {
+  let directory: string
+  let configPath: string
+  const service = new HermesHookService()
+
+  beforeEach(() => {
+    directory = mkdtempSync(join(tmpdir(), 'orca-hermes-remote-adapter-'))
+    mkdirSync(join(directory, '.hermes'))
+    configPath = join(directory, '.hermes', 'config.yaml')
+  })
+  afterEach(() => rmSync(directory, { recursive: true, force: true }))
+
+  it('keeps edits made during an already-configured remote install', async () => {
+    writeFileSync(configPath, 'model: initial\n')
+    // Why: derive "already configured" from a real install so the fixture tracks managed-config changes.
+    await service.installRemote(createManagedHookLocalFilesystem(), directory)
+    rmSync(join(directory, '.hermes', 'plugins'), { recursive: true })
+    const updated = readFileSync(configPath, 'utf8').replace(
+      'model: initial',
+      'model: operator-edited'
+    )
+    expect(updated).toContain('model: operator-edited')
+    const filesystem = createManagedHookLocalFilesystem()
+    const rename = filesystem.ext_openssh_rename.bind(filesystem)
+    filesystem.ext_openssh_rename = (source, destination, callback) => {
+      if (destination === join(directory, '.hermes', 'plugins', 'orca-status', 'plugin.yaml')) {
+        writeFileSync(configPath, updated)
+      }
+      rename(source, destination, callback)
+    }
+
+    expect((await service.installRemote(filesystem, directory)).state).toBe('installed')
+    expect(readFileSync(configPath, 'utf8')).toBe(updated)
+  })
+
+  it.each(['plugins: [', 'plugins: unexpected\n', 'plugins:\n  enabled: [123]\n'])(
+    'refuses unsafe YAML before writing plugin files (%s)',
+    async (input) => {
+      writeFileSync(configPath, input)
+      expect(
+        (await service.installRemote(createManagedHookLocalFilesystem(), directory)).state
+      ).toBe('error')
+      expect(readFileSync(configPath, 'utf8')).toBe(input)
+      expect(readdirSync(join(directory, '.hermes'))).toEqual(['config.yaml'])
+    }
+  )
+
+  it('keeps the config and cleans staged files when remote rename fails', async () => {
+    writeFileSync(configPath, 'model: fixture\n')
+    const filesystem = createManagedHookLocalFilesystem()
+    const rename = filesystem.ext_openssh_rename.bind(filesystem)
+    filesystem.ext_openssh_rename = (source, destination, callback) => {
+      if (destination === configPath) {
+        callback(new Error('fixture rename refusal'))
+      } else {
+        rename(source, destination, callback)
+      }
+    }
+    expect((await service.installRemote(filesystem, directory)).state).toBe('error')
+    expect(readFileSync(configPath, 'utf8')).toBe('model: fixture\n')
+    expect(readdirSync(join(directory, '.hermes')).sort()).toEqual(['config.yaml', 'plugins'])
+  })
+})

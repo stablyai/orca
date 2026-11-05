@@ -2,6 +2,12 @@ import type { ManagedPane } from '@/lib/pane-manager/pane-manager'
 
 export type SessionRestoredBannerPane = Pick<ManagedPane, 'id' | 'container'>
 
+/** `resume-unavailable`: the pane asked to resume a provider session Orca could not
+ *  verify, so it launched a fresh one — silence would read as a successful restore. */
+export type SessionRestoredBannerReason = 'restored' | 'resume-unavailable'
+
+export type SessionRestoredBannerPaneReasons = ReadonlyMap<number, SessionRestoredBannerReason>
+
 export type SessionRestoredBannerStartup =
   | {
       showSessionRestoredBanner?: boolean
@@ -12,36 +18,37 @@ export type SessionRestoredBannerStartup =
 export type SessionRestoredBannerDismissEvent = KeyboardEvent | PointerEvent
 
 export function addSessionRestoredBannerPaneId(
-  paneIds: ReadonlySet<number>,
-  paneId: number
-): Set<number> {
-  if (paneIds.has(paneId)) {
-    return paneIds instanceof Set ? paneIds : new Set(paneIds)
+  paneReasons: SessionRestoredBannerPaneReasons,
+  paneId: number,
+  reason: SessionRestoredBannerReason = 'restored'
+): Map<number, SessionRestoredBannerReason> {
+  if (paneReasons.get(paneId) === reason) {
+    return paneReasons instanceof Map ? paneReasons : new Map(paneReasons)
   }
-  return new Set(paneIds).add(paneId)
+  return new Map(paneReasons).set(paneId, reason)
 }
 
 export function removeSessionRestoredBannerPaneId(
-  paneIds: ReadonlySet<number>,
+  paneReasons: SessionRestoredBannerPaneReasons,
   paneId: number
-): Set<number> {
-  if (!paneIds.has(paneId)) {
-    return paneIds instanceof Set ? paneIds : new Set(paneIds)
+): Map<number, SessionRestoredBannerReason> {
+  if (!paneReasons.has(paneId)) {
+    return paneReasons instanceof Map ? paneReasons : new Map(paneReasons)
   }
-  const next = new Set(paneIds)
+  const next = new Map(paneReasons)
   next.delete(paneId)
   return next
 }
 
 export function pruneSessionRestoredBannerPaneIds(
-  paneIds: ReadonlySet<number>,
+  paneReasons: SessionRestoredBannerPaneReasons,
   panes: readonly SessionRestoredBannerPane[]
-): Set<number> {
+): Map<number, SessionRestoredBannerReason> {
   const livePaneIds = new Set(panes.map((pane) => pane.id))
-  if ([...paneIds].every((paneId) => livePaneIds.has(paneId))) {
-    return paneIds instanceof Set ? paneIds : new Set(paneIds)
+  if ([...paneReasons.keys()].every((paneId) => livePaneIds.has(paneId))) {
+    return paneReasons instanceof Map ? paneReasons : new Map(paneReasons)
   }
-  return new Set([...paneIds].filter((paneId) => livePaneIds.has(paneId)))
+  return new Map([...paneReasons].filter(([paneId]) => livePaneIds.has(paneId)))
 }
 
 export function getSessionRestoredBannerDismissPaneId(
@@ -62,21 +69,21 @@ export function getSessionRestoredBannerDismissPaneId(
 }
 
 export function dismissSessionRestoredBannerPaneIds(
-  paneIds: ReadonlySet<number>,
+  paneReasons: SessionRestoredBannerPaneReasons,
   event: SessionRestoredBannerDismissEvent,
   panes: readonly SessionRestoredBannerPane[]
-): Set<number> {
+): Map<number, SessionRestoredBannerReason> {
   const paneId = getSessionRestoredBannerDismissPaneId(event, panes)
   if (paneId === null) {
-    return new Set()
+    return new Map()
   }
-  return removeSessionRestoredBannerPaneId(paneIds, paneId)
+  return removeSessionRestoredBannerPaneId(paneReasons, paneId)
 }
 
 export function seedStartupSessionRestoredBanner(
   startup: SessionRestoredBannerStartup,
   paneId: number,
-  onShowSessionRestoredBanner: (paneId: number) => void
+  onShowSessionRestoredBanner: (paneId: number, reason?: SessionRestoredBannerReason) => void
 ): void {
   if (startup?.showSessionRestoredBanner === true) {
     onShowSessionRestoredBanner(paneId)
@@ -87,7 +94,7 @@ export function syncSessionRestoredBannerTitleSpace(args: {
   panes: readonly SessionRestoredBannerPane[]
   paneTitles: Readonly<Record<number, string>>
   renamingPaneId: number | null
-  sessionRestoredBannerPaneIds: ReadonlySet<number>
+  sessionRestoredBannerPaneIds: SessionRestoredBannerPaneReasons
 }): boolean {
   let needsFit = false
   for (const pane of args.panes) {

@@ -1,66 +1,107 @@
-import { createReadStream } from 'fs'
-import { createInterface } from 'readline'
-import type { AgentType, NativeChatMessage } from '../../shared/native-chat-types'
+import { readOpenCodeNativeChatTranscriptFull } from './transcript-opencode'
+import { isENOENT } from '../ipc/filesystem/access/filesystem-path-containment'
+import type { AgentType } from '../../shared/agent-status/contracts/agent-status-types'
+import type {
+  NativeChatMessage,
+  NativeChatTurnLifecycle
+} from '../../shared/native-chat/native-chat-types'
+import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat/native-chat-agent-support'
 import { errorMessage } from '../ai-vault/session-scanner-values'
 import { resolveSessionFilePath, type ResolveSessionFileOptions } from './session-file-resolver'
-import { decodeClaudeTranscriptLine, decodeCodexTranscriptLine } from './transcript-line-decoders'
+import { openTranscriptReadStream } from './wsl-transcript-fs-access'
+import { wslTranscriptFsRefusal } from './wsl-transcript-fs-gate'
+import {
+  decodeClaudeTranscriptLine,
+  decodeCodexTranscriptLine,
+  decodeGrokTranscriptLine,
+  decodeOmpTranscriptLine
+} from './transcript-line-decoders'
+import { decodeTranscriptStream } from './transcript-stream-lines'
 
-export type ReadTranscriptResult = { messages: NativeChatMessage[] } | { error: string }
+export type ReadTranscriptResult =
+  | {
+      messages: NativeChatMessage[]
+      lifecycle?: NativeChatTurnLifecycle
+      sourceEmpty?: boolean
+    }
+  // notFound is retryable: the agent may not have flushed its transcript yet.
+  | { error: string; notFound?: true }
 
 export type ReadTranscriptOptions = ResolveSessionFileOptions & {
-  /** Resolve directly to this file, skipping path discovery (used by tests). */
   filePath?: string
+  sourceOrder?: boolean
 }
 
-/**
- * Read the ENTIRE Claude/Codex JSONL transcript for an agent + session id into
- * the NativeChatMessage model. Unlike the AI-Vault preview scan, this applies
- * NO message cap. Unknown record types are skipped rather than throwing, so a
- * single malformed/unrecognized line cannot fail the whole read. The per-line
- * record→message mapping is shared with the live tailer (transcript-watch.ts)
- * via transcript-line-decoders.ts.
- */
+/** Read the full transcript with no message cap; skip malformed/unknown records using the tailer’s decoders. */
 export async function readNativeChatTranscript(
   agent: AgentType,
   sessionId: string,
   options: ReadTranscriptOptions = {}
 ): Promise<ReadTranscriptResult> {
-  const filePath = options.filePath ?? (await resolveSessionFilePath(agent, sessionId, options))
+  if (resolveNativeChatTranscriptAgent(agent) === 'opencode') {
+    return readOpenCodeNativeChatTranscriptFull(
+      sessionId,
+      {},
+      undefined,
+      agent === 'zcode' ? 'zcode' : undefined
+    )
+  }
+  let filePath: string | null
+  try {
+    filePath = options.filePath ?? (await resolveSessionFilePath(agent, sessionId, options))
+  } catch (err) {
+    // Gate refusal is unavailable, never evidence that the transcript is missing.
+    return { error: wslTranscriptFsRefusal(err).message }
+  }
   if (!filePath) {
-    return { error: `No transcript found for ${agent} session ${sessionId}` }
+    return { error: `No transcript found for ${agent} session ${sessionId}`, notFound: true }
   }
   try {
-    if (agent === 'claude') {
-      return { messages: await readTranscript(filePath, decodeClaudeTranscriptLine) }
+    const transcriptAgent = resolveNativeChatTranscriptAgent(agent)
+    if (transcriptAgent === 'claude') {
+      return {
+        messages: await readTranscript(filePath, decodeClaudeTranscriptLine, options.sourceOrder)
+      }
     }
-    if (agent === 'codex') {
-      return { messages: await readTranscript(filePath, decodeCodexTranscriptLine) }
+    if (transcriptAgent === 'codex') {
+      return {
+        messages: await readTranscript(filePath, decodeCodexTranscriptLine, options.sourceOrder)
+      }
     }
-    return { error: `Unsupported agent for native chat transcript: ${agent}` }
+    if (transcriptAgent === 'grok') {
+      return {
+        messages: await readTranscript(filePath, decodeGrokTranscriptLine, options.sourceOrder)
+      }
+    }
+    if (transcriptAgent === 'omp') {
+      return {
+        messages: await readTranscript(filePath, decodeOmpTranscriptLine, options.sourceOrder)
+      }
+    }
+    return { error: `Unsupported agent for Chat UI transcript: ${agent}` }
   } catch (err) {
+    // First flush/rotation can race successful resolution; ENOENT remains retryable.
+    if (isENOENT(err)) {
+      return { error: errorMessage(err), notFound: true }
+    }
     return { error: errorMessage(err) }
   }
 }
 
 async function readTranscript(
   filePath: string,
-  decode: (line: string, fallbackId: string) => NativeChatMessage | null
+  decode: (line: string, fallbackId: string) => NativeChatMessage | null,
+  sourceOrder = false
 ): Promise<NativeChatMessage[]> {
-  const reader = createInterface({
-    input: createReadStream(filePath, { encoding: 'utf-8' }),
-    crlfDelay: Infinity
-  })
-  const messages: NativeChatMessage[] = []
-  let index = 0
-  for await (const line of reader) {
-    // Why: fallback id embeds start offset 0 so it matches the live tailer's id
-    // for the same record (the tailer's first drain reads from offset 0 too).
-    // Records that re-emit then collapse by id in the assembler — no dup, no drop.
-    const message = decode(line, `${filePath}:0:${index}`)
-    if (message) {
-      messages.push(message)
-    }
-    index++
-  }
+  const stream = openTranscriptReadStream(filePath, { encoding: 'utf-8' }, 'exact')
+  const { messages } = await decodeTranscriptStream(
+    stream,
+    filePath,
+    0,
+    decode,
+    true,
+    Infinity,
+    sourceOrder
+  )
   return messages
 }

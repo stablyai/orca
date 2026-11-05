@@ -1,0 +1,2560 @@
+{
+  "recordedFrom": "linux-final/run-30827421748/terminal-ime-native-evidence/terminal-ime-evidence/native-ibus-boundaries-forwards-the-issue-exact-byte-sequence-without-loss-or-duplication.json",
+  "inputFramework": "ibus",
+  "engine": "hangul",
+  "display": ":99",
+  "keyDelayMs": 20,
+  "repetitions": 5,
+  "expectedLines": ["한abc글", "한abc글", "한abc글", "한abc글", "한abc글"],
+  "receivedBytes": [
+    "ed959c616263eab8800a",
+    "ed959c616263eab8800a",
+    "ed959c616263eab8800a",
+    "ed959c616263eab8800a",
+    "ed959c616263eab8800a"
+  ],
+  "dom": [
+    {
+      "type": "keydown",
+      "key": "Process",
+      "code": "KeyG",
+      "keyCode": 229,
+      "isComposing": false,
+      "value": "",
+      "selectionStart": 0,
+      "selectionEnd": 0
+    },
+    {
+      "type": "compositionstart",
+      "data": "",
+      "value": "",
+      "selectionStart": 0,
+      "selectionEnd": 0
+    },
+    {
+      "type": "compositionupdate",
+      "data": "ㅎ",
+      "value": "",
+      "selectionStart": 0,
+      "selectionEnd": 0
+    },
+    {
+      "type": "beforeinput",
+      "inputType": "insertCompositionText",
+      "data": "ㅎ",
+      "isComposing": true,
+      "value": "",
+      "selectionStart": 0,
+      "selectionEnd": 0
+    },
+    {
+      "type": "input",
+      "inputType": "insertCompositionText",
+      "data": "ㅎ",
+      "isComposing": true,
+      "value": "ㅎ",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keyup",
+      "key": "g",
+      "code": "KeyG",
+      "keyCode": 71,
+      "isComposing": true,
+      "value": "ㅎ",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keydown",
+      "key": "Process",
+      "code": "KeyK",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "ㅎ",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "compositionupdate",
+      "data": "하",
+      "value": "ㅎ",
+      "selectionStart": 0,
+      "selectionEnd": 1
+    },
+    {
+      "type": "beforeinput",
+      "inputType": "insertCompositionText",
+      "data": "하",
+      "isComposing": true,
+      "value": "ㅎ",
+      "selectionStart": 0,
+      "selectionEnd": 1
+    },
+    {
+      "type": "input",
+      "inputType": "insertCompositionText",
+      "data": "하",
+      "isComposing": true,
+      "value": "하",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keyup",
+      "key": "k",
+      "code": "KeyK",
+      "keyCode": 75,
+      "isComposing": true,
+      "value": "하",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keydown",
+      "key": "Process",
+      "code": "KeyS",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "하",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "compositionupdate",
+      "data": "한",
+      "value": "하",
+      "selectionStart": 0,
+      "selectionEnd": 1
+    },
+    {
+      "type": "beforeinput",
+      "inputType": "insertCompositionText",
+      "data": "한",
+      "isComposing": true,
+      "value": "하",
+      "selectionStart": 0,
+      "selectionEnd": 1
+    },
+    {
+      "type": "input",
+      "inputType": "insertCompositionText",
+      "data": "한",
+      "isComposing": true,
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keyup",
+      "key": "s",
+      "code": "KeyS",
+      "keyCode": 83,
+      "isComposing": true,
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keydown",
+      "key": "Process",
+      "code": "AltRight",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "compositionupdate",
+      "data": "",
+      "value": "한",
+      "selectionStart": 0,
+      "selectionEnd": 1
+    },
+    {
+      "type": "beforeinput",
+      "inputType": "insertCompositionText",
+      "data": "",
+      "isComposing": true,
+      "value": "한",
+      "selectionStart": 0,
+      "selectionEnd": 1
+    },
+    {
+      "type": "input",
+      "inputType": "deleteContentBackward",
+      "isComposing": false,
+      "value": "",
+      "selectionStart": 0,
+      "selectionEnd": 0
+    },
+    {
+      "type": "compositionend",
+      "data": "",
+      "value": "",
+      "selectionStart": 0,
+      "selectionEnd": 0
+    },
+    {
+      "type": "beforeinput",
+      "inputType": "insertText",
+      "data": "한",
+      "isComposing": false,
+      "value": "",
+      "selectionStart": 0,
+      "selectionEnd": 0
+    },
+    {
+      "type": "input",
+      "inputType": "insertText",
+      "data": "한",
+      "isComposing": false,
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keyup",
+      "key": "HangulMode",
+      "code": "AltRight",
+      "keyCode": 21,
+      "isComposing": false,
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keydown",
+      "key": "a",
+      "code": "KeyA",
+      "keyCode": 65,
+      "isComposing": false,
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keyup",
+      "key": "a",
+      "code": "KeyA",
+      "keyCode": 65,
+      "isComposing": false,
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keydown",
+      "key": "b",
+      "code": "KeyB",
+      "keyCode": 66,
+      "isComposing": false,
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keyup",
+      "key": "b",
+      "code": "KeyB",
+      "keyCode": 66,
+      "isComposing": false,
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keydown",
+      "key": "c",
+      "code": "KeyC",
+      "keyCode": 67,
+      "isComposing": false,
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keyup",
+      "key": "c",
+      "code": "KeyC",
+      "keyCode": 67,
+      "isComposing": false,
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keyup",
+      "key": "HangulMode",
+      "code": "AltRight",
+      "keyCode": 21,
+      "isComposing": false,
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keydown",
+      "key": "Process",
+      "code": "KeyR",
+      "keyCode": 229,
+      "isComposing": false,
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "compositionstart",
+      "data": "",
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "compositionupdate",
+      "data": "ㄱ",
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "beforeinput",
+      "inputType": "insertCompositionText",
+      "data": "ㄱ",
+      "isComposing": true,
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "input",
+      "inputType": "insertCompositionText",
+      "data": "ㄱ",
+      "isComposing": true,
+      "value": "한ㄱ",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "keyup",
+      "key": "r",
+      "code": "KeyR",
+      "keyCode": 82,
+      "isComposing": true,
+      "value": "한ㄱ",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "keydown",
+      "key": "Process",
+      "code": "KeyM",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "한ㄱ",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "compositionupdate",
+      "data": "그",
+      "value": "한ㄱ",
+      "selectionStart": 1,
+      "selectionEnd": 2
+    },
+    {
+      "type": "beforeinput",
+      "inputType": "insertCompositionText",
+      "data": "그",
+      "isComposing": true,
+      "value": "한ㄱ",
+      "selectionStart": 1,
+      "selectionEnd": 2
+    },
+    {
+      "type": "input",
+      "inputType": "insertCompositionText",
+      "data": "그",
+      "isComposing": true,
+      "value": "한그",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "keyup",
+      "key": "m",
+      "code": "KeyM",
+      "keyCode": 77,
+      "isComposing": true,
+      "value": "한그",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "keydown",
+      "key": "Process",
+      "code": "KeyF",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "한그",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "compositionupdate",
+      "data": "글",
+      "value": "한그",
+      "selectionStart": 1,
+      "selectionEnd": 2
+    },
+    {
+      "type": "beforeinput",
+      "inputType": "insertCompositionText",
+      "data": "글",
+      "isComposing": true,
+      "value": "한그",
+      "selectionStart": 1,
+      "selectionEnd": 2
+    },
+    {
+      "type": "input",
+      "inputType": "insertCompositionText",
+      "data": "글",
+      "isComposing": true,
+      "value": "한글",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "keyup",
+      "key": "f",
+      "code": "KeyF",
+      "keyCode": 70,
+      "isComposing": true,
+      "value": "한글",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "keydown",
+      "key": "Process",
+      "code": "Enter",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "한글",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "compositionupdate",
+      "data": "",
+      "value": "한글",
+      "selectionStart": 1,
+      "selectionEnd": 2
+    },
+    {
+      "type": "beforeinput",
+      "inputType": "insertCompositionText",
+      "data": "",
+      "isComposing": true,
+      "value": "한글",
+      "selectionStart": 1,
+      "selectionEnd": 2
+    },
+    {
+      "type": "input",
+      "inputType": "deleteContentBackward",
+      "isComposing": false,
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "compositionend",
+      "data": "",
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "beforeinput",
+      "inputType": "insertText",
+      "data": "글",
+      "isComposing": false,
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "input",
+      "inputType": "insertText",
+      "data": "글",
+      "isComposing": false,
+      "value": "한글",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "keydown",
+      "key": "Enter",
+      "code": "Enter",
+      "keyCode": 13,
+      "isComposing": false,
+      "value": "",
+      "selectionStart": 0,
+      "selectionEnd": 0
+    },
+    {
+      "type": "keyup",
+      "key": "Enter",
+      "code": "Enter",
+      "keyCode": 13,
+      "isComposing": false,
+      "value": "",
+      "selectionStart": 0,
+      "selectionEnd": 0
+    },
+    {
+      "type": "keydown",
+      "key": "Process",
+      "code": "KeyG",
+      "keyCode": 229,
+      "isComposing": false,
+      "value": "",
+      "selectionStart": 0,
+      "selectionEnd": 0
+    },
+    {
+      "type": "compositionstart",
+      "data": "",
+      "value": "",
+      "selectionStart": 0,
+      "selectionEnd": 0
+    },
+    {
+      "type": "compositionupdate",
+      "data": "ㅎ",
+      "value": "",
+      "selectionStart": 0,
+      "selectionEnd": 0
+    },
+    {
+      "type": "beforeinput",
+      "inputType": "insertCompositionText",
+      "data": "ㅎ",
+      "isComposing": true,
+      "value": "",
+      "selectionStart": 0,
+      "selectionEnd": 0
+    },
+    {
+      "type": "input",
+      "inputType": "insertCompositionText",
+      "data": "ㅎ",
+      "isComposing": true,
+      "value": "ㅎ",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keyup",
+      "key": "g",
+      "code": "KeyG",
+      "keyCode": 71,
+      "isComposing": true,
+      "value": "ㅎ",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keydown",
+      "key": "Process",
+      "code": "KeyK",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "ㅎ",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "compositionupdate",
+      "data": "하",
+      "value": "ㅎ",
+      "selectionStart": 0,
+      "selectionEnd": 1
+    },
+    {
+      "type": "beforeinput",
+      "inputType": "insertCompositionText",
+      "data": "하",
+      "isComposing": true,
+      "value": "ㅎ",
+      "selectionStart": 0,
+      "selectionEnd": 1
+    },
+    {
+      "type": "input",
+      "inputType": "insertCompositionText",
+      "data": "하",
+      "isComposing": true,
+      "value": "하",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keyup",
+      "key": "k",
+      "code": "KeyK",
+      "keyCode": 75,
+      "isComposing": true,
+      "value": "하",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keydown",
+      "key": "Process",
+      "code": "KeyS",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "하",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "compositionupdate",
+      "data": "한",
+      "value": "하",
+      "selectionStart": 0,
+      "selectionEnd": 1
+    },
+    {
+      "type": "beforeinput",
+      "inputType": "insertCompositionText",
+      "data": "한",
+      "isComposing": true,
+      "value": "하",
+      "selectionStart": 0,
+      "selectionEnd": 1
+    },
+    {
+      "type": "input",
+      "inputType": "insertCompositionText",
+      "data": "한",
+      "isComposing": true,
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keyup",
+      "key": "s",
+      "code": "KeyS",
+      "keyCode": 83,
+      "isComposing": true,
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keydown",
+      "key": "Process",
+      "code": "AltRight",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "compositionupdate",
+      "data": "",
+      "value": "한",
+      "selectionStart": 0,
+      "selectionEnd": 1
+    },
+    {
+      "type": "beforeinput",
+      "inputType": "insertCompositionText",
+      "data": "",
+      "isComposing": true,
+      "value": "한",
+      "selectionStart": 0,
+      "selectionEnd": 1
+    },
+    {
+      "type": "input",
+      "inputType": "deleteContentBackward",
+      "isComposing": false,
+      "value": "",
+      "selectionStart": 0,
+      "selectionEnd": 0
+    },
+    {
+      "type": "compositionend",
+      "data": "",
+      "value": "",
+      "selectionStart": 0,
+      "selectionEnd": 0
+    },
+    {
+      "type": "beforeinput",
+      "inputType": "insertText",
+      "data": "한",
+      "isComposing": false,
+      "value": "",
+      "selectionStart": 0,
+      "selectionEnd": 0
+    },
+    {
+      "type": "input",
+      "inputType": "insertText",
+      "data": "한",
+      "isComposing": false,
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keyup",
+      "key": "HangulMode",
+      "code": "AltRight",
+      "keyCode": 21,
+      "isComposing": false,
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keydown",
+      "key": "a",
+      "code": "KeyA",
+      "keyCode": 65,
+      "isComposing": false,
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keyup",
+      "key": "a",
+      "code": "KeyA",
+      "keyCode": 65,
+      "isComposing": false,
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keydown",
+      "key": "b",
+      "code": "KeyB",
+      "keyCode": 66,
+      "isComposing": false,
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keyup",
+      "key": "b",
+      "code": "KeyB",
+      "keyCode": 66,
+      "isComposing": false,
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keydown",
+      "key": "c",
+      "code": "KeyC",
+      "keyCode": 67,
+      "isComposing": false,
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keyup",
+      "key": "c",
+      "code": "KeyC",
+      "keyCode": 67,
+      "isComposing": false,
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keyup",
+      "key": "HangulMode",
+      "code": "AltRight",
+      "keyCode": 21,
+      "isComposing": false,
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keydown",
+      "key": "Process",
+      "code": "KeyR",
+      "keyCode": 229,
+      "isComposing": false,
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "compositionstart",
+      "data": "",
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "compositionupdate",
+      "data": "ㄱ",
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "beforeinput",
+      "inputType": "insertCompositionText",
+      "data": "ㄱ",
+      "isComposing": true,
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "input",
+      "inputType": "insertCompositionText",
+      "data": "ㄱ",
+      "isComposing": true,
+      "value": "한ㄱ",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "keyup",
+      "key": "r",
+      "code": "KeyR",
+      "keyCode": 82,
+      "isComposing": true,
+      "value": "한ㄱ",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "keydown",
+      "key": "Process",
+      "code": "KeyM",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "한ㄱ",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "compositionupdate",
+      "data": "그",
+      "value": "한ㄱ",
+      "selectionStart": 1,
+      "selectionEnd": 2
+    },
+    {
+      "type": "beforeinput",
+      "inputType": "insertCompositionText",
+      "data": "그",
+      "isComposing": true,
+      "value": "한ㄱ",
+      "selectionStart": 1,
+      "selectionEnd": 2
+    },
+    {
+      "type": "input",
+      "inputType": "insertCompositionText",
+      "data": "그",
+      "isComposing": true,
+      "value": "한그",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "keyup",
+      "key": "m",
+      "code": "KeyM",
+      "keyCode": 77,
+      "isComposing": true,
+      "value": "한그",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "keydown",
+      "key": "Process",
+      "code": "KeyF",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "한그",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "compositionupdate",
+      "data": "글",
+      "value": "한그",
+      "selectionStart": 1,
+      "selectionEnd": 2
+    },
+    {
+      "type": "beforeinput",
+      "inputType": "insertCompositionText",
+      "data": "글",
+      "isComposing": true,
+      "value": "한그",
+      "selectionStart": 1,
+      "selectionEnd": 2
+    },
+    {
+      "type": "input",
+      "inputType": "insertCompositionText",
+      "data": "글",
+      "isComposing": true,
+      "value": "한글",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "keyup",
+      "key": "f",
+      "code": "KeyF",
+      "keyCode": 70,
+      "isComposing": true,
+      "value": "한글",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "keydown",
+      "key": "Process",
+      "code": "Enter",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "한글",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "compositionupdate",
+      "data": "",
+      "value": "한글",
+      "selectionStart": 1,
+      "selectionEnd": 2
+    },
+    {
+      "type": "beforeinput",
+      "inputType": "insertCompositionText",
+      "data": "",
+      "isComposing": true,
+      "value": "한글",
+      "selectionStart": 1,
+      "selectionEnd": 2
+    },
+    {
+      "type": "input",
+      "inputType": "deleteContentBackward",
+      "isComposing": false,
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "compositionend",
+      "data": "",
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "beforeinput",
+      "inputType": "insertText",
+      "data": "글",
+      "isComposing": false,
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "input",
+      "inputType": "insertText",
+      "data": "글",
+      "isComposing": false,
+      "value": "한글",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "keydown",
+      "key": "Enter",
+      "code": "Enter",
+      "keyCode": 13,
+      "isComposing": false,
+      "value": "",
+      "selectionStart": 0,
+      "selectionEnd": 0
+    },
+    {
+      "type": "keyup",
+      "key": "Enter",
+      "code": "Enter",
+      "keyCode": 13,
+      "isComposing": false,
+      "value": "",
+      "selectionStart": 0,
+      "selectionEnd": 0
+    },
+    {
+      "type": "keydown",
+      "key": "Process",
+      "code": "KeyG",
+      "keyCode": 229,
+      "isComposing": false,
+      "value": "",
+      "selectionStart": 0,
+      "selectionEnd": 0
+    },
+    {
+      "type": "compositionstart",
+      "data": "",
+      "value": "",
+      "selectionStart": 0,
+      "selectionEnd": 0
+    },
+    {
+      "type": "compositionupdate",
+      "data": "ㅎ",
+      "value": "",
+      "selectionStart": 0,
+      "selectionEnd": 0
+    },
+    {
+      "type": "beforeinput",
+      "inputType": "insertCompositionText",
+      "data": "ㅎ",
+      "isComposing": true,
+      "value": "",
+      "selectionStart": 0,
+      "selectionEnd": 0
+    },
+    {
+      "type": "input",
+      "inputType": "insertCompositionText",
+      "data": "ㅎ",
+      "isComposing": true,
+      "value": "ㅎ",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keyup",
+      "key": "g",
+      "code": "KeyG",
+      "keyCode": 71,
+      "isComposing": true,
+      "value": "ㅎ",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keydown",
+      "key": "Process",
+      "code": "KeyK",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "ㅎ",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "compositionupdate",
+      "data": "하",
+      "value": "ㅎ",
+      "selectionStart": 0,
+      "selectionEnd": 1
+    },
+    {
+      "type": "beforeinput",
+      "inputType": "insertCompositionText",
+      "data": "하",
+      "isComposing": true,
+      "value": "ㅎ",
+      "selectionStart": 0,
+      "selectionEnd": 1
+    },
+    {
+      "type": "input",
+      "inputType": "insertCompositionText",
+      "data": "하",
+      "isComposing": true,
+      "value": "하",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keyup",
+      "key": "k",
+      "code": "KeyK",
+      "keyCode": 75,
+      "isComposing": true,
+      "value": "하",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keydown",
+      "key": "Process",
+      "code": "KeyS",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "하",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "compositionupdate",
+      "data": "한",
+      "value": "하",
+      "selectionStart": 0,
+      "selectionEnd": 1
+    },
+    {
+      "type": "beforeinput",
+      "inputType": "insertCompositionText",
+      "data": "한",
+      "isComposing": true,
+      "value": "하",
+      "selectionStart": 0,
+      "selectionEnd": 1
+    },
+    {
+      "type": "input",
+      "inputType": "insertCompositionText",
+      "data": "한",
+      "isComposing": true,
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keyup",
+      "key": "s",
+      "code": "KeyS",
+      "keyCode": 83,
+      "isComposing": true,
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keydown",
+      "key": "Process",
+      "code": "AltRight",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "compositionupdate",
+      "data": "",
+      "value": "한",
+      "selectionStart": 0,
+      "selectionEnd": 1
+    },
+    {
+      "type": "beforeinput",
+      "inputType": "insertCompositionText",
+      "data": "",
+      "isComposing": true,
+      "value": "한",
+      "selectionStart": 0,
+      "selectionEnd": 1
+    },
+    {
+      "type": "input",
+      "inputType": "deleteContentBackward",
+      "isComposing": false,
+      "value": "",
+      "selectionStart": 0,
+      "selectionEnd": 0
+    },
+    {
+      "type": "compositionend",
+      "data": "",
+      "value": "",
+      "selectionStart": 0,
+      "selectionEnd": 0
+    },
+    {
+      "type": "beforeinput",
+      "inputType": "insertText",
+      "data": "한",
+      "isComposing": false,
+      "value": "",
+      "selectionStart": 0,
+      "selectionEnd": 0
+    },
+    {
+      "type": "input",
+      "inputType": "insertText",
+      "data": "한",
+      "isComposing": false,
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keyup",
+      "key": "HangulMode",
+      "code": "AltRight",
+      "keyCode": 21,
+      "isComposing": false,
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keydown",
+      "key": "a",
+      "code": "KeyA",
+      "keyCode": 65,
+      "isComposing": false,
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keyup",
+      "key": "a",
+      "code": "KeyA",
+      "keyCode": 65,
+      "isComposing": false,
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keydown",
+      "key": "b",
+      "code": "KeyB",
+      "keyCode": 66,
+      "isComposing": false,
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keyup",
+      "key": "b",
+      "code": "KeyB",
+      "keyCode": 66,
+      "isComposing": false,
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keydown",
+      "key": "c",
+      "code": "KeyC",
+      "keyCode": 67,
+      "isComposing": false,
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keyup",
+      "key": "c",
+      "code": "KeyC",
+      "keyCode": 67,
+      "isComposing": false,
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keyup",
+      "key": "HangulMode",
+      "code": "AltRight",
+      "keyCode": 21,
+      "isComposing": false,
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keydown",
+      "key": "Process",
+      "code": "KeyR",
+      "keyCode": 229,
+      "isComposing": false,
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "compositionstart",
+      "data": "",
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "compositionupdate",
+      "data": "ㄱ",
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "beforeinput",
+      "inputType": "insertCompositionText",
+      "data": "ㄱ",
+      "isComposing": true,
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "input",
+      "inputType": "insertCompositionText",
+      "data": "ㄱ",
+      "isComposing": true,
+      "value": "한ㄱ",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "keyup",
+      "key": "r",
+      "code": "KeyR",
+      "keyCode": 82,
+      "isComposing": true,
+      "value": "한ㄱ",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "keydown",
+      "key": "Process",
+      "code": "KeyM",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "한ㄱ",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "compositionupdate",
+      "data": "그",
+      "value": "한ㄱ",
+      "selectionStart": 1,
+      "selectionEnd": 2
+    },
+    {
+      "type": "beforeinput",
+      "inputType": "insertCompositionText",
+      "data": "그",
+      "isComposing": true,
+      "value": "한ㄱ",
+      "selectionStart": 1,
+      "selectionEnd": 2
+    },
+    {
+      "type": "input",
+      "inputType": "insertCompositionText",
+      "data": "그",
+      "isComposing": true,
+      "value": "한그",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "keyup",
+      "key": "m",
+      "code": "KeyM",
+      "keyCode": 77,
+      "isComposing": true,
+      "value": "한그",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "keydown",
+      "key": "Process",
+      "code": "KeyF",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "한그",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "compositionupdate",
+      "data": "글",
+      "value": "한그",
+      "selectionStart": 1,
+      "selectionEnd": 2
+    },
+    {
+      "type": "beforeinput",
+      "inputType": "insertCompositionText",
+      "data": "글",
+      "isComposing": true,
+      "value": "한그",
+      "selectionStart": 1,
+      "selectionEnd": 2
+    },
+    {
+      "type": "input",
+      "inputType": "insertCompositionText",
+      "data": "글",
+      "isComposing": true,
+      "value": "한글",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "keyup",
+      "key": "f",
+      "code": "KeyF",
+      "keyCode": 70,
+      "isComposing": true,
+      "value": "한글",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "keydown",
+      "key": "Process",
+      "code": "Enter",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "한글",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "compositionupdate",
+      "data": "",
+      "value": "한글",
+      "selectionStart": 1,
+      "selectionEnd": 2
+    },
+    {
+      "type": "beforeinput",
+      "inputType": "insertCompositionText",
+      "data": "",
+      "isComposing": true,
+      "value": "한글",
+      "selectionStart": 1,
+      "selectionEnd": 2
+    },
+    {
+      "type": "input",
+      "inputType": "deleteContentBackward",
+      "isComposing": false,
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "compositionend",
+      "data": "",
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "beforeinput",
+      "inputType": "insertText",
+      "data": "글",
+      "isComposing": false,
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "input",
+      "inputType": "insertText",
+      "data": "글",
+      "isComposing": false,
+      "value": "한글",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "keydown",
+      "key": "Enter",
+      "code": "Enter",
+      "keyCode": 13,
+      "isComposing": false,
+      "value": "",
+      "selectionStart": 0,
+      "selectionEnd": 0
+    },
+    {
+      "type": "keyup",
+      "key": "Enter",
+      "code": "Enter",
+      "keyCode": 13,
+      "isComposing": false,
+      "value": "",
+      "selectionStart": 0,
+      "selectionEnd": 0
+    },
+    {
+      "type": "keydown",
+      "key": "Process",
+      "code": "KeyG",
+      "keyCode": 229,
+      "isComposing": false,
+      "value": "",
+      "selectionStart": 0,
+      "selectionEnd": 0
+    },
+    {
+      "type": "compositionstart",
+      "data": "",
+      "value": "",
+      "selectionStart": 0,
+      "selectionEnd": 0
+    },
+    {
+      "type": "compositionupdate",
+      "data": "ㅎ",
+      "value": "",
+      "selectionStart": 0,
+      "selectionEnd": 0
+    },
+    {
+      "type": "beforeinput",
+      "inputType": "insertCompositionText",
+      "data": "ㅎ",
+      "isComposing": true,
+      "value": "",
+      "selectionStart": 0,
+      "selectionEnd": 0
+    },
+    {
+      "type": "input",
+      "inputType": "insertCompositionText",
+      "data": "ㅎ",
+      "isComposing": true,
+      "value": "ㅎ",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keyup",
+      "key": "g",
+      "code": "KeyG",
+      "keyCode": 71,
+      "isComposing": true,
+      "value": "ㅎ",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keydown",
+      "key": "Process",
+      "code": "KeyK",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "ㅎ",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "compositionupdate",
+      "data": "하",
+      "value": "ㅎ",
+      "selectionStart": 0,
+      "selectionEnd": 1
+    },
+    {
+      "type": "beforeinput",
+      "inputType": "insertCompositionText",
+      "data": "하",
+      "isComposing": true,
+      "value": "ㅎ",
+      "selectionStart": 0,
+      "selectionEnd": 1
+    },
+    {
+      "type": "input",
+      "inputType": "insertCompositionText",
+      "data": "하",
+      "isComposing": true,
+      "value": "하",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keyup",
+      "key": "k",
+      "code": "KeyK",
+      "keyCode": 75,
+      "isComposing": true,
+      "value": "하",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keydown",
+      "key": "Process",
+      "code": "KeyS",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "하",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "compositionupdate",
+      "data": "한",
+      "value": "하",
+      "selectionStart": 0,
+      "selectionEnd": 1
+    },
+    {
+      "type": "beforeinput",
+      "inputType": "insertCompositionText",
+      "data": "한",
+      "isComposing": true,
+      "value": "하",
+      "selectionStart": 0,
+      "selectionEnd": 1
+    },
+    {
+      "type": "input",
+      "inputType": "insertCompositionText",
+      "data": "한",
+      "isComposing": true,
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keyup",
+      "key": "s",
+      "code": "KeyS",
+      "keyCode": 83,
+      "isComposing": true,
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keydown",
+      "key": "Process",
+      "code": "AltRight",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "compositionupdate",
+      "data": "",
+      "value": "한",
+      "selectionStart": 0,
+      "selectionEnd": 1
+    },
+    {
+      "type": "beforeinput",
+      "inputType": "insertCompositionText",
+      "data": "",
+      "isComposing": true,
+      "value": "한",
+      "selectionStart": 0,
+      "selectionEnd": 1
+    },
+    {
+      "type": "input",
+      "inputType": "deleteContentBackward",
+      "isComposing": false,
+      "value": "",
+      "selectionStart": 0,
+      "selectionEnd": 0
+    },
+    {
+      "type": "compositionend",
+      "data": "",
+      "value": "",
+      "selectionStart": 0,
+      "selectionEnd": 0
+    },
+    {
+      "type": "beforeinput",
+      "inputType": "insertText",
+      "data": "한",
+      "isComposing": false,
+      "value": "",
+      "selectionStart": 0,
+      "selectionEnd": 0
+    },
+    {
+      "type": "input",
+      "inputType": "insertText",
+      "data": "한",
+      "isComposing": false,
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keyup",
+      "key": "HangulMode",
+      "code": "AltRight",
+      "keyCode": 21,
+      "isComposing": false,
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keydown",
+      "key": "a",
+      "code": "KeyA",
+      "keyCode": 65,
+      "isComposing": false,
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keyup",
+      "key": "a",
+      "code": "KeyA",
+      "keyCode": 65,
+      "isComposing": false,
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keydown",
+      "key": "b",
+      "code": "KeyB",
+      "keyCode": 66,
+      "isComposing": false,
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keyup",
+      "key": "b",
+      "code": "KeyB",
+      "keyCode": 66,
+      "isComposing": false,
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keydown",
+      "key": "c",
+      "code": "KeyC",
+      "keyCode": 67,
+      "isComposing": false,
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keyup",
+      "key": "c",
+      "code": "KeyC",
+      "keyCode": 67,
+      "isComposing": false,
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keyup",
+      "key": "HangulMode",
+      "code": "AltRight",
+      "keyCode": 21,
+      "isComposing": false,
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keydown",
+      "key": "Process",
+      "code": "KeyR",
+      "keyCode": 229,
+      "isComposing": false,
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "compositionstart",
+      "data": "",
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "compositionupdate",
+      "data": "ㄱ",
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "beforeinput",
+      "inputType": "insertCompositionText",
+      "data": "ㄱ",
+      "isComposing": true,
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "input",
+      "inputType": "insertCompositionText",
+      "data": "ㄱ",
+      "isComposing": true,
+      "value": "한ㄱ",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "keyup",
+      "key": "r",
+      "code": "KeyR",
+      "keyCode": 82,
+      "isComposing": true,
+      "value": "한ㄱ",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "keydown",
+      "key": "Process",
+      "code": "KeyM",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "한ㄱ",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "compositionupdate",
+      "data": "그",
+      "value": "한ㄱ",
+      "selectionStart": 1,
+      "selectionEnd": 2
+    },
+    {
+      "type": "beforeinput",
+      "inputType": "insertCompositionText",
+      "data": "그",
+      "isComposing": true,
+      "value": "한ㄱ",
+      "selectionStart": 1,
+      "selectionEnd": 2
+    },
+    {
+      "type": "input",
+      "inputType": "insertCompositionText",
+      "data": "그",
+      "isComposing": true,
+      "value": "한그",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "keyup",
+      "key": "m",
+      "code": "KeyM",
+      "keyCode": 77,
+      "isComposing": true,
+      "value": "한그",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "keydown",
+      "key": "Process",
+      "code": "KeyF",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "한그",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "compositionupdate",
+      "data": "글",
+      "value": "한그",
+      "selectionStart": 1,
+      "selectionEnd": 2
+    },
+    {
+      "type": "beforeinput",
+      "inputType": "insertCompositionText",
+      "data": "글",
+      "isComposing": true,
+      "value": "한그",
+      "selectionStart": 1,
+      "selectionEnd": 2
+    },
+    {
+      "type": "input",
+      "inputType": "insertCompositionText",
+      "data": "글",
+      "isComposing": true,
+      "value": "한글",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "keyup",
+      "key": "f",
+      "code": "KeyF",
+      "keyCode": 70,
+      "isComposing": true,
+      "value": "한글",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "keydown",
+      "key": "Process",
+      "code": "Enter",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "한글",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "compositionupdate",
+      "data": "",
+      "value": "한글",
+      "selectionStart": 1,
+      "selectionEnd": 2
+    },
+    {
+      "type": "beforeinput",
+      "inputType": "insertCompositionText",
+      "data": "",
+      "isComposing": true,
+      "value": "한글",
+      "selectionStart": 1,
+      "selectionEnd": 2
+    },
+    {
+      "type": "input",
+      "inputType": "deleteContentBackward",
+      "isComposing": false,
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "compositionend",
+      "data": "",
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "beforeinput",
+      "inputType": "insertText",
+      "data": "글",
+      "isComposing": false,
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "input",
+      "inputType": "insertText",
+      "data": "글",
+      "isComposing": false,
+      "value": "한글",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "keydown",
+      "key": "Enter",
+      "code": "Enter",
+      "keyCode": 13,
+      "isComposing": false,
+      "value": "",
+      "selectionStart": 0,
+      "selectionEnd": 0
+    },
+    {
+      "type": "keyup",
+      "key": "Enter",
+      "code": "Enter",
+      "keyCode": 13,
+      "isComposing": false,
+      "value": "",
+      "selectionStart": 0,
+      "selectionEnd": 0
+    },
+    {
+      "type": "keydown",
+      "key": "Process",
+      "code": "KeyG",
+      "keyCode": 229,
+      "isComposing": false,
+      "value": "",
+      "selectionStart": 0,
+      "selectionEnd": 0
+    },
+    {
+      "type": "compositionstart",
+      "data": "",
+      "value": "",
+      "selectionStart": 0,
+      "selectionEnd": 0
+    },
+    {
+      "type": "compositionupdate",
+      "data": "ㅎ",
+      "value": "",
+      "selectionStart": 0,
+      "selectionEnd": 0
+    },
+    {
+      "type": "beforeinput",
+      "inputType": "insertCompositionText",
+      "data": "ㅎ",
+      "isComposing": true,
+      "value": "",
+      "selectionStart": 0,
+      "selectionEnd": 0
+    },
+    {
+      "type": "input",
+      "inputType": "insertCompositionText",
+      "data": "ㅎ",
+      "isComposing": true,
+      "value": "ㅎ",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keyup",
+      "key": "g",
+      "code": "KeyG",
+      "keyCode": 71,
+      "isComposing": true,
+      "value": "ㅎ",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keydown",
+      "key": "Process",
+      "code": "KeyK",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "ㅎ",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "compositionupdate",
+      "data": "하",
+      "value": "ㅎ",
+      "selectionStart": 0,
+      "selectionEnd": 1
+    },
+    {
+      "type": "beforeinput",
+      "inputType": "insertCompositionText",
+      "data": "하",
+      "isComposing": true,
+      "value": "ㅎ",
+      "selectionStart": 0,
+      "selectionEnd": 1
+    },
+    {
+      "type": "input",
+      "inputType": "insertCompositionText",
+      "data": "하",
+      "isComposing": true,
+      "value": "하",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keyup",
+      "key": "k",
+      "code": "KeyK",
+      "keyCode": 75,
+      "isComposing": true,
+      "value": "하",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keydown",
+      "key": "Process",
+      "code": "KeyS",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "하",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "compositionupdate",
+      "data": "한",
+      "value": "하",
+      "selectionStart": 0,
+      "selectionEnd": 1
+    },
+    {
+      "type": "beforeinput",
+      "inputType": "insertCompositionText",
+      "data": "한",
+      "isComposing": true,
+      "value": "하",
+      "selectionStart": 0,
+      "selectionEnd": 1
+    },
+    {
+      "type": "input",
+      "inputType": "insertCompositionText",
+      "data": "한",
+      "isComposing": true,
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keyup",
+      "key": "s",
+      "code": "KeyS",
+      "keyCode": 83,
+      "isComposing": true,
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keydown",
+      "key": "Process",
+      "code": "AltRight",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "compositionupdate",
+      "data": "",
+      "value": "한",
+      "selectionStart": 0,
+      "selectionEnd": 1
+    },
+    {
+      "type": "beforeinput",
+      "inputType": "insertCompositionText",
+      "data": "",
+      "isComposing": true,
+      "value": "한",
+      "selectionStart": 0,
+      "selectionEnd": 1
+    },
+    {
+      "type": "input",
+      "inputType": "deleteContentBackward",
+      "isComposing": false,
+      "value": "",
+      "selectionStart": 0,
+      "selectionEnd": 0
+    },
+    {
+      "type": "compositionend",
+      "data": "",
+      "value": "",
+      "selectionStart": 0,
+      "selectionEnd": 0
+    },
+    {
+      "type": "beforeinput",
+      "inputType": "insertText",
+      "data": "한",
+      "isComposing": false,
+      "value": "",
+      "selectionStart": 0,
+      "selectionEnd": 0
+    },
+    {
+      "type": "input",
+      "inputType": "insertText",
+      "data": "한",
+      "isComposing": false,
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keyup",
+      "key": "HangulMode",
+      "code": "AltRight",
+      "keyCode": 21,
+      "isComposing": false,
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keydown",
+      "key": "a",
+      "code": "KeyA",
+      "keyCode": 65,
+      "isComposing": false,
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keyup",
+      "key": "a",
+      "code": "KeyA",
+      "keyCode": 65,
+      "isComposing": false,
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keydown",
+      "key": "b",
+      "code": "KeyB",
+      "keyCode": 66,
+      "isComposing": false,
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keyup",
+      "key": "b",
+      "code": "KeyB",
+      "keyCode": 66,
+      "isComposing": false,
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keydown",
+      "key": "c",
+      "code": "KeyC",
+      "keyCode": 67,
+      "isComposing": false,
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keyup",
+      "key": "c",
+      "code": "KeyC",
+      "keyCode": 67,
+      "isComposing": false,
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keyup",
+      "key": "HangulMode",
+      "code": "AltRight",
+      "keyCode": 21,
+      "isComposing": false,
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keydown",
+      "key": "Process",
+      "code": "KeyR",
+      "keyCode": 229,
+      "isComposing": false,
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "compositionstart",
+      "data": "",
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "compositionupdate",
+      "data": "ㄱ",
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "beforeinput",
+      "inputType": "insertCompositionText",
+      "data": "ㄱ",
+      "isComposing": true,
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "input",
+      "inputType": "insertCompositionText",
+      "data": "ㄱ",
+      "isComposing": true,
+      "value": "한ㄱ",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "keyup",
+      "key": "r",
+      "code": "KeyR",
+      "keyCode": 82,
+      "isComposing": true,
+      "value": "한ㄱ",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "keydown",
+      "key": "Process",
+      "code": "KeyM",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "한ㄱ",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "compositionupdate",
+      "data": "그",
+      "value": "한ㄱ",
+      "selectionStart": 1,
+      "selectionEnd": 2
+    },
+    {
+      "type": "beforeinput",
+      "inputType": "insertCompositionText",
+      "data": "그",
+      "isComposing": true,
+      "value": "한ㄱ",
+      "selectionStart": 1,
+      "selectionEnd": 2
+    },
+    {
+      "type": "input",
+      "inputType": "insertCompositionText",
+      "data": "그",
+      "isComposing": true,
+      "value": "한그",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "keyup",
+      "key": "m",
+      "code": "KeyM",
+      "keyCode": 77,
+      "isComposing": true,
+      "value": "한그",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "keydown",
+      "key": "Process",
+      "code": "KeyF",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "한그",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "compositionupdate",
+      "data": "글",
+      "value": "한그",
+      "selectionStart": 1,
+      "selectionEnd": 2
+    },
+    {
+      "type": "beforeinput",
+      "inputType": "insertCompositionText",
+      "data": "글",
+      "isComposing": true,
+      "value": "한그",
+      "selectionStart": 1,
+      "selectionEnd": 2
+    },
+    {
+      "type": "input",
+      "inputType": "insertCompositionText",
+      "data": "글",
+      "isComposing": true,
+      "value": "한글",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "keyup",
+      "key": "f",
+      "code": "KeyF",
+      "keyCode": 70,
+      "isComposing": true,
+      "value": "한글",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "keydown",
+      "key": "Process",
+      "code": "Enter",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "한글",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "compositionupdate",
+      "data": "",
+      "value": "한글",
+      "selectionStart": 1,
+      "selectionEnd": 2
+    },
+    {
+      "type": "beforeinput",
+      "inputType": "insertCompositionText",
+      "data": "",
+      "isComposing": true,
+      "value": "한글",
+      "selectionStart": 1,
+      "selectionEnd": 2
+    },
+    {
+      "type": "input",
+      "inputType": "deleteContentBackward",
+      "isComposing": false,
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "compositionend",
+      "data": "",
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "beforeinput",
+      "inputType": "insertText",
+      "data": "글",
+      "isComposing": false,
+      "value": "한",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "input",
+      "inputType": "insertText",
+      "data": "글",
+      "isComposing": false,
+      "value": "한글",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "keydown",
+      "key": "Enter",
+      "code": "Enter",
+      "keyCode": 13,
+      "isComposing": false,
+      "value": "",
+      "selectionStart": 0,
+      "selectionEnd": 0
+    },
+    {
+      "type": "keyup",
+      "key": "Enter",
+      "code": "Enter",
+      "keyCode": 13,
+      "isComposing": false,
+      "value": "",
+      "selectionStart": 0,
+      "selectionEnd": 0
+    }
+  ],
+  "onData": [
+    "한",
+    "a",
+    "b",
+    "c",
+    "글",
+    "\r",
+    "한",
+    "a",
+    "b",
+    "c",
+    "글",
+    "\r",
+    "한",
+    "a",
+    "b",
+    "c",
+    "글",
+    "\r",
+    "한",
+    "a",
+    "b",
+    "c",
+    "글",
+    "\r",
+    "한",
+    "a",
+    "b",
+    "c",
+    "글",
+    "\r"
+  ]
+}

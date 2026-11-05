@@ -6,27 +6,17 @@ export type ResourceUsageSpaceScanSnapshot = {
 
 export function resolveResourceUsageSpaceScanReady({
   snapshot,
-  runtimeEnvironmentActive,
   open,
   activeView,
   scannedAt,
   scanning
 }: {
   snapshot: ResourceUsageSpaceScanSnapshot
-  runtimeEnvironmentActive: boolean
   open: boolean
   activeView: string
   scannedAt: number | null
   scanning: boolean
 }): ResourceUsageSpaceScanSnapshot {
-  if (runtimeEnvironmentActive) {
-    return {
-      ready: false,
-      previousScanning: false,
-      lastSeenScannedAt: snapshot.lastSeenScannedAt
-    }
-  }
-
   const scanCompleted =
     snapshot.previousScanning &&
     !scanning &&

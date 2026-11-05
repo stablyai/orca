@@ -39,7 +39,7 @@ EOF
    - Lines before the marker → setup commands
    - Lines after the marker → run command to test
 
-3. **Gets Orca's wrapper config** by calling `getShellReadyLaunchConfig()`
+3. **Gets Orca's wrapper config** by calling `getShellLaunchConfig()` with the features `selectShellStartupFeatures()` picks for a startup-command launch
 
 4. **Executes setup** (if present) with bash in temp HOME, using wrapper env
 

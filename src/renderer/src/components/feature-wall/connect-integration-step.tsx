@@ -5,12 +5,7 @@ import { translate } from '@/i18n/i18n'
 
 export type { IntegrationStepState }
 
-// One progressive step. The active step shows its instructional copy and
-// provider rows; a done step collapses to a one-line summary with a "Change"
-// affordance that reopens it inline; upcoming steps start collapsed but open
-// on click so the step order never blocks anyone. `expanded` (body visibility)
-// is tracked separately from `state` so a done step can reopen while still
-// reading as connected.
+// Track expansion separately from connection state so completed steps can reopen without losing their status.
 export function IntegrationStep(props: {
   index: number
   state: IntegrationStepState
@@ -25,8 +20,7 @@ export function IntegrationStep(props: {
   const { state, expanded, onToggle } = props
   const done = state === 'done'
   const active = state === 'active'
-  // Upcoming steps are openable too — the order is a recommendation, not a
-  // prerequisite, so a Linear/Jira-first user can connect tasks right away.
+  // Allow tracker-first setup; step order is a recommendation, not a prerequisite.
   const canToggle = !active && (props.canToggle ?? true)
 
   return (
@@ -51,9 +45,9 @@ export function IntegrationStep(props: {
           className={cn(
             'flex size-7 shrink-0 items-center justify-center rounded-full border text-[13px] font-semibold leading-none',
             done
-              ? 'border-status-success-border bg-status-success-background text-status-success'
+              ? 'border-foreground bg-foreground text-background'
               : active
-                ? 'border-foreground bg-foreground text-background'
+                ? 'border-foreground text-foreground'
                 : 'border-border text-muted-foreground'
           )}
         >

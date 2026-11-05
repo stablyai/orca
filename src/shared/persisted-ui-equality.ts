@@ -36,7 +36,7 @@ export function persistedUIValuesEqual(left: unknown, right: unknown): boolean {
 
   for (const key of leftKeys) {
     if (
-      !Object.prototype.hasOwnProperty.call(rightRecord, key) ||
+      !Object.hasOwn(rightRecord, key) ||
       !persistedUIValuesEqual(leftRecord[key], rightRecord[key])
     ) {
       return false

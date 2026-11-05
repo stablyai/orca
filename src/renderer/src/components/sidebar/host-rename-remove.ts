@@ -4,13 +4,13 @@ import {
   getHostSettingOverride,
   setHostSettingOverride
 } from '../../../../shared/host-setting-overrides'
-import type { GlobalSettings, HostSettingOverrides } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { HostSettingOverrides } from '../../../../shared/host-setting-overrides'
 
 type OverridesSlice = Pick<GlobalSettings, 'hostSettingOverrides'>
 type OverridesMap = Partial<Record<ExecutionHostId, HostSettingOverrides>>
 
-/** The current user-chosen display-label override for a host, or undefined when
- *  the host still uses its derived label. */
+/** Undefined means the host uses its derived label. */
 export function getHostDisplayLabelOverride(
   settings: OverridesSlice | null | undefined,
   hostId: ExecutionHostId
@@ -18,8 +18,7 @@ export function getHostDisplayLabelOverride(
   return getHostSettingOverride(settings, hostId, 'displayLabel')
 }
 
-/** Computes the next `hostSettingOverrides` after a rename. A blank label clears
- *  the override so the host reverts to its derived label. */
+/** A blank rename clears the override and restores the derived label. */
 export function applyHostRename(
   settings: OverridesSlice | null | undefined,
   hostId: ExecutionHostId,
@@ -28,7 +27,6 @@ export function applyHostRename(
   return setHostSettingOverride(settings, hostId, 'displayLabel', nextLabel)
 }
 
-/** Computes the next `hostSettingOverrides` after resetting a host's label. */
 export function clearHostRename(
   settings: OverridesSlice | null | undefined,
   hostId: ExecutionHostId
@@ -41,9 +39,7 @@ export type HostRemovalTarget =
   | { kind: 'runtime'; environmentId: string }
   | null
 
-/** Resolves how a host should be removed. SSH targets are removed inline via the
- *  ssh API; runtime environments deep-link into the Orca servers pane because
- *  their removal needs active-environment/error context that lives there. */
+/** Runtime removal needs server-pane context; SSH targets can be removed inline. */
 export function resolveHostRemoval(hostId: ExecutionHostId): HostRemovalTarget {
   const parsed = parseExecutionHostId(hostId)
   if (parsed?.kind === 'ssh') {

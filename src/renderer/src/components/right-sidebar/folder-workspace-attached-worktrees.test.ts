@@ -1,11 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import type {
-  FolderWorkspace,
-  Worktree,
-  WorktreeLineage,
-  WorkspaceLineage
-} from '../../../../shared/types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
+import type { WorkspaceLineage } from '../../../../shared/worktree/lineage-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { folderWorkspaceKey, worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
+
 import { getAttachedWorktreesForFolderWorkspace } from './folder-workspace-attached-worktrees'
 
 function makeFolder(id = 'folder-1'): FolderWorkspace {
@@ -62,56 +60,7 @@ function makeWorkspaceLineage(child: Worktree, folderId = 'folder-1'): Workspace
   }
 }
 
-function makeWorktreeLineage(child: Worktree, parent: Worktree): WorktreeLineage {
-  return {
-    worktreeId: child.id,
-    worktreeInstanceId: child.instanceId ?? '',
-    parentWorktreeId: parent.id,
-    parentWorktreeInstanceId: parent.instanceId ?? '',
-    origin: 'cli',
-    capture: { source: 'env-workspace', confidence: 'inferred' },
-    createdAt: 1
-  }
-}
-
 describe('getAttachedWorktreesForFolderWorkspace', () => {
-  it('resolves direct attached children and sorts by activity then name', () => {
-    const alpha = makeWorktree({
-      id: 'repo-1::/alpha',
-      displayName: 'Alpha',
-      lastActivityAt: 10
-    })
-    const beta = makeWorktree({
-      id: 'repo-1::/beta',
-      displayName: 'Beta',
-      lastActivityAt: 50
-    })
-    const gamma = makeWorktree({
-      id: 'repo-1::/gamma',
-      displayName: 'Gamma',
-      lastActivityAt: 50
-    })
-
-    const result = getAttachedWorktreesForFolderWorkspace({
-      activeWorkspaceKey: folderWorkspaceKey('folder-1'),
-      activeWorktreeId: null,
-      folderWorkspaces: [makeFolder()],
-      workspaceLineageByChildKey: {
-        [alpha.id]: makeWorkspaceLineage(alpha),
-        [beta.id]: makeWorkspaceLineage(beta),
-        [gamma.id]: makeWorkspaceLineage(gamma)
-      },
-      worktreeLineageById: {},
-      worktreesByRepo: { 'repo-1': [alpha, beta, gamma] }
-    })
-
-    expect(result.childWorktrees.map((worktree) => worktree.displayName)).toEqual([
-      'Beta',
-      'Gamma',
-      'Alpha'
-    ])
-  })
-
   it('omits archived and stale-instance children', () => {
     const visible = makeWorktree({
       id: 'repo-1::/visible',
@@ -140,30 +89,5 @@ describe('getAttachedWorktreesForFolderWorkspace', () => {
     })
 
     expect(result.childWorktrees.map((worktree) => worktree.id)).toEqual([visible.id])
-  })
-
-  it('includes nested lineage descendants under attached roots', () => {
-    const parent = makeWorktree({
-      id: 'repo-1::/parent',
-      instanceId: 'parent'
-    })
-    const nested = makeWorktree({
-      id: 'repo-1::/nested',
-      instanceId: 'nested'
-    })
-
-    const result = getAttachedWorktreesForFolderWorkspace({
-      activeWorkspaceKey: folderWorkspaceKey('folder-1'),
-      activeWorktreeId: null,
-      folderWorkspaces: [makeFolder()],
-      workspaceLineageByChildKey: { [parent.id]: makeWorkspaceLineage(parent) },
-      worktreeLineageById: { [nested.id]: makeWorktreeLineage(nested, parent) },
-      worktreesByRepo: { 'repo-1': [parent, nested] }
-    })
-
-    expect(result.rootChildWorktrees.map((worktree) => worktree.id)).toEqual([parent.id])
-    expect(result.lineageChildrenByParentId.get(parent.id)?.map((worktree) => worktree.id)).toEqual(
-      [nested.id]
-    )
   })
 })

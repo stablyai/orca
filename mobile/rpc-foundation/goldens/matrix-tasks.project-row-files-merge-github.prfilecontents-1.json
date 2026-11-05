@@ -1,0 +1,3879 @@
+{
+  "goldenFormatVersion": 6,
+  "operation": "tasks.project-row-files-merge",
+  "family": "tasks.project-row-files-merge",
+  "namedDeltas": [],
+  "values": {
+    "033080c46df7": {
+      "contents": {
+        "src/index.ts": {
+          "modified": "b",
+          "modifiedIsBinary": false,
+          "original": "a",
+          "originalIsBinary": false
+        }
+      },
+      "error": "",
+      "mutating": false,
+      "row": {
+        "content": {
+          "assignees": [],
+          "body": "Project pull request body",
+          "issueType": {
+            "$rpc": "null"
+          },
+          "labels": [],
+          "number": 2,
+          "repository": "owner/repo",
+          "state": "OPEN",
+          "title": "Project pull request",
+          "url": "https://github.enterprise.test/owner/repo/pull/2"
+        },
+        "fieldValuesByFieldId": {},
+        "id": "item-2",
+        "itemType": "PULL_REQUEST"
+      }
+    },
+    "03cbeb9836aa": {
+      "contents": {
+        "src/index.ts": {
+          "error": "inner refused",
+          "ok": false
+        }
+      },
+      "error": "",
+      "mutating": false,
+      "row": {
+        "content": {
+          "assignees": [],
+          "body": "Project pull request body",
+          "issueType": {
+            "$rpc": "null"
+          },
+          "labels": [],
+          "number": 2,
+          "repository": "owner/repo",
+          "state": "OPEN",
+          "title": "Project pull request",
+          "url": "https://github.enterprise.test/owner/repo/pull/2"
+        },
+        "fieldValuesByFieldId": {},
+        "id": "item-2",
+        "itemType": "PULL_REQUEST"
+      }
+    },
+    "058cf46d652d": {
+      "name": "github.prFileContents#1",
+      "ordinal": 10,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.prFileContents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "baseSha": "base-sha",
+            "headSha": "head-sha",
+            "oldPath": {
+              "$rpc": "undefined"
+            },
+            "path": "src/index.ts",
+            "prNumber": 2,
+            "prRepo": {
+              "host": "github.enterprise.test",
+              "owner": "owner",
+              "repo": "repo"
+            },
+            "repo": "id:repo-1",
+            "status": "modified"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true
+        }
+      }
+    },
+    "089e85bcb747": {
+      "name": "projectRowDetailError",
+      "ordinal": 14,
+      "value": "transport failure"
+    },
+    "0a27be2bb59e": {
+      "name": "github.prFileContents#1",
+      "ordinal": 10,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.prFileContents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "baseSha": "base-sha",
+            "headSha": "head-sha",
+            "oldPath": {
+              "$rpc": "undefined"
+            },
+            "path": "src/index.ts",
+            "prNumber": 2,
+            "prRepo": {
+              "host": "github.enterprise.test",
+              "owner": "owner",
+              "repo": "repo"
+            },
+            "repo": "id:repo-1",
+            "status": "modified"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "181cd5886ebc": {
+      "contents": {
+        "src/index.ts": {
+          "error": "inner refused",
+          "ok": false
+        }
+      },
+      "error": "",
+      "mutating": false,
+      "row": {
+        "content": {
+          "assignees": [],
+          "body": "Project pull request body",
+          "issueType": {
+            "$rpc": "null"
+          },
+          "labels": [],
+          "number": 2,
+          "repository": "owner/repo",
+          "state": "MERGED",
+          "title": "Project pull request",
+          "url": "https://github.enterprise.test/owner/repo/pull/2"
+        },
+        "fieldValuesByFieldId": {},
+        "id": "item-2",
+        "itemType": "PULL_REQUEST"
+      }
+    },
+    "1b4a4c760bea": {
+      "name": "github.prFileContents#1",
+      "ordinal": 10,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.prFileContents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "baseSha": "base-sha",
+            "headSha": "head-sha",
+            "oldPath": {
+              "$rpc": "undefined"
+            },
+            "path": "src/index.ts",
+            "prNumber": 2,
+            "prRepo": {
+              "host": "github.enterprise.test",
+              "owner": "owner",
+              "repo": "repo"
+            },
+            "repo": "id:repo-1",
+            "status": "modified"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "1bef2a9b13a1": {
+      "contents": {
+        "src/index.ts": {
+          "modified": "b",
+          "modifiedIsBinary": false,
+          "original": "a",
+          "originalIsBinary": false
+        }
+      },
+      "error": "",
+      "mutating": false,
+      "row": {
+        "content": {
+          "assignees": [],
+          "body": "Project pull request body",
+          "issueType": {
+            "$rpc": "null"
+          },
+          "labels": [],
+          "number": 2,
+          "repository": "owner/repo",
+          "state": "MERGED",
+          "title": "Project pull request",
+          "url": "https://github.enterprise.test/owner/repo/pull/2"
+        },
+        "fieldValuesByFieldId": {},
+        "id": "item-2",
+        "itemType": "PULL_REQUEST"
+      }
+    },
+    "1d3851814e1c": {
+      "name": "github.prFileContents#1",
+      "ordinal": 10,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.prFileContents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "baseSha": "base-sha",
+            "headSha": "head-sha",
+            "oldPath": {
+              "$rpc": "undefined"
+            },
+            "path": "src/index.ts",
+            "prNumber": 2,
+            "prRepo": {
+              "host": "github.enterprise.test",
+              "owner": "owner",
+              "repo": "repo"
+            },
+            "repo": "id:repo-1",
+            "status": "modified"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "2141fc3d6fbb": {
+      "name": "error",
+      "ordinal": 37,
+      "value": ""
+    },
+    "23e9450f41da": {
+      "contents": {},
+      "error": "transport failure",
+      "mutating": false,
+      "row": {
+        "content": {
+          "assignees": [],
+          "body": "Project pull request body",
+          "issueType": {
+            "$rpc": "null"
+          },
+          "labels": [],
+          "number": 2,
+          "repository": "owner/repo",
+          "state": "OPEN",
+          "title": "Project pull request",
+          "url": "https://github.enterprise.test/owner/repo/pull/2"
+        },
+        "fieldValuesByFieldId": {},
+        "id": "item-2",
+        "itemType": "PULL_REQUEST"
+      }
+    },
+    "2aa5c6eda2ab": {
+      "contents": {
+        "src/index.ts": {
+          "error": {
+            "message": "inner refused"
+          },
+          "ok": false
+        }
+      },
+      "error": "",
+      "mutating": false,
+      "row": {
+        "content": {
+          "assignees": [],
+          "body": "Project pull request body",
+          "issueType": {
+            "$rpc": "null"
+          },
+          "labels": [],
+          "number": 2,
+          "repository": "owner/repo",
+          "state": "OPEN",
+          "title": "Project pull request",
+          "url": "https://github.enterprise.test/owner/repo/pull/2"
+        },
+        "fieldValuesByFieldId": {},
+        "id": "item-2",
+        "itemType": "PULL_REQUEST"
+      }
+    },
+    "352091a6a533": {
+      "contents": {},
+      "error": "outer refused",
+      "mutating": false,
+      "row": {
+        "content": {
+          "assignees": [],
+          "body": "Project pull request body",
+          "issueType": {
+            "$rpc": "null"
+          },
+          "labels": [],
+          "number": 2,
+          "repository": "owner/repo",
+          "state": "OPEN",
+          "title": "Project pull request",
+          "url": "https://github.enterprise.test/owner/repo/pull/2"
+        },
+        "fieldValuesByFieldId": {},
+        "id": "item-2",
+        "itemType": "PULL_REQUEST"
+      }
+    },
+    "39ae33a4e8d3": {
+      "name": "github.updatePRState#1",
+      "ordinal": 40,
+      "json": "{\"id\":\"frame-6\",\"deviceToken\":\"recording-device\",\"method\":\"github.updatePRState\",\"params\":{\"repo\":\"id:repo-1\",\"prNumber\":12,\"prRepo\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.com\"},\"updates\":{\"state\":\"closed\"}}}"
+    },
+    "3ad8c366dadb": {
+      "name": "projectRowDetailError",
+      "ordinal": 14,
+      "value": "Unknown method"
+    },
+    "3b468c3062a8": {
+      "name": "prFileContents",
+      "ordinal": 14,
+      "value": {
+        "src/index.ts": {
+          "error": "refused"
+        }
+      }
+    },
+    "3d4dab1d4a3e": {
+      "name": "github.prFileContents#1",
+      "ordinal": 10,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.prFileContents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "baseSha": "base-sha",
+            "headSha": "head-sha",
+            "oldPath": {
+              "$rpc": "undefined"
+            },
+            "path": "src/index.ts",
+            "prNumber": 2,
+            "prRepo": {
+              "host": "github.enterprise.test",
+              "owner": "owner",
+              "repo": "repo"
+            },
+            "repo": "id:repo-1",
+            "status": "modified"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "3e0c86d3ff78": {
+      "name": "prFileLoadingPath",
+      "ordinal": 15,
+      "value": {
+        "$rpc": "null"
+      }
+    },
+    "3f9768efc421": {
+      "name": "githubProjectTable",
+      "ordinal": 28,
+      "value": {
+        "fields": [
+          {
+            "dataType": "SINGLE_SELECT",
+            "id": "field-1",
+            "name": "Status",
+            "options": []
+          }
+        ],
+        "project": {
+          "id": "project-1",
+          "number": 3,
+          "title": "Board"
+        },
+        "rows": [
+          {
+            "content": {
+              "assignees": [],
+              "body": "Project issue body",
+              "issueType": {
+                "$rpc": "null"
+              },
+              "labels": [],
+              "number": 1,
+              "repository": "owner/repo",
+              "state": "OPEN",
+              "title": "Project issue",
+              "url": "https://github.enterprise.test/owner/repo/issues/1"
+            },
+            "fieldValuesByFieldId": {},
+            "id": "item-1",
+            "itemType": "ISSUE"
+          },
+          {
+            "content": {
+              "assignees": [],
+              "body": "Project pull request body",
+              "issueType": {
+                "$rpc": "null"
+              },
+              "labels": [],
+              "number": 2,
+              "repository": "owner/repo",
+              "state": "MERGED",
+              "title": "Project pull request",
+              "url": "https://github.enterprise.test/owner/repo/pull/2"
+            },
+            "fieldValuesByFieldId": {},
+            "id": "item-2",
+            "itemType": "PULL_REQUEST"
+          }
+        ],
+        "selectedView": {
+          "filter": "",
+          "id": "view-1",
+          "layout": "TABLE_LAYOUT",
+          "name": "Table",
+          "number": 1
+        }
+      }
+    },
+    "42be1ca2bc40": {
+      "name": "mutatingStatus",
+      "ordinal": 4,
+      "value": false
+    },
+    "4366c8884dbd": {
+      "contents": {},
+      "error": "",
+      "mutating": false,
+      "row": {
+        "content": {
+          "assignees": [],
+          "body": "Project pull request body",
+          "issueType": {
+            "$rpc": "null"
+          },
+          "labels": [],
+          "number": 2,
+          "repository": "owner/repo",
+          "state": "OPEN",
+          "title": "Project pull request",
+          "url": "https://github.enterprise.test/owner/repo/pull/2"
+        },
+        "fieldValuesByFieldId": {},
+        "id": "item-2",
+        "itemType": "PULL_REQUEST"
+      }
+    },
+    "44c2e6541ebd": {
+      "name": "projectRowDetailError",
+      "ordinal": 9,
+      "value": ""
+    },
+    "494eb7340666": {
+      "name": "projectRowDetailError",
+      "ordinal": 14,
+      "value": "The host sent a reply this app could not read (github.prFileContents)"
+    },
+    "4fe8ef09de5f": {
+      "name": "projectRowDetail",
+      "ordinal": 20,
+      "value": {
+        "assignees": ["octocat"],
+        "baseSha": "base-sha",
+        "body": "body",
+        "checks": [],
+        "comments": [
+          {
+            "author": "octocat",
+            "body": "please fix",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": 501,
+            "isResolved": false,
+            "line": 12,
+            "path": "src/index.ts",
+            "threadId": "thread-1"
+          },
+          {
+            "author": "octocat",
+            "body": "a thought",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-2"
+          },
+          {
+            "author": "You",
+            "body": "a review comment",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": 901,
+            "line": 12,
+            "path": "src/index.ts"
+          }
+        ],
+        "files": [
+          {
+            "additions": 2,
+            "deletions": 1,
+            "oldPath": {
+              "$rpc": "undefined"
+            },
+            "path": "src/index.ts",
+            "status": "modified",
+            "viewerViewedState": "UNVIEWED"
+          }
+        ],
+        "headSha": "head-sha",
+        "labels": ["bug"],
+        "latestReviews": [],
+        "provider": "github",
+        "pullRequestId": "PR_kwDO",
+        "reviewDecision": {
+          "$rpc": "null"
+        },
+        "reviewRequests": []
+      }
+    },
+    "54db29822338": {
+      "name": "github.prFileContents#1",
+      "ordinal": 10,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.prFileContents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "baseSha": "base-sha",
+            "headSha": "head-sha",
+            "oldPath": {
+              "$rpc": "undefined"
+            },
+            "path": "src/index.ts",
+            "prNumber": 2,
+            "prRepo": {
+              "host": "github.enterprise.test",
+              "owner": "owner",
+              "repo": "repo"
+            },
+            "repo": "id:repo-1",
+            "status": "modified"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "595f7991ecf7": {
+      "name": "prFileContents",
+      "ordinal": 14,
+      "value": {
+        "src/index.ts": {
+          "error": "inner refused",
+          "ok": false
+        }
+      }
+    },
+    "5c30b4794b57": {
+      "name": "projectRowDetailError",
+      "ordinal": 14,
+      "value": ""
+    },
+    "60e8d2f72874": {
+      "name": "mutatingStatus",
+      "ordinal": 39,
+      "value": true
+    },
+    "658dac7df662": {
+      "name": "expandedPrFilePath",
+      "ordinal": 3,
+      "value": {
+        "$rpc": "null"
+      }
+    },
+    "662cbccd78cb": {
+      "name": "prFileLoadingPath",
+      "ordinal": 7,
+      "value": {
+        "$rpc": "null"
+      }
+    },
+    "77324937aa89": {
+      "name": "github.updateIssue#1",
+      "ordinal": 35,
+      "json": "{\"expectedRuntimeSource\":{\"sourceId\":\"recorded\",\"runtimeId\":\"recorded\"},\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"github.updateIssue\",\"params\":{\"repo\":\"id:repo-1\",\"number\":9,\"updates\":{\"state\":\"closed\"},\"ownerRepo\":{\"host\":\"github.com\",\"owner\":\"owner\",\"repo\":\"repo\"}}}"
+    },
+    "7c6b75268905": {
+      "name": "github.prFileContents#1",
+      "ordinal": 10,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.prFileContents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "baseSha": "base-sha",
+            "headSha": "head-sha",
+            "oldPath": {
+              "$rpc": "undefined"
+            },
+            "path": "src/index.ts",
+            "prNumber": 2,
+            "prRepo": {
+              "host": "github.enterprise.test",
+              "owner": "owner",
+              "repo": "repo"
+            },
+            "repo": "id:repo-1",
+            "status": "modified"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "7d33c355aeac": {
+      "name": "prFileContents",
+      "ordinal": 14,
+      "value": {
+        "src/index.ts": {
+          "modified": "b",
+          "modifiedIsBinary": false,
+          "original": "a",
+          "originalIsBinary": false
+        }
+      }
+    },
+    "875e33a81c61": {
+      "contents": {
+        "src/index.ts": {
+          "error": "refused"
+        }
+      },
+      "error": "",
+      "mutating": false,
+      "row": {
+        "content": {
+          "assignees": [],
+          "body": "Project pull request body",
+          "issueType": {
+            "$rpc": "null"
+          },
+          "labels": [],
+          "number": 2,
+          "repository": "owner/repo",
+          "state": "OPEN",
+          "title": "Project pull request",
+          "url": "https://github.enterprise.test/owner/repo/pull/2"
+        },
+        "fieldValuesByFieldId": {},
+        "id": "item-2",
+        "itemType": "PULL_REQUEST"
+      }
+    },
+    "8862f0950552": {
+      "name": "error",
+      "ordinal": 30,
+      "value": ""
+    },
+    "8989e41d1c1e": {
+      "name": "github.mergePR#1",
+      "ordinal": 25,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.mergePR"
+        },
+        {
+          "name": "params",
+          "value": {
+            "method": "squash",
+            "prNumber": 2,
+            "prRepo": {
+              "host": "github.enterprise.test",
+              "owner": "owner",
+              "repo": "repo"
+            },
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 60000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "ok": true
+          }
+        }
+      }
+    },
+    "899dc22eb082": {
+      "name": "github.addPRReviewComment#1",
+      "ordinal": 19,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.addPRReviewComment\",\"params\":{\"repo\":\"id:repo-1\",\"prNumber\":2,\"prRepo\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\"},\"commitId\":\"head-sha\",\"path\":\"src/index.ts\",\"line\":12,\"body\":\"a review comment\"}}"
+    },
+    "8a8297d29da8": {
+      "contents": {},
+      "error": "Unknown method",
+      "mutating": false,
+      "row": {
+        "content": {
+          "assignees": [],
+          "body": "Project pull request body",
+          "issueType": {
+            "$rpc": "null"
+          },
+          "labels": [],
+          "number": 2,
+          "repository": "owner/repo",
+          "state": "OPEN",
+          "title": "Project pull request",
+          "url": "https://github.enterprise.test/owner/repo/pull/2"
+        },
+        "fieldValuesByFieldId": {},
+        "id": "item-2",
+        "itemType": "PULL_REQUEST"
+      }
+    },
+    "8bb07f5e4ddb": {
+      "name": "projectMutating",
+      "ordinal": 16,
+      "value": true
+    },
+    "8d4edaf085d8": {
+      "name": "mutatingStatus",
+      "ordinal": 41,
+      "value": false
+    },
+    "8d7ac6f2573d": {
+      "name": "github.prFileContents#1",
+      "ordinal": 10,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.prFileContents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "baseSha": "base-sha",
+            "headSha": "head-sha",
+            "oldPath": {
+              "$rpc": "undefined"
+            },
+            "path": "src/index.ts",
+            "prNumber": 2,
+            "prRepo": {
+              "host": "github.enterprise.test",
+              "owner": "owner",
+              "repo": "repo"
+            },
+            "repo": "id:repo-1",
+            "status": "modified"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "modified": "b",
+            "modifiedIsBinary": false,
+            "original": "a",
+            "originalIsBinary": false
+          }
+        }
+      }
+    },
+    "9140ae079dc3": {
+      "name": "github.prFileContents#1",
+      "ordinal": 10,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.prFileContents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "baseSha": "base-sha",
+            "headSha": "head-sha",
+            "oldPath": {
+              "$rpc": "undefined"
+            },
+            "path": "src/index.ts",
+            "prNumber": 2,
+            "prRepo": {
+              "host": "github.enterprise.test",
+              "owner": "owner",
+              "repo": "repo"
+            },
+            "repo": "id:repo-1",
+            "status": "modified"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "922be13b96f2": {
+      "contents": {},
+      "error": "The host sent a reply this app could not read (github.prFileContents)",
+      "mutating": false,
+      "row": {
+        "content": {
+          "assignees": [],
+          "body": "Project pull request body",
+          "issueType": {
+            "$rpc": "null"
+          },
+          "labels": [],
+          "number": 2,
+          "repository": "owner/repo",
+          "state": "OPEN",
+          "title": "Project pull request",
+          "url": "https://github.enterprise.test/owner/repo/pull/2"
+        },
+        "fieldValuesByFieldId": {},
+        "id": "item-2",
+        "itemType": "PULL_REQUEST"
+      }
+    },
+    "942210205c5d": {
+      "name": "prFileCommentDrafts",
+      "ordinal": 22,
+      "value": {}
+    },
+    "95184e01a147": {
+      "contents": {
+        "src/index.ts": {
+          "error": "refused"
+        }
+      },
+      "error": "",
+      "mutating": false,
+      "row": {
+        "content": {
+          "assignees": [],
+          "body": "Project pull request body",
+          "issueType": {
+            "$rpc": "null"
+          },
+          "labels": [],
+          "number": 2,
+          "repository": "owner/repo",
+          "state": "MERGED",
+          "title": "Project pull request",
+          "url": "https://github.enterprise.test/owner/repo/pull/2"
+        },
+        "fieldValuesByFieldId": {},
+        "id": "item-2",
+        "itemType": "PULL_REQUEST"
+      }
+    },
+    "9f1cbc7d5c35": {
+      "name": "projectRowDetailError",
+      "ordinal": 14,
+      "value": "outer refused"
+    },
+    "9f963399c2ce": {
+      "name": "mutatingStatus",
+      "ordinal": 36,
+      "value": false
+    },
+    "a3113e662699": {
+      "contents": {},
+      "error": "",
+      "mutating": false,
+      "row": {
+        "content": {
+          "assignees": [],
+          "body": "Project pull request body",
+          "issueType": {
+            "$rpc": "null"
+          },
+          "labels": [],
+          "number": 2,
+          "repository": "owner/repo",
+          "state": "MERGED",
+          "title": "Project pull request",
+          "url": "https://github.enterprise.test/owner/repo/pull/2"
+        },
+        "fieldValuesByFieldId": {},
+        "id": "item-2",
+        "itemType": "PULL_REQUEST"
+      }
+    },
+    "a6f1fd854afa": {
+      "name": "prFileContents",
+      "ordinal": 6,
+      "value": {}
+    },
+    "a7480d9dd9a2": {
+      "name": "github.updatePRState#1",
+      "ordinal": 38,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.updatePRState"
+        },
+        {
+          "name": "params",
+          "value": {
+            "prNumber": 12,
+            "prRepo": {
+              "host": "github.com",
+              "owner": "owner",
+              "repo": "repo"
+            },
+            "repo": "id:repo-1",
+            "updates": {
+              "state": "closed"
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-6",
+          "ok": true,
+          "result": {
+            "ok": true
+          }
+        }
+      }
+    },
+    "a9d38c3e95dd": {
+      "name": "prFileContents",
+      "ordinal": 14,
+      "value": {
+        "src/index.ts": {
+          "error": {
+            "message": "inner refused"
+          },
+          "ok": false
+        }
+      }
+    },
+    "aba945c58a7f": {
+      "name": "projectMutating",
+      "ordinal": 21,
+      "value": false
+    },
+    "ad362e2aebe2": {
+      "name": "status.get#1",
+      "ordinal": 31,
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "beforeSend": "[local beforeSend]",
+            "failWhenDisconnected": true,
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-4",
+          "ok": true,
+          "result": {
+            "capabilities": ["github.exact-work-item-target.v1"],
+            "hostDescriptor": {
+              "installationId": "recorded"
+            },
+            "runtimeId": "recorded"
+          }
+        }
+      }
+    },
+    "b3ac1e3114bf": {
+      "name": "projectRowDetailError",
+      "ordinal": 24,
+      "value": ""
+    },
+    "b3ff73919780": {
+      "name": "status.get#1",
+      "ordinal": 33,
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
+    },
+    "bff535848bcf": {
+      "name": "projectRowDetailError",
+      "ordinal": 17,
+      "value": ""
+    },
+    "c0f0a440afe3": {
+      "name": "mutatingStatus",
+      "ordinal": 32,
+      "value": true
+    },
+    "c2ebef7f076f": {
+      "name": "projectMutating",
+      "ordinal": 29,
+      "value": false
+    },
+    "c3341bcbbaa3": {
+      "name": "projectRowItem",
+      "ordinal": 27,
+      "value": {
+        "content": {
+          "assignees": [],
+          "body": "Project pull request body",
+          "issueType": {
+            "$rpc": "null"
+          },
+          "labels": [],
+          "number": 2,
+          "repository": "owner/repo",
+          "state": "MERGED",
+          "title": "Project pull request",
+          "url": "https://github.enterprise.test/owner/repo/pull/2"
+        },
+        "fieldValuesByFieldId": {},
+        "id": "item-2",
+        "itemType": "PULL_REQUEST"
+      }
+    },
+    "c6b185002fec": {
+      "name": "github.prFileContents#1",
+      "ordinal": 13,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.prFileContents\",\"params\":{\"repo\":\"id:repo-1\",\"prNumber\":2,\"prRepo\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\"},\"path\":\"src/index.ts\",\"status\":\"modified\",\"headSha\":\"head-sha\",\"baseSha\":\"base-sha\"}}"
+    },
+    "c858cb8b4846": {
+      "name": "prFileCommentDrafts",
+      "ordinal": 5,
+      "value": {}
+    },
+    "ca024c503a01": {
+      "name": "github.updateIssue#1",
+      "ordinal": 34,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.updateIssue"
+        },
+        {
+          "name": "params",
+          "value": {
+            "number": 9,
+            "ownerRepo": {
+              "host": "github.com",
+              "owner": "owner",
+              "repo": "repo"
+            },
+            "repo": "id:repo-1",
+            "updates": {
+              "state": "closed"
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "beforeSend": "[local beforeSend]",
+            "envelope": {
+              "expectedRuntimeSource": {
+                "runtimeId": "recorded",
+                "sourceId": "recorded"
+              }
+            },
+            "failWhenDisconnected": true,
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-5",
+          "ok": true,
+          "result": {
+            "ok": true
+          }
+        }
+      }
+    },
+    "cc2ece9478f0": {
+      "name": "actionItem",
+      "ordinal": 1,
+      "value": {
+        "$rpc": "null"
+      }
+    },
+    "d4a23b3fe28b": {
+      "name": "prFileCommentDrafts",
+      "ordinal": 8,
+      "value": {
+        "src/index.ts:12": "a review comment"
+      }
+    },
+    "d8aab48da993": {
+      "contents": {
+        "src/index.ts": {
+          "error": {
+            "message": "inner refused"
+          },
+          "ok": false
+        }
+      },
+      "error": "",
+      "mutating": false,
+      "row": {
+        "content": {
+          "assignees": [],
+          "body": "Project pull request body",
+          "issueType": {
+            "$rpc": "null"
+          },
+          "labels": [],
+          "number": 2,
+          "repository": "owner/repo",
+          "state": "MERGED",
+          "title": "Project pull request",
+          "url": "https://github.enterprise.test/owner/repo/pull/2"
+        },
+        "fieldValuesByFieldId": {},
+        "id": "item-2",
+        "itemType": "PULL_REQUEST"
+      }
+    },
+    "dccea7ccf5b9": {
+      "name": "github.prFileContents#1",
+      "ordinal": 10,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.prFileContents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "baseSha": "base-sha",
+            "headSha": "head-sha",
+            "oldPath": {
+              "$rpc": "undefined"
+            },
+            "path": "src/index.ts",
+            "prNumber": 2,
+            "prRepo": {
+              "host": "github.enterprise.test",
+              "owner": "owner",
+              "repo": "repo"
+            },
+            "repo": "id:repo-1",
+            "status": "modified"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "dda49aeb3971": {
+      "name": "projectMutating",
+      "ordinal": 23,
+      "value": true
+    },
+    "e3de0d18d0dc": {
+      "name": "github.addPRReviewComment#1",
+      "ordinal": 18,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.addPRReviewComment"
+        },
+        {
+          "name": "params",
+          "value": {
+            "body": "a review comment",
+            "commitId": "head-sha",
+            "line": 12,
+            "path": "src/index.ts",
+            "prNumber": 2,
+            "prRepo": {
+              "host": "github.enterprise.test",
+              "owner": "owner",
+              "repo": "repo"
+            },
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "comment": {
+              "author": "You",
+              "body": "a review comment",
+              "createdAt": "2020-01-01T00:00:00.000Z",
+              "id": 901,
+              "line": 12,
+              "path": "src/index.ts"
+            },
+            "ok": true
+          }
+        }
+      }
+    },
+    "e85ac5bc1e52": {
+      "name": "prFileLoadingPath",
+      "ordinal": 12,
+      "value": "src/index.ts"
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "ebffceebdc52": {
+      "name": "github.prFileContents#1",
+      "ordinal": 10,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.prFileContents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "baseSha": "base-sha",
+            "headSha": "head-sha",
+            "oldPath": {
+              "$rpc": "undefined"
+            },
+            "path": "src/index.ts",
+            "prNumber": 2,
+            "prRepo": {
+              "host": "github.enterprise.test",
+              "owner": "owner",
+              "repo": "repo"
+            },
+            "repo": "id:repo-1",
+            "status": "modified"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "eda130337c99": {
+      "name": "detailPayload",
+      "ordinal": 2,
+      "value": {
+        "$rpc": "null"
+      }
+    },
+    "f5c29abaf308": {
+      "name": "github.mergePR#1",
+      "ordinal": 26,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"github.mergePR\",\"params\":{\"repo\":\"id:repo-1\",\"prNumber\":2,\"prRepo\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\"},\"method\":\"squash\"}}"
+    },
+    "fa860899f47a": {
+      "name": "expandedPrFilePath",
+      "ordinal": 11,
+      "value": "src/index.ts"
+    }
+  },
+  "recording": {
+    "scenario": "matrix-tasks.project-row-files-merge-github.prfilecontents-1",
+    "checkpoints": [
+      {
+        "id": "tk-project-row-files-merge.normal:expand-settled",
+        "observation": {
+          "sender": ["8d7ac6f2573d"],
+          "payloads": ["c6b185002fec"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "expand-0": "eb79a9b3682a"
+          },
+          "state": "033080c46df7",
+          "effects": [
+            "cc2ece9478f0",
+            "eda130337c99",
+            "658dac7df662",
+            "42be1ca2bc40",
+            "c858cb8b4846",
+            "a6f1fd854afa",
+            "662cbccd78cb",
+            "d4a23b3fe28b",
+            "44c2e6541ebd",
+            "fa860899f47a",
+            "e85ac5bc1e52",
+            "7d33c355aeac",
+            "3e0c86d3ff78"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-files-merge.normal:file-comment-settled",
+        "observation": {
+          "sender": ["8d7ac6f2573d", "e3de0d18d0dc"],
+          "payloads": ["c6b185002fec", "899dc22eb082"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "expand-0": "eb79a9b3682a",
+            "file-comment-1": "eb79a9b3682a"
+          },
+          "state": "033080c46df7",
+          "effects": [
+            "cc2ece9478f0",
+            "eda130337c99",
+            "658dac7df662",
+            "42be1ca2bc40",
+            "c858cb8b4846",
+            "a6f1fd854afa",
+            "662cbccd78cb",
+            "d4a23b3fe28b",
+            "44c2e6541ebd",
+            "fa860899f47a",
+            "e85ac5bc1e52",
+            "7d33c355aeac",
+            "3e0c86d3ff78",
+            "8bb07f5e4ddb",
+            "bff535848bcf",
+            "4fe8ef09de5f",
+            "aba945c58a7f",
+            "942210205c5d"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-files-merge.normal:merge-settled",
+        "observation": {
+          "sender": ["8d7ac6f2573d", "e3de0d18d0dc", "8989e41d1c1e"],
+          "payloads": ["c6b185002fec", "899dc22eb082", "f5c29abaf308"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "expand-0": "eb79a9b3682a",
+            "file-comment-1": "eb79a9b3682a",
+            "merge-2": "eb79a9b3682a"
+          },
+          "state": "1bef2a9b13a1",
+          "effects": [
+            "cc2ece9478f0",
+            "eda130337c99",
+            "658dac7df662",
+            "42be1ca2bc40",
+            "c858cb8b4846",
+            "a6f1fd854afa",
+            "662cbccd78cb",
+            "d4a23b3fe28b",
+            "44c2e6541ebd",
+            "fa860899f47a",
+            "e85ac5bc1e52",
+            "7d33c355aeac",
+            "3e0c86d3ff78",
+            "8bb07f5e4ddb",
+            "bff535848bcf",
+            "4fe8ef09de5f",
+            "aba945c58a7f",
+            "942210205c5d",
+            "dda49aeb3971",
+            "b3ac1e3114bf",
+            "c3341bcbbaa3",
+            "3f9768efc421",
+            "c2ebef7f076f"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-files-merge.normal:issue-state-settled",
+        "observation": {
+          "sender": [
+            "8d7ac6f2573d",
+            "e3de0d18d0dc",
+            "8989e41d1c1e",
+            "ad362e2aebe2",
+            "ca024c503a01"
+          ],
+          "payloads": [
+            "c6b185002fec",
+            "899dc22eb082",
+            "f5c29abaf308",
+            "b3ff73919780",
+            "77324937aa89"
+          ],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "expand-0": "eb79a9b3682a",
+            "file-comment-1": "eb79a9b3682a",
+            "merge-2": "eb79a9b3682a",
+            "issue-state-3": "eb79a9b3682a"
+          },
+          "state": "1bef2a9b13a1",
+          "effects": [
+            "cc2ece9478f0",
+            "eda130337c99",
+            "658dac7df662",
+            "42be1ca2bc40",
+            "c858cb8b4846",
+            "a6f1fd854afa",
+            "662cbccd78cb",
+            "d4a23b3fe28b",
+            "44c2e6541ebd",
+            "fa860899f47a",
+            "e85ac5bc1e52",
+            "7d33c355aeac",
+            "3e0c86d3ff78",
+            "8bb07f5e4ddb",
+            "bff535848bcf",
+            "4fe8ef09de5f",
+            "aba945c58a7f",
+            "942210205c5d",
+            "dda49aeb3971",
+            "b3ac1e3114bf",
+            "c3341bcbbaa3",
+            "3f9768efc421",
+            "c2ebef7f076f",
+            "8862f0950552",
+            "c0f0a440afe3",
+            "9f963399c2ce"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-files-merge.normal:pr-state-settled",
+        "observation": {
+          "sender": [
+            "8d7ac6f2573d",
+            "e3de0d18d0dc",
+            "8989e41d1c1e",
+            "ad362e2aebe2",
+            "ca024c503a01",
+            "a7480d9dd9a2"
+          ],
+          "payloads": [
+            "c6b185002fec",
+            "899dc22eb082",
+            "f5c29abaf308",
+            "b3ff73919780",
+            "77324937aa89",
+            "39ae33a4e8d3"
+          ],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "expand-0": "eb79a9b3682a",
+            "file-comment-1": "eb79a9b3682a",
+            "merge-2": "eb79a9b3682a",
+            "issue-state-3": "eb79a9b3682a",
+            "pr-state-4": "eb79a9b3682a"
+          },
+          "state": "1bef2a9b13a1",
+          "effects": [
+            "cc2ece9478f0",
+            "eda130337c99",
+            "658dac7df662",
+            "42be1ca2bc40",
+            "c858cb8b4846",
+            "a6f1fd854afa",
+            "662cbccd78cb",
+            "d4a23b3fe28b",
+            "44c2e6541ebd",
+            "fa860899f47a",
+            "e85ac5bc1e52",
+            "7d33c355aeac",
+            "3e0c86d3ff78",
+            "8bb07f5e4ddb",
+            "bff535848bcf",
+            "4fe8ef09de5f",
+            "aba945c58a7f",
+            "942210205c5d",
+            "dda49aeb3971",
+            "b3ac1e3114bf",
+            "c3341bcbbaa3",
+            "3f9768efc421",
+            "c2ebef7f076f",
+            "8862f0950552",
+            "c0f0a440afe3",
+            "9f963399c2ce",
+            "2141fc3d6fbb",
+            "60e8d2f72874",
+            "8d4edaf085d8"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-files-merge.result-absent:expand-settled",
+        "observation": {
+          "sender": ["058cf46d652d"],
+          "payloads": ["c6b185002fec"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "expand-0": "eb79a9b3682a"
+          },
+          "state": "922be13b96f2",
+          "effects": [
+            "cc2ece9478f0",
+            "eda130337c99",
+            "658dac7df662",
+            "42be1ca2bc40",
+            "c858cb8b4846",
+            "a6f1fd854afa",
+            "662cbccd78cb",
+            "d4a23b3fe28b",
+            "44c2e6541ebd",
+            "fa860899f47a",
+            "e85ac5bc1e52",
+            "494eb7340666",
+            "3e0c86d3ff78"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-files-merge.result-absent:file-comment-settled",
+        "observation": {
+          "sender": ["058cf46d652d", "e3de0d18d0dc"],
+          "payloads": ["c6b185002fec", "899dc22eb082"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "expand-0": "eb79a9b3682a",
+            "file-comment-1": "eb79a9b3682a"
+          },
+          "state": "4366c8884dbd",
+          "effects": [
+            "cc2ece9478f0",
+            "eda130337c99",
+            "658dac7df662",
+            "42be1ca2bc40",
+            "c858cb8b4846",
+            "a6f1fd854afa",
+            "662cbccd78cb",
+            "d4a23b3fe28b",
+            "44c2e6541ebd",
+            "fa860899f47a",
+            "e85ac5bc1e52",
+            "494eb7340666",
+            "3e0c86d3ff78",
+            "8bb07f5e4ddb",
+            "bff535848bcf",
+            "4fe8ef09de5f",
+            "aba945c58a7f",
+            "942210205c5d"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-files-merge.result-absent:merge-settled",
+        "observation": {
+          "sender": ["058cf46d652d", "e3de0d18d0dc", "8989e41d1c1e"],
+          "payloads": ["c6b185002fec", "899dc22eb082", "f5c29abaf308"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "expand-0": "eb79a9b3682a",
+            "file-comment-1": "eb79a9b3682a",
+            "merge-2": "eb79a9b3682a"
+          },
+          "state": "a3113e662699",
+          "effects": [
+            "cc2ece9478f0",
+            "eda130337c99",
+            "658dac7df662",
+            "42be1ca2bc40",
+            "c858cb8b4846",
+            "a6f1fd854afa",
+            "662cbccd78cb",
+            "d4a23b3fe28b",
+            "44c2e6541ebd",
+            "fa860899f47a",
+            "e85ac5bc1e52",
+            "494eb7340666",
+            "3e0c86d3ff78",
+            "8bb07f5e4ddb",
+            "bff535848bcf",
+            "4fe8ef09de5f",
+            "aba945c58a7f",
+            "942210205c5d",
+            "dda49aeb3971",
+            "b3ac1e3114bf",
+            "c3341bcbbaa3",
+            "3f9768efc421",
+            "c2ebef7f076f"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-files-merge.result-absent:issue-state-settled",
+        "observation": {
+          "sender": [
+            "058cf46d652d",
+            "e3de0d18d0dc",
+            "8989e41d1c1e",
+            "ad362e2aebe2",
+            "ca024c503a01"
+          ],
+          "payloads": [
+            "c6b185002fec",
+            "899dc22eb082",
+            "f5c29abaf308",
+            "b3ff73919780",
+            "77324937aa89"
+          ],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "expand-0": "eb79a9b3682a",
+            "file-comment-1": "eb79a9b3682a",
+            "merge-2": "eb79a9b3682a",
+            "issue-state-3": "eb79a9b3682a"
+          },
+          "state": "a3113e662699",
+          "effects": [
+            "cc2ece9478f0",
+            "eda130337c99",
+            "658dac7df662",
+            "42be1ca2bc40",
+            "c858cb8b4846",
+            "a6f1fd854afa",
+            "662cbccd78cb",
+            "d4a23b3fe28b",
+            "44c2e6541ebd",
+            "fa860899f47a",
+            "e85ac5bc1e52",
+            "494eb7340666",
+            "3e0c86d3ff78",
+            "8bb07f5e4ddb",
+            "bff535848bcf",
+            "4fe8ef09de5f",
+            "aba945c58a7f",
+            "942210205c5d",
+            "dda49aeb3971",
+            "b3ac1e3114bf",
+            "c3341bcbbaa3",
+            "3f9768efc421",
+            "c2ebef7f076f",
+            "8862f0950552",
+            "c0f0a440afe3",
+            "9f963399c2ce"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-files-merge.result-absent:pr-state-settled",
+        "observation": {
+          "sender": [
+            "058cf46d652d",
+            "e3de0d18d0dc",
+            "8989e41d1c1e",
+            "ad362e2aebe2",
+            "ca024c503a01",
+            "a7480d9dd9a2"
+          ],
+          "payloads": [
+            "c6b185002fec",
+            "899dc22eb082",
+            "f5c29abaf308",
+            "b3ff73919780",
+            "77324937aa89",
+            "39ae33a4e8d3"
+          ],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "expand-0": "eb79a9b3682a",
+            "file-comment-1": "eb79a9b3682a",
+            "merge-2": "eb79a9b3682a",
+            "issue-state-3": "eb79a9b3682a",
+            "pr-state-4": "eb79a9b3682a"
+          },
+          "state": "a3113e662699",
+          "effects": [
+            "cc2ece9478f0",
+            "eda130337c99",
+            "658dac7df662",
+            "42be1ca2bc40",
+            "c858cb8b4846",
+            "a6f1fd854afa",
+            "662cbccd78cb",
+            "d4a23b3fe28b",
+            "44c2e6541ebd",
+            "fa860899f47a",
+            "e85ac5bc1e52",
+            "494eb7340666",
+            "3e0c86d3ff78",
+            "8bb07f5e4ddb",
+            "bff535848bcf",
+            "4fe8ef09de5f",
+            "aba945c58a7f",
+            "942210205c5d",
+            "dda49aeb3971",
+            "b3ac1e3114bf",
+            "c3341bcbbaa3",
+            "3f9768efc421",
+            "c2ebef7f076f",
+            "8862f0950552",
+            "c0f0a440afe3",
+            "9f963399c2ce",
+            "2141fc3d6fbb",
+            "60e8d2f72874",
+            "8d4edaf085d8"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-files-merge.result-null:expand-settled",
+        "observation": {
+          "sender": ["0a27be2bb59e"],
+          "payloads": ["c6b185002fec"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "expand-0": "eb79a9b3682a"
+          },
+          "state": "922be13b96f2",
+          "effects": [
+            "cc2ece9478f0",
+            "eda130337c99",
+            "658dac7df662",
+            "42be1ca2bc40",
+            "c858cb8b4846",
+            "a6f1fd854afa",
+            "662cbccd78cb",
+            "d4a23b3fe28b",
+            "44c2e6541ebd",
+            "fa860899f47a",
+            "e85ac5bc1e52",
+            "494eb7340666",
+            "3e0c86d3ff78"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-files-merge.result-null:file-comment-settled",
+        "observation": {
+          "sender": ["0a27be2bb59e", "e3de0d18d0dc"],
+          "payloads": ["c6b185002fec", "899dc22eb082"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "expand-0": "eb79a9b3682a",
+            "file-comment-1": "eb79a9b3682a"
+          },
+          "state": "4366c8884dbd",
+          "effects": [
+            "cc2ece9478f0",
+            "eda130337c99",
+            "658dac7df662",
+            "42be1ca2bc40",
+            "c858cb8b4846",
+            "a6f1fd854afa",
+            "662cbccd78cb",
+            "d4a23b3fe28b",
+            "44c2e6541ebd",
+            "fa860899f47a",
+            "e85ac5bc1e52",
+            "494eb7340666",
+            "3e0c86d3ff78",
+            "8bb07f5e4ddb",
+            "bff535848bcf",
+            "4fe8ef09de5f",
+            "aba945c58a7f",
+            "942210205c5d"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-files-merge.result-null:merge-settled",
+        "observation": {
+          "sender": ["0a27be2bb59e", "e3de0d18d0dc", "8989e41d1c1e"],
+          "payloads": ["c6b185002fec", "899dc22eb082", "f5c29abaf308"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "expand-0": "eb79a9b3682a",
+            "file-comment-1": "eb79a9b3682a",
+            "merge-2": "eb79a9b3682a"
+          },
+          "state": "a3113e662699",
+          "effects": [
+            "cc2ece9478f0",
+            "eda130337c99",
+            "658dac7df662",
+            "42be1ca2bc40",
+            "c858cb8b4846",
+            "a6f1fd854afa",
+            "662cbccd78cb",
+            "d4a23b3fe28b",
+            "44c2e6541ebd",
+            "fa860899f47a",
+            "e85ac5bc1e52",
+            "494eb7340666",
+            "3e0c86d3ff78",
+            "8bb07f5e4ddb",
+            "bff535848bcf",
+            "4fe8ef09de5f",
+            "aba945c58a7f",
+            "942210205c5d",
+            "dda49aeb3971",
+            "b3ac1e3114bf",
+            "c3341bcbbaa3",
+            "3f9768efc421",
+            "c2ebef7f076f"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-files-merge.result-null:issue-state-settled",
+        "observation": {
+          "sender": [
+            "0a27be2bb59e",
+            "e3de0d18d0dc",
+            "8989e41d1c1e",
+            "ad362e2aebe2",
+            "ca024c503a01"
+          ],
+          "payloads": [
+            "c6b185002fec",
+            "899dc22eb082",
+            "f5c29abaf308",
+            "b3ff73919780",
+            "77324937aa89"
+          ],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "expand-0": "eb79a9b3682a",
+            "file-comment-1": "eb79a9b3682a",
+            "merge-2": "eb79a9b3682a",
+            "issue-state-3": "eb79a9b3682a"
+          },
+          "state": "a3113e662699",
+          "effects": [
+            "cc2ece9478f0",
+            "eda130337c99",
+            "658dac7df662",
+            "42be1ca2bc40",
+            "c858cb8b4846",
+            "a6f1fd854afa",
+            "662cbccd78cb",
+            "d4a23b3fe28b",
+            "44c2e6541ebd",
+            "fa860899f47a",
+            "e85ac5bc1e52",
+            "494eb7340666",
+            "3e0c86d3ff78",
+            "8bb07f5e4ddb",
+            "bff535848bcf",
+            "4fe8ef09de5f",
+            "aba945c58a7f",
+            "942210205c5d",
+            "dda49aeb3971",
+            "b3ac1e3114bf",
+            "c3341bcbbaa3",
+            "3f9768efc421",
+            "c2ebef7f076f",
+            "8862f0950552",
+            "c0f0a440afe3",
+            "9f963399c2ce"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-files-merge.result-null:pr-state-settled",
+        "observation": {
+          "sender": [
+            "0a27be2bb59e",
+            "e3de0d18d0dc",
+            "8989e41d1c1e",
+            "ad362e2aebe2",
+            "ca024c503a01",
+            "a7480d9dd9a2"
+          ],
+          "payloads": [
+            "c6b185002fec",
+            "899dc22eb082",
+            "f5c29abaf308",
+            "b3ff73919780",
+            "77324937aa89",
+            "39ae33a4e8d3"
+          ],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "expand-0": "eb79a9b3682a",
+            "file-comment-1": "eb79a9b3682a",
+            "merge-2": "eb79a9b3682a",
+            "issue-state-3": "eb79a9b3682a",
+            "pr-state-4": "eb79a9b3682a"
+          },
+          "state": "a3113e662699",
+          "effects": [
+            "cc2ece9478f0",
+            "eda130337c99",
+            "658dac7df662",
+            "42be1ca2bc40",
+            "c858cb8b4846",
+            "a6f1fd854afa",
+            "662cbccd78cb",
+            "d4a23b3fe28b",
+            "44c2e6541ebd",
+            "fa860899f47a",
+            "e85ac5bc1e52",
+            "494eb7340666",
+            "3e0c86d3ff78",
+            "8bb07f5e4ddb",
+            "bff535848bcf",
+            "4fe8ef09de5f",
+            "aba945c58a7f",
+            "942210205c5d",
+            "dda49aeb3971",
+            "b3ac1e3114bf",
+            "c3341bcbbaa3",
+            "3f9768efc421",
+            "c2ebef7f076f",
+            "8862f0950552",
+            "c0f0a440afe3",
+            "9f963399c2ce",
+            "2141fc3d6fbb",
+            "60e8d2f72874",
+            "8d4edaf085d8"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-files-merge.inner-ok-missing:expand-settled",
+        "observation": {
+          "sender": ["7c6b75268905"],
+          "payloads": ["c6b185002fec"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "expand-0": "eb79a9b3682a"
+          },
+          "state": "875e33a81c61",
+          "effects": [
+            "cc2ece9478f0",
+            "eda130337c99",
+            "658dac7df662",
+            "42be1ca2bc40",
+            "c858cb8b4846",
+            "a6f1fd854afa",
+            "662cbccd78cb",
+            "d4a23b3fe28b",
+            "44c2e6541ebd",
+            "fa860899f47a",
+            "e85ac5bc1e52",
+            "3b468c3062a8",
+            "3e0c86d3ff78"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-files-merge.inner-ok-missing:file-comment-settled",
+        "observation": {
+          "sender": ["7c6b75268905", "e3de0d18d0dc"],
+          "payloads": ["c6b185002fec", "899dc22eb082"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "expand-0": "eb79a9b3682a",
+            "file-comment-1": "eb79a9b3682a"
+          },
+          "state": "875e33a81c61",
+          "effects": [
+            "cc2ece9478f0",
+            "eda130337c99",
+            "658dac7df662",
+            "42be1ca2bc40",
+            "c858cb8b4846",
+            "a6f1fd854afa",
+            "662cbccd78cb",
+            "d4a23b3fe28b",
+            "44c2e6541ebd",
+            "fa860899f47a",
+            "e85ac5bc1e52",
+            "3b468c3062a8",
+            "3e0c86d3ff78",
+            "8bb07f5e4ddb",
+            "bff535848bcf",
+            "4fe8ef09de5f",
+            "aba945c58a7f",
+            "942210205c5d"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-files-merge.inner-ok-missing:merge-settled",
+        "observation": {
+          "sender": ["7c6b75268905", "e3de0d18d0dc", "8989e41d1c1e"],
+          "payloads": ["c6b185002fec", "899dc22eb082", "f5c29abaf308"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "expand-0": "eb79a9b3682a",
+            "file-comment-1": "eb79a9b3682a",
+            "merge-2": "eb79a9b3682a"
+          },
+          "state": "95184e01a147",
+          "effects": [
+            "cc2ece9478f0",
+            "eda130337c99",
+            "658dac7df662",
+            "42be1ca2bc40",
+            "c858cb8b4846",
+            "a6f1fd854afa",
+            "662cbccd78cb",
+            "d4a23b3fe28b",
+            "44c2e6541ebd",
+            "fa860899f47a",
+            "e85ac5bc1e52",
+            "3b468c3062a8",
+            "3e0c86d3ff78",
+            "8bb07f5e4ddb",
+            "bff535848bcf",
+            "4fe8ef09de5f",
+            "aba945c58a7f",
+            "942210205c5d",
+            "dda49aeb3971",
+            "b3ac1e3114bf",
+            "c3341bcbbaa3",
+            "3f9768efc421",
+            "c2ebef7f076f"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-files-merge.inner-ok-missing:issue-state-settled",
+        "observation": {
+          "sender": [
+            "7c6b75268905",
+            "e3de0d18d0dc",
+            "8989e41d1c1e",
+            "ad362e2aebe2",
+            "ca024c503a01"
+          ],
+          "payloads": [
+            "c6b185002fec",
+            "899dc22eb082",
+            "f5c29abaf308",
+            "b3ff73919780",
+            "77324937aa89"
+          ],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "expand-0": "eb79a9b3682a",
+            "file-comment-1": "eb79a9b3682a",
+            "merge-2": "eb79a9b3682a",
+            "issue-state-3": "eb79a9b3682a"
+          },
+          "state": "95184e01a147",
+          "effects": [
+            "cc2ece9478f0",
+            "eda130337c99",
+            "658dac7df662",
+            "42be1ca2bc40",
+            "c858cb8b4846",
+            "a6f1fd854afa",
+            "662cbccd78cb",
+            "d4a23b3fe28b",
+            "44c2e6541ebd",
+            "fa860899f47a",
+            "e85ac5bc1e52",
+            "3b468c3062a8",
+            "3e0c86d3ff78",
+            "8bb07f5e4ddb",
+            "bff535848bcf",
+            "4fe8ef09de5f",
+            "aba945c58a7f",
+            "942210205c5d",
+            "dda49aeb3971",
+            "b3ac1e3114bf",
+            "c3341bcbbaa3",
+            "3f9768efc421",
+            "c2ebef7f076f",
+            "8862f0950552",
+            "c0f0a440afe3",
+            "9f963399c2ce"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-files-merge.inner-ok-missing:pr-state-settled",
+        "observation": {
+          "sender": [
+            "7c6b75268905",
+            "e3de0d18d0dc",
+            "8989e41d1c1e",
+            "ad362e2aebe2",
+            "ca024c503a01",
+            "a7480d9dd9a2"
+          ],
+          "payloads": [
+            "c6b185002fec",
+            "899dc22eb082",
+            "f5c29abaf308",
+            "b3ff73919780",
+            "77324937aa89",
+            "39ae33a4e8d3"
+          ],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "expand-0": "eb79a9b3682a",
+            "file-comment-1": "eb79a9b3682a",
+            "merge-2": "eb79a9b3682a",
+            "issue-state-3": "eb79a9b3682a",
+            "pr-state-4": "eb79a9b3682a"
+          },
+          "state": "95184e01a147",
+          "effects": [
+            "cc2ece9478f0",
+            "eda130337c99",
+            "658dac7df662",
+            "42be1ca2bc40",
+            "c858cb8b4846",
+            "a6f1fd854afa",
+            "662cbccd78cb",
+            "d4a23b3fe28b",
+            "44c2e6541ebd",
+            "fa860899f47a",
+            "e85ac5bc1e52",
+            "3b468c3062a8",
+            "3e0c86d3ff78",
+            "8bb07f5e4ddb",
+            "bff535848bcf",
+            "4fe8ef09de5f",
+            "aba945c58a7f",
+            "942210205c5d",
+            "dda49aeb3971",
+            "b3ac1e3114bf",
+            "c3341bcbbaa3",
+            "3f9768efc421",
+            "c2ebef7f076f",
+            "8862f0950552",
+            "c0f0a440afe3",
+            "9f963399c2ce",
+            "2141fc3d6fbb",
+            "60e8d2f72874",
+            "8d4edaf085d8"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-files-merge.inner-false-string-error:expand-settled",
+        "observation": {
+          "sender": ["9140ae079dc3"],
+          "payloads": ["c6b185002fec"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "expand-0": "eb79a9b3682a"
+          },
+          "state": "03cbeb9836aa",
+          "effects": [
+            "cc2ece9478f0",
+            "eda130337c99",
+            "658dac7df662",
+            "42be1ca2bc40",
+            "c858cb8b4846",
+            "a6f1fd854afa",
+            "662cbccd78cb",
+            "d4a23b3fe28b",
+            "44c2e6541ebd",
+            "fa860899f47a",
+            "e85ac5bc1e52",
+            "595f7991ecf7",
+            "3e0c86d3ff78"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-files-merge.inner-false-string-error:file-comment-settled",
+        "observation": {
+          "sender": ["9140ae079dc3", "e3de0d18d0dc"],
+          "payloads": ["c6b185002fec", "899dc22eb082"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "expand-0": "eb79a9b3682a",
+            "file-comment-1": "eb79a9b3682a"
+          },
+          "state": "03cbeb9836aa",
+          "effects": [
+            "cc2ece9478f0",
+            "eda130337c99",
+            "658dac7df662",
+            "42be1ca2bc40",
+            "c858cb8b4846",
+            "a6f1fd854afa",
+            "662cbccd78cb",
+            "d4a23b3fe28b",
+            "44c2e6541ebd",
+            "fa860899f47a",
+            "e85ac5bc1e52",
+            "595f7991ecf7",
+            "3e0c86d3ff78",
+            "8bb07f5e4ddb",
+            "bff535848bcf",
+            "4fe8ef09de5f",
+            "aba945c58a7f",
+            "942210205c5d"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-files-merge.inner-false-string-error:merge-settled",
+        "observation": {
+          "sender": ["9140ae079dc3", "e3de0d18d0dc", "8989e41d1c1e"],
+          "payloads": ["c6b185002fec", "899dc22eb082", "f5c29abaf308"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "expand-0": "eb79a9b3682a",
+            "file-comment-1": "eb79a9b3682a",
+            "merge-2": "eb79a9b3682a"
+          },
+          "state": "181cd5886ebc",
+          "effects": [
+            "cc2ece9478f0",
+            "eda130337c99",
+            "658dac7df662",
+            "42be1ca2bc40",
+            "c858cb8b4846",
+            "a6f1fd854afa",
+            "662cbccd78cb",
+            "d4a23b3fe28b",
+            "44c2e6541ebd",
+            "fa860899f47a",
+            "e85ac5bc1e52",
+            "595f7991ecf7",
+            "3e0c86d3ff78",
+            "8bb07f5e4ddb",
+            "bff535848bcf",
+            "4fe8ef09de5f",
+            "aba945c58a7f",
+            "942210205c5d",
+            "dda49aeb3971",
+            "b3ac1e3114bf",
+            "c3341bcbbaa3",
+            "3f9768efc421",
+            "c2ebef7f076f"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-files-merge.inner-false-string-error:issue-state-settled",
+        "observation": {
+          "sender": [
+            "9140ae079dc3",
+            "e3de0d18d0dc",
+            "8989e41d1c1e",
+            "ad362e2aebe2",
+            "ca024c503a01"
+          ],
+          "payloads": [
+            "c6b185002fec",
+            "899dc22eb082",
+            "f5c29abaf308",
+            "b3ff73919780",
+            "77324937aa89"
+          ],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "expand-0": "eb79a9b3682a",
+            "file-comment-1": "eb79a9b3682a",
+            "merge-2": "eb79a9b3682a",
+            "issue-state-3": "eb79a9b3682a"
+          },
+          "state": "181cd5886ebc",
+          "effects": [
+            "cc2ece9478f0",
+            "eda130337c99",
+            "658dac7df662",
+            "42be1ca2bc40",
+            "c858cb8b4846",
+            "a6f1fd854afa",
+            "662cbccd78cb",
+            "d4a23b3fe28b",
+            "44c2e6541ebd",
+            "fa860899f47a",
+            "e85ac5bc1e52",
+            "595f7991ecf7",
+            "3e0c86d3ff78",
+            "8bb07f5e4ddb",
+            "bff535848bcf",
+            "4fe8ef09de5f",
+            "aba945c58a7f",
+            "942210205c5d",
+            "dda49aeb3971",
+            "b3ac1e3114bf",
+            "c3341bcbbaa3",
+            "3f9768efc421",
+            "c2ebef7f076f",
+            "8862f0950552",
+            "c0f0a440afe3",
+            "9f963399c2ce"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-files-merge.inner-false-string-error:pr-state-settled",
+        "observation": {
+          "sender": [
+            "9140ae079dc3",
+            "e3de0d18d0dc",
+            "8989e41d1c1e",
+            "ad362e2aebe2",
+            "ca024c503a01",
+            "a7480d9dd9a2"
+          ],
+          "payloads": [
+            "c6b185002fec",
+            "899dc22eb082",
+            "f5c29abaf308",
+            "b3ff73919780",
+            "77324937aa89",
+            "39ae33a4e8d3"
+          ],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "expand-0": "eb79a9b3682a",
+            "file-comment-1": "eb79a9b3682a",
+            "merge-2": "eb79a9b3682a",
+            "issue-state-3": "eb79a9b3682a",
+            "pr-state-4": "eb79a9b3682a"
+          },
+          "state": "181cd5886ebc",
+          "effects": [
+            "cc2ece9478f0",
+            "eda130337c99",
+            "658dac7df662",
+            "42be1ca2bc40",
+            "c858cb8b4846",
+            "a6f1fd854afa",
+            "662cbccd78cb",
+            "d4a23b3fe28b",
+            "44c2e6541ebd",
+            "fa860899f47a",
+            "e85ac5bc1e52",
+            "595f7991ecf7",
+            "3e0c86d3ff78",
+            "8bb07f5e4ddb",
+            "bff535848bcf",
+            "4fe8ef09de5f",
+            "aba945c58a7f",
+            "942210205c5d",
+            "dda49aeb3971",
+            "b3ac1e3114bf",
+            "c3341bcbbaa3",
+            "3f9768efc421",
+            "c2ebef7f076f",
+            "8862f0950552",
+            "c0f0a440afe3",
+            "9f963399c2ce",
+            "2141fc3d6fbb",
+            "60e8d2f72874",
+            "8d4edaf085d8"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-files-merge.inner-false-object-error:expand-settled",
+        "observation": {
+          "sender": ["1b4a4c760bea"],
+          "payloads": ["c6b185002fec"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "expand-0": "eb79a9b3682a"
+          },
+          "state": "2aa5c6eda2ab",
+          "effects": [
+            "cc2ece9478f0",
+            "eda130337c99",
+            "658dac7df662",
+            "42be1ca2bc40",
+            "c858cb8b4846",
+            "a6f1fd854afa",
+            "662cbccd78cb",
+            "d4a23b3fe28b",
+            "44c2e6541ebd",
+            "fa860899f47a",
+            "e85ac5bc1e52",
+            "a9d38c3e95dd",
+            "3e0c86d3ff78"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-files-merge.inner-false-object-error:file-comment-settled",
+        "observation": {
+          "sender": ["1b4a4c760bea", "e3de0d18d0dc"],
+          "payloads": ["c6b185002fec", "899dc22eb082"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "expand-0": "eb79a9b3682a",
+            "file-comment-1": "eb79a9b3682a"
+          },
+          "state": "2aa5c6eda2ab",
+          "effects": [
+            "cc2ece9478f0",
+            "eda130337c99",
+            "658dac7df662",
+            "42be1ca2bc40",
+            "c858cb8b4846",
+            "a6f1fd854afa",
+            "662cbccd78cb",
+            "d4a23b3fe28b",
+            "44c2e6541ebd",
+            "fa860899f47a",
+            "e85ac5bc1e52",
+            "a9d38c3e95dd",
+            "3e0c86d3ff78",
+            "8bb07f5e4ddb",
+            "bff535848bcf",
+            "4fe8ef09de5f",
+            "aba945c58a7f",
+            "942210205c5d"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-files-merge.inner-false-object-error:merge-settled",
+        "observation": {
+          "sender": ["1b4a4c760bea", "e3de0d18d0dc", "8989e41d1c1e"],
+          "payloads": ["c6b185002fec", "899dc22eb082", "f5c29abaf308"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "expand-0": "eb79a9b3682a",
+            "file-comment-1": "eb79a9b3682a",
+            "merge-2": "eb79a9b3682a"
+          },
+          "state": "d8aab48da993",
+          "effects": [
+            "cc2ece9478f0",
+            "eda130337c99",
+            "658dac7df662",
+            "42be1ca2bc40",
+            "c858cb8b4846",
+            "a6f1fd854afa",
+            "662cbccd78cb",
+            "d4a23b3fe28b",
+            "44c2e6541ebd",
+            "fa860899f47a",
+            "e85ac5bc1e52",
+            "a9d38c3e95dd",
+            "3e0c86d3ff78",
+            "8bb07f5e4ddb",
+            "bff535848bcf",
+            "4fe8ef09de5f",
+            "aba945c58a7f",
+            "942210205c5d",
+            "dda49aeb3971",
+            "b3ac1e3114bf",
+            "c3341bcbbaa3",
+            "3f9768efc421",
+            "c2ebef7f076f"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-files-merge.inner-false-object-error:issue-state-settled",
+        "observation": {
+          "sender": [
+            "1b4a4c760bea",
+            "e3de0d18d0dc",
+            "8989e41d1c1e",
+            "ad362e2aebe2",
+            "ca024c503a01"
+          ],
+          "payloads": [
+            "c6b185002fec",
+            "899dc22eb082",
+            "f5c29abaf308",
+            "b3ff73919780",
+            "77324937aa89"
+          ],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "expand-0": "eb79a9b3682a",
+            "file-comment-1": "eb79a9b3682a",
+            "merge-2": "eb79a9b3682a",
+            "issue-state-3": "eb79a9b3682a"
+          },
+          "state": "d8aab48da993",
+          "effects": [
+            "cc2ece9478f0",
+            "eda130337c99",
+            "658dac7df662",
+            "42be1ca2bc40",
+            "c858cb8b4846",
+            "a6f1fd854afa",
+            "662cbccd78cb",
+            "d4a23b3fe28b",
+            "44c2e6541ebd",
+            "fa860899f47a",
+            "e85ac5bc1e52",
+            "a9d38c3e95dd",
+            "3e0c86d3ff78",
+            "8bb07f5e4ddb",
+            "bff535848bcf",
+            "4fe8ef09de5f",
+            "aba945c58a7f",
+            "942210205c5d",
+            "dda49aeb3971",
+            "b3ac1e3114bf",
+            "c3341bcbbaa3",
+            "3f9768efc421",
+            "c2ebef7f076f",
+            "8862f0950552",
+            "c0f0a440afe3",
+            "9f963399c2ce"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-files-merge.inner-false-object-error:pr-state-settled",
+        "observation": {
+          "sender": [
+            "1b4a4c760bea",
+            "e3de0d18d0dc",
+            "8989e41d1c1e",
+            "ad362e2aebe2",
+            "ca024c503a01",
+            "a7480d9dd9a2"
+          ],
+          "payloads": [
+            "c6b185002fec",
+            "899dc22eb082",
+            "f5c29abaf308",
+            "b3ff73919780",
+            "77324937aa89",
+            "39ae33a4e8d3"
+          ],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "expand-0": "eb79a9b3682a",
+            "file-comment-1": "eb79a9b3682a",
+            "merge-2": "eb79a9b3682a",
+            "issue-state-3": "eb79a9b3682a",
+            "pr-state-4": "eb79a9b3682a"
+          },
+          "state": "d8aab48da993",
+          "effects": [
+            "cc2ece9478f0",
+            "eda130337c99",
+            "658dac7df662",
+            "42be1ca2bc40",
+            "c858cb8b4846",
+            "a6f1fd854afa",
+            "662cbccd78cb",
+            "d4a23b3fe28b",
+            "44c2e6541ebd",
+            "fa860899f47a",
+            "e85ac5bc1e52",
+            "a9d38c3e95dd",
+            "3e0c86d3ff78",
+            "8bb07f5e4ddb",
+            "bff535848bcf",
+            "4fe8ef09de5f",
+            "aba945c58a7f",
+            "942210205c5d",
+            "dda49aeb3971",
+            "b3ac1e3114bf",
+            "c3341bcbbaa3",
+            "3f9768efc421",
+            "c2ebef7f076f",
+            "8862f0950552",
+            "c0f0a440afe3",
+            "9f963399c2ce",
+            "2141fc3d6fbb",
+            "60e8d2f72874",
+            "8d4edaf085d8"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-files-merge.outer-refused:expand-settled",
+        "observation": {
+          "sender": ["dccea7ccf5b9"],
+          "payloads": ["c6b185002fec"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "expand-0": "eb79a9b3682a"
+          },
+          "state": "352091a6a533",
+          "effects": [
+            "cc2ece9478f0",
+            "eda130337c99",
+            "658dac7df662",
+            "42be1ca2bc40",
+            "c858cb8b4846",
+            "a6f1fd854afa",
+            "662cbccd78cb",
+            "d4a23b3fe28b",
+            "44c2e6541ebd",
+            "fa860899f47a",
+            "e85ac5bc1e52",
+            "9f1cbc7d5c35",
+            "3e0c86d3ff78"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-files-merge.outer-refused:file-comment-settled",
+        "observation": {
+          "sender": ["dccea7ccf5b9", "e3de0d18d0dc"],
+          "payloads": ["c6b185002fec", "899dc22eb082"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "expand-0": "eb79a9b3682a",
+            "file-comment-1": "eb79a9b3682a"
+          },
+          "state": "4366c8884dbd",
+          "effects": [
+            "cc2ece9478f0",
+            "eda130337c99",
+            "658dac7df662",
+            "42be1ca2bc40",
+            "c858cb8b4846",
+            "a6f1fd854afa",
+            "662cbccd78cb",
+            "d4a23b3fe28b",
+            "44c2e6541ebd",
+            "fa860899f47a",
+            "e85ac5bc1e52",
+            "9f1cbc7d5c35",
+            "3e0c86d3ff78",
+            "8bb07f5e4ddb",
+            "bff535848bcf",
+            "4fe8ef09de5f",
+            "aba945c58a7f",
+            "942210205c5d"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-files-merge.outer-refused:merge-settled",
+        "observation": {
+          "sender": ["dccea7ccf5b9", "e3de0d18d0dc", "8989e41d1c1e"],
+          "payloads": ["c6b185002fec", "899dc22eb082", "f5c29abaf308"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "expand-0": "eb79a9b3682a",
+            "file-comment-1": "eb79a9b3682a",
+            "merge-2": "eb79a9b3682a"
+          },
+          "state": "a3113e662699",
+          "effects": [
+            "cc2ece9478f0",
+            "eda130337c99",
+            "658dac7df662",
+            "42be1ca2bc40",
+            "c858cb8b4846",
+            "a6f1fd854afa",
+            "662cbccd78cb",
+            "d4a23b3fe28b",
+            "44c2e6541ebd",
+            "fa860899f47a",
+            "e85ac5bc1e52",
+            "9f1cbc7d5c35",
+            "3e0c86d3ff78",
+            "8bb07f5e4ddb",
+            "bff535848bcf",
+            "4fe8ef09de5f",
+            "aba945c58a7f",
+            "942210205c5d",
+            "dda49aeb3971",
+            "b3ac1e3114bf",
+            "c3341bcbbaa3",
+            "3f9768efc421",
+            "c2ebef7f076f"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-files-merge.outer-refused:issue-state-settled",
+        "observation": {
+          "sender": [
+            "dccea7ccf5b9",
+            "e3de0d18d0dc",
+            "8989e41d1c1e",
+            "ad362e2aebe2",
+            "ca024c503a01"
+          ],
+          "payloads": [
+            "c6b185002fec",
+            "899dc22eb082",
+            "f5c29abaf308",
+            "b3ff73919780",
+            "77324937aa89"
+          ],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "expand-0": "eb79a9b3682a",
+            "file-comment-1": "eb79a9b3682a",
+            "merge-2": "eb79a9b3682a",
+            "issue-state-3": "eb79a9b3682a"
+          },
+          "state": "a3113e662699",
+          "effects": [
+            "cc2ece9478f0",
+            "eda130337c99",
+            "658dac7df662",
+            "42be1ca2bc40",
+            "c858cb8b4846",
+            "a6f1fd854afa",
+            "662cbccd78cb",
+            "d4a23b3fe28b",
+            "44c2e6541ebd",
+            "fa860899f47a",
+            "e85ac5bc1e52",
+            "9f1cbc7d5c35",
+            "3e0c86d3ff78",
+            "8bb07f5e4ddb",
+            "bff535848bcf",
+            "4fe8ef09de5f",
+            "aba945c58a7f",
+            "942210205c5d",
+            "dda49aeb3971",
+            "b3ac1e3114bf",
+            "c3341bcbbaa3",
+            "3f9768efc421",
+            "c2ebef7f076f",
+            "8862f0950552",
+            "c0f0a440afe3",
+            "9f963399c2ce"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-files-merge.outer-refused:pr-state-settled",
+        "observation": {
+          "sender": [
+            "dccea7ccf5b9",
+            "e3de0d18d0dc",
+            "8989e41d1c1e",
+            "ad362e2aebe2",
+            "ca024c503a01",
+            "a7480d9dd9a2"
+          ],
+          "payloads": [
+            "c6b185002fec",
+            "899dc22eb082",
+            "f5c29abaf308",
+            "b3ff73919780",
+            "77324937aa89",
+            "39ae33a4e8d3"
+          ],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "expand-0": "eb79a9b3682a",
+            "file-comment-1": "eb79a9b3682a",
+            "merge-2": "eb79a9b3682a",
+            "issue-state-3": "eb79a9b3682a",
+            "pr-state-4": "eb79a9b3682a"
+          },
+          "state": "a3113e662699",
+          "effects": [
+            "cc2ece9478f0",
+            "eda130337c99",
+            "658dac7df662",
+            "42be1ca2bc40",
+            "c858cb8b4846",
+            "a6f1fd854afa",
+            "662cbccd78cb",
+            "d4a23b3fe28b",
+            "44c2e6541ebd",
+            "fa860899f47a",
+            "e85ac5bc1e52",
+            "9f1cbc7d5c35",
+            "3e0c86d3ff78",
+            "8bb07f5e4ddb",
+            "bff535848bcf",
+            "4fe8ef09de5f",
+            "aba945c58a7f",
+            "942210205c5d",
+            "dda49aeb3971",
+            "b3ac1e3114bf",
+            "c3341bcbbaa3",
+            "3f9768efc421",
+            "c2ebef7f076f",
+            "8862f0950552",
+            "c0f0a440afe3",
+            "9f963399c2ce",
+            "2141fc3d6fbb",
+            "60e8d2f72874",
+            "8d4edaf085d8"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-files-merge.outer-refused-no-message:expand-settled",
+        "observation": {
+          "sender": ["3d4dab1d4a3e"],
+          "payloads": ["c6b185002fec"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "expand-0": "eb79a9b3682a"
+          },
+          "state": "4366c8884dbd",
+          "effects": [
+            "cc2ece9478f0",
+            "eda130337c99",
+            "658dac7df662",
+            "42be1ca2bc40",
+            "c858cb8b4846",
+            "a6f1fd854afa",
+            "662cbccd78cb",
+            "d4a23b3fe28b",
+            "44c2e6541ebd",
+            "fa860899f47a",
+            "e85ac5bc1e52",
+            "5c30b4794b57",
+            "3e0c86d3ff78"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-files-merge.outer-refused-no-message:file-comment-settled",
+        "observation": {
+          "sender": ["3d4dab1d4a3e", "e3de0d18d0dc"],
+          "payloads": ["c6b185002fec", "899dc22eb082"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "expand-0": "eb79a9b3682a",
+            "file-comment-1": "eb79a9b3682a"
+          },
+          "state": "4366c8884dbd",
+          "effects": [
+            "cc2ece9478f0",
+            "eda130337c99",
+            "658dac7df662",
+            "42be1ca2bc40",
+            "c858cb8b4846",
+            "a6f1fd854afa",
+            "662cbccd78cb",
+            "d4a23b3fe28b",
+            "44c2e6541ebd",
+            "fa860899f47a",
+            "e85ac5bc1e52",
+            "5c30b4794b57",
+            "3e0c86d3ff78",
+            "8bb07f5e4ddb",
+            "bff535848bcf",
+            "4fe8ef09de5f",
+            "aba945c58a7f",
+            "942210205c5d"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-files-merge.outer-refused-no-message:merge-settled",
+        "observation": {
+          "sender": ["3d4dab1d4a3e", "e3de0d18d0dc", "8989e41d1c1e"],
+          "payloads": ["c6b185002fec", "899dc22eb082", "f5c29abaf308"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "expand-0": "eb79a9b3682a",
+            "file-comment-1": "eb79a9b3682a",
+            "merge-2": "eb79a9b3682a"
+          },
+          "state": "a3113e662699",
+          "effects": [
+            "cc2ece9478f0",
+            "eda130337c99",
+            "658dac7df662",
+            "42be1ca2bc40",
+            "c858cb8b4846",
+            "a6f1fd854afa",
+            "662cbccd78cb",
+            "d4a23b3fe28b",
+            "44c2e6541ebd",
+            "fa860899f47a",
+            "e85ac5bc1e52",
+            "5c30b4794b57",
+            "3e0c86d3ff78",
+            "8bb07f5e4ddb",
+            "bff535848bcf",
+            "4fe8ef09de5f",
+            "aba945c58a7f",
+            "942210205c5d",
+            "dda49aeb3971",
+            "b3ac1e3114bf",
+            "c3341bcbbaa3",
+            "3f9768efc421",
+            "c2ebef7f076f"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-files-merge.outer-refused-no-message:issue-state-settled",
+        "observation": {
+          "sender": [
+            "3d4dab1d4a3e",
+            "e3de0d18d0dc",
+            "8989e41d1c1e",
+            "ad362e2aebe2",
+            "ca024c503a01"
+          ],
+          "payloads": [
+            "c6b185002fec",
+            "899dc22eb082",
+            "f5c29abaf308",
+            "b3ff73919780",
+            "77324937aa89"
+          ],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "expand-0": "eb79a9b3682a",
+            "file-comment-1": "eb79a9b3682a",
+            "merge-2": "eb79a9b3682a",
+            "issue-state-3": "eb79a9b3682a"
+          },
+          "state": "a3113e662699",
+          "effects": [
+            "cc2ece9478f0",
+            "eda130337c99",
+            "658dac7df662",
+            "42be1ca2bc40",
+            "c858cb8b4846",
+            "a6f1fd854afa",
+            "662cbccd78cb",
+            "d4a23b3fe28b",
+            "44c2e6541ebd",
+            "fa860899f47a",
+            "e85ac5bc1e52",
+            "5c30b4794b57",
+            "3e0c86d3ff78",
+            "8bb07f5e4ddb",
+            "bff535848bcf",
+            "4fe8ef09de5f",
+            "aba945c58a7f",
+            "942210205c5d",
+            "dda49aeb3971",
+            "b3ac1e3114bf",
+            "c3341bcbbaa3",
+            "3f9768efc421",
+            "c2ebef7f076f",
+            "8862f0950552",
+            "c0f0a440afe3",
+            "9f963399c2ce"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-files-merge.outer-refused-no-message:pr-state-settled",
+        "observation": {
+          "sender": [
+            "3d4dab1d4a3e",
+            "e3de0d18d0dc",
+            "8989e41d1c1e",
+            "ad362e2aebe2",
+            "ca024c503a01",
+            "a7480d9dd9a2"
+          ],
+          "payloads": [
+            "c6b185002fec",
+            "899dc22eb082",
+            "f5c29abaf308",
+            "b3ff73919780",
+            "77324937aa89",
+            "39ae33a4e8d3"
+          ],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "expand-0": "eb79a9b3682a",
+            "file-comment-1": "eb79a9b3682a",
+            "merge-2": "eb79a9b3682a",
+            "issue-state-3": "eb79a9b3682a",
+            "pr-state-4": "eb79a9b3682a"
+          },
+          "state": "a3113e662699",
+          "effects": [
+            "cc2ece9478f0",
+            "eda130337c99",
+            "658dac7df662",
+            "42be1ca2bc40",
+            "c858cb8b4846",
+            "a6f1fd854afa",
+            "662cbccd78cb",
+            "d4a23b3fe28b",
+            "44c2e6541ebd",
+            "fa860899f47a",
+            "e85ac5bc1e52",
+            "5c30b4794b57",
+            "3e0c86d3ff78",
+            "8bb07f5e4ddb",
+            "bff535848bcf",
+            "4fe8ef09de5f",
+            "aba945c58a7f",
+            "942210205c5d",
+            "dda49aeb3971",
+            "b3ac1e3114bf",
+            "c3341bcbbaa3",
+            "3f9768efc421",
+            "c2ebef7f076f",
+            "8862f0950552",
+            "c0f0a440afe3",
+            "9f963399c2ce",
+            "2141fc3d6fbb",
+            "60e8d2f72874",
+            "8d4edaf085d8"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-files-merge.method-not-found:expand-settled",
+        "observation": {
+          "sender": ["54db29822338"],
+          "payloads": ["c6b185002fec"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "expand-0": "eb79a9b3682a"
+          },
+          "state": "8a8297d29da8",
+          "effects": [
+            "cc2ece9478f0",
+            "eda130337c99",
+            "658dac7df662",
+            "42be1ca2bc40",
+            "c858cb8b4846",
+            "a6f1fd854afa",
+            "662cbccd78cb",
+            "d4a23b3fe28b",
+            "44c2e6541ebd",
+            "fa860899f47a",
+            "e85ac5bc1e52",
+            "3ad8c366dadb",
+            "3e0c86d3ff78"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-files-merge.method-not-found:file-comment-settled",
+        "observation": {
+          "sender": ["54db29822338", "e3de0d18d0dc"],
+          "payloads": ["c6b185002fec", "899dc22eb082"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "expand-0": "eb79a9b3682a",
+            "file-comment-1": "eb79a9b3682a"
+          },
+          "state": "4366c8884dbd",
+          "effects": [
+            "cc2ece9478f0",
+            "eda130337c99",
+            "658dac7df662",
+            "42be1ca2bc40",
+            "c858cb8b4846",
+            "a6f1fd854afa",
+            "662cbccd78cb",
+            "d4a23b3fe28b",
+            "44c2e6541ebd",
+            "fa860899f47a",
+            "e85ac5bc1e52",
+            "3ad8c366dadb",
+            "3e0c86d3ff78",
+            "8bb07f5e4ddb",
+            "bff535848bcf",
+            "4fe8ef09de5f",
+            "aba945c58a7f",
+            "942210205c5d"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-files-merge.method-not-found:merge-settled",
+        "observation": {
+          "sender": ["54db29822338", "e3de0d18d0dc", "8989e41d1c1e"],
+          "payloads": ["c6b185002fec", "899dc22eb082", "f5c29abaf308"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "expand-0": "eb79a9b3682a",
+            "file-comment-1": "eb79a9b3682a",
+            "merge-2": "eb79a9b3682a"
+          },
+          "state": "a3113e662699",
+          "effects": [
+            "cc2ece9478f0",
+            "eda130337c99",
+            "658dac7df662",
+            "42be1ca2bc40",
+            "c858cb8b4846",
+            "a6f1fd854afa",
+            "662cbccd78cb",
+            "d4a23b3fe28b",
+            "44c2e6541ebd",
+            "fa860899f47a",
+            "e85ac5bc1e52",
+            "3ad8c366dadb",
+            "3e0c86d3ff78",
+            "8bb07f5e4ddb",
+            "bff535848bcf",
+            "4fe8ef09de5f",
+            "aba945c58a7f",
+            "942210205c5d",
+            "dda49aeb3971",
+            "b3ac1e3114bf",
+            "c3341bcbbaa3",
+            "3f9768efc421",
+            "c2ebef7f076f"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-files-merge.method-not-found:issue-state-settled",
+        "observation": {
+          "sender": [
+            "54db29822338",
+            "e3de0d18d0dc",
+            "8989e41d1c1e",
+            "ad362e2aebe2",
+            "ca024c503a01"
+          ],
+          "payloads": [
+            "c6b185002fec",
+            "899dc22eb082",
+            "f5c29abaf308",
+            "b3ff73919780",
+            "77324937aa89"
+          ],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "expand-0": "eb79a9b3682a",
+            "file-comment-1": "eb79a9b3682a",
+            "merge-2": "eb79a9b3682a",
+            "issue-state-3": "eb79a9b3682a"
+          },
+          "state": "a3113e662699",
+          "effects": [
+            "cc2ece9478f0",
+            "eda130337c99",
+            "658dac7df662",
+            "42be1ca2bc40",
+            "c858cb8b4846",
+            "a6f1fd854afa",
+            "662cbccd78cb",
+            "d4a23b3fe28b",
+            "44c2e6541ebd",
+            "fa860899f47a",
+            "e85ac5bc1e52",
+            "3ad8c366dadb",
+            "3e0c86d3ff78",
+            "8bb07f5e4ddb",
+            "bff535848bcf",
+            "4fe8ef09de5f",
+            "aba945c58a7f",
+            "942210205c5d",
+            "dda49aeb3971",
+            "b3ac1e3114bf",
+            "c3341bcbbaa3",
+            "3f9768efc421",
+            "c2ebef7f076f",
+            "8862f0950552",
+            "c0f0a440afe3",
+            "9f963399c2ce"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-files-merge.method-not-found:pr-state-settled",
+        "observation": {
+          "sender": [
+            "54db29822338",
+            "e3de0d18d0dc",
+            "8989e41d1c1e",
+            "ad362e2aebe2",
+            "ca024c503a01",
+            "a7480d9dd9a2"
+          ],
+          "payloads": [
+            "c6b185002fec",
+            "899dc22eb082",
+            "f5c29abaf308",
+            "b3ff73919780",
+            "77324937aa89",
+            "39ae33a4e8d3"
+          ],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "expand-0": "eb79a9b3682a",
+            "file-comment-1": "eb79a9b3682a",
+            "merge-2": "eb79a9b3682a",
+            "issue-state-3": "eb79a9b3682a",
+            "pr-state-4": "eb79a9b3682a"
+          },
+          "state": "a3113e662699",
+          "effects": [
+            "cc2ece9478f0",
+            "eda130337c99",
+            "658dac7df662",
+            "42be1ca2bc40",
+            "c858cb8b4846",
+            "a6f1fd854afa",
+            "662cbccd78cb",
+            "d4a23b3fe28b",
+            "44c2e6541ebd",
+            "fa860899f47a",
+            "e85ac5bc1e52",
+            "3ad8c366dadb",
+            "3e0c86d3ff78",
+            "8bb07f5e4ddb",
+            "bff535848bcf",
+            "4fe8ef09de5f",
+            "aba945c58a7f",
+            "942210205c5d",
+            "dda49aeb3971",
+            "b3ac1e3114bf",
+            "c3341bcbbaa3",
+            "3f9768efc421",
+            "c2ebef7f076f",
+            "8862f0950552",
+            "c0f0a440afe3",
+            "9f963399c2ce",
+            "2141fc3d6fbb",
+            "60e8d2f72874",
+            "8d4edaf085d8"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-files-merge.transport-rejection:expand-settled",
+        "observation": {
+          "sender": ["ebffceebdc52"],
+          "payloads": ["c6b185002fec"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "expand-0": "eb79a9b3682a"
+          },
+          "state": "23e9450f41da",
+          "effects": [
+            "cc2ece9478f0",
+            "eda130337c99",
+            "658dac7df662",
+            "42be1ca2bc40",
+            "c858cb8b4846",
+            "a6f1fd854afa",
+            "662cbccd78cb",
+            "d4a23b3fe28b",
+            "44c2e6541ebd",
+            "fa860899f47a",
+            "e85ac5bc1e52",
+            "089e85bcb747",
+            "3e0c86d3ff78"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-files-merge.transport-rejection:file-comment-settled",
+        "observation": {
+          "sender": ["ebffceebdc52", "e3de0d18d0dc"],
+          "payloads": ["c6b185002fec", "899dc22eb082"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "expand-0": "eb79a9b3682a",
+            "file-comment-1": "eb79a9b3682a"
+          },
+          "state": "4366c8884dbd",
+          "effects": [
+            "cc2ece9478f0",
+            "eda130337c99",
+            "658dac7df662",
+            "42be1ca2bc40",
+            "c858cb8b4846",
+            "a6f1fd854afa",
+            "662cbccd78cb",
+            "d4a23b3fe28b",
+            "44c2e6541ebd",
+            "fa860899f47a",
+            "e85ac5bc1e52",
+            "089e85bcb747",
+            "3e0c86d3ff78",
+            "8bb07f5e4ddb",
+            "bff535848bcf",
+            "4fe8ef09de5f",
+            "aba945c58a7f",
+            "942210205c5d"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-files-merge.transport-rejection:merge-settled",
+        "observation": {
+          "sender": ["ebffceebdc52", "e3de0d18d0dc", "8989e41d1c1e"],
+          "payloads": ["c6b185002fec", "899dc22eb082", "f5c29abaf308"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "expand-0": "eb79a9b3682a",
+            "file-comment-1": "eb79a9b3682a",
+            "merge-2": "eb79a9b3682a"
+          },
+          "state": "a3113e662699",
+          "effects": [
+            "cc2ece9478f0",
+            "eda130337c99",
+            "658dac7df662",
+            "42be1ca2bc40",
+            "c858cb8b4846",
+            "a6f1fd854afa",
+            "662cbccd78cb",
+            "d4a23b3fe28b",
+            "44c2e6541ebd",
+            "fa860899f47a",
+            "e85ac5bc1e52",
+            "089e85bcb747",
+            "3e0c86d3ff78",
+            "8bb07f5e4ddb",
+            "bff535848bcf",
+            "4fe8ef09de5f",
+            "aba945c58a7f",
+            "942210205c5d",
+            "dda49aeb3971",
+            "b3ac1e3114bf",
+            "c3341bcbbaa3",
+            "3f9768efc421",
+            "c2ebef7f076f"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-files-merge.transport-rejection:issue-state-settled",
+        "observation": {
+          "sender": [
+            "ebffceebdc52",
+            "e3de0d18d0dc",
+            "8989e41d1c1e",
+            "ad362e2aebe2",
+            "ca024c503a01"
+          ],
+          "payloads": [
+            "c6b185002fec",
+            "899dc22eb082",
+            "f5c29abaf308",
+            "b3ff73919780",
+            "77324937aa89"
+          ],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "expand-0": "eb79a9b3682a",
+            "file-comment-1": "eb79a9b3682a",
+            "merge-2": "eb79a9b3682a",
+            "issue-state-3": "eb79a9b3682a"
+          },
+          "state": "a3113e662699",
+          "effects": [
+            "cc2ece9478f0",
+            "eda130337c99",
+            "658dac7df662",
+            "42be1ca2bc40",
+            "c858cb8b4846",
+            "a6f1fd854afa",
+            "662cbccd78cb",
+            "d4a23b3fe28b",
+            "44c2e6541ebd",
+            "fa860899f47a",
+            "e85ac5bc1e52",
+            "089e85bcb747",
+            "3e0c86d3ff78",
+            "8bb07f5e4ddb",
+            "bff535848bcf",
+            "4fe8ef09de5f",
+            "aba945c58a7f",
+            "942210205c5d",
+            "dda49aeb3971",
+            "b3ac1e3114bf",
+            "c3341bcbbaa3",
+            "3f9768efc421",
+            "c2ebef7f076f",
+            "8862f0950552",
+            "c0f0a440afe3",
+            "9f963399c2ce"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-files-merge.transport-rejection:pr-state-settled",
+        "observation": {
+          "sender": [
+            "ebffceebdc52",
+            "e3de0d18d0dc",
+            "8989e41d1c1e",
+            "ad362e2aebe2",
+            "ca024c503a01",
+            "a7480d9dd9a2"
+          ],
+          "payloads": [
+            "c6b185002fec",
+            "899dc22eb082",
+            "f5c29abaf308",
+            "b3ff73919780",
+            "77324937aa89",
+            "39ae33a4e8d3"
+          ],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "expand-0": "eb79a9b3682a",
+            "file-comment-1": "eb79a9b3682a",
+            "merge-2": "eb79a9b3682a",
+            "issue-state-3": "eb79a9b3682a",
+            "pr-state-4": "eb79a9b3682a"
+          },
+          "state": "a3113e662699",
+          "effects": [
+            "cc2ece9478f0",
+            "eda130337c99",
+            "658dac7df662",
+            "42be1ca2bc40",
+            "c858cb8b4846",
+            "a6f1fd854afa",
+            "662cbccd78cb",
+            "d4a23b3fe28b",
+            "44c2e6541ebd",
+            "fa860899f47a",
+            "e85ac5bc1e52",
+            "089e85bcb747",
+            "3e0c86d3ff78",
+            "8bb07f5e4ddb",
+            "bff535848bcf",
+            "4fe8ef09de5f",
+            "aba945c58a7f",
+            "942210205c5d",
+            "dda49aeb3971",
+            "b3ac1e3114bf",
+            "c3341bcbbaa3",
+            "3f9768efc421",
+            "c2ebef7f076f",
+            "8862f0950552",
+            "c0f0a440afe3",
+            "9f963399c2ce",
+            "2141fc3d6fbb",
+            "60e8d2f72874",
+            "8d4edaf085d8"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-files-merge.transport-rejection-no-message:expand-settled",
+        "observation": {
+          "sender": ["1d3851814e1c"],
+          "payloads": ["c6b185002fec"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "expand-0": "eb79a9b3682a"
+          },
+          "state": "4366c8884dbd",
+          "effects": [
+            "cc2ece9478f0",
+            "eda130337c99",
+            "658dac7df662",
+            "42be1ca2bc40",
+            "c858cb8b4846",
+            "a6f1fd854afa",
+            "662cbccd78cb",
+            "d4a23b3fe28b",
+            "44c2e6541ebd",
+            "fa860899f47a",
+            "e85ac5bc1e52",
+            "5c30b4794b57",
+            "3e0c86d3ff78"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-files-merge.transport-rejection-no-message:file-comment-settled",
+        "observation": {
+          "sender": ["1d3851814e1c", "e3de0d18d0dc"],
+          "payloads": ["c6b185002fec", "899dc22eb082"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "expand-0": "eb79a9b3682a",
+            "file-comment-1": "eb79a9b3682a"
+          },
+          "state": "4366c8884dbd",
+          "effects": [
+            "cc2ece9478f0",
+            "eda130337c99",
+            "658dac7df662",
+            "42be1ca2bc40",
+            "c858cb8b4846",
+            "a6f1fd854afa",
+            "662cbccd78cb",
+            "d4a23b3fe28b",
+            "44c2e6541ebd",
+            "fa860899f47a",
+            "e85ac5bc1e52",
+            "5c30b4794b57",
+            "3e0c86d3ff78",
+            "8bb07f5e4ddb",
+            "bff535848bcf",
+            "4fe8ef09de5f",
+            "aba945c58a7f",
+            "942210205c5d"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-files-merge.transport-rejection-no-message:merge-settled",
+        "observation": {
+          "sender": ["1d3851814e1c", "e3de0d18d0dc", "8989e41d1c1e"],
+          "payloads": ["c6b185002fec", "899dc22eb082", "f5c29abaf308"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "expand-0": "eb79a9b3682a",
+            "file-comment-1": "eb79a9b3682a",
+            "merge-2": "eb79a9b3682a"
+          },
+          "state": "a3113e662699",
+          "effects": [
+            "cc2ece9478f0",
+            "eda130337c99",
+            "658dac7df662",
+            "42be1ca2bc40",
+            "c858cb8b4846",
+            "a6f1fd854afa",
+            "662cbccd78cb",
+            "d4a23b3fe28b",
+            "44c2e6541ebd",
+            "fa860899f47a",
+            "e85ac5bc1e52",
+            "5c30b4794b57",
+            "3e0c86d3ff78",
+            "8bb07f5e4ddb",
+            "bff535848bcf",
+            "4fe8ef09de5f",
+            "aba945c58a7f",
+            "942210205c5d",
+            "dda49aeb3971",
+            "b3ac1e3114bf",
+            "c3341bcbbaa3",
+            "3f9768efc421",
+            "c2ebef7f076f"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-files-merge.transport-rejection-no-message:issue-state-settled",
+        "observation": {
+          "sender": [
+            "1d3851814e1c",
+            "e3de0d18d0dc",
+            "8989e41d1c1e",
+            "ad362e2aebe2",
+            "ca024c503a01"
+          ],
+          "payloads": [
+            "c6b185002fec",
+            "899dc22eb082",
+            "f5c29abaf308",
+            "b3ff73919780",
+            "77324937aa89"
+          ],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "expand-0": "eb79a9b3682a",
+            "file-comment-1": "eb79a9b3682a",
+            "merge-2": "eb79a9b3682a",
+            "issue-state-3": "eb79a9b3682a"
+          },
+          "state": "a3113e662699",
+          "effects": [
+            "cc2ece9478f0",
+            "eda130337c99",
+            "658dac7df662",
+            "42be1ca2bc40",
+            "c858cb8b4846",
+            "a6f1fd854afa",
+            "662cbccd78cb",
+            "d4a23b3fe28b",
+            "44c2e6541ebd",
+            "fa860899f47a",
+            "e85ac5bc1e52",
+            "5c30b4794b57",
+            "3e0c86d3ff78",
+            "8bb07f5e4ddb",
+            "bff535848bcf",
+            "4fe8ef09de5f",
+            "aba945c58a7f",
+            "942210205c5d",
+            "dda49aeb3971",
+            "b3ac1e3114bf",
+            "c3341bcbbaa3",
+            "3f9768efc421",
+            "c2ebef7f076f",
+            "8862f0950552",
+            "c0f0a440afe3",
+            "9f963399c2ce"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-files-merge.transport-rejection-no-message:pr-state-settled",
+        "observation": {
+          "sender": [
+            "1d3851814e1c",
+            "e3de0d18d0dc",
+            "8989e41d1c1e",
+            "ad362e2aebe2",
+            "ca024c503a01",
+            "a7480d9dd9a2"
+          ],
+          "payloads": [
+            "c6b185002fec",
+            "899dc22eb082",
+            "f5c29abaf308",
+            "b3ff73919780",
+            "77324937aa89",
+            "39ae33a4e8d3"
+          ],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "expand-0": "eb79a9b3682a",
+            "file-comment-1": "eb79a9b3682a",
+            "merge-2": "eb79a9b3682a",
+            "issue-state-3": "eb79a9b3682a",
+            "pr-state-4": "eb79a9b3682a"
+          },
+          "state": "a3113e662699",
+          "effects": [
+            "cc2ece9478f0",
+            "eda130337c99",
+            "658dac7df662",
+            "42be1ca2bc40",
+            "c858cb8b4846",
+            "a6f1fd854afa",
+            "662cbccd78cb",
+            "d4a23b3fe28b",
+            "44c2e6541ebd",
+            "fa860899f47a",
+            "e85ac5bc1e52",
+            "5c30b4794b57",
+            "3e0c86d3ff78",
+            "8bb07f5e4ddb",
+            "bff535848bcf",
+            "4fe8ef09de5f",
+            "aba945c58a7f",
+            "942210205c5d",
+            "dda49aeb3971",
+            "b3ac1e3114bf",
+            "c3341bcbbaa3",
+            "3f9768efc421",
+            "c2ebef7f076f",
+            "8862f0950552",
+            "c0f0a440afe3",
+            "9f963399c2ce",
+            "2141fc3d6fbb",
+            "60e8d2f72874",
+            "8d4edaf085d8"
+          ]
+        }
+      }
+    ]
+  }
+}

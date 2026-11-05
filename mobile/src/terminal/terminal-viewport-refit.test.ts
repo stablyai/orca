@@ -1,92 +1,87 @@
-import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import type { RpcResponse } from '../transport/types'
+import { terminalViewportUpdate } from './mobile-terminal-operations'
 import {
-  isTerminalUpdateViewportApplied,
-  isTerminalUpdateViewportUpdated,
-  isTerminalViewportRefitTargetCurrent
+  isTerminalViewportRefitTargetCurrent,
+  reduceTerminalFrameHeightRefit,
+  resolveTerminalUpdateViewportCapability,
+  type TerminalFrameHeightRefitEvent,
+  type TerminalFrameHeightRefitState
 } from './terminal-viewport-refit-state'
 
-const hookSource = readFileSync(new URL('./terminal-viewport-refit.ts', import.meta.url), 'utf8')
-const sessionSource = readFileSync(
-  new URL('../../app/h/[hostId]/session/[worktreeId].tsx', import.meta.url),
-  'utf8'
-)
-
 describe('terminal viewport refit', () => {
-  it('refits when the window dimensions change (fold/unfold, rotation)', () => {
-    // Why: a PTY fitted on the folded cover screen must be re-measured when
-    // the window grows, or the terminal renders in a fraction of the display.
-    expect(hookSource).toContain('useWindowDimensions()')
-    const start = hookSource.indexOf('const { width: windowWidth, height: windowHeight }')
-    expect(start).toBeGreaterThanOrEqual(0)
-    const resizeEffect = hookSource.slice(start)
-    expect(resizeEffect).toContain('viewportMeasuredRef.current = false')
-    expect(resizeEffect).toContain('scheduleViewportRefit()')
-    expect(resizeEffect).toContain(
-      '[windowWidth, windowHeight, viewportMeasuredRef, scheduleViewportRefit]'
+  it('coalesces keyboard-visible frame-height churn into one refit after close', () => {
+    let state: TerminalFrameHeightRefitState = {
+      frameHeight: 600,
+      keyboardVisible: false,
+      pending: false
+    }
+    let refitCount = 0
+    const dispatch = (event: TerminalFrameHeightRefitEvent) => {
+      const transition = reduceTerminalFrameHeightRefit(state, event)
+      state = transition.state
+      refitCount += Number(transition.shouldRefit)
+    }
+
+    dispatch({ type: 'keyboard-visibility', visible: true })
+    dispatch({ type: 'frame-height', height: 540 })
+    dispatch({ type: 'frame-height', height: 520 })
+    dispatch({ type: 'frame-height', height: 520 })
+    expect(refitCount).toBe(0)
+    expect(state.pending).toBe(true)
+
+    dispatch({ type: 'keyboard-visibility', visible: false })
+    dispatch({ type: 'keyboard-visibility', visible: false })
+    dispatch({ type: 'frame-height', height: 520 })
+    expect(refitCount).toBe(1)
+    expect(state.pending).toBe(false)
+
+    dispatch({ type: 'frame-height', height: 500 })
+    expect(refitCount).toBe(2)
+  })
+
+  it('re-defers a height refit if the keyboard reopens before the debounce fires', () => {
+    let r = reduceTerminalFrameHeightRefit(
+      { frameHeight: 600, keyboardVisible: true, pending: false },
+      { type: 'frame-height', height: 520 }
     )
+    expect(r.shouldRefit).toBe(false)
+    expect(r.state.pending).toBe(true)
+
+    r = reduceTerminalFrameHeightRefit(r.state, { type: 'keyboard-visibility', visible: false })
+    expect(r.shouldRefit).toBe(true)
+
+    // Reopen inside debounce; the timer must preserve the pending refit instead of reflowing while typing.
+    r = reduceTerminalFrameHeightRefit(r.state, { type: 'keyboard-visibility', visible: true })
+    const committed = reduceTerminalFrameHeightRefit(r.state, { type: 'refit-committed' })
+    expect(committed.shouldRefit).toBe(false)
+    expect(committed.state.pending).toBe(true)
+
+    const rescheduled = reduceTerminalFrameHeightRefit(committed.state, {
+      type: 'keyboard-visibility',
+      visible: false
+    })
+    expect(rescheduled.shouldRefit).toBe(true)
+    const ran = reduceTerminalFrameHeightRefit(rescheduled.state, { type: 'refit-committed' })
+    expect(ran.shouldRefit).toBe(true)
+    expect(ran.state.pending).toBe(false)
   })
 
-  it('still refits when the tab strip toggles visibility', () => {
-    const start = hookSource.indexOf('const prevTabStripVisibleRef')
-    expect(start).toBeGreaterThanOrEqual(0)
-    const tabEffect = hookSource.slice(start, hookSource.indexOf('useWindowDimensions()'))
-    expect(tabEffect).toContain('viewportMeasuredRef.current = false')
-    expect(tabEffect).toContain('scheduleViewportRefit()')
-  })
-
-  it('refits the PTY when terminal text scale changes', () => {
-    // Why: mobile text size must change the real PTY grid, not just scale pixels
-    // in the WebView, or wrapped CLI output diverges from what the shell sees.
-    const start = hookSource.indexOf('const prevTextScaleRef = useRef(textScale)')
-    expect(start).toBeGreaterThanOrEqual(0)
-    const textScaleEffect = hookSource.slice(start, start + 600)
-    expect(textScaleEffect).toContain('prevTextScaleRef.current === textScale')
-    expect(textScaleEffect).toContain('viewportMeasuredRef.current = false')
-    expect(textScaleEffect).toContain('scheduleViewportRefit()')
-    expect(textScaleEffect).toContain('[textScale, viewportMeasuredRef, scheduleViewportRefit]')
-  })
-
-  it('is wired into the session screen', () => {
-    expect(sessionSource).toContain('useTerminalViewportRefit({')
-    expect(sessionSource).toContain('tabStripVisible: terminals.length > 1')
-    expect(sessionSource).toContain('textScale: terminalTextScale')
-  })
-
-  it('prefers the in-place updateViewport RPC over resubscribe', () => {
-    const rpcIndex = hookSource.indexOf("sendRequest('terminal.updateViewport'")
-    const cacheUpdateIndex = hookSource.indexOf('updateTerminalSubscriptionViewport(handle, dims)')
-    const resubscribeIndex = hookSource.indexOf('subscribeToTerminal(handle)')
-    expect(rpcIndex).toBeGreaterThanOrEqual(0)
-    expect(cacheUpdateIndex).toBeGreaterThan(rpcIndex)
-    expect(resubscribeIndex).toBeGreaterThan(rpcIndex)
-  })
-
-  it('reflows the local xterm scrollback after a successful updateViewport', () => {
-    // Why: updateViewport may only record an informational mobile viewport in
-    // desktop mode. Reflow local scrollback only after the server says it
-    // actually applied phone-fit to the PTY.
-    const appliedIndex = hookSource.indexOf('isTerminalUpdateViewportApplied(response)')
-    const reflowIndex = hookSource.indexOf('ref.reflow(dims.cols, dims.rows)')
-    const cacheUpdateIndex = hookSource.indexOf('updateTerminalSubscriptionViewport(handle, dims)')
-    // Assert each anchor exists before ordering: a missing marker yields -1 and would
-    // let the ordering comparisons pass vacuously.
-    expect(appliedIndex).toBeGreaterThanOrEqual(0)
-    expect(cacheUpdateIndex).toBeGreaterThanOrEqual(0)
-    expect(reflowIndex).toBeGreaterThanOrEqual(0)
-    expect(reflowIndex).toBeGreaterThan(appliedIndex)
-    expect(reflowIndex).toBeGreaterThan(cacheUpdateIndex)
-  })
-
-  it('checks refit freshness after updateViewport resolves before side effects', () => {
-    // Why: rapid dock/sidebar resizing can complete RPCs out of order; a stale
-    // response must not update the viewport cache or locally reflow the old dims.
-    const responseIndex = hookSource.indexOf("sendRequest('terminal.updateViewport'")
-    const postRpcCurrentIndex = hookSource.indexOf('if (!isCurrentTarget())', responseIndex)
-    const cacheUpdateIndex = hookSource.indexOf('updateTerminalSubscriptionViewport(handle, dims)')
-    expect(postRpcCurrentIndex).toBeGreaterThan(responseIndex)
-    expect(postRpcCurrentIndex).toBeLessThan(cacheUpdateIndex)
+  it('falls back to legacy resubscribe when an older desktop lacks updateViewport', () => {
+    const unsupported = {
+      id: 'old-host',
+      ok: false,
+      error: { code: 'method_not_found', message: 'Unknown method: terminal.updateViewport' },
+      _meta: { runtimeId: 'runtime' }
+    } satisfies RpcResponse
+    expect(terminalViewportUpdate.interpret(unsupported)).toBe(null)
+    expect(
+      resolveTerminalUpdateViewportCapability({
+        ...unsupported,
+        error: { code: 'temporary_failure', message: 'retryable' }
+      })
+    ).toBe('unknown')
+    expect(resolveTerminalUpdateViewportCapability(unsupported)).toBe('unsupported')
   })
 
   it('only treats updateViewport as applied when the runtime updated the subscriber', () => {
@@ -115,13 +110,16 @@ describe('terminal viewport refit', () => {
       _meta: { runtimeId: 'runtime' }
     } satisfies RpcResponse
 
-    expect(isTerminalUpdateViewportUpdated(okUpdated)).toBe(true)
-    expect(isTerminalUpdateViewportUpdated(okRecordedButNotApplied)).toBe(true)
-    expect(isTerminalUpdateViewportUpdated(okNotUpdated)).toBe(false)
-    expect(isTerminalUpdateViewportApplied(okUpdated)).toBe(true)
-    expect(isTerminalUpdateViewportApplied(okRecordedButNotApplied)).toBe(false)
-    expect(isTerminalUpdateViewportApplied(okNotUpdated)).toBe(false)
-    expect(isTerminalUpdateViewportApplied(failed)).toBe(false)
+    expect(terminalViewportUpdate.interpret(okUpdated)).toEqual({ updated: true, applied: true })
+    expect(terminalViewportUpdate.interpret(okRecordedButNotApplied)).toEqual({
+      updated: true,
+      applied: false
+    })
+    expect(terminalViewportUpdate.interpret(okNotUpdated)).toEqual({
+      updated: false,
+      applied: false
+    })
+    expect(terminalViewportUpdate.interpret(failed)).toBe(null)
   })
 
   it('rejects stale async refits when the active terminal, ref, or run changes', () => {
@@ -131,6 +129,7 @@ describe('terminal viewport refit', () => {
       expectedHandle: 'term-1',
       currentRef: expectedRef,
       expectedRef,
+      nativeChatCovered: false,
       disposed: false,
       runSeq: 2,
       currentRunSeq: 2
@@ -143,5 +142,8 @@ describe('terminal viewport refit', () => {
     ).toBe(false)
     expect(isTerminalViewportRefitTargetCurrent({ ...current, currentRunSeq: 3 })).toBe(false)
     expect(isTerminalViewportRefitTargetCurrent({ ...current, disposed: true })).toBe(false)
+    expect(isTerminalViewportRefitTargetCurrent({ ...current, nativeChatCovered: true })).toBe(
+      false
+    )
   })
 })

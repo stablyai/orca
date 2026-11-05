@@ -1,0 +1,5 @@
+# Files currently allowed to carry a `@ts-nocheck` header.
+# This is a RATCHET: the list may only SHRINK. These exist only because the split
+# runtime mixin chain cannot express forward references yet — do NOT add entries to
+# get CI green; fix the types instead.
+# Regenerate/prune: pnpm check:ts-nocheck-ratchet --prune   (removes stale entries only)

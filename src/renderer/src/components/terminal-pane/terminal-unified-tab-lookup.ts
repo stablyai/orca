@@ -1,29 +1,65 @@
-import type { Tab } from '../../../../shared/types'
+import type { Tab } from '../../../../shared/tab-types'
 
-const terminalGroupLookupByUnifiedTabs = new WeakMap<readonly Tab[], Map<string, string>>()
+export type UnifiedTerminalTabFields = {
+  unifiedTabId: string | undefined
+  isChatViewMode: boolean
+  unifiedTabLabel: string | undefined
+  isTabPinned: boolean
+}
+
+const terminalTabLookupByUnifiedTabs = new WeakMap<readonly Tab[], Map<string, Tab>>()
+
+export function getCachedUnifiedTerminalTabForWorktree(
+  unifiedTabsByWorktree: Record<string, Tab[]>,
+  worktreeId: string,
+  terminalTabId: string
+): Tab | null {
+  const unifiedTabs = unifiedTabsByWorktree[worktreeId]
+  if (!unifiedTabs) {
+    return null
+  }
+
+  let lookup = terminalTabLookupByUnifiedTabs.get(unifiedTabs)
+  if (!lookup) {
+    // Share one immutable-array index across retained panes reading unified tabs on every write.
+    lookup = new Map()
+    for (const tab of unifiedTabs) {
+      if (tab.contentType === 'terminal') {
+        lookup.set(tab.entityId, tab)
+      }
+    }
+    terminalTabLookupByUnifiedTabs.set(unifiedTabs, lookup)
+  }
+
+  return lookup.get(terminalTabId) ?? null
+}
 
 export function getCachedTerminalGroupIdForWorktree(
   unifiedTabsByWorktree: Record<string, Tab[]>,
   worktreeId: string,
   terminalTabId: string
 ): string | null {
-  const unifiedTabs = unifiedTabsByWorktree[worktreeId]
-  if (!unifiedTabs) {
-    return null
-  }
+  return (
+    getCachedUnifiedTerminalTabForWorktree(unifiedTabsByWorktree, worktreeId, terminalTabId)
+      ?.groupId ?? null
+  )
+}
 
-  let lookup = terminalGroupLookupByUnifiedTabs.get(unifiedTabs)
-  if (!lookup) {
-    // Why: every mounted TerminalPane asks for its owning group on store updates.
-    // Cache by immutable tab-array ref so 200 panes do not repeat the same scan.
-    lookup = new Map()
-    for (const tab of unifiedTabs) {
-      if (tab.contentType === 'terminal') {
-        lookup.set(tab.entityId, tab.groupId)
-      }
-    }
-    terminalGroupLookupByUnifiedTabs.set(unifiedTabs, lookup)
+/** Bundle formerly separate pane reads to avoid repeated lookups and listener slots per tab. */
+export function selectUnifiedTerminalTabFields(
+  unifiedTabsByWorktree: Record<string, Tab[]>,
+  worktreeId: string,
+  terminalTabId: string
+): UnifiedTerminalTabFields {
+  const tab = getCachedUnifiedTerminalTabForWorktree(
+    unifiedTabsByWorktree,
+    worktreeId,
+    terminalTabId
+  )
+  return {
+    unifiedTabId: tab?.id,
+    isChatViewMode: tab?.viewMode === 'chat',
+    unifiedTabLabel: tab?.label,
+    isTabPinned: tab?.isPinned === true
   }
-
-  return lookup.get(terminalTabId) ?? null
 }

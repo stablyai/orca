@@ -1,4 +1,13 @@
-import type { WorkspaceKey, WorkspaceScope } from './types'
+import {
+  getWorktreeIdFromHostIdentity,
+  isWorktreeHostIdentity
+} from './worktree/host-qualified-identity'
+
+export type WorkspaceScope =
+  | { type: 'worktree'; worktreeId: string }
+  | { type: 'folder'; folderWorkspaceId: string }
+
+export type WorkspaceKey = `worktree:${string}` | `folder:${string}`
 
 export function worktreeWorkspaceKey(worktreeId: string): WorkspaceKey {
   return `worktree:${worktreeId}`
@@ -6,12 +15,6 @@ export function worktreeWorkspaceKey(worktreeId: string): WorkspaceKey {
 
 export function folderWorkspaceKey(folderWorkspaceId: string): WorkspaceKey {
   return `folder:${folderWorkspaceId}`
-}
-
-export function workspaceKeyFromScope(scope: WorkspaceScope): WorkspaceKey {
-  return scope.type === 'worktree'
-    ? worktreeWorkspaceKey(scope.worktreeId)
-    : folderWorkspaceKey(scope.folderWorkspaceId)
 }
 
 export function parseWorkspaceKey(value: string): WorkspaceScope | null {
@@ -26,6 +29,30 @@ export function parseWorkspaceKey(value: string): WorkspaceScope | null {
   return null
 }
 
+/** Strip WorkspaceKey or host-qualified visit-recency scope (ssh:target|repo::path); retain already-bare workspace IDs. */
+export function normalizeWorkspaceSessionKeyToWorkspaceId(value: string): string {
+  if (isWorktreeHostIdentity(value)) {
+    return getWorktreeIdFromHostIdentity(value)
+  }
+  const scope = parseWorkspaceKey(value)
+  return scope?.type === 'worktree' ? scope.worktreeId : value
+}
+
 export function isWorkspaceKey(value: string): value is WorkspaceKey {
   return parseWorkspaceKey(value) !== null
+}
+
+// Folder workspaces use the scoped active key; older worktree paths still use activeWorktreeId.
+export function getActiveSidebarWorkspaceId(
+  activeWorkspaceKey: string | null,
+  activeWorktreeId: string | null
+): string | null {
+  const scope = activeWorkspaceKey ? parseWorkspaceKey(activeWorkspaceKey) : null
+  if (scope?.type === 'folder') {
+    return folderWorkspaceKey(scope.folderWorkspaceId)
+  }
+  if (scope?.type === 'worktree') {
+    return scope.worktreeId
+  }
+  return activeWorktreeId
 }

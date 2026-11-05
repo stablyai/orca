@@ -1,186 +1,252 @@
+import {
+  GITHUB_CONNECTION_CHANGED,
+  githubOperationResponse
+} from '../transport/github-target-invocation'
+import { captureMobilePRCheckContract } from '../transport/pr-check-observation-contract'
+import { acceptPRCheckObservation } from '../../../src/shared/github/complete-pr-check-owner'
+import type { RpcClient } from '../transport/rpc-client'
+import { withGitHubTargetOperation } from '../tasks/github-work-item-operation'
+import { requireGitHubWorkItemTargetDetails } from '../../../src/shared/github/work-item-target'
+import type { PRCheckDetail, PRCheckRunDetails } from '../../../src/shared/github/check-types'
 import type {
   GitHubAssignableUser,
-  GitHubWorkItemDetails,
-  PRCheckDetail,
-  PRCheckRunDetails,
+  GitHubOwnerRepo,
   PRInfo
-} from '../../../src/shared/types'
-import type { HostedReviewInfo } from '../../../src/shared/hosted-review'
-import type { RpcClient } from '../transport/rpc-client'
-import type { RpcSuccess } from '../transport/types'
+} from '../../../src/shared/github/pull-request-types'
+import type { GitHubWorkItemDetails } from '../../../src/shared/github/work-item-types'
+import type { HostedReviewInfo } from '../../../src/shared/source-control/hosted-review/hosted-review-contracts'
+import { refusedRpcMessageOrFallback } from '../transport/rpc-refusal-message'
+import type { RpcResponse } from '../transport/types'
 import { mobileRepoSelectorFromWorktreeId } from '../source-control/mobile-pr-create'
+import type { GitHubPrForBranchOutcome } from './github-pr-read-reply-schema'
 import {
-  readAssignableUsers,
-  readForBranch,
-  readPRCheckDetails,
-  readPRChecks,
-  readPRForBranch,
-  readWorkItemDetails
-} from './github-pr-parsers'
+  githubPrAssignableUsersRead,
+  githubPrCheckDetailsRead,
+  githubPrChecksRead,
+  githubPrForBranchRead,
+  githubPrRepoSlugRead,
+  githubPrWorkItemDetailsRead,
+  hostedReviewBranchLookupRead
+} from './github-pr-read-operations'
+import type { GitHubPrSettleableOperation } from './github-pr-mutation-outcome'
+import { githubPrRequestParams, type GitHubPrRepoSlug } from './github-pr-repo-slug'
+import type { RpcOperationSender } from '../transport/rpc-operation-sender'
+import { translate } from '../i18n/mobile-i18n'
 
-// Re-export the defensive parsers so consumers (and tests) have a single entry
-// point for the github.* PR RPC surface.
 export {
-  readAssignableUsers,
-  readForBranch,
-  readPRCheckDetails,
-  readPRChecks,
-  readPRForBranch,
-  readWorkItemDetails
-} from './github-pr-parsers'
-
-// Why: a fork PR's head lives in a different owner/repo; the host's SlugRepo
-// (`{ owner, repo }`) identifies it. Only a subset of github.* methods accept it.
-export type GitHubPrRepoSlug = { owner: string; repo: string }
+  buildGithubPrParams,
+  githubPrRepoSlugParam,
+  type GitHubPrRepoSlug
+} from './github-pr-repo-slug'
 
 export type GitHubPrReadOutcome<T> = { ok: true; result: T } | { ok: false; error: string }
 
-// Why: `prRepo` is method-asymmetric (KTD3). These are the only github.* methods
-// whose host schema (SlugRepo on PullRequest/PullRequestChecks/PullRequestCheckDetails)
-// accepts it; the rest reject the key. Centralizing the allow-list keeps a fork's
-// prRepo from leaking into a schema that would reject it.
-const METHODS_ACCEPTING_PR_REPO = new Set<string>([
-  'github.prChecks',
-  'github.prCheckDetails',
-  'github.mergePR',
-  'github.setPRAutoMerge',
-  'github.prComments'
-])
-
-// Why: only github.prChecks declares a `headSha` param (PullRequestCheckDetails
-// does not), so headSha is forwarded just to that read. Check runs are commit-keyed.
-const METHODS_ACCEPTING_HEAD_SHA = new Set<string>(['github.prChecks'])
-
-export function buildGithubPrParams(
-  method: string,
-  worktreeId: string,
-  params: Record<string, unknown>,
-  options?: { prRepo?: GitHubPrRepoSlug | null; headSha?: string | null }
-): Record<string, unknown> {
-  const built: Record<string, unknown> = {
-    repo: mobileRepoSelectorFromWorktreeId(worktreeId),
-    ...params
+// Refusals without text use method fallback; decode/in-band upstream errors preserve their own text.
+function githubPrFailureText(reply: RpcResponse, error: unknown, fallback: string): string {
+  if (!reply.ok) {
+    return refusedRpcMessageOrFallback(error, fallback)
   }
-  if (options?.prRepo && METHODS_ACCEPTING_PR_REPO.has(method) && !('prRepo' in built)) {
-    built.prRepo = { owner: options.prRepo.owner, repo: options.prRepo.repo }
-  }
-  if (options?.headSha && METHODS_ACCEPTING_HEAD_SHA.has(method) && !('headSha' in built)) {
-    built.headSha = options.headSha
-  }
-  return built
+  return error instanceof Error ? error.message : fallback
 }
 
-async function sendGithubPrRead<T>(
-  client: Pick<RpcClient, 'sendRequest'>,
-  method: string,
-  params: Record<string, unknown>,
-  parse: (value: unknown) => T
-): Promise<GitHubPrReadOutcome<T>> {
+async function settleGithubPrRead<Value>(
+  read: GitHubPrSettleableOperation<Value>,
+  send: () => Promise<RpcResponse>
+): Promise<GitHubPrReadOutcome<Value>> {
+  const fallback = translate('session.githubPrRpc.requestFailed', 'Request failed: {{method}}', {
+    method: read.operation.method
+  })
+  let reply: RpcResponse
   try {
-    const response = await client.sendRequest(method, params)
-    if (!response.ok) {
-      return { ok: false, error: response.error?.message || `Request failed: ${method}` }
-    }
-    return { ok: true, result: parse((response as RpcSuccess).result) }
-  } catch (err) {
-    // Why: a transport drop or a parser throw must not escape as an unhandled
-    // rejection — normalize to the `{ ok:false, error }` contract callers expect.
-    return { ok: false, error: err instanceof Error ? err.message : `Request failed: ${method}` }
+    reply = await send()
+  } catch (error) {
+    // A transport drop surfaces its own message verbatim, empty included.
+    return { ok: false, error: error instanceof Error ? error.message : fallback }
+  }
+  try {
+    return { ok: true, result: read.interpret(reply) }
+  } catch (error) {
+    return { ok: false, error: githubPrFailureText(reply, error, fallback) }
   }
 }
 
-// Probes whether the worktree's repo has a GitHub remote (a non-null slug). Used
-// to decide whether the dedicated PR-view icon is available — independent of
-// whether the branch has an open PR.
-export async function fetchGithubRepoSlug(
-  client: Pick<RpcClient, 'sendRequest'>,
+// Gate the PR icon on a GitHub remote independently of whether this branch has an open PR.
+export function fetchGithubRepoSlug(
+  client: RpcOperationSender,
   worktreeId: string
 ): Promise<GitHubPrReadOutcome<GitHubPrRepoSlug | null>> {
-  return sendGithubPrRead(
-    client,
-    'github.repoSlug',
-    buildGithubPrParams('github.repoSlug', worktreeId, {}),
-    (value) => {
-      if (!value || typeof value !== 'object') {
-        return null
-      }
-      const record = value as Record<string, unknown>
-      const owner = record.owner
-      const repo = record.repo
-      return typeof owner === 'string' && typeof repo === 'string' ? { owner, repo } : null
-    }
+  return settleGithubPrRead(githubPrRepoSlugRead, () =>
+    githubPrRepoSlugRead.request(
+      client,
+      githubPrRequestParams(githubPrRepoSlugRead.operation.method, worktreeId, {})
+    )
   )
 }
 
-export async function fetchHostedReviewForBranch(
-  client: Pick<RpcClient, 'sendRequest'>,
+export function fetchHostedReviewForBranch(
+  client: RpcOperationSender,
   worktreeId: string,
   args: { branch: string; linkedGitHubPR?: number | null }
 ): Promise<GitHubPrReadOutcome<HostedReviewInfo | null>> {
-  return sendGithubPrRead(
-    client,
-    'hostedReview.forBranch',
-    {
+  return settleGithubPrRead(hostedReviewBranchLookupRead, () =>
+    hostedReviewBranchLookupRead.request(client, {
       repo: mobileRepoSelectorFromWorktreeId(worktreeId),
       branch: args.branch,
-      linkedGitHubPR: args.linkedGitHubPR ?? null
-    },
-    readForBranch
+      linkedGitHubPR: args.linkedGitHubPR ?? null,
+      // Why: the mobile PR sidebar is only ever open on the selected worktree,
+      // so it belongs in the host's fast re-check tier (#11532).
+      active: true
+    })
   )
 }
 
+// Raise decoded upstream-error here so the sidebar retains host text; it is not a protocol decode failure.
 export async function fetchPRForBranch(
-  client: Pick<RpcClient, 'sendRequest'>,
+  client: RpcOperationSender,
   worktreeId: string,
-  args: { branch: string; linkedPRNumber?: number | null }
+  args: {
+    branch: string
+    linkedPRNumber?: number | null
+    fallbackPRNumber?: number | null
+    currentHeadOid?: string | null
+    refresh?: boolean
+  }
 ): Promise<GitHubPrReadOutcome<PRInfo | null>> {
-  return sendGithubPrRead(
-    client,
-    'github.prForBranch',
-    buildGithubPrParams('github.prForBranch', worktreeId, {
-      branch: args.branch,
-      linkedPRNumber: args.linkedPRNumber ?? null
-    }),
-    readPRForBranch
-  )
+  return observe(true, args.refresh === true)
+  async function observe(
+    adopt: boolean,
+    refresh = false
+  ): Promise<GitHubPrReadOutcome<PRInfo | null>> {
+    const contract = await captureMobilePRCheckContract(
+      client,
+      {
+        repo: mobileRepoSelectorFromWorktreeId(worktreeId)
+      },
+      refresh
+    )
+    try {
+      let sourceMismatch = false
+      const result = await settleGithubPrRead(
+        {
+          operation: githubPrForBranchRead.operation,
+          interpret: (reply) =>
+            resolveGithubPrForBranchOutcome(githubPrForBranchRead.interpret(reply))
+        },
+        async () => {
+          const reply = await githubPrForBranchRead.request(
+            contract.client ?? client,
+            githubPrRequestParams(githubPrForBranchRead.operation.method, worktreeId, {
+              branch: args.branch,
+              linkedPRNumber: args.linkedPRNumber ?? null,
+              fallbackPRNumber: args.fallbackPRNumber ?? null,
+              currentHeadOid: args.currentHeadOid ?? null
+            }),
+            contract.options
+          )
+          sourceMismatch =
+            !reply.ok &&
+            ['runtime_source_mismatch', 'runtime_source_unverifiable'].includes(reply.error.code)
+          return githubOperationResponse(reply)
+        }
+      )
+      if (adopt && sourceMismatch && contract.routeCurrent()) {
+        return observe(false, true)
+      }
+      if (!contract.current()) {
+        if (adopt && !contract.complete && contract.routeCurrent()) {
+          return observe(false)
+        }
+        return { ok: false, error: GITHUB_CONNECTION_CHANGED }
+      }
+      if (result.ok && result.result && contract.complete) {
+        return {
+          ok: true,
+          result: acceptPRCheckObservation(result.result, null, {
+            scope: contract.scope!,
+            complete: true,
+            current: contract.current()
+          })!
+        }
+      }
+      return result
+    } finally {
+      contract.retire()
+    }
+  }
+}
+
+function resolveGithubPrForBranchOutcome(outcome: GitHubPrForBranchOutcome | null): PRInfo | null {
+  if (outcome === null) {
+    return null
+  }
+  if (outcome.kind === 'upstream-error') {
+    throw new Error(outcome.message)
+  }
+  return outcome.kind === 'found' ? outcome.pr : null
 }
 
 export async function fetchWorkItemDetails(
-  client: Pick<RpcClient, 'sendRequest'>,
+  client: RpcClient,
   worktreeId: string,
-  args: { prNumber: number }
+  args: { prNumber: number; prRepo?: GitHubPrRepoSlug | null; refresh?: boolean }
 ): Promise<GitHubPrReadOutcome<GitHubWorkItemDetails | null>> {
-  return sendGithubPrRead(
-    client,
-    'github.workItemDetails',
-    buildGithubPrParams('github.workItemDetails', worktreeId, {
-      number: args.prNumber,
-      type: 'pr'
-    }),
-    readWorkItemDetails
+  const params = githubPrRequestParams(githubPrWorkItemDetailsRead.operation.method, worktreeId, {
+    number: args.prNumber,
+    type: 'pr'
+  })
+  const outcome = await settleGithubPrRead(githubPrWorkItemDetailsRead, () =>
+    args.prRepo
+      ? withGitHubTargetOperation({
+          client,
+          params: { repo: mobileRepoSelectorFromWorktreeId(worktreeId) },
+          ownerRepo: args.prRepo,
+          read: true,
+          canonical: args.refresh === true,
+          send: (selected, exact, options) =>
+            githubPrWorkItemDetailsRead.request(selected, { ...params, ...exact }, options)
+        })
+      : githubPrWorkItemDetailsRead.request(client, params)
   )
+  if (outcome.ok && args.prRepo) {
+    try {
+      return {
+        ok: true,
+        result: requireGitHubWorkItemTargetDetails(outcome.result, {
+          repository: args.prRepo,
+          type: 'pr',
+          number: args.prNumber
+        })
+      }
+    } catch (error) {
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : 'Unable to load pull request details.'
+      }
+    }
+  }
+  return outcome
 }
 
-export async function fetchPRChecks(
-  client: Pick<RpcClient, 'sendRequest'>,
+export function fetchPRChecks(
+  client: RpcOperationSender,
   worktreeId: string,
   args: { prNumber: number; headSha?: string | null; prRepo?: GitHubPrRepoSlug | null }
 ): Promise<GitHubPrReadOutcome<PRCheckDetail[]>> {
-  return sendGithubPrRead(
-    client,
-    'github.prChecks',
-    buildGithubPrParams(
-      'github.prChecks',
-      worktreeId,
-      { prNumber: args.prNumber },
-      { prRepo: args.prRepo, headSha: args.headSha }
-    ),
-    readPRChecks
+  return settleGithubPrRead(githubPrChecksRead, () =>
+    githubPrChecksRead.request(
+      client,
+      githubPrRequestParams(
+        githubPrChecksRead.operation.method,
+        worktreeId,
+        { prNumber: args.prNumber },
+        { prRepo: args.prRepo, headSha: args.headSha }
+      )
+    )
   )
 }
 
-export async function fetchPRCheckDetails(
-  client: Pick<RpcClient, 'sendRequest'>,
+export function fetchPRCheckDetails(
+  client: RpcOperationSender,
   worktreeId: string,
   args: {
     checkRunId?: number
@@ -203,22 +269,36 @@ export async function fetchPRCheckDetails(
   if (args.url !== undefined) {
     params.url = args.url
   }
-  return sendGithubPrRead(
-    client,
-    'github.prCheckDetails',
-    buildGithubPrParams('github.prCheckDetails', worktreeId, params, { prRepo: args.prRepo }),
-    readPRCheckDetails
+  return settleGithubPrRead(githubPrCheckDetailsRead, () =>
+    githubPrCheckDetailsRead.request(
+      client,
+      githubPrRequestParams(githubPrCheckDetailsRead.operation.method, worktreeId, params, {
+        prRepo: args.prRepo
+      })
+    )
   )
 }
 
-export async function fetchAssignableUsers(
-  client: Pick<RpcClient, 'sendRequest'>,
-  worktreeId: string
+export function fetchAssignableUsers(
+  client: RpcClient,
+  worktreeId: string,
+  prRepo: GitHubOwnerRepo | null
 ): Promise<GitHubPrReadOutcome<GitHubAssignableUser[]>> {
-  return sendGithubPrRead(
-    client,
-    'github.listAssignableUsers',
-    buildGithubPrParams('github.listAssignableUsers', worktreeId, {}),
-    readAssignableUsers
-  )
+  return settleGithubPrRead(githubPrAssignableUsersRead, () => {
+    if (!prRepo) {
+      throw new Error('Unable to identify this pull request. Open it again.')
+    }
+    const params = githubPrRequestParams(
+      githubPrAssignableUsersRead.operation.method,
+      worktreeId,
+      {}
+    )
+    return withGitHubTargetOperation({
+      client,
+      params,
+      ownerRepo: prRepo,
+      send: (selected, exact, options) =>
+        githubPrAssignableUsersRead.request(selected, { ...params, ...exact }, options)
+    })
+  })
 }

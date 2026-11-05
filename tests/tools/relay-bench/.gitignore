@@ -1,0 +1,3 @@
+# Bench output contains live device and resume tokens.
+*.json
+state*

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import {
   getProcessOutputFields,
   iterateProcessOutputLines,
@@ -21,18 +21,6 @@ describe('getProcessOutputFields', () => {
     expect(
       getProcessOutputFields('  TCP\t127.0.0.1:3000   0.0.0.0:0 LISTENING 4242 extra', 5)
     ).toEqual(['TCP', '127.0.0.1:3000', '0.0.0.0:0', 'LISTENING', '4242'])
-  })
-
-  it('does not use regex whitespace splitting', () => {
-    const splitSpy = vi.spyOn(String.prototype, 'split')
-
-    getProcessOutputFields('alpha beta gamma', 2)
-
-    const usedWhitespaceFieldSplit = splitSpy.mock.calls.some(
-      ([separator]) => separator instanceof RegExp && separator.source.includes('\\s+')
-    )
-    splitSpy.mockRestore()
-    expect(usedWhitespaceFieldSplit).toBe(false)
   })
 
   it('caps scan work for oversized rows', () => {

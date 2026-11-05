@@ -1,11 +1,12 @@
+import { taskProviderErrorMessage, taskProviderErrorText } from '@/lib/task-provider-error-copy'
 import { useId, useMemo, useState } from 'react'
 import { ExternalLink, LoaderCircle, Lock } from 'lucide-react'
-import type { LinearWorkspace } from '../../../shared/types'
+import type { LinearWorkspace } from '../../../shared/linear/workspace-types'
 import {
   buildLinearPersonalApiKeySettingsUrl,
   buildLinearWorkspaceApiSettingsUrl
-} from '../../../shared/linear-links'
-import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+} from '../../../shared/linear/links'
+import { defaultScopeHost } from '@/lib/default-creation-host'
 import { useAppStore } from '@/store'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { Button } from '@/components/ui/button'
@@ -20,6 +21,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
+import { preventOutsideDismissWhenDirty } from '@/lib/outside-dismiss-guard'
 import {
   createLinearApiKeyDialogState,
   resolveLinearApiKeyDialogState
@@ -56,14 +58,18 @@ export function LinearApiKeyDialog({
   const apiKeyErrorId = useId()
   const [dialogState, setDialogState] = useState(createLinearApiKeyDialogState)
 
-  const runtimeTarget = useMemo(() => getActiveRuntimeTarget(settings), [settings])
+  // Why: connectLinear stores the key on the default scope host, so the copy names that host.
+  const runtimeTarget = useMemo(() => defaultScopeHost(settings), [settings])
   const personalKeyUrl = buildLinearPersonalApiKeySettingsUrl(workspace?.organizationUrlKey)
   const workspaceApiUrl = buildLinearWorkspaceApiSettingsUrl(workspace?.organizationUrlKey)
-  const submitLabel = connectLabel ?? (workspace ? 'Update access' : 'Connect')
+  const submitLabel =
+    connectLabel ??
+    (workspace
+      ? translate('taskProviders.linear.updateAccess', 'Update access')
+      : translate('taskProviders.linear.connect', 'Connect'))
   const resolvedDialogState = resolveLinearApiKeyDialogState(dialogState, open)
   if (resolvedDialogState !== dialogState) {
-    // Why: parent-controlled close can race an in-flight connect request; keep
-    // hidden draft/error state reset before the next open paints.
+    // Reset hidden drafts/errors before paint because parent closure can race a connect request.
     setDialogState(resolvedDialogState)
   }
   const { apiKeyDraft, connectState, connectError } = resolvedDialogState
@@ -73,6 +79,10 @@ export function LinearApiKeyDialog({
       onOpenChange(nextOpen)
     }
   }
+
+  // Why: a stray backdrop click must not discard a typed API key. Escape / Cancel / × stay explicit.
+  const isDraftDirty = (): boolean => apiKeyDraft !== ''
+  const guardOutsideDismiss = preventOutsideDismissWhenDirty(isDraftDirty)
 
   const handleConnect = async (): Promise<void> => {
     const apiKey = apiKeyDraft.trim()
@@ -94,14 +104,17 @@ export function LinearApiKeyDialog({
       setDialogState((current) => ({
         ...current,
         connectState: 'error',
-        connectError: result.error
+        connectError: taskProviderErrorMessage(result)
       }))
     } catch (error) {
       if (mountedRef.current) {
         setDialogState((current) => ({
           ...current,
           connectState: 'error',
-          connectError: error instanceof Error ? error.message : 'Connection failed'
+          connectError:
+            error instanceof Error
+              ? taskProviderErrorText(error.message)
+              : translate('taskProviders.linear.connectionFailed', 'Connection failed')
         }))
       }
     }
@@ -109,22 +122,43 @@ export function LinearApiKeyDialog({
 
   const resolvedTitle =
     title ??
-    (workspace ? `Update Linear access for ${workspace.organizationName}` : 'Add Linear access')
+    (workspace
+      ? translate(
+          'taskProviders.linear.updateWorkspaceAccess',
+          'Update Linear access for {{workspace}}',
+          { workspace: workspace.organizationName }
+        )
+      : translate('taskProviders.linear.addAccess', 'Add Linear access'))
   const resolvedDescription =
     description ??
     (workspace
-      ? `Paste a Personal API key for ${workspace.organizationName}. If this workspace is already connected, Orca replaces its stored key.`
-      : 'Paste a Personal API key for the Linear workspace you want Orca to use. If that workspace is already connected, Orca replaces its stored key.')
+      ? translate(
+          'taskProviders.linear.workspaceApiKeyHint',
+          'Paste a Personal API key for {{workspace}}. If this workspace is already connected, Orca replaces its stored key.',
+          { workspace: workspace.organizationName }
+        )
+      : translate(
+          'taskProviders.linear.apiKeyHint',
+          'Paste a Personal API key for the Linear workspace you want Orca to use. If that workspace is already connected, Orca replaces its stored key.'
+        ))
   const storageCopy =
     runtimeTarget.kind === 'environment'
-      ? 'This key is stored by the active remote runtime.'
-      : 'Local runtime keys are stored on this device using Electron encrypted storage when available.'
+      ? translate(
+          'taskProviders.linear.remoteKeyStorage',
+          'This key is stored by the active remote runtime.'
+        )
+      : translate(
+          'taskProviders.linear.localKeyStorage',
+          'Local runtime keys are stored on this device using Electron encrypted storage when available.'
+        )
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
         overlayClassName={overlayClassName}
         className={cn('sm:max-w-lg', contentClassName)}
+        onPointerDownOutside={guardOutsideDismiss}
+        onInteractOutside={guardOutsideDismiss}
         onKeyDown={(event) => {
           if (event.key === 'Enter' && apiKeyDraft.trim() && connectState !== 'connecting') {
             event.preventDefault()

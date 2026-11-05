@@ -1,6 +1,13 @@
-import { LoaderCircle } from 'lucide-react'
+import { useId, useState } from 'react'
+import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { SparseDirectoryPicker } from './SparseDirectoryPicker'
+import { SparseSelectedDirectoryList } from './SparseSelectedDirectoryList'
+import { addSparseDirectoryEntries } from './sparse-directory-entry-input'
 import { translate } from '@/i18n/i18n'
+import { normalizeSparseDirectoryLines } from '@/lib/sparse-paths'
 import type { SparsePresetDirectoryParseResult } from '@/lib/sparse-preset-draft'
 
 export type SparsePresetDraft = {
@@ -16,10 +23,13 @@ type SparseCheckoutPresetDraftFormProps = {
   nameError: string | null
   submitting: boolean
   canSave: boolean
-  setNameInputNode: (node: HTMLInputElement | null) => void
+  setNameInputNode?: (node: HTMLInputElement | null) => void
   onDraftChange: (draft: SparsePresetDraft) => void
   onCancel: () => void
   onSave: () => void
+  operationError?: string | null
+  repoRootPath?: string
+  repoConnectionId?: string
 }
 
 export function SparseCheckoutPresetDraftForm({
@@ -31,104 +41,124 @@ export function SparseCheckoutPresetDraftForm({
   setNameInputNode,
   onDraftChange,
   onCancel,
-  onSave
+  onSave,
+  operationError,
+  repoRootPath,
+  repoConnectionId
 }: SparseCheckoutPresetDraftFormProps): React.JSX.Element {
+  const id = useId()
+  const [nameTouched, setNameTouched] = useState(false)
+  const visibleNameError = nameTouched || draft.name.length > 0 ? nameError : null
+  const directoryError = draft.directoriesText.length > 0 ? parsedDirectories?.error : null
+  // Why: chips must survive a preset whose saved paths no longer parse.
+  const selectedDirectories = normalizeSparseDirectoryLines(draft.directoriesText)
+  const setDirectories = (next: string[]): void => {
+    onDraftChange({ ...draft, directoriesText: next.join('\n') })
+  }
+  const addDirectories = (directories: string[]): void => {
+    setDirectories(addSparseDirectoryEntries(selectedDirectories, directories))
+  }
+  const removeDirectory = (directory: string): void => {
+    setDirectories(selectedDirectories.filter((entry) => entry !== directory))
+  }
   return (
     <form
+      className="space-y-3"
       onSubmit={(event) => {
         event.preventDefault()
+        event.stopPropagation()
         onSave()
       }}
     >
-      <div className="border-b border-border px-3 py-2 text-xs font-medium text-foreground">
-        {draft.mode === 'new'
-          ? translate('auto.components.sparse.SparseCheckoutPresetSelect.c4ac80151d', 'New preset')
-          : translate(
-              'auto.components.sparse.SparseCheckoutPresetSelect.69c020eddc',
-              'Edit preset'
-            )}
-      </div>
-      <div className="space-y-3 px-3 py-3">
-        <div className="space-y-1">
-          <label
-            htmlFor="sparse-preset-name"
-            className="block text-[11px] font-medium text-muted-foreground"
-          >
-            {translate('auto.components.sparse.SparseCheckoutPresetSelect.b3a500c623', 'Name')}
-          </label>
-          <div className="rounded-md border border-border/70 bg-muted/20 px-2.5 shadow-xs transition focus-within:border-ring/70 focus-within:ring-1 focus-within:ring-ring/30">
-            <input
-              id="sparse-preset-name"
-              ref={setNameInputNode}
-              value={draft.name}
-              onChange={(event) => onDraftChange({ ...draft, name: event.target.value })}
-              placeholder={translate(
-                'auto.components.sparse.SparseCheckoutPresetSelect.064c1e2d12',
-                'Renderer UI'
-              )}
-              maxLength={80}
-              autoComplete="off"
-              spellCheck={false}
-              className="h-8 w-full bg-transparent text-xs text-foreground outline-none selection:bg-primary selection:text-primary-foreground placeholder:text-muted-foreground"
-            />
-          </div>
-        </div>
-        <div className="space-y-1">
-          <label
-            htmlFor="sparse-preset-directories"
-            className="block text-[11px] font-medium text-muted-foreground"
-          >
-            {translate(
-              'auto.components.sparse.SparseCheckoutPresetSelect.0e9ad9c798',
-              'Directories'
-            )}
-          </label>
-          <div className="rounded-md border border-border/70 bg-muted/20 px-2.5 py-1.5 shadow-xs transition focus-within:border-ring/70 focus-within:ring-1 focus-within:ring-ring/30">
-            <textarea
-              id="sparse-preset-directories"
-              value={draft.directoriesText}
-              onChange={(event) => onDraftChange({ ...draft, directoriesText: event.target.value })}
-              placeholder={translate(
-                'auto.components.sparse.SparseCheckoutPresetSelect.ddbcaef7be',
-                'src/renderer packages/ui'
-              )}
-              rows={3}
-              spellCheck={false}
-              className="max-h-28 w-full min-w-0 resize-none bg-transparent font-mono text-xs leading-5 text-foreground outline-none selection:bg-primary selection:text-primary-foreground placeholder:text-muted-foreground"
-            />
-          </div>
-        </div>
-      </div>
-      <div className="flex min-h-11 items-center justify-between gap-3 border-t border-border px-3 py-2">
-        <div className="min-w-0 text-[10px] text-muted-foreground">
-          {nameError ? (
-            <span className="text-destructive">{nameError}</span>
-          ) : parsedDirectories?.error ? (
-            <span className="text-destructive">{parsedDirectories.error}</span>
-          ) : parsedDirectories?.directories.length === 1 ? (
-            translate('auto.components.sparse.SparseCheckoutPresetSelect.e9283eb171', '1 directory')
-          ) : (
-            translate(
-              'auto.components.sparse.SparseCheckoutPresetSelect.14952d451e',
-              '{{value0}} directories',
-              { value0: parsedDirectories?.directories.length ?? 0 }
-            )
-          )}
-        </div>
-        <div className="flex shrink-0 justify-end gap-1">
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="h-7 px-2 text-xs text-muted-foreground"
-            onClick={onCancel}
+      <div className="space-y-3">
+        <div className="space-y-2">
+          <Label htmlFor={`${id}-name`}>{translate('sparsePreset.name', 'Name')}</Label>
+          <Input
+            id={`${id}-name`}
+            ref={setNameInputNode}
+            value={draft.name}
+            onChange={(event) => onDraftChange({ ...draft, name: event.target.value })}
+            placeholder={translate('sparsePreset.namePlaceholder', 'Web app and shared UI')}
             disabled={submitting}
-          >
-            {translate('auto.components.sparse.SparseCheckoutPresetSelect.de8fce5854', 'Cancel')}
+            autoComplete="off"
+            spellCheck={false}
+            onBlur={() => setNameTouched(true)}
+            aria-invalid={!!visibleNameError}
+            aria-describedby={visibleNameError ? `${id}-name-error` : undefined}
+          />
+          {visibleNameError ? (
+            <p id={`${id}-name-error`} className="text-xs text-destructive">
+              {visibleNameError}
+            </p>
+          ) : null}
+        </div>
+        <div className="space-y-2">
+          <Label id={`${id}-directories`}>
+            {translate('sparsePreset.directories', 'Directories')}
+          </Label>
+          <p id={`${id}-help`} className="text-xs text-muted-foreground">
+            {translate(
+              'sparsePreset.pathInstructions',
+              'Pick folders from the repository, or type any repo-relative path.'
+            )}
+          </p>
+          <SparseDirectoryPicker
+            rootPath={repoRootPath ?? ''}
+            connectionId={repoConnectionId}
+            selected={selectedDirectories}
+            disabled={submitting}
+            describedById={`${id}-help ${id}-directory-status`}
+            onAdd={addDirectories}
+          />
+          <SparseSelectedDirectoryList
+            directories={selectedDirectories}
+            disabled={submitting}
+            onRemove={removeDirectory}
+          />
+          <p id={`${id}-directory-status`} aria-live="polite">
+            {directoryError ? (
+              <span className="text-xs text-destructive">{directoryError}</span>
+            ) : null}
+          </p>
+        </div>
+        <details className="space-y-2 text-xs text-muted-foreground">
+          <summary className="cursor-pointer">
+            {translate('sparsePreset.details', 'What gets checked out?')}
+          </summary>
+          <p>
+            {translate(
+              'sparsePreset.coneHelp',
+              'Git also keeps files at the repository root and along the parent folders of these directories.'
+            )}
+          </p>
+        </details>
+      </div>
+      <div className="space-y-3 border-t border-border pt-3">
+        {operationError ? (
+          <p role="alert" className="text-sm text-destructive">
+            {operationError}
+          </p>
+        ) : null}
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="ghost" onClick={onCancel} disabled={submitting}>
+            {translate('sparsePreset.cancel', 'Cancel')}
           </Button>
-          <Button type="submit" size="sm" className="h-7 px-2 text-xs" disabled={!canSave}>
-            {submitting ? <LoaderCircle className="size-3 animate-spin" /> : null}
-            {translate('auto.components.sparse.SparseCheckoutPresetSelect.8b12c0850a', 'Save')}
+          <Button
+            type="submit"
+            disabled={!canSave}
+            aria-busy={submitting}
+            aria-label={translate('sparsePreset.save', 'Save preset')}
+          >
+            <span className="relative">
+              <span className="data-[saving=true]:invisible" data-saving={submitting}>
+                {translate('sparsePreset.save', 'Save preset')}
+              </span>
+              {submitting ? (
+                <span className="absolute inset-0 flex items-center justify-center">
+                  <Loader2 className="size-4 animate-spin" />
+                </span>
+              ) : null}
+            </span>
           </Button>
         </div>
       </div>

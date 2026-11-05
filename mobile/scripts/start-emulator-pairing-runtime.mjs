@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process'
-import { mkdtempSync } from 'node:fs'
+import { mkdirSync, mkdtempSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
@@ -24,6 +24,9 @@ export async function startHeadlessPairingRuntime({
   logStep('0', 'Starting temporary desktop runtime for mobile pairing...')
   const runDir = mkdtempSync(path.join(os.tmpdir(), 'orca-mobile-run.'))
   const userData = path.join(runDir, 'userData')
+  // Give pairing runtime disposable HOME matching main-process E2E boot guard.
+  const homeDir = path.join(runDir, 'home')
+  mkdirSync(homeDir, { recursive: true, mode: 0o700 })
   const pairingAddress = primaryLanIp(lanIpCandidates)
   const child = spawn(
     orcaCli,
@@ -32,7 +35,10 @@ export async function startHeadlessPairingRuntime({
       cwd,
       env: {
         ...process.env,
-        ORCA_E2E_USER_DATA_DIR: userData
+        ORCA_E2E_USER_DATA_DIR: userData,
+        ORCA_E2E_HOME_DIR: homeDir,
+        HOME: homeDir,
+        USERPROFILE: homeDir
       },
       stdio: ['ignore', 'pipe', 'pipe']
     }
@@ -78,7 +84,9 @@ async function waitForPairingRuntime({ child, userData, pairingAddress, logSucce
     process: child,
     env: {
       ...process.env,
-      ORCA_USER_DATA_PATH: userData
+      ORCA_USER_DATA_PATH: userData,
+      // orca-dev ignores ORCA_USER_DATA_PATH; override derived profile so CLI addresses disposable runtime. Plain orca ignores this.
+      ORCA_DEV_USER_DATA_PATH: userData
     },
     stop
   })

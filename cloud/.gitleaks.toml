@@ -1,0 +1,20 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Explicit Relay test signing key"
+regexTarget = "secret"
+regexes = ['''^test-assignment-key-with-at-least-32-bytes$''']
+
+# Fixture lease holders use owner/repo/run_id, which the generic key rule mistakes for a secret.
+[[allowlists]]
+description = "Cloud SQL rollout lease holder keys in the action's unit tests"
+regexTarget = "secret"
+paths = ['''\.github/actions/cloud-sql-rollout-lease/[a-z-]+\.test\.mjs$''']
+regexes = ['''^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/[0-9]+$''']
+
+# Raw-socket tests use RFC 6455 §1.3’s example base64 nonce, triggering the generic key rule.
+[[allowlists]]
+description = "RFC 6455 example Sec-WebSocket-Key in upgrade tests"
+regexTarget = "secret"
+regexes = ['''^dGhlIHNhbXBsZSBub25jZQ==$''']

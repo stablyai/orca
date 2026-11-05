@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
-  buildReactErrorBoundaryReportArgs,
   clearReactErrorBoundaryReportingForTest,
   reportReactErrorBoundaryCrash
 } from './react-error-boundary-reporting'
@@ -67,35 +66,6 @@ afterEach(() => {
 })
 
 describe('react error boundary reporting', () => {
-  it('builds a renderer error payload with low-cardinality app context', () => {
-    const args = buildReactErrorBoundaryReportArgs({
-      boundaryId: 'terminal.workbench',
-      surface: 'terminal-workbench',
-      error: new TypeError('Cannot render /Users/alice/project'),
-      errorInfo: { componentStack: 'at Terminal\nat App' },
-      context: {
-        activeView: 'terminal',
-        activeModal: 'none',
-        activeTabType: 'editor',
-        activeRightSidebarTab: 'source-control',
-        hasActiveWorktree: true
-      }
-    })
-
-    expect(args).toMatchObject({
-      boundaryId: 'terminal.workbench',
-      surface: 'terminal-workbench',
-      errorName: 'TypeError',
-      errorMessage: 'Cannot render /Users/alice/project',
-      componentStack: 'at Terminal\nat App',
-      activeView: 'terminal',
-      activeModal: 'none',
-      activeTabType: 'editor',
-      activeRightSidebarTab: 'source-control',
-      hasActiveWorktree: true
-    })
-  })
-
   it('reports a caught render error once per boundary signature', async () => {
     const error = new Error('render failed')
     await reportReactErrorBoundaryCrash({

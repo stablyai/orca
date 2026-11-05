@@ -1,58 +1,35 @@
 import { describe, expect, it, vi } from 'vitest'
+
 import { subscribeRuntimeClientEvents } from './runtime-client-events'
+import {
+  recordRuntimeSubscription,
+  stubRuntimeEnvironmentBridge
+} from './runtime-environment-bridge-fixture'
 
 describe('subscribeRuntimeClientEvents', () => {
-  it('subscribes to runtime client events and forwards event frames', async () => {
-    const unsubscribe = vi.fn()
-    let capturedOnResponse: ((response: unknown) => void) | undefined
-    const subscribe = vi.fn(async (_args, nextCallbacks) => {
-      capturedOnResponse = (nextCallbacks as { onResponse: (response: unknown) => void }).onResponse
-      return { unsubscribe, sendBinary: vi.fn() }
-    })
+  it('rejects a partial runtime authority instead of retaining it', async () => {
+    const { subscribe, respond } = recordRuntimeSubscription({ subscriptionId: 'sub-1' })
     const onEvent = vi.fn()
     const onError = vi.fn()
+    stubRuntimeEnvironmentBridge({ subscribe })
+    await subscribeRuntimeClientEvents('env-1', onEvent, onError)
 
-    vi.stubGlobal('window', {
-      api: {
-        runtimeEnvironments: { subscribe }
+    respond({
+      ok: true,
+      result: {
+        type: 'sshStateChanged',
+        targetId: 'ssh-1',
+        state: {
+          targetId: 'ssh-1',
+          status: 'connected',
+          error: null,
+          reconnectAttempt: 0,
+          providerEpoch: 'partial-provider-epoch'
+        }
       }
     })
 
-    const subscription = await subscribeRuntimeClientEvents('env-1', onEvent, onError)
-
-    expect(subscribe).toHaveBeenCalledWith(
-      {
-        selector: 'env-1',
-        method: 'runtime.clientEvents.subscribe',
-        timeoutMs: 15_000
-      },
-      expect.objectContaining({
-        onResponse: expect.any(Function),
-        onError
-      })
-    )
-
-    if (!capturedOnResponse) {
-      throw new Error('Expected subscription callbacks')
-    }
-    capturedOnResponse({
-      ok: true,
-      result: { type: 'ready', subscriptionId: 'sub-1' }
-    })
-    capturedOnResponse({
-      ok: true,
-      result: { type: 'worktreesChanged', repoId: 'repo-1' }
-    })
-    capturedOnResponse({
-      ok: false,
-      error: { code: 'method_not_found', message: 'missing' }
-    })
-
-    expect(onEvent).toHaveBeenCalledTimes(1)
-    expect(onEvent).toHaveBeenCalledWith({ type: 'worktreesChanged', repoId: 'repo-1' })
-    expect(onError).toHaveBeenCalledWith({ code: 'method_not_found', message: 'missing' })
-
-    subscription.unsubscribe()
-    expect(unsubscribe).toHaveBeenCalledTimes(1)
+    expect(onEvent).not.toHaveBeenCalled()
+    expect(onError).toHaveBeenCalledWith(expect.objectContaining({ message: expect.any(String) }))
   })
 })

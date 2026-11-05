@@ -1,4 +1,4 @@
-import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
+import { isTerminalDropWindowsPathLike } from '../../../../shared/image-path-paste'
 import { isWslUncPath } from '../../../../shared/wsl-paths'
 import { isWindowsUserAgent } from './pane-helpers'
 
@@ -15,30 +15,22 @@ export function resolveTerminalDropTargetShell({
   activeRuntimeEnvironmentId,
   worktreePath,
   connectionId,
-  remotePlatform,
   userAgent
 }: {
   activeRuntimeEnvironmentId: string | null | undefined
   worktreePath: string | null | undefined
   connectionId: string | null | undefined
-  remotePlatform?: NodeJS.Platform | null
   userAgent?: string
 }): TerminalTargetShell {
   if (activeRuntimeEnvironmentId?.trim() && worktreePath) {
     return getTerminalTargetShellForWorktreePath(worktreePath)
   }
+  // Why: only a relay-era SSH row still has a connectionId, and its pane cannot accept input.
   if (typeof connectionId === 'string') {
-    return remotePlatform === 'win32' ? 'windows' : 'posix'
+    return 'posix'
   }
   if (worktreePath && isWslUncPath(worktreePath)) {
     return 'posix'
   }
   return isWindowsUserAgent(userAgent) ? 'windows' : 'posix'
-}
-
-export function isTerminalDropWindowsPathLike(path: string): boolean {
-  if (isWslUncPath(path)) {
-    return false
-  }
-  return isWindowsAbsolutePathLike(path) || path.includes('\\')
 }

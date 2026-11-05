@@ -21,7 +21,8 @@ export function getPRReviewCommentLineNumbersFromPatch(patch: string | undefined
       continue
     }
 
-    if (line.startsWith('+') && !line.startsWith('+++')) {
+    // Per-file headers precede the hunk; +++ inside a hunk is added content.
+    if (line.startsWith('+')) {
       lineNumbers.push(nextModifiedLine)
       nextModifiedLine++
       continue

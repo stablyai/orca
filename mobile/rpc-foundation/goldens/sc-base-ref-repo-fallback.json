@@ -1,0 +1,118 @@
+{
+  "goldenFormatVersion": 6,
+  "operation": "source-control.branch-base-ref",
+  "family": "git.base-ref-chain",
+  "namedDeltas": [],
+  "values": {
+    "0fa683226c0a": {
+      "name": "worktree.show#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.show"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "no worktree"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "74dda17aff6f": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": "origin/rel"
+    },
+    "d64700b9de3b": {
+      "name": "repo.list#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}"
+    },
+    "dc11f1ff4a3d": {
+      "baseRef": "origin/rel"
+    },
+    "dfcd2e1792cb": {
+      "name": "worktree.show#1",
+      "ordinal": 3,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:repo42::/p\"}}"
+    },
+    "dff5c38c64e4": {
+      "name": "repo.list#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "repos": [
+              {
+                "id": "repo42",
+                "worktreeBaseRef": " origin/rel "
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+  "recording": {
+    "scenario": "sc-base-ref-repo-fallback",
+    "checkpoints": [
+      {
+        "id": "settled",
+        "observation": {
+          "sender": ["0fa683226c0a", "dff5c38c64e4"],
+          "payloads": ["dfcd2e1792cb", "d64700b9de3b"],
+          "settlements": {
+            "resolve": "74dda17aff6f"
+          },
+          "state": "dc11f1ff4a3d",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

@@ -1,14 +1,18 @@
-import type { JSX } from 'react'
+import type { JSX, Ref } from 'react'
 import { Loader2 } from 'lucide-react'
 import type { FeatureTip, FeatureTipAction } from '../../../../shared/feature-tips'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
+import { getLocalizedFeatureTipCopy } from './feature-tip-localized-copy'
 
 function getPrimaryBusyLabel(action: FeatureTipAction): string {
   if (action === 'setup-cli') {
-    return 'Installing...'
+    return translate('auto.components.feature.tips.FeatureTipActions.installing', 'Installing...')
   }
-  return 'Working...'
+  if (action === 'enable-session-search') {
+    return translate('auto.components.feature.tips.FeatureTipActions.turningOn', 'Turning on...')
+  }
+  return translate('auto.components.feature.tips.FeatureTipActions.working', 'Working...')
 }
 
 export function FeatureTipActions({
@@ -17,24 +21,46 @@ export function FeatureTipActions({
   onPrimaryAction,
   onSkip,
   showSkip = true,
-  fullWidth = false
+  swapButtons = false,
+  fullWidth = false,
+  primaryButtonRef,
+  label,
+  secondaryLabel
 }: {
   currentTip: FeatureTip
   primaryBusy: boolean
   onPrimaryAction: () => void
   onSkip: () => void
   showSkip?: boolean
+  swapButtons?: boolean
+  /** Fills the footer row, or what a sibling button leaves of it. */
   fullWidth?: boolean
+  primaryButtonRef?: Ref<HTMLButtonElement>
+  /** Overrides the tip's CTA for tips whose button changes with their state. */
+  label?: string
+  /** Overrides the secondary button's default "Maybe Later". */
+  secondaryLabel?: string
 }): JSX.Element {
+  const skipButton = showSkip ? (
+    <Button
+      ref={swapButtons ? primaryButtonRef : undefined}
+      variant={swapButtons ? 'default' : 'ghost'}
+      className={fullWidth && swapButtons ? 'w-full flex-1' : undefined}
+      onClick={onSkip}
+      disabled={primaryBusy}
+    >
+      {secondaryLabel ??
+        translate('auto.components.feature.tips.FeatureTipActions.eb04abece8', 'Maybe Later')}
+    </Button>
+  ) : null
+
   return (
     <>
-      {showSkip ? (
-        <Button variant="ghost" onClick={onSkip} disabled={primaryBusy}>
-          {translate('auto.components.feature.tips.FeatureTipActions.eb04abece8', 'Maybe Later')}
-        </Button>
-      ) : null}
+      {swapButtons ? null : skipButton}
       <Button
-        className={fullWidth ? 'w-full' : undefined}
+        ref={swapButtons ? undefined : primaryButtonRef}
+        variant={swapButtons ? 'ghost' : 'default'}
+        className={fullWidth && !swapButtons ? 'w-full flex-1' : undefined}
         onClick={onPrimaryAction}
         disabled={primaryBusy}
       >
@@ -44,9 +70,10 @@ export function FeatureTipActions({
             {getPrimaryBusyLabel(currentTip.action)}
           </>
         ) : (
-          currentTip.ctaLabel
+          (label ?? getLocalizedFeatureTipCopy(currentTip).ctaLabel)
         )}
       </Button>
+      {swapButtons ? skipButton : null}
     </>
   )
 }

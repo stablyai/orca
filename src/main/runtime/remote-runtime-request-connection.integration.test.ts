@@ -1,23 +1,28 @@
-import { mkdtempSync, rmSync } from 'fs'
-import { tmpdir } from 'os'
-import { join } from 'path'
+import { pairedRuntimeConnectionFromOffer } from '../../shared/remote-runtime/pairing/paired-runtime-connection'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { getDefaultRepoHookSettings } from '../../shared/constants'
-import type { Repo } from '../../shared/types'
-import { parsePairingCode } from '../../shared/pairing'
-import { RemoteRuntimeRequestConnection } from '../../shared/remote-runtime-request-connection'
-import { RemoteRuntimeSharedControlConnection } from '../../shared/remote-runtime-shared-control-connection'
-import { subscribeRemoteRuntimeRequest } from '../../shared/remote-runtime-client'
+import type { Repo } from '../../shared/repo-types'
+import { parsePairingCode } from '../../shared/remote-runtime/pairing/pairing'
+import { RemoteRuntimeRequestConnection } from '../../shared/remote-runtime/requests/remote-runtime-request-connection'
+import { RemoteRuntimeSharedControlConnection } from '../../shared/remote-runtime/control/remote-runtime-shared-control-connection'
+import { subscribeRemoteRuntimeRequest } from '../../shared/remote-runtime/remote-runtime-client'
 import type {
   RuntimeClientEvent,
   RuntimeClientEventStreamMessage
 } from '../../shared/runtime-client-events'
 import type { OrcaRuntimeService } from './orca-runtime'
-import { OrcaRuntimeRpcServer } from './runtime-rpc'
+import { OrcaRuntimeRpcServer } from './rpc/server/runtime-rpc'
 import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../shared/protocol-version'
 
 const REMOTE_RUNTIME_TEST_TIMEOUT_MS = 15_000
 const REMOTE_RUNTIME_REQUEST_TIMEOUT_MS = 5_000
+
+// Bypass create idempotency here to test request connection behavior alone.
+const passthroughDedupe = <T>(_repo: string, _id: string | undefined, run: () => Promise<T>) =>
+  run()
 
 describe('remote runtime request connection integration', () => {
   it(
@@ -38,13 +43,14 @@ describe('remote runtime request connection integration', () => {
           kind: 'git'
         }
       ]
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: repo.list over the real socket only calls the runtime methods defined below.
       const runtime = {
+        configureNotificationDismissalStore: () => {},
         getRuntimeId: () => 'fetch-runtime-test',
         getStartedAt: () => 1,
         cleanupSubscriptionsForConnection: () => {},
-        cancelMobileDictationForConnection: () => {},
         onClientDisconnected: () => {},
-        listRepos: () => repos
+        listVisibleRepos: () => repos
       } as unknown as OrcaRuntimeService
       const server = new OrcaRuntimeRpcServer({
         runtime,
@@ -63,7 +69,9 @@ describe('remote runtime request connection integration', () => {
         if (!pairing) {
           throw new Error('invalid pairing')
         }
-        const connection = new RemoteRuntimeRequestConnection(pairing)
+        const connection = new RemoteRuntimeRequestConnection(
+          pairedRuntimeConnectionFromOffer(pairing)
+        )
         try {
           await expect(
             connection.request('repo.list', undefined, REMOTE_RUNTIME_REQUEST_TIMEOUT_MS)
@@ -109,7 +117,9 @@ describe('remote runtime request connection integration', () => {
       ]
       const clientEventListeners = new Set<(event: RuntimeClientEvent) => void>()
       const subscriptionCleanups = new Map<string, () => void>()
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this socket fixture implements every runtime method used by client-events subscribe and repo.list.
       const runtime = {
+        configureNotificationDismissalStore: () => {},
         getRuntimeId: () => 'events-runtime-test',
         getStartedAt: () => 1,
         cleanupSubscriptionsForConnection: (connectionId: string) => {
@@ -127,7 +137,6 @@ describe('remote runtime request connection integration', () => {
           subscriptionCleanups.get(id)?.()
           subscriptionCleanups.delete(id)
         },
-        cancelMobileDictationForConnection: () => {},
         onClientDisconnected: () => {},
         showRepo: (selector: string) => {
           if (selector !== repo.id && selector !== `id:${repo.id}`) {
@@ -135,6 +144,7 @@ describe('remote runtime request connection integration', () => {
           }
           return repo
         },
+        getClientSettings: () => ({ nativeChatQueueFollowUps: false }),
         onClientEvent: (listener: (event: RuntimeClientEvent) => void) => {
           clientEventListeners.add(listener)
           return () => clientEventListeners.delete(listener)
@@ -145,6 +155,7 @@ describe('remote runtime request connection integration', () => {
           source: 'git',
           worktrees
         }),
+        dedupeWorktreeCreate: passthroughDedupe,
         createManagedWorktree: ({ name }: { name?: string }) => {
           const worktree = {
             id: `repo-1::${name || 'created'}`,
@@ -181,7 +192,7 @@ describe('remote runtime request connection integration', () => {
 
         const events: RuntimeClientEventStreamMessage[] = []
         const subscription = await subscribeRemoteRuntimeRequest<RuntimeClientEventStreamMessage>(
-          pairing,
+          pairedRuntimeConnectionFromOffer(pairing),
           'runtime.clientEvents.subscribe',
           undefined,
           REMOTE_RUNTIME_REQUEST_TIMEOUT_MS,
@@ -196,8 +207,10 @@ describe('remote runtime request connection integration', () => {
             }
           }
         )
-        const desktop = new RemoteRuntimeRequestConnection(pairing)
-        const mobile = new RemoteRuntimeRequestConnection(pairing)
+        const desktop = new RemoteRuntimeRequestConnection(
+          pairedRuntimeConnectionFromOffer(pairing)
+        )
+        const mobile = new RemoteRuntimeRequestConnection(pairedRuntimeConnectionFromOffer(pairing))
         try {
           await waitFor(() => events.some((event) => event.type === 'ready'))
 
@@ -251,6 +264,219 @@ describe('remote runtime request connection integration', () => {
   )
 
   it(
+    'delivers one host-authoritative sleep and ordered disposition to two remote clients',
+    { timeout: REMOTE_RUNTIME_TEST_TIMEOUT_MS },
+    async () => {
+      const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-remote-sleep-'))
+      const clientEventListeners = new Set<(event: RuntimeClientEvent) => void>()
+      const subscriptionCleanups = new Map<string, () => void>()
+      const worktreeId = 'repo-1::C:\\repo\\feature'
+      const ptyId = `${worktreeId}@@pty-1`
+      let sleepSnapshot: RuntimeClientEvent[] = []
+      const launchDraftResolutionSnapshot: RuntimeClientEvent[] = [
+        {
+          type: 'nativeChatLaunchDraftResolved',
+          tabId: 'tab-1',
+          text: 'seed',
+          createdAt: 7
+        }
+      ]
+      const emit = (event: RuntimeClientEvent): void => {
+        for (const listener of clientEventListeners) {
+          listener(event)
+        }
+      }
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this sleep socket fixture implements every runtime method reached by its subscriptions and list requests.
+      const runtime = {
+        configureNotificationDismissalStore: () => {},
+        getRuntimeId: () => 'remote-sleep-runtime-test',
+        getStartedAt: () => 1,
+        cleanupSubscriptionsForConnection: (connectionId: string) => {
+          for (const [id, cleanup] of subscriptionCleanups) {
+            if (id.includes(connectionId)) {
+              cleanup()
+              subscriptionCleanups.delete(id)
+            }
+          }
+        },
+        registerSubscriptionCleanup: (id: string, cleanup: () => void) => {
+          subscriptionCleanups.set(id, cleanup)
+        },
+        cleanupSubscription: (id: string) => {
+          subscriptionCleanups.get(id)?.()
+          subscriptionCleanups.delete(id)
+        },
+        onClientDisconnected: () => {},
+        getClientSettings: () => ({ nativeChatQueueFollowUps: false }),
+        onClientEvent: (listener: (event: RuntimeClientEvent) => void) => {
+          clientEventListeners.add(listener)
+          return () => clientEventListeners.delete(listener)
+        },
+        getTerminalSleepClientEventSnapshot: () => sleepSnapshot,
+        getNativeChatLaunchDraftResolutionClientEventSnapshot: () => launchDraftResolutionSnapshot,
+        sleepTerminalsForWorktree: async () => {
+          emit({
+            type: 'worktreeTerminalSleepState',
+            worktreeId,
+            generation: 1,
+            phase: 'started',
+            ptyIds: [ptyId],
+            terminalHandles: ['terminal-handle-1']
+          })
+          emit({
+            type: 'worktreeTerminalSleepState',
+            worktreeId,
+            generation: 1,
+            phase: 'committed',
+            ptyIds: [ptyId],
+            terminalHandles: ['terminal-handle-1']
+          })
+          sleepSnapshot = [
+            {
+              type: 'worktreeTerminalSleepState',
+              worktreeId,
+              generation: 1,
+              phase: 'committed',
+              ptyIds: [ptyId],
+              terminalHandles: ['terminal-handle-1']
+            }
+          ]
+          return {
+            stopped: 1,
+            stoppedPtyIds: [ptyId],
+            livePtyIds: [ptyId],
+            postStopVerified: true
+          }
+        }
+      } as unknown as OrcaRuntimeService
+      const server = new OrcaRuntimeRpcServer({
+        runtime,
+        userDataPath,
+        enableWebSocket: true,
+        wsPort: 0
+      })
+
+      await server.start()
+      try {
+        const offer = server.createPairingOffer({ name: 'remote-sleep', scope: 'runtime' })
+        if (!offer.available) {
+          throw new Error('pairing unavailable')
+        }
+        const pairing = parsePairingCode(offer.pairingUrl)
+        if (!pairing) {
+          throw new Error('invalid pairing')
+        }
+        const clientEvents: RuntimeClientEventStreamMessage[][] = [[], []]
+        const subscriptions = await Promise.all(
+          clientEvents.map((events) =>
+            subscribeRemoteRuntimeRequest<RuntimeClientEventStreamMessage>(
+              pairedRuntimeConnectionFromOffer(pairing),
+              'runtime.clientEvents.subscribe',
+              undefined,
+              REMOTE_RUNTIME_REQUEST_TIMEOUT_MS,
+              {
+                onResponse: (response) => {
+                  if (response.ok) {
+                    events.push(response.result)
+                  }
+                },
+                onError: (error) => {
+                  throw error
+                }
+              }
+            )
+          )
+        )
+        const requester = new RemoteRuntimeRequestConnection(
+          pairedRuntimeConnectionFromOffer(pairing)
+        )
+        try {
+          await waitFor(() =>
+            clientEvents.every((events) => events.some((e) => e.type === 'ready'))
+          )
+          for (const events of clientEvents) {
+            expect(events).toContainEqual(launchDraftResolutionSnapshot[0])
+          }
+          await expect(
+            requester.request(
+              'terminal.sleep',
+              { worktree: `id:${worktreeId}` },
+              REMOTE_RUNTIME_REQUEST_TIMEOUT_MS
+            )
+          ).resolves.toMatchObject({
+            ok: true,
+            result: { stopped: 1, postStopVerified: true }
+          })
+          await waitFor(() =>
+            clientEvents.every(
+              (events) =>
+                events.filter((event) => event.type === 'worktreeTerminalSleepState').length === 2
+            )
+          )
+          for (const events of clientEvents) {
+            expect(
+              events
+                .filter((event) => event.type === 'worktreeTerminalSleepState')
+                .map((event) => event.phase)
+            ).toEqual(['started', 'committed'])
+          }
+          const reconnectedEvents: RuntimeClientEventStreamMessage[] = []
+          const reconnected = await subscribeRemoteRuntimeRequest<RuntimeClientEventStreamMessage>(
+            pairedRuntimeConnectionFromOffer(pairing),
+            'runtime.clientEvents.subscribe',
+            undefined,
+            REMOTE_RUNTIME_REQUEST_TIMEOUT_MS,
+            {
+              onResponse: (response) => {
+                if (response.ok) {
+                  reconnectedEvents.push(response.result)
+                }
+              },
+              onError: (error) => {
+                throw error
+              }
+            }
+          )
+          try {
+            await waitFor(() => reconnectedEvents.some((event) => event.type === 'ready'))
+            expect(
+              reconnectedEvents
+                .filter((event) => event.type === 'worktreeTerminalSleepState')
+                .map((event) => event.phase)
+            ).toEqual(['committed'])
+            expect(reconnectedEvents).toContainEqual(launchDraftResolutionSnapshot[0])
+
+            sleepSnapshot = []
+            emit({
+              type: 'worktreeTerminalSleepState',
+              worktreeId,
+              generation: 1,
+              phase: 'woken',
+              ptyIds: [ptyId],
+              terminalHandles: ['terminal-handle-1']
+            })
+            await waitFor(() =>
+              reconnectedEvents.some(
+                (event) => event.type === 'worktreeTerminalSleepState' && event.phase === 'woken'
+              )
+            )
+          } finally {
+            reconnected.close()
+          }
+        } finally {
+          requester.close()
+          for (const subscription of subscriptions) {
+            subscription.close()
+          }
+        }
+      } finally {
+        await server.stop()
+        rmSync(userDataPath, { recursive: true, force: true })
+      }
+    }
+  )
+
+  it(
     'multiplexes shared-control calls and passive subscriptions through the real runtime',
     { timeout: REMOTE_RUNTIME_TEST_TIMEOUT_MS },
     async () => {
@@ -290,9 +516,12 @@ describe('remote runtime request connection integration', () => {
         activeTabType: null,
         tabs: []
       }
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fake carries only the surface the shared-control and status paths under test read.
       const runtime = {
+        configureNotificationDismissalStore: () => {},
         getRuntimeId: () => 'shared-runtime-test',
         getStartedAt: () => 1,
+        machineNameReady: async () => undefined,
         getStatus: () => ({
           runtimeId: 'shared-runtime-test',
           startedAt: 1,
@@ -325,14 +554,21 @@ describe('remote runtime request connection integration', () => {
             }
           }
         },
-        cancelMobileDictationForConnection: () => {},
         onClientDisconnected: () => {},
+        getClientSettings: () => ({ nativeChatQueueFollowUps: false }),
         onClientEvent: (listener: (event: RuntimeClientEvent) => void) => {
           clientEventListeners.add(listener)
           return () => clientEventListeners.delete(listener)
         },
         getAccountsSnapshot: () => ({ claude: null, codex: null }),
+        getAccountsStreamSnapshot: () => ({ claude: null, codex: null }),
+        getUsageRateLimits: () => null,
         refreshAccountsForMobile: async () => {
+          for (const listener of accountsListeners) {
+            listener({ claude: null, codex: null })
+          }
+        },
+        refreshAccountsForMobileSubscriber: async () => {
           for (const listener of accountsListeners) {
             listener({ claude: null, codex: null })
           }
@@ -352,7 +588,7 @@ describe('remote runtime request connection integration', () => {
           return () => sessionTabListeners.delete(listener)
         },
         watchFileExplorer: async () => () => {},
-        listRepos: () => [repo],
+        listVisibleRepos: () => [repo],
         showRepo: (selector: string) => {
           if (selector !== repo.id && selector !== `id:${repo.id}`) {
             throw new Error('repo_not_found')
@@ -365,6 +601,7 @@ describe('remote runtime request connection integration', () => {
           source: 'git',
           worktrees
         }),
+        dedupeWorktreeCreate: passthroughDedupe,
         createManagedWorktree: ({ name }: { name?: string }) => {
           const worktree = {
             id: `repo-1::${name || 'created'}`,
@@ -400,7 +637,9 @@ describe('remote runtime request connection integration', () => {
         }
 
         const events: RuntimeClientEventStreamMessage[] = []
-        const shared = new RemoteRuntimeSharedControlConnection(pairing)
+        const shared = new RemoteRuntimeSharedControlConnection(
+          pairedRuntimeConnectionFromOffer(pairing)
+        )
         const subscription = await shared.subscribe<RuntimeClientEventStreamMessage>(
           'runtime.clientEvents.subscribe',
           undefined,
@@ -478,9 +717,7 @@ describe('remote runtime request connection integration', () => {
             REMOTE_RUNTIME_REQUEST_TIMEOUT_MS,
             () => `cleanup count ${subscriptionCleanups.size}, event count ${mixedEvents.length}`
           )
-          expect(
-            (server as unknown as { wsConnectionIds: Map<unknown, unknown> }).wsConnectionIds.size
-          ).toBe(1)
+          expect(server.getMobileSocketWiring()?.connectionCount).toBe(1)
           for (const mixed of mixedSubscriptions) {
             mixed.close()
           }
@@ -500,9 +737,7 @@ describe('remote runtime request connection integration', () => {
               )
             )
           )
-          expect(
-            (server as unknown as { wsConnectionIds: Map<unknown, unknown> }).wsConnectionIds.size
-          ).toBe(1)
+          expect(server.getMobileSocketWiring()?.connectionCount).toBe(1)
           for (const extra of extraSubscriptions) {
             extra.close()
           }

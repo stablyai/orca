@@ -3,8 +3,11 @@ import type { ReadClipboardTextOptions } from '../../../shared/clipboard-text'
 export const PRIMARY_SELECTION_MAX_LENGTH = 65_536
 const PRIMARY_SELECTION_MAX_BYTES = PRIMARY_SELECTION_MAX_LENGTH * 4
 
+const PRIMARY_SELECTION_NATIVE_PASTE_SUPPRESSION_MS = 750
+
 let enabled = false
 let primarySelectionText = ''
+let nativePasteSuppressionUntil = 0
 
 type SelectionClipboardApi = {
   readSelectionClipboardText: (options?: ReadClipboardTextOptions) => Promise<string>
@@ -45,7 +48,25 @@ export function setPrimarySelectionEnabled(nextEnabled: boolean): void {
   enabled = nextEnabled
   if (!enabled) {
     primarySelectionText = ''
+    nativePasteSuppressionUntil = 0
   }
+}
+
+// Only X11/Linux emits Chromium’s native paste after PTY middle-click injection; suppress that follow-up to avoid duplicates without swallowing pastes elsewhere.
+export function armPrimarySelectionNativePasteSuppression(now: number = Date.now()): void {
+  if (!enabled || !isLinuxUserAgent(getUserAgent())) {
+    return
+  }
+  nativePasteSuppressionUntil = now + PRIMARY_SELECTION_NATIVE_PASTE_SUPPRESSION_MS
+}
+
+// Consume once; keyboard paste within the same 750ms window must remain available.
+export function consumePrimarySelectionNativePasteSuppression(now: number = Date.now()): boolean {
+  if (!enabled || nativePasteSuppressionUntil === 0 || now > nativePasteSuppressionUntil) {
+    return false
+  }
+  nativePasteSuppressionUntil = 0
+  return true
 }
 
 export function isPrimarySelectionEnabled(): boolean {
@@ -94,4 +115,5 @@ export async function readPrimarySelectionText(): Promise<string> {
 export function resetPrimarySelectionForTests(): void {
   enabled = false
   primarySelectionText = ''
+  nativePasteSuppressionUntil = 0
 }

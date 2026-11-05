@@ -1,47 +1,30 @@
 import {
+  getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
-  type ExecutionHostId,
   normalizeExecutionHostId,
   parseExecutionHostId,
   toRuntimeExecutionHostId,
-  toSshExecutionHostId
+  type ExecutionHostId
 } from './execution-host'
-import type { GlobalSettings, ProjectProviderIdentity, Repo } from './types'
+import {
+  areTaskProviderIdentitiesEqual,
+  isStoredTaskProviderIdentity,
+  normalizeTaskProviderIdentity,
+  taskProviderIdentityCachePart,
+  type TaskProviderIdentity
+} from './task-provider-identity'
+import { isTaskProvider, type TaskProvider } from './task-providers'
+import type { GlobalSettings } from './global-settings-types'
+import type { Repo } from './repo-types'
 
-export type TaskProvider = 'github' | 'gitlab' | 'linear' | 'jira'
-
-export type GitHubTaskProviderIdentity = ProjectProviderIdentity & {
-  provider: 'github'
-}
-
-export type GitLabTaskProviderIdentity = {
-  provider: 'gitlab'
-  projectId?: string | null
-  namespace?: string | null
-  project?: string | null
-  webUrl?: string | null
-}
-
-export type LinearTaskProviderIdentity = {
-  provider: 'linear'
-  workspaceId?: string | null
-  workspaceName?: string | null
-  teamId?: string | null
-  teamKey?: string | null
-}
-
-export type JiraTaskProviderIdentity = {
-  provider: 'jira'
-  siteId?: string | null
-  siteUrl?: string | null
-  projectKey?: string | null
-}
-
-export type TaskProviderIdentity =
-  | GitHubTaskProviderIdentity
-  | GitLabTaskProviderIdentity
-  | LinearTaskProviderIdentity
-  | JiraTaskProviderIdentity
+export type {
+  GitHubTaskProviderIdentity,
+  GitLabTaskProviderIdentity,
+  JiraTaskProviderIdentity,
+  LinearTaskProviderIdentity,
+  TaskProviderIdentity
+} from './task-provider-identity'
+export type { TaskProvider } from './task-providers'
 
 export type TaskSourceContext = {
   kind: 'task-source'
@@ -91,6 +74,34 @@ export function normalizeTaskSourceContext(
   }
 }
 
+export function normalizeStoredTaskSourceContext(value: unknown): TaskSourceContext | null {
+  if (!value || typeof value !== 'object') {
+    return null
+  }
+  const input = value as Record<string, unknown>
+  const provider = normalizeTaskProvider(input.provider)
+  if (
+    !provider ||
+    typeof input.projectId !== 'string' ||
+    (input.kind !== undefined && input.kind !== 'task-source') ||
+    !isNullableOptionalString(input.hostId) ||
+    !isNullableOptionalString(input.projectHostSetupId) ||
+    !isNullableOptionalString(input.repoId) ||
+    !isNullableOptionalString(input.accountLabel) ||
+    !isStoredTaskProviderIdentity(provider, input.providerIdentity)
+  ) {
+    return null
+  }
+  if (
+    typeof input.hostId === 'string' &&
+    input.hostId.trim().length > 0 &&
+    normalizeExecutionHostId(input.hostId) === null
+  ) {
+    return null
+  }
+  return normalizeTaskSourceContext(input as TaskSourceContextInput)
+}
+
 export function buildTaskSourceContextFromRepo(args: {
   provider: TaskProvider
   projectId: string
@@ -102,12 +113,48 @@ export function buildTaskSourceContextFromRepo(args: {
   return normalizeTaskSourceContext({
     provider: args.provider,
     projectId: args.projectId,
-    hostId: getRepoHostId(args.repo),
+    hostId: getRepoExecutionHostId(args.repo),
     repoId: args.repo.id,
     projectHostSetupId: args.projectHostSetupId,
     providerIdentity: args.providerIdentity,
     accountLabel: args.accountLabel
   })
+}
+
+export function areTaskSourceContextsEqual(
+  a: TaskSourceContext | null | undefined,
+  b: TaskSourceContext | null | undefined
+): boolean {
+  if (a === b) {
+    return true
+  }
+  if (!a || !b) {
+    return !a && !b
+  }
+  return (
+    a.provider === b.provider &&
+    a.projectId === b.projectId &&
+    a.hostId === b.hostId &&
+    (a.projectHostSetupId ?? null) === (b.projectHostSetupId ?? null) &&
+    (a.repoId ?? null) === (b.repoId ?? null) &&
+    (a.accountLabel ?? null) === (b.accountLabel ?? null) &&
+    areTaskProviderIdentitiesEqual(a.providerIdentity, b.providerIdentity)
+  )
+}
+
+/** Jira identity is siteId (site + login); its label is display-only. Callers match providers first. */
+export function haveConflictingTaskSourceAccounts(
+  a: Pick<TaskSourceContext, 'provider' | 'providerIdentity' | 'accountLabel'>,
+  b: Pick<TaskSourceContext, 'provider' | 'providerIdentity' | 'accountLabel'>
+): boolean {
+  if (a.provider === 'jira') {
+    const left = a.providerIdentity?.provider === 'jira' ? a.providerIdentity.siteId : null
+    const right = b.providerIdentity?.provider === 'jira' ? b.providerIdentity.siteId : null
+    return Boolean(left && right && left !== right)
+  }
+  const left = a.accountLabel?.trim()
+  const right = b.accountLabel?.trim()
+  return Boolean(left && right && left !== right)
 }
 
 export function getTaskSourceRuntimeSettings(
@@ -123,6 +170,7 @@ export function getTaskSourceCacheScope(
   context: Pick<TaskSourceContext, 'provider' | 'hostId' | 'projectId' | 'projectHostSetupId'> & {
     providerIdentity?: TaskProviderIdentity | null
     repoId?: string | null
+    accountLabel?: string | null
   }
 ): string {
   return [
@@ -131,10 +179,32 @@ export function getTaskSourceCacheScope(
     context.projectId,
     context.projectHostSetupId ?? '',
     context.repoId ?? '',
-    providerIdentityCachePart(context.providerIdentity)
+    taskProviderIdentityCachePart(context.providerIdentity),
+    ...(context.accountLabel?.trim() ? [context.accountLabel.trim()] : [])
   ]
     .map(encodeCachePart)
     .join(':')
+}
+
+// provider, hostId, projectId, projectHostSetupId, repoId, identity; accountLabel is optional.
+const TASK_SOURCE_CACHE_SCOPE_FIXED_PARTS = 6
+
+/** The host a {@link getTaskSourceCacheScope} scope was built for, or null when `scope` isn't a whole one. */
+export function taskSourceCacheScopeHostId(scope: string): ExecutionHostId | null {
+  // Empty scope parts contain ::; require full arity so truncated prefixes cannot parse as whole scopes.
+  const parts = scope.split(':')
+  const whole =
+    parts.length === TASK_SOURCE_CACHE_SCOPE_FIXED_PARTS ||
+    (parts.length === TASK_SOURCE_CACHE_SCOPE_FIXED_PARTS + 1 && parts.at(-1) !== '')
+  const [provider, encodedHostId] = parts
+  if (!whole || !isTaskProvider(provider) || !encodedHostId) {
+    return null
+  }
+  try {
+    return normalizeExecutionHostId(decodeURIComponent(encodedHostId))
+  } catch {
+    return null
+  }
 }
 
 export function buildWorkspaceRunContext(args: {
@@ -161,22 +231,7 @@ export function buildWorkspaceRunContext(args: {
   }
 }
 
-export function getWorkspaceRunRuntimeSettings(
-  context: Pick<WorkspaceRunContext, 'hostId'> | null | undefined
-): Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> {
-  return getTaskSourceRuntimeSettings(context ? { hostId: context.hostId } : null)
-}
-
-function getRepoHostId(repo: Pick<Repo, 'connectionId' | 'executionHostId'>): ExecutionHostId {
-  const explicit = normalizeExecutionHostId(repo.executionHostId)
-  if (explicit) {
-    return explicit
-  }
-  const connectionId = normalizeNonEmptyString(repo.connectionId)
-  return connectionId ? toSshExecutionHostId(connectionId) : LOCAL_EXECUTION_HOST_ID
-}
-
-function normalizeTaskProvider(value: string): TaskProvider | null {
+function normalizeTaskProvider(value: unknown): TaskProvider | null {
   switch (value) {
     case 'github':
     case 'gitlab':
@@ -188,35 +243,13 @@ function normalizeTaskProvider(value: string): TaskProvider | null {
   }
 }
 
-function normalizeTaskProviderIdentity(
-  provider: TaskProvider,
-  identity: TaskProviderIdentity | null | undefined
-): TaskProviderIdentity | null {
-  if (!identity || identity.provider !== provider) {
-    return null
-  }
-  return identity
-}
-
-function normalizeNonEmptyString(value: string | null | undefined): string | null {
-  const trimmed = value?.trim()
+function normalizeNonEmptyString(value: unknown): string | null {
+  const trimmed = typeof value === 'string' ? value.trim() : ''
   return trimmed ? trimmed : null
 }
 
-function providerIdentityCachePart(identity: TaskProviderIdentity | null | undefined): string {
-  if (!identity) {
-    return ''
-  }
-  switch (identity.provider) {
-    case 'github':
-      return [identity.owner, identity.repo].join('/')
-    case 'gitlab':
-      return identity.projectId ?? [identity.namespace, identity.project].filter(Boolean).join('/')
-    case 'linear':
-      return [identity.workspaceId, identity.teamId ?? identity.teamKey].filter(Boolean).join('/')
-    case 'jira':
-      return [identity.siteId ?? identity.siteUrl, identity.projectKey].filter(Boolean).join('/')
-  }
+function isNullableOptionalString(value: unknown): boolean {
+  return value === undefined || value === null || typeof value === 'string'
 }
 
 function encodeCachePart(value: string): string {

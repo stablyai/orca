@@ -27,6 +27,22 @@ describe('isTerminalGestureInput', () => {
     expect(isTerminalGestureInput(`${ESC}[<0;9999;9999M${ESC}[<0;9999;9999m`)).toBe(true)
   })
 
+  it('accepts SGR left-drag motion sequences but rejects a motion release', () => {
+    expect(isTerminalGestureInput(`${ESC}[<32;10;5M${ESC}[<32;11;5M`)).toBe(true)
+    expect(countTerminalGestureInputSequences(`${ESC}[<32;10;5M${ESC}[<32;11;5M`)).toBe(2)
+    expect(isTerminalGestureInput(`${ESC}[<0;10;5M${ESC}[<32;11;5M${ESC}[<0;11;5m`)).toBe(true)
+    expect(isTerminalGestureInput(`${ESC}[<32;10;5m`)).toBe(false)
+  })
+
+  it('accepts default-encoding left-drag motion sequences', () => {
+    expect(isTerminalGestureInput(`${ESC}[M${String.fromCharCode(64, 43, 38)}`)).toBe(true)
+    expect(
+      isTerminalGestureInput(
+        `${ESC}[M${String.fromCharCode(32, 33, 33)}${ESC}[M${String.fromCharCode(64, 34, 33)}${ESC}[M${String.fromCharCode(35, 34, 33)}`
+      )
+    ).toBe(true)
+  })
+
   it('accepts repeated default mouse wheel sequences', () => {
     expect(
       isTerminalGestureInput(

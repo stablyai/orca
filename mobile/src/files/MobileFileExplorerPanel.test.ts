@@ -1,0 +1,491 @@
+import { createElement, type ReactNode } from 'react'
+import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { MobileFileExplorerPanel } from './MobileFileExplorerPanel'
+import type { MobileDirEntry } from './file-tree'
+import type { RpcResponse } from '../transport/types'
+
+type MockClient = {
+  sendRequest: ReturnType<typeof vi.fn>
+}
+const mounted: ReactTestRenderer[] = []
+
+const mockTransport = vi.hoisted(
+  (): {
+    client: MockClient | null
+    connectionState: string
+    forceReconnect: ReturnType<typeof vi.fn> | null
+  } => ({
+    client: null,
+    connectionState: 'connected',
+    forceReconnect: vi.fn()
+  })
+)
+
+vi.mock('../platform/use-reduced-motion', () => ({ useReducedMotionEnabled: () => true }))
+vi.mock('react-native-reanimated', () => ({
+  Easing: { bezier: () => (t: number) => t },
+  default: { View: 'AnimatedView' },
+  useSharedValue: (initial: number) => ({ value: initial }),
+  useAnimatedStyle: () => ({}),
+  withTiming: (to: number) => to
+}))
+
+vi.mock('react-native', async () => {
+  const React = await import('react')
+  return {
+    ActivityIndicator: 'ActivityIndicator',
+    Animated: { View: 'View' },
+    FlatList: (props: {
+      data: unknown[]
+      keyExtractor: (item: unknown, index: number) => string
+      renderItem: (info: {
+        item: unknown
+        index: number
+        separators: Record<string, never>
+      }) => ReactNode
+    }) =>
+      React.createElement(
+        'FlatList',
+        props,
+        props.data.map((item, index) =>
+          React.createElement(
+            'FlatListItem',
+            { key: props.keyExtractor(item, index) },
+            props.renderItem({ item, index, separators: {} })
+          )
+        )
+      ),
+    Dimensions: { get: () => ({ width: 390, height: 844 }) },
+    Keyboard: { addListener: () => ({ remove() {} }), dismiss: () => {} },
+    Platform: { OS: 'web', select: (choices: Record<string, unknown>) => choices.web },
+    Pressable: 'Pressable',
+    StyleSheet: {
+      absoluteFill: {},
+      create: (styles: unknown) => styles,
+      hairlineWidth: 1
+    },
+    Text: 'Text',
+    TextInput: 'TextInput',
+    View: 'View'
+  }
+})
+
+vi.mock('react-native-safe-area-context', () => ({
+  SafeAreaView: 'SafeAreaView',
+  useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 })
+}))
+
+vi.mock('react-native-svg', () => ({
+  default: 'Svg',
+  Defs: 'Defs',
+  LinearGradient: 'LinearGradient',
+  Rect: 'Rect',
+  Stop: 'Stop'
+}))
+
+vi.mock('expo-router', () => ({
+  useRouter: () => ({
+    back: vi.fn(),
+    push: vi.fn()
+  })
+}))
+
+vi.mock('lucide-react-native', () => ({
+  ChevronDown: 'ChevronDown',
+  ChevronLeft: 'ChevronLeft',
+  ChevronRight: 'ChevronRight',
+  CircleAlert: 'CircleAlert',
+  File: 'File',
+  FileText: 'FileText',
+  Folder: 'Folder',
+  FolderOpen: 'FolderOpen',
+  Image: 'Image',
+  Search: 'Search',
+  SearchX: 'SearchX',
+  WifiOff: 'WifiOff',
+  X: 'X'
+}))
+
+vi.mock('../platform/haptics', () => ({
+  triggerSelection: vi.fn()
+}))
+
+vi.mock('./mobile-file-explorer-row-actions-sheet', () => ({
+  useMobileFileExplorerRowActions: () => ({ openRowActions: () => {}, rowActionsSheet: null })
+}))
+
+vi.mock('../transport/host-client-hooks', () => ({
+  useForceReconnect: () => mockTransport.forceReconnect,
+  useHostClient: () => ({
+    client: mockTransport.client,
+    state: mockTransport.connectionState
+  })
+}))
+
+function entry(name: string, isDirectory = false): MobileDirEntry {
+  return { name, isDirectory }
+}
+
+function ok(result: MobileDirEntry[]): RpcResponse {
+  return { id: 'response-id', ok: true, result, _meta: { runtimeId: 'runtime-id' } }
+}
+
+function createMockClient(entriesByPath: Record<string, MobileDirEntry[]>): MockClient {
+  return {
+    sendRequest: vi.fn(async (_method: string, params: { relativePath: string }) => {
+      return ok(entriesByPath[params.relativePath] ?? [])
+    })
+  }
+}
+
+async function renderExplorer(): Promise<ReactTestRenderer> {
+  let renderer: ReactTestRenderer | null = null
+  await act(async () => {
+    renderer = create(
+      createElement(MobileFileExplorerPanel, {
+        hostId: 'host-a',
+        worktreeId: 'worktree-a',
+        name: 'Example Worktree',
+        embedded: true
+      })
+    )
+  })
+  if (!renderer) {
+    throw new Error('MobileFileExplorerPanel did not render')
+  }
+  mounted.push(renderer)
+  return renderer
+}
+
+async function updateExplorer(renderer: ReactTestRenderer): Promise<void> {
+  await act(async () => {
+    renderer.update(
+      createElement(MobileFileExplorerPanel, {
+        hostId: 'host-a',
+        worktreeId: 'worktree-a',
+        name: 'Example Worktree',
+        embedded: true
+      })
+    )
+  })
+}
+
+async function pressByLabel(
+  renderer: ReactTestRenderer,
+  accessibilityLabel: string
+): Promise<void> {
+  const pressable = renderer.root
+    .findAll((node) => String(node.type) === 'Pressable')
+    .find((node) => node.props.accessibilityLabel === accessibilityLabel)
+  if (!pressable) {
+    throw new Error(`Unable to find pressable: ${accessibilityLabel}`)
+  }
+  await act(async () => {
+    pressable.props.onPress()
+  })
+}
+
+function renderedText(renderer: ReactTestRenderer): string {
+  return renderer.root
+    .findAll((node) => String(node.type) === 'Text')
+    .flatMap((node) => node.props.children)
+    .join(' ')
+}
+
+describe('MobileFileExplorerPanel', () => {
+  afterEach(() => {
+    for (const renderer of mounted.splice(0)) {
+      act(() => renderer.unmount())
+    }
+    vi.restoreAllMocks()
+    mockTransport.client = null
+    mockTransport.connectionState = 'connected'
+    mockTransport.forceReconnect = vi.fn()
+  })
+
+  it('loads directories lazily and reuses cached children when reopened', async () => {
+    const client = createMockClient({
+      '': [entry('src', true), entry('README.md')],
+      src: [entry('app.ts'), entry('components', true)]
+    })
+    mockTransport.client = client
+
+    const renderer = await renderExplorer()
+
+    expect(client.sendRequest).toHaveBeenCalledTimes(1)
+    expect(client.sendRequest).toHaveBeenLastCalledWith('files.readDir', {
+      worktree: 'id:worktree-a',
+      relativePath: ''
+    })
+
+    await pressByLabel(renderer, 'Open folder src')
+    await vi.waitFor(() => expect(client.sendRequest).toHaveBeenCalledTimes(2))
+    expect(client.sendRequest).toHaveBeenLastCalledWith('files.readDir', {
+      worktree: 'id:worktree-a',
+      relativePath: 'src'
+    })
+    expect(renderedText(renderer)).toContain('app.ts')
+
+    await pressByLabel(renderer, 'Open folder src')
+    await pressByLabel(renderer, 'Open folder src')
+
+    expect(client.sendRequest).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps the loaded tree visible during a transient disconnect', async () => {
+    const client = createMockClient({
+      '': [entry('src', true), entry('README.md')]
+    })
+    mockTransport.client = client
+
+    const renderer = await renderExplorer()
+    expect(renderedText(renderer)).toContain('src')
+
+    mockTransport.client = null
+    mockTransport.connectionState = 'disconnected'
+    await updateExplorer(renderer)
+
+    expect(client.sendRequest).toHaveBeenCalledTimes(1)
+    expect(renderedText(renderer)).toContain('src')
+    expect(renderedText(renderer)).toContain('README.md')
+    expect(renderedText(renderer)).not.toContain('Waiting for desktop')
+  })
+
+  it('refreshes the root in the background after reconnect without blanking the tree', async () => {
+    const client = createMockClient({
+      '': [entry('src', true), entry('README.md')]
+    })
+    mockTransport.client = client
+
+    const renderer = await renderExplorer()
+    expect(renderedText(renderer)).toContain('README.md')
+
+    mockTransport.client = null
+    mockTransport.connectionState = 'disconnected'
+    await updateExplorer(renderer)
+
+    let resolveReload: ((response: RpcResponse) => void) | undefined
+    const reconnectedClient: MockClient = {
+      sendRequest: vi.fn(
+        () =>
+          new Promise<RpcResponse>((resolve) => {
+            resolveReload = resolve
+          })
+      )
+    }
+    mockTransport.client = reconnectedClient
+    mockTransport.connectionState = 'connected'
+    await updateExplorer(renderer)
+
+    expect(reconnectedClient.sendRequest).toHaveBeenCalledTimes(1)
+    expect(renderedText(renderer)).toContain('src')
+    expect(renderedText(renderer)).toContain('README.md')
+
+    await act(async () => {
+      resolveReload?.(ok([entry('src', true), entry('README.md'), entry('CHANGELOG.md')]))
+    })
+    expect(renderedText(renderer)).toContain('CHANGELOG.md')
+  })
+
+  it('refreshes an expanded folder after reconnect instead of keeping deleted children', async () => {
+    mockTransport.client = createMockClient({
+      '': [entry('src', true)],
+      src: [entry('deleted-while-offline.ts')]
+    })
+    const renderer = await renderExplorer()
+    await pressByLabel(renderer, 'Open folder src')
+    expect(renderedText(renderer)).toContain('deleted-while-offline.ts')
+
+    mockTransport.client = null
+    mockTransport.connectionState = 'disconnected'
+    await updateExplorer(renderer)
+    mockTransport.client = createMockClient({
+      '': [entry('src', true)],
+      src: [entry('created-while-offline.ts')]
+    })
+    mockTransport.connectionState = 'connected'
+    await updateExplorer(renderer)
+
+    expect(renderedText(renderer)).toContain('created-while-offline.ts')
+    expect(renderedText(renderer)).not.toContain('deleted-while-offline.ts')
+    await pressByLabel(renderer, 'Open folder src')
+    await pressByLabel(renderer, 'Open folder src')
+    expect(renderedText(renderer)).toContain('created-while-offline.ts')
+    act(() => renderer.unmount())
+  })
+
+  it('rereads a previously cached collapsed folder when reopened after reconnect', async () => {
+    mockTransport.client = createMockClient({
+      '': [entry('src', true)],
+      src: [entry('deleted-while-offline.ts')]
+    })
+    const renderer = await renderExplorer()
+    await pressByLabel(renderer, 'Open folder src')
+    await pressByLabel(renderer, 'Open folder src')
+
+    mockTransport.client = null
+    mockTransport.connectionState = 'disconnected'
+    await updateExplorer(renderer)
+    mockTransport.client = createMockClient({
+      '': [entry('src', true)],
+      src: [entry('created-while-offline.ts')]
+    })
+    mockTransport.connectionState = 'connected'
+    await updateExplorer(renderer)
+    await pressByLabel(renderer, 'Open folder src')
+
+    expect(renderedText(renderer)).toContain('created-while-offline.ts')
+    expect(renderedText(renderer)).not.toContain('deleted-while-offline.ts')
+    act(() => renderer.unmount())
+  })
+
+  it('lets a superseded folder load retry when the reconnect root refresh fails', async () => {
+    let finishOldChild: (response: RpcResponse) => void = () => {}
+    const oldChild = new Promise<RpcResponse>((resolve) => {
+      finishOldChild = resolve
+    })
+    mockTransport.client = {
+      sendRequest: vi.fn(async (_method: string, params: { relativePath: string }) =>
+        params.relativePath === '' ? ok([entry('src', true)]) : oldChild
+      )
+    }
+    const renderer = await renderExplorer()
+    await pressByLabel(renderer, 'Open folder src')
+    mockTransport.client = null
+    mockTransport.connectionState = 'disconnected'
+    await updateExplorer(renderer)
+    const reconnected = {
+      sendRequest: vi.fn(async (): Promise<RpcResponse> => {
+        throw new Error('root refresh failed')
+      })
+    }
+    mockTransport.client = reconnected
+    mockTransport.connectionState = 'connected'
+    await updateExplorer(renderer)
+    await act(async () => {
+      finishOldChild(ok([entry('obsolete.ts')]))
+      await oldChild
+    })
+
+    reconnected.sendRequest.mockResolvedValue(ok([entry('current.ts')]))
+    await pressByLabel(renderer, 'Retry loading src')
+    expect(renderedText(renderer)).toContain('current.ts')
+    expect(renderedText(renderer)).not.toContain('obsolete.ts')
+    act(() => renderer.unmount())
+  })
+
+  it('keeps the cached tree when a post-reconnect root refresh fails', async () => {
+    const client = createMockClient({
+      '': [entry('src', true), entry('README.md')]
+    })
+    mockTransport.client = client
+
+    const renderer = await renderExplorer()
+    expect(renderedText(renderer)).toContain('README.md')
+
+    mockTransport.client = null
+    mockTransport.connectionState = 'disconnected'
+    await updateExplorer(renderer)
+
+    const failingClient: MockClient = {
+      sendRequest: vi.fn(async () => {
+        throw new Error('refresh failed')
+      })
+    }
+    mockTransport.client = failingClient
+    mockTransport.connectionState = 'connected'
+    await updateExplorer(renderer)
+
+    expect(failingClient.sendRequest).toHaveBeenCalledTimes(1)
+    expect(renderedText(renderer)).toContain('src')
+    expect(renderedText(renderer)).toContain('README.md')
+    expect(renderedText(renderer)).not.toContain('refresh failed')
+  })
+
+  it('falls back to the capped files.list against desktops without files.readDir', async () => {
+    const legacyClient: MockClient = {
+      sendRequest: vi.fn(async (method: string): Promise<RpcResponse> => {
+        if (method === 'files.readDir') {
+          return {
+            id: 'response-id',
+            ok: false,
+            error: {
+              code: 'forbidden',
+              message: "Method 'files.readDir' is not available to mobile clients"
+            },
+            _meta: { runtimeId: 'runtime-id' }
+          }
+        }
+        return {
+          id: 'response-id',
+          ok: true,
+          result: {
+            files: [
+              { relativePath: 'src/app.ts', basename: 'app.ts', kind: 'text' },
+              { relativePath: 'README.md', basename: 'README.md', kind: 'text' }
+            ],
+            totalCount: 2,
+            truncated: false
+          },
+          _meta: { runtimeId: 'runtime-id' }
+        }
+      })
+    }
+    mockTransport.client = legacyClient
+
+    const renderer = await renderExplorer()
+
+    expect(legacyClient.sendRequest).toHaveBeenCalledWith('files.list', {
+      worktree: 'id:worktree-a'
+    })
+    expect(renderedText(renderer)).toContain('src')
+    expect(renderedText(renderer)).toContain('README.md')
+
+    await pressByLabel(renderer, 'Open folder src')
+    expect(renderedText(renderer)).toContain('app.ts')
+    // The synthesized cache needs one readDir attempt and one files.list call, with no per-directory RPCs.
+    expect(legacyClient.sendRequest).toHaveBeenCalledTimes(2)
+  })
+
+  describe('Retry while the host is unreachable', () => {
+    function failingClient(failedPaths: Set<string>): MockClient {
+      return {
+        sendRequest: vi.fn(async (_method: string, params: { relativePath: string }) =>
+          failedPaths.has(params.relativePath)
+            ? {
+                id: 'response-id',
+                ok: false,
+                error: { code: 'internal', message: 'read failed' },
+                _meta: { runtimeId: 'runtime-id' }
+              }
+            : ok(params.relativePath === '' ? [entry('src', true)] : [entry('app.ts')])
+        )
+      }
+    }
+
+    it("keeps a folder's Retry on the page, whose read runs when the shell reconnects", async () => {
+      // Queue the read even without re-dial; any later connected event drains it.
+      mockTransport.forceReconnect = null
+      const client = failingClient(new Set(['src']))
+      mockTransport.client = client
+      const renderer = await renderExplorer()
+      await pressByLabel(renderer, 'Open folder src')
+      await vi.waitFor(() => expect(renderedText(renderer)).toContain('read failed'))
+      mockTransport.connectionState = 'reconnecting'
+      await updateExplorer(renderer)
+      client.sendRequest = failingClient(new Set()).sendRequest
+      await pressByLabel(renderer, 'Retry loading src')
+      mockTransport.connectionState = 'connected'
+      await updateExplorer(renderer)
+      await vi.waitFor(() =>
+        expect(client.sendRequest).toHaveBeenLastCalledWith('files.readDir', {
+          worktree: 'id:worktree-a',
+          relativePath: 'src'
+        })
+      )
+      expect(renderedText(renderer)).toContain('app.ts')
+      expect(renderedText(renderer)).not.toContain('read failed')
+    })
+  })
+})

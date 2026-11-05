@@ -31,7 +31,3 @@ export function TabDragProvider({
 export function useTabDragActive(): boolean {
   return useContext(TabDragContext).isTabDragActive
 }
-
-export function useTabDragActiveRef(): RefObject<boolean> {
-  return useContext(TabDragContext).isTabDragActiveRef
-}

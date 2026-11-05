@@ -1,19 +1,29 @@
 import React from 'react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { isIterationCurrent, type ProjectGroup } from '../../../../shared/github-project-group-sort'
+import {
+  EMPTY_PROJECT_GROUP_KEY,
+  isIterationCurrent,
+  type ProjectGroup
+} from '../../../../shared/github/project-group-sort'
 import { translate } from '@/i18n/i18n'
 
 type Props = {
   group: ProjectGroup
+  /** Names the empty bucket; shared grouping words it in English for other clients. */
+  groupFieldName: string
   expanded: boolean
   onToggle: () => void
+  /** Set the roadmap band width while pinning its label within the visible viewport. */
+  bandWidth?: number
 }
 
 export default function ProjectGroupHeader({
   group,
+  groupFieldName,
   expanded,
-  onToggle
+  onToggle,
+  bandWidth
 }: Props): React.JSX.Element {
   const isCurrent = group.iteration ? isIterationCurrent(group.iteration) : false
   const dateRange = group.iteration
@@ -24,24 +34,31 @@ export default function ProjectGroupHeader({
       type="button"
       onClick={onToggle}
       className={cn(
-        'flex w-full items-center gap-2 border-b border-border/50 bg-muted/40 px-3 py-1.5 text-left text-xs',
-        'hover:bg-muted/60'
+        'flex items-center border-b border-border/50 bg-muted/40 px-3 py-1.5 text-left text-xs',
+        'hover:bg-muted/60',
+        // Keep the band painted to the pane’s edge when the timeline is narrower.
+        bandWidth == null ? 'w-full' : 'min-w-full'
       )}
+      style={bandWidth == null ? undefined : { width: bandWidth }}
     >
-      {expanded ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
-      <span className="font-medium">
-        {group.label ||
-          translate('auto.components.github.project.ProjectGroupHeader.244c9e7d06', 'All')}
-      </span>
-      <span className="rounded-full border border-border/50 bg-background px-1.5 text-[10px] text-muted-foreground">
-        {group.rows.length}
-      </span>
-      {dateRange ? <span className="text-[10px] text-muted-foreground">{dateRange}</span> : null}
-      {isCurrent ? (
-        <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-1.5 text-[10px] text-emerald-700 dark:text-emerald-300">
-          {translate('auto.components.github.project.ProjectGroupHeader.82a22d2079', 'Current')}
+      <span className={cn('flex items-center gap-2', bandWidth != null && 'sticky left-3')}>
+        {expanded ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
+        <span className="font-medium">
+          {group.key === EMPTY_PROJECT_GROUP_KEY
+            ? translate('projectBoard.noField', 'No {{field}}', { field: groupFieldName })
+            : group.label ||
+              translate('auto.components.github.project.ProjectGroupHeader.244c9e7d06', 'All')}
         </span>
-      ) : null}
+        <span className="rounded-full border border-border/50 bg-background px-1.5 text-[10px] text-muted-foreground">
+          {group.rows.length}
+        </span>
+        {dateRange ? <span className="text-[10px] text-muted-foreground">{dateRange}</span> : null}
+        {isCurrent ? (
+          <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-1.5 text-[10px] text-emerald-700 dark:text-emerald-300">
+            {translate('auto.components.github.project.ProjectGroupHeader.82a22d2079', 'Current')}
+          </span>
+        ) : null}
+      </span>
     </button>
   )
 }

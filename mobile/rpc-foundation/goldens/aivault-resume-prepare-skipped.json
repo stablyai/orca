@@ -1,0 +1,47 @@
+{
+  "goldenFormatVersion": 6,
+  "operation": "aiVault.resume-preparation",
+  "family": "aiVault.resume-preparation",
+  "namedDeltas": [],
+  "values": {
+    "5d9b438a0a47": {
+      "failure": {
+        "$rpc": "null"
+      },
+      "prepared": {
+        "agent": "claude",
+        "codexHome": "/hosts/codex-runtime-home/home",
+        "executionHostId": "local",
+        "filePath": "/sessions/rollout.jsonl"
+      }
+    },
+    "fd5226716450": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "agent": "claude",
+        "codexHome": "/hosts/codex-runtime-home/home",
+        "executionHostId": "local",
+        "filePath": "/sessions/rollout.jsonl"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "aivault-resume-prepare-skipped",
+    "checkpoints": [
+      {
+        "id": "no-wire",
+        "observation": {
+          "sender": [],
+          "payloads": [],
+          "settlements": {
+            "claude": "fd5226716450"
+          },
+          "state": "5d9b438a0a47",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

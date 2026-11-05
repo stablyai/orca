@@ -3,18 +3,34 @@ import { cn } from '@/lib/utils'
 
 type DashboardAgentRowToolStepProps = {
   expanded: boolean
-  isWorking: boolean
+  showsTool: boolean
+  /** Hold the slot open while tool metadata is still in flight — see the empty branch below. */
+  reservesHeight: boolean
   toolName: string
   toolInput: string
+  /** Said in the step's place: a person's Stop (`agentRowStoppingLabel`) or a program's block. */
+  statusLabel?: string | null
 }
 
 export function DashboardAgentRowToolStep({
   expanded,
-  isWorking,
+  showsTool,
+  reservesHeight,
   toolName,
-  toolInput
+  toolInput,
+  statusLabel = null
 }: DashboardAgentRowToolStepProps): React.JSX.Element | null {
-  if (!isWorking) {
+  if (statusLabel) {
+    return (
+      <div
+        data-agent-row-tool-slot=""
+        className="mt-0.5 min-w-0 truncate pl-5 text-[10px] leading-snug text-muted-foreground/70"
+      >
+        {statusLabel}
+      </div>
+    )
+  }
+  if (!showsTool || (!toolName && !toolInput && !reservesHeight)) {
     return null
   }
 
@@ -53,6 +69,18 @@ export function DashboardAgentRowToolStep({
             </div>
           ) : null}
         </>
+      ) : toolInput ? (
+        // Why no tool header: only a program's message reaches here alone (agentRowToolInput), and it's prose.
+        <div
+          data-agent-row-tool-input="true"
+          className={cn(
+            'min-w-0 text-muted-foreground/60',
+            expanded ? 'whitespace-pre-wrap break-words' : 'truncate'
+          )}
+          title={toolInput}
+        >
+          {toolInput}
+        </div>
       ) : (
         <span data-agent-row-tool-placeholder="true" aria-hidden className="block h-[1lh]" />
       )}

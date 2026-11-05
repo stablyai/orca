@@ -1,4 +1,4 @@
-import type { MRListState } from '../../shared/types'
+import type { MRListState } from '../../shared/gitlab-types'
 
 export type GitLabIssueListState = 'opened' | 'closed' | 'all'
 
@@ -21,10 +21,7 @@ export function normalizeGitLabIssueListState(value: unknown): GitLabIssueListSt
   return value === 'closed' || value === 'all' ? value : 'opened'
 }
 
-// Why: cap the free-text MR search at the same byte budget the renderer
-// enforces (SMART_WORKSPACE_SOURCE_QUERY_MAX_BYTES) so the RPC/SSH path —
-// which can be driven by callers other than the desktop input — can't push
-// an unbounded string into the glab `&search=` query.
+// RPC/SSH callers bypass renderer limits; bound search bytes at this boundary too.
 const GITLAB_SEARCH_QUERY_MAX_BYTES = 2048
 
 export function normalizeGitLabSearchQuery(value: unknown): string | undefined {
@@ -39,8 +36,7 @@ export function normalizeGitLabSearchQuery(value: unknown): string | undefined {
 }
 
 export function normalizeGitLabIssueAssignee(value: unknown): '@me' | undefined {
-  // Why: the renderer only exposes "Assigned to me"; accepting arbitrary
-  // values would turn preload/RPC boundaries into a generic glab flag surface.
+  // Accept only the renderer-supported assignment filter, not arbitrary CLI flags.
   return value === '@me' ? '@me' : undefined
 }
 
@@ -48,14 +44,18 @@ export function normalizeGitLabIssueListArgs(args: {
   state?: unknown
   assignee?: unknown
   limit?: unknown
+  page?: unknown
 }): {
   state: GitLabIssueListState
   assignee: '@me' | undefined
   limit: number
+  page: number
 } {
   return {
     state: normalizeGitLabIssueListState(args.state),
     assignee: normalizeGitLabIssueAssignee(args.assignee),
-    limit: normalizeGitLabPositiveInteger(args.limit, 20, 100)
+    limit: normalizeGitLabPositiveInteger(args.limit, 20, 100),
+    // GitLab pages are 1-based; the renderer translates its 0-based UI index.
+    page: normalizeGitLabPositiveInteger(args.page, 1, 10_000)
   }
 }

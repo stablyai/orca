@@ -1,0 +1,123 @@
+{
+  "goldenFormatVersion": 6,
+  "operation": "notifications.push-registration",
+  "family": "notifications.push-registration",
+  "namedDeltas": [],
+  "values": {
+    "692c015040bb": {
+      "name": "notifications.registerPush#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"notifications.registerPush\",\"params\":{\"platform\":\"ios\",\"token\":\"apns-token-1\",\"apnsEnvironment\":\"production\",\"filter\":{\"onlyWhenDesktopAway\":true,\"sound\":true}}}"
+    },
+    "810a020dae97": {
+      "name": "notifications.registerPush#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "notifications.registerPush"
+        },
+        {
+          "name": "params",
+          "value": {
+            "apnsEnvironment": "production",
+            "filter": {
+              "onlyWhenDesktopAway": true,
+              "sound": true
+            },
+            "platform": "ios",
+            "token": "apns-token-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true,
+            "timeoutMs": 5000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "registered": true,
+            "registrationId": "registration-1"
+          }
+        }
+      }
+    },
+    "84e5ca07cb7a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": true
+    },
+    "caff83b6525e": {
+      "name": "notifications.unregisterPush#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "notifications.unregisterPush"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "null"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true,
+            "timeoutMs": 5000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "unregistered": true
+          }
+        }
+      }
+    },
+    "d92e80fc55a0": {
+      "name": "notifications.unregisterPush#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"notifications.unregisterPush\",\"params\":null}"
+    },
+    "deec5cecd49f": {
+      "register": true,
+      "unregister": true
+    }
+  },
+  "recording": {
+    "scenario": "notifications-push-registered",
+    "checkpoints": [
+      {
+        "id": "settled",
+        "observation": {
+          "sender": ["810a020dae97", "caff83b6525e"],
+          "payloads": ["692c015040bb", "d92e80fc55a0"],
+          "settlements": {
+            "register": "84e5ca07cb7a",
+            "unregister": "84e5ca07cb7a"
+          },
+          "state": "deec5cecd49f",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

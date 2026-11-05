@@ -1,35 +1,36 @@
+import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import React, { useMemo, useState } from 'react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
 import { useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
-import type { GlobalSettings } from '../../../../../shared/types'
 import { translate } from '@/i18n/i18n'
 
 export function AssigneesEditor({
   owner,
   repo,
+  host,
   selected,
   disabled,
-  sourceSettings,
+  sourceTarget,
   onChange
 }: {
   owner: string
   repo: string
+  host?: string
   selected: string[]
   disabled?: boolean
-  sourceSettings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
+  sourceTarget: RuntimeClientTarget
   onChange: (add: string[], remove: string[]) => void | Promise<void>
 }): React.JSX.Element {
   const [open, setOpen] = useState(false)
-  // Why: stabilize the assignee seed identity. `selected` is a fresh array on
-  // every parent render — depending on it directly would refire the IPC for
-  // every unrelated re-render while the popover is open.
+  // Key by sorted assignee values so fresh parent arrays cannot trigger redundant IPC while the popover is open.
   const seedKey = useMemo(() => selected.slice().sort().join(','), [selected])
   const metadata = useRepoAssigneesBySlug(
     open ? owner : null,
     open ? repo : null,
     seedKey ? seedKey.split(',') : [],
-    sourceSettings
+    sourceTarget,
+    host
   )
   return (
     <Popover open={open} onOpenChange={(o) => !disabled && setOpen(o)}>

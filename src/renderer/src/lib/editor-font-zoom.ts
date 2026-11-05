@@ -19,14 +19,11 @@ export function nextEditorFontZoomLevel(current: number, direction: EditorZoomDi
 }
 
 export function computeEditorFontSize(baseFontSize: number, zoomLevel: number): number {
-  // Why: Monaco and markdown surfaces become unreadable or visually broken at
-  // extreme values. Clamp after applying zoom so all editor-like surfaces stay
-  // within the same safe range regardless of their own default base size.
+  // Clamp after zoom so editor/markdown surfaces stay readable regardless of base size.
   return Math.max(8, Math.min(32, baseFontSize + zoomLevel))
 }
 
 export function computeDiffEditorFontSize(baseFontSize: number, zoomLevel: number): number {
-  // Why: diff editors have denser gutters and inline decorations, so matching
-  // terminal font size makes review views feel oversized relative to app chrome.
+  // Dense diff gutters/decorations need smaller defaults than terminal text to fit app chrome.
   return computeEditorFontSize(baseFontSize - 0.5, zoomLevel)
 }

@@ -1,4 +1,4 @@
-import type { DropZone, ManagedPaneInternal } from './pane-manager-types'
+import type { DropZone, ManagedPaneInternal, PaneExternalDropTarget } from './pane-manager-types'
 import type { DragReorderCallbacks, DragReorderState } from './pane-drag-reorder'
 import {
   handlePaneDrop,
@@ -40,13 +40,19 @@ export function beginPaneDragFromPointerDown(
     window.removeEventListener('pointermove', onPointerMoveOuter, true)
     window.removeEventListener('pointerup', onPointerUpOuter, true)
     window.removeEventListener('pointercancel', onPointerCancelOuter, true)
-    window.removeEventListener('blur', onWindowBlur, true)
+    window.removeEventListener('blur', onWindowBlur)
     activePointerId = null
     if (state.cleanupActiveDrag === cleanupDrag) {
       state.cleanupActiveDrag = null
     }
-    if (pointerId !== null && handle.hasPointerCapture(pointerId)) {
-      handle.releasePointerCapture(pointerId)
+    if (pointerId !== null) {
+      try {
+        if (handle.hasPointerCapture(pointerId)) {
+          handle.releasePointerCapture(pointerId)
+        }
+      } catch {
+        // Capture may already be lost; cleanup must still restore terminal pointer input.
+      }
     }
     if (!dragging) {
       return
@@ -55,22 +61,26 @@ export function beginPaneDragFromPointerDown(
     callbacks.getRoot().classList.remove('is-pane-dragging')
     callbacks.getPanes().get(paneId)?.container.classList.remove('is-drag-source')
     try {
-      if (commitDrop && state.currentDropTarget && state.dragSourcePaneId !== null) {
-        handlePaneDrop(
-          state.dragSourcePaneId,
-          state.currentDropTarget.paneId,
-          state.currentDropTarget.zone,
-          state,
-          callbacks
-        )
+      if (commitDrop && state.dragSourcePaneId !== null) {
+        if (state.currentDropTarget) {
+          handlePaneDrop(
+            state.dragSourcePaneId,
+            state.currentDropTarget.paneId,
+            state.currentDropTarget.zone,
+            state,
+            callbacks
+          )
+        } else if (state.currentExternalDropTarget) {
+          callbacks.onExternalPaneDrop?.(state.dragSourcePaneId, state.currentExternalDropTarget)
+        }
       }
     } finally {
-      // Why: pointer capture can be lost crossing Electron webviews; always
-      // clear the drag overlay/input state so terminals do not stay inert.
+      // Clear drag overlays/input state even when Electron webview crossings lose capture.
       callbacks.onDragActiveChange?.(false)
       hideDropOverlay(state)
       state.dragSourcePaneId = null
       state.currentDropTarget = null
+      state.currentExternalDropTarget = null
     }
   }
 
@@ -118,12 +128,12 @@ export function beginPaneDragFromPointerDown(
   handle.addEventListener('pointerup', onPointerUpOuter)
   handle.addEventListener('pointercancel', onPointerCancelOuter)
   handle.addEventListener('lostpointercapture', onLostPointerCaptureOuter)
-  // Why: title bars live outside the pane subtree; keep tracking if Chromium
-  // routes captured pointer moves through the window rather than the handle.
+  // Titles lie outside pane subtrees; retain window tracking when captured moves bypass the handle.
   window.addEventListener('pointermove', onPointerMoveOuter, true)
   window.addEventListener('pointerup', onPointerUpOuter, true)
   window.addEventListener('pointercancel', onPointerCancelOuter, true)
-  window.addEventListener('blur', onWindowBlur, true)
+  // Not capture: a capturing window listener also hears element blurs, so focus moving between panes ended the drag.
+  window.addEventListener('blur', onWindowBlur)
 
   return () => cleanupDrag(false)
 }
@@ -159,8 +169,20 @@ function updateDropTarget(
   }
   const targetPane = findDropTargetPane(clientX, clientY, state, callbacks)
   if (!targetPane) {
-    overlay.style.display = 'none'
+    const sourcePaneId = state.dragSourcePaneId
+    const externalTarget =
+      sourcePaneId === null
+        ? null
+        : (callbacks.resolveExternalDropTarget?.({ sourcePaneId, clientX, clientY }) ?? null)
+    if (!externalTarget) {
+      overlay.style.display = 'none'
+      state.currentDropTarget = null
+      state.currentExternalDropTarget = null
+      return
+    }
     state.currentDropTarget = null
+    state.currentExternalDropTarget = externalTarget
+    positionExternalDropOverlay(overlay, externalTarget)
     return
   }
 
@@ -173,9 +195,11 @@ function updateDropTarget(
   ) {
     overlay.style.display = 'none'
     state.currentDropTarget = null
+    state.currentExternalDropTarget = null
     return
   }
   state.currentDropTarget = { paneId: targetPane.id, zone }
+  state.currentExternalDropTarget = null
   positionDropOverlay(overlay, rect, zone)
 }
 
@@ -216,6 +240,7 @@ function resolveDropZone(clientX: number, clientY: number, rect: DOMRect): DropZ
 
 function positionDropOverlay(overlay: HTMLElement, rect: DOMRect, zone: DropZone): void {
   overlay.style.display = ''
+  overlay.dataset.paneDropOverlayKind = 'area'
   const scrollX = window.scrollX
   const scrollY = window.scrollY
   const halfWidth = rect.width / 2
@@ -225,4 +250,14 @@ function positionDropOverlay(overlay: HTMLElement, rect: DOMRect, zone: DropZone
   overlay.style.top = `${rect.top + scrollY + (zone === 'bottom' ? halfHeight : 0)}px`
   overlay.style.width = `${zone === 'left' || zone === 'right' ? halfWidth : rect.width}px`
   overlay.style.height = `${zone === 'top' || zone === 'bottom' ? halfHeight : rect.height}px`
+}
+
+function positionExternalDropOverlay(overlay: HTMLElement, target: PaneExternalDropTarget): void {
+  const rect = target.rect
+  overlay.style.display = ''
+  overlay.dataset.paneDropOverlayKind = target.overlayKind ?? 'area'
+  overlay.style.left = `${rect.left + window.scrollX}px`
+  overlay.style.top = `${rect.top + window.scrollY}px`
+  overlay.style.width = `${rect.width}px`
+  overlay.style.height = `${rect.height}px`
 }

@@ -27,8 +27,7 @@ export function registerVisibleTerminalTab(tabId: string | null | undefined): ()
     return () => {}
   }
 
-  // Why: multiple visible panes can belong to one terminal tab; tokenized claims
-  // let each pane clean up without dropping sibling foreground protection.
+  // Tokenize visible-pane claims so one pane’s cleanup cannot drop a sibling’s foreground protection.
   const token = Symbol(id)
   visibleTerminalTabClaimsByToken.set(token, id)
   foregroundTerminalTabLastSeenAtById.set(id, Date.now())
@@ -44,8 +43,7 @@ export function registerVisibleTerminalTab(tabId: string | null | undefined): ()
 }
 
 export function getForegroundTerminalTabIds(): string[] {
-  // Why: hibernation already reasons by terminal tab, so visible pane claims
-  // join the page-level foreground set instead of adding pane rules.
+  // Merge pane claims into tab-level protection because hibernation reasons by terminal tab.
   return Array.from(
     new Set([...explicitForegroundTerminalTabIds, ...visibleTerminalTabClaimsByToken.values()])
   )
@@ -53,6 +51,13 @@ export function getForegroundTerminalTabIds(): string[] {
 
 export function getForegroundTerminalTabLastSeenAtById(): Record<string, number> {
   return Object.fromEntries(foregroundTerminalTabLastSeenAtById)
+}
+
+// Purge retired tab timestamps on tab/worktree removal; IDs never recur and would otherwise accumulate all session.
+export function forgetForegroundTerminalTabs(tabIds: Iterable<string>): void {
+  for (const tabId of tabIds) {
+    foregroundTerminalTabLastSeenAtById.delete(tabId)
+  }
 }
 
 export function resetForegroundTerminalTabIdsForTests(): void {

@@ -1,0 +1,103 @@
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
+import type { SshConnectionState, SshProviderEpoch, SshTarget } from '../../../shared/ssh-types'
+import { restoreSshConnectionsForStartup } from './startup-ssh-connection-restore'
+
+function connectedState(targetId: string): SshConnectionState {
+  return {
+    targetId,
+    status: 'connected',
+    error: null,
+    reconnectAttempt: 0,
+    providerEpoch: 'epoch' as SshProviderEpoch,
+    connectionGeneration: 1,
+    remotePlatform: 'linux'
+  }
+}
+
+function target(id: string, lastRequiredPassphrase = false): SshTarget {
+  return {
+    id,
+    label: id,
+    host: `${id}.example`,
+    port: 22,
+    username: 'orca',
+    lastRequiredPassphrase
+  }
+}
+
+type Harness = {
+  connect: Mock<(targetId: string) => Promise<SshConnectionState | null>>
+  getState: Mock<(targetId: string) => Promise<SshConnectionState | null>>
+  setDeferredSshReconnectTargets: Mock<(targetIds: string[]) => void>
+  removeDeferredSshReconnectTarget: Mock<(targetId: string) => void>
+  publishSshConnectionState: Mock<(targetId: string, state: SshConnectionState) => void>
+}
+
+let harness: Harness
+
+function installWindowApi(targets: SshTarget[]): void {
+  harness = {
+    connect: vi.fn(),
+    getState: vi.fn().mockResolvedValue(null),
+    setDeferredSshReconnectTargets: vi.fn(),
+    removeDeferredSshReconnectTarget: vi.fn(),
+    publishSshConnectionState: vi.fn()
+  }
+  vi.stubGlobal('window', {
+    api: {
+      app: { startupDiagnostic: undefined },
+      ssh: {
+        listTargets: vi.fn().mockResolvedValue(targets),
+        connect: (args: { targetId: string }) => harness.connect(args.targetId),
+        getState: (args: { targetId: string }) => harness.getState(args.targetId)
+      }
+    }
+  })
+}
+
+beforeEach(() => {
+  vi.spyOn(console, 'warn').mockImplementation(() => {})
+})
+
+afterEach(() => {
+  vi.useRealTimers()
+  vi.unstubAllGlobals()
+  vi.restoreAllMocks()
+})
+
+describe('restoreSshConnectionsForStartup', () => {
+  it('does not wait on a target that owns no immediately-mounted pane', async () => {
+    vi.useFakeTimers()
+    installWindowApi([target('ssh-active'), target('ssh-asleep')])
+    // The asleep host never answers — the old code awaited it for the full timeout.
+    harness.connect.mockImplementation((targetId: string) =>
+      targetId === 'ssh-active'
+        ? Promise.resolve(connectedState(targetId))
+        : new Promise<SshConnectionState>(() => {})
+    )
+
+    let settled = false
+    const restore = restoreSshConnectionsForStartup({
+      connectionIds: ['ssh-active', 'ssh-asleep'],
+      blockingConnectionIds: ['ssh-active'],
+      setDeferredSshReconnectTargets: harness.setDeferredSshReconnectTargets,
+      removeDeferredSshReconnectTarget: harness.removeDeferredSshReconnectTarget,
+      publishSshConnectionState: harness.publishSshConnectionState
+    }).then(() => {
+      settled = true
+    })
+
+    await vi.advanceTimersByTimeAsync(0)
+    await restore
+    expect(settled).toBe(true)
+    // Both were dialled; only the active one gated restoration.
+    expect(harness.connect).toHaveBeenCalledWith('ssh-active')
+    expect(harness.connect).toHaveBeenCalledWith('ssh-asleep')
+    expect(harness.publishSshConnectionState).toHaveBeenCalledWith(
+      'ssh-active',
+      connectedState('ssh-active')
+    )
+    // The unreachable host is deferred, so its panes reattach on tab focus.
+    expect(harness.setDeferredSshReconnectTargets).toHaveBeenCalledWith(['ssh-asleep'])
+  })
+})

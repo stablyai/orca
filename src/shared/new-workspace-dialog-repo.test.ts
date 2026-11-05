@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Repo } from './types'
+import type { Repo } from './repo-types'
 import {
   getNewWorkspaceDialogEligibleRepos,
   resolveNewWorkspaceDialogGitRepoId,
@@ -57,6 +57,16 @@ describe('new workspace dialog repo selection', () => {
     expect(
       getNewWorkspaceDialogEligibleRepos([makeRepo('missing-path', { path: '' }), makeRepo('repo')])
     ).toEqual([expect.objectContaining({ id: 'repo' })])
+  })
+
+  it('excludes runtime-owned (per-workspace-env) SSH repos but keeps user SSH repos', () => {
+    const eligible = getNewWorkspaceDialogEligibleRepos([
+      makeRepo('local-repo'),
+      makeRepo('user-ssh', { connectionId: 'my-server' }),
+      makeRepo('runtime-ssh', { connectionId: 'runtime-ssh-orca-1' })
+    ])
+
+    expect(eligible.map((repo) => repo.id)).toEqual(['local-repo', 'user-ssh'])
   })
 
   it('defaults to a repo on the focused host when no explicit repo is chosen', () => {

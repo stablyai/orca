@@ -4,6 +4,7 @@ import {
   resolveComposerBranchNameOverrideForCreate,
   resolveComposerBranchReuse,
   resolveComposerBranchSelection,
+  resolveComposerManualBranchNameChange,
   resolveComposerReuseOverride
 } from './composer-branch-selection'
 
@@ -57,15 +58,15 @@ describe('resolveComposerBranchSelection', () => {
     })
   })
 
-  it('keeps resolver-provided PR branch overrides when the workspace name changes', () => {
+  it('keeps manual branch-name overrides when preserving workspace edits', () => {
     expect(
       resolveComposerBranchNameOverrideForCreate({
-        branchNameOverride: 'feature/fix',
-        branchAutoName: '',
+        branchNameOverride: 'feature/manual',
+        branchAutoName: 'feature/auto',
         workspaceName: 'edited display name',
         preserveWorkspaceNameEdits: true
       })
-    ).toBe('feature/fix')
+    ).toBe('feature/manual')
   })
 
   it('keeps existing branch picker override behavior tied to the auto-name', () => {
@@ -77,6 +78,108 @@ describe('resolveComposerBranchSelection', () => {
         preserveWorkspaceNameEdits: false
       })
     ).toBeUndefined()
+  })
+
+  it('uses a slash-containing typed branch name as the create override in branch mode', () => {
+    expect(
+      resolveComposerBranchNameOverrideForCreate({
+        branchNameOverride: undefined,
+        branchAutoName: '',
+        workspaceName: 'feature/user-profile',
+        preserveWorkspaceNameEdits: false,
+        createBranchFromWorkspaceName: true
+      })
+    ).toBe('feature/user-profile')
+  })
+
+  it('keeps plain typed branch names on the existing sanitized-name path', () => {
+    expect(
+      resolveComposerBranchNameOverrideForCreate({
+        branchNameOverride: undefined,
+        branchAutoName: '',
+        workspaceName: 'feature-user-profile',
+        preserveWorkspaceNameEdits: false,
+        createBranchFromWorkspaceName: true
+      })
+    ).toBeUndefined()
+  })
+
+  it('does not preserve a slash typed name outside branch mode (gate off)', () => {
+    // Only branch mode preserves slashes; other modes sanitize the workspace name.
+    expect(
+      resolveComposerBranchNameOverrideForCreate({
+        branchNameOverride: undefined,
+        branchAutoName: '',
+        workspaceName: 'feature/user-profile',
+        preserveWorkspaceNameEdits: false,
+        createBranchFromWorkspaceName: false
+      })
+    ).toBeUndefined()
+  })
+
+  it('keeps a resolver-provided override even in branch mode with a slash name', () => {
+    // Explicit picked-branch overrides must beat typed branch-mode names.
+    expect(
+      resolveComposerBranchNameOverrideForCreate({
+        branchNameOverride: 'feature/picked',
+        branchAutoName: 'feature/picked',
+        workspaceName: 'feature/user-profile',
+        preserveWorkspaceNameEdits: true,
+        createBranchFromWorkspaceName: true
+      })
+    ).toBe('feature/picked')
+  })
+})
+
+describe('resolveComposerManualBranchNameChange', () => {
+  const forkPushTarget = {
+    remoteName: 'contributor',
+    branchName: 'feature/from-pr',
+    remoteUrl: 'https://example.com/contributor/repo.git'
+  }
+
+  it('clears a PR-derived push target when the manual branch changes to a different branch', () => {
+    expect(
+      resolveComposerManualBranchNameChange({
+        value: 'feature/manual',
+        pushTarget: forkPushTarget,
+        forkPushWarning: 'Cannot push to fork'
+      })
+    ).toEqual({
+      branchNameOverride: 'feature/manual',
+      pushTarget: undefined,
+      forkPushWarning: null
+    })
+  })
+
+  it('clears a PR-derived push target when manual branch input is empty or whitespace', () => {
+    for (const value of ['', '   ']) {
+      expect(
+        resolveComposerManualBranchNameChange({
+          value,
+          pushTarget: forkPushTarget,
+          forkPushWarning: 'Cannot push to fork'
+        })
+      ).toEqual({
+        branchNameOverride: undefined,
+        pushTarget: undefined,
+        forkPushWarning: null
+      })
+    }
+  })
+
+  it('preserves a PR-derived push target when the manual branch exactly matches its branch', () => {
+    expect(
+      resolveComposerManualBranchNameChange({
+        value: 'feature/from-pr',
+        pushTarget: forkPushTarget,
+        forkPushWarning: 'Cannot push to fork'
+      })
+    ).toEqual({
+      branchNameOverride: 'feature/from-pr',
+      pushTarget: forkPushTarget,
+      forkPushWarning: 'Cannot push to fork'
+    })
   })
 })
 
@@ -92,17 +195,6 @@ describe('isBranchCheckedOutInWorktrees', () => {
 })
 
 describe('resolveComposerReuseOverride', () => {
-  it('keeps the selection override for a reusable (non-busy) local branch', () => {
-    expect(
-      resolveComposerReuseOverride({
-        refName: 'feature-x',
-        localBranchName: 'feature-x',
-        branchNameOverride: 'feature-x',
-        branchCheckedOutElsewhere: false
-      })
-    ).toBe('feature-x')
-  })
-
   it('drops the override for a local branch checked out in another worktree', () => {
     // Why: pinning a busy branch would collide and produce a suffixed branch.
     expect(
@@ -115,9 +207,8 @@ describe('resolveComposerReuseOverride', () => {
     ).toBeUndefined()
   })
 
-  it('keeps the override for a remote-only ref even if its local name is busy', () => {
-    // Why: a remote-only ref (ref !== local name) creates a fresh local tracking
-    // branch, so the busy check on the local name must not drop its override.
+  it('drops the branch-off override when the remote branch has a busy local copy', () => {
+    // Remote-only refs need fresh local tracking branches; local-name busy checks must preserve their override.
     expect(
       resolveComposerReuseOverride({
         refName: 'origin/feature-x',
@@ -125,66 +216,43 @@ describe('resolveComposerReuseOverride', () => {
         branchNameOverride: 'feature-x',
         branchCheckedOutElsewhere: true
       })
-    ).toBe('feature-x')
+    ).toBeUndefined()
   })
 })
 
 describe('resolveComposerBranchReuse', () => {
-  it('marks an existing local branch reusable and defaults reuse ON for an auto-derived name', () => {
+  it('offers reuse for qualified local and remote selectors', () => {
     expect(
       resolveComposerBranchReuse({
-        refName: 'feature-x',
-        localBranchName: 'feature-x',
-        selectionProducedOverride: true,
+        refName: 'refs/heads/feature/加',
+        localBranchName: 'feature/加',
         branchCheckedOutElsewhere: false
       })
-    ).toEqual({ reuseEligibleBranch: 'feature-x', defaultReuse: true })
-  })
-
-  it('treats a slash-containing local branch as reusable (ref equals local name)', () => {
+    ).toEqual({ reuseEligibleBranch: 'feature/加', defaultReuse: true })
     expect(
       resolveComposerBranchReuse({
-        refName: 'fix/bug-0',
-        localBranchName: 'fix/bug-0',
-        selectionProducedOverride: true,
+        refName: 'refs/remotes/origin/feature/加',
+        localBranchName: 'feature/加',
         branchCheckedOutElsewhere: false
       })
-    ).toEqual({ reuseEligibleBranch: 'fix/bug-0', defaultReuse: true })
-  })
-
-  it('does not offer reuse for a remote-only ref (ref carries an origin/ prefix)', () => {
+    ).toEqual({ reuseEligibleBranch: 'feature/加', defaultReuse: true })
     expect(
-      resolveComposerBranchReuse({
-        refName: 'origin/feature/something',
-        localBranchName: 'feature/something',
-        selectionProducedOverride: true,
-        branchCheckedOutElsewhere: false
-      })
-    ).toEqual({ reuseEligibleBranch: null, defaultReuse: false })
-  })
-
-  it('does not offer reuse when the branch is already checked out in another worktree', () => {
-    // Why: git refuses a branch in two worktrees, so reuse is impossible here.
-    expect(
-      resolveComposerBranchReuse({
-        refName: 'feature-x',
-        localBranchName: 'feature-x',
-        selectionProducedOverride: true,
+      resolveComposerReuseOverride({
+        refName: 'refs/heads/feature/加',
+        localBranchName: 'feature/加',
+        branchNameOverride: 'feature/加',
         branchCheckedOutElsewhere: true
       })
-    ).toEqual({ reuseEligibleBranch: null, defaultReuse: false })
+    ).toBeUndefined()
   })
 
-  it('keeps a local branch reuse-eligible but defaults reuse OFF when the user typed a custom name', () => {
-    // Why: no override means the user is branching off the ref with a custom
-    // worktree name; reuse stays opt-in (checkbox still shown via eligibility).
+  it('retains reuse intent for a busy branch so the host can report or open its workspace', () => {
     expect(
       resolveComposerBranchReuse({
         refName: 'feature-x',
         localBranchName: 'feature-x',
-        selectionProducedOverride: false,
-        branchCheckedOutElsewhere: false
+        branchCheckedOutElsewhere: true
       })
-    ).toEqual({ reuseEligibleBranch: 'feature-x', defaultReuse: false })
+    ).toEqual({ reuseEligibleBranch: 'feature-x', defaultReuse: true })
   })
 })

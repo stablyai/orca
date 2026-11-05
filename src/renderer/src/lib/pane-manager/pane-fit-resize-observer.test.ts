@@ -1,9 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ManagedPaneInternal, ScrollState } from './pane-manager-types'
+import { requestStablePaneFit } from './pane-fit-resize-observer'
 import {
-  attachPaneFitResizeObserver,
-  detachPaneFitResizeObserver
-} from './pane-fit-resize-observer'
+  beginTerminalScrollIntentBufferRebuild,
+  endTerminalScrollIntentBufferRebuild
+} from './terminal-scroll-intent-rebuild'
+import { safeFitAndThen } from './pane-tree-ops'
 
 type ResizeObserverCallbackLike = ConstructorParameters<typeof ResizeObserver>[0]
 
@@ -66,6 +68,7 @@ function createPane(
     unicode11Addon: {} as never,
     webLinksAddon: {} as never,
     webglAddon: null,
+    imageAddon: null,
     ligaturesAddon: null,
     compositionHandler: null,
     debugLabel: null,
@@ -106,85 +109,36 @@ describe('attachPaneFitResizeObserver', () => {
     vi.restoreAllMocks()
   })
 
-  it('coalesces repeated observer callbacks and fits once the grid is stable', () => {
+  it('releases a hidden reattach continuation when the stable grid already matches', async () => {
     const pane = createPane()
+    vi.mocked(pane.fitAddon.proposeDimensions).mockReturnValue(undefined)
+    const continuation = vi.fn()
+    const pending = safeFitAndThen(pane, 'reattach-pty-resize', continuation)
 
-    attachPaneFitResizeObserver(pane)
-    mockResizeObservers[0]?.trigger()
-    mockResizeObservers[0]?.trigger()
-
-    expect(requestAnimationFrame).toHaveBeenCalledTimes(1)
-    expect(pane.fitAddon.fit).not.toHaveBeenCalled()
-
+    expect(continuation).not.toHaveBeenCalled()
+    vi.mocked(pane.fitAddon.proposeDimensions).mockReturnValue({ cols: 79, rows: 24 })
+    requestStablePaneFit(pane)
     flushAnimationFrames()
 
-    expect(pane.fitAddon.fit).toHaveBeenCalledTimes(1)
-  })
-
-  it('waits through a transient grid wobble before fitting', () => {
-    const proposed = [
-      { cols: 80, rows: 24 },
-      { cols: 81, rows: 24 },
-      { cols: 81, rows: 24 }
-    ]
-    const pane = createPane(() => proposed.shift() ?? { cols: 81, rows: 24 })
-
-    attachPaneFitResizeObserver(pane)
-    mockResizeObservers[0]?.trigger()
-
-    flushAnimationFrames()
-
-    expect(pane.fitAddon.fit).not.toHaveBeenCalled()
-
-    flushAnimationFrames()
-
-    expect(pane.fitAddon.fit).toHaveBeenCalledTimes(1)
-  })
-
-  it('skips observer fits while the terminal has no visible geometry', () => {
-    const pane = createPane(() => ({ cols: 80, rows: 24 }), {
-      rect: { width: 0, height: 0 }
-    })
-
-    attachPaneFitResizeObserver(pane)
-    mockResizeObservers[0]?.trigger()
-    flushAnimationFrames()
-
-    expect(requestAnimationFrame).not.toHaveBeenCalled()
+    await expect(pending.completion).resolves.toBe(true)
+    expect(continuation).toHaveBeenCalledTimes(1)
     expect(pane.fitAddon.fit).not.toHaveBeenCalled()
   })
 
-  it('throttles an endlessly unstable grid instead of fitting every frame', () => {
-    let cols = 80
-    const pane = createPane(() => {
-      cols = cols === 80 ? 81 : 80
-      return { cols, rows: 24 }
-    })
-
-    attachPaneFitResizeObserver(pane)
-    mockResizeObservers[0]?.trigger()
-
-    for (let i = 0; i < 10; i += 1) {
-      flushAnimationFrames()
-    }
-
-    expect(pane.fitAddon.fit).toHaveBeenCalledTimes(1)
-    expect(pane.pendingObservedFitRafId).toBeNull()
-  })
-
-  it('disconnects the observer and cancels any queued fit', () => {
+  it('does not notify settled callbacks until a replay-deferred fit completes', async () => {
+    const onSettled = vi.fn()
     const pane = createPane()
+    beginTerminalScrollIntentBufferRebuild(pane.terminal)
 
-    attachPaneFitResizeObserver(pane)
-    mockResizeObservers[0]?.trigger()
-    const scheduledRafId = pane.pendingObservedFitRafId
-
-    detachPaneFitResizeObserver(pane)
+    requestStablePaneFit(pane, onSettled)
     flushAnimationFrames()
 
-    expect(mockResizeObservers[0]?.disconnect).toHaveBeenCalledTimes(1)
-    expect(cancelAnimationFrame).toHaveBeenCalledWith(scheduledRafId)
     expect(pane.fitAddon.fit).not.toHaveBeenCalled()
-    expect(pane.pendingObservedFitRafId).toBeNull()
+    expect(onSettled).not.toHaveBeenCalled()
+    endTerminalScrollIntentBufferRebuild(pane.terminal)
+    await Promise.resolve()
+
+    expect(pane.fitAddon.fit).toHaveBeenCalledTimes(1)
+    expect(onSettled).toHaveBeenCalledTimes(1)
   })
 })

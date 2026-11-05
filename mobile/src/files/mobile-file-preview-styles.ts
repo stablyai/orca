@@ -1,46 +1,14 @@
 import { StyleSheet } from 'react-native'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { colors, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
 
-export const filePreviewStyles = StyleSheet.create({
+export const filePreviewStyles = themedStyleSheet(() => ({
   container: {
     flex: 1,
     backgroundColor: colors.bgBase
   },
   header: {
-    backgroundColor: colors.bgPanel,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderSubtle
-  },
-  topBar: {
-    minHeight: 58,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    paddingHorizontal: spacing.md
-  },
-  backButton: {
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radii.button
-  },
-  backButtonPressed: {
-    backgroundColor: colors.bgRaised
-  },
-  titleBlock: {
-    flex: 1,
-    minWidth: 0
-  },
-  title: {
-    color: colors.textPrimary,
-    fontSize: typography.titleSize,
-    fontWeight: '600'
-  },
-  meta: {
-    marginTop: 2,
-    color: colors.textSecondary,
-    fontSize: typography.metaSize
+    backgroundColor: colors.bgBase
   },
   state: {
     flex: 1,
@@ -59,26 +27,12 @@ export const filePreviewStyles = StyleSheet.create({
     fontSize: typography.bodySize,
     textAlign: 'center'
   },
-  retryButton: {
-    minHeight: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radii.button,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
-    paddingHorizontal: spacing.lg
-  },
-  retryText: {
-    color: colors.textPrimary,
-    fontSize: typography.bodySize,
-    fontWeight: '600'
-  },
   scroll: {
     flex: 1,
-    backgroundColor: colors.editorSurface
+    backgroundColor: colors.bgBase
   },
   textContent: {
-    padding: spacing.md,
+    padding: spacing.lg,
     paddingBottom: spacing.xl
   },
   textPreview: {
@@ -88,36 +42,19 @@ export const filePreviewStyles = StyleSheet.create({
     lineHeight: 19
   },
   markdownContent: {
-    padding: spacing.md,
+    padding: spacing.lg,
     paddingBottom: spacing.xl
   },
-  modeContainer: {
-    flex: 1,
-    backgroundColor: colors.editorSurface
-  },
-  modeToolbar: {
+  modeBar: {
     flexDirection: 'row',
-    alignSelf: 'flex-start',
-    marginHorizontal: spacing.md,
-    marginVertical: spacing.sm,
-    padding: 1,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.button,
-    backgroundColor: colors.bgPanel
-  },
-  modeToggle: {
-    width: 34,
-    height: 28,
     alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radii.row,
-    backgroundColor: 'transparent',
-    opacity: 0.72
+    justifyContent: 'space-between',
+    gap: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.xs
   },
-  modeToggleActive: {
-    backgroundColor: colors.bgRaised,
-    opacity: 1
+  modeSwitch: {
+    backgroundColor: colors.bgPanel
   },
   truncatedNote: {
     marginBottom: spacing.md,
@@ -126,15 +63,80 @@ export const filePreviewStyles = StyleSheet.create({
   },
   imageContainer: {
     flex: 1,
-    backgroundColor: colors.editorSurface
+    backgroundColor: colors.bgBase
   },
-  imageScrollContent: {
-    flexGrow: 1,
+  editContainer: {
+    flex: 1,
+    backgroundColor: colors.bgBase,
+    padding: spacing.lg
+  },
+  saveErrorText: {
+    marginBottom: spacing.sm,
+    color: colors.statusRed,
+    fontSize: typography.metaSize
+  },
+  previewSaveErrorText: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    color: colors.statusRed,
+    fontSize: typography.metaSize
+  },
+  editInput: {
+    flex: 1,
+    color: colors.textPrimary,
+    fontFamily: typography.monoFamily,
+    // iOS zooms the page when a field under 16px takes focus; a literal, not the seam, avoids an extra shared chunk.
+    fontSize: 16,
+    lineHeight: 22,
+    padding: 0
+  }
+}))
+
+export const chatAttachmentPreviewStyles = themedStyleSheet(() => ({
+  ...filePreviewStyles,
+  header: {
+    backgroundColor: colors.bgPanel,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.borderSubtle
+  },
+  topBar: {
+    minHeight: 58,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingHorizontal: spacing.md
+  },
+  backButton: {
+    width: 36,
+    height: 36,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: spacing.md
+    borderRadius: 6,
+    borderCurve: 'circular'
   },
-  image: {
+  titleBlock: {
+    flex: 1,
+    minWidth: 0
+  },
+  title: {
+    color: colors.textPrimary,
+    fontSize: typography.titleSize,
+    fontWeight: '600'
+  },
+  meta: {
+    marginTop: 2,
+    color: colors.textSecondary,
+    fontSize: typography.metaSize
+  },
+  saveButtonDisabled: {
+    opacity: 0.42
+  },
+  scroll: {
+    flex: 1,
     backgroundColor: colors.editorSurface
+  },
+  textContent: {
+    padding: spacing.md,
+    paddingBottom: spacing.xl
   }
-})
+}))

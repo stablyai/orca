@@ -20,7 +20,17 @@ describe('getPRReviewCommentLineNumbersFromPatch', () => {
     expect(getPRReviewCommentLineNumbersFromPatch(patch)).toEqual([20, 21, 22, 23, 51, 52])
   })
 
-  it('returns an empty list when GitHub omits the patch', () => {
-    expect(getPRReviewCommentLineNumbersFromPatch(undefined)).toEqual([])
+  it('counts added lines whose content begins with ++', () => {
+    // Inside a hunk +++count is added ++count content, not a file header.
+    const patch = ['@@ -1,1 +1,2 @@', ' const a = 1', '+++count'].join('\n')
+
+    expect(getPRReviewCommentLineNumbersFromPatch(patch)).toEqual([1, 2])
+  })
+
+  it('does not treat removed lines whose content begins with -- as commentable', () => {
+    // Removed --count content must not advance the new-side line counter.
+    const patch = ['@@ -1,2 +1,1 @@', ' const a = 1', '---count'].join('\n')
+
+    expect(getPRReviewCommentLineNumbersFromPatch(patch)).toEqual([1])
   })
 })

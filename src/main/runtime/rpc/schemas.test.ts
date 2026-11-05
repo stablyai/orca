@@ -1,22 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import { z, type ZodType } from 'zod'
 import {
-  BrowserTarget,
   OptionalBoolean,
   OptionalFiniteNumber,
   OptionalPlainString,
   OptionalPositiveInt,
   OptionalString
-} from './schemas'
-import {
-  InterceptEnable,
-  Screenshot,
-  Scroll,
-  TabClose,
-  TabSwitch,
-  Wait
-} from './methods/browser-schemas'
+} from '../../../shared/rpc-contract/rpc-param-primitives'
 import { TERMINAL_METHODS } from './methods/terminal'
+import { TERMINAL_ORPHAN_METHODS } from './methods/terminal-orphan'
 import { WORKTREE_METHODS } from './methods/worktree'
 
 function expectParses(schema: ZodType, value: unknown): void {
@@ -55,16 +47,6 @@ describe('RPC optional pipe schemas', () => {
     expectParses(schema, {})
   })
 
-  it('accepts omitted browser optional fields while required fields are present', () => {
-    expectParses(Scroll, { direction: 'down' })
-    expectParses(Screenshot, {})
-    expectParses(TabSwitch, { page: 'page-1' })
-    expectParses(TabClose, {})
-    expectParses(Wait, {})
-    expectParses(InterceptEnable, {})
-    expectParses(BrowserTarget, {})
-  })
-
   it('accepts omitted terminal and worktree optional fields while required fields are present', () => {
     expectParses(methodParams(TERMINAL_METHODS, 'terminal.split'), { terminal: 'terminal-1' })
     expectParses(methodParams(TERMINAL_METHODS, 'terminal.split'), {
@@ -83,5 +65,89 @@ describe('RPC optional pipe schemas', () => {
       linkedLinearIssueOrganizationUrlKey: 'stably'
     })
     expectParses(methodParams(WORKTREE_METHODS, 'worktree.prefetchCreateBase'), { repo: 'repo-1' })
+  })
+
+  it('requires complete, bounded orphan adoption claims and a topology revision', () => {
+    const adopt = methodParams(TERMINAL_ORPHAN_METHODS, 'terminal.adoptOrphans')
+    const claim = {
+      terminal: 'term-live',
+      ptyId: 'pty-live',
+      incarnationId: 'inc-live',
+      tabId: 'tab-live',
+      leafId: 'leaf-live'
+    }
+
+    expectParses(adopt, {
+      worktree: 'id:repo::/worktree',
+      expectedTopologyRevision: 4,
+      claims: [claim],
+      topology: {
+        tabs: [
+          {
+            tabId: 'tab-live',
+            root: { type: 'leaf', leafId: 'leaf-live' },
+            activeLeafId: 'leaf-live',
+            expandedLeafId: null
+          }
+        ],
+        groups: [{ id: 'group-live', activeTabId: 'tab-live', tabOrder: ['tab-live'] }],
+        groupLayout: { type: 'leaf', groupId: 'group-live' }
+      }
+    })
+    expectRejects(adopt, {
+      worktree: 'id:repo::/worktree',
+      expectedTopologyRevision: -1,
+      claims: [claim]
+    })
+    expectRejects(adopt, {
+      worktree: 'id:repo::/worktree',
+      expectedTopologyRevision: 4,
+      claims: [{ ...claim, incarnationId: '' }]
+    })
+    expectRejects(adopt, {
+      worktree: 'id:repo::/worktree',
+      expectedTopologyRevision: 4,
+      claims: [{ ...claim, incarnationId: 'i'.repeat(129) }]
+    })
+    expectRejects(adopt, {
+      worktree: 'id:repo::/worktree',
+      expectedTopologyRevision: 4,
+      claims: []
+    })
+    expectRejects(adopt, {
+      worktree: 'id:repo::/worktree',
+      expectedTopologyRevision: 4,
+      claims: [{ ...claim, terminal: 't'.repeat(257) }]
+    })
+    expectRejects(adopt, {
+      worktree: 'id:repo::/worktree',
+      expectedTopologyRevision: 4,
+      claims: [claim],
+      topology: {
+        tabs: [
+          {
+            tabId: 'tab-live',
+            root: {
+              type: 'split',
+              direction: 'horizontal',
+              ratio: Number.NaN,
+              first: { type: 'leaf', leafId: 'leaf-live' },
+              second: { type: 'leaf', leafId: 'leaf-other' }
+            },
+            activeLeafId: 'leaf-live',
+            expandedLeafId: null
+          }
+        ],
+        groups: [{ id: 'group-live', activeTabId: 'tab-live', tabOrder: ['tab-live'] }]
+      }
+    })
+  })
+
+  it('bounds targeted terminal listing used by orphan recovery', () => {
+    const list = methodParams(TERMINAL_METHODS, 'terminal.list')
+
+    expectParses(list, { worktree: 'id:repo::/worktree', handles: ['term-live'] })
+    expectRejects(list, { handles: [''] })
+    expectRejects(list, { handles: Array.from({ length: 65 }, (_, index) => `term-${index}`) })
   })
 })

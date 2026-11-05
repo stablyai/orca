@@ -1,9 +1,12 @@
-import type { Tab } from '../../../../shared/types'
+import type { Tab } from '../../../../shared/tab-types'
 import { EmulatorPaneToolbar } from './emulator-pane-toolbar'
 import { EmulatorDeviceFrame } from './emulator-device-frame'
 import { MobileEmulatorAgentSetupGuideLayer } from './MobileEmulatorAgentSetupGuideLayer'
 import { useEmulatorPaneSession } from './use-emulator-pane-session'
+import { scrcpyDeviceIdFromStreamUrl } from './emulator-scrcpy-stream-url'
+import { useEmulatorInputCheck } from './use-emulator-input-check'
 import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 
 type EmulatorPaneProps = {
   tab?: Tab
@@ -13,6 +16,7 @@ type EmulatorPaneProps = {
 }
 
 export default function EmulatorPane({ tab, worktreeId, isActive = true }: EmulatorPaneProps) {
+  useUiLanguageRevision()
   const {
     devices,
     selectedUdid,
@@ -20,6 +24,7 @@ export default function EmulatorPane({ tab, worktreeId, isActive = true }: Emula
     loading,
     error,
     attach,
+    markStreamLost,
     shutdown,
     sendTap,
     sendButton,
@@ -29,12 +34,19 @@ export default function EmulatorPane({ tab, worktreeId, isActive = true }: Emula
     previewUrl,
     wsUrl,
     streamKey,
-    isLive
+    isLive,
+    visualOrientation
   } = useEmulatorPaneSession({
     worktreeId,
     tabId: tab?.id,
     autoAttachOnMount: isActive
   })
+  const { inputError, checkOnInteraction } = useEmulatorInputCheck(
+    worktreeId,
+    isLive ? (previewUrl ?? null) : null,
+    streamKey
+  )
+  const visibleError = error ?? inputError
 
   return (
     <div
@@ -57,14 +69,20 @@ export default function EmulatorPane({ tab, worktreeId, isActive = true }: Emula
         onRotate={() => void sendRotate()}
       />
 
-      {error ? (
+      {visibleError ? (
         <div className="border-b border-border bg-destructive/10 px-3 py-2 text-xs text-destructive">
-          {error}
+          {visibleError}
         </div>
       ) : null}
 
-      <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-muted px-3 py-6">
-        <MobileEmulatorAgentSetupGuideLayer isActive={isActive} worktreeId={worktreeId}>
+      <div
+        className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-muted px-3 py-6"
+        onPointerDownCapture={checkOnInteraction}
+        onWheelCapture={checkOnInteraction}
+        onKeyDownCapture={checkOnInteraction}
+        onPasteCapture={checkOnInteraction}
+      >
+        <MobileEmulatorAgentSetupGuideLayer isActive={isActive}>
           {!isLive && !loading ? (
             <p className="mb-4 text-center text-xs text-muted-foreground">
               {translate(
@@ -80,8 +98,11 @@ export default function EmulatorPane({ tab, worktreeId, isActive = true }: Emula
             deviceName={displayName}
             loading={loading}
             isLive={isLive}
+            visualOrientation={visualOrientation}
+            isActive={isActive}
             onTap={(x, y) => void sendTap(x, y)}
             onGesture={(points) => void sendGesture(points)}
+            onStreamLost={scrcpyDeviceIdFromStreamUrl(previewUrl) ? markStreamLost : undefined}
           />
         </MobileEmulatorAgentSetupGuideLayer>
       </div>

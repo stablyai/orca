@@ -1,20 +1,66 @@
-import { useEffect, type ReactNode } from 'react'
-import { I18nextProvider } from 'react-i18next'
-
-import { UI_LANGUAGE_SYSTEM } from '../../../shared/ui-language'
+import { useEffect, useRef, type ReactNode } from 'react'
 import { useAppStore } from '../store'
-import { i18n } from './i18n'
-import { resolveUiLocale } from './supported-languages'
+import { i18n, setRendererPluginLanguagePacks, loadRendererUiLanguage } from './i18n'
+import { usePluginLanguagePacks } from '../store/plugin-language-packs'
+import { isPluginUiLanguage } from '../../../shared/ui-language'
+import { initializeLanguageDetection, useLanguageReadiness } from './language-readiness'
 
 export function I18nProvider({ children }: { children: ReactNode }): React.JSX.Element {
-  const uiLanguage = useAppStore((state) => state.settings?.uiLanguage ?? UI_LANGUAGE_SYSTEM)
-  const locale = resolveUiLocale(uiLanguage)
+  const uiLanguage = useAppStore((state) => state.settings?.uiLanguage ?? null)
+  const packs = usePluginLanguagePacks()
+  const retryCount = useLanguageReadiness((state) => state.retryCount)
+  const systemLocale = useLanguageReadiness((state) =>
+    uiLanguage === 'system' ? state.detection?.locale : null
+  )
+  const generation = useRef(0)
+  // The store keeps unchanged packs by reference, so this changes only when the selected pack's content does.
+  const activePack = isPluginUiLanguage(uiLanguage)
+    ? packs.find((pack) => pack.id === uiLanguage)
+    : undefined
 
   useEffect(() => {
-    if (i18n.language !== locale) {
-      void i18n.changeLanguage(locale)
-    }
-  }, [locale])
+    setRendererPluginLanguagePacks(packs)
+  }, [packs])
 
-  return <I18nextProvider i18n={i18n}>{children}</I18nextProvider>
+  useEffect(() => {
+    if (uiLanguage === null) {
+      return
+    }
+    const request = ++generation.current
+    let cancelled = false
+    useLanguageReadiness.setState({ loading: true })
+    void (async () => {
+      const detection = initializeLanguageDetection()
+      try {
+        if (uiLanguage === 'system') {
+          await detection
+          if (cancelled || request !== generation.current) {
+            return
+          }
+        }
+        const [, locale] = await Promise.all([detection, loadRendererUiLanguage(uiLanguage)])
+        if (cancelled || request !== generation.current) {
+          return
+        }
+        await i18n.changeLanguage(locale)
+        if (!cancelled && request === generation.current) {
+          useLanguageReadiness.setState({ ready: true, error: false, loading: false })
+        }
+      } catch {
+        await detection
+        if (!cancelled && request === generation.current) {
+          await i18n.changeLanguage('en')
+          if (!cancelled && request === generation.current) {
+            useLanguageReadiness.setState({ ready: true, error: true, loading: false })
+          }
+        }
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [uiLanguage, activePack, retryCount, systemLocale])
+
+  // initReactI18next already binds useTranslation to this instance.
+  return <>{children}</>
 }

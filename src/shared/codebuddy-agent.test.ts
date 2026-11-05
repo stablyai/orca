@@ -1,0 +1,44 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { describe, expect, it } from 'vitest'
+import { createHookListenerState } from './agent-hook-listener/listener-state'
+import { normalizeAndAccept } from './agent-hook-listener/normalization/agent-hook-listener-test-harness'
+import { recognizeAgentProcessFromCommandLine } from './agent-status/process/agent-process-recognition'
+import { getAgentResumeArgv } from './agent-launch/startup/agent-resume-argv'
+
+describe('CodeBuddy harness', () => {
+  it('replays the live question lifecycle without settling at late SessionStart', () => {
+    const state = createHookListenerState()
+    const events = readFileSync(
+      join(__dirname, '__fixtures__/codebuddy-question-hooks.jsonl'),
+      'utf8'
+    )
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line))
+    const rows = events.map((event) => normalizeAndAccept(state, 'codebuddy', event))
+    expect(rows.map((row) => row?.payload.state ?? null)).toEqual([
+      'working',
+      null,
+      'waiting',
+      'working',
+      'working',
+      'done'
+    ])
+    expect(rows[2]?.payload).toMatchObject({ agentType: 'codebuddy', toolName: 'AskUserQuestion' })
+    expect(rows[5]?.payload).toMatchObject({ agentType: 'codebuddy', lastAssistantMessage: 'Red' })
+    expect(rows[5]?.providerSession?.id).toBe('codebuddy-verification')
+  })
+
+  it('excludes print runs and resumes the original provider session', () => {
+    for (const flag of ['--print', '--serve', '--acp', '--bg', '--background']) {
+      expect(recognizeAgentProcessFromCommandLine(`codebuddy ${flag}`)).toBeNull()
+    }
+    expect(recognizeAgentProcessFromCommandLine('codebuddy -- --serve')?.agent).toBe('codebuddy')
+    expect(getAgentResumeArgv('codebuddy', { key: 'session_id', id: 'session-1' })).toEqual([
+      'codebuddy',
+      '--resume',
+      'session-1'
+    ])
+  })
+})

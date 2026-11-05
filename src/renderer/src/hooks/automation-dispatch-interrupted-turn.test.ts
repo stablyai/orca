@@ -1,0 +1,61 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { AutomationDispatchResult } from '../../../shared/automations-types'
+import type { AutomationTerminalOwnership } from '@/lib/automation-terminal-ownership'
+
+vi.mock('@/store', () => ({
+  useAppStore: {
+    getState: () => ({ agentStatusByPaneKey: {} }),
+    subscribe: vi.fn(() => () => {})
+  }
+}))
+
+const markDispatchResult = vi.fn<(result: AutomationDispatchResult) => Promise<void>>()
+const releaseTerminalOwnership = vi.fn()
+const finalizeTerminalOwnership = vi.fn<AutomationTerminalOwnership['finalize']>(async () => null)
+
+async function createCompletion() {
+  const { createAutomationDispatchCompletion } = await import('./automation-dispatch-completion')
+  return createAutomationDispatchCompletion({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: completion reads only the run id.
+    run: { id: 'run-1' } as never,
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: completion reads only id and displayName.
+    worktree: { id: 'wt-1', displayName: 'Automation worktree' } as never,
+    precheckResult: null,
+    markDispatchResult,
+    releaseTerminalOwnership,
+    finalizeTerminalOwnership
+  })
+}
+
+// Why: an interrupted terminal turn used to be recorded as a completed run (STA-12638).
+describe('automation dispatch completion for an interrupted turn', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    markDispatchResult.mockResolvedValue(undefined)
+  })
+
+  it.each([
+    { name: 'after the dispatch is marked', doneFirst: false },
+    { name: 'before the dispatch is marked', doneFirst: true }
+  ])('records it as failed and keeps the terminal, $name', async ({ doneFirst }) => {
+    const completion = await createCompletion()
+    if (doneFirst) {
+      completion.handleAgentDone({ interrupted: true })
+      await completion.settlePendingAfterDispatch()
+    } else {
+      await completion.settlePendingAfterDispatch()
+      completion.handleAgentDone({ interrupted: true })
+    }
+    await vi.waitFor(() => expect(releaseTerminalOwnership).toHaveBeenCalled())
+
+    expect(markDispatchResult).toHaveBeenCalledTimes(1)
+    expect(markDispatchResult).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'dispatch_failed',
+        errorCode: 'agentInterrupted',
+        error: 'The agent was interrupted before it finished this run.'
+      })
+    )
+    expect(finalizeTerminalOwnership).not.toHaveBeenCalled()
+  })
+})

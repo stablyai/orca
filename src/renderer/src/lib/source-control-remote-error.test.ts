@@ -1,41 +1,59 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
-
-import { resolveRemoteOperationErrorMessage } from './source-control-remote-error'
+import { describe, expect, it } from 'vitest'
+import {
+  isNonFastForwardRemoteError,
+  resolveRemoteOperationErrorMessage
+} from './source-control-remote-error'
 
 describe('source-control remote error formatting', () => {
-  afterEach(() => {
-    vi.restoreAllMocks()
-  })
+  it.each(['fatal', 'remote'])(
+    'redacts ANSI-bearing credentials in %s details from older remote hosts',
+    (prefix) => {
+      const error = new Error(
+        `git.push failed:\n${prefix}: Access denied to https://user:sec\x1b[1 qret@example.com/repo.git`
+      )
 
-  it('prefers fatal detail over an earlier remote detail for publish failures', () => {
-    const error = new Error('remote: protected branch\r\nfatal: Authentication failed\r\n')
+      expect(resolveRemoteOperationErrorMessage(error, { isPush: true })).toBe(
+        'Push failed. Access denied to https://example.com/repo.git. Check your remote access and try again.'
+      )
+    }
+  )
 
-    expect(resolveRemoteOperationErrorMessage(error, { publish: true })).toBe(
-      'Publish Branch failed. Authentication failed. Check your remote access and try again.'
+  it.each([
+    [{ isFetch: true }, 'Fetch failed. '],
+    [{ isFastForward: true }, 'Fast-forward failed. '],
+    [{ isRebase: true }, 'Rebase failed. '],
+    [{}, '']
+  ])('redacts ANSI-bearing credentials in fallback details for %j', (options, prefix) => {
+    const error = new Error('Access denied to https://user:sec\x1b[1 qret@example.com/repo.git')
+
+    expect(resolveRemoteOperationErrorMessage(error, options)).toBe(
+      `${prefix}Access denied to https://example.com/repo.git`
     )
+    expect(error.message).toContain('user:sec\x1b[1 qret@')
   })
 
-  it('extracts publish details from newline-heavy output without full line-array splitting', () => {
-    const splitSpy = vi.spyOn(String.prototype, 'split')
-    const replaceSpy = vi.spyOn(String.prototype, 'replace')
-    const progress = 'remote: Enumerating objects\r\n'.repeat(10_000)
+  it.each([
+    [{ publish: true }, 'Publish Branch'],
+    [{ isSync: true }, 'Sync'],
+    [{ isForcePush: true }, 'Force Push'],
+    [{ isPush: true }, 'Push']
+  ])('sanitizes and classifies older-host submodule errors for %j', (options, operation) => {
     const error = new Error(
-      `${progress}fatal: unable to access https://token:secret@example.com/repo.git\r\n`
+      "Unable to push sub\x1b[1 qmodule 'https://user:sec\x1b[1 qret@example.com/repo.git'\n" +
+        ' ! [rejected] main -> main (fetch\x1b[1 q first)'
     )
 
-    const result = resolveRemoteOperationErrorMessage(error, { publish: true })
-
-    expect(result).toContain('Publish Branch failed. unable to access https://example.com/repo.git')
-    const usedLineSplit = splitSpy.mock.calls.some(([separator]) => {
-      if (typeof separator === 'string') {
-        return separator === '\n'
-      }
-      return separator instanceof RegExp && separator.source === '\\r?\\n'
-    })
-    const usedCrlfReplace = replaceSpy.mock.calls.some(
-      ([pattern]) => pattern instanceof RegExp && pattern.source === '\\r\\n'
+    expect(resolveRemoteOperationErrorMessage(error, options)).toBe(
+      `${operation} failed. Submodule 'https://example.com/repo.git' has remote changes. Pull inside the submodule, then try again.`
     )
-    expect(usedLineSplit).toBe(false)
-    expect(usedCrlfReplace).toBe(false)
+    expect(isNonFastForwardRemoteError(error)).toBe(true)
+    expect(
+      resolveRemoteOperationErrorMessage(
+        new Error("Unable to push submodule 'https://user:sec\x1b[1 qret@example.com/repo.git'"),
+        options
+      )
+    ).toBe(
+      `${operation} failed. Submodule 'https://example.com/repo.git' could not be pushed. Resolve the submodule push error, then try again.`
+    )
   })
 })

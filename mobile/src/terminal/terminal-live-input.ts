@@ -31,8 +31,7 @@ type TerminalLiveSpecialKeyId =
   | 'pageUp'
   | 'tab'
 
-// Why: Enter stays on onSubmitEditing; mapping it here can double-send carriage
-// returns when native TextInput emits both submit and key events.
+// Keep Enter on onSubmitEditing; handling both native key and submit events would double-send Return.
 const TERMINAL_LIVE_SPECIAL_KEY_IDS = new Map<string, TerminalLiveSpecialKeyId>([
   ['Escape', 'escape'],
   ['Esc', 'escape'],
@@ -66,16 +65,24 @@ export type TerminalLiveInputFocusTimerRef = {
   current: ReturnType<typeof setTimeout> | null
 }
 
-export type TerminalLiveInputDefaultResult = {
-  enabledHandles: ReadonlySet<string>
-  defaultedHandles: ReadonlySet<string>
-  changed: boolean
+export type TerminalLiveInputFocusTarget = {
+  readonly focus: () => void
+  readonly blur: () => void
+  readonly isFocused?: () => boolean
 }
 
-export type TerminalLiveInputPruneResult = TerminalLiveInputDefaultResult
+type FocusTerminalLiveInputTargetOptions = {
+  readonly keyboardHeight: number
+  readonly refocus: () => void
+  readonly reopenFocusedInputWhenKeyboardHidden: boolean
+}
+
+export function getTerminalLiveSpecialKeyId(key: string): TerminalLiveSpecialKeyId | null {
+  return TERMINAL_LIVE_SPECIAL_KEY_IDS.get(key) ?? null
+}
 
 export function getTerminalLiveSpecialKeyBytes(key: string): string | null {
-  const shortcutKey = TERMINAL_LIVE_SPECIAL_KEY_IDS.get(key)
+  const shortcutKey = getTerminalLiveSpecialKeyId(key)
   if (!shortcutKey) {
     return null
   }
@@ -87,70 +94,6 @@ export function isTerminalLiveInputWithinByteLimit(
   maxBytes = TERMINAL_LIVE_INPUT_MAX_BYTES
 ): boolean {
   return encoder.encode(text).byteLength <= maxBytes
-}
-
-export function defaultTerminalLiveInputHandles(
-  enabledHandles: ReadonlySet<string>,
-  defaultedHandles: ReadonlySet<string>,
-  terminalHandles: readonly string[]
-): TerminalLiveInputDefaultResult {
-  let nextEnabledHandles: Set<string> | null = null
-  let nextDefaultedHandles: Set<string> | null = null
-
-  for (const handle of terminalHandles) {
-    if (defaultedHandles.has(handle)) {
-      continue
-    }
-    nextEnabledHandles ??= new Set(enabledHandles)
-    nextDefaultedHandles ??= new Set(defaultedHandles)
-    nextEnabledHandles.add(handle)
-    nextDefaultedHandles.add(handle)
-  }
-
-  if (!nextEnabledHandles || !nextDefaultedHandles) {
-    return { enabledHandles, defaultedHandles, changed: false }
-  }
-
-  return {
-    enabledHandles: nextEnabledHandles,
-    defaultedHandles: nextDefaultedHandles,
-    changed: true
-  }
-}
-
-export function pruneTerminalLiveInputHandles(
-  enabledHandles: ReadonlySet<string>,
-  defaultedHandles: ReadonlySet<string>,
-  liveTerminalHandles: ReadonlySet<string>
-): TerminalLiveInputPruneResult {
-  let nextEnabledHandles: Set<string> | null = null
-  let nextDefaultedHandles: Set<string> | null = null
-
-  for (const handle of enabledHandles) {
-    if (liveTerminalHandles.has(handle)) {
-      continue
-    }
-    nextEnabledHandles ??= new Set(enabledHandles)
-    nextEnabledHandles.delete(handle)
-  }
-
-  for (const handle of defaultedHandles) {
-    if (liveTerminalHandles.has(handle)) {
-      continue
-    }
-    nextDefaultedHandles ??= new Set(defaultedHandles)
-    nextDefaultedHandles.delete(handle)
-  }
-
-  if (!nextEnabledHandles && !nextDefaultedHandles) {
-    return { enabledHandles, defaultedHandles, changed: false }
-  }
-
-  return {
-    enabledHandles: nextEnabledHandles ?? enabledHandles,
-    defaultedHandles: nextDefaultedHandles ?? defaultedHandles,
-    changed: true
-  }
 }
 
 export function clearTerminalLiveInputFocusTimer(timerRef: TerminalLiveInputFocusTimerRef): void {
@@ -166,13 +109,34 @@ export function scheduleTerminalLiveInputFocus(
   focus: () => void,
   delayMs = 50
 ): void {
-  // Why: live input can be toggled during route changes; replacing the pending
-  // focus timer prevents stale native TextInput focus after unmount/disable.
+  // Replace pending focus timers so route changes cannot focus a stale input after disable/unmount.
   clearTerminalLiveInputFocusTimer(timerRef)
   timerRef.current = setTimeout(() => {
     timerRef.current = null
     focus()
   }, delayMs)
+}
+
+export function focusTerminalLiveInputTarget(
+  input: TerminalLiveInputFocusTarget | null,
+  {
+    keyboardHeight,
+    refocus,
+    reopenFocusedInputWhenKeyboardHidden
+  }: FocusTerminalLiveInputTargetOptions
+): void {
+  if (!input) {
+    return
+  }
+
+  if (reopenFocusedInputWhenKeyboardHidden && keyboardHeight <= 0 && input.isFocused?.()) {
+    // Android can retain hidden input focus after IME dismissal; blur first to create a new focus session.
+    input.blur()
+    refocus()
+    return
+  }
+
+  input.focus()
 }
 
 export { TERMINAL_LIVE_INPUT_MAX_BYTES }

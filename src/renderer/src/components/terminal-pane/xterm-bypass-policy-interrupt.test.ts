@@ -3,7 +3,6 @@ import {
   shouldHandleTerminalInterruptKeyboardEvent,
   shouldSuppressTerminalInterruptKeyup,
   shouldSuppressTerminalModifierKeyboardEvent,
-  TERMINAL_INTERRUPT_INPUT,
   type XtermBypassEvent
 } from './xterm-bypass-policy'
 
@@ -22,10 +21,6 @@ function event(overrides: Partial<XtermBypassEvent>): XtermBypassEvent {
 }
 
 describe('shouldHandleTerminalInterruptKeyboardEvent', () => {
-  it('exports the ETX byte used for terminal interrupts', () => {
-    expect(TERMINAL_INTERRUPT_INPUT).toBe('\x03')
-  })
-
   it('handles macOS Ctrl+C as terminal interrupt even with a selection', () => {
     expect(
       shouldHandleTerminalInterruptKeyboardEvent(event({ key: 'c', code: 'KeyC', ctrlKey: true }), {
@@ -100,6 +95,26 @@ describe('shouldHandleTerminalInterruptKeyboardEvent', () => {
         isMac: false,
         hasSelection: false
       })
+    ).toBe(false)
+  })
+
+  it('suppresses the matching keyup for a non-Latin Ctrl+C', () => {
+    expect(
+      shouldSuppressTerminalInterruptKeyup(
+        event({ type: 'keyup', key: 'ㅊ', code: 'KeyC', ctrlKey: true })
+      )
+    ).toBe(true)
+  })
+
+  it('does not handle a non-Latin logical key on a physical key other than KeyC', () => {
+    expect(
+      shouldHandleTerminalInterruptKeyboardEvent(
+        event({ key: 'ㅁ', code: 'KeyA', ctrlKey: true }),
+        {
+          isMac: true,
+          hasSelection: false
+        }
+      )
     ).toBe(false)
   })
 

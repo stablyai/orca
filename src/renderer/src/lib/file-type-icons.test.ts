@@ -1,61 +1,28 @@
-import {
-  Database,
-  File,
-  FileArchive,
-  FileBox,
-  FileChartColumn,
-  FileCode,
-  FileCog,
-  FileDiff,
-  FileImage,
-  FileJson,
-  FileKey,
-  FileLock,
-  FileMusic,
-  FileSliders,
-  FileSpreadsheet,
-  FileText,
-  FileType,
-  FileVideo
-} from 'lucide-react'
 import { describe, expect, it } from 'vitest'
-import { getFileTypeIcon } from './file-type-icons'
+import { parsePluginIconThemeArtifact } from '../../../shared/plugins/artifacts/plugin-icon-theme-artifact'
+import type { ActivePluginIconTheme } from '../store/plugin-icon-themes'
+import { getPluginFileTypeIconIndex } from './file-type-icons'
 
-describe('getFileTypeIcon', () => {
-  it('prefers known filenames over generic extensions', () => {
-    expect(getFileTypeIcon('package.json')).toBe(FileBox)
-    expect(getFileTypeIcon('/repo/tsconfig.json')).toBe(FileSliders)
-    expect(getFileTypeIcon('C:\\repo\\.env.local')).toBe(FileLock)
-    expect(getFileTypeIcon('README')).toBe(FileText)
-    expect(getFileTypeIcon('Dockerfile.dev')).toBe(FileCog)
-  })
+const iconTheme = (maps: Partial<ActivePluginIconTheme>): ActivePluginIconTheme => ({
+  icons: {},
+  fileNames: {},
+  fileExtensions: {},
+  folderNames: {},
+  folderNamesExpanded: {},
+  ...maps
+})
 
-  it('matches common code, config, document, and media extensions', () => {
-    expect(getFileTypeIcon('src/App.tsx')).toBe(FileCode)
-    expect(getFileTypeIcon('config/settings.jsonc')).toBe(FileJson)
-    expect(getFileTypeIcon('styles/app.css')).toBe(FileType)
-    expect(getFileTypeIcon('README.md')).toBe(FileText)
-    expect(getFileTypeIcon('assets/logo.png')).toBe(FileImage)
-    expect(getFileTypeIcon('notes.patch')).toBe(FileDiff)
-  })
-
-  it('uses more specific icons for data, security, and presentation files', () => {
-    expect(getFileTypeIcon('db/schema.sql')).toBe(Database)
-    expect(getFileTypeIcon('reports/summary.xlsx')).toBe(FileSpreadsheet)
-    expect(getFileTypeIcon('certs/server.pem')).toBe(FileKey)
-    expect(getFileTypeIcon('slides/status.pptx')).toBe(FileChartColumn)
-  })
-
-  it('handles compound archive extensions before their trailing extension', () => {
-    expect(getFileTypeIcon('release.tar.gz')).toBe(FileArchive)
-  })
-
-  it('matches audio and video extensions', () => {
-    expect(getFileTypeIcon('sound/theme.mp3')).toBe(FileMusic)
-    expect(getFileTypeIcon('demo.mov')).toBe(FileVideo)
-  })
-
-  it('falls back to the generic file icon for unknown files', () => {
-    expect(getFileTypeIcon('unknown.customtype')).toBe(File)
+describe('parsed artifact lookup', () => {
+  it('finds files named __proto__ and constructor from the parsed theme', () => {
+    const artifact = parsePluginIconThemeArtifact(
+      '{"schemaVersion":1,"fileNames":{"__proto__":"a.svg","Constructor":"b.svg"}}'
+    )
+    const indexes = Object.fromEntries(
+      Object.keys(artifact.fileNames).map((key, index) => [key, index])
+    )
+    const theme = iconTheme({ fileNames: indexes })
+    expect(getPluginFileTypeIconIndex(theme, '/a/__proto__')).toBe(0)
+    expect(getPluginFileTypeIconIndex(theme, '/a/CONSTRUCTOR')).toBe(1)
+    expect(getPluginFileTypeIconIndex(theme, '/a/other')).toBeNull()
   })
 })

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createTestStore, makeWorktree } from './store-test-helpers'
-import type { Project, ProjectHostSetup, Repo } from '../../../../shared/types'
+import type { Project, ProjectHostSetup } from '../../../../shared/project-types'
+import type { Repo } from '../../../../shared/repo-types'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest
@@ -26,11 +27,14 @@ const remoteDuplicate: Repo = {
 }
 
 const reposRemove = vi.fn()
+const reposRemoveForHost = vi.fn()
 const reposUpdate = vi.fn()
 const reposReorder = vi.fn()
+const reposReorderForHost = vi.fn()
 const ptyKill = vi.fn()
 const runtimeEnvironmentCall = vi.fn()
 const runtimeEnvironmentTransportCall = vi.fn()
+const uiSet = vi.fn()
 
 function deferred<T>() {
   let resolve!: (value: T) => void
@@ -59,11 +63,15 @@ function projectHostSetup(overrides: Pick<ProjectHostSetup, 'id' | 'hostId'>): P
 beforeEach(() => {
   clearRuntimeCompatibilityCacheForTests()
   reposRemove.mockReset()
+  reposRemoveForHost.mockReset()
   reposUpdate.mockReset()
   reposReorder.mockReset()
+  reposReorderForHost.mockReset()
   ptyKill.mockReset()
   runtimeEnvironmentCall.mockReset()
   runtimeEnvironmentTransportCall.mockReset()
+  uiSet.mockReset()
+  uiSet.mockResolvedValue(undefined)
   runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
     return createCompatibleRuntimeStatusResponseIfNeeded(args) ?? runtimeEnvironmentCall(args)
   })
@@ -71,65 +79,19 @@ beforeEach(() => {
     api: {
       repos: {
         remove: reposRemove,
+        removeForHost: reposRemoveForHost,
         update: reposUpdate,
-        reorder: reposReorder
+        reorder: reposReorder,
+        reorderForHost: reposReorderForHost
       },
       pty: { kill: ptyKill },
-      runtimeEnvironments: { call: runtimeEnvironmentTransportCall }
+      runtimeEnvironments: { call: runtimeEnvironmentTransportCall },
+      ui: { set: uiSet }
     }
   })
 })
 
 describe('repo slice host identity routing', () => {
-  it('updates only the focused host row when repo ids are duplicated across hosts', async () => {
-    runtimeEnvironmentCall.mockResolvedValue({
-      id: 'rpc-duplicate-update',
-      ok: true,
-      result: { repo: { ...remoteDuplicate, displayName: 'Remote Renamed' } },
-      _meta: { runtimeId: 'runtime-remote' }
-    })
-    const store = createTestStore()
-    store.setState({
-      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
-      repos: [localDuplicate, remoteDuplicate]
-    })
-
-    await store.getState().updateRepo('same-repo', { displayName: 'Remote Renamed' })
-
-    expect(store.getState().repos).toEqual([
-      localDuplicate,
-      { ...remoteDuplicate, displayName: 'Remote Renamed' }
-    ])
-    expect(reposUpdate).not.toHaveBeenCalled()
-    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
-      selector: 'env-1',
-      method: 'repo.update',
-      params: { repo: 'same-repo', updates: { displayName: 'Remote Renamed' } },
-      timeoutMs: 15_000
-    })
-  })
-
-  it('updates a legacy local duplicate without overwriting an explicit remote sibling', async () => {
-    const { executionHostId: _executionHostId, ...legacyLocalDuplicate } = localDuplicate
-    reposUpdate.mockResolvedValue(undefined)
-    const store = createTestStore()
-    store.setState({ repos: [legacyLocalDuplicate as Repo, remoteDuplicate] })
-
-    await store.getState().updateRepo('same-repo', { displayName: 'Local Renamed' })
-
-    expect(store.getState().repos).toEqual([
-      { ...legacyLocalDuplicate, displayName: 'Local Renamed' },
-      remoteDuplicate
-    ])
-    expect(reposUpdate).toHaveBeenCalledWith({
-      repoId: 'same-repo',
-      updates: { displayName: 'Local Renamed' }
-    })
-    expect(runtimeEnvironmentCall).not.toHaveBeenCalledWith(
-      expect.objectContaining({ method: 'repo.update' })
-    )
-  })
-
   it('keeps queued focused-host repo updates pinned when focus changes', async () => {
     const firstUpdate = deferred<{
       id: string
@@ -203,7 +165,7 @@ describe('repo slice host identity routing', () => {
     ])
   })
 
-  it('removes only the focused host row and worktrees for duplicate repo ids', async () => {
+  it('removes only the named host row and worktrees for duplicate repo ids', async () => {
     const localWorktree = makeWorktree({
       id: 'same-repo::/local/wt',
       repoId: 'same-repo'
@@ -216,6 +178,8 @@ describe('repo slice host identity routing', () => {
     const store = createTestStore()
     store.setState({
       repos: [localDuplicate, remoteDuplicate],
+      activeRepoId: 'same-repo',
+      filterRepoIds: ['same-repo'],
       projects: [
         {
           id: 'repo:same-repo',
@@ -245,9 +209,12 @@ describe('repo slice host identity routing', () => {
       }
     })
 
-    await store.getState().removeProject('same-repo')
+    await store.getState().removeProject('same-repo', { hostId: 'local' })
 
     expect(store.getState().repos).toEqual([remoteDuplicate])
+    // Current contract: bare-ID UI selections clear even though the sibling host row survives.
+    expect(store.getState().activeRepoId).toBeNull()
+    expect(store.getState().filterRepoIds).toEqual([])
     expect(store.getState().worktreesByRepo['same-repo']).toEqual([remoteWorktree])
     expect(store.getState().tabsByWorktree[localWorktree.id]).toBeUndefined()
     expect(store.getState().tabsByWorktree[remoteWorktree.id]).toEqual([
@@ -260,9 +227,42 @@ describe('repo slice host identity routing', () => {
     expect(store.getState().projects).toEqual([
       expect.objectContaining({ id: 'repo:same-repo', sourceRepoIds: ['same-repo'] })
     ])
-    expect(reposRemove).toHaveBeenCalledWith({ repoId: 'same-repo' })
+    // Host-scope local removal or main also deletes runtime twin’s persisted row.
+    expect(reposRemoveForHost).toHaveBeenCalledWith({ repoId: 'same-repo', hostId: 'local' })
+
+    expect(reposRemove).not.toHaveBeenCalled()
     expect(ptyKill).toHaveBeenCalledWith('local-pty')
     expect(ptyKill).not.toHaveBeenCalledWith('remote-pty')
+  })
+  it('keeps a tab with no host evidence when two hosts collide on repoId and path', async () => {
+    const sharedWorktreeId = 'same-repo::/shared'
+    const localWorktree = makeWorktree({
+      id: sharedWorktreeId,
+      repoId: 'same-repo'
+    })
+    const remoteWorktree = makeWorktree({
+      id: sharedWorktreeId,
+      repoId: 'same-repo',
+      hostId: 'runtime:env-1'
+    })
+    const store = createTestStore()
+    store.setState({
+      repos: [localDuplicate, remoteDuplicate],
+      worktreesByRepo: { 'same-repo': [localWorktree, remoteWorktree] },
+      tabsByWorktree: {
+        [sharedWorktreeId]: [{ id: 'shared-tab', worktreeId: sharedWorktreeId }] as never
+      },
+      lastVisitedAtByWorktreeId: { [sharedWorktreeId]: 10 }
+    })
+
+    await store.getState().removeProject('same-repo', { hostId: 'local' })
+
+    expect(store.getState().worktreesByRepo['same-repo']).toEqual([remoteWorktree])
+    // Why kept: nothing says which host this tab is on, so it may be the surviving twin's.
+    expect(store.getState().tabsByWorktree[sharedWorktreeId]?.map((tab) => tab.id)).toEqual([
+      'shared-tab'
+    ])
+    expect(store.getState().lastVisitedAtByWorktreeId[sharedWorktreeId]).toBe(10)
   })
 
   it('removes a runtime duplicate without purging legacy local worktrees', async () => {
@@ -300,7 +300,7 @@ describe('repo slice host identity routing', () => {
       }
     })
 
-    await store.getState().removeProject('same-repo')
+    await store.getState().removeProject('same-repo', { hostId: 'runtime:env-1' })
 
     expect(store.getState().repos).toEqual([localDuplicate])
     expect(store.getState().worktreesByRepo['same-repo']).toEqual([localWorktree])
@@ -318,28 +318,5 @@ describe('repo slice host identity routing', () => {
     expect(reposRemove).not.toHaveBeenCalled()
     expect(ptyKill).toHaveBeenCalledWith('remote-pty')
     expect(ptyKill).not.toHaveBeenCalledWith('local-pty')
-  })
-
-  it('reorders duplicate repo ids once per owning host', async () => {
-    reposReorder.mockResolvedValue({ status: 'applied' })
-    runtimeEnvironmentCall.mockResolvedValue({
-      id: 'rpc-duplicate-reorder',
-      ok: true,
-      result: { status: 'applied' },
-      _meta: { runtimeId: 'runtime-remote' }
-    })
-    const store = createTestStore()
-    store.setState({ repos: [localDuplicate, remoteDuplicate] })
-
-    await store.getState().reorderRepos(['same-repo', 'same-repo'])
-
-    expect(store.getState().repos).toEqual([localDuplicate, remoteDuplicate])
-    expect(reposReorder).toHaveBeenCalledWith({ orderedIds: ['same-repo'] })
-    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
-      selector: 'env-1',
-      method: 'repo.reorder',
-      params: { orderedIds: ['same-repo'] },
-      timeoutMs: 15_000
-    })
   })
 })

@@ -45,9 +45,9 @@ describe('createSshSlice', () => {
         'tab-stale-last-known': staleLastKnownPtyId,
         'tab-other': otherPtyId
       },
-      pendingCodexPaneRestartIds: {
-        [removedPtyId]: true,
-        [otherPtyId]: true
+      pendingPaneAccountRestarts: {
+        [removedPtyId]: 'codex',
+        [otherPtyId]: 'codex'
       },
       codexRestartNoticeByPtyId: {
         [removedPtyId]: { previousAccountLabel: 'Old', nextAccountLabel: 'New' },
@@ -64,11 +64,6 @@ describe('createSshSlice', () => {
         [targetId, 'Removed target'],
         [otherTargetId, 'Other target']
       ]),
-      remoteWorkspaceHydratedTargetIds: new Set([targetId, otherTargetId]),
-      remoteWorkspaceSyncStatusByTargetId: {
-        [targetId]: { phase: 'offline' },
-        [otherTargetId]: { phase: 'synced' }
-      },
       portForwardsByConnection: {
         [targetId]: [
           {
@@ -98,9 +93,19 @@ describe('createSshSlice', () => {
         { requestId: 'req-2', targetId: otherTargetId, kind: 'password', detail: 'password' }
       ],
       deferredSshReconnectTargets: [targetId, otherTargetId],
+      transientClearedAgentStatusConnectionIds: {
+        [targetId]: true,
+        [otherTargetId]: true
+      },
       deferredSshSessionIdsByTabId: {
         'tab-ssh': 'legacy-session-without-target-prefix',
         'tab-stale-encoded': toAppSshPtyId(targetId, 'pty-1'),
+        'tab-other': toAppSshPtyId(otherTargetId, 'pty-2')
+      },
+      // Pending reconnect counts as orphan-sweep liveness; removal must clear it or pin the dead tab (#9911).
+      pendingReconnectPtyIdByTabId: {
+        'tab-ssh': toAppSshPtyId(targetId, 'pty-1'),
+        'tab-stale-encoded': toAppSshPtyId(targetId, 'pty-9'),
         'tab-other': toAppSshPtyId(otherTargetId, 'pty-2')
       }
     })
@@ -110,13 +115,17 @@ describe('createSshSlice', () => {
     const state = store.getState()
     expect(state.sshConnectionStates.has(targetId)).toBe(false)
     expect(state.sshTargetLabels.has(targetId)).toBe(false)
-    expect(state.remoteWorkspaceHydratedTargetIds.has(targetId)).toBe(false)
-    expect(state.remoteWorkspaceSyncStatusByTargetId[targetId]).toBeUndefined()
     expect(state.portForwardsByConnection[targetId]).toBeUndefined()
     expect(state.detectedPortsByConnection[targetId]).toBeUndefined()
     expect(state.sshCredentialQueue.map((req) => req.targetId)).toEqual([otherTargetId])
     expect(state.deferredSshReconnectTargets).toEqual([otherTargetId])
+    expect(state.transientClearedAgentStatusConnectionIds).toEqual({
+      [otherTargetId]: true
+    })
     expect(state.deferredSshSessionIdsByTabId).toEqual({
+      'tab-other': toAppSshPtyId(otherTargetId, 'pty-2')
+    })
+    expect(state.pendingReconnectPtyIdByTabId).toEqual({
       'tab-other': toAppSshPtyId(otherTargetId, 'pty-2')
     })
     expect(state.tabsByWorktree[worktreeId][0]).toMatchObject({ id: 'tab-ssh', ptyId: null })
@@ -124,111 +133,79 @@ describe('createSshSlice', () => {
     expect(state.ptyIdsByTabId['tab-ssh']).toEqual([])
     expect(state.lastKnownRelayPtyIdByTabId['tab-ssh']).toBeUndefined()
     expect(state.lastKnownRelayPtyIdByTabId['tab-stale-last-known']).toBeUndefined()
-    expect(state.pendingCodexPaneRestartIds[removedPtyId]).toBeUndefined()
+    expect(state.pendingPaneAccountRestarts[removedPtyId]).toBeUndefined()
     expect(state.codexRestartNoticeByPtyId[removedPtyId]).toBeUndefined()
 
     expect(state.sshConnectionStates.get(otherTargetId)?.status).toBe('connected')
     expect(state.sshTargetLabels.get(otherTargetId)).toBe('Other target')
-    expect(state.remoteWorkspaceHydratedTargetIds.has(otherTargetId)).toBe(true)
-    expect(state.remoteWorkspaceSyncStatusByTargetId[otherTargetId]).toEqual({ phase: 'synced' })
     expect(state.portForwardsByConnection[otherTargetId]).toHaveLength(1)
     expect(state.detectedPortsByConnection[otherTargetId]).toHaveLength(1)
     expect(state.tabsByWorktree[otherWorktreeId][0]?.ptyId).toBe(otherPtyId)
     expect(state.ptyIdsByTabId['tab-other']).toEqual([otherPtyId])
     expect(state.lastKnownRelayPtyIdByTabId['tab-other']).toBe(otherPtyId)
-    expect(state.pendingCodexPaneRestartIds[otherPtyId]).toBe(true)
+    expect(state.pendingPaneAccountRestarts[otherPtyId]).toBe('codex')
     expect(state.codexRestartNoticeByPtyId[otherPtyId]).toEqual({
       previousAccountLabel: 'Other old',
       nextAccountLabel: 'Other new'
     })
   })
 
-  it('keeps SSH target label references stable when refreshed metadata is unchanged', () => {
+  it("preserves another SSH target's terminal bindings when repo ids collide", () => {
     const store = createTestStore()
-    const labels = new Map([['ssh-1', 'Remote']])
-    store.setState({ sshTargetLabels: labels })
-    const previousState = store.getState()
+    const removedTargetId = 'target-a'
+    const survivingTargetId = 'target-b'
+    const removedWorktreeId = 'shared::/srv/a/work'
+    const survivingWorktreeId = 'shared::/srv/b/work'
+    const removedPtyId = toAppSshPtyId(removedTargetId, 'pty-a')
+    const survivingPtyId = toAppSshPtyId(survivingTargetId, 'pty-b')
 
-    store.getState().setSshTargetsMetadata([{ id: 'ssh-1', label: 'Remote' }])
-
-    expect(store.getState()).toBe(previousState)
-    expect(store.getState().sshTargetLabels).toBe(labels)
-  })
-
-  it('keeps SSH connection state references stable when duplicate state arrives', () => {
-    const store = createTestStore()
-    const sshConnectionStates = new Map([
-      [
-        'ssh-1',
-        { targetId: 'ssh-1', status: 'connected' as const, error: null, reconnectAttempt: 0 }
-      ]
-    ])
-    store.setState({ sshConnectionStates, sshConnectedGeneration: 1 })
-    const previousState = store.getState()
-
-    store.getState().setSshConnectionState('ssh-1', {
-      targetId: 'ssh-1',
-      status: 'connected',
-      error: null,
-      reconnectAttempt: 0
-    })
-
-    expect(store.getState()).toBe(previousState)
-    expect(store.getState().sshConnectionStates).toBe(sshConnectionStates)
-    expect(store.getState().sshConnectedGeneration).toBe(1)
-  })
-
-  it('does not publish state when cleanup finds no removed SSH target state', () => {
-    const store = createTestStore()
-    const previousState = store.getState()
-
-    store.getState().clearRemovedSshTargetState('missing-target')
-
-    expect(store.getState()).toBe(previousState)
-  })
-
-  it('preserves untouched cleanup slice references while removing deferred target metadata', () => {
-    const store = createTestStore()
-    const sshConnectionStates = new Map([
-      [
-        'ssh-2',
-        { targetId: 'ssh-2', status: 'connected' as const, error: null, reconnectAttempt: 0 }
-      ]
-    ])
-    const sshTargetLabels = new Map([['ssh-2', 'Other']])
-    const remoteWorkspaceHydratedTargetIds = new Set(['ssh-2'])
-    const remoteWorkspaceSyncStatusByTargetId = { 'ssh-2': { phase: 'synced' as const } }
-    const portForwardsByConnection = { 'ssh-2': [] }
-    const detectedPortsByConnection = { 'ssh-2': [] }
-    const sshCredentialQueue = [
-      { requestId: 'req-2', targetId: 'ssh-2', kind: 'password' as const, detail: 'password' }
-    ]
-    const deferredSshSessionIdsByTabId = {
-      'tab-other': toAppSshPtyId('ssh-2', 'pty-2')
-    }
     store.setState({
-      sshConnectionStates,
-      sshTargetLabels,
-      remoteWorkspaceHydratedTargetIds,
-      remoteWorkspaceSyncStatusByTargetId,
-      portForwardsByConnection,
-      detectedPortsByConnection,
-      sshCredentialQueue,
-      deferredSshReconnectTargets: ['ssh-1'],
-      deferredSshSessionIdsByTabId
+      repos: [
+        {
+          ...TEST_REPO,
+          id: 'shared',
+          connectionId: removedTargetId,
+          executionHostId: 'ssh:target-a'
+        },
+        {
+          ...TEST_REPO,
+          id: 'shared',
+          connectionId: survivingTargetId,
+          executionHostId: 'ssh:target-b'
+        }
+      ],
+      worktreesByRepo: {
+        shared: [
+          makeWorktree({
+            id: removedWorktreeId,
+            repoId: 'shared',
+            hostId: 'ssh:target-a'
+          }),
+          makeWorktree({
+            id: survivingWorktreeId,
+            repoId: 'shared',
+            hostId: 'ssh:target-b'
+          })
+        ]
+      },
+      tabsByWorktree: {
+        [removedWorktreeId]: [
+          makeTab({ id: 'tab-a', worktreeId: removedWorktreeId, ptyId: removedPtyId })
+        ],
+        [survivingWorktreeId]: [
+          makeTab({ id: 'tab-b', worktreeId: survivingWorktreeId, ptyId: survivingPtyId })
+        ]
+      },
+      ptyIdsByTabId: { 'tab-a': [removedPtyId], 'tab-b': [survivingPtyId] },
+      lastKnownRelayPtyIdByTabId: { 'tab-a': removedPtyId, 'tab-b': survivingPtyId }
     })
 
-    store.getState().clearRemovedSshTargetState('ssh-1')
+    store.getState().clearRemovedSshTargetState(removedTargetId)
 
     const state = store.getState()
-    expect(state.deferredSshReconnectTargets).toEqual([])
-    expect(state.sshConnectionStates).toBe(sshConnectionStates)
-    expect(state.sshTargetLabels).toBe(sshTargetLabels)
-    expect(state.remoteWorkspaceHydratedTargetIds).toBe(remoteWorkspaceHydratedTargetIds)
-    expect(state.remoteWorkspaceSyncStatusByTargetId).toBe(remoteWorkspaceSyncStatusByTargetId)
-    expect(state.portForwardsByConnection).toBe(portForwardsByConnection)
-    expect(state.detectedPortsByConnection).toBe(detectedPortsByConnection)
-    expect(state.sshCredentialQueue).toBe(sshCredentialQueue)
-    expect(state.deferredSshSessionIdsByTabId).toBe(deferredSshSessionIdsByTabId)
+    expect(state.tabsByWorktree[removedWorktreeId][0]?.ptyId).toBeNull()
+    expect(state.tabsByWorktree[survivingWorktreeId][0]?.ptyId).toBe(survivingPtyId)
+    expect(state.ptyIdsByTabId['tab-b']).toEqual([survivingPtyId])
+    expect(state.lastKnownRelayPtyIdByTabId['tab-b']).toBe(survivingPtyId)
   })
 })

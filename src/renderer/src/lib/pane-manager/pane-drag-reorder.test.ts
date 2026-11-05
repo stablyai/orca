@@ -3,7 +3,7 @@ import type { ManagedPaneInternal } from './pane-manager-types'
 import type * as PaneTreeOpsModule from './pane-tree-ops'
 import { attachPaneDrag } from './pane-drag-pointer'
 import { createDragReorderState } from './pane-drag-reorder'
-import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
+import type { TerminalLeafId } from '../../../../shared/workspace-layout/stable-pane-id'
 
 const detachPaneFromTree = vi.hoisted(() => vi.fn())
 const insertPaneNextTo = vi.hoisted(() => vi.fn())
@@ -45,6 +45,7 @@ class FakeElement {
   readonly classList: FakeClassList
   readonly style: Record<string, string> = {}
   readonly dataset: Record<string, string> = {}
+  releasePointerCaptureError: Error | null = null
   private readonly listeners = new Map<string, Set<FakeListener>>()
   private readonly capturedPointerIds = new Set<number>()
   removed = false
@@ -81,6 +82,9 @@ class FakeElement {
   }
 
   releasePointerCapture(pointerId: number): void {
+    if (this.releasePointerCaptureError) {
+      throw this.releasePointerCaptureError
+    }
     this.capturedPointerIds.delete(pointerId)
   }
 
@@ -129,6 +133,7 @@ function createPane(id: number, container: FakeElement): ManagedPaneInternal {
     webglDisabledAfterContextLoss: false,
     hasComplexScriptOutput: false,
     webglAddon: null,
+    imageAddon: null,
     ligaturesAddon: null,
     fitResizeObserver: null,
     pendingObservedFitRafId: null,
@@ -225,10 +230,72 @@ describe('attachPaneDrag', () => {
     expect(appendedElements[0].removed).toBe(true)
     expect(state.dragSourcePaneId).toBeNull()
     expect(state.currentDropTarget).toBeNull()
+    expect(state.currentExternalDropTarget).toBeNull()
     expect(state.cleanupActiveDrag).toBeNull()
     expect(onDragActiveChange).toHaveBeenLastCalledWith(false)
     expect(detachPaneFromTree).not.toHaveBeenCalled()
     expect(insertPaneNextTo).not.toHaveBeenCalled()
+  })
+
+  it('cleans pane drag state if releasing pointer capture fails during drop', () => {
+    const handle = new FakeElement()
+    const root = new FakeElement(['pane-manager-root'])
+    const sourceContainer = new FakeElement(['pane'], {
+      left: 0,
+      top: 0,
+      right: 100,
+      bottom: 100,
+      width: 100,
+      height: 100
+    })
+    const targetContainer = new FakeElement(['pane'], {
+      left: 0,
+      top: 100,
+      right: 100,
+      bottom: 200,
+      width: 100,
+      height: 100
+    })
+    const sourcePane = createPane(1, sourceContainer)
+    const targetPane = createPane(2, targetContainer)
+    const panes = new Map<number, ManagedPaneInternal>([
+      [sourcePane.id, sourcePane],
+      [targetPane.id, targetPane]
+    ])
+    const onDragActiveChange = vi.fn()
+    const onLayoutChanged = vi.fn()
+    const state = createDragReorderState()
+
+    attachPaneDrag(handle as unknown as HTMLElement, sourcePane.id, state, {
+      getPanes: () => panes,
+      getRoot: () => root as unknown as HTMLElement,
+      getStyleOptions: () => ({}),
+      isDestroyed: () => false,
+      safeFit: vi.fn(),
+      applyPaneOpacity: vi.fn(),
+      applyDividerStyles: vi.fn(),
+      refitPanesUnder: vi.fn(),
+      onLayoutChanged,
+      onDragActiveChange
+    })
+
+    handle.dispatchPointer('pointerdown', pointerEvent({ clientX: 10, clientY: 10 }))
+    handle.dispatchPointer('pointermove', pointerEvent({ clientX: 50, clientY: 150 }))
+    handle.releasePointerCaptureError = new Error('release failed')
+
+    expect(() => {
+      handle.dispatchPointer('pointerup', pointerEvent({ pointerId: 1 }))
+    }).not.toThrow()
+
+    expect(root.classList.contains('is-pane-dragging')).toBe(false)
+    expect(sourceContainer.classList.contains('is-drag-source')).toBe(false)
+    expect(appendedElements[0]?.removed).toBe(true)
+    expect(state.dragSourcePaneId).toBeNull()
+    expect(state.currentDropTarget).toBeNull()
+    expect(state.currentExternalDropTarget).toBeNull()
+    expect(state.cleanupActiveDrag).toBeNull()
+    expect(onDragActiveChange).toHaveBeenLastCalledWith(false)
+    expect(onLayoutChanged).toHaveBeenCalledOnce()
   })
 
   it('returns cleanup that removes handle listeners and cancels active drag capture', () => {
@@ -269,43 +336,6 @@ describe('attachPaneDrag', () => {
     expect(handle.listenerCount('lostpointercapture')).toBe(0)
     expect(handle.hasPointerCapture(1)).toBe(false)
     expect(state.cleanupActiveDrag).toBeNull()
-    expect(window.removeEventListener).toHaveBeenCalledWith('blur', expect.any(Function), true)
-  })
-
-  it('ignores context-menu pointer buttons so the pane menu can open', () => {
-    const handle = new FakeElement()
-    const root = new FakeElement(['pane-manager-root'])
-    const sourcePane = createPane(1, new FakeElement(['pane']))
-    const targetPane = createPane(2, new FakeElement(['pane']))
-    const panes = new Map<number, ManagedPaneInternal>([
-      [sourcePane.id, sourcePane],
-      [targetPane.id, targetPane]
-    ])
-    const state = createDragReorderState()
-
-    attachPaneDrag(handle as unknown as HTMLElement, sourcePane.id, state, {
-      getPanes: () => panes,
-      getRoot: () => root as unknown as HTMLElement,
-      getStyleOptions: () => ({}),
-      isDestroyed: () => false,
-      safeFit: vi.fn(),
-      applyPaneOpacity: vi.fn(),
-      applyDividerStyles: vi.fn(),
-      refitPanesUnder: vi.fn()
-    })
-
-    const rightClick = pointerEvent({ button: 2 })
-    handle.dispatchPointer('pointerdown', rightClick)
-
-    expect(rightClick.preventDefault).not.toHaveBeenCalled()
-    expect(rightClick.stopPropagation).not.toHaveBeenCalled()
-    expect(state.cleanupActiveDrag).toBeNull()
-
-    const controlClick = pointerEvent({ ctrlKey: true })
-    handle.dispatchPointer('pointerdown', controlClick)
-
-    expect(controlClick.preventDefault).not.toHaveBeenCalled()
-    expect(controlClick.stopPropagation).not.toHaveBeenCalled()
-    expect(state.cleanupActiveDrag).toBeNull()
+    expect(window.removeEventListener).toHaveBeenCalledWith('blur', expect.any(Function))
   })
 })

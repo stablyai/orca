@@ -1,74 +1,72 @@
-import { app } from 'electron'
-import i18next, { type i18n as I18nInstance, type TOptions } from 'i18next'
+import { getSystemLanguageDetection } from './system-language'
+import type { i18n as I18nInstance } from 'i18next'
 
-import en from '../../renderer/src/i18n/locales/en.json'
-import es from '../../renderer/src/i18n/locales/es.json'
-import ja from '../../renderer/src/i18n/locales/ja.json'
-import ko from '../../renderer/src/i18n/locales/ko.json'
-import zh from '../../renderer/src/i18n/locales/zh.json'
-import { isPseudoLocalizationLocale, pseudoLocalizeString } from '../../shared/pseudo-localization'
+import { createOrcaI18n } from '../../shared/orca-i18n-instance'
 import { DEFAULT_UI_LOCALE, resolveUiLocale, type SupportedUiLocale } from '../../shared/ui-locale'
 import { UI_LANGUAGE_SYSTEM, type UiLanguage } from '../../shared/ui-language'
 
-export const mainI18n: I18nInstance = i18next.createInstance()
+let languageGeneration = 0
 
-let initialized = false
+// English uses caller fallbacks; load only the selected non-English catalog after startup.
+const LAZY_LOCALE_LOADERS: Record<
+  Exclude<SupportedUiLocale, 'en'>,
+  () => Promise<{ default: Record<string, unknown> }>
+> = {
+  de: () => import('../../renderer/src/i18n/locales/de.json'),
+  es: () => import('../../renderer/src/i18n/locales/es.json'),
+  fr: () => import('../../renderer/src/i18n/locales/fr.json'),
+  ja: () => import('../../renderer/src/i18n/locales/ja.json'),
+  ko: () => import('../../renderer/src/i18n/locales/ko.json'),
+  pt: () => import('../../renderer/src/i18n/locales/pt.json'),
+  ru: () => import('../../renderer/src/i18n/locales/ru.json'),
+  tr: () => import('../../renderer/src/i18n/locales/tr.json'),
+  zh: () => import('../../renderer/src/i18n/locales/zh.json'),
+  'zh-Hant': () => import('../../renderer/src/i18n/locales/zh-Hant.json')
+}
+const LAZY_LOCALE_LOADER_MAP = new Map<string, () => Promise<{ default: Record<string, unknown> }>>(
+  Object.entries(LAZY_LOCALE_LOADERS)
+)
+
+// Initializes synchronously, so startup dialogs can translate before settings load.
+const orcaI18n = createOrcaI18n({
+  loadCatalog: (language) => LAZY_LOCALE_LOADER_MAP.get(language)?.().then((mod) => mod.default),
+  englishResources: {}
+})
+
+export const mainI18n: I18nInstance = orcaI18n.i18n
+export const translateMain = orcaI18n.translate
+export const setMainPluginLanguagePacks = orcaI18n.setPluginLanguagePacks
 
 export function getMainSystemLocale(): string {
-  try {
-    return app.getLocale()
-  } catch {
-    return DEFAULT_UI_LOCALE
-  }
+  return getSystemLanguageDetection()?.locale ?? DEFAULT_UI_LOCALE
 }
 
-export async function ensureMainI18n(): Promise<I18nInstance> {
-  if (!initialized) {
-    await mainI18n.init({
-      fallbackLng: DEFAULT_UI_LOCALE,
-      lng: DEFAULT_UI_LOCALE,
-      resources: {
-        en: {
-          translation: en
-        },
-        zh: {
-          translation: zh
-        },
-        ko: {
-          translation: ko
-        },
-        ja: {
-          translation: ja
-        },
-        es: {
-          translation: es
-        }
-      },
-      interpolation: {
-        escapeValue: false
-      }
-    })
-    initialized = true
-  }
-  return mainI18n
-}
-
-export async function setMainUiLanguage(language: UiLanguage): Promise<SupportedUiLocale> {
-  await ensureMainI18n()
-  const locale = resolveUiLocale(
-    language,
-    language === UI_LANGUAGE_SYSTEM ? getMainSystemLocale() : DEFAULT_UI_LOCALE
+export async function setMainUiLanguage(language: UiLanguage): Promise<string> {
+  const request = ++languageGeneration
+  const locale = orcaI18n.resolveResourceLanguage(
+    resolveUiLocale(
+      language,
+      language === UI_LANGUAGE_SYSTEM ? getMainSystemLocale() : DEFAULT_UI_LOCALE
+    )
   )
   if (mainI18n.language !== locale) {
+    await mainI18n.loadLanguages(locale)
+    if (request !== languageGeneration) {
+      return mainI18n.language
+    }
     await mainI18n.changeLanguage(locale)
   }
   return locale
 }
 
-export function translateMain(key: string, fallback: string, options?: TOptions): string {
-  // Why: menu registration can run before async init finishes in tests; fall back
-  // to the English default instead of returning undefined from an uninitialized i18n.
-  const raw = initialized ? mainI18n.t(key, { defaultValue: fallback, ...options }) : fallback
-  const value = typeof raw === 'string' && raw.length > 0 ? raw : fallback
-  return isPseudoLocalizationLocale(mainI18n.language) ? pseudoLocalizeString(value) : value
+/** Startup failures can show dialogs before settings load; use the system language until then. */
+export async function prepareEarlyMainUiLanguage(): Promise<void> {
+  if (languageGeneration > 0) {
+    return
+  }
+  try {
+    await setMainUiLanguage(UI_LANGUAGE_SYSTEM)
+  } catch (error) {
+    console.warn('[i18n] Could not localize early startup dialogs:', error)
+  }
 }

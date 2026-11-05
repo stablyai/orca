@@ -1,0 +1,123 @@
+import { mkdirSync, realpathSync } from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+
+const RESTRICTED_ENV_KEYS = new Set([
+  'HOME',
+  'USERPROFILE',
+  'HOMEDRIVE',
+  'HOMEPATH',
+  'CODEX_HOME',
+  'ORCA_CODEX_HOME',
+  'ZCODE_DATA_BASE_DIR',
+  'ZCODE_PERSONAL_PROVIDER_CONFIG_FILE',
+  // Why: Orca's spawn hook writes Claude folder trust into the config this names.
+  'CLAUDE_CONFIG_DIR',
+  'ORCA_E2E_USER_DATA_DIR',
+  'ORCA_E2E_HOME_DIR',
+  'ORCA_DISABLE_MACOS_LOGIN_SHELL',
+  'ZDOTDIR',
+  'ORCA_ORIG_ZDOTDIR',
+  'BASH_ENV',
+  'ENV'
+])
+
+type ElectronHomeIsolationOptions = {
+  inheritedEnv: NodeJS.ProcessEnv
+  launchEnv: NodeJS.ProcessEnv
+  extraEnv: Record<string, string>
+  userDataDir: string
+  realHome?: string
+}
+
+export type ElectronHomeIsolation = {
+  // Playwright's electron.launch rejects unset (undefined) env entries.
+  env: Record<string, string>
+  isolatedHome: string
+  realHome: string
+}
+
+function normalizeComparablePath(candidatePath: string, platform = process.platform): string {
+  const normalized = path.resolve(candidatePath)
+  return platform === 'win32' ? normalized.toLowerCase() : normalized
+}
+
+export function areSameHomePath(left: string, right: string, platform = process.platform): boolean {
+  return normalizeComparablePath(left, platform) === normalizeComparablePath(right, platform)
+}
+
+function assertOverlayDoesNotReplaceIsolation(
+  overlay: NodeJS.ProcessEnv | Record<string, string>,
+  overlayName: string
+): void {
+  const restrictedKey = Object.keys(overlay).find((key) =>
+    RESTRICTED_ENV_KEYS.has(key.toUpperCase())
+  )
+  if (restrictedKey) {
+    throw new Error(`${overlayName}.${restrictedKey} cannot override the E2E home boundary`)
+  }
+}
+
+function definedEnvEntries(env: NodeJS.ProcessEnv): [string, string][] {
+  return Object.entries(env).flatMap(([key, value]) => (value === undefined ? [] : [[key, value]]))
+}
+
+function stripAmbientHomeAndCodexEnv(env: NodeJS.ProcessEnv): Record<string, string> {
+  return Object.fromEntries(
+    definedEnvEntries(env).filter(([key]) => !RESTRICTED_ENV_KEYS.has(key.toUpperCase()))
+  )
+}
+
+export function createElectronHomeIsolation({
+  inheritedEnv,
+  launchEnv,
+  extraEnv,
+  userDataDir,
+  realHome = os.homedir()
+}: ElectronHomeIsolationOptions): ElectronHomeIsolation {
+  assertOverlayDoesNotReplaceIsolation(launchEnv, 'launchEnv')
+  assertOverlayDoesNotReplaceIsolation(extraEnv, 'orcaAppExtraEnv')
+
+  const requestedIsolatedHome = path.join(userDataDir, 'home')
+  mkdirSync(requestedIsolatedHome, { recursive: true, mode: 0o700 })
+  // Canonicalize macOS symlinks/Windows 8.3 aliases like git or worktree path comparisons miss new rows.
+  const isolatedHome = realpathSync.native(requestedIsolatedHome)
+  // Create roaming AppData before Electron 43’s Windows home lookup, which otherwise crashes with 0xFFFF7003.
+  if (process.platform === 'win32') {
+    mkdirSync(path.join(isolatedHome, 'AppData', 'Roaming'), { recursive: true })
+    mkdirSync(path.join(isolatedHome, 'AppData', 'Local'), { recursive: true })
+  }
+  // Refuse real HOME before launch; userData isolation alone does not change app.getPath(home).
+  if (areSameHomePath(isolatedHome, realHome)) {
+    throw new Error('Refusing to launch E2E with the developer home as its isolated HOME')
+  }
+
+  return {
+    isolatedHome,
+    realHome,
+    env: {
+      ...stripAmbientHomeAndCodexEnv(inheritedEnv),
+      ...Object.fromEntries(definedEnvEntries(launchEnv)),
+      ...extraEnv,
+      HOME: isolatedHome,
+      USERPROFILE: isolatedHome,
+      ORCA_E2E_USER_DATA_DIR: userDataDir,
+      ORCA_E2E_HOME_DIR: isolatedHome,
+      // macOS login resets HOME to the native account before the shell starts.
+      ...(process.platform === 'darwin' ? { ORCA_DISABLE_MACOS_LOGIN_SHELL: '1' } : {})
+    }
+  }
+}
+
+export function assertElectronResolvedIsolatedHome(
+  actualHome: string,
+  isolation: Pick<ElectronHomeIsolation, 'isolatedHome' | 'realHome'>
+): void {
+  if (
+    !areSameHomePath(actualHome, isolation.isolatedHome) ||
+    areSameHomePath(actualHome, isolation.realHome)
+  ) {
+    // Safety failures reach shared CI artifacts; omit native usernames/home paths.
+    throw new Error('Electron E2E HOME escaped the disposable profile boundary')
+  }
+}

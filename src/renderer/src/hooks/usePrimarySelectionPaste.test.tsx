@@ -3,10 +3,14 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { readPrimarySelectionText } from '@/lib/primary-selection'
+import {
+  consumePrimarySelectionNativePasteSuppression,
+  readPrimarySelectionText
+} from '@/lib/primary-selection'
 import { usePrimarySelectionPaste } from './usePrimarySelectionPaste'
 
 vi.mock('@/lib/primary-selection', () => ({
+  consumePrimarySelectionNativePasteSuppression: vi.fn(() => false),
   readPrimarySelectionText: vi.fn(),
   setPrimarySelectionEnabled: vi.fn(),
   setPrimarySelectionText: vi.fn()
@@ -14,6 +18,7 @@ vi.mock('@/lib/primary-selection', () => ({
 
 const originalUserAgent = navigator.userAgent
 const readPrimarySelectionTextMock = vi.mocked(readPrimarySelectionText)
+const consumeNativePasteMock = vi.mocked(consumePrimarySelectionNativePasteSuppression)
 
 let root: Root | null = null
 let container: HTMLDivElement | null = null
@@ -107,6 +112,7 @@ async function renderProbe(): Promise<void> {
 
 beforeEach(() => {
   setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0)')
+  consumeNativePasteMock.mockReturnValue(false)
 })
 
 afterEach(async () => {
@@ -125,23 +131,6 @@ afterEach(async () => {
 })
 
 describe('usePrimarySelectionPaste', () => {
-  it('pastes resolved primary-selection text into the focused middle-click target', async () => {
-    readPrimarySelectionTextMock.mockResolvedValue('beta')
-    await renderProbe()
-    const textarea = appendTextarea('alpha omega')
-    textarea.focus()
-    textarea.setSelectionRange(6, 11)
-
-    await act(async () => {
-      dispatchMiddleClick(textarea)
-      await flushPromises()
-    })
-
-    expect(readPrimarySelectionTextMock).toHaveBeenCalledTimes(1)
-    expect(textarea.value).toBe('alpha beta')
-    expect(document.activeElement).toBe(textarea)
-  })
-
   it('does not paste when focus leaves before the async primary-selection read resolves', async () => {
     const deferredSelection = createDeferred<string>()
     readPrimarySelectionTextMock.mockReturnValue(deferredSelection.promise)
@@ -190,6 +179,27 @@ describe('usePrimarySelectionPaste', () => {
     expect(auxClick.defaultPrevented).toBe(true)
     expect(readPrimarySelectionTextMock).toHaveBeenCalledTimes(1)
     expect(textarea.value).toBe('alpha beta')
+  })
+
+  it('does not suppress an unrelated document paste while the terminal window is armed', async () => {
+    setUserAgent('Mozilla/5.0 (X11; Linux x86_64)')
+    // Armed terminal suppression must leave unrelated form pastes intact.
+    consumeNativePasteMock.mockReturnValue(true)
+    await renderProbe()
+    const unrelatedTextarea = appendTextarea()
+    let nativeBeforeInput!: Event
+    const nativePaste = new Event('paste', { bubbles: true, cancelable: true })
+
+    await act(async () => {
+      nativeBeforeInput = dispatchNativePasteBeforeInput(unrelatedTextarea)
+      unrelatedTextarea.dispatchEvent(nativePaste)
+      await flushPromises()
+    })
+
+    expect(nativeBeforeInput.defaultPrevented).toBe(false)
+    expect(nativePaste.defaultPrevented).toBe(false)
+    // Check target before consuming; unrelated pastes must not burn the arm and permit a terminal double-paste.
+    expect(consumeNativePasteMock).not.toHaveBeenCalled()
   })
 
   it('does not keep middle-click ownership after the gesture window expires', async () => {

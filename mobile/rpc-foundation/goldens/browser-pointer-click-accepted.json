@@ -1,0 +1,90 @@
+{
+  "goldenFormatVersion": 6,
+  "operation": "browser.page-commands",
+  "family": "browser.pointer-click",
+  "namedDeltas": [],
+  "values": {
+    "002a5bcbde42": {
+      "name": "browser.mouseClick#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"browser.mouseClick\",\"params\":{\"worktree\":\"id:worktree-1\",\"page\":\"page-1\",\"x\":40,\"y\":80,\"button\":\"left\",\"modifiers\":[],\"radius\":14}}"
+    },
+    "9855d4ec3415": {
+      "busy": false,
+      "dialog": {
+        "$rpc": "null"
+      },
+      "error": {
+        "$rpc": "null"
+      },
+      "keyboardValue": "hello",
+      "pointerModifiers": []
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "f14b569391f9": {
+      "name": "browser.mouseClick#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "browser.mouseClick"
+        },
+        {
+          "name": "params",
+          "value": {
+            "button": "left",
+            "modifiers": [],
+            "page": "page-1",
+            "radius": 14,
+            "worktree": "id:worktree-1",
+            "x": 40,
+            "y": 80
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 5000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "clicked": true
+          }
+        }
+      }
+    }
+  },
+  "recording": {
+    "scenario": "browser-pointer-click-accepted",
+    "checkpoints": [
+      {
+        "id": "clicked",
+        "observation": {
+          "sender": ["f14b569391f9"],
+          "payloads": ["002a5bcbde42"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "click": "eb79a9b3682a"
+          },
+          "state": "9855d4ec3415",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

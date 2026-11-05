@@ -1,0 +1,103 @@
+import type { JiraListColumnId } from './jira-list-columns'
+import type { JiraIssue, JiraPriority } from '../../../shared/jira/jira-types'
+import { compareNumericLocaleText } from '../../../shared/locale-text-collators'
+
+export type JiraIssueSortColumn = JiraListColumnId
+
+export type JiraIssueSortDirection = 'asc' | 'desc'
+export type JiraPrioritiesBySite = ReadonlyMap<string, readonly JiraPriority[]>
+
+// Why: Jira instances can use synonymous names for the same standard priority tier.
+export const JIRA_PRIORITY_ORDER: Record<string, number> = {
+  blocker: 99,
+  highest: 99,
+  critical: 99,
+  high: 75,
+  major: 75,
+  medium: 50,
+  normal: 50,
+  low: 25,
+  minor: 25,
+  lowest: 1,
+  trivial: 1
+}
+
+export function getJiraPriorityWeight(
+  priorityName?: string,
+  priorityId?: string,
+  jiraPriorities: readonly JiraPriority[] = []
+): number {
+  if (!priorityName) {
+    return 0
+  }
+  if (jiraPriorities.length > 0) {
+    const idx = jiraPriorities.findIndex(
+      (p) => p.id === priorityId || p.name.toLowerCase() === priorityName.toLowerCase()
+    )
+    if (idx !== -1) {
+      // Why: site schemes have different tier counts, so raw indices are not cross-site comparable.
+      if (jiraPriorities.length === 1) {
+        return 50
+      }
+      return 1 + ((jiraPriorities.length - 1 - idx) / (jiraPriorities.length - 1)) * 98
+    }
+  }
+  const nameKey = priorityName.toLowerCase()
+  if (nameKey in JIRA_PRIORITY_ORDER) {
+    return JIRA_PRIORITY_ORDER[nameKey]
+  }
+  // Why: custom priority IDs are opaque identifiers, not ordering ranks.
+  return 50
+}
+
+export function sortJiraIssues(
+  issues: readonly JiraIssue[],
+  orderBy: JiraIssueSortColumn,
+  orderDirection: JiraIssueSortDirection,
+  jiraPrioritiesBySite: JiraPrioritiesBySite = new Map()
+): JiraIssue[] {
+  const numericKeys = new Map<JiraIssue, number>()
+  if (issues.length > 1 && (orderBy === 'priority' || orderBy === 'updated')) {
+    for (const issue of issues) {
+      numericKeys.set(
+        issue,
+        orderBy === 'updated'
+          ? new Date(issue.updatedAt).getTime()
+          : getJiraPriorityWeight(
+              issue.priority?.name,
+              issue.priority?.id,
+              jiraPrioritiesBySite.get(issue.siteId ?? '')
+            )
+      )
+    }
+  }
+  return [...issues].sort((a, b) => {
+    let comparison = 0
+    if (orderBy === 'key') {
+      comparison = compareNumericLocaleText(a.key, b.key)
+    } else if (orderBy === 'title') {
+      comparison = a.title.localeCompare(b.title)
+    } else if (orderBy === 'status') {
+      comparison = 0
+    } else if (orderBy === 'priority') {
+      comparison = numericKeys.get(a)! - numericKeys.get(b)!
+    } else if (orderBy === 'assignee') {
+      const userA = a.assignee?.displayName ?? ''
+      const userB = b.assignee?.displayName ?? ''
+      comparison = userA.localeCompare(userB)
+    } else if (orderBy === 'updated') {
+      comparison = numericKeys.get(a)! - numericKeys.get(b)!
+    } else if (orderBy === 'parent') {
+      comparison = compareNumericLocaleText(a.parent?.title ?? '', b.parent?.title ?? '')
+    } else if (orderBy === 'sprint') {
+      comparison = compareNumericLocaleText(a.sprint ?? '', b.sprint ?? '')
+    } else if (orderBy === 'storyPoints') {
+      comparison = (a.storyPoints ?? -1) - (b.storyPoints ?? -1)
+    } else if (orderBy === 'originalEstimate') {
+      comparison = (a.originalEstimateSeconds ?? -1) - (b.originalEstimateSeconds ?? -1)
+    } else if (orderBy === 'remainingEstimate') {
+      comparison = (a.remainingEstimateSeconds ?? -1) - (b.remainingEstimateSeconds ?? -1)
+    }
+    return orderDirection === 'asc' ? comparison : -comparison
+  })
+}

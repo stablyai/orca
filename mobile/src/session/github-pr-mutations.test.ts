@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { RpcResponse } from '../transport/types'
 import {
+  fetchAddIssueComment,
+  fetchAddPRReviewCommentReply,
   fetchDeleteIssueComment,
   fetchMergePR,
   fetchResolveReviewThread,
@@ -29,6 +31,7 @@ function clientRejecting(message: string) {
 }
 
 const WORKTREE_ID = 'repo-42::/path/to/wt'
+const ENTERPRISE_PR_REPO = { owner: 'o', repo: 'r', host: 'github.acme.test' }
 
 describe('fetchResolveReviewThread / fetchUpdatePRTitle — bare-boolean host result', () => {
   it('treats an explicit true as success', async () => {
@@ -102,12 +105,51 @@ describe('mutation transport rejection normalization', () => {
   })
 })
 
+describe('Enterprise PR repo forwarding', () => {
+  it('forwards the host through title, root-comment, and review-reply RPCs', async () => {
+    const titleClient = clientReturning(okResponse(true))
+    await fetchUpdatePRTitle(titleClient, WORKTREE_ID, {
+      prNumber: 7,
+      title: 'New title',
+      prRepo: ENTERPRISE_PR_REPO
+    })
+    expect(titleClient.sendRequest).toHaveBeenCalledWith(
+      'github.updatePRTitle',
+      expect.objectContaining({ prRepo: ENTERPRISE_PR_REPO })
+    )
+
+    const rootClient = clientReturning(okResponse({ ok: true }))
+    await fetchAddIssueComment(rootClient, WORKTREE_ID, {
+      prNumber: 7,
+      body: 'Root comment',
+      prRepo: ENTERPRISE_PR_REPO
+    })
+    expect(rootClient.sendRequest).toHaveBeenCalledWith(
+      'github.addIssueComment',
+      expect.objectContaining({ prRepo: ENTERPRISE_PR_REPO })
+    )
+
+    const replyClient = clientReturning(okResponse({ ok: true }))
+    await fetchAddPRReviewCommentReply(replyClient, WORKTREE_ID, {
+      prNumber: 7,
+      commentId: 42,
+      body: 'Reply',
+      prRepo: ENTERPRISE_PR_REPO
+    })
+    expect(replyClient.sendRequest).toHaveBeenCalledWith(
+      'github.addPRReviewCommentReply',
+      expect.objectContaining({ prRepo: ENTERPRISE_PR_REPO })
+    )
+  })
+})
+
 describe('fetchUpdateIssueComment / fetchDeleteIssueComment — slug-addressed envelope', () => {
   it('sends owner/repo/commentId(+body) and reads the { ok } envelope', async () => {
     const editClient = clientReturning(okResponse({ ok: true }))
     const edit = await fetchUpdateIssueComment(editClient, {
       owner: 'o',
       repo: 'r',
+      host: 'github.acme.test',
       commentId: 5,
       body: 'edited'
     })
@@ -115,16 +157,23 @@ describe('fetchUpdateIssueComment / fetchDeleteIssueComment — slug-addressed e
     expect(editClient.sendRequest).toHaveBeenCalledWith('github.project.updateIssueCommentBySlug', {
       owner: 'o',
       repo: 'r',
+      host: 'github.acme.test',
       commentId: 5,
       body: 'edited'
     })
 
     const delClient = clientReturning(okResponse({ ok: true }))
-    const del = await fetchDeleteIssueComment(delClient, { owner: 'o', repo: 'r', commentId: 5 })
+    const del = await fetchDeleteIssueComment(delClient, {
+      owner: 'o',
+      repo: 'r',
+      host: 'github.acme.test',
+      commentId: 5
+    })
     expect(del).toEqual({ ok: true })
     expect(delClient.sendRequest).toHaveBeenCalledWith('github.project.deleteIssueCommentBySlug', {
       owner: 'o',
       repo: 'r',
+      host: 'github.acme.test',
       commentId: 5
     })
   })

@@ -1,0 +1,8 @@
+name: Set up WSL test runtime
+description: Install a checksum-pinned Ubuntu WSL1 guest with executable Node and Git for real terminal tests.
+runs:
+  using: composite
+  steps:
+    - name: Provision Ubuntu WSL1
+      shell: pwsh
+      run: '& "${{ github.action_path }}/setup.ps1"'

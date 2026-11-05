@@ -1,146 +1,244 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { loadTerminalLinkOpenMode, saveTerminalLinkOpenMode } from './preferences'
 import {
-  HOST_DOCK_MAX_WIDTH,
-  HOST_DOCK_MIN_WIDTH,
-  HOST_SIDEBAR_DEFAULT_WIDTH,
-  HOST_SIDEBAR_MAX_WIDTH,
-  HOST_SIDEBAR_MIN_WIDTH,
-  clampHostDockWidth,
-  clampHostSidebarWidth,
-  loadHostSidebarWidth,
-  loadTerminalAutocompleteEnabled,
-  loadTerminalLinkOpenMode,
-  saveHostSidebarWidth,
-  saveTerminalAutocompleteEnabled,
-  saveTerminalLinkOpenMode
-} from './preferences'
+  loadDefaultSessionView,
+  loadSessionViewOverrides,
+  readDefaultSessionViewPreference,
+  readSessionViewOverridesPreference,
+  saveDefaultSessionView,
+  updateSessionViewOverride
+} from './session-view-preferences'
 
+const stored = vi.hoisted(() => new Map<string, string>())
 vi.mock('@react-native-async-storage/async-storage', () => ({
   default: {
-    getItem: vi.fn(),
-    setItem: vi.fn()
+    getItem: vi.fn(async (key: string) => stored.get(key) ?? null),
+    setItem: vi.fn(async (key: string, value: string) => {
+      stored.set(key, value)
+    })
   }
 }))
 
-describe('terminal autocomplete preference', () => {
+function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise
+  })
+  return { promise, resolve }
+}
+
+describe('session view preference', () => {
   beforeEach(() => {
-    vi.mocked(AsyncStorage.getItem).mockReset()
-    vi.mocked(AsyncStorage.setItem).mockReset()
+    stored.clear()
+    vi.mocked(AsyncStorage.getItem)
+      .mockReset()
+      .mockImplementation(async (key) => stored.get(key) ?? null)
+    vi.mocked(AsyncStorage.setItem)
+      .mockReset()
+      .mockImplementation(async (key, value) => {
+        stored.set(key, value)
+      })
   })
 
-  it('defaults to disabled when unset', async () => {
-    vi.mocked(AsyncStorage.getItem).mockResolvedValue(null)
-
-    await expect(loadTerminalAutocompleteEnabled()).resolves.toBe(false)
-    expect(AsyncStorage.getItem).toHaveBeenCalledWith('orca:terminalAutocompleteEnabled')
-  })
-
-  it('loads enabled only from the persisted true value', async () => {
-    vi.mocked(AsyncStorage.getItem).mockResolvedValue('true')
-
-    await expect(loadTerminalAutocompleteEnabled()).resolves.toBe(true)
-
-    vi.mocked(AsyncStorage.getItem).mockResolvedValue('false')
-
-    await expect(loadTerminalAutocompleteEnabled()).resolves.toBe(false)
-  })
-
-  it('falls back to disabled when storage cannot be read', async () => {
+  it('marks an unreadable default as not loaded so the opt-in gate can bail', async () => {
     vi.mocked(AsyncStorage.getItem).mockRejectedValue(new Error('storage unavailable'))
-
-    await expect(loadTerminalAutocompleteEnabled()).resolves.toBe(false)
+    await expect(readDefaultSessionViewPreference()).resolves.toEqual({
+      value: null,
+      loaded: false,
+      hasStoredValue: false
+    })
+    await expect(loadDefaultSessionView()).resolves.toBe('terminal')
   })
 
-  it('persists the selected value', async () => {
-    await saveTerminalAutocompleteEnabled(true)
+  it('migrates the legacy array format to chat overrides', async () => {
+    vi.mocked(AsyncStorage.getItem).mockResolvedValue(JSON.stringify(['tab-1', 42, 'tab-2']))
 
-    expect(AsyncStorage.setItem).toHaveBeenCalledWith('orca:terminalAutocompleteEnabled', 'true')
-
-    await saveTerminalAutocompleteEnabled(false)
-
-    expect(AsyncStorage.setItem).toHaveBeenCalledWith('orca:terminalAutocompleteEnabled', 'false')
-  })
-})
-
-describe('host sidebar width preference', () => {
-  beforeEach(() => {
-    vi.mocked(AsyncStorage.getItem).mockReset()
-    vi.mocked(AsyncStorage.setItem).mockReset()
+    const loaded = await loadSessionViewOverrides('host', 'wt')
+    expect([...loaded.entries()]).toEqual([
+      ['tab-1', 'chat'],
+      ['tab-2', 'chat']
+    ])
   })
 
-  it('clamps saved widths to the supported sidebar range', () => {
-    expect(clampHostSidebarWidth(HOST_SIDEBAR_MIN_WIDTH - 10)).toBe(HOST_SIDEBAR_MIN_WIDTH)
-    expect(clampHostSidebarWidth(HOST_SIDEBAR_MAX_WIDTH + 10)).toBe(HOST_SIDEBAR_MAX_WIDTH)
-    expect(clampHostSidebarWidth(337.6)).toBe(338)
+  it('serializes default writes across callers and makes reads wait for the latest', async () => {
+    let stored = 'terminal'
+    const firstWrite = deferred<void>()
+    vi.mocked(AsyncStorage.getItem).mockImplementation(async () => stored)
+    vi.mocked(AsyncStorage.setItem)
+      .mockImplementationOnce(async (_key, value) => {
+        await firstWrite.promise
+        stored = value
+      })
+      .mockImplementation(async (_key, value) => {
+        stored = value
+      })
+
+    const older = saveDefaultSessionView('chat')
+    await Promise.resolve()
+    const newer = saveDefaultSessionView('terminal')
+    const reloaded = loadDefaultSessionView()
+    await Promise.resolve()
+
+    expect(AsyncStorage.setItem).toHaveBeenCalledTimes(1)
+    firstWrite.resolve()
+    await Promise.all([older, newer])
+
+    await expect(reloaded).resolves.toBe('terminal')
+    expect(AsyncStorage.setItem).toHaveBeenNthCalledWith(1, 'orca:defaultSessionView', 'chat')
+    expect(AsyncStorage.setItem).toHaveBeenNthCalledWith(2, 'orca:defaultSessionView', 'terminal')
   })
 
-  it('falls back to the default width for missing, invalid, or unreadable storage', async () => {
-    vi.mocked(AsyncStorage.getItem).mockResolvedValue(null)
+  it('continues the shared default queue after a failed write', async () => {
+    let stored = 'terminal'
+    vi.mocked(AsyncStorage.getItem).mockImplementation(async () => stored)
+    vi.mocked(AsyncStorage.setItem)
+      .mockRejectedValueOnce(new Error('storage unavailable'))
+      .mockImplementation(async (_key, value) => {
+        stored = value
+      })
 
-    await expect(loadHostSidebarWidth()).resolves.toBe(HOST_SIDEBAR_DEFAULT_WIDTH)
+    const failed = expect(saveDefaultSessionView('terminal')).rejects.toThrow('storage unavailable')
+    const latest = saveDefaultSessionView('chat')
+    await failed
+    await latest
 
-    vi.mocked(AsyncStorage.getItem).mockResolvedValue('not-a-number')
-
-    await expect(loadHostSidebarWidth()).resolves.toBe(HOST_SIDEBAR_DEFAULT_WIDTH)
-
-    vi.mocked(AsyncStorage.getItem).mockRejectedValue(new Error('storage unavailable'))
-
-    await expect(loadHostSidebarWidth()).resolves.toBe(HOST_SIDEBAR_DEFAULT_WIDTH)
+    await expect(loadDefaultSessionView()).resolves.toBe('chat')
+    expect(AsyncStorage.setItem).toHaveBeenCalledTimes(2)
   })
 
-  it('loads and persists clamped sidebar widths', async () => {
-    vi.mocked(AsyncStorage.getItem).mockResolvedValue(String(HOST_SIDEBAR_MAX_WIDTH + 20))
+  it('orders per-tab mutations across callers without losing saved siblings', async () => {
+    let stored = JSON.stringify({ saved: 'chat' })
+    const firstWrite = deferred<void>()
+    const firstStarted = deferred<void>()
+    vi.mocked(AsyncStorage.getItem).mockImplementation(async () => stored)
+    vi.mocked(AsyncStorage.setItem)
+      .mockImplementationOnce(async (_key, value) => {
+        firstStarted.resolve()
+        await firstWrite.promise
+        stored = value
+      })
+      .mockImplementation(async (_key, value) => {
+        stored = value
+      })
 
-    await expect(loadHostSidebarWidth()).resolves.toBe(HOST_SIDEBAR_MAX_WIDTH)
+    const first = updateSessionViewOverride('host', 'worktree', 'first', 'terminal')
+    await firstStarted.promise
+    const second = updateSessionViewOverride('host', 'worktree', 'second', 'chat')
+    const reloaded = loadSessionViewOverrides('host', 'worktree')
 
-    await saveHostSidebarWidth(HOST_SIDEBAR_MIN_WIDTH - 20)
+    expect(AsyncStorage.setItem).toHaveBeenCalledTimes(1)
+    firstWrite.resolve()
+    await Promise.all([first, second])
 
-    expect(AsyncStorage.setItem).toHaveBeenCalledWith(
-      'orca:hostSidebarWidth',
-      String(HOST_SIDEBAR_MIN_WIDTH)
+    await expect(reloaded).resolves.toEqual(
+      new Map([
+        ['saved', 'chat'],
+        ['first', 'terminal'],
+        ['second', 'chat']
+      ])
     )
   })
-})
 
-describe('host dock width preference', () => {
-  it('clamps saved widths to the supported dock range', () => {
-    expect(clampHostDockWidth(HOST_DOCK_MIN_WIDTH - 10)).toBe(HOST_DOCK_MIN_WIDTH)
-    expect(clampHostDockWidth(HOST_DOCK_MAX_WIDTH + 10)).toBe(HOST_DOCK_MAX_WIDTH)
-    expect(clampHostDockWidth(337.6)).toBe(338)
+  it('does not globally block updates for a different host and worktree', async () => {
+    const blockedWrite = deferred<void>()
+    vi.mocked(AsyncStorage.getItem).mockResolvedValue(null)
+    vi.mocked(AsyncStorage.setItem).mockImplementation(async (key) => {
+      if (key.includes('blocked-host')) {
+        await blockedWrite.promise
+      }
+    })
+
+    const blocked = updateSessionViewOverride('blocked-host', 'worktree', 'tab', 'chat')
+    await Promise.resolve()
+    await Promise.resolve()
+    await updateSessionViewOverride('other-host', 'worktree', 'tab', 'terminal')
+
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith(
+      'orca:nativeChatTabs:other-host:worktree',
+      JSON.stringify({ tab: 'terminal' })
+    )
+    blockedWrite.resolve()
+    await blocked
+  })
+
+  it('continues a scoped override queue after a failed write', async () => {
+    let stored: string | null = null
+    vi.mocked(AsyncStorage.getItem).mockImplementation(async () => stored)
+    vi.mocked(AsyncStorage.setItem)
+      .mockRejectedValueOnce(new Error('storage unavailable'))
+      .mockImplementation(async (_key, value) => {
+        stored = value
+      })
+
+    const failed = updateSessionViewOverride('host', 'worktree', 'first', 'chat')
+    const latest = updateSessionViewOverride('host', 'worktree', 'second', 'terminal')
+    await expect(failed).rejects.toThrow('storage unavailable')
+    await latest
+
+    await expect(loadSessionViewOverrides('host', 'worktree')).resolves.toEqual(
+      new Map([['second', 'terminal']])
+    )
+  })
+
+  it('does not replace saved overrides after a transient read failure', async () => {
+    vi.mocked(AsyncStorage.getItem).mockRejectedValue(new Error('storage unavailable'))
+
+    await expect(readSessionViewOverridesPreference('host', 'worktree')).resolves.toEqual({
+      overrides: new Map(),
+      loaded: false
+    })
+
+    await expect(updateSessionViewOverride('host', 'worktree', 'tab', 'chat')).rejects.toThrow(
+      'Session view overrides could not be read'
+    )
+
+    expect(AsyncStorage.setItem).not.toHaveBeenCalled()
+  })
+
+  it('repairs invalid preference data on the next user mutation', async () => {
+    vi.mocked(AsyncStorage.getItem).mockResolvedValue('not-json')
+
+    await updateSessionViewOverride('host', 'worktree', 'tab', 'chat')
+
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith(
+      'orca:nativeChatTabs:host:worktree',
+      JSON.stringify({ tab: 'chat' })
+    )
   })
 })
 
 describe('terminal link open mode preference', () => {
   beforeEach(() => {
-    vi.mocked(AsyncStorage.getItem).mockReset()
-    vi.mocked(AsyncStorage.setItem).mockReset()
+    stored.clear()
+    vi.mocked(AsyncStorage.getItem)
+      .mockReset()
+      .mockImplementation(async (key) => stored.get(key) ?? null)
+    vi.mocked(AsyncStorage.setItem)
+      .mockReset()
+      .mockImplementation(async (key, value) => {
+        stored.set(key, value)
+      })
   })
 
-  it('defaults to Orca browser when unset', async () => {
-    vi.mocked(AsyncStorage.getItem).mockResolvedValue(null)
-
-    await expect(loadTerminalLinkOpenMode()).resolves.toBe('orca-browser')
-    expect(AsyncStorage.getItem).toHaveBeenCalledWith('orca:terminalLinkOpenMode')
-  })
-
-  it('loads only known modes', async () => {
-    vi.mocked(AsyncStorage.getItem).mockResolvedValue('phone-browser')
-    await expect(loadTerminalLinkOpenMode()).resolves.toBe('phone-browser')
-
-    vi.mocked(AsyncStorage.getItem).mockResolvedValue('external')
-    await expect(loadTerminalLinkOpenMode()).resolves.toBe('orca-browser')
-  })
-
-  it('falls back to Orca browser when storage cannot be read', async () => {
-    vi.mocked(AsyncStorage.getItem).mockRejectedValue(new Error('storage unavailable'))
-
-    await expect(loadTerminalLinkOpenMode()).resolves.toBe('orca-browser')
-  })
-
-  it('persists the selected mode', async () => {
-    await saveTerminalLinkOpenMode('phone-browser')
-
-    expect(AsyncStorage.setItem).toHaveBeenCalledWith('orca:terminalLinkOpenMode', 'phone-browser')
+  it('orders writes across settings mounts and makes readers wait for the latest choice', async () => {
+    const firstWrite = deferred<void>()
+    let stored: string | null = 'orca-browser'
+    vi.mocked(AsyncStorage.getItem).mockImplementation(async () => stored)
+    vi.mocked(AsyncStorage.setItem).mockImplementation(async (_key, value) => {
+      if (value === 'phone-browser') {
+        await firstWrite.promise
+      }
+      stored = value
+    })
+    const firstMount = saveTerminalLinkOpenMode('phone-browser')
+    const secondMount = saveTerminalLinkOpenMode('orca-browser')
+    const reader = loadTerminalLinkOpenMode()
+    await Promise.resolve()
+    expect(stored).toBe('orca-browser')
+    firstWrite.resolve()
+    await Promise.all([firstMount, secondMount])
+    await expect(reader).resolves.toBe('orca-browser')
+    expect(stored).toBe('orca-browser')
   })
 })

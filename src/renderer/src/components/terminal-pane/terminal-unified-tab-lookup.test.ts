@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { Tab } from '../../../../shared/types'
-import { getCachedTerminalGroupIdForWorktree } from './terminal-unified-tab-lookup'
+import type { Tab } from '../../../../shared/tab-types'
+import {
+  getCachedTerminalGroupIdForWorktree,
+  getCachedUnifiedTerminalTabForWorktree,
+  selectUnifiedTerminalTabFields
+} from './terminal-unified-tab-lookup'
 
 function makeTerminalTab(entityId: string, groupId: string): Tab {
   return {
@@ -45,8 +49,8 @@ function iterableTabs(tabs: Tab[]): {
   }
 }
 
-describe('getCachedTerminalGroupIdForWorktree', () => {
-  it('reuses the terminal group lookup while the unified tab array is unchanged', () => {
+describe('terminal unified tab lookup', () => {
+  it('shares one terminal lookup across all pane field and group reads', () => {
     const tabs = [
       makeEditorTab('editor-1'),
       ...Array.from({ length: 200 }, (_, index) =>
@@ -56,14 +60,23 @@ describe('getCachedTerminalGroupIdForWorktree', () => {
     const { value, iterator } = iterableTabs(tabs)
     const unifiedTabsByWorktree = { 'wt-1': value }
 
-    expect(getCachedTerminalGroupIdForWorktree(unifiedTabsByWorktree, 'wt-1', 'terminal-199')).toBe(
-      'group-3'
-    )
+    for (let index = 0; index < 200; index += 1) {
+      const terminalTabId = `terminal-${index}`
+      expect(
+        getCachedUnifiedTerminalTabForWorktree(unifiedTabsByWorktree, 'wt-1', terminalTabId)
+      ).toBe(tabs[index + 1])
+      expect(
+        getCachedUnifiedTerminalTabForWorktree(unifiedTabsByWorktree, 'wt-1', terminalTabId)?.id
+      ).toBe(terminalTabId)
+      expect(
+        getCachedUnifiedTerminalTabForWorktree(unifiedTabsByWorktree, 'wt-1', terminalTabId)?.label
+      ).toBe(terminalTabId)
+    }
     expect(getCachedTerminalGroupIdForWorktree(unifiedTabsByWorktree, 'wt-1', 'terminal-0')).toBe(
       'group-0'
     )
     expect(
-      getCachedTerminalGroupIdForWorktree(unifiedTabsByWorktree, 'wt-1', 'editor-1')
+      getCachedUnifiedTerminalTabForWorktree(unifiedTabsByWorktree, 'wt-1', 'editor-1')
     ).toBeNull()
 
     expect(iterator).toHaveBeenCalledTimes(1)
@@ -73,14 +86,25 @@ describe('getCachedTerminalGroupIdForWorktree', () => {
     const first = iterableTabs([makeTerminalTab('terminal-1', 'group-a')])
     const second = iterableTabs([makeTerminalTab('terminal-1', 'group-b')])
 
-    expect(getCachedTerminalGroupIdForWorktree({ 'wt-1': first.value }, 'wt-1', 'terminal-1')).toBe(
-      'group-a'
-    )
+    expect(
+      getCachedUnifiedTerminalTabForWorktree({ 'wt-1': first.value }, 'wt-1', 'terminal-1')?.groupId
+    ).toBe('group-a')
     expect(
       getCachedTerminalGroupIdForWorktree({ 'wt-1': second.value }, 'wt-1', 'terminal-1')
     ).toBe('group-b')
 
     expect(first.iterator).toHaveBeenCalledTimes(1)
     expect(second.iterator).toHaveBeenCalledTimes(1)
+  })
+
+  it('reads pinned state from the selected terminal tab after it changes', () => {
+    const tab = { ...makeTerminalTab('terminal-1', 'group-a'), id: 'unified-1' }
+    expect(
+      selectUnifiedTerminalTabFields({ 'wt-1': [tab] }, 'wt-1', tab.entityId).isTabPinned
+    ).toBe(false)
+    expect(
+      selectUnifiedTerminalTabFields({ 'wt-1': [{ ...tab, isPinned: true }] }, 'wt-1', tab.entityId)
+        .isTabPinned
+    ).toBe(true)
   })
 })

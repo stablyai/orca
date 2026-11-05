@@ -2,13 +2,14 @@ type HostNameSource = {
   readonly name: string
 }
 
-const HOST_NUMBER_PATTERN = /^Host (\d+)$/
+// Treat matching legacy names as generated rather than phone overrides.
+export const GENERATED_HOST_NAME_PATTERN = /^Host (\d+)$/
 
 export function getNextHostNameFromHosts(hosts: readonly HostNameSource[]): string {
   let largestHostNumber = 0
 
   for (const host of hosts) {
-    const match = HOST_NUMBER_PATTERN.exec(host.name)
+    const match = GENERATED_HOST_NAME_PATTERN.exec(host.name)
     if (!match) {
       continue
     }

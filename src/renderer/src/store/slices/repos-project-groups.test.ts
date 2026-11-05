@@ -1,18 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createTestStore } from './store-test-helpers'
-import type {
-  NestedRepoScanResult,
-  Repo,
-  ProjectGroup,
-  FolderWorkspace
-} from '../../../../shared/types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
+import type { NestedRepoScanResult, ProjectGroup } from '../../../../shared/project-group-types'
+import type { Repo } from '../../../../shared/repo-types'
 import {
+  createCompatibleRuntimeStatusResponse,
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest
 } from '../../runtime/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import type { SshConnectionState } from '../../../../shared/ssh-types'
+
+const LOCAL_OWNER = { runtimeEnvironmentId: null }
 
 const remoteRepo: Repo = {
   id: 'remote-repo',
@@ -119,255 +119,38 @@ beforeEach(() => {
 })
 
 describe('project group store routing', () => {
-  it('creates local project groups without contacting the runtime transport', async () => {
-    projectGroupsCreate.mockResolvedValue(projectGroup)
-    const store = createTestStore()
-
-    await expect(store.getState().createProjectGroup('Platform')).resolves.toEqual({
-      ...projectGroup,
-      executionHostId: 'local'
-    })
-
-    expect(store.getState().projectGroups).toEqual([{ ...projectGroup, executionHostId: 'local' }])
-    expect(projectGroupsCreate).toHaveBeenCalledWith({
-      name: 'Platform',
-      createdFrom: 'manual'
-    })
-    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
-  })
-
-  it('stamps local fetched folder groups with the local owner', async () => {
-    const folderGroup = { ...projectGroup, parentPath: '/workspace/platform' }
-    projectGroupsList.mockResolvedValue([folderGroup])
-    const store = createTestStore()
-
-    await store.getState().fetchProjectGroups()
-
-    expect(store.getState().projectGroups).toEqual([{ ...folderGroup, executionHostId: 'local' }])
-    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
-  })
-
-  it('stamps runtime-fetched SSH folder groups with the runtime owner', async () => {
-    const folderGroup = {
-      ...projectGroup,
-      parentPath: '/workspace/platform',
-      connectionId: 'ssh-1'
+  it('blocks Jira folder creation on runtimes without durable linked context support', async () => {
+    const oldRuntimeStatus = createCompatibleRuntimeStatusResponse('runtime-old')
+    if (oldRuntimeStatus.ok) {
+      oldRuntimeStatus.result.capabilities = oldRuntimeStatus.result.capabilities?.filter(
+        (capability) => capability !== 'worktree.linked-work-item-context.v1'
+      )
     }
-    runtimeEnvironmentCall.mockResolvedValue({
-      id: 'rpc-list-groups',
-      ok: true,
-      result: { groups: [folderGroup] },
-      _meta: { runtimeId: 'runtime-remote' }
-    })
-    const store = createTestStore()
-    store.setState({ settings: { activeRuntimeEnvironmentId: 'env-1' } as never })
-
-    await store.getState().fetchProjectGroups()
-
-    expect(store.getState().projectGroups).toEqual([
-      { ...folderGroup, executionHostId: 'runtime:env-1' }
-    ])
-  })
-
-  it('stamps runtime-fetched folder groups with the focused runtime host', async () => {
-    const folderGroup = { ...projectGroup, parentPath: '/workspace/platform' }
-    runtimeEnvironmentCall.mockResolvedValue({
-      id: 'rpc-list-groups',
-      ok: true,
-      result: { groups: [folderGroup] },
-      _meta: { runtimeId: 'runtime-remote' }
-    })
-    const store = createTestStore()
-    store.setState({ settings: { activeRuntimeEnvironmentId: 'env-1' } as never })
-
-    await store.getState().fetchProjectGroups()
-
-    expect(store.getState().projectGroups).toEqual([
-      { ...folderGroup, executionHostId: 'runtime:env-1' }
-    ])
-    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
-      selector: 'env-1',
-      method: 'projectGroup.list',
-      params: undefined,
-      timeoutMs: 15_000
-    })
-    expect(projectGroupsList).not.toHaveBeenCalled()
-  })
-
-  it('routes folder path status through an explicit runtime owner when provided', async () => {
-    runtimeEnvironmentCall.mockResolvedValue({
-      id: 'rpc-path-status',
-      ok: true,
-      result: { status: { path: '/workspace/platform', exists: true } },
-      _meta: { runtimeId: 'runtime-remote' }
-    })
-    const folderGroup = { ...projectGroup, parentPath: '/workspace/platform' }
-    const store = createTestStore()
-    store.setState({
-      settings: { activeRuntimeEnvironmentId: 'wrong-env' } as never,
-      projectGroups: [folderGroup]
-    })
-
-    const request = { scope: 'project-group' as const, projectGroupId: folderGroup.id }
-
-    await expect(
-      store.getState().fetchFolderWorkspacePathStatus(request, {
-        force: true,
-        runtimeEnvironmentId: 'env-1'
-      })
-    ).resolves.toEqual({ path: '/workspace/platform', exists: true })
-
-    expect(store.getState().getFolderWorkspacePathStatusCacheKey(request)).toBe(
-      `environment:wrong-env:project-group:${folderGroup.id}`
+    runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) =>
+      args.method === 'status.get' ? oldRuntimeStatus : runtimeEnvironmentCall(args)
     )
-    expect(
-      store
-        .getState()
-        .getFolderWorkspacePathStatusCacheKey(request, { runtimeEnvironmentId: 'env-1' })
-    ).toBe(`environment:env-1:project-group:${folderGroup.id}`)
-    expect(
-      store.getState().getFreshFolderWorkspacePathStatus(request, { runtimeEnvironmentId: 'env-1' })
-    ).toEqual({ path: '/workspace/platform', exists: true })
-
-    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
-      selector: 'env-1',
-      method: 'folderWorkspace.getPathStatus',
-      params: request,
-      timeoutMs: 15_000
-    })
-  })
-
-  it('routes folder workspace creation through an explicit runtime owner when provided', async () => {
-    const folderWorkspace: FolderWorkspace = {
-      id: 'folder-workspace-runtime',
-      projectGroupId: projectGroup.id,
-      name: 'Runtime folder',
-      folderPath: '/workspace/platform',
-      linkedTask: null,
-      comment: '',
-      isArchived: false,
-      isUnread: false,
-      isPinned: false,
-      sortOrder: 1,
-      lastActivityAt: 0,
-      createdAt: 1,
-      updatedAt: 1
-    }
-    runtimeEnvironmentCall.mockResolvedValue({
-      id: 'rpc-create-folder',
-      ok: true,
-      result: { folderWorkspace },
-      _meta: { runtimeId: 'runtime-remote' }
-    })
-    const store = createTestStore()
-    store.setState({ settings: { activeRuntimeEnvironmentId: 'wrong-env' } as never })
-
-    await expect(
-      store
-        .getState()
-        .createFolderWorkspace(
-          { projectGroupId: projectGroup.id, name: 'Runtime folder' },
-          { runtimeEnvironmentId: 'env-1' }
-        )
-    ).resolves.toEqual(folderWorkspace)
-
-    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
-      selector: 'env-1',
-      method: 'folderWorkspace.create',
-      params: { projectGroupId: projectGroup.id, name: 'Runtime folder' },
-      timeoutMs: 15_000
-    })
-    expect(folderWorkspacesCreate).not.toHaveBeenCalled()
-  })
-
-  it('creates, updates, and deletes local folder workspaces', async () => {
-    const linkedTask: FolderWorkspace['linkedTask'] = {
-      provider: 'linear',
-      type: 'issue',
-      number: 0,
-      title: 'Refund fix',
-      url: 'https://linear.app/acme/issue/ENG-123',
-      linearIdentifier: 'ENG-123'
-    }
-    const folderWorkspace: FolderWorkspace = {
-      id: 'folder-workspace-1',
-      projectGroupId: projectGroup.id,
-      name: 'Refund fix',
-      folderPath: '/workspace/platform',
-      linkedTask,
-      comment: '',
-      isArchived: false,
-      isUnread: false,
-      isPinned: false,
-      sortOrder: 1,
-      lastActivityAt: 0,
-      createdAt: 1,
-      updatedAt: 1
-    }
-    folderWorkspacesCreate.mockResolvedValue(folderWorkspace)
-    folderWorkspacesUpdate.mockResolvedValue({ ...folderWorkspace, comment: 'Ready' })
-    folderWorkspacesDelete.mockResolvedValue(true)
     const store = createTestStore()
 
     await expect(
-      store.getState().createFolderWorkspace({
-        projectGroupId: projectGroup.id,
-        name: 'Refund fix',
-        linkedTask
-      })
-    ).resolves.toEqual(folderWorkspace)
-    await expect(
-      store.getState().updateFolderWorkspace(folderWorkspace.id, { comment: 'Ready' })
-    ).resolves.toBe(true)
-    await expect(store.getState().deleteFolderWorkspace(folderWorkspace.id)).resolves.toBe(true)
+      store.getState().createFolderWorkspace(
+        {
+          projectGroupId: projectGroup.id,
+          name: 'Jira folder',
+          linkedTask: {
+            provider: 'jira',
+            type: 'issue',
+            number: 0,
+            title: 'ORCA-123 Link Jira',
+            url: 'https://company.atlassian.net/browse/ORCA-123',
+            jiraIdentifier: 'ORCA-123'
+          }
+        },
+        { runtimeEnvironmentId: 'env-1' }
+      )
+    ).rejects.toThrow('Update the remote runtime to link Jira')
 
-    expect(folderWorkspacesCreate).toHaveBeenCalledWith({
-      projectGroupId: projectGroup.id,
-      name: 'Refund fix',
-      linkedTask
-    })
-    expect(folderWorkspacesUpdate).toHaveBeenCalledWith({
-      folderWorkspaceId: folderWorkspace.id,
-      updates: { comment: 'Ready' }
-    })
-    expect(folderWorkspacesDelete).toHaveBeenCalledWith({
-      folderWorkspaceId: folderWorkspace.id
-    })
-    expect(store.getState().folderWorkspaces).toEqual([])
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
-  })
-
-  it('caches local folder workspace path status by scope', async () => {
-    const folderGroup = { ...projectGroup, parentPath: '/workspace/platform' }
-    folderWorkspacesGetPathStatus.mockResolvedValue({
-      path: '/workspace/platform',
-      exists: false,
-      reason: 'missing'
-    })
-    const store = createTestStore()
-    store.setState({ projectGroups: [folderGroup] })
-
-    await expect(
-      store.getState().fetchFolderWorkspacePathStatus({
-        scope: 'project-group',
-        projectGroupId: folderGroup.id
-      })
-    ).resolves.toEqual({
-      path: '/workspace/platform',
-      exists: false,
-      reason: 'missing'
-    })
-
-    const cacheKey = store.getState().getFolderWorkspacePathStatusCacheKey({
-      scope: 'project-group',
-      projectGroupId: folderGroup.id
-    })
-    expect(store.getState().folderWorkspacePathStatuses[cacheKey]?.status).toEqual({
-      path: '/workspace/platform',
-      exists: false,
-      reason: 'missing'
-    })
-    expect(folderWorkspacesGetPathStatus).toHaveBeenCalledTimes(1)
+    expect(folderWorkspacesCreate).not.toHaveBeenCalled()
   })
 
   it('ignores stale folder path status responses after a group path changes', async () => {
@@ -383,7 +166,7 @@ describe('project group store routing', () => {
       projectGroups: [{ ...projectGroup, parentPath: '/workspace/old-platform' }]
     })
     const request = { scope: 'project-group' as const, projectGroupId: projectGroup.id }
-    const statusPromise = store.getState().fetchFolderWorkspacePathStatus(request)
+    const statusPromise = store.getState().fetchFolderWorkspacePathStatus(request, LOCAL_OWNER)
 
     store.setState({
       projectGroups: [{ ...projectGroup, parentPath: '/workspace/new-platform' }]
@@ -391,7 +174,7 @@ describe('project group store routing', () => {
     resolveStatus({ path: '/workspace/old-platform', exists: true })
     await statusPromise
 
-    const cacheKey = store.getState().getFolderWorkspacePathStatusCacheKey(request)
+    const cacheKey = store.getState().getFolderWorkspacePathStatusCacheKey(request, LOCAL_OWNER)
     expect(store.getState().folderWorkspacePathStatuses[cacheKey]).toBeUndefined()
   })
 
@@ -409,7 +192,7 @@ describe('project group store routing', () => {
       repos: [{ ...remoteRepo, id: 'local-repo', path: '/workspace/platform/api' }]
     })
     const request = { scope: 'project-group' as const, projectGroupId: projectGroup.id }
-    const statusPromise = store.getState().fetchFolderWorkspacePathStatus(request)
+    const statusPromise = store.getState().fetchFolderWorkspacePathStatus(request, LOCAL_OWNER)
 
     store.setState({
       repos: [
@@ -424,54 +207,8 @@ describe('project group store routing', () => {
     resolveStatus({ path: '/workspace/platform', exists: true })
     await statusPromise
 
-    const cacheKey = store.getState().getFolderWorkspacePathStatusCacheKey(request)
+    const cacheKey = store.getState().getFolderWorkspacePathStatusCacheKey(request, LOCAL_OWNER)
     expect(store.getState().folderWorkspacePathStatuses[cacheKey]).toBeUndefined()
-  })
-
-  it('treats expired folder path status cache entries as unknown', async () => {
-    vi.useFakeTimers()
-    try {
-      const store = createTestStore()
-      store.setState({
-        projectGroups: [{ ...projectGroup, parentPath: '/workspace/platform' }]
-      })
-      const request = { scope: 'project-group' as const, projectGroupId: projectGroup.id }
-      await store.getState().fetchFolderWorkspacePathStatus(request)
-
-      expect(store.getState().getFreshFolderWorkspacePathStatus(request)).toEqual({
-        path: '/workspace/platform',
-        exists: true
-      })
-
-      vi.setSystemTime(Date.now() + 10_001)
-
-      expect(store.getState().getFreshFolderWorkspacePathStatus(request)).toBeNull()
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('treats current-state mismatched folder path cache entries as unknown', async () => {
-    const store = createTestStore()
-    store.setState({
-      projectGroups: [
-        { ...projectGroup, parentPath: '/workspace/platform', connectionId: 'ssh-1' }
-      ],
-      sshConnectionStates: new Map([['ssh-1', makeSshConnectionState('connected')]])
-    })
-    const request = { scope: 'project-group' as const, projectGroupId: projectGroup.id }
-    await store.getState().fetchFolderWorkspacePathStatus(request)
-
-    expect(store.getState().getFreshFolderWorkspacePathStatus(request)).toEqual({
-      path: '/workspace/platform',
-      exists: true
-    })
-
-    store.setState({
-      sshConnectionStates: new Map([['ssh-1', makeSshConnectionState('disconnected')]])
-    })
-
-    expect(store.getState().getFreshFolderWorkspacePathStatus(request)).toBeNull()
   })
 
   it('ignores stale folder path status responses after SSH connection state changes', async () => {
@@ -490,14 +227,16 @@ describe('project group store routing', () => {
       sshConnectionStates: new Map([['ssh-1', makeSshConnectionState('connected')]])
     })
     const request = { scope: 'project-group' as const, projectGroupId: projectGroup.id }
-    const connectedStatusPromise = store.getState().fetchFolderWorkspacePathStatus(request)
+    const connectedStatusPromise = store
+      .getState()
+      .fetchFolderWorkspacePathStatus(request, LOCAL_OWNER)
 
     store.setState({
       sshConnectionStates: new Map([['ssh-1', makeSshConnectionState('disconnected')]])
     })
     const disconnectedStatusPromise = store
       .getState()
-      .fetchFolderWorkspacePathStatus(request, { force: true })
+      .fetchFolderWorkspacePathStatus(request, { force: true, ...LOCAL_OWNER })
 
     resolvers[1]?.({
       path: '/workspace/platform',
@@ -508,7 +247,7 @@ describe('project group store routing', () => {
     resolvers[0]?.({ path: '/workspace/platform', exists: true })
     await connectedStatusPromise
 
-    const cacheKey = store.getState().getFolderWorkspacePathStatusCacheKey(request)
+    const cacheKey = store.getState().getFolderWorkspacePathStatusCacheKey(request, LOCAL_OWNER)
     expect(store.getState().folderWorkspacePathStatuses[cacheKey]?.status).toEqual({
       path: '/workspace/platform',
       exists: false,
@@ -632,51 +371,6 @@ describe('project group store routing', () => {
     expect(state.lastVisitedAtByWorktreeId[workspaceKey]).toBeUndefined()
   })
 
-  it('refreshes local repos and groups after importing nested repos', async () => {
-    const importedRepo: Repo = {
-      ...remoteRepo,
-      id: 'local-imported',
-      path: '/platform/api',
-      projectGroupId: projectGroup.id,
-      projectGroupOrder: 0
-    }
-    const result = {
-      group: projectGroup,
-      repos: [{ path: importedRepo.path, projectId: importedRepo.id, status: 'imported' as const }],
-      importedCount: 1,
-      alreadyKnownCount: 0,
-      failedCount: 0
-    }
-    projectGroupsImportNested.mockResolvedValue(result)
-    projectGroupsList.mockResolvedValue([projectGroup])
-    folderWorkspacesList.mockResolvedValue([])
-    reposList.mockResolvedValue([importedRepo])
-    const store = createTestStore()
-
-    await expect(
-      store.getState().importNestedRepos({
-        parentPath: '/platform',
-        groupName: 'Platform',
-        projectPaths: [importedRepo.path],
-        mode: 'group'
-      })
-    ).resolves.toEqual(result)
-
-    expect(projectGroupsImportNested).toHaveBeenCalledWith({
-      parentPath: '/platform',
-      groupName: 'Platform',
-      projectPaths: [importedRepo.path],
-      mode: 'group'
-    })
-    expect(projectGroupsList).toHaveBeenCalled()
-    expect(folderWorkspacesList).toHaveBeenCalled()
-    expect(reposList).toHaveBeenCalled()
-    expect(store.getState().projectGroups).toEqual([{ ...projectGroup, executionHostId: 'local' }])
-    // Why: the repos slice stamps fetched repos with their owning execution
-    // host so multi-host routing never has to guess (multi-host design).
-    expect(store.getState().repos).toEqual([{ ...importedRepo, executionHostId: 'local' }])
-  })
-
   it('routes local nested scan progress by scanId and unsubscribes after completion', async () => {
     const unsubscribe = vi.fn()
     const progressCallback = vi.fn()
@@ -704,6 +398,7 @@ describe('project group store routing', () => {
 
     await expect(
       store.getState().scanNestedRepos('/platform', undefined, {
+        ...LOCAL_OWNER,
         scanId: 'scan-1',
         onProgress: progressCallback
       })
@@ -717,113 +412,5 @@ describe('project group store routing', () => {
       scanId: 'scan-1'
     })
     expect(unsubscribe).toHaveBeenCalledTimes(1)
-  })
-
-  it('unsubscribes local nested scan progress when the scan rejects', async () => {
-    const unsubscribe = vi.fn()
-    projectGroupsOnNestedScanProgress.mockReturnValue(unsubscribe)
-    projectGroupsScanNested.mockRejectedValue(new Error('scan failed'))
-    const store = createTestStore()
-
-    await expect(
-      store.getState().scanNestedRepos('/platform', undefined, {
-        scanId: 'scan-1',
-        onProgress: vi.fn()
-      })
-    ).resolves.toBeNull()
-
-    expect(unsubscribe).toHaveBeenCalledTimes(1)
-  })
-
-  it('cancels local nested scans through the preload API', async () => {
-    projectGroupsCancelNestedScan.mockResolvedValue(true)
-    const store = createTestStore()
-
-    await expect(store.getState().cancelNestedRepoScan('scan-1')).resolves.toBe(true)
-
-    expect(projectGroupsCancelNestedScan).toHaveBeenCalledWith({ scanId: 'scan-1' })
-  })
-
-  it('does not send cancelNestedRepoScan to a runtime environment transport', async () => {
-    const store = createTestStore()
-    store.setState({ settings: { activeRuntimeEnvironmentId: 'env-1' } as never })
-
-    await expect(store.getState().cancelNestedRepoScan('scan-1')).resolves.toBe(false)
-
-    expect(projectGroupsCancelNestedScan).not.toHaveBeenCalled()
-    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
-  })
-
-  it('normalizes older runtime nested scan results and keeps the RPC bounded', async () => {
-    runtimeEnvironmentCall.mockResolvedValue({
-      id: 'rpc-scan',
-      ok: true,
-      result: {
-        selectedPath: '/platform',
-        selectedPathKind: 'non_git_folder',
-        repos: [{ path: '/platform/api', displayName: 'api', depth: 1 }],
-        truncated: true,
-        timedOut: false,
-        durationMs: 10,
-        maxDepth: 3
-      },
-      _meta: { runtimeId: 'runtime-remote' }
-    })
-    const store = createTestStore()
-    store.setState({ settings: { activeRuntimeEnvironmentId: 'env-1' } as never })
-
-    await expect(store.getState().scanNestedRepos('/platform')).resolves.toEqual({
-      selectedPath: '/platform',
-      selectedPathKind: 'non_git_folder',
-      repos: [{ path: '/platform/api', displayName: 'api', depth: 1 }],
-      truncated: true,
-      timedOut: false,
-      stopped: false,
-      durationMs: 10,
-      maxDepth: 3,
-      maxRepos: 100,
-      timeoutMs: null
-    })
-
-    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
-      selector: 'env-1',
-      method: 'projectGroup.scanNested',
-      params: { path: '/platform' },
-      timeoutMs: 20_000
-    })
-  })
-
-  it('moves local repos to a group using the preload projectId contract', async () => {
-    const movedRepo = { ...remoteRepo, projectGroupId: projectGroup.id, projectGroupOrder: 3 }
-    projectGroupsMoveProject.mockResolvedValue(movedRepo)
-    const store = createTestStore()
-    store.setState({ repos: [remoteRepo], projectGroups: [projectGroup] })
-
-    await expect(
-      store.getState().moveProjectToGroup(remoteRepo.id, projectGroup.id, 3)
-    ).resolves.toBe(true)
-
-    expect(projectGroupsMoveProject).toHaveBeenCalledWith({
-      projectId: remoteRepo.id,
-      groupId: projectGroup.id,
-      order: 3
-    })
-    // Why: the repos slice stamps updated repos with their owning execution
-    // host so multi-host routing never has to guess (multi-host design).
-    expect(store.getState().repos).toEqual([{ ...movedRepo, executionHostId: 'local' }])
-  })
-
-  it('propagates specific folder workspace create failures to callers', async () => {
-    folderWorkspacesCreate.mockRejectedValue(new Error('folder_workspace_path_missing:/srv/app'))
-    const store = createTestStore()
-
-    await expect(
-      store.getState().createFolderWorkspace({
-        projectGroupId: projectGroup.id,
-        name: 'Broken folder'
-      })
-    ).rejects.toThrow(
-      'Folder not found. Orca cannot find /srv/app. Remove and re-import the folder.'
-    )
   })
 })

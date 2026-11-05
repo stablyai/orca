@@ -1,0 +1,99 @@
+import { createElement } from 'react'
+import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { QUICK_COMMAND_SEARCH_QUERY_MAX_LENGTH, QuickCommandsList } from './QuickCommandsList'
+import { findAllByHostType, findByHostType } from '../test-support/react-test-renderer-host-nodes'
+
+vi.mock('react-native', () => ({
+  ActivityIndicator: 'ActivityIndicator',
+  Pressable: 'Pressable',
+  StyleSheet: {
+    create: <T>(styles: T) => styles,
+    hairlineWidth: 1
+  },
+  Text: 'Text',
+  TextInput: 'TextInput',
+  View: 'View'
+}))
+
+vi.mock('lucide-react-native', () => ({
+  Check: 'Check',
+  Copy: 'Copy',
+  Pencil: 'Pencil',
+  Play: 'Play',
+  Plus: 'Plus',
+  Search: 'Search',
+  Trash2: 'Trash2'
+}))
+
+vi.mock('expo-clipboard', () => ({ setStringAsync: vi.fn() }))
+
+// The row buzzes when a copy is refused, and the real module reads `__DEV__` at import.
+vi.mock('expo-haptics', () => ({
+  notificationAsync: vi.fn(),
+  performAndroidHapticsAsync: vi.fn(),
+  AndroidHaptics: { Reject: 'reject' },
+  NotificationFeedbackType: { Error: 'error', Success: 'success' }
+}))
+
+vi.mock('../components/MobileAgentIcon', () => ({ MobileAgentIcon: 'MobileAgentIcon' }))
+
+describe('QuickCommandsList search', () => {
+  let renderer: ReactTestRenderer | null = null
+
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+  })
+
+  it('keeps an active filter clearable when only one command remains', async () => {
+    const onQueryChange = vi.fn()
+    await act(async () => {
+      renderer = create(
+        createElement(QuickCommandsList, {
+          repoCommands: [],
+          globalCommands: [],
+          totalCount: 1,
+          query: 'missing',
+          loading: false,
+          disabled: false,
+          error: null,
+          onQueryChange,
+          onLaunch: vi.fn(),
+          onEdit: vi.fn(),
+          onDelete: vi.fn(),
+          onAdd: vi.fn()
+        })
+      )
+    })
+
+    const search = findByHostType(renderer!.root, 'TextInput')
+    expect(search.props.value).toBe('missing')
+    expect(search.props.maxLength).toBe(QUICK_COMMAND_SEARCH_QUERY_MAX_LENGTH)
+    act(() => search.props.onChangeText(''))
+    expect(onQueryChange).toHaveBeenCalledExactlyOnceWith('')
+  })
+
+  it('omits idle search chrome for a single command', async () => {
+    await act(async () => {
+      renderer = create(
+        createElement(QuickCommandsList, {
+          repoCommands: [],
+          globalCommands: [],
+          totalCount: 1,
+          query: '',
+          loading: false,
+          disabled: false,
+          error: null,
+          onQueryChange: vi.fn(),
+          onLaunch: vi.fn(),
+          onEdit: vi.fn(),
+          onDelete: vi.fn(),
+          onAdd: vi.fn()
+        })
+      )
+    })
+
+    expect(findAllByHostType(renderer!.root, 'TextInput')).toHaveLength(0)
+  })
+})

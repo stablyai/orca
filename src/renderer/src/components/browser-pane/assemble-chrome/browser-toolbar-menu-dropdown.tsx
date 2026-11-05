@@ -1,0 +1,306 @@
+import { Check, Ellipsis, FileCode2, History, Import, Monitor, Plus, Settings } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuPortal,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuShortcut,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu'
+import { BrowserCookieImportDisclosure } from '@/components/BrowserCookieImportDisclosure'
+import { BrowserCookieImportMachineNotice } from '@/components/BrowserCookieImportMachineNotice'
+import { useAppStore } from '@/store'
+import { formatOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
+import { BROWSER_FAMILY_LABELS } from '../../../../../shared/constants'
+import type {
+  BrowserSessionProfile,
+  BrowserViewportPresetId
+} from '../../../../../shared/browser-workspace-types'
+import type {
+  BrowserPageSiteDisplay,
+  BrowserSiteColorScheme
+} from '../../../../../shared/browser-site-display'
+import type { BrowserPageZoomDirection } from '../../../../../shared/browser-page-zoom'
+
+type DetectedBrowserEntry = {
+  family: string
+  label: string
+  profiles: { name: string; directory: string }[]
+  selectedProfile: string
+}
+import { BROWSER_VIEWPORT_PRESETS } from '../../../../../shared/browser-viewport-presets'
+import { browserViewportPresetLabel } from './browser-viewport-preset-label'
+import { translate } from '@/i18n/i18n'
+import {
+  BrowserChromeFoldedMenuItems,
+  type BrowserChromeOverflowMenuProps
+} from './browser-chrome-folded-tools'
+import {
+  BrowserToolbarAppearanceSub,
+  BrowserToolbarZoomRow
+} from './browser-toolbar-page-display-items'
+
+type BrowserToolbarMenuDropdownProps = {
+  browserPageId: string
+  menuOpen: boolean
+  onMenuOpenChange: (open: boolean) => void
+  allProfiles: BrowserSessionProfile[]
+  effectiveProfileId: string
+  onSwitchProfile: (profileId: string | null) => void
+  onNewProfile: () => void
+  detectedBrowsers: DetectedBrowserEntry[]
+  onFetchDetectedBrowsers: () => void
+  browserSessionImportState: { profileId: string; status: string } | null | undefined
+  onImportFromBrowser: (browserFamily: string, browserProfile?: string) => void
+  onImportFromFile: () => void
+  viewportPresetId: BrowserViewportPresetId | null
+  onApplyViewportPreset: (nextId: BrowserViewportPresetId | null) => void
+  siteDisplay: BrowserPageSiteDisplay | null
+  onZoomPage: (direction: BrowserPageZoomDirection) => void
+  onSetSiteColorScheme: (colorScheme: BrowserSiteColorScheme | null) => void
+  onOpenSourceFile?: (() => void) | null
+  overflow: BrowserChromeOverflowMenuProps
+}
+
+export function BrowserToolbarMenuDropdown({
+  browserPageId,
+  menuOpen,
+  onMenuOpenChange,
+  allProfiles,
+  effectiveProfileId,
+  onSwitchProfile,
+  onNewProfile,
+  detectedBrowsers,
+  onFetchDetectedBrowsers,
+  browserSessionImportState,
+  onImportFromBrowser,
+  onImportFromFile,
+  viewportPresetId,
+  onApplyViewportPreset,
+  siteDisplay,
+  onZoomPage,
+  onSetSiteColorScheme,
+  onOpenSourceFile = null,
+  overflow
+}: BrowserToolbarMenuDropdownProps): React.JSX.Element {
+  const keybindings = useAppStore((s) => s.keybindings)
+  const historyShortcut = formatOptionalShortcutLabel('browser.showHistory', keybindings)
+  return (
+    <DropdownMenu modal={false} open={menuOpen} onOpenChange={onMenuOpenChange}>
+      <DropdownMenuTrigger asChild>
+        <Button
+          ref={overflow.triggerRef}
+          size="icon"
+          variant="ghost"
+          className="h-8 w-8"
+          title={translate(
+            'auto.components.browser.pane.BrowserToolbarMenu.7b838540c7',
+            'Browser menu'
+          )}
+        >
+          <Ellipsis className="size-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align="end"
+        className="w-56"
+        data-browser-page-menu-id={browserPageId}
+        onCloseAutoFocus={overflow.onMenuCloseAutoFocus}
+      >
+        <BrowserChromeFoldedMenuItems
+          tools={overflow.tools}
+          deferUntilClose={overflow.deferUntilClose}
+        />
+        {onOpenSourceFile ? (
+          <>
+            <DropdownMenuItem onSelect={onOpenSourceFile}>
+              <FileCode2 className="mr-2 size-3.5" />
+              {translate(
+                'auto.components.editor.HtmlDocPreview.openSourceControl',
+                'Open source file'
+              )}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+          </>
+        ) : null}
+        {allProfiles.map((profile) => {
+          const isSelectedProfile = profile.id === effectiveProfileId
+          return (
+            <DropdownMenuItem
+              key={profile.id}
+              onSelect={() => onSwitchProfile(profile.id === 'default' ? null : profile.id)}
+            >
+              <Check
+                className={`mr-2 size-3.5 shrink-0 ${isSelectedProfile ? 'opacity-100' : 'opacity-0'}`}
+              />
+              <span className="truncate">{profile.label}</span>
+              {profile.source?.browserFamily && (
+                <span className="ml-auto pl-2 text-[11px] text-muted-foreground">
+                  {BROWSER_FAMILY_LABELS[profile.source.browserFamily] ??
+                    profile.source.browserFamily}
+                </span>
+              )}
+            </DropdownMenuItem>
+          )
+        })}
+
+        <DropdownMenuSeparator />
+
+        <DropdownMenuItem onSelect={onNewProfile}>
+          <Plus className="mr-2 size-3.5" />
+          {translate('auto.components.browser.pane.BrowserToolbarMenu.cf7cdc67ef', 'New Profile…')}
+        </DropdownMenuItem>
+
+        <DropdownMenuSeparator />
+
+        <DropdownMenuSub
+          onOpenChange={(open) => {
+            if (open) {
+              // Defer macOS app-data profile probes until the user opens Import.
+              onFetchDetectedBrowsers()
+            }
+          }}
+        >
+          <DropdownMenuSubTrigger
+            disabled={
+              browserSessionImportState?.profileId === effectiveProfileId &&
+              browserSessionImportState.status === 'importing'
+            }
+            data-contextual-tour-target="browser-import-cookies-control"
+          >
+            <Import className="mr-2 size-3.5" />
+            {translate(
+              'auto.components.browser.pane.BrowserToolbarMenu.2293adf620',
+              'Import Cookies'
+            )}
+          </DropdownMenuSubTrigger>
+          <DropdownMenuPortal>
+            <DropdownMenuSubContent data-browser-page-menu-id={browserPageId}>
+              <BrowserCookieImportMachineNotice />
+              {detectedBrowsers.map((browser) =>
+                browser.profiles.length > 1 ? (
+                  <DropdownMenuSub key={browser.family}>
+                    <DropdownMenuSubTrigger>
+                      {translate(
+                        'auto.components.browser.pane.BrowserToolbarMenu.eb280bfb11',
+                        'From {{value0}}',
+                        { value0: browser.label }
+                      )}
+                    </DropdownMenuSubTrigger>
+                    <DropdownMenuPortal>
+                      <DropdownMenuSubContent data-browser-page-menu-id={browserPageId}>
+                        {browser.profiles.map((profile) => (
+                          <DropdownMenuItem
+                            key={profile.directory}
+                            onSelect={() => onImportFromBrowser(browser.family, profile.directory)}
+                          >
+                            {profile.name}
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuSubContent>
+                    </DropdownMenuPortal>
+                  </DropdownMenuSub>
+                ) : (
+                  <DropdownMenuItem
+                    key={browser.family}
+                    onSelect={() => onImportFromBrowser(browser.family)}
+                  >
+                    {translate(
+                      'auto.components.browser.pane.BrowserToolbarMenu.eb280bfb11',
+                      'From {{value0}}',
+                      { value0: browser.label }
+                    )}
+                  </DropdownMenuItem>
+                )
+              )}
+              {detectedBrowsers.length > 0 && <DropdownMenuSeparator />}
+              <DropdownMenuItem onSelect={onImportFromFile}>
+                {translate(
+                  'auto.components.browser.pane.BrowserToolbarMenu.56f94f4ffa',
+                  'From File…'
+                )}
+              </DropdownMenuItem>
+              <BrowserCookieImportDisclosure />
+            </DropdownMenuSubContent>
+          </DropdownMenuPortal>
+        </DropdownMenuSub>
+
+        <DropdownMenuSeparator />
+
+        <BrowserToolbarZoomRow display={siteDisplay} onZoom={onZoomPage} />
+        <BrowserToolbarAppearanceSub
+          browserPageId={browserPageId}
+          display={siteDisplay}
+          onSetColorScheme={onSetSiteColorScheme}
+        />
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger>
+            <Monitor className="mr-2 size-3.5" />
+            {translate(
+              'auto.components.browser.pane.BrowserToolbarMenu.e5d31de1a9',
+              'Viewport Size'
+            )}
+          </DropdownMenuSubTrigger>
+          <DropdownMenuPortal>
+            <DropdownMenuSubContent data-browser-page-menu-id={browserPageId}>
+              {/* Use radio semantics for viewport selection; encode null as default because Radix values must be strings. */}
+              <DropdownMenuRadioGroup
+                value={viewportPresetId ?? 'default'}
+                onValueChange={(v) =>
+                  onApplyViewportPreset(v === 'default' ? null : (v as BrowserViewportPresetId))
+                }
+              >
+                <DropdownMenuRadioItem value="default">
+                  {translate(
+                    'auto.components.browser.pane.BrowserToolbarMenu.ed8f54509d',
+                    'Default'
+                  )}
+                </DropdownMenuRadioItem>
+                <DropdownMenuSeparator />
+                {BROWSER_VIEWPORT_PRESETS.map((preset) => (
+                  <DropdownMenuRadioItem key={preset.id} value={preset.id}>
+                    <span className="truncate">{browserViewportPresetLabel(preset)}</span>
+                  </DropdownMenuRadioItem>
+                ))}
+              </DropdownMenuRadioGroup>
+            </DropdownMenuSubContent>
+          </DropdownMenuPortal>
+        </DropdownMenuSub>
+
+        <DropdownMenuSeparator />
+
+        <DropdownMenuItem
+          // Why deferred: focus returning to the ⋯ trigger would otherwise close the dialog at once.
+          onSelect={() =>
+            overflow.deferUntilClose(() =>
+              useAppStore.getState().setBrowserHistoryPageId(browserPageId)
+            )
+          }
+        >
+          <History className="mr-2 size-3.5" />
+          {translate('browser.history.menuItem', 'History')}
+          {historyShortcut ? <DropdownMenuShortcut>{historyShortcut}</DropdownMenuShortcut> : null}
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onSelect={() => {
+            useAppStore.getState().openSettingsTarget({ pane: 'browser', repoId: null })
+            useAppStore.getState().openSettingsPage()
+          }}
+        >
+          <Settings className="mr-2 size-3.5" />
+          {translate(
+            'auto.components.browser.pane.BrowserToolbarMenu.a771c2b6c8',
+            'Browser Settings…'
+          )}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}

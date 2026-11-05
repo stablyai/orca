@@ -1,14 +1,17 @@
 import { BrowserWindow, ipcMain, type WebContents } from 'electron'
-import { randomUUID } from 'crypto'
+import { randomUUID } from 'node:crypto'
 import { scrcpyVideoRegistry } from '../emulator/scrcpy-video-registry'
 import { emulatorProbe } from '../emulator/emulator-probe'
+import { abortWhenRendererGone } from './renderer-lifetime-abort'
 
-// Bridges the main-process scrcpy video registry to renderer subscribers. The
-// renderer calls emulator:videoStreamStart with a deviceId; meta + H.264 access
-// units arrive on emulator:videoStreamMeta / emulator:videoStreamFrame. Mirrors
-// the MJPEG emulator-frame-stream handler but for the Android H.264 path.
+// Relay scrcpy metadata/H.264 units to renderer subscribers, parallel to the MJPEG stream handler.
 export function registerEmulatorVideoStreamHandlers(): void {
-  type Subscription = { owner: WebContents; unsubscribe: () => void }
+  type Subscription = {
+    owner: WebContents
+    unsubscribe: () => void
+    disposeLifetime: () => void
+    startTimer: ReturnType<typeof setTimeout> | null
+  }
   const subscriptions = new Map<string, Subscription>()
 
   const stopSubscription = (streamId: string, owner?: WebContents): void => {
@@ -16,8 +19,12 @@ export function registerEmulatorVideoStreamHandlers(): void {
     if (!subscription || (owner && subscription.owner !== owner)) {
       return
     }
-    subscription.unsubscribe()
     subscriptions.delete(streamId)
+    if (subscription.startTimer !== null) {
+      clearTimeout(subscription.startTimer)
+    }
+    subscription.disposeLifetime()
+    subscription.unsubscribe()
   }
 
   ipcMain.handle(
@@ -37,9 +44,21 @@ export function registerEmulatorVideoStreamHandlers(): void {
         throw new Error('Video stream id is already in use by another renderer')
       }
       stopSubscription(streamId, owner)
-      const pendingSubscription = { owner, unsubscribe: () => {} }
+      const lifetime = abortWhenRendererGone(owner)
+      const onRendererGone = (): void => stopSubscription(streamId, owner)
+      const pendingSubscription: Subscription = {
+        owner,
+        unsubscribe: () => {},
+        disposeLifetime: () => {
+          lifetime.signal.removeEventListener('abort', onRendererGone)
+          lifetime.dispose()
+        },
+        startTimer: null
+      }
       subscriptions.set(streamId, pendingSubscription)
-      setTimeout(() => {
+      lifetime.signal.addEventListener('abort', onRendererGone, { once: true })
+      pendingSubscription.startTimer = setTimeout(() => {
+        pendingSubscription.startTimer = null
         if (owner.isDestroyed() || subscriptions.get(streamId) !== pendingSubscription) {
           return
         }
@@ -47,7 +66,14 @@ export function registerEmulatorVideoStreamHandlers(): void {
           if (owner.isDestroyed()) {
             return
           }
-          if (videoEvent.type === 'meta') {
+          if (videoEvent.type === 'end') {
+            stopSubscription(streamId, owner)
+            // Shares the MJPEG error channel; the renderer matches it by stream id.
+            owner.send('emulator:frameStreamError', {
+              streamId,
+              message: 'The Android video stream ended.'
+            })
+          } else if (videoEvent.type === 'meta') {
             owner.send('emulator:videoStreamMeta', {
               streamId,
               deviceId: args.deviceId,
@@ -63,9 +89,6 @@ export function registerEmulatorVideoStreamHandlers(): void {
         })
         pendingSubscription.unsubscribe = unsubscribe
       }, 0)
-      owner.once('destroyed', () => {
-        stopSubscription(streamId, owner)
-      })
       return { streamId }
     }
   )

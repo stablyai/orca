@@ -5,9 +5,29 @@ import {
   validateNativeFileDropPaths
 } from '../../../shared/native-file-drop'
 import { measureClipboardTextByteLength } from '../../../shared/clipboard-text'
+import {
+  isUnresolvedOwnerHostId,
+  normalizeExecutionHostId,
+  type ExecutionHostId
+} from '../../../shared/execution-host'
 
 export const WORKSPACE_FILE_PATH_MIME = 'text/x-orca-file-path'
 export const WORKSPACE_FILE_PATHS_MIME = 'text/x-orca-file-paths'
+export const WORKSPACE_FILE_DRAG_SOURCE_MIME = 'application/x-orca-workspace-file-source'
+
+const WORKSPACE_FILE_DRAG_SOURCE_MAX_BYTES = 4096
+
+export type WorkspaceFileDragSource = {
+  executionHostId: ExecutionHostId
+  workspaceId: string
+  runtimeEnvironmentId?: string
+}
+
+export function isResolvedWorkspaceFileDragExecutionHost(
+  executionHostId: ExecutionHostId
+): boolean {
+  return !isUnresolvedOwnerHostId(executionHostId)
+}
 
 export type WorkspaceFileDragRejectionReason = 'paths-too-large' | 'too-many-paths'
 
@@ -31,6 +51,82 @@ type WorkspaceFilePathDecodeResult =
 
 export function encodeWorkspaceFilePaths(paths: readonly string[]): string {
   return paths.length === 1 ? paths[0] : JSON.stringify(paths)
+}
+
+export function writeWorkspaceFileDragSource(
+  dataTransfer: Pick<DataTransfer, 'setData'>,
+  source: WorkspaceFileDragSource
+): void {
+  dataTransfer.setData(WORKSPACE_FILE_DRAG_SOURCE_MIME, JSON.stringify({ ...source, version: 1 }))
+}
+
+/** Stamp only when both halves resolve: an unstamped drag fails closed at the
+ *  composer, which is the right answer for an owner we could not name. */
+export function writeWorkspaceFileDragSourceIfResolved(
+  dataTransfer: Pick<DataTransfer, 'setData'>,
+  workspaceId: string | null | undefined,
+  executionHostId: ExecutionHostId | null | undefined,
+  runtimeEnvironmentId?: string | null
+): void {
+  if (
+    !workspaceId ||
+    !executionHostId ||
+    !isResolvedWorkspaceFileDragExecutionHost(executionHostId)
+  ) {
+    return
+  }
+  writeWorkspaceFileDragSource(dataTransfer, {
+    executionHostId,
+    workspaceId,
+    ...(runtimeEnvironmentId ? { runtimeEnvironmentId } : {})
+  })
+}
+
+export function readWorkspaceFileDragSource(
+  dataTransfer: Pick<DataTransfer, 'getData'>
+): WorkspaceFileDragSource | null {
+  const data = dataTransfer.getData(WORKSPACE_FILE_DRAG_SOURCE_MIME)
+  if (!data) {
+    return null
+  }
+  if (
+    measureClipboardTextByteLength(data, {
+      stopAfterBytes: WORKSPACE_FILE_DRAG_SOURCE_MAX_BYTES
+    }).exceededLimit
+  ) {
+    return null
+  }
+  try {
+    const parsed: unknown = JSON.parse(data)
+    if (!parsed || typeof parsed !== 'object') {
+      return null
+    }
+    const executionHostValue = 'executionHostId' in parsed ? parsed.executionHostId : null
+    const executionHostId =
+      typeof executionHostValue === 'string' ? normalizeExecutionHostId(executionHostValue) : null
+    const workspaceValue = 'workspaceId' in parsed ? parsed.workspaceId : null
+    const workspaceId = typeof workspaceValue === 'string' ? workspaceValue.trim() : ''
+    const version = 'version' in parsed ? parsed.version : null
+    if (version !== 1 || !executionHostId || !workspaceId) {
+      return null
+    }
+    if ('runtimeEnvironmentId' in parsed) {
+      if (typeof parsed.runtimeEnvironmentId !== 'string' || !parsed.runtimeEnvironmentId.trim()) {
+        return null
+      }
+      return { executionHostId, workspaceId, runtimeEnvironmentId: parsed.runtimeEnvironmentId }
+    }
+    return { executionHostId, workspaceId }
+  } catch {
+    return null
+  }
+}
+
+export function hasWorkspaceFileDragType(dataTransfer: Pick<DataTransfer, 'types'>): boolean {
+  return (
+    dataTransfer.types.includes(WORKSPACE_FILE_PATH_MIME) ||
+    dataTransfer.types.includes(WORKSPACE_FILE_PATHS_MIME)
+  )
 }
 
 export function decodeWorkspaceFilePaths(data: string): string[] {
@@ -110,8 +206,7 @@ function getUniqueWorkspaceFilePathEntries(
 function getTopLevelWorkspaceFilePaths(paths: readonly string[]): string[] {
   const uniquePaths = getUniqueWorkspaceFilePathEntries(paths)
 
-  // Why: moving a selected folder already moves its descendants; issuing
-  // extra moves for selected children races against paths that no longer exist.
+  // Moving a selected folder includes descendants; extra child moves race paths already removed.
   return uniquePaths
     .filter(
       (pathEntry) =>
@@ -132,6 +227,7 @@ export function readWorkspaceFileDragPaths(
   options: {
     maxPathBytes?: number
     maxPaths?: number
+    collapseDescendantsForMove?: boolean
   } = {}
 ): WorkspaceFileDragPathsReadResult {
   const maxPathBytes = options.maxPathBytes ?? NATIVE_FILE_DROP_MAX_PATH_BYTES
@@ -173,7 +269,10 @@ export function readWorkspaceFileDragPaths(
     }
   }
 
-  const paths = getTopLevelWorkspaceFilePaths(decodedPaths)
+  const paths =
+    options.collapseDescendantsForMove === false
+      ? getUniqueWorkspaceFilePathEntries(decodedPaths).map((entry) => entry.path)
+      : getTopLevelWorkspaceFilePaths(decodedPaths)
   return {
     byteLength: validation.byteLength,
     pathCount: paths.length,

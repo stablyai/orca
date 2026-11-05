@@ -10,19 +10,21 @@ import type {
   ExternalAutomationProvider
 } from '../../../../shared/automations-types'
 import { ExternalAutomationManagers } from './ExternalAutomationManagers'
+import type {
+  ExternalAutomationScope,
+  ScopedExternalAutomationManager
+} from './external-automation-scope-client'
+import { externalAutomationActionKey } from './external-automation-scope-keys'
 
-// Why: act(...) warnings are silenced by opting this module into the React act
-// environment, matching how the renderer mounts under test.
+// Enable React’s act environment for these renderer mounts.
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
-// Why: the run table fetches from the external automation store; stub it so the
-// test stays focused on the row controls (switch + action cluster).
+// Stub external run fetching to isolate row controls.
 vi.mock('./ExternalAutomationRunTable', () => ({
   ExternalAutomationRunTable: () => <div data-testid="run-table" />
 }))
 
-// Why: Tooltip needs a TooltipProvider mounted higher in the real app; stub the
-// primitives so the row renders standalone and the span trigger stays inspectable.
+// Stub TooltipProvider-dependent primitives so standalone row triggers stay inspectable.
 vi.mock('@/components/ui/tooltip', () => ({
   Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   TooltipTrigger: ({ children }: { children: React.ReactNode }) => <>{children}</>,
@@ -36,7 +38,7 @@ function makeJob(overrides: Partial<ExternalAutomationJob> = {}): ExternalAutoma
   return {
     id: 'job-1',
     managerId: 'manager-1',
-    provider: 'hermes',
+    provider: 'openclaw',
     name: 'Nightly backup',
     schedule: '0 0 * * *',
     rawSchedule: null,
@@ -58,11 +60,11 @@ function makeJob(overrides: Partial<ExternalAutomationJob> = {}): ExternalAutoma
 function makeManager(
   overrides: Partial<ExternalAutomationManager> = {}
 ): ExternalAutomationManager {
-  const provider: ExternalAutomationProvider = overrides.provider ?? 'hermes'
+  const provider: ExternalAutomationProvider = overrides.provider ?? 'openclaw'
   return {
     id: 'manager-1',
     provider,
-    label: 'Local Hermes',
+    label: 'Local OpenClaw',
     targetLabel: 'Local',
     target: { type: 'local' },
     status: 'available',
@@ -73,31 +75,47 @@ function makeManager(
   }
 }
 
+/** The desktop-self host every manager here is discovered on unless named otherwise. */
+function makeScope(environmentId: string | null = null): ExternalAutomationScope {
+  return {
+    owner: {
+      authority:
+        environmentId === null
+          ? { kind: 'desktop' }
+          : { kind: 'runtime', environmentId, pairingRevision: 1 },
+      selector: { kind: 'self' }
+    },
+    provider: 'openclaw'
+  }
+}
+
+function scoped(
+  overrides: Partial<ExternalAutomationManager> = {},
+  scope: ExternalAutomationScope = makeScope()
+): ScopedExternalAutomationManager {
+  return { scope, manager: makeManager(overrides) }
+}
+
 type OnActionMock = ReturnType<
   typeof vi.fn<
     (
       manager: ExternalAutomationManager,
       job: ExternalAutomationJob,
-      action: ExternalAutomationAction
+      action: ExternalAutomationAction,
+      scope: ExternalAutomationScope
     ) => void
   >
 >
-type OnEditMock = ReturnType<
-  typeof vi.fn<(manager: ExternalAutomationManager, job: ExternalAutomationJob) => void>
->
-
 type RenderOptions = {
   runningActionKey?: string | null
   onAction?: OnActionMock
-  onEdit?: OnEditMock
 }
 
 function renderManagers(
-  managers: ExternalAutomationManager[],
+  managers: ScopedExternalAutomationManager[],
   options: RenderOptions = {}
-): { onAction: OnActionMock; onEdit: OnEditMock } {
+): { onAction: OnActionMock } {
   const onAction = options.onAction ?? vi.fn()
-  const onEdit = options.onEdit ?? vi.fn()
   act(() => {
     root.render(
       <ExternalAutomationManagers
@@ -105,17 +123,16 @@ function renderManagers(
         now={0}
         runningActionKey={options.runningActionKey ?? null}
         onAction={onAction}
-        onEdit={onEdit}
       />
     )
   })
-  return { onAction, onEdit }
+  return { onAction }
 }
 
-function getSwitch(): HTMLButtonElement {
-  const node = container.querySelector('button[role="switch"]')
+function getSwitch(index = 0): HTMLButtonElement {
+  const node = container.querySelectorAll('button[role="switch"]')[index]
   if (!(node instanceof HTMLButtonElement)) {
-    throw new Error('expected a role="switch" control')
+    throw new Error(`expected a role="switch" control at ${index}`)
   }
   return node
 }
@@ -142,58 +159,101 @@ describe('ExternalAutomationManagers toggle', () => {
   })
 
   it('renders a switch reflecting the enabled state via aria-checked', () => {
-    renderManagers([makeManager({ jobs: [makeJob({ enabled: true })] })])
+    renderManagers([scoped({ jobs: [makeJob({ enabled: true })] })])
     expect(getSwitch().getAttribute('aria-checked')).toBe('true')
   })
 
   it('renders aria-checked=false for a paused job', () => {
-    renderManagers([makeManager({ jobs: [makeJob({ enabled: false })] })])
+    renderManagers([scoped({ jobs: [makeJob({ enabled: false })] })])
     expect(getSwitch().getAttribute('aria-checked')).toBe('false')
   })
 
   it('dispatches pause when toggling an enabled job', () => {
-    const manager = makeManager({ jobs: [makeJob({ enabled: true })] })
-    const { onAction } = renderManagers([manager])
+    const entry = scoped({ jobs: [makeJob({ enabled: true })] })
+    const { onAction } = renderManagers([entry])
     act(() => {
       getSwitch().click()
     })
-    expect(onAction).toHaveBeenCalledWith(manager, manager.jobs[0], 'pause')
+    expect(onAction).toHaveBeenCalledWith(
+      entry.manager,
+      entry.manager.jobs[0],
+      'pause',
+      entry.scope
+    )
   })
 
   it('dispatches resume when toggling a paused job', () => {
-    const manager = makeManager({ jobs: [makeJob({ enabled: false })] })
-    const { onAction } = renderManagers([manager])
+    const entry = scoped({ jobs: [makeJob({ enabled: false })] })
+    const { onAction } = renderManagers([entry])
     act(() => {
       getSwitch().click()
     })
-    expect(onAction).toHaveBeenCalledWith(manager, manager.jobs[0], 'resume')
+    expect(onAction).toHaveBeenCalledWith(
+      entry.manager,
+      entry.manager.jobs[0],
+      'resume',
+      entry.scope
+    )
   })
 
   it('disables the switch when the manager cannot be managed', () => {
-    renderManagers([makeManager({ canManage: false })])
+    renderManagers([scoped({ canManage: false })])
     expect(getSwitch().disabled).toBe(true)
   })
 
-  it('shows the sibling spinner only while a pause/resume targets this row', () => {
-    const manager = makeManager({ jobs: [makeJob({ id: 'job-1', enabled: true })] })
-    // Keyed for the resume action even though the job is enabled — the spinner
-    // must match either pause or resume so it does not vanish when enabled flips.
-    renderManagers([manager], { runningActionKey: 'manager-1:job-1:resume' })
+  it('shows the sibling spinner for a matching resume key on an enabled row', () => {
+    const entry = scoped({ jobs: [makeJob({ id: 'job-1', enabled: true })] })
+    // Match both pause/resume keys because enabled can flip before the action settles.
+    renderManagers([entry], {
+      runningActionKey: externalAutomationActionKey(entry.scope, 'job-1', 'resume')
+    })
     expect(container.querySelector('.animate-spin')).not.toBeNull()
   })
 
-  it('keeps the Run/Edit/Delete actions and removes the pause/resume button on hermes', () => {
-    renderManagers([makeManager({ provider: 'hermes' })])
-    const labels = actionButtonLabels()
-    expect(labels).toContain('Run external automation')
-    expect(labels).toContain('Edit external automation')
-    expect(labels).toContain('Delete external automation')
-    expect(labels).not.toContain('Pause external automation')
-    expect(labels).not.toContain('Resume external automation')
+  it('spins only the host whose action is in flight when two authorities share a manager ID', () => {
+    // Manager/job IDs collide across authorities; scope the in-flight key so another host cannot show this action’s spinner.
+    const local = { id: 'openclaw:local', jobs: [makeJob({ id: 'job-1', enabled: true })] }
+    const desktop = scoped(local, makeScope())
+    const runtime = scoped(local, makeScope('env-7'))
+
+    renderManagers([desktop, runtime], {
+      runningActionKey: externalAutomationActionKey(runtime.scope, 'job-1', 'pause')
+    })
+
+    // The spinner’s sibling switch identifies which host row is in flight.
+    const spinners = container.querySelectorAll('.animate-spin')
+    expect(spinners).toHaveLength(1)
+    expect(spinners[0]?.parentElement?.contains(getSwitch(1))).toBe(true)
+    expect(spinners[0]?.parentElement?.contains(getSwitch(0))).toBe(false)
+  })
+
+  it('labels the two rows apart when two authorities share a manager and job ID', () => {
+    const local = { id: 'openclaw:local', jobs: [makeJob({ id: 'job-1' })] }
+    renderManagers([scoped(local, makeScope()), scoped(local, makeScope('env-7'))])
+
+    // Scope name IDs too so aria-labelledby cannot resolve to another host’s row.
+    expect(getSwitch(0).getAttribute('aria-labelledby')).not.toBe(
+      getSwitch(1).getAttribute('aria-labelledby')
+    )
+  })
+
+  it('dispatches each row against its own authority when two share a manager ID', () => {
+    const local = { id: 'openclaw:local', jobs: [makeJob({ id: 'job-1', enabled: true })] }
+    const desktop = scoped(local, makeScope())
+    const runtime = scoped(local, makeScope('env-7'))
+    const { onAction } = renderManagers([desktop, runtime])
+
+    act(() => {
+      getSwitch(1).click()
+    })
+
+    // Carry row scope into actions so matching remote/local job IDs cannot misroute pause.
+    expect(onAction).toHaveBeenCalledTimes(1)
+    expect(onAction.mock.calls[0]?.[3]).toEqual(runtime.scope)
   })
 
   it('keeps Run/Delete (no Edit) for openclaw and removes the pause/resume button', () => {
-    renderManagers([makeManager({ provider: 'openclaw' })])
+    renderManagers([scoped({ provider: 'openclaw' })])
     const labels = actionButtonLabels()
     expect(labels).toContain('Run external automation')
     expect(labels).toContain('Delete external automation')

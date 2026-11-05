@@ -1,8 +1,7 @@
-import { getRepoIdFromMobileWorktreeId } from '../session/mobile-session-route-helpers'
-
+import { getRepoIdFromWorktreeId } from '../../../src/shared/worktree/id'
 export const LAST_VISITED_WORKTREE_STORAGE_KEY = 'orca:last-visited-worktree'
 
-type LastVisitedWorktreeRecord = {
+export type LastVisitedWorktreeRecord = {
   hostId: string
   worktreeId: string
 }
@@ -11,7 +10,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
 }
 
-function readLastVisitedWorktreeRecord(raw: string | null): LastVisitedWorktreeRecord | null {
+// Resume turns this record into navigation; reject incomplete history before it can form an invalid route.
+export function readLastVisitedWorktreeRecord(
+  raw: string | null
+): LastVisitedWorktreeRecord | null {
   if (!raw) {
     return null
   }
@@ -20,7 +22,10 @@ function readLastVisitedWorktreeRecord(raw: string | null): LastVisitedWorktreeR
     if (
       !isRecord(parsed) ||
       typeof parsed.hostId !== 'string' ||
-      typeof parsed.worktreeId !== 'string'
+      typeof parsed.worktreeId !== 'string' ||
+      // Empty ids cannot form an actionable route.
+      parsed.hostId === '' ||
+      parsed.worktreeId === ''
     ) {
       return null
     }
@@ -35,6 +40,6 @@ export function readLastVisitedWorktreeRepoId(raw: string | null, hostId: string
   if (!record || record.hostId !== hostId) {
     return null
   }
-  const repoId = getRepoIdFromMobileWorktreeId(record.worktreeId).trim()
+  const repoId = getRepoIdFromWorktreeId(record.worktreeId).trim()
   return repoId || null
 }

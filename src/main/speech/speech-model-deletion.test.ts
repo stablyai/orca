@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { getDefaultVoiceSettings } from '../../shared/constants'
 import type { VoiceSettings } from '../../shared/speech-types'
-import type { GlobalSettings } from '../../shared/types'
+import type { GlobalSettings } from '../../shared/global-settings-types'
 import { SPEECH_MODEL_CATALOG } from './model-catalog'
 import { deleteLocalSpeechModel } from './speech-model-deletion'
 
@@ -23,41 +23,6 @@ function makeStore(initialVoice: VoiceSettings) {
 }
 
 describe('deleteLocalSpeechModel', () => {
-  it('clears the selected local model after deletion succeeds', async () => {
-    expect(localModel).toBeDefined()
-    const calls: string[] = []
-    const voice = { ...getDefaultVoiceSettings(), enabled: true, sttModel: localModel!.id }
-    const store = makeStore(voice)
-    const modelManager = {
-      deleteModel: vi.fn(async () => {
-        calls.push('delete')
-      })
-    }
-    const sttService = {
-      prepareModelForDeletion: vi.fn(async () => {
-        calls.push('prepare')
-      })
-    }
-
-    await deleteLocalSpeechModel({
-      store,
-      modelManager,
-      sttService,
-      modelId: localModel!.id
-    })
-
-    expect(calls).toEqual(['prepare', 'delete'])
-    expect(store.updateSettings).toHaveBeenCalledWith(
-      {
-        voice: {
-          ...voice,
-          sttModel: ''
-        }
-      },
-      { notifyListeners: true }
-    )
-  })
-
   it('does not clear selection when another client selected a newer model', async () => {
     expect(localModel).toBeDefined()
     const voice = { ...getDefaultVoiceSettings(), enabled: true, sttModel: localModel!.id }

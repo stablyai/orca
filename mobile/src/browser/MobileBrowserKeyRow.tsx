@@ -1,5 +1,7 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, Text, View } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
 const BROWSER_KEYS = ['Enter', 'Backspace', 'Tab', 'Escape'] as const
 
@@ -9,6 +11,7 @@ type Props = {
 }
 
 export function MobileBrowserKeyRow({ disabled, onKeypress }: Props): React.JSX.Element {
+  useMobileColorScheme()
   return (
     <View style={styles.keyRow}>
       {BROWSER_KEYS.map((key) => (
@@ -31,7 +34,7 @@ export function MobileBrowserKeyRow({ disabled, onKeypress }: Props): React.JSX.
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   keyRow: {
     flexDirection: 'row',
     gap: spacing.xs,
@@ -43,7 +46,7 @@ const styles = StyleSheet.create({
     minWidth: 42,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     backgroundColor: colors.bgRaised,
     paddingHorizontal: spacing.sm
   },
@@ -61,4 +64,4 @@ const styles = StyleSheet.create({
   disabledText: {
     color: colors.textMuted
   }
-})
+}))

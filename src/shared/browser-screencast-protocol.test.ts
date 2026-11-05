@@ -1,5 +1,7 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
+  BROWSER_SCREENCAST_MAX_METADATA_BYTES,
+  BROWSER_SCREENCAST_METADATA_JSON_STRUCTURE_LIMITS,
   BrowserScreencastOpcode,
   decodeBrowserScreencastFrame,
   encodeBrowserScreencastFrame
@@ -72,6 +74,59 @@ describe('browser screencast binary protocol', () => {
     )
 
     expect(decodeBrowserScreencastFrame(encoded)).toBeNull()
+  })
+
+  it('rejects oversized valid metadata before decoding it', () => {
+    const metadata = { deviceWidth: 1280, padding: '' }
+    metadata.padding = 'x'.repeat(
+      BROWSER_SCREENCAST_MAX_METADATA_BYTES -
+        new TextEncoder().encode(JSON.stringify(metadata)).byteLength
+    )
+    const withinBudget = encodeBrowserScreencastFrame({
+      opcode: BrowserScreencastOpcode.Frame,
+      seq: 1,
+      format: 'jpeg',
+      metadata,
+      image: new Uint8Array([1])
+    })
+    expect(decodeBrowserScreencastFrame(withinBudget)?.metadata).toEqual({ deviceWidth: 1280 })
+
+    const oversizedMetadata = { ...metadata, padding: `${metadata.padding}x` }
+    const oversized = encodeBrowserScreencastFrame({
+      opcode: BrowserScreencastOpcode.Frame,
+      seq: 1,
+      format: 'jpeg',
+      metadata: oversizedMetadata,
+      image: new Uint8Array([1])
+    })
+    const decode = vi.spyOn(TextDecoder.prototype, 'decode')
+    try {
+      expect(decodeBrowserScreencastFrame(oversized)).toBeNull()
+      expect(decode).not.toHaveBeenCalled()
+    } finally {
+      decode.mockRestore()
+    }
+  })
+
+  it('rejects excessive metadata nesting before JSON.parse', () => {
+    const parseSpy = vi.spyOn(JSON, 'parse')
+    try {
+      const depth = BROWSER_SCREENCAST_METADATA_JSON_STRUCTURE_LIMITS.nestingDepth + 1
+      const metadata = new TextEncoder().encode(`${'['.repeat(depth)}0${']'.repeat(depth)}`)
+      const encoded = new Uint8Array(16 + metadata.byteLength)
+      const view = new DataView(encoded.buffer)
+      encoded[0] = 0x62
+      encoded[1] = 1
+      encoded[2] = BrowserScreencastOpcode.Frame
+      encoded[3] = 1
+      view.setUint32(8, metadata.byteLength, true)
+      encoded.set(metadata, 16)
+
+      expect(decodeBrowserScreencastFrame(encoded)).toBeNull()
+      expect(parseSpy).not.toHaveBeenCalled()
+    } finally {
+      parseSpy.mockRestore()
+    }
   })
 
   it('rejects frames with nonzero reserved header bytes', () => {

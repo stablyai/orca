@@ -2,24 +2,19 @@ import type { Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { sendToTerminal, waitForActivePanePtyId } from './helpers/terminal'
+import { compareTerminalScreenshots } from './terminal-screenshot-diff'
 
-// Why: mirrors FLOATING_TERMINAL_WORKTREE_ID in src/shared/constants.ts.
-// e2e specs avoid importing renderer/shared modules into the Playwright runner.
+// Mirror FLOATING_TERMINAL_WORKTREE_ID without loading renderer/shared modules into Playwright.
 const FLOATING_WORKTREE_ID = 'global-floating-terminal'
 const PANEL_SELECTOR = '[data-floating-terminal-panel]'
 
-// Why: the floating panel toggles via this window event
-// (src/renderer/src/lib/floating-terminal.ts); dispatching it exercises the
-// same code path as the status bar button and the keyboard shortcut.
+// Dispatch the same toggle event as the status bar and shortcut.
 const TOGGLE_EVENT = 'orca-toggle-floating-terminal'
 
-// Why: a silent foreground command blocks the shell so no prompt framework
-// (e.g. async p10k segments) repaints while screenshots are compared.
+// Block shell prompt repaints so screenshot comparisons stay stable.
 const SILENT_FOREGROUND_COMMAND = 'node -e "setInterval(() => {}, 1000)"\r'
 
-// Why: distinct glyph populations per terminal. After a shared-atlas clear the
-// pages refill in first-use order, so terminals with different content put
-// different glyphs at the coordinates a stale render model still points to.
+// Use distinct glyph populations so shared-page refills invalidate stale coordinates visibly.
 const WORKSPACE_GLYPH_ROW = 'abcdefghijklmnopqrstuvwxyz 0123456789 []{}<>/\\#@%&*+=~'
 const FLOATING_GLYPH_ROW = 'ZYXWVUTSRQPONMLKJIHGFEDCBA 9876543210 !?^"\'();:,.|$_-'
 
@@ -68,9 +63,7 @@ async function ensureFloatingTabs(page: Page, count: number): Promise<string[]> 
     },
     { worktreeId: FLOATING_WORKTREE_ID, wanted: count }
   )
-  // Why: the toggle event listener closes over floatingTerminalEnabled; wait
-  // for the (lazy) panel to mount so React has committed the enabled state
-  // before the toggle event is dispatched, otherwise the event is dropped.
+  // Wait for React’s enabled-state commit or the closure-backed toggle drops the event.
   await page.waitForFunction(
     (panelSelector) => Boolean(document.querySelector(panelSelector)),
     PANEL_SELECTOR,
@@ -95,14 +88,11 @@ async function toggleFloatingPanel(page: Page, open: boolean): Promise<void> {
 }
 
 async function waitForWebglOnTab(page: Page, tabId: string): Promise<boolean> {
-  // Why: a pane that mounted before the GPU setting landed needs the manager
-  // call too — mirrors forceWebgl in terminal-image-paste-webgl-recovery.spec.
+  // Force GPU attachment when the pane mounted before its setting committed.
   await page.evaluate((id) => {
     window.__paneManagers?.get(id)?.setTerminalGpuAcceleration?.('on')
   }, tabId)
-  // Why: getPanes()/getActivePane() return a public projection without
-  // webglAddon; getRenderingDiagnostics() is the supported way to observe
-  // whether WebGL is attached.
+  // Use supported rendering diagnostics; public pane projections omit webglAddon.
   return page
     .waitForFunction(
       (id) => {
@@ -156,12 +146,7 @@ async function writeStaticContent(
     },
     {
       id: tabId,
-      // Why: clear screen + scrollback and hide the cursor so screenshots are
-      // time-invariant, then render dense mixed glyphs so the shared WebGL
-      // atlas region this terminal depends on is populated. Default-colored
-      // ASCII only: a small glyph population avoids atlas page merges, whose
-      // one-shot clear-model flag would let a stale renderer accidentally
-      // self-heal and mask the corruption this spec reproduces.
+      // Use stable default-colored ASCII: atlas page merges can clear stale models and accidentally hide corruption.
       content: `\x1b[2J\x1b[3J\x1b[H\x1b[?25l${Array.from(
         { length: 14 },
         (_, row) => `${marker} row ${row} | ${glyphRow} |\r\n`
@@ -174,9 +159,7 @@ async function writeStaticContent(
 }
 
 async function refreshTerminalOnTab(page: Page, tabId: string): Promise<void> {
-  // Why: stands in for the steady output stream of a real agent session. The
-  // workspace shell is blocked, so without a repaint trigger the stale-model
-  // corruption would stay latent and the comparison would prove nothing.
+  // Force the repaint an active agent would produce or stale-model corruption stays latent.
   await page.evaluate((id) => {
     const manager = window.__paneManagers?.get(id)
     for (const pane of manager?.getPanes?.() ?? []) {
@@ -188,19 +171,13 @@ async function refreshTerminalOnTab(page: Page, tabId: string): Promise<void> {
   )
 }
 
-/**
- * True when both tabs' WebGL renderers draw from the same glyph texture atlas.
- * @xterm/addon-webgl keeps a module-global atlas cache keyed by font config,
- * so terminals with identical settings share pages — the precondition for the
- * cross-terminal corruption this spec reproduces.
- */
+// Identical font settings share xterm’s module-global atlas; confirm that precondition before testing cross-terminal corruption.
 async function tabsShareGlyphAtlas(page: Page, tabIdA: string, tabIdB: string): Promise<boolean> {
   return page.evaluate(
     ({ a, b }) => {
       const atlasCanvasOf = (tabId: string): HTMLCanvasElement | null => {
         const manager = window.__paneManagers?.get(tabId)
-        // Why: the public pane projection omits webglAddon; reach the internal
-        // pane map (runtime-visible) to compare addon.textureAtlas identity.
+        // Compare internal addon atlas identity because public pane projections omit webglAddon.
         const internalPanes = (
           manager as unknown as
             | { panes?: Map<number, { webglAddon?: { textureAtlas?: HTMLCanvasElement } | null }> }
@@ -233,8 +210,7 @@ async function screenshotWorkspaceTerminal(page: Page, ptyId: string): Promise<B
 }
 
 async function captureStableWorkspaceShot(page: Page, ptyId: string): Promise<Buffer> {
-  // Why: two consecutive identical captures prove the surface is byte-stable
-  // before screenshot-equality comparisons begin.
+  // Require consecutive identical captures before screenshot comparisons.
   let previous = await screenshotWorkspaceTerminal(page, ptyId)
   for (let attempt = 0; attempt < 10; attempt += 1) {
     await page.waitForTimeout(250)
@@ -248,8 +224,7 @@ async function captureStableWorkspaceShot(page: Page, ptyId: string): Promise<Bu
 }
 
 async function settleAtlasActivity(page: Page): Promise<void> {
-  // Why: atlas warm-up re-rasterization runs in idle callbacks and scheduled
-  // recovery resets fire up to 500ms after their trigger; wait past both.
+  // Outwait idle atlas warmup and the 500ms delayed recovery resets.
   await page.waitForTimeout(800)
 }
 
@@ -260,12 +235,7 @@ type SharedAtlasScenario = {
   baseline: Buffer
 }
 
-/**
- * Stage: a visible workspace terminal with stable static content, plus two
- * floating workspace terminal tabs whose WebGL renderers share its glyph
- * atlas. Returns a workspace baseline screenshot taken with the panel closed
- * (the panel can overlap the workspace terminal region).
- */
+// Stage a stable workspace plus two floating tabs sharing its atlas; capture with the overlay closed.
 async function setUpSharedAtlasScenario(page: Page): Promise<SharedAtlasScenario | null> {
   await waitForSessionReady(page)
   await waitForActiveWorktree(page)
@@ -285,8 +255,7 @@ async function setUpSharedAtlasScenario(page: Page): Promise<SharedAtlasScenario
     return null
   }
   await sendToTerminal(page, workspacePtyId, SILENT_FOREGROUND_COMMAND)
-  // Why: give the shell a beat to echo the command and start blocking before
-  // the screen is cleared; later captures verify stability explicitly.
+  // Let the foreground command block before clearing; later captures explicitly prove stability.
   await page.waitForTimeout(1_000)
   await writeStaticContent(page, workspaceTabId, 'WORKSPACE', WORKSPACE_GLYPH_ROW)
 
@@ -301,8 +270,7 @@ async function setUpSharedAtlasScenario(page: Page): Promise<SharedAtlasScenario
     await sendToTerminal(page, ptyId, SILENT_FOREGROUND_COMMAND)
   }
   await page.waitForTimeout(1_000)
-  // Why: the hidden second tab accepts writes too — its buffer paints on
-  // resume, refilling the cleared shared atlas with a different glyph layout.
+  // Hidden tabs refill cleared shared pages on resume with a different glyph layout.
   for (const tabId of floatingTabIds) {
     await writeStaticContent(page, tabId, 'FLOATING', FLOATING_GLYPH_ROW)
   }
@@ -312,18 +280,13 @@ async function setUpSharedAtlasScenario(page: Page): Promise<SharedAtlasScenario
     return null
   }
 
-  // Why: glyphs rasterized during startup can predate web font readiness; a
-  // clean rebuild here makes the baseline byte-identical to any later
-  // re-rasterization, so equality is a sound "intact" oracle.
+  // Rebuild after fonts settle so later re-rasterization matches the baseline.
   await resetAtlasOnTab(page, workspaceTabId)
   await settleAtlasActivity(page)
 
-  // Why: the panel overlay can cover the workspace terminal region, so all
-  // workspace screenshots are taken with the panel closed. Closing only
-  // suspends the floating renderer; it never mutates the shared atlas.
+  // Close the overlay for workspace screenshots; suspension alone does not mutate the atlas.
   await toggleFloatingPanel(page, false)
-  // Why: closing the panel can refit the workspace terminal; rebuild once more
-  // so the baseline model/atlas state matches the post-trigger capture path.
+  // Rebuild after close-triggered refit so baseline and post-trigger model state agree.
   await resetAtlasOnTab(page, workspaceTabId)
   const baseline = await captureStableWorkspaceShot(page, workspacePtyId)
 
@@ -335,8 +298,7 @@ async function captureWorkspaceAfterTrigger(
   scenario: SharedAtlasScenario
 ): Promise<Buffer> {
   await settleAtlasActivity(page)
-  // Why: a real agent session repaints continuously; the blocked test shell
-  // does not, so force the equivalent full repaint before comparing.
+  // Force the full repaint a live agent would produce before comparing.
   await refreshTerminalOnTab(page, scenario.workspaceTabId)
   return captureStableWorkspaceShot(page, scenario.workspacePtyId)
 }
@@ -345,19 +307,14 @@ test.describe('floating workspace shared glyph atlas @headful', () => {
   test('switching floating workspace tabs keeps workspace terminal glyphs intact', async ({
     orcaPage
   }, testInfo) => {
-    // Why: xterm WebGL terminals with identical font configs share one glyph
-    // texture atlas. The floating tab switch resumes a hidden renderer, whose
-    // atlas reset clears those shared pages; unless every sharing terminal
-    // rebuilds its render model too, the visible workspace terminal keeps
-    // stale glyph coordinates and paints garbage (the bug this guards).
+    // Resuming a floating renderer clears shared atlas pages; sibling models must invalidate their old glyph coordinates.
     const scenario = await setUpSharedAtlasScenario(orcaPage)
     test.skip(!scenario, 'WebGL inactive or terminals do not share a glyph atlas')
     const { baseline, floatingTabIds } = scenario!
 
     await toggleFloatingPanel(orcaPage, true)
     await activateFloatingTab(orcaPage, floatingTabIds[1])
-    // Why: the switched-to tab attaching WebGL proves the suspend/resume
-    // (and with it the atlas reset trigger) actually ran.
+    // Require WebGL attachment to prove the tab switch actually resumed rendering.
     expect(
       await waitForWebglOnTab(orcaPage, floatingTabIds[1]),
       'switched-to floating tab should resume WebGL'
@@ -368,20 +325,53 @@ test.describe('floating workspace shared glyph atlas @headful', () => {
     const afterSwitch = await captureWorkspaceAfterTrigger(orcaPage, scenario!)
     await testInfo.attach('baseline', { body: baseline, contentType: 'image/png' })
     await testInfo.attach('after-tab-switch', { body: afterSwitch, contentType: 'image/png' })
-    console.log(`[shared-atlas] tabSwitchIntact=${afterSwitch.equals(baseline)}`)
+    // Allow antialiasing noise below 1.5%; stale-model blanking affects ~3% of pixels.
+    const afterSwitchDiff = compareTerminalScreenshots(baseline, afterSwitch)
+    console.log(
+      `[shared-atlas] tabSwitchIntact=${afterSwitchDiff.matches} diffRatio=${afterSwitchDiff.diffRatio.toFixed(5)} diffPixels=${afterSwitchDiff.diffPixels}`
+    )
 
     expect(
-      afterSwitch.equals(baseline),
+      afterSwitchDiff.matches,
       'workspace terminal must render identically after floating tab switching'
+    ).toBe(true)
+  })
+
+  test('a sibling terminal clearing the shared atlas leaves workspace glyphs intact', async ({
+    orcaPage
+  }, testInfo) => {
+    // Clear the floating manager directly: reveal’s global reset would heal every pane and mask missing sibling invalidation.
+    const scenario = await setUpSharedAtlasScenario(orcaPage)
+    test.skip(!scenario, 'WebGL inactive or terminals do not share a glyph atlas')
+    const { baseline, workspacePtyId, floatingTabIds } = scenario!
+
+    // The panel stays closed: the workspace terminal must be the only thing repainting.
+    await resetAtlasOnTab(orcaPage, floatingTabIds[0])
+
+    // Refresh without rebuilding to exercise vertices still pointing into the wiped atlas.
+    await refreshTerminalOnTab(orcaPage, scenario!.workspaceTabId)
+    const afterSiblingClear = await captureStableWorkspaceShot(orcaPage, workspacePtyId)
+
+    await testInfo.attach('baseline', { body: baseline, contentType: 'image/png' })
+    await testInfo.attach('after-sibling-clear', {
+      body: afterSiblingClear,
+      contentType: 'image/png'
+    })
+    const afterSiblingClearDiff = compareTerminalScreenshots(baseline, afterSiblingClear)
+    console.log(
+      `[shared-atlas] siblingClearIntact=${afterSiblingClearDiff.matches} diffRatio=${afterSiblingClearDiff.diffRatio.toFixed(5)} diffPixels=${afterSiblingClearDiff.diffPixels}`
+    )
+
+    expect(
+      afterSiblingClearDiff.matches,
+      'workspace terminal must rebuild its model after a sibling wipes the shared atlas'
     ).toBe(true)
   })
 
   test('reopening the floating workspace keeps workspace terminal glyphs intact', async ({
     orcaPage
   }, testInfo) => {
-    // Why: reopening the panel resumes its terminal, whose atlas reset clears
-    // the shared pages just like a tab switch — the other user flow that
-    // garbled visible workspace terminals before resets went global.
+    // Panel reopen also resumes a renderer and clears shared pages, so siblings must invalidate then too.
     const scenario = await setUpSharedAtlasScenario(orcaPage)
     test.skip(!scenario, 'WebGL inactive or terminals do not share a glyph atlas')
     const { baseline } = scenario!
@@ -393,10 +383,13 @@ test.describe('floating workspace shared glyph atlas @headful', () => {
     const afterReopen = await captureWorkspaceAfterTrigger(orcaPage, scenario!)
     await testInfo.attach('baseline', { body: baseline, contentType: 'image/png' })
     await testInfo.attach('after-reopen', { body: afterReopen, contentType: 'image/png' })
-    console.log(`[shared-atlas] reopenIntact=${afterReopen.equals(baseline)}`)
+    const afterReopenDiff = compareTerminalScreenshots(baseline, afterReopen)
+    console.log(
+      `[shared-atlas] reopenIntact=${afterReopenDiff.matches} diffRatio=${afterReopenDiff.diffRatio.toFixed(5)} diffPixels=${afterReopenDiff.diffPixels}`
+    )
 
     expect(
-      afterReopen.equals(baseline),
+      afterReopenDiff.matches,
       'workspace terminal must render identically after a floating panel reopen'
     ).toBe(true)
   })

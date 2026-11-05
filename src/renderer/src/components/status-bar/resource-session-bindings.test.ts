@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import {
   buildResourceSessionBindingIndex,
-  countUnboundDaemonSessions
+  selectUnboundDaemonSessions
 } from './resource-session-bindings'
 
 function makeTab(id: string, ptyId: string | null = null): TerminalTab {
@@ -20,82 +20,29 @@ function makeTab(id: string, ptyId: string | null = null): TerminalTab {
   } as unknown as TerminalTab
 }
 
-function makeLayout(ptyIdsByLeafId: Record<string, string>): TerminalLayoutSnapshot {
-  return {
-    root: { type: 'leaf', leafId: 'leaf-1' },
-    activeLeafId: 'leaf-1',
-    expandedLeafId: null,
-    ptyIdsByLeafId
-  }
-}
-
 describe('resource session bindings', () => {
-  it('combines live PTYs with restored tab and split-pane wake hints', () => {
-    const index = buildResourceSessionBindingIndex({
-      ptyIdsByTabId: {
-        'tab-active': ['pty-live', 'pty-live']
-      },
-      tabsByWorktree: {
-        'repo::/workspace': [makeTab('tab-active'), makeTab('tab-restored', 'pty-restored')]
-      },
-      terminalLayoutsByTabId: {
-        'tab-restored': makeLayout({
-          'leaf-1': 'pty-leaf-a',
-          'leaf-2': 'pty-leaf-b'
-        })
-      },
-      workspaceSessionReady: true
-    })
-
-    expect(index.ptyIdToTabId).toEqual(
-      new Map([
-        ['pty-live', 'tab-active'],
-        ['pty-restored', 'tab-restored'],
-        ['pty-leaf-a', 'tab-restored'],
-        ['pty-leaf-b', 'tab-restored']
-      ])
-    )
-    expect([...index.boundPtyIds].sort()).toEqual([
-      'pty-leaf-a',
-      'pty-leaf-b',
-      'pty-live',
-      'pty-restored'
-    ])
-  })
-
-  it('ignores stale layout-only PTYs after their tab is gone', () => {
-    const index = buildResourceSessionBindingIndex({
+  it('binds a session deferred for SSH reattach so it is never offered for cleanup', () => {
+    const inputs = {
       ptyIdsByTabId: {},
-      tabsByWorktree: {
-        'repo::/workspace': [makeTab('tab-live', null)]
-      },
-      terminalLayoutsByTabId: {
-        'tab-closed': makeLayout({ 'leaf-1': 'pty-closed' })
-      },
+      tabsByWorktree: { 'repo::/workspace': [makeTab('tab-ssh')] },
+      terminalLayoutsByTabId: {},
+      deferredSshSessionIdsByTabId: { 'tab-ssh': 'pty-deferred' },
       workspaceSessionReady: true
-    })
+    }
 
-    expect(index.ptyIdToTabId.has('pty-closed')).toBe(false)
-    expect(index.boundPtyIds.has('pty-closed')).toBe(false)
-  })
-
-  it('counts only daemon sessions without live or restorable tab bindings', () => {
-    const count = countUnboundDaemonSessions(
-      [
-        { id: 'pty-live', cwd: '/workspace', title: 'live' },
-        { id: 'pty-restored', cwd: '/workspace', title: 'restored' },
-        { id: 'pty-orphan', cwd: '/tmp', title: 'orphan' }
-      ],
-      {
-        ptyIdsByTabId: { 'tab-live': ['pty-live'] },
-        tabsByWorktree: {
-          'repo::/workspace': [makeTab('tab-live'), makeTab('tab-restored', 'pty-restored')]
-        },
-        terminalLayoutsByTabId: {},
-        workspaceSessionReady: true
-      }
-    )
-
-    expect(count).toBe(1)
+    expect(buildResourceSessionBindingIndex(inputs).boundPtyIds.has('pty-deferred')).toBe(true)
+    expect(
+      selectUnboundDaemonSessions(
+        [
+          {
+            id: 'pty-deferred',
+            cwd: '/workspace',
+            title: 'agent',
+            agentOwnership: 'absent' as const
+          }
+        ],
+        inputs
+      )
+    ).toEqual([])
   })
 })

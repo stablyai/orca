@@ -1,0 +1,121 @@
+// @vitest-environment happy-dom
+
+import { act } from 'react'
+import { createRoot, type Root } from 'react-dom/client'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { TooltipProvider } from '@/components/ui/tooltip'
+import { useAppStore } from '@/store'
+import type { AppState } from '@/store/types'
+
+const fileListMock = vi.hoisted(() => ({
+  current: { files: [] as string[], loading: false, loadError: null as string | null }
+}))
+vi.mock('../quick-open-file-list', () => ({
+  useRuntimeFileListForWorktree: () => fileListMock.current
+}))
+
+const tabSearchMock = vi.hoisted(() => ({
+  calls: [] as { enabled: boolean; query: string }[],
+  results: [] as unknown[]
+}))
+vi.mock('./use-open-tab-search', () => ({
+  useOpenTabSearch: ({ enabled, query }: { enabled: boolean; query: string }) => {
+    tabSearchMock.calls.push({ enabled, query })
+    return { query, results: tabSearchMock.results }
+  }
+}))
+
+import TabBarCreateEntry from './TabBarCreateEntry'
+
+;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+let container: HTMLDivElement
+let root: Root
+
+function renderEntry(props: Record<string, unknown> = {}): void {
+  act(() => {
+    root.render(
+      <TooltipProvider>
+        <TabBarCreateEntry
+          worktreeId="wt"
+          groupId="g"
+          menuOpen
+          onOpenEntry={vi.fn().mockResolvedValue(undefined)}
+          {...props}
+        />
+      </TooltipProvider>
+    )
+  })
+}
+
+function setQuery(value: string): void {
+  const input = container.querySelector('input')!
+  const nativeSetter = Object.getOwnPropertyDescriptor(
+    window.HTMLInputElement.prototype,
+    'value'
+  )?.set
+  act(() => {
+    nativeSetter?.call(input, value)
+    input.dispatchEvent(new window.Event('input', { bubbles: true }))
+  })
+}
+
+function submit(): void {
+  act(() => {
+    container
+      .querySelector('form')!
+      .dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }))
+  })
+}
+
+beforeEach(() => {
+  fileListMock.current = { files: [], loading: false, loadError: null }
+  tabSearchMock.calls = []
+  tabSearchMock.results = []
+  useAppStore.setState(
+    { ...useAppStore.getInitialState(), browserDefaultSearchEngine: null } as AppState,
+    true
+  )
+  container = document.createElement('div')
+  document.body.appendChild(container)
+  root = createRoot(container)
+})
+
+afterEach(() => {
+  act(() => root.unmount())
+  container.remove()
+  vi.clearAllMocks()
+})
+
+describe('TabBarCreateEntry search behavior', () => {
+  it('disables the active submission and exposes failures to assistive technology', async () => {
+    let rejectOpen: ((error: Error) => void) | undefined
+    const onOpenEntry = vi.fn(
+      () =>
+        new Promise<void>((_resolve, reject) => {
+          rejectOpen = reject
+        })
+    )
+    renderEntry({ onOpenEntry })
+    setQuery('react hooks')
+    submit()
+
+    // Read-only rather than disabled so the pending input keeps keyboard focus.
+    expect(container.querySelector('input')?.disabled).toBe(false)
+    expect(container.querySelector('input')?.readOnly).toBe(true)
+    expect(container.querySelector('input')?.getAttribute('aria-busy')).toBe('true')
+    expect(container.querySelector<HTMLButtonElement>('[role="option"]')?.disabled).toBe(true)
+    expect(container.querySelector('[role="option"] .animate-spin')).not.toBeNull()
+
+    await act(async () => rejectOpen?.(new Error('Search failed safely.')))
+
+    const input = container.querySelector('input')!
+    expect(input.readOnly).toBe(false)
+    expect(input.getAttribute('aria-busy')).toBeNull()
+    expect(input.getAttribute('aria-expanded')).toBe('false')
+    expect(input.getAttribute('aria-errormessage')).toBe('tab-create-entry-error')
+    expect(container.querySelector('#tab-create-entry-error')?.textContent).toContain(
+      'Search failed safely.'
+    )
+  })
+})

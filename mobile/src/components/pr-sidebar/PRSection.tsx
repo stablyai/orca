@@ -1,24 +1,28 @@
 import type { ReactNode } from 'react'
 import { Text, View } from 'react-native'
 import { mobilePrSidebarStyles as styles } from './mobile-pr-sidebar-styles'
+import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 
 type Props = {
-  title: string
-  // Optional trailing control(s) in the header row (e.g. add-reviewer, checks
-  // summary + rerun). Rendered right-aligned opposite the title.
+  // Omit header for self-explanatory action sections to save mobile space.
+  title?: string
+  // Right-align optional header controls opposite title.
   trailing?: ReactNode
   children: ReactNode
 }
 
-// Shared card shell for the titled PR sections (Actions/Reviewers/Checks). Mirrors
-// the desktop PR page's card-with-header-divider so the sections read consistently.
+// Use consistent desktop-style section/header divider; omit header only when title and trailing controls both absent.
 export function PRSection({ title, trailing, children }: Props) {
+  useMobileColorScheme()
+  const showHeader = Boolean(title) || trailing != null
   return (
     <View style={styles.section}>
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionLabel}>{title}</Text>
-        {trailing ? <View style={styles.sectionHeaderTrailing}>{trailing}</View> : null}
-      </View>
+      {showHeader ? (
+        <View style={styles.sectionHeader}>
+          {title ? <Text style={styles.sectionLabel}>{title}</Text> : null}
+          {trailing ? <View style={styles.sectionHeaderTrailing}>{trailing}</View> : null}
+        </View>
+      ) : null}
       <View style={styles.sectionBody}>{children}</View>
     </View>
   )

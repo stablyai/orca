@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-09-11T04:33:34.954Z",
+  "platform": "darwin",
+  "command": ["agy"],
+  "cols": 120,
+  "rows": 40,
+  "note": "same session as antigravity-ready-api-key-gemini-model but with AGY_CLI_HIDE_ACCOUNT_INFO=1",
+  "exitCode": 0
+}

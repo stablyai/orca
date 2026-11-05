@@ -1,34 +1,52 @@
-import { z } from 'zod'
-import { defineStreamingMethod, defineMethod, type RpcAnyMethod } from '../core'
+import { createNotificationStreamFilter } from './notification-stream-policy'
+import { defineStreamingMethod, defineMethod, type RpcContext } from '../core'
+import type { OrcaRuntimeService } from '../../orca-runtime'
+import {
+  NotificationGetMissedSinceParams,
+  NotificationRegisterPushParams,
+  NotificationReportDesktopPresenceParams,
+  NotificationUnsubscribeParams,
+  NotificationsSubscribeParams
+} from '../../../../shared/rpc-contract/notifications-params'
 
-// Why: monotonically increasing per-process counter eliminates the
-// Date.now() collision that could fire when two near-simultaneous
-// notifications.subscribe calls landed on the same millisecond.
+// Use a per-process counter so same-millisecond subscriptions cannot collide.
 let notificationsSubscriptionSeq = 0
 
-const NotificationUnsubscribeParams = z.object({
-  subscriptionId: z
-    .unknown()
-    .transform((value) => (typeof value === 'string' && value.length > 0 ? value : ''))
-    .pipe(z.string().min(1, 'Missing subscriptionId'))
-})
+type DesktopPresenceReportContext = Pick<RpcContext, 'clientKind' | 'connectionId' | 'signal'> & {
+  runtime: Pick<OrcaRuntimeService, 'reportDesktopClientPresence' | 'registerSubscriptionCleanup'>
+}
 
-// Why: notifications.subscribe streams desktop notification events to mobile
-// clients over WebSocket. The mobile client shows a local push notification
-// for each event. This avoids requiring Firebase/APNs — the existing
-// persistent WebSocket connection doubles as the push channel.
-export const NOTIFICATION_METHODS: readonly RpcAnyMethod[] = [
+/** Only a paired desktop's own socket speaks for a desktop; the report lives as long as it. */
+export function reportDesktopPresence(
+  params: { away: boolean },
+  { runtime, clientKind, connectionId, signal }: DesktopPresenceReportContext
+): { recorded: boolean } {
+  // A closed socket already ran its cleanups, so a late report would never be forgotten.
+  if (clientKind !== 'runtime' || !connectionId || signal?.aborted) {
+    return { recorded: false }
+  }
+  runtime.reportDesktopClientPresence(connectionId, params.away, (forget) =>
+    runtime.registerSubscriptionCleanup(`desktop-presence-${connectionId}`, forget, connectionId)
+  )
+  return { recorded: true }
+}
+
+// Legacy callers retain filtered socket alerts; push clients opt into the full event stream.
+export const NOTIFICATION_METHODS = [
   defineStreamingMethod({
     name: 'notifications.subscribe',
-    params: null,
-    handler: async (_params, { runtime, connectionId }, emit) => {
+    permission: 'workspace',
+    params: NotificationsSubscribeParams,
+    handler: async (params, { runtime, connectionId }, emit) => {
+      const shouldEmit = createNotificationStreamFilter(params?.includeDesktopSuppressed)
       await new Promise<void>((resolve) => {
         const unsubscribe = runtime.onNotificationDispatched((event) => {
-          emit(event)
+          if (shouldEmit(event)) {
+            emit(event)
+          }
         })
 
-        // Why: scope by per-ws connectionId + per-process counter so
-        // concurrent subscribes never collide on the cleanup map.
+        // Key cleanup by socket plus sequence so concurrent subscriptions cannot evict each other.
         const seq = ++notificationsSubscriptionSeq
         const subscriptionId = `notifications-${connectionId ?? 'inproc'}-${seq}`
         runtime.registerSubscriptionCleanup(
@@ -41,16 +59,78 @@ export const NOTIFICATION_METHODS: readonly RpcAnyMethod[] = [
           connectionId
         )
 
-        emit({ type: 'ready', subscriptionId })
+        // Send epoch before the reconnect watermark so getMissedSince knows the counter lifetime (#8591).
+        emit({ type: 'ready', subscriptionId, epoch: runtime.getMobileNotificationEpoch() })
       })
     }
   }),
   defineMethod({
     name: 'notifications.unsubscribe',
+    permission: 'workspace',
     params: NotificationUnsubscribeParams,
     handler: async (params, { runtime }) => {
       runtime.cleanupSubscription(params.subscriptionId)
       return { unsubscribed: true }
+    }
+  }),
+  defineMethod({
+    name: 'notifications.getMissedSince',
+    permission: 'workspace',
+    params: NotificationGetMissedSinceParams,
+    // Runtime sequence/epoch is authoritative for notifications missed while the socket was reaped.
+    handler: async (params, { runtime }) => {
+      const missed = runtime.getMissedNotificationsSince(params.lastSeenSeq, params.epoch)
+      return {
+        notifications: missed.filter(
+          createNotificationStreamFilter(params.includeDesktopSuppressed)
+        ),
+        epoch: runtime.getMobileNotificationEpoch(),
+        ...(params.deliveredPushes
+          ? { dismissedPushes: runtime.reconcileDismissedPushes(params.deliveredPushes) }
+          : {})
+      }
+    }
+  }),
+  defineMethod({
+    name: 'notifications.reportDesktopPresence',
+    permission: 'workspace',
+    params: NotificationReportDesktopPresenceParams,
+    handler: async (params, context) => reportDesktopPresence(params, context)
+  }),
+  defineMethod({
+    name: 'notifications.registerPush',
+    permission: 'pairing-admin',
+    params: NotificationRegisterPushParams,
+    // Register only the transport-proven revocable mobile device; CLI/in-process callers have no device identity.
+    handler: async (params, { runtime, clientKind, pairedDeviceId }) => {
+      if (clientKind !== 'mobile' || !pairedDeviceId) {
+        return { registered: false, reason: 'not_mobile' }
+      }
+      // The paired identity is spread last so no parameter can ever override it.
+      return await runtime.registerMobilePushDevice({ ...params, deviceId: pairedDeviceId })
+    }
+  }),
+  defineMethod({
+    name: 'notifications.testPush',
+    permission: 'pairing-admin',
+    params: null,
+    handler: async (_params, { runtime, clientKind, pairedDeviceId }) => {
+      if (clientKind !== 'mobile' || !pairedDeviceId) {
+        return { accepted: false, reason: 'not_registered' }
+      }
+      return await runtime.testMobilePushDevice(pairedDeviceId)
+    }
+  }),
+  defineMethod({
+    name: 'notifications.unregisterPush',
+    permission: 'pairing-admin',
+    params: null,
+    // Durable gateway deletion lets unregister succeed even while the gateway is offline.
+    handler: async (_params, { runtime, clientKind, pairedDeviceId }) => {
+      if (clientKind !== 'mobile' || !pairedDeviceId) {
+        return { unregistered: false }
+      }
+      return await runtime.unregisterMobilePushDevice(pairedDeviceId)
     }
   })
 ]

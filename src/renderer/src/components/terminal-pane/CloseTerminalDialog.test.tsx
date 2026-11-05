@@ -4,6 +4,11 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import CloseTerminalDialog from './CloseTerminalDialog'
+import { translate } from '@/i18n/i18n'
+
+vi.mock('@/i18n/i18n', () => ({
+  translate: vi.fn((_key: string, fallback: string) => fallback)
+}))
 
 const mountedRoots: Root[] = []
 
@@ -49,6 +54,22 @@ describe('CloseTerminalDialog', () => {
     document.body.innerHTML = ''
   })
 
+  it('does no dialog-copy work while closed, then builds the opened confirmation', async () => {
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    mountedRoots.push(root)
+    const props = { onCancel: vi.fn(), onConfirm: vi.fn() }
+    vi.mocked(translate).mockClear()
+
+    await act(async () => root.render(<CloseTerminalDialog open={false} {...props} />))
+    expect(translate).not.toHaveBeenCalled()
+
+    await act(async () => root.render(<CloseTerminalDialog open {...props} />))
+    expect(document.body.textContent).toContain('Stop running command?')
+    expect(translate).toHaveBeenCalled()
+  })
+
   it('renders running command copy and confirms without skipping by default', async () => {
     const onConfirm = vi.fn()
 
@@ -87,5 +108,33 @@ describe('CloseTerminalDialog', () => {
     })
 
     expect(onConfirm).toHaveBeenCalledWith(true)
+  })
+
+  it('resets the skip preference when the dialog closes and reopens', async () => {
+    const onConfirm = vi.fn()
+    const onCancel = vi.fn()
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    mountedRoots.push(root)
+    const render = async (open: boolean): Promise<void> => {
+      await act(async () => {
+        root.render(<CloseTerminalDialog open={open} onCancel={onCancel} onConfirm={onConfirm} />)
+      })
+    }
+
+    await render(true)
+    const checkbox = document.body.querySelector<HTMLButtonElement>('[role="checkbox"]')
+    await act(async () => {
+      checkbox?.click()
+    })
+    expect(checkbox?.getAttribute('aria-checked')).toBe('true')
+
+    await render(false)
+    await render(true)
+
+    expect(document.body.querySelector('[role="checkbox"]')?.getAttribute('aria-checked')).toBe(
+      'false'
+    )
   })
 })

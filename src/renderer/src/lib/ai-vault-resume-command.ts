@@ -1,186 +1,125 @@
 import {
-  buildAiVaultResumeCommand,
-  buildAiVaultResumeShellCommand,
-  type AiVaultSession
-} from '../../../shared/ai-vault-types'
+  assertAntigravityReferenceTarget,
+  buildAntigravityReferenceStartup
+} from './ai-vault-antigravity-reference-startup'
+import { isAntigravityReferenceSession } from '../../../shared/antigravity-session-origin'
+import { normalizeAiVaultResumeFilePath } from '../../../shared/ai-vault/resume/ai-vault-resume-path'
+import type { AiVaultSessionDragPayload } from '@/lib/ai-vault-session-drag'
+import { resolveAiVaultResumeStartupShell } from '@/lib/ai-vault-resume-shell'
 import {
-  isResumableTuiAgent,
-  type SleepingAgentLaunchConfig
-} from '../../../shared/agent-session-resume'
+  getAiVaultResumePlatform,
+  type AiVaultResumePlatformState
+} from '@/lib/ai-vault-resume-platform'
 import {
-  resolveTuiAgentLaunchArgs,
-  resolveTuiAgentLaunchEnv
-} from '../../../shared/tui-agent-launch-defaults'
-import { parseWslUncPath } from '../../../shared/wsl-paths'
-import { resolveWindowsShellStartupFamily } from '../../../shared/windows-terminal-shell'
-import type { AgentStartupShell } from '../../../shared/tui-agent-startup-shell'
-import type { AppState } from '@/store/types'
-import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
-import { CLIENT_PLATFORM } from '@/lib/new-workspace'
-import { buildAgentResumeStartupPlan } from '@/lib/tui-agent-startup'
-import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
-import { parseExecutionHostId } from '../../../shared/execution-host'
-import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+  buildAiVaultLocalResumeStartup,
+  type AiVaultResumeCommandSession,
+  type AiVaultResumeHostShell,
+  type AiVaultResumeStartup
+} from '../../../shared/ai-vault/resume/ai-vault-resume-startup'
+import {
+  buildAiVaultRemoteResumeStartup,
+  resolveAiVaultResumeHostShell
+} from '../../../shared/ai-vault/resume/ai-vault-resume-host-startup'
 
-type AiVaultResumeCommandSession = Pick<AiVaultSession, 'agent' | 'sessionId' | 'cwd' | 'codexHome'>
-
-export type AiVaultResumeStartup = {
-  command: string
-  env?: Record<string, string>
-  launchConfig?: SleepingAgentLaunchConfig
-}
-
-export function buildAiVaultResumeCommandForWorktree(args: {
-  state: Pick<
-    AppState,
-    | 'activeRepoId'
-    | 'activeWorktreeId'
-    | 'folderWorkspaces'
-    | 'projectGroups'
-    | 'projects'
-    | 'repos'
-    | 'settings'
-    | 'worktreesByRepo'
-  >
+export type AiVaultResumeWorktreeArgs = {
+  state: AiVaultResumePlatformState
   worktreeId?: string | null
   session: AiVaultResumeCommandSession
   commandOverride?: string | null
-}): string {
-  return buildAiVaultResumeStartupForWorktree(args).command
+  agentArgs?: string
 }
 
-export function buildAiVaultResumeStartupForWorktree(args: {
-  state: Pick<
-    AppState,
-    | 'activeRepoId'
-    | 'activeWorktreeId'
-    | 'folderWorkspaces'
-    | 'projectGroups'
-    | 'projects'
-    | 'repos'
-    | 'settings'
-    | 'worktreesByRepo'
-  >
-  worktreeId?: string | null
-  session: AiVaultResumeCommandSession
-  commandOverride?: string | null
-}): AiVaultResumeStartup {
-  const platform = getAiVaultResumePlatform(args.state, args.worktreeId)
-  const codexHome = getAiVaultResumeCodexHome(args.session.codexHome, platform)
-  // Why: the queued command is typed verbatim into the freshly spawned tab whose
-  // live shell is the configured Windows shell (default PowerShell). Hardcoding
-  // cmd quoting made PowerShell mis-parse the `""`-doubled wrapper (#6152), so
-  // resolve the actual shell to quote per-shell instead.
-  const queuedShell: AgentStartupShell | undefined =
-    platform === 'win32'
-      ? resolveWindowsShellStartupFamily(args.state.settings?.terminalWindowsShell)
+export function buildAiVaultResumeCopyCommandForWorktree(args: AiVaultResumeWorktreeArgs): string {
+  // Copied lines run in unknown shells; env -u avoids fish_pid probing that aborts under set -u before agent launch (#14863).
+  const clearEnvNames =
+    args.session.agent === 'codex' && args.session.codexHome === null
+      ? (['CODEX_HOME', 'ORCA_CODEX_HOME'] as const)
       : undefined
-  if (isResumableTuiAgent(args.session.agent)) {
-    const startupPlan = buildAgentResumeStartupPlan({
-      agent: args.session.agent,
-      providerSession: { key: 'session_id', id: args.session.sessionId },
-      cmdOverrides: {
-        ...args.state.settings?.agentCmdOverrides,
-        ...(args.commandOverride?.trim() ? { [args.session.agent]: args.commandOverride } : {})
-      },
-      platform,
-      shell: queuedShell,
-      agentArgs: resolveTuiAgentLaunchArgs(
-        args.session.agent,
-        args.state.settings?.agentDefaultArgs
-      ),
-      agentEnv: resolveTuiAgentLaunchEnv(args.session.agent, args.state.settings?.agentDefaultEnv)
-    })
-    if (startupPlan) {
-      return {
-        command: buildAiVaultResumeShellCommand({
-          resumeCommand: startupPlan.launchCommand,
-          cwd: args.session.cwd,
-          platform,
-          codexHome,
-          shell: queuedShell
-        }),
-        ...(startupPlan.env ? { env: startupPlan.env } : {}),
-        launchConfig: startupPlan.launchConfig
-      }
-    }
-  }
-
-  return {
-    command: buildAiVaultResumeCommand({
-      agent: args.session.agent,
-      sessionId: args.session.sessionId,
-      cwd: args.session.cwd,
-      platform,
-      commandOverride: args.commandOverride,
-      codexHome
-    })
-  }
+  return buildAiVaultResumeForWorktree(args, true, clearEnvNames).command
 }
 
-function getAiVaultResumeCodexHome(
-  codexHome: string | null,
-  platform: NodeJS.Platform
-): string | null {
-  // Why: WSL UNC Codex homes must be POSIX when invoking Linux commands.
-  // Keep original paths unchanged for non-Linux targets.
-  if (!codexHome || platform !== 'linux') {
-    return codexHome
-  }
-  return parseWslUncPath(codexHome)?.linuxPath ?? codexHome
+export function buildAiVaultResumeStartupForWorktree(
+  args: AiVaultResumeWorktreeArgs
+): AiVaultResumeStartup {
+  return buildAiVaultResumeForWorktree(args, false)
 }
 
-export function getAiVaultResumePlatform(
-  state: Pick<
-    AppState,
-    | 'activeRepoId'
-    | 'activeWorktreeId'
-    | 'folderWorkspaces'
-    | 'projectGroups'
-    | 'projects'
-    | 'repos'
-    | 'settings'
-    | 'worktreesByRepo'
-  >,
-  worktreeId?: string | null
-): NodeJS.Platform {
-  const targetWorktreeId = worktreeId ?? state.activeWorktreeId
-  const executionHost = parseExecutionHostId(getExecutionHostIdForWorktree(state, targetWorktreeId))
-  if (executionHost?.kind === 'ssh' || executionHost?.kind === 'runtime') {
-    return 'linux'
-  }
-
-  const projectRuntime = getLocalProjectExecutionRuntimeContext(state, worktreeId, CLIENT_PLATFORM)
-  if (projectRuntime?.status === 'repair-required') {
-    return projectRuntime.repair.preferredRuntime.kind === 'wsl' ? 'linux' : CLIENT_PLATFORM
-  }
-  if (projectRuntime?.status === 'resolved' && projectRuntime.runtime.kind === 'wsl') {
-    return 'linux'
-  }
-
-  const workspacePath = getAiVaultResumeWorkspacePath(state, targetWorktreeId)
-  return workspacePath && parseWslUncPath(workspacePath) ? 'linux' : CLIENT_PLATFORM
-}
-
-function getAiVaultResumeWorkspacePath(
-  state: Pick<AppState, 'folderWorkspaces' | 'worktreesByRepo'>,
-  worktreeId: string | null | undefined
-): string | null {
-  if (!worktreeId) {
+/** Rebuild with the substituted account home; the prebuilt command pins the wrong account. null cwd means no cd; absent cwd is an older payload whose original directory cannot be recovered. */
+export function buildAiVaultDropRepinStartup(args: {
+  state: AiVaultResumeWorktreeArgs['state']
+  payload: Pick<
+    AiVaultSessionDragPayload,
+    'agent' | 'sessionId' | 'sessionCwd' | 'sessionExecutionHostId' | 'sessionFilePath'
+  >
+  substituteCodexHome: string
+  worktreeId: string
+}): AiVaultResumeStartup | null {
+  if (args.payload.sessionCwd === undefined || !args.payload.sessionFilePath) {
     return null
   }
-  const workspaceScope = parseWorkspaceKey(worktreeId)
-  if (workspaceScope?.type === 'folder') {
-    return (
-      state.folderWorkspaces.find((workspace) => workspace.id === workspaceScope.folderWorkspaceId)
-        ?.folderPath ?? null
-    )
+  return buildAiVaultResumeStartupForWorktree({
+    state: args.state,
+    worktreeId: args.worktreeId,
+    session: {
+      agent: args.payload.agent,
+      sessionId: args.payload.sessionId,
+      cwd: args.payload.sessionCwd,
+      codexHome: args.substituteCodexHome,
+      executionHostId: args.payload.sessionExecutionHostId,
+      filePath: args.payload.sessionFilePath
+    },
+    commandOverride: args.state.settings?.agentCmdOverrides?.[args.payload.agent]
+  })
+}
+
+function buildAiVaultResumeForWorktree(
+  args: AiVaultResumeWorktreeArgs,
+  embedCwd: boolean,
+  /** Copied lines strip env from the agent command; spawned startups use envToDelete. */
+  clearEnvNames?: readonly string[]
+): AiVaultResumeStartup {
+  assertAntigravityReferenceTarget(args)
+  const remote = buildAiVaultRemoteResumeStartup(args.session, args.commandOverride)
+  if (remote) {
+    return remote
   }
-  const targetWorktreeId =
-    workspaceScope?.type === 'worktree' ? workspaceScope.worktreeId : worktreeId
-  return (
-    Object.values(state.worktreesByRepo ?? {})
-      .flat()
-      .find((candidate) => candidate.id === targetWorktreeId)?.path ?? null
-  )
+  const host = resolveAiVaultResumeHost(args)
+  if (isAntigravityReferenceSession(args.session)) {
+    const reference = buildAntigravityReferenceStartup({
+      session: {
+        ...args.session,
+        filePath: normalizeAiVaultResumeFilePath(args.session.filePath, host.platform)
+      },
+      cwd: embedCwd ? args.session.cwd : null,
+      platform: host.platform,
+      shell: host.liveShell,
+      commandOverride: args.commandOverride,
+      settings: args.state.settings
+    })
+    if (reference) {
+      return { ...reference, ...(!embedCwd && args.session.cwd ? { cwd: args.session.cwd } : {}) }
+    }
+  }
+  return buildAiVaultLocalResumeStartup({
+    session: args.session,
+    host,
+    settings: args.state.settings,
+    commandOverride: args.commandOverride,
+    agentArgs: args.agentArgs,
+    embedCwd,
+    clearEnvNames
+  })
+}
+
+export function resolveAiVaultResumeHost(args: AiVaultResumeWorktreeArgs): AiVaultResumeHostShell {
+  return resolveAiVaultResumeHostShell({
+    session: args.session,
+    workspacePlatform: getAiVaultResumePlatform(args.state, args.worktreeId),
+    localLiveShell: (platform) =>
+      resolveAiVaultResumeStartupShell({
+        state: args.state,
+        worktreeId: args.worktreeId,
+        platform
+      })
+  })
 }

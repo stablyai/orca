@@ -1,0 +1,1 @@
+export const DISPATCH_CIRCUIT_BREAK_FAILURES = 3

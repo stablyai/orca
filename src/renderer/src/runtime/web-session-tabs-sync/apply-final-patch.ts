@@ -1,0 +1,192 @@
+import { collectCollidingRetractionPaneKeys } from './retraction-pane-ownership'
+import type { WebSessionTabsSyncState } from './state'
+import type { applyActiveStateUpdates } from './apply-active-state'
+import { buildMirroredAgentStatusPatch } from './agent-status-patch'
+import { buildMirroredRuntimePaneTitlePatch } from './runtime-pane-title-patch'
+import {
+  buildRemirroredClosedTabMarkerLiftPatch,
+  buildRetractedMirroredTabSweepPatch
+} from './agent-status-primitives'
+import { isWebSessionTabsWorktreeRemovalFrame } from './session-tabs-inventory-absence'
+import { adoptMirroredEditorBuffers } from '../../store/slices/editor/buffers/editor-buffer-record'
+import { buildEditorBufferViewIndex } from '../../store/slices/editor/buffers/editor-buffer-views'
+import { editorBufferIdForFile } from '../../store/slices/editor/buffers/editor-buffer-identity-cache'
+
+type FinalPatchContext = ReturnType<typeof applyActiveStateUpdates>
+
+export function buildWebSessionTabsFinalPatch(
+  context: FinalPatchContext
+): WebSessionTabsSyncState | Partial<WebSessionTabsSyncState> {
+  const {
+    state,
+    snapshot,
+    environmentId,
+    worktreeId,
+    now,
+    batchContext,
+    currentTerminalTabs,
+    terminalSurfaceTabs,
+    mirroredTerminalTabs,
+    nextTabsByWorktree,
+    removedTerminalResourceIds,
+    mirroredTerminalIds,
+    nextOpenFiles,
+    nextBrowserTabsByWorktree,
+    nextUnifiedTabsByWorktree,
+    nextGroupsByWorktree,
+    nextActiveGroupIdByWorktree,
+    nextLayoutByWorktree,
+    nextTabBarOrderByWorktree,
+    nextPtyIdsByTabId,
+    nextTerminalLayoutsByTabId,
+    nextLocalOnlyScrollbackByTabId,
+    nextUnreadTerminalTabs,
+    pendingStartupByTabId,
+    nextPendingStartupByTabId,
+    automaticAgentResumeClaimsByTabId,
+    nextAutomaticAgentResumeClaimsByTabId,
+    nextBrowserPagesByWorkspace,
+    nextRemoteBrowserPageHandlesByPageId,
+    nextBrowserCertificateFailuresByPageId,
+    nextActiveTabIdByWorktree,
+    nextActiveBrowserTabIdByWorktree,
+    nextActiveFileIdByWorktree,
+    nextActiveTabId,
+    nextActiveBrowserTabId,
+    nextActiveFileId,
+    nextActiveTabType,
+    nextActiveTabTypeByWorktree
+  } = context
+
+  // Capture ownership before the batch reducer removes rows from its mutable state.
+  const retractionPaneKeys = collectCollidingRetractionPaneKeys(
+    state,
+    removedTerminalResourceIds,
+    environmentId,
+    worktreeId,
+    batchContext
+  )
+  const runtimePaneTitlePatch =
+    context.options?.terminalPtyMode === 'local'
+      ? null
+      : buildMirroredRuntimePaneTitlePatch(
+          state,
+          mirroredTerminalTabs,
+          terminalSurfaceTabs,
+          now,
+          batchContext
+        )
+  const agentStatusPatch = buildMirroredAgentStatusPatch(
+    state,
+    currentTerminalTabs,
+    terminalSurfaceTabs,
+    mirroredTerminalTabs,
+    environmentId,
+    worktreeId,
+    new Set(isWebSessionTabsWorktreeRemovalFrame(snapshot) ? [] : removedTerminalResourceIds),
+    now,
+    batchContext
+  )
+  // A tombstone clears this host's view of a worktree; it is not a terminal retraction.
+  const retractedTabSweepPatch = isWebSessionTabsWorktreeRemovalFrame(snapshot)
+    ? null
+    : buildRetractedMirroredTabSweepPatch(
+        state,
+        nextTabsByWorktree,
+        agentStatusPatch,
+        removedTerminalResourceIds,
+        retractionPaneKeys,
+        batchContext
+      )
+  const remirroredClosedTabLiftPatch = buildRemirroredClosedTabMarkerLiftPatch(
+    retractedTabSweepPatch?.recentlyClosedAgentStatusTabIds ??
+      state.recentlyClosedAgentStatusTabIds,
+    mirroredTerminalIds
+  )
+
+  const adoptedEditorBuffers =
+    nextOpenFiles === state.openFiles
+      ? null
+      : adoptMirroredEditorBuffers(
+          state.editorBuffers,
+          nextOpenFiles,
+          // Live view index preserves sticky detachments; resolve new views like record middleware so same-file host views share records.
+          buildEditorBufferViewIndex(
+            nextOpenFiles,
+            (file) => state.editorBufferIdOf?.[file.id] ?? editorBufferIdForFile(file, state)
+          )
+        )
+
+  const patch: Partial<WebSessionTabsSyncState> = {
+    ...runtimePaneTitlePatch,
+    ...agentStatusPatch,
+    ...retractedTabSweepPatch,
+    ...remirroredClosedTabLiftPatch,
+    ...(adoptedEditorBuffers
+      ? { openFiles: adoptedEditorBuffers.views, editorBuffers: adoptedEditorBuffers.editorBuffers }
+      : {}),
+    ...(nextTabsByWorktree !== state.tabsByWorktree ? { tabsByWorktree: nextTabsByWorktree } : {}),
+    ...(nextBrowserTabsByWorktree !== state.browserTabsByWorktree
+      ? { browserTabsByWorktree: nextBrowserTabsByWorktree }
+      : {}),
+    ...(nextUnifiedTabsByWorktree !== state.unifiedTabsByWorktree
+      ? { unifiedTabsByWorktree: nextUnifiedTabsByWorktree }
+      : {}),
+    ...(nextGroupsByWorktree !== state.groupsByWorktree
+      ? { groupsByWorktree: nextGroupsByWorktree }
+      : {}),
+    ...(nextActiveGroupIdByWorktree !== state.activeGroupIdByWorktree
+      ? { activeGroupIdByWorktree: nextActiveGroupIdByWorktree }
+      : {}),
+    ...(nextLayoutByWorktree !== state.layoutByWorktree
+      ? { layoutByWorktree: nextLayoutByWorktree }
+      : {}),
+    ...(nextTabBarOrderByWorktree !== state.tabBarOrderByWorktree
+      ? { tabBarOrderByWorktree: nextTabBarOrderByWorktree }
+      : {}),
+    ...(nextPtyIdsByTabId !== state.ptyIdsByTabId ? { ptyIdsByTabId: nextPtyIdsByTabId } : {}),
+    ...(nextTerminalLayoutsByTabId !== state.terminalLayoutsByTabId
+      ? { terminalLayoutsByTabId: nextTerminalLayoutsByTabId }
+      : {}),
+    ...(nextLocalOnlyScrollbackByTabId !== state.localOnlyScrollbackByTabId
+      ? { localOnlyScrollbackByTabId: nextLocalOnlyScrollbackByTabId }
+      : {}),
+    ...(nextUnreadTerminalTabs !== state.unreadTerminalTabs
+      ? { unreadTerminalTabs: nextUnreadTerminalTabs }
+      : {}),
+    ...(nextPendingStartupByTabId !== pendingStartupByTabId
+      ? { pendingStartupByTabId: nextPendingStartupByTabId }
+      : {}),
+    ...(nextAutomaticAgentResumeClaimsByTabId !== automaticAgentResumeClaimsByTabId
+      ? { automaticAgentResumeClaimsByTabId: nextAutomaticAgentResumeClaimsByTabId }
+      : {}),
+    ...(nextBrowserPagesByWorkspace !== state.browserPagesByWorkspace
+      ? { browserPagesByWorkspace: nextBrowserPagesByWorkspace }
+      : {}),
+    ...(nextRemoteBrowserPageHandlesByPageId !== state.remoteBrowserPageHandlesByPageId
+      ? { remoteBrowserPageHandlesByPageId: nextRemoteBrowserPageHandlesByPageId }
+      : {}),
+    ...(nextBrowserCertificateFailuresByPageId !== state.browserCertificateFailuresByPageId
+      ? { browserCertificateFailuresByPageId: nextBrowserCertificateFailuresByPageId }
+      : {}),
+    ...(nextActiveTabIdByWorktree !== state.activeTabIdByWorktree
+      ? { activeTabIdByWorktree: nextActiveTabIdByWorktree }
+      : {}),
+    ...(nextActiveBrowserTabIdByWorktree !== state.activeBrowserTabIdByWorktree
+      ? { activeBrowserTabIdByWorktree: nextActiveBrowserTabIdByWorktree }
+      : {}),
+    ...(nextActiveFileIdByWorktree !== state.activeFileIdByWorktree
+      ? { activeFileIdByWorktree: nextActiveFileIdByWorktree }
+      : {}),
+    ...(nextActiveTabId !== state.activeTabId ? { activeTabId: nextActiveTabId } : {}),
+    ...(nextActiveBrowserTabId !== state.activeBrowserTabId
+      ? { activeBrowserTabId: nextActiveBrowserTabId }
+      : {}),
+    ...(nextActiveFileId !== state.activeFileId ? { activeFileId: nextActiveFileId } : {}),
+    ...(nextActiveTabType !== state.activeTabType ? { activeTabType: nextActiveTabType } : {}),
+    ...(nextActiveTabTypeByWorktree !== state.activeTabTypeByWorktree
+      ? { activeTabTypeByWorktree: nextActiveTabTypeByWorktree }
+      : {})
+  }
+  return Object.keys(patch).length === 0 ? state : patch
+}

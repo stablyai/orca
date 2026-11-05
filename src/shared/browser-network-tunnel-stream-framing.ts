@@ -1,0 +1,202 @@
+const LENGTH_BYTES = 4
+const DEFAULT_MAX_FRAME_BYTES = 64 * 1024 + 16
+const DEFAULT_MAX_RETAINED_BYTES = 2 * 1024 * 1024
+const DEFAULT_MAX_QUEUED_BYTES = 1024 * 1024
+const DEFAULT_MAX_QUEUED_FRAMES = 512
+
+// Single source of truth so writer admission reserves exactly what encoding allocates.
+function encodedFrameByteLength(frame: Uint8Array): number {
+  return LENGTH_BYTES + frame.byteLength
+}
+
+export function encodeBrowserNetworkTunnelStreamFrame(frame: Uint8Array): Uint8Array {
+  if (frame.byteLength === 0 || frame.byteLength > DEFAULT_MAX_FRAME_BYTES) {
+    throw new Error('browser_tunnel_stream_frame_invalid')
+  }
+  const encoded = new Uint8Array(encodedFrameByteLength(frame))
+  new DataView(encoded.buffer).setUint32(0, frame.byteLength, false)
+  encoded.set(frame, LENGTH_BYTES)
+  return encoded
+}
+
+export class BrowserNetworkTunnelStreamFrameDecoder {
+  private readonly header = new Uint8Array(LENGTH_BYTES)
+  private headerBytes = 0
+  private frame: Uint8Array | null = null
+  private frameBytes = 0
+  private closed = false
+
+  constructor(
+    private readonly onFrame: (frame: Uint8Array) => void,
+    private readonly onError: (error: Error) => void,
+    private readonly maxFrameBytes = DEFAULT_MAX_FRAME_BYTES,
+    private readonly maxRetainedBytes = DEFAULT_MAX_RETAINED_BYTES
+  ) {}
+
+  feed(chunk: Uint8Array): void {
+    if (this.closed || chunk.byteLength === 0) {
+      return
+    }
+    if (this.headerBytes + this.frameBytes + chunk.byteLength > this.maxRetainedBytes) {
+      this.fail(new Error('browser_tunnel_stream_buffer_overflow'))
+      return
+    }
+    let offset = 0
+    while (offset < chunk.byteLength) {
+      if (this.headerBytes < LENGTH_BYTES) {
+        let length: number
+        if (this.headerBytes === 0 && chunk.byteLength - offset >= LENGTH_BYTES) {
+          length = new DataView(chunk.buffer, chunk.byteOffset + offset, LENGTH_BYTES).getUint32(
+            0,
+            false
+          )
+          this.headerBytes = LENGTH_BYTES
+          offset += LENGTH_BYTES
+        } else {
+          const count = Math.min(LENGTH_BYTES - this.headerBytes, chunk.byteLength - offset)
+          this.header.set(chunk.subarray(offset, offset + count), this.headerBytes)
+          this.headerBytes += count
+          offset += count
+          if (this.headerBytes < LENGTH_BYTES) {
+            return
+          }
+          length = new DataView(this.header.buffer).getUint32(0, false)
+        }
+        if (length === 0 || length > this.maxFrameBytes) {
+          this.fail(new Error('browser_tunnel_stream_frame_invalid'))
+          return
+        }
+        this.frame = new Uint8Array(length)
+      }
+      const frame = this.frame!
+      const count = Math.min(frame.byteLength - this.frameBytes, chunk.byteLength - offset)
+      frame.set(chunk.subarray(offset, offset + count), this.frameBytes)
+      this.frameBytes += count
+      offset += count
+      if (this.frameBytes < frame.byteLength) {
+        return
+      }
+      this.frame = null
+      this.frameBytes = 0
+      this.headerBytes = 0
+      try {
+        this.onFrame(frame)
+      } catch (error) {
+        this.fail(error instanceof Error ? error : new Error(String(error)))
+        return
+      }
+      if (this.closed) {
+        return
+      }
+    }
+  }
+
+  close(): void {
+    this.closed = true
+    this.frame = null
+    this.frameBytes = 0
+    this.headerBytes = 0
+  }
+
+  private fail(error: Error): void {
+    if (this.closed) {
+      return
+    }
+    this.close()
+    this.onError(error)
+  }
+}
+
+type StreamWrite = (bytes: Uint8Array, callback: (error?: Error | null) => void) => void
+
+type StreamFrameWriterOptions = {
+  maxQueuedBytes?: number
+  maxQueuedFrames?: number
+}
+
+export class BrowserNetworkTunnelStreamFrameWriter {
+  private readonly frames: Uint8Array[] = []
+  private readonly maxQueuedBytes: number
+  private readonly maxQueuedFrames: number
+  private retainedBytes = 0
+  private writing = false
+  private closed = false
+
+  constructor(
+    private readonly write: StreamWrite,
+    private readonly onError: (error: Error) => void,
+    options: StreamFrameWriterOptions = {}
+  ) {
+    this.maxQueuedBytes = options.maxQueuedBytes ?? DEFAULT_MAX_QUEUED_BYTES
+    this.maxQueuedFrames = options.maxQueuedFrames ?? DEFAULT_MAX_QUEUED_FRAMES
+  }
+
+  get queuedBytes(): number {
+    return this.retainedBytes
+  }
+
+  send(frame: Uint8Array): boolean {
+    if (this.closed) {
+      return false
+    }
+    if (
+      this.retainedBytes + encodedFrameByteLength(frame) > this.maxQueuedBytes ||
+      this.frames.length + (this.writing ? 1 : 0) >= this.maxQueuedFrames
+    ) {
+      return false
+    }
+    let encoded: Uint8Array
+    try {
+      encoded = encodeBrowserNetworkTunnelStreamFrame(frame)
+    } catch {
+      return false
+    }
+    this.frames.push(encoded)
+    this.retainedBytes += encoded.byteLength
+    this.pump()
+    return true
+  }
+
+  close(): void {
+    this.closed = true
+    this.writing = false
+    this.frames.length = 0
+    this.retainedBytes = 0
+  }
+
+  private pump(): void {
+    if (this.closed || this.writing) {
+      return
+    }
+    const frame = this.frames.shift()
+    if (!frame) {
+      return
+    }
+    this.writing = true
+    const settled = (error?: Error | null): void => {
+      if (!this.writing) {
+        return
+      }
+      this.writing = false
+      this.retainedBytes -= frame.byteLength
+      if (error) {
+        this.fail(error)
+        return
+      }
+      this.pump()
+    }
+    try {
+      this.write(frame, settled)
+    } catch (error) {
+      settled(error instanceof Error ? error : new Error(String(error)))
+    }
+  }
+
+  private fail(error: Error): void {
+    if (this.closed) {
+      return
+    }
+    this.close()
+    this.onError(error)
+  }
+}
