@@ -22363,7 +22363,7 @@
       },
       "workspace-copies": {
         "title": "Workspace Copies",
-        "description": "Copies of a stream workspace that Create workspace makes in a Perforce project; they need Windows 11 24H2 or later with the workspace on a Dev Drive. What a copy leaves out and how much free space to keep."
+        "description": "Copies of a stream workspace that Create workspace makes in a Perforce project; they need Windows 11 24H2 or later with the workspace on a Dev Drive, or macOS with the workspace on APFS. What a copy leaves out and how much free space to keep."
       }
     },
     "copies": {
@@ -22430,7 +22430,7 @@
       "minFreeSpace": "Minimum free space",
       "minFreeSpaceDescription": "Refuse to make a copy when the drive has less free space than this. A new copy takes about 1 GB, but opening it in Unity writes several GB more.",
       "skipPackageCache": "Leave out Unity's package cache",
-      "skipPackageCacheDescription": "Skips each Unity project's Library/PackageCache; Unity refills it on first open. On a Dev Drive copying it is cheaper and opens faster, so this is off by default.",
+      "skipPackageCacheDescription": "Skips each Unity project's Library/PackageCache; Unity refills it on first open. Where copies are clones, copying it is cheaper and opens faster, so this is off by default.",
       "excludedFolders": "Folders to leave out",
       "excludedFoldersDescription": "Workspace-relative folders a copy does not take, one per line (for example a tool’s local state folder). Files Perforce tracks in them come back from the depot.",
       "excludedFoldersAria": "Folders to leave out of copies",
@@ -22447,8 +22447,8 @@
       "holderStarted": "Started from it: {{programs}}",
       "holderExplorer": "Close the Explorer window showing this folder; Orca does not end Explorer.",
       "holderCannotEnd": "Orca cannot end this program; close it yourself.",
-      "requirement": "Perforce copies need Windows 11 24H2 or later, with the workspace on a Dev Drive: each copy block-clones the workspace, so it takes almost no extra space. Elsewhere a new workspace shares the project folder.",
-      "unavailableHere": "Perforce copies need Windows 11 24H2 or later, with the workspace on a Dev Drive, so this workspace will share the project folder instead of getting its own copy.",
+      "requirement": "Perforce copies need Windows 11 24H2 or later with the workspace on a Dev Drive, or macOS with the workspace on APFS: each copy clones the workspace, so it takes almost no extra space. Elsewhere a new workspace shares the project folder.",
+      "unavailableHere": "Perforce copies need Windows 11 24H2 or later with the workspace on a Dev Drive, or macOS with the workspace on APFS, so this workspace will share the project folder instead of getting its own copy.",
       "setUpDevDrive": "Set up a Dev Drive",
       "modeNew": "New stream",
       "modeExisting": "Existing stream",

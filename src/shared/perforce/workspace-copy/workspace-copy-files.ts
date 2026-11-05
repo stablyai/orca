@@ -100,6 +100,14 @@ export function robocopyFailed(code: number | null): boolean {
   return code === null || code >= 8
 }
 
+export function robocopyFailure(code: number | null, stdout: string): string {
+  const errors = stdout
+    .split(/\r?\n/)
+    .filter((line) => /ERROR \d+/.test(line))
+    .slice(0, 3)
+  return `robocopy failed with exit code ${code ?? 'unknown'}. ${errors.join(' ')}`.trim()
+}
+
 /**
  * Copied files and bytes from robocopy's summary. With /BYTES its Dirs, Files and Bytes rows are six
  * plain integers each (the labels are localized, the shape is not); Copied is the second column.

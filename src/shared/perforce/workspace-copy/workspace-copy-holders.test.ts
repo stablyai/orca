@@ -8,7 +8,7 @@ import { FakePerforceServer } from './__fixtures__/fake-perforce-server'
 import type { HostProcess } from './workspace-copy-host'
 import { requireRemovalOptions } from './workspace-copy-arguments'
 import { createWorkspaceCopy } from './workspace-copy-create'
-import { processesUnder } from './workspace-copy-processes'
+import { processesUnder, unityProjectsOpenInEditor } from './workspace-copy-processes'
 import { previewWorkspaceCopyRemoval } from './workspace-copy-removal-preview'
 import { removeWorkspaceCopy } from './workspace-copy-remove'
 
@@ -192,5 +192,19 @@ describe('programs holding a copy', () => {
       { pid: 6, startedAt: null }
     ])
     expect(requireRemovalOptions({}).endHolders).toBeUndefined()
+  })
+})
+
+describe('unityProjectsOpenInEditor', () => {
+  it('reads a macOS editor from ps, whose argv has no quotes around a path with spaces', async () => {
+    const project = join(base, 'My Games', 'Game')
+    const editor = '/Applications/Unity/Hub/Editor/6000.0.1f1/Unity.app/Contents/MacOS/Unity'
+    const host = createFakeCopyHost(server, base, {
+      processes: [
+        { pid: 7, name: 'Unity', commandLine: `${editor} -projectPath ${project} -useHub` },
+        { pid: 8, name: 'Unity Hub', commandLine: `/Applications/Unity Hub.app -projectPath ${ws}` }
+      ]
+    })
+    await expect(unityProjectsOpenInEditor(host, [project, ws])).resolves.toEqual([project])
   })
 })

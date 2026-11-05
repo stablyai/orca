@@ -1,15 +1,13 @@
 import { setTimeout as sleep } from 'node:timers/promises'
 import type { HostProcess } from '../../shared/perforce/workspace-copy/workspace-copy-host'
 import { readOrcaChromiumProcessPids } from '../pty/process-retirement/orca-chromium-process-pids'
-import {
-  readWindowsProcessTableFresh,
-  type WindowsProcessRow
-} from '../windows/windows-process-table'
+import { readCopyHostProcessTable } from './perforce-copy-host-processes'
+import type { CopyHostProcessRow } from './perforce-copy-posix-processes'
 
 const EXIT_WAIT_MS = 5_000
 const EXIT_POLL_MS = 150
 
-function isSameProcess(row: WindowsProcessRow, target: HostProcess): boolean {
+function isSameProcess(row: CopyHostProcessRow, target: HostProcess): boolean {
   return (
     row.pid === target.pid &&
     row.name === target.name &&
@@ -19,7 +17,7 @@ function isSameProcess(row: WindowsProcessRow, target: HostProcess): boolean {
 }
 
 async function isRunning(target: HostProcess): Promise<boolean> {
-  return (await readWindowsProcessTableFresh()).some((row) => isSameProcess(row, target))
+  return (await readCopyHostProcessTable()).some((row) => isSameProcess(row, target))
 }
 
 /**

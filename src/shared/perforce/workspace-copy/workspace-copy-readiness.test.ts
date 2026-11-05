@@ -23,9 +23,9 @@ describe('probeBlockCloning', () => {
   it('remembers for a few minutes that a volume does not block-clone', async () => {
     const host = createFakeCopyHost(new FakePerforceServer(), dir, { blockClones: false })
     await expect(probeBlockCloning(host, dir)).resolves.toBe('not-cloning')
-    expect(host.robocopyCalls).toHaveLength(2)
+    expect(host.copyCalls).toHaveLength(2)
     vi.advanceTimersByTime(4 * 60_000)
     await expect(probeBlockCloning(host, dir)).resolves.toBe('not-cloning')
-    expect(host.robocopyCalls).toHaveLength(2)
+    expect(host.copyCalls).toHaveLength(2)
   })
 })

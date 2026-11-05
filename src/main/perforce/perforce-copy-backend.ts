@@ -16,12 +16,15 @@ const REMOTE_COPY_DEFERRED_MESSAGE =
 let localBackend: WorkspaceCopyBackend | null = null
 
 function createLocalBackend(): WorkspaceCopyBackend {
+  const windows = process.platform === 'win32'
+  // Why macOS too: copies are made there (APFS clones); only Windows can name a folder's open handles.
+  const processTable = windows || process.platform === 'darwin'
   return createLocalWorkspaceCopyBackend(
     createWorkspaceCopyHost({
       removeTree: removeHostTree,
-      listProcesses: process.platform === 'win32' ? listCopyHostProcesses : undefined,
-      listFolderHolders: process.platform === 'win32' ? readProcessesHoldingFolder : undefined,
-      endProcess: process.platform === 'win32' ? endWorkspaceCopyHolder : undefined
+      listProcesses: processTable ? listCopyHostProcesses : undefined,
+      listFolderHolders: windows ? readProcessesHoldingFolder : undefined,
+      endProcess: processTable ? endWorkspaceCopyHolder : undefined
     })
   )
 }

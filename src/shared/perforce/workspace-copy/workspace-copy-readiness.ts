@@ -1,8 +1,7 @@
 import { randomBytes } from 'node:crypto'
-import { lstat, mkdir, open } from 'node:fs/promises'
+import { lstat, mkdir, open, stat } from 'node:fs/promises'
 import { dirname, join, parse } from 'node:path'
 import { WorkspaceCopyError } from './workspace-copy-errors'
-import { robocopyFailed } from './workspace-copy-files'
 import type { WorkspaceCopyHost } from './workspace-copy-host'
 import { copiesDirFor } from './workspace-copy-names'
 import {
@@ -14,6 +13,7 @@ import {
 } from './workspace-copy-source'
 import { MIN_BLOCK_CLONE_BUILD } from './workspace-copy-platform'
 import type { BlockCloningState, WorkspaceCopyReadiness } from './workspace-copy-types'
+import { macVolumeProblems } from './workspace-copy-volume'
 
 const PROBE_BYTES = 64 * 1024 * 1024
 const PROBE_CHUNK_BYTES = 1024 * 1024
@@ -26,11 +26,11 @@ export function resetBlockCloningProbeCacheForTests(): void {
   probedVolumes.clear()
 }
 
-async function writeProbeFile(path: string): Promise<void> {
+async function writeProbeFile(path: string, size: number): Promise<void> {
   const chunk = randomBytes(PROBE_CHUNK_BYTES)
   const handle = await open(path, 'w')
   try {
-    for (let written = 0; written < PROBE_BYTES; written += PROBE_CHUNK_BYTES) {
+    for (let written = 0; written < size; written += PROBE_CHUNK_BYTES) {
       await handle.write(chunk)
     }
     await handle.sync()
@@ -44,13 +44,21 @@ async function measureClone(host: WorkspaceCopyHost, dir: string): Promise<Block
   const from = join(probe, 'from')
   try {
     await mkdir(from, { recursive: true })
+    // Why a small probe on macOS: a forced clone either succeeds or fails, free space is not needed.
+    const size = host.platform === 'macos' ? PROBE_CHUNK_BYTES : PROBE_BYTES
     const beforeWrite = await host.freeBytes(dir)
-    await writeProbeFile(join(from, 'probe.bin'))
+    await writeProbeFile(join(from, 'probe.bin'), size)
     const afterWrite = await host.freeBytes(dir)
-    const copied = await host.robocopy([from, join(probe, 'to'), '/COPY:DAT', '/R:0', '/W:0'])
+    const copied = await host.copyTree(from, join(probe, 'to'), { folders: [], files: [] })
     const afterCopy = await host.freeBytes(dir)
+    if (!copied.ok) {
+      return copied.notCloning ? 'not-cloning' : 'unknown'
+    }
+    if (copied.cloned) {
+      return 'verified'
+    }
     // Why: when writing the probe barely moved free space, something else on the drive did too.
-    if (robocopyFailed(copied.code) || beforeWrite - afterWrite < PROBE_BYTES / 2) {
+    if (beforeWrite - afterWrite < PROBE_BYTES / 2) {
       return 'unknown'
     }
     return afterWrite - afterCopy < PROBE_BYTES / 4 ? 'verified' : 'not-cloning'
@@ -62,13 +70,14 @@ async function measureClone(host: WorkspaceCopyHost, dir: string): Promise<Block
 /**
  * Copies a 64 MB file next to the workspace and checks that free space did not drop by its size: the
  * one property copies rely on, measured directly because asking Windows whether a volume is a Dev
- * Drive (`fsutil devdrv query`) needs an elevated shell.
+ * Drive (`fsutil devdrv query`) needs an elevated shell. On macOS a forced clone answers directly.
  */
 export async function probeBlockCloning(
   host: WorkspaceCopyHost,
   dir: string
 ): Promise<BlockCloningState> {
-  const volume = parse(dir).root.toLowerCase()
+  // Why the device too: every macOS volume is under the one root `/`.
+  const volume = `${parse(dir).root.toLowerCase()}|${(await stat(dir)).dev}`
   const known = probedVolumes.get(volume)
   if (known && (known.state === 'verified' || Date.now() - known.at < NOT_CLONING_TTL_MS)) {
     return known.state
@@ -97,6 +106,7 @@ export async function checkCopyReadiness(
   dir: string,
   options: { minFreeBytes?: number; probe?: boolean } = {}
 ): Promise<WorkspaceCopyReadiness & { resolvedSource: CopySource | null }> {
+  const platform = host.platform
   const build = host.windowsBuild()
   const result: WorkspaceCopyReadiness & { resolvedSource: CopySource | null } = {
     ready: false,
@@ -104,20 +114,21 @@ export async function checkCopyReadiness(
     warnings: [],
     source: null,
     copiesDir: null,
+    copyPlatform: platform,
     windowsBuild: build,
     fileSystemFreeBytes: null,
     blockCloning: null,
     resolvedSource: null
   }
-  if (build === null) {
+  if (platform === null) {
     result.problems.push(
-      'Perforce copies need Windows 11 24H2 or later with the workspace on a Dev Drive, and the computer this workspace is on does not run Windows.'
+      'Perforce copies need Windows 11 24H2 or later with the workspace on a Dev Drive, or macOS with the workspace on APFS, and the computer this workspace is on runs neither.'
     )
     return result
   }
-  if (build < MIN_BLOCK_CLONE_BUILD) {
+  if (platform === 'windows' && (build ?? 0) < MIN_BLOCK_CLONE_BUILD) {
     result.problems.push(
-      `Perforce copies need Windows 11 24H2 (build ${MIN_BLOCK_CLONE_BUILD}) or later. This computer runs build ${build}, which cannot block-clone files, so each copy would duplicate the whole workspace.`
+      `Perforce copies need Windows 11 24H2 (build ${MIN_BLOCK_CLONE_BUILD}) or later. This computer runs build ${build ?? 'unknown'}, which cannot block-clone files, so each copy would duplicate the whole workspace.`
     )
   }
   try {
@@ -157,6 +168,9 @@ export async function checkCopyReadiness(
       )
     }
   }
+  if (platform === 'macos' && result.source) {
+    result.problems.push(...(await macVolumeProblems(result.source.root, copiesDir)))
+  }
   const free = await host.freeBytes((await pathExists(copiesDir)) ? copiesDir : dirname(copiesDir))
   result.fileSystemFreeBytes = free
   const minFree = options.minFreeBytes ?? 0
@@ -174,7 +188,9 @@ export async function checkCopyReadiness(
     result.blockCloning = await probeBlockCloning(host, copiesDir)
     if (result.blockCloning === 'not-cloning') {
       result.problems.push(
-        `The drive holding ${result.source?.root} does not block-clone files (it is not a ReFS Dev Drive), so every copy would duplicate the whole workspace. Move the workspace onto a Dev Drive first.`
+        platform === 'macos'
+          ? `The volume holding ${result.source?.root} does not clone files (it is not APFS), so every copy would duplicate the whole workspace. Keep the workspace on an APFS volume.`
+          : `The drive holding ${result.source?.root} does not block-clone files (it is not a ReFS Dev Drive), so every copy would duplicate the whole workspace. Move the workspace onto a Dev Drive first.`
       )
     } else if (result.blockCloning === 'unknown') {
       result.warnings.push(

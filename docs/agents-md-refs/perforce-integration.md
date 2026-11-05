@@ -63,7 +63,7 @@ Keyboard chords on the active Perforce file (editor or unstaged-diff tab): **Alt
 two-step detector wired by `app-shell/use-perforce-file-chords.ts`; it only claims Alt+P when a Perforce file is active. The
 shortcut registry supports single combinations only, so these are fixed rather than remappable.
 
-**Workspace copies** (the Perforce counterpart of Git worktrees, on a Windows Dev Drive) are made and
+**Workspace copies** (the Perforce counterpart of Git worktrees, on a Windows Dev Drive or macOS APFS) are made and
 removed from the project menu; see [perforce-workspace-copies.md](./perforce-workspace-copies.md).
 
 ## Code map

@@ -1,4 +1,5 @@
-import { win32 } from 'node:path'
+import { posix, win32 } from 'node:path'
+import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
 import { getRepoSshConnectionId } from '../../shared/execution-host'
 import type { Repo } from '../../shared/repo-types'
 import type {
@@ -21,12 +22,13 @@ export type CopyWorktreeStore = Pick<
 
 /**
  * The copy's counterpart of the project folder: the copy root itself, or the same subfolder inside it
- * when the project is a folder below the client root. Copies exist only on Windows hosts, so their
- * paths follow Windows rules whatever this computer runs.
+ * when the project is a folder below the client root. Paths follow the host's rules (Windows or
+ * macOS), which need not be this computer's.
  */
 export function copyWorktreePath(repo: Repo, sourceRoot: string, copyRoot: string): string {
-  const inside = win32.relative(sourceRoot, repo.path)
-  return inside && !inside.startsWith('..') ? win32.join(copyRoot, inside) : copyRoot
+  const path = isWindowsAbsolutePathLike(sourceRoot) ? win32 : posix
+  const inside = path.relative(sourceRoot, repo.path)
+  return inside && !inside.startsWith('..') ? path.join(copyRoot, inside) : copyRoot
 }
 
 /** Records a copy as a worktree of `repo`; creation metadata makes it a visible Orca workspace. */

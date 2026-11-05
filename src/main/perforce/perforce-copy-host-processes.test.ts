@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import type { WindowsProcessRow } from '../windows/windows-process-table'
 import { orcaOwnedPids } from './perforce-copy-host-processes'
+import { parsePosixProcessTable } from './perforce-copy-posix-processes'
 
 const DAEMON_DIR = join(tmpdir(), 'orca-user-data', 'daemon')
 // Another Orca install (a dev build) keeps its daemon under its own user data folder.
@@ -36,5 +37,31 @@ describe('orcaOwnedPids', () => {
       row(101, 100, 'cmd.exe', 1_000)
     ]
     expect([...orcaOwnedPids(rows, DAEMON_DIR)]).toEqual([100])
+  })
+})
+
+describe('parsePosixProcessTable', () => {
+  it('reads pid, parent, start time and the whole command line', () => {
+    const stdout = [
+      '  412     1 Thu Nov  5 10:00:00 2026     /Applications/Unity.app/Contents/MacOS/Unity -projectPath /Users/me/My Game',
+      '99999 412 Mon Dec 14 09:05:07 2026 /bin/zsh -l',
+      'not a row'
+    ].join('\n')
+    expect(parsePosixProcessTable(stdout)).toEqual([
+      {
+        pid: 412,
+        ppid: 1,
+        name: 'Unity',
+        command: '/Applications/Unity.app/Contents/MacOS/Unity -projectPath /Users/me/My Game',
+        creationTimeMs: Date.parse('Thu Nov  5 10:00:00 2026')
+      },
+      {
+        pid: 99999,
+        ppid: 412,
+        name: 'zsh',
+        command: '/bin/zsh -l',
+        creationTimeMs: Date.parse('Mon Dec 14 09:05:07 2026')
+      }
+    ])
   })
 })

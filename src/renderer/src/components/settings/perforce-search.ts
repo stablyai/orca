@@ -182,7 +182,7 @@ export const getPerforceSettingsCatalog = createLocalizedCatalog((): PerforceCat
     translate('perforce.settings.workspace-copies.title', 'Workspace Copies'),
     translate(
       'perforce.settings.workspace-copies.description',
-      'Copies of a stream workspace that Create workspace makes in a Perforce project; they need Windows 11 24H2 or later with the workspace on a Dev Drive. What a copy leaves out and how much free space to keep.'
+      'Copies of a stream workspace that Create workspace makes in a Perforce project; they need Windows 11 24H2 or later with the workspace on a Dev Drive, or macOS with the workspace on APFS. What a copy leaves out and how much free space to keep.'
     ),
     [
       'perforce',

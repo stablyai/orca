@@ -10,6 +10,10 @@ Git worktree on a branch of its own.
 - **Windows 11 24H2 or later** (build 26100+) and the workspace on a **ReFS volume**, normally a Dev
   Drive. There, Windows block-clones every copied file, so a copy of an ~80 GB Unity workspace takes
   about 1 GB until files change. On NTFS a copy would duplicate every byte, so Orca refuses.
+- Or **macOS** with the workspace on a **case-insensitive APFS volume**, and `<root>.wt` on the same
+  volume (the workspace root is not a mount point). Every file is an APFS clone (`clonefile`), so a
+  copy costs metadata only. Perforce and Unity projects assume case-insensitive paths, so a
+  case-sensitive volume is refused.
 - A **stream** client whose `P4CLIENT` comes from a **P4CONFIG file inside the client root**
   (`p4config.txt` with `P4CLIENT=...`). Each copy gets its own p4config naming its own client, and the
   check guarantees Orca acts on the folder's own client.
@@ -19,12 +23,12 @@ Git worktree on a branch of its own.
 The requirement is the host's, not the desktop's: the readiness check runs where the workspace is, so
 a Mac connected to a Windows 11 SSH host that runs a managed Orca server, or paired with a Windows 11
 Orca server, makes copies there. An SSH host that stays on the relay cannot make copies for now (see
-the code map). Everywhere else (macOS, Linux, older
-Windows, a drive that does not block-clone) Perforce source control works as usual and a new
+the code map). Everywhere else (Linux, older
+Windows, a drive that does not clone) Perforce source control works as usual and a new
 workspace shares the project folder. The UI says so before anyone tries: the Create workspace option
 replaces its stream picker with the requirement when the host cannot make copies, and Manage Perforce
-copies and Settings › Perforce › Workspace Copies state it with a **Set up a Dev Drive** link
-(`PerforceCopyRequirement`).
+copies and Settings › Perforce › Workspace Copies state it, with a **Set up a Dev Drive** link off
+macOS (`PerforceCopyRequirement`).
 
 ## Perforce projects
 
@@ -60,7 +64,8 @@ agent working there, an Explorer window, Unity Hub's watcher). The second asks t
 list (`FileProcessIdsUsingFileInformation`, what Restart Manager uses) through
 `getProcessIdsUsingPaths` in Orca's patch of `@vscode/windows-process-tree`; it opens only the
 folders, never another process, so it is not the handle walk security software scores as an attack.
-Each folder costs the kernel a walk of every handle on the system (about 50 ms at 200,000 handles,
+On macOS only the command line names a program (`ps`); a shell working in the copy does not
+hold it, since macOS deletes a folder a program has open. Each folder costs the kernel a walk of every handle on the system (about 50 ms at 200,000 handles,
 on NTFS and ReFS alike), so the check stops at 64 folders, shallowest first, and asks them on up to
 eight threads: about 0.8 s for a Unity project's top two levels. A program holding only a deeper
 folder is not named; the delete then refuses before touching Perforce and says a program has the
@@ -77,13 +82,20 @@ Settings › Perforce › Workspace Copies: minimum free space (default 10 GB), 
 
 `createWorkspaceCopy` (`src/shared/perforce/workspace-copy/`):
 
-1. **Check.** Windows build, the P4CONFIG binding, a stream client, `<root>.wt` not a junction, free
-   space, and a **block-clone probe**: copy a 64 MB file next to the workspace with robocopy and check
-   that free space did not drop by its size. Asking Windows whether a volume is a Dev Drive
-   (`fsutil devdrv query`) needs an elevated shell; the probe measures the property copies rely on. The
-   host remembers a volume's answer (a negative one for five minutes), since each probe writes about 256 MB.
-2. **Copy.** `robocopy /E /COPY:DAT /DCOPY:DAT /MT:32` into `<root>.wt\<name>`, keeping timestamps so
-   Unity does not reimport. Each Unity project's `Temp`, `Logs`, `obj` and editor lock files stay behind.
+1. **Check.** Windows build, the P4CONFIG binding, a stream client, `<root>.wt` not a junction or
+   link, free space, and a **clone probe**. On Windows: copy a 64 MB file next to the workspace with
+   robocopy and check that free space did not drop by its size. Asking Windows whether a volume is a
+   Dev Drive (`fsutil devdrv query`) needs an elevated shell; the probe measures the property copies
+   rely on. The host remembers a volume's answer (a negative one for five minutes), since each probe
+   writes about 256 MB. On macOS: a forced clone of a 1 MB file (`COPYFILE_FICLONE_FORCE`) either
+   succeeds or fails, plus `<root>.wt` on the workspace's volume and a case-insensitivity probe
+   (`workspace-copy-volume.ts`).
+2. **Copy.** The host's `copyTree`. Windows: `robocopy /E /COPY:DAT /DCOPY:DAT /MT:32` into
+   `<root>.wt\<name>`. macOS: `cloneTree` (`workspace-copy-clone-tree.ts`) clones file by file, 16 at a
+   time, recreates symbolic links and fails rather than fall back to a full copy; `<root>.wt` gets
+   `.metadata_never_index` and a Time Machine exclusion (`tmutil addexclusion`). Both keep file and
+   folder timestamps so Unity does not reimport. Each Unity project's `Temp`, `Logs`, `obj` and editor
+   lock files stay behind.
 3. **Stream and client.** The copy's own sparsedev stream `<parent>_wt_<name>` (`stream -o -t sparsedev
    -P <parent>` → `stream -i`), branched at the parent's latest change; an earlier copy's stream of the
    same name that kept submitted work is continued instead. Then `<client>_wt_<name>` from the source's
@@ -92,7 +104,7 @@ Settings › Perforce › Workspace Copies: minimum free space (default 10 GB), 
    stream): metadata only, nothing is downloaded. On another stream, the two have-lists' server digests
    name the files that differ, and only those are fetched.
 5. **Clean up.** Files the source has open go back to the depot version; tracked files under skipped
-   folders come back from the depot; files that changed while robocopy ran (a sync) are repaired.
+   folders come back from the depot; files that changed while the copy ran (a sync) are repaired.
 6. **Rebind.** p4config files, Rider `.idea/**/workspace.xml` and Unity's `vcPerforceWorkspace` entry.
 7. **Verify.** `p4 set P4CLIENT` inside the copy must name the copy's client from the copy's own
    p4config. Any failure rolls back the client, stream, folder and marker.
@@ -126,7 +138,9 @@ list and remove the ones Orca makes.
 ## Code map
 
 - `src/shared/perforce/workspace-copy/`: the engine (create, list, preview, remove), its host seam
-  (`workspace-copy-host.ts`: p4, robocopy, free space, process list), and tests against a fake server.
+  (`workspace-copy-host.ts`: p4, the platform's tree copy, free space, process list), and tests
+  against a fake server. The macOS approach follows the agents framework's `agents worktree`
+  (`//Tech_Tools/Agents/tools/agents-cli/Worktree/`, `MacWorktreePlatform.cs`).
   `workspace-copy-operations.ts` names the project-level operations every transport exposes.
 - `src/main/runtime/runtime-perforce-copy-commands.ts`: readiness, streams, project detection, sync and
   removal against the runtime's own store, the one implementation. Desktop IPC (`perforce:runCopy`,

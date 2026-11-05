@@ -10,7 +10,7 @@ import {
   type CopyWorktreeStore
 } from './perforce-copy-worktrees'
 
-// Copies live only on Windows hosts, so their paths follow Windows rules on every OS.
+// A Windows host's copies follow Windows path rules on every OS.
 const { join } = win32
 const ROOT = 'D:\\ws'
 const COPIES = `${ROOT}.wt`
@@ -84,6 +84,13 @@ describe('syncCopyWorktrees', () => {
       join(COPIES, 'copy-1', 'Game')
     )
     expect(copyWorktreePath(REPO, ROOT, join(COPIES, 'copy-1'))).toBe(join(COPIES, 'copy-1'))
+  })
+
+  it('follows macOS path rules for a copy on a Mac host', () => {
+    const repo = { ...REPO, path: '/Users/me/ws/Game' }
+    expect(copyWorktreePath(repo, '/Users/me/ws', '/Users/me/ws.wt/copy-1')).toBe(
+      '/Users/me/ws.wt/copy-1/Game'
+    )
   })
 
   it('reports no change when the sidebar already matches', () => {

@@ -1,5 +1,7 @@
 // Pure types: shared by the copy engine, the main process, the relay and the renderer.
 
+import type { CopyPlatform } from './workspace-copy-platform'
+
 /** `same-stream`: the source's stream; `child`: a sparse stream of its own; `other-stream`: an existing stream. */
 export type WorkspaceCopyMode = 'same-stream' | 'child' | 'other-stream'
 
@@ -45,11 +47,11 @@ export type WorkspaceCopyCreateOptions = {
 }
 
 export type WorkspaceCopySpace = {
-  /** Bytes robocopy reported copying; null when its summary could not be read. */
+  /** Bytes the copy reported copying; null when robocopy's summary could not be read. */
   copiedBytes: number | null
   /** How much the drive's free space dropped during the copy. */
   usedBytes: number
-  /** True when the copy cost far less than its size, i.e. the drive block-cloned it. */
+  /** True when the copy cost far less than its size, i.e. the drive cloned it. */
   cloned: boolean | null
   freeBytesAfter: number
 }
@@ -109,6 +111,8 @@ export type WorkspaceCopyReadiness = {
   warnings: string[]
   source: WorkspaceCopySourceSummary | null
   copiesDir: string | null
+  /** Absent from hosts older than macOS support; read as Windows then. */
+  copyPlatform?: CopyPlatform | null
   windowsBuild: number | null
   fileSystemFreeBytes: number | null
   blockCloning: BlockCloningState | null

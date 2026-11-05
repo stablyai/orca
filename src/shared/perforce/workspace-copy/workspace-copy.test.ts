@@ -159,10 +159,10 @@ describe('createWorkspaceCopy (same stream)', () => {
   it('refuses a name that is taken, before changing anything', async () => {
     const host = createFakeCopyHost(server, base)
     await createWorkspaceCopy(host, ws, { name: 'one' })
-    const calls = host.robocopyCalls.length
+    const calls = host.copyCalls.length
 
     await expect(createWorkspaceCopy(host, ws, { name: 'one' })).rejects.toThrow(/already exists/)
-    expect(host.robocopyCalls.length).toBe(calls)
+    expect(host.copyCalls.length).toBe(calls)
   })
 
   it('refuses when the client does not come from a P4CONFIG file', async () => {

@@ -3,7 +3,6 @@ import {
   type CreatedParts,
   assertCopyBinding,
   assertNameFree,
-  robocopyFailure,
   rollBack,
   spaceUsed
 } from './workspace-copy-create-steps'
@@ -12,9 +11,7 @@ import {
   excludedFiles,
   excludedFolders,
   findUnityProjects,
-  relativeTo,
-  robocopyArguments,
-  robocopyFailed
+  relativeTo
 } from './workspace-copy-files'
 import type { WorkspaceCopyHost } from './workspace-copy-host'
 import { withSourceLock } from './workspace-copy-lock'
@@ -92,6 +89,7 @@ async function createLocked(
   try {
     await mkdir(names.copiesDir, { recursive: true })
     created.folder = true
+    await host.prepareCopiesDir?.(names.copiesDir)
     const freeBefore = await host.freeBytes(names.copiesDir)
     const haveBefore = await haveRevisions(host, source.client, source.root)
     let mark = Date.now()
@@ -100,11 +98,12 @@ async function createLocked(
       message: `Copying ${source.root} to ${names.copyRoot}`
     })
     const excluded = excludedFolders(source.root, projects, options)
-    const copy = await host.robocopy(
-      robocopyArguments(source.root, names.copyRoot, excluded, excludedFiles(projects))
-    )
-    if (robocopyFailed(copy.code)) {
-      throw new WorkspaceCopyError('copy', robocopyFailure(copy.code, copy.stdout))
+    const copy = await host.copyTree(source.root, names.copyRoot, {
+      folders: excluded,
+      files: excludedFiles(projects)
+    })
+    if (!copy.ok) {
+      throw new WorkspaceCopyError('copy', copy.message)
     }
     const freeAfter = await host.freeBytes(names.copiesDir)
     seconds.copy = elapsed(mark)
@@ -155,10 +154,10 @@ async function createLocked(
     await writeMarker(names.markerPath, marker)
     seconds.cleanup = elapsed(mark)
     seconds.total = elapsed(started)
-    const space = spaceUsed(copy.stdout, freeBefore, freeAfter)
+    const space = spaceUsed(copy, freeBefore, freeAfter)
     if (space.cloned === false) {
       warnings.push(
-        `The copy used ${formatGb(space.usedBytes)} of disk for ${formatGb(space.copiedBytes ?? 0)} of files: the drive did not block-clone it.`
+        `The copy used ${formatGb(space.usedBytes)} of disk for ${formatGb(space.copiedBytes ?? 0)} of files: the drive did not clone it.`
       )
     }
     return {

@@ -1,6 +1,6 @@
 import { rm } from 'node:fs/promises'
 import { WorkspaceCopyError } from './workspace-copy-errors'
-import { parseRobocopySummary } from './workspace-copy-files'
+import type { TreeCopyResult } from './workspace-copy-clone-tree'
 import type { WorkspaceCopyHost } from './workspace-copy-host'
 import type { WorkspaceCopyNames } from './workspace-copy-names'
 import { findClient } from './workspace-copy-p4'
@@ -100,28 +100,21 @@ export async function rollBack(
   )
 }
 
-export function robocopyFailure(code: number | null, stdout: string): string {
-  const errors = stdout
-    .split(/\r?\n/)
-    .filter((line) => /ERROR \d+/.test(line))
-    .slice(0, 3)
-  return `robocopy failed with exit code ${code ?? 'unknown'}. ${errors.join(' ')}`.trim()
-}
-
 export function spaceUsed(
-  stdout: string,
+  copy: Extract<TreeCopyResult, { ok: true }>,
   freeBefore: number,
   freeAfter: number
 ): WorkspaceCopySpace {
-  const summary = parseRobocopySummary(stdout)
+  const { files, bytes } = copy
   const usedBytes = Math.max(0, freeBefore - freeAfter)
   // Each clone still costs about a cluster of metadata per file; a real copy costs its bytes.
-  const cloneBudget = summary ? summary.bytes * 0.1 + summary.files * 8192 : null
+  const cloneBudget = files !== null && bytes !== null ? bytes * 0.1 + files * 8192 : null
   return {
-    copiedBytes: summary?.bytes ?? null,
+    copiedBytes: bytes,
     usedBytes,
-    cloned:
-      cloneBudget === null || summary === null || summary.bytes < 256 * 1024 ** 2
+    cloned: copy.cloned
+      ? true
+      : cloneBudget === null || bytes === null || bytes < 256 * 1024 ** 2
         ? null
         : usedBytes <= cloneBudget,
     freeBytesAfter: freeAfter

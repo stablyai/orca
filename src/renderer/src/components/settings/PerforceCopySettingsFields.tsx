@@ -46,7 +46,7 @@ export function PerforceCopySettingsFields({
         label={translate('perforce.copies.skipPackageCache', "Leave out Unity's package cache")}
         description={translate(
           'perforce.copies.skipPackageCacheDescription',
-          "Skips each Unity project's Library/PackageCache; Unity refills it on first open. On a Dev Drive copying it is cheaper and opens faster, so this is off by default."
+          "Skips each Unity project's Library/PackageCache; Unity refills it on first open. Where copies are clones, copying it is cheaper and opens faster, so this is off by default."
         )}
         checked={perforce.copySkipPackageCache}
         onChange={() => update({ copySkipPackageCache: !perforce.copySkipPackageCache })}

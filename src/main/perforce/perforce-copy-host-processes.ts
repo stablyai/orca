@@ -1,17 +1,20 @@
 import { getDaemonRuntimeDir } from '../daemon/daemon-launch-paths'
-import {
-  readWindowsProcessTableFresh,
-  type WindowsProcessRow
-} from '../windows/windows-process-table'
+import { readWindowsProcessTableFresh } from '../windows/windows-process-table'
 import type { HostProcess } from '../../shared/perforce/workspace-copy/workspace-copy-host'
+import { readPosixProcessTable, type CopyHostProcessRow } from './perforce-copy-posix-processes'
+
+/** This host's process table with command lines: the native snapshot on Windows, ps elsewhere. */
+export function readCopyHostProcessTable(): Promise<CopyHostProcessRow[]> {
+  return process.platform === 'win32' ? readWindowsProcessTableFresh() : readPosixProcessTable()
+}
 
 /**
  * This Orca's process tree: main, this app's terminal daemon (its command line names this app's
  * daemon folder, so another Orca install's daemon is not ours), and everything they started.
  */
-export function orcaOwnedPids(rows: readonly WindowsProcessRow[], daemonDir: string): Set<number> {
+export function orcaOwnedPids(rows: readonly CopyHostProcessRow[], daemonDir: string): Set<number> {
   const daemonDirLower = daemonDir.toLowerCase()
-  const children = new Map<number, WindowsProcessRow[]>()
+  const children = new Map<number, CopyHostProcessRow[]>()
   for (const row of rows) {
     children.set(row.ppid, [...(children.get(row.ppid) ?? []), row])
   }
@@ -43,7 +46,7 @@ export function orcaOwnedPids(rows: readonly WindowsProcessRow[], daemonDir: str
 
 /** The process table for a Perforce copy's holder checks. */
 export async function listCopyHostProcesses(): Promise<HostProcess[]> {
-  const rows = await readWindowsProcessTableFresh()
+  const rows = await readCopyHostProcessTable()
   const owned = orcaOwnedPids(rows, getDaemonRuntimeDir())
   return rows.map((row) => ({
     pid: row.pid,

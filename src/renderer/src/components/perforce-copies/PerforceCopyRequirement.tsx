@@ -1,6 +1,7 @@
 import { Info } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
+import { isMac } from '@/app-shell/app-window-chrome'
 import { DEV_DRIVE_SETUP_URL } from '../../../../shared/perforce/workspace-copy/workspace-copy-platform'
 
 /**
@@ -9,7 +10,7 @@ import { DEV_DRIVE_SETUP_URL } from '../../../../shared/perforce/workspace-copy/
  */
 export function PerforceCopyRequirement({
   unavailableHere = false,
-  showSetupLink = true
+  showSetupLink = !isMac
 }: {
   unavailableHere?: boolean
   showSetupLink?: boolean
@@ -22,11 +23,11 @@ export function PerforceCopyRequirement({
           {unavailableHere
             ? translate(
                 'perforce.copies.unavailableHere',
-                'Perforce copies need Windows 11 24H2 or later, with the workspace on a Dev Drive, so this workspace will share the project folder instead of getting its own copy.'
+                'Perforce copies need Windows 11 24H2 or later with the workspace on a Dev Drive, or macOS with the workspace on APFS, so this workspace will share the project folder instead of getting its own copy.'
               )
             : translate(
                 'perforce.copies.requirement',
-                'Perforce copies need Windows 11 24H2 or later, with the workspace on a Dev Drive: each copy block-clones the workspace, so it takes almost no extra space. Elsewhere a new workspace shares the project folder.'
+                'Perforce copies need Windows 11 24H2 or later with the workspace on a Dev Drive, or macOS with the workspace on APFS: each copy clones the workspace, so it takes almost no extra space. Elsewhere a new workspace shares the project folder.'
               )}
         </p>
         {showSetupLink ? (

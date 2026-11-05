@@ -4,6 +4,16 @@ import type { WorkspaceCopyHolder, WorkspaceCopyHolderConsent } from './workspac
 import { escapeRegex } from '../../string-utils'
 
 const PROJECT_PATH_ARG = /-projectpath\s+(?:"([^"]+)"|(\S+))/i
+// ps joins argv with spaces and drops quotes, so an unquoted path runs up to the next option.
+const UNQUOTED_PROJECT_PATH_ARG = /-projectpath\s+(?:"([^"]+)"|(.+?)(?=\s+-[A-Za-z]|\s*$))/i
+const MAC_UNITY_EDITOR = /\/Contents\/MacOS\/Unity(\s|$)/
+
+function unityEditorProjectArg(p: HostProcess): RegExpExecArray | null {
+  if (p.name.toLowerCase() === 'unity.exe') {
+    return PROJECT_PATH_ARG.exec(p.commandLine)
+  }
+  return MAC_UNITY_EDITOR.test(p.commandLine) ? UNQUOTED_PROJECT_PATH_ARG.exec(p.commandLine) : null
+}
 
 async function processes(host: WorkspaceCopyHost): Promise<HostProcess[]> {
   try {
@@ -20,10 +30,9 @@ export async function unityProjectsOpenInEditor(
   projects: readonly string[]
 ): Promise<string[]> {
   const open = (await processes(host))
-    .filter((p) => p.name.toLowerCase() === 'unity.exe')
-    .map((p) => PROJECT_PATH_ARG.exec(p.commandLine))
+    .map(unityEditorProjectArg)
     .filter((match) => match !== null)
-    .map((match) => normalizePath(match[1] ?? match[2]))
+    .map((match) => normalizePath((match[1] ?? match[2]).trim()))
   return projects.filter((project) => open.some((path) => samePath(path, project)))
 }
 
@@ -38,8 +47,8 @@ async function folderHolders(
   }
 }
 
-// Ending Explorer takes the taskbar and desktop with it; the user closes its window instead.
-const NEVER_ENDED = new Set(['explorer.exe'])
+// Ending Explorer or Finder takes the desktop with it; the user closes its window instead.
+const NEVER_ENDED = new Set(['explorer.exe', 'finder'])
 
 /**
  * Programs holding `root`: a handle open in its folder (a shell or agent working there, an

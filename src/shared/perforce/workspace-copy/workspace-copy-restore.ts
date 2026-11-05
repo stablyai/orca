@@ -1,5 +1,5 @@
 import { chmod, rm, stat } from 'node:fs/promises'
-import { join, sep } from 'node:path'
+import { isAbsolute, join, sep } from 'node:path'
 import { escapeP4FileArg } from '../p4-command'
 import type { P4Record } from '../p4-tagged-output'
 import { WorkspaceCopyError } from './workspace-copy-errors'
@@ -180,7 +180,8 @@ export async function alignToStream(
   }
   for (const line of missing.stdout.split(/\r?\n/)) {
     const path = line.trim()
-    if (/^[A-Za-z]:\\/.test(path) && isPathUnder(path, names.copyRoot) && path !== names.copyRoot) {
+    // Why isAbsolute: p4 prints host paths, D:\... on Windows and /Users/... on macOS.
+    if (isAbsolute(path) && isPathUnder(path, names.copyRoot) && path !== names.copyRoot) {
       const rel = path
         .slice(names.copyRoot.length + 1)
         .split(sep)

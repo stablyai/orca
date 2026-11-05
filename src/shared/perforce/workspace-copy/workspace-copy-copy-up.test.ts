@@ -166,7 +166,8 @@ beforeEach(async () => {
   server = new CopyUpServer(ws)
   host = {
     p4: async (args, options) => server.run(args, options.input),
-    robocopy: () => Promise.reject(new Error('unused')),
+    platform: null,
+    copyTree: () => Promise.reject(new Error('unused')),
     windowsBuild: () => null,
     freeBytes: () => Promise.resolve(0),
     removeTree: (path) => rm(path, { recursive: true, force: true })
