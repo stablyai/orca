@@ -9,7 +9,6 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/runtime/agent-session/lifecycle/structured-agent-cli-writers.test.ts',
   'config/scripts/test-runtime/sqlite-admission/vitest-sqlite-runtime-boundary.test.ts',
   'config/scripts/ci/workflow-contracts/cloud-security-history-workflow.test.mjs',
-  'config/scripts/skills/recipe-contracts/skill-recipe-shell.test.mjs',
   'src/main/ssh/legacy-relay/ssh-relay-endpoint-incumbent-shell.integration.test.ts',
   'src/main/ssh/ssh-remote-commands.test.ts',
   'src/packages/process-host/src/run-process.test.ts',
