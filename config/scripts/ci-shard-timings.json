@@ -7235,7 +7235,6 @@
       "src/renderer/src/components/github-item-dialog/load-item-details/use-github-task-refresh.test.tsx": 1070,
       "src/renderer/src/components/github-item-dialog/open-dialog/github-item-dialog.task-record.test.tsx": 1391,
       "src/renderer/src/components/github-link-copy-state.test.ts": 41,
-      "src/renderer/src/components/github-pr-merge-state.test.ts": 243,
       "src/renderer/src/components/github-project/GhAuthErrorHelp.test.ts": 479,
       "src/renderer/src/components/github-project/ProjectBoard.test.tsx": 988,
       "src/renderer/src/components/github-project/ProjectRoadmap.test.tsx": 2369,
