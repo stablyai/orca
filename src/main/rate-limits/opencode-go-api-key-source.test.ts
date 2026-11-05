@@ -25,6 +25,7 @@ const SETTINGS_KEY = 'settings-placeholder-key'
 const ENVIRONMENT_KEY = 'environment-placeholder-key'
 const AUTH_FILE_KEY = 'auth-file-placeholder-key'
 const DATABASE_KEY = 'database-placeholder-key'
+const OAUTH_ACCESS_TOKEN = 'oauth-access-placeholder-token'
 
 const ENVIRONMENT_KEYS = [
   'XDG_DATA_HOME',
@@ -53,9 +54,9 @@ describe('resolveOpenCodeGoApiKey', () => {
     writeFileSync(join(dataHome, 'opencode', 'auth.json'), JSON.stringify(contents))
   }
 
-  function writeCredentialDatabase(rows: { value: string; active: number; created: number }[]): {
-    path: string
-  } {
+  function writeCredentialDatabase(
+    rows: { value: string; active: number; created: number; integrationId?: string }[]
+  ): { path: string } {
     const path = join(dataHome, 'opencode-credentials.db')
     const database = new Database(path)
     database.exec(
@@ -66,9 +67,16 @@ describe('resolveOpenCodeGoApiKey', () => {
       database
         .prepare(
           'INSERT INTO credential (id, integration_id, label, value, active, time_created) ' +
-            "VALUES (?, 'opencode-go', 'API key', ?, ?, ?)"
+            'VALUES (?, ?, ?, ?, ?, ?)'
         )
-        .run(`cred_${index}`, row.value, row.active, row.created)
+        .run(
+          `cred_${index}`,
+          row.integrationId ?? 'opencode-go',
+          'API key',
+          row.value,
+          row.active,
+          row.created
+        )
     })
     database.close()
     return { path }
@@ -220,6 +228,53 @@ describe('resolveOpenCodeGoApiKey', () => {
         value: JSON.stringify({ type: 'key', key: 'stale-placeholder-key' }),
         active: 0,
         created: 2
+      },
+      { value: JSON.stringify({ type: 'key', key: DATABASE_KEY }), active: 1, created: 1 }
+    ])
+    process.env.OPENCODE_DB = path
+
+    await expect(resolveOpenCodeGoApiKey({})).resolves.toEqual({
+      status: 'found',
+      key: DATABASE_KEY,
+      tier: 'opencode-credential-database'
+    })
+  })
+
+  it('reads the OAuth Go credential the new console stores on the opencode integration (#24818)', async () => {
+    const { path } = writeCredentialDatabase([
+      {
+        value: JSON.stringify({
+          type: 'oauth',
+          access: OAUTH_ACCESS_TOKEN,
+          refresh: 'refresh-placeholder',
+          expires: 1
+        }),
+        active: 1,
+        created: 1,
+        integrationId: 'opencode'
+      }
+    ])
+    process.env.OPENCODE_DB = path
+
+    await expect(resolveOpenCodeGoApiKey({})).resolves.toEqual({
+      status: 'found',
+      key: OAUTH_ACCESS_TOKEN,
+      tier: 'opencode-credential-database'
+    })
+  })
+
+  it('prefers a Go api key over an opencode OAuth credential', async () => {
+    const { path } = writeCredentialDatabase([
+      {
+        value: JSON.stringify({
+          type: 'oauth',
+          access: OAUTH_ACCESS_TOKEN,
+          refresh: 'refresh-placeholder',
+          expires: 1
+        }),
+        active: 1,
+        created: 2,
+        integrationId: 'opencode'
       },
       { value: JSON.stringify({ type: 'key', key: DATABASE_KEY }), active: 1, created: 1 }
     ])

@@ -15,6 +15,8 @@ import {
 } from '../opencode/opencode-credential-backend'
 
 const OPENCODE_GO_INTEGRATION_ID = 'opencode-go'
+// The new console stores the Go sign-in as an OAuth credential on this integration (#24818).
+const OPENCODE_OAUTH_INTEGRATION_ID = 'opencode'
 // models.dev shares this variable between OpenCode and Go.
 const OPENCODE_API_KEY_ENV = 'OPENCODE_API_KEY'
 const AUTH_FILE_NAME = 'auth.json'
@@ -63,6 +65,14 @@ function trimmedKey(value: unknown): string | null {
   }
   const trimmed = value.trim()
   return trimmed ? trimmed : null
+}
+
+/** New-console Go sign-ins are OAuth credentials; the bearer token lives on `access`. */
+function oauthAccessTokenFromCredentialRecord(value: unknown): string | null {
+  if (!isRecord(value) || value.type !== 'oauth') {
+    return null
+  }
+  return trimmedKey(value.access)
 }
 
 function readOpenCodeInlineGoKey(environment: NodeJS.ProcessEnv): {
@@ -137,6 +147,26 @@ function selectCredentialKey(database: Database.Database): string | null {
       const key = keyFromCredentialRecord(JSON.parse(row.value), 'key')
       if (key) {
         return key
+      }
+    } catch {
+      continue
+    }
+  }
+  // A Go api key outranks the OAuth sign-in; the new console only offers the latter (#24818).
+  const oauthRows: unknown[] = database
+    .prepare(
+      'SELECT value FROM credential WHERE integration_id = ? ' +
+        'ORDER BY active DESC, time_created DESC LIMIT 8'
+    )
+    .all(OPENCODE_OAUTH_INTEGRATION_ID)
+  for (const row of oauthRows) {
+    if (!isRecord(row) || typeof row.value !== 'string') {
+      continue
+    }
+    try {
+      const accessToken = oauthAccessTokenFromCredentialRecord(JSON.parse(row.value))
+      if (accessToken) {
+        return accessToken
       }
     } catch {
       continue
