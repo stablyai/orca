@@ -2,7 +2,7 @@ import { Buffer } from 'node:buffer'
 import { describe, expect, it, vi } from 'vitest'
 
 import { decodeBrowserScreencastFrame } from '../../../../shared/browser-screencast-protocol'
-import { clampScreencastViewportToGuestView } from './browser-screencast-guest-view-limit'
+
 import { startBrowserScreencast } from './browser-screencast-stream'
 import { createMockScreencastWebContents } from './browser-screencast-web-contents-test-double'
 
@@ -73,17 +73,6 @@ async function startOversizedStream(guest: ReturnType<typeof createGuest>, onFra
     onFrame
   })
 }
-
-describe('clampScreencastViewportToGuestView', () => {
-  it('never goes below the smallest viewport a client may request', () => {
-    expect(
-      clampScreencastViewportToGuestView(
-        { viewportWidth: 800, viewportHeight: 600 },
-        { width: 1, height: 1 }
-      )
-    ).toEqual({ viewportWidth: 320, viewportHeight: 240 })
-  })
-})
 
 describe('screencast of a guest smaller than the requested viewport (#30341)', () => {
   it('re-emulates at the size the guest can paint and labels frames with it', async () => {

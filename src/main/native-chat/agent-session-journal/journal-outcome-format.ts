@@ -1,8 +1,7 @@
-import type Database from '../../sqlite/sync-database'
 import { readJournalSessionEpoch } from './journal-row-table'
-import { AgentSessionJournalError } from './journal-write-guards'
+import { AgentSessionJournalError, JournalOutcomeDecodeError } from './journal-write-guards'
 import { JOURNAL_OUTCOME_FORMAT_2 } from './journal-outcome-format-2'
-import { JournalOutcomeDecodeError } from './journal-outcome-codec'
+import type Database from '../../sqlite/sync-database'
 
 /** The newest record format this build reads, and the one it writes. Each stored record carries its
  * own format; older formats keep their frozen decoders and are never rewritten. */
@@ -12,7 +11,7 @@ export const JOURNAL_OUTCOME_FORMAT = JOURNAL_OUTCOME_FORMAT_2
  * tail's records were written over that reading. A build that reads old rows into different keys or
  * values must key the new reading off a new marker version; a prefix key read twice under two
  * names, or a key the tail deleted coming back, is never intended behavior. */
-export const JOURNAL_OUTCOME_MARKER_VERSION = 5
+export const JOURNAL_OUTCOME_MARKER_VERSION = 6
 /** `prefix` counts the epoch's frozen input rows; the marker row sits right after them and outcome
  * records start at its sequence. `format` is the highest record format the epoch holds. */
 export type JournalOutcomeSource = {
@@ -20,6 +19,7 @@ export type JournalOutcomeSource = {
   through: number
   format: number
   prefix: number
+  marker: 5 | 6
 }
 
 export function ensureJournalOutcomeTables(db: Database.Database): void {
@@ -43,6 +43,14 @@ export function ensureJournalOutcomeTables(db: Database.Database): void {
 /** Every owning mutation calls this inside its transaction, before changing the epoch. Null means
  * an input-only epoch, read as main reads it; a format this build does not know refuses as newer. */
 export function journalOutcomeSource(
+  db: Database.Database,
+  sessionId: string,
+  epoch: string
+): JournalOutcomeSource | null {
+  return readOutcomeSource(db, sessionId, epoch)
+}
+
+function readOutcomeSource(
   db: Database.Database,
   sessionId: string,
   epoch: string
@@ -83,10 +91,10 @@ export function journalOutcomeSource(
   if (typeof version === 'number' && version > JOURNAL_OUTCOME_MARKER_VERSION) {
     throw new AgentSessionJournalError('journal_read_only', 'the chat uses a newer marker')
   }
-  if (version !== JOURNAL_OUTCOME_MARKER_VERSION) {
+  if (version !== 5 && version !== 6) {
     throw new JournalOutcomeDecodeError('missing journal outcome marker')
   }
-  return { generation, format, through, prefix }
+  return { generation, format, through, prefix, marker: version === 6 ? 6 : 5 }
 }
 
 function markerVersion(json: unknown): unknown {
@@ -126,14 +134,26 @@ export function startJournalOutcomeLog(
     epoch,
     seq,
     savedAt,
-    JSON.stringify({ v: JOURNAL_OUTCOME_MARKER_VERSION, kind: 'outcomes', epoch, seq, ts: savedAt })
+    JSON.stringify({
+      v: prefix > 0 ? JOURNAL_OUTCOME_MARKER_VERSION : 5,
+      kind: 'outcomes',
+      epoch,
+      seq,
+      ts: savedAt
+    })
   )
   db.prepare(
     `INSERT INTO journal_outcome_epochs VALUES (?, ?, ?, ?, ?, ?)
     ON CONFLICT(session_id) DO UPDATE SET epoch = excluded.epoch, generation = excluded.generation,
     format = excluded.format, through_seq = excluded.through_seq, prefix_seq = excluded.prefix_seq`
   ).run(sessionId, epoch, generation, JOURNAL_OUTCOME_FORMAT, prefix, prefix)
-  return { generation, format: JOURNAL_OUTCOME_FORMAT, through: prefix, prefix }
+  return {
+    generation,
+    format: JOURNAL_OUTCOME_FORMAT,
+    through: prefix,
+    prefix,
+    marker: prefix > 0 ? 6 : 5
+  }
 }
 
 /** Coverage advances with each write; the required format only ever rises. */

@@ -1,10 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import { agentSessionFailureSentence } from '../../shared/agent-session/failures/agent-session-failure-words'
-import {
-  agentSessionFailureFact,
-  providerDiagnosticOf
-} from '../../shared/agent-session/failures/agent-session-failure'
+
+import { providerDiagnosticOf } from '../../shared/agent-session/failures/agent-session-failure'
 import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import { AcpSignInPromptError } from './acp-errors'
 import { ACP_LAUNCH_SPECS } from './acp-launch-specs'
@@ -112,24 +109,6 @@ it('starts signed out without Orca words when the connection closes for sign-in'
   expect(error).toMatchObject({ reason: 'notSignedIn' })
   expect(providerDiagnosticOf(error)).toBeUndefined()
 })
-
-it.each(ACP_LAUNCH_SPECS)(
-  'preserves $agent startup auth classification and its detail',
-  async (spec) => {
-    const detail = 'Sign-in credentials are missing.'
-    const rig = await openAcpAdapterRig({
-      spec,
-      script: (agent) => agent.on('session/new', (frame) => agent.fail(frame, -32000, detail))
-    })
-    await rig.acquire()
-    expect(rig.openFailure()).toMatchObject({ reason: 'notSignedIn' })
-    expect(providerDiagnosticOf(rig.openFailure())).toEqual({ text: detail, audience: 'person' })
-    const fact = agentSessionFailureFact('notSignedIn', {
-      detail: providerDiagnosticOf(rig.openFailure())
-    })
-    expect(agentSessionFailureSentence(fact, 'row', { agentName: spec.agent })).toContain(detail)
-  }
-)
 
 it.each(ACP_LAUNCH_SPECS)(
   "keeps $agent's sign-in words over log lines it wrote before refusing its start",

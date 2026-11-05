@@ -14,7 +14,7 @@ import {
 import type {
   PersistedOpenFile,
   WorkspaceSessionState
-} from '../../shared/workspace-session-state-types'
+} from '../../shared/workspace-session/workspace-session-state-types'
 
 export type HeadlessEditorTab = RuntimeMobileSessionMarkdownTab | RuntimeMobileSessionFileTab
 

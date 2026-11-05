@@ -15,7 +15,8 @@ import type { TerminalHistorySeedTransferRegistry } from './terminal-history-see
 import type { CreateOrAttachOptions, CreateOrAttachResult, TerminalHost } from './terminal-host'
 import { isTuiAgent } from '../../shared/agent-launch/catalog/tui-agent-config'
 import { isSpawnIntent } from '../../shared/host-spawn-admission'
-import { parsePtyStartupIngressIntent } from '../../shared/pty-startup-ingress'
+import '../../shared/terminal/pty/ingress/pty-startup-ingress'
+import { parsePtyStartupIngressIntent } from '../../shared/terminal/pty/ingress/pty-startup-ingress-intent'
 import {
   isAgentSessionExecutionClaim,
   isAgentSessionSurfaceBinding

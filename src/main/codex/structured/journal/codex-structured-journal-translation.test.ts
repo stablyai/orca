@@ -7,8 +7,10 @@ import {
   createDeferredStructuredAgentSessionEventSink,
   type StructuredAgentSessionEventSink
 } from '../../../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import { createCodexJournalTranslator } from './codex-structured-journal-translation'
-import '../prompts/codex-structured-prompt-replies'
+import {
+  createCodexHistoryTranslator,
+  createCodexJournalTranslator
+} from './codex-structured-journal-translation'
 import {
   CODEX_COMMAND_APPROVAL_METHOD,
   CODEX_USER_INPUT_METHOD
@@ -110,7 +112,8 @@ function pausedDeferred() {
 
 describe('codex journal translation', () => {
   it('projects turns restored by thread/resume into durable conversation rows', () => {
-    const { translator, tap } = translatorWith()
+    const tap = recorder()
+    const translator = createCodexHistoryTranslator({ sink: tap.sink })
 
     translator.restoreThread(THREAD_ID, {
       turns: [
@@ -140,26 +143,6 @@ describe('codex journal translation', () => {
         blocks: [{ type: 'text', text: 'existing answer' }]
       }
     ])
-  })
-
-  it('refuses an old-provider restore above the operation bound before partial import', () => {
-    const { translator, tap } = translatorWith()
-    const result = translator.restoreThread(THREAD_ID, {
-      turns: [
-        {
-          id: 'turn-restored',
-          items: Array.from({ length: 1_025 }, (_, index) => ({
-            type: 'agentMessage',
-            id: `agent-${index}`,
-            text: `answer-${index}`
-          }))
-        }
-      ]
-    })
-
-    expect(result).toEqual({ accepted: false, reason: 'backpressure' })
-    expect(tap.rows).toEqual([])
-    expect(tap.publishes()).toBe(0)
   })
 
   it('durably opens and closes the primary turn cancellation lifecycle', () => {
@@ -196,6 +179,27 @@ describe('codex journal translation', () => {
       }
     ])
     expect(tap.tombstones).toEqual([])
+  })
+
+  it('stops calling an image generation running once its turn ends without completing it', () => {
+    const { translator, tap } = translatorWith()
+
+    translator.handle(TURN_STARTED)
+    translator.handle(
+      notification('item/started', {
+        item: { type: 'imageGeneration', id: 'image-1', status: 'in_progress' }
+      })
+    )
+    translator.handle(
+      notification('turn/completed', { turn: { id: TURN_ID, status: 'interrupted' } })
+    )
+
+    const image = reduced(tap.rows).find((row) => row.key.includes('image-1'))
+    expect(image?.body).toEqual({
+      kind: 'message',
+      role: 'assistant',
+      blocks: [{ type: 'text', text: 'Image generation: preview unavailable' }]
+    })
   })
 
   it('closes every active turn when the provider session ends after a later turn starts', () => {

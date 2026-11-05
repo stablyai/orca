@@ -97,7 +97,7 @@ export function ChatUiHereCornerCard({ onClose }: { onClose: () => void }): JSX.
               <FeatureTipSettingsLine
                 text={translate(
                   'featureTips.chatUiHere.changeInSettings',
-                  'Change anytime in <link>Settings → Agents</link>.'
+                  'Change anytime in <link>Settings → Chat UI</link>.'
                 )}
                 onClick={handleOpenSettings}
               />

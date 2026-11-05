@@ -225,7 +225,11 @@ export const ownerQuestionRussian = defineFixture({
   width: 360,
   setup: async () => {
     setup('paused')
-    useAppStore.setState((state) => ({ settings: { ...state.settings, uiLanguage: 'ru' } }))
+    const settings = useAppStore.getState().settings
+    if (!settings) {
+      throw new Error('Fixture settings are not initialized')
+    }
+    useAppStore.setState({ settings: { ...settings, uiLanguage: 'ru' } })
     await i18n.changeLanguage(await loadRendererUiLanguage('ru'))
   },
   render: () => <SessionLinkOwnerQuestion sessionId={source.sessionId} />

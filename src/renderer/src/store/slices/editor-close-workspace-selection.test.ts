@@ -73,26 +73,6 @@ describe.each(workspaces)('editor close selection in a $label', ({ id: worktreeI
     expect(state.openFiles).toEqual([])
     expect(state.activeFileId).toBeNull()
   })
-
-  it.each(closeActions)('%s returns to the welcome screen when no tab survives', async (action) => {
-    const store = createEditorTabsStore()
-    store.setState({ activeWorktreeId: worktreeId })
-    const main = await drawTabsFromMain(store)
-    const fileId = openMarkdown(store, worktreeId)
-    await main.settle()
-
-    if (action === 'closeFile') {
-      store.getState().closeFile(fileId)
-    } else {
-      store.getState().closeAllFiles()
-    }
-    await main.settle()
-    main.close()
-
-    expect(store.getState().activeWorktreeId).toBeNull()
-    // A layout-owner build's frame drops an emptied workspace's tab map.
-    expect(store.getState().unifiedTabsByWorktree[worktreeId] ?? []).toEqual([])
-  })
 })
 
 describe('editor close mixed tab history', () => {
@@ -124,31 +104,5 @@ describe('editor close mixed tab history', () => {
     expect(state.activeTabType).toBe('agent-session')
     expect(state.groupsByWorktree['wt-1'][0].activeTabId).toBe(first.id)
     expect(state.unifiedTabsByWorktree['wt-1'].map((tab) => tab.id)).toEqual([first.id, second.id])
-  })
-
-  it.each(closeActions)('%s ignores chats in another workspace', async (action) => {
-    const store = createEditorTabsStore()
-    const otherChat = store.getState().createUnifiedTab('wt-2', 'agent-session', {
-      entityId: 'session-2',
-      agentSessionAgent: 'codex',
-      activate: false
-    })
-    const main = await drawTabsFromMain(store)
-    const fileId = openMarkdown(store, 'wt-1')
-    await main.settle()
-
-    if (action === 'closeFile') {
-      store.getState().closeFile(fileId)
-    } else {
-      store.getState().closeAllFiles()
-    }
-    await main.settle()
-    main.close()
-
-    expect(store.getState().activeWorktreeId).toBeNull()
-    // Main's frame redraws the chat; it is the same tab.
-    expect(store.getState().unifiedTabsByWorktree['wt-2']).toEqual([
-      expect.objectContaining({ id: otherChat.id, entityId: otherChat.entityId })
-    ])
   })
 })

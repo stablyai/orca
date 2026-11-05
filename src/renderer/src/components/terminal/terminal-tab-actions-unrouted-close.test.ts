@@ -17,7 +17,7 @@ vi.mock('@/runtime/web-runtime-session-tab-lifecycle', () => ({
 vi.mock('@/runtime/web-runtime-session-environment', () => ({
   isWebRuntimeSessionActive: isWebRuntimeSessionActiveMock
 }))
-vi.mock('../../../../shared/terminal-surface-id', () => ({
+vi.mock('../../../../shared/workspace-layout/terminal-surface-id', () => ({
   toHostSessionTabId: (tabId: string) => tabId
 }))
 
@@ -65,7 +65,7 @@ describe('closeTerminalTab before the worktree catalog names a host', () => {
     getStateMock.mockReturnValue(unhydratedState(toRemoteRuntimePtyId('h-1', 'env-1'), closeTab))
     const onCancel = vi.fn()
 
-    closeTerminalTab('tab-1', { onCancel })
+    closeTerminalTab('tab-1', { reason: 'user', onCancel })
 
     expect(onCancel).not.toHaveBeenCalled()
     expect(closeWebRuntimeSessionTabMock).toHaveBeenCalledWith({

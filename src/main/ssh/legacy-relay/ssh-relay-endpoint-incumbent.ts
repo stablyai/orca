@@ -1,7 +1,7 @@
 /** Probe this endpoint only: unlinking a refusing live socket strands its relay/PTYs (#8585). Exit requires refused connect, complete no-holder evidence and local storage; shared-home sockets may live on another kernel. Missing tools or ambiguous failures stay unverifiable and never authorize cleanup (docs/reference/ssh-execution-boundary.md). */
 import { RELAY_LSOF_PROBE_JS } from '@orca/process-host/posix-lsof-probe'
 import type { SshConnection } from '../connection/ssh-connection'
-import { quotePosixShell } from '../../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import {
   RELAY_CHILD_COUNT_VAR,
   RELAY_UNRECOGNIZED_CHILD_COUNT_VAR,

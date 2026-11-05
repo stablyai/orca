@@ -25,7 +25,7 @@ import {
   type NativeChatMessageSlot,
   type NativeChatTranscriptSlot
 } from './native-chat-transcript-slots'
-import { nativeChatTurnDiffs } from './native-chat-turn-diffs'
+import { nativeChatTurnDiffs } from '../../../../shared/native-chat/tools/native-chat-turn-diffs'
 
 let sequence = 0
 

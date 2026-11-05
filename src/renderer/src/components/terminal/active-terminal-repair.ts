@@ -1,5 +1,5 @@
 import type { WorkspaceVisibleTabType } from '../../../../shared/tab-types'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 
 export function shouldRepairActiveTerminalTab(args: {
   activeTabType: WorkspaceVisibleTabType

@@ -4128,7 +4128,6 @@
             "5c938d39ac": "semana",
             "54e8d6bb2d": "Fable",
             "a79c64f87e": "Fable",
-            "c98ea88392": "Ninguna otra cuenta",
             "d450654fa2": "Cuenta de Claude",
             "11e2354daf": "Uso de Claude",
             "3dd7ddfae1": "Abrir detalles de Claude y cambiar de cuenta",
@@ -5638,9 +5637,6 @@
           "hiding_one": "Ocultando {{count}} worktree detectado",
           "hiding_other": "Ocultando {{count}} worktrees detectados",
           "hiding_many": "Ocultando {{count}} worktrees detectados",
-          "hidingInRepo_one": "Ocultando {{count}} worktree detectado en {{repo}}",
-          "hidingInRepo_other": "Ocultando {{count}} worktrees detectados en {{repo}}",
-          "hidingInRepo_many": "Ocultando {{count}} worktrees detectados en {{repo}}",
           "keepHiddenAriaLabel_one": "Mantener oculto {{count}} worktree detectado de {{repo}}; recupéralo desde el menú del proyecto",
           "keepHiddenAriaLabel_other": "Mantener ocultos {{count}} worktrees detectados de {{repo}}; recupéralos desde el menú del proyecto",
           "keepHiddenAriaLabel_many": "Mantener ocultos {{count}} worktrees detectados de {{repo}}; recupéralos desde el menú del proyecto",
@@ -14777,9 +14773,7 @@
           "ae3b00ca82": "Configurar tareas de GitHub",
           "ff92d15436": "Orca te notificará cuando los agentes terminen o necesiten ayuda.",
           "b054332836": "Configurar notificaciones",
-          "04ae28d8ca": "Elige la apariencia que quieras ver durante horas.",
           "f396db9f20": "Haz que te sientas como en casa",
-          "322fc50a18": "Orca funciona con cualquier agente CLI. Elige el que más usarás. Puedes cambiarlo en cualquier momento.",
           "198b148b3c": "Elija su agente predeterminado",
           "windowsTerminalTitle": "Configura los valores predeterminados de la terminal de Windows",
           "windowsTerminalSubtitle": "Elige la Shell predeterminada para los paneles nuevos y cómo se comporta el clic derecho en la terminal.",
@@ -17754,6 +17748,9 @@
         },
         "automationTargetAvailability": {
           "hostMismatch": "El host de ejecución guardado ya no coincide con esta configuración del proyecto."
+        },
+        "launchSettings": {
+          "needsFreshSession": "La configuración de inicio del agente requiere una sesión nueva en cada ejecución."
         }
       },
       "agent": {
@@ -19411,7 +19408,6 @@
       "dismissDeliveryNotice": "Descartar",
       "addSelectionToChat": "Añadir al chat",
       "messageNotSent": "Mensaje no enviado",
-      "deliveryUnconfirmed": "Entrega sin confirmar — revisa el chat antes de reintentar",
       "messageSending": "Enviando…",
       "userMessage": {
         "showFull": "Mostrar mensaje completo",
@@ -19588,8 +19584,6 @@
       },
       "turnDiff": {
         "partial": "Diff parcial",
-        "showDiff": "Mostrar diferencias",
-        "hideDiff": "Ocultar diferencias",
         "changedFiles_one": "{{count}} archivo modificado",
         "changedFiles_other": "{{count}} archivos modificados",
         "changedFiles_many": "{{count}} archivos modificados"
@@ -19695,7 +19689,6 @@
         "continue": "Continuar",
         "failed": "No se pudo continuar este chat. Inténtalo de nuevo o envía un mensaje.",
         "explanation": "Continúa y el agente comprobará primero si su último paso terminó.",
-        "unconfirmed": "No se pudo confirmar si {{agent}} recibió Continuar. Revisa el chat antes de volver a intentarlo.",
         "usageLimitExplanation": "Pide al agente que continúe donde lo dejó. Úsalo cuando se restablezca el límite."
       },
       "rewind": {
@@ -20267,6 +20260,9 @@
     "settings": {
       "nativeChat": {
         "followUpBehaviorTitle": "Poner mensajes de seguimiento en cola",
+        "scrollToLatestOnSendTitle": "Desplazar a lo último al enviar",
+        "scrollToLatestOnSendCopy": "Enviar con el chat desplazado hacia arriba salta al último mensaje y sigue la respuesta. Desactívalo para mantener tu posición.",
+        "scrollToLatestOnSendSearchPosition": "posición",
         "followUpBehaviorCopy": "Los mensajes enviados mientras el agente trabaja esperan como tarjetas hasta que termina el turno, en lugar de entrar en el turno en curso. Cmd/Ctrl+Intro hace lo contrario para un mensaje.",
         "inlineVisualsTitle": "Elementos visuales inline",
         "inlineVisualsCopy": "Permite que el agente muestre gráficos, diagramas y maquetas dentro de sus respuestas. Se aplica a los chats nuevos.",
@@ -20283,7 +20279,13 @@
         "usageLimitContinueCopy": "Orca envía \"Continue where you left off.\" cuando se restablece el límite. Se aplica a todos los chats con una hora de restablecimiento conocida.",
         "usageLimitContinueSearchLimit": "límite de uso",
         "usageLimitContinueSearchReset": "restablecer",
-        "usageLimitContinueToggleLabel": "Activar o desactivar la continuación de chats al restablecerse un límite de uso"
+        "usageLimitContinueToggleLabel": "Activar o desactivar la continuación de chats al restablecerse un límite de uso",
+        "idleStopTitle": "Detener agentes inactivos tras",
+        "idleStopCopy": "Cierra el agente de un chat cuando el chat lleva este tiempo inactivo, para liberar memoria. El chat se conserva y tu siguiente mensaje vuelve a iniciar el agente. Elige Nunca para agentes que siguen trabajando en segundo plano entre turnos.",
+        "idleStopSearchIdle": "idle",
+        "idleStopSearchTimeout": "tiempo de espera",
+        "idleStopSearchKeepAlive": "mantener activo",
+        "idleStopNever": "Nunca"
       },
       "TerminalInteraction": {
         "copyTrimsGutter": "Recortar margen al copiar",
@@ -20341,7 +20343,32 @@
           "system": "Igual que el SO",
           "dark": "Suave a la vista",
           "light": "Brillante y nítido"
-        }
+        },
+        "looks": {
+          "activeNow": "ahora",
+          "browsePlugins": "Explorar plugins",
+          "browseThemePlugins": "Explorar plugins de temas",
+          "colorMode": "Modo de color",
+          "colorModeCaption": "Claro, oscuro o según tu sistema.",
+          "darkLook": "Estilo oscuro",
+          "darkLooks": "Estilos oscuros",
+          "lightLook": "Estilo claro",
+          "lightLooks": "Estilos claros",
+          "moreThemes": "Más temas",
+          "next": "Más estilos",
+          "orcaDark": "Orca oscuro",
+          "orcaLight": "Orca claro",
+          "pluginsHint": "Hay más temas disponibles como plugins.",
+          "previous": "Estilos anteriores",
+          "showsWhenDark": "Se muestra cuando tu sistema está en modo oscuro",
+          "showsWhenLight": "Se muestra cuando tu sistema está en modo claro",
+          "slotLabel": "Estilo a editar",
+          "sourceBuiltIn": "Integrado",
+          "sourceCommunity": "Paleta de terminal",
+          "themes": "Tema",
+          "themesCaption": "Opcional. Ve más allá con temas de la app y paletas de terminal."
+        },
+        "subtitle": "Elige claro u oscuro y, si quieres, un tema. Puedes cambiar ambos cuando quieras en Ajustes."
       },
       "integrations": {
         "capabilities": {
@@ -20961,10 +20988,8 @@
       "offTerminal": "¿Prefieres el terminal? Sigue teniendo soporte completo. Tus agentes seguirán abriéndose allí hasta que elijas Chat.",
       "onIntro": "La interfaz de chat ya no es experimental y ahora forma parte de Orca. Tus agentes siguen abriéndose como chats, con mensajes enriquecidos, elementos visuales e imágenes.",
       "onTerminal": "El terminal también sigue teniendo soporte completo. Puedes volver a cambiar cualquier agente cuando quieras.",
-      "changeInSettings": "Cámbialo cuando quieras en <link>Configuración → Agentes</link>.",
       "stayInTerminal": "Seguir en el terminal",
       "cta": "Usar la interfaz de chat",
-      "saveFailed": "No se pudo activar la interfaz de chat. Elige Chat en Configuración → Agentes.",
       "demoTabTitle": "Explicar el inicio de sesión",
       "demoPrompt": "Explica cómo funciona el inicio de sesión",
       "demoReply": "El inicio de sesión empieza en {{file}}: el navegador envía a /login, el servidor comprueba la contraseña y crea una sesión, y luego te redirige a la app. Este es el flujo:",

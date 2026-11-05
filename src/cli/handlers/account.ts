@@ -8,7 +8,7 @@ import { RuntimeClientError } from '../runtime-client'
 import { stripElectronRunAsNode } from '../runtime/orca-app-executable'
 import { rejectRemoteSelectionFlags } from '../remote-selection-flag-rejection'
 import { buildWslExecArgs, buildWslLoginShellCommand } from '../../shared/wsl-login-shell-command'
-import { quotePosixShell } from '../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../shared/shell/launch/shell-argument-quoting'
 import { isWindowsFnmDefaultAliasDir } from '../../shared/fnm-default-alias-dirs'
 import {
   getVersionManagerBinPaths,
