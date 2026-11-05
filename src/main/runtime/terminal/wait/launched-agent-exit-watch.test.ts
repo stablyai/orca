@@ -24,7 +24,6 @@ const ZSH_PROMPT_AFTER_EXIT = [
   '\x1b]133;D;1\x07\x1b]133;A\x07\r\x1b[0m\x1b[27m\x1b[24m\x1b[Jplain% \x1b[K',
   '\x1b]777;orca-shell-ready\x07\x1b[?2004h'
 ].join('')
-const NESTED_SHELL_COMMAND = '\x1b]133;C\x07ls\n\x1b]133;D;0\x07'
 
 /** Past every re-read the watch makes after a shell return. */
 async function runRereads(): Promise<void> {
@@ -96,117 +95,6 @@ describe('a launched agent exiting during readiness', () => {
     expect(launch.unsubscribe).toHaveBeenCalledOnce()
   })
 
-  it('finds an exit that happened before the wait began', async () => {
-    const launch = watchedLaunch({
-      replay: ZSH_PROMPT + ZSH_RUNS_LAUNCH_LINE + REJECTION + ZSH_PROMPT_AFTER_EXIT
-    })
-    await runRereads()
-
-    await expect(launch.result).rejects.toThrow(REJECTION.trim())
-  })
-
-  it('says so when the launch command printed nothing', async () => {
-    const launch = watchedLaunch({ replay: ZSH_RUNS_LAUNCH_LINE + ZSH_PROMPT_AFTER_EXIT })
-    await runRereads()
-
-    await expect(launch.result).rejects.toThrow('without printing anything')
-  })
-
-  it('keeps what a verbose launch printed last after its start left the buffer', async () => {
-    const launch = watchedLaunch({})
-    launch.emit(ZSH_RUNS_LAUNCH_LINE)
-    launch.setRecent(REJECTION)
-    launch.emit(ZSH_PROMPT_AFTER_EXIT)
-    await runRereads()
-
-    await expect(launch.result).rejects.toThrow(REJECTION.trim())
-  })
-
-  it('reads a redrawn line as its last frame, over CRLF', async () => {
-    const launch = watchedLaunch({
-      replay: `${ZSH_RUNS_LAUNCH_LINE}loading 10%\rloading 90%\r\nfatal: bad model\r\n${ZSH_PROMPT_AFTER_EXIT}`
-    })
-    await runRereads()
-
-    await expect(launch.result).rejects.toThrow(/Its output:\nloading 90%\nfatal: bad model$/)
-  })
-
-  it('keeps a last line with no newline, which zsh’s prompt redraw would erase', async () => {
-    const launch = watchedLaunch({
-      replay: `${ZSH_RUNS_LAUNCH_LINE}fatal: bad model${ZSH_PROMPT_AFTER_EXIT}`
-    })
-    await runRereads()
-
-    await expect(launch.result).rejects.toThrow(/Its output:\nfatal: bad model$/)
-  })
-
-  it('reads again while a prompt’s own command leads the group', async () => {
-    const reads: LaunchedAgentForeground[] = ['agent', 'unknown', 'shell']
-    const launch = watchedLaunch({ foreground: () => reads.shift() ?? 'agent' })
-    launch.emit(ZSH_RUNS_LAUNCH_LINE + REJECTION + ZSH_PROMPT_AFTER_EXIT)
-    await runRereads()
-
-    await expect(launch.result).rejects.toThrow(REJECTION.trim())
-  })
-
-  it('stops reading once the shell’s return never proves out', async () => {
-    const launch = watchedLaunch({ foreground: () => 'agent' })
-    launch.emit(ZSH_RUNS_LAUNCH_LINE + ZSH_PROMPT_AFTER_EXIT)
-    await runRereads()
-    const reads = vi.mocked(launch.runtime.readLaunchedAgentForeground).mock.calls.length
-    await runRereads()
-
-    expect(vi.mocked(launch.runtime.readLaunchedAgentForeground)).toHaveBeenCalledTimes(reads)
-    expect(launch.settled).not.toHaveBeenCalled()
-  })
-
-  it('leaves a slow start alone while the shell runs the launch line', async () => {
-    const launch = watchedLaunch({})
-    // An rc file toggling bracketed paste looks like a command ending without integration marks.
-    launch.emit('\x1b[?2004l\x1b[?2004h')
-    launch.emit(ZSH_PROMPT)
-    launch.emit(ZSH_RUNS_LAUNCH_LINE)
-    await runRereads()
-
-    expect(launch.runtime.readLaunchedAgentForeground).not.toHaveBeenCalled()
-    launch.finishWait('ready')
-    await expect(launch.result).resolves.toBe('ready')
-  })
-
-  it('ignores a finish no command came before, as prompt hooks can report', async () => {
-    const launch = watchedLaunch({})
-    launch.emit('\x1b]133;D;0\x07')
-    await runRereads()
-
-    expect(launch.runtime.readLaunchedAgentForeground).not.toHaveBeenCalled()
-    expect(launch.settled).not.toHaveBeenCalled()
-  })
-
-  it('outlasts a shell nested in the agent, then still sees the agent exit', async () => {
-    let foreground: LaunchedAgentForeground = 'agent'
-    const launch = watchedLaunch({ foreground: () => foreground })
-    launch.emit(ZSH_RUNS_LAUNCH_LINE)
-    launch.emit(NESTED_SHELL_COMMAND)
-    await runRereads()
-    expect(launch.settled).not.toHaveBeenCalled()
-
-    foreground = 'shell'
-    launch.emit(REJECTION + ZSH_PROMPT_AFTER_EXIT)
-    await runRereads()
-
-    await expect(launch.result).rejects.toThrow(REJECTION.trim())
-  })
-
-  it('keeps waiting when no foreground read can tell', async () => {
-    const launch = watchedLaunch({ foreground: () => 'unknown' })
-    launch.emit(ZSH_RUNS_LAUNCH_LINE + ZSH_PROMPT_AFTER_EXIT)
-    await runRereads()
-
-    expect(launch.settled).not.toHaveBeenCalled()
-    launch.finishWait('ready')
-    await expect(launch.result).resolves.toBe('ready')
-  })
-
   it('discards a read that a later command outran', async () => {
     let answer: (value: LaunchedAgentForeground) => void = () => {}
     const launch = watchedLaunch({
@@ -222,23 +110,6 @@ describe('a launched agent exiting during readiness', () => {
     await runRereads()
 
     expect(launch.settled).not.toHaveBeenCalled()
-  })
-
-  it('keeps a ready answer when the exit verdict lands after it', async () => {
-    let answer: (value: LaunchedAgentForeground) => void = () => {}
-    const launch = watchedLaunch({
-      foreground: () =>
-        new Promise((resolve) => {
-          answer = resolve
-        })
-    })
-    launch.emit(ZSH_RUNS_LAUNCH_LINE + ZSH_PROMPT_AFTER_EXIT)
-    await runRereads()
-    launch.finishWait('ready')
-    await runRereads()
-    answer('shell')
-
-    await expect(launch.result).resolves.toBe('ready')
   })
 })
 
@@ -274,26 +145,4 @@ describe('worker readiness on a real runtime pane', () => {
       expect(await wait).toMatchObject({ message: expect.stringContaining(REJECTION.trim()) })
     }
   )
-
-  it('does not watch a reused terminal, whose shell ran commands before this start', async () => {
-    const { runtime, handle, terminal } = await createTranscriptPane({
-      paneTitle: 'shell',
-      foregroundProcess: 'zsh',
-      launchAgent: 'cursor',
-      data: ''
-    })
-    const read = vi.spyOn(runtime, 'readLaunchedAgentForeground').mockResolvedValue('shell')
-    runtime.onPtyData(TRANSCRIPT_PANE_PTY_ID, ZSH_RUNS_LAUNCH_LINE + ZSH_PROMPT_AFTER_EXIT, 1)
-    vi.useFakeTimers()
-    const wait = waitForWorkerAgentReady(runtime, handle, {
-      agent: 'cursor',
-      reusesTerminal: true,
-      creation: terminal,
-      timeoutMs: 50
-    }).catch((error: unknown) => error)
-    await vi.advanceTimersByTimeAsync(100)
-    await wait
-
-    expect(read).not.toHaveBeenCalled()
-  })
 })

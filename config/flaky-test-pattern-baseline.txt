@@ -249,7 +249,6 @@
 1 test-no-real-time-wait:src/main/runtime/agent-session/structured-agent-session-runtime.test.ts
 1 test-no-real-time-wait:src/main/runtime/claude-structured-idle-releases-unknown.test.ts
 1 test-no-real-time-wait:src/main/runtime/terminal/wait/launched-agent-crash-guard.live-shell.test.ts
-1 test-no-real-time-wait:src/main/runtime/terminal/wait/launched-agent-foreground.test.ts
 1 test-no-real-time-wait:src/main/runtime/terminal/wait/launched-agent-shell-handoff-readiness.test.ts
 1 test-no-real-time-wait:src/main/runtime/mobile-desktop-relay/mobile-desktop-relay.integration.test.ts
 1 test-no-real-time-wait:src/main/runtime/mobile-desktop-relay/mobile-desktop-relay.test.ts
@@ -814,7 +813,6 @@
 10 test-no-real-time-wait:src/main/browser/cdp/transport/cdp-ws-proxy-focus-replay.test.ts
 10 test-no-wall-clock:src/main/observability/bundle.test.ts
 10 test-no-wall-clock:src/main/orca-profiles/profile-cloud-auth-characterization.test.ts
-10 test-no-wall-clock:src/main/runtime/terminal/wait/tui-idle-hook-lane.test.ts
 10 test-timeout-needs-reason:tests/e2e/orchestration-idle-mail-delivery.spec.ts
 11 test-no-real-time-wait:src/main/daemon/sessions/testing/reattach-snapshot.test.ts
 11 test-no-real-time-wait:src/main/native-chat/transcript-watch.test.ts
@@ -822,7 +820,6 @@
 11 test-no-wall-clock:src/main/runtime/runtime-rpc-relay-pairing.test.ts
 12 test-no-real-time-wait:src/main/browser/cdp/transport/cdp-ws-proxy.test.ts
 12 test-no-wall-clock:src/main/rate-limits/service-minimax-usage.test.ts
-12 test-no-wall-clock:src/main/runtime/terminal/wait/tui-idle-evidence.test.ts
 13 test-no-real-time-wait:tests/e2e/terminal-long-table-scroll-restore.spec.ts
 13 test-no-wall-clock:src/main/startup/windows-install-dir-acl-recovery.test.ts
 3 test-no-wall-clock:src/renderer/src/components/native-chat/NativeChatMessageList.test.tsx
@@ -833,7 +830,7 @@
 16 test-no-wall-clock:src/main/claude/structured/claude-structured-real-cli.test.ts
 18 test-no-wall-clock:src/main/github/pr-refresh-coordinator-visible-follow-up.test.ts
 18 test-no-wall-clock:src/main/provider-process/provider-process-supervisor.integration.test.ts
-18 test-no-wall-clock:src/main/runtime/terminal/wait/tui-idle-hook-lane-runtime.test.ts
+16 test-no-wall-clock:src/main/runtime/terminal/wait/tui-idle-hook-lane-runtime.test.ts
 2 test-no-in-test-import-actual:src/main/daemon/history/storage/testing/terminal-history-permissions.test.ts
 2 test-no-in-test-import-actual:src/main/managed-server/activation/orcad-activation-crash-recovery.test.ts
 2 test-no-in-test-import-actual:src/main/ssh/connection/ssh-connection-auth-fallback.test.ts
@@ -1303,7 +1300,7 @@
 5 test-timeout-needs-reason:src/main/claude-usage/scanner-incremental-reader.test.ts
 5 test-timeout-needs-reason:src/main/native-chat/agent-session-wire/structured-agent-session-claude-queued-stop.test.ts
 5 test-timeout-needs-reason:src/main/pty/process-retirement/node-pty-master-fd-retirement.test.ts
-5 test-timeout-needs-reason:src/main/runtime/terminal/wait/tui-idle-hook-lane-runtime.test.ts
+4 test-timeout-needs-reason:src/main/runtime/terminal/wait/tui-idle-hook-lane-runtime.test.ts
 5 test-timeout-needs-reason:tests/e2e/browser-agent-input-focus-isolation.spec.ts
 5 test-timeout-needs-reason:tests/e2e/persisted-session-production-upgrade.spec.ts
 5 test-timeout-needs-reason:tests/e2e/ssh-orcad-auto-convert.spec.ts

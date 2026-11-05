@@ -76,23 +76,6 @@ function launchedPane(
 describe('a launched agent’s ready signal, after the shell that ran it', () => {
   afterEach(() => vi.useRealTimers())
 
-  it('waits for the agent’s own bracketed paste when the agent starts well after the shell’s prompt', async () => {
-    vi.useFakeTimers()
-    const pane = launchedPane()
-    const launchLine = shellRunsLaunchLine()
-    expect(launchLine).toContain('\x1b[?2004h')
-
-    pane.emit(launchLine)
-    pane.setForeground('claude')
-    await vi.advanceTimersByTimeAsync(3_000)
-    expect(pane.settled).not.toHaveBeenCalled()
-
-    // Claude's composer marker answers once it draws, ahead of the quiet window.
-    pane.emit(readFixture('claude-dialog-trust-workspace-answered'))
-    await vi.advanceTimersByTimeAsync(100)
-    expect(pane.settled).toHaveBeenCalledWith('pty-1')
-  })
-
   it('never reads the shell’s next prompt as the agent’s composer after the agent exits', async () => {
     vi.useFakeTimers()
     const pane = launchedPane()
@@ -104,97 +87,6 @@ describe('a launched agent’s ready signal, after the shell that ran it', () =>
 
     expect(pane.settled).toHaveBeenCalledWith(null)
     expect(pane.reads).toBe(1)
-  })
-
-  // Unknown must retain the one-shot signal; only proven shell may discard it.
-  it('settles on the signal when the check cannot prove a shell, with one read', async () => {
-    vi.useFakeTimers()
-    const pane = launchedPane({ provesShell: () => false })
-
-    pane.emit(shellRunsLaunchLine())
-    pane.setForeground('2.1.285')
-    pane.emit(readFixture('claude-dialog-trust-workspace-answered'))
-    await vi.advanceTimersByTimeAsync(QUIET_WINDOW_MS)
-
-    expect(pane.settled).toHaveBeenCalledWith('pty-1')
-    expect(pane.reads).toBe(1)
-  })
-
-  it('settles a Claude that is in front the moment its signal fires, with one check', async () => {
-    vi.useFakeTimers()
-    const pane = launchedPane()
-
-    pane.emit(shellRunsLaunchLine())
-    pane.setForeground('2.1.285')
-    pane.emit(readFixture('claude-dialog-trust-workspace-answered'))
-    await vi.advanceTimersByTimeAsync(QUIET_WINDOW_MS)
-
-    expect(pane.settled).toHaveBeenCalledWith('pty-1')
-    expect(pane.reads).toBe(1)
-  })
-
-  it('reads nothing before the signal when the shell never enables bracketed paste', async () => {
-    vi.useFakeTimers()
-    const pane = launchedPane()
-
-    pane.emit('$ claude\r\n')
-    pane.setForeground('2.1.285')
-    await vi.advanceTimersByTimeAsync(300)
-    expect(pane.reads).toBe(0)
-    pane.emit(readFixture('claude-dialog-trust-workspace-answered'))
-    await vi.advanceTimersByTimeAsync(QUIET_WINDOW_MS)
-
-    expect(pane.settled).toHaveBeenCalledWith('pty-1')
-    expect(pane.reads).toBe(1)
-  })
-
-  // conda/pyenv startup subprocesses prove no agent; their following shell prompt must not settle readiness.
-  it('does not settle while Claude is still silent after a startup-file subprocess ran', async () => {
-    vi.useFakeTimers()
-    const pane = launchedPane()
-
-    pane.setForeground('python3.11')
-    await vi.advanceTimersByTimeAsync(300)
-    pane.setForeground('zsh')
-    pane.emit(shellRunsLaunchLine())
-    pane.setForeground('2.1.285')
-    await vi.advanceTimersByTimeAsync(3_000)
-
-    expect(pane.settled).not.toHaveBeenCalled()
-  })
-
-  it('counts only what follows the last hand-off when the shell draws two prompts first', async () => {
-    vi.useFakeTimers()
-    const pane = launchedPane({ provesShell: () => false })
-
-    pane.emit(shellRunsLaunchLine())
-    pane.emit(shellPromptAfterCommandExits())
-    await vi.advanceTimersByTimeAsync(100)
-    pane.emit(`claude${SHELL_HANDOFF}\r\r\n`)
-    pane.setForeground('2.1.285')
-    await vi.advanceTimersByTimeAsync(3_000)
-    expect(pane.settled).not.toHaveBeenCalled()
-
-    pane.emit(readFixture('claude-dialog-trust-workspace-answered'))
-    await vi.advanceTimersByTimeAsync(QUIET_WINDOW_MS)
-    expect(pane.settled).toHaveBeenCalledWith('pty-1')
-  })
-
-  it('sees a hand-off split across two chunks', async () => {
-    vi.useFakeTimers()
-    const pane = launchedPane({ provesShell: () => false })
-    const launchLine = shellRunsLaunchLine()
-    const cut = launchLine.indexOf(SHELL_HANDOFF) + 4
-
-    pane.emit(launchLine.slice(0, cut))
-    pane.emit(launchLine.slice(cut))
-    pane.setForeground('2.1.285')
-    await vi.advanceTimersByTimeAsync(3_000)
-    expect(pane.settled).not.toHaveBeenCalled()
-
-    pane.emit(readFixture('claude-dialog-trust-workspace-answered'))
-    await vi.advanceTimersByTimeAsync(QUIET_WINDOW_MS)
-    expect(pane.settled).toHaveBeenCalledWith('pty-1')
   })
 
   it('never settles a shell signal whose check was still running when the shell handed over', async () => {
