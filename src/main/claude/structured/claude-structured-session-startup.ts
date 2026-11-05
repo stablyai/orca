@@ -62,7 +62,10 @@ export type ClaudeStartupFacts = ClaudeInitializeFacts & {
   prepared: ReturnType<typeof prepareClaudeStructuredSessionAcquisitionOptions>
 }
 
-export const CLAUDE_INITIALIZE_TIMEOUT_MS = 60_000
+// Hooks, MCP servers and an LSP plugin can keep the CLI busy for tens of seconds before it
+// answers initialize; at 60 s those sessions failed while the terminal surface still opened
+// (#38369). Three minutes bounds a genuinely hung CLI without failing slow-but-healthy ones.
+export const CLAUDE_INITIALIZE_TIMEOUT_MS = 180_000
 
 export async function readClaudeStartupFacts(input: {
   connection: ClaudeStreamJsonConnection
