@@ -1,4 +1,12 @@
-import { createContext, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  createContext,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState
+} from 'react'
 import {
   AGENT_SESSION_AGENTS_METHOD,
   decodeAgentSessionAgentsResult,
@@ -19,16 +27,18 @@ import {
   nativeChatRowOffersFork
 } from '../../../../src/shared/native-chat/native-chat-fork-offer'
 import type { NativeChatMessage } from '../../../../src/shared/native-chat/native-chat-types'
+import { isRootAgentJournalItem } from '../../../../src/shared/agent-session/journal/agent-session-journal-producer'
 import {
   nativeChatTurnMembership,
   type NativeChatTurnJournal
 } from '../../../../src/shared/native-chat/transcript/native-chat-turn-membership'
 import type { RpcClient } from '../../transport/rpc-client'
 
-/** The fork a message's actions sheet offers: hidden, drawn disabled, or pressable. */
-export type MobileNativeChatForkOffer = 'hidden' | 'disabled' | 'available'
+/** The fork a response offers: none, an empty held slot, drawn disabled, or pressable. */
+export type MobileNativeChatForkOffer = 'hidden' | 'reserved' | 'disabled' | 'available'
 
 export type MobileNativeChatFork = {
+  subscribe: (listener: () => void) => () => void
   offerFor: (message: NativeChatMessage) => MobileNativeChatForkOffer
   fork: (message: NativeChatMessage) => void
 }
@@ -84,7 +94,7 @@ export function useMobileNativeChatFork(input: {
     agent: AgentSessionHandleProvider,
     forkFrom: StructuredAgentSessionForkSource
   ) => Promise<void>
-}): MobileNativeChatFork | null {
+}): MobileNativeChatFork {
   const host: StructuredAgentSessionHostCapabilityState = !input.hostCapabilities
     ? 'unknown'
     : input.hostCapabilities.includes(AGENT_SESSION_CREATE_FORK_RUNTIME_CAPABILITY)
@@ -118,6 +128,15 @@ export function useMobileNativeChatFork(input: {
   const [pending, setPending] = useState(false)
   const offerFor = useCallback(
     (message: NativeChatMessage): MobileNativeChatForkOffer => {
+      // Fixed by the row's own kind, never by support or turn state, so the meta row never shifts.
+      if (
+        message.role !== 'assistant' ||
+        message.source !== 'transcript' ||
+        message.agentStart ||
+        !isRootAgentJournalItem(message)
+      ) {
+        return 'hidden'
+      }
       const turnKey = turns.keyById.get(message.id)
       const offered =
         !!sessionId &&
@@ -131,7 +150,11 @@ export function useMobileNativeChatFork(input: {
           },
           { support, contextFloorSequence, forkableItemIds }
         )
-      return !offered ? 'hidden' : pending || support.kind === 'unknown' ? 'disabled' : 'available'
+      return !offered
+        ? 'reserved'
+        : pending || support.kind === 'unknown'
+          ? 'disabled'
+          : 'available'
     },
     [agent, agentWorking, contextFloorSequence, forkableItemIds, pending, sessionId, support, turns]
   )
@@ -155,8 +178,25 @@ export function useMobileNativeChatFork(input: {
     },
     [agent, createFork, offerFor, sessionId]
   )
+  // One stable value: each button re-renders only when its own offer changes, not on every
+  // streamed revision of the transcript.
+  const latest = useRef({ offerFor, fork })
+  const listeners = useRef(new Set<() => void>())
+  useLayoutEffect(() => {
+    latest.current = { offerFor, fork }
+    for (const listener of listeners.current) {
+      listener()
+    }
+  }, [offerFor, fork])
   return useMemo(
-    () => (support.kind === 'none' ? null : { offerFor, fork }),
-    [fork, offerFor, support.kind]
+    () => ({
+      subscribe: (listener) => {
+        listeners.current.add(listener)
+        return () => listeners.current.delete(listener)
+      },
+      offerFor: (message) => latest.current.offerFor(message),
+      fork: (message) => latest.current.fork(message)
+    }),
+    []
   )
 }

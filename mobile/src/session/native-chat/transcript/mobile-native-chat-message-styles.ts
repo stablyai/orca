@@ -76,11 +76,6 @@ export const styles = themedStyleSheet(() => ({
     alignItems: 'center',
     gap: 6
   },
-  // The copy button's 24 pt box centres a 14 pt glyph; pulling the 5 pt back lines the glyph up with the tool icons.
-  metaCopy: {
-    flexDirection: 'row',
-    marginHorizontal: -5
-  },
   unsentNotice: {
     maxWidth: '88%',
     marginTop: spacing.xs,

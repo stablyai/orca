@@ -14,8 +14,7 @@ import {
   isRenderableSubagentGroup,
   withoutSubagentGroupTwins
 } from '../../../../../src/shared/native-chat/transcript/native-chat-subagent-summary'
-import { MobileSourceCopyButton } from '../../../components/MobileSourceCopyButton'
-import { MobileNativeChatForkButton } from './MobileNativeChatForkButton'
+import { MobileNativeChatResponseActions } from './MobileNativeChatResponseActions'
 import { nativeChatMessageCopyText } from '../../../../../src/shared/native-chat/transcript/native-chat-message-copy-text'
 import { deriveNativeChatRowContent } from '../../../../../src/shared/native-chat/transcript/native-chat-row-content'
 import {
@@ -374,16 +373,7 @@ function MobileNativeChatMessageImpl({
         {/* Always shown, so the row never shifts when copy appears. */}
         {isChatTurn && !agentFrom ? (
           <View style={styles.meta}>
-            {copyText.length > 0 ? (
-              <View style={styles.metaCopy}>
-                <MobileSourceCopyButton
-                  key={message.id}
-                  text={copyText}
-                  accessibilityLabel={t('chat.message.copyMessage', 'Copy message')}
-                />
-                <MobileNativeChatForkButton message={message} />
-              </View>
-            ) : null}
+            <MobileNativeChatResponseActions message={message} copyText={copyText} />
             <MobileNativeChatMessageTime timestamp={message.timestamp} fontScale={fontScale} />
           </View>
         ) : null}
