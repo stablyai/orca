@@ -1,3 +1,4 @@
+import type { AgentLaunchResult } from '../../../shared/agent-launch/contracts/agent-launch-intent'
 import { renderOrchestrationArgv, type OrchestrationAgentView } from './agent-view'
 import type { WorkerStartReceipt } from './worker-output'
 
@@ -8,6 +9,7 @@ type LaunchChoice = {
 }
 
 export type WorkerStartAgentReceipt = WorkerStartReceipt & {
+  account?: AgentLaunchResult['account']
   runId?: string
   mode?: { mode?: string; preferred?: string; detail: string }
   launch?: { requested?: LaunchChoice; effective?: LaunchChoice }
@@ -27,6 +29,7 @@ export function isUnobservedTurnStart(value: WorkerStartAgentReceipt): boolean {
 }
 
 type WorkerStartFields = {
+  account?: AgentLaunchResult['account']
   dispatchId: string
   taskId: string
   runId?: string
@@ -57,6 +60,7 @@ export const WORKER_START_VIEW: OrchestrationAgentView<WorkerStartAgentReceipt, 
       const residual = (value.residualResources ?? []).map(describeEffect)
       const unobserved = isUnobservedTurnStart(value)
       return {
+        account: value.account,
         dispatchId: value.dispatchId,
         taskId: value.taskId,
         runId: value.runId ?? value.run?.id,

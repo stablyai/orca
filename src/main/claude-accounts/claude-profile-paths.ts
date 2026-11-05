@@ -1,4 +1,4 @@
-import { lstatSync, mkdirSync, readFileSync, realpathSync } from 'node:fs'
+import { existsSync, lstatSync, mkdirSync, readFileSync, realpathSync } from 'node:fs'
 import * as hostPath from 'node:path'
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import {
@@ -247,4 +247,25 @@ export function readUserClaudeConfigDirAsSet(env: NodeJS.ProcessEnv): string | u
 
 export function resolveClaudeDefaultHome(userHome: string, userConfigDir?: string): string {
   return userConfigDir ?? join(userHome, '.claude')
+}
+
+export function writeClaudeProfilePointer(pointer: string, home: string): void {
+  if (!existsSync(pointer) || readFileSync(pointer, 'utf8') !== home) {
+    mkdirSync(dirname(pointer), { recursive: true, mode: 0o700 })
+    writeFileAtomically(pointer, home, { mode: 0o600 })
+  }
+}
+
+/** A fixed pointer keeps later account switches from redirecting the child's shell wrapper. */
+export function claudeProfileLaunchPointer(
+  pointer: string,
+  accountId: string | null,
+  home: string
+): string {
+  const fixed = join(
+    dirname(pointer),
+    accountId === null ? 'launch-system-default' : `launch-account-${accountId}`
+  )
+  writeClaudeProfilePointer(fixed, accountId === null ? '' : home)
+  return fixed
 }

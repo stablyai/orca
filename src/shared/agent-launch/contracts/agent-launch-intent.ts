@@ -106,7 +106,14 @@ export type AgentLaunchPromptReceipt = {
   delivery: AgentLaunchPromptDelivery
 } & AgentLaunchPromptDisposal
 
+export type AgentLaunchAccountReceipt = {
+  id: string | null
+  email: string | null
+  source: 'caller' | 'selected'
+}
+
 export type AgentLaunchResult = {
+  account?: AgentLaunchAccountReceipt
   outcome: AgentLaunchOutcome
   /** The workspace the agent runs in, resolved or created. */
   worktreeId: string

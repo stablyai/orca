@@ -1,3 +1,4 @@
+import { claudeLaunchAccountReceipt } from '../../../claude-accounts/claude-launch-inheritance'
 /** Publish a stable-id tab before cold admission/spawn for replay-safe launches; its pane waits for the launch.
  * Best-effort only: unresolved workspace, chat default, absent layout owner or occupied pane falls back to publication at spawn.
  * After restart the pane behaves as an ordinary pane. */
@@ -86,7 +87,8 @@ export type AgentLaunchView = {
 
 export function withPlacement(result: AgentLaunchResult, view: AgentLaunchView): AgentLaunchResult {
   const placement = view.early?.placement()
-  return placement ? { ...result, placement } : result
+  const account = result.account ?? claudeLaunchAccountReceipt()
+  return { ...result, ...(placement ? { placement } : {}), ...(account ? { account } : {}) }
 }
 
 /** Recorded operations must replay/refuse without showing another tab or moving anyone's view. */

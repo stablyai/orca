@@ -1,10 +1,11 @@
+import { inheritedClaudeLaunchPreparation } from './claude-launch-inheritance'
 import { claudeAccountUsagePreparation } from './claude-account-usage-preparation'
 import { claudeProfileSelectionHomes } from './claude-profile-selection-homes'
 import { prepareClaudeProfileForLaunch } from './claude-profile-launch-preparation'
 import { getClaudeAgentViewService } from '../claude/agent-view/agent-view-service'
-import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, rmSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { join } from 'node:path'
 import { isAgentStatusHooksEnabledForAgent } from '../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 import {
   CLAUDE_INJECTED_CONFIG_DIR_ENV,
@@ -16,9 +17,9 @@ import { claudeProfileMissing } from './claude-profile-launch-errors'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { ClaudeManagedAccount } from '../../shared/managed-account-types'
 import { probeRecentClaudeCliVersion } from '../claude/claude-hook-event-versions'
-import { writeFileAtomically } from '../codex-accounts/fs-utils'
 import { resolveClaudeCommand } from '../codex-cli/command'
 import {
+  writeClaudeProfilePointer,
   describeClaudeProfile,
   type ClaudeProfileDescriptor,
   readUserClaudeConfigDir,
@@ -132,6 +133,10 @@ export class ClaudeProfileRouter {
   /** Never fall back from a missing folder: that would run the wrong account. `identity` names
    *  the selected route before its folder exists; launches and reads still check availability. */
   routedHome(availability: 'checked' | 'identity' = 'checked'): string | null {
+    const inherited = inheritedClaudeLaunchPreparation(this)
+    if (inherited) {
+      return inherited.provenance === 'system' ? null : inherited.configDir
+    }
     const home = this.routedProfile()?.home ?? null
     if (availability === 'checked' && home !== null && !isDirectory(home)) {
       throw claudeProfileMissing()
@@ -157,11 +162,7 @@ export class ClaudeProfileRouter {
       return false
     }
     const home = this.routedProfile()?.home ?? ''
-    // Avoid rewriting the pointer on every launch.
-    if (!existsSync(this.pointerPath) || readFileSync(this.pointerPath, 'utf8') !== home) {
-      mkdirSync(dirname(this.pointerPath), { recursive: true, mode: 0o700 })
-      writeFileAtomically(this.pointerPath, home, { mode: 0o600 })
-    }
+    writeClaudeProfilePointer(this.pointerPath, home)
     return true
   }
 
@@ -173,6 +174,10 @@ export class ClaudeProfileRouter {
 
   /** Initial setup must succeed; later refreshes may time out without blocking launch. */
   async prepareLaunch(): Promise<ClaudeRuntimeAuthPreparation> {
+    const inherited = inheritedClaudeLaunchPreparation(this)
+    if (inherited) {
+      return inherited
+    }
     const selected = this.selectedProfile()
     // Only fallback routing needs the shell env; account setup waits for it separately.
     if (!selected || !this.accountLogin(selected.accountId)) {
@@ -261,11 +266,13 @@ export class ClaudeProfileRouter {
 
   launchEnv(): ClaudeEnvPatch {
     const home = this.routedHome()
-    return {
-      [CLAUDE_PROFILE_POINTER_ENV]: this.pointerPath,
-      // Preserve the user's inherited CLAUDE_CONFIG_DIR for System default.
-      ...(home ? { CLAUDE_CONFIG_DIR: home, [CLAUDE_INJECTED_CONFIG_DIR_ENV]: home } : {})
-    }
+    return (
+      inheritedClaudeLaunchPreparation(this)?.envPatch ?? {
+        [CLAUDE_PROFILE_POINTER_ENV]: this.pointerPath,
+        // Preserve the user's inherited CLAUDE_CONFIG_DIR for System default.
+        ...(home ? { CLAUDE_CONFIG_DIR: home, [CLAUDE_INJECTED_CONFIG_DIR_ENV]: home } : {})
+      }
+    )
   }
 
   /** A broken account selection must not prevent opening a terminal. */
@@ -298,16 +305,19 @@ export class ClaudeProfileRouter {
   }
 
   preparation(): ClaudeRuntimeAuthPreparation {
+    const inherited = inheritedClaudeLaunchPreparation(this)
     const profile = this.routedProfile()
     const home = this.routedHome()
-    return {
-      configDir: home ?? this.systemDefaultHome(),
-      runtime: 'host',
-      wslDistro: null,
-      wslLinuxConfigDir: null,
-      envPatch: this.launchEnv(),
-      provenance: home ? `profile:${profile?.accountId}` : 'system'
-    }
+    return (
+      inherited ?? {
+        configDir: home ?? this.systemDefaultHome(),
+        runtime: 'host',
+        wslDistro: null,
+        wslLinuxConfigDir: null,
+        envPatch: this.launchEnv(),
+        provenance: home ? `profile:${profile?.accountId}` : 'system'
+      }
+    )
   }
 
   /** Compare pre-routing terminals against the selection; null means no account is selected. */
@@ -324,7 +334,8 @@ export class ClaudeProfileRouter {
   }
 
   routesToAccount(): boolean {
-    return this.routedProfile() !== null
+    const inherited = inheritedClaudeLaunchPreparation(this)
+    return inherited ? inherited.provenance !== 'system' : this.routedProfile() !== null
   }
 
   /** Read usage from the same login the account would launch with. */
