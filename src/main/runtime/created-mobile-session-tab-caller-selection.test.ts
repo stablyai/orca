@@ -79,3 +79,18 @@ it('selects a launched chat by its session for the caller only', async () => {
     first.id
   )
 })
+
+it("sends the caller's selection in the publication its earlier frames came from", async () => {
+  const { runtime, caller } = pairedRuntime()
+  await createPane(runtime)
+  const launched = await createPane(runtime)
+  const previous = caller.at(-1)!
+
+  runtime.selectCreatedMobileSessionTabForClient(WT, launched, 'device-caller')
+
+  // A frame from another publication or behind the last version is fenced by the client.
+  const selected = caller.at(-1)!
+  expect(selected.activeTabId).toBe(launched.id)
+  expect(selected.publicationEpoch).toBe(previous.publicationEpoch)
+  expect(selected.snapshotVersion).toBe(previous.snapshotVersion + 1)
+})
