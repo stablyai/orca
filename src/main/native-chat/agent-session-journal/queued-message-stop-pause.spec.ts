@@ -226,7 +226,7 @@ export function registerQueuedMessageStopPauseTests(
         0
       )
       const db = new Database(journalDatabasePath(fixture.root), { readonly: true })
-      const stored = liveTestJournalRows(db, fixture.IDENTITY.sessionId)
+      const stored = await liveTestJournalRows(db, fixture.IDENTITY.sessionId)
       db.close()
       const parsed = parseJournalRow(stored.at(-1)?.rowJson ?? '')
       expect(parsed).toMatchObject({
@@ -355,9 +355,9 @@ export function registerQueuedMessageStopPauseTests(
     it('the restated Stop is the same event: its reason, turn, caller and time', async () => {
       const journal = await fixture.open()
       await journal.appendStopEvent({ reason: 'user-stop', turnId: 'turn-7', caller: 'phone' }, 0)
-      const stopped = fixture.stopEvents()
+      const stopped = await fixture.stopEvents()
       await journal.replaceEpochItems('handle_forked', 0, [])
-      expect(fixture.stopEvents()).toEqual(stopped)
+      expect(await fixture.stopEvents()).toEqual(stopped)
       expect(stopped).toEqual([
         { reason: 'user-stop', turnId: 'turn-7', caller: 'phone', at: expect.any(Number) }
       ])

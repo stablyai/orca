@@ -133,6 +133,12 @@ export function buildDaemonHostManifest(sources: DaemonHostSources): CopyOp[] {
 
   // Preserve sibling chunks and out/package.json for CJS/ESM resolution.
   ops.push({ sourcePath: entrySourcePath, destRel: entryRelPath, kind: 'file' })
+  const readerPath = join(winPath.dirname(entrySourcePath), 'surface-executor-reader-entry.js')
+  ops.push({
+    sourcePath: readerPath,
+    destRel: toPosixRelative(appDir, readerPath),
+    kind: 'file'
+  })
   const chunksDir = join(winPath.dirname(entrySourcePath), 'chunks')
   ops.push({
     sourcePath: chunksDir,

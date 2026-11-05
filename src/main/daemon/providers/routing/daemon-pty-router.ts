@@ -1,3 +1,4 @@
+import { RoutedSurfaceExecution } from '../../../providers/routed-surface-execution'
 import { DaemonPtyTargetInspection } from './daemon-pty-target-inspection'
 import { terminateResolvedDaemonSession } from '../../server/daemon-fenced-termination'
 import type { PtyFencedTerminationRequest } from '../../../../shared/terminal/pty/lifecycle/pty-fenced-termination'
@@ -21,13 +22,25 @@ import type {
 import { DaemonSessionOwnerResolver } from './daemon-session-owner-resolution'
 import type { DaemonIdleRetirementResult } from '../adapter/daemon-pty-runtime-state'
 import { DaemonRouterRetirement } from './daemon-router-retirement'
-import { routeSpawnOrHold } from './daemon-router-newer-daemon-hold'
+import { spawnDaemonRouterPty } from './daemon-router-spawn'
 import { findLegacySessionOwner } from './daemon-router-legacy-owner'
 import { retireExitedLegacyAdapter, type ExitedLegacyVerdict } from './daemon-router-exited-legacy'
 import type { WriteSettlement } from '../../../../shared/terminal/pty/lifecycle/pty-write-settlement'
 import type { TerminalOscColorQueryReplyColors } from '../../../../shared/terminal/protocol/queries/terminal-osc-color-reply'
 
 export class DaemonPtyRouter implements IPtyProvider {
+  readonly surfaceExecution = new RoutedSurfaceExecution(
+    () => this.allAdapters(),
+    async (candidate) =>
+      this.sessionAdapters.get(candidate.resourceId) ??
+      (await findLegacySessionOwner(
+        { sessionId: candidate.resourceId },
+        this.current,
+        this.legacy,
+        this.legacyExitProof
+      )) ??
+      this.current
+  )
   private current: DaemonPtyAdapter
   private legacy: DaemonPtyAdapter[]
   private sessionAdapters = new Map<string, DaemonPtyAdapter>()
@@ -73,27 +86,15 @@ export class DaemonPtyRouter implements IPtyProvider {
   }
 
   async spawn(opts: PtySpawnOptions): Promise<PtySpawnResult> {
-    if (this.retirement.admissionClosed) {
-      throw new Error('Terminal daemon is decommissioning')
-    }
-    // Retirement census must account for spawns that have not published their sessions yet.
-    this.retirement.spawnInFlight++
-    try {
-      if (opts.attachOnly && opts.sessionId) {
-        return await this.ownerResolver.spawnAttachOnly({ ...opts, sessionId: opts.sessionId })
-      }
-      const adapter =
-        (opts.sessionId ? this.sessionAdapters.get(opts.sessionId) : undefined) ??
-        (await findLegacySessionOwner(opts, this.current, this.legacy, this.legacyExitProof))
-      const target = await routeSpawnOrHold(opts, adapter, this.current, this.ownerResolver)
-      const result = await target.spawn(opts)
-      if (!result.exitedBeforeSpawnReply) {
-        this.ownerResolver.recordRoute(result.id, target, result.incarnationId)
-      }
-      return result
-    } finally {
-      this.retirement.spawnInFlight--
-    }
+    return spawnDaemonRouterPty(opts, {
+      retirement: this.retirement,
+      ownerResolver: this.ownerResolver,
+      surfaceExecution: this.surfaceExecution,
+      current: this.current,
+      legacy: this.legacy,
+      sessionAdapters: this.sessionAdapters,
+      legacyExitProof: this.legacyExitProof
+    })
   }
 
   requestIdleRetirement(): Promise<DaemonIdleRetirementResult> {

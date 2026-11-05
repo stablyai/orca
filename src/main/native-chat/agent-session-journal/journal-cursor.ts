@@ -88,3 +88,28 @@ export function readJournalSince(
     throw error
   }
 }
+
+export async function readJournalSinceAsync(
+  source: {
+    state: JournalCursorRange
+    rowsAfter: (afterSequence: number) => Promise<JournalRowsRead>
+  },
+  cursor: AgentJournalCursor
+): Promise<JournalReadSince> {
+  const resume = resolveJournalResume(source.state, cursor)
+  if (!resume.ok) {
+    return { ok: false, reset: resume.reset }
+  }
+  try {
+    return {
+      ok: true,
+      ...(await source.rowsAfter(resume.afterSequence)),
+      cursor: { epoch: source.state.epoch, sequence: source.state.lastSequence }
+    }
+  } catch (error) {
+    if (error instanceof JournalOutcomeDecodeError) {
+      return { ok: false, reset: 'schema_unreadable' }
+    }
+    throw error
+  }
+}

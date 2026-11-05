@@ -1,8 +1,12 @@
+import {
+  queueSubscriberDelivery,
+  restateSessionSubscribers
+} from './agent-session-subscriber-delivery'
 import type { AgentSessionSubscribeInput } from './agent-session-subscribe-input'
 import type { CurrentRequestsSubscriber } from './agent-session-current-requests'
+// Advance subscriber cursors independently, sending resets or reducer-projected batches as needed.
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type {
-  AgentSessionHistoryPage,
   AgentSessionSubscribeEvent,
   AgentSessionTurnActivity
 } from '../../../shared/agent-session/agent-session-wire'
@@ -14,40 +18,39 @@ import {
   type SubscriberFieldState
 } from './agent-session-subscriber-frame-fields'
 import type { QueuePublication } from './structured-agent-session-queued-publication'
-import {
+import type {
   deliverToSubscriber,
-  type SubscriberDeliveryPort
+  SubscriberDeliveryPort
 } from './agent-session-subscriber-catch-up'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { emptyAgentSessionBatch } from './agent-session-empty-batch'
 import { readAgentSessionHydrationPage } from './agent-session-history-page'
 import { withPublishedWork } from './agent-session-published-work'
 import { subscriberHistoryReader } from './agent-session-bounded-frames'
+import { refreshPublishedWork } from './agent-session-work-refresh'
 import { rememberSessionActivity } from './structured-agent-session-activity-retention'
 import { refreshDerivedStopNotes } from './agent-session-stop-note-refresh'
-import { refreshPublishedWork } from './agent-session-work-refresh'
 import type { HistoryReader } from './agent-session-history-page-bounds'
 import type { StructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 export type { AgentSessionSubscribeInput } from './agent-session-subscribe-input'
-// Advance subscriber cursors independently, sending resets or reducer-projected batches as needed.
-
-// Advance subscriber cursors independently, sending resets or reducer-projected batches as needed.
 
 export type AgentSessionSubscriberEmit = (event: AgentSessionSubscribeEvent) => void
-export type Subscriber = {
-  id: string
-  emit: AgentSessionSubscriberEmit
-  cursor: AgentJournalCursor
-  fence: number
-  readHistorySnapshot?: HistoryReader['snapshot']
-  readQueueSourceIds?: HistoryReader['queueSourceIds']
-  snapshotCatchUp?: boolean
-  /** The current-work view the last frame's fields were read under
-   *  (`StructuredAgentSessionCurrentWork.viewKey`); a change with no row still owes a frame. */
-  workView?: string
-  historyView?: string
-} & CurrentRequestsSubscriber &
-  SubscriberFieldState
+export type Subscriber = CurrentRequestsSubscriber &
+  SubscriberFieldState & {
+    id: string
+    emit: AgentSessionSubscriberEmit
+    cursor: AgentJournalCursor
+    fence: number
+    readHistorySnapshot?: HistoryReader['snapshot']
+    readQueueSourceIds?: HistoryReader['queueSourceIds']
+    snapshotCatchUp?: boolean
+    /** Last frame’s current-work key; row-free changes still require a frame. */
+    workView?: string
+    /** Semantic history baseline actually emitted, independent of token/row progress. */
+    historyView?: string
+    delivery?: Promise<void>
+    pendingDelivery?: Omit<Parameters<typeof deliverToSubscriber>[1], 'subscriber'>
+  }
 
 export type AgentSessionSubscribersHooks = {
   readCommands?: SubscriberFieldHooks['readCommands']
@@ -95,13 +98,6 @@ export class AgentSessionSubscribers {
     const hostNow = this.now()
     if (input.cursor) {
       this.deliver(subscriber, input.journal, hostNow, true)
-      refreshDerivedStopNotes(
-        this.deliveryPort(),
-        subscriber,
-        input.journal,
-        hostNow,
-        this.hooks.readCurrentWork?.(input.sessionId, input.journal)
-      )
     } else {
       const view = input.journal.publicRead()
       const work = this.hooks.readCurrentWork?.(input.sessionId, input.journal)
@@ -165,9 +161,8 @@ export class AgentSessionSubscribers {
     }
   }
 
-  readQueuePublication(sessionId: string): QueuePublication | undefined {
-    return this.hooks.readQueuePublication?.(sessionId)
-  }
+  readQueuePublication = (sessionId: string): QueuePublication | undefined =>
+    this.hooks.readQueuePublication?.(sessionId)
 
   deliverFrames(
     sessionId: string,
@@ -181,47 +176,19 @@ export class AgentSessionSubscribers {
   }
 
   snapshot(sessionId: string, journal: AgentSessionJournal, fence: number): void {
-    const view = journal.publicRead()
-    const work = this.hooks.readCurrentWork?.(sessionId, journal)
-    // Cache each stored/bounded form separately; each sizes its own page.
-    let storedPage: AgentSessionHistoryPage | undefined
-    let boundedPage: AgentSessionHistoryPage | undefined
-    const read = (subscriber: Subscriber): AgentSessionHistoryPage =>
-      withPublishedWork(
-        readAgentSessionHydrationPage(
-          journal,
-          fence,
-          subscriberHistoryReader(subscriber),
-          view.currentSnapshot()
-        ),
-        work
-      )
-    const pageFor = (subscriber: Subscriber): AgentSessionHistoryPage =>
-      subscriber.readHistorySnapshot
-        ? read(subscriber)
-        : subscriber.boundedFrames
-          ? (boundedPage ??= read(subscriber))
-          : (storedPage ??= read(subscriber))
-    const hostNow = this.now()
-    for (const subscriber of this.subscribers(sessionId)) {
-      const page = pageFor(subscriber)
-      this.emit(
-        subscriber,
-        {
-          type: 'snapshot',
-          sessionId,
-          page,
-          fence,
-          hostNow,
-          ...this.activityField(sessionId)
-        },
-        { currentWork: work, historyView: view.normalizationKey, journal }
-      )
-      subscriber.cursor = page.liveCursor ?? page.window.nextCursor
-      subscriber.fence = fence
-      refreshPublishedWork(this.deliveryPort(), subscriber, journal, work, { hostNow })
-    }
+    this.restate(sessionId, journal, fence)
     this.hooks.onJournalPublished?.(sessionId, journal)
+  }
+
+  restate(sessionId: string, journal: AgentSessionJournal, fence: number): void {
+    restateSessionSubscribers(
+      this.deliveryPort(),
+      sessionId,
+      this.subscribers(sessionId),
+      journal,
+      fence,
+      this.now()
+    )
   }
 
   republishBackgroundTasks(sessionId: string, fence: number): void {
@@ -277,13 +244,20 @@ export class AgentSessionSubscribers {
     emitCheckpoint = false,
     activity?: AgentSessionTurnActivity | null
   ): void {
-    deliverToSubscriber(this.deliveryPort(), {
+    queueSubscriberDelivery(
+      this.deliveryPort(),
       subscriber,
-      journal,
-      hostNow,
-      emitCheckpoint,
-      activity
-    })
+      { journal, hostNow, emitCheckpoint, activity },
+      (pending) => {
+        refreshDerivedStopNotes(
+          this.deliveryPort(),
+          subscriber,
+          pending.journal,
+          pending.hostNow,
+          this.hooks.readCurrentWork?.(subscriber.sessionId, pending.journal)
+        )
+      }
+    )
   }
 
   private now = (): number => this.hooks.now?.() ?? Date.now()
@@ -324,7 +298,7 @@ export class AgentSessionSubscribers {
     }
   }
 
-  private activityField(sessionId: string): { activity: AgentSessionTurnActivity | null } {
-    return { activity: this.activityBySession.get(sessionId) ?? null }
-  }
+  private activityField = (sessionId: string): { activity: AgentSessionTurnActivity | null } => ({
+    activity: this.activityBySession.get(sessionId) ?? null
+  })
 }

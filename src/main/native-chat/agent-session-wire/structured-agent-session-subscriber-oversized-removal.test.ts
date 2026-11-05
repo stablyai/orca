@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
 import { AGENT_SESSION_JOURNAL_SCHEMA_VERSION } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session/agent-session-wire'
 import {
@@ -61,13 +61,13 @@ it('catches a subscriber up past a pre-existing unsendable removal with a bounde
   ]
   // Direct writes model legacy persisted rows.
   await seeded.close()
-  const opened = openTestJournalHostDatabase(journalDir)
+  const opened = await openTestJournalHostDatabase(journalDir)
   try {
-    opened.db.exec('BEGIN IMMEDIATE')
-    for (const row of rows) {
-      insertTestJournalRow(opened.db, SESSION, row)
-    }
-    opened.db.exec('COMMIT')
+    await opened.transaction((plan) => {
+      for (const row of rows) {
+        insertTestJournalRow(plan, SESSION, row)
+      }
+    })
   } finally {
     await opened.close()
   }
@@ -93,6 +93,7 @@ it('catches a subscriber up past a pre-existing unsendable removal with a bounde
     emit: (event) => events.push(event)
   })
 
+  await vi.waitFor(() => expect(events.some((event) => event.type === 'reset')).toBe(true))
   for (const event of events) {
     expect(Buffer.byteLength(serializeRemoteRuntimePayload(event), 'utf8')).toBeLessThanOrEqual(
       REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES
@@ -103,6 +104,22 @@ it('catches a subscriber up past a pre-existing unsendable removal with a bounde
 
   // Reset must advance past the unsendable row so later publications make progress.
   const settled = events.length
+  await journal.appendItem(
+    { provider: 'orca', clientMessageId: 'after-reset' },
+    { kind: 'status', text: 'after-reset' },
+    { fence: 1, turnScope: { kind: 'thread' } }
+  )
   subscribers.publish(SESSION, journal)
+  await vi.waitFor(() =>
+    expect(
+      events.some(
+        (event) =>
+          event.type === 'batch' &&
+          event.batch.items.some(
+            (item) => item.body.kind === 'status' && item.body.text === 'after-reset'
+          )
+      )
+    ).toBe(true)
+  )
   expect(events.slice(settled).filter((event) => event.type === 'reset')).toEqual([])
 })

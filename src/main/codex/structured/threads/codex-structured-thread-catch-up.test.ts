@@ -1,3 +1,7 @@
+import {
+  openTestJournalHostDatabase,
+  setTestLaterRowFailure
+} from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
 import { testEventSinkLogging } from '../../../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 import { writeFile } from 'node:fs/promises'
 import { importLegacyTranscriptIntoJournal } from '../../../native-chat/agent-session-journal/journal-legacy-import'
@@ -359,6 +363,35 @@ describe('Codex chat catch-up', () => {
     expect(displayed).toContainEqual({ type: 'text', text: answer })
   })
 
+  it('commits a 600-message import once, rolls back a later partition failure, and recovers', async () => {
+    const c = await chat({ now: 1_000 })
+    await c.open([turn(1)])
+    const before = c.journal.snapshot()
+    const large = {
+      ...turn(2),
+      items: Array.from({ length: 600 }, (_, n) => ({
+        type: 'agentMessage',
+        id: `item-${n}`,
+        text: `answer ${n}`
+      }))
+    }
+    const seq = c.journal.cursor().sequence
+    const database = await openTestJournalHostDatabase(c.root)
+    await setTestLaterRowFailure(database, { afterSequence: seq + 1 })
+    expect((await c.open([turn(1), large])).ok).toBe(false)
+    expect(c.deferred.state().failed).toBe(true)
+    expect(c.journal.snapshot()).toEqual(before)
+    await setTestLaterRowFailure(database, null)
+    await c.reopen()
+    expect(c.journal.snapshot()).toEqual(before)
+    c.publications.length = 0
+    await c.open([turn(1), large])
+    expect(c.texts()).toHaveLength(603)
+    expect(c.publications).toEqual([before.items.length + 602])
+    await c.reopen()
+    await c.open([turn(1), large])
+    expect(c.texts()).toHaveLength(603)
+  })
   it('adds the turns made outside the chat once, in order, after the chat rows', async () => {
     const c = await chat({ now: 1_000 })
 
@@ -450,37 +483,6 @@ describe('Codex chat catch-up', () => {
     })
     await c.open([turn(1), turn(2)])
     expect(c.texts().slice(-3)).toEqual(['(continued-outside)', 'user:ask 2', 'assistant:answer 2'])
-  })
-
-  it('commits a 600-message import once, rolls back a later partition failure, and recovers', async () => {
-    const c = await chat({ now: 1_000 })
-    await c.open([turn(1)])
-    const before = c.journal.snapshot()
-    const large = {
-      ...turn(2),
-      items: Array.from({ length: 600 }, (_, n) => ({
-        type: 'agentMessage',
-        id: `item-${n}`,
-        text: `answer ${n}`
-      }))
-    }
-    const seq = c.journal.cursor().sequence
-    c.db.exec(
-      `CREATE TRIGGER fail_later_partition BEFORE INSERT ON journal_rows WHEN NEW.seq > ${seq + 1} BEGIN SELECT RAISE(ABORT, 'injected later partition failure'); END`
-    )
-    expect((await c.open([turn(1), large])).ok).toBe(false)
-    expect(c.deferred.state().failed).toBe(true)
-    expect(c.journal.snapshot()).toEqual(before)
-    c.db.exec('DROP TRIGGER fail_later_partition')
-    await c.reopen()
-    expect(c.journal.snapshot()).toEqual(before)
-    c.publications.length = 0
-    await c.open([turn(1), large])
-    expect(c.texts()).toHaveLength(603)
-    expect(c.publications).toEqual([before.items.length + 602])
-    await c.reopen()
-    await c.open([turn(1), large])
-    expect(c.texts()).toHaveLength(603)
   })
 
   it('keeps rollback reasoning and message identities immutable across turns', async () => {

@@ -29,8 +29,6 @@ afterEach(() => {
 it.each(['accepted', 'pending', 'oldest'] as const)(
   'real %s reader wait tier behind an active command uses its actual budget and eventual wake',
   async (tier) => {
-    vi.useFakeTimers()
-    vi.setSystemTime(HOST_TEST_NOW)
     vi.spyOn(Date, 'now').mockReturnValue(HOST_TEST_NOW)
     const rig = await createQueuedMessageTestRig({ now: () => Date.now() })
     setStructuredAgentSessionHost(rig.host)
@@ -46,6 +44,7 @@ it.each(['accepted', 'pending', 'oldest'] as const)(
       })
       await eventually(() => expect(rig.compact).toHaveBeenCalledTimes(1))
       await command
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
       const body = hostTestMessage('M behind compact')
       const messageId = hostTestOperationId()
       let replied = false
@@ -111,6 +110,7 @@ it.each(['accepted', 'pending', 'oldest'] as const)(
         rig.dispatch.mock.calls.filter(([input]) => input.clientMessageId === messageId)
       ).toHaveLength(1)
     } finally {
+      vi.useRealTimers()
       await rig.dispose()
     }
   }

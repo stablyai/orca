@@ -76,15 +76,17 @@ async function fixture() {
     agent.notify('_x.ai/session/update', { sessionId, update, _meta: meta })
     await hosted.rows()
   }
-  const spawn = (id: string, label = 'Exact label', turn = promptIdOf(prompt)) =>
-    notify({
+  const spawn = async (id: string, label = 'Exact label', turn = promptIdOf(prompt)) => {
+    await notify({
       sessionUpdate: 'subagent_spawned',
       subagent_id: id,
       parent_prompt_id: turn,
       description: label
     })
-  const finish = (id: string, status: string) =>
-    notify({ sessionUpdate: 'subagent_finished', subagent_id: id, status })
+  }
+  const finish = async (id: string, status: 'completed' | 'failed' | 'cancelled') => {
+    await notify({ sessionUpdate: 'subagent_finished', subagent_id: id, status })
+  }
   const strip = async () =>
     (await hosted.host.history({ sessionId: SESSION, direction: 'tail' })).page.backgroundTasks
   const roster = async () =>
@@ -190,7 +192,9 @@ describe('Grok roster evidence through the existing host child store', () => {
     await f.spawn('first')
     await f.spawn('sibling')
     // Ordinals belong to presentation; persisted labels stay unchanged.
-    expect(await f.roster()).toMatchObject([{ label: 'Exact label' }, { label: 'Exact label' }])
+    await waitFor(async () =>
+      expect(await f.roster()).toMatchObject([{ label: 'Exact label' }, { label: 'Exact label' }])
+    )
     expect((await f.strip())?.tasks).toMatchObject([
       { id: 'first', kind: 'agent', description: 'Exact label' },
       { id: 'sibling', kind: 'agent', description: 'Exact label' }
@@ -201,9 +205,9 @@ describe('Grok roster evidence through the existing host child store', () => {
     await f.rows()
     expect(f.childWork.views().map((view) => view.membership)).toEqual(['live', 'live'])
     await f.finish('first', 'completed')
-    expect((await f.strip())?.tasks).toMatchObject([{ id: 'sibling' }])
+    await waitFor(async () => expect((await f.strip())?.tasks).toMatchObject([{ id: 'sibling' }]))
     await f.finish('sibling', 'failed')
-    expect(await f.strip()).toBeNull()
+    await waitFor(async () => expect(await f.strip()).toBeNull())
     expect(f.sidebar.at(-1)).toEqual([])
     expect(f.childWork.views().map((view) => view.outcome)).toEqual(['succeeded', 'failed'])
     await f.notify({ sessionUpdate: 'subagent_progress', subagent_id: 'first', tokens_used: 100 })
@@ -228,7 +232,7 @@ describe('Grok roster evidence through the existing host child store', () => {
     ])
     expect(f.agent.frames.filter((frame) => frame.method === 'session/cancel')).toEqual([])
     await f.finish('first', 'cancelled')
-    expect((await f.roster())[0].state).toBe('stopped')
+    await waitFor(async () => expect((await f.roster())[0]?.state).toBe('stopped'))
     expect(f.childWork.views()).toMatchObject([
       { providerId: 'first', outcome: 'cancelled' },
       { providerId: 'sibling', membership: 'live' }
@@ -257,7 +261,7 @@ describe('Grok roster evidence through the existing host child store', () => {
     )
     expect(await f.targetedStop('first')).toMatchObject({ ok: true, value: { cancelled: false } })
     await f.rows()
-    expect((await f.roster())[0].state).toBe('completed')
+    await waitFor(async () => expect((await f.roster())[0]?.state).toBe('completed'))
     expect(f.childWork.views()).toMatchObject([{ outcome: 'succeeded' }])
     await f.spawn('missing')
     f.agent.on('_x.ai/subagent/cancel', (frame) =>
@@ -282,7 +286,11 @@ describe('Grok roster evidence through the existing host child store', () => {
       await f.spawn(`later-${index}`, `Later ${index}`, `later-turn-${index}`)
       await f.finish(`later-${index}`, 'completed')
     }
-    expect((await f.strip())?.tasks).toMatchObject([{ id: 'original', description: 'Exact label' }])
+    await waitFor(async () =>
+      expect((await f.strip())?.tasks).toMatchObject([
+        { id: 'original', description: 'Exact label' }
+      ])
+    )
     expect((await f.strip())?.tasks).toHaveLength(1)
     await f.notify({
       sessionUpdate: 'subagent_progress',
@@ -312,11 +320,15 @@ describe('Grok roster evidence through the existing host child store', () => {
     const second = `${'x'.repeat(600)}B`
     await f.spawn(first, 'First', 'turn-A')
     await f.spawn(second, 'Second', 'turn-B')
+    await waitFor(async () => expect(await f.roster()).toHaveLength(2))
     const entries = await f.roster()
     expect(entries[0].id).not.toBe(entries[1].id)
     const bothStrip = (await f.strip())?.tasks
     const bothSidebar = f.sidebar.at(-1)
     await f.finish(first, 'completed')
+    await waitFor(async () =>
+      expect(await f.roster()).toMatchObject([{ state: 'completed' }, { state: 'working' }])
+    )
     const remainingStrip = (await f.strip())?.tasks
     const remainingSidebar = f.sidebar.at(-1)
     expect(await f.roster()).toMatchObject([{ state: 'completed' }, { state: 'working' }])
@@ -332,6 +344,7 @@ describe('Grok roster evidence through the existing host child store', () => {
   it('uses the exact clipped roster label and hides Stop for digested oversized provider handles', async () => {
     const f = await fixture()
     await f.spawn('long-id'.repeat(100), 'Long label '.repeat(70))
+    await waitFor(async () => expect(await f.roster()).toHaveLength(1))
     const [entry] = await f.roster()
     expect((await f.strip())?.tasks).toMatchObject([
       { description: entry.label, kind: 'agent', stoppable: false }
@@ -346,7 +359,7 @@ describe('Grok roster evidence through the existing host child store', () => {
     for (let index = 0; index < 33; index++) {
       await f.spawn(`live-${index}`, `Live ${index}`, `live-turn-${index}`)
     }
-    expect((await f.strip())?.tasks).toHaveLength(34)
+    await waitFor(async () => expect((await f.strip())?.tasks).toHaveLength(34))
     expect(f.sidebar.at(-1)).toHaveLength(34)
     await f.finish('original-live', 'cancelled')
     await f.notify({
@@ -354,12 +367,16 @@ describe('Grok roster evidence through the existing host child store', () => {
       subagent_id: 'original-live',
       tokens_used: 100
     })
-    expect((await f.strip())?.tasks).toHaveLength(33)
+    await waitFor(async () => expect((await f.strip())?.tasks).toHaveLength(33))
     expect(f.sidebar.at(-1)).toHaveLength(33)
     expect(f.childWork.views().find((view) => view.providerId === 'original-live')?.outcome).toBe(
       'cancelled'
     )
-    expect((await f.roster()).find((entry) => entry.id === 'original-live')?.state).toBe('stopped')
+    await waitFor(async () =>
+      expect((await f.roster()).find((entry) => entry.id === 'original-live')?.state).toBe(
+        'stopped'
+      )
+    )
   })
 
   it('keeps the agent strip but hides Stop when the installed peer lacks the targeted route', async () => {

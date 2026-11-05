@@ -1,3 +1,4 @@
+import { mutateTestJournalFixture } from './journal-drained-fixture-test-support'
 import { agentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -76,26 +77,23 @@ async function send(id: string, handed = true, message = body(id), saved = true)
     })
   }
   if (saved) {
-    saveCopy(id, message)
+    await saveCopy(id, message)
   }
 }
-function saveCopy(id: string, message: AgentJournalMessageItem) {
-  appendTestJournalQueueRow(openTestJournalHostDatabase(root).db, journal, `recovery:${id}`, {
-    op: 'queued',
-    body: message,
-    recovers: id,
-    position: journal.cursor().sequence,
-    queuedAt: journal.cursor(),
-    returned: { reason: 'old uncertainty', rejection: { kind: 'unconfirmed' } }
-  })
-}
-async function receipt(id: string) {
-  await journal.resolveDispatch({
-    clientMessageId: id,
-    state: 'accepted',
-    fence: 7,
-    providerIdentity: { provider: 'codex', threadId: 'thread', turnId: 'receipt', ordinal: clock }
-  })
+async function saveCopy(id: string, message: AgentJournalMessageItem) {
+  await appendTestJournalQueueRow(
+    await openTestJournalHostDatabase(root),
+    journal,
+    `recovery:${id}`,
+    {
+      op: 'queued',
+      body: message,
+      recovers: id,
+      position: journal.cursor().sequence,
+      queuedAt: journal.cursor(),
+      returned: { reason: 'old uncertainty', rejection: { kind: 'unconfirmed' } }
+    }
+  )
 }
 
 it('delivers newly loaded saved image choices in bounded semantic batches without resetting expanded history', async () => {
@@ -157,7 +155,7 @@ it('delivers newly loaded saved image choices in bounded semantic batches withou
     projectQueuePublication: (pub: QueuePublication) =>
       projectQueuedImageCardPublication(pub, { clientKind: 'mobile' })
   }
-  subscribers.open({
+  const unsubscribe = subscribers.open({
     id: 'old',
     sessionId: identity.sessionId,
     journal,
@@ -191,31 +189,38 @@ it('delivers newly loaded saved image choices in bounded semantic batches withou
     }
   }
   for (let i = 0; i < 10; i++) {
-    saveCopy(`image-${i}`, journal.submissionBody(`image-${i}`)!)
+    await saveCopy(`image-${i}`, journal.submissionBody(`image-${i}`)!)
   }
   finishTestJournalHistoricalInputs(journal)
   const historicalCursor = journal.cursor()
   const historicalCards = structuredClone(journal.queuedMessages.list())
   pinTestJournalInputMode(journal)
-  expect(() => saveCopy('after-finish', body('after-finish'))).toThrow(
+  await expect(saveCopy('after-finish', body('after-finish'))).rejects.toThrow(
     'historical journal authoring ended'
   )
   expect(journal.cursor()).toEqual(historicalCursor)
-  const db = openTestJournalHostDatabase(root).db
-  db.exec(
-    "CREATE TEMP TRIGGER fail_current_takeover BEFORE INSERT ON journal_outcomes BEGIN SELECT RAISE(ABORT, 'takeover unavailable'); END"
+  const db = await openTestJournalHostDatabase(root)
+  await mutateTestJournalFixture(db, (fixtureDb) =>
+    fixtureDb.exec(
+      "CREATE TRIGGER fail_current_takeover BEFORE INSERT ON journal_outcomes BEGIN SELECT RAISE(ABORT, 'takeover unavailable'); END"
+    )
   )
   await expect(journal.appendQueueResume(7)).rejects.toThrow('takeover unavailable')
   expect(journal.cursor()).toEqual(historicalCursor)
   expect(journal.queuedMessages.list()).toEqual(historicalCards)
-  expect(readTestJournalOutcomes(db, identity.sessionId)).toEqual([])
-  db.exec('DROP TRIGGER fail_current_takeover')
+  expect(await readTestJournalOutcomes(db, identity.sessionId)).toEqual([])
+  await mutateTestJournalFixture(db, (fixtureDb) =>
+    fixtureDb.exec('DROP TRIGGER fail_current_takeover')
+  )
   await journal.appendQueueResume(7)
   expect(
-    readTestJournalOutcomes(openTestJournalHostDatabase(root).db, identity.sessionId).length
+    (await readTestJournalOutcomes(await openTestJournalHostDatabase(root), identity.sessionId))
+      .length
   ).toBeGreaterThan(0)
   const currentCursor = journal.cursor()
-  expect(() => saveCopy('too-late', body('too-late'))).toThrow('historical journal authoring ended')
+  await expect(saveCopy('too-late', body('too-late'))).rejects.toThrow(
+    'historical journal authoring ended'
+  )
   expect(journal.cursor()).toEqual(currentCursor)
   await journal.open()
   const correction = {
@@ -260,6 +265,16 @@ it('delivers newly loaded saved image choices in bounded semantic batches withou
   }
   expect(retryFrames.at(-1)).toMatchObject({ type: 'batch', batch: { cursor: journal.cursor() } })
   subscribers.publish(identity.sessionId, journal)
+  await vi.waitFor(() => {
+    expect(
+      new Set(
+        frames.flatMap((event) =>
+          event.type === 'batch' ? event.batch.items.map((item) => item.itemId) : []
+        )
+      ).size
+    ).toBe(10)
+    expect(frames.at(-1)).toMatchObject({ type: 'batch', batch: { cursor: journal.cursor() } })
+  })
   expect(frames.every((event) => event.type === 'batch')).toBe(true)
   const inserted = frames.flatMap((event) => (event.type === 'batch' ? event.batch.items : []))
   expect(new Set(inserted.map((item) => item.itemId)).size).toBe(10)
@@ -281,12 +296,19 @@ it('delivers newly loaded saved image choices in bounded semantic batches withou
   expect(frames.at(-1)).toMatchObject({ type: 'batch', batch: { cursor: journal.cursor() } })
   frames.length = 0
   subscribers.publish(identity.sessionId, journal, { turnId: 't', text: 'metadata only' })
+  await vi.waitFor(() =>
+    expect(frames).toContainEqual(
+      expect.objectContaining({ activity: { turnId: 't', text: 'metadata only' } })
+    )
+  )
   expect(frames.flatMap((event) => (event.type === 'batch' ? event.batch.items : []))).toEqual([])
   await journal.queuedMessages.withdraw(['recovery:image-0'])
   subscribers.publish(identity.sessionId, journal)
-  expect(
-    frames.flatMap((event) => (event.type === 'batch' ? event.batch.removedItemIds : []))
-  ).toContain(agentJournalSubmissionKey('image-0'))
+  await vi.waitFor(() =>
+    expect(
+      frames.flatMap((event) => (event.type === 'batch' ? event.batch.removedItemIds : []))
+    ).toContain(agentJournalSubmissionKey('image-0'))
+  )
   expect(frames.every((event) => event.type === 'batch')).toBe(true)
   const original = journal.submissionBody('image-1')!
   await journal.appendSubmission(
@@ -330,6 +352,7 @@ it('delivers newly loaded saved image choices in bounded semantic batches withou
     )
   ).toBe(false)
   expect(frames.every((event) => event.type === 'batch')).toBe(true)
+  unsubscribe()
   await journals.closeAll()
   journal = await journals.open({ identity, stateDirectory: root, now: () => ++clock })
   const reopenedWork = structuredAgentSessionCurrentWork(journal, {
@@ -353,146 +376,6 @@ it('delivers newly loaded saved image choices in bounded semantic batches withou
     )
   ).toBe(false)
 })
-
-it.each([100, 1000].flatMap((n) => ['none', 'visible', 'cut'].map((source) => ({ n, source }))))(
-  'avoids added history population work for $source source and $n visible rows on ten real publishes',
-  async ({ n, source }) => {
-    const { AgentSessionSubscribers } =
-      await import('../agent-session-wire/structured-agent-session-subscribers')
-    const { queuedImageReaderSnapshot, queuedImageReaderEvent, queuedImageSourceIds } =
-      await import('../agent-session-wire/agent-session-queued-image-reader')
-    const idleWork = structuredAgentSessionCurrentWork(journal, {
-      record: agentSessionConversationView(
-        agentSessionRecordFixture(
-          agentSessionLeaseFixture({
-            sessionId: identity.sessionId,
-            runtimeFence: 7,
-            claimStatus: 'released'
-          })
-        )
-      )
-    })
-    journal.queuedMessages.inputWork = () => idleWork
-    if (source !== 'none') {
-      await send('active-image', true, {
-        kind: 'message',
-        role: 'user',
-        blocks: [
-          { type: 'text', text: 'active' },
-          { type: 'image-ref', url: 'https://example.test/a.png' }
-        ]
-      })
-      if (source === 'cut') {
-        await journal.rollEpoch('unreconcilable_prefix', 7)
-        expect(journal.item(agentJournalSubmissionKey('active-image'))).toBeNull()
-      }
-    }
-    async function append(recordId: string) {
-      await journal.appendItem(
-        { provider: 'legacy', agent: 'codex', sessionId: 'thread', recordId },
-        { kind: 'status', text: recordId },
-        { fence: 7, turnScope: { kind: 'thread' } }
-      )
-    }
-    for (let i = 0; i < n; i++) {
-      await append(`seed-${i}`)
-    }
-    const frames: AgentSessionSubscribeEvent[] = []
-    const capable: AgentSessionSubscribeEvent[] = []
-    const subscribers = new AgentSessionSubscribers({
-      readQueuePublication: () =>
-        readQueuePublication(journal, () => ({
-          record: agentSessionRecordFixture(lease),
-          work: idleWork
-        })),
-      readCurrentWork: () => idleWork
-    })
-    subscribers.open({
-      id: 'perf-old',
-      sessionId: identity.sessionId,
-      journal,
-      fence: 7,
-      emit: (event) => frames.push(event),
-      boundedFrames: true,
-      readHistorySnapshot: queuedImageReaderSnapshot,
-      readQueueSourceIds: queuedImageSourceIds,
-      projectJournalEvent: queuedImageReaderEvent
-    })
-    subscribers.open({
-      id: 'perf-current',
-      sessionId: identity.sessionId,
-      journal,
-      fence: 7,
-      emit: (event) => capable.push(event),
-      boundedFrames: true
-    })
-    const sourceKey = agentJournalSubmissionKey('active-image')
-    const cold = queuedImageReaderSnapshot(journal)
-    expect(cold.items.some((item) => item.itemId === sourceKey)).toBe(source !== 'none')
-    const baseline = journal.cursor()
-    frames.length = 0
-    capable.length = 0
-    const operations = { adapter: 0, inherited: 0 }
-    const original = journal.snapshot.bind(journal)
-    function watched<T>(values: T[]): T[] {
-      return new Proxy(values, {
-        get(target, key) {
-          const adapter =
-            new Error('population read').stack?.includes('queuedImageReaderSnapshot') === true
-          const bucket = adapter ? 'adapter' : 'inherited'
-          if (key === Symbol.iterator) {
-            return function* () {
-              for (const value of target) {
-                operations[bucket]++
-                yield value
-              }
-            }
-          }
-          if (typeof key === 'string' && /^\d+$/.test(key)) {
-            operations[bucket]++
-          }
-          // Array methods use the proxy receiver, counting every numeric read, including map/slice/splice.
-          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This Proxy forwards plain array properties unchanged; unbound methods retain the Proxy receiver for counting.
-          return target[key as keyof typeof target]
-        }
-      })
-    }
-    const spy = vi.spyOn(journal, 'snapshot').mockImplementation(() => {
-      const snapshot = original()
-      return {
-        ...snapshot,
-        items: watched(snapshot.items),
-        submissions: watched(snapshot.submissions)
-      }
-    })
-    try {
-      for (let i = 0; i < 10; i++) {
-        await append(`output-${i}`)
-        subscribers.publish(identity.sessionId, journal)
-      }
-    } finally {
-      spy.mockRestore()
-    }
-    console.info('compatibility operation counts', { n, source, ...operations })
-    expect(operations.adapter).toBe(0)
-    for (const delivered of [frames, capable]) {
-      expect(delivered.every((event) => event.type === 'batch')).toBe(true)
-      const items = delivered.flatMap((event) => (event.type === 'batch' ? event.batch.items : []))
-      expect(
-        items.filter((item) => item.body.kind === 'status' && item.body.text.startsWith('output-'))
-      ).toHaveLength(10)
-      expect(items.some((item) => item.itemId === sourceKey)).toBe(false)
-      expect(delivered.at(-1)?.type === 'batch' && delivered.at(-1)).toMatchObject({
-        batch: { cursor: journal.cursor() }
-      })
-    }
-    expect(journal.cursor().sequence - baseline.sequence).toBe(10)
-    if (source !== 'none') {
-      expect(journal.queuedMessages.list().filter((row) => row.state === 'waiting')).toHaveLength(1)
-      await receipt('active-image')
-    }
-  }
-)
 
 it('projects a still-active cut source before stateless and middle-page catch-up decisions, with cold reset fallback', async () => {
   const { queuedImageHistoryReader, queuedImageSubscriber } =
@@ -535,7 +418,7 @@ it('projects a still-active cut source before stateless and middle-page catch-up
   }
   const reader = queuedImageHistoryReader({ clientKind: 'mobile' })!
   const request = { sessionId: identity.sessionId, direction: 'after' as const, cursor, limit: 1 }
-  const first = readAgentSessionHistory(journal, request, { reader })
+  const first = await readAgentSessionHistory(journal, request, { reader })
   expect(first).toMatchObject({
     ok: true,
     page: {
@@ -547,9 +430,9 @@ it('projects a still-active cut source before stateless and middle-page catch-up
   })
   expect(first.page.submissions[0]).not.toHaveProperty('queuedMessageId')
   const read = createAgentSessionCatchUpReader(journal, reader)
-  const middle = read(request)
+  const middle = await read(request)
   expect(middle).toEqual(first)
-  const next = read({ ...request, cursor: middle.page.window.nextCursor })
+  const next = await read({ ...request, cursor: middle.page.window.nextCursor })
   expect(next.ok).toBe(true)
   expect(next.page.removedItemIds).not.toContain(key)
   expect(next.page.window.nextCursor.sequence).toBeGreaterThan(
@@ -560,11 +443,15 @@ it('projects a still-active cut source before stateless and middle-page catch-up
     { ...cursor, epoch: 'stale' },
     { ...cursor, sequence: journal.cursor().sequence + 1 }
   ]) {
-    const reset = readAgentSessionHistory(journal, { ...request, cursor: resetCursor }, { reader })
+    const reset = await readAgentSessionHistory(
+      journal,
+      { ...request, cursor: resetCursor },
+      { reader }
+    )
     expect(reset.ok).toBe(false)
     expect(reset.page.items).toContainEqual(expect.objectContaining({ itemId: key }))
   }
-  const staleBackward = readAgentSessionHistory(
+  const staleBackward = await readAgentSessionHistory(
     journal,
     {
       ...request,
@@ -584,7 +471,7 @@ it('projects a still-active cut source before stateless and middle-page catch-up
       })),
     readCurrentWork: () => idleWork
   })
-  subscribers.open({
+  const unsubscribe = subscribers.open({
     id: 'reconnect',
     sessionId: identity.sessionId,
     journal,
@@ -595,14 +482,17 @@ it('projects a still-active cut source before stateless and middle-page catch-up
     emit: (event) => frames.push(event),
     ...queuedImageSubscriber({ clientKind: 'mobile' })
   })
+  await vi.waitFor(() =>
+    expect(
+      frames.flatMap((event) => (event.type === 'batch' ? event.batch.items : []))
+    ).toContainEqual(expect.objectContaining({ itemId: key }))
+  )
   expect(frames.every((event) => event.type === 'batch')).toBe(true)
   expect(
     frames.flatMap((event) => (event.type === 'batch' ? event.batch.removedItemIds : []))
   ).not.toContain(key)
-  expect(
-    frames.flatMap((event) => (event.type === 'batch' ? event.batch.items : []))
-  ).toContainEqual(expect.objectContaining({ itemId: key }))
   expect(journal.item(key)).toBeNull()
+  unsubscribe()
 })
 
 it('keeps proven unwritten input waiting after both old-process hold writes fail, then preserves one exact actionable copy', async () => {

@@ -1,58 +1,144 @@
+import type { AgentJournalItemIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
+import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import { readAgentSessionConversationOutline } from './agent-session-conversation-outline'
+import { shortenedAgentJournalItem } from './agent-session-item-wire-form'
+import { firstStructuredChatNamingPrompt } from '../../../shared/structured-chat-naming-eligibility'
+import { structuredSessionGateFacts } from '../../runtime/orchestration/structured-session-pointer-delivery'
 import { describe, expect, it } from 'vitest'
 import {
+  readTestJournalRows,
+  updateTestJournalRowJson
+} from '../agent-session-journal/journal-native-fixture-test-support'
+import { hostTestMessage } from './structured-agent-session-host-test-data'
+import {
   agentJournalSubmissionKey,
-  agentJournalItemKey,
-  boundJournalKeyComponent
+  agentJournalItemKey
 } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
-  type AgentJournalMessageItem,
-  AGENT_SESSION_JOURNAL_SCHEMA_VERSION
+  type AgentJournalMessageItem
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentJournalItemIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
-import { AGENT_SESSION_HISTORY_MAX_LIMIT } from '../../../shared/agent-session/agent-session-wire'
-import {
-  openTestJournalHostDatabase,
-  insertTestJournalRow
-} from '../agent-session-journal/journal-host-database-test-support'
 
-import {
-  REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES,
-  serializeRemoteRuntimePayload
-} from '../../../shared/remote-runtime/remote-runtime-memory-limits'
+import { serializeRemoteRuntimePayload } from '../../../shared/remote-runtime/remote-runtime-memory-limits'
 import { structuredAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
-import type {
-  JournalItemRow,
-  JournalRow,
-  JournalTombstoneRow
-} from '../agent-session-journal/journal-row-schema'
-import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { projectJournalBatch } from './agent-session-journal-batch'
-import { readAgentSessionHistory, resolveHistoryLimit } from './agent-session-history-page'
+import {
+  readAgentSessionHistory,
+  createAgentSessionCatchUpReader
+} from './agent-session-history-page'
 import {
   fixture,
   journals,
-  tick,
   IDENTITY,
   appendItems,
   body,
   item
 } from './agent-session-history-contract-test-fixture'
 
-describe('resolveHistoryLimit', () => {
-  it('clamps rather than rejecting so a mid-scroll client keeps paging', () => {
-    expect(resolveHistoryLimit(undefined)).toBe(40)
-    expect(resolveHistoryLimit(0)).toBe(1)
-    expect(resolveHistoryLimit(-5)).toBe(1)
-    expect(resolveHistoryLimit(10_000)).toBe(AGENT_SESSION_HISTORY_MAX_LIMIT)
-    expect(resolveHistoryLimit(Number.NaN)).toBe(40)
-  })
-})
-
 describe('readAgentSessionHistory', () => {
+  it('refreshes a retained catch-up reader after a same-cursor disk reload', async () => {
+    const options = { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+    await fixture.journal.appendItem(
+      item(0),
+      { kind: 'turn', turnId: 'turn-1', state: 'running' },
+      options
+    )
+    const view = fixture.journal.publicRead()
+    expect(view.snapshot.items).toHaveLength(1)
+    const cursor = fixture.journal.cursor()
+    const read = createAgentSessionCatchUpReader(fixture.journal, undefined, view)
+    const request = {
+      sessionId: IDENTITY.sessionId,
+      direction: 'after' as const,
+      cursor: { epoch: cursor.epoch, sequence: 0 }
+    }
+    expect(await read(request)).toMatchObject({
+      ok: true,
+      page: { items: [{ body: { state: 'running' } }], latestTurn: { turn: { state: 'running' } } }
+    })
+    const database = await openTestJournalHostDatabase(fixture.root)
+    const rows = await readTestJournalRows(database, IDENTITY.sessionId, cursor.epoch)
+    const saved = rows.find((row) => row.seq === cursor.sequence)
+    if (!saved) {
+      throw new Error('missing saved turn')
+    }
+    const row = JSON.parse(saved.rowJson)
+    row.body.state = 'completed'
+    await updateTestJournalRowJson(
+      database,
+      IDENTITY.sessionId,
+      cursor.sequence,
+      JSON.stringify(row)
+    )
+    await fixture.journal.open()
+    expect(fixture.journal.cursor()).toEqual(cursor)
+    expect(await read(request)).toMatchObject({
+      ok: true,
+      page: {
+        items: [{ body: { state: 'completed' } }],
+        latestTurn: { turn: { state: 'completed' } }
+      }
+    })
+  })
+
+  it('serves current detail, outline, naming and mail facts without changing later history', async () => {
+    const options = { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+    await fixture.journal.appendSubmission({
+      clientMessageId: 'u',
+      payloadFingerprint: 'u',
+      body: hostTestMessage('Name this'),
+      fence: 1
+    })
+    const turn = await fixture.journal.appendItem(
+      item(0),
+      { kind: 'turn', turnId: 'turn-1', state: 'running' },
+      options
+    )
+    const replies = { ...options, turnScope: { kind: 'turn' as const, turnItemId: turn.itemId } }
+    await fixture.journal.appendItem(item(1), body('obsolete reply'), replies)
+    await fixture.journal.appendItem(item(2), body('initial reply'), replies)
+    const warm = fixture.journal.snapshot()
+    await fixture.journal.resolveDispatch({
+      clientMessageId: 'u',
+      state: 'accepted',
+      providerIdentity: null,
+      fence: 1
+    })
+    await fixture.journal.appendItem(item(2), body('Revised reply'), replies)
+    await fixture.journal.appendTombstone(item(1), { fence: 1 })
+    await fixture.journal.appendItem(
+      item(0),
+      { kind: 'turn', turnId: 'turn-1', state: 'completed' },
+      options
+    )
+    const current = fixture.journal.snapshot()
+    const expected = structuredClone(current)
+    expect(current).not.toBe(warm)
+    const detail = current.items.at(-1)!
+    expect(shortenedAgentJournalItem(detail, 1024)?.body).toMatchObject({
+      blocks: [{ text: 'Revised reply' }]
+    })
+    expect(readAgentSessionConversationOutline(current).entries).toMatchObject([
+      { preview: 'Name this', reply: 'Revised reply' }
+    ])
+    expect(firstStructuredChatNamingPrompt(current, 0)).toBe('Name this')
+    expect(structuredSessionGateFacts(current.items).turnRunning).toBe(false)
+    expect(current.submissions).toMatchObject([{ clientMessageId: 'u', dispatchState: 'accepted' }])
+    expect(
+      await readAgentSessionHistory(fixture.journal, {
+        sessionId: IDENTITY.sessionId,
+        direction: 'tail'
+      })
+    ).toMatchObject({
+      ok: true,
+      page: { items: expected.items, submissions: expected.submissions }
+    })
+    expect(fixture.journal.snapshot()).toEqual(expected)
+  })
+
   it('serves the newest page on tail and pages backward from it', async () => {
     await appendItems(5)
-    const tail = readAgentSessionHistory(fixture.journal, {
+    const tail = await readAgentSessionHistory(fixture.journal, {
       sessionId: 'session-1',
       direction: 'tail',
       limit: 2
@@ -65,7 +151,7 @@ describe('readAgentSessionHistory', () => {
     expect(tail.page.hasNewer).toBe(false)
     expect(tail.page.liveCursor).toEqual(fixture.journal.cursor())
 
-    const older = readAgentSessionHistory(fixture.journal, {
+    const older = await readAgentSessionHistory(fixture.journal, {
       sessionId: 'session-1',
       direction: 'before',
       cursor: tail.page.window.nextCursor,
@@ -101,7 +187,7 @@ describe('readAgentSessionHistory', () => {
     expect(receipt).toEqual(fixture.journal.cursor())
     for (const direction of ['before', 'after'] as const) {
       expect(
-        readAgentSessionHistory(fixture.journal, {
+        await readAgentSessionHistory(fixture.journal, {
           sessionId: IDENTITY.sessionId,
           direction,
           cursor: before
@@ -133,7 +219,7 @@ describe('readAgentSessionHistory', () => {
     expect(appended.cursor).toEqual(fixture.journal.cursor())
     expect(appendedReceipt).toEqual(appended.cursor)
     expect(
-      readAgentSessionHistory(fixture.journal, {
+      await readAgentSessionHistory(fixture.journal, {
         sessionId: IDENTITY.sessionId,
         direction: 'after',
         cursor: receipt
@@ -149,7 +235,7 @@ describe('readAgentSessionHistory', () => {
     await fixture.journal.close()
     fixture.journal = await journals.open({ identity: IDENTITY, stateDirectory: fixture.root })
     expect(fixture.journal.cursor()).toEqual(appended.cursor)
-    const tail = readAgentSessionHistory(fixture.journal, {
+    const tail = await readAgentSessionHistory(fixture.journal, {
       sessionId: IDENTITY.sessionId,
       direction: 'tail',
       limit: 2
@@ -159,7 +245,7 @@ describe('readAgentSessionHistory', () => {
       throw new Error('missing tail')
     }
     expect(
-      readAgentSessionHistory(fixture.journal, {
+      await readAgentSessionHistory(fixture.journal, {
         sessionId: IDENTITY.sessionId,
         direction: 'before',
         cursor: tail.page.window.nextCursor,
@@ -175,7 +261,7 @@ describe('readAgentSessionHistory', () => {
     await appendItems(2)
     const cursor = fixture.journal.cursor()
     await appendItems(5)
-    const page = readAgentSessionHistory(fixture.journal, {
+    const page = await readAgentSessionHistory(fixture.journal, {
       sessionId: 'session-1',
       direction: 'after',
       cursor,
@@ -194,7 +280,7 @@ describe('readAgentSessionHistory', () => {
     const cursor = fixture.journal.cursor()
     await fixture.journal.appendTombstone(item(1), { fence: 1 })
 
-    const page = readAgentSessionHistory(fixture.journal, {
+    const page = await readAgentSessionHistory(fixture.journal, {
       sessionId: 'session-1',
       direction: 'after',
       cursor
@@ -209,7 +295,7 @@ describe('readAgentSessionHistory', () => {
   it('reports a forward read with no cursor as cursor_ahead rather than serving the tail', async () => {
     await appendItems(1)
     expect(
-      readAgentSessionHistory(fixture.journal, { sessionId: 'session-1', direction: 'after' })
+      await readAgentSessionHistory(fixture.journal, { sessionId: 'session-1', direction: 'after' })
     ).toMatchObject({ ok: false, reset: 'cursor_ahead' })
   })
 
@@ -219,7 +305,7 @@ describe('readAgentSessionHistory', () => {
     await fixture.journal.rollEpoch('legacy_import', 2)
     for (const direction of ['before', 'after'] as const) {
       expect(
-        readAgentSessionHistory(fixture.journal, {
+        await readAgentSessionHistory(fixture.journal, {
           sessionId: 'session-1',
           direction,
           cursor: stale
@@ -232,7 +318,7 @@ describe('readAgentSessionHistory', () => {
     await appendItems(1)
     const ahead = { epoch: fixture.journal.epoch, sequence: fixture.journal.cursor().sequence + 10 }
     expect(
-      readAgentSessionHistory(fixture.journal, {
+      await readAgentSessionHistory(fixture.journal, {
         sessionId: 'session-1',
         direction: 'before',
         cursor: ahead
@@ -247,7 +333,7 @@ describe('readAgentSessionHistory', () => {
       body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hi' }] },
       fence: 1
     })
-    const page = readAgentSessionHistory(fixture.journal, {
+    const page = await readAgentSessionHistory(fixture.journal, {
       sessionId: 'session-1',
       direction: 'tail'
     })
@@ -276,7 +362,7 @@ describe('history page byte ceiling', () => {
     }
   }
 
-  function pageOf(result: ReturnType<typeof readAgentSessionHistory>) {
+  function pageOf(result: Awaited<ReturnType<typeof readAgentSessionHistory>>) {
     if (!result.ok) {
       throw new Error(`expected a page, got reset ${result.reset}`)
     }
@@ -288,7 +374,7 @@ describe('history page byte ceiling', () => {
     await appendLargeItems(20)
 
     const tail = pageOf(
-      readAgentSessionHistory(fixture.journal, {
+      await readAgentSessionHistory(fixture.journal, {
         sessionId: 'session-1',
         direction: 'tail',
         limit: 40
@@ -305,7 +391,7 @@ describe('history page byte ceiling', () => {
       guard += 1
       expect(guard).toBeLessThan(30)
       const page = pageOf(
-        readAgentSessionHistory(fixture.journal, {
+        await readAgentSessionHistory(fixture.journal, {
           sessionId: 'session-1',
           direction: 'before',
           cursor,
@@ -325,7 +411,7 @@ describe('history page byte ceiling', () => {
     await appendLargeItems(20)
 
     const first = pageOf(
-      readAgentSessionHistory(fixture.journal, {
+      await readAgentSessionHistory(fixture.journal, {
         sessionId: 'session-1',
         direction: 'after',
         cursor: start,
@@ -343,7 +429,7 @@ describe('history page byte ceiling', () => {
       guard += 1
       expect(guard).toBeLessThan(30)
       const page = pageOf(
-        readAgentSessionHistory(fixture.journal, {
+        await readAgentSessionHistory(fixture.journal, {
           sessionId: 'session-1',
           direction: 'after',
           cursor,
@@ -365,7 +451,7 @@ describe('history page byte ceiling', () => {
     })
 
     const tail = pageOf(
-      readAgentSessionHistory(fixture.journal, {
+      await readAgentSessionHistory(fixture.journal, {
         sessionId: 'session-1',
         direction: 'tail',
         limit: 40
@@ -417,7 +503,7 @@ describe('projectJournalBatch', () => {
       ]
     })
 
-    const page = readAgentSessionHistory(fixture.journal, {
+    const page = await readAgentSessionHistory(fixture.journal, {
       sessionId: 'session-1',
       direction: 'after',
       cursor,
@@ -430,7 +516,7 @@ describe('projectJournalBatch', () => {
     expect(page.page.removedItemIds).toHaveLength(1)
     expect(new Set(page.page.items.map((entry) => entry.sequence)).size).toBe(1)
 
-    const tail = readAgentSessionHistory(fixture.journal, {
+    const tail = await readAgentSessionHistory(fixture.journal, {
       sessionId: 'session-1',
       direction: 'tail',
       limit: 1
@@ -443,7 +529,7 @@ describe('projectJournalBatch', () => {
 
   it('reports a hole in the row sequence as journal_gap', async () => {
     await appendItems(3)
-    const since = fixture.journal.readSince({ epoch: fixture.journal.epoch, sequence: 0 })
+    const since = await fixture.journal.readSince({ epoch: fixture.journal.epoch, sequence: 0 })
     if (!since.ok) {
       throw new Error(`expected rows, got reset ${since.reset}`)
     }
@@ -464,7 +550,7 @@ describe('projectJournalBatch', () => {
       fence: 1,
       turnScope: AGENT_JOURNAL_THREAD_SCOPE
     })
-    const since = fixture.journal.readSince(cursor)
+    const since = await fixture.journal.readSince(cursor)
     if (!since.ok) {
       throw new Error(`expected rows, got reset ${since.reset}`)
     }
@@ -485,7 +571,7 @@ describe('projectJournalBatch', () => {
     await appendItems(1)
     const cursor = fixture.journal.cursor()
     await fixture.journal.appendTombstone(item(1), { fence: 1 })
-    const since = fixture.journal.readSince(cursor)
+    const since = await fixture.journal.readSince(cursor)
     if (!since.ok) {
       throw new Error(`expected rows, got reset ${since.reset}`)
     }
@@ -543,7 +629,7 @@ describe('projectJournalBatch', () => {
       { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
 
-    const page = readAgentSessionHistory(fixture.journal, {
+    const page = await readAgentSessionHistory(fixture.journal, {
       sessionId: IDENTITY.sessionId,
       direction: 'after',
       cursor
@@ -565,222 +651,5 @@ describe('projectJournalBatch', () => {
       )
     ).toBe(agentJournalSubmissionKey('client-follow-up'))
     expect(page.page.removedItemIds).toEqual([])
-  })
-})
-
-function serializedPageBytes(value: unknown): number {
-  return Buffer.byteLength(serializeRemoteRuntimePayload(value), 'utf8')
-}
-
-type RawSeedRow =
-  | Omit<JournalItemRow, 'v' | 'epoch' | 'fence' | 'ts'>
-  | Omit<JournalTombstoneRow, 'v' | 'epoch' | 'fence' | 'ts'>
-
-/** Seed raw legacy rows, then reopen to exercise current read bounds. */
-async function reopenWithRawRows(rows: readonly RawSeedRow[]): Promise<AgentSessionJournal> {
-  const full = rows.map((row): JournalRow => ({
-    ...row,
-    v: AGENT_SESSION_JOURNAL_SCHEMA_VERSION,
-    epoch: fixture.journal.epoch,
-    fence: 1,
-    ts: tick()
-  }))
-  await fixture.journal.close()
-  const opened = openTestJournalHostDatabase(fixture.root)
-  try {
-    opened.db.exec('BEGIN IMMEDIATE')
-    for (const row of full) {
-      insertTestJournalRow(opened.db, IDENTITY.sessionId, row)
-    }
-    opened.db.exec('COMMIT')
-  } finally {
-    await opened.close()
-  }
-  return journals.open({ identity: IDENTITY, stateDirectory: fixture.root, now: tick })
-}
-
-describe('pre-existing oversized identities', () => {
-  // Legacy oversized tombstone IDs cannot fit any outbound page.
-  const HUGE_ITEM_ID = `codex:thread-1:${'h'.repeat(5 * 1024 * 1024)}:1`
-
-  it('answers an unfittable pre-existing removal with a bounded reset instead of an unsendable page', async () => {
-    const seq = fixture.journal.cursor().sequence
-    const reopened = await reopenWithRawRows([
-      { kind: 'item', itemId: HUGE_ITEM_ID, revision: 1, seq: seq + 1, body: body('big') },
-      { kind: 'tombstone', itemId: HUGE_ITEM_ID, revision: 2, seq: seq + 2 }
-    ])
-
-    for (const sequence of [seq, seq + 1]) {
-      const result = readAgentSessionHistory(reopened, {
-        sessionId: 'session-1',
-        direction: 'after',
-        cursor: { epoch: reopened.epoch, sequence },
-        limit: 40
-      })
-      expect(result.ok).toBe(false)
-      if (result.ok) {
-        throw new Error('expected a reset')
-      }
-      expect(result.reset).toBe('cursor_compacted')
-      expect(serializedPageBytes(result.page)).toBeLessThanOrEqual(
-        REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES
-      )
-      // Reset replaces client state without sending an unsendable removal ID.
-      expect(result.page.items).toEqual([])
-      const liveCursor = result.page.liveCursor
-      if (!liveCursor) {
-        throw new Error('expected a live cursor on the reset page')
-      }
-      expect(liveCursor.sequence).toBeGreaterThanOrEqual(seq + 2)
-
-      const resumed = readAgentSessionHistory(reopened, {
-        sessionId: 'session-1',
-        direction: 'after',
-        cursor: liveCursor,
-        limit: 40
-      })
-      expect(resumed.ok).toBe(true)
-    }
-  })
-
-  it('charges removal ids into the page budget and splits catch-up instead of overflowing', async () => {
-    const seq = fixture.journal.cursor().sequence
-    const removalIds = Array.from(
-      { length: 30 },
-      (_, index) => `codex:thread-1:${'r'.repeat(250 * 1024)}:${index}`
-    )
-    const reopened = await reopenWithRawRows(
-      removalIds.map((itemId, index) => ({
-        kind: 'tombstone' as const,
-        itemId,
-        revision: 1,
-        seq: seq + 1 + index
-      }))
-    )
-
-    const seen = new Set<string>()
-    let cursor = { epoch: reopened.epoch, sequence: seq }
-    let guard = 0
-    while (true) {
-      guard += 1
-      expect(guard).toBeLessThan(30)
-      const result = readAgentSessionHistory(reopened, {
-        sessionId: 'session-1',
-        direction: 'after',
-        cursor,
-        limit: 40
-      })
-      if (!result.ok) {
-        throw new Error(`expected a page, got reset ${result.reset}`)
-      }
-      expect(serializedPageBytes(result.page)).toBeLessThanOrEqual(
-        REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES
-      )
-      for (const removed of result.page.removedItemIds) {
-        seen.add(removed)
-      }
-      cursor = result.page.window.nextCursor
-      if (!result.page.hasNewer) {
-        break
-      }
-    }
-    expect(seen).toEqual(new Set(removalIds))
-  })
-
-  it('bounds the truncation marker id for a live oversized-id item', async () => {
-    const seq = fixture.journal.cursor().sequence
-    const reopened = await reopenWithRawRows([
-      { kind: 'item', itemId: HUGE_ITEM_ID, revision: 1, seq: seq + 1, body: body('big') }
-    ])
-
-    const tail = readAgentSessionHistory(reopened, {
-      sessionId: 'session-1',
-      direction: 'tail',
-      limit: 40
-    })
-    if (!tail.ok) {
-      throw new Error(`expected a page, got reset ${tail.reset}`)
-    }
-    expect(serializedPageBytes(tail.page)).toBeLessThanOrEqual(
-      REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES
-    )
-    expect(tail.page.items).toHaveLength(1)
-    const marker = tail.page.items[0]
-    expect(marker?.body.kind).toBe('status')
-    expect(marker?.itemId).toBe(boundJournalKeyComponent(HUGE_ITEM_ID))
-    expect(marker?.itemId.length).toBeLessThan(2048)
-
-    const forward = readAgentSessionHistory(reopened, {
-      sessionId: 'session-1',
-      direction: 'after',
-      cursor: { epoch: reopened.epoch, sequence: seq },
-      limit: 40
-    })
-    if (!forward.ok) {
-      throw new Error(`expected a page, got reset ${forward.reset}`)
-    }
-    expect(serializedPageBytes(forward.page)).toBeLessThanOrEqual(
-      REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES
-    )
-    expect(forward.page.items[0]?.itemId).toBe(boundJournalKeyComponent(HUGE_ITEM_ID))
-  })
-})
-
-describe('identity bounding at admission', () => {
-  it('bounds a new oversized provider identity so its item and removal share one sendable key', async () => {
-    const oversized: AgentJournalItemIdentity = {
-      provider: 'codex',
-      threadId: 'thread-1',
-      turnId: 'T'.repeat(5 * 1024 * 1024),
-      ordinal: 1
-    }
-    const start = { epoch: fixture.journal.epoch, sequence: fixture.journal.cursor().sequence }
-    const appended = await fixture.journal.appendItem(oversized, body('bounded'), {
-      fence: 1,
-      turnScope: AGENT_JOURNAL_THREAD_SCOPE
-    })
-    expect(appended.itemId.length).toBeLessThan(2048)
-    expect(appended.itemId).toContain('~orca-oversized~')
-
-    const beforeTombstone = fixture.journal.cursor()
-    await fixture.journal.appendTombstone(oversized, { fence: 1 })
-
-    const created = readAgentSessionHistory(fixture.journal, {
-      sessionId: 'session-1',
-      direction: 'after',
-      cursor: start,
-      limit: 40
-    })
-    if (!created.ok) {
-      throw new Error(`expected a page, got reset ${created.reset}`)
-    }
-    expect(serializedPageBytes(created.page)).toBeLessThanOrEqual(
-      REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES
-    )
-    expect(created.page.removedItemIds).toEqual([appended.itemId])
-
-    const removal = readAgentSessionHistory(fixture.journal, {
-      sessionId: 'session-1',
-      direction: 'after',
-      cursor: beforeTombstone,
-      limit: 40
-    })
-    if (!removal.ok) {
-      throw new Error(`expected a page, got reset ${removal.reset}`)
-    }
-    expect(serializedPageBytes(removal.page)).toBeLessThanOrEqual(
-      REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES
-    )
-    expect(removal.page.removedItemIds).toEqual([appended.itemId])
-  })
-
-  it('keeps bounded keys deterministic and a fixed point of re-derivation', () => {
-    const oversized = 'x'.repeat(2 * 1024 * 1024)
-    const bounded = boundJournalKeyComponent(oversized)
-    expect(bounded).toBe(boundJournalKeyComponent(oversized))
-    expect(boundJournalKeyComponent(bounded)).toBe(bounded)
-    expect(bounded.length).toBeLessThan(2048)
-    expect(boundJournalKeyComponent(`${oversized}y`)).not.toBe(bounded)
-    expect(boundJournalKeyComponent('short')).toBe('short')
   })
 })

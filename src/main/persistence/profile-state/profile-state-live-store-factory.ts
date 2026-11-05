@@ -1,3 +1,4 @@
+import { createProfileStateStartupTransfer } from '../loading-store/profile-state-startup-transfer'
 import { Store } from '../loading-store/store'
 import {
   prepareProfileStateStore,
@@ -23,26 +24,33 @@ export async function createLiveProfileStateStore(
     initial.authority.retireForWorker(),
     workerOptions
   )
+  let store: Store | undefined
   try {
     await authority.ready
     const initialAuthorityState = initial.takeParsedState
-      ? { authority, takeParsedState: () => parsed }
+      ? createProfileStateStartupTransfer(authority, parsed)
       : { authority, serializedState }
-    return {
-      ...prepared,
-      store: new Store({
-        dataFile: options.dataFile,
-        storageAuthority: options.storageAuthority,
-        profileStateAuthority: authority,
-        initialAuthorityState: {
-          ...initialAuthorityState,
-          unboundPaneAliases: initial.unboundPaneAliases
-        }
-      })
+    store = new Store({
+      dataFile: options.dataFile,
+      storageAuthority: options.storageAuthority,
+      profileStateAuthority: authority,
+      initialAuthorityState: {
+        ...initialAuthorityState,
+        unboundPaneAliases: initial.unboundPaneAliases
+      }
+    })
+    if (!store.workspaceSurfacesInitialized()) {
+      await store.executeWorkspaceSurfaceCommand({ type: 'initialize', hostId: 'local' })
     }
+    await store.pruneDeregisteredTerminalSurfaces()
+    return { ...prepared, store }
   } catch (error) {
     try {
-      await authority.close()
+      try {
+        await store?.freezeWritesAsync()
+      } finally {
+        await authority.close()
+      }
     } catch (closeError) {
       console.error('[persistence] Failed to close a refused profile writer:', closeError)
     }

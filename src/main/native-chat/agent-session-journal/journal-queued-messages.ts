@@ -1,3 +1,4 @@
+import { settleJournalCommit } from './journal-committed-effects'
 import type { JournalReducerState } from './journal-reducer'
 import { journalInputAttemptEnded, type JournalInputWork } from './journal-input-obligations'
 import { journalInputOrder } from './journal-input-order'
@@ -51,6 +52,10 @@ export class JournalQueuedMessages {
 
   constructor(private readonly deps: JournalQueuedMessagesDeps) {
     this.legacy = new LegacyQueuedCards(deps)
+  }
+
+  initialize(): Promise<void> {
+    return this.legacy.initialize()
   }
 
   get sessionId(): string {
@@ -156,7 +161,8 @@ export class JournalQueuedMessages {
   update(input: QueuedMessageUpdate): Promise<AgentSessionQueuedMessageUpdateResult> {
     let edit: { body: AgentJournalMessageItem; previous: AgentJournalMessageItem } | undefined
     const receipt = journalAttachmentClaimReceipt(
-      (db) => (edit ? this.deps.claimAttachments(db, edit.body, true, edit.previous) : undefined),
+      async (db) =>
+        edit ? this.deps.claimAttachments(db, edit.body, true, edit.previous) : undefined,
       () => this.editLeases.retire(input.messageId)
     )
     return this.write<AgentSessionQueuedMessageUpdateResult>(() => {
@@ -297,13 +303,15 @@ export class JournalQueuedMessages {
           return planned.plan.rows
         },
         {
-          write: (db, row) => {
-            planned?.plan.receipt.write(db, row)
-            receipt?.write(db, row)
+          write: async (db, row) => {
+            await planned?.plan.receipt.write(db, row)
+            await receipt?.write(db, row)
           },
           committed: () => {
-            planned?.plan.receipt.committed()
-            receipt?.committed()
+            settleJournalCommit(
+              () => planned?.plan.receipt.committed(),
+              () => receipt?.committed()
+            )
           }
         }
       )

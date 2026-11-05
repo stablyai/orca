@@ -15,16 +15,27 @@ export function terminalIsOfTab(heldTabId: string | null, parentTabId: string): 
 export function liveTerminalsOfTab(
   snapshot: RuntimeMobileSessionTabsSnapshot,
   parentTabId: string,
-  find: (row: RuntimeMobileSessionTerminalTab) => RuntimePtyWorktreeRecord | null
+  find: (row: RuntimeMobileSessionTerminalTab) => RuntimePtyWorktreeRecord | null,
+  capture = ORCA_LAYOUT_OWNER_IS_MAIN
 ): (row: RuntimeMobileSessionTerminalTab) => RuntimePtyWorktreeRecord | null {
-  if (!ORCA_LAYOUT_OWNER_IS_MAIN) {
+  if (!capture) {
     return find
   }
-  const live = new Map<string, RuntimePtyWorktreeRecord | null>()
+  const live = new Map<
+    string,
+    { pty: RuntimePtyWorktreeRecord; incarnationId: string | null } | null
+  >()
   for (const row of snapshot.tabs) {
     if (row.type === 'terminal' && row.parentTabId === parentTabId) {
-      live.set(row.id, find(row))
+      const pty = find(row)
+      live.set(row.id, pty ? { pty, incarnationId: pty.incarnationId } : null)
     }
   }
-  return (row) => live.get(row.id) ?? find(row)
+  return (row) => {
+    if (!live.has(row.id)) {
+      return find(row)
+    }
+    const captured = live.get(row.id)
+    return captured && captured.pty.incarnationId === captured.incarnationId ? captured.pty : null
+  }
 }

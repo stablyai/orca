@@ -1,3 +1,4 @@
+import { SURFACE_EVIDENCE_PREFIX } from '../../../shared/workspace-surfaces/surface-evidence-document'
 import type Database from '../../sqlite/sync-database'
 import { readProfileStateAutomationRunsDocument } from './profile-state-automation-runs'
 import {
@@ -15,6 +16,7 @@ import {
 export type ReadProfileStateDocumentsOptions = {
   /** Reuse the surrounding snapshot's revision. */
   profileRevision?: number
+  excludeSurfaceEvidence?: boolean
 }
 
 /** Validate hash, shape and JSON before returning authoritative rows. */
@@ -46,9 +48,13 @@ export function readProfileStateDocuments(
   const rows = db
     .prepare(
       `SELECT domain, payload, domain_version, revision, updated_at, content_hash
-       FROM profile_state_documents ORDER BY rowid`
+       FROM profile_state_documents ${options.excludeSurfaceEvidence ? 'WHERE domain < ? OR domain >= ?' : ''} ORDER BY rowid`
     )
-    .iterate()
+    .iterate(
+      ...(options.excludeSurfaceEvidence
+        ? [SURFACE_EVIDENCE_PREFIX, `${SURFACE_EVIDENCE_PREFIX}\uffff`]
+        : [])
+    )
   const documents: (
     | ProfileStateDocument
     | ProfileStateParsedDocument

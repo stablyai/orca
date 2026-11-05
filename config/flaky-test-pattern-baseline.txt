@@ -877,7 +877,7 @@
 2 test-no-real-time-wait:src/main/ipc/worktrees/git/worktree-git-status-attribution-real-git.test.ts
 2 test-no-real-time-wait:src/main/managed-server/install/orcad-remote-windows-scripts.test.ts
 2 test-no-real-time-wait:src/main/managed-server/install/remote-node-runtime-store-lock-host-release.test.ts
-2 test-no-real-time-wait:src/main/native-chat/agent-session-wire/structured-agent-session-claude-subagent-row.test.ts
+1 test-no-real-time-wait:src/main/native-chat/agent-session-wire/structured-agent-session-claude-subagent-row.test.ts
 2 test-no-real-time-wait:src/main/native-chat/agent-session-wire/structured-agent-session-restart-resume.test.ts
 2 test-no-real-time-wait:src/main/native-chat/transcript-watch-liveness.test.ts
 2 test-no-real-time-wait:src/main/providers/startup-line-typed-length.live-shell.test.ts
@@ -981,7 +981,6 @@
 2 test-no-wall-clock:src/main/orcad/orcad-stale-lock-reclaim.test.ts
 2 test-no-wall-clock:src/main/persistence/migrating-orcad-catalog/orcad-source-release-upgrade.test.ts
 2 test-no-wall-clock:src/main/persistence/profile-state/profile-state-backup-temporary-files.test.ts
-2 test-no-wall-clock:src/main/persistence/profile-state/profile-state-live-store-factory.test.ts
 2 test-no-wall-clock:src/main/persistence/profile-state/profile-state-section-repair.test.ts
 2 test-no-wall-clock:src/main/persistence/tracking-repos/persistence-deregistered-repo-residue.test.ts
 2 test-no-wall-clock:src/main/persistence/tracking-repos/persistence-workspace-session-scrollback.test.ts

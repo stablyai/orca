@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type {
   AgentSessionStatusEvent,
@@ -165,14 +165,16 @@ it('publishes latest turn activity without advancing or adding journal rows', as
   })
 
   expect(journal.cursor()).toEqual(cursor)
-  expect(events.at(-1)).toEqual({
-    type: 'batch',
-    sessionId: SESSION,
-    batch: { cursor, items: [], removedItemIds: [], submissions: [] },
-    fence: 1,
-    hostNow: expect.any(Number),
-    activity: { turnId: 'turn-1', text: 'Inspecting the session wire' }
-  })
+  await vi.waitFor(() =>
+    expect(events.at(-1)).toEqual({
+      type: 'batch',
+      sessionId: SESSION,
+      batch: { cursor, items: [], removedItemIds: [], submissions: [] },
+      fence: 1,
+      hostNow: expect.any(Number),
+      activity: { turnId: 'turn-1', text: 'Inspecting the session wire' }
+    })
+  )
 
   subscribers.close(SESSION, 'subscriber-1')
   subscribers.publish(SESSION, journal, null)
@@ -185,5 +187,5 @@ it('publishes latest turn activity without advancing or adding journal rows', as
     emit: (event) => events.push(event)
   })
   expect(journal.cursor()).toEqual(cursor)
-  expect(events.at(-1)).toMatchObject({ activity: null })
+  await vi.waitFor(() => expect(events.at(-1)).toMatchObject({ activity: null }))
 })

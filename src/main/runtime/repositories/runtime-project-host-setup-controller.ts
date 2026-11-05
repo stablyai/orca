@@ -1,3 +1,6 @@
+import { assertCloneHostIsSupported } from '../project-clone-host-support'
+import { captureRepositoryOwnerRemoval } from '../workspaces/removal/canonical-owner-removal-scopes'
+import type { OpenNativeOwnerRemovalStore } from '../workspaces/removal/canonical-owner-removal'
 import type {
   Project,
   ProjectHostSetup,
@@ -16,7 +19,6 @@ import type { Repo } from '../../../shared/repo-types'
 import {
   getRepoExecutionHostId,
   getSshTargetIdForExecutionHost,
-  parseExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
 import { getProjectHostSetupForRepo } from '../../../shared/project-host-setup-lookup'
@@ -48,6 +50,7 @@ import {
 } from '../../../shared/project-host-setup-target'
 
 type RuntimeProjectHostSetupDependencies = {
+  openNativeOwnerStore?: OpenNativeOwnerRemovalStore
   getStore: () => RuntimeStore | null
   listRepos: () => Repo[]
   addRepo: (path: string, kind: 'folder' | 'git', hostId: ExecutionHostId) => Promise<Repo>
@@ -56,20 +59,6 @@ type RuntimeProjectHostSetupDependencies = {
   invalidateWorktreeScan: (repoId: string) => void
   notifyReposChanged: () => void
   countLiveTerminalsForRepo: (repo: Repo) => number
-}
-
-// cloneRepo runs locally; accepting SSH would register the client's checkout as a remote repo.
-function assertCloneHostIsSupported(hostId: ExecutionHostId | null | undefined): void {
-  if (parseExecutionHostId(hostId)?.kind !== 'ssh') {
-    return
-  }
-  throw new Error(
-    'Cloning onto an SSH host is not supported. Clone the repository on the host, then set the project up from that existing folder.'
-  )
-}
-
-function sshTargetNotServedError(connectionId: string): SshHostNotServedError {
-  return new SshHostNotServedError(connectionId, SERVER_SSH_PROJECT_ADD_UNAVAILABLE_MESSAGE)
 }
 
 export class RuntimeProjectHostSetupController {
@@ -128,7 +117,7 @@ export class RuntimeProjectHostSetupController {
     const knownRepoIds = new Set(this.deps.listRepos().map((repo) => repo.id))
     const sshTargetId = getSshTargetIdForExecutionHost(args.hostId)
     if (sshTargetId) {
-      throw sshTargetNotServedError(sshTargetId)
+      throw new SshHostNotServedError(sshTargetId, SERVER_SSH_PROJECT_ADD_UNAVAILABLE_MESSAGE)
     }
     const repo = await this.deps.addRepo(args.path, kind, args.hostId)
     const repoWasCreated = !knownRepoIds.has(repo.id)
@@ -201,7 +190,7 @@ export class RuntimeProjectHostSetupController {
     return result
   }
 
-  deleteSetup(args: ProjectHostSetupDeleteArgs): ProjectHostSetupDeleteResult {
+  async deleteSetup(args: ProjectHostSetupDeleteArgs): Promise<ProjectHostSetupDeleteResult> {
     const store = this.deps.getStore()
     if (!store?.deleteProjectHostSetup) {
       throw new Error('runtime_unavailable')
@@ -215,7 +204,15 @@ export class RuntimeProjectHostSetupController {
       }
       releaseWorktreeCreatePreparationsForRepo(store, repo)
     }
-    const result = store.deleteProjectHostSetup(args)
+    const finalize = () => store.deleteProjectHostSetup!(args)
+    const result = repo
+      ? await captureRepositoryOwnerRemoval(store, repo, this.deps.openNativeOwnerStore, () => {
+          assertWslMoveHostSetupIdWritable(store, args)
+          if (args.force === false) {
+            this.assertSetupRemovalIsUnused(store, repo)
+          }
+        })(finalize)
+      : finalize()
     if (!result) {
       throw new Error(`Project host setup not found: ${args.setupId}`)
     }

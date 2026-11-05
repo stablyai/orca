@@ -15,7 +15,15 @@ type OrcadMigrationCatalogFlushStore = Partial<Pick<Store, 'flushPendingOrThrowA
 type OrcadMigrationCatalogStageStore = OrcadMigrationCatalogFlushStore &
   Partial<Pick<Store, 'stageOrcadMigrationCatalog'>>
 type OrcadMigrationCatalogCommitStore = OrcadMigrationCatalogFlushStore &
-  Partial<Pick<Store, 'commitStagedOrcadMigrationCatalog' | 'installOrcadMigrationReceivedBlobs'>>
+  Partial<
+    Pick<
+      Store,
+      | 'commitStagedOrcadMigrationCatalog'
+      | 'installOrcadMigrationReceivedBlobs'
+      | 'executeWorkspaceSurfaceCommand'
+      | 'workspaceSurfacesInitialized'
+    >
+  >
 type OrcadMigrationCatalogAbortStore = OrcadMigrationCatalogFlushStore &
   Partial<Pick<Store, 'abortStagedOrcadMigrationCatalog'>>
 type OrcadMigrationCatalogAbortByReferenceStore = OrcadMigrationCatalogFlushStore &
@@ -46,6 +54,9 @@ export async function commitStagedOrcadMigrationCatalogDurably(args: {
     args.expectedBlobs ? { expectedBlobs: args.expectedBlobs } : {}
   )
   await flushMigrationState(args.store, args.signal)
+  if (args.store.workspaceSurfacesInitialized?.('local')) {
+    await args.store.executeWorkspaceSurfaceCommand!({ type: 'query', hostId: 'local' })
+  }
   args.onDurableCommit()
   installReceivedBlobs(args.store, args.manifest, args.worktreeHasLiveShells)
   return result

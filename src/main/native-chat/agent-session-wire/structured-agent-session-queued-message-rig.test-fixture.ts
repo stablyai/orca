@@ -1,10 +1,10 @@
+import { abandonStructuredAgentSessionHost } from './structured-agent-session-host-test-abandon'
+import { settleRejectedQueuedRigMessage } from './structured-agent-session-queued-rig-turn.test-fixture'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect } from 'vitest'
 import { activeProviderContext } from '../../../shared/agent-session/agent-session-provider-context'
-import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
-import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionQueuePause } from '../../../shared/agent-session/requests/agent-session-queued-message-wire'
@@ -60,16 +60,20 @@ export async function createQueuedMessageTestRig(
   const SESSION = options.sessionId ?? DEFAULT_SESSION
   const root = await mkdtemp(join(tmpdir(), 'orca-queued-messages-'))
   resetHostTestOperationIds()
-  const store = await openTestAgentSessionRecordStore(root)
-  const provider = createQueuedRigProvider(store, options, () => host)
+  let store = await openTestAgentSessionRecordStore(root)
+  const provider = createQueuedRigProvider(
+    { getRecord: (id) => store.getRecord(id) },
+    options,
+    () => host
+  )
   const { dispatch, compact, cancelTurn, closeSession, setOption } = provider
-  const makeHost = () =>
+  const makeHost = async () =>
     new StructuredAgentSessionHost({
       agents: claudeAndCodexDeclared(),
       logger: createStructuredAgentSessionLogger(),
       store,
       adapter: provider.adapter,
-      journalDatabase: openTestJournalHostDatabase(root),
+      journalDatabase: await openTestJournalHostDatabase(root),
       claimKeyId: 'key-1',
       mintSpawnToken: () => 'spawn-1',
       now: options.now ?? (() => NOW),
@@ -79,7 +83,7 @@ export async function createQueuedMessageTestRig(
       ...(options.idleSweep ? { idleSweep: options.idleSweep } : {}),
       ...(options.recoveryCapsule ? { recoveryCapsule: new AgentSessionRecoveryCapsule(root) } : {})
     })
-  let host = makeHost()
+  let host = await makeHost()
   const firstAttach = hostTestAttachParams(null, {
     ...(options.location ? { location: options.location } : {}),
     envelope: {
@@ -97,7 +101,8 @@ export async function createQueuedMessageTestRig(
         } as const)
       : {})
   })
-  const pinLegacy = options.legacyInputs && seedQueuedRigLegacyJournal(root, SESSION, options.agent)
+  const pinLegacy =
+    options.legacyInputs && (await seedQueuedRigLegacyJournal(root, SESSION, options.agent))
   expect(await host.attach(QUEUED_RIG_CALLER, firstAttach)).toMatchObject({ ok: true })
   if (pinLegacy) {
     pinLegacy(host)
@@ -228,15 +233,7 @@ export async function createQueuedMessageTestRig(
   }
 
   async function settleRejected(id: string, providerText: string): Promise<void> {
-    const detail = { text: providerText, audience: 'person' as const }
-    await host.settleLateDispatch({
-      sessionId: SESSION,
-      clientMessageId: id,
-      state: 'rejected',
-      ...agentSessionFailureWords(agentSessionFailureFact('providerRejected', { detail }), {
-        surface: 'rejection'
-      })
-    })
+    await settleRejectedQueuedRigMessage(host, SESSION, id, providerText)
   }
 
   /** Graceful restart preserves personal Stop pauses because quit writes no close Stop event. */
@@ -245,13 +242,15 @@ export async function createQueuedMessageTestRig(
   }
 
   /** Replace the host without graceful close, reusing persisted state. */
-  function crashRestartHostProcess(): void {
-    host = makeHost()
+  async function crashRestartHostProcess(): Promise<void> {
+    await abandonStructuredAgentSessionHost(host)
+    store = await openTestAgentSessionRecordStore(root)
+    host = await makeHost()
   }
 
   async function quitRestartHostProcess(): Promise<void> {
     await host.flushAllStreamedEvents()
-    crashRestartHostProcess()
+    await crashRestartHostProcess()
   }
 
   async function queuePause(sessionId = SESSION): Promise<AgentSessionQueuePause | null> {
@@ -292,7 +291,9 @@ export async function createQueuedMessageTestRig(
 
   return {
     root,
-    store,
+    get store() {
+      return store
+    },
     get host() {
       return host
     },

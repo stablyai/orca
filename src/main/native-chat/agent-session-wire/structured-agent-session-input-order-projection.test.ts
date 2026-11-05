@@ -458,7 +458,7 @@ it.each([10, 30])(
       }
       rig.host.stopDelivery()
       phase = 'original-replay'
-      expect(loadTestJournal(rig.root, SESSION)?.damage).toBeNull()
+      expect((await loadTestJournal(rig.root, SESSION))?.damage).toBeNull()
       expect(metric().receipts).toBe(0)
       for (let pass = 0; pass < 2; pass++) {
         phase = `replacement-${pass}`
@@ -473,7 +473,7 @@ it.each([10, 30])(
           ).length
         ).toBeLessThanOrEqual(2 * n + 4)
         phase = `output-replay-${pass}`
-        const replay = loadTestJournal(rig.root, SESSION)!
+        const replay = (await loadTestJournal(rig.root, SESSION))!
         expect(replay.damage).toBeNull()
         expect(replay.newer).toBeNull()
         expect(metric().rows).toBe(0) // Keyed restore assigns canonical facts and rebuilds derived indexes once.

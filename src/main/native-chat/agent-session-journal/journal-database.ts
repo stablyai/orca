@@ -16,7 +16,6 @@ import { ensureAgentSessionAttachmentClaimTables } from '../agent-session-attach
 
 export const JOURNAL_BUSY_TIMEOUT_MS = 5000
 export const JOURNAL_SIZE_LIMIT_BYTES = 32 * 1024 * 1024
-const JOURNAL_SYNCHRONOUS = 'FULL'
 
 export type OpenJournalDatabase = {
   db: Database.Database
@@ -91,15 +90,19 @@ export function openJournalDatabase(dbPath: string): OpenJournalDatabase {
 
 function configureJournalPragmas(db: Database.Database, stored: number): void {
   if (stored === 0) {
-    // INCREMENTAL must precede WAL/table creation to permit later bounded page reclamation.
+    // INCREMENTAL must precede table creation to permit later bounded page reclamation.
     db.pragma('auto_vacuum = INCREMENTAL')
   }
-  db.pragma('journal_mode = WAL')
   db.pragma(`busy_timeout = ${JOURNAL_BUSY_TIMEOUT_MS}`)
-  db.pragma('foreign_keys = ON')
-  // FULL fsyncs submissions before dispatch; checkpoint_fullfsync also flushes macOS drive caches.
-  db.pragma(`synchronous = ${JOURNAL_SYNCHRONOUS}`)
+  const mode = db.pragma('journal_mode = WAL', { simple: true })
+  if (mode !== 'wal') {
+    throw new Error(`Chat journal cannot use WAL (mode: ${String(mode)})`)
+  }
+  db.pragma('locking_mode = NORMAL')
+  db.pragma('synchronous = FULL')
+  db.pragma('fullfsync = OFF')
   db.pragma('checkpoint_fullfsync = ON')
+  db.pragma('foreign_keys = ON')
   db.pragma(`journal_size_limit = ${JOURNAL_SIZE_LIMIT_BYTES}`)
 }
 

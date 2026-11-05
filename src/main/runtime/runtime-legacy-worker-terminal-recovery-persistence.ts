@@ -14,6 +14,7 @@ import type {
 import { cloneWorkspaceSessionState } from '../persistence/restoring-sessions/session-owner-fields'
 import { rollbackWorkspaceSessionAfterFailedAsyncWrite } from '../persistence/restoring-sessions/workspace-session-write-rollback'
 import { worktreeIdsEqual } from '../../shared/worktree/id'
+import { commitCanonicalWorkerRecovery } from './canonical-legacy-worker-recovery'
 
 export class RuntimeLegacyWorkerTerminalRecoveryPersistence {
   constructor(
@@ -43,6 +44,12 @@ export class RuntimeLegacyWorkerTerminalRecoveryPersistence {
     const dispatchIds = new Set<string>()
     let adopted = false
     try {
+      for (const resolution of resolutions) {
+        const hostId = resolution.hostId ?? this.getHostId(resolution.candidate.worktreeId)
+        if (hostId) {
+          await commitCanonicalWorkerRecovery(store, hostId, resolution)
+        }
+      }
       return await store.runDurableMutation(() => {
         for (const { candidate, resolution, hostId: observedHostId } of resolutions) {
           const hostId = observedHostId ?? this.getHostId(candidate.worktreeId)

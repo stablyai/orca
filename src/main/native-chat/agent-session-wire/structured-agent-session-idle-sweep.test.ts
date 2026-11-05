@@ -131,8 +131,11 @@ describe('the idle sweep', () => {
     await swept
     expect(rig.adapter.closeSession).not.toHaveBeenCalled()
     await vi.waitFor(() => expect(rig.adapter.dispatch).toHaveBeenCalledTimes(2))
-    const settled = (await rig.host.journalSnapshot(SESSION)).submissions.at(-1)
-    expect(settled?.dispatchState).toBe('accepted')
+    await vi.waitFor(async () =>
+      expect((await rig.host.journalSnapshot(SESSION)).submissions.at(-1)?.dispatchState).toBe(
+        'accepted'
+      )
+    )
     const seen = readerSaw(reader.events).submissions
     expect(seen.some((row) => row.dispatchState === 'accepted')).toBe(true)
     expect(

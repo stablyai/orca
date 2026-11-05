@@ -215,9 +215,12 @@ it('follows branching, unreadable and cyclic /clear predecessors as the full sca
     'session-c>session-c',
     'unreadable-u>session-c'
   ])
-  const plan = openTestJournalHostDatabase(root)
-    .db.prepare(`EXPLAIN QUERY PLAN ${AGENT_SESSION_PREDECESSOR_IDS}`)
-    .all('session-c')
-    .map((row) => String(row.detail))
+  const plan = (
+    await (
+      await openTestJournalHostDatabase(root)
+    ).read((read) =>
+      read.prepare(`EXPLAIN QUERY PLAN ${AGENT_SESSION_PREDECESSOR_IDS}`).all('session-c')
+    )
+  ).map((row) => String(row.detail))
   expect(plan.join('\n')).toContain('USING INDEX idx_agent_session_clear_successor')
 })

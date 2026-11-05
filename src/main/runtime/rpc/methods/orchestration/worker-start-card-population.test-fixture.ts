@@ -5,13 +5,13 @@ import type { AgentSessionJournal } from '../../../../native-chat/agent-session-
 import type { JournalHostDatabase } from '../../../../native-chat/agent-session-journal/journal-host-database'
 import { COORD } from './worker-start-card-contract-test-fixture'
 
-export function expectWorkerStartPopulation(input: {
+export async function expectWorkerStartPopulation(input: {
   journal: AgentSessionJournal
   count: number
-  connection: JournalHostDatabase['db']
+  connection: JournalHostDatabase
   facts: { dispatchId: string; workerAddress: string; task: string; name: string }[]
   before: AgentJournalSnapshot
-}): void {
+}): Promise<void> {
   const { journal, facts, count, connection, before } = input
   const cards = journal.snapshot().items.filter(({ body }) => body.kind === 'agent-start')
   expect(cards.map(({ body }) => body)).toEqual(
@@ -30,8 +30,11 @@ export function expectWorkerStartPopulation(input: {
     }))
   )
   expect(
-    connection.prepare('SELECT COUNT(*) AS count FROM journal_rows WHERE session_id = ?').get(COORD)
-      ?.count
+    (
+      await connection.read((read) =>
+        read.prepare('SELECT COUNT(*) AS count FROM journal_rows WHERE session_id = ?').get(COORD)
+      )
+    )?.count
   ).toBe(before.cursor.sequence + count)
 }
 

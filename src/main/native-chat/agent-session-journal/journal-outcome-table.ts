@@ -1,25 +1,24 @@
-import { OUTCOME_FORMAT_1_COLLECTIONS } from './journal-outcome-format-1'
-import { isNativeOutcomeField } from './journal-outcome-format-2'
-import { journalInputOrder } from './journal-input-order'
-import { detachJournalNativePrefix, restoreJournalNativeState } from './journal-input-conversion'
-import { type JournalReducerState, applyJournalRow } from './journal-reducer'
-import { isolateJournalTransition } from './journal-reducer-transition'
-import type { JournalRow } from './journal-row-schema'
-import { journalRowReadBack } from './journal-row-table'
+import type { JournalReadConnection } from './journal-sql-owner'
+import { prepareJournalAcceptance } from './journal-input-provenance'
 import {
-  encodeJournalOutcomes,
-  journalOutcomeScalars,
-  JournalOutcomeFold,
-  JOURNAL_PREFIX_ORDINAL
-} from './journal-outcome-codec'
-import type { JournalOutcomeSource } from './journal-outcome-format'
-import type Database from '../../sqlite/sync-database'
+  restoreJournalNativeFacts,
+  detachJournalNativePrefix,
+  restoreJournalNativeState
+} from './journal-input-conversion'
+import { readLegacyRowsAsync, journalLegacyCardsFromRows } from './journal-queue-import'
 
-// The key index orders each key's records newest first, so a range seek past the last key read lands
-// on the next key's newest record: one indexed seek per key, whatever its revisions number.
-export const JOURNAL_NEWEST_OUTCOME_SQL = `SELECT seq, field, entry_key, format, ordinal, value_json,
-  deleted FROM journal_outcomes WHERE generation = ? AND (field, entry_key) > (?, ?) AND seq <= ?
-  ORDER BY field, entry_key, seq DESC LIMIT 1`
+import type Database from '../../sqlite/sync-database'
+import type { JournalReducerState } from './journal-reducer'
+import type { JournalRow } from './journal-row-schema'
+import { JournalOutcomeFold } from './journal-outcome-codec'
+import type { JournalOutcomeSource } from './journal-outcome-format'
+import { planJournalOutcomeRows, type PlannedJournalOutcome } from './journal-outcome-plan'
+
+import {
+  JOURNAL_NEWEST_OUTCOME_SQL,
+  writeJournalEncodedOutcomes
+} from './journal-outcome-persistence'
+export { JOURNAL_NEWEST_OUTCOME_SQL } from './journal-outcome-persistence'
 
 /** Folds each key's newest record, deletions included, over `baseline`, the chat's folded input
  * prefix when it has one. Superseded revisions are never read: they no longer shape the chat. */
@@ -67,74 +66,57 @@ export function persistJournalOutcomeRows(
   upgradeNative = false,
   finish?: (state: JournalReducerState) => void
 ): { state: JournalReducerState; adopt: () => JournalReducerState } {
-  let scalar = state.lastSequence === 0 ? {} : journalOutcomeScalars(state)
-  const transition = isolateJournalTransition(state, () => undefined)
-  journalInputOrder(transition.state).introduceOverlays(transition.state)
-  const previous = db.prepare(`SELECT ordinal, deleted FROM journal_outcomes
-    WHERE generation = ? AND field = ? AND entry_key = ? ORDER BY seq DESC LIMIT 1`)
-  const insert = db.prepare(`INSERT INTO journal_outcomes
-    (generation, seq, field, entry_key, format, ordinal, value_json, deleted)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
-  for (const row of rows) {
-    // Folding what a reload reads keeps live state equal to it: an annotation the reader drops as
-    // unusable never reaches the model, so it is never refused by the strict record encoder.
-    const { stored } = journalRowReadBack(state.sessionId, row)
-    applyJournalRow(transition.state, transition.input(stored), savedAt ?? row.ts)
-    if (row === rows.at(-1)) {
-      finish?.(transition.state)
-    }
-    const changes = transition
-      .changes(true)
-      .filter(
-        (entry) =>
-          isNativeOutcomeField(entry.path) ||
-          OUTCOME_FORMAT_1_COLLECTIONS.some((path) => path === entry.path)
-      )
-    if (upgradeNative) {
-      for (const path of ['inputEntries', 'inputCards'] as const) {
-        const changed = new Set(
-          changes.filter((change) => change.path === path).map((change) => change.key)
-        )
-        for (const [key, value] of transition.state[path]) {
-          if (!changed.has(key)) {
-            changes.push({ path, key, value, deleted: false, reinsert: true })
-          }
-        }
-      }
-      upgradeNative = false
-    }
-    // Only this row's own transition is recorded, never a snapshot of a prefix value it left alone.
-    const encoded = encodeJournalOutcomes(transition.state, changes, scalar, transition.untracked)
-    scalar = encoded.scalars
-    for (const [index, value] of encoded.values.entries()) {
-      // Each change's record is at its own index; the scalar records after them match no change.
-      const change = changes.at(index)
-      const kept = previous.get(source.generation, value.field, value.key)
-      // A new or re-created key takes its place in the row's touch order, as the live map does; a
-      // key that existed before this row keeps its place, which for a key only the frozen prefix
-      // held is the prefix's own order.
-      const ordinal = change?.reinsert
-        ? appended(row.seq, index)
-        : kept?.deleted === 0 && typeof kept.ordinal === 'string'
-          ? kept.ordinal
-          : !kept && source.prefix > 0 && change
-            ? JOURNAL_PREFIX_ORDINAL
-            : appended(row.seq, index)
-      insert.run(
-        source.generation,
-        value.seq,
-        value.field,
-        value.key,
-        value.format,
-        ordinal,
-        value.json,
-        Number(value.deleted)
-      )
-    }
-  }
+  const transition = planJournalOutcomeRows(state, rows, savedAt, upgradeNative, finish)
+  writePlannedJournalOutcomes(db, source, transition.values)
   return { state: transition.state, adopt: transition.adopt }
 }
 
-function appended(seq: number, index: number): string {
-  return `s${String(seq).padStart(16, '0')}:${String(index).padStart(16, '0')}`
+/** Resolve ordinal/previous-key facts inside the storage transaction. */
+export function writePlannedJournalOutcomes(
+  db: Database.Database,
+  source: Pick<JournalOutcomeSource, 'generation' | 'prefix'>,
+  values: readonly PlannedJournalOutcome[]
+): void {
+  writeJournalEncodedOutcomes(db, source, values)
+}
+
+export async function readJournalOutcomesAsync(
+  read: JournalReadConnection,
+  sessionId: string,
+  epoch: string,
+  source: JournalOutcomeSource,
+  baseline?: JournalReducerState
+): Promise<JournalReducerState> {
+  const recoveries = [...(baseline?.queue.cards.values() ?? [])].flatMap((card) =>
+    card.recovers ? [{ id: card.messageId, recovers: card.recovers }] : []
+  )
+  const prefix = detachJournalNativePrefix(baseline)
+  const fold = new JournalOutcomeFold()
+  let after = { field: '', key: '' }
+  for (;;) {
+    const page = await read.outcomes(source.generation, source.through, after.field, after.key)
+    if (page.length === 0) {
+      break
+    }
+    for (const row of page) {
+      after = fold.add(row)
+    }
+    await new Promise<void>((resolve) => setImmediate(resolve))
+  }
+  const state = fold.finish(sessionId, epoch, source.through, baseline)
+  for (const { id, recovers } of recoveries) {
+    const card = state.queue.cards.get(id)
+    if (card && !fold.replaced('queue.cards', id)) {
+      card.recovers = recovers
+    }
+  }
+  const acceptance = await prepareJournalAcceptance(read, sessionId, [
+    ...state.inputEntries.keys(),
+    ...state.submissions.keys()
+  ])
+  const legacy = await readLegacyRowsAsync(read, sessionId)
+  restoreJournalNativeFacts(state, source.format, fold, prefix, acceptance, (state) =>
+    journalLegacyCardsFromRows(state, legacy)
+  )
+  return state
 }

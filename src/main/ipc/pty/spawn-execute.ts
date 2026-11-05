@@ -75,7 +75,7 @@ export async function executePtySpawn(
           preserveExisting: !ctx.ownsNewIncarnation || Boolean(stablePaneOwnerCandidate)
         }) ?? false
     }
-    const sequenceBeforeProviderSpawn = expectedPtyId
+    let sequenceBeforeProviderSpawn = expectedPtyId
       ? (ctx.deps.runtime?.getPtyOutputSequence?.(expectedPtyId) ?? 0)
       : 0
     ctx.spawnTiming?.mark('options')
@@ -95,6 +95,36 @@ export async function executePtySpawn(
         throw new Error('client_disconnected')
       }
       facts.beforeProviderSpawn?.()
+    }
+    const spawnProvider = () => {
+      const beforeDispatch = (): void => {
+        validateDispatch()
+        const id = ctx.spawnOptions.sessionId
+        if (ctx.canonicalRun?.bindingTarget && id && ctx.pendingRegistrationPtyId !== id) {
+          if (ctx.pendingRegistrationPtyId) {
+            ctx.deps.runtime?.cancelPendingPtyRegistration?.(
+              ctx.pendingRegistrationPtyId,
+              undefined,
+              ctx.pendingRegistrationClaim
+            )
+          }
+          ctx.effectiveSessionAppId = id
+          ctx.pendingRegistrationClaim = ctx.deps.runtime?.beginPtyRegistration?.(id)
+          ctx.pendingRegistrationPtyId = id
+          sequenceBeforeProviderSpawn = ctx.deps.runtime?.getPtyOutputSequence?.(id) ?? 0
+          if (ctx.isDaemonHostSpawn) {
+            ctx.preparedProvisionalExecutionContext =
+              ctx.deps.runtime?.preparePtyExecutionContext?.(id, ctx.expectedWslDistro, {
+                resetIncarnation: true
+              }) ?? false
+          }
+        }
+      }
+      if (ctx.canonicalRun) {
+        return ctx.canonicalRun.spawn(ctx.provider, ctx.spawnOptions, beforeDispatch)
+      }
+      beforeDispatch()
+      return ctx.provider.spawn(ctx.spawnOptions)
     }
     if (args.agentSessionEnsure && !ctx.preAdoptedStablePane) {
       // Claims can outlive this controller; import authoritative owner listings before deciding absence.
@@ -126,8 +156,7 @@ export async function executePtySpawn(
             if (refusal) {
               throw new SavedResumeFreshRefusal(refusal)
             }
-            validateDispatch()
-            providerResult = await ctx.provider.spawn(ctx.spawnOptions)
+            providerResult = await spawnProvider()
             ctx.rejectedRegistrationCandidate = providerResult
             // Lower-owner success proves physical commit even when registration observes an early exit.
             facts.reportPtySpawnCommitted?.()
@@ -163,8 +192,7 @@ export async function executePtySpawn(
         facts.suppressRefusedLaunch?.()
         delete args.agentSessionEnsure
         delete ctx.spawnOptions.agentSessionEnsure
-        validateDispatch()
-        providerResult = await ctx.provider.spawn(ctx.spawnOptions)
+        providerResult = await spawnProvider()
         facts.reportPtySpawnCommitted?.()
         ctx.stablePaneOwner = null
       }
@@ -187,10 +215,12 @@ export async function executePtySpawn(
       if (!facts.attachOnlyView) {
         await chooseFresh()
       }
-      validateDispatch()
+      if (facts.attachOnlyView) {
+        validateDispatch()
+      }
       ctx.result = facts.attachOnlyView
         ? await attachViewWithoutOwner(ctx.provider, ctx.spawnOptions)
-        : await ctx.provider.spawn(ctx.spawnOptions)
+        : await spawnProvider()
       facts.reportPtySpawnCommitted?.()
       ctx.stablePaneOwner = null
       ctx.rejectedRegistrationCandidate = ctx.result

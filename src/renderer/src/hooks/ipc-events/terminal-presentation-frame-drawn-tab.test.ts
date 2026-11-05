@@ -9,7 +9,11 @@ import { createStoreSessionMockApi } from '../../store/slices/store-session-test
 
 const mocks = vi.hoisted(() => {
   const store: { current: ReturnType<typeof createTestStore> | null } = { current: null }
-  return { store, callRuntimeRpc: vi.fn(async () => ({ ok: true, result: {} })) }
+  return {
+    store,
+    mainOwnsLayout: true,
+    callRuntimeRpc: vi.fn(async () => ({ ok: true, result: {} }))
+  }
 })
 
 function testStore(): ReturnType<typeof createTestStore> {
@@ -20,7 +24,11 @@ function testStore(): ReturnType<typeof createTestStore> {
 }
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
-vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
+vi.mock('../../../../shared/layout-owner-switch', () => ({
+  get ORCA_LAYOUT_OWNER_IS_MAIN() {
+    return mocks.mainOwnsLayout
+  }
+}))
 vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.callRuntimeRpc }))
 vi.mock('../../store', () => ({
   useAppStore: {
@@ -96,6 +104,7 @@ function setup(frameDrewTab = true) {
 beforeEach(() => {
   vi.unstubAllGlobals()
   mocks.callRuntimeRpc.mockClear()
+  mocks.mainOwnsLayout = true
 })
 
 // Main’s frame may precede reveal; reuse its ID rather than adding a second terminal tab.
@@ -115,19 +124,23 @@ describe('revealing a terminal main created, in a layout-owner build', () => {
     expect(replyTerminalCreate.mock.calls[0]?.[0]).not.toHaveProperty('error')
   })
 
-  it('before its frame, draws the tab under main’s ids so main finds the create already done', () => {
-    const { store, reveal } = setup(false)
+  it.each([true, false])(
+    'before its frame, retains the host tab and leaf (main-owned layout: %s)',
+    (mainOwnsLayout) => {
+      mocks.mainOwnsLayout = mainOwnsLayout
+      const { store, reveal } = setup(false)
 
-    reveal()
+      reveal()
 
-    expect(store.getState().tabsByWorktree[WORKTREE]?.map((tab) => tab.id)).toEqual([TAB])
-    expect(store.getState().terminalLayoutsByTabId[TAB]?.ptyIdsByLeafId).toEqual({
-      [LEAF]: 'pty-1'
-    })
-    expect(mocks.callRuntimeRpc).toHaveBeenCalledWith({ kind: 'local' }, 'layout.apply', {
-      command: expect.objectContaining({ type: 'createTerminalTab', tabId: TAB, leafId: LEAF })
-    })
-  })
+      expect(store.getState().tabsByWorktree[WORKTREE]?.map((tab) => tab.id)).toEqual([TAB])
+      expect(store.getState().terminalLayoutsByTabId[TAB]?.ptyIdsByLeafId).toEqual({
+        [LEAF]: 'pty-1'
+      })
+      expect(mocks.callRuntimeRpc).toHaveBeenCalledWith({ kind: 'local' }, 'layout.apply', {
+        command: expect.objectContaining({ type: 'createTerminalTab', tabId: TAB, leafId: LEAF })
+      })
+    }
+  )
 
   it('reuses the frame-drawn tab even when stale records leave the terminal’s owner unclear', () => {
     const { store, reveal, replyTerminalCreate } = setup()

@@ -1,5 +1,27 @@
+import type { SurfaceKey } from '../../../shared/workspace-surfaces/surface-content'
+import type {
+  SurfaceStorageRead,
+  SurfaceStorageReadResult
+} from '../../../shared/workspace-surfaces/surface-storage-read'
+import {
+  isSurfaceStorageRead,
+  isSurfaceStorageReadResult,
+  isSurfaceStorageCommand,
+  isSurfaceStorageResult
+} from '../../workspace-surfaces/surface-storage-validation'
+import type { JournalSqlFailure } from '../../native-chat/agent-session-journal/journal-sql-protocol'
+import type {
+  JournalUnitPacket,
+  JournalResultPacket
+} from '../../native-chat/agent-session-journal/journal-unit-transfer'
+import type { SurfaceJointTransaction } from '../../workspace-surfaces/surface-joint-transaction'
 import type { ProfileStateDomainReplacement } from '../loading-store/profile-state-authority'
 import { isRecord } from './profile-state-document-validation'
+import type {
+  SurfaceStorageCommand,
+  SurfaceStorageMutation,
+  SurfaceStorageResult
+} from '../../../shared/workspace-surfaces/surface-storage-command'
 
 export type ProfileStateWriterInitialization = {
   databasePath: string
@@ -7,7 +29,14 @@ export type ProfileStateWriterInitialization = {
   revision: number
 }
 
+export type ProfileStateWriterJournalPackets = { id: number; journalPackets: JournalResultPacket[] }
+
 export type ProfileStateWriterCommand =
+  | { command: 'stage-surface-journal'; packets: readonly JournalUnitPacket[] | null }
+  | { command: 'read-surface'; read: SurfaceStorageRead }
+  | { command: 'write-surface'; surface: SurfaceStorageCommand }
+  | { command: 'write-surfaces'; surfaces: readonly SurfaceStorageMutation[] }
+  | { command: 'write-surface-joint'; transaction: SurfaceJointTransaction }
   | { command: 'write-state'; payload: Uint8Array }
   | {
       command: 'write-complete' | 'write-domains'
@@ -29,12 +58,22 @@ export type ProfileStateWriterErrorData = {
   outcome: ProfileStateWriterFailureOutcome
   expectedRevision?: number
   actualRevision?: number
+  journal?: JournalSqlFailure
   domain?: string | null
   /** Preserve SQLite causes that the outer open-error class cannot identify. */
   cause?: { code?: string; errcode?: number; message: string }
 }
 export type ProfileStateWriterResponse =
-  | { id: number; ok: true; revision: number; exportedRevision?: number | null }
+  | {
+      id: number
+      ok: true
+      revision: number
+      exportedRevision?: number | null
+      surfaceInvalidations?: readonly SurfaceKey[]
+      surfaceRead?: SurfaceStorageReadResult
+      surfaceResult?: SurfaceStorageResult
+      surfaceResults?: SurfaceStorageResult[]
+    }
   | { id: number; ok: false; error: ProfileStateWriterErrorData }
 
 export function isProfileStateRevision(value: unknown): value is number {
@@ -68,6 +107,33 @@ export function isProfileStateWriterRequest(value: unknown): value is ProfileSta
     return false
   }
   switch (value.command) {
+    case 'stage-surface-journal':
+      return value.packets === null || Array.isArray(value.packets)
+    case 'write-surface-joint':
+      return (
+        isRecord(value.transaction) &&
+        typeof value.transaction.journalPath === 'string' &&
+        value.transaction.journalPath.length > 0 &&
+        Array.isArray(value.transaction.commands) &&
+        value.transaction.commands.length > 0 &&
+        (value.transaction.effectCount === undefined ||
+          isProfileStateRevision(value.transaction.effectCount)) &&
+        value.transaction.commands.every(
+          (command: unknown) => isSurfaceStorageCommand(command) && command.type !== 'query'
+        )
+      )
+    case 'write-surfaces':
+      return (
+        Array.isArray(value.surfaces) &&
+        value.surfaces.length > 0 &&
+        value.surfaces.every(
+          (surface: unknown) => isSurfaceStorageCommand(surface) && surface.type !== 'query'
+        )
+      )
+    case 'read-surface':
+      return isSurfaceStorageRead(value.read)
+    case 'write-surface':
+      return isSurfaceStorageCommand(value.surface)
     case 'write-state':
       return value.payload instanceof Uint8Array
     case 'assert-revision':
@@ -119,6 +185,20 @@ export function isProfileStateWriterResponse(value: unknown): value is ProfileSt
   }
   return value.ok === true
     ? isProfileStateRevision(value.revision) &&
+        (value.surfaceRead === undefined || isSurfaceStorageReadResult(value.surfaceRead)) &&
+        (value.surfaceInvalidations === undefined ||
+          (Array.isArray(value.surfaceInvalidations) &&
+            value.surfaceInvalidations.every(
+              (key) =>
+                isRecord(key) &&
+                typeof key.hostId === 'string' &&
+                typeof key.workspaceId === 'string' &&
+                typeof key.hostTabId === 'string'
+            ))) &&
+        (value.surfaceResult === undefined || isSurfaceStorageResult(value.surfaceResult)) &&
+        (value.surfaceResults === undefined ||
+          (Array.isArray(value.surfaceResults) &&
+            value.surfaceResults.every(isSurfaceStorageResult))) &&
         (value.exportedRevision === undefined ||
           value.exportedRevision === null ||
           isProfileStateRevision(value.exportedRevision))

@@ -28,7 +28,7 @@ import {
   journalAttachmentClaimsReceipt,
   type JournalAttachmentClaim
 } from './journal-submission-hook'
-import { claimAgentSessionAttachmentsInTransaction } from '../agent-session-attachments/agent-session-attachment-claims'
+import { prepareAgentSessionAttachmentClaim } from '../agent-session-attachments/prepared-agent-session-attachment-claim'
 import { JournalGoalAttachmentInverse } from './journal-goal-attachment-inverse'
 import {
   isJournalOutputRevision,
@@ -49,6 +49,7 @@ export type JournalStoreHost = {
   adopt: (loaded: JournalLoad) => void
   prepare: NonNullable<ConstructorParameters<typeof JournalRowWriter>[0]['prepare']>
   commit: ConstructorParameters<typeof JournalRowWriter>[0]['commit']
+  verify: () => Promise<void>
   journal: () => AgentSessionJournal
   enqueue: JournalRowWriter['enqueue']
 }
@@ -70,8 +71,8 @@ export type JournalStoreCollaborators = {
 
 export function createJournalStoreCollaborators(host: JournalStoreHost): JournalStoreCollaborators {
   const goalAttachments = new JournalGoalAttachmentInverse(host.identity.sessionId)
-  const claimAttachments: JournalAttachmentClaim = (db, body, required, previous, goalId) => {
-    const claim = claimAgentSessionAttachmentsInTransaction(db, {
+  const claimAttachments: JournalAttachmentClaim = async (db, body, required, previous, goalId) => {
+    const claim = await prepareAgentSessionAttachmentClaim({
       stateDirectory: host.database().stateDirectory,
       sessionId: host.identity.sessionId,
       body,
@@ -79,7 +80,19 @@ export function createJournalStoreCollaborators(host: JournalStoreHost): Journal
       ...(previous ? { previous } : {}),
       now: host.now()
     })
-    return () => goalAttachments.acquired(claim.referenced, claim.inserted, goalId)
+    let adopted: { referenced: Set<string>; inserted: string[] } | undefined
+    db.add({ kind: 'claim', claim }, (value) => {
+      if (typeof value !== 'object' || value === null) {
+        throw new Error('Native attachment claim result is missing')
+      }
+      adopted = value
+    })
+    return () => {
+      if (!adopted) {
+        throw new Error('Native attachment claim was not committed')
+      }
+      goalAttachments.acquired(adopted.referenced, adopted.inserted, goalId)
+    }
   }
   const rowWriter = new JournalRowWriter({
     sessionId: host.identity.sessionId,
@@ -93,7 +106,8 @@ export function createJournalStoreCollaborators(host: JournalStoreHost): Journal
     commit: host.commit,
     project: (rows) => projectJournalRows(host.state(), rows),
     streamedTextRevision: (row) => isJournalStreamedTextRevision(host.state(), row),
-    outputRevision: (row) => isJournalOutputRevision(host.state(), row)
+    outputRevision: (row) => isJournalOutputRevision(host.state(), row),
+    verify: host.verify
   })
   const inputReceipt = (rows: readonly JournalRow[], receipt?: JournalOperationReceipt) =>
     journalInputClaimsReceipt(claimAttachments, (id) => goalAttachments.isLive(id), rows, receipt)
@@ -153,7 +167,10 @@ export function createJournalStoreCollaborators(host: JournalStoreHost): Journal
     stops: new JournalStopAcceptor({ writer: rowWriter, state: host.state }),
     // Import legacy cards once per open without failing the open.
     restore: () =>
-      restoreJournalStore(host, { epochController }).then(() => queuedMessages.importAtOpen()),
+      queuedMessages
+        .initialize()
+        .then(() => restoreJournalStore(host, { epochController }))
+        .then(() => queuedMessages.importAtOpen()),
     rowWriter,
     submissionWriter: new JournalSubmissionWriter({
       state: host.state,

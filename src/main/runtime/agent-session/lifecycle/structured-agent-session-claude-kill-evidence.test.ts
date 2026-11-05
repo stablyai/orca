@@ -44,18 +44,20 @@ async function attach() {
 async function forceTime() {
   await vi.advanceTimersByTimeAsync(SUPERVISED_GRACEFUL_EXIT_MS + 8000)
 }
-function killEvidence() {
-  expect(fixture.record().lease).toMatchObject({
-    claimStatus: 'released',
-    ownerProcess: null,
-    reservedSpawnToken: null,
-    handoffStage: null,
-    deathEvidence: { kind: 'kill-delivered' }
+async function killEvidence() {
+  await vi.waitFor(() => {
+    expect(fixture.record().lease).toMatchObject({
+      claimStatus: 'released',
+      ownerProcess: null,
+      reservedSpawnToken: null,
+      handoffStage: null,
+      deathEvidence: { kind: 'kill-delivered' }
+    })
+    expect(fixture.adapter.hasOwnedAcquisition!(SESSION)).toBe(false)
+    expect(
+      fixture.host.deps.store.listOperationRows().some((row) => row.outcome.status === 'pending')
+    ).toBe(false)
   })
-  expect(fixture.adapter.hasOwnedAcquisition!(SESSION)).toBe(false)
-  expect(
-    fixture.host.deps.store.listOperationRows().some((row) => row.outcome.status === 'pending')
-  ).toBe(false)
 }
 
 it('preserves actual TRUE writer-close through published close, join, and a healthy successor', async () => {
@@ -68,10 +70,10 @@ it('preserves actual TRUE writer-close through published close, join, and a heal
   await forceTime()
   await closing
   await fixture.drain()
-  killEvidence()
-  const database = JournalHostDatabase.open(fixture.directory)
+  await killEvidence()
+  const database = await JournalHostDatabase.open(fixture.directory)
   try {
-    const reopened = AgentSessionRecordStore.open({
+    const reopened = await AgentSessionRecordStore.open({
       journalDatabase: database,
       hostId: 'local',
       legacySessionTabIds: []
@@ -136,15 +138,17 @@ it('settles a real failed acquisition with exact kill evidence and rejects dispa
   identity.resolve()
   await forceTime()
   await fixture.drain()
-  killEvidence()
-  const journal = await fixture.host.journalSnapshot(SESSION)
+  await killEvidence()
   if (!pending.ok) {
     throw new Error('send refused')
   }
-  expect(
-    journal.submissions.find((row) => row.clientMessageId === pending.value.clientMessageId)
-      ?.dispatchState
-  ).toBe('rejected')
+  await vi.waitFor(async () =>
+    expect(
+      (await fixture.host.journalSnapshot(SESSION)).submissions.find(
+        (row) => row.clientMessageId === pending.value.clientMessageId
+      )?.dispatchState
+    ).toBe('rejected')
+  )
   expect(
     JSON.stringify(fixture.logs.warn.mock.calls, (_key, value) =>
       value instanceof Error ? { message: value.message, cause: value.cause } : value
@@ -181,15 +185,17 @@ it('retains a non-root late-refusal receipt while its ended event waits behind h
   })
   await forceTime()
   join.resolve()
-  expect(events.mock.calls).toContainEqual([
-    expect.objectContaining({ type: 'ended', deathEvidenceKind: 'kill-delivered' })
-  ])
+  await vi.waitFor(() =>
+    expect(events.mock.calls).toContainEqual([
+      expect.objectContaining({ type: 'ended', deathEvidenceKind: 'kill-delivered' })
+    ])
+  )
   const joined = await receipt
   expect(joined).toBeInstanceOf(AgentSessionAcquisitionRootExitObservedError)
   expect(joined.deathEvidenceKind).toBe('kill-delivered')
   expect(joined.cause).toBeInstanceOf(Error)
   await fixture.drain()
-  killEvidence()
+  await killEvidence()
   expect(fixture.record().lease.deathEvidence?.ownerFence).toBe(old.fence)
   expect(savedKinds).toEqual(['kill-delivered'])
   unsubscribe()
@@ -224,15 +230,17 @@ it.each(['identity', 'spawn-return'] as const)(
     expect(report).toBeInstanceOf(AgentSessionAcquisitionRootExitObservedError)
     expect(report.deathEvidenceKind).toBe('kill-delivered')
     await fixture.drain()
-    killEvidence()
+    await killEvidence()
     if (!pending.ok) {
       throw new Error('send refused')
     }
-    expect(
-      (await fixture.host.journalSnapshot(SESSION)).submissions.find(
-        (row) => row.clientMessageId === pending.value.clientMessageId
-      )?.dispatchState
-    ).toBe('rejected')
+    await vi.waitFor(async () =>
+      expect(
+        (await fixture.host.journalSnapshot(SESSION)).submissions.find(
+          (row) => row.clientMessageId === pending.value.clientMessageId
+        )?.dispatchState
+      ).toBe('rejected')
+    )
     vi.useRealTimers()
     await fixture.healthy()
   }
@@ -242,23 +250,39 @@ it.each(['prove-owner', 'journal-attach'] as const)(
   'preserves proof after a recorded owner fails at %s',
   async (boundary) => {
     const fault = new Error(`fixture ${boundary} failure`)
+    const reached = Promise.withResolvers<void>()
+    const reject = async () => {
+      reached.resolve()
+      throw fault
+    }
     if (boundary === 'prove-owner') {
-      vi.spyOn(fixture.host.deps.store, 'proveOwner').mockRejectedValueOnce(fault)
+      vi.spyOn(fixture.host.deps.store, 'proveOwner').mockImplementationOnce(reject)
     } else {
       vi.spyOn(
         fixture.host.collaboratorsForTests().conversationDelivery,
         'open'
-      ).mockRejectedValueOnce(fault)
+      ).mockImplementationOnce(reject)
     }
     const events = vi.spyOn(fixture.host, 'handleAdapterEvent')
+    const release = vi.spyOn(fixture.adapter, 'releaseAcquisition')
     fixture.permitKill.add(0)
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
-    const pending = fixture.host.attach(fixture.caller, fixture.params()).catch((error) => error)
+    let settled: unknown
+    const pending = fixture.host
+      .attach(fixture.caller, fixture.params())
+      .catch((error) => error)
+      .then((result) => {
+        settled = result
+        return result
+      })
     await vi.waitFor(() => expect(fixture.connections).toHaveLength(1))
+    await reached.promise
+    await vi.waitFor(() => expect(release).toHaveBeenCalledWith({ sessionId: SESSION }))
     await forceTime()
+    await vi.waitFor(() => expect(settled).toBeDefined())
     expect(await pending).not.toMatchObject({ ok: true })
     await fixture.drain()
-    killEvidence()
+    await killEvidence()
     expect(events.mock.calls).toContainEqual([
       expect.objectContaining({ type: 'ended', deathEvidenceKind: 'kill-delivered' })
     ])
@@ -321,7 +345,7 @@ it('preserves known delivery when the published lifecycle callback fails', async
   await forceTime()
   await closing
   await fixture.drain()
-  killEvidence()
+  await killEvidence()
   expect(
     JSON.stringify(fixture.logs.warn.mock.calls, (_key, value) =>
       value instanceof Error ? { message: value.message, cause: value.cause } : value
@@ -367,7 +391,7 @@ it('joins indexed non-root cleanup despite cursor failure until acknowledgment',
   })
   expect(receipt).toBeInstanceOf(AgentSessionAcquisitionRootExitObservedError)
   await fixture.drain()
-  killEvidence()
+  await killEvidence()
   expect(await fixture.adapter.releaseAcquisition!({ sessionId: SESSION })).toBe(true)
   expect(fixture.delivered.size).toBe(1)
   vi.useRealTimers()

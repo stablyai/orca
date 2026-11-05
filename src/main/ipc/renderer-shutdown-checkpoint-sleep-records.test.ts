@@ -112,4 +112,17 @@ describe('the quit checkpoint in a layout-owner build', () => {
     const records = store.getWorkspaceSession('local').sleepingAgentSessionsByPaneKey ?? {}
     expect(Object.keys(records)).toEqual([PANE_A])
   })
+  it('joins the initialized canonical quit capture before reporting checkpoint durability', async () => {
+    store.setWorkspaceSession(session())
+    store.initializeWorkspaceSurfacesSync()
+    const captured = { ...record(PANE_A, 3), origin: 'quit' as const }
+    quitRecords.push(captured)
+    expect(stage(session())).toEqual({ ok: true })
+    await expect(
+      handlers.get('app:await-before-unload-checkpoint')!({}, undefined)
+    ).resolves.toEqual({ ok: true })
+    expect(store.getWorkspaceSession().sleepingAgentSessionsByPaneKey?.[PANE_A]).toEqual(captured)
+    store.setWorkspaceSession(session())
+    expect(store.getWorkspaceSession().sleepingAgentSessionsByPaneKey?.[PANE_A]).toEqual(captured)
+  })
 })

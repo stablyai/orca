@@ -10,9 +10,10 @@ import type {
 import type { openAgentSessionJournal } from './journal-store-factory'
 import {
   createTrackedJournalOpener,
-  openTestJournalHostDatabase
+  openTestJournalHostDatabase,
+  deleteTestJournalRow,
+  liveTestJournalRows
 } from './journal-host-database-test-support'
-import type Database from '../../sqlite/sync-database'
 import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 export function createFixture() {
@@ -63,16 +64,26 @@ export function createFixture() {
     await rm(root, { recursive: true, force: true })
   })
 
-  async function withJournalDatabase(
-    stateDirectory: string,
-    run: (db: Database.Database) => void
-  ): Promise<void> {
-    const opened = openTestJournalHostDatabase(stateDirectory)
-    try {
-      run(opened.db)
-    } finally {
-      await opened.close()
-    }
+  async function savedJournalFacts() {
+    const database = await openTestJournalHostDatabase(root)
+    return database.read(async (read) => ({
+      item: await read
+        .prepare("SELECT value_json FROM journal_outcomes WHERE field = 'items'")
+        .get(),
+      epoch: await read.prepare('SELECT epoch FROM journal_sessions').get()
+    }))
+  }
+
+  async function deleteSavedJournalRow(sequence: number): Promise<void> {
+    await deleteTestJournalRow(
+      await openTestJournalHostDatabase(root),
+      IDENTITY.sessionId,
+      sequence
+    )
+  }
+
+  async function savedRows() {
+    return liveTestJournalRows(await openTestJournalHostDatabase(root), IDENTITY.sessionId)
   }
 
   return {
@@ -94,6 +105,8 @@ export function createFixture() {
       root = value
     },
     tick,
-    withJournalDatabase
+    savedJournalFacts,
+    deleteSavedJournalRow,
+    savedRows
   }
 }

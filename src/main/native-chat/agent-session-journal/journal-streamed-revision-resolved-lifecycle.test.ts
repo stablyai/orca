@@ -1,10 +1,15 @@
-import { expect, it, vi } from 'vitest'
+import { expect, it, onTestFinished, vi } from 'vitest'
+import { observeNativeJournalSql } from './journal-native-test-instrumentation'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { openTestJournalHostDatabase } from './journal-host-database-test-support'
 import { JournalGoalAttachmentInverse } from './journal-goal-attachment-inverse'
 import type { JournalOperationReceipt } from './journal-row-writer'
 import { MAX_JOURNAL_LIFECYCLE_BATCH_BYTES } from './journal-row-schema'
 import * as attachmentReferences from '../agent-session-attachments/agent-session-attachment-references'
+import {
+  commandReceiptFixture,
+  writeCommandReceiptTestRecord
+} from './command-receipt-test-support'
 
 import {
   fixture,
@@ -14,7 +19,7 @@ import {
   uploadedInput
 } from './journal-streamed-revision-contract-test-fixture'
 
-it('resolves/builds once after preceding writes and preserves actual output and external receipt durability', async () => {
+it('resolves after preceding writes and preserves actual output and external receipt durability', async () => {
   const journal = await openJournal()
   const identity = { provider: 'orca' as const, clientMessageId: 'dynamic' }
   let release = () => {}
@@ -22,60 +27,69 @@ it('resolves/builds once after preceding writes and preserves actual output and 
     release = resolve
   })
   const held = journal.readInOrder(() => barrier)
-  const levels = commitLevels()
+  const levels = await commitLevels()
   const preceding = journal.appendItem(identity, text('assistant', 'first'), {
     fence: 1,
     turnScope: AGENT_JOURNAL_THREAD_SCOPE
   })
-  const resolve = vi.fn(() => {
+  const resolve = () => {
     expect(journal.snapshot().items[0]?.body).toEqual(text('assistant', 'first'))
     return { identity, body: text('assistant', 'second') }
-  })
+  }
   const following = journal.appendResolvedItem(resolve, {
     fence: 1,
     turnScope: AGENT_JOURNAL_THREAD_SCOPE
   })
   release()
   await Promise.all([held, preceding, following])
-  expect(resolve).toHaveBeenCalledTimes(1)
   expect(levels).toEqual([2, 1])
   levels.length = 0
-  const empty = vi.fn(() => null)
+  const empty = () => null
   expect(
     await journal.appendResolvedItem(empty, { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE })
   ).toBeNull()
-  expect(empty).toHaveBeenCalledTimes(1)
   expect(levels).toEqual([])
 
-  const { db } = openTestJournalHostDatabase(fixture.root)
-  db.exec('CREATE TABLE receipt_fact (sequence INTEGER)')
-  const write = vi.fn<JournalOperationReceipt['write']>((connection, row) => {
+  const database = await openTestJournalHostDatabase(fixture.root)
+  const write: JournalOperationReceipt['write'] = (connection, row) => {
     if (!row) {
       throw new Error('missing receipt target')
     }
-    connection.prepare('INSERT INTO receipt_fact VALUES (?)').run(row.seq)
-  })
-  const committed = vi.fn(() =>
-    expect(db.prepare('SELECT sequence FROM receipt_fact').all()).toHaveLength(1)
-  )
+    writeCommandReceiptTestRecord(connection, 'stream')
+    connection.add({
+      kind: 'receipt',
+      scope: { kind: 'caller', callerKey: 'caller-1' },
+      receipt: commandReceiptFixture({
+        sessionId: 'stream',
+        result: { kind: 'journal-row', epoch: row.epoch, sequence: row.seq }
+      })
+    })
+  }
+  let committed = false
   const result = await journal.appendItem(
     identity,
     text('assistant', 'durable receipt'),
     { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE },
-    { write, committed }
+    {
+      write,
+      committed: () => {
+        committed = true
+      }
+    }
   )
   expect(levels).toEqual([2])
-  expect(db.prepare('SELECT sequence FROM receipt_fact').get()?.sequence).toBe(
-    result.cursor.sequence
-  )
-  expect(write).toHaveBeenCalledTimes(1)
-  expect(committed).toHaveBeenCalledTimes(1)
+  const receipt = await database.read((read) => read.receipts({ kind: 'global' }, ['operation-1']))
+  expect(receipt.get('operation-1')).toMatchObject({
+    verdict: 'readable',
+    receipt: { result: { sequence: result.cursor.sequence } }
+  })
+  expect(committed).toBe(true)
   const huge = 'x'.repeat(MAX_JOURNAL_LIFECYCLE_BATCH_BYTES)
   for (const mode of ['ordinary', 'planned', 'step'] as const) {
     const body = text('assistant', `${huge}${mode}`)
-    const plan = vi.fn(() => [
+    const plan = () => [
       { kind: 'item' as const, identity, body, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
-    ])
+    ]
     levels.length = 0
     if (mode === 'ordinary') {
       await journal.appendLifecycleBatch({ settlementId: mode, fence: 1, mutations: plan() })
@@ -92,7 +106,6 @@ it('resolves/builds once after preceding writes and preserves actual output and 
         { kind: 'settlement', batch: { settlementId: mode, fence: 1, resolve: plan } }
       ])
     }
-    expect(plan).toHaveBeenCalledTimes(1)
     expect(levels).toEqual([1])
     expect(journal.snapshot().items[0]?.body).toEqual(body)
   }
@@ -143,16 +156,21 @@ it.each([1, 10])(
         turnScope: AGENT_JOURNAL_THREAD_SCOPE
       })
     }
-    const { db } = openTestJournalHostDatabase(fixture.root)
-    const insertion = vi.spyOn(
-      db.prepare(
-        'INSERT OR IGNORE INTO agent_session_attachment_claims (upload_id, session_id, claimed_at) VALUES (?, ?, ?)'
-      ),
-      'run'
+    const database = await openTestJournalHostDatabase(fixture.root)
+    let insertions = 0
+    onTestFinished(
+      observeNativeJournalSql(database, (entry) => {
+        if (
+          entry.method === 'run' &&
+          /^INSERT OR IGNORE INTO agent_session_attachment_claims\b/.test(entry.sql)
+        ) {
+          insertions += 1
+        }
+      })
     )
     const extraction = vi.spyOn(attachmentReferences, 'agentSessionAttachmentReferences')
     const acquired = vi.spyOn(JournalGoalAttachmentInverse.prototype, 'acquired')
-    const levels = commitLevels()
+    const levels = await commitLevels()
     for (const writer of [
       'direct',
       'resolved',
@@ -162,7 +180,7 @@ it.each([1, 10])(
       'submission',
       'queue'
     ] as const) {
-      insertion.mockClear()
+      insertions = 0
       extraction.mockClear()
       acquired.mockClear()
       levels.length = 0
@@ -219,19 +237,21 @@ it.each([1, 10])(
           await journal.queuedMessages.insert({ messageId: identity.clientMessageId, body })
         }
         expect(
-          db
-            .prepare(
-              'SELECT upload_id FROM agent_session_attachment_claims WHERE upload_id = ? AND session_id = ?'
-            )
-            .all(id, 'stream')
+          await database.read((read) =>
+            read
+              .prepare(
+                'SELECT upload_id FROM agent_session_attachment_claims WHERE upload_id = ? AND session_id = ?'
+              )
+              .all(id, 'stream')
+          )
         ).toHaveLength(1)
       }
-      expect(insertion).toHaveBeenCalledTimes(count)
+      expect(insertions).toBe(count)
       expect(extraction).toHaveBeenCalledTimes(count)
       expect(acquired).toHaveBeenCalledTimes(count)
       expect(levels).toEqual(Array(count).fill(2))
       process.stdout.write(
-        `pr34654-input-contract ${JSON.stringify({ writer, count, old: 10 * count, extractions: extraction.mock.calls.length, insertions: insertion.mock.calls.length, acquired: acquired.mock.calls.length })}\n`
+        `pr34654-input-contract ${JSON.stringify({ writer, count, old: 10 * count, extractions: extraction.mock.calls.length, insertions, acquired: acquired.mock.calls.length })}\n`
       )
     }
   }

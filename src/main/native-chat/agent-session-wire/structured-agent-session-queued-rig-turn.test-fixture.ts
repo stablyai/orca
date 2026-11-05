@@ -1,3 +1,4 @@
+import type { StructuredAgentSessionHost } from './structured-agent-session-host'
 import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
@@ -43,5 +44,22 @@ export async function withdrawnByStop(rig: QueuedMessageTestRig, id: string): Pr
     clientMessageId: id,
     state: 'rejected',
     ...agentSessionFailureWords(agentSessionFailureFact('cancelled'), { surface: 'rejection' })
+  })
+}
+
+export async function settleRejectedQueuedRigMessage(
+  host: Pick<StructuredAgentSessionHost, 'settleLateDispatch'>,
+  sessionId: string,
+  id: string,
+  providerText: string
+): Promise<void> {
+  const detail = { text: providerText, audience: 'person' as const }
+  await host.settleLateDispatch({
+    sessionId,
+    clientMessageId: id,
+    state: 'rejected',
+    ...agentSessionFailureWords(agentSessionFailureFact('providerRejected', { detail }), {
+      surface: 'rejection'
+    })
   })
 }

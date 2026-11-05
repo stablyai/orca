@@ -82,7 +82,7 @@ beforeEach(async () => {
     logger: createStructuredAgentSessionLogger(),
     store,
     adapter,
-    journalDatabase: openTestJournalHostDatabase(root),
+    journalDatabase: await openTestJournalHostDatabase(root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-1',
     idleSweep: {

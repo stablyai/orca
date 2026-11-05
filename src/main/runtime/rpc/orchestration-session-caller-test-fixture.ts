@@ -80,10 +80,11 @@ export function createSessionCallerHarness(
   getVisibleSessionTabIndex: () => { present: boolean; sessionIds: string[] } = () => ({
     present: false,
     sessionIds: []
-  })
+  }),
+  store?: ConstructorParameters<typeof OrcaRuntimeService>[0]
 ): SessionCallerHarness {
   const db = new OrchestrationDb(':memory:')
-  const runtime = new SessionCallerRuntime()
+  const runtime = new SessionCallerRuntime(store)
   runtime.setOrchestrationDb(db)
   vi.spyOn(runtime, 'ensureStructuredAgentSessionHost').mockResolvedValue()
   vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) =>

@@ -104,7 +104,7 @@ describe('processless structured session reservation', () => {
         logger: createStructuredAgentSessionLogger(),
         store,
         adapter,
-        openConversation: openTestAttachConversation(openTestJournalHostDatabase(root!)),
+        openConversation: openTestAttachConversation(await openTestJournalHostDatabase(root!)),
         authority: {
           spawnToken: 'spawn-a',
           claimKeyId: 'key-1',
@@ -152,8 +152,8 @@ describe('processless structured session reservation', () => {
       logger: createStructuredAgentSessionLogger(),
       store,
       adapter,
-      journalDatabase: openTestJournalHostDatabase(root),
-      openConversation: openTestAttachConversation(openTestJournalHostDatabase(root!)),
+      journalDatabase: await openTestJournalHostDatabase(root),
+      openConversation: openTestAttachConversation(await openTestJournalHostDatabase(root!)),
       authority: {
         spawnToken: 'spawn-a',
         claimKeyId: 'key-1',
@@ -191,8 +191,8 @@ describe('processless structured session reservation', () => {
       logger: createStructuredAgentSessionLogger(),
       store,
       adapter,
-      journalDatabase: openTestJournalHostDatabase(root),
-      openConversation: openTestAttachConversation(openTestJournalHostDatabase(root!)),
+      journalDatabase: await openTestJournalHostDatabase(root),
+      openConversation: openTestAttachConversation(await openTestJournalHostDatabase(root!)),
       authority: {
         spawnToken: 'spawn-drift',
         claimKeyId: 'key-1',
@@ -245,7 +245,7 @@ describe('processless structured session reservation', () => {
         logger: createStructuredAgentSessionLogger(),
         store,
         adapter,
-        openConversation: openTestAttachConversation(openTestJournalHostDatabase(root!)),
+        openConversation: openTestAttachConversation(await openTestJournalHostDatabase(root!)),
         authority: {
           spawnToken: 'spawn-a',
           claimKeyId: 'key-1',
@@ -314,8 +314,8 @@ describe('processless structured session reservation', () => {
       logger: createStructuredAgentSessionLogger(),
       store,
       adapter,
-      journalDatabase: openTestJournalHostDatabase(root),
-      openConversation: openTestAttachConversation(openTestJournalHostDatabase(root!)),
+      journalDatabase: await openTestJournalHostDatabase(root),
+      openConversation: openTestAttachConversation(await openTestJournalHostDatabase(root!)),
       authority: {
         spawnToken: 'spawn-a',
         claimKeyId: 'key-1',

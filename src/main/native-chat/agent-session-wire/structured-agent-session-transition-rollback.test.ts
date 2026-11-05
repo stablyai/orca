@@ -1,3 +1,4 @@
+import { mutateTestJournalFixture } from '../agent-session-journal/journal-drained-fixture-test-support'
 import { expect, it } from 'vitest'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
@@ -22,9 +23,11 @@ it('leaves no row of a settlement durable when a later one of its rows fails to 
   await deferred.drained()
   const before = journal.cursor().sequence
   // Abort the second insert to verify settlement transaction atomicity.
-  openTestJournalHostDatabase(root).db.exec(`CREATE TEMP TRIGGER fail_second_chunk
+  await mutateTestJournalFixture(await openTestJournalHostDatabase(root), (db) => {
+    db.exec(`CREATE TRIGGER fail_second_chunk
 BEFORE INSERT ON main.journal_rows WHEN NEW.seq = ${before + 2}
 BEGIN SELECT RAISE(ABORT, 'second chunk refused'); END`)
+  })
   sink.tryAppendTransition?.({
     lifecycle: true,
     publish: true,

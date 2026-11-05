@@ -8,7 +8,10 @@ import {
   type SnapshotCheckpointResult
 } from './daemon-pty-runtime-state'
 import { isDaemonGoneError } from '../../endpoint/identity/daemon-endpoint-errors'
-import { HISTORY_SEED_TRANSFER_PROTOCOL_VERSION } from '../../protocol/daemon-protocol-version'
+import {
+  HISTORY_SEED_TRANSFER_PROTOCOL_VERSION,
+  SURFACE_EXECUTION_PROTOCOL_VERSION
+} from '../../protocol/daemon-protocol-version'
 import type { ColdRestoreInfo } from '../../history/restoration/terminal-history-cold-restore-info'
 import { NdjsonLineTooLongError } from '../../../../shared/main-process-ndjson-framer'
 import {
@@ -117,6 +120,11 @@ export abstract class DaemonPtySpawnRequest extends DaemonPtyRuntimeState {
       }
       const payload = {
         sessionId: context.sessionId,
+        ...(!context.attachOnly &&
+        this.protocolVersion >= SURFACE_EXECUTION_PROTOCOL_VERSION &&
+        opts.surfaceExecution
+          ? { surfaceExecution: opts.surfaceExecution }
+          : {}),
         cols: context.effectiveCols,
         rows: context.effectiveRows,
         cwd: context.attachOnly ? undefined : context.effectiveCwd,

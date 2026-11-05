@@ -1,8 +1,12 @@
 import { withProfileStateWriteTransaction } from './profile-state-write-transaction'
-import { hasProfileStateAuthorityMarker } from './profile-state-authority-marker'
+import {
+  hasProfileStateAuthorityMarker,
+  ensureProfileStateAuthorityMarker
+} from './profile-state-authority-marker'
 import Database, { isSqliteAvailable } from '../../sqlite/sync-database'
 import { migrateAutomationRunsStorage } from './profile-state-automation-runs-migration'
 import { hardenSqliteDatabaseFiles } from '../../sqlite/harden-database-files'
+import { configureSqliteRollbackDurability } from '../../sqlite/rollback-durability'
 import {
   createProfileStateTablesSql,
   PROFILE_STATE_DATABASE_SCHEMA_VERSION,
@@ -55,7 +59,22 @@ export function openWritableProfileStateDatabase(
   return opened
 }
 
-/** Validate schema before WAL/DDL setup so unknown or malformed databases remain untouched. */
+/** Keep marker failures from leaking a writable bootstrap handle. */
+export function openMarkedWritableProfileStateDatabase(
+  databasePath: string,
+  profileId: string
+): OpenProfileStateDatabase {
+  const opened = openWritableProfileStateDatabase(databasePath, profileId)
+  try {
+    ensureProfileStateAuthorityMarker(databasePath)
+    return opened
+  } catch (error) {
+    opened.db.close()
+    throw error
+  }
+}
+
+/** Validate schema before journal/DDL setup so unknown or malformed databases remain untouched. */
 export function openProfileStateDatabase(
   dbPath: string,
   profileId: string
@@ -201,15 +220,8 @@ function verifyProfileStateIntegrity(db: Database.Database): void {
 }
 
 function configureProfileStatePragmas(db: Database.Database): void {
-  const journalMode = db.pragma('journal_mode = WAL', { simple: true })
-  if (typeof journalMode !== 'string' || journalMode.toLowerCase() !== 'wal') {
-    throw new Error(`Profile state database does not support WAL (mode: ${String(journalMode)})`)
-  }
-  db.pragma(`busy_timeout = ${PROFILE_STATE_BUSY_TIMEOUT_MS}`)
+  configureSqliteRollbackDurability(db, 'main', PROFILE_STATE_BUSY_TIMEOUT_MS)
   db.pragma('foreign_keys = ON')
-  // User state needs FULL durability; macOS checkpoints also need F_FULLFSYNC to flush drive caches.
-  db.pragma('synchronous = FULL')
-  db.pragma('checkpoint_fullfsync = ON')
 }
 
 function migrateProfileStateSchema(

@@ -1,3 +1,4 @@
+import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   refusedBeforeWrite,
@@ -33,6 +34,23 @@ export class JournalInputEvidence extends JournalInputObservations {
   private readonly stoppedOwed = new JournalInputPlaceIndex('')
   private readonly carrierCoverage = new Map<string, readonly string[]>()
   private readonly coveredBy = new Map<string, Set<string>>()
+
+  constructor(
+    state: JournalReducerState,
+    protected originalAcceptance?: (id: string) => AgentJournalCursor | undefined
+  ) {
+    super(state)
+  }
+
+  withAcceptance<T>(acceptance: (id: string) => AgentJournalCursor | undefined, run: () => T): T {
+    const previous = this.originalAcceptance
+    this.originalAcceptance = acceptance
+    try {
+      return run()
+    } finally {
+      this.originalAcceptance = previous
+    }
+  }
 
   refreshLink(id: string): void {
     this.links.refreshInput(this.state, id)

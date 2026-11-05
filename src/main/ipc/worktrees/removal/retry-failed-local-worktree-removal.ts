@@ -1,4 +1,5 @@
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
+import type { CapturedOwnerRemoval } from '../../../runtime/workspaces/removal/canonical-owner-removal'
 import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
 import { retryFailedWorktreeRemoval } from '../../../workspaces/removal/worktree-background-removal'
 import { interruptedLocalWorktreeRemovalJob } from '../../../runtime/workspaces/removal/runtime-interrupted-local-worktree-removal'
@@ -19,17 +20,21 @@ import {
 export function retryFailedLocalWorktreeRemoval(
   context: WorktreeIpcContext,
   args: RemoveWorktreeArgs,
-  removalHostId: ExecutionHostId
+  removalHostId: ExecutionHostId,
+  removeOwned?: CapturedOwnerRemoval
 ): Promise<RemoveWorktreeResult> | undefined {
   const { store, runtime, options } = context
   const jobFor = (record: WorktreeRemovalRecord) =>
     interruptedLocalWorktreeRemovalJob(record, {
       store,
+      removeOwned,
+      openNativeOwnerStore: () => runtime.openAgentSessionRecordStore(),
       acquireWatcherRemoval: (path) => runtime.acquireFileWatcherRemoval(path),
       closeWatchers: (path) => runtime.closeFileWatchersForRemoval(path),
       stopPtys: () =>
         stopPtysForDestructiveWorktreeRemoval(runtime, record.worktreeId, {
-          allowUnverifiedStop: args.allowUnverifiedPtyStop
+          allowUnverifiedStop: args.allowUnverifiedPtyStop,
+          deferSurfaceRetirement: true
         }),
       preservedBranchCleanup: {
         preserveHead: preserveBranchHeadFallback,

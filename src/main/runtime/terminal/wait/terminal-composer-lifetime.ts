@@ -3,6 +3,7 @@ import type { TerminalWaiter } from '../../runtime-terminal-contracts'
 import { buildPtyTerminalWaitExitError, getPtyTerminalState } from './terminal-wait-results'
 import type { RuntimeTerminalWaiterRegistry } from './terminal-waiter-registry'
 import type { RuntimeTerminalWait } from '../../../../shared/runtime-terminal-contracts'
+import { terminalExitError } from '../../../../shared/terminal/pty/lifecycle/terminal-start-failure'
 
 export async function waitForTerminalComposer(
   {
@@ -41,7 +42,7 @@ export async function waitForTerminalComposer(
     handle,
     ptyId: target.ptyId,
     condition: 'exit',
-    resolve: () => endObservation(buildPtyTerminalWaitExitError(target)),
+    resolve: (result) => endObservation(terminalExitError('terminal_exited', result.exitCause)),
     reject: endObservation,
     timeout: null,
     cancelIdlePoll: null,

@@ -17,6 +17,8 @@ import { restoreProvisionalPtySize } from './spawn-options-assembly'
 import { spawnWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { releaseStoppedPaneBinding } from './pane/pane-owner-replacement'
+import { CanonicalPtyRun } from './canonical-pty-run'
+import { LOCAL_EXECUTION_HOST_ID, toSshExecutionHostId } from '../../../shared/execution-host'
 import {
   admitColdRestoreReattach,
   captureSavedResumeCleanup,
@@ -39,6 +41,7 @@ type SpawnAdapter<State extends PtySpawnOperationState> = {
   releasePreparation?: () => void
   releaseHiddenMark?: () => void
   adoption?: () => Pick<AdoptStablePaneArgs, 'renderer' | 'keepAbsentBinding' | 'completed'>
+  replacesPtyId?: string
   replace?: () => Promise<void>
 }
 
@@ -76,6 +79,19 @@ export async function runPtySpawn<State extends PtySpawnOperationState>(
 ): Promise<PtySpawnOutcome> {
   const ctx = adapter.state
   const args = ctx.args
+  const paneKeyAtEntry = resolveEarlyPaneKey(args)
+  const paneAtEntry = paneKeyAtEntry ? parsePaneKey(paneKeyAtEntry) : null
+  if (ctx.deps.store?.captureWorkspaceSurfaceRun && paneAtEntry && args.worktreeId) {
+    const target =
+      args.surfaceRunTarget ??
+      ctx.deps.store.captureWorkspaceSurfaceRun(
+        { worktreeId: args.worktreeId, ...paneAtEntry },
+        args.connectionId ? toSshExecutionHostId(args.connectionId) : LOCAL_EXECUTION_HOST_ID
+      )
+    if (target !== undefined) {
+      ctx.canonicalRun = new CanonicalPtyRun(ctx.deps.store, target)
+    }
+  }
   ctx.preAdoptedStablePane = args.adoptedStablePane ?? null
   ctx.paneSpawnOperation = args.paneSpawnOperation
   const replacementKey = adapter.replace ? resolveEarlyPaneSpawnReservationKey(args) : null
@@ -239,6 +255,9 @@ export async function runPtySpawn<State extends PtySpawnOperationState>(
   }
   try {
     if (adapter.replace) {
+      if (adapter.replacesPtyId) {
+        await ctx.canonicalRun?.replace(adapter.replacesPtyId)
+      }
       await adapter.replace()
     }
     await adapter.admission
@@ -254,6 +273,11 @@ export async function runPtySpawn<State extends PtySpawnOperationState>(
       ? acquire(paneKey, fresh)
       : fresh(ctx.paneSpawnOperation ?? { mustExist: false }))
   } catch (caught) {
+    try {
+      await ctx.canonicalRun?.abort()
+    } catch (error) {
+      console.warn('[pty] could not persist terminal allocation cancellation', error)
+    }
     const error = adapter.onError?.(caught) ?? caught
     adapter.releasePreparation?.()
     adapter.releaseHiddenMark?.()

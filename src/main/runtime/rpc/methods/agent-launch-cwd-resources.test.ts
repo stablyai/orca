@@ -358,9 +358,13 @@ describe('CLI cwd resource frames, managed receipts and raw-path controls', () =
             expect(output.error.message).toHaveLength(637)
             expect(host.publish.mock.calls.length).toBe(effectBefore[2])
           }
-          const row = openTestJournalHostDatabase(stateDirectory)
-            .db.prepare('SELECT row_json FROM agent_session_operations ORDER BY rowid DESC LIMIT 1')
-            .get()
+          const row = await (
+            await openTestJournalHostDatabase(stateDirectory)
+          ).read((read) =>
+            read
+              .prepare('SELECT row_json FROM agent_session_operations ORDER BY rowid DESC LIMIT 1')
+              .get()
+          )
           expect(typeof row?.row_json).toBe('string')
           const rowJson = String(row!.row_json)
           expect(JSON.parse(rowJson).outcome.status).toBe(valid ? 'succeeded' : 'failed')
@@ -430,10 +434,11 @@ describe('CLI cwd resource frames, managed receipts and raw-path controls', () =
           const { _meta: _reopenedMeta, ...replyBody } = JSON.parse(replies.at(-1)!)
           expect(replyBody).toEqual(originals.get(operationId)!.reply)
           expect(settledExecution.at(-1)).toEqual(Array(8).fill(0))
-          const persisted = openTestJournalHostDatabase(stateDirectory)
-            .db.prepare('SELECT row_json FROM agent_session_operations')
-            .all()
-            .map((row) => String(row.row_json))
+          const persisted = (
+            await (
+              await openTestJournalHostDatabase(stateDirectory)
+            ).read((read) => read.prepare('SELECT row_json FROM agent_session_operations').all())
+          ).map((row) => String(row.row_json))
           expect(persisted).toContain(originals.get(operationId)!.row)
           expect(result.ok).toBe(index === 0)
           if (index === 1) {

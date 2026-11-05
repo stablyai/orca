@@ -27,7 +27,7 @@ export function journalContextCursor(
 }
 
 export function projectJournalRows<Row extends JournalReadRow>(
-  state: JournalReducerState,
+  state: Pick<JournalReducerState, 'epoch' | 'contextBoundary'>,
   rows: readonly Row[]
 ): Row[] {
   const boundary = Math.max(

@@ -840,7 +840,7 @@ describe('finishing an interrupted worktree removal after a restart', () => {
 
     expect(records).toEqual([])
     expect(outcome).toMatchObject({ status: 'removed' })
-    expect(purged).toEqual([])
+    expect(purged).toEqual([`repo-1::${worktreePath}`])
     expect(existsSync(worktreePath)).toBe(true)
   })
 })

@@ -1,3 +1,4 @@
+import { corruptTestRecordFence } from '../agent-session-journal/journal-retained-fault-test-support'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
@@ -66,11 +67,7 @@ it('says so in the chat when the agent cannot start for the continuation', async
   // The failure note replaces the derived cut notice to avoid duplicate explanations.
   expect(await readerNotes(host)).toEqual(await statusNotes(host))
   await host.flushAllStreamedEvents()
-  openTestJournalHostDatabase(root)
-    .db.prepare(
-      "UPDATE agent_session_records SET record_json = json_set(record_json, '$.lease.minimumNextFence', 'bad') WHERE session_id = ?"
-    )
-    .run(SESSION)
+  await corruptTestRecordFence(await openTestJournalHostDatabase(root), SESSION)
   const store = await openTestAgentSessionRecordStore(root)
   const restarted = new StructuredAgentSessionHost({ ...host.deps, store })
   const starts = acquire.mock.calls.length

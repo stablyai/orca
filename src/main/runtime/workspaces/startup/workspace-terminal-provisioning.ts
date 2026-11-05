@@ -10,14 +10,20 @@ import { getWorktreeCreatePrefetchGitOptions } from '../../../workspaces/executi
 import type { Worktree } from '../../../../shared/worktree/types'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import type { LayoutApplyReply } from '../../../../shared/workspace-layout/workspace-layout-command-types'
-import type { WindowLayoutCommand } from '../../terminal/layout/runtime-layout-apply'
+import type {
+  LayoutCommandRunOptions,
+  WindowLayoutCommand
+} from '../../terminal/layout/runtime-layout-apply'
 import {
   navigationTargetsHost,
   type RuntimeNavigationTarget
 } from '../../../../shared/runtime-navigation'
 
 export abstract class OrcaRuntimeWithGetWorktreeTerminalProvisioningHost extends OrcaRuntimeWithActivateManagedWorktree {
-  abstract applyLayoutCommand(command: WindowLayoutCommand): Promise<LayoutApplyReply>
+  abstract applyLayoutCommand(
+    command: WindowLayoutCommand,
+    run?: Pick<LayoutCommandRunOptions, 'admit'>
+  ): Promise<LayoutApplyReply>
 
   abstract splitTerminal(
     handle: string,

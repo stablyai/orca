@@ -64,8 +64,26 @@ export abstract class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends Orca
       return proof ? [proof] : []
     })
     const acknowledgeRetirement = this.captureTerminalTabRetirement(worktreeId, closedParentTabId)
-    const liveTerminalOf = this.liveTerminalsOfClosedTab(worktreeId, snapshot, closedParentTabId)
-    const projectedPtyIds = await this.closeTerminalSurface(
+    const closingRows = snapshot.tabs.filter(
+      (row): row is RuntimeMobileSessionTerminalTab =>
+        row.type === 'terminal' && row.parentTabId === closedParentTabId
+    )
+    const targets = this.captureExplicitCloseTargets(
+      [
+        ...closingRows.flatMap((candidate) => {
+          const live = this.findPtyForMobileTerminalTab(worktreeId, candidate)
+          return live
+            ? [live.ptyId]
+            : this.getMobileTerminalLeafPtyIds(candidate).filter((id) => parseAppSshPtyId(id))
+        }),
+        ...(options.authorizedPty ? [options.authorizedPty.ptyId] : []),
+        ...this.getPtyIdsForExplicitTabClose(worktreeId, closedParentTabId).filter((id) =>
+          parseAppSshPtyId(id)
+        )
+      ],
+      { worktreeId, tabId: closedParentTabId }
+    )
+    await this.closeTerminalSurface(
       worktreeId,
       { kind: 'tab', tabId: closedParentTabId },
       {
@@ -80,39 +98,13 @@ export abstract class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends Orca
     // Renderer frames may add other tabs while the durable close is in flight.
     snapshot = this.mobileSessionTabsByWorktree.get(worktreeId) ?? snapshot
     this.clearRuntimeSessionOwnershipForMobileTab(worktreeId, snapshot, closedParentTabId)
-    if (options.authorizedPty) {
-      options.authorizedPty.runtimeSessionOwned = false
-      this.setPairedRendererSessionOwnership(options.authorizedPty.ptyId, false)
-    }
-    // Persisted local provider ids may be reused after restart; only dormant SSH relay ids remain exact stop authority.
-    const ptyIdsToKill = new Set(projectedPtyIds.filter((ptyId) => parseAppSshPtyId(ptyId)))
-    for (const candidate of snapshot.tabs) {
-      if (candidate.type !== 'terminal' || candidate.parentTabId !== closedParentTabId) {
-        continue
-      }
-      const authorizedPty =
-        options.authorizedPty &&
-        this.getMobileTerminalLeafPtyIds(candidate).includes(options.authorizedPty.ptyId)
-          ? options.authorizedPty
-          : null
-      const livePty = liveTerminalOf(candidate) ?? authorizedPty
-      const ptyId = livePty?.ptyId ?? candidate.ptyId
-      const hasOtherOwner = snapshot.tabs.some(
-        (other) =>
-          other.type === 'terminal' &&
-          other.parentTabId !== closedParentTabId &&
-          other.ptyId === ptyId
-      )
-      if (ptyId && !hasOtherOwner && (livePty || parseAppSshPtyId(ptyId))) {
-        // Include live serve bindings from the authoritative snapshot before their debounced durable write, or split close leaks processes.
-        ptyIdsToKill.add(ptyId)
-      }
-    }
     if (options.killPtys !== false) {
-      for (const ptyId of ptyIdsToKill) {
-        this.ptyController?.kill(ptyId)
-      }
+      await this.stopExplicitlyClosedTabPtys(targets, tab.ptyId ?? targets[0]?.ptyId ?? '')
     }
+    if (!acknowledgeRetirement().matches) {
+      return
+    }
+    snapshot = this.mobileSessionTabsByWorktree.get(worktreeId) ?? snapshot
     const nextTabs = snapshot.tabs.filter((candidate) => {
       if (candidate.type !== 'terminal' || candidate.parentTabId !== closedParentTabId) {
         return true
@@ -215,6 +207,17 @@ export abstract class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends Orca
     const hostTabId = snapshot
       ? (this.resolveMobileSessionHostTabId(snapshot, args.tabId) ?? args.tabId)
       : args.tabId
+    if (args.chatLeafId !== undefined) {
+      const reply = await this.applyLayoutCommand({
+        type: 'setChatPane',
+        workspace: worktreeId,
+        tabId: hostTabId,
+        leafId: args.chatLeafId
+      })
+      if (!reply.ok) {
+        throw new Error(reply.code)
+      }
+    }
     // Main owns pane renames; pass only geometry onward.
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {
       args = await this.nameMainPanes(worktreeId, hostTabId, args)

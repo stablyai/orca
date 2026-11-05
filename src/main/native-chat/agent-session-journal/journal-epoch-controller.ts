@@ -27,8 +27,12 @@ export class JournalEpochController {
     }
   ) {}
 
-  start(reason: AgentJournalEpochReason, fence: number, expectedEpoch: string | null): void {
-    publishNewEpoch({
+  async start(
+    reason: AgentJournalEpochReason,
+    fence: number,
+    expectedEpoch: string | null
+  ): Promise<void> {
+    await publishNewEpoch({
       expectedEpoch,
       database: this.deps.database(),
       identity: this.deps.identity,

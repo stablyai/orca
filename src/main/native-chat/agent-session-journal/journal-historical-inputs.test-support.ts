@@ -1,7 +1,7 @@
-import type Database from '../../sqlite/sync-database'
+import type { JournalPersistencePlan } from './journal-persistence-plan'
+import type { JournalReadConnection } from './journal-sql-owner'
 import type { AgentSessionJournal } from './journal-store'
-import { journalOutcomeSource } from './journal-outcome-format'
-import { readJournalSessionEpoch, insertJournalRow } from './journal-row-table'
+import { serializeJournalRow } from './journal-row-schema'
 import { applyJournalRow } from './journal-reducer'
 import { isolateJournalTransition } from './journal-reducer-transition'
 
@@ -18,23 +18,20 @@ export function finishTestJournalHistoricalInputs(journal: AgentSessionJournal):
 export function pinTestJournalInputMode(journal: AgentSessionJournal): void {
   const projection = journal['projection']
   const prepare = projection.prepare.bind(projection)
-  const db = journal['database'].db
-  const sessionId = journal['identity'].sessionId
-  const epoch = readJournalSessionEpoch(db, sessionId)
-  if (historicalWriters.has(journal) || (epoch && journalOutcomeSource(db, sessionId, epoch))) {
+  if (historicalWriters.has(journal)) {
     return
   }
   historicalWriters.set(journal, () => {
     projection.prepare = prepare
     historicalWriters.set(journal, null)
   })
-  projection.prepare = (db, rows, savedAt, finishFold) => {
+  projection.prepare = async (db, rows, savedAt, finishFold) => {
     const state = journal['state']
     if (
-      journalOutcomeSource(db, state.sessionId, state.epoch) ||
+      (await db.source(state.sessionId, state.epoch)) ||
       rows.some((row) => row.kind === 'epoch')
     ) {
-      const adopt = prepare(db, rows, savedAt, finishFold)
+      const adopt = await prepare(db, rows, savedAt, finishFold)
       return () => {
         adopt()
         finishTestJournalHistoricalInputs(journal)
@@ -47,7 +44,11 @@ export function pinTestJournalInputMode(journal: AgentSessionJournal): void {
       finishFold?.(draft)
     })
     for (const row of rows) {
-      insertJournalRow(db, state.sessionId, row, savedAt)
+      db.add({
+        kind: 'rows',
+        sessionId: state.sessionId,
+        rows: [{ epoch: row.epoch, seq: row.seq, savedAt, json: serializeJournalRow(row) }]
+      })
     }
     return () => {
       transition.adopt()
@@ -55,12 +56,12 @@ export function pinTestJournalInputMode(journal: AgentSessionJournal): void {
   }
 }
 
-export function assertTestJournalHistoricalInputs(
-  db: Database.Database,
+export async function assertTestJournalHistoricalInputs(
+  db: Pick<JournalReadConnection, 'source'> | JournalPersistencePlan,
   journal: AgentSessionJournal
-): void {
+): Promise<void> {
   const state = journal['state']
-  if (!historicalWriters.get(journal) || journalOutcomeSource(db, state.sessionId, state.epoch)) {
+  if (!historicalWriters.get(journal) || (await db.source(state.sessionId, state.epoch))) {
     throw new Error('historical journal authoring ended at current-writer takeover')
   }
 }

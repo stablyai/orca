@@ -1,3 +1,7 @@
+import {
+  sameRunTarget,
+  type SurfaceRunTarget
+} from '../../../../shared/workspace-surfaces/surface-allocation'
 // Main writes and starts its owned splits under the proposed pane id; every view attaches to that terminal.
 import { OrcaRuntimeWithSplitPtyBackedTerminal } from './terminal-split-surface'
 import type { RuntimeTerminalSplit } from '../../../../shared/runtime-types'
@@ -44,17 +48,32 @@ export abstract class OrcaRuntimeWithSplitPaneInMain extends OrcaRuntimeWithSpli
   private async keepSplitThatCannotStart(
     source: SplitPaneSource,
     opts: SplitPaneInMainOptions,
-    error: unknown
+    error: unknown,
+    expectedSource?: SurfaceRunTarget | null
   ): Promise<never> {
     if (opts.keepPaneOnStartFailure && opts.newLeafId && isTerminalLeafId(opts.newLeafId)) {
-      const reply = await this.applyLayoutCommand({
-        type: 'splitPane',
-        workspace: source.worktreeId,
-        tabId: source.tabId,
-        leafId: source.leafId,
-        direction: opts.direction,
-        newLeafId: opts.newLeafId
-      }).catch((writeError: unknown) => {
+      const reply = await this.applyLayoutCommand(
+        {
+          type: 'splitPane',
+          workspace: source.worktreeId,
+          tabId: source.tabId,
+          leafId: source.leafId,
+          direction: opts.direction,
+          newLeafId: opts.newLeafId
+        },
+        {
+          admit: () => {
+            if (expectedSource === undefined) {
+              return true
+            }
+            const current = this.store?.captureWorkspaceSurfaceRun?.(
+              source,
+              this.getWorkspaceSessionHostIdForTab(source.worktreeId, source.tabId)
+            )
+            return !!current && !!expectedSource && sameRunTarget(current, expectedSource)
+          }
+        }
+      ).catch((writeError: unknown) => {
         // The caller still hears why the start failed, not why showing it did.
         console.warn('[terminal-split] could not keep a split that failed to start:', writeError)
         return null
@@ -96,15 +115,27 @@ export abstract class OrcaRuntimeWithSplitPaneInMain extends OrcaRuntimeWithSpli
     if (opts.newLeafId && this.holdsLeaf(source.worktreeId, leafId)) {
       throw new Error('pane_exists')
     }
+    const expectedSourceRun = this.store?.captureWorkspaceSurfaceRun?.(
+      source,
+      this.getWorkspaceSessionHostIdForTab(source.worktreeId, source.tabId)
+    )
     const controller = this.ptyController
     if (!controller?.spawn) {
-      return this.keepSplitThatCannotStart(source, opts, new Error('runtime_unavailable'))
+      return this.keepSplitThatCannotStart(
+        source,
+        opts,
+        new Error('runtime_unavailable'),
+        expectedSourceRun
+      )
     }
+
     const workspace = await this.resolveTerminalWorkspaceLaunchScope(
       `id:${source.worktreeId}`,
       undefined,
       { wslUserAct: opts.wslUserAct === true }
-    ).catch((error: unknown) => this.keepSplitThatCannotStart(source, opts, error))
+    ).catch((error: unknown) =>
+      this.keepSplitThatCannotStart(source, opts, error, expectedSourceRun)
+    )
     const preAllocatedHandle = this.createPreAllocatedTerminalHandle()
     const result = await spawnInAdmittedPane(this.store, controller, {
       ...resolvePtyFirstSize({ pane: opts.initialSize }),
@@ -125,6 +156,7 @@ export abstract class OrcaRuntimeWithSplitPaneInMain extends OrcaRuntimeWithSpli
       leafId,
       persistHostSessionBinding: true,
       placement: runtimeSplitPlacement(source.leafId, opts.direction),
+      expectedSourceRun,
       ...this.paneStartStatusArgs(
         opts.keepPaneOnStartFailure ? { keepPaneOnStartFailure: true } : {}
       )

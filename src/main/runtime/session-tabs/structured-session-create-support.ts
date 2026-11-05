@@ -283,7 +283,7 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
   }
 
   protected async prepareStructuredAgentSessionStartupRestorationOnce(): Promise<void> {
-    if (!this.hasPersistedStructuredAgentSessionStore()) {
+    if (!(await this.hasPersistedStructuredAgentSessionStore())) {
       return
     }
     // Load durable agent records before reconciling daemon inventory; refused hosts block only structured requests, not app startup.
@@ -294,7 +294,7 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
     await getStructuredAgentSessionHost()?.reconcileRestartLeases()
   }
 
-  protected hasPersistedStructuredAgentSessionStore(): boolean {
+  protected hasPersistedStructuredAgentSessionStore(): boolean | Promise<boolean> {
     return hasPersistedStructuredAgentSessionStoreOnDisk(getProfileUserDataPath())
   }
 }

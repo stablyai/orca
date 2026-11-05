@@ -119,7 +119,7 @@ it.each(['empty', 'claude-codex'] as const)(
       store,
       agents,
       adapter: router,
-      journalDatabase: openTestJournalHostDatabase(root),
+      journalDatabase: await openTestJournalHostDatabase(root),
       recoveryCapsule: capsule,
       claimKeyId: 'key-1',
       probeOwner: async () => ({ outcome: 'pid-absent' }),

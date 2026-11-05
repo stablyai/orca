@@ -1,4 +1,4 @@
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session/agent-session-wire'
 import { readAgentSessionHistory } from './agent-session-history-page'
@@ -37,7 +37,7 @@ it('shrinks the triggering row window without dropping the dependent note', asyn
     )
   }
   await turn('interrupted')
-  const first = readAgentSessionHistory(fixture.journal, {
+  const first = await readAgentSessionHistory(fixture.journal, {
     sessionId: 'session-1',
     direction: 'after',
     cursor: held,
@@ -47,7 +47,7 @@ it('shrinks the triggering row window without dropping the dependent note', asyn
     throw new Error(first.reset)
   }
   expect(first.page.hasNewer).toBe(true)
-  const next = readAgentSessionHistory(fixture.journal, {
+  const next = await readAgentSessionHistory(fixture.journal, {
     sessionId: 'session-1',
     direction: 'after',
     cursor: first.page.window.nextCursor,
@@ -74,7 +74,7 @@ it('refreshes at the exact tip using bounded frames and no durable writes', asyn
       }
     )
   }
-  const stored = rows()
+  const stored = await rows()
   const events: AgentSessionSubscribeEvent[] = []
   new AgentSessionSubscribers().open({
     id: 'reconnect',
@@ -84,6 +84,11 @@ it('refreshes at the exact tip using bounded frames and no durable writes', asyn
     cursor: fixture.journal.cursor(),
     emit: (event) => events.push(event)
   })
+  await vi.waitFor(() =>
+    expect(
+      events.flatMap((event) => (event.type === 'batch' ? event.batch.items : []))
+    ).toHaveLength(205)
+  )
   const batches = events.flatMap((event) => (event.type === 'batch' ? [event.batch] : []))
   expect(batches.flatMap((batch) => batch.items)).toHaveLength(205)
   expect(
@@ -102,7 +107,7 @@ it('refreshes at the exact tip using bounded frames and no durable writes', asyn
           item.body.kind === 'status' && item.body.text === ordinary.text && !item.body.failure
       )
   ).toBe(true)
-  expect(rows()).toEqual(stored)
+  expect(await rows()).toEqual(stored)
 })
 
 it('refreshes a phone within its frames, in bounded pages', async () => {
@@ -127,6 +132,11 @@ it('refreshes a phone within its frames, in bounded pages', async () => {
     emit: (event) => events.push(event),
     boundedFrames: true
   })
+  await vi.waitFor(() =>
+    expect(
+      events.flatMap((event) => (event.type === 'batch' ? event.batch.items : []))
+    ).toHaveLength(205)
+  )
   const batches = events.flatMap((event) => (event.type === 'batch' ? [event.batch] : []))
   expect(batches.filter((batch) => batch.items.length > 0)).toHaveLength(2)
   expect(batches.flatMap((batch) => batch.items)).toHaveLength(205)

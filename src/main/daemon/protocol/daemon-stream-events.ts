@@ -1,3 +1,4 @@
+import type { SurfaceExecutorAdmission } from '../../../shared/workspace-surfaces/surface-executor-contract'
 import type { TerminalGitHubPRLink } from '../../../shared/terminal/links/terminal-github-pr-link-detector'
 import type { PtyIncarnationId } from '../../../shared/terminal/pty/lifecycle/pty-incarnation'
 import type { TerminalExitCause } from '../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
@@ -76,7 +77,15 @@ export type InputClosedEvent = {
   payload: { incarnationId: PtyIncarnationId }
 }
 
+export type SurfaceExecutionChangedEvent = {
+  type: 'event'
+  event: 'surfaceExecutionChanged'
+  sessionId: string
+  payload: SurfaceExecutorAdmission
+}
+
 export type DaemonEvent =
+  | SurfaceExecutionChangedEvent
   | DataEvent
   | ExitEvent
   | TerminalErrorEvent

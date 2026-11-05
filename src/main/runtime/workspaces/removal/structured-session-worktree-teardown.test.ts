@@ -214,6 +214,53 @@ describe('worktree teardown and structured agent sessions', () => {
     expect(host.closed).toEqual(['s1'])
   })
 
+  it('defers live and detached membership retirement to the captured owner commit', async () => {
+    const host = installHost({
+      records: [record('live', WORKTREE), record('idle', WORKTREE)],
+      detached: new Set(['idle']),
+      visible: ['live', 'idle']
+    })
+    const retire = vi.fn(() => true)
+    await expect(
+      killAllProcessesForWorktree(WORKTREE, {
+        ...destructiveDeps(),
+        deferSurfaceRetirement: true,
+        runtime: runtimeDouble({
+          retireStructuredAgentSessionTabFromSnapshot: retire,
+          stopTerminalsForWorktree: async () => ({ stopped: 0 }),
+          getPtyLivenessVerdict: () => null
+        })
+      })
+    ).resolves.toMatchObject({ structuredStopped: 1 })
+    expect(host.closed).toEqual(['live'])
+    expect([...host.visible]).toEqual(['live', 'idle'])
+    expect(retire).not.toHaveBeenCalled()
+  })
+
+  it('keeps captured native membership when a later PTY stop refuses deletion', async () => {
+    const host = installHost({
+      records: [record('live', WORKTREE), record('idle', WORKTREE)],
+      detached: new Set(['idle']),
+      visible: ['live', 'idle']
+    })
+    const retire = vi.fn(() => true)
+    await expect(
+      killAllProcessesForWorktree(WORKTREE, {
+        ...destructiveDeps(),
+        deferSurfaceRetirement: true,
+        runtime: runtimeDouble({
+          retireStructuredAgentSessionTabFromSnapshot: retire,
+          stopTerminalsForWorktree: async () => {
+            throw new Error('PTY could not be stopped')
+          }
+        })
+      })
+    ).rejects.toThrow('PTY could not be stopped')
+    expect(host.closed).toEqual(['live'])
+    expect([...host.visible]).toEqual(['live', 'idle'])
+    expect(retire).not.toHaveBeenCalled()
+  })
+
   it('refuses only when the close does not settle', async () => {
     installHost({ records: [record('s1', WORKTREE)], stuck: new Set(['s1']) })
     await expect(killAllProcessesForWorktree(WORKTREE, destructiveDeps())).rejects.toThrow(

@@ -29,6 +29,7 @@ export function buildRecoveryCrashProcess(directory: string): {
         export { restoreProfileStateJsonExport } from './src/main/persistence/profile-state/legacy-json/profile-state-recovery'
         export { restoreProfileStateDatabaseBackup } from './src/main/persistence/profile-state/profile-state-database-recovery'
         export { openProfileStateDatabase } from './src/main/persistence/profile-state/profile-state-database'
+        export { writeProfileStateDomains } from './src/main/persistence/profile-state/profile-state-domain-writes'
         export { importProfileStateJson } from './src/main/persistence/profile-state/profile-state-documents'
         export { invalidateHttp1CompatibilityMarker, writeHttp1CompatibilityMarker } from './src/main/startup/http1-compatibility-marker'
       `,
@@ -39,7 +40,6 @@ export function buildRecoveryCrashProcess(directory: string): {
     bundle: true,
     platform: 'node',
     format: 'cjs',
-    packages: 'external',
     alias: createWorkspaceSourceResolver().esbuildAliases,
     metafile: true
   })
@@ -60,6 +60,7 @@ const barrier = label => {
 }
 if (stage === 'seed') {
   const source = api.openProfileStateDatabase(options.databasePath, options.profileId)
+  source.db.pragma('journal_mode = WAL')
   api.importProfileStateJson(source.db, payload, { expectedRevision: 3 })
   barrier('seed')
 }
@@ -79,6 +80,16 @@ const rm = fs.rmSync
 fs.rmSync = (target, ...rest) => {
   rm(target, ...rest)
   barrier('removed:' + target)
+}
+if (stage === 'evidence-probe:after') {
+  const { DatabaseSync } = require('node:sqlite')
+  const close = DatabaseSync.prototype.close
+  DatabaseSync.prototype.close = function () {
+    const path = this.prepare('PRAGMA database_list').all().find(row => row.name === 'main')?.file
+    const original = path && fs.realpathSync(path) === fs.realpathSync(options.databasePath)
+    close.call(this)
+    if (original) barrier('evidence-probe:after')
+  }
 }
 let clone = 0
 const link = fs.linkSync

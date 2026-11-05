@@ -1,3 +1,4 @@
+import { markTestUnclaimedUpload } from '../agent-session-journal/journal-native-fixture-test-support'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -10,10 +11,7 @@ import {
   openTestJournalHostDatabase
 } from '../agent-session-journal/journal-host-database-test-support'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
-import {
-  isAgentSessionAttachmentExpiredError,
-  markUnclaimedUploadForSweep
-} from './agent-session-attachment-claims'
+import { isAgentSessionAttachmentExpiredError } from './agent-session-attachment-claims'
 import {
   agentSessionAttachmentReferenceNames,
   agentSessionAttachmentReferences,
@@ -129,22 +127,26 @@ describe('claims written with the message', () => {
     return join(storeRoot, uploadId, name)
   }
 
-  function claims(): { upload_id: string; session_id: string }[] {
-    return openTestJournalHostDatabase(stateDirectory)
-      .db.prepare(
-        'SELECT upload_id, session_id FROM agent_session_attachment_claims ORDER BY session_id'
+  async function claims(): Promise<{ upload_id: string; session_id: string }[]> {
+    const database = await openTestJournalHostDatabase(stateDirectory)
+    return (
+      await database.read((read) =>
+        read
+          .prepare(
+            'SELECT upload_id, session_id FROM agent_session_attachment_claims ORDER BY session_id'
+          )
+          .all()
       )
-      .all()
-      .flatMap((row) =>
-        typeof row === 'object' &&
-        row !== null &&
-        'upload_id' in row &&
-        'session_id' in row &&
-        typeof row.upload_id === 'string' &&
-        typeof row.session_id === 'string'
-          ? [{ upload_id: row.upload_id, session_id: row.session_id }]
-          : []
-      )
+    ).flatMap((row) =>
+      typeof row === 'object' &&
+      row !== null &&
+      'upload_id' in row &&
+      'session_id' in row &&
+      typeof row.upload_id === 'string' &&
+      typeof row.session_id === 'string'
+        ? [{ upload_id: row.upload_id, session_id: row.session_id }]
+        : []
+    )
   }
 
   function clientSend(journal: AgentSessionJournal, id: string, body: AgentJournalMessageItem) {
@@ -173,7 +175,7 @@ describe('claims written with the message', () => {
     const path = await storeUpload(UPLOAD_A)
     await clientSend(journal, 'send-1', message({ type: 'image-ref', path }))
     expect(journal.submission('send-1')).toBeTruthy()
-    expect(claims()).toEqual([{ upload_id: UPLOAD_A, session_id: IDENTITY.sessionId }])
+    expect(await claims()).toEqual([{ upload_id: UPLOAD_A, session_id: IDENTITY.sessionId }])
   })
 
   it('refuses the whole client message, writing nothing, when an upload is gone', async () => {
@@ -188,14 +190,14 @@ describe('claims written with the message', () => {
     ).catch((caught: unknown) => caught)
     expect(isAgentSessionAttachmentExpiredError(error)).toBe(true)
     expect(journal.submission('send-1')).toBeUndefined()
-    expect(claims()).toEqual([])
+    expect(await claims()).toEqual([])
   })
 
   it('refuses an upload the sweep already marked, even while its file is still on disk', async () => {
     const journal = await open()
     const path = await storeUpload(UPLOAD_A)
     expect(
-      markUnclaimedUploadForSweep(openTestJournalHostDatabase(stateDirectory).db, UPLOAD_A, 1)
+      await markTestUnclaimedUpload(await openTestJournalHostDatabase(stateDirectory), UPLOAD_A, 1)
     ).toBe(true)
     const error = await clientSend(journal, 'send-1', message({ type: 'image-ref', path })).catch(
       (caught: unknown) => caught
@@ -208,7 +210,7 @@ describe('claims written with the message', () => {
     const path = await storeUpload(UPLOAD_A)
     await clientSend(journal, 'send-1', message({ type: 'image-ref', path }))
     expect(
-      markUnclaimedUploadForSweep(openTestJournalHostDatabase(stateDirectory).db, UPLOAD_A, 1)
+      await markTestUnclaimedUpload(await openTestJournalHostDatabase(stateDirectory), UPLOAD_A, 1)
     ).toBe(false)
   })
 
@@ -226,11 +228,9 @@ describe('claims written with the message', () => {
       origin: 'host'
     })
     expect(journal.submission('host-1')).toBeTruthy()
-    expect(
-      claims()
-        .map((claim) => claim.upload_id)
-        .sort()
-    ).toEqual([UPLOAD_A, UPLOAD_B].sort())
+    expect(await (await claims()).map((claim) => claim.upload_id).sort()).toEqual(
+      [UPLOAD_A, UPLOAD_B].sort()
+    )
   })
 
   it("refuses a gone upload and keeps a waiting card's attachment claim across clear", async () => {
@@ -260,7 +260,7 @@ describe('claims written with the message', () => {
     await journals.closeAll()
     const reopened = await open()
     expect(reopened.queuedMessages.get('draft-1')).toMatchObject({ body, state: 'waiting' })
-    expect(claims()).toEqual([{ upload_id: UPLOAD_A, session_id: IDENTITY.sessionId }])
+    expect(await claims()).toEqual([{ upload_id: UPLOAD_A, session_id: IDENTITY.sessionId }])
   })
 
   it("does not refuse a draft's conversion: the draft claimed its uploads when it was written", async () => {
@@ -292,9 +292,9 @@ describe('claims written with the message', () => {
     await clientSend(journal, 'send-1', message({ type: 'image-ref', path }))
     await journals.closeAll()
     journal = await open()
-    expect(claims()).toEqual([{ upload_id: UPLOAD_A, session_id: IDENTITY.sessionId }])
+    expect(await claims()).toEqual([{ upload_id: UPLOAD_A, session_id: IDENTITY.sessionId }])
     expect(
-      markUnclaimedUploadForSweep(openTestJournalHostDatabase(stateDirectory).db, UPLOAD_A, 1)
+      await markTestUnclaimedUpload(await openTestJournalHostDatabase(stateDirectory), UPLOAD_A, 1)
     ).toBe(false)
   })
 })

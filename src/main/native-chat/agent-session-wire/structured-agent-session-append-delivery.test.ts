@@ -150,7 +150,7 @@ beforeEach(async () => {
       answerPrompt: vi.fn(async () => undefined),
       setOption: vi.fn(async () => undefined)
     }),
-    journalDatabase: openTestJournalHostDatabase(root),
+    journalDatabase: await openTestJournalHostDatabase(root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => `spawn-${generation + 1}`,
     now: () => NOW
@@ -242,10 +242,10 @@ describe('an open chat receives each row once', () => {
       rows: { epoch: string; sequence: number; kind: string; itemId: string | null }[]
     }[] = []
     const realReadSince = journal.readSince.bind(journal)
-    const readSince = vi.spyOn(journal, 'readSince').mockImplementation((cursor, limit) => {
+    const readSince = vi.spyOn(journal, 'readSince').mockImplementation(async (cursor, limit) => {
       const epoch = cursor.epoch
       const sequence = cursor.sequence
-      const result = realReadSince(cursor, limit)
+      const result = await realReadSince(cursor, limit)
       reads.push({
         epoch,
         sequence,

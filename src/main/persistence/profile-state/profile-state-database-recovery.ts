@@ -1,10 +1,29 @@
+import {
+  readSurfaceSqlRecoveryEvidence,
+  readSurfaceJsonRecoveryEvidence,
+  readSurfaceSqlEvidenceDocuments
+} from '../../workspace-surfaces/surface-recovery-evidence'
+import { preserveSurfaceRecoveryObligations } from '../../workspace-surfaces/surface-recovery-obligations'
+import { mergeSurfaceEvidenceDocuments } from '../../workspace-surfaces/surface-cold-evidence'
+import {
+  WORKSPACE_SURFACE_DOMAIN,
+  surfaceProfileDomainSchema,
+  emptySurfaceProfileDomain
+} from '../../../shared/workspace-surfaces/surface-profile-domain'
+import { readProfileStateDomainsWithRevisionFromDatabase } from './profile-state-domain-reader'
+import { withProfileStateWriteTransaction } from './profile-state-write-transaction'
+import { writeProfileStateDomainsInTransaction } from './profile-state-domain-writes'
+import {
+  openWritableProfileStateDatabase,
+  openProfileStateDatabaseReadOnly
+} from './profile-state-database'
 import { profileStateDatabaseFiles } from './profile-state-storage-classification'
 import { existsSync, lstatSync, mkdirSync, rmSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { durableWriteTempPath, renameDurableSync } from '../../filesystem/durable-file-write'
 import { hardenSqliteDatabaseFiles } from '../../sqlite/harden-database-files'
 import { bestEffortFsyncDirectorySync, fsyncFileSync } from '../../../shared/secure-file'
-import { openProfileStateDatabaseReadOnly } from './profile-state-database'
+
 import { validateProfileStateSnapshot } from './profile-state-documents'
 import { copyProfileStateRecoveryFile } from './profile-state-recovery-copy'
 import {
@@ -61,8 +80,7 @@ export function restoreProfileStateDatabaseBackup(
   try {
     copyProfileStateRecoveryFile(options.backupPath, stagingPath)
     hardenSqliteDatabaseFiles(stagingPath)
-    const revision = validateRecoverySnapshot(stagingPath, options.profileId)
-    fsyncFileSync(stagingPath)
+    validateRecoverySnapshot(stagingPath, options.profileId)
     const recoveryFiles = [
       ...profileStateDatabaseBackupFiles(options.databasePath),
       ...profileStateJsonExportPaths(options.dataFile),
@@ -79,22 +97,81 @@ export function restoreProfileStateDatabaseBackup(
       recoveryFiles
     )
     options.beforeRestore?.()
+    const laterJson = readSurfaceJsonRecoveryEvidence(options.dataFile)
+    const laterSql = readSurfaceSqlRecoveryEvidence(options.databasePath, options.profileId)
+    const keepCurrentPrimary = existsSync(options.databasePath) && laterSql.kind !== 'unreadable'
+    const staged = openWritableProfileStateDatabase(stagingPath, options.profileId)
+    try {
+      const selected = readProfileStateDomainsWithRevisionFromDatabase(staged.db, [
+        WORKSPACE_SURFACE_DOMAIN
+      ])
+      if (selected.kind === 'unreadable') {
+        throw selected.error
+      }
+      const value = selected.values.get(WORKSPACE_SURFACE_DOMAIN)
+      let merged = value === undefined ? undefined : surfaceProfileDomainSchema.parse(value)
+      const documents = new Map<string, unknown>()
+      const selectedDocuments = readSurfaceSqlEvidenceDocuments(staged.db)
+      for (const evidence of [laterJson, laterSql]) {
+        // Unreadable authority remains in the returned quarantine; only intact documents can merge.
+        if (evidence.kind === 'value') {
+          for (const [key, value] of Object.entries(
+            mergeSurfaceEvidenceDocuments(selectedDocuments, evidence.documents)
+          )) {
+            documents.set(key, value)
+            selectedDocuments[key] = value
+          }
+          merged = preserveSurfaceRecoveryObligations(merged, evidence.carrier)
+        }
+      }
+      if (merged || documents.size) {
+        merged ??= emptySurfaceProfileDomain()
+        if (merged) {
+          merged = preserveSurfaceRecoveryObligations(merged, undefined)!
+        }
+        withProfileStateWriteTransaction(staged.db, () =>
+          writeProfileStateDomainsInTransaction(
+            staged.db,
+            {
+              expectedRevision: selected.revision,
+              replacements: [
+                ...(merged
+                  ? [{ domain: WORKSPACE_SURFACE_DOMAIN, payload: JSON.stringify(merged) }]
+                  : []),
+                ...[...documents].map(([domain, value]) => ({
+                  domain,
+                  payload: JSON.stringify(value)
+                }))
+              ]
+            },
+            merged
+          )
+        )
+      }
+    } finally {
+      staged.db.close()
+    }
+    const revision = validateRecoverySnapshot(stagingPath, options.profileId)
+    fsyncFileSync(stagingPath)
     ensureProfileStateAuthorityMarker(options.databasePath)
 
-    // Archive then remove legacy exports so reused revisions cannot collide with divergent old payloads.
     const retainedJsonExports = profileStateJsonExportPaths(options.dataFile)
-    for (const exportPath of retainedJsonExports) {
-      rmSync(exportPath)
-    }
 
     const removedDatabaseFiles = profileStateDatabaseFiles(options.databasePath).filter(existsSync)
     // Remove the primary first: interruption must fail closed on retained backups, never replay old WAL.
     for (const path of removedDatabaseFiles) {
-      rmSync(path)
+      if (!keepCurrentPrimary || path !== options.databasePath) {
+        rmSync(path)
+      }
     }
-    rmSync(options.dataFile, { force: true })
     bestEffortFsyncDirectorySync(dirname(options.databasePath))
     renameDurableSync(stagingPath, options.databasePath)
+    // Keep every later carrier available to retry until the enriched replacement is durable.
+    rmSync(options.dataFile, { force: true })
+    for (const exportPath of retainedJsonExports) {
+      rmSync(exportPath)
+    }
+    bestEffortFsyncDirectorySync(dirname(options.databasePath))
     return { revision, quarantine, removedDatabaseFiles }
   } finally {
     for (const path of profileStateDatabaseFiles(stagingPath)) {

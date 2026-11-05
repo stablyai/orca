@@ -52,6 +52,7 @@ type RepoLifecycleOperationsRuntime = Pick<
   | 'repoUpdateOperations'
   | 'state'
   | 'orcadTerminalRestoreHints'
+  | 'workspaceSurfaces'
 >
 
 const repoLifecycleOperationsContext = Symbol('RepoLifecycleOperations')
@@ -135,8 +136,11 @@ export class RepoLifecycleOperations {
 
   /** Sweep unregistered local repos at load; unpaired remote absence cannot prove deletion. */
   sweepDeregisteredRepoResidue(): string[] {
-    const state = this[repoLifecycleOperationsContext].runtime.state
-    const orphanRepoIds = collectDeregisteredRepoIds(state)
+    const { state, workspaceSurfaces } = this[repoLifecycleOperationsContext].runtime
+    const orphanRepoIds = collectDeregisteredRepoIds(
+      state,
+      (workspaceSurfaces?.hostIds?.() ?? []).flatMap((host) => workspaceSurfaces!.all(host))
+    )
     if (orphanRepoIds.size === 0) {
       return []
     }

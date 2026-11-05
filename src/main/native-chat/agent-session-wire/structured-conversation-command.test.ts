@@ -1,3 +1,5 @@
+import { mutateTestJournalFixture } from '../agent-session-journal/journal-drained-fixture-test-support'
+import { corruptTestRecordFence } from '../agent-session-journal/journal-retained-fault-test-support'
 import { openTestChats } from './structured-agent-session-open-test-chats.test-support'
 import { listStructuredProviderSessionOwnership } from './structured-provider-session-ownership'
 import { findConflictingStructuredAdoption } from '../structured-agent-session-history-adoption'
@@ -77,7 +79,7 @@ async function openHost(): Promise<void> {
     logger: createStructuredAgentSessionLogger(),
     store,
     adapter,
-    journalDatabase: openTestJournalHostDatabase(generationRoot()),
+    journalDatabase: await openTestJournalHostDatabase(generationRoot()),
     claimKeyId: 'key',
     now: () => clock,
     mintSpawnToken: () => `spawn-${acquisitions}`,
@@ -171,9 +173,9 @@ afterEach(async () => {
 
 const journal = () => host.collaboratorsForTests().sessions.get(HOST_TEST_SESSION)!.journal
 const clearRows = async () =>
-  (await host.journalSnapshot(HOST_TEST_SESSION)).items.filter(
-    (item) => item.body.kind === 'status' && item.body.contextClear
-  )
+  await (
+    await host.journalSnapshot(HOST_TEST_SESSION)
+  ).items.filter((item) => item.body.kind === 'status' && item.body.contextClear)
 
 async function clearCommits(params = commandParams('clear'), who = caller) {
   const result = await host.conversationCommand(who, params)
@@ -264,11 +266,10 @@ describe('same-conversation clear', () => {
     expect(store.listRecords()).toHaveLength(1)
     expect(adapter.acquire).toHaveBeenCalledTimes(1)
     await host.flushAllStreamedEvents()
-    openTestJournalHostDatabase(generationRoot())
-      .db.prepare(
-        "UPDATE agent_session_records SET record_json = json_set(record_json, '$.lease.minimumNextFence', 'bad') WHERE session_id = ?"
-      )
-      .run(HOST_TEST_SESSION)
+    await corruptTestRecordFence(
+      await openTestJournalHostDatabase(generationRoot()),
+      HOST_TEST_SESSION
+    )
     await openHost()
     expect(await host.conversationCommand(caller, params)).toMatchObject({
       ok: true,
@@ -287,10 +288,12 @@ describe('same-conversation clear', () => {
   })
 
   it('rolls back the divider, boundary and ledger success together when storage fails', async () => {
-    const db = openTestJournalHostDatabase(generationRoot()).db
-    db.exec(
-      "CREATE TEMP TRIGGER fail_clear BEFORE UPDATE ON agent_session_records WHEN instr(NEW.record_json, 'providerContextBoundary') > 0 BEGIN SELECT RAISE(ABORT, 'disk full'); END"
-    )
+    const database = await openTestJournalHostDatabase(generationRoot())
+    await mutateTestJournalFixture(database, (db) => {
+      db.exec(
+        "CREATE TRIGGER fail_clear BEFORE UPDATE ON agent_session_records WHEN instr(NEW.record_json, 'providerContextBoundary') > 0 BEGIN SELECT RAISE(ABORT, 'disk full'); END"
+      )
+    })
     const params = commandParams('clear')
     const before = await host.journalSnapshot(HOST_TEST_SESSION)
     await expect(host.conversationCommand(caller, params)).rejects.toThrow('disk full')
@@ -300,7 +303,9 @@ describe('same-conversation clear', () => {
     expect(
       store.getOperationRow(caller.callerKey, params.envelope.clientOperationId)?.outcome.status
     ).toBe('pending')
-    db.exec('DROP TRIGGER fail_clear')
+    await mutateTestJournalFixture(database, (db) => {
+      db.exec('DROP TRIGGER fail_clear')
+    })
     await clearCommits(params)
     expect(await clearRows()).toHaveLength(1)
     expect(

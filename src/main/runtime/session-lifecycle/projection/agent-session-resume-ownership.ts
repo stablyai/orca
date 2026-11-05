@@ -1,3 +1,6 @@
+import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
+import { commitCanonicalResumeRecordEdit } from '../../terminal/stop/canonical-resume-record-edit'
 // Share recorded-session ownership checks and in-flight claims between pane reopen and targeted resume.
 
 import { findPaneSleepingRecord } from './pane-sleeping-record'
@@ -31,6 +34,15 @@ export abstract class OrcaRuntimeWithAgentSessionResumeOwnership extends OrcaRun
   protected abstract resolveMobileSessionResumeCommand(
     ...args: Parameters<MobileTerminalStartup['resolveMobileSessionResumeCommand']>
   ): ReturnType<MobileTerminalStartup['resolveMobileSessionResumeCommand']>
+  /** Resume intent is an owner command; the session edit below keeps only unrelated recovery facts. */
+  protected async commitWorkspaceResumeRecordEdit(
+    hostId: ExecutionHostId,
+    edit: (session: WorkspaceSessionState) => WorkspaceSessionState | Error | null
+  ): Promise<void> {
+    await commitCanonicalResumeRecordEdit(this.store ?? undefined, hostId, edit)
+    await this.commitWorkspaceSessionEdit(hostId, edit)
+  }
+
   protected abstract commitWorkspaceSessionEdit(
     ...args: Parameters<SessionEditHost['commitWorkspaceSessionEdit']>
   ): ReturnType<SessionEditHost['commitWorkspaceSessionEdit']>
@@ -146,7 +158,10 @@ export abstract class OrcaRuntimeWithAgentSessionResumeOwnership extends OrcaRun
     record: SleepingAgentSessionRecord
   ): Promise<boolean> {
     const hostId = this.getWorkspaceSessionHostIdForWorktree(worktreeId)
-    return claimSleepRecordForPane((edit) => this.commitWorkspaceSessionEdit(hostId, edit), record)
+    return claimSleepRecordForPane(
+      (edit) => this.commitWorkspaceResumeRecordEdit(hostId, edit),
+      record
+    )
   }
 
   /** The hook store names the held session in its pane, from a row since the claim. */

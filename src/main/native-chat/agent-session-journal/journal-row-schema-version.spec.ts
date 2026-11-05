@@ -54,9 +54,9 @@ export function registerJournalRowSchemaVersionTests(): void {
         { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
       )
       await journal.close()
-      const opened = openTestJournalHostDatabase(join(root, 'session-1'))
+      const opened = await openTestJournalHostDatabase(join(root, 'session-1'))
       try {
-        const stored = liveTestJournalRows(opened.db, 'session-1')
+        const stored = (await liveTestJournalRows(opened, 'session-1'))
           .map((row) => JSON.parse(row.rowJson))
           .map((row: { kind: string; v: number }) => [row.kind, row.v])
         expect(stored).toEqual([

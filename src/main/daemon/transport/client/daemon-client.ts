@@ -1,7 +1,7 @@
 import type { Socket } from 'node:net'
 import { readDaemonClientToken } from './daemon-client-token'
 import { randomUUID } from 'node:crypto'
-import { encodeNdjson } from '../../../../shared/main-process-ndjson-framer'
+import { writeDaemonControlNotification } from './daemon-client-notify'
 import { PROTOCOL_VERSION } from '../../protocol/daemon-protocol-version'
 import { NOTIFY_PREFIX } from '../../protocol/daemon-rpc-contract'
 import { DaemonConnectionLostError, DaemonProtocolError } from '../../protocol/daemon-errors'
@@ -57,6 +57,7 @@ export class DaemonClient {
 
   private pendingRequests = new DaemonPendingRequests()
   private eventListeners = new DaemonClientListeners<(event: unknown) => void>()
+  private connectedListeners = new DaemonClientListeners<() => void>()
   private disconnectedListeners = new DaemonClientListeners<() => void>()
   private requestCounter = 0
   private cleanupSocketListeners: (() => void) | null = null
@@ -71,17 +72,14 @@ export class DaemonClient {
     return this.connected
   }
 
-  getDaemonIdentity(): DaemonEndpointIdentity | null {
-    return this.daemonIdentity ? { ...this.daemonIdentity } : null
-  }
+  getDaemonIdentity = (): DaemonEndpointIdentity | null =>
+    this.daemonIdentity ? { ...this.daemonIdentity } : null
 
   /**
    * The last daemon's resize model, kept through a disconnect (the next hello replaces it): null is
    * an older daemon, undefined that no daemon has answered yet.
    */
-  getDaemonResizeModel(): string | null | undefined {
-    return this.daemonResizeModel
-  }
+  getDaemonResizeModel = (): string | null | undefined => this.daemonResizeModel
 
   hasObservedAuthenticatedDisconnect(): boolean {
     return this.observedAuthenticatedDisconnect
@@ -168,6 +166,11 @@ export class DaemonClient {
       this.daemonResizeModel = controlHello.resizeModel
       this.disconnectArmed = true
       this.connectionGeneration++
+      this.connectedListeners.each((listener) => {
+        try {
+          listener()
+        } catch {}
+      })
 
       const gen = this.connectionGeneration
       pendingListenerCleanups.push(
@@ -230,14 +233,7 @@ export class DaemonClient {
     }
 
     const id = `${NOTIFY_PREFIX}${++this.requestCounter}`
-    const msg = { id, type, ...(payload !== undefined ? { payload } : {}) }
-    try {
-      this.controlSocket.write(encodeNdjson(msg))
-      return true
-    } catch {
-      // Notifications are best-effort; an oversized payload must not tear down the caller.
-      return false
-    }
+    return writeDaemonControlNotification(this.controlSocket, id, type, payload)
   }
 
   async notifyWithSettlement(
@@ -266,6 +262,10 @@ export class DaemonClient {
 
   onEvent(listener: (event: unknown) => void): () => void {
     return this.eventListeners.add(listener)
+  }
+
+  onConnected(listener: () => void): () => void {
+    return this.connectedListeners.add(listener)
   }
 
   onDisconnected(listener: () => void): () => void {

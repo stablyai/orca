@@ -1,4 +1,5 @@
 import { OrcaRuntimeWithReadKittyFile } from '../../files/paths/orca-runtime-read-kitty-file'
+import { localWorktreeRemovalOwners } from '../../../workspaces/removal/worktree-removal-owner-residue'
 import type { RuntimeWorkspaceRepoScanRefresh } from './workspace-repo-scan-refresh'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
 import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree/id'
@@ -115,9 +116,7 @@ export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFi
     const platformByRepoId = platformsByRepoId(repos, projectRuntimeByRepoId)
     const deps = this.repoWorktreeRowDeps()
     const perRepoWorktrees = await Promise.all(
-      repos.map(
-        async (repo) => await resolveRepoWorktreeRows(deps, repo, metaById, projectRuntimeByRepoId)
-      )
+      repos.map((repo) => resolveRepoWorktreeRows(deps, repo, metaById, projectRuntimeByRepoId))
     )
     const lineageById = this.store?.getAllWorktreeLineage?.() ?? {}
     const worktrees = projectResolvedWorktreeLineage(perRepoWorktrees.flat(), lineageById)
@@ -219,10 +218,9 @@ export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFi
     worktreeId: string,
     requiredHostId?: ExecutionHostId
   ): Promise<ResolvedWorktree | null> {
-    if (!this.store) {
-      return null
-    }
-    return await resolveScopedWorktreeIdRow(this.repoWorktreeRowDeps(), worktreeId, requiredHostId)
+    return this.store
+      ? resolveScopedWorktreeIdRow(this.repoWorktreeRowDeps(), worktreeId, requiredHostId)
+      : null
   }
 
   /** The resolution scan plus the checkouts this host's removals own that Git no longer lists. */
@@ -239,7 +237,9 @@ export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFi
             ok: true,
             worktrees: await withUnregisteredRemovalCheckouts(
               repo.id,
-              withoutInFlightWorktreeCreates(repo.id, scan.worktrees)
+              withoutInFlightWorktreeCreates(repo.id, scan.worktrees),
+              (records) =>
+                this.store ? localWorktreeRemovalOwners(this.store, records) : new Set()
             )
           }
         : scan

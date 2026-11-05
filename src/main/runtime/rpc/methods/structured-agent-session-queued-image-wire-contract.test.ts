@@ -272,7 +272,7 @@ it('keeps a saved physical hold independent while its own rejected retry blocks 
   await rig.host.flushStreamedEvents(SESSION)
   const j = rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal
   const saved = `recovery:${id}`
-  appendTestJournalQueueRow(openTestJournalHostDatabase(rig.root).db, j, saved, {
+  await appendTestJournalQueueRow(await openTestJournalHostDatabase(rig.root), j, saved, {
     op: 'queued',
     body,
     recovers: id,

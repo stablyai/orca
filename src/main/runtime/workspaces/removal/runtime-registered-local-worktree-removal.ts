@@ -80,7 +80,7 @@ async function acceptRuntimeRegisteredLocalWorktreeRemoval(args: {
     rememberBranch: boolean,
     // Archive hooks may move the branch; re-read the fallback head afterward.
     fallbackHead: string | undefined
-  ) => void
+  ) => void | Promise<void>
   /** Fired when Git finished, not on acceptance. */
   onRemoved: () => void
   publish: () => void
@@ -274,8 +274,8 @@ export async function finishRuntimeLocalWorktreeRemoval(
         )
         await pruneGitWorktrees({ cwd: repo.path, ...localOptions }).catch(() => {})
         await cleanupRemovedWorktreePushTarget(args)
-        args.finishRemoval(undefined, false, refreshed.head)
         completed = true
+        await args.finishRemoval(undefined, false, refreshed.head)
         return {}
       } else {
         throw new Error(formatWorktreeRemovalError(error, canonicalPath, args.force))
@@ -287,7 +287,7 @@ export async function finishRuntimeLocalWorktreeRemoval(
     try {
       await cleanupRemovedWorktreePushTarget(args)
     } finally {
-      args.finishRemoval(removalResult, true, refreshed.head)
+      await args.finishRemoval(removalResult, true, refreshed.head)
     }
     return removalResult ?? {}
   } finally {

@@ -1,3 +1,4 @@
+import { deleteTestCommandReceipt } from '../agent-session-journal/journal-retained-fault-test-support'
 import { structuredAgentSessionSeedCatalog } from '../../../shared/agent-session/options/structured-agent-session-seed-catalog'
 import {
   applyStructuredAgentSessionOptions,
@@ -109,7 +110,9 @@ async function handedOver(draftId: string): Promise<void> {
 async function handedOverUserSend(text: string): Promise<string> {
   const { id, result } = rig.send(text)
   expect(await result).toMatchObject({ ok: true, value: { submission: expect.anything() } })
-  await eventually(async () => expect((await rig.submission(id))?.handedOverAt).toBeDefined())
+  await eventually(async () =>
+    expect(await rig.submission(id)).toMatchObject({ handedOverAt: expect.any(Number) })
+  )
   return id
 }
 
@@ -130,7 +133,7 @@ describe("a Stop's queue pause", () => {
     const originalReceipt = journal.receiptFor(originalId)
     const savedId = `recovery:${originalId}`
     const options = { model: 'gpt-5', effort: 'high' }
-    appendTestJournalQueueRow(openTestJournalHostDatabase(rig.root).db, journal, savedId, {
+    await appendTestJournalQueueRow(await openTestJournalHostDatabase(rig.root), journal, savedId, {
       op: 'queued',
       body: originalBody,
       options,
@@ -335,10 +338,16 @@ describe("a Stop's queue pause", () => {
   })
 
   it('survives a restart, and a send made after the Stop still ends it when its turn starts there', async () => {
+    await rig.dispose()
+    rig = await createQueuedMessageTestRig({
+      restartable: true,
+      probeOwner: async () => ({ outcome: 'pid-absent' })
+    })
     const draftId = await stoppedDraft()
     const inFlight = await handedOverUserSend('sent before the restart')
     // Crash without close; persisted journal state must still derive both pauses.
-    rig.crashRestartHostProcess()
+    await rig.crashRestartHostProcess()
+    await rig.host.reconcileRestartLeases()
     expect(await rig.queuePause()).toBeNull()
     expect(derivedPauses()).toEqual(['stopped', 'restarted'])
     await rig.settleAccepted(inFlight, 'after-restart')
@@ -346,9 +355,8 @@ describe("a Stop's queue pause", () => {
     await eventually(async () => expect(derivedPauses()).toEqual(['restarted']))
     expect(await rig.queuePause()).toBeNull()
     expect(await rig.handoff(draftId)).toBeUndefined()
-    const next = rig.send('sent after the restart')
-    await next.result
-    await rig.settleAccepted(next.id, 'next')
+    const next = await handedOverUserSend('sent after the restart')
+    await rig.settleAccepted(next, 'next')
     await eventually(async () => expect(await rig.handoff(draftId)).toBeDefined())
   })
 
@@ -409,9 +417,7 @@ describe("a Stop's queue pause", () => {
     await rig.stop()
     await rig.settleAccepted(working, 'stopped')
     // Model legacy no-receipt acceptance that must reconstruct its result.
-    openTestJournalHostDatabase(rig.root)
-      .db.prepare('DELETE FROM agent_session_command_receipts WHERE operation_id = ?')
-      .run(working)
+    await deleteTestCommandReceipt(await openTestJournalHostDatabase(rig.root), working)
     const body = hostTestMessage('work on this')
     const replayed = await rig.host.send(QUEUED_RIG_CALLER, {
       envelope: rig.envelope({ body }, 'agentSession.send', working),
@@ -586,7 +592,7 @@ describe('a pause only over cards Resume could send', () => {
 })
 
 describe('comparing queue pauses', () => {
-  it('compares a pause by presence before reason, so appearing or clearing is always a change', () => {
+  it('compares a pause by presence before reason, so appearing or clearing is always a change', async () => {
     expect(sameQueuePause(null, {})).toBe(false)
     expect(sameQueuePause({}, null)).toBe(false)
     expect(sameQueuePause(null, null)).toBe(true)
@@ -740,7 +746,7 @@ describe('Resume', () => {
 
   it("of a Stop from before a restart, which no client offers there, also lifts the restart's pause", async () => {
     const draftId = await stoppedDraft()
-    rig.crashRestartHostProcess()
+    await rig.crashRestartHostProcess()
     expect(await rig.queuePause()).toBeNull()
     expect(derivedPauses()).toEqual(['stopped', 'restarted'])
     expect(await rig.resume()).toMatchObject({ ok: true, value: { resumed: true } })

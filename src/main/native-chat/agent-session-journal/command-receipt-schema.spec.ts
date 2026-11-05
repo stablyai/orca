@@ -10,7 +10,10 @@ import {
   JOURNAL_DB_SCHEMA_VERSION
 } from './journal-database-schema'
 import { journalDatabasePath } from './journal-host-database'
-import { closeTestJournalHostDatabases } from './journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabases,
+  openTestJournalHostDatabase
+} from './journal-host-database-test-support'
 import { insertCommandReceiptIfAbsent, readCommandReceipt } from './command-receipt-table'
 import { commandReceiptScope } from './command-receipt-schema'
 import {
@@ -95,13 +98,15 @@ export function registerCommandReceiptSchemaTests(): void {
         const write = () => insertCommandReceiptIfAbsent(db, scope, receipt)
         expect(write).toThrow(AgentSessionJournalError)
         expect(write).toThrow(expect.objectContaining({ code: 'journal_read_only' }))
-        expect(() => buildCommandReceiptTransaction(scope, receipt).write(db)).toThrow(
-          expect.objectContaining({ code: 'journal_read_only' })
-        )
       } finally {
         db.close()
       }
 
+      const host = await openTestJournalHostDatabase(root)
+      await expect(
+        host.transaction((plan) => buildCommandReceiptTransaction(scope, receipt).write(plan))
+      ).rejects.toMatchObject({ code: 'journal_read_only' })
+      await host.close()
       expect(await readFile(dbPath)).toEqual(before)
       expect((await stat(`${dbPath}-wal`).catch(() => null))?.size ?? 0).toBe(0)
     })

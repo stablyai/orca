@@ -9,15 +9,11 @@ import {
   openTestJournalHostDatabase,
   type TrackedJournalOpener
 } from '../../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
-import { restoreJournal } from '../../../src/main/native-chat/agent-session-journal/journal-open'
+import { restoreJournalAsync } from '../../../src/main/native-chat/agent-session-journal/journal-async-open'
 import { JOURNAL_PREFIX_ORDINAL } from '../../../src/main/native-chat/agent-session-journal/journal-outcome-codec'
-import { journalOutcomeSource } from '../../../src/main/native-chat/agent-session-journal/journal-outcome-format'
 import type { AgentJournalSnapshot } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
 import { parseJournalRow } from '../../../src/main/native-chat/agent-session-journal/journal-row-schema'
-import {
-  readJournalSessionEpoch,
-  type JournalStoredRow
-} from '../../../src/main/native-chat/agent-session-journal/journal-row-table'
+import type { JournalStoredRow } from '../../../src/main/native-chat/agent-session-journal/journal-row-table'
 import { JournalWriteProjection } from '../../../src/main/native-chat/agent-session-journal/journal-write-projection'
 import { readPublishedQueuedMessages } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-queued-publication'
 import { resolveBaselineReleaseRef } from './release-checkout'
@@ -112,12 +108,13 @@ async function carryOn(
       await editReleasedCard(journal)
       if (prefix) {
         // The release's rows stay byte for byte; one marker follows them, where records begin.
-        const database = openTestJournalHostDatabase(stateDirectory)
-        const rows = liveTestJournalRows(database.db, options.identity.sessionId)
+        const database = await openTestJournalHostDatabase(stateDirectory)
+        const rows = await liveTestJournalRows(database, options.identity.sessionId)
         expect(rows.slice(0, prefix.length)).toEqual(prefix)
         expect(rows).toHaveLength(prefix.length + 1)
         expect(
-          journalOutcomeSource(database.db, options.identity.sessionId, journal.epoch)?.prefix
+          (await database.read((read) => read.source(options.identity.sessionId, journal.epoch)))
+            ?.prefix
         ).toBe(prefix.length)
       }
       await sendAfterUpgrade(journal)
@@ -126,14 +123,28 @@ async function carryOn(
         expect.objectContaining({ clientMessageId: 'after-upgrade', dispatchState: 'accepted' })
       )
       const beforeRewind = journal.cursor()
-      const database = openTestJournalHostDatabase(stateDirectory)
-      const physicalEpoch = readJournalSessionEpoch(database.db, options.identity.sessionId)
+      const database = await openTestJournalHostDatabase(stateDirectory)
+      const physicalEpoch = (
+        await database.read((read) =>
+          read
+            .prepare('SELECT epoch FROM journal_sessions WHERE session_id = ?')
+            .get(options.identity.sessionId)
+        )
+      )?.epoch
       expect(physicalEpoch).not.toBeNull()
       await rewindReleasedChat(journal, new Set(opened.snapshot.items.map((item) => item.itemId)))
       expect(journal.epoch).toMatch(/^context-v1:/)
       expect(journal.epoch).not.toBe(beforeRewind.epoch)
-      expect(readJournalSessionEpoch(database.db, options.identity.sessionId)).toBe(physicalEpoch)
-      expect(journal.readSince(beforeRewind)).toEqual({ ok: false, reset: 'epoch_changed' })
+      expect(
+        (
+          await database.read((read) =>
+            read
+              .prepare('SELECT epoch FROM journal_sessions WHERE session_id = ?')
+              .get(options.identity.sessionId)
+          )
+        )?.epoch
+      ).toBe(physicalEpoch)
+      expect(await journal.readSince(beforeRewind)).toEqual({ ok: false, reset: 'epoch_changed' })
       const seen = view(journal)
       // The rewind keeps every message the release wrote and every card not taken back, the edit
       // included.
@@ -191,8 +202,8 @@ describe('a chat a shipped release wrote, carried on by this build', () => {
         )
         expect(written.cards).toHaveLength(2)
 
-        const database = openTestJournalHostDatabase(directory)
-        const rows = liveTestJournalRows(database.db, identity.sessionId)
+        const database = await openTestJournalHostDatabase(directory)
+        const rows = await liveTestJournalRows(database, identity.sessionId)
         expect(rows.filter((row) => !parseJournalRow(row.rowJson).ok)).toEqual([])
         // Anti-vacuous: the release wrote every row kind a chat holds (cards in their own table
         // before they moved into the rows).
@@ -201,7 +212,9 @@ describe('a chat a shipped release wrote, carried on by this build', () => {
           ['dispatch', 'epoch', 'item', 'lifecycle-batch', 'submission', 'tombstone'].sort()
         )
         expect(kinds.has('queue')).toBe(build !== 'the oldest release with this chat database')
-        expect(restoreJournal(database.db, identity.sessionId)).toMatchObject({
+        expect(
+          await database.read((read) => restoreJournalAsync(read, identity.sessionId))
+        ).toMatchObject({
           newer: null,
           damage: null
         })
@@ -218,10 +231,14 @@ describe('a chat a shipped release wrote, carried on by this build', () => {
           // A release in the window wrote the shapes this build reads, so it opens as written,
           // and the edit records the card the old rows hold in its place among them.
           expect(releaseWritten(ours.opened)).toMatchObject(releaseWritten(written))
-          const edits = openTestJournalHostDatabase(directory)
-            .db.prepare(`SELECT ordinal FROM journal_outcomes
+          const edits = await (
+            await openTestJournalHostDatabase(directory)
+          ).read((read) =>
+            read
+              .prepare(`SELECT ordinal FROM journal_outcomes
             WHERE field = 'queue.cards' AND entry_key = '"card-2"'`)
-            .all()
+              .all()
+          )
           expect(edits).toContainEqual({ ordinal: JOURNAL_PREFIX_ORDINAL })
           await closeTestJournalHostDatabase(directory)
         }

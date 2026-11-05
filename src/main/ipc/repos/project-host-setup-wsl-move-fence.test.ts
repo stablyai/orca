@@ -78,12 +78,26 @@ const setupFor = (repoId: string) => {
   return setup
 }
 
+function setupRuntime() {
+  const controller = new RuntimeProjectHostSetupController({
+    getStore: () => store,
+    listRepos: () => store.getRepos(),
+    addRepo: vi.fn(),
+    cloneRepo: vi.fn(),
+    invalidateResolvedWorktrees: vi.fn(),
+    invalidateWorktreeScan: vi.fn(),
+    notifyReposChanged: vi.fn(),
+    countLiveTerminalsForRepo: () => 0
+  })
+  return { deleteProjectHostSetup: controller.deleteSetup.bind(controller) }
+}
+
 describe('project host setups under a WSL move', () => {
   it('refuses IPC edits to a local setup of a moving repo and leaves others alone', async () => {
     store.addRepo(repo('repo-1'))
     store.addRepo(repo('repo-2'))
     seedWslMoveCutover(testState.dir, cutover('move-1', 'source-fenced'))
-    registerProjectHostSetupHandlers(new BrowserWindow(), store)
+    registerProjectHostSetupHandlers(new BrowserWindow(), store, setupRuntime())
     const moving = setupFor('repo-1')
 
     await expect(
@@ -107,7 +121,7 @@ describe('project host setups under a WSL move', () => {
   it("keeps a setup's own repo frozen once the WSL host owns it", async () => {
     store.addRepo(repo('repo-1'))
     seedWslMoveCutover(testState.dir, cutover('move-1', 'destination-committed'))
-    registerProjectHostSetupHandlers(new BrowserWindow(), store)
+    registerProjectHostSetupHandlers(new BrowserWindow(), store, setupRuntime())
     const owned = setupFor('repo-1')
 
     await expect(
@@ -118,7 +132,7 @@ describe('project host setups under a WSL move', () => {
     )
   })
 
-  it('refuses a runtime setup delete for a moving repo', () => {
+  it('refuses a runtime setup delete for a moving repo', async () => {
     store.addRepo(repo('repo-1'))
     seedWslMoveCutover(testState.dir, cutover('move-1', 'source-fenced'))
     const controller = new RuntimeProjectHostSetupController({
@@ -133,7 +147,7 @@ describe('project host setups under a WSL move', () => {
     })
     const setupId = setupFor('repo-1').id
 
-    expect(() => controller.deleteSetup({ setupId })).toThrow(WslMoveProjectFencedError)
+    await expect(controller.deleteSetup({ setupId })).rejects.toThrow(WslMoveProjectFencedError)
     expect(() => controller.updateSetup({ setupId, updates: { displayName: 'x' } })).toThrow(
       WslMoveProjectFencedError
     )

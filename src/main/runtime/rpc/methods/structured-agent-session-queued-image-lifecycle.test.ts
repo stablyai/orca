@@ -690,8 +690,8 @@ it.each([
     await rig.host.collaboratorsForTests().serialize(SESSION, async () => {})
     expect(journal().queuedMessages.list()).toEqual([])
     if (edit) {
-      appendTestJournalQueueRow(
-        openTestJournalHostDatabase(rig.root).db,
+      await appendTestJournalQueueRow(
+        await openTestJournalHostDatabase(rig.root),
         journal(),
         `recovery:${id}`,
         {

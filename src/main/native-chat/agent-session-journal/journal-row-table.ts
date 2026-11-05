@@ -1,11 +1,16 @@
+import { journalTable, type JournalTableScope } from './journal-table-scope'
+import type { JournalReadConnection } from './journal-sql-owner'
 import { parseJournalRow, serializeJournalRow, type JournalRow } from './journal-row-schema'
 import { AgentSessionJournalError } from './journal-write-guards'
 import type Database from '../../sqlite/sync-database'
 
 export type JournalStoredRow = { epoch: string; seq: number; ts: number; rowJson: string }
 
-const SELECT_EPOCH = 'SELECT epoch FROM journal_sessions WHERE session_id = ?'
-const PUBLISH_SESSION_EPOCH = `INSERT INTO journal_sessions (session_id, workspace_id, epoch)
+const selectEpoch = (scope: JournalTableScope): string =>
+  `SELECT epoch FROM ${journalTable(scope, 'journal_sessions')} WHERE session_id = ?`
+const publishSessionEpoch = (
+  scope: JournalTableScope
+): string => `INSERT INTO ${journalTable(scope, 'journal_sessions')} (session_id, workspace_id, epoch)
 VALUES (?, ?, ?)
 ON CONFLICT(session_id) DO UPDATE SET
   workspace_id = excluded.workspace_id, epoch = excluded.epoch`
@@ -14,19 +19,25 @@ const INSERT_ROW =
 const SELECT_ROWS_AFTER = `SELECT seq, ts, row_json FROM journal_rows
 WHERE session_id = ? AND epoch = ? AND seq > ? ORDER BY seq ASC`
 const SELECT_ROWS_AFTER_LIMITED = `${SELECT_ROWS_AFTER} LIMIT ?`
-const DELETE_EPOCH = 'DELETE FROM journal_rows WHERE session_id = ? AND epoch = ?'
+const deleteEpoch = (scope: JournalTableScope): string =>
+  `DELETE FROM ${journalTable(scope, 'journal_rows')} WHERE session_id = ? AND epoch = ?`
 
-export function readJournalSessionEpoch(db: Database.Database, sessionId: string): string | null {
-  const epoch = db.prepare(SELECT_EPOCH).get(sessionId)?.epoch
+export function readJournalSessionEpoch(
+  db: Database.Database,
+  sessionId: string,
+  tableScope: JournalTableScope = 'main'
+): string | null {
+  const epoch = db.prepare(selectEpoch(tableScope)).get(sessionId)?.epoch
   return typeof epoch === 'string' ? epoch : null
 }
 
 export function publishJournalSessionEpoch(
   db: Database.Database,
   identity: { sessionId: string; workspaceId: string },
-  epoch: string
+  epoch: string,
+  tableScope: JournalTableScope = 'main'
 ): void {
-  db.prepare(PUBLISH_SESSION_EPOCH).run(identity.sessionId, identity.workspaceId, epoch)
+  db.prepare(publishSessionEpoch(tableScope)).run(identity.sessionId, identity.workspaceId, epoch)
 }
 
 export function insertJournalRow(
@@ -100,7 +111,40 @@ export function readJournalRowsAfter(
 export function deleteJournalEpochRows(
   db: Database.Database,
   sessionId: string,
-  epoch: string
+  epoch: string,
+  tableScope: JournalTableScope = 'main'
 ): void {
-  db.prepare(DELETE_EPOCH).run(sessionId, epoch)
+  db.prepare(deleteEpoch(tableScope)).run(sessionId, epoch)
+}
+
+export async function* iterateJournalEpochRowsAsync(
+  read: JournalReadConnection,
+  sessionId: string,
+  epoch: string,
+  afterSequence = Number.MIN_SAFE_INTEGER,
+  through = Number.MAX_SAFE_INTEGER,
+  limit?: number
+): AsyncGenerator<JournalStoredRow[]> {
+  for await (const page of read.pages(`${SELECT_ROWS_AFTER} LIMIT ?`, [
+    sessionId,
+    epoch,
+    afterSequence,
+    limit ?? -1
+  ])) {
+    const rows: JournalStoredRow[] = []
+    for (const row of page) {
+      if (typeof row.seq === 'number' && row.seq > through) {
+        yield rows
+        return
+      }
+      if (
+        typeof row.seq === 'number' &&
+        typeof row.ts === 'number' &&
+        typeof row.row_json === 'string'
+      ) {
+        rows.push({ epoch, seq: row.seq, ts: row.ts, rowJson: row.row_json })
+      }
+    }
+    yield rows
+  }
 }

@@ -1,3 +1,4 @@
+import { restoreJournalAsync } from './journal-async-open'
 import { journalInputOrder } from './journal-input-order'
 import {
   journalInputSourceBody,
@@ -28,8 +29,7 @@ import {
   openTestJournalHostDatabase,
   publishTestJournalEpoch
 } from './journal-host-database-test-support'
-import { publishJournalOutcomeEpoch } from './journal-outcome-write'
-import { restoreJournal } from './journal-open'
+import { publishJournalOutcomeEpochPlan } from './journal-outcome-write'
 import type { JournalRow } from './journal-row-schema'
 import type { JournalHostDatabase } from './journal-host-database'
 
@@ -59,17 +59,17 @@ const journals = createTrackedJournalOpener()
 
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-journal-saved-state-'))
-  database = openTestJournalHostDatabase(root)
+  database = await openTestJournalHostDatabase(root)
 })
 afterEach(async () => {
   await journals.closeAll()
   await rm(root, { recursive: true, force: true })
 })
 
-function write(rows: readonly JournalRow[]): JournalReducerState {
-  const result = database.transaction((db) => {
+async function write(rows: readonly JournalRow[]): Promise<JournalReducerState> {
+  const result = await database.transaction((db) => {
     publishTestJournalEpoch(db, identity.sessionId, epoch)
-    return publishJournalOutcomeEpoch(db, identity.sessionId, epoch, rows)
+    return publishJournalOutcomeEpochPlan(db, identity.sessionId, epoch, rows)
   })
   return result.adopt()
 }
@@ -139,7 +139,7 @@ function expectSameState(actual: JournalReducerState, expected: JournalReducerSt
   expect(renderJournalState(actual)).toStrictEqual(renderJournalState(expected))
 }
 
-it('round trips the complete replayed reducer, including insertion order and valueless echoes', () => {
+it('round trips the complete replayed reducer, including insertion order and valueless echoes', async () => {
   for (const table of [
     'journal_rows',
     'journal_sessions',
@@ -148,9 +148,9 @@ it('round trips the complete replayed reducer, including insertion order and val
     'journal_outcome_generations'
   ]) {
     expect(
-      database.db
-        .prepare("SELECT name FROM sqlite_schema WHERE type = 'table' AND name = ?")
-        .get(table)
+      await database.read((read) =>
+        read.prepare("SELECT name FROM sqlite_schema WHERE type = 'table' AND name = ?").get(table)
+      )
     ).toEqual({ name: table })
     expect(SQLITE_TABLE_DISPOSITIONS[`agent-session-journal.${table}`]).toMatchObject({
       disposition: 'not-applicable',
@@ -270,13 +270,15 @@ it('round trips the complete replayed reducer, including insertion order and val
       providerHandle
     })
   }
-  const state = write(rows)
+  const state = await write(rows)
   expect(state.items.has(agentJournalSubmissionKey('send-1'))).toBe(true)
   expect(state.itemEchoes.has(itemId(2))).toBe(true)
   expect(state.itemEchoes.get(itemId(2))).toBeNull()
   expect([...state.appliedSettlementIds][0]).toBe('settlement-2')
   expect(state.derivedTurnScope.snapshot()).toBe(itemId(5))
-  const restored = requireState(restoreJournal(database.db, identity.sessionId)?.state)
+  const restored = requireState(
+    (await database.read((read) => restoreJournalAsync(read, identity.sessionId)))?.state
+  )
   expectSameState(restored, state)
   expect(restored.derivedTurnScope.scopeFor(text('next'))).toEqual({
     kind: 'turn',

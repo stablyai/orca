@@ -1,3 +1,4 @@
+import { advancePromptProjection } from './structured-agent-session-actionable-prompts'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { JournalRow } from '../agent-session-journal/journal-row-schema'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
@@ -73,6 +74,7 @@ export class StructuredAgentSessionConversations extends Map<
     }
     const current = () => this.attachments.get(sessionId) === source
     const releaseCommit = journal.observeCommits((rows, affectsInput = true) => {
+      advancePromptProjection(journal, rows)
       if (!current()) {
         return
       }
@@ -92,21 +94,26 @@ export class StructuredAgentSessionConversations extends Map<
       }
       queued = true
       queueMicrotask(() => {
-        queued = false
-        const affectsInput = inputChanged
-        inputChanged = false
-        if (!current()) {
-          return
-        }
-        try {
-          this.delivery.deliver(sessionId, journal, affectsInput)
-        } catch (error) {
-          this.delivery.logger.warn('delivering a journal commit failed', {
-            scope: 'journal-delivery',
-            sessionId,
-            error
+        // Async commits yield between units; deliver once after the already-admitted prefix.
+        void journal
+          .readCommittedPrefix(() => {
+            queued = false
+            const affectsInput = inputChanged
+            inputChanged = false
+            if (current()) {
+              this.delivery.deliver(sessionId, journal, affectsInput)
+            }
           })
-        }
+          .catch((error) => {
+            queued = false
+            if (current()) {
+              this.delivery.logger.warn('delivering a journal commit failed', {
+                scope: 'journal-delivery',
+                sessionId,
+                error
+              })
+            }
+          })
       })
     })
     const releaseSettle = journal.stopMarks.observeSettleEdges(() => {

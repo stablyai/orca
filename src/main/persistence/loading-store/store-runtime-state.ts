@@ -1,3 +1,4 @@
+import type { SurfaceStorageResult } from '../../../shared/workspace-surfaces/surface-storage-command'
 import { removeStaleDurableWriteTempFiles } from '../../filesystem/durable-file-write'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
@@ -31,6 +32,7 @@ import type { ProfileStatePersistenceAuthority } from './profile-state-authority
 import type { AutomationRun } from '../../../shared/automations-types'
 import { resolveNewPaneShellPath } from '../migrating-orcad-catalog/orcad-shell-history-installer'
 import { OrcadTerminalRestoreHintStore } from '../migrating-orcad-catalog/orcad-terminal-restore-hint-store'
+import type { WorkspaceSurfaceReader } from '../../../shared/workspace-surfaces/surface-reader'
 
 export type DurableProfileStateMutation<T> = {
   value: T
@@ -50,6 +52,9 @@ export type StoreRuntimeOptions = {
 
 export class StoreRuntimeState {
   state!: PersistedState
+  workspaceSurfaces?: WorkspaceSurfaceReader
+  readonly workspaceSurfaceCommitListeners = new Set<(result: SurfaceStorageResult) => void>()
+  readonly profilePersistenceFinalizedListeners = new Set<() => void>()
   readonly dataFile: string
   readonly storageAuthority: AutomationStorageAuthority
   readonly profileStateAuthority: ProfileStatePersistenceAuthority | undefined

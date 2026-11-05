@@ -1,3 +1,4 @@
+import { restoreJournalSqlFailure } from '../../native-chat/agent-session-journal/journal-sql-protocol'
 import { storageCapacityErrorCode } from '../../../shared/storage-capacity-error'
 import {
   ProfileStateDocumentCorruptionError,
@@ -21,6 +22,14 @@ export class ProfileStateWriterError extends Error {
     super(message, options)
     this.name = 'ProfileStateWriterError'
   }
+}
+
+export function closedProfileStateWriterError(): ProfileStateWriterError {
+  return new ProfileStateWriterError(
+    'profile-state-writer-closed',
+    'Profile state writer is closing',
+    'known-failure'
+  )
 }
 
 export function profileStateWriterFailureOutcome(error: unknown): ProfileStateWriterFailureOutcome {
@@ -76,6 +85,9 @@ export function encodeProfileStateWriterError(
 
 export function decodeProfileStateWriterError(data: ProfileStateWriterErrorData): Error {
   if (data.outcome === 'known-failure') {
+    if (data.journal) {
+      return restoreJournalSqlFailure(data.journal)
+    }
     if (
       data.code === 'profile-state-revision-conflict' &&
       data.expectedRevision !== undefined &&

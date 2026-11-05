@@ -82,6 +82,7 @@ async function stopRendererOwnedPtyAs(
     await stopRendererOwnedPtyProcess(deps, args)
     stopped = true
   } finally {
+    await settleStop?.joinRelease()
     settleStop?.(stopped)
     if (!stopped) {
       // The failed shutdown left the process running.
@@ -112,7 +113,7 @@ async function stopRendererOwnedPtyProcess(
     // Detached/unhydrated SSH ownership must be tombstoned, never routed to local fallback.
     const unproven = PtyRetirementWithoutProof.because(SSH_PROVIDER_UNREGISTERED_REASON)
     const incarnationId = finishPtyShutdown(args.id, connectionId, store, unproven)
-    publishSyntheticExit(deps, args.id, -1, incarnationId, unproven)
+    await publishSyntheticExit(deps, args.id, -1, incarnationId, unproven)
     return
   }
   const shutdownProvider = provider ?? getProviderForPty(args.id)
@@ -137,7 +138,7 @@ async function stopRendererOwnedPtyProcess(
   // Some shutdown paths omit onExit; idempotent cleanup must cover them too.
   const incarnationId = finishPtyShutdown(args.id, connectionId, store, proof)
   if (proof.source !== 'exit-observed') {
-    publishSyntheticExit(deps, args.id, -1, incarnationId, proof)
+    await publishSyntheticExit(deps, args.id, -1, incarnationId, proof)
   }
 }
 

@@ -164,6 +164,9 @@ describe('materializeRelocatedDaemonHost', () => {
     expect(existsSync(result!.execPath)).toBe(true)
     expect(existsSync(result!.entryPath)).toBe(true)
     expect(
+      readFileSync(join(dirname(result!.entryPath), 'surface-executor-reader-entry.js'), 'utf8')
+    ).toBe('reader')
+    expect(
       existsSync(
         join(dest, 'resources', 'node_modules', 'node-pty', 'build', 'Release', 'conpty.node')
       )

@@ -5,6 +5,7 @@ import type {
 import { getOrcaProfileListState } from './profile-index-store'
 import {
   readProfileProjectTransferState,
+  initializeProfileProjectSurfaces,
   writeProfileProjectDomainChanges
 } from './profile-project-domain-state'
 import {
@@ -76,6 +77,19 @@ export function transferOrcaProfileProject(
   }
   if (args.mode === 'move' && sourceSnapshot.revision === undefined) {
     sourceSnapshot = migrateProfileProjectTransferParticipant(
+      args.sourceProfileId,
+      userDataPath,
+      sourceSnapshot
+    )
+  }
+
+  targetSnapshot = initializeProfileProjectSurfaces(
+    args.targetProfileId,
+    userDataPath,
+    targetSnapshot
+  )
+  if (args.mode === 'move') {
+    sourceSnapshot = initializeProfileProjectSurfaces(
       args.sourceProfileId,
       userDataPath,
       sourceSnapshot

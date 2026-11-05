@@ -14,6 +14,7 @@ import {
   INCARNATION_ID,
   LEAF_ID,
   PTY_ID,
+  RUNTIME_OWNED_PTY_ID,
   SIBLING_INCARNATION_ID,
   SIBLING_LEAF_ID,
   TAB_ID,
@@ -57,6 +58,31 @@ async function closeLastPane(
 }
 
 describe('terminal close and handle incarnation continuity', () => {
+  // L259a/b: main-owned close still lacks stale saved/unplaced headless continuity.
+  ;(ORCA_LAYOUT_OWNER_IS_MAIN ? it.fails : it).each(['saved', 'unplaced'] as const)(
+    'closes a stale headless tab with a %s placement without leaving its terminal behind',
+    async (placement) => {
+      const harness = await createStaleTabCloseHarness({ headless: true })
+      if (placement === 'unplaced') {
+        harness.retirePersistedTab()
+      }
+
+      await expect(
+        harness.runtime.closeTerminalTab(harness.terminal.handle)
+      ).resolves.toMatchObject({
+        handle: harness.terminal.handle,
+        tabId: TAB_ID,
+        closeMode: 'tab'
+      })
+
+      expect(harness.kill.mock.calls.map(([id]) => id)).toContain(RUNTIME_OWNED_PTY_ID)
+      expect(harness.getSession().tabsByWorktree[WORKTREE_ID]).toEqual([])
+      await expect(
+        harness.runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
+      ).resolves.toMatchObject({ tabs: [] })
+    }
+  )
+
   it('does not let a colliding PTY id close a different persisted incarnation', async () => {
     const harness = await createStaleTabCloseHarness({ headless: true })
     harness.replacePersistedIncarnation(SIBLING_INCARNATION_ID)
@@ -101,7 +127,7 @@ describe('terminal close and handle incarnation continuity', () => {
       harness.acknowledged.resolve()
       await expect(closing).resolves.toMatchObject({ handle, tabId: TAB_ID, ptyKilled: false })
     }
-    expect(harness.kill).toHaveBeenCalledWith(PTY_ID)
+    expect(harness.kill.mock.calls.map(([id]) => id)).toContain(PTY_ID)
     expect(harness.closeTerminal).not.toHaveBeenCalled()
     expect(harness.getSession().tabsByWorktree[WORKTREE_ID]).toEqual([])
   })
@@ -157,7 +183,8 @@ describe('terminal close and handle incarnation continuity', () => {
     ])
     expect(harness.stopAndWait).toHaveBeenCalledTimes(1)
     expect(harness.stopAndWait).toHaveBeenCalledWith(PTY_ID, {
-      deadlineMs: expect.any(Number)
+      deadlineMs: expect.any(Number),
+      isCurrent: expect.any(Function)
     })
     expect(harness.kill).not.toHaveBeenCalled()
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {

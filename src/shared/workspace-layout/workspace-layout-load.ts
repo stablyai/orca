@@ -38,7 +38,8 @@ function workspaceKeys(session: WorkspaceSessionState): string[] {
       ...Object.keys(session.tabGroups ?? {}),
       ...Object.keys(session.tabGroupLayouts ?? {}),
       ...Object.keys(session.openFilesByWorktree ?? {}),
-      ...Object.keys(session.browserTabsByWorktree ?? {})
+      ...Object.keys(session.browserTabsByWorktree ?? {}),
+      ...Object.keys(session.clientHostedBrowserPagesByWorktree ?? {})
     ])
   ]
 }

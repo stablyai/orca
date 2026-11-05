@@ -1,9 +1,11 @@
+import { mutateTestJournalFixture } from '../../../src/main/native-chat/agent-session-journal/journal-drained-fixture-test-support'
+import { failNextNativeJournalStatement } from '../../../src/main/native-chat/agent-session-journal/journal-native-test-instrumentation'
 import { createHash } from 'node:crypto'
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { isDeepStrictEqual } from 'node:util'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
 import type {
   AgentSessionJournalIdentity,
@@ -18,8 +20,7 @@ import {
   openTestJournalHostDatabase,
   SAVED_BY_NEWER_ORCA
 } from '../../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
-import { journalOutcomeSource } from '../../../src/main/native-chat/agent-session-journal/journal-outcome-format'
-import { restoreJournal } from '../../../src/main/native-chat/agent-session-journal/journal-open'
+import { restoreJournalAsync } from '../../../src/main/native-chat/agent-session-journal/journal-async-open'
 import type { JournalStoredRow } from '../../../src/main/native-chat/agent-session-journal/journal-row-table'
 import type { AgentSessionJournal } from '../../../src/main/native-chat/agent-session-journal/journal-store'
 import {
@@ -31,7 +32,7 @@ import {
 
 // A chat this build has written, new or an existing one whose input rows an older build wrote, is
 // refused by each of the two last releases before outcome storage as a newer Orca's, which leaves
-// every byte as it was; a build from before that reason opens it read-only, as it does any newer
+// saved content intact; a build from before that reason opens it read-only, as it does any newer
 // row, and changes no saved row (it only adds a table of its own). The existing chat's input rows
 // stay byte for byte throughout, and this build reads the whole chat again afterwards.
 const SUITE_TIMEOUT_MS = 180_000
@@ -87,7 +88,10 @@ async function savedChat(kind: 'new' | 'existing'): Promise<JournalStoredRow[]> 
       await appendStatus(journal, ordinal)
     }
     await older.closeAll()
-    prefix = liveTestJournalRows(openTestJournalHostDatabase(directory).db, IDENTITY.sessionId)
+    prefix = await liveTestJournalRows(
+      await openTestJournalHostDatabase(directory),
+      IDENTITY.sessionId
+    )
     expect(prefix).toHaveLength(4)
   }
   const journals = createTrackedJournalOpener()
@@ -96,11 +100,13 @@ async function savedChat(kind: 'new' | 'existing'): Promise<JournalStoredRow[]> 
     await appendStatus(journal, ordinal)
   }
   await journals.closeAll()
-  const database = openTestJournalHostDatabase(directory)
-  expect(journalOutcomeSource(database.db, IDENTITY.sessionId, journal.epoch)).toMatchObject({
+  const database = await openTestJournalHostDatabase(directory)
+  expect(
+    await database.read((read) => read.source(IDENTITY.sessionId, journal.epoch))
+  ).toMatchObject({
     prefix: prefix.length
   })
-  const rows = liveTestJournalRows(database.db, IDENTITY.sessionId)
+  const rows = await liveTestJournalRows(database, IDENTITY.sessionId)
   expect(rows.slice(0, prefix.length)).toEqual(prefix)
   // One appended marker, after the prefix, where outcome records begin.
   expect(rows.map((row) => row.seq)).toEqual([...prefix.map((row) => row.seq), prefix.length + 1])
@@ -108,17 +114,19 @@ async function savedChat(kind: 'new' | 'existing'): Promise<JournalStoredRow[]> 
   return prefix
 }
 
-/** The database file and its log, by content; SQLite's shared-memory index is not data. */
+/** Compare non-bookkeeping bytes; an absent WAL and an empty WAL both contain no frames. */
 function databaseBytes(): Record<string, string> {
   return Object.fromEntries(
-    ['agent-session-journal.db', 'agent-session-journal.db-wal']
-      .filter((file) => existsSync(join(directory, file)))
-      .map((file) => [
-        file,
-        createHash('sha256')
-          .update(readFileSync(join(directory, file)))
-          .digest('hex')
-      ])
+    ['agent-session-journal.db', 'agent-session-journal.db-wal'].map((file) => {
+      const path = join(directory, file)
+      const bytes = existsSync(path) ? readFileSync(path) : Buffer.alloc(0)
+      if (file === 'agent-session-journal.db') {
+        bytes.fill(0, 18, 20)
+        bytes.fill(0, 24, 28)
+        bytes.fill(0, 92, 96)
+      }
+      return [file, createHash('sha256').update(bytes).digest('hex')]
+    })
   )
 }
 
@@ -150,7 +158,7 @@ describe('a chat this build wrote, opened by a shipped build', () => {
     ['new', 'the writable baseline'],
     ['existing', 'the writable baseline']
   ] as const)(
-    'keeps a %s chat from %s, leaving every byte as it was, and reads whole again after',
+    'keeps a %s chat from %s, preserving saved content and non-bookkeeping bytes, and reads whole again after',
     async (kind, build) => {
       const prefix = await savedChat(kind)
       const before = databaseBytes()
@@ -200,6 +208,7 @@ describe('a chat this build wrote, opened by a shipped build', () => {
         close(directory)
       }
       if (inWindow) {
+        expect(savedContent()).toEqual(saved)
         expect(databaseBytes()).toEqual(before)
       } else {
         const after = savedContent()
@@ -208,12 +217,14 @@ describe('a chat this build wrote, opened by a shipped build', () => {
         ).toEqual([])
       }
       // Upgraded again, this build reads the prefix and its records, the rows still as they were.
-      const database = openTestJournalHostDatabase(directory)
+      const database = await openTestJournalHostDatabase(directory)
       try {
-        const reopened = restoreJournal(database.db, IDENTITY.sessionId)
+        const reopened = await database.read((read) =>
+          restoreJournalAsync(read, IDENTITY.sessionId)
+        )
         expect(reopened).toMatchObject({ newer: null, damage: null })
         expect(reopened?.state.items.size).toBe(kind === 'existing' ? 6 : 3)
-        const rows = liveTestJournalRows(database.db, IDENTITY.sessionId)
+        const rows = await liveTestJournalRows(database, IDENTITY.sessionId)
         expect(rows.slice(0, prefix.length)).toEqual(prefix)
       } finally {
         await closeTestJournalHostDatabase(directory)
@@ -233,34 +244,32 @@ it(
       await appendStatus(seeded, ordinal)
     }
     await older.closeAll()
-    const prefix = liveTestJournalRows(
-      openTestJournalHostDatabase(directory).db,
+    const prefix = await liveTestJournalRows(
+      await openTestJournalHostDatabase(directory),
       IDENTITY.sessionId
     )
     await closeTestJournalHostDatabase(directory)
 
     const journals = createTrackedJournalOpener()
     const journal = await journals.open({ identity: IDENTITY, stateDirectory: directory })
-    const database = openTestJournalHostDatabase(directory)
+    const database = await openTestJournalHostDatabase(directory)
     // The first write fails after its marker is in: at a record, then at COMMIT.
-    database.db.exec(`CREATE TEMP TRIGGER failure BEFORE INSERT ON main.journal_outcomes
+    await mutateTestJournalFixture(database, (db) =>
+      db.exec(`CREATE TRIGGER failure BEFORE INSERT ON main.journal_outcomes
       BEGIN SELECT RAISE(ABORT, 'record failure'); END`)
+    )
     await expect(appendStatus(journal, 3)).rejects.toThrow('record failure')
-    database.db.exec('DROP TRIGGER failure')
-    const exec = database.db.exec.bind(database.db)
-    const commit = vi.spyOn(database.db, 'exec').mockImplementation((sql) => {
-      if (sql === 'COMMIT') {
-        throw new Error('commit failure')
-      }
-      exec(sql)
-    })
+    await mutateTestJournalFixture(database, (db) => db.exec('DROP TRIGGER failure'))
+    await failNextNativeJournalStatement(database, 'COMMIT', 'commit failure')
     await expect(appendStatus(journal, 4)).rejects.toThrow('commit failure')
-    commit.mockRestore()
-    expect(journalOutcomeSource(database.db, IDENTITY.sessionId, journal.epoch)).toBeNull()
+    expect(await database.read((read) => read.source(IDENTITY.sessionId, journal.epoch))).toBeNull()
     expect(
-      database.db.prepare('SELECT COUNT(*) AS n FROM journal_outcome_generations').get()?.n
+      await database.read(
+        async (read) =>
+          (await read.prepare('SELECT COUNT(*) AS n FROM journal_outcome_generations').get())?.n
+      )
     ).toBe(0)
-    expect(liveTestJournalRows(database.db, IDENTITY.sessionId)).toEqual(prefix)
+    expect(await liveTestJournalRows(database, IDENTITY.sessionId)).toEqual(prefix)
     await journals.closeAll()
 
     const checkout = await materializeReleaseCheckout(resolveBaselineReleaseRef())
@@ -287,12 +296,15 @@ it(
         'closeTestJournalHostDatabase'
       )(directory)
     }
-    const reopened = openTestJournalHostDatabase(directory)
+    const reopened = await openTestJournalHostDatabase(directory)
     try {
-      expect(restoreJournal(reopened.db, IDENTITY.sessionId)?.state.items.size).toBe(4)
-      expect(liveTestJournalRows(reopened.db, IDENTITY.sessionId).slice(0, prefix.length)).toEqual(
-        prefix
-      )
+      expect(
+        (await reopened.read((read) => restoreJournalAsync(read, IDENTITY.sessionId)))?.state.items
+          .size
+      ).toBe(4)
+      expect(
+        (await liveTestJournalRows(reopened, IDENTITY.sessionId)).slice(0, prefix.length)
+      ).toEqual(prefix)
     } finally {
       await closeTestJournalHostDatabase(directory)
     }

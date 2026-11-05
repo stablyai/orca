@@ -218,15 +218,12 @@ it('keeps Sleep through history reopen and replay, and clears it atomically with
     const receipt = outcomeReceipt(args)
     return {
       ...receipt,
-      write: (db, row) => {
-        receipt.write(db, row)
-        stagedAwake =
-          db.isTransaction &&
-          db
-            .prepare(
-              "SELECT json_extract(record_json, '$.sleptAt') AS sleptAt FROM agent_session_records WHERE session_id = ?"
-            )
-            .get(SESSION)?.sleptAt === null
+      write: async (plan, row) => {
+        await receipt.write(plan, row)
+        const awake = plan.effects
+          .flatMap((effect) => (effect.kind === 'store' ? effect.writes.records.upsert : []))
+          .find(([id]) => id === SESSION)
+        stagedAwake = awake !== undefined && JSON.parse(awake[1]).sleptAt === undefined
         throw new Error('transaction failed before commit')
       }
     }

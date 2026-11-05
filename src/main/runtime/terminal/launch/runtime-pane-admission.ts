@@ -14,6 +14,7 @@ import type { LayoutRefusalCode } from '../../../../shared/workspace-layout/work
 import type { RuntimePtyController } from '../../runtime-pty-controller-contract'
 import type { RuntimeStore } from '../../runtime-store-contract'
 import type { PaneResumeOutcome } from '../../../../shared/workspace-layout/workspace-layout-published'
+import type { SurfaceRunTarget } from '../../../../shared/workspace-surfaces/surface-allocation'
 import {
   paneStartFailure,
   type PaneResumeOutcomes,
@@ -38,19 +39,22 @@ type AdmittedSpawnArgs = Parameters<Spawn>[0] & {
   /** The group a new tab joins; a split stays in its parent's. */
   groupId?: string
   afterTabId?: string
+  expectedSourceRun?: SurfaceRunTarget | null
 }
 
 /** The pane its placement names: a new tab, or a split beside its parent pane. */
 function admissionFor(args: AdmittedSpawnArgs): TerminalPaneAdmission {
   const { worktreeId: workspace, tabId, leafId, placement } = args
   if (placement?.kind === 'split') {
-    const { parentLeafId, direction } = placement
+    const { parentLeafId, direction, ratio, proposedRoot } = placement
     return {
       type: 'splitPane',
       workspace,
       tabId,
       leafId: parentLeafId,
       direction,
+      ratio,
+      proposedRoot,
       newLeafId: leafId
     }
   }
@@ -95,7 +99,13 @@ export async function withdrawRuntimePane(
   store: RuntimeStore | null | undefined,
   args: AdmittedSpawnArgs
 ): Promise<void> {
-  await withdrawAdmittedPane(store, admissionFor(args), hostIdOf(args))
+  await withdrawAdmittedPane(
+    store,
+    admissionFor(args),
+    hostIdOf(args),
+    undefined,
+    args.surfaceRunTarget
+  )
 }
 
 /** Withdrawal is not user close and stops no launch; stillStarting preserves already-bound or starting panes. */
@@ -103,7 +113,8 @@ export async function withdrawAdmittedPane(
   store: RuntimeStore | null | undefined,
   admission: TerminalPaneAdmission,
   hostId: string | undefined,
-  stillStarting?: () => boolean
+  stillStarting?: () => boolean,
+  expected?: SurfaceRunTarget
 ): Promise<LayoutRefusalCode | 'bound' | 'starting' | null | undefined> {
   const leafId = admission.type === 'createTerminalTab' ? admission.leafId : admission.newLeafId
   const pane = {
@@ -112,7 +123,9 @@ export async function withdrawAdmittedPane(
     tabId: admission.tabId,
     leafId
   }
-  return store?.withdrawTerminalPane?.(pane, hostId, stillStarting)
+  return expected
+    ? store?.withdrawTerminalPane?.(pane, hostId, stillStarting, expected)
+    : store?.withdrawTerminalPane?.(pane, hostId, stillStarting)
 }
 
 /** Writes a pane the runtime asks for into main's copy; what fills it is the caller's. */
@@ -129,15 +142,22 @@ export async function startInAdmittedPane<T>(
   store: RuntimeStore | null | undefined,
   admission: TerminalPaneAdmission,
   hostId: string | undefined,
-  start: (outcome: TerminalPaneAdmissionOutcome | undefined) => Promise<T>,
-  keepOnFailure = false
+  start: (
+    outcome: TerminalPaneAdmissionOutcome | undefined,
+    target?: SurfaceRunTarget
+  ) => Promise<T>,
+  keepOnFailure = false,
+  expectedSource?: SurfaceRunTarget | null
 ): Promise<{ outcome: TerminalPaneAdmissionOutcome | undefined; result: T }> {
-  const outcome = await admitRuntimePane(store, admission, hostId)
+  const admitted = store?.admitTerminalRun
+    ? await store.admitTerminalRun(admission, hostId, expectedSource)
+    : { outcome: await admitRuntimePane(store, admission, hostId), target: undefined }
+  const { outcome, target } = admitted
   try {
-    return { outcome, result: await start(outcome) }
+    return { outcome, result: await (target ? start(outcome, target) : start(outcome)) }
   } catch (error) {
     if (outcome === 'admitted' && !keepOnFailure && !(error instanceof PaneOwnerContentionError)) {
-      await withdrawAdmittedPane(store, admission, hostId)
+      await withdrawAdmittedPane(store, admission, hostId, undefined, target ?? undefined)
     }
     throw error
   }
@@ -150,7 +170,7 @@ export async function spawnInAdmittedPane(
   controller: Pick<RuntimePtyController, 'spawn'>,
   { startStatus, ...args }: AdmittedSpawnArgs & PaneStartArgs
 ): ReturnType<Spawn> {
-  const { groupId: _groupId, afterTabId: _afterTabId, ...spawnArgs } = args
+  const { groupId: _groupId, afterTabId: _afterTabId, expectedSourceRun, ...spawnArgs } = args
   const paneKey = `${args.tabId}:${args.leafId}`
   let admittedAs: TerminalPaneAdmissionOutcome | undefined
   startStatus?.sink.set(paneKey, { status: 'starting' })
@@ -175,7 +195,8 @@ export async function spawnInAdmittedPane(
   }
   let run: { outcome: TerminalPaneAdmissionOutcome | undefined; result: Awaited<ReturnType<Spawn>> }
   const start = async (
-    admitted: TerminalPaneAdmissionOutcome | undefined
+    admitted: TerminalPaneAdmissionOutcome | undefined,
+    target?: SurfaceRunTarget
   ): Promise<Awaited<ReturnType<Spawn>>> => {
     if (admitted !== undefined && admitted !== 'admitted' && admitted !== 'exists') {
       // A tab main recorded closed, or a split whose parent pane left the layout.
@@ -184,6 +205,10 @@ export async function spawnInAdmittedPane(
       )
     }
     admittedAs = admitted
+    if (target) {
+      spawnArgs.surfaceRunTarget = target
+      args.surfaceRunTarget = target
+    }
     // SAFETY: Callers require spawn; a lost capability during admission keeps the original failure.
     return controller.spawn!(spawnArgs)
   }
@@ -196,7 +221,8 @@ export async function spawnInAdmittedPane(
           admissionFor(args),
           hostIdOf(args),
           start,
-          startStatus?.keepOnFailure
+          startStatus?.keepOnFailure,
+          expectedSourceRun
         )
   } catch (error) {
     if (

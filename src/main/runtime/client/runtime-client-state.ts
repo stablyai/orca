@@ -128,7 +128,11 @@ export abstract class OrcaRuntimeWithPtyForegroundProcessReads extends OrcaRunti
 
   protected async stopPtysForDestructiveWorktreeRemoval(
     worktreeId: string,
-    options: { connectionId?: string; allowUnverifiedStop?: boolean } = {}
+    options: {
+      connectionId?: string
+      allowUnverifiedStop?: boolean
+      deferSurfaceRetirement?: boolean
+    } = {}
   ): Promise<void> {
     const { connectionId, allowUnverifiedStop } = options
     // This process has no SSH PTY provider and cannot stop that host's terminals.
@@ -143,6 +147,7 @@ export abstract class OrcaRuntimeWithPtyForegroundProcessReads extends OrcaRunti
       localProvider: provider,
       onPtyStopped: this.onPtyStopped ?? undefined,
       requirePhysicalStop: true,
+      deferSurfaceRetirement: options.deferSurfaceRetirement,
       // #11960: only explicit Force Delete bypasses unverified-stop refusal.
       ...(allowUnverifiedStop ? { allowUnverifiedStop: true } : {})
     })

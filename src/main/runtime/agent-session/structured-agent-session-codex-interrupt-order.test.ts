@@ -96,29 +96,31 @@ async function stop(turnId?: string): Promise<void> {
 }
 
 /** Every end row written for turn-1, as a row or a lifecycle batch's mutation, in order. */
-function turnEndRows(): AgentJournalTurnItem[] {
-  return readTestJournalOutcomes(openTestJournalHostDatabase(root).db, SESSION).flatMap((value) => {
-    if (value.field !== 'items' || value.deleted) {
-      return []
+async function turnEndRows(): Promise<AgentJournalTurnItem[]> {
+  return (await readTestJournalOutcomes(await openTestJournalHostDatabase(root), SESSION)).flatMap(
+    (value) => {
+      if (value.field !== 'items' || value.deleted) {
+        return []
+      }
+      const { body } = fields.items.element.parse(JSON.parse(value.json))
+      return body.kind === 'turn' && body.turnId === 'turn-1' && body.state !== 'running'
+        ? [body]
+        : []
     }
-    const { body } = fields.items.element.parse(JSON.parse(value.json))
-    return body.kind === 'turn' && body.turnId === 'turn-1' && body.state !== 'running'
-      ? [body]
-      : []
-  })
+  )
 }
 
 /** After Stop answers, deliver its pending turn end and verify no intermediate failed status. */
 async function expectInterruptedThroughout(): Promise<void> {
   expect(interrupts).toBe(1)
-  expect(turnEndRows()).toEqual([
+  expect(await turnEndRows()).toEqual([
     expect.objectContaining({ state: 'interrupted', outcome: 'cancellation' })
   ])
 
   turns.end('interrupted')
 
   await vi.waitFor(async () => expect(await owesWork()).toBe(false))
-  const ends = turnEndRows()
+  const ends = await turnEndRows()
   expect(ends.length).toBeGreaterThan(0)
   for (const end of ends) {
     expect(end).toMatchObject({ state: 'interrupted', outcome: 'cancellation' })

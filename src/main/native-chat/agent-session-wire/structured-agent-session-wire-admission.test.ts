@@ -92,7 +92,7 @@ describe('structured agent-session outbound admission', () => {
     })
     expect(epochReset[0]).toMatchObject({ type: 'reset', reset: 'epoch_changed' })
     expectAdmitted(epochReset[0])
-    const epochHistory = readAgentSessionHistory(journal, {
+    const epochHistory = await readAgentSessionHistory(journal, {
       sessionId: SESSION,
       direction: 'before',
       cursor: { epoch: 'retired-epoch', sequence: 1 }
@@ -103,7 +103,7 @@ describe('structured agent-session outbound admission', () => {
     // Epochs no longer shed rows; exercise cursor_compacted via an over-budget legacy page.
     const cursorBefore = journal.cursor()
     const overBudget = await reopenWithOversizedRemoval(cursorBefore.sequence)
-    const history = readAgentSessionHistory(overBudget, {
+    const history = await readAgentSessionHistory(overBudget, {
       sessionId: SESSION,
       direction: 'after',
       cursor: cursorBefore
@@ -169,13 +169,13 @@ async function reopenWithOversizedRemoval(afterSequence: number): Promise<AgentS
     { ...base, kind: 'tombstone', itemId: hugeItemId, revision: 2, seq: afterSequence + 2 }
   ]
   await journal.close()
-  const opened = openTestJournalHostDatabase(root)
+  const opened = await openTestJournalHostDatabase(root)
   try {
-    opened.db.exec('BEGIN IMMEDIATE')
-    for (const row of rows) {
-      insertTestJournalRow(opened.db, SESSION, row)
-    }
-    opened.db.exec('COMMIT')
+    await opened.transaction((plan) => {
+      for (const row of rows) {
+        insertTestJournalRow(plan, SESSION, row)
+      }
+    })
   } finally {
     await opened.close()
   }

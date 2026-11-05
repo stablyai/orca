@@ -27,10 +27,7 @@ import {
   mergeMobileSessionSnapshotTabs,
   mergeMobileSessionTabGroups
 } from '../session-lifecycle/projection/mobile-session-tab-merge'
-import {
-  appendBrowserTabOrder,
-  collectBrowserGroupAssignment
-} from '../mobile-session-browser-group-projection'
+import { appendBrowserTabOrder } from '../mobile-session-browser-group-projection'
 import { headlessMobileSnapshotContentUnchanged } from '../mobile-session-snapshot-equality'
 
 export abstract class OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspaceSession extends RuntimeSessionTabsInventoryPublication {
@@ -252,21 +249,15 @@ export abstract class OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspa
           : mergedActiveTab.id
         : null
       const rebuiltTabGroups: RuntimeMobileSessionTabGroup[] = hasPersistedSplit
-        ? appendBrowserTabOrder(
-            distributeHeadlessTabsAcrossGroups(
-              persistedGroups.map((group) => ({
-                id: group.id,
-                activeTabId: group.activeTabId,
-                tabOrder: [...group.tabOrder],
-                ...(group.recentTabIds ? { recentTabIds: [...group.recentTabIds] } : {})
-              })),
-              collectHeadlessParentTabOrder(mergedTerminalTabs),
-              activeTopLevelId
-            ),
-            mergedBrowserOrder,
-            undefined,
-            // Terminal-only distribution drops browsers; retain their persisted groups separately.
-            collectBrowserGroupAssignment(persistedGroups, mergedBrowserOrder)
+        ? distributeHeadlessTabsAcrossGroups(
+            persistedGroups.map((group) => ({
+              id: group.id,
+              activeTabId: group.activeTabId,
+              tabOrder: [...group.tabOrder],
+              ...(group.recentTabIds ? { recentTabIds: [...group.recentTabIds] } : {})
+            })),
+            [...collectHeadlessParentTabOrder(mergedTerminalTabs), ...mergedBrowserOrder],
+            activeTopLevelId
           )
         : options.onlyRuntimeOwnedTerminals === true && existing?.tabGroups
           ? appendBrowserTabOrder(

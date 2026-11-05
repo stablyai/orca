@@ -21,7 +21,7 @@ import {
 import type { WorktreePtyHostFence } from '../../workspaces/removal/worktree-pty-host-fence'
 import { collectWorktreePtyIds } from './worktree-pty-collection'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import { withMainBoundLeaves } from '../surface/main-terminal-surfaces'
+import { withMainBoundLeaves } from '../surface/main-terminal-surface-observations'
 import { mainHoldsTerminal } from '../surface/main-pane-verdict'
 import { summarizeWorktreePtyStopVerdict } from '../../workspaces/removal/worktree-pty-stop-verdict'
 import { describeMobileSessionTabCloseRefusal } from '../../session-lifecycle/close/mobile-session-tab-close-refusal-message'
@@ -120,7 +120,7 @@ export abstract class OrcaRuntimeWithStopTerminalsForWorktree extends OrcaRuntim
     hostId: ExecutionHostId,
     closedTabIds: readonly string[]
   ): Promise<void> {
-    await this.commitWorkspaceSessionEdit(hostId, (session) =>
+    await this.commitWorkspaceResumeRecordEdit(hostId, (session) =>
       clearClosedWorktreeResumeRecords(session, worktreeId, closedTabIds)
     )
   }

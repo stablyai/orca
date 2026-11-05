@@ -50,7 +50,7 @@ afterEach(async () => {
 async function itemsFor(frames: Record<string, unknown>[]) {
   const journal = await openAgentSessionJournal({
     identity: IDENTITY,
-    database: openTestJournalHostDatabase(root),
+    database: await openTestJournalHostDatabase(root),
     now: () => 1_700_000_000_000,
     mintEpoch: () => 'epoch-1'
   })

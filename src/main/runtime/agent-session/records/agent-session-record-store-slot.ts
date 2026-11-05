@@ -1,13 +1,23 @@
+import {
+  installSurfaceNativeRuntimeOwner,
+  type SurfaceNativeRuntimeOwner
+} from '../../../workspace-surfaces/surface-native-runtime-owner'
 import { sessionCrewChanges } from '../../orchestration/crew/crew-changes'
 // Launch admission opens the single-writer store before chat-host installation; both must reuse this instance.
 // Quit-only edge: failed host teardown can leave its connection open after releasing the slot; a post-stop open lasts until exit.
 
 import { existsSync } from 'node:fs'
-import { journalDatabasePath } from '../../../native-chat/agent-session-journal/journal-host-database'
-import { journalDatabaseHoldsAgentSessions } from '../../../native-chat/agent-session-journal/journal-database'
+import {
+  type JournalHostDatabase,
+  journalDatabasePath
+} from '../../../native-chat/agent-session-journal/journal-host-database'
 import { AgentSessionRecordStore } from './agent-session-record-store'
-import type { JournalHostDatabase } from '../../../native-chat/agent-session-journal/journal-host-database'
-import { openStructuredAgentSessionJournalDatabase } from '../structured-agent-session-journal-open'
+import {
+  openSurfaceJournalOnce,
+  surfaceJournalHoldsSessions,
+  releaseSurfaceJournal,
+  closeSurfaceJournal
+} from '../../../workspace-surfaces/surface-journal-slot'
 import type { StructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/structured-agent-session-logger'
 
 export type AgentSessionRecordStoreLocation = {
@@ -15,6 +25,7 @@ export type AgentSessionRecordStoreLocation = {
   hostId: string
   logger: StructuredAgentSessionLogger
   legacySessionTabIds: readonly string[]
+  surfaceOwner?: SurfaceNativeRuntimeOwner
 }
 
 export type OpenedAgentSessionRecordStore = {
@@ -30,19 +41,12 @@ type RecordStoreSlot = {
 }
 
 let opening: RecordStoreSlot | null = null
-const pendingDatabaseClose = new Set<JournalHostDatabase>()
 
 /** Keep failed standalone/open-failure closes owned until a later stop or open retries them. */
 export async function closeAgentSessionRecordStoreDatabase(
   database?: JournalHostDatabase
 ): Promise<void> {
-  if (database) {
-    pendingDatabaseClose.add(database)
-  }
-  for (const pending of pendingDatabaseClose) {
-    await pending.close()
-    pendingDatabaseClose.delete(pending)
-  }
+  await closeSurfaceJournal(database)
 }
 
 export function openAgentSessionRecordStoreOnce(
@@ -86,19 +90,22 @@ async function openRecordStore(
   location: AgentSessionRecordStoreLocation
 ): Promise<OpenedAgentSessionRecordStore> {
   await closeAgentSessionRecordStoreDatabase()
-  const journalDatabase = openStructuredAgentSessionJournalDatabase(location)
-  try {
-    return {
+  const journalDatabase = await openSurfaceJournalOnce(location)
+  if (location.surfaceOwner) {
+    await installSurfaceNativeRuntimeOwner(
       journalDatabase,
-      store: AgentSessionRecordStore.open({
-        journalDatabase,
-        hostId: location.hostId,
-        legacySessionTabIds: location.legacySessionTabIds
-      })
-    }
-  } catch (error) {
-    await closeAgentSessionRecordStoreDatabase(journalDatabase)
-    throw error
+      location.surfaceOwner,
+      location.hostId,
+      location.legacySessionTabIds
+    )
+  }
+  return {
+    journalDatabase,
+    store: await AgentSessionRecordStore.open({
+      journalDatabase,
+      hostId: location.hostId,
+      legacySessionTabIds: location.legacySessionTabIds
+    })
   }
 }
 
@@ -106,23 +113,29 @@ async function openRecordStore(
 export async function releaseAgentSessionRecordStore(): Promise<OpenedAgentSessionRecordStore | null> {
   const released = opening
   opening = null
+  // A terminal-only runtime has a journal but no provider record-store instance.
+  const journalDatabase = await releaseSurfaceJournal()
   if (released) {
     sessionCrewChanges.notify(new Set(['topology', 'records']))
   }
-  return released ? released.opened.catch(() => null) : null
+  const records = released ? await released.opened.catch(() => null) : null
+  if (!records && journalDatabase) {
+    await closeAgentSessionRecordStoreDatabase(journalDatabase)
+  }
+  return records
 }
 
 /** Whether this profile holds a structured chat: a record or tab in the journal database. */
-export function hasPersistedStructuredAgentSessionStore(
+export async function hasPersistedStructuredAgentSessionStore(
   stateDirectory: string,
   fileExists: (path: string) => boolean = existsSync
-): boolean {
+): Promise<boolean> {
   const databasePath = journalDatabasePath(stateDirectory)
   if (!fileExists(databasePath)) {
     return false
   }
   try {
-    return journalDatabaseHoldsAgentSessions(databasePath)
+    return await surfaceJournalHoldsSessions(stateDirectory)
   } catch {
     // A database that cannot be read cannot say it is empty.
     return true

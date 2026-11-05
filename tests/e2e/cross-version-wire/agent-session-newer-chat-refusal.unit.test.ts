@@ -1,3 +1,4 @@
+import { mutateTestJournalFixture } from '../../../src/main/native-chat/agent-session-journal/journal-drained-fixture-test-support'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -110,18 +111,17 @@ async function journalWithNewerRow(
     ...row
   })
   await journals.closeAll()
-  insertTestJournalRowJson(
-    openTestJournalHostDatabase(directory).db,
-    IDENTITY.sessionId,
-    seq,
-    newer,
-    2_000
+  await mutateTestJournalFixture(await openTestJournalHostDatabase(directory), (db) =>
+    insertTestJournalRowJson(db, IDENTITY.sessionId, seq, newer, 2_000)
   )
   return { rows: await storedRows(), newer }
 }
 
 async function storedRows(): Promise<string[]> {
-  const rows = liveTestJournalRows(openTestJournalHostDatabase(directory).db, IDENTITY.sessionId)
+  const rows = await liveTestJournalRows(
+    await openTestJournalHostDatabase(directory),
+    IDENTITY.sessionId
+  )
   await closeTestJournalHostDatabase(directory)
   return rows.map((row) => row.rowJson)
 }

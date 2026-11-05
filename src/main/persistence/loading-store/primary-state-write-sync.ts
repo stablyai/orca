@@ -1,3 +1,4 @@
+import { invalidateImportedSurfaceAdmissions } from '../../workspace-surfaces/surface-admission-capture'
 import { writeSelectiveProfileState } from './profile-state-selective-write'
 import type { PrimaryStateWriteOperationsContext } from './primary-state-write-context'
 import {
@@ -38,6 +39,7 @@ export function writeToDiskSync(
     if (selective.aborted) {
       return false
     }
+    invalidateImportedSurfaceAdmissions(runtime)
     if (selective.consumedAutomationRuns) {
       runtime.pendingAutomationRunsAfter = undefined
     }
@@ -66,6 +68,7 @@ export function writeToDiskSync(
   } else {
     authority.writeSerializedState(built.payload)
   }
+  invalidateImportedSurfaceAdmissions(runtime)
   runtime.dirtyProfileStateDomains = new Set()
   runtime.pendingAutomationRunsAfter = undefined
   if (!isCurrent || isCurrent()) {

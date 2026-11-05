@@ -1,3 +1,10 @@
+import { mutateTestJournalFixture } from './journal-drained-fixture-test-support'
+import { restoreJournalAsync, readJournalRowsAfterCursorAsync } from './journal-async-open'
+import {
+  updateTestJournalRowJson,
+  setTestJournalTrigger,
+  setTestJournalOutcomeFormat
+} from './journal-native-fixture-test-support'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { journalInputSourceBody } from './journal-input-source'
 import { readFileSync } from 'node:fs'
@@ -15,7 +22,6 @@ import {
   liveTestJournalRows
 } from './journal-host-database-test-support'
 import type { JournalHostDatabase } from './journal-host-database'
-import { readJournalRowsAfterCursor, restoreJournal } from './journal-open'
 import { parseJournalRow, type JournalRow } from './journal-row-schema'
 import { publishNewEpoch } from './journal-epoch-rollover'
 import {
@@ -39,7 +45,7 @@ const experimentRoots: string[] = []
 const rigs: ReturnType<typeof projectionWriter>[] = []
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-journal-outcome-prefix-'))
-  database = openTestJournalHostDatabase(root)
+  database = await openTestJournalHostDatabase(root)
   vi.spyOn(console, 'warn').mockImplementation(() => {})
 })
 afterEach(async () => {
@@ -72,20 +78,25 @@ const tombstone = (seq: number, itemId: string): JournalRow => ({
 it("keeps an existing chat's rows byte for byte, starts its records after one appended marker, and reopens prefix plus records as live", async () => {
   // A prefix holding a, b, c, d; then b changes in place, a is deleted, c is deleted and recreated,
   // and e is new: the live map reads b, d, c, e.
-  seedProjectionRows(database, [
+  await seedProjectionRows(database, [
     projectionEpochRow,
     ...['a', 'b', 'c', 'd'].map((id, index) => item(index + 2, id))
   ])
-  const original = liveTestJournalRows(database.db, sessionId)
-  const rig = projectionWriter(database, restoreJournal(database.db, sessionId)!.state)
+  const original = await liveTestJournalRows(database, sessionId)
+  const rig = projectionWriter(
+    database,
+    (await database.read((read) => restoreJournalAsync(read, sessionId)))!.state
+  )
   rigs.push(rig)
   await rig.writer.enqueue((seq, ts) => ({ ...item(seq, 'b'), ts }))
   // The first record holds only the row's own transition, never a snapshot of the prefix.
   expect(
-    database.db
-      .prepare(`SELECT field, entry_key, ordinal FROM journal_outcomes
+    await database.read((read) =>
+      read
+        .prepare(`SELECT field, entry_key, ordinal FROM journal_outcomes
       WHERE field != '$'`)
-      .all()
+        .all()
+    )
   ).toEqual([{ field: 'items', entry_key: '"b"', ordinal: 'b' }])
   for (const row of [
     (seq: number) => tombstone(seq, 'a'),
@@ -96,37 +107,45 @@ it("keeps an existing chat's rows byte for byte, starts its records after one ap
     await rig.writer.enqueue((seq, ts) => ({ ...row(seq), ts }))
   }
 
-  const rows = liveTestJournalRows(database.db, sessionId)
+  const rows = await liveTestJournalRows(database, sessionId)
   expect(rows.slice(0, original.length)).toEqual(original)
   expect(rows).toHaveLength(original.length + 1)
   // Shipped readers refuse the marker wherever it sits; it was never written over a row.
   expect(rows.at(-1)?.seq).toBe(original.length + 1)
   expect(parseJournalRow(rows.at(-1)!.rowJson)).toEqual({ ok: false, unreadable: true })
   expect([...rig.state().items.keys()]).toEqual(['b', 'd', 'c', 'e'])
-  expectProjectionMatches(database, rig.state())
+  await expectProjectionMatches(database, rig.state())
 
   // Catch-up pages the prefix rows, then the record groups, each sequence once.
-  const read = (after: number, limit?: number) =>
-    readJournalRowsAfterCursor(database.db, sessionId, epoch, after, limit).rows.map(
-      (row) => row.seq
-    )
-  expect(read(0)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
-  expect(read(3, 4)).toEqual([4, 5, 6, 7])
-  expect(read(5, 2)).toEqual([6, 7])
-  expect(read(7)).toEqual([8, 9, 10])
+  const read = async (after: number, limit?: number) =>
+    (
+      await database.read((read) =>
+        readJournalRowsAfterCursorAsync(read, sessionId, epoch, after, limit)
+      )
+    ).rows.map((row) => row.seq)
+  expect(await read(0)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+  expect(await read(3, 4)).toEqual([4, 5, 6, 7])
+  expect(await read(5, 2)).toEqual([6, 7])
+  expect(await read(7)).toEqual([8, 9, 10])
 })
 
 it('keeps a record that updated a prefix key when a later prefix fold no longer yields that key', async () => {
-  seedProjectionRows(database, [projectionEpochRow, item(2, 'a'), item(3, 'b')])
-  const rig = projectionWriter(database, restoreJournal(database.db, sessionId)!.state)
+  await seedProjectionRows(database, [projectionEpochRow, item(2, 'a'), item(3, 'b')])
+  const rig = projectionWriter(
+    database,
+    (await database.read((read) => restoreJournalAsync(read, sessionId)))!.state
+  )
   rigs.push(rig)
   await rig.writer.enqueue((seq, ts) => ({ ...item(seq, 'b'), ts }))
   await rig.writer.enqueue((seq, ts) => ({ ...item(seq, 'c'), ts }))
   // A later reducer reads the old row for b as another item: the prefix no longer holds b.
-  database.db
-    .prepare('UPDATE journal_rows SET row_json = ? WHERE session_id = ? AND seq = 3')
-    .run(JSON.stringify({ ...item(3, 'renamed'), revision: 3 }), sessionId)
-  const restored = restoreJournal(database.db, sessionId)
+  await updateTestJournalRowJson(
+    database,
+    sessionId,
+    3,
+    JSON.stringify({ ...item(3, 'renamed'), revision: 3 })
+  )
+  const restored = await database.read((read) => restoreJournalAsync(read, sessionId))
   expect(restored).toMatchObject({ newer: null, damage: null })
   // b keeps its newest value, appended after the prefix and before the tail's own keys.
   expect([...restored!.state.items.keys()]).toEqual(['a', 'renamed', 'b', 'c'])
@@ -134,36 +153,40 @@ it('keeps a record that updated a prefix key when a later prefix fold no longer 
 })
 
 it('fences opens and every writer before mutation, while the old parser refuses the founding row', async () => {
-  const state = seedOutcomeRows(database, [projectionEpochRow, item(2)])
-  const anchor = liveTestJournalRows(database.db, sessionId)[0]
+  const state = await seedOutcomeRows(database, [projectionEpochRow, item(2)])
+  const anchor = (await liveTestJournalRows(database, sessionId))[0]
   expect(anchor && parseJournalRow(anchor.rowJson)).toEqual({ ok: false, unreadable: true })
   const rig = projectionWriter(database, state)
   rigs.push(rig)
-  database.db.prepare('UPDATE journal_outcome_epochs SET format = 99').run()
-  expect(restoreJournal(database.db, sessionId)).toMatchObject({
+  await setTestJournalOutcomeFormat(database, 99)
+  expect(await database.read((read) => restoreJournalAsync(read, sessionId))).toMatchObject({
     newer: { sequence: 1 },
     damage: null
   })
-  const before = database.db
-    .prepare('SELECT * FROM journal_outcomes ORDER BY seq, field, entry_key')
-    .all()
+  const before = await database.read((read) =>
+    read.prepare('SELECT * FROM journal_outcomes ORDER BY seq, field, entry_key').all()
+  )
   await expect(rig.writer.enqueue((seq) => item(seq))).rejects.toMatchObject({
     code: 'journal_read_only'
   })
   expect(
-    database.db.prepare('SELECT * FROM journal_outcomes ORDER BY seq, field, entry_key').all()
+    await database.read((read) =>
+      read.prepare('SELECT * FROM journal_outcomes ORDER BY seq, field, entry_key').all()
+    )
   ).toEqual(before)
   expect(rig.state()).toBe(state)
   // Missing remains distinct from unsupported for ACP's resume and loss-warning decisions.
-  expect(restoreJournal(database.db, 'missing-session')).toBeNull()
+  expect(await database.read((read) => restoreJournalAsync(read, 'missing-session'))).toBeNull()
 })
 
 // The check runs inside the publishing transaction, against the epoch the caller last saw.
-it('refuses to publish a new epoch over one the caller did not see, writing nothing', () => {
-  seedOutcomeRows(database, [projectionEpochRow, item(2)])
-  const before = database.db.prepare('SELECT * FROM journal_rows ORDER BY seq').all()
+it('refuses to publish a new epoch over one the caller did not see, writing nothing', async () => {
+  await seedOutcomeRows(database, [projectionEpochRow, item(2)])
+  const before = await database.read((read) =>
+    read.prepare('SELECT * FROM journal_rows ORDER BY seq').all()
+  )
   const committed = vi.fn()
-  expect(() =>
+  await expect(
     publishNewEpoch({
       database,
       identity: {
@@ -181,10 +204,14 @@ it('refuses to publish a new epoch over one the caller did not see, writing noth
       queue: { cards: [], receipt: { write: () => {}, committed } },
       onPublished: committed
     })
-  ).toThrow(expect.objectContaining({ code: 'journal_row_rejected' }))
+  ).rejects.toMatchObject({ code: 'journal_row_rejected' })
   expect(committed).not.toHaveBeenCalled()
-  expect(database.db.prepare('SELECT * FROM journal_rows ORDER BY seq').all()).toEqual(before)
-  expect(restoreJournal(database.db, sessionId)?.state.epoch).toBe(epoch)
+  expect(
+    await database.read((read) => read.prepare('SELECT * FROM journal_rows ORDER BY seq').all())
+  ).toEqual(before)
+  expect((await database.read((read) => restoreJournalAsync(read, sessionId)))?.state.epoch).toBe(
+    epoch
+  )
 })
 
 const historicalFixture = z
@@ -233,8 +260,11 @@ function frozenDatabase() {
 }
 
 // Exact rows/outcomes and public values captured from the pinned writers, before/after real cleanup.
-function seedFrozen(db: JournalHostDatabase, fixture: z.output<ReturnType<typeof frozenDatabase>>) {
-  db.transaction((connection) => {
+async function seedFrozen(
+  db: JournalHostDatabase,
+  fixture: z.output<ReturnType<typeof frozenDatabase>>
+) {
+  await mutateTestJournalFixture(db, (connection) => {
     connection
       .prepare('INSERT INTO journal_sessions VALUES (?, ?, ?)')
       .run(fixture.session.session_id, fixture.session.workspace_id, fixture.session.epoch)
@@ -268,8 +298,8 @@ function seedFrozen(db: JournalHostDatabase, fixture: z.output<ReturnType<typeof
 }
 
 it('main-outcome-old-prefix-source-roundtrip', async () => {
-  const readJournalHistoricalInputs = (db: Parameters<typeof restoreJournal>[0], id: string) => {
-    const load = restoreJournal(db, id)
+  const readJournalHistoricalInputs = async (db: JournalHostDatabase, id: string) => {
+    const load = await db.read((read) => restoreJournalAsync(read, id))
     return load && { load, sources: load.state.inputs.sources }
   }
   const { strictJournalInputSource } = await import('./journal-input-source-schema')
@@ -284,9 +314,9 @@ it('main-outcome-old-prefix-source-roundtrip', async () => {
     role: 'user',
     blocks: [{ type: 'text', text }]
   })
-  seedFrozen(database, historicalFixture.prefix)
-  const before = liveTestJournalRows(database.db, sessionId)
-  const current = readJournalHistoricalInputs(database.db, sessionId)!.load
+  await seedFrozen(database, historicalFixture.prefix)
+  const before = await liveTestJournalRows(database, sessionId)
+  const current = (await readJournalHistoricalInputs(database, sessionId))!.load
   expect(current).toMatchObject({ newer: null, damage: null })
   const encoded = encodeJournalState(current.state)
   const { inputEntries, inputCards, ...common } = z
@@ -305,26 +335,26 @@ it('main-outcome-old-prefix-source-roundtrip', async () => {
     state: 'withdrawn',
     body: words('final edit')
   })
-  expect(liveTestJournalRows(database.db, sessionId)).toEqual(before)
+  expect(await liveTestJournalRows(database, sessionId)).toEqual(before)
   expect(JSON.parse(before.at(-1)!.rowJson)).toMatchObject({ v: 5 })
 
   const rawRoot = await mkdtemp(join(tmpdir(), 'orca-32267-raw-fixture-'))
   experimentRoots.push(rawRoot)
-  const rawDb = openTestJournalHostDatabase(rawRoot)
-  seedFrozen(rawDb, historicalFixture.raw)
-  const raw = readJournalHistoricalInputs(rawDb.db, sessionId)!.load
+  const rawDb = await openTestJournalHostDatabase(rawRoot)
+  await seedFrozen(rawDb, historicalFixture.raw)
+  const raw = (await readJournalHistoricalInputs(rawDb, sessionId))!.load
   expect(raw).toMatchObject({ newer: null, damage: null })
   expect([...raw.state.inputs.sources]).toEqual(historicalFixture.rawSources)
   expect(raw.state.queue.cards.get('raw-Q')?.recovers).toBe('raw-U')
-  const unsupported = liveTestJournalRows(rawDb.db, sessionId)
+  const unsupported = (await liveTestJournalRows(rawDb, sessionId))
     .at(-1)!
     .rowJson.replace('recovers', 'notADeclaredSource')
   expect(parseJournalRow(unsupported, true)).toEqual({ ok: false, unreadable: true })
 
   const { startJournalOutcomeLog, JOURNAL_OUTCOME_MARKER_VERSION } =
     await import('./journal-outcome-format')
-  const rawPrefix = liveTestJournalRows(rawDb.db, sessionId)
-  rawDb.transaction((db) => {
+  const rawPrefix = await liveTestJournalRows(rawDb, sessionId)
+  await mutateTestJournalFixture(rawDb, (db) => {
     startJournalOutcomeLog(db, sessionId, epoch, raw.state.lastSequence, 20_000)
     const marker = { v: 6, kind: 'outcomes', epoch, seq: raw.state.lastSequence + 1, ts: 20_000 }
     db.prepare('UPDATE journal_rows SET row_json=? WHERE session_id=? AND epoch=? AND seq=?').run(
@@ -335,19 +365,21 @@ it('main-outcome-old-prefix-source-roundtrip', async () => {
     )
   })
   expect(JOURNAL_OUTCOME_MARKER_VERSION).toBe(6)
-  expect(liveTestJournalRows(rawDb.db, sessionId).slice(0, rawPrefix.length)).toEqual(rawPrefix)
-  const dispatchedRaw = readJournalHistoricalInputs(rawDb.db, sessionId)!.load
+  expect((await liveTestJournalRows(rawDb, sessionId)).slice(0, rawPrefix.length)).toEqual(
+    rawPrefix
+  )
+  const dispatchedRaw = (await readJournalHistoricalInputs(rawDb, sessionId))!.load
   expect(dispatchedRaw).toMatchObject({ newer: null, damage: null })
   expect([...dispatchedRaw.state.inputs.sources]).toEqual(historicalFixture.rawSources)
   expect(dispatchedRaw.state.queue.cards.get('raw-Q')?.recovers).toBe('raw-U')
-  expect(restoreJournal(rawDb.db, sessionId)?.newer).toBeNull()
+  expect((await rawDb.read((read) => restoreJournalAsync(read, sessionId)))?.newer).toBeNull()
 
   const stoppedRoot = await mkdtemp(join(tmpdir(), 'orca-32267-stop-fixture-'))
   experimentRoots.push(stoppedRoot)
-  let stoppedDb = openTestJournalHostDatabase(stoppedRoot)
-  seedFrozen(stoppedDb, historicalFixture.stopped)
-  const selected = () => {
-    const historical = readJournalHistoricalInputs(stoppedDb.db, sessionId)!
+  let stoppedDb = await openTestJournalHostDatabase(stoppedRoot)
+  await seedFrozen(stoppedDb, historicalFixture.stopped)
+  const selected = async () => {
+    const historical = (await readJournalHistoricalInputs(stoppedDb, sessionId))!
     const state = historical.load.state
     expect(state.submissions.get('stopped-U')).toMatchObject({
       dispatchState: 'rejected',
@@ -378,7 +410,7 @@ it('main-outcome-old-prefix-source-roundtrip', async () => {
       words('next human words')
     )
   }
-  expect(selected()).toEqual(historicalFixture.oldStoppedCarry)
+  expect(await selected()).toEqual(historicalFixture.oldStoppedCarry)
   const firstItem = historicalFixture.stopped.outcomes.find(
     ([, field, key]) => field === 'items' && key === JSON.stringify('orca:stopped-U')
   )!
@@ -387,24 +419,30 @@ it('main-outcome-old-prefix-source-roundtrip', async () => {
   // Apply the exact removal set from the real pinned cleaner; immutable record bytes stay unchanged.
   for (const [seq, field, key] of historicalFixture.stopped.outcomes) {
     if (!kept.has(JSON.stringify([seq, field, key]))) {
-      stoppedDb.db
-        .prepare(
-          'DELETE FROM journal_outcomes WHERE generation=1 AND seq=? AND field=? AND entry_key=?'
-        )
-        .run(seq, field, key)
+      await mutateTestJournalFixture(stoppedDb, (db) =>
+        db
+          .prepare(
+            'DELETE FROM journal_outcomes WHERE generation=1 AND seq=? AND field=? AND entry_key=?'
+          )
+          .run(seq, field, key)
+      )
     }
   }
   expect(kept.size).toBeLessThan(historicalFixture.stopped.outcomes.length)
   await closeTestJournalHostDatabases()
-  stoppedDb = openTestJournalHostDatabase(stoppedRoot)
-  expect(selected()).toEqual(historicalFixture.oldStoppedCarry)
+  stoppedDb = await openTestJournalHostDatabase(stoppedRoot)
+  expect(await selected()).toEqual(historicalFixture.oldStoppedCarry)
   const wrong = { ...JSON.parse(firstItem[5]), sequence: 999 }
-  stoppedDb.db
-    .prepare(
-      "UPDATE journal_outcomes SET value_json=? WHERE generation=1 AND seq=? AND field='items' AND entry_key=?"
-    )
-    .run(JSON.stringify(wrong), firstItem[0], firstItem[2])
-  expect(readJournalHistoricalInputs(stoppedDb.db, sessionId)!.sources.has('stopped-U')).toBe(false)
+  await mutateTestJournalFixture(stoppedDb, (db) =>
+    db
+      .prepare(
+        "UPDATE journal_outcomes SET value_json=? WHERE generation=1 AND seq=? AND field='items' AND entry_key=?"
+      )
+      .run(JSON.stringify(wrong), firstItem[0], firstItem[2])
+  )
+  expect((await readJournalHistoricalInputs(stoppedDb, sessionId))!.sources.has('stopped-U')).toBe(
+    false
+  )
 })
 
 registerRetainedOutcomeContract()
@@ -460,12 +498,8 @@ it.each(['prefix', 'zero', 'recreated'] as const)(
         inputOrderContext: { source: { epoch, sequence: 6 }, basis: 'observed', cut: 6 }
       }
     ]
-    if (path !== 'zero') {
-      seedProjectionRows(database, rows)
-    } else {
-      seedOutcomeRows(database, rows)
-    }
-    let state = restoreJournal(database.db, sessionId)!.state
+    await (path !== 'zero' ? seedProjectionRows : seedOutcomeRows)(database, rows)
+    let state = (await database.read((read) => restoreJournalAsync(read, sessionId)))!.state
     const first = projectionWriter(database, state)
     rigs.push(first)
     await first.writer.enqueue((seq, ts): JournalRow => ({
@@ -494,11 +528,9 @@ it.each(['prefix', 'zero', 'recreated'] as const)(
       }))
     }
     // These ordinary records are admitted by the frozen format-1 contract; old writers had no native families.
-    database.db.exec(
-      "DELETE FROM journal_outcomes WHERE field IN ('inputEntries','inputCards'); UPDATE journal_outcomes SET format=1; UPDATE journal_outcome_epochs SET format=1"
-    )
-    const prefix = liveTestJournalRows(database.db, sessionId)
-    const restored = restoreJournal(database.db, sessionId)!
+    await setTestJournalOutcomeFormat(database, 1, true)
+    const prefix = await liveTestJournalRows(database, sessionId)
+    const restored = (await database.read((read) => restoreJournalAsync(read, sessionId)))!
     expect(restored).toMatchObject({ newer: null, damage: null })
     state = restored.state
     expect(state.queue.cards.get('D')?.body.blocks).toEqual([{ type: 'text', text: 'latest D' }])
@@ -516,33 +548,48 @@ it.each(['prefix', 'zero', 'recreated'] as const)(
     }
     const rig = projectionWriter(database, state)
     rigs.push(rig)
-    database.db.exec(
-      "CREATE TRIGGER no_upgrade BEFORE UPDATE ON journal_outcome_epochs BEGIN SELECT RAISE(ABORT, 'upgrade failed'); END"
-    )
+    await setTestJournalTrigger(database, {
+      name: 'no_upgrade',
+      event: 'UPDATE',
+      table: 'journal_outcome_epochs',
+      message: 'upgrade failed'
+    })
     await expect(rig.writer.enqueue((seq) => item(seq, 'upgrade'))).rejects.toThrow(
       'upgrade failed'
     )
-    database.db.exec('DROP TRIGGER no_upgrade')
+    await setTestJournalTrigger(database, { remove: 'no_upgrade' })
     expect(
-      database.db
-        .prepare(
-          "SELECT COUNT(*) AS n FROM journal_outcomes WHERE field IN ('inputEntries','inputCards')"
+      (
+        await database.read((read) =>
+          read
+            .prepare(
+              "SELECT COUNT(*) AS n FROM journal_outcomes WHERE field IN ('inputEntries','inputCards')"
+            )
+            .get()
         )
-        .get()?.n
+      )?.n
     ).toBe(0)
     expect(rig.state().items.has('upgrade')).toBe(false)
-    expect(liveTestJournalRows(database.db, sessionId)).toEqual(prefix)
+    expect(await liveTestJournalRows(database, sessionId)).toEqual(prefix)
     await rig.writer.enqueue((seq) => item(seq, 'upgrade'))
-    expect(database.db.prepare('SELECT format FROM journal_outcome_epochs').get()?.format).toBe(2)
-    expectProjectionMatches(database, rig.state())
-    const native = database.db
-      .prepare(
-        "SELECT field, entry_key FROM journal_outcomes WHERE field IN ('inputEntries','inputCards')"
-      )
-      .all()
+    expect(
+      (
+        await database.read((read) =>
+          read.prepare('SELECT format FROM journal_outcome_epochs').get()
+        )
+      )?.format
+    ).toBe(2)
+    await expectProjectionMatches(database, rig.state())
+    const native = await database.read((read) =>
+      read
+        .prepare(
+          "SELECT field, entry_key FROM journal_outcomes WHERE field IN ('inputEntries','inputCards')"
+        )
+        .all()
+    )
     expect(native).toHaveLength(3)
     expect(native).toContainEqual({ field: 'inputEntries', entry_key: '"M"' })
-    expect(liveTestJournalRows(database.db, sessionId)).toEqual(prefix)
+    expect(await liveTestJournalRows(database, sessionId)).toEqual(prefix)
     await rig.writer.enqueue((seq): JournalRow => ({
       ...base(seq),
       kind: 'dispatch',
@@ -551,13 +598,19 @@ it.each(['prefix', 'zero', 'recreated'] as const)(
       providerItemId: null,
       reason: null
     }))
-    expectProjectionMatches(database, rig.state())
-    expect(restoreJournal(database.db, sessionId)!.state.inputEntries.size).toBe(0)
+    await expectProjectionMatches(database, rig.state())
     expect(
-      journalInputOrder(restoreJournal(database.db, sessionId)!.state).firstQueued()
+      (await database.read((read) => restoreJournalAsync(read, sessionId)))!.state.inputEntries.size
+    ).toBe(0)
+    expect(
+      journalInputOrder(
+        (await database.read((read) => restoreJournalAsync(read, sessionId)))!.state
+      ).firstQueued()
     ).toBeUndefined()
     // A later unrelated write cannot revive the old prefix's own component.
     await rig.writer.enqueue((seq) => item(seq, 'after-retirement'))
-    expect(restoreJournal(database.db, sessionId)!.state.inputEntries.size).toBe(0)
+    expect(
+      (await database.read((read) => restoreJournalAsync(read, sessionId)))!.state.inputEntries.size
+    ).toBe(0)
   }
 )

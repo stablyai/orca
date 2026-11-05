@@ -18,8 +18,7 @@ import { resolveTerminalPtyOwner } from '@/lib/terminal-worktree-route'
 import { resolveTerminalTeardownOwner } from './terminal-teardown-owner'
 import { removePanesAttention } from '../slices/workspace-attention/subject-attention-transitions'
 import { settleAttentionRemovedBy } from '../slices/workspace-attention/attention-removal-follow-up'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import { recordPaneSleepThroughLayoutOwner } from './terminal-sleep-layout-owner'
+import { commitPaneSleepThroughLayoutOwner } from './terminal-sleep-layout-owner'
 
 export function createTerminalPaneHibernationActions(
   set: TerminalStoreSet,
@@ -102,6 +101,13 @@ export function createTerminalPaneHibernationActions(
           replacedSleepingRecords[key] = existing
         }
       }
+      const resumeRecords = Object.fromEntries(
+        Object.entries(sleepingAgentSessionRecords).map(([key, record]) => [
+          key,
+          { ...record, origin: 'live' as const }
+        ])
+      )
+      let durableResume = false
       const rollbackTargetShutdownState = (): void => {
         set((s) => {
           const next = { ...s.suppressedPtyExitIds }
@@ -109,7 +115,7 @@ export function createTerminalPaneHibernationActions(
             delete next[ptyId]
           }
           const nextSleeping = { ...s.sleepingAgentSessionsByPaneKey }
-          for (const key of sleepingRecordKeys) {
+          for (const key of durableResume ? [] : sleepingRecordKeys) {
             const replaced = replacedSleepingRecords[key]
             if (replaced) {
               nextSleeping[key] = replaced
@@ -127,9 +133,20 @@ export function createTerminalPaneHibernationActions(
         },
         sleepingAgentSessionsByPaneKey: {
           ...s.sleepingAgentSessionsByPaneKey,
-          ...sleepingAgentSessionRecords
+          ...resumeRecords
         }
       }))
+      try {
+        durableResume = await commitPaneSleepThroughLayoutOwner(
+          get(),
+          worktreeId,
+          resumeRecords,
+          true
+        )
+      } catch (error) {
+        rollbackTargetShutdownState()
+        throw error
+      }
       if (expectedRuntimePtyIds.length > 0) {
         if (!runtimeEnvironmentId) {
           rollbackTargetShutdownState()
@@ -190,10 +207,7 @@ export function createTerminalPaneHibernationActions(
           snapshot.commit?.()
         }
       }
-      // Switch point: main records the sleep this window decided, once the stop settled.
-      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-        recordPaneSleepThroughLayoutOwner(get(), worktreeId, sleepingAgentSessionRecords)
-      }
+      await commitPaneSleepThroughLayoutOwner(get(), worktreeId, sleepingAgentSessionRecords)
       settleAttentionRemovedBy(set, get, () =>
         set((s) => {
           const existingPtyIds = s.ptyIdsByTabId[opts.tabId] ?? []
@@ -240,6 +254,10 @@ export function createTerminalPaneHibernationActions(
           delete nextLastTerminalInputAtByPaneKey[opts.paneKey]
           return {
             tabsByWorktree: nextTabsByWorktree,
+            sleepingAgentSessionsByPaneKey: {
+              ...s.sleepingAgentSessionsByPaneKey,
+              ...sleepingAgentSessionRecords
+            },
             ptyIdsByTabId: {
               ...s.ptyIdsByTabId,
               [opts.tabId]: remainingPtyIds

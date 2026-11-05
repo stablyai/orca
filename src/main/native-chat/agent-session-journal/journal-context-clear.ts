@@ -1,3 +1,4 @@
+import { settleJournalCommit } from './journal-committed-effects'
 import { journalContextCursor } from './journal-context-cursor'
 import type { AgentSessionProviderContextBoundary } from '../../../shared/agent-session/agent-session-provider-context'
 import type { JournalReducerState } from './journal-reducer'
@@ -55,13 +56,15 @@ export function appendJournalContextClear(input: {
         ]
       },
       {
-        write: (db) => {
-          commands?.receipt.write(db)
-          input.receipt.write(db)
+        write: async (db) => {
+          await commands?.receipt.write(db)
+          await input.receipt.write(db)
         },
         committed: () => {
-          commands?.receipt.committed()
-          input.receipt.committed()
+          settleJournalCommit(
+            () => commands?.receipt.committed(),
+            () => input.receipt.committed()
+          )
         }
       }
     )

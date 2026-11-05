@@ -1,3 +1,6 @@
+import { parseExecutionHostId } from '../../../shared/execution-host'
+import type { WorkspaceSurfaceCommands } from '../loading-store/workspace-surface-commands'
+import { applyCanonicalLayoutCommand, changesSurfaceContent } from './canonical-layout-command'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import type {
   CommandOf,
@@ -48,6 +51,7 @@ function writingOnly<T>(
 
 type LayoutCommandRuntime = Pick<
   StoreRuntimeState,
+  | 'workspaceSurfaces'
   | 'runDurableMutation'
   | 'state'
   | 'dirtyProfileStateDomains'
@@ -62,6 +66,7 @@ type LayoutCommandPersistenceContext = {
   sessions: SessionHostPartitionOperations
   /** Retry failed profile writes later in layout-owner builds. */
   writeLater?: () => void
+  surfaces?: WorkspaceSurfaceCommands
 }
 
 export class LayoutCommandPersistence {
@@ -70,9 +75,10 @@ export class LayoutCommandPersistence {
   constructor(
     runtime: LayoutCommandRuntime,
     sessions: SessionHostPartitionOperations,
-    writeLater?: () => void
+    writeLater?: () => void,
+    surfaces?: WorkspaceSurfaceCommands
   ) {
-    this[layoutCommandPersistenceContext] = { runtime, sessions, writeLater }
+    this[layoutCommandPersistenceContext] = { runtime, sessions, writeLater, surfaces }
   }
 
   /** Apply to every holder, routed first (local fallback); report routed effects only through onEffects. */
@@ -88,6 +94,20 @@ export class LayoutCommandPersistence {
   ): Promise<LayoutApplyOutcome> {
     const context = this[layoutCommandPersistenceContext]
     const resolved = hostIds.length > 0 ? hostIds.map(resolveHostId) : [resolveHostId()]
+    if (
+      context.surfaces &&
+      changesSurfaceContent(command) &&
+      parseExecutionHostId(resolved[0])?.kind !== 'runtime' &&
+      (context.runtime.workspaceSurfaces?.initialized('local') ||
+        resolved.some((hostId) => context.runtime.workspaceSurfaces?.initialized(hostId)))
+    ) {
+      return applyCanonicalLayoutCommand(
+        { ...context, surfaces: context.surfaces },
+        command,
+        resolved,
+        run
+      )
+    }
     let effects: LayoutEffects | undefined
     const commit = raisingBindingGenerations(
       context.runtime,

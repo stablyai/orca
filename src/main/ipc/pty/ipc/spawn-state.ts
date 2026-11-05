@@ -20,8 +20,10 @@ import type { ReplacedPaneOwner } from '../pane/replaced-pane-owner'
 import { localProvider } from '../provider/registry'
 import type { AdoptStablePaneResult, PtySpawnIpcArgs, PtySpawnIpcDeps } from './spawn-types'
 import type { PaneAgentLaunch } from './spawn-agent-launch-end'
+import type { CanonicalPtyRun } from '../canonical-pty-run'
 
 export type PtyIpcSpawnState = {
+  canonicalRun?: CanonicalPtyRun
   deps: PtySpawnIpcDeps
   args: PtySpawnIpcArgs
   spawnTiming: PtySpawnTiming

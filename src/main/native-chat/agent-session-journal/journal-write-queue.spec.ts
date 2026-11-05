@@ -57,7 +57,7 @@ export function registerJournalWriteQueueTests(): void {
   async function idleJournal(): Promise<AgentSessionJournal> {
     const journal = await openAgentSessionJournal({
       identity: IDENTITY,
-      database: openTestJournalHostDatabase(root)
+      database: await openTestJournalHostDatabase(root)
     })
     opened.push(journal)
     return journal
@@ -80,12 +80,11 @@ export function registerJournalWriteQueueTests(): void {
       const before = journal.cursor().sequence
 
       const first = journal.appendItem(item(1), reply('one'), OPTIONS)
-      expect(journal.itemBody(agentJournalItemKey(item(1)))).toEqual(reply('one'))
       const second = journal.appendItem(item(2), reply('two'), OPTIONS)
+      await expect(Promise.all([first, second])).resolves.toHaveLength(2)
+      expect(journal.itemBody(agentJournalItemKey(item(1)))).toEqual(reply('one'))
       expect(journal.cursor().sequence).toBe(before + 2)
       expect(sequenceOf(journal, 2)).toBeGreaterThan(sequenceOf(journal, 1)!)
-
-      await expect(Promise.all([first, second])).resolves.toHaveLength(2)
     })
 
     it('joins the line behind a write it was issued from inside, never nested in it', async () => {
@@ -100,11 +99,11 @@ export function registerJournalWriteQueueTests(): void {
         return { identity: item(1), body: reply('outer') }
       }, OPTIONS)
 
-      expect(innerLandedDuringOuter).toBe(false)
-      expect(journal.itemBody(agentJournalItemKey(item(1)))).toEqual(reply('outer'))
-      expect(journal.itemBody(agentJournalItemKey(item(2)))).toBeNull()
       await outer
       await inner
+      expect(innerLandedDuringOuter).toBe(false)
+      expect(journal.itemBody(agentJournalItemKey(item(1)))).toEqual(reply('outer'))
+      expect(journal.itemBody(agentJournalItemKey(item(2)))).toEqual(reply('inner'))
       expect(sequenceOf(journal, 2)).toBe(sequenceOf(journal, 1)! + 1)
     })
 
@@ -144,10 +143,21 @@ export function registerJournalWriteQueueTests(): void {
       expect(ran).toEqual(['write'])
     })
 
-    it('takes only a synchronous body', async () => {
+    it('holds the line through an awaited body', async () => {
       const queue = new JournalWriteQueue('session-1')
-      // @ts-expect-error an await inside a write would let a later write land first
-      await queue.serialize(async () => undefined)
+      const held = Promise.withResolvers<void>()
+      const ran: string[] = []
+      const first = queue.serialize(async () => {
+        await held.promise
+        ran.push('first')
+      })
+      const second = queue.serialize(() => {
+        ran.push('second')
+      })
+      expect(ran).toEqual([])
+      held.resolve()
+      await Promise.all([first, second])
+      expect(ran).toEqual(['first', 'second'])
     })
 
     it('answers a write that throws with a rejection, never a throw', async () => {

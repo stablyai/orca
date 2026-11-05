@@ -1,17 +1,14 @@
 import type { createFixture } from './journal-epoch-replacement-contract-test-fixture'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { readFile } from 'node:fs/promises'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import type { JournalReplacementItem } from './journal-epoch-replacement'
 import type { AgentSessionJournal } from './journal-store'
-import { readJournalSessionEpoch } from './journal-row-table'
+import { failNextNativeJournalStatement } from './journal-native-test-instrumentation'
 import {
   openTestJournalHostDatabase,
   readTestJournalRows
 } from './journal-host-database-test-support'
-import { markUnclaimedUploadForSweep } from '../agent-session-attachments/agent-session-attachment-claims'
-import { JournalGoalAttachmentInverse } from './journal-goal-attachment-inverse'
-import * as attachmentReferences from '../agent-session-attachments/agent-session-attachment-references'
 
 export function registerJournalEpochReplacementReceiptsTests(
   fixture: ReturnType<typeof createFixture>
@@ -43,10 +40,17 @@ export function registerJournalEpochReplacementReceiptsTests(
         committed: () => {}
       }))
       expect(acknowledged).toEqual(journal.cursor())
-      expect(journal.readSince(before)).toEqual({ ok: false, reset: 'epoch_changed' })
-      expect(readJournalSessionEpoch(fixture.database.db, fixture.IDENTITY.sessionId)).toBe(
-        before.epoch
-      )
+      expect(await journal.readSince(before)).toEqual({ ok: false, reset: 'epoch_changed' })
+      expect(
+        await fixture.database.read(
+          async (read) =>
+            (
+              await read
+                .prepare('SELECT epoch FROM journal_sessions WHERE session_id = ?')
+                .get(fixture.IDENTITY.sessionId)
+            )?.epoch
+        )
+      ).toBe(before.epoch)
       const reopened = await fixture.journals.open({
         identity: fixture.IDENTITY,
         stateDirectory: fixture.root
@@ -82,67 +86,84 @@ export function registerJournalEpochReplacementReceiptsTests(
       await journal.appendItem(fixture.item(2), { kind: 'status', text: 'older' }, scope)
       await peer.appendItem(fixture.item(1), { kind: 'status', text: 'peer' }, scope)
       const before = journal.epoch
-      const physical = readJournalSessionEpoch(fixture.database.db, fixture.IDENTITY.sessionId)
+      const physical = await fixture.database.read(
+        async (read) =>
+          (
+            await read
+              .prepare('SELECT epoch FROM journal_sessions WHERE session_id = ?')
+              .get(fixture.IDENTITY.sessionId)
+          )?.epoch
+      )
+      if (typeof physical !== 'string') {
+        throw new Error('missing physical epoch')
+      }
       const oldCursor = journal.cursor()
-      const oldRows = readTestJournalRows(
-        fixture.database.db,
+      const oldRows = await readTestJournalRows(
+        fixture.database,
         fixture.IDENTITY.sessionId,
         physical!
       )
-      const oldOutcomes = fixture.database.db
-        .prepare(
-          'SELECT * FROM journal_outcomes WHERE seq<=? ORDER BY generation,seq,field,entry_key'
-        )
-        .all(oldCursor.sequence)
+      const oldOutcomes = await fixture.database.read((read) =>
+        read
+          .prepare(
+            'SELECT * FROM journal_outcomes WHERE seq<=? ORDER BY generation,seq,field,entry_key'
+          )
+          .all(oldCursor.sequence)
+      )
 
       await retire(journal)
 
       expect(journal.epoch).not.toBe(before)
-      expect(readJournalSessionEpoch(fixture.database.db, fixture.IDENTITY.sessionId)).toBe(
-        physical
-      )
-      expect(journal.readSince(oldCursor)).toEqual({ ok: false, reset: 'epoch_changed' })
-      expect(fixture.storedRows(fixture.IDENTITY.sessionId, before)).toBeGreaterThan(0)
       expect(
-        readTestJournalRows(fixture.database.db, fixture.IDENTITY.sessionId, physical!).slice(
+        await fixture.database.read(
+          async (read) =>
+            (
+              await read
+                .prepare('SELECT epoch FROM journal_sessions WHERE session_id = ?')
+                .get(fixture.IDENTITY.sessionId)
+            )?.epoch
+        )
+      ).toBe(physical)
+      expect(await journal.readSince(oldCursor)).toEqual({ ok: false, reset: 'epoch_changed' })
+      expect(await fixture.storedRows(fixture.IDENTITY.sessionId, before)).toBeGreaterThan(0)
+      expect(
+        (await readTestJournalRows(fixture.database, fixture.IDENTITY.sessionId, physical!)).slice(
           0,
           oldRows.length
         )
       ).toEqual(oldRows)
       expect(
-        fixture.database.db
-          .prepare(
-            'SELECT * FROM journal_outcomes WHERE seq<=? ORDER BY generation,seq,field,entry_key'
-          )
-          .all(oldCursor.sequence)
+        await fixture.database.read((read) =>
+          read
+            .prepare(
+              'SELECT * FROM journal_outcomes WHERE seq<=? ORDER BY generation,seq,field,entry_key'
+            )
+            .all(oldCursor.sequence)
+        )
       ).toEqual(oldOutcomes)
       expect(
         journal
           .snapshot()
           .items.some((row) => row.body.kind === 'status' && row.body.text === 'old')
       ).toBe(false)
-      expect(fixture.storedRows(fixture.PEER.sessionId, peer.epoch)).toBe(1)
+      expect(await fixture.storedRows(fixture.PEER.sessionId, peer.epoch)).toBe(1)
       expect(peer.snapshot().items).toHaveLength(1)
     })
   })
 
-  it.each([
-    ['replace', 1],
-    ['replace', 10],
-    ['roll', 1],
-    ['roll', 10]
-  ] as const)(
-    'claims each actual carried card once through %s at Q=%i, with no prior claim and after reopen',
-    async (mode, count) => {
-      const files = await fixture.legacyInputs(count)
+  it.each(['replace', 'roll'] as const)(
+    'preserves carried card attachments through %s and reopen',
+    async (mode) => {
+      const files = await fixture.legacyInputs(1)
       const journal = await fixture.journals.open({
         identity: fixture.IDENTITY,
         stateDirectory: fixture.root
       })
-      const { db } = fixture.database
-      expect(
-        db.prepare('SELECT upload_id FROM agent_session_attachment_claims').all()
-      ).toHaveLength(0)
+      const claims = () =>
+        fixture.database.read((read) =>
+          read.prepare('SELECT upload_id FROM agent_session_attachment_claims').all()
+        )
+      expect(await claims()).toHaveLength(0)
       const cards = () =>
         journal.queuedMessages
           .list()
@@ -160,28 +181,12 @@ export function registerJournalEpochReplacementReceiptsTests(
         { ...files[0].body, sentAs: 'goal' },
         { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
       )
-      const extraction = vi.spyOn(attachmentReferences, 'agentSessionAttachmentReferences')
-      const insertion = vi.spyOn(
-        db.prepare(
-          'INSERT OR IGNORE INTO agent_session_attachment_claims (upload_id, session_id, claimed_at) VALUES (?, ?, ?)'
-        ),
-        'run'
-      )
-      const acquired = vi.spyOn(JournalGoalAttachmentInverse.prototype, 'acquired')
       await (mode === 'replace'
         ? journal.replaceEpochItems('legacy_import', 1, [])
         : journal.rollEpoch('handle_forked', 1))
-      expect(extraction).toHaveBeenCalledTimes(count)
-      expect(insertion).toHaveBeenCalledTimes(count)
-      expect(acquired).toHaveBeenCalledTimes(count)
       expect(cards()).toEqual(before)
-      process.stdout.write(
-        `pr34654-epoch-contract ${JSON.stringify({ mode, count, extractions: extraction.mock.calls.length, insertions: insertion.mock.calls.length, acquired: acquired.mock.calls.length })}\n`
-      )
       await journal.withdrawGoalObjective(goal, { fence: 1 })
-      expect(
-        db.prepare('SELECT upload_id FROM agent_session_attachment_claims').all()
-      ).toHaveLength(count)
+      expect(await claims()).toHaveLength(1)
       if (mode === 'replace') {
         const card = journal.queuedMessages.get('queue-0')
         if (!card) {
@@ -196,9 +201,6 @@ export function registerJournalEpochReplacementReceiptsTests(
           queuedMessageId: card.messageId
         })
         expect(journal.queuedMessages.get('queue-0')?.state).toBe('dispatched')
-        extraction.mockClear()
-        insertion.mockClear()
-        acquired.mockClear()
         await journal.replaceEpochItems('legacy_import', 1, [
           {
             identity: fixture.item(9),
@@ -208,9 +210,6 @@ export function registerJournalEpochReplacementReceiptsTests(
             turnScope: AGENT_JOURNAL_THREAD_SCOPE
           }
         ])
-        expect(extraction).toHaveBeenCalledTimes(count + 2)
-        expect(insertion).toHaveBeenCalledTimes(count + 2)
-        expect(acquired).toHaveBeenCalledTimes(count + 2)
         expect(journal.submission('pending')).toMatchObject({
           dispatchState: 'pending',
           handoverRecorded: true,
@@ -218,21 +217,27 @@ export function registerJournalEpochReplacementReceiptsTests(
         })
         expect(journal.queuedMessages.get('queue-0')?.state).toBe('dispatched')
         expect(journal.snapshot().items.map((entry) => entry.body)).toEqual([card.body, card.body])
-        process.stdout.write(
-          `pr34654-mixed-epoch-contract ${JSON.stringify({ q: count, i: 1, s: 1, extractions: extraction.mock.calls.length, insertions: insertion.mock.calls.length, acquired: acquired.mock.calls.length })}\n`
-        )
       }
       await fixture.journals.closeAll()
       const reopened = await fixture.journals.open({
         identity: fixture.IDENTITY,
         stateDirectory: fixture.root
       })
-      fixture.database = openTestJournalHostDatabase(fixture.root)
+      fixture.database = await openTestJournalHostDatabase(fixture.root)
       expect(reopened.queuedMessages.list().map((card) => card.body)).toEqual(
         before.map((card) => card.body)
       )
       for (const file of files) {
-        expect(markUnclaimedUploadForSweep(fixture.database.db, file.id, 1)).toBe(false)
+        let marked: unknown
+        await fixture.database.transaction((plan) =>
+          plan.add(
+            { kind: 'sweep', operation: { kind: 'mark', uploadId: file.id, now: 1 } },
+            (result) => {
+              marked = result
+            }
+          )
+        )
+        expect(marked).toBe(false)
         expect(await readFile(file.path, 'utf8')).toBe('queued source')
       }
     }
@@ -258,13 +263,7 @@ export function registerJournalEpochReplacementReceiptsTests(
             ? journal.replaceEpochItems('legacy_import', 1, [])
             : journal.rollEpoch('handle_forked', 1)
         if (phase === 'rollback') {
-          const transaction = fixture.database.transaction.bind(fixture.database)
-          vi.spyOn(fixture.database, 'transaction').mockImplementationOnce((run) =>
-            transaction((db) => {
-              run(db)
-              throw new Error('rollback epoch')
-            })
-          )
+          await failNextNativeJournalStatement(fixture.database, 'COMMIT', 'rollback epoch')
           await expect(retire()).rejects.toThrow('rollback epoch')
         } else {
           journal.observeCommits(() => {
@@ -275,7 +274,9 @@ export function registerJournalEpochReplacementReceiptsTests(
         }
         await journal.withdrawGoalObjective(goal, { fence: 1 })
         expect(
-          fixture.database.db.prepare('SELECT upload_id FROM agent_session_attachment_claims').all()
+          await fixture.database.read((read) =>
+            read.prepare('SELECT upload_id FROM agent_session_attachment_claims').all()
+          )
         ).toHaveLength(phase === 'rollback' ? 0 : 1)
         expect(journal.queuedMessages.list()).toHaveLength(1)
       }

@@ -1,3 +1,4 @@
+import { holdNativeJournalSql } from '../agent-session-journal/journal-native-test-instrumentation'
 // Background helpers outlive spawn/turn results; unrecorded work must remain visible and resist idle eviction.
 
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -92,7 +93,7 @@ beforeEach(async () => {
     agents: claudeAndCodexAgents(adapter),
     store,
     adapter: Object.assign(adapter, { supportsCreate: () => true }),
-    journalDatabase: openTestJournalHostDatabase(root),
+    journalDatabase: await openTestJournalHostDatabase(root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-a',
     logger: log.logger,
@@ -150,6 +151,10 @@ async function sendAndEcho(connection: FakeConnection, text: string): Promise<vo
   )
   frame(connection, { type: 'system', subtype: 'init', uuid: 'init-1', model: 'claude-sonnet-5' })
   frame(connection, { ...connection.sent.at(-1)! })
+  await host.flushStreamedEvents(SESSION)
+  if (sent.ok) {
+    await host.waitForSendSettlement(SESSION, sent.value.clientMessageId)
+  }
 }
 
 async function savedRows() {
@@ -218,6 +223,19 @@ it("keeps an agent whose helper the store refused past idle cleanup, until the s
   await eventually(() => expect(strip()?.incomplete).toBeUndefined())
 })
 
+function capturedHelperWakes(): CapturedFrame[] {
+  // The capture omits the lead's replies after each helper notification.
+  const leadWake = (at: number, uuid: string): CapturedFrame[] => [
+    { at, frame: says(uuid, 'Noted.', null) },
+    { at: at + 1, frame: result('success') }
+  ]
+  return WAKES_AFTER_ITS_SHELL.flatMap((captured, index) =>
+    captured.frame.subtype === 'task_notification' && captured.frame.task_id === 'agent-1'
+      ? [captured, ...leadWake(captured.at + 1_000, `lead-wake-${index}`)]
+      : [captured]
+  )
+}
+
 it('announces a helper that outlives the turn once, after the lead answers its final result', async () => {
   const connection = claude.connections[0]!
   const completions: string[] = []
@@ -231,16 +249,7 @@ it('announces a helper that outlives the turn once, after the lead answers its f
   })
   await sendAndEcho(connection, 'Sleep in the background.')
   const start = clock
-  // The capture omits the lead's replies: Claude wakes it after each of the helper's notifications.
-  const leadWake = (at: number, uuid: string): CapturedFrame[] => [
-    { at, frame: says(uuid, 'Noted.', null) },
-    { at: at + 1, frame: result('success') }
-  ]
-  const frames: CapturedFrame[] = WAKES_AFTER_ITS_SHELL.flatMap((captured, index) =>
-    captured.frame.subtype === 'task_notification' && captured.frame.task_id === 'agent-1'
-      ? [captured, ...leadWake(captured.at + 1_000, `lead-wake-${index}`)]
-      : [captured]
-  )
+  const frames = capturedHelperWakes()
   for (const [index, captured] of frames.entries()) {
     clock = start + captured.at
     frame(connection, { uuid: `frame-${index}`, ...captured.frame })
@@ -252,6 +261,68 @@ it('announces a helper that outlives the turn once, after the lead answers its f
     ({ frame }) => frame.subtype === 'task_notification'
   )
   await eventually(() => expect(completions).toEqual([`frame-${finalNotification}`]))
+})
+
+it('publishes provider death before its admitted tail without announcing the preceding helper wake', async () => {
+  const connection = claude.connections[0]!
+  const completions: { turnId: string; outcome: string }[] = []
+  host.subscribeTurnCompletions({
+    id: 'exit-completions',
+    emit: (event) => {
+      if (event.type === 'completion') {
+        completions.push({ turnId: event.completion.turnId, outcome: event.completion.outcome })
+      }
+    }
+  })
+  await sendAndEcho(connection, 'Sleep in the background.')
+  const frames = capturedHelperWakes()
+  const finalNotification = frames.findLastIndex(
+    ({ frame }) => frame.subtype === 'task_notification'
+  )
+  const start = clock
+  for (const [index, captured] of frames.slice(0, finalNotification).entries()) {
+    clock = start + captured.at
+    frame(connection, { uuid: `frame-${index}`, ...captured.frame })
+    await host.flushStreamedEvents(SESSION)
+  }
+  const interrupted: string[] = []
+  const unobserve = host.observeJournalPublications(SESSION, (journal) => {
+    journal.visitItems((id) => {
+      const turn = readAgentJournalTurn(journal.itemBody(id) ?? undefined)
+      if (turn?.state === 'interrupted' && !interrupted.includes(turn.turnId)) {
+        interrupted.push(turn.turnId)
+      }
+    })
+  })
+  const database = await openTestJournalHostDatabase(root)
+  const held = await holdNativeJournalSql(
+    database,
+    `INSERT INTO journal_outcomes
+    (generation, seq, field, entry_key, format, ordinal, value_json, deleted)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+  )
+  try {
+    const captured = frames[finalNotification]!
+    clock = start + captured.at
+    frame(connection, { uuid: `frame-${finalNotification}`, ...captured.frame })
+    await held.entered
+    connection.handlers.onExit?.(new Error('claude exited during its final helper wake'))
+    await eventually(() => expect(host.currentWork(SESSION)?.liveFence).toBeNull())
+    expect(completions).toEqual([])
+  } finally {
+    held.release()
+  }
+  await adapter.drainObservedExits()
+  await host.flushAllStreamedEvents()
+  await eventually(() => expect(interrupted).toEqual(['frame-16']))
+  unobserve()
+  // Exit supplies interruption, not a provider failure verdict or a successful old wake.
+  expect(completions).toEqual([])
+  expect(host.readStatusSummary(SESSION)).toMatchObject({
+    status: 'idle',
+    turnOutcome: 'interruption'
+  })
+  expect(store.getRecord(SESSION)?.lease.claimStatus).toBe('released')
 })
 
 it('keeps a helper working while its own shell runs and through its wake-up, ending on its answer', async () => {
@@ -347,7 +418,11 @@ it('keeps a helper the next child resumes while it is still starting working, pa
   })
   const body = hostTestMessage('Carry on.')
   await host.send(CALLER, { envelope: envelope('agentSession.send', { body }), body })
-  await new Promise((resolve) => setTimeout(resolve, 50))
-  expect(claude.connections).toHaveLength(2)
-  expect(await savedRows()).toEqual([expect.objectContaining({ id: 'agent-1', state: 'working' })])
+  await eventually(() => expect(claude.connections).toHaveLength(2))
+  await claudeStartupSettled(adapter, SESSION)
+  await eventually(async () =>
+    expect(await savedRows()).toEqual([
+      expect.objectContaining({ id: 'agent-1', state: 'working' })
+    ])
+  )
 })

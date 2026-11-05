@@ -10,7 +10,12 @@ type IntentionalStop = {
   incarnationId: string | null
   /** Why per kind: overlapping stops of different kinds each hold their own label on the exit. */
   ownersByKind: Map<TerminalIntentionalStopKind, IntentionalStopOwners>
+  release?: Promise<void>
   expiryTimer?: ReturnType<typeof setTimeout>
+}
+
+export type TerminalIntentionalStopOwner = ((stopped: boolean) => void) & {
+  joinRelease: () => Promise<void> | undefined
 }
 
 const NO_INTENTIONAL_STOP: readonly TerminalIntentionalStopKind[] = []
@@ -28,7 +33,7 @@ export class TerminalIntentionalStops {
     ptyId: string,
     kind: TerminalIntentionalStopKind,
     incarnationId: string | null
-  ): (stopped: boolean) => void {
+  ): TerminalIntentionalStopOwner {
     let stop = this.stopsByPtyId.get(ptyId)
     if (stop && this.joins(stop, incarnationId)) {
       clearTimeout(stop.expiryTimer)
@@ -44,8 +49,8 @@ export class TerminalIntentionalStops {
     stop.ownersByKind.set(kind, owners)
     const owned = stop
     let settled = false
-    return (stopped) => {
-      if (settled || this.stopsByPtyId.get(ptyId) !== owned) {
+    const settle = (stopped: boolean): void => {
+      if (settled) {
         return
       }
       settled = true
@@ -54,7 +59,34 @@ export class TerminalIntentionalStops {
       if (owners.inFlight === 0 && !owners.stopped) {
         owned.ownersByKind.delete(kind)
       }
-      this.settleIfIdle(ptyId, owned)
+      if (!hasInFlightOwners(owned)) {
+        owned.release = undefined
+      }
+      if (this.stopsByPtyId.get(ptyId) === owned) {
+        this.settleIfIdle(ptyId, owned)
+      }
+    }
+    return Object.assign(settle, { joinRelease: () => owned.release })
+  }
+
+  /** Capture the operation before callbacks can replace its PTY id. Ordinary exits retain no completion. */
+  captureExitRelease(
+    ptyId: string,
+    incarnationId: string | null | undefined
+  ): (release: Promise<void>) => void {
+    const stop = this.stopsByPtyId.get(ptyId)
+    if (
+      !stop ||
+      !hasInFlightOwners(stop) ||
+      (stop.incarnationId && incarnationId && stop.incarnationId !== incarnationId)
+    ) {
+      return () => {}
+    }
+    stop.incarnationId ??= incarnationId ?? null
+    return (release) => {
+      if (hasInFlightOwners(stop)) {
+        stop.release = stop.release ? Promise.all([stop.release, release]).then(() => {}) : release
+      }
     }
   }
 

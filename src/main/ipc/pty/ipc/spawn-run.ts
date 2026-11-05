@@ -104,6 +104,7 @@ export async function runPtyIpcSpawn(deps: PtySpawnIpcDeps, request: PtySpawnIpc
     adoption: () => ({ renderer: true, keepAbsentBinding: keepAbsentBindingForSwap(ctx) }),
     ...(args.replacesPtyId !== undefined
       ? {
+          replacesPtyId: args.replacesPtyId,
           replace: async () => {
             ctx.replacedPaneOwner = await stopReplacedPaneOwner(deps, {
               replacesPtyId: args.replacesPtyId!,

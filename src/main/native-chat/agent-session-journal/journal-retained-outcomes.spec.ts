@@ -1,3 +1,4 @@
+import { mutateTestJournalFixture } from './journal-drained-fixture-test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -32,14 +33,18 @@ import { agentSessionRecordFixture } from '../agent-session-record-test-fixture'
 import { agentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 
 // Author a sparse history left by the retired compactor; current writes use the production writer.
-function authorPreviouslyCompactedHistory(database: JournalHostDatabase): () => void {
-  const records = () =>
-    database.db
-      .prepare(
-        'SELECT generation,seq,field,entry_key,format,ordinal,value_json,deleted FROM journal_outcomes ORDER BY generation,seq,field,entry_key'
-      )
-      .all()
-  const before = records()
+async function authorPreviouslyCompactedHistory(
+  database: JournalHostDatabase
+): Promise<() => Promise<void>> {
+  const records = async () =>
+    await database.read((read) =>
+      read
+        .prepare(
+          'SELECT generation,seq,field,entry_key,format,ordinal,value_json,deleted FROM journal_outcomes ORDER BY generation,seq,field,entry_key'
+        )
+        .all()
+    )
+  const before = await records()
   const byKey = new Map<string, typeof before>()
   const keep = new Set(
     before.filter(
@@ -58,24 +63,30 @@ function authorPreviouslyCompactedHistory(database: JournalHostDatabase): () => 
   }
   const expected = before.filter((row) => keep.has(row))
   expect(expected.length).toBeLessThan(before.length)
-  const raw = () =>
-    database.db.prepare('SELECT * FROM journal_rows ORDER BY session_id,epoch,seq').all()
-  const sources = () =>
-    database.db.prepare('SELECT * FROM journal_outcome_epochs ORDER BY generation').all()
-  const rawBefore = raw()
-  const sourcesBefore = sources()
-  const remove = database.db.prepare(
-    'DELETE FROM journal_outcomes WHERE generation=? AND seq=? AND field=? AND entry_key=?'
-  )
-  for (const row of before) {
-    if (!keep.has(row)) {
-      remove.run(row.generation, row.seq, row.field, row.entry_key)
+  const raw = async () =>
+    await database.read((read) =>
+      read.prepare('SELECT * FROM journal_rows ORDER BY session_id,epoch,seq').all()
+    )
+  const sources = async () =>
+    await database.read((read) =>
+      read.prepare('SELECT * FROM journal_outcome_epochs ORDER BY generation').all()
+    )
+  const rawBefore = await raw()
+  const sourcesBefore = await sources()
+  await mutateTestJournalFixture(database, (fixtureDb) => {
+    const remove = fixtureDb.prepare(
+      'DELETE FROM journal_outcomes WHERE generation=? AND seq=? AND field=? AND entry_key=?'
+    )
+    for (const row of before) {
+      if (!keep.has(row)) {
+        remove.run(row.generation, row.seq, row.field, row.entry_key)
+      }
     }
-  }
-  return () => {
-    expect(records()).toEqual(expected)
-    expect(raw()).toEqual(rawBefore)
-    expect(sources()).toEqual(sourcesBefore)
+  })
+  return async () => {
+    expect(await records()).toEqual(expected)
+    expect(await raw()).toEqual(rawBefore)
+    expect(await sources()).toEqual(sourcesBefore)
   }
 }
 
@@ -92,9 +103,9 @@ export function registerRetainedOutcomeContract() {
         agent: 'codex' as const,
         providerHandle: codexProviderHandle('thread-1')
       }
-      let database = openTestJournalHostDatabase(root)
+      let database = await openTestJournalHostDatabase(root)
       let time = 10000
-      publishNewEpoch({
+      await publishNewEpoch({
         database,
         identity,
         epoch: 'retained-epoch',
@@ -148,20 +159,24 @@ export function registerRetainedOutcomeContract() {
       await journal.close()
       journal = await openAgentSessionJournal({ identity, database, now: () => time++ })
       expect(journal.presentationRemoved('orca:U')).toBe(true)
-      database.db
-        .prepare(
-          `INSERT INTO queued_messages (session_id,message_id,position,body_json,fingerprint,created_at,host_instance,state,options_json) VALUES (?,?,1,?,?,0,'earlier','waiting',?)`
-        )
-        .run(
-          sessionId,
-          'Q',
-          JSON.stringify(edited),
-          fingerprint(sessionId, edited),
-          JSON.stringify({ model: 'edited-model', effort: 'high' })
-        )
+      await mutateTestJournalFixture(database, (fixtureDb) =>
+        fixtureDb
+          .prepare(
+            `INSERT INTO queued_messages (session_id,message_id,position,body_json,fingerprint,created_at,host_instance,state,options_json) VALUES (?,?,1,?,?,0,'earlier','waiting',?)`
+          )
+          .run(
+            sessionId,
+            'Q',
+            JSON.stringify(edited),
+            fingerprint(sessionId, edited),
+            JSON.stringify({ model: 'edited-model', effort: 'high' })
+          )
+      )
       await journal.close()
       journal = await openAgentSessionJournal({ identity, database, now: () => time++ })
-      expect(database.db.prepare('SELECT message_id FROM queued_messages').all()).toEqual([])
+      expect(
+        await database.read((read) => read.prepare('SELECT message_id FROM queued_messages').all())
+      ).toEqual([])
       expect(journal.queuedMessages.get('Q')).toMatchObject({
         recovers: 'U',
         state: 'waiting',
@@ -236,33 +251,39 @@ export function registerRetainedOutcomeContract() {
         removed: journal.presentationRemoved('orca:U')
       }
       expect(before.sources).toEqual(['Q', 'U', 'V'])
-      const raw = database.db.prepare('SELECT seq,row_json FROM journal_rows ORDER BY seq').all()
+      const raw = await database.read((read) =>
+        read.prepare('SELECT seq,row_json FROM journal_rows ORDER BY seq').all()
+      )
       expect(raw).toHaveLength(1)
       expect(JSON.parse(String(raw[0].row_json))).toMatchObject({ v: 5 })
       expect(
-        database.db.prepare('SELECT prefix_seq,format FROM journal_outcome_epochs').all()
+        await database.read((read) =>
+          read.prepare('SELECT prefix_seq,format FROM journal_outcome_epochs').all()
+        )
       ).toEqual([{ prefix_seq: 0, format: 2 }])
-      const inventory = () =>
-        database.db
-          .prepare(
-            'SELECT generation,seq,field,entry_key,format,ordinal,value_json,deleted FROM journal_outcomes ORDER BY generation,seq,field,entry_key'
-          )
-          .all()
-      const all = inventory()
+      const inventory = async () =>
+        await database.read((read) =>
+          read
+            .prepare(
+              'SELECT generation,seq,field,entry_key,format,ordinal,value_json,deleted FROM journal_outcomes ORDER BY generation,seq,field,entry_key'
+            )
+            .all()
+        )
+      const all = await inventory()
       expect(all.every((row) => !String(row.field).startsWith('inputs.'))).toBe(true)
       expect(
         all
           .filter((row) => row.field === 'queue.cards')
           .every((row) => !String(row.value_json).includes('recovers'))
       ).toBe(true)
-      const expectRetention = authorPreviouslyCompactedHistory(database)
-      expectRetention()
-      const retained = inventory()
+      const expectRetention = await authorPreviouslyCompactedHistory(database)
+      await expectRetention()
+      const retained = await inventory()
       expect(retained.length).toBeLessThan(all.length)
       await journal.close()
       journal = undefined
       await closeTestJournalHostDatabase(root)
-      database = openTestJournalHostDatabase(root)
+      database = await openTestJournalHostDatabase(root)
       const record = agentSessionConversationView(
         agentSessionRecordFixture({
           sessionId,
@@ -338,14 +359,14 @@ export function registerRetainedOutcomeContract() {
       )
       expect(journal.receiptFor('U')).toEqual(receipt)
       expect(journal.queuedMessages.get('Q')).toEqual(returned)
-      const expectEchoRetention = authorPreviouslyCompactedHistory(database)
-      expectEchoRetention()
+      const expectEchoRetention = await authorPreviouslyCompactedHistory(database)
+      await expectEchoRetention()
       const keptEcho = inventory()
       expect(keptEcho).not.toEqual(retained)
       await journal.close()
       journal = undefined
       await closeTestJournalHostDatabase(root)
-      database = openTestJournalHostDatabase(root)
+      database = await openTestJournalHostDatabase(root)
       journal = (
         await openStructuredAgentSessionConversationJournal(
           {
@@ -407,12 +428,12 @@ export function registerRetainedOutcomeContract() {
       await journal.queuedMessages.withdraw(['Q'])
       const selectedAfterRemoval = journal.presentationRemoved('orca:U')
       expect(selectedAfterRemoval).toBe(false)
-      const expectRemovalRetention = authorPreviouslyCompactedHistory(database)
-      expectRemovalRetention()
+      const expectRemovalRetention = await authorPreviouslyCompactedHistory(database)
+      await expectRemovalRetention()
       await journal.close()
       journal = undefined
       await closeTestJournalHostDatabase(root)
-      database = openTestJournalHostDatabase(root)
+      database = await openTestJournalHostDatabase(root)
       journal = (
         await openStructuredAgentSessionConversationJournal(
           {
@@ -463,8 +484,8 @@ export function registerRetainedEchoBoundaryContract() {
               agent: 'codex' as const,
               providerHandle: codexProviderHandle('thread-1')
             }
-            let database = openTestJournalHostDatabase(root)
-            publishNewEpoch({
+            let database = await openTestJournalHostDatabase(root)
+            await publishNewEpoch({
               database,
               identity,
               epoch: 'implicit-epoch',
@@ -592,48 +613,64 @@ export function registerRetainedEchoBoundaryContract() {
               { fence: 1, turnScope: thread }
             )
             await journal.appendTombstone(removedTurn, { fence: 1 })
-            const nativeSequence = database.db
-              .prepare("SELECT MIN(seq) AS seq FROM journal_outcomes WHERE field='inputEntries'")
-              .get()?.seq
-            expect(typeof nativeSequence).toBe('number')
-            const boundary = database.db
-              .prepare(
-                `SELECT MAX(seq) AS seq FROM journal_outcomes WHERE field='$' AND entry_key='"contextBoundary"'`
+            const nativeSequence = (
+              await database.read((read) =>
+                read
+                  .prepare(
+                    "SELECT MIN(seq) AS seq FROM journal_outcomes WHERE field='inputEntries'"
+                  )
+                  .get()
               )
-              .get()?.seq
+            )?.seq
+            expect(typeof nativeSequence).toBe('number')
+            const boundary = (
+              await database.read((read) =>
+                read
+                  .prepare(
+                    `SELECT MAX(seq) AS seq FROM journal_outcomes WHERE field='$' AND entry_key='"contextBoundary"'`
+                  )
+                  .get()
+              )
+            )?.seq
             if (rewind) {
               expect(typeof boundary).toBe('number')
             }
-            const middle = database.db
-              .prepare(
-                "SELECT seq FROM journal_outcomes WHERE field='items' AND entry_key=? AND deleted=0 ORDER BY seq"
-              )
-              .all(JSON.stringify(agentJournalItemKey(revisionControl)))
+            const middle = await database.read((read) =>
+              read
+                .prepare(
+                  "SELECT seq FROM journal_outcomes WHERE field='items' AND entry_key=? AND deleted=0 ORDER BY seq"
+                )
+                .all(JSON.stringify(agentJournalItemKey(revisionControl)))
+            )
             expect(middle).toHaveLength(3)
             expect(Number(middle[1].seq)).toBeGreaterThan(Number(nativeSequence))
             if (rewind) {
               expect(Number(middle[1].seq)).toBeGreaterThan(Number(boundary))
             }
             // Ordinary format-1 values retain their meaning beside newer native format-2 values.
-            database.db
-              .prepare(
-                "UPDATE journal_outcomes SET format=1 WHERE field='items' AND entry_key=? AND seq=?"
-              )
-              .run(JSON.stringify(agentJournalItemKey(revisionControl)), middle[0].seq)
-            const expectRetention = authorPreviouslyCompactedHistory(database)
-            expectRetention()
-            expect(
-              database.db
+            await mutateTestJournalFixture(database, (fixtureDb) =>
+              fixtureDb
                 .prepare(
-                  "SELECT seq FROM journal_outcomes WHERE field='items' AND entry_key=? AND seq=?"
+                  "UPDATE journal_outcomes SET format=1 WHERE field='items' AND entry_key=? AND seq=?"
                 )
-                .all(JSON.stringify(agentJournalItemKey(revisionControl)), middle[1].seq)
+                .run(JSON.stringify(agentJournalItemKey(revisionControl)), middle[0].seq)
+            )
+            const expectRetention = await authorPreviouslyCompactedHistory(database)
+            await expectRetention()
+            expect(
+              await database.read((read) =>
+                read
+                  .prepare(
+                    "SELECT seq FROM journal_outcomes WHERE field='items' AND entry_key=? AND seq=?"
+                  )
+                  .all(JSON.stringify(agentJournalItemKey(revisionControl)), middle[1].seq)
+              )
             ).toEqual([])
             if (reopened) {
               await journal.close()
               journal = undefined
               await closeTestJournalHostDatabase(root)
-              database = openTestJournalHostDatabase(root)
+              database = await openTestJournalHostDatabase(root)
               journal = await openAgentSessionJournal({ identity, database, now: () => time++ })
             }
             await journal.appendSubmission({

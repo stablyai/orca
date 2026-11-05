@@ -34,8 +34,11 @@ import { localProvider } from '../provider/registry'
 import type { PaneResumeOutcome } from '../../../../shared/workspace-layout/workspace-layout-published'
 import type { StartupCwdFallback } from '../../../../shared/startup-cwd-fallback'
 import type { TerminalWorkspaceLaunchScope } from '../../../runtime/orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
+import type { SurfaceRunTarget } from '../../../../shared/workspace-surfaces/surface-allocation'
+import type { CanonicalPtyRun } from '../canonical-pty-run'
 
 export type RuntimePtySpawnState = {
+  canonicalRun?: CanonicalPtyRun
   deps: PtyRuntimeControllerDeps
   args: RuntimePtySpawnArgs
   codexHomeLaunchStartedAt: Date | undefined
@@ -112,6 +115,7 @@ export type RuntimePtySpawnState = {
 }
 
 export type RuntimePtySpawnArgs = {
+  surfaceRunTarget?: SurfaceRunTarget
   resolvedWorkspace?: TerminalWorkspaceLaunchScope
   cols: number
   rows: number

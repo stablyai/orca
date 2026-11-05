@@ -51,11 +51,19 @@ import {
   sendLocalPtySignal,
   writeLocalPty
 } from './local-pty-session-operations'
-import { spawnLocalPty } from './local-pty-spawn'
+import { spawnSurfaceLocalPty, localSurfaceExecutor } from './local-pty-surface-execution'
 import { cancelAllPendingLocalPtySpawns } from './local-pty-spawn-state'
 import { killAllLocalPtys, killOrphanedLocalPtys, shutdownLocalPty } from './local-pty-termination'
 
 export class LocalPtyProvider implements IPtyProvider {
+  readonly surfaceExecution = {
+    onWake: localSurfaceExecutor.onWake.bind(localSurfaceExecutor),
+    identify: () => localSurfaceExecutor.identify(),
+    query: async (admission: Parameters<typeof localSurfaceExecutor.query>[0]) =>
+      localSurfaceExecutor.query(admission),
+    settle: localSurfaceExecutor.settle.bind(localSurfaceExecutor),
+    release: localSurfaceExecutor.release.bind(localSurfaceExecutor)
+  }
   private readonly foregroundAuthority = randomUUID()
   private foregroundEpoch = 0
   private opts: LocalPtyProviderOptions
@@ -70,7 +78,7 @@ export class LocalPtyProvider implements IPtyProvider {
   }
 
   spawn(args: PtySpawnOptions): Promise<PtySpawnResult> {
-    return spawnLocalPty(args, () => this.opts)
+    return spawnSurfaceLocalPty(args, () => this.opts)
   }
 
   // Local PTYs are always attached -- no-op. Remote providers use this to resubscribe.

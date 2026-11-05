@@ -20,6 +20,8 @@ export const ORCAD_CHILD_ENTRY_POINTS = {
   daemon: 'src/main/daemon/daemon-entry.ts',
   writer: 'src/main/persistence/profile-state/profile-state-writer-worker-entry.ts',
   backup: 'src/main/persistence/profile-state/profile-state-backup-worker-entry.ts',
+  surfaceExecutorReader: 'src/main/workspace-surfaces/surface-executor-reader-entry.ts',
+  journalSql: 'src/main/native-chat/agent-session-journal/journal-sql-worker-entry.ts',
   foreignSqliteReader: 'src/main/foreign-sqlite-readers/foreign-sqlite-reader-entry.ts',
   portScanCommandWorker: 'src/main/ports/port-scan-command-worker-entry.ts',
   commandPathDirectoryWorker: 'src/main/ipc/command-path/command-path-directory-worker-entry.ts',

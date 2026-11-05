@@ -1,7 +1,10 @@
 import { expect, it, vi } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { codexImageItemBody } from '../../codex/structured/items/codex-image-item-translation'
-import { journalPragmaNumber } from './journal-database'
+import {
+  observeNativeJournalTransactions,
+  failNextNativeJournalStatement
+} from './journal-native-test-instrumentation'
 import { openTestJournalHostDatabase } from './journal-host-database-test-support'
 import { openAgentSessionJournal } from './journal-store-factory'
 import { createDeferredStructuredAgentSessionEventSink } from '../agent-session-wire/structured-agent-session-event-sink'
@@ -20,18 +23,8 @@ import {
 } from './journal-streamed-revision-contract-test-fixture'
 
 it('keeps image and goal transitions FULL, streams text at NORMAL, and restores FULL', async () => {
-  const database = openTestJournalHostDatabase(fixture.root)
+  const database = await openTestJournalHostDatabase(fixture.root)
   const levels: number[] = []
-  database.transaction((db) => levels.push(journalPragmaNumber(db, 'synchronous')), true)
-  levels.push(journalPragmaNumber(database.db, 'synchronous'))
-  database.transaction((db) => levels.push(journalPragmaNumber(db, 'synchronous')))
-  expect(() =>
-    database.transaction(() => {
-      throw new Error('rolled back')
-    }, true)
-  ).toThrow('rolled back')
-  levels.push(journalPragmaNumber(database.db, 'synchronous'))
-  expect(levels).toEqual([1, 2, 2, 2])
   const journal = await openAgentSessionJournal({
     database,
     identity: {
@@ -43,16 +36,14 @@ it('keeps image and goal transitions FULL, streams text at NORMAL, and restores 
     }
   })
   levels.length = 0
-  const exec = database.db.exec.bind(database.db)
   const rollbacks: number[] = []
-  vi.spyOn(database.db, 'exec').mockImplementation((sql) => {
-    if (sql === 'COMMIT') {
-      levels.push(journalPragmaNumber(database.db, 'synchronous'))
+  observeNativeJournalTransactions(database, (boundary) => {
+    if (boundary.sql === 'COMMIT') {
+      levels.push(boundary.synchronous)
     }
-    if (sql === 'ROLLBACK') {
-      rollbacks.push(journalPragmaNumber(database.db, 'synchronous'))
+    if (boundary.sql === 'ROLLBACK') {
+      rollbacks.push(boundary.synchronous)
     }
-    exec(sql)
   })
   const image = { id: 'image', type: 'imageGeneration' }
   for (const body of [
@@ -70,7 +61,11 @@ it('keeps image and goal transitions FULL, streams text at NORMAL, and restores 
     )
   }
   expect(levels).toEqual([2, 1, 2, 2, 2, 2])
-  expect(journalPragmaNumber(database.db, 'synchronous')).toBe(2)
+  expect(
+    await database.read(
+      async (read) => (await read.prepare('PRAGMA synchronous').get())?.synchronous
+    )
+  ).toBe(2)
   levels.length = 0
   for (const options of [
     { recovered: true as const },
@@ -96,9 +91,7 @@ it('keeps image and goal transitions FULL, streams text at NORMAL, and restores 
     fence: 2,
     turnScope: AGENT_JOURNAL_THREAD_SCOPE
   })
-  database.db.exec(
-    "CREATE TRIGGER reject_stream BEFORE INSERT ON journal_outcomes BEGIN SELECT RAISE(ABORT, 'stream insert failed'); END"
-  )
+  await failNextNativeJournalStatement(database, 'COMMIT', 'stream insert failed')
   await expect(
     journal.appendSteps([
       {
@@ -109,9 +102,12 @@ it('keeps image and goal transitions FULL, streams text at NORMAL, and restores 
     ])
   ).rejects.toThrow('stream insert failed')
   expect(rollbacks).toEqual([1])
-  expect(journalPragmaNumber(database.db, 'synchronous')).toBe(2)
+  expect(
+    await database.read(
+      async (read) => (await read.prepare('PRAGMA synchronous').get())?.synchronous
+    )
+  ).toBe(2)
   expect(journal.snapshot().items.at(-1)?.body).toEqual(text('assistant', 'before failure'))
-  database.db.exec('DROP TRIGGER reject_stream')
   levels.length = 0
   await journal.appendItem(identity, text('assistant', 'retry'), {
     fence: 2,
@@ -150,7 +146,7 @@ it.each([1, 10])(
       due.forEach((run) => run())
       await deferred.drained()
     }
-    const levels = commitLevels()
+    const levels = await commitLevels()
     const extraction = vi.spyOn(attachmentReferences, 'agentSessionAttachmentReferences')
     const acquired = vi.spyOn(JournalGoalAttachmentInverse.prototype, 'acquired')
     const delta = () =>
@@ -176,9 +172,11 @@ it.each([1, 10])(
       expect(journal.snapshot().items[0]?.body).toEqual(
         text('assistant', 'hello '.repeat(count + 1))
       )
-      expect(journalPragmaNumber(openTestJournalHostDatabase(fixture.root).db, 'synchronous')).toBe(
-        2
-      )
+      expect(
+        await (
+          await openTestJournalHostDatabase(fixture.root)
+        ).read(async (read) => (await read.prepare('PRAGMA synchronous').get())?.synchronous)
+      ).toBe(2)
       process.stdout.write(
         `pr34654-stream-contract ${JSON.stringify({ count, levels, extractions: extraction.mock.calls.length, acquired: acquired.mock.calls.length })}\n`
       )

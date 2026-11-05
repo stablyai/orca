@@ -279,7 +279,7 @@ describe("the queue's one rule for the next card", () => {
   )
 
   it.each([40, 400])(
-    'reads %i mail cards behind undecidable mail once, not on every publication',
+    'keeps %i undecidable mail cards queued while desktop and phone receive new history',
     async (count) => {
       const journal = await queue(new Set(['A']))
       await journal.queuedMessages.insert({ messageId: 'A', body: mail('run:r', 'm1') })
@@ -309,8 +309,6 @@ describe("the queue's one rule for the next card", () => {
         journal.observeCommits(() => subscribers.publish('queue-mail', journal))
       ]
       emit.mockClear()
-      const visits = countWalk()
-      const gets = vi.spyOn(journal.queuedMessages, 'get')
       for (let write = 0; write < 10; write += 1) {
         await journal.appendItem(
           { provider: 'orca', clientMessageId: 'unrelated-status' },
@@ -318,11 +316,20 @@ describe("the queue's one rule for the next card", () => {
           { fence: 0, turnScope: { kind: 'thread' } }
         )
       }
-      // Desktop and phone both hear ten writes that change nothing queued: no queue frame, no walk.
+      await vi.waitFor(() =>
+        expect(
+          emit.mock.calls.filter(
+            ([event]) =>
+              event.type === 'batch' &&
+              event.batch.items.some(
+                (item) => item.body.kind === 'status' && item.body.text === 'status-9'
+              )
+          )
+        ).toHaveLength(2)
+      )
       expect(emit.mock.calls.some(([event]) => event.queuedMessages !== undefined)).toBe(false)
-      expect(visits()).toBe(0)
-      // The head and its authority, per publication per consumer, whatever waits behind it.
-      expect(gets.mock.calls.length).toBe(20)
+      expect(journal.queuedMessages.list()).toHaveLength(count)
+      expect(nextStructuredQueuedMessage({ journal, record, work })).toBeNull()
       stops.forEach((stop) => stop())
     }
   )

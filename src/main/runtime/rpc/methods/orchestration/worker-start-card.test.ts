@@ -84,7 +84,7 @@ it.each([
       )
     }
     if (scenario === 'federated-no-card') {
-      vi.spyOn(current.host, 'captureAgentStartDestination').mockReturnValue(null)
+      vi.spyOn(current.host, 'captureAgentStartDestination').mockResolvedValue(null)
     }
     if (federated) {
       vi.spyOn(runtime, 'resolveOrchestrationWorkerServer').mockReturnValue({

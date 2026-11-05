@@ -9,7 +9,7 @@ import { HOST_TEST_SESSION as SESSION } from '../native-chat/agent-session-wire/
 import type { AcpScriptedAgent } from './acp-scripted-agent.test-support'
 import { GROK, GROK_CONFIG_OPTIONS, PROVIDER_SESSION } from './acp-structured-adapter.test-support'
 import { ACP_HANDLE_TRANSPORT } from './acp-structured-agent-definitions'
-import { restoreJournal } from '../native-chat/agent-session-journal/journal-open'
+import { restoreJournalAsync } from '../native-chat/agent-session-journal/journal-async-open'
 import { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
 import { createAcpStructuredLaunchResolver } from '../runtime/agent-session/launch/structured-agent-launch-composition.test-support'
 import {
@@ -81,7 +81,8 @@ async function openRestoreRig(code: number, message: string) {
   const { rig, host, store, journalDatabase } = opened
   resolver.resolve = createAcpStructuredLaunchResolver(GROK, {
     store,
-    readJournal: (sessionId) => restoreJournal(journalDatabase.db, sessionId),
+    readJournal: (sessionId) =>
+      journalDatabase.read((read) => restoreJournalAsync(read, sessionId)),
     resolveWorkspacePath: async () => '/workspace',
     resolveEnvironment: async () => ({ PATH: '/usr/bin' }),
     resolveCommand: () => '/fake/grok'

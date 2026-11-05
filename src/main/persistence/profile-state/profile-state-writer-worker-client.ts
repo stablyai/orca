@@ -1,5 +1,24 @@
+import type {
+  SurfaceStorageRead,
+  SurfaceStorageReadResult
+} from '../../../shared/workspace-surfaces/surface-storage-read'
+import type {
+  JournalPersistenceEffect,
+  JournalEffectResult
+} from '../../native-chat/agent-session-journal/journal-persistence-plan'
+import {
+  journalTransferBatches,
+  journalUnitPackets,
+  receiveJournalResult
+} from '../../native-chat/agent-session-journal/journal-unit-transfer'
+import type { SurfaceJointTransaction } from '../../workspace-surfaces/surface-joint-transaction'
 import type { ProfileStateDomainReplacement } from '../loading-store/profile-state-authority'
 import { ProfileStateWriterConnection } from './profile-state-writer-connection'
+import type {
+  SurfaceStorageCommand,
+  SurfaceStorageMutation,
+  SurfaceStorageResult
+} from '../../../shared/workspace-surfaces/surface-storage-command'
 export { resolveProfileStateWriterWorkerPath } from './profile-state-writer-worker-path'
 export {
   ProfileStateWriterError,
@@ -8,6 +27,82 @@ export {
 export type { ProfileStateWriterInitialization } from './profile-state-writer-protocol'
 
 export class ProfileStateWriteWorkerClient extends ProfileStateWriterConnection {
+  readSurface(read: SurfaceStorageRead): Promise<SurfaceStorageReadResult> {
+    return this.dispatch({ command: 'read-surface', read }).then((response) => {
+      if (!response.surfaceRead) {
+        throw new Error('Profile state writer omitted surface read')
+      }
+      return response.surfaceRead
+    })
+  }
+
+  executeSurfaceCommand(surface: SurfaceStorageCommand): Promise<SurfaceStorageResult> {
+    return this.dispatch({ command: 'write-surface', surface }).then((response) => {
+      if (!response.surfaceResult) {
+        throw new Error('Profile state writer omitted the committed surface result')
+      }
+      return response.surfaceResult
+    })
+  }
+
+  executeSurfaceTransaction(
+    surfaces: readonly SurfaceStorageMutation[]
+  ): Promise<SurfaceStorageResult[]> {
+    return this.dispatch({ command: 'write-surfaces', surfaces }).then((response) => {
+      if (!response.surfaceResults || response.surfaceResults.length !== surfaces.length) {
+        throw new Error('Profile state writer omitted committed surface results')
+      }
+      return response.surfaceResults
+    })
+  }
+
+  executeSurfaceJointTransaction(
+    transaction: SurfaceJointTransaction
+  ): Promise<SurfaceStorageResult[]> {
+    return this.dispatch({ command: 'write-surface-joint', transaction }).then((response) => {
+      if (
+        !response.surfaceResults ||
+        response.surfaceResults.length !== transaction.commands.length
+      ) {
+        throw new Error('Profile state writer omitted committed joint surface results')
+      }
+      return response.surfaceResults
+    })
+  }
+
+  async executeSurfaceJournalUnit(
+    transaction: SurfaceJointTransaction,
+    effects: readonly JournalPersistenceEffect[]
+  ) {
+    await this.dispatch({ command: 'stage-surface-journal', packets: null })
+    for (const packets of journalTransferBatches(journalUnitPackets(effects))) {
+      await this.dispatch({ command: 'stage-surface-journal', packets })
+    }
+    const values: JournalEffectResult[] = []
+    const response = await this.dispatch(
+      {
+        command: 'write-surface-joint',
+        transaction: { ...transaction, effectCount: effects.length }
+      },
+      (packets) => {
+        for (const packet of packets) {
+          if (!packet || packet.index >= effects.length) {
+            throw new Error('Unexpected native unit result packet')
+          }
+          receiveJournalResult(values, packet)
+        }
+      }
+    )
+    if (
+      !response.surfaceResults ||
+      response.surfaceResults.length !== transaction.commands.length ||
+      values.length !== effects.length
+    ) {
+      throw new Error('Profile state writer omitted the committed native unit')
+    }
+    return { surfaces: response.surfaceResults, values }
+  }
+
   assertWritable(): void {
     this.assertDispatchable()
   }

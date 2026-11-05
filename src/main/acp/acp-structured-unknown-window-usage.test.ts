@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
-import { restoreJournal } from '../native-chat/agent-session-journal/journal-open'
+import { restoreJournalAsync } from '../native-chat/agent-session-journal/journal-async-open'
 import { JournalWriteProjection } from '../native-chat/agent-session-journal/journal-write-projection'
 import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import { HOST_TEST_SESSION as SESSION } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
@@ -37,7 +37,7 @@ describe('an ACP usage report with an unknown window', () => {
     expect((await rig.rows()).filter((row) => row.body.kind === 'status')).toEqual([])
     expect((await rig.turns()).at(-1)?.contextUsage).toBeUndefined()
 
-    const loaded = restoreJournal(rig.journalDatabase.db, SESSION)
+    const loaded = await rig.journalDatabase.read((read) => restoreJournalAsync(read, SESSION))
     expect(loaded?.damage).toBeFalsy()
     expect(loaded?.newer).toBeFalsy()
     const saved = [...(loaded?.state.items.values() ?? [])].flatMap(

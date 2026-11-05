@@ -6,7 +6,7 @@ import type {
 } from './structured-agent-session-work-evidence'
 import {
   reusePromptProjection,
-  type PromptProjection
+  promptProjections
 } from './structured-agent-session-actionable-prompts'
 import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { compareAgentJournalItems } from '../../../shared/agent-session/journal/agent-session-journal-position'
@@ -99,8 +99,6 @@ function structuredAgentSessionHandsOver(
     !journal.wroteBeforeOpen(submission.acceptedSequence)
   )
 }
-
-const promptProjections = new WeakMap<StructuredAgentSessionCurrentWorkJournal, PromptProjection>()
 
 /** Re-read lease evidence per decision; immutable prompts share cursor/fence caches. */
 export class StructuredAgentSessionCurrentWork {

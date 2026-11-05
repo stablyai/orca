@@ -1,4 +1,10 @@
 import {
+  surfaceEvidenceKey,
+  surfaceEvidenceDocumentSchema,
+  SURFACE_EVIDENCE_PREFIX,
+  type SurfaceEvidenceDocument
+} from '../../../shared/workspace-surfaces/surface-evidence-document'
+import {
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -321,3 +327,56 @@ describe('profile state database backup recovery', () => {
     expect(readFileSync(options.dataFile, 'utf8')).toContain('migration')
   })
 })
+
+it.each(['json', 'sqlite'] as const)(
+  'preserves divergent ordered cold mappings through %s restore and retry without gating recovery',
+  async (format) => {
+    const mapping = (currentId: string, sequence: number): SurfaceEvidenceDocument => ({
+      version: 1,
+      hostId: 'local',
+      kind: 'mapping',
+      sequence,
+      value: { workspaceId: 'repo::/project', kind: 'host-tab', previousId: 'T', currentId }
+    })
+    const selected = mapping('selected', 0)
+    const later = [mapping('later-A', 0), mapping('later-B', 1)]
+    const selectedJson = JSON.stringify({ [surfaceEvidenceKey(selected, () => '')]: selected })
+    const options = await fixture({ json: selectedJson })
+    options.exportPath = join(dirname(options.dataFile), 'selected.json')
+    writeFileSync(options.exportPath, selectedJson)
+    writeFileSync(
+      options.dataFile,
+      JSON.stringify(
+        Object.fromEntries(later.map((value) => [surfaceEvidenceKey(value, () => ''), value]))
+      )
+    )
+    const restore = () =>
+      format === 'json'
+        ? restoreProfileStateJsonExport(options)
+        : restoreProfileStateDatabaseBackup(options)
+    const documents = () => {
+      const json =
+        format === 'json'
+          ? readFileSync(options.dataFile, 'utf8')
+          : readRestored(options.databasePath)
+      return Object.entries(JSON.parse(json))
+        .filter(([key]) => key.startsWith(SURFACE_EVIDENCE_PREFIX))
+        .map(([, value]) => surfaceEvidenceDocumentSchema.parse(value))
+    }
+    try {
+      restore()
+      const first = documents()
+      expect(first.map((value) => value.value)).toEqual([
+        selected.value,
+        ...later.map((value) => value.value)
+      ])
+      expect(first.map((value) => (value.kind === 'mapping' ? value.sequence : -1))).toEqual([
+        0, 1, 2
+      ])
+      restore()
+      expect(documents()).toEqual(first)
+    } finally {
+      options.maintenance.release()
+    }
+  }
+)

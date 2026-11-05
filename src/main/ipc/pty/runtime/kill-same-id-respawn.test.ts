@@ -126,3 +126,34 @@ describe('a stop of a PTY whose incarnation was stamped mid-stop', () => {
     expectRetired(h)
   })
 })
+
+describe('a captured close while provider startup is pending', () => {
+  it.each(['kill', 'stop'] as const)(
+    'does not dispatch %s to the successor after startup',
+    async (kind) => {
+      const h = harness()
+      const startup = Promise.withResolvers<void>()
+      const shutdown = vi.fn(async () => {})
+      setLocalPtyProvider(providerWhose(shutdown, [{ id: PTY_ID }]))
+      ptyOwnership.set(PTY_ID, LOCAL_EXECUTION_HOST_ID)
+      ptyIncarnationById.set(PTY_ID, 'old')
+      const deps = asControllerDeps({
+        ...h.ports,
+        getLocalPtyProviderStartupPromise: () => startup.promise
+      })
+      const opts = { isCurrent: () => true }
+      const stopped =
+        kind === 'kill'
+          ? killPtyFromRuntimeController(deps, PTY_ID, opts)
+          : stopAndWaitPtyFromRuntimeController(deps, PTY_ID, opts)
+      ptyIncarnationById.set(PTY_ID, 'successor')
+      startup.resolve()
+      await stopped
+      await settleKill()
+      expect(shutdown).not.toHaveBeenCalled()
+      expect(h.runtime.onPtyExit).not.toHaveBeenCalled()
+      expect(h.runtime.markPtyLivenessLive).not.toHaveBeenCalled()
+      expect(ptyIncarnationById.get(PTY_ID)).toBe('successor')
+    }
+  )
+})

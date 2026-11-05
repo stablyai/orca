@@ -1,3 +1,18 @@
+import type { SurfaceKey } from '../../../shared/workspace-surfaces/surface-content'
+import type {
+  SurfaceStorageRead,
+  SurfaceStorageReadResult
+} from '../../../shared/workspace-surfaces/surface-storage-read'
+import { readSurfaceOwner } from '../../workspace-surfaces/surface-owner-read'
+import { writeCompleteProfileStateDomains } from './profile-state-complete-domain-write'
+import type { JournalPersistenceEffect } from '../../native-chat/agent-session-journal/journal-persistence-plan'
+import type Database from '../../sqlite/sync-database'
+import { profileStateMaintenance } from './profile-state-maintenance'
+import {
+  executeSurfaceJointTransaction,
+  type SurfaceJointTransaction
+} from '../../workspace-surfaces/surface-joint-transaction'
+import { createProfileStateStartupTransfer } from '../loading-store/profile-state-startup-transfer'
 import { existsSync } from 'node:fs'
 import type {
   ProfileStateAuthority,
@@ -6,38 +21,47 @@ import type {
   ProfileStateMaintenance
 } from '../loading-store/profile-state-authority'
 import {
-  importProfileStateJson,
   readAcceptedProfileStateParsedSnapshot,
   readProfileStateParsedSnapshot,
   readProfileStateRevision,
-  readProfileStateSnapshot
+  readProfileStateSnapshot,
+  ProfileStateRevisionConflictError
 } from './profile-state-documents'
+import type { openWritableProfileStateDatabase } from './profile-state-database'
 import {
-  openWritableProfileStateDatabase,
+  openMarkedWritableProfileStateDatabase,
   openProfileStateDatabaseReadOnly
 } from './profile-state-database'
 import { writeProfileStateDomains } from './profile-state-domain-writes'
-import {
-  prepareProfileStateDomainMutation,
-  validateProfileStateDomainTransaction
-} from './profile-state-domain-write-validation'
-import {
-  parseProfileStateRoot,
-  ProfileStateRevisionConflictError
-} from './profile-state-document-validation'
 import { assertProfileStateRevisionOnDisk } from './profile-state-revision-readmission'
 import {
   quarantineProfileStateDatabase,
   type ProfileStateDatabaseQuarantine
 } from './profile-state-database-quarantine'
 import { writeProfileStateAuthorityJsonExport } from './legacy-json/profile-state-authority-exports'
-import { buildCompleteDocumentReplacements } from './profile-state-complete-replacements'
+import { serializedProfileDomainReplacements } from './profile-state-complete-replacements'
 import { ProfileStateBackupRotation } from './profile-state-backup-rotation'
-import { ensureProfileStateAuthorityMarker } from './profile-state-authority-marker'
 import type { ProfileStateWriterInitialization } from './profile-state-writer-protocol'
+import type {
+  SurfaceStorageCommand,
+  SurfaceStorageMutation,
+  SurfaceStorageResult
+} from '../../../shared/workspace-surfaces/surface-storage-command'
+import {
+  executeSurfaceOwnerCommand,
+  executeSurfaceOwnerCommands
+} from '../../workspace-surfaces/surface-owner-command'
 
 /** Reuse one writable handle; fenced domain commits preserve unchanged normalized rows. */
 export class ProfileStateSqliteAuthority implements ProfileStateAuthority {
+  private surfaceInvalidations: readonly SurfaceKey[] = []
+
+  takeSurfaceInvalidations(): readonly SurfaceKey[] {
+    const keys = this.surfaceInvalidations
+    this.surfaceInvalidations = []
+    return keys
+  }
+
   private retired = false
   private observedRevision: number | undefined
   private writableDatabase: ReturnType<typeof openWritableProfileStateDatabase> | undefined
@@ -47,6 +71,11 @@ export class ProfileStateSqliteAuthority implements ProfileStateAuthority {
     private readonly databasePath: string,
     private readonly profileId: string
   ) {}
+
+  get surfaceExecutionScope() {
+    this.assertActive()
+    return { databasePath: this.databasePath, profileId: this.profileId }
+  }
 
   retireForWorker(): ProfileStateWriterInitialization {
     this.assertActive()
@@ -88,7 +117,9 @@ export class ProfileStateSqliteAuthority implements ProfileStateAuthority {
     this.assertActive()
     const opened = openProfileStateDatabaseReadOnly(this.databasePath, this.profileId)
     try {
-      const snapshot = readAcceptedProfileStateParsedSnapshot(opened.db, rawJson)
+      const snapshot = readAcceptedProfileStateParsedSnapshot(opened.db, rawJson, {
+        excludeSurfaceEvidence: true
+      })
       if (snapshot === undefined) {
         return undefined
       }
@@ -106,7 +137,7 @@ export class ProfileStateSqliteAuthority implements ProfileStateAuthority {
     const opened =
       this.writableDatabase ?? openProfileStateDatabaseReadOnly(this.databasePath, this.profileId)
     try {
-      const snapshot = readProfileStateParsedSnapshot(opened.db)
+      const snapshot = readProfileStateParsedSnapshot(opened.db, { excludeSurfaceEvidence: true })
       return this.createInitialState(
         snapshot.revision,
         snapshot.revision === 0 ? undefined : snapshot.state
@@ -142,17 +173,59 @@ export class ProfileStateSqliteAuthority implements ProfileStateAuthority {
     replacements: readonly ProfileStateDomainReplacement[],
     automationRunsAfter?: readonly unknown[]
   ): void {
-    this.assertActive()
-    if (this.observedRevision === undefined) {
-      // Direct callers must establish a revision fence even without Store's initial read.
-      this.readSerializedState()
-    }
+    this.observeCurrentRevision()
     const opened = this.openWritableDatabase()
-    this.observedRevision = writeProfileStateDomains(opened.db, {
+    const committed = writeProfileStateDomains(opened.db, {
       expectedRevision: this.observedRevision ?? 0,
       replacements,
       automationRunsAfter
-    }).revision
+    })
+    this.observedRevision = committed.revision
+    this.surfaceInvalidations = committed.surfaceInvalidations ?? []
+  }
+
+  readSurface(request: SurfaceStorageRead): SurfaceStorageReadResult {
+    return this.surfaceWrite((db, revision) => readSurfaceOwner(db, revision, request)).result
+  }
+
+  executeSurfaceCommand(command: SurfaceStorageCommand): SurfaceStorageResult {
+    return this.surfaceWrite((db, revision) => executeSurfaceOwnerCommand(db, revision, command))
+      .result
+  }
+
+  executeSurfaceTransaction(commands: readonly SurfaceStorageMutation[]) {
+    return this.surfaceWrite((db, revision) => executeSurfaceOwnerCommands(db, revision, commands))
+      .results
+  }
+
+  executeSurfaceJointTransaction(transaction: SurfaceJointTransaction) {
+    return this.surfaceWrite((db, revision) =>
+      executeSurfaceJointTransaction(db, revision, transaction)
+    ).results
+  }
+
+  executeSurfaceJournalUnit(
+    transaction: SurfaceJointTransaction,
+    effects: readonly JournalPersistenceEffect[]
+  ) {
+    const result = this.surfaceWrite((db, revision) =>
+      executeSurfaceJointTransaction(
+        db,
+        revision,
+        { ...transaction, effectCount: effects.length },
+        effects
+      )
+    )
+    return { surfaces: result.results, values: result.values }
+  }
+
+  private surfaceWrite<T extends { revision: number }>(
+    write: (db: Database.Database, revision: number) => T
+  ): T {
+    this.observeCurrentRevision()
+    const committed = write(this.openWritableDatabase().db, this.observedRevision ?? 0)
+    this.observedRevision = committed.revision
+    return committed
   }
 
   assertCurrentRevision(): void {
@@ -171,54 +244,19 @@ export class ProfileStateSqliteAuthority implements ProfileStateAuthority {
 
   writeSerializedState(payload: Buffer): void {
     this.assertActive()
-    const serialized = payload.toString('utf8')
-    if (!Buffer.from(serialized, 'utf8').equals(payload)) {
-      throw new Error('Profile state payload is not valid UTF-8')
-    }
-    const parsed = parseProfileStateRoot(serialized)
-    this.writeCompleteSerializedDomains(
-      Object.entries(parsed).map(([domain, value]) => {
-        const payload = JSON.stringify(value)
-        if (payload === undefined) {
-          throw new Error(`Profile state domain payload is not serializable: ${domain}`)
-        }
-        return { domain, payload }
-      })
-    )
+    this.writeCompleteSerializedDomains(serializedProfileDomainReplacements(payload))
   }
 
-  writeCompleteSerializedDomains(replacements: readonly ProfileStateDomainReplacement[]): void {
-    this.assertActive()
-    if (this.observedRevision === undefined) {
-      this.readSerializedState()
-    }
-    if (!Array.isArray(replacements) || replacements.length > 0) {
-      validateProfileStateDomainTransaction({
-        expectedRevision: this.observedRevision ?? 0,
-        replacements
-      })
-    }
-    const opened = this.openWritableDatabase()
-    const currentRevision = readProfileStateRevision(opened.db)
-    const complete = buildCompleteDocumentReplacements(opened.db, replacements)
-    if (currentRevision === 0 || complete.length === 0) {
-      // Validate fragments independently so splicing cannot conceal malformed JSON.
-      for (const replacement of replacements) {
-        prepareProfileStateDomainMutation(replacement)
+  writeCompleteSerializedDomains(replacements: readonly ProfileStateDomainReplacement[]) {
+    this.observeCurrentRevision()
+    this.observedRevision = writeCompleteProfileStateDomains(
+      () => this.openWritableDatabase().db,
+      this.observedRevision,
+      replacements,
+      (keys) => {
+        this.surfaceInvalidations = keys
       }
-      const rawJson = `{${replacements
-        .filter(({ payload }) => payload !== null)
-        .map(({ domain, payload }) => `${JSON.stringify(domain)}:${payload}`)
-        .join(',')}}`
-      this.observedRevision = importProfileStateJson(opened.db, rawJson, {
-        expectedRevision: this.observedRevision
-      })
-      return
-    }
-    this.observedRevision = writeProfileStateDomains(opened.db, {
-      expectedRevision: this.observedRevision ?? currentRevision,
-      replacements: complete
-    }).revision
+    )
   }
 
   scheduleBackup(): void {
@@ -258,41 +296,25 @@ export class ProfileStateSqliteAuthority implements ProfileStateAuthority {
     const revision = this.revision
     await this.drainBackups()
     this.close()
-    let consumed = false
-    return {
-      resume: async () => {
-        if (consumed) {
-          throw new Error('Profile maintenance resume has already been consumed')
-        }
-        consumed = true
-        assertProfileStateRevisionOnDisk(this.databasePath, this.profileId, revision)
-        this.assertCurrentRevision()
-        this.backupRotation = undefined
-      }
-    }
+    return profileStateMaintenance(async () => {
+      assertProfileStateRevisionOnDisk(this.databasePath, this.profileId, revision)
+      this.assertCurrentRevision()
+      this.backupRotation = undefined
+    })
   }
 
-  private createInitialState(
-    revision: number,
-    value: Record<string, unknown> | undefined
-  ): ProfileStateAuthorityInitialState<ProfileStateSqliteAuthority> {
-    let pending: { revision: number; value: Record<string, unknown> | undefined } | undefined = {
-      revision,
-      value
-    }
+  private createInitialState(revision: number, value: Record<string, unknown> | undefined) {
     this.observedRevision = revision
-    return {
-      authority: this,
-      takeParsedState: () => {
-        this.assertActive()
-        const snapshot = pending
-        if (snapshot === undefined) {
-          throw new Error('Profile state startup snapshot has already been consumed')
-        }
-        pending = undefined
-        this.observedRevision = snapshot.revision
-        return snapshot.value
-      }
+    return createProfileStateStartupTransfer(this, value, () => {
+      this.assertActive()
+      this.observedRevision = revision
+    })
+  }
+
+  private observeCurrentRevision(): void {
+    this.assertActive()
+    if (this.observedRevision === undefined) {
+      this.readSerializedState()
     }
   }
 
@@ -304,16 +326,10 @@ export class ProfileStateSqliteAuthority implements ProfileStateAuthority {
 
   private openWritableDatabase(): NonNullable<ProfileStateSqliteAuthority['writableDatabase']> {
     this.assertActive()
-    if (!this.writableDatabase) {
-      const opened = openWritableProfileStateDatabase(this.databasePath, this.profileId)
-      try {
-        ensureProfileStateAuthorityMarker(this.databasePath)
-        this.writableDatabase = opened
-      } catch (error) {
-        opened.db.close()
-        throw error
-      }
-    }
+    this.writableDatabase ??= openMarkedWritableProfileStateDatabase(
+      this.databasePath,
+      this.profileId
+    )
     return this.writableDatabase
   }
 }

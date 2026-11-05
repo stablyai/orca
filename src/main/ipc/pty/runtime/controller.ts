@@ -1,3 +1,5 @@
+import { capturePtyStopExpectation } from './stop-publication'
+import { installSurfaceAllocationRecovery } from '../provider/surface-allocation-recovery'
 import { adoptMaterializedRuntimePtySpawn } from './spawn-early'
 import { createRuntimePtySpawnState } from './spawn-state'
 import { localProvider } from '../provider/registry'
@@ -45,6 +47,9 @@ import {
 
 export function installPtyRuntimeController(deps: PtyRuntimeControllerDeps): void {
   const { runtime, adoptStablePane, requestSerializedBuffer } = deps
+  if (deps.store) {
+    installSurfaceAllocationRecovery(deps.store, deps.getLocalPtyProviderStartupPromise())
+  }
 
   runtime?.setPtyController({
     claimStablePaneCreate: (args) => {
@@ -72,7 +77,8 @@ export function installPtyRuntimeController(deps: PtyRuntimeControllerDeps): voi
     probePtyLiveness: (ptyId) => probePtyLivenessFromRuntimeController(deps, ptyId),
     // Attach-only ingestion serves unmounted daemon sessions without creating/resizing; SSH uses leases and local PTYs already stream.
     attach: (ptyId) => attachPtyFromRuntimeController(deps, ptyId),
-    kill: (ptyId) => killPtyFromRuntimeController(deps, ptyId),
+    captureStopExpectation: capturePtyStopExpectation,
+    kill: (ptyId, opts) => killPtyFromRuntimeController(deps, ptyId, opts),
     retireRejectedPty: (ptyId, stopConfirmed, incarnationId) =>
       retireRejectedPtyFromRuntimeController(deps, ptyId, stopConfirmed, incarnationId),
     stopAndWait: (ptyId, opts) => stopAndWaitPtyFromRuntimeController(deps, ptyId, opts),

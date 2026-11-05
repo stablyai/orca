@@ -1,3 +1,4 @@
+import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import type { BrowserWindow } from 'electron'
 import { ipcMain } from 'electron'
 import type { Store } from '../../persistence/loading-store/store'
@@ -21,7 +22,11 @@ import {
 import { activeNestedRepoScans, runNestedRepoScanForIpc } from './nested-repo-scan-ipc'
 import { visibleProjectGroups } from '../../ssh/orcad-retained-source'
 
-export function registerProjectGroupHandlers(mainWindow: BrowserWindow, store: Store): void {
+export function registerProjectGroupHandlers(
+  mainWindow: BrowserWindow,
+  store: Store,
+  runtime: Pick<OrcaRuntimeService, 'deleteProjectGroup'>
+): void {
   ipcMain.handle('projectGroups:list', () => visibleProjectGroups(store))
 
   ipcMain.handle('projectGroups:create', (_event, rawArgs: unknown): ProjectGroup => {
@@ -54,17 +59,13 @@ export function registerProjectGroupHandlers(mainWindow: BrowserWindow, store: S
     return updated
   })
 
-  ipcMain.handle('projectGroups:delete', (_event, rawArgs: unknown): boolean => {
+  ipcMain.handle('projectGroups:delete', async (_event, rawArgs: unknown): Promise<boolean> => {
     const args = parseProjectGroupIpcArgs(
       ProjectGroupSelectorArgs,
       rawArgs,
       'invalid_project_group_delete_args'
     )
-    const deleted = store.deleteProjectGroup(args.groupId)
-    if (deleted) {
-      notifyReposChanged(mainWindow)
-    }
-    return deleted
+    return (await runtime.deleteProjectGroup(args.groupId)).deleted
   })
 
   ipcMain.handle('projectGroups:moveProject', (_event, rawArgs: unknown): Repo | null => {

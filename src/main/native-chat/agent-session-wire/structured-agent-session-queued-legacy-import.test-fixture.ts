@@ -1,3 +1,4 @@
+import type { AgentSessionExecutionOptions } from '../../../shared/agent-session/options/agent-session-execution-options'
 import { afterEach, beforeEach } from 'vitest'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
@@ -10,7 +11,8 @@ import { agentSessionSendBodyFingerprint } from '../../../shared/agent-session/r
 import {
   openTestJournalHostDatabase,
   seedLegacyTestJournal,
-  pinTestJournalInputMode
+  pinTestJournalInputMode,
+  seedTestLegacyQueueRows
 } from '../agent-session-journal/journal-host-database-test-support'
 import { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { HOST_TEST_SESSION as SESSION } from './structured-agent-session-host-test-data'
@@ -30,7 +32,7 @@ beforeEach(async () => {
 
 afterEach(() => rig.dispose())
 
-export const db = () => openTestJournalHostDatabase(rig.root).db
+export const db = () => openTestJournalHostDatabase(rig.root)
 export const message = (text: string): AgentJournalMessageItem => ({
   kind: 'message',
   role: 'user',
@@ -45,9 +47,9 @@ export const words = (fact: 'providerRejected' | 'cancelled') =>
     { surface: 'rejection' }
   )
 
-export function journalFor(sessionId: string): AgentSessionJournal {
+export async function journalFor(sessionId: string): Promise<AgentSessionJournal> {
   return new AgentSessionJournal({
-    database: openTestJournalHostDatabase(rig.root),
+    database: await db(),
     identity: {
       sessionId,
       workspaceId: 'workspace-1',
@@ -59,9 +61,9 @@ export function journalFor(sessionId: string): AgentSessionJournal {
 }
 
 /** Prepare a genuinely historical source before any current writer owns this session. */
-export function historicalJournalFor(sessionId: string): AgentSessionJournal {
-  const journal = journalFor(sessionId)
-  seedLegacyTestJournal(openTestJournalHostDatabase(rig.root), { identity: journal['identity'] })
+export async function historicalJournalFor(sessionId: string): Promise<AgentSessionJournal> {
+  const journal = await journalFor(sessionId)
+  await seedLegacyTestJournal(await db(), { identity: journal['identity'] })
   pinTestJournalInputMode(journal)
   return journal
 }
@@ -74,32 +76,89 @@ export type Legacy = [
   hold?: string
 ]
 
-export function seedLegacy(sessionId: string, rows: readonly Legacy[]): void {
-  const insert = db().prepare(
-    `INSERT INTO queued_messages (session_id, message_id, position, body_json, fingerprint,
-       created_at, host_instance, state, hold_reason, returned_reason, consumed_as)
-     VALUES (?, ?, ?, ?, ?, 0, 'earlier', ?, ?, ?, ?)`
-  )
-  rows.forEach(([id, state, text, consumedAs, hold], index) => {
-    const body = text === null ? '{' : JSON.stringify(message(text))
-    const print = text === null ? '' : agentSessionSendBodyFingerprint(sessionId, message(text))
-    const reason = state === 'returned' ? 'refused before' : null
-    insert.run(
-      sessionId,
-      id,
-      index + 1,
-      body,
-      print,
+export async function seedLegacy(sessionId: string, rows: readonly Legacy[]): Promise<void> {
+  await seedTestLegacyQueueRows(
+    await db(),
+    sessionId,
+    rows.map(([id, state, text, consumedAs, hold], index) => ({
+      messageId: id,
+      position: index + 1,
+      body: message(text ?? ''),
+      ...(text === null ? { rawBodyJson: '{' } : {}),
+      fingerprint: text === null ? '' : agentSessionSendBodyFingerprint(sessionId, message(text)),
       state,
-      hold ?? null,
-      reason,
-      consumedAs ?? null
-    )
-  })
+      holdReason: hold ?? null,
+      returnedReason: state === 'returned' ? 'refused before' : null,
+      returnedRejection: null,
+      consumedAs: consumedAs ?? null,
+      queuedAt: null
+    }))
+  )
 }
 
-export const legacyIds = (sessionId = SESSION) =>
-  db()
-    .prepare('SELECT message_id AS id FROM queued_messages WHERE session_id = ? ORDER BY position')
-    .all(sessionId)
-    .map((row) => (typeof row === 'object' && row !== null && 'id' in row ? row.id : null))
+export const legacyIds = async (sessionId = SESSION) =>
+  (
+    await (
+      await db()
+    ).read((read) =>
+      read
+        .prepare(
+          'SELECT message_id AS id FROM queued_messages WHERE session_id = ? ORDER BY position'
+        )
+        .all(sessionId)
+    )
+  ).map((row) => row.id)
+
+/** An earlier build's hand-off of `card`, answered `as`. */
+export async function handOff(
+  journal: AgentSessionJournal,
+  attempt: string,
+  card: string,
+  text: string,
+  as: 'providerRejected' | 'cancelled' | 'accepted',
+  fence = 0,
+  answered = false,
+  full?: { body: AgentJournalMessageItem; options: AgentSessionExecutionOptions }
+): Promise<void> {
+  const body = full?.body ?? message(text)
+  const payloadFingerprint = agentSessionSendBodyFingerprint(journal.queuedMessages.sessionId, body)
+  await journal.appendSubmission({
+    clientMessageId: attempt,
+    payloadFingerprint,
+    body,
+    fence,
+    handoverRecorded: true,
+    queuedMessageId: card,
+    ...(answered ? { origin: 'client' as const } : {}),
+    ...(full ? { options: full.options } : {})
+  })
+  await journal.resolveDispatch({
+    clientMessageId: attempt,
+    state: 'pending',
+    fence,
+    turnScope: AGENT_JOURNAL_THREAD_SCOPE
+  })
+  await journal.resolveDispatch(
+    as === 'accepted'
+      ? { clientMessageId: attempt, state: 'accepted', providerIdentity: null, fence }
+      : {
+          clientMessageId: attempt,
+          state: 'rejected',
+          ...words(as),
+          fence,
+          ...(answered
+            ? {
+                answeredInTurn: {
+                  turn: {
+                    provider: 'legacy' as const,
+                    agent: 'codex',
+                    sessionId: 'thread',
+                    recordId: 'ended'
+                  },
+                  via: 'start' as const
+                }
+              }
+            : {})
+        }
+  )
+}

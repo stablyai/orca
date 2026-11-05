@@ -56,11 +56,11 @@ export class JournalInputOrder extends JournalInputEvidence {
   private revision = 0
 
   constructor(
-    state: JournalReducerState,
-    private readonly originalAcceptance?: (id: string) => AgentJournalCursor | undefined,
+    protected readonly state: JournalReducerState,
+    originalAcceptance?: (id: string) => AgentJournalCursor | undefined,
     readonly newestTurn = new JournalNewestTurn(state)
   ) {
-    super(state)
+    super(state, originalAcceptance)
     this.lineage = new JournalInputLineageOwner(state.inputCards)
     this.cards = new JournalInputCardIndex(this.lineage)
   }
@@ -103,7 +103,7 @@ export class JournalInputOrder extends JournalInputEvidence {
   finishReconstruction(state: JournalReducerState): void {
     this.reconstructing = false
     if (this.legacyPlaces === 0) {
-      this.releaseHistory(state)
+      releaseJournalInputHistory(state, this.lineage, this.cards)
     }
   }
 
@@ -290,7 +290,9 @@ export class JournalInputOrder extends JournalInputEvidence {
         if (
           !this.reconstructing &&
           this.legacyPlaces === 0 &&
-          !this.currentIdentity(state, card.messageId)
+          !currentJournalInputIdentity(state, card.messageId, () =>
+            this.cards.hasOverlay(card.messageId)
+          )
         ) {
           this.cards.releaseCard(card.messageId, state.lastSequence)
           this.lineage.cards.delete(card.messageId)
@@ -299,22 +301,14 @@ export class JournalInputOrder extends JournalInputEvidence {
     }
   }
 
-  private currentIdentity(state: JournalReducerState, id: string): boolean {
-    return currentJournalInputIdentity(state, id, () => this.cards.hasOverlay(id))
-  }
-
   private releasePlace(state: JournalReducerState, id: string): void {
     const place = this.state.inputEntries.get(id)
     if (place && this.state.inputEntries.delete(id)) {
       this.originals.delete(id)
       if (place.context.basis === 'legacy' && --this.legacyPlaces === 0 && !this.reconstructing) {
-        this.releaseHistory(state)
+        releaseJournalInputHistory(state, this.lineage, this.cards)
       }
     }
-  }
-
-  private releaseHistory(state: JournalReducerState): void {
-    releaseJournalInputHistory(state, this.lineage, this.cards)
   }
 
   precedes(card: QueuedMessageRow, submission: AgentJournalSubmission): boolean {

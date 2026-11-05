@@ -1,3 +1,4 @@
+import type { JournalReadConnection } from './journal-sql-owner'
 import type Database from '../../sqlite/sync-database'
 import { parseJournalRow, type JournalRow } from './journal-row-schema'
 import { journalOutcomeSource, type JournalOutcomeSource } from './journal-outcome-format'
@@ -113,4 +114,46 @@ function publicOutcomeKey(stored: unknown): string {
     }
     return key
   })
+}
+
+export async function readJournalOutcomeGroupsAsync(
+  read: JournalReadConnection,
+  epoch: string,
+  source: JournalOutcomeSource,
+  after: number,
+  limit?: number
+): Promise<JournalOutcomeReadRow[]> {
+  const groups: JournalOutcomeReadRow[] = []
+  for await (const page of read.pages(
+    `SELECT DISTINCT seq FROM journal_outcomes WHERE generation = ? AND seq > ? AND seq <= ? ORDER BY seq LIMIT ?`,
+    [source.generation, after, source.through, limit ?? -1]
+  )) {
+    for (const { seq } of page) {
+      if (typeof seq !== 'number') {
+        throw new JournalOutcomeDecodeError('invalid journal outcome group')
+      }
+      const group: JournalOutcomeReadRow = {
+        kind: 'outcome',
+        epoch,
+        seq,
+        itemIds: [],
+        submissionIds: []
+      }
+      for await (const entries of read.pages(
+        `SELECT field, entry_key FROM journal_outcomes WHERE generation = ? AND seq = ? AND field IN ('items', 'submissions') ORDER BY field, entry_key`,
+        [source.generation, seq]
+      )) {
+        for (const entry of entries) {
+          const key = publicOutcomeKey(entry.entry_key)
+          if (entry.field === 'items') {
+            group.itemIds.push(key)
+          } else {
+            group.submissionIds.push(key)
+          }
+        }
+      }
+      groups.push(group)
+    }
+  }
+  return groups
 }

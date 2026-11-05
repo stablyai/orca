@@ -25,6 +25,7 @@ import { runningStructuredAgentSessionTurnItemBySequence } from '../../../shared
 import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { journalWroteBeforeOpen } from './journal-cursor'
 import type { JournalHostDatabase } from './journal-host-database'
+import { JournalHistoryReader } from './journal-history-read'
 import {
   markJournalPendingSubmissionsUnknown,
   rejectJournalPendingSubmissions,
@@ -79,6 +80,7 @@ export class AgentSessionJournal {
   private readonly submissionWriter: JournalCollaborators['submissionWriter']
   private readonly stepWriter: JournalCollaborators['stepWriter']
   private readonly restore: () => Promise<void>
+  private readonly history: JournalHistoryReader
   private readonly projection: JournalWriteProjection
   /** Queued cards never count as owed work. */
   readonly queuedMessages: JournalCollaborators['queuedMessages']
@@ -91,6 +93,7 @@ export class AgentSessionJournal {
     this.database = options.database
     this.state = createJournalReducerState(options.identity.sessionId, '')
     this.queue = new JournalWriteQueue(options.identity.sessionId)
+    this.history = new JournalHistoryReader(options, () => this.state, this.publicRead)
     this.projection = new JournalWriteProjection({
       ...options,
       state: () => this.state,
@@ -111,17 +114,17 @@ export class AgentSessionJournal {
       adopt: (loaded) => {
         journalInputOrder(loaded.state).carryRecovery(journalInputOrder(this.state))
         this.state = loaded.state
-        this.onCommitted?.()
+        this.database.notifyCommitted(() => this.onCommitted?.())
       },
       prepare: (db, rows, savedAt, finishFold) => {
         this.queuedMessages.inputState()
         return this.projection.prepare(db, rows, savedAt, finishFold)
       },
       commit: (rows, _savedAt, inputChanged) => {
-        this.onCommitted?.(rows, inputChanged)
-        this.projection.verify()
+        this.database.notifyCommitted(() => this.onCommitted?.(rows, inputChanged))
       },
-      notifyCommitted: () => this.onCommitted?.([]),
+      verify: () => this.projection.verify(),
+      notifyCommitted: () => this.database.notifyCommitted(() => this.onCommitted?.([])),
       journal: () => this,
       enqueue: (build, receipt) => this.rowWriter.enqueue(build, receipt)
     })
@@ -278,14 +281,17 @@ export class AgentSessionJournal {
   canonicalItemId = (itemId: string): string => resolveJournalItemId(this.state, itemId)
 
   /** Read after all preceding writes and before later ones. */
-  readInOrder<T>(read: () => T): Promise<T> {
-    return this.queue.readInOrder(read)
-  }
+  readInOrder = <T>(read: () => T): Promise<T> => this.queue.readInOrder(read)
+
+  /** Commit delivery waits for the admitted prefix without delaying a single settled unit. */
+  readCommittedPrefix = <T>(read: () => T): Promise<T> => this.queue.readCommittedPrefix(read)
 
   readSince(cursor: AgentJournalCursor, limit?: number) {
-    const { database, state } = this
-    return journalContext.readStoredJournalContextSince(database.db, state, cursor, limit)
+    return this.history.readSince(cursor, limit)
   }
+
+  readSinceView: JournalHistoryReader['readSinceView'] = (...args) =>
+    this.history.readSinceView(...args)
 
   /** Assign revisions here so callers cannot publish reducer-stale upserts. */
   appendItem(...args: Parameters<typeof this.itemAppender.append>) {
@@ -322,9 +328,8 @@ export class AgentSessionJournal {
     )
   }
 
-  keepGoalAttachments(identity: AgentJournalItemIdentity): Promise<void> {
-    return this.queue.serialize(() => this.goalAttachments.keep(agentJournalItemKey(identity)))
-  }
+  keepGoalAttachments = (identity: AgentJournalItemIdentity): Promise<void> =>
+    this.queue.serialize(() => this.goalAttachments.keep(agentJournalItemKey(identity)))
 
   appendStopEvent(event: Omit<JournalStopEvent, 'at'>, fence: number): Promise<AgentJournalCursor> {
     return this.rowWriter.append(journalStopEventRowBuilder(() => this.state, event, fence))
@@ -348,9 +353,8 @@ export class AgentSessionJournal {
     }
   }
 
-  appendLifecycleBatch(input: JournalLifecycleBatchInput): Promise<AgentJournalCursor> {
-    return this.lifecycleBatchAppender.append(input)
-  }
+  appendLifecycleBatch = (input: JournalLifecycleBatchInput): Promise<AgentJournalCursor> =>
+    this.lifecycleBatchAppender.append(input)
 
   appendPlannedLifecycleBatch = (input: JournalPlannedLifecycleBatchInput) =>
     this.lifecycleBatchAppender.appendPlanned(input)
@@ -388,7 +392,6 @@ export class AgentSessionJournal {
     return this.epochController.roll(reason, fence)
   }
 
-  replaceEpochItems(...args: Parameters<typeof this.epochController.replace>) {
-    return this.epochController.replace(...args)
-  }
+  replaceEpochItems = (...args: Parameters<typeof this.epochController.replace>) =>
+    this.epochController.replace(...args)
 }

@@ -99,7 +99,7 @@ function rendered(item: Partial<AgentJournalRenderItem> & { body: AgentJournalIt
 }
 
 describe('a bounded row', () => {
-  it('never weighs more than its share of a page, whatever its fields hold', () => {
+  it('never weighs more than its share of a page, whatever its fields hold', async () => {
     const rows = [
       rendered({ body: message(WIDE_TEXT.repeat(400_000)) }),
       rendered({
@@ -142,7 +142,7 @@ describe('a bounded row', () => {
     }
   })
 
-  it('is the stored row when it already fits', () => {
+  it('is the stored row when it already fits', async () => {
     const row = rendered({ body: message('hello') })
     expect(boundedFrameItem({ item: row, bytes: jsonBytes(row) }).item).toBe(row)
   })
@@ -170,21 +170,25 @@ describe('frames to a bounded-frame subscriber', () => {
     }
     const request = { sessionId: SESSION, direction: 'tail' as const, limit: 1 }
     expect(
-      readStructuredAgentSessionHistoryResult({
-        journal,
-        record: null,
-        request,
-        reader
-      }).page.items.map((row) => row.itemId)
+      (
+        await readStructuredAgentSessionHistoryResult({
+          journal,
+          record: null,
+          request,
+          reader
+        })
+      ).page.items.map((row) => row.itemId)
     ).toEqual([agentJournalItemKey(first)])
-    expect(readAgentSessionHistory(journal, request).page.items.map((row) => row.itemId)).toEqual([
-      hidden
-    ])
     expect(
-      readAgentSessionHistory(
-        journal,
-        { ...request, direction: 'before', cursor: journal.cursor() },
-        { reader }
+      (await readAgentSessionHistory(journal, request)).page.items.map((row) => row.itemId)
+    ).toEqual([hidden])
+    expect(
+      (
+        await readAgentSessionHistory(
+          journal,
+          { ...request, direction: 'before', cursor: journal.cursor() },
+          { reader }
+        )
       ).page.items.map((row) => row.itemId)
     ).toEqual([agentJournalItemKey(first)])
     const projected: AgentSessionSubscribeEvent[] = []
@@ -231,7 +235,7 @@ describe('frames to a bounded-frame subscriber', () => {
     expect(
       current?.type === 'snapshot' && current.page.items.some((row) => row.itemId === hidden)
     ).toBe(true)
-    const stale = readAgentSessionHistory(
+    const stale = await readAgentSessionHistory(
       journal,
       { ...request, cursor: { epoch: 'old', sequence: 0 }, direction: 'after' },
       { reader }
@@ -470,7 +474,7 @@ describe('frames to a bounded-frame subscriber', () => {
       EMPTY_STRUCTURED_AGENT_SESSION
     )
     for (let cursor = oldestStructuredAgentSessionCursor(state); state.hasOlder && cursor;) {
-      const older = readAgentSessionHistory(journal, {
+      const older = await readAgentSessionHistory(journal, {
         sessionId: SESSION,
         direction: 'before',
         cursor

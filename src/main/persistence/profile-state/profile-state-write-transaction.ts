@@ -1,3 +1,4 @@
+import { finishSurfaceProfileCache } from '../../workspace-surfaces/surface-profile-cache'
 import type Database from '../../sqlite/sync-database'
 import { storageCapacityErrorCode } from '../../../shared/storage-capacity-error'
 
@@ -24,8 +25,10 @@ export function withProfileStateWriteTransaction<T>(db: Database.Database, write
     const result = write()
     committing = true
     db.exec('COMMIT')
+    finishSurfaceProfileCache(db, true)
     return result
   } catch (error) {
+    finishSurfaceProfileCache(db, false)
     if (!db.isTransaction) {
       // Auto-rollback leaves COMMIT uncertain except SQLITE_FULL: the default powersafe VFS writes its frame last.
       if (committing && storageCapacityErrorCode(error) !== 'SQLITE_FULL') {

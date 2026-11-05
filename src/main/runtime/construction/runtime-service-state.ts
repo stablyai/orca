@@ -45,7 +45,7 @@ import type { RuntimeSkillCommands } from '../integrations/skill/runtime-skill-c
 import { RuntimeTerminalStreamConsumers } from '../terminal/output/runtime-terminal-stream-consumers'
 import type { RecentPtyOutputBuffer } from '../recent-pty-output-buffer'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
-import { mainListsEveryPane } from '../terminal/surface/main-terminal-surfaces'
+import { mainListsEveryPane } from '../terminal/surface/main-terminal-surface-observations'
 import { TUI_IDLE_QUIESCENCE_MS } from '../orca-runtime-postlude'
 import { readScreenClearingBlockedTail } from '../blocked-tail-screen-clear'
 

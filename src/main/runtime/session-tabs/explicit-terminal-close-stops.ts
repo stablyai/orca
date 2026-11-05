@@ -1,16 +1,16 @@
-import type { WorktreePtyHostFence } from '../workspaces/removal/worktree-pty-host-fence'
+import { windowListsTab } from '../terminal/surface/main-terminal-surfaces'
 import type { RuntimeTerminalClose } from '../../../shared/runtime-types'
 import type { RuntimePtyTabCloseAuthority } from '../terminal/records/runtime-terminal-state-records'
 import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
-import type { ResolvedWorktree } from '../workspaces/catalog/runtime-worktree-path-identity'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import type { LayoutApplyReply } from '../../../shared/workspace-layout/workspace-layout-command-types'
-import type { WindowLayoutCommand } from '../terminal/layout/runtime-layout-apply'
+import type {
+  LayoutCommandRunOptions,
+  WindowLayoutCommand
+} from '../terminal/layout/runtime-layout-apply'
 import { closeMainOwnedPaneByHandle } from './main-handle-close'
 import {
   NO_STOP,
-  OrcaRuntimeWithExplicitCloseTabPtyStops,
-  type ExplicitCloseStop
+  OrcaRuntimeWithExplicitCloseTabPtyStops
 } from './explicit-terminal-close-pty-stops'
 import {
   closePairedHostLeafFirst,
@@ -18,52 +18,10 @@ import {
 } from './paired-host-terminal-close'
 
 export abstract class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRuntimeWithExplicitCloseTabPtyStops {
-  protected abstract getResolvedWorktreeMap(): Promise<Map<string, ResolvedWorktree>>
-  abstract applyLayoutCommand(command: WindowLayoutCommand): Promise<LayoutApplyReply>
-  protected abstract refreshPtyWorktreeRecordsFromController(
-    resolvedWorktrees: ResolvedWorktree[],
-    targetWorktreeId?: string | null,
-    deadline?: number
-  ): Promise<Set<string> | null>
-  protected abstract getLivePtyIdsForWorktree(
-    worktreeId: string,
-    freshPtyIds?: ReadonlySet<string>,
-    hostFence?: WorktreePtyHostFence
-  ): Set<string>
-  protected abstract getTerminalHandlesForPtyId(ptyId: string): string[]
-  protected abstract getRecordedTerminalSleepHandles(
-    ptyIds: Iterable<string>,
-    terminalHandlesByPtyId: Readonly<Record<string, readonly string[]>>
-  ): string[]
-  protected abstract commitWorktreeTerminalSleepPtys(args: {
-    worktreeId: string
-    generation: number
-    ptyIds: readonly string[]
-    pendingPtyIds: Set<string>
-    committedPtyIds: Set<string>
-    terminalHandlesByPtyId: Readonly<Record<string, readonly string[]>>
-  }): void
-
-  protected describeTerminalClose(
-    handle: string,
-    tabId: string,
-    ptyId: string | null,
-    stop: ExplicitCloseStop
-  ): RuntimeTerminalClose {
-    const close: RuntimeTerminalClose = { handle, tabId, ptyKilled: stop.stopped }
-    if (stop.stopped || !ptyId) {
-      return close
-    }
-    const verdict = this.getPtyLivenessVerdict(ptyId)
-    if (verdict?.status === 'unverifiable') {
-      return { ...close, ptyStopVerdict: 'unverifiable', ptyStopReason: verdict.reason }
-    }
-    if (verdict?.status === 'live') {
-      return { ...close, ptyStopVerdict: 'live' }
-    }
-    return close
-  }
-
+  abstract applyLayoutCommand(
+    command: WindowLayoutCommand,
+    run?: Pick<LayoutCommandRunOptions, 'admit'>
+  ): Promise<LayoutApplyReply>
   /** null when this machine owns the PTY; see `closePairedHostLeafFirst` otherwise. */
   private closeOnOwningPairedHost(
     handle: string,
@@ -84,25 +42,24 @@ export abstract class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRun
   }
 
   async closeTerminal(handle: string): Promise<RuntimeTerminalClose> {
-    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-      const mainClose = await closeMainOwnedPaneByHandle(
-        {
-          runtime: this,
-          livePty: () => this.getLivePtyForHandle(handle)?.pty ?? null,
-          liveLeaf: () => this.getLiveLeafForHandle(handle).leaf,
-          remoteSessionIdOf: (worktreeId, tabId) =>
-            this.getWorkspaceSessionForWorktree(worktreeId)?.remoteSessionIdsByTabId?.[tabId],
-          applyLayoutCommand: (command) => this.applyLayoutCommand(command),
-          stop: (ptyIds, addressed) => this.stopExplicitlyClosedTabPtys(ptyIds, addressed),
-          describe: (...args) => this.describeTerminalClose(...args)
-        },
-        handle,
-        false
-      )
-      if (mainClose) {
-        this.claudeAgentTeams.removeTeamForLeaderHandle(handle)
-        return mainClose
-      }
+    const mainClose = await closeMainOwnedPaneByHandle(
+      {
+        runtime: this,
+        livePty: () => this.getLivePtyForHandle(handle)?.pty ?? null,
+        liveLeaf: () => this.getLiveLeafForHandle(handle).leaf,
+        remoteSessionIdOf: (worktreeId, tabId) =>
+          this.getWorkspaceSessionForWorktree(worktreeId)?.remoteSessionIdsByTabId?.[tabId],
+        applyLayoutCommand: (command) => this.applyLayoutCommand(command),
+        capture: (ptyIds, scope) => this.captureExplicitCloseTargets(ptyIds, scope),
+        stop: (ptyIds, addressed) => this.stopExplicitlyClosedTabPtys(ptyIds, addressed),
+        describe: (...args) => this.describeTerminalClose(...args)
+      },
+      handle,
+      false
+    )
+    if (mainClose) {
+      this.claudeAgentTeams.removeTeamForLeaderHandle(handle)
+      return mainClose
     }
     const pty = this.getLivePtyForHandle(handle)
     this.claudeAgentTeams.removeTeamForLeaderHandle(handle)
@@ -131,8 +88,21 @@ export abstract class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRun
       const closesTab =
         paneTarget !== null &&
         this.resolveTerminalCloseTarget(pty.pty.worktreeId, paneTarget) === 'last-pane'
-      if (closesTab && surface && this.tabs.has(tabId) && this.notifier?.closeTerminalTab) {
-        const ptyIdsToKill = this.getPtyIdsForExplicitTabClose(pty.pty.worktreeId, tabId)
+      const capturedPty = this.captureExplicitCloseTargets([pty.pty.ptyId], {
+        worktreeId: pty.pty.worktreeId,
+        tabId,
+        ...(closesTab ? {} : { leafId })
+      })
+      if (
+        closesTab &&
+        surface &&
+        windowListsTab(this, this.tabs, tabId) &&
+        this.notifier?.closeTerminalTab
+      ) {
+        const ptyIdsToKill = this.captureExplicitCloseTargets(
+          this.getPtyIdsForExplicitTabClose(pty.pty.worktreeId, tabId),
+          { worktreeId: pty.pty.worktreeId, tabId }
+        )
         try {
           await this.closeMobileSessionTab(`id:${pty.pty.worktreeId}`, tabId, {
             localPtyTeardownOwnedExternally: true
@@ -146,7 +116,12 @@ export abstract class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRun
         const stop = await this.stopExplicitlyClosedTabPtys(ptyIdsToKill, pty.pty.ptyId)
         return this.describeTerminalClose(handle, tabId, pty.pty.ptyId, stop)
       }
-      if (closesTab && surface && ptyCloseAuthority && !this.tabs.has(surface.tab.parentTabId)) {
+      if (
+        closesTab &&
+        surface &&
+        ptyCloseAuthority &&
+        !windowListsTab(this, this.tabs, surface.tab.parentTabId)
+      ) {
         try {
           await this.closeMobileSessionTab(`id:${pty.pty.worktreeId}`, tabId, {
             reason: 'user',
@@ -157,11 +132,11 @@ export abstract class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRun
           if (!(error instanceof Error) || error.message !== 'workspace_session_unavailable') {
             throw error
           }
-          const stop = await this.stopExplicitlyClosedTabPtys([pty.pty.ptyId], pty.pty.ptyId)
+          const stop = await this.stopExplicitlyClosedTabPtys(capturedPty, pty.pty.ptyId)
           this.notifyRendererOfHeadlessTerminalClose(tabId)
           return this.describeTerminalClose(handle, tabId, pty.pty.ptyId, stop)
         }
-        const stop = await this.stopExplicitlyClosedTabPtys([pty.pty.ptyId], pty.pty.ptyId)
+        const stop = await this.stopExplicitlyClosedTabPtys(capturedPty, pty.pty.ptyId)
         return this.describeTerminalClose(handle, tabId, pty.pty.ptyId, stop)
       }
       // Headless hosts have no renderer tab to close through the notifier.
@@ -169,10 +144,13 @@ export abstract class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRun
         closesTab &&
         !surface &&
         recorded.tabId &&
-        this.tabs.has(tabId) &&
+        windowListsTab(this, this.tabs, tabId) &&
         this.notifier?.closeTerminalTab
       ) {
-        const ptyIdsToKill = this.getPtyIdsForExplicitTabClose(pty.pty.worktreeId, tabId)
+        const ptyIdsToKill = this.captureExplicitCloseTargets(
+          this.getPtyIdsForExplicitTabClose(pty.pty.worktreeId, tabId),
+          { worktreeId: pty.pty.worktreeId, tabId }
+        )
         let tabClosed = true
         try {
           await this.notifier.closeTerminalTab(tabId, { localPtyTeardownOwnedExternally: true })
@@ -188,7 +166,7 @@ export abstract class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRun
           return this.describeTerminalClose(handle, tabId, pty.pty.ptyId, stop)
         }
       }
-      const stop = await this.stopExplicitlyClosedTabPtys([pty.pty.ptyId], pty.pty.ptyId)
+      const stop = await this.stopExplicitlyClosedTabPtys(capturedPty, pty.pty.ptyId)
       if (!closesTab) {
         // Commit this pane's removal explicitly; unconfirmed stop never authorizes closing live siblings.
         if (paneTarget) {
@@ -224,11 +202,18 @@ export abstract class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRun
       return { handle, tabId: leaf.tabId, ...hostClose.close }
     }
     const closesTab = this.resolveTerminalCloseTarget(leaf.worktreeId, paneTarget) === 'last-pane'
-    const ptyIdsToKill = closesTab
-      ? this.getPtyIdsForExplicitTabClose(leaf.worktreeId, leaf.tabId)
-      : leaf.ptyId
-        ? [leaf.ptyId]
-        : []
+    const ptyIdsToKill = this.captureExplicitCloseTargets(
+      closesTab
+        ? this.getPtyIdsForExplicitTabClose(leaf.worktreeId, leaf.tabId)
+        : leaf.ptyId
+          ? [leaf.ptyId]
+          : [],
+      {
+        worktreeId: leaf.worktreeId,
+        tabId: leaf.tabId,
+        ...(closesTab ? {} : { leafId: leaf.leafId })
+      }
+    )
     if (closesTab && this.notifier?.closeTerminalTab) {
       await this.notifier.closeTerminalTab(leaf.tabId, { localPtyTeardownOwnedExternally: true })
     }
@@ -252,25 +237,24 @@ export abstract class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRun
   }
 
   async closeTerminalTab(handle: string): Promise<RuntimeTerminalClose> {
-    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-      const mainClose = await closeMainOwnedPaneByHandle(
-        {
-          runtime: this,
-          livePty: () => this.getLivePtyForHandle(handle)?.pty ?? null,
-          liveLeaf: () => this.getLiveLeafForHandle(handle).leaf,
-          remoteSessionIdOf: (worktreeId, tabId) =>
-            this.getWorkspaceSessionForWorktree(worktreeId)?.remoteSessionIdsByTabId?.[tabId],
-          applyLayoutCommand: (command) => this.applyLayoutCommand(command),
-          stop: (ptyIds, addressed) => this.stopExplicitlyClosedTabPtys(ptyIds, addressed),
-          describe: (...args) => this.describeTerminalClose(...args)
-        },
-        handle,
-        true
-      )
-      if (mainClose) {
-        this.claudeAgentTeams.removeTeamForLeaderHandle(handle)
-        return mainClose
-      }
+    const mainClose = await closeMainOwnedPaneByHandle(
+      {
+        runtime: this,
+        livePty: () => this.getLivePtyForHandle(handle)?.pty ?? null,
+        liveLeaf: () => this.getLiveLeafForHandle(handle).leaf,
+        remoteSessionIdOf: (worktreeId, tabId) =>
+          this.getWorkspaceSessionForWorktree(worktreeId)?.remoteSessionIdsByTabId?.[tabId],
+        applyLayoutCommand: (command) => this.applyLayoutCommand(command),
+        capture: (ptyIds, scope) => this.captureExplicitCloseTargets(ptyIds, scope),
+        stop: (ptyIds, addressed) => this.stopExplicitlyClosedTabPtys(ptyIds, addressed),
+        describe: (...args) => this.describeTerminalClose(...args)
+      },
+      handle,
+      true
+    )
+    if (mainClose) {
+      this.claudeAgentTeams.removeTeamForLeaderHandle(handle)
+      return mainClose
     }
     const pty = this.getLivePtyForHandle(handle)
     if (pty) {

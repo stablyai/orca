@@ -84,6 +84,45 @@ function script(root: string, source: string): string {
 }
 
 describe('persistent profile state write worker', () => {
+  it('commits canonical terminal commands through its typed owner and preserves them across stale saves and restart', async () => {
+    const f = fixture()
+    const client = clientFor(f.initialization)
+    await client.ready
+    const initialized = await client.executeSurfaceCommand({ type: 'initialize', hostId: 'local' })
+    const leafId = '339343d0-9fcb-4d4d-8bf6-69615be0f927'
+    const created = await client.executeSurfaceCommand({
+      type: 'layout',
+      hostId: 'local',
+      session: initialized.session,
+      facts: { startingLeafIds: [], bindings: [] },
+      request: {
+        hostId: 'local',
+        callerId: 'ordinary',
+        commandId: 'create',
+        // ast-grep-ignore: test-no-wall-clock -- The real storage owner validates this bounded deadline against its own clock.
+        expiresAt: Date.now() + 60_000,
+        command: { type: 'createTerminalTab', workspace: 'folder', tabId: 'terminal', leafId },
+        targets: [{ hostTabId: 'terminal', expected: null }]
+      }
+    })
+    expect(created.outcome).toMatchObject({ status: 'accepted' })
+    expect(created.host.surfaces).toHaveLength(1)
+    await client.writeSerializedDomains([
+      { domain: 'workspaceSession', payload: JSON.stringify(initialized.session) }
+    ])
+    await client.close()
+    const reopened = new ProfileStateSqliteAuthority(f.path, f.profileId)
+    reopened.readSerializedState()
+    const current = reopened.executeSurfaceCommand({ type: 'query', hostId: 'local' })
+    expect(current.host.surfaces).toEqual(created.host.surfaces)
+    expect(current.allocations).toEqual(created.allocations)
+    expect(current.session.tabsByWorktree.folder).toHaveLength(1)
+    const revision = reopened.revision
+    reopened.executeSurfaceCommand({ type: 'query', hostId: 'local' })
+    expect(reopened.revision).toBe(revision)
+    reopened.close()
+  })
+
   it('commits full, selective, automation and byte payloads, exports and releases the database', async () => {
     const f = fixture()
     const client = clientFor(f.initialization)

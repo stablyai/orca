@@ -79,7 +79,7 @@ beforeEach(async () => {
     agents: claudeAndCodexDeclared(),
     store,
     adapter: Object.assign(adapter, { supportsCreate: () => true }),
-    journalDatabase: openTestJournalHostDatabase(root),
+    journalDatabase: await openTestJournalHostDatabase(root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-a',
     logger: createStructuredAgentSessionLogger(),
@@ -141,7 +141,7 @@ it('ends empty initialization without a cancellation request row', async () => {
   ).toMatchObject({ ok: true })
   await vi.waitFor(() => expect(host['sessions'].get(SESSION)?.child).toBeNull())
   expect(
-    (await host.journalSnapshot(SESSION)).items.filter((item) => item.body.kind === 'status')
+    await (await host.journalSnapshot(SESSION)).items.filter((item) => item.body.kind === 'status')
   ).toEqual([])
   expect(claude.connections[0]!.closeCount).toBeGreaterThan(0)
 })
@@ -165,17 +165,17 @@ it('holds the message from a start that never answers, and a Stop ends it: stopp
 
   expect(stopped).toMatchObject({ ok: true, value: { cancelled: true } })
   expect(
-    (await host.journalSnapshot(SESSION)).items.flatMap((item) =>
-      item.body.kind === 'status' ? [item.body.text] : []
-    )
+    await (
+      await host.journalSnapshot(SESSION)
+    ).items.flatMap((item) => (item.body.kind === 'status' ? [item.body.text] : []))
   ).toEqual(['Cancellation requested.'])
   await vi.waitFor(() => expect(host['sessions'].get(SESSION)?.child).toBeNull())
   expect(connection!.closeCount).toBeGreaterThan(0)
   await vi.waitFor(async () =>
     expect(
-      (await host.journalSnapshot(SESSION)).submissions.find(
-        (entry) => entry.clientMessageId === id
-      )
+      await (
+        await host.journalSnapshot(SESSION)
+      ).submissions.find((entry) => entry.clientMessageId === id)
     ).toMatchObject({ dispatchState: 'rejected', reason: DISPATCH_REJECTED_CANCELLED })
   )
   expect(await readsWorking()).toBe(false)

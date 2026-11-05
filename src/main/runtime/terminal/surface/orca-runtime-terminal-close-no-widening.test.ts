@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import {
   LEAF_ID,
+  INCARNATION_ID,
   PTY_ID,
   SIBLING_LEAF_ID,
   SIBLING_PTY_ID,
@@ -272,11 +274,12 @@ const rows: [Entry, Condition][] = [
   ['phone-headless', 'no-saved-layout']
 ]
 
-// L255: expected main-owned headless phone-close widening until its fix lands.
-const awaitsL255 = (entry: string) => ORCA_LAYOUT_OWNER_IS_MAIN && entry === 'phone-headless'
-
 describe('an explicit close of one pane never widens into its tab', () => {
-  it.each(rows.filter(([entry]) => !awaitsL255(entry)))('%s close, %s', closesOnlyThatPane)
+  const pending = ([entry, condition]: (typeof rows)[number]) =>
+    ORCA_LAYOUT_OWNER_IS_MAIN &&
+    entry === 'phone-headless' &&
+    (condition === 'leaf-already-retired' || condition === 'no-saved-layout')
+  it.each(rows.filter((row) => !pending(row)))('%s close, %s', closesOnlyThatPane)
 })
 
 async function closesOnlyThatPane(
@@ -307,7 +310,11 @@ async function closesOnlyThatPane(
   if (entry === 'phone-headless') {
     const snapshot = await harness.runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
     expect(snapshot.tabs.map((tab) => tab.id)).toEqual([`${TAB_ID}::${SIBLING_LEAF_ID}`])
-    expect(harness.kill).toHaveBeenCalledWith(PTY_ID)
+    expect(harness.stopAndWait).toHaveBeenCalledWith(
+      PTY_ID,
+      expect.objectContaining({ isCurrent: expect.any(Function) })
+    )
+    expect(harness.kill).not.toHaveBeenCalled()
     return
   }
   expectDesktopDropsPane(harness, TAB_ID, LEAF_ID)
@@ -327,6 +334,88 @@ describe("a close of a tab's last pane still closes the tab", () => {
 
     expect(harness.getSession().tabsByWorktree[WORKTREE_ID]).toEqual([])
     expect((await harness.runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)).tabs).toEqual([])
-    expect(harness.kill).toHaveBeenCalledWith(PTY_ID)
+    expect(harness.kill).toHaveBeenCalledWith(
+      PTY_ID,
+      expect.objectContaining({ isCurrent: expect.any(Function) })
+    )
   })
+})
+
+it('leaves a terminal another tab already owns usable when the addressed tab closes', async () => {
+  const f = createHarness({ registerPtyBacked: true })
+  const otherTab = 'other-existing-owner'
+  const otherLeaf = '30000000-0000-4000-8000-000000000003'
+  const publish = (withClosing: boolean) => {
+    const panes = [
+      ...(withClosing ? [{ tabId: TAB_ID, leafId: LEAF_ID }] : []),
+      { tabId: otherTab, leafId: otherLeaf }
+    ]
+    f.runtime.syncWindowGraph(1, {
+      tabs: panes.map((pane) => ({
+        tabId: pane.tabId,
+        worktreeId: WORKTREE_ID,
+        title: 'Shell',
+        activeLeafId: pane.leafId,
+        layout: { type: 'leaf', leafId: pane.leafId }
+      })),
+      leaves: panes.map((pane, index) => ({
+        ...pane,
+        worktreeId: WORKTREE_ID,
+        paneRuntimeId: index + 10,
+        ptyId: PTY_ID
+      })),
+      mobileSessionTabs: [
+        {
+          worktree: WORKTREE_ID,
+          publicationEpoch: 'renderer:shared-resource',
+          snapshotVersion: withClosing ? 1 : 2,
+          activeGroupId: null,
+          activeTabId: `${otherTab}::${otherLeaf}`,
+          activeTabType: 'terminal',
+          tabs: panes.map((pane) => ({
+            type: 'terminal',
+            id: `${pane.tabId}::${pane.leafId}`,
+            parentTabId: pane.tabId,
+            leafId: pane.leafId,
+            ptyId: PTY_ID,
+            title: 'Shell',
+            isActive: pane.tabId === otherTab
+          }))
+        }
+      ]
+    })
+  }
+  f.editSession((session) => ({
+    ...session,
+    tabsByWorktree: {
+      ...session.tabsByWorktree,
+      [WORKTREE_ID]: [
+        ...(session.tabsByWorktree[WORKTREE_ID] ?? []),
+        { ...session.tabsByWorktree[WORKTREE_ID]![0]!, id: otherTab }
+      ]
+    },
+    terminalLayoutsByTabId: {
+      ...session.terminalLayoutsByTabId,
+      [otherTab]: {
+        root: { type: 'leaf', leafId: otherLeaf },
+        activeLeafId: otherLeaf,
+        expandedLeafId: null,
+        ptyIdsByLeafId: { [otherLeaf]: PTY_ID }
+      }
+    },
+    terminalPtyIncarnationsByPaneKey: {
+      ...session.terminalPtyIncarnationsByPaneKey,
+      [makePaneKey(otherTab, otherLeaf)]: INCARNATION_ID
+    }
+  }))
+  publish(true)
+  const closing = (await f.runtime.listTerminals()).terminals.find((row) => row.tabId === TAB_ID)!
+  f.setCloseTerminalTabAction(() => publish(false))
+  await f.runtime.closeTerminalTab(closing.handle)
+  const survivor = (await f.runtime.listTerminals()).terminals.find(
+    (row) => row.tabId === otherTab
+  )!
+  expect(await f.runtime.readTerminal(survivor.handle)).toMatchObject({ status: 'running' })
+  expect(f.stopAndWait).not.toHaveBeenCalled()
+  expect(f.kill).not.toHaveBeenCalled()
 })

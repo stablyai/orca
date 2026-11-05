@@ -154,7 +154,10 @@ export function startJournalRowFold(
   },
   state = createJournalReducerState(input.sessionId, input.epoch, input.originalAcceptance)
 ): {
-  add: (entry: { seq: number; rowJson: string; ts?: number }) => boolean
+  add: (
+    entry: { seq: number; rowJson: string; ts?: number },
+    parsed?: ReturnType<typeof parseJournalRow>
+  ) => boolean
   finish: () => JournalLoad
 } {
   journalInputOrder(state).beginReconstruction()
@@ -164,9 +167,11 @@ export function startJournalRowFold(
   let newer: { sequence: number } | null = null
   let empty = true
 
-  const add = (entry: { seq: number; rowJson: string; ts?: number }): boolean => {
+  const add = (
+    entry: { seq: number; rowJson: string; ts?: number },
+    parsed = parseJournalRow(entry.rowJson, input.interpretation === 'sources')
+  ): boolean => {
     empty = false
-    const parsed = parseJournalRow(entry.rowJson, input.interpretation === 'sources')
     if (!parsed.ok && parsed.unreadable) {
       newer = { sequence: entry.seq }
       return false
@@ -220,7 +225,10 @@ export function startJournalRowFold(
         : { sequence: FIRST_JOURNAL_SEQUENCE, cause: 'no-epoch-row' as const })
     return { state, newer, damage: newer ? null : found }
   }
-  return { add: input.untilDamage ? (entry) => add(entry) && damage === null : add, finish }
+  return {
+    add: input.untilDamage ? (entry, parsed) => add(entry, parsed) && damage === null : add,
+    finish
+  }
 }
 
 export { journalRowsAfterReader, readJournalRowsAfterCursor } from './journal-read-row'

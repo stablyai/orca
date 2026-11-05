@@ -1,3 +1,5 @@
+import { runJournalTransaction } from '../agent-session-journal/journal-database'
+import { mutateTestJournalFixture } from '../agent-session-journal/journal-drained-fixture-test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -107,16 +109,14 @@ export async function reopenWithRawRows(rows: readonly RawSeedRow[]): Promise<Ag
       }) as JournalRow
   )
   await journal.close()
-  const opened = openTestJournalHostDatabase(root)
-  try {
-    opened.db.exec('BEGIN IMMEDIATE')
-    for (const row of full) {
-      insertTestJournalRow(opened.db, IDENTITY.sessionId, row)
-    }
-    opened.db.exec('COMMIT')
-  } finally {
-    await opened.close()
-  }
+  const opened = await openTestJournalHostDatabase(root)
+  await mutateTestJournalFixture(opened, (raw) => {
+    runJournalTransaction(raw, () => {
+      for (const row of full) {
+        insertTestJournalRow(raw, IDENTITY.sessionId, row)
+      }
+    })
+  })
   return journals.open({ identity: IDENTITY, stateDirectory: root, now: tick })
 }
 

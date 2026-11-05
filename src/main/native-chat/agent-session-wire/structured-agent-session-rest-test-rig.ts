@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { expect, vi, type Mock } from 'vitest'
+import { vi, type Mock } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type {
@@ -174,6 +174,7 @@ export async function createRestTestRig(
     readOptions: vi.fn(async () => ({ models: [], current: { model: 'gpt-live' } }))
   }
   const starts = structuredAgentSessionHeldStarts(() => rig.host)
+  const journalDatabase = await openTestJournalHostDatabase(root)
   const hostFor = (overrides: Partial<StructuredAgentSessionHostDeps>) =>
     new StructuredAgentSessionHost({
       agents: claudeAndCodexAgents(),
@@ -186,7 +187,7 @@ export async function createRestTestRig(
         answerPrompt: async ({ commit }) => commit(),
         setOption: async () => undefined
       }),
-      journalDatabase: openTestJournalHostDatabase(root),
+      journalDatabase,
       claimKeyId: 'key-1',
       mintSpawnToken: () => 'spawn-a',
       probeOwner: async () => ({ outcome: 'pid-absent' }),
@@ -234,7 +235,8 @@ export async function foundRestTestChat(rig: RestTestRig): Promise<void> {
   if (!sent.ok) {
     throw new Error(`send refused: ${sent.refusal.code}`)
   }
-  await vi.waitFor(() => expect(rig.adapter.dispatch).toHaveBeenCalled())
+  await rig.host.waitForSendSettlement(SESSION, sent.value.clientMessageId)
+  await rig.host['conversationDelivery'].loop.wake(SESSION)
 }
 
 export function sweepOnce(host: StructuredAgentSessionHost): Promise<void> {

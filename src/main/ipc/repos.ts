@@ -64,9 +64,9 @@ export function registerRepoHandlers(
   ipcMain.removeHandler('sparsePresets:remove')
 
   registerRepoCatalogHandlers(mainWindow, store, runtime)
-  registerProjectHostSetupHandlers(mainWindow, store)
+  registerProjectHostSetupHandlers(mainWindow, store, runtime)
   registerRepoCreationHandlers(mainWindow, store)
-  registerProjectGroupHandlers(mainWindow, store)
+  registerProjectGroupHandlers(mainWindow, store, runtime)
   registerFolderWorkspaceHandlers(mainWindow, store, runtime)
   registerNestedRepoImportHandler(mainWindow, store)
   registerRepoUpdateHandler(mainWindow, store)

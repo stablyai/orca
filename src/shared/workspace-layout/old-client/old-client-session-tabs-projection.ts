@@ -63,7 +63,8 @@ export function projectSessionTabs(
   workspace: WorkspaceLayout,
   view: SessionTabsView,
   facts: SessionTabsFacts,
-  generatedTitlesEnabled: boolean
+  generatedTitlesEnabled: boolean,
+  clientBrowserPageIds: ReadonlySet<string> = new Set()
 ): ProjectedSessionTabs {
   const activeGroupId = resolveActiveGroupId(workspace, view.activeGroupIdByWorktree?.[key])
   const groupViews = view.groups[key] ?? {}
@@ -86,6 +87,8 @@ export function projectSessionTabs(
       if (tab && rows.length > 0) {
         tabs.push(...rows)
         tabOrder.push(publishedTabOrderId(tab))
+      } else if (!tab && clientBrowserPageIds.has(tabId)) {
+        tabOrder.push(tabId)
       }
     }
     if (tabOrder.length === 0) {

@@ -12,6 +12,7 @@ export type StoreCascadesMockApi = {
   pty: { kill: Mock }
   gh: { prForBranch: Mock; issue: Mock }
   settings: { get: Mock; set: Mock }
+  runtime: { call: Mock }
   runtimeEnvironments: { call: Mock }
   cache: { getGitHub: Mock; setGitHub: Mock }
 }
@@ -43,6 +44,11 @@ export function createStoreCascadesMockApi(): StoreCascadesMockApi {
       get: vi.fn().mockResolvedValue({}),
       set: vi.fn().mockResolvedValue(undefined)
     },
+    runtime: {
+      call: vi
+        .fn()
+        .mockResolvedValue({ id: 'local-rpc', ok: true, result: { ok: true, result: {} } })
+    },
     runtimeEnvironments: {
       call: vi.fn()
     },
@@ -59,6 +65,11 @@ export function createStoreCascadesMockApi(): StoreCascadesMockApi {
 
 /** Runtime RPC default for the sleep suites: compat probes pass through, terminal.sleep reports a clean stop. */
 export function applySleepRuntimeRpcDefault(mockApi: StoreCascadesMockApi): void {
+  mockApi.runtime.call.mockResolvedValue({
+    id: 'local-rpc',
+    ok: true,
+    result: { ok: true, result: {} }
+  })
   mockApi.runtimeEnvironments.call.mockImplementation((args: { method: string }) =>
     Promise.resolve(
       createCompatibleRuntimeStatusResponseIfNeeded(args) ?? {

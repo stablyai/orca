@@ -31,6 +31,7 @@ function makeController(options: {
     repo: targetRepo
   }))
   const store = {
+    getRepos: () => [targetRepo],
     getProjects: () => projects,
     getProjectHostSetups: () => projectHostSetups,
     getAllWorktreeMeta: () =>
@@ -55,22 +56,22 @@ function makeController(options: {
 }
 
 describe('project setup delete guard', () => {
-  it('refuses a CLI delete while terminals are live, and deletes with --force', () => {
+  it('refuses a CLI delete while terminals are live, and deletes with --force', async () => {
     const { controller, deleteProjectHostSetup, setupId } = makeController({
       liveTerminals: 2,
       metaIds: []
     })
 
-    expect(() => controller.deleteSetup({ setupId, force: false })).toThrow(
+    await expect(controller.deleteSetup({ setupId, force: false })).rejects.toThrow(
       /2 terminals still open.*--force/
     )
     expect(deleteProjectHostSetup).not.toHaveBeenCalled()
 
-    controller.deleteSetup({ setupId, force: true })
+    await controller.deleteSetup({ setupId, force: true })
     expect(deleteProjectHostSetup).toHaveBeenCalledTimes(1)
   })
 
-  it('sees sibling-host metadata kept only in the host-qualified maps', () => {
+  it('sees sibling-host metadata kept only in the host-qualified maps', async () => {
     // Same repo id and path on local and SSH: the raw-id map holds only the local row.
     const { controller, deleteProjectHostSetup, setupId } = makeController({
       liveTerminals: 0,
@@ -79,19 +80,19 @@ describe('project setup delete guard', () => {
       targetRepo: { ...repo, connectionId: 'box' }
     })
 
-    expect(() => controller.deleteSetup({ setupId, force: false })).toThrow(
+    await expect(controller.deleteSetup({ setupId, force: false })).rejects.toThrow(
       /saved details for 1 workspace\./
     )
     expect(deleteProjectHostSetup).not.toHaveBeenCalled()
   })
 
-  it('keeps the unchecked delete for older clients that omit force', () => {
+  it('keeps the unchecked delete for older clients that omit force', async () => {
     const { controller, deleteProjectHostSetup, setupId } = makeController({
       liveTerminals: 3,
       metaIds: ['repo-1::/work/app']
     })
 
-    controller.deleteSetup({ setupId })
+    await controller.deleteSetup({ setupId })
     expect(deleteProjectHostSetup).toHaveBeenCalledTimes(1)
   })
 })

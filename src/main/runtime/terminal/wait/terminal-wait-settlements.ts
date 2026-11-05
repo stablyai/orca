@@ -1,4 +1,5 @@
 import { OrcaRuntimeWithBindPtyIncarnationHandle } from '../identity/terminal-handle-bindings'
+import type { TerminalWaiter } from '../../runtime-terminal-contracts'
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 import {
   buildPtyTerminalWaitBlockedResult,
@@ -28,8 +29,14 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
     ...args: Parameters<OrcaRuntimeWithResolveWaiter['removeWaiter']>
   ): ReturnType<OrcaRuntimeWithResolveWaiter['removeWaiter']>
 
-  protected resolvePtyExitWaiters(pty: RuntimePtyWorktreeRecord, ptyId: string): void {
-    for (const waiter of this.terminalWaiters.forPty(ptyId)) {
+  protected resolvePtyExitWaiters(
+    pty: Pick<RuntimePtyWorktreeRecord, 'connected' | 'lastExitCode' | 'lastExitCause'>,
+    waiters: readonly TerminalWaiter[]
+  ): void {
+    for (const waiter of waiters) {
+      if (!this.terminalWaiters.has(waiter)) {
+        continue
+      }
       if (waiter.condition === 'exit') {
         this.resolveWaiter(waiter, buildPtyTerminalWaitResult(waiter.handle, 'exit', pty))
       } else {

@@ -1,3 +1,4 @@
+import { admittedSplitRoot } from './terminal-pane-placement-graft'
 // Pane IDs and their keyed data/scrollback survive moves.
 
 import { getNextTerminalOrdinal } from './terminal-tab-ordinal'
@@ -48,8 +49,16 @@ export function splitPane(
     return refuse('pane_not_found')
   }
   const leafId = command.newLeafId ?? context.mintLeafId()
-  const side = command.direction === 'vertical' ? 'right' : 'bottom'
-  const root = insertLeafBeside(tab.panes.root!, command.leafId, leafId, side, command.ratio)
+  const root = admittedSplitRoot(tab.panes.root!, leafId, {
+    kind: 'split',
+    parentLeafId: command.leafId,
+    direction: command.direction,
+    ratio: command.ratio,
+    proposedRoot: command.proposedRoot
+  })
+  if (!root) {
+    return refuse('pane_structure_changed')
+  }
   const next = updateTab(model, command.workspace, { ...tab, panes: { ...tab.panes, root } })
   if (!next.ok) {
     return next

@@ -67,6 +67,9 @@ function runtimeSpawnPaneBinding(
       tabId,
       leafId,
       ptyId: ctx.result.id,
+      ...(ctx.canonicalRun?.bindingTarget
+        ? { surfaceRunTarget: ctx.canonicalRun.bindingTarget }
+        : {}),
       // The runtime wrote the pane before spawning; a pane gone by now was closed meanwhile.
       mayCreate: false,
       ...(ctx.result.incarnationId ? { incarnationId: ctx.result.incarnationId } : {}),

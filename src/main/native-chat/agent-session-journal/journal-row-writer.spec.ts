@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { AGENT_SESSION_JOURNAL_SCHEMA_VERSION } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { JournalHostDatabase } from './journal-host-database'
 import type { JournalRow } from './journal-row-schema'
+import { writeCommandReceiptTestRecord } from './command-receipt-test-support'
 import { JournalRowWriter } from './journal-row-writer'
 import { JournalWriteQueue } from './journal-write-queue'
 import {
@@ -39,8 +40,11 @@ export function registerJournalRowWriterTests(): void {
 
     beforeEach(async () => {
       root = await mkdtemp(join(tmpdir(), 'orca-journal-row-writer-'))
-      database = openTestJournalHostDatabase(root)
-      publishTestJournalEpoch(database.db, SESSION_ID, EPOCH)
+      database = await openTestJournalHostDatabase(root)
+      await database.transaction((plan) => {
+        publishTestJournalEpoch(plan, SESSION_ID, EPOCH)
+        writeCommandReceiptTestRecord(plan, SESSION_ID)
+      })
       readOnly = false
     })
 
@@ -73,13 +77,13 @@ export function registerJournalRowWriterTests(): void {
 
     it('rolls the transaction back and sets no latch when the insert fails', async () => {
       const { writer, committedRows } = writerHarness()
-      insertTestJournalRow(database.db, SESSION_ID, row(1, 1))
+      await database.transaction((plan) => insertTestJournalRow(plan, SESSION_ID, row(1, 1)))
 
       await expect(writer.enqueue(row)).rejects.toThrow()
 
       expect(readOnly).toBe(false)
       expect(committedRows).toHaveLength(0)
-      expect(readTestJournalRows(database.db, SESSION_ID, EPOCH)).toHaveLength(1)
+      expect(await readTestJournalRows(database, SESSION_ID, EPOCH)).toHaveLength(1)
       // Rolled-back inserts leave the writer usable.
       await expect(writer.enqueue((seq, ts) => row(seq + 1, ts))).resolves.toMatchObject({
         kind: 'item'
@@ -88,13 +92,13 @@ export function registerJournalRowWriterTests(): void {
 
     it('writes several rows as one: a failure on the last leaves none', async () => {
       const { writer, committedRows } = writerHarness()
-      insertTestJournalRow(database.db, SESSION_ID, row(2, 1))
+      await database.transaction((plan) => insertTestJournalRow(plan, SESSION_ID, row(2, 1)))
 
       await expect(writer.enqueueRows(() => [row, row])).rejects.toThrow()
 
       expect(committedRows).toHaveLength(0)
       expect(
-        readTestJournalRows(database.db, SESSION_ID, EPOCH).map((stored) => stored.seq)
+        (await readTestJournalRows(database, SESSION_ID, EPOCH)).map((stored) => stored.seq)
       ).toEqual([2])
     })
   })

@@ -1,3 +1,7 @@
+import { setTestRecoveredOutcomeFailure } from '../agent-session-journal/journal-retained-fault-test-support'
+// Ended generations must hold no work across projection, status, chat, Stop, prompts and queue,
+// even when settlement/release writes fail; live generations retain their work.
+
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentSessionExecutionLocation } from '../../../shared/agent-session/lifecycle/agent-session-record'
@@ -33,7 +37,6 @@ import {
   currentWork,
   exitWhileSettlementFails,
   leaveUnfinishedWork,
-  REJECT_RECOVERED_ROWS,
   sendText,
   turnState
 } from './structured-agent-session-leftover-settlement.test-fixture'
@@ -179,9 +182,9 @@ describe('a close Orca asked for, its settlement refused', () => {
     await leaveUnfinishedWork(current, { prompt: true })
     const view = watch(current)
     await vi.waitFor(() => expect(view.answerable()).toBe(true))
-    const database = openTestJournalHostDatabase(current.root)
+    const database = await openTestJournalHostDatabase(current.root)
     vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-    database.db.exec(REJECT_RECOVERED_ROWS)
+    await setTestRecoveredOutcomeFailure(database)
     const before = currentJournal(current).cursor().sequence
     const child = current.host.collaboratorsForTests().sessions.get(SESSION)?.child
     if (!child?.generation) {
@@ -224,9 +227,9 @@ describe('a waiting card when the generation ahead of it ends', () => {
     const journal = currentJournal(current)
     const [card] = journal.queuedMessages.list()
     expect(card?.state).toBe('waiting')
-    const database = openTestJournalHostDatabase(current.root)
+    const database = await openTestJournalHostDatabase(current.root)
     vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-    database.db.exec(REJECT_RECOVERED_ROWS)
+    await setTestRecoveredOutcomeFailure(database)
     const before = journal.cursor().sequence
     const child = current.host.collaboratorsForTests().sessions.get(SESSION)?.child
     if (!child?.generation) {
@@ -246,7 +249,7 @@ describe('a waiting card when the generation ahead of it ends', () => {
       expect(journal.queuedMessages.get(card?.messageId ?? '')?.state).toBe('dispatched')
     )
     // Generation-end publication alone must wake delivery without an intervening journal write.
-    const first = readTestJournalOutcomes(database.db, SESSION).find(
+    const first = (await readTestJournalOutcomes(database, SESSION)).find(
       (row) => row.seq > before && row.field === 'submissions'
     )
     expect(JSON.parse(first?.json ?? '[null, {}]')[1]).toMatchObject({
@@ -354,5 +357,5 @@ it('reuses token deltas but refreshes pending prompt dependencies', async () => 
     await journal.appendItem(token, body, { fence: 1, turnScope: { kind: 'thread' } })
   }
   expect(currentWork(rig).actionablePromptIds()).toContain(APPROVAL_ID)
-  expect(visits).toHaveBeenCalledOnce()
+  expect(visits).not.toHaveBeenCalled()
 })

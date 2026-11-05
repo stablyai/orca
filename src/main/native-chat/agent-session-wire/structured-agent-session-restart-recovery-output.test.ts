@@ -87,7 +87,7 @@ async function restartAfterCrash(): Promise<void> {
   rig.host = new StructuredAgentSessionHost({
     ...old.deps,
     store: rig.store,
-    journalDatabase: openTestJournalHostDatabase(rig.root),
+    journalDatabase: await openTestJournalHostDatabase(rig.root),
     now: () => RESTARTED_AT
   })
 }

@@ -34,6 +34,7 @@ import type { WriteSettlement } from '../../shared/terminal/pty/lifecycle/pty-wr
 import type { StartupCwdFallback } from '../../shared/startup-cwd-fallback'
 import type { TerminalInputKind } from '../../shared/terminal/input/terminal-input-kind'
 import type { PaneResumeOutcome } from '../../shared/workspace-layout/workspace-layout-published'
+import type { SurfaceRunTarget } from '../../shared/workspace-surfaces/surface-allocation'
 
 export type PtyInventoryRefreshOptions = {
   includeForegroundProcessEvidence?: boolean
@@ -103,6 +104,7 @@ export type RuntimePtyController = {
     initiallyHidden?: boolean
     persistHostSessionBinding?: boolean
     expectedSourceBinding?: PtyBindingSourceExpectation
+    surfaceRunTarget?: SurfaceRunTarget
     placement?: TerminalPanePlacement
     terminalKittyKeyboardProtocol?: boolean
     terminalColorQueryReplies?: { foreground?: string; background?: string }
@@ -153,12 +155,17 @@ export type RuntimePtyController = {
   ): WriteSettlement | Promise<WriteSettlement>
   /** Attach existing local daemon output without creating, resizing or focusing; refuse uncertain, SSH-scoped or non-daemon sessions. */
   attach?(ptyId: string): Promise<boolean>
-  kill(ptyId: string): boolean
+  captureStopExpectation?(ptyId: string, addressedIncarnationId?: string): () => boolean
+  kill(ptyId: string, opts?: { isCurrent?: () => boolean }): boolean
   /** `incarnationId` is the rejected spawn's; a same-id respawn since then is left alone. */
   retireRejectedPty?(ptyId: string, stopConfirmed: boolean, incarnationId: string | undefined): void
   stopAndWait?(
     ptyId: string,
-    opts?: { keepHistory?: boolean; deadlineMs?: number }
+    opts?: {
+      keepHistory?: boolean
+      deadlineMs?: number
+      isCurrent?: () => boolean
+    }
   ): Promise<boolean>
   getCwd?(ptyId: string): Promise<string | null>
   getForegroundProcess(ptyId: string): Promise<string | null>

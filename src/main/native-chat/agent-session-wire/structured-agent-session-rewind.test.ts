@@ -1,3 +1,5 @@
+import { rewindTestParams } from './structured-agent-session-rewind-request.test-fixture'
+import { corruptTestRecordFence } from '../agent-session-journal/journal-retained-fault-test-support'
 import {
   expectGoalRowsThroughHydration,
   expectAtomicRewindCompletion,
@@ -122,7 +124,7 @@ beforeEach(async () => {
     logger: createStructuredAgentSessionLogger(),
     store,
     adapter,
-    journalDatabase: openTestJournalHostDatabase(directory),
+    journalDatabase: await openTestJournalHostDatabase(directory),
     claimKeyId: 'key',
     now: () => clock,
     probeOwner: async () => ({ outcome: 'exit-observed' })
@@ -184,9 +186,9 @@ async function seed(acceptedSubmissions = false) {
       ).toMatchObject({ ok: true })
       await vi.waitFor(async () =>
         expect(
-          (await host.journalSnapshot(HOST_TEST_SESSION)).submissions.find(
-            (entry) => entry.clientMessageId === clientOperationId
-          )?.dispatchState
+          await (
+            await host.journalSnapshot(HOST_TEST_SESSION)
+          ).submissions.find((entry) => entry.clientMessageId === clientOperationId)?.dispatchState
         ).toBe('accepted')
       )
       if (i === 1) {
@@ -200,21 +202,12 @@ async function seed(acceptedSubmissions = false) {
   return selectedItemId
 }
 async function params(itemId: string, epoch?: string) {
-  const expectedEpoch = epoch ?? (await host.journalSnapshot(HOST_TEST_SESSION)).cursor.epoch
-  return {
+  return rewindTestParams(
+    () => host,
+    () => store,
     itemId,
-    expectedEpoch,
-    envelope: {
-      sessionId: HOST_TEST_SESSION,
-      clientOperationId: hostTestOperationId(),
-      expectedRuntimeFence: store.getRecord(HOST_TEST_SESSION)!.lease.runtimeFence,
-      payloadFingerprint: computeAgentSessionPayloadFingerprint({
-        method: 'agentSession.rewind',
-        sessionId: HOST_TEST_SESSION,
-        fields: { itemId, expectedEpoch }
-      })
-    }
-  }
+    epoch
+  )
 }
 
 const LATE = { provider: 'codex' as const, threadId: HOST_TEST_THREAD, turnId: 'late', ordinal: 0 }
@@ -249,11 +242,7 @@ describe('host rewind', () => {
     const request = await params(await seed())
     expect(await host.rewind(caller, request)).toMatchObject({ ok: true })
     await host.flushAllStreamedEvents()
-    openTestJournalHostDatabase(directory)
-      .db.prepare(
-        "UPDATE agent_session_records SET record_json = json_set(record_json, '$.lease.minimumNextFence', 'bad') WHERE session_id = ?"
-      )
-      .run(HOST_TEST_SESSION)
+    await corruptTestRecordFence(await openTestJournalHostDatabase(directory), HOST_TEST_SESSION)
     const reopened = await openTestAgentSessionRecordStore(directory)
     const restored = new StructuredAgentSessionHost({ ...host.deps, store: reopened })
     const effects = rewind.mock.calls.length
@@ -266,7 +255,7 @@ describe('host rewind', () => {
     await restored.flushAllStreamedEvents()
   })
 
-  it('replays the original ordinary rewind after another rewind replaces its record', () =>
+  it('replays the original ordinary rewind after another rewind replaces its record', async () =>
     expectSupersededRewindReplay({ host, store, rewind, recoverRewind, seed, params }))
 
   it('retains the raw Stop failure and recovers a committed rewind against raw bodies', async () => {
@@ -316,7 +305,7 @@ describe('host rewind', () => {
     sink.appendItem(target, hostTestMessage('target'), { turnScope: AGENT_JOURNAL_THREAD_SCOPE })
     await host.flushStreamedEvents(HOST_TEST_SESSION)
     expect(
-      (await host.journalSnapshot(HOST_TEST_SESSION)).items.map(({ itemId }) => itemId)
+      await (await host.journalSnapshot(HOST_TEST_SESSION)).items.map(({ itemId }) => itemId)
     ).toEqual([
       agentJournalItemKey(kept),
       agentJournalSubmissionKey(clientOperationId),
@@ -326,7 +315,7 @@ describe('host rewind', () => {
       ok: true
     })
     expect(
-      (await host.journalSnapshot(HOST_TEST_SESSION)).items.map(({ itemId }) => itemId)
+      await (await host.journalSnapshot(HOST_TEST_SESSION)).items.map(({ itemId }) => itemId)
     ).toEqual([agentJournalItemKey(kept)])
   })
 
@@ -434,9 +423,9 @@ describe('host rewind', () => {
     expect(await second).toMatchObject({ ok: false, refusal: { rewindReason: 'stale-epoch' } })
     expect(rewind).toHaveBeenCalledTimes(1)
   })
-  it('rewinds a chat whose kept part is far past the old 2 MB limit', () =>
+  it('rewinds a chat whose kept part is far past the old 2 MB limit', async () =>
     expectLargeRetainedPrefixRewind({ host, store, rewind, sink: () => sink, params }))
-  it('replaces the epoch with the retained prefix and replays without another provider call', () =>
+  it('replaces the epoch with the retained prefix and replays without another provider call', async () =>
     expectRetainedPrefixRewindReplay({ host, rewind, seed, params }))
   it('keeps when each kept message was first seen, not when the rewind re-read it', async () => {
     const target = await seed()
@@ -496,9 +485,9 @@ describe('host rewind', () => {
       }
     })
     const sent = async () =>
-      (await host.journalSnapshot(HOST_TEST_SESSION)).submissions.find(
-        (entry) => entry.clientMessageId === clientOperationId
-      )
+      await (
+        await host.journalSnapshot(HOST_TEST_SESSION)
+      ).submissions.find((entry) => entry.clientMessageId === clientOperationId)
     await vi.waitFor(async () => expect((await sent())?.dispatchState).toBe('unknown'))
     expect(await host.rewind(caller, await params(target))).toMatchObject({
       ok: false,
@@ -648,12 +637,12 @@ describe('host rewind', () => {
     await host.flushStreamedEvents(HOST_TEST_SESSION)
     const journal = host.collaboratorsForTests().sessions.get(HOST_TEST_SESSION)!.journal
     const before = journal.snapshot()
-    const database = openTestJournalHostDatabase(directory)
-    const saved = () =>
-      database.db
-        .prepare('SELECT * FROM journal_outcomes ORDER BY generation,seq,field,entry_key')
-        .all()
-    const bytes = saved()
+    const database = await openTestJournalHostDatabase(directory)
+    const saved = async () =>
+      await database.read((read) =>
+        read.prepare('SELECT * FROM journal_outcomes ORDER BY generation,seq,field,entry_key').all()
+      )
+    const bytes = await saved()
     await expect(
       journal.appendItem(newerRow, newerBody, {
         fence: store.getRecord(HOST_TEST_SESSION)!.lease.runtimeFence,
@@ -661,7 +650,7 @@ describe('host rewind', () => {
       })
     ).rejects.toMatchObject({ code: 'journal_row_rejected' })
     expect(journal.snapshot()).toEqual(before)
-    expect(saved()).toEqual(bytes)
+    expect(await saved()).toEqual(bytes)
     sink.appendItem(message('drop'), hostTestMessage('drop'), {
       turnScope: AGENT_JOURNAL_THREAD_SCOPE
     })
@@ -672,7 +661,9 @@ describe('host rewind', () => {
     ).toMatchObject({ ok: true })
 
     expect(
-      (await host.journalSnapshot(HOST_TEST_SESSION)).items.map(({ itemId, body }) => ({
+      await (
+        await host.journalSnapshot(HOST_TEST_SESSION)
+      ).items.map(({ itemId, body }) => ({
         itemId,
         body
       }))
@@ -717,9 +708,9 @@ describe('host rewind', () => {
       ).toMatchObject({ ok: true })
       await vi.waitFor(async () =>
         expect(
-          (await host.journalSnapshot(HOST_TEST_SESSION)).submissions.find(
-            (entry) => entry.clientMessageId === clientOperationId
-          )?.dispatchState
+          await (
+            await host.journalSnapshot(HOST_TEST_SESSION)
+          ).submissions.find((entry) => entry.clientMessageId === clientOperationId)?.dispatchState
         ).toBe('accepted')
       )
       sink.appendItem(
@@ -758,7 +749,7 @@ describe('host rewind', () => {
     expect(membership.turnKeys).toEqual([opener, opener])
   })
 
-  it('keeps a host goal row when interrupted Codex rewind recovery rebuilds provider history', () =>
+  it('keeps a host goal row when interrupted Codex rewind recovery rebuilds provider history', async () =>
     expectGoalRowRewindRecovery({ host, store, rewind, sink: () => sink, params, attachAndStart }))
 
   it('commits context and completion atomically before a post-commit crash', async () => {

@@ -105,7 +105,7 @@ export abstract class DaemonPtyDaemonRecovery extends DaemonPtyCheckpointPersist
 
   // Reconnect on endpoint loss without waiting for input; only daemon-gone errors permit respawn.
   protected recoverAfterEndpointLoss(): void {
-    if (this.activeSessionIds.size > 0) {
+    if (this.activeSessionIds.size > 0 || this.surfaceRecoveryInterests.size > 0) {
       this.reconnectAfterWriteFailure()
     }
   }

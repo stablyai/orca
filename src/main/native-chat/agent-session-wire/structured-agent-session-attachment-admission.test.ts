@@ -52,13 +52,18 @@ function clientSend(body: AgentJournalMessageItem, delivery?: 'queue-if-active')
   })
 }
 
-function claimedSessions(): string[] {
-  return openTestJournalHostDatabase(rig.root)
-    .db.prepare('SELECT session_id FROM agent_session_attachment_claims ORDER BY session_id')
-    .all()
-    .flatMap((row) =>
-      typeof row === 'object' && row !== null && 'session_id' in row ? [String(row.session_id)] : []
+async function claimedSessions(): Promise<string[]> {
+  return (
+    await (
+      await openTestJournalHostDatabase(rig.root)
+    ).read((read) =>
+      read
+        .prepare('SELECT session_id FROM agent_session_attachment_claims ORDER BY session_id')
+        .all()
     )
+  ).flatMap((row) =>
+    typeof row === 'object' && row !== null && 'session_id' in row ? [String(row.session_id)] : []
+  )
 }
 
 function textWith(path: string): AgentJournalMessageItem {
@@ -100,7 +105,7 @@ describe('attachments at send admission', () => {
       }
     })
     expect((await rig.host.journalSnapshot(SESSION)).submissions).toHaveLength(0)
-    expect(claimedSessions()).toEqual([])
+    expect(await claimedSessions()).toEqual([])
     expect(existsSync(fresh)).toBe(true)
   })
 
@@ -109,7 +114,7 @@ describe('attachments at send admission', () => {
       textWith(`/home/someone/.config/Orca/agent-session-attachments/${UPLOAD}/notes.txt`)
     )
     expect(result).toMatchObject({ ok: true, value: { submission: expect.anything() } })
-    expect(claimedSessions()).toEqual([])
+    expect(await claimedSessions()).toEqual([])
   })
 
   it('replays an admitted send under the same id without judging its attachments again', async () => {

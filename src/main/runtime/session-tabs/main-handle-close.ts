@@ -4,7 +4,11 @@ import type { RuntimeTerminalClose } from '../../../shared/runtime-types'
 import type { LayoutApplyReply } from '../../../shared/workspace-layout/workspace-layout-command-types'
 import type { WindowLayoutCommand } from '../terminal/layout/runtime-layout-apply'
 import { startedMainTerminalSurfaces } from '../terminal/surface/main-terminal-surfaces'
-import type { ExplicitCloseStop } from './explicit-terminal-close-pty-stops'
+import type {
+  ExplicitCloseStop,
+  ExplicitCloseTarget,
+  ExplicitCloseScope
+} from './explicit-terminal-close-pty-stops'
 import { closeInMainLayout } from './main-layout-close-command'
 
 type HandleTarget = { worktreeId: string; ptyId: string | null; tabId?: string; leafId?: string }
@@ -18,7 +22,11 @@ export type MainHandleCloseHost = {
   applyLayoutCommand: (command: WindowLayoutCommand) => Promise<LayoutApplyReply>
   /** The tab's dormant SSH relay session, which a tab close also ends. */
   remoteSessionIdOf: (worktreeId: string, tabId: string) => string | undefined
-  stop: (ptyIds: string[], addressedPtyId: string) => Promise<ExplicitCloseStop>
+  capture: (ptyIds: string[], scope: ExplicitCloseScope) => ExplicitCloseTarget[]
+  stop: (
+    targets: readonly ExplicitCloseTarget[],
+    addressedPtyId: string
+  ) => Promise<ExplicitCloseStop>
   describe: (
     handle: string,
     tabId: string,
@@ -40,7 +48,7 @@ export async function closeMainOwnedPaneByHandle(
   // The graph takes main's latest panes first, so a handle names what main holds now.
   surfaces.republish()
   const target: HandleTarget = host.livePty() ?? host.liveLeaf()
-  if (!surfaces.ownsWorkspace(target.worktreeId)) {
+  if (!surfaces.ownsPlacement(target.worktreeId)) {
     return null
   }
   const pane =
@@ -55,6 +63,7 @@ export async function closeMainOwnedPaneByHandle(
           panesOfTab: (tabId) => surfaces.panesOfTab(tabId),
           applyLayoutCommand: host.applyLayoutCommand,
           remoteSessionIdOf: (tabId) => host.remoteSessionIdOf(target.worktreeId, tabId),
+          capture: host.capture,
           stop: host.stop
         },
         {

@@ -1,4 +1,6 @@
 import type { Repo } from '../../../../shared/repo-types'
+import type { CapturedOwnerRemoval } from '../../../runtime/workspaces/removal/canonical-owner-removal'
+import { captureWorktreeOwnerRemoval } from '../../../runtime/workspaces/removal/canonical-owner-removal-scopes'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
 import { killAllProcessesForWorktree } from '../../../runtime/workspaces/removal/worktree-teardown'
@@ -19,7 +21,13 @@ export async function removeFolderWorkspace(
   args: RemoveWorktreeArgs,
   repo: Repo,
   repoId: string,
-  removalHostId: ExecutionHostId
+  removalHostId: ExecutionHostId,
+  removeOwned: CapturedOwnerRemoval = captureWorktreeOwnerRemoval(
+    context.store,
+    args.worktreeId,
+    removalHostId,
+    () => context.runtime.openAgentSessionRecordStore()
+  )
 ): Promise<RemoveWorktreeResult> {
   const { mainWindow, store, runtime } = context
   if (args.worktreeId === getFolderWorkspaceRootId(repo)) {
@@ -46,17 +54,20 @@ export async function removeFolderWorkspace(
         onPtyStopped: clearProviderPtyState,
         // PTY inventories cannot see structured sessions; close them before forgetting the workspace.
         closeStructuredSessions: teardownStops('folder-removal', 'structured-chat'),
+        deferSurfaceRetirement: true,
         ...(externalHost ? { includeProviderInventory: false, includeLocalRegistry: false } : {})
       }).catch((err) => {
         console.warn(`[worktree-teardown] failed for ${args.worktreeId}:`, err)
       })
     })
     await withWorktreeRemoveStageSpan('metadata_purge', 'folder', async () => {
-      removeWorktreeMetadataAndTransientState(
-        { store, runtime, entryPoint: 'folder-removal' },
-        args.worktreeId,
-        removalHostId,
-        args.snapshotPruneBatchId
+      await removeOwned(() =>
+        removeWorktreeMetadataAndTransientState(
+          { store, runtime, entryPoint: 'folder-removal' },
+          args.worktreeId,
+          removalHostId,
+          args.snapshotPruneBatchId
+        )
       )
     })
     preservedBranchCleanupByScope.delete(

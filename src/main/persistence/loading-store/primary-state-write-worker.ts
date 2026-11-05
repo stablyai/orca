@@ -1,3 +1,4 @@
+import { invalidateImportedSurfaceAdmissions } from '../../workspace-surfaces/surface-admission-capture'
 import type { AsyncProfileStateAuthority } from './profile-state-authority'
 import type { PrimaryStateWriteOperationsContext } from './primary-state-write-context'
 import { markPrimaryStateWriteDurable } from './primary-state-write-runtime'
@@ -40,6 +41,7 @@ export async function writeProfileStateInWorker(
       return false
     }
     await prepared.completion
+    invalidateImportedSurfaceAdmissions(runtime)
     runtime.protectedSecrets.commitRetentionUpdates(prepared.protectedSecretUpdates)
     runtime.lastWrittenStateHash =
       runtime.writeGeneration === generation ? prepared.stateHash : null

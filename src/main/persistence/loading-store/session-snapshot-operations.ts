@@ -23,6 +23,7 @@ import { dropClosedTerminalTabs } from '../closed-terminal-tab-write-fence'
 import { keepWslMoveFrozenSessionsForStore } from '../moving-wsl-projects/wsl-move-session-freeze'
 import { type WriteSchedulingOperations, scheduleSave } from './write-scheduling'
 import { orderTerminalRowsByTabGroups } from '../../../shared/workspace-layout/terminal-row-order'
+import { canonicalSessionProjection } from './canonical-session-projection'
 
 type SessionSnapshotOperationsRuntime = Pick<
   StoreRuntimeState,
@@ -34,6 +35,7 @@ type SessionSnapshotOperationsRuntime = Pick<
   | 'terminalScrollbackSnapshotStorage'
   | 'retainedScrollbackRefsByMigrationId'
   | 'writesFrozen'
+  | 'workspaceSurfaces'
 >
 
 const sessionSnapshotOperationsContext = Symbol('SessionSnapshotOperations')
@@ -117,8 +119,8 @@ export class SessionSnapshotOperations {
   }
 
   private publishSession(session: WorkspaceSessionState, hostId: ExecutionHostId): void {
-    session = orderTerminalRowsByTabGroups(session)
     const { runtime, scheduling } = this[sessionSnapshotOperationsContext]
+    session = canonicalSessionProjection(runtime, hostId, orderTerminalRowsByTabGroups(session))
     if (hostId === LOCAL_EXECUTION_HOST_ID) {
       runtime.state.workspaceSession = session
     } else {

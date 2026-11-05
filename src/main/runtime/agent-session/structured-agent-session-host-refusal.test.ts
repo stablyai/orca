@@ -1,3 +1,7 @@
+import {
+  observeNativeJournalSql,
+  failNextNativeJournalStatement
+} from '../../native-chat/agent-session-journal/journal-native-test-instrumentation'
 import { structuredAgentSessionTabId } from '../../../shared/agent-session/view/structured-agent-session-projection'
 import { seedTestAgentSessionRecordStore } from './records/agent-session-record-store-test-harness'
 import { agentSessionRecordFixture } from '../../native-chat/agent-session-record-test-fixture'
@@ -11,10 +15,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { isAgentSessionRefusalError } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { JOURNAL_DB_SCHEMA_VERSION } from '../../native-chat/agent-session-journal/journal-database-schema'
-import {
-  JournalHostDatabase,
-  journalDatabasePath
-} from '../../native-chat/agent-session-journal/journal-host-database'
+import { journalDatabasePath } from '../../native-chat/agent-session-journal/journal-host-database'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
 import Database from '../../sqlite/sync-database'
 import type { RuntimeNavigationTarget } from '../../../shared/runtime-navigation'
@@ -377,24 +378,25 @@ describe('startup and other non-chat work without a structured host', () => {
 describe('stopping', () => {
   it('keeps the connection until a journal close that failed is retried and goes through', async () => {
     await install()
-    const close = JournalHostDatabase.prototype.close
-    let connectionClose: ReturnType<typeof vi.fn> | null = null
-    const journalClose = vi
-      .spyOn(JournalHostDatabase.prototype, 'close')
-      .mockImplementation(function (this: JournalHostDatabase) {
-        // The connection's first close fails, as a native close can before it completes.
-        connectionClose ??= vi.spyOn(this.db, 'close').mockImplementationOnce(() => {
-          throw new Error('unable to close due to unfinalized statements')
-        })
-        return close.call(this)
-      })
-    const journal = () => journalClose.mock.contexts[0]
-
-    await expect(stopStructuredAgentSessionRuntime()).rejects.toThrow('unable to close')
-    expect(journal()).toHaveProperty('isClosed', false)
-
+    const journal = getStructuredAgentSessionHost()!.deps.journalDatabase
+    let closes = 0
+    const stopObserving = observeNativeJournalSql(journal, (entry) => {
+      if (entry.sql === 'CLOSE' && entry.method === 'exec' && !entry.reader) {
+        closes++
+      }
+    })
+    await failNextNativeJournalStatement(
+      journal,
+      'CLOSE',
+      'unable to close due to unfinalized statements'
+    )
+    await expect(stopStructuredAgentSessionRuntime()).rejects.toMatchObject({
+      errors: [expect.objectContaining({ message: expect.stringContaining('unable to close') })]
+    })
+    expect(journal.isClosed).toBe(false)
     await stopStructuredAgentSessionRuntime()
-    expect(connectionClose).toHaveBeenCalledTimes(2)
-    expect(journal()).toHaveProperty('isClosed', true)
+    expect(closes).toBe(2)
+    expect(journal.isClosed).toBe(true)
+    stopObserving()
   })
 })

@@ -1,3 +1,4 @@
+import { localWorktreeRemovalOwners } from '../../../workspaces/removal/worktree-removal-owner-residue'
 import {
   projectPendingWorktreeRemovals,
   snapshotPendingWorktreeRemovals,
@@ -124,7 +125,8 @@ export async function listDetectedWorktreesForCapturedRepo(
     const { gitWorktrees, fresh: freshScan, sideEffectToken, metadataPrune, hygieneDue } = scan
     const localRows = await withUnregisteredRemovalCheckouts(
       repo.id,
-      withoutInFlightWorktreeCreates(repo.id, gitWorktrees)
+      withoutInFlightWorktreeCreates(repo.id, gitWorktrees),
+      (records) => localWorktreeRemovalOwners(store, records)
     )
     const aborted = abortedResult()
     if (aborted) {

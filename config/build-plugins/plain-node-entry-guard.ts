@@ -1,3 +1,4 @@
+import { collectReachableChunks } from './plain-node-entry-chunks'
 import { spawn } from 'node:child_process'
 import { isBuiltin } from 'node:module'
 import { join } from 'node:path'
@@ -55,6 +56,8 @@ const WORKER_THREAD_ENTRY_NAMES = [
   'stt-worker',
   'warp-theme-parser-worker',
   'foreign-sqlite-reader-entry',
+  'journal-sql-worker-entry',
+  'surface-executor-reader-entry',
   'main-thread-hang-watchdog-entry',
   'port-scan-command-worker-entry',
   'command-path-directory-worker-entry',
@@ -90,31 +93,6 @@ function assertEntryNamesAreRollupInputs(input: NormalizedInputOptions['input'])
         `the current entry names — a stale name silently stops guarding that entry.`
     )
   }
-}
-
-function collectReachableChunks(
-  entry: OutputChunk,
-  byFileName: Map<string, OutputChunk>
-): OutputChunk[] {
-  const seen = new Set<string>()
-  const reachable: OutputChunk[] = []
-  const stack = [entry.fileName]
-  while (stack.length > 0) {
-    const fileName = stack.pop() as string
-    if (seen.has(fileName)) {
-      continue
-    }
-    seen.add(fileName)
-    const chunk = byFileName.get(fileName)
-    if (!chunk) {
-      continue
-    }
-    reachable.push(chunk)
-    for (const imported of [...chunk.imports, ...chunk.dynamicImports]) {
-      stack.push(imported)
-    }
-  }
-  return reachable
 }
 
 function assertNoElectronRequire(

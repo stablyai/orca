@@ -5,6 +5,28 @@ import { sleepingAgentSessionRecordSchema } from '../workspace-session/workspace
 // copied, not imported: import cycle
 const OnTab = { workspace: z.string().min(1), tabId: z.string().min(1) }
 
+export const expectedResumeRecordsSchema = z.record(
+  z.string().min(1),
+  sleepingAgentSessionRecordSchema.nullable()
+)
+
+function expectationsNamePanes(command: {
+  workspace: string
+  paneKeys: string[]
+  recordOnly?: true
+  expectedRecords?: z.infer<typeof expectedResumeRecordsSchema>
+}): boolean {
+  return (
+    command.expectedRecords === undefined ||
+    (command.recordOnly === true &&
+      Object.entries(command.expectedRecords).every(
+        ([key, record]) =>
+          command.paneKeys.includes(key) &&
+          (record === null || (record.paneKey === key && record.worktreeId === command.workspace))
+      ))
+  )
+}
+
 /** Pane keys of the command's own tab only, so a sleep or wake never reaches past it. */
 function paneKeysNameTab(command: { tabId: string; paneKeys: string[] }): boolean {
   return command.paneKeys.every((paneKey) => parsePaneKey(paneKey)?.tabId === command.tabId)
@@ -17,8 +39,10 @@ export const SleepCommand = z
     ...OnTab,
     paneKeys: z.array(z.string().min(1)).min(1),
     records: z.array(sleepingAgentSessionRecordSchema),
-    recordOnly: z.literal(true).optional()
+    recordOnly: z.literal(true).optional(),
+    expectedRecords: expectedResumeRecordsSchema.optional()
   })
+  .refine(expectationsNamePanes)
   .refine(paneKeysNameTab)
   .refine((command) =>
     command.records.every(
@@ -33,8 +57,10 @@ export const WakeCommand = z
     type: z.literal('wake'),
     ...OnTab,
     paneKeys: z.array(z.string().min(1)).min(1),
-    recordOnly: z.literal(true).optional()
+    recordOnly: z.literal(true).optional(),
+    expectedRecords: expectedResumeRecordsSchema.optional()
   })
+  .refine(expectationsNamePanes)
   .refine((command) => command.recordOnly === true || command.paneKeys.length === 1)
   .refine(paneKeysNameTab)
 

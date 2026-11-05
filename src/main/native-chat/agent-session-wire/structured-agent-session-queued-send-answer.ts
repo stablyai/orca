@@ -106,15 +106,15 @@ function submissionAnswer(
 
 /** One keyed read per send: the card first, then the send itself, then a gone card's handoff, and only
  *  then the admission receipt, which alone can prove nothing was admitted. */
-export function structuredSendAnswer(
+export async function structuredSendAnswer(
   journal: SendAnswerJournal &
     Pick<AgentSessionJournal, 'item'> & {
       queuedMessages: Pick<AgentSessionJournal['queuedMessages'], 'inputState'>
     },
-  readReceipt: (operationId: string) => CommandReceiptRead,
+  readReceipt: (operationId: string) => CommandReceiptRead | Promise<CommandReceiptRead>,
   sessionId: string,
   operationId: string
-): StructuredSendAnswer {
+): Promise<StructuredSendAnswer> {
   const card = journal.queuedMessages.get(operationId)
   if (card) {
     if (card.state === 'withdrawn') {
@@ -134,7 +134,7 @@ export function structuredSendAnswer(
     }
     return submissionAnswer(journal, sent)
   }
-  const receipt = readReceipt(operationId)
+  const receipt = await readReceipt(operationId)
   switch (receipt.verdict) {
     case 'absent':
       return { kind: 'absent' }

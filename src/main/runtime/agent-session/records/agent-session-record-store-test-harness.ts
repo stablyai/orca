@@ -13,6 +13,8 @@ import {
   openTestJournalHostDatabase
 } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
 import type Database from '../../../sqlite/sync-database'
+import { openJournalDatabase } from '../../../native-chat/agent-session-journal/journal-database'
+import { journalDatabasePath } from '../../../native-chat/agent-session-journal/journal-host-database'
 import { AgentSessionRecordStore } from './agent-session-record-store'
 import type { RetiredAgentSessionClaimKey } from './agent-session-store-state'
 
@@ -29,16 +31,12 @@ export type PersistedTestAgentSessionStore = {
   sessionTabs?: { tabId: string; sessionId: string }[]
 }
 
-function databaseFor(stateDirectory: string): Database.Database {
-  return openTestJournalHostDatabase(stateDirectory).db
-}
-
 export async function openTestAgentSessionRecordStore(
   stateDirectory: string,
   options: { hostId?: string; legacySessionTabIds?: readonly string[] } = {}
 ): Promise<AgentSessionRecordStore> {
   return AgentSessionRecordStore.open({
-    journalDatabase: openTestJournalHostDatabase(stateDirectory),
+    journalDatabase: await openTestJournalHostDatabase(stateDirectory),
     hostId: options.hostId ?? TEST_HOST_ID,
     legacySessionTabIds: options.legacySessionTabIds ?? []
   })
@@ -114,7 +112,7 @@ export async function seedTestAgentSessionRecordStore(
     sessionTabs?: { tabId: string; sessionId: string }[]
   }
 ): Promise<void> {
-  writePersisted(databaseFor(stateDirectory), {
+  await writeFixture(stateDirectory, {
     records: Object.fromEntries(
       seed.records.map((record) => [record.sessionId, storedTestAgentSessionRecord(record)])
     ),
@@ -129,10 +127,14 @@ export async function seedTestAgentSessionRecordStore(
 export async function seedTestAgentSessionStoreFromNewerBuild(
   stateDirectory: string
 ): Promise<void> {
-  openTestJournalHostDatabase(stateDirectory).db.pragma(
-    `user_version = ${JOURNAL_DB_SCHEMA_VERSION + 1}`
-  )
+  await openTestJournalHostDatabase(stateDirectory)
   await closeTestJournalHostDatabase(stateDirectory)
+  const fixture = openJournalDatabase(journalDatabasePath(stateDirectory))
+  try {
+    fixture.db.pragma(`user_version = ${JOURNAL_DB_SCHEMA_VERSION + 1}`)
+  } finally {
+    fixture.db.close()
+  }
 }
 
 function parsed(json: unknown): unknown {
@@ -142,50 +144,53 @@ function parsed(json: unknown): unknown {
 export async function readPersistedTestAgentSessionStore(
   stateDirectory: string
 ): Promise<PersistedTestAgentSessionStore> {
-  const db = databaseFor(stateDirectory)
-  const persisted: PersistedTestAgentSessionStore = {
-    records: {},
-    operations: {},
-    retiredClaimKeys: [],
-    unusableRecords: {}
-  }
-  for (const row of db
-    .prepare('SELECT session_id, record_json FROM agent_session_records ORDER BY rowid')
-    .all()) {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test read-back of rows the store wrote; a test asserting on a malformed row reads it as the value it stored.
-    persisted.records[String(row.session_id)] = parsed(
-      row.record_json
-    ) as PersistedAgentSessionRecord
-  }
-  for (const row of db
-    .prepare('SELECT operation_key, row_json FROM agent_session_operations ORDER BY rowid')
-    .all()) {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test read-back of rows the store wrote after validating them.
-    persisted.operations[String(row.operation_key)] = parsed(
-      row.row_json
-    ) as AgentSessionOperationRow
-  }
-  for (const row of db
-    .prepare('SELECT key_id, retired_at FROM agent_session_retired_claim_keys ORDER BY rowid')
-    .all()) {
-    persisted.retiredClaimKeys.push({
-      keyId: String(row.key_id),
-      retiredAt: Number(row.retired_at)
-    })
-  }
-  if (
-    db
-      .prepare(
-        "SELECT 1 AS present FROM agent_session_store_meta WHERE key = 'session_tabs_recorded'"
-      )
-      .get()
-  ) {
-    persisted.sessionTabs = db
-      .prepare('SELECT tab_id, session_id FROM agent_session_tabs ORDER BY position')
-      .all()
-      .map((row) => ({ tabId: String(row.tab_id), sessionId: String(row.session_id) }))
-  }
-  return persisted
+  const database = await openTestJournalHostDatabase(stateDirectory)
+  return database.read(async (db) => {
+    const persisted: PersistedTestAgentSessionStore = {
+      records: {},
+      operations: {},
+      retiredClaimKeys: [],
+      unusableRecords: {}
+    }
+    for (const row of await db
+      .prepare('SELECT session_id, record_json FROM agent_session_records ORDER BY rowid')
+      .all()) {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test read-back of rows the store wrote; a test asserting on a malformed row reads it as the value it stored.
+      persisted.records[String(row.session_id)] = parsed(
+        row.record_json
+      ) as PersistedAgentSessionRecord
+    }
+    for (const row of await db
+      .prepare('SELECT operation_key, row_json FROM agent_session_operations ORDER BY rowid')
+      .all()) {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test read-back of rows the store wrote after validating them.
+      persisted.operations[String(row.operation_key)] = parsed(
+        row.row_json
+      ) as AgentSessionOperationRow
+    }
+    for (const row of await db
+      .prepare('SELECT key_id, retired_at FROM agent_session_retired_claim_keys ORDER BY rowid')
+      .all()) {
+      persisted.retiredClaimKeys.push({
+        keyId: String(row.key_id),
+        retiredAt: Number(row.retired_at)
+      })
+    }
+    if (
+      await db
+        .prepare(
+          "SELECT 1 AS present FROM agent_session_store_meta WHERE key = 'session_tabs_recorded'"
+        )
+        .get()
+    ) {
+      persisted.sessionTabs = (
+        await db
+          .prepare('SELECT tab_id, session_id FROM agent_session_tabs ORDER BY position')
+          .all()
+      ).map((row) => ({ tabId: String(row.tab_id), sessionId: String(row.session_id) }))
+    }
+    return persisted
+  })
 }
 
 /** Compare committed text to prove a value/action never changed disk state. */
@@ -202,5 +207,23 @@ export async function editPersistedTestAgentSessionStore(
 ): Promise<void> {
   const persisted = await readPersistedTestAgentSessionStore(stateDirectory)
   edit(persisted)
-  writePersisted(databaseFor(stateDirectory), persisted)
+  await writeFixture(stateDirectory, persisted)
+}
+
+async function writeFixture(
+  stateDirectory: string,
+  persisted: PersistedTestAgentSessionStore
+): Promise<void> {
+  const database = await openTestJournalHostDatabase(stateDirectory)
+  await database.joint(
+    async (filename) => {
+      const fixture = openJournalDatabase(filename)
+      try {
+        writePersisted(fixture.db, persisted)
+      } finally {
+        fixture.db.close()
+      }
+    },
+    () => {}
+  )
 }

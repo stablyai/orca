@@ -1,3 +1,4 @@
+import { TerminalIntentionalStops } from '../../../runtime/terminal-intentional-stops'
 import { describe, expect, it, vi } from 'vitest'
 import { toAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import type { SshRemotePtyLease } from '../../../../shared/ssh-types'
@@ -222,7 +223,7 @@ describe('a failed tab-close stop', () => {
     const runtime = {
       markPtyStopRequested: vi.fn(),
       clearPtyStopRequest: vi.fn(),
-      intentionalPtyStops: { mark: () => () => {} }
+      intentionalPtyStops: new TerminalIntentionalStops()
     }
     const deps = {
       runtime,

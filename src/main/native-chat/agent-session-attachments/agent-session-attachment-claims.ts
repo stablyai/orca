@@ -1,3 +1,4 @@
+import { journalTable, type JournalTableScope } from '../agent-session-journal/journal-table-scope'
 // Claim writes and sweep marks share the journal transaction connection so only one can win.
 
 import { lstatSync, readdirSync } from 'node:fs'
@@ -15,6 +16,10 @@ import {
   agentSessionAttachmentReferences,
   agentSessionAttachmentStoreRoot
 } from './agent-session-attachment-references'
+
+import type { PreparedAgentSessionAttachmentClaim } from './prepared-agent-session-attachment-claim'
+export { prepareAgentSessionAttachmentClaim } from './prepared-agent-session-attachment-claim'
+export type { PreparedAgentSessionAttachmentClaim } from './prepared-agent-session-attachment-claim'
 
 const CLAIM_SAVEPOINT = 'agent_session_attachment_claims'
 
@@ -60,10 +65,16 @@ function uploadIsStored(root: string, uploadId: string): boolean {
   }
 }
 
-function isBeingSwept(db: Database.Database, uploadId: string): boolean {
+function isBeingSwept(
+  db: Database.Database,
+  uploadId: string,
+  tableScope: JournalTableScope = 'main'
+): boolean {
   return (
     db
-      .prepare('SELECT 1 FROM agent_session_attachment_sweeps WHERE upload_id = ?')
+      .prepare(
+        `SELECT 1 FROM ${journalTable(tableScope, 'agent_session_attachment_sweeps')} WHERE upload_id = ?`
+      )
       .get(uploadId) !== undefined
   )
 }
@@ -72,11 +83,12 @@ function insertClaims(
   db: Database.Database,
   uploadIds: Iterable<string>,
   sessionId: string,
-  now: number
+  now: number,
+  tableScope: JournalTableScope = 'main'
 ): string[] {
   const inserted: string[] = []
   const insert = db.prepare(
-    'INSERT OR IGNORE INTO agent_session_attachment_claims (upload_id, session_id, claimed_at) VALUES (?, ?, ?)'
+    `INSERT OR IGNORE INTO ${journalTable(tableScope, 'agent_session_attachment_claims')} (upload_id, session_id, claimed_at) VALUES (?, ?, ?)`
   )
   for (const uploadId of uploadIds) {
     if (Number(insert.run(uploadId, sessionId, now).changes) > 0) {
@@ -123,14 +135,38 @@ export function claimAgentSessionAttachmentsInTransaction(
       )
     )
   }
-  const inserted = insertClaims(db, required, claim.sessionId, claim.now)
+  return claimPreparedAgentSessionAttachments(db, {
+    sessionId: claim.sessionId,
+    now: claim.now,
+    uploadIds,
+    required,
+    names: agentSessionAttachmentReferenceNames(root, claim.body, required)
+  })
+}
+
+/** Files were prepared under host admission; the native transaction rechecks competing sweeps. */
+export function claimPreparedAgentSessionAttachments(
+  db: Database.Database,
+  claim: PreparedAgentSessionAttachmentClaim,
+  tableScope: JournalTableScope = 'main'
+): { referenced: Set<string>; inserted: string[] } {
+  const { uploadIds, required } = claim
+  const expired = new Set(required.filter((id) => isBeingSwept(db, id, tableScope)))
+  if (expired.size > 0) {
+    throw new AgentSessionAttachmentExpiredError(
+      claim.names
+        .filter(({ uploadId }) => expired.has(uploadId))
+        .slice(0, AGENT_SESSION_EXPIRED_ATTACHMENTS_MAX)
+    )
+  }
+  const inserted = insertClaims(db, required, claim.sessionId, claim.now, tableScope)
   const bestEffort = [...uploadIds].filter((id) => !required.includes(id))
   if (bestEffort.length === 0) {
     return { referenced: uploadIds, inserted }
   }
   db.exec(`SAVEPOINT ${CLAIM_SAVEPOINT}`)
   try {
-    const acquired = insertClaims(db, bestEffort, claim.sessionId, claim.now)
+    const acquired = insertClaims(db, bestEffort, claim.sessionId, claim.now, tableScope)
     db.exec(`RELEASE ${CLAIM_SAVEPOINT}`)
     inserted.push(...acquired)
   } catch (error) {
@@ -148,13 +184,14 @@ export function claimAgentSessionAttachmentsInTransaction(
 export function markUnclaimedUploadForSweep(
   db: Database.Database,
   uploadId: string,
-  now: number
+  now: number,
+  tableScope: JournalTableScope = 'main'
 ): boolean {
   const result = db
     .prepare(
-      `INSERT OR IGNORE INTO agent_session_attachment_sweeps (upload_id, started_at)
+      `INSERT OR IGNORE INTO ${journalTable(tableScope, 'agent_session_attachment_sweeps')} (upload_id, started_at)
        SELECT ?, ? WHERE NOT EXISTS
-         (SELECT 1 FROM agent_session_attachment_claims WHERE upload_id = ?)`
+         (SELECT 1 FROM ${journalTable(tableScope, 'agent_session_attachment_claims')} WHERE upload_id = ?)`
     )
     .run(uploadId, now, uploadId)
   return Number(result.changes) > 0
@@ -174,8 +211,14 @@ export function listUploadsBeingSwept(db: Database.Database): string[] {
     )
 }
 
-export function finishUploadSweep(db: Database.Database, uploadId: string): void {
-  db.prepare('DELETE FROM agent_session_attachment_sweeps WHERE upload_id = ?').run(uploadId)
+export function finishUploadSweep(
+  db: Database.Database,
+  uploadId: string,
+  tableScope: JournalTableScope = 'main'
+): void {
+  db.prepare(
+    `DELETE FROM ${journalTable(tableScope, 'agent_session_attachment_sweeps')} WHERE upload_id = ?`
+  ).run(uploadId)
 }
 
 /** Recheck chat and disk facts on each sweep so orphan claims cannot preserve unused uploads. */

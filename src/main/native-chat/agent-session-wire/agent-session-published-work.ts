@@ -1,3 +1,4 @@
+import type { AgentJournalSnapshot } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type {
   AgentSessionHistoryPage,
   AgentSessionHistoryResult
@@ -64,4 +65,34 @@ export function withPublishedWorkResult(
   work: AgentSessionPublishedWork | undefined
 ): AgentSessionHistoryResult {
   return work ? { ...result, page: withPublishedWork(result.page, work) } : result
+}
+
+/** A finite response captures current-work facts beside its published journal view. */
+export function capturePublishedWork(
+  snapshot: AgentJournalSnapshot,
+  work: AgentSessionPublishedWork | undefined
+): AgentSessionPublishedWork | undefined {
+  if (!work) {
+    return undefined
+  }
+  const latest = structuredClone(work.publishedLatestTurn(snapshotLatestTurn(snapshot)))
+  const prompts = structuredClone(work.actionablePrompts())
+  const ids = prompts.map((item) => item.itemId)
+  const submissions = structuredClone(work.restatedSubmissions())
+  const byId = new Map(submissions.map((entry) => [entry.clientMessageId, entry]))
+  const requests = structuredClone(work.requestProjection(snapshot.sessionId))
+  const working = work.working(),
+    view = work.viewKey(),
+    workView = work.workViewKey()
+  return {
+    publishedLatestTurn: () => latest,
+    actionablePrompts: () => prompts,
+    actionablePromptIds: () => ids,
+    restatedSubmissions: () => submissions,
+    publishedSubmission: (entry) => byId.get(entry.clientMessageId) ?? entry,
+    requestProjection: () => requests,
+    working: () => working,
+    viewKey: () => view,
+    workViewKey: () => workView
+  }
 }

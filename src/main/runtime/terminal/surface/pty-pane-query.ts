@@ -25,7 +25,8 @@ export type PtyPane = {
 export type PtyPaneSource = Pick<
   RuntimePtyWorktreeRecord,
   'ptyId' | 'tabId' | 'paneKey' | 'surfaceRecordedAtGraphSequence'
->
+> &
+  Partial<Pick<RuntimePtyWorktreeRecord, 'worktreeId'>>
 
 /** How a helper outside the runtime asks for a terminal's pane: the runtime's `paneOfPty`. */
 export type PtyPaneOf = (pty: PtyPaneSource) => PtyPane
@@ -38,13 +39,14 @@ const NO_PANE: PtyPane = Object.freeze({ tabId: null, paneKey: null, recordedAtG
 /** The tab and pane that hold a terminal; null fields when none does or there is no record. */
 export function paneOfPty(
   pty: PtyPaneSource | null | undefined,
-  mainPaneOf: MainPaneOfPty
+  mainPaneOf: MainPaneOfPty,
+  canonical = false
 ): PtyPane {
   if (!pty) {
     return NO_PANE
   }
-  if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-    const pane = mainPaneOf(pty.ptyId)
+  const pane = mainPaneOf(pty.ptyId)
+  if (pane || canonical || ORCA_LAYOUT_OWNER_IS_MAIN) {
     if (!pane) {
       return NO_PANE
     }

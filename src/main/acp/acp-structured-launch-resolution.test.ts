@@ -1,3 +1,9 @@
+import {
+  openJournalDatabase,
+  runJournalTransaction
+} from '../native-chat/agent-session-journal/journal-database'
+import { journalDatabasePath } from '../native-chat/agent-session-journal/journal-host-database'
+import type Database from '../sqlite/sync-database'
 import { createAcpStructuredLaunchResolver } from '../runtime/agent-session/launch/structured-agent-launch-composition.test-support'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -14,8 +20,6 @@ import {
   type JournalLoad
 } from '../native-chat/agent-session-journal/journal-open'
 import {
-  openTestJournalHostDatabase,
-  closeTestJournalHostDatabase,
   publishTestJournalEpoch,
   insertTestJournalRow,
   insertTestJournalRowJson
@@ -33,6 +37,14 @@ import { createProviderSpawnSpec } from '../provider-process/provider-process-su
 import { acpLaunchSpecFor } from './acp-launch-specs'
 import { STRUCTURED_CHILD_ENV_TO_DELETE } from '../runtime/agent-session/environment/structured-session-child-env'
 import { acpSessionNotRestoredItem } from './acp-session-reopen-failure'
+
+function openSavedJournalFixture(root: string) {
+  const opened = openJournalDatabase(journalDatabasePath(root))
+  return {
+    db: opened.db,
+    transaction: <T>(run: (db: Database.Database) => T) => runJournalTransaction(opened.db, run)
+  }
+}
 
 const GROK = acpLaunchSpecFor('grok')!
 const identity = {
@@ -92,7 +104,7 @@ function resolver(record: AgentSessionRecord, readJournal: () => JournalLoad | n
 describe('ACP launch resolution', () => {
   it('preserves resume and loss-warning decisions through a restore and an unreadable tail', async () => {
     const root = mkdtempSync(join(tmpdir(), 'orca-acp-saved-read-'))
-    const database = openTestJournalHostDatabase(root)
+    const database = openSavedJournalFixture(root)
     try {
       const handle: AgentSessionProviderHandle = {
         transport: 'acp',
@@ -147,8 +159,8 @@ describe('ACP launch resolution', () => {
       const readDecisions = async (readJournal: () => JournalLoad | null) => {
         const launch = await resolver(record, readJournal).resolve({ identity })
         return {
-          unsaved: launch.resume?.mayBeUnsaved(),
-          losses: launch.resume?.unannouncedLosses()
+          unsaved: await launch.resume?.mayBeUnsaved(),
+          losses: await launch.resume?.unannouncedLosses()
         }
       }
       const full = () => replayJournal(database.db, identity.sessionId)
@@ -159,14 +171,14 @@ describe('ACP launch resolution', () => {
       expect(await readDecisions(restored)).toStrictEqual(await readDecisions(full))
       expect(await readDecisions(restored)).toEqual({ unsaved: false, losses: [] })
     } finally {
-      await closeTestJournalHostDatabase(root)
+      database.db.close()
       rmSync(root, { recursive: true, force: true })
     }
   })
 
   it('reads an outcome chat from its records, and a newer one as unreadable', async () => {
     const root = mkdtempSync(join(tmpdir(), 'orca-acp-outcome-read-'))
-    const database = openTestJournalHostDatabase(root)
+    const database = openSavedJournalFixture(root)
     try {
       const handle: AgentSessionProviderHandle = {
         transport: 'acp',
@@ -220,8 +232,8 @@ describe('ACP launch resolution', () => {
           restoreJournal(database.db, identity.sessionId)
         ).resolve({ identity })
         return {
-          unsaved: launch.resume?.mayBeUnsaved(),
-          losses: launch.resume?.unannouncedLosses()
+          unsaved: await launch.resume?.mayBeUnsaved(),
+          losses: await launch.resume?.unannouncedLosses()
         }
       }
       expect(restoreJournal(database.db, identity.sessionId)?.state.items.has('turn')).toBe(true)
@@ -237,7 +249,7 @@ describe('ACP launch resolution', () => {
       expect(newer?.damage).toBeNull()
       expect(await readDecisions()).toEqual({ unsaved: false, losses: [] })
     } finally {
-      await closeTestJournalHostDatabase(root)
+      database.db.close()
       rmSync(root, { recursive: true, force: true })
     }
   })
@@ -295,13 +307,13 @@ describe('ACP launch resolution', () => {
     }
     const key = agentSessionProviderHandleKey(handle)
     expect(created.resume).toMatchObject({ sessionId: 'acp-1', key })
-    expect(created.resume?.mayBeUnsaved()).toBe(true)
+    expect(await created.resume?.mayBeUnsaved()).toBe(true)
     const resumed = await resolver(
       grokRecord({ providerHandleChain: [link('created'), link('resumed')] }),
       () => journalWithTurns()
     ).resolve({ identity })
     expect(resumed.resume).toMatchObject({ sessionId: 'acp-1', key })
-    expect(resumed.resume?.mayBeUnsaved()).toBe(false)
+    expect(await resumed.resume?.mayBeUnsaved()).toBe(false)
   })
 
   it('counts a created session as possibly unsaved only while the journal proves no turn on it', async () => {
@@ -325,7 +337,7 @@ describe('ACP launch resolution', () => {
     }).resolve({ identity })
     // Read only when asked: a reopen that works never replays the journal.
     expect(reads).toEqual([])
-    expect(launch.resume?.mayBeUnsaved()).toBe(true)
+    expect(await launch.resume?.mayBeUnsaved()).toBe(true)
 
     expect(await unsaved(() => journalWithTurns())).toBe(true)
     expect(await unsaved(() => journalWithTurns('acp-other'))).toBe(true)

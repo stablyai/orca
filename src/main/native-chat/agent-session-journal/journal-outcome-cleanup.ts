@@ -2,52 +2,35 @@
 // wait for it: a retired generation is one no current epoch names, so no read reaches its records.
 
 import type { JournalHostDatabase } from './journal-host-database'
-import type Database from '../../sqlite/sync-database'
 
 const FIRST_PASS_MS = 60_000
 const PASS_INTERVAL_MS = 6 * 60 * 60_000
-const sweepPositions = new WeakMap<Database.Database, number>()
-type SweptDatabase = Pick<JournalHostDatabase, 'transaction' | 'isClosed' | 'readOnly'>
+const sweepPositions = new WeakMap<object, number>()
+type SweptDatabase = Pick<JournalHostDatabase, 'maintenance' | 'isClosed' | 'readOnly'>
 
 /** A retired epoch's records go with it, as main deletes a retired epoch's rows: every generation
  * the chat's current epoch no longer names is swept, one bounded page per transaction. */
-export function sweepJournalOutcomePage(
-  database: Pick<JournalHostDatabase, 'transaction'>
-): boolean {
-  return database.transaction((db) => {
-    const after = sweepPositions.get(db) ?? 0
-    const candidates = db
-      .prepare(`SELECT a.generation FROM journal_outcome_generations a LEFT JOIN journal_outcome_epochs e
-      ON e.session_id = a.session_id AND e.epoch = a.epoch AND e.generation = a.generation
-      WHERE e.session_id IS NULL AND a.generation > ? ORDER BY a.generation LIMIT 32`)
-      .all(after)
-    for (const { generation } of candidates) {
-      if (typeof generation !== 'number') {
-        continue
-      }
-      sweepPositions.set(db, generation)
-      const removed = db
-        .prepare(`DELETE FROM journal_outcomes WHERE rowid IN (
-        SELECT rowid FROM journal_outcomes WHERE generation = ? LIMIT 32)`)
-        .run(generation)
-      if (removed.changes === 0) {
-        db.prepare('DELETE FROM journal_outcome_generations WHERE generation = ?').run(generation)
-        continue
-      }
-      // One bounded data page per transaction, even with many retired generations. The next page
-      // resumes at this generation, so it never rescans the live ones before it.
-      sweepPositions.set(db, generation - 1)
-      return true
-    }
-    if (candidates.length === 32) {
-      return true
-    }
-    sweepPositions.delete(db)
-    return false
+export async function sweepJournalOutcomePage(
+  database: Pick<JournalHostDatabase, 'maintenance'>,
+  charge: (ms: number) => void = () => {}
+): Promise<boolean> {
+  const result = await database.maintenance({
+    kind: 'retired',
+    after: sweepPositions.get(database) ?? 0
   })
+  charge(result.elapsed)
+  if (result.position === undefined) {
+    throw new Error('Native retired sweep position is missing')
+  }
+  sweepPositions.set(database, result.position)
+  return result.more
 }
 
-export type JournalPace = { work: <T>(unit: () => T) => T; rest: () => Promise<void> }
+export type JournalPace = {
+  work: <T>(unit: () => T) => T
+  record: (ms: number) => void
+  rest: () => Promise<void>
+}
 
 /** A 10% duty cycle for background deletion only: a chat open or a send is never charged. */
 export function createJournalPace(
@@ -56,6 +39,9 @@ export function createJournalPace(
 ): JournalPace {
   let worked = 0
   return {
+    record: (ms) => {
+      worked += ms
+    },
     work<T>(unit: () => T): T {
       const start = now()
       try {
@@ -113,10 +99,14 @@ export class JournalOutcomeSweeper {
   private async run(): Promise<void> {
     for (;;) {
       const database = this.current()
-      if (!database || !this.pace.work(() => sweepJournalOutcomePage(database))) {
+      if (!database) {
         return
       }
+      const more = await sweepJournalOutcomePage(database, this.pace.record)
       await this.pace.rest()
+      if (!more) {
+        return
+      }
     }
   }
 

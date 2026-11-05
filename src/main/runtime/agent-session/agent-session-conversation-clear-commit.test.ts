@@ -110,7 +110,7 @@ async function prepare(released = true) {
     })
   }
   const journal = new AgentSessionJournal({
-    database: openTestJournalHostDatabase(directory),
+    database: await openTestJournalHostDatabase(directory),
     identity: {
       sessionId: SOURCE,
       workspaceId: 'workspace-1',

@@ -1,3 +1,4 @@
+import { mutateTestJournalFixture } from '../agent-session-journal/journal-drained-fixture-test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -51,18 +52,20 @@ it('refreshes a retained catch-up reader after a same-cursor disk reload', async
     direction: 'after' as const,
     cursor: { epoch: cursor.epoch, sequence: 0 }
   }
-  expect(read(request)).toMatchObject({
+  expect(await read(request)).toMatchObject({
     ok: true,
     page: { items: [{ body: { state: 'running' } }], latestTurn: { turn: { state: 'running' } } }
   })
-  openTestJournalHostDatabase(root)
-    .db.prepare(
-      "UPDATE journal_rows SET row_json = json_set(row_json, '$.body.state', 'completed') WHERE session_id = ? AND epoch = ? AND seq = ?"
-    )
-    .run(IDENTITY.sessionId, cursor.epoch, cursor.sequence)
+  await mutateTestJournalFixture(await openTestJournalHostDatabase(root), (raw) => {
+    raw
+      .prepare(
+        "UPDATE journal_rows SET row_json = json_set(row_json, '$.body.state', 'completed') WHERE session_id = ? AND epoch = ? AND seq = ?"
+      )
+      .run(IDENTITY.sessionId, cursor.epoch, cursor.sequence)
+  })
   await journal.open()
   expect(journal.cursor()).toEqual(cursor)
-  expect(read(request)).toMatchObject({
+  expect(await read(request)).toMatchObject({
     ok: true,
     page: {
       items: [{ body: { state: 'completed' } }],

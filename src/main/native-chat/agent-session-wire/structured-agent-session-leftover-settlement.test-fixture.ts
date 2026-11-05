@@ -1,3 +1,4 @@
+import { setTestRecoveredOutcomeFailure } from '../agent-session-journal/journal-retained-fault-test-support'
 import { expect, vi } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalItemIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
@@ -29,13 +30,6 @@ export const TURN: AgentJournalItemIdentity = {
 export const TURN_KEY = agentJournalItemKey(TURN)
 const IN_TURN = { kind: 'turn' as const, turnItemId: TURN_KEY }
 export const APPROVAL: AgentJournalItemIdentity = { ...TURN, ordinal: 2 }
-/** Recovered outcome values carry recovered=true. */
-export const REJECT_RECOVERED_ROWS = `
-  CREATE TEMP TRIGGER reject_recovered BEFORE INSERT ON journal_outcomes
-  WHEN (NEW.field = 'items' AND json_extract(NEW.value_json, '$.recovered') = 1)
-    OR (NEW.field = 'submissions' AND json_extract(NEW.value_json, '$[1].recovered') = 1)
-  BEGIN SELECT RAISE(ABORT, 'temporary storage failure'); END;
-`
 
 export async function leaveUnfinishedWork(
   current: QueuedMessageTestRig,
@@ -71,10 +65,10 @@ export async function exitWhileSettlementFails(current: QueuedMessageTestRig) {
   if (!session || !child?.generation) {
     throw new Error('expected the original child')
   }
-  const database = openTestJournalHostDatabase(current.root)
-  const before = readTestJournalOutcomes(database.db, SESSION)
+  const database = await openTestJournalHostDatabase(current.root)
+  const before = await readTestJournalOutcomes(database, SESSION)
   vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-  database.db.exec(REJECT_RECOVERED_ROWS)
+  await setTestRecoveredOutcomeFailure(database)
   await current.host.handleAdapterEvent({
     type: 'ended',
     sessionId: SESSION,
@@ -90,7 +84,7 @@ export async function exitWhileSettlementFails(current: QueuedMessageTestRig) {
     runtimeFence: child.fence + 1,
     deathEvidence: { kind: 'exit-observed', ownerFence: child.fence }
   })
-  expect(readTestJournalOutcomes(database.db, SESSION)).toEqual(before)
+  expect(await readTestJournalOutcomes(database, SESSION)).toEqual(before)
   return { session, database, deadFence: child.fence }
 }
 

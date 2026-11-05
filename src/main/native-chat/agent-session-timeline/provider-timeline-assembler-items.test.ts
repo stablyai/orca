@@ -110,6 +110,7 @@ describe('provider timeline items', () => {
       item: 'call-a',
       body: { ...runningTool('read'), state: 'failed' }
     })
+    await rig.rows()
     const update = rig.assembler.apply({
       type: 'item.update',
       item: 'call-a',

@@ -22,7 +22,9 @@ const NO_PENDING_REMOVALS: PendingWorktreeRemovals = new Map()
 /** Keep unregistered removal leftovers visible until the folder disappears or a different checkout replaces it. */
 export async function withUnregisteredRemovalCheckouts(
   repoId: string,
-  gitWorktrees: GitWorktreeInfo[]
+  gitWorktrees: GitWorktreeInfo[],
+  logicalOwners: (records: readonly WorktreeRemovalRecord[]) => ReadonlySet<string> = () =>
+    new Set()
 ): Promise<GitWorktreeInfo[]> {
   let droppedFailure = false
   const failures = new Map(
@@ -48,11 +50,35 @@ export async function withUnregisteredRemovalCheckouts(
       !gitWorktrees.some((worktree) => areWorktreePathsEqual(worktree.path, record.worktreePath))
   )
   const leftovers: GitWorktreeInfo[] = []
+  const probed: {
+    record: WorktreeRemovalRecord
+    failed: boolean
+    physicalLeftover: boolean
+    exists: boolean
+  }[] = []
   for (const record of unlisted) {
     const failed = failedWorktreeRemovals.get(record.worktreeId) === record
-    if (
-      (await worktreeCheckoutExists(record.worktreePath)) &&
+    const exists = await worktreeCheckoutExists(record.worktreePath)
+    const physicalLeftover =
+      exists &&
       (!failed || (await isUnregisteredRemovalLeftover(record.repoPath, record.worktreePath)))
+    probed.push({ record, failed, physicalLeftover, exists })
+  }
+  const retained = logicalOwners(
+    probed
+      .filter(
+        ({ record, failed, exists }) =>
+          failed && !exists && failedWorktreeRemovals.get(record.worktreeId) === record
+      )
+      .map(({ record }) => record)
+  )
+  for (const { record, failed, physicalLeftover, exists } of probed) {
+    if (
+      physicalLeftover ||
+      (!exists &&
+        failed &&
+        failedWorktreeRemovals.get(record.worktreeId) === record &&
+        retained.has(record.worktreeId))
     ) {
       leftovers.push({
         path: record.worktreePath,
@@ -62,7 +88,7 @@ export async function withUnregisteredRemovalCheckouts(
         isMainWorktree: false,
         ...(record.failure ? { removalError: record.failure.message } : {})
       })
-    } else if (failed) {
+    } else if (failed && failedWorktreeRemovals.get(record.worktreeId) === record) {
       failedWorktreeRemovals.delete(record.worktreeId)
       droppedFailure = true
     }

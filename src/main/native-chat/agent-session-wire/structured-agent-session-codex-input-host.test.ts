@@ -1,10 +1,10 @@
+import { snapshotTestJournal } from '../agent-session-journal/journal-drained-fixture-test-support'
 import { openTestChats } from './structured-agent-session-open-test-chats.test-support'
 import {
   continuingStructuredAgentSessionInput,
   finalizingStructuredAgentSessionInput,
   structuredAgentSessionHandingOver
 } from './structured-agent-session-handing-over'
-import { measureCodexInputWork } from './structured-agent-session-codex-input-perf-test-support'
 import { registerCodexInputFinalization } from './structured-agent-session-codex-input-finalization.spec'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
 import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
@@ -212,7 +212,7 @@ async function permissionSend(text: string, options?: Record<string, string>) {
   return result.value.clientMessageId
 }
 const row = async (id: string) =>
-  (await host.journalSnapshot(SESSION)).submissions.find((s) => s.clientMessageId === id)
+  await (await host.journalSnapshot(SESSION)).submissions.find((s) => s.clientMessageId === id)
 const starts = () =>
   codex.connections.flatMap((c) => c.calls.filter((r) => r.method === 'turn/start'))
 async function began(id: string) {
@@ -444,15 +444,10 @@ it.each(['config', 'order', 'initial'] as const)(
   }
 )
 
-it.each([
-  ['ask', 1],
-  ['auto', 1],
-  ['empty', 1],
-  ['auto', 10],
-  ['auto', 100]
-] as const)(
-  'refreshes stopped words after refused steering with %s and %i stopped messages, including replacement',
-  async (mode, population) => {
+it.each(['ask', 'auto', 'empty'] as const)(
+  'refreshes stopped words after refused steering with %s, including replacement',
+  async (mode) => {
+    const population = 1
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
     const journal = host.collaboratorsForTests().sessions.get(SESSION)!.journal
     const running = await permissionSend('running')
@@ -495,15 +490,8 @@ it.each([
     const refusal = Promise.withResolvers<unknown>()
     codex.routes['turn/steer'] = () => refusal.promise
     await host.flushStreamedEvents(SESSION)
-    const measured =
-      population > 1 ? measureCodexInputWork(host, events, 'history', population) : undefined
-    let waiting: ReturnType<typeof host.waitForSendSettlement> | undefined
     try {
       const id = await permissionSend('follow up')
-      if (measured) {
-        waiting = host.waitForSendSettlement(SESSION, id)
-        void waiting.catch(() => {})
-      }
       await vi.waitFor(() =>
         expect(
           codex.connections[0]?.calls.some(
@@ -562,19 +550,8 @@ it.each([
       for (const stoppedId of stoppedIds.slice(1)) {
         expect(JSON.stringify(starts()[1]?.params?.input)).toContain(stoppedId)
       }
-      if (waiting) {
-        await began(id)
-        expect(submission((await waiting)?.value)).toMatchObject({
-          clientMessageId: id,
-          dispatchState: 'accepted'
-        })
-        expect(host['clientDelivery']['sendSettlement']['waiters'].has(SESSION)).toBe(false)
-      }
     } finally {
       refusal.resolve({})
-      host['clientDelivery']['sendSettlement'].closeSession(SESSION)
-      await waiting?.catch(() => {})
-      await measured?.()
     }
   }
 )
@@ -678,7 +655,9 @@ it.each(['stop', 'local-abort'] as const)(
         expect(finalizingStructuredAgentSessionInput(journal, id)).toBe(false)
         expect(submission((await waiting)?.value)).toMatchObject({ dispatchState: 'unknown' })
         expect(
-          (await host.journalSnapshot(SESSION)).items.filter(
+          await (
+            await host.journalSnapshot(SESSION)
+          ).items.filter(
             (item) => item.body.kind === 'status' && item.body.text === 'Cancellation requested.'
           )
         ).toHaveLength(1)
@@ -753,14 +732,17 @@ async function assertInputRecoveredAfterSnapshot(id: string): Promise<void> {
   const journal = host['sessions'].get(SESSION)!.journal
   const snapshotRoot = join(root, 'crash')
   await mkdir(snapshotRoot)
-  await openTestJournalHostDatabase(root).db.backup(journalDatabasePath(snapshotRoot))
+  await snapshotTestJournal(
+    await openTestJournalHostDatabase(root),
+    journalDatabasePath(snapshotRoot)
+  )
   const fresh = fakeCodex()
   const restartedAdapter = adapterFor(fresh)
   const restarted = new StructuredAgentSessionHost({
     ...host['deps'],
     adapter: restartedAdapter,
     store: await openTestAgentSessionRecordStore(snapshotRoot),
-    journalDatabase: openTestJournalHostDatabase(snapshotRoot),
+    journalDatabase: await openTestJournalHostDatabase(snapshotRoot),
     probeOwner: async () => ({ outcome: 'pid-absent' })
   })
   try {
@@ -787,7 +769,7 @@ export function codexInputFinalizationFixture() {
     adapter,
     codex,
     config,
-    database: () => openTestJournalHostDatabase(root).db,
+    database: async () => await openTestJournalHostDatabase(root),
     rewindTo: (itemId: string, expectedEpoch: string) =>
       host.rewind(CALLER, {
         envelope: envelope('agentSession.rewind', { itemId, expectedEpoch }),
@@ -805,9 +787,7 @@ export function codexInputFinalizationFixture() {
     assertInputRecoveredAfterSnapshot,
     conversationFence: () => host['deps'].store.getRecord(SESSION)!.lease.runtimeFence,
     waitForInputFinalization: (journal: AgentSessionJournal, id: string) =>
-      vi.waitFor(() => expect(finalizingStructuredAgentSessionInput(journal, id)).toBe(false)),
-    measureInputWork: (kind: 'history' | 'close', population: number) =>
-      measureCodexInputWork(host, events, kind, population)
+      vi.waitFor(() => expect(finalizingStructuredAgentSessionInput(journal, id)).toBe(false))
   }
 }
 

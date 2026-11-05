@@ -1,3 +1,10 @@
+import type { SurfaceExecutorIdentity } from '../../shared/workspace-surfaces/surface-execution-provenance'
+import type {
+  SurfaceExecutorCandidate,
+  SurfaceExecutorAdmission,
+  SurfaceExecutorDecision,
+  SurfaceExecutorResult
+} from '../../shared/workspace-surfaces/surface-executor-contract'
 import type {
   PtyFencedTerminationRequest,
   PtyFencedTerminationOutcome
@@ -49,6 +56,7 @@ export type PtyProviderBufferSnapshot = {
 }
 
 export type PtySpawnOptions = {
+  surfaceExecution?: SurfaceExecutorAdmission
   cols: number
   rows: number
   cwd?: string
@@ -118,6 +126,14 @@ export type { PtyProcessInfo, PtySpawnResult }
 type PtyProbeOptions = { signal?: AbortSignal }
 
 export type IPtyProvider = {
+  surfaceExecution?: {
+    retainRecoveryInterest?(): () => void
+    onWake?: (listener: (admission?: SurfaceExecutorAdmission) => void) => () => void
+    identify(candidate: SurfaceExecutorCandidate): Promise<SurfaceExecutorIdentity | null>
+    query(admission: SurfaceExecutorAdmission): Promise<SurfaceExecutorResult>
+    settle(decision: SurfaceExecutorDecision): Promise<SurfaceExecutorResult>
+    release(admission: SurfaceExecutorAdmission): Promise<void>
+  }
   /** SSH providers only: the relay session generation that registered them. */
   readonly providerGeneration?: number
   requestHostRpc?: (

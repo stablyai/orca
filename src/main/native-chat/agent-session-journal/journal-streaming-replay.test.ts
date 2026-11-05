@@ -3,18 +3,19 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AGENT_SESSION_JOURNAL_SCHEMA_VERSION } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { JournalHostDatabase } from './journal-host-database'
+import { journalDatabasePath } from './journal-host-database'
+import { openJournalDatabase } from './journal-database'
+import type Database from '../../sqlite/sync-database'
 import { replayJournal } from './journal-open'
 import type { JournalRow } from './journal-row-schema'
 import {
-  openTestJournalHostDatabase,
   insertTestJournalRow,
   publishTestJournalEpoch,
   insertTestJournalRowJson
 } from './journal-host-database-test-support'
 
 let root: string
-let opened: JournalHostDatabase
+let opened: { db: Database.Database }
 const sessionId = 'streaming-session'
 const epoch = 'epoch-1'
 
@@ -51,18 +52,18 @@ function put(row: JournalRow): void {
 
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-stream-replay-'))
-  opened = openTestJournalHostDatabase(root)
+  opened = openJournalDatabase(journalDatabasePath(root))
   publishTestJournalEpoch(opened.db, sessionId, epoch)
 })
 
 afterEach(async () => {
   vi.restoreAllMocks()
-  await opened.close()
+  opened.db.close()
   await rm(root, { recursive: true, force: true })
 })
 
 describe('streaming journal replay', () => {
-  it('reads past a gap to a future row, which names the newer row and no damage', () => {
+  it('reads past a gap to a future row, which names the newer row and no damage', async () => {
     put(anchor())
     put(revision(2))
     put(revision(4))
@@ -71,11 +72,11 @@ describe('streaming journal replay', () => {
     expect(loaded).toMatchObject({ newer: { sequence: 5 }, damage: null })
     expect(loaded.state.items.get('message-1')?.revision).toBe(2)
     expect(loaded.state.lastSequence).toBe(2)
-    const checkpoint = opened.db.pragma('wal_checkpoint(TRUNCATE)') as { busy: number }[]
-    expect(checkpoint[0].busy).toBe(0)
+    opened.db.exec('BEGIN IMMEDIATE')
+    opened.db.exec('COMMIT')
   })
 
-  it('names the first damage when a later row is malformed too', () => {
+  it('names the first damage when a later row is malformed too', async () => {
     put(anchor())
     put(revision(2))
     put(revision(4))
@@ -88,7 +89,7 @@ describe('streaming journal replay', () => {
     expect(loaded.state.lastSequence).toBe(2)
   })
 
-  it('names a missing epoch row before a later gap', () => {
+  it('names a missing epoch row before a later gap', async () => {
     put(revision(1))
     put(revision(3))
     const loaded = replayJournal(opened.db, sessionId)!

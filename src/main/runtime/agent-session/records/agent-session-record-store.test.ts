@@ -1,3 +1,4 @@
+import { mutateTestJournalFixture } from '../../../native-chat/agent-session-journal/journal-drained-fixture-test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -381,9 +382,11 @@ describe('concurrent claims', () => {
     const before = store.getRecord('session-alpha')
     const persistedBefore = await readPersistedTestAgentSessionStore(directory)
     // Fail the record update inside commit, like full-disk/I/O failure.
-    openTestJournalHostDatabase(directory).db.exec(
-      "CREATE TRIGGER fail_record_write BEFORE UPDATE ON agent_session_records BEGIN SELECT RAISE(ABORT, 'disk I/O error'); END"
-    )
+    await mutateTestJournalFixture(await openTestJournalHostDatabase(directory), (db) => {
+      db.exec(
+        "CREATE TRIGGER fail_record_write BEFORE UPDATE ON agent_session_records BEGIN SELECT RAISE(ABORT, 'disk I/O error'); END"
+      )
+    })
     await expect(store.setConversationName('session-alpha', 'renamed')).rejects.toThrow(
       'disk I/O error'
     )

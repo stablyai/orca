@@ -78,8 +78,8 @@ export function readNote() {
   return journal.snapshot().items.find((item) => item.itemId === noteId)!
 }
 
-export function rows() {
-  const result = journal.readSince({ epoch: journal.epoch, sequence: 0 })
+export async function rows() {
+  const result = await journal.readSince({ epoch: journal.epoch, sequence: 0 })
   if (!result.ok) {
     throw new Error(result.reset)
   }

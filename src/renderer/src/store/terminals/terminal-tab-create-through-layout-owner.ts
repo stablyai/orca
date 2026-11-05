@@ -1,3 +1,4 @@
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 // C3: window draws immediately for synchronous callers; main records the same IDs before later pane commands. Main-created tabs retain main’s facts so window saves do not mutate them.
 
 import { createBrowserUuid } from '@/lib/browser-uuid'
@@ -97,12 +98,14 @@ export function recordCreatedTerminalTabInLayoutOwner(
   const { workspace, ...rest } = command
   // Main starts the first terminal once it holds the tab; until then the pane waits for it.
   const startsInMain =
+    ORCA_LAYOUT_OWNER_IS_MAIN &&
     start !== undefined &&
     runtimeEnvironmentIdUnlessTwin(state, workspace) === null &&
     windowTabStartsInMain(state, start.tab)
-  const mark = startsInMain
-    ? markWindowTabStarting(start.store, command.tabId, command.leafId)
-    : null
+  const mark =
+    start && runtimeEnvironmentIdUnlessTwin(state, workspace) === null
+      ? markWindowTabStarting(start.store, command.tabId, command.leafId)
+      : null
   const unmark = (): void => {
     if (start && mark) {
       clearWindowTabMark(start.store, makePaneKey(command.tabId, command.leafId), mark)
@@ -110,8 +113,10 @@ export function recordCreatedTerminalTabInLayoutOwner(
   }
   const sent = sendLayoutApply(state, workspace, rest, {
     apply: () => {
-      if (start && mark) {
+      if (start && mark && startsInMain) {
         startWindowTabInMain(start.store, start.tab, command.leafId, mark)
+      } else {
+        unmark()
       }
     },
     // A paired server may hold it: the pane starts its own terminal, as today.

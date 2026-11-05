@@ -10,7 +10,10 @@ import {
   SURFACE_CLAIM_WITHOUT_STANDING
 } from '../../terminal/surface/pty-recorded-surface-topology'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import type { WindowLayoutCommand } from '../../terminal/layout/runtime-layout-apply'
+import type {
+  LayoutCommandRunOptions,
+  WindowLayoutCommand
+} from '../../terminal/layout/runtime-layout-apply'
 import {
   placeUnshownLiveTerminals,
   placeUnshownLiveTerminalsBestEffort,
@@ -33,7 +36,10 @@ import { followExportedPaneKeys } from '../../terminal/identity/exported-pane-ke
 export const FIRST_SURFACE_PLACEMENT_WAIT_MS = 500
 
 export abstract class OrcaRuntimeWithRestoredTerminalPlacement extends OrcaRuntimeWithAutomationOperations {
-  abstract applyLayoutCommand(command: WindowLayoutCommand): Promise<LayoutApplyReply>
+  abstract applyLayoutCommand(
+    command: WindowLayoutCommand,
+    run?: Pick<LayoutCommandRunOptions, 'admit'>
+  ): Promise<LayoutApplyReply>
   protected abstract notePaneSleeping(paneKey: string): void
 
   private placementRun: Promise<LiveTerminalPlacement> | null = null

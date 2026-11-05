@@ -1,6 +1,5 @@
 // Move main-owned tabs through layout commands so every view follows main without a window relay.
 import type { OrcaRuntimeWithPruneMobileSessionTabGroupLayout } from '../session-lifecycle/projection/prune-mobile-session-tab-group-layout'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import type {
   RuntimeMobileSessionTabMove,
   RuntimeMobileSessionTabMoveResult,
@@ -13,6 +12,7 @@ import { OrcaRuntimeWithMainLayoutRenames } from './main-layout-renames'
 import { liveTerminalsOfTab } from '../session-lifecycle/close/closed-tab-terminal'
 import type { WorkspaceLayout } from '../../../shared/workspace-layout/workspace-layout-model'
 import type { CommandOf } from '../../../shared/workspace-layout/workspace-layout-command-types'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { isPaneColumnSplitDropNoOp } from '../../../shared/workspace-layout/pane-column-split-drop-no-op'
 
 export abstract class OrcaRuntimeWithMainLayoutTabMoves extends OrcaRuntimeWithMainLayoutRenames {
@@ -28,8 +28,11 @@ export abstract class OrcaRuntimeWithMainLayoutTabMoves extends OrcaRuntimeWithM
     snapshot: RuntimeMobileSessionTabsSnapshot,
     tabId: string
   ): ReturnType<typeof liveTerminalsOfTab> {
-    return liveTerminalsOfTab(snapshot, tabId, (row) =>
-      this.findPtyForMobileTerminalTab(worktreeId, row)
+    return liveTerminalsOfTab(
+      snapshot,
+      tabId,
+      (row) => this.findPtyForMobileTerminalTab(worktreeId, row),
+      startedMainTerminalSurfaces(this)?.ownsWorkspace(worktreeId)
     )
   }
 
@@ -53,15 +56,22 @@ export abstract class OrcaRuntimeWithMainLayoutTabMoves extends OrcaRuntimeWithM
     shown: RuntimeMobileSessionTabsSnapshot,
     move: RuntimeMobileSessionTabMove
   ): Promise<RuntimeMobileSessionTabMoveResult | null> {
-    if (
-      !ORCA_LAYOUT_OWNER_IS_MAIN ||
-      !startedMainTerminalSurfaces(this)?.ownsWorkspace(worktreeId)
-    ) {
+    if (!startedMainTerminalSurfaces(this)?.ownsPlacement(worktreeId)) {
       return null
     }
     const workspace = this.mainLayoutWorkspace(worktreeId)
     if (!workspace) {
       throw new Error('tab_not_found')
+    }
+    const addressed = shown.tabs.find((row) => row.id === move.tabId)
+    if (
+      !ORCA_LAYOUT_OWNER_IS_MAIN &&
+      addressed &&
+      addressed.type !== 'terminal' &&
+      addressed.type !== 'agent-session' &&
+      !resolveSessionTabRow(workspace, move.tabId)
+    ) {
+      return null
     }
     const translation = translateSessionTabMove(
       worktreeId,

@@ -8,8 +8,6 @@ import type {
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-types'
 import type { RuntimeLeafRecord } from '../terminal/records/runtime-terminal-state-records'
 
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
-
 type Graph = RuntimeSyncWindowGraph
 
 /** The runtime indexes graph tabs by bare id, so duplicate ids cannot be routed safely. */
@@ -87,7 +85,7 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAtta
       this.servesHeadlessGraph = true
       this.rendererGeneration = null
     }
-    graph = ORCA_LAYOUT_OWNER_IS_MAIN ? this.withMainSurfaces(windowId, graph) : graph
+    graph = this.withMainSurfaces(windowId, graph)
 
     if (graph.terminalGroupGridSizes) {
       // Merged, not replaced: a group in a worktree the window is not showing keeps its last size.

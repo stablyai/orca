@@ -1,9 +1,5 @@
 import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
-import {
-  serializeOrcadMigrationValue,
-  type OrcadMigrationImportReceipt,
-  type OrcadMigrationManifest
-} from '../../../shared/orcad-migration/orcad-migration-manifest'
+import type { OrcadMigrationManifest } from '../../../shared/orcad-migration/orcad-migration-manifest'
 import type { ProjectGroup } from '../../../shared/project-group-types'
 import type { Repo } from '../../../shared/repo-types'
 import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
@@ -25,6 +21,7 @@ import {
   type PreparedOrcadMigrationDormantState
 } from './orcad-dormant-state-records'
 import { sameOrcadRepositoryConfiguration, selectNewRows } from './orcad-catalog-row-identity'
+export { assertOrcadMigrationReceiptMatchesManifest } from './orcad-catalog-row-identity'
 
 export type PreparedOrcadMigrationCatalog = {
   repositories: Repo[]
@@ -100,27 +97,6 @@ export function applyPreparedOrcadMigrationCatalog(
   applyPreparedOrcadMigrationDormantState(prepared.dormantState, state)
   if (prepared.newRepositories.length > 0) {
     syncProjectHostSetupCompatibilityState(repos)
-  }
-}
-
-export function assertOrcadMigrationReceiptMatchesManifest(
-  receipt: OrcadMigrationImportReceipt,
-  manifest: OrcadMigrationManifest
-): void {
-  const expected = {
-    source: manifest.source,
-    repositoryIds: manifest.payload.repositories.map((repo) => repo.id),
-    projectGroupIds: manifest.payload.projectGroups.map((group) => group.id),
-    folderWorkspaceIds: manifest.payload.folderWorkspaces.map((workspace) => workspace.id)
-  }
-  const actual = {
-    source: receipt.source,
-    repositoryIds: receipt.repositoryIds,
-    projectGroupIds: receipt.projectGroupIds,
-    folderWorkspaceIds: receipt.folderWorkspaceIds
-  }
-  if (serializeOrcadMigrationValue(actual) !== serializeOrcadMigrationValue(expected)) {
-    throw new Error('orcad_migration_receipt_manifest_mismatch')
   }
 }
 

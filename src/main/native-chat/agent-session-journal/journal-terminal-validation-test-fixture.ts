@@ -77,22 +77,24 @@ export function createFixture() {
   }
 
   async function saveOldItems(inputs: { itemId: string; revision?: number; body: unknown }[]) {
-    const { db } = openTestJournalHostDatabase(root)
-    for (const [index, input] of inputs.entries()) {
-      const json = JSON.stringify({
-        v: 3,
-        kind: 'item',
-        epoch: journal.epoch,
-        seq: index + 2,
-        ts: 900,
-        fence: 7,
-        revision: 1,
-        ...input,
-        turnScope: AGENT_JOURNAL_THREAD_SCOPE
-      })
-      expect(parseJournalRow(json).ok).toBe(true)
-      insertTestJournalRowJson(db, 'validation', index + 2, json, 900)
-    }
+    const database = await openTestJournalHostDatabase(root)
+    await database.transaction((plan) => {
+      for (const [index, input] of inputs.entries()) {
+        const json = JSON.stringify({
+          v: 3,
+          kind: 'item',
+          epoch: journal.epoch,
+          seq: index + 2,
+          ts: 900,
+          fence: 7,
+          revision: 1,
+          ...input,
+          turnScope: AGENT_JOURNAL_THREAD_SCOPE
+        })
+        expect(parseJournalRow(json).ok).toBe(true)
+        insertTestJournalRowJson(plan, 'validation', index + 2, json, 900, journal.epoch)
+      }
+    })
     await journal.close()
     journal = await open()
   }
@@ -108,8 +110,8 @@ export function createFixture() {
       { itemId: 'orca:approval', body: pendingApproval() }
     ])
     const before = journal.snapshot().items.find((item) => item.itemId === saved.itemId)
-    const { db } = openTestJournalHostDatabase(root)
-    const history = liveTestJournalRows(db, 'validation')
+    const database = await openTestJournalHostDatabase(root)
+    const history = await liveTestJournalRows(database, 'validation')
     const commits = vi.fn()
     journal.observeCommits(commits)
     await expect(settle()).resolves.toBeGreaterThan(0)
@@ -117,7 +119,9 @@ export function createFixture() {
     expect(journal.snapshot().items.find((item) => item.itemId === saved.itemId)).toEqual(before)
     expect(journal.itemBody('orca:advanceable')).toMatchObject({ state: 'interrupted' })
     expect(journal.itemBody('orca:approval')).toMatchObject({ resolution: { state: 'cancelled' } })
-    expect(liveTestJournalRows(db, 'validation').slice(0, history.length)).toEqual(history)
+    expect((await liveTestJournalRows(database, 'validation')).slice(0, history.length)).toEqual(
+      history
+    )
     const settled = journal.snapshot()
     await settle()
     expect(journal.snapshot()).toEqual(settled)

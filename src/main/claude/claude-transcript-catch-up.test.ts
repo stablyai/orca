@@ -159,8 +159,11 @@ describe('Claude chat catch-up', () => {
       const reopened = await c.replay()
       expect(reopened.item(key)).toEqual(c.journal.item(key))
       expect(isStructuredRewindTarget(reopened, key)).toBe(false)
-      const page = readAgentSessionHistory(reopened, { sessionId: SESSION, direction: 'tail' })
-      const delta = reopened.readSince(cursor)
+      const page = await readAgentSessionHistory(reopened, {
+        sessionId: SESSION,
+        direction: 'tail'
+      })
+      const delta = await reopened.readSince(cursor)
       if (!page.ok || !delta.ok) {
         throw new Error('history unavailable')
       }

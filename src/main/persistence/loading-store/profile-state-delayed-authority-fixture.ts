@@ -36,6 +36,36 @@ export class DelayedAuthority implements AsyncProfileStateAuthority {
 
   constructor(readonly inner: ProfileStateSqliteAuthority) {}
 
+  get surfaceExecutionScope() {
+    return this.inner.surfaceExecutionScope
+  }
+  takeSurfaceInvalidations() {
+    return this.inner.takeSurfaceInvalidations()
+  }
+  async readSurface(...args: Parameters<ProfileStateSqliteAuthority['readSurface']>) {
+    return this.dispatch(() => this.inner.readSurface(...args))
+  }
+  async executeSurfaceCommand(
+    ...args: Parameters<ProfileStateSqliteAuthority['executeSurfaceCommand']>
+  ) {
+    return this.dispatch(() => this.inner.executeSurfaceCommand(...args), true)
+  }
+  async executeSurfaceTransaction(
+    ...args: Parameters<ProfileStateSqliteAuthority['executeSurfaceTransaction']>
+  ) {
+    return this.dispatch(() => this.inner.executeSurfaceTransaction(...args), true)
+  }
+  async executeSurfaceJointTransaction(
+    ...args: Parameters<ProfileStateSqliteAuthority['executeSurfaceJointTransaction']>
+  ) {
+    return this.dispatch(() => this.inner.executeSurfaceJointTransaction(...args), true)
+  }
+  async executeSurfaceJournalUnit(
+    ...args: Parameters<ProfileStateSqliteAuthority['executeSurfaceJournalUnit']>
+  ) {
+    return this.dispatch(() => this.inner.executeSurfaceJournalUnit(...args), true)
+  }
+
   failNextWrite() {
     this.failNext = true
   }
@@ -88,7 +118,7 @@ export class DelayedAuthority implements AsyncProfileStateAuthority {
   async quarantineDatabase(root?: string, reason?: string) {
     return this.inner.quarantineDatabase(root, reason)
   }
-  private async dispatch(operation: () => void, write = false) {
+  private async dispatch<T>(operation: () => T, write = false): Promise<T> {
     const gate = this.next
     this.next = undefined
     gate?.started.resolve()
@@ -97,7 +127,7 @@ export class DelayedAuthority implements AsyncProfileStateAuthority {
       this.failNext = false
       throw new Error('profile_state_write_failed')
     }
-    operation()
+    return operation()
   }
 }
 

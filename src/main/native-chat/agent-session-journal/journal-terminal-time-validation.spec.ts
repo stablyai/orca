@@ -141,8 +141,8 @@ export function registerJournalTerminalTimeValidationTests(
         }
       ]
       await fixture.saveOldItems(inputs)
-      const { db } = openTestJournalHostDatabase(fixture.root)
-      const history = liveTestJournalRows(db, 'validation')
+      const db = await openTestJournalHostDatabase(fixture.root)
+      const history = await liveTestJournalRows(db, 'validation')
       const rows: JournalRow[] = []
       const insert = rowTable.insertJournalRow
       vi.spyOn(rowTable, 'insertJournalRow').mockImplementation((database, sessionId, row) => {
@@ -167,7 +167,9 @@ export function registerJournalTerminalTimeValidationTests(
       expect(
         rows.some((row) => row.kind === 'item' && row.itemId === `orca:${long}oversized`)
       ).toBe(true)
-      expect(liveTestJournalRows(db, 'validation').slice(0, history.length)).toEqual(history)
+      expect((await liveTestJournalRows(db, 'validation')).slice(0, history.length)).toEqual(
+        history
+      )
       for (const input of inputs) {
         const body = fixture.journal.itemBody(input.itemId)
         expect(body).toBeDefined()

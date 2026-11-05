@@ -242,12 +242,13 @@ export async function applyStructuredRewindRecovery(
           renderJournalStatus(draft, journalInputOrder(draft))
         )
       },
-      write: (db, row) => {
-        // The prepared fold is the result written before this completion receipt.
+      write: async (db, row) => {
+        // Every path writes its resulting history before this receipt: context and fork rows in this
+        // transaction, normal replacement already committed. The cancel comes from that saved result.
         staged =
           receipt?.(completed, fence, cursor, cancel) ??
           store.conversationReceipts.rewind(sessionId, fence, completed, cursor, cancel)
-        staged.write(db, row)
+        await staged.write(db, row)
       },
       committed: () => staged.committed()
     }

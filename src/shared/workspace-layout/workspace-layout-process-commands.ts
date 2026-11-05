@@ -1,6 +1,7 @@
 // Return terminal process effects separately from bindings/sleeping records; the runtime runs them after replying.
 
 import { isPaneSleepRecord } from '../agent-session/lifecycle/agent-session-resume'
+import { structuralValuesEqualIgnoringUndefined } from '../structural-value-equality'
 import { omitStoredFields } from './stored-record-fields'
 import {
   applied,
@@ -29,6 +30,35 @@ function workspacePanes(workspace: WorkspaceLayout): { paneKey: string; leafId: 
 
 function hasResumeRecord(leaf: LayoutLeaf | undefined): boolean {
   return leaf?.sleeping !== undefined || leaf?.resume !== undefined
+}
+
+function expectedRecordsMatch(
+  workspace: WorkspaceLayout,
+  command: CommandOf<'sleep'> | CommandOf<'wake'>
+): boolean {
+  if (!command.expectedRecords) {
+    return true
+  }
+  return (
+    command.recordOnly === true &&
+    Object.entries(command.expectedRecords).every(([key, expected]) => {
+      const pane = locatePane(workspace, key)
+      const leaf = pane && workspace.leaves?.[pane.leafId]
+      const current = leaf ? (leaf.sleeping ?? leaf.resume) : undefined
+      return (
+        (!command.paneKeys || command.paneKeys.includes(key)) &&
+        (expected === null
+          ? current === undefined
+          : expected.paneKey === key &&
+            expected.worktreeId === command.workspace &&
+            (expected.tabId === undefined || expected.tabId === pane?.tab.entityId) &&
+            structuralValuesEqualIgnoringUndefined(
+              current,
+              omitStoredFields(expected, ['paneKey', 'tabId', 'worktreeId'])
+            ))
+      )
+    })
+  )
 }
 
 /** Start or restore idempotently from the pane’s retained binding/resume record. Assume bindings live unless runtime evidence says otherwise; only restartPane replaces a live terminal. */
@@ -80,6 +110,9 @@ export function restartPane(
 /** Stops the terminals (unless `recordOnly`) and records how to resume each agent; panes and bindings stay. */
 export function sleep(model: WorkspaceLayoutModel, command: CommandOf<'sleep'>): Applied {
   let workspace = model.workspaces[command.workspace]!
+  if (!expectedRecordsMatch(workspace, command)) {
+    return refuse('pane_structure_changed')
+  }
   const panes = workspacePanes(workspace)
   const targets = command.paneKeys
     ? panes.filter((pane) => command.paneKeys!.includes(pane.paneKey))
@@ -107,6 +140,9 @@ export function sleep(model: WorkspaceLayoutModel, command: CommandOf<'sleep'>):
 /** Start slept panes unless recordOnly; retain resume records so failed starts or host crashes can retry. */
 export function wake(model: WorkspaceLayoutModel, command: CommandOf<'wake'>): Applied {
   let workspace = model.workspaces[command.workspace]!
+  if (!expectedRecordsMatch(workspace, command)) {
+    return refuse('pane_structure_changed')
+  }
   // A recordOnly wake drops either record (how a live one is cleared); a start wakes only slept panes.
   const woken = workspacePanes(workspace).filter((pane) => {
     const leaf = workspace.leaves?.[pane.leafId]

@@ -1,6 +1,23 @@
+import type { SurfaceKey } from '../../../shared/workspace-surfaces/surface-content'
+import type {
+  SurfaceStorageRead,
+  SurfaceStorageReadResult
+} from '../../../shared/workspace-surfaces/surface-storage-read'
+import type { SurfaceExecutionScope } from '../../../shared/workspace-surfaces/surface-executor-contract'
+import type { JournalPersistenceEffect } from '../../native-chat/agent-session-journal/journal-persistence-plan'
+import type {
+  SurfaceJointResult,
+  SurfaceJointTransaction
+} from '../../workspace-surfaces/surface-joint-transaction'
+
 import type { LegacyPaneKeyAliasEntry } from '../../../shared/persisted-state-types'
 import type { AutomationRun } from '../../../shared/automations-types'
 import type { ProfileStateDatabaseQuarantine } from '../profile-state/profile-state-database-quarantine'
+import type {
+  SurfaceStorageCommand,
+  SurfaceStorageMutation,
+  SurfaceStorageResult
+} from '../../../shared/workspace-surfaces/surface-storage-command'
 
 export type ProfileStateMaintenance = {
   resume(): Promise<void>
@@ -8,11 +25,28 @@ export type ProfileStateMaintenance = {
 
 // Keep compatibility/offline persistence loadable without eagerly importing SQLite.
 export type ProfileStateAuthority = {
+  readonly surfaceExecutionScope?: SurfaceExecutionScope
+  takeSurfaceInvalidations?: () => readonly SurfaceKey[]
   readonly asynchronous?: false
   /** Undefined means this authority has no saved state. */
   readSerializedState(): string | undefined
 
   assertCurrentRevision?: () => void
+
+  readSurface?: (request: SurfaceStorageRead) => SurfaceStorageReadResult
+
+  executeSurfaceCommand?: (command: SurfaceStorageCommand) => SurfaceStorageResult
+
+  executeSurfaceTransaction?: (
+    commands: readonly SurfaceStorageMutation[]
+  ) => SurfaceStorageResult[]
+
+  executeSurfaceJointTransaction?: (transaction: SurfaceJointTransaction) => SurfaceStorageResult[]
+
+  executeSurfaceJournalUnit?: (
+    transaction: SurfaceJointTransaction,
+    effects: readonly JournalPersistenceEffect[]
+  ) => SurfaceJointResult
 
   /** Without selective domain writes, callers replace the full document. */
   writeSerializedDomains?: (replacements: readonly ProfileStateDomainReplacement[]) => void
@@ -54,11 +88,28 @@ export type AsyncProfileStateAuthority = Omit<
   | 'writeJsonExport'
   | 'quarantineDatabase'
   | 'close'
+  | 'readSurface'
+  | 'executeSurfaceCommand'
+  | 'executeSurfaceTransaction'
+  | 'executeSurfaceJointTransaction'
+  | 'executeSurfaceJournalUnit'
 > & {
   readonly asynchronous: true
   assertWritable(): void
   abort(): Promise<void>
   assertCurrentRevision(): Promise<void>
+  readSurface?: (request: SurfaceStorageRead) => Promise<SurfaceStorageReadResult>
+  executeSurfaceCommand?: (command: SurfaceStorageCommand) => Promise<SurfaceStorageResult>
+  executeSurfaceTransaction?: (
+    commands: readonly SurfaceStorageMutation[]
+  ) => Promise<SurfaceStorageResult[]>
+  executeSurfaceJointTransaction?: (
+    transaction: SurfaceJointTransaction
+  ) => Promise<SurfaceStorageResult[]>
+  executeSurfaceJournalUnit?: (
+    transaction: SurfaceJointTransaction,
+    effects: readonly JournalPersistenceEffect[]
+  ) => Promise<SurfaceJointResult>
   writeSerializedDomains(replacements: readonly ProfileStateDomainReplacement[]): Promise<void>
   writeSerializedAutomationRuns(
     replacements: readonly ProfileStateDomainReplacement[],

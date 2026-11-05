@@ -1,16 +1,17 @@
-import type { JournalReducerState } from './journal-reducer'
-import { insertJournalRow } from './journal-row-table'
+import { settleJournalCommit } from './journal-committed-effects'
+import type { JournalPersistencePlan } from './journal-persistence-plan'
+import { journalRowReadBack } from './journal-row-table'
 import type { JournalHostDatabase } from './journal-host-database'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { JournalRow } from './journal-row-schema'
 import { assertJournalFence, assertJournalWritable } from './journal-write-guards'
 import type { JournalWriteBody } from './journal-write-queue'
-import type Database from '../../sqlite/sync-database'
+import type { JournalReducerState } from './journal-reducer'
 
 /** Write receipts in the row transaction; notify synchronously after COMMIT, never rollback. */
 export type JournalOperationReceipt = {
   fold?: (draft: JournalReducerState) => void
-  write: (db: Database.Database, row?: JournalRow) => void
+  write: (plan: JournalPersistencePlan, row?: JournalRow) => void | Promise<void>
   committed: () => void
 }
 
@@ -23,20 +24,24 @@ export function composeJournalOperationReceipts(
 ): JournalOperationReceipt {
   return {
     fold: (draft) => receipts.forEach((receipt) => receipt.fold?.(draft)),
-    write: (db, row) => receipts.forEach((receipt) => receipt.write(db, row)),
-    committed: () => receipts.forEach((receipt) => receipt.committed())
+    write: async (plan, row) => {
+      for (const receipt of receipts) {
+        await receipt.write(plan, row)
+      }
+    },
+    committed: () => settleJournalCommit(...receipts.map((receipt) => receipt.committed))
   }
 }
 
 export function writeReceiptIfChanged<T>(
-  run: (db: Database.Database) => T,
+  run: (plan: JournalPersistencePlan) => T | Promise<T>,
   changed: (result: T) => boolean,
   receipt?: JournalOperationReceipt
-): (db: Database.Database) => T {
-  return (db) => {
-    const result = run(db)
+): (plan: JournalPersistencePlan) => Promise<T> {
+  return async (db) => {
+    const result = await run(db)
     if (receipt && changed(result)) {
-      receipt.write(db)
+      await receipt.write(db)
     }
     return result
   }
@@ -52,13 +57,14 @@ export type JournalRowWriterDeps = {
   nextSequence: () => number
   project?: (rows: readonly JournalRow[]) => JournalRow[]
   prepare?: (
-    db: Database.Database,
+    plan: JournalPersistencePlan,
     rows: readonly JournalRow[],
     savedAt: number,
     finishFold?: (draft: JournalReducerState) => void
-  ) => () => void
+  ) => Promise<() => void>
   commit: (rows: readonly JournalRow[], savedAt: number, inputChanged?: boolean) => void
-  /** Streamed-text-only revisions may skip per-commit fsync; settlement makes them durable. */
+  verify?: () => Promise<void>
+  /** Identifies coalescible text; accepted batches still commit with FULL durability. */
   streamedTextRevision?: (row: JournalRow) => boolean
   outputRevision?: (row: JournalRow) => boolean
 }
@@ -70,29 +76,13 @@ export class JournalRowWriter {
     build: (seq: number, ts: number) => JournalRow,
     prepareReceipt?: JournalReceiptPreparation
   ): Promise<JournalRow> {
-    return this.deps.serialize(() => {
-      assertJournalWritable(this.deps.readOnly(), this.deps.sessionId)
-      const savedAt = this.deps.now()
-      const row = build(this.deps.nextSequence(), savedAt)
-      assertJournalFence(row.fence, this.deps.highestFence())
-      const receipt = typeof prepareReceipt === 'function' ? prepareReceipt([row]) : prepareReceipt
-      const streamed = !receipt && this.streamed([row])
-      const inputChanged = Boolean(receipt) || !this.outputOnly([row])
-      this.deps.database().transaction(
-        (db) => {
-          if (!this.deps.prepare) {
-            insertJournalRow(db, this.deps.sessionId, row, savedAt)
-          }
-          const adopt = this.deps.prepare?.(db, [row], savedAt, receipt?.fold)
-          receipt?.write(db, this.project([row])[0])
-          return adopt
-        },
-        streamed,
-        (adopt) => adopt?.()
+    return this.deps.serialize(async () => {
+      const [row] = await this.writeRows(
+        () => [build],
+        prepareReceipt,
+        (rows) => rows[0]
       )
-      receipt?.committed()
-      this.deps.commit([row], savedAt, inputChanged)
-      return this.project([row])[0]!
+      return row
     })
   }
 
@@ -106,45 +96,55 @@ export class JournalRowWriter {
   }
 
   /** Caller must already own the write lane. */
-  writeRows(
+  async writeRows(
     plan: () => readonly ((seq: number, ts: number) => JournalRow)[],
     prepareReceipt?: JournalReceiptPreparation,
     receiptRow?: (rows: readonly JournalRow[]) => JournalRow | undefined
-  ): JournalRow[] {
-    assertJournalWritable(this.deps.readOnly(), this.deps.sessionId)
-    const first = this.deps.nextSequence()
-    const ts = this.deps.now()
-    const rows = plan().map((build, index) => build(first + index, ts))
-    if (rows.length === 0) {
-      return rows
-    }
-    for (const row of rows) {
-      assertJournalFence(row.fence, this.deps.highestFence())
-    }
-    const receipt = typeof prepareReceipt === 'function' ? prepareReceipt(rows) : prepareReceipt
-    const streamed = !receipt && this.streamed(rows)
-    const inputChanged = Boolean(receipt) || !this.outputOnly(rows)
-    this.deps.database().transaction(
-      (db) => {
+  ): Promise<JournalRow[]> {
+    let streamed = false
+    const result = await this.deps.database().transaction(
+      async (db) => {
+        assertJournalWritable(this.deps.readOnly(), this.deps.sessionId)
+        const first = this.deps.nextSequence()
+        const savedAt = this.deps.now()
+        const rows = plan().map((build, index) => build(first + index, savedAt))
+        if (rows.length === 0) {
+          return { rows, savedAt, receipt: undefined, adopt: undefined, inputChanged: false }
+        }
+        for (const row of rows) {
+          assertJournalFence(row.fence, this.deps.highestFence())
+        }
+        const receipt = typeof prepareReceipt === 'function' ? prepareReceipt(rows) : prepareReceipt
+        streamed = !receipt && rows.length > 0 && this.streamed(rows)
+        const inputChanged = Boolean(receipt) || !this.outputOnly(rows)
         if (!this.deps.prepare) {
           for (const row of rows) {
-            insertJournalRow(db, this.deps.sessionId, row, ts)
+            this.stageRow(db, row, savedAt)
           }
         }
-        const adopt = this.deps.prepare?.(db, rows, ts, receipt?.fold)
-        receipt?.write(db, receiptRow?.(this.project(rows)))
-        return adopt
+        const adopt = rows.length
+          ? await this.deps.prepare?.(db, rows, savedAt, receipt?.fold)
+          : undefined
+        await receipt?.write(db, receiptRow?.(this.project(rows)))
+        return { rows, savedAt, receipt, adopt, inputChanged }
       },
-      streamed,
-      (adopt) => adopt?.()
+      () => streamed,
+      ({ rows, savedAt, receipt, adopt, inputChanged }) => {
+        settleJournalCommit(
+          () => adopt?.(),
+          () => receipt?.committed(),
+          () => {
+            if (rows.length) {
+              this.deps.commit(rows, savedAt, inputChanged)
+            }
+          }
+        )
+      }
     )
-    receipt?.committed()
-    this.deps.commit(rows, ts, inputChanged)
-    return this.project(rows)
-  }
-
-  private project(rows: readonly JournalRow[]): JournalRow[] {
-    return this.deps.project?.(rows) ?? [...rows]
+    if (result.rows.length) {
+      await this.deps.verify?.()
+    }
+    return this.project(result.rows)
   }
 
   /** Serialize sequence assignment, durable write and replay-equivalent folding. */
@@ -158,8 +158,27 @@ export class JournalRowWriter {
     }))
   }
 
+  private project(rows: readonly JournalRow[]): JournalRow[] {
+    return this.deps.project?.(rows) ?? [...rows]
+  }
+
   private outputOnly(rows: readonly JournalRow[]): boolean {
     return this.deps.outputRevision !== undefined && rows.every(this.deps.outputRevision)
+  }
+
+  private stageRow(plan: JournalPersistencePlan, row: JournalRow, savedAt: number): void {
+    plan.add({
+      kind: 'rows',
+      sessionId: this.deps.sessionId,
+      rows: [
+        {
+          epoch: row.epoch,
+          seq: row.seq,
+          savedAt,
+          json: journalRowReadBack(this.deps.sessionId, row).rowJson
+        }
+      ]
+    })
   }
 
   private streamed(rows: readonly JournalRow[]): boolean {

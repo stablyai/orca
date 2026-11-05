@@ -3,7 +3,6 @@ import { randomUUID } from 'node:crypto'
 import { reconcileChatTabIdentities } from '../agent-session/agent-session-tab-identity'
 import { preserveTerminalRetirementProofs } from '../terminal/surface/mobile-session-terminal-retirement-proof'
 import { stampMobileSnapshotVersion } from '../mobile-session-snapshot-version'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { startedMainTerminalSurfaces } from '../terminal/surface/main-terminal-surfaces'
 import { mainBindsUnendedTerminal } from '../terminal/surface/main-pane-verdict'
 import {
@@ -131,19 +130,17 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
   ): RuntimeMobileSessionTabsSnapshot {
     const existing = this.mobileSessionTabsByWorktree.get(worktreeId)
     snapshot = reconcileChatTabIdentities(snapshot, existing)
-    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-      const merged = startedMainTerminalSurfaces(this)?.withMainOrder(snapshot) ?? snapshot
-      // Main-order-only rebuilds are no-ops unless occupant/publication/retirement evidence changed.
-      if (
-        existing &&
-        mobileSnapshotIdentityUnchanged(existing, snapshot) &&
-        headlessMobileSnapshotContentUnchanged(existing, merged) &&
-        !headlessMobileSnapshotContentUnchanged(snapshot, merged)
-      ) {
-        return existing
-      }
-      snapshot = merged
+    const merged = startedMainTerminalSurfaces(this)?.withMainOrder(snapshot) ?? snapshot
+    // Main-order-only rebuilds are no-ops unless occupant/publication/retirement evidence changed.
+    if (
+      existing &&
+      mobileSnapshotIdentityUnchanged(existing, snapshot) &&
+      headlessMobileSnapshotContentUnchanged(existing, merged) &&
+      !headlessMobileSnapshotContentUnchanged(snapshot, merged)
+    ) {
+      return existing
     }
+    snapshot = merged
     snapshot = preserveTerminalRetirementProofs(snapshot, existing)
     const stamped = stampMobileSnapshotVersion(snapshot, existing)
     this.mobileSessionTabsByWorktree.set(worktreeId, stamped)

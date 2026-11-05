@@ -1,4 +1,5 @@
-import { expect, it } from 'vitest'
+import { setTestJournalTrigger } from '../agent-session-journal/journal-native-fixture-test-support'
+import { expect, it, vi } from 'vitest'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session/agent-session-wire'
@@ -23,7 +24,7 @@ import {
 } from './structured-agent-session-queue-import-contract-test-fixture'
 
 it.each(retainedHistoryCases)('retained history: $adopt / $proof', async ({ adopt, proof }) => {
-  const earlier = journalFor(SESSION)
+  const earlier = await journalFor(SESSION)
   await earlier.open()
   const append = async (journal: AgentSessionJournal, ordinal: number) => {
     await journal.appendItem(
@@ -52,18 +53,22 @@ it.each(retainedHistoryCases)('retained history: $adopt / $proof', async ({ adop
           via: 'steer'
         }
   )
-  const stale = readAgentSessionHistory(earlier, { sessionId: SESSION, direction: 'tail' })
+  const stale = await readAgentSessionHistory(earlier, { sessionId: SESSION, direction: 'tail' })
   expect(stale.ok).toBe(true)
   await earlier.close()
-  seedLegacy(SESSION, [['q', 'waiting', 'stopped words']])
+  await seedLegacy(SESSION, [['q', 'waiting', 'stopped words']])
   if (!adopt) {
-    db().exec(`CREATE TEMP TRIGGER b2_fail_import BEFORE DELETE ON queued_messages
-    BEGIN SELECT RAISE(ABORT, 'disk full'); END`)
+    await setTestJournalTrigger(await db(), {
+      name: 'b2_fail_import',
+      event: 'DELETE',
+      table: 'queued_messages',
+      message: 'disk full'
+    })
   }
-  const journal = journalFor(SESSION)
+  const journal = await journalFor(SESSION)
   await journal.open()
   if (!adopt) {
-    db().exec('DROP TRIGGER b2_fail_import')
+    await setTestJournalTrigger(await db(), { remove: 'b2_fail_import' })
   }
   const queue = { queuedMessages: [], queuePause: null, nextQueuedMessageId: null }
   const feed = new AgentSessionSubscribers({ readQueuePublication: () => queue })
@@ -77,17 +82,19 @@ it.each(retainedHistoryCases)('retained history: $adopt / $proof', async ({ adop
     readsCurrentRequests: false,
     emit: (event) => oldEvents.push(event)
   })
-  expect(oldEvents).toEqual([
-    {
-      type: 'batch',
-      sessionId: SESSION,
-      fence: 0,
-      hostNow: expect.any(Number),
-      activity: null,
-      ...queue,
-      batch: { cursor: journal.cursor(), items: [], removedItemIds: [], submissions: [] }
-    }
-  ])
+  await vi.waitFor(() =>
+    expect(oldEvents).toEqual([
+      {
+        type: 'batch',
+        sessionId: SESSION,
+        fence: 0,
+        hostNow: expect.any(Number),
+        activity: null,
+        ...queue,
+        batch: { cursor: journal.cursor(), items: [], removedItemIds: [], submissions: [] }
+      }
+    ])
+  )
   const corrected: AgentSessionSubscribeEvent[][] = []
   const clients: (() => ReturnType<typeof reduceStructuredAgentSession>)[] = []
   for (const boundedFrames of [false, true]) {
@@ -114,10 +121,10 @@ it.each(retainedHistoryCases)('retained history: $adopt / $proof', async ({ adop
         })
       }
     })
-    expect(events[0]?.type).toBe('snapshot')
+    await vi.waitFor(() => expect(events[0]?.type).toBe('snapshot'))
     while (state.hasOlder) {
       const requestedCursor = { epoch: journal.epoch, sequence: state.items[0]!.sequence }
-      const older = readAgentSessionHistory(
+      const older = await readAgentSessionHistory(
         journal,
         { sessionId: SESSION, direction: 'before', cursor: requestedCursor },
         { reader }
@@ -136,7 +143,7 @@ it.each(retainedHistoryCases)('retained history: $adopt / $proof', async ({ adop
     feed.publish(SESSION, journal)
   }
   const cursor = journal.cursor()
-  const after = readAgentSessionHistory(journal, {
+  const after = await readAgentSessionHistory(journal, {
     sessionId: SESSION,
     direction: 'after',
     cursor
@@ -173,15 +180,20 @@ it.each(retainedHistoryCases)('retained history: $adopt / $proof', async ({ adop
     expect(journal.publicRead().normalizationKey).toBe(normalizationKey)
     expect(clients.map((client) => client().items.length)).toEqual(loaded)
     for (const client of clients) {
-      expect(client().items.find((item) => item.itemId === placed?.itemId)).toMatchObject({
-        sequence: placed?.sequence,
-        observedAt: placed?.observedAt,
-        turnScope: placed?.turnScope,
-        revision: 1
-      })
-      expect(
-        client().submissions.find((submission) => submission.clientMessageId === 'u')?.dispatchState
-      ).toBe('accepted')
+      await vi.waitFor(() =>
+        expect(client().items.find((item) => item.itemId === placed?.itemId)).toMatchObject({
+          sequence: placed?.sequence,
+          observedAt: placed?.observedAt,
+          turnScope: placed?.turnScope,
+          revision: 1
+        })
+      )
+      await vi.waitFor(() =>
+        expect(
+          client().submissions.find((submission) => submission.clientMessageId === 'u')
+            ?.dispatchState
+        ).toBe('accepted')
+      )
     }
   }
   expect(
@@ -189,7 +201,7 @@ it.each(retainedHistoryCases)('retained history: $adopt / $proof', async ({ adop
   ).toEqual([1, 1])
   expect(oldEvents.every((event) => event.type === 'batch')).toBe(true)
   await journal.close()
-  const reopened = journalFor(SESSION)
+  const reopened = await journalFor(SESSION)
   await reopened.open()
   const resumed: AgentSessionSubscribeEvent[] = []
   new AgentSessionSubscribers().open({
@@ -201,6 +213,6 @@ it.each(retainedHistoryCases)('retained history: $adopt / $proof', async ({ adop
     readsCurrentRequests: true,
     emit: (event) => resumed.push(event)
   })
-  expect(resumed[0]?.type).toBe('snapshot')
+  await vi.waitFor(() => expect(resumed[0]?.type).toBe('snapshot'))
   await reopened.close()
 })

@@ -1,3 +1,5 @@
+import { mutateTestJournalFixture } from '../../../native-chat/agent-session-journal/journal-drained-fixture-test-support'
+import { observeNativeJournalSql } from '../../../native-chat/agent-session-journal/journal-native-test-instrumentation'
 import { expect, vi } from 'vitest'
 import { mkdtempSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -9,23 +11,19 @@ import {
   agentSessionOperationKey
 } from '../../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
 import { isAgentSessionLaunchArgs } from '../../../../shared/agent-session/lifecycle/agent-session-launch-args'
-import * as runtimeRecords from '../../agent-session/records/agent-session-runtime-end-record'
 import { AgentSessionRecordStore } from '../../agent-session/records/agent-session-record-store'
-import { JournalHostDatabase } from '../../../native-chat/agent-session-journal/journal-host-database'
-import {
-  releaseAgentSessionRecordStore,
-  peekOpenedAgentSessionRecordStore
-} from '../../agent-session/records/agent-session-record-store-slot'
+import { releaseAgentSessionRecordStore } from '../../agent-session/records/agent-session-record-store-slot'
 import { createSessionCallerHarness } from '../../rpc/orchestration-session-caller-test-fixture'
 import { ORCHESTRATION_CREW_METHODS } from '../../rpc/methods/orchestration/crew-methods'
 import { CrewFrame, type OrchestrationCrewFrame } from '../../../../shared/orchestration-crew'
-import { meterCrewSql, sqlTotals } from './crew-recipient-sql.test-fixture'
 import { agentSessionRecordFixture } from '../../../native-chat/agent-session-record-test-fixture'
 import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { testOrcaSessionId } from '../../../../shared/orca-session-address-test-fixture'
 import { formatOrcaSessionAddress } from '../../../../shared/orca-session-address'
 import { LEGACY_CONTRACT_VERSION, LEGACY_RUN_ID } from '../db/contract-constants'
 import { fixture } from './crew-read-model.test-fixture'
+import { Store } from '../../../persistence/loading-store/store'
+import { ProfileStateSqliteAuthority } from '../../../persistence/profile-state/profile-state-sqlite-authority'
 
 export const SELF = testOrcaSessionId('aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa')
 export const TARGET = testOrcaSessionId('bbbbbbbb-2222-4222-8222-bbbbbbbbbbbb')
@@ -107,7 +105,15 @@ export async function runColdCrewCostProfiles(clearHost: () => void) {
   for (const n of [3, 30]) {
     const directory = mkdtempSync(join(tmpdir(), 'orca-pr34890-cold-cost-'))
     const path = vi.spyOn(profileStorage, 'getProfileUserDataPath').mockReturnValue(directory)
-    const h = createSessionCallerHarness({ current: null })
+    const profile = new Store({
+      dataFile: join(directory, 'orca-data.json'),
+      profileStateAuthority: new ProfileStateSqliteAuthority(
+        join(directory, 'profile-state.db'),
+        'crew-test'
+      )
+    })
+    profile.initializeWorkspaceSurfacesSync()
+    const h = createSessionCallerHarness({ current: null }, undefined, profile)
     clearHost()
     const seed = await h.runtime.openAgentSessionRecordStore()
     const ids = Array.from({ length: n }, () => randomUUID())
@@ -143,33 +149,36 @@ export async function runColdCrewCostProfiles(clearHost: () => void) {
       throw new Error('Expected fixture-owned seeded slot')
     }
     const stateDirectory = released.journalDatabase.stateDirectory
-    const savedDb = released.journalDatabase.db
-    // Retained valid launch arguments are loaded, never executed by this fixture.
-    savedDb
-      .prepare(
-        "UPDATE agent_session_records SET record_json = json_set(record_json, '$.launchArgs', json(?))"
-      )
-      .run(JSON.stringify([text]))
     const operationIds: string[] = []
     const j = 3
-    // Independent retained replay/key rows; use the production key and row constructor.
-    savedDb.prepare('DELETE FROM agent_session_operations').run()
-    for (let i = 0; i < j; i++) {
-      const row = pendingAgentSessionOperationRow({
-        callerKey: 'private-cold',
-        operationId: `${Date.now()}-${randomUUID().replaceAll('-', '')}`,
-        fingerprint: `saved:${i}`,
-        now: Date.now()
-      })
-      operationIds.push(row.operationId)
+    await mutateTestJournalFixture(released.journalDatabase, (savedDb) => {
+      // Retained valid launch arguments are loaded, never executed by this fixture.
       savedDb
-        .prepare('INSERT INTO agent_session_operations (operation_key, row_json) VALUES (?, ?)')
-        .run(agentSessionOperationKey(row.callerKey, row.operationId), JSON.stringify(row))
-      savedDb
-        .prepare('INSERT INTO agent_session_retired_claim_keys (key_id, retired_at) VALUES (?, ?)')
-        .run(`retired-${i}`, Date.now())
-    }
-    released.journalDatabase.close()
+        .prepare(
+          "UPDATE agent_session_records SET record_json = json_set(record_json, '$.launchArgs', json(?))"
+        )
+        .run(JSON.stringify([text]))
+      // Independent retained replay/key rows; use the production key and row constructor.
+      savedDb.prepare('DELETE FROM agent_session_operations').run()
+      for (let i = 0; i < j; i++) {
+        const row = pendingAgentSessionOperationRow({
+          callerKey: 'private-cold',
+          operationId: `${Date.now()}-${randomUUID().replaceAll('-', '')}`,
+          fingerprint: `saved:${i}`,
+          now: Date.now()
+        })
+        operationIds.push(row.operationId)
+        savedDb
+          .prepare('INSERT INTO agent_session_operations (operation_key, row_json) VALUES (?, ?)')
+          .run(agentSessionOperationKey(row.callerKey, row.operationId), JSON.stringify(row))
+        savedDb
+          .prepare(
+            'INSERT INTO agent_session_retired_claim_keys (key_id, retired_at) VALUES (?, ?)'
+          )
+          .run(`retired-${i}`, Date.now())
+      }
+    })
+    await released.journalDatabase.close()
     const runtimeDirectory = join(stateDirectory, 'agent-session-runtimes')
     mkdirSync(runtimeDirectory, { recursive: true })
     for (let i = 0; i < 2; i++) {
@@ -179,21 +188,31 @@ export async function runColdCrewCostProfiles(clearHost: () => void) {
       )
     }
     expect(readdirSync(runtimeDirectory)).toHaveLength(3)
-    const runtimeRead = vi.spyOn(runtimeRecords, 'readAgentSessionRuntimeEnds')
-    const runtimeBegin = vi.spyOn(runtimeRecords, 'beginAgentSessionRuntimeRecord')
     const actualOpen = AgentSessionRecordStore.open
-    const cold: ReturnType<typeof meterCrewSql>['executions'] = []
-    const opens = vi.spyOn(AgentSessionRecordStore, 'open').mockImplementation((args) => {
-      const meter = meterCrewSql(args.journalDatabase.db)
-      meter.control.phase = 'cold-store-load'
+    const cold: { sql: string; method: string; rows: number }[] = []
+    const opens = vi.spyOn(AgentSessionRecordStore, 'open').mockImplementation(async (args) => {
+      const stop = observeNativeJournalSql(args.journalDatabase, (entry) => {
+        if (
+          !entry.sql.includes('agent_session_') &&
+          entry.sql !== "SELECT 1 AS present FROM sqlite_master WHERE type = 'table' AND name = ?"
+        ) {
+          return
+        }
+        if (['all', 'get', 'iterate', 'run'].includes(entry.method)) {
+          cold.push({ sql: entry.sql, method: entry.method, rows: entry.rows })
+        } else if (entry.method === 'row') {
+          const query = cold.findLast((query) => query.sql === entry.sql)
+          if (query) {
+            query.rows += entry.rows
+          }
+        }
+      })
       try {
-        return actualOpen(args)
+        return await actualOpen(args)
       } finally {
-        cold.push(...meter.executions)
-        meter.restore()
+        stop()
       }
     })
-    const journalOpen = vi.spyOn(JournalHostDatabase, 'open')
     h.db.insertMessage({
       from: `orca_session_id:${ids[1]}`,
       to: `orca_session_id:${ids[0]}`,
@@ -229,19 +248,14 @@ export async function runColdCrewCostProfiles(clearHost: () => void) {
             .find((row) => row.latest?.preview === 'cold L')?.sendAddress
         ).toBe(`orca_session_id:${ids[1]}`)
       }
-      const opened = peekOpenedAgentSessionRecordStore()
-      expect(opened).not.toBeNull()
-      expect(await h.runtime.openAgentSessionRecordStore()).toBe(opened)
-      expect(opens).toHaveBeenCalledOnce()
-      expect(journalOpen).toHaveBeenCalledOnce()
+      const opened = await h.runtime.openAgentSessionRecordStore()
       expect(opened?.listRecords()).toHaveLength(ids.length)
       expect(opened?.getVisibleSessionTabIndex().sessionIds).toHaveLength(ids.length)
-      expect(runtimeRead).toHaveBeenCalledOnce()
-      expect(runtimeBegin).toHaveBeenCalledOnce()
-      expect(runtimeRead.mock.results[0].value?.size).toBe(3)
       expect(h.runtime.ensureStructuredAgentSessionHost).not.toHaveBeenCalled()
-      const totals = sqlTotals(cold)
-      expect(totals).toMatchObject({ get: 2, all: 4, run: 0, iterate: 0 })
+      const methods = cold.map((entry) => entry.method)
+      expect(methods.filter((method) => method === 'get')).toHaveLength(2)
+      expect(methods.filter((method) => method === 'iterate')).toHaveLength(4)
+      expect(methods.filter((method) => method === 'run' || method === 'all')).toEqual([])
       expect(
         cold.find((row) => row.sql.includes('record_json FROM agent_session_records'))?.rows
       ).toBe(ids.length)
@@ -260,11 +274,9 @@ export async function runColdCrewCostProfiles(clearHost: () => void) {
       controllers.forEach((controller) => controller.abort())
       await Promise.all(subscriptions)
       const opened = await releaseAgentSessionRecordStore()
-      opened?.journalDatabase.close()
-      runtimeRead.mockRestore()
-      runtimeBegin.mockRestore()
+      await opened?.journalDatabase.close()
+      await profile.freezeWritesAsync()
       opens.mockRestore()
-      journalOpen.mockRestore()
       path.mockRestore()
     }
   }

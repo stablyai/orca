@@ -805,15 +805,26 @@ describe('publication', () => {
   it('an unchanged list is not re-sent on later frames', async () => {
     await workingSend()
     const events = await subscribeEvents()
-    await send('queued behind', 'queue-if-active').result
-    await eventually(() => expect(queuedFrames(events).length).toBeGreaterThan(0))
+    const queued = await send('queued behind', 'queue-if-active').result
+    if (!queued.ok || !('queued' in queued.value)) {
+      throw new Error('expected a queued receipt')
+    }
+    const draftId = queued.value.queued.messageId
+    await eventually(() =>
+      expect(queuedFrames(events).at(-1)).toMatchObject([{ messageId: draftId, state: 'waiting' }])
+    )
     const framesAfterInsert = queuedFrames(events).length
-    const { result } = send('another working send')
+    const { id, result } = send('another working send')
     await result
-    await eventually(async () => {
-      const last = events.at(-1)
-      expect(last?.type).toBe('batch')
-    })
+    await eventually(() =>
+      expect(
+        events.some(
+          (event) =>
+            event.type === 'batch' &&
+            event.batch.submissions.some((entry) => entry.clientMessageId === id)
+        )
+      ).toBe(true)
+    )
     expect(queuedFrames(events).length).toBe(framesAfterInsert)
   })
 })

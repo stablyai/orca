@@ -242,7 +242,7 @@ export async function startClearedContext(sessionId: string): Promise<void> {
 
 beforeEach(async () => {
   resetProviderFaults()
-  root = await mkdtemp(join(tmpdir(), 'orca-structured-coordinator-mail-'))
+  root = await mkdtemp(join(tmpdir(), 'orca-cmail-'))
   testState.dir = root
   profile = createStore()
   profile.addRepo(makeRepo({ id: 'workspace-1', path: root, executionHostId: 'local' }))

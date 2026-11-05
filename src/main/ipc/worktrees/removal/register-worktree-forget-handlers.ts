@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron'
+import { captureWorktreeOwnerRemoval } from '../../../runtime/workspaces/removal/canonical-owner-removal-scopes'
 import type {
   RemoveWorktreeResult,
   ForceDeleteWorktreeBranchResult
@@ -101,6 +102,9 @@ export function registerWorktreeForgetHandlers(context: WorktreeIpcContext): voi
           args.hostId
         )
         const ownerHost = parseExecutionHostId(ownerHostId)
+        const removeOwned = captureWorktreeOwnerRemoval(store, args.worktreeId, ownerHost?.id, () =>
+          runtime.openAgentSessionRecordStore()
+        )
         const externalHost = ownerHost?.kind === 'ssh' || ownerHost?.kind === 'runtime'
         // Off-host teardown must never include same-ID local inventory.
         await killAllProcessesForWorktree(args.worktreeId, {
@@ -114,6 +118,7 @@ export function registerWorktreeForgetHandlers(context: WorktreeIpcContext): voi
           onPtyStopped: clearProviderPtyState,
           // Metadata removal must retire structured chats even when no provider child is attached.
           closeStructuredSessions: teardownStops('worktree-removal', 'structured-chat'),
+          deferSurfaceRetirement: true,
           ...(externalHost ? { includeProviderInventory: false, includeLocalRegistry: false } : {})
         }).catch((err) => {
           console.warn(`[worktree-teardown] forget-local failed for ${args.worktreeId}:`, err)
@@ -121,11 +126,13 @@ export function registerWorktreeForgetHandlers(context: WorktreeIpcContext): voi
 
         runtime.clearOptimisticReconcileToken(args.worktreeId)
         // Resolve omitted hosts too, or orphan cleanup purges the local partition and leaves remote state.
-        removeWorktreeMetadataAndTransientState(
-          { store, runtime },
-          args.worktreeId,
-          ownerHost?.id,
-          args.snapshotPruneBatchId
+        await removeOwned(() =>
+          removeWorktreeMetadataAndTransientState(
+            { store, runtime },
+            args.worktreeId,
+            ownerHost?.id,
+            args.snapshotPruneBatchId
+          )
         )
         // Cached authorization outlives metadata; invalidate it before the forgotten path can remain accessible.
         invalidateAuthorizedRootsCache()

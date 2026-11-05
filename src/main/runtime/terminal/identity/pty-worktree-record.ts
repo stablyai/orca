@@ -13,9 +13,9 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switc
 import {
   mainDecidesLeafLiveness,
   mainPaneRecordFacts,
-  noteMainPaneRecordChange,
-  withoutPaneClaim
-} from '../surface/main-terminal-surfaces'
+  noteMainPaneRecordChange
+} from '../surface/main-terminal-surface-observations'
+import { withoutPaneClaim } from '../surface/main-terminal-surfaces'
 import {
   recordPtySurfaceClaim,
   SURFACE_CLAIM_WITHOUT_STANDING

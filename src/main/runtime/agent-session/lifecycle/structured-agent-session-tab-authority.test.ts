@@ -1,3 +1,12 @@
+import { mutateTestJournalFixture } from '../../../native-chat/agent-session-journal/journal-drained-fixture-test-support'
+import { windowSaveKeepingMainSleepRecords } from '../../../persistence/window-save-sleep-records'
+import { readPersistedState } from '../../../persistence/persistence-test-harness'
+import {
+  isSurfaceEvidenceDomain,
+  surfaceEvidenceDocumentSchema
+} from '../../../../shared/workspace-surfaces/surface-evidence-document'
+import { windowViewSaveForMain } from '../../../persistence/window-save-view'
+import { failNativeJournalStatements } from '../../../native-chat/agent-session-journal/journal-native-test-instrumentation'
 import '../../rpc/unused-default-rpc-methods.test-fixture'
 import { beforeEach, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../../rpc/dispatcher'
@@ -5,6 +14,7 @@ import { ORCHESTRATION_CALLER_METHODS } from '../../rpc/methods/orchestration/ca
 import { STRUCTURED_AGENT_SESSION_REVEAL_METHODS } from '../../rpc/methods/structured-agent-session-reveal'
 import {
   seedTestAgentSessionStoreFromNewerBuild,
+  readPersistedTestAgentSessionStore,
   editPersistedTestAgentSessionStore
 } from '../records/agent-session-record-store-test-harness'
 import { STRUCTURED_AGENT_SESSION_STATUS_METHODS } from '../../rpc/methods/structured-agent-session-status-stream'
@@ -24,14 +34,18 @@ import {
   physicalReload,
   rejectVisibility,
   replaceSaved,
-  savedIds
+  savedIds,
+  savedSnapshot
 } from './structured-agent-session-tab-authority.test-support'
 import { structuredAgentSessionTabId } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { chatTabCommandsSettled } from '../../orca-runtime-tests/session-layout-apply.test-fixture'
 import * as journalFactory from '../../../native-chat/agent-session-journal/journal-store-factory'
 import { discardStructuredWorkerSession } from '../../rpc/methods/orchestration-structured-worker-session'
 import { closeStructuredAgentSessionChild } from '../structured-agent-session-close'
-import { createTrackedJournalOpener } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
+import {
+  createTrackedJournalOpener,
+  openTestJournalHostDatabase
+} from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 
 // CLI capability probing is outside tab authority and must not start a real CLI in this fixture.
@@ -103,18 +117,16 @@ it('captures persisted folder attention without installing the chat host or open
 })
 
 it.each([false, true])(
-  'captures the initialized profile before mutable snapshot/lazy admission, firstMessage=%s',
+  'imports legacy saved chats before a stale snapshot and preserves them through create/reload, firstMessage=%s',
   async (first) => {
-    const profile = await authorityProfile([G, B])
+    const profile = await authorityProfile([G, B], { legacy: true })
     const runtime = new AuthorityRuntime(profile.profile)
     replaceSaved(profile, [])
     const rig = await openAuthorityRuntime(profile, runtime)
     expect(runtime.capturedSelection()).toEqual([G, B])
     expect(rig.host.deps.store).toBe(rig.store)
-    expect(rig.host.getPersistedVisibleSessionTabIndex().present).toBe(false)
-    const prepare = vi.spyOn(rig.store.founding, 'prepare')
+    expect(rig.host.getPersistedVisibleSessionTabIndex().present).toBe(true)
     expect(await createC(rig, first)).toMatchObject({ ok: true })
-    expect(prepare).toHaveBeenCalled()
     expect(rig.host.getPersistedVisibleSessionTabIndex()).toEqual({
       present: true,
       sessionIds: [B, C]
@@ -131,16 +143,72 @@ it.each([false, true])(
     expect(fresh.store).not.toBe(rig.store)
     expect(fresh.host.deps.journalDatabase).not.toBe(rig.host.deps.journalDatabase)
     expect(fresh.host.getPersistedVisibleSessionTabIndex().sessionIds).toEqual([B, C])
+    const references = Object.entries(readPersistedState())
+      .filter(([domain]) => isSurfaceEvidenceDomain(domain))
+      .map(([, value]) => surfaceEvidenceDocumentSchema.parse(value))
+    expect(references).toContainEqual(
+      expect.objectContaining({
+        kind: 'reference',
+        value: expect.objectContaining({
+          id: structuredAgentSessionTabId(G),
+          raw: expect.objectContaining({ contentType: 'agent-session', entityId: G })
+        })
+      })
+    )
   }
 )
 
+it('a refused first import adopts nothing and retries the same captured selection', async () => {
+  const profile = await authorityProfile([G, B], { legacy: true })
+  const runtime = new AuthorityRuntime(profile.profile)
+  replaceSaved(profile, [])
+  await mutateTestJournalFixture(await openTestJournalHostDatabase(root), (db) => {
+    db.exec(
+      "CREATE TRIGGER reject_first_import BEFORE INSERT ON agent_session_store_meta WHEN NEW.key='session_tabs_recorded' BEGIN SELECT RAISE(ABORT, 'first import rejected'); END"
+    )
+  })
+  await expect(openAuthorityRuntime(profile, runtime)).rejects.toThrow('first import rejected')
+  expect(
+    profile.profile.readWorkspaceSurfaces().filter((row) => row.content?.kind === 'agent-session')
+  ).toEqual([])
+  expect(savedIds(profile)).toEqual([])
+  expect(getStructuredAgentSessionHost()).toBeNull()
+  expect((await readPersistedTestAgentSessionStore(root)).sessionTabs).toBeUndefined()
+  await mutateTestJournalFixture(await openTestJournalHostDatabase(root), (db) => {
+    db.exec('DROP TRIGGER reject_first_import')
+  })
+  const rig = await openAuthorityRuntime(profile, runtime)
+  expect(rig.store.listVisibleSessionIds()).toEqual([B])
+  expect(rig.acquire).not.toHaveBeenCalled()
+  expect((await physicalReload(rig)).store.listVisibleSessionIds()).toEqual([B])
+})
+
+it('first import keeps current custom identity and order before the captured supplement', async () => {
+  const profile = await authorityProfile([B, C], { legacy: true })
+  const runtime = new AuthorityRuntime(profile.profile)
+  const current = savedSnapshot(profile, [C])
+  const tab = current.unifiedTabs?.[profile.workspace]?.find((row) => row.entityId === C)
+  if (!tab) {
+    throw new Error('expected the current saved chat')
+  }
+  tab.id = 'current-c-tab'
+  profile.profile.setWorkspaceSession(current)
+  const rig = await openAuthorityRuntime(profile, runtime)
+  expect(rig.store.listVisibleSessionIds()).toEqual([C, B])
+  expect(rig.store.getSessionTabId(C)).toBe('current-c-tab')
+  await rig.host.setSessionTabVisibility(B, false)
+  const fresh = await physicalReload(rig)
+  expect(fresh.store.listVisibleSessionIds()).toEqual([C])
+  expect(fresh.store.getSessionTabId(C)).toBe('current-c-tab')
+})
+
 it.each([false, true])(
-  'failed passive SQL and rejected hide do not spend the captured base, firstMessage=%s',
+  'rejected hide and create preserve canonical membership through retry/reload, firstMessage=%s',
   async (first) => {
     const rig = await openAuthorityRuntime(await authorityProfile())
-    const allow = rejectVisibility(rig)
+    const allow = await rejectVisibility(rig)
     const release = await holdStartup(rig)
-    expect(rig.host.getPersistedVisibleSessionTabIndex().present).toBe(false)
+    expect(rig.host.getPersistedVisibleSessionTabIndex().present).toBe(true)
     replaceSaved(rig, [])
     await expect(rig.host.setSessionTabVisibility(B, false)).rejects.toThrow('visibility rejected')
     expect(savedIds(rig)).toEqual([])
@@ -149,8 +217,8 @@ it.each([false, true])(
       ? expect(createC(rig, first)).resolves.toMatchObject({ ok: false })
       : expect(createC(rig, first)).rejects.toThrow('visibility rejected'))
     expect(rig.store.getRecord(C)).toBeNull()
-    expect(rig.host.getPersistedVisibleSessionTabIndex().present).toBe(false)
-    allow()
+    expect(rig.host.getPersistedVisibleSessionTabIndex().present).toBe(true)
+    await allow()
     expect(await createC(rig, first)).toMatchObject({ ok: true })
     expect(rig.host.getPersistedVisibleSessionTabIndex().sessionIds).toEqual([B, C])
     await release()
@@ -168,7 +236,7 @@ it.each([false, true])(
       refusal: { code: 'agent_session_conflict', details: { reason: 'tabIdTaken' } }
     })
     expect(rig.store.getRecord(C)).toBeNull()
-    expect(rig.host.getPersistedVisibleSessionTabIndex().present).toBe(false)
+    expect(rig.host.getPersistedVisibleSessionTabIndex().present).toBe(true)
     expect(rig.acquire).not.toHaveBeenCalled()
     await rig.store.initializeSessionTabs()
     expect(await createC(rig, first, structuredAgentSessionTabId(B))).toMatchObject({
@@ -211,12 +279,12 @@ it.each([false, true])(
   }
 )
 
-it('preserves windowless explicit failed-show insertion and retention', async () => {
+it('keeps failed-show Retry live without partial durability and persists a later retry', async () => {
   layoutOwner.main = false
   const rig = await openAuthorityRuntime(await authorityProfile())
   const release = await holdStartup(rig)
   await closeStructuredAgentSessionChild(B, { runtime: rig.runtime })
-  const allow = rejectVisibility(rig)
+  const allow = await rejectVisibility(rig)
   await rig.runtime.publishStructuredAgentSessionTab({
     workspaceId: rig.workspace,
     sessionId: B,
@@ -226,7 +294,7 @@ it('preserves windowless explicit failed-show insertion and retention', async ()
   expect(rig.store.isSessionTabVisible(B)).toBe(false)
   expect(rig.runtime.live(B)).toBe(true)
   await release()
-  expect(savedIds(rig)).toContain(B)
+  expect(savedIds(rig)).toEqual([])
   await rig.runtime.publishStructuredAgentSessionTab({
     workspaceId: rig.workspace,
     sessionId: B,
@@ -234,7 +302,7 @@ it('preserves windowless explicit failed-show insertion and retention', async ()
     activate: true
   })
   await chatTabCommandsSettled()
-  expect(savedIds(rig)).toEqual([B])
+  expect(savedIds(rig)).toEqual([])
   expect(rig.store.isSessionTabVisible(B)).toBe(false)
   expect(rig.runtime.live(B)).toBe(true)
   const snapshot = rig.runtime.mobileSessionTabsByWorktree.get(rig.workspace)!
@@ -244,20 +312,33 @@ it('preserves windowless explicit failed-show insertion and retention', async ()
   expect(rig.runtime.live(B)).toBe(true)
   rig.runtime.mobileSessionTabsByWorktree.delete(rig.workspace)
   expect(rig.runtime.live(B)).toBe(false)
-  allow()
-  await rig.host.setSessionTabVisibility(B, true)
-  await closeStructuredAgentSessionChild(B, { runtime: rig.runtime })
+  await allow()
+  await rig.runtime.publishStructuredAgentSessionTab({
+    workspaceId: rig.workspace,
+    sessionId: B,
+    agent: 'codex',
+    activate: true
+  })
   await chatTabCommandsSettled()
-  expect(savedIds(rig)).toEqual([])
+  expect(savedIds(rig)).toEqual([B])
+  expect(rig.store.isSessionTabVisible(B)).toBe(true)
+  const fresh = await physicalReload(rig)
+  expect(fresh.store.listVisibleSessionIds()).toEqual([B])
+  await closeStructuredAgentSessionChild(B, { runtime: fresh.runtime })
+  await chatTabCommandsSettled()
+  expect(savedIds(fresh)).toEqual([])
 })
 
 it.each([false, true])(
-  'leaves prior visibility and exact known/null ID untouched after unproven close, known=%s',
+  'leaves prior visibility and exact recorded ID untouched after unproven close, custom=%s',
   async (known) => {
     const rig = await openAuthorityRuntime(await authorityProfile())
     if (known) {
+      await rig.host.setSessionTabVisibility(B, false)
       await rig.host.setSessionTabVisibility(B, true, 'known-tab')
     }
+    const beforeId = rig.store.getSessionTabId(B)
+    expect(beforeId).toBe(known ? 'known-tab' : structuredAgentSessionTabId(B))
     await rig.store.transitionHandoff(B, (record) => ({
       ...record,
       lease: { ...record.lease, claimStatus: 'reserved', reservedSpawnToken: 'pending-owner' }
@@ -265,13 +346,14 @@ it.each([false, true])(
     vi.spyOn(rig.host, 'close').mockRejectedValueOnce(new Error('child close unproven'))
     const result = await closeStructuredAgentSessionChild(B, { runtime: rig.runtime })
     expect(result).toMatchObject({ stopped: false, closeAttempted: true })
-    expect(rig.store.getSessionTabId(B)).toBe(known ? 'known-tab' : null)
+    expect(rig.store.getSessionTabId(B)).toBe(beforeId)
     expect(rig.store.isSessionTabVisible(B)).toBe(true)
   }
 )
 
 it('failed worker discard explicitly restores a known tab instead of relying on a loaded handle', async () => {
   const rig = await openAuthorityRuntime(await authorityProfile())
+  await rig.host.setSessionTabVisibility(B, false)
   await rig.host.setSessionTabVisibility(B, true, 'worker-tab')
   await rig.store.transitionHandoff(B, (record) => ({
     ...record,
@@ -300,11 +382,26 @@ it.each([undefined, [], [C]])(
   }
 )
 
-it('leaves absence when no selected record is representable; rechecks raw selection on a genuine later action', async () => {
-  const rig = await openAuthorityRuntime(await authorityProfile([G], { records: [] }))
+it('records empty membership without deleting unresolved legacy data; a genuine create remains usable', async () => {
+  const rig = await openAuthorityRuntime(await authorityProfile([G], { records: [], legacy: true }))
   await rig.runtime.restoreStructuredAgentSessionTabs()
-  expect(rig.store.getVisibleSessionTabIndex().present).toBe(false)
-  expect(savedIds(rig)).toEqual([G])
+  expect(rig.store.getVisibleSessionTabIndex().present).toBe(true)
+  expect(savedIds(rig)).toEqual([])
+  await rig.profile.flushPendingOrThrowAsync()
+  const references = Object.entries(readPersistedState())
+    .filter(([domain]) => isSurfaceEvidenceDomain(domain))
+    .map(([, value]) => surfaceEvidenceDocumentSchema.parse(value))
+  expect(references).toContainEqual({
+    version: 1,
+    hostId: 'local',
+    kind: 'reference',
+    value: {
+      workspaceId: rig.workspace,
+      kind: 'agent-session',
+      id: structuredAgentSessionTabId(G),
+      raw: { tabId: structuredAgentSessionTabId(G), sessionId: G, recordJson: null }
+    }
+  })
   expect(rig.runtime.capturedSelection()).toEqual([G])
   expect(await createC(rig, false)).toMatchObject({ ok: true })
   expect(rig.store.listVisibleSessionIds()).toEqual([C])
@@ -314,9 +411,9 @@ it.each(['group', 'folder'] as const)(
   'keeps accepted %s removal and does not fabricate an owner from the captured base',
   async (kind) => {
     const rig = await openAuthorityRuntime(await authorityProfile())
-    const allow = rejectVisibility(rig)
+    const allow = await rejectVisibility(rig)
     const release = await holdStartup(rig)
-    allow()
+    await allow()
     const removed =
       kind === 'group'
         ? await rig.runtime.deleteProjectGroup(rig.groupId)
@@ -374,8 +471,8 @@ it.each([false, true])(
   }
 )
 
-it('first orcad status client uses the pre-snapshot capture through install-first and admission reuse', async () => {
-  const profile = await authorityProfile([G, B])
+it('first orcad status imports legacy saved chats through install-first and admission reuse', async () => {
+  const profile = await authorityProfile([G, B], { legacy: true })
   const runtime = new AuthorityRuntime(profile.profile)
   replaceSaved(profile, [])
   const rig = await openAuthorityRuntime(profile, runtime, true)
@@ -422,30 +519,19 @@ it('first orcad status client uses the pre-snapshot capture through install-firs
 it('checked unreadable selection survives but raw unreadable and foreign saved rows do not establish membership', async () => {
   const raw = 'raw-unreadable-0006',
     foreign = 'foreign-chat-0007'
-  const profile = await authorityProfile([G, B, raw, foreign])
+  const profile = await authorityProfile([G, B, raw], { legacy: true, records: [B, raw, foreign] })
   await editPersistedTestAgentSessionStore(root, (state) => {
     Object.assign(state.records[B].lease, { minimumNextFence: 'bad' })
     Object.assign(state.records[raw], { providerHandleChain: 'bad' })
+    state.records[foreign].location.executionHostId = toSshExecutionHostId('foreign')
   })
-  const saved = profile.profile.getWorkspaceSession('local')
-  profile.profile.setWorkspaceSession({
-    ...saved,
-    unifiedTabs: Object.fromEntries(
-      Object.entries(saved.unifiedTabs ?? {}).map(([key, tabs]) => [
-        key,
-        tabs.map((tab) =>
-          tab.entityId === foreign
-            ? { ...tab, executionHostId: toSshExecutionHostId('foreign') }
-            : tab
-        )
-      ])
-    )
-  })
+  const remote = savedSnapshot(profile, [foreign], toSshExecutionHostId('foreign'))
+  profile.profile.setWorkspaceSession(remote, toSshExecutionHostId('foreign'))
   const rig = await openAuthorityRuntime(profile)
   expect(rig.runtime.capturedSelection()).toEqual([G, B, raw])
   expect(
     rig.profile
-      .getWorkspaceSession('local')
+      .getWorkspaceSession(toSshExecutionHostId('foreign'))
       .unifiedTabs?.[rig.workspace]?.find((tab) => tab.entityId === foreign)?.executionHostId
   ).toBe(toSshExecutionHostId('foreign'))
   expect(rig.store.isSessionUnreadable(B)).toBe(true)
@@ -457,30 +543,31 @@ it('checked unreadable selection survives but raw unreadable and foreign saved r
     rig.profile
       .getWorkspaceSession('local')
       .unifiedTabs?.[rig.workspace]?.map((tab) => tab.entityId)
-  ).toEqual([B, raw, foreign])
+  ).toEqual([B, raw])
   expect(
     rig.profile
-      .getWorkspaceSession('local')
+      .getWorkspaceSession(toSshExecutionHostId('foreign'))
       .unifiedTabs?.[rig.workspace]?.some((tab) => tab.entityId === foreign)
   ).toBe(true)
 })
 
-it('refused switched predicates and metadata consume no base; an own custom show overrides only its derived ID', async () => {
+it('refused switched predicates and metadata preserve membership; a close/reopen can choose a custom ID', async () => {
   const rig = await openAuthorityRuntime(await authorityProfile())
   expect(await rig.store.setSwitchedSessionTabVisibility(B, 'own-tab', true, () => false)).toBe(
     false
   )
   await rig.store.setConversationName(B, 'still selected')
-  expect(rig.store.getVisibleSessionTabIndex().present).toBe(false)
+  expect(rig.store.getVisibleSessionTabIndex().present).toBe(true)
+  await rig.store.setSessionTabVisibility(B, false)
   await rig.store.setSessionTabVisibility(B, true, 'own-tab')
   expect(rig.store.getSessionTabId(B)).toBe('own-tab')
   expect(rig.store.listVisibleSessionIds()).toEqual([B])
 })
 
-it('late reserved record is rechecked at the actual first visibility draft without reservation materialization', async () => {
+it('late reservation is retained and resolved by a genuine later visibility action', async () => {
   const rig = await openAuthorityRuntime(await authorityProfile([B], { records: [] }))
   await rig.runtime.restoreStructuredAgentSessionTabs()
-  expect(rig.store.getVisibleSessionTabIndex().present).toBe(false)
+  expect(rig.store.getVisibleSessionTabIndex().present).toBe(true)
   const now = 1_700_000_000_000
   await rig.store.reserveOwner({
     sessionId: B,
@@ -505,7 +592,7 @@ it('late reserved record is rechecked at the actual first visibility draft witho
     now
   })
   expect(rig.store.getRecord(B)).not.toBeNull()
-  expect(rig.store.getVisibleSessionTabIndex().present).toBe(false)
+  expect(rig.store.getVisibleSessionTabIndex().present).toBe(true)
   expect(await createC(rig, false)).toMatchObject({ ok: true })
   expect(rig.store.listVisibleSessionIds()).toEqual([B, C])
 })
@@ -514,27 +601,21 @@ it.each([false, true])(
   'SQL COMMIT rejection adopts no authority or record, firstMessage=%s',
   async (first) => {
     const rig = await openAuthorityRuntime(await authorityProfile())
-    const db = rig.host.deps.journalDatabase.db
-    const exec = db.exec.bind(db)
-    const failure = vi.spyOn(db, 'exec').mockImplementation((sql) => {
-      if (
-        sql === 'COMMIT' &&
-        db
-          .prepare("SELECT value FROM agent_session_store_meta WHERE key='session_tabs_recorded'")
-          .get()
-      ) {
-        throw new Error('commit rejected')
-      }
-      return exec(sql)
+    const database = rig.host.deps.journalDatabase
+    await failNativeJournalStatements(database, [
+      { sql: 'COMMIT', message: 'commit rejected', visibility: true }
+    ])
+    expect(await createC(rig, first)).toMatchObject({
+      ok: false,
+      refusal: { code: 'agent_session_journal_unreadable' }
     })
-    await (first
-      ? expect(createC(rig, first)).resolves.toMatchObject({ ok: false })
-      : expect(createC(rig, first)).rejects.toThrow('commit rejected'))
-    expect(rig.store.getVisibleSessionTabIndex().present).toBe(false)
+    expect(rig.store.listVisibleSessionIds()).toEqual([B])
+    expect(rig.store.getVisibleSessionTabIndex().present).toBe(true)
     expect(rig.store.getRecord(C)).toBeNull()
-    failure.mockRestore()
+    await failNativeJournalStatements(database, [])
     expect(await createC(rig, first)).toMatchObject({ ok: true })
     expect(rig.store.listVisibleSessionIds()).toEqual([B, C])
+    expect((await physicalReload(rig)).store.listVisibleSessionIds()).toEqual([B, C])
   }
 )
 
@@ -638,7 +719,14 @@ it.each([false, true])(
       saved.unifiedTabs?.[rig.workspace]?.filter((tab) => tab.entityId === B).map((tab) => tab.id)
     ).toEqual([id])
     expect(saved.tabGroups?.[rig.workspace]?.some((group) => group.activeTabId === id)).toBe(false)
-    replaceSaved(rig, [B, C])
+    const currentSaved = rig.profile.getWorkspaceSession('local')
+    const staleSaved = savedSnapshot(rig, [B, C])
+    rig.profile.setWorkspaceSession(
+      main
+        ? windowViewSaveForMain(currentSaved, staleSaved, 'local')
+        : windowSaveKeepingMainSleepRecords(currentSaved, staleSaved, 'set')
+    )
+    expect(rig.store.getSessionTabId(B)).toBe(id)
     await rig.runtime.publishStructuredAgentSessionTab({
       workspaceId: rig.workspace,
       sessionId: B,
@@ -696,10 +784,11 @@ it('does not admit saved cleanup when the current presentation scope becomes unr
   await rig.runtime.restoreStructuredAgentSessionTabs()
   const surface = rig.runtime.captureStructuredAgentSessionPresentation(B)
   await rig.host.setSessionTabVisibility(B, false)
+  expect(savedIds(rig)).toEqual([])
   vi.spyOn(rig.store, 'getConversation').mockImplementation(() => {
     throw new Error('record unreadable')
   })
   rig.runtime.removeCapturedStructuredSessionSavedTabs(B, surface.saved)
   await chatTabCommandsSettled()
-  expect(savedIds(rig)).toEqual([B])
+  expect(savedIds(rig)).toEqual([])
 })

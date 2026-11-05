@@ -5,10 +5,15 @@ import {
 } from '../catalog/runtime-worktree-selection'
 import type { ResolvedWorktree } from '../catalog/runtime-worktree-path-identity'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
+import { failedWorktreeRemovals } from '../../../workspaces/removal/worktree-removal-table'
+import {
+  hasLocalWorktreeRemovalOwner,
+  type OwnerResidueStore
+} from '../../../workspaces/removal/worktree-removal-owner-residue'
 
 export async function resolveRuntimeWorktreeRemovalTarget(args: {
   selector: string
-  store: RuntimeStore | null
+  store: (OwnerResidueStore & Pick<RuntimeStore, 'getWorktreeMeta'>) | null
   resolveWorktree: (selector: string) => Promise<ResolvedWorktree>
   resolveExplicitWorktreeIdScoped: (
     worktreeId: string,
@@ -33,6 +38,13 @@ export async function resolveRuntimeWorktreeRemovalTarget(args: {
     }
     const target = parseExactWorktreeIdSelector(args.selector)
     const meta = target ? args.store?.getWorktreeMeta(target.id) : undefined
+    const failed =
+      target && (args.requiredHostId ?? 'local') === 'local'
+        ? failedWorktreeRemovals.get(target.id)
+        : undefined
+    if (target && failed && args.store && hasLocalWorktreeRemovalOwner(args.store, failed)) {
+      return target
+    }
     if (
       !target ||
       !meta ||

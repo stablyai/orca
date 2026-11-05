@@ -19,7 +19,11 @@ import {
 export async function stopPtysForDestructiveWorktreeRemoval(
   runtime: OrcaRuntimeService,
   worktreeId: string,
-  options: { connectionId?: string; allowUnverifiedStop?: boolean } = {}
+  options: {
+    connectionId?: string
+    allowUnverifiedStop?: boolean
+    deferSurfaceRetirement?: boolean
+  } = {}
 ): Promise<void> {
   const { connectionId, allowUnverifiedStop } = options
   // This process has no SSH PTY provider and cannot prove remote terminals stopped.
@@ -33,6 +37,7 @@ export async function stopPtysForDestructiveWorktreeRemoval(
     localProvider: getLocalPtyProvider(),
     onPtyStopped: clearProviderPtyState,
     requirePhysicalStop: true,
+    deferSurfaceRetirement: options.deferSurfaceRetirement,
     // Only explicit Force Delete may waive PTY-stop proof; ordinary force confirmation must remain strict.
     ...(allowUnverifiedStop ? { allowUnverifiedStop: true } : {})
   })

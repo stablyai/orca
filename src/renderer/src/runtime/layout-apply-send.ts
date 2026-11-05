@@ -1,3 +1,4 @@
+import type { TerminalPaneLayoutNode } from '../../../shared/workspace-layout/terminal-tab-types'
 // Store-free so store slices can send; `layout-owner-command` reads the store for other callers.
 import {
   runtimeEnvironmentIdForWorkspaceOwner,
@@ -39,6 +40,8 @@ export type WindowLayoutCommand =
       direction: 'vertical' | 'horizontal'
       /** A pane the window already split under its own id. */
       newLeafId?: string
+      ratio?: number
+      proposedRoot?: TerminalPaneLayoutNode
     }
   | { type: 'closePane'; tabId: string; leafId: string }
   | { type: 'renamePane'; tabId: string; leafId: string; title: string | null }
@@ -151,12 +154,19 @@ export type WindowLayoutCommand =
       records: SleepingAgentSessionRecord[]
       /** Records how the panes' agents resume without stopping them (a live or quit capture). */
       recordOnly?: true
+      expectedRecords?: Record<string, SleepingAgentSessionRecord | null>
     }
   /** Main starts the pane if its terminal is not live; the window then attaches. */
   | { type: 'startPane'; tabId: string; paneKey: string }
   | { type: 'wake'; tabId: string; paneKeys: [string] }
   /** Drops the panes' resume records without starting them. */
-  | { type: 'wake'; tabId: string; paneKeys: string[]; recordOnly: true }
+  | {
+      type: 'wake'
+      tabId: string
+      paneKeys: string[]
+      recordOnly: true
+      expectedRecords?: Record<string, SleepingAgentSessionRecord | null>
+    }
   | { type: 'setDefaultTabsApplied' }
   | (Omit<CommandOf<'createTerminalTab'>, 'workspace'> & { tabId: string; leafId: string })
 

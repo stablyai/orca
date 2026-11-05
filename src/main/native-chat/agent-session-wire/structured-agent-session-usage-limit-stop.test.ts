@@ -164,7 +164,8 @@ describe('a Stop accepted before a usage limit ends the turn', () => {
     await expectNoAutomaticContinue(rig.host, cut.resetsAt)
     await reopen()
     expect(
-      (await openTestAgentSessionRecordStore(rig.root)).getRecord(SESSION)?.usageLimitContinueCancel
+      await (await openTestAgentSessionRecordStore(rig.root)).getRecord(SESSION)
+        ?.usageLimitContinueCancel
     ).toEqual(cut)
     await expectNoAutomaticContinue(rig.host, cut.resetsAt)
   })
@@ -287,7 +288,8 @@ describe('a Stop accepted before a usage limit ends the turn', () => {
     ).toBeUndefined()
     expect(rig.store.getRecord(SESSION)?.usageLimitContinueCancel).toBeUndefined()
     expect(
-      (await openTestAgentSessionRecordStore(rig.root)).getRecord(SESSION)?.usageLimitContinueCancel
+      await (await openTestAgentSessionRecordStore(rig.root)).getRecord(SESSION)
+        ?.usageLimitContinueCancel
     ).toBeUndefined()
 
     failing.mockRestore()
@@ -411,7 +413,7 @@ it('records a Stop and its limited end in a conversation opened without a record
   const root = await mkdtemp(join(tmpdir(), 'usage-limit-storeless-'))
   try {
     const record = agentSessionRecordFixture(agentSessionLeaseFixture({ sessionId: 'storeless' }))
-    const opened = await openTestAttachConversation(openTestJournalHostDatabase(root))(record)
+    const opened = await openTestAttachConversation(await openTestJournalHostDatabase(root))(record)
     const fence = record.lease.runtimeFence
     await opened.stops.accept({
       event: { reason: 'user-stop', turnId: 'turn-1' },

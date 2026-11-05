@@ -96,7 +96,7 @@ describe('prompt delivery after host recovery', () => {
       logger: h.log.logger,
       store,
       adapter: adapter(),
-      journalDatabase: openTestJournalHostDatabase(h.root),
+      journalDatabase: await openTestJournalHostDatabase(h.root),
       claimKeyId: 'key-1',
       mintSpawnToken: () => 'spawn-b',
       probeOwner: async () => ({ outcome: 'pid-absent' }),

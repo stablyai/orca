@@ -9,10 +9,9 @@ import {
   createJournalReducerState,
   type JournalReducerState
 } from './journal-reducer'
-import { restoreJournal } from './journal-open'
+import { restoreJournalAsync } from './journal-async-open'
 import { encodeJournalState } from './journal-state-codec'
-import { journalOutcomeSource } from './journal-outcome-format'
-import { publishJournalOutcomeEpoch } from './journal-outcome-write'
+import { publishJournalOutcomeEpochPlan } from './journal-outcome-write'
 import { insertTestJournalRow, publishTestJournalEpoch } from './journal-host-database-test-support'
 import type { JournalRow } from './journal-row-schema'
 
@@ -32,12 +31,12 @@ export const projectionEpochRow: JournalRow = {
   providerHandle: { kind: 'codex', threadId: 'thread-1' }
 }
 
-export function seedProjectionRows(
+export async function seedProjectionRows(
   database: JournalHostDatabase,
   rows: readonly JournalRow[]
-): JournalReducerState {
+): Promise<JournalReducerState> {
   const state = createJournalReducerState(projectionSessionId, projectionEpoch)
-  database.transaction((db) => {
+  await database.transaction((db) => {
     publishTestJournalEpoch(db, projectionSessionId, projectionEpoch)
     for (const row of rows) {
       insertTestJournalRow(db, projectionSessionId, row)
@@ -47,13 +46,13 @@ export function seedProjectionRows(
   return state
 }
 
-export function seedOutcomeRows(
+export async function seedOutcomeRows(
   database: JournalHostDatabase,
   rows: readonly JournalRow[]
-): JournalReducerState {
-  const publication = database.transaction((db) => {
+): Promise<JournalReducerState> {
+  const publication = await database.transaction((db) => {
     publishTestJournalEpoch(db, projectionSessionId, projectionEpoch)
-    return publishJournalOutcomeEpoch(db, projectionSessionId, projectionEpoch, rows)
+    return publishJournalOutcomeEpochPlan(db, projectionSessionId, projectionEpoch, rows)
   })
   return publication.adopt()
 }
@@ -82,15 +81,16 @@ export function projectionWriter(database: JournalHostDatabase, initial: Journal
   return { writer, projection, state: () => state, queue }
 }
 
-export function expectProjectionMatches(
+export async function expectProjectionMatches(
   database: JournalHostDatabase,
   state: JournalReducerState
-): void {
-  const source = journalOutcomeSource(database.db, state.sessionId, state.epoch)
-  if (!source) {
-    throw new Error('expected canonical outcomes')
-  }
-  const restored = restoreJournal(database.db, state.sessionId)
+): Promise<void> {
+  const restored = await database.read(async (read) => {
+    if (!(await read.source(state.sessionId, state.epoch))) {
+      throw new Error('expected canonical outcomes')
+    }
+    return restoreJournalAsync(read, state.sessionId)
+  })
   expect(restored?.damage).toBeNull()
   expect(restored?.newer).toBeNull()
   expect(restored && encodeJournalState(restored.state)).toStrictEqual(encodeJournalState(state))

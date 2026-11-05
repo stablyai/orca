@@ -2,11 +2,9 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { JournalHostDatabase } from './journal-host-database'
-import {
-  closeTestJournalHostDatabases,
-  openTestJournalHostDatabase
-} from './journal-host-database-test-support'
+import type Database from '../../sqlite/sync-database'
+import { openJournalDatabase, runJournalTransaction } from './journal-database'
+import { journalDatabasePath } from './journal-host-database'
 import {
   commandReceiptScope,
   type CommandReceipt,
@@ -21,17 +19,18 @@ import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-ses
 
 export function registerCommandReceiptTableTests(): void {
   let root: string
-  let database: JournalHostDatabase
+  let database: { db: Database.Database; transaction: <T>(run: (db: Database.Database) => T) => T }
   const globalScope = commandReceiptScope('caller-1', 'global')
 
   beforeEach(async () => {
     root = await mkdtemp(join(tmpdir(), 'orca-command-receipt-table-'))
-    database = openTestJournalHostDatabase(root)
+    const { db } = openJournalDatabase(journalDatabasePath(root))
+    database = { db, transaction: (run) => runJournalTransaction(db, run) }
     database.transaction((db) => writeCommandReceiptTestRecord(db))
   })
 
   afterEach(async () => {
-    await closeTestJournalHostDatabases()
+    database.db.close()
     await rm(root, { recursive: true, force: true })
   })
 

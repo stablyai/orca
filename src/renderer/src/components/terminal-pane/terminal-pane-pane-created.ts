@@ -1,3 +1,4 @@
+import { admitDrawnTerminalPane } from './terminal-pane-content-admission'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager'
 import type { PaneSpawnHints } from '@/lib/pane-manager/pane-manager-types'
 import { useAppStore } from '@/store'
@@ -178,6 +179,19 @@ export function createTerminalPaneCreatedHandler(
       () => useAppStore.getState().consumeTabStartupCommand(deps.tabId),
       () => useAppStore.getState().pendingStartupByTabId[deps.tabId] === startup
     )
+    const placement = effectiveSpawnHints?.placement
+      ? completePaneSpawnPlacement(effectiveSpawnHints.placement, {
+          worktreeId: deps.worktreeId,
+          tabId: deps.tabId,
+          container: deps.containerRef.current
+        })
+      : undefined
+    admitDrawnTerminalPane(
+      deps.worktreeId,
+      deps.tabId,
+      pane.leafId,
+      placement ? { ...effectiveSpawnHints, placement } : effectiveSpawnHints
+    )
     const panePtyBinding = connectPanePty(pane, manager, {
       ...ptyDeps,
       ...(onQueuedStartupSpawned ? { onQueuedStartupSpawned } : {}),
@@ -204,15 +218,7 @@ export function createTerminalPaneCreatedHandler(
         : {}),
       ...(effectiveSpawnHints?.cwd ? { cwd: effectiveSpawnHints.cwd } : {}),
       ...(effectiveSpawnHints?.cwdPromise ? { cwdPromise: effectiveSpawnHints.cwdPromise } : {}),
-      ...(effectiveSpawnHints?.placement
-        ? {
-            placement: completePaneSpawnPlacement(effectiveSpawnHints.placement, {
-              worktreeId: deps.worktreeId,
-              tabId: deps.tabId,
-              container: deps.containerRef.current
-            })
-          }
-        : {}),
+      ...(placement ? { placement } : {}),
       restoredPtyIdByLeafId: effectiveSpawnHints?.ptyId
         ? {
             ...ptyDeps.restoredPtyIdByLeafId,

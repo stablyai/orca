@@ -5,12 +5,12 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import { z } from 'zod'
 import {
-  closeTestJournalHostDatabases,
   insertTestJournalRowJson,
-  openTestJournalHostDatabase,
   publishTestJournalEpoch
 } from './journal-host-database-test-support'
-import type { JournalHostDatabase } from './journal-host-database'
+import { journalDatabasePath } from './journal-host-database'
+import { openJournalDatabase, runJournalTransaction } from './journal-database'
+import type Database from '../../sqlite/sync-database'
 import { restoreJournal } from './journal-open'
 import type { JournalReducerState } from './journal-reducer'
 import {
@@ -42,10 +42,11 @@ const { sessionId, epoch } = fixture
 const GENERATION = 7
 
 let root: string
-let database: JournalHostDatabase
+let database: { db: Database.Database; transaction: <T>(run: (db: Database.Database) => T) => T }
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-journal-outcome-format-1-'))
-  database = openTestJournalHostDatabase(root)
+  const { db } = openJournalDatabase(journalDatabasePath(root))
+  database = { db, transaction: (run) => runJournalTransaction(db, run) }
   database.transaction((db) => {
     publishTestJournalEpoch(db, sessionId, epoch)
     insertTestJournalRowJson(db, sessionId, 1, fixture.marker)
@@ -67,7 +68,7 @@ beforeEach(async () => {
   })
 })
 afterEach(async () => {
-  await closeTestJournalHostDatabases()
+  database.db.close()
   await rm(root, { recursive: true, force: true })
 })
 
@@ -91,7 +92,7 @@ function plain(state: JournalReducerState): unknown {
   )
 }
 
-function restored(): JournalReducerState {
+async function restored(): Promise<JournalReducerState> {
   const loaded = restoreJournal(database.db, sessionId)
   expect(loaded).toMatchObject({ newer: null, damage: null })
   if (!loaded) {
@@ -100,7 +101,7 @@ function restored(): JournalReducerState {
   return loaded.state
 }
 
-it('reads the checked-in format-1 outcomes into the same chat, every field and scalar included', () => {
+it('reads the checked-in format-1 outcomes into the same chat, every field and scalar included', async () => {
   // Every field and scalar has records here; a field or scalar added later adds its own records.
   expect(OUTCOME_FORMAT_1_COLLECTIONS).toEqual([
     'items',
@@ -146,7 +147,7 @@ it('reads the checked-in format-1 outcomes into the same chat, every field and s
   )
   expect(stored.some(([, , , , , , deleted]) => deleted === 1)).toBe(true)
 
-  const state = restored()
+  const state = await restored()
   expect(state.contextBoundary).toBe(1)
   expect([...state.inputs.sources.keys()]).toEqual(['send-1', 'send-3', 'send-2'])
   expect(plain(state)).toEqual(fixture.expected)
@@ -166,12 +167,12 @@ function insertOutcome(field: string, key: string, json: string, format = 1): vo
 
 const newer = { newer: { sequence: 1 }, damage: null }
 
-it('refuses a field format 1 does not define as written by a newer Orca', () => {
+it('refuses a field format 1 does not define as written by a newer Orca', async () => {
   insertOutcome('futureField', '"k"', '["k",1]')
   expect(restoreJournal(database.db, sessionId)).toMatchObject(newer)
 })
 
-it('refuses a record of a newer format even when the epoch summary was not raised', () => {
+it('refuses a record of a newer format even when the epoch summary was not raised', async () => {
   insertOutcome('receipts', '"client-9"', '["client-9",{}]', 3)
   expect(restoreJournal(database.db, sessionId)).toMatchObject(newer)
 })
@@ -189,7 +190,7 @@ const values = z
     )
   )
 
-it('admits and decodes every declared shape as stored, and refuses one key more as newer', () => {
+it('admits and decodes every declared shape as stored, and refuses one key more as newer', async () => {
   for (const [field, key, value] of values) {
     const json = JSON.stringify(value)
     expect(admitOutcomeFormat1({ field, key, json, deleted: false })).toEqual({
@@ -209,7 +210,7 @@ it('admits and decodes every declared shape as stored, and refuses one key more 
   )
 })
 
-it('distinguishes new canonical damage from newer keys, without changing frozen format-1 admission', () => {
+it('distinguishes new canonical damage from newer keys, without changing frozen format-1 admission', async () => {
   const own = {
     context: { source: { epoch, sequence: 1 }, basis: 'observed', cut: 1 },
     witnessCardId: 'C'
@@ -238,11 +239,11 @@ it('distinguishes new canonical damage from newer keys, without changing frozen 
   expect(restoreJournal(database.db, sessionId)).toMatchObject(newer)
 })
 
-it('declares only an optional safe noninitial context boundary while preserving every frozen value', () => {
-  const before = plain(restored())
+it('declares only an optional safe noninitial context boundary while preserving every frozen value', async () => {
+  const before = plain(await restored())
   insertOutcome('$', '"contextBoundary"', '9')
-  expect(restored().contextBoundary).toBe(9)
-  expect(plain(restored())).toEqual(before)
+  expect((await restored()).contextBoundary).toBe(9)
+  expect(plain(await restored())).toEqual(before)
   for (const value of [1, 0, -1, 2.5, Number.MAX_SAFE_INTEGER + 1, null, '9']) {
     database.db
       .prepare("UPDATE journal_outcomes SET value_json=? WHERE field='$' AND entry_key=?")
@@ -255,6 +256,6 @@ it('declares only an optional safe noninitial context boundary while preserving 
   database.db
     .prepare("DELETE FROM journal_outcomes WHERE field='$' AND entry_key=?")
     .run('"contextBoundary"')
-  expect(restored().contextBoundary).toBe(1)
-  expect(plain(restored())).toEqual(before)
+  expect((await restored()).contextBoundary).toBe(1)
+  expect(plain(await restored())).toEqual(before)
 })

@@ -38,7 +38,9 @@ export function journalQueueAdoptionPlan(
     rows,
     receipt: journalAttachmentClaimsReceipt(deps.claimAttachments, bodies, {
       write: () => {},
-      committed: () => legacy.cleanup(adopted)
+      committed: () => {
+        void legacy.cleanup(adopted)
+      }
     })
   }
 }

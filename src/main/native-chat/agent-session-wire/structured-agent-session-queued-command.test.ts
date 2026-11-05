@@ -1,3 +1,4 @@
+import { corruptTestRecordFence } from '../agent-session-journal/journal-retained-fault-test-support'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
@@ -216,10 +217,12 @@ it('replays /compact across callers with one submission and one provider command
   }
   expect(replay.value).toEqual(original.value)
   expect((await rig.host.journalSnapshot(params.envelope.sessionId)).submissions).toHaveLength(1)
-  expect(rig.store.readCommandReceipt({ kind: 'caller', callerKey: 'second-caller' }, id)).toEqual({
+  expect(
+    await rig.store.readCommandReceipt({ kind: 'caller', callerKey: 'second-caller' }, id)
+  ).toEqual({
     verdict: 'absent'
   })
-  expect(rig.store.readCommandReceipt({ kind: 'global' }, id)).toMatchObject({
+  expect(await rig.store.readCommandReceipt({ kind: 'global' }, id)).toMatchObject({
     verdict: 'readable',
     receipt: { callerKey: CALLER.callerKey }
   })
@@ -294,9 +297,9 @@ it('replays a completed compact after reopening an unreadable writer without com
   const { command } = rig.compact.mock.calls[0]![0]
   await eventually(async () =>
     expect(
-      (await rig.host.journalSnapshot(SESSION)).items.find(
-        ({ itemId }) => itemId === agentJournalItemKey(command.identity)
-      )?.body
+      await (
+        await rig.host.journalSnapshot(SESSION)
+      ).items.find(({ itemId }) => itemId === agentJournalItemKey(command.identity))?.body
     ).toMatchObject({ ...command.running, state: 'completed', outcome: 'success' })
   )
   expect(await rig.host.conversationCommand(CALLER, params)).toMatchObject({
@@ -306,11 +309,7 @@ it('replays a completed compact after reopening an unreadable writer without com
   expect(rig.compact).toHaveBeenCalledOnce()
   rig.host.stopDelivery()
   await rig.host.flushAllStreamedEvents()
-  openTestJournalHostDatabase(rig.root)
-    .db.prepare(
-      "UPDATE agent_session_records SET record_json = json_set(record_json, '$.lease.minimumNextFence', 'bad') WHERE session_id = ?"
-    )
-    .run(SESSION)
+  await corruptTestRecordFence(await openTestJournalHostDatabase(rig.root), SESSION)
   const store = await openTestAgentSessionRecordStore(rig.root)
   const restored = new StructuredAgentSessionHost({ ...rig.host.deps, store })
   try {

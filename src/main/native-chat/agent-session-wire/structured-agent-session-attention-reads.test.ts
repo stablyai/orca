@@ -1,3 +1,4 @@
+import { mutateTestJournalFixture } from '../agent-session-journal/journal-drained-fixture-test-support'
 import { expect, it, vi } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentSessionJournalProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
@@ -44,7 +45,7 @@ it.each(['git-worktree', 'folder'] as const)(
       ).toMatchObject({ ok: true })
       await vi.waitFor(() => expect(rig.adapter.dispatch).toHaveBeenCalled())
       await rig.restart()
-      const stored = loadTestJournal(rig.root, SESSION)
+      const stored = await loadTestJournal(rig.root, SESSION)
       if (!stored) {
         throw new Error('the conversation has no stored journal')
       }
@@ -135,13 +136,13 @@ it.each(['resting-newer-format', 'live-closed'] as const)(
         (read) => read.sessionId === SESSION
       )
       expect(accepted).toBeDefined()
-      if (failure === 'resting-newer-format') {
-        openTestJournalHostDatabase(rig.root)
-          .db.prepare('UPDATE journal_outcome_epochs SET format = format + 1 WHERE session_id = ?')
-          .run(damaged)
-      } else {
-        await rig.host.collaboratorsForTests().sessions.get(damaged)?.journal.close()
-      }
+      await (failure === 'resting-newer-format'
+        ? mutateTestJournalFixture(await openTestJournalHostDatabase(rig.root), (raw) =>
+            raw
+              .prepare('UPDATE journal_outcome_epochs SET format = format + 1 WHERE session_id = ?')
+              .run(damaged)
+          )
+        : rig.host.collaboratorsForTests().sessions.get(damaged)?.journal.close())
 
       expect(await rig.host.attentionReads.workspace(HOST_TEST_LOCATION)).toEqual([accepted])
       expect(warn).toHaveBeenCalled()

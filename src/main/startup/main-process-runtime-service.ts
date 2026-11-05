@@ -141,7 +141,7 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
   )
   agentHookServer.setCliWriterExecutionMatcher(observedPaneIdentities, runtime)
   // Main records pane resume state from accepted status.
-  if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+  if (ORCA_LAYOUT_OWNER_IS_MAIN || store.workspaceSurfacesInitialized()) {
     agentHookServer.subscribeEnrichedStatus((enriched) =>
       runtime.recordHookStatusResume(toAgentStatusIpcPayload(enriched))
     )

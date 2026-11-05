@@ -1,3 +1,4 @@
+import { mutateTestJournalFixture } from '../agent-session-journal/journal-drained-fixture-test-support'
 import { expect, it, vi } from 'vitest'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
@@ -132,9 +133,11 @@ it('writes nothing after a step whose row the database refused', async () => {
   const { root, journal, deferred, sink, bind } = await rig()
   bind()
   // Fail step two to verify step three never fills its place.
-  openTestJournalHostDatabase(root).db.exec(`CREATE TEMP TRIGGER fail_second_step
+  await mutateTestJournalFixture(await openTestJournalHostDatabase(root), (db) => {
+    db.exec(`CREATE TRIGGER fail_second_step
 BEFORE INSERT ON main.journal_rows WHEN instr(NEW.row_json, 'refused-step') > 0
 BEGIN SELECT RAISE(ABORT, 'second step refused'); END`)
+  })
   const step = (recordId: string) =>
     itemStep(() => ({ identity: identity(recordId), body: tool(recordId, 'running') }))
   sink.tryAppendTransition?.({

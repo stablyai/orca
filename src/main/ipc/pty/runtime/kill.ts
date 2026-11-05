@@ -1,3 +1,5 @@
+import { publishSyntheticExit, stopLegacyRelayBridgedPty } from './stop-publication'
+export { publishSyntheticExit, stopLegacyRelayBridgedPty } from './stop-publication'
 import type { IPtyProvider } from '../../../providers/pty-provider-contract'
 import { SSH_PROVIDER_UNREGISTERED_REASON } from '../../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 import { isCurrentPtyExit, ptyOwnership, ptyIncarnationById } from '../provider/ownership-state'
@@ -8,15 +10,12 @@ import {
 } from '../provider/registry'
 import { isPtyAlreadyGoneError, delay, verifyPtyStopped } from '../provider/liveness'
 import type { PtyRuntimeControllerDeps } from './controller-deps'
-import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import { errorMessage } from '../../../../shared/error-message'
 import {
   PtyExitProof,
-  PtyRetirementWithoutProof,
-  type PtyRetirementEvidence
+  PtyRetirementWithoutProof
 } from '../../../pty/process-retirement/pty-exit-proof'
 import {
-  closeLegacyRelayPane,
   isLegacyRelayBridgedPty,
   stopLegacyRelayPaneAndWait
 } from '../../../ssh/legacy-relay/legacy-relay-bridge-registry'
@@ -24,49 +23,10 @@ import {
 // Bounds the wait for an observed exit to reach the runtime record when the caller set no deadline.
 const OBSERVED_EXIT_RECORD_WAIT_MS = 10_000
 
-/** Unproved synthetic exit stays unverifiable; rejected incarnation proof publishes nothing for a same-ID respawn. */
-export function publishSyntheticExit(
-  deps: Pick<PtyRuntimeControllerDeps, 'rememberSyntheticKillExit' | 'sendPtyExitToRenderer'> & {
-    runtime?: Pick<OrcaRuntimeService, 'onPtyExit' | 'markPtyLivenessUnverifiable'>
-  },
-  ptyId: string,
-  code: number,
-  incarnationId: string | undefined | null,
-  evidence: PtyRetirementEvidence
-): void {
-  if (incarnationId === null) {
-    return
-  }
-  if (evidence instanceof PtyRetirementWithoutProof) {
-    deps.runtime?.markPtyLivenessUnverifiable?.(ptyId, evidence.unverifiableReason)
-  }
-  deps.runtime?.onPtyExit(ptyId, code, incarnationId)
-  deps.rememberSyntheticKillExit(ptyId, incarnationId)
-  deps.sendPtyExitToRenderer({ id: ptyId, code, ...(incarnationId ? { incarnationId } : {}) })
-}
-
-/**
- * COMPAT(legacy-relay-bridge, revisit 2027-01-15): an older relay's shell stops through the
- * bridge, which retires its lease only on the relay's proof; tombstoning it here would orphan it.
- * Every stop route checks this first, before reading the (absent) SSH provider. A reversible stop
- * is refused: the bridge's recorded stop would outlive it and kill a shell the pane wakes back to.
- */
-export function stopLegacyRelayBridgedPty(
-  ptyId: string,
-  connectionId: string | null,
-  reversible = false
-): Promise<unknown> | null {
-  if (!connectionId || !isLegacyRelayBridgedPty(ptyId)) {
-    return null
-  }
-  return reversible
-    ? Promise.reject(new Error('legacy_relay_bridged_pty_cannot_sleep'))
-    : closeLegacyRelayPane(ptyId)
-}
-
 export function killPtyFromRuntimeController(
   deps: PtyRuntimeControllerDeps,
-  ptyId: string
+  ptyId: string,
+  opts?: { isCurrent?: () => boolean }
 ): boolean {
   const {
     runtime,
@@ -76,6 +36,16 @@ export function killPtyFromRuntimeController(
     finishPtyShutdown,
     retiredRejectedPtyIds
   } = deps
+  const expectedIncarnation = ptyIncarnationById.get(ptyId)
+  const isCurrent = (): boolean =>
+    opts?.isCurrent?.() !== false &&
+    (!opts?.isCurrent ||
+      !expectedIncarnation ||
+      !ptyIncarnationById.has(ptyId) ||
+      ptyIncarnationById.get(ptyId) === expectedIncarnation)
+  if (!isCurrent()) {
+    return false
+  }
   runtime?.markPtyStopRequested?.(ptyId)
   const connectionId = getPtySshConnectionId(ptyId)
   if (stopLegacyRelayBridgedPty(ptyId, connectionId)) {
@@ -83,6 +53,9 @@ export function killPtyFromRuntimeController(
   }
   // Close runtime tails but retain provider ownership so failed shutdown can be retried.
   const reportStopFailure = (err: unknown, incarnationId: string | undefined): void => {
+    if (!isCurrent()) {
+      return
+    }
     const msg = errorMessage(err)
     console.warn(`[pty] Failed to stop PTY ${ptyId}: ${msg}`)
     if (retiredRejectedPtyIds.has(ptyId)) {
@@ -91,6 +64,9 @@ export function killPtyFromRuntimeController(
     runtime?.onPtyExit(ptyId, -1, incarnationId)
   }
   const killWithCurrentProvider = (): boolean => {
+    if (!isCurrent()) {
+      return false
+    }
     let provider: IPtyProvider
     try {
       provider = getProviderForPty(ptyId)
@@ -107,6 +83,9 @@ export function killPtyFromRuntimeController(
     // The synchronous controller retains ownership until asynchronous shutdown settles.
     void shutdownProviderAndDetectExit(provider, ptyId, { immediate: false })
       .then((providerExitObserved) => {
+        if (!isCurrent()) {
+          return
+        }
         const retired = retiredRejectedPtyIds.has(ptyId)
         const proof = PtyExitProof.from(
           providerExitObserved ? 'exit-observed' : 'shutdown-acknowledged',
@@ -118,6 +97,9 @@ export function killPtyFromRuntimeController(
         }
       })
       .catch((err) => {
+        if (!isCurrent()) {
+          return
+        }
         const retired = retiredRejectedPtyIds.has(ptyId)
         if (isPtyAlreadyGoneError(err)) {
           const proof = PtyExitProof.from('absent', stoppingIncarnationId)
@@ -180,17 +162,28 @@ export function retireRejectedPtyFromRuntimeController(
 export async function stopAndWaitPtyFromRuntimeController(
   deps: PtyRuntimeControllerDeps,
   ptyId: string,
-  opts?: { keepHistory?: boolean; deadlineMs?: number }
+  opts?: {
+    keepHistory?: boolean
+    deadlineMs?: number
+    isCurrent?: () => boolean
+  }
 ): Promise<boolean> {
+  const expectedIncarnation = ptyIncarnationById.get(ptyId)
+  const isCurrent = (): boolean =>
+    opts?.isCurrent?.() !== false &&
+    (!opts?.isCurrent ||
+      !expectedIncarnation ||
+      !ptyIncarnationById.has(ptyId) ||
+      ptyIncarnationById.get(ptyId) === expectedIncarnation)
   // A final relay stop is owed until the relay proves it, so an unproven one still reads as closing.
   const relayOwesStop =
     !opts?.keepHistory && Boolean(getPtySshConnectionId(ptyId)) && isLegacyRelayBridgedPty(ptyId)
   let stopped = false
   try {
-    stopped = await stopAndWaitPty(deps, ptyId, opts)
+    stopped = await stopAndWaitPty(deps, ptyId, { ...opts, isCurrent })
     return stopped
   } finally {
-    if (!stopped && !relayOwesStop) {
+    if (!stopped && !relayOwesStop && isCurrent()) {
       // Refused, failed or thrown: the process may run on, so it must not read as closing.
       deps.runtime?.clearPtyStopRequest?.(ptyId)
     }
@@ -200,7 +193,11 @@ export async function stopAndWaitPtyFromRuntimeController(
 async function stopAndWaitPty(
   deps: PtyRuntimeControllerDeps,
   ptyId: string,
-  opts?: { keepHistory?: boolean; deadlineMs?: number }
+  opts?: {
+    keepHistory?: boolean
+    deadlineMs?: number
+    isCurrent?: () => boolean
+  }
 ): Promise<boolean> {
   const {
     runtime,
@@ -209,6 +206,9 @@ async function stopAndWaitPty(
     shutdownProviderAndDetectExit,
     finishPtyShutdown
   } = deps
+  if (opts?.isCurrent?.() === false) {
+    return false
+  }
   runtime?.markPtyStopRequested?.(ptyId)
   const connectionId = getPtySshConnectionId(ptyId)
   if (connectionId && isLegacyRelayBridgedPty(ptyId)) {
@@ -222,6 +222,9 @@ async function stopAndWaitPty(
       stopLegacyRelayPaneAndWait(ptyId, deadline),
       delay(Math.max(1, deadline - Date.now())).then(() => null)
     ])
+    if (opts?.isCurrent?.() === false) {
+      return false
+    }
     if (stopped) {
       // The bridge retired the lease and holds no pane. An exit it saw already reached the runtime.
       const proof = PtyExitProof.from('absent', stoppingIncarnationId)
@@ -252,6 +255,9 @@ async function stopAndWaitPty(
       await startupPromise
     }
   }
+  if (opts?.isCurrent?.() === false) {
+    return false
+  }
   let provider: IPtyProvider
   try {
     provider = getProviderForPty(ptyId)
@@ -278,13 +284,23 @@ async function stopAndWaitPty(
       return false
     }
   }
+  if (opts?.isCurrent?.() === false) {
+    return false
+  }
   try {
-    if (!(await verifyPtyStopped(provider, ptyId, opts, providerExitObserved))) {
+    const verified = await verifyPtyStopped(provider, ptyId, opts, providerExitObserved)
+    if (opts?.isCurrent?.() === false) {
+      return false
+    }
+    if (!verified) {
       runtime?.markPtyLivenessLive?.(ptyId)
       return false
     }
   } catch (err) {
     console.warn(`[pty] Failed to verify PTY ${ptyId} stopped: ${errorMessage(err)}`)
+    return false
+  }
+  if (opts?.isCurrent?.() === false) {
     return false
   }
   const proof = PtyExitProof.from(
@@ -294,7 +310,7 @@ async function stopAndWaitPty(
   const incarnationId = finishPtyShutdown(ptyId, connectionId, store, proof)
   if (!providerExitObserved) {
     // Fresh owning-provider absence proves exit even if its event was missed.
-    publishSyntheticExit(deps, ptyId, 0, incarnationId, proof)
+    await publishSyntheticExit(deps, ptyId, 0, incarnationId, proof)
   } else {
     // SSH exit records follow output drain; wait before returning a verdict consumers can read.
     const waitUntil = Math.min(deadlineMs ?? Infinity, Date.now() + OBSERVED_EXIT_RECORD_WAIT_MS)

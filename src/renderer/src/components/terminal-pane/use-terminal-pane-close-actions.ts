@@ -19,7 +19,6 @@ import { retireUnboundIpcTerminalPane } from './retire-unbound-ipc-terminal-pane
 import { capturePendingTerminalPaneClose } from './terminal-pane-close-admission'
 import { commitTerminalSurfaceClose } from '@/store/terminals/terminal-surface-close-intent'
 import { noteAgentLaunchPaneClosedByUser } from '@/lib/agent-launch-pane-closes'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { sendUserPaneCloseToLayoutOwner } from './layout-owner-pane-close-command'
 import type { TerminalTabCloseIntent } from '../terminal/terminal-tab-close-intent'
 
@@ -119,7 +118,6 @@ export function useTerminalPaneCloseActions(controller: TerminalPaneBindingContr
       const leafId = manager.getLeafId(paneId)
       // Switch point: main closes the pane first; the window removes it when main's frame does.
       if (
-        ORCA_LAYOUT_OWNER_IS_MAIN &&
         leafId &&
         sendUserPaneCloseToLayoutOwner(
           { worktreeId, tabId, leafId, paneId },

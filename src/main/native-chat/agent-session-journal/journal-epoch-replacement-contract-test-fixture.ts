@@ -11,8 +11,10 @@ import type { AgentJournalMessageItem } from '../../../shared/agent-session/jour
 import type { JournalHostDatabase } from './journal-host-database'
 import {
   createTrackedJournalOpener,
-  openTestJournalHostDatabase
+  openTestJournalHostDatabase,
+  seedTestLegacyQueueRows
 } from './journal-host-database-test-support'
+import type { QueuedMessageRow } from './queued-message-table'
 import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { formatNativeChatFileReference } from '../../../shared/agent-image-paste'
 import { agentSessionSendBodyFingerprint } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
@@ -46,11 +48,17 @@ export function createFixture() {
     return clock
   }
 
-  function storedRows(sessionId: string, epoch: string): number {
-    return Number(
-      database.db
-        .prepare('SELECT count(*) AS total FROM journal_rows WHERE session_id = ? AND epoch = ?')
-        .get(sessionId, epoch)?.total
+  async function storedRows(sessionId: string, epoch: string): Promise<number> {
+    return database.read(async (read) =>
+      Number(
+        (
+          await read
+            .prepare(
+              'SELECT count(*) AS total FROM journal_rows WHERE session_id = ? AND epoch = ?'
+            )
+            .get(sessionId, epoch)
+        )?.total
+      )
     )
   }
 
@@ -61,7 +69,7 @@ export function createFixture() {
   beforeEach(async () => {
     root = await mkdtemp(join(tmpdir(), 'orca-journal-replace-'))
     clock = 1_000
-    database = openTestJournalHostDatabase(root)
+    database = await openTestJournalHostDatabase(root)
   })
 
   afterEach(async () => {
@@ -76,6 +84,7 @@ export function createFixture() {
     const existing = await journals.open({ identity: IDENTITY, stateDirectory: root })
     await existing.close()
     const files: { id: string; path: string; body: AgentJournalMessageItem }[] = []
+    const queueRows: QueuedMessageRow[] = []
     for (let n = 0; n < count; n++) {
       const id = randomUUID()
       const path = join(
@@ -90,23 +99,21 @@ export function createFixture() {
         role: 'user',
         blocks: [{ type: 'text', text: formatNativeChatFileReference(path) }]
       }
-      database.db
-        .prepare(`INSERT INTO queued_messages
-        (session_id, message_id, position, body_json, fingerprint, created_at, host_instance, state, hold_reason, returned_reason, consumed_as)
-        VALUES (?, ?, ?, ?, ?, 0, 'earlier', ?, ?, ?, ?)`)
-        .run(
-          IDENTITY.sessionId,
-          `queue-${n}`,
-          n + 1,
-          JSON.stringify(body),
-          agentSessionSendBodyFingerprint(IDENTITY.sessionId, body),
-          n % 2 ? 'returned' : 'waiting',
-          n % 2 ? null : 'send_failed',
-          n % 2 ? 'refused before' : null,
-          n % 2 ? `old-${n}` : null
-        )
+      queueRows.push({
+        messageId: `queue-${n}`,
+        position: n + 1,
+        body,
+        fingerprint: agentSessionSendBodyFingerprint(IDENTITY.sessionId, body),
+        state: n % 2 ? 'returned' : 'waiting',
+        holdReason: n % 2 ? null : 'send_failed',
+        returnedReason: n % 2 ? 'refused before' : null,
+        returnedRejection: null,
+        consumedAs: n % 2 ? `old-${n}` : null,
+        queuedAt: null
+      })
       files.push({ id, path, body })
     }
+    await seedTestLegacyQueueRows(database, IDENTITY.sessionId, queueRows)
     return files
   }
 

@@ -1,3 +1,4 @@
+import { observeNativeJournalSql } from '../native-chat/agent-session-journal/journal-native-test-instrumentation'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -140,28 +141,20 @@ export function countStoreWork(store?: AgentSessionRecordStore) {
   }
 }
 
-export function countRecordQueries(root: string) {
+export async function countRecordQueries(root: string) {
   let executions = 0
   let rows = 0
-  const db = openTestJournalHostDatabase(root).db
-  const observed = new WeakSet<object>()
-  const prepare = db.prepare.bind(db)
-  vi.spyOn(db, 'prepare').mockImplementation((sql) => {
-    const statement = prepare(sql)
-    if (
-      sql === 'SELECT session_id, record_json FROM agent_session_records ORDER BY rowid' &&
-      !observed.has(statement)
-    ) {
-      observed.add(statement)
-      const all = statement.all.bind(statement)
-      vi.spyOn(statement, 'all').mockImplementation((...args) => {
-        executions++
-        const result = all(...args)
-        rows += result.length
-        return result
-      })
+  const database = await openTestJournalHostDatabase(root)
+  observeNativeJournalSql(database, (entry) => {
+    if (entry.sql !== 'SELECT session_id, record_json FROM agent_session_records ORDER BY rowid') {
+      return
     }
-    return statement
+    if (entry.method === 'all' || entry.method === 'iterate') {
+      executions++
+    }
+    if (entry.method === 'all' || entry.method === 'row') {
+      rows += entry.rows
+    }
   })
   return () => ({ executions, rows })
 }

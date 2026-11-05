@@ -227,7 +227,13 @@ export function loadWorkspace(
   }
   const groups = resolveGroupOrder({
     storedGroups,
-    candidates,
+    candidates: [
+      ...candidates,
+      ...(session.clientHostedBrowserPagesByWorktree?.[key] ?? []).map((page) => ({
+        id: page.browserPageId,
+        createdAt: page.savedAt
+      }))
+    ],
     workspaceKey: key,
     mintId: args.context.mintId
   })

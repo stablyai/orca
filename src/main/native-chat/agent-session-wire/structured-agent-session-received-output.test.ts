@@ -24,7 +24,7 @@ it('saves every tool result past 1,024 in one received Claude message, through r
   }
   let journal = await openAgentSessionJournal({
     identity,
-    database: openTestJournalHostDatabase(root)
+    database: await openTestJournalHostDatabase(root)
   })
   const onFailed = vi.fn()
   const readingControl = { pauseReading: vi.fn(), resumeReading: vi.fn() }
@@ -62,7 +62,7 @@ it('saves every tool result past 1,024 in one received Claude message, through r
     await closeTestJournalHostDatabase(root)
     journal = await openAgentSessionJournal({
       identity,
-      database: openTestJournalHostDatabase(root)
+      database: await openTestJournalHostDatabase(root)
     })
     const tools = journal.snapshot().items.filter((item) => item.body.kind === 'tool-call')
     expect(tools).toHaveLength(count)

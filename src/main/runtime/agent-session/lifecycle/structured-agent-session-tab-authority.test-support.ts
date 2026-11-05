@@ -1,3 +1,5 @@
+import type { ExecutionHostId } from '../../../../shared/execution-host'
+import { mutateTestJournalFixture } from '../../../native-chat/agent-session-journal/journal-drained-fixture-test-support'
 import { randomUUID } from 'node:crypto'
 import type { MockInstance } from 'vitest'
 import type { AgentSessionRecordStore } from '../records/agent-session-record-store'
@@ -65,10 +67,13 @@ export class AuthorityRuntime extends OrcaRuntimeService {
 
 export async function authorityProfile(
   ids: string[] = [B],
-  options: { visible?: string[]; records?: string[] } = {},
+  options: { visible?: string[]; records?: string[]; legacy?: boolean } = {},
   profile = createStore()
 ) {
   initOrcaProfilePaths()
+  if (!options.legacy) {
+    await profile.executeWorkspaceSurfaceCommand({ type: 'initialize', hostId: 'local' })
+  }
   const group = profile.createProjectGroup({
     name: 'Chats',
     parentPath: root,
@@ -104,6 +109,7 @@ export async function authorityProfile(
         }
       : {})
   })
+  await closeTestJournalHostDatabases()
   const saved = withChatTabChanges(
     'local',
     getDefaultWorkspaceSession(),
@@ -116,6 +122,10 @@ export async function authorityProfile(
     profile.setWorkspaceSession(saved)
   }
   await profile.flushPendingOrThrowAsync()
+  if (options.legacy) {
+    // The production profile factory initializes only after reading the old saved document.
+    await profile.executeWorkspaceSurfaceCommand({ type: 'initialize', hostId: 'local' })
+  }
   return { profile, workspace, groupId: group.id, folderId: folder.id }
 }
 
@@ -133,6 +143,7 @@ export async function openAuthorityRuntime(
   runtime = new AuthorityRuntime(rig.profile),
   installFirst = false
 ): Promise<AuthorityRig> {
+  await closeTestJournalHostDatabases()
   // Exercise the production admission route before the real host installer reuses its slot.
   if (installFirst) {
     await runtime.ensureStructuredAgentSessionHost()
@@ -156,16 +167,23 @@ export async function openAuthorityRuntime(
 export function savedIds(rig: AuthorityProfile) {
   return collectSavedStructuredAgentSessionIds(rig.profile.getWorkspaceSession('local'))
 }
-export function replaceSaved(rig: AuthorityProfile, ids: string[]) {
+export function savedSnapshot(
+  rig: AuthorityProfile,
+  ids: string[],
+  hostId: ExecutionHostId = 'local'
+) {
   const next = withChatTabChanges(
-    'local',
+    hostId,
     getDefaultWorkspaceSession(),
     rig.workspace,
     ids.map((sessionId) => ({
       open: { sessionId, agent: 'codex', tabId: structuredAgentSessionTabId(sessionId) }
     }))
   )
-  rig.profile.setWorkspaceSession(next ?? getDefaultWorkspaceSession())
+  return next ?? getDefaultWorkspaceSession()
+}
+export function replaceSaved(rig: AuthorityProfile, ids: string[]) {
+  rig.profile.setWorkspaceSession(savedSnapshot(rig, ids))
 }
 export async function holdStartup(rig: AuthorityRig) {
   const entered = Promise.withResolvers<void>(),
@@ -188,22 +206,25 @@ export async function holdStartup(rig: AuthorityRig) {
     await chatTabCommandsSettled()
   }
 }
-export function rejectVisibility(rig: AuthorityRig) {
-  const db = rig.host.deps.journalDatabase.db
-  db.exec(
-    "CREATE TEMP TRIGGER reject_initial_tabs BEFORE INSERT ON agent_session_store_meta WHEN NEW.key='session_tabs_recorded' BEGIN SELECT RAISE(ABORT, 'visibility rejected'); END"
-  )
-  db.exec(
-    "CREATE TEMP TRIGGER reject_tab_delta BEFORE DELETE ON agent_session_tabs BEGIN SELECT RAISE(ABORT, 'visibility rejected'); END"
-  )
-  db.exec(
-    "CREATE TEMP TRIGGER reject_tab_insert BEFORE INSERT ON agent_session_tabs BEGIN SELECT RAISE(ABORT, 'visibility rejected'); END"
-  )
-  return () => {
-    db.exec('DROP TRIGGER reject_tab_insert')
-    db.exec('DROP TRIGGER reject_initial_tabs')
-    db.exec('DROP TRIGGER reject_tab_delta')
-  }
+export async function rejectVisibility(rig: AuthorityRig) {
+  const database = rig.host.deps.journalDatabase
+  await mutateTestJournalFixture(database, (db) => {
+    db.exec(
+      "CREATE TRIGGER reject_initial_tabs BEFORE INSERT ON agent_session_store_meta WHEN NEW.key='session_tabs_recorded' BEGIN SELECT RAISE(ABORT, 'visibility rejected'); END"
+    )
+    db.exec(
+      "CREATE TRIGGER reject_tab_delta BEFORE DELETE ON agent_session_tabs BEGIN SELECT RAISE(ABORT, 'visibility rejected'); END"
+    )
+    db.exec(
+      "CREATE TRIGGER reject_tab_insert BEFORE INSERT ON agent_session_tabs BEGIN SELECT RAISE(ABORT, 'visibility rejected'); END"
+    )
+  })
+  return () =>
+    mutateTestJournalFixture(database, (db) => {
+      db.exec('DROP TRIGGER reject_tab_insert')
+      db.exec('DROP TRIGGER reject_initial_tabs')
+      db.exec('DROP TRIGGER reject_tab_delta')
+    })
 }
 export async function createC(
   rig: AuthorityRig,

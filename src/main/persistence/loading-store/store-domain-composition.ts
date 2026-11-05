@@ -28,8 +28,10 @@ import { SshLeaseRecoveryOperations } from './ssh-lease-recovery-operations'
 import { OrcadSourceExportPersistence } from '../migrating-orcad-catalog/orcad-source-export'
 import { OrcadCatalogImportPersistence } from '../migrating-orcad-catalog/orcad-catalog-import'
 import { OrcadMigrationBlobInstallPersistence } from '../migrating-orcad-catalog/orcad-migration-blob-install-persistence'
+import { WorkspaceSurfaceCommands } from './workspace-surface-commands'
 
 export type StoreDomainOperations = WriteSchedulingOperations &
+  WorkspaceSurfaceCommands &
   PrimaryStateWriteOperations &
   ProjectCollectionOperations &
   RepoLifecycleOperations &
@@ -53,6 +55,7 @@ export type StoreDomainOperations = WriteSchedulingOperations &
   WriteFlushBarrierOperations
 
 export type StoreDomains = {
+  surfaces: WorkspaceSurfaceCommands
   adaptation: LoadedStateAdaptationOperations
   cohorts: LoadedCohortMigrationOperations
   loader: LoadedStateParsingOperations
@@ -83,6 +86,7 @@ export type StoreDomains = {
 }
 
 export const STORE_DOMAIN_OPERATION_CLASSES = [
+  WorkspaceSurfaceCommands,
   WriteSchedulingOperations,
   PrimaryStateWriteOperations,
   ProjectCollectionOperations,
@@ -123,6 +127,7 @@ export function createStoreDomains(runtime: StoreRuntimeState): StoreDomains {
   const loader = new LoadedStateParsingOperations(runtime, cohorts)
   const serialization = new StateSerializationSecretHandlingOperations(runtime)
   const writes = new PrimaryStateWriteOperations(runtime, serialization)
+  const surfaces = new WorkspaceSurfaceCommands(runtime, writes)
   const scheduling = new WriteSchedulingOperations(runtime, writes)
   const flushBarriers = new WriteFlushBarrierOperations(runtime, writes)
   const preferences = new ProfilePreferences(runtime, scheduling)
@@ -141,7 +146,7 @@ export function createStoreDomains(runtime: StoreRuntimeState): StoreDomains {
   const mobileTabSelections = new MobileTabSelectionPersistence(runtime, scheduling)
   const remoteLayoutSnapshots = new RemoteLayoutSnapshotPersistence(runtime, scheduling)
   const sparsePresets = new SparsePresetPersistence(runtime, scheduling)
-  const ptyBindings = new PtyBindingPersistenceOperations(runtime, sessions)
+  const ptyBindings = new PtyBindingPersistenceOperations(runtime, sessions, surfaces)
   const sshProfiles = new SshProfileOperations(runtime, scheduling, repos)
   const retiredWorktreeNames = new RetiredWorktreeNamePersistence(runtime, scheduling)
   const sshLeases = new SshLeaseRecoveryOperations(
@@ -152,6 +157,7 @@ export function createStoreDomains(runtime: StoreRuntimeState): StoreDomains {
   )
   const orcadCatalogImports = new OrcadCatalogImportPersistence(runtime, repos, scheduling)
   return {
+    surfaces,
     adaptation,
     cohorts,
     loader,
@@ -176,7 +182,8 @@ export function createStoreDomains(runtime: StoreRuntimeState): StoreDomains {
       runtime,
       sessions,
       // Retry persistence for terminal closes retained after failed writes.
-      ORCA_LAYOUT_OWNER_IS_MAIN ? () => scheduleSave(scheduling) : undefined
+      ORCA_LAYOUT_OWNER_IS_MAIN ? () => scheduleSave(scheduling) : undefined,
+      surfaces
     ),
     sshProfiles,
     retiredWorktreeNames,

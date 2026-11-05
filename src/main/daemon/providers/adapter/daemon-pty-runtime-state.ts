@@ -72,6 +72,14 @@ export type DaemonIdleRetirementResult =
   | { state: 'unverifiable' }
 
 export abstract class DaemonPtyRuntimeState {
+  protected retainSurfaceRecoveryInterest(): () => void {
+    const interest = Symbol()
+    this.surfaceRecoveryInterests.add(interest)
+    return () => {
+      this.surfaceRecoveryInterests.delete(interest)
+    }
+  }
+
   protected readonly readRunningWslDistros: ReadRunningWslDistros | undefined
   protected readonly wslBridgeBootIdentity: WslBridgeBootIdentity
   readonly protocolVersion: number
@@ -121,6 +129,7 @@ export abstract class DaemonPtyRuntimeState {
   protected coldRestoreCache = new ColdRestorePayloadCache(undefined, (sessionId) => {
     this.sleepRestoreSessionIds.delete(sessionId)
   })
+  protected surfaceRecoveryInterests = new Set<symbol>()
   protected activeSessionIds = new Set<string>()
   protected getSizeUnsupported = false
   protected sessionsAwaitingDaemonRecovery = new Set<string>()

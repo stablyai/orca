@@ -13,6 +13,14 @@ import {
 import { getPtyExecutionHost } from '../../../../shared/terminal/pty/lifecycle/terminal-execution-host'
 
 export let localProvider: IPtyProvider = new LocalPtyProvider()
+const localProviderChanged = new Set<() => void>()
+export function onLocalPtyProviderChanged(listener: () => void): () => void {
+  localProviderChanged.add(listener)
+  return () => {
+    localProviderChanged.delete(listener)
+  }
+}
+
 let colorQueryReplyColors: TerminalOscColorQueryReplyColors | null = null
 
 // Push theme updates to every PTY owner before its next OSC query; never erase a surviving daemon's theme with unknown.
@@ -156,4 +164,9 @@ export function getLocalPtyProvider(): IPtyProvider {
 export function setLocalPtyProvider(provider: IPtyProvider): void {
   localProvider = provider
   pushColorQueryReplyColors(provider)
+  for (const listener of localProviderChanged) {
+    try {
+      listener()
+    } catch {}
+  }
 }

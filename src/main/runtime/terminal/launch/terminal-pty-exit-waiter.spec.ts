@@ -70,6 +70,50 @@ export function registerTerminalPtyExitWaiterTests(): void {
   })
 
   describe('fresh composer lifetime', () => {
+    it('settles only the exited terminal composers at N and 10N', async () => {
+      for (const n of [2, 20]) {
+        const { runtime, handle } = await createTranscriptPane({
+          paneTitle: 'shell',
+          foregroundProcess: 'bash',
+          data: ''
+        })
+        const other = runtime['recordPtyWorktree']('pty-unrelated', 'wt-1', {
+          connected: true,
+          incarnationId: 'inc-other'
+        })
+        const otherHandle = runtime['issuePtyHandle'](other)
+        vi.useFakeTimers()
+        const otherOutcomes: unknown[] = []
+        const otherWaits = Array.from({ length: n }, () =>
+          runtime.waitForFreshWorkerComposer(otherHandle, 'claude', 60_000).catch((error) => {
+            otherOutcomes.push(error)
+            return error
+          })
+        )
+        const waits = Array.from({ length: n }, () =>
+          runtime
+            .waitForFreshWorkerComposer(handle, 'claude', 60_000)
+            .catch((error: unknown) => error)
+        )
+        try {
+          runtime.onPtyExit(TRANSCRIPT_PANE_PTY_ID, 137, 'inc-1', { providerExitObserved: true })
+          await vi.advanceTimersByTimeAsync(0)
+          for (const error of await Promise.all(waits)) {
+            expect(error).toMatchObject({ message: 'terminal_exited' })
+          }
+          expect(otherOutcomes).toEqual([])
+          runtime.onPtyExit('pty-unrelated', 137, 'inc-other', { providerExitObserved: true })
+          for (const error of await Promise.all(otherWaits)) {
+            expect(error).toMatchObject({ message: 'terminal_exited' })
+          }
+        } finally {
+          runtime['terminalWaiters'].rejectAll('request_aborted')
+          await Promise.all([...waits, ...otherWaits])
+          vi.useRealTimers()
+        }
+      }
+    })
+
     it.each(['exit', 'replacement', 'prune', 'graph-retirement', 'abort', 'timeout'] as const)(
       'retires its scanner, listeners and deadline on %s',
       async (end) => {

@@ -5,7 +5,11 @@ import { normalizeLocalBranchRef } from '../../git/worktrees/worktree-operation-
 import { acquireWatcherRemovalGate, type WatcherRemovalGate } from './watcher-removal-gate'
 import { runWorktreeChangeInvalidators } from '../../ipc/worktrees/listing/worktree-change-invalidators'
 import { parseWslPath } from '../../wsl/filesystem/unc-path-access'
-import { readWorktreeRemovalRecords, type WorktreeRemovalRecord } from './worktree-removal-records'
+import {
+  assertAcceptedBranchChoice,
+  readWorktreeRemovalRecords,
+  type WorktreeRemovalRecord
+} from './worktree-removal-records'
 import { failureLeftByGit } from './worktree-removal-failure'
 import { differentCheckoutAtPathError, isCheckoutRegistered } from './worktree-removal-leftover'
 import {
@@ -41,17 +45,22 @@ const startupFencesByWorktreeId = new Map<string, WatcherRemovalGate>()
 /** Load removal fences before session restore can reopen terminals or watchers in incomplete checkouts. */
 export async function loadWorktreeRemovalRecords(
   directory: string,
-  hasRepo: (repoId: string) => boolean = () => true
+  hasRepo: (repoId: string) => boolean = () => true,
+  logicalOwners: (records: readonly WorktreeRemovalRecord[]) => ReadonlySet<string> = () =>
+    new Set()
 ): Promise<void> {
   setWorktreeRemovalRecordsDirectory(directory)
   let droppedFailure = false
+  const missing: WorktreeRemovalRecord[] = []
   for (const record of await readWorktreeRemovalRecords(directory)) {
     if (record.failure) {
       // Removed repos have no listing to clear a failed-removal record.
-      if (hasRepo(record.repoId) && (await worktreeCheckoutExists(record.worktreePath))) {
+      if (!hasRepo(record.repoId)) {
+        droppedFailure = true
+      } else if (await worktreeCheckoutExists(record.worktreePath)) {
         failedWorktreeRemovals.set(record.worktreeId, record)
       } else {
-        droppedFailure = true
+        missing.push(record)
       }
       continue
     }
@@ -65,6 +74,14 @@ export async function loadWorktreeRemovalRecords(
       } catch {
         // An overlapping loaded removal already fences this path.
       }
+    }
+  }
+  const retained = logicalOwners(missing)
+  for (const record of missing) {
+    if (retained.has(record.worktreeId)) {
+      failedWorktreeRemovals.set(record.worktreeId, record)
+    } else {
+      droppedFailure = true
     }
   }
   if (droppedFailure) {
@@ -105,17 +122,6 @@ export function waitForPendingWorktreeRemoval(
   }
   assertAcceptedBranchChoice(pendingWorktreeRemovals.get(worktreeId), deleteBranch)
   return settlementsByWorktreeId.get(worktreeId)?.result
-}
-
-function assertAcceptedBranchChoice(
-  record: WorktreeRemovalRecord | undefined,
-  deleteBranch: boolean | undefined
-): void {
-  if (record && deleteBranch !== undefined && record.deleteBranch !== deleteBranch) {
-    throw new Error(
-      `Orca already accepted removal of ${record.worktreePath} with a different branch choice. That cleanup may already have run; check the branch before retrying.`
-    )
-  }
 }
 
 /** Await the delete while preserving the acceptance result fields. */

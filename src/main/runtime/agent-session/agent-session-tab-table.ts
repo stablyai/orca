@@ -216,14 +216,14 @@ export abstract class AgentSessionRecordTabs extends AgentSessionRecordPublicati
     this.transactions.state.sessionTabs?.tabIdFor(sessionId) ?? null
 
   /** Persist chat-tab identity separately from rollback-sensitive profile tabs; explicit tabId restores hidden tabs under their old ids. */
-  setSessionTabVisibility(
+  async setSessionTabVisibility(
     sessionId: string,
     visible: boolean,
     tabId?: string,
     check?: () => void,
     capture?: (tabId: string | null) => void
   ): Promise<void> {
-    return this.transact((draft) => {
+    const retired = await this.transact((draft) => {
       check?.()
       const retired =
         effectiveAgentSessionTabs(draft, this.transactions.legacySessionTabIds).tabIdFor(
@@ -236,8 +236,9 @@ export abstract class AgentSessionRecordTabs extends AgentSessionRecordPublicati
         tabId,
         this.transactions.legacySessionTabIds
       )
-      capture?.(visible ? (draft.sessionTabs?.tabIdFor(sessionId) ?? null) : retired)
+      return retired
     })
+    capture?.(visible ? this.getSessionTabId(sessionId) : retired)
   }
 
   setSwitchedSessionTabVisibility(
