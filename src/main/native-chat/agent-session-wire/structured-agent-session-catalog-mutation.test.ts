@@ -230,6 +230,7 @@ describe('installed catalog through Codex delivery and report settlement', () =>
     },
     10_000
   )
+  // Real host setup, delayed report settlement and bounded resource drains share this budget.
   it('keeps a newer alias pick of the same model over a delayed report of the earlier turn', async () => {
     const f = await createCatalogMutationFixture(stateDirectory, 'claude')
     const acquire = f.rig.adapter.acquire.getMockImplementation()!
