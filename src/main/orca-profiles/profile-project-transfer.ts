@@ -2,7 +2,11 @@ import type {
   TransferOrcaProfileProjectArgs,
   TransferOrcaProfileProjectResult
 } from '../../shared/orca-profiles'
-import { getOrcaProfileListState } from './profile-index-store'
+import {
+  getOrcaProfileIndexPath,
+  getOrcaProfileListState,
+  readProfileIndex
+} from './profile-index-store'
 import {
   readProfileProjectTransferState,
   writeProfileProjectDomainChanges
@@ -46,10 +50,13 @@ export function transferOrcaProfileProject(
   args: TransferOrcaProfileProjectArgs,
   userDataPath: string
 ): TransferOrcaProfileProjectResult {
+  // Refuse a linked move before the profile lookup, recovery or storage migration can write anything.
+  const index = readProfileIndex(getOrcaProfileIndexPath(userDataPath))
+  if (index?.profiles.some((profile) => profile.id === args.sourceProfileId)) {
+    const unrecoveredSource = readProfileProjectTransferState(args.sourceProfileId, userDataPath)
+    assertRepoHasNoCrossStoreLinkedWorkspace(unrecoveredSource.state, args.repoId)
+  }
   assertKnownProfiles(args, userDataPath)
-  // Refuse a linked move before recovery or storage migration can write anything.
-  const unrecoveredSource = readProfileProjectTransferState(args.sourceProfileId, userDataPath)
-  assertRepoHasNoCrossStoreLinkedWorkspace(unrecoveredSource.state, args.repoId)
   recoverPendingProfileProjectMoves(userDataPath)
   let sourceSnapshot = readProfileProjectTransferState(args.sourceProfileId, userDataPath)
   let targetSnapshot = readProfileProjectTransferState(args.targetProfileId, userDataPath)
