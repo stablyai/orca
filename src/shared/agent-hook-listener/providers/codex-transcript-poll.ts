@@ -1,5 +1,9 @@
 import { record } from '../../codex-rollout-jsonl-cursor'
 import {
+  hasPendingCodexSubagentIdentity,
+  retryPendingCodexSubagentIdentities
+} from '../../codex-subagent-roster'
+import {
   codexTranscriptTurnEnd,
   reconcileCodexSubagentTranscript
 } from '../../codex-subagent-transcript'
@@ -16,15 +20,21 @@ export function pollCodexTranscriptStatus(
   body: unknown,
   env: string
 ): AgentHookEventPayload | undefined {
+  const roster = getOrCreateCodexSubagentRoster(state, original.paneKey)
+  const named = retryPendingCodexSubagentIdentities(roster)
   const transcript = state.codexSubagentTranscriptByPaneKey.get(original.paneKey)
   if (!transcript?.parent.filePath) {
-    return undefined
+    // Without a parent rollout, keep polling only while a child's own rollout still owes its name.
+    const payload = named
+      ? buildCodexChildDrivenStatusPayload(state, undefined, original.paneKey, {})
+      : undefined
+    if (payload) {
+      return { ...original, hookEventName: undefined, payload }
+    }
+    return hasPendingCodexSubagentIdentity(roster) ? original : undefined
   }
-  const changed = reconcileCodexSubagentTranscript(
-    transcript,
-    getOrCreateCodexSubagentRoster(state, original.paneKey),
-    transcript.parent.filePath
-  )
+  const changed =
+    reconcileCodexSubagentTranscript(transcript, roster, transcript.parent.filePath) || named
   const lead = state.codexLeadStateByPaneKey.get(original.paneKey)
   const interrupted = transcript.rootTurn.interrupted && lead?.state !== 'done'
   const envelope = record(body)

@@ -25,7 +25,7 @@ export function record(value: unknown): JsonRecord | undefined {
   return typeof value === 'object' && value !== null ? (value as JsonRecord) : undefined
 }
 
-/** 'pending' while the first line is unwritten; 'unreadable' on an I/O failure; undefined once the line is final. */
+/** 'pending' while the file or its first line is unwritten; 'unreadable' on other I/O failures; undefined once the line is final. */
 export function readJsonlFirstRecord(
   filePath: string
 ): JsonRecord | 'pending' | 'unreadable' | undefined {
@@ -47,7 +47,10 @@ export function readJsonlFirstRecord(
     }
     return record(JSON.parse(buffer.toString('utf8', 0, newline)))
   } catch (error) {
-    return error instanceof SyntaxError ? undefined : 'unreadable'
+    if (error instanceof SyntaxError) {
+      return undefined
+    }
+    return (error as NodeJS.ErrnoException).code === 'ENOENT' ? 'pending' : 'unreadable'
   } finally {
     if (fd !== undefined) {
       closeSync(fd)

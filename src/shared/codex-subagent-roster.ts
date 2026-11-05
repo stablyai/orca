@@ -27,6 +27,9 @@ type TrackedCodexSubagent = {
   identityTranscriptPath?: string
   /** The path whose first line holds no identity, or `path:size` while that line is unwritten; retried only on change. */
   identityMissKey?: string
+  /** A hook-supplied rollout still owed an identity read; polls retry it without a parent transcript. */
+  identityPendingPath?: string
+  identityRetryAt?: number
   /** Relay session whose own roster listed this child; only that session may retire it by omission. */
   reportedBy?: string
 }
@@ -70,6 +73,8 @@ export function finishCodexSubagent(roster: CodexSubagentRoster, id: string): vo
   roster.delete(id.trim())
 }
 
+const IDENTITY_IO_RETRY_MS = 5_000
+
 /** Returns whether the child's name changed, so a poll that only recovered identity still publishes. */
 export function enrichCodexSubagentIdentity(
   roster: CodexSubagentRoster,
@@ -80,17 +85,28 @@ export function enrichCodexSubagentIdentity(
   if (!child || !transcriptPath || child.identityTranscriptPath === transcriptPath) {
     return false
   }
+  child.identityPendingPath = transcriptPath
+  if (child.identityMissKey === transcriptPath || (child.identityRetryAt ?? 0) > Date.now()) {
+    return false
+  }
   const missKey = `${transcriptPath}:${transcriptFileSize(transcriptPath)}`
-  if (child.identityMissKey === missKey || child.identityMissKey === transcriptPath) {
+  if (child.identityMissKey === missKey) {
     return false
   }
   const identity = readCodexSubagentIdentity(transcriptPath, id.trim())
   if (identity === 'unreadable') {
+    child.identityRetryAt = Date.now() + IDENTITY_IO_RETRY_MS
     return false
   }
-  if (!identity || identity === 'pending') {
-    // A complete first line without this child's metadata never changes; an unwritten one is retried as it grows.
-    child.identityMissKey = identity ? missKey : transcriptPath
+  child.identityRetryAt = undefined
+  if (identity === 'pending') {
+    child.identityMissKey = missKey
+    return false
+  }
+  child.identityPendingPath = undefined
+  if (!identity) {
+    // A complete first line without this child's metadata never changes.
+    child.identityMissKey = transcriptPath
     return false
   }
   child.identityTranscriptPath = transcriptPath
@@ -100,6 +116,21 @@ export function enrichCodexSubagentIdentity(
     normalizeOptionalField(identity.description, AGENT_STATUS_TOOL_INPUT_MAX_LENGTH) ??
     child.description
   return child.description !== previous
+}
+
+export function hasPendingCodexSubagentIdentity(roster: CodexSubagentRoster | undefined): boolean {
+  return [...(roster?.values() ?? [])].some((child) => child.identityPendingPath !== undefined)
+}
+
+/** Retry each unnamed child's own rollout; a relay restart can leave no parent transcript to drive this. */
+export function retryPendingCodexSubagentIdentities(roster: CodexSubagentRoster): boolean {
+  let changed = false
+  for (const [id, child] of roster) {
+    if (child.identityPendingPath !== undefined) {
+      changed = enrichCodexSubagentIdentity(roster, id, child.identityPendingPath) || changed
+    }
+  }
+  return changed
 }
 
 function transcriptFileSize(transcriptPath: string): number | null {
