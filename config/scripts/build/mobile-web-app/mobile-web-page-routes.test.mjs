@@ -4,6 +4,7 @@ import {
   MobileWebBundleRouteSchema
 } from '../../../../src/shared/mobile-web-bundle/manifest-contract.ts'
 import { resolveMobileWebPageRoutes } from './build-mobile-web-app-bundle.mjs'
+import { MOBILE_WEB_PAGE_ROUTES } from './mobile-web-page-routes.mjs'
 import { routePathnameFromKey } from '../../mobile-web-app/mobile-web-app-route-manifest.mjs'
 
 // Test declared screens separately from bundle mechanics so route inventory can grow without coupling builder test size.
