@@ -42,7 +42,6 @@ import {
   readCodexNonUserOrigin,
   type CodexNonUserOrigin
 } from './session-scanner-codex-non-user-origin'
-
 export async function parseCodexSessionFile(
   file: FileWithMtime,
   platform: NodeJS.Platform = process.platform,
@@ -54,7 +53,6 @@ export async function parseCodexSessionFile(
     input: openTranscriptReadStream(file.path, { encoding: 'utf-8' }, 'scan'),
     crlfDelay: Infinity
   })
-
   return parseCodexSessionLines({
     file,
     lines,
@@ -65,7 +63,6 @@ export async function parseCodexSessionFile(
     titleReader: (sessionId) => readCodexSessionIndexTitle(file.path, codexHome, sessionId)
   })
 }
-
 type CodexSessionParseState = {
   accumulator: SessionAccumulator
   previousTotals: CodexUsageSnapshot | null
@@ -73,10 +70,9 @@ type CodexSessionParseState = {
   nonUserOrigin: CodexNonUserOrigin | null
   sawSessionMeta: boolean
   historyMode: string | null
-  // Metadata titles outrank indexed titles, which outrank raw user prompts.
+  // Metadata titles outrank raw prompts; the name index wins at finalization.
   titleSource: 'meta' | 'user' | null
 }
-
 function createCodexParseState(
   file: FileWithMtime,
   messages?: TranscriptMessageSink
@@ -95,7 +91,6 @@ function createCodexParseState(
     titleSource: null
   }
 }
-
 function cloneCodexParseState(state: CodexSessionParseState): CodexSessionParseState {
   return {
     // previousTotals snapshots are replaced, never mutated, so sharing is safe.
@@ -103,7 +98,6 @@ function cloneCodexParseState(state: CodexSessionParseState): CodexSessionParseS
     accumulator: cloneSessionAccumulator(state.accumulator)
   }
 }
-
 function consumeCodexRecordLine(state: CodexSessionParseState, line: string): void {
   if (state.nonUserOrigin) {
     return
@@ -113,7 +107,6 @@ function consumeCodexRecordLine(state: CodexSessionParseState, line: string): vo
     return
   }
   const { accumulator } = state
-
   updateTimeline(accumulator, extractString(record.timestamp))
 
   const payload = asRecord(record.payload)
@@ -225,7 +218,7 @@ async function finalizeCodexParseState(
   // Finalize a snapshot: the live state keeps accumulating appended lines.
   const snapshot = cloneCodexParseState(state)
   // Recheck the signature-cached index: a title can arrive after the transcript stops growing.
-  if (snapshot.sawSessionMeta && snapshot.titleSource !== 'meta') {
+  if (snapshot.sawSessionMeta) {
     const indexedTitle = await args.titleReader?.(snapshot.accumulator.sessionId)
     if (indexedTitle) {
       snapshot.accumulator.title = indexedTitle

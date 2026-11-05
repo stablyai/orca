@@ -7,6 +7,11 @@ import {
 } from '../../../shared/ai-vault/contracts/ai-vault-session-title'
 import { parseAgentSessionFileCached } from '../parse-cache/session-scanner-parse-cache'
 
+import {
+  codexHomeFromSessionFilePath,
+  readCodexSessionIndexTitles
+} from '../scanners/codex/session-scanner-codex-title-index'
+
 const TITLE_PARSE_CONCURRENCY = 4
 
 export type AiVaultSessionTitleCache = {
@@ -17,7 +22,8 @@ export type AiVaultSessionTitleCache = {
 async function readOneTitle(
   request: AiVaultSessionTitleRequest,
   signal: AbortSignal | undefined,
-  cache?: AiVaultSessionTitleCache
+  cache?: AiVaultSessionTitleCache,
+  indexByHome?: Map<string, Promise<Map<string, string>>>
 ): Promise<AiVaultSessionTitle | null> {
   if (signal?.aborted) {
     return null
@@ -27,6 +33,23 @@ async function readOneTitle(
     return cache?.get(request) ?? null
   }
   try {
+    const home = request.agent === 'codex' ? codexHomeFromSessionFilePath(transcriptPath) : null
+    if (home && indexByHome) {
+      let indexed = indexByHome.get(home)
+      if (!indexed) {
+        indexed = readCodexSessionIndexTitles(home)
+        indexByHome.set(home, indexed)
+      }
+      const title = (await indexed).get(request.sessionId)
+      if (signal?.aborted) {
+        return null
+      }
+      if (title) {
+        const resolved = { agent: request.agent, sessionId: request.sessionId, title }
+        cache?.set(resolved)
+        return resolved
+      }
+    }
     const stats = await wslGatedLstat(transcriptPath, 'scan', signal)
     if (!stats.isFile() || signal?.aborted) {
       return null
@@ -43,7 +66,10 @@ async function readOneTitle(
         },
         codexHome: null
       },
-      process.platform
+      process.platform,
+      undefined,
+      undefined,
+      signal
     )
     if (
       signal?.aborted ||
@@ -74,11 +100,17 @@ export async function readAiVaultSessionTitlesFromFiles(
     { length: bounded.length },
     () => null
   )
+  const indexByHome = new Map<string, Promise<Map<string, string>>>()
   let nextIndex = 0
   const parseNext = async (): Promise<void> => {
     while (nextIndex < bounded.length && !options.signal?.aborted) {
       const index = nextIndex++
-      resolved[index] = await readOneTitle(bounded[index]!, options.signal, options.cache)
+      resolved[index] = await readOneTitle(
+        bounded[index]!,
+        options.signal,
+        options.cache,
+        indexByHome
+      )
     }
   }
   await Promise.all(

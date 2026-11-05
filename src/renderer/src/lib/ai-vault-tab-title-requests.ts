@@ -27,10 +27,7 @@ export type AgentPaneConversation<Agent extends AgentType> = {
   worktreeId: string
 }
 
-export type AiVaultTitleRequest = Omit<
-  AgentPaneConversation<AiVaultSessionTitle['agent']>,
-  'paneKey'
->
+export type AiVaultTitleRequest = AgentPaneConversation<AiVaultSessionTitle['agent']>
 
 type ConversationTab = TerminalTab & { worktreeId: string; leafIds?: ReadonlySet<string> }
 
@@ -135,9 +132,7 @@ function conversationRecords<T>(records: Record<string, T> | undefined, paneKey?
 }
 
 export function collectAiVaultTitleRequests(state: AppState): AiVaultTitleRequest[] {
-  return collectAgentPaneConversations(state, isAiVaultTitleAgent, { skipHostNamedTabs: true }).map(
-    ({ paneKey: _paneKey, ...request }) => request
-  )
+  return collectAgentPaneConversations(state, isAiVaultTitleAgent, { skipHostNamedTabs: true })
 }
 
 /** Each tab's conversation: live, sleeping, retained, then its last reported identity. */
