@@ -1,28 +1,58 @@
 import { useMemo, useState } from 'react'
 import { Pressable } from 'react-native'
-import { Copy, Download, Share } from 'lucide-react-native'
+import { Copy, Download, Share, type LucideIcon } from 'lucide-react-native'
 import { ActionSheetModal } from '../../../components/ActionSheetModal'
 import { TransientToast, useTransientToast } from '../../../components/TransientToast'
 import type { Translate } from '../../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
-import type { BridgeImageOperation } from '../../../mobile-web-shell/bridge/bridge-image-verbs'
+import {
+  BRIDGE_IMAGE_OPERATIONS,
+  type BridgeImageOperation
+} from '../../../mobile-web-shell/bridge/bridge-image-verbs'
 import { useImageActions } from '../../../platform/image-actions'
 import { ImageActionRefusedError } from '../../../platform/image-actions-contract'
 import { colors, feedback } from '../../../theme/mobile-theme'
 import type { ImageViewerActionsProps } from './MobileNativeChatImageViewer'
 
-function failureMessage(t: Translate, operation: BridgeImageOperation, error: unknown): string {
-  if (error instanceof ImageActionRefusedError) {
-    return error.reason === 'photos-access-denied'
-      ? t('chat.nativeChatImageViewer.photosAccessDenied', 'Allow Orca to add photos in Settings')
-      : t('chat.nativeChatImageViewer.imageTooLarge', 'This image is too large')
+type OperationCopy = {
+  icon: LucideIcon
+  label: string
+  done: string | null
+  failed: string
+  // Save and Share raise system UI, which must wait for the sheet to leave.
+  closeBeforePress: boolean
+}
+
+function operationCopy(t: Translate): Record<BridgeImageOperation, OperationCopy> {
+  return {
+    copy: {
+      icon: Copy,
+      label: t('chat.nativeChatImageViewer.copyImage', 'Copy image'),
+      done: t('chat.nativeChatImageViewer.imageCopied', 'Image copied'),
+      failed: t('chat.nativeChatImageViewer.copyFailed', "Couldn't copy image"),
+      closeBeforePress: false
+    },
+    save: {
+      icon: Download,
+      label: t('chat.nativeChatImageViewer.saveImage', 'Save image'),
+      done: t('chat.nativeChatImageViewer.imageSaved', 'Image saved'),
+      failed: t('chat.nativeChatImageViewer.saveFailed', "Couldn't save image"),
+      closeBeforePress: true
+    },
+    share: {
+      icon: Share,
+      label: t('chat.nativeChatImageViewer.share', 'Share…'),
+      done: null,
+      failed: t('chat.nativeChatImageViewer.shareFailed', "Couldn't share image"),
+      closeBeforePress: true
+    }
   }
-  if (operation === 'copy') {
-    return t('chat.nativeChatImageViewer.copyFailed', "Couldn't copy image")
-  }
-  return operation === 'save'
-    ? t('chat.nativeChatImageViewer.saveFailed', "Couldn't save image")
-    : t('chat.nativeChatImageViewer.shareFailed', "Couldn't share image")
+}
+
+function refusalMessage(t: Translate, error: ImageActionRefusedError): string {
+  return error.reason === 'photos-access-denied'
+    ? t('chat.nativeChatImageViewer.photosAccessDenied', 'Allow Orca to add photos in Settings')
+    : t('chat.nativeChatImageViewer.imageTooLarge', 'This image is too large')
 }
 
 /** The viewer's Share button and sheet: copy, save to the photo library, or the system share sheet. Absent on shells without native.image.act and for images the phone cannot act on. */
@@ -32,23 +62,20 @@ export function MobileImageViewerActions({
   toastInset
 }: ImageViewerActionsProps): React.JSX.Element | null {
   const t = useMobileTranslation()
-  const imageActions = useImageActions()
-  const act = useMemo(() => imageActions?.forImage(uri) ?? null, [imageActions, uri])
+  const actionsFor = useImageActions()
+  const act = useMemo(() => actionsFor?.(uri) ?? null, [actionsFor, uri])
   const [menuOpen, setMenuOpen] = useState(false)
   const { message, showToast } = useTransientToast()
   if (!act) {
     return null
   }
+  const operations = operationCopy(t)
   const run = (operation: BridgeImageOperation) => {
+    const { done, failed } = operations[operation]
     act(operation).then(
-      () => {
-        if (operation === 'copy') {
-          showToast(t('chat.nativeChatImageViewer.imageCopied', 'Image copied'))
-        } else if (operation === 'save') {
-          showToast(t('chat.nativeChatImageViewer.imageSaved', 'Image saved'))
-        }
-      },
-      (error: unknown) => showToast(failureMessage(t, operation, error))
+      () => done && showToast(done),
+      (error: unknown) =>
+        showToast(error instanceof ImageActionRefusedError ? refusalMessage(t, error) : failed)
     )
   }
   return (
@@ -64,28 +91,13 @@ export function MobileImageViewerActions({
       <ActionSheetModal
         visible={menuOpen}
         onClose={() => setMenuOpen(false)}
-        actions={[
-          {
-            id: 'copy',
-            label: t('chat.nativeChatImageViewer.copyImage', 'Copy image'),
-            icon: Copy,
-            onPress: () => run('copy')
-          },
-          {
-            id: 'save',
-            label: t('chat.nativeChatImageViewer.saveImage', 'Save image'),
-            icon: Download,
-            closeBeforePress: true,
-            onPress: () => run('save')
-          },
-          {
-            id: 'share',
-            label: t('chat.nativeChatImageViewer.share', 'Share…'),
-            icon: Share,
-            closeBeforePress: true,
-            onPress: () => run('share')
-          }
-        ]}
+        actions={BRIDGE_IMAGE_OPERATIONS.map((operation) => ({
+          id: operation,
+          label: operations[operation].label,
+          icon: operations[operation].icon,
+          closeBeforePress: operations[operation].closeBeforePress,
+          onPress: () => run(operation)
+        }))}
       />
       <TransientToast message={message} bottomInset={toastInset} />
     </>

@@ -15,7 +15,7 @@ const byteOffsetSchema = z.number().int().min(0).max(CLIPBOARD_IMAGE_MAX_SOURCE_
 const rasterMimeSchema = z.string().max(128).refine(isKnownRasterImageMimeType)
 
 // Offset 0 starts a new staged image and drops any earlier one; later chunks must continue exactly where the last ended.
-export const imageStageParamsSchema = z.strictObject({
+const imageStageParamsSchema = z.strictObject({
   action: z.literal('stage'),
   offset: byteOffsetSchema,
   base64: z
@@ -25,7 +25,7 @@ export const imageStageParamsSchema = z.strictObject({
     .regex(/^[A-Za-z0-9+/]*={0,2}$/)
 })
 
-export const imageRunParamsSchema = z.strictObject({
+const imageRunParamsSchema = z.strictObject({
   action: z.literal('run'),
   operation: z.enum(BRIDGE_IMAGE_OPERATIONS),
   source: z.discriminatedUnion('kind', [

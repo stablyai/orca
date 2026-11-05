@@ -1,5 +1,11 @@
 import { useMemo } from 'react'
+import {
+  agentSessionAttachmentAppends,
+  base64DecodedByteLength
+} from '../../../src/shared/agent-session/agent-session-attachments'
 import { readRasterImageDataUri } from '../../../src/shared/image-data-uri'
+import { isKnownRasterImageMimeType } from '../../../src/shared/raster-image-preview-limits'
+import { isSvgFilePath } from '../../../src/shared/svg-document'
 import type {
   BridgeImageOperation,
   BridgeImageRunParams
@@ -7,59 +13,68 @@ import type {
 import {
   NativeVerbError,
   useNativeVerbs,
+  type NativeVerbReason,
   type NativeVerbs
 } from '../mobile-web-shell/bridge/use-native-verbs'
-import { MOBILE_CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS } from '../session/mobile-clipboard-image-upload-chunk'
 import {
   ImageActionRefusedError,
   type ImageAction,
-  type ImageActions
+  type ImageActionRefusal,
+  type ImageActionsFor
 } from './image-actions-contract'
 
-// Whole four-character groups per chunk keep each one canonical base64 and its byte offset exact.
+// Same 512 KiB base64 chunks as attachment uploads: whole four-character groups keep each chunk canonical and its offset exact.
 async function stageInChunks(verbs: NativeVerbs, unpadded: string): Promise<number> {
   // Browsers draw unpadded data URIs, but the shell takes only canonical base64.
   const base64 = unpadded.padEnd(Math.ceil(unpadded.length / 4) * 4, '=')
-  const chunkChars = MOBILE_CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS
-  for (let start = 0; start < base64.length; start += chunkChars) {
-    await verbs.stageImage((start / 4) * 3, base64.slice(start, start + chunkChars))
+  for (const chunk of agentSessionAttachmentAppends(base64)) {
+    await verbs.stageImage(chunk.offset, chunk.contentBase64)
   }
-  const padding = base64.endsWith('==') ? 2 : base64.endsWith('=') ? 1 : 0
-  return (base64.length / 4) * 3 - padding
+  return base64DecodedByteLength(base64)
+}
+
+const REFUSALS: Partial<Record<NativeVerbReason, ImageActionRefusal>> = {
+  native_image_permission_denied: 'photos-access-denied',
+  native_media_too_large: 'too-large'
 }
 
 function refusal(error: unknown): unknown {
-  if (!(error instanceof NativeVerbError)) {
-    return error
-  }
-  if (error.reason === 'native_image_permission_denied') {
-    return new ImageActionRefusedError('photos-access-denied', error.message)
-  }
-  return error.reason === 'native_media_too_large'
-    ? new ImageActionRefusedError('too-large', error.message)
+  const reason = error instanceof NativeVerbError ? REFUSALS[error.reason] : undefined
+  return reason && error instanceof Error
+    ? new ImageActionRefusedError(reason, error.message)
     : error
 }
 
-// The shell stages one image at a time, so every action in this document waits for the one before it, even from a closed viewer.
-let previous: Promise<unknown> = Promise.resolve()
+// Reads only the header, so opening a large image does not copy its payload before a tap.
+function isRasterDataUri(uri: string): boolean {
+  const mime = /^data:([^;,]+);base64,/i.exec(uri.slice(0, 256))?.[1]
+  return isKnownRasterImageMimeType(mime)
+}
 
 // The phone cannot save an SVG; drop the ones the URL names before offering actions that would fail.
 function isWebRaster(uri: string): boolean {
   try {
     const url = new URL(uri)
-    return url.protocol === 'https:' && !/\.svgz?$/i.test(url.pathname)
+    return url.protocol === 'https:' && !isSvgFilePath(url.pathname)
   } catch {
     return false
   }
 }
 
+// The shell stages one image at a time, so every action in this document waits for the one before it, even from a closed viewer.
+let previous: Promise<unknown> = Promise.resolve()
+
 // The page holds host and inline images as base64 data URIs and stages them; the shell downloads web images itself.
 function imageAction(verbs: NativeVerbs, uri: string): ImageAction | null {
-  const data = readRasterImageDataUri(uri)
-  if (!data && !isWebRaster(uri)) {
+  const inline = isRasterDataUri(uri)
+  if (!inline && !isWebRaster(uri)) {
     return null
   }
   const act = async (operation: BridgeImageOperation) => {
+    const data = inline ? readRasterImageDataUri(uri) : null
+    if (inline && !data) {
+      throw new Error('the image has no bytes')
+    }
     try {
       const source: BridgeImageRunParams['source'] = data
         ? {
@@ -81,10 +96,10 @@ function imageAction(verbs: NativeVerbs, uri: string): ImageAction | null {
 }
 
 // Older shells lack native.image.act, so callers get null and offer no image actions.
-export function useImageActions(): ImageActions | null {
+export function useImageActions(): ImageActionsFor | null {
   const verbs = useNativeVerbs()
   return useMemo(
-    () => (verbs.canActOnImages ? { forImage: (uri) => imageAction(verbs, uri) } : null),
+    () => (verbs.canActOnImages ? (uri: string) => imageAction(verbs, uri) : null),
     [verbs]
   )
 }

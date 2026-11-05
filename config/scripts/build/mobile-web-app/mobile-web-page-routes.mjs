@@ -38,7 +38,7 @@ export const MOBILE_WEB_PAGE_ROUTES = [
   {
     pathname: '/h/[hostId]/files/[worktreeId]',
     grants: ['navigate', 'storage', 'externalLink', 'haptics', 'native.clipboard.write'],
-    // Older shells cannot open PDFs; the preview asks for an app update instead. Without native.image.act the image viewer has no actions.
+    // Older shells cannot open PDFs; the preview asks for an app update instead.
     // Match preview grants for in-document navigation; older shells render inert HTML links.
     optionalGrants: ['externalNavigation', 'native.pdf.view', 'native.image.act']
   },
@@ -81,7 +81,7 @@ export const MOBILE_WEB_PAGE_ROUTES = [
       'native.audio.read',
       'native.audio.stop'
     ],
-    // Optional media.name falls back to the file type; terminalKeyRail falls back to the page's row; without native.image.act the image viewer has no actions.
+    // Optional media.name falls back to the file type; terminalKeyRail falls back to the page's row; the image viewer drops its actions without native.image.act.
     optionalGrants: [
       'externalNavigation',
       'native.media.name',

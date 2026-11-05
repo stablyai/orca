@@ -1,7 +1,7 @@
 import { useCallback, useMemo } from 'react'
 import { Platform } from 'react-native'
 import * as Clipboard from 'expo-clipboard'
-import { Directory, File as FsFile, Paths, type FileHandle } from 'expo-file-system'
+import { File as FsFile, type Directory, type FileHandle } from 'expo-file-system'
 import { useFocusEffect, useNavigation } from 'expo-router'
 import { saveImageToPhotos, shareImage } from '../../modules/orca-mobile-web-shell/src'
 import {
@@ -16,21 +16,11 @@ import {
 import { BridgeNativeVerbRefusedError } from '../mobile-web-shell/bridge-host-errors'
 import { decodeCanonicalBase64Bytes } from '../transport/base64-byte-codec'
 import { mobileFileExtensionForMime } from './mobile-picked-file-name'
+import { freshCacheFolder } from './native-media-device'
 
 type Staged = { folder: Directory; file: FsFile; handle: FileHandle; byteLength: number }
 
 type Ready = { file: FsFile; mime: string }
-
-// A share target may still be reading the last image, so earlier ones are cleared only when the next starts.
-function freshFolder(): Directory {
-  const root = new Directory(Paths.cache, 'orca-image-actions')
-  if (root.exists) {
-    root.delete()
-  }
-  const folder = new Directory(root, `${Date.now()}-${Math.random().toString(36).slice(2)}`)
-  folder.create({ intermediates: true })
-  return folder
-}
 
 function tooLarge(): BridgeNativeVerbRefusedError {
   return new BridgeNativeVerbRefusedError('native_media_too_large', CLIPBOARD_IMAGE_TOO_LARGE_ERROR)
@@ -47,7 +37,7 @@ function namedForMime(file: FsFile, folder: Directory, mime: string): FsFile {
 }
 
 async function download(url: string): Promise<Ready> {
-  const folder = freshFolder()
+  const folder = freshCacheFolder('orca-image-actions')
   const file = await FsFile.downloadFileAsync(url, folder)
   const raster = isKnownRasterImageMimeType(file.type)
   if (!raster || file.size > CLIPBOARD_IMAGE_MAX_SOURCE_BYTES) {
@@ -62,7 +52,7 @@ function sharedUri(file: FsFile): string {
 }
 
 // Serves native.image.act for one page session: staged chunks, then one copy, save or share on the user's tap.
-export function createNativeImageActions(isFocused: () => boolean) {
+function createNativeImageActions(isFocused: () => boolean) {
   let staged: Staged | null = null
   let disposals = 0
 
@@ -85,7 +75,7 @@ export function createNativeImageActions(isFocused: () => boolean) {
     }
     if (offset === 0) {
       dropStaged()
-      const folder = freshFolder()
+      const folder = freshCacheFolder('orca-image-actions')
       const file = new FsFile(folder, 'image.bin')
       file.create({ overwrite: true })
       staged = { folder, file, handle: file.open(), byteLength: 0 }
