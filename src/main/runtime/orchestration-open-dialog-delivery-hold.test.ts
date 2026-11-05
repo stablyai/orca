@@ -7,6 +7,7 @@ import {
   createDatabase,
   createRuntime,
   insertDirectRunMessage,
+  LAUNCH_TOKEN,
   PANE_KEY,
   PTY_ID,
   TERMINAL_HANDLE,
@@ -228,5 +229,128 @@ describe('mailbox delivery into a pane awaiting the user', () => {
       '\r'
     ])
     db.close()
+  })
+
+  describe('while background work keeps an ended Claude turn open', () => {
+    const rule = '\u2500'.repeat(40)
+    function heldOpenRow(state: 'working' | 'waiting'): AgentStatusIpcPayload {
+      const now = Date.now()
+      return {
+        ...claudeHookRow(state),
+        mainAgent: { state: 'done', stateStartedAt: now },
+        providerSession: { key: 'session_id', id: 'session-1' },
+        launchToken: LAUNCH_TOKEN,
+        observation: {
+          origin: 'hook',
+          authorityId: 'host',
+          incarnation: 1,
+          revision: 1,
+          observedAt: now
+        }
+      }
+    }
+
+    // Claude lists its background agents under the composer and parks the cursor in it.
+    const composer = (draft: string): string =>
+      `${rule}\r\n\u276f ${draft}\r\n${rule}\r\n  \u23f5\u23f5 bypass permissions on \u00b7 1 shell\r\n` +
+      `  \u23fa main\r\n  \u25ef general-purpose  Running sleep 15 commands  39s\x1b[2;${draft.length + 3}H`
+
+    it.each([
+      ['a dialog paints without its hook', (): void => {}],
+      [
+        'the screen turns unreadable',
+        (runtime: ReturnType<typeof createRuntime>['runtime']): void => {
+          runtime['providerSnapshotPreferredPtys'].add(PTY_ID)
+        }
+      ]
+    ] as const)(
+      'holds Enter when, between the pointer and Enter, %s',
+      async (_label, afterDialog) => {
+        vi.useFakeTimers()
+        const db = createDatabase('orca-held-open-late-dialog-')
+        const { runtime, write } = createRuntime(db, {
+          getAgentStatusSnapshot: () => [heldOpenRow('working')],
+          checkHookAgentPresence: async () => 'live',
+          launchAgent: 'claude'
+        })
+        const run = createBoundRun(db, 'Claude Run')
+        await runtime.listTerminals()
+        runtime.onPtyData(PTY_ID, `\x1b]0;Claude Code\x07${composer('')}`, Date.now())
+        const repaint = setInterval(
+          () => runtime.onPtyData(PTY_ID, '\x1b7\x1b[6;55H40s\x1b8', Date.now()),
+          500
+        )
+        await vi.advanceTimersByTimeAsync(200)
+        insertDirectRunMessage(db, run.id, 'Worker heartbeat')
+        runtime.notifyMessageArrived(`run:${run.id}`, 'status')
+        await vi.advanceTimersByTimeAsync(100)
+        expect(write).toHaveBeenCalledTimes(1)
+        runtime.onPtyData(
+          PTY_ID,
+          `\x1b[2J\x1b[H${QUESTION_SCREEN.slice(QUESTION_SCREEN.indexOf('\x07') + 1)}`,
+          Date.now()
+        )
+        afterDialog(runtime)
+        await vi.advanceTimersByTimeAsync(10_000)
+        clearInterval(repaint)
+
+        expect(write.mock.calls.map(([, data]) => data)).toEqual([
+          expect.stringContaining('You have 1 orchestration message')
+        ])
+        db.close()
+      }
+    )
+
+    it.each([
+      ['an empty composer takes the pointer', 'working', composer(''), 2],
+      [
+        'a draft typed before an Orca restart holds it',
+        'working',
+        composer('please refactor the auth'),
+        0
+      ],
+      [
+        'a redraw with no composer on screen holds it',
+        'working',
+        '  \u23fa main\r\n  \u25ef general-purpose  Running sleep 15 commands  39s',
+        0
+      ],
+      ['an open question holds it', 'waiting', QUESTION_SCREEN, 0],
+      [
+        'a question painted before its waiting hook holds it',
+        'working',
+        QUESTION_SCREEN.slice(QUESTION_SCREEN.indexOf('\x07') + 1),
+        0
+      ]
+    ] as const)('%s', async (_label, state, screen, expectedWrites) => {
+      vi.useFakeTimers()
+      const db = createDatabase('orca-held-open-claude-delivery-')
+      const { runtime, write } = createRuntime(db, {
+        getAgentStatusSnapshot: () => [heldOpenRow(state)],
+        checkHookAgentPresence: async () => 'live',
+        launchAgent: 'claude'
+      })
+      const run = createBoundRun(db, 'Claude Run')
+      await runtime.listTerminals()
+
+      // A name-only rest title, and a background row repainting below the composer: never quiet.
+      runtime.onPtyData(PTY_ID, `\x1b]0;Claude Code\x07${screen}`, Date.now())
+      const repaint = setInterval(
+        () => runtime.onPtyData(PTY_ID, '\x1b7\x1b[6;55H40s\x1b8', Date.now()),
+        500
+      )
+      await vi.advanceTimersByTimeAsync(200)
+      insertDirectRunMessage(db, run.id, 'Worker heartbeat')
+      runtime.notifyMessageArrived(`run:${run.id}`, 'status')
+      await vi.advanceTimersByTimeAsync(10_000)
+      clearInterval(repaint)
+
+      expect(write.mock.calls.map(([, data]) => data)).toEqual(
+        expectedWrites === 0
+          ? []
+          : [expect.stringContaining('You have 1 orchestration message'), '\r']
+      )
+      db.close()
+    })
   })
 })

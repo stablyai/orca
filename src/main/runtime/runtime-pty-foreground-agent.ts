@@ -165,8 +165,16 @@ export class RuntimePtyForegroundAgent {
     if (!result || result.controller !== this.deps.getController() || !result.available) {
       return false
     }
-    const agent = result.process ? (recognizeAgentProcess(result.process)?.agent ?? null) : null
-    if (pty.foregroundAgent === agent) {
+    // Scan only a pane showing agent status: its next transition refreshes it, so a scanned identity
+    // cannot outlive the agent the way a titleless dialog's can. A transition during the scan asks again.
+    const scanStillCurrent =
+      pty.lastAgentStatus === null
+        ? null
+        : () =>
+            this.deps.getPty(ptyId) === pty &&
+            (this.refreshes.get(ptyId)?.requestedAfterTitleObservation ?? afterTitle) <= afterTitle
+    const agent = await this.recognizeRead(ptyId, result, scanStillCurrent)
+    if (agent === undefined || pty.foregroundAgent === agent) {
       return false
     }
     pty.foregroundAgent = agent
@@ -185,12 +193,24 @@ export class RuntimePtyForegroundAgent {
     if (!result || result.controller !== this.deps.getController() || !result.available) {
       return null
     }
+    return (await this.recognizeRead(ptyId, result, () => true)) ?? null
+  }
+
+  /** `scanStillCurrent` null skips the version-name scan; undefined when the scan's answer went stale. */
+  private async recognizeRead(
+    ptyId: string,
+    result: PtyForegroundProcessRead,
+    scanStillCurrent: (() => boolean) | null
+  ): Promise<TerminalAgent | null | undefined> {
     const foregroundName = result.process
     const agent = recognizeAgentProcess(foregroundName)?.agent ?? null
     // Native Claude's p_comm is its versions/<semver> binary; only a process-table scan reads its argv.
     if (agent || !foregroundName || !NATIVE_CLAUDE_VERSION_NAME.test(foregroundName)) {
       this.confirmedByPtyId.delete(ptyId)
       return agent
+    }
+    if (!scanStillCurrent) {
+      return null
     }
     const confirmed = this.confirmedByPtyId.get(ptyId)
     if (confirmed?.foregroundName === foregroundName) {
@@ -202,10 +222,10 @@ export class RuntimePtyForegroundAgent {
     }
     const confirmedAgent =
       recognizeAgentProcess(await this.confirm(result.controller, ptyId))?.agent ?? null
-    if (result.controller !== this.deps.getController()) {
-      return null
+    if (result.controller !== this.deps.getController() || !scanStillCurrent()) {
+      return undefined
     }
-    // Only a recognized agent is kept, so a "not an agent" verdict is rescanned on the next dialog.
+    // Only a recognized agent is kept, so a "not an agent" verdict is rescanned on the next read.
     if (confirmedAgent) {
       this.confirmedByPtyId.set(ptyId, { foregroundName, agent: confirmedAgent })
     }

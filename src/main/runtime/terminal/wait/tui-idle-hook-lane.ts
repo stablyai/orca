@@ -4,6 +4,7 @@ import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent
 import { hookAuthority } from '../../agent-state-rules/agent-state-rules-engine'
 import { selectFreshExplicitAgentStatusRow } from '../../workspaces/process-listing/runtime-hook-agent-row-selection'
 import { terminalHostConnectionMatches } from '../../orchestration/worker-provider-session'
+import { isAgentStatusHeldOpenByChildWork } from '../../../../shared/agent-status/lifecycle/agent-lead-status-fold'
 
 type HookTurnState = 'done' | 'working' | 'permission'
 
@@ -12,6 +13,8 @@ export type TuiIdleHookTurn = {
   state: HookTurnState
   blockedReason: RuntimeTerminalWaitBlockedReason | null
   taskWakeupPending?: true
+  /** Claude ended its own turn while its background agents or shells keep the pane working. */
+  heldByChildWork?: true
   /** When a fresh `done`'s turn has had time to paint its last frame. */
   finalFrameAt?: number
 }
@@ -93,8 +96,14 @@ export function readTuiIdleHookTurn(read: TuiIdleHookTurnRead): TuiIdleHookTurn 
   const blockedReason = read.resolveBlockedText(state, row)
   // Why the hook alone blocks: a question or custom modal paints no dialog text the arbiter knows,
   // and these hooks report its answer. Input since may have answered it before the hook arrived.
-  const taskWakeupPending =
+  const ownClaudeHookRow =
     read.agent === 'claude' &&
+    row.observation?.origin === 'hook' &&
+    row.providerSession?.key === 'session_id' &&
+    terminalHostConnectionMatches(row.connectionId, read.connectionId ?? null, read.wslDistro) &&
+    (!read.launchToken || row.launchToken === read.launchToken)
+  const taskWakeupPending =
+    ownClaudeHookRow &&
     row.state !== 'done' &&
     (row.claudeTaskWakeupPending === 'notification' ||
       (row.claudeTaskWakeupPending === 'finishing-turn' &&
@@ -102,11 +111,10 @@ export function readTuiIdleHookTurn(read: TuiIdleHookTurnRead): TuiIdleHookTurn 
           read.hasExplicitIdleTitle &&
           typeof read.titleObservedAtEpochMs === 'number' &&
           read.titleObservedAtEpochMs > (row.turnStartedAt ?? row.receivedAt)
-        ))) &&
-    row.observation?.origin === 'hook' &&
-    row.providerSession?.key === 'session_id' &&
-    terminalHostConnectionMatches(row.connectionId, read.connectionId ?? null, read.wslDistro) &&
-    (!read.launchToken || row.launchToken === read.launchToken)
+        )))
+  // Waiting or blocked child work is a dialog, so only a working row counts.
+  const heldByChildWork =
+    ownClaudeHookRow && row.state === 'working' && isAgentStatusHeldOpenByChildWork(row)
   const finalFrameAt = row.receivedAt + TURN_END_FINAL_FRAME_MS
   const finalFramePending =
     state === 'done' &&
@@ -116,11 +124,21 @@ export function readTuiIdleHookTurn(read: TuiIdleHookTurnRead): TuiIdleHookTurn 
   return {
     state,
     ...(taskWakeupPending ? { taskWakeupPending: true as const } : {}),
+    ...(heldByChildWork ? { heldByChildWork: true as const } : {}),
     ...(finalFramePending ? { finalFrameAt } : {}),
     blockedReason:
       blockedReason ??
       (state === 'permission' && !predatesInput ? 'agent-interactive-prompt' : null)
   }
+}
+
+/** Delivery only, not rest: Claude ended its own turn while background work keeps the pane working
+ *  and its screen repainting, so typed text queues in its composer though tui-idle cannot settle. */
+export function claudeHookTurnQueuesTypedInput(
+  agent: TuiAgent | null | undefined,
+  turn: TuiIdleHookTurn | null | undefined
+): boolean {
+  return agent === 'claude' && turn?.heldByChildWork === true && !turn.blockedReason
 }
 
 /** The tui-idle verdicts the hook lane can reach (a subset of `TuiIdleVerdict`). */
