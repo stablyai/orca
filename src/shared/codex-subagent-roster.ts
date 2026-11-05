@@ -9,6 +9,7 @@ import {
 import type { AgentSubagentSnapshot } from './agent-status/contracts/agent-status-subagent-snapshot'
 
 import { readCodexSubagentIdentity } from './codex-subagent-identity'
+import { usableAgentChildLabel } from './agent-status/presentation/agent-child-row-name'
 import {
   agentChildWorkLiveness,
   type AgentChildWorkLiveness
@@ -130,7 +131,7 @@ export function queueCodexSubagentIdentity(
   const child = roster.get(id)
   if (
     child &&
-    child.description === undefined &&
+    !usableAgentChildLabel(child.description) &&
     child.identityTranscriptPath !== transcriptPath &&
     child.identityMissKey !== transcriptPath
   ) {
@@ -156,6 +157,11 @@ export function retryPendingCodexSubagentIdentities(roster: CodexSubagentRoster)
   identityRetryCursors.set(roster, start + turn.length)
   let changed = false
   for (const [id, child] of turn) {
+    // A task path the parent rollout supplied meanwhile outranks the child's own header.
+    if (usableAgentChildLabel(child.description)) {
+      child.identityPendingPath = undefined
+      continue
+    }
     changed = enrichCodexSubagentIdentity(roster, id, child.identityPendingPath) || changed
   }
   return changed

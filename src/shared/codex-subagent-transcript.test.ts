@@ -24,6 +24,7 @@ import {
 } from './codex-subagent-transcript'
 import {
   codexRosterToSnapshots,
+  queueCodexSubagentIdentity,
   retryPendingCodexSubagentIdentities,
   upsertCodexSubagent,
   type CodexSubagentRoster
@@ -192,6 +193,23 @@ describe('Codex subagent transcript reconciliation', () => {
     expect(codexRosterToSnapshots(roster)).toEqual([
       expect.objectContaining({ id: CHILD_ID, agentType: 'worker', description: 'Planck' })
     ])
+  })
+
+  it('keeps a task path the parent supplied over a queued header read', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'codex-subagent-transcript-'))
+    dirs.push(dir)
+    const childPath = join(dir, `rollout-child-${CHILD_ID}.jsonl`)
+    writeFileSync(
+      childPath,
+      jsonl([{ type: 'session_meta', payload: { id: CHILD_ID, agent_nickname: 'Planck' } }])
+    )
+    const roster: CodexSubagentRoster = new Map()
+    upsertCodexSubagent(roster, CHILD_ID, { agentType: 'worker', state: 'working' }, 1234)
+    queueCodexSubagentIdentity(roster, CHILD_ID, childPath)
+    upsertCodexSubagent(roster, CHILD_ID, { description: 'pr_review', state: 'working' }, 1234)
+
+    expect(retryPendingCodexSubagentIdentities(roster)).toBe(false)
+    expect(codexRosterToSnapshots(roster)?.[0]).toMatchObject({ description: 'pr_review' })
   })
 
   it('removes a child when Codex reports it interrupted', () => {
