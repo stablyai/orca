@@ -46,7 +46,7 @@ vi.mock('child_process', async () => {
 import { main } from './index'
 import { RuntimeRpcFailureError } from './runtime-client'
 import { buildWorktree, okFixture, queueFixtures, worktreeListFixture } from './test-fixtures'
-import { useWorktreeAwarenessEnvironment } from './index-test-harness'
+import { pairRuntimeEnvironment, useWorktreeAwarenessEnvironment } from './index-test-harness'
 
 describe('orca cli worktree awareness', () => {
   useWorktreeAwarenessEnvironment({
@@ -587,6 +587,53 @@ describe('orca cli worktree awareness', () => {
       noParent: true,
       callerTerminalHandle: undefined,
       cliProvenanceRequest: {}
+    })
+  })
+
+  function mockServerCreate(capabilities: string[]): void {
+    callMock.mockImplementation(async (method: string) => {
+      if (method === 'status.get') {
+        return okFixture('req_status', { capabilities })
+      }
+      if (method === 'worktree.show') {
+        const parent = { ...buildWorktree('/tmp/repo', 'main'), instanceId: 'parent-instance' }
+        return okFixture('req_show', { worktree: parent })
+      }
+      if (method === 'worktree.lineageList') {
+        return okFixture('req_lineage', { lineage: {}, installationId: 'mac-install' })
+      }
+      return okFixture('req_create', {
+        worktree: buildWorktree('/srv/child', 'child'),
+        lineage: null,
+        warnings: []
+      })
+    })
+  }
+
+  function createParams(): Record<string, unknown> | undefined {
+    return callMock.mock.calls.find(([method]) => method === 'worktree.create')?.[1]
+  }
+
+  it('nests a create on another machine under the caller workspace with no parent flag', async () => {
+    process.env.ORCA_WORKTREE_ID = 'repo::/tmp/repo'
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    pairRuntimeEnvironment(listEnvironmentsMock, 'build-box')
+    mockServerCreate(['worktree.lineage.crossMachine'])
+
+    await main(
+      ['worktree', 'create', '--repo', 'id:srv', '--name', 'child', '--environment', 'build-box'],
+      '/tmp/repo'
+    )
+
+    expect(createParams()).toMatchObject({
+      crossStoreParent: {
+        installationId: 'mac-install',
+        workspaceKey: 'worktree:repo::/tmp/repo',
+        instanceId: 'parent-instance'
+      },
+      crossStoreParentInferredFrom: 'env-workspace',
+      noParent: false
     })
   })
 })

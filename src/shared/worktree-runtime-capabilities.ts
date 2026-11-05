@@ -51,12 +51,16 @@ export const WORKTREE_CLIENT_AUTOMATION_PROVENANCE_RUNTIME_CAPABILITY =
 export const WORKTREE_CROSS_STORE_LINEAGE_RUNTIME_CAPABILITY =
   'worktree.lineage.crossMachine' as const
 
+export function supportsCrossStoreLineage(capabilities: readonly string[] | undefined): boolean {
+  return capabilities?.includes(WORKTREE_CROSS_STORE_LINEAGE_RUNTIME_CAPABILITY) === true
+}
+
 /** Refuses before any request, so an older host never applies the rest of the change without its parent. */
 export function assertCrossStoreLineageSupported(
   capabilities: readonly string[] | undefined,
   hostLabel: string
 ): void {
-  if (!capabilities?.includes(WORKTREE_CROSS_STORE_LINEAGE_RUNTIME_CAPABILITY)) {
+  if (!supportsCrossStoreLineage(capabilities)) {
     throw new Error(
       `Update Orca on ${hostLabel} to nest workspaces under a parent on another machine. Nothing was changed.`
     )

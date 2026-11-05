@@ -71,7 +71,8 @@ export async function createRuntimeFolderWorktree(args: {
   deps: RuntimeFolderWorktreeCreateDeps
 }): Promise<CreateWorktreeResult> {
   const { request, repo, deps } = args
-  if (request.lineage?.crossStoreParent) {
+  // Inferred parents fall away here, as same-machine folder creates record none.
+  if (request.lineage?.crossStoreParent && !request.lineage.crossStoreParentInferredFrom) {
     throw new RuntimeLineageError(
       'LINEAGE_PARENT_CONTEXT_CONFLICT',
       "A folder workspace can't have a parent on another machine yet."
