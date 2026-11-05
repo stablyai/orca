@@ -41,6 +41,7 @@ describe('native chat appearance normalization', () => {
     const fromNewerVersion = {
       fontFamily: 'Georgia',
       fontSize: 18,
+      fontWeight: 500,
       codeFontSize: 16,
       width: 'wide' as const,
       contrast: 151,
@@ -58,6 +59,7 @@ describe('native chat appearance normalization', () => {
     ).toEqual({
       fontFamily: '',
       fontSize: 20,
+      fontWeight: 400,
       codeFontSize: 10,
       width: 'full',
       contrast: 100,
@@ -103,4 +105,25 @@ describe('chat contrast and terminal interface normalization', () => {
       expect(normalizeNativeChatAppearanceSettings({ contrast })).toBeUndefined()
     }
   })
+})
+
+describe('message body weight normalization', () => {
+  it.each([
+    [100, 300],
+    [300, 300],
+    [325, 300],
+    [375, 400],
+    [400, 400],
+    [475, 500],
+    [500, 500],
+    [700, 500]
+  ])('snaps %s to the readable body step %s', (fontWeight, expected) => {
+    expect(resolveNativeChatAppearanceSettings({ fontWeight }).fontWeight).toBe(expected)
+  })
+  it.each([400, Number.NaN, Number.POSITIVE_INFINITY, '500', null, undefined])(
+    'removes defaults and malformed weight %s',
+    (fontWeight) => {
+      expect(normalizeNativeChatAppearanceSettings({ fontWeight })).toBeUndefined()
+    }
+  )
 })

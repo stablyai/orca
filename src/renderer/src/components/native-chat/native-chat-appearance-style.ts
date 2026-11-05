@@ -2,7 +2,10 @@ import './native-chat-appearance.css'
 import { useMemo, type CSSProperties } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import { resolveNativeChatAppearanceSettings } from '../../../../shared/native-chat/native-chat-appearance-settings'
+import {
+  DEFAULT_NATIVE_CHAT_FONT_WEIGHT,
+  resolveNativeChatAppearanceSettings
+} from '../../../../shared/native-chat/native-chat-appearance-settings'
 import { resolveConfiguredTerminalColors } from '../../../../shared/terminal-themes/terminal-theme-selection'
 import { MATCH_TERMINAL_APP_THEME } from '../../../../shared/plugin-theme-settings'
 import { buildFontFamily } from '@/lib/monospace-font-family'
@@ -155,6 +158,7 @@ export function nativeChatAppearanceStyle(
   const codeFont = matching ? font : resolveEditorFontStack(settings)
   const style: NativeChatAppearanceStyle = {
     '--chat-font-size': `${fontSize}px`,
+    '--chat-font-weight': matching ? DEFAULT_NATIVE_CHAT_FONT_WEIGHT : appearance.fontWeight,
     '--chat-ui-font-size': `${uiFontSize}px`,
     '--chat-code-font-size': `${codeFontSize}px`,
     '--chat-content-max-width': width === 'full' ? 'none' : width === 'wide' ? '60rem' : '46rem',

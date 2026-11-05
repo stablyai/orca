@@ -14,6 +14,10 @@
   font-family: var(--chat-font-family, var(--font-sans));
 }
 
+.native-chat-appearance .native-chat-prompt-editor {
+  font-weight: var(--chat-font-weight);
+}
+
 .native-chat-markdown pre {
   font-size: var(--text-chat-code);
 }
