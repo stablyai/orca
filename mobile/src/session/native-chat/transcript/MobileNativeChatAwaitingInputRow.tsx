@@ -34,30 +34,47 @@ export function MobileNativeChatAwaitingInputRow({
   // The count stays in the label; questions are agent text, so they draw below it as chat markdown.
   const count = subject?.kind === 'questions' ? copy.questionCount : null
   const type = scaledType(typography.bodySize, fontScale)
-  const questions =
-    subject?.kind === 'question'
-      ? [subject.text]
-      : subject?.kind === 'questions' && listsQuestions
-        ? subject.questions.map((question, index) => `${index + 1}. ${question}`)
-        : null
+  const question = subject?.kind === 'question' ? subject.text : null
+  const questions = subject?.kind === 'questions' && listsQuestions ? subject.questions : null
+  const indent = { paddingLeft: ICON_SIZE * fontScale + spacing.sm }
   return (
     <>
-      <View style={styles.row} accessibilityLiveRegion={pending ? 'polite' : undefined}>
-        <MessageSquareMore
-          size={ICON_SIZE * fontScale}
-          color={colors.textMuted}
-          strokeWidth={2}
-          style={{ marginTop: 3 * fontScale }}
-        />
-        <Text selectable={INLINE_TEXT_SELECTION} style={[styles.label, type]}>
-          {label}
-          {count === null ? null : <Text style={[styles.question, type]}> {count}</Text>}
-        </Text>
+      {/* The question shares the label's live region, so a pending ask is announced whole. */}
+      <View accessibilityLiveRegion={pending ? 'polite' : undefined}>
+        <View style={styles.row}>
+          <MessageSquareMore
+            size={ICON_SIZE * fontScale}
+            color={colors.textMuted}
+            strokeWidth={2}
+            style={{ marginTop: 3 * fontScale }}
+          />
+          <Text selectable={INLINE_TEXT_SELECTION} style={[styles.label, type]}>
+            {label}
+            {count === null ? null : <Text style={[styles.question, type]}> {count}</Text>}
+          </Text>
+        </View>
+        {question === null ? null : (
+          <MobileNativeChatQuestionText
+            content={question}
+            fontSize={type.fontSize}
+            rangeSelectable
+            style={indent}
+          />
+        )}
       </View>
       {questions === null ? null : (
-        <View style={{ paddingLeft: ICON_SIZE * fontScale + spacing.sm }}>
-          {questions.map((question, index) => (
-            <MobileNativeChatQuestionText key={index} content={question} fontSize={type.fontSize} />
+        <View style={indent}>
+          {/* Numbers stay outside the agent's text so its own markdown cannot restyle them. */}
+          {questions.map((entry, index) => (
+            <View key={index} style={styles.entry}>
+              <Text style={[styles.question, type]}>{`${index + 1}.`}</Text>
+              <MobileNativeChatQuestionText
+                content={entry}
+                fontSize={type.fontSize}
+                rangeSelectable
+                style={styles.entryText}
+              />
+            </View>
           ))}
         </View>
       )}
@@ -78,5 +95,12 @@ const styles = themedStyleSheet(() => ({
   },
   question: {
     color: colors.textPrimary
+  },
+  entry: {
+    flexDirection: 'row',
+    gap: spacing.xs
+  },
+  entryText: {
+    flex: 1
   }
 }))

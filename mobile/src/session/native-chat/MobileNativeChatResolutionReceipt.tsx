@@ -85,6 +85,7 @@ export function MobileNativeChatResolutionReceipt({
                 content={heading}
                 fontSize={typography.metaSize * fontScale}
                 tone="muted"
+                rangeSelectable
               />
             ) : null}
             <Text selectable={INLINE_TEXT_SELECTION} style={text} numberOfLines={3}>

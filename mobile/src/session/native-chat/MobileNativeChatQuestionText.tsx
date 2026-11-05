@@ -4,7 +4,10 @@ import { styles as markdownStyles } from '../../components/mobile-markdown-style
 import { typography } from '../../theme/mobile-theme'
 import { MobileNativeChatMarkdown } from './MobileNativeChatMarkdown'
 
-type Props = Pick<ComponentProps<typeof MobileNativeChatMarkdown>, 'content' | 'tone'> & {
+type Props = Pick<
+  ComponentProps<typeof MobileNativeChatMarkdown>,
+  'content' | 'tone' | 'rangeSelectable'
+> & {
   /** The surface's text size; the markdown scales its own sizes to match. */
   fontSize?: number
   /** The question heads its card: larger and strong. */
@@ -18,13 +21,15 @@ export function MobileNativeChatQuestionText({
   title = false,
   tone,
   style,
-  content
+  content,
+  rangeSelectable
 }: Props): React.JSX.Element {
   const size = title ? typography.bodySize + 1 : fontSize
   return (
     <View style={style}>
       <MobileNativeChatMarkdown
         content={content}
+        rangeSelectable={rangeSelectable}
         tone={title ? 'strong' : tone}
         textScale={size / markdownStyles.paragraph.fontSize}
       />
