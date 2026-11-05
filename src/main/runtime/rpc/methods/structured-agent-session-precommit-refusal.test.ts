@@ -182,6 +182,7 @@ describe('a create refused before it commits', () => {
   it('keeps private faults out of in-process create refusals too', async () => {
     const params = createParams()
     const result = await createStructuredAgentSessionForWorktree({
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resolver throws before create can read any other runtime member.
       runtime: {
         resolveStructuredAgentSessionCreateIntent: async () => {
           throw new Error('private-in-process-sentinel')
