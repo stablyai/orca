@@ -4,9 +4,9 @@ import { join } from 'node:path'
 import { spawnProcess } from '@orca/process-host'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { readAgentProcess } from '../../shared/agent-status/process/agent-process-presence-probe'
-import type { LinuxStatEvidence } from '../daemon/daemon-incarnation-evidence-types'
-import { DaemonEndpointOwnershipError } from '../daemon/daemon-endpoint-adoption'
-import { cleanupDaemonForProtocol } from '../daemon/daemon-protocol-cleanup'
+import type { LinuxStatEvidence } from '../daemon/endpoint/identity/daemon-incarnation-evidence-types'
+import { DaemonEndpointOwnershipError } from '../daemon/launch/daemon-endpoint-adoption'
+import { cleanupDaemonForProtocol } from '../daemon/launch/daemon-protocol-cleanup'
 import {
   __setDaemonProcessTableReaderForTests,
   killAndAwaitExit,
@@ -15,7 +15,7 @@ import {
   waitForProcessExit
 } from './orcad-daemon-teardown-fixture'
 
-vi.mock('../daemon/daemon-protocol-cleanup', () => ({ cleanupDaemonForProtocol: vi.fn() }))
+vi.mock('../daemon/launch/daemon-protocol-cleanup', () => ({ cleanupDaemonForProtocol: vi.fn() }))
 
 const ZOMBIE_PARENT = `
 import os, select, sys

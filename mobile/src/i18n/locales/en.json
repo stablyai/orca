@@ -2860,7 +2860,9 @@
     },
     "sessionOptionRows": {
       "defaultMarker": "Default",
-      "notReportedMarker": "Not reported"
+      "notReportedMarker": "Not reported",
+      "moreModels": "More models",
+      "fewerModels": "Fewer models"
     },
     "sessionOptionSegments": {
       "dispatchUnconfirmed": "Sent to the agent — not confirmed"

@@ -1,6 +1,6 @@
 import { withTimeout } from '../../shared/promise-timeout-fallback'
 import type { ExternalConversationLink } from '../../shared/external-conversation-link'
-import { createLaunchedAgentWriteGuard } from '../runtime/launched-agent-write-guard'
+import { createLaunchedAgentWriteGuard } from '../runtime/terminal/wait/launched-agent-write-guard'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { interruptWorkingAgent } from '../runtime/terminal-agent-interrupt'
 import type { ConversationPrompts, PromptTerminal } from './external-conversation-prompts'

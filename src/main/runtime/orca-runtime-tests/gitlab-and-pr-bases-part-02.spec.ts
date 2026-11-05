@@ -1,23 +1,24 @@
 import * as gitExecFile from '../../git/command-runner/git-exec-file'
 import { SshHostNotServedError } from '../../providers/ssh-host-not-served-error'
 import { describe, expect, it, vi } from 'vitest'
+import './runtime-test-module-registration.spec'
 import {
   ORIGIN_HEAD_COMPONENT,
   ORIGIN_REMOTE_URL,
-  OrcaRuntimeService,
-  REVIEW_HEAD_FETCH_TIMEOUT_MS,
   getGitLabProjectRefForRemoteMock,
   getGitLabWorkItemByProjectRefMock,
   getGlabKnownHostsMock,
   getPullRequestPushTargetMock,
   setPlatform
-} from '../orca-runtime-test-mocks.spec'
+} from '../orca-runtime-test-mocks/setup.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { REVIEW_HEAD_FETCH_TIMEOUT_MS } from '../../../shared/review-head-tracking-ref'
 import {
   TEST_REPO_ID,
   TEST_REPO_PATH,
   isOriginMainBaseRefProbe,
   store
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
   it('records GitLab pasted-project recents only after successful runtime lookup', async () => {

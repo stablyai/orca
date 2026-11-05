@@ -2,7 +2,10 @@ import '../rpc/unused-default-rpc-methods.test-fixture'
 import { expect, it, vi } from 'vitest'
 import { createRuntimeAgentProjections } from '../construction/runtime-agent-projections'
 import { MIRROR_LEAVES_STEP_1 } from '../runtime-leaf-record-projection.test-fixture'
-import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from '../runtime-terminal-state-records'
+import type {
+  RuntimeLeafRecord,
+  RuntimePtyWorktreeRecord
+} from '../terminal/records/runtime-terminal-state-records'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import { RuntimeSessionTabsInventoryPublication as Census } from './session-tabs-inventory-publication'
 import { OrcaRuntimeWithCollectMobileVisibleGraphChangedWorktrees as Inventory } from './session-tabs-inventory'

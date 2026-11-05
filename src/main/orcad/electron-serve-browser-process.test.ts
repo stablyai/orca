@@ -8,8 +8,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import type * as RunProcessModule from '@orca/process-host'
 import type * as FsPromisesModule from 'node:fs/promises'
-import type { RuntimeBrowserCommandHost } from '../runtime/browser/browser-command-contracts'
-import { RuntimeBrowserPageRegistry } from '../runtime/runtime-browser-page-registry'
+import type { RuntimeBrowserCommandHost } from '../runtime/browser/commands/browser-command-contracts'
+import { RuntimeBrowserPageRegistry } from '../runtime/browser/client-pages/runtime-browser-page-registry'
 import { readRuntimeMetadataAsync } from '../runtime/runtime-metadata'
 
 const { spawnProcessMock, lockedRemovalPaths } = vi.hoisted(() => ({
@@ -48,7 +48,7 @@ import {
   createRuntimeBrowserCommands,
   runtimeBrowserCommandsFactorySupportsGoogleCookieClear,
   setRuntimeBrowserCommandsFactory
-} from '../runtime/runtime-browser-commands-factory'
+} from '../runtime/browser/installation/runtime-browser-commands-factory'
 
 vi.mock('./orcad-browser-provider', () => ({ resolveOrcadBrowserProvider: vi.fn() }))
 // The fixture's /Applications/Orca.app path would open a real macOS install park.
@@ -61,7 +61,7 @@ vi.mock('../browser/cookies/browser-cookie-import', () => ({
   importCookiesFromBrowser: async () => ({ ok: true, summary: {} })
 }))
 import { browserSessionRegistry } from '../browser/sessions/browser-session-registry'
-import { browserProfileRpcFixture } from '../runtime/browser/browser-profile-rpc-test-fixture'
+import { browserProfileRpcFixture } from '../runtime/browser/commands/browser-profile-rpc-test-fixture'
 
 const actual = await vi.importActual<typeof OrcadBrowserProviderModule>('./orcad-browser-provider')
 

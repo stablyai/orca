@@ -1,5 +1,5 @@
-import { structuredAgentHostLaunchSources } from '../runtime/structured-agent-launch-support'
-import { captureHostShellEnvironment } from '../runtime/structured-agent-shell-environment'
+import { structuredAgentHostLaunchSources } from '../runtime/agent-session/launch/structured-agent-launch-support'
+import { captureHostShellEnvironment } from '../runtime/agent-session/environment/structured-agent-shell-environment'
 import * as profileStorage from '../orca-profiles/profile-storage-paths'
 // The chat sign-in against a scripted Antigravity server.
 

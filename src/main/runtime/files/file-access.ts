@@ -24,7 +24,7 @@ import {
 } from './file-target'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 import type { FileStat } from '../../providers/filesystem-provider-contract'
-import { assertRuntimeReadWslDistroRunning } from '../runtime-wsl-background-read-gate'
+import { assertRuntimeReadWslDistroRunning } from '../integrations/git/runtime-wsl-background-read-gate'
 
 type RuntimeFileAccessHost = Pick<
   RuntimeFileCommandHost,

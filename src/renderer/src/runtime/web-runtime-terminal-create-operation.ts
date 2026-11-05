@@ -46,6 +46,7 @@ import {
 } from './web-runtime-terminal-identity'
 import { settleWebRuntimeTerminalPlacement } from './web-runtime-terminal-placement-settlement'
 import { buildPlainCreateTerminalParams } from './web-runtime-plain-terminal-create-params'
+import { agentSessionCreateRequest } from './agent-session-create-request'
 
 export async function createWebRuntimeSessionTerminalResult(
   args: CreateWebRuntimeSessionTerminalArgs
@@ -86,7 +87,11 @@ export async function createWebRuntimeSessionTerminalResult(
   try {
     const agent = args.launchAgent ?? args.agent
     const agentArgsOverride =
-      args.agentArgs !== undefined ? args.agentArgs : args.launchConfig?.agentArgs
+      args.agentArgs !== undefined
+        ? args.agentArgs
+        : args.agentSessionKind === 'resume'
+          ? args.launchConfig?.agentArgs
+          : undefined
     if (agent) {
       // Paired panes retain the default keyboard advertisement, including on Windows clients.
       const keyboardProtocol = buildDefaultTerminalOptions().vtExtensions?.kittyKeyboard
@@ -139,19 +144,13 @@ export async function createWebRuntimeSessionTerminalResult(
                       params: withAgentSessionCreateOperationId(
                         {
                           ...(await keyboardOptions(environmentId)),
-                          worktree: toRuntimeWorktreeSelector(args.worktreeId),
-                          agent,
-                          ...(args.prompt ? { prompt: args.prompt } : {}),
-                          ...(args.promptDelivery ? { promptDelivery: args.promptDelivery } : {}),
-                          ...(agentArgsOverride !== undefined
-                            ? { agentArgs: agentArgsOverride }
-                            : {}),
-                          ...(args.launchPreferences
-                            ? { launchPreferences: args.launchPreferences }
-                            : {}),
+                          ...agentSessionCreateRequest({
+                            ...args,
+                            agent,
+                            agentArgs: args.agentArgs
+                          }),
                           ...(args.cwd ? { startupCwd: args.cwd } : {}),
-                          ...(args.viewMode ? { viewMode: args.viewMode } : {}),
-                          presentation: 'background'
+                          ...(args.viewMode ? { viewMode: args.viewMode } : {})
                         },
                         clientOperationId
                       ),
@@ -167,22 +166,30 @@ export async function createWebRuntimeSessionTerminalResult(
       }>({
         environmentId,
         ...(hostAuthority ? { hostAuthority } : {}),
-        ...(resumeHostAuthorityCapability
-          ? { hostAuthorityCapability: resumeHostAuthorityCapability }
+        ...((resumeHostAuthorityCapability ?? args.agentSessionCreateCapability)
+          ? {
+              hostAuthorityCapability:
+                resumeHostAuthorityCapability ?? args.agentSessionCreateCapability
+            }
           : {}),
         legacy: async () => {
+          const legacyAgentLaunch = await args.legacyAgentLaunch?.()
+          const legacy = legacyAgentLaunch ?? args
           const response = await callEnvironment({
             method: 'session.tabs.createTerminal',
             params: {
               worktree: toRuntimeWorktreeSelector(args.worktreeId),
               afterTabId: args.afterTabId ? toHostSessionTabId(args.afterTabId) : undefined,
               targetGroupId: args.targetGroupId,
-              command: args.command,
+              ...(legacy.command ? { command: legacy.command } : {}),
               cwd: args.cwd,
-              ...(args.env ? { env: args.env } : {}),
+              ...(legacy.env ? { env: legacy.env } : {}),
               ...(args.envToDelete ? { envToDelete: args.envToDelete } : {}),
-              startupCommandDelivery: args.startupCommandDelivery,
-              ...(args.launchConfig ? { launchConfig: args.launchConfig } : {}),
+              startupCommandDelivery: legacy.startupCommandDelivery,
+              ...(legacy.launchConfig ? { launchConfig: legacy.launchConfig } : {}),
+              ...(legacyAgentLaunch?.agentPrompt
+                ? { agentPrompt: legacyAgentLaunch.agentPrompt }
+                : {}),
               ...(args.launchToken ? { launchToken: args.launchToken } : {}),
               ...(args.agent ? { agent: args.agent } : {}),
               ...(args.launchAgent ? { launchAgent: args.launchAgent } : {}),

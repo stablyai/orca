@@ -1,15 +1,16 @@
 import { describe, expect, it, vi } from 'vitest'
-import { committingSpawn } from '../bind-first-pane.test-fixture'
-import { OrcaRuntimeService } from '../orca-runtime-test-mocks.spec'
-import { createSideEffectRuntime } from '../orca-runtime-test-scenario-builders.spec'
-import type { RuntimeTerminalAgentStatusEvent } from '../orca-runtime-test-mocks.spec'
+import { committingSpawn } from './bind-first-pane.test-fixture'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { createSideEffectRuntime } from './orca-runtime-test-scenario-builders.spec'
+import type { RuntimeTerminalAgentStatusEvent } from '../runtime-terminal-contracts'
 import {
   syncSinglePty,
   TEST_WORKTREE_PATH,
   expectStablePaneKeyEnv,
-  spawnedPtyEnv,
   store
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
+import { spawnedPtyEnv } from '../spawned-pty-env-fixtures'
 
 describe('OSC 7501 program status', () => {
   it('projects split reports from a rendererless PTY into hook-yielding status events', async () => {

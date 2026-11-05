@@ -9,7 +9,7 @@ import type { AutomationsChangedPayload } from '../../shared/runtime-client-even
 import {
   createTranscriptPane,
   TRANSCRIPT_PANE_PTY_ID
-} from '../runtime/agent-transcript-pane-test-harness'
+} from '../runtime/orca-runtime-tests/agent-transcript-pane-test-harness'
 import { createRuntimeAutomationRunTerminalObserver } from './runtime-terminal-run-observer'
 import { AutomationService } from './service'
 import type {

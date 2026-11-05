@@ -1,14 +1,14 @@
+import type { PtyControllerInventory } from './runtime-pty-controller-contract'
 import { vi, type Mock } from 'vitest'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { OrchestrationError } from './orchestration/orchestration-error'
 import { RuntimeLegacyWorkerTerminalRecoveryController } from './runtime-legacy-worker-terminal-recovery-controller'
 import type {
   LegacyWorkerRecoveryCandidate,
-  LegacyWorkerRecoveryInventory,
   LegacyWorkerRecoveryOptions,
   LegacyWorkerRecoveryPorts,
   LegacyWorkerRecoveryResolution
-} from './runtime-legacy-worker-terminal-recovery-types'
+} from './orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 
 export function missingWorkspaceWorker(
   overrides: Partial<LegacyWorkerRecoveryCandidate> = {}
@@ -32,7 +32,7 @@ export function missingWorkspaceWorker(
 
 export function missingWorkspaceRecoveryFixture(
   candidates = [missingWorkspaceWorker()],
-  inventory: LegacyWorkerRecoveryInventory | null = null
+  inventory: PtyControllerInventory | null = null
 ): {
   controller: RuntimeLegacyWorkerTerminalRecoveryController
   ports: LegacyWorkerRecoveryPorts
@@ -89,7 +89,7 @@ export function missingWorkspaceRecoveryFixture(
   }
 }
 
-export function emptyLocalWorkerInventory(): LegacyWorkerRecoveryInventory {
+export function emptyLocalWorkerInventory(): PtyControllerInventory {
   return {
     livePtyIds: new Set(),
     allLivePtyIds: new Set(),

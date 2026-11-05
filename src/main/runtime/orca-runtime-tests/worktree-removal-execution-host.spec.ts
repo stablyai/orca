@@ -1,10 +1,9 @@
-import {
-  OrcaRuntimeService,
-  listWorktrees,
-  listWorktreesStrict,
-  removeWorktree
-} from '../orca-runtime-test-mocks.spec'
-import type { WorktreeMeta } from '../orca-runtime-test-mocks.spec'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { listWorktrees } from '../../git/worktrees/catalog/worktree-scan-cache'
+import { listWorktreesStrict } from '../../git/worktrees/catalog/worktree-listing'
+import { removeWorktree } from '../../git/worktrees/removal/worktree-removal'
+import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
@@ -14,8 +13,8 @@ import {
   TEST_WORKTREE_PATH,
   makeWorktreeMeta,
   store
-} from '../orca-runtime-test-fixtures.spec'
-import { createWorktreeRemovalRuntime } from '../orca-runtime-test-scenario-builders.spec'
+} from './orca-runtime-test-fixtures.spec'
+import { createWorktreeRemovalRuntime } from './orca-runtime-test-scenario-builders.spec'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { RuntimeStore } from '../runtime-store-contract'
 import type { WorktreeRemovalRecord } from '../../workspaces/removal/worktree-removal-records'
@@ -27,7 +26,7 @@ import {
   _resetPendingWorktreeRemovalsForTests,
   _settlePendingWorktreeRemovalsForTests
 } from '../../workspaces/removal/worktree-background-removal'
-import { RuntimeWorktreeRemovalInFlight } from '../runtime-worktree-removal-in-flight'
+import { RuntimeWorktreeRemovalInFlight } from '../workspaces/removal/runtime-worktree-removal-in-flight'
 import type { HostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 
 const REMOTE_REPO_PATH = '/remote/repo'

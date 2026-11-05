@@ -25,7 +25,7 @@ export const PR_BROWSER_E2E_SOURCE_ROUTES = [
     specs: ['tests/e2e/paired-client-hosted-browser-restart-survival.spec.ts'],
     matches: (file) =>
       isProductSource(file) &&
-      (file === 'src/main/runtime/browser/browser-commands.ts' ||
+      (file === 'src/main/runtime/browser/commands/browser-commands.ts' ||
         /^src\/.*(?:[Cc]lient-?[Hh]osted|browser-host-(?:lease|page|client-page)|browser-client-(?:host|page)|runtime-browser-(?:client-)?page|session-tabs-sync|host-session-snapshot-authority|orca-runtime\.ts|\/runtime-(?:status|types)\.ts)/.test(
           file
         ))
