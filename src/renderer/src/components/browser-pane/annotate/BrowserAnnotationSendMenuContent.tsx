@@ -1,5 +1,5 @@
 import React from 'react'
-import { ReviewNotesSendMenuContent } from '@/components/editor/ReviewNotesSendMenuContent'
+import { ReviewNotesSendMenuContent } from '@/components/editor/review-note-delivery/ReviewNotesSendMenuContent'
 import { DropdownMenuCheckboxItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
 import { translate } from '@/i18n/i18n'
 

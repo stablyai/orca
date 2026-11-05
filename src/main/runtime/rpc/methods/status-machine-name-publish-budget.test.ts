@@ -17,6 +17,7 @@ vi.mock('electron', () => ({
   app: { getPath: vi.fn(() => '/tmp') }
 }))
 
+const SCUTIL = '/usr/sbin/scutil'
 const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')!
 
 describe('status.get publish budget', () => {
@@ -30,11 +31,13 @@ describe('status.get publish budget', () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
     vi.useFakeTimers()
     let finishLookup: ((value: unknown) => void) | undefined
-    runProcessMock.mockImplementation(
-      () =>
-        new Promise((resolve) => {
-          finishLookup = resolve
-        })
+    // Hold only scutil; the hardware probe that shares this mock fails fast.
+    runProcessMock.mockImplementation((spec: { program: string }) =>
+      spec.program === SCUTIL
+        ? new Promise((resolve) => {
+            finishLookup = resolve
+          })
+        : Promise.resolve({ code: 1, signal: null, stdout: '', stderr: '', timedOut: false })
     )
     const runtime = new OrcaRuntimeService(partialRuntimeStore({ getSettings: () => ({}) }))
     expect(finishLookup).toBeTypeOf('function')
@@ -56,6 +59,6 @@ describe('status.get publish budget', () => {
     await expect(STATUS_METHODS[0].handler({}, { runtime })).resolves.toMatchObject({
       machineName: 'Friendly Name'
     })
-    expect(runProcessMock).toHaveBeenCalledTimes(1)
+    expect(runProcessMock.mock.calls.filter(([spec]) => spec.program === SCUTIL)).toHaveLength(1)
   })
 })

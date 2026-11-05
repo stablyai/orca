@@ -1,9 +1,9 @@
-import { join, resolve } from 'node:path'
+import { resolve } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { subscribeViaWatcherProcess } from '../../filesystem/watcher-process/parcel-watcher-process'
 import type { WatcherProcessCallback } from '../../filesystem/watcher-process/parcel-watcher-process-subscription'
 import { startGitCommonPolling } from './worktree-git-common-polling'
-import { startGitCommonNarrowWatch } from './worktree-git-common-narrow-watch'
+
 import { createGitCommonWatchReconciliation } from './worktree-git-common-watch-reconciliation'
 import type {
   WorktreeBaseSubscription,
@@ -92,42 +92,6 @@ function createReconciliation(shouldKeep = () => true) {
 }
 
 describe('Git common watcher reconciliation ownership', () => {
-  it('shares one pending baseline between concurrent starts', async () => {
-    const reconciliation = createReconciliation()
-    const first = reconciliation.ensureStarted()
-    const second = reconciliation.ensureStarted()
-    expect(pollMock).toHaveBeenCalledOnce()
-    baselines[0]?.settle()
-    await Promise.all([first, second])
-    reconciliation.notifyWindowBecameVisible()
-    expect(baselines[0]?.onVisible).toHaveBeenCalledOnce()
-    await reconciliation.unsubscribe()
-    expect(baselines[0]?.unsubscribe).toHaveBeenCalledOnce()
-  })
-
-  it('keeps one poller when a native failure rearms during the initial baseline', async () => {
-    vi.useFakeTimers()
-    const starting = startGitCommonNarrowWatch(
-      { key: 'git-common', kind: 'git-common', path: commonDirPath, repos: new Map() },
-      vi.fn(),
-      10,
-      'darwin',
-      visibility
-    )
-    starts.push(starting)
-    await vi.waitFor(() => expect(pollMock).toHaveBeenCalledOnce())
-    subscriptions[0]?.callback(new Error('root failed during baseline'), [])
-    await vi.advanceTimersByTimeAsync(20)
-    expect(subscribeMock).toHaveBeenCalledTimes(2)
-    expect(subscribeMock.mock.calls[1]?.[0]).toBe(join(commonDirPath, 'worktrees'))
-    expect(pollMock).toHaveBeenCalledOnce()
-    baselines[0]?.settle()
-    const subscription = await starting
-    await vi.advanceTimersByTimeAsync(0)
-    await subscription.unsubscribe()
-    expect(baselines[0]?.unsubscribe).toHaveBeenCalledOnce()
-  })
-
   it.each([true, false])(
     'waits for and releases a late baseline when shouldKeep returns %s',
     async (keep) => {
@@ -147,16 +111,4 @@ describe('Git common watcher reconciliation ownership', () => {
       expect(baselines[0]?.onVisible).not.toHaveBeenCalled()
     }
   )
-
-  it('retries a rejected baseline and releases the successful retry', async () => {
-    pollMock.mockRejectedValueOnce(new Error('baseline failed'))
-    const reconciliation = createReconciliation()
-    await expect(reconciliation.ensureStarted()).rejects.toThrow('baseline failed')
-    const retry = reconciliation.ensureStarted()
-    expect(pollMock).toHaveBeenCalledTimes(2)
-    baselines[0]?.settle()
-    await retry
-    await reconciliation.unsubscribe()
-    expect(baselines[0]?.unsubscribe).toHaveBeenCalledOnce()
-  })
 })

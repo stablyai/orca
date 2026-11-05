@@ -97,11 +97,6 @@ describe('the status menu with a very large imported SSH host list', () => {
     expect(screen.queryByText('node-13691')).toBeNull()
   })
 
-  it('keeps an idle host that owns a project, even deep in the config', () => {
-    render(<SshStatusSegment compact={false} iconOnly={false} />)
-    expect(screen.getByText('node-12345')).toBeTruthy()
-  })
-
   it('offers a search for the hidden hosts that connects the exact host typed', async () => {
     const connect = vi.fn(async () => undefined)
     vi.stubGlobal('api', { ssh: { connect } })

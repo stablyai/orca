@@ -3,7 +3,6 @@ import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contrac
 import type { AutomationRun } from '../../../shared/automations-types'
 import {
   collectWslMoveGateInputs,
-  listWslMovePanes,
   type WslMoveGateFactSources,
   type WslMoveLiveTerminal
 } from './wsl-move-gate-facts'
@@ -180,16 +179,5 @@ describe('collectWslMoveGateInputs', () => {
       verdict: 'blocked',
       blockers: [{ kind: 'unverifiable' }]
     })
-  })
-})
-
-describe('listWslMovePanes', () => {
-  it('lists each pane with its session, skipping terminals with no pane', () => {
-    expect(
-      listWslMovePanes(
-        sources({ listTerminals: () => [terminal(1), terminal(2, { paneKey: null })] }),
-        scope
-      )
-    ).toEqual([{ paneKey: pane(1), sessionId: 'pty-1', wslDistro: 'Ubuntu' }])
   })
 })

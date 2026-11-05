@@ -58,43 +58,48 @@ export async function dispatchPiRpcMessage(
     return exited(session.agentName)
   }
   input.onInputPreparation?.()
-  if (!input.executionOptions) {
-    input.signal?.throwIfAborted()
-    return submitPiRpcPrompt(session, input, prompt)
-  }
-  for (const key of optionWriter?.keys ?? ['model', 'effort']) {
-    const value = input.executionOptions[key]
-    if (
-      value === undefined ||
-      (!optionWriter?.alwaysWrite?.includes(key) && session.optionProof.current.get(key) === value)
-    ) {
-      continue
+  // Pi refuses prompts during a requested compaction. Wait it out, then reapply this send's
+  // options in case a pick changed them meanwhile, until none started during the option RPCs.
+  do {
+    await session.turns.compaction.waitForEnd(input.signal)
+    if (!input.executionOptions) {
+      break
     }
-    try {
-      await (optionWriter
-        ? optionWriter.write(session, key, value, input.signal)
-        : applyPiRpcSessionOption(
-            session.connection,
-            session.selected,
-            key,
-            value,
-            { signal: input.signal },
-            session.optionProof
-          ))
-    } catch (error) {
-      input.signal?.throwIfAborted()
-      if (session.connection.closed) {
-        return exited(session.agentName)
+    for (const key of optionWriter?.keys ?? ['model', 'effort']) {
+      const value = input.executionOptions[key]
+      if (
+        value === undefined ||
+        (!optionWriter?.alwaysWrite?.includes(key) &&
+          session.optionProof.current.get(key) === value)
+      ) {
+        continue
       }
-      if (error instanceof JsonlRpcResponseError) {
-        throw withProviderDiagnostic(
-          new AgentSessionOptionRejectedError(error),
-          providerDiagnostic(error.message, 'person')
-        )
+      try {
+        await (optionWriter
+          ? optionWriter.write(session, key, value, input.signal)
+          : applyPiRpcSessionOption(
+              session.connection,
+              session.selected,
+              key,
+              value,
+              { signal: input.signal },
+              session.optionProof
+            ))
+      } catch (error) {
+        input.signal?.throwIfAborted()
+        if (session.connection.closed) {
+          return exited(session.agentName)
+        }
+        if (error instanceof JsonlRpcResponseError) {
+          throw withProviderDiagnostic(
+            new AgentSessionOptionRejectedError(error),
+            providerDiagnostic(error.message, 'person')
+          )
+        }
+        throw new AgentSessionOptionRejectedError(error)
       }
-      throw new AgentSessionOptionRejectedError(error)
     }
-  }
+  } while (session.turns.compaction.running)
   input.signal?.throwIfAborted()
   if (!isCurrent() || session.connection.closed) {
     return exited(session.agentName)

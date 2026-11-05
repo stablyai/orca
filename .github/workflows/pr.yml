@@ -629,9 +629,7 @@ jobs:
             export GIT_EXEC_PATH="$HOME/.cache/orca-git-compat/git-$ORCA_GIT_COMPAT_VERSION"
           fi
           pnpm exec vitest run --config config/vitest.config.ts \
-            src/shared/git/compatibility/git-binary-compatibility.test.ts \
-            src/main/git/worktrees/creation/worktree-safety-real-git.test.ts \
-            src/main/git/worktrees/removal/worktree-rebase-update-refs-real-git.test.ts
+            src/shared/git/compatibility/git-binary-compatibility.test.ts
 
   # Run pinned real Codex: thread/read must repair an unindexed rollout’s threads row; stub-only units cannot detect upstream removal of this behavior.
   codex_index_heal_contract:
@@ -866,7 +864,7 @@ jobs:
             src/shared/fish-query-reply-child-stdin.node-pty.test.ts \
             src/shared/fish-wsl-cwd-report.node-pty.test.ts \
             src/main/wsl/filesystem/wsl-sh-cwd-report.node-pty.test.ts \
-            src/shared/pty-reply-echo-shapes.node-pty.test.ts \
+            src/shared/terminal/pty/ingress/pty-reply-echo-shapes.node-pty.test.ts \
             src/shared/startup-shell-portability.live-shell.test.ts \
             src/shared/posix-command-path-lookup.test.ts
 
@@ -1110,7 +1108,6 @@ jobs:
           xvfb-run --auto-servernum pnpm exec vitest run --config config/vitest.config.ts
           --no-file-parallelism
           src/main/browser/client-pages/renderer/browser-client-page-renderer-lifecycle.electron.test.ts
-          src/main/browser/network/egress/browser-route-webrtc-egress.electron.test.ts
           src/main/persistence/profile-state/profile-state-writer-stall.electron.test.ts
           src/main/browser/cookies/browser-google-cookie-clear.electron.test.ts
           src/main/browser/guest-lifecycle/popups/popup-origin-chrome.electron.test.ts

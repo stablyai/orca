@@ -4,7 +4,7 @@ import { basename, dirname, join } from 'node:path'
 import type { CliInstallStatus } from '../../shared/cli-install-types'
 import { isPermissionError } from '../filesystem/permission-errors'
 import { isMissingError } from './cli-install-errors'
-import { quotePosixShellDoubleQuotedApostrophe } from '../../shared/shell-argument-quoting'
+import { quotePosixShellDoubleQuotedApostrophe } from '../../shared/shell/launch/shell-argument-quoting'
 
 export type EntryIdentity = {
   dev: bigint

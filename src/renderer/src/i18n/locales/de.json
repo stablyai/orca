@@ -3741,7 +3741,6 @@
             "e8b3741ff7": "Ignoriert",
             "a9957007eb": "{{value0}} ignorieren",
             "bef0adef9b": "Branch",
-            "0b1766738a": "Repo",
             "bbb1ab6a6f": "{{value0}} auswählen",
             "b771c92598": "Ausgewählte löschen",
             "7eee951968": "Arbeitsbereiche werden durchsucht",
@@ -3750,7 +3749,6 @@
             "b2c1331844": "Inaktive Arbeitsbereiche löschen",
             "7f451a3e2c": "Bereinigungsvorschlag konnte nicht ignoriert werden",
             "662b8ec3f8": "Suche nach zu bereinigenden Arbeitsbereichen fehlgeschlagen",
-            "4d0b72481c": "Ignorieren",
             "9cc26c019d": "Entfernen",
             "0e2d235c63": "Suche in Arbeitsbereichen abgeschlossen",
             "4a35c08764": "Prüfen",
@@ -3758,9 +3756,6 @@
             "1d3503357d": "Dieses Fenster kann geschlossen und später wieder geöffnet werden, während das Löschen fortgesetzt wird.",
             "4c2990886e": "{{value0}}/{{value1}} gelöscht",
             "86ba852118": "{{value0}}, {{value1}} fehlgeschlagen",
-            "deletingCount": "Arbeitsbereiche werden gelöscht: {{value0}}",
-            "deleteCount": "Arbeitsbereiche löschen: {{value0}}?",
-            "selectedForDeletionCount": "Zum Löschen ausgewählt: {{value0}}",
             "deleteButtonCount": "{{value0}} löschen",
             "archivedStatus": "Archiviert",
             "74f6c16279": "Zurück"
@@ -3775,7 +3770,6 @@
           },
           "candidateRow": {
             "gitLabel": "Git",
-            "commitsLabel": "Commits",
             "contextLabel": "Kontext",
             "flagsLabel": "Labels",
             "collapseDetails": "Details einklappen",
@@ -4579,7 +4573,6 @@
             "5c938d39ac": "Wo.",
             "54e8d6bb2d": "Fable",
             "a79c64f87e": "Fable",
-            "c98ea88392": "Keine weiteren Konten",
             "d450654fa2": "Claude-Konto",
             "11e2354daf": "Claude-Nutzung: Laufzeitumgebung",
             "3dd7ddfae1": "Claude-Details und Kontowechsel öffnen",
@@ -6041,8 +6034,6 @@
           "expandAriaLabel": "Ausgeblendete Worktrees für {{repo}} ausklappen",
           "hiding_one": "{{count}} entdeckter Worktree ausgeblendet",
           "hiding_other": "{{count}} entdeckte Worktrees ausgeblendet",
-          "hidingInRepo_one": "{{count}} entdeckter Worktree in {{repo}} ausgeblendet",
-          "hidingInRepo_other": "{{count}} entdeckte Worktrees in {{repo}} ausgeblendet",
           "keepHiddenAriaLabel_one": "{{count}} entdeckten Worktree für {{repo}} ausgeblendet lassen; über das Projektmenü wieder einblenden",
           "keepHiddenAriaLabel_other": "{{count}} entdeckte Worktrees für {{repo}} ausgeblendet lassen; über das Projektmenü wieder einblenden",
           "keepHiddenTooltip": "Ausgeblendet lassen - über das Projektmenü wieder einblenden",
@@ -15062,9 +15053,7 @@
           "ae3b00ca82": "GitHub-Aufgaben einrichten",
           "ff92d15436": "Orca zeigt Benachrichtigungen an, wenn Agenten fertig sind oder Hilfe benötigen.",
           "b054332836": "Benachrichtigungen einrichten",
-          "04ae28d8ca": "Ein Erscheinungsbild auswählen, das auch nach Stunden noch gefällt.",
           "f396db9f20": "Vertraute Umgebung einrichten",
-          "322fc50a18": "Orca funktioniert mit jedem CLI-Agenten. Den bevorzugten Agenten auswählen. Ein Wechsel ist jederzeit möglich.",
           "198b148b3c": "Standardagenten auswählen",
           "windowsTerminalTitle": "Standardeinstellungen für Windows-Terminals festlegen",
           "windowsTerminalSubtitle": "Die Standard-Shell für neue Bereiche und das Verhalten bei Rechtsklicks im Terminal auswählen.",
@@ -18009,6 +17998,9 @@
         },
         "automationTargetAvailability": {
           "hostMismatch": "Der gespeicherte Ausführungshost stimmt nicht mehr mit dieser Projekteinrichtung überein."
+        },
+        "launchSettings": {
+          "needsFreshSession": "Agent-Starteinstellungen erfordern für jeden Durchlauf eine neue Sitzung."
         }
       },
       "agent": {
@@ -19078,7 +19070,32 @@
           "system": "An Betriebssystem anpassen",
           "dark": "Angenehm für die Augen",
           "light": "Hell & klar"
-        }
+        },
+        "looks": {
+          "activeNow": "jetzt",
+          "browsePlugins": "Plugins durchsuchen",
+          "browseThemePlugins": "Design-Plugins durchsuchen",
+          "colorMode": "Farbmodus",
+          "colorModeCaption": "Hell, dunkel oder wie dein System.",
+          "darkLook": "Dunkler Look",
+          "darkLooks": "Dunkle Looks",
+          "lightLook": "Heller Look",
+          "lightLooks": "Helle Looks",
+          "moreThemes": "Weitere Designs",
+          "next": "Weitere Looks",
+          "orcaDark": "Orca Dunkel",
+          "orcaLight": "Orca Hell",
+          "pluginsHint": "Weitere Designs gibt es als Plugins.",
+          "previous": "Vorherige Looks",
+          "showsWhenDark": "Wird angezeigt, wenn dein System dunkel ist",
+          "showsWhenLight": "Wird angezeigt, wenn dein System hell ist",
+          "slotLabel": "Zu bearbeitender Look",
+          "sourceBuiltIn": "Integriert",
+          "sourceCommunity": "Terminal-Palette",
+          "themes": "Design",
+          "themesCaption": "Optional. Geh weiter mit App-Designs und Terminal-Paletten."
+        },
+        "subtitle": "Wähle hell oder dunkel und optional ein Design. Beides kannst du jederzeit in den Einstellungen ändern."
       },
       "integrations": {
         "capabilities": {
@@ -19313,8 +19330,6 @@
       },
       "turnDiff": {
         "partial": "Teilweiser Diff",
-        "showDiff": "Diff anzeigen",
-        "hideDiff": "Diff ausblenden",
         "changedFiles_one": "{{count}} geänderte Datei",
         "changedFiles_other": "{{count}} geänderte Dateien"
       },
@@ -19830,7 +19845,6 @@
       "dismissDeliveryNotice": "Ausblenden",
       "addSelectionToChat": "Zum Chat hinzufügen",
       "messageNotSent": "Nachricht nicht gesendet",
-      "deliveryUnconfirmed": "Zustellung unbestätigt — vor erneutem Versuch den Chat prüfen",
       "messageSending": "Wird gesendet…",
       "userMessage": {
         "showFull": "Vollständige Nachricht anzeigen",
@@ -19902,8 +19916,7 @@
       "interruptedContinue": {
         "continue": "Fortfahren",
         "failed": "Dieser Chat konnte nicht fortgesetzt werden. Erneut versuchen oder eine Nachricht senden.",
-        "explanation": "Beim Fortfahren prüft der Agent zuerst, ob sein letzter Schritt abgeschlossen wurde.",
-        "unconfirmed": "Es konnte nicht bestätigt werden, ob {{agent}} „Fortfahren“ erhalten hat. Vor einem erneuten Versuch den Chat prüfen."
+        "explanation": "Beim Fortfahren prüft der Agent zuerst, ob sein letzter Schritt abgeschlossen wurde."
       },
       "antigravitySignIn": {
         "sentence": "Antigravity ist nicht angemeldet. Unter <settings>Einstellungen → Konten → Antigravity</settings> anmelden. Danach die Nachricht erneut senden."
@@ -20123,9 +20136,7 @@
         "browse": {
           "noSizes": "Es wurden noch keine Arbeitsbereichsgrößen gemessen.",
           "noSizesDescription": "Die Größen werden nach der Messung des Speicherplatzbedarfs angezeigt.",
-          "measureSizes": "Scannen",
           "measureSizesTitle": "Arbeitsbereichsgrößen erfassen",
-          "measureSizesDescription": "Speicherplatzbedarf erfassen, um Arbeitsbereiche nach Größe zu vergleichen, zu sortieren und zu filtern.",
           "sizeOnDisk": "Speicherplatzbedarf: {{value0}}",
           "checkingGitRow": "Git-Status wird geprüft",
           "searchPlaceholder": "Name, Repo, Branch, Pfad, Host suchen",
@@ -20469,6 +20480,9 @@
       },
       "nativeChat": {
         "followUpBehaviorTitle": "Folgenachrichten einreihen",
+        "scrollToLatestOnSendTitle": "Beim Senden zur neuesten Nachricht scrollen",
+        "scrollToLatestOnSendCopy": "Senden im hochgescrollten Zustand springt zur neuesten Nachricht und folgt der Antwort. Deaktiviere dies, um deine Position zu behalten.",
+        "scrollToLatestOnSendSearchPosition": "Position",
         "inlineVisualsTitle": "Eingebettete Grafiken",
         "inlineVisualsCopy": "Dem Agenten erlauben, Diagramme, Schaubilder und Mockups in seinen Antworten anzuzeigen. Gilt für neu gestartete Chats.",
         "inlineVisualsToggleLabel": "Eingebettete Grafiken umschalten",
@@ -20480,7 +20494,13 @@
         "queueSearchSteer": "Steuern",
         "shellEnvSearchVariables": "Umgebungsvariablen",
         "shellEnvSearchPath": "PATH",
-        "shellEnvSearchProxy": "Proxy"
+        "shellEnvSearchProxy": "Proxy",
+        "idleStopTitle": "Inaktive Agenten beenden nach",
+        "idleStopCopy": "Beendet den Agenten eines Chats, sobald der Chat so lange inaktiv war, um Speicher freizugeben. Der Chat bleibt erhalten, und deine nächste Nachricht startet den Agenten erneut. Wähle Nie für Agenten, die zwischen Durchgängen im Hintergrund weiterarbeiten.",
+        "idleStopSearchIdle": "idle",
+        "idleStopSearchTimeout": "Zeitlimit",
+        "idleStopSearchKeepAlive": "aktiv halten",
+        "idleStopNever": "Nie"
       }
     },
     "agentChildRow": {
@@ -20808,10 +20828,8 @@
       "offTerminal": "Lieber das Terminal? Es wird weiterhin voll unterstützt. Deine Agenten öffnen sich dort, bis du Chat wählst.",
       "onIntro": "Die Chat-Oberfläche ist nicht mehr experimentell und jetzt fester Teil von Orca. Deine Agenten öffnen sich weiterhin als Chats, mit formatierten Nachrichten, Grafiken und Bildern.",
       "onTerminal": "Auch das Terminal wird weiterhin voll unterstützt. Jeder Agent lässt sich jederzeit zurückstellen.",
-      "changeInSettings": "Jederzeit unter <link>Einstellungen → Agenten</link> ändern.",
       "stayInTerminal": "Im Terminal bleiben",
       "cta": "Chat-Oberfläche nutzen",
-      "saveFailed": "Die Chat-Oberfläche konnte nicht aktiviert werden. Unter Einstellungen → Agenten „Chat“ wählen.",
       "demoTabTitle": "Anmeldung erklären",
       "demoPrompt": "Zeig mir, wie die Anmeldung funktioniert",
       "demoReply": "Die Anmeldung beginnt in {{file}}: Der Browser sendet an /login, der Server prüft das Passwort und erstellt eine Sitzung, dann leitet er dich zur App weiter. So läuft es ab:",

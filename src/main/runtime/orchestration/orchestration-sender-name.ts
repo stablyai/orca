@@ -10,7 +10,10 @@ import type { AgentType } from '../../../shared/agent-status/contracts/agent-sta
 import { formatAgentTypeLabel } from '../../../shared/agent-status/presentation/agent-type-label'
 import { structuredChatDisplayName } from '../../../shared/structured-chat-row-name'
 import type { Tab } from '../../../shared/tab-types'
-import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
+import type {
+  TerminalLayoutSnapshot,
+  TerminalTab
+} from '../../../shared/workspace-layout/terminal-tab-types'
 import type { OrchestrationDb } from './db'
 import type { DispatchContextRow } from './types'
 import { lineageLiveSession, type AgentSessionRecordReader } from './structured-session-lineage'

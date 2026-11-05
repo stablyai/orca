@@ -59,6 +59,52 @@ describe('pending worktree creation state', () => {
     resetRemoteRuntimeMocks()
   })
 
+  it.each([false, true])(
+    'keeps composer picks when preparation publishes an older request, prior chat projection: %s',
+    (hasChatProjection) => {
+      const store = createTestStore()
+      const request = {
+        ...makePendingCreation('c1').request,
+        agent: 'codex' as const,
+        launchInputs: {
+          sessionOptions: { effort: 'high', permissionMode: 'ask' },
+          ...(hasChatProjection ? { chatSessionOptions: { effort: 'high' } } : {})
+        }
+      }
+      store.getState().beginPendingWorktreeCreation(makePendingCreation('c1', { request }))
+      store.getState().updatePendingWorktreeCreation('c1', {
+        chatSessionOptions: { effort: 'low' }
+      })
+      store.getState().updatePendingWorktreeCreation('c1', {
+        chatSessionOptions: { fastMode: 'true' }
+      })
+
+      store.getState().updatePendingWorktreeCreation('c1', {
+        request: {
+          ...request,
+          setupDecision: 'skip',
+          hookPreparation: undefined,
+          executionHostId: 'runtime:host-1',
+          launchInputs: { ...request.launchInputs, agentArgs: '--sandbox workspace-write' }
+        },
+        phase: 'creating'
+      })
+
+      const current = store.getState().pendingWorktreeCreations.c1
+      expect(current?.request).toMatchObject({
+        setupDecision: 'skip',
+        executionHostId: 'runtime:host-1',
+        launchInputs: {
+          sessionOptions: { effort: 'high', permissionMode: 'ask' },
+          agentArgs: '--sandbox workspace-write',
+          chatSessionOptions: { effort: 'low', fastMode: 'true' }
+        }
+      })
+      expect(current?.request.launchInputs?.chatSessionOptions?.model).toBeUndefined()
+      expect(current?.phase).toBe('creating')
+    }
+  )
+
   it('removePendingWorktreeCreation cleans up a provisioned-root setup and VM runtime', async () => {
     const store = createTestStore()
     const deleteProjectHostSetup = vi.mocked(store.getState().deleteProjectHostSetup)

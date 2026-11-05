@@ -19,6 +19,10 @@ export function takeBrowserAttachmentFile(token: string): File | null {
   return file
 }
 
+export function readBrowserAttachmentFile(token: string): File | null {
+  return heldFiles.get(token) ?? null
+}
+
 /** Releases whatever an attach left unclaimed (refused, abandoned, failed); other paths are ignored. */
 export function releaseBrowserAttachmentFiles(paths: readonly string[]): void {
   for (const path of paths) {

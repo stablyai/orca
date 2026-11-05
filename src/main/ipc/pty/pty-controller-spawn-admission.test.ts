@@ -11,7 +11,7 @@ import { registerPtyHandlers } from './register-handlers'
 import { clearProviderPtyState } from './provider/state-cleanup'
 import { setLocalPtyProvider } from './provider/registry'
 import { isCurrentPtyExit, restorePtyIncarnation } from './provider/ownership-state'
-import { formatTerminalStartFailure } from '../../../shared/terminal-start-failure'
+import { formatTerminalStartFailure } from '../../../shared/terminal/pty/lifecycle/terminal-start-failure'
 import { agentSessionOwners } from './pane/agent-session-owners'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))

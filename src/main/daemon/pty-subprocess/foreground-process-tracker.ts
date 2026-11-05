@@ -21,9 +21,9 @@ import {
   shouldInspectOuterWrapperForegroundName,
   shouldInspectOuterWrapperForegroundProcess
 } from '../../../shared/foreground-wrapper-agent'
-import { isShellProcess } from '../../../shared/shell-process-detection'
+import { isShellProcess } from '../../../shared/agent-status/process/shell-process-detection'
 import { resolveFallbackForegroundProcess } from './foreground-fallback-process'
-import { parsePtySessionId } from '../../../shared/pty-session-id-format'
+import { parsePtySessionId } from '../../../shared/terminal/pty/lifecycle/pty-session-id-format'
 import {
   ptyProcessNameIsSpawnFile,
   createPtyForegroundResolver,

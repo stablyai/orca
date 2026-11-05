@@ -3,7 +3,6 @@ import { PiRpcMessages } from '../pi/rpc-messages'
 import { PiRpcContextUsage } from '../pi/rpc-context-usage'
 import type { JsonlRpcRecord } from '../jsonl-rpc/peer'
 import type { ProviderTimelineEvent } from '../native-chat/agent-session-timeline/provider-timeline-event'
-import { MAX_PROVIDER_TIMELINE_OPEN_BYTES } from '../native-chat/agent-session-timeline/provider-timeline-budget'
 import { ompEditResultEvents } from './rpc-edit-results'
 import { ompTodoEvents } from './rpc-todo'
 
@@ -98,12 +97,6 @@ export class OmpRpcSubagentMessages {
       events = run.messages.tool(event)
       events.push(...ompEditResultEvents(event))
       events.push(...ompTodoEvents(event))
-    }
-    if (
-      [...this.runs.values()].reduce((bytes, each) => bytes + each.messages.retainedToolBytes, 0) >
-      MAX_PROVIDER_TIMELINE_OPEN_BYTES
-    ) {
-      throw new Error('OMP subagent transcript byte capacity exceeded')
     }
     return this.attribute(payload.id, run, events)
   }

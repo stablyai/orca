@@ -1,5 +1,5 @@
 import type { TerminalReadinessCreation } from './launched-agent-composer-readiness'
-import { isShellProcess } from '../../shared/shell-process-detection'
+import { isShellProcess } from '../../shared/agent-status/process/shell-process-detection'
 import { isExpectedAgentProcess } from '../../shared/agent-status/process/agent-process-recognition'
 import {
   createDraftPasteReadyScanner,

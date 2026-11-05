@@ -31,6 +31,7 @@ function renderModel(args: {
   fileContents?: Record<string, FileContent>
   editorDrafts?: Record<string, string>
   markdownViewMode?: Record<string, 'source' | 'rich' | 'preview'>
+  markdownDefaultViewMode?: 'source' | 'rich'
   markdownRichModeSizeOverridden?: boolean
   isChangesMode?: boolean
   gitStatusByWorktree?: Record<string, GitStatusEntry[]>
@@ -43,6 +44,7 @@ function renderModel(args: {
     gitStatusEntries: args.gitStatusByWorktree?.[activeFile.worktreeId],
     gitBranchEntries: undefined,
     markdownViewMode: args.markdownViewMode ?? {},
+    markdownDefaultViewMode: args.markdownDefaultViewMode,
     markdownRichModeSizeOverridden: args.markdownRichModeSizeOverridden ?? false,
     isChangesMode: args.isChangesMode ?? false,
     canOpenWorkspaceFileBrowser: true
@@ -295,5 +297,28 @@ describe('virtual Markdown preview PDF export', () => {
         }).canExportMarkdownToPdf
       ).toBe(false)
     }
+  })
+})
+
+describe('default Markdown view preference', () => {
+  it('opens untoggled Markdown edit tabs in the preferred view', () => {
+    expect(renderModel({}).mdViewMode).toBe('rich')
+    expect(renderModel({ markdownDefaultViewMode: 'source' }).mdViewMode).toBe('source')
+  })
+
+  it('keeps a per-tab toggle over the preference', () => {
+    const model = renderModel({
+      markdownDefaultViewMode: 'source',
+      markdownViewMode: { '/repo/README.md': 'rich' }
+    })
+    expect(model.mdViewMode).toBe('rich')
+  })
+
+  it('leaves Markdown diffs on Source regardless of the preference', () => {
+    const model = renderModel({
+      activeFile: markdownFile({ mode: 'diff', diffSource: 'unstaged' }),
+      markdownDefaultViewMode: 'rich'
+    })
+    expect(model.mdViewMode).toBe('source')
   })
 })

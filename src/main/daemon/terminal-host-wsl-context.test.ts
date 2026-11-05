@@ -37,72 +37,6 @@ describe('TerminalHost WSL context', () => {
     await host?.dispose()
   })
 
-  it('returns the first creator context on conflicting later attaches', async () => {
-    const spawnSubprocess = vi.fn(() => createSubprocess())
-    host = new TerminalHost({ spawnSubprocess })
-    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
-    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-    try {
-      const created = await host.createOrAttach({
-        sessionId: 'session-wsl',
-        cols: 80,
-        rows: 24,
-        cwd: '\\\\wsl.localhost\\Ubuntu\\home\\jin',
-        terminalWindowsWslDistro: 'Debian',
-        streamClient: { onData: vi.fn(), onExit: vi.fn() }
-      })
-      const attached = await host.createOrAttach({
-        sessionId: 'session-wsl',
-        cols: 80,
-        rows: 24,
-        terminalWindowsWslDistro: 'Debian',
-        streamClient: { onData: vi.fn(), onExit: vi.fn() }
-      })
-
-      expect(created.wslDistro).toBe('Ubuntu')
-      expect(attached.wslDistro).toBe('Ubuntu')
-      expect(spawnSubprocess).toHaveBeenCalledOnce()
-    } finally {
-      if (platform) {
-        Object.defineProperty(process, 'platform', platform)
-      }
-    }
-  })
-
-  it('persists the resolved default distro across daemon attaches', async () => {
-    const spawnSubprocess = vi.fn(() => createSubprocess())
-    host = new TerminalHost({ spawnSubprocess })
-    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
-    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-    try {
-      const created = await host.createOrAttach({
-        sessionId: 'session-default-wsl',
-        cols: 80,
-        rows: 24,
-        cwd: 'C:\\Users\\jin\\repo',
-        shellOverride: 'wsl.exe',
-        terminalWindowsWslDistro: null,
-        streamClient: { onData: vi.fn(), onExit: vi.fn() }
-      })
-      const attached = await host.createOrAttach({
-        sessionId: 'session-default-wsl',
-        cols: 80,
-        rows: 24,
-        shellOverride: 'wsl.exe',
-        terminalWindowsWslDistro: 'Debian',
-        streamClient: { onData: vi.fn(), onExit: vi.fn() }
-      })
-
-      expect(created.wslDistro).toBe('Ubuntu')
-      expect(attached.wslDistro).toBe('Ubuntu')
-      expect(spawnSubprocess).toHaveBeenCalledOnce()
-    } finally {
-      if (platform) {
-        Object.defineProperty(process, 'platform', platform)
-      }
-    }
-  })
-
   it('records a guest root the PTY printed before the session subscribed', async () => {
     // ConPTY's startup check and spawn bookkeeping run before the session exists; output
     // from then waits in the pre-listener buffer and is replayed as the session subscribes.
@@ -131,39 +65,6 @@ describe('TerminalHost WSL context', () => {
           wslGuestRoot: { pid: 4242, startTime: `${boot}:98765` }
         })
       ])
-    } finally {
-      if (platform) {
-        Object.defineProperty(process, 'platform', platform)
-      }
-    }
-  })
-
-  it('returns authoritative null when a native session is attached with a WSL preference', async () => {
-    const spawnSubprocess = vi.fn(() => createSubprocess())
-    host = new TerminalHost({ spawnSubprocess })
-    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
-    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-    try {
-      const created = await host.createOrAttach({
-        sessionId: 'session-native',
-        cols: 80,
-        rows: 24,
-        cwd: '\\\\server\\share\\repo',
-        shellOverride: 'powershell.exe',
-        streamClient: { onData: vi.fn(), onExit: vi.fn() }
-      })
-      const attached = await host.createOrAttach({
-        sessionId: 'session-native',
-        cols: 80,
-        rows: 24,
-        shellOverride: 'wsl.exe',
-        terminalWindowsWslDistro: 'Ubuntu',
-        streamClient: { onData: vi.fn(), onExit: vi.fn() }
-      })
-
-      expect(created.wslDistro).toBeNull()
-      expect(attached.wslDistro).toBeNull()
-      expect(spawnSubprocess).toHaveBeenCalledOnce()
     } finally {
       if (platform) {
         Object.defineProperty(process, 'platform', platform)

@@ -5,7 +5,7 @@ import { findKnownWorktreeById } from './detected-worktree-meta'
 import {
   makeFolderWorkspace,
   makeProjectGroup
-} from '../../../../components/sidebar/folder-workspace-composer-submit-fixtures'
+} from '../../../../components/sidebar/workspace-creation/folder/folder-workspace-composer-submit-fixtures'
 import { findFolderWorkspaceOwner } from '@/lib/folder-workspace-runtime-owner'
 import { selectWorkspaceByHostTarget } from '../../../workspace-record-selectors'
 import { resolveWorkspaceDirectory } from '@/lib/workspace-directory'

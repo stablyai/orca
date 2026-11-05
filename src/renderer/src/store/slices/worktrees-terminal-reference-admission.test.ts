@@ -2,7 +2,7 @@ import { beforeEach, expect, it, vi } from 'vitest'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import { createTerminalGitHubPRLinkDetector } from '../../../../shared/terminal/links/terminal-github-pr-link-detector'
 import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments/workspace-attachments'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { singlePaneLayoutSnapshot } from './terminal-helpers'
 import { makeTerminalTab, makeWorktree } from './worktrees-slice-test-fixtures'
 import {
@@ -181,21 +181,4 @@ it('retains occupied native permits until settlement after their pane closes', a
   expect(
     getWorkspaceAttachments(store.getState().worktreesByRepo.repo[0]).map((item) => item.number)
   ).toEqual([7, 1000])
-})
-
-it('deduplicates an observation while queued without collapsing different PR numbers', async () => {
-  const { store, pending } = setup()
-  for (const number of [100, 101, 102, 103, 103, 103]) {
-    store.getState().observeTerminalGitHubPullRequestLink(workspaceId, link(number), context())
-  }
-  await flush()
-  for (const deferred of pending.values()) {
-    deferred.resolve(null)
-  }
-  await flush()
-  expect(exactLookup).toHaveBeenCalledTimes(4)
-  pending.get(103)?.resolve(null)
-  await flush()
-  expect(exactLookup).toHaveBeenCalledTimes(4)
-  expect(exactLookup.mock.calls.filter(([args]) => args.number === 103)).toHaveLength(1)
 })

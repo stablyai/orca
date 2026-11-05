@@ -38,6 +38,32 @@ export function codexThreadGoalRequests(
   ]
 }
 
+/** After Codex refuses a status change, whether it had no goal to change; unknown counts as a goal. */
+async function codexThreadGoalMissing(
+  session: Pick<CodexSession, 'connection' | 'threadId'>,
+  timeoutMs: number | undefined
+): Promise<boolean> {
+  try {
+    const read = await session.connection.request(
+      'thread/goal/get',
+      { threadId: session.threadId },
+      { timeoutMs }
+    )
+    return typeof read === 'object' && read !== null && 'goal' in read && read.goal === null
+  } catch {
+    return false
+  }
+}
+
+function readCodexClearedFlag(response: unknown): boolean | undefined {
+  return typeof response === 'object' &&
+    response !== null &&
+    'cleared' in response &&
+    typeof response.cleared === 'boolean'
+    ? response.cleared
+    : undefined
+}
+
 export async function changeCodexThreadGoal(
   session: Pick<CodexSession, 'connection' | 'threadId'>,
   change: AgentSessionThreadGoalChange,
@@ -49,11 +75,26 @@ export async function changeCodexThreadGoal(
   try {
     for (const request of codexThreadGoalRequests(session.threadId, change, replacesGoal)) {
       throwIfSignalAborted(signal)
-      await session.connection.request(request.method, request.params, { timeoutMs })
+      const response = await session.connection.request(request.method, request.params, {
+        timeoutMs
+      })
+      // A clear on its own reports whether a goal existed; Codex says nothing else when none did.
+      if (change.kind === 'clear' && readCodexClearedFlag(response) === false) {
+        return { ok: false, rejected: AGENT_SESSION_GOAL_CONTROL_COPY.noGoal }
+      }
       cleared ||= request.method === 'thread/goal/clear'
     }
   } catch (error) {
     if (isCodexAppServerRequestError(error)) {
+      // Codex words a missing goal with internal ids; say it in the user's terms instead.
+      if (change.kind === 'status') {
+        throwIfSignalAborted(signal)
+        const missing = await codexThreadGoalMissing(session, timeoutMs)
+        throwIfSignalAborted(signal)
+        if (missing) {
+          return { ok: false, rejected: AGENT_SESSION_GOAL_CONTROL_COPY.noGoal }
+        }
+      }
       return {
         ok: false,
         rejected: cleared

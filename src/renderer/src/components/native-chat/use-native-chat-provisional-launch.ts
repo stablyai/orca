@@ -1,16 +1,19 @@
-import { useCallback, useMemo, useState, useSyncExternalStore } from 'react'
+import { restorePersistedStructuredLaunchState } from '@/lib/agent-session/launch/structured-agent-session-launch-reload'
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
+import { getStructuredAgentSessionLaunchSelection } from '../../lib/agent-session/launch/structured-agent-session-launch-options'
 import {
-  getStructuredAgentSessionLaunchResumes,
   subscribeStructuredAgentLaunchStatus,
+  structuredAgentSessionLaunchHasRetainedInput,
+  getStructuredLaunchStateBySessionId,
+  getStructuredAgentSessionLaunchResumes,
   useStructuredAgentSessionLaunchFailure,
   useStructuredAgentSessionLaunchLifecycle
 } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
+import { relaunchFailedStructuredAgentSessionWithMessage } from '../../lib/agent-session/launch/structured-agent-session-launch-message'
 import {
   relaunchFailedStructuredAgentSessionForMessage,
   retryStructuredAgentSessionLaunch
 } from '@/lib/agent-session/launch/structured-agent-session-launch'
-import { getStructuredAgentSessionLaunchSelection } from '@/lib/agent-session/launch/structured-agent-session-launch-options'
-import { relaunchFailedStructuredAgentSessionWithMessage } from '@/lib/agent-session/launch/structured-agent-session-launch-message'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 
 export type StructuredAgentSessionLaunchView = {
@@ -88,7 +91,14 @@ export function useNativeChatProvisionalLaunch(
   worktreeId: string | null | undefined,
   sessionId: string
 ) {
-  const lifecycle = useStructuredAgentSessionLaunchLifecycle(worktreeId ?? '', sessionId)
+  const rawLifecycle = useStructuredAgentSessionLaunchLifecycle(worktreeId ?? '', sessionId)
+  const retainedInput = structuredAgentSessionLaunchHasRetainedInput(worktreeId ?? '', sessionId)
+  const lifecycle = retainedInput ? null : rawLifecycle
+  useEffect(() => {
+    if (worktreeId && retainedInput && !getStructuredLaunchStateBySessionId(sessionId)) {
+      restorePersistedStructuredLaunchState(worktreeId, sessionId)
+    }
+  }, [worktreeId, sessionId, retainedInput])
   const failure = useStructuredAgentSessionLaunchFailure(worktreeId ?? '', sessionId)
   const launch = useLaunchView(sessionId, worktreeId, lifecycle !== null)
   const retry = useCallback(() => {
@@ -98,14 +108,18 @@ export function useNativeChatProvisionalLaunch(
   }, [sessionId, worktreeId])
   const starting = lifecycle === 'pending' || lifecycle === 'visibility-unknown'
   const sendThroughLaunch = useCallback(
-    (text: string, withImages: boolean, send: () => boolean | 'queued'): boolean | 'queued' => {
+    (
+      text: string,
+      requiresSession: boolean,
+      send: () => boolean | 'queued'
+    ): boolean | 'queued' => {
       if (starting) {
         return false
       }
       if (lifecycle !== 'failed' || !worktreeId) {
         return send()
       }
-      if (!withImages && text.trim()) {
+      if (!requiresSession && text.trim()) {
         return relaunchFailedStructuredAgentSessionWithMessage(worktreeId, sessionId, text) !== null
       }
       relaunchFailedStructuredAgentSessionForMessage(worktreeId, sessionId)

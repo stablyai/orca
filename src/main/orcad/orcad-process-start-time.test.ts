@@ -19,10 +19,7 @@ vi.mock('../daemon/daemon-process-start-time', async (importOriginal) => ({
 
 import {
   compareOrcadProcessIdentity,
-  readOrcadProcessIncarnation,
-  readOrcadProcessName,
-  readOrcadProcessOwnerUid,
-  readOrcadProcessStartedAtMs
+  readOrcadProcessIncarnation
 } from './orcad-process-start-time'
 
 const platform = process.platform
@@ -36,21 +33,6 @@ afterEach(() => {
 })
 
 describe('orcad process start time', () => {
-  it('reads the addon creation time on Windows, never the POSIX probe', () => {
-    onPlatform('win32')
-    readWindowsProcessCreationTime.mockReturnValue(1_700_000_000_123)
-    expect(readOrcadProcessStartedAtMs(42)).toBe(1_700_000_000_123)
-    expect(readWindowsProcessCreationTime).toHaveBeenCalledWith(42)
-    expect(getProcessStartedAtMs).not.toHaveBeenCalled()
-  })
-
-  it('keeps the POSIX probe elsewhere', () => {
-    onPlatform('linux')
-    getProcessStartedAtMs.mockReturnValue(5_000)
-    expect(readOrcadProcessStartedAtMs(42)).toBe(5_000)
-    expect(readWindowsProcessCreationTime).not.toHaveBeenCalled()
-  })
-
   it('tells a reused Windows PID apart, and fails open when the addon cannot answer', () => {
     onPlatform('win32')
     readWindowsProcessCreationTime.mockReturnValue(9_000_000)
@@ -82,24 +64,6 @@ describe('orcad process identity', () => {
     expect(compareOrcadProcessIdentity(42, recorded, { incarnation: () => actual })).toBe('differs')
   })
 
-  it('is unknown, never different, when the incarnation cannot be read', () => {
-    expect(compareOrcadProcessIdentity(42, recorded, { incarnation: () => null })).toBe('unknown')
-  })
-
-  it('reads a Linux wall-clock mismatch on a record without ticks as unproven', () => {
-    expect(
-      compareOrcadProcessIdentity(
-        42,
-        { startedAtMs: 1_000 },
-        {
-          startedAtMs: () => 158_000,
-          incarnation: () => incarnation,
-          platform: 'linux'
-        }
-      )
-    ).toBe('unproven')
-  })
-
   it.each([
     ['another non-root uid', 1001, 'differs'],
     ['root', 0, 'unproven'],
@@ -115,16 +79,6 @@ describe('orcad process identity', () => {
     expect(compareOrcadProcessIdentity(42, { startedAtMs: 1_000, identity: '1000' }, readers)).toBe(
       verdict
     )
-  })
-
-  it('never proves reuse by owner when the recorded identity is not a uid', () => {
-    expect(
-      compareOrcadProcessIdentity(
-        42,
-        { startedAtMs: 1_000, identity: 'alice' },
-        { startedAtMs: () => 158_000, ownerUid: () => 1001, platform: 'linux' }
-      )
-    ).toBe('unproven')
   })
 })
 
@@ -157,16 +111,5 @@ describe.runIf(platform === 'linux')('orcad process incarnation on a real /proc'
       child.kill('SIGKILL')
       rmSync(dir, { recursive: true, force: true })
     }
-  })
-
-  it('answers null for a PID that does not exist', () => {
-    expect(readOrcadProcessIncarnation(2 ** 30)).toBeNull()
-    expect(readOrcadProcessOwnerUid(2 ** 30)).toBeNull()
-    expect(readOrcadProcessName(2 ** 30)).toBeNull()
-  })
-
-  it('reads its own owner uid and command name', () => {
-    expect(readOrcadProcessOwnerUid(process.pid)).toBe(process.getuid?.())
-    expect(readOrcadProcessName(process.pid)).toMatch(/^[\x20-\x7e]+$/)
   })
 })

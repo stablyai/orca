@@ -306,13 +306,16 @@ it('continues ahead of a failure-held card, which drains only after the continua
 it('reuses the status projection and does not cold replay disabled sweeps', async () => {
   const { current, sweep, journal } = await setup()
   const snapshot = vi.spyOn(journal, 'snapshot')
+  const status = vi.spyOn(journal, 'statusRead')
   sweep.readState(SESSION)
   sweep.readState(SESSION)
   expect(snapshot).not.toHaveBeenCalled()
+  expect(status).not.toHaveBeenCalled()
   current.host.publishWorkChanged(SESSION)
-  expect(snapshot).toHaveBeenCalledOnce()
+  expect(status).toHaveBeenCalledOnce()
   sweep.readState(SESSION)
-  expect(snapshot).toHaveBeenCalledOnce()
+  expect(status).toHaveBeenCalledOnce()
+  expect(snapshot).not.toHaveBeenCalled()
   const sessions = current.host.collaboratorsForTests().sessions
   const held = sessions.get(SESSION)!
   sessions.delete(SESSION)

@@ -5,7 +5,7 @@
  * restores, and its terminals and editors now live on the host.
  */
 import type { Tab, TabGroup } from '../../../shared/tab-types'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 
 function isChatTab(tab: Pick<Tab, 'contentType'>): boolean {
   return tab.contentType === 'agent-session'

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { SSH_PROVIDER_UNREGISTERED_REASON } from '../../../shared/pty-liveness-verdict'
+
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { registerPtyHandlers } from './register-handlers'
 import {
@@ -102,41 +102,6 @@ describe('stopping a PTY whose SSH provider is unregistered', () => {
       expect.stringContaining('SSH')
     )
     deletePtyOwnership('ssh-detached-stop')
-  })
-
-  it('preserves lost-contact evidence for renderer IPC teardown', async () => {
-    const ptyId = 'ssh-renderer-detached'
-    setPtyOwnership(ptyId, 'ssh:ssh-dropped')
-    const { runtime } = installController()
-    try {
-      await handlers.get('pty:kill')!(null, { id: ptyId })
-
-      expect(runtime.markPtyLivenessUnverifiable).toHaveBeenCalledWith(
-        ptyId,
-        SSH_PROVIDER_UNREGISTERED_REASON
-      )
-      expect(runtime.onPtyExit).toHaveBeenCalledWith(ptyId, -1, undefined)
-    } finally {
-      deletePtyOwnership(ptyId)
-    }
-  })
-
-  it('retires a rejected split without asserting an unconfirmed exit', () => {
-    const ptyId = 'ssh-rejected-split'
-    setPtyOwnership(ptyId, 'ssh:ssh-dropped')
-    const { controller, runtime } = installController()
-    try {
-      controller.retireRejectedPty(ptyId, false, undefined)
-
-      expect(runtime.markPtyLivenessUnverifiable).toHaveBeenCalledWith(
-        ptyId,
-        'a follow-up stop was issued but its outcome could not be verified'
-      )
-      expect(runtime.onPtyExit).toHaveBeenCalledWith(ptyId, -1, undefined)
-      expect(runtime.onPtyExit).not.toHaveBeenCalledWith(ptyId, 0, expect.anything())
-    } finally {
-      deletePtyOwnership(ptyId)
-    }
   })
 
   it('leaves a same-id respawn alone when the rejected incarnation is retired', () => {

@@ -206,7 +206,7 @@ it('serializes the captured draft before structured and PTY sends', async () => 
     'pty-left',
     wire
   ])
-  expect(optimistic).toHaveBeenCalledExactlyOnceWith(wire, [])
+  expect(optimistic).toHaveBeenCalledExactlyOnceWith(wire, [], false)
 })
 
 it('writes only revalidated split bytes, sanitizing controls without Enter and surfacing rejected acceptance', async () => {
@@ -276,7 +276,7 @@ it('captures projected identity once for real typed-goal dispatch and Goal mode'
   expect(expected).not.toContain('\n')
   expect(expected).toContain('message it with orca orchestration send --to')
   expect(expected.match(/@Same name \(2\)/g)).toHaveLength(1)
-  const setObjective = vi.fn(async () => true)
+  const setObjective = vi.fn(async (_objective: string) => true)
   const structured = transport()
   structured.threadGoal = { setObjective }
   structured.dispatchCommand = (text) =>
@@ -284,7 +284,7 @@ it('captures projected identity once for real typed-goal dispatch and Goal mode'
       snapshot: [],
       invokeAction: async () => true,
       setOption: async () => true,
-      setThreadGoalObjective: setObjective
+      changeThreadGoal: (change) => setObjective(change.kind === 'set' ? change.objective : '')
     })
   structured.capturePresentation = () => {
     updateNativeChatComposerDraft(

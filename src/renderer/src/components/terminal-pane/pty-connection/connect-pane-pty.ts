@@ -10,10 +10,10 @@ import type { PtyConnectionDeps } from '../pty-connection-types'
 import { registerTerminalPaneRecoveryInstance } from '../terminal-pane-recovery'
 import { captureTabRecoveryGeneration } from '@/store/terminals/terminal-tab-recovery-ledger'
 import { TerminalIdleCursorReset } from '../terminal-idle-cursor-reset'
-import { TerminalResumeEscapeGap } from '../terminal-resume-escape-gap'
+import { TerminalStreamPosition } from '../terminal-stream-position'
 import { writeTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import { createTerminalStructuralReplayCoordinator } from '@/lib/pane-manager/terminal-structural-replay-coordinator'
-import { makePaneKey } from '../../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import type { AgentType } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import { resolveCommittedTitleAgentType } from '@/lib/pane-agent-evidence'
 
@@ -122,7 +122,8 @@ export function connectPanePty(
   }
   // Idle callbacks precede deferred setup; switch from the shared scheduler to the PTY writer to preserve hidden-byte ordering and recovery.
   session.idleCursorReset = new TerminalIdleCursorReset()
-  session.resumeEscapeGap = new TerminalResumeEscapeGap()
+  session.streamPosition = new TerminalStreamPosition()
+  session.skippedQueryCarry = null
   session.queueAgentIdleTerminalModeReset = (): void => {
     if (session.disposed) {
       return

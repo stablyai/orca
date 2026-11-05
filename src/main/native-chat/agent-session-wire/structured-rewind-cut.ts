@@ -33,7 +33,7 @@ export function structuredRewindCut(
   journal: AgentSessionJournal,
   target: { itemId: string; provider: string; nativeId: string }
 ): StructuredRewindCut | null {
-  const snapshot = journal.snapshot()
+  const snapshot = journal.currentRead()
   const floor = journal.context.floor()
   const items = floor
     ? snapshot.items.filter((item) => item.sequence > floor.sequence)
@@ -126,7 +126,7 @@ export function structuredRewindCut(
 
 /** Admission only; already-saved rewinds complete even if their target is no longer eligible. */
 export function isStructuredRewindTarget(journal: AgentSessionJournal, itemId: string): boolean {
-  const item = journal.snapshot().items.find((row) => row.itemId === itemId)
+  const item = journal.currentRead().items.find((row) => row.itemId === itemId)
   return (
     item !== undefined &&
     isAgentSessionRewindTarget(
@@ -163,7 +163,9 @@ function lastListedTurn(
 }
 
 export function providerItemIdOf(journal: AgentSessionJournal, itemId: string): string {
-  return savedRewindKeys(journal.snapshot().submissions).providerKey(itemId)
+  return savedRewindKeys(
+    [journal.inputOrder.inputForItem(itemId)].flatMap((input) => (input ? [input] : []))
+  ).providerKey(itemId)
 }
 
 /** Child rows belong to their enclosing main turn, never their child-thread turn ID. */

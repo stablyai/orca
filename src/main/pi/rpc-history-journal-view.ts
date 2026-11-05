@@ -1,8 +1,5 @@
 import { z } from 'zod'
-import {
-  agentJournalSubmissionKey,
-  parseAgentJournalItemKey
-} from '../../shared/agent-session/journal/agent-session-journal-item-key'
+import { parseAgentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import { isQueuedAgentJournalSubmission } from '../../shared/agent-session/requests/agent-session-queued-submission'
 import type { StructuredAgentSessionHistoryJournal } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 
@@ -48,12 +45,6 @@ export function readPiHistoryJournalView(
   agent = 'pi'
 ): PiHistoryJournalView {
   const accounted = new Set<string>()
-  const submissions = journal.submissions()
-  const queued = new Set(
-    submissions
-      .filter(isQueuedAgentJournalSubmission)
-      .map((submission) => agentJournalSubmissionKey(submission.clientMessageId))
-  )
   let hasRows = false
   let ownWorkSequence = 0
   journal.visitItems((itemId, sequence, body) => {
@@ -69,18 +60,18 @@ export function readPiHistoryJournalView(
     }
     if (
       body.kind === 'turn' ||
-      (identity?.provider === 'orca' && body.kind === 'message' && !queued.has(itemId))
+      (identity?.provider === 'orca' &&
+        body.kind === 'message' &&
+        !(
+          journal.inputOrder.inputForItem(itemId) &&
+          isQueuedAgentJournalSubmission(journal.inputOrder.inputForItem(itemId)!)
+        ))
     ) {
       ownWorkSequence = Math.max(ownWorkSequence, sequence)
     }
   })
   // A prompt Pi accepted before its turn row landed still counts from its acceptance.
-  for (const submission of submissions) {
-    const receipt = journal.receiptFor(submission.clientMessageId)
-    if (receipt?.cursor.epoch === journal.epoch) {
-      ownWorkSequence = Math.max(ownWorkSequence, receipt.cursor.sequence)
-    }
-  }
+  ownWorkSequence = Math.max(ownWorkSequence, journal.inputOrder.latestReceiptSequence())
   const cursor = journal.cursor()
   return { epoch: cursor.epoch, sequence: cursor.sequence, hasRows, accounted, ownWorkSequence }
 }

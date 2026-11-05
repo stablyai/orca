@@ -80,13 +80,26 @@ function discardEntryInBackground(entry: PreparationEntry): void {
   trackPreparationDiscard(worktreePreparationGit.run(() => discardPreparationEntry(entry)))
 }
 
-function expireEntry(entry: PreparationEntry): void {
-  if (preparations.get(entry.key) !== entry) {
-    return
-  }
+function evictEntry(entry: PreparationEntry): void {
   preparations.delete(entry.key)
+  clearTimeout(entry.expiration)
   entry.controller.abort()
   discardEntryInBackground(entry)
+}
+
+function expireEntry(entry: PreparationEntry): void {
+  if (preparations.get(entry.key) === entry) {
+    evictEntry(entry)
+  }
+}
+
+/** A removed project has no create left to claim its armed checkouts. */
+export function discardRepoPreparations(repoPathKey: string): void {
+  for (const entry of preparations.values()) {
+    if (entry.repoPathKey === repoPathKey) {
+      evictEntry(entry)
+    }
+  }
 }
 
 /** Bound full-checkout disk use, evicting the requesting workspace's oldest preparation first. */
@@ -107,10 +120,7 @@ function enforcePreparationLimit(
     if (!victim) {
       return
     }
-    preparations.delete(victim.key)
-    clearTimeout(victim.expiration)
-    victim.controller.abort()
-    discardEntryInBackground(victim)
+    evictEntry(victim)
   }
 }
 

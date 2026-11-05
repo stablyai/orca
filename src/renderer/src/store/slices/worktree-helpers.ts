@@ -6,7 +6,7 @@ import type {
   CreatedWorktreeResult
 } from './worktrees/create/worktree-create-payload'
 import type { WorktreeCatalogVersion } from '../../../../shared/worktree/catalog-version'
-import type { WorkspaceKey } from '../../../../shared/folder-workspaces/folder-workspace-types'
+import type { WorkspaceKey } from '../../../../shared/workspace-scope'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../../shared/workspace-source'
 import type {
@@ -31,7 +31,7 @@ import type {
 import type { WorktreeRemovalTarget } from '../../../../shared/worktree/removal'
 import type { TerminalGitHubPRLink } from '../../../../shared/terminal/links/terminal-github-pr-link-detector'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
-import type { TerminalPaneRecoveryOutcome } from '../../../../shared/terminal-tab-types'
+import type { TerminalPaneRecoveryOutcome } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type {
   TerminalRecoveryRemountRequest,
   TerminalRecoveryRemountResult
@@ -195,10 +195,13 @@ export type WorktreeSlice = {
       error?: string
       loaderVisible?: boolean
       request?: PendingWorktreeCreation['request']
+      chatSessionOptions?: Readonly<Record<string, string>>
       provisioningLog?: string
       checkoutProgress?: PendingWorktreeCreation['checkoutProgress']
       worktreeId?: string
       heldChatMessage?: string
+      heldChatAttachments?: PendingWorktreeCreation['heldChatAttachments']
+      heldChatSkills?: PendingWorktreeCreation['heldChatSkills']
       chatInputHandedOff?: boolean
     }
   ) => void

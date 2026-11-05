@@ -1,11 +1,6 @@
 import { boundedDiffPatch } from '../native-chat/bounded-diff-patch'
 import { z } from 'zod'
 import type { AgentJournalToolCallItem } from '../../shared/agent-session/journal/agent-session-journal-types'
-import { BoundedMap } from '../../shared/bounded-map'
-import {
-  MAX_PROVIDER_TIMELINE_OPEN_BYTES,
-  MAX_PROVIDER_TIMELINE_OPEN_ENTRIES
-} from '../native-chat/agent-session-timeline/provider-timeline-budget'
 import {
   boundToolInput,
   JOURNAL_RUNNING_PREVIEW_LIMITS,
@@ -46,31 +41,13 @@ function outputText(update: ToolCallUpdate): string | undefined {
 
 type ToolSnapshot = { body: AgentJournalToolCallItem; turn?: string }
 
-// Evict settled snapshots first to preserve partial-update context for live tools.
+// Keep partial-update context until completion or the owning turn ends.
 export class AcpToolTimeline {
   private readonly tools = new Map<string, ToolSnapshot>()
-  private bytes = 0
-  // Preserve placement after snapshot eviction for later tasks and requests.
-  private readonly turns = new BoundedMap<string, string>({
-    maxEntries: MAX_PROVIDER_TIMELINE_OPEN_ENTRIES
-  })
-  // Retain full live payloads until close; byte accounting is a ledger, not an RSS ceiling.
-  private readonly whole = new BoundedMap<
-    string,
-    {
-      input?: unknown
-      output?: string
-      inputBytes: number
-      outputBytes: number
-    }
-  >({
-    maxEntries: MAX_PROVIDER_TIMELINE_OPEN_ENTRIES,
-    sizeOf: (value, key) => value.inputBytes + value.outputBytes + Buffer.byteLength(key) + 64
-  })
-
-  get retainedToolBytes(): number {
-    return this.whole.retainedBytes
-  }
+  // Late requests need their original turn even when no journal lookup is available.
+  private readonly turns = new Map<string, string>()
+  // Closing updates may omit fields; only their running journal copies are previews.
+  private readonly whole = new Map<string, { input?: unknown; output?: string }>()
 
   translate(
     raw: ToolCallUpdate,
@@ -93,25 +70,7 @@ export class AcpToolTimeline {
             ? 'running'
             : (previous?.body.state ?? 'running')
     if (state === 'running') {
-      if (!held && this.whole.size >= MAX_PROVIDER_TIMELINE_OPEN_ENTRIES) {
-        throw new Error('ACP tool stream capacity exceeded')
-      }
-      if (
-        !this.whole.set(update.toolCallId, {
-          input,
-          output,
-          inputBytes:
-            update.rawInput === undefined
-              ? (held?.inputBytes ?? 0)
-              : Buffer.byteLength(JSON.stringify(input) ?? ''),
-          outputBytes:
-            suppliedOutput === undefined
-              ? (held?.outputBytes ?? 0)
-              : Buffer.byteLength(JSON.stringify(output) ?? '')
-        })
-      ) {
-        throw new Error('ACP tool snapshot could not be retained')
-      }
+      this.whole.set(update.toolCallId, { input, output })
     } else {
       this.whole.delete(update.toolCallId)
     }
@@ -148,7 +107,12 @@ export class AcpToolTimeline {
     }
     const turn = join.turn ?? this.turn(update.toolCallId)
     this.turns.delete(update.toolCallId)
-    this.remember(update.toolCallId, { body, ...(turn === undefined ? {} : { turn }) })
+    const snapshot = { body, ...(turn === undefined ? {} : { turn }) }
+    if (state === 'running') {
+      this.tools.set(update.toolCallId, snapshot)
+    } else {
+      this.retire(update.toolCallId, snapshot)
+    }
     const events: ProviderTimelineEvent[] = [
       {
         type: state === 'running' ? (previous ? 'item.update' : 'item.open') : 'item.close',
@@ -190,7 +154,6 @@ export class AcpToolTimeline {
   end(turn: string): void {
     for (const [key, snapshot] of this.tools) {
       if (snapshot.turn === turn) {
-        this.bytes -= this.size(key, snapshot)
         this.retire(key, snapshot)
         this.whole.delete(key)
       }
@@ -204,54 +167,9 @@ export class AcpToolTimeline {
     }
   }
 
-  private fits(count: number, bytes: number): boolean {
-    return count <= MAX_PROVIDER_TIMELINE_OPEN_ENTRIES && bytes <= MAX_PROVIDER_TIMELINE_OPEN_BYTES
-  }
-
-  private size(key: string, snapshot: ToolSnapshot): number {
-    return Buffer.byteLength(key) + Buffer.byteLength(JSON.stringify(snapshot))
-  }
-
-  private remember(key: string, snapshot: ToolSnapshot): void {
-    const previous = this.tools.get(key)
-    if (this.size(key, snapshot) > MAX_PROVIDER_TIMELINE_OPEN_BYTES) {
-      if (previous) {
-        this.bytes -= this.size(key, previous)
-      }
-      this.retire(key, snapshot)
-      return
-    }
-    let bytes = this.bytes - (previous ? this.size(key, previous) : 0) + this.size(key, snapshot)
-    let count = this.tools.size + (previous ? 0 : 1)
-    const evicted: string[] = []
-    for (const [candidate, stored] of this.tools) {
-      if (this.fits(count, bytes)) {
-        break
-      }
-      if (candidate !== key && stored.body.state !== 'running') {
-        evicted.push(candidate)
-        count -= 1
-        bytes -= this.size(candidate, stored)
-      }
-    }
-    for (const [candidate, stored] of this.tools) {
-      if (this.fits(count, bytes)) {
-        break
-      }
-      if (candidate !== key && !evicted.includes(candidate)) {
-        evicted.push(candidate)
-        count -= 1
-        bytes -= this.size(candidate, stored)
-      }
-    }
-    for (const candidate of evicted) {
-      const stored = this.tools.get(candidate)
-      if (stored) {
-        this.retire(candidate, stored)
-      }
-    }
-    this.tools.delete(key)
-    this.tools.set(key, snapshot)
-    this.bytes = bytes
+  dispose(): void {
+    this.tools.clear()
+    this.whole.clear()
+    this.turns.clear()
   }
 }

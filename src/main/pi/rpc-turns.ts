@@ -6,6 +6,7 @@ import type { ProviderTimelineEvent } from '../native-chat/agent-session-timelin
 import type { JsonlRpcRecord } from '../jsonl-rpc/peer'
 import type { JsonlRpcRequestOptions } from '../jsonl-rpc/peer-oversized-record'
 import type { JsonlRpcTimelineLane } from '../jsonl-rpc/timeline-lane'
+import { PiRpcCompaction } from './rpc-compaction'
 import { PiRpcContextUsage } from './rpc-context-usage'
 import { PiRpcMessages, piRpcSkippedEventNotice } from './rpc-messages'
 import { PiRpcPromptDelivery, piRpcFailureStatus } from './rpc-prompt-delivery'
@@ -43,7 +44,7 @@ export class PiRpcTurns {
   private turn = 0
   private active?: string
   private settling = false
-  private compacting = false
+  readonly compaction = new PiRpcCompaction(this.context)
   private stopped = false
   private ended = false
   private failure?: string
@@ -55,7 +56,7 @@ export class PiRpcTurns {
       request: () => deps.request('get_state'),
       prepareObservation: deps.prepareStateObservation,
       current: (revision) =>
-        !this.ended && this.settling && !this.compacting && revision === this.revision,
+        !this.ended && this.settling && !this.compaction.running && revision === this.revision,
       settled: (state) => {
         this.deps.lane.apply(this.context.setModel(state.model ?? undefined, Date.now()))
         this.finish()
@@ -172,13 +173,11 @@ export class PiRpcTurns {
       case 'compaction_start':
       case 'auto_compaction_start':
         this.revision++
-        this.compacting = true
-        this.deps.lane.apply(this.context.compacting())
+        this.deps.lane.apply(this.compaction.start())
         return
       case 'compaction_end':
       case 'auto_compaction_end':
-        this.compacting = false
-        this.context.compacted(frame.result)
+        this.deps.lane.apply(this.compaction.end(frame.result))
         if (frame.willRetry === true) {
           this.failure = undefined
           this.lastStopReason = undefined
@@ -260,6 +259,7 @@ export class PiRpcTurns {
     this.revision++
     this.idleCheck.dispose()
     this.delivery.end()
+    this.compaction.release()
   }
 
   private awaitingRunTrigger = false
