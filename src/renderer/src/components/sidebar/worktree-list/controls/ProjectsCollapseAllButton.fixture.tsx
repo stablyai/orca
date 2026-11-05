@@ -26,7 +26,7 @@ function AnnouncedProjects() {
       {target && sidebarBody !== 'agents' ? createPortal(<CollapseControl />, target) : null}
       <Button
         variant="ghost"
-        className="w-full justify-start px-4"
+        className="w-full justify-start"
         data-fixture-project=""
         onClick={() => {
           useAppStore.getState().toggleCollapsedGroup('repo:orca')

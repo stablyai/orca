@@ -298,10 +298,9 @@ export function renderWorktreeSectionHeaderRow(args: {
                 : undefined
           }
           onClick={(event) => {
-            if (shouldIgnoreRepoHeaderToggle(event)) {
-              return
+            if (!shouldIgnoreRepoHeaderToggle(event)) {
+              toggleHeader(event)
             }
-            toggleHeader(event)
           }}
           onKeyDown={(e) => {
             if (shouldIgnoreRepoHeaderToggle(e)) {
