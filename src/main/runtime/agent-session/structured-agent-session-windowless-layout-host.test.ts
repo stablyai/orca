@@ -1,7 +1,9 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import * as chatTabLayout from './agent-session-tab-layout'
+import * as sessionTabsProjection from '../../../shared/workspace-layout/old-client/old-client-session-tabs-projection'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
@@ -164,6 +166,30 @@ function savedChatIds(state: { session: WorkspaceSessionState }): string[] {
 }
 
 describe('a windowless chat tab against the chat host', () => {
+  it.each([10, 100])(
+    'loads and projects saved order once per worktree for %i restored chats',
+    async (count) => {
+      const ids = Array.from({ length: count }, (_, index) => `restored-chat-${index}`)
+      await seedTestAgentSessionRecordStore(root, {
+        records: ids.map(released),
+        sessionTabs: shown(...ids)
+      })
+      const { runtime } = await runtimeWithSavedChats(ids)
+      restoringRuntime(runtime)
+      const load = vi.spyOn(chatTabLayout, 'loadChatTabLayout')
+      const project = vi.spyOn(sessionTabsProjection, 'projectSessionTabs')
+      try {
+        await runtime.restoreStructuredAgentSessionTabs()
+        expect(runtime.mobileSessionTabsByWorktree.get(WT)?.tabs).toHaveLength(count)
+        expect(load.mock.calls.filter((call) => call[2] === WT)).toHaveLength(1)
+        expect(project.mock.calls.filter((call) => call[0] === WT)).toHaveLength(1)
+      } finally {
+        load.mockRestore()
+        project.mockRestore()
+      }
+    }
+  )
+
   it('leaves the layout when the host hides the chat', async () => {
     await seedTestAgentSessionRecordStore(root, {
       records: [released(CHAT_A), released(CHAT_B)],

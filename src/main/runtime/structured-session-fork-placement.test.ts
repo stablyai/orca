@@ -9,8 +9,11 @@ import type { WorkspaceSessionState } from '../../shared/workspace-session/works
 vi.mock('../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: false }))
 const { OrcaRuntimeService, electronMocks } = await import('./orca-runtime-test-mocks.spec')
 await import('./orca-runtime-test-lifecycle.spec')
-const { makeRuntimeStoreWithWorkspaceSession, TEST_WORKTREE_ID: WT } =
-  await import('./orca-runtime-test-fixtures.spec')
+const {
+  makeRuntimeStoreWithWorkspaceSession,
+  store,
+  TEST_WORKTREE_ID: WT
+} = await import('./orca-runtime-test-fixtures.spec')
 
 type Anchor = 'ordinary' | 'missing' | 'reopened' | 'stale-reopened' | 'old-alias'
 const REOPENED = 'agent-chat-tab-v1-current-source'
@@ -116,6 +119,38 @@ function rawSnapshot(anchor: Anchor, listed: boolean): RuntimeMobileSessionTabsS
     tabs: [chat('source'), chat('B'), chat('active'), ...(listed ? [chat('child')] : [])]
   }
 }
+
+it.each(['missing session', 'filtered open'])(
+  'publishes a phone fork through the raw owner after a skipped saved open: %s',
+  async (reason) => {
+    const saved = savedSession('ordinary', true)
+    const reopenedChild = 'agent-chat-tab-v1-unconfirmed-child'
+    saved.unifiedTabs![WT]!.find((tab) => tab.entityId === 'child')!.id = reopenedChild
+    saved.tabGroups![WT]![1]!.tabOrder = [savedId('active'), reopenedChild]
+    const fixture = makeRuntimeStoreWithWorkspaceSession(saved)
+    const before = JSON.stringify(fixture.getSession())
+    const runtime = new OrcaRuntimeService(
+      reason === 'missing session' ? store : fixture.runtimeStore
+    )
+    runtime.storeMobileSessionSnapshot(WT, rawSnapshot('ordinary', false))
+    await runtime.publishStructuredAgentSessionTab({
+      workspaceId: WT,
+      sessionId: 'child',
+      agent: 'claude',
+      activate: false,
+      placement: { afterTabId: 'agent-session:source' }
+    })
+    expect(runtime.mobileSessionTabsByWorktree.get(WT)?.tabGroups).toEqual([
+      {
+        id: 'G1',
+        activeTabId: 'agent-session:source',
+        tabOrder: ['agent-session:source', 'agent-session:child', 'agent-session:B']
+      },
+      { id: 'G2', activeTabId: 'agent-session:active', tabOrder: ['agent-session:active'] }
+    ])
+    expect(JSON.stringify(fixture.getSession())).toBe(before)
+  }
+)
 
 for (const owner of ['saved', 'window'] as const) {
   it.each([

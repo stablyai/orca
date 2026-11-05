@@ -83,9 +83,27 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
         this.passiveStructuredSessionTabChangeEligible(change)
       )
     }
+    const savedOrders = new Map<string, ProjectedSessionTabs | undefined>()
     for (const session of restored) {
       if (host?.isSessionTabVisible(session.sessionId)) {
-        this.projectStructuredAgentSessionTab({ ...session, activate: false, notify: false })
+        if (!savedOrders.has(session.workspaceId)) {
+          savedOrders.set(
+            session.workspaceId,
+            ORCA_LAYOUT_OWNER_IS_MAIN || !this.getAvailableAuthoritativeWindow()
+              ? this.savedStructuredSessionTabOrder(session.workspaceId)
+              : undefined
+          )
+        }
+        projectStructuredSessionTab(
+          this,
+          {
+            ...session,
+            activate: false,
+            notify: false,
+            savedOrder: savedOrders.get(session.workspaceId)
+          },
+          (snapshot) => this.emitMobileSessionTabsSnapshot(snapshot)
+        )
       }
     }
     const wasUnverifiable = this.structuredAgentSessionInventoryUnverifiable
@@ -116,21 +134,26 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
       (ORCA_LAYOUT_OWNER_IS_MAIN || !this.getAvailableAuthoritativeWindow()) &&
       !(ORCA_LAYOUT_OWNER_IS_MAIN && input.placedByWindow)
     ) {
+      let attempted = false
       const saving = this.saveWindowlessAgentSessionTab(input.workspaceId, {
         ...input,
         eligible,
         ...(tabId ? { tabId } : {})
+      }).then((saved) => {
+        attempted = saved
       })
       input.workspaceAuthority?.saving(saving)
       await saving
-      savedOrder = this.savedStructuredSessionTabOrder(input.workspaceId)
-      if (
-        !savedOrder?.tabs.some(
-          (tab) =>
-            tab.type === 'agent-session' && tab.id === agentSessionRowId(input.sessionId, tabId)
-        )
-      ) {
-        throw new Error('Chat tab publication was superseded')
+      if (attempted) {
+        savedOrder = this.savedStructuredSessionTabOrder(input.workspaceId)
+        if (
+          !savedOrder?.tabs.some(
+            (tab) =>
+              tab.type === 'agent-session' && tab.id === agentSessionRowId(input.sessionId, tabId)
+          )
+        ) {
+          throw new Error('Chat tab publication was superseded')
+        }
       }
     }
     projectStructuredSessionTab(this, { ...input, tabId, eligible, savedOrder }, (snapshot) =>
