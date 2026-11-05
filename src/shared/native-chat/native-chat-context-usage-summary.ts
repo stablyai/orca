@@ -10,6 +10,9 @@ export type NativeChatContextUsageSummary = {
   rows: readonly { name: string; tokens: number; percentage: number }[]
 }
 
+/** Past this the window is nearly spent, so the ring turns red to say so. */
+export const CONTEXT_USAGE_CRITICAL_PERCENTAGE = 90
+
 function rowPercentage(tokens: number, windowTokens: number): number {
   return windowTokens > 0 ? Math.round((tokens / windowTokens) * 1000) / 10 : 0
 }

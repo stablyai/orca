@@ -2,6 +2,7 @@ import { StyleSheet, Pressable, Text, View } from 'react-native'
 import { useCallback } from 'react'
 import Svg, { Circle } from 'react-native-svg'
 import {
+  CONTEXT_USAGE_CRITICAL_PERCENTAGE,
   formatContextTokenCount,
   keyContextUsageRows,
   type NativeChatContextUsageSummary
@@ -28,8 +29,6 @@ const RING_SIZE = 16
 const RING_STROKE = 2
 const RING_RADIUS = (RING_SIZE - RING_STROKE) / 2
 const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS
-/** Desktop's threshold: past it the window is nearly spent, so the ring and bar turn red. */
-const CRITICAL_PERCENTAGE = 90
 
 /** Composer ring for context-window usage; a tap shows the provider's breakdown above the composer. */
 export function MobileNativeChatContextUsageRing({
@@ -70,7 +69,7 @@ export function MobileNativeChatContextUsageRing({
     [openerRef, keepsKeyboard]
   )
   const filled = Math.min(Math.max(usage.percentage, 0), 100)
-  const critical = usage.percentage >= CRITICAL_PERCENTAGE
+  const critical = usage.percentage >= CONTEXT_USAGE_CRITICAL_PERCENTAGE
   const tint = critical ? colors.statusRed : colors.textMuted
   const used = formatContextTokenCount(usage.usedTokens)
   const window = formatContextTokenCount(usage.windowTokens)

@@ -4,6 +4,7 @@ import { Progress } from '@/components/ui/progress'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import {
+  CONTEXT_USAGE_CRITICAL_PERCENTAGE,
   formatContextTokenCount,
   keyContextUsageRows,
   type NativeChatContextUsageSummary
@@ -13,8 +14,6 @@ const RING_SIZE = 16
 const RING_STROKE = 2
 const RING_RADIUS = (RING_SIZE - RING_STROKE) / 2
 const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS
-/** Past this the window is nearly spent; the ring turns destructive to say so. */
-const CRITICAL_PERCENTAGE = 90
 /** Long enough that a pointer crossing the ring toward dictation doesn't flash the card. */
 const HOVER_OPEN_DELAY_MS = 150
 /** Long enough for the pointer to cross the gap between the ring and the card. */
@@ -71,7 +70,7 @@ export function NativeChatContextUsageRing({
   usage: NativeChatContextUsageSummary
 }): React.JSX.Element {
   const filled = Math.min(Math.max(usage.percentage, 0), 100)
-  const critical = usage.percentage >= CRITICAL_PERCENTAGE
+  const critical = usage.percentage >= CONTEXT_USAGE_CRITICAL_PERCENTAGE
   const used = formatContextTokenCount(usage.usedTokens)
   const window = formatContextTokenCount(usage.windowTokens)
   const label = translate(
