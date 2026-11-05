@@ -5396,8 +5396,6 @@
           "expandAriaLabel": "{{repo}}의 숨겨진 워크트리 펼치기",
           "hiding_one": "발견된 워크트리 {{count}}개 숨김",
           "hiding_other": "발견된 워크트리 {{count}}개 숨김",
-          "hidingInRepo_one": "{{repo}}에서 발견된 워크트리 {{count}}개 숨김",
-          "hidingInRepo_other": "{{repo}}에서 발견된 워크트리 {{count}}개 숨김",
           "keepHiddenAriaLabel_one": "{{repo}}에서 발견된 워크트리 {{count}}개를 숨김 상태로 유지합니다. 프로젝트 메뉴에서 복구할 수 있습니다",
           "keepHiddenAriaLabel_other": "{{repo}}에서 발견된 워크트리 {{count}}개를 숨김 상태로 유지합니다. 프로젝트 메뉴에서 복구할 수 있습니다",
           "keepHiddenTooltip": "숨김 유지 - 프로젝트 메뉴에서 복구",
@@ -18946,8 +18944,6 @@
       },
       "turnDiff": {
         "partial": "부분적인 차이점",
-        "showDiff": "차이 보기",
-        "hideDiff": "차이 숨기기",
         "changedFiles_other": "변경된 파일 {{count}}개"
       },
       "receipt": {
@@ -20547,10 +20543,8 @@
       "offTerminal": "터미널이 더 편하신가요? 터미널은 앞으로도 완전히 지원됩니다. 채팅을 선택하기 전까지 에이전트는 계속 터미널에서 열립니다.",
       "onIntro": "채팅 UI가 실험적 기능에서 벗어나 이제 Orca의 정식 기능이 되었습니다. 에이전트는 계속 채팅으로 열리며 서식 있는 메시지, 시각 자료, 이미지를 지원합니다.",
       "onTerminal": "터미널도 계속 완전히 지원됩니다. 언제든지 에이전트를 다시 터미널로 바꿀 수 있습니다.",
-      "changeInSettings": "<link>설정 → 에이전트</link>에서 언제든지 변경할 수 있습니다.",
       "stayInTerminal": "터미널 계속 사용",
       "cta": "채팅 UI 사용",
-      "saveFailed": "채팅 UI를 켜지 못했습니다. 설정 → 에이전트에서 채팅을 선택하세요.",
       "demoTabTitle": "로그인 설명",
       "demoPrompt": "로그인이 어떻게 동작하는지 정리해 줘",
       "demoReply": "로그인은 {{file}}에서 시작합니다. 브라우저가 /login으로 보내면 서버가 비밀번호를 확인하고 세션을 만든 뒤 앱으로 리디렉션합니다. 흐름은 다음과 같습니다:",

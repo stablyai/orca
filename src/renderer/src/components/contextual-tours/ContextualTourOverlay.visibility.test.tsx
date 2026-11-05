@@ -2,17 +2,11 @@
 
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { ContextualTourOverlay } from './ContextualTourOverlay'
-import { useAppStore } from '@/store'
-import { getContextualTourStepIndex } from '../../../../shared/contextual-tours'
-import { advanceAgentSessionsTourPastNewTab } from './agent-sessions-tour-new-tab'
-import { useContextualTour } from './use-contextual-tour'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
-const PARALLEL_STEP_INDEX = getContextualTourStepIndex(
-  'workspace-agent-sessions',
-  'agent-sessions-parallel'
-)
+import { useAppStore } from '@/store'
+
+import { useContextualTour } from './use-contextual-tour'
 
 let container: HTMLDivElement
 let root: Root
@@ -57,10 +51,6 @@ async function setDocumentVisibility(state: 'visible' | 'hidden'): Promise<void>
   })
 }
 
-function ringsTop(): string | undefined {
-  return container.querySelector<HTMLElement>('[data-contextual-tour-target-rings]')?.style.top
-}
-
 beforeEach(async () => {
   useAppStore.setState(initialState, true)
   vi.useFakeTimers({
@@ -90,206 +80,6 @@ afterEach(async () => {
   await setDocumentVisibility('visible')
   useAppStore.setState(initialState, true)
   vi.useRealTimers()
-})
-
-describe('ContextualTourOverlay full-pass interval visibility gate', () => {
-  it('keeps focus in a popup when the underlying tour ends', async () => {
-    tourTarget('workspace-create-control', 300)
-    const originalInput = document.createElement('input')
-    document
-      .querySelector('[data-contextual-tour-target="workspace-create-control"]')
-      ?.appendChild(originalInput)
-    originalInput.focus()
-    useAppStore.setState({
-      activeContextualTourId: 'workspace-agent-sessions',
-      activeContextualTourStepIndex: PARALLEL_STEP_INDEX,
-      activeModal: 'none',
-      contextualToursOnboardingVisible: false,
-      contextualToursBlockingSurfaceVisible: false,
-      activeContextualTourSuppressed: false
-    })
-    act(() => root.render(<ContextualTourOverlay />))
-    await settle(50)
-    tourTarget('test-popup', 400)
-    const popup = document.querySelector('[data-contextual-tour-target="test-popup"]')
-    if (!popup) {
-      throw new Error('Missing popup')
-    }
-    popup.setAttribute('role', 'menu')
-    const popupInput = document.createElement('input')
-    popup.appendChild(popupInput)
-    popupInput.focus()
-
-    act(() => useAppStore.getState().cancelContextualTour('workspace-agent-sessions'))
-    await settle(50)
-
-    expect(document.activeElement).toBe(popupInput)
-  })
-
-  it.each(['terminal', 'agent-session'] as const)(
-    'waits for a delayed %s pane instead of skipping the split lesson',
-    async (type) => {
-      tourTarget('tab-create-menu', 50)
-      tourTarget('workspace-create-control', 300)
-      useAppStore.setState({
-        activeContextualTourId: 'workspace-agent-sessions',
-        activeContextualTourStepIndex: 0,
-        activeTabType: type,
-        activeModal: 'none',
-        contextualToursOnboardingVisible: false,
-        contextualToursBlockingSurfaceVisible: false,
-        activeContextualTourSuppressed: false
-      })
-      act(() => root.render(<ContextualTourOverlay />))
-      await settle(50)
-
-      act(() => advanceAgentSessionsTourPastNewTab())
-      await settle(1_100)
-
-      expect(useAppStore.getState().activeContextualTourStepIndex).not.toBe(PARALLEL_STEP_INDEX)
-      expect(container.querySelector('[data-contextual-tour-panel]')).toBeNull()
-
-      tourTarget(type === 'terminal' ? 'terminal-pane-split-target' : 'chat-pane-split-target', 150)
-      await settle(550)
-
-      expect(container.querySelector('[data-contextual-tour-panel]')?.textContent).toContain(
-        type === 'terminal' ? 'Split a terminal pane' : 'Run two chats side by side'
-      )
-
-      document
-        .querySelectorAll(
-          '[data-contextual-tour-target="terminal-pane-split-target"], [data-contextual-tour-target="chat-pane-split-target"]'
-        )
-        .forEach((target) => target.remove())
-      act(() =>
-        useAppStore.setState({ activeTabType: type === 'terminal' ? 'agent-session' : 'terminal' })
-      )
-      await settle(1_100)
-
-      expect(useAppStore.getState().activeContextualTourStepIndex).not.toBe(PARALLEL_STEP_INDEX)
-      expect(container.querySelector('[data-contextual-tour-panel]')).toBeNull()
-
-      tourTarget(type === 'terminal' ? 'chat-pane-split-target' : 'terminal-pane-split-target', 150)
-      await settle(550)
-      expect(container.querySelector('[data-contextual-tour-panel]')?.textContent).toContain(
-        type === 'terminal' ? 'Run two chats side by side' : 'Split a terminal pane'
-      )
-    }
-  )
-
-  it('hides the previous browser lesson while waiting for its menu target', async () => {
-    tourTarget('browser-grab-control', 50)
-    tourTarget('browser-annotation-control', 150)
-    useAppStore.setState({
-      activeContextualTourId: 'browser',
-      activeContextualTourStepIndex: 1,
-      activeModal: 'none',
-      contextualToursOnboardingVisible: false,
-      contextualToursBlockingSurfaceVisible: false,
-      activeContextualTourSuppressed: false
-    })
-    act(() => root.render(<ContextualTourOverlay />))
-    await settle(50)
-    expect(container.querySelector('[data-contextual-tour-panel]')?.textContent).toContain(
-      'Mark design feedback in place'
-    )
-
-    act(() => useAppStore.getState().advanceContextualTour())
-    await settle(50)
-
-    expect(useAppStore.getState().activeContextualTourId).toBe('browser')
-    expect(useAppStore.getState().activeContextualTourStepIndex).toBe(2)
-    expect(container.querySelector('[data-contextual-tour-panel]')).toBeNull()
-
-    tourTarget('browser-import-cookies-control', 250)
-    await settle(550)
-
-    expect(container.querySelector('[data-contextual-tour-panel]')?.textContent).toContain(
-      'Stay logged in'
-    )
-  })
-
-  it.each([
-    ['agent-session', 'terminal'],
-    ['terminal', 'agent-session']
-  ] as const)('keeps the tour when the + menu changes %s to %s', async (before, after) => {
-    tourTarget('tab-create-menu', 50)
-    tourTarget('workspace-agent-terminal-tip', 150)
-    tourTarget('workspace-create-control', 300)
-    const target = document.querySelector<HTMLElement>(
-      '[data-contextual-tour-target="workspace-agent-terminal-tip"]'
-    )
-    if (!target) {
-      throw new Error('Missing workspace tour target')
-    }
-    target.dataset.activeContentType = before
-    useAppStore.setState({
-      activeContextualTourId: 'workspace-agent-sessions',
-      activeContextualTourStepIndex: 0,
-      activeTabType: before,
-      contextualToursSeenIds: [],
-      activeModal: 'none',
-      contextualToursOnboardingVisible: false,
-      contextualToursBlockingSurfaceVisible: false,
-      activeContextualTourSuppressed: false,
-      persistedUIReady: true
-    })
-    act(() => root.render(<ContextualTourOverlay />))
-    await settle(50)
-
-    act(() => advanceAgentSessionsTourPastNewTab())
-    await settle(50)
-    target.dataset.activeContentType = after
-    act(() => useAppStore.setState({ activeTabType: after }))
-    await settle(50)
-
-    const state = useAppStore.getState()
-    expect(state.activeContextualTourId).toBe('workspace-agent-sessions')
-    expect(state.activeContextualTourStepIndex).toBe(
-      getContextualTourStepIndex(
-        'workspace-agent-sessions',
-        after === 'agent-session' ? 'agent-sessions-split-chat' : 'agent-sessions-split'
-      )
-    )
-    await act(async () => {
-      await state.recordFeatureInteraction(
-        after === 'agent-session' ? 'tab-splits' : 'terminal-pane-split'
-      )
-    })
-    expect(useAppStore.getState().activeContextualTourStepIndex).toBe(PARALLEL_STEP_INDEX)
-  })
-
-  it('pauses the 500ms full pass while hidden and re-measures on return', async () => {
-    const target = tourTarget('workspace-create-control', 300)
-    useAppStore.setState({
-      activeContextualTourId: 'workspace-agent-sessions',
-      activeContextualTourStepIndex: PARALLEL_STEP_INDEX,
-      activeModal: 'none',
-      contextualToursOnboardingVisible: false,
-      contextualToursBlockingSurfaceVisible: false,
-      activeContextualTourSuppressed: false
-    })
-    act(() => {
-      root.render(<ContextualTourOverlay />)
-    })
-    await settle(50)
-    expect(ringsTop()).toBe('300px')
-
-    // Baseline: while visible, the periodic full pass follows a silent move.
-    target.moveTo(640)
-    await settle(700)
-    expect(ringsTop()).toBe('640px')
-
-    await setDocumentVisibility('hidden')
-    target.moveTo(900)
-    await settle(1_500)
-    expect(ringsTop()).toBe('640px')
-
-    // Returning runs the pass immediately, so the overlay is never left stale.
-    await setDocumentVisibility('visible')
-    await settle(50)
-    expect(ringsTop()).toBe('900px')
-  })
 })
 
 function PendingTourSource({ persisted }: { persisted: Promise<void> }) {

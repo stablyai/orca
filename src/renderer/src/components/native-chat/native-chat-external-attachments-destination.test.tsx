@@ -24,6 +24,12 @@ import {
   useNativeChatComposerAttachments
 } from './use-native-chat-composer-attachments'
 import type * as RemoteRuntimePtyIdModule from '../../../../shared/remote-runtime/remote-runtime-pty-id'
+import {
+  holdBrowserAttachmentFiles,
+  readBrowserAttachmentFile
+} from '@/lib/browser-attachment-files'
+import { releaseNativeChatStagedFiles } from './native-chat-draft-attachment-staging'
+import { moveNativeChatComposerDraft } from './native-chat-composer-draft-move'
 
 const mocks = vi.hoisted(() => {
   const state: {
@@ -141,9 +147,21 @@ function latest(): Api {
   return api
 }
 
-async function render(worktreeId?: string, acceptsImages = true, disabled = false): Promise<void> {
+async function render(
+  worktreeId?: string,
+  acceptsImages = true,
+  disabled = false,
+  scope = 'drop-test'
+): Promise<void> {
   await act(async () =>
-    root.render(<Probe worktreeId={worktreeId} acceptsImages={acceptsImages} disabled={disabled} />)
+    root.render(
+      <Probe
+        worktreeId={worktreeId}
+        acceptsImages={acceptsImages}
+        disabled={disabled}
+        scope={scope}
+      />
+    )
   )
 }
 
@@ -170,12 +188,37 @@ beforeEach(() => {
 afterEach(() => {
   act(() => root.unmount())
   container.remove()
+  releaseNativeChatStagedFiles('drop-test')
   clearNativeChatAttachmentCacheForTests()
   clearNativeChatComposerDraftsForTests()
   vi.unstubAllGlobals()
 })
 
 describe('OS attachment destination through input-method composition', () => {
+  it.each(['apply', 'cancel'] as const)(
+    'retains a staged browser file through an IME-deferred drop until %s',
+    async (outcome) => {
+      mocks.owner = { kind: 'local', stagingScope: 'drop-test' }
+      const file = new File(['image'], 'screen.png', { type: 'image/png' })
+      const [path] = holdBrowserAttachmentFiles([file])
+      await render('workspace-1')
+
+      await act(async () => latest().captureExternalDrop()([path]))
+
+      expect(nativeChatPendingAttachmentSnapshot('drop-test')).toHaveLength(1)
+      expect(readBrowserAttachmentFile(path)).toBe(file)
+      if (outcome === 'cancel') {
+        await render('workspace-1', true, true)
+      } else {
+        composing = false
+        act(() => latest().flushPendingAttachments())
+        expect(latest().imageAttachments.map((image) => image.path)).toEqual([path])
+      }
+      expect(nativeChatPendingAttachmentSnapshot('drop-test')).toEqual([])
+      expect(readBrowserAttachmentFile(path)).toBe(outcome === 'apply' ? file : null)
+    }
+  )
+
   it.each(['workspace', 'host', 'terminal-workspace'])(
     'refuses queued files after the %s changes',
     async (change) => {
@@ -412,10 +455,11 @@ describe('a macOS paste the clipboard shows is Finder files', () => {
     expect(mocks.stat).toHaveBeenCalledTimes(2)
   })
 
-  it.each(['local', 'runtime-session'])(
+  it.each(['local', 'runtime-session', 'handoff'])(
     'finishes a %s paste into its draft when the composer unmounts before the clipboard answers',
     async (route) => {
-      const stored = route === 'local' ? '/Users/me' : '/srv/store'
+      const stored = route === 'runtime-session' ? '/srv/store' : '/Users/me'
+      const destination = route === 'handoff' ? 'agent-session:next' : 'drop-test'
       if (route === 'runtime-session') {
         mocks.owner = {
           kind: 'runtime-session',
@@ -436,15 +480,19 @@ describe('a macOS paste the clipboard shows is Finder files', () => {
       pasteFinderCopy(['a.png', 'notes.txt'])
       const ids = nativeChatPendingAttachmentSnapshot('drop-test').map(({ id }) => id)
       expect(new Set(ids).size).toBe(2)
+      if (route === 'handoff') {
+        act(() => moveNativeChatComposerDraft('drop-test', destination))
+      }
       act(() => root.unmount())
       await answerClipboard('a.png\nnotes.txt')
       expect(nativeChatPendingAttachmentSnapshot('drop-test')).toEqual([])
+      expect(nativeChatPendingAttachmentSnapshot(destination)).toEqual([])
       root = createRoot(container)
-      await render('workspace-1')
+      await render('workspace-1', true, false, destination)
       expect(latest().imageAttachments).toEqual([
         expect.objectContaining({ id: ids[0], path: `${stored}/a.png` })
       ])
-      expect(readNativeChatDraftCache('drop-test')).toBe(`@${stored}/notes.txt`)
+      expect(readNativeChatDraftCache(destination)).toBe(`@${stored}/notes.txt`)
     }
   )
 
