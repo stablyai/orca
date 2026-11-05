@@ -142,6 +142,7 @@ export function declaredEffortReadAdapter(options: AcpStructuredOptions) {
     changeThreadGoal: unused,
     rewind: unused,
     recoverRewind: unused,
+    copyConversation: unused,
     readOptions: () =>
       readAcpLiveOptions({
         connection: { initialize: async () => ({ protocolVersion: 1, agentCapabilities: {} }) },
