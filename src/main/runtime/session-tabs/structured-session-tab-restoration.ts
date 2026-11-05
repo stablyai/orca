@@ -90,16 +90,12 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
               : undefined
           )
         }
-        projectStructuredSessionTab(
-          this,
-          {
-            ...session,
-            activate: false,
-            notify: false,
-            savedOrder: savedOrders.get(session.workspaceId)
-          },
-          (snapshot) => this.emitMobileSessionTabsSnapshot(snapshot)
-        )
+        this.projectStructuredAgentSessionTab({
+          ...session,
+          activate: false,
+          notify: false,
+          savedOrder: savedOrders.get(session.workspaceId)
+        })
       }
     }
     const wasUnverifiable = this.structuredAgentSessionInventoryUnverifiable
@@ -130,16 +126,14 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
       (ORCA_LAYOUT_OWNER_IS_MAIN || !this.getAvailableAuthoritativeWindow()) &&
       !(ORCA_LAYOUT_OWNER_IS_MAIN && input.placedByWindow)
     ) {
-      let attempted = false
       const saving = this.saveWindowlessAgentSessionTab(input.workspaceId, {
         ...input,
         eligible,
         ...(tabId ? { tabId } : {})
-      }).then((saved) => {
-        attempted = saved
       })
-      input.workspaceAuthority?.saving(saving)
-      await saving
+      input.workspaceAuthority?.saving(saving.then(() => undefined))
+      // Captured placement waits for its owner; ordinary opens retain their queued-save lifetime.
+      const attempted = input.placement ? await saving : false
       if (attempted) {
         savedOrder = this.savedStructuredSessionTabOrder(input.workspaceId)
         if (
@@ -154,9 +148,7 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
         }
       }
     }
-    projectStructuredSessionTab(this, { ...input, tabId, eligible, savedOrder }, (snapshot) =>
-      this.emitMobileSessionTabsSnapshot(snapshot)
-    )
+    this.projectStructuredAgentSessionTab({ ...input, tabId, eligible, savedOrder })
     input.workspaceAuthority?.committed()
     if (!eligible()) {
       throw new Error('Chat tab publication was superseded')
@@ -175,11 +167,14 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
 
   /** The caller owns the store write; this publishes only its current raw surface. */
   projectStructuredAgentSessionTab(input: StructuredSessionRawPublicationInput): void {
+    // Publication supplies the owner's result, including an explicit absence; direct restores read it.
     const savedOrder =
-      (ORCA_LAYOUT_OWNER_IS_MAIN || !this.getAvailableAuthoritativeWindow()) &&
-      !(ORCA_LAYOUT_OWNER_IS_MAIN && input.placedByWindow)
-        ? this.savedStructuredSessionTabOrder(input.workspaceId)
-        : undefined
+      'savedOrder' in input
+        ? input.savedOrder
+        : (ORCA_LAYOUT_OWNER_IS_MAIN || !this.getAvailableAuthoritativeWindow()) &&
+            !(ORCA_LAYOUT_OWNER_IS_MAIN && input.placedByWindow)
+          ? this.savedStructuredSessionTabOrder(input.workspaceId)
+          : undefined
     projectStructuredSessionTab(this, { ...input, savedOrder }, (snapshot) =>
       this.emitMobileSessionTabsSnapshot(snapshot)
     )

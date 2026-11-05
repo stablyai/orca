@@ -68,7 +68,7 @@ export class AgentSessionSubscribers {
     const liveCursor = journal.cursor()
     const subscriber: Subscriber = {
       ...fields,
-      readForkMarker: () => this.hooks.readForkMarker?.(input.sessionId),
+      readForkMarker: () => this.hooks.readForkMarker?.(fields.sessionId),
       cursor: input.cursor ?? { epoch: liveCursor.epoch, sequence: 0 },
       boundedFrames: input.boundedFrames === true,
       readsCurrentRequests: input.readsCurrentRequests === true,
