@@ -28,7 +28,11 @@ declare module 'micromark-util-types' {
 
 const lineEnding = (code: Code): boolean => code !== null && code < -2
 const whitespace = (code: Code): boolean => code === null || code < 0 || code === 32
-const digit = (code: Code): boolean => code !== null && code >= 48 && code <= 57
+const digit = (code: Code): code is number => code !== null && code >= 48 && code <= 57
+const currencyTerminators = new Set([33, 41, 58, 59, 63])
+const variableStart = (code: Code): boolean =>
+  code !== null &&
+  (code === 95 || code === 123 || (code >= 65 && code <= 90) || (code >= 97 && code <= 122))
 
 type ExhaustedSearch = { from: number; to: number; last: Map<number, number> }
 
@@ -126,7 +130,22 @@ function construct(flow: boolean): Construct {
       if (opener === '$' && whitespace(code)) {
         return nok(code)
       }
+      if (opener === '$' && digit(code)) {
+        effects.enter('chatMathData')
+        return leadingNumber(code)
+      }
       return between(code)
+    }
+    function leadingNumber(code: Code): State | undefined {
+      if (digit(code) || code === 44 || code === 46) {
+        effects.consume(code)
+        body += String.fromCharCode(code)
+        return leadingNumber
+      }
+      if (whitespace(code) || (code !== null && currencyTerminators.has(code))) {
+        return nok(code)
+      }
+      return data(code)
     }
     function between(code: Code): State | undefined {
       if (code === null) {
@@ -178,8 +197,8 @@ function construct(flow: boolean): Construct {
         opener === '$' &&
         (/\s/.test(body.at(-1) ?? '') ||
           digit(code) ||
-          (/^[+-]?\d[\d,]*(?:\.\d+)?(?:[^\p{ASCII}]|\s)/u.test(body) &&
-            !/[\\_^=<>+*/{}-]/.test(body)))
+          // A path separator can be followed by another shell expansion, not a math closer.
+          ((body.endsWith('/') || body.endsWith(':') || body.endsWith(';')) && variableStart(code)))
       ) {
         return nok(code)
       }
