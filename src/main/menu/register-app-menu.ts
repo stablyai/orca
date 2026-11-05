@@ -1,6 +1,5 @@
 import { BrowserWindow, Menu, app } from 'electron'
 import {
-  formatKeybindingList,
   getEffectiveKeybindingsForAction,
   type KeybindingActionId,
   type KeybindingOverrides
@@ -10,6 +9,7 @@ import { translateMain } from '../i18n/main-i18n'
 import { createAppMenuSelectionItem, resolveNativeEditTarget } from './app-menu-selection-item'
 import { createAppMenuQuitItems, type AppMenuQuitHandlers } from './app-menu-quit-item'
 import { createAppMenuReloadAndDevToolsItems } from './app-menu-reload-devtools-items'
+import { appMenuShortcutHint } from './app-menu-shortcut-hint'
 import { createAppWindowMenu } from './app-menu-window'
 
 export type AppearanceMenuState = {
@@ -66,14 +66,10 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
 
   const isMac = process.platform === 'darwin'
   const appearance = getAppearanceState()
-  const shortcutLabel = (actionId: KeybindingActionId): string => {
-    const bindings = getEffectiveKeybindingsForAction(
-      actionId,
-      process.platform,
-      getKeybindings?.()
-    )
-    return formatKeybindingList(bindings, process.platform)
-  }
+  const shortcutBindings = (actionId: KeybindingActionId): string[] =>
+    getEffectiveKeybindingsForAction(actionId, process.platform, getKeybindings?.())
+  const shortcutHint = (label: string, actionId: KeybindingActionId) =>
+    appMenuShortcutHint(label, shortcutBindings(actionId), process.platform)
 
   // Share modifier-click release-channel routing across platform-specific update menu locations.
   const checkForUpdatesClick: Electron.MenuItemConstructorOptions['click'] = (
@@ -98,16 +94,12 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
     click: checkForUpdatesClick
   }
 
-  const settingsBindings = getEffectiveKeybindingsForAction(
-    'app.settings',
-    process.platform,
-    getKeybindings?.()
-  )
-  const settingsShortcut = settingsBindings.length
-    ? `\t${formatKeybindingList(settingsBindings, process.platform)}`
-    : ''
+  const settingsLabel = translateMain('menu.settings', 'Settings')
+  const settingsBindings = shortcutBindings('app.settings')
   const settingsItem: Electron.MenuItemConstructorOptions = {
-    label: `${translateMain('menu.settings', 'Settings')}${settingsShortcut}`,
+    ...(settingsBindings.length
+      ? appMenuShortcutHint(settingsLabel, settingsBindings, process.platform)
+      : { label: settingsLabel }),
     click: () => onOpenSettings()
   }
 
@@ -200,11 +192,17 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
     submenu: [
       {
         // Display hints only: native accelerators bypass markdown bold handling and renderer-owned sidebar state.
-        label: `${translateMain('menu.toggleLeftSidebar', 'Toggle Left Sidebar')}\t${shortcutLabel('sidebar.left.toggle')}`,
+        ...shortcutHint(
+          translateMain('menu.toggleLeftSidebar', 'Toggle Left Sidebar'),
+          'sidebar.left.toggle'
+        ),
         click: () => onToggleLeftSidebar()
       },
       {
-        label: `${translateMain('menu.toggleRightSidebar', 'Toggle Right Sidebar')}\t${shortcutLabel('sidebar.right.toggle')}`,
+        ...shortcutHint(
+          translateMain('menu.toggleRightSidebar', 'Toggle Right Sidebar'),
+          'sidebar.right.toggle'
+        ),
         click: () => onToggleRightSidebar()
       },
       {
@@ -245,28 +243,29 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
     label: translateMain('menu.view', 'View'),
     submenu: [
       ...createAppMenuReloadAndDevToolsItems({
-        forceReloadShortcutLabel: shortcutLabel('app.forceReload'),
+        forceReloadBindings: shortcutBindings('app.forceReload'),
         onBeforeReload,
         toggleFocusedPageDevTools: options.toggleFocusedPageDevTools
       }),
       { type: 'separator' },
       {
-        label: `${translateMain('menu.resetSize', 'Reset Size')}\t${shortcutLabel('zoom.reset')}`,
+        ...shortcutHint(translateMain('menu.resetSize', 'Reset Size'), 'zoom.reset'),
         click: () => onZoomReset()
       },
       {
-        label: `${translateMain('menu.zoomIn', 'Zoom In')}\t${shortcutLabel('zoom.in')}`,
+        ...shortcutHint(translateMain('menu.zoomIn', 'Zoom In'), 'zoom.in'),
         click: () => onZoomIn()
       },
       {
-        label: `${translateMain('menu.zoomOut', 'Zoom Out')}\t${shortcutLabel('zoom.out')}`,
+        ...shortcutHint(translateMain('menu.zoomOut', 'Zoom Out'), 'zoom.out'),
         click: () => onZoomOut()
       },
       { type: 'separator' },
-      {
-        // Native accelerators would bypass the renderer's overlay mutual-exclusion handling.
-        label: `${translateMain('menu.openWorktreePalette', 'Open Worktree Palette')}\t${shortcutLabel('worktree.palette')}`
-      },
+      // Registered accelerators would bypass the renderer's overlay mutual-exclusion handling.
+      shortcutHint(
+        translateMain('menu.openWorktreePalette', 'Open Worktree Palette'),
+        'worktree.palette'
+      ),
       { type: 'separator' },
       { role: 'togglefullscreen' },
       { type: 'separator' },
