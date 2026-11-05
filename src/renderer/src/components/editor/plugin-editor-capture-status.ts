@@ -56,7 +56,7 @@ function publish(status: FileStatus): void {
     (content) => content.eligibleEditorKeys !== undefined
   )
   const content = loaded.at(-1) ?? status.retainedContent
-  const frames = [...status.frameOwners.values()].reverse()
+  const frames = [...status.frameOwners.values()].toReversed()
   frames.sort(
     (a, b) =>
       Number(b.frame === 'ready' && b.delivered) - Number(a.frame === 'ready' && a.delivered)
@@ -82,23 +82,31 @@ export function reportPluginEditorContent(
   const content = { eligibleEditorKeys, failure, filePath, defaultEditorKey }
   status.contentOwners.delete(owner)
   status.contentOwners.set(owner, content)
-  if (eligibleEditorKeys !== undefined) status.retainedContent = content
+  if (eligibleEditorKeys !== undefined) {
+    status.retainedContent = content
+  }
   publish(status)
 }
 
 export function withdrawPluginEditorContent(fileId: string, owner: symbol): void {
   const status = statuses.get(fileId)
-  if (status?.contentOwners.delete(owner)) publish(status)
+  if (status?.contentOwners.delete(owner)) {
+    publish(status)
+  }
 }
 
 /** The canonical file-entity close controller owns pruning, independent of mounted panes. */
 export function clearPluginEditorContent(fileId: string): void {
-  if (statuses.delete(fileId)) listeners.forEach((listener) => listener())
+  if (statuses.delete(fileId)) {
+    listeners.forEach((listener) => listener())
+  }
 }
 
 export function withdrawPluginEditorFrame(fileId: string, owner: symbol): void {
   const status = statuses.get(fileId)
-  if (status?.frameOwners.delete(owner)) publish(status)
+  if (status?.frameOwners.delete(owner)) {
+    publish(status)
+  }
 }
 
 export function reportPluginEditorFailure(
@@ -145,6 +153,9 @@ export function usePluginEditorCaptureReport(
   frameName?: string
 ): (step: 'delivered' | 'subscribed') => void {
   const owner = useRef(Symbol('editor-frame')).current
+  const failureCode = failure?.code
+  const failureMessage = failure?.message
+  const failureEditorKey = failure?.editorKey
   const captureId = usePluginViewCaptureStore((state) =>
     state.editorFileId === fileId ? (state.owner ?? undefined) : undefined
   )
@@ -171,7 +182,10 @@ export function usePluginEditorCaptureReport(
         editorKey,
         delivered: sameDocument && previous?.delivered === true,
         subscribed: sameDocument && previous?.subscribed === true,
-        failure: failure ?? null
+        failure:
+          failureCode !== undefined && failureMessage !== undefined
+            ? { code: failureCode, message: failureMessage, editorKey: failureEditorKey }
+            : null
       })
       publish(status)
     }
@@ -180,8 +194,9 @@ export function usePluginEditorCaptureReport(
     frameKey,
     frame,
     guestUrl,
-    failure?.code,
-    failure?.message,
+    failureCode,
+    failureMessage,
+    failureEditorKey,
     editorKey,
     frameName,
     captureId,
@@ -189,11 +204,16 @@ export function usePluginEditorCaptureReport(
     owner
   ])
   useEffect(() => {
-    if (fileId !== undefined) return () => withdrawPluginEditorFrame(fileId, owner)
+    if (fileId !== undefined) {
+      return () => withdrawPluginEditorFrame(fileId, owner)
+    }
+    return undefined
   }, [fileId, owner])
   return useCallback(
     (step) => {
-      if (fileId === undefined) return
+      if (fileId === undefined) {
+        return
+      }
       const status = statuses.get(fileId)
       const current = status?.frameOwners.get(owner)
       if (status && current) {

@@ -19237,7 +19237,9 @@
           "conflict": "Not used: {{value0}}, installed first, replaces it",
           "detail": "From its shortcut, the palette and menus. If the plugin fails, Orca’s own runs.",
           "switch": "Use {{value0}} instead of Orca’s {{value1}}"
-        }
+        },
+        "binaryFallback": "Unsupported binary files (any file name)",
+        "binaryFallbackConsent": "Opens unsupported binary files of any name in Orca. It can read and edit every document you open in it."
       }
     },
     "i18n": {

@@ -6,7 +6,10 @@ import { usePluginEditorCaptureReport } from '@/components/editor/plugin-editor-
 import { usePluginViewCaptureStore } from '@/store/plugin-view-capture'
 import { captureOpenEditor } from './plugin-view-editor-capture'
 
-const settling = vi.hoisted(() => ({ wait: undefined as (() => Promise<void>) | undefined }))
+const settling = vi.hoisted(() => {
+  const control: { wait?: () => Promise<void> } = {}
+  return control
+})
 vi.mock('./plugin-view-panel-settle', () => ({
   waitForColorScheme: async () => settling.wait?.(),
   nextPaintedFrames: async () => undefined

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { getConnectionId } from '@/lib/connection-context'
 import { formatClipboardFilePath } from '@/lib/clipboard-file-path'
@@ -31,14 +31,8 @@ import {
 } from './editor-artifact-upload'
 import { useEditorPanelSave } from './save/commands/useEditorPanelSave'
 import { isMarkdownReviewNotesEnabled } from '@/lib/markdown-review-notes-setting'
-import {
-  eligibleCustomEditorsForContent,
-  useFileCustomEditors
-} from '@/store/plugin-custom-editors'
-import {
-  withdrawPluginEditorContent,
-  reportPluginEditorContent
-} from './plugin-editor-capture-status'
+import { useFileCustomEditors } from '@/store/plugin-custom-editors'
+import { usePluginEditorContentReport } from './use-plugin-editor-content-report'
 import { applyCustomEditorToggle } from './view-mode/custom-editor-toggle'
 import { runAfterEditorFramesFlush } from './save/flush/editor-pending-flush'
 
@@ -145,33 +139,11 @@ function EditorPanelInner({
     editorViewMode,
     isVisible
   })
-  const contentOwner = useRef(Symbol('editor-content')).current
-  const activeContent = activeFile ? fileContents[activeFile.id] : undefined
-  useEffect(() => {
-    if (activeFile) {
-      const eligible = eligibleCustomEditorsForContent(
-        activeFile,
-        activeContent,
-        customEditors.customEditors
-      )
-      reportPluginEditorContent(
-        activeFile.id,
-        contentOwner,
-        activeContent ? eligible.map((editor) => editor.key) : undefined,
-        activeContent?.loadError
-          ? { code: 'editor_read_failed', message: activeContent.loadError }
-          : null,
-        activeFile.filePath,
-        eligible.find((editor) => editor.priority === 'default')?.key ?? null
-      )
-    }
-  }, [activeFile, activeContent, customEditors.customEditors, contentOwner])
-  useEffect(() => {
-    const fileId = activeFile?.id
-    return () => {
-      if (fileId) withdrawPluginEditorContent(fileId, contentOwner)
-    }
-  }, [activeFile?.id, contentOwner])
+  usePluginEditorContentReport(
+    activeFile,
+    activeFile ? fileContents[activeFile.id] : undefined,
+    customEditors.customEditors
+  )
   const isChangesMode =
     requestedChangesMode &&
     !!activeFile &&

@@ -2,6 +2,7 @@
 import { act, useEffect, useRef } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
 import { useAppStore } from '@/store'
 import { usePluginPanelsStore } from '@/store/plugin-panels'
 import {
@@ -87,15 +88,16 @@ function LoadedEditor({
         null
       )
     }
-  }, [file, content])
+  }, [file, content, contentOwner])
+  const fileId = file?.id
   useEffect(
     () => () => {
-      if (file) {
-        withdrawPluginEditorContent(file.id, contentOwner)
-        withdrawPluginEditorFrame(file.id, contentOwner)
+      if (fileId) {
+        withdrawPluginEditorContent(fileId, contentOwner)
+        withdrawPluginEditorFrame(fileId, contentOwner)
       }
     },
-    [file?.id]
+    [fileId, contentOwner]
   )
   useEffect(() => {
     if (choice) {
@@ -110,7 +112,7 @@ function LoadedEditor({
         )
       }
     }
-  }, [choice, file, progress, wrongFrame])
+  }, [choice, file, progress, wrongFrame, contentOwner])
   return null
 }
 
@@ -124,8 +126,10 @@ beforeEach(() => {
     activeView: 'terminal',
     activeWorktreeId: 'wt-binary',
     openFiles: [],
-    worktreesByRepo: { repo: [{ id: 'wt-binary', path: '/workspace', isArchived: false }] }
-  } as never)
+    worktreesByRepo: {
+      repo: [makeWorktree({ id: 'wt-binary', repoId: 'repo', path: '/workspace' })]
+    }
+  })
   usePluginPanelsStore.setState({ plugins: [plugin] })
   useCustomEditorViewStore.setState({ choices: {} })
   container = document.createElement('div')

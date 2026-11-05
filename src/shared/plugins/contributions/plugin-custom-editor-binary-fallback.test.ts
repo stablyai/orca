@@ -19,7 +19,9 @@ function raw(customEditor: Record<string, unknown>, floor = '>=1.4.250') {
 }
 function manifest(customEditor: Record<string, unknown>) {
   const result = parsePluginManifest(raw(customEditor))
-  if (!result.ok) throw new Error(result.error)
+  if (!result.ok) {
+    throw new Error(result.error)
+  }
   return result.manifest
 }
 

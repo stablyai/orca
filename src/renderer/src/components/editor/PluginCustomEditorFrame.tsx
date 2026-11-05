@@ -174,7 +174,10 @@ export default function PluginCustomEditorFrame({
     entry.status === 'ready' && !guest && editor.frame === 'isolated'
       ? {
           code: 'editor_frame_unavailable',
-          message: 'This editor requires an isolated desktop frame.',
+          message: translate(
+            'auto.components.editor.PluginEditorNeedsDesktopNotice.heading',
+            'This editor needs the Orca desktop app'
+          ),
           editorKey: editor.key
         }
       : null,

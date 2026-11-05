@@ -8,7 +8,7 @@ import {
 import type { PluginManifest } from '../../../../../shared/plugins/manifest/plugin-manifest'
 import { getIntlLocale, translate } from '@/i18n/i18n'
 import { customEditorTakeover } from './plugin-custom-editor-takeover'
-import { fileList } from './plugin-contribution-file-list'
+import { fileList, customEditorFileList } from './plugin-contribution-file-list'
 import {
   statusBarContributionRows,
   statusBarItemTitles,
@@ -266,17 +266,7 @@ export function describePluginContributions(
   }
   for (const [index, editor] of source.customEditors.entries()) {
     const label = translate('auto.components.settings.PluginDetailSections.customEditor', 'Editor')
-    const files = [
-      fileList(editor.extensions, editor.filenames),
-      editor.binaryFallback
-        ? translate(
-            'auto.components.plugins.binaryFallback',
-            'Unsupported binary files (any file name)'
-          )
-        : null
-    ]
-      .filter(Boolean)
-      .join(', ')
+    const files = customEditorFileList(editor)
     const takeover = customEditorTakeover(editor)
     rows.push({
       key: `customEditors:${index}`,

@@ -126,6 +126,7 @@ describe('custom editor file and split lifetime', () => {
       root.render(
         <>
           <View key="left" file={a} guest="left" />
+          <Tab file={a} />
         </>
       )
     )
