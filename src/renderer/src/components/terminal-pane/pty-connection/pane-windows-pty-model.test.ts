@@ -170,6 +170,51 @@ describe('pane resize model on a Mac client', () => {
     expect(await scrollbackAfterShrinkAndGrow(terminal)).toBeGreaterThan(0)
   })
 
+  it("re-resolves when a reattached mirror learns it belongs to the server's SSH target", async () => {
+    const terminal = newTerminal()
+    const store = fakeStore({
+      ...EMPTY,
+      runtimeStatusByEnvironmentId: new Map([['env-1', serverStatus('win32')]]),
+      sshStateByEnvironment: new Map([
+        [
+          'env-1',
+          {
+            connectionStates: new Map([['target-1', sshState('linux')]]),
+            targetLabels: new Map(),
+            targetGenerations: new Map(),
+            removedTargetLabels: new Map(),
+            targetsHydrated: true
+          }
+        ]
+      ])
+    })
+    let executionHostId: ExecutionHostId = 'runtime:env-1'
+    const hostListeners = new Set<() => void>()
+    const transport = {
+      getRuntimeEnvironmentId: () => 'env-1',
+      getExecutionHostId: () => executionHostId,
+      onExecutionHostChange: (listener: () => void) => {
+        hostListeners.add(listener)
+        return () => hostListeners.delete(listener)
+      }
+    }
+    const model = createPaneWindowsPtyModel(
+      paneContext(terminal, 'runtime:env-1', transport),
+      store
+    )
+    model.apply()
+    model.apply()
+    expect(hostListeners.size).toBe(1)
+    expect(terminal.options.windowsPty).toEqual({ backend: 'conpty' })
+
+    executionHostId = 'ssh:target-1'
+    hostListeners.forEach((listener) => listener())
+
+    expect(await scrollbackAfterShrinkAndGrow(terminal)).toBeLessThanOrEqual(0)
+    model.dispose()
+    expect(hostListeners.size).toBe(0)
+  })
+
   it('does not watch the store for an owner it can never name', () => {
     const terminal = newTerminal()
     terminal.options.windowsPty = { backend: 'conpty' }

@@ -32,7 +32,7 @@ export function runtimeHostPlatform(
 }
 
 export type PaneOwnerTransport = Partial<
-  Pick<PtyTransport, 'getRuntimeEnvironmentId' | 'getExecutionHostId'>
+  Pick<PtyTransport, 'getRuntimeEnvironmentId' | 'getExecutionHostId' | 'onExecutionHostChange'>
 > | null
 
 export type RemotePtyOwnerMachine =
