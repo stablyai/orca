@@ -16,7 +16,7 @@ import { getSetupConfig, getSetupTrustContent } from '../../../shared/orca-hook-
 import { isENOENT } from '../../ipc/filesystem/access/filesystem-path-containment'
 import { isFolderRepo } from '../../../shared/repo-kind'
 import { inspectSetupScriptImportCandidates } from '../../../shared/workspace-setup/setup-script-imports'
-import { joinWorktreeRelativePath } from '../runtime-relative-paths'
+import { joinWorktreeRelativePath } from '../files/paths/runtime-relative-paths'
 import { blockedWslDistroForPath } from '../../wsl/filesystem/wsl-unc-access-gate'
 
 type RuntimeRepositoryHooksCommandsDeps = {

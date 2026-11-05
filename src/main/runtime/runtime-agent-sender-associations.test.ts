@@ -9,7 +9,7 @@ import {
   fingerprintOrchestrationPeer,
   pairedOrchestrationPeers
 } from './orchestration/environment-transport'
-import { devicePrincipalOf } from './device-principal'
+import { devicePrincipalOf } from './rpc/server/pairing/device-principal'
 import { OrchestrationDb } from './orchestration/db'
 import { createRootDispatch } from './orchestration/db/root-dispatch-test-fixture'
 import { MIRROR_LEAVES_STEP_1 } from './runtime-leaf-record-projection.test-fixture'
@@ -27,7 +27,7 @@ import {
 import {
   mintStructuredWorkerHandle,
   mintStructuredWorkerPaneKey
-} from './structured-worker-identity'
+} from './orchestration/terminal-authority/structured-sessions/structured-worker-identity'
 import { testOrcaSessionId } from '../../shared/orca-session-address-test-fixture'
 import { projectSessionTabsForClient } from './rpc/methods/session-tabs-inventory'
 import { AGENT_SENDER_PANE_READS } from './runtime-agent-sender-worker-history'

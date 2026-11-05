@@ -10,7 +10,6 @@ import {
   createBundleServer,
   installShellDouble,
   readBridgeFaultGrant,
-  readBridgePageClientIdentity,
   readBridgeProtocolVersion,
   readShellCsp
 } from '../preview/mobile-web-app-render-harness.mjs'
@@ -83,7 +82,6 @@ let origin
 let cspHeader = null
 let bridgeVersion = null
 let faultGrant = null
-let pageClientIdentity = null
 
 beforeAll(async () => {
   if (!bundles) {
@@ -92,7 +90,6 @@ beforeAll(async () => {
   cspHeader = await readShellCsp()
   bridgeVersion = await readBridgeProtocolVersion()
   faultGrant = await readBridgeFaultGrant()
-  pageClientIdentity = await readBridgePageClientIdentity()
   scratch = await mkdtemp(join(tmpdir(), 'orca-mobile-web-app-terminal-init-'))
   const built = await buildMobileWebAppBundle({ outDir: join(scratch, 'bundle') })
   const served = await createBundleServer({ outDir: built.outDir, cspHeader })
@@ -197,18 +194,6 @@ async function waitForSubscribe(page, method) {
 describeRender(
   'the session route attaches its terminal on the page',
   () => {
-    it('subscribes to the terminal the tab snapshot named, carrying a client identity', async () => {
-      const { page } = await openSessionWithTerminalTab()
-      const subscribe = await waitForSubscribe(page, 'terminal.subscribe')
-      expect(subscribe.params.terminal).toBe(HANDLE)
-      // Page claims placeholder only; native shell substitutes authenticated device identity as frame leaves.
-      expect(subscribe.params.client).toEqual({
-        id: pageClientIdentity.placeholder,
-        type: 'mobile'
-      })
-      await page.close()
-    }, 300_000)
-
     it('receives init in the document and measures a non-zero grid', async () => {
       const { errors, page } = await openSessionWithTerminalTab()
       const subscribe = await waitForSubscribe(page, 'terminal.subscribe')

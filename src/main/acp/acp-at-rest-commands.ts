@@ -11,7 +11,7 @@ import type { AgentCliVersionReader } from '../agent-launch/preflight/agent-cli-
 import type { ProviderProcessLaunch } from '../provider-process/provider-process-launch'
 import { ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV } from '../../shared/agent-session/lifecycle/agent-session-caller-env'
 import { ORCA_AGENT_SESSION_CALLER_ENV_KEYS } from '../ipc/pty/host-env/spawn-env-keys'
-import { STRUCTURED_CHILD_ENV_TO_DELETE } from '../runtime/structured-session-child-env'
+import { STRUCTURED_CHILD_ENV_TO_DELETE } from '../runtime/agent-session/environment/structured-session-child-env'
 import {
   LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV,
   NATIVE_CHAT_SCRATCH_DIR_ENV

@@ -9,7 +9,7 @@ afterEach(() => {
 import {
   RuntimeAccountController,
   type RuntimeAccountServices
-} from '../../../main/runtime/runtime-account-controller'
+} from '../../../main/runtime/agent-session/environment/runtime-account-controller'
 import { createEmptyRateLimitState } from '../../../shared/rate-limit-state-factory'
 import type { RateLimitState } from '../../../shared/rate-limit-types'
 import type { ProviderAccountsSnapshot } from './runtime-provider-accounts-client'

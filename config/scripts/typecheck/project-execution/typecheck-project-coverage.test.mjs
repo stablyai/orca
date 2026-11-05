@@ -30,7 +30,10 @@ function typedFiles(directory) {
 
 describe('typecheck project coverage', () => {
   it('checks the real CLI coordinator-mail integration in exactly one mixed project', () => {
-    const file = resolve(root, 'src/main/runtime/structured-chat-coordinator-mail.test.ts')
+    const file = resolve(
+      root,
+      'src/main/runtime/orchestration/terminal-authority/structured-sessions/structured-chat-coordinator-mail.test.ts'
+    )
     expect(
       projects.filter((project) => project.files.has(file)).map((project) => project.config)
     ).toEqual(['config/tsconfig.test.pane-launch.json'])

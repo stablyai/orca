@@ -34,7 +34,7 @@ import { OrcaRuntimeService } from '../../orca-runtime'
 import {
   WORKTREE_SCAN_ADMIN_FINGERPRINT_TIMEOUT_MS,
   WORKTREE_SCAN_ADMIN_RECONCILE_INTERVAL_MS
-} from '../../orca-runtime-postlude'
+} from './worktree-scan-admin-budget'
 import { RESOLVED_WORKTREE_REPO_TIMEOUT_MS } from './repo-worktree-row-resolution'
 import { canonicalWorktreeIdentity } from '../../../../shared/worktree/identity'
 import type { HostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'

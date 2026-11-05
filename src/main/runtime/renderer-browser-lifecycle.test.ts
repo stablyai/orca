@@ -14,7 +14,7 @@ import type {
   RuntimeMobileSessionBrowserTab,
   RuntimeMobileSessionTabsSnapshot
 } from '../../shared/runtime-types'
-import { getRuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
+import { getRuntimeBrowserPageRegistry } from './browser/client-pages/runtime-browser-page-registry'
 
 const rendererTab: RuntimeMobileSessionBrowserTab = {
   type: 'browser',

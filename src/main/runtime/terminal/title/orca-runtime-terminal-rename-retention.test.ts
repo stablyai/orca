@@ -14,7 +14,7 @@ import {
 
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { committingSpawn } from '../../orca-runtime-tests/bind-first-pane.test-fixture'
-import { buildRuntimeMobileAgentStatus } from '../../runtime-mobile-agent-status-builder'
+import { buildRuntimeMobileAgentStatus } from '../../session-lifecycle/projection/runtime-mobile-agent-status-builder'
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 
 describe('terminal rename before renderer graph hydration', () => {

@@ -17,13 +17,11 @@ import type { MobileNativeChatLiveLine as LiveLine } from './use-mobile-native-c
 export function MobileNativeChatLiveLine({
   line,
   onToggleReasoning,
-  fontScale,
-  onOpenFile
+  fontScale
 }: {
   line: LiveLine
   onToggleReasoning: (key: string) => void
   fontScale: number
-  onOpenFile?: (relativePath: string) => void
 }): React.JSX.Element {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -68,7 +66,6 @@ export function MobileNativeChatLiveLine({
             positionKey={nativeChatReasoningDisclosureKey(reasoning.message.id)}
             markdown={reasoning.markdown}
             fontScale={fontScale}
-            onOpenFile={onOpenFile}
             onLongPress={INLINE_TEXT_SELECTION ? undefined : () => openActions(reasoning.message)}
           />
         </View>

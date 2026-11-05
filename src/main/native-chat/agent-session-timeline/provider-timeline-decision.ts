@@ -99,7 +99,7 @@ export function decideProviderTimelineEvent(
     case 'turn.end':
       return decideTurnEnd(input, event)
     case 'turn.settled':
-      return decideTurnSettled(event)
+      return decideTurnSettled(input, event)
     case 'item.open':
     case 'item.update':
     case 'item.close':

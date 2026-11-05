@@ -8,7 +8,7 @@ import {
   B,
   C,
   root
-} from '../../src/main/runtime/structured-agent-session-tab-authority.test-support'
+} from '../../src/main/runtime/agent-session/lifecycle/structured-agent-session-tab-authority.test-support'
 import { closeTestJournalHostDatabases } from '../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
 import { journalDatabasePath } from '../../src/main/native-chat/agent-session-journal/journal-host-database'
 import { getStructuredAgentSessionHost } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-registry'

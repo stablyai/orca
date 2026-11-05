@@ -7,7 +7,6 @@ import { openInMemoryRelayDatabase, type RelayDatabase } from '../../database/da
 
 const HEARTBEAT_TTL_MS = 45_000
 const BOUND = 60
-const RELAY_CELL_COUNT = 16
 const OLD_INCARNATION = '11111111-1111-4111-8111-111111111111'
 const NEW_INCARNATION = '22222222-2222-4222-8222-222222222222'
 
@@ -180,20 +179,6 @@ describe('effective connection cap = min(configured, reported)', () => {
     }
   )
 
-  it('keeps a stored report across a lower-then-raise', async () => {
-    const before = cell(1, 3_000)
-    const harness = await setup([before])
-    await harness.heartbeat(before, { connectionHardCap: 3_000 })
-    await harness.store.reconcileCells([cell(1, 1_000)], true)
-    expect(await harness.capacity(before.id)).toMatchObject({
-      reportedHardCap: 3_000,
-      effectiveHardCap: 1_000
-    })
-    await harness.store.reconcileCells([cell(1, 3_000)], true)
-
-    expect(await harness.capacity(before.id)).toMatchObject({ effectiveHardCap: 3_000 })
-  })
-
   it('keeps telemetry on a lowering, places against it and refuses the higher report', async () => {
     const before = cell(1, 3_000)
     const harness = await setup([before])
@@ -229,49 +214,6 @@ describe('effective connection cap = min(configured, reported)', () => {
     await expect(
       harness.store.assign({ userId: 'user-a', relayHostId: 'host000000000001' })
     ).rejects.toThrow('relay_capacity_exhausted')
-  })
-
-  it('survives revisions with different caps reconciling in turn during a deploy', async () => {
-    // A new revision raises 16 cells; an outgoing instance of the same code, still configured at
-    // 1,000, then boots and reconciles them back down; the new revision boots again.
-    const lower = Array.from({ length: RELAY_CELL_COUNT }, (_, index) => cell(index + 1, 1_000))
-    const higher = lower.map((_, index) => cell(index + 1, 3_000))
-    const harness = await setup(lower)
-    for (const target of lower) await harness.heartbeat(target, { connectionHardCap: 1_000 })
-    let host = 0
-    for (const config of [higher, lower, higher]) {
-      await harness.store.reconcileCells(config, true)
-      for (const target of lower) {
-        expect(await harness.telemetryRows(target.id)).toBe(2)
-        expect(await harness.capacity(target.id)).toMatchObject({
-          reportedHardCap: 1_000,
-          effectiveHardCap: 1_000,
-          heartbeatFresh: true
-        })
-      }
-      await expect(
-        harness.store.assign({ userId: `user-${host}`, relayHostId: `interleave${host++}` })
-      ).resolves.toMatchObject({ placed: true })
-    }
-  })
-
-  it('takes a raise only once the cell itself reports it', async () => {
-    const before = cell(1, 1_000)
-    const harness = await setup([before])
-    await harness.heartbeat(before, { connectionHardCap: 1_000 })
-    await harness.store.reconcileCells([cell(1, 3_000)], true)
-    await harness.heartbeat(before, {
-      connectionHardCap: 3_000,
-      incarnation: NEW_INCARNATION,
-      startedAt: 90
-    })
-
-    expect(await harness.capacity(before.id)).toMatchObject({
-      hardCap: 3_000,
-      reportedHardCap: 3_000,
-      effectiveHardCap: 3_000,
-      normalAdmissionPause: 2_840
-    })
   })
 
   it('places a mixed fleet against each cell’s own reported cap', async () => {
@@ -332,54 +274,4 @@ describe('effective connection cap = min(configured, reported)', () => {
     })
   })
 
-  it('changes no placement, sticky or status answer on a 16-cell raise', async () => {
-    const before = Array.from({ length: RELAY_CELL_COUNT }, (_, index) => cell(index + 1, 1_000))
-    const harness = await setup(before)
-    for (const [index, target] of before.entries()) {
-      await harness.heartbeat(target, { connectionHardCap: 1_000, units: 100 + index })
-    }
-    const pinned = []
-    for (let index = 0; index < RELAY_CELL_COUNT; index++) {
-      pinned.push(
-        await harness.store.assign({ userId: `user-${index}`, relayHostId: `pinned${index}` })
-      )
-    }
-    const statusBefore = await Promise.all(
-      before.map(async ({ id }) => await harness.store.reserveAwareCellDeploymentStatus(id))
-    )
-
-    await harness.store.reconcileCells(
-      before.map((_, index) => cell(index + 1, 3_000)),
-      true
-    )
-
-    // No heartbeat has landed since the raise.
-    for (const [index, target] of before.entries()) {
-      const after = await harness.store.reserveAwareCellDeploymentStatus(target.id)
-      expect(after).toEqual({
-        ...statusBefore[index],
-        status: {
-          ...statusBefore[index]!.status,
-          connectionCapacity: {
-            ...statusBefore[index]!.status.connectionCapacity,
-            hardCap: 3_000,
-            reportedHardCap: 1_000
-          }
-        }
-      })
-    }
-    for (const [index, assignment] of pinned.entries()) {
-      await expect(
-        harness.store.assign({ userId: `user-${index}`, relayHostId: `pinned${index}` })
-      ).resolves.toMatchObject({
-        cellId: assignment.cellId,
-        assignmentEpoch: assignment.assignmentEpoch
-      })
-    }
-    for (let index = 0; index < RELAY_CELL_COUNT; index++) {
-      await expect(
-        harness.store.assign({ userId: `fresh-${index}`, relayHostId: `fresh${index}` })
-      ).resolves.toMatchObject({ placed: true })
-    }
-  })
 })

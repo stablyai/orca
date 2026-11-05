@@ -25,7 +25,7 @@ import {
   agentLaunchRepairRefusal,
   PROJECT_RUNTIME_REPAIR_REQUIRED_CODE
 } from '../../../../shared/project-runtime-repair-message'
-import type { TerminalWorkspaceLaunchScope } from '../../runtime-legacy-worker-terminal-recovery-types'
+import type { TerminalWorkspaceLaunchScope } from '../../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 
 type AgentLaunchRuntimeStore = Omit<LaunchScopeRuntimeStore, 'getSettings'> &
   Pick<RuntimeStore, 'getSettings'>

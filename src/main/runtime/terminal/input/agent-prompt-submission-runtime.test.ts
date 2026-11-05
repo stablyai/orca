@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AGENT_PROMPT_BRACKETED_PASTE_END } from '../../../../shared/agent-launch/startup/agent-prompt-injection'
 import { createAgentPromptSubmissionRuntime } from './agent-prompt-submission-runtime-test-fixture'
 import type { OrcaRuntimeService } from '../../orca-runtime'
-import { TUI_IDLE_QUIESCENCE_MS } from '../../orca-runtime-postlude'
+import { TUI_IDLE_QUIESCENCE_MS } from '../wait/terminal-idle-policy'
 
 const createPromptRuntime = createAgentPromptSubmissionRuntime
 

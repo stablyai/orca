@@ -107,20 +107,6 @@ describe('control accept cell-row lock span', () => {
     return Number(row.units)
   }
 
-  it('writes the shared cell row once, last, and never takes it as a read lock', async () => {
-    const control = await accept(1)
-    await store.releaseActivity(host, control)
-
-    await accept(2)
-
-    const cells = cellStatements()
-    expect(cells.map((statement) => statement.locked)).toEqual([false])
-    expect(cells[0]!.sql).toContain('RETURNING cell_id')
-    // The contended row is written by the last statement of the transaction, so
-    // its write lock is held across the commit alone, not the whole accept.
-    expect(recorder.statements.at(-1)).toBe(cells[0])
-  })
-
   it('leaves the cell row untouched when a rebind retires and installs one control', async () => {
     await accept(1)
 

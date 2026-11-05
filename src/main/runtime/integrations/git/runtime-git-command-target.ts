@@ -15,7 +15,7 @@ import type {
 import { SshHostNotServedError } from '../../../providers/ssh-host-not-served-error'
 import type { CommitMessageAgentEnvironmentResolvers } from '../../../text-generation/commit-message-agent-environment'
 import type { PullRequestLinkedIssueMeta } from '../../../source-control/pull-request-linked-issue'
-import { normalizeRuntimeRelativePath } from '../../runtime-relative-paths'
+import { normalizeRuntimeRelativePath } from '../../files/paths/runtime-relative-paths'
 
 export type ResolvedRuntimeGitWorktree = Worktree & { git: GitWorktreeInfo }
 

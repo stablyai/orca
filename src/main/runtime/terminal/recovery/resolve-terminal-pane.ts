@@ -10,10 +10,8 @@ import type {
   RuntimeTerminalCreate,
   RuntimeTerminalSummary
 } from '../../../../shared/runtime-terminal-contracts'
-import type {
-  RuntimeProviderSnapshotReadOptions,
-  TerminalHandleRecord
-} from '../../runtime-terminal-contracts'
+import type { RuntimeProviderSnapshotReadOptions } from '../output/provider-snapshot-read-options'
+import type { TerminalHandleRecord } from '../identity/terminal-handle-records'
 import type {
   RuntimeLeafRecord,
   RuntimePtyWorktreeRecord
@@ -26,7 +24,7 @@ import {
   readTerminalTail
 } from '../output/tail/terminal-tail-read'
 import { getTerminalState } from '../wait/terminal-wait-results'
-import { readStructuredWorkerTerminal } from '../../structured-worker-terminal-read'
+import { readStructuredWorkerTerminal } from '../../orchestration/terminal-authority/structured-sessions/structured-worker-terminal-read'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 
 export abstract class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWithRestoredHandlePaneStart {
