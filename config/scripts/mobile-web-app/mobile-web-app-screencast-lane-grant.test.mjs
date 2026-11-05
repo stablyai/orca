@@ -5,13 +5,13 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { mobileWebAppRouteClosure } from '../build-mobile-web-app-bundle.mjs'
+import { mobileWebAppRouteClosure } from '../build/mobile-web-app/build-mobile-web-app-bundle.mjs'
 import { mobileWebAppDependenciesPresent } from './mobile-web-app-bundle-dependencies.mjs'
 import {
   PAGE_ROUTE_MODULES,
   pageRouteModulesCoverTheManifest
 } from './mobile-web-app-page-route-modules.mjs'
-import { MOBILE_WEB_PAGE_ROUTES } from '../mobile-web-page-routes.mjs'
+import { MOBILE_WEB_PAGE_ROUTES } from '../build/mobile-web-app/mobile-web-page-routes.mjs'
 
 const mobileDir = fileURLToPath(new URL('../../../mobile/', import.meta.url))
 const describeClosure = mobileWebAppDependenciesPresent() ? describe : describe.skip

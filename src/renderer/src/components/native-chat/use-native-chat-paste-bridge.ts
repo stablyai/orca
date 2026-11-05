@@ -19,11 +19,14 @@ type NativeChatPasteBridgeRefs = {
   rootRef: RefObject<HTMLDivElement | null>
   composerRef: RefObject<NativeChatComposerHandle | null>
   /** Paste here while the question card owns input and the composer is unmounted. */
-  questionAnswerInputRef?: RefObject<HTMLInputElement | null>
+  questionAnswerInputRef?: RefObject<HTMLInputElement | HTMLTextAreaElement | null>
 }
 
 /** Text-only on purpose: an answer input takes no image attachments. */
-function pasteClipboardTextInto(input: HTMLInputElement, stillTarget: () => boolean): void {
+function pasteClipboardTextInto(
+  input: HTMLInputElement | HTMLTextAreaElement,
+  stillTarget: () => boolean
+): void {
   void (async () => {
     const text = await window.api.ui
       .readClipboardText({ maxBytes: TEXT_CONTROL_PASTE_MAX_BYTES })

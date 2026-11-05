@@ -97,7 +97,7 @@ describe('complete handback acceptance', () => {
           snapshot: [],
           invokeAction: async () => true,
           setOption: async () => true,
-          setThreadGoalObjective: () => goal.promise
+          changeThreadGoal: () => goal.promise
         }),
       optionsSurface: {
         getSnapshot: () => [],

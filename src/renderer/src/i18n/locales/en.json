@@ -3972,7 +3972,6 @@
             "e8b3741ff7": "Ignored",
             "a9957007eb": "Ignore {{value0}}",
             "bef0adef9b": "Branch",
-            "0b1766738a": "Repo",
             "bbb1ab6a6f": "Select {{value0}}",
             "b771c92598": "Delete selected",
             "7eee951968": "Scanning workspaces",
@@ -3981,7 +3980,6 @@
             "b2c1331844": "Delete Inactive Workspaces",
             "7f451a3e2c": "Could not ignore cleanup suggestion",
             "662b8ec3f8": "Workspace cleanup scan failed",
-            "4d0b72481c": "Ignore",
             "9cc26c019d": "Remove",
             "0e2d235c63": "Workspace scan ready",
             "4a35c08764": "Review",
@@ -3989,9 +3987,6 @@
             "1d3503357d": "You can close this and come back while deletion continues.",
             "4c2990886e": "{{value0}}/{{value1}} deleted",
             "86ba852118": "{{value0}}, {{value1}} failed",
-            "deletingCount": "Deleting workspaces: {{value0}}",
-            "deleteCount": "Delete workspaces: {{value0}}?",
-            "selectedForDeletionCount": "Selected for deletion: {{value0}}",
             "deleteButtonCount": "Delete {{value0}}",
             "archivedStatus": "Archived",
             "74f6c16279": "Back"
@@ -4006,7 +4001,6 @@
           },
           "candidateRow": {
             "gitLabel": "Git",
-            "commitsLabel": "Commits",
             "contextLabel": "Context",
             "flagsLabel": "Flags",
             "collapseDetails": "Collapse details",
@@ -15875,8 +15869,6 @@
           "AiCommitPrSettingsCard": {
             "8d4152701a": "e.g. ollama run llama3.1 {{value0}}",
             "9ee54037a4": "Custom command",
-            "4b2fc4b80c": "Thinking effort",
-            "be8917699e": "Model",
             "560d4feb00": "Custom",
             "29d119fe95": "Agent",
             "f9382b48a1": "Enable AI author",
@@ -20460,7 +20452,8 @@
         "settingsRejected": "Codex could not apply the selected model and effort. This goal change was not sent. Check the selection and try again.",
         "settingsUnconfirmed": "Codex did not confirm the selected model and effort. This goal change was not sent. Check the chat and try again.",
         "pauseUnconfirmed": "Codex stopped running, but its goal pause was not confirmed. Check the goal before continuing.",
-        "stopUnconfirmed": "Codex could not confirm Stop. Check the chat before continuing."
+        "stopUnconfirmed": "Codex could not confirm Stop. Check the chat before continuing.",
+        "noGoal": "Codex has no goal to change in this chat. Set one with /goal followed by the objective."
       },
       "slashCommandDescriptions": {
         "clearConversation": "Clear the conversation",
@@ -20657,9 +20650,7 @@
         "browse": {
           "noSizes": "No workspace sizes measured yet.",
           "noSizesDescription": "Sizes appear after disk usage has been measured.",
-          "measureSizes": "Scan",
           "measureSizesTitle": "Scan workspace sizes",
-          "measureSizesDescription": "Scan disk usage to compare, sort, and filter workspaces by size.",
           "sizeOnDisk": "Size on disk: {{value0}}",
           "checkingGitRow": "Checking git status",
           "searchPlaceholder": "Search name, repo, branch, path, host",
@@ -20841,7 +20832,18 @@
           "selectionWithheldCount_other": "{{count}} selected workspaces are hidden by the current filters and were deselected.",
           "selectAllSafetyChecked_one": "Select {{count}} safety-checked workspace",
           "selectAllSafetyChecked_other": "Select all {{count}} safety-checked workspaces",
-          "lastActive": "Last active {{value0}}"
+          "lastActive": "Last active {{value0}}",
+          "projectNamed": "Project: {{value0}}",
+          "moreFlags": "Show {{value0}} more flags",
+          "pathLabel": "Path",
+          "copyPath": "Copy path",
+          "gitNotChecked": "Not checked",
+          "workspaceCount_one": "{{count}} workspace",
+          "workspaceCount_other": "{{count}} workspaces",
+          "restoreFailed": "Could not stop ignoring {{value0}}",
+          "ignoreTooltip": "Ignore: skip in bulk delete",
+          "stopIgnoring": "Stop ignoring",
+          "stopIgnoringNamed": "Stop ignoring {{value0}}"
         },
         "scan": {
           "progress": "Scanning workspaces ({{value0}}/{{value1}})",
@@ -20882,6 +20884,12 @@
             "unpushed": "Unpushed",
             "unknown": "Unknown"
           }
+        },
+        "confirm": {
+          "deletingTitle_one": "Deleting {{count}} workspace",
+          "deletingTitle_other": "Deleting {{count}} workspaces",
+          "deleteTitle_one": "Delete {{count}} workspace?",
+          "deleteTitle_other": "Delete {{count}} workspaces?"
         }
       },
       "creation": {

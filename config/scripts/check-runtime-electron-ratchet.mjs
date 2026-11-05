@@ -6,8 +6,11 @@ import { existsSync, readdirSync } from 'node:fs'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import process from 'node:process'
-import { isTestOnlyDirectoryName, isTestOnlySourcePath } from './test-only-source-path.mjs'
-import { createWorkspaceSourceResolver } from './workspace-source-exports.mjs'
+import {
+  isTestOnlyDirectoryName,
+  isTestOnlySourcePath
+} from './static-analysis/process-boundaries/test-only-source-path.mjs'
+import { createWorkspaceSourceResolver } from './workspace/source-exports/workspace-source-exports.mjs'
 
 // Resolve from module location: CI/editors may run outside root; cwd-relative paths previously caused ENOENT.
 const ROOT = path.join(import.meta.dirname, '..', '..')

@@ -1,6 +1,9 @@
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
-import { readTrackedSources, runEntryRatchet } from './ratchet-baseline.mjs'
+import {
+  readTrackedSources,
+  runEntryRatchet
+} from './static-analysis/ratchet-baseline/ratchet-baseline.mjs'
 
 // Ratchet gate for the `@ts-nocheck` directive.
 //

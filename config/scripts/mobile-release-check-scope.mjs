@@ -1,6 +1,6 @@
 import { appendFileSync, readFileSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
-import { isDocsOnlyPath } from './pr-code-change-scope.mjs'
+import { isDocsOnlyPath } from './workflow/source-routing/pr-code-change-scope.mjs'
 
 const APPLICATION_PREFIXES = ['src/', 'mobile/app/', 'mobile/src/']
 // The root lockfile triggers Mobile Checks for its tests and typechecks; the Ruby release checks

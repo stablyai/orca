@@ -89,7 +89,7 @@
       "invariant": "The relocated Windows daemon must retain the registry package root JS and native binary independently of its install tree, reject incomplete source or mirror files, and preserve an existing mirror while repairing it.",
       "oracle": "Run the real package JS from the relocated entry after deleting the install tree, reach its native loader, refuse each missing source file before staging, and replace each incomplete mirror without deleting its sentinel. Pin the real package name against the Windows packaging allowlist. On Windows, read ProductName through the built native addon from the mirror.",
       "commands": [
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/daemon/daemon-host-process-package.test.ts src/main/daemon/daemon-host-file-hash-cache.test.ts config/scripts/pr-code-change-scope.test.mjs config/scripts/package-electron-runtime-contract.test.mjs"
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/daemon/daemon-host-process-package.test.ts src/main/daemon/daemon-host-file-hash-cache.test.ts config/scripts/workflow/source-routing/pr-code-change-scope.test.mjs config/scripts/package-electron-runtime-contract.test.mjs"
       ],
       "testFiles": [
         "src/main/daemon/daemon-host-process-package.test.ts",
@@ -112,6 +112,7 @@
           "runner": "local",
           "platform": "macos",
           "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/daemon/daemon-host-process-package.test.ts src/main/daemon/daemon-host-file-hash-cache.test.ts config/scripts/pr-code-change-scope.test.mjs config/scripts/package-electron-runtime-contract.test.mjs",
+          "currentCommand": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/daemon/daemon-host-process-package.test.ts src/main/daemon/daemon-host-file-hash-cache.test.ts config/scripts/workflow/source-routing/pr-code-change-scope.test.mjs config/scripts/package-electron-runtime-contract.test.mjs",
           "result": "passed",
           "durationSeconds": 1.1,
           "summary": "Gate files and packaging scope contracts: 76 tests passed in four files, one Windows native-read test skipped. Full daemon-host suite also passed 94 tests in eight files. Original implementation fails seven new registry regressions."
@@ -1319,91 +1320,12 @@
       ],
       "demotionRule": "Remain experimental until repeated independent or CI evidence; investigate ordering or unbounded-wait regressions without weakening the hold or deadline assertions."
     },
-    {
-      "id": "settings.general-section-lifetime",
-      "title": "General settings search preserves matching section state",
-      "maturity": "experimental",
-      "protection": "partial",
-      "owner": "renderer-settings",
-      "layer": "renderer-unit",
-      "surfaces": [
-        "General settings search",
-        "app version and remote update display",
-        "autosave settings draft"
-      ],
-      "platforms": ["macos", "linux", "windows"],
-      "providers": ["local", "remote-runtime", "ssh", "wsl"],
-      "coveredPlatforms": ["macos"],
-      "coveredProviders": [],
-      "coverageNotes": "Actual GeneralPane, update/version and remote-status components with mocked store/API; actual autosave form. Windows runtime on/off simulated. No physical updater, paired host, settings write or native input.",
-      "motivatingLinks": [
-        "https://github.com/stablyai/orca/blob/main/src/renderer/src/components/settings/general/GeneralPane.tsx"
-      ],
-      "invariant": "A matching General settings section retains its owner and state as preceding search results disappear; an actually removed section releases its owner and reloads when shown again.",
-      "oracle": "Across 14 matching searches the Updates section keeps the same DOM node and the version-read and remote-refresh counts do not grow, instead of six each. Store-published remote update state still reaches the retained section. Explicit refresh and genuine hide/reopen still read; drafts yield to externally changed saved settings; a removed owner cannot publish its late version.",
-      "commands": [
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/settings/general/GeneralPane.section-lifetime.test.tsx"
-      ],
-      "testFiles": [
-        "src/renderer/src/components/settings/general/GeneralPane.section-lifetime.test.tsx"
-      ],
-      "assertionRefs": [
-        {
-          "file": "src/renderer/src/components/settings/general/GeneralPane.section-lifetime.test.tsx",
-          "assertions": [
-            "keeps showing store-published remote update state without a remount",
-            "keeps explicit remote refresh and true hide/reopen reads",
-            "preserves an autosave draft until external settings change or the section hides",
-            "does not publish a version result from a genuinely unmounted section"
-          ]
-        }
-      ],
-      "evidenceRuns": [
-        {
-          "date": "2026-09-26",
-          "runner": "local",
-          "platform": "macos",
-          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/settings/GeneralPane.section-lifetime.test.tsx",
-          "currentCommand": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/settings/general/GeneralPane.section-lifetime.test.tsx",
-          "result": "passed",
-          "durationSeconds": 1.89,
-          "summary": "7 tests/1 suite pass after the shared SettingsSectionStack adoption. Read-count oracles restated as node identity plus non-growing counts; original main fails both retained-section cases, the draft, the release-picker reveal and the late-version publish."
-        }
-      ],
-      "runtimeBudget": {
-        "p95Seconds": 10,
-        "scope": "Focused renderer-unit suites, p95 not established."
-      },
-      "flakeHistory": {
-        "status": "not-started",
-        "evidence": "Author and independent local evidence only; no CI soak."
-      },
-      "redGreenEvidence": {
-        "status": "complete",
-        "evidence": "Candidate permanent6pass versus original4fail2controls. Additional independent pending-version/error-context/store-refresh3pass versus original2fail1control."
-      },
-      "performanceBudget": {
-        "required": true,
-        "evidence": "Actual version and remote-refresh admissions 6 to 1 across 14 matching queries, which also stops one paired-host update probe per keystroke. Section map now lives in the shared SettingsSectionStack; no added poll, cache, listener or subprocess. No packaged CPU/frame/heap claim."
-      },
-      "knownGaps": [
-        "CI soak pending.",
-        "Physical updater/install, local/daemon PTYs and mobile are unaffected; no execution-host routing, process authority or wire change.",
-        "Native Linux/Windows, SSH/WSL and paired remote-runtime behavior not exercised; synthetic runtime flags cover renderer branches only.",
-        "Matching search no longer incidentally refreshes version/remote-status/CLI discovery; explicit checks and real hide/reopen remain. The installed version cannot change in-process and remote update entries are store-published, so neither goes stale without a signal.",
-        "Retained drafts, release reveal and pending/error context last until a real hide or their own transition; programmatic-query draft test does not reproduce ordinary mouse-search blur/commit.",
-        "Hidden Electron actual-form proof is separate; no packaged latency, heap or native focus evidence."
-      ],
-      "promotionCriteria": [
-        "Retain count, draft, owner cleanup and refresh controls; collect CI soak and relevant full-app/provider evidence before promotion."
-      ],
-      "demotionRule": "Keep experimental until soak; investigate state or cleanup regressions without weakening owner, read-count or draft assertions."
-    },
+
     {
       "id": "settings.accounts-section-lifetime",
       "title": "Accounts search preserves matching account section owners",
       "maturity": "experimental",
-      "protection": "partial",
+      "protection": "none",
       "owner": "renderer-settings",
       "layer": "renderer-unit",
       "surfaces": [
@@ -1413,53 +1335,29 @@
       ],
       "platforms": ["macos", "linux", "windows"],
       "providers": ["local", "remote-runtime", "ssh", "wsl"],
-      "coveredPlatforms": ["macos"],
+      "coveredPlatforms": [],
       "coveredProviders": [],
-      "coverageNotes": "Actual AccountsPane, Grok, Cursor and Codex login components; synthetic APIs/store with Windows account support enabled/disabled. No real account, keychain or provider action.",
+      "coverageNotes": "Audit1437 removes AccountsPane.section-lifetime.test.tsx: DOM identity, mock status/read/subscription counts and simulated platform variants are intentionally retired. No equivalent replacement coverage is claimed. Historical coverage account: Actual AccountsPane, Grok, Cursor and Codex login components; synthetic APIs/store with Windows account support enabled/disabled. No real account, keychain or provider action.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/blob/main/src/renderer/src/components/settings/accounts/AccountsPane.tsx"
       ],
       "invariant": "Matching sections retain their owners as earlier search results disappear; genuine removal releases the Codex subscription and reopens fresh status reads.",
-      "oracle": "Across nine matching Grok, ten matching Cursor and eleven matching Codex queries each matched section keeps the same DOM node and its status-read, watcher and subscription counts do not grow, against four to six reads each before. Explicit refresh, store-published usage updates, pushed login URLs and genuine removal all still reach the retained section.",
-      "commands": [
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/settings/accounts/AccountsPane.section-lifetime.test.tsx"
-      ],
-      "testFiles": [
-        "src/renderer/src/components/settings/accounts/AccountsPane.section-lifetime.test.tsx"
-      ],
-      "assertionRefs": [
-        {
-          "file": "src/renderer/src/components/settings/accounts/AccountsPane.section-lifetime.test.tsx",
-          "assertions": [
-            "preserves explicit Grok refresh and real hide/reopen status reads",
-            "keeps the login subscription until Codex genuinely hides",
-            "keeps Cursor refresh driven by usage updates and genuine reopen"
-          ]
-        }
-      ],
-      "evidenceRuns": [
-        {
-          "date": "2026-09-26",
-          "runner": "local",
-          "platform": "macos",
-          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/settings/AccountsPane.section-lifetime.test.tsx",
-          "currentCommand": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/settings/accounts/AccountsPane.section-lifetime.test.tsx",
-          "result": "passed",
-          "durationSeconds": 1.84,
-          "summary": "10 tests/1 suite pass after the shared SettingsSectionStack adoption. Read-count oracles restated as node identity plus non-growing counts; original main fails the three retained-section cases and the retained Codex subscription, and passes the explicit-refresh, usage-driven and genuine-removal controls."
-        }
-      ],
+      "oracle": "No current automated oracle is claimed after Audit1437 removed this suite. Historical oracle account: Across nine matching Grok, ten matching Cursor and eleven matching Codex queries each matched section keeps the same DOM node and its status-read, watcher and subscription counts do not grow, against four to six reads each before. Explicit refresh, store-published usage updates, pushed login URLs and genuine removal all still reach the retained section.",
+      "commands": [],
+      "testFiles": [],
+      "assertionRefs": [],
+      "evidenceRuns": [],
       "runtimeBudget": {
         "p95Seconds": 10,
         "scope": "Focused renderer-unit suites, p95 not established."
       },
       "flakeHistory": {
         "status": "not-started",
-        "evidence": "Author and independent local evidence only; no CI soak."
+        "evidence": "No current suite remains. Historical account: Author and independent local evidence only; no CI soak."
       },
       "redGreenEvidence": {
-        "status": "complete",
-        "evidence": "Candidate ten pass; current-main original seven fail and three controls pass."
+        "status": "missing",
+        "evidence": "Historical red/green only after suite removal. Candidate ten pass; current-main original seven fail and three controls pass."
       },
       "performanceBudget": {
         "required": true,
@@ -1470,7 +1368,8 @@
         "No native Linux/Windows or live SSH/WSL/paired provider behavior; platform flags are simulated.",
         "Hidden Electron Grok proof uses the original audit baseline and synthetic status; current-main Cursor addition has unit evidence only.",
         "Matching search no longer incidentally refreshes Grok/Cursor status or pending Codex URLs. Every one of those surfaces is store-subscribed or push-subscribed, so the retained section still tracks usage updates, pushed login URLs, explicit refresh and true hide/reopen; there is no bounded automatic freshness deadline and none of them relied on one before.",
-        "Child drafts, errors, copied feedback and timers remain until their own transition or real removal."
+        "Child drafts, errors, copied feedback and timers remain until their own transition or real removal.",
+        "Audit1437 removes AccountsPane.section-lifetime.test.tsx: DOM identity, mock status/read/subscription counts and simulated platform variants are intentionally retired. No equivalent replacement coverage is claimed. Original complete gate record: {\"id\":\"settings.accounts-section-lifetime\",\"title\":\"Accounts search preserves matching account section owners\",\"maturity\":\"experimental\",\"protection\":\"partial\",\"owner\":\"renderer-settings\",\"layer\":\"renderer-unit\",\"surfaces\":[\"Accounts settings search\",\"Grok and Cursor account status\",\"Codex pending sign-in link\"],\"platforms\":[\"macos\",\"linux\",\"windows\"],\"providers\":[\"local\",\"remote-runtime\",\"ssh\",\"wsl\"],\"coveredPlatforms\":[\"macos\"],\"coveredProviders\":[],\"coverageNotes\":\"Actual AccountsPane, Grok, Cursor and Codex login components; synthetic APIs/store with Windows account support enabled/disabled. No real account, keychain or provider action.\",\"motivatingLinks\":[\"https://github.com/stablyai/orca/blob/main/src/renderer/src/components/settings/accounts/AccountsPane.tsx\"],\"invariant\":\"Matching sections retain their owners as earlier search results disappear; genuine removal releases the Codex subscription and reopens fresh status reads.\",\"oracle\":\"Across nine matching Grok, ten matching Cursor and eleven matching Codex queries each matched section keeps the same DOM node and its status-read, watcher and subscription counts do not grow, against four to six reads each before. Explicit refresh, store-published usage updates, pushed login URLs and genuine removal all still reach the retained section.\",\"commands\":[\"ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/settings/accounts/AccountsPane.section-lifetime.test.tsx\"],\"testFiles\":[\"src/renderer/src/components/settings/accounts/AccountsPane.section-lifetime.test.tsx\"],\"assertionRefs\":[{\"file\":\"src/renderer/src/components/settings/accounts/AccountsPane.section-lifetime.test.tsx\",\"assertions\":[\"preserves explicit Grok refresh and real hide/reopen status reads\",\"keeps the login subscription until Codex genuinely hides\",\"keeps Cursor refresh driven by usage updates and genuine reopen\"]}],\"evidenceRuns\":[{\"date\":\"2026-09-26\",\"runner\":\"local\",\"platform\":\"macos\",\"command\":\"ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/settings/AccountsPane.section-lifetime.test.tsx\",\"currentCommand\":\"ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/settings/accounts/AccountsPane.section-lifetime.test.tsx\",\"result\":\"passed\",\"durationSeconds\":1.84,\"summary\":\"10 tests/1 suite pass after the shared SettingsSectionStack adoption. Read-count oracles restated as node identity plus non-growing counts; original main fails the three retained-section cases and the retained Codex subscription, and passes the explicit-refresh, usage-driven and genuine-removal controls.\"}],\"runtimeBudget\":{\"p95Seconds\":10,\"scope\":\"Focused renderer-unit suites, p95 not established.\"},\"flakeHistory\":{\"status\":\"not-started\",\"evidence\":\"Author and independent local evidence only; no CI soak.\"},\"redGreenEvidence\":{\"status\":\"complete\",\"evidence\":\"Candidate ten pass; current-main original seven fail and three controls pass.\"},\"performanceBudget\":{\"required\":true,\"evidence\":\"Actual renderer status-read/subscription admissions counted; the section map now lives in the shared SettingsSectionStack and no cache, poll, listener or process is added. No CPU, latency or heap claim. Matching sections retain local state and lose only the incidental search-driven refresh that duplicated an existing subscription.\"},\"knownGaps\":[\"CI soak pending.\",\"No native Linux/Windows or live SSH/WSL/paired provider behavior; platform flags are simulated.\",\"Hidden Electron Grok proof uses the original audit baseline and synthetic status; current-main Cursor addition has unit evidence only.\",\"Matching search no longer incidentally refreshes Grok/Cursor status or pending Codex URLs. Every one of those surfaces is store-subscribed or push-subscribed, so the retained section still tracks usage updates, pushed login URLs, explicit refresh and true hide/reopen; there is no bounded automatic freshness deadline and none of them relied on one before.\",\"Child drafts, errors, copied feedback and timers remain until their own transition or real removal.\"],\"promotionCriteria\":[\"Retain read/subscription counts and genuine-removal controls; collect CI soak and relevant full-app provider evidence.\"],\"demotionRule\":\"Keep experimental until soak; investigate owner and refresh regressions without weakening assertions or adding retries.\"}"
       ],
       "promotionCriteria": [
         "Retain read/subscription counts and genuine-removal controls; collect CI soak and relevant full-app provider evidence."
@@ -3044,7 +2943,7 @@
       "providers": ["local", "ssh", "remote-runtime"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": [],
-      "coverageNotes": "Audit1396 changes referenced sources. Retained unchanged-source receipts apply only to their unchanged commands; the reduced selectors have no new execution result. Historical coverage account (not a current claim for changed sources): Audit1308 changes referenced sources. Retained unchanged-source receipts apply only to their unchanged commands; the reduced selectors have no new execution result. Historical coverage account (not a current claim for changed sources): Deterministic candidate-builder contracts inject local and paired-runtime worktrees with the same bare id into the real aggregated tab buckets, including folder workspaces and a paired runtime transporting an SSH-owned worktree. A mirror contract preserves distinct same-id runtime tabs. A paired Electron journey verifies both visible browser rows and both visible simulator rows, then requires each selection to render its owning active tab and update backing host-qualified state. The test-value audit narrowed simulator-palette-search.test.ts to the recency tie, same-id host isolation, ambiguous legacy host rejection and oversized-input getter tripwire. Supplied timestamp, empty-query context ordering, host projection, alias/range, metadata matching, active-tab score, over-token/whitespace and malformed display-name fallback examples were removed. Their separate alarms are lost; retained candidate and activation contracts do not establish equivalent coverage. Historical run commands and results remain historical. The audit also removed the standalone workspace-tab-palette-search suite: supplied row, title, metadata, alias, range, ranking and ownership examples no longer provide their separate alarms. Other retained contracts are not replacement coverage. The mirror-identity fixture now retains same-id sibling-runtime isolation and the repeated-frame subscriber tripwire only. Supplied field, owner, alias and mapping examples are removed; their separate alarms are lost. The retained sibling-runtime case is not equivalent coverage for them. The test-value audit removed tabs-open-close-lifecycle host-stamping examples and ordinary tab/group operations from tabs-pane-layout-operations. Local-null, explicit-runtime and SSH-without-active-host stamp assertions are lost; retained mobile/MRU and subscriber/atomic split cases do not replace them. Candidate and live Cmd-J evidence retains its own scope. Historical commands, outcomes and narratives remain historical. Audit1308: src/renderer/src/lib/browser-palette-search.test.ts removed. Browser-palette token and pasted-query size-guard work alarms disappear. No equivalent replacement coverage is claimed. Audit1386: src/renderer/src/lib/open-mobile-emulator-tab.test.ts reduced. Duplicate attach count and null-tab creation retry/guard reset standalone alarms removed; no simulator device used. No equivalent replacement coverage is claimed. Existing exact unaffected receipts and their platform/provider/budget claims remain scoped to unchanged selectors. Changed optional selectors have no new execution result. Audit1396: src/renderer/src/lib/simulator-palette-search.test.ts reduced. Lose simulator-specific lastFocusedAt tie-order alarm; identity/routing and pre-scan size fence remain. No native simulator or real remote launch claim. No equivalent replacement coverage is claimed. Audit1402: src/renderer/src/runtime/web-session-tabs-sync-mirror-identity.test.ts reduced. Loses repeated no-op frame store-notification budget; independent cross-runtime resource preservation remains. No equivalent replacement coverage is claimed. Existing exact unaffected receipts remain unchanged and apply only to their unchanged selectors. Changed optional selectors have no new execution result.",
+      "coverageNotes": "Audit1433 narrows worktree-checks-review-index.test.ts to same-ID local/SSH object-key review isolation. Local provider/cache lookup, GitLab preference, suppression/legacy fallback, explicit-PR authority, physical-versus-runtime review isolation, and branchless-workspace alarms are intentionally removed. No equivalent replacement coverage is claimed. Historical receipts and commands remain unchanged and do not certify the reduced source. Historical coverage account: Audit1396 changes referenced sources. Retained unchanged-source receipts apply only to their unchanged commands; the reduced selectors have no new execution result. Historical coverage account (not a current claim for changed sources): Audit1308 changes referenced sources. Retained unchanged-source receipts apply only to their unchanged commands; the reduced selectors have no new execution result. Historical coverage account (not a current claim for changed sources): Deterministic candidate-builder contracts inject local and paired-runtime worktrees with the same bare id into the real aggregated tab buckets, including folder workspaces and a paired runtime transporting an SSH-owned worktree. A mirror contract preserves distinct same-id runtime tabs. A paired Electron journey verifies both visible browser rows and both visible simulator rows, then requires each selection to render its owning active tab and update backing host-qualified state. The test-value audit narrowed simulator-palette-search.test.ts to the recency tie, same-id host isolation, ambiguous legacy host rejection and oversized-input getter tripwire. Supplied timestamp, empty-query context ordering, host projection, alias/range, metadata matching, active-tab score, over-token/whitespace and malformed display-name fallback examples were removed. Their separate alarms are lost; retained candidate and activation contracts do not establish equivalent coverage. Historical run commands and results remain historical. The audit also removed the standalone workspace-tab-palette-search suite: supplied row, title, metadata, alias, range, ranking and ownership examples no longer provide their separate alarms. Other retained contracts are not replacement coverage. The mirror-identity fixture now retains same-id sibling-runtime isolation and the repeated-frame subscriber tripwire only. Supplied field, owner, alias and mapping examples are removed; their separate alarms are lost. The retained sibling-runtime case is not equivalent coverage for them. The test-value audit removed tabs-open-close-lifecycle host-stamping examples and ordinary tab/group operations from tabs-pane-layout-operations. Local-null, explicit-runtime and SSH-without-active-host stamp assertions are lost; retained mobile/MRU and subscriber/atomic split cases do not replace them. Candidate and live Cmd-J evidence retains its own scope. Historical commands, outcomes and narratives remain historical. Audit1308: src/renderer/src/lib/browser-palette-search.test.ts removed. Browser-palette token and pasted-query size-guard work alarms disappear. No equivalent replacement coverage is claimed. Audit1386: src/renderer/src/lib/open-mobile-emulator-tab.test.ts reduced. Duplicate attach count and null-tab creation retry/guard reset standalone alarms removed; no simulator device used. No equivalent replacement coverage is claimed. Existing exact unaffected receipts and their platform/provider/budget claims remain scoped to unchanged selectors. Changed optional selectors have no new execution result. Audit1396: src/renderer/src/lib/simulator-palette-search.test.ts reduced. Lose simulator-specific lastFocusedAt tie-order alarm; identity/routing and pre-scan size fence remain. No native simulator or real remote launch claim. No equivalent replacement coverage is claimed. Audit1402: src/renderer/src/runtime/web-session-tabs-sync-mirror-identity.test.ts reduced. Loses repeated no-op frame store-notification budget; independent cross-runtime resource preservation remains. No equivalent replacement coverage is claimed. Existing exact unaffected receipts remain unchanged and apply only to their unchanged selectors. Changed optional selectors have no new execution result.",
       "motivatingLinks": [
         "https://linear.app/stably/issue/STA-4965",
         "https://github.com/stablyai/orca/pull/15371"
@@ -3082,9 +2981,7 @@
       "assertionRefs": [
         {
           "file": "src/renderer/src/components/cmd-j/worktree-checks-review-index.test.ts",
-          "assertions": [
-            "a runtime-owned SSH worktree never exposes review metadata cached for its physical host"
-          ]
+          "assertions": ["same-id local and SSH worktrees keep separate review-index results"]
         },
         {
           "file": "src/renderer/src/components/worktree-jump/WorktreeJumpPalette.test.tsx",
@@ -3296,7 +3193,7 @@
       "providers": ["orca-server", "direct-ssh"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["orca-server", "direct-ssh"],
-      "coverageNotes": "Retained exact unchanged-source receipts remain the only current execution evidence. Reduced selectors have no fresh execution result. Audit1417 intentionally deletes src/renderer/src/lib/ephemeral-vm-workspace-target.test.ts: Loses wrapper-level host rebinding, incompatible provisioned-root refusal and best-effort cleanup-call alarms; all are mock-only orchestration projections. No equivalent replacement coverage or fresh result is claimed. Historical coverage account: Audit1342 changes referenced sources. Retained unchanged-source receipts apply only to their unchanged commands; the reduced selectors have no new execution result. Historical coverage account (not a current claim for changed sources): A pinned exact-source harness runs the pre-#14352 reader and lifecycle service against baseline, affected-main, candidate, and fix-reverted stores. Platform-neutral tests cover store compatibility, user-cancellable cleanup, branch/ref adoption; audit885 removes the direct resume ownership predicate alarms. The direct-SSH provisioned-root Electron journey remains the live transport and destroy proof; this desktop sidecar is not mobile-facing and changes no RPC or remote wire payload. The test-value audit removed the renderer provisioned-root create-options suite. Its two incomplete-identity rejection assertions are lost: one omitted workspaceRunContext and other identity fields, and one supplied the context but omitted ephemeralVmExpectedRefHead. The suite did not test successful option mapping. Retained source-ref and lifecycle suites do not establish equivalent renderer guard coverage. Audit1342: src/renderer/src/lib/ephemeral-vm-runtime-cleanup.test.ts removed. Runtime/SSH ownership, encoded target, retry/failure/listing-error cleanup projection samples disappear. No equivalent replacement coverage is claimed.",
+      "coverageNotes": "Audit1441 removes the complete renderer VM-runtime settings suite: display filter/status/SSH-retry flags, cleanup and stop RPC-to-toast/dialog plumbing, manual-copy plumbing and polling toast silence. The suite did not execute provider teardown or process cancellation. Its rendered stop/retry and hidden-SSH display alarms are intentionally retired; no equivalent replacement or fresh reduced-selector runtime result is claimed. Retained exact unchanged-source receipts remain the only current execution evidence. Reduced selectors have no fresh execution result. Audit1417 intentionally deletes src/renderer/src/lib/ephemeral-vm-workspace-target.test.ts: Loses wrapper-level host rebinding, incompatible provisioned-root refusal and best-effort cleanup-call alarms; all are mock-only orchestration projections. No equivalent replacement coverage or fresh result is claimed. Historical coverage account: Audit1342 changes referenced sources. Retained unchanged-source receipts apply only to their unchanged commands; the reduced selectors have no new execution result. Historical coverage account (not a current claim for changed sources): A pinned exact-source harness runs the pre-#14352 reader and lifecycle service against baseline, affected-main, candidate, and fix-reverted stores. Platform-neutral tests cover store compatibility, user-cancellable cleanup, branch/ref adoption; audit885 removes the direct resume ownership predicate alarms. The direct-SSH provisioned-root Electron journey remains the live transport and destroy proof; this desktop sidecar is not mobile-facing and changes no RPC or remote wire payload. The test-value audit removed the renderer provisioned-root create-options suite. Its two incomplete-identity rejection assertions are lost: one omitted workspaceRunContext and other identity fields, and one supplied the context but omitted ephemeralVmExpectedRefHead. The suite did not test successful option mapping. Retained source-ref and lifecycle suites do not establish equivalent renderer guard coverage. Audit1342: src/renderer/src/lib/ephemeral-vm-runtime-cleanup.test.ts removed. Runtime/SSH ownership, encoded target, retry/failure/listing-error cleanup projection samples disappear. No equivalent replacement coverage is claimed.",
       "motivatingLinks": [
         "https://linear.app/stably/issue/STA-4274",
         "https://github.com/stablyai/orca/pull/14352",
@@ -3306,7 +3203,7 @@
       "oracle": "Retained exact unchanged-source receipts remain the only current execution evidence. Reduced selectors have no fresh execution result. Historical pre-audit oracle account for changed sources: The retained unchanged-source receipts are the only current execution evidence; reduced-source assertions await validation. Historical oracle account (not a current claim for changed sources): Write one ordinary schema-v1 runtime and one provisioned-root runtime. Require the exact pre-#14352 reader to return both, run the old destroy lifecycle against the projected provisioned record, then require the candidate to retain the cleaned state while restoring schema-v2 and checkout-mode metadata. The same old reader must reject affected-main and fix-reverted bytes. Malformed, oversized, unknown-record, and future-version feature sidecars must leave rollback-compatible records accessible and must not be overwritten during compatible lifecycle mutations. Require destroy to have no implicit deadline, stop a hung destroy through the public desktop action, require cleanup_failed plus a fresh successful retry, prove provider or project-host rollback failure retains every ownership record required to retry, and prove missing recipe context cannot leave an unremovable hidden SSH registration. Supply the source ref's captured commit to create, reject a provisioned checkout on the wrong branch/ref, and reject a resume that changes connection mode or SSH ownership.",
       "commands": [
         "node config/scripts/run-ephemeral-vm-runtime-store-rollback-repro.mjs config/scripts/ephemeral-vm-runtime-store-cross-version.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/shared/ephemeral-vm-runtime-store.test.ts src/shared/ephemeral-vm-runtime-store-rollback.test.ts src/shared/ephemeral-vm-recipe-process.test.ts src/main/ephemeral-vm/runtime-service.test.ts src/main/ephemeral-vm/recipe-runner.test.ts src/main/ephemeral-vm/runtime-ssh-cleanup.test.ts src/main/ipc/ephemeral-vm-runtime-handler-cleanup.test.ts src/main/ipc/ephemeral-vm-provision-cancel.test.ts src/main/ipc/ephemeral-vm-provisioned-root-ref.test.ts src/main/ipc/ephemeral-vm.test.ts src/renderer/src/components/settings/virtual-machines/runtimes/EphemeralVmRuntimesSection.test.tsx src/renderer/src/lib/ephemeral-vm-failed-create-cleanup.test.ts src/renderer/src/store/slices/repos-ephemeral-vm-cleanup-retention.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/shared/ephemeral-vm-runtime-store.test.ts src/shared/ephemeral-vm-runtime-store-rollback.test.ts src/shared/ephemeral-vm-recipe-process.test.ts src/main/ephemeral-vm/runtime-service.test.ts src/main/ephemeral-vm/recipe-runner.test.ts src/main/ephemeral-vm/runtime-ssh-cleanup.test.ts src/main/ipc/ephemeral-vm-runtime-handler-cleanup.test.ts src/main/ipc/ephemeral-vm-provision-cancel.test.ts src/main/ipc/ephemeral-vm-provisioned-root-ref.test.ts src/main/ipc/ephemeral-vm.test.ts src/renderer/src/lib/ephemeral-vm-failed-create-cleanup.test.ts src/renderer/src/store/slices/repos-ephemeral-vm-cleanup-retention.test.ts",
         "pnpm exec playwright test tests/e2e/ephemeral-vm-cleanup-retry.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
       ],
       "testFiles": [
@@ -3322,7 +3219,6 @@
         "src/main/ipc/ephemeral-vm-provision-cancel.test.ts",
         "src/main/ipc/ephemeral-vm-provisioned-root-ref.test.ts",
         "src/main/ipc/ephemeral-vm.test.ts",
-        "src/renderer/src/components/settings/virtual-machines/runtimes/EphemeralVmRuntimesSection.test.tsx",
         "src/renderer/src/lib/ephemeral-vm-failed-create-cleanup.test.ts",
         "src/renderer/src/store/slices/repos-ephemeral-vm-cleanup-retention.test.ts",
         "tests/e2e/ephemeral-vm-cleanup-retry.spec.ts"
@@ -3358,12 +3254,6 @@
           "assertions": [
             "recipe commands have no implicit wall-clock deadline",
             "a stopped process that ignores graceful termination is force-killed and settled"
-          ]
-        },
-        {
-          "file": "src/renderer/src/components/settings/virtual-machines/runtimes/EphemeralVmRuntimesSection.test.tsx",
-          "assertions": [
-            "a running cleanup exposes a persistent Stop cleanup action and becomes retryable after stopping"
           ]
         },
         {
@@ -3430,6 +3320,7 @@
         "Collect soak history without unexplained lifecycle or sidecar flakes."
       ],
       "knownGaps": [
+        "Audit1441 removes the complete renderer VM-runtime settings suite: display filter/status/SSH-retry flags, cleanup and stop RPC-to-toast/dialog plumbing, manual-copy plumbing and polling toast silence. The suite did not execute provider teardown or process cancellation. Its rendered stop/retry and hidden-SSH display alarms are intentionally retired; no equivalent replacement or fresh reduced-selector runtime result is claimed.",
         "No packaged-build downgrade installer journey; the exact released source reader and service are executed in-process.",
         "The obsolete provisioned-root SSH adoption unit suite was retired; it no longer supplies branch/ref adoption evidence. Historical run commands and counts are preserved, and no replacement equivalence is claimed.",
         "Live Docker SSH evidence runs locally on macOS and in the changed-file PR E2E lane on Ubuntu; Windows desktop behavior is covered by the platform-neutral filesystem codec and package job.",
@@ -9655,7 +9546,7 @@
         "pnpm exec vitest run --config config/vitest.config.ts src/shared/claimed-agent-pty-owner.test.ts src/main/daemon/daemon-pty-adapter.test.ts src/main/runtime/orca-runtime-agent-session-operation.test.ts src/main/runtime/remote-agent-session-host-authority.integration.test.ts src/main/runtime/orca-runtime-terminal-retirement.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-host-session-launch.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-create-handoff.test.ts src/renderer/src/runtime/remote-runtime-session-tabs-inflight.test.ts src/renderer/src/runtime/web-runtime-session.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts tests/e2e/remote-terminal-tab-retirement.unit.test.ts",
         "pnpm run build:cli && pnpm run build:electron-vite && node config/scripts/remote-agent-session-authority-repro.mjs",
-        "node --check config/scripts/remote-agent-session-process-cleanup.mjs && node config/scripts/remote-agent-session-authority-repro.mjs",
+        "node --check config/scripts/development/remote-session-cleanup/remote-agent-session-process-cleanup.mjs && node config/scripts/remote-agent-session-authority-repro.mjs",
         "pnpm exec electron-vite build --mode e2e",
         "VITE_EXPOSE_STORE=true pnpm run build:web",
         "ORCA_E2E_WEB_CLIENT=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/remote-agent-session-focus-authority.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
@@ -9687,7 +9578,7 @@
         "src/renderer/src/runtime/web-runtime-session.test.ts",
         "tests/e2e/remote-agent-session-focus-authority.spec.ts",
         "config/scripts/remote-agent-session-authority-repro.mjs",
-        "config/scripts/remote-agent-session-process-cleanup.mjs",
+        "config/scripts/development/remote-session-cleanup/remote-agent-session-process-cleanup.mjs",
         "tests/e2e/remote-terminal-tab-retirement.unit.test.ts",
         "src/main/runtime/orca-runtime.test.ts",
         "src/main/runtime/terminal-orphan-owner.test.ts",
@@ -9783,7 +9674,7 @@
           ]
         },
         {
-          "file": "config/scripts/remote-agent-session-process-cleanup.mjs",
+          "file": "config/scripts/development/remote-session-cleanup/remote-agent-session-process-cleanup.mjs",
           "assertions": [
             "isolated daemon roots and captured descendants are verified dead before profile PID records are removed"
           ]
@@ -18299,13 +18190,13 @@
       "commands": [
         "gh workflow run windows-wsl-e2e.yml",
         "pnpm exec playwright test tests/e2e/golden-tab-bar-agent-launch.spec.ts tests/e2e/terminal-windows-shell-paste-ownership.spec.ts --config tests/playwright.config.ts --project=electron-headless --workers=1",
-        "node_modules/.bin/vitest run --config config/vitest.config.ts config/scripts/wsl-e2e-lane-contract.test.mjs config/scripts/verify-wsl-e2e-participation.test.mjs",
+        "node_modules/.bin/vitest run --config config/vitest.config.ts config/scripts/workflow/source-routing/wsl-e2e-lane-contract.test.mjs config/scripts/verify-wsl-e2e-participation.test.mjs",
         "gh run view 34031806291 --log"
       ],
       "testFiles": [
         "tests/e2e/golden-tab-bar-agent-launch.spec.ts",
         "tests/e2e/terminal-windows-shell-paste-ownership.spec.ts",
-        "config/scripts/wsl-e2e-lane-contract.test.mjs",
+        "config/scripts/workflow/source-routing/wsl-e2e-lane-contract.test.mjs",
         "config/scripts/verify-wsl-e2e-participation.test.mjs"
       ],
       "assertionRefs": [
@@ -18384,11 +18275,11 @@
         "gh workflow run packaged-browser-e2e.yml",
         "pnpm exec playwright test tests/e2e/packaged-mixed-version-browser-placement.spec.ts --config tests/playwright.config.ts --project=electron-headless --workers=1 --repeat-each=3 --retries=0",
         "gh run view 34069063016 --log",
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts config/scripts/verify-packaged-browser-participation.test.mjs --maxWorkers=2 --reporter=dot"
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts config/scripts/desktop-distribution/runtime-verification/verify-packaged-browser-participation.test.mjs --maxWorkers=2 --reporter=dot"
       ],
       "testFiles": [
         "tests/e2e/packaged-mixed-version-browser-placement.spec.ts",
-        "config/scripts/verify-packaged-browser-participation.test.mjs"
+        "config/scripts/desktop-distribution/runtime-verification/verify-packaged-browser-participation.test.mjs"
       ],
       "assertionRefs": [
         {
@@ -18399,7 +18290,7 @@
           ]
         },
         {
-          "file": "config/scripts/verify-packaged-browser-participation.test.mjs",
+          "file": "config/scripts/desktop-distribution/runtime-verification/verify-packaged-browser-participation.test.mjs",
           "assertions": ["reject missing, substituted, skipped and retried scenarios"]
         }
       ],
