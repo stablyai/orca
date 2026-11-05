@@ -63,6 +63,8 @@ function DropdownMenuContent({
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Content> & {
   portalContainer?: HTMLElement | null
+  // Radix consumes this at its opening focus scope but omits it from the public Menu props.
+  onOpenAutoFocus?: (event: Event) => void
 }) {
   const container = usePortalContainer(portalContainer)
   const pointerHighlight = useMenuPointerHighlight(props)

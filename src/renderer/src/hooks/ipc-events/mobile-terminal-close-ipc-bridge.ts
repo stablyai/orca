@@ -155,10 +155,10 @@ export function registerMobileAndTerminalCloseIpcBridge(
   unsubs.push(
     window.api.ui.onCloseTerminal((target) => {
       if (target.kind === 'pane') {
-        applyClosedTerminalLeafNotice(target.tabId, target.leafId)
+        applyClosedTerminalLeafNotice(target.tabId, target.leafId, 'requested')
       } else {
         // Why: the CLI/RPC caller is answered immediately, so it cannot wait on a modal.
-        closeTerminalTab(target.tabId, { skipRunningProcessConfirm: true })
+        closeTerminalTab(target.tabId, { reason: 'requested', skipRunningProcessConfirm: true })
       }
     })
   )
@@ -177,6 +177,7 @@ export function registerMobileAndTerminalCloseIpcBridge(
             window.api.ui.respondTerminalTabClose({ requestId, ...(error ? { error } : {}) })
           }
           closeTerminalTab(tabId, {
+            reason: 'requested',
             rejectPinned: true,
             ...(force ? { force: true } : {}),
             ...(localPtyTeardownOwnedExternally ? { localPtyTeardownOwnedExternally: true } : {}),

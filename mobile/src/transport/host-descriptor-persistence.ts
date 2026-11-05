@@ -6,7 +6,11 @@ export async function updateHostDescriptor(
   hostId: string,
   descriptor: ReportedHostDescriptor
 ): Promise<void> {
-  if (descriptor.machineName === null && descriptor.platform === null) {
+  if (
+    descriptor.machineName === null &&
+    descriptor.platform === null &&
+    (descriptor.machine ?? null) === null
+  ) {
     return
   }
   try {

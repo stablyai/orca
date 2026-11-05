@@ -142,7 +142,11 @@ export function useNativeChatInterruptedContinuation(input: {
       if (admission === false) {
         setUsageFailure(turnItemId)
       } else {
-        completeNativeChatStructuredUserAction(agent, transport, admission === true)
+        completeNativeChatStructuredUserAction(
+          agent,
+          transport,
+          admission === true ? transport.onSubmitted : undefined
+        )
         if (hadFocus) {
           focusComposer()
         }

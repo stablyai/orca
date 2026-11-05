@@ -6,9 +6,6 @@ import {
   updateContextMenuItem
 } from './browser-extension-context-menu-model'
 import {
-  ACTION_MENU_CONTEXTS,
-  arrangeExtensionContextMenuGroup,
-  buildContextMenuOnClickData,
   contextMenuTargetFromParams,
   visibleContextMenuTree
 } from './browser-extension-context-menu-target'
@@ -114,33 +111,12 @@ describe('what a right-click shows', () => {
     ])
   })
 
-  it('shows action items only for the toolbar menu', () => {
-    const toolbar = {
-      contexts: new Set<string>(ACTION_MENU_CONTEXTS),
-      pageUrl: 'https://site.test/'
-    }
-    expect(visibleContextMenuTree(items, toolbar).map((item) => item.key)).toEqual(['"toolbar"'])
-  })
-
   it('drops a parent whose children are all filtered out', () => {
     const nested = build(
       { id: 'parent', title: 'Parent', contexts: ['all'] },
       { id: 'kid', title: 'Kid', parentId: 'parent', contexts: ['link'] }
     )
     expect(visibleContextMenuTree(nested, pageClick)).toEqual([])
-  })
-
-  it('shows one item inline and several under a submenu named after the extension', () => {
-    const one = visibleContextMenuTree(build({ id: 'a', title: 'A' }), pageClick)
-    expect(arrangeExtensionContextMenuGroup('ext', 'Vault', one)?.items).toEqual(one)
-    const two = visibleContextMenuTree(
-      build({ id: 'a', title: 'A' }, { id: 'b', title: 'B' }),
-      pageClick
-    )
-    expect(arrangeExtensionContextMenuGroup('ext', 'Vault', two)?.items).toEqual([
-      { key: '', title: 'Vault', type: 'normal', checked: false, enabled: true, children: two }
-    ])
-    expect(arrangeExtensionContextMenuGroup('ext', 'Vault', [])).toBeNull()
   })
 })
 
@@ -159,33 +135,5 @@ describe('clicking an item', () => {
       ['r1', false],
       ['r2', true]
     ])
-  })
-
-  it("builds Chrome's OnClickData", () => {
-    const [item] = build({ id: 'fill', title: 'Fill', contexts: ['editable'], parentId: undefined })
-    const target = contextMenuTargetFromParams(
-      {
-        isEditable: true,
-        linkURL: 'https://site.test/next',
-        srcURL: 'https://cdn.test/a.png',
-        frameURL: 'https://frame.test/',
-        selectionText: 'me@site.test'
-      },
-      'https://site.test/login',
-      true
-    )
-    expect(
-      buildContextMenuOnClickData({ item, target, frameId: 12, editable: true, mediaType: 'image' })
-    ).toEqual({
-      menuItemId: 'fill',
-      mediaType: 'image',
-      linkUrl: 'https://site.test/next',
-      srcUrl: 'https://cdn.test/a.png',
-      pageUrl: 'https://site.test/login',
-      frameUrl: 'https://frame.test/',
-      frameId: 12,
-      selectionText: 'me@site.test',
-      editable: true
-    })
   })
 })

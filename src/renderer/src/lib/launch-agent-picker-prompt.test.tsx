@@ -246,6 +246,7 @@ it.each([true, false])(
     mockLaunchStructuredCodexSession.mockImplementation(async (intent) => {
       await Promise.resolve()
       intent.createMessageSupport = createMessageSupport
+      intent.sendSkillsSupport = true
       try {
         intent.prepareCreate!(false)
       } catch (error) {
@@ -295,7 +296,7 @@ it.each([true, false])(
     await act(async () => button('Launch chat').click())
     const call = dispatch.mock.results[0]
     const result = call?.type === 'return' ? call.value : null
-    expect(result?.surface.kind).toBe('host-published')
+    expect(result?.surface.kind).toBe('local-chat')
     expect(await result?.structuredSettlement).toMatchObject({ kind: 'failed' })
     expect(preparationErrors).toEqual([])
     expect(mockLaunchStructuredCodexSession).toHaveBeenCalledOnce()
@@ -314,6 +315,7 @@ it.each([true, false])(
     const returned = readNativeChatComposerDraft(
       structuredAgentSessionDraftScopeKey('codex-session-1')
     ).text
+    expect(returned).toContain('$review and $review this change')
     expect(returned).toContain('/repo/.agents/skills/review/SKILL.md')
     expect(returned).toContain('/home/me/.agents/skills/review/SKILL.md')
     expect(readNativeChatComposerDraft(agentLaunchPromptScopeKey(selected)).text).toBe('')

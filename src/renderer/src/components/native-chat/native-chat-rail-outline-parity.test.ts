@@ -25,7 +25,7 @@ import { nativeChatSubagentSections } from './native-chat-subagent-sections'
 import { projectNativeChatTaskListFrames } from '../../../../shared/native-chat/input/native-chat-task-list-frames'
 import { omitNativeChatThreadGoalRows } from './native-chat-thread-goal-rows'
 import { buildNativeChatTranscriptSlots } from './native-chat-transcript-slots'
-import type { NativeChatTurnDiff } from './native-chat-turn-diffs'
+import type { NativeChatTurnDiff } from '../../../../shared/native-chat/tools/native-chat-turn-diffs'
 import { projectStructuredAgentSessionMessages } from './structured-agent-session-message-projection'
 
 function row(sequence: number, body: AgentJournalItemBody, itemId = `item-${sequence}`) {

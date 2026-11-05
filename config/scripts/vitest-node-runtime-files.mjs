@@ -28,6 +28,8 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/browser/extensions/native-messaging/browser-extension-native-host-process-backpressure.test.ts',
   'src/main/daemon/daemon-init-provider-installation.test.ts',
   'src/main/orcad/orcad-daemon-teardown-linux.test.ts',
+  // Launches process.execPath as orcad's pinned runtime to measure V8 address-space reservations.
+  'src/main/managed-server/install/orcad-remote-launch-address-space.test.ts',
   'src/renderer/src/components/terminal-pane/pty-input-write-queue.test.ts',
   'src/renderer/src/lib/react-commit-cascade-observer.test.ts',
   'src/renderer/src/lib/react-commit-cascade-telemetry.test.ts',
@@ -77,7 +79,6 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/acp/acp-structured-child-stop.test.ts',
   'src/main/acp/acp-structured-child-work-admission.test.ts',
   'src/main/acp/acp-structured-child-work.test.ts',
-  'src/main/acp/acp-structured-host-subagent-stop.test.ts',
   'src/main/native-chat/agent-session-wire/structured-agent-session-background-stop-unreadable.test.ts',
   'src/main/native-chat/agent-session-wire/structured-agent-session-exit-delivery.test.ts',
   'src/main/native-chat/agent-session-wire/structured-agent-session-provider-open.test.ts',
@@ -120,7 +121,6 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/plugins/workers/plugin-worker-typescript-entry.integration.test.ts',
   // Reconciliation loads the real native Parcel watcher; Bun can abort on Linux ARM.
   'src/main/plugins/plugin-service-reconciliation.test.ts',
-  'src/main/usage/usage-scan-worker-event-loop.test.ts',
   'src/main/ipc/command-path/command-path-directory-worker.test.ts',
   // Asserts Node's spawn-failure close signal and that a dead worker closes its children's pipes.
   'src/main/worker-thread-child-process/worker-thread-child-process.test.ts',

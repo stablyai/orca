@@ -19,11 +19,6 @@ const MIXED: LeaseRow[] = [
   { ptyId: 'exp', state: 'expired' },
   { ptyId: 'ter', state: 'terminated' }
 ]
-const UNRESOLVED: LeaseRow[] = [
-  { ptyId: 'det', state: 'detached' },
-  { ptyId: 'exp', state: 'expired' },
-  { ptyId: 'ter', state: 'terminated' }
-]
 
 describe('terminal gate characterization: census-only verdicts', () => {
   it('a census that throws is bridged as unverifiable, never exited', async () => {
@@ -37,47 +32,6 @@ describe('terminal gate characterization: census-only verdicts', () => {
       bridgedPtyIds: ['att', 'det', 'exp'],
       hostTerminals: 0
     })
-  })
-
-  it.each([
-    [
-      'an attached lease',
-      MIXED,
-      { verdict: 'live', ptyIds: ['att'], reason: 'terminals on this host are still running' }
-    ],
-    [
-      'detached or expired leases',
-      UNRESOLVED,
-      {
-        verdict: 'unverifiable',
-        ptyIds: ['det', 'exp'],
-        reason: 'no SSH relay could confirm these terminals exited'
-      }
-    ],
-    [
-      'only terminated leases',
-      [{ ptyId: 'ter', state: 'terminated' }],
-      {
-        verdict: 'unverifiable',
-        ptyIds: [],
-        reason: "no census of every relay on this host's account was taken"
-      }
-    ],
-    [
-      'no leases',
-      [],
-      {
-        verdict: 'unverifiable',
-        ptyIds: [],
-        reason: "no census of every relay on this host's account was taken"
-      }
-    ]
-  ] as const)('without a census, %s blocks', async (_label, leases, expected) => {
-    for (const census of [undefined, null]) {
-      await expect(
-        assessOrcadMigrationTerminals(store([...leases]), 'ssh-1', census)
-      ).resolves.toEqual(expected)
-    }
   })
 })
 

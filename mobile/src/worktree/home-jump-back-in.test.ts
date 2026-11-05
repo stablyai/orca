@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
 import { selectHomeAttentionWorktrees, selectHomeJumpBackInRows } from './home-jump-back-in'
 import type { HomeWorktreeSummary, HostWorktreeInfo } from './home-worktree-info'
 
@@ -15,6 +16,25 @@ function row(id: string, fields: Partial<HomeWorktreeSummary>): HomeWorktreeSumm
   }
 }
 
+function agent(paneKey: string, fields: Partial<RuntimeWorktreeAgentRow>): RuntimeWorktreeAgentRow {
+  return {
+    paneKey,
+    parentPaneKey: null,
+    state: 'working',
+    agentType: 'claude',
+    prompt: '',
+    taskTitle: null,
+    displayName: null,
+    lastAssistantMessage: null,
+    toolName: null,
+    toolInput: null,
+    interrupted: false,
+    stateStartedAt: NOW,
+    updatedAt: NOW,
+    ...fields
+  }
+}
+
 function info(hostId: string, rows: HomeWorktreeSummary[]): HostWorktreeInfo {
   return {
     hostId,
@@ -27,6 +47,10 @@ function info(hostId: string, rows: HomeWorktreeSummary[]): HostWorktreeInfo {
 }
 
 describe('home jump back in', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it('puts agents waiting on the user first, then unseen finished work, then running work', () => {
     const rows = selectHomeAttentionWorktrees([
       row('running', { sidebarStatus: 'working', lastOutputAt: NOW }),
@@ -81,6 +105,53 @@ describe('home jump back in', () => {
     })
     expect(deduped.map((entry) => [entry.worktree.worktreeId, entry.lastOpened])).toEqual([
       ['resume', false]
+    ])
+  })
+
+  it('names a row after the newest live top-level conversation in the dot state, else none', () => {
+    vi.useFakeTimers({ now: NOW })
+    const rows = selectHomeAttentionWorktrees([
+      row('blocked', {
+        sidebarStatus: 'permission',
+        agents: [
+          agent('older', {
+            state: 'waiting',
+            conversationName: 'Older question',
+            updatedAt: NOW - 9
+          }),
+          agent('newer', { state: 'blocked', conversationName: 'Fix login', updatedAt: NOW - 5 }),
+          agent('running', { state: 'working', conversationName: 'Refactor', updatedAt: NOW }),
+          agent('worker', {
+            parentPaneKey: 'running',
+            state: 'waiting',
+            conversationName: 'Worker',
+            updatedAt: NOW
+          })
+        ]
+      }),
+      row('unnamed', {
+        sidebarStatus: 'working',
+        agents: [agent('a', { state: 'working' })]
+      }),
+      row('stale', {
+        sidebarStatus: 'working',
+        agents: [
+          agent('s', {
+            state: 'working',
+            conversationName: 'Old task',
+            updatedAt: NOW - 31 * 60_000
+          })
+        ]
+      }),
+      row('old-host', { sidebarStatus: 'done', unread: true })
+    ])
+    expect(
+      rows.map((worktree) => [worktree.worktreeId, worktree.conversationName, worktree.paneKey])
+    ).toEqual([
+      ['blocked', 'Fix login', 'newer'],
+      ['old-host', undefined, undefined],
+      ['unnamed', undefined, undefined],
+      ['stale', undefined, undefined]
     ])
   })
 })

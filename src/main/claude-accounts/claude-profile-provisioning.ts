@@ -1,12 +1,11 @@
 import { randomUUID } from 'node:crypto'
 import { existsSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
 import {
   resolveClaudeGlobalConfigFile,
   updateClaudeGlobalConfig
 } from '../claude/claude-folder-trust-file'
-import { getManagedScriptFileName, removeManagedHooks } from '../claude/hook-settings'
 import { publishFileWithoutOverwrite } from '../codex-accounts/fs-utils'
 import { CLAUDE_PROFILE_HISTORY_DIRS, mergeClaudeProfileDirectory } from './claude-profile-history'
 import { readClaudeProfileObject, resolveClaudeDefaultHome } from './claude-profile-paths'
@@ -19,6 +18,7 @@ import {
   type ClaudeProfileReport,
   type ClaudeProfileSurfaceOutcome
 } from './claude-profile-report'
+import { syncClaudeProfileSettings } from './claude-profile-settings'
 import { copyClaudeProfileFile, linkClaudeProfileDirectory } from './claude-profile-sharing'
 
 const CLAUDE_PROFILE_MEMORY_IMPORT = '@~/.claude/CLAUDE.md\n'
@@ -153,32 +153,6 @@ function isAccountBoundState(key: string): boolean {
   )
 }
 
-// Ignore managed hooks to avoid copy/install churn on every launch.
-function settingsWithoutOrcaHooks(value: Record<string, unknown>): string {
-  return JSON.stringify(removeManagedHooks(value, getManagedScriptFileName()).config)
-}
-
-// Keep proxy addresses and credentials together in the settings copy.
-function copySettings(source: string, target: string): ClaudeProfileSurfaceOutcome {
-  const input = readClaudeProfileObject(source)
-  const current = readClaudeProfileObject(target)
-  // Compare values because hook installation changes serialization.
-  if (
-    input.kind === 'present' &&
-    current.kind === 'present' &&
-    !lstatIfPresent(target)?.isSymbolicLink() &&
-    settingsWithoutOrcaHooks(input.value) === settingsWithoutOrcaHooks(current.value)
-  ) {
-    return 'unchanged'
-  }
-  const outcome = copyClaudeProfileFile(source, target)
-  if (outcome === 'absent' && lstatIfPresent(target)?.isFile()) {
-    rmSync(target, { force: true })
-    return 'synced'
-  }
-  return outcome
-}
-
 // Preserve account-only project and server entries during merging.
 const MERGED_BY_ENTRY: ReadonlySet<string> = new Set(['projects', 'mcpServers'])
 
@@ -294,7 +268,12 @@ export async function provisionClaudeProfile(args: {
     })
   }
   await runClaudeProfileSurface(report, 'settings.json', () =>
-    copySettings(join(defaultHome, 'settings.json'), join(args.profileHome, 'settings.json'))
+    syncClaudeProfileSettings(
+      join(defaultHome, 'settings.json'),
+      join(args.profileHome, 'settings.json'),
+      // Beside the setup marker, outside the folder Claude reads.
+      join(dirname(args.profileHome), 'settings-sync.json')
+    )
   )
   const statePath = (configDir: string | undefined): string =>
     resolveClaudeGlobalConfigFile({

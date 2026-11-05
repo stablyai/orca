@@ -134,7 +134,7 @@ describe('launchStructuredWorktreeSession', () => {
     vi.clearAllMocks()
     mocks.waitForComposerMount.mockResolvedValue(undefined)
     clearNativeChatComposerDraftsForTests()
-    mocks.state.pendingWorktreeCreations = Object.fromEntries([['creation-1', {}]])
+    mocks.state.pendingWorktreeCreations = { 'creation-1': { request } }
     mocks.launchAgentInNewTabWithOutcome.mockReturnValue(null)
     mocks.listener = null
     mocks.state.activePendingCreationId = 'creation-1'
