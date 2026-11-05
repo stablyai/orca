@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { mobileWebAppModuleClosure } from './build-mobile-web-app-bundle.mjs'
+import { mobileWebAppModuleClosure } from './build/mobile-web-app/build-mobile-web-app-bundle.mjs'
 import { mobileWebAppDependenciesPresent } from './mobile-web-app/mobile-web-app-bundle-dependencies.mjs'
 
 // Page imports xterm directly; WebView’s ~612KiB engine IIFE is unusable/dead weight under shipped CSP.

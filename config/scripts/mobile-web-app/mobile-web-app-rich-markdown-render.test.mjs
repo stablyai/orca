@@ -12,7 +12,7 @@ import {
   MOBILE_WEB_APP_NATIVE_PARITY_STYLE,
   MOBILE_WEB_APP_ROOT_RESET,
   lucideBarrelPlugin
-} from '../build-mobile-web-app-bundle.mjs'
+} from '../build/mobile-web-app/build-mobile-web-app-bundle.mjs'
 import { mobileWebAppDependenciesPresent } from './mobile-web-app-bundle-dependencies.mjs'
 import { themeSwitchTest } from './mobile-web-app-theme-switch.mjs'
 import { textInputFontSizeFloor } from './platform-seams/mobile-web-app-text-input-font-size-seam.mjs'

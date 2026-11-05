@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { expect, it } from 'vitest'
 import { parse } from 'yaml'
-import { compileAggregateExpression } from './pr-aggregate-gate-context.mjs'
+import { compileAggregateExpression } from './workflow/pr-admission/pr-aggregate-gate-context.mjs'
 import { WSL_FAMILIES } from './wsl-orcad-qualification.mjs'
 
 const workflow = parse(readFileSync('.github/workflows/wsl-orcad-e2e.yml', 'utf8'))

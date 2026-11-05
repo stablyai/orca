@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto'
 import { lstat, mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
-import { resolvePullRequestDiffBase } from './git-pull-request-diff-base.mjs'
+import { resolvePullRequestDiffBase } from './git/pr-diff-base/git-pull-request-diff-base.mjs'
 import skillRenames from '../../src/shared/bundled-skill-renames.json' with { type: 'json' }
 
 // Schema 3 removed revision/tree identity with snapshot registry; freshness compares installed bytes only.

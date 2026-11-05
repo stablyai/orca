@@ -9,10 +9,10 @@ on:
       - '.github/workflows/computer-macos-native.yml'
       - 'electron.vite.config.ts'
       - 'config/build-plugins/**'
-      - 'config/scripts/build-computer-macos.mjs'
-      - 'config/scripts/build-native-for-platform.mjs'
-      - 'config/scripts/build-native-for-platform.test.mjs'
-      - 'config/scripts/pnpm-cli-invocation.mjs'
+      - 'config/scripts/native-build/macos/build-computer-macos.mjs'
+      - 'config/scripts/native-build/composition/build-native-for-platform.mjs'
+      - 'config/scripts/native-build/composition/build-native-for-platform.test.mjs'
+      - 'config/scripts/tool-invocation/pnpm-cli-invocation.mjs'
       - 'config/scripts/macos-computer-helper-owner-loss-*'
       - 'config/scripts/verify-computer-native.mjs'
       - 'native/computer-use-macos/**'
@@ -57,7 +57,7 @@ jobs:
       - name: Parallel native build launcher cancellation
         run: >-
           pnpm vitest run --config config/vitest.config.ts
-          config/scripts/build-native-for-platform.test.mjs
+          config/scripts/native-build/composition/build-native-for-platform.test.mjs
       - name: Authenticated helper owner-loss smoke
         run: pnpm bench:macos-computer-helper-owner-loss --expect reaped --trials 1
       - name: Swift tests and signed universal helper verification

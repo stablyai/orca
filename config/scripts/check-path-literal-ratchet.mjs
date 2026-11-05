@@ -1,7 +1,11 @@
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
 import { parse } from 'jsonc-parser'
-import { listTrackedFiles, readTrackedSources, runEntryRatchet } from './ratchet-baseline.mjs'
+import {
+  listTrackedFiles,
+  readTrackedSources,
+  runEntryRatchet
+} from './static-analysis/ratchet-baseline/ratchet-baseline.mjs'
 
 // Ratchet stale src/... references in CI/workflows/e2e downward before folder moves can orphan routes, gate manifests or workflow paths.
 
@@ -10,7 +14,7 @@ const SCAN_ROOTS = ['config', '.github', 'tests']
 const SOURCE_ROOTS = 'main|renderer|shared|cli|preload|packages|types|wsl-guest'
 const RESOLVED_EXTENSIONS = ['.ts', '.tsx', '.js', '.mjs', '.cjs', '/index.ts']
 // Generated timings; a stale row only skews shard balance and is rewritten by its generator.
-const EXCLUDED_FILES = new Set(['config/scripts/ci-shard-timings.json'])
+const EXCLUDED_FILES = new Set(['config/scripts/ci/sharding/ci-shard-timings.json'])
 const GATE_MANIFEST = 'config/reliability-gates.jsonc'
 // Command strings in manifests and scripts name paths unquoted; in code only quoted literals count.
 const UNQUOTED_ALLOWED = /\.(?:jsonc?|ya?ml|sh|ps1)$/
