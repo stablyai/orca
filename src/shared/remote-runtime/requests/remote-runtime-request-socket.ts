@@ -74,14 +74,22 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
       envelope: selectedEnvelope
     })
   const prepare = (selectedParams: unknown) => {
+    let measured:
+      | { params: unknown; envelope: RuntimeOrchestrationEnvelope | undefined; serialized: string }
+      | undefined
     const selected = prepareRequest?.({
       params: selectedParams,
       envelope,
-      measure: (candidateParams, candidateEnvelope) =>
-        Buffer.byteLength(serialize(candidateParams, candidateEnvelope), 'utf8')
+      measure: (candidateParams, candidateEnvelope) => {
+        const serialized = serialize(candidateParams, candidateEnvelope)
+        measured = { params: candidateParams, envelope: candidateEnvelope, serialized }
+        return Buffer.byteLength(serialized, 'utf8')
+      }
     }) ?? { params: selectedParams, envelope }
     return prepareRemoteRuntimeRequest(new Map(), () =>
-      serialize(selected.params, selected.envelope)
+      measured && measured.params === selected.params && measured.envelope === selected.envelope
+        ? measured.serialized
+        : serialize(selected.params, selected.envelope)
     )
   }
   const pendingRequest: { preparedRequest: ReturnType<typeof prepare> | null } = {

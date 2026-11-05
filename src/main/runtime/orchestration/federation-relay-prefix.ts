@@ -17,8 +17,16 @@ export function federationRelayPrefix(
         orchestrationRequestId: `relay_import_${dispatchId}_${items[count - 1]?.sequence ?? 0}`
       }
     })
+    const full = candidate(items.length)
+    if (
+      items.length &&
+      measure(full.params, full.envelope) <= REMOTE_RUNTIME_MAX_INBOUND_REQUEST_JSON_BYTES
+    ) {
+      selected(items.at(-1)!.sequence)
+      return full
+    }
     let low = 1
-    let high = items.length
+    let high = items.length - 1
     let fit = 0
     while (low <= high) {
       const middle = Math.floor((low + high) / 2)

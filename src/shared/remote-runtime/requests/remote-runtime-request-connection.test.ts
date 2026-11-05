@@ -1,3 +1,5 @@
+import { federationRelayPrefix } from '../../../main/runtime/orchestration/federation-relay-prefix'
+import * as memoryLimits from '../remote-runtime-memory-limits'
 import { sendRemoteRuntimeRequest } from '../remote-runtime-client'
 import {
   pairedRuntimeConnectionFromOffer,
@@ -59,10 +61,20 @@ afterEach(async () => {
 })
 
 describe('RemoteRuntimeRequestConnection', () => {
-  it('prepares a request using the exact sending socket envelope and maximal accepted device token', async () => {
+  it('serializes a fitting 50-item relay page once with the exact socket envelope and maximal token', async () => {
     const server = await createServer(undefined, 'x'.repeat(65536))
-    let measured = 0
-    const params = { body: '\u0001'.repeat(20000) }
+    const serialize = vi.spyOn(memoryLimits, 'serializeRemoteRuntimeRpcRequest')
+    onTestFinished(() => serialize.mockRestore())
+    const items = Array.from({ length: 50 }, (_, i) => ({
+      dispatch_id: 'dispatch_remote',
+      direction: 'to_worker' as const,
+      sequence: i + 1,
+      message_id: `m${i}`,
+      kind: 'control_message',
+      payload: JSON.stringify({ body: 'x'.repeat(12 * 1024) })
+    }))
+    const params = { dispatchId: 'dispatch_remote', items }
+    let selectedThrough = 0
     const response = await sendRemoteRuntimeRequest(
       server.pairing,
       'orchestration.federationImport',
@@ -71,19 +83,21 @@ describe('RemoteRuntimeRequestConnection', () => {
       { orchestrationRequestId: 'before' },
       undefined,
       [],
-      ({ params: original, envelope, measure }) => {
-        const selected = { ...envelope, orchestrationRequestId: 'selected-prefix-7' }
-        measured = measure(original, selected)
-        return { params: original, envelope: selected }
-      }
+      federationRelayPrefix('dispatch_remote', items, (last) => {
+        selectedThrough = last
+      })
     )
     expect(response.ok).toBe(true)
     expect(server.requests).toHaveLength(1)
     expect(server.requests[0]).toMatchObject({
       params,
-      orchestrationRequestId: 'selected-prefix-7'
+      orchestrationRequestId: 'relay_import_dispatch_remote_50'
     })
-    expect(measured).toBe(Buffer.byteLength(JSON.stringify(server.requests[0])))
+    expect(selectedThrough).toBe(50)
+    expect(Buffer.byteLength(JSON.stringify(server.requests[0]))).toBeLessThanOrEqual(
+      memoryLimits.REMOTE_RUNTIME_MAX_INBOUND_REQUEST_JSON_BYTES
+    )
+    expect(serialize).toHaveBeenCalledTimes(1)
   })
 
   async function reuseWithCancellation(wait: 'admission' | 'preflight') {

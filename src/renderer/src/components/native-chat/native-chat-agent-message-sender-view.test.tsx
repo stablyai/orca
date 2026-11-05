@@ -14,6 +14,7 @@ import type { AgentMessageSenderView } from '../../../../shared/agent-session/ag
 import { runtimeEnvironmentStatusFromSnapshot } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { parseOrcaSessionAddress } from '../../../../shared/orca-session-address'
 import * as presentation from '@/lib/program-status/agent-row-presentation'
+import * as senderTargets from './native-chat-agent-message-sender-target'
 import * as cache from '@/components/dashboard/worktree-agent-rows-cache'
 import '@/components/sidebar/workspace-card/activity/worktree-agent-row-selectors'
 import {
@@ -39,34 +40,45 @@ const views = new Map<number, AgentMessageSenderView>()
 function Probe({
   id,
   workspace = 'workspace',
-  remote = false
+  remote = false,
+  sourceId = id,
+  proof = 'live'
 }: {
   id: number
   workspace?: string
   remote?: boolean
+  sourceId?: number
+  proof?: 'live' | 'gone' | 'terminal'
 }) {
   const value = useAgentMessageSenderView(
     {
-      party: { address: `term_${id}`, terminalHandle: `term_${id}`, orcaSessionId: null },
-      name: 'Sender'
+      party: {
+        address: `term_${sourceId}`,
+        terminalHandle: `term_${sourceId}`,
+        orcaSessionId: null
+      },
+      name: 'Sender',
+      ...(proof === 'gone' ? { agent: 'claude' } : {})
     },
     workspace,
     remote ? { kind: 'environment', environmentId: 'remote' } : { kind: 'local' },
-    `source-${id}`
+    proof === 'terminal' ? undefined : `${proof === 'gone' ? 'closed' : 'source'}-${sourceId}`
   )
   views.set(id, value)
   renders.set(id, (renders.get(id) ?? 0) + 1)
   return null
 }
 let publicationRevision = 0
-function publishSources(n: number, host = 'local', worktreeId = 'workspace') {
+function publishSources(n: number, host = 'local', worktreeId = 'workspace', handles = false) {
   useAppStore.getState().setAgentSenderPublication(host, {
-    associations: Array.from({ length: n }, (_, i) => ({
-      identity: `dispatch:source-${i}`,
-      paneKey: status(i).paneKey,
-      worktreeId,
-      dispatchActor: true as const
-    })),
+    associations: Array.from({ length: n }, (_, i) =>
+      [`dispatch:source-${i}`, ...(handles ? [`term_${i}`] : [])].map((identity) => ({
+        identity,
+        paneKey: status(i).paneKey,
+        worktreeId,
+        dispatchActor: true as const
+      }))
+    ).flat(),
     principals: [],
     attachments: [],
     revision: { epoch: 'activity', revision: ++publicationRevision }
@@ -103,23 +115,24 @@ afterEach(() => {
 })
 
 it.each([100, 1000])(
-  'shares actual row acquisition and isolates selected progress across %i cards',
+  'bounds proved, gone-proof and plain-terminal cards across %i status rows',
   (n) => {
     let visits = 0
-    const live = new Proxy(
-      Object.fromEntries(
-        Array.from({ length: n }, (_, i) => {
-          const entry = status(i)
-          return [entry.paneKey, entry]
-        })
-      ),
-      {
+    const track = (entries: Record<string, AgentStatusEntry>) =>
+      new Proxy(entries, {
         ownKeys(target) {
           const keys = Object.getOwnPropertyNames(target)
           visits += keys.length
           return keys
         }
-      }
+      })
+    const live = track(
+      Object.fromEntries(
+        Array.from({ length: n }, (_, i) => {
+          const entry = status(i)
+          return [entry.paneKey, entry]
+        })
+      )
     )
     useAppStore.setState({
       agentStatusByPaneKey: live,
@@ -135,46 +148,77 @@ it.each([100, 1000])(
         ])
       )
     })
-    publishSources(n)
+    publishSources(n, 'local', 'workspace', true)
     const normalize = vi.spyOn(presentation, 'resolveRowProgramStatus')
+    const resolve = vi.spyOn(senderTargets, 'resolveAgentMessageSenderTarget')
     const mounted = render(
       <>
         {Array.from({ length: n }, (_, id) => (
-          <Probe key={id} id={id} />
+          <span key={id}>
+            <Probe id={id} />
+            <Probe id={n + id} sourceId={id} proof="gone" />
+            <Probe id={2 * n + id} sourceId={id} proof="terminal" />
+          </span>
         ))}
       </>
     )
-    // Exact Dispatch lookup reuses the index; visible authority and sidebar indexing visit the live entries.
-    expect(visits).toBe(n * 2)
+    // Both fallback cohorts share the existing sender index and row source.
+    expect(visits).toBeLessThanOrEqual(n * 3)
     expect(normalize).toHaveBeenCalledTimes(n)
     for (let i = 0; i < n; i++) {
       expect(views.get(i)?.dot).toBe('working')
+      expect(views.get(n + i)).toEqual({ agentType: 'claude' })
+      expect(views.get(2 * n + i)).toEqual({ agentType: 'claude' })
     }
     const before = new Map(renders)
     visits = 0
     normalize.mockClear()
+    resolve.mockClear()
     act(() => useAppStore.setState({ sidebarBody: 'agents' }))
     expect(visits).toBe(0)
     expect(normalize).not.toHaveBeenCalled()
+    expect(resolve.mock.calls.length).toBeLessThanOrEqual(n * 4)
     expect(renders).toEqual(before)
     for (const progress of [40, 60]) {
+      const state = useAppStore.getState()
+      const entries = { ...state.agentStatusByPaneKey }
+      const key = status(0).paneKey
+      entries[key] = {
+        ...entries[key],
+        programStatus: { state: 'working', progress, observedAt: 2_000_000 }
+      }
+      visits = 0
       normalize.mockClear()
-      const epoch = useAppStore.getState().agentStatusEpoch
-      act(() =>
-        useAppStore.getState().setAgentProgramStatus(status(0).paneKey, {
-          state: 'working',
-          progress,
-          observedAt: 2_000_000
-        })
-      )
+      resolve.mockClear()
+      const epoch = state.agentStatusEpoch
+      act(() => useAppStore.setState({ agentStatusByPaneKey: track(entries) }))
+      expect(visits).toBeLessThanOrEqual(n * 3)
+      expect(resolve.mock.calls.length).toBeGreaterThanOrEqual(n * 4)
+      expect(resolve.mock.calls.length).toBeLessThanOrEqual(n * 8)
       expect(useAppStore.getState().agentStatusEpoch).toBe(epoch)
       expect(normalize).toHaveBeenCalledTimes(n)
       expect(views.get(0)?.progress).toBe(progress)
       expect(renders.get(0)).toBe(before.get(0)! + (progress === 40 ? 1 : 2))
-      for (let i = 1; i < n; i++) {
+      for (let i = 1; i < 3 * n; i++) {
         expect(renders.get(i)).toBe(before.get(i))
       }
     }
+    const settled = new Map(renders)
+    visits = 0
+    normalize.mockClear()
+    resolve.mockClear()
+    act(() => useAppStore.setState({ sidebarBody: 'worktrees' }))
+    expect(visits).toBe(0)
+    expect(normalize).not.toHaveBeenCalled()
+    expect(resolve.mock.calls.length).toBeLessThanOrEqual(n * 4)
+    expect(renders).toEqual(settled)
+    write(0, { agentType: 'codex' })
+    for (const id of [0, 2 * n]) {
+      expect(views.get(id)?.agentType).toBe('codex')
+      expect(renders.get(id)).toBe(settled.get(id)! + 1)
+    }
+    expect(views.get(n)).toEqual({ agentType: 'claude' })
+    expect(renders.get(n)).toBe(settled.get(n))
     mounted.unmount()
   }
 )
