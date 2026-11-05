@@ -2615,7 +2615,7 @@
       "loadFailed": "Browser-Einstellungen konnten nicht geladen werden. Erneut versuchen.",
       "openTerminalLinks": "Terminal-Links öffnen",
       "phoneBrowser": "Browser auf dem Smartphone",
-      "phoneBrowserDescription": "In Safari, Chrome oder einem anderen Browser auf diesem Smartphone öffnen.",
+      "phoneBrowserDescription": "Im Systembrowser dieses Smartphones öffnen.",
       "saveFailed": "Browser-Einstellungen konnten nicht gespeichert werden. Erneut versuchen.",
       "title": "Browser"
     },

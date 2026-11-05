@@ -45,7 +45,7 @@
       "desktopBrowser": "Orca browser on desktop",
       "desktopBrowserDescription": "Open in the streamed browser from your paired desktop.",
       "phoneBrowser": "Phone browser",
-      "phoneBrowserDescription": "Open in Safari, Chrome, or another browser on this phone.",
+      "phoneBrowserDescription": "Open in this phone's system browser.",
       "title": "Browser",
       "linksHeading": "LINKS",
       "linksDescription": "Choose where HTTP(S) links tapped in terminal output open.",

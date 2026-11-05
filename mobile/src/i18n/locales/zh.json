@@ -2611,7 +2611,7 @@
       "loadFailed": "无法加载浏览器偏好设置。请重试。",
       "openTerminalLinks": "打开终端链接",
       "phoneBrowser": "手机浏览器",
-      "phoneBrowserDescription": "在此手机的 Safari、Chrome 或其他浏览器中打开。",
+      "phoneBrowserDescription": "在此手机的系统浏览器中打开。",
       "saveFailed": "无法保存浏览器偏好设置。请重试。",
       "title": "浏览器"
     },

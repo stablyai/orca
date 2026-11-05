@@ -35,7 +35,7 @@ function linkModeOptions(t: Translate): PickerOption<MobileTerminalLinkOpenMode>
       label: t('settings.browserSettingsScreen.phoneBrowser', 'Phone browser'),
       subtitle: t(
         'settings.browserSettingsScreen.phoneBrowserDescription',
-        'Open in Safari, Chrome, or another browser on this phone.'
+        "Open in this phone's system browser."
       )
     }
   ]

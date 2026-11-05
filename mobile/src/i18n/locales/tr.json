@@ -2615,7 +2615,7 @@
       "loadFailed": "Tarayıcı tercihleri yüklenemedi. Yeniden deneyin.",
       "openTerminalLinks": "Terminal bağlantılarını aç",
       "phoneBrowser": "Telefon tarayıcısı",
-      "phoneBrowserDescription": "Bu telefondaki Safari, Chrome veya başka bir tarayıcıda açın.",
+      "phoneBrowserDescription": "Bu telefonun sistem tarayıcısında açın.",
       "saveFailed": "Tarayıcı tercihleri kaydedilemedi. Yeniden deneyin.",
       "title": "Tarayıcı"
     },
