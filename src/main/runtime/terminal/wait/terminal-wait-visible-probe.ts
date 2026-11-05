@@ -21,6 +21,7 @@ import {
 import { outputClockOf } from './tui-idle-evidence-source'
 import { hasTerminalAgentPainted, isShellInFront } from '../input/terminal-command-paint-record'
 import { createSetupCompletionScanner } from '../../orchestration/workers/launch/setup-completion-signal'
+import { SETUP_SUCCESS_EXIT_CODE } from '../../../../shared/agent-launch/startup/setup-runner-command'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 const TUI_IDLE_VISIBLE_PROBE_SETTLE_MARGIN_MS = 10
 
@@ -186,7 +187,10 @@ export abstract class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRu
         })
           .then((wait) => {
             if (wait.satisfied && wait.condition === 'exit' && wait.status === 'exited') {
-              finish(wait.exitCode)
+              // Why: the auto-close clause exits with this code only after setup succeeded; it can beat the marker on ConPTY.
+              finish(
+                completionToken && wait.exitCode === SETUP_SUCCESS_EXIT_CODE ? 0 : wait.exitCode
+              )
             }
           })
           .catch(fail)
