@@ -14,6 +14,8 @@ import { resolveTerminalPaneOwnerContext } from '@/components/terminal-pane/term
 const mockUnregisterPtyDataHandlers = vi.hoisted(() => vi.fn<() => unknown[]>(() => []))
 const mockRestorePtyDataHandlersAfterFailedShutdown = vi.hoisted(() => vi.fn())
 
+vi.mock('@/lib/focus-terminal-tab-surface', () => ({ focusTerminalTabSurface: vi.fn() }))
+
 vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }
 }))
@@ -169,4 +171,27 @@ describe('setActiveWorktree', () => {
     expect(state.lastKnownRelayPtyIdByTabId[tabId]).toBe('pty-A')
     expect(getOrphanTerminalIds(state, wt)).not.toContain(tabId)
   })
+})
+
+describe('explicit workspace terminal creation', () => {
+  it.each([true, false])(
+    'uses an explicit menu owner or the active shortcut workspace (%s)',
+    async (explicit) => {
+      const store = createTestStore()
+      const first = makeWorktree({ id: 'repo1::/path/a', repoId: 'repo1', path: '/path/a' })
+      const second = makeWorktree({ id: 'repo1::/path/b', repoId: 'repo1', path: '/path/b' })
+      seedStore(store, {
+        worktreesByRepo: { repo1: [first, second] },
+        activeWorktreeId: second.id,
+        activeWorkspaceExecutionHostId: 'local'
+      })
+      await store
+        .getState()
+        .openNewTerminalTabInActiveWorkspace('menu-group', explicit ? first.id : undefined)
+      const target = explicit ? first.id : second.id
+      const other = explicit ? second.id : first.id
+      expect(store.getState().tabsByWorktree[target]).toHaveLength(1)
+      expect(store.getState().tabsByWorktree[other] ?? []).toEqual([])
+    }
+  )
 })

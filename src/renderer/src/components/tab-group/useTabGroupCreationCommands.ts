@@ -113,7 +113,7 @@ export function useTabGroupCreationCommands({
       await openNewMarkdownInActiveWorkspace(groupId)
     },
     newTerminalTab: () => {
-      void openNewTerminalTabInActiveWorkspace(groupId)
+      void openNewTerminalTabInActiveWorkspace(groupId, worktreeId)
     },
     newTerminalWithShell: (shellOverride: string) => {
       void (async () => {

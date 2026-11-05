@@ -11,9 +11,9 @@ export function createActiveWorkspaceTerminalActions(
   get: TerminalStoreGet
 ): Pick<TerminalSlice, 'openNewTerminalTabInActiveWorkspace'> {
   return {
-    openNewTerminalTabInActiveWorkspace: async (groupId) => {
+    openNewTerminalTabInActiveWorkspace: async (groupId, targetWorktreeId) => {
       const state = get()
-      const worktreeId = state.activeWorktreeId
+      const worktreeId = targetWorktreeId ?? state.activeWorktreeId
       if (!worktreeId) {
         return
       }
