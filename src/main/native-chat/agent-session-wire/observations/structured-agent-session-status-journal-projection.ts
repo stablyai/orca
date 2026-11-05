@@ -138,7 +138,8 @@ export class StructuredAgentSessionJournalProjections {
             snapshot.items,
             snapshot.submissions,
             fence,
-            work.scope
+            work.scope,
+            snapshot.item
           ),
           work.diedTurn()
         ),

@@ -287,7 +287,9 @@
       "permissionDenied": "{{agent}} hat die Berechtigung verweigert. Details anzeigen.",
       "safetyReview": "{{agent}} hat eine Warnung zur Sicherheitsprüfung gemeldet. Details anzeigen.",
       "truncatedResponse": "Anbieterantwort gekürzt (ursprüngliche Größe: {{bytes}} Bytes).",
-      "modelFallback": "Claude hat das Modell gewechselt: {{from}} → {{to}}."
+      "modelFallback": "Claude hat das Modell gewechselt: {{from}} → {{to}}.",
+      "signIn": "Anmelden",
+      "signInHint": "Öffnet ein Terminal auf dem Computer, auf dem dieser Chat läuft"
     },
     "orcaStop": {
       "canContinue": "Die Unterhaltung kann fortgesetzt werden.",
@@ -563,6 +565,12 @@
       "byteSize": "{{size}} Byte",
       "saveUpdate": "Speichern wird mit einem Smartphone-Update verfügbar sein.",
       "fullCopySaveUpdate": "„Vollständig kopieren“ und Speichern werden für diesen Anhang mit einem Smartphone-Update verfügbar sein."
+    },
+    "hostOutage": {
+      "reconnecting": "{{hostName}} verbindet sich erneut…",
+      "stopped": "{{hostName}} ist gestoppt. Starte es auf deinem Computer.",
+      "server": "Der Server",
+      "unavailable": "{{hostName}} ist von deinem Telefon aus nicht verfügbar. Öffne eines seiner Projekte auf deinem Computer."
     }
   },
   "common": {

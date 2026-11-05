@@ -291,7 +291,9 @@
       "permissionDenied": "{{agent}} denegó el permiso. Ver detalles.",
       "safetyReview": "{{agent}} notificó una advertencia de revisión de seguridad. Ver detalles.",
       "truncatedResponse": "Respuesta del proveedor truncada (tamaño original: {{bytes}} bytes).",
-      "modelFallback": "Claude cambió de modelo: {{from}} → {{to}}."
+      "modelFallback": "Claude cambió de modelo: {{from}} → {{to}}.",
+      "signIn": "Iniciar sesión",
+      "signInHint": "Abre una terminal en el ordenador que ejecuta este chat"
     },
     "orcaStop": {
       "canContinue": "Puedes continuar en esta conversación.",
@@ -598,6 +600,12 @@
       "byteSize": "{{size}} bytes",
       "saveUpdate": "Guardar estará disponible en una actualización del teléfono.",
       "fullCopySaveUpdate": "Copiar todo y Guardar para este adjunto estarán disponibles en una actualización del teléfono."
+    },
+    "hostOutage": {
+      "reconnecting": "{{hostName}} se está reconectando…",
+      "stopped": "{{hostName}} está detenido. Inícialo en tu ordenador.",
+      "server": "El servidor",
+      "unavailable": "{{hostName}} no está disponible desde tu teléfono. Abre uno de sus proyectos en tu ordenador."
     }
   },
   "common": {

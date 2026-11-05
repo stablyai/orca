@@ -287,7 +287,9 @@
       "permissionDenied": "{{agent}}이(가) 권한을 거부했습니다. 세부 정보 보기.",
       "safetyReview": "{{agent}}이(가) 안전 검토 경고를 보고했습니다. 세부 정보 보기.",
       "truncatedResponse": "공급자 응답이 잘렸습니다(원래 크기: {{bytes}}바이트).",
-      "modelFallback": "Claude가 모델을 변경했습니다: {{from}} → {{to}}."
+      "modelFallback": "Claude가 모델을 변경했습니다: {{from}} → {{to}}.",
+      "signIn": "로그인",
+      "signInHint": "이 채팅을 실행 중인 컴퓨터에서 터미널을 엽니다"
     },
     "orcaStop": {
       "canContinue": "이 대화에서 계속할 수 있습니다.",
@@ -559,6 +561,12 @@
       "byteSize": "{{size}}바이트",
       "saveUpdate": "저장 기능은 휴대전화 업데이트에서 제공될 예정입니다.",
       "fullCopySaveUpdate": "이 첨부 파일의 전체 복사와 저장 기능은 휴대전화 업데이트에서 제공될 예정입니다."
+    },
+    "hostOutage": {
+      "reconnecting": "{{hostName}}에 다시 연결하는 중…",
+      "stopped": "{{hostName}}이(가) 중지되었습니다. 컴퓨터에서 시작하세요.",
+      "server": "서버",
+      "unavailable": "휴대폰에서 {{hostName}}을(를) 사용할 수 없습니다. 컴퓨터에서 해당 프로젝트 중 하나를 여세요."
     }
   },
   "common": {

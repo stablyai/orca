@@ -270,7 +270,8 @@ function Harness({
     sessionId: source?.sessionId ?? 'session',
     getSendCompletionGeneration: stable.getSendCompletionGeneration,
     keyboardInset: 0,
-    hostName: null
+    hostName: null,
+    onRunInTerminal: vi.fn()
   })
 }
 
