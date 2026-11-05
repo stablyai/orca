@@ -26,7 +26,8 @@ vi.mock('@/runtime/web-runtime-terminal-creation', () => ({
 }))
 
 vi.mock('@/runtime/agent-launch-settings/agent-launch-settings-transport', () => ({
-  hostSupportsLaunchChoices: vi.fn(async () => false)
+  hostSupportsLaunchChoices: vi.fn(async () => false),
+  readHostAgentStartupSettings: vi.fn(async () => null)
 }))
 
 vi.mock('@/runtime/agent-launch-settings/use-host-agent-launch-preferences', () => ({
@@ -76,6 +77,15 @@ it('carries the Claude account to the host even without a prompt', async () => {
       claudeAccountId: 'acct-2'
     })
   )
+})
+
+it('keeps the Claude account when a launch falls back to an older host', async () => {
+  mockCreateTerminal.mockResolvedValue({ outcome: { status: 'created' } })
+  await launch()
+  const [{ legacyAgentLaunch }] = mockCreateTerminal.mock.calls[0]!
+  await expect(legacyAgentLaunch()).resolves.toMatchObject({
+    launchConfig: { claudeAccountId: 'acct-2' }
+  })
 })
 
 it('explains a pinned refusal and offers to start on the active account', async () => {

@@ -68,8 +68,7 @@ export async function launchAgentInWebHostTab(args: {
     promptDelivery,
     agentArgs,
     viewMode,
-    onPromptDelivered,
-    relaunch
+    onPromptDelivered
   } = args
   const failureMessage = translate(
     'agentLaunch.terminalPreparationFailed',
@@ -141,7 +140,9 @@ export async function launchAgentInWebHostTab(args: {
         ? { promptDelivery: promptDelivery === 'draft' ? 'draft' : 'auto-submit' }
         : {}),
       legacyAgentLaunch: async () => {
+        // Why: a legacy launch carries its Claude account only inside a planned launch config.
         if (
+          !args.claudeAccountId &&
           !Object.keys(args.sessionOptions ?? {}).length &&
           args.actionAgentArgs === undefined &&
           agentArgs === undefined &&
@@ -262,7 +263,7 @@ export async function launchAgentInWebHostTab(args: {
           outcome: { status: 'failed', message: '' }
         }
       }
-      toastWebHostLaunchFailure(outcome.message, failureMessage, relaunch)
+      toastWebHostLaunchFailure(outcome.message, failureMessage, args.relaunch)
       return { delivered: false, failureNotified: true, outcome }
     }
     if (args.activate !== false) {
