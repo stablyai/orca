@@ -530,6 +530,12 @@ it('withdraws worker aliases on a failed read and retries only on the next ident
     getRecord: (id) => chats.find((r) => r.sessionId === id) ?? null,
     listRecords: () => chats
   })
+  const priorSession = testOrcaSessionId('55555555-5555-4555-8555-555555555555')
+  chats.push(
+    agentSessionConversationView(
+      agentSessionRecordFixture(agentSessionLeaseFixture({ sessionId: priorSession }))
+    )
+  )
   const first = h.worker(0)
   const unaffected = h.worker(1)
   h.handles.set('tab-0', 'term_reminted')
@@ -576,7 +582,9 @@ it('withdraws worker aliases on a failed read and retries only on the next ident
   h.handles.set('tab-1', 'term_fresh')
   const warned = warn.mock.calls.length
   const withChat = h.projection.build().associations
-  expect(withChat.filter((r) => !r.sessionId)).toEqual(safe.associations)
+  expect(withChat.filter((r) => !r.sessionId)).toEqual(
+    safe.associations.filter((r) => !r.sessionId)
+  )
   expect(withChat.map((r) => r.identity)).toContain(`orca_session_id:${chat}`)
   // The failure still reaches the build's warning.
   expect(warn.mock.calls.length).toBe(warned + 1)
@@ -649,6 +657,7 @@ it.each([100, 1000])(
 
 it('publishes one principal per paired peer and attachments only while their worker runs there', () => {
   const h = harness()
+  const local = h.worker(0)
   h.db.createRemoteDispatchAttachment({
     dispatchId: 'federated',
     taskId: 'task',
@@ -690,6 +699,23 @@ it('publishes one principal per paired peer and attachments only while their wor
   }
   expect(publicRows.attachments).toEqual([attached])
   expect(publicRows.associations.some((row) => row.identity === 'dispatch:federated')).toBe(false)
+  const prepare = h.db.db.prepare.bind(h.db.db)
+  const failed = vi.spyOn(h.db.db, 'prepare').mockImplementation((sql: string) => {
+    if (sql === AGENT_SENDER_PANE_READS.resources) {
+      throw new Error('disk I/O error')
+    }
+    return prepare(sql)
+  })
+  vi.spyOn(console, 'warn').mockImplementation(() => {})
+  h.ptys[0].launchToken = null
+  h.ptys[0].launchIncarnationId = null
+  const safe = h.projection.build('workspace')
+  expect(safe.associations.some((row) => row.identity === `dispatch:${local.id}`)).toBe(false)
+  expect(safe.attachments).toEqual([attached])
+  expect(safe.principals).toEqual(publicRows.principals)
+  expect(safe.peerFingerprint).toBe(publicRows.peerFingerprint)
+  expect(safe.associations.some((row) => row.identity === handle(0))).toBe(true)
+  failed.mockRestore()
   // A settled attachment no longer names a worker running there.
   h.db.db.prepare("UPDATE remote_dispatch_attachments SET state = 'stopped'").run()
   expect(h.projection.build('workspace').attachments).toEqual([])
