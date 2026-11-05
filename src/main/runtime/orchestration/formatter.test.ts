@@ -124,6 +124,8 @@ describe('isMessagePointerText', () => {
   it.each([
     'You have 1 orchestration message. Why?',
     'You have 1 orchestration message. Run `foo` and then `orca orchestration check`.',
+    'You have 1 orchestration message. Run `please explain orchestration check`.',
+    'You have 1 orchestration message. Run `orca orchestration check --run run_1 --help`.',
     'You have 1 new orchestration message after delivery d_1, which you have not acknowledged. Please draft a reply for the new mail.'
   ])('treats user text that only resembles a pointer as a draft: %s', (text) => {
     expect(isMessagePointerText(text)).toBe(false)
