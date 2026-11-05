@@ -44,6 +44,7 @@ const HELPER_STOP_TEXT: Record<HelperStopOutcome['outcome'], string> = {
   stopped: 'stopped',
   already_finished: 'already finished',
   kept_open: 'kept open by the user, not stopped',
+  under_kept_open: 'left running for its kept-open creator',
   starting: 'starting; stopped once its start finishes',
   unconfirmed: 'stop unconfirmed'
 }

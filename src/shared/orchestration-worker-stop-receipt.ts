@@ -4,7 +4,14 @@ import { z } from 'zod'
 export const HelperStopOutcome = z.object({
   dispatchId: z.string(),
   creatorDispatchId: z.string(),
-  outcome: z.enum(['stopped', 'already_finished', 'kept_open', 'starting', 'unconfirmed']),
+  outcome: z.enum([
+    'stopped',
+    'already_finished',
+    'kept_open',
+    'under_kept_open',
+    'starting',
+    'unconfirmed'
+  ]),
   state: z.string().optional(),
   lastError: z.string().nullable().optional()
 })

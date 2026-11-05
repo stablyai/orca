@@ -1,8 +1,5 @@
-import { z } from 'zod'
-import {
-  HelperStopOutcome,
-  type WorkerStopReceipt
-} from '../../../../../../shared/orchestration-worker-stop-receipt'
+import type { WorkerStopReceipt } from '../../../../../../shared/orchestration-worker-stop-receipt'
+import { RemoteCapabilities, RemoteStopReceipt, remoteHelpers } from './worker-stop-remote-receipt'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import type { RpcContext } from '../../../core'
 import { describeUnconfirmedAgentStop } from '../../../../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
@@ -39,21 +36,43 @@ export async function stopSingleWorker(
     }
     await refuseFederatedStopWhileKeptOpen(runtime, federated)
     const server = resolvePinnedFederatedServer(runtime, federated)
+    const call = (method: string, params?: unknown, requestId?: string) =>
+      runtime.callOrchestrationWorkerServer(
+        server.environmentId,
+        method,
+        params,
+        30_000,
+        requestId ? { orchestrationRequestId: requestId } : undefined,
+        { expectedEnvironmentPairingRevision: server.pairingRevision }
+      )
     const begun = db.beginWorkerStop(dispatchId, runtime.getRuntimeId())
     if (begun.disposition === 'already_settled') {
-      return settledReceipt(dispatchId, begun.worker.state)
+      // Its host may still run helpers an earlier, partial stop left; a capable host stops them.
+      const settled = settledReceipt(dispatchId, begun.worker.state)
+      try {
+        const status = RemoteCapabilities.parse(await call('status.get'))
+        if (!status.capabilities?.includes(ORCHESTRATION_WORKER_STOP_HELPERS_RUNTIME_CAPABILITY)) {
+          return settled
+        }
+        const remote = await call(
+          'orchestration.federationStop',
+          { dispatchId },
+          orchestrationMutation.requestId
+        )
+        return {
+          ...settled,
+          ...remoteHelpers(RemoteStopReceipt.parse(remote), status, server.name)
+        }
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : String(error)
+        return {
+          ...settled,
+          warning: `Could not reach ${server.name} to stop helpers this worker started there: ${reason}`
+        }
+      }
     }
     try {
-      const status = RemoteCapabilities.parse(
-        await runtime.callOrchestrationWorkerServer(
-          server.environmentId,
-          'status.get',
-          undefined,
-          30_000,
-          undefined,
-          { expectedEnvironmentPairingRevision: server.pairingRevision }
-        )
-      )
+      const status = RemoteCapabilities.parse(await call('status.get'))
       if (!status.capabilities?.includes(ORCHESTRATION_WORKER_STOP_VERDICT_RUNTIME_CAPABILITY)) {
         return unknownReceipt(
           dispatchId,
@@ -65,14 +84,7 @@ export async function stopSingleWorker(
         )
       }
       const remote = RemoteStopReceipt.parse(
-        await runtime.callOrchestrationWorkerServer(
-          server.environmentId,
-          'orchestration.federationStop',
-          { dispatchId },
-          30_000,
-          { orchestrationRequestId: orchestrationMutation.requestId },
-          { expectedEnvironmentPairingRevision: server.pairingRevision }
-        )
+        await call('orchestration.federationStop', { dispatchId }, orchestrationMutation.requestId)
       )
       if (remote.state === 'stopped') {
         const worker = db.reconcileFederatedWorkerStop(dispatchId)
@@ -246,33 +258,6 @@ export async function stopSingleWorker(
     processAction: 'closed_agent_terminal',
     ...('close' in closed ? { close: closed.close } : {})
   }
-}
-
-const RemoteCapabilities = z.object({ capabilities: z.array(z.string()).optional() })
-
-const RemoteStopReceipt = z.object({
-  state: z.string(),
-  alreadySettled: z.boolean(),
-  processAction: z.string(),
-  close: z.unknown().optional(),
-  lastError: z.string().nullable().optional(),
-  helpers: z.unknown().optional()
-})
-type RemoteStopReceipt = z.infer<typeof RemoteStopReceipt>
-
-/** Helpers the worker's host stopped under it; an older host stops none, so say so. */
-function remoteHelpers(
-  remote: RemoteStopReceipt,
-  status: z.infer<typeof RemoteCapabilities>,
-  serverName: string
-): Pick<WorkerStopReceipt, 'helpers' | 'warning'> {
-  if (!status.capabilities?.includes(ORCHESTRATION_WORKER_STOP_HELPERS_RUNTIME_CAPABILITY)) {
-    return {
-      warning: `${serverName} runs an older Orca that leaves helpers this worker started there running; update it to stop them with the worker.`
-    }
-  }
-  const helpers = HelperStopOutcome.array().safeParse(remote.helpers)
-  return helpers.success && helpers.data.length ? { helpers: helpers.data } : {}
 }
 
 function settledReceipt(dispatchId: string, state: string): WorkerStopReceipt {

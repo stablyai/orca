@@ -2,6 +2,7 @@ import { OrchestrationError } from '../../../../orchestration/orchestration-erro
 import { defineMethod } from '../../../core'
 import { mapWithConcurrency } from '../../../../../../shared/map-with-concurrency'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
+import type { OrchestrationDb } from '../../../../orchestration/db'
 import { WorkerDispatchParams } from '../../../../../../shared/rpc-contract/orchestration-worker-stop-params'
 import type {
   HelperStopOutcome,
@@ -62,13 +63,14 @@ async function stopHelpers(
       const helper = { dispatchId, creatorDispatchId }
       const state = db.getWorkerDispatch(dispatchId)?.state
       if (state === 'starting') {
+        stopsAfterStart(runtime).add(dispatchId)
         return [{ ...helper, outcome: 'starting', state }]
       }
       try {
         const receipt = await stopWorkerAndHelpers(
           runtime,
           dispatchId,
-          mutation && { ...mutation, requestId: `${mutation.requestId}:${dispatchId}` }
+          helperMutation(mutation, dispatchId)
         )
         const outcome = receipt.alreadySettled
           ? 'already_finished'
@@ -86,15 +88,13 @@ async function stopHelpers(
         ]
       } catch (error) {
         if (error instanceof OrchestrationError && error.code === 'terminal_kept_open') {
-          return [{ ...helper, outcome: 'kept_open', state }]
+          // The user keeps this helper, so the helpers working for it keep running too.
+          return [{ ...helper, outcome: 'kept_open', state }, ...listUnderKeptOpen(db, dispatchId)]
         }
+        const lastError = error instanceof Error ? error.message : String(error)
         return [
-          {
-            ...helper,
-            outcome: 'unconfirmed',
-            state,
-            lastError: error instanceof Error ? error.message : String(error)
-          }
+          { ...helper, outcome: 'unconfirmed', state, lastError },
+          ...(await stopHelpers(runtime, dispatchId, mutation))
         ]
       }
     }
@@ -102,8 +102,36 @@ async function stopHelpers(
   return outcomes.flat()
 }
 
-/** A helper whose start finished after its creator was stopped; the creator's stop saw it starting. */
-export async function stopHelperOfStoppedCreator(
+function listUnderKeptOpen(db: OrchestrationDb, creatorDispatchId: string): HelperStopOutcome[] {
+  return db.listHelperDispatchIds(creatorDispatchId).flatMap((dispatchId) => [
+    {
+      dispatchId,
+      creatorDispatchId,
+      outcome: 'under_kept_open' as const,
+      state: db.getWorkerDispatch(dispatchId)?.state
+    },
+    ...listUnderKeptOpen(db, dispatchId)
+  ])
+}
+
+function helperMutation(mutation: StopMutation, dispatchId: string): StopMutation {
+  return mutation && { ...mutation, requestId: `${mutation.requestId}:${dispatchId}` }
+}
+
+const stopsAfterStartByRuntime = new WeakMap<OrcaRuntimeService, Set<string>>()
+
+/** Helpers a creator's stop found still starting; their start's end stops them. */
+function stopsAfterStart(runtime: OrcaRuntimeService): Set<string> {
+  let pending = stopsAfterStartByRuntime.get(runtime)
+  if (!pending) {
+    pending = new Set()
+    stopsAfterStartByRuntime.set(runtime, pending)
+  }
+  return pending
+}
+
+/** Stops a helper whose creator's stop found it starting, once that start ends with an agent that may run. */
+export async function stopHelperAfterStart(
   runtime: OrcaRuntimeService,
   startReceipt: unknown,
   mutation: StopMutation
@@ -112,23 +140,16 @@ export async function stopHelperOfStoppedCreator(
     startReceipt && typeof startReceipt === 'object' && 'dispatchId' in startReceipt
       ? startReceipt.dispatchId
       : undefined
-  if (typeof dispatchId !== 'string') {
+  if (typeof dispatchId !== 'string' || !stopsAfterStart(runtime).delete(dispatchId)) {
     return
   }
-  const db = runtime.getOrchestrationDb()
-  const creator = db.getDispatchContextById(dispatchId)?.creator_dispatch_id
-  if (
-    creator &&
-    db.isWorkerStopRequested(creator) &&
-    db.getWorkerDispatch(dispatchId)?.state === 'ready'
-  ) {
-    await stopWorkerAndHelpers(
-      runtime,
-      dispatchId,
-      mutation && { ...mutation, requestId: `${mutation.requestId}:${dispatchId}` }
-    ).catch((error: unknown) => {
-      console.warn('[orchestration] helper stop after creator stop failed', dispatchId, error)
-    })
+  const state = runtime.getOrchestrationDb().getWorkerDispatch(dispatchId)?.state
+  if (state === 'ready' || state === 'start_unknown') {
+    await stopWorkerAndHelpers(runtime, dispatchId, helperMutation(mutation, dispatchId)).catch(
+      (error: unknown) => {
+        console.warn('[orchestration] helper stop after its start failed', dispatchId, error)
+      }
+    )
   }
 }
 

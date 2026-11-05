@@ -1,8 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import { useHelperFollowUpCli } from './helper-follow-up-cli.test-support'
+import { receipt, useHelperFollowUpCli } from './helper-follow-up-cli.test-support'
 
 describe('worker-stop through CLI argv, RPC and SQLite', () => {
-  const { h, cli, success, start, report } = useHelperFollowUpCli()
+  const f = useHelperFollowUpCli()
+  const { h, cli, success, start, report } = f
 
   it('stops every helper under the worker and lists the finished and kept-open ones', async () => {
     const worker = await start('term_coord', 'term_worker')
@@ -25,6 +26,7 @@ describe('worker-stop through CLI argv, RPC and SQLite', () => {
         outcome: 'stopped'
       }),
       expect.objectContaining({ dispatchId: kept.dispatchId, outcome: 'kept_open' }),
+      expect.objectContaining({ dispatchId: keptChild.dispatchId, outcome: 'under_kept_open' }),
       expect.objectContaining({ dispatchId: finished.dispatchId, outcome: 'already_finished' })
     ])
     const closed = vi.mocked(h.runtime.closeTerminal).mock.calls.map(([handle]) => handle)
@@ -52,5 +54,33 @@ describe('worker-stop through CLI argv, RPC and SQLite', () => {
       code: 'consumer_fenced',
       message: expect.stringContaining('is being stopped')
     })
+  })
+
+  it('stops a helper that was still starting when its creator stopped, once its start ends', async () => {
+    const worker = await start('term_coord', 'term_worker')
+    const ready = h.deferred<void>()
+    const wait = vi.mocked(h.runtime.waitForTerminal).getMockImplementation()
+    vi.mocked(h.runtime.waitForTerminal).mockImplementationOnce(async (...args) => {
+      await ready.promise
+      return wait!(...args)
+    })
+    f.nextTerminal = 'term_late'
+    const starting = cli(
+      'worker-start',
+      '--from',
+      'term_worker',
+      '--spec',
+      'late',
+      '--agent',
+      'codex'
+    )
+    await vi.waitFor(() => expect(h.runtime.createTerminal).toHaveBeenCalledTimes(2))
+
+    const stopped = await success('worker-stop', '--dispatch', worker.dispatchId)
+    expect(stopped).toHaveProperty('helpers', [expect.objectContaining({ outcome: 'starting' })])
+    ready.resolve()
+    const late = receipt.parse((await starting).result)
+
+    expect(h.db.getWorkerDispatch(late.dispatchId)?.state).toBe('stopped')
   })
 })

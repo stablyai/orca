@@ -42,11 +42,11 @@ export function isStopStrandedByAnotherRuntime(
   return worker.state === 'stopping' && worker.runtime_epoch !== runtimeEpoch
 }
 
-/** worker-stop fenced this Dispatch: it starts no helper, and a helper it was starting is stopped too. */
+/** worker-stop has fenced this still-active Dispatch, so it may start no helper. */
 export function isWorkerStopRequested(this: OrchestrationDb, dispatchId: string): boolean {
   const state =
     this.getWorkerDispatch(dispatchId)?.state ?? this.getRemoteDispatchAttachment(dispatchId)?.state
-  return state === 'stopping' || state === 'stop_unknown' || state === 'stopped'
+  return state === 'stopping' || state === 'stop_unknown'
 }
 
 export function beginWorkerStop(
