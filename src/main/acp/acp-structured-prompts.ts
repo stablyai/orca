@@ -27,10 +27,10 @@ export class AcpStructuredPrompts {
 
   constructor(
     private readonly lane: () => AcpStructuredLane | null,
-    /** Allows interactive requests for the current turn. */
+    /** Allows interactive requests and content from requests that settled immediately. */
     private readonly admits: () => boolean,
-    /** Allows content from requests that settled immediately. */
-    private readonly shows: () => boolean
+    /** Requests then come from the agent's own turn, not Orca's open prompt. */
+    private readonly unowned: () => boolean = () => false
   ) {}
 
   get size(): number {
@@ -44,17 +44,23 @@ export class AcpStructuredPrompts {
     }
     const translated = lane.translator.request(method, params, context.id)
     if (translated.settled) {
-      if (this.shows()) {
+      if (this.admits()) {
         lane.apply(translated.events)
       }
       return Promise.resolve(translated.settled.reply)
     }
     if (translated.presentation && !this.admits()) {
-      // Reply cancelled without opening a card when the turn can no longer ask.
+      // Reply cancelled without opening a card when nobody can answer.
       return Promise.resolve(translated.presentation.reply(null))
     }
-    lane.apply(translated.events)
-    const opened = translated.events.find((event) => event.type === 'request.open')
+    const unowned = this.unowned()
+    const events = translated.events.map((event) =>
+      unowned && event.type === 'request.open' && event.join?.turn === undefined
+        ? { ...event, unowned: true as const }
+        : event
+    )
+    lane.apply(events)
+    const opened = events.find((event) => event.type === 'request.open')
     if (!translated.presentation || opened?.type !== 'request.open') {
       throw new AcpRpcError(-32601, `Unsupported ACP client method: ${method}`)
     }

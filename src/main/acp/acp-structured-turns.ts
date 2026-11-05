@@ -60,12 +60,11 @@ export class AcpStructuredTurns {
     return this.active !== null
   }
 
-  /** Interactive requests require an active Orca prompt with no Stop or steer cancellation. */
+  /** Interactive requests wait for the person, including in turns the agent began itself, unless Stop or a steer cuts them short. */
   get acceptsRequests(): boolean {
     return (
       this.stopAt === null &&
-      this.active !== null &&
-      this.steerCancelled !== this.active &&
+      (this.active === null || this.steerCancelled !== this.active) &&
       !this.ended
     )
   }

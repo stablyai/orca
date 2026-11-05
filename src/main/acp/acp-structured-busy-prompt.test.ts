@@ -10,7 +10,7 @@ import {
   hostTestAttachParams
 } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import { acpLaunchSpecFor } from './acp-launch-specs'
-import { waitFor } from './acp-structured-adapter.test-support'
+import { PROVIDER_SESSION, waitFor } from './acp-structured-adapter.test-support'
 import { message, openHostRig, stop } from './acp-structured-host.test-support'
 
 let opened: Awaited<ReturnType<typeof openHostRig>> | undefined
@@ -119,3 +119,35 @@ it.each(['Stop', 'close'] as const)(
     )
   }
 )
+
+it('shows a permission from OMP own turn outside the held message and returns the answer', async () => {
+  const { rig, host, send, fence } = await fixture()
+  await send('first')
+  await rig.frame('session/prompt')
+  await rig.settle()
+  const asked = rig.child().agent.request('own-turn', 'session/request_permission', {
+    sessionId: PROVIDER_SESSION,
+    toolCall: { toolCallId: 'own-call', title: 'orca worktree set --unread' },
+    options: [{ optionId: 'allow', name: 'Allow', kind: 'allow_once' }]
+  })
+  const card = await waitFor(async () => {
+    await host.flushStreamedEvents(SESSION)
+    const found = (await host.history({ sessionId: SESSION, direction: 'tail' })).page.items.find(
+      (row) => row.body.kind === 'approval'
+    )
+    expect(found?.body).toMatchObject({ resolution: { state: 'pending' } })
+    return found!
+  })
+  expect(card.turnScope).toEqual({ kind: 'thread' })
+  await rig.adapter.answerPrompt({
+    sessionId: SESSION,
+    itemId: card.itemId,
+    kind: 'approval',
+    response: { kind: 'option', optionId: 'allow' },
+    fence: fence(),
+    commit: async () => {}
+  })
+  expect(await asked).toMatchObject({
+    result: { outcome: { outcome: 'selected', optionId: 'allow' } }
+  })
+})

@@ -73,14 +73,10 @@ export async function acquireAcpStructuredSession(input: {
     history: AcpLoadHistory | null
   } = { lane: null, reattaching: false, history: null }
   const options = new AcpStructuredOptions(launch.spec.dialect)
-  // Agent-initiated turns cannot open interactive requests; settled request content may still show.
   const prompts = new AcpStructuredPrompts(
     () => slot.lane,
     () => isAcpReadySession(session) && session.turns?.acceptsRequests === true,
-    () =>
-      isAcpReadySession(session) &&
-      (session.turns.acceptsRequests ||
-        (!session.turns.running && !session.turns.stopped && session.lane.openTurnId !== null))
+    () => session?.connection.promptHeld === true
   )
   const early: (() => void)[] = []
   const whenLane = (deliver: () => void): void => {
@@ -108,7 +104,7 @@ export async function acquireAcpStructuredSession(input: {
       ...(spec.signIn ? { signIn: spec.signIn } : {}),
       onPermission: (request, context) => {
         if (!isAcpReadySession(session) || !session.turns?.acceptsRequests) {
-          // No interactive prompt remains during Stop, steering or an agent-initiated turn.
+          // Nobody can answer during Stop, a steer or teardown.
           return { outcome: { outcome: 'cancelled' } }
         }
         // Do not auto-approve questions or permissions enforced by the agent's own mode.

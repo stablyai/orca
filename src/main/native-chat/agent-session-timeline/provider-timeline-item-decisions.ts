@@ -123,7 +123,9 @@ export function decideRequest(
   if (state.items.has(key) && !(journal && state.settledInJournal(key, journal))) {
     return { dropped: 'request-duplicate' }
   }
-  const scope = providerTimelinePlacement(context, state, event.join)
+  const scope = event.unowned
+    ? AGENT_JOURNAL_THREAD_SCOPE
+    : providerTimelinePlacement(context, state, event.join)
   const turn = turnOf(scope)
   const opened: ProviderTimelineOpenItem = {
     kind: 'request',

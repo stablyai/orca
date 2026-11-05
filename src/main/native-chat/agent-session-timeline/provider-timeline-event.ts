@@ -73,7 +73,13 @@ export type ProviderTimelineEvent =
       Joined)
   /** Final text overrides accumulated deltas; join must match the same item. */
   | ({ type: 'text.close'; item: ProviderTimelineTextItem; text?: string } & Joined)
-  | ({ type: 'request.open'; request: string; body: ProviderTimelineRequestBody } & Produced &
+  /** Unowned requests stay at thread level, outside an open turn they do not belong to. */
+  | ({
+      type: 'request.open'
+      request: string
+      body: ProviderTimelineRequestBody
+      unowned?: true
+    } & Produced &
       Joined)
   /** Withdraw only unanswered requests. */
   | { type: 'request.withdrawn'; request: string }

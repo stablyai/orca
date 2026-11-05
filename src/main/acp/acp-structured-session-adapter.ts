@@ -230,7 +230,7 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
     if (input.turnId !== undefined && liveTurnId !== null && input.turnId !== liveTurnId) {
       return { cancelled: false, refusal: { turnNotRunning: true } }
     }
-    if (!session.turns.running && session.lane.openTurnId === null && !session.turns.holdsSteers) {
+    if (!stop.acpStopHasWork(session)) {
       return { cancelled: false, refusal: { turnNotRunning: true } }
     }
     // The host waits for turn completion or grace expiry, never for the cancel write.

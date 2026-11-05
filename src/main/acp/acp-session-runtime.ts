@@ -103,6 +103,11 @@ export class AcpSessionRuntime {
     return this.peer.closed
   }
 
+  /** The agent refused the prompt as busy, so its own turn owns requests until a retry is admitted. */
+  get promptHeld(): boolean {
+    return this.prompts.waitingToRetry
+  }
+
   subscribe(listener: (event: AcpSessionEvent) => void): () => void {
     this.listeners.add(listener)
     return () => {
@@ -276,22 +281,11 @@ export class AcpSessionRuntime {
     if (!request) {
       throw new AcpRpcError(-32602, 'Invalid ACP permission request')
     }
-    // The caller decides whether agent-initiated turns may request permission.
+    // Only the started session asks the caller; the caller decides who can answer.
     if (request.sessionId !== this.started?.sessionId) {
       return { outcome: { outcome: 'cancelled' } }
     }
-    // Defer the decision so a preceding refusal in the same chunk takes effect.
-    return answerAcpPermission(
-      request,
-      context,
-      (request, context) =>
-        this.prompts.waitingToRetry
-          ? { outcome: { outcome: 'cancelled' } }
-          : (this.options.onPermission?.(request, context) ?? {
-              outcome: { outcome: 'cancelled' }
-            }),
-      diagnose
-    )
+    return answerAcpPermission(request, context, this.options.onPermission, diagnose)
   }
 
   private diagnose(message: string): void {

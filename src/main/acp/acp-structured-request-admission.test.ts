@@ -7,7 +7,8 @@ import {
   openAcpAdapterRig,
   PROVIDER_SESSION,
   replyChunk,
-  sendHello
+  sendHello,
+  waitFor
 } from './acp-structured-adapter.test-support'
 
 afterEach(async () => {
@@ -89,15 +90,13 @@ describe('Grok requests and the turn they belong to', () => {
     expect(await cards()).toEqual([])
   })
 
-  it('refuses a question during a turn Grok began itself, opening no card, yet shows its plan', async () => {
+  it('shows a question during a turn Grok began itself, and its plan', async () => {
     const rig = await openAcpAdapterRig()
     await rig.acquire()
     const { agent } = rig.child()
     agent.notify('session/update', replyChunk('task-completed-background-1', 'Build finished; now'))
     await rig.settle()
-    expect(await agent.request(7, 'x.ai/ask_user_question', question('call-7'))).toMatchObject({
-      result: { outcome: 'cancelled' }
-    })
+    void agent.request(7, 'x.ai/ask_user_question', question('call-7'))
     expect(
       await agent.request(8, 'x.ai/exit_plan_mode', {
         sessionId: PROVIDER_SESSION,
@@ -107,19 +106,34 @@ describe('Grok requests and the turn they belong to', () => {
     ).toMatchObject({ result: { outcome: 'abandoned' } })
     await rig.settle()
     const rows = await rig.rig.rows()
-    expect(rows.filter((row) => row.body.kind === 'question')).toEqual([])
+    expect(rows.filter((row) => row.body.kind === 'question').map((row) => row.body)).toMatchObject(
+      [{ resolution: { state: 'pending' } }]
+    )
     expect(rows.map((row) => row.body)).toContainEqual(
       expect.objectContaining({ kind: 'status', presentation: 'plan-document', text: '# Plan' })
     )
   })
 
-  it('refuses a question when no turn is open', async () => {
+  it('waits for the answer to a permission the agent asks with no prompt of Orca running', async () => {
     const rig = await openAcpAdapterRig()
     await rig.acquire()
     const { agent } = rig.child()
-    expect(await agent.request(5, 'x.ai/ask_user_question', question('call-5'))).toMatchObject({
-      result: { outcome: 'cancelled' }
+    const asked = agent.request(5, 'session/request_permission', permission('call-5'))
+    const card = await waitFor(async () => {
+      const found = (await rig.rig.rows()).find((row) => row.body.kind === 'approval')
+      expect(found?.body).toMatchObject({ resolution: { state: 'pending' } })
+      return found!
     })
-    expect((await rig.rig.rows()).filter((row) => row.body.kind === 'question')).toEqual([])
+    await rig.adapter.answerPrompt({
+      sessionId: SESSION,
+      itemId: card.itemId,
+      kind: 'approval',
+      response: { kind: 'option', optionId: 'allow-once' },
+      fence: 1,
+      commit: async () => {}
+    })
+    expect(await asked).toMatchObject({
+      result: { outcome: { outcome: 'selected', optionId: 'allow-once' } }
+    })
   })
 })
