@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { parseMobileMarkdownTree } from './mobile-markdown-tree'
 
 /** Formulas as `D:` (display) or `I:` (inline) plus the text drawn around them. */
-function drawn(source: string): { math: string[]; text: string } {
+function drawn(source: string, chatMath = true): { math: string[]; text: string } {
   const math: string[] = []
   let text = ''
   const walk = (node: Nodes): void => {
@@ -18,7 +18,7 @@ function drawn(source: string): { math: string[]; text: string } {
       node.children.forEach(walk)
     }
   }
-  walk(parseMobileMarkdownTree(source, false))
+  walk(parseMobileMarkdownTree(source, false, chatMath))
   return { math, text }
 }
 
@@ -43,5 +43,14 @@ describe('math in mobile Markdown follows desktop chat', () => {
     ['a closed math fence', '```math\nx^2\n```', ['D:x^2'], '']
   ])('%s', (_name, source, math, text) => {
     expect(drawn(source)).toEqual({ math, text })
+  })
+})
+
+describe('math in GitHub text (PRs, Tasks, files)', () => {
+  it('reads dollar math but leaves escaped brackets as brackets', () => {
+    expect(drawn('\\[Bug\\] $x$ and \\(y\\)', false)).toEqual({
+      math: ['I:x'],
+      text: '[Bug]  and (y)'
+    })
   })
 })

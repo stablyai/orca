@@ -15,7 +15,14 @@ function useMathTypesetter(): MobileMathTypesetter | null {
       return
     }
     let disposed = false
-    loading ??= loadMobileMathTypesetter().then((ready) => (loaded = ready))
+    // A failed chunk load leaves the source showing; the next formula to mount tries again.
+    loading ??= loadMobileMathTypesetter().then(
+      (ready) => (loaded = ready),
+      () => {
+        loading = null
+        return null
+      }
+    )
     void loading.then((ready) => {
       if (!disposed) {
         setTypesetter(() => ready)

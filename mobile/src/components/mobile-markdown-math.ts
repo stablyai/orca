@@ -91,9 +91,15 @@ function nextAtOrAfter(sorted: readonly number[] | undefined, from: number): num
   return sorted[low] ?? Infinity
 }
 
-function openerAt(src: string, at: number): string | null {
+/** Chat reads `\(…\)` and `\[…\]` as math too, like desktop chat; GitHub text reads `$` only, so
+ *  an escaped bracket there (`\[Bug\]`) stays a bracket. */
+function chatDelimiters(env: unknown): boolean {
+  return typeof env === 'object' && env !== null && 'chatMath' in env && env.chatMath === true
+}
+
+function openerAt(src: string, at: number, brackets: boolean): string | null {
   if (src[at] === '\\') {
-    return src[at + 1] === '(' || src[at + 1] === '[' ? src.slice(at, at + 2) : null
+    return brackets && (src[at + 1] === '(' || src[at + 1] === '[') ? src.slice(at, at + 2) : null
   }
   let end = at
   while (src[end] === '$') {
@@ -104,8 +110,7 @@ function openerAt(src: string, at: number): string | null {
 
 function inlineMath(state: StateInline, silent: boolean): boolean {
   const { src, pos } = state
-  const opener = openerAt(src, pos)
-  if (!opener) {
+  if (src[pos] !== '$' && src[pos] !== '\\') {
     return false
   }
   let index = inlineIndexes.get(state)
@@ -113,8 +118,12 @@ function inlineMath(state: StateInline, silent: boolean): boolean {
     index = indexInlineSource(src)
     inlineIndexes.set(state, index)
   }
-  // A `$` run is one opener: its tail never reopens after the whole run failed.
-  if (opener[0] === '$' && src[pos - 1] === '$' && !index.escaped[pos - 1]) {
+  // A `$` run is one opener: its tail never reopens after the whole run failed, and is not rescanned.
+  if (src[pos] === '$' && src[pos - 1] === '$' && !index.escaped[pos - 1]) {
+    return false
+  }
+  const opener = openerAt(src, pos, chatDelimiters(state.env))
+  if (!opener) {
     return false
   }
   const bodyStart = pos + opener.length
@@ -173,6 +182,10 @@ function closerInLine(text: string, opener: string): number {
   return -1
 }
 
+/** Block scans that failed at a line, per parse. A later opener of the same kind before that line
+ *  reads the same lines to the same end, so it fails without rescanning (paragraphs retry every line). */
+const failedBlockScans = new WeakMap<StateBlock, Map<string, number>>()
+
 function blockMath(
   state: StateBlock,
   startLine: number,
@@ -184,9 +197,18 @@ function blockMath(
   }
   const { src } = state
   const start = state.bMarks[startLine]! + state.tShift[startLine]!
-  const opener = openerAt(src, start)
+  const opener = openerAt(src, start, chatDelimiters(state.env))
   // Single `$` and `\(` never open a block.
   if (!opener || !isDisplayMathOpener(opener)) {
+    return false
+  }
+  let failed = failedBlockScans.get(state)
+  if (!failed) {
+    failed = new Map()
+    failedBlockScans.set(state, failed)
+  }
+  const scan = `${opener}:${state.blkIndent}:${endLine}`
+  if ((failed.get(scan) ?? -1) > startLine) {
     return false
   }
   const closer = markdownMathCloser(opener)
@@ -200,6 +222,7 @@ function blockMath(
     if (at >= 0) {
       // A closer with text after it is inline math in a paragraph, not a block.
       if (text.slice(at + closer.length).trim()) {
+        failed.set(scan, line)
         return false
       }
       lines.push(text.slice(0, at))
@@ -216,6 +239,7 @@ function blockMath(
   }
   const body = lines.join('\n')
   if (isCitationBracketMath(opener, body)) {
+    failed.set(scan, line)
     return false
   }
   if (silent) {
@@ -233,7 +257,8 @@ function blockMath(
   return true
 }
 
-/** `$…$`, `$$…$$`, `\(…\)` and `\[…\]`, by desktop chat's rules. */
+/** `$…$` and `$$…$$` (plus `\(…\)` and `\[…\]` when parsed with `{ chatMath: true }`), by desktop
+ *  chat's rules. */
 export function mobileMarkdownMath(markdown: MarkdownIt): void {
   markdown.inline.ruler.before('escape', 'math_inline', inlineMath)
   markdown.block.ruler.before('fence', 'math_block', blockMath, {

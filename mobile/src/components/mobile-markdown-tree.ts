@@ -10,6 +10,7 @@ import {
   displayFormulas,
   inlineMathNode,
   mathBlockNode,
+  mathClosed,
   mathFenceNode,
   withoutMath
 } from './mobile-markdown-math-nodes'
@@ -279,22 +280,28 @@ function withoutHtml(parent: Parent, nested: boolean): void {
 
 /** The text with the markup its last top-level block leaves open closed, as desktop closes it.
  *  Only that block: a lone `*` earlier in the reply is no opener, and remend would close it. */
-function withLastBlockClosed(source: string, tokens: readonly Token[]): string {
-  const lastBlock = tokens.findLast((token) => token.level === 0 && token.map)?.map?.[0] ?? 0
+function withLastBlockClosed(source: string, tokens: readonly Token[], chatMath: boolean): string {
+  const last = tokens.findLast((token) => token.level === 0 && token.map)
+  const lastBlock = last?.map?.[0] ?? 0
   const lines = source.split('\n')
   const tail = lines.slice(lastBlock).join('\n')
+  // Like desktop, unfinished math stays as typed: remend would rewrite TeX as Markdown.
+  if ((last && !mathClosed(last)) || (chatMath && /\\[[(]/.test(tail))) {
+    return source
+  }
   const closed = remend(tail, { linkMode: 'text-only', katex: false })
   return closed === tail ? source : [...lines.slice(0, lastBlock), closed].join('\n')
 }
 
 /** `growing`: the text is still arriving, so markup its end leaves open is closed first, instead
- *  of flashing raw markers and half-written links. */
-export function parseMobileMarkdownTree(source: string, growing: boolean): Root {
-  let tokens = markdown.parse(source, {})
+ *  of flashing raw markers and half-written links. `chatMath`: chat's `\(` and `\[` math too. */
+export function parseMobileMarkdownTree(source: string, growing: boolean, chatMath = false): Root {
+  const env = { chatMath }
+  let tokens = markdown.parse(source, env)
   let text = source
   if (growing) {
-    text = withLastBlockClosed(source, tokens)
-    tokens = text === source ? tokens : markdown.parse(text, {})
+    text = withLastBlockClosed(source, tokens, chatMath)
+    tokens = text === source ? tokens : markdown.parse(text, env)
   }
   const root = toTree(tokens, text)
   withoutHtml(root, false)

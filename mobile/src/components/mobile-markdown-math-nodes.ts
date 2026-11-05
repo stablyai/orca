@@ -7,7 +7,7 @@ import { isDisplayMathOpener, markdownMathCloser } from '../../../src/shared/mar
 type Token = ReturnType<MarkdownIt['parse']>[number]
 
 /** Whether the formula's closing delimiter arrived; only a streaming block can lack one. */
-function mathClosed(token: Token): boolean {
+export function mathClosed(token: Token): boolean {
   const meta: unknown = token.meta
   return !(typeof meta === 'object' && meta !== null && 'closed' in meta && meta.closed === false)
 }
@@ -93,6 +93,9 @@ const TEX_SIZES: Record<string, number> = {
   Huge: 1.44
 }
 
+const DRAWS_NOTHING =
+  /^(?:math[a-z]+|text[a-z]*|operatorname|boldsymbol|bm|left|right|[a-z]*style|tiny|scriptsize|footnotesize|small|normalsize|large|Large|LARGE|huge|Huge|color|frac|dfrac|tfrac|sqrt)$/
+
 /** About as many characters as a formula draws wide, for sizing table columns: commands,
  *  colour arguments, braces and scripts take no room, and a size command scales the rest. */
 export function mobileMathMeasureText(value: string): string {
@@ -102,7 +105,8 @@ export function mobileMathMeasureText(value: string): string {
   )
   const glyphs = value
     .replace(/\\(?:color|textcolor)\{[^}]*\}/g, '')
-    .replace(/\\[a-zA-Z]+/g, '')
+    // A symbol command (\alpha, \sum) draws one glyph; style and size commands draw none.
+    .replace(/\\([a-zA-Z]+)/g, (_command, name: string) => (DRAWS_NOTHING.test(name) ? '' : 'x'))
     .replace(/[{}^_\s]/g, '')
   return 'm'.repeat(Math.ceil([...glyphs].length * scale))
 }

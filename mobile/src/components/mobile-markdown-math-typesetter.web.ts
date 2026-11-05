@@ -1,11 +1,16 @@
+import { BoundedMap } from '../../../src/shared/bounded-map'
 import { MARKDOWN_MATH_KATEX_SETTINGS } from '../../../src/shared/markdown-math-rules'
 import { KATEX_PAGE_STYLE } from './katex-page-style.generated'
 import { GITHUB_MATH_SIZE_MACROS } from './mobile-markdown-math-nodes'
 import type { MobileMathTypesetter } from './mobile-markdown-math-typesetter'
 
-// Streaming replies re-render every formula above the growing tail; typeset each once.
-const MAX_CACHED_FORMULAS = 500
-const results = new Map<string, string | null>()
+// Streaming replies re-render every formula above the growing tail; typeset each once, within the
+// same count and byte bounds as desktop chat's cache.
+const results = new BoundedMap<string, string | null>({
+  maxEntries: 1000,
+  maxBytes: 4 * 1024 * 1024,
+  sizeOf: (html, key) => 256 + 2 * (key.length + (html?.length ?? 0))
+})
 
 /** KaTeX loads with the first formula a page shows, from the chunk mermaid also uses. */
 export async function loadMobileMathTypesetter(): Promise<MobileMathTypesetter | null> {
@@ -33,9 +38,6 @@ export async function loadMobileMathTypesetter(): Promise<MobileMathTypesetter |
     } catch {
       // Like desktop, a formula KaTeX can't parse stays as its source.
       html = null
-    }
-    if (results.size >= MAX_CACHED_FORMULAS) {
-      results.clear()
     }
     results.set(key, html)
     return html
