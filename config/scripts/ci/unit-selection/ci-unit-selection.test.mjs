@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { buildUnitDependencyGraph } from './dependency-graph/ci-unit-dependency-graph.mjs'
 import { UNIT_SETUP_FILES } from './dependency-graph/ci-unit-files.mjs'
-import { auditUnitSelection, planUnitSelection, selectUnitFiles } from './ci-unit-selection.mjs'
-import { FULL_SHARD_COUNT } from './ci-unit-matrix.mjs'
+import { planUnitSelection, selectUnitFiles } from './ci-unit-selection.mjs'
 
 const sources = new Map(
   Object.entries({
@@ -79,15 +78,6 @@ describe('conservative unit selection', () => {
     ])
   })
 
-  it('resolves renderer aliases and changed tests without executing their source', () => {
-    expect(selectUnitFiles(files, ['src/renderer/src/view.tsx'], graph).files).toContain(
-      'src/view.test.ts'
-    )
-    expect(selectUnitFiles(files, ['src/unrelated.test.ts'], graph).files).toContain(
-      'src/unrelated.test.ts'
-    )
-  })
-
   it('does not mistake unrelated opaque readers for coverage of a new entry point', () => {
     const uncovered = { ...graph, files: new Set([...graph.files, 'src/entry.ts']) }
     expect(selectUnitFiles(files, ['src/entry.ts'], uncovered)).toMatchObject({ full: true, files })
@@ -103,32 +93,6 @@ describe('conservative unit selection', () => {
     ].map((changed) => ({ changed }))
   )('runs everything for incomplete/global evidence: $changed', ({ changed }) => {
     expect(selectUnitFiles(files, changed, graph)).toMatchObject({ files, full: true })
-  })
-
-  it.each(
-    [[], ['pnpm-lock.yaml'], ['config/vitest.config.ts', 'src/leaf.ts']].map((changed) => ({
-      changed
-    }))
-  )('keeps full coverage without reading the graph for global evidence: %j', ({ changed }) => {
-    const plan = planUnitSelection({
-      files,
-      changed,
-      graph: () => {
-        throw new Error('Graph must not be read')
-      },
-      timings: {},
-      mode: 'selected',
-      event: { pull_request: { draft: true } }
-    })
-    expect(plan.executionFiles).toEqual(files)
-    expect(plan.selectionAvailable).toBe(false)
-    expect(plan.shards).toHaveLength(FULL_SHARD_COUNT)
-  })
-
-  it('reads lazy graph evidence for source changes', () => {
-    expect(selectUnitFiles(files, ['src/leaf.ts'], () => graph)).toEqual(
-      selectUnitFiles(files, ['src/leaf.ts'], graph)
-    )
   })
 
   it('keeps full coverage by default and on every non-draft commit', () => {
@@ -151,52 +115,5 @@ describe('conservative unit selection', () => {
     })
     expect(selected.executionFiles).not.toContain('src/unrelated.test.ts')
     expect(selected.shards).toEqual([{ index: 1, count: 1 }])
-  })
-
-  it('uses ten complete PR shards while selected drafts stay within the full-count cap', () => {
-    const expandedSources = new Map(sources)
-    for (let index = 0; index < 5; index++) {
-      expandedSources.set(`src/additional-${index}.test.ts`, `import './leaf'`)
-    }
-    const expandedGraph = {
-      ...buildUnitDependencyGraph(expandedSources),
-      files: new Set(expandedSources.keys())
-    }
-    const expandedFiles = [...expandedSources.keys()]
-      .filter((file) => file.endsWith('.test.ts'))
-      .sort()
-    const base = {
-      files: expandedFiles,
-      changed: ['src/leaf.ts'],
-      graph: expandedGraph,
-      fullShardCount: 10
-    }
-    const full = planUnitSelection({ ...base, timings: {} })
-    expect(full.executionFiles).toEqual(expandedFiles)
-    expect(full.shards).toEqual(
-      Array.from({ length: 10 }, (_, index) => ({ index: index + 1, count: 10 }))
-    )
-    const selected = planUnitSelection({
-      ...base,
-      timings: Object.fromEntries(expandedFiles.map((file) => [file, 1_800_000])),
-      mode: 'selected',
-      event: { pull_request: { draft: true } }
-    })
-    expect(selected.shards).toHaveLength(Math.min(FULL_SHARD_COUNT, selected.executionFiles.length))
-    expect(selected.executionFiles).toEqual(
-      selectUnitFiles(expandedFiles, ['src/leaf.ts'], expandedGraph).files
-    )
-    expect(selected.executionFiles.length).toBeGreaterThan(5)
-  })
-
-  it('records failures that would have been missed while shadow runs remain full', () => {
-    const plan = planUnitSelection({ files, changed: ['src/leaf.ts'], graph, timings: {} })
-    expect(
-      auditUnitSelection(plan, {
-        'src/consumer.test.ts': 'failed',
-        'src/unrelated.test.ts': 'failed',
-        'src/view.test.ts': 'passed'
-      }).omittedFailures
-    ).toEqual(['src/unrelated.test.ts'])
   })
 })

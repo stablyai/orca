@@ -1,4 +1,4 @@
-import type { RuntimeBrowserClientPage } from '../runtime-browser-page-registry'
+import type { RuntimeBrowserClientPage } from '../browser/client-pages/runtime-browser-page-registry'
 import type { RuntimeMobileSessionBrowserTab } from '../../../shared/runtime-types'
 
 export function publishedClientBrowserTab(

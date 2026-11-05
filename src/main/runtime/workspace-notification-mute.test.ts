@@ -11,7 +11,7 @@ import {
   isWorkspaceHiddenBySidebarFilters,
   isWorkspaceNotificationMuted,
   type WorkspaceNotificationMuteDeps
-} from './workspace-notification-mute'
+} from './push/notifications/workspace-notification-mute'
 
 const WORKSPACE_ID = 'repo-1::/work/feature'
 const SCOPE = WORKSPACE_ID

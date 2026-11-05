@@ -36,8 +36,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { registerMobileHandlers } from './mobile'
 import { NETWORK_EXPOSURE_FAILED_GUIDANCE } from '../runtime/network-exposure-guidance'
-import { createMobileRpcSurfaceRuntime } from '../runtime/runtime-rpc-mobile-method-allowlist-fixtures'
-import { OrcaRuntimeRpcServer } from '../runtime/runtime-rpc'
+import { createMobileRpcSurfaceRuntime } from '../runtime/rpc/server/runtime-rpc-mobile-method-allowlist-fixtures'
+import { OrcaRuntimeRpcServer } from '../runtime/rpc/server/runtime-rpc'
 import { WebSocketTransport } from '../runtime/rpc/ws-transport'
 
 // Match production's IPv4-only widened listener.

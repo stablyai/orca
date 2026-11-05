@@ -16,13 +16,13 @@ import {
   type RuntimeHostStatusSnapshot
 } from '../../../shared/remote-runtime/host-status/runtime-host-status'
 import { OrcaRuntimeService } from '../orca-runtime'
-import { OrcaRuntimeRpcServer } from '../runtime-rpc'
+import { OrcaRuntimeRpcServer } from '../rpc/server/runtime-rpc'
 import {
   authenticateMobileWsSession,
   createEncryptedWsResponseReader,
   sendEncryptedWsRequest
-} from '../runtime-rpc-mobile-ws-test-harness'
-import { makeStore } from '../runtime-rpc-worktree-store-fixtures'
+} from '../rpc/server/runtime-rpc-mobile-ws-test-harness'
+import { makeStore } from '../rpc/server/runtime-rpc-worktree-store-fixtures'
 import type { MobileDesktopRelayHosts } from './mobile-desktop-relay-hosts'
 import { partialRuntimeStore } from '../orca-runtime-tests/runtime-store-partial-fixture'
 

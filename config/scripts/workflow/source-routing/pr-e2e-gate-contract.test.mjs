@@ -21,7 +21,7 @@ describe('restart-survival E2E routing', () => {
     'src/main/runtime/browser/browser-commands.test-fixture.ts',
     'src/main/runtime/browser/browser-commands.fixture.ts',
     'src/main/runtime/browser/browser-commands-extra.ts',
-    'src/main/runtime/browser/browser-navigation.ts'
+    'src/main/runtime/browser/commands/browser-navigation.ts'
   ])('does not route %s', (path) => {
     expect(restartSurvivalRoute.matches(path)).toBe(false)
   })

@@ -30,7 +30,7 @@ import { MobileE2EEDesktopOutboundOwner } from './mobile-e2ee-desktop-outbound-o
 import { createLegacyReplySenders } from './mobile-e2ee-legacy-reply-senders'
 import { RuntimeClientCapabilities } from './runtime-client-capabilities'
 import type * as RpcBinary from './rpc-binary-sender'
-import type { E2EEAuthenticatedDevice } from './mobile-e2ee-authenticated-device'
+import type { E2EEAuthenticatedDevice } from './server/mobile-e2ee-authenticated-device'
 
 const MAX_CONSECUTIVE_DECRYPT_FAILURES = 5
 

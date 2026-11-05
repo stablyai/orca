@@ -45,7 +45,7 @@ function loadRuntimeModules() {
   return Promise.all([
     import('./orca-runtime'),
     import('./orchestration/db'),
-    import('./runtime-rpc')
+    import('./rpc/server/runtime-rpc')
   ])
 }
 

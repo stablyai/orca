@@ -4,15 +4,15 @@ import {
   adjudicateAbsentMobileSessionTabClose,
   resolveMobileSessionLifecycleCloseContext,
   type MobileSessionLifecycleCloseHost
-} from '../../mobile-session-lifecycle-close-adjudication'
+} from './mobile-session-lifecycle-close-adjudication'
 import {
   committedMobileSessionTabClose,
   delegatedMobileSessionTabClose,
   refusedMobileSessionTabClose,
   type MobileSessionTabCloseOutcome,
   type MobileSessionTabCloseOptions
-} from '../../mobile-session-tab-close-outcome'
-import { getRuntimeBrowserPageRegistry } from '../../runtime-browser-page-registry'
+} from './mobile-session-tab-close-outcome'
+import { getRuntimeBrowserPageRegistry } from '../../browser/client-pages/runtime-browser-page-registry'
 import type { RuntimeEdgeCommandSurface } from '../../runtime-edge-command-controller'
 import { rendererPublicationThrottle } from '../../../window/renderer-publication-throttle'
 import { retireHeadlessMobileSessionEditorTab } from '../../mobile-session-editor-projection'

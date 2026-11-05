@@ -11,7 +11,7 @@ import { testOrcaSessionId } from '../../../../../shared/orca-session-address-te
 import { idOf } from '../../../rpc/orchestration-session-caller-test-fixture'
 import { closeStructuredAgentSessionChild } from '../../../agent-session/structured-agent-session-close'
 import { loadTestJournal } from '../../../../native-chat/agent-session-journal/journal-host-database-test-support'
-import { OrcaRuntimeRpcServer } from '../../../runtime-rpc'
+import { OrcaRuntimeRpcServer } from '../../../rpc/server/runtime-rpc'
 import { ORCHESTRATION_METHODS } from '../../../rpc/methods/orchestration'
 import type { FakeConnection } from './structured-chat-coordinator-fake-codex-fixture'
 import {

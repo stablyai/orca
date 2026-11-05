@@ -1,6 +1,6 @@
 import type { OrcadPeerDesktopsResult } from '../../shared/orcad-peer-desktops-contract'
 import { sanitizeDeviceLabel } from '../../shared/remote-runtime/pairing/device-key-proof'
-import type { DeviceEntry } from './device-entry'
+import type { DeviceEntry } from './rpc/server/pairing/device-entry'
 
 const UNNAMED_DESKTOP = 'another Orca'
 // Lost contact isn't proof an Orca left: a closed control socket still counts while it reconnects.

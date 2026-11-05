@@ -55,7 +55,7 @@ import {
   runtimeVisibleRepos,
   withoutHiddenHosts
 } from '../catalog/runtime-visible-catalog'
-import { isWorkspaceNotificationMuted } from '../../workspace-notification-mute'
+import { isWorkspaceNotificationMuted } from '../../push/notifications/workspace-notification-mute'
 import { WorkerAutoReleaseActivity } from '../../orchestration/worker-auto-release-activity'
 import { nativeChatIdleStopMs } from '../../../../shared/native-chat/native-chat-idle-stop'
 import type { SurfaceNativeRuntimeOwner } from '../../../workspace-surfaces/surface-native-runtime-owner'

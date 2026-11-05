@@ -1,11 +1,11 @@
 import { TERMINAL_LIFECYCLE_METHODS } from './rpc/methods/terminal/terminal-lifecycle-methods'
-import type { BrowserTabCreatePublicationHost } from './browser-tab-create-publication'
+import type { BrowserTabCreatePublicationHost } from './browser/tabs/browser-tab-create-publication'
 import {
   createBrowserClientPage,
   type BrowserClientPageCreateParams
-} from './browser/browser-client-page-opening'
-import { getBrowserHostLeaseRegistry } from './browser-host/browser-host-lease-registry-instance'
-import { getRuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
+} from './browser/client-pages/browser-client-page-opening'
+import { getBrowserHostLeaseRegistry } from './browser-host/leases/browser-host-lease-registry-instance'
+import { getRuntimeBrowserPageRegistry } from './browser/client-pages/runtime-browser-page-registry'
 import { randomUUID } from 'node:crypto'
 import { expect, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
