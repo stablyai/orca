@@ -97,7 +97,7 @@ export function runTerminalScalePerfReportGate({
 
   console.log(`Terminal scale perf report saved to ${reportPath}`)
   const summaryResult = runNodeScript(
-    'config/scripts/summarize-terminal-perf-report.mjs',
+    'config/scripts/performance/terminal-reporting/summarize-terminal-perf-report.mjs',
     [reportPath],
     'inherit',
     spawnSyncImpl,
@@ -109,7 +109,7 @@ export function runTerminalScalePerfReportGate({
   }
 
   const budgetResult = runNodeScript(
-    'config/scripts/check-terminal-perf-report-budgets.mjs',
+    'config/scripts/performance/terminal-reporting/check-terminal-perf-report-budgets.mjs',
     [reportPath],
     'inherit',
     spawnSyncImpl,
@@ -122,7 +122,7 @@ export function runTerminalScalePerfReportGate({
 
   const htmlReportPath = env.ORCA_E2E_TERMINAL_PERF_HTML_REPORT_PATH || DEFAULT_HTML_REPORT_PATH
   const htmlResult = runNodeScript(
-    'config/scripts/generate-terminal-perf-html-report.mjs',
+    'config/scripts/performance/terminal-reporting/generate-terminal-perf-html-report.mjs',
     [reportPath, '--output', htmlReportPath],
     'inherit',
     spawnSyncImpl,

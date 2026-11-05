@@ -14,7 +14,7 @@ import {
   promoteAgentStateRules,
   publishAgentStateRules
 } from './agent-state-rules-bundle.mjs'
-import { agentStateRulesTag } from './release-tag-patterns.mjs'
+import { agentStateRulesTag } from './release/versioning/release-tag-patterns.mjs'
 
 const REPO = 'stablyai/orca'
 const NEXT = agentStateRulesTag(1, 'next')

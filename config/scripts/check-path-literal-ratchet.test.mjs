@@ -84,7 +84,9 @@ describe('stripSlashComments', () => {
 
 describe('isScannedPath', () => {
   it('skips unit tests, fixtures and generated timings, but scans e2e specs', () => {
-    expect(isScannedPath('config/scripts/pr-e2e-source-routing.mjs')).toBe(true)
+    expect(isScannedPath('config/scripts/workflow/source-routing/pr-e2e-source-routing.mjs')).toBe(
+      true
+    )
     expect(isScannedPath('.github/workflows/pr.yml')).toBe(true)
     expect(isScannedPath('tests/e2e/ssh-orcad-terminal-journeys.spec.ts')).toBe(true)
     expect(isScannedPath('config/scripts/pr-e2e-source-routing.test.mjs')).toBe(false)

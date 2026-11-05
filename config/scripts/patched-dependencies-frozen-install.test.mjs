@@ -13,8 +13,8 @@ import { describe, expect, it } from 'vitest'
 import { runProcessSync } from '@orca/process-host'
 import { resolveCliCommand } from '../../src/shared/node-cli-command-resolution.ts'
 import { removeTreeSync } from '../../src/shared/windows-transient-lock-removal.ts'
-import { resolvePnpmCliInvocation } from './pnpm-cli-invocation.mjs'
-import { workspacePackageManifests } from './workspace-source-exports.mjs'
+import { resolvePnpmCliInvocation } from './tool-invocation/pnpm-cli-invocation.mjs'
+import { workspacePackageManifests } from './workspace/source-exports/workspace-source-exports.mjs'
 
 // Run actual pnpm: it hashes LF-normalized patch content; repeated raw SHA checks agreed with a bad CRLF lockfile and missed frozen-install failures.
 // lockfile-only/ignore-scripts checks resolution without node_modules or native builds; patch application is tested separately below.

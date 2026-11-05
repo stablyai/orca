@@ -7,7 +7,7 @@ import {
   AST_GREP_SCAN_PATHS,
   resolveAstGrepBinary,
   scanAstGrep
-} from './ast-grep-scan.mjs'
+} from './static-analysis/structural-scan/ast-grep-scan.mjs'
 import { main as checkFlakyTestPatterns } from './check-flaky-test-pattern-ratchet.mjs'
 
 const LINT_SEVERITIES = new Set(['error', 'warning'])

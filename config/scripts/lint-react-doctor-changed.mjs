@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
-import { resolveOxlintInvocation } from './oxlint-cli-invocation.mjs'
+import { resolveOxlintInvocation } from './tool-invocation/oxlint-cli-invocation.mjs'
 
 const SOURCE_FILE_PATTERN = /\.(?:[cm]?[jt]sx?)$/
 

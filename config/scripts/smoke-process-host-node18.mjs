@@ -8,7 +8,7 @@ import {
   runPackagedProcessHostConsumer,
   stagePackagedProcessHost,
   writePackagedProcessHostConsumer
-} from './packaged-process-host-fixture.mjs'
+} from './desktop-distribution/runtime-verification/packaged-process-host-fixture.mjs'
 
 // Qualifies the package's engines floor against the staged public output, not the checkout source.
 assert.match(process.versions.node, /^18\./, 'This smoke test must run under Node 18')

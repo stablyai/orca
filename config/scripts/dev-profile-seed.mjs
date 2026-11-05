@@ -9,8 +9,8 @@ import {
   readDevInstanceRecord,
   resolveDevProfile,
   sameFilesystemPath
-} from './dev-instance-isolation.mjs'
-import { isProcessAlive } from './remote-agent-session-process-cleanup.mjs'
+} from './development/instance-isolation/dev-instance-isolation.mjs'
+import { isProcessAlive } from './development/remote-session-cleanup/remote-agent-session-process-cleanup.mjs'
 
 // Allowlist of profile-state domains: projects, workspaces, settings, and SSH targets.
 // Terminal sessions, PTY leases, automations (they would run twice), and telemetry stay behind.

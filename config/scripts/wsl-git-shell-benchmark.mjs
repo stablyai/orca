@@ -8,8 +8,8 @@ import { createJiti } from 'jiti'
 import {
   BENCHMARK_SAMPLE_AGGREGATION,
   summarizeBenchmarkSamples
-} from './benchmark-sample-summary.mjs'
-import { buildCounterbalancedSchedule } from './counterbalanced-benchmark-schedule.mjs'
+} from './performance/measurement/benchmark-sample-summary.mjs'
+import { buildCounterbalancedSchedule } from './performance/measurement/counterbalanced-benchmark-schedule.mjs'
 
 const DEFAULT_SAMPLES = 20
 const DEFAULT_WARMUPS = 3

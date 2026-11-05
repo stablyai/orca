@@ -1,8 +1,11 @@
 import path from 'node:path'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
-import { readTrackedSources, runEntryRatchet } from './ratchet-baseline.mjs'
-import { collectModuleSpecifiers } from './static-module-specifiers.mjs'
+import {
+  readTrackedSources,
+  runEntryRatchet
+} from './static-analysis/ratchet-baseline/ratchet-baseline.mjs'
+import { collectModuleSpecifiers } from './static-analysis/module-requests/static-module-specifiers.mjs'
 
 // COMPAT(legacy-relay-bridge): retirement (2027-01-15) deletes LEGACY_FOLDER and edits its external importers/tagged seams; both lists may only shrink.
 
