@@ -164,9 +164,7 @@ describe('launchAgentInNewTab paired web runtime', () => {
           expect(await prepared.mock.results[0].value).toMatchObject({
             command: creates()[0][0].params.command,
             env: { KEEP: 'host' },
-            launchConfig: {
-              agentArgs: route === 'edited' ? '--model opus --effort high --verbose' : '--verbose'
-            }
+            launchConfig: { agentArgs: '--verbose' }
           })
           expect(spawn).not.toHaveBeenCalled()
         }

@@ -1,12 +1,12 @@
 import { migrateAgentPermissionChoice } from '../../../../shared/agent-launch/permissions/tui-agent-permission-lift'
 import { usableAgentPickerDefaultSettings } from '../../../../shared/agent-launch/picker/agent-launch-picker-defaults'
-import type { AgentLaunchSettingsSource } from '../../../../shared/agent-launch/choices/agent-launch-settings'
 import { lastVerifiedRuntimeStatus } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { useAppStore } from '@/store'
 import { AGENT_SESSION_PERMISSION_OWN_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/agent-session-permission-modes-capability'
 import type {
   AgentLaunchSettings,
-  AgentLaunchSettingsMutation
+  AgentLaunchSettingsMutation,
+  AgentLaunchSettingsSource
 } from '../../../../shared/agent-launch/choices/agent-launch-settings'
 import {
   AGENT_LAUNCH_AUTO_PERMISSIONS_CAPABILITY,
