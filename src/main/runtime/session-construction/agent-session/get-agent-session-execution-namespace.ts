@@ -17,7 +17,7 @@ import { buildAgentResumeStartupPlan } from '../../../../shared/agent-launch/sta
 import { agentLaunchQuotingShell } from '../../../../shared/agent-launch/startup/agent-launch-runtime'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
 import { withAgentSessionAccountEnv } from '../../agent-session/agent-session-account-env'
-import { resolveWslHostAgentResumeInputs } from '../../wsl-host-agent-terminal-launch'
+import { resolveWslHostAgentResumeInputs } from '../../terminal/launch/wsl-host-agent-terminal-launch'
 import {
   resolveTuiAgentLaunchRawArgs,
   resolveTuiAgentLaunchEnv

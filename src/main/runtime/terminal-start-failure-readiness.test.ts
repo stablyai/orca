@@ -3,7 +3,7 @@ import { createTranscriptPane, TRANSCRIPT_PANE_PTY_ID } from './agent-transcript
 import {
   waitForWorkerAgentReady,
   waitForLaunchedAgentComposer
-} from './launched-agent-composer-readiness'
+} from './terminal/wait/launched-agent-composer-readiness'
 import {
   formatTerminalStartFailure,
   readTerminalStartFailure

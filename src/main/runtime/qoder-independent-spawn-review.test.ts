@@ -18,7 +18,7 @@ const {
   makeFolderProjectGroup
 } = await import('./orca-runtime-test-fixtures.spec')
 const { committingSpawn } = await import('./bind-first-pane.test-fixture')
-const { detectAgentCommandsOnHost } = await import('../preflight/agent-detection')
+const { detectAgentCommandsOnHost } = await import('../preflight/agent-command-detection')
 beforeEach(() =>
   vi
     .mocked(detectAgentCommandsOnHost)

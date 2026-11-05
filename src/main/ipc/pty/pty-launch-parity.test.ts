@@ -1,5 +1,5 @@
 import * as spawnRouting from './host-env/fresh-spawn-routing'
-import * as teamsShim from '../../runtime/claude-agent-teams-shim-env'
+import * as teamsShim from '../../runtime/terminal/launch/claude-agent-teams-shim-env'
 import { WorktreeTerminalMutationLock } from '../../runtime/worktree-terminal-mutation-lock'
 import * as teamsPlan from '../../runtime/terminal/launch/agent-teams-launch-plan'
 import { SessionNotFoundError } from '../../daemon/protocol/daemon-errors'

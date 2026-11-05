@@ -3,7 +3,7 @@ import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-r
 import { OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness } from '../../terminal/lifecycle/floating-session-liveness'
 import { writeOrchestrationPointerWithSettlement } from '../mailbox-pointer-pty-write'
 import type { WriteSettlement } from '../../../../shared/terminal/pty/lifecycle/pty-write-settlement'
-import type { RuntimeLeafRecord } from '../../runtime-terminal-state-records'
+import type { RuntimeLeafRecord } from '../../terminal/records/runtime-terminal-state-records'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { getPtyExecutionHost } from '../../../../shared/terminal/pty/lifecycle/terminal-execution-host'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'

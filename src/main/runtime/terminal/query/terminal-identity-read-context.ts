@@ -14,7 +14,7 @@ import type {
 import type {
   RuntimeLeafRecord,
   RuntimePtyWorktreeRecord
-} from '../../runtime-terminal-state-records'
+} from '../records/runtime-terminal-state-records'
 import type { PtyPane, PtyPaneOf, PtyPaneSource } from '../surface/pty-pane-query'
 
 type IdentitySources = {

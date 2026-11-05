@@ -1,4 +1,4 @@
-import type { TerminalReadinessCreation } from './launched-agent-composer-readiness'
+import type { TerminalReadinessCreation } from './terminal/wait/launched-agent-composer-readiness'
 import { isShellProcess } from '../../shared/agent-status/process/shell-process-detection'
 import { isExpectedAgentProcess } from '../../shared/agent-status/process/agent-process-recognition'
 import {
