@@ -7,6 +7,7 @@ import { isDocumentPreview, type FilePreview } from '../../shared/file-preview-k
 import type { RemoteFilePreviewAddress } from '../../shared/remote-file-preview-address'
 import { abortWhenRendererGone } from '../ipc/renderer-lifetime-abort'
 import {
+  RemotePreviewGrantLapsedError,
   renewRemotePreviewGrant,
   statRemotePreviewFile,
   type GrantedRemoteFilePreviewAddress,
@@ -120,11 +121,12 @@ export function revokeRemoteFilePreviewGrants(environmentId: string): void {
   }
 }
 
-export function remoteSnapshot(grant: PreviewGrant, remote: RemoteFilePreviewAddress) {
+export function remoteSnapshot(grant: PreviewGrant): Promise<RemotePreviewFileSnapshot> {
   const now = Date.now()
   if (!grant.stat || now - grant.stat.at > REMOTE_STAT_REUSE_MS) {
     // Not tied to one request's abort: other ranges in the burst may be waiting on it.
-    const snapshot = statRemotePreviewFile(remote, new AbortController().signal)
+    const signal = new AbortController().signal
+    const snapshot = callRemotePreview(grant, (remote) => statRemotePreviewFile(remote, signal))
     const stat = { at: now, snapshot }
     grant.stat = stat
     snapshot.catch(() => {
@@ -155,8 +157,31 @@ export function previewGrantForSender(
   return grant && grant.senderId === senderId ? { token, grant } : null
 }
 
+/**
+ * Runs one host call for a remote preview on its current address. A paused or reconnected viewer
+ * outlives its grant, so a lapsed one is renewed once, as the editor's reads do, wherever the call
+ * happens: a stat, a streamed chunk or a PDF range.
+ */
+export async function callRemotePreview<T>(
+  grant: PreviewGrant,
+  call: (remote: RemoteFilePreviewAddress) => Promise<T>
+): Promise<T> {
+  if (!('remote' in grant.target)) {
+    throw new Error('Preview is not a remote file')
+  }
+  const remote = grant.target.remote
+  try {
+    return await call(remote)
+  } catch (error) {
+    if (!(error instanceof RemotePreviewGrantLapsedError) || remote.grantId === undefined) {
+      throw error
+    }
+    return call(await renewedRemoteTarget(grant, remote))
+  }
+}
+
 /** The preview's address under a fresh grant, shared by every request that found the old one lapsed. */
-export function renewedRemoteTarget(
+function renewedRemoteTarget(
   grant: PreviewGrant,
   lapsed: GrantedRemoteFilePreviewAddress
 ): Promise<RemoteFilePreviewAddress> {

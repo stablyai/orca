@@ -40,7 +40,8 @@ describe('a granted host file outside every workspace', () => {
 
     await expect(readRuntimeFileContent({ ...video, pageOversizedBinary: true })).resolves.toEqual({
       ...mediaUrl,
-      terminalArtifactGrantId: 'g-1'
+      terminalArtifactGrantId: 'g-1',
+      readOnly: true
     })
     expect(fsGrantRuntimeFilePreview).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -94,6 +95,8 @@ describe('a granted host file outside every workspace', () => {
     const read = await readRuntimeFileContent(text)
     expect(read.content.length).toBe(bytes.length)
     expect(read.isBinary).toBe(false)
+    // Why: a grant saves only within one write, so a larger file must not open editable.
+    expect(read.readOnly).toBe(true)
   })
 
   // Why: a bytes editor pages the file with the grant that served it, not the one that lapsed.
@@ -143,5 +146,6 @@ describe('a granted host file outside every workspace', () => {
     })
 
     expect(read).toMatchObject({ content: 'ok', terminalArtifactGrantId: 'g-2' })
+    expect(read).not.toHaveProperty('readOnly')
   })
 })

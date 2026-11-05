@@ -8,6 +8,7 @@ import {
   pinTerminalArtifactGrantTarget,
   renewRestoredHostFileGrant,
   renewTerminalArtifactGrant,
+  TERMINAL_ARTIFACT_WRITE_MAX_BYTES,
   type TerminalArtifactGrantTarget
 } from './runtime-terminal-artifact-grant'
 
@@ -93,5 +94,19 @@ async function readThroughGrant(
     },
     options
   )
-  return { ...content, terminalArtifactGrantId: args.grantId }
+  return {
+    ...content,
+    terminalArtifactGrantId: args.grantId,
+    ...(grantCanSave(content) ? {} : { readOnly: true as const })
+  }
+}
+
+/** A grant saves only text within one write; a larger or binary file opens read-only. */
+function grantCanSave(content: RuntimeReadableFileContent): boolean {
+  // Why the length first: UTF-8 never takes fewer bytes than UTF-16 units, so long text skips encoding.
+  return (
+    !content.isBinary &&
+    content.content.length <= TERMINAL_ARTIFACT_WRITE_MAX_BYTES &&
+    new TextEncoder().encode(content.content).byteLength <= TERMINAL_ARTIFACT_WRITE_MAX_BYTES
+  )
 }

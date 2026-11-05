@@ -136,6 +136,9 @@ export async function hostSavesGrantedFiles(environmentId: string): Promise<bool
   }
 }
 
+// Why: hosts cap a grant write at their mobile read budget; refuse before sending the bytes.
+export const TERMINAL_ARTIFACT_WRITE_MAX_BYTES = 512 * 1024
+
 /** Whether this host reports what a grant can serve, so a file another workspace holds may open in place; rejects when unanswered. */
 export function hostOpensGrantedFilesInPlace(environmentId: string): Promise<boolean> {
   return runtimeEnvironmentSupportsCapability(

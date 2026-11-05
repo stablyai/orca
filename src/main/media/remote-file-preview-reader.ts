@@ -193,6 +193,9 @@ export async function renewRemotePreviewGrant(
     undefined,
     { signal }
   )
+  if (!response.ok && response.error.code === 'runtime_environment_changed') {
+    throw new RemotePreviewPairingChangedError(response.error.message)
+  }
   const openTarget =
     response.ok && isRecord(response.result) && isRecord(response.result.openTarget)
       ? response.result.openTarget

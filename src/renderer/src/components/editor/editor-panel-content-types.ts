@@ -34,6 +34,8 @@ export type FileContent = {
   fileIdentity?: string
   /** The grant that served a host file outside every workspace, renewed or minted by the read. */
   terminalArtifactGrantId?: string
+  /** This copy can't be saved where it was read from, such as a file larger than its grant saves. */
+  readOnly?: true
   loadError?: string
   /** Machine code from a runtime RPC failure; `loadError` alone may be prose (#21041). */
   loadErrorCode?: string

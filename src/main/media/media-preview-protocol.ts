@@ -26,7 +26,6 @@ import { abortWhenRendererGone } from '../ipc/renderer-lifetime-abort'
 import { createMediaRangeResponse } from './media-range-response'
 import {
   REMOTE_PREVIEW_UPDATE_REQUIRED_MESSAGE,
-  RemotePreviewGrantLapsedError,
   RemotePreviewPairingChangedError,
   assertRemoteChunkReadsSupported,
   readRemotePreviewChunk,
@@ -38,8 +37,8 @@ import { readRegisteredPairingRevision } from '../ipc/runtime-environments/runti
 import {
   grants,
   mintPreviewUrl,
+  callRemotePreview,
   remoteSnapshot,
-  renewedRemoteTarget,
   revokeGrant,
   type LocalPreviewTarget,
   type PreviewGrant,
@@ -161,9 +160,7 @@ export async function grantRemoteFilePreview(
 async function handleRemotePreviewRequest(
   request: Request,
   token: string,
-  grant: PreviewGrant,
-  remote: RemoteFilePreviewAddress,
-  renewed = false
+  grant: PreviewGrant
 ): Promise<Response> {
   // Electron's request.signal may never abort; close() also cancels the in-flight chunk.
   const controller = new AbortController()
@@ -175,12 +172,17 @@ async function handleRemotePreviewRequest(
   }
   try {
     // Re-stat (at most once a second) like a local file re-opens per request, so a growing recording keeps playing.
-    const { size } = await remoteSnapshot(grant, remote)
+    const { size } = await remoteSnapshot(grant)
     // The file can change after mint; check the bytes this response serves.
-    await assertRemotePreviewRasterHeader(grant.preview, remote, size, controller.signal)
+    await callRemotePreview(grant, (remote) =>
+      assertRemotePreviewRasterHeader(grant.preview, remote, size, controller.signal)
+    )
     return await createMediaRangeResponse(request, grant.mimeType, {
       size,
-      read: (offset, length) => readRemotePreviewChunk(remote, offset, length, controller.signal),
+      read: (offset, length) =>
+        callRemotePreview(grant, (remote) =>
+          readRemotePreviewChunk(remote, offset, length, controller.signal)
+        ),
       close: async () => {
         request.signal.removeEventListener('abort', forwardAbort)
         controller.abort()
@@ -191,19 +193,6 @@ async function handleRemotePreviewRequest(
     if (error instanceof RemotePreviewPairingChangedError) {
       revokeGrant(token)
       return new Response(null, { status: 410 })
-    }
-    // Why: a paused or reconnected player outlives its grant; renew it the way the editor's reads do.
-    if (
-      error instanceof RemotePreviewGrantLapsedError &&
-      remote.grantId !== undefined &&
-      !renewed
-    ) {
-      try {
-        const next = await renewedRemoteTarget(grant, remote)
-        return await handleRemotePreviewRequest(request, token, grant, next, true)
-      } catch {
-        return new Response(null, { status: 502 })
-      }
     }
     // A lost server is not "file missing".
     return new Response(null, { status: 502 })
@@ -222,7 +211,7 @@ export async function handleMediaPreviewRequest(request: Request): Promise<Respo
   }
   const { target, store, mimeType } = grant
   if ('remote' in target) {
-    return handleRemotePreviewRequest(request, token, grant, target.remote)
+    return handleRemotePreviewRequest(request, token, grant)
   }
   try {
     // This process cannot serve SSH filesystems.
