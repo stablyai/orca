@@ -27,8 +27,8 @@ export function MobileLinkActionSheet(props: {
     }
     actions.push(
       {
-        // The phone's default browser, which may not be Safari.
-        label: t('session.linkActionSheet.openInBrowser', 'Open in browser'),
+        // The phone's default browser, whichever the person set.
+        label: t('session.linkActionSheet.openInBrowser', 'Open in system browser'),
         icon: ExternalLink,
         closeBeforePress: true,
         onPress: () => openExternalLink(url)

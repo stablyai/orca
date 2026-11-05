@@ -38,7 +38,7 @@ describe('MobileLinkActionSheet', () => {
 
     expect(actions.map((action) => action.label)).toEqual([
       'Open in Orca browser',
-      'Open in browser',
+      'Open in system browser',
       'Copy link'
     ])
     actions[0]?.onPress()
@@ -52,7 +52,10 @@ describe('MobileLinkActionSheet', () => {
   })
 
   it("offers only the phone's choices where an Orca browser tab cannot open", () => {
-    expect(sheetActions().map((action) => action.label)).toEqual(['Open in browser', 'Copy link'])
+    expect(sheetActions().map((action) => action.label)).toEqual([
+      'Open in system browser',
+      'Copy link'
+    ])
   })
 
   it('reports a copy that failed', async () => {

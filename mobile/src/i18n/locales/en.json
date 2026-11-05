@@ -2766,7 +2766,7 @@
     },
     "linkActionSheet": {
       "openInOrca": "Open in Orca browser",
-      "openInBrowser": "Open in browser",
+      "openInBrowser": "Open in system browser",
       "copyLink": "Copy link",
       "linkCopied": "Link copied",
       "copyFailed": "Could not copy the link",
