@@ -1,5 +1,5 @@
 import { AppState } from 'react-native'
-import { isTerminalLeafId } from '../../../src/shared/stable-pane-id'
+import { isTerminalLeafId } from '../../../src/shared/workspace-layout/stable-pane-id'
 import { registerBridgeSessionViewingSink } from './bridge-session-viewing-tracker'
 import { dismissConsumedTrayNotifications } from './consumed-notification-tray-dismissal'
 import {
