@@ -11,7 +11,7 @@ test('global Auto preserves other agents’ choices and the single permission se
   await orcaPage.getByRole('button', { name: 'Agents', exact: true }).click()
   const permissions = orcaPage.getByRole('button', { name: 'Permissions', exact: true })
   const group = orcaPage.getByRole('group', { name: 'Permissions', exact: true })
-  const others = orcaPage.getByRole('radiogroup', { name: 'Permissions for other agents' })
+  const others = orcaPage.getByRole('button', { name: 'Permissions for other agents' })
   const readPermissions = () =>
     orcaPage.evaluate(async () => {
       const settings = await window.api.settings.get()
@@ -34,7 +34,8 @@ test('global Auto preserves other agents’ choices and the single permission se
     'true'
   )
   await group.getByRole('menuitemradio', { name: /^Approve for me\b/ }).press('Escape')
-  await expect(others.getByRole('radio', { name: 'Full access', exact: true })).toHaveAttribute(
+  await others.click()
+  await expect(orcaPage.getByRole('menuitemradio', { name: /^Full access\b/ })).toHaveAttribute(
     'aria-checked',
     'true'
   )
@@ -45,7 +46,7 @@ test('global Auto preserves other agents’ choices and the single permission se
     grok: 'full-access'
   })
 
-  await others.getByRole('radio', { name: 'Own settings', exact: true }).click()
+  await orcaPage.getByRole('menuitemradio', { name: /^Each agent's own settings\b/ }).click()
   await expect.poll(readPermissions).toEqual({
     default: 'auto',
     claude: 'auto',
@@ -63,10 +64,10 @@ test('global Auto preserves other agents’ choices and the single permission se
     'true'
   )
   await group.getByRole('menuitemradio', { name: /^Approve for me\b/ }).press('Escape')
-  await expect(others.getByRole('radio', { name: 'Own settings', exact: true })).toHaveAttribute(
-    'aria-checked',
-    'true'
-  )
+  await others.click()
+  await expect(
+    orcaPage.getByRole('menuitemradio', { name: /^Each agent's own settings\b/ })
+  ).toHaveAttribute('aria-checked', 'true')
   await expect.poll(readPermissions).toEqual({
     default: 'auto',
     claude: 'auto',
@@ -74,6 +75,7 @@ test('global Auto preserves other agents’ choices and the single permission se
     grok: 'own'
   })
 
+  await orcaPage.keyboard.press('Escape')
   await permissions.click()
   await group.getByRole('menuitemradio', { name: /^Each agent's own settings\b/ }).click()
   await expect.poll(readPermissions).toEqual({
