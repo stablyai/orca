@@ -153,6 +153,23 @@ describe('a home-relative path printed in a paired-server terminal', () => {
     }
   )
 
+  it('shows no link for a home folder path that names no workspace root', async () => {
+    runtimeEnvironmentCallMock.mockResolvedValue({
+      id: 'rpc-1',
+      ok: true,
+      result: {
+        worktree: 'wt-b',
+        relativePath: 'guides',
+        absolutePath: '/data/m/work/project-rh/guides',
+        exists: true,
+        isDirectory: true
+      },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+
+    expect(await provideLinks('/data/m/work/project', 'cd ~/work/project-rh/guides/')).toEqual([])
+  })
+
   it('shows no link for a home path its host lacks, without asking this computer', async () => {
     runtimeEnvironmentCallMock.mockResolvedValue({
       id: 'rpc-1',

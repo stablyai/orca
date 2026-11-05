@@ -141,9 +141,15 @@ async function opensInPlace(environmentId: string): Promise<boolean> {
   }
 }
 
+export function isHostWorkspaceRoot(
+  file: HostWorkspaceFile | HostGrantedFile | ClientLocalFile | null
+): boolean {
+  return file?.kind === 'host' && file.isDirectory && file.absolutePath === file.worktreePath
+}
+
 /** A host-resolved workspace root, such as `~/proj` from a paired pane, switches to it like an absolute root link. */
 export function revealHostWorkspaceRoot(file: HostWorkspaceFile): void {
-  if (file.isDirectory && file.absolutePath === file.worktreePath) {
+  if (isHostWorkspaceRoot(file)) {
     activateAndRevealWorkspace(file.worktreeId, { executionHostId: file.executionHostId })
   }
 }

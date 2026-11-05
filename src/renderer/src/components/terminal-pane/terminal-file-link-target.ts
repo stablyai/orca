@@ -50,6 +50,8 @@ export type FileLinkTarget = {
   isRemoteRuntimePath: boolean
   cacheKey: string
   isKnownWorktreeRoot: boolean
+  /** A folder link only its host can expand, such as `~/proj/`: it links only to a workspace root. */
+  hostWorkspaceRootOnly?: true
 }
 
 export type FileLinkPathExistence = ReturnType<typeof createTerminalPathExistenceBatch>
@@ -111,7 +113,8 @@ export function resolveFileLinkTarget(
   const isKnownWorktreeRoot = Boolean(
     resolveKnownWorktreeRootPathLink(absolutePath, useAppStore.getState(), fileContext)
   )
-  if (/[\\/]$/.test(parsed.pathText) && !isKnownWorktreeRoot && !expandsOnHost) {
+  const folderText = /[\\/]$/.test(parsed.pathText) && !isKnownWorktreeRoot
+  if (folderText && !expandsOnHost) {
     return null
   }
   const isRemoteRuntimePath = isRemoteRuntimeFileOperation(fileContext, absolutePath)
@@ -127,7 +130,8 @@ export function resolveFileLinkTarget(
       isRemoteRuntimePath,
       runtimeEnvironmentId: host.runtimeEnvironmentId
     }),
-    isKnownWorktreeRoot
+    isKnownWorktreeRoot,
+    ...(folderText ? { hostWorkspaceRootOnly: true as const } : {})
   }
 }
 
