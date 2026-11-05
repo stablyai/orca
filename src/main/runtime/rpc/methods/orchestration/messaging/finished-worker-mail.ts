@@ -108,7 +108,7 @@ export function finishedWorkerSend<P extends { to?: string; type?: string }>(
 }
 
 /** Whether the pane now holds a local worker rather than the remote one: by its custody, which every worker
- *  start records, else by an active local Dispatch or one created strictly later; a tie stays remote. */
+ *  start records, else by a local Dispatch created strictly later; a tie stays remote. */
 function holdsLocalWorker(
   db: OrchestrationDb,
   address: string,
@@ -120,7 +120,6 @@ function holdsLocalWorker(
     return custodian !== attachment.dispatch_id && Boolean(db.getDispatchContextById(custodian))
   }
   return (
-    Boolean(db.getActiveDispatchForIdentity(address, paneKey)) ||
     (db.getLatestDispatchForTerminal(address, paneKey)?.created_at ?? '') > attachment.created_at
   )
 }
