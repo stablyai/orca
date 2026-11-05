@@ -1288,6 +1288,11 @@
       "retryLoading": "Повторить загрузку {{path}}",
       "unavailable": "Недоступно на мобильном устройстве"
     },
+    "fileExplorerRowActions": {
+      "copyName": "Копировать имя",
+      "copyRelativePath": "Копировать относительный путь",
+      "copyFailed": "Не удалось скопировать"
+    },
     "fileMarkdownPreview": {
       "copyLoadedSource": "Скопировать загруженный исходный код Markdown",
       "copySource": "Скопировать исходный код Markdown",

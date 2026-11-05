@@ -1206,6 +1206,11 @@
       "retryLoading": "重试加载 {{path}}",
       "unavailable": "移动端不可用"
     },
+    "fileExplorerRowActions": {
+      "copyName": "复制名称",
+      "copyRelativePath": "复制相对路径",
+      "copyFailed": "无法复制"
+    },
     "fileMarkdownPreview": {
       "copyLoadedSource": "复制已加载的 Markdown 源码",
       "copySource": "复制 Markdown 源码",

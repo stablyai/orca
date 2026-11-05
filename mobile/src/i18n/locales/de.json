@@ -1210,6 +1210,11 @@
       "retryLoading": "{{path}} erneut laden",
       "unavailable": "Auf Mobilgeräten nicht verfügbar"
     },
+    "fileExplorerRowActions": {
+      "copyName": "Namen kopieren",
+      "copyRelativePath": "Relativen Pfad kopieren",
+      "copyFailed": "Kopieren fehlgeschlagen"
+    },
     "fileMarkdownPreview": {
       "copyLoadedSource": "Geladenen Markdown-Quelltext kopieren",
       "copySource": "Markdown-Quelltext kopieren",

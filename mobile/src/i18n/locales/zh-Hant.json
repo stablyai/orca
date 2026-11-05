@@ -1206,6 +1206,11 @@
       "retryLoading": "重新嘗試載入 {{path}}",
       "unavailable": "行動版無法使用"
     },
+    "fileExplorerRowActions": {
+      "copyName": "複製名稱",
+      "copyRelativePath": "複製相對路徑",
+      "copyFailed": "無法複製"
+    },
     "fileMarkdownPreview": {
       "copyLoadedSource": "複製已載入的 Markdown 原始碼",
       "copySource": "複製 Markdown 原始碼",

@@ -1210,6 +1210,11 @@
       "retryLoading": "{{path}} klasörünü yüklemeyi yeniden dene",
       "unavailable": "Mobilde kullanılamıyor"
     },
+    "fileExplorerRowActions": {
+      "copyName": "Adı Kopyala",
+      "copyRelativePath": "Göreli Yolu Kopyala",
+      "copyFailed": "Kopyalanamadı"
+    },
     "fileMarkdownPreview": {
       "copyLoadedSource": "Yüklenen Markdown kaynağını kopyala",
       "copySource": "Markdown kaynağını kopyala",

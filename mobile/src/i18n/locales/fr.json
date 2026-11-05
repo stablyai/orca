@@ -1249,6 +1249,11 @@
       "retryLoading": "Réessayer de charger {{path}}",
       "unavailable": "Indisponible sur mobile"
     },
+    "fileExplorerRowActions": {
+      "copyName": "Copier le nom",
+      "copyRelativePath": "Copier le chemin relatif",
+      "copyFailed": "Impossible de copier"
+    },
     "fileMarkdownPreview": {
       "copyLoadedSource": "Copier le code source Markdown chargé",
       "copySource": "Copier le code source Markdown",
