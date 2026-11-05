@@ -10,7 +10,9 @@ const EXAMPLE_TEMPLATE = `scripts:
   archive: |
     echo "Cleaning up before archive"
 issueCommand: |
-  Complete {{artifact_url}}`
+  Complete {{artifact_url}}
+reviewCommand: |
+  Review {{artifact_url}}`
 
 const YAML_STATE_STYLES: Record<string, { card: string; titleClassName: string }> = {
   loaded: {
@@ -84,8 +86,8 @@ function getParseErrorFixes(): string[] {
       'Check the indentation under `scripts:`. Hook keys should use two spaces, and command lines should use four.'
     ),
     translate(
-      'auto.components.settings.RepositoryHooksSection.787ca433ef',
-      'Define only the supported keys: `scripts`, `setup`, `archive`, and `issueCommand`.'
+      'auto.components.settings.RepositoryHooksYamlStatus.supportedKeysWithReview',
+      'Define only the supported keys: `scripts`, `setup`, `archive`, `issueCommand`, and `reviewCommand`.'
     ),
     translate(
       'auto.components.settings.RepositoryHooksSection.ecc73d9125',
@@ -162,8 +164,8 @@ export function RepositoryHooksYamlStatus({
             <div className="space-y-2 text-xs text-muted-foreground">
               <p>
                 {translate(
-                  'auto.components.settings.RepositoryHooksSection.af49e2a19e',
-                  'The file is present, but Orca could not find valid `scripts` or `issueCommand` definitions.'
+                  'auto.components.settings.RepositoryHooksYamlStatus.noValidDefinitionsWithReview',
+                  'The file is present, but Orca could not find valid `scripts`, `issueCommand`, or `reviewCommand` definitions.'
                 )}
               </p>
               <ol className="space-y-1.5 pl-4 text-[11.5px]">

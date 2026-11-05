@@ -20,17 +20,16 @@ export function createHooksApi(): NonNullable<Partial<PreloadApi>['hooks']> {
       }),
     inspectSetupScriptImports: async ({ repoId }) =>
       callRuntimeResult('repo.setupScriptImports', { repo: repoId }),
-    readIssueCommand: async ({ repoId, wakeWslDistro }) =>
-      callRuntimeResult('repo.issueCommandRead', {
+    readIssueCommand: async ({ repoId, wakeWslDistro, kind }) =>
+      callRuntimeResult(kind === 'review' ? 'repo.reviewCommandRead' : 'repo.issueCommandRead', {
         repo: repoId,
         ...(wakeWslDistro ? { wakeWslDistro } : {})
       }),
-    writeIssueCommand: async ({ repoId, content, wakeWslDistro }) => {
-      await callRuntimeResult('repo.issueCommandWrite', {
-        repo: repoId,
-        content,
-        ...(wakeWslDistro ? { wakeWslDistro } : {})
-      })
+    writeIssueCommand: async ({ repoId, content, wakeWslDistro, kind }) => {
+      await callRuntimeResult(
+        kind === 'review' ? 'repo.reviewCommandWrite' : 'repo.issueCommandWrite',
+        { repo: repoId, content, ...(wakeWslDistro ? { wakeWslDistro } : {}) }
+      )
     }
   }
 }

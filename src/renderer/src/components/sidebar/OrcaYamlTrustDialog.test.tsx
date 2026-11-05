@@ -115,3 +115,33 @@ describe('OrcaYamlTrustDialog Always trust', () => {
     await expect(edited).resolves.toBe('skip')
   })
 })
+
+describe('OrcaYamlTrustDialog prompt templates', () => {
+  function openPrompt(modalData: Record<string, unknown>): ReturnType<typeof vi.fn> {
+    const onResolve = vi.fn()
+    act(() => {
+      useAppStore.setState({
+        activeModal: 'confirm-orca-yaml-hooks',
+        modalData: {
+          repoId: 'repo-1',
+          repoName: 'Repo One',
+          contentHash: 'h',
+          onResolve,
+          ...modalData
+        }
+      })
+    })
+    return onResolve
+  }
+
+  it.each([
+    [{ scriptKind: 'reviewCommand' }, 'Use prompt'],
+    [{ scriptKind: 'reviewCommand', usage: 'shell' }, 'Use prompt'],
+    [{ scriptKind: 'issueCommand', usage: 'prompt' }, 'Use prompt'],
+    [{ scriptKind: 'issueCommand' }, 'Run hooks']
+  ])('approves %j with %s', (modalData, approveLabel) => {
+    const onResolve = openPrompt({ scriptContent: 'Review {{artifact_url}}', ...modalData })
+    clickButton(approveLabel)
+    expect(onResolve).toHaveBeenCalledExactlyOnceWith('run')
+  })
+})

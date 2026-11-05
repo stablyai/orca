@@ -3,6 +3,9 @@ import type { OrcaHookTrustKind } from '../../../shared/orca-hook-trust-entries'
 
 export type OrcaHookScriptKind = OrcaHookTrustKind
 
+/** How approved repo text is used: run as a shell command, or sent to the agent as its prompt. */
+export type OrcaHookTrustUsage = 'shell' | 'prompt'
+
 export async function hashOrcaHookScript(content: string): Promise<string> {
   const normalized = content.trim()
   const bytes = new TextEncoder().encode(normalized)

@@ -3,15 +3,18 @@ import { toast } from 'sonner'
 import { readRuntimeIssueCommand, writeRuntimeIssueCommand } from '@/runtime/runtime-hooks-client'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { watchRefusedWslRead } from '@/runtime/wsl-refused-read-watch'
+import type { RepoCommandKind } from '../../../../../../shared/repo-command-kind'
 
 export function useRepositoryIssueCommand({
   repoId,
   repoHostIdentity,
-  selectedHostId
+  selectedHostId,
+  kind = 'issue'
 }: {
   repoId: string
   repoHostIdentity: string
   selectedHostId: ExecutionHostId
+  kind?: RepoCommandKind
 }): {
   issueCommandDraft: string
   setIssueCommandDraft: (value: string) => void
@@ -47,7 +50,7 @@ export function useRepositoryIssueCommand({
     // A refused read is re-asked once its distro runs: main's signal here, a bounded re-poll for a paired host.
     const stopWatching = watchRefusedWslRead({
       hostId: selectedHostId,
-      read: () => readRuntimeIssueCommand(selectedHostId, repoId),
+      read: () => readRuntimeIssueCommand(selectedHostId, repoId, { kind }),
       refusedDistro: (result) => (result.status === 'error' ? result.refusedWslDistro : undefined),
       onResult: (result) => {
         if (result.status === 'error') {
@@ -77,17 +80,18 @@ export function useRepositoryIssueCommand({
       const draft = issueCommandDraftRef.current.trim()
       if (!contentUnknownRef.current && draft !== lastCommittedIssueCommandRef.current) {
         // Saving the user's own edit is a user act: it may start the repo's stopped WSL distro.
-        void writeRuntimeIssueCommand(selectedHostId, repoId, draft, { wakeWslDistro: true }).catch(
-          (error) => {
-            console.error(
-              '[RepositoryHooksSection] Failed to save issue command on unmount:',
-              error
-            )
-          }
-        )
+        void writeRuntimeIssueCommand(selectedHostId, repoId, draft, {
+          wakeWslDistro: true,
+          kind
+        }).catch((error) => {
+          console.error(
+            `[RepositoryHooksSection] Failed to save ${kind} command on unmount:`,
+            error
+          )
+        })
       }
     }
-  }, [repoHostIdentity, repoId, selectedHostId, updateIssueCommandDraft])
+  }, [kind, repoHostIdentity, repoId, selectedHostId, updateIssueCommandDraft])
 
   const commitIssueCommand = useCallback(async (): Promise<void> => {
     if (contentUnknownRef.current) {
@@ -100,17 +104,16 @@ export function useRepositoryIssueCommand({
       return
     }
     try {
-      await writeRuntimeIssueCommand(selectedHostId, repoId, trimmed, { wakeWslDistro: true })
+      await writeRuntimeIssueCommand(selectedHostId, repoId, trimmed, { wakeWslDistro: true, kind })
       lastCommittedIssueCommandRef.current = trimmed
       setIssueCommandSaveError(null)
     } catch (error) {
-      console.error('[RepositoryHooksSection] Failed to write issue command:', error)
-      const message =
-        error instanceof Error ? error.message : 'Failed to save GitHub issue command.'
+      console.error(`[RepositoryHooksSection] Failed to write ${kind} command:`, error)
+      const message = error instanceof Error ? error.message : `Failed to save ${kind} command.`
       setIssueCommandSaveError(message)
       toast.error(message)
     }
-  }, [issueCommandDraft, repoId, selectedHostId, updateIssueCommandDraft])
+  }, [issueCommandDraft, kind, repoId, selectedHostId, updateIssueCommandDraft])
 
   return {
     issueCommandDraft,

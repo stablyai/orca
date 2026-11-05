@@ -125,6 +125,7 @@ const RECOGNIZED_ORCA_YAML_KEYS = new Set([
   'scripts',
   'setupAgentStartupPolicy',
   'issueCommand',
+  'reviewCommand',
   'defaultTabs',
   'environmentRecipes',
   'worktree'

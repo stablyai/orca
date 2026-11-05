@@ -8344,7 +8344,6 @@
           "a867a0889f": "最近或分頁列。"
         },
         "RepositoryHooksSection": {
-          "af49e2a19e": "該檔案存在，但 Orca 找不到有效的 `scripts` 或 `issueCommand` 定義。",
           "39da2ae12f": "orca.yaml",
           "32fec28f5b": "命令來源",
           "bbbd6e0bc4": "命令來源 & orca.yaml",
@@ -8380,7 +8379,6 @@
           "623e0c9f31": "無法解析 `orca.yaml`",
           "5a67e4793d": "未偵測到 `orca.yaml`",
           "07ba35bc68": "檢查 `scripts:` 下的縮排。掛鉤鍵應使用兩個空格，命令列應使用四個空格。",
-          "787ca433ef": "僅定義支援的鍵：`scripts`、`setup`、`archive` 和 `issueCommand`。",
           "ecc73d9125": "將你的檔案與下面可用的範本進行比較，並在需要時複製該結構。",
           "0cc712b823": "核心設定檔存在於存放庫根目錄中，但 Orca 尚無法解析支援的掛鉤定義。",
           "aba825233f": "該檔案包含此版本的 Orca 無法辨識的設定鍵。您可能需要更新 Orca，或檢查檔案是否有拼字錯誤。",

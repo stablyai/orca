@@ -40,7 +40,7 @@ export function useTaskPageWorkspaceActions<Model extends TaskPageWorkspaceActio
         taskSourceContext: getTaskPageRepoSourceContext(getWorkItemRepo(repos, item), 'github'),
         prefilledName: getGitHubWorkItemWorkspaceSeed(item),
         initialRepoId: item.repoId,
-        enableIssueAutomation: item.type === 'issue',
+        enableIssueAutomation: true,
         telemetrySource: 'sidebar'
       })
     },
@@ -110,6 +110,7 @@ export function useTaskPageWorkspaceActions<Model extends TaskPageWorkspaceActio
         ),
         prefilledName: getGitLabWorkItemWorkspaceSeed(item),
         initialRepoId: item.repoId,
+        enableIssueAutomation: true,
         telemetrySource: 'sidebar'
       })
     },

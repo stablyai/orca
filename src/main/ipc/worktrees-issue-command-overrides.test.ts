@@ -238,7 +238,8 @@ describe('registerWorktreeHandlers', () => {
         '/workspace/repo',
         'command',
         expect.any(Function),
-        { wakeWslDistro: undefined }
+        { wakeWslDistro: undefined },
+        'issue'
       )
     } finally {
       resolveOptions.mockRestore()

@@ -5,6 +5,7 @@ import { callRuntimeRpc } from './runtime-rpc-client'
 import { ipcOrRuntimeTargetForHostId } from './runtime-client-target'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { repoHooksCheckWakeParams } from '../../../shared/repo-hooks-check-wake'
+import type { RepoCommandKind } from '../../../shared/repo-command-kind'
 
 /** The repo's own host: a server's runtime, or this app (with `hostId`) for local and SSH repos. */
 function getHookInspectionTarget(hostId: ExecutionHostId): RuntimeClientTarget {
@@ -77,16 +78,20 @@ export async function inspectRuntimeSetupScriptImports(
 export async function readRuntimeIssueCommand(
   hostId: ExecutionHostId,
   repoId: string,
-  options: { wakeWslDistro?: boolean } = {}
+  options: { wakeWslDistro?: boolean; kind?: RepoCommandKind } = {}
 ): Promise<IssueCommandReadResult> {
   const wake = options.wakeWslDistro ? { wakeWslDistro: true } : {}
+  const kind = options.kind ?? 'issue'
+  const kindArg = kind === 'issue' ? {} : { kind }
   const target = getHookInspectionTarget(hostId)
   if (target.kind !== 'environment') {
-    return window.api.hooks.readIssueCommand({ repoId, hostId, ...wake })
+    // Why: omit `kind` for issues so older preload builds see the old args.
+    return window.api.hooks.readIssueCommand({ repoId, hostId, ...wake, ...kindArg })
   }
+  // Why: a pre-review-template host has no such method and rejects; callers already handle a failed read.
   return callRuntimeRpc<IssueCommandReadResult>(
     target,
-    'repo.issueCommandRead',
+    kind === 'review' ? 'repo.reviewCommandRead' : 'repo.issueCommandRead',
     { repo: repoId, ...wake },
     { timeoutMs: 15_000 }
   )
@@ -97,17 +102,19 @@ export async function writeRuntimeIssueCommand(
   hostId: ExecutionHostId,
   repoId: string,
   content: string,
-  options: { wakeWslDistro?: boolean } = {}
+  options: { wakeWslDistro?: boolean; kind?: RepoCommandKind } = {}
 ): Promise<void> {
   const wake = options.wakeWslDistro ? { wakeWslDistro: true } : {}
+  const kind = options.kind ?? 'issue'
+  const kindArg = kind === 'issue' ? {} : { kind }
   const target = getHookInspectionTarget(hostId)
   if (target.kind !== 'environment') {
-    await window.api.hooks.writeIssueCommand({ repoId, content, hostId, ...wake })
+    await window.api.hooks.writeIssueCommand({ repoId, content, hostId, ...wake, ...kindArg })
     return
   }
   await callRuntimeRpc(
     target,
-    'repo.issueCommandWrite',
+    kind === 'review' ? 'repo.reviewCommandWrite' : 'repo.issueCommandWrite',
     { repo: repoId, content, ...wake },
     { timeoutMs: 15_000 }
   )

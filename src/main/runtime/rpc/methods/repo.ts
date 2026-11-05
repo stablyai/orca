@@ -281,5 +281,23 @@ export const REPO_METHODS = [
       runtime.writeRepoIssueCommand(params.repo, params.content, {
         wakeWslDistro: params.wakeWslDistro
       })
+  }),
+  // Why: a `kind` param on repo.issueCommandRead/Write would make a pre-review-template host
+  // answer with — or overwrite — the ISSUE command. Distinct names fail loudly instead.
+  defineMethod({
+    name: 'repo.reviewCommandRead',
+    permission: 'workspace',
+    params: RepoIssueCommandRead,
+    handler: async (params, { runtime }) =>
+      runtime.readRepoReviewCommand(params.repo, { wakeWslDistro: params.wakeWslDistro })
+  }),
+  defineMethod({
+    name: 'repo.reviewCommandWrite',
+    permission: 'workspace',
+    params: RepoIssueCommandWrite,
+    handler: async (params, { runtime }) =>
+      runtime.writeRepoReviewCommand(params.repo, params.content, {
+        wakeWslDistro: params.wakeWslDistro
+      })
   })
 ]

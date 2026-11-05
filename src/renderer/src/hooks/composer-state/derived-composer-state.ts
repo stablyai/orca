@@ -11,12 +11,12 @@ import { githubRepoIdentityKey } from '../../../../shared/github/repository-iden
 import {
   getLinkedWorkItemProvider,
   canUseIssueCommandForLinkedItemProvider,
-  getWorkspaceSeedName,
-  DEFAULT_ISSUE_COMMAND_TEMPLATE,
-  renderIssueCommandTemplate
+  getWorkspaceSeedName
 } from '@/lib/new-workspace'
 import { getSetupConfig } from '../../../../shared/orca-hook-setup-config'
 import { deriveWorkspaceSetupState } from '@/lib/workspace-setup-preparation'
+import { resolveLinkedOnlyTemplatePrompt } from '@/lib/composer-issue-command'
+import { getRepoCommandKindForLinkedItemType } from '../../../../shared/repo-command-kind'
 import type { SparsePreset } from '../../../../shared/worktree/create-types'
 import { useRetiredWorktreeNames } from '@/hooks/useRetiredWorktreeNames'
 import { getSuggestedCreatureName } from '@/components/sidebar/workspace-creation/naming/worktree-name-suggestions'
@@ -182,10 +182,15 @@ export function useDerivedComposerState(input: DerivedComposerStateInput) {
     if (!shouldApplyLinkedOnlyTemplate || !linkedWorkItem) {
       return ''
     }
-    const template = issueCommandTemplate.trim() || DEFAULT_ISSUE_COMMAND_TEMPLATE
-    return renderIssueCommandTemplate(template, {
-      issueNumber: linkedWorkItem.type === 'issue' ? linkedWorkItem.number : null,
-      artifactUrl: linkedWorkItem.url
+    const kind = getRepoCommandKindForLinkedItemType(linkedWorkItem.type)
+    // Only the issue template is preloaded; a review preview shows the built-in default.
+    return resolveLinkedOnlyTemplatePrompt({
+      trustDecision: 'run',
+      note: '',
+      kind,
+      number: linkedWorkItem.number,
+      artifactUrl: linkedWorkItem.url,
+      template: kind === 'issue' ? issueCommandTemplate : ''
     })
   }, [issueCommandTemplate, linkedWorkItem, shouldApplyLinkedOnlyTemplate])
 

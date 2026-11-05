@@ -128,6 +128,8 @@ export async function prepareQuickComposerStartup(
     executionHostId: ComposerModel['selectedRepoExecutionHostId']
     linkedWorkItem: Parameters<typeof resolveQuickCreateLinkedWorkItemPrompt>[0]
     note: string
+    /** A trusted repo template that replaces the linked-item draft. */
+    templateDraftPrompt?: string
   }
 ): Promise<QuickComposerStartup & { prompt: string; draftPrompt: string | null }> {
   const preferences = input.agent
@@ -137,10 +139,13 @@ export async function prepareQuickComposerStartup(
         executionHostId: input.executionHostId ?? undefined
       })
     : undefined
-  const { prompt, draftPrompt } = resolveQuickCreateLinkedWorkItemPrompt(
+  const resolved = resolveQuickCreateLinkedWorkItemPrompt(
     input.agent ? input.linkedWorkItem : null,
     input.note
   )
+  const prompt = resolved.prompt
+  const draftPrompt =
+    input.agent && input.templateDraftPrompt ? input.templateDraftPrompt : resolved.draftPrompt
   return {
     prompt,
     draftPrompt,

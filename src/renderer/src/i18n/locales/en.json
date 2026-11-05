@@ -6334,7 +6334,21 @@
           "newVmRecipe": "New VM recipe",
           "vmRecipe": "VM recipe",
           "thisRepository": "this repository",
-          "alwaysTrustRepo": "Always trust <code>orca.yaml</code> in <repo/>"
+          "alwaysTrustRepo": "Always trust <code>orca.yaml</code> in <repo/>",
+          "usePrompt": "Use prompt",
+          "dontUsePrompt": "Don't use",
+          "reviewPromptChangedTitle": "{{repo}}'s review prompt changed — use the new version?",
+          "issuePromptChangedTitle": "{{repo}}'s issue prompt changed — use the new version?",
+          "reviewPromptChangedBody": "<code>orca.yaml</code> changed since you last approved. Re-review before Orca sends it to the agent when this workspace launches with a linked pull or merge request.",
+          "issuePromptChangedBody": "<code>orca.yaml</code> changed since you last approved. Re-review before Orca sends it to the agent when this workspace launches with a linked issue.",
+          "newReviewPrompt": "New review prompt",
+          "newIssuePrompt": "New issue prompt",
+          "reviewPromptUseTitle": "Use review prompt from {{repo}}?",
+          "issuePromptUseTitle": "Use issue prompt from {{repo}}?",
+          "reviewPromptUseBody": "This repository's <code>orca.yaml</code> becomes the prompt Orca sends the agent when this workspace launches with a linked pull or merge request. Only use it if you trust <repo/>.",
+          "issuePromptUseBody": "This repository's <code>orca.yaml</code> becomes the prompt Orca sends the agent when this workspace launches with a linked issue. Only use it if you trust <repo/>.",
+          "reviewPrompt": "Review prompt",
+          "issuePrompt": "Issue prompt"
         },
         "PendingWorktreeRow": {
           "af21e953d1": "Cancel worktree creation",
@@ -8795,7 +8809,6 @@
           "a867a0889f": "Recent or tab strip."
         },
         "RepositoryHooksSection": {
-          "af49e2a19e": "The file is present, but Orca could not find valid `scripts` or `issueCommand` definitions.",
           "39da2ae12f": "orca.yaml",
           "32fec28f5b": "Command Source",
           "bbbd6e0bc4": "Command source & orca.yaml",
@@ -8831,7 +8844,6 @@
           "623e0c9f31": "`orca.yaml` could not be parsed",
           "5a67e4793d": "No `orca.yaml` detected",
           "07ba35bc68": "Check the indentation under `scripts:`. Hook keys should use two spaces, and command lines should use four.",
-          "787ca433ef": "Define only the supported keys: `scripts`, `setup`, `archive`, and `issueCommand`.",
           "ecc73d9125": "Compare your file against the working template below and copy that shape if needed.",
           "0cc712b823": "The core configuration file exists in the repo root, but Orca could not parse the supported hook definitions yet.",
           "aba825233f": "The file contains configuration keys that this version of Orca does not recognize. You may need to update Orca, or check the file for typos.",
@@ -8872,7 +8884,9 @@
           "issueCommandSharedDefault": "Leave blank to use the repo default from <yaml>orca.yaml</yaml>.",
           "issueCommandOptionalDefault": "Leave blank to use the repo default from <yaml>orca.yaml</yaml> when one exists.",
           "commandSourceDescription": "When both <yaml>orca.yaml</yaml> and local commands exist, choose which run.",
-          "issueCommandWslStopped": "WSL distro {{distro}} is stopped. Open a terminal in it to see or edit this command."
+          "issueCommandWslStopped": "WSL distro {{distro}} is stopped. Open a terminal in it to see or edit this command.",
+          "c6fd537b13": "Custom Review Command",
+          "8f844ef8e6": "Optional per-user override for the pull/merge request prompt."
         },
         "RepositoryIconPicker": {
           "2b7d27b93c": "Use {{value0}} repo color",
@@ -11152,7 +11166,13 @@
             "wsl": "wsl",
             "distro": "distro",
             "agentRuntime": "agent runtime",
-            "skillRuntime": "skill runtime"
+            "skillRuntime": "skill runtime",
+            "8f907858c1": "review command",
+            "477e8c36fb": "pull request command",
+            "b23c9163a8": "merge request command",
+            "4b1f01c96f": ".orca/review-command",
+            "4b87da14ac": "Custom Review Command",
+            "22948e9325": "File-based pull/merge request prompt configured via orca.yaml reviewCommand and an optional local override."
           }
         },
         "runtime": {
@@ -12760,6 +12780,11 @@
           "subtle": "Subtle",
           "strong": "Strong"
         },
+        "RepositoryIssueCommandSetting": {
+          "e21e26b8ea": "Custom Review Command",
+          "66af9e725a": "Review {{artifact_url}}",
+          "reviewCommandDescription": "Optional override. Use <artifactUrl>{{artifact_url}}</artifactUrl> for the linked pull or merge request URL."
+        },
         "TerminalRenderingSection": {
           "6d4c55bacc": "Inline Images",
           "fffab5890b": "Display images directly in the terminal using SIXEL, iTerm2 (IIP), and Kitty graphics protocols."
@@ -13739,6 +13764,10 @@
         },
         "SettingsSearchableSelect": {
           "noMatches": "No matches."
+        },
+        "RepositoryHooksYamlStatus": {
+          "supportedKeysWithReview": "Define only the supported keys: `scripts`, `setup`, `archive`, `issueCommand`, and `reviewCommand`.",
+          "noValidDefinitionsWithReview": "The file is present, but Orca could not find valid `scripts`, `issueCommand`, or `reviewCommand` definitions."
         }
       },
       "right": {

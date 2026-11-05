@@ -87,13 +87,21 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
         submitBaseBranch,
         createDisplayName,
         pendingFirstAgentMessageRename,
-        trimmedNote
+        trimmedNote,
+        linkedOnlyTemplatePrompt
       } = prepared
 
       const promptLinkedWorkItem = agent === null ? null : submitLinkedWorkItem
 
-      const { prompt: quickPrompt, draftPrompt: quickDraftPrompt } =
-        resolveQuickCreateLinkedWorkItemPrompt(promptLinkedWorkItem, trimmedNote)
+      const resolvedQuickPrompt = resolveQuickCreateLinkedWorkItemPrompt(
+        promptLinkedWorkItem,
+        trimmedNote
+      )
+      const quickPrompt = resolvedQuickPrompt.prompt
+      const quickDraftPrompt =
+        promptLinkedWorkItem && linkedOnlyTemplatePrompt
+          ? linkedOnlyTemplatePrompt
+          : resolvedQuickPrompt.draftPrompt
 
       const startupPolicySettlement = await settleComposerSubmit(
         persistSetupAgentStartupPolicy(),
@@ -152,6 +160,7 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
         agent,
         linkedWorkItem: submitLinkedWorkItem,
         note: trimmedNote,
+        templateDraftPrompt: linkedOnlyTemplatePrompt,
         repoId,
         executionHostId: selectedRepoExecutionHostId,
         settings,

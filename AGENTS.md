@@ -64,3 +64,7 @@ Every change must consider these areas:
 ## Git / GitHub
 
 If changing code around `git`, `gh`, source-control, or review behavior read [`docs/agents-md-refs/git-workflow.md`](./docs/agents-md-refs/git-workflow.md).
+
+## Repo Prompt Templates
+
+If changing `issueCommand`/`reviewCommand` or the trust gate on shared `orca.yaml` prompt text read [`docs/agents-md-refs/repo-prompt-templates.md`](./docs/agents-md-refs/repo-prompt-templates.md).

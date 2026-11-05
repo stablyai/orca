@@ -1,6 +1,7 @@
 import type { OrcaHooks } from '../../shared/orca-yaml-hook-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type { SetupScriptImportCandidate } from '../../shared/workspace-setup/setup-script-imports'
+import type { RepoCommandKind } from '../../shared/repo-command-kind'
 
 export type HooksApi = {
   /** `background`: a render-driven probe, refused (status 'error') rather than booting a stopped WSL distro. */
@@ -21,6 +22,7 @@ export type HooksApi = {
     repoId: string
     hostId?: ExecutionHostId
     wakeWslDistro?: boolean
+    kind?: RepoCommandKind
   }) => Promise<{
     status?: 'ok' | 'error'
     localContent: string | null
@@ -35,5 +37,6 @@ export type HooksApi = {
     content: string
     hostId?: ExecutionHostId
     wakeWslDistro?: boolean
+    kind?: RepoCommandKind
   }) => Promise<void>
 }

@@ -46,6 +46,7 @@ const trustedOrcaHookRepoSchema = z.looseObject({
   setup: salvagedOptional('setup', trustedOrcaHookApprovalSchema),
   archive: salvagedOptional('archive', trustedOrcaHookApprovalSchema),
   issueCommand: salvagedOptional('issueCommand', trustedOrcaHookApprovalSchema),
+  reviewCommand: salvagedOptional('reviewCommand', trustedOrcaHookApprovalSchema),
   vmRecipe: salvagedOptional('vmRecipe', trustedOrcaHookApprovalSchema)
 })
 

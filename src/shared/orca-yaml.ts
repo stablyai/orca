@@ -224,6 +224,7 @@ export function parseOrcaYaml(content: string): OrcaHooks | null {
       ? record.setupAgentStartupPolicy
       : undefined
   const issueCommand = asTrimmedString(record.issueCommand)
+  const reviewCommand = asTrimmedString(record.reviewCommand)
   const defaultTabs = normalizeDefaultTabs(record.defaultTabs)
   const environmentRecipeParse = normalizeVmRecipes(record.environmentRecipes)
   const environmentRecipes = environmentRecipeParse.recipes
@@ -237,6 +238,7 @@ export function parseOrcaYaml(content: string): OrcaHooks | null {
     !setup &&
     !archive &&
     !issueCommand &&
+    !reviewCommand &&
     !setupAgentStartupPolicy &&
     defaultTabs.length === 0 &&
     environmentRecipes.length === 0 &&
@@ -253,6 +255,7 @@ export function parseOrcaYaml(content: string): OrcaHooks | null {
     },
     ...(setupAgentStartupPolicy ? { setupAgentStartupPolicy } : {}),
     ...(issueCommand ? { issueCommand } : {}),
+    ...(reviewCommand ? { reviewCommand } : {}),
     ...(defaultTabs.length > 0 ? { defaultTabs } : {}),
     ...(environmentRecipes.length > 0 ? { environmentRecipes } : {}),
     ...(environmentRecipeDiagnostics.length > 0 ? { environmentRecipeDiagnostics } : {}),
