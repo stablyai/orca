@@ -1,6 +1,6 @@
 import type { RuntimeWorktreePsSummary } from '../../shared/runtime-worktree-contracts'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
-import type { TuiAgent } from '../../shared/tui-agent'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 
 /**
  * Projects the worktree/agent roster into spoken-safe entries for the coordinator session.

@@ -1,6 +1,6 @@
 import type { RuntimeWorktreePsSummary } from '../../shared/runtime-worktree-contracts'
-import type { AgentStatusState } from '../../shared/agent-status-types'
-import type { TuiAgent } from '../../shared/tui-agent'
+import type { AgentStatusState } from '../../shared/agent-status/contracts/agent-status-types'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 
 /**
  * The worktree-ps summary builders for the session-backend test files: one live agent

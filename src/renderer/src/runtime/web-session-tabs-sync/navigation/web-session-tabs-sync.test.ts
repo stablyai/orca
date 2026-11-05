@@ -5,9 +5,11 @@ import { structuredAgentSessionTabId } from '../../../../../shared/agent-session
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
 import {
   clearWebSessionCloseIntent,
+  isWebSessionCloseIntentPending,
   recordWebSessionCloseIntent
 } from '../closing/web-session-close-intent'
 import { recordWebSessionReorderIntent } from './web-session-reorder-intent'
+import { LOCAL_STRUCTURED_SESSION_OWNER } from '../../native-chat/local-sessions/local-structured-session-owner'
 import type { Tab } from '../../../../../shared/tab-types'
 import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
 
@@ -184,7 +186,7 @@ describe('applyWebSessionTabsSnapshot', () => {
     const older = makeSnapshot([], { snapshotVersion: 2, activeTabType: null })
 
     const first = applyFreshWebSessionTabsSnapshot(state, newer, ENV, NOW)
-    const afterNewer = { ...state, ...(first as Partial<WebSessionTabsSyncState>) }
+    const afterNewer: WebSessionTabsSyncState = { ...state, ...first }
     const second = applyFreshWebSessionTabsSnapshot(afterNewer, older, ENV, NOW)
 
     expect(second).toBe(afterNewer)
@@ -478,9 +480,11 @@ describe('applyWebSessionTabsSnapshot', () => {
         activeTabId: null,
         activeTabType: null
       }),
-      ENV,
+      // Only the local structured-session owner's agent-session lane may write the floating
+      // workspace; a remote environment id is refused by the floating gate.
+      LOCAL_STRUCTURED_SESSION_OWNER,
       NOW,
-      { contentScope: 'agent-session', preserveLocalLayout: true }
+      { contentScope: 'agent-session', preserveLocalLayout: true, terminalPtyMode: 'local' }
     )
 
     expect(patch).not.toBe(state)
@@ -558,6 +562,26 @@ describe('applyWebSessionTabsSnapshot', () => {
     const restored = { ...hidden, ...(restoredPatch as Partial<WebSessionTabsSyncState>) }
     expect((restored.tabsByWorktree[WT] ?? []).map((tab) => tab.id)).toContain(
       toWebTerminalSurfaceTabId('host-tab-1')
+    )
+  })
+
+  it('does not let a replay reset clear another close intent from an older snapshot', () => {
+    const current = makeSnapshot([], { snapshotVersion: 6, activeTabType: null })
+    expect(shouldApplyWebSessionTabsSnapshot(current, ENV)).toBe(true)
+    recordWebSessionCloseIntent({ environmentId: ENV }, WT, 'host-tab-2', NOW)
+
+    acceptReplayedWebSessionTabsSnapshot(ENV, WT)
+    const state = makeState()
+    const stalePatch = applyFreshWebSessionTabsSnapshot(
+      state,
+      makeSnapshot([], { snapshotVersion: 5, activeTabType: null }),
+      ENV,
+      NOW + 1
+    )
+
+    expect(stalePatch).toBe(state)
+    expect(isWebSessionCloseIntentPending({ environmentId: ENV }, WT, 'host-tab-2', NOW + 1)).toBe(
+      true
     )
   })
 
