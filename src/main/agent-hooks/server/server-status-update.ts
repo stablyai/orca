@@ -213,7 +213,7 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
             ...rootContextPreservingPayload,
             payload: { ...rootContextPreservingPayload.payload, agentType: identity.agentType }
           }
-    const attachedPayload = this.claudeToolUses.attach(previous, identityResolvedPayload)
+    const attachedPayload = this.claudeToolUses.admit(previous, identityResolvedPayload, !restated)
     // Resolve cancellation before permission holds adopt a replayed main-agent observation.
     const latch = resolveCancelVerdictLatch(previous, attachedPayload, Date.now())
     if (latch.hold) {
@@ -236,7 +236,7 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
       this.commitStatusRowMutation(rowBefore, previous)
       return previous
     }
-    const effectivePayload = this.claudeToolUses.observe(latch.event)
+    const effectivePayload = latch.event
     if (previous && shouldKeepClaudePermissionVisible(previous, effectivePayload)) {
       const held = withHeldChildWaitMainAgent(previous, effectivePayload)
       // Child prompts preserve main-agent progress and its paired shell evidence; the main agent's own waits do not.

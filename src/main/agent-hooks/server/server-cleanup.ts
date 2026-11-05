@@ -313,6 +313,7 @@ export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFen
     this.clearTranscriptPoll(resolvedPaneKey)
     this.runtimeObservedStatusPaneKeys.delete(resolvedPaneKey)
     this.currentAuthorityObservations.delete(resolvedPaneKey)
+    this.claudeToolUses.forget(paneKey, resolvedPaneKey)
     if (existing.payload.state === 'done') {
       this.promptSentDedupeByPaneKey.delete(resolvedPaneKey)
     }

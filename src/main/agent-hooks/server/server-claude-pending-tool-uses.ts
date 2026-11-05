@@ -7,50 +7,65 @@ import type { EnrichedAgentHookEventPayload } from './server-types'
 
 const MAX_PENDING_PER_PANE = 32
 const MAX_TRACKED_PANES = 64
-const TURN_BOUNDARY_EVENTS = new Set([
-  'UserPromptSubmit',
-  'Stop',
-  'StopFailure',
-  'SessionStart',
-  'SessionEnd'
-])
+const SESSION_BOUNDARY_EVENTS = new Set(['SessionStart', 'SessionEnd'])
+const MAIN_TURN_BOUNDARY_EVENTS = new Set(['UserPromptSubmit', 'Stop', 'StopFailure'])
 
 /** PermissionRequest omits tool_use_id; any unfinished PreToolUse in the pane may own it, not just the latest row. */
 export class ClaudePendingToolUses {
   private readonly pendingByPaneKey = new Map<string, AgentHookEventPayload[]>()
 
-  attach(
+  /** Attaches the inherited tool_use_id, then records the event unless it is a restated row. */
+  admit(
     previous: EnrichedAgentHookEventPayload | undefined,
-    next: AgentHookEventPayload
+    next: AgentHookEventPayload,
+    record: boolean
   ): AgentHookEventPayload {
-    const source = this.pendingByPaneKey
-      .get(next.paneKey)
-      ?.findLast((candidate) => shouldInheritClaudeToolUseIdForPermission(candidate, next))
-    return source
-      ? { ...next, toolUseId: source.toolUseId }
-      : attachClaudePermissionToolUseId(previous, next)
+    const matches = (this.pendingByPaneKey.get(next.paneKey) ?? []).filter((candidate) =>
+      shouldInheritClaudeToolUseIdForPermission(candidate, next)
+    )
+    // Identical previews can't tell parallel tools apart, so keep the row-based guess.
+    const attached =
+      matches.length === 1
+        ? { ...next, toolUseId: matches[0].toolUseId }
+        : attachClaudePermissionToolUseId(previous, next)
+    if (record) {
+      this.record(attached)
+    }
+    return attached
   }
 
-  observe<T extends AgentHookEventPayload>(event: T): T {
-    if (event.payload.agentType !== 'claude') {
-      return event
+  forget(...paneKeys: string[]): void {
+    for (const paneKey of paneKeys) {
+      this.pendingByPaneKey.delete(paneKey)
     }
-    if (event.hookEventName && TURN_BOUNDARY_EVENTS.has(event.hookEventName)) {
-      this.pendingByPaneKey.delete(event.paneKey)
-      return event
+  }
+
+  clear(): void {
+    this.pendingByPaneKey.clear()
+  }
+
+  private record(event: AgentHookEventPayload): void {
+    if (event.payload.agentType !== 'claude' || !event.hookEventName) {
+      return
     }
-    if (!event.toolUseId) {
-      return event
+    const current = this.pendingByPaneKey.get(event.paneKey) ?? []
+    let pending: AgentHookEventPayload[]
+    if (SESSION_BOUNDARY_EVENTS.has(event.hookEventName)) {
+      pending = []
+    } else if (MAIN_TURN_BOUNDARY_EVENTS.has(event.hookEventName)) {
+      // Background subagents keep running past the main agent's turn.
+      pending = current.filter((candidate) => candidate.toolAgentId)
+    } else if (event.toolUseId) {
+      pending = current.filter((candidate) => candidate.toolUseId !== event.toolUseId)
+      // Tools denied before running never send PostToolUse, so bound what they leave behind.
+      if (event.hookEventName === 'PreToolUse' && event.payload.state === 'working') {
+        pending.push(event)
+        pending.splice(0, pending.length - MAX_PENDING_PER_PANE)
+      }
+    } else {
+      return
     }
-    const pending = (this.pendingByPaneKey.get(event.paneKey) ?? []).filter(
-      (candidate) => candidate.toolUseId !== event.toolUseId
-    )
-    // Tools denied before running never send PostToolUse, so bound what they leave behind.
-    if (event.hookEventName === 'PreToolUse' && event.payload.state === 'working') {
-      pending.push(event)
-      pending.splice(0, pending.length - MAX_PENDING_PER_PANE)
-    }
-    // Re-insert so the oldest pane is evicted first; closed panes need no explicit cleanup.
+    // Re-insert so the oldest pane is evicted first.
     this.pendingByPaneKey.delete(event.paneKey)
     if (pending.length > 0) {
       this.pendingByPaneKey.set(event.paneKey, pending)
@@ -61,10 +76,5 @@ export class ClaudePendingToolUses {
       }
       this.pendingByPaneKey.delete(paneKey)
     }
-    return event
-  }
-
-  clear(): void {
-    this.pendingByPaneKey.clear()
   }
 }
