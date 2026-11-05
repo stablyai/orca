@@ -3,6 +3,7 @@ import { Copy, ExternalLink, Globe } from 'lucide-react-native'
 import { ActionSheetModal, type ActionSheetAction } from '../components/ActionSheetModal'
 import { openExternalLink } from '../platform/external-link'
 import { useClipboardWriter } from '../platform/clipboard'
+import { triggerError, triggerSuccess } from '../platform/haptics'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 
 // Choices for a tapped chat link: Orca's browser on the host, the phone's browser, or the clipboard.
@@ -12,12 +13,12 @@ export function MobileLinkActionSheet(props: {
   onClose: () => void
   // Absent where an Orca browser tab cannot open (floating workspace, or a host without streaming).
   openInOrca?: (url: string) => void
-  showToast: (message: string, durationMs?: number) => void
 }): React.JSX.Element {
-  const { url, onClose, openInOrca, showToast } = props
+  const { url, onClose, openInOrca } = props
   const t = useMobileTranslation()
   const clipboard = useClipboardWriter()
   const [visible, setVisible] = useState(true)
+  const [copied, setCopied] = useState(false)
   const actions: ActionSheetAction[] = []
   if (openInOrca) {
     actions.push({
@@ -39,19 +40,19 @@ export function MobileLinkActionSheet(props: {
     },
     {
       id: 'copyLink',
-      label: t('session.linkActionSheet.copyLink', 'Copy link'),
+      label: copied
+        ? t('common.copied', 'Copied')
+        : t('session.linkActionSheet.copyLink', 'Copy link'),
       icon: Copy,
-      onPress: () =>
+      onPress: () => {
         void clipboard.writeText(url).then(
-          () => showToast(t('session.linkActionSheet.linkCopied', 'Link copied'), 1200),
-          (error: unknown) =>
-            showToast(
-              error instanceof Error
-                ? error.message
-                : t('session.linkActionSheet.copyFailed', 'Could not copy the link'),
-              1800
-            )
+          () => {
+            triggerSuccess()
+            setCopied(true)
+          },
+          () => triggerError()
         )
+      }
     }
   )
   return (

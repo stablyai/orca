@@ -22,7 +22,6 @@ import { MobileSourceCopyButton } from '../../../components/MobileSourceCopyButt
 import { MobileSyntaxSegments } from '../../../components/MobileSyntaxSegments'
 import { MarkdownLinkHandlerContext } from '../../../components/markdown-link-handler'
 import { INLINE_TEXT_SELECTION } from '../../../components/inline-text-selection'
-import { openExternalLink } from '../../../platform/external-link'
 import { colors, pressedStyle } from '../../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { highlightMobileCode } from '../../mobile-file-syntax'
@@ -71,7 +70,7 @@ function SearchResults({
 }): React.JSX.Element {
   useMobileColorScheme()
   const type = toolType(fontScale).meta
-  const onOpenLink = useContext(MarkdownLinkHandlerContext)
+  const openLink = useContext(MarkdownLinkHandlerContext)
   return (
     <View style={[styles.codeBox, styles.searchResults]}>
       {results.map((hit) => (
@@ -79,7 +78,7 @@ function SearchResults({
           key={hit.url}
           style={[styles.codeText, styles.searchHit, type]}
           numberOfLines={1}
-          onPress={() => (onOpenLink ? onOpenLink(hit.url) : openExternalLink(hit.url))}
+          onPress={() => openLink(hit.url)}
           accessibilityRole="link"
         >
           {hit.title}

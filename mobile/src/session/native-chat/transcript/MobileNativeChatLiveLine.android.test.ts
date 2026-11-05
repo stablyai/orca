@@ -50,7 +50,7 @@ const block: NativeChatLiveReasoning = {
 const chat = (reasoning: NativeChatLiveReasoning | null | undefined) =>
   createElement(
     MobileNativeChatRowOverlaysHost,
-    { conversation: { surfaceId: 'chat', sessionId: 's1' }, showToast: () => {} },
+    { conversation: { surfaceId: 'chat', sessionId: 's1' } },
     reasoning === undefined
       ? null
       : createElement(MobileNativeChatLiveLine, {

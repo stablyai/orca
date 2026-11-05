@@ -45,7 +45,7 @@ function MobileMarkdownContent({
   useMobileColorScheme()
   // Interactive children own their touches and must forward the row action.
   const setup = useContext(MarkdownTextContext)
-  const onOpenLink = useContext(MarkdownLinkHandlerContext) ?? undefined
+  const onOpenLink = useContext(MarkdownLinkHandlerContext)
   const text = content?.trim() ?? ''
   const { root, directives } = useMobileMarkdownTree(text, renderVisual !== undefined, growing)
   if (!text) {

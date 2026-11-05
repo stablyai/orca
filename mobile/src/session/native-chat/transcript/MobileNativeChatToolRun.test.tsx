@@ -82,10 +82,7 @@ describe('ToolRun', () => {
     renderer = null
   })
 
-  function render(
-    blocks: NativeChatBlock[],
-    onOpenLink: ((url: string) => void) | null = null
-  ): ReactTestRenderer {
+  function render(blocks: NativeChatBlock[], onOpenLink: (url: string) => void): ReactTestRenderer {
     act(() => {
       renderer = create(
         createElement(

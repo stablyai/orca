@@ -362,7 +362,6 @@ export function MobileSessionActiveContent({
                 // A workspace routed to another server stops with that server, whose name the phone lacks.
                 hostName={executionHost === undefined && hostProfile ? hostTitle : null}
                 onOpenUrlInOrca={openUrlInOrca}
-                showToast={showToast}
               />
             </MobileAgentMessageProvider>
           </MobileDictationMeterContext.Provider>

@@ -38,7 +38,7 @@ function Row(): null {
   return null
 }
 const chat = (conversation: MobileNativeChatConversation) => (
-  <MobileNativeChatRowOverlaysHost conversation={conversation} showToast={() => {}}>
+  <MobileNativeChatRowOverlaysHost conversation={conversation}>
     <Row />
   </MobileNativeChatRowOverlaysHost>
 )

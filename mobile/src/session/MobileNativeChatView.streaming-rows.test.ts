@@ -268,8 +268,7 @@ function Harness({
     sessionId: source?.sessionId ?? 'session',
     getSendCompletionGeneration: stable.getSendCompletionGeneration,
     keyboardInset: 0,
-    hostName: null,
-    showToast: () => {}
+    hostName: null
   })
 }
 

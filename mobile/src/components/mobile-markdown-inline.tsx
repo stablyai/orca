@@ -15,8 +15,8 @@ import { plainText } from './mobile-markdown-tree'
 export type MarkdownInlineContext = {
   // File targets call this when viewer exists; omit to keep paths plain.
   onOpenFile?: (pathText: string) => void
-  // Web links call this when the screen offers choices; omit to open the system browser.
-  onOpenLink?: (url: string) => void
+  // Web links other than mail go here; the screen decides where they open.
+  onOpenLink: (url: string) => void
   tone: MarkdownTone
   textScale: number
 }
@@ -31,12 +31,12 @@ export function openMarkdownHref(
   const route = routeMarkdownHref(href)
   if (route.kind === 'web') {
     // Mail links skip the screen's choices: the Orca browser can't open them.
-    if (ctx.onOpenLink && !/^mailto:/i.test(route.url)) {
+    if (/^mailto:/i.test(route.url)) {
+      // Use link-opening seam: RN Linking inside shell page resolves without opening anything.
+      openExternalLink(route.url)
+    } else {
       ctx.onOpenLink(route.url)
-      return
     }
-    // Use link-opening seam: RN Linking inside shell page resolves without opening anything.
-    openExternalLink(route.url)
     return
   }
   if (route.kind === 'file' && ctx.onOpenFile) {

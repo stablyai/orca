@@ -19,14 +19,12 @@ export function MobileNativeChatRowOverlaysHost({
   conversation,
   imageSource,
   onOpenUrlInOrca,
-  showToast,
   children
 }: {
   conversation: MobileNativeChatConversation
   imageSource?: MobileNativeChatImageSource
   /** Absent where the host can't open a browser tab for this chat. */
   onOpenUrlInOrca?: (url: string) => void
-  showToast: (message: string, durationMs?: number) => void
   children?: React.ReactNode
 }): React.JSX.Element {
   // Keep pressed message text with its conversation so streaming cannot rewrite an open sheet.
@@ -55,14 +53,9 @@ export function MobileNativeChatRowOverlaysHost({
     ) : shown?.actionsFor ? (
       <MobileNativeChatMessageActionsSheet message={shown.actionsFor} onClose={close} />
     ) : shown?.link ? (
-      <MobileLinkActionSheet
-        url={shown.link}
-        onClose={close}
-        openInOrca={onOpenUrlInOrca}
-        showToast={showToast}
-      />
+      <MobileLinkActionSheet url={shown.link} onClose={close} openInOrca={onOpenUrlInOrca} />
     ) : null
-  }, [shown, setShown, onOpenUrlInOrca, showToast])
+  }, [shown, setShown, onOpenUrlInOrca])
   return (
     <MobileNativeChatRowOverlaysContext.Provider value={overlays}>
       <MarkdownLinkHandlerContext.Provider value={openLink}>

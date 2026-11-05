@@ -177,8 +177,7 @@ function Harness(props: HarnessProps) {
     sessionId: null,
     getSendCompletionGeneration: () => 0,
     keyboardInset: 0,
-    hostName: null,
-    showToast: () => {}
+    hostName: null
   })
 }
 export async function render(props: HarnessProps = lastProps ?? {}) {
