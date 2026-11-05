@@ -132,7 +132,7 @@ export const PR_E2E_SOURCE_ROUTES = [
         file
       ) ||
       (isProductSource(file) &&
-        /^src\/(?:cli\/runtime\/(?:launch|serve-)|main\/orcad\/(?:main|orcad-entry|orcad-instance-lock|orcad-command-arguments|orcad-lifecycle)\.ts$|main\/startup\/desktop-profile-instance-lock\.ts$|main\/daemon\/(?:[^/]+\/)*daemon-(?:spawner|endpoint-adoption|init)|main\/server\/serve-)/.test(
+        /^src\/(?:cli\/runtime\/(?:launch|serve-)|main\/orcad\/(?:main|orcad-entry|orcad-command-startup|orcad-instance-lock|orcad-command-arguments|orcad-lifecycle)\.ts$|main\/startup\/desktop-profile-instance-lock\.ts$|main\/daemon\/(?:[^/]+\/)*daemon-(?:spawner|endpoint-adoption|init)|main\/server\/serve-)/.test(
           file
         ))
   },
