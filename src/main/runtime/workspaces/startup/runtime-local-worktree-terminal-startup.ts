@@ -12,7 +12,7 @@ import type { AgentLaunchRuntime } from '../../../../shared/agent-launch/startup
 import { createSequencedSetupAgentCommands } from '../../../../shared/setup-agent-sequencing'
 import { getSetupRunnerCommandPlatformForPath } from '../../../../shared/setup-runner-command'
 import type { RuntimeTerminalCreate } from '../../../../shared/runtime-terminal-create-contract'
-import type { TerminalCreateOptions } from '../../runtime-terminal-contracts'
+import type { TerminalCreateOptions } from '../../terminal/launch/terminal-create-options'
 import type { RuntimeManagedWorktreeCreateArgs } from '../creation/runtime-managed-worktree-create-types'
 import type {
   WorktreeStartupDraftPaste,

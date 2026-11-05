@@ -1,5 +1,5 @@
 import type { RuntimeClientEvent } from '../../../../shared/runtime-client-events'
-import { notifyRuntimeListeners } from '../../runtime-async-boundaries'
+import { notifyRuntimeListeners } from '../../events/runtime-listener-delivery'
 
 type RuntimeClientEventBusDeps = {
   makeTitleGateKey: (rawTitle: string, normalizedTitle: string) => string

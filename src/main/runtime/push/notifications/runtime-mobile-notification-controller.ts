@@ -17,7 +17,7 @@ import type {
   MobilePushRegisterResult
 } from '../../../../shared/mobile-push-contract'
 import { MobileNotificationReplayBuffer } from './mobile-notification-replay'
-import { notifyRuntimeListeners } from '../../runtime-async-boundaries'
+import { notifyRuntimeListeners } from '../../events/runtime-listener-delivery'
 import { getRuntimeDesktopSurface } from '../../runtime-desktop-surface'
 import { MobileNotificationDismissalStore } from './mobile-notification-dismissal-store'
 import { DesktopClientPresenceTracker } from './desktop-client-presence-tracker'

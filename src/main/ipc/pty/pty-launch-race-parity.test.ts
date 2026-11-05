@@ -1,5 +1,5 @@
 import { OrcaRuntimeService } from '../../runtime/orca-runtime'
-import type { TerminalCreateOptions } from '../../runtime/runtime-terminal-contracts'
+import type { TerminalCreateOptions } from '../../runtime/terminal/launch/terminal-create-options'
 import { registerPtyHandlers } from './register-handlers'
 import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { launchWorkspaceId } from '../../../shared/launch-parity-window-request.test-fixture'

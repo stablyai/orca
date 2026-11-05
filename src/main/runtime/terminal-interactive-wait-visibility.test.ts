@@ -1,4 +1,4 @@
-import type { TerminalWaiter } from './runtime-terminal-contracts'
+import type { TerminalWaiter } from './terminal/wait/terminal-waiter'
 import type {
   RuntimeTerminalWait,
   RuntimeTerminalAgentStatus
@@ -10,7 +10,7 @@ import { readFileSync } from 'node:fs'
 import { makeAgentStatusStoreWiring } from './agent-status-store-wiring.test-fixture'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { TERMINAL_INTERACTIVE_WAIT_PROBE_TIMEOUT_MS } from './orca-runtime-core'
+import { TERMINAL_INTERACTIVE_WAIT_PROBE_TIMEOUT_MS } from './terminal/wait/terminal-interactive-probe-budget'
 import {
   createTranscriptPane,
   type TranscriptPaneOptions,
