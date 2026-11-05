@@ -254,7 +254,7 @@ describe('mid-turn send keys on a host that queues', () => {
 
 function operationTransport(overrides: Partial<NativeChatStructuredComposerTransport> = {}) {
   const send = vi.fn(() => true)
-  const setObjective = vi.fn(async () => true)
+  const setObjective = vi.fn(async (_objective: string) => true)
   const invokeAction = vi.fn(async () => true)
   const runConversationCommand = vi.fn(async () => ({ accepted: true, error: null }))
   const transport: NativeChatStructuredComposerTransport = {
@@ -267,7 +267,7 @@ function operationTransport(overrides: Partial<NativeChatStructuredComposerTrans
         setOption: async () => true,
         conversationCommands: ['compact', 'clear'],
         runConversationCommand,
-        setThreadGoalObjective: setObjective
+        changeThreadGoal: (change) => setObjective(change.kind === 'set' ? change.objective : '')
       }),
     sendFollowUp: { action: 'queue', offersChoice: true },
     threadGoal: { setObjective },

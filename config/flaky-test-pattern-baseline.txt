@@ -1286,7 +1286,6 @@
 4 test-no-wall-clock:src/main/ssh/orcad-exited-own-fence-mutation-race.test.ts
 4 test-no-wall-clock:src/main/ssh/ssh-remote-commands.test.ts
 4 test-no-wall-clock:src/main/updater/lifecycle/serve-supervisor-install-park.test.ts
-4 test-no-wall-clock:src/renderer/src/components/cmd-j/palette-live-status.test.tsx
 4 test-no-wall-clock:src/renderer/src/components/sidebar/workspace-card/surface/WorktreeCard.compact-hover.test.tsx
 4 test-no-wall-clock:src/renderer/src/components/task-page/jira/task-page-jira-cache-selectors.test.ts
 4 test-no-wall-clock:tests/e2e/cross-version-wire/release-checkout.unit.test.ts
@@ -1383,7 +1382,6 @@
 8 test-no-wall-clock:src/renderer/src/components/native-chat/structured-child-records-switch.test.tsx
 8 test-no-wall-clock:src/renderer/src/components/worktree-jump/WorktreeJumpPalette.recent-tabs.test.tsx
 8 test-timeout-needs-reason:src/main/worker-thread-child-process/worker-thread-child-process.test.ts
-9 test-no-real-time-wait:src/renderer/src/components/contextual-tours/contextual-tour-floating-position.test.ts
 9 test-no-real-time-wait:tests/e2e/chinese-ime-chat-input-repro.spec.ts
 9 test-no-real-time-wait:tests/e2e/terminal-inline-tui-reveal-convergence.spec.ts
 9 test-no-wall-clock:src/main/github/pr-refresh-coordinator-active-visible-priority.test.ts
