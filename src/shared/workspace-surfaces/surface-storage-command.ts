@@ -27,7 +27,7 @@ export type SurfaceLayoutRuntimeFacts = {
 }
 
 export type SurfaceStorageCommand = { hostId: string } & (
-  | { type: 'initialize' }
+  | { type: 'initialize'; legacySessionTabIds?: readonly string[] }
   | {
       type: 'layout'
       request: SurfaceLayoutRequest

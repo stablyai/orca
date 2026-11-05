@@ -5,7 +5,7 @@ import {
   createTranscriptPane,
   TRANSCRIPT_PANE_PTY_ID,
   waitForTranscriptIdle
-} from '../../agent-transcript-pane-test-harness'
+} from '../../orca-runtime-tests/agent-transcript-pane-test-harness'
 import { createHookListenerState } from '../../../../shared/agent-hook-listener/listener-state'
 import { normalizeHermesEvent } from '../../../../shared/agent-hook-listener/providers/hermes-events'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'

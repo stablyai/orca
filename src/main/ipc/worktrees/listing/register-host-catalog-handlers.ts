@@ -1,6 +1,6 @@
 import { getRepoDialableSshTargetId, parseExecutionHostId } from '../../../../shared/execution-host'
 import { ipcMain } from 'electron'
-import { captureWorktreeOwnerRemoval } from '../../../runtime/workspaces/canonical-owner-removal-scopes'
+import { captureWorktreeOwnerRemoval } from '../../../runtime/workspaces/removal/canonical-owner-removal-scopes'
 import type {
   ListKnownWorktreesForExecutionHostArgs,
   HostQualifiedKnownWorktreeResult,

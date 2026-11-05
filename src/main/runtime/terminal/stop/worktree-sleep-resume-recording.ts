@@ -26,7 +26,7 @@ import {
 import { type ExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
-import type { WorktreePtyHostFence } from '../../worktree-pty-host-fence'
+import type { WorktreePtyHostFence } from '../../workspaces/removal/worktree-pty-host-fence'
 
 export abstract class OrcaRuntimeWithWorktreeSleepResumeRecording extends OrcaRuntimeWithStopTerminalsForWorktree {
   protected abstract getLivePtyIdsForWorktree(

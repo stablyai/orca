@@ -14,7 +14,7 @@ import {
   mintStructuredWorkerPaneKey,
   structuredWorkerIdentities,
   structuredWorkerProcessIncarnation
-} from '../../structured-worker-identity'
+} from '../../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
 import { ORCHESTRATION_METHODS } from './orchestration'
 import { isStreamingMethod, eraseRpcMethods } from '../core'
 

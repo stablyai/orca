@@ -1,6 +1,6 @@
 import type { TerminalIdentityReadContext as IdentityRead } from '../terminal/query/terminal-identity-read-context'
 import type * as Calls from './runtime-host-service-calls'
-import type { selectFreshExplicitAgentStatus } from '../runtime-hook-agent-row-selection'
+import type { selectFreshExplicitAgentStatus } from '../workspaces/process-listing/runtime-hook-agent-row-selection'
 import type { IPtyProvider } from '../../providers/pty-provider-contract'
 import type {
   RuntimePtyWorktreeRecord,
@@ -19,10 +19,10 @@ import type {
   TerminalWaiter,
   OrchestrationCompatibilityTerminalAuthority
 } from '../runtime-terminal-contracts'
-import type { TitleDisplayClear } from '../runtime-worktree-status-projection'
+import type { TitleDisplayClear } from '../workspaces/process-listing/runtime-worktree-status-projection'
 import type { OrchestrationDb } from '../orchestration/db/orchestration-db'
 import type { WorkerTerminalResourceRow } from '../orchestration/worker-terminal-ownership'
-import type { ResolvedWorktree } from '../runtime-worktree-path-identity'
+import type { ResolvedWorktree } from '../workspaces/catalog/runtime-worktree-path-identity'
 import type {
   RuntimeTerminalShow,
   RuntimeTerminalSummary
@@ -32,7 +32,7 @@ import type { readOrchestrationFleetAgentStatusSnapshot } from '../orchestration
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { Repo } from '../../../shared/repo-types'
 import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
-import type { RuntimeWorktreeScanResult } from '../repo-worktree-resolution-scan'
+import type { RuntimeWorktreeScanResult } from '../workspaces/catalog/repo-worktree-resolution-scan'
 import type { ProcessedAgentStatusChunk } from '../../../shared/agent-status/transport/agent-status-osc'
 import type { RuntimeTerminalAgentPresenceOptions } from '../terminal/query/runtime-terminal-agent-presence'
 import type { resolveTerminalOrchestrationCliCommand } from '../orchestration/cli-command'
@@ -44,7 +44,7 @@ import type { WorkspaceSessionState } from '../../../shared/workspace-session/wo
 import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type * as PtyControllerContract from '../runtime-pty-controller-contract'
 import type { RuntimeClientEventBus } from '../runtime-client-event-bus'
-import type { RuntimeRepoSelector } from '../runtime-repo-selector'
+import type { RuntimeRepoSelector } from '../workspaces/catalog/runtime-repo-selector'
 import type { PtyPane, PtyPaneSource } from '../terminal/surface/pty-pane-query'
 
 export abstract class RuntimeConstructionServices {

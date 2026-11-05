@@ -1,5 +1,5 @@
 import type { StructuredAgentId } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
-import { structuredAgentRuntimeMetadata } from '../structured-agent-runtime-metadata'
+import { structuredAgentRuntimeMetadata } from '../agent-session/installation/structured-agent-runtime-metadata'
 import { getProfileUserDataPath } from '../../orca-profiles/profile-storage-paths'
 import { OrcaRuntimeWithStructuredSessionCliWriterHost } from './structured-session-cli-writer-host'
 import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'

@@ -1,6 +1,6 @@
 import type { Repo } from '../../../../shared/repo-types'
-import type { CapturedOwnerRemoval } from '../../../runtime/workspaces/canonical-owner-removal'
-import { captureWorktreeOwnerRemoval } from '../../../runtime/workspaces/canonical-owner-removal-scopes'
+import type { CapturedOwnerRemoval } from '../../../runtime/workspaces/removal/canonical-owner-removal'
+import { captureWorktreeOwnerRemoval } from '../../../runtime/workspaces/removal/canonical-owner-removal-scopes'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
 import { assertRemovalHostMatchesRepoRow } from '../repo-host-ownership'

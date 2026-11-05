@@ -27,7 +27,7 @@ import {
   createEncryptedWsResponseReader
 } from './runtime-rpc-mobile-ws-test-harness'
 import { makeStore } from './runtime-rpc-worktree-store-fixtures'
-import { committingSpawn } from './bind-first-pane.test-fixture'
+import { committingSpawn } from './orca-runtime-tests/bind-first-pane.test-fixture'
 
 vi.mock('../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => {
   const listings = getWorktreeListingMocks()

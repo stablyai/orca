@@ -2,10 +2,10 @@ import { OrcaRuntimeWithAgentGeneratedTabTitles } from '../layout/agent-generate
 import {
   includeTargetResolvedWorktree,
   type ResolvedWorktree
-} from '../../runtime-worktree-path-identity'
+} from '../../workspaces/catalog/runtime-worktree-path-identity'
 import type { RuntimeWorktreeTerminalSleepResult } from '../../../../shared/runtime-types'
 import { WORKTREE_TERMINAL_SLEEP_TIMEOUT_MS } from '../../orca-runtime-postlude'
-import { teardownRpcDeadline } from '../../worktree-teardown-deadline'
+import { teardownRpcDeadline } from '../../workspaces/removal/worktree-teardown-deadline'
 import { sleptNothing } from './worktree-terminal-sleep-result'
 import type { TerminalIntentionalStopOwner } from '../../terminal-intentional-stops'
 import type { WorktreeSleepScope } from './worktree-terminal-sleep-key'

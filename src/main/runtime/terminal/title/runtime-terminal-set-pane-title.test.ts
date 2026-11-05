@@ -1,12 +1,12 @@
-import '../../orca-runtime-test-lifecycle.spec'
+import '../../orca-runtime-tests/orca-runtime-test-lifecycle.spec'
 import { describe, expect, it, vi } from 'vitest'
 import {
   createRuntime,
   syncSinglePty,
   TEST_WORKTREE_ID
-} from '../../orca-runtime-test-fixtures.spec'
+} from '../../orca-runtime-tests/orca-runtime-test-fixtures.spec'
 import { electronMocks } from '../../orca-runtime-test-mocks/setup.spec'
-import { createMobileCreateTestNotifier } from '../../orca-runtime-test-scenario-builders.spec'
+import { createMobileCreateTestNotifier } from '../../orca-runtime-tests/orca-runtime-test-scenario-builders.spec'
 
 async function createPaneTitleRuntime() {
   electronMocks.BrowserWindow.fromId.mockReturnValue({ isDestroyed: () => false })

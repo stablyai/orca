@@ -26,7 +26,7 @@ import {
 } from '../terminal/launch/agent-launch-scope-runtime'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { AgentLaunchRuntime } from '../../../shared/agent-launch/startup/agent-launch-runtime'
-import type { TerminalWorkspaceLaunchScope } from '../runtime-legacy-worker-terminal-recovery-types'
+import type { TerminalWorkspaceLaunchScope } from '../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import { parseAppSshPtyId } from '../../../shared/ssh-pty-id'
 import type { TerminalProcessInspection as PtyProcessInspection } from '../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
 

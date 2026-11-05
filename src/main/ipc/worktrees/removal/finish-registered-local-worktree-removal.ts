@@ -1,4 +1,4 @@
-import type { CapturedOwnerRemoval } from '../../../runtime/workspaces/canonical-owner-removal'
+import type { CapturedOwnerRemoval } from '../../../runtime/workspaces/removal/canonical-owner-removal'
 import type { Repo } from '../../../../shared/repo-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'

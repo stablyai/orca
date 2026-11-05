@@ -3,8 +3,8 @@ import { getRuntimeDesktopSurface } from '../../src/main/runtime/runtime-desktop
 import {
   authorityProfile,
   openAuthorityRuntime
-} from '../../src/main/runtime/structured-agent-session-tab-authority.test-support'
-import { chatTabCommandsSettled } from '../../src/main/runtime/session-layout-apply.test-fixture'
+} from '../../src/main/runtime/agent-session/lifecycle/structured-agent-session-tab-authority.test-support'
+import { chatTabCommandsSettled } from '../../src/main/runtime/orca-runtime-tests/session-layout-apply.test-fixture'
 import { fixture } from '../../src/main/persistence/loading-store/profile-state-delayed-authority-fixture'
 import {
   loadChatTabLayout,
@@ -275,7 +275,7 @@ it('rolls back rejected membership, retains legacy Retry presentation and accept
   layoutOwner.main = true
   const { store: profile, authority } = await fixture()
   const { root, B, rejectVisibility, savedIds } =
-    await import('../../src/main/runtime/structured-agent-session-tab-authority.test-support')
+    await import('../../src/main/runtime/agent-session/lifecycle/structured-agent-session-tab-authority.test-support')
   const { installFakeAppEnvironment } =
     await import('../../config/scripts/test-runtime/environment/vitest-host-ports-setup')
   installFakeAppEnvironment({ getPath: () => root })
@@ -334,7 +334,8 @@ describe.each(['close', 'retire'] as const)('%s supplied-member sweep', (phase) 
         createStructuredSweepProgress,
         closeStructuredSessionsForWorktree,
         retireStructuredSessionTabsForWorktree
-      } = await import('../../src/main/runtime/structured-session-worktree-teardown')
+      } =
+        await import('../../src/main/runtime/workspaces/removal/structured-session-worktree-teardown')
       const ids = Array.from({ length: s }, (_, i) => `sweep-${i.toString().padStart(5, '0')}`)
       const background = Array.from(
         { length: n },
@@ -346,7 +347,7 @@ describe.each(['close', 'retire'] as const)('%s supplied-member sweep', (phase) 
       await rig.runtime.restoreStructuredAgentSessionTabs()
       await chatTabCommandsSettled()
       const { root } =
-        await import('../../src/main/runtime/structured-agent-session-tab-authority.test-support')
+        await import('../../src/main/runtime/agent-session/lifecycle/structured-agent-session-tab-authority.test-support')
       const { folderWorkspaceKey } = await import('../../src/shared/workspace-scope')
       const other = folderWorkspaceKey(
         rig.profile.createFolderWorkspace({
@@ -452,7 +453,7 @@ it.each([10, 100])(
     layoutOwner.main = true
     const { store: profile, authority } = await fixture()
     const { root, B } =
-      await import('../../src/main/runtime/structured-agent-session-tab-authority.test-support')
+      await import('../../src/main/runtime/agent-session/lifecycle/structured-agent-session-tab-authority.test-support')
     const { installFakeAppEnvironment } =
       await import('../../config/scripts/test-runtime/environment/vitest-host-ports-setup')
     installFakeAppEnvironment({ getPath: () => root })

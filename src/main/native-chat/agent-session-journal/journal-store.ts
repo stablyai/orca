@@ -283,6 +283,9 @@ export class AgentSessionJournal {
   /** Read after all preceding writes and before later ones. */
   readInOrder = <T>(read: () => T): Promise<T> => this.queue.readInOrder(read)
 
+  /** Commit delivery waits for the admitted prefix without delaying a single settled unit. */
+  readCommittedPrefix = <T>(read: () => T): Promise<T> => this.queue.readCommittedPrefix(read)
+
   readSince(cursor: AgentJournalCursor, limit?: number) {
     return this.history.readSince(cursor, limit)
   }

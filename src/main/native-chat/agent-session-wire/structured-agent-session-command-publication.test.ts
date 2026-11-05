@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
 
 import type {
   AgentSessionSlashCommand,
@@ -62,8 +62,10 @@ it('delivers catalog changes through existing frames without resending them on o
     expect(events.filter((event) => 'commands' in event)).toHaveLength(2)
     commands = undefined
     subscribers.publish(sessionId, journal)
-    coalescer.flush()
-    expect(state.commands).toBeNull()
+    await vi.waitFor(() => {
+      coalescer.flush()
+      expect(state.commands).toBeNull()
+    })
     close()
     commands = [{ name: 'reconnected', kind: 'skill' }]
     subscribers.open({
@@ -74,8 +76,10 @@ it('delivers catalog changes through existing frames without resending them on o
       fence: 8,
       emit: coalescer.push
     })
-    coalescer.flush()
-    expect(state.commands).toEqual(commands)
+    await vi.waitFor(() => {
+      coalescer.flush()
+      expect(state.commands).toEqual(commands)
+    })
     subscribers.snapshot(sessionId, journal, 8)
     expect(state.commands).toEqual(commands)
     commands = undefined
@@ -87,8 +91,10 @@ it('delivers catalog changes through existing frames without resending them on o
       fence: 9,
       emit: coalescer.push
     })
-    coalescer.flush()
-    expect(state.commands).toBeNull()
+    await vi.waitFor(() => {
+      coalescer.flush()
+      expect(state.commands).toBeNull()
+    })
   } finally {
     coalescer.dispose()
     await journals.closeAll()

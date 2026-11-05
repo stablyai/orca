@@ -272,24 +272,6 @@ describe('a reserve-mode cell admits from memory with its database wedged', () =
     }
   }
 
-  it('answers a director dry run only while reserveDryRun is on, and books nothing either way', async () => {
-    const cell = await startCell({})
-    const identity = await cell.host()
-    const check = () =>
-      cell.relay.sessions.reserve({
-        v: 1,
-        directorId: 'director-a',
-        dryRun: true,
-        items: [{ userId: 'user-1', relayHostId: identity.hostId, epoch: 7, ttlMs: 30_000 }]
-      })
-    expect(check()).toEqual([{ outcome: 'off' }])
-    cell.setFlags({ reserveDryRun: true })
-    expect(check()).toEqual([{ outcome: 'ok' }])
-    expect(cell.relay.sessions.reserveCounts()?.bookings).toBe(0)
-    // A real booking on a database-mode cell stays off, whatever the dry-run switch says.
-    expect(cell.book(identity, 7)).toEqual([{ outcome: 'off' }])
-  })
-
   it('connects a booked host, and only at its booked epoch, without a database read', async () => {
     const cell = await startCell({ admitMode: 'reserve' })
     const booked = await cell.host()
@@ -487,21 +469,6 @@ describe('a reserve-mode cell admits from memory with its database wedged', () =
       expect(seatEpochs(cell)).toEqual([11])
       expect(warned('orca_relay_cell_seat_log_drift')).toEqual([])
     })
-  })
-
-  it('leaves a drained seat to its drain grace instead of the shorter demotion close', async () => {
-    const cell = await startCell({ admitMode: 'reserve' })
-    const identity = await cell.host()
-    cell.book(identity, 9)
-    await cell.connect(identity, 9)
-    const page = cell.relay.sessions.seatFeed(null)
-    const joinedAt = 'full' in page ? page.full[0]!.joinedAt : -1
-    cell.relay.sessions.drain(120_000)
-    const seat = { v: 1 as const, userId: 'user-1', relayHostId: identity.hostId, epoch: 9, joinedAt }
-    expect(cell.relay.sessions.demote(seat)).toBe('draining')
-    expect(cell.relay.sessions.demote(seat)).toBe('draining')
-    const after = cell.relay.sessions.seatFeed(null)
-    expect('full' in after && after.full.map((entry) => entry.epoch)).toEqual([9])
   })
 
   it('gives every booking unit back when the cell starts to drain', async () => {

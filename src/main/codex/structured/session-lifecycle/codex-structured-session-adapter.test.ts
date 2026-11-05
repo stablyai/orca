@@ -22,7 +22,7 @@ import type {
 } from './codex-structured-session-state'
 import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { AgentModelCatalogStore } from '../../../native-chat/agent-model-catalog/agent-model-catalog-store'
-import { createCodexStructuredLaunchResolver } from '../../../runtime/structured-agent-launch-composition.test-support'
+import { createCodexStructuredLaunchResolver } from '../../../runtime/agent-session/launch/structured-agent-launch-composition.test-support'
 import { agentSessionRecordFixture } from '../../../native-chat/agent-session-record-test-fixture'
 
 describe('CodexStructuredSessionAdapter.acquire', () => {

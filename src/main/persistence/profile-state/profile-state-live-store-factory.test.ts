@@ -13,7 +13,7 @@ import {
   markResumedRecordLive
 } from '../../runtime/session-lifecycle/projection/sleep-record-pane-claim'
 import { RuntimeLegacyWorkerTerminalRecoveryPersistence } from '../../runtime/runtime-legacy-worker-terminal-recovery-persistence'
-import type { LegacyWorkerRecoveryResolution } from '../../runtime/runtime-legacy-worker-terminal-recovery-types'
+import type { LegacyWorkerRecoveryResolution } from '../../runtime/orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import { mutateTestJournalFixture } from '../../native-chat/agent-session-journal/journal-drained-fixture-test-support'
 import { installSurfaceNativeRuntimeOwner } from '../../workspace-surfaces/surface-native-runtime-owner'
 import { openTestJournalHostDatabase } from '../../native-chat/agent-session-journal/journal-host-database-test-support'

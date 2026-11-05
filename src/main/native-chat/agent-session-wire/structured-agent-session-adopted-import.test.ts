@@ -27,7 +27,7 @@ import {
   NO_STRUCTURED_AGENTS,
   structuredAgentsDeclaringNothing
 } from './structured-agent-session-adapter-router-test-support'
-import { structuredAgentRuntimeRegistration } from '../../runtime/structured-agent-runtime-registrations'
+import { structuredAgentRuntimeRegistration } from '../../runtime/agent-session/installation/structured-agent-runtime-registrations'
 import { writeOpenCodeSqliteDatabase } from '../../ai-vault/scanners/opencode/sqlite/session-scanner-opencode-sqlite-fixture'
 
 vi.mock(

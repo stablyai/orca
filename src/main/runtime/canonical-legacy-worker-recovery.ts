@@ -2,7 +2,7 @@ import { isDeepStrictEqual } from 'node:util'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import { worktreeIdsEqual } from '../../shared/worktree/id'
 import type { RuntimeStore } from './runtime-store-contract'
-import type { LegacyWorkerRecoveryResolution } from './runtime-legacy-worker-terminal-recovery-types'
+import type { LegacyWorkerRecoveryResolution } from './orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import { commitCanonicalResumeRecordEdit } from './terminal/stop/canonical-resume-record-edit'
 
 /** Admit placed edits before the legacy recovery batch acquires the profile write queue. */

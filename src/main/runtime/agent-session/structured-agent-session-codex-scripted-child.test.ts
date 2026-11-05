@@ -11,7 +11,7 @@ import {
   hostTestMessage
 } from '../../native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import { createStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/structured-agent-session-logger'
-import type { ScriptedAgentChild } from '../structured-agent-scripted-child.test-fixture'
+import type { ScriptedAgentChild } from './installation/structured-agent-scripted-child.test-fixture'
 import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime

@@ -18,7 +18,7 @@ import type {
   RuntimeLeafRecord,
   RuntimePtyWorktreeRecord
 } from '../records/runtime-terminal-state-records'
-import type { ResolvedWorktree } from '../../runtime-worktree-path-identity'
+import type { ResolvedWorktree } from '../../workspaces/catalog/runtime-worktree-path-identity'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
   buildVisibleSnapshotReadFallback,
@@ -26,7 +26,7 @@ import {
   readTerminalTail
 } from '../output/tail/terminal-tail-read'
 import { getTerminalState } from '../wait/terminal-wait-results'
-import { readStructuredWorkerTerminal } from '../../structured-worker-terminal-read'
+import { readStructuredWorkerTerminal } from '../../orchestration/terminal-authority/structured-sessions/structured-worker-terminal-read'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 
 export abstract class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWithRestoredHandlePaneStart {

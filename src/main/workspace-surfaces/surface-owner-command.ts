@@ -168,7 +168,8 @@ function applyTrackedSurfaceCommands(
           hostId,
           host,
           readSurfaceHostSession(db, hostId),
-          mintId
+          mintId,
+          commands
         )
       )
     }

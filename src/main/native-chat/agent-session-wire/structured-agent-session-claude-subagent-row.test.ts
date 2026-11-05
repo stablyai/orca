@@ -26,7 +26,7 @@ import {
 import { claudeStartupSettled } from '../../claude/structured/claude-structured-startup-settled-test-support'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
-import { structuredClaudeLifecycleEvent } from '../../runtime/structured-claude-runtime-adapter'
+import { structuredClaudeLifecycleEvent } from '../../runtime/agent-session/installation/structured-claude-runtime-adapter'
 import {
   closeTestJournalHostDatabases,
   openTestJournalHostDatabase

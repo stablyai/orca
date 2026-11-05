@@ -8,7 +8,7 @@ import {
   B,
   C,
   root
-} from '../../src/main/runtime/structured-agent-session-tab-authority.test-support'
+} from '../../src/main/runtime/agent-session/lifecycle/structured-agent-session-tab-authority.test-support'
 import { closeTestJournalHostDatabases } from '../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
 import { journalDatabasePath } from '../../src/main/native-chat/agent-session-journal/journal-host-database'
 import { getStructuredAgentSessionHost } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-registry'
@@ -17,7 +17,7 @@ import { RpcDispatcher } from '../../src/main/runtime/rpc/dispatcher'
 import { SESSION_TAB_CLOSE_METHODS } from '../../src/main/runtime/rpc/methods/session-tab-close-methods'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../src/shared/agent-session/agent-session-runtime-capabilities'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../src/shared/runtime-types'
-import { createMobileCreateTestNotifier } from '../../src/main/runtime/orca-runtime-test-scenario-builders.spec'
+import { createMobileCreateTestNotifier } from '../../src/main/runtime/orca-runtime-tests/orca-runtime-test-scenario-builders.spec'
 import { sessionTabClose } from '../../mobile/src/session/mobile-session-write-operations'
 vi.mock('../../src/main/claude/claude-cli-flag-prewarm', () => ({
   prewarmClaudeCliFlags: async () => undefined

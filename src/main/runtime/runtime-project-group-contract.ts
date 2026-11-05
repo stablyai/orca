@@ -1,4 +1,4 @@
-import type { OpenNativeOwnerRemovalStore } from './workspaces/canonical-owner-removal'
+import type { OpenNativeOwnerRemovalStore } from './workspaces/removal/canonical-owner-removal'
 import type { WorkspaceAttachmentMutation } from '../../shared/workspace-attachments/workspace-attachment-mutation'
 import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-workspace-types'
 import type { Repo } from '../../shared/repo-types'

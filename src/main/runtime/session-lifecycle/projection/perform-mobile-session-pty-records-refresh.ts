@@ -14,13 +14,13 @@ import type {
   RuntimeMobileSessionTabsSnapshot
 } from '../../../../shared/runtime-types'
 import type { RuntimeMobileSessionTabActivationResult } from '../../../../shared/runtime-session-contracts'
-import type { ResolvedWorktree } from '../../runtime-worktree-path-identity'
-import { includeTargetResolvedWorktree } from '../../runtime-worktree-path-identity'
+import type { ResolvedWorktree } from '../../workspaces/catalog/runtime-worktree-path-identity'
+import { includeTargetResolvedWorktree } from '../../workspaces/catalog/runtime-worktree-path-identity'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { navigationTargetsHost } from '../../../../shared/runtime-navigation'
 import { isAutomaticTabActivation } from '../../../../shared/tab-activation-intent'
-import { isWorktreeTerminalsSleepingError } from '../../worktree-terminals-sleeping-error'
+import { isWorktreeTerminalsSleepingError } from '../../../../shared/workspace-sleep'
 
 import { paneHoldsSession } from '../../terminal/surface/main-terminal-surface-observations'
 import { resolveChatTabActivation } from '../../agent-session/agent-session-tab-identity'

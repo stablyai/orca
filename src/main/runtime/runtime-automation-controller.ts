@@ -1,4 +1,4 @@
-import { hostQualifiedRepoSelector } from './runtime-repo-selector'
+import { hostQualifiedRepoSelector } from './workspaces/catalog/runtime-repo-selector'
 import { parseExecutionHostId } from '../../shared/execution-host'
 import type { AutomationService } from '../automations/service'
 import type {

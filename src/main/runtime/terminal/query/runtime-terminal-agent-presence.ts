@@ -21,7 +21,7 @@ import {
   getPtyDisplayRecord,
   ptyTitleProvesAgentPresence,
   type TitleDisplayClear
-} from '../../runtime-worktree-status-projection'
+} from '../../workspaces/process-listing/runtime-worktree-status-projection'
 
 const WRAPPER_RETRY_INTERVAL_MS = 150
 const WRAPPER_RETRY_TIMEOUT_MS = 6_500

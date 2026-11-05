@@ -94,21 +94,26 @@ export class StructuredAgentSessionConversations extends Map<
       }
       queued = true
       queueMicrotask(() => {
-        queued = false
-        const affectsInput = inputChanged
-        inputChanged = false
-        if (!current()) {
-          return
-        }
-        try {
-          this.delivery.deliver(sessionId, journal, affectsInput)
-        } catch (error) {
-          this.delivery.logger.warn('delivering a journal commit failed', {
-            scope: 'journal-delivery',
-            sessionId,
-            error
+        // Async commits yield between units; deliver once after the already-admitted prefix.
+        void journal
+          .readCommittedPrefix(() => {
+            queued = false
+            const affectsInput = inputChanged
+            inputChanged = false
+            if (current()) {
+              this.delivery.deliver(sessionId, journal, affectsInput)
+            }
           })
-        }
+          .catch((error) => {
+            queued = false
+            if (current()) {
+              this.delivery.logger.warn('delivering a journal commit failed', {
+                scope: 'journal-delivery',
+                sessionId,
+                error
+              })
+            }
+          })
       })
     })
     const releaseSettle = journal.stopMarks.observeSettleEdges(() => {

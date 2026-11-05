@@ -17,7 +17,7 @@ import { createStructuredAgentSessionLogger } from '../../native-chat/agent-sess
 import { recordAgentSessionStartup } from '../../observability/agent-session-instrumentation'
 import { STRUCTURED_AGENT_SESSION_STARTUP_CEILING_MS } from '../../native-chat/agent-session-wire/structured-agent-session-startup-attempt-contract'
 import { readWholeAgentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
-import type { ScriptedAgentChild } from '../structured-agent-scripted-child.test-fixture'
+import type { ScriptedAgentChild } from './installation/structured-agent-scripted-child.test-fixture'
 import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime

@@ -6,7 +6,7 @@ import {
 } from './worktree-removal-leftover'
 import type { WorktreeRemovalFailure, WorktreeRemovalRecord } from './worktree-removal-records'
 import { worktreeCheckoutExists } from './worktree-removal-table'
-import { WorkspaceOwnerRemovalError } from '../../runtime/workspaces/canonical-owner-removal'
+import { WorkspaceOwnerRemovalError } from '../../runtime/workspaces/removal/canonical-owner-removal'
 
 /** Retain failures for the same checkout without cleaning up its live Git ownership. */
 export async function failureLeftByGit(

@@ -92,7 +92,12 @@ async function openRecordStore(
   await closeAgentSessionRecordStoreDatabase()
   const journalDatabase = await openSurfaceJournalOnce(location)
   if (location.surfaceOwner) {
-    await installSurfaceNativeRuntimeOwner(journalDatabase, location.surfaceOwner, location.hostId)
+    await installSurfaceNativeRuntimeOwner(
+      journalDatabase,
+      location.surfaceOwner,
+      location.hostId,
+      location.legacySessionTabIds
+    )
   }
   return {
     journalDatabase,

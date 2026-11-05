@@ -39,7 +39,7 @@ import {
 } from './structured-agent-session-runtime'
 import { createStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/structured-agent-session-logger'
 import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
-import { scriptedCodexTransport } from '../scripted-codex-transport.test-fixture'
+import { scriptedCodexTransport } from '../orca-runtime-tests/scripted-codex-transport.test-fixture'
 
 const journals = createTrackedJournalOpener()
 

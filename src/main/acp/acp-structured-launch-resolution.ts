@@ -35,8 +35,8 @@ import {
   providerTimelineKeyPart,
   spelledProviderTimelineItemKey
 } from '../native-chat/agent-session-timeline/provider-timeline-identity'
-import type { StructuredAgentLaunchPartResolver } from '../runtime/structured-agent-launch-composition'
-import { STRUCTURED_CHILD_ENV_TO_DELETE } from '../runtime/structured-session-child-env'
+import type { StructuredAgentLaunchPartResolver } from '../runtime/agent-session/launch/structured-agent-launch-composition'
+import { STRUCTURED_CHILD_ENV_TO_DELETE } from '../runtime/agent-session/environment/structured-session-child-env'
 import {
   LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV,
   NATIVE_CHAT_SCRATCH_DIR_ENV,

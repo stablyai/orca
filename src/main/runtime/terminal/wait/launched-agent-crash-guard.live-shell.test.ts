@@ -15,7 +15,7 @@ import {
 } from '../../../providers/macos-tcc-login-shell'
 import { readLaunchedAgentForeground } from './launched-agent-foreground'
 import { createLaunchedAgentWriteGuard } from './launched-agent-write-guard'
-import { waitForWorktreeStartupDraft } from '../../runtime-worktree-startup-readiness'
+import { waitForWorktreeStartupDraft } from '../../workspaces/startup/runtime-worktree-startup-readiness'
 
 const PTY_ID = 'pty-1'
 // Use a function: the Windows registration scanner misclassifies platform-gated const ternaries.

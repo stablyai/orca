@@ -30,7 +30,7 @@ import type { RuntimeTerminalSend } from '../../shared/runtime-terminal-contract
 import type { RuntimeTerminalWriteOptions } from './terminal/input/runtime-terminal-writer'
 import type { TerminalInputKind } from '../../shared/terminal/input/terminal-input-kind'
 import type { RuntimePtyController } from './runtime-pty-controller-contract'
-import type { RuntimeAgentRowSnapshot } from './runtime-worktree-agent-rows'
+import type { RuntimeAgentRowSnapshot } from './workspaces/process-listing/runtime-hook-agent-row-selection'
 import type { WorkerTerminalHostScope } from '../../shared/worker-terminal-host-scope'
 
 export type TerminalCreateOptions = {

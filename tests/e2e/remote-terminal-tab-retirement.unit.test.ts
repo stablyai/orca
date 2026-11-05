@@ -10,7 +10,7 @@ import { applyWebSessionTabsSnapshot } from '../../src/renderer/src/runtime/web-
 import { shouldApplyWebSessionTabsSnapshot } from '../../src/renderer/src/runtime/web-session-tabs-sync/tracking-decisions'
 import type { WebSessionTabsSyncState } from '../../src/renderer/src/runtime/web-session-tabs-sync/state'
 import { OrcaRuntimeService } from '../../src/main/runtime/orca-runtime'
-import { withDurableRuntimeStore } from '../../src/main/runtime/runtime-durable-store-fixture'
+import { withDurableRuntimeStore } from '../../src/main/runtime/orca-runtime-tests/runtime-durable-store-fixture'
 
 vi.mock('../../src/renderer/src/store', () => ({
   useAppStore: { setState: vi.fn() }

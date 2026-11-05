@@ -1,3 +1,5 @@
+import type { SurfaceStorageMutation } from '../../shared/workspace-surfaces/surface-storage-command'
+import { structuredAgentSessionTabId } from '../../shared/agent-session/view/structured-agent-session-projection'
 import { randomUUID } from 'node:crypto'
 import type Database from '../sqlite/sync-database'
 import type { ExecutionHostId } from '../../shared/execution-host'
@@ -52,7 +54,8 @@ export function reconcileSurfaceNativeMembership(
   hostId: ExecutionHostId,
   host: SurfaceHostDomain,
   session: WorkspaceSessionState,
-  mintId: () => string = randomUUID
+  mintId: () => string = randomUUID,
+  commands: readonly SurfaceStorageMutation[] = []
 ): { tabId: string; sessionId: string }[] {
   const unresolved: { tabId: string; sessionId: string }[] = []
   const attributed = db
@@ -95,6 +98,28 @@ export function reconcileSurfaceNativeMembership(
           actual.push({ tabId: tab.id, sessionId: tab.entityId })
           sessions.add(tab.entityId)
         }
+      }
+    }
+    if (hostId === 'local' && host.chatInitialization !== 'verified') {
+      const initial = commands.find(
+        (command) => command.hostId === hostId && command.type === 'initialize'
+      )
+      const captured = initial?.type === 'initialize' ? (initial.legacySessionTabIds ?? []) : []
+      for (const sessionId of captured) {
+        if (sessions.has(sessionId)) {
+          continue
+        }
+        const row = db
+          .prepare(
+            'SELECT record_json FROM surface_chat.agent_session_records WHERE session_id = ?'
+          )
+          .get(sessionId)
+        const record = decodeSurfaceChatRecord(row?.record_json, sessionId)
+        if (record?.location.executionHostId !== hostId) {
+          continue
+        }
+        actual.push({ tabId: structuredAgentSessionTabId(sessionId), sessionId })
+        sessions.add(sessionId)
       }
     }
   }

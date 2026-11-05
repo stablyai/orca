@@ -13,7 +13,7 @@ import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-w
 import { structuredAgentSessionTabCloseCause } from '../agent-session/structured-agent-session-tab-close-cause'
 import { isReopenedChatTabId } from '../../../shared/agent-session/view/structured-agent-session-host-tab-id'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
-import { savedSessionId } from '../saved-structured-agent-session-restoration'
+import { savedSessionId } from '../agent-session/lifecycle/saved-structured-agent-session-restoration'
 import type { QueuedChatTabChange } from '../agent-session-tab-layout-queue'
 
 type Surface = { worktreeId: string; tabId: string }

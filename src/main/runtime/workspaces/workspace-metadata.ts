@@ -1,15 +1,18 @@
-import { OrcaRuntimeWithCreateManagedWorktree } from './workspace-creation'
+import { OrcaRuntimeWithCreateManagedWorktree } from './creation/workspace-creation'
 import type { LocalGitExecOptions } from '../../git/repo-default-base-ref'
 import type { CreateWorktreeResult } from '../../../shared/worktree/create-types'
-import type { RemoteFetchResult, RemoteTrackingBase } from '../runtime-remote-fetch-controller'
+import type {
+  RemoteFetchResult,
+  RemoteTrackingBase
+} from '../repositories/runtime-remote-fetch-controller'
 import type { WorktreeBaseStatusEvent } from '../../../shared/worktree/base-ref-drift-types'
-import { probeRuntimeWorktreeDrift } from '../runtime-worktree-drift-probe'
+import { probeRuntimeWorktreeDrift } from './metadata/runtime-worktree-drift-probe'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import type { GitHubPrStartPoint, GitPushTarget } from '../../../shared/worktree/types'
 import {
   persistRuntimeManagedWorktreeSortOrder,
   updateRuntimeManagedWorktreeMetadata
-} from '../runtime-managed-worktree-metadata'
+} from './metadata/runtime-managed-worktree-metadata'
 import {
   resolveRuntimeGitHubWorktreeBase,
   type RuntimeGitHubWorktreeBaseArgs
@@ -23,7 +26,7 @@ import {
   adoptRuntimeProvisionedRoot,
   readLocalSparseCheckoutEnabled,
   type RuntimeProvisionedRootRequest
-} from '../runtime-provisioned-root-adoption'
+} from './creation/runtime-provisioned-root-adoption'
 
 export abstract class OrcaRuntimeWithCreateManagedRemoteWorktree extends OrcaRuntimeWithCreateManagedWorktree {
   async getCanonicalFetchKey(

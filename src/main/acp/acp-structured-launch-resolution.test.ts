@@ -4,7 +4,7 @@ import {
 } from '../native-chat/agent-session-journal/journal-database'
 import { journalDatabasePath } from '../native-chat/agent-session-journal/journal-host-database'
 import type Database from '../sqlite/sync-database'
-import { createAcpStructuredLaunchResolver } from '../runtime/structured-agent-launch-composition.test-support'
+import { createAcpStructuredLaunchResolver } from '../runtime/agent-session/launch/structured-agent-launch-composition.test-support'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -35,7 +35,7 @@ import {
 } from '../native-chat/agent-session-timeline/provider-timeline-identity'
 import { createProviderSpawnSpec } from '../provider-process/provider-process-supervisor'
 import { acpLaunchSpecFor } from './acp-launch-specs'
-import { STRUCTURED_CHILD_ENV_TO_DELETE } from '../runtime/structured-session-child-env'
+import { STRUCTURED_CHILD_ENV_TO_DELETE } from '../runtime/agent-session/environment/structured-session-child-env'
 import { acpSessionNotRestoredItem } from './acp-session-reopen-failure'
 
 function openSavedJournalFixture(root: string) {

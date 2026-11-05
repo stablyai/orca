@@ -1,6 +1,9 @@
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
-import { worktreePtyBelongsToHost, type WorktreePtyHostFence } from '../../worktree-pty-host-fence'
+import {
+  worktreePtyBelongsToHost,
+  type WorktreePtyHostFence
+} from '../../workspaces/removal/worktree-pty-host-fence'
 
 /** The terminals a worktree stop targets: every pane's terminal plus every connected PTY record. */
 export function collectWorktreePtyIds(

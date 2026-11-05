@@ -20,7 +20,7 @@ import {
   type PublishedWorkspaceLayout
 } from '../../shared/workspace-layout/workspace-layout-published'
 import { WorkspaceLayoutStream } from './terminal/surface/workspace-layout-stream'
-import { collectLayoutEvents } from './workspace-layout-stream-events.test-fixture'
+import { collectLayoutEvents } from './orca-runtime-tests/workspace-layout-stream-events.test-fixture'
 
 const SSH_HOST: ExecutionHostId = 'ssh:target-1'
 const SERVER_HOST: ExecutionHostId = 'runtime:env-1'

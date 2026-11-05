@@ -1,7 +1,7 @@
 import { codexProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { cancelLocalGeneration } from '../text-generation/source-control-generation-lanes'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
-import { structuredChatNamingDeps } from '../runtime/structured-chat-naming-runtime'
+import { structuredChatNamingDeps } from '../runtime/agent-session/naming/structured-chat-naming-runtime'
 import { getDefaultSettings } from '../../shared/constants'
 import { normalizeSourceControlAiSettings } from '../../shared/source-control/ai/settings/source-control-ai-settings'
 import { setStructuredAgentSessionHost } from './agent-session-wire/structured-agent-session-registry'

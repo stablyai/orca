@@ -1,5 +1,5 @@
 import { ipcMain } from 'electron'
-import { captureWorktreeOwnerRemoval } from '../../../runtime/workspaces/canonical-owner-removal-scopes'
+import { captureWorktreeOwnerRemoval } from '../../../runtime/workspaces/removal/canonical-owner-removal-scopes'
 import { getLocalWorktreeCatalogVersion } from '../../../workspaces/catalog/local-worktree-scan-generation'
 import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
@@ -29,7 +29,7 @@ import {
   observeTerminals,
   runWorkspaceLifecycleCommand,
   workspaceLifecycleKey
-} from '../../../runtime/workspaces/workspace-lifecycle-commands'
+} from '../../../runtime/workspaces/lifecycle/workspace-lifecycle-commands'
 
 export function registerWorktreeRemovalHandlers(context: WorktreeIpcContext): void {
   const { store, options, worktreeRemovalsInFlight } = context

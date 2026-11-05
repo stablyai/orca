@@ -23,7 +23,8 @@ export type SurfaceNativeRuntimeOwner = Pick<
 export async function installSurfaceNativeRuntimeOwner(
   journal: JournalHostDatabase,
   owner: SurfaceNativeRuntimeOwner,
-  host: string
+  host: string,
+  legacySessionTabIds: readonly string[] = []
 ): Promise<void> {
   const hostId = normalizeExecutionHostId(host)
   if (!hostId) {
@@ -50,7 +51,7 @@ export async function installSurfaceNativeRuntimeOwner(
         ),
       committed
     )
-  await commit([{ type: 'initialize', hostId }], () => {})
+  await commit([{ type: 'initialize', hostId, legacySessionTabIds }], () => {})
   const readOrphans = () =>
     owner
       .readDeregisteredWorkspaceSurfaces()

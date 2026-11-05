@@ -1,4 +1,4 @@
-import { captureRepositoryOwnerRemoval } from '../../runtime/workspaces/canonical-owner-removal-scopes'
+import { captureRepositoryOwnerRemoval } from '../../runtime/workspaces/removal/canonical-owner-removal-scopes'
 import { type BrowserWindow, ipcMain } from 'electron'
 import type { Store } from '../../persistence/loading-store/store'
 import type { Project, ProjectUpdateArgs } from '../../../shared/project-types'

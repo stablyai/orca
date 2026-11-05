@@ -216,7 +216,7 @@ export const WINDOWS_BOUNDARY_TESTS = [
   'src/main/startup/windows-app-data-path.test.ts',
   'src/main/startup/windows-std-handle-inheritance.win32.test.ts',
   'src/main/startup/windows-isolated-spawner.win32.test.ts',
-  'src/main/runtime/worktree-scan-admin-fingerprint-gate.test.ts',
+  'src/main/runtime/workspaces/catalog/worktree-scan-admin-fingerprint-gate.test.ts',
   'src/shared/secure-file-fsync-flags.test.ts',
   'src/shared/secure-path-windows-acl.win32.test.ts',
   'src/main/runtime/unreadable-secret-store-preservation.win32.test.ts',

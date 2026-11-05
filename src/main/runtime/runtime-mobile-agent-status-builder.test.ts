@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { RuntimeMobileSessionTerminalTab } from '../../shared/runtime-types'
-import type { RuntimeAgentRowSnapshot } from './runtime-hook-agent-row-selection'
+import type { RuntimeAgentRowSnapshot } from './workspaces/process-listing/runtime-hook-agent-row-selection'
 import { buildRuntimeMobileAgentStatus } from './runtime-mobile-agent-status-builder'
 import type { RuntimeLeafRecord } from './terminal/records/runtime-terminal-state-records'
 

@@ -33,6 +33,18 @@ export class JournalWriteQueue {
     return this.lineBusy ? this.join(read) : this.runNow(read)
   }
 
+  /** Commit readers already see the running unit; only admitted successors need a barrier. */
+  readCommittedPrefix<T>(read: JournalWriteBody<T>): Promise<T> {
+    if (this.waiting > 0) {
+      return this.join(read)
+    }
+    try {
+      return Promise.resolve(read())
+    } catch (error) {
+      return Promise.reject(error)
+    }
+  }
+
   private get lineBusy(): boolean {
     return this.running || this.waiting > 0
   }

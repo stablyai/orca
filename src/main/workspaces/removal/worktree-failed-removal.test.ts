@@ -27,10 +27,10 @@ import {
 } from './worktree-removal-listing'
 import { readWorktreeRemovalRecords } from './worktree-removal-records'
 import { loadWorktreeRemovalRecordsForStore } from '../../startup/worktree-removal-records-load'
-import { WorkspaceOwnerRemovalError } from '../../runtime/workspaces/canonical-owner-removal'
+import { WorkspaceOwnerRemovalError } from '../../runtime/workspaces/removal/canonical-owner-removal'
 import { localWorktreeRemovalOwners } from './worktree-removal-owner-residue'
 import type { WorkspaceSurface } from '../../../shared/workspace-surfaces/surface-content'
-import { resolveRuntimeWorktreeRemovalTarget } from '../../runtime/runtime-worktree-removal-target'
+import { resolveRuntimeWorktreeRemovalTarget } from '../../runtime/workspaces/removal/runtime-worktree-removal-target'
 
 const listWorktreesStrictMock = vi.hoisted(() => vi.fn(async () => []))
 

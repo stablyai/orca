@@ -1,9 +1,9 @@
 import type { Repo } from '../../../../shared/repo-types'
-import type { CapturedOwnerRemoval } from '../../../runtime/workspaces/canonical-owner-removal'
-import { captureWorktreeOwnerRemoval } from '../../../runtime/workspaces/canonical-owner-removal-scopes'
+import type { CapturedOwnerRemoval } from '../../../runtime/workspaces/removal/canonical-owner-removal'
+import { captureWorktreeOwnerRemoval } from '../../../runtime/workspaces/removal/canonical-owner-removal-scopes'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
-import { killAllProcessesForWorktree } from '../../../runtime/worktree-teardown'
+import { killAllProcessesForWorktree } from '../../../runtime/workspaces/removal/worktree-teardown'
 import { withWorktreeRemoveStageSpan } from '../../../observability/instrumentation'
 import { preservedBranchCleanupScopeKey } from '../../../../shared/git/branches/preserved-branch-cleanup'
 import { notifyWorktreesChanged } from '../../worktree-remote'
@@ -14,7 +14,7 @@ import type { WorktreeIpcContext } from '../worktree-ipc-context'
 import { getFolderWorkspaceRootId } from '../folder-workspace-model'
 import { preservedBranchCleanupByScope } from './preserved-branch-cleanup'
 import { removeWorktreeMetadataAndTransientState } from './worktree-removal-ownership'
-import { teardownStops } from '../../../runtime/owned-session-teardown-policy'
+import { teardownStops } from '../../../runtime/workspaces/removal/owned-session-teardown-policy'
 
 export async function removeFolderWorkspace(
   context: WorktreeIpcContext,

@@ -12,7 +12,7 @@ import {
   identityFor,
   THREAD_ID
 } from '../session-lifecycle/codex-structured-session-adapter-fixture'
-import { createCodexStructuredLaunchResolver } from '../../../runtime/structured-agent-launch-composition.test-support'
+import { createCodexStructuredLaunchResolver } from '../../../runtime/agent-session/launch/structured-agent-launch-composition.test-support'
 import { agentSessionRecordFixture } from '../../../native-chat/agent-session-record-test-fixture'
 import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { prepareCodexThreadForVisuals } from './codex-structured-visuals'
