@@ -253,6 +253,11 @@ export function MobileNativeChatOverlay({
                         ? () => void images.attachImage('library')
                         : undefined
                     }
+                    onPasteImages={
+                      controller.nativeChatAcceptsImages
+                        ? (read) => void images.attachImage(read)
+                        : undefined
+                    }
                     attachments={images.attachments}
                     onRemoveAttachment={images.removeAttachment}
                     isAttaching={images.isAttaching}

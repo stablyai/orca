@@ -17,6 +17,7 @@ import {
   uploadMobileNativeChatImages,
   type PendingNativeChatImage
 } from './mobile-native-chat-image-attachment'
+import type { MobilePastedImages } from './mobile-native-chat-composer-paste'
 
 type CurrentRef<T> = { readonly current: T }
 type UploadedNativeChatImage = Omit<PendingNativeChatImage, 'id'>
@@ -37,7 +38,7 @@ export function useMobileNativeChatImageUpload(args: {
   onAttachSuccess?: () => void
   onError?: () => void
 }): {
-  attachImage: (source: MobileImageSource) => Promise<void>
+  attachImage: (source: MobileImageSource | MobilePastedImages) => Promise<void>
   isAttaching: boolean
 } {
   const {
@@ -61,7 +62,7 @@ export function useMobileNativeChatImageUpload(args: {
   }, [connState])
 
   const attachImage = useCallback(
-    async (source: MobileImageSource): Promise<void> => {
+    async (source: MobileImageSource | MobilePastedImages): Promise<void> => {
       const scope = scopeKey
       if (
         !client ||
@@ -84,7 +85,7 @@ export function useMobileNativeChatImageUpload(args: {
           canContinue: () => destination.active,
           client,
           getConnectionId: getActiveWorktreeConnectionId,
-          pickImages: picker.pickImages,
+          pickImages: (from) => (typeof from === 'function' ? from() : picker.pickImages(from)),
           onImageUploaded: (image) => uploadedImages.push(image),
           onUploadStart: () => {
             started = true

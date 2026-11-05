@@ -100,6 +100,9 @@ export function MobileQueuedMessageComposer({
                 ...context.structured,
                 files: files.files,
                 onAttachFiles: () => void files.attachFiles(),
+                ...(context.structured.onAttachPastedText
+                  ? { onAttachPastedText: (text: string) => void files.attachPastedText(text) }
+                  : {}),
                 onRemoveFile: (id) => files.removeFiles([id])
               }
             : null
@@ -123,6 +126,7 @@ export function MobileQueuedMessageComposer({
               }
             : undefined
         }
+        onPasteImages={editor.imagesCapable ? (read) => void images.attachImage(read) : undefined}
         isAttaching={images.isAttaching}
         onMicPress={context?.onMicPress}
         micActive={context?.micActive}
