@@ -21265,10 +21265,8 @@
           "body": "Click + to start an agent, a terminal, or a browser tab."
         },
         "splitChat": {
-          "title": "Run two chats side by side",
           "body": "Press {terminal.splitRight}, or click the split button at the top of the chat. Each side gets its own tabs.",
-          "bodyWithoutShortcut": "Click the split button at the top of the chat. Each side gets its own tabs.",
-          "action": "Split chat"
+          "bodyWithoutShortcut": "Click the split button at the top of the chat. Each side gets its own tabs."
         },
         "split": {
           "bodyWithoutShortcut": "Right-click the pane for split options."
