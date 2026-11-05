@@ -1775,13 +1775,8 @@
       "noUpdate": "{{value0}} süredir güncelleme yok"
     },
     "agentMessageAttribution": {
-      "from": "Gönderen: {{sender}}",
-      "fromMore": "Gönderen: {{sender}} +{{count}}",
-      "fromUnnamed": "Bir ajandan",
-      "messageFrom": "Mesajı gönderen: {{sender}}",
-      "messageFromMore": "Mesajı gönderen: {{sender}} +{{count}}",
-      "messageFromUnnamed": "Bir ajandan mesaj",
-      "unnamedSender": "bir ajan"
+      "unnamedSender": "bir ajan",
+      "fromSender": "Gönderen"
     },
     "aiVaultResumeLaunch": {
       "createFailed": "Terminal oluşturulamadı",
@@ -2150,8 +2145,7 @@
     },
     "queuedMessageComposer": {
       "commandsNotAllowed": "Komutlar sıraya alınmış bir mesaja kaydedilemez.",
-      "editing": "Mesaj düzenleniyor",
-      "editingAttributed": "Mesaj düzenleniyor · {{attribution}}"
+      "editing": "Mesaj düzenleniyor"
     },
     "quickCommandEditorForm": {
       "action": "Eylem",

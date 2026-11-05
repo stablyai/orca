@@ -1771,13 +1771,8 @@
       "noUpdate": "已有 {{value0}} 未更新"
     },
     "agentMessageAttribution": {
-      "from": "来自 {{sender}}",
-      "fromMore": "来自 {{sender}} 及其他 {{count}} 个智能体",
-      "fromUnnamed": "来自智能体",
-      "messageFrom": "来自 {{sender}} 的消息",
-      "messageFromMore": "来自 {{sender}} 及其他 {{count}} 个智能体的消息",
-      "messageFromUnnamed": "来自智能体的消息",
-      "unnamedSender": "一个智能体"
+      "unnamedSender": "一个智能体",
+      "fromSender": "来自"
     },
     "aiVaultResumeLaunch": {
       "createFailed": "创建终端失败",
@@ -2146,8 +2141,7 @@
     },
     "queuedMessageComposer": {
       "commandsNotAllowed": "排队消息中不能保存命令。",
-      "editing": "正在编辑消息",
-      "editingAttributed": "正在编辑消息 · {{attribution}}"
+      "editing": "正在编辑消息"
     },
     "quickCommandEditorForm": {
       "action": "操作",

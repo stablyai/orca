@@ -1771,13 +1771,8 @@
       "noUpdate": "已有 {{value0}} 未更新"
     },
     "agentMessageAttribution": {
-      "from": "來自 {{sender}}",
-      "fromMore": "來自 {{sender}} +{{count}}",
-      "fromUnnamed": "來自代理程式",
-      "messageFrom": "來自 {{sender}} 的訊息",
-      "messageFromMore": "來自 {{sender}} +{{count}} 的訊息",
-      "messageFromUnnamed": "來自代理程式的訊息",
-      "unnamedSender": "一個代理程式"
+      "unnamedSender": "一個代理程式",
+      "fromSender": "來自"
     },
     "aiVaultResumeLaunch": {
       "createFailed": "無法建立終端機",
@@ -2146,8 +2141,7 @@
     },
     "queuedMessageComposer": {
       "commandsNotAllowed": "無法將命令儲存在排隊中的訊息內。",
-      "editing": "正在編輯訊息",
-      "editingAttributed": "正在編輯訊息 · {{attribution}}"
+      "editing": "正在編輯訊息"
     },
     "quickCommandEditorForm": {
       "action": "操作",

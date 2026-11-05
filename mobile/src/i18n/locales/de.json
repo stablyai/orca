@@ -1775,13 +1775,8 @@
       "noUpdate": "Seit {{value0}} keine Meldung"
     },
     "agentMessageAttribution": {
-      "from": "Von {{sender}}",
-      "fromMore": "Von {{sender}} +{{count}}",
-      "fromUnnamed": "Von einem Agenten",
-      "messageFrom": "Nachricht von {{sender}}",
-      "messageFromMore": "Nachricht von {{sender}} +{{count}}",
-      "messageFromUnnamed": "Nachricht von einem Agenten",
-      "unnamedSender": "einem Agenten"
+      "unnamedSender": "einem Agenten",
+      "fromSender": "Von"
     },
     "aiVaultResumeLaunch": {
       "createFailed": "Terminal konnte nicht erstellt werden.",
@@ -2150,8 +2145,7 @@
     },
     "queuedMessageComposer": {
       "commandsNotAllowed": "Befehle können nicht in einer Nachricht in der Warteschlange gespeichert werden.",
-      "editing": "Nachricht wird bearbeitet",
-      "editingAttributed": "Nachricht wird bearbeitet · {{attribution}}"
+      "editing": "Nachricht wird bearbeitet"
     },
     "quickCommandEditorForm": {
       "action": "Aktion",
