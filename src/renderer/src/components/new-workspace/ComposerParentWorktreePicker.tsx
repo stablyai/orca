@@ -58,7 +58,7 @@ const NO_PARENT_ROW_KEY = 'no-parent'
 
 type ComposerParentWorktreePickerProps = {
   repoId: string
-  /** Parent must belong to the same execution host that will create the child. */
+  /** The child's destination host; parents on it nest as usual, others by a cross-machine link. */
   executionHostId?: ExecutionHostId | null
   projectId?: string | null
   value: string | null

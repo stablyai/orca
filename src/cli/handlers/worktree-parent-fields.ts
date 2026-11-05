@@ -125,7 +125,7 @@ async function inferCallerCrossStoreParent(
   const local = callerOrcaClient(client)
   // No Orca running here, or cwd outside its workspaces: no cwd context.
   const cwdContext = await resolveWorktreeCreateCwdContext(cwd, local, false).catch(
-    () => ({}) as Awaited<ReturnType<typeof resolveWorktreeCreateCwdContext>>
+    (): Awaited<ReturnType<typeof resolveWorktreeCreateCwdContext>> => ({})
   )
   if (!context.envParentWorkspace && !context.callerTerminalHandle && !cwdContext.parentWorktree) {
     return {}

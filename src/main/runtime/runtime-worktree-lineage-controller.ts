@@ -1,8 +1,9 @@
-import type {
-  CrossStoreInferredSource,
-  CrossStoreParentRef,
-  WorktreeLineage,
-  WorkspaceLineage
+import {
+  isCrossStoreInferredSource,
+  type CrossStoreInferredSource,
+  type CrossStoreParentRef,
+  type WorktreeLineage,
+  type WorkspaceLineage
 } from '../../shared/worktree/lineage-types'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
@@ -144,9 +145,12 @@ export class RuntimeWorktreeLineageController {
     if (!parent.instanceId || !installationId) {
       return { reason: "Orca couldn't confirm this workspace's identity." }
     }
+    if (!isCrossStoreInferredSource(capture.source)) {
+      return { reason: "Orca couldn't tell which workspace this command runs in." }
+    }
     return {
       parent: { installationId, workspaceKey: parent.workspaceKey, instanceId: parent.instanceId },
-      source: capture.source as CrossStoreInferredSource
+      source: capture.source
     }
   }
 
