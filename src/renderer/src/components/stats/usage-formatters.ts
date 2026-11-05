@@ -2,7 +2,11 @@ import { getIntlLocale, translate } from '@/i18n/i18n'
 
 export function formatTokens(value: number): string {
   if (value >= 1_000_000_000) {
-    return `${(value / 1_000_000_000).toFixed(1)}B`
+    // Why: a bare `B` reads as 10^12 in locales like es (billón).
+    return new Intl.NumberFormat(getIntlLocale(), {
+      notation: 'compact',
+      maximumFractionDigits: 1
+    }).format(value)
   }
   if (value >= 1_000_000) {
     return `${(value / 1_000_000).toFixed(1)}M`
