@@ -1,9 +1,9 @@
 import { OrchestrationDb } from './orchestration/db'
 import type { RuntimeAgentLineageTestModule } from '../../shared/runtime-agent-lineage-consumer.test-fixture'
 import { RuntimeAgentOrchestrationProjection } from './runtime-agent-orchestration-projection'
-import { attachRuntimeWorktreeAgentRows } from './runtime-worktree-agent-rows'
+import { attachRuntimeWorktreeAgentRows } from './workspaces/process-listing/runtime-worktree-agent-rows'
 import type { RuntimeWorktreePsSummary } from '../../shared/runtime-types'
-import type { RuntimeWorktreeAgentSource } from './runtime-worktree-agent-source'
+import type { RuntimeWorktreeAgentSource } from './workspaces/process-listing/runtime-worktree-agent-source'
 import { testOrcaSessionId } from '../../shared/orca-session-address-test-fixture'
 import {
   structuredAgentSessionPaneKey,

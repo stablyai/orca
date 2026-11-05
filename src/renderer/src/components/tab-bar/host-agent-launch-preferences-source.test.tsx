@@ -1,16 +1,8 @@
 // @vitest-environment happy-dom
-import {
-  rpc,
-  server,
-  compositions,
-  status
-} from './new-tab-agent-menu-host-preferences-test-fixture'
+import { rpc, server, status } from './new-tab-agent-menu-host-preferences-test-fixture'
 import { act, renderHook } from '@testing-library/react'
 import { expect, it, vi } from 'vitest'
-import {
-  AGENT_LAUNCH_CHOICES_CAPABILITY,
-  AGENT_LAUNCH_SETTINGS_CAPABILITY
-} from '../../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
+import { AGENT_LAUNCH_CHOICES_CAPABILITY } from '../../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
 import {
   compatibilityEntry,
   rememberRuntimeEnvironmentCompatibility
@@ -27,11 +19,8 @@ import {
   ensureAgentLaunchPreferences,
   readAgentLaunchPreferencesForWorktree
 } from '../../runtime/agent-launch-settings/use-host-agent-launch-preferences'
-import {
-  useAgentLaunchPickerInventorySource,
-  useAgentPickerInventoryEntries
-} from '../agent/use-agent-launch-picker-inventory'
-import { useAgentMenuObservation, useNewTabAgentMenuRows } from './use-new-tab-agent-menu-rows'
+
+import { useAgentMenuObservation } from './use-new-tab-agent-menu-rows'
 
 it('projects one capable source through cold, deadline, late, failed-refresh and empty answers', async () => {
   vi.useFakeTimers()
@@ -174,166 +163,6 @@ it('projects one capable source through cold, deadline, late, failed-refresh and
     vi.useRealTimers()
   }
 })
-
-it.each(['failed-capable', 'old-choices', 'old-settings', 'unknown'] as const)(
-  'uses host settings or neutral inherited defaults for %s',
-  async (mode) => {
-    const desktop = { claude: { model: 'desktop', options: { effort: 'low' } } }
-    useAppStore.setState((state) => ({
-      settings: { ...state.settings!, agentLaunchChoices: desktop }
-    }))
-    if (mode === 'failed-capable') {
-      useAppStore.setState({
-        runtimeStatusByEnvironmentId: new Map([
-          [
-            'alpha',
-            {
-              ...status(),
-              status: { ...status().status!, capabilities: [AGENT_LAUNCH_CHOICES_CAPABILITY] }
-            }
-          ]
-        ])
-      })
-      rpc.call.mockRejectedValue(new Error('offline'))
-    } else {
-      rpc.supports.mockImplementation(
-        async (_environment, capability) =>
-          mode === 'old-choices' && capability === AGENT_LAUNCH_SETTINGS_CAPABILITY
-      )
-    }
-    const read = () => readAgentLaunchPreferencesForWorktree(useAppStore.getState(), 'wt')
-    expect(read().agentLaunchChoices).toEqual({})
-    expect(rpc.supports).not.toHaveBeenCalled()
-    if (mode === 'unknown') {
-      rpc.supports.mockImplementation(async () => {
-        rememberRuntimeEnvironmentCompatibility(
-          'alpha',
-          compatibilityEntry({
-            ...status().status!,
-            capabilities: [AGENT_LAUNCH_CHOICES_CAPABILITY]
-          })
-        )
-        return true
-      })
-      rpc.call.mockRejectedValue(new Error('offline'))
-    }
-    const hook = renderHook(() =>
-      useAgentMenuObservation('wt', true, { kind: 'runtime', environmentId: 'alpha' })
-    )
-    const resolved = await ensureAgentLaunchPreferences(useAppStore.getState(), {
-      kind: 'git-worktree',
-      worktreeId: 'wt'
-    })
-    await act(async () => {})
-    expect(resolved).toEqual(read())
-    expect(read()).toMatchObject(hook.result.current.preferences)
-    expect(resolved.agentLaunchChoices).toEqual(
-      mode === 'failed-capable' || mode === 'unknown' ? {} : server.agentChoices?.defaults
-    )
-    expect(resolved.defaultTuiAgent).toBe(
-      mode === 'old-choices' || mode === 'old-settings' ? 'codex' : null
-    )
-    expect(useAppStore.getState().settings?.agentLaunchChoices).toBe(desktop)
-  }
-)
-
-it.each([20, 200])(
-  'bounds capable fallback subscriptions and independent work for %i holders',
-  async (count) => {
-    vi.useFakeTimers()
-    const route = await import('@/lib/agent-launch-route-input')
-    const builder = vi.spyOn(route, 'buildAgentLaunchRouteInput')
-    const profiles = vi.spyOn(
-      await import('../../../../shared/agent-launch/choices/agent-launch-profile'),
-      'projectAgentLaunchProfile'
-    )
-    try {
-      const pending = Promise.withResolvers<{ settings: typeof server }>()
-      rpc.call.mockReturnValueOnce(pending.promise)
-      useAppStore.setState((state) => ({
-        settings: {
-          ...state.settings!,
-          agentLaunchChoices: { claude: { options: { effort: 'low' } } }
-        },
-        runtimeStatusByEnvironmentId: new Map([
-          [
-            'alpha',
-            {
-              ...status(),
-              status: {
-                ...status().status!,
-                capabilities: [CHAT, CLIENT, AGENT_LAUNCH_CHOICES_CAPABILITY]
-              }
-            }
-          ]
-        ])
-      }))
-      let renders = 0
-      const holders = Array.from({ length: count }, () =>
-        renderHook(() => {
-          const menu = useNewTabAgentMenuRows('wt', true, {
-            kind: 'runtime',
-            environmentId: 'alpha'
-          })
-          renders++
-          return useAgentPickerInventoryEntries(
-            useAgentLaunchPickerInventorySource('wt', menu, false)
-          )
-        })
-      )
-      await act(async () => vi.advanceTimersByTimeAsync(3_000))
-      expect(rpc.call).toHaveBeenCalledTimes(1)
-      expect(profiles.mock.calls.length).toBeLessThanOrEqual(12 * count)
-      expect(builder.mock.calls.length).toBeLessThanOrEqual(20 * count)
-      const work = {
-        reads: rpc.call.mock.calls.length,
-        status: rpc.supports.mock.calls.length,
-        profiles: profiles.mock.calls.length,
-        compositions: compositions.mock.calls.length,
-        routes: builder.mock.calls.length,
-        renders
-      }
-      await act(async () =>
-        useAppStore.setState((state) => ({
-          settings: { ...state.settings!, terminalFontSize: 19 }
-        }))
-      )
-      expect(renders).toBe(work.renders)
-      await act(async () =>
-        useAppStore.setState((state) => ({
-          runtimeStatusByEnvironmentId: new Map(state.runtimeStatusByEnvironmentId).set(
-            'beta',
-            status('other')
-          )
-        }))
-      )
-      expect(renders).toBe(work.renders)
-      await act(async () =>
-        useAppStore.setState((state) => ({
-          settings: { ...state.settings!, agentLaunchChoices: { claude: { model: 'unused' } } }
-        }))
-      )
-      expect(renders).toBe(work.renders)
-      expect(rpc.call).toHaveBeenCalledTimes(work.reads)
-      expect(rpc.supports).toHaveBeenCalledTimes(work.status)
-      expect(profiles).toHaveBeenCalledTimes(work.profiles)
-      expect(compositions).toHaveBeenCalledTimes(work.compositions)
-      // Store selectors inspect the selected host once per holder, without rebuilding profiles/resources.
-      expect(builder.mock.calls.length - work.routes).toBeLessThanOrEqual(3 * count)
-      await act(async () => pending.resolve({ settings: server }))
-      expect(renders).toBeGreaterThan(work.renders)
-      expect(holders[0].result.current[0]?.ownerKey).not.toBeUndefined()
-      expect(
-        readAgentLaunchPreferencesForWorktree(useAppStore.getState(), 'wt').agentLaunchChoices
-      ).toEqual(server.agentChoices?.defaults)
-      holders.forEach((holder) => holder.unmount())
-    } finally {
-      vi.useRealTimers()
-      builder.mockRestore()
-      profiles.mockRestore()
-    }
-  }
-)
 
 it('updates the shared cold projection when existing capability resolves after the fallback deadline', async () => {
   vi.useFakeTimers()

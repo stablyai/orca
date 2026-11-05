@@ -1,16 +1,18 @@
 import { describe, expect, it, vi } from 'vitest'
 import { join } from 'node:path'
 import type { BrowserWindow } from 'electron'
-import './orca-runtime-test-lifecycle.spec'
-import { OrcaRuntimeService, listWorktrees } from './orca-runtime-test-mocks.spec'
-import type { WorktreeMeta } from './orca-runtime-test-mocks.spec'
+import './orca-runtime-tests/orca-runtime-test-lifecycle.spec'
+import './orca-runtime-tests/runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from './orca-runtime'
+import { listWorktrees } from '../git/worktrees/catalog/worktree-scan-cache'
+import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import {
   TEST_REPO_ID,
   TEST_REPO_PATH,
   makeWorktreeInfo,
   makeWorktreeMeta,
   store
-} from './orca-runtime-test-fixtures.spec'
+} from './orca-runtime-tests/orca-runtime-test-fixtures.spec'
 import { registerRuntimeWindowLifecycle } from '../window/runtime-window-lifecycle'
 import type { RuntimeClientEvent } from '../../shared/runtime-client-events'
 import type { HostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'

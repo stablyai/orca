@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
-import { OrcaRuntimeService } from '../orca-runtime-test-mocks.spec'
-import { TEST_WORKTREE_ID, spawnedPtyEnv, store } from '../orca-runtime-test-fixtures.spec'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { TEST_WORKTREE_ID, store } from './orca-runtime-test-fixtures.spec'
+import { spawnedPtyEnv } from '../spawned-pty-env-fixtures'
 
 function makeRuntime(): { runtime: OrcaRuntimeService; spawn: ReturnType<typeof vi.fn> } {
   const spawn = vi.fn().mockResolvedValue({ id: 'pty-workspace-id' })

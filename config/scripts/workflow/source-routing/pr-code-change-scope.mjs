@@ -198,12 +198,14 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   // The R1 daemon protocol crossing gate runs in this job.
   'config/scripts/daemon-protocol-facts',
   'config/scripts/daemon-protocol/schema-facts/daemon-protocol-facts',
+  'config/scripts/daemon-protocol/schema-facts/daemon-protocol-revision-facts',
+  'config/scripts/runtime-verification/daemon-lifecycle/git-baseline-sources',
   'config/scripts/check-daemon-protocol-crossing',
   'config/scripts/daemon-protocol/admission/check-daemon-protocol-crossing',
   // R3 runtime launcher protocol ratchet; a bump always routes here via the protocol file.
   'config/scripts/check-runtime-launcher-protocol-ratchet',
   'config/scripts/daemon-protocol/admission/check-runtime-launcher-protocol-ratchet',
-  'src/main/daemon/daemon-protocol-version.ts',
+  'src/main/daemon/protocol/daemon-protocol-version.ts',
   'src/shared/protocol-version',
   'src/shared/terminal/stream/terminal-stream-protocol',
   'src/shared/browser/client-hosting/browser-client-host-protocol',
@@ -270,7 +272,9 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'src/main/runtime/rpc/methods/structured-agent-session',
   'src/main/runtime/rpc/methods/terminal',
   'src/main/runtime/runtime-worktree-agent-',
-  'src/main/runtime/runtime-worktree-pty-agent-sources',
+  'src/main/runtime/workspaces/process-listing/runtime-worktree-agent-',
+  'src/main/runtime/workspaces/startup/runtime-worktree-agent-startup',
+  'src/main/runtime/workspaces/process-listing/runtime-worktree-pty-agent-sources',
   'src/shared/runtime-worktree-contracts',
   'src/renderer/src/runtime/remote-runtime-terminal-multiplexer',
   // Turn-end status a newer host publishes and an older desktop reads (cross-version-host-observed-turn-end).
@@ -437,7 +441,8 @@ export function needsMobileDependencies(changedFiles) {
   return changedFiles.length === 0 || changedFiles.some((file) => file.startsWith('mobile/'))
 }
 
-export const DAEMON_INIT_TEST_SUPPORT = 'src/main/daemon/daemon-init-dependency-mocks.ts'
+export const DAEMON_INIT_TEST_SUPPORT =
+  'src/main/daemon/providers/lifecycle/testing/daemon-init-dependency-mocks.ts'
 
 const DAEMON_INIT_TEST_SCOPE = new Set([
   DAEMON_INIT_TEST_SUPPORT,

@@ -265,9 +265,10 @@ export const ACCOUNT_HANDLERS: Record<string, CommandHandler> = {
       return
     }
     const { client, json } = ctx
-    // Listing shows no usage, so avoid a serial provider refresh for every account.
+    // JSON carries usage: refresh stale windows within throttles; a forced refresh bypasses Retry-After.
     const result = await client.call<AccountsListSnapshot>('accounts.list', {
-      refreshUsage: false
+      refreshUsage: false,
+      ...(json ? { refreshStaleUsage: true } : {})
     })
     printResult(result, json, (snapshot) =>
       [

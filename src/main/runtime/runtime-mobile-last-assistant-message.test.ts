@@ -4,7 +4,7 @@ import type { RuntimeMobileSessionTabsSnapshot } from '../../shared/runtime-type
 import { renewRuntimeMobileAgentStatusFromPtyTitle } from './runtime-mobile-agent-status-projection'
 import { projectRuntimeMobileSessionTabs } from './runtime-mobile-session-projection'
 import type { RuntimeMobileSessionProjectionHost } from './runtime-mobile-session-projection-contract'
-import type { RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
+import type { RuntimePtyWorktreeRecord } from './terminal/records/runtime-terminal-state-records'
 
 const MESSAGE = '좌→우 가로 파이프라인으로 다시 그렸습니다'
 

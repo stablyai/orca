@@ -27,7 +27,7 @@ import {
   getLeafDisplayRecord,
   getPtyDisplayRecord,
   terminalTitleBlocksExplicitAgentStatus
-} from './runtime-worktree-status-projection'
+} from './workspaces/process-listing/runtime-worktree-status-projection'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import { projectRuntimeMobileSessionTitle } from './runtime-mobile-session-title-projection'
 

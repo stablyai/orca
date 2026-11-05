@@ -5,7 +5,7 @@ import type * as WorktreeListingModule from '../../../git/worktrees/catalog/work
 
 import { describe, expect, it, vi } from 'vitest'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
-import { createAgentPromptSubmissionRuntime } from '../../agent-prompt-submission-runtime-test-fixture'
+import { createAgentPromptSubmissionRuntime } from '../../terminal/input/agent-prompt-submission-runtime-test-fixture'
 import { deliverTerminalAgentLaunchPrompt } from './agent-launch-terminal-prompt'
 
 vi.mock('../../../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => {

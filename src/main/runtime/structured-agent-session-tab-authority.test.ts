@@ -27,7 +27,7 @@ import {
   savedIds
 } from './structured-agent-session-tab-authority.test-support'
 import { structuredAgentSessionTabId } from '../../shared/agent-session/view/structured-agent-session-projection'
-import { chatTabCommandsSettled } from './session-layout-apply.test-fixture'
+import { chatTabCommandsSettled } from './orca-runtime-tests/session-layout-apply.test-fixture'
 import * as journalFactory from '../native-chat/agent-session-journal/journal-store-factory'
 import { discardStructuredWorkerSession } from './rpc/methods/orchestration-structured-worker-session'
 import { closeStructuredAgentSessionChild } from './agent-session/structured-agent-session-close'

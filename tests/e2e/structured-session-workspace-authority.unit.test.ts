@@ -1,14 +1,14 @@
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../src/shared/constants'
 import { makeWorkspaceLineage } from '../../src/main/persistence/persistence-test-harness'
-import * as folderTeardown from '../../src/main/runtime/folder-workspace-pty-teardown'
+import * as folderTeardown from '../../src/main/runtime/workspaces/removal/folder-workspace-pty-teardown'
 import * as pathPresence from '../../src/main/workspaces/catalog/local-worktree-path-presence'
 import { mkdir } from 'node:fs/promises'
 import { basename } from 'node:path'
 import * as worktreePaths from '../../src/main/git/worktrees/catalog/worktree-path-comparison'
 import * as gitRemoval from '../../src/main/git/worktrees/removal/worktree-removal'
 import * as pushTargetCleanup from '../../src/main/ipc/worktree-remote'
-import { finishRuntimeLocalWorktreeRemoval } from '../../src/main/runtime/runtime-registered-local-worktree-removal'
-import { getRuntimeFolderWorkspaceInstanceId } from '../../src/main/runtime/runtime-folder-workspace'
+import { finishRuntimeLocalWorktreeRemoval } from '../../src/main/runtime/workspaces/removal/runtime-registered-local-worktree-removal'
+import { getRuntimeFolderWorkspaceInstanceId } from '../../src/main/runtime/workspaces/catalog/runtime-folder-workspace'
 import '../../src/main/runtime/rpc/unused-default-rpc-methods.test-fixture'
 import { expect, it, vi } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../src/shared/agent-session/journal/agent-session-journal-types'
@@ -20,7 +20,7 @@ import {
   acquireWatcherRemovalGate,
   beginWatcherInstall
 } from '../../src/main/workspaces/removal/watcher-removal-gate'
-import { chatTabCommandsSettled } from '../../src/main/runtime/session-layout-apply.test-fixture'
+import { chatTabCommandsSettled } from '../../src/main/runtime/orca-runtime-tests/session-layout-apply.test-fixture'
 import {
   root,
   B,
@@ -36,9 +36,9 @@ import {
   readPersistedTestAgentSessionStore,
   seedTestAgentSessionRecordStore
 } from '../../src/main/runtime/agent-session/records/agent-session-record-store-test-harness'
-import { storeRepo } from '../../src/main/runtime/runtime-store-partial-fixture'
+import { storeRepo } from '../../src/main/runtime/orca-runtime-tests/runtime-store-partial-fixture'
 import { hostWorktreeTarget } from '../../src/shared/worktree/host-qualified-identity'
-import type { RuntimeWorktreeScanResult } from '../../src/main/runtime/repo-worktree-resolution-scan'
+import type { RuntimeWorktreeScanResult } from '../../src/main/runtime/workspaces/catalog/repo-worktree-resolution-scan'
 import { openMobileAgentHistoryChat } from '../../mobile/src/agent-history/open-mobile-agent-history-chat'
 import type { RpcClient } from '../../mobile/src/transport/rpc-client'
 import type { AiVaultSession } from '../../src/shared/ai-vault/contracts/ai-vault-types'

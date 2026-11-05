@@ -1,6 +1,6 @@
 // Model desktop reorder/split layout commands; session.tabs must list the resulting main-owned groups/order.
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-session-contracts'
-import { TEST_WORKTREE_ID } from '../orca-runtime-test-fixtures.spec'
+import { TEST_WORKTREE_ID } from '../orca-runtime-tests/orca-runtime-test-fixtures.spec'
 import {
   SURFACE_TAB_ID,
   surfaceRuntime

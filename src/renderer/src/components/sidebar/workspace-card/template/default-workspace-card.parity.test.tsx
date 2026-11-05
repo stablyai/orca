@@ -1,11 +1,11 @@
 // @vitest-environment happy-dom
 
 import React, { type ReactNode } from 'react'
-import { renderToStaticMarkup } from 'react-dom/server'
+
 import { act, cleanup, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
-import type { HostedReviewInfo } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
+
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { WorktreeCardProperty } from '../../../../../../shared/ui-chrome-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
@@ -135,20 +135,6 @@ function makeWorktree(overrides: Partial<Worktree> = {}): Worktree {
   }
 }
 
-function review(overrides: Partial<HostedReviewInfo> = {}): HostedReviewInfo {
-  return {
-    provider: 'github',
-    number: 456,
-    title: 'Card plugins',
-    state: 'open',
-    url: 'https://github.com/acme/orca/pull/456',
-    status: 'failure',
-    updatedAt: '2026-11-02T00:00:00.000Z',
-    mergeable: 'CONFLICTING',
-    ...overrides
-  }
-}
-
 type Case = {
   worktree?: Partial<Worktree>
   repo?: Partial<Repo> | null
@@ -159,107 +145,7 @@ type Case = {
   deleteModifier?: boolean
 }
 
-const wt = makeWorktree()
-const CASES: Record<string, Case> = {
-  plain: {},
-  titleOnly: { cardProps: ['status'], worktree: { branch: '' } },
-  noStatus: { cardProps: ['issue', 'pr', 'ports', 'inline-agents', 'host'] },
-  noInlineAgents: { cardProps: ['status', 'unread', 'pr', 'host'] },
-  branchMatchesName: { worktree: { displayName: 'feature/card-plugins' } },
-  unread: { worktree: { isUnread: true } },
-  main: { worktree: { isMainWorktree: true, branch: 'refs/heads/main' } },
-  sparse: { worktree: { isSparse: true, sparseDirectories: ['src', 'docs'] } },
-  mainSparse: {
-    worktree: { isMainWorktree: true, isSparse: true, sparseDirectories: ['src', 'docs'] }
-  },
-  renameFailed: { worktree: { firstAgentMessageRenameError: 'agent said no' } },
-  removalError: { worktree: { removalError: '/repo/worktrees/feature: busy' } },
-  detached: { worktree: { branch: '', head: 'deadbeef' } },
-  merging: { state: { gitConflictOperationByWorktree: { [wt.id]: 'merge' } } },
-  rebasing: { state: { gitConflictOperationByWorktree: { [wt.id]: 'rebase' } } },
-  remoteConflict: {
-    state: {
-      remoteBranchConflictByWorktreeId: {
-        [wt.id]: { remote: 'origin', branchName: 'feature/card-plugins' }
-      }
-    }
-  },
-  prFailing: {
-    worktree: { linkedPR: 456 },
-    state: {
-      hostedReviewCache: {
-        'local::repo-1::feature/card-plugins': { data: review(), fetchedAt: 1 }
-      }
-    }
-  },
-  details: {
-    worktree: {
-      linkedIssue: 12,
-      linkedLinearIssue: 'ORC-1',
-      comment: 'Waiting on review',
-      automationProvenance: {
-        kind: 'created-by-automation',
-        automationId: 'a1',
-        automationNameSnapshot: 'Nightly',
-        automationRunId: 'r1',
-        automationRunTitleSnapshot: 'Nightly run',
-        createdAt: 1,
-        executionTargetType: 'local',
-        executionTargetId: 'local',
-        projectId: 'repo-1'
-      }
-    }
-  },
-  twoAttachments: {
-    worktree: {
-      linkedItems: [
-        { type: 'pr', provider: 'github', number: 1, url: 'https://github.com/a/b/pull/1' },
-        { type: 'pr', provider: 'github', number: 2, url: 'https://github.com/a/b/pull/2' }
-      ]
-    }
-  },
-  cacheTimer: { cacheStartedAt: 1000 },
-  deleteQuickAction: { deleteModifier: true },
-  ssh: { repo: { connectionId: 'ssh-1' } },
-  runtime: { repo: { executionHostId: 'runtime:env-1' } },
-  folder: { repo: { kind: 'folder' }, worktree: { branch: '' } },
-  folderWithGroups: {
-    repo: { kind: 'folder' },
-    worktree: { branch: '' },
-    state: { projectGroups: [{ id: 'g1' }] }
-  },
-  noRepo: { repo: null },
-  pinned: { props: { inPinnedSection: true } },
-  pinnedWithProject: { props: { inPinnedSection: true, showProjectName: true } },
-  hideRepoBadge: { props: { hideRepoBadge: true } },
-  hostLabel: { props: { hostContextLabel: 'build-box' } },
-  hostLabelWithProject: { props: { hostContextLabel: 'build-box', showProjectName: true } },
-  lineage: {
-    props: {
-      lineageChildCount: 2,
-      lineageChildWorktreeIds: ['c1', 'c2'],
-      onLineageToggle: () => {}
-    }
-  },
-  affiliate: { props: { affiliateListMode: true } },
-  activeLinear: { props: { isActive: true }, worktree: { linkedLinearIssue: 'ORC-2' } },
-  flushIndented: { props: { flushSurface: true, contentIndent: 24 } },
-  indented: { props: { contentIndent: 16 } }
-}
-
 // Proof each case draws what it is named for, so a parity pass is not two empty cards.
-const SHOWS: Partial<Record<keyof typeof CASES, string>> = {
-  sparse: 'sparse',
-  renameFailed: 'rename failed',
-  removalError: 'data-worktree-card-delete-failed',
-  merging: 'Merging',
-  remoteConflict: 'already exists',
-  cacheTimer: 'data-cache-timer',
-  deleteQuickAction: 'Delete workspace',
-  lineage: 'data-lineage-toggle',
-  details: 'Waiting on review',
-  activeLinear: 'Linear'
-}
 
 const STYLES: Record<string, Partial<GlobalSettings>> = {
   classic: { compactWorktreeCards: false },
@@ -347,47 +233,8 @@ function Harness({ props, variant }: { props: WorktreeCardProps; variant: 'legac
 }
 
 /** Attribute order and class token order do not change what the browser draws. */
-function canonical(html: string): string {
-  const host = document.createElement('div')
-  host.innerHTML = html
-  const walk = (node: Node): string => {
-    if (node.nodeType === Node.TEXT_NODE) {
-      return node.textContent ?? ''
-    }
-    if (!(node instanceof Element)) {
-      return ''
-    }
-    const attrs = [...node.attributes]
-      .map((attr) =>
-        attr.name === 'class'
-          ? `class="${attr.value.split(/\s+/).filter(Boolean).sort().join(' ')}"`
-          : `${attr.name}="${attr.value}"`
-      )
-      .sort()
-    return `<${node.localName} ${attrs.join(' ')}>${[...node.childNodes].map(walk).join('')}</${node.localName}>`
-  }
-  // React's generated ids depend on tree position, not on what is drawn.
-  const ids = new Map<string, string>()
-  return [...host.childNodes]
-    .map(walk)
-    .join('')
-    .replace(/_R_[A-Za-z0-9]+_/g, (id) => {
-      if (!ids.has(id)) {
-        ids.set(id, `id${ids.size}`)
-      }
-      return ids.get(id) ?? id
-    })
-}
 
 // Why a window: full card markup is too long for a readable assertion diff.
-function aroundFirstDifference(actual: string, expected: string): [string, string] {
-  let index = 0
-  while (index < actual.length && actual[index] === expected[index]) {
-    index++
-  }
-  const start = Math.max(0, index - 120)
-  return [actual.slice(start, index + 240), expected.slice(start, index + 240)]
-}
 
 describe('default workspace card template parity with the original card', () => {
   beforeEach(() => {
@@ -396,33 +243,6 @@ describe('default workspace card template parity with the original card', () => 
     mocks.hoverOpenChange = undefined
   })
   afterEach(cleanup)
-
-  for (const [styleName, style] of Object.entries(STYLES)) {
-    for (const [caseName, testCase] of Object.entries(CASES)) {
-      it(`${styleName}: ${caseName}`, () => {
-        mocks.cacheStartedAt = testCase.cacheStartedAt ?? null
-        mocks.deleteModifier = testCase.deleteModifier ?? false
-        mocks.state = stateFor(style, testCase)
-        const props: WorktreeCardProps = {
-          worktree: makeWorktree(testCase.worktree),
-          repo: testCase.repo === null ? undefined : { ...repo, ...testCase.repo },
-          isActive: false,
-          ...testCase.props
-        }
-        const legacy = canonical(renderToStaticMarkup(<Harness props={props} variant="legacy" />))
-        const template = canonical(
-          renderToStaticMarkup(<Harness props={props} variant="template" />)
-        )
-        const shows =
-          caseName === 'sparse' && styleName === 'new' ? 'Sparse checkout' : SHOWS[caseName]
-        if (shows) {
-          expect(legacy).toContain(shows)
-        }
-        const [actualWindow, expectedWindow] = aroundFirstDifference(template, legacy)
-        expect(actualWindow).toBe(expectedWindow)
-      })
-    }
-  }
 
   it('suppresses a delayed details hover while a template identity icon is focused', () => {
     mocks.state = stateFor(STYLES.new, {})

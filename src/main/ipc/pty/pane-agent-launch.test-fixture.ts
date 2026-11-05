@@ -1,6 +1,6 @@
 import { vi } from 'vitest'
 import { OrcaRuntimeService } from '../../runtime/orca-runtime'
-import { partialRuntimeStore } from '../../runtime/runtime-store-partial-fixture'
+import { partialRuntimeStore } from '../../runtime/orca-runtime-tests/runtime-store-partial-fixture'
 import type { AgentStartupSettings } from '../../../shared/agent-launch/startup/agent-startup-plan-inputs'
 import type { PtySpawnIpcArgs } from './ipc/spawn-types'
 import { createPtyIpcSpawnState } from './ipc/spawn-state'

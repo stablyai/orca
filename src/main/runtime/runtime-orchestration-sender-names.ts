@@ -28,7 +28,7 @@ import {
   readAgentSessionRecordStore
 } from './orchestration/structured-session-lineage'
 import { terminalHostConnectionMatches } from './orchestration/worker-provider-session'
-import type { RuntimeWorktreeAgentSource } from './runtime-worktree-agent-source'
+import type { RuntimeWorktreeAgentSource } from './workspaces/process-listing/runtime-worktree-agent-source'
 
 type RuntimeSenderNameDeps = {
   getDb: () => OrchestrationDb | null

@@ -128,6 +128,11 @@ export class BrowserPasswordLoginTracker {
     }
   }
 
+  /** Page forms matter only while a login that navigated here waits to settle. */
+  wantsPageForms(): boolean {
+    return this.attempt?.stage === 'loaded'
+  }
+
   pageForms(forms: BrowserPasswordFormSummary[]): void {
     const attempt = this.attempt
     if (attempt?.stage === 'loaded' && forms.some((form) => isSameForm(form, attempt.capture))) {

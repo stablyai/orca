@@ -10,9 +10,12 @@ import type {
   RuntimeSyncedTab
 } from '../../shared/runtime-types'
 import type { TabGroupLayoutNode } from '../../shared/tab-types'
-import type { RuntimeAgentRowSnapshot } from './runtime-worktree-agent-rows'
-import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
-import type { TitleDisplayClear } from './runtime-worktree-status-projection'
+import type { RuntimeAgentRowSnapshot } from './workspaces/process-listing/runtime-hook-agent-row-selection'
+import type {
+  RuntimeLeafRecord,
+  RuntimePtyWorktreeRecord
+} from './terminal/records/runtime-terminal-state-records'
+import type { TitleDisplayClear } from './workspaces/process-listing/runtime-worktree-status-projection'
 
 export type RuntimeMobileSessionProjectionHost = {
   tabs: ReadonlyMap<string, RuntimeSyncedTab>
