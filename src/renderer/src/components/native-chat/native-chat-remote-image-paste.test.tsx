@@ -57,9 +57,11 @@ type Api = {
 function Probe({
   acceptsImages,
   owner,
-  onReady
+  onReady,
+  declineText = false
 }: {
   acceptsImages: boolean
+  declineText?: boolean
   owner: () => NativeChatAttachmentOwner
   onReady: (api: Api) => void
 }): React.JSX.Element {
@@ -80,8 +82,8 @@ function Probe({
     setNotice
   })
   const paste = useNativeChatComposerPaste({
-    targetKey: 'remote-scope',
-    attachmentScopeKey: 'remote-scope',
+    targetKey: declineText ? undefined : 'remote-scope',
+    attachmentScopeKey: declineText ? undefined : 'remote-scope',
     agent: 'claude',
     disabled: false,
     caret,
@@ -93,7 +95,11 @@ function Probe({
     resolvePendingImageAttachment: attachments.resolvePendingImageAttachment,
     revealPendingImageAttachment: attachments.revealPendingImageAttachment,
     dropPendingImageAttachment: attachments.dropPendingImageAttachment,
+    removeImageAttachment: attachments.removeImageAttachment,
     insertTypedText: (text) => {
+      if (declineText) {
+        return false
+      }
       setDraft((previous) => previous + text)
       return true
     },
@@ -110,14 +116,17 @@ let root: Root | null = null
 
 async function render(
   owner: () => NativeChatAttachmentOwner,
-  acceptsImages = true
+  acceptsImages = true,
+  declineText = false
 ): Promise<() => Api> {
   const container = document.createElement('div')
   document.body.append(container)
   let api: Api | null = null
   root = createRoot(container)
   await act(async () => {
-    root?.render(createElement(Probe, { acceptsImages, owner, onReady: (next) => (api = next) }))
+    root?.render(
+      createElement(Probe, { acceptsImages, owner, declineText, onReady: (next) => (api = next) })
+    )
   })
   return () => {
     if (!api) {
@@ -264,4 +273,15 @@ it('preserves an explicitly empty image payload so the save bridge rejects it', 
     runtimeEnvironmentId: 'env-1',
     imageDataUrl: ''
   })
+})
+
+it('rolls back a saved commented image if its text cannot enter the draft', async () => {
+  const latest = await render(() => SERVER_OWNER, true, true)
+  let attached = true
+  await act(async () => {
+    attached = await latest().paste.attachCommentedImage('data:image/png;base64,cG5n', 'Feedback')
+  })
+  expect(attached).toBe(false)
+  expect(latest().attachments.imageAttachments).toEqual([])
+  expect(latest().draft).toBe('')
 })

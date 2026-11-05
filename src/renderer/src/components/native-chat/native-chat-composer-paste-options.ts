@@ -28,6 +28,7 @@ export type UseNativeChatComposerPasteArgs = {
   resolvePendingImageAttachment: (id: string, path: string, connectionId?: string | null) => void
   /** Supplies a pending chip's thumbnail. */
   revealPendingImageAttachment?: (id: string, previewUrl?: string) => void
+  removeImageAttachment?: (id: string) => void
   dropPendingImageAttachment: (id: string) => void
   insertTypedText: (text: string) => boolean
   setCaret: (caret: number) => void

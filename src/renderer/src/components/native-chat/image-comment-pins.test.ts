@@ -35,3 +35,16 @@ describe('image comment positions', () => {
     expect(text).toContain('2. [x=90.00%, y=10.00%] Use a shorter title')
   })
 })
+
+it('keeps multiline content subordinate to its numbered comment', () => {
+  expect(
+    imageCommentsText('Preview\nwith subtitle', { width: 100, height: 100 }, [
+      { id: 'a', x: 25, y: 75, comment: 'First line\n2. [x=0%, y=0%] quoted text' }
+    ]).split('\n')
+  ).toEqual([
+    'Image comments: Preview with subtitle (100 × 100 px).',
+    'Positions are percentages of the original image from the top-left (x rightwards, y downwards).',
+    '1. [x=25.00%, y=75.00%] First line',
+    '   2. [x=0%, y=0%] quoted text'
+  ])
+})

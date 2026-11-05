@@ -37,6 +37,7 @@ export function useNativeChatComposerPaste({
   resolvePendingImageAttachment,
   revealPendingImageAttachment,
   dropPendingImageAttachment,
+  removeImageAttachment,
   insertTypedText,
   setCaret,
   setNotice
@@ -269,7 +270,8 @@ export function useNativeChatComposerPaste({
     showPasteUnavailable,
     startImageChip,
     saveClipboardImage,
-    insertCapturedText
+    insertCapturedText,
+    removeImageAttachment
   })
 
   return { handlePaste, pasteFromClipboard, attachCommentedImage }

@@ -9,7 +9,8 @@ export function useNativeChatCommentedImageAttachment({
   showPasteUnavailable,
   startImageChip,
   saveClipboardImage,
-  insertCapturedText
+  insertCapturedText,
+  removeImageAttachment
 }: {
   canPaste: () => boolean
   resolveAttachmentOwner: () => NativeChatAttachmentOwner
@@ -22,11 +23,12 @@ export function useNativeChatCommentedImageAttachment({
     ready?: () => void,
     dataUrl?: string
   ) => Promise<boolean>
-  insertCapturedText: (text: string) => void
+  insertCapturedText: (text: string) => boolean
+  removeImageAttachment?: (id: string) => void
 }): (dataUrl: string, text: string) => Promise<boolean> {
   return useCallback(
     async (dataUrl: string, text: string): Promise<boolean> => {
-      if (!canPaste()) {
+      if (!canPaste() || !removeImageAttachment) {
         return false
       }
       const owner = resolveAttachmentOwner()
@@ -46,7 +48,10 @@ export function useNativeChatCommentedImageAttachment({
       if (!saved) {
         return false
       }
-      insertCapturedText(`\n\n${text}\n`)
+      if (!insertCapturedText(`\n\n${text}\n`)) {
+        removeImageAttachment(id)
+        return false
+      }
       return true
     },
     [
@@ -55,7 +60,8 @@ export function useNativeChatCommentedImageAttachment({
       showPasteUnavailable,
       startImageChip,
       saveClipboardImage,
-      insertCapturedText
+      insertCapturedText,
+      removeImageAttachment
     ]
   )
 }

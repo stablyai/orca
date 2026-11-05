@@ -199,6 +199,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       // Settles into the scope cache, which outlives a composer a prompt card unmounted.
       resolvePendingImageAttachment: attachments.pendingChips.resolve,
       revealPendingImageAttachment: attachments.revealPendingImageAttachment,
+      removeImageAttachment: attachments.removeImageAttachment,
       dropPendingImageAttachment: attachments.dropPendingImageAttachment,
       pastedTextEditor: structuredTransport ? attachments.scopeEditor : null,
       setNotice
