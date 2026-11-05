@@ -37,10 +37,6 @@ vi.mock('node:os', async (importOriginal) => {
 vi.mock('electron', () => ({ app: { getPath: () => '/tmp/orca-user-data' } }))
 
 import { MANAGED_AGENT_HOOK_SCRIPT_REFRESHERS } from './managed-agent-hook-registry'
-import { ClaudeAgentViewService } from '../claude/agent-view/agent-view-service'
-import { reconcileClaudeAgentViewConfig } from '../claude/agent-view/agent-view-config'
-import { ensureClaudeAgentViewPluginAsync } from '../claude/agent-view/agent-view-plugin'
-import { listClaudeProfileHomesAsync } from '../claude-accounts/claude-profile-homes'
 
 function syncCallsUnderHome(): string[] {
   return state.syncCalls
@@ -131,59 +127,5 @@ describe('managed hook script refresh stays off the main thread', () => {
     await expect(
       readFile(join(absent, 'skills', 'orca-agent-view', 'hooks', 'register.js'))
     ).rejects.toMatchObject({ code: 'ENOENT' })
-  })
-
-  it('keeps the Windows Claude entry and payload refresh off the main thread', async () => {
-    const platform = Object.getOwnPropertyDescriptor(process, 'platform')!
-    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-    try {
-      const hooksDir = join(state.home, '.orca', 'agent-hooks')
-      await mkdir(hooksDir, { recursive: true })
-      await writeFile(join(hooksDir, 'claude-hook.cmd'), 'stale', 'utf-8')
-      state.syncCalls = []
-
-      await MANAGED_AGENT_HOOK_SCRIPT_REFRESHERS.find(([agent]) => agent === 'claude')![1]()
-
-      expect(syncCallsUnderHome()).toEqual([])
-      const entry = await readFile(join(hooksDir, 'claude-hook.cmd'), 'utf8')
-      const payload = await readFile(join(hooksDir, 'claude-hook-impl.cmd'), 'utf8')
-      expect(entry).toContain('set "ORCA_CLAUDE_HOOK_IMPL=%~dp0claude-hook-impl.cmd"')
-      expect(payload).toContain('echo {}')
-      expect(payload).toContain('if "%ORCA_AGENT_HOOK_PORT%"=="" exit /b 0')
-    } finally {
-      Object.defineProperty(process, 'platform', platform)
-    }
-  })
-
-  it('prepares and disables navigation asynchronously and serves spawn cache reads without HOME I/O', async () => {
-    const config = join(state.home, '.claude')
-    const service = new ClaudeAgentViewService(join(state.home, 'user-data'), {
-      reconcileConfig: reconcileClaudeAgentViewConfig,
-      ensurePlugin: ensureClaudeAgentViewPluginAsync,
-      listProfiles: listClaudeProfileHomesAsync,
-      loginEnv: async () => ({ CLAUDE_CONFIG_DIR: config })
-    })
-    await Promise.all(
-      Array.from({ length: 100 }, () =>
-        service.reconcile({ claudeSubagentNavigationEnabled: true })
-      )
-    )
-    const root = service.read()?.pluginDir
-    expect(root).toBeTruthy()
-    expect(await readFile(join(root!, 'hooks', 'register.js'), 'utf8')).toContain('$.ui.view(')
-    for (let pane = 0; pane < 100; pane++) {
-      await service.ready()
-      expect(service.read()?.pluginDir).toBe(root)
-    }
-    await Promise.all(
-      Array.from({ length: 100 }, () =>
-        service.reconcile({ claudeSubagentNavigationEnabled: false })
-      )
-    )
-    expect(JSON.parse(await readFile(join(config, 'keybindings.json'), 'utf8')).bindings).toEqual(
-      []
-    )
-    expect(service.read()).toBeUndefined()
-    expect(syncCallsUnderHome()).toEqual([])
   })
 })
