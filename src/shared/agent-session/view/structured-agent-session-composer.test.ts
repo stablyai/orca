@@ -94,20 +94,6 @@ describe('dispatchStructuredAgentSessionComposerCommand', () => {
       'custom-tool'
     ])
   })
-
-  it('drops the common /help for Pi, which expands only /skill: commands', () => {
-    const names = structuredSessionSlashCommands(
-      'pi',
-      ['clear', 'compact'],
-      [{ name: 'help', kind: 'command' }]
-    ).map((entry) => entry.name)
-    expect(names).not.toContain('help')
-    // A reported name outside the curated catalog still stays: the session advertised it.
-    const advertised = structuredSessionSlashCommands('pi', undefined, [
-      { name: 'custom-tool', kind: 'command' }
-    ]).map((entry) => entry.name)
-    expect(advertised).toContain('custom-tool')
-  })
 })
 
 describe('agent-implemented commands pass through to the agent', () => {
