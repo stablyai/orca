@@ -1,8 +1,4 @@
-import type { TerminalLaunchResult } from '../../../../shared/agent-session-resume'
-import { recordPtySurface, spawnSurfaceClaimSequence } from '../../pty-recorded-surface-topology'
-import { resolveLaunchCommandPaneAgent } from '../../runtime-agent-launch-resolution'
 import type { RuntimePtyWorktreeRecord } from '../../runtime-terminal-state-records'
-import { recordTerminalLaunchMetadata } from './terminal-launch-result'
 
 type CreatedTerminalTitleHost = {
   getSessionCustomTitle(sessionId: string): string | null
@@ -16,26 +12,19 @@ type CreatedTerminalTitleHost = {
 
 export type CreatedTerminalPtyHost = CreatedTerminalTitleHost & {
   getOrCreatePtyWorktreeRecord(ptyId: string): RuntimePtyWorktreeRecord | null
-  rememberSavedTerminalLaunchResult(ptyId: string, result: TerminalLaunchResult): void
 }
 
-type CreatedLaunch = Parameters<typeof recordTerminalLaunchMetadata>[2]
-type CreatedSpawnResult = Parameters<typeof recordTerminalLaunchMetadata>[1]
-
-/** Bind the spawned PTY to this runtime's title, launch facts, and surface claim. */
+/** Bind the spawned PTY and keep a resume custom title. Launch facts stay with the caller. */
 export function finishCreatedTerminalPty(
   host: CreatedTerminalPtyHost,
-  result: CreatedSpawnResult,
+  result: { id: string },
   presentation: string | undefined,
-  launch: CreatedLaunch,
+  launch: { effectiveTitle: string | null | undefined; adoptedStablePane: boolean },
   launchTitleAt: { sequence: number; epochMs: number },
   tabId: string,
   launchOpts: {
-    command?: string | null
     resumeProviderSession?: { id: string } | null
-  },
-  paneKey: string,
-  graphSequence: number
+  }
 ): RuntimePtyWorktreeRecord | null {
   const pty = host.getOrCreatePtyWorktreeRecord(result.id)
   if (!pty) {
@@ -43,14 +32,6 @@ export function finishCreatedTerminalPty(
   }
   pty.runtimeSessionOwned = true
   applyCreatedTerminalManualTitle(host, pty, presentation, launch, launchTitleAt, tabId, launchOpts)
-  recordTerminalLaunchMetadata(pty, result, launch)
-  if (!launch.adoptedStablePane) {
-    pty.launchCommandAgent = result.agentResumeRefused
-      ? null
-      : resolveLaunchCommandPaneAgent(launchOpts.command)
-    host.rememberSavedTerminalLaunchResult(result.id, result)
-  }
-  recordPtySurface(pty, tabId, paneKey, spawnSurfaceClaimSequence(graphSequence))
   return pty
 }
 
