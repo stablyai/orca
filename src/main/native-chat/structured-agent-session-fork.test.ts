@@ -5,10 +5,13 @@ import { PI_CWD_BUCKET_LAYOUT } from '../ai-vault/session-cwd-bucket-layouts'
 import { handleStructuredAgentSessionCreate } from '../runtime/rpc/methods/structured-agent-session-create-handler'
 import type { StructuredAgentSessionAdapter } from './agent-session-wire/structured-agent-session-adapter'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { mkdir, writeFile } from 'node:fs/promises'
+import { appendFile, mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { agentSessionRecordFixture } from './agent-session-record-test-fixture'
-import { codexProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import {
+  claudeProviderHandle,
+  codexProviderHandle
+} from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentJournalSnapshot } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { prepareStructuredAgentSessionFork } from './structured-agent-session-fork'
@@ -21,6 +24,11 @@ import { structuredAgentSessionCreateParams } from '../../shared/agent-session/s
 import { prepareStructuredAgentSessionCreateForWorktree } from '../runtime/rpc/methods/structured-agent-session-create'
 import { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { setStructuredAgentSessionHost } from './agent-session-wire/structured-agent-session-registry'
+import {
+  hostTestMessage,
+  hostTestOperationId
+} from './agent-session-wire/structured-agent-session-host-test-data'
+import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 
 const SOURCE = '019e6b26-18e2-7103-b7a0-7ba6bb071123'
 const COPY = '019e6b26-18e2-7103-b7a0-7ba6bb071124'
@@ -34,13 +42,16 @@ afterEach(async () => {
   vi.restoreAllMocks()
 })
 
-function source() {
+function source(agent: 'claude' | 'codex' = 'codex') {
   let admissions = 0
   let capability: 'checkpoint' | 'tip' = 'checkpoint'
   const record = agentSessionRecordFixture({
     sessionId: 'source-chat',
-    provider: 'codex',
-    accountHome: { variable: 'CODEX_HOME', path: join(rig.root, 'source-account') },
+    provider: agent,
+    accountHome: {
+      variable: agent === 'claude' ? 'CLAUDE_CONFIG_DIR' : 'CODEX_HOME',
+      path: join(rig.root, 'source-account')
+    },
     options: { model: 'retired-model', effort: 'high', fastMode: 'false' },
     permissionMode: 'accept-edits',
     launchArgs: ['--no-daemon'],
@@ -51,7 +62,8 @@ function source() {
         origin: 'created',
         mintedAtFence: 1,
         observedAt: 1,
-        handle: codexProviderHandle(SOURCE)
+        handle:
+          agent === 'claude' ? claudeProviderHandle(SOURCE, 'answer') : codexProviderHandle(SOURCE)
       }
     ]
   })
@@ -112,9 +124,48 @@ function source() {
     async (
       _input: Parameters<NonNullable<StructuredAgentSessionAdapter['copyConversation']>>[0]
     ): ReturnType<NonNullable<StructuredAgentSessionAdapter['copyConversation']>> => {
-      const dir = join(rig.root, 'source-account', 'sessions', '2026', '11', '03')
+      const dir =
+        agent === 'claude'
+          ? join(rig.root, 'source-account', 'projects', 'workspace')
+          : join(rig.root, 'source-account', 'sessions', '2026', '11', '03')
       await mkdir(dir, { recursive: true })
-      const filePath = join(dir, `rollout-2026-11-03T19-00-00-${COPY}.jsonl`)
+      const filePath = join(
+        dir,
+        agent === 'claude' ? `${COPY}.jsonl` : `rollout-2026-11-03T19-00-00-${COPY}.jsonl`
+      )
+      if (agent === 'claude') {
+        await writeFile(
+          filePath,
+          `${[
+            {
+              type: 'user',
+              uuid: 'prompt',
+              parentUuid: null,
+              sessionId: COPY,
+              timestamp: '2026-11-03T19:00:00.000Z',
+              cwd: rig.root,
+              message: { role: 'user', content: 'Remember the nonce 57319' }
+            },
+            {
+              type: 'assistant',
+              uuid: 'answer',
+              parentUuid: 'prompt',
+              sessionId: COPY,
+              timestamp: '2026-11-03T19:00:01.000Z',
+              message: {
+                id: 'msg_answer',
+                role: 'assistant',
+                model: 'claude-opus-5-5',
+                content: [{ type: 'text', text: 'Remembered' }],
+                stop_reason: 'end_turn'
+              }
+            }
+          ]
+            .map((row) => JSON.stringify(row))
+            .join('\n')}\n`
+        )
+        return { sessionId: COPY, filePath }
+      }
       await writeFile(
         filePath,
         `${[
@@ -151,8 +202,8 @@ function source() {
     journalSnapshot: async () => snapshot
   } as unknown as StructuredAgentSessionHost
   const intent = structuredAgentSessionCreateParams({
-    sessionId: 'codex_independent_child',
-    agent: 'codex',
+    sessionId: `${agent}_independent_child`,
+    agent,
     worktree: 'id:workspace-1',
     forkFrom: { sessionId: record.sessionId, throughItemId: 'selected-response' },
     now: rig.clock.now,
@@ -163,7 +214,7 @@ function source() {
       host,
       sessionId: record.sessionId,
       throughItemId: 'selected-response',
-      agent: 'codex',
+      agent,
       location: record.location,
       envelope: intent.envelope
     })
@@ -250,6 +301,96 @@ it('copies the selected retained root, founds its relationship and title, and re
   })
   expect(test.copy).toHaveBeenCalledOnce()
 })
+
+it.each(['claude', 'codex'] as const)(
+  'keeps the %s source selection through native import, options readback and reload',
+  async (agent) => {
+    const test = source(agent)
+    const selected = {
+      model: agent === 'claude' ? 'opus[1m]' : 'gpt-6.1-sol',
+      effort: 'medium',
+      fastMode: 'false'
+    }
+    test.record.options = selected
+    if (agent === 'codex') {
+      const copy = test.copy.getMockImplementation()!
+      test.copy.mockImplementationOnce(async (input) => {
+        const result = await copy(input)
+        await appendFile(
+          result.filePath!,
+          `${JSON.stringify({
+            type: 'turn_context',
+            timestamp: '2026-11-03T19:00:01.000Z',
+            payload: {
+              turn_id: 'completed-turn',
+              cwd: rig.root,
+              model: 'gpt-6.1-sol',
+              effort: 'low'
+            }
+          })}\n`
+        )
+        return result
+      })
+    }
+    const params = await test.prepare()
+    expect(await rig.host.create({ callerKey: 'device-1' }, params)).toMatchObject({ ok: true })
+    const sessionId = test.intent.envelope.sessionId
+    expect(rig.store.getRecord(sessionId)?.options).toEqual(selected)
+    expect((await rig.host.readOptions(sessionId)).current).toMatchObject({
+      ...selected,
+      fastMode: false
+    })
+    await rig.restart()
+    expect(rig.store.getRecord(sessionId)?.options).toEqual(selected)
+    expect((await rig.host.readOptions(sessionId)).current).toMatchObject({
+      ...selected,
+      fastMode: false
+    })
+    rig.adapter.acquire.mockImplementation(async (input) => ({
+      acquisitionGeneration: 'fork-generation',
+      process: {
+        hostId: 'local',
+        pid: 4242,
+        processStartTimeMs: rig.clock.now,
+        spawnToken: input.spawnToken
+      },
+      link: {
+        linkId: 'fork-resume',
+        origin: 'resumed',
+        mintedAtFence: input.fence,
+        observedAt: rig.clock.now,
+        handle:
+          agent === 'claude' ? claudeProviderHandle(COPY, 'answer') : codexProviderHandle(COPY)
+      }
+    }))
+    rig.adapter.dispatch.mockResolvedValue({ state: 'unknown', reason: 'test' })
+    const body = hostTestMessage('Continue with the same settings')
+    expect(
+      await rig.host.send(
+        { callerKey: 'device-1' },
+        {
+          body,
+          envelope: {
+            sessionId,
+            clientOperationId: hostTestOperationId(),
+            expectedRuntimeFence: 1,
+            payloadFingerprint: computeAgentSessionPayloadFingerprint({
+              method: 'agentSession.send',
+              sessionId,
+              fields: { body }
+            })
+          }
+        }
+      )
+    ).toMatchObject({ ok: true })
+    await vi.waitFor(() =>
+      expect(rig.adapter.dispatch).toHaveBeenCalledWith(
+        expect.objectContaining({ sessionId, executionOptions: selected })
+      )
+    )
+    expect(rig.adapter.acquire).toHaveBeenCalledWith(expect.objectContaining({ options: selected }))
+  }
+)
 
 it('requires a post-clear completed context and leaves the source untouched on a copy failure', async () => {
   const test = source()
