@@ -230,7 +230,16 @@ describe('terminal worker turn stops', () => {
       subject: 'check again',
       runId: ctx.run.id
     })
-    // Mail still on its way belongs to the next turn, not to a stop seen before it arrived.
+    // A helper's report is not the coordinator asking again.
+    const helperReport = ctx.db.insertMessage({
+      from: 'term_helper',
+      to: `dispatch:${ctx.dispatch.id}`,
+      subject: 'helper done',
+      type: 'worker_done',
+      runId: ctx.run.id
+    })
+    ctx.db.markAsRead([helperReport.id])
+    // Mail the worker has not taken yet belongs to its next turn, not to a stop seen before it arrived.
     current.row = hookRow({ stateStartedAt: 500 })
     stops.observe(moved('working', 'done'))
     await settle()
@@ -238,6 +247,12 @@ describe('terminal worker turn stops', () => {
 
     ctx.db.markAsDelivered([mail.id], `dispatch:${ctx.dispatch.id}`)
     current.row = hookRow({ stateStartedAt: 600 })
+    stops.observe(moved('working', 'done'))
+    await settle()
+    expect(ctx.mail()).toHaveLength(1)
+
+    ctx.db.markAsRead([mail.id])
+    current.row = hookRow({ stateStartedAt: 700 })
     stops.observe(moved('working', 'done'))
     await settle()
     expect(ctx.mail()).toHaveLength(2)
