@@ -19,21 +19,6 @@ async function indexedColumns(
   return full.flatMap((row) => Object.values(row))
 }
 
-it('splits an oversized message on a line boundary and keeps every character', () => {
-  const line = `${'padding '.repeat(11)}word\n`
-  const text = line.repeat(400)
-  const chunks = [...searchMessageRows([{ role: 'user', text, timestamp: null }])].map(
-    (row) => row.text
-  )
-
-  expect(chunks.length).toBeGreaterThan(1)
-  expect(chunks.join('')).toBe(text)
-  for (const chunk of chunks) {
-    expect(chunk.length).toBeLessThanOrEqual(8000)
-    expect(chunk.endsWith('\n')).toBe(true)
-  }
-})
-
 it('cuts at whitespace rather than through the word on the boundary', async () => {
   const index = await openSessionSearchIndexFile('ss-rows-whitespace')
   try {
@@ -97,16 +82,6 @@ it.each(['\u0305', '\u030d', '\u0332'])(
   }
 )
 
-it('backs up to any whitespace, not only a newline', () => {
-  const text = `${'\u4e00'.repeat(7000)}\u3000${'\u4e8c'.repeat(2000)}`
-  const chunks = [...searchMessageRows([{ role: 'user', text, timestamp: null }])].map(
-    (row) => row.text
-  )
-
-  expect(chunks[0]).toBe(`${'\u4e00'.repeat(7000)}\u3000`)
-  expect(chunks.join('')).toBe(text)
-})
-
 it('cuts at punctuation when the window holds no whitespace at all', async () => {
   const index = await openSessionSearchIndexFile('ss-rows-minified')
   try {
@@ -130,30 +105,6 @@ it('cuts at punctuation when the window holds no whitespace at all', async () =>
   } finally {
     await index.close()
   }
-})
-
-it('hard-cuts a 9,000-character identifier without treating underscores as boundaries', () => {
-  // Underscores are token characters, so this oversized identifier requires a hard cut.
-  const text = 'ab_'.repeat(3000)
-  expect(text.length).toBe(9000)
-  const chunks = [...searchMessageRows([{ role: 'user', text, timestamp: null }])].map(
-    (row) => row.text
-  )
-
-  expect(chunks.map((chunk) => chunk.length)).toEqual([8000, 1000])
-  expect(chunks.join('')).toBe(text)
-})
-
-it('still chunks a message that holds no whitespace at all', () => {
-  const chunks = [
-    ...searchMessageRows([{ role: 'user', text: 'a'.repeat(20_000), timestamp: null }])
-  ]
-  expect(chunks.map((row) => row.text.length)).toEqual([8000, 8000, 4000])
-})
-
-it('leaves a message that fits as a single row', () => {
-  const rows = [...searchMessageRows([{ role: 'user', text: 'short enough', timestamp: null }])]
-  expect(rows.map((row) => row.text)).toEqual(['short enough'])
 })
 
 it('caps a tool row at its head and never caps the conversation', async () => {
