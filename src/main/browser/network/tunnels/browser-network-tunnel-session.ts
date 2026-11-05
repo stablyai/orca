@@ -54,7 +54,11 @@ export class BrowserNetworkTunnelSession {
     this.frameReceiver = {
       tunnelGeneration: options.tunnelGeneration,
       frameSender: this.frameSender,
-      connectionCredit: new BrowserNetworkTunnelConnectionCredit(this.flowControl, 'session'),
+      connectionCredit: new BrowserNetworkTunnelConnectionCredit(
+        this.flowControl,
+        'session',
+        options.now
+      ),
       dispatch: (frame) => this.handleFrame(frame),
       fail: () => this.close()
     }
@@ -165,11 +169,7 @@ export class BrowserNetworkTunnelSession {
         const credit =
           bytes + this.frameReceiver.connectionCredit.replenishReceiveWindow(stream, bytes, drained)
         stream.receiveCredit += credit
-        this.frameSender.send(
-          BrowserNetworkTunnelOpcode.WindowUpdate,
-          stream.id,
-          encodeBrowserNetworkTunnelWindowUpdate(credit)
-        )
+        this.frameSender.sendWindowUpdate(stream.id, credit)
       },
       (bytes) => this.resourceBudget.claimRetainedBytes(bytes)
     )

@@ -1,3 +1,4 @@
+import { performance } from 'node:perf_hooks'
 import {
   BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES,
   type BrowserNetworkTunnelFlowControl
@@ -5,13 +6,30 @@ import {
 
 type GrowableReceiveStream = { id: number; windowBytes: number; receiveWindowBytes: number }
 
+/** A drained stream that has received nothing for this long is idle (a kept-alive socket). */
+export const BROWSER_NETWORK_TUNNEL_IDLE_STREAM_MS = 1_000
+
+type StreamGrowth = {
+  // Window growth past the legacy window.
+  grownBytes: number
+  charged: boolean
+  drained: boolean
+  lastArrivalAt: number
+}
+
 /**
  * Connection-level credit shared by every stream of one tunnel. In flight, it bounds the bytes a
  * sender has queued toward its peer; receivers acknowledge on receipt, not consumption, so a
- * stalled reader cannot starve other streams. At rest, it bounds how far streams holding unread
- * data may grow their receive windows past the legacy window. Idle streams (keep-alive sockets)
- * are not charged, so they never cost a fresh stream its speed; an idle grown stream that wakes
- * and stalls can exceed the pool by its own growth, which the memory budgets fail per stream.
+ * stalled reader cannot starve other streams. At rest, it bounds how far streams may grow their
+ * receive windows past the legacy window: growth stays charged to the pool while a stream holds
+ * it, so streams that stall together pin at most the pool.
+ *
+ * Only genuinely idle streams (drained, nothing received for BROWSER_NETWORK_TUNNEL_IDLE_STREAM_MS)
+ * give their charge up, and only when another stream needs it to grow, so kept-alive sockets never
+ * cost a fresh stream its speed. Granted credit cannot be revoked, so an idle stream that wakes is
+ * charged again even past the pool; while the pool is overcommitted, consuming streams withhold
+ * credit to shrink back toward the legacy window. Tradeoff: idle streams that wake and stall before
+ * consuming can exceed the pool by the sum of their growth, which the memory budgets fail per stream.
  */
 export class BrowserNetworkTunnelConnectionCredit {
   private sendCredit: number
@@ -19,13 +37,16 @@ export class BrowserNetworkTunnelConnectionCredit {
   private unacknowledgedBytes = 0
   private readonly acknowledgeThreshold: number
   private readonly sendWaiters = new Map<number, () => void>()
+  // Pool left for growth; negative while woken idle streams overcommit it.
   private receiveGrowthBytes: number
-  // Window growth past the legacy window, per stream; charged to the pool only while data is unread.
-  private readonly grownBytes = new Map<number, number>()
-  private readonly chargedStreams = new Set<number>()
+  private readonly growthByStream = new Map<number, StreamGrowth>()
   private readonly window: { sendBytes: number; receiveBytes: number } | null
 
-  constructor(flowControl: BrowserNetworkTunnelFlowControl, side: 'client' | 'session') {
+  constructor(
+    flowControl: BrowserNetworkTunnelFlowControl,
+    side: 'client' | 'session',
+    private readonly now: () => number = () => performance.now()
+  ) {
     const window = flowControl.connectionWindow
     this.window = !window
       ? null
@@ -40,33 +61,43 @@ export class BrowserNetworkTunnelConnectionCredit {
   }
 
   /**
-   * Grows a stream's receive window by up to the bytes its reader just consumed (doubling per round
-   * trip), then stops charging the stream once its reader has drained everything it received.
+   * Window change to add to the consumed bytes the stream returns: growth of up to the bytes its
+   * reader just consumed (doubling per round trip), or a negative shrink while the pool is
+   * overcommitted. The result never exceeds consumedBytes in magnitude.
    */
   replenishReceiveWindow(
     stream: GrowableReceiveStream,
     consumedBytes: number,
     drained: boolean
   ): number {
-    const growth = Math.max(
-      0,
-      Math.min(
-        consumedBytes,
-        this.receiveGrowthBytes,
-        stream.windowBytes - stream.receiveWindowBytes
-      )
-    )
-    if (growth > 0) {
-      this.chargeReceiveGrowth(stream.id)
-      this.receiveGrowthBytes -= growth
-      this.grownBytes.set(stream.id, (this.grownBytes.get(stream.id) ?? 0) + growth)
-      this.chargedStreams.add(stream.id)
-      stream.receiveWindowBytes += growth
+    if (!this.window) {
+      return 0
     }
-    if (drained) {
-      this.releaseReceiveGrowth(stream.id)
+    const growth = this.streamGrowth(stream.id)
+    growth.drained = drained
+    if (this.receiveGrowthBytes < 0) {
+      // Idle streams give the pool back before an active stream gives up its window.
+      this.releaseIdleGrowth(stream.id)
     }
-    return growth
+    if (this.receiveGrowthBytes < 0 && growth.charged && growth.grownBytes > 0) {
+      const shrink = Math.min(-this.receiveGrowthBytes, growth.grownBytes, consumedBytes)
+      growth.grownBytes -= shrink
+      this.receiveGrowthBytes += shrink
+      stream.receiveWindowBytes -= shrink
+      return -shrink
+    }
+    const wanted = Math.min(consumedBytes, stream.windowBytes - stream.receiveWindowBytes)
+    if (wanted > this.receiveGrowthBytes) {
+      this.releaseIdleGrowth(stream.id)
+    }
+    const grown = Math.max(0, Math.min(wanted, this.receiveGrowthBytes))
+    if (grown > 0) {
+      this.charge(growth)
+      growth.grownBytes += grown
+      this.receiveGrowthBytes -= grown
+      stream.receiveWindowBytes += grown
+    }
+    return grown
   }
 
   sendableBytes(bytes: number): number {
@@ -86,8 +117,11 @@ export class BrowserNetworkTunnelConnectionCredit {
   /** Drops a retired stream's send wait and returns its grown receive window to the connection. */
   forget(stream: GrowableReceiveStream): void {
     this.sendWaiters.delete(stream.id)
-    this.releaseReceiveGrowth(stream.id)
-    this.grownBytes.delete(stream.id)
+    const growth = this.growthByStream.get(stream.id)
+    if (growth?.charged) {
+      this.receiveGrowthBytes += growth.grownBytes
+    }
+    this.growthByStream.delete(stream.id)
     stream.receiveWindowBytes = BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES
   }
 
@@ -117,8 +151,13 @@ export class BrowserNetworkTunnelConnectionCredit {
     if (bytes > this.receiveCredit) {
       return null
     }
-    // An idle grown stream that receives again is charged even past the pool; its window caps it.
-    this.chargeReceiveGrowth(streamId)
+    const growth = this.growthByStream.get(streamId)
+    if (growth) {
+      growth.lastArrivalAt = this.now()
+      growth.drained = false
+      // A woken idle stream already holds its grown credit, so it is charged even past the pool.
+      this.charge(growth)
+    }
     this.receiveCredit -= bytes
     this.unacknowledgedBytes += bytes
     if (this.unacknowledgedBytes < this.acknowledgeThreshold) {
@@ -130,17 +169,35 @@ export class BrowserNetworkTunnelConnectionCredit {
     return acknowledged
   }
 
-  private chargeReceiveGrowth(streamId: number): void {
-    const grown = this.grownBytes.get(streamId)
-    if (grown !== undefined && !this.chargedStreams.has(streamId)) {
-      this.chargedStreams.add(streamId)
-      this.receiveGrowthBytes -= grown
+  private streamGrowth(streamId: number): StreamGrowth {
+    let growth = this.growthByStream.get(streamId)
+    if (!growth) {
+      growth = { grownBytes: 0, charged: false, drained: false, lastArrivalAt: this.now() }
+      this.growthByStream.set(streamId, growth)
+    }
+    return growth
+  }
+
+  private charge(growth: StreamGrowth): void {
+    if (!growth.charged) {
+      growth.charged = true
+      this.receiveGrowthBytes -= growth.grownBytes
     }
   }
 
-  private releaseReceiveGrowth(streamId: number): void {
-    if (this.chargedStreams.delete(streamId)) {
-      this.receiveGrowthBytes += this.grownBytes.get(streamId) ?? 0
+  private releaseIdleGrowth(exceptStreamId: number): void {
+    const idleBefore = this.now() - BROWSER_NETWORK_TUNNEL_IDLE_STREAM_MS
+    for (const [streamId, growth] of this.growthByStream) {
+      if (
+        streamId !== exceptStreamId &&
+        growth.charged &&
+        growth.drained &&
+        growth.grownBytes > 0 &&
+        growth.lastArrivalAt <= idleBefore
+      ) {
+        growth.charged = false
+        this.receiveGrowthBytes += growth.grownBytes
+      }
     }
   }
 }

@@ -12,7 +12,8 @@ export function createBrowserNetworkTunnelResourceBudget(
   return new BrowserNetworkTunnelResourceBudget(
     options.now,
     options.claimAggregateRetainedBytes,
-    // Grown upload windows can retain up to one connection window beyond the legacy headroom.
+    // Upload windows grow only while charged to the connection pool, so growth retains at most one
+    // connection window beyond the legacy headroom (woken idle streams aside; see the credit class).
     MAX_RETAINED_BYTES + (options.flowControl?.connectionWindow?.toSessionBytes ?? 0)
   )
 }

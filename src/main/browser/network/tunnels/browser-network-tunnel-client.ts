@@ -1,7 +1,6 @@
 import {
   BrowserNetworkTunnelOpcode,
   encodeBrowserNetworkTunnelOpen,
-  encodeBrowserNetworkTunnelWindowUpdate,
   type BrowserNetworkTunnelFrame,
   type BrowserNetworkTunnelOpen
 } from '../../../../shared/browser-network-tunnel-protocol'
@@ -43,6 +42,7 @@ type BrowserNetworkTunnelClientOptions = {
   maxStreamIds?: number
   flowControl?: BrowserNetworkTunnelFlowControl
   onClosed?: (error: Error) => void
+  now?: () => number
 }
 
 export class BrowserNetworkTunnelClient {
@@ -78,7 +78,11 @@ export class BrowserNetworkTunnelClient {
     this.frameReceiver = {
       tunnelGeneration: options.tunnelGeneration,
       frameSender: this.frameSender,
-      connectionCredit: new BrowserNetworkTunnelConnectionCredit(this.flowControl, 'client'),
+      connectionCredit: new BrowserNetworkTunnelConnectionCredit(
+        this.flowControl,
+        'client',
+        options.now
+      ),
       dispatch: (frame) => this.dispatchFrame(frame),
       fail: (error) => this.close(error)
     }
@@ -249,8 +253,7 @@ export class BrowserNetworkTunnelClient {
       this.close(new Error('Browser tunnel receive credit overflow'))
       return
     }
-    const update = encodeBrowserNetworkTunnelWindowUpdate(credit)
-    if (!this.frameSender.send(BrowserNetworkTunnelOpcode.WindowUpdate, stream.id, update)) {
+    if (!this.frameSender.sendWindowUpdate(stream.id, credit)) {
       this.close(new Error('Browser tunnel transport rejected receive credit'))
     }
   }

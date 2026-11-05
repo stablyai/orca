@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { BrowserNetworkTunnelClient } from './browser-network-tunnel-client'
 import { BrowserNetworkTunnelOutboundMemoryBudgetRegistry } from './browser-network-tunnel-outbound-memory-budget'
 import { BrowserNetworkTunnelSession } from './browser-network-tunnel-session'
+import { BROWSER_NETWORK_TUNNEL_IDLE_STREAM_MS } from './browser-network-tunnel-connection-credit'
 import {
   BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES,
   BROWSER_NETWORK_TUNNEL_WINDOW_V2_FLOW_CONTROL,
@@ -73,6 +74,7 @@ describe('browser network tunnel flow control over a slow link', () => {
     // Finished responses on kept-alive sockets: grown windows, open streams, no data.
     const idle = Array.from({ length: 24 }, () => link!.openDownload(4 * MIB))
     await link.runUntil(() => idle.every((download) => download.received() === 4 * MIB))
+    link.idle(BROWSER_NETWORK_TUNNEL_IDLE_STREAM_MS)
 
     const fresh = link.openDownload(16 * MIB)
     await link.runUntil(fresh.opened)
@@ -81,6 +83,38 @@ describe('browser network tunnel flow control over a slow link', () => {
 
     expect(link.now - startedAt).toBeLessThan(12 * rttMs)
     expect(link.closures).toEqual([])
+  })
+
+  it('throttles grown downloads that stall together instead of exhausting client memory', async () => {
+    link = new SimulatedLink({ oneWayMs: 45 })
+    const downloads = Array.from({ length: 16 }, () =>
+      link!.openDownload(8 * MIB, { stallAfter: 4 * MIB })
+    )
+    await link.runToQuiet()
+
+    // Growth is charged while a stream holds it, so stalled streams pin at most the pool.
+    const toClientWindow =
+      BROWSER_NETWORK_TUNNEL_WINDOW_V2_FLOW_CONTROL.connectionWindow!.toClientBytes
+    const unread = downloads.reduce((total, download) => total + download.unread(), 0)
+    expect(downloads.every((download) => download.received() >= 4 * MIB)).toBe(true)
+    expect(unread).toBeLessThanOrEqual(
+      16 * BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES + toClientWindow
+    )
+    expect(link.streamErrors).toEqual([])
+    expect(link.closures).toEqual([])
+  })
+
+  it('throttles grown uploads that stall together within the host retained budget', async () => {
+    link = new SimulatedLink({ oneWayMs: 45 })
+    const uploads = Array.from({ length: 8 }, () =>
+      link!.openUpload(8 * MIB, { stallWritesAfter: 4 * MIB })
+    )
+    await link.runToQuiet()
+
+    expect(uploads.every((upload) => upload.sent() >= 4 * MIB)).toBe(true)
+    expect(link.streamErrors).toEqual([])
+    expect(link.closures).toEqual([])
+    expect(link.sessionClosed).toBe(false)
   })
 
   it('keeps stalled readers and writers within the legacy memory headroom', async () => {
@@ -102,7 +136,7 @@ describe('browser network tunnel flow control over a slow link', () => {
   })
 })
 
-type Download = { opened: () => boolean; received: () => number }
+type Download = { opened: () => boolean; received: () => number; unread: () => number }
 
 type LinkDirection = {
   bytesPerMs: number
@@ -139,6 +173,7 @@ class SimulatedLink {
     this.session = new BrowserNetworkTunnelSession({
       tunnelGeneration: TUNNEL_GENERATION,
       flowControl: BROWSER_NETWORK_TUNNEL_WINDOW_V2_FLOW_CONTROL,
+      now: () => this.now,
       connect: () => {
         const destination = this.destinations.shift()!
         queueMicrotask(() => destination.emit('connect'))
@@ -153,30 +188,39 @@ class SimulatedLink {
       tunnelGeneration: TUNNEL_GENERATION,
       flowControl: BROWSER_NETWORK_TUNNEL_WINDOW_V2_FLOW_CONTROL,
       sendBinary: (bytes) => this.send(this.toSession, bytes, this.session),
+      now: () => this.now,
       outboundMemory: lease,
       onClosed: (error) => this.closures.push(error)
     })
   }
 
-  openDownload(bytes: number, options: { stalled?: boolean } = {}): Download {
+  openDownload(bytes: number, options: { stalled?: boolean; stallAfter?: number } = {}): Download {
     this.destinations.push(new StreamingDestination(bytes))
     let opened = false
     let received = 0
+    let settled = 0
+    const stallAfter = options.stalled ? 0 : (options.stallAfter ?? Number.POSITIVE_INFINITY)
     void this.client.open({ host: 'download.internal', port: 443 }).then((duplex) => {
       opened = true
       duplex.on('error', (error: Error) => this.streamErrors.push(error))
       duplex.on('data', (chunk: Buffer) => {
         received += chunk.byteLength
-        if (!options.stalled) {
+        if (settled < stallAfter) {
+          settled += chunk.byteLength
           queueMicrotask(() => duplex.settleRead(chunk.byteLength))
         }
       })
     })
-    return { opened: () => opened, received: () => received }
+    return { opened: () => opened, received: () => received, unread: () => received - settled }
   }
 
-  openUpload(bytes: number, options: { stalled?: boolean } = {}): { sent: () => number } {
-    this.destinations.push(new StreamingDestination(0, options.stalled))
+  openUpload(
+    bytes: number,
+    options: { stalled?: boolean; stallWritesAfter?: number } = {}
+  ): { sent: () => number } {
+    this.destinations.push(
+      new StreamingDestination(0, options.stalled ? 0 : options.stallWritesAfter)
+    )
     let sent = 0
     void this.client.open({ host: 'upload.internal', port: 443 }).then((duplex) => {
       duplex.on('error', (error: Error) => this.streamErrors.push(error))
@@ -215,6 +259,24 @@ class SimulatedLink {
       this.now = Math.max(this.now, next.at)
       next.deliver()
     }
+  }
+
+  /** Delivers everything in flight until no frame is left, e.g. once every stream has stalled. */
+  async runToQuiet(): Promise<void> {
+    for (;;) {
+      await this.quiesce()
+      const next = this.inFlight.shift()
+      if (!next) {
+        return
+      }
+      this.now = Math.max(this.now, next.at)
+      next.deliver()
+    }
+  }
+
+  /** Lets time pass with nothing on the wire. */
+  idle(ms: number): void {
+    this.now += ms
   }
 
   close(): void {
@@ -267,9 +329,12 @@ class StreamingDestination extends EventEmitter implements BrowserNetworkTunnelS
   private paused = true
   private pumping = false
 
+  private written = 0
+
   constructor(
     private remaining: number,
-    private readonly stallWrites = false
+    // Bytes after which writes never complete; undefined never stalls.
+    private readonly stallWritesAfter?: number
   ) {
     super()
   }
@@ -292,8 +357,9 @@ class StreamingDestination extends EventEmitter implements BrowserNetworkTunnelS
     return this
   }
 
-  write(_bytes: Uint8Array<ArrayBufferLike>, callback?: () => void): boolean {
-    if (!this.stallWrites) {
+  write(bytes: Uint8Array<ArrayBufferLike>, callback?: () => void): boolean {
+    if (this.stallWritesAfter === undefined || this.written < this.stallWritesAfter) {
+      this.written += bytes.byteLength
       callback?.()
     }
     return true
