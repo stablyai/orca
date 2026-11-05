@@ -4,6 +4,8 @@ import { getDisplayPromptLifecycle } from '../../workspaces/process-listing/runt
 import { findLastCompleteOscTitleRange } from './terminal-osc-title-range'
 import { extractLastOscTitle } from '../../../../shared/agent-status/title/osc-title-extraction'
 import type { RuntimeTerminalDataMeta } from './runtime-terminal-stream-consumers'
+import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
+import { readLaunchCommandOutput } from '../wait/launched-agent-exit-watch'
 
 export abstract class OrcaRuntimeWithRecordAgentPromptLifecycleState extends OrcaRuntimeWithCreateTerminalSideEffectCommandCodeDetector {
   private readonly ptyLifecycleCancellation = new Map<string, AbortController>()
@@ -215,5 +217,25 @@ export abstract class OrcaRuntimeWithRecordAgentPromptLifecycleState extends Orc
 
   readRecentTerminalOutput(ptyId: string): string | undefined {
     return this.recentPtyOutputById.get(ptyId)?.read()
+  }
+
+  /** The exit frees the buffer, so keep what the PTY's last command printed for its start failure. */
+  protected releaseRecentPtyOutput(ptyId: string, pty: RuntimePtyWorktreeRecord | undefined): void {
+    if (pty) {
+      pty.lastExitOutput = readLaunchCommandOutput(
+        this.recentPtyOutputById.get(ptyId)?.read() ?? '',
+        {
+          ptyExited: true
+        }
+      )
+    }
+    this.recentPtyOutputById.delete(ptyId)
+  }
+
+  readExitedLaunchOutput(ptyId: string, incarnationId: string): string | undefined {
+    const pty = this.ptysById.get(ptyId)
+    return pty && !pty.connected && pty.incarnationId === incarnationId
+      ? pty.lastExitOutput
+      : undefined
   }
 }
