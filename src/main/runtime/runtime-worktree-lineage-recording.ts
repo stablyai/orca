@@ -62,7 +62,7 @@ export function crossStoreManualLineage(parent: CrossStoreParentRef): CrossStore
 export function crossStoreCreateLineage(input: {
   crossStoreParent: CrossStoreParentRef
   parentWorkspaceOrigin?: 'manual'
-  crossStoreParentInferredFrom?: 'env-workspace' | 'cwd-context'
+  crossStoreParentInferredFrom?: 'env-workspace' | 'terminal-context' | 'cwd-context'
 }): CrossStoreLineageResolution {
   if (input.parentWorkspaceOrigin === 'manual') {
     return crossStoreManualLineage(input.crossStoreParent)
