@@ -80,6 +80,7 @@ export function ensureManagedOrcadServing(
   const answerAge = answeredAt === null ? null : now() - answeredAt
   // Clock rollback must not extend the proof window.
   if (answerAge !== null && answerAge >= 0 && answerAge < LIVE_ANSWER_PROOF_MS) {
+    getManagedOrcadCrashLoopBrake().noteServing(id)
     return Promise.resolve({ state: 'serving' })
   }
   const next: ServingCheck = { ...transport, check: checkAndStart(input) }
@@ -106,6 +107,7 @@ export function resetManagedOrcadServingForTests(): void {
 
 async function checkAndStart(input: OrcadManagedServingInput): Promise<OrcadManagedServing> {
   if (await input.probe(input.environment, PROBE_TIMEOUT_MS)) {
+    getManagedOrcadCrashLoopBrake().noteServing(input.environment.id)
     return { state: 'serving' }
   }
   let starting = false

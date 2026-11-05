@@ -73,6 +73,13 @@ export class ManagedOrcadCrashLoopBrake {
     this.record(environmentId)
   }
 
+  /** A served run's clean exit (its lock gone) may release the brake, even one that served late. */
+  noteServing(environmentId: string): void {
+    if (this.engaged(environmentId)) {
+      this.latchedOnServingRun.add(environmentId)
+    }
+  }
+
   /** True when the latch came from a run that served, whose own exit decides whether it still holds. */
   latchedOnServingRunOf(environmentId: string): boolean {
     return this.latchedOnServingRun.has(environmentId)
@@ -198,6 +205,9 @@ async function wakeUnlessEngaged(
     }
     if (wake.outcome === 'started') {
       brake.noteStarted(environmentId, epoch, wake.readiness.health)
+    }
+    if (wake.outcome === 'serving') {
+      brake.noteServing(environmentId)
     }
     if ((wake.outcome === 'fenced' || wake.outcome === 'recovery-refused') && wake.launchFailure) {
       brake.noteFailedStart(environmentId, epoch, wake.launchFailure)

@@ -284,6 +284,24 @@ describe('a managed orcad that keeps exiting unexpectedly', () => {
     expect(launches).toBe(3)
   })
 
+  it('wakes it again once a start that timed out later served and then stopped cleanly', async () => {
+    stoppedSlotLaunches(async () => {
+      throw new OrcadLaunchReadinessError('rejected', 'orcad did not become ready')
+    })
+    for (let i = 0; i < 3; i++) {
+      await findStopped()
+    }
+    // The last of them came up after all.
+    generation += 1
+    expect(await ensureManagedOrcadServing({ ...input(), probe: async () => true })).toEqual({
+      state: 'serving'
+    })
+    startsReporting(null)
+    vi.mocked(readBoundedOrcadRemoteRecord).mockResolvedValueOnce({ state: 'absent' })
+
+    expect(await findStopped()).toMatchObject({ state: 'started' })
+  })
+
   it('wakes it again once the run it braked on later stopped cleanly', async () => {
     startsReporting(CRASHED)
     for (let i = 0; i < 3; i++) {
