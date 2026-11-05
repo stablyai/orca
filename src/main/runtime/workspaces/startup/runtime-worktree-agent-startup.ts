@@ -105,7 +105,12 @@ export async function buildWorktreeStartupForDraft(
     platform,
     shell,
     isRemote: repoIsRemote(repo),
-    ...(environment.agentArgs !== undefined ? { agentArgs: environment.agentArgs } : {})
+    ...(agent === environment.requestedAgent
+      ? {
+          ...(environment.agentArgs !== undefined ? { agentArgs: environment.agentArgs } : {}),
+          sessionOptions: environment.sessionOptions
+        }
+      : {})
   })
   const telemetry = agentStartedTelemetry(agent, environment.launchSource)
   const draftPlan = buildAgentDraftLaunchPlan({ ...launchArgs, draft: content })

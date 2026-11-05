@@ -160,7 +160,9 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
         isRemote: selectedRepoIsRemote,
         telemetrySource,
         route: agentLaunchRoute,
-        launchInputs: options?.launchInputs
+        launchInputs: options?.launchInputs,
+        legacyLaunchInputs: options?.legacyLaunchInputs,
+        ephemeralVm: Boolean(ephemeralVmRecipe)
       })
 
       if (isSubmissionCancelled()) {
@@ -191,6 +193,8 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
         agent,
         agentLaunchRoute,
         launchInputs: options?.launchInputs,
+        legacyLaunchInputs: options?.legacyLaunchInputs,
+        creationStartup: quickStartup.creationStartup,
         linkedLinearIssue,
         linkedLinearIssueWorkspaceId,
         linkedLinearIssueOrganizationUrlKey,

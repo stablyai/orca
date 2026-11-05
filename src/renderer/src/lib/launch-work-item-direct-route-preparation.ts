@@ -34,6 +34,10 @@ export type DirectWorkItemAgentLaunchPreparation = {
   unavailable: boolean
   effectiveAgent: TuiAgent | null
   agentArgs?: string | null
+  freshLaunchInputs?: {
+    agentArgs?: string | null
+    sessionOptions?: Readonly<Record<string, string>>
+  }
   startupPlan: ReturnType<typeof buildDirectWorkItemStartup>['startupPlan']
   draftLaunchedNatively: boolean
   startupPlanFailed: boolean
@@ -216,6 +220,7 @@ export async function prepareDirectWorkItemAgentLaunch(args: {
     unavailable: false,
     effectiveAgent,
     agentArgs,
+    freshLaunchInputs: { agentArgs, sessionOptions },
     startupPlan,
     draftLaunchedNatively,
     startupPlanFailed,

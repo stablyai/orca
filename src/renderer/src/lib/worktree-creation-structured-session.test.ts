@@ -178,12 +178,22 @@ describe('launchStructuredWorktreeSession', () => {
       surface: { kind: 'local-terminal', tabId: 'recovered-terminal' }
     })
 
-    await expect(launchStructuredWorktreeSession(baseArgs)).resolves.toMatchObject({
+    await expect(
+      launchStructuredWorktreeSession({
+        ...baseArgs,
+        request: {
+          ...request,
+          launchInputs: { agentArgs: '', sessionOptions: { model: 'gpt-picked', effort: 'high' } }
+        }
+      })
+    ).resolves.toMatchObject({
       primaryTabId: 'recovered-terminal'
     })
     expect(mocks.launchAgentInNewTabWithOutcome).toHaveBeenCalledWith(
       expect.objectContaining({
         prompt: 'Add a test',
+        agentArgs: '',
+        sessionOptions: { model: 'gpt-picked', effort: 'high' },
         promptDelivery: 'auto-submit',
         activate: visible,
         agentSessionLaunchPlan: expect.objectContaining({ route: 'terminal-tui' })

@@ -142,7 +142,12 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
     repo: Repo,
     draft: string,
     requestedAgent?: TuiAgent,
-    launchSource?: string
+    launchSource?: string,
+    inputs?: {
+      startupAgentArgs?: string | null
+      startupSessionOptions?: Parameters<typeof buildWorktreeStartupForDraft>[0]['sessionOptions']
+      startupLaunchPreferences?: AgentLaunchPreferences
+    }
   ): ReturnType<typeof buildWorktreeStartupForDraft> {
     if (!this.store) {
       return null
@@ -150,6 +155,10 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
     return buildWorktreeStartupForDraft({
       repo,
       draft,
+      agentArgs: inputs?.startupAgentArgs,
+      sessionOptions:
+        inputs?.startupSessionOptions ??
+        this.toAgentSessionOptions(inputs?.startupLaunchPreferences),
       ...(requestedAgent ? { requestedAgent } : {}),
       ...(launchSource ? { launchSource } : {}),
       settings: this.store.getSettings(),

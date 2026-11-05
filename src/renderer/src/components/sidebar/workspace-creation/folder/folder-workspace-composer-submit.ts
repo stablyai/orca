@@ -203,6 +203,15 @@ export async function submitFolderWorkspaceCreate({
           launchConfig: startupPlan.launchConfig,
           ...(startupPlan.launchToken ? { launchToken: startupPlan.launchToken } : {}),
           launchAgent: quickAgent,
+          freshAgentLaunch: {
+            agentArgs,
+            sessionOptions,
+            prompt:
+              startupPlan.followupPrompt || startupPlan.draftPrompt
+                ? ''
+                : (launchDraftPrompt ?? note),
+            promptDelivery: launchDraftPrompt ? ('draft' as const) : ('auto-submit' as const)
+          },
           ...(startupPlan.draftPrompt ? { draftPrompt: startupPlan.draftPrompt } : {}),
           ...(startupPlan.startupCommandDelivery
             ? { startupCommandDelivery: startupPlan.startupCommandDelivery }

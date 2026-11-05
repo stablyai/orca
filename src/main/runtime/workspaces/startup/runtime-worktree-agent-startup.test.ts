@@ -403,3 +403,52 @@ describe('resolveWorktreeStartupDraftAgent', () => {
     await expect(resolve({})).resolves.toBeNull()
   })
 })
+
+describe('paired workspace draft inputs', () => {
+  it.each(['claude', 'codex'] as const)(
+    'applies picks and authored Arguments to a %s draft',
+    async (agent) => {
+      const result = await buildWorktreeStartupForDraft({
+        repo: makeRepo({}),
+        settings: { ...settings, agentDefaultArgs: { [agent]: '--add-dir /host/shared' } },
+        draft: 'ship it',
+        requestedAgent: agent,
+        agentArgs: '',
+        sessionOptions: { model: 'opus' },
+        getLaunchRuntime: () => LINUX
+      })
+      expect(result?.startup.command).toContain(
+        agent === 'codex' ? "'-m' 'opus'" : "'--model' 'opus'"
+      )
+      expect(result?.startup.command).not.toContain('/host/shared')
+      if (agent === 'claude') {
+        expect(result?.startup.command).toContain("'ship it'")
+        expect(result?.draftPaste).toBeUndefined()
+      } else {
+        expect(result?.draftPaste).toEqual({ agent: 'codex', content: 'ship it' })
+      }
+    }
+  )
+
+  it('keeps the disabled-agent draft substitution without applying the original picks or Arguments', async () => {
+    mocks.detectInstalledAgentsWithShellPathHydration.mockResolvedValue(['codex'])
+    const result = await buildWorktreeStartupForDraft({
+      repo: makeRepo({}),
+      settings: {
+        ...settings,
+        disabledTuiAgents: ['claude'],
+        agentDefaultArgs: { codex: '--model host-model' }
+      },
+      draft: 'ship it',
+      requestedAgent: 'claude',
+      agentArgs: '--add-dir /claude-only',
+      sessionOptions: { model: 'opus' },
+      getLaunchRuntime: () => LINUX
+    })
+    expect(result?.agent).toBe('codex')
+    expect(result?.startup.command).toContain('host-model')
+    expect(result?.startup.command).not.toContain('opus')
+    expect(result?.startup.command).not.toContain('/claude-only')
+    expect(result?.draftPaste).toEqual({ agent: 'codex', content: 'ship it' })
+  })
+})

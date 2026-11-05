@@ -572,6 +572,88 @@ describe('createRemoteRuntimePtyTransport', () => {
     )
   })
 
+  it('sends fresh workspace picks and authored empty Arguments through host composition', async () => {
+    const original = runtimeCall.getMockImplementation()!
+    runtimeCall.mockImplementation(async (args: { method?: string }) => {
+      const response = await original(args)
+      return args.method === 'status.get'
+        ? {
+            ...response,
+            result: {
+              ...response.result,
+              capabilities: ['agent-session.host-authority.v1', 'agent-session.create-options.v1']
+            }
+          }
+        : response
+    })
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'repo1::/remote/wt',
+      command: '/desktop/codex --model desktop',
+      env: { DESKTOP_ONLY: 'yes' },
+      launchAgent: 'codex',
+      freshAgentLaunch: {
+        agentArgs: '',
+        sessionOptions: { model: 'gpt-host-pick', effort: 'high', permissionMode: 'full-access' },
+        prompt: 'ship it',
+        promptDelivery: 'draft'
+      },
+      tabId: 'tab-1',
+      leafId: '11111111-1111-4111-8111-111111111111'
+    })
+    await transport.connect({ url: '', callbacks: {} })
+    expect(runtimeCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'terminal.createAgentSession',
+        params: expect.objectContaining({
+          agent: 'codex',
+          agentArgs: '',
+          sessionOptions: { model: 'gpt-host-pick', effort: 'high', permissionMode: 'full-access' },
+          prompt: 'ship it',
+          promptDelivery: 'draft'
+        })
+      })
+    )
+    const create = runtimeCall.mock.calls.find(
+      ([args]) => args.method === 'terminal.createAgentSession'
+    )?.[0]
+    expect(create?.params).not.toHaveProperty('command')
+    expect(create?.params).not.toHaveProperty('env')
+    transport.disconnect()
+  })
+
+  it('keeps the existing pane request when an old host needs a prepared launch', async () => {
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'repo1::/remote/wt',
+      command: 'goose',
+      launchAgent: 'goose',
+      agentLaunchPreferences: { mode: 'full-access' },
+      freshAgentLaunch: {
+        sessionOptions: { permissionMode: 'full-access' },
+        prompt: '',
+        promptDelivery: 'auto-submit'
+      },
+      tabId: 'tab-1',
+      leafId: '11111111-1111-4111-8111-111111111111'
+    })
+    await transport.connect({ url: '', callbacks: {} })
+    expect(runtimeCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'terminal.createAgentSession',
+        params: expect.objectContaining({
+          agent: 'goose',
+          launchPreferences: { mode: 'full-access' }
+        })
+      })
+    )
+    const create = runtimeCall.mock.calls.find(
+      ([args]) => args.method === 'terminal.createAgentSession'
+    )?.[0]
+    expect(create?.params).not.toHaveProperty('sessionOptions')
+    transport.disconnect()
+  })
+
   it('forwards input over the stream and disconnects without closing shared remote sessions', async () => {
     vi.useFakeTimers()
     try {

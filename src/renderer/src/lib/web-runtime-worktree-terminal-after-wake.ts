@@ -1,3 +1,4 @@
+import { launchAgentInWebHostTab } from '@/lib/launch-agent-web-host-tab'
 import { useAppStore } from '@/store'
 import { tabHasLivePty } from '../../../shared/tab-has-live-pty'
 import { createWebRuntimeSessionTerminal } from '@/runtime/web-runtime-terminal-creation'
@@ -114,32 +115,51 @@ export function ensureWebRuntimeWorktreeTerminalAfterWake(
 
   const startup = opts?.startup
   // Why: sleep keeps tab rows but terminal.stop clears host PTYs, while a failed create receipt leaves a selected agent with no host surface.
-  void createWebRuntimeSessionTerminal(
-    {
-      worktreeId,
-      environmentId: runtimeEnvironmentId,
-      ...(startup
-        ? {
-            command: startup.command,
-            ...(startup.env ? { env: startup.env } : {}),
-            ...(startup.launchConfig ? { launchConfig: startup.launchConfig } : {}),
-            ...(startup.launchToken ? { launchToken: startup.launchToken } : {}),
-            ...(launchAgent ? { launchAgent, preparedAgentCommand: true } : {}),
-            ...(startup.startupCommandDelivery
-              ? { startupCommandDelivery: startup.startupCommandDelivery }
-              : {})
+  const creation =
+    startup?.freshAgentLaunch && launchAgent
+      ? launchAgentInWebHostTab({
+          ...startup.freshAgentLaunch,
+          agent: launchAgent,
+          environmentId: runtimeEnvironmentId,
+          worktreeId,
+          activate: opts?.activate !== false,
+          selectWorktree: false,
+          buildStartup: () => {
+            const plan = startup.freshAgentLaunch?.legacy?.() ?? null
+            return {
+              startupPlan: plan,
+              pasteDraftAfterLaunch: plan?.draftPrompt ?? plan?.followupPrompt ?? null,
+              submitPastedPrompt: Boolean(plan?.followupPrompt)
+            }
           }
-        : launchAgent
-          ? { agent: launchAgent }
-          : {}),
-      activate: opts?.activate !== false,
-      selectWorktree: false
-    },
-    // This flow toasts every failure itself, including a disconnected host.
-    { notifyFailure: false }
-  )
+        }).then((result) => result.outcome)
+      : createWebRuntimeSessionTerminal(
+          {
+            worktreeId,
+            environmentId: runtimeEnvironmentId,
+            ...(startup
+              ? {
+                  command: startup.command,
+                  ...(startup.env ? { env: startup.env } : {}),
+                  ...(startup.launchConfig ? { launchConfig: startup.launchConfig } : {}),
+                  ...(startup.launchToken ? { launchToken: startup.launchToken } : {}),
+                  ...(launchAgent ? { launchAgent, preparedAgentCommand: true } : {}),
+                  ...(startup.startupCommandDelivery
+                    ? { startupCommandDelivery: startup.startupCommandDelivery }
+                    : {})
+                }
+              : launchAgent
+                ? { agent: launchAgent }
+                : {}),
+            activate: opts?.activate !== false,
+            selectWorktree: false
+          },
+          // This flow toasts every failure itself, including a disconnected host.
+          { notifyFailure: false }
+        )
+  void creation
     .then((outcome) => {
-      if (outcome.status === 'failed') {
+      if (outcome.status === 'failed' && !startup?.freshAgentLaunch) {
         toast.error(outcome.message, {
           id: `web-runtime-worktree-terminal:${runtimeEnvironmentId}:${worktreeId}`
         })

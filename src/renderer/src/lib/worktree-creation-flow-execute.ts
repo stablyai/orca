@@ -17,6 +17,7 @@ import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
 import { resolveBackendDraftStartup } from '@/lib/worktree-draft-startup-view-mode'
 import {
   hostPlannableAgentLaunch,
+  worktreeCreationAgentLaunchOptions,
   windowStartupAfterCreate
 } from '@/lib/worktree-creation-host-agent-launch'
 import {
@@ -53,7 +54,6 @@ export async function executeWorktreeCreation(
   const structuredLaunch = preparedRequest.agentLaunchRoute === 'structured-native-chat'
   const creationHostId =
     preparedRequest.workspaceRunContext?.hostId ?? preparedRequest.executionHostId
-  // Named to later steps, so a same-path twin on another host can't blur the owner (L277).
   const onCreationHost = creationHostId ? { executionHostId: creationHostId } : {}
   const hostAgentLaunch = hostPlannableAgentLaunch(preparedRequest)
   let result: CreatedWorktreeResult
@@ -93,6 +93,7 @@ export async function executeWorktreeCreation(
           setupOnly: preparedRequest.setupOnly,
           ...(preparedRequest.branchIntent ? { branchIntent: preparedRequest.branchIntent } : {}),
           ...(hostAgentLaunch ? { hostAgentLaunch } : {}),
+          ...worktreeCreationAgentLaunchOptions(preparedRequest),
           executionHostId: creationHostId,
           ...(preparedRequest.nameWasGenerated ? { nameWasGenerated: true } : {}),
           ...(preparedRequest.displayNameKind
@@ -160,7 +161,6 @@ export async function executeWorktreeCreation(
   const setupIsOnlySurface = preparedRequest.setupOnly === true && result.setup !== undefined
   const defaultTabs = setupIsOnlySurface ? undefined : result.defaultTabs
 
-  // Contain post-create follow-ups independently; fire-and-forget throws otherwise strand creation UI over a completed workspace.
   let activation: ActivateAndRevealResult | false = false
   let primaryTabId: string | null = null
   if (shouldActivateOnCompletion && !structuredLaunch) {
@@ -312,6 +312,7 @@ export async function executeWorktreeCreation(
     activation,
     primaryTabId,
     startupTerminalTabId: result.startupTerminal?.tabId,
+    startupAgent: result.worktree.createdWithAgent ?? undefined,
     backendSpawned,
     hostPlannedStartup: result.hostPlannedStartup === true,
     focusOnCompletion: shouldActivateOnCompletion

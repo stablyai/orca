@@ -1,3 +1,8 @@
+import { parseExecutionHostId } from '../../../../shared/execution-host'
+import { readCachedRuntimeEnvironmentCapability } from '@/runtime/runtime-rpc-client'
+import { WORKTREE_CREATE_AGENT_OPTIONS_RUNTIME_CAPABILITY } from '../../../../shared/worktree-runtime-capabilities'
+import { terminalSessionOptionInputs } from '../../../../shared/agent-launch/startup/tui-agent-launch-command'
+import { resolveStartupShell } from '../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { useAppStore } from '@/store'
 import { resolveQuickCreateLinkedWorkItemPrompt } from '@/lib/linked-work-item-context'
 import type { ComposerModel } from './composer-model'
@@ -37,6 +42,7 @@ export type QuickComposerStartupInput = {
 }
 
 export type QuickComposerStartup = {
+  creationStartup?: WorktreeCreationRequest['creationStartup']
   startupPlan: AgentStartupPlan | null
   backendStartup: WorktreeCreationRequest['startup']
   telemetry: AgentStartedTelemetry | null
@@ -128,6 +134,8 @@ export async function prepareQuickComposerStartup(
     executionHostId: ComposerModel['selectedRepoExecutionHostId']
     linkedWorkItem: Parameters<typeof resolveQuickCreateLinkedWorkItemPrompt>[0]
     note: string
+    legacyLaunchInputs?: WorktreeCreationRequest['legacyLaunchInputs']
+    ephemeralVm?: boolean
   }
 ): Promise<QuickComposerStartup & { prompt: string; draftPrompt: string | null }> {
   const preferences = input.agent
@@ -141,19 +149,59 @@ export async function prepareQuickComposerStartup(
     input.agent ? input.linkedWorkItem : null,
     input.note
   )
-  return {
-    prompt,
-    draftPrompt,
-    ...buildQuickComposerStartup({
+  const settings = input.settings
+    ? {
+        ...input.settings,
+        agentLaunchChoices: preferences?.agentLaunchChoices ?? input.settings.agentLaunchChoices
+      }
+    : input.settings
+  const legacy = () =>
+    buildQuickComposerStartup({
       ...input,
       prompt,
       draftPrompt,
-      settings: input.settings
-        ? {
-            ...input.settings,
-            agentLaunchChoices: preferences?.agentLaunchChoices ?? input.settings.agentLaunchChoices
-          }
-        : input.settings
+      settings,
+      launchInputs: input.legacyLaunchInputs ?? input.launchInputs
     })
+  const host = parseExecutionHostId(input.executionHostId)
+  const hostComposes =
+    (input.launchInputs !== undefined || Boolean(draftPrompt)) &&
+    !input.ephemeralVm &&
+    host?.kind === 'runtime' &&
+    readCachedRuntimeEnvironmentCapability(
+      host.environmentId,
+      WORKTREE_CREATE_AGENT_OPTIONS_RUNTIME_CAPABILITY
+    ) === true
+  const eager = hostComposes ? null : legacy()
+  const seed = input.agent
+    ? terminalSessionOptionInputs({
+        agent: input.agent,
+        settings: { agentLaunchChoices: settings?.agentLaunchChoices },
+        agentArgs: input.launchInputs?.agentArgs,
+        sessionOptions: input.launchInputs?.sessionOptions,
+        shell: resolveStartupShell(
+          requireExecutionHostPlatform(input.launchHost),
+          input.shell ?? undefined
+        )
+      }).sessionOptions
+    : undefined
+  return {
+    prompt,
+    draftPrompt,
+    ...(eager ?? {
+      startupPlan: null,
+      backendStartup: undefined,
+      telemetry: input.agent
+        ? {
+            agent_kind: tuiAgentToAgentKind(input.agent),
+            launch_source:
+              input.telemetrySource === 'onboarding'
+                ? ('onboarding' as const)
+                : ('new_workspace_composer' as const),
+            request_kind: 'new' as const
+          }
+        : null
+    }),
+    creationStartup: { legacy, ...(seed ? { sessionOptions: seed } : {}) }
   }
 }

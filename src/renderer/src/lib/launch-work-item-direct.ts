@@ -244,7 +244,11 @@ export async function launchWorkItemDirect(
         defaultTabs: result.defaultTabs,
         ...(launchPreparation.structuredLaunch
           ? { providesInitialSurface: true }
-          : buildDirectWorkItemStartupOpts(effectiveAgent, startupPlan, launchSource))
+          : buildDirectWorkItemStartupOpts(effectiveAgent, startupPlan, launchSource, {
+              ...launchPreparation.freshLaunchInputs,
+              prompt: promptDelivery === 'draft' && draftLaunchedNatively ? draftContent : '',
+              promptDelivery
+            }))
       })
       return activationHolder.value !== false
     }

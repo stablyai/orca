@@ -1,3 +1,5 @@
+import { resolveBackendDraftStartup } from '@/lib/worktree-draft-startup-view-mode'
+import type { CreateWorktreeCallOptions } from '@/store/slices/worktrees/create/worktree-create-payload'
 import { toast } from 'sonner'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
@@ -73,12 +75,54 @@ function planWindowStartup(
     }
     return { agent: null }
   }
-  if (request.startupPlan && !backendSpawned && !request.startupPlan.launchToken) {
-    // Share one renderer-session token so delayed delivery targets the pane this queued startup spawns.
-    request.startupPlan.launchToken = createBrowserUuid()
+  if (!backendSpawned) {
+    const token =
+      request.creationStartup?.launchToken ??
+      request.startupPlan?.launchToken ??
+      createBrowserUuid()
+    if (request.creationStartup) {
+      request.creationStartup.launchToken = token
+    }
+    if (request.startupPlan) {
+      request.startupPlan.launchToken = token
+    }
   }
   if (request.agentLaunchRoute === 'structured-native-chat') {
     return { agent: request.agent }
   }
   return { startup: buildWorktreeCreationStartupOpt(request, backendSpawned), agent: request.agent }
+}
+
+export function worktreeCreationAgentLaunchOptions(
+  request: WorktreeCreationRequest
+): Pick<CreateWorktreeCallOptions, 'creationAgentLaunch' | 'legacyStartup'> {
+  if (
+    request.agentLaunchRoute === 'structured-native-chat' ||
+    request.ephemeralVmCheckoutMode === 'provisioned-root' ||
+    request.ephemeralVmRecipe ||
+    !request.agent ||
+    (request.launchInputs === undefined && !request.launchDraftPrompt)
+  ) {
+    return {}
+  }
+  const intent = request.creationStartup
+  return {
+    creationAgentLaunch: {
+      agent: request.agent,
+      prompt: request.quickPrompt,
+      draft: request.launchDraftPrompt,
+      inputs: request.launchInputs,
+      launchSource: request.quickTelemetry?.launch_source
+    },
+    ...(intent
+      ? {
+          legacyStartup: () => {
+            const legacy = intent.legacy()
+            request.startupPlan = legacy.startupPlan
+            request.startup = legacy.backendStartup
+            return resolveBackendDraftStartup(request)
+          }
+        }
+      : {})
+  }
 }

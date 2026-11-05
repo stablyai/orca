@@ -199,7 +199,12 @@ export async function launchStructuredWorktreeSession(
         ? {}
         : {
             onHostDeclined: (host) =>
-              openBackgroundDeclinedTerminal(args, host, pending?.heldChatMessage)
+              openBackgroundDeclinedTerminal(
+                { ...args, request },
+                host,
+                pending?.heldChatMessage,
+                abandoned.signal
+              )
           }),
       beforeOpen: () => !abandoned.signal.aborted && !isCancelled(),
       onTabOpenSettled: (tabId, reason) => {
@@ -247,6 +252,7 @@ export async function launchStructuredWorktreeSession(
         }
         const fallback = launchAgentInNewTabWithOutcome({
           agent,
+          ...request.launchInputs,
           worktreeId: args.worktreeId,
           prompt: plan.prompt,
           promptDelivery: plan.promptDelivery,

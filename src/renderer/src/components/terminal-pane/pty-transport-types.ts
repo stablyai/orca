@@ -1,3 +1,4 @@
+import type { FreshWorkspaceAgentLaunch } from '@/lib/worktree-startup-payload'
 import type { TerminalAttachmentLaunchResult } from '../../../../shared/terminal/pty/lifecycle/terminal-attachment-launch-result'
 import type { AgentIdleEdgeMeta } from '../../../../shared/terminal/output/terminal-output-side-effects'
 import type {
@@ -302,6 +303,7 @@ export type IpcPtyTransportOptions = {
   resumeOrigin?: 'saved'
   agentPrompt?: string
   agentPromptDelivery?: AgentPromptDelivery
+  freshAgentLaunch?: FreshWorkspaceAgentLaunch
   agentArgsOverride?: string | null
   agentLaunchPreferences?: AgentLaunchPreferences
   launchToken?: string

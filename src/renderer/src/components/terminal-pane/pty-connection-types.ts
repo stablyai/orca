@@ -1,3 +1,4 @@
+import type { FreshWorkspaceAgentLaunch } from '@/lib/worktree-startup-payload'
 import type { isGeminiTerminalTitle } from '../../../../shared/agent-status/title/agent-title-core'
 import type { isClaudeAgent } from '../../../../shared/agent-status/title/agent-title-identity'
 import type { detectAgentStatusFromTitle } from '../../../../shared/agent-status/title/agent-title-status'
@@ -42,6 +43,7 @@ export type PtyPaneStartup = {
   /** The agent launch the pane's own spawn starts, instead of `command`. */
   agentLaunch?: AgentPaneLaunchRequest
   /** Explicit CLI override for host-owned agent launches; omission uses host settings. */
+  freshAgentLaunch?: FreshWorkspaceAgentLaunch
   agentArgsOverride?: string | null
   draftPrompt?: string
   sessionOptions?: Record<string, SessionOptionValue>

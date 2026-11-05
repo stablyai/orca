@@ -1,7 +1,6 @@
-import {
-  agentPickerLaunchInputs,
-  type AgentPickerDraft,
-  type AgentPickerEntry
+import type {
+  AgentPickerDraft,
+  AgentPickerEntry
 } from '../../../shared/agent-launch/picker/agent-launch-picker'
 import { DirectWorkItemSetupDialog } from './new-workspace/DirectWorkItemSetupDialog'
 import type { DirectWorkItemSetupRequest } from '@/lib/direct-work-item-setup'
@@ -25,6 +24,7 @@ import type { AddRepoDialogHostedController } from '@/components/sidebar/project
 import { useComposerState } from '@/hooks/useComposerState'
 import {
   composerLaunchWorkspace,
+  quickWorkspacePickerInputs,
   pickQuickWorkspaceAgent,
   resolveQuickWorkspaceAgentSelection
 } from '@/lib/quick-workspace-agent-selection'
@@ -251,26 +251,15 @@ function QuickTabBody({
     if (createDisabled) {
       return
     }
-    let launchInputs = pickerDraft
-      ? agentPickerLaunchInputs(pickerDraft, quickAgentPick.entry)
-      : undefined
-    if (
-      launchInputs &&
-      pickerDraft?.surface === 'terminal' &&
-      pickerDraft.arguments === undefined &&
-      quickAgentPick.entry &&
-      !quickAgentPick.entry.defaultsPending
-    ) {
-      launchInputs = agentPickerLaunchInputs(
-        { ...pickerDraft, arguments: quickAgentPick.entry.arguments ?? null },
-        quickAgentPick.entry
-      )
-    }
     await submitQuick(quickAgent, {
       // Blank Terminal is the setup-only create: no agent, and no extra shell beside setup.
       setupOnly: quickAgent === null,
       launchChoice: launchSelection.choice,
-      ...(launchInputs ? { launchInputs } : {})
+      ...quickWorkspacePickerInputs(
+        pickerDraft,
+        quickAgentPick.entry,
+        launchSelection.choice?.executionHostId
+      )
     })
   }, [
     createDisabled,

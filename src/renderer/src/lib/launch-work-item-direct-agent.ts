@@ -1,3 +1,4 @@
+import type { FreshWorkspaceAgentLaunch } from '@/lib/worktree-startup-payload'
 import { toast } from 'sonner'
 import { track, tuiAgentToAgentKind } from '@/lib/telemetry'
 import {
@@ -99,10 +100,12 @@ export function buildDirectWorkItemAgentStartupPlan(args: {
 export function buildDirectWorkItemStartupOpts(
   agent: TuiAgent | null,
   plan: AgentStartupPlan | null,
-  launchSource: LaunchSource
+  launchSource: LaunchSource,
+  freshAgentLaunch?: FreshWorkspaceAgentLaunch
 ): {
   startup?: {
     command: string
+    freshAgentLaunch?: FreshWorkspaceAgentLaunch
     env?: Record<string, string>
     launchConfig?: SleepingAgentLaunchConfig
     launchAgent?: TuiAgent
@@ -122,6 +125,7 @@ export function buildDirectWorkItemStartupOpts(
   return {
     startup: {
       command: plan.launchCommand,
+      ...(freshAgentLaunch ? { freshAgentLaunch } : {}),
       ...(plan.env ? { env: plan.env } : {}),
       launchConfig: plan.launchConfig,
       ...(plan.sessionOptions ? { sessionOptions: plan.sessionOptions } : {}),

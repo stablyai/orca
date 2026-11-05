@@ -1,3 +1,6 @@
+import type { WorktreeStartupLaunch } from '../../../../../../shared/worktree/launch-types'
+import type { agentPickerLaunchInputs } from '../../../../../../shared/agent-launch/picker/agent-launch-picker'
+import { toAgentLaunchPreferences } from '../../../../../../shared/agent-launch/choices/agent-launch-preferences'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../../shared/sidebar-inputs-switch'
 import type {
@@ -26,6 +29,11 @@ export type CreateWorktreeCallOptions = {
   startupDraft?: string
   /** A terminal agent the owning host may plan from its own settings; `startup` stays the fallback. */
   hostAgentLaunch?: HostAgentLaunch
+  creationAgentLaunch?: HostAgentLaunch & {
+    inputs?: ReturnType<typeof agentPickerLaunchInputs>
+    draft?: string
+  }
+  legacyStartup?: () => WorktreeStartupLaunch | undefined
   setupOnly?: boolean
   /** True only when `name` came from the creature-name generator; gates host-side retirement. */
   nameWasGenerated?: boolean
@@ -141,7 +149,8 @@ export function buildLocalWorktreeCreateArgs(
 export function buildRuntimeWorktreeCreateParams(
   request: WorktreeCreateRequest,
   attempt: WorktreeCreateAttempt,
-  hostAgentLaunch?: HostAgentLaunch
+  hostAgentLaunch?: HostAgentLaunch,
+  creationAgentLaunch?: CreateWorktreeCallOptions['creationAgentLaunch']
 ): Record<string, unknown> {
   const { startup, options } = request
   return {
@@ -154,19 +163,48 @@ export function buildRuntimeWorktreeCreateParams(
       ? { creationId: request.creationId }
       : {}),
     ...(options?.startupDraft ? { startupDraft: options.startupDraft } : {}),
-    ...(hostAgentLaunch
-      ? buildHostAgentLaunchParams(hostAgentLaunch)
-      : startup
-        ? {
-            startupCommand: startup.command,
-            ...(startup.env ? { startupEnv: startup.env } : {}),
-            ...(startup.launchConfig ? { startupLaunchConfig: startup.launchConfig } : {}),
-            ...(startup.startupCommandDelivery
-              ? { startupCommandDelivery: startup.startupCommandDelivery }
-              : {}),
-            activate: true
-          }
-        : {})
+    ...(creationAgentLaunch
+      ? {
+          ...(creationAgentLaunch.draft
+            ? {
+                startupDraft: creationAgentLaunch.draft,
+                ...(creationAgentLaunch.launchSource
+                  ? { launchSource: creationAgentLaunch.launchSource }
+                  : {}),
+                activate: true
+              }
+            : buildHostAgentLaunchParams(creationAgentLaunch)),
+          ...(creationAgentLaunch.inputs?.agentArgs !== undefined
+            ? { startupAgentArgs: creationAgentLaunch.inputs.agentArgs }
+            : {}),
+          ...(creationAgentLaunch.inputs?.sessionOptions
+            ? { startupSessionOptions: creationAgentLaunch.inputs.sessionOptions }
+            : {}),
+          ...(toAgentLaunchPreferences(
+            creationAgentLaunch.inputs?.sessionOptions,
+            creationAgentLaunch.agent
+          )
+            ? {
+                startupLaunchPreferences: toAgentLaunchPreferences(
+                  creationAgentLaunch.inputs?.sessionOptions,
+                  creationAgentLaunch.agent
+                )
+              }
+            : {})
+        }
+      : hostAgentLaunch
+        ? buildHostAgentLaunchParams(hostAgentLaunch)
+        : startup
+          ? {
+              startupCommand: startup.command,
+              ...(startup.env ? { startupEnv: startup.env } : {}),
+              ...(startup.launchConfig ? { startupLaunchConfig: startup.launchConfig } : {}),
+              ...(startup.startupCommandDelivery
+                ? { startupCommandDelivery: startup.startupCommandDelivery }
+                : {}),
+              activate: true
+            }
+          : {})
   }
 }
 

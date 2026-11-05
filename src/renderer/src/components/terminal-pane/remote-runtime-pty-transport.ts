@@ -1,3 +1,10 @@
+import { pairedAgentLaunchInputs } from '@/lib/paired-agent-launch-inputs'
+import {
+  agentSessionCreateCapabilities,
+  agentSessionCreateRequest
+} from '@/runtime/agent-session-create-request'
+import { beginAgentStartupDeliveryAttempt } from '@/lib/agent-startup-delayed-delivery'
+import { ensureAgentStartupInTerminal } from '@/lib/new-workspace'
 import { parseTerminalAttachmentLaunchResult } from '../../../../shared/terminal/pty/lifecycle/terminal-attachment-launch-result'
 import { REMOTE_RUNTIME_PTY_HONOURS_TAB_SHELL_OVERRIDE } from './remote-runtime-pty-shell'
 import { terminalLaunchFacts } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
@@ -3533,8 +3540,18 @@ export function createRemoteRuntimePtyTransport(
         presentation: 'background' as const,
         ...(activate === true ? { activate: true } : {})
       }
-      const legacyCreate = (epoch = connectLifecycleEpoch) =>
-        createWithUnknownOutcomeRecovery(
+      const freshLaunch = !resumeProviderSessionToSend ? opts.freshAgentLaunch : undefined
+      const legacyCreate = async (epoch = connectLifecycleEpoch) => {
+        const plan = freshLaunch?.recovery ? freshLaunch.legacy?.() : null
+        if (plan) {
+          Object.assign(legacyCreateParams, {
+            command: plan.launchCommand,
+            env: plan.env,
+            launchConfig: plan.launchConfig,
+            startupCommandDelivery: plan.startupCommandDelivery
+          })
+        }
+        const result = await createWithUnknownOutcomeRecovery(
           'terminal',
           (timeoutMs, reconcileExisting) =>
             callRuntimeForEnvironment<{ terminal: RuntimeTerminalCreate }>(
@@ -3549,8 +3566,43 @@ export function createRemoteRuntimePtyTransport(
           createEnvironmentId,
           epoch
         )
+        if (plan && tabId && leafId && launchTokenToSend) {
+          useAppStore
+            .getState()
+            .registerAgentLaunchConfig(`${tabId}:${leafId}`, plan.launchConfig, {
+              agentType: plan.agent,
+              tabId,
+              leafId,
+              launchToken: launchTokenToSend
+            })
+          void ensureAgentStartupInTerminal({
+            worktreeId,
+            primaryTabId: tabId,
+            startup: { ...plan, launchToken: launchTokenToSend }
+          })
+        }
+        return result
+      }
       const hostAuthorityCreate = async (epoch = connectLifecycleEpoch) => {
         const keyboardOptions = await agentKeyboardOptions(createEnvironmentId)
+        const freshInputs =
+          freshLaunch && launchAgentToSend
+            ? await pairedAgentLaunchInputs({
+                ...freshLaunch,
+                ...(await agentSessionCreateCapabilities(createEnvironmentId)),
+                environmentId: createEnvironmentId,
+                agent: launchAgentToSend
+              })
+            : undefined
+        const prepared = freshInputs && 'preparedAgentCommand' in freshInputs
+        if (prepared && freshLaunch?.recovery) {
+          return legacyCreate(epoch)
+        }
+        // Older hosts keep their existing pane request when these inputs require preparation.
+        const composed = freshInputs && !prepared ? freshInputs : undefined
+        if (composed && freshLaunch?.recovery && tabId && launchTokenToSend) {
+          beginAgentStartupDeliveryAttempt({ worktreeId, tabId, launchToken: launchTokenToSend })
+        }
         const ensureProviderSession = resumeProviderSessionToSend
           ? await agentProviderSessionForHostEnsure(
               createEnvironmentId,
@@ -3592,10 +3644,25 @@ export function createRemoteRuntimePtyTransport(
                       ...keyboardOptions,
                       worktree: toRuntimeTerminalWorktreeSelector(worktreeId),
                       agent: launchAgentToSend!,
-                      ...(agentPrompt ? { prompt: agentPrompt } : {}),
-                      ...(agentPromptDelivery ? { promptDelivery: agentPromptDelivery } : {}),
-                      ...(agentArgsOverride !== undefined ? { agentArgs: agentArgsOverride } : {}),
-                      ...(agentLaunchPreferences
+                      ...(composed
+                        ? {
+                            ...agentSessionCreateRequest({
+                              worktreeId,
+                              agent: launchAgentToSend!,
+                              ...composed,
+                              prompt: freshLaunch?.prompt,
+                              promptDelivery:
+                                freshLaunch?.promptDelivery === 'draft' ? 'draft' : 'auto-submit'
+                            })
+                          }
+                        : {
+                            ...(agentPrompt ? { prompt: agentPrompt } : {}),
+                            ...(agentPromptDelivery ? { promptDelivery: agentPromptDelivery } : {})
+                          }),
+                      ...(!composed && agentArgsOverride !== undefined
+                        ? { agentArgs: agentArgsOverride }
+                        : {}),
+                      ...(!composed && agentLaunchPreferences
                         ? { launchPreferences: agentLaunchPreferences }
                         : {}),
                       placement: { tabId, leafId },

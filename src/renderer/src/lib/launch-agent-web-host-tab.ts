@@ -51,6 +51,8 @@ export async function launchAgentInWebHostTab(args: {
   /** False opens the host's tab without selecting it. */
   activate?: boolean
   onPromptDelivered?: () => void
+  selectWorktree?: boolean
+  isCancelled?: () => boolean
 }): Promise<{ delivered: boolean; failureNotified: boolean } & AgentTerminalLaunchCompletion> {
   const {
     agent,
@@ -118,6 +120,7 @@ export async function launchAgentInWebHostTab(args: {
       targetGroupId: groupId,
       activate: args.activate !== false,
       ...(!hasPrompt && args.activate === false ? { selectWorktree: false } : {}),
+      ...(args.selectWorktree !== undefined ? { selectWorktree: args.selectWorktree } : {}),
       ...(cwd?.trim() ? { cwd } : {}),
       ...(viewMode ? { viewMode } : {}),
       agentSessionKind: 'fresh',
@@ -283,6 +286,9 @@ export async function launchAgentInWebHostTab(args: {
     }
   }
 
+  if (args.isCancelled?.()) {
+    return { delivered: false, failureNotified: false, outcome: { status: 'failed', message: '' } }
+  }
   const created = await createWebRuntimeSessionTerminalResult(launch)
   const promptDelivered =
     hasPrompt &&
