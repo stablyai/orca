@@ -20,10 +20,13 @@ import {
   authorityProfile,
   root,
   savedIds
-} from '../structured-agent-session-tab-authority.test-support'
+} from '../agent-session/lifecycle/structured-agent-session-tab-authority.test-support'
 import { ensureStructuredAgentSessionHost } from '../agent-session/structured-agent-session-runtime'
-import { fakeCodex, resetProviderFaults } from '../structured-chat-coordinator-fake-codex-fixture'
-import { structuredWorkerIdentities } from '../structured-worker-identity'
+import {
+  fakeCodex,
+  resetProviderFaults
+} from '../orchestration/terminal-authority/structured-sessions/structured-chat-coordinator-fake-codex-fixture'
+import { structuredWorkerIdentities } from '../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
 import { releaseStructuredWorkerSession } from './methods/orchestration-structured-worker-session'
 import { AGENT_LAUNCH_METHODS } from './methods/agent-launch'
 import { ORCHESTRATION_METHODS } from './methods/orchestration'

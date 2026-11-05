@@ -6,7 +6,7 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/linear/linear-request-recovery.test.ts',
   'src/main/linear/linear-issue-detail-deadline.test.ts',
   'tests/e2e/linear-cli-recovery.unit.test.ts',
-  'src/main/runtime/structured-agent-cli-writers.test.ts',
+  'src/main/runtime/agent-session/lifecycle/structured-agent-cli-writers.test.ts',
   'config/scripts/test-runtime/sqlite-admission/vitest-sqlite-runtime-boundary.test.ts',
   'config/scripts/ci/workflow-contracts/cloud-security-history-workflow.test.mjs',
   'config/scripts/skills/recipe-contracts/skill-recipe-shell.test.mjs',

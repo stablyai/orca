@@ -4,7 +4,7 @@ import type { TerminalWorkspaceCreationEvidence } from './terminal-workspace-sco
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type { Repo } from '../../../../shared/repo-types'
 
-import { OrcaRuntimeWithCreateAgentSession } from '../../orca-runtime-create-agent-session'
+import { OrcaRuntimeWithCreateAgentSession } from '../../session-construction/agent-session/orca-runtime-create-agent-session'
 import type { RuntimeTerminalCreate } from '../../../../shared/runtime-types'
 import { WORKTREE_CREATE_RESULT_TTL_MS } from '../../orca-runtime-core'
 import { deriveRemoteRuntimeTerminalCreateHandle } from '../identity/remote-runtime-terminal-create-identity'
@@ -23,7 +23,7 @@ import {
 } from '../../../../shared/execution-host'
 import { resolveWorktreeLaunchHost } from '../../workspaces/catalog/worktree-launch-host-repo'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
-import type { TerminalWorkspaceLaunchScope } from '../../runtime-legacy-worker-terminal-recovery-types'
+import type { TerminalWorkspaceLaunchScope } from '../../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 
 export abstract class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRuntimeWithCreateAgentSession {
   /** A create's scope: its `wslUserAct` lets the folder check start a stopped WSL distro (E9). */

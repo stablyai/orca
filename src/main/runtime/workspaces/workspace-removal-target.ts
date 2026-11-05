@@ -26,7 +26,7 @@ import type {
   RuntimeTerminalRename,
   RuntimeTerminalSetPaneTitle
 } from '../../../shared/runtime-types'
-import type { TerminalWorkspaceLaunchScope } from '../runtime-legacy-worker-terminal-recovery-types'
+import type { TerminalWorkspaceLaunchScope } from '../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import type { TerminalCreateOptions } from '../runtime-terminal-contracts'
 import {
   LOCAL_EXECUTION_HOST_ID,

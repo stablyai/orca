@@ -1,4 +1,4 @@
-import { collectSavedStructuredAgentSessionIds } from '../saved-structured-agent-session-restoration'
+import { collectSavedStructuredAgentSessionIds } from '../agent-session/lifecycle/saved-structured-agent-session-restoration'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import type {
   RuntimeConstructionBindings,

@@ -27,7 +27,7 @@ import {
 import {
   mintStructuredWorkerHandle,
   mintStructuredWorkerPaneKey
-} from './structured-worker-identity'
+} from './orchestration/terminal-authority/structured-sessions/structured-worker-identity'
 import { testOrcaSessionId } from '../../shared/orca-session-address-test-fixture'
 import { projectSessionTabsForClient } from './rpc/methods/session-tabs-inventory'
 import { AGENT_SENDER_PANE_READS } from './runtime-agent-sender-worker-history'

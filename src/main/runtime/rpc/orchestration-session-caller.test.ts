@@ -13,7 +13,7 @@ import {
   mintStructuredWorkerHandle,
   mintStructuredWorkerPaneKey,
   structuredWorkerProcessIncarnation
-} from '../structured-worker-identity'
+} from '../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
 import {
   ADDRESS_X,
   createSessionCallerHarness,

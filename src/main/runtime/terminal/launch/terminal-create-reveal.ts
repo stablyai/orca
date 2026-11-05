@@ -2,7 +2,7 @@ import type { TerminalCreateOptions } from '../../runtime-terminal-contracts'
 import type { RuntimeTerminalCreate } from '../../../../shared/runtime-terminal-create-contract'
 import { createTerminalRevealWarning, ownerSurfacing } from '../../orca-runtime-core'
 import type { RuntimeNotifier } from '../../runtime-notifier-contract'
-import type { TerminalWorkspaceLaunchScope } from '../../runtime-legacy-worker-terminal-recovery-types'
+import type { TerminalWorkspaceLaunchScope } from '../../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import type { RuntimeTerminalPresentation } from '../../../../shared/runtime-types'
 
 function terminalRevealViewerOptions(

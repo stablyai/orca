@@ -9,7 +9,7 @@ import {
   resolveQualifiedFolderWorkspace
 } from '../../../shared/folder-workspaces/folder-workspace-execution-host'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
-import type { TerminalWorkspaceLaunchScope } from '../../runtime/runtime-legacy-worker-terminal-recovery-types'
+import type { TerminalWorkspaceLaunchScope } from '../../runtime/orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import {
   getWorkspaceRuntimePreference,
   resolveProjectExecutionRuntime,

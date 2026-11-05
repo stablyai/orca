@@ -4,7 +4,7 @@ import type { ExecutionHostId } from '../../shared/execution-host'
 import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import { withDurableRuntimeStore } from './orca-runtime-tests/runtime-durable-store-fixture'
 import { RuntimeLegacyWorkerTerminalRecoveryPersistence } from './runtime-legacy-worker-terminal-recovery-persistence'
-import type { LegacyWorkerRecoveryResolution } from './runtime-legacy-worker-terminal-recovery-types'
+import type { LegacyWorkerRecoveryResolution } from './orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import type { RuntimeStore } from './runtime-store-contract'
 
 function makeResolution(index: number): LegacyWorkerRecoveryResolution {

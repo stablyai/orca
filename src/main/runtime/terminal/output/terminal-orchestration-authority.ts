@@ -22,7 +22,7 @@ import {
   readAgentOrchestrationProjectionRecords,
   readCapturedOrchestrationFleetAgentStatusSnapshot
 } from '../../orchestration-fleet-agent-status-snapshot'
-import { resolveStructuredWorkerAuthority } from '../../structured-worker-authority'
+import { resolveStructuredWorkerAuthority } from '../../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
 import { matchesProcessIncarnation } from '../../orchestration/worker-terminal-process-liveness'
 import { claimIdleShellPrompt } from '../input/idle-shell-prompt-claim'
 

@@ -1240,13 +1240,13 @@
       "invariant": "A fresh PTY launch of an agent with a trust preset pre-trusts its workspace root (for Codex, whose lookup keys on its start folder, the folder it starts in, including a floating terminal's) before the provider spawn, in both spawn builders, on the host that runs the agent: main for local and WSL launches, the SSH relay on its own disk for SSH launches. It never waits past the preset's deadline: 20 s for local Codex, the short budget for every other write, local or on the relay. A failed or abandoned write lets the launch proceed untrusted, so the agent asks. Restored or reattached panes, spawns with no launch command and the setting turned off are never trusted; for an agent whose trust on a home covers the folders below it (Claude, Copilot, Qoder), no writer stores a path that is a root, a home or a folder above one, and an unknown home writes nothing; Codex, Cursor and Antigravity, whose trust on a home covers only the home, trust it as they did before; and a WSL launch never writes the Windows home. A structured Codex chat, which has no PTY, pre-trusts its folder the same way when it is created, under the same setting.",
       "oracle": "A pending local Codex write keeps the dispatcher unresolved past the short budget and settles after the long deadline. A pending Claude write settles at the short deadline with a warning, and a real Claude grant writes the config selected by the launch environment. Actual host-writer artifacts establish ordinary-folder admission and home/root/ancestor/symlink/missing-segment refusal, including an unknown home, with exact Codex worktree, subfolder and home keys. Other retained assertions are named in assertionRefs; removed mock-routing assertions provide no current protection.",
       "commands": [
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty/spawn-options-agent-workspace-trust.test.ts src/main/agent-launch/trust/agent-workspace-trust.test.ts src/main/agent-launch/trust/execution-host-workspace-trust.test.ts src/main/runtime/orca-runtime-structured-agent-session-create-intent.test.ts"
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty/spawn-options-agent-workspace-trust.test.ts src/main/agent-launch/trust/agent-workspace-trust.test.ts src/main/agent-launch/trust/execution-host-workspace-trust.test.ts src/main/runtime/agent-session/launch/orca-runtime-structured-agent-session-create-intent.test.ts"
       ],
       "testFiles": [
         "src/main/ipc/pty/spawn-options-agent-workspace-trust.test.ts",
         "src/main/agent-launch/trust/agent-workspace-trust.test.ts",
         "src/main/agent-launch/trust/execution-host-workspace-trust.test.ts",
-        "src/main/runtime/orca-runtime-structured-agent-session-create-intent.test.ts"
+        "src/main/runtime/agent-session/launch/orca-runtime-structured-agent-session-create-intent.test.ts"
       ],
       "assertionRefs": [
         {
@@ -1273,7 +1273,7 @@
           ]
         },
         {
-          "file": "src/main/runtime/orca-runtime-structured-agent-session-create-intent.test.ts",
+          "file": "src/main/runtime/agent-session/launch/orca-runtime-structured-agent-session-create-intent.test.ts",
           "assertions": [
             "pre-trusts the chat folder in the account home launch preparation selected",
             "writes nothing with the setting off, and still prepares the launch"
@@ -1285,7 +1285,7 @@
           "date": "2026-09-29",
           "runner": "local",
           "platform": "macos",
-          "currentCommand": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty/spawn-options-agent-workspace-trust.test.ts src/main/agent-launch/trust/agent-workspace-trust.test.ts src/main/agent-launch/trust/execution-host-workspace-trust.test.ts src/main/runtime/orca-runtime-structured-agent-session-create-intent.test.ts",
+          "currentCommand": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty/spawn-options-agent-workspace-trust.test.ts src/main/agent-launch/trust/agent-workspace-trust.test.ts src/main/agent-launch/trust/execution-host-workspace-trust.test.ts src/main/runtime/agent-session/launch/orca-runtime-structured-agent-session-create-intent.test.ts",
           "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty/spawn-options-agent-workspace-trust.test.ts src/main/agent-workspace-trust-spawn.test.ts src/main/agent-workspace-trust.test.ts src/main/execution-host-workspace-trust.test.ts src/main/runtime/orca-runtime-structured-agent-session-create-intent.test.ts",
           "result": "passed",
           "durationSeconds": 4.16,
@@ -9344,7 +9344,7 @@
         "pnpm exec vitest run --config config/vitest.config.ts tests/e2e/completed-worker-retirement-resume.unit.test.ts --reporter=verbose",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/resume-sleeping-agent-session.test.ts src/main/providers/local-pty/local-pty-provider-spawn-session.test.ts src/main/daemon/terminal-host/testing/terminal-host.test.ts src/main/daemon/providers/adapter/testing/daemon-pty-adapter.test.ts src/main/ipc/pty/pty-pane-materialization-race.test.ts src/main/ipc/pty/pty-persisted-incarnation-repair.test.ts src/main/ipc/pty/pty-pane-reservation-settlement.test.ts src/main/runtime/orca-runtime.test.ts src/renderer/src/lib/pane-manager/pane-fit.test.ts src/renderer/src/components/terminal-pane/pty-connection-hidden-replay.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-host-session-launch.test.ts",
         "pnpm exec electron-vite build --mode e2e && SKIP_BUILD=1 pnpm exec playwright test tests/e2e/live-background-terminal-mount-authority.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/structured-agent-cli-writers.test.ts src/main/runtime/rpc/methods/structured-agent-session-adoption-replay.test.ts src/main/providers/agent-foreground-process-git-bash.win32.test.ts"
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/agent-session/lifecycle/structured-agent-cli-writers.test.ts src/main/runtime/rpc/methods/structured-agent-session-adoption-replay.test.ts src/main/providers/agent-foreground-process-git-bash.win32.test.ts"
       ],
       "testFiles": [
         "src/renderer/src/lib/resume-sleeping-agent-session.test.ts",
@@ -9360,13 +9360,13 @@
         "src/renderer/src/components/terminal-pane/pty-connection-hidden-replay.test.ts",
         "src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-host-session-launch.test.ts",
         "tests/e2e/live-background-terminal-mount-authority.spec.ts",
-        "src/main/runtime/structured-agent-cli-writers.test.ts",
+        "src/main/runtime/agent-session/lifecycle/structured-agent-cli-writers.test.ts",
         "src/main/runtime/rpc/methods/structured-agent-session-adoption-replay.test.ts",
         "src/main/providers/agent-foreground-process-git-bash.win32.test.ts"
       ],
       "assertionRefs": [
         {
-          "file": "src/main/runtime/structured-agent-cli-writers.test.ts",
+          "file": "src/main/runtime/agent-session/lifecycle/structured-agent-cli-writers.test.ts",
           "assertions": [
             "accepts exact exited or unchanged shell-only proof, never loss of evidence",
             "inspects the terminal a conversation leaves, whatever its rows now say"

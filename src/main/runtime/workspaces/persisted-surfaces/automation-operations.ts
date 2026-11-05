@@ -8,7 +8,7 @@ import {
 } from '../../orchestration/db/messages/helper-mailbox-hand-back'
 import { existsSync } from 'node:fs'
 import type { LegacyWorkerTerminalRecoveryPlan } from '../../orchestration/orchestration-legacy-worker-terminal-recovery'
-import type { LegacyWorkerTerminalRecoveryResult } from '../../runtime-legacy-worker-terminal-recovery-types'
+import type { LegacyWorkerTerminalRecoveryResult } from '../../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 
 export abstract class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWithAutomationApiOperations {
   abstract ensureOrchestrationFederationRelay(runId?: string): void
