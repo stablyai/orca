@@ -27,6 +27,8 @@ markdown.validateLink = () => true
 endLinkifyUrlsAtProsePunctuation(markdown.linkify)
 
 type Token = ReturnType<MarkdownIt['parse']>[number]
+/** markdown-it's env for every parse of one document; mobile-markdown-math reads `chatMath`. */
+type MathEnv = { chatMath: boolean }
 
 const PATH_FLANK = /[\w\\/]/
 const TASK_MARKER = /^\[([ xX])\](?:\s+|$)/
@@ -149,14 +151,14 @@ function readTaskMarker(item: Parent & { checked?: boolean | null }): void {
 }
 
 /** A `<details>` summary's inline HTML and Markdown as spans. */
-function summaryPhrasing(html: string): PhrasingContent[] {
+function summaryPhrasing(html: string, env: MathEnv): PhrasingContent[] {
   // A summary is one line of spans; heading markup in it (`<h3>`) keeps only its text.
   const text = normalizeMobileMarkdownPreviewHtml(html).replace(/^\s*#{1,6}\s+/gm, '')
-  return phrasing(markdown.parseInline(text, {})[0]?.children ?? [], 0).nodes
+  return phrasing(markdown.parseInline(text, env)[0]?.children ?? [], 0).nodes
 }
 
 /** markdown-it's flat token stream as the mdast tree the renderer draws. */
-function toTree(tokens: readonly Token[], source: string): Root {
+function toTree(tokens: readonly Token[], source: string, env: MathEnv): Root {
   const root: Root = { type: 'root', children: [] }
   const lines = source.split('\n')
   const stack: Parent[] = [root]
@@ -232,7 +234,7 @@ function toTree(tokens: readonly Token[], source: string): Root {
         parent.children.push({ type: 'thematicBreak' })
         break
       case 'html_block':
-        appendHtmlBlock(token.content, stack, open, summaryPhrasing)
+        appendHtmlBlock(token.content, stack, open, (html) => summaryPhrasing(html, env))
         break
       default:
         if (CLOSING_TOKENS.has(token.type)) {
@@ -250,12 +252,12 @@ function toTree(tokens: readonly Token[], source: string): Root {
 }
 
 // Clean only parser HTML nodes, never code: blocks become preview Markdown, inline tags become remaining text; nested leftover block HTML stays text.
-function withoutHtml(parent: Parent, nested: boolean): void {
+function withoutHtml(parent: Parent, nested: boolean, env: MathEnv): void {
   const inline = !BLOCK_PARENTS.has(parent.type)
   parent.children = parent.children.flatMap((child): RootContent[] => {
     if (child.type !== 'html') {
       if ('children' in child) {
-        withoutHtml(child, nested)
+        withoutHtml(child, nested, env)
       }
       return [child]
     }
@@ -272,8 +274,8 @@ function withoutHtml(parent: Parent, nested: boolean): void {
     if (nested) {
       return [{ type: 'paragraph', children: [{ type: 'text', value: text }] }]
     }
-    const blocks = toTree(markdown.parse(text, {}), text)
-    withoutHtml(blocks, true)
+    const blocks = toTree(markdown.parse(text, env), text, env)
+    withoutHtml(blocks, true, env)
     return blocks.children
   })
 }
@@ -286,7 +288,8 @@ function withLastBlockClosed(source: string, tokens: readonly Token[], chatMath:
   const lines = source.split('\n')
   const tail = lines.slice(lastBlock).join('\n')
   // Like desktop, unfinished math stays as typed: remend would rewrite TeX as Markdown.
-  if ((last && !mathClosed(last)) || (chatMath && /\\[[(]/.test(tail))) {
+  const tailTokens = last ? tokens.slice(tokens.indexOf(last)) : []
+  if (tailTokens.some((token) => !mathClosed(token)) || (chatMath && /\\[[(]/.test(tail))) {
     return source
   }
   const closed = remend(tail, { linkMode: 'text-only', katex: false })
@@ -296,15 +299,15 @@ function withLastBlockClosed(source: string, tokens: readonly Token[], chatMath:
 /** `growing`: the text is still arriving, so markup its end leaves open is closed first, instead
  *  of flashing raw markers and half-written links. `chatMath`: chat's `\(` and `\[` math too. */
 export function parseMobileMarkdownTree(source: string, growing: boolean, chatMath = false): Root {
-  const env = { chatMath }
+  const env: MathEnv = { chatMath }
   let tokens = markdown.parse(source, env)
   let text = source
   if (growing) {
     text = withLastBlockClosed(source, tokens, chatMath)
     tokens = text === source ? tokens : markdown.parse(text, env)
   }
-  const root = toTree(tokens, text)
-  withoutHtml(root, false)
+  const root = toTree(tokens, text, env)
+  withoutHtml(root, false, env)
   return root
 }
 

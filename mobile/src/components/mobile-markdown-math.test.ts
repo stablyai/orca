@@ -47,6 +47,12 @@ describe('math in mobile Markdown follows desktop chat', () => {
 })
 
 describe('math in GitHub text (PRs, Tasks, files)', () => {
+  it('keeps an unclosed $$ as text instead of swallowing what follows', () => {
+    expect(
+      parseMobileMarkdownTree('$$ savings\n\n## Summary', false).children.map((n) => n.type)
+    ).toEqual(['paragraph', 'heading'])
+  })
+
   it('reads dollar math but leaves escaped brackets as brackets', () => {
     expect(drawn('\\[Bug\\] $x$ and \\(y\\)', false)).toEqual({
       math: ['I:x'],

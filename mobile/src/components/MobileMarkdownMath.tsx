@@ -60,10 +60,13 @@ export const MobileMarkdownMath = memo(function MobileMarkdownMath({
       return
     }
     host.innerHTML = html
+    // Copying a selection reads the formula back as this source (markdownMathSelectionText).
+    host.dataset.mathSource = source
     return () => {
       host.replaceChildren()
+      delete host.dataset.mathSource
     }
-  }, [html])
+  }, [html, source])
 
   if (html === null) {
     return <Text style={style}>{source}</Text>

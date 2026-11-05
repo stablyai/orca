@@ -93,20 +93,22 @@ const TEX_SIZES: Record<string, number> = {
   Huge: 1.44
 }
 
+const MAX_MEASURED_GLYPHS = 64
 const DRAWS_NOTHING =
   /^(?:math[a-z]+|text[a-z]*|operatorname|boldsymbol|bm|left|right|[a-z]*style|tiny|scriptsize|footnotesize|small|normalsize|large|Large|LARGE|huge|Huge|color|frac|dfrac|tfrac|sqrt)$/
 
 /** About as many characters as a formula draws wide, for sizing table columns: commands,
  *  colour arguments, braces and scripts take no room, and a size command scales the rest. */
 export function mobileMathMeasureText(value: string): string {
-  const scale = Math.max(
-    1,
-    ...[...value.matchAll(/\\([a-zA-Z]+)/g)].map(([, name]) => TEX_SIZES[name!] ?? 1)
-  )
+  let scale = 1
+  for (const [, name] of value.matchAll(/\\([a-zA-Z]+)/g)) {
+    scale = Math.max(scale, TEX_SIZES[name!] ?? 1)
+  }
   const glyphs = value
     .replace(/\\(?:color|textcolor)\{[^}]*\}/g, '')
     // A symbol command (\alpha, \sum) draws one glyph; style and size commands draw none.
     .replace(/\\([a-zA-Z]+)/g, (_command, name: string) => (DRAWS_NOTHING.test(name) ? '' : 'x'))
     .replace(/[{}^_\s]/g, '')
-  return 'm'.repeat(Math.ceil([...glyphs].length * scale))
+  // Columns cap well below this, so a huge formula needs no longer estimate.
+  return 'm'.repeat(Math.min(MAX_MEASURED_GLYPHS, Math.ceil([...glyphs].length * scale)))
 }

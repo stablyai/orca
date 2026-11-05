@@ -182,9 +182,10 @@ function closerInLine(text: string, opener: string): number {
   return -1
 }
 
-/** Block scans that failed at a line, per parse. A later opener of the same kind before that line
- *  reads the same lines to the same end, so it fails without rescanning (paragraphs retry every line). */
-const failedBlockScans = new WeakMap<StateBlock, Map<string, number>>()
+/** Block scans that failed, per parse, by the lines they read. A later opener of the same kind inside
+ *  that range reads the same lines to the same end, so it fails without rescanning (paragraphs retry
+ *  every line). Containers look ahead, so a range never rejects an opener before it. */
+const failedBlockScans = new WeakMap<StateBlock, Map<string, { from: number; to: number }>>()
 
 function blockMath(
   state: StateBlock,
@@ -208,7 +209,8 @@ function blockMath(
     failedBlockScans.set(state, failed)
   }
   const scan = `${opener}:${state.blkIndent}:${endLine}`
-  if ((failed.get(scan) ?? -1) > startLine) {
+  const searched = failed.get(scan)
+  if (searched && startLine > searched.from && startLine < searched.to) {
     return false
   }
   const closer = markdownMathCloser(opener)
@@ -222,7 +224,7 @@ function blockMath(
     if (at >= 0) {
       // A closer with text after it is inline math in a paragraph, not a block.
       if (text.slice(at + closer.length).trim()) {
-        failed.set(scan, line)
+        failed.set(scan, { from: startLine, to: line })
         return false
       }
       lines.push(text.slice(0, at))
@@ -238,8 +240,9 @@ function blockMath(
     }
   }
   const body = lines.join('\n')
-  if (isCitationBracketMath(opener, body)) {
-    failed.set(scan, line)
+  // An unclosed block is chat still streaming in; GitHub keeps an unclosed `$$` as text.
+  if (isCitationBracketMath(opener, body) || (!closed && !chatDelimiters(state.env))) {
+    failed.set(scan, { from: startLine, to: line })
     return false
   }
   if (silent) {
