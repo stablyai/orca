@@ -4,6 +4,7 @@ import { act, startTransition, Suspense, use } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { cleanup, renderHook } from '@testing-library/react'
 import { useAppStore } from '@/store'
+import { createTabsLabelActions } from '@/store/slices/tabs/tabs-label-actions'
 import { useNativeChatToggleShortcut } from '../native-chat/use-native-chat-toggle-shortcut'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { clearClientHostedBrowserRowSelection } from '@/lib/pane-manager/client-hosted-browser-row-state'
@@ -355,8 +356,10 @@ it.each([true, false, null])(
   (runtime) => {
     const previous = useAppStore.getState()
     const tab = makeUnifiedTab('tab', 'wt', 'tab', 'codex')
+    const leafId = '11111111-1111-4111-8111-111111111111'
     useAppStore.setState({
       ...createTestStore().getState(),
+      ...createTabsLabelActions(useAppStore.setState, useAppStore.getState),
       tabsByWorktree: { wt: [makeTerminalTab('tab', 'wt', 'codex')] },
       activeWorktreeId: 'wt',
       activeGroupIdByWorktree: { wt: 'group-wt' },
@@ -378,12 +381,12 @@ it.each([true, false, null])(
             },
       unifiedTabsByWorktree: { wt: [{ ...tab, viewMode: 'terminal' }] },
       agentStatusByPaneKey: {
-        [`tab:${LEFT}`]: {
+        [`tab:${leafId}`]: {
           state: 'waiting',
           prompt: '',
           updatedAt: 0,
           stateStartedAt: 0,
-          paneKey: `tab:${LEFT}`,
+          paneKey: `tab:${leafId}`,
           agentType: 'codex'
         }
       }
