@@ -11,6 +11,7 @@ import type { AcpAgentError } from '../acp-errors'
 import type { AgentSessionOptionChoice } from '../../../shared/agent-session/agent-session-wire'
 import type {
   AvailableCommand,
+  ClientCapabilities,
   InitializeResponse,
   ModelInfo,
   ToolCallUpdate
@@ -121,6 +122,8 @@ export type AcpDialect = {
   }
   /** Native thinking choices remain valid across models; the agent clamps unsupported levels. */
   clampsUnlistedEffort?: true
+  /** Advertised only when `request` answers what it turns on. */
+  clientCapabilities?: Pick<ClientCapabilities, 'elicitation'>
   /** Claimed permission requests are never auto-approved. */
   request?(method: string, params: unknown): AcpRequestPresentation | undefined
   settleRequest?(method: string, params: unknown): AcpRequestSettlement | undefined

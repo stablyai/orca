@@ -232,7 +232,9 @@ const OMP_LAUNCH_SPEC: AcpLaunchSpec = {
   command: 'omp',
   // Full access approves permission requests individually.
   args: ({ pluginDir }) => ['acp', ...(pluginDir ? ['--plugin-dir', pluginDir] : [])],
-  env: {},
+  // Answering forms marks the session as having a UI, so `pty: true` bash would open a TUI
+  // overlay ACP cannot draw and fail; OMP's own headless modes set this too.
+  env: { PI_NO_PTY: '1' },
   dialect: OMP_ACP_DIALECT,
   loginCommand: agentSessionSignInFor('omp')?.loginCommand ?? [],
   account: directoryAccountBinding('PI_CODING_AGENT_DIR', (homePath) =>
