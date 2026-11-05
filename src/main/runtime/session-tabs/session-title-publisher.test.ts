@@ -38,7 +38,7 @@ describe.each([false, true])('session title publisher, main layout=%s', (isMain)
   beforeEach(() => {
     layoutOwner.isMain = isMain
     vi.useFakeTimers()
-    electronMocks.BrowserWindow.fromId.mockReturnValue({ isDestroyed: () => false } as never)
+    electronMocks.BrowserWindow.fromId.mockReturnValue({ isDestroyed: () => false })
   })
   afterEach(() => vi.useRealTimers())
 
@@ -51,7 +51,7 @@ describe.each([false, true])('session title publisher, main layout=%s', (isMain)
       [HEADLESS_LEAF_ID]: surface.ptyId!
     })
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(session)
-    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    const runtime = new OrcaRuntimeService(runtimeStore)
     runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
     runtime.registerPty(surface.ptyId!, TEST_WORKTREE_ID, null, {
       tabId: surface.parentTabId,
