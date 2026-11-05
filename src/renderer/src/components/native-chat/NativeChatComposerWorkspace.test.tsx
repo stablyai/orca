@@ -118,6 +118,26 @@ describe('chat composer workspace', () => {
     expect(screen.getByText('notes')).toBeTruthy()
   })
 
+  it('identifies a folder project by its checkout name without Git identity', () => {
+    const folder = makeWorktree({
+      id: 'notes-main',
+      repoId: TEST_REPO.id,
+      path: '/work/notes',
+      displayName: 'plain-notes-folder',
+      isMainWorktree: true,
+      branch: '',
+      head: ''
+    })
+    useAppStore.setState({
+      repos: [{ ...TEST_REPO, kind: 'folder', displayName: 'Notes project', path: '/work/notes' }],
+      worktreesByRepo: { [TEST_REPO.id]: [folder] },
+      tabsByWorktree: { [folder.id]: [makeTab({ id: 'tab-1', worktreeId: folder.id })] }
+    })
+    render(<Footer />)
+    expect(screen.getByText('plain-notes-folder')).toBeTruthy()
+    expect(screen.queryByRole('button')).toBeNull()
+  })
+
   it('does not render for unrelated store writes or another workspace branch update', () => {
     const commits = vi.fn()
     render(

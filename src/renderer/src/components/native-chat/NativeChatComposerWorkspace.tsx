@@ -51,7 +51,7 @@ export function NativeChatComposerWorkspace({
   }
 
   return (
-    <div className="@container mt-1 flex h-6 shrink-0 min-w-0 items-center gap-2 overflow-hidden px-3 text-xs text-chat-foreground-faint">
+    <div className="@container mt-1 flex h-6 shrink-0 min-w-0 items-center gap-2 px-3 text-xs text-chat-foreground-faint">
       {project && (
         <span
           className="hidden min-w-0 max-w-40 shrink items-center gap-1 @sm:flex"
@@ -72,7 +72,7 @@ export function NativeChatComposerWorkspace({
         >
           <Folder className="size-3.5 shrink-0" aria-hidden />
           <span className="truncate">
-            {project && mainCheckout
+            {identity && project && mainCheckout
               ? translate(
                   'components.native-chat.composerWorkspace.projectCheckout',
                   'Project checkout'
