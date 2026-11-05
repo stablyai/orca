@@ -161,6 +161,28 @@ describe('launchPullRequestAgentPrompt', () => {
     })
   })
 
+  it('picks a detected agent for a new workspace when the default agent is blank', async () => {
+    mocks.store.settings = { defaultTuiAgent: 'blank', disabledTuiAgents: [] }
+    mocks.store.ensureDetectedAgents.mockResolvedValue(['claude'])
+
+    await launchPullRequestAgentPrompt(launchArgs())
+
+    expect(mocks.launchWorkItemDirect).toHaveBeenCalledWith(
+      expect.objectContaining({ agentOverride: 'claude' })
+    )
+  })
+
+  it('refuses to create a workspace when no enabled agent is detected', async () => {
+    mocks.store.ensureDetectedAgents.mockResolvedValue([])
+
+    await expect(launchPullRequestAgentPrompt(launchArgs())).resolves.toBe(false)
+
+    expect(mocks.launchWorkItemDirect).not.toHaveBeenCalled()
+    expect(mocks.toastError).toHaveBeenCalledWith(
+      'No enabled AI agent was detected on this workspace host.'
+    )
+  })
+
   it('refuses to create a workspace when the saved agent is not detected', async () => {
     await expect(
       launchPullRequestAgentPrompt(launchArgs({ recipe: { agentId: 'claude' } }))

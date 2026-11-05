@@ -73,17 +73,18 @@ async function resolveSavedAgentOverride(
   messages: PullRequestAgentPromptLaunchMessages
 ): Promise<SavedAgentOverrideResult> {
   const savedAgent = readSourceControlLaunchRecipeAgentId(recipe)
-  if (!savedAgent) {
+  const pendingAgents = ensureDetectedAgentsForRepo(useAppStore.getState(), repo ?? {})
+  // Why: a paired server answers per workspace, so its default is resolved after creation.
+  if (!savedAgent && !pendingAgents) {
     return { kind: 'launch-default' }
   }
-  const pendingAgents = ensureDetectedAgentsForRepo(useAppStore.getState(), repo ?? {})
   // Why: a paired server answers per workspace, so only the enabled check can run before it exists;
   // the direct launch checks installation on the new workspace.
   const [choices, preferences] = await Promise.all([
     pendingAgents ? acquireAgentLaunchChoices(workspace, () => pendingAgents) : null,
     preferencesPromise
   ])
-  const available = pendingAgents
+  const pickedAgent = pendingAgents
     ? resolveChecksActionAgent(
         useAppStore.getState(),
         STRICT_SAVED_AGENT_ACTION_ID,
@@ -92,7 +93,23 @@ async function resolveSavedAgentOverride(
         choices?.detected ?? null,
         preferences,
         recipe
-      ) === savedAgent
+      )
+    : null
+  if (!savedAgent) {
+    // Why: same pick as an existing workspace, so a prompt is never dropped for want of an agent.
+    if (!pickedAgent) {
+      toast.error(
+        translate(
+          'auto.lib.fix.checks.agent.launch.2ebf794906',
+          'No enabled AI agent was detected on this workspace host.'
+        )
+      )
+      return { kind: 'blocked' }
+    }
+    return { kind: 'agent', agent: pickedAgent }
+  }
+  const available = pendingAgents
+    ? pickedAgent === savedAgent
     : isTuiAgentEnabled(savedAgent, preferences.disabledTuiAgents)
   if (!available) {
     toast.error(messages.savedAgentUnavailable())
