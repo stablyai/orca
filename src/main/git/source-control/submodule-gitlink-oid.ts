@@ -29,17 +29,25 @@ export async function readGitlinkOidFromIndex(
   options: GitRuntimeOptions
 ): Promise<string> {
   try {
-    const { stdout } = await gitExecFileAsync(
-      ['ls-files', '-s', '--', literalPathspec(submodulePath, worktreePath, options)],
-      {
-        ...gitOptionsForWorktree(worktreePath, options),
-        env: gitOptionalLocksDisabledEnv()
-      }
-    )
-    return stdout.match(/^160000 ([0-9a-f]+) /m)?.[1] ?? ''
+    return await readGitlinkOidFromIndexStrict(worktreePath, submodulePath, options)
   } catch {
     return ''
   }
+}
+
+export async function readGitlinkOidFromIndexStrict(
+  worktreePath: string,
+  submodulePath: string,
+  options: GitRuntimeOptions
+): Promise<string> {
+  const { stdout } = await gitExecFileAsync(
+    ['ls-files', '-s', '--', literalPathspec(submodulePath, worktreePath, options)],
+    {
+      ...gitOptionsForWorktree(worktreePath, options),
+      env: gitOptionalLocksDisabledEnv()
+    }
+  )
+  return stdout.match(/^160000 ([0-9a-f]+) /m)?.[1] ?? ''
 }
 
 export async function readWorkingSubmoduleHead(

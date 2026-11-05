@@ -1,7 +1,7 @@
+import { areGitStatusEntriesEqual } from '../../../../../../shared/git/status/git-status-entries-equal'
 import type { EditorGet, EditorSet } from '../types/editor-set-get'
 import type { EditorSlice } from '../types/editor-slice'
 import {
-  areGitStatusEntriesEqual,
   areTrackedConflictMapsEqual,
   reconcileOpenFilesForStatus
 } from '../git/git-status-reconciliation'

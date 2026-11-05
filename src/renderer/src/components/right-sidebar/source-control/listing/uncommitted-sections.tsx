@@ -74,6 +74,7 @@ export function SourceControlUncommittedSections(props: {
   requestDiscardPaths: (area: DiscardAllArea, paths: readonly string[]) => void
   expandedSubmoduleKeys: Set<string>
   toggleSubmodule: (entry: Pick<GitStatusEntry, 'area' | 'path'>) => void
+  retrySubmodule: (key: string) => void
   currentWorktreeId: string
   worktreePath: string
   selectedKeySet: ReadonlySet<string>
@@ -192,6 +193,7 @@ export function SourceControlUncommittedSections(props: {
                 handleUnstagePaths={props.handleUnstagePaths}
                 expandedSubmoduleKeys={props.expandedSubmoduleKeys}
                 toggleSubmodule={props.toggleSubmodule}
+                retrySubmodule={props.retrySubmodule}
                 currentWorktreeId={props.currentWorktreeId}
                 worktreePath={props.worktreePath}
                 selectedKeySet={props.selectedKeySet}

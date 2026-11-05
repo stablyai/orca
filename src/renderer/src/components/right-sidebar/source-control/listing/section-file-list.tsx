@@ -30,6 +30,7 @@ export function SourceControlSectionFileList({
   handleUnstagePaths,
   expandedSubmoduleKeys,
   toggleSubmodule,
+  retrySubmodule,
   currentWorktreeId,
   worktreePath,
   selectedKeySet,
@@ -58,6 +59,7 @@ export function SourceControlSectionFileList({
   handleUnstagePaths: (paths: readonly string[]) => Promise<void>
   expandedSubmoduleKeys: Set<string>
   toggleSubmodule: (entry: Pick<GitStatusEntry, 'area' | 'path'>) => void
+  retrySubmodule: (key: string) => void
   currentWorktreeId: string
   worktreePath: string
   selectedKeySet: ReadonlySet<string>
@@ -86,6 +88,8 @@ export function SourceControlSectionFileList({
               depth={node.depth}
               state={node.state}
               message={node.message}
+              refreshing={node.refreshing}
+              onRetry={() => retrySubmodule(node.expansionKey)}
             />
           )
         }
@@ -152,6 +156,8 @@ export function SourceControlSectionFileList({
               depth={row.depth}
               state={row.state}
               message={row.message}
+              refreshing={row.refreshing}
+              onRetry={() => retrySubmodule(row.expansionKey)}
             />
           )
         }

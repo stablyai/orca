@@ -64,6 +64,7 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
     requestDiscardEntry,
     requestDiscardPaths,
     revealInExplorer,
+    retrySubmodule,
     selectedKeySet,
     setBaseRefDialogOpen,
     sourceControlAiActionsVisible,
@@ -169,6 +170,7 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
           requestDiscardPaths={requestDiscardPaths}
           expandedSubmoduleKeys={expandedSubmoduleKeys}
           toggleSubmodule={toggleSubmodule}
+          retrySubmodule={retrySubmodule}
           currentWorktreeId={currentWorktreeId}
           worktreePath={worktreePath}
           selectedKeySet={selectedKeySet}

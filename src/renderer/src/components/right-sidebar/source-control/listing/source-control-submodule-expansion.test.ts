@@ -10,6 +10,7 @@ import {
   type SubmoduleSectionTreeNode,
   type SubmoduleStatusState
 } from './submodule-expansion'
+import { getSourceControlDirectoryActionPaths } from './directory-action-paths'
 
 const LOADING = 'Loading submodule changes…'
 const EMPTY = 'No changes in submodule'
@@ -102,14 +103,19 @@ describe('buildSubmoduleChildNodes', () => {
       }
     ]
 
-    const [child] = buildSubmoduleChildNodes(parent, inner)
+    const [directory] = buildSubmoduleChildNodes(parent, inner)
+    expect(directory).toMatchObject({ type: 'directory', path: 'flutter_mine/lib', depth: 3 })
+    if (directory.type !== 'directory' || directory.children[0].type !== 'file') {
+      throw new Error('Expected a directory containing the renamed file')
+    }
+    const child = directory.children[0]
 
     expect(child.path).toBe('flutter_mine/lib/main.dart')
     expect(child.entry.oldPath).toBe('flutter_mine/lib/old-main.dart')
     expect(child.name).toBe('main.dart')
     expect(child.entry.submoduleRoot).toBe('flutter_mine')
     expect(child.entry.status).toBe('renamed')
-    expect(child.depth).toBe(3)
+    expect(child.depth).toBe(4)
     expect(child.area).toBe('unstaged')
   })
 })
@@ -186,12 +192,16 @@ describe('injectExpandedSubmoduleRows', () => {
       LOADING,
       EMPTY
     )
-    expect(result).toHaveLength(2)
-    expect(result[1]).toMatchObject({
+    expect(result).toHaveLength(3)
+    expect(result[1]).toMatchObject({ type: 'directory', path: 'flutter_mine/lib' })
+    expect(result[2]).toMatchObject({
       type: 'file',
       path: 'flutter_mine/lib/main.dart'
     })
-    const child = result[1] as SubmoduleSectionTreeNode & { type: 'file' }
+    const child = result[2]
+    if (child.type !== 'file') {
+      throw new Error('Expected the submodule child file')
+    }
     expect(child.entry.submoduleRoot).toBe('flutter_mine')
   })
 
@@ -236,7 +246,7 @@ describe('injectExpandedSubmoduleRows', () => {
       EMPTY
     )
 
-    expect(result[1]).toMatchObject({
+    expect(result[2]).toMatchObject({
       type: 'file',
       key: 'staged::flutter_mine/lib/main.dart',
       area: 'staged',
@@ -268,8 +278,104 @@ describe('injectExpandedSubmoduleRows', () => {
       LOADING,
       EMPTY
     )
-    expect(result).toHaveLength(2)
-    expect(result[1]).toMatchObject({ type: 'file', path: 'flutter_mine/lib/main.dart' })
+    expect(result).toHaveLength(3)
+    expect(result[2]).toMatchObject({ type: 'file', path: 'flutter_mine/lib/main.dart' })
+  })
+
+  it('places matching filenames in their folders and keeps child directory actions read-only', () => {
+    const node = fileNode(submoduleEntry({ path: 'flutter_mine' }), 1)
+    const rows = injectExpandedSubmoduleRows(
+      [node],
+      new Set([FLUTTER_KEY]),
+      {
+        [FLUTTER_KEY]: {
+          status: 'loaded',
+          entries: [
+            { path: 'src/index.ts', oldPath: 'src/old.ts', status: 'renamed', area: 'staged' },
+            { path: 'tests/index.ts', status: 'untracked', area: 'untracked' }
+          ]
+        }
+      },
+      LOADING,
+      EMPTY
+    )
+    expect(rows.map(({ type, key, depth }) => ({ type, key, depth }))).toEqual([
+      { type: 'file', key: 'unstaged::flutter_mine', depth: 1 },
+      { type: 'directory', key: 'dir::unstaged::flutter_mine/src', depth: 2 },
+      { type: 'file', key: 'staged::flutter_mine/src/index.ts', depth: 3 },
+      { type: 'directory', key: 'dir::unstaged::flutter_mine/tests', depth: 2 },
+      { type: 'file', key: 'untracked::flutter_mine/tests/index.ts', depth: 3 }
+    ])
+    expect(rows[2]).toMatchObject({
+      entry: { oldPath: 'flutter_mine/src/old.ts', submoduleRoot: 'flutter_mine' }
+    })
+    for (const row of rows) {
+      if (row.type === 'directory') {
+        expect(getSourceControlDirectoryActionPaths(row)).toEqual({
+          stagePaths: [],
+          unstagePaths: [],
+          discardPaths: []
+        })
+      }
+    }
+  })
+
+  it('keeps the staged parent diff area for every file within child folders', () => {
+    const parent = fileNode(submoduleEntry({ path: 'flutter_mine', area: 'staged' }))
+    parent.area = 'staged'
+    const rows = injectExpandedSubmoduleRows(
+      [parent],
+      new Set(['staged::flutter_mine']),
+      {
+        'staged::flutter_mine': {
+          status: 'loaded',
+          entries: [{ path: 'src/index.ts', status: 'untracked', area: 'untracked' }]
+        }
+      },
+      LOADING,
+      EMPTY
+    )
+    expect(rows[1]).toMatchObject({ key: 'dir::staged::flutter_mine/src' })
+    expect(rows[2]).toMatchObject({
+      key: 'staged::flutter_mine/src/index.ts',
+      entry: { area: 'staged', submoduleRoot: 'flutter_mine' }
+    })
+  })
+
+  it('shows a retryable refresh error before retained children without an empty placeholder', () => {
+    const node = fileNode(submoduleEntry({ path: 'flutter_mine' }))
+    const rows = injectExpandedSubmoduleRows(
+      [node],
+      new Set([FLUTTER_KEY]),
+      {
+        [FLUTTER_KEY]: {
+          status: 'loaded',
+          entries: [{ path: 'src/index.ts', status: 'modified', area: 'unstaged' }],
+          error: 'Connection lost',
+          refreshing: true
+        }
+      },
+      LOADING,
+      EMPTY
+    )
+    expect(rows[1]).toMatchObject({
+      type: 'submodule-placeholder',
+      state: 'error',
+      expansionKey: 'unstaged::flutter_mine',
+      message: 'Connection lost',
+      refreshing: true
+    })
+    expect(rows[3]).toMatchObject({ type: 'file', path: 'flutter_mine/src/index.ts' })
+    const emptyErrorRows = injectExpandedSubmoduleRows(
+      [node],
+      new Set([FLUTTER_KEY]),
+      { [FLUTTER_KEY]: { status: 'loaded', entries: [], error: 'Connection lost' } },
+      LOADING,
+      EMPTY
+    )
+    expect(
+      emptyErrorRows.map((row) => (row.type === 'submodule-placeholder' ? row.state : row.type))
+    ).toEqual(['file', 'error'])
   })
 
   it('never expands a non-submodule entry that is in the expanded set', () => {
@@ -379,6 +485,36 @@ describe('injectExpandedSubmoduleEntries (list view)', () => {
       state: 'empty',
       message: EMPTY
     })
+  })
+
+  it('retains flat child paths after a failed refresh and exposes its retry key', () => {
+    const entry = submoduleEntry({ path: 'flutter_mine' })
+    const rows = injectExpandedSubmoduleEntries(
+      [entry],
+      new Set([FLUTTER_KEY]),
+      {
+        [FLUTTER_KEY]: {
+          status: 'loaded',
+          error: 'Offline',
+          entries: [
+            { path: 'src/index.ts', status: 'modified', area: 'unstaged' },
+            { path: 'tests/index.ts', status: 'untracked', area: 'untracked' }
+          ]
+        }
+      },
+      LOADING,
+      EMPTY
+    )
+    expect(rows[1]).toMatchObject({
+      type: 'submodule-placeholder',
+      state: 'error',
+      expansionKey: 'unstaged::flutter_mine'
+    })
+    expect(collectListSelectionEntries(rows).map(({ key }) => key)).toEqual([
+      'unstaged::flutter_mine',
+      'unstaged::flutter_mine/src/index.ts',
+      'untracked::flutter_mine/tests/index.ts'
+    ])
   })
 
   it('shows that capped list results omit additional submodule changes', () => {

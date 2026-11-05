@@ -105,7 +105,7 @@ async function dropSharedSymlinkUntrackedEntries(
 // Git's stderr is unbounded and travels to remote clients; the first lines say what failed.
 const STATUS_READ_ERROR_MAX_LENGTH = 1_000
 
-function describeStatusReadError(error: unknown): string {
+export function describeStatusReadError(error: unknown): string {
   const stderr = readGitCommandFailureStderr(error)?.trim()
   const text = stderr || (error instanceof Error ? error.message : String(error))
   return text.slice(0, STATUS_READ_ERROR_MAX_LENGTH)

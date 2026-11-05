@@ -169,7 +169,8 @@ export function useSourceControlFileProjection({
         expandedSubmoduleKeys,
         submoduleStatusByKey,
         getSubmoduleLoadingLabel(),
-        getSubmoduleEmptyLabel()
+        getSubmoduleEmptyLabel(),
+        collapsedTreeDirs
       )
     }
     return rows

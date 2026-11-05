@@ -20,6 +20,53 @@ vi.mock('@/runtime/close-mirrored-editor-tab', () => ({
 }))
 
 describe('createEditorSlice conflict status reconciliation', () => {
+  it('updates submodule metadata when the parent file status stays modified', () => {
+    const store = createEditorStore()
+    store.getState().setGitStatus('wt-1', {
+      conflictOperation: 'unknown',
+      entries: [
+        {
+          path: 'vendor/lib',
+          status: 'modified',
+          area: 'unstaged',
+          submodule: { commitChanged: false, trackedChanges: true, untrackedChanges: false }
+        }
+      ]
+    })
+    store.getState().setGitStatus('wt-1', {
+      conflictOperation: 'unknown',
+      entries: [
+        {
+          path: 'vendor/lib',
+          status: 'modified',
+          area: 'unstaged',
+          submodule: {
+            commitChanged: true,
+            trackedChanges: false,
+            untrackedChanges: true,
+            restoreRecurses: true
+          },
+          submoduleRoot: 'vendor'
+        }
+      ]
+    })
+
+    expect(store.getState().gitStatusByWorktree['wt-1']).toEqual([
+      {
+        path: 'vendor/lib',
+        status: 'modified',
+        area: 'unstaged',
+        submodule: {
+          commitChanged: true,
+          trackedChanges: false,
+          untrackedChanges: true,
+          restoreRecurses: true
+        },
+        submoduleRoot: 'vendor'
+      }
+    ])
+  })
+
   it('keeps the last known changes while git status cannot be read', () => {
     const store = createEditorStore()
     const entries = [{ path: 'README.md', status: 'modified' as const, area: 'unstaged' as const }]

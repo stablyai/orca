@@ -7,12 +7,26 @@ const LOCAL_TARGET: RuntimeClientTarget = { kind: 'local' }
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-const mocks = vi.hoisted(() => ({ getRuntimeGitSubmoduleStatus: vi.fn() }))
+const mocks: {
+  getRuntimeGitSubmoduleStatus: ReturnType<typeof vi.fn>
+  ownerTarget: RuntimeClientTarget
+} = vi.hoisted(() => ({
+  getRuntimeGitSubmoduleStatus: vi.fn(),
+  ownerTarget: { kind: 'local' }
+}))
 
 vi.mock('@/runtime/runtime-git-status-client', () => ({
   getRuntimeGitSubmoduleStatus: mocks.getRuntimeGitSubmoduleStatus
 }))
-vi.mock('@/lib/connection-context', () => ({ getConnectionId: () => undefined }))
+vi.mock('@/lib/worktree-git-copy', () => ({
+  useWorktreeGitCopyHostId: () => 'local',
+  resolveWorktreeGitCopyNow: (worktreeId: string) => ({
+    worktreeId,
+    hostId: 'local',
+    connectionId: undefined,
+    transport: mocks.ownerTarget
+  })
+}))
 
 import {
   useSourceControlSubmoduleStatus,
@@ -85,6 +99,7 @@ afterEach(() => {
     }
   })
   mocks.getRuntimeGitSubmoduleStatus.mockReset()
+  mocks.ownerTarget = { kind: 'local' }
   latest = null
 })
 
@@ -128,7 +143,7 @@ describe('useSourceControlSubmoduleStatus', () => {
 
     expect(latest?.submoduleStatusByKey['unstaged::sub']).toEqual({
       status: 'loaded',
-      entries: [innerEntry('from-b.ts')]
+      entries: [{ path: 'from-b.ts', status: 'modified', area: 'unstaged' }]
     })
   })
 
@@ -170,7 +185,7 @@ describe('useSourceControlSubmoduleStatus', () => {
 
     expect(latest?.submoduleStatusByKey['unstaged::sub']).toEqual({
       status: 'loaded',
-      entries: [innerEntry('from-b.ts')]
+      entries: [{ path: 'from-b.ts', status: 'modified', area: 'unstaged' }]
     })
   })
 
@@ -188,6 +203,7 @@ describe('useSourceControlSubmoduleStatus', () => {
     const root = createRoot(container)
     roots.push(root)
 
+    mocks.ownerTarget = { kind: 'environment', environmentId: 'env-a' }
     await act(async () => {
       root.render(
         <Probe
@@ -203,6 +219,7 @@ describe('useSourceControlSubmoduleStatus', () => {
     })
     await flush()
 
+    mocks.ownerTarget = { kind: 'environment', environmentId: 'env-b' }
     await act(async () => {
       root.render(
         <Probe
@@ -229,7 +246,7 @@ describe('useSourceControlSubmoduleStatus', () => {
 
     expect(latest?.submoduleStatusByKey['unstaged::sub']).toEqual({
       status: 'loaded',
-      entries: [innerEntry('from-env-b.ts')]
+      entries: [{ path: 'from-env-b.ts', status: 'modified', area: 'unstaged' }]
     })
   })
 })

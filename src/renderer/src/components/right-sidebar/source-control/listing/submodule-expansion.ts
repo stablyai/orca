@@ -1,7 +1,11 @@
 import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
-import { basename } from '@/lib/path'
 import type { SourceControlSectionArea } from '../../../../../../shared/source-control/listing/source-control-section-order'
-import type { SourceControlTreeNode } from '../../../../../../shared/source-control/listing/source-control-tree'
+import {
+  buildGitStatusSourceControlTree,
+  compactSourceControlTree,
+  flattenSourceControlTree,
+  type SourceControlTreeNode
+} from '../../../../../../shared/source-control/listing/source-control-tree'
 import type { FlatEntry } from './use-selection'
 
 export type SubmoduleSectionTreeNode = SourceControlTreeNode<
@@ -14,6 +18,8 @@ export type SubmodulePlaceholderNode = {
   type: 'submodule-placeholder'
   key: string
   submodulePath: string
+  expansionKey: string
+  refreshing?: boolean
   depth: number
   state: 'loading' | 'empty' | 'error' | 'truncated'
   message?: string
@@ -23,8 +29,14 @@ export type RenderableSourceControlNode = SubmoduleSectionTreeNode | SubmodulePl
 
 export type SubmoduleStatusState =
   | { status: 'loading' }
-  | { status: 'loaded'; entries: GitStatusEntry[]; didHitLimit?: boolean }
-  | { status: 'error'; error: string }
+  | {
+      status: 'loaded'
+      entries: GitStatusEntry[]
+      didHitLimit?: boolean
+      error?: string
+      refreshing?: boolean
+    }
+  | { status: 'error'; error: string; refreshing?: boolean }
 
 export function getSubmoduleExpansionKey(entry: Pick<GitStatusEntry, 'area' | 'path'>): string {
   return `${entry.area}::${entry.path}`
@@ -73,20 +85,78 @@ export function buildSubmoduleChildEntry(
 export function buildSubmoduleChildNodes(
   parent: SubmoduleSectionTreeNode & { type: 'file' },
   innerEntries: GitStatusEntry[]
-): (SubmoduleSectionTreeNode & { type: 'file' })[] {
+): SubmoduleSectionTreeNode[] {
   const submodulePath = parent.entry.path
-  return innerEntries.map((innerEntry) => {
-    const childEntry = buildSubmoduleChildEntry(submodulePath, innerEntry, parent.entry.area)
-    return {
-      type: 'file',
-      key: `${childEntry.area}::${childEntry.path}`,
-      name: basename(childEntry.path),
-      path: childEntry.path,
-      entry: childEntry,
-      area: childEntry.area,
-      depth: parent.depth + 1
+  const stampNode = (node: SubmoduleSectionTreeNode): SubmoduleSectionTreeNode => {
+    const depth = parent.depth + 1 + node.depth
+    if (node.type === 'file') {
+      const entry = buildSubmoduleChildEntry(submodulePath, node.entry, parent.entry.area)
+      return {
+        ...node,
+        key: `${entry.area}::${entry.path}`,
+        path: entry.path,
+        entry,
+        area: entry.area,
+        depth
+      }
     }
+    const path = `${submodulePath}/${node.path}`
+    return {
+      ...node,
+      key: `dir::${parent.area}::${path}`,
+      path,
+      depth,
+      children: node.children.map(stampNode)
+    }
+  }
+  return compactSourceControlTree(buildGitStatusSourceControlTree(parent.area, innerEntries)).map(
+    stampNode
+  )
+}
+
+function buildSubmodulePlaceholders(
+  entry: GitStatusEntry,
+  state: SubmoduleStatusState | undefined,
+  depth: number,
+  loadingMessage: string,
+  emptyMessage: string
+): SubmodulePlaceholderNode[] {
+  const placeholder = (
+    kind: SubmodulePlaceholderNode['state'],
+    message?: string
+  ): SubmodulePlaceholderNode => ({
+    type: 'submodule-placeholder',
+    key: `submodule-${kind}::${entry.area}::${entry.path}`,
+    submodulePath: entry.path,
+    expansionKey: getSubmoduleExpansionKey(entry),
+    depth,
+    state: kind,
+    message,
+    ...(state && state.status !== 'loading' ? { refreshing: state.refreshing } : {})
   })
+  if (!state || state.status === 'loading') {
+    return [placeholder('loading', loadingMessage)]
+  }
+  if (state.error !== undefined) {
+    return [placeholder('error', state.error)]
+  }
+  return state.status === 'loaded' && state.entries.length === 0
+    ? [placeholder('empty', emptyMessage)]
+    : []
+}
+
+function buildSubmoduleTruncationPlaceholder(
+  entry: GitStatusEntry,
+  depth: number
+): SubmodulePlaceholderNode {
+  return {
+    type: 'submodule-placeholder',
+    key: `submodule-truncated::${entry.area}::${entry.path}`,
+    submodulePath: entry.path,
+    expansionKey: getSubmoduleExpansionKey(entry),
+    depth,
+    state: 'truncated'
+  }
 }
 
 export type RenderableSubmoduleListItem =
@@ -108,55 +178,19 @@ export function injectExpandedSubmoduleEntries(
     if (!isExpandableSubmoduleEntry(entry) || !expandedSubmoduleKeys.has(expansionKey)) {
       continue
     }
-    const submodulePath = entry.path
     const state = submoduleStatusByKey[expansionKey]
-    if (!state || state.status === 'loading') {
-      result.push({
-        type: 'submodule-placeholder',
-        key: `submodule-loading::${entry.area}::${submodulePath}`,
-        submodulePath,
-        depth: 1,
-        state: 'loading',
-        message: loadingMessage
-      })
-      continue
-    }
-    if (state.status === 'error') {
-      result.push({
-        type: 'submodule-placeholder',
-        key: `submodule-error::${entry.area}::${submodulePath}`,
-        submodulePath,
-        depth: 1,
-        state: 'error',
-        message: state.error
-      })
-      continue
-    }
-    if (state.entries.length === 0) {
-      result.push({
-        type: 'submodule-placeholder',
-        key: `submodule-empty::${entry.area}::${submodulePath}`,
-        submodulePath,
-        depth: 1,
-        state: 'empty',
-        message: emptyMessage
-      })
+    result.push(...buildSubmodulePlaceholders(entry, state, 1, loadingMessage, emptyMessage))
+    if (state?.status !== 'loaded') {
       continue
     }
     for (const innerEntry of state.entries) {
       result.push({
         type: 'entry',
-        entry: buildSubmoduleChildEntry(submodulePath, innerEntry, entry.area)
+        entry: buildSubmoduleChildEntry(entry.path, innerEntry, entry.area)
       })
     }
     if (state.didHitLimit) {
-      result.push({
-        type: 'submodule-placeholder',
-        key: `submodule-truncated::${entry.area}::${submodulePath}`,
-        submodulePath,
-        depth: 1,
-        state: 'truncated'
-      })
+      result.push(buildSubmoduleTruncationPlaceholder(entry, 1))
     }
   }
   return result
@@ -185,7 +219,8 @@ export function injectExpandedSubmoduleRows(
   expandedSubmoduleKeys: ReadonlySet<string>,
   submoduleStatusByKey: Readonly<Record<string, SubmoduleStatusState>>,
   loadingMessage: string,
-  emptyMessage: string
+  emptyMessage: string,
+  collapsedTreeDirs: ReadonlySet<string> = new Set()
 ): RenderableSourceControlNode[] {
   const result: RenderableSourceControlNode[] = []
   for (const node of nodes) {
@@ -197,52 +232,18 @@ export function injectExpandedSubmoduleRows(
     ) {
       continue
     }
-    const submodulePath = node.entry.path
     const state = submoduleStatusByKey[getSubmoduleExpansionKey(node.entry)]
-    if (!state || state.status === 'loading') {
-      result.push({
-        type: 'submodule-placeholder',
-        key: `submodule-loading::${node.area}::${submodulePath}`,
-        submodulePath,
-        depth: node.depth + 1,
-        state: 'loading',
-        message: loadingMessage
-      })
+    result.push(
+      ...buildSubmodulePlaceholders(node.entry, state, node.depth + 1, loadingMessage, emptyMessage)
+    )
+    if (state?.status !== 'loaded') {
       continue
     }
-    if (state.status === 'error') {
-      result.push({
-        type: 'submodule-placeholder',
-        key: `submodule-error::${node.area}::${submodulePath}`,
-        submodulePath,
-        depth: node.depth + 1,
-        state: 'error',
-        message: state.error
-      })
-      continue
-    }
-    if (state.entries.length === 0) {
-      result.push({
-        type: 'submodule-placeholder',
-        key: `submodule-empty::${node.area}::${submodulePath}`,
-        submodulePath,
-        depth: node.depth + 1,
-        state: 'empty',
-        message: emptyMessage
-      })
-      continue
-    }
-    for (const childNode of buildSubmoduleChildNodes(node, state.entries)) {
-      result.push(childNode)
-    }
+    result.push(
+      ...flattenSourceControlTree(buildSubmoduleChildNodes(node, state.entries), collapsedTreeDirs)
+    )
     if (state.didHitLimit) {
-      result.push({
-        type: 'submodule-placeholder',
-        key: `submodule-truncated::${node.area}::${submodulePath}`,
-        submodulePath,
-        depth: node.depth + 1,
-        state: 'truncated'
-      })
+      result.push(buildSubmoduleTruncationPlaceholder(node.entry, node.depth + 1))
     }
   }
   return result

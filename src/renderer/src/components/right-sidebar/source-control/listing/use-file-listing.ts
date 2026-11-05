@@ -63,7 +63,7 @@ export function useSourceControlFileListing({
   worktreeMap: SourceControlWorktreeContext['worktreeMap']
   worktreePath: string | null
 }) {
-  const { expandedSubmoduleKeys, submoduleStatusByKey, toggleSubmodule } =
+  const { expandedSubmoduleKeys, submoduleStatusByKey, toggleSubmodule, retrySubmodule } =
     useSourceControlSubmoduleStatus({
       activeWorktreeId,
       worktreePath,
@@ -233,6 +233,7 @@ export function useSourceControlFileListing({
     setIsExecutingBulk,
     submoduleStatusByKey,
     toggleSubmodule,
+    retrySubmodule,
     unfilteredDisplaySectionsById,
     unresolvedConflictReviewEntries,
     unresolvedConflicts,

@@ -427,6 +427,81 @@ describe('getSubmoduleStatus', () => {
     expect(result.statusLength).toBe(2)
   })
 
+  it('rejects an aborted submodule range read instead of returning a read error', async () => {
+    const controller = new AbortController()
+    const error = new Error('submodule range read canceled')
+    gitExecFileAsyncMock.mockImplementation((args: string[]) => {
+      if (args.includes('--raw')) {
+        controller.abort(error)
+        return Promise.reject(error)
+      }
+      if (args[0] === 'ls-files') {
+        return Promise.resolve({ stdout: `160000 ${'b'.repeat(40)} 0\tflutter_mine\n` })
+      }
+      if (args[0] === 'ls-tree') {
+        return Promise.resolve({ stdout: `160000 commit ${'a'.repeat(40)}\tflutter_mine\n` })
+      }
+      return Promise.resolve({ stdout: '' })
+    })
+
+    await expect(
+      getSubmoduleStatus('/repo', 'flutter_mine', { staged: true, signal: controller.signal })
+    ).rejects.toBe(error)
+  })
+
+  it.each([false, true])('reports an index read failure with staged=%s', async (staged) => {
+    readFileMock.mockResolvedValue('gitdir: /repo/flutter_mine/.git\n')
+    existsSyncMock.mockReturnValue(false)
+    gitExecFileAsyncMock.mockImplementation((args: string[]) => {
+      if (args.includes('status')) {
+        return Promise.resolve({
+          stdout:
+            '1 .M N... 100644 100644 100644 ce013625030ba8dba906f756967f9e9ca394464a ce013625030ba8dba906f756967f9e9ca394464a lib/main.dart\n'
+        })
+      }
+      if (args[0] === 'ls-files') {
+        return Promise.reject(
+          Object.assign(new Error('Git process failed'), {
+            stderr: 'fatal: index read timed out\n'
+          })
+        )
+      }
+      if (args[0] === 'ls-tree') {
+        return Promise.resolve({ stdout: `160000 commit ${'a'.repeat(40)}\tflutter_mine\n` })
+      }
+      if (args[0] === 'rev-parse') {
+        return Promise.resolve({ stdout: `${'b'.repeat(40)}\n` })
+      }
+      return Promise.resolve({ stdout: '' })
+    })
+
+    const result = await getSubmoduleStatus('/repo', 'flutter_mine', {
+      staged,
+      includeLineStats: false
+    })
+
+    expect(result.readError).toBe('fatal: index read timed out')
+    expect(result.entries).toEqual(
+      staged ? [] : [{ path: 'lib/main.dart', status: 'modified', area: 'unstaged' }]
+    )
+  })
+
+  it('rejects an already-aborted staged read when legacy OID readers return empty', async () => {
+    const controller = new AbortController()
+    const error = new Error('submodule status canceled')
+    controller.abort(error)
+    gitExecFileAsyncMock.mockImplementation((args: string[]) => {
+      if (args[0] === 'ls-tree') {
+        return Promise.reject(error)
+      }
+      return Promise.resolve({ stdout: '' })
+    })
+
+    await expect(
+      getSubmoduleStatus('/repo', 'flutter_mine', { staged: true, signal: controller.signal })
+    ).rejects.toBe(error)
+  })
+
   it('overlaps the inner status, index and HEAD reads instead of serializing them', async () => {
     const OLD_OID = 'a'.repeat(40)
     const NEW_OID = 'b'.repeat(40)

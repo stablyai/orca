@@ -1,10 +1,11 @@
+import { fetchAndApplyAutomaticUpstreamStatus } from './git-status-automatic-upstream'
+import { publishSuccessfulGitStatusRefresh } from './git-status-successful-refresh'
 import { getRuntimeGitStatus } from '@/runtime/runtime-git-status-client'
 import { getRuntimeGitUpstreamStatus } from '@/runtime/runtime-git-sync-client'
 import { getBranchLineTotalMergeBase } from './branch-line-total-request-gate'
 import {
   clearAutomaticPushTargetUpstreamStatusCache,
   getCachedAutomaticPushTargetUpstreamStatus,
-  invalidateAutomaticPushTargetUpstreamStatusCache,
   storeCachedAutomaticPushTargetUpstreamStatus
 } from './push-target-upstream-refresh-cache'
 import type {
@@ -19,9 +20,7 @@ import {
   beginStrictUpstreamRefresh,
   claimAutomaticUpstreamRefreshApply,
   clearGitStatusRefreshOrderingStateForTests,
-  finishAutomaticUpstreamRefresh,
-  shouldApplyAutomaticUpstreamRefresh,
-  type AutomaticRefreshOrder
+  finishAutomaticUpstreamRefresh
 } from './git-status-refresh-ordering'
 
 export type GitStatusRefreshDeps = {
@@ -42,59 +41,6 @@ export type GitStatusRefreshDeps = {
       applyUpstreamStatus?: boolean
     }
   ) => Promise<GitUpstreamStatus | null>
-}
-
-async function fetchAndApplyAutomaticUpstreamStatus({
-  target,
-  worktreeId,
-  worktreePath,
-  connectionId,
-  pushTarget,
-  deps,
-  order,
-  shouldApply
-}: {
-  /** The worktree owner's transport. */
-  target: RuntimeClientTarget
-  worktreeId: string
-  worktreePath: string
-  connectionId?: string
-  pushTarget?: GitPushTarget
-  deps: GitStatusRefreshDeps
-  order: AutomaticRefreshOrder
-  shouldApply?: () => boolean
-}): Promise<GitUpstreamStatus | null> {
-  if (!shouldApplyAutomaticUpstreamRefresh(worktreeId, order, shouldApply)) {
-    return null
-  }
-  const upstreamStatus = await deps.fetchUpstreamStatus(
-    worktreeId,
-    worktreePath,
-    connectionId,
-    pushTarget,
-    {
-      runtimeTarget: target,
-      applyUpstreamStatus: false
-    }
-  )
-  if (!upstreamStatus) {
-    if (pushTarget) {
-      // Invalidate failed publish-target refreshes so older automatic cache entries cannot suppress recovery.
-      invalidateAutomaticPushTargetUpstreamStatusCache({
-        target,
-        worktreeId,
-        worktreePath,
-        connectionId,
-        pushTarget
-      })
-    }
-    return null
-  }
-  if (!claimAutomaticUpstreamRefreshApply(worktreeId, order, shouldApply)) {
-    return null
-  }
-  deps.setUpstreamStatus(worktreeId, upstreamStatus)
-  return upstreamStatus
 }
 
 export function clearGitStatusRefreshOrderingForTests(): void {
@@ -150,6 +96,10 @@ export async function refreshGitStatusForWorktree({
     }
 
     deps.setGitStatus(worktreeId, status)
+    publishSuccessfulGitStatusRefresh(
+      { target, ownerHostId, worktreeId, worktreePath, connectionId },
+      status
+    )
     // Read shell-driven branch changes from git status --branch without another worktree-list poll.
     deps.updateWorktreeGitIdentity(
       worktreeId,
@@ -282,6 +232,10 @@ export async function refreshGitStatusForWorktreeStrict({
   )
 
   deps.setGitStatus(worktreeId, status)
+  publishSuccessfulGitStatusRefresh(
+    { target, ownerHostId, worktreeId, worktreePath, connectionId },
+    status
+  )
   // Read shell-driven branch changes from git status --branch without another worktree-list poll.
   deps.updateWorktreeGitIdentity(
     worktreeId,

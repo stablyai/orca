@@ -58,3 +58,50 @@ describe('useSourceControlFileProjection view-mode gating', () => {
     ])
   })
 })
+
+describe('expanded submodule folder selection', () => {
+  it('excludes files hidden by a collapsed child folder from keyboard selection', () => {
+    const { result } = renderHook(() =>
+      useSourceControlFileProjection({
+        entries: [
+          {
+            path: 'vendor/module',
+            status: 'modified',
+            area: 'unstaged',
+            submodule: { commitChanged: false, trackedChanges: true, untrackedChanges: true }
+          }
+        ],
+        branchEntries: [],
+        filterQuery: '',
+        sourceControlGroupOrder: GROUP_ORDER,
+        activeWorktreeId: 'wt-1',
+        worktreePath: '/repo',
+        isFolder: false,
+        collapsedTreeDirs: new Set(['dir::unstaged::vendor/module/src']),
+        expandedSubmoduleKeys: new Set(['unstaged::vendor/module']),
+        submoduleStatusByKey: {
+          'unstaged::vendor/module': {
+            status: 'loaded',
+            entries: [
+              { path: 'src/index.ts', status: 'modified', area: 'unstaged' },
+              { path: 'tests/index.ts', status: 'untracked', area: 'untracked' }
+            ]
+          }
+        },
+        sourceControlViewMode: 'tree',
+        collapsedSections: NO_COLLAPSED_SECTIONS
+      })
+    )
+    expect(result.current.visibleTreeRowsBySection.unstaged?.map((row) => row.key)).toEqual([
+      'dir::unstaged::vendor',
+      'unstaged::vendor/module',
+      'dir::unstaged::vendor/module/src',
+      'dir::unstaged::vendor/module/tests',
+      'untracked::vendor/module/tests/index.ts'
+    ])
+    expect(result.current.visibleSelectionEntries.map(({ key }) => key)).toEqual([
+      'unstaged::vendor/module',
+      'untracked::vendor/module/tests/index.ts'
+    ])
+  })
+})
