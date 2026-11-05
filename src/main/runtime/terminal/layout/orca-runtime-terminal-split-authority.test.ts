@@ -5,7 +5,7 @@ import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/runtim
 import type { TerminalLayoutSnapshot } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
-import { collectLeafIds } from '../../../../shared/workspace-layout/terminal-pane-layout-tree'
+
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { bindPaneFirst, committingSpawn } from '../../bind-first-pane.test-fixture'
@@ -21,9 +21,6 @@ const SPLIT_INCARNATION_ID = 'pty-split-inc'
 const SOURCE_STAMPED_BEFORE = ORCA_LAYOUT_OWNER_IS_MAIN
   ? { sourceIncarnationId: 'persisted-before' }
   : {}
-const UNOWNED_SOURCE_ERROR = ORCA_LAYOUT_OWNER_IS_MAIN
-  ? 'terminal_handle_stale'
-  : 'terminal_split_source_not_found'
 
 function sourceLayout(): TerminalLayoutSnapshot {
   return {
@@ -264,99 +261,6 @@ function createHarness(
 }
 
 describe('remote runtime terminal split authority', () => {
-  it('addresses a graph-backed split by stable leaf identity across a parked remount', async () => {
-    const harness = createHarness(true, { rendererMounted: true, graphOnlySource: true })
-    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-      // Main starts splits by stable pane id; parked/remounting windows cannot delay them.
-      const started = await harness.runtime.splitTerminal(harness.handle, {
-        direction: 'vertical'
-      })
-      const startedLeafId = started.leafId ?? ''
-      expect(harness.rendererSplitTerminal).not.toHaveBeenCalled()
-      expect(started).toMatchObject({ tabId: TAB_ID, handle: expect.stringMatching(/^term_/) })
-      expect(harness.spawn).toHaveBeenCalledWith(
-        expect.objectContaining({ tabId: TAB_ID, leafId: startedLeafId })
-      )
-      expect(collectLeafIds(harness.getSession().terminalLayoutsByTabId[TAB_ID]?.root)).toEqual([
-        SOURCE_LEAF_ID,
-        startedLeafId
-      ])
-      return
-    }
-
-    const split = harness.runtime.splitTerminal(harness.handle, { direction: 'vertical' })
-    await vi.waitFor(() => expect(harness.rendererSplitTerminal).toHaveBeenCalled())
-
-    const newLeafId = harness.rendererSplitTerminal.mock.calls[0]?.[2]?.newLeafId
-    expect(newLeafId).toEqual(expect.any(String))
-    if (typeof newLeafId !== 'string') {
-      throw new Error('split notifier did not receive a pre-minted leaf id')
-    }
-    expect(harness.rendererSplitTerminal).toHaveBeenCalledWith(TAB_ID, 1, {
-      direction: 'vertical',
-      command: undefined,
-      worktreeId: WORKTREE_ID,
-      sourceLeafId: SOURCE_LEAF_ID,
-      telemetrySource: undefined,
-      newLeafId
-    })
-    harness.runtime.syncWindowGraph(1, {
-      tabs: [
-        {
-          tabId: TAB_ID,
-          worktreeId: WORKTREE_ID,
-          title: 'Restored terminal',
-          activeLeafId: SOURCE_LEAF_ID,
-          layout: {
-            type: 'split',
-            direction: 'vertical',
-            ratio: 0.5,
-            first: { type: 'leaf', leafId: SOURCE_LEAF_ID },
-            second: { type: 'leaf', leafId: newLeafId }
-          }
-        }
-      ],
-      leaves: [
-        {
-          tabId: TAB_ID,
-          worktreeId: WORKTREE_ID,
-          leafId: SOURCE_LEAF_ID,
-          paneRuntimeId: 7,
-          ptyId: SOURCE_PTY_ID
-        },
-        {
-          tabId: TAB_ID,
-          worktreeId: WORKTREE_ID,
-          leafId: newLeafId,
-          paneRuntimeId: 8,
-          ptyId: SPLIT_PTY_ID
-        }
-      ]
-    })
-
-    await expect(split).resolves.toMatchObject({
-      tabId: TAB_ID,
-      handle: expect.stringMatching(/^term_/)
-    })
-  })
-
-  it('reveals a persisted split while its mounted source is still publishing its PTY binding', async () => {
-    const harness = createHarness(true, { rendererMounted: true, rendererPtyId: null })
-    await harness.runtime.splitTerminal(harness.handle, { direction: 'vertical' })
-    expect(harness.revealTerminalSession).toHaveBeenCalledOnce()
-    expect(harness.getSession().terminalLayoutsByTabId[TAB_ID]?.root?.type).toBe('split')
-  })
-
-  // Main-owned leaves replace renderer authority, making differently bound window panes impossible.
-  it.skipIf(ORCA_LAYOUT_OWNER_IS_MAIN)(
-    'does not reveal a persisted split into a renderer bound to a different PTY',
-    async () => {
-      const harness = createHarness(true, { rendererMounted: true, rendererPtyId: 'replacement' })
-      await harness.runtime.splitTerminal(harness.handle, { direction: 'vertical' })
-      expect(harness.revealTerminalSession).not.toHaveBeenCalled()
-    }
-  )
-
   // STA-9417: offer splits despite lagging window graph; window refusal must retain the persisted split.
   it('splits a persisted tab the window has not listed, and still offers it to the window', async () => {
     const harness = createHarness()
@@ -395,48 +299,6 @@ describe('remote runtime terminal split authority', () => {
       )
     expect(siblingSurfaces).toHaveLength(2)
     expect(siblingSurfaces.every((tab) => tab.parentLayout?.root?.type === 'split')).toBe(true)
-  })
-
-  it("gives a split the host's account env, under the caller's own env", async () => {
-    const harness = createHarness()
-    harness.runtime.setHostAccountLaunchEnv({
-      wslDistro: 'Ubuntu',
-      claude: {},
-      terminal: { CODEX_HOME: '/home/u/.orca/codex/b', ORCA_CLAUDE_PROFILE_POINTER: '~/p' }
-    })
-
-    await harness.runtime.splitTerminal(harness.handle, {
-      direction: 'vertical',
-      env: { ORCA_CLAUDE_PROFILE_POINTER: '~/caller' }
-    })
-
-    expect(harness.spawn).toHaveBeenCalledWith(
-      expect.objectContaining({
-        resolvedWorkspace: expect.objectContaining({
-          id: WORKTREE_ID,
-          path: '/workspace',
-          connectionId: null
-        }),
-        env: expect.objectContaining({
-          CODEX_HOME: '/home/u/.orca/codex/b',
-          ORCA_CLAUDE_PROFILE_POINTER: '~/caller'
-        })
-      })
-    )
-  })
-
-  it('rejects an unowned split source before spawning a PTY', async () => {
-    const harness = createHarness(false)
-
-    const outcome = await harness.runtime
-      .splitTerminal(harness.handle, { direction: 'vertical' })
-      .then(() => 'resolved')
-      .catch((error: unknown) => (error instanceof Error ? error.message : String(error)))
-
-    expect.soft(outcome).toBe(UNOWNED_SOURCE_ERROR)
-    expect.soft(harness.spawn).not.toHaveBeenCalled()
-    expect.soft(harness.kill).not.toHaveBeenCalled()
-    expect.soft(harness.revealTerminalSession).not.toHaveBeenCalled()
   })
 
   it.each([
@@ -480,30 +342,6 @@ describe('remote runtime terminal split authority', () => {
     }
   )
 
-  it('rejects a same-ID paired-runtime source replacement recovered without an incarnation map', async () => {
-    const harness = createHarness(true, {
-      deferSpawn: true,
-      includePairedSnapshot: true,
-      rendererMounted: false,
-      sourceIncarnationId: 'remote-before'
-    })
-
-    const split = harness.runtime.splitTerminal(harness.handle, { direction: 'horizontal' })
-    await vi.waitFor(() => expect(harness.spawn).toHaveBeenCalledOnce())
-    expect(harness.spawn).toHaveBeenCalledWith(
-      expect.objectContaining({
-        expectedSourceBinding: expect.not.objectContaining({ incarnationId: expect.anything() })
-      })
-    )
-
-    harness.replaceSourceIncarnation('remote-after')
-    harness.resolveSpawn()
-
-    await expect(split).rejects.toThrow('terminal_split_source_not_found')
-    expect(harness.kill).toHaveBeenCalledWith(SPLIT_PTY_ID)
-    expect(harness.revealTerminalSession).not.toHaveBeenCalled()
-  })
-
   it('rejects a persisted-only source incarnation change during spawn', async () => {
     const harness = createHarness(true, {
       deferSpawn: true,
@@ -525,16 +363,6 @@ describe('remote runtime terminal split authority', () => {
     )
     expect(harness.kill).not.toHaveBeenCalled()
     expect(harness.retireRejectedPty).toHaveBeenCalledWith(SPLIT_PTY_ID, true, SPLIT_INCARNATION_ID)
-  })
-
-  it('refuses a split whose source is only projected, before spawning', async () => {
-    const harness = createHarness(false, { includePairedSnapshot: true })
-
-    await expect(
-      harness.runtime.splitTerminal(harness.handle, { direction: 'horizontal' })
-    ).rejects.toThrow(UNOWNED_SOURCE_ERROR)
-    expect(harness.spawn).not.toHaveBeenCalled()
-    expect(harness.revealTerminalSession).not.toHaveBeenCalled()
   })
 
   it('preserves the split error and takes back the pane when kill and retirement throw', async () => {

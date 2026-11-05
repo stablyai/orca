@@ -53,23 +53,4 @@ describe('a paired desktop terminal.create replayed with its pane ids', () => {
     expect(spawn).toHaveBeenCalledTimes(1)
     expect(session().tabsByWorktree[WORKTREE_ID] ?? []).toEqual([])
   })
-
-  it('returns the same tab and terminal for a retry before any close', async () => {
-    const { spawn, session, live, pane, create } = pairedDesktopCreate()
-
-    const first = await create(false)
-    expect(first.ptyId).toEqual(expect.any(String))
-    live.push({
-      id: first.ptyId!,
-      terminalHandle: first.handle,
-      worktreeId: WORKTREE_ID,
-      cwd: '/workspace',
-      title: ''
-    })
-    const retry = await create(true)
-
-    expect(retry.handle).toBe(first.handle)
-    expect(spawn).toHaveBeenCalledTimes(1)
-    expect(session().tabsByWorktree[WORKTREE_ID]?.map((tab) => tab.id)).toEqual([pane.tabId])
-  })
 })

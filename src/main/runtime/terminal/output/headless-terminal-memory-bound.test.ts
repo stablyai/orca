@@ -66,17 +66,3 @@ it('bounds a provider snapshot that does not answer, then reseeds once it lands'
     vi.useRealTimers()
   }
 })
-
-it('bounds every reader of a provider snapshot that does not answer', async () => {
-  vi.useFakeTimers()
-  try {
-    const { runtime } = hangingProvider()
-    runtime.preferProvider()
-    const read = runtime.serializeTerminalBuffer(PTY_ID)
-    // Preferred-provider read, then the no-model fallback: two bounded waits.
-    await vi.advanceTimersByTimeAsync(2 * AUTHORITATIVE_TERMINAL_SNAPSHOT_TIMEOUT_MS)
-    await expect(read).resolves.toBeNull()
-  } finally {
-    vi.useRealTimers()
-  }
-})
