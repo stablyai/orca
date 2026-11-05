@@ -5,19 +5,19 @@ import {
   type NativeChatSession,
   type NativeChatSessionStatus
 } from '../../../../shared/native-chat/native-chat-types'
-import type { AgentType } from '../../../../shared/agent-status-types'
-import { NATIVE_CHAT_STREAMING_ID } from '../../../../shared/native-chat/native-chat-streaming'
+import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 import {
-  compareNativeChatTranscriptMessages,
-  orderNativeChatTranscriptEntries
-} from '../../../../shared/native-chat/transcript/native-chat-transcript-projection'
+  compareNativeChatDisplayMessages as compareMessages,
+  orderNativeChatDisplayEntries as orderEntries,
+  orderNativeChatDisplayMessages as orderMessages
+} from '../../../../shared/native-chat/transcript/native-chat-message-order'
 import {
   hasImagePromptMarker,
   isImageSourceUserTurn,
   normalizeImageTranscriptMessages
 } from '../../../../shared/native-chat/transcript/native-chat-image-transcript-markers'
-import { isLaunchPromptMessageId } from './native-chat-pending'
-import { isPendingMessageId } from '../../../../shared/native-chat-pending-sends'
+
+export { compareMessages, orderMessages }
 
 /** For the same turn, prefer transcript over hook over scrape. */
 export type NativeChatSources = {
@@ -77,39 +77,6 @@ function supersedes(candidate: NativeChatMessage, existing: NativeChatMessage): 
   const candidateRank = NATIVE_CHAT_SOURCE_PRIORITY[candidate.source]
   const existingRank = NATIVE_CHAT_SOURCE_PRIORITY[existing.source]
   return candidateRank > existingRank
-}
-
-// Sort real content before streaming preview before optimistic/queued sends, regardless of timestamps.
-function messageSortRank(message: NativeChatMessage): number {
-  if (message.id === NATIVE_CHAT_STREAMING_ID) {
-    return 1
-  }
-  if (message.queued || isPendingMessageId(message.id) || isLaunchPromptMessageId(message.id)) {
-    return 2
-  }
-  return 0
-}
-
-export function compareMessages(a: NativeChatMessage, b: NativeChatMessage): number {
-  const ar = messageSortRank(a)
-  const br = messageSortRank(b)
-  if (ar !== br) {
-    return ar - br
-  }
-  return compareNativeChatTranscriptMessages(a, b)
-}
-
-function orderEntries<T>(entries: readonly T[], messageOf: (entry: T) => NativeChatMessage): T[] {
-  return [0, 1, 2].flatMap((rank) => {
-    const tier = entries.filter((entry) => messageSortRank(messageOf(entry)) === rank)
-    return rank === 0
-      ? orderNativeChatTranscriptEntries(tier, messageOf)
-      : tier.sort((a, b) => compareMessages(messageOf(a), messageOf(b)))
-  })
-}
-
-export function orderMessages(messages: readonly NativeChatMessage[]): NativeChatMessage[] {
-  return orderEntries(messages, (message) => message)
 }
 
 export function assembleNativeChatSession(

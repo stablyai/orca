@@ -7,16 +7,16 @@ import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { getIndexedAllWorktrees } from '@/store/worktree-repo-index'
 import { makeRepo, makeWorktree } from '../worktree-jump/worktree-jump-palette-test-fixtures'
-import type { AiVaultSession } from '../../../../shared/ai-vault-types'
+import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import {
   STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RESUME_LINKED_CWD_RUNTIME_CAPABILITY
 } from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
-import { resolveAiVaultSessionRowChatActions } from '../right-sidebar/ai-vault-session-chat-action'
-import { useAiVaultPanelSessionResume } from '../right-sidebar/use-ai-vault-panel-session-resume'
-import { resolveAiVaultPanelSessionListRequest } from '../right-sidebar/ai-vault-panel-session-list-request'
+import { resolveAiVaultSessionRowChatActions } from '../right-sidebar/ai-vault/session-actions/ai-vault-session-chat-action'
+import { useAiVaultPanelSessionResume } from '../right-sidebar/ai-vault/session-actions/use-ai-vault-panel-session-resume'
+import { resolveAiVaultPanelSessionListRequest } from '../right-sidebar/ai-vault/scanning/ai-vault-panel-session-list-request'
 import {
   resolveTabSessionSwitch,
   lookupTabSessionHistoryRow,

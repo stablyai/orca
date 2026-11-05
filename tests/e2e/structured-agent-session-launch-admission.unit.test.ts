@@ -17,7 +17,8 @@ const mocks = vi.hoisted(() => ({
   toastInfo: vi.fn(),
   toastError: vi.fn(),
   launchAgentInNewTab: vi.fn(),
-  hostPermission: vi.fn()
+  hostPermission: vi.fn(),
+  writerCapability: vi.fn(async () => 'supported')
 }))
 
 vi.mock('sonner', () => ({ toast: { info: mocks.toastInfo, error: mocks.toastError } }))
@@ -28,12 +29,14 @@ vi.mock('@/lib/ai-vault-session-resume-preparation', () => ({
   prepareAiVaultSessionForResume: async () => ({ sessionId: 'provider-1' })
 }))
 vi.mock('@/runtime/structured-agent-session-client', () => ({
-  callStructuredAgentSession: vi.fn(async (_target: unknown, method: string) => {
+  callStructuredAgentSession: vi.fn(async (_target: unknown, method: string, params: unknown) => {
     if (method === 'agentSession.createSupport') {
-      return mocks.createSupport()
+      return mocks.createSupport(params)
     }
     return new Promise(() => undefined)
-  })
+  }),
+  structuredAgentSessionHostSupports: async () => true,
+  structuredAgentSessionHostCapabilityState: mocks.writerCapability
 }))
 
 vi.mock('@/runtime/structured-chat-host-permission', async (importOriginal) => ({
@@ -62,6 +65,10 @@ import { peekWebSessionFocusIntent } from '@/runtime/web-session-focus-intent'
 import { LOCAL_ADMISSION_WAIT_MS } from '../../src/renderer/src/lib/agent-session/launch/structured-agent-session-host-admission'
 import { launchStructuredAgentFromNewTab } from '../../src/renderer/src/lib/launch-agent-in-new-tab-structured-route'
 import { structuredAgentSessionFocusOwner } from '@/runtime/structured-agent-session-owner'
+import {
+  readNativeChatComposerDraft,
+  structuredAgentSessionDraftScopeKey
+} from '@/components/native-chat/native-chat-composer-draft-store'
 import {
   drawTabsFromMain,
   type TabsDrawnFromMain
@@ -508,6 +515,33 @@ describe('a structured chat launch on a paired server', () => {
     )
     launch?.cancel()
   })
+
+  // An unread capability is neither an older server nor an unreachable one: the resume asks the
+  // plain question and create decides, as before the early writer question existed.
+  it('opens a resumed chat when the server could not say what it supports', async () => {
+    mocks.writerCapability.mockResolvedValueOnce('unknown')
+    mocks.createSupport.mockResolvedValue({ supported: true })
+
+    const launch = beginStructuredAgentSessionProvisionalLaunch({
+      plan: pairedPlan({ resumeFrom: { providerSessionId: 'provider-1' } }),
+      hooks: {},
+      onHostDeclined: vi.fn()
+    })
+    await vi.waitFor(() =>
+      expect(useAppStore.getState().unifiedTabsByWorktree[WORKTREE]).toEqual([
+        expect.objectContaining({
+          contentType: 'agent-session',
+          executionHostId: 'runtime:server-1'
+        })
+      ])
+    )
+    // Admission's question is the plain one; create asks it again on its own.
+    expect(mocks.createSupport.mock.calls[0]).toEqual([
+      { worktree: `id:${WORKTREE}`, agent: 'claude' }
+    ])
+    expect(mocks.toastError).not.toHaveBeenCalled()
+    launch?.cancel()
+  })
 })
 
 // The same ask, of this machine's own runtime: a Claude account bound to WSL is one "no" it gives.
@@ -601,24 +635,6 @@ describe('a structured chat launch on this machine', () => {
     launch?.cancel()
   })
 
-  it('opens the chat once this machine admits it', async () => {
-    mocks.createSupport.mockResolvedValue({ supported: true })
-
-    const launch = beginStructuredAgentSessionProvisionalLaunch({
-      plan: localPlan(),
-      hooks: {},
-      onHostDeclined: vi.fn()
-    })
-
-    expect(useAppStore.getState().unifiedTabsByWorktree[WORKTREE] ?? []).toEqual([])
-    await vi.waitFor(() =>
-      expect(useAppStore.getState().unifiedTabsByWorktree[WORKTREE]).toEqual([
-        expect.objectContaining({ contentType: 'agent-session', executionHostId: 'local' })
-      ])
-    )
-    launch?.cancel()
-  })
-
   // This machine has no connection to lose: the chat opens, and its own start reports a failure.
   it('opens the chat without a notice when this machine cannot answer the ask', async () => {
     mocks.createSupport.mockRejectedValue(new Error('runtime not ready'))
@@ -683,6 +699,40 @@ describe('a structured chat launch on this machine', () => {
   })
 })
 
+// Another terminal running the conversation: create would refuse it, so nothing opens first.
+it('opens nothing for a resume the host refuses, leaving the one notice to its caller', async () => {
+  mocks.createSupport.mockRejectedValue(
+    Object.assign(new Error('agent_session_conflict'), {
+      code: 'agent_session_conflict',
+      data: {
+        refusal: {
+          code: 'agent_session_conflict',
+          details: { reason: 'conversationHeldElsewhere' }
+        }
+      }
+    })
+  )
+  const onHostDeclined = vi.fn()
+  const launch = beginStructuredAgentSessionProvisionalLaunch({
+    plan: pairedPlan({ executionHostId: 'local', resumeFrom: { providerSessionId: 'provider-1' } }),
+    hooks: {},
+    onHostDeclined
+  })
+
+  const settlement = await launch?.settlement
+  expect(settlement).toMatchObject({
+    kind: 'failed',
+    error: { code: 'agent_session_conflict', refusal: { code: 'agent_session_conflict' } }
+  })
+  expect(settlement).not.toHaveProperty('notified')
+  expect(mocks.createSupport).toHaveBeenCalledWith(
+    expect.objectContaining({ resumeFrom: { providerSessionId: 'provider-1' } })
+  )
+  expect(onHostDeclined).not.toHaveBeenCalled()
+  expect(mocks.toastError).not.toHaveBeenCalled()
+  expectNoChatCommitted()
+})
+
 describe('a paired server that cannot resolve a new workspace yet', () => {
   beforeEach(seedPairedServerWorkspace)
 
@@ -701,27 +751,32 @@ describe('a paired server that cannot resolve a new workspace yet', () => {
   })
 })
 
-it('keeps explicit refusal owned by admission and keeps an opened chat failure out of the menu', async () => {
+it('keeps an explicit chat and its prompt when its host declines startup', async () => {
   seedPairedServerWorkspace()
-  for (const supported of [false, true]) {
-    mocks.toastError.mockClear()
-    mocks.createSupport.mockResolvedValue({ supported, reason: 'wsl' })
-    const plan = adoptAgentSessionLaunchVerdict({ ...pairedPlan(), requestedSurface: 'chat' })
-    if (supported) {
-      mocks.createSupport
-        .mockResolvedValueOnce({ supported: true })
-        .mockResolvedValueOnce({ supported: false })
-    }
-    const onHostDeclined = vi.fn()
-    const launch = beginStructuredAgentSessionProvisionalLaunch({ plan, hooks: {}, onHostDeclined })
-    await expect(launch?.settlement).resolves.toMatchObject({ kind: 'failed' })
-    expect(onHostDeclined).not.toHaveBeenCalled()
-    expect(mocks.toastError).toHaveBeenCalledTimes(supported ? 0 : 1)
-    if (!supported) {
-      await expect(launch?.promptDeliveryResult).resolves.toMatchObject({
-        delivered: false,
-        failureNotified: true
-      })
-    }
+  mocks.createSupport.mockResolvedValue({ supported: false, reason: 'wsl' })
+  const plan = adoptAgentSessionLaunchVerdict({ ...pairedPlan(), requestedSurface: 'chat' })
+  const launch = beginStructuredAgentSessionProvisionalLaunch({ plan, hooks: {} })
+  if (!launch?.tab) {
+    throw new Error('An explicit chat must open before its host answers')
   }
+
+  await expect(launch.settlement).resolves.toMatchObject({
+    kind: 'failed',
+    error: { code: 'structured_agent_session_unsupported' }
+  })
+  await expect(launch.promptDeliveryResult).resolves.toMatchObject({
+    delivered: false,
+    inComposer: true
+  })
+  expect(
+    readNativeChatComposerDraft(structuredAgentSessionDraftScopeKey(launch.tab.entityId)).text
+  ).toBe('fix the flaky test')
+  await vi.waitFor(() =>
+    expect(useAppStore.getState().unifiedTabsByWorktree[WORKTREE]).toEqual([
+      expect.objectContaining({
+        contentType: 'agent-session',
+        executionHostId: 'runtime:server-1'
+      })
+    ])
+  )
 })

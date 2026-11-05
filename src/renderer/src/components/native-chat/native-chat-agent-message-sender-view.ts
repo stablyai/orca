@@ -1,134 +1,131 @@
-import { useMemo } from 'react'
+import { useCallback, useMemo } from 'react'
 import {
   useAgentMessageSenderSource,
   useAgentMessageSenderSources,
-  type SenderLocation
+  useLeasedSenderSelector
 } from './native-chat-agent-message-sender-source'
 import type { AppState } from '@/store/types'
-import { getKnownExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
-import { structuredAgentSessionOwnerInputs } from '@/runtime/structured-agent-session-owner'
-import { structuredAgentSessionPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import type { AgentMessageSender } from '../../../../shared/agent-session/agent-session-message-source'
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import {
-  agentMessageSenderOwner,
-  findAgentMessageSenderChatTab
-} from './native-chat-agent-message-sender-label'
+  agentMessageSenderCandidateLocation,
+  agentMessageSenderOpens,
+  resolveAgentMessageSenderTarget
+} from './native-chat-agent-message-sender-target'
+import { agentMessageSavedKind } from '../../../../shared/agent-session/agent-message-presentation'
 
-const handleIndexes = new WeakMap<
-  object,
-  { inputs: unknown[]; index: Map<string, Map<string | null, AgentStatusEntry[]>> }
->()
-function byHandle(
-  state: AppState,
-  source: AppState['agentStatusByPaneKey'] | AppState['retainedAgentsByPaneKey']
-) {
-  const inputs = structuredAgentSessionOwnerInputs(state)
-  let cached = handleIndexes.get(source)
-  if (!cached || inputs.some((value, index) => value !== cached?.inputs[index])) {
-    const index = new Map<string, Map<string | null, AgentStatusEntry[]>>()
-    const owners = new Map<string, string | null>()
-    for (const value of Object.values(source)) {
-      const entry = 'entry' in value ? value.entry : value
-      if (!entry.terminalHandle || !entry.worktreeId) {
-        continue
-      }
-      if (!owners.has(entry.worktreeId)) {
-        owners.set(entry.worktreeId, getKnownExecutionHostIdForWorktree(state, entry.worktreeId))
-      }
-      const owner = owners.get(entry.worktreeId) ?? null
-      let byHost = index.get(entry.terminalHandle)
-      if (!byHost) {
-        byHost = new Map()
-        index.set(entry.terminalHandle, byHost)
-      }
-      const entries = byHost.get(owner) ?? []
-      entries.push(entry)
-      byHost.set(owner, entries)
-    }
-    cached = { inputs, index }
-    handleIndexes.set(source, cached)
-  }
-  return cached.index
-}
-
-export type AgentMessageSenderInput = {
-  sender: AgentMessageSender | undefined
-  worktreeId: string | null
-}
-
-function stableRuntimeTarget(
-  targetKind: RuntimeClientTarget['kind'] | undefined,
-  environmentId: string | undefined
-): RuntimeClientTarget | undefined {
-  return targetKind === 'local'
-    ? { kind: 'local' }
-    : environmentId !== undefined
-      ? { kind: 'environment', environmentId }
-      : undefined
-}
-
-function senderLocator(
-  address: string | undefined,
-  sessionId: string | null | undefined,
-  handle: string | null | undefined,
+/** The card's sender, rebuilt only from the fields resolution reads, and where it runs now. */
+function useSenderLocation(
+  sender: AgentMessageSender | undefined,
   chatWorktreeId: string | null,
-  target: RuntimeClientTarget | undefined
-): (state: AppState) => SenderLocation | undefined {
-  return (state) => {
-    if (!address || address.startsWith('dispatch:')) {
-      return undefined
-    }
-    const owner = agentMessageSenderOwner(state, chatWorktreeId, target)
-    if (!owner) {
-      return undefined
-    }
-    const chatTab = sessionId ? findAgentMessageSenderChatTab(state, sessionId, owner) : undefined
-    let paneKey = chatTab && structuredAgentSessionPaneKey(chatTab.id, chatTab.entityId)
-    if (!paneKey && handle) {
-      for (const source of [state.agentStatusByPaneKey, state.retainedAgentsByPaneKey]) {
-        const matches = byHandle(state, source).get(handle)?.get(owner) ?? []
-        if (matches.length) {
-          paneKey = matches.length === 1 ? matches[0].paneKey : undefined
-          break
-        }
+  target: RuntimeClientTarget | undefined,
+  dispatchId: string | undefined
+) {
+  const address = sender?.party.address
+  const sessionId = sender?.party.orcaSessionId
+  const handle = sender?.party.terminalHandle
+  const savedAgent = agentMessageSavedKind(sender)
+  const targetKind = target?.kind
+  const environmentId = target?.kind === 'environment' ? target.environmentId : undefined
+  const stableTarget = useMemo<RuntimeClientTarget | undefined>(
+    () =>
+      targetKind === 'local'
+        ? { kind: 'local' }
+        : environmentId !== undefined
+          ? { kind: 'environment', environmentId }
+          : undefined,
+    [targetKind, environmentId]
+  )
+  const identity = useMemo<AgentMessageSender | undefined>(
+    () =>
+      address
+        ? {
+            party: { address, orcaSessionId: sessionId ?? null, terminalHandle: handle ?? null },
+            name: null,
+            ...(savedAgent ? { agent: savedAgent } : {})
+          }
+        : undefined,
+    [address, sessionId, handle, savedAgent]
+  )
+  const resolve = useCallback(
+    (state: AppState) =>
+      identity
+        ? resolveAgentMessageSenderTarget(state, identity, chatWorktreeId, stableTarget, dispatchId)
+        : undefined,
+    [identity, chatWorktreeId, stableTarget, dispatchId]
+  )
+  const locate = useCallback(
+    (state: AppState) => {
+      const resolved = resolve(state)
+      if (resolved?.kind === 'legacy') {
+        return resolved.location
       }
-    }
-    const worktreeId =
-      chatTab?.worktreeId ??
-      (paneKey
-        ? (state.agentStatusByPaneKey[paneKey]?.worktreeId ??
-          state.retainedAgentsByPaneKey[paneKey]?.worktreeId)
-        : undefined)
-    return worktreeId && paneKey
-      ? { host: owner, worktreeId, paneKey, agentType: chatTab?.agentSessionAgent }
-      : undefined
-  }
+      const located = resolved?.kind === 'located' ? resolved.location : undefined
+      // A located chat's own tab names its agent for cards saved before the agent kind was.
+      return located && { ...located, agentType: located.tab?.agentSessionAgent }
+    },
+    [resolve]
+  )
+  // The kind check reads the candidate's row before it can veto it, so the card leases that row's
+  // source in every answer: a replaced card reuses it as a located one does.
+  const leaseLocate = useCallback(
+    (state: AppState) =>
+      identity
+        ? agentMessageSenderCandidateLocation(
+            state,
+            identity,
+            chatWorktreeId,
+            stableTarget,
+            dispatchId
+          )
+        : undefined,
+    [identity, chatWorktreeId, stableTarget, dispatchId]
+  )
+  return { identity, savedAgent, resolve, locate, leaseLocate }
 }
 
 export function useAgentMessageSenderView(
   sender: AgentMessageSender | undefined,
   chatWorktreeId: string | null,
-  target?: RuntimeClientTarget
+  target?: RuntimeClientTarget,
+  dispatchId?: string
 ) {
-  const address = sender?.party.address
-  const sessionId = sender?.party.orcaSessionId
-  const handle = sender?.party.terminalHandle
-  const targetKind = target?.kind
-  const environmentId = target?.kind === 'environment' ? target.environmentId : undefined
-  const locate = useMemo(
-    () =>
-      senderLocator(
-        address,
-        sessionId,
-        handle,
-        chatWorktreeId,
-        stableRuntimeTarget(targetKind, environmentId)
-      ),
-    [address, sessionId, handle, chatWorktreeId, targetKind, environmentId]
+  const { savedAgent, locate, leaseLocate } = useSenderLocation(
+    sender,
+    chatWorktreeId,
+    target,
+    dispatchId
   )
-  return useAgentMessageSenderSource(locate, sender?.agent)
+  return useAgentMessageSenderSource(locate, savedAgent, leaseLocate)
+}
+
+/** Whether the card's sender name is a link. Its kind check reads the located row, so it holds
+ *  the same lease the avatar does: a name drawn without an avatar rebuilds no rows per write. */
+export function useAgentMessageSenderOpens(
+  sender: AgentMessageSender,
+  chatWorktreeId: string | null,
+  target?: RuntimeClientTarget,
+  dispatchId?: string
+): boolean {
+  const { identity, resolve, leaseLocate } = useSenderLocation(
+    sender,
+    chatWorktreeId,
+    target,
+    dispatchId
+  )
+  const opens = useCallback(
+    (state: AppState) => {
+      const resolved = resolve(state)
+      return Boolean(resolved && identity && agentMessageSenderOpens(resolved, identity))
+    },
+    [resolve, identity]
+  )
+  return useLeasedSenderSelector(leaseLocate, opens)
+}
+
+export type AgentMessageSenderInput = {
+  sender: AgentMessageSender | undefined
+  worktreeId: string | null
 }
 
 /** List form of the card avatar's view: one subscription for every sender in `inputs`. */
@@ -139,16 +136,28 @@ export function useAgentMessageSenderViews(
   const targetKind = target?.kind
   const environmentId = target?.kind === 'environment' ? target.environmentId : undefined
   const lookups = useMemo(() => {
-    const stable = stableRuntimeTarget(targetKind, environmentId)
+    const stable: RuntimeClientTarget | undefined =
+      targetKind === 'local'
+        ? { kind: 'local' }
+        : environmentId !== undefined
+          ? { kind: 'environment', environmentId }
+          : undefined
     return inputs.map(({ sender, worktreeId }) => ({
-      locate: senderLocator(
-        sender?.party.address,
-        sender?.party.orcaSessionId,
-        sender?.party.terminalHandle,
-        worktreeId,
-        stable
-      ),
-      savedAgent: sender?.agent
+      locate: (state: AppState) => {
+        const resolved = sender
+          ? resolveAgentMessageSenderTarget(state, sender, worktreeId, stable, undefined)
+          : undefined
+        if (resolved?.kind === 'legacy') {
+          return resolved.location
+        }
+        const located = resolved?.kind === 'located' ? resolved.location : undefined
+        return located && { ...located, agentType: located.tab?.agentSessionAgent }
+      },
+      leaseLocate: (state: AppState) =>
+        sender
+          ? agentMessageSenderCandidateLocation(state, sender, worktreeId, stable, undefined)
+          : undefined,
+      savedAgent: agentMessageSavedKind(sender)
     }))
   }, [inputs, targetKind, environmentId])
   return useAgentMessageSenderSources(lookups)

@@ -19,7 +19,7 @@ import {
   OrcadInstanceLockError,
   type OrcadDataRootPrivacyHooks
 } from './orcad-data-root-privacy'
-import { hasErrorCode, isProcessAlive } from '../daemon/daemon-process-inspection'
+import { hasErrorCode, isProcessAlive } from '../daemon/endpoint/identity/daemon-process-inspection'
 import { profileStateAccessMachineIdentity } from '../persistence/profile-state/profile-state-access-identity'
 import { orcadDataRootIsOnLocalDisk } from './orcad-data-root-locality'
 import type { OrcadReclaimHintRuntime } from '../../shared/orcad-stale-lock-reclaim'

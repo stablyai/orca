@@ -1,28 +1,28 @@
-import { claimDeadManTripSlot } from '../cell-dead-man-trip-slot.js'
-import { createDrainMigrationRowLookup } from '../drain-migration-row-lookup.js'
-import { HeapWindowReaper } from '../heap-window-reaper.js'
-import type { PlacementLoadBand } from '../placement-load-band.js'
-import type { SeatFeedCell } from '../shadow-seat-directory.js'
+import { claimDeadManTripSlot } from '../cell/reservations/cell-dead-man-trip-slot.js'
+import { createDrainMigrationRowLookup } from './migrations/drain-migration-row-lookup.js'
+import { HeapWindowReaper } from '../credentials/heap-window-reaper.js'
+import type { PlacementLoadBand } from './reserve-placement/placement-load-band.js'
+import type { SeatFeedCell } from '../cell/seats/shadow-seat-directory.js'
 import {
   selectIdleRegionalRehomes,
   type IdleRegionalRehomeCandidate,
   type IdleRehomeHostCursor
-} from '../idle-regional-rehome-selection.js'
+} from './regional-rehome/idle-regional-rehome-selection.js'
 import {
   RegionalRehomePollTelemetry,
   type RegionalRehomePollGate
-} from '../regional-rehome-poll-telemetry.js'
-import { readRegionCorrectionOutcomes } from '../region-correction-outcomes.js'
-import { ReservePaceError } from '../reserve-assignment.js'
+} from './regional-rehome/regional-rehome-poll-telemetry.js'
+import { readRegionCorrectionOutcomes } from './regional-rehome/region-correction-outcomes.js'
+import { ReservePaceError } from './reserve-placement/reserve-assignment.js'
 import {
   previewRegionalRehomeEligibility,
   type RegionCorrectionPreview
-} from '../region-correction-preview.js'
+} from './regional-rehome/region-correction-preview.js'
 import {
   exchangeRegionCorrection,
   previewRegionCorrection,
   REGIONAL_REHOME_CONCURRENT_LIMIT
-} from '../region-correction-state.js'
+} from './regional-rehome/region-correction-state.js'
 import { randomUUID } from 'node:crypto'
 import { performance } from 'node:perf_hooks'
 import {
@@ -57,11 +57,11 @@ import {
   type CellAdmissionMembership,
   type CellAdmissionSelectorInspection,
   type CellAdmissionState
-} from '../cell-admission-selector.js'
+} from '../cell/admission/cell-admission-selector.js'
 import {
   RelayMigrationCellRegistrar,
   type MigrationCellRegistration
-} from '../cell-admission-migration-registration.js'
+} from '../cell/admission/cell-admission-migration-registration.js'
 import { ASSIGNMENT_CONNECTION_HEADROOM_QUERY } from './assignment-connection-headroom-query.js'
 import {
   CONNECTION_CAP_COLUMNS_SQL,
@@ -72,7 +72,7 @@ import {
   reportedHardCapWithinLimit,
   writeCellConnectionLimit,
   type CellConnectionCap
-} from '../cell-connection-cap.js'
+} from '../cell/admission/cell-connection-cap.js'
 import { AssignmentIdentityQueue } from './assignment-identity-queue.js'
 import {
   CONTROL_RENEWAL_BATCH_SQL,
@@ -82,20 +82,20 @@ import {
   readControlRenewalOutcomes,
   type ControlRenewalOutcome,
   type ControlRenewalRequest
-} from '../control-renewal-statement.js'
-import { commitWithFinalWrite, REGIONAL_REHOME_DEFAULT_HOST_COOLDOWN_MS } from '../database.js'
+} from '../control-leases/control-renewal-statement.js'
+import { commitWithFinalWrite, REGIONAL_REHOME_DEFAULT_HOST_COOLDOWN_MS } from '../database/database.js'
 import type { RelayCellConfig } from '../config.js'
-import type { CellLockHoldSite } from '../cell-inventory-hold-samples.js'
-import type { DeadCellVerdict } from '../cell-poll-reachability.js'
-import { isPostgresPoolConnectFailure } from '../postgres-pool-pressure.js'
-import { isPostgresReadTimeout } from '../relay-database-rejection-fence.js'
+import type { CellLockHoldSite } from '../database/cell-inventory-hold-samples.js'
+import type { DeadCellVerdict } from '../cell/seats/cell-poll-reachability.js'
+import { isPostgresPoolConnectFailure } from '../database/postgres-pool-pressure.js'
+import { isPostgresReadTimeout } from '../database/relay-database-rejection-fence.js'
 import type {
   RelayDatabase,
   RelayLockOptions,
   RelayTransactionOptions,
   SqlRow
-} from '../database.js'
-import type { RegionalRehomeSafetySnapshot } from '../relay-observability.js'
+} from '../database/database.js'
+import type { RegionalRehomeSafetySnapshot } from '../observability/relay-observability.js'
 import {
   combineRegionalRehomeSafety,
   nextRegionalRehomeSqlFailuresBreach,
@@ -105,16 +105,16 @@ import {
   regionalRehomeSafetyFailure,
   regionalRehomeSqlFailuresSustained,
   type RegionalRehomeSqlFailuresBreach
-} from '../regional-rehome-safety.js'
+} from './regional-rehome/regional-rehome-safety.js'
 import {
   REGIONAL_REHOME_ARRIVAL_WINDOW_MS,
   type RegionalRehomeAbortReason
-} from '../regional-rehome-abort-reason.js'
+} from './regional-rehome/regional-rehome-abort-reason.js'
 import {
   ABANDONED_REGISTERED_MIGRATION,
   DURABLY_FENCED_MIGRATION_SOURCE,
   REGISTERED_MIGRATION_ABANDON_MS
-} from '../registered-migration-abandonment.js'
+} from './migrations/registered-migration-abandonment.js'
 
 type AssignmentIdentity = { userId: string; relayHostId: string }
 type CellHeartbeat = {
@@ -3945,16 +3945,19 @@ export class RelayAssignmentStore {
   async verifyCellAssignment(input: AssignmentIdentity & {
     cellId: string
     assignmentEpoch: number
+    allowUnassignedBootstrap?: boolean
   }): Promise<boolean> {
     const rows = await this.database.query(
       `SELECT cell_id, assignment_epoch FROM relay_assignments
        WHERE user_id = ? AND relay_host_id = ?`,
       [input.userId, input.relayHostId]
     )
-    return Boolean(
-      rows[0] &&
-        text(rows[0], 'cell_id') === input.cellId &&
-        integer(rows[0], 'assignment_epoch') === input.assignmentEpoch
+    if (!rows[0]) {
+      return input.allowUnassignedBootstrap === true && input.assignmentEpoch === 1
+    }
+    return (
+      text(rows[0], 'cell_id') === input.cellId &&
+      integer(rows[0], 'assignment_epoch') === input.assignmentEpoch
     )
   }
 

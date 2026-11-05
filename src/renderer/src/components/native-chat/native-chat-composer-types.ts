@@ -5,7 +5,7 @@ import type { NativeChatComposerNotice } from './native-chat-composer-notice'
 import type { AgentSessionConversationCommand } from '../../../../shared/agent-session/agent-session-conversation-command'
 import type { StructuredAgentContextUsage } from '../../../../shared/agent-session/structured-agent-session-context-usage'
 import type { AgentSessionSlashCommand } from '../../../../shared/agent-session/agent-session-wire'
-import type { AgentType } from '../../../../shared/agent-status-types'
+import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type {
   StructuredAgentSessionCommandOutcome,
   StructuredAgentSessionCommandRefusalCause
@@ -19,7 +19,7 @@ import type { NativeChatComposerImageAttachment } from './NativeChatComposerFiel
 import type { NativeChatAfterStopSend } from './native-chat-composer-target'
 import type { NativeChatLocalCommandAnswer } from './use-native-chat-local-command-answer'
 import type { NativeChatRecallSource } from './native-chat-sent-prompt-history'
-import type { NativeChatSendFollowUp } from '../../../../shared/native-chat-follow-up-behavior'
+import type { NativeChatSendFollowUp } from '../../../../shared/native-chat/input/native-chat-follow-up-behavior'
 
 export type NativeChatComposerErrorDetail = {
   /** Error text Orca did not write, shown apart and copyable. */
@@ -41,6 +41,7 @@ export type NativeChatComposerSendIntent = Pick<StructuredAgentSessionSendReques
 export type NativeChatStructuredComposerTransport = {
   capturePresentation: CaptureStructuredAgentSessionPresentation
   conversationCommands?: readonly AgentSessionConversationCommand[]
+  compactInstructions?: boolean
   send: (
     text: string,
     attachments: readonly NativeChatComposerImageAttachment[],
@@ -71,9 +72,12 @@ export type NativeChatStructuredComposerTransport = {
   onError: (message: string | null, detail?: NativeChatComposerErrorDetail) => void
   /** A local send: brings the latest into view at the press, not when the host answers. */
   onSubmitted?: () => void
+  /** At the press, the reveal to run once the host admits the message. */
+  captureAdmittedReveal?: () => () => void
   runtime: 'local' | 'remote'
   /** The session behind this composer; a real user send relinquishes orchestration ownership. */
   sessionId: string
+  attachmentStagingScope?: string
   /** Owning runtime for that report; null is the local runtime. */
   runtimeEnvironmentId: string | null
   /** The host has not confirmed this chat: session uploads wait for publication. */
@@ -134,9 +138,7 @@ export type NativeChatComposerProps = {
   launchSeed?: NativeChatLaunchSeed
   /** Structured journal transport; absent keeps the existing PTY path unchanged. */
   structuredTransport?: NativeChatStructuredComposerTransport
-  /** The chat's worktree is still being created, so there is no session or file tree yet:
-   *  text and dictation only, with no command/skill/@-file pickers, `/resume`, attachments or
-   *  file-backed pastes. The pending transport reports no session options or context usage. */
+  /** Compose against the source checkout until the new workspace and session exist. */
   workspacePending?: true
   /** The first prompt in an agent's launch panel: one line that grows, Attach as its only control,
    *  no /resume, the launch workspace's skills, and a draft kept in memory until the launch. */
@@ -156,9 +158,14 @@ export type NativeChatLaunchSeed = {
   launchDraftResolved: boolean
   /** False for every pane of a split tab; gates adopting the seed, not cleanup. */
   ownsTabWideLaunchDraft: boolean
+  /** The transcript is read, so whether the draft was already sent is known. */
+  transcriptReady?: boolean
+  /** The user's text on the agent's input line: '' when it is empty, null when unreadable. */
+  readTerminalDraft?: () => string | null
 }
 
 export type NativeChatComposerHandle = {
+  resend?: (text: string, imagePaths?: string[]) => boolean
   insertAgentReferences: (references: OrchestrationAgentReference[]) => boolean
   isComposing?: () => boolean
   focus: () => boolean
@@ -166,7 +173,7 @@ export type NativeChatComposerHandle = {
   insertPastedText?: (text: string) => boolean
   /** Whether the input is there and enabled, so text given to it lands. */
   acceptsText: () => boolean
-  /** Append deduplicated text after a blank line and place the caret at its end. */
+  /** Append text after a blank line and place the caret at its end; repeated additions stay separate. */
   appendText: (text: string) => void
   /** Routes pane-level paste events back to the composer field. */
   handlePasteEvent: (event: {

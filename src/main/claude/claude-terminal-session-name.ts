@@ -1,6 +1,6 @@
 import { readTranscriptSlice, transcriptFileStat } from '../native-chat/wsl-transcript-fs-access'
-import { isSpinnerFrameGlyph } from '../../shared/agent-decorative-title-signature'
-import { CLAUDE_IDLE } from '../../shared/terminal-title-agent-type'
+import { isSpinnerFrameGlyph } from '../../shared/agent-status/title/agent-decorative-title-signature'
+import { CLAUDE_IDLE } from '../../shared/agent-status/title/agent-title-glyphs'
 
 // Claude appends `custom-title` on each /rename, so the latest one sits near the end.
 const TRANSCRIPT_TAIL_BYTES = 256 * 1024

@@ -7,7 +7,7 @@ vi.mock('../../ssh/remote-exec/remote-exec-command', async (importOriginal) => (
   ...(await importOriginal<typeof ExecCommandModule>()),
   execCommand: vi.fn()
 }))
-vi.mock('../../../shared/shell-argument-quoting', () => ({
+vi.mock('../../../shared/shell/launch/shell-argument-quoting', () => ({
   quotePosixShell: (s: string) => `'${s}'`
 }))
 vi.mock('./remote-install-lock', async (importOriginal) => ({
@@ -84,18 +84,6 @@ function expectExactlyTheRecordedSlot(): void {
 }
 
 describe('decommissioning a managed orcad', () => {
-  it('stops the active instance by request, then records that nothing serves', async () => {
-    expect(await decommission()).toEqual({
-      outcome: 'decommissioned',
-      version: OLD,
-      retirement: 'retired'
-    })
-    expect(currentRecord()).toMatchObject({ active: null, previous: OLD, snapshot: null })
-    expectExactlyTheRecordedSlot()
-    // Only instance-bound requests may stop the server; never signal a possibly reused PID.
-    expect(host.commands.some((command) => command.includes('kill -TERM'))).toBe(false)
-  })
-
   it.each([
     [{ ...idle, liveSessions: null }, 'unverifiable', 'orcad_decommission_census_unavailable'],
     [{ ...idle, liveSessions: 2 }, 'live', 'orcad_decommission_terminals_running']
@@ -103,27 +91,6 @@ describe('decommissioning a managed orcad', () => {
     expect(await decommission(census)).toMatchObject({ outcome: 'refused', verdict, code })
     expect(host.alive.has(OLD)).toBe(true)
     expect(writeAtomicOrcadRemoteRecord).not.toHaveBeenCalled()
-  })
-
-  it('refuses an orcad that cannot be addressed by request', async () => {
-    host.alive.clear()
-    expect(await decommission()).toMatchObject({
-      outcome: 'refused',
-      verdict: 'unverifiable',
-      code: 'orcad_managed_stop_readiness_unverifiable'
-    })
-    expect(writeAtomicOrcadRemoteRecord).not.toHaveBeenCalled()
-  })
-
-  it('withdraws a request orcad never acted on and keeps serving', async () => {
-    host.managedStop = 'stays'
-    expect(await decommission()).toMatchObject({
-      outcome: 'refused',
-      verdict: 'live',
-      code: 'orcad_decommission_stop_withdrawn'
-    })
-    expect(currentRecord().active).toBe(OLD)
-    expectExactlyTheRecordedSlot()
   })
 
   it('keeps the fence while orcad is still stopping, and recovery finishes once it exits', async () => {

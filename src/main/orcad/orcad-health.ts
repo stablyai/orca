@@ -3,15 +3,15 @@ import { hashOrcadLauncher } from '../../shared/orcad-build-identity'
 import {
   confirmPtyProcessCeiling,
   type PtyProcessCeilingState
-} from '../../shared/pty-process-ceiling-state'
+} from '../../shared/terminal/pty/native-process/pty-process-ceiling-state'
 import process from 'node:process'
-import { checkDaemonHealthWithCoverage, type DaemonHealth } from '../daemon/daemon-health'
-import { ptySpawnHealthPlatformCoverage } from '../daemon/daemon-health-identity'
+import { checkDaemonHealthWithCoverage, type DaemonHealth } from '../daemon/health/daemon-health'
+import { ptySpawnHealthPlatformCoverage } from '../daemon/health/daemon-health-identity'
 import {
   daemonOwnsFreshPersistentPtys,
   getDaemonEndpointFacts,
   readDaemonPidRecord
-} from '../daemon/daemon-provider-state'
+} from '../daemon/providers/lifecycle/daemon-provider-state'
 import type { OrcadProfileStateAuthoritySelection } from './orcad-profile-state-telemetry'
 import { ORCAD_STOP_REQUESTS_CAPABILITY } from '../../shared/orcad-stop-request'
 import type { OrcadIdleStopRecord } from '../../shared/orcad-idle-exit'

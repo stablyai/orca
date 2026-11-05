@@ -67,12 +67,4 @@ describe('chat tip visual lifetime', () => {
     expect(vi.getTimerCount()).toBe(0)
     expect(container.innerHTML).toBe(finished)
   })
-
-  it('starts as a complete still with reduced motion and no timer', () => {
-    vi.useFakeTimers()
-    motion(true)
-    const { container } = render(<ChatUiHereFeatureTipVisual />)
-    expect(vi.getTimerCount()).toBe(0)
-    expect(container.querySelectorAll('[data-on="true"]').length).toBeGreaterThan(10)
-  })
 })

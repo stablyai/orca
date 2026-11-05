@@ -1,3 +1,5 @@
+import { automationCanonicalLaunchSetup } from '../../shared/automation-launch-setup'
+import { automationLaunchInputs } from '../../shared/automation-launch-setup-source'
 import type { Automation, AutomationRun } from '../../shared/automations-types'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { launchAgentOnHost } from '../runtime/rpc/methods/agent-launch'
@@ -15,7 +17,7 @@ import {
 } from './automation-agent-run-result'
 import { automationRunOperationId, AUTOMATION_AGENT_CALLER } from './automation-run-operation'
 import { createAutomationDispatchToken } from './dispatch-tokens'
-import { tuiAgentDisplayName } from '../../shared/tui-agent-display-names'
+import { tuiAgentDisplayName } from '../../shared/agent-launch/catalog/tui-agent-display-names'
 
 export type AutomationChatAgentLaunch = HeadlessAutomationDispatchLaunch & {
   terminalHandle: string | null
@@ -57,6 +59,10 @@ async function launchChat(
       return reused
     }
   }
+  const views = automationLaunchInputs(
+    automation.agentId,
+    automationCanonicalLaunchSetup(automation)
+  )
   const operationId = automationRunOperationId(run, 'fresh-launch')
   try {
     const result = await launchAgentOnHost(
@@ -64,6 +70,9 @@ async function launchChat(
         agent: automation.agentId,
         operationId,
         surface: 'chat',
+        ...(views.chatSessionOptions !== undefined
+          ? { sessionOptions: {}, chatOptions: views.chatSessionOptions }
+          : {}),
         presentation: 'background',
         prompt: { text: automation.prompt, delivery: 'submit' },
         target:

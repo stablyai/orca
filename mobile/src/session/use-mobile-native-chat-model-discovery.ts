@@ -5,7 +5,7 @@ import type { CatalogModel } from '../../../src/shared/agent-session/options/age
 import {
   catalogModelsFromModelDiscovery,
   mergeDiscoveredCatalogModels
-} from '../../../src/shared/native-chat-discovered-catalog-models'
+} from '../../../src/shared/native-chat/input/native-chat-discovered-catalog-models'
 import { defineRpcOperation, runRpcOperation } from '../transport/rpc-operation'
 
 const discoveredModel = z.object({
@@ -15,7 +15,8 @@ const discoveredModel = z.object({
   thinkingLevels: z.array(z.object({ id: z.string(), label: z.string() })).optional(),
   supportsFastMode: z.boolean().optional(),
   isDefault: z.boolean().optional(),
-  contextWindowTokens: z.number().optional()
+  contextWindowTokens: z.number().optional(),
+  resolvedModel: z.string().optional()
 })
 
 const discoveryResult = z.union([

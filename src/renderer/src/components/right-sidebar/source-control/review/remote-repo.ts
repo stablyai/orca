@@ -1,5 +1,5 @@
-import type { HostedReviewProvider } from '../../../../../../shared/hosted-review'
-import { normalizeForgeWebHost } from '../../../../../../shared/git-remote-host-alias'
+import type { HostedReviewProvider } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
+import { normalizeForgeWebHost } from '../../../../../../shared/git/remotes/git-remote-host-alias'
 
 export type ManualReviewProvider = Exclude<HostedReviewProvider, 'unsupported'>
 

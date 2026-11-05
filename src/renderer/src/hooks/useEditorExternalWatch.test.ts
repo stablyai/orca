@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi, afterEach } from 'vitest'
-import type * as EditorAutosaveModule from '@/components/editor/editor-autosave'
+import type * as EditorAutosaveModule from '@/components/editor/autosave/editor-autosave'
 import type { FsChangedPayload } from '../../../shared/filesystem-entry-types'
 
 vi.mock('@/store', () => ({
@@ -8,7 +8,7 @@ vi.mock('@/store', () => ({
   }
 }))
 // Stub autosave’s window-event exports so the handler runs in headless Node.
-vi.mock('@/components/editor/editor-autosave', async (importOriginal) => {
+vi.mock('@/components/editor/autosave/editor-autosave', async (importOriginal) => {
   const actual = await importOriginal<typeof EditorAutosaveModule>()
   return {
     ...actual,
@@ -21,56 +21,17 @@ import {
   buildEditorExternalWatchEventHandler as createExternalWatchEventHandler,
   EXTERNAL_MUTATION_DEBOUNCE_MS
 } from './editor-external-watch-event-reconciliation'
-import { getEditorExternalWatchTargetKey as getWatchedTargetKey } from './editor-external-watch-targets'
 import { useAppStore } from '@/store'
 import { createTestStore } from '@/store/slices/store-test-helpers'
 import {
   getOpenFilesForExternalFileChange,
   notifyEditorExternalFileChange
-} from '@/components/editor/editor-autosave'
+} from '@/components/editor/autosave/editor-autosave'
 import {
   __clearSelfWriteRegistryForTests,
   recordSelfWrite
-} from '@/components/editor/editor-self-write-registry'
+} from '@/components/editor/external-changes/editor-self-write-registry'
 import { __clearEditorPathMovesForTests } from '@/components/editor/editor-path-move-inflight'
-
-describe('getWatchedTargetKey', () => {
-  it('changes when a worktree gains an SSH connection id', () => {
-    expect(
-      getWatchedTargetKey({
-        worktreeId: 'wt-1',
-        worktreePath: '/repo',
-        connectionId: undefined,
-        runtimeEnvironmentId: null
-      })
-    ).not.toBe(
-      getWatchedTargetKey({
-        worktreeId: 'wt-1',
-        worktreePath: '/repo',
-        connectionId: 'conn-1',
-        runtimeEnvironmentId: null
-      })
-    )
-  })
-
-  it('changes when the active runtime environment changes', () => {
-    expect(
-      getWatchedTargetKey({
-        worktreeId: 'wt-1',
-        worktreePath: '/repo',
-        connectionId: undefined,
-        runtimeEnvironmentId: null
-      })
-    ).not.toBe(
-      getWatchedTargetKey({
-        worktreeId: 'wt-1',
-        worktreePath: '/repo',
-        connectionId: undefined,
-        runtimeEnvironmentId: 'env-1'
-      })
-    )
-  })
-})
 
 describe('createExternalWatchEventHandler tombstone coalescing', () => {
   const setExternalMutation = vi.fn()

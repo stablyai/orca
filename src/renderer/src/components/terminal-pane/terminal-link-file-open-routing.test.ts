@@ -94,37 +94,37 @@ describe('handleOscLink', () => {
     )
   })
 
-  it('opens a sibling folder-workspace path under its owning host and workspace', async () => {
+  it('opens a local file another workspace holds open in the clicked workspace', async () => {
     const filePath = '/sibling/docs/SKILL.md'
     storeState.openFiles = [{ filePath, worktreeId: 'folder:notes' }]
-    findWorkspaceFileRouteMock.mockReturnValueOnce({
+    findWorkspaceFileRouteMock.mockReturnValue({
       worktreeId: 'folder:notes',
       relativePath: 'docs/SKILL.md',
       executionHostId: 'local'
     })
     openFileMock.mockImplementationOnce(() => {
-      storeState.activeFileIdByWorktree['folder:notes'] = 'owned-skill'
+      storeState.activeFileIdByWorktree['wt-1'] = 'clicked-skill'
     })
 
     openDetectedFilePath(filePath, 12, null, deps)
     await flushAsyncWork()
     await flushDoubleRaf()
 
-    expect(activateAndRevealWorkspace).toHaveBeenCalledWith('folder:notes', {
+    // Why: switching to the owner pulled the user out of the workspace they clicked in.
+    expect(findWorkspaceFileRouteMock).not.toHaveBeenCalled()
+    expect(activateAndRevealWorkspace).not.toHaveBeenCalledWith('folder:notes', expect.anything())
+    expect(activateAndRevealWorkspace).toHaveBeenCalledWith('wt-1', {
       providesInitialSurface: true,
       executionHostId: 'local'
     })
     expect(openFileMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        filePath,
-        relativePath: 'docs/SKILL.md',
-        worktreeId: 'folder:notes'
-      }),
+      expect.objectContaining({ filePath, relativePath: filePath, worktreeId: 'wt-1' }),
       { forceContentReload: true }
     )
     expect(setPendingEditorRevealMock).toHaveBeenLastCalledWith(
-      expect.objectContaining({ fileId: 'owned-skill' })
+      expect.objectContaining({ fileId: 'clicked-skill' })
     )
+    findWorkspaceFileRouteMock.mockReset()
   })
 
   it('opens terminal markdown line links in source mode so Monaco can reveal the line', async () => {

@@ -171,6 +171,13 @@ export const STRUCTURED_CALLS: {
     hostMethod: 'continueInterrupted',
     result: { sessionId: SESSION, outcome: 'superseded' }
   },
+  // Cancel a scheduled automatic continuation. Clients call it only on a host advertising
+  // `agent-session.usage-limit-auto-continue.v1`; an older host answers `method_not_found`.
+  {
+    method: 'agentSession.cancelUsageLimitContinue',
+    hostMethod: 'cancelUsageLimitContinue',
+    result: { ok: true }
+  },
   // Name a chat again after naming failed. Clients call it only on a host advertising
   // `agent-session.structured.regenerate-name.v1`; an older host answers `method_not_found`.
   {

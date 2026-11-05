@@ -1,9 +1,9 @@
-import { detectAgentStatusFromTitle } from '@/lib/agent-status'
+import { detectAgentStatusFromTitle as detectAgentStatusFromTitleDefault } from '../../../../../shared/agent-status/title/agent-title-status'
 import { useAppStore } from '@/store'
-import type { AgentType } from '../../../../../shared/agent-status-types'
-import { AGENT_INTERRUPT_SETTLE_MS } from '../../../../../shared/agent-interrupt-intent'
-import { resolvePaneAgentOwner } from '../../../../../shared/pane-agent-owner'
-import { titleAfterInferredInterrupt } from '../../../../../shared/terminal-pane-title-reset'
+import type { AgentType } from '../../../../../shared/agent-status/contracts/agent-status-types'
+import { AGENT_INTERRUPT_SETTLE_MS } from '../../../../../shared/agent-status/lifecycle/agent-interrupt-intent'
+import { resolvePaneAgentOwner } from '../../../../../shared/agent-status/identity/pane-agent-owner'
+import { titleAfterInferredInterrupt } from '../../../../../shared/workspace-layout/terminal-pane-title-reset'
 
 import { MANUAL_AGENT_COMMAND_MAX_CHARS } from './pty-connect-limits'
 import {
@@ -15,6 +15,8 @@ import {
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
 export function installShellCommandInference(session: ConnectPanePtySession): void {
+  const detectAgentStatusFromTitle =
+    session.deps.detectAgentStatusFromTitle ?? detectAgentStatusFromTitleDefault
   session.observeAcceptedShellCommandInput = (data: string): void => {
     if (
       data.includes('\r') ||

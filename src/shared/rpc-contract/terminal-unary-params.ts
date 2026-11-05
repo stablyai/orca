@@ -1,7 +1,7 @@
 import { z } from 'zod'
-import { TERMINAL_KITTY_FILE_MAX_BYTES } from '../terminal-kitty-file'
+import { TERMINAL_KITTY_FILE_MAX_BYTES } from '../terminal/images/terminal-kitty-file'
 import { OptionalFiniteNumber, OptionalString, requiredString } from './rpc-param-primitives'
-import { isTuiAgent } from '../tui-agent-config'
+import { isTuiAgent } from '../agent-launch/catalog/tui-agent-config'
 import { SpawnIntentParam } from './agent-session-params'
 import {
   canonicalizeWindowsShellOverride,
@@ -168,6 +168,12 @@ export const TerminalSetPaneTitle = TerminalHandle.extend({
 })
 
 export const TerminalSend = TerminalHandle.extend({
+  inputSequence: z
+    .object({
+      sessionId: z.string().min(1).max(128),
+      seq: z.number().int().positive().max(Number.MAX_SAFE_INTEGER)
+    })
+    .optional(),
   text: OptionalString,
   enter: z.unknown().optional(),
   interrupt: z.unknown().optional(),
@@ -200,6 +206,10 @@ export const TerminalSend = TerminalHandle.extend({
     })
     .optional(),
   claimViewport: z.literal(true).optional()
+})
+
+export const TerminalOpenInputSession = TerminalHandle.extend({
+  client: z.object({ id: requiredString('Missing client ID'), type: z.literal('mobile') })
 })
 
 export const TerminalViewport = z.object({

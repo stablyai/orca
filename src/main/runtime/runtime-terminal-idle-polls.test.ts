@@ -3,8 +3,8 @@ import { RuntimeTerminalIdlePolls } from './terminal/wait/terminal-idle-polls'
 import type { TerminalWaiter } from './runtime-terminal-contracts'
 import type { RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 import type { RuntimeTerminalWait } from '../../shared/runtime-types'
-import type { TuiAgent } from '../../shared/tui-agent'
-import { TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
+import { TUI_AGENT_CONFIG } from '../../shared/agent-launch/catalog/tui-agent-config'
 
 const INTERVAL_MS = 2000
 

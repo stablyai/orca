@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { SessionNotFoundError } from '../../../daemon/daemon-errors'
+import { SessionNotFoundError } from '../../../daemon/protocol/daemon-errors'
 import type { IPtyProvider } from '../../../providers/pty-provider-contract'
 import { PANE_NOT_LIVE_ERROR } from '../../../../shared/pane-attach-only-view'
 import { attachViewAfterHiddenStart, attachViewWithoutOwner } from './attach-only-view'

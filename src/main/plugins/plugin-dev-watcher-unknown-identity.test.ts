@@ -10,8 +10,8 @@ import {
   createAliasedWatcherRoot,
   removeAliasedWatcherRoot,
   type AliasedWatcherRoot
-} from '../ipc/watcher-aliased-root-fixture'
-import { watcherDirectoryIdentity } from '../ipc/watcher-directory-identity'
+} from '../ipc/filesystem/watcher-process/watcher-aliased-root-fixture'
+import { watcherDirectoryIdentity } from '../ipc/filesystem/watcher-process/watcher-directory-identity'
 import { PluginDevWatcher } from './plugin-dev-watcher'
 import { PluginServiceHousekeeping } from './plugin-service-housekeeping'
 

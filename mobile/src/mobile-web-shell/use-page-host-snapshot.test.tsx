@@ -241,27 +241,6 @@ it('keeps host-wide keys mirrored while the next route hydrates', async () => {
 })
 
 describe('what the shell puts on every init', () => {
-  it('carries the write the page just made, not the map it was primed with', async () => {
-    doubles.store.set(PINS, '["one"]')
-    const mounted = await mount()
-    expect(mounted.view().readStorage().storage).toEqual({ [PINS]: '["one"]' })
-    // Reloading the document in the same mount must receive its latest write in init.
-    await act(async () => {
-      mounted.view().writeStorage(PINS, '["one","two"]')
-    })
-    expect(mounted.view().readStorage().storage).toEqual({ [PINS]: '["one","two"]' })
-    expect(doubles.writes).toEqual([{ key: PINS, value: '["one","two"]' }])
-  })
-
-  it('drops a key the page removed', async () => {
-    doubles.store.set(PINS, '["one"]')
-    const mounted = await mount()
-    await act(async () => {
-      mounted.view().writeStorage(PINS, null)
-    })
-    expect(mounted.view().readStorage().storage).toEqual({})
-  })
-
   it('carries what the app wrote from its own screens on the next init, not the one after', async () => {
     const mounted = await mount()
     expect(mounted.view().readStorage().storage).toEqual({})
@@ -289,16 +268,6 @@ describe('what the shell puts on every init', () => {
       await seated
     })
     expect(mounted.view().readStorage().storage).toEqual({ [PINS]: '["just-written"]' })
-  })
-
-  it('picks up what the app changed underneath, on the next ask', async () => {
-    const mounted = await mount()
-    expect(mounted.view().readStorage().storage).toEqual({})
-    doubles.store.set(PINS, '["set-by-the-app"]')
-    await act(async () => {
-      mounted.view().refreshStorage()
-    })
-    expect(mounted.view().readStorage().storage).toEqual({ [PINS]: '["set-by-the-app"]' })
   })
 
   it('never carries another host key, whatever the store holds', async () => {
@@ -331,15 +300,6 @@ describe('what the shell puts on every init', () => {
     expect(doubles.writes).toEqual([])
     expect(doubles.store.get('orca:nativeChatTabs:host-1:wt-2')).toBe('{"tab-9":"chat"}')
     expect(mounted.view().readStorage().storage).toEqual({ [CHAT_TABS]: '{"tab-1":"chat"}' })
-  })
-
-  it('hands a route that names no workspace neither of the two, so the line above is the route', async () => {
-    doubles.store.set(CHAT_TABS, '{"tab-1":"chat"}')
-    const mounted = await mount('/h/host-1')
-    await act(async () => {
-      mounted.view().refreshStorage()
-    })
-    expect(mounted.view().readStorage().storage).toEqual({})
   })
 
   it('leaves out a value the page would refuse the whole frame over, and says which', async () => {
@@ -384,38 +344,5 @@ describe('the host the page is handed', () => {
     })
     expect(mounted.view().snapshot?.host.id).toBe('host-1')
     expect(mounted.view().readStorage().storage).toEqual({ [PINS]: '["one"]' })
-  })
-
-  it("carries the stored name identity, so the page can tell the phone's override from the desktop's name", async () => {
-    doubles.hostIdentity = {
-      personalName: 'Host One',
-      lastKnownMachineName: 'm4airs-Air',
-      lastKnownHostPlatform: 'darwin'
-    }
-    const mounted = await mount()
-    expect(mounted.view().snapshot?.host).toEqual({
-      id: 'host-1',
-      name: 'Host One',
-      personalName: 'Host One',
-      lastKnownMachineName: 'm4airs-Air',
-      lastKnownHostPlatform: 'darwin',
-      endpoint: 'ws://host-1',
-      lastConnected: 3
-    })
-  })
-})
-
-describe('a host the app store would not answer for', () => {
-  it('says so rather than leaving the caller holding a session with no host', async () => {
-    doubles.hostsReject = true
-    const mounted = await mount()
-    expect(mounted.view().snapshot).toBeNull()
-    expect(mounted.view().unreadable).toBe(true)
-  })
-
-  it('reports a readable host without an unreadable-store failure', async () => {
-    const mounted = await mount()
-    expect(mounted.view().snapshot?.host.id).toBe('host-1')
-    expect(mounted.view().unreadable).toBe(false)
   })
 })

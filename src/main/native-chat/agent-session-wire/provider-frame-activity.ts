@@ -1,6 +1,8 @@
-import { normalizeOptionalField } from '../../../shared/agent-status-field-normalization'
+import { normalizeOptionalField } from '../../../shared/agent-status/contracts/agent-status-field-normalization'
+import { formatNativeChatDuration } from '../../../shared/native-chat/transcript/native-chat-turn-status'
 
 export const MAX_PROVIDER_ACTIVITY_LENGTH = 160
+export const PROVIDER_COMPACTING_ACTIVITY = 'Compacting the conversation'
 
 type ActivityText = string | null | undefined
 
@@ -70,8 +72,7 @@ const CODEX_ITEM_ACTIVITY: Readonly<Record<string, string>> = {
   imageGeneration: 'Generating an image',
   enteredReviewMode: 'Reviewing changes',
   exitedReviewMode: 'Reviewing changes',
-  contextCompaction: 'Compacting the conversation',
-  sleep: 'Waiting briefly',
+  contextCompaction: PROVIDER_COMPACTING_ACTIVITY,
   hookPrompt: 'Processing workspace guidance'
 }
 
@@ -91,11 +92,22 @@ export function codexProviderFrameActivity(
   if (method === 'item/reasoning/summaryPartAdded') {
     return null
   }
+  const item = record(source?.item)
+  const itemType = stringField(item, 'type')
+  if (itemType === 'sleep') {
+    if (method === 'item/completed') {
+      return null
+    }
+    if (method === 'item/started') {
+      const durationMs = item?.durationMs
+      return typeof durationMs === 'number' && Number.isFinite(durationMs) && durationMs > 0
+        ? `Waiting for ${formatNativeChatDuration(Math.ceil(durationMs / 1000))}`
+        : 'Waiting'
+    }
+  }
   if (method !== 'item/started') {
     return undefined
   }
-  const item = record(source?.item)
-  const itemType = stringField(item, 'type')
   return itemType ? (CODEX_ITEM_ACTIVITY[itemType] ?? null) : null
 }
 
@@ -103,7 +115,7 @@ export function codexProviderFrameActivity(
 export function claudeProviderFrameActivity(kind: string, payload: unknown): ActivityText {
   const source = record(payload)
   if (kind === 'message:system:status') {
-    return stringField(source, 'status') === 'compacting' ? 'Compacting the conversation' : null
+    return stringField(source, 'status') === 'compacting' ? PROVIDER_COMPACTING_ACTIVITY : null
   }
   if (
     kind === 'message:system:task_started' ||

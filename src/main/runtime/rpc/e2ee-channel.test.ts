@@ -8,7 +8,7 @@ import {
   encrypt,
   decrypt,
   encryptBytes
-} from '../../../shared/e2ee-crypto'
+} from '../../../shared/remote-runtime/e2ee/node/e2ee-crypto'
 import {
   REMOTE_RUNTIME_MAX_OUTBOUND_BINARY_FRAME_BYTES,
   REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES

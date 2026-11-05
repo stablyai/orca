@@ -1,5 +1,5 @@
-import type { AgentStatusIpcPayload } from '../../shared/agent-status-ipc-payload'
-import { parsePaneKey } from '../../shared/stable-pane-id'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
+import { parsePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import {
   claudeRenameCommand,
   claudeTitleName,

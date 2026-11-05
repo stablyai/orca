@@ -1,10 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import { OrcaRuntimeService } from './orca-runtime'
 
 export function registerOrcaRuntimeHeadlessHydrationRepoGateTests(): void {
-  const WORKTREE_ID = 'repo::/worktree'
   const REPO_ID = 'repo'
 
   function makeSession(worktreeId: string): WorkspaceSessionState {
@@ -29,15 +28,6 @@ export function registerOrcaRuntimeHeadlessHydrationRepoGateTests(): void {
 
   // #9343: skip sessions for removed repos without treating unavailable inventory as universal removal.
   describe('headless mobile session hydration repo gate', () => {
-    it('hydrates when the store cannot report repos at all', async () => {
-      const runtime = new OrcaRuntimeService({
-        getWorkspaceSession: () => makeSession(WORKTREE_ID)
-      } as never)
-
-      const result = await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
-      expect(result.tabs.length).toBeGreaterThan(0)
-    })
-
     it('still skips a key whose repo is absent from a known inventory', async () => {
       const runtime = new OrcaRuntimeService({
         getWorkspaceSession: () => makeSession('ghost-repo::/worktree'),

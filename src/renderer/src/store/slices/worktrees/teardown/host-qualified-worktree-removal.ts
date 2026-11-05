@@ -20,7 +20,7 @@ import { cleanupEphemeralVmRuntimesForDeleted } from '@/lib/ephemeral-vm-runtime
 import { purgeOrphanedRuntimeSshProjects } from './orphaned-runtime-ssh-project-purge'
 import { completePreservedBranchCleanup } from './complete-preserved-branch-cleanup'
 
-import { preservedBranchCleanupKey } from '../../../../../../shared/preserved-branch-cleanup'
+import { preservedBranchCleanupKey } from '../../../../../../shared/git/branches/preserved-branch-cleanup'
 import { preservedBranchRuntimeTargetByCleanupKey } from './preserved-branch-cleanup-target'
 import { worktreeHostMatchOptions, worktreeMatchesHost } from '../listing/worktree-host-ownership'
 import {

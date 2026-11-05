@@ -1,5 +1,5 @@
-import { TerminalShellLifecycleScanner } from '../daemon/terminal-shell-lifecycle-scanner'
-import type { TerminalOwner } from '../../shared/terminal-owner'
+import { TerminalShellLifecycleScanner } from '../daemon/shell-readiness/terminal-shell-lifecycle-scanner'
+import type { TerminalOwner } from '../../shared/terminal/pty/lifecycle/terminal-owner'
 
 // Bound serialization latency independently of slow RPC/process inspection; late proof remains generation-fenced.
 const SETTLE_DEADLINE_MS = 750
