@@ -219,6 +219,76 @@ describe('active review ownership across a real rebase', () => {
     expect(persisted.read().pushTarget).toBeUndefined()
   })
 
+  it('clears a local reattach observed by listing without clearing its same-ID remote twin', async () => {
+    const repo = createReviewRepo('feature')
+    const persisted = createPersistence(reviewMeta())
+    await observe(repo, persisted)
+    const local = activeStore.getState().worktreesByRepo.repo1[0]
+    const remote = {
+      ...local,
+      hostId: 'ssh:box-b' as const,
+      instanceId: 'remote-instance',
+      linkedPR: 987,
+      pushTarget: { remoteName: 'origin', branchName: 'remote-review' }
+    }
+    activeStore.setState({ worktreesByRepo: { repo1: [local, remote] } })
+    repo.git('checkout', '--quiet', '--detach')
+    await observe(repo, persisted, { listing: false })
+    repo.git('checkout', '--quiet', 'other')
+    await observe(repo, persisted)
+
+    expect(persisted.read().linkedPR).toBeNull()
+    expect(persisted.read().pushTarget).toBeUndefined()
+    expect(activeStore.getState().worktreesByRepo.repo1[0]).toMatchObject({
+      branch: 'refs/heads/other',
+      linkedPR: null,
+      pushTarget: undefined
+    })
+    expect(activeStore.getState().worktreesByRepo.repo1[1]).toEqual(remote)
+  })
+
+  it('clears the old review after an unrelated linked issue changes while detached', async () => {
+    const repo = createReviewRepo('feature')
+    const persisted = createPersistence(reviewMeta())
+    await observe(repo, persisted)
+    repo.git('checkout', '--quiet', '--detach')
+    await observe(repo, persisted, { listing: false })
+    const issue = {
+      provider: 'github' as const,
+      type: 'issue' as const,
+      number: 42,
+      title: 'Unrelated work item',
+      url: 'https://github.com/stablyai/orca/issues/42'
+    }
+    persisted.writeExternally({ linkedWorkItem: issue })
+    await observe(repo, persisted)
+    repo.git('checkout', '--quiet', 'other')
+    await observe(repo, persisted)
+
+    expect(persisted.read().linkedPR).toBeNull()
+    expect(persisted.read().pushTarget).toBeUndefined()
+    expect(persisted.read().linkedWorkItem).toEqual(issue)
+    expect(persisted.read().linkedItems).toEqual(
+      expect.arrayContaining([expect.objectContaining({ type: 'issue', number: 42 })])
+    )
+  })
+
+  it('keeps a same-number review relinked to another repository while detached', async () => {
+    const repo = createReviewRepo('feature')
+    const persisted = createPersistence(reviewMeta())
+    await observe(repo, persisted)
+    repo.git('checkout', '--quiet', '--detach')
+    await observe(repo, persisted, { listing: false })
+    const relinked = { ...REVIEW, url: 'https://github.com/other/project/pull/37557' }
+    persisted.writeExternally({ linkedWorkItem: relinked })
+    await observe(repo, persisted)
+    repo.git('checkout', '--quiet', 'other')
+    await observe(repo, persisted)
+
+    expect(persisted.read()).toMatchObject({ linkedPR: 37557, linkedWorkItem: relinked })
+    expect(persisted.read().pushTarget).toBeUndefined()
+  })
+
   it('keeps an unverified cold-start ownership when a renamed local branch returns', async () => {
     const repo = createReviewRepo('review-123')
     const persisted = createPersistence(reviewMeta())
@@ -231,7 +301,7 @@ describe('active review ownership across a real rebase', () => {
     expect(persisted.read()).toMatchObject({ linkedPR: 37557, pushTarget: PUSH_TARGET })
   })
 
-  it('keeps a review relinked while detached and drops only the old push target on switch', async () => {
+  it('keeps a relinked review and rejects a stale push target while the partial clear is pending', async () => {
     const repo = createReviewRepo('feature')
     const persisted = createPersistence(reviewMeta())
     await observe(repo, persisted)
@@ -244,14 +314,57 @@ describe('active review ownership across a real rebase', () => {
     }
     persisted.writeExternally({ linkedPR: 40000, linkedWorkItem: relinked })
     await observe(repo, persisted)
-    repo.git('checkout', '--quiet', 'other')
-    await observe(repo, persisted, { listing: false })
+    const pending = Promise.withResolvers<void>()
+    const save = mockApi.worktrees.updateMeta.getMockImplementation()!
+    mockApi.worktrees.updateMeta.mockImplementationOnce(async (args) => {
+      await pending.promise
+      return save(args)
+    })
+    try {
+      repo.git('checkout', '--quiet', 'other')
+      await observe(repo, persisted, { listing: false })
+      await observe(repo, persisted, { watcher: false })
+
+      expect(activeStore.getState().worktreesByRepo.repo1[0]).toMatchObject({
+        linkedPR: 40000,
+        pushTarget: undefined
+      })
+    } finally {
+      pending.resolve()
+      await settle()
+    }
 
     expect(persisted.read()).toMatchObject({ linkedPR: 40000, linkedWorkItem: relinked })
     expect(persisted.read().pushTarget).toBeUndefined()
     expect(persisted.read().linkedItems).toEqual(
       expect.arrayContaining([expect.objectContaining({ number: 37557 })])
     )
+  })
+
+  it('keeps a review linked after the first detached observation when a branch appears', async () => {
+    const repo = createReviewRepo('feature')
+    repo.git('checkout', '--quiet', '--detach')
+    const persisted = createPersistence(reviewMeta())
+    await observe(repo, persisted)
+    const relinked = {
+      ...REVIEW,
+      number: 40000,
+      url: 'https://github.com/stablyai/orca/pull/40000'
+    }
+    const pushTarget = { remoteName: 'origin', branchName: 'new-review' }
+    persisted.writeExternally({ linkedPR: 40000, linkedWorkItem: relinked, pushTarget })
+    await observe(repo, persisted)
+    repo.git('checkout', '--quiet', 'other')
+    await observe(repo, persisted)
+
+    expect(persisted.read()).toMatchObject({
+      linkedPR: 40000,
+      pushTarget: { remoteName: 'origin', branchName: 'new-review' }
+    })
+    expect(activeStore.getState().worktreesByRepo.repo1[0]).toMatchObject({
+      linkedPR: 40000,
+      pushTarget: { remoteName: 'origin', branchName: 'new-review' }
+    })
   })
 
   it('drops the stale push target after an unlink while detached, then a switch', async () => {

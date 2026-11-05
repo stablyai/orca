@@ -6,7 +6,8 @@ import {
   canonicalHostedReviewBranchIdentity
 } from './hosted-review-links'
 import type { WorktreeMeta } from './meta-types'
-import { getWorkspaceReferenceIdentity } from '../workspace-reference-identity'
+import { getWorkspaceReferenceIdentity } from '../workspace-attachments/workspace-reference-identity'
+import { WORKSPACE_ATTACHMENT_NUMBER_SLOTS } from '../workspace-attachments/workspace-attachment-legacy'
 
 // Why: a detached HEAD (rebase, bisect, checkout of a commit) is not proof the active review
 // belongs to other work. Only an attached checkout decides, against the branch that last proved
@@ -16,11 +17,13 @@ export type HostedReviewContext = Partial<
   Pick<Worktree, (typeof HOSTED_REVIEW_LINK_KEYS)[number] | 'pushTarget' | 'linkedWorkItem'>
 >
 
+type HostedReviewSelectionSignature = { links: string; source: string | null }
+
 export type HostedReviewOwner =
   /** A branch proved this review context; signatures record it as it stood then. */
-  | { kind: 'branch'; branch: string; selection: string; push: string }
+  | { kind: 'branch'; branch: string; selection: HostedReviewSelectionSignature; push: string }
   /** Detached with no rebase in progress, verified by the owning host. */
-  | { kind: 'detached' }
+  | { kind: 'detached'; selection: HostedReviewSelectionSignature; push: string }
   /** Detached, but no host verdict says which branch (if any) the review belongs to. */
   | { kind: 'unknown' }
 
@@ -33,10 +36,25 @@ function hasSelection(context: HostedReviewContext): boolean {
 }
 
 /** The selected review's source identity; titles and status refreshes do not change it. */
-export function hostedReviewSelectionSignature(context: HostedReviewContext): string {
+export function hostedReviewSelectionSignature(
+  context: HostedReviewContext
+): HostedReviewSelectionSignature {
   const item = context.linkedWorkItem
-  const source = item && item.type !== 'issue' ? getWorkspaceReferenceIdentity(item) : null
-  return JSON.stringify([...HOSTED_REVIEW_LINK_KEYS.map((key) => context[key] ?? null), source])
+  const source =
+    item &&
+    WORKSPACE_ATTACHMENT_NUMBER_SLOTS.some(
+      ([slot, provider, type]) =>
+        type !== 'issue' &&
+        item.provider === provider &&
+        item.type === type &&
+        context[slot] === item.number
+    )
+      ? getWorkspaceReferenceIdentity(item)
+      : null
+  return {
+    links: JSON.stringify(HOSTED_REVIEW_LINK_KEYS.map((key) => context[key] ?? null)),
+    source
+  }
 }
 
 /** Push destination identity; `remoteCreated` is operational enrichment, not a new target. */
@@ -73,7 +91,11 @@ export function detachedHostedReviewOwner(
   }
   const verdict = row.detachedRebase
   if (verdict?.active === false) {
-    return { kind: 'detached' }
+    return {
+      kind: 'detached',
+      selection: hostedReviewSelectionSignature(row),
+      push: hostedReviewPushSignature(row.pushTarget)
+    }
   }
   if (verdict?.active && verdict.branch) {
     return branchHostedReviewOwner(verdict.branch, row)
@@ -95,14 +117,16 @@ export function decideHostedReviewClear(
   }
   const selected = hasSelection(context)
   const pushed = context.pushTarget !== undefined
-  if (owner.kind === 'detached') {
-    return { selection: selected, push: pushed }
-  }
-  if (owner.branch === canonicalHostedReviewBranchIdentity(branch)) {
+  if (owner.kind === 'branch' && owner.branch === canonicalHostedReviewBranchIdentity(branch)) {
     return NO_CLEAR
   }
+  const selection = hostedReviewSelectionSignature(context)
   return {
-    selection: selected && hostedReviewSelectionSignature(context) === owner.selection,
+    selection:
+      selected &&
+      selection.links === owner.selection.links &&
+      // Missing review source data (for example, a linked issue) does not prove a relink.
+      (!selection.source || !owner.selection.source || selection.source === owner.selection.source),
     push: pushed && hostedReviewPushSignature(context.pushTarget) === owner.push
   }
 }
