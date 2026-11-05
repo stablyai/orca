@@ -98,7 +98,7 @@ export const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
     return (
       <DropdownMenuItem
         disabled={disabled || !entry.surfaces.length}
-        className={searchDefault ? 'bg-black/8 text-accent-foreground dark:bg-white/14' : undefined}
+        data-search-default={searchDefault || undefined}
         onSelect={() => {
           onSelectAgent?.(entry.agent)
           runLaunch(pickerLaunchRow(entry, selected?.surface ?? entry.defaultSurface))
@@ -151,7 +151,7 @@ export const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
       renderAnchor={(trigger) => (
         <div
           data-agent-launch-row
-          className={searchDefault ? 'bg-accent text-accent-foreground' : undefined}
+          data-search-default={searchDefault || undefined}
           onClick={(event) => {
             event.preventDefault()
             if (disabled || !entry.surfaces.length) {
