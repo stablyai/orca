@@ -92,7 +92,8 @@ by `plugins:list`.
 
 Revocation works through the ordinary change path. Disable, uninstall, consent revoke, and kill-list
 arrival all funnel into `performActivationStateReconciliation()` → `notifyChanged(true)`, which
-makes the renderer refetch the table. A stale cached table here is a security bug, not UI lag.
+makes the renderer drop its table at once and refetch it. A stale cached table here is a security bug,
+not UI lag.
 
 ## The gate order rule — the whole safety property
 

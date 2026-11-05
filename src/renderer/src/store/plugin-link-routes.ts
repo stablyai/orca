@@ -86,6 +86,9 @@ export function ensurePluginLinkRoutesLoaded(): void {
     // above is what keeps StrictMode's double-mount from registering two IPC listeners.
     window.api.plugins.onChanged((event) => {
       if (event?.contentPacksChanged ?? true) {
+        // Drop the old table first: a disabled or revoked plugin must not keep routing while the
+        // refetch is in flight, or forever if it never settles.
+        usePluginLinkRouteStore.setState({ routes: [] })
         void usePluginLinkRouteStore.getState().fetchRoutes()
       }
     })

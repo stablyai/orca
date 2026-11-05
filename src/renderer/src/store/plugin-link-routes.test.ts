@@ -108,8 +108,14 @@ describe('plugin link route store', () => {
     expect(getPluginLinkRoutes()).toEqual([])
   })
 
-  it('refetches when plugins change', async () => {
-    const listLinkRoutes = vi.fn(async () => [route('app.example.com')])
+  // One test: the change subscription is process-lifetime, so only the first ensure call registers.
+  it('drops the old table at once when plugins change, then refetches', async () => {
+    let call = 0
+    const listLinkRoutes = vi.fn(async () => {
+      call += 1
+      // The refetch never settles, as a hung handler would.
+      return call === 1 ? [route('app.example.com')] : new Promise<never>(() => {})
+    })
     const handlers: ((event: { contentPacksChanged?: boolean }) => void)[] = []
     installApi({
       listLinkRoutes,
@@ -120,8 +126,10 @@ describe('plugin link route store', () => {
     })
 
     ensurePluginLinkRoutesLoaded()
-    await vi.waitFor(() => expect(handlers.length).toBeGreaterThan(0))
+    await vi.waitFor(() => expect(getPluginLinkRoutes()).toHaveLength(1))
     handlers[0]({ contentPacksChanged: true })
-    await vi.waitFor(() => expect(listLinkRoutes.mock.calls.length).toBeGreaterThan(1))
+
+    expect(getPluginLinkRoutes()).toEqual([])
+    expect(listLinkRoutes).toHaveBeenCalledTimes(2)
   })
 })
