@@ -1,3 +1,5 @@
+import type { ExecutionHostId } from '../../../../shared/execution-host'
+import { worktreeLaunchWorkspace } from '@/lib/agent-launch-route-input'
 import type { TabBarCreateMenuController } from './tab-bar-create-menu-contract'
 export type { TabBarCreateMenuController } from './tab-bar-create-menu-contract'
 import { useAgentLaunchPickerInventorySource } from '../agent/use-agent-launch-picker-inventory'
@@ -22,6 +24,7 @@ const NEW_TAB_MENU_TERMINAL_FOCUS_RETRY_MS = 50
 const NEW_TAB_MENU_TERMINAL_FOCUS_TIMEOUT_MS = 5000
 export function useTabBarCreateMenuController({
   worktreeId,
+  executionHostId,
   resolvedGroupId,
   terminalOnly,
   showAgentLaunchItems = true,
@@ -44,6 +47,7 @@ export function useTabBarCreateMenuController({
   onOpenFileTab
 }: {
   worktreeId: string
+  executionHostId?: ExecutionHostId
   resolvedGroupId: string
   terminalOnly: boolean
   showAgentLaunchItems?: boolean
@@ -71,7 +75,9 @@ export function useTabBarCreateMenuController({
   const [newTabMenuOpen, setNewTabMenuOpen] = useState(initialOpen)
   const [createMenuQuery, setCreateMenuQuery] = useState('')
   const agentMenu = useNewTabAgentMenuRows(
-    worktreeId,
+    executionHostId
+      ? { workspace: worktreeLaunchWorkspace(worktreeId, executionHostId) }
+      : worktreeId,
     newTabMenuOpen && showAgentLaunchItems,
     agentDetectionTarget,
     { wakeOnOpen: true }
@@ -82,7 +88,8 @@ export function useTabBarCreateMenuController({
     worktreeId,
     agentMenu,
     newTabMenuOpen && showAgentLaunchItems,
-    selectedPickerAgent
+    selectedPickerAgent,
+    executionHostId
   )
   const pendingNewTabMenuFocusRef = useRef<{ focus: () => void; synchronous?: true } | null>(null)
   const pendingNewTabMenuFocusAnimationRef = useRef<number | null>(null)

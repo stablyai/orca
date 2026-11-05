@@ -2,7 +2,9 @@ import { useMemo } from 'react'
 import { useAppStore } from '@/store'
 import { getConnectionIdFromState } from '@/lib/connection-owner-resolution'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
-import { runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/resolve-owner'
+import { authorityKey } from '../../../shared/host-authority'
+import type { ExecutionHostId } from '../../../shared/execution-host'
+import { resolveOwner, runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/resolve-owner'
 import type { WorktreeRuntimeOwnerState } from '@/lib/worktree-runtime-owner-state'
 import { getResolvedExecutionHostIdForWorktree } from '@/lib/resolved-worktree-execution-host'
 import { parseExecutionHostId } from '../../../shared/execution-host'
@@ -29,10 +31,25 @@ export type AgentDetectionOwnerState = Parameters<typeof getConnectionIdFromStat
 /** Resolve the workspace’s proven local/SSH/runtime owner, remaining undefined through hydration. Return a primitive selector key to avoid allocating targets on every store write. */
 export function getAgentDetectionTargetKeyForWorktree(
   state: AgentDetectionOwnerState,
-  worktreeId: string | null
+  worktreeId: string | null,
+  executionHostId?: ExecutionHostId
 ): string | undefined {
   if (worktreeId === null) {
     return AGENT_DETECTION_LOCAL_TARGET_KEY
+  }
+  if (executionHostId) {
+    const owner = resolveOwner(state, { workspaceId: worktreeId, hostId: executionHostId })
+    if (owner.kind !== 'resolved') {
+      return undefined
+    }
+    const host = parseExecutionHostId(authorityKey(owner.owner))
+    if (host?.kind === 'runtime') {
+      return getRuntimeAgentDetectionTargetKey(host.environmentId, worktreeId)
+    }
+    if (host?.kind === 'ssh') {
+      return `ssh:${host.targetId}`
+    }
+    return getLocalAgentDetectionTargetKey(worktreeId)
   }
   if (parseWorkspaceKey(worktreeId)?.type === 'folder') {
     const owner = runtimeEnvironmentIdForWorkspaceOwner(state, { workspaceId: worktreeId })
@@ -105,8 +122,11 @@ export function parseAgentDetectionTargetKey(
 }
 
 export function useAgentDetectionTargetForWorktree(
-  worktreeId: string | null
+  worktreeId: string | null,
+  executionHostId?: ExecutionHostId
 ): AgentDetectionTarget | undefined {
-  const key = useAppStore((s) => getAgentDetectionTargetKeyForWorktree(s, worktreeId))
+  const key = useAppStore((s) =>
+    getAgentDetectionTargetKeyForWorktree(s, worktreeId, executionHostId)
+  )
   return useMemo(() => parseAgentDetectionTargetKey(key), [key])
 }

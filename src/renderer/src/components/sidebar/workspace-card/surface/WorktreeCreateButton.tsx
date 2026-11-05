@@ -145,6 +145,7 @@ function WorktreeCreateMenu({
   const controller = useTabBarCreateMenuController({
     ...runtime,
     worktreeId,
+    executionHostId,
     resolvedGroupId: runtime.resolvedGroupId,
     terminalOnly: false,
     initialOpen: true,

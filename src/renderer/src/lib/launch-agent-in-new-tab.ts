@@ -1,3 +1,4 @@
+import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import {
   launchNewTabPromptThroughHost,
   newTabPromptLaunchesThroughHost
@@ -69,6 +70,16 @@ export function launchAgentInNewTabWithOutcome(
     beforeSurfaceOpen,
     activate
   } = args
+  if (
+    args.selectedExecutionHostId &&
+    activateAndRevealWorktree(worktreeId, {
+      executionHostId: args.selectedExecutionHostId,
+      providesInitialSurface: true
+    }) === false
+  ) {
+    args.focusIntent?.cancel()
+    return null
+  }
   const store = useAppStore.getState()
   const executionContext = resolveAgentLaunchExecutionContext(store, { worktreeId, launchPlatform })
   if (!executionContext) {

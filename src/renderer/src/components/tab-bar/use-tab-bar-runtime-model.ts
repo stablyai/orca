@@ -122,7 +122,7 @@ export function useTabBarRuntimeModel({
   const defaultWindowsShell = useAppStore(
     (s) => s.settings?.terminalWindowsShell ?? 'powershell.exe'
   )
-  const agentDetectionTarget = useAgentDetectionTargetForWorktree(worktreeId)
+  const agentDetectionTarget = useAgentDetectionTargetForWorktree(worktreeId, executionHostId)
   const defaultWindowsPowerShellImplementation = useAppStore((s) =>
     resolveWindowsPowerShellImplementationSetting(s.settings)
   )
@@ -237,7 +237,7 @@ export function useTabBarRuntimeModel({
   )
   const [managedBrowserCreationEnabled, mobileEmulatorCreationEnabled] = useAppStore(
     useShallow((state) => {
-      const policy = getWorkspaceClientCreationActionPolicy(state, worktreeId)
+      const policy = getWorkspaceClientCreationActionPolicy(state, worktreeId, executionHostId)
       return [
         policy['managed-browser'].state === 'enabled',
         policy['mobile-emulator'].state === 'enabled'

@@ -36,7 +36,12 @@ export function useTabGroupCreationCommands({
 
   return {
     newBrowserTab: async () => {
-      await openNewBrowserTabInActiveWorkspace(groupId, undefined, worktreeId).catch((error) => {
+      await openNewBrowserTabInActiveWorkspace(
+        groupId,
+        undefined,
+        worktreeId,
+        executionHostId
+      ).catch((error) => {
         toast.error(error instanceof Error ? error.message : String(error))
       })
     },

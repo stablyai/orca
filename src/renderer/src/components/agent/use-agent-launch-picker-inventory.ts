@@ -1,3 +1,4 @@
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { hostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import {
@@ -56,7 +57,8 @@ export function useAgentLaunchPickerInventorySource(
   worktreeId: string | undefined,
   model: NewTabAgentMenuModel,
   open: boolean,
-  selected?: AgentPickerEntry['agent']
+  selected?: AgentPickerEntry['agent'],
+  selectedExecutionHostId?: ExecutionHostId
 ): AgentPickerInventorySource {
   const selectedRef = useRef(selected)
   useLayoutEffect(() => {
@@ -68,6 +70,7 @@ export function useAgentLaunchPickerInventorySource(
     context?.executionHostId ??
     buildAgentLaunchRouteInput(useAppStore.getState(), {
       agent: 'claude',
+      selectedExecutionHostId,
       workspace: context?.workspace ?? {
         kind: worktreeId ? workspaceKindForWorktreeId(worktreeId) : 'floating',
         ...(worktreeId ? { worktreeId } : {})

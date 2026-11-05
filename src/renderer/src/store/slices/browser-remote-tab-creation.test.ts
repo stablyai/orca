@@ -1,3 +1,4 @@
+import { makeWorktree } from './store-test-helpers'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '../types'
 import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
@@ -92,6 +93,40 @@ describe('createBrowserSlice runtime guard', () => {
     const page = tab ? store.getState().browserPagesByWorkspace[tab.id]?.[0] : undefined
     expect(page?.browserRuntimeEnvironmentId).toBeNull()
     expectDrawnHere(store.getState())
+  })
+
+  it('creates a browser on the captured runtime while a same-ID local copy is active', async () => {
+    const id = 'repo1::/path/twin'
+    const { store, main } = await createTestStoreDrawnFromMain({
+      ...onePaneGroup(id),
+      activeWorktreeId: id,
+      activeWorkspaceExecutionHostId: 'local',
+      runtimeStatusByEnvironmentId: runtimeStatuses(['browser.screencast.v1']),
+      worktreesByRepo: {
+        repo1: [
+          makeWorktree({ id, repoId: 'repo1', path: '/path/twin', hostId: 'local' }),
+          makeWorktree({
+            id,
+            repoId: 'repo1',
+            path: '/path/twin',
+            hostId: 'runtime:env-1',
+            runtimeOwnerEnvironmentId: 'env-1'
+          })
+        ]
+      }
+    })
+    await store
+      .getState()
+      .openNewBrowserTabInActiveWorkspace('group-1', undefined, id, 'runtime:env-1')
+    expect(createWebRuntimeSessionBrowserTabMock).toHaveBeenCalledWith({
+      worktreeId: id,
+      environmentId: 'env-1',
+      url: 'about:blank',
+      targetGroupId: 'group-1',
+      clientTargetGroupId: 'group-1'
+    })
+    await main.settle()
+    expect(store.getState().browserTabsByWorktree[id] ?? []).toEqual([])
   })
 
   it('does not create a local fallback tab when remote browser creation fails', async () => {
