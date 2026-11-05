@@ -21,6 +21,7 @@ import type {
   WorktreeLineageInput,
   WorktreeLineageResolution
 } from '../runtime-worktree-lineage-resolution'
+import type { RuntimeWorktreeLineageController } from '../runtime-worktree-lineage-controller'
 import type { OrchestrationDb } from '../orchestration/db/orchestration-db'
 import { resolveNestedWorkerMaxDepth } from '../../../shared/nested-worker-depth'
 import type {
@@ -195,6 +196,12 @@ export abstract class RuntimeWorkspaceSelectors extends OrcaRuntimeWithResolveBr
 
   listCrossStoreLineage(): Record<WorkspaceKey, CrossStoreWorkspaceLineage> {
     return this.store?.getAllCrossStoreWorkspaceLineage?.() ?? {}
+  }
+
+  resolveCallerParentForAnotherStore(
+    ...args: Parameters<RuntimeWorktreeLineageController['resolveCallerParentForAnotherStore']>
+  ): ReturnType<RuntimeWorktreeLineageController['resolveCallerParentForAnotherStore']> {
+    return this.worktreeLineage.resolveCallerParentForAnotherStore(...args)
   }
 
   /** This store's installationId; cross-store records name their parent's store by it. */

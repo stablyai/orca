@@ -2,6 +2,7 @@ import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-work
 
 import type { Worktree } from '../../shared/worktree/types'
 import type {
+  CrossStoreInferredSource,
   CrossStoreParentRef,
   CrossStoreWorkspaceLineage,
   WorktreeLineage,
@@ -62,7 +63,7 @@ export function crossStoreManualLineage(parent: CrossStoreParentRef): CrossStore
 export function crossStoreCreateLineage(input: {
   crossStoreParent: CrossStoreParentRef
   parentWorkspaceOrigin?: 'manual'
-  crossStoreParentInferredFrom?: 'env-workspace' | 'terminal-context' | 'cwd-context'
+  crossStoreParentInferredFrom?: CrossStoreInferredSource
 }): CrossStoreLineageResolution {
   if (input.parentWorkspaceOrigin === 'manual') {
     return crossStoreManualLineage(input.crossStoreParent)

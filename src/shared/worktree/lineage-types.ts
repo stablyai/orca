@@ -11,6 +11,12 @@ export type WorktreeLineageCaptureSource =
   | 'active-workspace'
   | 'manual-action'
 
+/** The caller's own context that implied a parent for a create on another machine. */
+export type CrossStoreInferredSource = Extract<
+  WorktreeLineageCaptureSource,
+  'env-workspace' | 'terminal-context' | 'cwd-context' | 'orchestration-context'
+>
+
 export type WorktreeLineageCapture = {
   source: WorktreeLineageCaptureSource
   confidence: WorktreeLineageCaptureConfidence

@@ -434,3 +434,26 @@ describe('consumed cwd parent at the production authority boundary', () => {
     }
   })
 })
+
+describe('caller parent for a create on another machine', () => {
+  it('skips a stale terminal and keeps the valid environment parent, as a same-machine create does', async () => {
+    const { controller, showTerminal } = fixture()
+    showTerminal.mockRejectedValue(new Error('terminal_not_found'))
+    await expect(
+      controller.resolveCallerParentForAnotherStore(
+        {
+          envParentWorkspace: 'id:repo-a::/tmp/env-parent',
+          callerTerminalHandle: 'term_stale'
+        },
+        'mac-install'
+      )
+    ).resolves.toEqual({
+      parent: {
+        installationId: 'mac-install',
+        workspaceKey: 'worktree:repo-a::/tmp/env-parent',
+        instanceId: 'repo-a::/tmp/env-parent'
+      },
+      source: 'env-workspace'
+    })
+  })
+})

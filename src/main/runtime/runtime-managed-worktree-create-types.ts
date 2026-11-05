@@ -13,7 +13,10 @@ import type {
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../shared/workspace-source'
 import type { WorktreeStartupLaunch } from '../../shared/worktree/launch-types'
-import type { CrossStoreParentRef } from '../../shared/worktree/lineage-types'
+import type {
+  CrossStoreInferredSource,
+  CrossStoreParentRef
+} from '../../shared/worktree/lineage-types'
 import type { TaskSourceContext } from '../../shared/task-source-context'
 import type { WorktreeStartupDraftPaste } from './runtime-worktree-agent-startup'
 import type { RuntimeNavigationTarget } from '../../shared/runtime-navigation'
@@ -106,7 +109,7 @@ export type RuntimeManagedWorktreeCreateArgs = {
     envParentWorkspace?: string
     parentWorktree?: string
     crossStoreParent?: CrossStoreParentRef
-    crossStoreParentInferredFrom?: 'env-workspace' | 'terminal-context' | 'cwd-context'
+    crossStoreParentInferredFrom?: CrossStoreInferredSource
     cwdParentWorktree?: string
     cwdParentAmbiguous?: true
     noParent?: boolean
