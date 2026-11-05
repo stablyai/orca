@@ -6940,7 +6940,6 @@
       "src/renderer/src/components/diff-comments/diff-comment-line-range.test.ts": 49,
       "src/renderer/src/components/diff-comments/diff-comment-popover-outside-click.test.tsx": 1889,
       "src/renderer/src/components/diff-comments/diff-comment-popover-position.test.ts": 55,
-      "src/renderer/src/components/diff-comments/diff-comment-range-drag.test.ts": 2661,
       "src/renderer/src/components/diff-comments/diff-comment-zone-mouse-events.test.ts": 48,
       "src/renderer/src/components/diff-comments/useDiffCommentDecorator.lifecycle.test.tsx": 2669,
       "src/renderer/src/components/diff-comments/useDiffCommentDecorator.range-selection.test.tsx": 1782,
