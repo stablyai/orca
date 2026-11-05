@@ -135,9 +135,20 @@ export async function readRemoteBinaryFile(
  * `fs:readFileChunk` cap; the stat bracket refuses a file rewritten mid-read.
  */
 export async function readRuntimeFileBytes(
-  args: RuntimeFileReadArgs,
+  unpinned: RuntimeFileReadArgs,
   maxBytes: number
 ): Promise<PagedRemoteFileRead> {
+  // Why: pinned before the first read, so a renewal mid-re-pair can't move the read to another host.
+  const args =
+    unpinned.target.kind === 'environment'
+      ? {
+          ...unpinned,
+          expectedEnvironmentPairingRevision: captureRuntimeEnvironmentRequestRevision(
+            unpinned.target.environmentId,
+            unpinned.expectedEnvironmentPairingRevision
+          )
+        }
+      : unpinned
   try {
     return await readFileBytesOnce(args, maxBytes)
   } catch (error) {

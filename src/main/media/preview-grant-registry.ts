@@ -157,32 +157,73 @@ export function previewGrantForSender(
   return grant && grant.senderId === senderId ? { token, grant } : null
 }
 
-/**
- * Runs one host call for a remote preview on its current address. A paused or reconnected viewer
- * outlives its grant, so a lapsed one is renewed once, as the editor's reads do, wherever the call
- * happens: a stat, a streamed chunk or a PDF range. A call serving bytes of a version it already
- * started (`served`) continues only if the renewed grant still sees that version.
- */
-export async function callRemotePreview<T>(
-  grant: PreviewGrant,
-  call: (remote: RemoteFilePreviewAddress) => Promise<T>,
-  served?: RemotePreviewFileSnapshot
-): Promise<T> {
+function currentRemote(grant: PreviewGrant): RemoteFilePreviewAddress {
   if (!('remote' in grant.target)) {
     throw new Error('Preview is not a remote file')
   }
-  const remote = grant.target.remote
+  return grant.target.remote
+}
+
+/** The granted address a lapsed-grant refusal names, or null for any other failure. */
+function lapsedGrant(
+  error: unknown,
+  remote: RemoteFilePreviewAddress
+): GrantedRemoteFilePreviewAddress | null {
+  return error instanceof RemotePreviewGrantLapsedError && remote.grantId !== undefined
+    ? remote
+    : null
+}
+
+/**
+ * Runs one host call for a remote preview on its current address. A paused or reconnected viewer
+ * outlives its grant, so a lapsed one is renewed once, as the editor's reads do.
+ */
+async function callRemotePreview<T>(
+  grant: PreviewGrant,
+  call: (remote: RemoteFilePreviewAddress) => Promise<T>
+): Promise<T> {
+  const remote = currentRemote(grant)
   try {
     return await call(remote)
   } catch (error) {
-    if (!(error instanceof RemotePreviewGrantLapsedError) || remote.grantId === undefined) {
+    const lapsed = lapsedGrant(error, remote)
+    if (!lapsed) {
       throw error
     }
-    const renewed = await renewedRemoteTarget(grant, remote)
-    if (served && !sameFileVersion(await remoteSnapshot(grant), served)) {
-      throw new Error('The file changed on its host while it was being read.')
+    return call(await renewedRemoteTarget(grant, lapsed))
+  }
+}
+
+export type RemotePreviewReader = <T>(
+  call: (remote: RemoteFilePreviewAddress) => Promise<T>
+) => Promise<T>
+
+/**
+ * Host calls for one response that serves the file version `served`: they stay on the grant they
+ * started with and move to a renewed one only while that grant still sees the same version, so a
+ * rewritten file never splices into a response.
+ */
+export function remotePreviewReader(
+  grant: PreviewGrant,
+  served: RemotePreviewFileSnapshot
+): RemotePreviewReader {
+  let remote = currentRemote(grant)
+  return async (call) => {
+    const pinned = remote
+    try {
+      return await call(pinned)
+    } catch (error) {
+      const lapsed = lapsedGrant(error, pinned)
+      if (!lapsed) {
+        throw error
+      }
+      const renewed = await renewedRemoteTarget(grant, lapsed)
+      if (!sameFileVersion(await remoteSnapshot(grant), served)) {
+        throw new Error('The file changed on its host while it was being read.')
+      }
+      remote = renewed
+      return call(renewed)
     }
-    return call(renewed)
   }
 }
 

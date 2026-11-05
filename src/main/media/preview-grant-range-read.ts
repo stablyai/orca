@@ -1,7 +1,7 @@
 import { openLocalPreviewGrantFile } from './local-preview-grant-file'
 import {
-  callRemotePreview,
   previewGrantForSender,
+  remotePreviewReader,
   remoteSnapshot,
   revokeGrant,
   type PreviewSender
@@ -45,11 +45,10 @@ export async function readPreviewGrantRange(
     const lifetime = abortWhenRendererGone(sender)
     try {
       const snapshot = await remoteSnapshot(grant)
-      return await callRemotePreview(
+      return await remotePreviewReader(
         grant,
-        (remote) => readRemotePreviewRange(remote, offset, length, snapshot.size, lifetime.signal),
         snapshot
-      )
+      )((remote) => readRemotePreviewRange(remote, offset, length, snapshot.size, lifetime.signal))
     } catch (error) {
       if (error instanceof RemotePreviewPairingChangedError) {
         revokeGrant(token)

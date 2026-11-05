@@ -37,7 +37,7 @@ import { readRegisteredPairingRevision } from '../ipc/runtime-environments/runti
 import {
   grants,
   mintPreviewUrl,
-  callRemotePreview,
+  remotePreviewReader,
   remoteSnapshot,
   revokeGrant,
   type LocalPreviewTarget,
@@ -174,20 +174,15 @@ async function handleRemotePreviewRequest(
     // Re-stat (at most once a second) like a local file re-opens per request, so a growing recording keeps playing.
     const snapshot = await remoteSnapshot(grant)
     const { size } = snapshot
+    const read = remotePreviewReader(grant, snapshot)
     // The file can change after mint; check the bytes this response serves.
-    await callRemotePreview(
-      grant,
-      (remote) => assertRemotePreviewRasterHeader(grant.preview, remote, size, controller.signal),
-      snapshot
+    await read((remote) =>
+      assertRemotePreviewRasterHeader(grant.preview, remote, size, controller.signal)
     )
     return await createMediaRangeResponse(request, grant.mimeType, {
       size,
       read: (offset, length) =>
-        callRemotePreview(
-          grant,
-          (remote) => readRemotePreviewChunk(remote, offset, length, controller.signal),
-          snapshot
-        ),
+        read((remote) => readRemotePreviewChunk(remote, offset, length, controller.signal)),
       close: async () => {
         request.signal.removeEventListener('abort', forwardAbort)
         controller.abort()
