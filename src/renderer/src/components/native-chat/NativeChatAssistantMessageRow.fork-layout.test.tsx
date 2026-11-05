@@ -40,14 +40,16 @@ function renderMidTurnReply(withFork: boolean): HTMLElement {
   return container.querySelector<HTMLElement>('.group')!
 }
 
-it('adds no line of its own to a mid-turn response beside the row without it', () => {
+it('keeps a mid-turn fork inside its own response, adding no line before the next row', () => {
   const plain = Array.from(renderMidTurnReply(false).children)
   cleanup()
   const row = renderMidTurnReply(true)
   const button = screen.getByRole('button', { name: 'Fork from this response' })
-  const added = Array.from(row.children).filter((child) => child.contains(button))
+  const holder = Array.from(row.children).find((child) => child.contains(button))
 
-  expect(row.children).toHaveLength(plain.length + 1)
-  expect(added).toHaveLength(1)
-  expect(getComputedStyle(added[0]!).height).toBe('0px')
+  // The same lines as the row without it: nothing below the response for the next row to meet.
+  expect(row.children).toHaveLength(plain.length)
+  // It sits beside the response's own words, within the box the next row follows.
+  expect(holder?.textContent).toContain('Looking at the config next.')
+  expect(row.lastElementChild).toBe(holder)
 })

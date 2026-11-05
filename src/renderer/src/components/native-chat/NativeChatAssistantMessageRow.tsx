@@ -57,8 +57,11 @@ export function NativeChatAssistantMessageRow({
     !isSystem && words.length > 0 && !continuesTurn && activeTurnIsWorking !== true
   const forkAction =
     fork && words.length > 0 ? <NativeChatForkAction itemId={message.id} fork={fork} /> : null
-  const revealOnHover =
-    'mt-1 w-fit select-none transition-opacity can-hover:pointer-events-none can-hover:opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 [.group:has(:focus-visible)_&]:pointer-events-auto [.group:has(:focus-visible)_&]:opacity-100'
+  const hoverReveal =
+    'select-none transition-opacity can-hover:pointer-events-none can-hover:opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 [.group:has(:focus-visible)_&]:pointer-events-auto [.group:has(:focus-visible)_&]:opacity-100'
+  const revealOnHover = cn('mt-1 w-fit', hoverReveal)
+  // Mid-turn the next row follows too closely to hang controls into, so the fork stays in this response's box.
+  const gutterFork = !showControls ? forkAction : null
 
   return (
     <div
@@ -77,20 +80,22 @@ export function NativeChatAssistantMessageRow({
         enablePreview={runtimeContext !== undefined}
       />
       {words ? (
-        <NativeChatPacedMarkdown
-          rowKey={message.id}
-          content={words}
-          variant="document"
-          className="text-sm"
-          renderCodeBlock={isSystem ? NativeChatPlainCodeBlock : NativeChatCodeBlock}
-          onLinkClick={onLinkClick}
-          allowFileUriLinks={allowFileUriLinks}
-          linkifyFilePaths={onLinkClick !== undefined}
-          {...(isSystem ? {} : NATIVE_CHAT_QUOTE_SOURCE_PROPS)}
-          visualMessageId={message.role === 'assistant' ? message.id : undefined}
-          // Only the live turn’s prose frontier can be mid-sentence; structured rows have no per-row streaming flag.
-          streaming={messageIsStreaming(message, activeTurnIsWorking, trailingRun)}
-        />
+        <NativeChatForkGutter fork={gutterFork} reveal={hoverReveal}>
+          <NativeChatPacedMarkdown
+            rowKey={message.id}
+            content={words}
+            variant="document"
+            className="text-sm"
+            renderCodeBlock={isSystem ? NativeChatPlainCodeBlock : NativeChatCodeBlock}
+            onLinkClick={onLinkClick}
+            allowFileUriLinks={allowFileUriLinks}
+            linkifyFilePaths={onLinkClick !== undefined}
+            {...(isSystem ? {} : NATIVE_CHAT_QUOTE_SOURCE_PROPS)}
+            visualMessageId={message.role === 'assistant' ? message.id : undefined}
+            // Only the live turn’s prose frontier can be mid-sentence; structured rows have no per-row streaming flag.
+            streaming={messageIsStreaming(message, activeTurnIsWorking, trailingRun)}
+          />
+        </NativeChatForkGutter>
       ) : null}
       {toolRun ? <NativeChatToolRun {...toolRun} /> : null}
       {showControls ? (
@@ -105,17 +110,31 @@ export function NativeChatAssistantMessageRow({
             !inSubagentSection && '-mb-5'
           )}
         />
-      ) : forkAction ? (
-        // Mid-turn the next row follows closely, so the fork floats over it from a line of no height.
-        <div data-native-chat-fork-anchor className="relative" style={{ height: 0 }}>
-          <div
-            data-native-chat-find-skip
-            className={cn('absolute left-0 top-0 z-10 flex items-center', revealOnHover)}
-          >
-            {forkAction}
-          </div>
-        </div>
       ) : null}
+    </div>
+  )
+}
+
+/** The response's prose beside a right gutter that holds its fork at the last line; the gutter is
+ *  as tall as the prose, so the action never reaches the next row or adds a line. */
+function NativeChatForkGutter({
+  fork,
+  reveal,
+  children
+}: {
+  fork: React.ReactNode
+  reveal: string
+  children: React.ReactNode
+}): React.JSX.Element {
+  if (!fork) {
+    return <>{children}</>
+  }
+  return (
+    <div className="flex gap-1">
+      <div className="min-w-0 flex-1">{children}</div>
+      <div data-native-chat-find-skip className="relative w-6 shrink-0">
+        <div className={cn('absolute bottom-0 right-0 flex items-center', reveal)}>{fork}</div>
+      </div>
     </div>
   )
 }
