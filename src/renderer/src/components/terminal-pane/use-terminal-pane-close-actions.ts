@@ -210,13 +210,18 @@ export function useTerminalPaneCloseActions(controller: TerminalPaneBindingContr
     [executeClosePane, getCloseDialogCopyKind]
   )
 
-  const closeActivePane = useCallback((): void => {
-    const manager = managerRef.current
-    const pane = manager?.getActivePane() ?? manager?.getPanes()[0]
-    if (pane) {
-      handleRequestClosePane(pane.id)
-    }
-  }, [handleRequestClosePane, managerRef])
+  const closeActivePane = useCallback(
+    (leafId?: string): void => {
+      const manager = managerRef.current
+      const pane = leafId
+        ? manager?.getPanes().find((candidate) => manager.getLeafId(candidate.id) === leafId)
+        : (manager?.getActivePane() ?? manager?.getPanes()[0])
+      if (pane) {
+        handleRequestClosePane(pane.id)
+      }
+    },
+    [handleRequestClosePane, managerRef]
+  )
   useEffect(
     () => onActiveTerminalPaneCloseRequest(tabId, closeActivePane),
     [closeActivePane, tabId]

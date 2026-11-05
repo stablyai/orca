@@ -25,6 +25,7 @@ import {
   type ProgramStatusPresentation
 } from '../../../../../../shared/program-status/presentation'
 import { resolveRowProgramStatus } from '@/lib/program-status/agent-row-presentation'
+import { SidebarAgentActions } from './SidebarAgentActions'
 
 function getCompactAgentPrimary(
   agent: DashboardAgentRowData,
@@ -291,6 +292,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
       ) : (
         timestamp
       )}
+      {!sendTargetStatus && <SidebarAgentActions agent={agent} />}
     </>
   )
 

@@ -32,4 +32,12 @@ describe('active terminal pane close request', () => {
 
     expect(close).not.toHaveBeenCalled()
   })
+
+  it('targets the selected leaf instead of the active sibling', () => {
+    const close = vi.fn()
+    unsubscribes.push(onActiveTerminalPaneCloseRequest('tab-a', close))
+    expect(requestActiveTerminalPaneClose('tab-a', 'leaf-b')).toBe(true)
+    expect(close).toHaveBeenCalledWith('leaf-b')
+    expect(requestActiveTerminalPaneClose('unmounted-tab', 'leaf-b')).toBe(false)
+  })
 })
