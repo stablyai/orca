@@ -21,7 +21,7 @@ import { StructuredAgentSessionTurnCompletionFeed } from '../../src/main/native-
 import {
   RuntimeMobileNotificationController,
   type MobileNotificationEvent
-} from '../../src/main/runtime/runtime-mobile-notification-controller'
+} from '../../src/main/runtime/push/notifications/runtime-mobile-notification-controller'
 import { createStructuredAttentionMobileDelivery } from '../../src/main/runtime/agent-session/structured-agent-session-mobile-attention'
 import {
   call,

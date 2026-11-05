@@ -1,5 +1,5 @@
 import { createOrdinaryCrewCommandFixture } from './crew-recipient-public-command.test-fixture'
-import { partialRuntimeStore } from '../../src/main/runtime/runtime-store-partial-fixture'
+import { partialRuntimeStore } from '../../src/main/runtime/orca-runtime-tests/runtime-store-partial-fixture'
 import { resolveOrcaSessionParty } from '../../src/main/runtime/orchestration/orchestration-party'
 import { subscribeCrew } from '../../src/main/runtime/orchestration/crew/crew-stream'
 import { CrewFrame, type OrchestrationCrewFrame } from '../../src/shared/orchestration-crew'

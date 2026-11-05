@@ -95,6 +95,9 @@ vi.mock('../git/git-username', async (importOriginal) => ({
 vi.mock('../github/client', async () =>
   (await import('./worktrees-test-module-mocks')).githubClientModuleMock()
 )
+vi.mock('../github/client/lookup/get-pr-for-branch', async () =>
+  (await import('./worktrees-test-module-mocks')).githubClientModuleMock()
+)
 vi.mock('../source-control/hosted-review', async () =>
   (await import('./worktrees-test-module-mocks')).hostedReviewModuleMock()
 )
@@ -150,7 +153,7 @@ vi.mock('../workspaces/space-analysis/workspace-space-analysis-snapshot', async 
 vi.mock('../workspaces/cleanup/workspace-cleanup-removal-snapshot-prune', async () =>
   (await import('./worktrees-test-module-mocks')).workspaceCleanupRemovalSnapshotPruneModuleMock()
 )
-vi.mock('../runtime/worktree-teardown', async () =>
+vi.mock('../runtime/workspaces/removal/worktree-teardown', async () =>
   (await import('./worktrees-test-module-mocks')).worktreeTeardownModuleMock()
 )
 vi.mock('./pty/provider/registry', async () =>

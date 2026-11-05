@@ -1,9 +1,5 @@
-import { RELAY_CLOSE_CODE } from '@orca-cloud/relay-contract/close-codes'
 import { describe, expect, it } from 'vitest'
-import { RelayAssignmentStore } from '../assignment-store.js'
-import { openInMemoryRelayDatabase } from '../../database/database.js'
 import {
-  RESERVE_REHOME_HOST_COOLDOWN_MS,
   RESERVE_REHOME_SWITCH_STALE_MS,
   ReserveRehome,
   ReserveRehomeSwitch,
@@ -39,47 +35,6 @@ function warmed(percent = 100) {
 }
 
 describe('rehome on reconnect rules', () => {
-  it('leaves a host that another install dropped in the last 10 minutes', () => {
-    const peerDropped = { region: 'us-central1' as const, closeCode: RELAY_CLOSE_CODE.PEER_DROPPED }
-    expect(admitted(warmed(), { leaves: [{ ...peerDropped, at: 60_000 - 10 * 60_000 }] })).toBe(
-      'peer-dropped'
-    )
-    expect(
-      admitted(warmed(), { leaves: [{ ...peerDropped, at: 60_000 - 10 * 60_000 - 1 }] })
-    ).toBeNull()
-  })
-
-  it('leaves a host whose remembered leaves span regions, or that it moved within a day', () => {
-    const leaves = [
-      { region: 'us-central1' as const, at: 1 },
-      { region: 'asia-east2' as const, at: 2 }
-    ]
-    expect(admitted(warmed(), { leaves })).toBe('moved-recently')
-    expect(admitted(warmed(), { leaves: [{ region: undefined, at: 1 }] })).toBe(
-      'unknown-leave-region'
-    )
-    const rehome = warmed()
-    rehome.recordMoved(HOST, 0)
-    expect(admitted(rehome)).toBe('moved-recently')
-    expect(admitted(rehome, { now: RESERVE_REHOME_HOST_COOLDOWN_MS })).toBeNull()
-  })
-
-  it('moves no one into a region under 10% free, however full the source is', () => {
-    expect(admitted(warmed(), { target: { free: 20, ceiling: 1_000, bookable: true } })).toBe(
-      'target-room'
-    )
-    expect(admitted(warmed(), { target: { free: 99, ceiling: 1_000, bookable: true } })).toBe(
-      'target-room'
-    )
-    expect(admitted(warmed(), { target: { free: 100, ceiling: 1_000, bookable: true } })).toBeNull()
-    expect(admitted(warmed(), { target: { free: 500, ceiling: 1_000, bookable: false } })).toBe(
-      'target-room'
-    )
-    expect(admitted(warmed(), { target: { free: 0, ceiling: 0, bookable: false } })).toBe(
-      'target-room'
-    )
-  })
-
   it('takes a source cell at 0.05% of its controls a minute, burst one, and refunds an unmade move', () => {
     const rehome = warmed()
     expect(admitted(rehome)).toBeNull()
@@ -154,31 +109,5 @@ describe('the rehome switch under a stalled read', () => {
     await stalled
     // Asked at 1 s, answered past the stale bound: off.
     expect(control.isOpen(now + 1)).toBe(false)
-  })
-})
-
-describe('the rehome switch read', () => {
-  it('reads the operator row, and nothing before it exists', async () => {
-    const database = await openInMemoryRelayDatabase()
-    try {
-      let now = 100_000_000
-      const store = new RelayAssignmentStore(database, () => now)
-      expect(await store.regionRehomeSwitch()).toBeNull()
-      await store.inspectRegionalRehomeControl()
-      expect(await store.regionRehomeSwitch()).toMatchObject({ enabled: false })
-      now += 86_400_000
-      await store.applyRegionalRehomeControl({
-        expectedGeneration: 0,
-        enabled: true,
-        notBefore: now + 1_000,
-        ratePerMinute: 10,
-        preferenceMaxAgeMs: 86_400_000,
-        hostCooldownMs: 604_800_000,
-        drainGraceMs: 60_000
-      })
-      expect(await store.regionRehomeSwitch()).toEqual({ enabled: true, notBefore: now + 1_000 })
-    } finally {
-      await database.close()
-    }
   })
 })

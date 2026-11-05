@@ -6,7 +6,7 @@ import type { TerminalViewAttributes } from '../../shared/terminal/protocol/quer
 import type { PtySpawnOutcome } from '../ipc/pty/spawn-outcome'
 import type { RuntimePaneCreateClaim } from '../ipc/pty/pane/spawn-reservation'
 import type { PaneSpawnOperation } from '../ipc/pty/pane/pane-spawn-operation'
-import type { TerminalWorkspaceLaunchScope } from './runtime-legacy-worker-terminal-recovery-types'
+import type { TerminalWorkspaceLaunchScope } from './orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import type { AgentLaunchRuntime } from '../../shared/agent-launch/startup/agent-launch-runtime'
 import type {
   AutomaticWorkResumeOutcome,
@@ -24,11 +24,9 @@ import type { PtyIncarnationId } from '../../shared/terminal/pty/lifecycle/pty-i
 import type { PtyBindingSourceExpectation } from '../persistence/loading-store/store'
 import type { TerminalPanePlacement } from '../../shared/workspace-layout/terminal-pane-placement'
 import type { ExecutionHostId } from '../../shared/execution-host'
-import type {
-  PtyProviderBufferSnapshot,
-  PtyProcessInfo,
-  PtySpawnResult
-} from '../providers/pty-provider-contract'
+import type { PtyProviderBufferSnapshot } from '../providers/pty-provider-contract'
+import type { PtyProcessInfo } from '../providers/pty-process-info'
+import type { PtySpawnResult } from '../providers/pty-spawn-result'
 import type { TerminalProcessInspection as PtyProcessInspection } from '../../shared/terminal/pty/lifecycle/terminal-process-inspection'
 import type { WriteSettlement } from '../../shared/terminal/pty/lifecycle/pty-write-settlement'
 import type { StartupCwdFallback } from '../../shared/startup-cwd-fallback'

@@ -14,12 +14,12 @@ import {
   createIncrementalResolvedWorktreeLookup,
   findResolvedWorktreeIdForPath,
   inferWorktreeIdFromPtyId
-} from '../../runtime-worktree-path-identity'
+} from '../../workspaces/catalog/runtime-worktree-path-identity'
 import {
   indexPersistedPtySurfaceBindings,
   indexPersistedPtyWorktreeBindings,
   type PersistedPtyBindingIndexes
-} from '../../runtime-worktree-binding-index'
+} from '../identity/runtime-worktree-binding-index'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import { indexFloatingSnapshotPtyBindings } from '../../floating-snapshot-pty-bindings'
 import { NO_OBSERVING_PROVIDER_REASON } from '../../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'

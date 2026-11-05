@@ -36,7 +36,7 @@ import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
 } from './structured-agent-session-runtime'
-import { scriptedCodexTransport } from '../scripted-codex-transport.test-fixture'
+import { scriptedCodexTransport } from '../orca-runtime-tests/scripted-codex-transport.test-fixture'
 // Codex resume rounds turn starts to seconds; only journal order can place withdrawn sends between exchanges, including after restart.
 
 import type * as CodexTurnOpenWait from '../../codex/structured/turns/codex-structured-turn-open-wait'

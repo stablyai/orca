@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { createTrackedJournalOpener } from '../../native-chat/agent-session-journal/journal-host-database-test-support'
 import { createDeferredStructuredAgentSessionEventSink } from '../../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { testEventSinkLogging } from '../../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
-import { createClaudeStructuredLaunchResolver } from '../../runtime/structured-agent-launch-composition.test-support'
+import { createClaudeStructuredLaunchResolver } from '../../runtime/agent-session/launch/structured-agent-launch-composition.test-support'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   agentSessionLeaseFixture,

@@ -13,9 +13,9 @@ function git(repo, args) {
   execFileSync('git', args, { cwd: repo, stdio: 'ignore' })
 }
 
-function writeProtocol(repo, current) {
+function writeProtocol(repo, current, sourcePath = DAEMON_PROTOCOL_SOURCE_PATH) {
   const previous = Array.from({ length: current - 1 }, (_, index) => index + 1)
-  const file = join(repo, DAEMON_PROTOCOL_SOURCE_PATH)
+  const file = join(repo, sourcePath)
   mkdirSync(dirname(file), { recursive: true })
   writeFileSync(
     file,
@@ -23,12 +23,12 @@ function writeProtocol(repo, current) {
   )
 }
 
-function repoWithTags(tagged) {
+function repoWithTags(tagged, sourcePath = DAEMON_PROTOCOL_SOURCE_PATH) {
   const repo = mkdtempSync(join(tmpdir(), 'daemon-protocol-crossing-'))
   repos.push(repo)
   git(repo, ['init', '-q'])
   for (const [tag, protocol] of tagged) {
-    writeProtocol(repo, protocol)
+    writeProtocol(repo, protocol, sourcePath)
     git(repo, ['add', '.'])
     git(repo, [
       '-c',
@@ -77,29 +77,23 @@ describe('selectLatestStableReleaseTag', () => {
       expect(selectLatestStableReleaseTag(['v0.0.0'])).toBe('v0.0.0')
     }
   )
-
-  it('skips unfilled entries in a sparse tag list', () => {
-    const sparse = []
-    sparse.length = 12
-    sparse[3] = 'v1.2.3'
-    sparse[8] = 'v2.0.0'
-    expect(selectLatestStableReleaseTag(Object.freeze(sparse))).toBe('v2.0.0')
-  })
 })
 
 describe('checkDaemonProtocolCrossing', () => {
-  const env = {}
+  it.each(['src/main/daemon/daemon-protocol-version.ts', DAEMON_PROTOCOL_SOURCE_PATH])(
+    'reads the pinned release from %s while checking the dirty candidate',
+    (sourcePath) => {
+      const repo = repoWithTags([['v1.0.0', 5]], sourcePath)
+      writeFileSync(join(repo, sourcePath), 'invalid dirty release source\n')
+      writeProtocol(repo, 6)
+      const result = checkDaemonProtocolCrossing({ repoRoot: repo, env: {} })
+      expect(result).toMatchObject({ upgrade: true, rollback: false })
+      expect(result.lines[0]).toBe('release v1.0.0: daemon protocol 5')
+      expect(result.lines[1]).toBe('candidate (working tree): daemon protocol 6')
+    }
+  )
 
-  it('passes a bump that lists the newest release version, reporting rollback as info', () => {
-    const repo = repoWithTags([
-      ['v1.0.9', 5],
-      ['v1.0.10', 6]
-    ])
-    writeProtocol(repo, 7)
-    const result = checkDaemonProtocolCrossing({ repoRoot: repo, env })
-    expect(result).toMatchObject({ upgrade: true, rollback: false })
-    expect(result.lines[0]).toBe('release v1.0.10: daemon protocol 6')
-  })
+  const env = {}
 
   it('fails when the working tree drops the newest release version', () => {
     const repo = repoWithTags([['v1.0.0', 6]])

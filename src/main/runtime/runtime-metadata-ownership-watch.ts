@@ -1,5 +1,5 @@
 import { getRuntimeMetadataPath, type RuntimeMetadata } from '../../shared/runtime-bootstrap'
-import { readRuntimeMetadataAsync } from './runtime-metadata'
+import { readRuntimeMetadataAsync } from './rpc/server/runtime-metadata'
 
 /** Reclaim dead runtime metadata so CLI can find this still-serving process (#7848); macOS may purge Chromium's lock socket from TMPDIR after 3 days.
  * Reclaim dead pids only: two live profile-sharing runtimes must not fight over the file. */

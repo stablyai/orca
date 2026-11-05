@@ -19,7 +19,7 @@ import {
   loadBundledMobileWebBundle,
   type BundledMobileWebBundle
 } from '../../bundled-mobile-web-bundle'
-import { isClientDisconnectedError } from '../../orca-runtime-core'
+import { isClientDisconnectedError } from '../../client/runtime-client-disconnect'
 import { defineMethod, InvalidArgumentError, type RpcContext } from '../core'
 import {
   readMobileWebBundleAssetWindow,

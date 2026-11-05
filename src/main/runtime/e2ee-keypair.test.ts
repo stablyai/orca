@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import nacl from 'tweetnacl'
 import { describe, expect, it, vi } from 'vitest'
 import { loadOrCreateE2EEKeypair } from './e2ee-keypair'
-import './mobile-pairing-files'
+import './rpc/server/pairing/mobile-pairing-files'
 import { E2EE_KEYPAIR_FILENAME } from '../../shared/remote-runtime/host-store/runtime-e2ee-keypair-file'
 
 describe('loadOrCreateE2EEKeypair', () => {

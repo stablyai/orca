@@ -21,7 +21,7 @@ import {
 import type { SleepingAgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-resume'
 import { forgetRefusedPaneResumeMock } from './pty/pty-ipc-mock-registry'
 import { agentSessionOwners } from './pty/pane/agent-session-owners'
-import type { TerminalCreateOptions } from '../runtime/runtime-terminal-contracts'
+import type { TerminalCreateOptions } from '../runtime/terminal/launch/terminal-create-options'
 
 vi.mock('../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 vi.mock('electron', () => import('./pty/pty-ipc-mock-registry').then((m) => m.electronModuleMock()))

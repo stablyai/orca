@@ -1,0 +1,69 @@
+import { describe, expect, it } from 'vitest'
+import { RuntimeResolvedWorktreeCache } from './runtime-resolved-worktree-cache'
+import type { ResolvedWorktreeSnapshot } from './runtime-resolved-worktree-cache'
+import {
+  getLocalWorktreeScanGeneration,
+  getWorktreeScanMutationRevision
+} from '../../../workspaces/catalog/local-worktree-scan-generation'
+
+function snapshotOf(ids: string[]): ResolvedWorktreeSnapshot {
+  return {
+    worktrees: ids.map((id) => ({ id }) as ResolvedWorktreeSnapshot['worktrees'][number]),
+    platformByRepoId: new Map()
+  }
+}
+
+describe('RuntimeResolvedWorktreeCache', () => {
+  it('recomputes when the repo inventory moved, even well inside the TTL', async () => {
+    // Repo registration invalidates earlier snapshots: absence there cannot prove workspace not found.
+    const cache = new RuntimeResolvedWorktreeCache()
+    const results = [snapshotOf(['repo-1::/a']), snapshotOf(['repo-1::/a', 'repo-2::/b'])]
+    let computes = 0
+    const compute = async (): Promise<ResolvedWorktreeSnapshot> => results[computes++]
+
+    await cache.getSnapshot(compute, 60_000, 7)
+    const afterRegistration = await cache.getSnapshot(compute, 60_000, 8)
+
+    expect(computes).toBe(2)
+    expect(afterRegistration.worktrees.map((worktree) => worktree.id)).toEqual([
+      'repo-1::/a',
+      'repo-2::/b'
+    ])
+  })
+
+  it('does not join an in-flight compute that started under a stale inventory', async () => {
+    const cache = new RuntimeResolvedWorktreeCache()
+    const computed: number[] = []
+    const compute = async (): Promise<ResolvedWorktreeSnapshot> => {
+      computed.push(computed.length)
+      return snapshotOf([])
+    }
+
+    const first = cache.getSnapshot(compute, 60_000, 7)
+    const second = cache.getSnapshot(compute, 60_000, 8)
+    await Promise.all([first, second])
+
+    expect(computed).toHaveLength(2)
+  })
+
+  it('keeps a primed snapshot servable when nothing mutated', async () => {
+    // Headless reattach resolves from a primed cache without Git; non-mutation reads must preserve its freshness.
+    const cache = new RuntimeResolvedWorktreeCache()
+    let computes = 0
+    const prime = async (): Promise<ResolvedWorktreeSnapshot> => {
+      computes += 1
+      return snapshotOf(['repo-restore::/tmp/restore-records'])
+    }
+    await cache.getSnapshot(prime, 60_000, getWorktreeScanMutationRevision())
+
+    // A read that mints a scan generation for a repo nothing has scanned yet is not a mutation.
+    getLocalWorktreeScanGeneration(`repo-never-scanned-${Math.random()}`)
+
+    expect(cache.isFresh(getWorktreeScanMutationRevision())).toBe(true)
+    const served = await cache.getSnapshot(prime, 60_000, getWorktreeScanMutationRevision())
+    expect(computes).toBe(1)
+    expect(served.worktrees.map((worktree) => worktree.id)).toEqual([
+      'repo-restore::/tmp/restore-records'
+    ])
+  })
+})

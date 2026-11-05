@@ -2,7 +2,7 @@ import * as fs from 'node:fs/promises'
 import type { RpcResponse } from '../core'
 import { RUNTIME_CAPABILITIES as runtimeCapabilities } from '../../../../shared/protocol-version'
 import { AGENT_SESSION_TEXT_ATTACHMENT_READ_CAPABILITY } from '../../../../shared/agent-session/agent-session-runtime-capabilities'
-import { MOBILE_RPC_METHOD_ALLOWLIST } from '../../runtime-rpc/runtime-rpc-mobile-method-allowlist'
+import { MOBILE_RPC_METHOD_ALLOWLIST } from '../server/runtime-rpc-mobile-method-allowlist'
 import {
   AttachmentTextSource,
   ATTACHMENT_TEXT_BLOCK_BYTES,

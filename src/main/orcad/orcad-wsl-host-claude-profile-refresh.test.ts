@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { HostAccountLaunchEnv } from '../../shared/host-account-launch-env'
 import { wslClaudeProfile } from '../claude-accounts/claude-profile-wsl-paths'
 import { provisionWslClaudeAccountProfile } from '../claude-accounts/claude-profile-wsl-provision'
-import { RuntimeAccountController } from '../runtime/runtime-account-controller'
+import { RuntimeAccountController } from '../runtime/agent-session/environment/runtime-account-controller'
 import { createWslHostClaudeProfileRefresh } from './orcad-wsl-host-claude-profile-refresh'
 
 const DISTRO = 'orca-acct-test'

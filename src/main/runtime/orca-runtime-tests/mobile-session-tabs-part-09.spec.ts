@@ -1,11 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
-import { bindPaneFirst, committingSpawn, registerBoundPty } from '../bind-first-pane.test-fixture'
-import {
-  OrcaRuntimeService,
-  electronMocks,
-  waitForMobileSessionTabsEvents,
-  type RuntimeMobileSessionTabsResult
-} from '../orca-runtime-test-mocks.spec'
+import { bindPaneFirst, committingSpawn, registerBoundPty } from './bind-first-pane.test-fixture'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { electronMocks } from '../orca-runtime-test-mocks/setup.spec'
+import { waitForMobileSessionTabsEvents } from './mobile-session-tab-event-wait'
+import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-session-contracts'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import {
@@ -18,7 +17,7 @@ import {
   makeRuntimeStoreWithWorkspaceSession,
   makeWorkspaceSessionWithHeadlessTerminal,
   store
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
 import type { RuntimeStore } from '../runtime-store-contract'
 
 describe('OrcaRuntimeService', () => {

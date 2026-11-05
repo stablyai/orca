@@ -1,4 +1,5 @@
-import { execFileSync, spawnSync } from 'node:child_process'
+import { readGitBaselineSources } from './git-baseline-sources.mjs'
+import { spawnSync } from 'node:child_process'
 import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { delimiter, dirname, join, resolve } from 'node:path'
@@ -51,13 +52,19 @@ function runDocker(command, allowFailure = false) {
 }
 
 async function bundle(mode) {
-  const productionScopePath = join(repo, 'src/main/daemon/daemon-cgroup-scope.ts')
+  const productionScopePath = join(repo, 'src/main/daemon/process-scopes/daemon-cgroup-scope.ts')
   const baselineSource =
     mode === 'baseline'
-      ? execFileSync('git', ['show', `${baselineRef}:src/main/daemon/daemon-cgroup-scope.ts`], {
-          cwd: repo,
-          encoding: 'utf8'
-        })
+      ? readGitBaselineSources(
+          repo,
+          baselineRef,
+          new Map([
+            [
+              'src/main/daemon/process-scopes/daemon-cgroup-scope.ts',
+              `${baselineRef}:src/main/daemon/daemon-cgroup-scope.ts`
+            ]
+          ])
+        ).get(productionScopePath)
       : null
   await build({
     ...(mode === 'candidate'
@@ -65,7 +72,7 @@ async function bundle(mode) {
       : {
           stdin: {
             contents:
-              "export { buildDurableDaemonScopeCommand } from './src/main/daemon/daemon-cgroup-scope'",
+              "export { buildDurableDaemonScopeCommand } from './src/main/daemon/process-scopes/daemon-cgroup-scope'",
             resolveDir: repo,
             loader: 'ts'
           }
@@ -83,9 +90,28 @@ async function bundle(mode) {
             {
               name: 'baseline-daemon-scope',
               setup(buildApi) {
+                buildApi.onResolve({ filter: /^\./ }, (args) => {
+                  const original = resolve(args.resolveDir, args.path)
+                  const historicalSourceSpec = `${baselineRef}:src/main/daemon/daemon-user-manager-lifetime.ts`
+                  const historical = resolve(
+                    repo,
+                    historicalSourceSpec.slice(baselineRef.length + 1)
+                  )
+                  return original === historical || `${original}.ts` === historical
+                    ? {
+                        path: resolve(
+                          repo,
+                          'src/main/daemon/process-scopes/daemon-user-manager-lifetime.ts'
+                        )
+                      }
+                    : undefined
+                })
                 buildApi.onLoad({ filter: /daemon-cgroup-scope\.ts$/ }, ({ path }) =>
                   path === productionScopePath
-                    ? { contents: baselineSource, loader: 'ts', resolveDir: dirname(path) }
+                    ? {
+                        ...baselineSource,
+                        loader: 'ts'
+                      }
                     : undefined
                 )
               }

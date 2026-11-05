@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs'
 import { performance } from 'node:perf_hooks'
 import { createCodexCapacityNoticeTracker } from '../../../../src/shared/codex-native-notice'
-import { HeadlessEmulator } from '../../../../src/main/daemon/headless-emulator'
+import { HeadlessEmulator } from '../../../../src/main/daemon/emulation/headless-emulator'
 import { observeCodexCapacityTerminalStatus } from '../../../../src/main/runtime/codex-notice-terminal-status'
 
 const fixture = readFileSync(

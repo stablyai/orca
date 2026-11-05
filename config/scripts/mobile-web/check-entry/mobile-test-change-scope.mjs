@@ -21,7 +21,6 @@ const DESKTOP_SUITE_PREFIXES = [
   'src/packages/process-host/',
   'src/main/agent-launch/',
   'src/main/runtime/rpc/',
-  'src/main/runtime/runtime-rpc/',
   'src/main/runtime/agent-session-',
   'src/main/runtime/agent-session/records/agent-session-',
   'src/main/runtime/agent-session/agent-session-account-',

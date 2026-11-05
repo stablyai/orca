@@ -28,7 +28,7 @@ import { sendAgentTurn, type StructuredAgentTurnHost } from '../../orchestration
 import {
   resolveStructuredWorkerIdentity,
   structuredWorkerSession
-} from '../../structured-worker-authority'
+} from '../../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
 import type { OrchestrationDb } from '../../orchestration/db'
 import {
   mintStructuredWorkerHandle,
@@ -37,7 +37,7 @@ import {
   mintStructuredWorkerPaneKey,
   structuredWorkerProcessIncarnation,
   type StructuredWorkerIdentity
-} from '../../structured-worker-identity'
+} from '../../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
 import { createStructuredAgentSessionForWorktree } from './structured-agent-session-create'
 
 // The worker's handle, keyed by its root session: a reused worker outlives the Dispatch that created it.

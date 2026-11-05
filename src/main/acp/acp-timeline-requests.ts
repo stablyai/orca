@@ -122,7 +122,9 @@ export function translateAcpRequest(
         type: 'request.open',
         request: `${method}:${JSON.stringify(id)}`,
         body: presentation.body,
-        join
+        join,
+        // The live exchange ends only by answer or withdrawal, not with the turn that shows it.
+        outlivesTurn: true
       }
     ]
   }

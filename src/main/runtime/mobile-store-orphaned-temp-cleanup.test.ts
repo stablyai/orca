@@ -2,9 +2,9 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSyn
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
-import { DeviceRegistry } from './device-registry'
-import { MobileNotificationDismissalStore } from './mobile-notification-dismissal-store'
-import { DEVICE_REGISTRY_FILENAME } from './mobile-pairing-files'
+import { DeviceRegistry } from './rpc/server/pairing/device-registry'
+import { MobileNotificationDismissalStore } from './push/notifications/mobile-notification-dismissal-store'
+import { DEVICE_REGISTRY_FILENAME } from './rpc/server/pairing/mobile-pairing-files'
 
 const dirs: string[] = []
 afterEach(() => {

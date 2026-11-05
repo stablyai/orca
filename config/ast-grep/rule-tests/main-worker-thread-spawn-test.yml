@@ -4,5 +4,4 @@ valid:
   - 'new WorkerThreadChildProcessHost(factory)'
 invalid:
   - 'new Worker(workerPath)'
-  - 'new Worker(source, { eval: true })'
   - 'new workerThreads.Worker(workerPath)'

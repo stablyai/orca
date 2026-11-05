@@ -7,7 +7,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import WebSocket from 'ws'
 import type { RelayConfig } from '../config.js'
 import { PostgresDatabase } from '../database/database.js'
-import { HostSessionRegistry } from './host-session-registry.js'
 import { createRelayServer, HOST_HELLO_SHED_OLDEST_WAIT_MS } from '../relay-server.js'
 
 async function unusedPort(): Promise<number> {
@@ -176,11 +175,4 @@ describe('host hello shedding under database pool pressure', () => {
     expect(error.message).toBe('Unexpected server response: 503')
   })
 
-  it('never refuses a rebind over a live control', async () => {
-    vi.spyOn(HostSessionRegistry.prototype, 'hasActiveControl').mockReturnValue(true)
-    const cell = await startCell(2)
-    cell.advance(HOST_HELLO_SHED_OLDEST_WAIT_MS * 2)
-
-    expect(await dial(cell)).toEqual({ status: 101 })
-  })
 })

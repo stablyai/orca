@@ -12,7 +12,7 @@ import {
 } from '../../../../shared/terminal/quick-commands/terminal-quick-command-capabilities'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES } from '../../../ipc/desktop-renderer-runtime-capabilities'
-import { RuntimeClientSettingsController } from '../../runtime-client-settings'
+import { RuntimeClientSettingsController } from '../../client/settings/runtime-client-settings'
 import {
   updateSettings,
   type SettingsMutationOperations

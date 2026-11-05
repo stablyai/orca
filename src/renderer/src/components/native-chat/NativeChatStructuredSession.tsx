@@ -185,7 +185,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
   const install = useNativeChatInstallSlot(props, agentLabel, installLayout)
   const canMention = composerShown && install.unavailableHint === undefined
   const approval = prompt?.body.kind === 'approval' ? chatApprovalFromJournal(prompt.body) : null
-  const cancelPrompt = () => cancelStructuredPrompt(controller, prompt, props.agent)
+  const cancelPrompt = () => cancelStructuredPrompt(controller, prompt)
   const rootInput = useNativeChatRootInputRouting({
     tabId: props.tabId,
     rootRef,
