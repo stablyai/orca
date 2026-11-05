@@ -248,6 +248,7 @@ describe('a Claude chat on the model id an older host lists by alias', () => {
         snapshot: structuredAgentSessionShownSnapshot(view),
         ready: true,
         providerStarting: false,
+        existingChat: true,
         isCurrentContext: () => true,
         flush: () =>
           controller.flush(async (pick) => acceptedStructuredSessionSelectionOutcome(pick)),

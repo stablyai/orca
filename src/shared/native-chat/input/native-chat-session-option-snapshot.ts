@@ -1,5 +1,6 @@
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../agent-launch/permissions/agent-chat-permission-mode'
 import { labelFromModelId } from '../../model-id-label'
+import { isCoveredModelAlias } from '../../model-alias-rows'
 import type {
   AgentSessionOptionCatalog,
   CatalogMidSessionApply,
@@ -227,10 +228,7 @@ export function nativeChatSessionOptionDescriptors(args: {
     value: id,
     label,
     ...(description ? { description } : {}),
-    ...(resolvedModel &&
-    resolvedModel !== id &&
-    id !== model.currentId &&
-    models.some((row) => row.id === resolvedModel)
+    ...(id !== model.currentId && isCoveredModelAlias({ id, resolvedModel }, models)
       ? { searchOnly: true as const }
       : {})
   }))

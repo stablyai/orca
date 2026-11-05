@@ -23,6 +23,8 @@ type WriteContext = {
   snapshot: SessionOptionDescriptor[]
   ready: boolean
   providerStarting: boolean
+  /** Reopened, or past its first turn or send: its value picks never adopt a new-chat model. */
+  existingChat: boolean
   isCurrentContext: () => boolean
   hold?: (
     id: string,
@@ -129,8 +131,11 @@ export function createStructuredAgentSessionOptionsWriteOwner(read: () => WriteC
         return held !== null
       }
       const presents = context.capturePresentation?.()
-      // Past the launch hold the chat exists, so its value picks never adopt a new-chat model.
-      const pick = structuredAgentSessionOptionPicks(view, { [id]: encoded }, true)[0]
+      const pick = structuredAgentSessionOptionPicks(
+        view,
+        { [id]: encoded },
+        context.existingChat
+      )[0]
       const operation = controller.issue(
         id,
         encoded,

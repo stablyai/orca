@@ -46,6 +46,8 @@ export type ClaudeListedModel = {
   supportsAutoMode?: boolean
   /** Runs what the CLI's `default` row resolves to: what a chat that names no model runs. */
   isDefault?: true
+  /** The versioned model the row runs, when the CLI names one. */
+  resolvedModel?: string
 }
 
 const CLAUDE_MODEL_LIST_JSON_LIMITS = {
@@ -144,14 +146,20 @@ export function parseClaudeModelList(stdout: string): ClaudeListedModel[] {
       listed.push({
         ...model,
         id,
+        ...(resolved ? { resolvedModel: resolved } : {}),
         ...(resolved && resolved !== model.id ? { label: claudeListedModelLabel(resolved) } : {}),
         ...(defaultRuns !== null && id === defaultRuns ? { isDefault: true as const } : {})
       })
     }
     for (const entry of rows) {
       const model = toListedModel(entry)
+      const resolved = resolvedModelOf(entry)
       if (model && !listed.some((row) => row.id === model.id)) {
-        listed.push({ ...model, label: `${model.label} alias` })
+        listed.push({
+          ...model,
+          label: `${model.label} alias`,
+          ...(resolved ? { resolvedModel: resolved } : {})
+        })
       }
     }
     if (listed.length > 0) {

@@ -62,6 +62,7 @@ describe('parseClaudeModelList', () => {
     ])
     expect(parsed[0]).toEqual({
       id: 'claude-opus-5[1m]',
+      resolvedModel: 'claude-opus-5[1m]',
       label: 'Claude Opus 5 (1M context)',
       description: 'Opus 5 with 1M context · Best for everyday, complex tasks · $5/$25 per Mtok',
       effortLevels: ['low', 'medium', 'high', 'xhigh', 'max'],
@@ -71,6 +72,7 @@ describe('parseClaudeModelList', () => {
     // A saved alias (a commit-message or terminal model) keeps a row with its own controls.
     expect(parsed[3]).toMatchObject({
       id: 'opus[1m]',
+      resolvedModel: 'claude-opus-5[1m]',
       effortLevels: ['low', 'medium', 'high', 'xhigh', 'max']
     })
     expect(parsed[2]).toMatchObject({ effortLevels: [], supportsFastMode: false })

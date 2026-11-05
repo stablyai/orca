@@ -6,6 +6,8 @@ import {
 } from './structured-agent-session-options-write-owner'
 import { createStructuredSessionSelectionController } from './structured-agent-session-selection-operations'
 import { applyNativeChatSessionOptionPicks } from '../../native-chat/input/native-chat-session-option-defaults'
+import { catalogModelsFromModelDiscovery } from '../../native-chat/input/native-chat-discovered-catalog-models'
+import { isCoveredModelAlias } from '../../model-alias-rows'
 import {
   applyStructuredAgentSessionModelCatalog,
   applyStructuredAgentSessionOptions,
@@ -70,9 +72,13 @@ describe('a Claude listing keyed by the model each row runs', () => {
   it('lists the versioned rows, an alias only while the chat is on it', () => {
     expect(mainList(chat('claude-opus-5-5'))).toEqual(['claude-opus-5-5', 'claude-sonnet-5-5'])
     expect(mainList(chat('opus'))).toEqual(['claude-opus-5-5', 'claude-sonnet-5-5', 'opus'])
-    // An older host keys rows by alias alone: every row stays in the list.
+    // An older host keys rows by alias alone: every row stays in the list, even beside the
+    // stand-in row a chat on the full id gets.
     const older = ROWS.slice(2).map((alias) => ({ ...alias, label: alias.id }))
     expect(mainList(chat('opus', older))).toEqual(['opus', 'sonnet'])
+    expect(mainList(chat('claude-opus-5-5', older))).toEqual(
+      expect.arrayContaining(['opus', 'sonnet', 'claude-opus-5-5'])
+    )
   })
 
   it('applies effort to a versioned chat and keeps sending the id it runs', () => {
@@ -93,42 +99,58 @@ describe('a Claude listing keyed by the model each row runs', () => {
     expect(carried(state, undefined, { effort: 'low' })).toEqual({ model: 'sonnet', effort: 'low' })
   })
 
-  it('remembers an effort picked in a chat under its model, never adopting it for new chats', async () => {
-    const state = chat('claude-opus-5-5')
-    const remembered: RememberedPicks = []
-    const controller = createStructuredSessionSelectionController((picks) => {
-      remembered.push(...picks)
-    })
-    const writer = createStructuredAgentSessionOptionsWriteOwner(() => {
-      const view = structuredAgentSessionOptionView(state, undefined, controller.overlay())
-      return {
-        controller,
-        record: state.record,
-        view,
-        snapshot: structuredAgentSessionShownSnapshot(view),
-        ready: true,
-        providerStarting: false,
-        isCurrentContext: () => true,
-        flush: () =>
-          controller.flush(async (pick) => acceptedStructuredSessionSelectionOutcome(pick)),
-        revalidate: () => {},
-        revalidateOn: 'refused-current'
-      }
-    })
-    expect(await writer.setOption('effort', 'high')).toBe(true)
-    expect(remembered).toEqual([
-      {
-        modelId: 'claude-opus-5-5',
-        optionId: 'effort',
-        value: 'high',
-        adoptModelAsLaunchDefault: false
-      }
-    ])
-    const next = applyNativeChatSessionOptionPicks({
-      persisted: { claude: { model: 'sonnet', valuesByModel: {} } },
-      agent: 'claude',
-      picks: remembered
-    })
-    expect(next.claude?.model).toBe('sonnet')
+  it.each([
+    { chat: 'a chat with a turn', existingChat: true, remembers: 'sonnet' },
+    { chat: 'a new chat before its first send', existingChat: false, remembers: 'claude-opus-5-5' }
+  ])(
+    'remembers an effort picked in $chat under its model, adopting it only for a new chat',
+    async ({ existingChat, remembers }) => {
+      const state = chat('claude-opus-5-5')
+      const remembered: RememberedPicks = []
+      const controller = createStructuredSessionSelectionController((picks) => {
+        remembered.push(...picks)
+      })
+      const writer = createStructuredAgentSessionOptionsWriteOwner(() => {
+        const view = structuredAgentSessionOptionView(state, undefined, controller.overlay())
+        return {
+          controller,
+          record: state.record,
+          view,
+          snapshot: structuredAgentSessionShownSnapshot(view),
+          ready: true,
+          providerStarting: false,
+          existingChat,
+          isCurrentContext: () => true,
+          flush: () =>
+            controller.flush(async (pick) => acceptedStructuredSessionSelectionOutcome(pick)),
+          revalidate: () => {},
+          revalidateOn: 'refused-current'
+        }
+      })
+      expect(await writer.setOption('effort', 'high')).toBe(true)
+      const next = applyNativeChatSessionOptionPicks({
+        persisted: { claude: { model: 'sonnet', valuesByModel: {} } },
+        agent: 'claude',
+        picks: remembered
+      })
+      expect(next.claude?.model).toBe(remembers)
+      expect(next.claude?.valuesByModel?.['claude-opus-5-5']).toEqual({ effort: 'high' })
+    }
+  )
+
+  it('keeps the alias relationship through the terminal-chat and commit-message discovery', () => {
+    const models = catalogModelsFromModelDiscovery('claude', {
+      success: true,
+      catalogOrigin: 'probe',
+      models: [
+        { id: 'claude-opus-5-5', label: 'Claude Opus 5.5', resolvedModel: 'claude-opus-5-5' },
+        { id: 'opus', label: 'Opus alias', resolvedModel: 'claude-opus-5-5' },
+        // An older remote host lists the alias alone, without the relationship.
+        { id: 'sonnet', label: 'Sonnet' }
+      ]
+    })!
+    expect(
+      models.filter((model) => !isCoveredModelAlias(model, models)).map(({ id }) => id)
+    ).toEqual(['claude-opus-5-5', 'sonnet'])
   })
 })
