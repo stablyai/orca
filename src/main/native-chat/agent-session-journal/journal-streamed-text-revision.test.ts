@@ -22,7 +22,7 @@ import {
   uploadedInput
 } from './journal-streamed-revision-contract-test-fixture'
 
-it('keeps image, goal and streamed text commits FULL on the rollback owner', async () => {
+it('keeps image and goal transitions FULL, streams text at NORMAL, and restores FULL', async () => {
   const database = await openTestJournalHostDatabase(fixture.root)
   const levels: number[] = []
   const journal = await openAgentSessionJournal({
@@ -60,7 +60,7 @@ it('keeps image, goal and streamed text commits FULL on the rollback owner', asy
       { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
   }
-  expect(levels).toEqual([2, 2, 2, 2, 2, 2])
+  expect(levels).toEqual([2, 1, 2, 2, 2, 2])
   expect(
     await database.read(
       async (read) => (await read.prepare('PRAGMA synchronous').get())?.synchronous
@@ -85,7 +85,7 @@ it('keeps image, goal and streamed text commits FULL on the rollback owner', asy
     ])
   }
   // Existing items retain creation provenance; a caller's ownerFence hint changes no stored owner.
-  expect(levels).toEqual([2, 2, 2, 2])
+  expect(levels).toEqual([2, 1, 2, 2])
   const identity = { provider: 'orca' as const, clientMessageId: 'failed-stream' }
   await journal.appendItem(identity, text('assistant', 'before failure'), {
     fence: 2,
@@ -101,7 +101,7 @@ it('keeps image, goal and streamed text commits FULL on the rollback owner', asy
       }
     ])
   ).rejects.toThrow('stream insert failed')
-  expect(rollbacks).toEqual([2])
+  expect(rollbacks).toEqual([1])
   expect(
     await database.read(
       async (read) => (await read.prepare('PRAGMA synchronous').get())?.synchronous
@@ -113,13 +113,13 @@ it('keeps image, goal and streamed text commits FULL on the rollback owner', asy
     fence: 2,
     turnScope: AGENT_JOURNAL_THREAD_SCOPE
   })
-  expect(levels).toEqual([2])
+  expect(levels).toEqual([1])
   expect(journal.snapshot().items.at(-1)?.body).toEqual(text('assistant', 'retry'))
   await journal.close()
 })
 
 it.each([1, 10])(
-  'commits %i real assembler windows at FULL with no attachment effects',
+  'commits %i real assembler windows at NORMAL with no attachment effects',
   async (count) => {
     const journal = await openJournal()
     const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging('stream'))
@@ -165,7 +165,7 @@ it.each([1, 10])(
         expect(delta().admission).toEqual({ accepted: true })
         await flush()
       }
-      expect(levels).toEqual(Array(count).fill(2))
+      expect(levels).toEqual(Array(count).fill(1))
       expect(extraction).not.toHaveBeenCalled()
       expect(acquired).not.toHaveBeenCalled()
       expect(journal.snapshot().items).toHaveLength(1)

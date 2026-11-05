@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
+import { makePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import {
   LEAF_ID,
+  INCARNATION_ID,
   PTY_ID,
   SIBLING_LEAF_ID,
   SIBLING_PTY_ID,
@@ -274,12 +276,13 @@ const rows: [Entry, Condition][] = [
   ['phone-headless', 'no-saved-layout']
 ]
 
-// L255: expected main-owned headless phone-close widening until its fix lands.
-const awaitsL255 = (entry: string) => ORCA_LAYOUT_OWNER_IS_MAIN && entry === 'phone-headless'
-
 describe('an explicit close of one pane never widens into its tab', () => {
-  it.each(rows.filter(([entry]) => !awaitsL255(entry)))('%s close, %s', closesOnlyThatPane)
-  it.fails.each(rows.filter(([entry]) => awaitsL255(entry)))('%s close, %s', closesOnlyThatPane)
+  const pending = ([entry, condition]: (typeof rows)[number]) =>
+    ORCA_LAYOUT_OWNER_IS_MAIN &&
+    entry === 'phone-headless' &&
+    (condition === 'leaf-already-retired' || condition === 'no-saved-layout')
+  it.each(rows.filter((row) => !pending(row)))('%s close, %s', closesOnlyThatPane)
+  it.fails.each(rows.filter(pending))('%s close, %s', closesOnlyThatPane)
 })
 
 async function closesOnlyThatPane(
@@ -446,6 +449,29 @@ it('leaves a terminal another tab already owns usable when the addressed tab clo
       ]
     })
   }
+  f.editSession((session) => ({
+    ...session,
+    tabsByWorktree: {
+      ...session.tabsByWorktree,
+      [WORKTREE_ID]: [
+        ...(session.tabsByWorktree[WORKTREE_ID] ?? []),
+        { ...session.tabsByWorktree[WORKTREE_ID]![0]!, id: otherTab }
+      ]
+    },
+    terminalLayoutsByTabId: {
+      ...session.terminalLayoutsByTabId,
+      [otherTab]: {
+        root: { type: 'leaf', leafId: otherLeaf },
+        activeLeafId: otherLeaf,
+        expandedLeafId: null,
+        ptyIdsByLeafId: { [otherLeaf]: PTY_ID }
+      }
+    },
+    terminalPtyIncarnationsByPaneKey: {
+      ...session.terminalPtyIncarnationsByPaneKey,
+      [makePaneKey(otherTab, otherLeaf)]: INCARNATION_ID
+    }
+  }))
   publish(true)
   const closing = (await f.runtime.listTerminals()).terminals.find((row) => row.tabId === TAB_ID)!
   f.setCloseTerminalTabAction(() => publish(false))

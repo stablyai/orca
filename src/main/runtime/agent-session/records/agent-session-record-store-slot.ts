@@ -8,12 +8,13 @@ import { sessionCrewChanges } from '../../orchestration/crew/crew-changes'
 
 import { existsSync } from 'node:fs'
 import {
-  JournalHostDatabase,
+  type JournalHostDatabase,
   journalDatabasePath
 } from '../../../native-chat/agent-session-journal/journal-host-database'
 import { AgentSessionRecordStore } from './agent-session-record-store'
 import {
   openSurfaceJournalOnce,
+  surfaceJournalHoldsSessions,
   releaseSurfaceJournal,
   closeSurfaceJournal
 } from '../../../workspace-surfaces/surface-journal-slot'
@@ -129,7 +130,7 @@ export async function hasPersistedStructuredAgentSessionStore(
     return false
   }
   try {
-    return await JournalHostDatabase.holdsSessions(stateDirectory)
+    return await surfaceJournalHoldsSessions(stateDirectory)
   } catch {
     // A database that cannot be read cannot say it is empty.
     return true

@@ -99,6 +99,11 @@ export function collectDaemonHostBuildInventory(
       return null
     }
     const files = collectCodeFiles(sources.entrySourcePath, sources.entryRelPath)
+    const readerPath = join(
+      winPath.dirname(sources.entrySourcePath),
+      'surface-executor-reader-entry.js'
+    )
+    files.push(...collectCodeFiles(readerPath, toPosixRelative(sources.appDir, readerPath)))
     const chunksDir = join(winPath.dirname(sources.entrySourcePath), 'chunks')
     if (existsSync(chunksDir)) {
       files.push(...collectCodeFiles(chunksDir, toPosixRelative(sources.appDir, chunksDir)))

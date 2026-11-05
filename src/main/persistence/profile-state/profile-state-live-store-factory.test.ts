@@ -127,7 +127,7 @@ describe('live profile authority admission', () => {
       hostId: 'local',
       type: 'query'
     })
-    expect(recovered.host.surfaces[0]?.content).toBeNull()
+    expect(recovered.host.surfaces.filter((surface) => surface.content !== null)).toEqual([])
     expect(recovered.allocations).toMatchObject([{ decision: 'aborting' }])
     expect(reopened.getWorkspaceSession().tabsByWorktree[workspace] ?? []).toEqual([])
   })
@@ -172,7 +172,9 @@ describe('live profile authority admission', () => {
     store.setWorkspaceSession(stale)
     await store.flushPendingOrThrowAsync()
     const final = readState(input).workspaceSurfaces.hosts.local
-    expect(final.surfaces[0].content).toBeNull()
+    expect(
+      final.surfaces.filter((surface: { content: unknown }) => surface.content !== null)
+    ).toEqual([])
     expect(final.allocations).toHaveLength(2)
     expect(
       final.allocations.every(
@@ -332,8 +334,8 @@ describe('live profile authority admission', () => {
               tabId: 'tab-local',
               worktreeId: 'repo-local::/fixture/local',
               connectionId: null,
-              receivedAt: 1_700_000_000_000,
-              stateStartedAt: 1_700_000_000_000,
+              receivedAt: Date.now(),
+              stateStartedAt: Date.now(),
               payload: { state: 'working', prompt: 'legacy cached', agentType: 'claude' }
             }
           }

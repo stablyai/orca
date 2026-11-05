@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { expect, vi, type Mock } from 'vitest'
+import { vi, type Mock } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type {
@@ -235,7 +235,8 @@ export async function foundRestTestChat(rig: RestTestRig): Promise<void> {
   if (!sent.ok) {
     throw new Error(`send refused: ${sent.refusal.code}`)
   }
-  await vi.waitFor(() => expect(rig.adapter.dispatch).toHaveBeenCalled())
+  await rig.host.waitForSendSettlement(SESSION, sent.value.clientMessageId)
+  await rig.host['conversationDelivery'].loop.wake(SESSION)
 }
 
 export function sweepOnce(host: StructuredAgentSessionHost): Promise<void> {

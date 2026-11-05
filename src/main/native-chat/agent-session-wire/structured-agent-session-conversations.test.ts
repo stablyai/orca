@@ -355,8 +355,8 @@ describe('internal publication lifetime, independently of presentation', () => {
         seq: priorCursor.sequence + 1
       })
       expect(replacedCursor.epoch).not.toBe(priorCursor.epoch)
-      expect(second.readSince(priorCursor)).toEqual({ ok: false, reset: 'epoch_changed' })
-      expect(second.readSince(replacedCursor)).toEqual({
+      expect(await second.readSince(priorCursor)).toEqual({ ok: false, reset: 'epoch_changed' })
+      expect(await second.readSince(replacedCursor)).toEqual({
         ok: true,
         rows: [],
         through: replacedCursor.sequence,

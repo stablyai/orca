@@ -3,7 +3,6 @@
 import { ensureJournalOutcomeTables } from './journal-outcome-format'
 import Database from '../../sqlite/sync-database'
 import { hardenSqliteDatabaseFiles } from '../../sqlite/harden-database-files'
-import { configureSqliteRollbackDurability } from '../../sqlite/rollback-durability'
 import {
   createAgentSessionRecordTablesSql,
   createJournalTablesSql,
@@ -94,7 +93,15 @@ function configureJournalPragmas(db: Database.Database, stored: number): void {
     // INCREMENTAL must precede table creation to permit later bounded page reclamation.
     db.pragma('auto_vacuum = INCREMENTAL')
   }
-  configureSqliteRollbackDurability(db, 'main', JOURNAL_BUSY_TIMEOUT_MS)
+  db.pragma(`busy_timeout = ${JOURNAL_BUSY_TIMEOUT_MS}`)
+  const mode = db.pragma('journal_mode = WAL', { simple: true })
+  if (mode !== 'wal') {
+    throw new Error(`Chat journal cannot use WAL (mode: ${String(mode)})`)
+  }
+  db.pragma('locking_mode = NORMAL')
+  db.pragma('synchronous = FULL')
+  db.pragma('fullfsync = OFF')
+  db.pragma('checkpoint_fullfsync = ON')
   db.pragma('foreign_keys = ON')
   db.pragma(`journal_size_limit = ${JOURNAL_SIZE_LIMIT_BYTES}`)
 }

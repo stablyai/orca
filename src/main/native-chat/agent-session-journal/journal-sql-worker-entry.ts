@@ -1,5 +1,6 @@
 import { sweepJournalRetiredPage } from './journal-native-retired-page'
 import { openJournalDatabase } from './journal-database'
+import { JournalCheckpointOwner } from './journal-checkpoint-owner'
 import { mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { parentPort, workerData } from 'node:worker_threads'
@@ -30,6 +31,7 @@ const reads = new JournalNativeReads()
 let db: Database.Database | undefined
 let readOnly = reader
 let fault: unknown
+let checkpoint: JournalCheckpointOwner | undefined
 try {
   if (reader) {
     db = new Database(workerData.filename, { readonly: true, fileMustExist: true })
@@ -38,6 +40,9 @@ try {
     const opened = openJournalDatabase(workerData.filename)
     db = opened.db
     readOnly = opened.readOnly
+    if (!readOnly) {
+      checkpoint = new JournalCheckpointOwner(db, workerData.filename)
+    }
   }
   port.postMessage({ type: 'ready', readOnly } satisfies JournalSqlResponse)
 } catch (error) {
@@ -50,7 +55,7 @@ try {
   port.close()
 }
 
-port.on('message', ({ id, command }: JournalSqlRequest) => {
+port.on('message', async ({ id, command }: JournalSqlRequest) => {
   let outcome: 'not-dispatched' | 'not-committed' | 'rolled-back' | 'indeterminate' =
     'not-dispatched'
   try {
@@ -63,6 +68,7 @@ port.on('message', ({ id, command }: JournalSqlRequest) => {
       if (db.isTransaction) {
         db.exec('ROLLBACK')
       }
+      await checkpoint?.close()
       db.close()
       db = undefined
       port.postMessage({ type: 'done', id } satisfies JournalSqlResponse)
@@ -121,6 +127,7 @@ port.on('message', ({ id, command }: JournalSqlRequest) => {
         result = sweepJournalRetiredPage(db, unit.after)
         outcome = 'indeterminate'
         db.exec('COMMIT')
+        checkpoint?.afterCommit()
       } catch (error) {
         if (db.isTransaction) {
           try {
@@ -157,10 +164,15 @@ port.on('message', ({ id, command }: JournalSqlRequest) => {
       return effect
     })
     upload.clear()
-    db.exec('BEGIN IMMEDIATE')
-    outcome = 'not-committed'
+    let committed = false
+    let postcommit: ReturnType<typeof journalSqlFailure> | undefined
     let packets: JournalResultPacket[][]
     try {
+      if (command.normal) {
+        db.pragma('synchronous = NORMAL')
+      }
+      db.exec('BEGIN IMMEDIATE')
+      outcome = 'not-committed'
       const database = db
       packets = [
         ...journalResultPackets(
@@ -169,6 +181,7 @@ port.on('message', ({ id, command }: JournalSqlRequest) => {
       ]
       outcome = 'indeterminate'
       db.exec('COMMIT')
+      committed = true
     } catch (error) {
       if (db.isTransaction) {
         try {
@@ -184,11 +197,23 @@ port.on('message', ({ id, command }: JournalSqlRequest) => {
         fault = error
       }
       throw error
+    } finally {
+      if (command.normal && !db.isTransaction) {
+        try {
+          db.pragma('synchronous = FULL')
+        } catch (error) {
+          fault = error
+          if (committed) {
+            postcommit = journalSqlFailure(error)
+          }
+        }
+      }
     }
+    checkpoint?.afterCommit()
     for (const packet of packets) {
       port.postMessage({ type: 'results', id, packets: packet } satisfies JournalSqlResponse)
     }
-    port.postMessage({ type: 'committed', id, values: [] } satisfies JournalSqlResponse)
+    port.postMessage({ type: 'committed', id, values: [], postcommit } satisfies JournalSqlResponse)
   } catch (error) {
     port.postMessage({
       type: 'failed',

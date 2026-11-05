@@ -1,4 +1,12 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
@@ -103,6 +111,16 @@ describe('large independent recovery copies under process death', () => {
     'preserves exact backup and retry state after %s',
     async (boundary) => {
       const profile = await fixture()
+      if (boundary === 'primary') {
+        const unreadable = Buffer.from(profile.originalFamily.get('')!)
+        unreadable.set(Buffer.from('not a database!!'))
+        writeFileSync(profile.databasePath, unreadable)
+        profile.originalFamily.set('', unreadable)
+        const wal = Buffer.from(profile.originalFamily.get('-wal')!)
+        wal.fill(0, 0, 32)
+        writeFileSync(`${profile.databasePath}-wal`, wal)
+        profile.originalFamily.set('-wal', wal)
+      }
       const stage = boundary === 'primary' ? `removed:${profile.databasePath}` : boundary
       await killRecoveryAt(bundle, profile, stage)
       expect(readFileSync(profile.backupPath).equals(profile.backupBytes)).toBe(true)
@@ -131,8 +149,11 @@ describe('large independent recovery copies under process death', () => {
         ).toBe(true)
         if (boundary === 'sqlite-publish:after') {
           expect(snapshot(profile.databasePath)).toEqual({ json: selectedJson, revision: 3 })
-        } else {
+        } else if (boundary === 'primary') {
           expect(existsSync(profile.databasePath)).toBe(false)
+          expect(() => snapshot(profile.databasePath)).toThrow()
+        } else {
+          expect(snapshot(profile.databasePath)).toEqual({ json: oldJson, revision: 4 })
         }
       }
       const maintenance = acquireProfileStateMaintenance(profile.root)

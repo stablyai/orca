@@ -145,6 +145,10 @@ export class StructuredAgentSessionHostRuntimeState {
     )
   }
 
+  writtenEventPrefix(sessionId: string): Promise<StructuredAgentSessionSinkBarrier> | undefined {
+    return this.eventSinks.get(sessionId)?.sink.written?.()
+  }
+
   lifecycleBarrier(sessionId: string): Promise<StructuredAgentSessionSinkBarrier> {
     return this.eventSinks.get(sessionId)?.lifecycleBarrier() ?? Promise.resolve({ ok: true })
   }

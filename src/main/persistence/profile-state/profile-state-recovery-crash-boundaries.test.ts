@@ -234,7 +234,7 @@ function readSqlite(path: string): unknown {
   }
 }
 
-function assertQuarantine(profile: Fixture, hasMarker = true): void {
+function assertQuarantine(profile: Fixture, hasMarker = true, readable = true): void {
   const quarantine = readdirSync(dirname(profile.databasePath)).find((name) =>
     name.startsWith('profile-state-corrupt-')
   )
@@ -258,7 +258,9 @@ function assertQuarantine(profile: Fixture, hasMarker = true): void {
   expect(
     readFileSync(join(directory, basename(profile.backupPath))).equals(profile.backupBytes)
   ).toBe(true)
-  expect(readSqlite(join(directory, 'profile-state.db'))).toEqual(oldState)
+  if (readable) {
+    expect(readSqlite(join(directory, 'profile-state.db'))).toEqual(oldState)
+  }
 }
 
 function assertRestart(profile: Fixture, expected: 'old' | 'selected' | 'refused'): void {
@@ -282,7 +284,26 @@ function assertRestart(profile: Fixture, expected: 'old' | 'selected' | 'refused
         ? readSqlite(profile.databasePath)
         : JSON.parse(readFileSync(profile.dataFile, 'utf8'))
     // Check raw state before normalization can hide a lost domain.
-    expect(raw).toEqual(expectedState)
+    const { workspaceSurfaces, ...documents } = raw
+    expect(documents).toEqual(expectedState)
+    if (workspaceSurfaces !== undefined) {
+      expect(workspaceSurfaces).toEqual({
+        version: 1,
+        hosts: {
+          local: {
+            terminalInitialized: false,
+            chatInitialization: 'unknown',
+            revision: 0,
+            surfaces: [],
+            allocations: [],
+            receipts: [],
+            terminalBaselines: {},
+            retainedReferences: [],
+            identityMappings: []
+          }
+        }
+      })
+    }
     const reopened = open()
     try {
       expect(reopened.backend).toBe('sqlite')
@@ -391,6 +412,33 @@ describe.each([false, true])('JSON recovery process death, accepted prior JSON=%
 })
 
 describe('SQLite recovery process death', () => {
+  // SQLite closes the invalid-primary probe by removing WAL/SHM before explicit family removal.
+  it.each(['evidence-probe:after', 'primary', 'journal'])(
+    'refuses restart after unreadable-family %s removal and retains an exact retry',
+    async (boundary) => {
+      const profile = await fixture('sqlite', true)
+      const unreadable = Buffer.from(profile.originalFamily.get('')!)
+      unreadable.set(Buffer.from('not a database!!'))
+      writeFileSync(profile.databasePath, unreadable)
+      profile.originalFamily.set('', unreadable)
+      const wal = Buffer.from(profile.originalFamily.get('-wal')!)
+      wal.fill(0, 0, 32)
+      writeFileSync(`${profile.databasePath}-wal`, wal)
+      profile.originalFamily.set('-wal', wal)
+      await killRecoveryAt(bundle, profile, stage(profile, boundary))
+      if (boundary === 'evidence-probe:after') {
+        expect(existsSync(`${profile.databasePath}-wal`)).toBe(false)
+        expect(existsSync(`${profile.databasePath}-shm`)).toBe(false)
+        expect(readFileSync(profile.databasePath).equals(unreadable)).toBe(true)
+      }
+      assertQuarantine(profile, true, false)
+      expect(readFileSync(profile.backupPath).equals(profile.backupBytes)).toBe(true)
+      assertRestart(profile, 'refused')
+      retry(profile)
+      expect(readFileSync(profile.backupPath).equals(profile.backupBytes)).toBe(true)
+    }
+  )
+
   it.each(['before', 'after'] as const)(
     'preserves the original family through authority-marker publication %s rename',
     async (boundary) => {
@@ -399,23 +447,19 @@ describe('SQLite recovery process death', () => {
       await killRecoveryAt(bundle, profile, `authority-publish:${boundary}`)
       assertQuarantine(profile, false)
       expect(hasProfileStateAuthorityMarker(profile.databasePath)).toBe(boundary === 'after')
-      for (const [suffix, bytes] of profile.originalFamily) {
-        expect(readFileSync(`${profile.databasePath}${suffix}`)).toEqual(bytes)
-      }
+      // SQLite may checkpoint the live WAL while reading; the quarantine above preserves exact originals.
+      expect(readSqlite(profile.databasePath)).toEqual(oldState)
       assertRestart(profile, 'old')
       retry(profile)
     }
   )
 
+  // Readable primaries survive until rename; the evidence probe may checkpoint their sidecars.
   it.each([
     'marker-invalidated',
     'selected-export',
     'other-export',
     'first-export',
-    'primary',
-    'wal',
-    'shm',
-    'journal',
     'json',
     'sqlite-publish:before',
     'sqlite-publish:after',
@@ -429,22 +473,9 @@ describe('SQLite recovery process death', () => {
     expect(hasProfileStateAuthorityMarker(profile.databasePath)).toBe(true)
     assertQuarantine(profile)
     expect(readFileSync(profile.backupPath).equals(profile.backupBytes)).toBe(true)
-    const expected = [
-      'marker-invalidated',
-      'selected-export',
-      'other-export',
-      'first-export'
-    ].includes(boundary)
+    const expected = ['marker-invalidated', 'sqlite-publish:before'].includes(boundary)
       ? 'old'
-      : [
-            'sqlite-publish:after',
-            'restore-returned',
-            'marker-publish:before',
-            'marker-publish:after',
-            'marker-refreshed'
-          ].includes(boundary)
-        ? 'selected'
-        : 'refused'
+      : 'selected'
     assertRestart(profile, expected)
     retry(profile)
     expect(readFileSync(profile.backupPath).equals(profile.backupBytes)).toBe(true)

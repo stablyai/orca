@@ -506,6 +506,8 @@ describe('profile state authority bootstrap', () => {
       expect.arrayContaining([options.databaseFile, `${options.databaseFile}-wal`])
     )
     expect(existsSync(options.databaseFile)).toBe(false)
+    expect(existsSync(`${options.databaseFile}-wal`)).toBe(false)
+    expect(existsSync(`${options.databaseFile}-shm`)).toBe(false)
     expect(readFileSync(options.dataFile).equals(restoredJson)).toBe(true)
     expect(existsSync(exportPath)).toBe(false)
     expect(readFileSync(join(result.quarantine.directory, 'profile-state.db'), 'utf8')).toBe(

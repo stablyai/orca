@@ -110,6 +110,7 @@ it.each(['Stop', 'close'] as const)(
     await vi.advanceTimersByTimeAsync(60_000)
     expect(child.agent.frames.filter((frame) => frame.method === 'session/prompt')).toHaveLength(1)
     expect(await messages()).toEqual(['first'])
+    await host.flushStreamedEvents(SESSION)
     const history = await host.history({ sessionId: SESSION, direction: 'tail' })
     expect(history.page.queuedMessages).toMatchObject([
       { state: 'waiting', body: message('queued') }

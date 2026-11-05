@@ -1,7 +1,7 @@
 import type Database from '../sqlite/sync-database'
 import type { WorkspaceSurface } from '../../shared/workspace-surfaces/surface-content'
 import type { SurfaceCommandOutcome } from '../../shared/workspace-surfaces/surface-command'
-import { rowKey, parseSurface } from './surface-rows'
+import { rowKey, parseSurface } from './surface-row-codec'
 
 /** Check only identities being installed; stale unrelated window contents cannot grant or refuse them. */
 export function conflictingSurfaceIdentity(

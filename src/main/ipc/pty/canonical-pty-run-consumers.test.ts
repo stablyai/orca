@@ -1,4 +1,19 @@
+import { OrcaRuntimeService } from '../../runtime/orca-runtime'
+import { _internals as codexPaneAccounts } from '../../codex/configuration/homes/codex-pane-account-registry'
+import { createTerminalSurfaceByRpc } from '../../runtime/terminal-surface-controller-test-fixture'
+import { installPtyRuntimeController } from './runtime/controller'
+import { adoptStablePane } from './pane/adopt-stable'
+import { getLocalPtyProvider, setLocalPtyProvider } from './provider/registry'
+import { finishPtyShutdown } from './provider/liveness'
+import {
+  noCodexResumeLaunch,
+  prepareCodexResumeHome,
+  resolveCodexResumeLaunch,
+  reconcileSharedRuntimeResumeHome,
+  stripSequencedStartupResumeArgv
+} from './host-env/codex-resume'
 import { randomUUID } from 'node:crypto'
+import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import type { WorkspaceSurface } from '../../../shared/workspace-surfaces/surface-content'
 import { emptySurfaceHostDomain } from '../../../shared/workspace-surfaces/surface-profile-domain'
@@ -52,6 +67,8 @@ beforeAll(async () => {
 afterAll(() => rmSync(bundleRoot, { recursive: true, force: true }))
 beforeEach(() => {
   directory = mkdtempSync(join(tmpdir(), 'orca-canonical-run-'))
+  vi.stubEnv('ORCA_USER_DATA_PATH', directory)
+  codexPaneAccounts.resetCache()
 })
 const stores: Store[] = []
 const readers: SurfaceExecutorReader[] = []
@@ -76,6 +93,8 @@ afterEach(async () => {
     reader.dispose()
   }
   await Promise.all(stores.splice(0).map((store) => store.freezeWritesAsync()))
+  codexPaneAccounts.resetCache()
+  vi.unstubAllEnvs()
   rmSync(directory, { recursive: true, force: true })
 })
 
@@ -108,6 +127,108 @@ async function closeRun(store: Store) {
     })
   ).toMatchObject({ ok: true })
 }
+
+it.each(['available', 'missing'] as const)(
+  'runs public ordinary terminal.create through profile, controller and the actual %s executor reader',
+  async (worker) => {
+    const store = await open()
+    const group = store.createProjectGroup({
+      name: 'Fixture',
+      createdFrom: 'manual',
+      parentPath: directory
+    })
+    const folder = store.createFolderWorkspace({ projectGroupId: group.id, folderPath: directory })
+    const worktreeId = folderWorkspaceKey(folder.id)
+    const runtime = new OrcaRuntimeService(store)
+    const reader = new SurfaceExecutorReader(
+      join(
+        bundleRoot,
+        worker === 'available' ? 'surface-executor-reader-entry.js' : 'missing-reader.js'
+      )
+    )
+    readers.push(reader)
+    const read = reader.read.bind(reader)
+    const spy = vi.spyOn(SurfaceExecutorReader.prototype, 'read').mockImplementation(read)
+    const socketPath = getDaemonSocketPath(directory)
+    const tokenPath = join(directory, 'daemon.token')
+    const physical = vi.fn(() => createMockSubprocess())
+    const server = new DaemonServer({ socketPath, tokenPath, spawnSubprocess: physical })
+    const provider = new DaemonPtyAdapter({
+      socketPath,
+      tokenPath,
+      historyPath: join(directory, 'history')
+    })
+    const prior = getLocalPtyProvider()
+    try {
+      await server.start()
+      setLocalPtyProvider(provider)
+      installPtyRuntimeController({
+        runtime,
+        store,
+        prepareCodexResumeHome: (args) => prepareCodexResumeHome(undefined, args),
+        noCodexResumeLaunch,
+        resolveCodexResumeLaunch,
+        reconcileSharedRuntimeResumeHome,
+        stripSequencedStartupResumeArgv,
+        adoptStablePane: (args) => adoptStablePane(runtime, store, args),
+        getLocalPtyStartupPromise: () => undefined,
+        getLocalPtyProviderStartupPromise: () => undefined,
+        assertWorkspaceAcceptsNewPty: () => {},
+        resolvePtySpawnStartupCwd: (_id, cwd) => cwd,
+        requestSerializedBuffer: async () => null,
+        shutdownProviderAndDetectExit: async (owner, id) => {
+          await owner.shutdown(id, { immediate: true })
+          return false
+        },
+        rememberSyntheticKillExit: () => {},
+        rememberRetiredRejectedPty: () => {},
+        sendPtyExitToRenderer: () => {},
+        sendPtySpawnedToRenderer: () => {},
+        finishPtyShutdown,
+        getSettings: () => store.getSettings(),
+        trustedTerminalHandleEnv: new Set(),
+        retiredRejectedPtyIds: new Map()
+      })
+      const creating = createTerminalSurfaceByRpc(runtime, worktreeId, {
+        tabId: pane.tabId,
+        leafId: pane.leafId
+      })
+      if (worker === 'missing') {
+        await expect(creating).rejects.toThrow('terminal_pane_owner_changed')
+        expect(await provider.listProcesses()).toEqual([])
+        expect(store.getWorkspaceSession().tabsByWorktree[worktreeId] ?? []).toEqual([])
+      } else {
+        const created = await creating
+        expect(created.terminal.ptyId).toBeTruthy()
+        expect(
+          store.getWorkspaceSession().terminalLayoutsByTabId[pane.tabId]?.ptyIdsByLeafId?.[
+            pane.leafId
+          ]
+        ).toBe(created.terminal.ptyId)
+        const published = await runtime.listMobileSessionTabs(`id:${worktreeId}`)
+        expect(published.tabs).toContainEqual(
+          expect.objectContaining({
+            parentTabId: pane.tabId,
+            leafId: pane.leafId,
+            ptyId: created.terminal.ptyId
+          })
+        )
+        await store.applyLayoutCommand({
+          type: 'closeTabs',
+          workspace: worktreeId,
+          tabIds: [pane.tabId],
+          force: true
+        })
+      }
+    } finally {
+      await store.freezeWritesAsync()
+      setLocalPtyProvider(prior)
+      await provider.disconnectOnly()
+      await server.shutdown()
+      spy.mockRestore()
+    }
+  }
+)
 
 it('recovers the same elected physical owner over actual daemon reconnect and retires it after canonical close', async () => {
   const store = await open()

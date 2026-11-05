@@ -12,6 +12,7 @@ import type {
   SurfaceLayoutView,
   SurfaceCommandOutcome
 } from '../../shared/workspace-surfaces/surface-command'
+import { workspaceRootGroupId } from '../../shared/workspace-layout/workspace-layout-minted-ids'
 import { parsePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import { missingSurfaceTargets, compareSurfaceTarget } from './surface-layout-targets'
 import { existingLayoutCreateOutcome } from '../persistence/terminal-topology/terminal-pane-admission'
@@ -79,29 +80,41 @@ export function applySurfaceLayout(
     workspaces: Object.fromEntries(
       [...workspaceIds].map((workspaceId) => {
         const workspace = view.model.workspaces[workspaceId]
-        return [
-          workspaceId,
-          affected.has(workspaceId)
-            ? projectSurfaceWorkspace(
-                workspaceId,
-                workspace,
-                affected.get(workspaceId)!,
-                view.chatVerified,
-                undefined,
-                undefined,
-                new Set(
-                  (view.model.records.clientHostedBrowserPagesByWorkspace?.[workspaceId] ?? []).map(
-                    (page) => page.browserPageId
-                  )
-                )
+        if (!affected.has(workspaceId)) {
+          return [
+            workspaceId,
+            {
+              ...workspace!,
+              tabs: workspace!.tabs.filter(
+                (tab) => tab.kind !== 'terminal' && tab.kind !== 'agent-session'
               )
-            : {
-                ...workspace!,
-                tabs: workspace!.tabs.filter(
-                  (tab) => tab.kind !== 'terminal' && tab.kind !== 'agent-session'
-                )
-              }
-        ]
+            }
+          ]
+        }
+        const projected = projectSurfaceWorkspace(
+          workspaceId,
+          workspace,
+          affected.get(workspaceId) ?? [],
+          view.chatVerified,
+          undefined,
+          undefined,
+          new Set(
+            (view.model.records.clientHostedBrowserPagesByWorkspace?.[workspaceId] ?? []).map(
+              (page) => page.browserPageId
+            )
+          )
+        )
+        const groupId = 'groupId' in command ? command.groupId : undefined
+        const envelope =
+          workspace?.groups.find((group) => group.id === groupId) ??
+          (projected.groups.length === 0 ? workspace?.groups[0] : undefined)
+        if (envelope && !projected.groups.some((group) => group.id === envelope.id)) {
+          projected.groups.push({ ...envelope, tabOrder: [] })
+        }
+        if (projected.groups.length === 0) {
+          projected.groups.push({ id: workspaceRootGroupId(workspaceId), tabOrder: [] })
+        }
+        return [workspaceId, projected]
       })
     )
   }

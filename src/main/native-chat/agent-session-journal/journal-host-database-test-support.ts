@@ -34,9 +34,7 @@ function prepareTestWorker(): Promise<string> {
     bundleRoot = await mkdtemp(join(tmpdir(), 'orca-journal-fixture-worker-'))
     const path = join(bundleRoot, 'journal-sql-worker-entry.cjs')
     await build({
-      entryPoints: [
-        resolve('src/main/native-chat/agent-session-journal/journal-sql-worker-entry.ts')
-      ],
+      entryPoints: [join(import.meta.dirname, 'journal-sql-worker-entry.ts')],
       outfile: path,
       bundle: true,
       platform: 'node',
@@ -50,7 +48,15 @@ function prepareTestWorker(): Promise<string> {
 }
 
 const nativeOpen = JournalHostDatabase.open
+const nativeHoldsSessions = JournalHostDatabase.holdsSessions
 beforeEach(() => {
+  vi.spyOn(JournalHostDatabase, 'holdsSessions').mockImplementation(async (directory, workerPath) =>
+    nativeHoldsSessions.call(
+      JournalHostDatabase,
+      directory,
+      workerPath ?? (await prepareTestWorker())
+    )
+  )
   vi.spyOn(JournalHostDatabase, 'open').mockImplementation(async (directory, workerPath) =>
     nativeOpen.call(JournalHostDatabase, directory, workerPath ?? (await prepareTestWorker()))
   )

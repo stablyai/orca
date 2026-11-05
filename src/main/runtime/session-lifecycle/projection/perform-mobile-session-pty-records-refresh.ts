@@ -22,7 +22,7 @@ import { navigationTargetsHost } from '../../../../shared/runtime-navigation'
 import { isAutomaticTabActivation } from '../../../../shared/tab-activation-intent'
 import { isWorktreeTerminalsSleepingError } from '../../worktree-terminals-sleeping-error'
 
-import { paneHoldsSession } from '../../terminal/surface/main-terminal-surfaces'
+import { paneHoldsSession } from '../../terminal/surface/main-terminal-surface-observations'
 import { resolveChatTabActivation } from '../../agent-session/agent-session-tab-identity'
 export abstract class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh extends OrcaRuntimeWithRestoredPaneStart {
   protected abstract toMobileSessionTabsResult(

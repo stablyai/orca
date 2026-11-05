@@ -94,7 +94,7 @@ it.each(['turn', 'submission'] as const)(
     const body = hostTestMessage('Stop the old task and do this instead')
     await host.send(CALLER, { envelope: envelope('agentSession.send', { body }), body })
     await host.restartResume.continueAfterRestart([SESSION], 'modal')
-    expect(dispatch).toHaveBeenCalledTimes(1)
+    await vi.waitFor(() => expect(dispatch).toHaveBeenCalledTimes(1))
     expect((await host.journalSnapshot(SESSION)).submissions).toHaveLength(work === 'turn' ? 1 : 2)
   }
 )

@@ -4,21 +4,8 @@ import { workspaceSurfaceSchema } from '../../shared/workspace-surfaces/surface-
 import { reconcileSurfaceAllocations } from './surface-allocation-rows'
 import { releaseSurfaceIdentities, writeSurfaceLeafIdentities } from './surface-identities'
 import { recordSurfaceHost, recordSurfaceWrite } from './surface-transaction-changes'
-
-export function parseJson(value: unknown): unknown {
-  if (typeof value !== 'string') {
-    throw new Error('surface_row_unreadable')
-  }
-  return JSON.parse(value)
-}
-
-export function rowKey(surface: Pick<SurfaceKey, 'workspaceId' | 'hostTabId'>): string {
-  return JSON.stringify([surface.workspaceId, surface.hostTabId])
-}
-
-export function parseSurface(value: unknown): WorkspaceSurface {
-  return workspaceSurfaceSchema.parse(parseJson(value))
-}
+import { parseSurface, rowKey } from './surface-row-codec'
+export { parseJson, parseSurface, rowKey } from './surface-row-codec'
 
 export function readSurface(db: Database.Database, key: SurfaceKey): WorkspaceSurface | null {
   const row = db

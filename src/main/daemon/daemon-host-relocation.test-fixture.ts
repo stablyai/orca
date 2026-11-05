@@ -33,6 +33,7 @@ export function buildInstallFixture(root: string): void {
   const mainDir = join(root, 'resources', 'app.asar.unpacked', 'out', 'main')
   mkdirSync(join(mainDir, 'chunks'), { recursive: true })
   writeFileSync(join(mainDir, 'daemon-entry.js'), 'entry')
+  writeFileSync(join(mainDir, 'surface-executor-reader-entry.js'), 'reader')
   writeFileSync(join(mainDir, 'chunks', 'a.js'), 'chunk')
   writeFileSync(join(root, 'resources', 'app.asar.unpacked', 'out', 'package.json'), '{}')
   const nativeDir = join(root, 'resources', 'node_modules', 'node-pty', 'build', 'Release')

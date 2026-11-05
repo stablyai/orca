@@ -77,19 +77,13 @@ export abstract class OrcaRuntimeWithExplicitCloseTabPtyStops extends OrcaRuntim
         workspace === scope.worktreeId &&
         tabId === scope.tabId &&
         (scope.leafId === undefined || leafId === scope.leafId)
-      const ownsOnlyClosingScope = (): boolean => {
-        const currentPane = this.paneOfPty(this.ptysById.get(ptyId))
-        const parsed = parsePaneKey(currentPane.paneKey ?? '')
-        if (
-          (currentPane.tabId !== null && currentPane.tabId !== scope.tabId) ||
-          (parsed && !inside(worktreeId ?? scope.worktreeId, parsed.tabId, parsed.leafId))
-        ) {
-          return false
-        }
+      const ownsOnlyClosingScope = (capturedOwner = false): boolean => {
+        let hasCurrentOwner = false
         for (const leaf of this.getLeavesForPty(ptyId)) {
           if (!inside(leaf.worktreeId, leaf.tabId, leaf.leafId)) {
             return false
           }
+          hasCurrentOwner = true
         }
         const currentWorkspaces = record ? workspaces : this.mobileSessionTabsByWorktree.keys()
         for (const workspace of currentWorkspaces) {
@@ -98,9 +92,18 @@ export abstract class OrcaRuntimeWithExplicitCloseTabPtyStops extends OrcaRuntim
             if (!inside(ownerWorkspace, tabId, leafId)) {
               return false
             }
+            hasCurrentOwner = true
           }
         }
-        return true
+        if (hasCurrentOwner || capturedOwner) {
+          return true
+        }
+        const currentPane = this.paneOfPty(this.ptysById.get(ptyId))
+        const parsed = parsePaneKey(currentPane.paneKey ?? '')
+        return (
+          (currentPane.tabId === null || currentPane.tabId === scope.tabId) &&
+          (!parsed || inside(worktreeId ?? scope.worktreeId, parsed.tabId, parsed.leafId))
+        )
       }
       // Losing a closing binding is expected; an outside owner never grants stop authority.
       const ownedAtCapture = ownsOnlyClosingScope()
@@ -124,7 +127,7 @@ export abstract class OrcaRuntimeWithExplicitCloseTabPtyStops extends OrcaRuntim
           ) {
             return false
           }
-          return ownedAtCapture && ownsOnlyClosingScope()
+          return ownedAtCapture && ownsOnlyClosingScope(true)
         }
       }
     })

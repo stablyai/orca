@@ -10,16 +10,18 @@ import { JournalPersistencePlan } from './journal-persistence-plan'
 import { JournalNativeService } from './journal-native-service'
 import type { JournalReadLease } from './journal-readers'
 import { JournalNativeStorage } from './journal-native-storage'
-import { adoptJournalCommittedEffects, settleJournalCommitAsync } from './journal-committed-effects'
+import {
+  adoptJournalCommittedEffects,
+  reportJournalCommittedEffectFailure,
+  settleJournalCommitAsync
+} from './journal-committed-effects'
 import { profileStateWriterFailureOutcome } from '../../persistence/profile-state/profile-state-writer-errors'
 import { journalTransferBatches, journalUnitPackets } from './journal-unit-transfer'
 import { restoreJournalSqlFailure } from './journal-sql-protocol'
 import { AgentSessionJournalError } from './journal-write-guards'
 
-const JOURNAL_DATABASE_FILE = 'agent-session-journal.db'
-
 export function journalDatabasePath(stateDirectory: string): string {
-  return join(stateDirectory, JOURNAL_DATABASE_FILE)
+  return join(stateDirectory, 'agent-session-journal.db')
 }
 
 export { JournalCommittedEffectError } from './journal-committed-effects'
@@ -66,8 +68,8 @@ export class JournalHostDatabase {
     return this.storage.readOnly
   }
 
-  static async holdsSessions(stateDirectory: string): Promise<boolean> {
-    return journalDatabaseHoldsSessions(journalDatabasePath(stateDirectory))
+  static async holdsSessions(stateDirectory: string, workerPath?: string): Promise<boolean> {
+    return journalDatabaseHoldsSessions(journalDatabasePath(stateDirectory), workerPath)
   }
 
   get isClosed(): boolean {
@@ -162,10 +164,15 @@ export class JournalHostDatabase {
       if (reply.type !== 'committed') {
         throw new Error('journal owner did not acknowledge COMMIT')
       }
-      if (reply.postcommit) {
-        this.report(restoreJournalSqlFailure(reply.postcommit))
-      }
-      await this.adopt([() => plan.settle(reply.values), () => committed?.(result)])
+      await this.adopt([
+        () => plan.settle(reply.values),
+        () => committed?.(result),
+        () => {
+          if (reply.postcommit) {
+            throw restoreJournalSqlFailure(reply.postcommit)
+          }
+        }
+      ])
       return result
     })
   }
@@ -177,7 +184,7 @@ export class JournalHostDatabase {
         throw new Error('Native maintenance result is missing')
       }
       if (reply.postcommit) {
-        this.report(restoreJournalSqlFailure(reply.postcommit))
+        reportJournalCommittedEffectFailure(restoreJournalSqlFailure(reply.postcommit))
       }
       return reply
     }, true)
@@ -310,7 +317,7 @@ export class JournalHostDatabase {
       try {
         listener(error)
       } catch (cause) {
-        this.report(cause)
+        reportJournalCommittedEffectFailure(cause)
       }
     }
   }
@@ -320,13 +327,5 @@ export class JournalHostDatabase {
       this.failure ??
       new AgentSessionJournalError('journal_closed', 'the chat journal database is closed')
     )
-  }
-
-  private report(error: unknown): void {
-    try {
-      console.warn('[agent-session-journal] postcommit settings failed', error)
-    } catch {
-      // Diagnostics never revoke known COMMIT.
-    }
   }
 }

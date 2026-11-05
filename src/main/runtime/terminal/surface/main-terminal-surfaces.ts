@@ -359,13 +359,3 @@ export type MainPaneRecordFacts = {
   incarnationId: string | null
   worktreeId: string
 }
-
-export {
-  mainPaneRecordFacts,
-  noteMainPaneRecordChange,
-  mainLayoutHoldsPane,
-  paneHoldsSession,
-  mainDecidesLeafLiveness,
-  mainListsEveryPane,
-  withMainBoundLeaves
-} from './main-terminal-surface-observations'

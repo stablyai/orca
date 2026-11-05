@@ -47,10 +47,6 @@ import { hashProfileStatePayload } from '../persistence/profile-state/profile-st
 import { PROFILE_STATE_META_REVISION } from '../persistence/profile-state/profile-state-database-schema'
 import { executeSurfaceOwnerCommand, executeSurfaceOwnerCommands } from './surface-owner-command'
 import { preserveSurfaceRecoveryObligations } from './surface-recovery-obligations'
-import {
-  surfaceCarrierFromRecoveryJson,
-  surfaceDocumentsFromRecoveryJson
-} from './surface-recovery-evidence'
 
 let directory: string
 let databasePath: string
@@ -422,6 +418,37 @@ it('keeps later exact retirement and receipt when recovery selects older content
   )
 })
 
+it('initializes a recovered evidence-only host in place, rolls back refusal and preserves later retirement on reopen', () => {
+  const later = commit((repository) => repository.initialize('local', [terminal]))
+  const recovered = preserveSurfaceRecoveryObligations(undefined, later)!
+  recovered.hosts.local!.revision = 7
+  withProfileStateWriteTransaction(db, () => {
+    writeProfileStateDomainsInTransaction(
+      db,
+      {
+        expectedRevision: readProfileStateRevision(db),
+        replacements: []
+      },
+      recovered
+    )
+    restoreSurfaceIndices(db, recovered, surfaceDomainFingerprint(JSON.stringify(recovered)))
+  })
+  db.exec(`CREATE TRIGGER reject_seed BEFORE INSERT ON workspace_surfaces
+    BEGIN SELECT RAISE(ABORT, 'seed refused'); END`)
+  expect(() => commit((repository) => repository.initialize('local', [terminal]))).toThrow(
+    'seed refused'
+  )
+  expect(readSurfaceProfileDomain(db)).toEqual(recovered)
+  db.exec('DROP TRIGGER reject_seed')
+  const initialized = commit((repository) => repository.initialize('local', [terminal]))
+  expect(initialized.hosts.local).toMatchObject({ terminalInitialized: true, revision: 8 })
+  expect(initialized.hosts.local!.allocations).toEqual(recovered.hosts.local!.allocations)
+  expect(initialized.hosts.local!.surfaces).toEqual([terminal])
+  db.close()
+  db = openWritableProfileStateDatabase(databasePath, 'test-profile').db
+  expect(commit((repository) => repository.initialize('local', []))).toEqual(initialized)
+})
+
 it('reconstructs acknowledged later binding debt without changing selected content and lets explicit abort win', () => {
   const later = commit((repository) => repository.initialize('local', [terminal]))
   const selected = structuredClone(later)
@@ -580,23 +607,6 @@ it('commits remote partition commands at one revision and rolls every partition 
   ).toThrow('batch output failed')
   expect(readSurfaceProfileDomain(db)).toEqual(before)
   expect(readProfileStateRevision(db)).toBe(created.revision)
-})
-
-it('reads only the last reserved recovery root while retaining nested exact resource facts', () => {
-  const carrier = commit((repository) => repository.initialize('local', [terminal]))
-  const payload = JSON.stringify(carrier)
-  const largeHistory = JSON.stringify('unrelated history '.repeat(10_000))
-  const raw = `{"workspaceSurfaces":{"invalid":"earlier duplicate"},"history":${largeHistory},"nested":{"workspaceSurfaces":null},"workspaceSurfaces":${payload},"tail":[false,null,42]}`
-  expect(surfaceCarrierFromRecoveryJson(raw)).toEqual(carrier)
-  expect(
-    surfaceCarrierFromRecoveryJson(`{"nested":{"workspaceSurfaces":${payload}}}`)
-  ).toBeUndefined()
-  expect(() => surfaceCarrierFromRecoveryJson(`[${payload}]`)).toThrow('root must be an object')
-  expect(() => surfaceCarrierFromRecoveryJson(raw.slice(0, -1))).toThrow()
-  expect(() => surfaceCarrierFromRecoveryJson('{"workspaceSurfaces":null}')).toThrow()
-  expect(() =>
-    surfaceDocumentsFromRecoveryJson('{"workspaceSurfaceEvidence/invalid":false}')
-  ).toThrow()
 })
 
 it('uses exact committed root stamps for warm reads, ignores unrelated profile revisions and discards rollback state', () => {

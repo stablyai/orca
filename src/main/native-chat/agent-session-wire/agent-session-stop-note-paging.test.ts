@@ -1,4 +1,4 @@
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session/agent-session-wire'
 import { readAgentSessionHistory } from './agent-session-history-page'
@@ -84,6 +84,11 @@ it('refreshes at the exact tip using bounded frames and no durable writes', asyn
     cursor: fixture.journal.cursor(),
     emit: (event) => events.push(event)
   })
+  await vi.waitFor(() =>
+    expect(
+      events.flatMap((event) => (event.type === 'batch' ? event.batch.items : []))
+    ).toHaveLength(205)
+  )
   const batches = events.flatMap((event) => (event.type === 'batch' ? [event.batch] : []))
   expect(batches.flatMap((batch) => batch.items)).toHaveLength(205)
   expect(
@@ -127,6 +132,11 @@ it('refreshes a phone within its frames, in bounded pages', async () => {
     emit: (event) => events.push(event),
     boundedFrames: true
   })
+  await vi.waitFor(() =>
+    expect(
+      events.flatMap((event) => (event.type === 'batch' ? event.batch.items : []))
+    ).toHaveLength(205)
+  )
   const batches = events.flatMap((event) => (event.type === 'batch' ? [event.batch] : []))
   expect(batches.filter((batch) => batch.items.length > 0)).toHaveLength(2)
   expect(batches.flatMap((batch) => batch.items)).toHaveLength(205)

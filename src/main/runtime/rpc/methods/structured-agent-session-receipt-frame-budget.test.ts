@@ -1,6 +1,6 @@
 import '../unused-default-rpc-methods.test-fixture'
 import { join } from 'node:path'
-import { afterEach, beforeEach, expect, it } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionSubscribeEvent } from '../../../../shared/agent-session/agent-session-wire'
 import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
@@ -77,7 +77,7 @@ it.each(['snapshot', 'reset', 'batch'] as const)(
       { ...STRUCTURED_MOBILE_CLIENT, clientId: 'reader-phone' },
       { readMachineName: () => '界'.repeat(255) }
     )
-    expect(base[0]?.type).toBe(type)
+    await vi.waitFor(() => expect(base[0]?.type).toBe(type))
     expect(Buffer.byteLength(JSON.stringify(base[0]), 'utf8')).toBeGreaterThan(540 * 1024)
     expect(responses).toHaveLength(base.length)
     for (const [index, response] of responses.entries()) {

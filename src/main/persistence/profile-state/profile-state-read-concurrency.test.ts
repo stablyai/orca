@@ -1,3 +1,6 @@
+import { once } from 'node:events'
+import { spawnWorkerThread } from '../../worker-threads/worker-thread-spawn'
+import { buildRecoveryCrashProcess } from './profile-state-recovery-crash-process'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -14,7 +17,6 @@ import {
   validateProfileStateSnapshot
 } from './profile-state-documents'
 import { readProfileStateDomainsWithRevisionFromDatabase } from './profile-state-domain-reader'
-import { writeProfileStateDomains } from './profile-state-domain-writes'
 import * as revisions from './profile-state-revision'
 
 const directories: string[] = []
@@ -36,27 +38,67 @@ function fixture() {
 }
 
 describe('profile state reads during concurrent commits', () => {
-  it.each([readProfileStateSnapshot, readProfileStateParsedSnapshot, validateProfileStateSnapshot])(
+  it.each([
+    [readProfileStateSnapshot, openProfileStateDatabaseReadOnly],
+    [readProfileStateParsedSnapshot, openProfileStateDatabase],
+    [validateProfileStateSnapshot, openProfileStateDatabaseReadOnly]
+  ] as const)(
     'keeps revision and documents together when a writer commits during %s',
-    (read) => {
+    async (read, open) => {
       const { path, db: writer } = fixture()
-      const { db: reader } = openProfileStateDatabaseReadOnly(path, 'profile-a')
+      const { db: reader } = open(path, 'profile-a')
+      const { bundle } = buildRecoveryCrashProcess(directories.at(-1)!)
+      const phase = new Int32Array(new SharedArrayBuffer(4))
+      const worker = spawnWorkerThread(
+        `
+        const { parentPort, workerData } = require('node:worker_threads')
+        const api = require(workerData.bundle)
+        const writer = api.openProfileStateDatabase(workerData.path, 'profile-a').db
+        const phase = new Int32Array(workerData.shared)
+        const exec = writer.exec.bind(writer)
+        writer.exec = sql => {
+          if (sql === 'COMMIT') {
+            Atomics.store(phase, 0, 1)
+            Atomics.notify(phase, 0)
+          }
+          return exec(sql)
+        }
+        parentPort.once('message', () => {
+          try {
+            api.writeProfileStateDomains(writer, {
+              expectedRevision: 1,
+              replacements: [{ domain: 'automationRuns', payload: '[]' }]
+            })
+            parentPort.postMessage('committed')
+          } catch (error) {
+            parentPort.postMessage(String(error))
+          } finally {
+            writer.close()
+            parentPort.close()
+          }
+        })
+        parentPort.postMessage('ready')
+      `,
+        { eval: true, workerData: { bundle, path, shared: phase.buffer }, execArgv: [] }
+      )
+      expect((await once(worker, 'message'))[0]).toBe('ready')
+      const completion = once(worker, 'message')
       const readRevision = revisions.readProfileStateRevision
-      let committed = false
+      let attempted = false
       vi.spyOn(revisions, 'readProfileStateRevision').mockImplementation((db) => {
         const revision = readRevision(db)
-        if (db === reader && !committed) {
-          committed = true
-          writeProfileStateDomains(writer, {
-            expectedRevision: 1,
-            replacements: [{ domain: 'automationRuns', payload: '[]' }]
-          })
+        if (db === reader && !attempted) {
+          attempted = true
+          worker.postMessage('write')
+          if (Atomics.wait(phase, 0, 0, 5_000) === 'timed-out') {
+            throw new Error('Concurrent writer did not begin')
+          }
         }
         return revision
       })
       try {
         const snapshot = read(reader)
-        expect(committed).toBe(true)
+        expect(attempted).toBe(true)
         if (typeof snapshot === 'number') {
           expect(snapshot).toBe(1)
         } else {
@@ -68,10 +110,19 @@ describe('profile state reads during concurrent commits', () => {
           )
         }
         expect(reader.isTransaction).toBe(false)
+        expect((await completion)[0]).toBe('committed')
         const next = read(reader)
         expect(typeof next === 'number' ? next : next.revision).toBe(2)
+        if (typeof next !== 'number') {
+          expect(next).toMatchObject(
+            read === readProfileStateSnapshot
+              ? { json: '{"automationRuns":[]}' }
+              : { state: { automationRuns: [] } }
+          )
+        }
       } finally {
         reader.close()
+        await worker.terminate()
         writer.close()
       }
     }
@@ -81,39 +132,25 @@ describe('profile state reads during concurrent commits', () => {
     ['read-only', openProfileStateDatabaseReadOnly],
     ['writable', openProfileStateDatabase]
   ] as const)(
-    'opens a healthy %s database structurally and keeps its first full read consistent',
+    'opens a malformed domain for repair through %s without losing its contents',
     (_, open) => {
       const { path, db: writer } = fixture()
-      const readRevision = revisions.readProfileStateRevision
-      let committed = false
-      vi.spyOn(revisions, 'readProfileStateRevision').mockImplementation((reader) => {
-        const revision = readRevision(reader)
-        if (reader !== writer && !committed) {
-          committed = true
-          writeProfileStateDomains(writer, {
-            expectedRevision: 1,
-            replacements: [{ domain: 'automationRuns', payload: '[]' }]
-          })
-        }
-        return revision
-      })
       try {
-        const opened = open(path, 'profile-a')
-        try {
-          // Why: opening checks structure only; automation content is read by ordinary reads.
-          expect(committed).toBe(false)
-          expect(readProfileStateParsedSnapshot(opened.db)).toEqual({
-            revision: 1,
-            state: { automationRuns: [{ id: 'run-1', status: 'pending' }] }
-          })
-          expect(committed).toBe(true)
-          expect(opened.db.isTransaction).toBe(false)
-          expect(readProfileStateSnapshot(opened.db)).toMatchObject({
-            revision: 2,
-            json: '{"automationRuns":[]}'
-          })
-        } finally {
-          opened.db.close()
+        writer.exec('DELETE FROM profile_state_automation_runs_meta')
+        for (let attempt = 0; attempt < 2; attempt++) {
+          const opened = open(path, 'profile-a')
+          try {
+            expect(() => readProfileStateParsedSnapshot(opened.db)).toThrow('metadata is malformed')
+            expect(opened.db.isTransaction).toBe(false)
+            expect(
+              opened.db.prepare('SELECT domain FROM profile_state_automation_runs_meta').all()
+            ).toEqual([])
+            expect(
+              opened.db.prepare('SELECT run_id, payload FROM profile_state_automation_runs').all()
+            ).toEqual([{ run_id: 'run-1', payload: '{"id":"run-1","status":"pending"}' }])
+          } finally {
+            opened.db.close()
+          }
         }
       } finally {
         writer.close()

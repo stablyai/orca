@@ -49,6 +49,7 @@ export class StructuredAgentSessionHost {
     (sessionId) => this.restartResume.onAgentStarted(sessionId),
     (sessionId) => this.backgroundTasks.publish(sessionId),
     (sessionId) => this.backgroundTasks.read(sessionId),
+    (sessionId) => this.runtimeState?.writtenEventPrefix(sessionId),
     (sessionId) => this.runtimeState?.startFlights.projectsStarting(sessionId) ?? false,
     this.sessions,
     (sessionId) => this.usageLimitContinue?.readState(sessionId)

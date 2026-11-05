@@ -84,9 +84,10 @@ export function registerJournalDatabaseTests(): void {
             'journal_set_aside'
           ])
         )
-        expect(db.pragma('journal_mode', { simple: true })).toBe('delete')
+        expect(db.pragma('journal_mode', { simple: true })).toBe('wal')
         expect(journalPragmaNumber(db, 'synchronous')).toBe(2)
-        expect(journalPragmaNumber(db, 'fullfsync')).toBe(1)
+        expect(journalPragmaNumber(db, 'fullfsync')).toBe(0)
+        expect(journalPragmaNumber(db, 'checkpoint_fullfsync')).toBe(1)
         expect(db.pragma('locking_mode', { simple: true })).toBe('normal')
         expect(journalPragmaNumber(db, 'busy_timeout')).toBe(JOURNAL_BUSY_TIMEOUT_MS)
         expect(journalPragmaNumber(db, 'foreign_keys')).toBe(1)

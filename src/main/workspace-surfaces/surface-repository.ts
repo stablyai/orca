@@ -71,7 +71,12 @@ export class WorkspaceSurfaceRepository {
   ): void {
     this.writable()
     this.storage.transaction((db) => {
-      if (this.initialized(hostId)) {
+      const host = db
+        .prepare(
+          'SELECT initialized, revision FROM main.workspace_surface_domains WHERE host_id = ?'
+        )
+        .get(hostId)
+      if (host?.initialized === 1) {
         return
       }
       for (const seed of surfaces) {
@@ -81,10 +86,12 @@ export class WorkspaceSurfaceRepository {
         }
         writeSurface(db, surface)
       }
+      const revision = Number(host?.revision ?? 0) + 1
       db.prepare(
-        'INSERT INTO main.workspace_surface_domains(host_id, initialized, revision) VALUES (?, 1, 1)'
-      ).run(hostId)
-      recordSurfaceHost(db, hostId, true, 1)
+        `INSERT INTO main.workspace_surface_domains(host_id, initialized, revision) VALUES (?, 1, ?)
+        ON CONFLICT(host_id) DO UPDATE SET initialized = 1, revision = excluded.revision`
+      ).run(hostId, revision)
+      recordSurfaceHost(db, hostId, true, revision)
       for (const workspaceId of new Set([
         ...workspaceIds,
         ...surfaces.map((surface) => surface.workspaceId)

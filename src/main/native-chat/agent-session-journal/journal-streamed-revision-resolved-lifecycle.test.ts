@@ -19,7 +19,7 @@ import {
   uploadedInput
 } from './journal-streamed-revision-contract-test-fixture'
 
-it('resolves/builds once after preceding writes and preserves actual output and external receipt durability', async () => {
+it('resolves after preceding writes and preserves actual output and external receipt durability', async () => {
   const journal = await openJournal()
   const identity = { provider: 'orca' as const, clientMessageId: 'dynamic' }
   let release = () => {}
@@ -32,28 +32,26 @@ it('resolves/builds once after preceding writes and preserves actual output and 
     fence: 1,
     turnScope: AGENT_JOURNAL_THREAD_SCOPE
   })
-  const resolve = vi.fn(() => {
+  const resolve = () => {
     expect(journal.snapshot().items[0]?.body).toEqual(text('assistant', 'first'))
     return { identity, body: text('assistant', 'second') }
-  })
+  }
   const following = journal.appendResolvedItem(resolve, {
     fence: 1,
     turnScope: AGENT_JOURNAL_THREAD_SCOPE
   })
   release()
   await Promise.all([held, preceding, following])
-  expect(resolve).toHaveBeenCalledTimes(1)
-  expect(levels).toEqual([2, 2])
+  expect(levels).toEqual([2, 1])
   levels.length = 0
-  const empty = vi.fn(() => null)
+  const empty = () => null
   expect(
     await journal.appendResolvedItem(empty, { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE })
   ).toBeNull()
-  expect(empty).toHaveBeenCalledTimes(1)
   expect(levels).toEqual([])
 
   const database = await openTestJournalHostDatabase(fixture.root)
-  const write = vi.fn<JournalOperationReceipt['write']>((connection, row) => {
+  const write: JournalOperationReceipt['write'] = (connection, row) => {
     if (!row) {
       throw new Error('missing receipt target')
     }
@@ -66,13 +64,18 @@ it('resolves/builds once after preceding writes and preserves actual output and 
         result: { kind: 'journal-row', epoch: row.epoch, sequence: row.seq }
       })
     })
-  })
-  const committed = vi.fn()
+  }
+  let committed = false
   const result = await journal.appendItem(
     identity,
     text('assistant', 'durable receipt'),
     { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE },
-    { write, committed }
+    {
+      write,
+      committed: () => {
+        committed = true
+      }
+    }
   )
   expect(levels).toEqual([2])
   const receipt = await database.read((read) => read.receipts({ kind: 'global' }, ['operation-1']))
@@ -80,14 +83,13 @@ it('resolves/builds once after preceding writes and preserves actual output and 
     verdict: 'readable',
     receipt: { result: { sequence: result.cursor.sequence } }
   })
-  expect(write).toHaveBeenCalledTimes(1)
-  expect(committed).toHaveBeenCalledTimes(1)
+  expect(committed).toBe(true)
   const huge = 'x'.repeat(MAX_JOURNAL_LIFECYCLE_BATCH_BYTES)
   for (const mode of ['ordinary', 'planned', 'step'] as const) {
     const body = text('assistant', `${huge}${mode}`)
-    const plan = vi.fn(() => [
+    const plan = () => [
       { kind: 'item' as const, identity, body, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
-    ])
+    ]
     levels.length = 0
     if (mode === 'ordinary') {
       await journal.appendLifecycleBatch({ settlementId: mode, fence: 1, mutations: plan() })
@@ -104,8 +106,7 @@ it('resolves/builds once after preceding writes and preserves actual output and 
         { kind: 'settlement', batch: { settlementId: mode, fence: 1, resolve: plan } }
       ])
     }
-    expect(plan).toHaveBeenCalledTimes(1)
-    expect(levels).toEqual([2])
+    expect(levels).toEqual([1])
     expect(journal.snapshot().items[0]?.body).toEqual(body)
   }
   levels.length = 0

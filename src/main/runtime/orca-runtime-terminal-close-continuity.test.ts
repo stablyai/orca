@@ -94,32 +94,28 @@ describe('terminal close and handle incarnation continuity', () => {
     }
   })
 
-  // L259a: expected failure until main-owned close handles stale spawn-time tabs.
-  ;(ORCA_LAYOUT_OWNER_IS_MAIN ? it.fails : it)(
-    'kills and removes a stale spawn-time tab through its current headless surface',
-    async () => {
-      const harness = await createStaleTabCloseHarness({ headless: true })
-      const { terminal } = harness
-      const published = vi.fn()
-      const unsubscribe = harness.runtime.onMobileSessionTabsChanged(published)
+  it('kills and removes a stale spawn-time tab through its current headless surface', async () => {
+    const harness = await createStaleTabCloseHarness({ headless: true })
+    const { terminal } = harness
+    const published = vi.fn()
+    const unsubscribe = harness.runtime.onMobileSessionTabsChanged(published)
 
-      await expect(harness.runtime.closeTerminalTab(terminal.handle)).resolves.toMatchObject({
-        handle: terminal.handle,
-        tabId: TAB_ID,
-        closeMode: 'tab'
-      })
+    await expect(harness.runtime.closeTerminalTab(terminal.handle)).resolves.toMatchObject({
+      handle: terminal.handle,
+      tabId: TAB_ID,
+      closeMode: 'tab'
+    })
 
-      expect(harness.kill).toHaveBeenCalledWith(RUNTIME_OWNED_PTY_ID)
-      expect(harness.getSession().tabsByWorktree[WORKTREE_ID]).toEqual([])
-      expect(harness.flushOrThrow.mock.invocationCallOrder[0]).toBeLessThan(
-        harness.kill.mock.invocationCallOrder[0]!
-      )
-      expect(harness.flushOrThrow.mock.invocationCallOrder[0]).toBeLessThan(
-        published.mock.invocationCallOrder[0]!
-      )
-      await expect(
-        harness.runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
-      ).resolves.toMatchObject({
+    expect(harness.kill.mock.calls.map(([id]) => id)).toContain(RUNTIME_OWNED_PTY_ID)
+    expect(harness.getSession().tabsByWorktree[WORKTREE_ID]).toEqual([])
+    expect(harness.flushOrThrow.mock.invocationCallOrder[0]).toBeLessThan(
+      harness.kill.mock.invocationCallOrder[0]!
+    )
+    expect(harness.flushOrThrow.mock.invocationCallOrder[0]).toBeLessThan(
+      published.mock.invocationCallOrder[0]!
+    )
+    await expect(harness.runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)).resolves.toMatchObject(
+      {
         retiredTerminalSurfaces: [
           {
             parentTabId: TAB_ID,
@@ -130,42 +126,36 @@ describe('terminal close and handle incarnation continuity', () => {
           }
         ],
         tabs: []
-      })
-      unsubscribe()
-    }
-  )
+      }
+    )
+    unsubscribe()
+  })
 
-  // L259a: expected failure until main-owned close handles stale spawn-time tabs.
-  ;(ORCA_LAYOUT_OWNER_IS_MAIN ? it.fails : it)(
-    'still kills and keeps the removal when the durable headless close fails to flush',
-    async () => {
-      const harness = await createStaleTabCloseHarness({ headless: true })
-      const errorSpy = vi
-        .spyOn(console, ORCA_LAYOUT_OWNER_IS_MAIN ? 'warn' : 'error')
-        .mockImplementation(() => undefined)
-      harness.rejectPersistenceFlush(new Error('disk-full'))
+  it('still kills and keeps the removal when the durable headless close fails to flush', async () => {
+    const harness = await createStaleTabCloseHarness({ headless: true })
+    const errorSpy = vi
+      .spyOn(console, ORCA_LAYOUT_OWNER_IS_MAIN ? 'warn' : 'error')
+      .mockImplementation(() => undefined)
+    harness.rejectPersistenceFlush(new Error('disk-full'))
 
-      await expect(
-        harness.runtime.closeTerminalTab(harness.terminal.handle)
-      ).resolves.toMatchObject({
-        tabId: TAB_ID,
-        closeMode: 'tab'
-      })
+    await expect(harness.runtime.closeTerminalTab(harness.terminal.handle)).resolves.toMatchObject({
+      tabId: TAB_ID,
+      closeMode: 'tab'
+    })
 
-      // Flush failure cannot undo the user's stop; retain in-memory retirement for the next write.
-      expect(harness.kill).toHaveBeenCalledWith(RUNTIME_OWNED_PTY_ID)
-      expect(harness.getSession().tabsByWorktree[WORKTREE_ID]).toEqual([])
-      const snapshot = await harness.runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
-      expect(snapshot.tabs).toEqual([])
-      expect(errorSpy).toHaveBeenCalledWith(
-        ORCA_LAYOUT_OWNER_IS_MAIN
-          ? '[layout] a terminal close is applied but not yet saved; saving again later:'
-          : '[runtime] failed to persist terminal close:',
-        expect.any(Error)
-      )
-      errorSpy.mockRestore()
-    }
-  )
+    // Flush failure cannot undo the user's stop; retain in-memory retirement for the next write.
+    expect(harness.kill.mock.calls.map(([id]) => id)).toContain(RUNTIME_OWNED_PTY_ID)
+    expect(harness.getSession().tabsByWorktree[WORKTREE_ID]).toEqual([])
+    const snapshot = await harness.runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
+    expect(snapshot.tabs).toEqual([])
+    expect(errorSpy).toHaveBeenCalledWith(
+      ORCA_LAYOUT_OWNER_IS_MAIN
+        ? '[layout] a terminal close is applied but not yet saved; saving again later:'
+        : '[runtime] failed to persist terminal close:',
+      expect.any(Error)
+    )
+    errorSpy.mockRestore()
+  })
 
   // L255: expected failure until main-owned close publishes leaf-specific handles.
   ;(ORCA_LAYOUT_OWNER_IS_MAIN ? it.fails : it)(
@@ -207,8 +197,7 @@ describe('terminal close and handle incarnation continuity', () => {
     }
   )
 
-  // L259b: expected failure until main-owned close accepts exact hot-state surfaces without persistence.
-  ;(ORCA_LAYOUT_OWNER_IS_MAIN ? it.fails : it).each(['pane', 'tab'] as const)(
+  it.each(['pane', 'tab'] as const)(
     'closes an exact hot-state %s whose failed reveal left no persisted row',
     async (closeMode) => {
       const harness = await createStaleTabCloseHarness({ headless: true })
@@ -220,7 +209,7 @@ describe('terminal close and handle incarnation continuity', () => {
           : harness.runtime.closeTerminal(harness.terminal.handle)
       ).resolves.toMatchObject({ handle: harness.terminal.handle, tabId: TAB_ID })
 
-      expect(harness.kill).toHaveBeenCalledWith(RUNTIME_OWNED_PTY_ID)
+      expect(harness.kill.mock.calls.map(([id]) => id)).toContain(RUNTIME_OWNED_PTY_ID)
       await expect(
         harness.runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
       ).resolves.toMatchObject({ tabs: [] })
@@ -302,7 +291,7 @@ describe('terminal close and handle incarnation continuity', () => {
       harness.acknowledged.resolve()
       await expect(closing).resolves.toMatchObject({ handle, tabId: TAB_ID, ptyKilled: false })
     }
-    expect(harness.kill).toHaveBeenCalledWith(PTY_ID)
+    expect(harness.kill.mock.calls.map(([id]) => id)).toContain(PTY_ID)
     expect(harness.closeTerminal).not.toHaveBeenCalled()
     expect(harness.getSession().tabsByWorktree[WORKTREE_ID]).toEqual([])
   })
@@ -358,7 +347,8 @@ describe('terminal close and handle incarnation continuity', () => {
     ])
     expect(harness.stopAndWait).toHaveBeenCalledTimes(1)
     expect(harness.stopAndWait).toHaveBeenCalledWith(PTY_ID, {
-      deadlineMs: expect.any(Number)
+      deadlineMs: expect.any(Number),
+      isCurrent: expect.any(Function)
     })
     expect(harness.kill).not.toHaveBeenCalled()
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {
@@ -422,8 +412,8 @@ describe('terminal close and handle incarnation continuity', () => {
       harness.retirePersistedTab()
       harness.acknowledged.resolve()
       await expect(closing).resolves.toMatchObject({ ptyKilled: false })
-      expect(harness.kill).toHaveBeenCalledWith(PTY_ID)
-      expect(harness.kill).toHaveBeenCalledWith(SIBLING_PTY_ID)
+      expect(harness.kill.mock.calls.map(([id]) => id)).toContain(PTY_ID)
+      expect(harness.kill.mock.calls.map(([id]) => id)).toContain(SIBLING_PTY_ID)
     }
   )
 
@@ -435,7 +425,8 @@ describe('terminal close and handle incarnation continuity', () => {
     const closing = closeLastPane(harness, handle)
     await expect(closing).resolves.toMatchObject({ ptyKilled: true })
     expect(harness.stopAndWait).toHaveBeenCalledWith(PTY_ID, {
-      deadlineMs: expect.any(Number)
+      deadlineMs: expect.any(Number),
+      isCurrent: expect.any(Function)
     })
     expect(harness.kill).not.toHaveBeenCalled()
   })
@@ -471,7 +462,7 @@ describe('terminal close and handle incarnation continuity', () => {
       ptyStopVerdict: 'unverifiable',
       ptyStopReason: 'a follow-up stop was issued but its outcome could not be verified'
     })
-    expect(harness.kill).toHaveBeenCalledWith(PTY_ID)
+    expect(harness.kill.mock.calls.map(([id]) => id)).toContain(PTY_ID)
   })
 
   it('leaves a confirmed kill receipt free of any stop verdict', async () => {
@@ -500,9 +491,10 @@ describe('terminal close and handle incarnation continuity', () => {
       ptyStopReason: 'provider_unavailable'
     })
     expect(harness.stopAndWait).toHaveBeenCalledWith(PTY_ID, {
-      deadlineMs: expect.any(Number)
+      deadlineMs: expect.any(Number),
+      isCurrent: expect.any(Function)
     })
-    expect(harness.kill).toHaveBeenCalledWith(PTY_ID)
+    expect(harness.kill.mock.calls.map(([id]) => id)).toContain(PTY_ID)
   })
 
   it('finishes PTY teardown when the session store disappears after retirement', async () => {
@@ -535,7 +527,8 @@ describe('terminal close and handle incarnation continuity', () => {
       expect(harness.closeTerminal).toHaveBeenCalledWith(TAB_ID)
     }
     expect(harness.stopAndWait).toHaveBeenCalledWith(RUNTIME_OWNED_PTY_ID, {
-      deadlineMs: expect.any(Number)
+      deadlineMs: expect.any(Number),
+      isCurrent: expect.any(Function)
     })
   })
 

@@ -295,15 +295,17 @@ describe('a send carrying its model and effort', () => {
 
 describe('a send kept as a card because Orca stopped before handing it over', () => {
   it('keeps its model and effort on the card', async () => {
-    const kept = await createQueuedMessageTestRig({ restartable: true })
+    const kept = await createQueuedMessageTestRig({ restartable: true, starting: true })
     try {
       await kept.host.close(SESSION, 'evict')
-      const startsBefore = kept.starts.mock.calls.length
-      kept.holdNextStart()
       const sent = kept.send('picked', undefined, { carried: PICKED })
       expect(await sent.result).toMatchObject({ ok: true })
-      await eventually(() => expect(kept.starts.mock.calls.length).toBeGreaterThan(startsBefore))
-      await kept.crashRestartHostProcess()
+      await eventually(() =>
+        expect(kept.host.collaboratorsForTests().sessions.get(SESSION)?.child?.phase).toBe(
+          'starting'
+        )
+      )
+      await kept.quitRestartHostProcess()
       expect(await kept.drafts()).toEqual([{ messageId: sent.id, state: 'waiting' }])
       const journal = kept.host.collaboratorsForTests().sessions.get(SESSION)?.journal
       expect(journal?.queuedMessages.list()).toMatchObject([

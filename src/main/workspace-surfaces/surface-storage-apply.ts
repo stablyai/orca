@@ -70,6 +70,15 @@ export function applySurfaceStorageCommand(
         },
         nameBasedLoadContext()
       )
+      const input = command.request.command
+      const groupId = 'groupId' in input ? input.groupId : undefined
+      const suppliedGroup = command.session.tabGroups?.[input.workspace]?.find(
+        (group) => group.id === groupId
+      )
+      const workspace = loaded.layout.workspaces[input.workspace]
+      if (suppliedGroup && workspace && !workspace.groups.some((group) => group.id === groupId)) {
+        workspace.groups.push({ id: suppliedGroup.id, tabOrder: [] })
+      }
       const bindings = new Map(command.facts.bindings.map((binding) => [binding.paneKey, binding]))
       const starting = new Set(command.facts.startingLeafIds)
       outcome = repository.applyLayout(

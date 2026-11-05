@@ -29,7 +29,7 @@ beforeAll(async () => {
 })
 afterAll(() => rmSync(root, { recursive: true, force: true }))
 
-it('owns actual rollback-mode FULL commits off thread and rolls back all effects when a later row fails', async () => {
+it('owns actual WAL commits off thread and rolls back all effects when a later row fails', async () => {
   const filename = join(root, 'journal.db')
   const fixture = openJournalDatabase(filename)
   fixture.db.exec(
@@ -53,10 +53,10 @@ it('owns actual rollback-mode FULL commits off thread and rolls back all effects
     }
     expect(await commit('epoch-1', 1)).toMatchObject({ type: 'committed' })
     expect(await owner.connection.prepare('PRAGMA journal_mode').get()).toEqual({
-      journal_mode: 'delete'
+      journal_mode: 'wal'
     })
     expect(await owner.connection.prepare('PRAGMA synchronous').get()).toEqual({ synchronous: 2 })
-    expect(await owner.connection.prepare('PRAGMA fullfsync').get()).toEqual({ fullfsync: 1 })
+    expect(await owner.connection.prepare('PRAGMA fullfsync').get()).toEqual({ fullfsync: 0 })
     await expect(commit('epoch-2', 2)).rejects.toThrow('reject later row')
     expect(await owner.connection.prepare('SELECT epoch FROM journal_sessions').all()).toEqual([
       { epoch: 'epoch-1' }

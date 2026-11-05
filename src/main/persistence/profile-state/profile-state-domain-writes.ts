@@ -104,7 +104,9 @@ export function writeProfileStateDomains(
             prepareProfileStateDomainMutation(mutation)
         )
       )
-      return { ...committed, surfaceInvalidations: [...changes.invalidated.values()] }
+      return changes.invalidated.size
+        ? { ...committed, surfaceInvalidations: [...changes.invalidated.values()] }
+        : committed
     })
   )
 }

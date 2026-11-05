@@ -94,7 +94,7 @@ it.each(['expired', 'resumed', 'orphan', 'partial-prune'])(
     expect(commits.length).toBeGreaterThan(0)
     expect(commits.every((synchronous) => synchronous === 2)).toBe(true)
     expect(await database.read((read) => read.prepare('PRAGMA journal_mode').get())).toEqual({
-      journal_mode: 'delete'
+      journal_mode: 'wal'
     })
   }
 )

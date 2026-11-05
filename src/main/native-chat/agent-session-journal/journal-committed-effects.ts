@@ -45,6 +45,14 @@ export class JournalCommittedEffectError extends Error {
   readonly outcome = 'committed'
 }
 
+export function reportJournalCommittedEffectFailure(error: unknown): void {
+  try {
+    console.warn('[agent-session-journal] postcommit settings failed', error)
+  } catch {
+    // Diagnostics never revoke known COMMIT.
+  }
+}
+
 /** A subscriber exception cannot fault a successfully adopted native commit. */
 export async function adoptJournalCommittedEffects(
   effects: (() => void | Promise<void>)[],

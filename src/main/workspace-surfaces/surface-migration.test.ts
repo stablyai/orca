@@ -1,3 +1,7 @@
+import {
+  surfaceCarrierFromRecoveryJson,
+  surfaceDocumentsFromRecoveryJson
+} from './surface-recovery-evidence'
 import { describe, expect, it } from 'vitest'
 import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import type { WorkspaceSurface } from '../../shared/workspace-surfaces/surface-content'
@@ -389,4 +393,30 @@ it('indexes migration mapping history once per import batch and reuses the exact
     return firstVisits
   })
   expect(counts[1]).toBeLessThanOrEqual(counts[0]! * 10)
+})
+
+it('reads only the last reserved recovery root while retaining nested exact resource facts', () => {
+  const carrier = {
+    version: 1 as const,
+    hosts: {
+      local: {
+        ...emptySurfaceHostDomain(),
+        terminalInitialized: true,
+        surfaces: seedWorkspaceSurfaces('local', snapshot, [])
+      }
+    }
+  }
+  const payload = JSON.stringify(carrier)
+  const largeHistory = JSON.stringify('unrelated history '.repeat(10_000))
+  const raw = `{"workspaceSurfaces":{"invalid":"earlier duplicate"},"history":${largeHistory},"nested":{"workspaceSurfaces":null},"workspaceSurfaces":${payload},"tail":[false,null,42]}`
+  expect(surfaceCarrierFromRecoveryJson(raw)).toEqual(carrier)
+  expect(
+    surfaceCarrierFromRecoveryJson(`{"nested":{"workspaceSurfaces":${payload}}}`)
+  ).toBeUndefined()
+  expect(() => surfaceCarrierFromRecoveryJson(`[${payload}]`)).toThrow('root must be an object')
+  expect(() => surfaceCarrierFromRecoveryJson(raw.slice(0, -1))).toThrow()
+  expect(() => surfaceCarrierFromRecoveryJson('{"workspaceSurfaces":null}')).toThrow()
+  expect(() =>
+    surfaceDocumentsFromRecoveryJson('{"workspaceSurfaceEvidence/invalid":false}')
+  ).toThrow()
 })

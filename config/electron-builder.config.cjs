@@ -351,6 +351,8 @@ module.exports = {
     'out/main/skills/bundled-skill-install/cli-entry.js',
     'out/main/startup/http1-compatibility-marker.js',
     'out/main/daemon-entry.js',
+    'out/main/surface-executor-reader-entry.js',
+    'out/main/journal-sql-worker-entry.js',
     'out/main/session-scanner-service-entry.js',
     'out/main/wsl-transcript-fs-process-entry.js',
     'out/main/foreign-sqlite-reader-entry.js',

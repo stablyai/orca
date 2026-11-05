@@ -27,12 +27,21 @@ import {
   makeProjectGroup
 } from '../components/sidebar/workspace-creation/folder/folder-workspace-composer-submit-fixtures'
 import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
+import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
+
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
 
 registerWorktreeActivationReset()
 const originalCreateTab = useAppStore.getState().createTab
 const originalSetActiveWorktree = useAppStore.getState().setActiveWorktree
 
-afterEach(() => {
+afterEach(async () => {
+  await layoutApplyTestTransport.settle()
+  layoutApplyTestTransport.reset()
   useAppStore.setState({
     createTab: originalCreateTab,
     setActiveWorktree: originalSetActiveWorktree
@@ -137,7 +146,7 @@ describe('activateAndRevealWorktree', () => {
     }
   )
 
-  it('real historical workspace-only inherited folder enters through the fresh native folder path', () => {
+  it('real historical workspace-only inherited folder enters through the fresh native folder path', async () => {
     const before = useAppStore.getState()
     const folder = makeFolderWorkspace({
       id: 'fresh-history-folder',
@@ -165,6 +174,7 @@ describe('activateAndRevealWorktree', () => {
       createAutomationRunWorkspaceAction({ list: { runTargetFor } })(run)
       expect(useAppStore.getState().activeWorktreeId).toBe(workspaceId)
       expect(useAppStore.getState().activeWorkspaceExecutionHostId).toBe('ssh:box')
+      await layoutApplyTestTransport.settle()
     } finally {
       useAppStore.setState(before, true)
     }

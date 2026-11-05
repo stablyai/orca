@@ -165,6 +165,24 @@ describe('relocated process-host package', () => {
     }
   )
 
+  it('rematerializes the same version when the executor reader changes', () => {
+    const previous = materializedRoot()
+    const relative = join(
+      'resources',
+      'app.asar.unpacked',
+      'out',
+      'main',
+      'surface-executor-reader-entry.js'
+    )
+    writeFileSync(join(installDir, relative), 'changed reader')
+    expect(getRelocatedDaemonHost()).toBeNull()
+    const current = materializedRoot()
+    expect(current).not.toBe(previous)
+    expect(readFileSync(join(current, relative), 'utf8')).toBe('changed reader')
+    rmSync(join(installDir, relative))
+    expect(getRelocatedDaemonHost()).not.toBeNull()
+  })
+
   it('distinguishes an Electron runtime patch with the same app version', () => {
     Object.defineProperty(process.versions, 'electron', { value: '41.0.0', configurable: true })
     const previous = materializedRoot()

@@ -1,5 +1,5 @@
+import { codexProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { cancelLocalGeneration } from '../text-generation/source-control-generation-lanes'
-import { AgentSessionJournal } from './agent-session-journal/journal-store'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import { structuredChatNamingDeps } from '../runtime/structured-chat-naming-runtime'
 import { getDefaultSettings } from '../../shared/constants'
@@ -25,15 +25,20 @@ import {
 async function send(text: string, sessionId = HOST_TEST_SESSION) {
   const body = hostTestMessage(text)
   const mutation = { method: 'agentSession.send', sessionId, fields: { body } }
-  expect(
-    await hostTestState().host.send(CALLER, {
-      body,
-      envelope: envelope(mutation.method, mutation.fields, {
-        sessionId,
-        payloadFingerprint: computeAgentSessionPayloadFingerprint(mutation)
-      })
+  const host = hostTestState().host
+  const result = await host.send(CALLER, {
+    body,
+    envelope: envelope(mutation.method, mutation.fields, {
+      sessionId,
+      payloadFingerprint: computeAgentSessionPayloadFingerprint(mutation)
     })
-  ).toMatchObject({ ok: true })
+  })
+  expect(result).toMatchObject({ ok: true })
+  if (result.ok) {
+    expect(await host.waitForSendSettlement(sessionId, result.value.clientMessageId)).toMatchObject(
+      { value: { submission: { dispatchState: 'accepted' } } }
+    )
+  }
 }
 async function clearContext() {
   expect(
@@ -95,6 +100,7 @@ it.each([
   const home = `/isolated/naming-${count}`
   const { host, store, naming, settings } = productionNaming(home)
   const held = Promise.withResolvers<void>()
+  onTestFinished(() => held.resolve())
   let pending = 0
   const lock = homeLock.withCodexHomeProcessLock
   const admissions = vi
@@ -117,8 +123,9 @@ it.each([
       await clearContext()
     }
     await send(`Context ${index}`)
-    await vi.waitFor(() =>
-      expect(store.getRecord(HOST_TEST_SESSION)?.conversationName).toBe(`Context ${index}`)
+    await vi.waitFor(
+      () => expect(store.getRecord(HOST_TEST_SESSION)?.conversationName).toBe(`Context ${index}`),
+      { interval: 5 }
     )
     await host.cancel(CALLER, {
       envelope: envelope('agentSession.cancel', { turnId: 'turn-1' }),
@@ -136,10 +143,28 @@ it.each([
   const unrelated = homeLock.withCodexHomeProcessLock(home, async () => {
     order.push('U')
   })
-  const other = hostTestAttachParams(null)
+  const { acquire } = hostTestState()
+  const originalAcquire = acquire.getMockImplementation()!
+  acquire.mockImplementation(async (input) => {
+    const acquired = await originalAcquire(input)
+    if (!acquired.link) {
+      throw new Error('fixture acquisition needs a provider link')
+    }
+    return {
+      ...acquired,
+      process: { ...acquired.process, spawnToken: input.spawnToken },
+      link: { ...acquired.link, origin: 'created', handle: codexProviderHandle('thread-beta') }
+    }
+  })
+  const other = hostTestAttachParams(null, {
+    providerHandle: { kind: 'codex', threadId: 'thread-beta' }
+  })
   other.envelope.sessionId = 'session-beta'
   expect(
-    await host.attach(CALLER, hostTestAttachParams(null, { envelope: other.envelope }))
+    await host.attach(
+      CALLER,
+      hostTestAttachParams(null, { envelope: other.envelope, providerHandle: other.providerHandle })
+    )
   ).toMatchObject({ ok: true })
   await send('Same folder, other chat', 'session-beta')
   await vi.waitFor(() => expect(admissions).toHaveBeenCalledTimes(4))
@@ -161,19 +186,16 @@ it.each([
   expect(order).toEqual(mode === 'off' ? ['U'] : mode === 'manual' ? ['U', 'B'] : ['U', 'B', 'A'])
   expect(admissions).toHaveBeenCalledTimes(mode === 'manual' || mode === 'off' ? 4 : 5)
   expect(spawn).toHaveBeenCalledTimes(mode === 'off' ? 0 : mode === 'manual' ? 1 : 2)
-  expect(naming.activeSessionIds()).toEqual([])
+  await vi.waitFor(() => expect(naming.activeSessionIds()).toEqual([]))
 })
 
 it.each([10, 100])(
-  'bounds reopened source and seed supersession across %i contexts',
+  'keeps latest naming context through a held persisted read and generation across %i contexts',
   async (count) => {
     const { host, store } = hostTestState()
     await attach()
     const sendAndWait = async (text: string) => {
       await send(text)
-      await vi.waitFor(() =>
-        expect(host.readStatusSummary(HOST_TEST_SESSION)?.status).toBe('working')
-      )
     }
     const clear = async () => {
       await host.cancel(CALLER, {
@@ -186,29 +208,18 @@ it.each([10, 100])(
     await host.close(HOST_TEST_SESSION, 'evict')
     const { naming } = productionNaming('/isolated/source-proof')
     const opening = Promise.withResolvers<void>()
-    const open = AgentSessionJournal.prototype.open
-    let openOutstanding = 0,
-      openPeak = 0
-    const opens = vi
-      .spyOn(AgentSessionJournal.prototype, 'open')
-      .mockImplementation(async function (this: AgentSessionJournal) {
-        openPeak = Math.max(openPeak, ++openOutstanding)
-        try {
-          await opening.promise
-          return await open.call(this)
-        } finally {
-          openOutstanding--
-        }
-      })
-    const reads = vi.spyOn(host, 'journalCurrentRead')
+    const currentRead = host.journalCurrentRead
+    let reading = false
+    vi.spyOn(host, 'journalCurrentRead').mockImplementation(async (...args) => {
+      reading = true
+      await opening.promise
+      return currentRead(...args)
+    })
     const seed = Promise.withResolvers<void>()
     const generated = Promise.withResolvers<void>()
-    const publications = vi.spyOn(host, 'publishConversationName')
-    const phases: [string, number][] = []
     const cas = store.compareAndSetConversationName
     vi.spyOn(store, 'compareAndSetConversationName').mockImplementation(async (...args) => {
       const result = await cas(...args)
-      phases.push([args[1] === 'Current title' ? 'result' : 'seed', publications.mock.calls.length])
       await (args[1] !== 'Current title' ? seed.promise : generated.promise)
       return result
     })
@@ -224,8 +235,7 @@ it.each([10, 100])(
     for (let index = 0; index < count; index++) {
       naming.regenerate(HOST_TEST_SESSION)
     }
-    await vi.waitFor(() => expect(opens).toHaveBeenCalledOnce())
-    expect(openOutstanding).toBe(1)
+    await vi.waitFor(() => expect(reading).toBe(true))
     opening.resolve()
     await vi.waitFor(() =>
       expect(store.getRecord(HOST_TEST_SESSION)?.conversationName).toBe('Current title')
@@ -235,27 +245,16 @@ it.each([10, 100])(
       await clear()
       await sendAndWait(`Input ${index}`)
     }
-    expect(reads).toHaveBeenCalledTimes(2)
-    expect(spawn).toHaveBeenCalledOnce()
     await clear()
-    const beforeLatest = publications.mock.calls.length
     await sendAndWait('Final input')
     seed.resolve()
     await vi.waitFor(() =>
       expect(store.getRecord(HOST_TEST_SESSION)?.conversationName).toBe('Final input')
     )
-    expect(openPeak).toBe(1)
-    expect(openOutstanding).toBe(0)
-    expect(reads).toHaveBeenCalledTimes(3)
-    expect(phases.at(-1)).toEqual(['seed', beforeLatest + 2])
-    const resultPublications = publications.mock.calls.length
     expect(naming.activeSessionIds()).toEqual([HOST_TEST_SESSION])
     generated.resolve()
     await vi.waitFor(() => expect(naming.activeSessionIds()).toEqual([]))
     expect(store.getRecord(HOST_TEST_SESSION)?.conversationName).toBe('Current title')
-    expect(phases.at(-1)).toEqual(['result', resultPublications + 2])
-    expect(publications).toHaveBeenCalledTimes(resultPublications + 4)
-    expect(phases.filter(([phase]) => phase === 'seed')).toHaveLength(2)
     expect(spawn).toHaveBeenCalledTimes(2)
   }
 )

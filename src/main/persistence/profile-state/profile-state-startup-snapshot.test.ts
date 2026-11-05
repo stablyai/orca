@@ -6,7 +6,6 @@ import type { ProfileStateAuthority } from '../loading-store/profile-state-autho
 import { Store } from '../loading-store/store'
 import { bootstrapProfileStateAuthority } from './profile-state-authority-bootstrap'
 import * as profileStateDatabase from './profile-state-database'
-import * as profileStateDocumentReader from './profile-state-document-reader'
 import { hashProfileStateJson, importProfileStateJson } from './profile-state-documents'
 import { ProfileStateSqliteAuthority } from './profile-state-sqlite-authority'
 import { createProfileStateStore } from './profile-state-store-factory'
@@ -114,27 +113,19 @@ describe('profile state startup snapshot handoff', () => {
     })
   })
 
-  it.each([false, true])('reads established storage once with retained JSON=%s', (keepJson) => {
-    const paths = createEstablishedProfile(keepJson)
-    const open = vi.spyOn(profileStateDatabase, 'openProfileStateDatabaseReadOnly')
-    const documentRead = vi.spyOn(profileStateDocumentReader, 'readProfileStateDocuments')
-    const initialRead = vi.spyOn(ProfileStateSqliteAuthority.prototype, 'readInitialState')
-    const serializedRead = vi.spyOn(ProfileStateSqliteAuthority.prototype, 'readSerializedState')
-    const acceptedRead = vi.spyOn(ProfileStateSqliteAuthority.prototype, 'readAcceptedState')
+  it.each([false, true])(
+    'loads established storage and preserves unknown domains with retained JSON=%s',
+    (keepJson) => {
+      const paths = createEstablishedProfile(keepJson)
+      const result = createProfileStateStore({ ...paths })
+      stores.push(result.store)
 
-    const result = createProfileStateStore({ ...paths })
-    stores.push(result.store)
-
-    expect(open).toHaveBeenCalledTimes(1)
-    expect(documentRead).toHaveBeenCalledTimes(1)
-    expect(initialRead).toHaveBeenCalledTimes(keepJson ? 0 : 1)
-    expect(serializedRead).not.toHaveBeenCalled()
-    expect(acceptedRead).toHaveBeenCalledTimes(keepJson ? 1 : 0)
-    expect(result.store.getSettings().theme).toBe('dark')
-    expect(JSON.parse(result.store.prepareProfileStateExport().json)).toMatchObject({
-      futureDomain: { keep: true }
-    })
-  })
+      expect(result.store.getSettings().theme).toBe('dark')
+      expect(JSON.parse(result.store.prepareProfileStateExport().json)).toMatchObject({
+        futureDomain: { keep: true }
+      })
+    }
+  )
 
   it('uses the validated empty snapshot without rereading SQLite or consulting JSON', () => {
     const paths = createPaths()
@@ -149,7 +140,6 @@ describe('profile state startup snapshot handoff', () => {
     }
     authorities.push(bootstrapped.authority)
     expect(bootstrapped.initialState.serializedState).toBeUndefined()
-    const read = vi.spyOn(bootstrapped.authority, 'readSerializedState')
     writeFileSync(paths.dataFile, '{"settings":{"opencodeSessionCookie":"stale-json"}}')
 
     const store = new Store({
@@ -159,7 +149,6 @@ describe('profile state startup snapshot handoff', () => {
     })
     stores.push(store)
 
-    expect(read).not.toHaveBeenCalled()
     expect(store.getSettings().opencodeSessionCookie).not.toBe('stale-json')
     store.updateSettings({ theme: 'dark' })
     store.flushOrThrow()

@@ -26,6 +26,10 @@ beforeEach(() => {
   directEntry = join(unpacked, 'daemon-entry.js')
   const nestedEntry = join(unpacked, 'out', 'main', 'daemon-entry.js')
   cpSync(nestedEntry, directEntry)
+  cpSync(
+    join(dirname(nestedEntry), 'surface-executor-reader-entry.js'),
+    join(dirname(directEntry), 'surface-executor-reader-entry.js')
+  )
   process.env.LOCALAPPDATA = join(tempDir, 'localAppData')
   setProcessProp('platform', 'win32')
   setProcessProp('execPath', join(installDir, 'Orca.exe'))

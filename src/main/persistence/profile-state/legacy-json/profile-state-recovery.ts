@@ -62,6 +62,9 @@ export function restoreProfileStateJsonExport(
   if (existsSync(options.dataFile)) {
     recoveryFiles.push(options.dataFile)
   }
+  const originalDatabaseFiles = profileStateDatabaseFiles(options.databasePath).filter((path) =>
+    existsSync(path)
+  )
   const quarantine = quarantineProfileStateDatabase(
     options.databasePath,
     options.profileId,
@@ -95,11 +98,14 @@ export function restoreProfileStateJsonExport(
   mkdirSync(dirname(options.dataFile), { recursive: true })
   writeFileDurableSync(durableWriteTempPath(options.dataFile), options.dataFile, rawJson)
 
-  const removedDatabaseFiles = profileStateDatabaseFiles(options.databasePath).filter((path) =>
-    existsSync(path)
-  )
+  const removedDatabaseFiles = [
+    ...new Set([
+      ...originalDatabaseFiles,
+      ...profileStateDatabaseFiles(options.databasePath).filter((path) => existsSync(path))
+    ])
+  ]
   for (const path of removedDatabaseFiles) {
-    rmSync(path)
+    rmSync(path, { force: true })
   }
   // Reserved exports must go or startup would reject restored JSON as a stale mirror.
   const retainedArtifacts = [...retainedBackups, ...retainedExports]

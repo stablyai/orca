@@ -171,9 +171,8 @@ export function registerCommandReceiptTransactionTests(): void {
       const journal = new AgentSessionJournal({ database, identity })
       await journal.open()
       await journal.replaceEpochItems('legacy_import', 0, [])
-      expect(
-        await database.read((read) => read.prepare('SELECT epoch FROM journal_rows').all())
-      ).toEqual([{ epoch: 'epoch-1' }, { epoch: 'epoch-1' }])
+      expect(journal.snapshot().items).toEqual([])
+      expect(journal.physicalCursor().epoch).not.toBe('epoch-1')
       await journal.close()
       expect(await readReceipt()).toEqual({ verdict: 'readable', receipt })
       await expect(
