@@ -167,6 +167,7 @@ describe('current recovery publication and normal Resume', () => {
         onEdit: hook.queued.edit,
         onMove: hook.queued.move
       },
+      taskList: null,
       backgroundTasks: null
     })
     return showTray ? createElement('View', null, tray.content) : null
