@@ -67,11 +67,9 @@ jobs:
           existing="$(gh pr list --repo "$GITHUB_REPOSITORY" --state open --base main --head "$branch" --json url --jq '.[0].url // empty')"
           if [ -n "$existing" ]; then
             echo "Updated $existing"
-            exit 0
-          fi
-
-          body="$RUNNER_TEMP/readme-downloads-pr.md"
-          cat > "$body" <<'BODY'
+          else
+            body="$RUNNER_TEMP/readme-downloads-pr.md"
+            cat > "$body" <<'BODY'
           ## ELI5
           Refresh the README downloads badge with the current release download count.
 
@@ -81,5 +79,9 @@ jobs:
           ## Testing
           Generated from published release assets by the README Downloads Badge workflow.
           BODY
-          gh pr create --repo "$GITHUB_REPOSITORY" --base main --head "$branch" \
-            --title "Update README downloads badge" --body-file "$body"
+            gh pr create --repo "$GITHUB_REPOSITORY" --base main --head "$branch" \
+              --title "Update README downloads badge" --body-file "$body"
+          fi
+
+          # Why: main only accepts PRs, so the badge PR merges itself once its required check passes.
+          gh pr merge "$branch" --repo "$GITHUB_REPOSITORY" --auto --squash
