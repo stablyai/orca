@@ -301,6 +301,13 @@
       "unnamedServer": "o servidor remoto",
       "update": "O Orca ({{machine}}) reiniciou para uma atualização enquanto esta resposta estava em andamento."
     },
+    "interruptedContinue": {
+      "failed": "Não foi possível continuar este chat. Tente novamente ou envie uma mensagem.",
+      "explanation": "Ao continuar, o agente verifica primeiro se a última etapa foi concluída."
+    },
+    "sendError": {
+      "dismiss": "Descartar"
+    },
     "permission": {
       "needsAccessTo": "Precisa de acesso a: ",
       "newerVersionRequired": "Esta solicitação requer uma versão mais recente do Orca.",

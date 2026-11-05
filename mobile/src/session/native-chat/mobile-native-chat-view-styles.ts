@@ -23,7 +23,13 @@ export const styles = themedStyleSheet(() => ({
     paddingHorizontal: spacing.md,
     paddingBottom: spacing.xs
   },
+  sendErrorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm
+  },
   sendErrorText: {
+    flexShrink: 1,
     color: colors.statusRed,
     fontSize: typography.metaSize,
     fontWeight: '600'

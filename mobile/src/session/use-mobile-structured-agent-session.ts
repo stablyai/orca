@@ -47,6 +47,7 @@ import { useMobileNativeChatQueueFollowUps as useQueueFollowUps } from './use-mo
 import { useMobileStructuredStopOffer } from './use-mobile-structured-stop-offer'
 import { useMobileStructuredTurnIndicator } from './use-mobile-structured-turn-indicator'
 import { useMobileStructuredContextUsage } from './use-mobile-structured-context-usage'
+import { useMobileStructuredInterruptedContinue } from './use-mobile-structured-interrupted-continue'
 
 const mobileStructuredTranscript = createStructuredQuestionProjection(
   projectStructuredAgentStartItem
@@ -181,7 +182,6 @@ export function useMobileStructuredAgentSession(
     queueFollowUps,
     queueSendsNext
   })
-  const { stopping } = turnIndicator
   const sendWithOutcome = useMobileStructuredSendWithOutcome({
     agent,
     client,
@@ -191,7 +191,7 @@ export function useMobileStructuredAgentSession(
     queueFollowUps,
     commandsWait,
     stateRef,
-    stopping,
+    stopping: turnIndicator.stopping,
     accept: sends.accept,
     acknowledge: sends.acknowledge,
     reject: sends.reject,
@@ -263,15 +263,13 @@ export function useMobileStructuredAgentSession(
     ]
   )
 
-  const visualSource = useMemo<MobileNativeChatVisualSource | null>(
-    () => (client && sessionId ? { client, sessionId } : null),
-    [client, sessionId]
-  )
-
   return {
     ...optionFields,
     contextUsage: useMobileStructuredContextUsage(state.items, contextUsageSupport, state.epoch),
-    visualSource,
+    visualSource: useMemo<MobileNativeChatVisualSource | null>(
+      () => (client && sessionId ? { client, sessionId } : null),
+      [client, sessionId]
+    ),
     asyncQuestionSourceScope: questionSourceScope({ kind: 'journal', agent, sessionId, epoch }),
     imagePreviewsByMessageId: sends.imagePreviewsByMessageId,
     submissions: state.submissions,
@@ -304,6 +302,10 @@ export function useMobileStructuredAgentSession(
     respondQuestion,
     queued,
     commandRefusalCauses,
-    backgroundTasks
+    backgroundTasks,
+    interruptedContinue: useMobileStructuredInterruptedContinue(
+      { client, sessionId, sessionKey, hostSupport, ...state },
+      isWorking || queueSendsNext
+    )
   }
 }
