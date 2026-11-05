@@ -781,7 +781,9 @@
     },
     "markdownBlocks": {
       "copyCode": "複製程式碼",
-      "openImage": "開啟圖片"
+      "openImage": "開啟圖片",
+      "wrapLines": "自動換行",
+      "disableLineWrap": "停用自動換行"
     },
     "mountedBottomDrawer": {
       "dismissDrawer": "關閉抽屜面板"

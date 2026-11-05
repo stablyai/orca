@@ -781,7 +781,9 @@
     },
     "markdownBlocks": {
       "copyCode": "코드 복사",
-      "openImage": "이미지 열기"
+      "openImage": "이미지 열기",
+      "wrapLines": "줄 바꿈",
+      "disableLineWrap": "줄 바꿈 끄기"
     },
     "mountedBottomDrawer": {
       "dismissDrawer": "하단 패널 닫기"

@@ -65,6 +65,7 @@ export function MobileNativeChatLiveLine({
           <MobileNativeChatReasoningBody
             positionKey={nativeChatReasoningDisclosureKey(reasoning.message.id)}
             markdown={reasoning.markdown}
+            streaming
             fontScale={fontScale}
             onLongPress={INLINE_TEXT_SELECTION ? undefined : () => openActions(reasoning.message)}
           />
