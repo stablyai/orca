@@ -5,7 +5,7 @@ import type { PublishedPane } from '../../shared/workspace-layout/workspace-layo
 import type { WorkspaceLayoutEvent } from '../../shared/workspace-layout/workspace-layout-stream-frames'
 import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import { OrcaRuntimeService } from './orca-runtime'
-import { collectLayoutEvents } from './workspace-layout-stream-events.test-fixture'
+import { collectLayoutEvents } from './orca-runtime-tests/workspace-layout-stream-events.test-fixture'
 
 const WORKTREE_ID = 'repo::/worktree'
 const REPO = { id: 'repo', path: '/worktree', displayName: 'repo', badgeColor: 'blue', addedAt: 1 }

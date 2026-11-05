@@ -34,8 +34,8 @@ const LAYOUT_ORACLE_PREFIXES = [
   // Other layout writers the stack edits.
   'src/main/ipc/pty/ipc/leaf-move.ts',
   'src/main/persistence/closed-terminal-tab-write-fence.ts',
-  'src/main/runtime/runtime-workspace-session-controller.ts',
-  'src/main/runtime/terminal-surface-close.ts',
+  'src/main/runtime/workspaces/session-hosts/runtime-workspace-session-controller.ts',
+  'src/main/runtime/terminal/surface/terminal-surface-close.ts',
   'src/main/runtime/terminal/output/terminal-derived-agent-facts.ts',
   'src/main/runtime/terminal/output/terminal-output-generation.ts',
   'src/main/runtime/session-graph/session-window-graph.ts',
@@ -74,7 +74,7 @@ const RUNTIME_LAYOUT_WRITERS = [
   'src/main/runtime/terminal/stop/worktree-terminal-stop.ts',
   'src/main/runtime/workspaces/workspace-file-session-targets.ts',
   'src/main/runtime/workspaces/persisted-surfaces/has-exact-persisted-terminal-surface-identity.ts',
-  'src/main/runtime/runtime-terminal-orphan-adoption.ts',
+  'src/main/runtime/terminal/adoption/runtime-terminal-orphan-adoption.ts',
   'src/main/runtime/terminal/adoption/adopt-terminal-orphans-from-inventory.ts',
   'src/main/runtime/session-tabs/mobile-session-membership.ts',
   'src/main/runtime/session-tabs/pty-backed-session-publication.ts'

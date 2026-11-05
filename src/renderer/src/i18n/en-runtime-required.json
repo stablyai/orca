@@ -933,6 +933,8 @@
           "groupProjectsRemained_other": "{{remaining}} of {{count}} contained projects remained after deleting the group.",
           "hideChildWorkspaces_one": "Hide {{count}} child workspace",
           "hideChildWorkspaces_other": "Hide {{count}} child workspaces",
+          "projectGroupRefreshSuccess_one": "Added {{count}} project to {{group}}",
+          "projectGroupRefreshSuccess_other": "Added {{count}} projects to {{group}}",
           "showChildWorkspaces_one": "Show {{count}} child workspace",
           "showChildWorkspaces_other": "Show {{count}} child workspaces"
         },

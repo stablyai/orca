@@ -87,16 +87,17 @@ export class PiTitlebarExtensionService {
     safeRemoveOverlay(overlayDir, this.getOverlayRoot(kind))
   }
 
-  private canOverwriteManagedExtension(path: string): boolean {
-    try {
-      return readFileSync(path, 'utf8').includes(ORCA_MANAGED_EXTENSION_MARKER)
-    } catch {
-      return true
-    }
-  }
-
   private writeManagedExtension(path: string, source: string): ManagedExtensionWriteResult {
-    if (existsSync(path) && !this.canOverwriteManagedExtension(path)) {
+    let installed: string | undefined
+    try {
+      installed = readFileSync(path, 'utf8')
+    } catch {
+      installed = undefined
+    }
+    if (installed === source) {
+      return 'written'
+    }
+    if (installed !== undefined && !installed.includes(ORCA_MANAGED_EXTENSION_MARKER)) {
       return 'skipped-user-owned'
     }
 

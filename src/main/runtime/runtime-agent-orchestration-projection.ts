@@ -2,8 +2,11 @@ import type { AgentStatusOrchestrationContext } from '../../shared/agent-status/
 import type { FleetAgentStatusEvidence } from '../../shared/orchestration-fleet-agent-status-evidence'
 import { creatorFirstParent, crewTaskDisplay } from './orchestration/crew/crew-rules'
 import { parsePaneKey } from '../../shared/workspace-layout/stable-pane-id'
-import type { OrchestrationCompatibilityTerminalAuthority } from './runtime-terminal-contracts'
-import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
+import type { OrchestrationCompatibilityTerminalAuthority } from './orchestration/terminal-authority/orchestration-compatibility-authority'
+import type {
+  RuntimeLeafRecord,
+  RuntimePtyWorktreeRecord
+} from './terminal/records/runtime-terminal-state-records'
 import type { OrchestrationDb } from './orchestration/db'
 import {
   buildWorkerAttentionContext,

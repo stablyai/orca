@@ -1,14 +1,14 @@
 import { terminalLaunchFacts } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
-import { admitStablePaneAdoption } from '../../runtime-terminal-pane-identity'
+import { admitStablePaneAdoption } from '../identity/runtime-terminal-pane-identity'
 import type { RuntimePtyController } from '../../runtime-pty-controller-contract'
-import type { TerminalCreateOptions } from '../../runtime-terminal-contracts'
-import type { RuntimePtyWorktreeRecord } from '../../runtime-terminal-state-records'
+import type { TerminalCreateOptions } from './terminal-create-options'
+import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import {
   copySleepingAgentLaunchConfig,
   resolveLaunchCommandPaneAgent,
   resolveLaunchedAgent
-} from '../../runtime-agent-launch-resolution'
+} from './runtime-agent-launch-resolution'
 
 type TerminalSpawnResult = Awaited<ReturnType<NonNullable<RuntimePtyController['spawn']>>>
 

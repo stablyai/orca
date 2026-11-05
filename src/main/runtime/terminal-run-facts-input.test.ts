@@ -10,11 +10,11 @@ import { OrcaRuntimeService } from './orca-runtime'
 import type { RuntimePtyController } from './runtime-pty-controller-contract'
 import { writeOrchestrationPointerWithSettlement } from './orchestration/mailbox-pointer-pty-write'
 import { sendTerminalStreamInput } from './rpc/methods/terminal/terminal-input-delivery'
-import { makeStore } from './runtime-rpc-worktree-store-fixtures'
+import { makeStore } from './rpc/server/runtime-rpc-worktree-store-fixtures'
 import {
   pasteWorktreeStartupDraftWhenReady,
   type WorktreeStartupReadinessHost
-} from './runtime-worktree-startup-readiness'
+} from './workspaces/startup/runtime-worktree-startup-readiness'
 
 vi.mock('../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => {
   const listings = getWorktreeListingMocks()

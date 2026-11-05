@@ -31,7 +31,7 @@ import {
 import { registerRuntimeHandlers } from './runtime'
 import { TERMINAL_FIT_RESTORE_DEADLINE_MS } from '../../shared/terminal/viewport/terminal-fit-restore-deadline'
 import { PROJECT_SECTION_PARITY_SERVED } from '../../shared/project-section-parity.test-fixture'
-import { readMobileProjectSections } from '../runtime/mobile-project-sections-snapshot'
+import { readMobileProjectSections } from '../runtime/sidebar-inputs/mobile-project-sections-snapshot'
 
 function runtimeCallEvent() {
   const mainFrame = {}

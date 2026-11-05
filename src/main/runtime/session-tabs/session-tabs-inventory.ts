@@ -13,14 +13,14 @@ import {
   mainTerminalSurfaces,
   type MainTerminalSurfacesHost
 } from '../terminal/surface/main-terminal-surfaces'
-import type { WorkspaceLayoutReads } from '../workspace-layout-stream'
+import type { WorkspaceLayoutReads } from '../terminal/surface/workspace-layout-stream'
 import type { MainSessionTabRows } from './main-session-tab-rows'
 import type {
   RuntimeMobileSessionTabsResult,
   RuntimeSyncedTab,
   RuntimeSyncWindowGraph
 } from '../../../shared/runtime-types'
-import type { RuntimeLeafRecord } from '../runtime-terminal-state-records'
+import type { RuntimeLeafRecord } from '../terminal/records/runtime-terminal-state-records'
 import type { PtyControllerInventory } from '../runtime-pty-controller-contract'
 import type { PaneStartStatuses } from '../pane-start-statuses'
 import {

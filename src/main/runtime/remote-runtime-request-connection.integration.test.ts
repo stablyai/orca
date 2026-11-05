@@ -14,7 +14,7 @@ import type {
   RuntimeClientEventStreamMessage
 } from '../../shared/runtime-client-events'
 import type { OrcaRuntimeService } from './orca-runtime'
-import { OrcaRuntimeRpcServer } from './runtime-rpc'
+import { OrcaRuntimeRpcServer } from './rpc/server/runtime-rpc'
 import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../shared/protocol-version'
 
 const REMOTE_RUNTIME_TEST_TIMEOUT_MS = 15_000

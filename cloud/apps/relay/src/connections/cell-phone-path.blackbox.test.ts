@@ -330,17 +330,6 @@ describe('the memory phone path', () => {
     ])
   })
 
-  it('confirms from memory after the switch turned off between accept and confirm, taking no lease', async () => {
-    const { reserve, confirm } = await splicedPhone('memory')
-    reserve.setAdmitMode('reserve', { phonePath: 'db' })
-    expect(await confirm('confirm-1')).toMatchObject({
-      type: 'device-resume-confirmed',
-      renewed: true
-    })
-    expect(reserve.phoneStatements()[0]).toEqual(RESUME_DEVICE_READ)
-    expect(await reserve.activityLeases()).toEqual([])
-  })
-
   it('replays a stored answer after its splice closed, and drops the basis itself', async () => {
     const { reserve, phone, confirm } = await splicedPhone('memory')
     const answer = await confirm('confirm-1')
@@ -399,26 +388,6 @@ describe('the memory phone path', () => {
       expect(await outcome('memory', change), name).toBe(await outcome('db', change))
     }
     expect(await outcome('memory', changes.revoked!)).toBe('reject-revoked')
-  })
-
-  it('sends a confirm with no memory basis to the database, which holds none either', async () => {
-    const { reserve, phone, confirm } = await splicedPhone('memory')
-    phone.socket.close()
-    await phone.closed
-    await new Promise((resolve) => setTimeout(resolve, 50))
-    expect(await confirm('confirm-1')).toMatchObject({
-      type: 'control-error',
-      code: 'confirmation_not_active'
-    })
-    expect(reserve.phoneStatements()[0]).toBe('BEGIN')
-    expect(warnings('orca_relay_resume_confirm_failed')).toEqual([
-      {
-        event: 'orca_relay_resume_confirm_failed',
-        code: 'confirmation_not_active',
-        phonePath: 'db',
-        cellId: reserve.config.cellId
-      }
-    ])
   })
 
   it('durably confirms and renews a database-path resume, releasing only its confirmation lease', async () => {

@@ -21,7 +21,7 @@ describe('restart-survival E2E routing', () => {
     'src/main/runtime/browser/browser-commands.test-fixture.ts',
     'src/main/runtime/browser/browser-commands.fixture.ts',
     'src/main/runtime/browser/browser-commands-extra.ts',
-    'src/main/runtime/browser/browser-navigation.ts'
+    'src/main/runtime/browser/commands/browser-navigation.ts'
   ])('does not route %s', (path) => {
     expect(restartSurvivalRoute.matches(path)).toBe(false)
   })
@@ -60,12 +60,13 @@ describe('PR E2E gate contract', () => {
 })
 
 describe('Daemon mock modified-only source routing', () => {
-  const helper = 'src/main/daemon/daemon-init-dependency-mocks.ts'
+  const helper = 'src/main/daemon/providers/lifecycle/testing/daemon-init-dependency-mocks.ts'
   const verified = { allowDaemonInitTestSupport: true }
   it('omits the real D7 route only for the proven unit-support scope', () => {
     expect(selectPrE2eSpecs([helper])).toContain('tests/e2e/orcad-serve-mode-switch.spec.ts')
     expect(selectPrE2eSpecs([helper], undefined, verified)).toEqual([])
-    const companion = 'config/scripts/process-host-build-dist.test.mjs'
+    const companion =
+      'config/scripts/desktop-distribution/runtime-verification/process-host-build-dist.test.mjs'
     expect(selectPrE2eSpecs([helper, companion], undefined, verified)).toEqual(
       selectPrE2eSpecs([companion])
     )

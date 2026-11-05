@@ -144,7 +144,7 @@ it('settles continuous placement changes and drains the next worktree open', asy
 it('checks admission inside the actual profile queue before replacement close effects, and does not freeze later writes', async () => {
   const { fixture } =
     await import('../persistence/loading-store/profile-state-delayed-authority-fixture')
-  const { applyWindowLayoutCommand } = await import('./runtime-layout-apply')
+  const { applyWindowLayoutCommand } = await import('./terminal/layout/runtime-layout-apply')
   const { store, authority } = await fixture()
   const workspace = 'chat-inner-queue'
   const opened = await store.applyLayoutCommand({
@@ -213,7 +213,7 @@ it('checks admission inside the actual profile queue before replacement close ef
 it('closes the captured row that an earlier queued open has not saved yet; missing identity never means wildcard', async () => {
   const { fixture } =
     await import('../persistence/loading-store/profile-state-delayed-authority-fixture')
-  const { applyWindowLayoutCommand } = await import('./runtime-layout-apply')
+  const { applyWindowLayoutCommand } = await import('./terminal/layout/runtime-layout-apply')
   const { store, authority } = await fixture()
   const workspace = 'queued-captured-close'
   const gate = authority.pause()
@@ -274,7 +274,7 @@ it('refuses a captured close when another actual holder now uses that id for a d
     await import('../persistence/loading-store/profile-state-delayed-authority-fixture')
   const { withChatTabChanges } = await import('./agent-session/agent-session-tab-layout')
   const { getDefaultWorkspaceSession } = await import('../../shared/constants')
-  const { applyWindowLayoutCommand } = await import('./runtime-layout-apply')
+  const { applyWindowLayoutCommand } = await import('./terminal/layout/runtime-layout-apply')
   const { store } = await fixture()
   const workspace = 'all-holders'
   for (const [hostId, sessionId] of [
@@ -329,7 +329,7 @@ it.each([10, 100])(
   async (p) => {
     const { fixture } =
       await import('../persistence/loading-store/profile-state-delayed-authority-fixture')
-    const { applyWindowLayoutCommand } = await import('./runtime-layout-apply')
+    const { applyWindowLayoutCommand } = await import('./terminal/layout/runtime-layout-apply')
     const { store, authority } = await fixture()
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     for (const mode of ['success', 'superseded', 'eligibility-error', 'apply-error'] as const) {

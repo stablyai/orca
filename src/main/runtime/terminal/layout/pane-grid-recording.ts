@@ -2,7 +2,7 @@
 
 import type { TerminalGrid } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
-import type { WindowLayoutCommand } from '../../runtime-layout-apply'
+import type { WindowLayoutCommand } from './runtime-layout-apply'
 
 export const PANE_GRID_RECORD_DELAY_MS = 1_000
 /** A quit's grid writes never hold the stop longer than this; a grid missed restarts at the default size. */

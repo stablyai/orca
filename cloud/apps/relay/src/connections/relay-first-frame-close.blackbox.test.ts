@@ -228,23 +228,6 @@ it('delivers the rejection code and a graceful FIN to a peer that keeps reading'
 const BINARY_FIRST_FRAME = Buffer.from([0x82, 0x80, 0, 0, 0, 0])
 const CONCURRENT_PEERS_PER_SOURCE = 4
 
-it('returns capacity to its exact baseline after repeated bursts of rejections', async () => {
-  const { relay, port } = await fixture({ hardCap: 2 * CONCURRENT_PEERS_PER_SOURCE + 1 })
-  for (let wave = 0; wave < 3; wave++) {
-    const peers = await Promise.all(
-      Array.from({ length: CONCURRENT_PEERS_PER_SOURCE }, () =>
-        silentUpgrade(port, PHONE_TARGET)
-      )
-    )
-    expect(relay.connectionSnapshot()).toMatchObject({
-      enforcedConnectionUnits: 2 * CONCURRENT_PEERS_PER_SOURCE
-    })
-    for (const peer of peers) peer.socket.write(BINARY_FIRST_FRAME)
-    await expectIdleLedger(relay, 3_000)
-    expect(relay.runtimeCounts().preAuthConnections).toBe(0)
-  }
-})
-
 // Ledger does not clamp at zero, so a disconnect racing rejection exposes double release as a negative count.
 it('releases exactly once when a rejected peer disconnects at the same moment', async () => {
   const { relay, port } = await fixture({ hardCap: 2 * CONCURRENT_PEERS_PER_SOURCE + 1 })

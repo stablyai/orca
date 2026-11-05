@@ -12,7 +12,7 @@ import type {
   LegacyWorkerRecoveryResolution,
   LegacyWorkerRecoveryWorkspace,
   LegacyWorkerTerminalRecoveryResult
-} from './runtime-legacy-worker-terminal-recovery-types'
+} from './orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 
 export async function runLegacyWorkerTerminalRecovery(
   controller: RuntimeLegacyWorkerTerminalRecoveryController,

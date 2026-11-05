@@ -1,31 +1,31 @@
 // Paired desktops can host pages without a local engine; present engine and desktop pages as one tab list.
 import { BrowserError } from '../browser/browser-error'
-import type { RuntimeBrowserCommands } from '../runtime/browser/browser-commands'
-import type { RuntimeBrowserCommandHost } from '../runtime/browser/browser-command-contracts'
+import type { RuntimeBrowserCommands } from '../runtime/browser/commands/browser-commands'
+import type { RuntimeBrowserCommandHost } from '../runtime/browser/commands/browser-command-contracts'
 import type {
   BrowserTabListResult,
   BrowserTabShowResult,
   BrowserTabSwitchResult
 } from '../../shared/runtime-types'
-import { browserUnavailableError } from '../runtime/runtime-browser-commands-factory'
-import { browserTabCreateClientPageStartsActive } from '../runtime/browser-tab-create-publication'
+import { browserUnavailableError } from '../runtime/browser/installation/runtime-browser-commands-factory'
+import { browserTabCreateClientPageStartsActive } from '../runtime/browser/tabs/browser-tab-create-publication'
 import {
   closeBrowserPageWithoutEngine,
   resolveClientPageToClose,
   retireRuntimeBrowserClientPage
-} from '../runtime/browser/browser-client-page-close'
+} from '../runtime/browser/client-pages/browser-client-page-close'
 import {
   createBrowserClientPage,
   createBrowserPageOnPairedHost,
   DEFAULT_BROWSER_PROFILE_ID,
   hasPairedPageHost,
   openBrowserUrlOnClient
-} from '../runtime/browser/browser-client-page-opening'
+} from '../runtime/browser/client-pages/browser-client-page-opening'
 import {
   BrowserClientPageQueries,
   yieldClientPageSelection,
   type BrowserEngineTabs
-} from '../runtime/browser/browser-client-page-queries'
+} from '../runtime/browser/client-pages/browser-client-page-queries'
 
 type Forward = (args: unknown[], name?: string) => unknown
 

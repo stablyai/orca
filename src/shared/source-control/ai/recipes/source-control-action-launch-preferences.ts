@@ -28,6 +28,7 @@ import {
 import { isTuiAgent } from '../../../agent-launch/catalog/tui-agent-config'
 import type { TuiAgent } from '../../../agent-launch/catalog/tui-agent'
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../agent-launch/permissions/agent-chat-permission-mode'
+import type { AgentStartupShell } from '../../../agent-launch/startup/tui-agent-startup-shell'
 import { agentPermissionChoices } from '../../../agent-launch/permissions/tui-agent-permission-choice'
 
 /** The selected action group's typed inputs; the host composes them with actual raw Args. */
@@ -191,6 +192,9 @@ export function projectSelectedSourceControlActionLaunch(
     ).trim(),
     ...optionViews,
     ...('agentArgs' in views ? { agentArgs: agentArgs?.trim() } : {}),
+    ...(selectedActionExecutionArgs(recipe, agent) !== undefined
+      ? { actionAgentArgs: selectedActionExecutionArgs(recipe, agent)?.trim() }
+      : {}),
     requestedSurface:
       liveChoice?.requestedSurface ?? resolveSourceControlActionRequestedSurface(recipe, agent),
     preferredSurface: liveChoice?.requestedSurface
@@ -207,25 +211,28 @@ export function sourceControlActionAgentArgs(
     'agentArgs' | 'launchPreferences' | 'argumentChoices' | 'resolvedChoiceSources'
   >,
   agent: TuiAgent,
-  settings: AgentLaunchProfileSettings | null | undefined
+  settings: AgentLaunchProfileSettings | null | undefined,
+  shell?: AgentStartupShell
 ): string | undefined {
-  return selectedActionAgentArgs(sourceControlActionRecipeEntry(recipe), agent, settings)
+  return selectedActionAgentArgs(sourceControlActionRecipeEntry(recipe), agent, settings, shell)
 }
 
 function selectedActionAgentArgs(
   recipe: SelectedSourceControlActionRecipe,
   agent: TuiAgent,
-  settings: AgentLaunchProfileSettings | null | undefined
+  settings: AgentLaunchProfileSettings | null | undefined,
+  shell?: AgentStartupShell
 ) {
   const agentArgs = selectedActionExecutionArgs(recipe, agent)
   const permission = recipe.resolvedChoiceSources.permission
   if (agentArgs === undefined || (permission?.agentId === agent && permission.permissionMode)) {
     return agentArgs
   }
-  return resolveTuiAgentLaunchRawArgs(agent, {
+  const actionSettings = {
     ...settings,
     agentDefaultArgs: { ...settings?.agentDefaultArgs, [agent]: agentArgs }
-  })
+  }
+  return resolveTuiAgentLaunchRawArgs(agent, actionSettings, undefined, shell)
 }
 
 export function sourceControlActionExecutionArgs(

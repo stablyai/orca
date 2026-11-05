@@ -46,8 +46,10 @@ const {
   sendStructuredWorkerPreamble
 } = await import('./orchestration-structured-worker-session')
 const { isUnknownWorkerStartOutcome } = await import('./orchestration/worker/worker-topology')
-const { structuredWorkerIdentities } = await import('../../structured-worker-identity')
-const { sealedChildEnv } = await import('../../structured-session-child-env.test-support')
+const { structuredWorkerIdentities } =
+  await import('../../orchestration/terminal-authority/structured-sessions/structured-worker-identity')
+const { sealedChildEnv } =
+  await import('../../agent-session/environment/structured-session-child-env.test-support')
 
 function installHost(
   location: Pick<AgentSessionExecutionLocation, 'executionHostId' | 'wslDistro'> = {

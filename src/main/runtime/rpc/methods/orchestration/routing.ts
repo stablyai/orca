@@ -1,5 +1,5 @@
 import type { MessageType } from '../../../orchestration/db'
-import type { RunRow } from '../../../orchestration/types'
+import type { DispatchContextRow, RunRow } from '../../../orchestration/types'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import type { OrchestrationCallerIdentity } from '../../../orchestration/orchestration-caller-identity'
 import { MESSAGE_TYPES } from '../../../orchestration/types'
@@ -20,6 +20,12 @@ export function parseMessageTypes(rawTypes: string | undefined): MessageType[] |
   return types && types.length > 0 ? types : undefined
 }
 
+export type MessageRouting = {
+  run: RunRow | undefined
+  dispatchId: string | undefined
+  dispatch: DispatchContextRow | undefined
+}
+
 export function resolveMessageRun(
   runtime: OrcaRuntimeService,
   params: {
@@ -30,7 +36,7 @@ export function resolveMessageRun(
     payload?: string
     type?: string
   }
-): { run: RunRow | undefined; dispatchId: string | undefined } {
+): MessageRouting {
   const db = runtime.getOrchestrationDb()
   let dispatchId: string | undefined
   if (params.payload) {
@@ -111,7 +117,7 @@ export function resolveMessageRun(
       )
     }
   }
-  return { run, dispatchId: dispatch?.id ?? dispatchId }
+  return { run, dispatchId: dispatch?.id ?? dispatchId, dispatch }
 }
 
 export function legacyWorkerDeliveryContract(

@@ -10,7 +10,7 @@ import { StructuredAgentSessionTurnCompletionFeed } from '../../native-chat/agen
 import {
   RuntimeMobileNotificationController,
   type MobileNotificationEvent
-} from '../runtime-mobile-notification-controller'
+} from '../push/notifications/runtime-mobile-notification-controller'
 import { createStructuredAttentionMobileDelivery } from './structured-agent-session-mobile-attention'
 
 const SCOPE = {

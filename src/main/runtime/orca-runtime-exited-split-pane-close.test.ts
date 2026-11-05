@@ -4,7 +4,7 @@ import { collectLeafIds } from '../../shared/workspace-layout/terminal-pane-layo
 import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../shared/runtime-types'
 import { OrcaRuntimeService } from './orca-runtime'
-import { partialRuntimeStore } from './runtime-store-partial-fixture'
+import { partialRuntimeStore } from './orca-runtime-tests/runtime-store-partial-fixture'
 
 vi.mock('../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 
