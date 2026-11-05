@@ -104,6 +104,10 @@ export const ORCHESTRATION_SEND_METHODS = [
           evidence: orchestrationCompatibilityEvidence
         })
       }
+      const processIncarnation = () =>
+        attestedCaller?.processIncarnation ??
+        runtime.getTerminalProcessIncarnation(from) ??
+        undefined
       const remoteAttachment = senderPaneKey
         ? db.findActiveRemoteAttachmentForPane(senderPaneKey)
         : undefined
@@ -115,10 +119,7 @@ export const ORCHESTRATION_SEND_METHODS = [
           from,
           senderPaneKey,
           remoteAttachment,
-          processIncarnation:
-            attestedCaller?.processIncarnation ??
-            runtime.getTerminalProcessIncarnation(from) ??
-            undefined,
+          processIncarnation: processIncarnation(),
           signal
         })
       }
@@ -134,7 +135,9 @@ export const ORCHESTRATION_SEND_METHODS = [
         payload: runGroup ? undefined : params.payload,
         type: params.type
       })
-      const finished = runGroup ? undefined : finishedWorkerSend(db, sender, routing, params)
+      const finished = runGroup
+        ? undefined
+        : finishedWorkerSend(db, { ...sender, processIncarnation }, routing, params)
       ;({ params, routing } = finished ?? { params, routing })
       if (
         params.type === 'worker_done' &&
@@ -275,10 +278,7 @@ export const ORCHESTRATION_SEND_METHODS = [
           messageRunId,
           senderPaneKey,
           legacyCoordinatorRunId,
-          resolveProcessIncarnation: () =>
-            attestedCaller?.processIncarnation ??
-            runtime.getTerminalProcessIncarnation(from) ??
-            undefined,
+          resolveProcessIncarnation: processIncarnation,
           revalidateLegacyCoordinator,
           recordMutationReceipt,
           markWorkerDoneMutationEffectFree,

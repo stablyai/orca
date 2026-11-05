@@ -8,11 +8,17 @@ import { OrchestrationError } from '../../../../orchestration/orchestration-erro
 import { isDispatchMutationMessageType } from '../schemas'
 import type { MessageRouting } from '../routing'
 
+/** A terminal also proves its process, so a new process in the same pane is not taken for the old worker;
+ *  a session caller is already bound to its own identity. */
+type FinishedSender = Pick<OrchestrationCallerIdentity, 'address' | 'paneKey' | 'orcaSessionId'> & {
+  processIncarnation: () => string | undefined
+}
+
 /** The Dispatch a worker finished and is still talking about: the one its message names, or, naming none
  *  and coordinating nothing, the last one it was given. What it sends there reaches that Dispatch's coordinator. */
 export function finishedWorkerDispatch(
   db: OrchestrationDb,
-  sender: Pick<OrchestrationCallerIdentity, 'address' | 'paneKey'>,
+  sender: FinishedSender,
   routing: Pick<MessageRouting, 'run' | 'dispatchId' | 'dispatch'>,
   type: string | undefined
 ): DispatchContextRow | undefined {
@@ -28,6 +34,13 @@ export function finishedWorkerDispatch(
     dispatch.status === 'pending' ||
     dispatch.status === 'dispatched' ||
     !isDispatchAssignee(dispatch, sender.address, sender.paneKey) ||
+    (!sender.orcaSessionId &&
+      dispatch.process_incarnation &&
+      !db.isDispatchProcessCurrent({
+        dispatchId: dispatch.id,
+        paneKey: sender.paneKey,
+        processIncarnation: sender.processIncarnation() ?? null
+      })) ||
     db.getFederatedDispatch(dispatch.id)
   ) {
     return undefined
@@ -39,7 +52,7 @@ export function finishedWorkerDispatch(
 /** Mail from a finished worker is ordinary mail to its coordinator, so no report or escalation reopens the Task. */
 export function finishedWorkerSend<P extends { to?: string; type?: string }>(
   db: OrchestrationDb,
-  sender: Pick<OrchestrationCallerIdentity, 'address' | 'paneKey'>,
+  sender: FinishedSender,
   routing: MessageRouting,
   params: P
 ):

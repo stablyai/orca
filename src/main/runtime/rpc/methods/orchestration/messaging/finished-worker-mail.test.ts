@@ -68,6 +68,83 @@ describe('a worker after its worker_done', () => {
     expect(await asking).toMatchObject({ answer: 'Nothing else.', timedOut: false })
   })
 
+  it("does not take a new process in the finished worker's pane for that worker", async () => {
+    const { db, runtime, ctx } = harness.setup()
+    const task = db.createTask({ spec: 'work' })
+    const dispatch = createRootDispatch(
+      db,
+      task.id,
+      'term_worker',
+      'tab_worker:leaf_worker',
+      undefined,
+      'runtime_test:term_worker:1'
+    )
+    vi.mocked(runtime.getTerminalPaneKey).mockImplementation((handle) =>
+      handle === 'term_worker' ? 'tab_worker:leaf_worker' : null
+    )
+    await harness.call(
+      'orchestration.send',
+      {
+        from: 'term_worker',
+        type: 'worker_done',
+        subject: 'Done',
+        payload: JSON.stringify({ taskId: task.id, dispatchId: dispatch.id, outcome: 'succeeded' })
+      },
+      ctx
+    )
+    vi.mocked(runtime.getTerminalProcessIncarnation).mockReturnValue('runtime_test:term_worker:2')
+
+    await expect(
+      harness.call('orchestration.send', { from: 'term_worker', subject: 'Not mine' }, ctx)
+    ).rejects.toMatchObject({ code: 'run_required' })
+  })
+
+  it('resumes its own question after a follow-up starts on the same worker', async () => {
+    const { db, runtime, ctx } = harness.setup()
+    const task = db.createTask({ spec: 'work' })
+    const dispatch = createRootDispatch(db, task.id, 'term_worker', 'tab_worker:leaf_worker')
+    vi.mocked(runtime.getTerminalPaneKey).mockImplementation((handle) =>
+      handle === 'term_worker'
+        ? 'tab_worker:leaf_worker'
+        : handle === 'term_coord'
+          ? harness.coordinatorPaneKey
+          : null
+    )
+    await harness.call(
+      'orchestration.send',
+      {
+        from: 'term_worker',
+        type: 'worker_done',
+        subject: 'Done',
+        payload: JSON.stringify({ taskId: task.id, dispatchId: dispatch.id, outcome: 'succeeded' })
+      },
+      ctx
+    )
+    const asked = await harness.call(
+      'orchestration.ask',
+      { from: 'term_worker', question: 'Anything else?', timeoutMs: 1 },
+      ctx
+    )
+    expect(asked).toMatchObject({ timedOut: true })
+    const questionId =
+      asked && typeof asked === 'object' && 'messageId' in asked ? asked.messageId : ''
+    createRootDispatch(
+      db,
+      db.createTask({ spec: 'more' }).id,
+      'term_worker',
+      'tab_worker:leaf_worker'
+    )
+    await harness.call(
+      'orchestration.reply',
+      { from: 'term_coord', id: questionId, body: 'Nothing else.' },
+      ctx
+    )
+
+    await expect(
+      harness.call('orchestration.ask', { from: 'term_worker', resume: questionId }, ctx)
+    ).resolves.toMatchObject({ answer: 'Nothing else.' })
+  })
+
   it('tells a finished worker on a paired host that its coordinator is out of reach', async () => {
     const { db, runtime, ctx } = harness.setup(false)
     db.createRemoteDispatchAttachment({

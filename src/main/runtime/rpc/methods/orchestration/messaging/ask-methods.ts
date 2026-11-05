@@ -76,7 +76,12 @@ export const ORCHESTRATION_ASK_METHODS = [
         workingDispatch ??
         finishedWorkerDispatch(
           db,
-          { address: from, paneKey: paneKey ?? null },
+          {
+            address: from,
+            paneKey: paneKey ?? null,
+            orcaSessionId: orchestrationCaller?.orcaSessionId ?? null,
+            processIncarnation: () => runtime.getTerminalProcessIncarnation(from) ?? undefined
+          },
           { run: undefined, dispatchId: undefined, dispatch: undefined },
           'question'
         )
