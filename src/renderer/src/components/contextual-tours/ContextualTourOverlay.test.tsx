@@ -60,12 +60,13 @@ function renderSurface(
     onNext?: () => void
     onBack?: () => void
     onStepAction?: Parameters<typeof ContextualTourOverlaySurface>[0]['onStepAction']
-  } = {}
+  } = {},
+  activeTourId: ContextualTourId = 'tasks'
 ): ReactElement {
   const renderState = { ...baseRenderState, ...overrides }
   return (
     <ContextualTourOverlaySurface
-      activeTourId="tasks"
+      activeTourId={activeTourId}
       renderState={renderState}
       panelRef={{ current: null } as RefObject<HTMLElement | null>}
       panelHost={renderState.panelHost}
@@ -276,6 +277,7 @@ describe('ContextualTourOverlaySurface', () => {
       dismissContextualTour
     } as unknown as ReturnType<typeof useAppStore.getState>)
     vi.stubGlobal('document', {
+      querySelectorAll: () => [],
       querySelector: vi.fn((selector: string) =>
         selector === '[data-contextual-tour-overlay]'
           ? overlay
@@ -293,11 +295,107 @@ describe('ContextualTourOverlaySurface', () => {
 
     expect(preventDefault).toHaveBeenCalledTimes(1)
     expect(stopImmediatePropagation).toHaveBeenCalledTimes(1)
-    expect(panel.querySelector).toHaveBeenCalledWith(
-      'button[aria-label^="Skip"], button[aria-label="Dismiss tour"]'
-    )
+    expect(panel.querySelector).toHaveBeenCalledWith('[data-contextual-tour-dismiss]')
     expect(click).toHaveBeenCalledTimes(1)
     expect(dismissContextualTour).not.toHaveBeenCalled()
+  })
+
+  it.each(['menu', 'listbox', 'dialog'])('leaves Escape to an open %s above the tour', (role) => {
+    const onSkip = vi.fn()
+    renderSurfaceInDom({}, { onSkip })
+    vi.spyOn(useAppStore, 'getState').mockReturnValue({
+      ...useAppStore.getState(),
+      activeContextualTourId: 'tasks'
+    })
+    const popup = document.createElement('div')
+    popup.setAttribute('role', role)
+    Object.defineProperty(popup, 'getClientRects', {
+      value: () => [new DOMRect(0, 0, 100, 100)]
+    })
+    container.appendChild(popup)
+    const event = new KeyboardEvent('keydown', { key: 'Escape', cancelable: true })
+
+    handleContextualTourGlobalKeyDown(event)
+
+    expect(event.defaultPrevented).toBe(false)
+    expect(onSkip).not.toHaveBeenCalled()
+    popup.remove()
+
+    handleContextualTourGlobalKeyDown(event)
+
+    expect(event.defaultPrevented).toBe(true)
+    expect(onSkip).toHaveBeenCalledWith('tasks')
+  })
+
+  it('leaves Escape to the + menu while the agent sessions tour is hidden', () => {
+    const onSkip = vi.fn()
+    act(() => {
+      root.render(renderSurface({}, { onSkip }, 'workspace-agent-sessions'))
+    })
+    vi.spyOn(useAppStore, 'getState').mockReturnValue({
+      ...useAppStore.getState(),
+      activeContextualTourId: 'workspace-agent-sessions',
+      activeContextualTourStepIndex: 0
+    })
+    const trigger = document.createElement('button')
+    trigger.dataset.contextualTourTarget = 'tab-create-menu'
+    trigger.dataset.state = 'open'
+    trigger.getBoundingClientRect = () => new DOMRect(0, 0, 30, 30)
+    container.appendChild(trigger)
+    const menu = document.createElement('div')
+    menu.setAttribute('role', 'menu')
+    Object.defineProperty(menu, 'getClientRects', {
+      value: () => [new DOMRect(0, 0, 100, 100)]
+    })
+    container.appendChild(menu)
+    const overlay = container.querySelector<HTMLElement>('[data-contextual-tour-overlay]')!
+    overlay.style.display = 'none'
+    const firstEscape = new KeyboardEvent('keydown', { key: 'Escape', cancelable: true })
+
+    handleContextualTourGlobalKeyDown(firstEscape)
+
+    expect(firstEscape.defaultPrevented).toBe(false)
+    expect(onSkip).not.toHaveBeenCalled()
+
+    menu.remove()
+    trigger.dataset.state = 'closed'
+    overlay.style.display = ''
+    const nextEscape = new KeyboardEvent('keydown', { key: 'Escape', cancelable: true })
+    handleContextualTourGlobalKeyDown(nextEscape)
+
+    expect(nextEscape.defaultPrevented).toBe(true)
+    expect(onSkip).toHaveBeenCalledWith('workspace-agent-sessions')
+  })
+
+  it('still dismisses a tour teaching a menu item inside its hosting dialog', () => {
+    const onSkip = vi.fn()
+    renderSurfaceInDom({}, { onSkip })
+    container.setAttribute('role', 'dialog')
+    vi.spyOn(useAppStore, 'getState').mockReturnValue({
+      ...useAppStore.getState(),
+      activeContextualTourId: 'tasks',
+      activeContextualTourStepIndex: 2
+    })
+    const hiddenTarget = document.createElement('button')
+    hiddenTarget.dataset.contextualTourTarget = 'tasks-start-workspace'
+    hiddenTarget.hidden = true
+    container.appendChild(hiddenTarget)
+    const menu = document.createElement('div')
+    menu.setAttribute('role', 'menu')
+    Object.defineProperty(menu, 'getClientRects', {
+      value: () => [new DOMRect(0, 0, 100, 100)]
+    })
+    const target = document.createElement('button')
+    target.dataset.contextualTourTarget = 'tasks-actions'
+    target.getBoundingClientRect = () => new DOMRect(0, 0, 100, 30)
+    menu.appendChild(target)
+    container.appendChild(menu)
+
+    handleContextualTourGlobalKeyDown(
+      new KeyboardEvent('keydown', { key: 'Escape', cancelable: true })
+    )
+
+    expect(onSkip).toHaveBeenCalledWith('tasks')
   })
 
   it('does not dismiss directly on global Escape when the panel button is missing', () => {
@@ -314,6 +412,7 @@ describe('ContextualTourOverlaySurface', () => {
       dismissContextualTour
     } as unknown as ReturnType<typeof useAppStore.getState>)
     vi.stubGlobal('document', {
+      querySelectorAll: () => [],
       querySelector: vi.fn((selector: string) =>
         selector === '[data-contextual-tour-overlay]'
           ? overlay
@@ -382,6 +481,22 @@ function renderLocalizedSurface(isLastStep: boolean): ReactElement {
 describe('ContextualTourOverlaySurface localization', () => {
   afterEach(async () => {
     await i18n.changeLanguage(await loadRendererUiLanguage('en'))
+  })
+
+  it.each([false, true])('dismisses a localized tour with Escape (last step: %s)', async (last) => {
+    await i18n.changeLanguage(await loadRendererUiLanguage('ko'))
+    const onSkip = vi.fn()
+    renderSurfaceInDom({ isLastStep: last }, { onSkip })
+    vi.spyOn(useAppStore, 'getState').mockReturnValue({
+      ...useAppStore.getState(),
+      activeContextualTourId: 'tasks'
+    })
+
+    handleContextualTourGlobalKeyDown(
+      new KeyboardEvent('keydown', { key: 'Escape', cancelable: true })
+    )
+
+    expect(onSkip).toHaveBeenCalledWith('tasks')
   })
 
   it('renders default tour actions in Korean when the UI locale is Korean', async () => {

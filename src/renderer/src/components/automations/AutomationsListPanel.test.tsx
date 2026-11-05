@@ -119,7 +119,6 @@ function renderPanel(
           sshConnectionStates={new Map()}
           runtimeStatusByEnvironmentId={new Map()}
           hostTargetFor={() => null}
-          automationSourceHostAvailabilityByRowKey={new Map()}
           isActionEnabled={() => true}
           externalActionKey={null}
           selectAutomationRow={options.selectAutomationRow ?? (() => undefined)}

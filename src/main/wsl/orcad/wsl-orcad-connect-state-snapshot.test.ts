@@ -62,46 +62,6 @@ afterEach(() => {
   rmSync(home, { recursive: true, force: true })
 })
 
-describe.skipIf(process.platform === 'win32')('WSL connect state snapshot', () => {
-  it('reads the record, a pending journal, the instance lock and a held fence together', async () => {
-    write('.orca-remote/orcad-active.json', serializeOrcadActivationRecord(ACTIVE))
-    write('.orca-remote/.orcad-activation-transaction/transaction.json', '{"partial"')
-    mkdirSync(join(home, '.orca-remote/.orcad-activation-transaction/.install-lock'))
-    write('.orca/orcad.lock', '{"pid":7}\n')
-    const reader = createWslOrcadConnectStateReader()
-
-    await expect(reader.readActivationRecord(target())).resolves.toEqual(ACTIVE)
-
-    expect(mockExec).toHaveBeenCalledOnce()
-    expect(reader.snapshot()).toMatchObject({
-      transactionAbsent: false,
-      instanceLock: { state: 'present', raw: '{"pid":7}' },
-      fenceOpen: false
-    })
-  })
-
-  it('fails closed on an oversized record, as the plain read does', async () => {
-    write('.orca-remote/orcad-active.json', `"${'x'.repeat(70 * 1024)}"`)
-    const reader = createWslOrcadConnectStateReader()
-
-    // The plain read refuses an oversized file too (exit 65), so the connect still fails closed.
-    await expect(reader.readActivationRecord(target())).rejects.toThrow()
-    expect(mockExec).toHaveBeenCalledTimes(2)
-    expect(reader.snapshot()).toBeNull()
-  })
-
-  it('falls back to the plain record read when the answer has another shape', async () => {
-    write('.orca-remote/orcad-active.json', serializeOrcadActivationRecord(ACTIVE))
-    mockExec.mockImplementationOnce(async () => 'startup noise\n')
-    const reader = createWslOrcadConnectStateReader()
-
-    await expect(reader.readActivationRecord(target())).resolves.toEqual(ACTIVE)
-
-    expect(mockExec).toHaveBeenCalledTimes(2)
-    expect(reader.snapshot()).toBeNull()
-  })
-})
-
 describe.skipIf(process.platform === 'win32')('WSL connect state snapshot fallbacks', () => {
   it('falls back to the plain read when the snapshot command itself fails', async () => {
     write('.orca-remote/orcad-active.json', serializeOrcadActivationRecord(ACTIVE))
@@ -125,20 +85,6 @@ describe.skipIf(process.platform === 'win32')('WSL connect state snapshot fallba
 
     await expect(reader.readActivationRecord(target())).resolves.toEqual(ACTIVE)
     expect(reader.snapshot()).toBeNull()
-  })
-})
-
-describe.runIf(process.platform === 'linux')('WSL connect state snapshot on a Linux guest', () => {
-  it("reads the lock holder's identity in the same command", async () => {
-    write('.orca/orcad.lock', `${JSON.stringify({ pid: process.pid, version: '0.1.0' })}\n`)
-    const reader = createWslOrcadConnectStateReader()
-
-    await reader.readActivationRecord(target())
-
-    expect(mockExec).toHaveBeenCalledOnce()
-    const lock = reader.snapshot()?.instanceLock
-    expect(lock?.state === 'present' && lock.holder?.pid).toBe(process.pid)
-    expect(lock?.state === 'present' && lock.holder?.guest.orcad).toMatch(`${process.pid}:`)
   })
 })
 

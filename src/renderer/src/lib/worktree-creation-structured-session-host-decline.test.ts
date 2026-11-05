@@ -125,8 +125,7 @@ function seedPairedServer(): ReturnType<typeof vi.fn> {
     worktreesByRepo: { 'repo-1': [OTHER, CREATED] },
     tabsByWorktree: {},
     ptyIdsByTabId: {},
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the launch only checks the creation is still pending.
-    pendingWorktreeCreations: { 'creation-1': {} as never },
+    pendingWorktreeCreations: { 'creation-1': pendingCreation() },
     settings: {
       ...getDefaultSettings(path.join('workspace', '.orca')),
       activeRuntimeEnvironmentId: 'server-1'
@@ -147,6 +146,18 @@ const REQUEST = {
     launchConfig: { agent: 'claude' }
   }
 } as unknown as WorktreeCreationRequest
+
+function pendingCreation() {
+  return {
+    creationId: 'creation-1',
+    phase: 'creating' as const,
+    status: 'creating' as const,
+    startedAt: 1,
+    indeterminate: false,
+    loaderVisible: true,
+    request: REQUEST
+  }
+}
 
 afterEach(() => {
   mocks.mainStarts.length = 0
@@ -203,8 +214,7 @@ function seedThisMachine(): void {
     worktreesByRepo: { 'repo-1': [LOCAL_OTHER, LOCAL_CREATED] },
     tabsByWorktree: {},
     ptyIdsByTabId: {},
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the launch only checks the creation is still pending.
-    pendingWorktreeCreations: { 'creation-1': {} as never },
+    pendingWorktreeCreations: { 'creation-1': pendingCreation() },
     settings: getDefaultSettings(path.join('workspace', '.orca')),
     // The user moved to another workspace while the create ran.
     activeWorktreeId: LOCAL_OTHER.id

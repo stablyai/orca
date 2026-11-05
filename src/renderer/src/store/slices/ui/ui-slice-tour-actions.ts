@@ -3,7 +3,8 @@ import {
   getContextualTour,
   hasContextualTourActionStep,
   type ContextualTourId,
-  isContextualTourStepDone
+  isContextualTourStepDone,
+  getContextualTourStepIndex
 } from '../../../../../shared/contextual-tours'
 import {
   getContextualTourRequestDecision,
@@ -151,6 +152,19 @@ export function createUiTourActions(set: UISliceSet, get: UISliceGet): Partial<U
           return s
         }
         const tour = getContextualTour(s.activeContextualTourId)
+        if (
+          tour.id === 'workspace-agent-sessions' &&
+          tour.steps[s.activeContextualTourStepIndex]?.id === 'agent-sessions-new-tab'
+        ) {
+          return {
+            activeContextualTourStepIndex: getContextualTourStepIndex(
+              tour.id,
+              s.activeTabType === 'agent-session'
+                ? 'agent-sessions-split-chat'
+                : 'agent-sessions-split'
+            )
+          }
+        }
         const nextStepIndex = getNextVisibleContextualTourStepIndex({
           tour,
           currentStepIndex: s.activeContextualTourStepIndex,

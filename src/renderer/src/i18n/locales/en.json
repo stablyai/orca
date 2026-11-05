@@ -14487,7 +14487,8 @@
             "9fffaf17c1": "Toggle right sidebar ({{value0}})",
             "aiVaultSessionHistory": "Agents",
             "folderWorkspaces": "Attached worktrees",
-            "parentPrChecks": "PR Checks"
+            "parentPrChecks": "PR Checks",
+            "creatingWorkspace": "Available when the workspace is ready"
           },
           "right": {
             "panel": {
@@ -15309,7 +15310,6 @@
           "ff92d15436": "Orca will notify you when agents are done or need help.",
           "b054332836": "Set up notifications",
           "f396db9f20": "Make it feel like home",
-          "322fc50a18": "Orca works with every CLI agent. Choose the one you'll reach for most. Switch any time.",
           "198b148b3c": "Pick your default agent",
           "windowsTerminalTitle": "Set Windows terminal defaults",
           "windowsTerminalSubtitle": "Choose the DEFAULT Shell for new panes and how right-click behaves in the terminal.",
@@ -19371,12 +19371,23 @@
           "theme": "Appearance",
           "windowsTerminal": "Windows Terminal",
           "notifications": "Notifications",
-          "integrations": "Integrations"
+          "integrations": "Integrations",
+          "agentSurface": "Chat or Terminal"
         },
         "actions": {
           "addFirstProject": "Add your first project",
           "continue": "Continue",
           "openingAddProject": "Opening Add Project..."
+        },
+        "agentSurface": {
+          "title": "How do you want to work with agents?",
+          "pickWhereAgentsOpen": "Pick where new agents open."
+        },
+        "agentChat": {
+          "subtitle": "Pick a Chat UI agent. Agents without chat support open in a terminal instead."
+        },
+        "agentTerminal": {
+          "subtitle": "Orca works with every CLI agent. Choose the one you'll reach for most."
         }
       },
       "skipConfirmation": {
@@ -19422,6 +19433,56 @@
           "reviewStatus": "See issue state, review status, and CI checks on every worktree",
           "managePullRequests": "Read, comment on, and merge pull requests without leaving Orca"
         }
+      },
+      "yoloPermissions": {
+        "overrideDescription": "These agents can still run commands and edit files without asking. Their individual settings override Yolo mode.",
+        "fullAccessOverride": "{{agent}} still has full access",
+        "useAgentOwnSettings": "Use {{agent}}’s own settings",
+        "useOwnSettings": "Use own settings",
+        "saveError": "Could not change permissions. Try again.",
+        "ownSettingsDescription": "Off uses each agent’s own settings. Individual agent permissions can override this switch."
+      },
+      "agentStep": {
+        "worksInChat": "Works in Chat UI",
+        "chatAgents": "Chat UI agents",
+        "terminalAgents": "Available as terminal agents",
+        "terminalAgentsHint": "No Chat UI support, so these fall back to a terminal.",
+        "chatAvailable": "Chat available",
+        "agentsOpenIn": "Agents open in",
+        "terminalUi": "Terminal UI",
+        "noAgentsForChat": "<em>No agents found on your PATH.</em> Chat UI works with {{agents}}. Install one, or continue and add an agent later.",
+        "noChatAgentsDetected": "<em>None of your agents work in Chat UI.</em> They would all open in a terminal, so Terminal fits better.",
+        "opensInTerminalFit": "<em>{{agent}} opens in a terminal</em>, so Terminal fits better.",
+        "useTerminalInstead": "Use Terminal instead",
+        "terminalTipHow": "Show how to start an agent in a terminal",
+        "terminalTip": "Switch back any time in <em>Settings → Chat UI</em>. You can also start any agent in a terminal from the <em>+</em> menu.",
+        "terminalTipWeb": "Switch back any time in <em>Settings → Onboarding checklist</em>. You can also start any agent in a terminal from the <em>+</em> menu.",
+        "terminalTipCaption": "Click <em>+</em> in the tab bar, then pick an agent marked <em>(CLI)</em>. If a chat agent's CLI is installed, hover its row and click the terminal icon to use the CLI.",
+        "chatTip": "Want chat too? Turn it on any time in <em>Settings → Chat UI</em>.",
+        "turnOnChat": "Turn on now"
+      },
+      "agentSurface": {
+        "chat": {
+          "label": "Chat UI",
+          "description": "Agents reply in a chat, with rendered messages and diffs.",
+          "terminalFallback": "Agents without chat support, and SSH or WSL projects, still open in a terminal.",
+          "noneDetected": "None of your detected agents work in Chat UI."
+        },
+        "terminal": {
+          "label": "Terminal",
+          "description": "Each agent's own CLI, exactly as it ships. Works with every CLI agent."
+        },
+        "switchNote": "Not a permanent choice. Switch any time in <em>Settings → Chat UI</em>.",
+        "preview": {
+          "userMessage": "Add retry to fetchUser",
+          "agentMessage": "Failed requests now retry up to 3 times.",
+          "composerPlaceholder": "Ask a follow-up…"
+        }
+      },
+      "launchDemo": {
+        "userMessage": "Fix the flaky upload test",
+        "agentMessage": "Found it. The retry timer wasn't mocked.",
+        "cliReady": "{{agent}} CLI ready."
       }
     },
     "jiraIssueAssigneeField": {
@@ -20454,7 +20515,8 @@
         "scheduled": "Orca will continue this chat at {{time}}.",
         "cancel": "Don't continue"
       },
-      "settings": "Chat settings"
+      "settings": "Chat settings",
+      "creationChatNotOpened": "Your worktree is ready, but the chat could not open. Retry to open it with your message."
     },
     "tab": {
       "bar": {
@@ -21062,6 +21124,23 @@
       "formatOnSave": {
         "failed": "Could not format {{file}}. Saving without formatting: {{reason}}"
       }
+    },
+    "contextualTours": {
+      "agentSessions": {
+        "newTab": {
+          "title": "New agents start here",
+          "body": "Click + to start an agent, a terminal, or a browser tab."
+        },
+        "splitChat": {
+          "title": "Run two chats side by side",
+          "body": "Press {terminal.splitRight}, or click the split button at the top of the chat. Each side gets its own tabs.",
+          "bodyWithoutShortcut": "Click the split button at the top of the chat. Each side gets its own tabs.",
+          "action": "Split chat"
+        },
+        "split": {
+          "bodyWithoutShortcut": "Right-click the pane for split options."
+        }
+      }
     }
   },
   "dashboardPopout": {
@@ -21243,12 +21322,13 @@
       "offTerminal": "Prefer the terminal? It stays fully supported. Your agents keep opening there until you choose Chat.",
       "onIntro": "Chat UI is out of Experimental and now part of Orca. Your agents keep opening as chats, with rich messages, visuals and images.",
       "onTerminal": "The terminal stays fully supported too. Switch any agent back anytime.",
-      "changeInSettings": "Change anytime in <link>Settings → Agents</link>.",
+      "changeInSettings": "Change anytime in <link>Settings → Chat UI</link>.",
       "stayInTerminal": "Stay in terminal",
       "switchToTerminal": "Switch to terminal",
       "cta": "Use Chat UI",
-      "saveFailed": "Could not turn on Chat UI. Choose Chat in Settings → Agents.",
-      "terminalSaveFailed": "Could not switch to terminal. Choose Terminal in Settings → Agents.",
+      "saveFailed": "Could not turn on Chat UI. Turn it on in Settings → Chat UI.",
+      "terminalSaveFailed": "Could not switch to terminal. Turn off Chat UI in Settings → Chat UI.",
+      "switched": "Chat UI is now the default for new agents. You can switch back any time in Settings → Chat UI.",
       "dismiss": "Dismiss",
       "demoTabTitle": "Explain login",
       "demoPrompt": "Map out how login works",
