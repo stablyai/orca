@@ -169,17 +169,20 @@ export function descriptorRowElements(
     ]
   }
   const { currentValue, choices } = descriptor.kind
-  return choices.map((choice) => (
-    <ListRow
-      key={choice.value}
-      title={nativeChatSessionChoiceLabel(choice, say, descriptor.id)}
-      subtitle={choice.description}
-      leading={choiceLeading ? (choiceLeading(choice.value) ?? null) : undefined}
-      selected={choice.value === currentValue}
-      disabled={locked}
-      onPress={() => onSetOption(choice.value)}
-    />
-  ))
+  // No search here, as on compact viewports elsewhere: search-only aliases stay off the list.
+  return choices
+    .filter((choice) => !choice.searchOnly)
+    .map((choice) => (
+      <ListRow
+        key={choice.value}
+        title={nativeChatSessionChoiceLabel(choice, say, descriptor.id)}
+        subtitle={choice.description}
+        leading={choiceLeading ? (choiceLeading(choice.value) ?? null) : undefined}
+        selected={choice.value === currentValue}
+        disabled={locked}
+        onPress={() => onSetOption(choice.value)}
+      />
+    ))
 }
 
 export function DescriptorRows(props: DescriptorRowsProps): React.JSX.Element {

@@ -275,33 +275,53 @@ describe('picks made while a chat launches', () => {
     expect(lifecycle()).toBeNull()
   })
 
-  it('remembers a held effort on a resolved-id chat without adopting a new-chat model', async () => {
+  it.each([
+    { chat: 'a resumed conversation', resumed: true, adopts: { adoptModelAsLaunchDefault: false } },
+    { chat: 'a new chat', resumed: false, adopts: {} }
+  ])('remembers a held effort in $chat under its versioned model', async ({ resumed, adopts }) => {
     const created = deferred<{ sessionId: string; fence: number }>()
     mocks.launch.mockReturnValue(created.promise)
-    mocks.createIntent.mockReturnValueOnce({ ...launchIntent(), agent: 'claude' })
+    const intent = launchIntent()
+    mocks.createIntent.mockReturnValueOnce({
+      ...intent,
+      agent: 'claude',
+      params: {
+        ...intent.params,
+        ...(resumed ? { resumeFrom: { providerSessionId: 'claude-session-1' } } : {})
+      }
+    })
     startStructuredAgentLaunch(WORKTREE_ID, 'claude', { requestId: 'request-1', prompt: 'first' })
-    // The picker draws a chat on the id Claude ran; its listing names that model as `opus`.
+    // The listing keys the row by the id Claude runs, the same id a chat saves; `opus` is its alias.
     const efforts = [
       { value: 'low', label: 'Low' },
       { value: 'high', label: 'High' }
     ]
-    const opus = {
-      id: 'opus',
-      label: 'Opus',
-      resolvedModel: 'claude-opus-5-5',
-      isDefault: false,
-      efforts
-    }
+    const rows = [
+      {
+        id: 'claude-opus-5-5',
+        label: 'Claude Opus 5.5',
+        resolvedModel: 'claude-opus-5-5',
+        isDefault: false,
+        efforts
+      },
+      {
+        id: 'opus',
+        label: 'Opus alias',
+        resolvedModel: 'claude-opus-5-5',
+        isDefault: false,
+        efforts
+      }
+    ]
     const picker = applyStructuredAgentSessionOptions(
       applyStructuredAgentSessionModelCatalog(
         createStructuredAgentSessionOptionState('claude', CLAUDE_SESSION_OPTION_CATALOG),
         CLAUDE_SESSION_OPTION_CATALOG,
-        { origin: 'probe', fetchedAt: 1, models: [opus] },
-        { newLaunch: false, coherentCatalog: true }
+        { origin: 'probe', fetchedAt: 1, models: rows },
+        { newLaunch: !resumed, coherentCatalog: true }
       ),
       CLAUDE_SESSION_OPTION_CATALOG,
-      { models: [opus], current: { model: 'claude-opus-5-5', effort: 'low' } },
-      { newLaunch: false, coherentCatalog: true }
+      { models: rows, current: { model: 'claude-opus-5-5', effort: 'low' } },
+      { newLaunch: !resumed, coherentCatalog: true }
     )
     const pick = holdStructuredAgentSessionLaunchOption(SESSION_ID, 'effort', 'high', picker)
     created.resolve({ sessionId: SESSION_ID, fence: 7 })
@@ -312,9 +332,7 @@ describe('picks made while a chat launches', () => {
     expect(mocks.settingsWrite).toHaveBeenLastCalledWith(expect.anything(), {
       type: 'apply-picks',
       agent: 'claude',
-      picks: [
-        { modelId: 'opus', optionId: 'effort', value: 'high', adoptModelAsLaunchDefault: false }
-      ]
+      picks: [{ modelId: 'claude-opus-5-5', optionId: 'effort', value: 'high', ...adopts }]
     })
   })
 

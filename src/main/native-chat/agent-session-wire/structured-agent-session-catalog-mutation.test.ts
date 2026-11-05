@@ -230,4 +230,65 @@ describe('installed catalog through Codex delivery and report settlement', () =>
     },
     10_000
   )
+  it('keeps a newer alias pick of the same model over a delayed report of the earlier turn', async () => {
+    const f = await createCatalogMutationFixture(stateDirectory, 'claude')
+    const acquire = f.rig.adapter.acquire.getMockImplementation()!
+    f.rig.adapter.acquire.mockImplementation(async (...args) => {
+      const result = await acquire(...args)
+      if (!result.link) {
+        throw new Error('test acquisition did not provide a provider link')
+      }
+      return {
+        ...result,
+        link: { ...result.link, handle: claudeProviderHandle('claude-provider', null) }
+      }
+    })
+    try {
+      f.rig.host.deps.adapter.open = async () => ({
+        reportedOptions: { model: '', effort: 'high' }
+      })
+      f.rig.adapter.dispatch.mockResolvedValue({
+        state: 'admitted',
+        ranOptions: { effort: 'high' }
+      })
+      expect(
+        await settled(
+          f.rig.host.send(
+            CALLER,
+            restTestSend(
+              'model arrives after a newer pick',
+              f.rig.store.requireWritableRecord(SESSION).lease.runtimeFence
+            )
+          ),
+          'model-less send acceptance'
+        )
+      ).toMatchObject({ ok: true })
+      const { conversationDelivery, sessions } = f.rig.host.collaboratorsForTests()
+      await settled(conversationDelivery.loop.wake(SESSION), 'model-less admitted delivery')
+      const child = sessions.get(SESSION)?.child
+      if (!child?.generation) {
+        throw new Error('production startup did not publish a child generation')
+      }
+      // The user picks the alias that runs the same model before the earlier turn reports it.
+      expect(
+        await settled(f.rig.host.setOption(CALLER, f.request('model', 'opus[1m]')), 'newer pick')
+      ).toMatchObject({ ok: true })
+      const lifecycle = createStructuredAgentSessionLifecycleDelivery({
+        handle: f.rig.host.handleAdapterEvent,
+        logger: f.rig.host.deps.logger,
+        drainObservedExits: async () => {}
+      })
+      lifecycle.deliver({
+        type: 'options-reported',
+        sessionId: SESSION,
+        fence: child.fence,
+        acquisitionGeneration: child.generation,
+        reportedOptions: { model: CLAUDE_MODEL, effort: 'low' }
+      })
+      await settled(lifecycle.drain(), 'delayed lifecycle report')
+      expect((await f.persisted()).records[SESSION]?.options?.model).toBe('opus[1m]')
+    } finally {
+      await f.dispose()
+    }
+  }, 10_000)
 })

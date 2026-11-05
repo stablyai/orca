@@ -5,11 +5,12 @@ import {
 import type { StructuredAgentSessionOptionState } from './structured-agent-session-options'
 
 /** The model a pick is remembered under: a model pick's own, else the one its values were chosen under
- *  (the chat's own, else the default shown). A chat on the resolved id it ran keeps the new-chat model:
- *  its picks join the listed row that runs it and never adopt a model, so that id never becomes a default. */
+ *  (the chat's own, else the default shown, joined to the listed row that runs it). Only a new chat's
+ *  value picks adopt that model as the new-chat default; an existing chat's keep the remembered model. */
 export function structuredAgentSessionRememberedPickModel(
   state: StructuredAgentSessionOptionState,
-  committedModel: string | undefined
+  committedModel: string | undefined,
+  existingChat: boolean
 ): { modelId: string; adoptModelAsLaunchDefault?: false } | null {
   if (typeof committedModel === 'string' && committedModel.trim()) {
     return { modelId: committedModel }
@@ -21,8 +22,7 @@ export function structuredAgentSessionRememberedPickModel(
   if (!controlsModelId) {
     return null
   }
-  const listed = structuredAgentSessionDescribedModel(state, controlsModelId)
-  return listed && listed.id !== controlsModelId
-    ? { modelId: listed.id, adoptModelAsLaunchDefault: false }
-    : { modelId: controlsModelId }
+  const modelId =
+    structuredAgentSessionDescribedModel(state, controlsModelId)?.id ?? controlsModelId
+  return existingChat ? { modelId, adoptModelAsLaunchDefault: false } : { modelId }
 }

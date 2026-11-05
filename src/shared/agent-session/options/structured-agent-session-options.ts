@@ -288,12 +288,13 @@ export type StructuredSessionOptionPick = {
  * because launch reads effort only under a stored model. Pre-commit state is valid: committed supplies changed model, record supplies unchanged model. */
 export function structuredAgentSessionOptionPicks(
   state: StructuredAgentSessionOptionState,
-  committed: Readonly<Record<string, string>>
+  committed: Readonly<Record<string, string>>,
+  existingChat = false
 ): StructuredSessionOptionPick[] {
   if (!state.catalog) {
     return []
   }
-  const remembered = structuredAgentSessionRememberedPickModel(state, committed.model)
+  const remembered = structuredAgentSessionRememberedPickModel(state, committed.model, existingChat)
   if (!remembered) {
     return []
   }

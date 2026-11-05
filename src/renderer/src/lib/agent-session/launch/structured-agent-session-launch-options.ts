@@ -100,7 +100,14 @@ export function holdStructuredAgentSessionLaunchOption(
   if (state.selection.seedPending) {
     return null
   }
-  const pick = picker ? structuredAgentSessionOptionPicks(picker, { [id]: encoded })[0] : undefined
+  // A resumed conversation already has turns: its value picks keep the remembered new-chat model.
+  const pick = picker
+    ? structuredAgentSessionOptionPicks(
+        picker,
+        { [id]: encoded },
+        state.intent.params.resumeFrom !== undefined
+      )[0]
+    : undefined
   const model = picker ? (pick?.modelId ?? null) : (state.selection.seed?.model ?? null)
   const operation = selectionController(state).issue(
     id,

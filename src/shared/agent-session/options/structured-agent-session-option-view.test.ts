@@ -134,8 +134,9 @@ describe('a Claude model its CLI no longer lists', () => {
   })
 })
 
-describe('a Claude chat saved on the model id its listing names by alias', () => {
-  // Claude Code 2.1.318's list_models rows: `opus` runs claude-opus-5-5, which the chat saves after its first turn.
+describe('a Claude chat on the model id an older host lists by alias', () => {
+  // Claude Code 2.1.318's list_models rows as hosts before the versioned listing key them: `opus`
+  // runs claude-opus-5-5, which the chat saves after its first turn.
   const EFFORTS = levels('low', 'medium', 'high', 'xhigh', 'max')
   const alias = (id: string, resolvedModel: string, extra = {}) => ({
     id,
