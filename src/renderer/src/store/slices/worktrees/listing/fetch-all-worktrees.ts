@@ -18,8 +18,6 @@ import { mapReposForWorktreeRefresh } from './worktree-refresh-pool'
 import { selectWorktreesByRepo } from '../../../workspace-record-selectors'
 import { purgeHydratedWorktrees } from './hydrated-worktree-purge'
 import type { WorktreeRefreshResult } from './worktree-refresh-result'
-import { ipcOrRuntimeTargetForHostId } from '@/runtime/runtime-client-target'
-import { refreshCrossStoreLineageForTarget } from '../metadata/cross-store-lineage-hydration'
 
 export function createFetchAllWorktrees(
   set: WorktreeSliceSet,
@@ -84,13 +82,6 @@ export function createFetchAllWorktrees(
         }
       }
     )
-    const lineageTarget = ipcOrRuntimeTargetForHostId(options?.visibilityOwnerHostId)
-    if (lineageTarget) {
-      // Each store's cross-machine links (local: also this desktop's identity), whichever host is focused.
-      void refreshCrossStoreLineageForTarget(lineageTarget, set, get, {
-        reuseRecentCompatibilityFailure: true
-      }).catch((err: unknown) => console.warn('Host worktree lineage refresh failed:', err))
-    }
     if (!options?.visibilityOwnerHostId && options?.hydrationPurge !== 'defer') {
       purgeHydratedWorktrees(set, get, results)
     }
