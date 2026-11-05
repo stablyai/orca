@@ -1,3 +1,5 @@
+import { importedAgentSessionForkTipSettled } from './imported-agent-session-fork-tip'
+import { defaultAgentChatLabel } from '../../shared/agent-session/agent-session-chat-label'
 import {
   normalizeAgentSessionConversationName,
   AGENT_SESSION_CONVERSATION_NAME_MAX_LENGTH
@@ -55,11 +57,7 @@ export async function prepareStructuredAgentSessionFork(input: {
       | 'providerRejected'
       | 'launchFolderMissing' = 'savedConversationMissing'
   ): never => {
-    throw agentSessionRefusalError(
-      'agent_session_operation_invalid',
-      { reason },
-      message.startsWith(name) ? message : `${name}: ${message}`
-    )
+    throw agentSessionRefusalError('agent_session_operation_invalid', { reason }, message)
   }
   if (!capability || !metadata?.transcriptImport || !host.deps.adapter.copyConversation) {
     throw agentSessionRefusalError(
@@ -73,7 +71,7 @@ export async function prepareStructuredAgentSessionFork(input: {
     !agentSessionExecutionLocationsEqual(record.location, input.location) ||
     input.sessionId === input.envelope.sessionId
   ) {
-    fail('The source chat is unavailable in this workspace. Open it again and try again.')
+    fail(`${name} could not open the source chat in this workspace. Open it again and try again.`)
   }
   if (
     !head ||
@@ -89,22 +87,52 @@ export async function prepareStructuredAgentSessionFork(input: {
       pendingClear || !head ? 'conversationCleared' : 'rewindUnconfirmed'
     )
   }
-  const sourceHead = head ?? fail('The source has no saved context.')
+  const sourceHead = head ?? fail(`${name} has no saved context. Send a message, then try again.`)
   const snapshot = await host.journalSnapshot(record.sessionId)
-  const boundary = structuredAgentSessionForkBoundary(snapshot, record, input.throughItemId)
+  const boundary = structuredAgentSessionForkBoundary(
+    snapshot,
+    record,
+    input.throughItemId,
+    capability
+  )
   const selected =
     boundary ??
     fail(
       `${name} could not find this response in the current chat. Open the chat again and try again.`
     )
+  const admissions = host.deps.store.admittedSendCount(record.sessionId)
+  const dispatch = JSON.stringify(snapshot.submissions)
+  const cwd =
+    record.launchDirectory ?? (await host.deps.resolveWorkspacePath?.(record.location.workspaceId))
+  if (!cwd) {
+    fail(
+      `${name} could not open the source workspace. Open it again and try again.`,
+      'launchFolderMissing'
+    )
+  }
+  const workspaceCwd =
+    cwd ??
+    fail(
+      `${name} could not open the source workspace. Open it again and try again.`,
+      'launchFolderMissing'
+    )
+  const launchEnv = { ...process.env, ...(await host.deps.resolveLaunchEnv?.(input.agent)) }
+  const providerSessionId = metadata.sessionHistory.rowSessionId(sourceHead)
+  if (capability === 'tip' && selected.latest && !selected.checkpoint.settled) {
+    selected.checkpoint.settled = await importedAgentSessionForkTipSettled({
+      record,
+      providerSessionId,
+      selectedItemId: selected.checkpoint.selectedItemId,
+      workspaceCwd,
+      launchEnv
+    })
+  }
   if (capability === 'tip' && (!selected.latest || !selected.checkpoint.settled)) {
     fail(
       `${name} can only fork its latest finished response. Wait for it to finish, then try again.`,
       'turnActive'
     )
   }
-  const admissions = host.deps.store.admittedSendCount(record.sessionId)
-  const dispatch = JSON.stringify(snapshot.submissions)
   const requireCurrent = async () => {
     const current = host.deps.store.requireWritableRecord(record.sessionId)
     const currentSnapshot = await host.journalSnapshot(record.sessionId)
@@ -118,7 +146,12 @@ export async function prepareStructuredAgentSessionFork(input: {
           current.conversationCommand.state === 'unknown'))
     const currentBoundary = transitionPending
       ? null
-      : structuredAgentSessionForkBoundary(currentSnapshot, current, input.throughItemId)
+      : structuredAgentSessionForkBoundary(
+          currentSnapshot,
+          current,
+          input.throughItemId,
+          capability
+        )
     if (
       !agentSessionExecutionLocationsEqual(current.location, record.location) ||
       currentBoundary?.retained !== selected.retained ||
@@ -127,14 +160,13 @@ export async function prepareStructuredAgentSessionFork(input: {
           JSON.stringify(currentSnapshot.submissions) !== dispatch ||
           !currentBoundary.latest))
     ) {
-      fail(`${name}: the chat moved on while it was being copied. Try again.`)
+      fail(`${name} could not finish the copy because the source context changed. Try again.`)
     }
   }
   await requireCurrent()
   const title = normalizeAgentSessionConversationName(
-    `${sliceAtCodeUnitLimit(record.conversationName?.trim() || name, AGENT_SESSION_CONVERSATION_NAME_MAX_LENGTH - 5)} fork`
+    `${sliceAtCodeUnitLimit(record.conversationName?.trim() || defaultAgentChatLabel(input.agent), AGENT_SESSION_CONVERSATION_NAME_MAX_LENGTH - 5)} fork`
   )!
-  const providerSessionId = metadata.sessionHistory.rowSessionId(sourceHead)
   const copy = await host.deps.adapter
     .copyConversation({
       record,
@@ -159,13 +191,17 @@ export async function prepareStructuredAgentSessionFork(input: {
       return fail(
         error instanceof AgentConversationCopyError
           ? error.message
-          : `${name} could not copy this conversation. Update ${name}, then try again.`,
+          : error instanceof Error &&
+              (error.name === 'TimeoutError' ||
+                (error.cause instanceof Error && error.cause.name === 'TimeoutError'))
+            ? `${name} took too long to copy this chat. Try again.`
+            : `${name} could not copy this conversation. Try again.`,
         'providerRejected'
       )
     })
   await requireCurrent()
   if (!copy.sessionId.trim() || copy.sessionId === providerSessionId) {
-    fail(`${name} did not save an independent chat copy. Update ${name}, then try again.`)
+    fail(`${name} did not save an independent chat copy. Try again.`)
   }
   requireUnownedStructuredAgentSessionAdoption({
     host,
@@ -173,13 +209,6 @@ export async function prepareStructuredAgentSessionFork(input: {
     providerSessionId: copy.sessionId,
     selfSessionId: input.envelope.sessionId
   })
-  const cwd =
-    record.launchDirectory ?? (await host.deps.resolveWorkspacePath?.(record.location.workspaceId))
-  if (!cwd) {
-    fail('The source workspace is unavailable. Open it again and try again.', 'launchFolderMissing')
-  }
-  const workspaceCwd = cwd ?? fail('The source workspace is unavailable.', 'launchFolderMissing')
-  const launchEnv = { ...process.env, ...(await host.deps.resolveLaunchEnv?.(input.agent)) }
   const importer = metadata.transcriptImport
   const adoption = await resolveStructuredAgentSessionAdoptionForCreate({
     settings: {},

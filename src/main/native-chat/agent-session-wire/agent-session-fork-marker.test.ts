@@ -1,8 +1,14 @@
+import { agentSessionRecordFixture } from '../agent-session-record-test-fixture'
 import { expect, it } from 'vitest'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { AgentJournalRenderItemSchema } from '../../../shared/agent-session/journal/agent-session-journal-schemas'
 import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session/agent-session-wire'
-import { FORK_MARKER_ITEM_ID, withForkMarker, type ForkMarker } from './agent-session-fork-marker'
+import {
+  FORK_MARKER_ITEM_ID,
+  readForkMarker,
+  withForkMarker,
+  type ForkMarker
+} from './agent-session-fork-marker'
 import { AgentSessionSubscribers } from './structured-agent-session-subscribers'
 import {
   readAgentSessionHistory,
@@ -140,4 +146,16 @@ it('does not move a pre-clear inherited boundary when only later context is rewo
       { identity: item(1), body: body('item-1'), ownerFence: 0 }
     ])
   ).toEqual({ kind: 'item', itemId: agentJournalItemKey(item(1)) })
+})
+
+it('uses the source chat display fallback until a live conversation name exists', () => {
+  const source = agentSessionRecordFixture({ sessionId: 'source', provider: 'claude' })
+  const child = agentSessionRecordFixture({
+    sessionId: 'child',
+    forkedFrom: { sessionId: 'source', itemId: 'reply', childBoundary: { kind: 'start' } }
+  })
+  const store = { getRecord: (id: string) => (id === 'source' ? source : child) }
+  expect(readForkMarker(store, 'child')?.sourceName).toBe('Claude Chat')
+  source.conversationName = 'Renamed source'
+  expect(readForkMarker(store, 'child')?.sourceName).toBe('Renamed source')
 })

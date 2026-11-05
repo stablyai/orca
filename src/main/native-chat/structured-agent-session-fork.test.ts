@@ -1,3 +1,8 @@
+import { copyAcpConversation } from '../acp/acp-conversation-copy'
+import { acpLaunchSpecFor } from '../acp/acp-launch-specs'
+import type { AcpStructuredConnection } from '../acp/acp-structured-connection'
+import { PI_CWD_BUCKET_LAYOUT } from '../ai-vault/session-cwd-bucket-layouts'
+import { handleStructuredAgentSessionCreate } from '../runtime/rpc/methods/structured-agent-session-create-handler'
 import type { StructuredAgentSessionAdapter } from './agent-session-wire/structured-agent-session-adapter'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { mkdir, writeFile } from 'node:fs/promises'
@@ -106,7 +111,7 @@ function source() {
   const copy = vi.fn(
     async (
       _input: Parameters<NonNullable<StructuredAgentSessionAdapter['copyConversation']>>[0]
-    ) => {
+    ): ReturnType<NonNullable<StructuredAgentSessionAdapter['copyConversation']>> => {
       const dir = join(rig.root, 'source-account', 'sessions', '2026', '11', '03')
       await mkdir(dir, { recursive: true })
       const filePath = join(dir, `rollout-2026-11-03T19-00-00-${COPY}.jsonl`)
@@ -216,7 +221,7 @@ it('copies the selected retained root, founds its relationship and title, and re
   expect(rig.store.getRecord(test.intent.envelope.sessionId)).toMatchObject({
     accountHome: test.record.accountHome,
     permissionMode: 'accept-edits',
-    conversationName: 'Codex fork',
+    conversationName: 'Codex Chat fork',
     forkedFrom: {
       sessionId: 'source-chat',
       itemId: 'selected-response',
@@ -280,7 +285,7 @@ it('rejects a tip-only copy if a same-head send is admitted during capture', asy
     return { sessionId: COPY, filePath: '' }
   })
   await expect(test.prepare()).rejects.toMatchObject({
-    refusal: { message: expect.stringContaining('chat moved on') }
+    refusal: { message: expect.stringContaining('source context changed') }
   })
 })
 
@@ -291,7 +296,7 @@ it('refuses a rewind completed during copying when its context retired the selec
     return { sessionId: COPY, filePath: '' }
   })
   await expect(test.prepare()).rejects.toMatchObject({
-    refusal: { message: expect.stringContaining('chat moved on') }
+    refusal: { message: expect.stringContaining('source context changed') }
   })
 })
 
@@ -316,3 +321,225 @@ it('keeps an earlier immutable response available while an unrelated later turn 
   })
   await expect(test.prepare()).resolves.toMatchObject({ fork: { itemId: 'selected-response' } })
 })
+
+it.each(['checkpoint', 'tip'] as const)(
+  'revalidates %s copies against the appropriate source identity on relaunch',
+  async (capability) => {
+    const test = source()
+    if (capability === 'tip') {
+      test.tip()
+    }
+    const nativeCopy = test.copy.getMockImplementation()!
+    test.copy.mockImplementationOnce(async (input) => {
+      test.record.providerHandleChain = [
+        ...test.record.providerHandleChain,
+        {
+          ...test.record.providerHandleChain[0]!,
+          linkId: 'relaunched',
+          origin: 'resumed',
+          mintedAtFence: 2,
+          observedAt: 9
+        }
+      ]
+      return nativeCopy(input)
+    })
+    await (capability === 'checkpoint'
+      ? expect(test.prepare()).resolves.toMatchObject({ fork: { itemId: 'selected-response' } })
+      : expect(test.prepare()).rejects.toMatchObject({
+          refusal: { details: { reason: 'savedConversationMissing' } }
+        }))
+  }
+)
+
+it('owns a slow fork through production create so an identical replay makes exactly one native copy', async () => {
+  const test = source()
+  const getRecord = rig.store.getRecord.bind(rig.store)
+  const writable = rig.store.requireWritableRecord.bind(rig.store)
+  const select = rig.store.selectWritableRecord.bind(rig.store)
+  const snapshot = rig.host.journalSnapshot.bind(rig.host)
+  vi.spyOn(rig.store, 'getRecord').mockImplementation((id) =>
+    id === 'source-chat' ? test.record : getRecord(id)
+  )
+  vi.spyOn(rig.store, 'requireWritableRecord').mockImplementation((id) =>
+    id === 'source-chat' ? test.record : writable(id)
+  )
+  vi.spyOn(rig.store, 'selectWritableRecord').mockImplementation((id) =>
+    id === 'source-chat' ? { kind: 'writable', record: test.record } : select(id)
+  )
+  vi.spyOn(rig.host, 'journalSnapshot').mockImplementation((id) =>
+    id === 'source-chat' ? Promise.resolve(test.snapshot) : snapshot(id)
+  )
+  const capabilities = rig.host.deps.agents.capabilities.bind(rig.host.deps.agents)
+  vi.spyOn(rig.host.deps.agents, 'capabilities').mockImplementation((agent) => {
+    const supported = capabilities(agent)
+    return supported ? { ...supported, fork: 'checkpoint' } : null
+  })
+  const entered = Promise.withResolvers<void>()
+  const release = Promise.withResolvers<void>()
+  const nativeCopy = test.copy.getMockImplementation()!
+  test.copy.mockImplementation(async (input) => {
+    entered.resolve()
+    await release.promise
+    return nativeCopy(input)
+  })
+  rig.host.deps.adapter.copyConversation = test.copy
+  setStructuredAgentSessionHost(rig.host)
+  const runtime = new OrcaRuntimeService()
+  vi.spyOn(runtime, 'resolveStructuredAgentSessionLocation').mockResolvedValue(test.record.location)
+  vi.spyOn(runtime, 'publishStructuredAgentSessionTab').mockResolvedValue(undefined)
+  const ctx = { runtime, clientId: 'device-1' }
+  const first = handleStructuredAgentSessionCreate(test.intent, ctx)
+  await entered.promise
+  const replay = handleStructuredAgentSessionCreate(test.intent, ctx)
+  release.resolve()
+  const results = await Promise.all([first, replay])
+  expect(results).toMatchObject([
+    { ok: true, value: { sessionId: 'codex_independent_child' } },
+    { ok: true, replayed: true, value: { sessionId: 'codex_independent_child' } }
+  ])
+  expect(test.copy).toHaveBeenCalledOnce()
+  const conflicting = structuredAgentSessionCreateParams({
+    ...test.intent,
+    sessionId: test.intent.envelope.sessionId,
+    forkFrom: { sessionId: 'another-source', throughItemId: 'other-response' },
+    now: rig.clock.now,
+    randomUuid: () => '00000000-0000-0000-0000-000000000123'
+  })
+  expect(await handleStructuredAgentSessionCreate(conflicting, ctx)).toMatchObject({
+    ok: false,
+    refusal: { code: 'agent_session_operation_conflict' }
+  })
+  expect(test.copy).toHaveBeenCalledOnce()
+})
+
+it.each([true, false])(
+  'admits an imported ACP tip only with native terminal evidence, completed: %s',
+  async (completed) => {
+    const test = source()
+    test.tip()
+    const home = join(rig.root, 'omp-account')
+    const sessions = join(home, 'sessions')
+    const directory = join(sessions, `${PI_CWD_BUCKET_LAYOUT.encodeScopePrefixes(rig.root)[0]}--`)
+    await mkdir(directory, { recursive: true })
+    const transcript = (id: string) =>
+      `${[
+        { type: 'session', version: 3, id, cwd: rig.root },
+        {
+          type: 'message',
+          id: 'prompt',
+          parentId: null,
+          message: { role: 'user', content: 'Remember 57319' }
+        },
+        {
+          type: 'message',
+          id: 'response',
+          parentId: 'prompt',
+          message: {
+            role: 'assistant',
+            content: [{ type: 'text', text: 'Remembered' }],
+            ...(completed ? { stopReason: 'stop' } : {})
+          }
+        }
+      ]
+        .map((row) => JSON.stringify(row))
+        .join('\n')}\n`
+    await writeFile(join(directory, `${SOURCE}.jsonl`), transcript(SOURCE))
+    test.record.provider = 'omp'
+    test.record.accountHome = { variable: 'PI_CODING_AGENT_DIR', path: home }
+    test.record.providerHandleChain = [
+      {
+        ...test.record.providerHandleChain[0]!,
+        handle: { transport: 'acp', agent: 'omp', nativeId: SOURCE }
+      }
+    ]
+    const selected = agentJournalItemKey({
+      provider: 'legacy',
+      agent: 'omp',
+      sessionId: SOURCE,
+      recordId: 'response'
+    })
+    test.snapshot.items = [
+      {
+        itemId: agentJournalItemKey({
+          provider: 'legacy',
+          agent: 'omp',
+          sessionId: SOURCE,
+          recordId: 'prompt'
+        }),
+        sequence: 1,
+        revision: 0,
+        observedAt: 1,
+        body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'Remember 57319' }] }
+      },
+      {
+        itemId: selected,
+        sequence: 2,
+        revision: 0,
+        observedAt: 2,
+        body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'Remembered' }] }
+      }
+    ]
+    const env = { PI_CODING_AGENT_DIR: home, OMP_CODING_AGENT_DIR: sessions }
+    test.host.deps.resolveLaunchEnv = async () => env
+    const spec = acpLaunchSpecFor('omp')!
+    const initialize = vi.fn(async () => ({
+      protocolVersion: 1,
+      agentCapabilities: { sessionCapabilities: { fork: {} } }
+    }))
+    const forkSession = vi.fn(async () => {
+      await writeFile(join(directory, `${COPY}.jsonl`), transcript(COPY))
+      return COPY
+    })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: native copy uses only initialize/forkSession/close on its short-lived connection.
+    const connection = {
+      initialize,
+      forkSession,
+      close: async () => true
+    } as unknown as AcpStructuredConnection
+    test.copy.mockImplementation((input) =>
+      copyAcpConversation(
+        {
+          spec,
+          dataDirectory: rig.root,
+          readLaunch: async () => ({
+            spec,
+            command: 'omp',
+            prefixArgs: [],
+            args: ['acp'],
+            cwd: rig.root,
+            env,
+            envToDelete: [],
+            fullAccess: false,
+            resume: null
+          }),
+          connect: () => connection
+        },
+        input,
+        { track: () => {} }
+      )
+    )
+    const pending = prepareStructuredAgentSessionFork({
+      host: test.host,
+      agent: 'omp',
+      sessionId: 'source-chat',
+      throughItemId: selected,
+      location: test.record.location,
+      envelope: test.intent.envelope
+    })
+    if (completed) {
+      await expect(pending).resolves.toMatchObject({
+        agent: 'omp',
+        fork: { itemId: selected },
+        adopt: { providerHandle: { nativeId: COPY } }
+      })
+      expect(initialize).toHaveBeenCalledOnce()
+      expect(forkSession).toHaveBeenCalledWith(SOURCE, rig.root)
+    } else {
+      await expect(pending).rejects.toMatchObject({
+        refusal: { details: { reason: 'turnActive' } }
+      })
+      expect(test.copy).not.toHaveBeenCalled()
+      expect(forkSession).not.toHaveBeenCalled()
+    }
+  }
+)

@@ -67,6 +67,22 @@ export async function handleStructuredAgentSessionCreate(
       reason: 'requestMalformed'
     })
   }
+  if ('worktree' in params && params.forkFrom) {
+    await ensureHostInstalled(ctx, params.agent)
+    return requireHost(ctx, params.agent).serializeCreateIntent(
+      callerFor(ctx).callerKey,
+      params.envelope,
+      () => resolveAndCommitStructuredAgentSessionCreate(params, ctx, capture)
+    )
+  }
+  return resolveAndCommitStructuredAgentSessionCreate(params, ctx, capture)
+}
+
+async function resolveAndCommitStructuredAgentSessionCreate(
+  params: z.infer<typeof CreateParams>,
+  ctx: RpcContext,
+  capture?: (surface: StructuredSessionSurface) => void
+) {
   // Before attach, return refusals instead of throwing so clients can distinguish no effects from unknown outcomes.
   const prepared = await resolveUncommittedStructuredCreate(async () => {
     if ('worktree' in params) {

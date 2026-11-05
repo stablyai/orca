@@ -1,3 +1,4 @@
+import { readOpenCodeNativeChatTranscriptFull } from './transcript-opencode'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -255,3 +256,25 @@ it('prefers the migrated live v2 session over retained legacy tables for pages a
     )
   ).toEqual(['opencode:imported', 'opencode:live'])
 })
+
+it.each([true, false])(
+  'uses genuine v2 idle evidence for the imported latest root, completed: %s',
+  async (completed) => {
+    const { path, insert } = fixture()
+    insert('u1', 'user', { text: 'First prompt' })
+    insert('a1', 'assistant', { content: [{ type: 'text', text: 'First response' }] })
+    insert('idle1', 'idle', { outcome: 'succeeded' })
+    insert('u2', 'user', { text: 'Latest prompt' })
+    insert('a2', 'assistant', { content: [{ type: 'text', text: 'Latest prose' }] })
+    if (completed) {
+      insert('idle2', 'idle', { outcome: 'succeeded' })
+    }
+    const imported = await readOpenCodeNativeChatTranscriptFull('session', {
+      resolveDbPath: async () => path,
+      readPage: async (args) => readOpenCodeTranscriptPage(args)
+    })
+    expect(imported).toMatchObject({
+      forkTipItemIds: completed ? ['opencode:u2', 'opencode:a2', 'opencode:idle2'] : []
+    })
+  }
+)

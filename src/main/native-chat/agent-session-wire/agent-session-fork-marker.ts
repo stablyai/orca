@@ -1,4 +1,4 @@
-import { acpAgentName } from '../../acp/acp-structured-agent-definitions'
+import { defaultAgentChatLabel } from '../../../shared/agent-session/agent-session-chat-label'
 import { AGENT_SESSION_FORKED_FROM_PRESENTATION } from '../../../shared/agent-session/agent-session-fork'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentSessionForkedFrom } from '../../../shared/agent-session/lifecycle/agent-session-record'
@@ -28,7 +28,7 @@ export function readForkMarker(
   return {
     forkedFrom,
     sourceName: source
-      ? source.conversationName?.trim() || acpAgentName(source.provider)
+      ? source.conversationName?.trim() || defaultAgentChatLabel(source.provider)
       : 'another chat'
   }
 }

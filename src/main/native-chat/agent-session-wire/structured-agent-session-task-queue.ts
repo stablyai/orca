@@ -16,6 +16,18 @@ export class StructuredAgentSessionTaskQueue {
     return runKeyedSerializedOperation(this.chains, sessionId, task)
   }
 
+  /** Own preparation through founding separately from the destination's journal mutations. */
+  serializeCreateIntent<T>(
+    callerKey: string,
+    envelope: { sessionId: string; clientOperationId: string },
+    run: () => Promise<T>
+  ): Promise<T> {
+    return this.serialize(
+      JSON.stringify(['create-intent', callerKey, envelope.sessionId, envelope.clientOperationId]),
+      run
+    )
+  }
+
   trackAttach<T>(
     operation: Promise<T>,
     pending?: { sessionId: string; location: AgentSessionExecutionLocation }
