@@ -11,6 +11,8 @@ describe('worker-stop through CLI argv, RPC and SQLite', () => {
     const nested = await start('term_helper', 'term_nested')
     const kept = await start('term_worker', 'term_kept')
     const keptChild = await start('term_kept', 'term_kept_child')
+    const keptDone = await start('term_kept', 'term_kept_done')
+    await report('term_kept_done', keptDone, `dispatch:${kept.dispatchId}`)
     const finished = await start('term_worker', 'term_finished')
     await report('term_finished', finished, `dispatch:${worker.dispatchId}`)
     h.db.keepWorkerTerminalOpen(h.runtime.getTerminalPaneKey('term_kept')!)
@@ -31,6 +33,7 @@ describe('worker-stop through CLI argv, RPC and SQLite', () => {
         outcome: 'kept_open',
         keptOpenBy: kept.dispatchId
       }),
+      expect.objectContaining({ dispatchId: keptDone.dispatchId, outcome: 'already_finished' }),
       expect.objectContaining({ dispatchId: finished.dispatchId, outcome: 'already_finished' })
     ])
     const closed = vi.mocked(h.runtime.closeTerminal).mock.calls.map(([handle]) => handle)
@@ -103,5 +106,22 @@ describe('worker-stop through CLI argv, RPC and SQLite', () => {
       expect.objectContaining({ dispatchId: helper.dispatchId, outcome: 'unconfirmed' }),
       expect.objectContaining({ dispatchId: nested.dispatchId, outcome: 'stopped' })
     ])
+  })
+
+  it('stops a helper whose start was cut off by a restart', async () => {
+    const worker = await start('term_coord', 'term_worker')
+    const helper = await start('term_worker', 'term_helper')
+    h.db.db
+      .prepare(
+        "UPDATE worker_dispatches SET state = 'starting', runtime_epoch = 'runtime_before_restart' WHERE dispatch_id = ?"
+      )
+      .run(helper.dispatchId)
+
+    const stopped = await success('worker-stop', '--dispatch', worker.dispatchId)
+
+    expect(stopped).toHaveProperty('helpers', [
+      expect.objectContaining({ dispatchId: helper.dispatchId, outcome: 'stopped' })
+    ])
+    expect(h.db.getWorkerDispatch(helper.dispatchId)?.state).toBe('stopped')
   })
 })

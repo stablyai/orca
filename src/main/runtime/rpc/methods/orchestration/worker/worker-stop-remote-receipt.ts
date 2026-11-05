@@ -22,13 +22,16 @@ export function remoteHelpers(
   remote: RemoteStopReceipt,
   status: z.infer<typeof RemoteCapabilities>,
   serverName: string
-): Pick<WorkerStopReceipt, 'helpers' | 'warning'> {
+): Pick<WorkerStopReceipt, 'helpers' | 'warning' | 'helperStopError'> {
   if (!status.capabilities?.includes(ORCHESTRATION_WORKER_STOP_HELPERS_RUNTIME_CAPABILITY)) {
     return {
       warning: `${serverName} runs an older Orca that leaves helpers this worker started there running; update it to stop them with the worker.`
     }
   }
-  const items = Array.isArray(remote.helpers) ? remote.helpers : []
+  if (remote.helpers !== undefined && !Array.isArray(remote.helpers)) {
+    return { helperStopError: `${serverName} returned a helper list this Orca cannot read.` }
+  }
+  const items = remote.helpers ?? []
   return items.length ? { helpers: items.map(readRemoteHelper) } : {}
 }
 

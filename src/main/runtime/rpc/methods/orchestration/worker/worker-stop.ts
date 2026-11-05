@@ -3,6 +3,7 @@ import { defineMethod } from '../../../core'
 import { mapWithConcurrency } from '../../../../../../shared/map-with-concurrency'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db'
+import { WORKER_SETTLED_STATES } from '../../../../orchestration/worker-terminal-ownership'
 import { WorkerDispatchParams } from '../../../../../../shared/rpc-contract/orchestration-worker-stop-params'
 import type {
   HelperStopOutcome,
@@ -61,6 +62,15 @@ async function stopHelpers(
     8,
     async (dispatchId): Promise<HelperStopOutcome[]> => {
       const helper = { dispatchId, creatorDispatchId }
+      const worker = db.getWorkerDispatch(dispatchId)
+      if (worker?.state === 'starting' && worker.runtime_epoch !== runtime.getRuntimeId()) {
+        // A runtime that restarted mid-start never finishes it; settle it as worker-show does, then stop it.
+        db.markWorkerStartUnknown(
+          dispatchId,
+          worker.stage,
+          'The runtime restarted before worker-start reached a terminal receipt.'
+        )
+      }
       const state = db.getWorkerDispatch(dispatchId)?.state
       if (state === 'starting') {
         stopsAfterStart(runtime).add(dispatchId)
@@ -112,16 +122,16 @@ function listUnderKeptOpen(
   creatorDispatchId: string,
   keptOpenBy: string
 ): HelperStopOutcome[] {
-  return db.listHelperDispatchIds(creatorDispatchId).flatMap((dispatchId) => [
-    {
-      dispatchId,
-      creatorDispatchId,
-      outcome: 'kept_open' as const,
-      keptOpenBy,
-      state: db.getWorkerDispatch(dispatchId)?.state
-    },
-    ...listUnderKeptOpen(db, dispatchId, keptOpenBy)
-  ])
+  return db.listHelperDispatchIds(creatorDispatchId).flatMap((dispatchId) => {
+    const state = db.getWorkerDispatch(dispatchId)?.state
+    const finished = state !== undefined && WORKER_SETTLED_STATES.includes(state)
+    return [
+      finished
+        ? { dispatchId, creatorDispatchId, outcome: 'already_finished' as const, state }
+        : { dispatchId, creatorDispatchId, outcome: 'kept_open' as const, keptOpenBy, state },
+      ...listUnderKeptOpen(db, dispatchId, keptOpenBy)
+    ]
+  })
 }
 
 function helperMutation(mutation: StopMutation, dispatchId: string): StopMutation {
@@ -154,11 +164,21 @@ export async function stopHelperAfterStart(
     return
   }
   // A start that already settled is skipped by the single stop; its helpers still stop.
-  await stopWorkerAndHelpers(runtime, dispatchId, helperMutation(mutation, dispatchId)).catch(
-    (error: unknown) => {
-      console.warn('[orchestration] helper stop after its start failed', dispatchId, error)
-    }
-  )
+  // Its creator's receipt already said "starting"; the outcome lands on the helper's own row and here.
+  const receipt = await stopWorkerAndHelpers(
+    runtime,
+    dispatchId,
+    helperMutation(mutation, dispatchId)
+  ).catch((error: unknown) => {
+    console.warn('[orchestration] helper stop after its start failed', dispatchId, error)
+  })
+  if (receipt && receipt.state !== 'stopped' && !receipt.alreadySettled) {
+    console.warn('[orchestration] helper stop after its start is unconfirmed', {
+      dispatchId,
+      state: receipt.state,
+      lastError: receipt.lastError
+    })
+  }
 }
 
 const activeStopByRuntime = new WeakMap<

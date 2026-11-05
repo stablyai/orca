@@ -300,7 +300,7 @@ describe('federated transport safety', () => {
 })
 
 describe('worker-stop of a remote worker already settled at home', () => {
-  async function stopSettledRemote(helpers: Record<string, string[]>) {
+  async function stopSettledRemote(helpers: Record<string, string[]>, rootHelpers?: unknown) {
     const db = {
       getFederatedDispatch: () => federatedDispatch(),
       beginWorkerStop: () => ({ disposition: 'already_settled', worker: { state: 'succeeded' } }),
@@ -317,8 +317,16 @@ describe('worker-stop of a remote worker already settled at home', () => {
           return runtimeStatus(['orchestration.worker-stop-helpers.v1'])
         }
         if (method === 'orchestration.federationStop') {
-          if (params.dispatchId === 'dispatch-worker' && helpers['dispatch-worker']) {
-            return { state: 'succeeded', alreadySettled: true, processAction: 'none' }
+          if (
+            params.dispatchId === 'dispatch-worker' &&
+            (helpers['dispatch-worker'] || rootHelpers)
+          ) {
+            return {
+              state: 'succeeded',
+              alreadySettled: true,
+              processAction: 'none',
+              helpers: rootHelpers
+            }
           }
           throw new Error('timed out')
         }
@@ -338,6 +346,12 @@ describe('worker-stop of a remote worker already settled at home', () => {
       state: 'succeeded',
       alreadySettled: true,
       helperStopError: expect.stringContaining('timed out')
+    })
+  })
+
+  it('fails the stop when a capable host returns an unreadable helper list', async () => {
+    await expect(stopSettledRemote({}, 'not a list')).resolves.toMatchObject({
+      helperStopError: expect.stringContaining('cannot read')
     })
   })
 
