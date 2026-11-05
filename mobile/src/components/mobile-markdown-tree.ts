@@ -12,7 +12,7 @@ import type {
   Table
 } from 'mdast'
 import remend from 'remend'
-import { appendHtmlBlock, popContainer } from './mobile-markdown-details'
+import { appendHtmlBlock, noteInlineHtml, popContainer } from './mobile-markdown-details'
 import { normalizeMobileMarkdownPreviewHtml } from './mobile-markdown-preview-html'
 import { endLinkifyUrlsAtProsePunctuation } from './markdown-linkify-prose-boundary'
 
@@ -162,7 +162,8 @@ function readTaskMarker(item: Parent & { checked?: boolean | null }): void {
 
 /** A `<details>` summary's inline HTML and Markdown as spans. */
 function summaryPhrasing(html: string): PhrasingContent[] {
-  const text = normalizeMobileMarkdownPreviewHtml(html)
+  // A summary is one line of spans; heading markup in it (`<h3>`) keeps only its text.
+  const text = normalizeMobileMarkdownPreviewHtml(html).replace(/^\s*#{1,6}\s+/gm, '')
   return phrasing(markdown.parseInline(text, {})[0]?.children ?? [], 0).nodes
 }
 
@@ -225,6 +226,11 @@ function toTree(tokens: readonly Token[], source: string): Root {
       }
       case 'inline':
         parent.children.push(...phrasing(token.children ?? [], 0).nodes)
+        for (const child of token.children ?? []) {
+          if (child.type === 'html_inline') {
+            noteInlineHtml(child.content, stack)
+          }
+        }
         break
       case 'fence':
       case 'code_block':

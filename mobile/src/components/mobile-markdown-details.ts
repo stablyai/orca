@@ -18,7 +18,7 @@ type DetailsPiece =
 // Comments match first so markup inside them stays text. Each scan stops at the next tag or
 // summary, and an unclosed comment runs to the end once, so hostile input stays linear.
 const DETAILS_MARKUP =
-  /<!--(?:(?!-->)[\s\S])*(?:-->|$)|<details\b([^<>]*)>|<summary\b[^<>]*>((?:(?!<\/?summary\b)[\s\S])*)<\/summary\s*>|<\/details\s*>/gi
+  /<!--(?:(?!-->)[\s\S])*(?:-->|$)|<details(?=[\s/>])([^<>]*)>|<summary(?=[\s/>])[^<>]*>((?:(?!<\/?summary\b)[\s\S])*)<\/summary\s*>|<\/details\s*>/gi
 /** Deeper sections stay text, so hostile nesting cannot exhaust the tree walk's stack. */
 const MAX_SECTION_DEPTH = 8
 /** Sections whose `</details>` came inside a list or quote; each closes when that container does. */
@@ -75,6 +75,22 @@ export function popContainer(stack: Parent[]): Parent | undefined {
   return closed
 }
 
+/** Like a browser, `</details>` inside a paragraph or list item ends the innermost section when
+ *  that container ends. */
+function closeSectionWithContainer(stack: Parent[]): void {
+  const section = stack.findLast(isDetails)
+  if (section) {
+    closedInside.add(section)
+  }
+}
+
+/** Inline HTML in a paragraph: a `</details>` there closes the section with the paragraph. */
+export function noteInlineHtml(html: string, stack: Parent[]): void {
+  if (/^<\/details\s*>$/i.test(html)) {
+    closeSectionWithContainer(stack)
+  }
+}
+
 /** Appends an HTML block to the open parent; its `<details>` markup opens and closes sections. */
 export function appendHtmlBlock(
   html: string,
@@ -91,11 +107,10 @@ export function appendHtmlBlock(
         open({ type: 'details', open: piece.open, summary: [], children: [] })
       }
     } else if (piece.kind === 'close') {
-      // Like a browser, `</details>` inside a list item ends the section with that list.
       if (details) {
         stack.pop()
-      } else if (sections.length > 0) {
-        closedInside.add(sections.at(-1)!)
+      } else {
+        closeSectionWithContainer(stack)
       }
     } else if (piece.kind === 'summary' && details?.summary.length === 0) {
       details.summary = summaryPhrasing(piece.value)

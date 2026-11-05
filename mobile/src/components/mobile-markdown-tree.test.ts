@@ -75,9 +75,12 @@ describe('GitHub <details> sections', () => {
     expect(after).toEqual({ type: 'paragraph', children: [{ type: 'text', value: 'After' }] })
   })
 
-  it('closes a section whose </details> sits inside a list item with that list', () => {
+  it.each([
+    ['a list item', '- a\n- b\n  </details>'],
+    ['the end of a paragraph', 'body text</details>']
+  ])('closes a section whose </details> sits in %s with that block', (_where, body) => {
     const types = parseMobileMarkdownTree(
-      '<details>\n<summary>S</summary>\n\n- a\n- b\n  </details>\n\nafter',
+      `<details>\n<summary>S</summary>\n\n${body}\n\nafter`,
       false
     ).children.map((node) => node.type)
     expect(types).toEqual(['details', 'paragraph'])
