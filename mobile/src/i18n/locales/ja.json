@@ -1802,6 +1802,7 @@
       "countWorkflows_one": "{{count}} ワークフロー",
       "countWorkflows_other": "{{count}} ワークフロー",
       "detailsUnavailable": "このセッションではタスクの詳細は利用できません。",
+      "outputFile": "出力: {{value0}}",
       "groupAgents": "Agent",
       "groupMonitors": "モニター",
       "groupShell": "シェル",

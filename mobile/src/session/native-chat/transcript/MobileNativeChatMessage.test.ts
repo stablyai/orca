@@ -3,7 +3,12 @@ import './mobile-agent-message-renderer.test-fixture'
 import { createElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
+import type {
+  NativeChatBackgroundTaskBlock,
+  NativeChatMessage
+} from '../../../../../src/shared/native-chat/native-chat-types'
+import { backgroundTaskJournalBody } from '../../../../../src/shared/native-chat/input/native-chat-background-task-row'
+import { projectStructuredItemToNativeChat } from '../../../../../src/shared/agent-session/view/structured-agent-session-projection'
 
 import type { NativeChatResolvedPrompt } from '../../../../../src/shared/native-chat/native-chat-resolution-receipt'
 
@@ -62,6 +67,8 @@ describe('MobileNativeChatMessage', () => {
     node
       .findAll((child) => String(child.type) === 'MobileMarkdown')
       .map((markdown) => markdown.props.content)
+  const textIn = (node: ReactTestInstance): string[] =>
+    findAllByHostType(node, 'Text').map((text) => String(text.children.join('')))
 
   it.each(['task', 'generic'] as const)(
     'expands and refolds %s messages and preserves old-server body',
@@ -99,5 +106,35 @@ describe('MobileNativeChatMessage', () => {
     }
   )
 
-  // An older host refuses the read; the row keeps today's placeholder.
+  it('draws a background task as its row, not the plain sentence written for older clients', () => {
+    const task = (overrides: Partial<NativeChatBackgroundTaskBlock>): NativeChatMessage =>
+      projectStructuredItemToNativeChat({
+        itemId: 'task',
+        revision: 1,
+        sequence: 1,
+        observedAt: 1,
+        body: backgroundTaskJournalBody({
+          type: 'background-task',
+          taskId: 'b1',
+          kind: 'command',
+          label: 'pnpm test',
+          state: 'working',
+          startedAt: 1_000,
+          outputFile: '/tmp/b1.output',
+          ...overrides
+        })
+      })!
+    const run = () => render(task({})).root.findByProps({ testID: 'background-task-run' })
+    expect(textIn(run())).toEqual(['pnpm test', 'working', 'Output: /tmp/b1.output'])
+    act(() => renderer?.unmount())
+    const settled = render(
+      task({ state: 'blocked', settledAt: 66_000, summary: 'Exited with code 1' })
+    )
+    expect(textIn(settled.root)).toEqual([
+      'pnpm test',
+      'blocked · failed · 1m 5s',
+      'Exited with code 1',
+      'Output: /tmp/b1.output'
+    ])
+  })
 })
