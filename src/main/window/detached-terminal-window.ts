@@ -61,7 +61,7 @@ export function createOrFocusDetachedTerminalWindow(
   args: DetachedTerminalWindowArgs
 ): BrowserWindow {
   const existing = entriesByTabId.get(args.tabId)
-  if (existing && !existing.window.isDestroyed()) {
+  if (existing && existing.ptyId === args.ptyId && !existing.window.isDestroyed()) {
     if (existing.window.isMinimized()) {
       existing.window.restore()
     }
@@ -69,6 +69,13 @@ export function createOrFocusDetachedTerminalWindow(
       existing.window.focus()
     }
     return existing.window
+  }
+  if (existing) {
+    // Why: a companion bound to another PTY must close before its entry is replaced.
+    entriesByTabId.delete(args.tabId)
+    if (!existing.window.isDestroyed()) {
+      existing.window.close()
+    }
   }
 
   const window = new BrowserWindow({

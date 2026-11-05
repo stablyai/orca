@@ -115,6 +115,25 @@ describe('detached terminal windows', () => {
     expect(instances).toHaveLength(2)
   })
 
+  it('replaces a companion bound to another PTY without re-docking the replacement', async () => {
+    const stale = createOrFocusDetachedTerminalWindow({
+      tabId: 'tab-1',
+      ptyId: 'pty-a',
+      title: 'a'
+    })
+    const replacement = createOrFocusDetachedTerminalWindow({
+      tabId: 'tab-1',
+      ptyId: 'pty-b',
+      title: 'b'
+    })
+    await Promise.resolve()
+
+    expect(replacement).not.toBe(stale)
+    expect(stale.close).toHaveBeenCalledTimes(1)
+    expect(isDetachedTerminalRendererForPty(replacement.webContents, 'pty-b')).toBe(true)
+    expect(sendToTrustedUIRendererMock).not.toHaveBeenCalled()
+  })
+
   it('notifies the main renderer when the companion closes without owning PTY teardown', async () => {
     const window = open()
 
