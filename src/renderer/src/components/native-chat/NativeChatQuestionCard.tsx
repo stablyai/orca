@@ -45,6 +45,7 @@ export type NativeChatQuestionCardProps = {
 
 // Reserve a non-option index so single-select holds either an option or typed text.
 const TYPED_ANSWER = -1
+const LINE_BREAKS = /[\r\n\u2028\u2029]/g
 
 const CONFIRM_LABEL = {
   submit: () => translate('components.native-chat.question.send', 'Submit'),
@@ -328,13 +329,22 @@ export function NativeChatQuestionCard({
                       // Enter submits, so a line break becomes a space; edit in place so a mid-draft paste keeps the caret.
                       onChange={(e) => {
                         const field = e.target
-                        const oneLine = field.value.replace(/[\r\n\u2028\u2029]/g, ' ')
+                        const oneLine = field.value.replace(LINE_BREAKS, ' ')
                         if (oneLine !== field.value) {
                           const { selectionStart, selectionEnd } = field
                           field.value = oneLine
                           field.setSelectionRange(selectionStart, selectionEnd)
                         }
                         setOther(index, oneLine)
+                      }}
+                      // Insert a multi-line paste as one undoable edit, after the event so Undo keeps the draft.
+                      onPaste={(e) => {
+                        const text = e.clipboardData.getData('text/plain')
+                        const oneLine = text.replace(LINE_BREAKS, ' ')
+                        if (oneLine !== text) {
+                          e.preventDefault()
+                          queueMicrotask(() => document.execCommand('insertText', false, oneLine))
+                        }
                       }}
                       // Select typed text on click; tabbing toward Submit must not replace a picked option.
                       onClick={() => {
