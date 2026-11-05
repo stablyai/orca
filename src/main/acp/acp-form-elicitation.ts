@@ -10,6 +10,8 @@ import { AcpRpcError } from './acp-errors'
 import { pendingAcpResolution } from './acp-timeline-requests'
 
 export const ACP_FORM_ELICITATION_METHOD = 'elicitation/create'
+// The card shows at most four questions; this tells the agent why the rest went unanswered.
+const NOT_SHOWN_ANSWER = 'Not shown to the user: Orca shows at most 4 questions at once. Ask again.'
 
 const choiceSchema = z.looseObject({
   const: z.string(),
@@ -140,6 +142,12 @@ export function acpFormElicitationPresentation(params: unknown): AcpRequestPrese
         }
         if (otherKey && answer.other?.trim()) {
           content[otherKey] = answer.other
+        }
+      }
+      for (const key of keys.slice(MAX_JOURNAL_GROUPED_PROMPT_QUESTIONS)) {
+        const otherKey = key.endsWith('__other') ? key : `${key}__other`
+        if (Object.hasOwn(properties, otherKey)) {
+          content[otherKey] = NOT_SHOWN_ANSWER
         }
       }
       return { action: 'accept', content }

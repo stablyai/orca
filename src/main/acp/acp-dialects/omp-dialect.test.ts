@@ -231,6 +231,35 @@ describe('OMP ask forms', () => {
     expect(presentation.reply(null)).toEqual({ action: 'cancel' })
   })
 
+  it('tells OMP which questions past the fourth were never shown', () => {
+    const properties = Object.fromEntries(
+      [0, 1, 2, 3, 4].map((n) => [
+        `q${n}__other`,
+        { type: 'string', title: 'Other (type your own)' }
+      ])
+    )
+    const presentation = OMP_ACP_DIALECT.request!('elicitation/create', {
+      ...ask,
+      message: 'Answer 5 questions',
+      requestedSchema: { type: 'object', properties }
+    })!
+    const answers = [1, 2, 3, 4].map((n) => ({
+      questionId: `q${n}`,
+      optionIds: [],
+      other: `a${n}`
+    }))
+    expect(presentation.reply({ kind: 'answers', answers })).toEqual({
+      action: 'accept',
+      content: {
+        q0__other: 'a1',
+        q1__other: 'a2',
+        q2__other: 'a3',
+        q3__other: 'a4',
+        q4__other: 'Not shown to the user: Orca shows at most 4 questions at once. Ask again.'
+      }
+    })
+  })
+
   it('answers a confirm form with a boolean', () => {
     const confirm = OMP_ACP_DIALECT.request!('elicitation/create', {
       mode: 'form',
