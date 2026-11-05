@@ -18,10 +18,7 @@ import {
   fillUnknownCatalogEfforts,
   enrichStructuredAgentEfforts
 } from './agent-session-model-efforts'
-import {
-  structuredAgentSessionDescribedModel,
-  structuredAgentSessionShownModel
-} from './structured-agent-session-option-snapshot'
+import { structuredAgentSessionRememberedPickModel } from './structured-agent-session-remembered-pick-model'
 import type { SessionOptionValue } from '../../native-chat/input/native-chat-session-options'
 import type {
   AgentSessionAcceptedInputSources,
@@ -233,16 +230,6 @@ export function applyStructuredAgentSessionOptions(
   }
 }
 
-/** The model a pick's other values were chosen under: the chat's own, else the default shown. */
-function structuredAgentSessionControlsModelId(
-  state: StructuredAgentSessionOptionState
-): string | null {
-  return state.catalog
-    ? structuredAgentSessionShownModel(state.catalog, state.catalog.models, state.record)
-        .controlsModelId
-    : null
-}
-
 export function commitStructuredAgentSessionOption(
   state: StructuredAgentSessionOptionState,
   id: string,
@@ -295,7 +282,7 @@ export type StructuredSessionOptionPick = {
   modelId: string
   optionId: string
   value: SessionOptionValue
-  adoptModelAsLaunchDefault?: false
+  adoptModelAsLaunchDefault?: boolean
 }
 
 /** Persist only reseedable IDs, using provider-committed values after reconciliation. Effort-only picks adopt their controls’ model
@@ -307,21 +294,10 @@ export function structuredAgentSessionOptionPicks(
   if (!state.catalog) {
     return []
   }
-  const committedModel = committed.model
-  const controlsModelId =
-    typeof committedModel === 'string' && committedModel.trim()
-      ? committedModel
-      : structuredAgentSessionControlsModelId(state)
-  if (!controlsModelId) {
+  const remembered = structuredAgentSessionRememberedPickModel(state, committed.model)
+  if (!remembered) {
     return []
   }
-  // A chat on the resolved id it ran keeps the new-chat model; its picks join the listed row that runs it.
-  const listed = committedModel
-    ? undefined
-    : structuredAgentSessionDescribedModel(state, controlsModelId)
-  const modelId = listed?.id ?? controlsModelId
-  const adoption =
-    listed && listed.id !== controlsModelId ? { adoptModelAsLaunchDefault: false as const } : {}
   return STRUCTURED_LAUNCH_SEED_OPTION_IDS.flatMap((optionId) => {
     const value = committed[optionId]
     if (value === undefined) {
@@ -332,6 +308,6 @@ export function structuredAgentSessionOptionPicks(
       (typeof decoded === 'string' && !decoded.trim()) ||
       encodeStructuredAgentSessionOptionValue(optionId, decoded) === null
       ? []
-      : [{ modelId, optionId, value: decoded, ...adoption }]
+      : [{ ...remembered, optionId, value: decoded }]
   })
 }

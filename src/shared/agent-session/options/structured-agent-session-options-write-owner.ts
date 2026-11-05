@@ -143,7 +143,7 @@ export function createStructuredAgentSessionOptionsWriteOwner(read: () => WriteC
             providerStarting: context.providerStarting
           }
         },
-        pick?.adoptModelAsLaunchDefault
+        pick?.adoptModelAsLaunchDefault === false ? false : undefined
       )
       context.flush(isCurrent)
       const outcome = await operation.result
