@@ -291,7 +291,8 @@ export function projectRuntimeMobileSessionTabs(
       title,
       ...(tab.customTitle !== undefined ? { customTitle: tab.customTitle } : {}),
       // A paired desktop re-ranks the title with its own generated name; the session name must reach it.
-      ...(tab.aiVaultTitle ? { aiVaultTitle: tab.aiVaultTitle } : {}),
+      ...(tab.aiVaultTitle !== undefined ? { aiVaultTitle: tab.aiVaultTitle } : {}),
+      ...(tab.resolvesSessionTitle ? { resolvesSessionTitle: true as const } : {}),
       ...(tab.ptyId ? { ptyId: tab.ptyId } : {}),
       // Bind identity to the handle's live owner, never a stale persisted surface.
       ...(terminalPty?.incarnationId ? { incarnationId: terminalPty.incarnationId } : {}),

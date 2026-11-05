@@ -171,11 +171,13 @@ export function buildMirroredTerminalTabs(
     // Why: viewMode echoes back through host snapshots, so prefer the client's record during the echo window and adopt the host value only without a prior tab.
     const hostViewModeSurface = surfaces.find((surface) => surface.viewMode)
     const viewMode = existing ? existing.viewMode : hostViewModeSurface?.viewMode
-    // The host is the single writer of a session name it publishes; older or headless hosts publish none, and the client resolves its own.
-    const hostSessionTitle = activeSurface.aiVaultTitle?.title.trim()
-      ? activeSurface.aiVaultTitle
-      : null
-    const sessionTitle = hostSessionTitle ?? existing?.aiVaultTitle
+    // A host window that resolves the session name is its only writer (null clears); a headless or older host's name is a saved cache, so the client resolves its own.
+    const hostResolvesSessionTitle = activeSurface.resolvesSessionTitle === true
+    const sessionTitle = hostResolvesSessionTitle
+      ? activeSurface.aiVaultTitle?.title.trim()
+        ? activeSurface.aiVaultTitle
+        : null
+      : existing?.aiVaultTitle
     return {
       tab: {
         id: localTabId,
@@ -186,7 +188,7 @@ export function buildMirroredTerminalTabs(
         // Host omits generated titles; retain client agent-prompt labels across rebuilds.
         ...(existing?.generatedTitle ? { generatedTitle: existing.generatedTitle } : {}),
         ...(sessionTitle ? { aiVaultTitle: sessionTitle } : {}),
-        ...(hostSessionTitle ? { sessionTitleFromHost: true as const } : {}),
+        ...(hostResolvesSessionTitle ? { sessionTitleFromHost: true as const } : {}),
         // Host omits client recovery ledger; preserve it or every snapshot rearms remount allowance (b5cfc6ca).
         ...(existing?.recovery ? { recovery: existing.recovery } : {}),
         ...(quickCommandLabel ? { quickCommandLabel } : {}),

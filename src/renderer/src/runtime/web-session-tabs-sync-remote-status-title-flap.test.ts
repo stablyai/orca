@@ -53,7 +53,8 @@ function makeHostSnapshot(args: {
   hostNow: number
   includeAgentStatus: boolean
   agentStatusOverrides?: Partial<AgentStatusEntry>
-  aiVaultTitle?: { agent: 'claude'; sessionId: string; title: string }
+  aiVaultTitle?: { agent: 'claude'; sessionId: string; title: string } | null
+  resolvesSessionTitle?: true
 }): RuntimeMobileSessionTabsResult {
   return {
     worktree: WT,
@@ -72,7 +73,8 @@ function makeHostSnapshot(args: {
         isActive: true,
         status: 'ready',
         terminal: 'terminal-1',
-        ...(args.aiVaultTitle ? { aiVaultTitle: args.aiVaultTitle } : {}),
+        ...(args.aiVaultTitle !== undefined ? { aiVaultTitle: args.aiVaultTitle } : {}),
+        ...(args.resolvesSessionTitle ? { resolvesSessionTitle: true as const } : {}),
         ...(args.includeAgentStatus
           ? {
               agentStatus: {
@@ -464,7 +466,8 @@ describe('remote-paired pane: host session name', () => {
         snapshotVersion: 2,
         hostNow: T0 + 2_000,
         includeAgentStatus: true,
-        aiVaultTitle: { agent: 'claude', sessionId: 'session-1', title: 'Login cleanup' }
+        aiVaultTitle: { agent: 'claude', sessionId: 'session-1', title: 'Login cleanup' },
+        resolvesSessionTitle: true
       }),
       T0 + 2_000
     )
@@ -474,24 +477,54 @@ describe('remote-paired pane: host session name', () => {
     expect(resolveTerminalTabTitle(tab!, true)).toBe('Login cleanup')
   })
 
-  it('follows a host rename of a session the client already named', () => {
+  it('follows a resolving host through a rename and a clear', () => {
     const store = seedPairedClientStore()
-    const publish = (snapshotVersion: number, title: string) =>
+    const publish = (
+      snapshotVersion: number,
+      aiVaultTitle: { agent: 'claude'; sessionId: string; title: string } | null
+    ) =>
       applyHostSnapshot(
         store,
         makeHostSnapshot({
           snapshotVersion,
           hostNow: T0 + snapshotVersion * 1_000,
           includeAgentStatus: true,
-          aiVaultTitle: { agent: 'claude', sessionId: 'session-1', title }
+          aiVaultTitle,
+          resolvesSessionTitle: true
         }),
         T0 + snapshotVersion * 1_000
       )
-    publish(1, 'Old')
-    publish(2, 'New')
+    const mirrored = () =>
+      (store.getState().tabsByWorktree[WT] ?? []).find((t) => t.id === MIRROR_TAB_ID)
+    publish(1, { agent: 'claude', sessionId: 'session-1', title: 'Old' })
+    publish(2, { agent: 'claude', sessionId: 'session-1', title: 'New' })
+    expect(mirrored()?.aiVaultTitle?.title).toBe('New')
+
+    publish(3, null)
+    expect(mirrored()?.aiVaultTitle).toBeUndefined()
+    expect(mirrored()?.sessionTitleFromHost).toBe(true)
+  })
+
+  it('takes a saved name back as cache once the host stops resolving it', () => {
+    const store = seedPairedClientStore()
+    const publish = (snapshotVersion: number, title: string, resolvesSessionTitle?: true) =>
+      applyHostSnapshot(
+        store,
+        makeHostSnapshot({
+          snapshotVersion,
+          hostNow: T0 + snapshotVersion * 1_000,
+          includeAgentStatus: true,
+          aiVaultTitle: { agent: 'claude', sessionId: 'session-1', title },
+          ...(resolvesSessionTitle ? { resolvesSessionTitle } : {})
+        }),
+        T0 + snapshotVersion * 1_000
+      )
+    // The window resolves "New"; the host then restarts headless and republishes its saved "Old".
+    publish(1, 'New', true)
+    publish(2, 'Old')
 
     const tab = (store.getState().tabsByWorktree[WT] ?? []).find((t) => t.id === MIRROR_TAB_ID)
     expect(tab?.aiVaultTitle?.title).toBe('New')
-    expect(tab?.sessionTitleFromHost).toBe(true)
+    expect(tab?.sessionTitleFromHost).toBeUndefined()
   })
 })
