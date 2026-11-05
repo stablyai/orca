@@ -249,7 +249,7 @@ describe('provisionWorktreeTerminals setup auto-close', () => {
     await provisionWithSetup(on)
     expect(on.createTerminal).toHaveBeenCalledWith(
       'id:wt-1',
-      expect.objectContaining({ command: 'bash /repo/.orca/setup.sh && exit' })
+      expect.objectContaining({ command: 'bash /repo/.orca/setup.sh && exit 79' })
     )
   })
 })
