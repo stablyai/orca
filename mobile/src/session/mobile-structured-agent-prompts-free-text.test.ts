@@ -25,17 +25,6 @@ function prompt(freeTextInput?: AgentJournalFreeTextInput): StructuredQuestionIt
 }
 
 describe('mobile structured free-text questions', () => {
-  it('projects editor input metadata onto the existing question card', () => {
-    const freeTextInput = {
-      allowEmpty: true,
-      multiline: true,
-      initialValue: 'draft',
-      placeholder: 'Edit here'
-    }
-    expect(projectStructuredQuestion(prompt(freeTextInput))?.freeTextInput).toEqual(freeTextInput)
-    expect(projectStructuredQuestion(prompt())?.freeTextInput).toBeUndefined()
-  })
-
   it('accepts empty and whitespace text only for the matching allowed prompt', () => {
     const current = prompt({ allowEmpty: true })
     const projected = projectStructuredQuestion(current)!

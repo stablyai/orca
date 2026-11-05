@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useRef } from 'react'
-import { requireGitOwnerTarget } from '../../worktree-git-owner-target'
+import { requireGitOwnerTarget } from './worktree-git-owner-target'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import { getConnectionId } from '@/lib/connection-context'
 import { getRuntimeGitBranchCompare } from '@/runtime/runtime-git-diff-client'
 import { useAppStore } from '@/store'
 import { createLoadingBranchCompareSummary } from '@/store/slices/editor/git/branch-compare-state'
-import type { GitUpstreamStatus } from '../../../../../../shared/git-status-types'
-import { shouldClearBranchCompareForMissingBase } from '../../../../../../shared/source-control-base-ref-resolution'
-import { slowTaskRequiredIdleMs } from '../../coalesced-poll-runner'
+import type { GitUpstreamStatus } from '../../../../../../shared/git/status/git-status-types'
+import { shouldClearBranchCompareForMissingBase } from '../../../../../../shared/source-control/decisions/source-control-base-ref-resolution'
+import { slowTaskRequiredIdleMs } from '../../../../lib/repository-refresh/coalesced-poll-runner'
 import { useBranchCompareRefreshTriggers } from './use-branch-compare-refresh-triggers'
 
 // Slow polls idle for their own duration; explicit mutation/base/manual refreshes remain immediate.

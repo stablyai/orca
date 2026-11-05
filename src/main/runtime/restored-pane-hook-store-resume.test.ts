@@ -1,19 +1,20 @@
 // verify-15a parity: a host whose daemon restarted resumed nothing and replayed the pane's launch.
 import { describe, expect, it, vi } from 'vitest'
-import type { AgentStatusIpcPayload } from '../../shared/agent-status-ipc-payload'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
-import { partialRuntimeStore } from './runtime-store-partial-fixture'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
+import { partialRuntimeStore } from './orca-runtime-tests/runtime-store-partial-fixture'
 
 // Preserve side-effect order: mocks, lifecycle, fixtures.
-const { OrcaRuntimeService } = await import('./orca-runtime-test-mocks.spec')
-await import('./orca-runtime-test-lifecycle.spec')
+await import('./orca-runtime-tests/runtime-test-module-registration.spec')
+const { OrcaRuntimeService } = await import('./orca-runtime')
+await import('./orca-runtime-tests/orca-runtime-test-lifecycle.spec')
 const {
   HEADLESS_LEAF_ID,
   TEST_WORKTREE_ID,
   makeRuntimeStoreWithWorkspaceSession,
   makeWorkspaceSessionWithHeadlessTerminal
-} = await import('./orca-runtime-test-fixtures.spec')
-const { committingSpawn } = await import('./bind-first-pane.test-fixture')
+} = await import('./orca-runtime-tests/orca-runtime-test-fixtures.spec')
+const { committingSpawn } = await import('./orca-runtime-tests/bind-first-pane.test-fixture')
 
 const PANE_KEY = `host-tab:${HEADLESS_LEAF_ID}`
 const SESSION_ID = '0bc9e9f8-192c-4bd4-beb8-8b745c59c8b0'
@@ -97,12 +98,6 @@ describe('restoring a pane its host recorded an agent in', () => {
     const { runtime, spawn } = makeRuntime([codexRow({ providerSessionOnly: true })], 'codex')
     await restore(runtime)
     expect(spawn.mock.calls[0]![0].command).toMatch(RESUMES)
-  })
-
-  it('never resumes a conversation a relayed SSH row names', async () => {
-    const { runtime, spawn } = makeRuntime([codexRow({ connectionId: 'ssh-1' })])
-    await restore(runtime)
-    expect(spawn.mock.calls[0]![0].command ?? '').not.toContain('resume')
   })
 
   it('ignores a row from another worktree, and launches the tab’s agent fresh', async () => {

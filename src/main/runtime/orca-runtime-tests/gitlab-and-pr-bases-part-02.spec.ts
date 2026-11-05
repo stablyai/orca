@@ -1,23 +1,24 @@
+import * as gitExecFile from '../../git/command-runner/git-exec-file'
 import { SshHostNotServedError } from '../../providers/ssh-host-not-served-error'
 import { describe, expect, it, vi } from 'vitest'
+import './runtime-test-module-registration.spec'
 import {
   ORIGIN_HEAD_COMPONENT,
   ORIGIN_REMOTE_URL,
-  OrcaRuntimeService,
-  REVIEW_HEAD_FETCH_TIMEOUT_MS,
   getGitLabProjectRefForRemoteMock,
   getGitLabWorkItemByProjectRefMock,
   getGlabKnownHostsMock,
   getPullRequestPushTargetMock,
-  gitRunner,
   setPlatform
-} from '../orca-runtime-test-mocks.spec'
+} from '../orca-runtime-test-mocks/setup.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { REVIEW_HEAD_FETCH_TIMEOUT_MS } from '../../../shared/review-head-tracking-ref'
 import {
   TEST_REPO_ID,
   TEST_REPO_PATH,
   isOriginMainBaseRefProbe,
   store
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
   it('records GitLab pasted-project recents only after successful runtime lookup', async () => {
@@ -106,7 +107,7 @@ describe('OrcaRuntimeService', () => {
       })
     }
     const runtime = new OrcaRuntimeService(runtimeStore as never)
-    const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => {
+    const gitSpy = vi.spyOn(gitExecFile, 'gitExecFileAsync').mockImplementation(async (args) => {
       if (args[0] === 'symbolic-ref') {
         return { stdout: 'refs/remotes/origin/main\n', stderr: '' }
       }
@@ -224,7 +225,7 @@ describe('OrcaRuntimeService', () => {
       path: 'group/repo'
     })
     const runtime = new OrcaRuntimeService(runtimeStore as never)
-    const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => {
+    const gitSpy = vi.spyOn(gitExecFile, 'gitExecFileAsync').mockImplementation(async (args) => {
       if (args[0] === 'remote' && args[1] === 'get-url') {
         return { stdout: `${ORIGIN_REMOTE_URL}\n`, stderr: '' }
       }
@@ -296,7 +297,7 @@ describe('OrcaRuntimeService', () => {
     })
     const runtime = new OrcaRuntimeService(runtimeStore as never)
     // Concurrent fetch overwrites FETCH_HEAD; durable Orca MR refs must retain compare-base authority.
-    const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => {
+    const gitSpy = vi.spyOn(gitExecFile, 'gitExecFileAsync').mockImplementation(async (args) => {
       if (args[0] === 'remote' && args[1] === 'get-url') {
         return { stdout: `${ORIGIN_REMOTE_URL}\n`, stderr: '' }
       }
@@ -358,7 +359,7 @@ describe('OrcaRuntimeService', () => {
       path: 'group/repo'
     })
     const runtime = new OrcaRuntimeService(runtimeStore as never)
-    const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => {
+    const gitSpy = vi.spyOn(gitExecFile, 'gitExecFileAsync').mockImplementation(async (args) => {
       if (args[0] === 'remote' && args[1] === 'get-url') {
         return { stdout: `${ORIGIN_REMOTE_URL}\n`, stderr: '' }
       }
@@ -424,7 +425,7 @@ describe('OrcaRuntimeService', () => {
       path: 'group/repo'
     })
     const runtime = new OrcaRuntimeService(runtimeStore as never)
-    const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => {
+    const gitSpy = vi.spyOn(gitExecFile, 'gitExecFileAsync').mockImplementation(async (args) => {
       if (args[0] === 'remote' && args[1] === 'get-url') {
         return { stdout: `${ORIGIN_REMOTE_URL}\n`, stderr: '' }
       }
@@ -498,7 +499,7 @@ describe('OrcaRuntimeService', () => {
       })
     }
     const runtime = new OrcaRuntimeService(runtimeStore as never)
-    const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => {
+    const gitSpy = vi.spyOn(gitExecFile, 'gitExecFileAsync').mockImplementation(async (args) => {
       if (args[0] === 'remote' && args[1] === 'get-url') {
         return { stdout: `${ORIGIN_REMOTE_URL}\n`, stderr: '' }
       }

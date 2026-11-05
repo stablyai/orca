@@ -60,6 +60,17 @@ function fold(rows: JournalRow[]): JournalReducerState {
         .map((entry) => entry.clientMessageId)
         .sort()
     )
+    expect(
+      journalInputOrder(state)
+        .sendingSubmissions()
+        .map((entry) => entry.clientMessageId)
+        .sort()
+    ).toEqual(
+      [...state.submissions.values()]
+        .filter((entry) => entry.dispatchState === 'pending')
+        .map((entry) => entry.clientMessageId)
+        .sort()
+    )
     for (const entry of state.submissions.values()) {
       if (entry.dispatchState !== 'pending') {
         expect(journalInputOrder(state).forced(entry.clientMessageId)).toBe(false)
@@ -754,7 +765,7 @@ describe('re-adding a tombstoned row', () => {
   })
 })
 
-it('retires unknown execution debt with the submission tombstone', () => {
+it('retains unknown proof identity when a context tombstone removes its visible item', () => {
   const state = fold([
     {
       kind: 'submission',
@@ -781,6 +792,13 @@ it('retires unknown execution debt with the submission tombstone', () => {
       ...base(3)
     }
   ])
-  expect(state.submissions.has('retired')).toBe(false)
-  expect(journalInputOrder(state).unsettledSubmissions()).toEqual([])
+  expect(state.items.has(agentJournalSubmissionKey('retired'))).toBe(false)
+  expect(state.submissions.get('retired')).toMatchObject({
+    dispatchState: 'unknown',
+    payloadFingerprint: 'retired'
+  })
+  expect(journalInputOrder(state).unsettledSubmissions()).toEqual([
+    state.submissions.get('retired')
+  ])
+  expect(journalInputOrder(state).place('retired')).toBeUndefined()
 })

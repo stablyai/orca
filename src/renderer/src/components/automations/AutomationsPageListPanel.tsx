@@ -15,7 +15,6 @@ export function AutomationsPageListPanel({
     local,
     list,
     destination,
-    sourceAvailability,
     pageRefresh,
     runActions,
     editorActions,
@@ -95,9 +94,6 @@ export function AutomationsPageListPanel({
       sshStateByEnvironment={sshStateByEnvironment}
       runtimeStatusByEnvironmentId={runtimeStatusByEnvironmentId}
       hostTargetFor={destination.automationHostTargetFor}
-      automationSourceHostAvailabilityByRowKey={
-        sourceAvailability.automationSourceHostAvailabilityByRowKey
-      }
       hostLabelById={presentation.hostLabelById}
       isActionEnabled={destination.isAutomationRowActionEnabled}
       externalActionKey={externalActionKey}

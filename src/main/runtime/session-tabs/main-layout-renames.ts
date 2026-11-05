@@ -5,9 +5,9 @@ import type {
   RuntimeTerminalRename,
   RuntimeTerminalSetPaneTitle
 } from '../../../shared/runtime-terminal-contracts'
-import type { TerminalPaneLayoutNode } from '../../../shared/terminal-tab-types'
-import type { WindowLayoutCommand } from '../runtime-layout-apply'
-import type { RuntimePtyWorktreeRecord } from '../runtime-terminal-state-records'
+import type { TerminalPaneLayoutNode } from '../../../shared/workspace-layout/terminal-tab-types'
+import type { WindowLayoutCommand } from '../terminal/layout/runtime-layout-apply'
+import type { RuntimePtyWorktreeRecord } from '../terminal/records/runtime-terminal-state-records'
 import { startedMainTerminalSurfaces } from '../terminal/surface/main-terminal-surfaces'
 import { paneTitlesForDesktopWindow } from './desktop-pane-title-forwarding'
 

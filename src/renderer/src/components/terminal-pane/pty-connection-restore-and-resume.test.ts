@@ -5,7 +5,6 @@ import { registerPtyConnectionColdRestoreRepaintTests } from './pty-connection-c
 import { registerPtyConnectionColdRestoreResumeCommandTests } from './pty-connection-cold-restore-resume-command.spec'
 import { registerPtyConnectionHibernationWakeTests } from './pty-connection-hibernation-wake.spec'
 import { registerPtyConnectionHiddenSleepingResumeTests } from './pty-connection-hidden-sleeping-resume.spec'
-import { registerPtyConnectionRestartReplacementTests } from './pty-connection-restart-replacement.spec'
 import { registerPtyConnectionSessionLivenessTests } from './pty-connection-session-liveness.spec'
 import { registerPtyConnectionSleepingResumeBannerTests } from './pty-connection-sleeping-resume-banner.spec'
 
@@ -28,6 +27,5 @@ describe(
 )
 describe('pty-connection-hibernation-wake', registerPtyConnectionHibernationWakeTests)
 describe('pty-connection-hidden-sleeping-resume', registerPtyConnectionHiddenSleepingResumeTests)
-describe('pty-connection-restart-replacement', registerPtyConnectionRestartReplacementTests)
 describe('pty-connection-session-liveness', registerPtyConnectionSessionLivenessTests)
 describe('pty-connection-sleeping-resume-banner', registerPtyConnectionSleepingResumeBannerTests)

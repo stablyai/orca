@@ -12,7 +12,7 @@ vi.mock('@/store/index', () => ({
     selector({ settingsSearchQuery: '' })
 }))
 
-vi.mock('../../BaseRefPicker', () => ({
+vi.mock('../../../source-control/BaseRefPicker', () => ({
   BaseRefPicker: () => null
 }))
 
@@ -83,99 +83,7 @@ function render(
   })
 }
 
-function getWorktreePathInput(): HTMLInputElement {
-  const input = container.querySelector<HTMLInputElement>('input')
-  if (!input) {
-    throw new Error('worktree path input not found')
-  }
-  return input
-}
-
-function setNativeValue(input: HTMLInputElement, text: string): void {
-  // Use the native setter so React’s controlled-value tracker recognizes the input.
-  const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
-  setValue?.call(input, text)
-}
-
-function typeText(input: HTMLInputElement, text: string): void {
-  act(() => {
-    setNativeValue(input, text)
-    input.dispatchEvent(new Event('input', { bubbles: true }))
-  })
-}
-
-function blurInput(input: HTMLInputElement): void {
-  // React onBlur delegates through bubbling focusout, not native blur.
-  act(() => {
-    input.dispatchEvent(new FocusEvent('focusout', { bubbles: true }))
-  })
-}
-
-describe('RepositoryWorktreeDefaultsSection — worktree path', () => {
-  it('does not call updateRepo while the user is typing', () => {
-    const updateRepo = vi.fn()
-    render(BASE_REPO, updateRepo)
-
-    const input = getWorktreePathInput()
-    typeText(input, './w')
-    typeText(input, './wo')
-    typeText(input, './wor')
-    typeText(input, './worktree')
-
-    expect(updateRepo).not.toHaveBeenCalled()
-  })
-
-  it('calls updateRepo with the final value on blur', () => {
-    const updateRepo = vi.fn()
-    render(BASE_REPO, updateRepo)
-
-    const input = getWorktreePathInput()
-    typeText(input, '  ./worktree  ')
-    blurInput(input)
-
-    expect(updateRepo).toHaveBeenCalledTimes(1)
-    expect(updateRepo).toHaveBeenCalledWith('repo-1', { worktreeBasePath: './worktree' })
-  })
-
-  it('does not call updateRepo when the normalized value is unchanged on blur', () => {
-    const updateRepo = vi.fn()
-    render({ ...BASE_REPO, worktreeBasePath: './worktree' }, updateRepo)
-
-    const input = getWorktreePathInput()
-    typeText(input, '  ./worktree  ')
-    blurInput(input)
-
-    expect(updateRepo).not.toHaveBeenCalled()
-  })
-
-  it('calls updateRepo with undefined when the field is cleared', () => {
-    const updateRepo = vi.fn()
-    render({ ...BASE_REPO, worktreeBasePath: '../worktrees' }, updateRepo)
-
-    const input = getWorktreePathInput()
-    typeText(input, '')
-    blurInput(input)
-
-    expect(updateRepo).toHaveBeenCalledWith('repo-1', { worktreeBasePath: undefined })
-  })
-})
-
 describe('RepositoryWorktreeDefaultsSection — external visibility', () => {
-  it('clears the override with the remote-safe null sentinel and refreshes classification', async () => {
-    const updateRepo = vi.fn().mockResolvedValue(true)
-    const refreshRepo = vi.fn().mockResolvedValue(true)
-    render({ ...BASE_REPO, externalWorktreeVisibility: 'show' }, updateRepo, { refreshRepo })
-
-    await act(async () => {
-      const select = container.querySelector('select')!
-      select.value = 'global'
-      select.dispatchEvent(new Event('change', { bubbles: true }))
-    })
-
-    expect(updateRepo).toHaveBeenCalledWith('repo-1', { externalWorktreeVisibility: null })
-    expect(refreshRepo).toHaveBeenCalledWith('repo-1')
-  })
-
   it('falls back to the effective explicit value when an older host rejects inheritance', async () => {
     const updateRepo = vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true)
     render(

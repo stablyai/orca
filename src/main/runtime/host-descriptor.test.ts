@@ -2,14 +2,12 @@ import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import { RuntimeHostDescriptorSchema } from '../../shared/runtime-host-descriptor'
+import { RuntimeHostDescriptorSchema } from '../../shared/remote-runtime/host-status/runtime-host-descriptor'
 import {
   HOST_INSTALLATION_FILENAME,
   computeHostMachineBinding,
   loadHostDescriptor,
-  getRuntimeSourceStamp,
-  loadOrCreateHostInstallationId,
-  publishHostDescriptor
+  loadOrCreateHostInstallationId
 } from './host-descriptor'
 
 function profile(): string {
@@ -51,16 +49,6 @@ describe('loadOrCreateHostInstallationId', () => {
 })
 
 describe('loadHostDescriptor', () => {
-  it('publishes an id and a binding keyed by that id', async () => {
-    const userDataPath = profile()
-    const descriptor = await loadHostDescriptor(userDataPath, () => 'machine-a')
-    expect(RuntimeHostDescriptorSchema.safeParse(descriptor).success).toBe(true)
-    expect(descriptor?.machineBinding).toBe(
-      computeHostMachineBinding(descriptor!.installationId, 'machine-a', userDataPath)
-    )
-    expect(await loadHostDescriptor(userDataPath, () => 'machine-a')).toEqual(descriptor)
-  })
-
   it('changes only the binding when the profile moves to another machine', async () => {
     const userDataPath = profile()
     const here = await loadHostDescriptor(userDataPath, () => 'machine-a')
@@ -95,28 +83,5 @@ describe('loadHostDescriptor', () => {
     expect(await loadHostDescriptor(join(blocker, 'profile'), () => 'machine-a')).toBeNull()
     expect(warn).toHaveBeenCalledOnce()
     warn.mockRestore()
-  })
-})
-
-describe('getRuntimeSourceStamp', () => {
-  it('names the profile as the source and the runtime id as the incarnation', () => {
-    const installationId = '0b4c3d5e-1f2a-4b6c-8d7e-9f0a1b2c3d4e'
-    publishHostDescriptor('runtime-stamp-1', { installationId })
-    try {
-      expect(
-        getRuntimeSourceStamp({ getRuntimeId: () => 'runtime-stamp-1' }, '/profiles/a')
-      ).toEqual({
-        sourceId: installationId,
-        incarnation: 'runtime-stamp-1',
-        profilePath: '/profiles/a'
-      })
-    } finally {
-      publishHostDescriptor('runtime-stamp-1', null)
-    }
-  })
-
-  it('stamps nothing before a descriptor is published or without a runtime', () => {
-    expect(getRuntimeSourceStamp({ getRuntimeId: () => 'runtime-unpublished' })).toBeNull()
-    expect(getRuntimeSourceStamp(undefined)).toBeNull()
   })
 })

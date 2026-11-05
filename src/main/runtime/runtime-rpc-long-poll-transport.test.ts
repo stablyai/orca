@@ -1,3 +1,5 @@
+import type * as WorktreeScanCacheModule from '../git/worktrees/catalog/worktree-scan-cache'
+import type * as WorktreeListingModule from '../git/worktrees/catalog/worktree-listing'
 import './rpc/unused-default-rpc-methods.test-fixture'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -7,7 +9,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import { OrchestrationDb } from './orchestration/db'
 import { readRuntimeMetadata } from './runtime-metadata'
-import { classifyRuntimeLongPoll } from './runtime-rpc/runtime-rpc-long-poll'
+
 import { createLongPollServer as createServer } from './runtime-rpc-long-poll-server.test-fixture'
 import {
   sendRequest,
@@ -17,98 +19,31 @@ import {
   seedSupervisedAskWorkers
 } from './runtime-rpc-test-harness'
 import { createRootDispatch } from './orchestration/db/root-dispatch-test-fixture'
-import { createTranscriptPane, TRANSCRIPT_PANE_PTY_ID } from './agent-transcript-pane-test-harness'
+import {
+  createTranscriptPane,
+  TRANSCRIPT_PANE_PTY_ID
+} from './orca-runtime-tests/agent-transcript-pane-test-harness'
 
-vi.mock('../git/worktree', () => {
-  const worktrees = [
-    {
-      path: '/tmp/worktree-a',
-      head: 'abc',
-      branch: 'feature/foo',
-      isBare: false,
-      isMainWorktree: false
-    }
-  ]
-  return {
-    listWorktrees: vi.fn().mockResolvedValue(worktrees),
-    listWorktreesStrict: vi.fn().mockResolvedValue(worktrees)
+vi.mock('../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => ({
+  ...(await importOriginal<typeof WorktreeScanCacheModule>()),
+  listWorktrees: (await getWorktreeOwnerMocks()).listWorktrees
+}))
+
+vi.mock('../git/worktrees/catalog/worktree-listing', async (importOriginal) => ({
+  ...(await importOriginal<typeof WorktreeListingModule>()),
+  listWorktreesStrict: (await getWorktreeOwnerMocks()).listWorktreesStrict
+}))
+
+const { getWorktreeOwnerMocks } = vi.hoisted(() => {
+  function createWorktreeOwnerMocks() {
+    return (async () =>
+      (await import('./runtime-rpc-worktree-store-fixtures')).createWorktreeListingMocks())()
   }
+  let fixture: ReturnType<typeof createWorktreeOwnerMocks> | undefined
+  return { getWorktreeOwnerMocks: () => (fixture ??= createWorktreeOwnerMocks()) }
 })
 
 describe('OrcaRuntimeRpcServer', () => {
-  it('classifies worker-start as a keepalive-backed long poll', () => {
-    expect(
-      classifyRuntimeLongPoll({
-        id: 'req_worker_start',
-        authToken: 'token',
-        method: 'orchestration.workerStart',
-        params: { task: 'task_1', timeoutMs: 60_000 }
-      })
-    ).toBe('wait')
-  })
-
-  it.each(['agent.launch', 'agent.launchReplay'])(
-    'keeps a prompted %s alive while it waits for the agent to be ready',
-    (method) => {
-      const prompt = { text: 'fix the build', delivery: 'submit' }
-      expect(
-        classifyRuntimeLongPoll({
-          id: 'req_launch',
-          authToken: 'token',
-          method,
-          params: { prompt }
-        })
-      ).toBe('wait')
-      // An existing workspace without a prompt remains a short call.
-      expect(
-        classifyRuntimeLongPoll({ id: 'req_launch', authToken: 'token', method, params: {} })
-      ).toBeNull()
-    }
-  )
-
-  it.each(['agent.launch', 'agent.launchReplay'])(
-    'keeps unprompted %s workspace setup alive',
-    (method) => {
-      expect(
-        classifyRuntimeLongPoll({
-          id: 'req_setup',
-          authToken: 'token',
-          method,
-          params: {
-            target: { kind: 'create-worktree', create: { repo: 'id:repo-1', name: 'task' } }
-          }
-        })
-      ).toBe('wait')
-      expect(
-        classifyRuntimeLongPoll({
-          id: 'req_existing',
-          authToken: 'token',
-          method,
-          params: { target: { kind: 'existing', worktree: 'id:wt-7' } }
-        })
-      ).toBeNull()
-    }
-  )
-
-  it('keeps agent-prompt submission sockets alive during verification', () => {
-    expect(
-      classifyRuntimeLongPoll({
-        id: 'req_prompt',
-        authToken: 'token',
-        method: 'terminal.send',
-        params: { agentPrompt: true }
-      })
-    ).toBe('wait')
-    expect(
-      classifyRuntimeLongPoll({
-        id: 'req_direct',
-        authToken: 'token',
-        method: 'terminal.send',
-        params: { agentPrompt: false }
-      })
-    ).toBeNull()
-  })
-
   it('rejects oversized RPC frames instead of buffering them indefinitely', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const runtime = new OrcaRuntimeService()

@@ -2,7 +2,7 @@ import type { RuntimeSyncedTab } from '../../../../shared/runtime-types'
 import type {
   RuntimeLeafRecord,
   RuntimePtyWorktreeRecord
-} from '../../runtime-terminal-state-records'
+} from '../records/runtime-terminal-state-records'
 import type { TerminalHandleRecord } from '../../runtime-terminal-contracts'
 import type { PtyIncarnationHandleRecord } from '../../orca-runtime-core'
 import { TerminalIncarnationCandidates } from './terminal-incarnation-candidates'

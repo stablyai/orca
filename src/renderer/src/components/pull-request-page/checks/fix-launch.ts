@@ -3,13 +3,13 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { startFixChecksAgent } from '@/lib/fix-checks-agent-launch'
 import { launchWorkItemDirect } from '@/lib/launch-work-item-direct'
-import { buildFixBrokenChecksPrompt } from '../../../../../shared/pr-checks-fix-prompt'
-import type { SourceControlAiWriteTarget } from '../../../../../shared/source-control-ai-recipe-save'
+import { buildFixBrokenChecksPrompt } from '../../../../../shared/source-control/checks/pr-checks-fix-prompt'
+import type { SourceControlAiWriteTarget } from '../../../../../shared/source-control/ai/settings/source-control-ai-recipe-save'
 import { saveSourceControlAiActionRecipeForTarget } from '../../right-sidebar/source-control/ai/recipe-persistence'
 import type {
   SourceControlActionRecipe,
   SourceControlLaunchActionId
-} from '../../../../../shared/source-control-ai-actions'
+} from '../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import { translate } from '@/i18n/i18n'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import type { PRCheckDetail } from '../../../../../shared/github/check-types'
@@ -44,6 +44,8 @@ export async function startFixChecksFromDialog(args: {
   /** Omitted when CLI arguments do not apply, so the launch resolves the global Agents setting. */
   agentArgs?: string
   sessionOptions?: Readonly<Record<string, string>>
+  chatSessionOptions?: Readonly<Record<string, string>>
+  preferredSurface?: 'chat'
   launchChoice?: Parameters<typeof launchWorkItemDirect>[0]['launchChoice']
   agentLaunchPreferences?: Parameters<typeof launchWorkItemDirect>[0]['agentLaunchPreferences']
   sessionOptionsYieldToAgentArgs?: true
@@ -64,7 +66,17 @@ export async function startFixChecksFromDialog(args: {
     agentLaunchPreferences: args.agentLaunchPreferences,
     agentArgs: args.agentArgs,
     ...(args.sessionOptions ? { sessionOptions: args.sessionOptions } : {}),
-    ...(args.launchChoice ? { launchChoice: args.launchChoice } : {}),
+    ...(args.chatSessionOptions !== undefined
+      ? { chatSessionOptions: args.chatSessionOptions }
+      : {}),
+    ...(args.launchChoice || args.preferredSurface
+      ? {
+          launchChoice: {
+            ...args.launchChoice,
+            ...(args.preferredSurface ? { preferredSurface: args.preferredSurface } : {})
+          }
+        }
+      : {}),
     sessionOptionsYieldToAgentArgs: args.sessionOptionsYieldToAgentArgs,
     openModalFallback: () => {
       toast.error(

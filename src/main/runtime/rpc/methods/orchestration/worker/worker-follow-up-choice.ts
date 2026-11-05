@@ -17,7 +17,7 @@ import { OrchestrationError } from '../../../../orchestration/orchestration-erro
 import type { DispatchContextRow } from '../../../../orchestration/types'
 import type { WorkerTerminalResourceRow } from '../../../../orchestration/worker-terminal-ownership'
 import { getStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/structured-agent-session-registry'
-import { resolveStructuredWorkerIdentity } from '../../../../structured-worker-authority'
+import { resolveStructuredWorkerIdentity } from '../../../../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
 import { earlierWork, parseStartOptions } from './worker-earlier-work'
 import {
   reopenWorkerChat,
@@ -188,7 +188,7 @@ function chatTabOpen(db: OrchestrationDb, resource: WorkerTerminalResourceRow): 
 }
 
 /** The user resumed the conversation in a tab of their own: the follow-up goes there and the tab stays theirs. */
-async function userTabHoldingSession(
+export async function userTabHoldingSession(
   runtime: OrcaRuntimeService,
   session: WorkerResumeSession
 ): Promise<string | undefined> {

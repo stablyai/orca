@@ -5,16 +5,6 @@ import type { StructuredAgentSessionWorkScope } from '../../../shared/agent-sess
 import { activeStructuredAgentSessionTurnId } from '../../../shared/agent-session/view/structured-agent-session-live-turn'
 import { projectStructuredAgentSessionStatus } from '../../../shared/agent-session/view/structured-agent-session-projection'
 
-/** Every reason retains the pointer; none of them consume mail. */
-export type StructuredPointerRetainReason =
-  | 'session-not-attached'
-  | 'turn-unsettled'
-  | 'dispatch-rejected'
-  | 'dispatch-unknown'
-
-/** The dispatch states both provider adapters converge on. */
-export type StructuredDispatchState = 'accepted' | 'rejected' | 'unknown'
-
 /** Read both facts from the full reduced timeline so downstream callers cannot infer idle from a page. */
 export type StructuredSessionGateFacts = {
   turnRunning: boolean
@@ -36,15 +26,4 @@ export function structuredSessionGateFacts(
       ) !== null,
     awaitingHuman: projectStructuredAgentSessionStatus(items, [], undefined, scope) === 'attention'
   }
-}
-
-/** Only accepted consumes mail; unknown cannot distinguish a dead provider from delayed acknowledgment. */
-export function structuredDispatchDelivered(state: StructuredDispatchState): state is 'accepted' {
-  return state === 'accepted'
-}
-
-export function retainReasonForDispatch(
-  state: Exclude<StructuredDispatchState, 'accepted'>
-): StructuredPointerRetainReason {
-  return state === 'rejected' ? 'dispatch-rejected' : 'dispatch-unknown'
 }

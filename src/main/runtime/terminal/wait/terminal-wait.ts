@@ -7,19 +7,19 @@ import {
   buildPtyTerminalWaitExitError,
   buildPtyTerminalWaitResult,
   getPtyTerminalState
-} from '../../terminal-wait-results'
+} from './terminal-wait-results'
 import { readsTrustedScreen } from '../../agent-state-rules/agent-state-rules-engine'
 import { showsScreenProbeBanner } from '../../agent-state-rules/agent-state-text-anchors'
-import { buildTerminalWaitText } from '../../terminal-wait-tail-state'
-import { evaluateTuiIdle, type TuiIdleVerdict } from '../../tui-idle-evidence'
+import { buildTerminalWaitText } from './terminal-wait-tail-state'
+import { evaluateTuiIdle, type TuiIdleVerdict } from './tui-idle-evidence'
 import {
   outputClockOf,
   ptyTuiIdleEvidence,
   type TuiIdleEvidenceSource
-} from '../../tui-idle-evidence-source'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+} from './tui-idle-evidence-source'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { TerminalWaiter } from '../../runtime-terminal-contracts'
-import type { RuntimePtyWorktreeRecord } from '../../runtime-terminal-state-records'
+import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 import type { RuntimeTerminalIdlePolls } from './terminal-idle-polls'
 import type { RuntimeTerminalWaiterRegistry } from './terminal-waiter-registry'
 

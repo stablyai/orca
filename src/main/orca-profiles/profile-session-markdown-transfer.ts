@@ -1,5 +1,5 @@
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
-import { ownedEditorFileId } from '../../shared/workspace-session-pane-ownership'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
+import { ownedEditorFileId } from '../../shared/workspace-session/workspace-session-pane-ownership'
 
 type OwnerProjection = {
   mapOwnerKey: (ownerKey: string) => string | null

@@ -4,7 +4,7 @@ import {
   isAgentSessionRefusalError
 } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { prepareCodexAdoption } from '../../native-chat/codex-adoption-preparation'
-import type { NativeCodexResumePreparation } from '../../codex/codex-ai-vault-session-resume'
+import type { NativeCodexResumePreparation } from '../../codex/history/resume/codex-ai-vault-session-resume'
 import type { StructuredAgentSessionResumeSource } from '../../../shared/agent-session/structured-agent-session-create'
 import type {
   StructuredAgentCliSourceEvidence,
@@ -28,7 +28,7 @@ import {
   resolveStructuredAgentSessionAdoption,
   structuredAdoptionConflictError
 } from '../../native-chat/structured-agent-session-history-adoption'
-import { structuredAgentRuntimeMetadata } from '../structured-agent-runtime-metadata'
+import { structuredAgentRuntimeMetadata } from './installation/structured-agent-runtime-metadata'
 import type {
   StructuredAgentTranscriptImport,
   StructuredAgentTranscriptImportSettings

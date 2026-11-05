@@ -26,7 +26,7 @@ import {
 import {
   generatedTitleReplacesExisting,
   generatedTitleSourceText
-} from '../../../../../shared/agent-generated-tab-title-rules'
+} from '../../../../../shared/agent-status/presentation/agent-generated-tab-title-rules'
 
 export function createAgentStatusLiveActions(
   runtime: AgentStatusRuntime

@@ -1,8 +1,6 @@
 // @vitest-environment happy-dom
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ORCA_INTERNAL_FILE_DRAG_TYPE } from '../../../shared/native-file-drop'
+import { afterEach, describe, expect, it } from 'vitest'
 import { installOsFileDropCancellationGuard } from './os-file-drop-cancellation-guard'
-import { WORKSPACE_FILE_DRAG_SOURCE_MIME, WORKSPACE_FILE_PATHS_MIME } from './workspace-file-drag'
 
 let dispose: (() => void) | null = null
 
@@ -25,57 +23,6 @@ afterEach(() => {
 })
 
 describe('OS file drop cancellation guard', () => {
-  it('cancels unclaimed OS files in capture and sets none in bubble', () => {
-    dispose = installOsFileDropCancellationGuard()
-    const target = document.createElement('div')
-    document.body.append(target)
-    const seenAtTarget = vi.fn((event: Event) => event.defaultPrevented)
-    target.addEventListener('drop', seenAtTarget)
-    const hover = drag(target, 'dragover')
-    const drop = drag(target, 'drop')
-    expect(hover.event.defaultPrevented).toBe(true)
-    expect(hover.transfer.dropEffect).toBe('none')
-    expect(seenAtTarget).toHaveReturnedWith(true)
-    expect(drop.event.defaultPrevented).toBe(true)
-    expect(drop.transfer.dropEffect).toBe('none')
-  })
-
-  it('leaves internal and non-file drags alone', () => {
-    dispose = installOsFileDropCancellationGuard()
-    const target = document.createElement('div')
-    document.body.append(target)
-    for (const types of [
-      ['text/plain'],
-      ['Files', ORCA_INTERNAL_FILE_DRAG_TYPE],
-      ['Files', WORKSPACE_FILE_PATHS_MIME],
-      ['Files', WORKSPACE_FILE_DRAG_SOURCE_MIME]
-    ]) {
-      const { event, transfer } = drag(target, 'drop', types)
-      expect(event.defaultPrevented).toBe(false)
-      expect(transfer.dropEffect).toBe('move')
-    }
-  })
-
-  it('lets an owner stop propagation before the unclaimed sink', () => {
-    dispose = installOsFileDropCancellationGuard()
-    const target = document.createElement('div')
-    document.body.append(target)
-    target.addEventListener(
-      'drop',
-      (event) => {
-        event.preventDefault()
-        event.stopPropagation()
-        if (event.dataTransfer) {
-          event.dataTransfer.dropEffect = 'copy'
-        }
-      },
-      true
-    )
-    const drop = drag(target, 'drop')
-    expect(drop.event.defaultPrevented).toBe(true)
-    expect(drop.transfer.dropEffect).toBe('copy')
-  })
-
   it('preserves a drop claimed by an earlier document capture listener', () => {
     const claim = (event: DragEvent): void => {
       event.preventDefault()

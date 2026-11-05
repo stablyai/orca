@@ -5,7 +5,7 @@ import {
   readWaitBlockedCarry
 } from './wait-blocked-check-state'
 
-import { MAX_TAIL_CHARS } from './terminal-tail-limits'
+import { MAX_TAIL_CHARS } from './terminal/output/tail/terminal-tail-limits'
 
 /** The accumulation this replaced, verbatim, as the equivalence oracle. */
 function referenceAppend(previous: string, chunk: string): string {

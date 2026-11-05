@@ -2,7 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, vi } from 'vitest'
-import type { AgentStatusStructuredSessionSubject } from '../../../shared/agent-status-subject'
+import type { AgentStatusStructuredSessionSubject } from '../../../shared/agent-status/contracts/agent-status-subject'
 import { AgentHookServer } from '../../agent-hooks/server'
 import { runClaudeControl } from '../../claude/claude-agent-sdk-control-requests'
 import { ClaudeStructuredSessionAdapter } from '../../claude/structured/claude-structured-session-adapter'
@@ -13,7 +13,7 @@ import {
 } from '../../claude/structured/claude-structured-session-test-support'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
-import { structuredClaudeLifecycleEvent } from '../../runtime/structured-claude-runtime-adapter'
+import { structuredClaudeLifecycleEvent } from '../../runtime/agent-session/installation/structured-claude-runtime-adapter'
 import {
   closeTestJournalHostDatabases,
   openTestJournalHostDatabase

@@ -8,8 +8,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import type * as RunProcessModule from '@orca/process-host'
 import type * as FsPromisesModule from 'node:fs/promises'
-import type { RuntimeBrowserCommandHost } from '../runtime/browser/browser-command-contracts'
-import { RuntimeBrowserPageRegistry } from '../runtime/runtime-browser-page-registry'
+import type { RuntimeBrowserCommandHost } from '../runtime/browser/commands/browser-command-contracts'
+import { RuntimeBrowserPageRegistry } from '../runtime/browser/client-pages/runtime-browser-page-registry'
 import { readRuntimeMetadataAsync } from '../runtime/runtime-metadata'
 
 const { spawnProcessMock, lockedRemovalPaths } = vi.hoisted(() => ({
@@ -38,6 +38,7 @@ vi.mock('@orca/process-host', async (importOriginal) => ({
   spawnProcess: spawnProcessMock
 }))
 
+import { BROWSER_EXPECT_URL_RUNTIME_CAPABILITY } from '../../shared/browser-runtime-capabilities'
 import { BROWSER_SIDECAR_OWNER_ENV } from '../../shared/browser-sidecar-lifetime'
 import { headlessServeOzonePlatformSwitches } from '../../shared/headless-serve-ozone-platform'
 import { ElectronServeBrowserProcess } from './electron-serve-browser-process'
@@ -47,7 +48,7 @@ import {
   createRuntimeBrowserCommands,
   runtimeBrowserCommandsFactorySupportsGoogleCookieClear,
   setRuntimeBrowserCommandsFactory
-} from '../runtime/runtime-browser-commands-factory'
+} from '../runtime/browser/installation/runtime-browser-commands-factory'
 
 vi.mock('./orcad-browser-provider', () => ({ resolveOrcadBrowserProvider: vi.fn() }))
 // The fixture's /Applications/Orca.app path would open a real macOS install park.
@@ -59,8 +60,8 @@ vi.mock('../browser/cookies/browser-cookie-import', () => ({
   detectInstalledBrowsers: () => [{ family: 'chrome', profiles: [], selectedProfile: 'Default' }],
   importCookiesFromBrowser: async () => ({ ok: true, summary: {} })
 }))
-import { browserSessionRegistry } from '../browser/browser-session-registry'
-import { browserProfileRpcFixture } from '../runtime/browser/browser-profile-rpc-test-fixture'
+import { browserSessionRegistry } from '../browser/sessions/browser-session-registry'
+import { browserProfileRpcFixture } from '../runtime/browser/commands/browser-profile-rpc-test-fixture'
 
 const actual = await vi.importActual<typeof OrcadBrowserProviderModule>('./orcad-browser-provider')
 
@@ -537,6 +538,51 @@ describe('ElectronServeBrowserProcess command routing', () => {
     await setControl({})
     await expect(commands.browserTabCurrent({ worktree: 'wt-a' })).rejects.toMatchObject({
       code: 'browser_no_tab'
+    })
+  })
+
+  it('refuses --expect-url when the installed app would drop it, without reaching the sidecar', async () => {
+    const commands = (await startProvider()).createCommands(host)
+
+    await expect(
+      commands.browserClick({ page: 'p', element: '@e1', expectUrl: 'https://example.test/a' })
+    ).rejects.toMatchObject({ code: 'browser_expect_url_unsupported' })
+    expect(await browserRequests()).toEqual([])
+  })
+
+  it('forwards --expect-url to a sidecar that enforces it and names the caller’s page', async () => {
+    await setControl({
+      capabilities: [['browser.headless.v1', BROWSER_EXPECT_URL_RUNTIME_CAPABILITY]]
+    })
+    const commands = (await startProvider()).createCommands(host)
+    await commands.browserTabCreate({ worktree: 'wt-a', page: 'public-page' })
+    const expectUrl = 'https://example.test/a'
+    const sidecarPage = 'sidecar-1'
+    await setControl({
+      errors: {
+        'browser.click': {
+          code: 'browser_expected_url_mismatch',
+          message: 'moved',
+          data: {
+            expectedUrl: expectUrl,
+            actualUrl: 'https://example.test/b',
+            browserPageId: sidecarPage,
+            mayHaveStarted: false
+          }
+        }
+      }
+    })
+
+    await expect(
+      commands.browserClick({ page: 'public-page', element: '@e1', expectUrl })
+    ).rejects.toMatchObject({
+      code: 'browser_expected_url_mismatch',
+      message: expect.stringContaining('Browser page public-page is at'),
+      data: { expectedUrl: expectUrl, browserPageId: 'public-page' }
+    })
+    expect((await browserRequests()).at(-1)).toMatchObject({
+      method: 'browser.click',
+      params: { page: sidecarPage, expectUrl }
     })
   })
 

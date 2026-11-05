@@ -3,9 +3,9 @@ import { act, cleanup, render, waitFor } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import type { AgentSessionStatusEvent } from '../../../../shared/agent-session/agent-session-wire'
 import type * as RuntimeRpcClientModule from '@/runtime/runtime-rpc-client'
-import { getWorktreeIdsWithStructuredChat } from '../sidebar/visible-worktree-activity-inputs'
-import { selectIsSleepingWorktree } from '../sidebar/use-worktree-sleep-state'
-import { hasSleepableWorkspaceActivity } from '../sidebar/workspace-lineage-menu-actions'
+import { getWorktreeIdsWithStructuredChat } from '../sidebar/worktree-list/listing/visible-worktree-activity-inputs'
+import { selectIsSleepingWorktree } from '../sidebar/workspace-actions/sleep/use-worktree-sleep-state'
+import { hasSleepableWorkspaceActivity } from '../sidebar/workspace-actions/context-menu/workspace-lineage-menu-actions'
 import {
   agentSessionTabFixture,
   repoFixture,

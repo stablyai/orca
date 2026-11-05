@@ -3,7 +3,7 @@ import { useAppStore } from '@/store'
 import { isWindowVisible } from '@/lib/window-visibility-interval'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import { createVisibleHostedReviewRefreshScheduler } from '@/store/github/visible-hosted-review-refresh-scheduler'
-import { getWorkspaceReferenceRefreshTargets } from '@/components/sidebar/workspace-reference-refresh-targets'
+import { getWorkspaceReferenceRefreshTargets } from '@/components/sidebar/workspace-card/review/workspace-reference-refresh-targets'
 import {
   getVisibleHostedReviewRefreshTargets,
   visibleHostedReviewRefreshInputsChanged

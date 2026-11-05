@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
+import { installFakeAppEnvironment } from '../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 import { EventEmitter } from 'node:events'
 import type * as NodeFs from 'node:fs'
 import type * as HostCodexManagedHomeOwnership from './host-codex-managed-home-ownership'

@@ -70,6 +70,7 @@ function renderMenu(overrides: Record<string, unknown> = {}): string {
     canExpandPane: true,
     menuPaneIsExpanded: false,
     onCopy: vi.fn(),
+    addToChat: null,
     onSelectAll: vi.fn(),
     onPaste: vi.fn(),
     onSplitRight: vi.fn(),
@@ -301,12 +302,13 @@ describe('TerminalContextMenu', () => {
           label: 'Local Mac',
           repoCommands: [{ id: 'repo', label: 'Repo command', command: 'repo', appendEnter: true }],
           globalCommands: [
-            { id: 'global', label: 'Global command', command: 'global', appendEnter: true }
+            { id: 'global', label: 'Global command', command: 'global', appendEnter: false }
           ]
         }
       ]
     })
 
+    expect(rendered).toContain('Insert')
     expect(rendered).toContain('Orca')
     expect(rendered).toContain('Global')
     expect(rendered).not.toContain('Local Mac')

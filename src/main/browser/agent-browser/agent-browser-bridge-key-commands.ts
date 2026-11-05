@@ -4,20 +4,21 @@ import type {
 } from '../../../shared/runtime-browser-contracts'
 import { assertClipboardTextWriteWithinLimitWithYield } from '../../../shared/clipboard-text'
 import { BrowserError } from '../browser-error'
-import { acquireElectronDebugger } from '../electron-debugger-lease'
+import { acquireElectronDebugger } from '../cdp/debugger/electron-debugger-lease'
 import {
   parseCdpKeyEvent,
   imeFallbackKeyEvent,
   typedInputSteps,
   type TypedInputStep
-} from '../cdp-keyboard-us-layout'
+} from '../cdp/input/cdp-keyboard-us-layout'
 import type { ResolvedBrowserCommandTarget } from './agent-browser-bridge-types'
 import {
   dispatchPageKeyEvents,
   routePageTextInsertion,
   type GuestCdpSender
-} from '../guest-direct-key-input'
-import { sendGuestCdpCommand } from '../guest-cdp-command'
+} from '../cdp/input/guest-direct-key-input'
+import { assertExpectedPageUrlForStep } from '../cdp/input/browser-expected-page-url'
+import { sendGuestCdpCommand } from '../cdp/debugger/guest-cdp-command'
 import { AgentBrowserBridgeCaptureCommands } from './agent-browser-bridge-capture-commands'
 
 // Bounds the events a typed run holds and how long it keeps the main loop busy.
@@ -92,6 +93,7 @@ export abstract class AgentBrowserBridgeKeyCommands extends AgentBrowserBridgeCa
           await flush()
           const route = await routePageTextInsertion(wc, { text: step }, send, guardFocus)
           try {
+            assertExpectedPageUrlForStep()
             await route.deliver({ text: step })
           } finally {
             route.release()

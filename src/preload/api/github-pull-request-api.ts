@@ -1,3 +1,4 @@
+import type { GhAccountBinding } from '../../shared/github/account-binding'
 import type { AppStarSource } from '../../shared/gh-star-source'
 import type { GhAuthDiagnostic } from '../../shared/github/auth-types'
 import type { TaskSourceContext } from '../../shared/task-source-context'
@@ -133,6 +134,7 @@ export type GithubPullRequestApi = {
   }) => Promise<boolean>
   setPRFileViewed: (
     args: GitHubRepoSelectorArgs & {
+      expectedGhAccount?: GhAccountBinding | null
       prNumber: number
       prRepo?: GitHubOwnerRepo | null
       pullRequestId: string

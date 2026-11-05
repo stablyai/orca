@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPaneBindingStore } from '../pty-launch-race-test-fixture'
-import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import {
   SessionNotFoundError,
   TerminalSessionOwnerUnverifiedError
-} from '../../../daemon/daemon-errors'
+} from '../../../daemon/protocol/daemon-errors'
 import type { Store } from '../../../persistence/loading-store/store'
 import { LocalPtyProvider } from '../../../providers/local-pty/local-pty-provider'
 import { OrcaRuntimeService } from '../../../runtime/orca-runtime'

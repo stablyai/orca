@@ -1,7 +1,9 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { OrcaRuntimeService, join } from '../orca-runtime-test-mocks.spec'
-import { store, syncSinglePty } from '../orca-runtime-test-fixtures.spec'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { join } from 'node:path'
+import { store, syncSinglePty } from './orca-runtime-test-fixtures.spec'
 import {
   clearNativeWindowsConptyPty,
   markNativeWindowsConptyPty

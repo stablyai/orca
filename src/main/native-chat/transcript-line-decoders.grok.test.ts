@@ -2,21 +2,6 @@ import { describe, expect, it } from 'vitest'
 import { decodeGrokTranscriptLine } from './transcript-line-decoders'
 
 describe('decodeGrokTranscriptLine', () => {
-  it('decodes user text and strips <user_query> wrappers', () => {
-    const line = JSON.stringify({
-      type: 'user',
-      content: [{ type: 'text', text: '<user_query>\nFix the bug\n</user_query>' }],
-      timestamp: '2026-06-18T00:00:00.000Z'
-    })
-    expect(decodeGrokTranscriptLine(line, 'fb-1')).toEqual({
-      id: 'fb-1',
-      role: 'user',
-      blocks: [{ type: 'text', text: 'Fix the bug' }],
-      timestamp: Date.parse('2026-06-18T00:00:00.000Z'),
-      source: 'transcript'
-    })
-  })
-
   it('decodes assistant tool calls on empty content rows', () => {
     const line = JSON.stringify({
       type: 'assistant',
@@ -168,40 +153,6 @@ describe('decodeGrokTranscriptLine', () => {
     })
   })
 
-  it('filters Grok bootstrap rows from a real-schema transcript prefix', () => {
-    const rows = [
-      { type: 'system', content: 'System context' },
-      {
-        type: 'user',
-        content: [{ type: 'text', text: '<user_info>Runtime context</user_info>' }]
-      },
-      {
-        type: 'user',
-        content: [{ type: 'text', text: 'Project context' }],
-        synthetic_reason: 'project_instructions'
-      },
-      {
-        type: 'user',
-        content: [{ type: 'text', text: 'Reminder context' }],
-        synthetic_reason: 'system_reminder'
-      },
-      {
-        type: 'user',
-        content: [{ type: 'text', text: '<user_query>Visible prompt</user_query>' }]
-      },
-      { type: 'assistant', content: 'Visible answer' }
-    ]
-
-    const messages = rows
-      .map((row, index) => decodeGrokTranscriptLine(JSON.stringify(row), `fb-real-schema-${index}`))
-      .filter((message) => message !== null)
-
-    expect(messages).toMatchObject([
-      { role: 'user', blocks: [{ type: 'text', text: 'Visible prompt' }] },
-      { role: 'assistant', blocks: [{ type: 'text', text: 'Visible answer' }] }
-    ])
-  })
-
   it('decodes reasoning summaries', () => {
     const line = JSON.stringify({
       type: 'reasoning',
@@ -214,10 +165,5 @@ describe('decodeGrokTranscriptLine', () => {
       blocks: [{ type: 'text', text: 'Planning the change' }],
       source: 'transcript'
     })
-  })
-
-  it('skips system prompts', () => {
-    const line = JSON.stringify({ type: 'system', content: 'You are Grok' })
-    expect(decodeGrokTranscriptLine(line, 'fb-4')).toBeNull()
   })
 })

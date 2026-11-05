@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import { normalizeExecutionHostId } from '../../../shared/execution-host'
 import type { StructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-host'
@@ -11,12 +11,15 @@ import { OrcaRuntimeService } from '../orca-runtime'
 import { withChatTabChanges } from './agent-session-tab-layout'
 import { structuredAgentSessionTabId } from '../../../shared/agent-session/view/structured-agent-session-projection'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
-import { chatTabCommandsSettled, layoutApplyOn } from '../session-layout-apply.test-fixture'
+import {
+  chatTabCommandsSettled,
+  layoutApplyOn
+} from '../orca-runtime-tests/session-layout-apply.test-fixture'
 import {
   captureStructuredSessionSurface,
   closeCapturedStructuredSession
 } from './structured-agent-session-close'
-import { partialRuntimeStore } from '../runtime-store-partial-fixture'
+import { partialRuntimeStore } from '../orca-runtime-tests/runtime-store-partial-fixture'
 
 const WT = 'repo-1::/tmp/worktree-a'
 

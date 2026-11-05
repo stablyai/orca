@@ -1,5 +1,3 @@
-// Drive the real host/journal/adapter with fake Codex: interrupt answers precede turn/completed, so Stop settlement must prevent a transient failed turn.
-
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -9,8 +7,8 @@ import type {
   CodexAppServerConnectionHandlers
 } from '../../codex/app-server/codex-app-server-connection-types'
 import type { openCodexAppServerConnection } from '../../codex/app-server/codex-app-server-connection'
-import { readCodexTurnId } from '../../codex/codex-structured-thread-facts'
-import { codexTurnLifecycleFake } from '../../codex/codex-turn-lifecycle-fake'
+import { readCodexTurnId } from '../../codex/app-server/codex-structured-thread-facts'
+import { codexTurnLifecycleFake } from '../../codex/structured/journal/codex-turn-lifecycle-fake'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import type { AgentJournalTurnItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionStatusSummary } from '../../../shared/agent-session/agent-session-wire'
@@ -33,7 +31,8 @@ import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
 } from './structured-agent-session-runtime'
-import { scriptedCodexTransport } from '../scripted-codex-transport.test-fixture'
+import { scriptedCodexTransport } from '../orca-runtime-tests/scripted-codex-transport.test-fixture'
+// Drive the real host/journal/adapter with fake Codex: interrupt answers precede turn/completed, so Stop settlement must prevent a transient failed turn.
 
 const CALLER = { callerKey: 'codex-interrupt-order-test' }
 const MODEL = {
@@ -137,7 +136,12 @@ async function expectInterruptedThroughout(): Promise<void> {
 
 async function owesWork(): Promise<boolean> {
   const snapshot = await host.journalSnapshot(SESSION)
-  return owesStructuredAgentSessionWork(snapshot.items, snapshot.submissions, fence)
+  return owesStructuredAgentSessionWork(
+    snapshot.items,
+    snapshot.submissions,
+    fence,
+    host.currentWork(SESSION)?.scope
+  )
 }
 
 beforeEach(async () => {

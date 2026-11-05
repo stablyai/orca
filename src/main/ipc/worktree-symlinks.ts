@@ -14,10 +14,7 @@ import {
   type SkippedWorktreeCopyPath,
   type WorktreeCopyBudget
 } from './worktree-include-copy-budget'
-import {
-  findExistingWorktreeSymlinkPaths,
-  getSafeRelativePath
-} from '../git/worktree-symlink-detection'
+import { getSafeRelativePath } from '../git/worktrees/content-paths/worktree-symlink-detection'
 
 type WorktreeLinkedPathOptions = {
   platform?: NodeJS.Platform
@@ -319,8 +316,6 @@ export async function removeWorktreeLinkedPaths(
     }
   }
 }
-
-export { findExistingWorktreeSymlinkPaths }
 
 /** Unlink configured symlinks before Git removal so shared paths do not look untracked.
  *

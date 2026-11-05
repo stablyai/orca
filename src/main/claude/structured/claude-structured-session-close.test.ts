@@ -10,7 +10,7 @@ import {
   fakeClaude,
   identityFor
 } from './claude-structured-session-test-support'
-import type { AgentChildWorkEvidence } from '../../../shared/agent-status-child-work-evidence'
+import type { AgentChildWorkEvidence } from '../../../shared/agent-status/child-work/agent-status-child-work-evidence'
 import { AgentSessionAcquisitionRootExitObservedError } from '../../native-chat/agent-session-wire/structured-agent-session-acquisition-errors'
 
 describe('Claude published session close lifecycle', () => {

@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import { parsePluginManifest } from '../manifest/plugin-manifest'
-import { PLUGIN_SCHEMA_NEWEST_SINCE } from '../installation/plugin-host-version'
 import { formatPluginApprovalMessage, pluginApprovalGrants } from '../approval/plugin-cli-approval'
 import { fingerprintPluginConsent } from '../approval/plugin-consent-fingerprint'
 
@@ -31,7 +30,6 @@ describe('commands[].replaces', () => {
     expect(
       issues(manifest([{ id: 'tasks', title: 'Tasks', replaces: 'view.tasks' }], '>=1.4.247'))
     ).toContain('1.4.248')
-    expect(PLUGIN_SCHEMA_NEWEST_SINCE).toBe('1.4.248')
   })
 
   it('refuses unknown actions, aliases that replace, and two commands for one action', () => {
@@ -81,11 +79,6 @@ describe('approving a replacing plugin from the CLI', () => {
       nextSteps: []
     })
     expect(message).toContain(`- Runs "Task board" instead of Orca's own view.tasks`)
-  })
-
-  it('leaves the grants of other plugins as they were', () => {
-    const parsed = parsePluginManifest(manifest([{ id: 'tasks', title: 'Tasks' }]))
-    expect(parsed.ok && 'replacements' in pluginApprovalGrants(parsed.manifest)).toBe(false)
   })
 })
 

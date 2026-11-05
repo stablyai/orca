@@ -1,7 +1,18 @@
-import type { AgentMessageSender, AgentMessageSource } from './agent-session-message-source'
-import type { AgentStatusEntry } from '../agent-status-types'
+import {
+  orchestrationMailNotice,
+  type AgentMessageSender,
+  type AgentMessageSource
+} from './agent-session-message-source'
+import type { AgentStatusEntry } from '../agent-status/contracts/agent-status-types'
 import type { NativeChatMessage } from '../native-chat/native-chat-types'
 import { agentMessageTranscriptText } from './agent-message-display-text'
+
+export function agentMessageIsCompact(
+  message: Pick<NativeChatMessage, 'agentStart' | 'from'>,
+  from = message.from
+): boolean {
+  return message.agentStart === true || orchestrationMailNotice(from) !== null
+}
 
 export const AGENT_MESSAGE_FOLDED_LINES = 3
 export type AgentMessageHeading =
@@ -71,11 +82,16 @@ export function agentMessageSenderLabel(facts: {
   )
 }
 
-export function agentMessageSenderCanOpen(
-  sender: AgentMessageSender,
-  hasWorkspace: boolean
-): boolean {
-  return hasWorkspace && !sender.party.address.startsWith('dispatch:')
+/** The kind the card saved, when it names one; a saved "unknown" proves nothing, so it is none. */
+export function agentMessageSavedKind(
+  sender: Pick<AgentMessageSender, 'agent'> | undefined
+): AgentMessageSender['agent'] {
+  return sender?.agent === 'unknown' ? undefined : sender?.agent
+}
+
+/** A Dispatch address names work, not a pane; every other sender address can be opened. */
+export function agentMessageSenderCanOpen(sender: AgentMessageSender): boolean {
+  return !sender.party.address.startsWith('dispatch:')
 }
 
 export function agentMessagePrimarySender(
@@ -84,11 +100,17 @@ export function agentMessagePrimarySender(
   return from.senders[0]
 }
 
+/** The sender's own kind is its icon; a live row adds only its status. */
 export function agentMessageSenderView(
   row: AgentMessageSenderView | undefined,
-  chatType: AgentMessageSenderView['agentType']
+  senderType: AgentMessageSenderView['agentType']
 ): AgentMessageSenderView {
-  return row ?? { agentType: chatType }
+  if (!row) {
+    return { agentType: senderType }
+  }
+  return senderType === undefined || row.agentType === senderType
+    ? row
+    : { ...row, agentType: senderType }
 }
 
 export function agentMessageOverflows(height: number, lineHeight: number): boolean {

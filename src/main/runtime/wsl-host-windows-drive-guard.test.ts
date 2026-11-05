@@ -3,7 +3,7 @@ import { WslHostWindowsDriveRefusalError } from '../../shared/wsl-host-windows-d
 import {
   refuseWslHostWindowsDrivePath,
   type WslHostWindowsDriveGuardDeps
-} from './wsl-host-windows-drive-guard'
+} from './terminal/launch/wsl-host-windows-drive-guard'
 
 function deps(overrides: Partial<WslHostWindowsDriveGuardDeps> = {}): WslHostWindowsDriveGuardDeps {
   return {

@@ -13,7 +13,7 @@ import {
   mintStructuredWorkerHandle,
   mintStructuredWorkerPaneKey,
   structuredWorkerProcessIncarnation
-} from '../structured-worker-identity'
+} from '../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
 import {
   ADDRESS_X,
   createSessionCallerHarness,
@@ -109,9 +109,9 @@ describe('orchestration session callers at the dispatch entry', () => {
       })
       .sort()
 
-    // The population: 49 registered methods carrying 35 party-naming fields.
-    expect(registry.size).toBe(49)
-    expect(partyNaming).toHaveLength(35)
+    // The population: 50 registered methods carrying 36 party-naming fields.
+    expect(registry.size).toBe(50)
+    expect(partyNaming).toHaveLength(36)
     expect(partyNaming).toEqual(
       [
         ...Object.entries(ORCHESTRATION_CALLER_PARAM).map(

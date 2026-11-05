@@ -1,10 +1,10 @@
 /** Census through the managed tunnel before lifecycle changes. Unknown counts never mean zero, so live/uncounted hosts defer update (D7). */
 import { getAppEnvironment } from '../../shared/app-environment'
-import { assertRuntimeEnvironmentNotReconciling } from '../../shared/runtime-environment-reconciliation-record'
+import { assertRuntimeEnvironmentNotReconciling } from '../../shared/remote-runtime/host-catalog/runtime-environment-reconciliation-record'
 import {
   redactRuntimeEnvironment,
   type KnownRuntimeEnvironment
-} from '../../shared/runtime-environments'
+} from '../../shared/remote-runtime/host-catalog/runtime-environments'
 import type {
   OrcadManagedDeployResult,
   OrcadManagedPastLiveTerminals,
@@ -163,7 +163,9 @@ export async function runManagedOrcadUpdate(
     return deferral
   }
   clearManagedOrcadUpdateDeferral(environment.id)
-  const started = result.outcome === 'already-active' && (await wakeAlreadyActiveOrcad(slot))
+  const alreadyActive = result.outcome === 'already-active'
+  const managed = { environmentId: environment.id, hostLabel: context.target.label }
+  const started = alreadyActive && (await wakeAlreadyActiveOrcad(slot, managed))
   const readiness = await probeManagedOrcadReadiness(
     context,
     localOrcadDir,

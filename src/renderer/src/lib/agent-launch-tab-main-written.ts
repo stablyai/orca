@@ -1,11 +1,11 @@
 /** Main owns tab creation/closure; attach this window’s session-only prompt, pane verdict and presentation state when its frame draws, retaining them for undrawn workspaces. */
 
-import type { AgentLaunchPaneVerdictEvent } from '../../../shared/agent-launch-pane-verdict'
+import type { AgentLaunchPaneVerdictEvent } from '../../../shared/agent-launch/contracts/agent-launch-pane-verdict'
 import type {
   AgentLaunchTabPublished,
   AgentLaunchTabPublishRequest
-} from '../../../shared/agent-launch-tab-publication'
-import type { TerminalTab } from '../../../shared/terminal-tab-types'
+} from '../../../shared/agent-launch/contracts/agent-launch-tab-publication'
+import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
 import { useAppStore } from '../store'
 import { presentAgentLaunchTab } from './agent-launch-tab-presentation'
 import {

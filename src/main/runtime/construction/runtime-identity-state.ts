@@ -1,7 +1,7 @@
 import type { TerminalIdentitySource } from '../terminal/identity/terminal-identity-source'
 import { randomUUID } from 'node:crypto'
 import { reconcileChatTabIdentities } from '../agent-session/agent-session-tab-identity'
-import { preserveTerminalRetirementProofs } from '../mobile-session-terminal-retirement-proof'
+import { preserveTerminalRetirementProofs } from '../terminal/surface/mobile-session-terminal-retirement-proof'
 import { stampMobileSnapshotVersion } from '../mobile-session-snapshot-version'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { startedMainTerminalSurfaces } from '../terminal/surface/main-terminal-surfaces'
@@ -10,9 +10,9 @@ import {
   headlessMobileSnapshotContentUnchanged,
   mobileSnapshotIdentityUnchanged
 } from '../mobile-session-snapshot-equality'
-import type { TuiAgent } from '../../../shared/tui-agent'
-import type { TerminalAgent } from '../../../shared/terminal-agent'
-import { isTuiAgent } from '../../../shared/tui-agent-config'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
+import type { TerminalAgent } from '../../../shared/agent-status/identity/terminal-agent'
+import { isTuiAgent } from '../../../shared/agent-launch/catalog/tui-agent-config'
 import type { RuntimeStore } from '../runtime-store-contract'
 import type { RuntimeClientSettingsController } from '../runtime-client-settings'
 import type { RuntimeAutomationController } from '../runtime-automation-controller'
@@ -34,11 +34,13 @@ import {
 } from '../runtime-graph-reload-lifecycle'
 import { ClientHostedPageReconciliationWindow } from '../client-hosted-page-reconciliation-window'
 import { ClientSessionTabSelectionStore } from '../client-session-tab-selection'
-import { WorktreeTerminalMutationLock } from '../worktree-terminal-mutation-lock'
-import { RemoteRuntimeTerminalCreateIdempotency } from '../remote-runtime-terminal-create-idempotency'
-import type { PtyIncarnationId } from '../../../shared/pty-incarnation'
+import { WorktreeTerminalMutationLock } from '../workspaces/lifecycle/worktree-terminal-mutation-lock'
+import { RemoteRuntimeTerminalCreateIdempotency } from '../terminal/identity/remote-runtime-terminal-create-idempotency'
+import type { PtyIncarnationId } from '../../../shared/terminal/pty/lifecycle/pty-incarnation'
+
 import type { MobileSessionTabsNotifyCoalescer } from '../mobile-session-tabs-notify-coalescer'
 import { createMobileSessionTabsNotifyCoalescer } from '../mobile-session-tabs-notify-coalescer'
+
 import type { MobileSessionTabsAgentStatusHeartbeat } from '../mobile-session-tabs-agent-status-heartbeat'
 import { createMobileSessionTabsAgentStatusHeartbeat } from '../mobile-session-tabs-agent-status-heartbeat'
 import { TerminalFocusNavigationCoalescer } from '../terminal-focus-navigation-coalescer'
@@ -50,29 +52,31 @@ import type {
   RuntimeLeafRecord,
   PtyRegistrationClaim,
   RuntimeWorktreeTerminalSleepState
-} from '../runtime-terminal-state-records'
+} from '../terminal/records/runtime-terminal-state-records'
 import { MailPointerRepointScheduler } from '../orchestration/mail-pointer-repoint-scheduler'
 import { RuntimeTerminalWaiterRegistry } from '../terminal/wait/terminal-waiter-registry'
-import { RuntimeTerminalWriter } from '../runtime-terminal-writer'
-import { writeRefused } from '../../../shared/pty-write-settlement'
+import { RuntimeTerminalWriter } from '../terminal/input/runtime-terminal-writer'
+import { writeRefused } from '../../../shared/terminal/pty/lifecycle/pty-write-settlement'
 import { RuntimeTerminalIdlePolls } from '../terminal/wait/terminal-idle-polls'
 import { TerminalIntentionalStops } from '../terminal-intentional-stops'
 import { TerminalRunFactsRegister, type TerminalSpawnCommit } from '../terminal-run-facts'
-import type { TuiIdleEvidenceSource } from '../tui-idle-evidence-source'
-import { hasTerminalCommandPainted } from '../terminal-command-paint'
+import type { TuiIdleEvidenceSource } from '../terminal/wait/tui-idle-evidence-source'
+import { hasTerminalCommandPainted } from '../terminal/input/terminal-command-paint'
 import {
   TUI_IDLE_DEFAULT_TIMEOUT_MS,
   TUI_IDLE_POLL_INTERVAL_MS,
   TUI_IDLE_QUIESCENCE_MS
 } from '../orca-runtime-postlude'
 import { RuntimeTerminalWait as RuntimeTerminalWaitController } from '../terminal/wait/terminal-wait'
-import type { PtyLivenessVerdict } from '../../../shared/pty-liveness-verdict'
+import type { PtyLivenessVerdict } from '../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 import type { HostScopedWorktreeKey } from '../../../shared/worktree/host-qualified-identity'
+import type { TerminalHandleAccess } from '../runtime-agent-sender-associations'
 
 import { RuntimeConstructionServices } from './runtime-construction-services'
 
 export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServices {
   protected abstract claimIdleShellPromptForPty(ptyId: string): Promise<boolean>
+  protected abstract terminalHandleAccess(): TerminalHandleAccess
   protected readonly runtimeId = randomUUID()
 
   protected readonly startedAt = Date.now()
@@ -234,6 +238,7 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
   protected mobileSessionTabListeners = new Set<{
     listener: (snapshot: RuntimeMobileSessionTabsResult, changeSequence: number) => void
     clientNavigationId?: string
+    clientKind?: 'mobile' | 'runtime'
   }>()
 
   protected pendingMobileSessionTabsChangeSequenceByWorktree = new Map<string, number>()

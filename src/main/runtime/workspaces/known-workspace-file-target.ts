@@ -1,6 +1,6 @@
 import { getRepoHostIdentityForParts } from '../../../shared/repo-host-identity'
 import { createRepoRowExecutionHostLookup } from '../../../shared/worktree-execution-host-resolution'
-import type { RuntimeWorkspaceCatalog } from './workspace-catalog'
+import type { RuntimeWorkspaceCatalog } from './catalog/workspace-catalog'
 import type { OrcaRuntimeWithListManagedWorktrees } from './managed-workspace-operations'
 import type { OrcaRuntimeWithTransitionGraphReloadToTerminalState } from '../session-graph/session-graph-authority'
 import type { OrcaRuntimeWithBindPtyIncarnationHandle } from '../terminal/identity/terminal-handle-bindings'
@@ -11,13 +11,13 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
 } from '../../../shared/execution-host'
-import type { ResolvedWorktree } from '../runtime-worktree-path-identity'
-import { resolveWorktreeHostRouting } from '../worktree-launch-host-repo'
+import type { ResolvedWorktree } from './catalog/runtime-worktree-path-identity'
+import { resolveWorktreeHostRouting } from './catalog/worktree-launch-host-repo'
 import { findRuntimeWorkspaceFileOwner } from '../../../shared/runtime-workspace-file-owner'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import { randomUUID } from 'node:crypto'
-import type { PtyIncarnationId } from '../../../shared/pty-incarnation'
-import { forgetPtySurface } from '../pty-recorded-surface-topology'
+import type { PtyIncarnationId } from '../../../shared/terminal/pty/lifecycle/pty-incarnation'
+import { forgetPtySurface } from '../terminal/surface/pty-recorded-surface-topology'
 
 export abstract class OrcaRuntimeWithResolveKnownWorkspaceFileTarget extends OrcaRuntimeWithPersistHeadlessTerminalTitle {
   protected abstract deliverPendingMessagesForPty(ptyId: string): void
@@ -131,19 +131,38 @@ export abstract class OrcaRuntimeWithResolveKnownWorkspaceFileTarget extends Orc
 
   onMobileSessionTabsChanged(
     listener: (snapshot: RuntimeMobileSessionTabsResult, changeSequence: number) => void,
-    clientNavigationId?: string
+    clientNavigationId?: string,
+    clientKind?: 'mobile' | 'runtime'
   ): () => void {
     // Drain coalesced notifications before subscribing: the initial snapshot already includes them.
     this.mobileSessionTabsNotifyCoalescer.flushAll()
-    const subscription = { listener, clientNavigationId }
+    const subscription = { listener, clientNavigationId, clientKind }
     this.mobileSessionTabListeners.add(subscription)
     return () => {
       // Flush before removal so this listener receives the latest settled state.
       this.mobileSessionTabsNotifyCoalescer.flushAll()
-      this.mobileSessionTabListeners.delete(subscription)
+      const removed = this.mobileSessionTabListeners.delete(subscription)
+      if (removed && clientKind !== 'mobile') {
+        this.releaseAgentSenderHistoryIfUnobserved()
+      }
       if (this.mobileSessionTabListeners.size === 0) {
         this.mobileSessionTabsAgentStatusHeartbeat.cancelPending()
       }
+    }
+  }
+
+  protected hasAgentSenderListeners(): boolean {
+    for (const { clientKind } of this.mobileSessionTabListeners) {
+      if (clientKind !== 'mobile') {
+        return true
+      }
+    }
+    return false
+  }
+
+  protected releaseAgentSenderHistoryIfUnobserved(): void {
+    if (!this.hasAgentSenderListeners()) {
+      this.agentProjections.senders.releaseDerivedHistory()
     }
   }
 

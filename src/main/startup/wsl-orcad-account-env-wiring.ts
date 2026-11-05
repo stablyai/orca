@@ -3,7 +3,7 @@ import { withClaudeProfileTerminalEnv } from '../claude-accounts/claude-profile-
 import { getSelectedClaudeAccountIdForTarget } from '../claude-accounts/runtime-selection'
 import { getSelectedCodexAccountIdForTarget } from '../codex-accounts/runtime-selection'
 import type { Store } from '../persistence/loading-store/store'
-import { installWslOrcadAccountEnvDependencies } from '../wsl/wsl-orcad-account-env'
+import { installWslOrcadAccountEnvDependencies } from '../wsl/orcad/wsl-orcad-account-env'
 import {
   WSL_ORCAD_ACCOUNT_NOT_APPLIED_CHANNEL,
   type WslOrcadAccountNotAppliedEvent
