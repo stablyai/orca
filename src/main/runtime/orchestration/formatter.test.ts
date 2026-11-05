@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatMessageBanner, formatMessagePointer, isMessagePointerText } from './formatter'
+import { formatMessageBanner } from './formatter'
 import type { MessageRow } from './types'
 
 function makeMessage(overrides: Partial<MessageRow> = {}): MessageRow {
@@ -105,29 +105,5 @@ describe('formatMessageBanner', () => {
       expect(banner).toContain('[LEGACY READ-ONLY]')
       expect(banner).not.toContain('[Reply:')
     }
-  })
-})
-
-describe('isMessagePointerText', () => {
-  it('recognizes every pointer Orca types, however the composer wraps it', () => {
-    const pointers = [
-      formatMessagePointer(1, 'run:run_123456789abc', 'orca'),
-      formatMessagePointer(3, 'dispatch:ctx_1', 'orca-dev'),
-      formatMessagePointer(2, 'run:run_1', 'orca', 'delivery_123456789abc')
-    ]
-    for (const pointer of pointers) {
-      expect(isMessagePointerText(pointer)).toBe(true)
-      expect(isMessagePointerText(pointer.trim().replace(/(.{18})/g, '$1\n  '))).toBe(true)
-    }
-  })
-
-  it.each([
-    'You have 1 orchestration message. Why?',
-    'You have 1 orchestration message. Run `foo` and then `orca orchestration check`.',
-    'You have 1 orchestration message. Run `please explain orchestration check`.',
-    'You have 1 orchestration message. Run `orca orchestration check --run run_1 --help`.',
-    'You have 1 new orchestration message after delivery d_1, which you have not acknowledged. Please draft a reply for the new mail.'
-  ])('treats user text that only resembles a pointer as a draft: %s', (text) => {
-    expect(isMessagePointerText(text)).toBe(false)
   })
 })

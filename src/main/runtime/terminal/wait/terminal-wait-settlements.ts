@@ -18,7 +18,6 @@ import { TUI_IDLE_QUIESCENCE_MS } from '../../orca-runtime-postlude'
 import { USER_INPUT_HOLD_CAP_MS } from '../../claude-open-dialog-hold'
 import { readTerminalComposerTypedText } from '../../../../shared/terminal/input/terminal-composer-draft'
 import { isMailboxTerminalTakingInput } from '../../orchestration/mailbox-owner'
-import { isMessagePointerText } from '../../orchestration/formatter'
 
 import type { OrcaRuntimeWithResolveWaiter } from '../../orca-runtime-resolve-waiter'
 
@@ -157,14 +156,10 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
       : null
     const drivingInputAt = facts.readLastDrivingInputAt(ptyId)
     // Why: main saw every input to a process it started, so with no typing there the draft is Orca's
-    // launch text; a process it attached to, as after a restart, may hold one typed before, or the
-    // pointer Orca typed but never submitted.
+    // launch text; a process it attached to, as after a restart, may hold one typed before.
     const unattributedSince = facts.noteUnattributedDraft(
       ptyId,
-      !!draft &&
-        drivingInputAt === null &&
-        facts.readProcessStartedAt(ptyId) === null &&
-        !isMessagePointerText(draft)
+      !!draft && drivingInputAt === null && facts.readProcessStartedAt(ptyId) === null
     )
     const holdSince = drivingInputAt ?? unattributedSince
     return !!draft && holdSince !== null && Date.now() - holdSince <= USER_INPUT_HOLD_CAP_MS

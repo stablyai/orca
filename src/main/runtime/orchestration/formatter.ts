@@ -123,21 +123,6 @@ export function formatMessagesForInjection(messages: MessageRow[]): string {
   return `\n--- Orchestration Messages (${messages.length}) ---\n${banners}\n---\n`
 }
 
-// Both formatMessagePointer shapes with whitespace removed, since a composer may wrap them anywhere.
-const POINTER_CLI = '(orca|orca-dev|orca-ide)orchestrationcheck((?:--run\\w+)?)'
-const MESSAGE_POINTER_TEXT = [
-  new RegExp(String.raw`^Youhave\d+orchestrationmessages?\.Run\x60${POINTER_CLI}\x60\.$`),
-  new RegExp(
-    String.raw`^Youhave\d+neworchestrationmessages?afterdelivery(\w+),whichyouhavenotacknowledged\.Ifyounolongerhaveit,run\x60${POINTER_CLI}\x60toseeitagain;onceitishandled,run\x60\2orchestrationcheck\3--ack\1\x60,then\x60\2orchestrationcheck\3\x60forthenewmail\.$`
-  )
-]
-
-/** Whether composer text is exactly a pointer Orca typed (see formatMessagePointer), not the user's draft. */
-export function isMessagePointerText(text: string): boolean {
-  const compact = text.replace(/\s+/g, '')
-  return MESSAGE_POINTER_TEXT.some((pointer) => pointer.test(compact))
-}
-
 export function formatMessagePointer(
   count: number,
   mailboxHandle?: string,

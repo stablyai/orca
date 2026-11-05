@@ -154,20 +154,15 @@ describe('mailbox delivery into a pane awaiting the user', () => {
   })
 
   it.each([
-    ['holds a draft typed before the restart until the cap', 'please refactor the auth', true],
+    ['a draft typed before the restart', 'please refactor the auth'],
+    // Orca died between typing a pointer and its Enter: the new pointer follows it and both submit.
     [
-      'holds user text that only starts like a pointer',
-      'You have 1 orchestration message. Why?',
-      true
-    ],
-    [
-      "does not hold on Orca's own unsent pointer",
-      'You have 1 orchestration message. Run `orca orchestration check --run run_1`.',
-      false
+      "Orca's own unsent pointer",
+      'You have 1 orchestration message. Run `orca orchestration check`.'
     ]
   ] as const)(
-    'after an Orca restart reattaches the agent, %s',
-    async (_label, composerText, held) => {
+    'after an Orca restart reattaches the agent, holds mail behind %s until the cap',
+    async (_label, composerText) => {
       vi.useFakeTimers()
       const db = createDatabase('orca-restored-draft-delivery-hold-')
       const { runtime, write } = createRuntime(db, {
@@ -183,7 +178,7 @@ describe('mailbox delivery into a pane awaiting the user', () => {
       insertDirectRunMessage(db, run.id, 'Worker heartbeat')
       runtime.notifyMessageArrived(`run:${run.id}`, 'status')
       await vi.advanceTimersByTimeAsync(10_000)
-      expect(write).toHaveBeenCalledTimes(held ? 0 : 2)
+      expect(write).not.toHaveBeenCalled()
 
       await vi.advanceTimersByTimeAsync(USER_INPUT_HOLD_CAP_MS)
       expect(write.mock.calls.map(([, data]) => data)).toEqual([
