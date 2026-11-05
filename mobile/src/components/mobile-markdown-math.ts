@@ -24,6 +24,15 @@ type InlineMathIndex = {
 
 const inlineIndexes = new WeakMap<StateInline, InlineMathIndex>()
 
+/** Where the run of `$` starting at `at` ends. */
+function dollarRunEnd(text: string, at: number): number {
+  let end = at
+  while (text[end] === '$') {
+    end += 1
+  }
+  return end
+}
+
 /** `escaped[i]`: an odd backslash run sits right before character i. */
 function escapedCharacters(text: string): Uint8Array {
   const escaped = new Uint8Array(text.length + 1)
@@ -56,10 +65,7 @@ function indexInlineSource(src: string): InlineMathIndex {
   for (let at = 0; at < src.length; at += 1) {
     const char = src[at]
     if (char === '$' && !escaped[at]) {
-      let end = at
-      while (src[end] === '$') {
-        end += 1
-      }
+      const end = dollarRunEnd(src, at)
       pushKeyed(index.dollarRuns, end - at, at)
       at = end - 1
     } else if (char === '\\' && !escaped[at] && (src[at + 1] === ')' || src[at + 1] === ']')) {
@@ -101,16 +107,14 @@ function openerAt(src: string, at: number, brackets: boolean): string | null {
   if (src[at] === '\\') {
     return brackets && (src[at + 1] === '(' || src[at + 1] === '[') ? src.slice(at, at + 2) : null
   }
-  let end = at
-  while (src[end] === '$') {
-    end += 1
-  }
+  const end = dollarRunEnd(src, at)
   return end > at ? src.slice(at, end) : null
 }
 
 function inlineMath(state: StateInline, silent: boolean): boolean {
   const { src, pos } = state
-  if (src[pos] !== '$' && src[pos] !== '\\') {
+  const brackets = chatDelimiters(state.env)
+  if (src[pos] !== '$' && !(brackets && src[pos] === '\\')) {
     return false
   }
   let index = inlineIndexes.get(state)
@@ -122,7 +126,7 @@ function inlineMath(state: StateInline, silent: boolean): boolean {
   if (src[pos] === '$' && src[pos - 1] === '$' && !index.escaped[pos - 1]) {
     return false
   }
-  const opener = openerAt(src, pos, chatDelimiters(state.env))
+  const opener = openerAt(src, pos, brackets)
   if (!opener) {
     return false
   }
@@ -167,10 +171,7 @@ function closerInLine(text: string, opener: string): number {
       continue
     }
     if (opener[0] === '$' && text[at] === '$') {
-      let end = at
-      while (text[end] === '$') {
-        end += 1
-      }
+      const end = dollarRunEnd(text, at)
       if (end - at === opener.length) {
         return at
       }

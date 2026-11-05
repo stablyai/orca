@@ -43,3 +43,18 @@ export function markdownMathSelectionText(selection: Selection, root: Element): 
   })
   return (fragment.textContent ?? '').replace(/\n{3,}/g, '\n\n').trimEnd()
 }
+
+/** Puts the selection on the clipboard as {@link markdownMathSelectionText} when it holds a formula. */
+export function copyMarkdownMathSelection(
+  event: { defaultPrevented: boolean; clipboardData: DataTransfer | null; preventDefault(): void },
+  root: Element
+): void {
+  const selection = root.ownerDocument.getSelection()
+  const text = selection && markdownMathSelectionText(selection, root)
+  if (event.defaultPrevented || text === null || text === undefined || !event.clipboardData) {
+    return
+  }
+  event.clipboardData.setData('text/plain', text)
+  event.clipboardData.setData('text/html', '')
+  event.preventDefault()
+}

@@ -40,6 +40,8 @@ type MobileMarkdownMathProps = {
   /** Shown until KaTeX loads, and instead of a formula KaTeX can't parse, as on desktop. */
   source: string
   display: boolean
+  /** GitHub text: large sizes drawn as github.com draws them (the PR line-count table). */
+  githubSizes: boolean
   style?: StyleProp<TextStyle>
 }
 
@@ -48,10 +50,14 @@ export const MobileMarkdownMath = memo(function MobileMarkdownMath({
   value,
   source,
   display,
+  githubSizes,
   style
 }: MobileMarkdownMathProps) {
   const typesetter = useMathTypesetter()
-  const html = useMemo(() => typesetter?.(value, display) ?? null, [typesetter, value, display])
+  const html = useMemo(
+    () => typesetter?.(value, display, githubSizes) ?? null,
+    [typesetter, value, display, githubSizes]
+  )
   const hostRef = useRef<Text>(null)
 
   useLayoutEffect(() => {

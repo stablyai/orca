@@ -317,6 +317,7 @@ function renderBlock(
           value={node.value}
           source={node.source}
           display
+          githubSizes={!ctx.chatMath}
           style={text.style}
         />
       )

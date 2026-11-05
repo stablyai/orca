@@ -39,6 +39,7 @@ async function main() {
     legalComments: 'none',
     logLevel: 'silent',
     nodePaths: [path.join(mobileRoot, 'node_modules')],
+    // The page imports KaTeX for Markdown math too; left external, both share one katex chunk.
     external: ['katex'],
     define: { 'process.env.NODE_ENV': '"production"' }
   })

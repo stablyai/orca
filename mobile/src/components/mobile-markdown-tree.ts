@@ -3,7 +3,7 @@ import cjkFriendly from 'markdown-it-cjk-friendly'
 import footnote from 'markdown-it-footnote'
 import type { AlignType, Nodes, Parent, PhrasingContent, Root, RootContent, Table } from 'mdast'
 import remend from 'remend'
-import { codeNode } from './mobile-markdown-code-nodes'
+import { codeNode, type Token } from './mobile-markdown-code-nodes'
 import { appendHtmlBlock, noteInlineHtml, popContainer } from './mobile-markdown-details'
 import { mobileMarkdownMath } from './mobile-markdown-math'
 import {
@@ -26,7 +26,6 @@ const markdown = new MarkdownIt({ html: true, linkify: true })
 markdown.validateLink = () => true
 endLinkifyUrlsAtProsePunctuation(markdown.linkify)
 
-type Token = ReturnType<MarkdownIt['parse']>[number]
 /** markdown-it's env for every parse of one document; mobile-markdown-math reads `chatMath`. */
 type MathEnv = { chatMath: boolean }
 

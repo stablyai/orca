@@ -1,7 +1,7 @@
 import type { Code } from 'mdast'
 import type MarkdownIt from 'markdown-it'
 
-type Token = ReturnType<MarkdownIt['parse']>[number]
+export type Token = ReturnType<MarkdownIt['parse']>[number]
 
 /** Whether a code block's closing fence has arrived; an unclosed one is still streaming in. */
 export function codeFenceClosed(node: Code): boolean {

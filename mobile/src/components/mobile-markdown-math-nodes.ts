@@ -1,10 +1,8 @@
 import type { Code, Parent, PhrasingContent, RootContent } from 'mdast'
-import type MarkdownIt from 'markdown-it'
 import { isDisplayMathOpener, markdownMathCloser } from '../../../src/shared/markdown-math-rules'
+import type { Token } from './mobile-markdown-code-nodes'
 
 // The mdast nodes mobile-markdown-math's tokens become, shaped like desktop chat's math nodes.
-
-type Token = ReturnType<MarkdownIt['parse']>[number]
 
 /** Whether the formula's closing delimiter arrived; only a streaming block can lack one. */
 export function mathClosed(token: Token): boolean {
@@ -85,13 +83,7 @@ export const GITHUB_MATH_SIZE_MACROS: Readonly<Record<string, string>> = {
 }
 
 /** The enlarging size commands as drawn; smaller ones only leave a column a little wide. */
-const TEX_SIZES: Record<string, number> = {
-  large: 1.2,
-  Large: 1.44,
-  LARGE: 1.44,
-  huge: 1.44,
-  Huge: 1.44
-}
+const TEX_SIZES: Record<string, number> = { large: 1.2, Large: 1.44 }
 
 const MAX_MEASURED_GLYPHS = 64
 const DRAWS_NOTHING =
@@ -102,7 +94,8 @@ const DRAWS_NOTHING =
 export function mobileMathMeasureText(value: string): string {
   let scale = 1
   for (const [, name] of value.matchAll(/\\([a-zA-Z]+)/g)) {
-    scale = Math.max(scale, TEX_SIZES[name!] ?? 1)
+    const drawn = GITHUB_MATH_SIZE_MACROS[`\\${name!}`]?.slice(1) ?? name!
+    scale = Math.max(scale, TEX_SIZES[drawn] ?? 1)
   }
   const glyphs = value
     .replace(/\\(?:color|textcolor)\{[^}]*\}/g, '')
