@@ -231,6 +231,12 @@ export function useGlobalKeybindings(args: {
       ) {
         return
       }
+      if (
+        matchShortcut('sidebar.projects.toggleCollapseAll') &&
+        handlers.get('sidebar.projects.toggleCollapseAll')?.()
+      ) {
+        return
+      }
       if (matchShortcut('view.plugins') && handlers.get('view.plugins')?.()) {
         return
       }

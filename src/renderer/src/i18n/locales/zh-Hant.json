@@ -22016,6 +22016,7 @@
       "chatFind": "在聊天中尋找",
       "terminalToggleNativeChat": "在聊天介面與終端機之間切換",
       "sidebarChildWorkspacesToggle": "顯示／隱藏子工作區",
+      "sidebarProjectsToggleCollapseAll": "摺疊／展開所有專案",
       "terminalClearPaneTitle": "清除窗格標題",
       "terminalClosePane": "關閉作用中的窗格",
       "terminalSplitRight": "向右分割終端機",

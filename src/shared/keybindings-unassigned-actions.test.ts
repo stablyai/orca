@@ -244,6 +244,37 @@ describe('keybindings', () => {
     )
   })
 
+  it('keeps collapse / expand all projects unassigned until users customize it', () => {
+    const binding = { key: 'p', code: 'KeyP', control: true, meta: false, alt: true, shift: false }
+
+    for (const platform of ['darwin', 'linux', 'win32'] as const) {
+      expect(
+        getEffectiveKeybindingsForAction('sidebar.projects.toggleCollapseAll', platform)
+      ).toEqual([])
+    }
+    expect(keybindingMatchesAction('sidebar.projects.toggleCollapseAll', binding, 'linux')).toBe(
+      false
+    )
+    expect(
+      keybindingMatchesAction('sidebar.projects.toggleCollapseAll', binding, 'linux', {
+        'sidebar.projects.toggleCollapseAll': ['Mod+Alt+P']
+      })
+    ).toBe(true)
+    expect(
+      keybindingMatchesAction(
+        'sidebar.projects.toggleCollapseAll',
+        binding,
+        'linux',
+        { 'sidebar.projects.toggleCollapseAll': ['Mod+Alt+P'] },
+        { context: 'terminal', terminalShortcutPolicy: 'orca-first' }
+      )
+    ).toBe(true)
+
+    const definition = getKeybindingDefinition('sidebar.projects.toggleCollapseAll')
+    expect(definition?.group).toBe('Global')
+    expect(definition?.scope).toBe('global')
+  })
+
   it('leaves floating workspace minimize unassigned because floating terminal toggle owns show and hide', () => {
     const platforms: readonly KeybindingPlatform[] = ['darwin', 'linux', 'win32']
     const minimizeAction = 'floatingWorkspace.minimize' as KeybindingActionId

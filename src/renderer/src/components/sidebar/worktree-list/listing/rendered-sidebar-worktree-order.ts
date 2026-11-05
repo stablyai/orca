@@ -28,9 +28,11 @@ import { selectWorktreeListReviewCacheInputs } from './review-cache-inputs'
 import {
   filterFolderWorkspacesForVisibleHosts,
   filterProjectGroupsForVisibleHosts,
+  filterReposForVisibleHosts,
   getVisibleSidebarHostIdSet
 } from '../../../../../../shared/sidebar-list/host-filtering'
-import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
+import { getEmptyProjectPlaceholderRepoIds } from '../../../../../../shared/sidebar-list/empty-project-placeholder-repos'
+import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 import { selectWorkspaceBoardStatuses } from '@/store/host-workspace-status-columns'
 
 const EMPTY_REPO_ID_SET: ReadonlySet<string> = Object.freeze(new Set<string>())
@@ -51,7 +53,8 @@ export function computeRenderedSidebarWorktrees(
 
 export function computeRenderedSidebarRows(
   state: AppState,
-  visibleWorktrees: readonly Worktree[]
+  visibleWorktrees: readonly Worktree[],
+  options: { includeEmptyProjects?: boolean } = {}
 ): HostSectionRow[] {
   const defaultHostId = getSettingsFocusedExecutionHostId(state.settings)
   const pinnedDisplayPolicy = getPinnedWorktreeDisplayPolicy(state.settings)
@@ -85,8 +88,17 @@ export function computeRenderedSidebarRows(
       visibleHostIdSet,
       defaultHostId
     ),
-    // Why empty: placeholder/imported/inbox/pending inputs never emit item or folder-workspace rows, the only two the order reads.
-    placeholderRepoIds: EMPTY_REPO_ID_SET,
+    // Why empty by default: placeholder/imported/inbox/pending inputs never emit item or folder-workspace rows, the only two the order reads.
+    // Header readers opt in to placeholders so empty projects count toward their group, as in the sidebar.
+    placeholderRepoIds: options.includeEmptyProjects
+      ? getEmptyProjectPlaceholderRepoIds({
+          groupBy: state.groupBy,
+          repos: filterReposForVisibleHosts(state.repos, visibleHostIdSet, defaultHostId),
+          worktreesByRepo: selectWorktreesByRepo(state),
+          visibleWorktrees,
+          filterRepoIds: state.filterRepoIds
+        })
+      : EMPTY_REPO_ID_SET,
     importedWorktreesByRepo: EMPTY_IMPORTED_BY_REPO,
     newExternalWorktreesInboxByRepo: EMPTY_INBOX_BY_REPO,
     pendingCreations: EMPTY_PENDING_CREATIONS,
