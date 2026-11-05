@@ -31,7 +31,8 @@ vi.mock('../../session/mobile-pr-sidebar-state', () => ({
 }))
 
 vi.mock('./PRSection', () => ({ PRSection: 'PRSection' }))
-vi.mock('./CommentMarkdown', () => ({ CommentMarkdown: 'CommentMarkdown' }))
+vi.mock('../MobileMarkdown', () => ({ MobileMarkdown: 'MobileMarkdown' }))
+vi.mock('../mobile-markdown-styles', () => ({ MOBILE_MARKDOWN_DOCUMENT_SCALE: 14 / 13 }))
 vi.mock('./PRCommentCard', () => ({ PRCommentCard: 'PRCommentCard' }))
 vi.mock('./PRCommentComposer', () => ({ PRCommentComposer: 'PRCommentComposer' }))
 vi.mock('./pr-comments-styles', () => ({ prCommentsStyles: {} }))

@@ -2,6 +2,9 @@ import { StyleSheet, type TextStyle } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet, themedStyles } from '../theme/themed-styles'
 
+/** Lifts the 13pt base to 14pt body text for documents (file preview, PR bodies); headings scale with it. */
+export const MOBILE_MARKDOWN_DOCUMENT_SCALE = 14 / 13
+
 export const styles = themedStyleSheet(() => ({
   root: {
     gap: spacing.md
@@ -107,6 +110,22 @@ export const styles = themedStyleSheet(() => ({
   imageParagraph: {
     gap: spacing.sm
   },
+  details: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderSubtle,
+    borderRadius: radii.surface,
+    overflow: 'hidden'
+  },
+  detailsSummary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    backgroundColor: colors.bgRaised
+  },
+  detailsSummaryText: { fontWeight: '600', flexShrink: 1 },
+  detailsBody: { padding: spacing.sm, gap: spacing.md },
   imageFrame: {
     borderWidth: 1,
     borderColor: colors.borderSubtle,

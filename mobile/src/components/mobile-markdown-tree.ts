@@ -12,6 +12,7 @@ import type {
   Table
 } from 'mdast'
 import remend from 'remend'
+import { appendHtmlBlock } from './mobile-markdown-details'
 import { normalizeMobileMarkdownPreviewHtml } from './mobile-markdown-preview-html'
 import { endLinkifyUrlsAtProsePunctuation } from './markdown-linkify-prose-boundary'
 
@@ -28,7 +29,7 @@ const TASK_MARKER = /^\[([ xX])\](?:\s+|$)/
 const LINE_BREAK_TAG = /^<br\s*\/?>$/i
 const HEADING_DEPTHS = [1, 2, 3, 4, 5, 6] as const
 /** Parents that hold blocks; any other parent holds inline content. */
-const BLOCK_PARENTS = new Set(['root', 'blockquote', 'listItem', 'footnoteDefinition'])
+const BLOCK_PARENTS = new Set(['root', 'blockquote', 'listItem', 'footnoteDefinition', 'details'])
 const CLOSING_TOKENS = new Set([
   'paragraph_close',
   'heading_close',
@@ -55,6 +56,9 @@ export function plainText(node: Nodes): string {
 }
 
 function pushText(nodes: PhrasingContent[], value: string): void {
+  if (!value) {
+    return
+  }
   const previous = nodes.at(-1)
   if (previous?.type === 'text') {
     previous.value += value
@@ -156,6 +160,12 @@ function readTaskMarker(item: Parent & { checked?: boolean | null }): void {
   }
 }
 
+/** A `<details>` summary's inline HTML and Markdown as spans. */
+function summaryPhrasing(html: string): PhrasingContent[] {
+  const text = normalizeMobileMarkdownPreviewHtml(html)
+  return phrasing(markdown.parseInline(text, {})[0]?.children ?? [], 0).nodes
+}
+
 /** markdown-it's flat token stream as the mdast tree the renderer draws. */
 function toTree(tokens: readonly Token[], source: string): Root {
   const root: Root = { type: 'root', children: [] }
@@ -224,10 +234,14 @@ function toTree(tokens: readonly Token[], source: string): Root {
         parent.children.push({ type: 'thematicBreak' })
         break
       case 'html_block':
-        parent.children.push({ type: 'html', value: token.content })
+        appendHtmlBlock(token.content, stack, open, summaryPhrasing)
         break
       default:
         if (CLOSING_TOKENS.has(token.type)) {
+          // A section left open inside a quote or list ends with it.
+          while (stack.at(-1)?.type === 'details') {
+            stack.pop()
+          }
           const closed = stack.pop()
           if (closed?.type === 'listItem') {
             readTaskMarker(closed)
