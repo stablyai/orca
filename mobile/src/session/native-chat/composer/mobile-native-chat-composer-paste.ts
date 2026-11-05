@@ -42,7 +42,11 @@ async function readEventImage(file: Blob): Promise<PickedMobileImage> {
   const image = new Image()
   image.src = uri
   await image.decode()
-  const sized = await sizedForUpload(base64, image.naturalWidth, image.naturalHeight)
+  const size = { width: image.naturalWidth, height: image.naturalHeight }
+  // Agents read only these formats; anything else (HEIC, TIFF) is re-encoded as PNG.
+  const readable = /^image\/(?:png|jpeg|gif|webp)$/.test(file.type)
+  const source = readable ? base64 : (await resizeMobileClipboardImage(base64, size)).data
+  const sized = await sizedForUpload(source, size.width, size.height)
   return sized === base64 ? { base64, uri } : { base64: sized }
 }
 
