@@ -76,7 +76,7 @@ export function installPanePtyVisibilityBind(session: ConnectPanePtySession): vo
     if (session.activePanePtyBinding && session.activePanePtyBinding !== ptyId) {
       session.reportPanePtyVisibility(session.activePanePtyBinding, false)
     }
-    session.applyWindowsPtyModel()
+    session.windowsPtyModel.apply()
     session.setPanePtyFitBinding(ptyId)
     session.activePanePtyBinding = ptyId
     session.reportPanePtyVisibility(ptyId, session.deps.isVisibleRef.current)

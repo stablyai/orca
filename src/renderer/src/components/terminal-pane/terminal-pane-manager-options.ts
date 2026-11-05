@@ -15,7 +15,6 @@ import {
 } from '@/lib/pane-manager/pane-terminal-options'
 import { buildFontFamily } from '@/lib/monospace-font-family'
 import { buildWindowsPtyCompatibilityOptions } from '@/lib/pane-manager/windows-pty-compatibility'
-import { resolveRemotePtyOwnerMachinePlatform } from './pty-owner-machine-platform'
 import { buildTerminalKeyboardProtocolOptions } from '@/lib/pane-manager/terminal-keyboard-protocol'
 import { resolvePaneKeyboardProtocolAgent } from './terminal-keyboard-protocol-pane-agent'
 import { UNRESOLVED_OWNER_HOST_ID } from '../../../../shared/execution-host'
@@ -146,7 +145,6 @@ export function createTerminalPaneManagerOptions(
         cwd: context.startupCwd,
         shellOverride: currentTab?.shellOverride,
         executionHostId: owner?.executionHostId ?? UNRESOLVED_OWNER_HOST_ID,
-        remoteOwnerPlatform: owner ? resolveRemotePtyOwnerMachinePlatform(storeState, owner) : null,
         tuiAgent: knownTuiAgent
       }
       return {

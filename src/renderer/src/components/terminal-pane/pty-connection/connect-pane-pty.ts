@@ -2,7 +2,7 @@ import { installPtyKittyFileReader } from './pty-kitty-file-reader'
 import { installSpawnDeferredSleep } from './spawn-deferred-sleep'
 import type { PaneManager, ManagedPane } from '@/lib/pane-manager/pane-manager'
 import { useAppStore } from '@/store'
-import { applyPaneWindowsPtyModel } from './pane-windows-pty-model'
+import { createPaneWindowsPtyModel } from './pane-windows-pty-model'
 import { buildTerminalKeyboardProtocolOptions } from '@/lib/pane-manager/terminal-keyboard-protocol'
 import { resolvePaneKeyboardProtocolAgent } from '../terminal-keyboard-protocol-pane-agent'
 import { TerminalKittyKeyboardModeTracker } from '../../../../../shared/terminal/protocol/input-modes/terminal-kitty-keyboard-mode-tracker'
@@ -164,14 +164,11 @@ export function connectPanePty(
   installSpawnDeferredSleep(session)
   installTitleSpawnBell(session)
   installAgentTaskCompleteNotify(session)
-  session.applyWindowsPtyModel = (): void =>
-    applyPaneWindowsPtyModel({
-      terminal: session.pane.terminal,
-      owner: session.ownerContext,
-      connectionId: session.ownerContext.connectionId,
-      cwd: session.deps.cwd,
-      shellOverride: session.tab?.shellOverride
-    })
+  session.windowsPtyModel = createPaneWindowsPtyModel(() => ({
+    terminal: session.pane.terminal,
+    owner: session.ownerContext,
+    transport: session.transport ?? null
+  }))
   const backendContext = {
     userAgent: navigator.userAgent,
     osRelease: window.api.platform?.get?.()?.osRelease,
@@ -183,7 +180,7 @@ export function connectPanePty(
   }
   // Capture backend policy before the tracker and transport copy xterm's initial capability flags.
   const keyboardProtocol = buildTerminalKeyboardProtocolOptions(backendContext)
-  session.applyWindowsPtyModel()
+  session.windowsPtyModel.apply()
   Object.assign(
     session.pane.terminal.options,
     keyboardProtocol,
