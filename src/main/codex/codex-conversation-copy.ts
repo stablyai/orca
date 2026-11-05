@@ -1,4 +1,3 @@
-import { setThreadName } from './structured/session-lifecycle/codex-provider-session-rename'
 import { AgentConversationCopyError } from '../native-chat/agent-conversation-copy-error'
 import { join } from 'node:path'
 import { requireLegacyAgentSessionAccountHome } from '../../shared/agent-session/lifecycle/agent-session-account-home'
@@ -233,11 +232,6 @@ export async function copyCodexConversation(
             return unavailable()
           }
         }
-      }
-      if (input.title) {
-        await setThreadName(rpc.request, id, input.title).catch((error: unknown) => {
-          console.warn('[codex-conversation-copy] naming the copied chat failed', error)
-        })
       }
       return { sessionId: id }
     }

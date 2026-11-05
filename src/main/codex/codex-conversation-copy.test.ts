@@ -115,11 +115,7 @@ it('uses a persisted terminal canonical boundary for an idle imported latest rep
   await history(SOURCE, turn('canonical', 1))
   state.request.mockResolvedValue({ thread: { id: CHILD } })
   await expect(copy(undefined, false)).resolves.toEqual({ sessionId: CHILD })
-  expect(state.request).toHaveBeenCalledWith(
-    'thread/name/set',
-    { threadId: CHILD, name: 'Source fork' },
-    { timeoutMs: 15_000 }
-  )
+  expect(state.request.mock.calls.map(([method]) => method)).toEqual(['thread/fork'])
   expect(state.request).toHaveBeenCalledWith(
     'thread/fork',
     expect.objectContaining({ lastTurnId: 'canonical' })
@@ -212,20 +208,4 @@ it('reports a provider in-progress rejection without suggesting an update', asyn
   await history(SOURCE, turn('canonical', 1))
   state.request.mockRejectedValue(new Error('Cannot fork thread with an in-progress turn'))
   await expect(copy()).rejects.toThrow('Wait for it to finish')
-})
-
-it('adopts the copied thread even when its native name cannot be set', async () => {
-  await history(SOURCE, turn('canonical', 1))
-  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-  state.request.mockImplementation(async (method) => {
-    if (method === 'thread/name/set') {
-      throw new Error('unsupported thread/name/set')
-    }
-    return { thread: { id: CHILD } }
-  })
-  try {
-    await expect(copy()).resolves.toEqual({ sessionId: CHILD })
-  } finally {
-    warn.mockRestore()
-  }
 })
