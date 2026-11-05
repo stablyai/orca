@@ -18,6 +18,7 @@ export type AgentSessionAcceptedInputSources = Partial<
 export type AgentSessionOptionsResult = {
   /** This host verified that account selection moves this chat with its history intact. */
   canSwitchAccount?: boolean
+  accountUsage?: true
   /** Fresh host observation; absent means an older host or unknown conversation. */
   sessionNeverStarted?: boolean
   /** Saved conversation on this execution host, resolved from the record's own account store. */

@@ -189,6 +189,11 @@
       "sendQueueHint": "在当前回合结束后运行",
       "sendSteerHint": "加入智能体当前正在进行的工作"
     },
+    "contextUsage": {
+      "label": "上下文 {{used}}/{{window}} token，已用 {{percent}}%",
+      "title": "上下文",
+      "estimated": "根据上一次响应的估算值。"
+    },
     "composerAttachments": {
       "attachedImage": "已添加的图片",
       "file": "文件",
@@ -776,7 +781,9 @@
     },
     "markdownBlocks": {
       "copyCode": "复制代码",
-      "openImage": "打开图片"
+      "openImage": "打开图片",
+      "wrapLines": "自动换行",
+      "disableLineWrap": "关闭自动换行"
     },
     "mountedBottomDrawer": {
       "dismissDrawer": "关闭抽屉"
@@ -1771,13 +1778,8 @@
       "noUpdate": "已有 {{value0}} 未更新"
     },
     "agentMessageAttribution": {
-      "from": "来自 {{sender}}",
-      "fromMore": "来自 {{sender}} 及其他 {{count}} 个智能体",
-      "fromUnnamed": "来自智能体",
-      "messageFrom": "来自 {{sender}} 的消息",
-      "messageFromMore": "来自 {{sender}} 及其他 {{count}} 个智能体的消息",
-      "messageFromUnnamed": "来自智能体的消息",
-      "unnamedSender": "一个智能体"
+      "unnamedSender": "一个智能体",
+      "fromSender": "来自"
     },
     "aiVaultResumeLaunch": {
       "createFailed": "创建终端失败",
@@ -2146,8 +2148,7 @@
     },
     "queuedMessageComposer": {
       "commandsNotAllowed": "排队消息中不能保存命令。",
-      "editing": "正在编辑消息",
-      "editingAttributed": "正在编辑消息 · {{attribution}}"
+      "editing": "正在编辑消息"
     },
     "quickCommandEditorForm": {
       "action": "操作",

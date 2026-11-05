@@ -189,6 +189,11 @@
       "sendQueueHint": "在目前回合結束後執行",
       "sendSteerHint": "加入代理程式目前正在進行的工作"
     },
+    "contextUsage": {
+      "label": "上下文 {{used}}/{{window}} token，已用 {{percent}}%",
+      "title": "上下文",
+      "estimated": "根據上一次回應的估算值。"
+    },
     "composerAttachments": {
       "attachedImage": "已附加的圖片",
       "file": "檔案",
@@ -776,7 +781,9 @@
     },
     "markdownBlocks": {
       "copyCode": "複製程式碼",
-      "openImage": "開啟圖片"
+      "openImage": "開啟圖片",
+      "wrapLines": "自動換行",
+      "disableLineWrap": "停用自動換行"
     },
     "mountedBottomDrawer": {
       "dismissDrawer": "關閉抽屜面板"
@@ -1771,13 +1778,8 @@
       "noUpdate": "已有 {{value0}} 未更新"
     },
     "agentMessageAttribution": {
-      "from": "來自 {{sender}}",
-      "fromMore": "來自 {{sender}} +{{count}}",
-      "fromUnnamed": "來自代理程式",
-      "messageFrom": "來自 {{sender}} 的訊息",
-      "messageFromMore": "來自 {{sender}} +{{count}} 的訊息",
-      "messageFromUnnamed": "來自代理程式的訊息",
-      "unnamedSender": "一個代理程式"
+      "unnamedSender": "一個代理程式",
+      "fromSender": "來自"
     },
     "aiVaultResumeLaunch": {
       "createFailed": "無法建立終端機",
@@ -2146,8 +2148,7 @@
     },
     "queuedMessageComposer": {
       "commandsNotAllowed": "無法將命令儲存在排隊中的訊息內。",
-      "editing": "正在編輯訊息",
-      "editingAttributed": "正在編輯訊息 · {{attribution}}"
+      "editing": "正在編輯訊息"
     },
     "quickCommandEditorForm": {
       "action": "操作",

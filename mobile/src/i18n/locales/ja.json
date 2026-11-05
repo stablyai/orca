@@ -189,6 +189,11 @@
       "sendQueueHint": "現在のターンの後に実行します",
       "sendSteerHint": "Agent が今行っている作業に加えます"
     },
+    "contextUsage": {
+      "label": "コンテキスト {{used}} / {{window}} トークン、{{percent}}% 使用済み",
+      "title": "コンテキスト",
+      "estimated": "最後の応答から推定。"
+    },
     "composerAttachments": {
       "attachedImage": "添付画像",
       "file": "ファイル",
@@ -776,7 +781,9 @@
     },
     "markdownBlocks": {
       "copyCode": "コードをコピーする",
-      "openImage": "画像を開く"
+      "openImage": "画像を開く",
+      "wrapLines": "行を折り返す",
+      "disableLineWrap": "行の折り返しを無効にする"
     },
     "mountedBottomDrawer": {
       "dismissDrawer": "ドロワーを閉じる"
@@ -1771,13 +1778,8 @@
       "noUpdate": "{{value0}}更新なし"
     },
     "agentMessageAttribution": {
-      "from": "{{sender}} から",
-      "fromMore": "{{sender}} ほか {{count}} 名から",
-      "fromUnnamed": "Agent から",
-      "messageFrom": "{{sender}} からのメッセージ",
-      "messageFromMore": "{{sender}} ほか {{count}} 名からのメッセージ",
-      "messageFromUnnamed": "Agent からのメッセージ",
-      "unnamedSender": "Agent"
+      "unnamedSender": "Agent",
+      "fromSender": "送信元:"
     },
     "aiVaultResumeLaunch": {
       "createFailed": "ターミナルの作成に失敗しました。",
@@ -2146,8 +2148,7 @@
     },
     "queuedMessageComposer": {
       "commandsNotAllowed": "キュー内のメッセージにコマンドは保存できません。",
-      "editing": "メッセージを編集中",
-      "editingAttributed": "メッセージを編集中 · {{attribution}}"
+      "editing": "メッセージを編集中"
     },
     "quickCommandEditorForm": {
       "action": "操作",

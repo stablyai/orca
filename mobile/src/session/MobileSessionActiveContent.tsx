@@ -341,6 +341,8 @@ export function MobileSessionActiveContent({
               <MobileNativeChatOverlay
                 controller={nativeChatController}
                 imageSource={nativeChatImageSource}
+                worktreePath={controller.worktreePath}
+                connState={controller.connState}
                 activeSessionTabId={controller.activeSessionTab?.id}
                 onOpenFile={handleNativeChatFileTap}
                 images={nativeChatImages}

@@ -25,9 +25,15 @@ import type {
 } from './native-chat/use-mobile-native-chat-send-error'
 import type { MobileStructuredQueuedMessageControls } from './use-mobile-structured-queued-message-controls'
 import type { MobileStructuredBackgroundTasks } from './use-mobile-structured-background-tasks'
+import type { NativeChatContextUsageSummary } from '../../../src/shared/native-chat/native-chat-context-usage-summary'
 
-export type StructuredMobileSession = ReturnType<typeof useMobileStructuredAgentOptions> &
+export type StructuredMobileSession = Omit<
+  ReturnType<typeof useMobileStructuredAgentOptions>,
+  'contextUsageSupport'
+> &
   ReturnType<typeof useMobileStructuredAgentTurnTiming> & {
+    /** The composer ring's readout; null until the session reports usage. */
+    contextUsage: NativeChatContextUsageSummary | null
     submissions: readonly AgentJournalSubmission[]
     session: MobileNativeChatSession
     asyncQuestionSourceScope: string
