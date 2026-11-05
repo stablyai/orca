@@ -135,7 +135,8 @@ describe('browserManager', () => {
     )
     expect(setUserAgent).toHaveBeenCalledOnce()
     const landingRequest = {
-      session: {} as never,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resolver reads no Session member.
+      session: guest.session as Electron.Session,
       webContentsId: guest.id,
       currentUserAgent: googleAuthUserAgent(),
       effectiveUserAgent: googleAuthUserAgent()
