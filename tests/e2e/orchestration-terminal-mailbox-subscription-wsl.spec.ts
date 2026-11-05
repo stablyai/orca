@@ -111,6 +111,7 @@ test('Windows Orca delivers subscribed mailbox pointers to a native WSL PTY', as
   orcaPage,
   electronApp
 }) => {
+  // Native WSL staging, agent detection and cross-runtime CLI delivery run without mocked clocks.
   test.setTimeout(300_000)
   test.skip(process.platform !== 'win32' || !DISTRO, 'Requires a Windows host and WSL distro.')
   await waitForSessionReady(orcaPage)

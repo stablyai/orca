@@ -32,6 +32,7 @@ test.skip(process.platform === 'win32', 'The managed Docker host fixture uses PO
 
 test('a managed SSH host preserves its subscription and pending mail across a viewer reconnect', async (// oxlint-disable-next-line no-empty-pattern -- Owns its hidden app through the managed-host fixture.
 {}, testInfo) => {
+  // Disposable managed-host provisioning and reconnect include real SSH install/startup latency.
   test.setTimeout(12 * 60_000)
   await withManagedHost(testInfo, async (fixture) => {
     if (!fixture.host.exec) {
@@ -124,6 +125,7 @@ test('a managed SSH host preserves its subscription and pending mail across a vi
       )
       .not.toBe('connected')
     // The execution host still owns the working receiver; losing its viewer never authorizes input.
+    // ast-grep-ignore: test-no-real-time-wait -- Observe delayed delivery while disconnected to prove no unauthorized input arrives.
     await new Promise((resolve) => setTimeout(resolve, 1_000))
     expect(agent.readStdin()).toBe(before)
     await reconnect(page, seeded.targetId)
@@ -145,6 +147,7 @@ test('a managed SSH host preserves its subscription and pending mail across a vi
       .toContain(POINTER_COMMAND)
     await expect.poll(() => agent.readStdin().slice(before.length).split('\r').length - 1).toBe(1)
     await expect.poll(message).toMatchObject({ read: 0, delivered_at: expect.any(String) })
+    // ast-grep-ignore: test-no-real-time-wait -- Observe an additional Enter-delay window to detect duplicate pointers or submissions.
     await new Promise((resolve) => setTimeout(resolve, 1_000))
     const delivered = agent.readStdin().slice(before.length)
     expect(delivered.split(POINTER_COMMAND).length - 1).toBe(1)

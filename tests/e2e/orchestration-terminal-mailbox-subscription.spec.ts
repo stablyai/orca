@@ -30,6 +30,7 @@ type AgentPane = {
 }
 
 async function readUserDataDir(electronApp: ElectronApplication): Promise<string> {
+  // ast-grep-ignore: test-no-polling-loop -- Retry only transient Electron context reloads, capped at five attempts.
   for (let attempt = 1; ; attempt += 1) {
     try {
       return await electronApp.evaluate(({ app }) => app.getPath('userData'))
@@ -39,6 +40,7 @@ async function readUserDataDir(electronApp: ElectronApplication): Promise<string
       if (!transient || attempt >= 5) {
         throw error
       }
+      // ast-grep-ignore: test-no-real-time-wait -- Bounded backoff after a destroyed Electron evaluation context.
       await new Promise((resolve) => setTimeout(resolve, 250))
     }
   }
@@ -200,6 +202,7 @@ test('receiver CLI subscribes a live bare terminal and keeps pointed mail unread
   orcaPage,
   electronApp
 }) => {
+  // Real agent startup, attested CLI registration and delayed PTY delivery share this test budget.
   test.setTimeout(180_000)
   const { client, userDataDir } = await setUpRuntime(orcaPage, electronApp)
   const agent = createMailPaneAgent({
@@ -257,6 +260,7 @@ test('receiver CLI subscribes a live bare terminal and keeps pointed mail unread
   await waitForObservedTitle(client, pane.handle, CODEX_WORKING_TITLE)
   const pointersBeforeWorking = countOccurrences(agent.readStdin(), POINTER_COMMAND)
   const workingMessageId = await sendMail(client, pane.handle, 'Hold while working')
+  // ast-grep-ignore: test-no-real-time-wait -- Observe a full delivery opportunity to prove forbidden input stays absent.
   await orcaPage.waitForTimeout(NO_DELIVERY_SETTLE_MS)
   expect(countOccurrences(agent.readStdin(), POINTER_COMMAND)).toBe(pointersBeforeWorking)
   expect(mailDisposition(readMailRow(userDataDir, workingMessageId))).toBe('pending')
@@ -311,6 +315,7 @@ test('receiver CLI subscribes a live bare terminal and keeps pointed mail unread
 
   const pointersBefore = countOccurrences(agent.readStdin(), POINTER_COMMAND)
   const secondMessageId = await sendMail(client, pane.handle, 'Unsubscribed bare terminal')
+  // ast-grep-ignore: test-no-real-time-wait -- Observe a full delivery opportunity to prove forbidden input stays absent.
   await orcaPage.waitForTimeout(NO_DELIVERY_SETTLE_MS)
   expect(countOccurrences(agent.readStdin(), POINTER_COMMAND)).toBe(pointersBefore)
   expect(readMailRow(userDataDir, secondMessageId)).toMatchObject({
@@ -324,6 +329,7 @@ test('positive Cursor identity receives the pointer without synthesized Enter', 
   orcaPage,
   electronApp
 }) => {
+  // Real agent startup, attested CLI registration and delayed PTY delivery share this test budget.
   test.setTimeout(180_000)
   const { client, userDataDir, worktreeId } = await setUpRuntime(orcaPage, electronApp)
   const agent = createMailPaneAgent({
@@ -350,6 +356,7 @@ test('positive Cursor identity receives the pointer without synthesized Enter', 
     await expect
       .poll(() => agent.readStdin(), { timeout: DELIVERY_TIMEOUT_MS })
       .toContain(POINTER_COMMAND)
+    // ast-grep-ignore: test-no-real-time-wait -- Wait beyond delayed Enter to prove Cursor receives no synthesized submission.
     await orcaPage.waitForTimeout(1_000)
     expect(agent.readStdin()).not.toContain('\r')
     expect(readMailRow(userDataDir, messageId)).toMatchObject({

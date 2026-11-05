@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { quotePosixShell } from '../../../src/shared/wsl-login-shell-command'
+import { quotePosixShell } from '../../../src/shared/shell/launch/shell-argument-quoting'
 import { MAIL_PANE_AGENT_SOURCE } from './orchestration-mail-pane-agent'
 
 const LedgerEntry = z.object({
