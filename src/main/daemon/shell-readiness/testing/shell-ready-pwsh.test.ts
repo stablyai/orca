@@ -4,14 +4,14 @@ import { spawnSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { STARTUP_COMMAND_FEATURES } from '../shell-startup-launch-intent-fixtures'
+import { STARTUP_COMMAND_FEATURES } from '../../../pty/shell-startup/shell-startup-launch-intent-fixtures'
 import {
   createShellStartupOutputScanState,
   drainShellStartupOutputScanState,
   scanShellStartupOutput
-} from '../shell-startup-output-scanner'
-import { HeadlessEmulator } from './headless-emulator'
-import { shellReadyMarkerComesFromLineEditor } from '../../shared/shell-ready-marker-timing'
+} from '../../../pty/shell-startup/shell-startup-output-scanner'
+import { HeadlessEmulator } from '../../emulation/headless-emulator'
+import { shellReadyMarkerComesFromLineEditor } from '../../../../shared/terminal/output/shell-ready-marker-timing'
 
 const PWSH_CANDIDATES = ['pwsh', '/opt/homebrew/bin/pwsh', '/usr/local/bin/pwsh'] as const
 
@@ -35,7 +35,7 @@ const SHELL_READY_MARKER_OUTPUT = '\x1b]777;orca-shell-ready\x07'
 describe('daemon shell-ready launch config for pwsh', () => {
   it('extends the startup barrier to pwsh so launch commands queue until the prompt', async () => {
     vi.resetModules()
-    const { shellPathSupportsPtyStartupBarrier } = await import('./shell-ready')
+    const { shellPathSupportsPtyStartupBarrier } = await import('../shell-ready')
 
     expect(shellPathSupportsPtyStartupBarrier('/opt/homebrew/bin/pwsh')).toBe(true)
     // Why: a shell with no marker source must stay off the barrier or its first
@@ -45,7 +45,7 @@ describe('daemon shell-ready launch config for pwsh', () => {
 
   it('marks pwsh launch config ready and hands the bootstrap the feature allowlist', async () => {
     vi.resetModules()
-    const { getShellLaunchConfig } = await import('./shell-ready')
+    const { getShellLaunchConfig } = await import('../shell-ready')
 
     const config = getShellLaunchConfig('/opt/homebrew/bin/pwsh', STARTUP_COMMAND_FEATURES)
 
@@ -56,7 +56,7 @@ describe('daemon shell-ready launch config for pwsh', () => {
 
   it('keeps markerless pwsh panes byte-identical to the plain OSC 133 integration', async () => {
     vi.resetModules()
-    const { getShellLaunchConfig } = await import('./shell-ready')
+    const { getShellLaunchConfig } = await import('../shell-ready')
 
     const config = getShellLaunchConfig('/opt/homebrew/bin/pwsh', [])
 
@@ -76,7 +76,7 @@ describe('daemon shell-ready launch config for pwsh', () => {
 
   it('arms the barrier and the line-editor flush for the same PowerShell set', async () => {
     vi.resetModules()
-    const { shellPathSupportsPtyStartupBarrier } = await import('./shell-ready')
+    const { shellPathSupportsPtyStartupBarrier } = await import('../shell-ready')
 
     // Why: the barrier arms for every isPowerShellExecutableName match, so the
     // timing predicate must cover exactly that set — a name in one but not the
@@ -91,7 +91,7 @@ describe('daemon shell-ready launch config for pwsh', () => {
   itWithPwsh(
     'emits the marker at the first real pwsh prompt and executes a post-marker command',
     async () => {
-      const { getShellLaunchConfig } = await import('./shell-ready')
+      const { getShellLaunchConfig } = await import('../shell-ready')
       const config = getShellLaunchConfig(PWSH ?? 'pwsh', STARTUP_COMMAND_FEATURES)
       const tempHome = mkdtempSync(join(tmpdir(), 'pwsh-shell-ready-'))
       const sentinel = join(tempHome, 'launched')

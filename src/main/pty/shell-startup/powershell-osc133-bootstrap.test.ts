@@ -1,10 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import {
-  encodePowerShellCommand,
-  getPowerShellOsc133Bootstrap
-} from './powershell-osc133-bootstrap'
-import { getShellLaunchConfig } from './daemon/shell-ready'
-import { resolveWindowsShellLaunchArgs } from './providers/windows-shell-args'
+import { encodePowerShellCommand } from '../../../shared/powershell-command-encoding'
+import { getPowerShellOsc133Bootstrap } from './powershell-osc133-bootstrap'
+import { getShellLaunchConfig } from '../../daemon/shell-readiness/shell-ready'
+import { resolveWindowsShellLaunchArgs } from '../../providers/windows-shell-args'
 import { STARTUP_COMMAND_FEATURES } from './shell-startup-launch-intent-fixtures'
 
 describe('PowerShell OSC 133 bootstrap', () => {
