@@ -127,7 +127,7 @@ export function NativeChatAccountUsageCard({
   )
 }
 
-/** The loaded card's layout with one usage window, so the modal keeps its height when usage lands. */
+/** The loaded card's layout with one usage window, so loading shows roughly the loaded size. */
 function LoadingUsageCard(): React.JSX.Element {
   const line = 'block rounded bg-foreground/10'
   return (
