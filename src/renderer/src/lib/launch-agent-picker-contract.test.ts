@@ -302,6 +302,8 @@ describe('picker window launch contract', () => {
             groupId: 'group-1',
             requestedSurface: 'terminal',
             selectedExecutionHostId: host,
+            // Why: the menu pins a non-lone pane's launch to that pane (QuickLaunchButton); match it.
+            placementFixed: true,
             ...inputs
           })
         }
