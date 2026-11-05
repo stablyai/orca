@@ -13,6 +13,8 @@ import { RuntimeClient, RuntimeClientError } from '../runtime-client'
 import { getOptionalWorktreeSelector, resolveWorktreeCreateCwdContext } from '../selectors'
 import { parentCwdNextSteps, withWorktreeSelectorRecovery } from '../worktree-selector-recovery'
 
+const CALLER_PARENT_INFERENCE_BUDGET_MS = 3_000
+
 /** This machine's own Orca, where a caller-relative parent (active, current, this terminal) lives. */
 export function callerOrcaClient(client: RuntimeClient): RuntimeClient {
   return client.isRemote ? new RuntimeClient(client.userDataPath, undefined, null, null) : client
@@ -122,10 +124,21 @@ async function inferCallerCrossStoreParent(
   context: { envParentWorkspace: string | undefined; callerTerminalHandle: string | undefined },
   cwd: string
 ): Promise<Record<string, unknown>> {
-  const local = callerOrcaClient(client)
+  // Optional nesting must not hold up the server create behind a stalled Orca on this machine.
+  const startedAt = Date.now()
+  const local = new RuntimeClient(
+    client.userDataPath,
+    CALLER_PARENT_INFERENCE_BUDGET_MS,
+    null,
+    null
+  )
+  let localTimedOut = false
   // No Orca running here, or cwd outside its workspaces: no cwd context.
   const cwdContext = await resolveWorktreeCreateCwdContext(cwd, local, false).catch(
-    (): Awaited<ReturnType<typeof resolveWorktreeCreateCwdContext>> => ({})
+    (error: unknown): Awaited<ReturnType<typeof resolveWorktreeCreateCwdContext>> => {
+      localTimedOut = error instanceof RuntimeClientError && error.code === 'runtime_timeout'
+      return {}
+    }
   )
   if (!context.envParentWorkspace && !context.callerTerminalHandle && !cwdContext.parentWorktree) {
     return {}
@@ -133,6 +146,11 @@ async function inferCallerCrossStoreParent(
   const notNested = (reason: string): Record<string, unknown> => {
     console.error(`note: not nested: ${reason}`)
     return { noParent: true }
+  }
+  // The budget is this machine's: time spent on the server's status doesn't count.
+  const remainingMs = CALLER_PARENT_INFERENCE_BUDGET_MS - (Date.now() - startedAt)
+  if (localTimedOut || remainingMs <= 0) {
+    return notNested("this machine's Orca didn't answer in time.")
   }
   try {
     const status = (await client.call<RuntimeStatus>('status.get')).result
@@ -142,11 +160,15 @@ async function inferCallerCrossStoreParent(
     const resolved = (
       await local.call<
         { parent: CrossStoreParentRef; source: CrossStoreInferredSource } | { reason: string }
-      >('worktree.resolveCallerParent', {
-        ...context,
-        cwdParentWorktree: cwdContext.parentWorktree?.selector,
-        ...(cwdContext.parentAmbiguous ? { cwdParentAmbiguous: true } : {})
-      })
+      >(
+        'worktree.resolveCallerParent',
+        {
+          ...context,
+          cwdParentWorktree: cwdContext.parentWorktree?.selector,
+          ...(cwdContext.parentAmbiguous ? { cwdParentAmbiguous: true } : {})
+        },
+        { timeoutMs: remainingMs }
+      )
     ).result
     if ('reason' in resolved) {
       return notNested(resolved.reason)
