@@ -117,7 +117,8 @@ async function executeRequest(request: AiVaultServiceRequest): Promise<AiVaultSe
         cacheServiceTitle(titleIndex, {
           agent: session.agent,
           sessionId: session.sessionId,
-          title: session.title.trim()
+          title: session.title.trim(),
+          ...(session.titleKind ? { kind: session.titleKind } : {})
         })
       }
     }

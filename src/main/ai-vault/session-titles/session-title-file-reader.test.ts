@@ -51,7 +51,8 @@ describe('readAiVaultSessionTitlesFromFiles', () => {
     parseAgentSessionFileCached.mockResolvedValue({
       agent: 'codex',
       sessionId: 'session-1',
-      title: '  Exact title  '
+      title: '  Exact title  ',
+      titleKind: 'fallback'
     })
 
     const controller = new AbortController()
@@ -61,7 +62,7 @@ describe('readAiVaultSessionTitlesFromFiles', () => {
         { signal: controller.signal }
       )
     ).resolves.toEqual({
-      titles: [{ agent: 'codex', sessionId: 'session-1', title: 'Exact title' }]
+      titles: [{ agent: 'codex', sessionId: 'session-1', title: 'Exact title', kind: 'fallback' }]
     })
     expect(parseAgentSessionFileCached.mock.calls[0]?.[4]).toBe(controller.signal)
     expect(parseAgentSessionFileCached).toHaveBeenCalledTimes(1)
@@ -69,6 +70,24 @@ describe('readAiVaultSessionTitlesFromFiles', () => {
       agent: 'codex',
       file: { path }
     })
+  })
+
+  it('rereads a session cached before titles carried a kind once, so a renamed session counts as named', async () => {
+    const path = await transcriptPath()
+    const cached = { agent: 'claude', sessionId: 'session-1', title: 'Renamed' }
+    parseAgentSessionFileCached
+      .mockResolvedValueOnce(cached)
+      .mockResolvedValueOnce({ ...cached, titleKind: 'named' })
+
+    await expect(
+      readAiVaultSessionTitlesFromFiles([
+        { agent: 'claude', sessionId: 'session-1', transcriptPath: path }
+      ])
+    ).resolves.toEqual({
+      titles: [{ agent: 'claude', sessionId: 'session-1', title: 'Renamed', kind: 'named' }]
+    })
+    expect(parseAgentSessionFileCached).toHaveBeenCalledTimes(2)
+    expect(parseAgentSessionFileCached.mock.calls[1]?.[3]).toBe('whole')
   })
 
   it('rejects a transcript whose parsed identity does not match the request', async () => {
@@ -106,7 +125,8 @@ describe('readAiVaultSessionTitlesFromFiles', () => {
       Array.from({ length: 9 }, () => ({
         agent: 'codex',
         sessionId: 'named',
-        title: 'Indexed name'
+        title: 'Indexed name',
+        kind: 'named'
       }))
     )
     expect(
@@ -120,7 +140,8 @@ describe('readAiVaultSessionTitlesFromFiles', () => {
     parseAgentSessionFileCached.mockResolvedValue({
       agent: 'codex',
       sessionId: 'session-0',
-      title: 'Title'
+      title: 'Title',
+      titleKind: 'fallback'
     })
 
     await readAiVaultSessionTitlesFromFiles(

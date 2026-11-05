@@ -40,7 +40,12 @@ async function readOneTitle(
         return null
       }
       if (title) {
-        const resolved = { agent: request.agent, sessionId: request.sessionId, title }
+        const resolved: AiVaultSessionTitle = {
+          agent: request.agent,
+          sessionId: request.sessionId,
+          title,
+          kind: 'named'
+        }
         cache?.set(resolved)
         return resolved
       }
@@ -50,22 +55,39 @@ async function readOneTitle(
       return null
     }
     // Raw lstat matches scanner keys only for providers without content dependencies: Claude and Codex.
-    const session = await parseAgentSessionFileCached(
-      {
-        agent: request.agent,
-        file: {
-          path: transcriptPath,
-          mtimeMs: stats.mtimeMs,
-          modifiedAt: stats.mtime.toISOString(),
-          sizeBytes: stats.size
-        },
-        codexHome: null
+    const candidate = {
+      agent: request.agent,
+      file: {
+        path: transcriptPath,
+        mtimeMs: stats.mtimeMs,
+        modifiedAt: stats.mtime.toISOString(),
+        sizeBytes: stats.size
       },
+      codexHome: null
+    }
+    let session = await parseAgentSessionFileCached(
+      candidate,
       process.platform,
       undefined,
       undefined,
       signal
     )
+    // Why: entries cached before titles carried their kind would rank every name as a stand-in; reread
+    // such a transcript once so the cache learns the kind, instead of invalidating every cached session.
+    if (
+      session?.agent === request.agent &&
+      session.sessionId === request.sessionId &&
+      !session.titleKind &&
+      !signal?.aborted
+    ) {
+      session = await parseAgentSessionFileCached(
+        candidate,
+        process.platform,
+        undefined,
+        'whole',
+        signal
+      )
+    }
     if (
       signal?.aborted ||
       session?.agent !== request.agent ||
@@ -74,10 +96,11 @@ async function readOneTitle(
     ) {
       return null
     }
-    const title = {
+    const title: AiVaultSessionTitle = {
       agent: request.agent,
       sessionId: request.sessionId,
-      title: session.title.trim()
+      title: session.title.trim(),
+      ...(session.titleKind ? { kind: session.titleKind } : {})
     }
     cache?.set(title)
     return title
