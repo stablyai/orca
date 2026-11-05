@@ -1,3 +1,4 @@
+import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import type { AppState } from '@/store/types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
@@ -35,4 +36,15 @@ export function selectWorktreeParent({
       )
     )
   })
+}
+
+/** Cross-machine refusals (an older Orca on the child's machine, an unconfirmed parent) name what to do next. */
+export function showCrossStoreParentError(error: unknown): void {
+  toast.error(
+    translate(
+      'auto.components.sidebar.WorktreeParentPickerPopover.failedSetParent',
+      'Failed to set parent worktree'
+    ),
+    { description: error instanceof Error ? error.message : undefined }
+  )
 }

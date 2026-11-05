@@ -32,7 +32,11 @@ function getWorktreeOwnerHostId(
   return repo ? getWorktreeExecutionHostId(worktree, repo) : (worktree.hostId ?? null)
 }
 
-export function getEligibleWorktreeParents({
+/** Where a picked parent may live relative to the child; null when it can't be the parent. */
+export type WorktreeParentPlacement = 'same-machine' | 'other-machine'
+
+/** Classifies parent candidates for one child; the picker and drag-to-nest share it. */
+export function worktreeParentPlacementFor({
   child,
   worktrees,
   lineageById,
@@ -40,17 +44,15 @@ export function getEligibleWorktreeParents({
   repoMap,
   cyclicLineageIds: precomputedCyclicLineageIds,
   parentIdentities
-}: ParentCandidateArgs): Worktree[] {
+}: ParentCandidateArgs): (candidate: Worktree) => WorktreeParentPlacement | null {
   const childHostId = getWorktreeOwnerHostId(child, repoMap)
   const cyclicLineageIds =
     precomputedCyclicLineageIds ?? getCyclicProjectedWorktreeLineageIds(lineageById, worktreeMap)
   const isCrossStoreParent = crossStoreParentEligibility(child, parentIdentities)
   const closesLoop = closesResolvedLoop(child, worktrees, parentIdentities)
-  const sameMachine: Worktree[] = []
-  const otherMachines: Worktree[] = []
-  for (const candidate of worktrees) {
+  return (candidate) => {
     if (closesLoop(candidate)) {
-      continue
+      return null
     }
     if (
       isEligibleWorktreeParent({
@@ -63,8 +65,21 @@ export function getEligibleWorktreeParents({
         childHostId
       })
     ) {
+      return 'same-machine'
+    }
+    return isCrossStoreParent(candidate) ? 'other-machine' : null
+  }
+}
+
+export function getEligibleWorktreeParents(args: ParentCandidateArgs): Worktree[] {
+  const placementOf = worktreeParentPlacementFor(args)
+  const sameMachine: Worktree[] = []
+  const otherMachines: Worktree[] = []
+  for (const candidate of args.worktrees) {
+    const placement = placementOf(candidate)
+    if (placement === 'same-machine') {
       sameMachine.push(candidate)
-    } else if (isCrossStoreParent(candidate)) {
+    } else if (placement === 'other-machine') {
       otherMachines.push(candidate)
     }
   }

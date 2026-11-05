@@ -161,7 +161,7 @@ export type WorktreeSlice = {
     worktreeId: string,
     args: { parentWorktreeId: string; executionHostId?: ExecutionHostId }
   ) => Promise<void>
-  assignCrossStoreWorktreeParent: (child: Worktree, parent: Worktree) => Promise<void>
+  assignCrossStoreWorktreeParent: (children: readonly Worktree[], parent: Worktree) => Promise<void>
   createWorktree: (
     repoId: string,
     name: string,
