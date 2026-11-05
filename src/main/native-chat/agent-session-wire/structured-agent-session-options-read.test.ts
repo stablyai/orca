@@ -313,6 +313,32 @@ describe('a chat at rest, read by the host', () => {
     ).toEqual(listed)
   })
 
+  it('describes a saved resolved id by the row that resolves to it, keeping its own identity', () => {
+    // Claude Code 2.1.318 lists `opus` (runs claude-opus-5-5); the chat saved the id it ran.
+    const efforts = [
+      { value: 'low', label: 'Low' },
+      { value: 'high', label: 'High' }
+    ]
+    const opus = {
+      id: 'opus',
+      label: 'Opus',
+      resolvedModel: 'claude-opus-5-5',
+      isDefault: true,
+      efforts,
+      supportsFastMode: true
+    }
+    const view = structuredAgentSessionCapabilityView({ models: [opus] }, 'claude-opus-5-5')
+    expect(view.models[1]).toEqual({
+      id: 'claude-opus-5-5',
+      label: 'Claude Opus 5.5',
+      description: 'claude-opus-5-5',
+      isDefault: false,
+      efforts,
+      supportsFastMode: true
+    })
+    expect(view.fastModeSupport).toEqual({ supported: true })
+  })
+
   it('uses installed choices for a live picker, admission and genuine first-run values', async () => {
     const installed = [
       {
@@ -439,10 +465,15 @@ describe('a chat at rest, read by the host', () => {
         { models: [], current: { model: reported } }
       )
       expect(result.current.model).toBe(shown)
+      // A saved resolved id keeps its own identity but takes the capabilities of the row that runs it.
       expect(result.models.find((row) => row.id === shown)).toMatchObject(
         shown === 'opus[1m]'
           ? { label: 'Installed Opus', efforts: installed[0]!.efforts }
-          : { label, description: shown, efforts: [] }
+          : {
+              label,
+              description: shown,
+              efforts: shown === currentModel ? installed[0]!.efforts : []
+            }
       )
     }
   })

@@ -7,6 +7,21 @@ import type {
 import type { AgentSessionOptionsResult } from '../../../shared/agent-session/options/agent-session-options-result'
 import { labelFromModelId } from '../../../shared/model-id-label'
 import type { AgentModelCatalogLiveListing } from '../agent-model-catalog/agent-model-catalog-entry'
+import { listedModelDescribing } from '../../../shared/agent-session/options/structured-agent-session-listed-model'
+
+function describedCapabilities({
+  id: _id,
+  label: _label,
+  description: _description,
+  isDefault: _isDefault,
+  resolvedModel: _resolvedModel,
+  ...capabilities
+}: AgentSessionModelOption): Omit<
+  AgentSessionModelOption,
+  'id' | 'label' | 'description' | 'isDefault' | 'resolvedModel'
+> {
+  return capabilities
+}
 
 export type StructuredAgentSessionOptionProjection = {
   models: readonly AgentSessionModelOption[]
@@ -36,14 +51,15 @@ export function structuredAgentSessionOptionModels<TModel extends AgentSessionMo
 ): TModel[] {
   const models = [...catalog]
   if (current && !models.some((entry) => entry.id === current)) {
+    // A row the listing resolves to this model supplies its capabilities, never its identity.
+    const described = listedModelDescribing(catalog, undefined, current)
     models.push(
       row({
+        ...(described ? describedCapabilities(described) : { efforts: [], effortsKnown: false }),
         id: current,
         label: labelFromModelId(current),
         description: current,
-        isDefault: false,
-        efforts: [],
-        effortsKnown: false
+        isDefault: false
       })
     )
   }

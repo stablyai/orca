@@ -4,6 +4,7 @@ import {
   CLAUDE_SESSION_OPTION_CATALOG,
   CODEX_SESSION_OPTION_CATALOG
 } from './agent-session-option-catalog-claude-codex'
+import { GROK_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-grok'
 import type { AgentSessionModelCatalogResult } from '../agent-session-wire'
 import type { AgentSessionOptionsResult } from './agent-session-options-result'
 import {
@@ -116,6 +117,117 @@ describe('a Claude model its CLI no longer lists', () => {
       settable: false,
       kind: { currentValue: 'high', choices: [{ value: 'high', label: 'high' }] }
     })
+  })
+})
+
+describe('a Claude chat saved on the model id its listing names by alias', () => {
+  // Claude Code 2.1.318's list_models rows: `opus` runs claude-opus-5-5, which the chat saves after its first turn.
+  const EFFORTS = levels('low', 'medium', 'high', 'xhigh', 'max')
+  const alias = (id: string, resolvedModel: string, extra = {}) => ({
+    id,
+    label: id,
+    resolvedModel,
+    isDefault: false,
+    efforts: EFFORTS,
+    ...extra
+  })
+  const LISTING = [
+    alias('opus', 'claude-opus-5-5', { declaredDefaultEffort: 'medium' }),
+    alias('sonnet', 'claude-sonnet-5-5')
+  ]
+  // The host's own row for the chat's model, as it answers today.
+  const placeholder = (id: string) => ({
+    id,
+    label: id,
+    isDefault: false,
+    efforts: [],
+    effortsKnown: false as const
+  })
+  const answer = (
+    model: string,
+    rows = LISTING,
+    listed: string[] | null = rows.map((row) => row.id),
+    effort?: string
+  ): AgentSessionOptionsResult => ({
+    models: [...rows, placeholder(model)],
+    ...(listed ? { listedModelIds: listed } : {}),
+    current: { model, ...(effort ? { effort } : {}) }
+  })
+  const effortRow = (state: StructuredAgentSessionOptionState) =>
+    structuredAgentSessionShownSnapshot(state).find((entry) => entry.id === 'effort')
+  const coherent = (result: AgentSessionOptionsResult, rows = LISTING) =>
+    applyStructuredAgentSessionOptions(
+      applyStructuredAgentSessionModelCatalog(
+        fresh(),
+        CLAUDE_SESSION_OPTION_CATALOG,
+        { origin: 'probe', fetchedAt: 1, models: rows },
+        { newLaunch: false, coherentCatalog: true }
+      ),
+      CLAUDE_SESSION_OPTION_CATALOG,
+      result,
+      { newLaunch: false, coherentCatalog: true }
+    )
+
+  it('offers the alias row’s levels and keeps sending the saved model', () => {
+    const answered = answer('claude-opus-5-5', LISTING, null, 'medium')
+    for (const state of [
+      coherent(answered),
+      applyStructuredAgentSessionOptions(fresh(), CLAUDE_SESSION_OPTION_CATALOG, {
+        ...answered,
+        listedModelIds: ['opus', 'sonnet']
+      })
+    ]) {
+      expect(effortRow(state)).toMatchObject({
+        settable: true,
+        kind: { currentValue: 'medium', choices: expect.arrayContaining(EFFORTS) }
+      })
+      expect(canSetStructuredAgentSessionOption(state, 'effort', 'high')).toBe(true)
+      expect(carried(state, undefined, { effort: 'high' })).toEqual({
+        model: 'claude-opus-5-5',
+        effort: 'high'
+      })
+    }
+  })
+
+  it('reads the alias row’s declared default when no effort is saved', () => {
+    expect(effortRow(coherent(answer('claude-opus-5-5')))).toMatchObject({
+      settable: true,
+      kind: { currentValue: 'medium' }
+    })
+  })
+
+  it('matches the 1M id only through its own row, and the first of two aliases', () => {
+    const oneM = [
+      alias('opus[1m]', 'claude-opus-5-5[1m]', { efforts: levels('low', 'high') }),
+      alias('best', 'claude-opus-5-5[1m]', { efforts: levels('max') }),
+      ...LISTING
+    ]
+    expect(
+      effortRow(coherent(answer('claude-opus-5-5[1m]', oneM, null, 'low'), oneM))
+    ).toMatchObject({ settable: true, kind: { choices: levels('low', 'high') } })
+  })
+
+  it('stays read-only without listing evidence for the alias', () => {
+    // An older host answers with its placeholder and no listed ids: the placeholder is the model's own row.
+    const older = applyStructuredAgentSessionOptions(
+      fresh(),
+      CLAUDE_SESSION_OPTION_CATALOG,
+      answer('claude-opus-5-5', LISTING, null, 'medium')
+    )
+    expect(effortRow(older)).toMatchObject({ settable: false })
+  })
+
+  it('leaves an unlisted model’s own effort menu to agents that declare one', () => {
+    const grok = applyStructuredAgentSessionOptions(
+      createStructuredAgentSessionOptionState('grok', GROK_SESSION_OPTION_CATALOG),
+      GROK_SESSION_OPTION_CATALOG,
+      {
+        models: [{ id: 'grok-4.7', label: 'Grok 4.7', isDefault: false, efforts: levels('low') }],
+        listedModelIds: ['grok-4.7'],
+        current: { model: 'grok-x', effort: 'xhigh' }
+      }
+    )
+    expect(effortRow(grok)).toMatchObject({ settable: true, kind: { currentValue: 'xhigh' } })
   })
 })
 
