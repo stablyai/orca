@@ -529,6 +529,7 @@ exports[`native-chat launch parity > claude floating fresh 1`] = `
     "cwd": "<root>/floating",
     "env": {
       "CLAUDE_AGENT_SDK_VERSION": "<dependency>",
+      "CLAUDE_CODE_ARTIFACT": "1",
       "CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS": "1",
       "CLAUDE_CODE_ENTRYPOINT": "sdk-ts",
       "CLAUDE_CODE_SDK_READS_SESSION_STATE": "1",
@@ -617,6 +618,7 @@ exports[`native-chat launch parity > claude floating resumed 1`] = `
     "cwd": "<root>/floating-pinned",
     "env": {
       "CLAUDE_AGENT_SDK_VERSION": "<dependency>",
+      "CLAUDE_CODE_ARTIFACT": "1",
       "CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS": "1",
       "CLAUDE_CODE_ENTRYPOINT": "sdk-ts",
       "CLAUDE_CODE_SDK_READS_SESSION_STATE": "1",
@@ -703,6 +705,7 @@ exports[`native-chat launch parity > claude worktree fresh 1`] = `
     "cwd": "<root>/worktree",
     "env": {
       "CLAUDE_AGENT_SDK_VERSION": "<dependency>",
+      "CLAUDE_CODE_ARTIFACT": "1",
       "CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS": "1",
       "CLAUDE_CODE_ENTRYPOINT": "sdk-ts",
       "CLAUDE_CODE_SDK_READS_SESSION_STATE": "1",
@@ -791,6 +794,7 @@ exports[`native-chat launch parity > claude worktree fresh configured 1`] = `
     "env": {
       "ANTHROPIC_API_KEY": "parent-api-key",
       "CLAUDE_AGENT_SDK_VERSION": "<dependency>",
+      "CLAUDE_CODE_ARTIFACT": "1",
       "CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS": "1",
       "CLAUDE_CODE_ENTRYPOINT": "sdk-ts",
       "CLAUDE_CODE_SDK_READS_SESSION_STATE": "1",
@@ -870,6 +874,7 @@ exports[`native-chat launch parity > claude worktree fresh worker 1`] = `
     "cwd": "<root>/worktree",
     "env": {
       "CLAUDE_AGENT_SDK_VERSION": "<dependency>",
+      "CLAUDE_CODE_ARTIFACT": "1",
       "CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS": "1",
       "CLAUDE_CODE_ENTRYPOINT": "sdk-ts",
       "CLAUDE_CODE_SDK_READS_SESSION_STATE": "1",
@@ -955,6 +960,7 @@ exports[`native-chat launch parity > claude worktree resumed 1`] = `
     "cwd": "<root>/worktree",
     "env": {
       "CLAUDE_AGENT_SDK_VERSION": "<dependency>",
+      "CLAUDE_CODE_ARTIFACT": "1",
       "CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS": "1",
       "CLAUDE_CODE_ENTRYPOINT": "sdk-ts",
       "CLAUDE_CODE_SDK_READS_SESSION_STATE": "1",
@@ -1043,6 +1049,7 @@ exports[`native-chat launch parity > claude worktree resumed configured 1`] = `
     "env": {
       "ANTHROPIC_API_KEY": "parent-api-key",
       "CLAUDE_AGENT_SDK_VERSION": "<dependency>",
+      "CLAUDE_CODE_ARTIFACT": "1",
       "CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS": "1",
       "CLAUDE_CODE_ENTRYPOINT": "sdk-ts",
       "CLAUDE_CODE_SDK_READS_SESSION_STATE": "1",

@@ -2,7 +2,7 @@ import { mkdtemp, mkdir, realpath, rm, symlink, unlink } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
+import { installFakeAppEnvironment } from '../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 
 import {

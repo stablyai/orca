@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   agentModelCatalogEntry,
+  agentModelCatalogEntryWithSuccess,
   entryWithConfiguredDefault,
   type AgentModelCatalogListing
 } from './agent-model-catalog-entry'
@@ -145,4 +146,33 @@ it('keeps late configured validation from reattaching old declaration proof to a
     entryWithConfiguredDefault(late, { modelId: 'openai/gpt-6', effort: 'high' }, 4, current)
       ?.models[0]?.declaredDefaultEffort
   ).toBe('high')
+})
+
+it('marks the versioned row a configured Claude alias runs, and gives its alias the configured effort', () => {
+  const efforts = menu('low', 'medium', 'high')
+  const row = (id: string) => ({
+    id,
+    label: id,
+    resolvedModel: 'claude-opus-5-5',
+    isDefault: false,
+    efforts
+  })
+  const entry = agentModelCatalogEntryWithSuccess(
+    undefined,
+    { agent: 'claude', fingerprint: 'fp' },
+    {
+      models: [row('claude-opus-5-5'), row('opus')],
+      origin: 'probe',
+      complete: true,
+      configured: { model: 'opus', effort: 'high' }
+    },
+    'discovery',
+    1
+  )
+  expect(
+    entry?.models.map(({ id, isDefault, defaultEffort }) => ({ id, isDefault, defaultEffort }))
+  ).toEqual([
+    { id: 'claude-opus-5-5', isDefault: true, defaultEffort: 'high' },
+    { id: 'opus', isDefault: false, defaultEffort: 'high' }
+  ])
 })

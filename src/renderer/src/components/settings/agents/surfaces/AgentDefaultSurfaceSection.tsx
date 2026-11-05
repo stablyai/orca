@@ -12,10 +12,7 @@ import { getIntlLocale, translate } from '@/i18n/i18n'
 import { getAgentLabel } from '@/lib/agent-catalog'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store/index'
-import {
-  trackAgentDefaultSurfaceChanged,
-  wasChatUiLaunchTipShown
-} from '../../../feature-tips/feature-tip-telemetry'
+import { trackAgentDefaultSurfaceChanged } from '../../../feature-tips/feature-tip-telemetry'
 import {
   ChatSurfacePreview,
   TerminalSurfacePreview
@@ -191,11 +188,7 @@ export function AgentDefaultSurfaceSection({
         trackAgentDefaultSurfaceChanged({
           from_mode: surface,
           to_mode: next,
-          source: 'settings',
-          launch_tip_shown: wasChatUiLaunchTipShown(
-            useAppStore.getState().featureTipsSeenIds,
-            settings
-          )
+          source: 'settings'
         })
         notify(next, writer)
       },
