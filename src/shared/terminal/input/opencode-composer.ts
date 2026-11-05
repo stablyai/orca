@@ -7,11 +7,12 @@ const OPENCODE_BOX_GUTTER = '┃'
 const OPENCODE_PLACEHOLDERS = ['Ask anything…', 'Run a command…']
 const ELLIPSIS = '…'
 
-function isOpenCodePlaceholder(line: string): boolean {
-  // Narrow panes clip the placeholder to the box width, with or without an ellipsis.
+function isOpenCodePlaceholder(line: string, reachesBoxEdge: boolean): boolean {
+  // Narrow panes clip the placeholder at the box's edge, with or without an ellipsis.
   const shown = line.endsWith(ELLIPSIS) ? line.slice(0, -ELLIPSIS.length) : line
   return OPENCODE_PLACEHOLDERS.some(
-    (placeholder) => line.startsWith(placeholder) || (!!shown && placeholder.startsWith(shown))
+    (placeholder) =>
+      line.startsWith(placeholder) || (reachesBoxEdge && !!shown && placeholder.startsWith(shown))
   )
 }
 
@@ -54,11 +55,14 @@ export function readOpenCodeComposerText(context: TerminalCursorContext): string
   const lines = rows.slice(1, spacer).map(unpad)
   const first = lines.findIndex((line) => line.trim())
   const last = lines.findLastIndex((line) => line.trim())
+  // OpenCode paints the box's padding row across its full width; a clip may stop at a word boundary.
+  const textEnd = column + OPENCODE_BOX_GUTTER.length + padding + (lines[0]?.length ?? 0)
+  const reachesBoxEdge = textEnd >= (context.rows[top] ?? '').length - padding - 2
   const placeholder =
     first === 0 &&
     last === 0 &&
     cursorLine === 1 &&
     !unpad(context.beforeCursor.slice(column + OPENCODE_BOX_GUTTER.length)) &&
-    isOpenCodePlaceholder(lines[0] ?? '')
+    isOpenCodePlaceholder(lines[0] ?? '', reachesBoxEdge)
   return first === -1 || placeholder ? '' : lines.slice(first, last + 1).join('\n')
 }
