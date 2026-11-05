@@ -90,5 +90,8 @@ it('checks its own Run with A identity but refuses ambiguous identity before cho
   expect(db.getRun(runA)).toEqual(beforeA)
   expect(db.getRun(runB.id)).toEqual(beforeB)
   expect(db.hasOutstandingRunDelivery(runB.id)).toBe(false)
-  expect(refusal).toMatchObject({ code: 'no_active_terminal' })
+  expect(refusal).toMatchObject({
+    code: 'no_active_sender_terminal',
+    message: expect.stringContaining("Pass --terminal with your own terminal's handle")
+  })
 })
