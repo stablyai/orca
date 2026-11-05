@@ -386,6 +386,7 @@ it.each([true, false, null])(
           prompt: '',
           updatedAt: 0,
           stateStartedAt: 0,
+          stateHistory: [],
           paneKey: `tab:${leafId}`,
           agentType: 'codex'
         }

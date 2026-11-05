@@ -11,12 +11,28 @@ import {
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { structuredAgentSessionStartFailureRowIdentity } from '../../../../shared/agent-session/failures/structured-agent-session-start-failure-row-key'
 import { NativeChatStructuredSession } from './NativeChatStructuredSession'
+import type * as StructuredLaunchRegistry from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
+import type * as StructuredLaunch from '@/lib/agent-session/launch/structured-agent-session-launch'
 import { structuredLaunchFailure } from '@/lib/agent-session/launch/structured-agent-session-launch-failure'
 import { StructuredAgentSessionCreateRefusalError } from '@/lib/agent-session/launch/structured-agent-session-launch-errors'
 
 const { mocks, moduleFactories, resetStructuredSessionMocks } = await vi.hoisted(async () =>
   (await import('./NativeChatStructuredSession.test-harness')).createStructuredSessionMocks()
 )
+
+vi.mock(
+  '@/lib/agent-session/launch/structured-agent-session-launch-registry',
+  async (original) => ({
+    ...(await original<typeof StructuredLaunchRegistry>()),
+    useStructuredAgentSessionLaunchLifecycle: () => mocks.launchLifecycle,
+    useStructuredAgentSessionLaunchFailure: () => mocks.launchFailure
+  })
+)
+vi.mock('@/lib/agent-session/launch/structured-agent-session-launch', async (original) => ({
+  ...(await original<typeof StructuredLaunch>()),
+  retryStructuredAgentSessionLaunch: mocks.retryLaunch
+}))
+vi.mock('./use-native-chat-tab-owner', () => moduleFactories.useNativeChatTabOwner())
 
 vi.mock('@/runtime/structured-agent-session-client', () =>
   moduleFactories.structuredAgentSessionClient()
@@ -153,7 +169,6 @@ it('explains a direct SSH refusal and keeps the retry route', () => {
       isVisible
       isFocusedGroup
       tabId="ssh-tab"
-      worktreeId="wt-1"
       sessionId="ssh-session"
       target={{ kind: 'local' }}
       agent="claude"
