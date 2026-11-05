@@ -68,7 +68,8 @@ describe('ACP sessions without a reported model', () => {
     reader.adoptSession(response)
     expect(reader.read()).toEqual({
       models: [],
-      current: { effort: 'off', confirmed: ['effort'] }
+      current: { effort: 'off', confirmed: ['effort'] },
+      forkSupport: 'unknown'
     })
     expect(reader.reported()).toEqual({ effort: 'off' })
     expect(writtenOptions('omp', reader)).toEqual({ effort: 'off' })

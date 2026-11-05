@@ -1,3 +1,4 @@
+import '../claude/claude-conversation-worker.test-fixture'
 import type * as ModelCatalogWiring from './structured-agent-model-catalog-wiring'
 import { agentJournalSubmissionKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import { claudePromptUuidForSubmission } from '../claude/structured/claude-structured-session-id'
