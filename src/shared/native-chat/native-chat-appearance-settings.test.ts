@@ -45,6 +45,8 @@ describe('native chat appearance normalization', () => {
       width: 'wide' as const,
       contrast: 151,
       matchTerminalInterface: true,
+      strongColor: '#ff8800',
+      inlineCodeColor: '#00aaff',
       futureSetting: { nested: 'keep' }
     }
     expect(resetNativeChatAppearanceSettings(fromNewerVersion)).toEqual({
@@ -61,7 +63,9 @@ describe('native chat appearance normalization', () => {
       codeFontSize: 10,
       width: 'full',
       contrast: 100,
-      matchTerminalInterface: false
+      matchTerminalInterface: false,
+      strongColor: '',
+      inlineCodeColor: ''
     })
     expect(
       normalizeNativeChatAppearanceSettings({ fontSize: 15.6, codeFontSize: 13.2, width: 'wide' })
@@ -88,6 +92,19 @@ describe('native chat appearance normalization', () => {
     })
     for (const fontFamily of ['', '  ', null, 42, ['Georgia']]) {
       expect(normalizeNativeChatAppearanceSettings({ fontFamily })).toBeUndefined()
+    }
+  })
+})
+
+describe('chat markdown color normalization', () => {
+  it('keeps hex colors as lowercase six-digit values and drops anything else', () => {
+    expect(
+      normalizeNativeChatAppearanceSettings({ strongColor: ' FA0 ', inlineCodeColor: '#00AAff' })
+    ).toEqual({ strongColor: '#ffaa00', inlineCodeColor: '#00aaff' })
+    for (const color of ['', 'red', '#12345', 'rgb(0,0,0)', 42, null]) {
+      expect(
+        normalizeNativeChatAppearanceSettings({ strongColor: color, inlineCodeColor: color })
+      ).toBeUndefined()
     }
   })
 })

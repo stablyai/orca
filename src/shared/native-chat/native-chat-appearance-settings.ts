@@ -1,3 +1,4 @@
+import { HEX_COLOR_RE } from '../color-validation'
 import type { NativeChatProviderChoices } from './native-chat-providers'
 
 export type NativeChatAppearanceSettings = {
@@ -13,6 +14,10 @@ export type NativeChatAppearanceSettings = {
   contrast?: number
   /** Follow the terminal interface font and theme; absent = false. */
   matchTerminalInterface?: boolean
+  /** Hex color for bold message text; absent follows the theme. */
+  strongColor?: string
+  /** Hex color for inline code in messages; absent follows the theme. */
+  inlineCodeColor?: string
 }
 
 export type AgentDefaultSurface = 'chat' | 'terminal'
@@ -40,6 +45,27 @@ export const DEFAULT_NATIVE_CHAT_FONT_SIZE = 14
 export const DEFAULT_NATIVE_CHAT_CODE_FONT_SIZE = 12
 export const DEFAULT_NATIVE_CHAT_CONTRAST = 100
 
+const NATIVE_CHAT_APPEARANCE_KEYS: readonly string[] = [
+  'fontFamily',
+  'fontSize',
+  'codeFontSize',
+  'width',
+  'contrast',
+  'matchTerminalInterface',
+  'strongColor',
+  'inlineCodeColor'
+] satisfies (keyof NativeChatAppearanceSettings)[]
+
+function normalizeHexColor(value: unknown): string | undefined {
+  const trimmed = typeof value === 'string' ? value.trim() : ''
+  if (!HEX_COLOR_RE.test(trimmed)) {
+    return undefined
+  }
+  const digits = trimmed.replace(/^#/, '').toLowerCase()
+  // Expanded so the value also fits <input type="color">.
+  return `#${digits.length === 3 ? digits.replace(/./g, '$&$&') : digits}`
+}
+
 function normalizeSize(value: unknown, min: number, max: number, fallback: number): number {
   return typeof value === 'number' && Number.isFinite(value)
     ? Math.min(max, Math.max(min, Math.round(value)))
@@ -66,26 +92,22 @@ export function normalizeNativeChatAppearanceSettings(
     'matchTerminalInterface' in value && value.matchTerminalInterface === true
   const width =
     'width' in value && (value.width === 'wide' || value.width === 'full') ? value.width : undefined
+  const strongColor = normalizeHexColor('strongColor' in value ? value.strongColor : undefined)
+  const inlineCodeColor = normalizeHexColor(
+    'inlineCodeColor' in value ? value.inlineCodeColor : undefined
+  )
   const normalized: NativeChatAppearanceSettings = {
     ...Object.fromEntries(
-      Object.entries(value).filter(
-        ([key]) =>
-          ![
-            'fontFamily',
-            'fontSize',
-            'codeFontSize',
-            'width',
-            'contrast',
-            'matchTerminalInterface'
-          ].includes(key)
-      )
+      Object.entries(value).filter(([key]) => !NATIVE_CHAT_APPEARANCE_KEYS.includes(key))
     ),
     ...(fontFamily ? { fontFamily } : {}),
     ...(fontSize !== DEFAULT_NATIVE_CHAT_FONT_SIZE ? { fontSize } : {}),
     ...(codeFontSize !== DEFAULT_NATIVE_CHAT_CODE_FONT_SIZE ? { codeFontSize } : {}),
     ...(width ? { width } : {}),
     ...(contrast !== DEFAULT_NATIVE_CHAT_CONTRAST ? { contrast } : {}),
-    ...(matchTerminalInterface ? { matchTerminalInterface } : {})
+    ...(matchTerminalInterface ? { matchTerminalInterface } : {}),
+    ...(strongColor ? { strongColor } : {}),
+    ...(inlineCodeColor ? { inlineCodeColor } : {})
   }
   return Object.keys(normalized).length ? normalized : undefined
 }
@@ -100,7 +122,9 @@ export function resolveNativeChatAppearanceSettings(
     codeFontSize: normalized?.codeFontSize ?? DEFAULT_NATIVE_CHAT_CODE_FONT_SIZE,
     width: normalized?.width ?? 'comfortable',
     contrast: normalized?.contrast ?? DEFAULT_NATIVE_CHAT_CONTRAST,
-    matchTerminalInterface: normalized?.matchTerminalInterface ?? false
+    matchTerminalInterface: normalized?.matchTerminalInterface ?? false,
+    strongColor: normalized?.strongColor ?? '',
+    inlineCodeColor: normalized?.inlineCodeColor ?? ''
   }
 }
 
@@ -109,17 +133,7 @@ export function resetNativeChatAppearanceSettings(
 ): NativeChatAppearanceSettings | undefined {
   return normalizeNativeChatAppearanceSettings(
     Object.fromEntries(
-      Object.entries(appearance ?? {}).filter(
-        ([key]) =>
-          ![
-            'fontFamily',
-            'fontSize',
-            'codeFontSize',
-            'width',
-            'contrast',
-            'matchTerminalInterface'
-          ].includes(key)
-      )
+      Object.entries(appearance ?? {}).filter(([key]) => !NATIVE_CHAT_APPEARANCE_KEYS.includes(key))
     )
   )
 }
