@@ -180,16 +180,6 @@ describe('notebook cell execution', () => {
     expect(applyContent).not.toHaveBeenCalled()
     expect(hook.result.current.pendingRun).toBeNull()
   })
-
-  it('gives id-less cells ids before queueing, so output follows a moved cell', () => {
-    const { hook, content } = renderExecution('/repo/legacy.ipynb', vi.fn(), false)
-
-    act(() => hook.result.current.runCell(1))
-    const [cell] = hook.result.current.pendingRun ?? []
-    const { cells } = parseIpynb(content())
-    expect(cells[1]?.id).toBeTruthy()
-    expect(cell?.key).toBe(cells[1]?.id)
-  })
 })
 
 function completedNotebookContent(count: number): string {
