@@ -124,12 +124,15 @@ async function reconcileOrcadTransaction(
       readiness: await ensureOrcadSlotServing(options, identity)
     }
   }
+  let launchFailure: Error | undefined
   if (transaction.operation === 'activate' && plan.launchedVersion) {
     const readiness = await resumeInterruptedOrcadCandidate(options, transaction)
     if (readiness && 'outcome' in readiness) {
       return readiness
     }
-    if (readiness) {
+    if (readiness && 'launchFailure' in readiness) {
+      launchFailure = readiness.launchFailure
+    } else if (readiness) {
       return {
         outcome: 'recovered',
         resolution: 'committed',
@@ -148,7 +151,7 @@ async function reconcileOrcadTransaction(
     launchedFromState: plan.launchedFromState
   })
   return recovery.outcome === 'refused'
-    ? recovery
+    ? { ...recovery, ...(launchFailure ? { launchFailure } : {}) }
     : {
         outcome: 'recovered',
         resolution: 'restored-incumbent',

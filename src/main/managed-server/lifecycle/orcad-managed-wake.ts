@@ -31,7 +31,7 @@ type OrcadManagedWake =
   /** A recovery launch that failed is still a failed run. */
   | { outcome: 'fenced'; launchFailure?: Error }
   | { outcome: 'started'; readiness: ServeReadiness }
-  | { outcome: 'recovery-refused'; reason: string }
+  | { outcome: 'recovery-refused'; reason: string; launchFailure?: Error }
   /** Proven stopped, but the caller's gate refused a new launch. */
   | { outcome: 'launch-refused' }
 
@@ -172,14 +172,14 @@ async function recoverAbandonedFence(
       return null
     case 'pending':
       return { outcome: 'fenced' }
-    case 'refused':
+    case 'refused': {
+      // A failed launch inside recovery is still a failed run.
+      const failure = recovery.launchFailure ? { launchFailure: recovery.launchFailure } : {}
       // Retry unverifiable recovery at the next fence check, as with a busy owner.
       return recovery.code === ORCAD_RECOVERY_UNVERIFIABLE_CODE
-        ? {
-            outcome: 'fenced',
-            ...(recovery.launchFailure ? { launchFailure: recovery.launchFailure } : {})
-          }
-        : { outcome: 'recovery-refused', reason: recovery.reason }
+        ? { outcome: 'fenced', ...failure }
+        : { outcome: 'recovery-refused', reason: recovery.reason, ...failure }
+    }
     case 'recovered':
       if (!recovery.readiness) {
         return { outcome: 'not-activated' }

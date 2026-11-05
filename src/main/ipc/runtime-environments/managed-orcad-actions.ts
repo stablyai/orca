@@ -72,6 +72,7 @@ export function createManagedOrcadActions(
       return result
     },
     rollback: async (selector) => {
+      forgetFailuresForExplicitAction(userDataPath(), selector)
       const result = await rollbackManagedOrcadEnvironment(userDataPath(), { selector })
       if (result.outcome === 'rolled-back') {
         await options.invalidateTransport(result.environment.id)
@@ -79,6 +80,7 @@ export function createManagedOrcadActions(
       return result
     },
     recover: async (selector, acceptChangedState) => {
+      forgetFailuresForExplicitAction(userDataPath(), selector)
       const result = await recoverManagedOrcadEnvironment(userDataPath(), {
         selector,
         acceptChangedState: acceptChangedState === true
@@ -145,7 +147,7 @@ async function reconnectRestartedManagedOrcad(
   }
 }
 
-/** A user's Update or Restart, like Connect, re-arms automatic starts on that host. */
+/** A user's Update, Rollback, Recover or Restart, like Connect, re-arms automatic starts on that host. */
 function forgetFailuresForExplicitAction(userDataPath: string, selector: string): void {
   try {
     forgetManagedOrcadAutomaticFailures(userDataPath, resolveEnvironment(userDataPath, selector).id)

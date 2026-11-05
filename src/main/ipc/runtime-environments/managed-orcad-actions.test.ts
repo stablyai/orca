@@ -5,8 +5,8 @@ vi.mock('../../../shared/remote-runtime/host-store/runtime-environment-store', (
 }))
 vi.mock('../../ssh/orcad-runtime-maintenance', () => ({
   updateManagedOrcadEnvironment: vi.fn(async () => ({ outcome: 'deferred' })),
-  recoverManagedOrcadEnvironment: vi.fn(),
-  rollbackManagedOrcadEnvironment: vi.fn()
+  recoverManagedOrcadEnvironment: vi.fn(async () => ({ outcome: 'refused' })),
+  rollbackManagedOrcadEnvironment: vi.fn(async () => ({ outcome: 'refused' }))
 }))
 vi.mock('../../managed-server/lifecycle/orcad-managed-launch-session', () => ({
   restartManagedOrcadEnvironment: vi.fn(async () => ({ outcome: 'refused' }))
@@ -40,7 +40,7 @@ beforeEach(() => {
   getManagedOrcadCrashLoopBrake().forget('env-1')
 })
 
-// A user's Update or Restart is an explicit action, like Connect.
+// A user's server action is explicit, like Connect.
 describe('explicit server actions on a host braked for crashing', () => {
   it('Restart re-arms automatic starts', async () => {
     brakeHost()
@@ -48,9 +48,13 @@ describe('explicit server actions on a host braked for crashing', () => {
     expect(getManagedOrcadCrashLoopBrake().engaged('env-1')).toBe(false)
   })
 
-  it('Update re-arms automatic starts', async () => {
+  it.each([
+    ['Update', () => createManagedOrcadActions(options).update('env-1', false)],
+    ['Rollback', () => createManagedOrcadActions(options).rollback('env-1')],
+    ['Recover', () => createManagedOrcadActions(options).recover('env-1', false)]
+  ])('%s re-arms automatic starts', async (_action, run) => {
     brakeHost()
-    await createManagedOrcadActions(options).update('env-1', false)
+    await run()
     expect(getManagedOrcadCrashLoopBrake().engaged('env-1')).toBe(false)
   })
 })

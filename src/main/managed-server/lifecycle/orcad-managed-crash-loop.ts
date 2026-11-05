@@ -183,7 +183,7 @@ async function wakeUnlessEngaged(
     if (wake.outcome === 'started') {
       brake.noteStarted(environmentId, epoch, wake.readiness.health)
     }
-    if (wake.outcome === 'fenced' && wake.launchFailure) {
+    if ((wake.outcome === 'fenced' || wake.outcome === 'recovery-refused') && wake.launchFailure) {
       brake.noteFailedStart(environmentId, epoch, wake.launchFailure)
     }
     return wake
