@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import type { Editor } from '@tiptap/react'
 import { getGitHubMarkdownImageUrlState } from './github-markdown-image-url'
-import { buildRichMarkdownImageInsertContent } from '@/components/editor/rich-markdown-image-insert-content'
+import { buildRichMarkdownImageInsertContent } from '@/components/editor/rich-markdown/images/rich-markdown-image-insert-content'
 import { translate } from '@/i18n/i18n'
 
 export function useImageInput(

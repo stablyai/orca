@@ -1,6 +1,6 @@
 import type { DecodedFrame, JsonRpcNotification, JsonRpcRequest, JsonRpcResponse } from './protocol'
 import { ClientRequestAborts } from './client-request-aborts'
-import type { PtyConsumerCloseCause } from '../shared/pty-consumer-session-contract'
+import type { PtyConsumerCloseCause } from '../shared/terminal/pty/lifecycle/pty-consumer-session-contract'
 import {
   LegacyRelayPublicationLedger,
   type LegacyPublicationLease

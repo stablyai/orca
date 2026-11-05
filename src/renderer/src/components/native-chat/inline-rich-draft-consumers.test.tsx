@@ -118,27 +118,6 @@ afterEach(() => {
   clearNativeChatComposerDraftsForTests()
 })
 
-it.each(['/clear', 'typed  \n\n'])(
-  'normalizes rich return over %j through the mounted editor and next Send',
-  (before) => {
-    updateNativeChatComposerDraft(scope, { text: before, images: [] }, 'immediate')
-    render(<Bottom />)
-    const edit = returned()
-    act(() => {
-      handBackNativeChatQueuedEdit(edit)
-      discardNativeChatQueuedEdit(edit)
-    })
-    const editor = promptEditor(screen.getByRole('textbox'))
-    const expected = before === '/clear' ? '$review changed' : 'typed\n\n$review changed'
-    expect(promptText(editor.state.doc)).toBe(expected)
-    act(() => editor.commands.insertContentAt(editor.state.doc.content.size - 1, '!'))
-    expect(nextSend()).toMatchObject({
-      blocks: [{ type: 'text', text: `${expected}!` }],
-      skills: [{ name: 'review', path: '/returned/SKILL.md' }]
-    })
-  }
-)
-
 it('keeps equal visible skill tokens with distinct selected paths through return and Send', () => {
   const bottom = createNativeChatQueuedEditDraft(
     {
@@ -472,6 +451,7 @@ function useCapturedPrompt(
 ) {
   const root = useRef<HTMLDivElement>(null)
   const handle = useRef<NativeChatComposerHandle>(null)
+  const ref = useRef<NativeChatComposerHandle>(null)
   useNativeChatComposerHandle(handle, {
     textareaRef: input,
     isComposing: () => composing,
@@ -493,6 +473,7 @@ function useCapturedPrompt(
     pastedTextEditor: () => input.current
   })
   useNativeChatComposerEditSession({
+    ref,
     root,
     handle,
     draftScopeKey: key,

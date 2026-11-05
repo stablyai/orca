@@ -1,3 +1,8 @@
+import {
+  CLAUDE_MODEL_FALLBACK_COPY,
+  claudeModelFallbackLabels
+} from '../../../../shared/native-chat/claude-model-fallback'
+import { NativeChatUsageLimitAutoContinue } from './NativeChatUsageLimitAutoContinue'
 import { NativeChatUsageLimitActions } from './NativeChatUsageLimitActions'
 import { agentSessionGoalControlWords } from './agent-session-goal-control-words'
 import { AlertCircle, AlertTriangle, Info } from 'lucide-react'
@@ -112,6 +117,17 @@ export function NativeChatNoticeRow({
     return (
       <p className="min-w-0 max-w-full select-text text-sm text-chat-foreground-faint [overflow-wrap:anywhere]">
         {HOST_STATUS_WORDS[look.presentation]()}
+      </p>
+    )
+  }
+  if (look.kind === 'model-fallback') {
+    return (
+      <p className="min-w-0 max-w-full select-text text-sm text-chat-foreground-faint [overflow-wrap:anywhere]">
+        {translate(
+          'components.native-chat.notices.modelFallback',
+          CLAUDE_MODEL_FALLBACK_COPY,
+          claudeModelFallbackLabels(look)
+        )}
       </p>
     )
   }
@@ -268,6 +284,9 @@ export function NativeChatNoticeRow({
         ) : null}
       </div>
       {usageLimitContinue ? <NativeChatUsageLimitActions /> : null}
+      {usageLimitContinue && orcaStopView.usageLimitAutoContinue ? (
+        <NativeChatUsageLimitAutoContinue state={orcaStopView.usageLimitAutoContinue} />
+      ) : null}
       {claudeSignIn && isClaudeSignInFailureKind(block.failure?.kind) ? (
         <Button
           type="button"

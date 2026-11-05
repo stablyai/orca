@@ -3,9 +3,6 @@ import {
   continuingStructuredAgentSessionInput,
   finalizingStructuredAgentSessionInput
 } from './structured-agent-session-handing-over'
-// Settle ended generations atomically at the current fence. Death/replacement proof interrupts;
-// absent proof marks unverifiable, revisable by later proof. Failed settlement holds no live work.
-
 import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
 import {
   planStructuredAgentSessionDeadGeneration,
@@ -22,6 +19,8 @@ import {
   structuredAgentSessionLiveFence,
   type StructuredAgentSessionWorkEvidence
 } from './structured-agent-session-current-work'
+// Settle ended generations atomically at the current fence. Death/replacement proof interrupts;
+// absent proof marks unverifiable, revisable by later proof. Failed settlement holds no live work.
 
 /** Missing replacedRuntime means no replaced runtime. */
 export type StructuredAgentSessionLeftoverStore = Pick<AgentSessionRecordStore, 'getRecord'> &
@@ -73,6 +72,7 @@ export async function settleStructuredAgentSessionLeftovers(
         : `${STALE_SESSION_ROW_PREFIX}${sessionId}:${fence}:seq-${journal.cursor().sequence}`,
       fence,
       recovered: true,
+      keepFailedStart: exit?.exitedDuringStartup !== undefined,
       plan: () => {
         const exited = exit
           ? planStructuredAgentSessionDeadGeneration(

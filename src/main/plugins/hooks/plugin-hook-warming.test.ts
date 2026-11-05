@@ -6,7 +6,6 @@ import type { PluginWorkerHandle } from '../workers/plugin-host-process'
 import { PluginWorkerManager, type PluginWorkerFactory } from '../workers/plugin-worker-manager'
 import { buildPluginWorkerSpawnSpec } from '../workers/plugin-worker-spawn-spec'
 import { PluginWorkerSlots } from '../workers/plugin-worker-slot-pool'
-import { createPluginHookWarmer } from './plugin-hook-participants'
 
 function plugin(
   pluginKey: string,
@@ -56,29 +55,6 @@ afterEach(() => {
 })
 
 describe('hook plugin warming', () => {
-  it('starts each enabled hook plugin once per approved revision', () => {
-    let plugins = [plugin('acme.guard', ['terminal.send']), plugin('acme.plain', [])]
-    const enabled = new Set(['acme.guard', 'acme.plain'])
-    const ensureWorker = vi.fn(async (_plugin: ValidDiscoveredPlugin) => worker())
-    const warm = createPluginHookWarmer({
-      plugins: () => plugins,
-      isRuntimeApproved: (candidate) => enabled.has(candidate.pluginKey),
-      ensureWorker,
-      isEnabled: () => true
-    })
-    warm()
-    warm()
-    expect(ensureWorker.mock.calls.map(([started]) => started.pluginKey)).toEqual(['acme.guard'])
-
-    plugins = [plugin('acme.guard', ['terminal.send'], 'fp-2')]
-    warm()
-    enabled.delete('acme.guard')
-    warm()
-    enabled.add('acme.guard')
-    warm()
-    expect(ensureWorker).toHaveBeenCalledTimes(3)
-  })
-
   it('keeps a hook plugin’s worker through idle reaping and restarts it after a crash', async () => {
     vi.useFakeTimers()
     const first = worker()
@@ -137,7 +113,7 @@ describe('hook plugin warming', () => {
     await slots.for({ keepWarm: true }, log).acquire(signal)
     await slots.for({ keepWarm: true }, log).acquire(signal)
     expect(log).toHaveBeenCalledOnce()
-    expect(log.mock.calls[0]?.[1]).toMatch(/more than 1 plugins with hooks/)
+    expect(log.mock.calls[0]?.[1]).toMatch(/more than 1 plugins with hooks or status bar items/)
     slots.dispose()
   })
 

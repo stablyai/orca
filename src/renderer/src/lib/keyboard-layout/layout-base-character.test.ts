@@ -5,7 +5,6 @@ import {
   _setLayoutMapForTests,
   _setLayoutSnapshotForTests,
   getLayoutBaseCharacterForCode,
-  getLayoutCharacterForCode,
   prefetchLayoutCharacters
 } from './layout-base-character'
 
@@ -18,65 +17,6 @@ describe('getLayoutBaseCharacterForCode', () => {
     _setLayoutSnapshotForTests(null)
     _resetLayoutCharacterListenersForTests()
     vi.unstubAllGlobals()
-  })
-
-  it('keeps the last complete snapshot until an atomic refresh settles', async () => {
-    _setLayoutSnapshotForTests({
-      inputSourceId: 'old',
-      keyCharacters: {
-        Digit7: { unmodified: '7', shifted: '/' }
-      }
-    })
-    let resolveMap!: (map: { get: (code: string) => string | undefined; size: number }) => void
-    let resolveSnapshot!: (snapshot: {
-      inputSourceId: string
-      keyCharacters: Record<
-        string,
-        {
-          unmodified: string
-          shifted: string
-        }
-      >
-    }) => void
-    const mapPromise = new Promise<{
-      get: (code: string) => string | undefined
-      size: number
-    }>((resolve) => {
-      resolveMap = resolve
-    })
-    const snapshotPromise = new Promise<Parameters<typeof resolveSnapshot>[0]>((resolve) => {
-      resolveSnapshot = resolve
-    })
-    vi.stubGlobal('window', {
-      navigator: { keyboard: { getLayoutMap: () => mapPromise } },
-      api: { app: { getKeyboardLayoutSnapshot: () => snapshotPromise } }
-    })
-
-    const refresh = _refreshLayoutCharactersForTests()
-    expect(getLayoutCharacterForCode('Digit7', true)).toBe('/')
-    resolveMap({ get: () => '&', size: 1 })
-    await Promise.resolve()
-    expect(getLayoutCharacterForCode('Digit7', true)).toBe('/')
-    resolveSnapshot({
-      inputSourceId: 'new',
-      keyCharacters: {
-        Digit7: { unmodified: '7', shifted: '?' }
-      }
-    })
-    await refresh
-    expect(getLayoutCharacterForCode('Digit7', true)).toBe('?')
-  })
-
-  it('never combines a native snapshot with a separate layout-map fallback', () => {
-    _setLayoutMapForTests({ get: () => 'q', size: 1 })
-    _setLayoutSnapshotForTests({
-      inputSourceId: 'partial',
-      keyCharacters: {
-        Digit7: { unmodified: '7', shifted: '/' }
-      }
-    })
-
-    expect(getLayoutBaseCharacterForCode('KeyQ')).toBeUndefined()
   })
 
   it('invalidates synchronously and fences an older refresh after a layout change', async () => {

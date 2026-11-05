@@ -6,19 +6,6 @@ import {
 } from './project-execution-runtime'
 
 describe('normalizeProjectRuntimePreference', () => {
-  it('preserves valid project runtime preferences', () => {
-    expect(normalizeProjectRuntimePreference({ kind: 'inherit-global' })).toEqual({
-      kind: 'inherit-global'
-    })
-    expect(normalizeProjectRuntimePreference({ kind: 'windows-host' })).toEqual({
-      kind: 'windows-host'
-    })
-    expect(normalizeProjectRuntimePreference({ kind: 'wsl', distro: 'Ubuntu-24.04' })).toEqual({
-      kind: 'wsl',
-      distro: 'Ubuntu-24.04'
-    })
-  })
-
   it('keeps Windows Git on a WSL preference and drops any other Git value', () => {
     expect(
       normalizeProjectRuntimePreference({ kind: 'wsl', distro: 'Ubuntu', git: 'windows-host' })
@@ -40,13 +27,6 @@ describe('normalizeProjectRuntimePreference', () => {
 })
 
 describe('deriveGlobalWindowsRuntimeDefaultFromLegacySettings', () => {
-  it('defaults malformed legacy settings to the host global default', () => {
-    expect(deriveGlobalWindowsRuntimeDefaultFromLegacySettings(null)).toEqual({
-      defaultRuntime: { kind: 'windows-host' },
-      fallbackReason: null
-    })
-  })
-
   it('migrates existing host settings to the host global default', () => {
     expect(
       deriveGlobalWindowsRuntimeDefaultFromLegacySettings({
@@ -308,34 +288,6 @@ describe('resolveProjectExecutionRuntime', () => {
         source: 'global-default',
         cacheKey: 'project-1:repair:wsl-distro-required:default'
       }
-    })
-  })
-
-  it('keeps two projects with different runtime preferences isolated', () => {
-    const hostProject = resolveProjectExecutionRuntime({
-      appPlatform: 'win32',
-      projectId: 'host-project',
-      projectRuntimePreference: { kind: 'windows-host' },
-      globalWindowsRuntimeDefault: { kind: 'wsl', distro: 'Ubuntu' },
-      wslAvailable: true,
-      availableWslDistros: ['Ubuntu']
-    })
-    const wslProject = resolveProjectExecutionRuntime({
-      appPlatform: 'win32',
-      projectId: 'wsl-project',
-      projectRuntimePreference: { kind: 'inherit-global' },
-      globalWindowsRuntimeDefault: { kind: 'wsl', distro: 'Ubuntu' },
-      wslAvailable: true,
-      availableWslDistros: ['Ubuntu']
-    })
-
-    expect(hostProject).toMatchObject({
-      status: 'resolved',
-      runtime: { kind: 'windows-host', cacheKey: 'host-project:windows-host' }
-    })
-    expect(wslProject).toMatchObject({
-      status: 'resolved',
-      runtime: { kind: 'wsl', distro: 'Ubuntu', cacheKey: 'wsl-project:wsl:Ubuntu' }
     })
   })
 

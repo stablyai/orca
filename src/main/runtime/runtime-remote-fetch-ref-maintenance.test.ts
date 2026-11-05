@@ -6,19 +6,19 @@ const gitExecFileAsyncMock = vi.hoisted(() => vi.fn())
 const armMock = vi.hoisted(() => vi.fn())
 const busyProbeMock = vi.hoisted(() => vi.fn())
 
-vi.mock('../git/runner', async (importOriginal) => ({
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
   ...((await importOriginal()) as Record<string, unknown>),
   gitExecFileAsync: gitExecFileAsyncMock
 }))
 
-vi.mock('../git/local-repo-ref-maintenance', async (importOriginal) => ({
+vi.mock('../git/refs/maintenance/local-repo-ref-maintenance', async (importOriginal) => ({
   ...((await importOriginal()) as Record<string, unknown>),
   armLocalRepoRefMaintenance: armMock,
   setRepoRefMaintenanceBusyProbe: busyProbeMock
 }))
 
 import { _resetCanonicalRepoKeyCacheForTests } from '../git/canonical-repo-key'
-import { RuntimeRemoteFetchController } from './runtime-remote-fetch-controller'
+import { RuntimeRemoteFetchController } from './repositories/runtime-remote-fetch-controller'
 
 function armedTargets(): { key: string }[] {
   return armMock.mock.calls.map(([args]) => args as { key: string })

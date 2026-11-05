@@ -1,14 +1,18 @@
 import { describe, expect, it, vi } from 'vitest'
-import { OrcaRuntimeService } from './orca-runtime-test-mocks.spec'
-import './orca-runtime-test-lifecycle.spec'
+import './orca-runtime-tests/runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from './orca-runtime'
+import './orca-runtime-tests/orca-runtime-test-lifecycle.spec'
 import { assertTerminalAgentSendable } from './rpc/terminal-agent-send-guard'
 import {
   HEADLESS_LEAF_ID,
   TEST_WORKTREE_ID,
   store,
   syncSinglePty
-} from './orca-runtime-test-fixtures.spec'
-import { committingSpawn, registerBoundPty } from './bind-first-pane.test-fixture'
+} from './orca-runtime-tests/orca-runtime-test-fixtures.spec'
+import {
+  committingSpawn,
+  registerBoundPty
+} from './orca-runtime-tests/bind-first-pane.test-fixture'
 
 async function psStatus(runtime: OrcaRuntimeService): Promise<string | undefined> {
   return (await runtime.getWorktreePs()).worktrees.find((w) => w.worktreeId === TEST_WORKTREE_ID)

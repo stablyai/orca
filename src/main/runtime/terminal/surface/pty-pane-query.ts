@@ -1,4 +1,4 @@
-import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { collectLayoutLeafIdsInOrder } from '../../../../shared/workspace-layout/terminal-pane-tree'
 import type { WorkspaceLayoutLoadContext } from '../../../../shared/workspace-layout/workspace-layout-load-types'
 import { isPaneSleepRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
@@ -11,9 +11,9 @@ import {
 // Read pane copies only in the window-owned branch; main-owned builds use layout alone. Delete these copies with the legacy branch (L80).
 
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import { isTerminalLeafId, makePaneKey } from '../../../../shared/stable-pane-id'
-import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
-import type { RuntimePtyWorktreeRecord } from '../../runtime-terminal-state-records'
+import { isTerminalLeafId, makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import { isValidTerminalTabId } from '../../../../shared/workspace-layout/terminal-tab-id'
+import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 
 export type PtyPane = {
   tabId: string | null

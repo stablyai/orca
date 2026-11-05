@@ -1,4 +1,4 @@
-import { makePaneKey } from '../../shared/stable-pane-id'
+import { makePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import type { AgentHookServer } from './server'
 
 export const LEAF_1 = '11111111-1111-4111-8111-111111111111'
@@ -22,6 +22,7 @@ export type Body = {
   env?: string
   version?: string
   agentProcess?: string
+  tmuxPane?: string
   payload: Record<string, unknown>
 }
 

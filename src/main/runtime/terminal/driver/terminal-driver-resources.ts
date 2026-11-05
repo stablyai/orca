@@ -4,15 +4,15 @@ import {
   remoteCliBrowserScopeWorkspaceId,
   resolveRemoteCliBrowserScopeSelector
 } from '../../desktop-browser-bridge/remote-cli-browser-scope'
-import type { ResolvedWorktree } from '../../runtime-worktree-path-identity'
+import type { ResolvedWorktree } from '../../workspaces/catalog/runtime-worktree-path-identity'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
-import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import type { RuntimeAccountController } from '../../runtime-account-controller'
-import type { BrowserNetworkExecutionHost } from '../../../../shared/browser-network-execution-host'
+import type { BrowserNetworkExecutionHost } from '../../../../shared/browser/client-hosting/browser-network-execution-host'
 import type { BrowserWindow } from 'electron'
 import type { BrowserSessionTabSelectionOptions } from '../../browser-tab-create-publication'
 import type { RuntimeStore } from '../../runtime-store-contract'
-import type { PtyLivenessVerdict } from '../../../../shared/pty-liveness-verdict'
+import type { PtyLivenessVerdict } from '../../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 import type {
   RuntimeTerminalClose,
   RuntimeTerminalRead
@@ -28,7 +28,7 @@ import type {
   PtyLayoutState
 } from '../../orca-runtime-core'
 
-import { RuntimeTerminalDriverController } from '../../runtime-terminal-driver-controller'
+import { RuntimeTerminalDriverController } from './runtime-terminal-driver-controller'
 import { RuntimeEdgeCommandController } from '../../runtime-edge-command-controller'
 import { getBrowserHostLeaseRegistry } from '../../browser-host/browser-host-lease-registry-instance'
 import { getRuntimeBrowserPageRegistry } from '../../runtime-browser-page-registry'
@@ -37,9 +37,9 @@ import { RuntimeBrowserDriverController } from '../../runtime-browser-driver-con
 import { RemoteDesktopTerminalFloor } from '../../remote-desktop-terminal-floor'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../../shared/runtime-types'
 import type { StatsCollector } from '../../../stats/collector'
-import { RuntimeRemoteFetchController } from '../../runtime-remote-fetch-controller'
-import { RuntimeWorktreeBaseReconciliation } from '../../runtime-worktree-base-reconciliation'
-import { RuntimeWorktreeRemovalInFlight } from '../../runtime-worktree-removal-in-flight'
+import { RuntimeRemoteFetchController } from '../../repositories/runtime-remote-fetch-controller'
+import { RuntimeWorktreeBaseReconciliation } from '../../workspaces/metadata/runtime-worktree-base-reconciliation'
+import { RuntimeWorktreeRemovalInFlight } from '../../workspaces/removal/runtime-worktree-removal-in-flight'
 import { ServeBrowserTabs } from '../../serve-browser-tabs'
 import { readBrowserTabBar } from '../../browser/browser-tab-listing'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'

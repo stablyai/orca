@@ -17,7 +17,7 @@ import { RpcDispatcher } from '../../src/main/runtime/rpc/dispatcher'
 import { SESSION_TAB_CLOSE_METHODS } from '../../src/main/runtime/rpc/methods/session-tab-close-methods'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../src/shared/agent-session/agent-session-runtime-capabilities'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../src/shared/runtime-types'
-import { createMobileCreateTestNotifier } from '../../src/main/runtime/orca-runtime-test-scenario-builders.spec'
+import { createMobileCreateTestNotifier } from '../../src/main/runtime/orca-runtime-tests/orca-runtime-test-scenario-builders.spec'
 import { sessionTabClose } from '../../mobile/src/session/mobile-session-write-operations'
 import { newReopenedChatTabId } from '../../src/main/runtime/agent-session/agent-session-tab-identity'
 vi.mock('../../src/main/claude/claude-cli-flag-prewarm', () => ({

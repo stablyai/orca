@@ -1,11 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import {
-  OrcaRuntimeService,
-  setPlatform,
-  worktreePathComparison
-} from '../orca-runtime-test-mocks.spec'
-import type { WorktreeMeta } from '../orca-runtime-test-mocks.spec'
-import { makeWorktreeMeta, store, syncSinglePty } from '../orca-runtime-test-fixtures.spec'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { setPlatform } from '../orca-runtime-test-mocks/setup.spec'
+import * as worktreePathComparison from '../../workspaces/catalog/worktree-path-comparison-key'
+import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
+import { makeWorktreeMeta, store, syncSinglePty } from './orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
   it('keeps pinned and unread worktrees when active rows fill the mobile summary limit', async () => {

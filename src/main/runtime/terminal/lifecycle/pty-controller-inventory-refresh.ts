@@ -1,5 +1,5 @@
 import { OrcaRuntimeWithPtyControllerInventoryListing } from './pty-controller-inventory-listing'
-import type { ResolvedWorktree } from '../../runtime-worktree-path-identity'
+
 import type * as PtyControllerContract from '../../runtime-pty-controller-contract'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import {
@@ -8,20 +8,21 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId
 } from '../../../../shared/execution-host'
-import { getPtyExecutionHost } from '../../../../shared/terminal-execution-host'
+import { getPtyExecutionHost } from '../../../../shared/terminal/pty/lifecycle/terminal-execution-host'
 import {
+  type ResolvedWorktree,
   createIncrementalResolvedWorktreeLookup,
   findResolvedWorktreeIdForPath,
   inferWorktreeIdFromPtyId
-} from '../../runtime-worktree-path-identity'
+} from '../../workspaces/catalog/runtime-worktree-path-identity'
 import {
   indexPersistedPtySurfaceBindings,
   indexPersistedPtyWorktreeBindings,
   type PersistedPtyBindingIndexes
-} from '../../runtime-worktree-binding-index'
+} from '../identity/runtime-worktree-binding-index'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import { indexFloatingSnapshotPtyBindings } from '../../floating-snapshot-pty-bindings'
-import { NO_OBSERVING_PROVIDER_REASON } from '../../../../shared/pty-liveness-verdict'
+import { NO_OBSERVING_PROVIDER_REASON } from '../../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 import { buildControllerTerminalIdentities } from '../../orca-runtime-build-controller-terminal-identities'
 import { retireOrchestrationAuthorityAbsentFromInventory } from '../../runtime-restored-orchestration-authority-sweep'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'

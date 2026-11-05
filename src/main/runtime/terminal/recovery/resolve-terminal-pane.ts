@@ -17,15 +17,15 @@ import type {
 import type {
   RuntimeLeafRecord,
   RuntimePtyWorktreeRecord
-} from '../../runtime-terminal-state-records'
-import type { ResolvedWorktree } from '../../runtime-worktree-path-identity'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
+} from '../records/runtime-terminal-state-records'
+import type { ResolvedWorktree } from '../../workspaces/catalog/runtime-worktree-path-identity'
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
   buildVisibleSnapshotReadFallback,
   labelTerminalReadSource,
   readTerminalTail
-} from '../../terminal-tail-read'
-import { getTerminalState } from '../../terminal-wait-results'
+} from '../output/tail/terminal-tail-read'
+import { getTerminalState } from '../wait/terminal-wait-results'
 import { readStructuredWorkerTerminal } from '../../structured-worker-terminal-read'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 

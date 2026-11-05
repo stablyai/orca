@@ -1,6 +1,9 @@
-import { isTerminalLeafId } from '../../../shared/stable-pane-id'
-import type { TerminalPaneLayoutNode, TerminalTab } from '../../../shared/terminal-tab-types'
-import { sanitizeTerminalLayoutPaneTitles } from '../../../shared/terminal-pane-title-sanitization'
+import { isTerminalLeafId } from '../../../shared/workspace-layout/stable-pane-id'
+import type {
+  TerminalPaneLayoutNode,
+  TerminalTab
+} from '../../../shared/workspace-layout/terminal-tab-types'
+import { sanitizeTerminalLayoutPaneTitles } from '../../../shared/workspace-layout/terminal-pane-title-sanitization'
 
 function collectLeafIds(node: TerminalPaneLayoutNode | null): string[] {
   if (!node) {

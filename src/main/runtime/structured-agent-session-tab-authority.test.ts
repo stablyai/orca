@@ -27,10 +27,12 @@ import {
   savedIds
 } from './structured-agent-session-tab-authority.test-support'
 import { structuredAgentSessionTabId } from '../../shared/agent-session/view/structured-agent-session-projection'
-import { chatTabCommandsSettled } from './session-layout-apply.test-fixture'
+import { chatTabCommandsSettled } from './orca-runtime-tests/session-layout-apply.test-fixture'
 import * as journalFactory from '../native-chat/agent-session-journal/journal-store-factory'
 import { discardStructuredWorkerSession } from './rpc/methods/orchestration-structured-worker-session'
 import { closeStructuredAgentSessionChild } from './agent-session/structured-agent-session-close'
+import { createTrackedJournalOpener } from '../native-chat/agent-session-journal/journal-host-database-test-support'
+import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 
 // CLI capability probing is outside tab authority and must not start a real CLI in this fixture.
 vi.mock('../claude/claude-cli-flag-prewarm', () => ({
@@ -45,6 +47,59 @@ vi.mock('../../shared/layout-owner-switch', () => ({
 }))
 beforeEach(() => {
   layoutOwner.main = false
+})
+
+it('captures persisted folder attention without installing the chat host or opening a conversation', async () => {
+  const profile = await authorityProfile([B])
+  await editPersistedTestAgentSessionStore(root, (persisted) => {
+    persisted.records[B].location.workspaceKind = 'folder'
+  })
+  const journals = createTrackedJournalOpener()
+  const journal = await journals.open({
+    stateDirectory: root,
+    identity: {
+      sessionId: B,
+      workspaceId: profile.workspace,
+      hostId: 'local',
+      agent: 'claude',
+      providerHandle: null
+    }
+  })
+  const physicalEpoch = journal.cursor().epoch
+  await journal.replaceEpochItems('handle_forked', 0, [
+    {
+      identity: { provider: 'orca', clientMessageId: 'kept-history' },
+      body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'retained history' }] },
+      ownerFence: 0,
+      turnScope: { kind: 'thread' }
+    }
+  ])
+  const cursor = journal.cursor()
+  expect(cursor.epoch).not.toBe(physicalEpoch)
+  await journals.closeAll()
+  const runtime = new AuthorityRuntime(profile.profile)
+  const ensureHost = vi
+    .spyOn(runtime, 'ensureStructuredAgentSessionHost')
+    .mockRejectedValue(new Error('acknowledgement must not install providers'))
+  const openConversation = vi.spyOn(journalFactory, 'openAgentSessionJournal')
+
+  expect(getStructuredAgentSessionHost()).toBeNull()
+  const acknowledgement = await runtime.prepareWorkspaceAttentionAcknowledgement(
+    `id:${profile.workspace}`
+  )
+  const scope = {
+    executionHostId: 'local',
+    wslDistro: null,
+    workspaceId: profile.workspace,
+    workspaceKind: 'folder'
+  }
+  expect(acknowledgement).toEqual({
+    worktree: scope,
+    reads: [{ sessionId: B, scope, observedCursor: cursor }]
+  })
+  expect(ensureHost).not.toHaveBeenCalled()
+  expect(openConversation).not.toHaveBeenCalled()
+  expect(getStructuredAgentSessionHost()).toBeNull()
 })
 
 it.each([false, true])(

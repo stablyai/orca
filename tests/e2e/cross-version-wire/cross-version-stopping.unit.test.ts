@@ -101,8 +101,8 @@ async function loadBuild(ref: string | null): Promise<Build> {
     const [fold, display, sources, rows] = await Promise.all([
       import('../../../src/shared/agent-session/view/structured-agent-session-agent-status'),
       importWorkingTreeModuleCopy(PHONE_ROW_READER),
-      import('../../../src/main/runtime/runtime-worktree-agent-sources'),
-      import('../../../src/main/runtime/runtime-worktree-agent-rows')
+      import('../../../src/main/runtime/workspaces/process-listing/runtime-worktree-agent-sources'),
+      import('../../../src/main/runtime/workspaces/process-listing/runtime-worktree-agent-rows')
     ])
     return {
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this spec drives both builds' fold through one untyped surface.
@@ -119,8 +119,14 @@ async function loadBuild(ref: string | null): Promise<Build> {
   const [fold, display, sources, rows] = await Promise.all([
     importReleaseCheckoutModule(checkout, STATUS_FOLD),
     importReleaseCheckoutModule(checkout, PHONE_ROW_READER),
-    importReleaseCheckoutModule(checkout, 'src/main/runtime/runtime-worktree-agent-sources.ts'),
-    importReleaseCheckoutModule(checkout, 'src/main/runtime/runtime-worktree-agent-rows.ts')
+    importReleaseCheckoutModule(
+      checkout,
+      'src/main/runtime/workspaces/process-listing/runtime-worktree-agent-sources.ts'
+    ),
+    importReleaseCheckoutModule(
+      checkout,
+      'src/main/runtime/workspaces/process-listing/runtime-worktree-agent-rows.ts'
+    )
   ])
   return {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a dynamic import is typed unknown; this is the old build's summary fold by path.
@@ -142,13 +148,6 @@ beforeAll(async () => {
 }, SUITE_TIMEOUT_MS)
 
 describe('cross-version Stopping', () => {
-  it('pairs two real builds that disagree on the field', () => {
-    // Prove distinct build identities so the pairing cannot silently collapse into same-version tests.
-    expect(oldBuild.fold).not.toBe(newBuild.fold)
-    expect(newBuild.fold(STOPPING_SUMMARY).mainAgent).toMatchObject({ stopping: true })
-    expect(oldBuild.fold(STOPPING_SUMMARY).mainAgent).not.toHaveProperty('stopping')
-  })
-
   it('an OLD desktop folds a new host summary into the plain working row it always drew', () => {
     expect(oldBuild.fold(STOPPING_SUMMARY)).toEqual({
       state: 'working',

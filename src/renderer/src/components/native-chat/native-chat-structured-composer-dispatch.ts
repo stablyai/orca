@@ -14,7 +14,11 @@ export async function dispatchNativeChatStructuredComposerText(
   draftText: string,
   attachments: readonly NativeChatComposerImageAttachment[] = [],
   skills: readonly AgentJournalSkillRef[] = [],
-  intent: Pick<StructuredAgentSessionSendRequest, 'alternate'> = {}
+  intent: Pick<
+    StructuredAgentSessionSendRequest,
+    'alternate' | 'prepareAttachments' | 'onSettled'
+  > = {},
+  onPending?: () => void
 ): Promise<Omit<StructuredAgentSessionCommandOutcome, 'handled'> & { revealsTranscript: boolean }> {
   // Number image chips by their attachment order in this message.
   const prompt = imageReferencesToPromptMarkers(
@@ -43,5 +47,9 @@ export async function dispatchNativeChatStructuredComposerText(
     Object.keys(request).length > 0
       ? transport.send(prompt, attachments, request)
       : transport.send(prompt, attachments)
-  return { accepted: admission !== false, error: null, revealsTranscript: admission === true }
+  if (admission instanceof Promise) {
+    onPending?.()
+  }
+  const accepted = await admission
+  return { accepted: accepted !== false, error: null, revealsTranscript: accepted === true }
 }

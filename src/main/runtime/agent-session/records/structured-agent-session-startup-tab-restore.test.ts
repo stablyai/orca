@@ -1,5 +1,5 @@
-import { partialRuntimeStore } from '../../runtime-store-partial-fixture'
-import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
+import { partialRuntimeStore } from '../../orca-runtime-tests/runtime-store-partial-fixture'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 // Startup chat-tab restore must write nothing with an existing index and bound failed writes per step rather than per chat.
 
 import { mkdtemp, readFile, rm } from 'node:fs/promises'

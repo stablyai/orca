@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import { committingSpawn, registerLivePty } from '../bind-first-pane.test-fixture'
-import { OrcaRuntimeService, electronMocks, makePaneKey } from '../orca-runtime-test-mocks.spec'
+import { committingSpawn, registerLivePty } from './bind-first-pane.test-fixture'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { electronMocks } from '../orca-runtime-test-mocks/setup.spec'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import {
   HEADLESS_LEAF_ID,
   RESTORED_AUTHORITY_TOKEN,
@@ -15,9 +18,9 @@ import {
   makeHeadlessTerminalLayout,
   makeRuntimeStoreWithWorkspaceSession,
   makeWorkspaceSessionWithHeadlessTerminal,
-  spawnedPtyEnv,
   store
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
+import { spawnedPtyEnv } from '../spawned-pty-env-fixtures'
 import {
   buildJcodeRuntimeDir,
   JCODE_RUNTIME_DIR_ENV_KEY,

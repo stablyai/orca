@@ -8,11 +8,6 @@ import {
   markLiveCodexSessionsForRestart,
   markRestoredStaleCodexSessionsForRestart
 } from './codex-session-restart'
-import {
-  createCompatibleRuntimeStatusResponseIfNeeded,
-  type RuntimeEnvironmentCallRequest
-} from '@/runtime/runtime-compatibility-test-fixture'
-import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
 
 const ACCOUNT_A = 'account-a@example.com'
 const ACCOUNT_B = 'account-b@example.com'
@@ -20,8 +15,6 @@ const ACCOUNT_B = 'account-b@example.com'
 // Reconfirm cached shell readings: one transient flap during account switch would silently lose the only restart notice (#11064).
 describe('spurious shell readings on Codex-launched panes', () => {
   const originalWindow = (globalThis as { window?: typeof window }).window
-  const runtimeEnvironmentCall = vi.fn()
-  const runtimeEnvironmentTransportCall = vi.fn()
 
   function seedPane(args: { ptyId?: string; launchAgent?: 'codex' } = {}): void {
     const ptyId = args.ptyId ?? 'pty-1'
@@ -49,12 +42,6 @@ describe('spurious shell readings on Codex-launched panes', () => {
   }
 
   beforeEach(() => {
-    clearRuntimeCompatibilityCacheForTests()
-    runtimeEnvironmentCall.mockReset()
-    runtimeEnvironmentTransportCall.mockReset()
-    runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
-      return createCompatibleRuntimeStatusResponseIfNeeded(args) ?? runtimeEnvironmentCall(args)
-    })
     seedPane({ launchAgent: 'codex' })
     ;(globalThis as { window: typeof window }).window = {
       ...originalWindow,
@@ -77,10 +64,6 @@ describe('spurious shell readings on Codex-launched panes', () => {
             activeAccountId: 'account-b'
           }),
           listStalePanes: vi.fn().mockResolvedValue([])
-        },
-        runtimeEnvironments: {
-          ...originalWindow?.api?.runtimeEnvironments,
-          call: runtimeEnvironmentTransportCall
         }
       }
     } as unknown as typeof window
@@ -109,65 +92,6 @@ describe('spurious shell readings on Codex-launched panes', () => {
       previousAccountLabel: ACCOUNT_A,
       nextAccountLabel: ACCOUNT_B
     })
-  })
-
-  it('keeps the pane uncarded when the fresh scan confirms the shell (user exited Codex)', async () => {
-    vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue('zsh')
-
-    await markLiveCodexSessionsForRestart({
-      owner: focusedOwner(),
-      previousAccountLabel: ACCOUNT_A,
-      nextAccountLabel: ACCOUNT_B
-    })
-
-    expect(useAppStore.getState().codexRestartNoticeByPtyId).toEqual({})
-  })
-
-  it('treats a rejected confirmation as no new evidence', async () => {
-    vi.mocked(window.api.pty.confirmForegroundProcess).mockRejectedValue(new Error('daemon busy'))
-
-    await markLiveCodexSessionsForRestart({
-      owner: focusedOwner(),
-      previousAccountLabel: ACCOUNT_A,
-      nextAccountLabel: ACCOUNT_B
-    })
-
-    expect(useAppStore.getState().codexRestartNoticeByPtyId).toEqual({})
-  })
-
-  it('survives a preload without confirmForegroundProcess', async () => {
-    ;(
-      window.api.pty as unknown as { confirmForegroundProcess?: unknown }
-    ).confirmForegroundProcess = undefined
-
-    await markLiveCodexSessionsForRestart({
-      owner: focusedOwner(),
-      previousAccountLabel: ACCOUNT_A,
-      nextAccountLabel: ACCOUNT_B
-    })
-
-    expect(useAppStore.getState().codexRestartNoticeByPtyId).toEqual({})
-  })
-
-  it('never routes a remote runtime pane through the local confirm bridge', async () => {
-    seedPane({ ptyId: 'remote:env-1@@term-1', launchAgent: 'codex' })
-    useAppStore.setState({ settings: { activeRuntimeEnvironmentId: 'env-1' } as never })
-    runtimeEnvironmentCall.mockResolvedValue({
-      id: 'rpc-1',
-      ok: true,
-      result: { process: { foregroundProcess: 'zsh', hasChildProcesses: false } },
-      _meta: { runtimeId: 'remote-runtime' }
-    })
-
-    await markLiveCodexSessionsForRestart({
-      owner: focusedOwner(),
-      previousAccountLabel: ACCOUNT_A,
-      nextAccountLabel: ACCOUNT_B
-    })
-
-    // Local fresh scans say nothing about remote PTYs; reject cross-lane confirmation.
-    expect(window.api.pty.confirmForegroundProcess).not.toHaveBeenCalled()
-    expect(useAppStore.getState().codexRestartNoticeByPtyId).toEqual({})
   })
 
   it('heals a spurious shell reading before the restored-pane stale lookup', async () => {

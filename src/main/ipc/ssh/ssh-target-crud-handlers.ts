@@ -28,7 +28,7 @@ import { runTargetLifecycle } from './ssh-target-lifecycle-queue'
 import { fingerprintRuntimeSshTarget } from '../../ssh/runtime-ssh-target-fingerprint'
 import { removeRegisteredSshTarget } from './ssh-session-teardown'
 import { notifyReposChanged } from '../repos/repos-changed-notification'
-import { requestDesktopBrowserBridgeReconcile } from '../desktop-browser-bridge-reconcile'
+import { requestDesktopBrowserBridgeReconcile } from '../browser/desktop-browser-bridge-reconcile'
 
 // Add/import can re-adopt orphaned workspaces; report them so the renderer refreshes repo ownership.
 function takeRepoReadoptions(): SshRepoReadoption[] {

@@ -1,14 +1,14 @@
-import { buildAgentStartupPlan } from '@/lib/tui-agent-startup'
+import { buildAgentStartupPlan } from '../../../shared/agent-launch/startup/tui-agent-startup'
 import { tuiAgentToAgentKind } from '@/lib/telemetry'
-import { isTuiAgentEnabled } from '../../../shared/tui-agent-selection'
-import { resolveAgentStartupPlanInputs } from '../../../shared/agent-startup-plan-inputs'
+import { isTuiAgentEnabled } from '../../../shared/agent-launch/catalog/tui-agent-selection'
+import { resolveAgentStartupPlanInputs } from '../../../shared/agent-launch/startup/agent-startup-plan-inputs'
 import type { AgentStartedTelemetry } from '@/lib/worktree-startup-payload'
-import type { StartupCommandDelivery } from '../../../shared/codex-startup-delivery'
+import type { StartupCommandDelivery } from '../../../shared/agent-launch/startup/codex-startup-delivery'
 import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { OnboardingState } from '../../../shared/onboarding-state-types'
-import type { AgentStartupShell } from '../../../shared/tui-agent-startup-shell'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { AgentStartupShell } from '../../../shared/agent-launch/startup/tui-agent-startup-shell'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 
 export type OnboardingFolderAgentStartup = {
   command: string

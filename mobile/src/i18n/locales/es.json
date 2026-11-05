@@ -5,10 +5,13 @@
       "connecting": "Conectando al host…",
       "connectingTo": "Conectando a {{name}}…",
       "default": "Predeterminado del sistema",
+      "fableWindow": "Fable",
       "hostNotFound": "Host no encontrado",
       "invalidSnapshot": "Instantánea de cuentas del host no válida",
       "loadingAccounts": "Cargando cuentas…",
       "manageAccountsHint": "Añade cuentas o vuelve a autenticarlas desde Ajustes → Cuentas en el escritorio.",
+      "mcpWindow": "MCP",
+      "otherAgents": "Otros agentes",
       "refreshAccounts": "Actualizar cuentas",
       "sessionWindow": "5h",
       "switchFailed": "No se pudo cambiar de cuenta",
@@ -112,13 +115,8 @@
       "tryAgain": "Reintentar"
     },
     "terminalSettings": {
-      "autocomplete": "Autocompletado y autocorrección",
-      "autocompleteOff": "Desactivado",
-      "autocompleteOn": "Activado",
       "defaultText": "Predeterminado (100%)",
       "keepPhoneSize": "Mantener en tamaño de teléfono (predeterminado)",
-      "keyboardInputDescription": "El autocompletado, la autocorrección y las sugerencias ortográficas solo se aplican a los comandos que se editan antes de enviarlos. Usa el botón de doble flecha situado encima del teclado para salir del modo de entrada directa y edita el comando antes de tocar Enviar. Estas funciones están desactivadas por defecto para evitar que se modifiquen comandos, opciones o rutas.",
-      "keyboardInputHeading": "ENTRADA DE TECLADO",
       "largeText": "Grande (125%)",
       "largerText": "Más grande (150%)",
       "largestText": "Máximo (200%)",
@@ -287,7 +285,8 @@
       "stoppedManually": "Detenido manualmente",
       "permissionDenied": "{{agent}} denegó el permiso. Ver detalles.",
       "safetyReview": "{{agent}} notificó una advertencia de revisión de seguridad. Ver detalles.",
-      "truncatedResponse": "Respuesta del proveedor truncada (tamaño original: {{bytes}} bytes)."
+      "truncatedResponse": "Respuesta del proveedor truncada (tamaño original: {{bytes}} bytes).",
+      "modelFallback": "Claude cambió de modelo: {{from}} → {{to}}."
     },
     "orcaStop": {
       "canContinue": "Puedes continuar en esta conversación.",
@@ -334,7 +333,10 @@
       "emptyAnswer": "Respuesta vacía",
       "resolved": "Resuelto",
       "resolver": "Respondido en {{device}}",
-      "unavailable": "Respuesta seleccionada no disponible"
+      "unavailable": "Respuesta seleccionada no disponible",
+      "thisPhone": "este teléfono",
+      "computer": "el ordenador",
+      "otherDevice": "otro dispositivo"
     },
     "sessionOptionCopy": {
       "availableAfterSessionStarts": "Disponible después de iniciar la sesión.",
@@ -377,7 +379,9 @@
     },
     "sessionOptionRows": {
       "defaultMarker": "Predeterminado",
-      "notReportedMarker": "No indicado"
+      "notReportedMarker": "No indicado",
+      "moreModels": "Más modelos",
+      "fewerModels": "Menos modelos"
     },
     "sessionOptionSegments": {
       "dispatchUnconfirmed": "Enviado al agente — sin confirmar"
@@ -564,6 +568,24 @@
     "agentMessage": {
       "handedOffToAgent": "Entregado a un agente",
       "startedAgent": "Agente iniciado"
+    },
+    "textAttachmentPreview": {
+      "unreadableReply": "La respuesta del adjunto no se puede leer. Inténtalo de nuevo.",
+      "incompleteReply": "El adjunto cambió o su respuesta estaba incompleta. Ciérralo e inténtalo de nuevo.",
+      "notText": "No se puede previsualizar este archivo como texto. Guárdalo para abrirlo en otra aplicación.",
+      "openFailed": "No se pudo abrir el adjunto. Inténtalo de nuevo.",
+      "hostUpdate": "Este host aún no puede abrir adjuntos de texto. Actualiza Orca en ese host y vuelve a intentarlo.",
+      "copyTooLarge": "Este archivo es demasiado grande para copiarlo. Guárdalo.",
+      "connectionChanged": "La conexión cambió. Vuelve a intentar abrir el adjunto.",
+      "hostChanged": "El host del adjunto cambió. Ciérralo y vuelve a abrirlo.",
+      "readFailed": "No se pudo leer el adjunto. Vuelve a conectarte e inténtalo de nuevo. Es posible que el archivo se haya eliminado o modificado.",
+      "copyFrame": "Copiar todo para este adjunto requiere la próxima actualización del teléfono.",
+      "copyFailed": "No se pudo copiar el adjunto. Inténtalo de nuevo.",
+      "pastedText": "Texto pegado",
+      "textAttachment": "Adjunto de texto",
+      "byteSize": "{{size}} bytes",
+      "saveUpdate": "Guardar estará disponible en una actualización del teléfono.",
+      "fullCopySaveUpdate": "Copiar todo y Guardar para este adjunto estarán disponibles en una actualización del teléfono."
     }
   },
   "common": {
@@ -760,6 +782,9 @@
     },
     "hostCard": {
       "hostActions": "Acciones para {{title}}",
+      "needsYou_many": "{{count}} te necesitan",
+      "needsYou_one": "{{count}} te necesita",
+      "needsYou_other": "{{count}} te necesitan",
       "openHost": "Abrir {{title}}",
       "pairingInvalid": "Emparejamiento no válido",
       "pairingTemporarilyUnavailable": "Emparejamiento no disponible temporalmente",
@@ -840,7 +865,8 @@
     },
     "prSidebar": {
       "loading": "Cargando pull request…",
-      "notPermitted": "Acceso no permitido: tu cuenta de GitHub no está conectada."
+      "notPermitted": "Acceso no permitido: tu cuenta de GitHub no está conectada.",
+      "retryLoading": "Reintentar cargar la pull request"
     },
     "protocolBlockScreen": {
       "backToHosts": "Volver a hosts",
@@ -1293,10 +1319,30 @@
     }
   },
   "home": {
+    "agents": {
+      "activeCount": "Activos: {{count}}",
+      "heading": "Agentes",
+      "showAll": "Mostrar todos ({{count}})",
+      "showFewer": "Mostrar menos"
+    },
     "appUpdateCard": {
       "dismissAccessibilityLabel": "Descartar la actualización de Orca {{version}}",
       "title": "Orca {{version}} está disponible",
       "updateAccessibilityLabel": "Orca {{version}} está disponible, toca para actualizar"
+    },
+    "automationsTab": {
+      "connectDesktop": "Conecta {{desktop}} para ver y ejecutar automatizaciones.",
+      "createHint": "Toca + para programar un agente.",
+      "emptyTitle": "Programa el trabajo de los agentes",
+      "lastStatus": "Última: {{status}}",
+      "newAutomation": "Nueva automatización",
+      "noAutomations": "Aún no hay automatizaciones",
+      "pairDesktop": "Empareja un escritorio para ver y ejecutar automatizaciones.",
+      "paused": "En pausa",
+      "scheduled": "Programadas",
+      "showFor": "Mostrar automatizaciones de",
+      "toggleFailed": "No se pudo actualizar {{name}}",
+      "updateDesktop": "Actualiza Orca en {{desktop}} para usar las automatizaciones."
     },
     "emptyState": {
       "connectedDescription": "Tu escritorio aparecerá aquí. Todo está cifrado de extremo a extremo.",
@@ -1308,9 +1354,7 @@
       "title": "Conecta tu escritorio"
     },
     "listFooter": {
-      "hostPickerTitle": "Abrir tareas en",
-      "automationsHeading": "Automatizaciones",
-      "automationsHostPickerTitle": "Abrir automatizaciones en"
+      "hostPickerTitle": "Abrir tareas en"
     },
     "listHeader": {
       "desktopsHeading": "Escritorios"
@@ -1321,6 +1365,33 @@
       "removeHostMessage": "¿Eliminar \"{{name}}\"? Puedes volver a emparejarlo más tarde.",
       "removeHostTitle": "Eliminar host",
       "tryAgain": "Por favor, vuelve a intentarlo."
+    },
+    "stats": {
+      "agentTime": "Tiempo de agentes",
+      "agentsSpawned": "Agentes iniciados",
+      "days": "{{days}} d",
+      "heading": "Tus estadísticas",
+      "hours": "{{hours}} h",
+      "minutes": "{{minutes}} min",
+      "prsCreated": "PRs creados"
+    },
+    "tabs": {
+      "automations": "Automatizaciones",
+      "chooseDesktop": "{{desktop}}, elegir otro escritorio",
+      "feed": "Actividad",
+      "usage": "Uso"
+    },
+    "usage": {
+      "active": "Activa",
+      "addAccounts": "Añade cuentas desde Ajustes → Cuentas en el escritorio.",
+      "connectDesktop": "Conecta {{desktop}} para ver el uso de las cuentas de agentes.",
+      "emptyTitle": "Aún no hay datos de uso",
+      "openAccountsHint": "Abre las cuentas de este escritorio",
+      "pairDesktop": "Empareja un escritorio para ver el uso de las cuentas de agentes.",
+      "refresh": "Actualizar uso",
+      "showUsageFor": "Mostrar uso de",
+      "updatedAgo": "Actualizado hace {{time}}",
+      "updatedJustNow": "Actualizado ahora mismo"
     }
   },
   "hooks": {
@@ -1521,7 +1592,7 @@
       "notificationsTitle": "Entérate cuando un agente te necesite",
       "openInChatUi": "Abrir sesiones en la interfaz de chat",
       "openInTerminal": "Abrir sesiones en el terminal",
-      "sessionViewDescription": "Elige si las sesiones de agentes compatibles se abren en el terminal o en la interfaz de chat de este dispositivo. Mantén pulsada la pestaña de una sesión para cambiar su vista, o cambia la opción predeterminada más tarde en Ajustes.",
+      "sessionViewDescription": "Elige si las sesiones de agentes compatibles se abren en el terminal o en la interfaz de chat de este dispositivo. Mantén pulsada la pestaña de una sesión para cambiar su vista, o cambia la opción predeterminada cuando quieras en Ajustes → Interfaz de chat.",
       "sessionViewTitle": "¿Cómo quieres abrir las sesiones?",
       "skipNotifications": "Omitir las notificaciones por ahora",
       "useChatUi": "Usar interfaz de chat"
@@ -1692,7 +1763,7 @@
     },
     "prViewPanel": {
       "branchUnavailable": "La rama actual no está disponible.",
-      "providerUnavailable": "El panel de revisión alojada no está disponible para este proveedor."
+      "githubRemoteRequired": "Esta pestaña necesita un remoto de GitHub para mostrar los detalles de las solicitudes de incorporación. Para otras plataformas compatibles, crea una revisión desde Cambios y ábrela en el navegador."
     },
     "reviewerPickerDrawer": {
       "loadFailed": "No se pudieron cargar las personas",
@@ -1715,15 +1786,18 @@
     "accessoryKeys": {
       "dismissKeyboard": "Ocultar teclado",
       "sendKey": "Enviar {{label}}",
-      "modifierHint": "Se aplica a la siguiente tecla. Toca dos veces para mantenerla activa.",
       "typeCharacter": "Escribir {{character}}",
       "interrupt": "Interrumpir terminal",
       "keysModeLabel": "Modo teclas: lo que escribes va directamente al terminal. Cambiar al modo mensaje",
       "messageModeLabel": "Modo mensaje: escribe y luego envía. Cambiar al modo teclas",
-      "keysMode": "Teclas",
-      "messageMode": "Mensaje",
       "moreKeys": "Más teclas y acciones",
-      "showKeyboard": "Mostrar teclado"
+      "showKeyboard": "Mostrar teclado",
+      "dismissKeyboardHint": "Oculta el teclado en pantalla y mantiene abierta la sesión de terminal actual.",
+      "switchToDesktopMode": "Cambiar al modo de escritorio",
+      "switchToPhoneMode": "Cambiar al modo teléfono",
+      "pasteFromClipboard": "Pegar desde el portapapeles",
+      "paste": "Pegar",
+      "addCustomShortcut": "Agregar atajo personalizado"
     },
     "activeContent": {
       "createTab": "Crear pestaña",
@@ -1850,11 +1924,7 @@
     },
     "commandDock": {
       "liveInputHint": "El texto que escribes se envía directamente a la terminal activa.",
-      "liveInputLabel": "Entrada al terminal en tiempo real",
-      "sendCommand": "Enviar comando",
-      "messageAgentPlaceholder": "Mensaje para {{agent}}",
-      "writeCommandPlaceholder": "Escribe un comando y luego envíalo",
-      "theAgent": "el agente"
+      "liveInputLabel": "Entrada al terminal en tiempo real"
     },
     "contentRow": {
       "dismissCreationWarning": "Descartar la advertencia de creación del espacio de trabajo"
@@ -1903,6 +1973,7 @@
       "attachmentAtMost": "{{agent}} acepta como máximo {{limit}} imágenes por mensaje, así que este mensaje no se envió.",
       "attachmentEmpty": "Una imagen de este mensaje está vacía, así que el mensaje no se envió.",
       "attachmentInvalid": "Un archivo adjunto de este mensaje no se puede enviar al agente.",
+      "attachmentsExpired": "Caducado: {{names}}.",
       "attachmentLargerThan": "Una imagen de este mensaje supera los {{size}} MB, así que el mensaje no se envió.",
       "attachmentNoSource": "Una imagen de este mensaje no tiene ningún archivo que enviar, así que el mensaje no se envió.",
       "attachmentNotAFile": "Una imagen de este mensaje no es un archivo, así que el mensaje no se envió.",
@@ -2108,7 +2179,7 @@
     },
     "prActionsEngine": {
       "mergeFailed": "No se pudo hacer merge de la pull request.",
-      "refreshFailed": "No se pudo actualizar la pull request."
+      "refreshFailed": "No se pudo actualizar la solicitud de extracción."
     },
     "prAiTriageLaunch": {
       "agentStarted": "Agente iniciado",
@@ -2490,6 +2561,7 @@
       "queueTooLarge": "Hay demasiado texto esperando en la cola.",
       "quitTerminalAgent": "Cierre ese agente para continuar el chat aquí.",
       "reattachFile": "Quítelo y vuelva a adjuntarlo.",
+      "reattachFiles": "Quítelos y vuelva a adjuntarlos.",
       "recordFailed": "Orca no pudo guardar esto en el historial del chat.",
       "recordUnreadable": "Orca no pudo leer el estado guardado de este chat.",
       "reopenChat": "Vuelva a abrir el chat para comprobarlo de nuevo.",
@@ -2536,14 +2608,6 @@
     "terminalSplitLayout": {
       "saveFailedTitle": "No se pudo guardar el diseño",
       "saveFailedMessage": "Este diseño se aplica por ahora. Vuelve a seleccionarlo para intentar guardarlo de nuevo."
-    },
-    "terminalArrowPad": {
-      "label": "Teclas de dirección",
-      "hint": "Toca un lado para pulsar una flecha o mantén pulsado y arrastra para repetir",
-      "up": "Arriba",
-      "down": "Abajo",
-      "left": "Izquierda",
-      "right": "Derecha"
     },
     "terminalMoreKeys": {
       "sendKey": "Enviar {{label}}",
@@ -2720,6 +2784,9 @@
       "title": "Voz",
       "toggleMode": "Alternar",
       "updateFailed": "No se pudo actualizar"
+    },
+    "agents": {
+      "permissionOwnAll": "Configuración propia de los agentes"
     }
   },
   "sourceControl": {
@@ -3283,7 +3350,6 @@
       "pipelineJobs_one": "{{count}} trabajo",
       "pipelineJobs_other": "{{count}} trabajos",
       "rerunAll": "Reejecutar todos",
-      "rerunFailed": "Reejecutar fallidos",
       "subIssueTitle": "Título del sub-issue",
       "subIssues": "Sub-issues"
     },
@@ -3517,7 +3583,6 @@
       "requestReview": "Solicitar revisión",
       "requestReviewers": "Solicitar revisores",
       "rerunAll": "Reejecutar todos",
-      "rerunFailed": "Reejecutar fallidos",
       "reviewers": "Revisores",
       "viewFile": "Ver"
     },
@@ -3971,7 +4036,6 @@
       "unknownResult": "Resultado desconocido",
       "notReported": "No informado",
       "searchOptions": "Buscar opciones",
-      "scheduleAgentWorkAndViewRuns": "Programa el trabajo de los agentes y consulta las ejecuciones",
       "task": "Tarea",
       "review": "Revisar"
     },

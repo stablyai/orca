@@ -9,8 +9,8 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { computeAgentLaunchFingerprint } from '../../../../shared/agent-launch-operation'
-import { AGENT_LAUNCH_SURFACE_UNAVAILABLE_CODE } from '../../../../shared/agent-launch-surface'
+import { computeAgentLaunchFingerprint } from '../../../../shared/agent-launch/contracts/agent-launch-operation'
+import { AGENT_LAUNCH_SURFACE_UNAVAILABLE_CODE } from '../../../../shared/agent-launch/contracts/agent-launch-surface'
 import { assertOpenCodeModelLaunchPreferencesAbsent } from '../../../opencode/opencode-model-startup-plan'
 import type { AgentSessionRecordStore } from '../../agent-session/records/agent-session-record-store'
 import {
@@ -22,7 +22,7 @@ import {
   RuntimeLineageError,
   LINEAGE_PARENT_AMBIGUOUS,
   formatAmbiguousCwdParentMessage
-} from '../../runtime-worktree-lineage-resolution'
+} from '../../workspaces/lineage/runtime-worktree-lineage-resolution'
 import { trackTerminalSpawnDispatch } from '../../../agent-launch/agent-launch-not-started'
 import {
   launchFailureWithoutEffectsCode,

@@ -3,9 +3,9 @@ import {
   getLocalBuildCompatibilityError,
   type LocalBuildCompatibility
 } from '../../shared/local-build-compatibility'
-import { DegradedDaemonPtyProvider } from '../daemon/degraded-daemon-pty-provider'
-import { getDaemonProvider } from '../daemon/daemon-provider-state'
-import { getAllDaemonAdapters } from '../daemon/daemon-provider-routing'
+import { DegradedDaemonPtyProvider } from '../daemon/providers/routing/degraded-daemon-pty-provider'
+import { getDaemonProvider } from '../daemon/providers/lifecycle/daemon-provider-state'
+import { getAllDaemonAdapters } from '../daemon/providers/lifecycle/daemon-provider-routing'
 import { getLocalPtyProvider } from '../ipc/pty/provider/registry'
 import { LocalPtyProvider } from '../providers/local-pty/local-pty-provider'
 

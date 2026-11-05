@@ -10,7 +10,7 @@ import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle
 import { CLI_CONVERSATION_ADOPTING_AGENTS } from '../../../shared/structured-agent-cli-conversation-adoption'
 import { recordConversationKey } from '../../native-chat/structured-conversation-key'
 import type { StructuredAgentCliSourceRoute } from '../../native-chat/structured-agent-cli-source'
-import { OrcaRuntimeWithGetWorktreePs } from '../workspaces/workspace-process-listing'
+import { OrcaRuntimeWithGetWorktreePs } from '../workspaces/process-listing/workspace-process-listing'
 
 export abstract class OrcaRuntimeWithStructuredSessionCliWriterHost extends OrcaRuntimeWithGetWorktreePs {
   getStructuredAgentCliSourceRoute(source: {
@@ -91,15 +91,22 @@ export abstract class OrcaRuntimeWithStructuredSessionCliWriterHost extends Orca
 
   async assertStructuredAdoptionTerminalWritersExited(
     agent: StructuredAgentId,
-    providerSessionId: string
+    providerSessionId: string,
+    closingPaneKeys?: readonly string[]
   ): Promise<void> {
     await assertCliConversationWritersExited(
       {
         rows: () => this.getAgentProviderSessionRows(),
-        observation: (row) => this.readHookCliWriterObservationFn?.(row) ?? null
+        observation: (row) => this.readHookCliWriterObservationFn?.(row) ?? null,
+        ptyResolver: () => {
+          // One identity read for every key, rather than a scan of all terminals per key.
+          const context = this.createTerminalIdentityReadContext()
+          return (paneKey) => this.getPtyRecordForPaneKey(paneKey, context)?.ptyId ?? null
+        }
       },
       agent,
-      providerSessionId
+      providerSessionId,
+      closingPaneKeys
     )
   }
 }

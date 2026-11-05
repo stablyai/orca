@@ -1,7 +1,7 @@
 import { OrcaRuntimeWithCreatePtyHeadlessTerminalState } from './headless-terminal-state'
-import type { TerminalOscLinkRange } from '../../../../shared/terminal-osc-link-ranges'
+import type { TerminalOscLinkRange } from '../../../../shared/terminal/links/terminal-osc-link-ranges'
 import type { PtyProviderBufferSnapshot } from '../../../providers/pty-provider-contract'
-import type { ProviderTerminalBufferWait } from '../../runtime-terminal-state-records'
+import type { ProviderTerminalBufferWait } from '../records/runtime-terminal-state-records'
 import { withTimeout } from '../../runtime-async-boundaries'
 import { AUTHORITATIVE_TERMINAL_SNAPSHOT_TIMEOUT_MS } from '../../orca-runtime-postlude'
 

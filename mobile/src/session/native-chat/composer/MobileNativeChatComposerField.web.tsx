@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { StyleSheet, TextInput, View, useWindowDimensions } from 'react-native'
 import { useKeyboardOcclusion } from '../../../platform/keyboard-occlusion'
+import { hostOs } from '../../../platform/host-os'
 import { useTextInputContentHeight } from '../../../platform/text-input-content-height'
 import { colors } from '../../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
@@ -38,6 +39,8 @@ export function MobileNativeChatComposerField({
   dictationPreview,
   placeholder,
   ref,
+  onKeyboardSubmit,
+  onKeyPress,
   ...props
 }: MobileNativeChatComposerFieldProps) {
   useMobileColorScheme()
@@ -82,6 +85,27 @@ export function MobileNativeChatComposerField({
         onScroll={skillToken ? (event) => setScrollTop(scrollTopOf(event)) : undefined}
         placeholder={dictationPreview ? undefined : placeholder}
         {...props}
+        onKeyPress={(event) => {
+          onKeyPress?.(event)
+          const key = event.nativeEvent
+          if (
+            event.defaultPrevented ||
+            !onKeyboardSubmit ||
+            !(key instanceof KeyboardEvent) ||
+            key.key !== 'Enter' ||
+            key.isComposing ||
+            key.keyCode === 229 ||
+            key.shiftKey ||
+            key.altKey ||
+            !(hostOs() === 'ios' ? key.metaKey && !key.ctrlKey : key.ctrlKey && !key.metaKey)
+          ) {
+            return
+          }
+          event.preventDefault()
+          if (!key.repeat) {
+            onKeyboardSubmit()
+          }
+        }}
       />
     </View>
   )

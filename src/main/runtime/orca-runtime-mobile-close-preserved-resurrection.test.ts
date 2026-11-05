@@ -1,4 +1,4 @@
-import { withDurableRuntimeStore } from './runtime-durable-store-fixture'
+import { withDurableRuntimeStore } from './orca-runtime-tests/runtime-durable-store-fixture'
 /** STA-4593: paired-owned connected PTYs could resurrect closed tabs during preserved-merge.
  * Renderer persistence/pruned publication precedes close ack, which clears ownership only afterward.
  * Keep committed closes retired while PTYs linger; deferred acks control interleaving without timing. */
@@ -6,8 +6,8 @@ import { describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import { sessionLayoutApply } from './__fixtures__/main-layout-close-fixture'
-import { makePaneKey } from '../../shared/stable-pane-id'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import { makePaneKey } from '../../shared/workspace-layout/stable-pane-id'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import { OrcaRuntimeService } from './orca-runtime'
 
 const REPO_ID = 'repo-preserved-resurrection'

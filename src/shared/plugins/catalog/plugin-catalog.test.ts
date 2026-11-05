@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { legacyPluginCatalog } from '../../../../config/scripts/export-legacy-plugin-catalog.mjs'
+import { legacyPluginCatalog } from '../../../../config/scripts/plugin-authoring/content-validation/export-legacy-plugin-catalog.mjs'
 import {
   PLUGIN_CATALOG_RELEASE_LIMIT,
   pluginCatalogSchema,

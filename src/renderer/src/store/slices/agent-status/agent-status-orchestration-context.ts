@@ -1,4 +1,4 @@
-import type { AgentStatusOrchestrationContext } from '../../../../../shared/agent-status-types'
+import type { AgentStatusOrchestrationContext } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import { orchestrationFleetAttentionEqual } from '../../../../../shared/orchestration-fleet-attention'
 
 export function orchestrationContextsEqual(

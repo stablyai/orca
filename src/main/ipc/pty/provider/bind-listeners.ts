@@ -14,6 +14,8 @@ import { localProvider } from './registry'
 import { clearProviderPtyState } from './state-cleanup'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { providerSnapshotRequiredPtys, visibleRendererPtys } from '../delivery/visibility-state'
+import { markPtyEscapeBoundaryUnknown } from '../delivery/pty-escape-boundary'
+import { discardPendingPtyDataAcrossGap } from '../delivery/accept'
 import type { PtyIpcSession } from '../session'
 import { publishPtyEndpointLoss } from '../../../runtime/terminal/pty-endpoint-loss-signal'
 
@@ -54,6 +56,9 @@ export function bindProviderListeners(session: PtyIpcSession): void {
       }
       if (payload.kind === 'dataGap') {
         providerSnapshotRequiredPtys.add(payload.id)
+        // The kept tail may start inside an escape whose head the provider dropped.
+        markPtyEscapeBoundaryUnknown(payload.id)
+        discardPendingPtyDataAcrossGap(session, payload.id)
         session.runtime?.notePtyDataGap(payload.id, payload.sequenceChars ?? payload.droppedChars)
         session.sendModelRestoreNeededMarker(
           payload.id,

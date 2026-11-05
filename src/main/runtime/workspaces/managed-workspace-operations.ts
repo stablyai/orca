@@ -1,5 +1,5 @@
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
-import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import type { OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree } from '../terminal/launch/terminal-workspace-scope'
 import { OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce } from '../session-tabs/structured-session-tab-restoration'
 import { DEFAULT_WORKTREE_LIST_LIMIT } from '../orca-runtime-postlude'
@@ -9,10 +9,10 @@ import type {
 } from '../../../shared/runtime-types'
 import type { DetectedWorktreeListResult, Worktree } from '../../../shared/worktree/types'
 import type { Repo } from '../../../shared/repo-types'
-import { stopMissingWorktreeTerminals } from '../missing-worktree-terminal-reconciliation'
+import { stopMissingWorktreeTerminals } from './removal/missing-worktree-terminal-reconciliation'
 import type { WorktreeVisibilitySourceMatcher } from '../../../shared/worktree/visibility-sources'
 import type { RuntimeStore } from '../runtime-store-contract'
-import { getWorkspaceAttachments } from '../../../shared/workspace-attachments'
+import { getWorkspaceAttachments } from '../../../shared/workspace-attachments/workspace-attachments'
 import type { TerminalWorkspaceLaunchScope } from '../runtime-legacy-worker-terminal-recovery-types'
 import type {
   WorkspacePortHostKillRequest,
@@ -32,19 +32,19 @@ import {
   scanWorkspacePortsOnExecutionHost,
   type WorkspacePortExecutionHostDeps
 } from '../../ports/workspace-port-execution-host'
-import { resolveWorktreeHostRouting } from '../worktree-launch-host-repo'
+import { resolveWorktreeHostRouting } from './catalog/worktree-launch-host-repo'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
 import type {
   WorkspaceSleepNotice,
   WorkspaceSleepOutcome,
   WorkspaceSleepRequest
 } from '../../../shared/workspace-sleep'
-import { WorkspaceSleepCoordinator } from './workspace-sleep-runtime'
+import { WorkspaceSleepCoordinator } from './sleep/workspace-sleep-runtime'
 import { dropStrandedSleepRecord } from '../terminal/stop/worktree-sleep-resume-records'
 import type { RestoredPane } from '../terminal/recovery/restored-pane-start'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 
-import { WorkspaceLifecycleQueue } from './workspace-lifecycle-queue'
+import { WorkspaceLifecycleQueue } from './lifecycle/workspace-lifecycle-queue'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../shared/sidebar-inputs-switch'
 
 export abstract class OrcaRuntimeWithListManagedWorktrees extends OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce {

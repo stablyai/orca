@@ -1,23 +1,25 @@
 import {
   makeRuntimeOrchestrationDb,
   dispatchContextRow
-} from '../runtime-orchestration-db.test-fixture'
+} from './runtime-orchestration-db.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { getDefaultWorkspaceSession } from '../../../shared/constants'
+import { join } from 'node:path'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
+import { mkdtemp } from 'node:fs/promises'
+import { setPlatform } from '../orca-runtime-test-mocks/setup.spec'
 import {
-  OrcaRuntimeService,
-  getDefaultWorkspaceSession,
-  join,
-  makePaneKey,
-  mkdtemp,
-  setPlatform,
   setTerminalViewAttributes,
-  tmpdir
-} from '../orca-runtime-test-mocks.spec'
-import { getTerminalViewerColors } from '../terminal-view-attribute-store'
+  getTerminalViewerColors
+} from '../terminal/view/terminal-view-attribute-store'
+import { tmpdir } from 'node:os'
+
 import type {
   TerminalViewAttributes,
   TerminalViewRgb
-} from '../../../shared/terminal-view-attributes'
+} from '../../../shared/terminal/protocol/queries/terminal-view-attributes'
 import type {
   AgentSessionExecutionClaim,
   AgentSessionSurfaceBinding
@@ -37,9 +39,9 @@ import {
   makeFolderWorkspace,
   makeHeadlessTerminalLayout,
   makeWorkspaceSessionWithHeadlessTerminal,
-  spawnedPtyEnv,
   store
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
+import { spawnedPtyEnv } from '../spawned-pty-env-fixtures'
 
 function viewAttributes(
   foreground: TerminalViewRgb,

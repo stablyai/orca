@@ -1,12 +1,11 @@
-// Share whole English sentence pieces: the host interpolates them; desktop translates each with the same fallback.
-
 import {
   CLAUDE_PROFILE_MISSING_MESSAGE,
   CLAUDE_PROFILE_SETUP_FAILED_MESSAGE
 } from '../../claude-profile-routing'
 import type { AgentSessionRefusalReference } from './agent-session-wire-refusals'
-import type { AgentCliInstallationProblem } from '../../agent-cli-installation-problem'
-import { tuiAgentDisplayName } from '../../tui-agent-display-names'
+import type { AgentCliInstallationProblem } from '../../agent-launch/catalog/agent-cli-installation-problem'
+import { tuiAgentDisplayName } from '../../agent-launch/catalog/tui-agent-display-names'
+// Share whole English sentence pieces: the host interpolates them; desktop translates each with the same fallback.
 
 /** Sentences a refusal notice shows too, so a chat says them one way. */
 export const TERMINAL_AGENT_HOLDS_CHAT = 'This chat is still open in a terminal agent.'
@@ -21,6 +20,7 @@ export const AGENT_STILL_WORKING = 'The agent is still working.'
 /** Whole translatable pieces; the host fills agent (name or theAgent) and command (conversation command name) in English. */
 export const AGENT_SESSION_FAILURE_COPY = {
   theAgent: 'The agent',
+  unconfirmed: "Couldn't confirm whether this was sent. It hasn't been resent.",
   providerStartFailed: '{{agent}} stopped before it finished starting.',
   savedConversationMissing: "{{agent}} couldn't find this chat's saved conversation.",
   runCommandAgain: 'Run /{{command}} again.',
@@ -120,6 +120,7 @@ export const AGENT_SESSION_FAILURE_COPY = {
   attachmentNotAFile: "An image on this message isn't a file, so the message was not sent.",
   attachmentNoSource: 'An image on this message has no file to send, so the message was not sent.',
   attachmentInvalid: "An attachment on this message can't be sent to the agent.",
+  attachmentsExpired: '{{names}} expired.',
   attachmentUnreadable:
     "An attachment on this message couldn't be read, so the message was not sent.",
   emptyMessage: 'This message is empty, so it was not sent.',
@@ -199,6 +200,8 @@ export type AgentSessionFailureCopyValues = {
   /** A provider protocol method that got no answer, e.g. `thread/start`. */
   method?: string
   seconds?: string
+  /** Attachment file names, already listed for the sentence. */
+  names?: string
 }
 
 export type AgentSessionFailureSay = (

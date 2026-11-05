@@ -3,7 +3,7 @@ import type { StoreRuntimeState } from '../loading-store/store-runtime-state'
 import {
   readTerminalScrollbackStoredBytesSync,
   writeTerminalScrollbackSnapshotSync
-} from '../../terminal-scrollback-snapshots'
+} from '../../pty/scrollback/terminal-scrollback-snapshots'
 import { deleteUnreferencedOrcadMigrationScrollback } from './orcad-source-scrollback-cleanup'
 import {
   findSnapshotBytes,

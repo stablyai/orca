@@ -1,11 +1,11 @@
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
-import { opensNewTurn } from '../../../shared/agent-hook-cancel-verdict-latch'
+import { opensNewTurn } from '../../../shared/agent-hook-listener/state/agent-hook-cancel-verdict-latch'
 import { isNewTurnEvent } from '../../../shared/agent-hook-listener/provider-event-routing'
 import {
   isSameAgentProcess,
   readAgentProcessIdentity,
   type AgentProcessIdentity
-} from '../../../shared/agent-process-presence'
+} from '../../../shared/agent-status/process/agent-process-presence'
 
 /** All pane aliases share the same exit evidence. */
 export type AgentExitEvidence = {

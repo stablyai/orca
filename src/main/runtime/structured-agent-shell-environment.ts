@@ -5,8 +5,11 @@ import {
   cachedPersistedWindowsPathSegments,
   mergePersistedWindowsPathAsync,
   readPersistedWindowsPathSegmentsAsync
-} from '../pty/windows-environment-path'
-import { mergeWindowsPathSegments, resolvePathEnvKey } from '../pty/windows-path-segment-merge'
+} from '../pty/environment/windows-environment-path'
+import {
+  mergeWindowsPathSegments,
+  resolvePathEnvKey
+} from '../pty/environment/windows-path-segment-merge'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import {
   nativeChatShellEnvironmentPolicy,
@@ -119,18 +122,23 @@ export async function refreshHostAgentBaseEnvironmentAfterMiss(askedAt: number):
   ).catch(() => {})
 }
 
-/** Explicit Refresh must recapture the profile Windows otherwise retains indefinitely. */
+/** First use and settings changes recapture the profile Windows otherwise retains; a capture started within the TTL counts. */
 export async function recaptureHostShellEnvironment(): Promise<void> {
-  await refreshAtRestCommandContext(() => captureHostShellEnvironment())
+  const startedAfter = Date.now() - SHELL_ENVIRONMENT_TTL_MS
+  await refreshAtRestCommandContext(() => captureHostShellEnvironment(undefined, startedAfter))
 }
 
 type EnvironmentProjection = (shellEnv: NodeJS.ProcessEnv) => Map<string, string>
 const servingEnvironmentCaptures = new Set<() => EnvironmentProjection>()
 
-export function captureHostShellEnvironment(): Promise<void>
+export function captureHostShellEnvironment(
+  beforeCapture?: undefined,
+  startedAfter?: number
+): Promise<void>
 export function captureHostShellEnvironment<T>(beforeCapture: () => Promise<T>): Promise<T>
 export async function captureHostShellEnvironment<T>(
-  beforeCapture?: () => Promise<T>
+  beforeCapture?: () => Promise<T>,
+  startedAfter?: number
 ): Promise<T | undefined> {
   const cachedShell = resolveLoginShellEnvironment({ cachedOnly: true })
   const cachedPath = cachedPersistedWindowsPathSegments()
@@ -146,10 +154,10 @@ export async function captureHostShellEnvironment<T>(
   try {
     return await beforeCapture?.()
   } finally {
-    const startedAfter = Date.now()
+    const freshAfter = startedAfter ?? Date.now()
     await Promise.all([
-      resolveLoginShellEnvironment({ startedAfter }),
-      readPersistedWindowsPathSegmentsAsync({ forceRefresh: true, startedAfter })
+      resolveLoginShellEnvironment({ startedAfter: freshAfter }),
+      readPersistedWindowsPathSegmentsAsync({ forceRefresh: true, startedAfter: freshAfter })
     ]).catch(() => {})
     const after = { ...(await resolveLoginShellEnvironment({ cachedOnly: true })) }
     if (process.platform === 'win32') {
