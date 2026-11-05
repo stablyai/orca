@@ -112,8 +112,8 @@ export function buildPosixHookSpoolLines(source: string, eventNameVar?: string):
   return [
     'spool_hook_event() {',
     eventNameVar
-      ? `  case "\${${eventNameVar}:-}" in PreToolUse|PostToolUse|PostToolUseFailure) return 0 ;; esac`
-      : '  case "$payload" in *\'"PreToolUse"\'*|*\'"PostToolUse"\'*|*\'"PostToolUseFailure"\'*) return 0 ;; esac',
+      ? `  case "\${${eventNameVar}:-}" in PreToolUse|PostToolUse|PostToolUseFailure|PostToolBatch) return 0 ;; esac`
+      : '  case "$payload" in *\'"PreToolUse"\'*|*\'"PostToolUse"\'*|*\'"PostToolUseFailure"\'*|*\'"hook_event_name":"PostToolBatch"\'*) return 0 ;; esac',
     '  [ -n "${ORCA_AGENT_HOOK_ENDPOINT:-}" ] || return 0',
     // Stale endpoint variables outside Orca must not accumulate unattributed spool records.
     '  [ -n "${ORCA_PANE_KEY:-}" ] || return 0',

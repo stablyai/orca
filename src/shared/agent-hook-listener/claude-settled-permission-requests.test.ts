@@ -32,6 +32,20 @@ describe('retained Claude request settlements', () => {
     ])
   })
 
+  it('keeps every request a batch end lists, so a reconnect can release a self-denied wait', () => {
+    const batch = {
+      ...base,
+      hookEventName: 'PostToolBatch',
+      claudeSettledRequests: [{ toolUseId: 'tool-1' }, { toolUseId: 'tool-denied' }]
+    }
+    const afterBatch = retainClaudeSettledRequests(undefined, base, batch)
+    const next = { ...base, hookEventName: 'PreToolUse', toolUseId: 'tool-2' }
+    expect(retainClaudeSettledRequests(afterBatch, batch, next)).toEqual([
+      { toolUseId: 'tool-1' },
+      { toolUseId: 'tool-denied' }
+    ])
+  })
+
   it.each([
     { launchToken: 'launch-2' },
     { providerSession: { key: 'session_id' as const, id: 'session-2' } },
