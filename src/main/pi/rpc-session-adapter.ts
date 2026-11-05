@@ -286,11 +286,8 @@ export class PiRpcSessionAdapter implements SessionAdapter {
   }
   async closeAll(): Promise<void> {
     this.endings.clear()
-    await Promise.all(
-      [...this.sessions.keys()].map((id) =>
-        stopAgentSessionProviderRoot(() => this.closeSession(id))
-      )
-    )
+    const ids = [...this.sessions.keys()]
+    await Promise.all(ids.map((id) => stopAgentSessionProviderRoot(() => this.closeSession(id))))
   }
   async drainObservedExits(): Promise<void> {
     await Promise.all([
