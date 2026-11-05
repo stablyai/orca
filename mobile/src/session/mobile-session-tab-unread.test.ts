@@ -300,5 +300,82 @@ describe('unread worktree tab completion', () => {
       }).agentState
     ).toBe('done')
     expect(isMobileSessionTabUnreadBeforeView(activeStructuredTab, 500)).toBe(true)
+
+    // Once viewed on screen (green dot), exiting the session and re-rendering stale/fresh worktree rows
+    // or replayed chatStatus.updatedAt must never flip the structured chat tab back to unread.
+    const workingCatalogRow: RuntimeWorktreeAgentRow = {
+      ...structuredDoneRow,
+      paneKey: 'structured-agent-session-sid-2:leaf-2',
+      state: 'working',
+      stateStartedAt: 600,
+      updatedAt: 600
+    }
+    setCatalogWorktreesForTabStatus(
+      [{ worktreeId: 'wt-grok', unread: false, agents: [workingCatalogRow] }],
+      600
+    )
+    const grokChatTab = {
+      type: 'agent-session' as const,
+      id: 'reopened-chat-tab-grok',
+      title: 'Grok Chat',
+      sessionId: 'sid-2',
+      agent: 'grok' as const,
+      isActive: true,
+      chatStatus: { state: 'working' as const, updatedAt: 600, evidenceObservedAt: 600 }
+    }
+    const grokWorkingCard = buildRecentSessionCardFromTab({
+      hostId: 'host-1',
+      worktreeId: 'wt-grok',
+      worktreeName: 'main',
+      tab: grokChatTab,
+      now: 600
+    })
+    expect(resolveMobileSessionTabDotState(grokChatTab, 600, { isActiveOnScreen: true })).toBe(
+      'working'
+    )
+
+    // Turn finishes while active on screen -> becomes green dot ('done')
+    const grokDoneTab = {
+      ...grokChatTab,
+      chatStatus: { state: 'done' as const, updatedAt: 705, evidenceObservedAt: 700 }
+    }
+    expect(resolveMobileSessionTabDotState(grokDoneTab, 705, { isActiveOnScreen: true })).toBe(
+      'done'
+    )
+
+    // Background WorktreeListRow re-renders with stale working row before catalog refresh
+    expect(
+      resolveHostWorktreeRowStatus(
+        { worktreeId: 'wt-grok', unread: true, agents: [workingCatalogRow] },
+        'working',
+        705
+      )
+    ).toEqual({ status: 'done', unread: false })
+
+    // Fresh catalog poll arrives with done row, and host replays chatStatus with newer receivedAt (updatedAt: 800)
+    const freshDoneCatalogRow: RuntimeWorktreeAgentRow = {
+      ...workingCatalogRow,
+      state: 'done',
+      stateStartedAt: 700,
+      updatedAt: 700
+    }
+    setCatalogWorktreesForTabStatus(
+      [{ worktreeId: 'wt-grok', unread: true, agents: [freshDoneCatalogRow] }],
+      800
+    )
+    const replayedGrokDoneTab = {
+      ...grokDoneTab,
+      chatStatus: { state: 'done' as const, updatedAt: 800, evidenceObservedAt: 700 }
+    }
+    seedUnreadWorktreeSessionTabs('wt-grok', [replayedGrokDoneTab], 800)
+    expect(
+      resolveMobileSessionTabDotState(replayedGrokDoneTab, 800, { isActiveOnScreen: false })
+    ).toBe('done')
+    expect(resolveHostAgentRowDotState(freshDoneCatalogRow, 800)).toBe('done')
+    expect(
+      syncRecentCardWithLiveTab(grokWorkingCard, replayedGrokDoneTab, {
+        isActiveOnScreen: false
+      }).agentState
+    ).toBe('done')
   })
 })

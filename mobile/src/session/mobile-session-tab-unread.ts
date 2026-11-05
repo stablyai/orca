@@ -4,6 +4,7 @@ import type { MobileSessionTab } from './mobile-session-route-types'
 import {
   buildTabCompletionKeys,
   reconcileTerminalAgentStatusWithCatalog,
+  recordStructuredSessionTabState,
   resolveTrackedTabCompletionState
 } from './session-tab-catalog-agent-status'
 import {
@@ -21,6 +22,7 @@ type SessionTabPaneIdentity = {
   id?: string
   parentTabId?: string | null
   leafId?: string | null
+  sessionId?: string | null
   agentStatus?: { paneKey?: string | null } | null
 }
 
@@ -40,6 +42,16 @@ export function resolveSessionTabPaneKey(
   }
   if (tabId?.includes('::')) {
     return tabId.replace('::', ':')
+  }
+  const sid =
+    tab.sessionId ||
+    (tabId?.startsWith('agent-session:')
+      ? tabId.slice('agent-session:'.length)
+      : tabId?.startsWith('structured-agent-session-')
+        ? tabId.slice('structured-agent-session-'.length)
+        : null)
+  if (sid) {
+    return `structured-agent-session-${sid}`
   }
   return null
 }
@@ -75,7 +87,15 @@ export function resolveRawSessionTabDotState(
     return undefined
   }
   if (tab.type === 'agent-session' && tab.chatStatus) {
-    return agentDotState(tab.chatStatus, now)
+    const dotState = agentDotState(tab.chatStatus, now)
+    const doneStamp = tab.chatStatus.evidenceObservedAt ?? tab.chatStatus.updatedAt
+    recordStructuredSessionTabState(
+      resolveSessionTabPaneKey(tab, tabId),
+      dotState,
+      doneStamp,
+      tab.chatStatus.updatedAt
+    )
+    return dotState
   }
   return undefined
 }
@@ -90,7 +110,7 @@ export function resolveTabDoneStamp(tab: SessionTabStatus, tabId = tab.id): numb
     return status ? (status.stateStartedAt ?? status.updatedAt) : undefined
   }
   if (tab.type === 'agent-session' && tab.chatStatus) {
-    return tab.chatStatus.updatedAt
+    return tab.chatStatus.evidenceObservedAt ?? tab.chatStatus.updatedAt
   }
   return undefined
 }

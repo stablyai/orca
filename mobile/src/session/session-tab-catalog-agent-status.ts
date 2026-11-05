@@ -132,12 +132,61 @@ function findCatalogAgentRow(
       }
     }
     for (const row of wt.agents) {
-      if (isRecord(row) && row.paneKey === paneKey) {
+      if (
+        isRecord(row) &&
+        typeof row.paneKey === 'string' &&
+        (row.paneKey === paneKey ||
+          (!paneKey.includes(':') && row.paneKey.startsWith(`${paneKey}:`)))
+      ) {
         return row
       }
     }
   }
   return null
+}
+
+export function recordStructuredSessionTabState(
+  paneKey: string | null,
+  rawState: string | undefined,
+  doneStamp: number | undefined,
+  updatedAt: number | undefined
+): void {
+  if (!paneKey) {
+    return
+  }
+  if (rawState === 'done' && doneStamp !== undefined) {
+    const catalogRow = findCatalogAgentRow(catalogWorktrees, undefined, paneKey)
+    const catalogInTurn =
+      catalogRow !== null &&
+      typeof catalogRow.state === 'string' &&
+      isInTurnDotState(
+        catalogRow.state === 'working' ||
+          catalogRow.state === 'monitoring' ||
+          catalogRow.state === 'waiting' ||
+          catalogRow.state === 'blocked'
+          ? catalogRow.state
+          : undefined
+      )
+    recordSessionSupersededDone(
+      paneKey,
+      {
+        updatedAt: Math.max(updatedAt ?? doneStamp, doneStamp),
+        stateStartedAt: doneStamp
+      },
+      catalogInTurn
+    )
+  } else if (
+    isInTurnDotState(
+      rawState === 'working' ||
+        rawState === 'monitoring' ||
+        rawState === 'waiting' ||
+        rawState === 'blocked'
+        ? rawState
+        : undefined
+    )
+  ) {
+    recordSessionSupersededDone(paneKey, null)
+  }
 }
 
 export function reconcileTerminalAgentStatusWithCatalog(

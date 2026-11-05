@@ -14,9 +14,7 @@ const tabCompletionListeners = new Set<() => void>()
 
 export function subscribeTabCompletionState(listener: () => void): () => void {
   tabCompletionListeners.add(listener)
-  return () => {
-    tabCompletionListeners.delete(listener)
-  }
+  return () => void tabCompletionListeners.delete(listener)
 }
 
 export function notifyTabCompletionStateChanged(): void {
@@ -87,12 +85,11 @@ export function acknowledgeSupersededCatalogInTurn(
   doneStamp?: number
 ): void {
   const entry = getOrCreateTrackerEntry(keys)
-  if (!entry) {
-    return
-  }
-  entry.catalogSawInTurn = false
-  if (!entry.unread && !entry.sawInTurn && doneStamp !== undefined && !entry.acknowledgedDoneAt) {
-    entry.acknowledgedDoneAt = doneStamp
+  if (entry) {
+    entry.catalogSawInTurn = false
+    if (!entry.unread && !entry.sawInTurn && doneStamp !== undefined && !entry.acknowledgedDoneAt) {
+      entry.acknowledgedDoneAt = doneStamp
+    }
   }
 }
 
@@ -150,11 +147,20 @@ export function recordCatalogAgentTabState(args: {
   }
   const prevUnread = entry.unread
   const { rawState, doneStamp, forceUnreadIfUnacknowledged } = args
+  const alreadyAcknowledged =
+    doneStamp !== undefined &&
+    entry.acknowledgedDoneAt !== undefined &&
+    doneStamp <= entry.acknowledgedDoneAt
   if (isInTurnDotState(rawState)) {
-    entry.catalogSawInTurn = true
-    entry.unread = false
+    if (!alreadyAcknowledged) {
+      entry.catalogSawInTurn = true
+      entry.unread = false
+    }
   } else if (rawState === 'done') {
-    if (
+    if (alreadyAcknowledged) {
+      entry.catalogSawInTurn = false
+      entry.sawInTurn = false
+    } else if (
       entry.catalogSawInTurn ||
       entry.sawInTurn ||
       (forceUnreadIfUnacknowledged &&
@@ -215,7 +221,6 @@ export function buildTabCompletionKeys(args: {
   paneKey?: string | null
   sessionId?: string | null
 }): string[] {
-  const keys: string[] = []
   const sid =
     args.sessionId ||
     (args.id?.startsWith('agent-session:')
@@ -223,18 +228,14 @@ export function buildTabCompletionKeys(args: {
       : args.id?.startsWith('structured-agent-session-')
         ? args.id.slice('structured-agent-session-'.length)
         : null)
-  if (args.id) {
-    keys.push(`tab:${args.id}`)
-  }
-  if (sid) {
-    keys.push(`session:${sid}`, `tab:agent-session:${sid}`, `tab:structured-agent-session-${sid}`)
-  }
-  if (args.terminal) {
-    keys.push(`pty:${args.terminal}`)
-  }
-  if (args.paneKey) {
-    keys.push(`pane:${args.paneKey}`)
-  }
+  const keys = [
+    ...(args.id ? [`tab:${args.id}`] : []),
+    ...(sid
+      ? [`session:${sid}`, `tab:agent-session:${sid}`, `tab:structured-agent-session-${sid}`]
+      : []),
+    ...(args.terminal ? [`pty:${args.terminal}`] : []),
+    ...(args.paneKey ? [`pane:${args.paneKey}`] : [])
+  ]
   return Array.from(new Set(keys))
 }
 
@@ -258,6 +259,10 @@ export function resolveTrackedTabCompletionState(args: {
     }
     return result
   }
+  const alreadyAcknowledged =
+    doneStamp !== undefined &&
+    entry.acknowledgedDoneAt !== undefined &&
+    doneStamp <= entry.acknowledgedDoneAt
   if (
     previousCardState === 'unread' &&
     !entry.sawInTurn &&
@@ -266,7 +271,13 @@ export function resolveTrackedTabCompletionState(args: {
   ) {
     entry.unread = true
   }
-  if (isInTurnDotState(previousCardState) && rawState === 'done' && isActiveOnScreen === false) {
+  if (
+    isInTurnDotState(previousCardState) &&
+    rawState === 'done' &&
+    isActiveOnScreen === false &&
+    !alreadyAcknowledged &&
+    (entry.acknowledgedDoneAt === undefined || doneStamp !== undefined)
+  ) {
     entry.sawInTurn = true
   }
   if (isInTurnDotState(rawState)) {
@@ -282,6 +293,10 @@ export function resolveTrackedTabCompletionState(args: {
       if (doneStamp !== undefined) {
         entry.acknowledgedDoneAt = Math.max(entry.acknowledgedDoneAt ?? 0, doneStamp)
       }
+      return finish('done')
+    }
+    if (alreadyAcknowledged && !entry.unread) {
+      entry.sawInTurn = false
       return finish('done')
     }
     if (entry.unread || entry.sawInTurn) {

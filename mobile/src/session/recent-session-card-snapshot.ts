@@ -14,6 +14,7 @@ import { reconcileTerminalAgentStatusWithCatalog } from './session-tab-catalog-a
 export type LiveRecentCardTab = {
   id: string
   terminal?: string | null
+  sessionId?: string | null
   isActive?: boolean
   type?: MobileSessionTab['type']
   agentStatus?: (AgentStatusEntry & { restoredUnconfirmed?: boolean }) | null
@@ -29,6 +30,7 @@ export type RecentSessionCardSnapshot = {
   tabId: string
   leafId?: string
   terminalHandle?: string
+  sessionId?: string
   title: string
   tabType: MobileSessionTabType
   agentId?: string
@@ -64,7 +66,8 @@ export function resolveLiveTabDotState(
     keys: buildTabCompletionKeys({
       id: tab.id || options?.card?.tabId,
       terminal: tab.terminal ?? options?.card?.terminalHandle,
-      paneKey: tab.agentStatus?.paneKey
+      paneKey: tab.agentStatus?.paneKey,
+      sessionId: tab.sessionId ?? options?.card?.sessionId
     }),
     rawState,
     doneStamp: tab.doneStamp ?? resolveTabDoneStamp(tab),
@@ -137,7 +140,9 @@ function resolveSnapshotSessionTabDotState(
   const doneStamp =
     'stateStartedAt' in raw && typeof raw.stateStartedAt === 'number'
       ? raw.stateStartedAt
-      : raw.updatedAt
+      : 'evidenceObservedAt' in raw && typeof raw.evidenceObservedAt === 'number'
+        ? raw.evidenceObservedAt
+        : raw.updatedAt
   return {
     agentState: agentDotState(
       {
@@ -162,6 +167,7 @@ export function recentCardSnapshotTabs(
   | {
       id: string
       terminal?: string | null
+      sessionId?: string | null
       agentState?: AgentDotState | null
       doneStamp?: number
     }[]
@@ -185,6 +191,10 @@ export function recentCardSnapshotTabs(
       return []
     }
     const { agentState, doneStamp } = resolveSnapshotSessionTabDotState(item, Date.now(), options)
+    const sessionId =
+      'sessionId' in item && typeof item.sessionId === 'string' && item.sessionId.length > 0
+        ? item.sessionId
+        : undefined
     return [
       {
         id: item.id,
@@ -192,6 +202,7 @@ export function recentCardSnapshotTabs(
           'terminal' in item && (typeof item.terminal === 'string' || item.terminal === null)
             ? item.terminal
             : undefined,
+        ...(sessionId ? { sessionId } : {}),
         agentState,
         ...(doneStamp !== undefined ? { doneStamp } : {})
       }
@@ -219,6 +230,7 @@ export function buildRecentSessionCardFromTab(p: {
   const agentState = rawState && rawState !== 'idle' ? rawState : undefined
   const leafId = t.type === 'terminal' && t.leafId ? t.leafId : undefined
   const terminalHandle = t.type === 'terminal' && t.terminal ? t.terminal : undefined
+  const sessionId = t.type === 'agent-session' && t.sessionId ? t.sessionId : undefined
   return {
     hostId,
     worktreeId,
@@ -230,6 +242,7 @@ export function buildRecentSessionCardFromTab(p: {
     ...(agentId ? { agentId } : {}),
     ...(agentState ? { agentState } : {}),
     ...(leafId ? { leafId } : {}),
-    ...(terminalHandle ? { terminalHandle } : {})
+    ...(terminalHandle ? { terminalHandle } : {}),
+    ...(sessionId ? { sessionId } : {})
   }
 }

@@ -101,30 +101,31 @@ function parseCard(v: unknown): RecentSessionCardRecord | null {
   if (!h || !w || !id || !t || !Number.isFinite(v.lastVisitedAt)) {
     return null
   }
-  const [leafId, terminalHandle, agentId] = [str(v.leafId), str(v.terminalHandle), str(v.agentId)]
-  const agentState = parseAgentDotState(v.agentState)
+  const [leaf, hdl] = [str(v.leafId), str(v.terminalHandle)]
+  const [sid, aid, st] = [str(v.sessionId), str(v.agentId), parseAgentDotState(v.agentState)]
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: guarded by TAB_TYPES.has(v.tabType) above.
   const tabType = v.tabType as MobileSessionTabType
   const base = { hostId: h, worktreeId: w, worktreeName: str(v.worktreeName) ?? '', tabId: id }
   const rest = { title: t, tabType, lastVisitedAt: Number(v.lastVisitedAt) }
+  const opt = Object.assign({}, leaf && { leafId: leaf }, hdl && { terminalHandle: hdl })
   return Object.assign(
     base,
     rest,
-    leafId && { leafId },
-    terminalHandle && { terminalHandle },
-    agentId && { agentId },
-    agentState && { agentState }
+    opt,
+    sid && { sessionId: sid },
+    aid && { agentId: aid },
+    st && { agentState: st }
   )
 }
 
 export function parseRecentSessionCards(raw: string | null | undefined): Cards {
   const p = parseJson(raw)
-  const items = Array.isArray(p)
+  const arr = Array.isArray(p)
     ? p
     : isRecord(p) && Array.isArray(p.recentCards)
       ? p.recentCards
       : []
-  return items.flatMap((i) => {
+  return arr.flatMap((i) => {
     const c = parseCard(i)
     return c ? [c] : []
   })
@@ -233,12 +234,10 @@ export function removeRecentSessionCard(
   handle?: string | null
 ): Cards {
   if (!hydrated) {
-    pendingRemovals.push({
-      hostId,
-      worktreeId,
-      ...(typeof tabId === 'string' && tabId.length > 0 ? { tabId } : {}),
-      ...(typeof handle === 'string' && handle.length > 0 ? { handle } : {})
-    })
+    const [tid, hdl] = [str(tabId), str(handle)]
+    pendingRemovals.push(
+      Object.assign({ hostId, worktreeId }, tid && { tabId: tid }, hdl && { handle: hdl })
+    )
   }
   const current = readAllRecentSessionCardsSync()
   const scoped = tabId != null || handle != null
@@ -299,16 +298,12 @@ export function getVisibleRecentSessionCards(p: {
   const tabs = p.currentWorktreeTabs
   return readAllRecentSessionCardsSync()
     .filter((i) => {
-      const entry = live?.get(i.worktreeId)
       const inCurrent = i.worktreeId === p.currentWorktreeId
       const isCurrent = Boolean(p.currentTabId) && inCurrent && i.tabId === p.currentTabId
       const closed = Boolean(tabs?.length) && inCurrent && !tabs?.some((t) => matchesTab(i, t))
-      return (
-        i.hostId === p.hostId &&
-        !isCurrent &&
-        (!live || (entry && entry.isArchived !== true)) &&
-        !closed
-      )
+      const activeWt =
+        !live || Boolean(live.get(i.worktreeId) && !live.get(i.worktreeId)?.isArchived)
+      return i.hostId === p.hostId && !isCurrent && activeWt && !closed
     })
     .slice(0, p.limit ?? getRecentSessionCardsMaxDisplaySync())
     .map((i) => {

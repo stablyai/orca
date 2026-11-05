@@ -91,25 +91,16 @@ function catalogAgentSessionKeys(tabId: string): string[] {
 
 function catalogAgentTabKeys(paneKey: string, tabCount: number): string[] {
   const tabId = catalogAgentTabId(paneKey)
-  const keys = [
-    `pane:${paneKey}`,
-    `tab:${paneKey.replace(':', '::')}`,
-    ...catalogAgentSessionKeys(tabId)
-  ]
-  if (tabCount === 1) {
-    keys.push(`tab:${tabId}`)
-  }
-  return keys
-}
-
-function catalogAgentLookupKeys(paneKey: string): string[] {
-  const tabId = catalogAgentTabId(paneKey)
   return [
     `pane:${paneKey}`,
     `tab:${paneKey.replace(':', '::')}`,
-    `tab:${tabId}`,
-    ...catalogAgentSessionKeys(tabId)
+    ...catalogAgentSessionKeys(tabId),
+    ...(tabCount === 1 ? [`tab:${tabId}`] : [])
   ]
+}
+
+function catalogAgentLookupKeys(paneKey: string): string[] {
+  return catalogAgentTabKeys(paneKey, 1)
 }
 
 export function recordSessionSupersededDone(
@@ -120,8 +111,13 @@ export function recordSessionSupersededDone(
   if (!paneKey) {
     return
   }
+  const tabId = catalogAgentTabId(paneKey)
   if (!done) {
-    if (sessionDoneByPaneKey.delete(paneKey)) {
+    const matching = !paneKey.includes(':')
+      ? [...sessionDoneByPaneKey.keys()].filter((k) => catalogAgentTabId(k) === tabId)
+      : []
+    const deleted = [paneKey, tabId, ...matching].some((k) => sessionDoneByPaneKey.delete(k))
+    if (deleted) {
       notifyTabCompletionStateChanged()
     }
     return
@@ -130,22 +126,22 @@ export function recordSessionSupersededDone(
     acknowledgeSupersededCatalogInTurn(catalogAgentLookupKeys(paneKey), done.stateStartedAt)
   }
   const prev = sessionDoneByPaneKey.get(paneKey)
-  if (prev && prev.updatedAt === done.updatedAt && prev.stateStartedAt === done.stateStartedAt) {
-    return
+  if (!prev || prev.updatedAt !== done.updatedAt || prev.stateStartedAt !== done.stateStartedAt) {
+    sessionDoneByPaneKey.set(paneKey, done)
+    notifyTabCompletionStateChanged()
   }
-  sessionDoneByPaneKey.set(paneKey, done)
-  notifyTabCompletionStateChanged()
 }
 
 export function reconcileWorktreeAgentRowWithSessionDone<T extends Record<string, unknown>>(
   row: T
 ): T {
   const paneKey = typeof row.paneKey === 'string' ? row.paneKey : null
-  if (!paneKey || row.state === 'done') {
-    return row
-  }
-  const sessionDone = sessionDoneByPaneKey.get(paneKey)
-  if (!sessionDone) {
+  const tabId = paneKey ? catalogAgentTabId(paneKey) : null
+  const sessionDone =
+    paneKey && row.state !== 'done'
+      ? (sessionDoneByPaneKey.get(paneKey) ?? (tabId ? sessionDoneByPaneKey.get(tabId) : undefined))
+      : undefined
+  if (!paneKey || !tabId || !sessionDone) {
     return row
   }
   const rowUpdatedAt = typeof row.updatedAt === 'number' ? row.updatedAt : -Infinity
@@ -165,6 +161,7 @@ export function reconcileWorktreeAgentRowWithSessionDone<T extends Record<string
   }
   if (rowUpdatedAt > sessionDone.updatedAt || rowStateStartedAt > sessionDone.updatedAt) {
     sessionDoneByPaneKey.delete(paneKey)
+    sessionDoneByPaneKey.delete(tabId)
   }
   return row
 }
@@ -245,49 +242,49 @@ export function syncUnreadWorktreeForTabStatus(worktree: unknown, receivedAt = D
         ? worktree.id
         : undefined
   const isUnread = worktree.unread === true || worktree.isUnread === true
-  if (isUnread && wtId) {
-    markWorktreeUnreadForTabCompletion(wtId)
-  }
   if (!Array.isArray(worktree.agents)) {
+    if (isUnread && wtId) {
+      markWorktreeUnreadForTabCompletion(wtId)
+    }
     return
   }
+  const agentRows = worktree.agents.filter(
+    (r): r is Record<string, unknown> & { paneKey: string } =>
+      isRecord(r) && typeof r.paneKey === 'string'
+  )
   const tabCounts = new Map<string, number>()
-  for (const row of worktree.agents) {
-    if (!isRecord(row) || typeof row.paneKey !== 'string') {
-      continue
-    }
+  for (const row of agentRows) {
     const tabId = catalogAgentTabId(row.paneKey)
     tabCounts.set(tabId, (tabCounts.get(tabId) ?? 0) + 1)
   }
-  const prepared: {
-    keys: string[]
-    rawState: AgentDotState | undefined
-    doneStamp: number | undefined
-  }[] = []
-  for (const row of worktree.agents) {
-    if (!isRecord(row) || typeof row.paneKey !== 'string') {
-      continue
-    }
+  const prepared = agentRows.map((row) => {
     const keys = catalogAgentTabKeys(
       row.paneKey,
       tabCounts.get(catalogAgentTabId(row.paneKey)) ?? 0
     )
-    const effectiveRow = reconcileWorktreeAgentRowWithSessionDone(row)
-    const status = toReconciledStatus(effectiveRow)
+    const status = toReconciledStatus(reconcileWorktreeAgentRowWithSessionDone(row))
     const rawState =
       status && !status.restoredUnconfirmed ? agentDotState(status, receivedAt) : undefined
     const doneStamp = status ? (status.stateStartedAt ?? status.updatedAt) : undefined
     recordCatalogAgentTabState({ keys, rawState, doneStamp })
-    prepared.push({ keys, rawState, doneStamp })
-  }
+    return { keys, rawState, doneStamp }
+  })
   if (!isUnread) {
     return
   }
-  const covered = prepared.some((item) => hasUnacknowledgedTabCompletion(item.keys, item.rawState))
-  if (covered) {
+  const doneAgents = prepared.filter((item) => item.rawState === 'done')
+  const allDoneAcknowledged =
+    doneAgents.length > 0 &&
+    doneAgents.every((item) => isTabCompletionAcknowledged(item.keys, item.doneStamp))
+  if (wtId && !allDoneAcknowledged) {
+    markWorktreeUnreadForTabCompletion(wtId)
+  }
+  if (
+    allDoneAcknowledged ||
+    prepared.some((item) => hasUnacknowledgedTabCompletion(item.keys, item.rawState))
+  ) {
     return
   }
-  const doneAgents = prepared.filter((item) => item.rawState === 'done')
   let maxStamp = -Infinity
   for (const item of doneAgents) {
     if (item.doneStamp !== undefined && item.doneStamp > maxStamp) {
