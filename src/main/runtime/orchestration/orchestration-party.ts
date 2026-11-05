@@ -9,8 +9,8 @@ import {
   isRecordedStructuredWorkerSession,
   resolveStructuredWorkerIdentity,
   resolveStructuredWorkerIdentityForRoot
-} from '../structured-worker-authority'
-import type { StructuredWorkerIdentity } from '../structured-worker-identity'
+} from './terminal-authority/structured-sessions/structured-worker-authority'
+import type { StructuredWorkerIdentity } from './terminal-authority/structured-sessions/structured-worker-identity'
 import { canonicalOrcaSessionId } from './canonical-orca-session-id'
 import type { AgentSessionRecordReader } from './structured-session-lineage'
 import type { OrchestrationDb } from './db'

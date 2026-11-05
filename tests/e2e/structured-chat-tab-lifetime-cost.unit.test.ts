@@ -4,7 +4,7 @@ import type { RuntimeMobileSessionTabsSnapshot } from '../../src/shared/runtime-
 import {
   authorityProfile,
   openAuthorityRuntime
-} from '../../src/main/runtime/structured-agent-session-tab-authority.test-support'
+} from '../../src/main/runtime/agent-session/lifecycle/structured-agent-session-tab-authority.test-support'
 import { chatTabCommandsSettled } from '../../src/main/runtime/orca-runtime-tests/session-layout-apply.test-fixture'
 import type { createChatTabLayoutQueue } from '../../src/main/runtime/agent-session-tab-layout-queue'
 import { fixture } from '../../src/main/persistence/loading-store/profile-state-delayed-authority-fixture'
@@ -309,7 +309,7 @@ it('keeps failed advisory legacy insertion and retention while the actual inner 
   layoutOwner.main = true
   const { store: profile, authority } = await fixture()
   const { root, B, holdStartup, rejectVisibility, savedIds } =
-    await import('../../src/main/runtime/structured-agent-session-tab-authority.test-support')
+    await import('../../src/main/runtime/agent-session/lifecycle/structured-agent-session-tab-authority.test-support')
   const { installFakeAppEnvironment } =
     await import('../../config/scripts/test-runtime/environment/vitest-host-ports-setup')
   installFakeAppEnvironment({ getPath: () => root })
@@ -399,7 +399,7 @@ it.each([
     await rig.runtime.restoreStructuredAgentSessionTabs()
     await chatTabCommandsSettled()
     const { root } =
-      await import('../../src/main/runtime/structured-agent-session-tab-authority.test-support')
+      await import('../../src/main/runtime/agent-session/lifecycle/structured-agent-session-tab-authority.test-support')
     const { folderWorkspaceKey } = await import('../../src/shared/workspace-scope')
     const other = folderWorkspaceKey(
       rig.profile.createFolderWorkspace({
@@ -612,7 +612,7 @@ it.each([10, 100])(
     queueProbe.visits = 0
     const { store: profile, authority } = await fixture()
     const { root, B, rejectVisibility } =
-      await import('../../src/main/runtime/structured-agent-session-tab-authority.test-support')
+      await import('../../src/main/runtime/agent-session/lifecycle/structured-agent-session-tab-authority.test-support')
     const { installFakeAppEnvironment } =
       await import('../../config/scripts/test-runtime/environment/vitest-host-ports-setup')
     installFakeAppEnvironment({ getPath: () => root })

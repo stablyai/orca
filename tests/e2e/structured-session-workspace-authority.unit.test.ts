@@ -28,7 +28,7 @@ import {
   openAuthorityRuntime,
   savedIds,
   AuthorityRuntime
-} from '../../src/main/runtime/structured-agent-session-tab-authority.test-support'
+} from '../../src/main/runtime/agent-session/lifecycle/structured-agent-session-tab-authority.test-support'
 import { removalPtyProvider } from '../../src/main/runtime/rpc/worktree-rm-pty.test-fixture'
 import type { DurableProfileStateMutation } from '../../src/main/persistence/loading-store/store-runtime-state'
 import * as publication from '../../src/main/runtime/session-tabs/structured-session-tab-publication'

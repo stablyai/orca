@@ -15,7 +15,7 @@ import { setStructuredAgentSessionHost } from '../../../native-chat/agent-sessio
 import {
   structuredWorkerIdentities,
   type StructuredWorkerIdentity
-} from '../../structured-worker-identity'
+} from '../../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
 import { createOrchestrationRpcHarness } from './orchestration/rpc-test-harness'
 import {
   createStructuredWorkerSession,

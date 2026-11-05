@@ -6,7 +6,7 @@ import {
   readOrcadHostAccountLaunchEnv,
   restoreOrcadHostAccountLaunchEnv
 } from './orcad-host-account-launch-env-store'
-import { RuntimeAccountController } from '../runtime/runtime-account-controller'
+import { RuntimeAccountController } from '../runtime/agent-session/environment/runtime-account-controller'
 
 const dirs: string[] = []
 function userData(): string {

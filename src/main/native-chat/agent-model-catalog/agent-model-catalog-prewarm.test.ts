@@ -8,7 +8,7 @@ import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { ClaudeProfileRouter } from '../../claude-accounts/claude-profile-router'
 import { installClaudeProfileRouter } from '../../claude-accounts/claude-profile-installed-router'
-import { resolveStructuredClaudeAccountHomePath } from '../../runtime/structured-agent-account-home'
+import { resolveStructuredClaudeAccountHomePath } from '../../runtime/agent-session/environment/structured-agent-account-home'
 
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import { agentModelCatalogFingerprintForRecord } from './agent-model-catalog-fingerprint'
