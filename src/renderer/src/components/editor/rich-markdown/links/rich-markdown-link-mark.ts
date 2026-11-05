@@ -1,4 +1,4 @@
-import { mergeAttributes, type PasteRuleFinder } from '@tiptap/core'
+import { mergeAttributes, type PasteRuleFinder, type PasteRuleMatch } from '@tiptap/core'
 import Link from '@tiptap/extension-link'
 import {
   findProseUrlEnd,
@@ -15,17 +15,17 @@ function findBetweenProseTerminators(find: PasteRuleFinder): PasteRuleFinder {
     return find
   }
   return (text, event) => {
+    const matches: PasteRuleMatch[] = []
     let offset = 0
-    return splitAtProseUrlTerminators(text).flatMap((piece, index) => {
-      const pieceOffset = offset
+    splitAtProseUrlTerminators(text).forEach((piece, index) => {
+      if (index % 2 === 0) {
+        for (const match of find(piece, event) ?? []) {
+          matches.push({ ...match, index: match.index + offset })
+        }
+      }
       offset += piece.length
-      return index % 2 === 0 && piece
-        ? (find(piece, event) ?? []).map((match) => ({
-            ...match,
-            index: match.index + pieceOffset
-          }))
-        : []
     })
+    return matches
   }
 }
 
@@ -39,10 +39,11 @@ export const RichMarkdownLink = Link.extend({
     }
   },
   addPasteRules() {
-    return (this.parent?.() ?? []).map((rule) => {
+    const rules = this.parent?.() ?? []
+    for (const rule of rules) {
       rule.find = findBetweenProseTerminators(rule.find)
-      return rule
-    })
+    }
+    return rules
   },
   // Why: Tiptap blanks file: hrefs in clipboard HTML, so copy/paste dropped those links. Admitting
   // them only in HTML transfer keeps autolink and plain-URL paste rules ignoring bare file: text.

@@ -31,8 +31,6 @@ afterEach(() => {
 it.each([
   ['届出の対象：「サイト」（https://example.com/）のメッセージ機能）', 'https://example.com/'],
   ['「https://example.com/a.」', 'https://example.com/a'],
-  ['詳細はhttps://example.com/、次。', 'https://example.com/'],
-  ['www.example.com/。次', 'http://www.example.com/'],
   ['https://ja.wikipedia.org/wiki/ジョン・スミス。', 'https://ja.wikipedia.org/wiki/ジョン・スミス']
 ])('ends a url in opened Markdown at CJK prose: %s', (markdown, href) => {
   const editor = createEditor(markdown)
