@@ -3,7 +3,10 @@ import type { AgentSessionAccountUsage } from '../../../../shared/agent-session/
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
 import { NativeChatAccountUsageCard } from './NativeChatAccountUsageCard'
-import { useNativeChatUsageResetAuthority } from './use-native-chat-usage-reset-authority'
+import {
+  CODEX_RESET_AUTHORITY_READING,
+  useNativeChatUsageResetAuthority
+} from './use-native-chat-usage-reset-authority'
 
 export function useNativeChatAccountUsage(args: {
   supported: boolean
@@ -62,27 +65,62 @@ export function useNativeChatAccountUsage(args: {
   )
   // The host builds the reset offer from its own Codex state, which can land after the card
   // opened (its first read after launch, an account switch); re-read when it changes.
-  const authority = useNativeChatUsageResetAuthority(target, panel?.result?.status === 'ok')
+  // Watched from the opening, so a change during the first read is not mistaken for its baseline.
+  const watching = panel !== null
+  const authority = useNativeChatUsageResetAuthority(target, watching)
   const seenAuthority = useRef<string | null>(null)
+  const resultShown = useRef(false)
   useEffect(() => {
-    const previous = seenAuthority.current
-    seenAuthority.current = authority
-    if (authority === null || previous === null || previous === authority) {
+    resultShown.current = panel?.result != null
+  }, [panel])
+  // One background read at a time; changes during it collapse into one follow-up read.
+  const reconciling = useRef<'idle' | 'reading' | 'again'>('idle')
+  const reconcile = useCallback(() => {
+    if (reconciling.current !== 'idle') {
+      reconciling.current = 'again'
       return
     }
+    reconciling.current = 'reading'
     const request = ++nextRequest.current
     setPanel((current) => (current ? { ...current, request } : current))
     void callStructuredAgentSession<AgentSessionAccountUsage>(target, 'agentSession.accountUsage', {
       sessionId
     })
       .catch(() => null)
-      .then((result) =>
-        // A failed background read keeps what the card already shows.
+      .then((result) => {
+        // A failed background read keeps what the card already shows; a card still loading shows it.
         setPanel((current) =>
-          current?.request === request && result?.status === 'ok' ? { ...current, result } : current
+          current?.request === request && (result?.status === 'ok' || current.result === null)
+            ? { ...current, result: result ?? { status: 'failed' } }
+            : current
         )
-      )
-  }, [authority, sessionId, target])
+        const again = reconciling.current === 'again'
+        reconciling.current = 'idle'
+        if (again) {
+          reconcile()
+        }
+      })
+  }, [sessionId, target])
+  useEffect(() => {
+    if (!watching) {
+      seenAuthority.current = null
+    }
+  }, [watching])
+  useEffect(() => {
+    if (authority === null) {
+      return
+    }
+    const previous = seenAuthority.current
+    seenAuthority.current = authority
+    // A host still reading has nothing new yet; its finished read is the change worth a re-read.
+    if (authority === CODEX_RESET_AUTHORITY_READING || previous === authority) {
+      return
+    }
+    // A first observation after the reply may postdate the state the host built the offer from.
+    if (previous !== null || resultShown.current) {
+      reconcile()
+    }
+  }, [authority, reconcile])
   return {
     command: supported
       ? {

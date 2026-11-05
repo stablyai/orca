@@ -7,15 +7,18 @@ import { useNativeChatAccountUsage } from './use-native-chat-account-usage'
 const mocks = vi.hoisted(() => ({
   read: vi.fn(),
   reset: vi.fn(),
-  updateSettings: vi.fn(),
-  hostSnapshot: null as ((snapshot: unknown) => void) | null
+  updateSettings: vi.fn()
 }))
+const hostStream = vi.hoisted(() => {
+  const stream: { snapshot: ((snapshot: unknown) => void) | null } = { snapshot: null }
+  return stream
+})
 vi.mock('@/runtime/runtime-provider-accounts-client', () => ({
   watchProviderAccounts: (_target: unknown, handlers: { onSnapshot: (s: unknown) => void }) => {
-    mocks.hostSnapshot = handlers.onSnapshot
+    hostStream.snapshot = handlers.onSnapshot
     return {
       close: () => {
-        mocks.hostSnapshot = null
+        hostStream.snapshot = null
       }
     }
   }
@@ -37,7 +40,7 @@ vi.mock('@/store', () => {
   return { useAppStore }
 })
 const target = { kind: 'environment' as const, environmentId: 'paired-host' }
-const result: AgentSessionAccountUsage = {
+const result: Extract<AgentSessionAccountUsage, { status: 'ok' }> = {
   status: 'ok',
   account: { kind: 'managed', email: 'chat@example.com' },
   rateLimits: {
@@ -160,10 +163,7 @@ describe('chat usage card', () => {
   })
 
   it('re-reads the offer when the host’s Codex state lands after the card opened, keeping the card', async () => {
-    const { reset: _offer, ...withoutOffer } = result as Extract<
-      AgentSessionAccountUsage,
-      { status: 'ok' }
-    >
+    const { reset: _offer, ...withoutOffer } = result
     mocks.read.mockResolvedValueOnce(withoutOffer).mockResolvedValueOnce(result)
     render(<Chat />)
     fireEvent.click(screen.getByText('Usage'))
@@ -176,14 +176,45 @@ describe('chat usage card', () => {
         codex: { status, rateLimitResetCredits: { availableCount, nextExpiresAt: 2_000 } }
       }
     })
-    act(() => mocks.hostSnapshot?.(host('fetching', 0)))
+    act(() => hostStream.snapshot?.(host('fetching', 0)))
     expect(mocks.read).toHaveBeenCalledOnce()
-    act(() => mocks.hostSnapshot?.(host('ok', 1)))
+    act(() => hostStream.snapshot?.(host('ok', 1)))
     await screen.findByRole('button', { name: 'Reset now' })
     expect(mocks.read).toHaveBeenCalledTimes(2)
     // An unchanged host state reads nothing more.
-    act(() => mocks.hostSnapshot?.(host('ok', 1)))
+    act(() => hostStream.snapshot?.(host('ok', 1)))
     expect(mocks.read).toHaveBeenCalledTimes(2)
+  })
+
+  it('collapses host changes during a background read into one follow-up read', async () => {
+    let finish!: (value: AgentSessionAccountUsage) => void
+    mocks.read
+      .mockResolvedValueOnce(result)
+      .mockImplementationOnce(
+        () =>
+          new Promise<AgentSessionAccountUsage>((resolve) => {
+            finish = resolve
+          })
+      )
+      .mockResolvedValue(result)
+    render(<Chat />)
+    fireEvent.click(screen.getByText('Usage'))
+    await screen.findByText('chat@example.com')
+    const host = (account: string, availableCount: number) => ({
+      codex: { accounts: [], activeAccountId: account },
+      rateLimits: {
+        codexTarget: { runtime: 'host', wslDistro: null },
+        codex: { status: 'ok', rateLimitResetCredits: { availableCount, nextExpiresAt: 2_000 } }
+      }
+    })
+    act(() => hostStream.snapshot?.(host('chat', 1)))
+    act(() => hostStream.snapshot?.(host('other', 1)))
+    act(() => hostStream.snapshot?.(host('other', 0)))
+    act(() => hostStream.snapshot?.(host('chat', 0)))
+    expect(mocks.read).toHaveBeenCalledTimes(2)
+    await act(async () => finish(result))
+    await waitFor(() => expect(mocks.read).toHaveBeenCalledTimes(3))
+    expect(screen.getByText('chat@example.com')).toBeTruthy()
   })
 
   it('does not reopen a dismissed card when an already-confirmed reset completes', async () => {

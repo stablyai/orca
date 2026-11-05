@@ -4,11 +4,17 @@ import { watchProviderAccounts } from '@/runtime/runtime-provider-accounts-clien
 import type { RateLimitState } from '../../../../shared/rate-limit-types'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 
+/** The host is still reading Codex; its state is about to change again. */
+export const CODEX_RESET_AUTHORITY_READING = 'reading'
+
 /** What the host's reset offer is built from; timestamps and other providers are left out. */
 function codexResetAuthorityKey(
   rateLimits: RateLimitState | null | undefined,
   selectedAccountId: string | null | undefined
 ): string {
+  if (rateLimits?.codex?.status === 'fetching') {
+    return CODEX_RESET_AUTHORITY_READING
+  }
   const credits = rateLimits?.codex?.rateLimitResetCredits
   return [
     rateLimits?.codexTarget.runtime,
