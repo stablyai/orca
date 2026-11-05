@@ -35,6 +35,7 @@ export function useMobileStructuredAgentOptions(args: {
   turnId: string | null
   /** The chat has a turn or a send: its value picks keep the remembered new-chat model. */
   hasTurn?: boolean
+  unloadedTurnRevisions: number | undefined
   mutate: StructuredAgentSessionMutate
   optionStamp?: string
   hostSupport: Pick<
@@ -48,8 +49,18 @@ export function useMobileStructuredAgentOptions(args: {
     | 'sendOptions'
   > | null
 }) {
-  const { agent, client, enabled, fence, mutate, optionStamp, sessionId, turnId, hostSupport } =
-    args
+  const {
+    agent,
+    client,
+    enabled,
+    fence,
+    mutate,
+    optionStamp,
+    sessionId,
+    turnId,
+    unloadedTurnRevisions,
+    hostSupport
+  } = args
   const optionCatalog = useMemo(
     () => (agent ? structuredAgentSessionSeedCatalog(agent) : null),
     [agent]
@@ -80,6 +91,7 @@ export function useMobileStructuredAgentOptions(args: {
     optionCatalog,
     sessionId,
     turnId,
+    unloadedTurnRevisions,
     client,
     optionStamp,
     sendSelection: hostSupport?.sendSelection === true,
@@ -211,6 +223,8 @@ export function useMobileStructuredAgentOptions(args: {
       conversationSupport?.sessionId === sessionId ? conversationSupport.commands : NO_COMMANDS,
     compactInstructions:
       conversationSupport?.sessionId === sessionId && conversationSupport.compactInstructions,
+    contextUsageSupport:
+      conversationSupport?.sessionId === sessionId ? conversationSupport.contextUsage : undefined,
     acceptsImages:
       (imageSupport?.sessionId === sessionId ? imageSupport.acceptsImages : undefined) ??
       (agent !== null && isAgentSessionHandleProvider(agent)),

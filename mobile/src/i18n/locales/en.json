@@ -1316,7 +1316,9 @@
     },
     "markdownBlocks": {
       "copyCode": "Copy code",
-      "openImage": "Open image"
+      "openImage": "Open image",
+      "wrapLines": "Wrap lines",
+      "disableLineWrap": "Disable line wrap"
     },
     "mountedBottomDrawer": {
       "dismissDrawer": "Dismiss drawer"
@@ -1863,6 +1865,10 @@
       "previewFile": "Preview file {{name}}",
       "unavailable": "Unavailable on mobile"
     },
+    "fileExplorerRowActions": {
+      "copyName": "Copy Name",
+      "copyRelativePath": "Copy Relative Path"
+    },
     "fileMutationOwnership": {
       "sshOwnerChanged": "Couldn't verify the SSH connection. Reconnect the host and try again."
     },
@@ -1945,7 +1951,6 @@
     },
     "queuedMessageComposer": {
       "commandsNotAllowed": "Commands can't be saved in a queued message.",
-      "editingAttributed": "Editing message · {{attribution}}",
       "editing": "Editing message"
     },
     "accessoryKeys": {
@@ -2154,13 +2159,8 @@
       "agent": "Agent"
     },
     "agentMessageAttribution": {
-      "messageFromUnnamed": "Message from an agent",
-      "fromUnnamed": "From an agent",
       "unnamedSender": "an agent",
-      "messageFromMore": "Message from {{sender}} +{{count}}",
-      "fromMore": "From {{sender}} +{{count}}",
-      "messageFrom": "Message from {{sender}}",
-      "from": "From {{sender}}"
+      "fromSender": "From"
     },
     "backgroundTask": {
       "monitoring": "Monitoring background tasks",
@@ -2173,6 +2173,7 @@
       "monitor": "Background monitor",
       "task": "Background task",
       "detailsUnavailable": "Task details are unavailable for this session.",
+      "outputFile": "Output: {{value0}}",
       "countAgents_one": "{{count}} agent",
       "countAgents_other": "{{count}} agents",
       "countShell_one": "{{count}} shell",
@@ -2764,6 +2765,11 @@
       "fileFailed": "Couldn't load file preview",
       "outsideWorkspace": "This file is outside the workspace. Open it on desktop to view it."
     },
+    "linkActionSheet": {
+      "openInOrca": "Open in Orca browser",
+      "openInBrowser": "Open in system browser",
+      "copyLink": "Copy link"
+    },
     "useDiffReviewGitHub": {
       "waitingForDesktop": "Waiting for desktop..."
     },
@@ -2783,6 +2789,11 @@
       "sendSteer": "Steer",
       "sendQueueHint": "Runs after the current turn",
       "sendSteerHint": "Goes into what the agent is doing now"
+    },
+    "contextUsage": {
+      "label": "Context {{used}} of {{window}} tokens, {{percent}}% used",
+      "title": "Context",
+      "estimated": "Estimated from the last response."
     },
     "composerAttachments": {
       "file": "File",
@@ -2947,7 +2958,9 @@
       "permissionDenied": "{{agent}} denied permission. View details.",
       "safetyReview": "{{agent}} reported a safety review warning. View details.",
       "truncatedResponse": "Provider response truncated (original size: {{bytes}} bytes).",
-      "modelFallback": "Claude switched models: {{from}} → {{to}}."
+      "modelFallback": "Claude switched models: {{from}} → {{to}}.",
+      "signIn": "Sign in",
+      "signInHint": "Opens a terminal on the computer running this chat"
     },
     "nativeChatProse": {
       "attachedImage": "Attached image",
@@ -3011,6 +3024,13 @@
       "remote": "Orca on {{machine}} stopped while this response was in progress.",
       "canContinue": "You can continue in this conversation.",
       "unnamedServer": "the remote server"
+    },
+    "interruptedContinue": {
+      "failed": "Couldn't continue this chat. Try again, or send a message.",
+      "explanation": "Continue, and the agent first checks whether its last step finished."
+    },
+    "sendError": {
+      "dismiss": "Dismiss"
     },
     "toolActivity": {
       "count_one": "{{count}} tool call",
@@ -3163,8 +3183,13 @@
       "taskFromCoordinator": "Task from coordinator",
       "messageFromCoordinator": "Message from coordinator",
       "updateFromWorker": "Update from worker",
-      "messageFrom": "Message from",
-      "showMore": "Show more"
+      "messageFrom": "Message from"
+    },
+    "hostOutage": {
+      "reconnecting": "{{hostName}} is reconnecting…",
+      "stopped": "{{hostName}} is stopped. Start it on your computer.",
+      "server": "The server",
+      "unavailable": "{{hostName}} isn't available from your phone. Open one of its projects on your computer."
     }
   },
   "sourceControl": {

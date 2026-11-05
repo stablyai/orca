@@ -43,6 +43,7 @@ describe.each(['json', 'sqlite'] as const)('offline settings %s updates', (backe
         settings: {
           uiLanguage: plugin,
           uiLanguagePortugueseMigrationApplied: marker,
+          nestedWorkerMaxDepth: 1,
           futureSetting: { retained: true }
         },
         pluginData: { untouched: true }
@@ -61,6 +62,7 @@ describe.each(['json', 'sqlite'] as const)('offline settings %s updates', (backe
       expect(Object.hasOwn(beforeLoad.settings, 'uiLanguagePortugueseMigrationApplied')).toBe(
         marker !== undefined
       )
+      expect(Object.hasOwn(beforeLoad.settings, 'nestedWorkerMaxDepthDefaultedToFour')).toBe(false)
       expect(beforeLoad.pluginData).toEqual(original.pluginData)
       authority.close()
       vi.useFakeTimers()
@@ -77,7 +79,8 @@ describe.each(['json', 'sqlite'] as const)('offline settings %s updates', (backe
         const persisted = JSON.parse(authority.readSerializedState() ?? 'null')
         expect(persisted.settings).toMatchObject({
           uiLanguage: marker === true ? plugin : 'pt',
-          uiLanguagePortugueseMigrationApplied: true
+          uiLanguagePortugueseMigrationApplied: true,
+          nestedWorkerMaxDepth: 4
         })
       } finally {
         await loaded.freezeWritesAsync()

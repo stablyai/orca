@@ -189,6 +189,11 @@
       "sendQueueHint": "Läuft nach dem aktuellen Durchgang",
       "sendSteerHint": "Fließt in das ein, was der Agent gerade tut"
     },
+    "contextUsage": {
+      "label": "Kontext: {{used}} von {{window}} Token, {{percent}} % genutzt",
+      "title": "Kontext",
+      "estimated": "Anhand der letzten Antwort geschätzt."
+    },
     "composerAttachments": {
       "attachedImage": "Angehängtes Bild",
       "file": "Datei",
@@ -282,7 +287,9 @@
       "permissionDenied": "{{agent}} hat die Berechtigung verweigert. Details anzeigen.",
       "safetyReview": "{{agent}} hat eine Warnung zur Sicherheitsprüfung gemeldet. Details anzeigen.",
       "truncatedResponse": "Anbieterantwort gekürzt (ursprüngliche Größe: {{bytes}} Bytes).",
-      "modelFallback": "Claude hat das Modell gewechselt: {{from}} → {{to}}."
+      "modelFallback": "Claude hat das Modell gewechselt: {{from}} → {{to}}.",
+      "signIn": "Anmelden",
+      "signInHint": "Öffnet ein Terminal auf dem Computer, auf dem dieser Chat läuft"
     },
     "orcaStop": {
       "canContinue": "Die Unterhaltung kann fortgesetzt werden.",
@@ -291,6 +298,13 @@
       "remote": "Orca auf {{machine}} wurde während dieser Antwort gestoppt.",
       "unnamedServer": "dem entfernten Server",
       "update": "Orca auf {{machine}} wurde während dieser Antwort für ein Update neu gestartet."
+    },
+    "interruptedContinue": {
+      "failed": "Dieser Chat konnte nicht fortgesetzt werden. Erneut versuchen oder eine Nachricht senden.",
+      "explanation": "Beim Fortfahren prüft der Agent zuerst, ob sein letzter Schritt abgeschlossen wurde."
+    },
+    "sendError": {
+      "dismiss": "Ausblenden"
     },
     "permission": {
       "needsAccessTo": "Benötigt Zugriff auf: ",
@@ -551,6 +565,12 @@
       "byteSize": "{{size}} Byte",
       "saveUpdate": "Speichern wird mit einem Smartphone-Update verfügbar sein.",
       "fullCopySaveUpdate": "„Vollständig kopieren“ und Speichern werden für diesen Anhang mit einem Smartphone-Update verfügbar sein."
+    },
+    "hostOutage": {
+      "reconnecting": "{{hostName}} verbindet sich erneut…",
+      "stopped": "{{hostName}} ist gestoppt. Starte es auf deinem Computer.",
+      "server": "Der Server",
+      "unavailable": "{{hostName}} ist von deinem Telefon aus nicht verfügbar. Öffne eines seiner Projekte auf deinem Computer."
     }
   },
   "common": {
@@ -780,7 +800,9 @@
     },
     "markdownBlocks": {
       "copyCode": "Code kopieren",
-      "openImage": "Bild öffnen"
+      "openImage": "Bild öffnen",
+      "wrapLines": "Zeilen umbrechen",
+      "disableLineWrap": "Zeilenumbruch deaktivieren"
     },
     "mountedBottomDrawer": {
       "dismissDrawer": "Bereich schließen"
@@ -1209,6 +1231,10 @@
       "previewFile": "Vorschau der Datei {{name}} anzeigen",
       "retryLoading": "{{path}} erneut laden",
       "unavailable": "Auf Mobilgeräten nicht verfügbar"
+    },
+    "fileExplorerRowActions": {
+      "copyName": "Namen kopieren",
+      "copyRelativePath": "Relativen Pfad kopieren"
     },
     "fileMarkdownPreview": {
       "copyLoadedSource": "Geladenen Markdown-Quelltext kopieren",
@@ -1771,13 +1797,8 @@
       "noUpdate": "Seit {{value0}} keine Meldung"
     },
     "agentMessageAttribution": {
-      "from": "Von {{sender}}",
-      "fromMore": "Von {{sender}} +{{count}}",
-      "fromUnnamed": "Von einem Agenten",
-      "messageFrom": "Nachricht von {{sender}}",
-      "messageFromMore": "Nachricht von {{sender}} +{{count}}",
-      "messageFromUnnamed": "Nachricht von einem Agenten",
-      "unnamedSender": "einem Agenten"
+      "unnamedSender": "einem Agenten",
+      "fromSender": "Von"
     },
     "aiVaultResumeLaunch": {
       "createFailed": "Terminal konnte nicht erstellt werden.",
@@ -1802,6 +1823,7 @@
       "countWorkflows_one": "{{count}} Arbeitsablauf",
       "countWorkflows_other": "{{count}} Arbeitsabläufe",
       "detailsUnavailable": "Aufgabendetails sind für diese Sitzung nicht verfügbar.",
+      "outputFile": "Ausgabe: {{value0}}",
       "groupAgents": "Agenten",
       "groupMonitors": "Überwachungen",
       "groupShell": "Shell",
@@ -2145,8 +2167,7 @@
     },
     "queuedMessageComposer": {
       "commandsNotAllowed": "Befehle können nicht in einer Nachricht in der Warteschlange gespeichert werden.",
-      "editing": "Nachricht wird bearbeitet",
-      "editingAttributed": "Nachricht wird bearbeitet · {{attribution}}"
+      "editing": "Nachricht wird bearbeitet"
     },
     "quickCommandEditorForm": {
       "action": "Aktion",

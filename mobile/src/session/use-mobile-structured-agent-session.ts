@@ -46,6 +46,8 @@ import { useMobileStructuredSends } from './use-mobile-structured-sends'
 import { useMobileNativeChatQueueFollowUps as useQueueFollowUps } from './use-mobile-native-chat-queue-follow-ups'
 import { useMobileStructuredStopOffer } from './use-mobile-structured-stop-offer'
 import { useMobileStructuredTurnIndicator } from './use-mobile-structured-turn-indicator'
+import { useMobileStructuredContextUsage } from './use-mobile-structured-context-usage'
+import { useMobileStructuredInterruptedContinue } from './use-mobile-structured-interrupted-continue'
 
 const mobileStructuredTranscript = createStructuredQuestionProjection(
   projectStructuredAgentStartItem
@@ -107,9 +109,11 @@ export function useMobileStructuredAgentSession(
     optionStamp,
     turnId,
     hasTurn: state.latestTurn != null || state.submissions.length > 0,
+    unloadedTurnRevisions: state.unloadedTurnRevisions,
     hostSupport
   })
   const sendController = useMobileStructuredCommandController(options)
+  const { contextUsageSupport, ...optionFields } = options
 
   const { respondPermission, respondQuestion } = useMobileStructuredPromptResponses({
     stateRef,
@@ -178,7 +182,6 @@ export function useMobileStructuredAgentSession(
     queueFollowUps,
     queueSendsNext
   })
-  const { stopping } = turnIndicator
   const sendWithOutcome = useMobileStructuredSendWithOutcome({
     agent,
     client,
@@ -188,7 +191,7 @@ export function useMobileStructuredAgentSession(
     queueFollowUps,
     commandsWait,
     stateRef,
-    stopping,
+    stopping: turnIndicator.stopping,
     accept: sends.accept,
     acknowledge: sends.acknowledge,
     reject: sends.reject,
@@ -260,14 +263,13 @@ export function useMobileStructuredAgentSession(
     ]
   )
 
-  const visualSource = useMemo<MobileNativeChatVisualSource | null>(
-    () => (client && sessionId ? { client, sessionId } : null),
-    [client, sessionId]
-  )
-
   return {
-    ...options,
-    visualSource,
+    ...optionFields,
+    contextUsage: useMobileStructuredContextUsage(state.items, contextUsageSupport, state.epoch),
+    visualSource: useMemo<MobileNativeChatVisualSource | null>(
+      () => (client && sessionId ? { client, sessionId } : null),
+      [client, sessionId]
+    ),
     asyncQuestionSourceScope: questionSourceScope({ kind: 'journal', agent, sessionId, epoch }),
     imagePreviewsByMessageId: sends.imagePreviewsByMessageId,
     submissions: state.submissions,
@@ -300,6 +302,10 @@ export function useMobileStructuredAgentSession(
     respondQuestion,
     queued,
     commandRefusalCauses,
-    backgroundTasks
+    backgroundTasks,
+    interruptedContinue: useMobileStructuredInterruptedContinue(
+      { client, sessionId, sessionKey, hostSupport, ...state },
+      isWorking || queueSendsNext
+    )
   }
 }

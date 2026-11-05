@@ -48,6 +48,7 @@ export const EXECUTION_HOST_METHODS = [
   'files.list',
   'files.open',
   'files.openDiff',
+  'files.pathsExist',
   'files.read',
   'files.readChatImage',
   'files.readChunk',

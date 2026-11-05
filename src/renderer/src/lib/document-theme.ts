@@ -145,9 +145,12 @@ function setPluginTokens(root: PluginThemeRoot, tokens: Record<string, string>):
 
 function documentBuiltIns(): Record<string, string> {
   const style = getComputedStyle(document.documentElement)
-  return Object.fromEntries(
-    PLUGIN_APP_THEME_TOKENS.map((token) => [token, style.getPropertyValue(token).trim()])
-  )
+  const read = (token: string): string => style.getPropertyValue(token).trim()
+  return {
+    ...Object.fromEntries(PLUGIN_APP_THEME_TOKENS.map((token) => [token, read(token)])),
+    // Why: chat paints an omitted link color as --callout-note, so the bubble check needs it.
+    '--text-link': read('--text-link') || read('--callout-note')
+  }
 }
 
 // Why: menus and dialogs paint a fixed glass tint, which would ignore the theme's --popover
