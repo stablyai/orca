@@ -64,8 +64,25 @@ export function useStructuredAgentSessionOptions(args: StructuredAgentSessionOpt
 
   const acceptsPicks = (!transportEnabled || fence !== null) && launch?.seedPending !== true
 
+  const interactionReadyRef = useRef(acceptsPicks)
+  const lockSnapshotRef = useRef(
+    (snapshot: ReturnType<typeof structuredAgentSessionOptionSnapshot>) => snapshot
+  )
+  const lockSnapshot = (snapshot: ReturnType<typeof structuredAgentSessionOptionSnapshot>) =>
+    !acceptsPicks ? lockedStructuredAgentSessionOptionSnapshot(snapshot) : snapshot
+  useLayoutEffect(() => {
+    interactionReadyRef.current = acceptsPicks
+    lockSnapshotRef.current = lockSnapshot
+  })
+  const optionSnapshot = lockSnapshot(
+    structuredAgentSessionShownSnapshot(
+      optionView(optionState, launchSeedOptions, launch?.explicitOptions)
+    )
+  )
+  const modelOption = optionSnapshot.find((row) => row.id === 'model')
   const hostCatalog = useHostModelCatalogUpgrade({
     agent,
+    selectedModel: modelOption?.kind.type === 'select' ? modelOption.kind.currentValue : undefined,
     sessionId,
     target,
     optionCatalog,
@@ -83,21 +100,6 @@ export function useStructuredAgentSessionOptions(args: StructuredAgentSessionOpt
     receiveCatalog
   })
 
-  const interactionReadyRef = useRef(acceptsPicks)
-  const lockSnapshotRef = useRef(
-    (snapshot: ReturnType<typeof structuredAgentSessionOptionSnapshot>) => snapshot
-  )
-  const lockSnapshot = (snapshot: ReturnType<typeof structuredAgentSessionOptionSnapshot>) =>
-    !acceptsPicks ? lockedStructuredAgentSessionOptionSnapshot(snapshot) : snapshot
-  useLayoutEffect(() => {
-    interactionReadyRef.current = acceptsPicks
-    lockSnapshotRef.current = lockSnapshot
-  })
-  const optionSnapshot = lockSnapshot(
-    structuredAgentSessionShownSnapshot(
-      optionView(optionState, launchSeedOptions, launch?.explicitOptions)
-    )
-  )
   const readWriteContext = () => {
     const view = optionView(optionStateRef.current, launchSeedOptions, launch?.explicitOptions)
     return {
@@ -107,6 +109,7 @@ export function useStructuredAgentSessionOptions(args: StructuredAgentSessionOpt
       snapshot: lockSnapshotRef.current(structuredAgentSessionOptionSnapshot(view)),
       ready: acceptsPicks && interactionReadyRef.current,
       providerStarting,
+      existingChat: !newLaunch || args.hasTurn === true,
       isCurrentContext,
       ...(!transportEnabled || fence === null
         ? {
@@ -162,6 +165,7 @@ export function useStructuredAgentSessionOptions(args: StructuredAgentSessionOpt
 
   return {
     conversationCommands: support?.commands ?? [],
+    compactInstructions: support?.compactInstructions === true,
     /** Absent unless this host and session can change the goal. */
     threadGoal: support?.threadGoal,
     /** A goal only the agent's own `/goal` changes; absent from a host that predates it. */

@@ -2,7 +2,7 @@
  * Chain disposal after all queued parses; reversing either order silently loses output. */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
-import { HeadlessEmulator } from '../daemon/headless-emulator'
+import { HeadlessEmulator } from '../daemon/emulation/headless-emulator'
 
 const store = {
   getRepo: () => undefined,

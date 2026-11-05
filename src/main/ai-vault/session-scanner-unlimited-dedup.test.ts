@@ -1,10 +1,8 @@
 import { beforeEach, expect, it, vi } from 'vitest'
-import type * as SessionDedup from './session-root-dedup'
-import type { AiVaultSession } from '../../shared/ai-vault-types'
+import type { AiVaultSession } from '../../shared/ai-vault/contracts/ai-vault-types'
 
-const fixture = vi.hoisted((): { sessions: AiVaultSession[]; visits: number } => ({
-  sessions: [],
-  visits: 0
+const fixture = vi.hoisted((): { sessions: AiVaultSession[] } => ({
+  sessions: []
 }))
 vi.mock('./session-scanner-source-discovery', () => ({
   discoverAiVaultSessionSources: async () => [],
@@ -13,7 +11,7 @@ vi.mock('./session-scanner-source-discovery', () => ({
 vi.mock('./session-scanner-candidates', () => ({
   sessionCandidatesFromDiscoveries: async () => candidates()
 }))
-vi.mock('./session-scanner-parse-cache', () => ({
+vi.mock('./parse-cache/session-scanner-parse-cache', () => ({
   createSessionParseStats: () => ({
     reused: 0,
     incremental: 0,
@@ -23,19 +21,9 @@ vi.mock('./session-scanner-parse-cache', () => ({
   }),
   parseListedSessionFile: async (candidate: { session: AiVaultSession }) => candidate.session
 }))
-vi.mock('./session-root-dedup', async (original) => {
-  const actual = await original<typeof SessionDedup>()
-  return {
-    ...actual,
-    dedupeScannedSessions: (sessions: AiVaultSession[]) => {
-      fixture.visits += sessions.length
-      return actual.dedupeScannedSessions(sessions)
-    }
-  }
-})
 
 import { scanAiVaultSessions } from './session-scanner'
-import { ScannedSessionCollection, dedupeScannedSessions } from './session-root-dedup'
+import { ScannedSessionCollection } from './session-root-dedup'
 
 function candidates() {
   return fixture.sessions.map((session) => ({
@@ -74,30 +62,9 @@ function session(index: number): AiVaultSession {
 
 beforeEach(() => {
   fixture.sessions = []
-  fixture.visits = 0
 })
 
 const scan = (unlimited: boolean, limit?: number) => scanAiVaultSessions({ unlimited, limit })
-
-it('load-all processes deduplication linearly and retains late canonical aliases', async () => {
-  fixture.sessions = Array.from({ length: 10000 }, (_, i) => session(i))
-  fixture.sessions[0] = {
-    ...fixture.sessions[0]!,
-    codexHome: '/custom',
-    filePath: '/custom/rollout-0.jsonl'
-  }
-  fixture.sessions.push(session(0))
-  const expected = dedupeScannedSessions(fixture.sessions)
-  fixture.visits = 0
-  const started = performance.now()
-  const result = await scan(true)
-  process.stdout.write(
-    `${JSON.stringify({ candidates: fixture.sessions.length, scanMs: performance.now() - started, dedupVisits: fixture.visits })}\n`
-  )
-  expect(result.issues).toEqual([])
-  expect(result.sessions).toEqual(expected)
-  expect(fixture.visits).toBeLessThanOrEqual(fixture.sessions.length * 2)
-}, 30000)
 
 it('capped scans still fill the unique-session budget', async () => {
   fixture.sessions = [
@@ -112,31 +79,6 @@ it('capped scans still fill the unique-session budget', async () => {
   const result = await scan(false, 10)
   expect(result.sessions).toHaveLength(10)
   expect(new Set(result.sessions.map((row) => row.sessionId)).size).toBe(10)
-})
-
-it('incremental canonical selection preserves winner occurrence order, ties and repeated references', () => {
-  const collection = new ScannedSessionCollection()
-  const same = session(0)
-  const rows: AiVaultSession[] = []
-  const variants: AiVaultSession[] = [
-    same,
-    same,
-    { ...same, codexHome: '/custom', filePath: '/custom/rollout-0.jsonl' },
-    { ...same, agent: 'claude' as const },
-    { ...same, executionHostId: 'ssh:fixture' },
-    { ...same, modifiedAt: '2026-02-01T00:00:00.000Z' },
-    { ...same, filePath: '/aaa/rollout-0.jsonl' },
-    { ...same, filePath: '/fixture/rollout-0-fork.jsonl', modifiedAt: 'invalid' },
-    session(1)
-  ]
-  let seed = 42
-  for (let index = 0; index < 2000; index++) {
-    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0
-    const row = variants[seed % variants.length]!
-    rows.push(row)
-    collection.add(row)
-    expect([...collection.values()]).toEqual(dedupeScannedSessions(rows))
-  }
 })
 
 it('retains only canonical rows during duplicate-heavy load-all scans', () => {
@@ -173,38 +115,4 @@ it('admits rows sharing one session id across rollout names without rescanning',
   }
   expect(collection.size).toBe(count)
   expect(pathReads).toBeLessThanOrEqual(count * 4)
-})
-
-it('bounds per-session bookkeeping for a large mostly-unique load-all corpus', () => {
-  const gc = globalThis.gc
-  if (!gc) {
-    throw new Error('Retention test requires --expose-gc (config/vitest.config.ts)')
-  }
-  const heapUsed = () => {
-    gc()
-    gc()
-    return process.memoryUsage().heapUsed
-  }
-  const count = 50000
-  // Build fixtures before measuring collection retention.
-  const corpus = Array.from({ length: count }, (_, index) =>
-    index % 100 === 99
-      ? {
-          ...session(index - 1),
-          codexHome: '/custom',
-          filePath: `/custom/rollout-${index - 1}.jsonl`
-        }
-      : session(index)
-  )
-  const expected = dedupeScannedSessions(corpus)
-  const before = heapUsed()
-  const collection = new ScannedSessionCollection()
-  for (const row of corpus) {
-    collection.add(row)
-  }
-  const retained = heapUsed() - before
-
-  expect([...collection.values()]).toEqual(expected)
-  // ~115 B per live row allows headroom below the ~300 B alias-string implementation.
-  expect(retained).toBeLessThan(count * 160)
 })

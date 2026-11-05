@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
+import { focusPanePreservingOverlays } from '@/lib/pane-manager/pane-overlay-focus'
 
 type ExpandCollapseState = {
   expandedPaneIdRef: React.MutableRefObject<number | null>
@@ -135,7 +136,10 @@ export function createExpandCollapseActions(state: ExpandCollapseState) {
       }
       if (focusActive) {
         const active = manager.getActivePane() ?? panes[0]
-        active?.terminal.focus()
+        // A chat covering the pane keeps its focus; its xterm underneath must not take keystrokes.
+        if (active) {
+          focusPanePreservingOverlays(active)
+        }
       }
     })
   }

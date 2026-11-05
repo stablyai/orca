@@ -1,11 +1,11 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
+import { installFakeAppEnvironment } from '../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 import { EventEmitter } from 'node:events'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { PassThrough } from 'node:stream'
 import type { CodexRateLimitAccountsState } from '../../shared/managed-account-types'
-import type { readHookTrustEntries as ReadHookTrustEntries } from '../codex/config-toml-trust'
+import type { readHookTrustEntries as ReadHookTrustEntries } from '../codex/trust/toml/config-toml-trust'
 import {
   createCodexAuthJson,
   createManagedHome,
@@ -19,10 +19,13 @@ import {
 import { createCanonicalHookTrustFixture } from './service-hook-trust-test-fixtures'
 
 // Keep asserted config bytes independent of platform socket-path limits.
-vi.mock('../codex/codex-daemon-socket-path-guard', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  applyCodexDaemonSocketGuard: (config: string) => config
-}))
+vi.mock(
+  '../codex/configuration/shared-server/codex-daemon-socket-path-guard',
+  async (importOriginal) => ({
+    ...(await importOriginal<object>()),
+    applyCodexDaemonSocketGuard: (config: string) => config
+  })
+)
 
 vi.mock('electron', () => ({
   app: {
@@ -156,7 +159,8 @@ describe('CodexAccountService config sync', () => {
       resolveCodexCommand: () => 'codex'
     }))
     fixture = await createCanonicalHookTrustFixture()
-    readHookTrustEntries = (await import('../codex/config-toml-trust')).readHookTrustEntries
+    readHookTrustEntries = (await import('../codex/trust/toml/config-toml-trust'))
+      .readHookTrustEntries
     writeFileSync(join(testState.fakeHomeDir, '.codex', 'config.toml'), fixture.config, 'utf-8')
 
     const store = createStore(createSettings())

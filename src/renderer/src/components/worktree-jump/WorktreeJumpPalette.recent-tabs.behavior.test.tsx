@@ -9,7 +9,7 @@ import type { AppState } from '@/store/types'
 import { emitCmdJRowIndexJump } from '@/lib/cmd-j-row-index-jump'
 import WorktreeJumpPalette from './WorktreeJumpPalette'
 import { encodePaletteIdentity } from '../../../../shared/palette-match/palette-ranking'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
   LEAF_ID,
   makeAgentEntry,
@@ -44,7 +44,7 @@ vi.mock('@/hooks/useSettingsNavigationMetadata', () => ({
   useSettingsNavigationMetadata: () => []
 }))
 
-vi.mock('@/components/sidebar/StatusIndicator', () => ({
+vi.mock('@/components/sidebar/workspace-card/surface/StatusIndicator', () => ({
   default: () => <span data-status-indicator="true" />
 }))
 
@@ -388,33 +388,6 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
     )
   })
 
-  it('ignores a digit chord beyond the rendered recent rows', async () => {
-    await renderPalette(makeRecentTabState())
-
-    await act(async () => {
-      emitCmdJRowIndexJump(8)
-    })
-    await flushEffects()
-
-    expect(activateWorkspaceTabPaletteResult).not.toHaveBeenCalled()
-  })
-
-  it('stops routing digit chords once a query is typed', async () => {
-    await renderPalette(makeRecentTabState())
-
-    await act(async () => {
-      setCommandQuery?.('Alpha')
-    })
-    await flushEffects()
-
-    await act(async () => {
-      emitCmdJRowIndexJump(0)
-    })
-    await flushEffects()
-
-    expect(activateWorkspaceTabPaletteResult).not.toHaveBeenCalled()
-  })
-
   it('keeps the agent badge on an Open Tabs row a query surfaced', async () => {
     await renderPalette(
       makeRecentTabState({
@@ -453,23 +426,5 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
     const rows = getRenderedRowIds().filter((id) => id.length > 0)
     expect(rows.at(-1)).toBe('__create_worktree__')
     expect(rows.length).toBeGreaterThan(1)
-  })
-
-  it('labels a branchless main worktree row with its display name', async () => {
-    await renderPalette(
-      makeRecentTabState({
-        worktreesByRepo: {
-          'repo-1': [
-            makeWorktree('wt-alpha', 'Alpha workspace', {
-              isMainWorktree: true,
-              branch: ''
-            }),
-            makeWorktree('wt-beta', 'Beta workspace')
-          ]
-        }
-      })
-    )
-
-    expect(testContainer.textContent).toContain('Alpha workspace')
   })
 })

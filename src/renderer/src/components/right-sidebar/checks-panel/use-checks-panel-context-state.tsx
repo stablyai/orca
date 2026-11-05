@@ -5,17 +5,17 @@ import { isFolderRepo } from '../../../../../shared/repo-kind'
 import { getGitHubPRCacheKey } from '../../../../../shared/github/github-cache-key'
 import { getHostedReviewCacheKey } from '@/store/slices/hosted-review-cache-identity'
 import { isStaleMergedGitHubReviewForHead } from '@/store/slices/hosted-review-cache-state'
-import { selectReviewCacheEntry } from '../review-cache-entry-selection'
-import { selectChecksPanelReview, type ChecksPanelReview } from '../checks-panel-review'
+import { selectReviewCacheEntry } from '../source-control/review/review-cache-entry-selection'
+import { selectChecksPanelReview, type ChecksPanelReview } from './checks-panel-review'
 import { isGitLabChecksPanelReview } from './gitlab-review-client'
-import { clearPendingPRCommentAiAck } from '../pr-comments-ai-launch-ack'
+import { clearPendingPRCommentAiAck } from './comments/pr-comments-ai-launch-ack'
 import {
   buildGitHubPRRefreshStateClearToken,
   getGitHubPRRefreshStateExpiryAt
 } from '@/store/github/pr-refresh-state'
 import type { ChecksPanelControllerState } from './use-checks-panel-controller-state'
-import { recordChecksPanelPRRefreshBreadcrumb } from '../checks-panel-pr-refresh-breadcrumb'
-import { isChecksPanelHardRefreshErrorType } from '../checks-panel-review-creation'
+import { recordChecksPanelPRRefreshBreadcrumb } from './refresh/checks-panel-pr-refresh-breadcrumb'
+import { isChecksPanelHardRefreshErrorType } from './review-actions/checks-panel-review-creation'
 import type { PRInfo } from '../../../../../shared/github/pull-request-types'
 import type { PRRefreshErrorType } from '../../../../../shared/github/pull-request-refresh-types'
 

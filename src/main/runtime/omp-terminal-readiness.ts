@@ -1,4 +1,4 @@
-import { getPiStateTitleStatus } from '../../shared/pi-state-title-marker'
+import { getPiStateTitleStatus } from '../../shared/agent-status/title/providers/pi-state-title-marker'
 import type { RuledScreen } from './screen-input-veto'
 
 /** OMP alternate-screen overlays own input, including setup; its heading can occur as ordinary answer text. */

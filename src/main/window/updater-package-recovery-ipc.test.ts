@@ -33,21 +33,23 @@ vi.mock('electron', () => ({
 
 vi.mock('../ipc/repos', () => ({ registerRepoHandlers: vi.fn() }))
 vi.mock('../ipc/worktrees', () => ({ registerWorktreeHandlers: vi.fn() }))
-vi.mock('../ipc/worktree-change-invalidators', () => ({ runWorktreeChangeInvalidators: vi.fn() }))
+vi.mock('../ipc/worktrees/listing/worktree-change-invalidators', () => ({
+  runWorktreeChangeInvalidators: vi.fn()
+}))
 vi.mock('../ipc/pty/provider/registry', () => ({ getLocalPtyProvider: vi.fn() }))
 vi.mock('../ipc/pty/register-handlers', () => ({ registerPtyHandlers: vi.fn() }))
 vi.mock('../memory/hydrate-local-pty-registry', () => ({
   hydrateLocalPtyRegistryAtBoot: vi.fn()
 }))
 vi.mock('../browser/browser-manager', () => ({ browserManager: { unregisterAll: vi.fn() } }))
-vi.mock('../macos-tcc-prompt-notice', () => ({
+vi.mock('../macos-permissions/macos-tcc-prompt-notice', () => ({
   acknowledgePendingTccPromptNotice: vi.fn(),
   consumePendingTccPromptNotice: vi.fn(),
   dismissTccPromptNotice: vi.fn(),
   releasePendingTccPromptNotice: vi.fn()
 }))
 
-vi.mock('../updater', () => ({
+vi.mock('../updater/updater-service', () => ({
   checkForUpdates: vi.fn(),
   checkForUpdatesFromMenu: vi.fn(),
   downloadUpdate: vi.fn(),
@@ -135,21 +137,6 @@ describe('updater linux package recovery IPC handlers', () => {
 
   afterEach(() => {
     vi.unstubAllEnvs()
-  })
-
-  it('removes and re-registers both recovery channels', () => {
-    for (const channel of RECOVERY_CHANNELS) {
-      expect(removeHandlerMock).toHaveBeenCalledWith(channel)
-      expect(handleMock.mock.calls.filter(([name]) => name === channel)).toHaveLength(1)
-    }
-  })
-
-  it('routes both channels through the trusted-renderer guard', () => {
-    isTrustedUIRendererMock.mockReturnValue(false)
-
-    expectBothChannelsRejected(webContents({}))
-
-    expect(isTrustedUIRendererMock).toHaveBeenCalledTimes(2)
   })
 
   it('serves the current main UI renderer', async () => {

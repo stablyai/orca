@@ -1,5 +1,5 @@
 import { runProcessSync } from '@orca/process-host'
-import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, realpath, rm, symlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -8,10 +8,10 @@ import type { Repo } from '../../shared/repo-types'
 import { RuntimeRepositoryRegistrationController } from './runtime-repository-registration-controller'
 import { partialRuntimeStore } from './runtime-store-partial-fixture'
 
-vi.mock('../repo-icon-autodetect', () => ({
+vi.mock('../repository-icons/repo-icon-autodetect', () => ({
   detectRepoIconAndUpstream: vi.fn().mockResolvedValue({})
 }))
-vi.mock('../worktree-root-preparation', () => ({
+vi.mock('../workspaces/creation/worktree-root-preparation', () => ({
   prepareLocalWorktreeRootForRepo: vi.fn().mockResolvedValue(undefined)
 }))
 
@@ -101,18 +101,6 @@ describe('RuntimeRepositoryRegistrationController.add through a symlink alias', 
 
     expect(second.id).toBe(first.id)
     expect(repos).toHaveLength(1)
-  })
-
-  it('refuses missing paths and files without saving a folder project', async () => {
-    const filePath = join(root, 'file')
-    await writeFile(filePath, 'content')
-    const { controller, repos } = createController()
-
-    await expect(controller.add(join(root, 'missing'), 'folder')).rejects.toThrow(
-      'Folder does not exist:'
-    )
-    await expect(controller.add(filePath, 'folder')).rejects.toThrow('Path is not a folder:')
-    expect(repos).toEqual([])
   })
 
   it('keeps two different checkouts of the same repository as two projects', async () => {

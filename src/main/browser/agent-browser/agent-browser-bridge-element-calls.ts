@@ -1,8 +1,9 @@
 import type { WebContents } from 'electron'
 import { BrowserError } from '../browser-error'
-import type { CapturedElement } from '../cdp-element-capture'
-import { sendGuestCdpCommand } from '../guest-cdp-command'
-import { readRecord, readString } from '../guest-frame-input-sessions'
+import type { CapturedElement } from '../cdp/commands/cdp-element-capture'
+import { assertExpectedPageUrlForStep } from '../cdp/input/browser-expected-page-url'
+import { sendGuestCdpCommand } from '../cdp/debugger/guest-cdp-command'
+import { readRecord, readString } from '../cdp/input/guest-frame-input-sessions'
 import { AgentBrowserBridgeExecution } from './agent-browser-bridge-execution'
 
 export type CapturedTarget = { wc: WebContents; captured: CapturedElement }
@@ -101,6 +102,7 @@ export abstract class AgentBrowserBridgeElementCalls extends AgentBrowserBridgeE
     params: Record<string, unknown>,
     sessionId: string | undefined
   ): Promise<unknown> {
+    assertExpectedPageUrlForStep()
     return sendGuestCdpCommand(wc, method, params, sessionId).catch((error: unknown) => {
       if (error instanceof BrowserError) {
         throw error

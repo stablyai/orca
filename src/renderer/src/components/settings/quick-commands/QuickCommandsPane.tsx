@@ -1,0 +1,402 @@
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { TerminalQuickCommand } from '../../../../../shared/terminal/quick-commands/terminal-quick-command-types'
+import { getTerminalQuickCommandScope } from '../../../../../shared/terminal/quick-commands/terminal-quick-commands'
+import {
+  createTerminalQuickCommandDraft,
+  TerminalQuickCommandDialog
+} from '@/components/terminal-quick-commands/TerminalQuickCommandDialog'
+import { searchTerminalQuickCommands } from '@/lib/terminal-quick-command-search'
+import { useAppStore } from '../../../store/index'
+import { getTerminalQuickCommandHostPromptMaxLength } from '@/lib/terminal-quick-command-host-prompt-limit'
+import { Button } from '../../ui/button'
+import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
+import { getSettingOwnershipSummary } from '../page/setting-ownership'
+import { translate } from '@/i18n/i18n'
+import { QuickCommandsList } from './QuickCommandsList'
+import { QuickCommandsToolbar } from './QuickCommandsToolbar'
+import { GLOBAL_SCOPE_KEY } from './QuickCommandsScopeFilter'
+import {
+  getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID,
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../../../../shared/execution-host'
+import {
+  getTerminalQuickCommandHostOptions,
+  shouldShowTerminalQuickCommandHostOwnership
+} from '@/hooks/use-terminal-quick-command-hosts'
+
+type QuickCommandsPaneProps = {
+  settings: GlobalSettings
+  addCommandIntentSignal?: number
+}
+
+type EditorState =
+  | {
+      mode: 'add'
+      command: TerminalQuickCommand
+      connectionGeneration: number
+      hostId: ExecutionHostId
+    }
+  | {
+      mode: 'edit'
+      command: TerminalQuickCommand
+      connectionGeneration: number
+      hostId: ExecutionHostId
+    }
+  | null
+
+export function shouldOpenQuickCommandAddIntent(
+  addCommandIntentSignal: number | undefined,
+  consumedAddIntentSignal: number
+): boolean {
+  return Boolean(addCommandIntentSignal && consumedAddIntentSignal !== addCommandIntentSignal)
+}
+
+export function getAvailableQuickCommandHostId(
+  selectedHostId: ExecutionHostId,
+  hostOptions: readonly { id: ExecutionHostId }[]
+): ExecutionHostId {
+  return hostOptions.some((host) => host.id === selectedHostId)
+    ? selectedHostId
+    : LOCAL_EXECUTION_HOST_ID
+}
+
+export function isQuickCommandEditorHostCurrent(
+  hostId: ExecutionHostId,
+  connectionGeneration: number,
+  hostOptions: readonly { id: ExecutionHostId }[],
+  runtimeStatuses: ReadonlyMap<string, { connectionGeneration?: number }>
+): boolean {
+  const host = parseExecutionHostId(hostId)
+  return (
+    hostOptions.some((option) => option.id === hostId) &&
+    (host?.kind !== 'runtime' ||
+      (runtimeStatuses.get(host.environmentId)?.connectionGeneration ?? 0) === connectionGeneration)
+  )
+}
+
+export function shouldShowQuickCommandsRefreshError(
+  commandsAreCurrent: boolean,
+  runtimeCommands: { error: string | null; ready: boolean } | undefined
+): boolean {
+  return commandsAreCurrent && runtimeCommands?.ready === true && Boolean(runtimeCommands.error)
+}
+
+export function QuickCommandsPane({
+  settings,
+  addCommandIntentSignal
+}: QuickCommandsPaneProps): React.JSX.Element {
+  const repos = useAppStore((s) => s.repos)
+  const activeRepoId = useAppStore((s) => s.activeRepoId)
+  const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
+  const runtimeStatuses = useAppStore((s) => s.runtimeStatusByEnvironmentId)
+  const runtimeCommands = useAppStore((s) => s.runtimeTerminalQuickCommands)
+  const loadRuntimeCommands = useAppStore((s) => s.loadRuntimeTerminalQuickCommands)
+  const ownership = getSettingOwnershipSummary('terminalQuickCommands')
+  const confirm = useConfirmationDialog()
+  const [selectedHostId, setSelectedHostId] = useState<ExecutionHostId>(LOCAL_EXECUTION_HOST_ID)
+  const selectedHost = parseExecutionHostId(selectedHostId)
+  const selectedEnvironmentId = selectedHost?.kind === 'runtime' ? selectedHost.environmentId : null
+  const selectedRuntimeConnectionGeneration = selectedEnvironmentId
+    ? (runtimeStatuses.get(selectedEnvironmentId)?.connectionGeneration ?? 0)
+    : 0
+  const selectedRuntimeCommands = selectedEnvironmentId
+    ? runtimeCommands.get(selectedEnvironmentId)
+    : undefined
+  const selectedRuntimeCommandsAreCurrent =
+    selectedRuntimeCommands?.connectionGeneration === selectedRuntimeConnectionGeneration
+  const commands = selectedEnvironmentId
+    ? selectedRuntimeCommandsAreCurrent
+      ? (selectedRuntimeCommands?.commands ?? [])
+      : []
+    : (settings.terminalQuickCommands ?? [])
+  const canManageSelectedHost =
+    !selectedEnvironmentId ||
+    (selectedRuntimeCommandsAreCurrent && selectedRuntimeCommands?.supported === true)
+
+  useEffect(() => {
+    if (selectedEnvironmentId) {
+      void loadRuntimeCommands(selectedEnvironmentId, { force: true })
+    }
+  }, [loadRuntimeCommands, selectedEnvironmentId, selectedRuntimeConnectionGeneration])
+
+  const hostOptions = getTerminalQuickCommandHostOptions(settings, runtimeEnvironments)
+
+  const [editor, setEditor] = useState<EditorState>(null)
+  const [consumedAddIntentSignal, setConsumedAddIntentSignal] = useState(0)
+  // Null means sticky All so newly added repos appear automatically, matching Tasks filtering.
+  const [scopeSelection, setScopeSelection] = useState<ReadonlySet<string> | null>(null)
+  const [scopePopoverOpen, setScopePopoverOpen] = useState(false)
+  const [query, setQuery] = useState('')
+
+  const availableHostId = getAvailableQuickCommandHostId(selectedHostId, hostOptions)
+  const editorHostIsCurrent =
+    editor === null ||
+    isQuickCommandEditorHostCurrent(
+      editor.hostId,
+      editor.connectionGeneration,
+      hostOptions,
+      runtimeStatuses
+    )
+  if (availableHostId !== selectedHostId) {
+    setSelectedHostId(availableHostId)
+    setScopeSelection(null)
+  }
+  if (!editorHostIsCurrent) {
+    setEditor(null)
+  }
+
+  const hostRepos = useMemo(
+    () =>
+      selectedEnvironmentId
+        ? repos.filter((repo) => getRepoExecutionHostId(repo) === selectedHostId)
+        : repos,
+    [repos, selectedEnvironmentId, selectedHostId]
+  )
+  const repoById = useMemo(() => new Map(hostRepos.map((repo) => [repo.id, repo])), [hostRepos])
+
+  const allScopeKeys = useMemo(
+    () => new Set<string>([GLOBAL_SCOPE_KEY, ...hostRepos.map((repo) => repo.id)]),
+    [hostRepos]
+  )
+  const effectiveSelection: ReadonlySet<string> = scopeSelection ?? allScopeKeys
+  const showAll = scopeSelection === null
+
+  const scopedCommands = commands.filter((command) => {
+    const scope = getTerminalQuickCommandScope(command)
+    if (showAll) {
+      return true
+    }
+    if (scope.type === 'global') {
+      return effectiveSelection.has(GLOBAL_SCOPE_KEY)
+    }
+    return effectiveSelection.has(scope.repoId)
+  })
+  const visibleCommands = searchTerminalQuickCommands(scopedCommands, query)
+
+  const createDraftForCurrentFilter = useCallback((): TerminalQuickCommand => {
+    // Create in a sole selected repo/global scope; otherwise prefer the active repo, then global.
+    if (!showAll) {
+      const selectedRepoIds = [...effectiveSelection].filter((key) => key !== GLOBAL_SCOPE_KEY)
+      if (selectedRepoIds.length === 1 && !effectiveSelection.has(GLOBAL_SCOPE_KEY)) {
+        return createTerminalQuickCommandDraft({ type: 'repo', repoId: selectedRepoIds[0] })
+      }
+      if (selectedRepoIds.length === 0 && effectiveSelection.has(GLOBAL_SCOPE_KEY)) {
+        return createTerminalQuickCommandDraft({ type: 'global' })
+      }
+    }
+    if (activeRepoId && repoById.has(activeRepoId)) {
+      return createTerminalQuickCommandDraft({ type: 'repo', repoId: activeRepoId })
+    }
+    return createTerminalQuickCommandDraft({ type: 'global' })
+  }, [activeRepoId, effectiveSelection, repoById, showAll])
+
+  const intentSignal = addCommandIntentSignal
+  if (
+    typeof intentSignal === 'number' &&
+    shouldOpenQuickCommandAddIntent(intentSignal, consumedAddIntentSignal)
+  ) {
+    // Consume deep-link add intent before paint so the editor opens without a pane-only flash.
+    setConsumedAddIntentSignal(intentSignal)
+    setEditor({
+      mode: 'add',
+      command: createDraftForCurrentFilter(),
+      connectionGeneration: selectedRuntimeConnectionGeneration,
+      hostId: selectedHostId
+    })
+  }
+
+  const toggleScope = (key: string): void => {
+    const current = new Set(effectiveSelection)
+    if (current.has(key)) {
+      // Keep at least one scope; an empty set would hide every command without explanation.
+      if (current.size <= 1) {
+        return
+      }
+      current.delete(key)
+    } else {
+      current.add(key)
+    }
+    setScopeSelection(current.size === allScopeKeys.size ? null : current)
+  }
+
+  const handleSelectAll = (): void => {
+    if (showAll) {
+      // Match Tasks: clicking active All collapses to Global instead of an empty set.
+      setScopeSelection(new Set([GLOBAL_SCOPE_KEY]))
+      return
+    }
+    setScopeSelection(null)
+  }
+
+  const saveCommand = async (next: TerminalQuickCommand): Promise<boolean> => {
+    if (
+      !editor ||
+      !isQuickCommandEditorHostCurrent(
+        editor.hostId,
+        editor.connectionGeneration,
+        hostOptions,
+        runtimeStatuses
+      )
+    ) {
+      setEditor(null)
+      return false
+    }
+    useAppStore.getState().recordFeatureInteraction('quick-commands')
+    return await useAppStore.getState().upsertTerminalQuickCommand(editor.hostId, next)
+  }
+
+  const removeCommand = async (command: TerminalQuickCommand): Promise<void> => {
+    const confirmed = await confirm({
+      title: translate(
+        'auto.components.settings.QuickCommandsPane.3edf3deaf8',
+        'Delete "{{value0}}"?',
+        { value0: command.label || 'Untitled' }
+      ),
+      description: translate(
+        'auto.components.settings.QuickCommandsPane.3d9dc558e8',
+        'This quick command will be removed from your saved list.'
+      ),
+      confirmLabel: translate('auto.components.settings.QuickCommandsPane.ec1ed99e70', 'Delete'),
+      confirmVariant: 'destructive'
+    })
+    if (!confirmed) {
+      return
+    }
+    void useAppStore.getState().deleteTerminalQuickCommand(selectedHostId, command.id)
+  }
+
+  const openAddDialog = (): void =>
+    setEditor({
+      mode: 'add',
+      command: createDraftForCurrentFilter(),
+      connectionGeneration: selectedRuntimeConnectionGeneration,
+      hostId: selectedHostId
+    })
+
+  return (
+    <div className="space-y-4">
+      {shouldShowTerminalQuickCommandHostOwnership(hostOptions) ? (
+        <p className="text-xs text-muted-foreground">{ownership.description}</p>
+      ) : null}
+
+      <QuickCommandsToolbar
+        query={query}
+        setQuery={setQuery}
+        hostOptions={hostOptions}
+        showHostSelect={shouldShowTerminalQuickCommandHostOwnership(hostOptions)}
+        selectedHostId={selectedHostId}
+        onHostChange={(hostId) => {
+          setSelectedHostId(hostId)
+          setScopeSelection(null)
+        }}
+        canAdd={canManageSelectedHost}
+        onAdd={openAddDialog}
+        repos={hostRepos}
+        effectiveSelection={effectiveSelection}
+        showAll={showAll}
+        scopePopoverOpen={scopePopoverOpen}
+        setScopePopoverOpen={setScopePopoverOpen}
+        handleSelectAll={handleSelectAll}
+        toggleScope={toggleScope}
+      />
+
+      {selectedRuntimeCommandsAreCurrent && selectedRuntimeCommands?.supported === false ? (
+        <div className="px-3 py-6 text-sm text-muted-foreground">
+          {translate(
+            'auto.components.settings.QuickCommandsPane.d59bd333c3',
+            'Update this Orca server to manage its quick commands.'
+          )}
+        </div>
+      ) : selectedRuntimeCommandsAreCurrent &&
+        selectedRuntimeCommands?.error &&
+        !selectedRuntimeCommands.ready ? (
+        <div className="flex items-center justify-between gap-3 rounded-md border border-border/60 px-3 py-3">
+          <span className="text-sm text-muted-foreground">
+            {translate(
+              'auto.components.settings.QuickCommandsPane.f2bf411640',
+              'Could not load commands from this host.'
+            )}
+          </span>
+          <Button
+            type="button"
+            variant="outline"
+            size="xs"
+            onClick={() =>
+              selectedEnvironmentId &&
+              void loadRuntimeCommands(selectedEnvironmentId, { force: true })
+            }
+          >
+            {translate('auto.components.settings.QuickCommandsPane.7ecfee5b8e', 'Retry')}
+          </Button>
+        </div>
+      ) : selectedEnvironmentId &&
+        (!selectedRuntimeCommandsAreCurrent ||
+          (selectedRuntimeCommands?.loading && !selectedRuntimeCommands.ready)) ? (
+        <div className="px-3 py-6 text-sm text-muted-foreground">
+          {translate('auto.components.settings.QuickCommandsPane.601d6af51f', 'Loading commands…')}
+        </div>
+      ) : (
+        <>
+          {shouldShowQuickCommandsRefreshError(
+            selectedRuntimeCommandsAreCurrent,
+            selectedRuntimeCommands
+          ) ? (
+            <div className="flex items-center justify-between gap-3 rounded-md border border-border/60 px-3 py-3">
+              <span className="text-sm text-muted-foreground">
+                {translate(
+                  'auto.components.settings.QuickCommandsPane.923ba89646',
+                  'Could not refresh commands from this host. Showing the last loaded commands.'
+                )}
+              </span>
+              <Button
+                type="button"
+                variant="outline"
+                size="xs"
+                onClick={() =>
+                  selectedEnvironmentId &&
+                  void loadRuntimeCommands(selectedEnvironmentId, { force: true })
+                }
+              >
+                {translate('auto.components.settings.QuickCommandsPane.7ecfee5b8e', 'Retry')}
+              </Button>
+            </div>
+          ) : null}
+          <QuickCommandsList
+            commands={commands}
+            visibleCommands={visibleCommands}
+            hasQuery={query.trim().length > 0}
+            repoById={repoById}
+            onEdit={(command) =>
+              setEditor({
+                mode: 'edit',
+                command,
+                connectionGeneration: selectedRuntimeConnectionGeneration,
+                hostId: selectedHostId
+              })
+            }
+            onRemove={(command) => void removeCommand(command)}
+          />
+        </>
+      )}
+
+      {editor !== null ? (
+        <TerminalQuickCommandDialog
+          open
+          mode={editor.mode}
+          command={editor.command}
+          repos={hostRepos}
+          defaultAdvancedOpen
+          agentPromptMaxLength={getTerminalQuickCommandHostPromptMaxLength(
+            { runtimeStatusByEnvironmentId: runtimeStatuses },
+            editor.hostId
+          )}
+          onOpenChange={(open) => !open && setEditor(null)}
+          onSave={saveCommand}
+        />
+      ) : null}
+    </div>
+  )
+}

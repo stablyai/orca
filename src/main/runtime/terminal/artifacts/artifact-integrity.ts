@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import { realpath } from 'node:fs/promises'
 import type { FileHandle } from 'node:fs/promises'
 import type { RuntimeFileStatLike, TerminalFileGrant } from './file-grants'
+import { isBinaryBuffer } from '../../../../shared/binary-buffer'
 import {
   LOCAL_PREVIEWABLE_BINARY_MAX_BYTES,
   MOBILE_FILE_READ_MAX_BYTES
@@ -24,20 +25,20 @@ export async function readFileHandleBufferBounded(
   return buffer.subarray(0, bytesRead)
 }
 
-/** Pin all returnable bytes; size-rejected files need no digest. */
+/** Pin all returnable bytes; size-rejected files need no digest. Binary is null where unread. */
 export async function localTerminalArtifactContentDigest(
   handle: FileHandle,
   size: number
-): Promise<string | null> {
+): Promise<{ contentDigest: string | null; binary: boolean | null }> {
   if (size > LOCAL_PREVIEWABLE_BINARY_MAX_BYTES) {
-    return null
+    return { contentDigest: null, binary: null }
   }
   // Why: hover probes mint grants for any path, so read only the file; procfs reports size 0 for real content.
   const buffer = await readFileHandleBufferBounded(
     handle,
     size === 0 ? LOCAL_PREVIEWABLE_BINARY_MAX_BYTES + 1 : size + 1
   )
-  return terminalArtifactContentDigest(buffer)
+  return { contentDigest: terminalArtifactContentDigest(buffer), binary: isBinaryBuffer(buffer) }
 }
 
 export function terminalArtifactContentDigest(buffer: Buffer): string {

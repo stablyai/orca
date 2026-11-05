@@ -14,7 +14,7 @@ import {
 import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import type * as NodeFs from 'node:fs'
-import type * as Win32Utils from '../win32-utils'
+import type * as Win32Utils from '../windows/windows-directory-acl'
 import { setAppEnvironment } from '../../shared/app-environment'
 import {
   openCodeTuiPluginDirName,
@@ -40,7 +40,7 @@ vi.mock('node:fs', async (importOriginal) => {
   return { ...actual, writeFileSync: fsMock.writeFileSync, mkdirSync: fsMock.mkdirSync }
 })
 
-vi.mock('../win32-utils', async (importOriginal) => ({
+vi.mock('../windows/windows-directory-acl', async (importOriginal) => ({
   ...(await importOriginal<typeof Win32Utils>()),
   grantDirAcl: fsMock.grantDirAcl
 }))

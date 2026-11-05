@@ -1,0 +1,293 @@
+import { getLocalPtyProvider } from '../../../ipc/pty/provider/registry'
+import { rebindLocalProviderListeners } from '../../../ipc/pty/provider/listener-lifecycle'
+import {
+  isStartupDiagnosticsEnabled,
+  logStartupDiagnostic
+} from '../../../startup/startup-diagnostics'
+import { checkDaemonHealth } from '../../health/daemon-health'
+import {
+  collectPinnedDaemonVersions,
+  pruneOldDaemonHosts
+} from '../../executable-host/windows/daemon-host-relocation'
+import {
+  cleanupFailedDaemonAdoption,
+  releaseDaemonAdoptionLease,
+  takeDaemonAdoptionLeaseRelease
+} from '../../launch/daemon-endpoint-adoption'
+import { createLegacyDaemonAdapters } from '../routing/daemon-legacy-adapters'
+import {
+  discoverNewerProtocolHolds,
+  isHoldingForNewerProtocolDaemon
+} from '../routing/daemon-newer-protocol-hold'
+import {
+  getDaemonHistoryDir as getHistoryDir,
+  getDaemonRuntimeDir as getRuntimeDir,
+  resolveStaleDaemonRecycleVersion
+} from '../../launch/daemon-launch-paths'
+import {
+  attributeNextDaemonReplacement,
+  createOutOfProcessLauncher,
+  type DaemonLaunchPolicy
+} from '../../launch/daemon-out-of-process-launcher'
+import type { DaemonProvider } from './daemon-provider-routing'
+import { installDaemonProvider } from './daemon-provider-state'
+import { DegradedDaemonPtyProvider } from '../routing/degraded-daemon-pty-provider'
+import { trackDaemonAdopted } from '../../observability/daemon-adoption-telemetry-event'
+import { readDaemonPidRecord } from '../../endpoint/identity/daemon-endpoint-incarnation'
+import { trackDaemonRetired } from '../../observability/daemon-lifecycle-event'
+import { getMacDaemonTccAttributionHealth } from '../../permissions/daemon-tcc-attribution'
+import { DaemonPtyAdapter } from '../adapter/daemon-pty-adapter'
+import type { DaemonRespawnReason } from '../adapter/daemon-pty-adapter-options'
+import { DaemonPtyRouter } from '../routing/daemon-pty-router'
+import { isDaemonRestartInFlight } from './daemon-restart-state'
+import {
+  DaemonSpawner,
+  getDaemonPidPath,
+  getDaemonSocketPath,
+  getDaemonTokenPath,
+  type DaemonProcessHandle
+} from '../../launch/daemon-spawner'
+import { tryInstallLegacyFallbackOnCurrentFailure } from '../../daemon-legacy-fallback-init'
+import {
+  clearSeveredDaemon,
+  getSeveredDaemon,
+  installSeveredDaemonController
+} from './daemon-host-image-state'
+import {
+  createSeveredDaemonController,
+  hasSeveredDaemonBeenReplaced
+} from './daemon-severed-restart'
+
+// A severed daemon can pass health checks; require a new incarnation before routing fresh terminals.
+function probeCurrentDaemonCanSpawn(
+  socketPath: string,
+  tokenPath: string,
+  runtimeDir: string,
+  quarantine: DaemonProcessHandle['quarantine']
+): () => Promise<boolean> {
+  return async () =>
+    (quarantine !== 'host-image-severed' ||
+      hasSeveredDaemonBeenReplaced(getDaemonPidPath(runtimeDir))) &&
+    (await checkDaemonHealth(socketPath, tokenPath)) === 'healthy'
+}
+
+function createCurrentDaemonAdapter(
+  runtimeDir: string,
+  newSpawner: DaemonSpawner,
+  socketPath = getDaemonSocketPath(runtimeDir),
+  tokenPath = getDaemonTokenPath(runtimeDir)
+): DaemonPtyAdapter {
+  return new DaemonPtyAdapter({
+    socketPath,
+    tokenPath,
+    pidPath: getDaemonPidPath(runtimeDir),
+    profileScope: runtimeDir,
+    runtimeDir,
+    packagedAppVersion: newSpawner.staleDaemonRecycleVersion,
+    historyPath: getHistoryDir(),
+    respawn: async (reason: DaemonRespawnReason) => {
+      // A wedged daemon can look dead here; launch reports the proven replacement cause after recovery.
+      if (reason === 'daemon_died') {
+        console.warn('[daemon] Daemon process died — respawning')
+        // Synthetic exits during manual restart must not enter the crash bucket.
+        if (!isDaemonRestartInFlight()) {
+          trackDaemonRetired('died_respawn')
+        }
+      } else {
+        // Must reach the launcher below without an await in between; see the consume site.
+        attributeNextDaemonReplacement(reason)
+      }
+      newSpawner.resetHandle()
+      await newSpawner.ensureRunning()
+      return takeDaemonAdoptionLeaseRelease(newSpawner.getHandle())
+    }
+  })
+}
+
+// Use in-process timestamps: daemon init overlaps window loading and harness stderr can arrive late.
+function logDaemonMilestone(event: string, details: Record<string, unknown> = {}): void {
+  if (isStartupDiagnosticsEnabled()) {
+    logStartupDiagnostic(event, {
+      t: Math.round(performance.now()),
+      ...details
+    })
+  }
+}
+
+export async function initDaemonPtyProvider(
+  signal?: AbortSignal,
+  options: DaemonLaunchPolicy = {}
+): Promise<void> {
+  logDaemonMilestone('daemon-init-start')
+  // Exercise startup-gate timeout by making daemon init deterministically outlast it.
+  const e2eInitDelayMs = Number(process.env.ORCA_E2E_DAEMON_INIT_DELAY_MS)
+  if (Number.isFinite(e2eInitDelayMs) && e2eInitDelayMs > 0) {
+    await new Promise((resolve) => setTimeout(resolve, e2eInitDelayMs))
+  }
+  const runtimeDir = getRuntimeDir()
+
+  const newSpawner = new DaemonSpawner({
+    runtimeDir,
+    launcher: createOutOfProcessLauncher(runtimeDir, options),
+    staleDaemonRecycleVersion: resolveStaleDaemonRecycleVersion(
+      options.recycleStaleDaemonOnEveryPlatform === true
+    )
+  })
+
+  // Current startup failure still installs when a legacy daemon has sessions; otherwise propagate the error.
+  let info: Awaited<ReturnType<DaemonSpawner['ensureRunning']>>
+  try {
+    info = await newSpawner.ensureRunning()
+  } catch (error) {
+    const quarantine =
+      newSpawner.getHandle()?.quarantine ??
+      (getSeveredDaemon() ? ('host-image-severed' as const) : undefined)
+    await tryInstallLegacyFallbackOnCurrentFailure({
+      error,
+      signal,
+      runtimeDir,
+      newSpawner,
+      newAdapter: createCurrentDaemonAdapter(runtimeDir, newSpawner),
+      quarantine,
+      probeCurrentDaemonSpawn: probeCurrentDaemonCanSpawn(
+        getDaemonSocketPath(runtimeDir),
+        getDaemonTokenPath(runtimeDir),
+        runtimeDir,
+        quarantine
+      )
+    })
+    return
+  }
+  // Reclaim superseded hosts after every adoption or spawn, retaining current and live-pinned versions.
+  pruneOldDaemonHosts(collectPinnedDaemonVersions(runtimeDir))
+  const launchMode = newSpawner.getHandle()?.mode
+  const quarantine = newSpawner.getHandle()?.quarantine
+  logDaemonMilestone('daemon-current-ready')
+  if (signal?.aborted) {
+    // Fallback PTYs may already exist; release the late daemon lease without replacing their provider.
+    const abortedStartupAdapter = new DaemonPtyAdapter({
+      socketPath: info.socketPath,
+      tokenPath: info.tokenPath,
+      pidPath: getDaemonPidPath(runtimeDir),
+      profileScope: runtimeDir,
+      runtimeDir
+    })
+    releaseDaemonAdoptionLease(newSpawner.getHandle())
+    await abortedStartupAdapter.disconnectOnly()
+    return
+  }
+
+  const newAdapter = createCurrentDaemonAdapter(
+    runtimeDir,
+    newSpawner,
+    info.socketPath,
+    info.tokenPath
+  )
+  let legacyAdapters: DaemonPtyAdapter[] = []
+  let routedAdapter: DaemonProvider = newAdapter
+  try {
+    // Overlap temporary and permanent leases so adoption never leaves a gap.
+    await newAdapter.establishLifecycleLease()
+  } catch (error) {
+    await tryInstallLegacyFallbackOnCurrentFailure({
+      error,
+      signal,
+      runtimeDir,
+      newSpawner,
+      newAdapter,
+      quarantine,
+      probeCurrentDaemonSpawn: probeCurrentDaemonCanSpawn(
+        info.socketPath,
+        info.tokenPath,
+        runtimeDir,
+        quarantine
+      )
+    })
+    return
+  }
+  try {
+    releaseDaemonAdoptionLease(newSpawner.getHandle())
+
+    // Adopt older daemons; newer protocols only hold their tabs.
+    const [discoveredLegacyAdapters] = await Promise.all([
+      createLegacyDaemonAdapters(runtimeDir),
+      discoverNewerProtocolHolds(runtimeDir)
+    ])
+    legacyAdapters = discoveredLegacyAdapters
+    routedAdapter =
+      launchMode === 'degraded-new-pty-fallback'
+        ? new DegradedDaemonPtyProvider({
+            current: newAdapter,
+            legacy: legacyAdapters,
+            fallback: getLocalPtyProvider(),
+            probeCurrentDaemonSpawn: probeCurrentDaemonCanSpawn(
+              info.socketPath,
+              info.tokenPath,
+              runtimeDir,
+              quarantine
+            )
+          })
+        : legacyAdapters.length > 0 || isHoldingForNewerProtocolDaemon()
+          ? new DaemonPtyRouter({
+              current: newAdapter,
+              legacy: legacyAdapters
+            })
+          : newAdapter
+    if (routedAdapter instanceof DegradedDaemonPtyProvider) {
+      // Discover existing daemon sessions so fresh terminals can use the local fallback.
+      await routedAdapter.discoverDaemonSessions()
+    } else if (routedAdapter instanceof DaemonPtyRouter) {
+      await routedAdapter.discoverLegacySessions()
+    }
+    if (signal?.aborted) {
+      // Recheck after discovery; release uninstalled leases without killing live sessions.
+      await routedAdapter.disconnectOnly()
+      return
+    }
+  } catch (error) {
+    try {
+      await cleanupFailedDaemonAdoption(newSpawner, newAdapter, legacyAdapters)
+    } catch (cleanupError) {
+      throw new AggregateError([error, cleanupError], 'Daemon adoption and cleanup both failed')
+    }
+    throw error
+  }
+  installDaemonProvider(newSpawner, routedAdapter)
+  installSeveredDaemonController(createSeveredDaemonController())
+  if (quarantine !== 'host-image-severed') {
+    clearSeveredDaemon()
+  }
+  // The first window can register listeners before init finishes; bind them to the installed provider.
+  rebindLocalProviderListeners()
+  logDaemonMilestone('daemon-init-done', {
+    legacyAdapters: legacyAdapters.length
+  })
+  if (process.platform === 'darwin' && newSpawner.getHandle()?.adopted) {
+    void reportDaemonAdoption(runtimeDir, info.socketPath, info.tokenPath, newAdapter)
+  }
+}
+
+// Adoption measurements must neither delay nor fail startup.
+async function reportDaemonAdoption(
+  runtimeDir: string,
+  socketPath: string,
+  tokenPath: string,
+  adapter: DaemonPtyAdapter
+): Promise<void> {
+  try {
+    const [tccAttribution, liveSessionCount] = await Promise.all([
+      getMacDaemonTccAttributionHealth(runtimeDir, socketPath, tokenPath),
+      adapter.listSessions().then(
+        (sessions) => sessions.length,
+        () => null
+      )
+    ])
+    await trackDaemonAdopted(
+      readDaemonPidRecord(getDaemonPidPath(runtimeDir)),
+      tccAttribution,
+      liveSessionCount
+    )
+  } catch {
+    // Measurement failure must not affect the installed provider.
+  }
+}

@@ -2,7 +2,7 @@ import type { RuntimeWorktreeScanResult } from './repo-worktree-resolution-scan'
 import type { TerminalWorkspaceLaunchScope } from './runtime-legacy-worker-terminal-recovery-types'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
 import type { RuntimeTerminalRowMetadata } from '../../shared/runtime-terminal-contracts'
-import { IMMEDIATE_KILL_REPLY_BUDGET_MS } from '../daemon/immediate-kill-reply-budget'
+import { IMMEDIATE_KILL_REPLY_BUDGET_MS } from '../daemon/sessions/immediate-kill-reply-budget'
 import type {
   RuntimeTerminalDriverState,
   RuntimeTerminalPresentation
@@ -302,3 +302,9 @@ export type RuntimeRendererReloadFence = Readonly<{
   revision: number
   recovery: 'renderer' | 'headless' | 'reloading'
 }>
+
+export type {
+  OrchestrationCompatibilityCallerAuthority,
+  OrchestrationCompatibilityTerminalAuthority,
+  RuntimeTerminalAgentStatusEvent
+} from './runtime-terminal-contracts'

@@ -13,7 +13,7 @@ import {
   resolveAgentTabShortcutAction
 } from '../terminal-agent-tab-shortcut'
 import type { KeybindingOverrides } from '../../../../shared/keybindings'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { NewTabAgentMenuModel } from './new-tab-agent-menu-model'
 
 export function useAgentMenuShortcutLabels(

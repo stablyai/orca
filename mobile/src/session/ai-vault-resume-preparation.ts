@@ -1,9 +1,9 @@
-import type { AiVaultSession } from '../../../src/shared/ai-vault-types'
+import type { AiVaultSession } from '../../../src/shared/ai-vault/contracts/ai-vault-types'
 import {
   isAiVaultPrepareSessionResumeUnavailableError,
   isLegacySharedCodexHome,
   isPerAccountManagedCodexHome
-} from '../../../src/shared/ai-vault-resume-preparation'
+} from '../../../src/shared/ai-vault/resume/ai-vault-resume-preparation'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../src/shared/execution-host'
 import { aiVaultResumePreparationRun } from './mobile-session-launch-operations'
 import type { RpcOperationSender } from '../transport/rpc-operation-sender'

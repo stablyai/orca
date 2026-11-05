@@ -1,7 +1,10 @@
-import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
-import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
-import type { AiVaultSessionTitle } from '../../../../shared/ai-vault-session-title'
-import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
+import type {
+  TerminalLayoutSnapshot,
+  TerminalTab
+} from '../../../../shared/workspace-layout/terminal-tab-types'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
+import type { AiVaultSessionTitle } from '../../../../shared/ai-vault/contracts/ai-vault-session-title'
+import { isValidTerminalTabId } from '../../../../shared/workspace-layout/terminal-tab-id'
 import {
   readCanonicalPtyOwners,
   resolveCanonicalPtyClaim,

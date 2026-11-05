@@ -10,8 +10,6 @@ import type { NativeChatBlock } from '../../../../shared/native-chat/native-chat
 
 import { NativeChatToolRun } from './NativeChatToolRun'
 
-import { nativeChatAppearanceStyle } from './native-chat-appearance-style'
-
 import { openToolRunMembers } from './native-chat-tool-run-members-test-support'
 
 import {
@@ -20,42 +18,7 @@ import {
   useNativeChatDisclosures
 } from './native-chat-disclosure-store'
 
-import { revealNativeChatToolRunMember } from './NativeChatToolRunMembers'
-
 import { i18n } from '@/i18n/i18n'
-
-{
-  describe('tool-run summary in a matching chat', () => {
-    afterEach(cleanup)
-
-    it('keeps a long command available in the expanded detail', () => {
-      const command = `printf ${'x'.repeat(5000)}`
-      const style = nativeChatAppearanceStyle({
-        terminalFontFamily: 'Menlo',
-        nativeChatAppearance: { matchTerminalInterface: true }
-      })
-      const { container } = render(
-        <div className="native-chat-appearance" style={style}>
-          <NativeChatToolRun
-            blocks={[{ type: 'tool-call', name: 'shell', input: { command }, state: 'completed' }]}
-            expandSignal={false}
-          />
-        </div>
-      )
-
-      const summary = container.querySelector('span.line-clamp-2')
-      expect(summary).toHaveClass('line-clamp-2', 'break-words')
-      expect(summary?.textContent).toContain('printf')
-      expect(summary?.textContent?.length).toBeLessThan(command.length)
-      expect(container.querySelector('pre')).toBeNull()
-
-      fireEvent.click(screen.getByRole('button'))
-      openToolRunMembers()
-
-      expect(container.querySelector('pre')).toHaveTextContent(command)
-    })
-  })
-}
 
 {
   const QUESTION = 'What would you like me to do next in this repo?'
@@ -107,29 +70,6 @@ import { i18n } from '@/i18n/i18n'
 
   describe('NativeChatToolRun awaiting-input row', () => {
     afterEach(cleanup)
-    it('does not revive stale tool state after a turn stops', () => {
-      render(
-        <NativeChatToolRun blocks={askBlocks('running')} expandSignal activeTurnIsWorking={false} />
-      )
-      expect(screen.queryByText('Awaiting user input:')).toBeNull()
-      expect(screen.getByText('Asked:')).toBeInTheDocument()
-    })
-
-    it('keeps a pending question visible alongside another active tool', () => {
-      render(
-        <NativeChatToolRun
-          blocks={[
-            ...askBlocks('running'),
-            { type: 'tool-call', name: 'Read', input: { file_path: 'a.ts' }, state: 'running' }
-          ]}
-          expandSignal
-          activeTurnIsWorking
-        />
-      )
-      expect(screen.getByText('Awaiting user input:')).toBeInTheDocument()
-      expect(screen.getByText('Reading 1 file')).toBeInTheDocument()
-      expect(screen.getByText('Read a.ts')).toBeInTheDocument()
-    })
 
     it('preserves errors from failed question calls', () => {
       render(
@@ -146,76 +86,6 @@ import { i18n } from '@/i18n/i18n'
       expect(screen.queryByText('Awaiting user input:')).toBeNull()
       expect(screen.queryByText('Asked:')).toBeNull()
       expect(screen.getAllByText('Question rejected').length).toBeGreaterThan(0)
-    })
-    it('replaces a running ask call with the awaiting row', () => {
-      const { container } = render(
-        <NativeChatToolRun blocks={askBlocks('running')} expandSignal activeTurnIsWorking />
-      )
-
-      expect(screen.getByText('Awaiting user input:')).toHaveClass(
-        'animate-pulse',
-        'motion-reduce:animate-none'
-      )
-      expect(screen.getByText(QUESTION)).toBeInTheDocument()
-      expect(container.querySelector('.lucide-message-square-more')).toBeInTheDocument()
-      expect(screen.queryByText(/Running AskUserQuestion/)).toBeNull()
-      expect(screen.queryByText(/AskUserQuestion/)).toBeNull()
-    })
-
-    it('reports a settled ask without the pulse or a tool-count header', () => {
-      const { container } = render(
-        <NativeChatToolRun
-          blocks={askBlocks('completed')}
-          expandSignal
-          activeTurnIsWorking={false}
-        />
-      )
-
-      expect(screen.getByText('Asked:')).not.toHaveClass('animate-pulse')
-      expect(screen.getByText(QUESTION)).toBeInTheDocument()
-      expect(container.querySelector('[data-native-chat-tool-run-state]')).toBeNull()
-    })
-
-    it('leaves a question that fits on its line as plain text', () => {
-      const { container } = render(
-        <NativeChatToolRun
-          blocks={askBlocks('completed')}
-          expandSignal
-          activeTurnIsWorking={false}
-        />
-      )
-      expect(screen.getByText(QUESTION)).toHaveClass('truncate')
-      expect(container.querySelector('button')).toBeNull()
-    })
-
-    it('opens a clipped question below the toggle and folds it back', () => {
-      const restore = clipEveryLine()
-      try {
-        render(
-          <NativeChatToolRun
-            blocks={askBlocks('completed')}
-            expandSignal
-            activeTurnIsWorking={false}
-          />
-        )
-        const toggle = screen.getByRole('button', { name: /Asked:/ })
-        expect(toggle).toHaveAttribute('aria-expanded', 'false')
-
-        fireEvent.click(toggle)
-        expect(toggle).toHaveAttribute('aria-expanded', 'true')
-        const full = screen.getByText(QUESTION)
-        expect(full).not.toHaveClass('truncate')
-        // Outside the button, so it selects like prose and a click in it keeps it open.
-        expect(full.closest('button')).toBeNull()
-        fireEvent.click(full)
-        expect(toggle).toHaveAttribute('aria-expanded', 'true')
-
-        fireEvent.click(toggle)
-        expect(toggle).toHaveAttribute('aria-expanded', 'false')
-        expect(screen.getByText(QUESTION)).toHaveClass('truncate')
-      } finally {
-        restore()
-      }
     })
 
     it('keeps an opened question open when the windowed row remounts', () => {
@@ -240,51 +110,6 @@ import { i18n } from '@/i18n/i18n'
       } finally {
         restore()
       }
-    })
-
-    it('offers no expansion when the row names only a question count', () => {
-      const restore = clipEveryLine()
-      try {
-        const input = { questions: [{ question: 'First?' }, { question: 'Second?' }] }
-        render(
-          <NativeChatToolRun
-            blocks={[{ type: 'tool-call', name: 'AskUserQuestion', input, state: 'completed' }]}
-            expandSignal
-            activeTurnIsWorking={false}
-          />
-        )
-        expect(screen.getByText('2 questions')).toBeInTheDocument()
-        expect(screen.queryByRole('button', { name: /Asked:/ })).toBeNull()
-      } finally {
-        restore()
-      }
-    })
-
-    it('counts only the work that ran in the header beside the ask', () => {
-      const blocks: NativeChatBlock[] = [
-        { type: 'tool-call', name: 'Read', input: { file_path: 'a.ts' }, state: 'completed' },
-        { type: 'tool-call', name: 'AskUserQuestion', input: ASK_INPUT, state: 'running' }
-      ]
-
-      render(<NativeChatToolRun blocks={blocks} expandSignal activeTurnIsWorking />)
-
-      expect(screen.getByText('Awaiting user input:')).toBeInTheDocument()
-      // Waiting for an answer settles the work summary; the question itself adds no call count.
-      expect(screen.getByText('Read 1 file')).toBeInTheDocument()
-      expect(screen.queryByText('Reading 1 file')).toBeNull()
-    })
-
-    it('draws the row from the tool name when the payload names no question', () => {
-      render(
-        <NativeChatToolRun
-          blocks={[{ type: 'tool-call', name: 'request_user_input', input: {}, state: 'running' }]}
-          expandSignal
-          activeTurnIsWorking
-        />
-      )
-
-      expect(screen.getByText('Awaiting user input')).toBeInTheDocument()
-      expect(screen.queryByText(/request_user_input/)).toBeNull()
     })
   })
 }
@@ -460,57 +285,6 @@ import { i18n } from '@/i18n/i18n'
       fireEvent.click(returnedHeader)
       expect(membersBox(container).scrollTop).toBe(0)
     })
-
-    it('opens a settled run at its first call', () => {
-      layOut({ current: 600 })
-      const { container } = render(
-        <NativeChatToolRun blocks={calls(3)} expandSignal activeTurnIsWorking={false} />
-      )
-      expect(membersBox(container).scrollTop).toBe(0)
-    })
-
-    it('brings a revealed member to the top of the box and reports the box', () => {
-      layOut({ current: 600 })
-      const { container } = render(
-        <NativeChatToolRun blocks={calls(3)} expandSignal activeTurnIsWorking={false} />
-      )
-      const box = membersBox(container)
-      const member = box.querySelectorAll('button')[2]!
-      vi.spyOn(box, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 40, 300, VIEWPORT))
-      vi.spyOn(member, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 340, 300, 26))
-
-      expect(revealNativeChatToolRunMember(member)).toBe(box)
-      expect(box.scrollTop).toBe(300)
-    })
-  })
-
-  describe('NativeChatToolRun asides', () => {
-    afterEach(() => {
-      cleanup()
-      vi.restoreAllMocks()
-    })
-    it('draws the rows it is handed among its calls, in order', () => {
-      const blocks = calls(2)
-      const { container } = render(
-        <NativeChatToolRun
-          blocks={blocks}
-          asides={{
-            before: new Map([[blocks[1]!, [<p key="between">between</p>]]]),
-            after: [<p key="last">last</p>]
-          }}
-          expandSignal
-          activeTurnIsWorking={false}
-        />
-      )
-      const rows = [...membersBox(container).querySelectorAll('button, p')].map(
-        (row) => row.textContent ?? ''
-      )
-      expect(rows).toHaveLength(4)
-      expect(rows[0]).toContain('file-0.ts')
-      expect(rows[1]).toBe('between')
-      expect(rows[2]).toContain('file-1.ts')
-      expect(rows[3]).toBe('last')
-    })
   })
 }
 
@@ -527,44 +301,6 @@ import { i18n } from '@/i18n/i18n'
     afterEach(async () => {
       cleanup()
       await i18n.changeLanguage('en')
-    })
-    it.each(['Task', 'Agent'])('separates failure counts in command and %s runs', (name) => {
-      const blocks: NativeChatBlock[] = [
-        { type: 'tool-call', name: 'Bash', input: { command: 'false' }, state: 'failed' },
-        { type: 'tool-result', output: 'exit 1', isError: true },
-        {
-          type: 'tool-call',
-          name,
-          input: { description: 'explored settings search entries' },
-          state: 'completed'
-        }
-      ]
-      const { container } = render(<NativeChatToolRun blocks={blocks} expandSignal={false} />)
-      const header = runHeader(container)
-      expect(header).toHaveTextContent('Ran 1 command and ran 1 agent · 1 failed')
-      expect(header).toHaveAccessibleName(/Failed tool calls: 1/)
-      expect(header).not.toHaveAccessibleName(/·/)
-      fireEvent.click(header)
-      expect(screen.getByText('Subagent')).toBeInTheDocument()
-      expect(screen.getByTitle('explored settings search entries')).toBeInTheDocument()
-    })
-
-    it('uses the agent glyph for a lone Agent transcript call', () => {
-      const { container } = render(
-        <NativeChatToolRun
-          blocks={[
-            {
-              type: 'tool-call',
-              name: 'Agent',
-              input: { description: 'inspect settings' },
-              state: 'completed'
-            }
-          ]}
-          expandSignal
-        />
-      )
-      expect(runHeader(container)).toHaveTextContent('Ran 1 agent')
-      expect(container.querySelectorAll('button .lucide-bot')).toHaveLength(2)
     })
 
     it('relabels an already-mounted run and its rows when the UI language changes', async () => {

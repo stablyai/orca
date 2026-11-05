@@ -1,5 +1,6 @@
 import { beforeEach, type Mock, vi } from 'vitest'
 import type { Project } from '../../../shared/project-types'
+import type { createWebRuntimeSessionTerminal } from '@/runtime/web-runtime-terminal-creation'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 
 const mockCreateTab: Mock = vi.fn()
@@ -130,23 +131,31 @@ vi.mock('@/lib/telemetry', () => ({
 }))
 
 const mockCreateWebRuntimeSessionTerminal: Mock = vi.fn()
-const mockCreateWebRuntimeAgentSessionTerminalWithLaunchDraft: Mock = vi.fn()
 const mockIsWebRuntimeSessionActive = vi.fn(() => false)
 
 vi.mock('@/runtime/web-runtime-terminal-create-operation', () => ({
-  createWebRuntimeSessionTerminalResult: async (args: unknown) => ({
-    outcome: await mockCreateWebRuntimeSessionTerminal(args)
-  })
+  createWebRuntimeSessionTerminalResult: async (
+    args: Parameters<typeof createWebRuntimeSessionTerminal>[0]
+  ) => {
+    const { legacyAgentLaunch, ...request } = args
+    return {
+      outcome: await mockCreateWebRuntimeSessionTerminal({
+        ...request,
+        ...(args.preparedAgentCommand || !args.agentSessionCreateCapability
+          ? await legacyAgentLaunch?.()
+          : {})
+      })
+    }
+  }
 }))
 vi.mock('@/runtime/web-runtime-terminal-creation', () => ({
   createWebRuntimeSessionTerminal: mockCreateWebRuntimeSessionTerminal,
-  createWebRuntimeAgentSessionTerminalWithLaunchDraft:
-    mockCreateWebRuntimeAgentSessionTerminalWithLaunchDraft
+  deliverCreatedWebRuntimeAgentSessionPrompt: vi.fn(async () => true)
 }))
 vi.mock('@/runtime/web-runtime-session-environment', () => ({
   isWebRuntimeSessionActive: mockIsWebRuntimeSessionActive
 }))
-vi.mock('../../../shared/terminal-surface-id', () => ({
+vi.mock('../../../shared/workspace-layout/terminal-surface-id', () => ({
   isWebTerminalSurfaceTabId: vi.fn(() => false)
 }))
 
@@ -155,7 +164,6 @@ beforeEach(() => {
   setLocalRuntimeCapabilitiesForTests([])
   mockIsWebRuntimeSessionActive.mockReturnValue(false)
   mockCreateWebRuntimeSessionTerminal.mockResolvedValue({ status: 'created' })
-  mockCreateWebRuntimeAgentSessionTerminalWithLaunchDraft.mockResolvedValue({ status: 'created' })
   store.activeRepoId = 'repo-1'
   store.activeWorktreeId = 'wt-1'
   store.settings = {
@@ -201,7 +209,6 @@ beforeEach(() => {
 export {
   LEAF_ID,
   mockCreateTab,
-  mockCreateWebRuntimeAgentSessionTerminalWithLaunchDraft,
   mockCreateWebRuntimeSessionTerminal,
   mockIsWebRuntimeSessionActive,
   mockPasteDraftWhenAgentReady,

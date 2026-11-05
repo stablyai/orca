@@ -5,7 +5,7 @@ import { LOCAL_BUILD_COMPATIBILITY_CONTRACT } from '../../shared/local-build-com
 import {
   PREVIOUS_DAEMON_PROTOCOL_VERSIONS,
   PROTOCOL_VERSION
-} from '../daemon/daemon-protocol-version'
+} from '../daemon/protocol/daemon-protocol-version'
 
 describe('packaged local build compatibility contract', () => {
   it('stays aligned with runtime state and daemon constants', () => {

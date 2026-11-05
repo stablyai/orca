@@ -101,7 +101,7 @@ export async function performThreadGoalChange(
         )
       } catch (error) {
         if (isAgentSessionAttachmentExpiredError(error)) {
-          return agentSessionAttachmentExpiredRefusal()
+          return agentSessionAttachmentExpiredRefusal(error)
         }
         throw error
       }

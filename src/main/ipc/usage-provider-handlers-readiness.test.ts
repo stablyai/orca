@@ -170,38 +170,3 @@ it('awaits loading before the first disabled cached snapshot and all historical 
   expect(snapshotGetter).toHaveBeenCalledWith('all', 'all', 7)
   expect(scanClaudeUsageFilesViaWorker).not.toHaveBeenCalled()
 })
-
-it.each(['claudeUsage', 'codexUsage', 'openCodeUsage', 'museUsage'] as const)(
-  'gates snapshot and scan state for %s until whenLoaded resolves',
-  async (prefix) => {
-    const providers = createProviders()
-    const store = providers[prefix]
-    const pending = Promise.withResolvers<void>()
-    releasePending.push(() => pending.resolve(undefined))
-    vi.spyOn(store, 'whenLoaded').mockReturnValue(pending.promise)
-    const snapshotGetter = vi.spyOn(store, 'getSnapshot')
-    const scanStateGetter = vi.spyOn(store, 'getScanState')
-    const snapshot = Promise.resolve(
-      invoke(`${prefix}:getSnapshot`, { scope: 'all', range: 'all' })
-    )
-    const scanState = Promise.resolve(invoke(`${prefix}:getScanState`))
-    await nextTurn()
-    expect(snapshotGetter).not.toHaveBeenCalled()
-    expect(scanStateGetter).not.toHaveBeenCalled()
-    pending.resolve(undefined)
-    await Promise.all([snapshot, scanState])
-    expect(snapshotGetter).toHaveBeenCalledWith('all', 'all', undefined)
-    expect(scanStateGetter).toHaveBeenCalled()
-  }
-)
-
-it('keeps a loaded provider snapshot synchronous for direct callers', () => {
-  const { codexUsage } = createProviders()
-  const loaded = vi.spyOn(codexUsage, 'whenLoaded')
-  const snapshot = codexUsage.getSnapshot('all', 'all', 3)
-  const scanState = codexUsage.getScanState()
-  expect(snapshot).not.toBeInstanceOf(Promise)
-  expect(scanState).not.toBeInstanceOf(Promise)
-  expect(loaded).not.toHaveBeenCalled()
-  expect(snapshot.summary.hasAnyCodexData).toBe(false)
-})

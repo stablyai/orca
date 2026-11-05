@@ -7,14 +7,12 @@ import { projectRuntimePermission } from '../../../../shared/agent-session/optio
 import { useStructuredAgentSessionStatusSummary } from './StructuredAgentSessionStatusBridge'
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import type { AgentSessionOptionsResult } from '../../../../shared/agent-session/options/agent-session-options-result'
-import type { AgentType } from '../../../../shared/agent-status-types'
+import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { AgentSessionOptionCatalog } from '../../../../shared/agent-session/options/agent-session-option-catalog-types'
-import { usesInstalledAgentModelCatalog } from '../../../../shared/agent-model-catalog-ownership'
+import { usesInstalledAgentModelCatalog } from '../../../../shared/agent-session/options/agent-model-catalog-ownership'
 import { AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY } from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
-import {
-  structuredAgentSessionReportsAtFence,
-  type StructuredAgentSessionOptionState
-} from '../../../../shared/agent-session/options/structured-agent-session-options'
+import type { StructuredAgentSessionOptionState } from '../../../../shared/agent-session/options/structured-agent-session-options'
+import { structuredAgentSessionReportsAtFence } from '../../../../shared/agent-session/options/structured-agent-session-runtime-reports'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { structuredAgentSessionOptionView } from '../../../../shared/agent-session/options/structured-agent-session-option-view'
 import {
@@ -93,6 +91,7 @@ export function useStructuredAgentSessionOptionState(args: {
         ? {
             sessionId: acceptedSupport.sessionId,
             commands: acceptedSupport.result.conversationCommands ?? [],
+            compactInstructions: acceptedSupport.result.compactInstructions === true,
             threadGoal: acceptedSupport.result.threadGoal,
             reportedThreadGoal: acceptedSupport.result.reportedThreadGoal,
             contextUsage: acceptedSupport.result.contextUsage,

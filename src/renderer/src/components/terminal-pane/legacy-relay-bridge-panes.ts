@@ -7,7 +7,7 @@ import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import {
   HOST_TERMINAL_SURFACE_SEPARATOR,
   toHostSessionTabId
-} from '../../../../shared/terminal-surface-id'
+} from '../../../../shared/workspace-layout/terminal-surface-id'
 
 let panes: LegacyRelayBridgedPane[] = []
 const listeners = new Set<() => void>()

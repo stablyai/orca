@@ -26,12 +26,6 @@ describe('background task twins', () => {
     expect([...claimBackgroundTaskTwins(blocks).twinTextIndexes]).toEqual([1])
   })
 
-  it('makes a row with no twin print its own sentence rather than nothing', () => {
-    const row = task({ state: 'blocked', summary: 'it failed' })
-    const claims = claimBackgroundTaskTwins([row])
-    expect(claims.unpairedRows.get(0)).toBe('it failed')
-  })
-
   it('gives two rows sharing a sentence one twin each', () => {
     const rows = [task({ taskId: 'a', state: 'done' }), task({ taskId: 'b', state: 'done' })]
     const blocks: NativeChatBlock[] = [

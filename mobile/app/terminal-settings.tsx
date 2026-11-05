@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import Animated, {
@@ -26,11 +26,6 @@ import {
 } from '../src/terminal/terminal-auto-restore-fit-state'
 import { setTerminalSettingsScrollEnabled } from '../src/terminal/terminal-settings-scroll-lock'
 import { useTerminalTextScaleSetting } from '../src/terminal/use-terminal-text-scale-setting'
-import {
-  loadTerminalAutocompleteEnabled,
-  saveTerminalAutocompleteEnabled
-} from '../src/storage/preferences'
-import { MobileSwitch } from '../src/components/MobileSwitch'
 import {
   SettingsEmptyRow,
   SettingsNavBar,
@@ -191,26 +186,6 @@ export default function TerminalSettingsScreen() {
     [selectTextScale, t]
   )
 
-  const [autocompleteEnabled, setAutocompleteEnabled] = useState(false)
-  // Fast toggle must win over delayed initial load.
-  const userToggledAutocompleteRef = useRef(false)
-  useEffect(() => {
-    let stale = false
-    void loadTerminalAutocompleteEnabled().then((enabled) => {
-      if (!stale && !userToggledAutocompleteRef.current) {
-        setAutocompleteEnabled(enabled)
-      }
-    })
-    return () => {
-      stale = true
-    }
-  }, [])
-  const toggleAutocomplete = useCallback((next: boolean) => {
-    userToggledAutocompleteRef.current = true
-    setAutocompleteEnabled(next)
-    void saveTerminalAutocompleteEnabled(next)
-  }, [])
-
   useEffect(() => {
     let cancelled = false
     for (const host of hosts) {
@@ -339,34 +314,6 @@ export default function TerminalSettingsScreen() {
               leading={<Type size={18} color={colors.textSecondary} />}
               navigates
               onPress={() => setTextSizePickerOpen(true)}
-            />
-          </SettingsSection>
-
-          <SettingsSection
-            title={t('app.terminalSettings.keyboardInputHeading', 'KEYBOARD INPUT')}
-            footer={t(
-              'app.terminalSettings.keyboardInputDescription',
-              'Autocomplete, autocorrect, and spelling suggestions apply only to buffered command input. Use the double-chevron button above the keyboard to switch from live input, then edit your command before tapping Send. Off by default to avoid rewriting commands, flags, or paths.'
-            )}
-          >
-            <ListRow
-              key="autocomplete"
-              title={t('app.terminalSettings.autocomplete', 'Autocomplete & autocorrect')}
-              subtitle={
-                autocompleteEnabled
-                  ? t('app.terminalSettings.autocompleteOn', 'On')
-                  : t('app.terminalSettings.autocompleteOff', 'Off')
-              }
-              accessory={
-                <MobileSwitch
-                  accessibilityLabel={t(
-                    'app.terminalSettings.autocomplete',
-                    'Autocomplete & autocorrect'
-                  )}
-                  value={autocompleteEnabled}
-                  onValueChange={toggleAutocomplete}
-                />
-              }
             />
           </SettingsSection>
 

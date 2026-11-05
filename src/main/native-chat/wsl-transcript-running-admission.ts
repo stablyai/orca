@@ -1,4 +1,4 @@
-import { blockedWslDistroForPath } from '../wsl/wsl-unc-access-gate'
+import { blockedWslDistroForPath } from '../wsl/filesystem/wsl-unc-access-gate'
 import { wslTranscriptFsDistroNotRunningError } from './wsl-transcript-fs-error'
 
 /**

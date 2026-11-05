@@ -1,4 +1,4 @@
-import { withMirroredEvidenceReceipt } from '../../../src/shared/agent-status-freshness'
+import { withMirroredEvidenceReceipt } from '../../../src/shared/agent-status/contracts/agent-status-freshness'
 import type { MobileSessionTab } from './mobile-session-route-types'
 
 // Age host evidence from phone receipt time so clock skew cannot prolong live status.

@@ -9,7 +9,7 @@ import type { WorkspaceLayoutModel } from './workspace-layout-model'
 import { localDesktopSession } from './workspace-layout-profile.test-fixture'
 import { saveWorkspaceLayout } from './workspace-layout-save'
 import { GIT_KEY, leaf } from './workspace-layout-session.test-fixture'
-import type { WorkspaceSessionState } from '../workspace-session-state-types'
+import type { WorkspaceSessionState } from '../workspace-session/workspace-session-state-types'
 
 function reload(session: WorkspaceSessionState) {
   let next = 0

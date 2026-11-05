@@ -46,8 +46,14 @@ export type ActiveAgentNotesSendResult = {
 
 export function activeAgentNotesSendFailureMessage(
   status: ActiveAgentNotesSendStatus,
-  options: { explicitTarget?: boolean; code?: ActiveAgentNotesSendFailureCode } = {}
+  options: {
+    explicitTarget?: boolean
+    code?: ActiveAgentNotesSendFailureCode
+    /** What was being delivered; Add to chat reuses this wording for a selection. */
+    subject?: 'notes' | 'selection'
+  } = {}
 ): string {
+  const subject = options.subject ?? 'notes'
   const target = options.explicitTarget ? 'selected' : 'active'
   let message: string
   switch (status) {
@@ -74,7 +80,7 @@ export function activeAgentNotesSendFailureMessage(
       message = `The ${target} agent was not ready for input yet.`
       break
     case 'not-writable':
-      message = `The ${target} agent did not accept the notes.`
+      message = `The ${target} agent did not accept the ${subject}.`
       break
     case 'partial-submit-failed':
       message = options.explicitTarget

@@ -6,8 +6,8 @@ import type {
   RuntimeMobileSessionTerminalTab
 } from '../../shared/runtime-types'
 import type { TabGroupLayoutNode } from '../../shared/tab-types'
-import { appendRetiredTerminalSurfaceProofs } from '../../shared/terminal-retirement-proof-ledger'
-import { retireLeavesFromTerminalLayout } from '../../shared/terminal-layout-leaf-retirement'
+import { appendRetiredTerminalSurfaceProofs } from '../../shared/workspace-layout/terminal-retirement-proof-ledger'
+import { retireLeavesFromTerminalLayout } from '../../shared/workspace-layout/terminal-layout-leaf-retirement'
 
 export type RetiredTerminalSurface = {
   worktreeId: string

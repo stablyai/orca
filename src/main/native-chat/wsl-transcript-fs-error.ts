@@ -2,7 +2,7 @@ import {
   AI_VAULT_SCAN_ISSUE_COPY,
   aiVaultScanIssueText,
   type AiVaultScanIssueText
-} from '../../shared/ai-vault-scan-issue-copy'
+} from '../../shared/ai-vault/scanning/ai-vault-scan-issue-copy'
 
 export const WSL_TRANSCRIPT_FS_SLOW_MESSAGE = AI_VAULT_SCAN_ISSUE_COPY.wslTranscriptFsSlow
 export const WSL_TRANSCRIPT_FS_CAPACITY_MESSAGE = AI_VAULT_SCAN_ISSUE_COPY.wslTranscriptFsCapacity

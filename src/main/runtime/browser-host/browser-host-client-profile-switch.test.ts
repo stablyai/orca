@@ -1,14 +1,14 @@
-import { DEFAULT_CLIENT_PAGE_CREATION_TIMEOUT_MS } from '../../../shared/browser-client-page-creation-timeouts'
-import type { BrowserClientHostCommandEvent } from '../../../shared/browser-client-host-protocol'
+import { DEFAULT_CLIENT_PAGE_CREATION_TIMEOUT_MS } from '../../../shared/browser/client-hosting/browser-client-page-creation-timeouts'
+import type { BrowserClientHostCommandEvent } from '../../../shared/browser/client-hosting/browser-client-host-protocol'
 import { describe, expect, it, vi } from 'vitest'
 import { BrowserHostLeaseRegistry } from './browser-host-lease-registry'
-import { BrowserClientHostCommandDispatcher } from '../../browser/browser-client-host-command-dispatcher'
-import { createHarness } from '../../browser/browser-client-page-command-executor-test-harness'
+import { BrowserClientHostCommandDispatcher } from '../../browser/client-hosts/commands/browser-client-host-command-dispatcher'
+import { createHarness } from '../../browser/client-pages/execution/browser-client-page-command-executor-test-harness'
 import {
   BROWSER_CLIENT_PROFILE_SWITCH_CAPABILITY,
   BrowserClientProfileMetadata
-} from '../../../shared/browser-client-profile-switch-protocol'
-import { deriveBrowserRoutePartition } from '../../browser/browser-route-identity'
+} from '../../../shared/browser/client-hosting/browser-client-profile-switch-protocol'
+import { deriveBrowserRoutePartition } from '../../browser/routing/partitions/browser-route-identity'
 import { setBrowserHostClientProfileResolver } from './browser-host-client-profile-metadata'
 
 async function fixture(supported = true, onClientPageReleased?: (browserPageId: string) => void) {

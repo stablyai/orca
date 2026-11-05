@@ -12,14 +12,19 @@ import type {
   AgentSessionQueuedMessageDeleteResult,
   AgentSessionQueuedMessagesResumeResult
 } from '../../../shared/agent-session/requests/agent-session-queued-message-wire'
-import { QueuedMessageNotConsumableError } from '../agent-session-journal/queued-message-consume-error'
+import {
+  QueuedMessageNotConsumableError,
+  QueuedMessageNotOwedError
+} from '../agent-session-journal/queued-message-consume-error'
 import { refusingNewerOrcaJournal } from '../agent-session-journal/journal-open-failure'
 import {
   journalRowReceiptResult,
   type MutationPlan
 } from './structured-agent-session-mutation-plans'
 import type { CommandReceiptResult } from '../agent-session-journal/command-receipt-schema'
-import { structuredQueueHold } from './structured-agent-session-queued-messages'
+import { structuredQueueHold } from './structured-agent-session-queued-gate'
+import { refuse } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
+import { queuedMessageOwed } from './structured-agent-session-queued-mail'
 import { resumeStructuredQueue } from './structured-agent-session-queued-pause'
 import {
   mutateStructuredAgentSession,
@@ -43,7 +48,7 @@ function submissionFor(
   ctx: AgentSessionTurnContext,
   clientMessageId: string
 ): AgentJournalSubmission | undefined {
-  return ctx.journal.submissions().find((entry) => entry.clientMessageId === clientMessageId)
+  return ctx.journal.submission(clientMessageId)
 }
 
 function submissionRowReceipt(
@@ -117,6 +122,7 @@ export function sendQueuedStructuredAgentMessage(
         return invalid("A command can't be sent while the agent is working.")
       }
       const submissionId = operationId
+      const owed = queuedMessageOwed(context.deps, ctx.sessionId, row.body)
       try {
         await ctx.journal.appendSubmission(
           {
@@ -129,12 +135,36 @@ export function sendQueuedStructuredAgentMessage(
             fence: ctx.fence,
             handoverRecorded: true
           },
-          { messageId, expect: row.state },
+          { messageId, expect: row.state, ...(owed && { owed }) },
           ctx.operationReceipt
         )
       } catch (error) {
         if (error instanceof QueuedMessageNotConsumableError) {
           return invalid('The queued message changed underneath this Send; try again.')
+        }
+        // Typed reasons, so desktop and phone say what happened: one notice, never this prose.
+        if (error instanceof QueuedMessageNotOwedError) {
+          if (error.owed === 'unavailable') {
+            return {
+              ok: false,
+              // Not only after a restart, so never the restart's words: refused before admission, so
+              // the same Send can be pressed again once the mailbox answers.
+              refusal: refuse(
+                'execution_owner_reconciling',
+                { reason: 'mailOwnerUnconfirmed' },
+                "Orca can't confirm this queued mail is still owed to this chat."
+              )
+            }
+          }
+          await ctx.journal.queuedMessages.withdraw([messageId])
+          return {
+            ok: false,
+            refusal: refuse(
+              'agent_session_operation_invalid',
+              { reason: 'continuationSuperseded' },
+              'This message no longer applies to this chat, so it was removed.'
+            )
+          }
         }
         throw error
       }
@@ -148,7 +178,7 @@ export function sendQueuedStructuredAgentMessage(
     replay: (ctx, _outcome, receipt) => {
       const submission =
         receipt?.kind === 'journal-row' && receipt.epoch === ctx.journal.epoch
-          ? ctx.journal.submissions().find((entry) => entry.submittedSequence === receipt.sequence)
+          ? ctx.journal.inputOrder.submissionAt(receipt.sequence)
           : undefined
       return submission?.queuedMessageId === messageId
         ? { clientMessageId: submission.clientMessageId, submission }

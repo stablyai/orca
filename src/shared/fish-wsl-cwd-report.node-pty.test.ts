@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { fishRequirementViolation, resolveFishBinary } from './fish-binary-requirement'
 import { getWslFishInitCommand } from './wsl-login-shell-command'
 import { toWindowsWslPath } from './wsl-paths'
-import { parseFileUriPath } from '../main/daemon/osc7-file-uri'
+import { parseFileUriPath } from '../main/daemon/emulation/osc7-file-uri'
 
 const FISH = resolveFishBinary(3)
 const FISH_PATH = FISH.available ? FISH.path : ''
