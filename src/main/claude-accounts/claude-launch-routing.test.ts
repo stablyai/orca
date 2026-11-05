@@ -15,6 +15,8 @@ import { prepareLocalCommitMessageAgentEnv } from '../text-generation/commit-mes
 import { claudeStructuredAuthPolicyForSettings } from './claude-structured-auth-policy'
 import { applyClaudeEnvPatch } from './environment'
 import { withoutInheritedClaudeConfigDir } from '../claude/claude-config-dir-pin'
+import { withInheritedClaudeLaunchAccount } from './claude-launch-inheritance'
+import type { RpcContext } from '../runtime/rpc/core'
 
 const roots: string[] = []
 afterEach(() => {
@@ -30,7 +32,7 @@ function signIn(stateDir: string, email: string): void {
   )
 }
 
-function coveredAccount() {
+function coveredAccount(env: Record<string, string> = {}) {
   const root = mkdtempSync(join(tmpdir(), 'claude-launch-routing-'))
   roots.push(root)
   const userHome = join(root, 'personal')
@@ -55,7 +57,7 @@ function coveredAccount() {
     getSettings: () => settings,
     dataRoot,
     userHome,
-    env: {},
+    env,
     runSetup: async () => ({ outcome: 'prepared', warnings: [], surfaces: {} })
   })
   const accountHome = router.accountHome('a')
@@ -177,4 +179,33 @@ describe('one router decision for every Claude launch', () => {
       }
     }
   )
+
+  describe('a CLI child that inherits System default', () => {
+    // The inheritance gate reads only the caller kind from the RPC context.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the partial context carries every field the gate reads.
+    const context = { caller: { kind: 'local-cli' } } as unknown as RpcContext
+    const launchPatch = (f: ReturnType<typeof coveredAccount>) => {
+      f.settings.activeClaudeManagedAccountId = null
+      return withInheritedClaudeLaunchAccount(
+        context,
+        'agent.launch',
+        { agent: 'claude' },
+        undefined,
+        () => f.router.launchEnv()
+      )
+    }
+
+    it('sends no CLAUDE_CONFIG_DIR when the user never set one', async () => {
+      const patch = await launchPatch(coveredAccount())
+      expect(patch).not.toHaveProperty('CLAUDE_CONFIG_DIR')
+      expect(patch.ORCA_CLAUDE_INJECTED_CONFIG_DIR).toBe('')
+    })
+
+    it("keeps the user's own CLAUDE_CONFIG_DIR", async () => {
+      const f = coveredAccount({ CLAUDE_CONFIG_DIR: join(tmpdir(), 'user-claude') })
+      const patch = await launchPatch(f)
+      expect(patch.CLAUDE_CONFIG_DIR).toBe(f.router.userConfigDir())
+      expect(patch.ORCA_CLAUDE_INJECTED_CONFIG_DIR).toBe('')
+    })
+  })
 })
