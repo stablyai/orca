@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import SidebarHeader from './SidebarHeader'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
+import { getContextualTourStepIndex } from '../../../../shared/contextual-tours'
 import {
   makeFolderWorkspace,
   makeProjectGroup
@@ -57,6 +58,10 @@ type MockState = {
   worktreesByRepo: Record<string, { id: string; repoId: string; path: string }[]>
   updateSettings: (patch: Record<string, unknown>) => void
   activeContextualTourId: string | null
+  activeContextualTourStepIndex?: number
+  activeContextualTourSource?: string | null
+  detachContextualTourSource?: ReturnType<typeof vi.fn>
+  completeContextualTour?: ReturnType<typeof vi.fn>
   settings?: {
     experimentalAgentDashboardPopout?: boolean
     agentsSidebarIntroShown?: boolean
@@ -99,7 +104,8 @@ vi.mock('@/components/ui/tooltip', () => ({
   TooltipContent: ({ children }: { children: React.ReactNode }) => <>{children}</>
 }))
 
-vi.mock('../contextual-tours/workspace-creation-tour-handoff', () => ({
+vi.mock('../contextual-tours/workspace-creation-tour-handoff', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   openWorkspaceCreationComposerWithTourHandoff: mocks.openWorkspaceCreationComposerWithTourHandoff
 }))
 
@@ -401,6 +407,48 @@ describe('SidebarHeader', () => {
     })
     expect(mocks.openWorkspaceCreationComposerWithTourHandoff).not.toHaveBeenCalled()
     expect(mockState.openModal).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    {
+      shape: 'Open as Folder repo',
+      setup: () => {
+        mockState.activeWorkspaceKey = 'worktree:home::/Users/me'
+        mockState.activeWorktreeId = 'home::/Users/me'
+        mockState.repos = [{ id: 'home', kind: 'folder', path: '/Users/me' }]
+        mockState.worktreesByRepo = {
+          home: [{ id: 'home::/Users/me', repoId: 'home', path: '/Users/me' }]
+        }
+      }
+    },
+    {
+      shape: 'folder project',
+      setup: () => {
+        mockState.projectGroups = [makeProjectGroup()]
+        mockState.folderWorkspaces = [makeFolderWorkspace()]
+        mockState.activeWorkspaceKey = 'folder:folder-workspace-1'
+      }
+    }
+  ])('completes the final parallel tip when + creates in the current $shape', async ({ setup }) => {
+    setup()
+    mockState.activeContextualTourId = 'workspace-agent-sessions'
+    mockState.activeContextualTourStepIndex = getContextualTourStepIndex(
+      'workspace-agent-sessions',
+      'agent-sessions-parallel'
+    )
+    mockState.activeContextualTourSource = 'workspace_agent_sessions_visible'
+    mockState.detachContextualTourSource = vi.fn()
+    mockState.completeContextualTour = vi.fn()
+    act(() => root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />))
+
+    await act(async () => createButton().click())
+
+    expect(mockState.detachContextualTourSource).toHaveBeenCalledWith(
+      'workspace-agent-sessions',
+      'workspace_agent_sessions_visible'
+    )
+    expect(mockState.completeContextualTour).toHaveBeenCalledWith('workspace-agent-sessions')
+    expect(mocks.openWorkspaceCreationComposerWithTourHandoff).not.toHaveBeenCalled()
   })
 
   it('shows the existing error toast when direct folder creation fails', async () => {
