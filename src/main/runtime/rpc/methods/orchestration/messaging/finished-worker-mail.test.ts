@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createOrchestrationRpcHarness } from '../rpc-test-harness'
 import { createRootDispatch } from '../../../../orchestration/db/root-dispatch-test-fixture'
+import type { OrchestrationSessionCaller } from '../../../../orchestration/orchestration-caller-identity'
+import { testOrcaSessionId } from '../../../../../../shared/orca-session-address-test-fixture'
 
 describe('a worker after its worker_done', () => {
   const harness = createOrchestrationRpcHarness()
@@ -99,7 +101,7 @@ describe('a worker after its worker_done', () => {
     ).rejects.toMatchObject({ code: 'run_required' })
   })
 
-  it('resumes its own question after a follow-up starts on the same worker', async () => {
+  it('resumes its own question after a follow-up starts, but not as a later worker in the pane', async () => {
     const { db, runtime, ctx } = harness.setup()
     const task = db.createTask({ spec: 'work' })
     const dispatch = createRootDispatch(db, task.id, 'term_worker', 'tab_worker:leaf_worker')
@@ -128,7 +130,7 @@ describe('a worker after its worker_done', () => {
     expect(asked).toMatchObject({ timedOut: true })
     const questionId =
       asked && typeof asked === 'object' && 'messageId' in asked ? asked.messageId : ''
-    createRootDispatch(
+    const later = createRootDispatch(
       db,
       db.createTask({ spec: 'more' }).id,
       'term_worker',
@@ -139,10 +141,15 @@ describe('a worker after its worker_done', () => {
       { from: 'term_coord', id: questionId, body: 'Nothing else.' },
       ctx
     )
-
-    await expect(
+    const resume = () =>
       harness.call('orchestration.ask', { from: 'term_worker', resume: questionId }, ctx)
-    ).resolves.toMatchObject({ answer: 'Nothing else.' })
+
+    // A later worker in the same pane cannot take another Dispatch's answer.
+    await expect(resume()).rejects.toMatchObject({ code: 'question_not_found' })
+    db.db
+      .prepare('UPDATE dispatch_contexts SET follow_up_of_dispatch_id = ? WHERE id = ?')
+      .run(dispatch.id, later.id)
+    await expect(resume()).resolves.toMatchObject({ answer: 'Nothing else.' })
   })
 
   it('tells a finished worker on a paired host that its coordinator is out of reach', async () => {
@@ -185,5 +192,57 @@ describe('a worker after its worker_done', () => {
         harness.call(method, { from: 'term_worker', ...params }, ctx)
       ).rejects.toMatchObject({ code: 'run_home_unreachable' })
     }
+
+    // A local worker the pane is given later speaks for it, not the settled remote one.
+    const run = db.createRun({
+      objective: 'local',
+      coordinatorHandle: 'term_coord',
+      coordinatorPaneKey: null
+    })
+    const task = db.createTask({ spec: 'local work', runId: run.id })
+    createRootDispatch(db, task.id, 'term_worker', 'tab_worker:leaf_worker')
+    await expect(
+      harness.call('orchestration.send', { from: 'term_worker', subject: 'Local' }, ctx)
+    ).resolves.toMatchObject({ message: { to_handle: `run:${run.id}` } })
+  })
+
+  it('takes only the chat session that finished for the finished worker', async () => {
+    const { db, runtime, ctx, activeRunId } = harness.setup()
+    const task = db.createTask({ spec: 'work' })
+    const dispatch = createRootDispatch(db, task.id, 'term_worker', 'tab_worker:leaf_worker')
+    const sessionCaller = (id: string): OrchestrationSessionCaller => ({
+      address: 'term_worker',
+      terminalHandle: 'term_worker',
+      paneKey: 'tab_worker:leaf_worker',
+      orcaSessionId: testOrcaSessionId(id),
+      sessionId: testOrcaSessionId(id),
+      workspaceId: 'wt'
+    })
+    db.db
+      .prepare('UPDATE dispatch_contexts SET assignee_orca_session_id = ? WHERE id = ?')
+      .run(testOrcaSessionId('chat_worker'), dispatch.id)
+    vi.mocked(runtime.getTerminalPaneKey).mockImplementation((handle) =>
+      handle === 'term_worker' ? 'tab_worker:leaf_worker' : null
+    )
+    const send = (session: string, params: Record<string, unknown>) =>
+      harness.call(
+        'orchestration.send',
+        { from: 'term_worker', ...params },
+        { ...ctx, orchestrationCaller: sessionCaller(session) }
+      )
+    await send('chat_worker', {
+      type: 'worker_done',
+      subject: 'Done',
+      payload: JSON.stringify({ taskId: task.id, dispatchId: dispatch.id, outcome: 'succeeded' })
+    })
+
+    await expect(send('chat_other', { subject: 'Not mine' })).rejects.toMatchObject({
+      code: 'run_required'
+    })
+    await send('chat_worker', { subject: 'Mine' })
+    expect(db.getUnreadMessages(`run:${activeRunId}`).map((message) => message.subject)).toEqual([
+      'Done',
+      'Mine'
+    ])
   })
 })

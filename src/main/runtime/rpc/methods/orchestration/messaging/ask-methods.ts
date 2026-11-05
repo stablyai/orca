@@ -13,8 +13,11 @@ import {
 import { resolveOrchestrationParty } from '../../../../orchestration/orchestration-party'
 import { assertLifecycleCallerIsNotAnotherParty } from './lifecycle-caller-fence'
 import { assertWorkerCanReport } from '../../../../orchestration/worker-report-admission'
-import { finishedWorkerDispatch, refuseFinishedRemoteWorker } from './finished-worker-mail'
-import { isDispatchAssignee } from '../../../../orchestration/db/dispatch-context/dispatch-lookup'
+import {
+  continuesDispatch,
+  finishedWorkerDispatch,
+  refuseFinishedRemoteWorker
+} from './finished-worker-mail'
 import {
   askedQuestionReceipt,
   waitForQuestionAnswer
@@ -86,7 +89,7 @@ export const ORCHESTRATION_ASK_METHODS = [
           'question'
         )
       if (!askingDispatch) {
-        refuseFinishedRemoteWorker(db, paneKey, undefined)
+        refuseFinishedRemoteWorker(db, { address: from, paneKey }, undefined)
         throw new OrchestrationError(
           'dispatch_inactive',
           'ask requires an active supervised Dispatch.'
@@ -114,8 +117,7 @@ export const ORCHESTRATION_ASK_METHODS = [
       let question = params.resume ? db.getQuestion(params.resume) : undefined
       if (params.resume) {
         // Its own question from a finished Dispatch stays resumable after a follow-up starts.
-        const askedBy = question && db.getDispatchContextById(question.dispatch_id)
-        if (!question || !askedBy || !isDispatchAssignee(askedBy, from, paneKey)) {
+        if (!question || !continuesDispatch(db, askingDispatch, question.dispatch_id)) {
           throw new OrchestrationError(
             'question_not_found',
             `Question ${params.resume} does not belong to this active Dispatch.`
