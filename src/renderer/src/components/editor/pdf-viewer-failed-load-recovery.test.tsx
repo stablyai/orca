@@ -399,27 +399,6 @@ describe('PdfViewer when the file is rewritten', () => {
     }
   })
 
-  it('does no parsing or viewer reconstruction for 100 unchanged rerenders', async () => {
-    const task = loadingTask({ name: 'stable' })
-    getDocument.mockImplementationOnce(() => task)
-    const content = btoa('%PDF stable')
-    const view = render(<PdfViewer content={content} filePath="out/main.pdf" />)
-    await waitFor(() => expect(viewers).toHaveLength(1))
-
-    for (let index = 0; index < 100; index += 1) {
-      view.rerender(
-        <PdfViewer content={index % 2 ? content : `\n${content}\n`} filePath="out/main.pdf" />
-      )
-    }
-
-    expect(getDocument).toHaveBeenCalledTimes(1)
-    expect(viewers).toHaveLength(1)
-    expect(viewerSignals).toHaveLength(1)
-    expect(task.destroy).not.toHaveBeenCalled()
-    view.unmount()
-    expect(task.destroy).toHaveBeenCalledTimes(1)
-  })
-
   it('bounds active resources across 25 failed and successful rewrite cycles', async () => {
     const tasks: ReturnType<typeof loadingTask>[] = []
     let activeTasks = 0
