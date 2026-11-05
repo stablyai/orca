@@ -52,6 +52,7 @@ type Api = {
   paste: ReturnType<typeof useNativeChatComposerPaste>
   draft: string
   notice: string | null
+  setDisabled: (disabled: boolean) => void
 }
 
 function Probe({
@@ -65,6 +66,7 @@ function Probe({
   owner: () => NativeChatAttachmentOwner
   onReady: (api: Api) => void
 }): React.JSX.Element {
+  const [disabled, setDisabled] = useState(false)
   const [caret, setCaret] = useState(0)
   const [draft, setDraft] = useState('')
   const [notice, setNotice] = useState<string | null>(null)
@@ -73,7 +75,7 @@ function Probe({
     attachmentScopeKey: 'remote-scope',
     acceptsImages,
     caret,
-    disabled: false,
+    disabled,
     isComposing: () => false,
     resolveTarget: () => ({ ptyId: 'remote:env-1@@pty-1' }),
     textareaRef,
@@ -85,7 +87,7 @@ function Probe({
     targetKey: declineText ? undefined : 'remote-scope',
     attachmentScopeKey: declineText ? undefined : 'remote-scope',
     agent: 'claude',
-    disabled: false,
+    disabled,
     caret,
     resolveAttachmentOwner: owner,
     attachResolvedPaths: attachments.attachResolvedPaths,
@@ -107,7 +109,7 @@ function Probe({
     setNotice
   })
   useEffect(() => {
-    onReady({ attachments, paste, draft, notice })
+    onReady({ attachments, paste, draft, notice, setDisabled })
   })
   return createElement('textarea', { ref: textareaRef })
 }
@@ -314,4 +316,32 @@ it('drops a commented image when its composer unmounts before the save finishes'
   const remounted = await render(() => SERVER_OWNER)
   expect(remounted().attachments.imageAttachments).toEqual([])
   expect(remounted().draft).toBe('')
+})
+
+it('does not insert comments when disabling the composer clears its pending image', async () => {
+  let finishSave!: (path: string) => void
+  let saveStarted!: () => void
+  const started = new Promise<void>((resolve) => {
+    saveStarted = resolve
+  })
+  mocks.saveClipboardImageAsTempFile.mockImplementation(() => {
+    saveStarted()
+    return new Promise<string>((resolve) => {
+      finishSave = resolve
+    })
+  })
+  const latest = await render(() => SERVER_OWNER)
+  let result!: Promise<boolean>
+  await act(async () => {
+    result = latest().paste.attachCommentedImage('data:image/png;base64,cG5n', 'Feedback')
+    await started
+  })
+  act(() => latest().setDisabled(true))
+  await act(async () => {
+    finishSave('/tmp/annotated.png')
+    await result
+  })
+  expect(await result).toBe(false)
+  expect(latest().attachments.imageAttachments).toEqual([])
+  expect(latest().draft).toBe('')
 })

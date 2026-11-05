@@ -35,10 +35,9 @@ export function useNativeChatImageSave({
       }
       if (pendingId) {
         lifetime.pending.delete(pendingId)
-        resolvePendingImageAttachment(pendingId, path, null)
-      } else {
-        attachResolvedPaths([path], null)
+        return resolvePendingImageAttachment(pendingId, path, null) !== false
       }
+      attachResolvedPaths([path], null)
       return true
     },
     [
