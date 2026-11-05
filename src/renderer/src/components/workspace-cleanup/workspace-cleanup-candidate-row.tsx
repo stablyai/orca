@@ -3,7 +3,6 @@ import {
   AlertTriangle,
   CircleDot,
   FileWarning,
-  GitBranch,
   GitPullRequest,
   Loader2,
   Lock,
@@ -19,16 +18,11 @@ import {
   canQueueWorkspaceCleanupCandidate,
   type WorkspaceCleanupCandidate
 } from '../../../../shared/workspace-cleanup/workspace-cleanup'
-import {
-  getWorkspaceCleanupGitState,
-  type WorkspaceCleanupReviewInfo
-} from './workspace-cleanup-presentation'
-import { getWorkspaceCleanupGitChipLabel } from './workspace-cleanup-candidate-labels'
+import type { WorkspaceCleanupReviewInfo } from './workspace-cleanup-presentation'
 import { CandidateRowDetails } from './workspace-cleanup-candidate-row-details'
 import {
   formatBranchSafetyDetails,
   formatContextDetails,
-  formatGitStatus,
   getCandidateFactStatuses,
   getContextCount,
   getDirtyGitLabel,
@@ -135,7 +129,6 @@ export const CandidateRow = React.memo(function CandidateRow({
   // rows are never queued and git is not read for them; "unknown" would be a false alarm.
   const showGitChip = queueable && gitStatuses.length === 0
   const dirtyLabel = getDirtyGitLabel(candidate)
-  const gitState = getWorkspaceCleanupGitState(candidate)
   const contextCount = getContextCount(candidate)
   const candidateAccessibleName = getWorkspaceCleanupCandidateAccessibleName(candidate)
   const hostLabel = getWorkspaceCleanupCandidateHostLabel(candidate)
@@ -263,21 +256,14 @@ export const CandidateRow = React.memo(function CandidateRow({
                   'Checking git status'
                 )}
               </span>
-            ) : !showGitChip ? null : dirtyLabel ? (
+            ) : showGitChip && dirtyLabel ? (
               <WorkspaceCleanupMetadataChip
                 icon={FileWarning}
                 label={dirtyLabel}
                 value={dirtyLabel}
                 tone="destructive"
               />
-            ) : gitState === 'clean' ? null : (
-              <WorkspaceCleanupMetadataChip
-                icon={GitBranch}
-                label={formatGitStatus(candidate)}
-                value={getWorkspaceCleanupGitChipLabel(gitState)}
-                tone="review"
-              />
-            )}
+            ) : null}
             {!deletionPhase && visibleFlags.length > 0 ? (
               <span className="inline-flex h-5 min-w-0 items-center gap-1 text-xs text-muted-foreground">
                 <span className="truncate">{visibleFlags.join(' · ')}</span>

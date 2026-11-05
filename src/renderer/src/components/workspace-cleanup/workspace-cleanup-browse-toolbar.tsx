@@ -59,7 +59,6 @@ export function WorkspaceCleanupBrowseToolbar({
         }}
         facetPanelOpen={facetPanelOpen}
         onFacetPanelOpenChange={onFacetPanelOpenChange}
-        activeFacetGroupCount={activeFacetGroupCount}
         matchedCount={facetRows.matchedCount}
         hasActiveFilters={activeFilters}
         gitEvidence={{ pendingCount: gitPendingCount, totalCount: gitCheckedTotal }}

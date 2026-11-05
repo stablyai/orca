@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import {
   useAppliedWorkspaceCleanupFilters,
@@ -32,7 +33,6 @@ export function WorkspaceCleanupFilterBar({
   facetProps,
   facetPanelOpen,
   onFacetPanelOpenChange,
-  activeFacetGroupCount,
   matchedCount,
   hasActiveFilters,
   gitEvidence,
@@ -44,7 +44,6 @@ export function WorkspaceCleanupFilterBar({
   facetProps: WorkspaceCleanupFacetGroupProps
   facetPanelOpen: boolean
   onFacetPanelOpenChange: (open: boolean) => void
-  activeFacetGroupCount: number
   matchedCount: number
   hasActiveFilters: boolean
   gitEvidence: WorkspaceCleanupGitEvidenceProgress
@@ -81,14 +80,11 @@ export function WorkspaceCleanupFilterBar({
               <PopoverTrigger asChild>
                 <Button
                   variant="ghost"
-                  size="xs"
+                  size="icon-xs"
                   aria-label={filtersLabel}
                   className="absolute top-1/2 right-1 -translate-y-1/2"
                 >
                   <SlidersHorizontal className="size-3.5" />
-                  {activeFacetGroupCount > 0 ? (
-                    <span className="tabular-nums">{activeFacetGroupCount}</span>
-                  ) : null}
                 </Button>
               </PopoverTrigger>
             </TooltipTrigger>
@@ -188,7 +184,10 @@ function SizeScanButton({
       : translate('components.workspace.cleanup.browse.measuringSizes', 'Scanning sizes')
   return (
     <Button variant="link" size="inline" className="shrink-0" disabled={scanning} onClick={onRun}>
-      {scanning ? <Loader2 className="size-3 animate-spin text-muted-foreground" /> : null}
+      {/* Reserved spinner slot keeps the link from shifting when a scan starts. */}
+      <Loader2
+        className={cn('size-3 text-muted-foreground', scanning ? 'animate-spin' : 'invisible')}
+      />
       {/* Stack the idle label under the live one so the link never changes width. */}
       <span className="grid text-xs tabular-nums text-muted-foreground underline decoration-muted-foreground/50 underline-offset-4 hover:text-foreground">
         <span className="invisible col-start-1 row-start-1" aria-hidden="true">

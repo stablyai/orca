@@ -68,7 +68,6 @@ function Top({
           }}
           facetPanelOpen={false}
           onFacetPanelOpenChange={noop}
-          activeFacetGroupCount={0}
           matchedCount={query ? 2 : 5}
           hasActiveFilters={query.length > 0}
           gitEvidence={{ pendingCount: refreshing ? 4 : 0, totalCount: 5 }}
