@@ -263,7 +263,13 @@ describe('mailbox delivery into a pane awaiting the user', () => {
         composer('please refactor the auth'),
         0
       ],
-      ['an open question holds it', 'waiting', QUESTION_SCREEN, 0]
+      ['an open question holds it', 'waiting', QUESTION_SCREEN, 0],
+      [
+        'a question painted before its waiting hook holds it',
+        'working',
+        QUESTION_SCREEN.slice(QUESTION_SCREEN.indexOf('\x07') + 1),
+        0
+      ]
     ] as const)('%s', async (_label, state, screen, expectedWrites) => {
       vi.useFakeTimers()
       const db = createDatabase('orca-held-open-claude-delivery-')

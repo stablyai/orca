@@ -11,7 +11,7 @@ import { buildTerminalWaitText } from './terminal-wait-tail-state'
 import { evaluateTuiIdle, isTuiIdleReadyVerdict, type TuiIdleVerdict } from './tui-idle-evidence'
 import { ptyTuiIdleEvidence } from './tui-idle-evidence-source'
 import { TUI_IDLE_QUIESCENCE_MS } from './terminal-idle-policy'
-import { USER_INPUT_HOLD_CAP_MS } from '../../claude-open-dialog-hold'
+import { isClaudeDialogOnScreen, USER_INPUT_HOLD_CAP_MS } from '../../claude-open-dialog-hold'
 import { readTerminalComposerTypedText } from '../../../../shared/terminal/input/terminal-composer-draft'
 import { isMailboxTerminalTakingInput } from '../../orchestration/mailbox-owner'
 import { claudeHookTurnQueuesTypedInput } from './tui-idle-hook-lane'
@@ -138,10 +138,17 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
     const queueSafe =
       verdict.kind === 'working' ||
       (verdict.kind === 'pending' &&
-        claudeHookTurnQueuesTypedInput(evidence.agent, evidence.readHookTurn?.()))
+        claudeHookTurnQueuesTypedInput(evidence.agent, evidence.readHookTurn?.()) &&
+        this.showsClaudeComposerWithoutDialog(ptyId))
     return queueSafe
       ? !!this.getPaneTerminalAgent(ptyId) && evidence.readScreenInputVeto() !== true
       : isTuiIdleReadyVerdict(verdict)
+  }
+
+  /** A dialog can paint before its waiting hook, or with none; an unreadable screen cannot rule one out. */
+  private showsClaudeComposerWithoutDialog(ptyId: string): boolean {
+    const lines = this.readLiveTerminalScreenLines(ptyId)
+    return lines !== null && !isClaudeDialogOnScreen(lines)
   }
 
   /** An unsent draft would be submitted with the injected text; the cap bounds an abandoned or misread one.

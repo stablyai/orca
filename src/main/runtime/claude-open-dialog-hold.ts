@@ -36,9 +36,11 @@ export function isClaudeDialogHoldingPane(args: {
     return false
   }
   const lines = args.readScreenLines()
-  if (lines === null) {
-    return true
-  }
+  return lines === null || isClaudeDialogOnScreen(lines)
+}
+
+/** Whether Claude's live screen shows a selection dialog, hook-reported or not. */
+export function isClaudeDialogOnScreen(lines: readonly string[]): boolean {
   const region = lines.filter((line) => line.trim() !== '').slice(-DIALOG_REGION_LINES)
   return region.some((line) => DIALOG_FOOTER_RE.test(line)) || hasCursoredOptionList(region)
 }
