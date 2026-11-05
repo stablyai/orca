@@ -57,7 +57,7 @@ it('keeps image and goal transitions FULL, streams text at NORMAL, and restores 
   const image = { id: 'image', type: 'imageGeneration' }
   for (const body of [
     text('assistant', 'Generating image'),
-    codexImageItemBody({ ...image, status: 'inProgress' }),
+    codexImageItemBody({ ...image, status: 'in_progress' }),
     codexImageItemBody({ ...image, status: 'completed', result: 'AAAA' }),
     text('assistant', 'Image preview unavailable'),
     { ...text('assistant', 'Goal'), sentAs: 'goal' as const },
