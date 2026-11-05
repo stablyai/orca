@@ -31,14 +31,11 @@ export function useMobileNativeChatStructuredComposer(args: {
             catalog,
             onSlashMenuOpen: refresh,
             onSlashMenuDemand: setMenuOpen,
-            ...(acceptsFiles
-              ? {
-                  onAttachFiles: () => void attachFiles(),
-                  ...(attachPastedText
-                    ? { onAttachPastedText: (text: string) => void attachPastedText(text) }
-                    : {})
-                }
-              : {}),
+            onAttachFiles: acceptsFiles ? () => void attachFiles() : undefined,
+            onAttachPastedText:
+              acceptsFiles && attachPastedText
+                ? (text: string) => void attachPastedText(text)
+                : undefined,
             files: pendingFiles,
             onRemoveFile: (id: string) => removeFiles([id])
           }
