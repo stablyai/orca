@@ -30,13 +30,7 @@ const EMPTY_RESULT: AiVaultListResult = {
 const listSessionsMock = vi.fn<(args: AiVaultListArgs) => Promise<AiVaultListResult>>()
 const cancelListSessionsMock = vi.fn<(args: { requestToken: string }) => Promise<void>>()
 
-let _windowFocusCallback: (() => void) | null = null
-const onWindowFocusedMock = vi.fn((callback: () => void) => {
-  _windowFocusCallback = callback
-  return () => {
-    _windowFocusCallback = null
-  }
-})
+const onWindowFocusedMock = vi.fn(() => () => {})
 
 const initialAppState = useAppStore.getInitialState()
 
