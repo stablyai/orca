@@ -9,7 +9,7 @@ import {
   restartSpawnArgs,
   tabId
 } from './pty-pane-owner-swap.test-fixture'
-import { WorkspaceLayoutStream } from '../../runtime/workspace-layout-stream'
+import { WorkspaceLayoutStream } from '../../runtime/terminal/surface/workspace-layout-stream'
 
 import type { WorkspaceLayoutStreamEvent } from '../../../shared/workspace-layout/workspace-layout-stream-frames'
 

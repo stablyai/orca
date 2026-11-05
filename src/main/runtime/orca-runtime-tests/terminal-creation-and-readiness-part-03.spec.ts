@@ -1,6 +1,6 @@
 import { realpath } from 'node:fs/promises'
 import { describe, expect, it, vi } from 'vitest'
-import { detectAgentCommandsOnHost } from '../../preflight/agent-detection'
+import { detectAgentCommandsOnHost } from '../../preflight/agent-command-detection'
 import {
   FLOATING_TERMINAL_WORKTREE_ID,
   OrcaRuntimeService,

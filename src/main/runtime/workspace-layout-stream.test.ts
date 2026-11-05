@@ -19,7 +19,7 @@ import {
   publishWorkspaceLayout,
   type PublishedWorkspaceLayout
 } from '../../shared/workspace-layout/workspace-layout-published'
-import { WorkspaceLayoutStream } from './workspace-layout-stream'
+import { WorkspaceLayoutStream } from './terminal/surface/workspace-layout-stream'
 import { collectLayoutEvents } from './workspace-layout-stream-events.test-fixture'
 
 const SSH_HOST: ExecutionHostId = 'ssh:target-1'

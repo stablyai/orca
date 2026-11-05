@@ -1,7 +1,7 @@
 import { createLocalWorkerStartDispatch } from './local-worker-start-dispatch'
 import { probeWorkerOpenCodeModelLaunchSupport } from './worker-opencode-model-preflight'
 import { resolveWorkerConfiguredAgentParams } from './worker-configured-agent-preflight'
-import { waitForWorkerAgentReady } from '../../../../launched-agent-composer-readiness'
+import { waitForWorkerAgentReady } from '../../../../terminal/wait/launched-agent-composer-readiness'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { describeTerminalWaitBlockedReason } from '../../../../../../shared/terminal/runtime-policy/terminal-wait-blocked-reason-legacy-alias'
 import type { OrchestrationDb } from '../../../../orchestration/db'

@@ -1,6 +1,6 @@
 import { OrcaRuntimeWithGetPtyRecordForPaneKey } from './terminal-pane-mail-routing'
 import type { OrchestrationMailboxTerminal } from './mailbox-owner'
-import type { RuntimePtyWorktreeRecord } from '../runtime-terminal-state-records'
+import type { RuntimePtyWorktreeRecord } from '../terminal/records/runtime-terminal-state-records'
 import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 
 /** Which live terminal orchestration types mail into, and the handle it is known by. */

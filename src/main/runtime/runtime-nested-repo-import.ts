@@ -23,7 +23,7 @@ import {
 } from '../project-groups/nested-repo-import'
 import { createNestedRepoImportTargetResolver } from '../project-groups/nested-repo-import-target'
 import type { RuntimeStore } from './runtime-store-contract'
-import { refuseWslHostWindowsDrivePath } from './wsl-host-windows-drive-guard'
+import { refuseWslHostWindowsDrivePath } from './terminal/launch/wsl-host-windows-drive-guard'
 
 type RuntimeNestedRepoImportDependencies = {
   getStore: () => RuntimeStore | null

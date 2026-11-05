@@ -45,7 +45,7 @@ import {
   waitForFreshComposerOnPty,
   watchLaunchComposer,
   type FreshComposerPtyHost
-} from '../launch-composer-watch'
+} from '../terminal/wait/launch-composer-watch'
 
 export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntimeWithForegroundInspection {
   protected abstract toAgentSessionOptions(
