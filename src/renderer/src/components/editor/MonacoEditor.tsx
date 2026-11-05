@@ -23,6 +23,7 @@ import { useMonacoContentSyncBridge } from './use-monaco-content-sync-bridge'
 import { useMonacoMarkdownAnnotations } from './markdown-source-tools/monaco/use-monaco-markdown-annotations'
 import { useMonacoEditorDecorations } from './use-monaco-editor-decorations'
 import { useMonacoEditorMount } from './use-monaco-editor-mount'
+import { useMonacoPythonDefinitions } from './use-monaco-python-definitions'
 import { snapshotMonacoViewState } from './monaco-view-state-persistence'
 import { MonacoMarkdownAnnotationOverlay } from './markdown-source-tools/monaco/MonacoMarkdownAnnotationOverlay'
 import { usePluginSyntaxLanguage } from './use-plugin-syntax-language'
@@ -194,6 +195,8 @@ export default function MonacoEditor({
       readOnly
     })
   }, [typographyOptions, editorWordWrap, readOnly])
+
+  useMonacoPythonDefinitions()
 
   const decorations = useMonacoEditorDecorations({
     editorRef,
