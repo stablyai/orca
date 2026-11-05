@@ -117,21 +117,31 @@ export const createWorkspaceCleanupSlice: StateCreator<AppState, [], [], Workspa
     await window.api.workspaceCleanup.dismiss({ dismissals })
   },
   restoreWorkspaceCleanupCandidates: async (candidates) => {
-    // Legacy dismissals are keyed by bare worktree id; drop that key too or the row stays ignored.
-    const restoredDismissalKeys = [
-      ...new Set(
-        candidates.flatMap((candidate) => [
-          getWorkspaceCleanupCandidateIdentity(candidate),
-          candidate.worktreeId
-        ])
-      )
-    ]
+    const { workspaceCleanupDismissals: dismissals, workspaceCleanupScan: scan } = get()
+    const restored = new Set(candidates.map(getWorkspaceCleanupCandidateIdentity))
+    const worktreeIds = new Set(candidates.map((candidate) => candidate.worktreeId))
+    // Legacy dismissals are keyed by bare worktree id and cover every host; drop that key too or the row stays ignored.
+    const restoredDismissalKeys = [...restored, ...worktreeIds]
+    // Re-key a dropped legacy dismissal onto the other hosts it covered so only the restored row un-ignores.
+    const migrated: WorkspaceCleanupDismissal[] = (scan?.candidates ?? []).flatMap((candidate) => {
+      const legacy = dismissals[candidate.worktreeId]
+      const identity = getWorkspaceCleanupCandidateIdentity(candidate)
+      return legacy &&
+        worktreeIds.has(candidate.worktreeId) &&
+        !restored.has(identity) &&
+        !dismissals[identity]
+        ? [{ ...legacy, executionHostId: getWorkspaceCleanupCandidateHostId(candidate) }]
+        : []
+    })
     // Persist first: a failed restore must not leave the row eligible for bulk delete.
-    await window.api.workspaceCleanup.dismiss({ dismissals: [], restoredDismissalKeys })
+    await window.api.workspaceCleanup.dismiss({ dismissals: migrated, restoredDismissalKeys })
     set((state) => {
       const next = { ...state.workspaceCleanupDismissals }
       for (const key of restoredDismissalKeys) {
         delete next[key]
+      }
+      for (const dismissal of migrated) {
+        next[getWorkspaceCleanupCandidateIdentity(dismissal)] = dismissal
       }
       return withWorkspaceCleanupDismissals(state, next)
     })

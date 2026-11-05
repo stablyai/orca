@@ -13,7 +13,7 @@ import {
   findWorkspaceCleanupCandidateRepo,
   groupWorkspaceCleanupReposById
 } from './workspace-cleanup-presentation'
-import { resolveWorkspaceCleanupRemovalHostId } from '../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
+import { getWorkspaceCleanupCandidateHostId } from '../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
 
 export type WorkspaceCleanupRowListState = {
   rows: readonly WorkspaceCleanupFacets[]
@@ -52,7 +52,7 @@ export function WorkspaceCleanupRowList(props: WorkspaceCleanupRowListState): Re
   // Count hosts across every scanned row so filtering down to one host does not hide the label.
   const showHostLabels = useMemo(
     () =>
-      new Set(scannedCandidates.map((candidate) => resolveWorkspaceCleanupRemovalHostId(candidate)))
+      new Set(scannedCandidates.map((candidate) => getWorkspaceCleanupCandidateHostId(candidate)))
         .size > 1,
     [scannedCandidates]
   )
