@@ -161,7 +161,7 @@ function spawnShellAndReadPath(shell: string): Promise<HydrationResult> {
         // Preserve environment for rc setup while suppressing noisy shell stderr and ignoring stdin.
         env: shellProbeEnv(),
         stdio: ['ignore', 'pipe', 'ignore'],
-        detached: false
+        detached: probe.detached
       })
     } catch {
       // Synchronous spawn failure (for example Store pwsh EPERM) must reach fallback selection.

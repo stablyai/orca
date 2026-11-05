@@ -6,6 +6,7 @@ import {
   resolveProfileLoadingFallbackShell,
   resolveProfileLoadingShell
 } from './hydrate-shell-path'
+import { shellProbeDetached } from './shell-path-probe'
 
 const START_MARKER = '__ORCA_LOGIN_SHELL_ENV_START__'
 const END_MARKER = '__ORCA_LOGIN_SHELL_ENV_END__'
@@ -128,7 +129,7 @@ function spawnShellAndReadEnvironment(
   return new Promise((resolve) => {
     let settled = false
     const chunks: Buffer[] = []
-    const child = spawnProcess({ program: shell, args, env })
+    const child = spawnProcess({ program: shell, args, env, detached: shellProbeDetached() })
     const finish = (value: NodeJS.ProcessEnv | null): void => {
       if (settled) {
         return
