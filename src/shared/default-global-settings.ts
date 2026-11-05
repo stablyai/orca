@@ -147,7 +147,7 @@ export function buildDefaultSettings(args: {
     terminalUrlMiddleClickBehavior: 'open',
     experimentalBrowserExtensions: false,
     agentDefaultSurface: 'terminal',
-    nativeChatResumeWorkOnRestart: false,
+    nativeChatResumeWorkOnRestart: true,
     nativeChatQueueFollowUps: true,
     nativeChatAutoContinueAfterUsageLimit: false,
     nativeChatIdleStopMinutes: DEFAULT_NATIVE_CHAT_IDLE_STOP_MINUTES,

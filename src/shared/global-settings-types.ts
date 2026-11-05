@@ -205,7 +205,7 @@ export type GlobalSettings = GlobalSettingsBase & {
   terminalLinkClickBehavior?: 'actions' | 'open' | 'none'
   /** Middle mouse URL behavior; defaults to opening the primary routed destination. */
   terminalUrlMiddleClickBehavior?: 'open' | 'actions' | 'none'
-  /** Opt-in resume of working structured chats after restart; off still lists them for review before token spending. */
+  /** Resume working structured chats after restart; on for new profiles, off for profiles that predate the default. Off still lists them for review before token spending. */
   nativeChatResumeWorkOnRestart?: boolean
   /** Queue follow-ups while the agent works on capable hosts; absent means on. */
   nativeChatQueueFollowUps?: boolean

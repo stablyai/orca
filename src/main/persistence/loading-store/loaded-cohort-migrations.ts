@@ -76,6 +76,22 @@ export class LoadedCohortMigrationOperations {
     return { ...state, settings: { ...state.settings, ...launchSettings } }
   }
 
+  /** Resume on restart defaults on for new profiles; profiles saved before without a choice keep it off. */
+  keepResumeOnRestartOffForExistingProfiles(
+    state: PersistedState,
+    savedProfile: unknown
+  ): PersistedState {
+    if (!isRecord(savedProfile)) {
+      return state
+    }
+    const saved = isRecord(savedProfile.settings) ? savedProfile.settings : undefined
+    if (typeof saved?.nativeChatResumeWorkOnRestart === 'boolean') {
+      return state
+    }
+    this.runtime.loadNeedsSave = true
+    return { ...state, settings: { ...state.settings, nativeChatResumeWorkOnRestart: false } }
+  }
+
   migrateTelemetry(state: PersistedState, fileExistedOnLoad: boolean): PersistedState {
     const existing = state.settings?.telemetry
     // Partial telemetry blocks still require migration unless all invariants hold.

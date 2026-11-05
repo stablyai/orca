@@ -173,11 +173,21 @@ export function migrateStoredWebSettings(
     ...normalizeAutoRenameBranchFromWorkDefaultOn(stored),
     ...normalizeTerminalCursorStyleDefault(stored),
     ...normalizeOsc52ClipboardDefaultOn(stored),
+    ...keepResumeOnRestartOffForExistingProfile(stored),
     terminalCustomThemes: normalizeTerminalCustomThemes(stored.terminalCustomThemes),
     ...splitLegacyTerminalColorOverrides(stored),
     ...migratePortugueseUiLanguageOnLoad(stored),
     ...(hasLegacyMatchTerminalSidebar(stored) ? syncLegacyMatchTerminalSidebar(stored, true) : {})
   }
+}
+
+/** Resume on restart defaults on for new browsers; saved settings without a choice keep it off. */
+function keepResumeOnRestartOffForExistingProfile(
+  stored: Partial<GlobalSettings>
+): Partial<GlobalSettings> {
+  return Object.keys(stored).length > 0 && typeof stored.nativeChatResumeWorkOnRestart !== 'boolean'
+    ? { nativeChatResumeWorkOnRestart: false }
+    : {}
 }
 
 /** Retired host intent must not become a new browser-owned legacy choice. */

@@ -194,6 +194,43 @@ describe('Store.migrateTabSwitchKeybindings', () => {
   })
 })
 
+describe('native chat resume on restart default', () => {
+  beforeEach(() => {
+    testState.dir = mkdtempSync(join(tmpdir(), 'orca-test-'))
+  })
+
+  afterEach(async () => {
+    await closeTestStores()
+    rmSync(testState.dir, { recursive: true, force: true })
+  })
+
+  const legacyProfile = (settings: Record<string, unknown>) => ({
+    schemaVersion: 1,
+    repos: [],
+    worktreeMeta: {},
+    settings,
+    ui: {},
+    githubCache: { pr: {}, issue: {} },
+    workspaceSession: {}
+  })
+
+  it('is on for a new install and stays on after a restart', async () => {
+    const store = await createStore()
+    expect(store.getSettings().nativeChatResumeWorkOnRestart).toBe(true)
+    await closeTestStores()
+    const reopened = await createStore()
+    expect(reopened.getSettings().nativeChatResumeWorkOnRestart).toBe(true)
+  })
+
+  it('stays off for an existing profile that never chose and keeps a saved choice', async () => {
+    writeDataFile(legacyProfile({ theme: 'dark' }))
+    expect((await createStore()).getSettings().nativeChatResumeWorkOnRestart).toBe(false)
+    await closeTestStores()
+    writeDataFile(legacyProfile({ nativeChatResumeWorkOnRestart: true }))
+    expect((await createStore()).getSettings().nativeChatResumeWorkOnRestart).toBe(true)
+  })
+})
+
 describe('Store.migrateWorktreeIdentity', () => {
   const OLD = 'repo1::/ws/cunner'
   const NEW = 'repo1::/ws/worktree-creation-spinner'

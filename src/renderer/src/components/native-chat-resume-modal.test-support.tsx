@@ -209,7 +209,12 @@ export function createResumeModalFixture(rpc: Mock<RestartRpc>, statusStream: Re
     vi.mocked(toast).mockClear()
     useAppStore.setState(useAppStore.getInitialState(), true)
     useAppStore.setState({
-      settings: { ...getDefaultSettings(''), nativeChatProviders: EVERY_AGENT_CHAT },
+      // The review dialog only appears while automatic resume is off.
+      settings: {
+        ...getDefaultSettings(''),
+        nativeChatProviders: EVERY_AGENT_CHAT,
+        nativeChatResumeWorkOnRestart: false
+      },
       updateSettings: async (changes) => {
         useAppStore.setState((state) => ({
           settings: { ...getDefaultSettings(''), ...state.settings, ...changes }
