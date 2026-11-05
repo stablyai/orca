@@ -8,7 +8,7 @@ import { resolveDevCliUserDataPath } from '../instance-isolation/dev-instance-is
 
 const scriptPath = realpathSync(import.meta.filename)
 const scriptDir = path.dirname(scriptPath)
-const repoRoot = path.resolve(scriptDir, '..', '..')
+const repoRoot = path.resolve(scriptDir, '..', '..', '..', '..')
 const cliEntry =
   process.env.ORCA_DEV_CLI_ENTRY_PATH ?? path.join(repoRoot, 'out', 'cli', 'index.js')
 

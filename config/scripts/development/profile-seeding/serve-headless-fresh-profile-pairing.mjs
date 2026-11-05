@@ -9,7 +9,10 @@ import { createInterface } from 'node:readline'
 const scriptDir = import.meta.dirname
 const repoRoot = path.resolve(scriptDir, '../../..', '..')
 const orcaDevScript = path.join(scriptDir, '../launch/orca-dev.mjs')
-const ensureNativeRuntimeScript = path.join(scriptDir, '../../ensure-native-runtime.mjs')
+const ensureNativeRuntimeScript = path.join(
+  scriptDir,
+  '../../native-build/node-addons/ensure-native-runtime.mjs'
+)
 const fixedProfileDir = process.env.ORCA_HEADLESS_PAIRING_PROFILE_DIR
 const parsed = parseArgs(process.argv.slice(2))
 
