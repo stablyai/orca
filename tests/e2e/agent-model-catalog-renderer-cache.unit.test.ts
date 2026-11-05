@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { homedir } from 'node:os'
+import { resolveHiddenProbeCwd } from '../../src/main/rate-limits/hidden-probe-cwd'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({ call: vi.fn(), cli: vi.fn() }))
@@ -152,7 +152,9 @@ describe('account catalog to renderer cache', () => {
         expect(publish).not.toHaveBeenCalled()
         scope.resolve()
         await refresh
-        expect(probe.resolve.mock.calls.every(([, cwd]) => cwd === homedir())).toBe(true)
+        expect(probe.resolve.mock.calls.every(([, cwd]) => cwd === resolveHiddenProbeCwd())).toBe(
+          true
+        )
         const exact = service.snapshot({ agent, verifiedOnly: true })
         expect(exact).toMatchObject({
           models: [{ id: 'account-model', isDefault: true, declaredDefaultEffort: 'high' }]
