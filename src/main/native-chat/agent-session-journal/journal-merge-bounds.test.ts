@@ -1,3 +1,7 @@
+import type {
+  AgentSessionSubscribeEvent,
+  AgentSessionStatusEvent
+} from '../../../shared/agent-session/agent-session-wire'
 import { finishJournalStepsAsync } from './journal-reconstruction-steps'
 import { createQueuedMessageTestRig } from '../agent-session-wire/structured-agent-session-queued-message-rig.test-fixture'
 import type { JournalReplacementItem } from './journal-epoch-replacement'
@@ -183,6 +187,26 @@ it('keeps logical replacement preparation finite and retained evidence reads pag
     await rig.workingSend()
     const sessions = rig.host.collaboratorsForTests().sessions
     sessions.set(projectionSessionId, { ...sessions.get(projectionSessionId)!, journal })
+    const frames: AgentSessionSubscribeEvent[] = []
+    const delivered = Promise.withResolvers<void>()
+    let replacing = false
+    const releaseChat = await rig.host.subscribe({
+      id: 'live-chat',
+      sessionId: projectionSessionId,
+      readsCurrentRequests: true,
+      emit: (event) => {
+        frames.push(event)
+        if (
+          replacing &&
+          (event.type === 'reset' || event.type === 'snapshot') &&
+          event.page.epoch !== retainedSnapshot.cursor.epoch
+        ) {
+          delivered.resolve()
+        }
+      }
+    })
+    const statuses: AgentSessionStatusEvent[] = []
+    let releaseStatus = () => {}
     let publicationCount = 0
     const releasePublication = sessions.observeConversationPublications(projectionSessionId, {
       next: (hint) => {
@@ -195,6 +219,7 @@ it('keeps logical replacement preparation finite and retained evidence reads pag
       }
     })
     const settle = journal.stopMarks.beginSettle(true)
+    await new Promise<void>((resolve) => setImmediate(resolve))
     const conversation = rig.store.getConversation.bind(rig.store)
     let releasedLease = false
     const leaseRead = vi.spyOn(rig.store, 'getConversation').mockImplementation((id) => {
@@ -218,7 +243,13 @@ it('keeps logical replacement preparation finite and retained evidence reads pag
     let newReads = 0
     let peerReads = 0
     const work = await countReconstructionWork(
-      () => journal.replaceEpochItems('handle_forked', 1, items),
+      async () => {
+        replacing = true
+        const result = await journal.replaceEpochItems('handle_forked', 1, items)
+        await delivered.promise
+        await journal.readInOrder(() => {})
+        return result
+      },
       () => {
         if (peer.publicRead() !== peerView) {
           throw new Error('unrelated chat changed')
@@ -226,6 +257,10 @@ it('keeps logical replacement preparation finite and retained evidence reads pag
         peerReads++
         if (projectingStatus && !changedEvidence) {
           changedEvidence = true
+          releaseStatus = rig.host.subscribeStatus({
+            id: 'reconnecting-status',
+            emit: (event) => statuses.push(event)
+          })
           releasedLease = true
           journal.stopMarks.settled(settle)
           const session = sessions.get(projectionSessionId)!
@@ -244,6 +279,10 @@ it('keeps logical replacement preparation finite and retained evidence reads pag
     )
     statusPreparation.mockRestore()
     expect(changedEvidence).toBe(true)
+    expect(frames.some((event) => event.type === 'reset' || event.type === 'snapshot')).toBe(true)
+    expect(
+      statuses.some((event) => event.type === 'status' && event.session.status === 'idle')
+    ).toBe(true)
     expect(rig.host['clientDelivery'].readStatusSummary(projectionSessionId)?.status).toBe('idle')
     leaseRead.mockRestore()
     expect(work.maximum, work.site).toBeLessThanOrEqual(65_536)
@@ -267,6 +306,8 @@ it('keeps logical replacement preparation finite and retained evidence reads pag
     expect(journal.snapshot().items.map((item) => item.itemId)).toEqual(
       items.map((item) => agentJournalItemKey(item.identity))
     )
+    releaseStatus()
+    releaseChat()
     releasePublication()
     sessions.delete(projectionSessionId)
     const published = journal.snapshot()

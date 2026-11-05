@@ -38,10 +38,10 @@ export class JournalHistoryReader {
     capture: (view: PublicRead) => Context,
     consume: (
       since: JournalReadSince,
-      view: PublicRead,
+      view: PublicRead & Pick<ReturnType<typeof captureJournalReadView>, 'snapshotSteps'>,
       canonicalItemId: (id: string) => string,
       context: Context
-    ) => T,
+    ) => T | Promise<T>,
     selectSnapshot: (snapshot: AgentJournalSnapshot) => AgentJournalSnapshot = (snapshot) =>
       snapshot
   ): Promise<T> {
@@ -68,6 +68,7 @@ export class JournalHistoryReader {
           since,
           {
             snapshot: retained.capture.snapshot(),
+            snapshotSteps: retained.capture.snapshotSteps,
             normalizationKey: retained.normalizationKey,
             currentSnapshot: () => retained.capture.snapshot()
           },
@@ -82,7 +83,7 @@ export class JournalHistoryReader {
     cursor: AgentJournalCursor,
     limit: number | undefined,
     capture: () => View,
-    consume: (since: JournalReadSince, view: View) => T,
+    consume: (since: JournalReadSince, view: View) => T | Promise<T>,
     release: (view: View) => void = () => {}
   ): Promise<T> {
     const request = await this.options.database.snapshot(() => ({
@@ -119,7 +120,7 @@ export class JournalHistoryReader {
         },
         cursor
       )
-      return consume(since, view)
+      return await consume(since, view)
     } finally {
       try {
         await request.close()

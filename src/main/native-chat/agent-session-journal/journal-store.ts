@@ -205,6 +205,8 @@ export class AgentSessionJournal {
   statusReadSteps = () =>
     journalPublic.renderJournalStatusSteps(this.queuedMessages.displayState(), this.inputOrder)
 
+  preparePublicReadSteps = () => this.publicRead().prepareSteps()
+
   publicRead = () =>
     this.readPublic(this.state, this.queuedMessages.displayState(), this.queuedMessages.revision())
 

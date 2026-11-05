@@ -1,8 +1,10 @@
+import { finishJournalStepsAsync } from '../agent-session-journal/journal-reconstruction-steps'
 import {
   buildPage,
   conversationWindow,
   buildHydrationPage,
-  historyReset
+  historyReset,
+  historyResetSteps
 } from './agent-session-history-page-fields'
 import type { JournalReadSince } from '../agent-session-journal/journal-store-contracts'
 import { resolveHistoryLimit } from './agent-session-history-limit'
@@ -99,12 +101,16 @@ export function readAgentSessionHistory(
     }),
     (since, view, canonical, captured) => {
       const snapshot = view.snapshot
+      const reset = async (reason: Extract<AgentSessionHistoryResult, { ok: false }>['reset']) => {
+        const stable = await finishJournalStepsAsync(view.snapshotSteps())
+        return finishJournalStepsAsync(historyResetSteps(stable, reason, reader))
+      }
       const result =
         !options.rowReplay &&
         cursor.epoch === snapshot.cursor.epoch &&
         cursor.sequence <= snapshot.cursor.sequence &&
         view.normalizationKey !== ''
-          ? historyReset(snapshot, 'cursor_compacted', reader)
+          ? reset('cursor_compacted')
           : readForward(
               snapshot,
               cursor,
@@ -112,9 +118,11 @@ export function readAgentSessionHistory(
               reader,
               since,
               canonical,
-              (id) => captured.queueSources.get(id) ?? []
+              (id) => captured.queueSources.get(id) ?? [],
+              reset
             )
-      return structuredClone(captured.apply(result))
+      const apply = (result: AgentSessionHistoryResult) => structuredClone(captured.apply(result))
+      return result instanceof Promise ? result.then(apply) : apply(result)
     },
     (snapshot) => reader.snapshot?.(journal, snapshot) ?? snapshot
   )
@@ -207,10 +215,13 @@ function readForward(
   reader: HistoryReader,
   since: JournalReadSince,
   canonicalItemId: (id: string) => string,
-  queueSourceIds: (id: string) => readonly string[]
-): AgentSessionHistoryResult {
+  queueSourceIds: (id: string) => readonly string[],
+  reset: (
+    reason: Extract<AgentSessionHistoryResult, { ok: false }>['reset']
+  ) => Promise<AgentSessionHistoryResult>
+): AgentSessionHistoryResult | Promise<AgentSessionHistoryResult> {
   if (!since.ok) {
-    return historyReset(snapshot, since.reset, reader)
+    return reset(since.reset)
   }
   let submissionBytes = submissionBytesByItemId(snapshot.submissions)
   // Shrink the row window; clipping items after advancing the cursor would permanently lose revisions.
@@ -232,7 +243,7 @@ function readForward(
   }
   let projected = project(rows)
   if (!projected.ok) {
-    return historyReset(snapshot, projected.reset, reader)
+    return reset(projected.reset)
   }
   let contentBytes = historyContentBytes(
     projected.batch.items,
@@ -243,7 +254,7 @@ function readForward(
     rows = rows.slice(0, Math.ceil(rows.length / 2))
     const shrunk = project(rows)
     if (!shrunk.ok) {
-      return historyReset(snapshot, shrunk.reset, reader)
+      return reset(shrunk.reset)
     }
     projected = shrunk
     contentBytes = historyContentBytes(
@@ -268,7 +279,7 @@ function readForward(
     // break the client's keying. A bounded tail replaces the client's state
     // wholesale, which applies the removal without carrying the id, and the
     // client resumes from the live cursor past this row.
-    return historyReset(snapshot, 'cursor_compacted', reader)
+    return reset('cursor_compacted')
   }
   const hasNewer = since.rows.length > rows.length
   // A complete read moves past trailing writes that saved nothing. `through` cannot run ahead of

@@ -30,10 +30,7 @@ import {
   publishOrderedStructuredChildWork,
   structuredStatusChildWorkFields
 } from './structured-agent-session-status-child-work'
-import {
-  StructuredAgentSessionJournalProjections,
-  type StructuredAgentSessionJournalProjection
-} from './structured-agent-session-status-journal-projection'
+import { StructuredAgentSessionStatusJournal } from './structured-agent-session-status-journal'
 import {
   permissionReportOnly,
   structuredStatusSummariesEqual
@@ -47,10 +44,9 @@ import {
 
 export type { StructuredAgentSessionStatusSink } from './structured-agent-session-status-ownership'
 export type { StructuredAgentSessionStatusFeedDeps } from './structured-agent-session-status-feed-deps'
+export type { StructuredAgentSessionStatusSubscriber } from './structured-agent-session-status-feed-deps'
 
 export type { StructuredAgentSessionStatusState } from './structured-agent-session-status-journal-projection'
-
-export type { StructuredAgentSessionStatusSubscriber } from './structured-agent-session-status-feed-deps'
 
 export class StructuredAgentSessionStatusFeed {
   private readonly ownership = new StructuredAgentSessionStatusOwnership(() =>
@@ -60,16 +56,14 @@ export class StructuredAgentSessionStatusFeed {
   // Never evicted: chats are named only while in here, and AI Vault reads closed ones' names here.
   private readonly published = new Map<string, StatusPublication>()
   private readonly acceptedSends = new Map<string, string>()
-  private readonly projections = new StructuredAgentSessionJournalProjections((sessionId) =>
-    this.deps.replacedRuntime?.(sessionId)
-  )
+  private readonly projections = new StructuredAgentSessionStatusJournal(() => this.deps)
 
   constructor(private readonly deps: StructuredAgentSessionStatusFeedDeps) {}
 
   private logFailure = (scope: string, message: string, sessionId: string, error: unknown): void =>
     this.deps.logger.warn(message, { scope, sessionId, error })
 
-  /** Opens with every session this host has projected, live ones re-read, then only changes. */
+  /** Replay retained statuses; live refreshes publish their complete successor when ready. */
   subscribe(subscriber: StructuredAgentSessionStatusSubscriber): () => void {
     // Naming completion must be observable even if a held journal cannot be read.
     if (this.deps.namingActiveSessionIds || this.deps.listConversations) {
@@ -169,20 +163,14 @@ export class StructuredAgentSessionStatusFeed {
 
   advanceJournalProjection = this.projections.advance.bind(this.projections)
 
-  /** Share per-commit projection with completion and steer-hold readers to avoid repeated snapshots. */
-  prepareJournalProjection = (id: string, journal: AgentSessionJournal): Promise<void> =>
-    this.projections.prepare(this.deps, id, journal)
+  refreshJournalProjection = (...args: Parameters<typeof this.projections.refresh>) =>
+    this.projections.refresh(...args)
 
-  journalProjection(
-    sessionId: string,
-    journal?: AgentSessionJournal
-  ): StructuredAgentSessionJournalProjection | null {
-    const session = this.deps.sessions.get(sessionId)
-    const source = journal ?? session?.journal
-    return source
-      ? this.projections.read(source, this.deps.getConversation(sessionId), session)
-      : null
-  }
+  afterReplacementProjection = (...args: Parameters<typeof this.projections.afterRefresh>) =>
+    this.projections.afterRefresh(...args)
+
+  journalProjection = (...args: Parameters<typeof this.projections.read>) =>
+    this.projections.read(...args)
 
   publish(sessionId: string, journal?: AgentSessionJournal, options?: { replay?: boolean }): void {
     const session = this.deps.sessions.get(sessionId)
@@ -190,8 +178,18 @@ export class StructuredAgentSessionStatusFeed {
       return
     }
     const source = journal ?? session.journal
+    if (
+      this.afterReplacementProjection(sessionId, source, () =>
+        this.publish(sessionId, source, options)
+      )
+    ) {
+      return
+    }
     const record = this.deps.getConversation(sessionId)
-    const projection = this.projections.read(source, record, session)
+    const projection = this.projections.read(sessionId, source)
+    if (!projection) {
+      return
+    }
     this.retireSettledChildrenOnNewTurn(sessionId, session, projection.acceptedSendKey)
     const summary = structuredAgentSessionStatusSummary({
       sessionId,

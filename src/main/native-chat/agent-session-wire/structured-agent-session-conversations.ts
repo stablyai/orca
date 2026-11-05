@@ -42,6 +42,11 @@ export class StructuredAgentSessionConversations extends Map<
       ) => void | Promise<void>
       forget?: (sessionId: string) => void
       deliver: (sessionId: string, journal: AgentSessionJournal, inputChanged?: boolean) => void
+      afterReplacementProjection?: (
+        sessionId: string,
+        journal: AgentSessionJournal,
+        publish: () => void
+      ) => boolean
       /** Settle edges write no row and renew no activity clock. */
       deliverSettleEdge?: (sessionId: string, journal: AgentSessionJournal) => void
       logger: StructuredAgentSessionLogger
@@ -140,28 +145,23 @@ export class StructuredAgentSessionConversations extends Map<
         return
       }
       this.publish(sessionId, 'operational')
-      void journal
-        .readInOrder(() => {
-          if (!current()) {
-            return
-          }
-          try {
-            this.delivery.deliverSettleEdge?.(sessionId, journal)
-          } catch (error) {
-            this.delivery.logger.warn("delivering a Stop's settle edge failed", {
-              scope: 'stop-settle-delivery',
-              sessionId,
-              error
-            })
-          }
-        })
-        .catch((error) =>
+      const deliver = () => {
+        if (!current()) {
+          return
+        }
+        try {
+          this.delivery.deliverSettleEdge?.(sessionId, journal)
+        } catch (error) {
           this.delivery.logger.warn("delivering a Stop's settle edge failed", {
             scope: 'stop-settle-delivery',
             sessionId,
             error
           })
-        )
+        }
+      }
+      if (!this.delivery.afterReplacementProjection?.(sessionId, journal, deliver)) {
+        queueMicrotask(deliver)
+      }
     })
     this.attachments.set(sessionId, source)
     this.activity.set(sessionId, this.delivery.now())

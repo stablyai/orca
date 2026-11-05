@@ -22,9 +22,9 @@ export function createStructuredAgentSessionPublicationWiring(input: {
       if (!replacement) {
         return client.requestFailures.observe(id, journal, rows)
       }
-      return client.requestFailures
-        .observeAsync(id, journal, rows)
-        .finally(() => client.prepareReplacementStatus(id, journal))
+      return client.observeReplacement(id, journal, () =>
+        client.requestFailures.observeAsync(id, journal, rows)
+      )
     },
     forget: (id) => input.client().requestFailures.forget(id),
     deliver: (id, journal, inputChanged) => {
@@ -32,6 +32,7 @@ export function createStructuredAgentSessionPublicationWiring(input: {
       input.client().publishJournal(id, journal, true, inputChanged)
       input.delivery().afterCommit(id, journal)
     },
+    afterReplacementProjection: (...args) => input.client().afterReplacementProjection(...args),
     deliverSettleEdge: (id, journal) => input.delivery().afterSettleEdge(id, journal),
     logger: deferredStructuredAgentSessionLogger(input.logger),
     onOpened: input.opened,

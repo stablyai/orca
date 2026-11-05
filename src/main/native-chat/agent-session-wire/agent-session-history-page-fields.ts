@@ -1,42 +1,42 @@
+import { finishJournalSteps } from '../agent-session-journal/journal-reconstruction-steps'
 import { isRootAgentJournalItem } from '../../../shared/agent-session/journal/agent-session-journal-producer'
 import type { AgentSessionHistoryResult } from '../../../shared/agent-session/agent-session-wire'
 import { AGENT_SESSION_HISTORY_MAX_LIMIT } from '../../../shared/agent-session/agent-session-wire'
 import {
-  boundHistoryItemsByBytes,
+  boundHistoryItemsByBytesSteps,
   isSubagentRow,
-  newestWholeSequenceGroups,
-  wholeSubagentGroupsStart,
-  submissionBytesByItemId,
+  newestWholeSequenceGroupsSteps,
+  wholeSubagentGroupsStartSteps,
+  submissionBytesByItemIdSteps,
+  type HistoryPageInput,
   type HistoryReader
 } from './agent-session-history-page-bounds'
-import { offPageSubagentRoster } from './agent-session-history-subagent-roster'
-import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
+import { offPageSubagentRosterSteps } from './agent-session-history-subagent-roster'
 import type {
   AgentJournalRenderItem,
   AgentJournalSnapshot
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type {
-  AgentSessionHistoryDirection,
-  AgentSessionHistoryPage,
-  AgentSessionSubagentRosterEntry
-} from '../../../shared/agent-session/agent-session-wire'
+import type { AgentSessionHistoryPage } from '../../../shared/agent-session/agent-session-wire'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
-import { snapshotLatestTurn } from './agent-session-history-latest-turn'
-export function buildPage(input: {
-  snapshot: AgentJournalSnapshot
-  submissions?: AgentJournalSnapshot['submissions']
-  direction: AgentSessionHistoryDirection
-  items: AgentJournalRenderItem[]
-  removedItemIds?: string[]
-  hasOlder: boolean
-  hasNewer: boolean
-  fallbackCursor: AgentJournalCursor
-  nextCursor: AgentJournalCursor | undefined
-  fence?: number
-  subagentRoster?: AgentSessionSubagentRosterEntry[]
-}): AgentSessionHistoryPage {
+import { snapshotLatestTurnSteps } from './agent-session-history-latest-turn'
+export function buildPage(input: HistoryPageInput): AgentSessionHistoryPage {
+  return finishJournalSteps(buildPageSteps(input))
+}
+
+export function* buildPageSteps(input: HistoryPageInput): Generator<void, AgentSessionHistoryPage> {
   const epoch = input.snapshot.cursor.epoch
-  const pageItemIds = new Set(input.items.map((item) => item.itemId))
+  const pageItemIds = new Set<string>()
+  for (const item of input.items) {
+    pageItemIds.add(item.itemId)
+    yield
+  }
+  const submissions: AgentJournalSnapshot['submissions'] = []
+  for (const submission of input.submissions ?? input.snapshot.submissions) {
+    if (pageItemIds.has(agentJournalSubmissionKey(submission.clientMessageId))) {
+      submissions.push(submission)
+    }
+    yield
+  }
   const oldest = input.items[0]
   const newest = input.items.at(-1)
   return {
@@ -46,9 +46,7 @@ export function buildPage(input: {
     direction: input.direction,
     items: input.items,
     removedItemIds: input.removedItemIds ?? [],
-    submissions: (input.submissions ?? input.snapshot.submissions).filter((submission) =>
-      pageItemIds.has(agentJournalSubmissionKey(submission.clientMessageId))
-    ),
+    submissions,
     window: {
       oldest: oldest ? { epoch, sequence: oldest.sequence } : null,
       newest: newest ? { epoch, sequence: newest.sequence } : null,
@@ -59,7 +57,7 @@ export function buildPage(input: {
     hasNewer: input.hasNewer,
     ...(input.subagentRoster === undefined ? {} : { subagentRoster: input.subagentRoster }),
     // Read the whole timeline: long turns can begin below this page.
-    latestTurn: snapshotLatestTurn(input.snapshot)
+    latestTurn: yield* snapshotLatestTurnSteps(input.snapshot)
   }
 }
 
@@ -68,19 +66,44 @@ export function conversationWindow(
   items: readonly AgentJournalRenderItem[],
   limit: number
 ): AgentJournalRenderItem[] {
-  const own = items.filter((item) => isRootAgentJournalItem(item) && !isSubagentRow(item))
-  if (own.length === items.length) {
-    return newestWholeSequenceGroups(items, limit)
+  return finishJournalSteps(conversationWindowSteps(items, limit))
+}
+
+export function* conversationWindowSteps(
+  items: readonly AgentJournalRenderItem[],
+  limit: number
+): Generator<void, AgentJournalRenderItem[]> {
+  const own: AgentJournalRenderItem[] = []
+  for (const item of items) {
+    if (isRootAgentJournalItem(item) && !isSubagentRow(item)) {
+      own.push(item)
+    }
+    yield
   }
-  const ownWindow = newestWholeSequenceGroups(own, limit)
+  if (own.length === items.length) {
+    return yield* newestWholeSequenceGroupsSteps(items, limit)
+  }
+  const ownWindow = yield* newestWholeSequenceGroupsSteps(own, limit)
   const start = ownWindow.length < own.length ? ownWindow[0]?.sequence : undefined
   if (start === undefined) {
-    return [...items]
+    const result: AgentJournalRenderItem[] = []
+    for (const item of items) {
+      result.push(item)
+      yield
+    }
+    return result
   }
-  const reach = newestWholeSequenceGroups(own, 2 * limit)
+  const reach = yield* newestWholeSequenceGroupsSteps(own, 2 * limit)
   const floor = reach.length < own.length ? reach[0]!.sequence : Number.NEGATIVE_INFINITY
-  const whole = wholeSubagentGroupsStart(items, start, floor)
-  return items.filter((item) => item.sequence >= whole)
+  const whole = yield* wholeSubagentGroupsStartSteps(items, start, floor)
+  const result: AgentJournalRenderItem[] = []
+  for (const item of items) {
+    if (item.sequence >= whole) {
+      result.push(item)
+    }
+    yield
+  }
+  return result
 }
 
 export function buildHydrationPage(
@@ -88,15 +111,23 @@ export function buildHydrationPage(
   fence: number | undefined,
   reader: HistoryReader
 ): AgentSessionHistoryPage {
-  const items = conversationWindow(snapshot.items, AGENT_SESSION_HISTORY_MAX_LIMIT)
-  const bounded = boundHistoryItemsByBytes(
+  return finishJournalSteps(buildHydrationPageSteps(snapshot, fence, reader))
+}
+
+export function* buildHydrationPageSteps(
+  snapshot: AgentJournalSnapshot,
+  fence: number | undefined,
+  reader: HistoryReader
+): Generator<void, AgentSessionHistoryPage> {
+  const items = yield* conversationWindowSteps(snapshot.items, AGENT_SESSION_HISTORY_MAX_LIMIT)
+  const bounded = yield* boundHistoryItemsByBytesSteps(
     items,
     'newest',
-    submissionBytesByItemId(snapshot.submissions),
+    yield* submissionBytesByItemIdSteps(snapshot.submissions),
     reader.budgetBytes,
     reader.form
   )
-  return buildPage({
+  return yield* buildPageSteps({
     snapshot,
     direction: 'tail',
     items: bounded.items,
@@ -107,7 +138,7 @@ export function buildHydrationPage(
       ? { epoch: snapshot.cursor.epoch, sequence: bounded.items[0].sequence }
       : undefined,
     fence,
-    subagentRoster: offPageSubagentRoster(snapshot.items, bounded.items)
+    subagentRoster: yield* offPageSubagentRosterSteps(snapshot.items, bounded.items)
   })
 }
 
@@ -116,9 +147,17 @@ export function historyReset(
   reset: Extract<AgentSessionHistoryResult, { ok: false }>['reset'],
   reader: HistoryReader
 ): AgentSessionHistoryResult {
+  return finishJournalSteps(historyResetSteps(snapshot, reset, reader))
+}
+
+export function* historyResetSteps(
+  snapshot: AgentJournalSnapshot,
+  reset: Extract<AgentSessionHistoryResult, { ok: false }>['reset'],
+  reader: HistoryReader
+): Generator<void, AgentSessionHistoryResult> {
   return {
     ok: false,
     reset,
-    page: buildHydrationPage(snapshot, undefined, reader)
+    page: yield* buildHydrationPageSteps(snapshot, undefined, reader)
   }
 }

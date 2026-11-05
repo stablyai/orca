@@ -1,3 +1,12 @@
+import { JournalSqlOwner } from '../agent-session-journal/journal-sql-owner'
+import {
+  EMPTY_STRUCTURED_AGENT_SESSION,
+  reduceStructuredAgentSession
+} from '../../../shared/agent-session/structured-agent-session-reducer'
+import {
+  leaveUnfinishedWork,
+  exitChild
+} from './structured-agent-session-leftover-settlement.test-fixture'
 import { afterEach, expect, it, vi } from 'vitest'
 import {
   createQueuedMessageTestRig,
@@ -117,3 +126,105 @@ it('finishes finite status preparation when a best-effort request observer fails
   expect(client.readStatusSummary(id)?.latestPrompt).toBe('Replacement prompt')
   expect(journal.snapshot().items).toHaveLength(1)
 })
+
+async function holdOrdinaryWrite(current: QueuedMessageTestRig) {
+  const journal = current.host.collaboratorsForTests().sessions.get(id)!.journal
+  const entered = Promise.withResolvers<void>()
+  const release = Promise.withResolvers<void>()
+  const request = JournalSqlOwner.prototype.request
+  let held = false
+  const spy = vi.spyOn(JournalSqlOwner.prototype, 'request').mockImplementation(async function (
+    this: JournalSqlOwner,
+    command
+  ) {
+    const response = request.call(this, command)
+    if (command.type === 'unit' && !held) {
+      held = true
+      entered.resolve()
+      await release.promise
+    }
+    return response
+  })
+  let finished = false
+  const write = journal
+    .appendItem(
+      { provider: 'orca', clientMessageId: 'in-flight' },
+      { kind: 'status', text: 'ordinary write' },
+      { fence: 1, turnScope: { kind: 'thread' } }
+    )
+    .finally(() => {
+      finished = true
+    })
+  await entered.promise
+  spy.mockRestore()
+  return { journal, write, release: release.resolve, finished: () => finished }
+}
+
+it('publishes a settled Stop before an ordinary native write completes', async () => {
+  rig = await createQueuedMessageTestRig()
+  await rig.workingSend()
+  await leaveUnfinishedWork(rig)
+  const client = rig.host['clientDelivery']
+  const journal = rig.host.collaboratorsForTests().sessions.get(id)!.journal
+  await journal.appendStopEvent({ reason: 'user-stop' }, 1)
+  const settle = journal.stopMarks.beginSettle(true)
+  await new Promise<void>((resolve) => setImmediate(resolve))
+  expect(client.readStatusSummary(id)).toMatchObject({ status: 'working', stopping: true })
+  const busy = await holdOrdinaryWrite(rig)
+  try {
+    journal.stopMarks.settled(settle)
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    expect(busy.finished()).toBe(false)
+    expect(client.readStatusSummary(id)?.stopping).toBeUndefined()
+    expect(client.readStatusSummary(id)?.status).toBe('working')
+  } finally {
+    busy.release()
+    await busy.write
+  }
+})
+
+it.each([false, true])(
+  'publishes process death before an ordinary write drains (closing=%s)',
+  async (closing) => {
+    rig = await createQueuedMessageTestRig()
+    await rig.workingSend()
+    await leaveUnfinishedWork(rig, { prompt: true })
+    let state = EMPTY_STRUCTURED_AGENT_SESSION
+    const dead = Promise.withResolvers<void>()
+    let expectingDeath = false
+    const unsubscribe = await rig.host.subscribe({
+      id: 'death-reader',
+      sessionId: id,
+      readsCurrentRequests: true,
+      emit: (event) => {
+        state = reduceStructuredAgentSession(state, { type: 'event', event })
+        if (expectingDeath && state.working === false && state.actionablePromptIds?.length === 0) {
+          dead.resolve()
+        }
+      }
+    })
+    expect(state.working).toBe(true)
+    expect(state.actionablePromptIds).toHaveLength(1)
+    const busy = await holdOrdinaryWrite(rig)
+    const observed = vi.spyOn(rig.host['clientDelivery'].requestFailures, 'generationEnded')
+    let closed: Promise<void> | undefined
+    if (closing) {
+      closed = busy.journal.close()
+    }
+    expectingDeath = true
+    const dying = exitChild(rig)
+    try {
+      await dead.promise
+      expect(busy.finished()).toBe(false)
+      expect(observed).toHaveBeenCalledWith(id)
+      expect(rig.host['clientDelivery'].readStatusSummary(id)?.status).toBe('idle')
+      expect(state.actionablePromptIds).toEqual([])
+    } finally {
+      busy.release()
+      await busy.write
+      await dying
+      await closed
+      unsubscribe()
+    }
+  }
+)

@@ -1,3 +1,4 @@
+import { finishJournalSteps } from '../agent-session-journal/journal-reconstruction-steps'
 import {
   type AgentSessionHistoryDirection,
   type AgentSessionSubagentRosterEntry,
@@ -71,16 +72,24 @@ const bytesBySubmissions = new WeakMap<
 export function submissionBytesByItemId(
   submissions: readonly AgentJournalSubmission[]
 ): ReadonlyMap<string, number> {
+  return finishJournalSteps(submissionBytesByItemIdSteps(submissions))
+}
+
+export function* submissionBytesByItemIdSteps(
+  submissions: readonly AgentJournalSubmission[]
+): Generator<void, ReadonlyMap<string, number>> {
   const cached = bytesBySubmissions.get(submissions)
   if (cached) {
     return cached
   }
-  const bytes = new Map(
-    submissions.map((submission) => [
+  const bytes = new Map<string, number>()
+  for (const submission of submissions) {
+    bytes.set(
       agentJournalSubmissionKey(submission.clientMessageId),
       Buffer.byteLength(JSON.stringify(submission), 'utf8')
-    ])
-  )
+    )
+    yield
+  }
   bytesBySubmissions.set(submissions, bytes)
   return bytes
 }
@@ -122,18 +131,46 @@ export function boundHistoryItemsByBytes(
   maxBytes: number,
   form: HistoryReader['form'] = measureHistoryItem
 ): { items: AgentJournalRenderItem[]; dropped: number } {
+  return finishJournalSteps(
+    boundHistoryItemsByBytesSteps(items, keep, submissionBytes, maxBytes, form)
+  )
+}
+
+export function* boundHistoryItemsByBytesSteps(
+  items: AgentJournalRenderItem[],
+  keep: 'newest' | 'oldest',
+  submissionBytes: ReadonlyMap<string, number>,
+  maxBytes: number,
+  form: HistoryReader['form'] = measureHistoryItem
+): Generator<void, { items: AgentJournalRenderItem[]; dropped: number }> {
   const ordered = groupItemsBySequence(items, keep)
   const kept: AgentJournalRenderItem[][] = []
   let total = 0
-  for (const stored of ordered) {
-    const formed = stored.map(form)
-    const group = formed.map(({ item }) => item)
-    const bytes = formed.reduce(
-      (sum, { item, bytes }) => sum + bytes + (submissionBytes.get(item.itemId) ?? 0),
-      0
-    )
+  for (;;) {
+    const next = ordered.next()
+    if (next.done) {
+      break
+    }
+    if (!next.value) {
+      yield
+      continue
+    }
+    const stored = next.value
+    const group: AgentJournalRenderItem[] = []
+    let bytes = 0
+    for (const item of stored) {
+      const formed = form(item)
+      group.push(formed.item)
+      bytes += formed.bytes + (submissionBytes.get(formed.item.itemId) ?? 0)
+      yield
+    }
     if (kept.length === 0 && bytes > maxBytes) {
-      kept.push(group.map((item) => oversizedHistoryItem(item)))
+      const oversized: AgentJournalRenderItem[] = []
+      for (const item of group) {
+        oversized.push(oversizedHistoryItem(item))
+        yield
+      }
+      kept.push(oversized)
       break
     }
     if (total + bytes > maxBytes) {
@@ -142,17 +179,22 @@ export function boundHistoryItemsByBytes(
     kept.push(group)
     total += bytes
   }
-  return {
-    items: (keep === 'newest' ? kept.toReversed() : kept).flat(),
-    dropped: items.length - kept.reduce((count, group) => count + group.length, 0)
+  const result: AgentJournalRenderItem[] = []
+  const groups = keep === 'newest' ? kept.toReversed() : kept
+  for (const group of groups) {
+    for (const item of group) {
+      result.push(item)
+      yield
+    }
   }
+  return { items: result, dropped: items.length - result.length }
 }
 
 /** Group only visited adjacent sequence runs, preserving item order in either traversal direction. */
 function* groupItemsBySequence(
   items: readonly AgentJournalRenderItem[],
   keep: 'newest' | 'oldest'
-): Generator<AgentJournalRenderItem[]> {
+): Generator<AgentJournalRenderItem[] | void> {
   let cursor = keep === 'newest' ? items.length : 0
   while (keep === 'newest' ? cursor > 0 : cursor < items.length) {
     if (keep === 'newest') {
@@ -160,16 +202,28 @@ function* groupItemsBySequence(
       const sequence = items[start].sequence
       while (start > 0 && items[start - 1].sequence === sequence) {
         start -= 1
+        yield
       }
-      yield items.slice(start, cursor)
+      const group: AgentJournalRenderItem[] = []
+      for (let index = start; index < cursor; index++) {
+        group.push(items[index])
+        yield
+      }
+      yield group
       cursor = start
     } else {
       let end = cursor + 1
       const sequence = items[cursor].sequence
       while (end < items.length && items[end].sequence === sequence) {
         end += 1
+        yield
       }
-      yield items.slice(cursor, end)
+      const group: AgentJournalRenderItem[] = []
+      for (let index = cursor; index < end; index++) {
+        group.push(items[index])
+        yield
+      }
+      yield group
       cursor = end
     }
   }
@@ -179,16 +233,40 @@ export function newestWholeSequenceGroups(
   items: readonly AgentJournalRenderItem[],
   limit: number
 ): AgentJournalRenderItem[] {
+  return finishJournalSteps(newestWholeSequenceGroupsSteps(items, limit))
+}
+
+export function* newestWholeSequenceGroupsSteps(
+  items: readonly AgentJournalRenderItem[],
+  limit: number
+): Generator<void, AgentJournalRenderItem[]> {
   const selected: AgentJournalRenderItem[][] = []
   let count = 0
-  for (const group of groupItemsBySequence(items, 'newest')) {
+  const groups = groupItemsBySequence(items, 'newest')
+  for (;;) {
+    const next = groups.next()
+    if (next.done) {
+      break
+    }
+    const group = next.value
+    if (!group) {
+      yield
+      continue
+    }
     if (selected.length > 0 && count + group.length > limit) {
       break
     }
     selected.push(group)
     count += group.length
   }
-  return selected.toReversed().flat()
+  const result: AgentJournalRenderItem[] = []
+  for (const group of selected.toReversed()) {
+    for (const item of group) {
+      result.push(item)
+      yield
+    }
+  }
+  return result
 }
 
 /** Include whole sibling groups where possible; floor prevents long groups from growing pages unbounded. */
@@ -197,8 +275,17 @@ export function wholeSubagentGroupsStart(
   start: number,
   floor: number
 ): number {
+  return finishJournalSteps(wholeSubagentGroupsStartSteps(items, start, floor))
+}
+
+export function* wholeSubagentGroupsStartSteps(
+  items: readonly AgentJournalRenderItem[],
+  start: number,
+  floor: number
+): Generator<void, number> {
   const firstOf = new Map<string, number>()
   for (const item of items) {
+    yield
     const block = item.body.kind === 'message' ? subagentItemBlock(item.body) : null
     if (block !== null && !firstOf.has(subagentFoldKey(block))) {
       firstOf.set(subagentFoldKey(block), item.sequence)
@@ -206,6 +293,7 @@ export function wholeSubagentGroupsStart(
   }
   let whole = start
   for (let index = items.length - 1; index >= 0 && items[index]!.sequence >= whole; index--) {
+    yield
     const item = items[index]!
     const block = item.body.kind === 'message' ? subagentItemBlock(item.body) : null
     if (block !== null) {

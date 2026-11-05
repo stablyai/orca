@@ -162,9 +162,10 @@ it('keeps full child requests answerable outside the bounded transcript and clea
     emit
   })
   coalescer.flush()
-  await vi.waitFor(() =>
+  await vi.waitFor(() => {
+    expect(state.cursor).toEqual(journal.cursor())
     expect(state.requestAuthority?.version).toEqual(state.requestMarker?.version)
-  )
+  })
   expect(state.items.length).toBeLessThanOrEqual(200)
   expect(
     state.items.some((item) => item.itemId === approval.itemId || item.itemId === question.itemId)

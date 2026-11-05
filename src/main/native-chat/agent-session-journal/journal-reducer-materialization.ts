@@ -6,7 +6,7 @@ export type JournalReplacementGraph = { state: JournalReducerState; order: Journ
 /** Detached materialization uses the draft resolver's identities, never its source-mutating finish. */
 export function* materializeJournalReplacementSteps(
   graph: JournalReplacementGraph,
-  read: (value: object) => { identity: object; source: object }
+  read: <Value extends object>(value: Value) => { identity: object; source: object }
 ): Generator<void, JournalReplacementGraph> {
   const copies = new WeakMap<object, object>()
   function* materialize(value: unknown): Generator<void, unknown> {

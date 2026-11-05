@@ -213,11 +213,17 @@ export class StructuredAgentSessionClientDelivery {
 
   publishStatusAndSettlement = (sessionId: string): void => {
     this.publications?.publish(sessionId, 'operational')
-    this.statusFeed.publish(sessionId)
+    const publish = () => {
+      this.statusFeed.publish(sessionId)
+      const journal = this.sessions.get(sessionId)?.journal
+      if (journal) {
+        this.sendSettlement.publish(sessionId, this.settlementReading(sessionId, journal))
+        this.queue.onJournalActivity(sessionId, false)
+      }
+    }
     const journal = this.sessions.get(sessionId)?.journal
-    if (journal) {
-      this.sendSettlement.publish(sessionId, this.settlementReading(sessionId, journal))
-      this.queue.onJournalActivity(sessionId, false)
+    if (!journal || !this.afterReplacementProjection(sessionId, journal, publish)) {
+      publish()
     }
   }
 
@@ -287,9 +293,12 @@ export class StructuredAgentSessionClientDelivery {
     this.journalObservers.clear()
   }
 
-  prepareReplacementStatus: StructuredAgentSessionStatusFeed['prepareJournalProjection'] = (
+  afterReplacementProjection: StructuredAgentSessionStatusFeed['afterReplacementProjection'] = (
     ...args
-  ) => this.statusFeed.prepareJournalProjection(...args)
+  ) => this.statusFeed.afterReplacementProjection(...args)
+
+  observeReplacement: StructuredAgentSessionStatusFeed['refreshJournalProjection'] = (...args) =>
+    this.statusFeed.refreshJournalProjection(...args)
 
   publishJournal(
     sessionId: string,
@@ -297,6 +306,13 @@ export class StructuredAgentSessionClientDelivery {
     activity = true,
     inputChanged = true
   ): void {
+    if (
+      this.afterReplacementProjection(sessionId, journal, () =>
+        this.publishJournal(sessionId, journal, activity, inputChanged)
+      )
+    ) {
+      return
+    }
     this.statusFeed.publish(sessionId, journal)
     this.sendSettlement.publish(sessionId, this.settlementReading(sessionId, journal))
     // Observe completion after status projection updates, even without subscribers for background chats.

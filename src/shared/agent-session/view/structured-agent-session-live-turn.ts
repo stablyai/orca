@@ -115,7 +115,14 @@ export function newestStructuredAgentSessionTurn(
 export function latestStructuredAgentSessionTurn(
   items: readonly AgentJournalRenderItem[]
 ): AgentSessionLatestTurn | null {
+  return finishAgentSessionSteps(latestStructuredAgentSessionTurnSteps(items))
+}
+
+export function* latestStructuredAgentSessionTurnSteps(
+  items: readonly AgentJournalRenderItem[]
+): Generator<void, AgentSessionLatestTurn | null> {
   for (let index = items.length - 1; index >= 0; index -= 1) {
+    yield
     const item = items[index]
     if (isAgentSessionContextClear(item?.body)) {
       return null

@@ -107,6 +107,7 @@ export function measureAutomationChatRun(
   const publicReads = vi.spyOn(journal, 'publicRead').mockImplementation(() => {
     const view = realPublicRead()
     return {
+      prepareSteps: () => view.prepareSteps(),
       currentSnapshot(ids) {
         const result = output(() => view.currentSnapshot(ids))
         if (!materialized.has(result)) {

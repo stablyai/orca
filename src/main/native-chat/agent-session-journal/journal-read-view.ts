@@ -20,6 +20,19 @@ export function captureJournalReadView(state: JournalReducerState, snapshot: Age
   readers.add(view)
   active.set(state, readers)
   return {
+    *snapshotSteps(): Generator<void, AgentJournalSnapshot> {
+      const items: AgentJournalSnapshot['items'] = []
+      const submissions: AgentJournalSnapshot['submissions'] = []
+      for (const item of snapshot.items) {
+        items.push(structuredClone(view.items.get(item) ?? item))
+        yield
+      }
+      for (const entry of snapshot.submissions) {
+        submissions.push(structuredClone(view.submissions.get(entry) ?? entry))
+        yield
+      }
+      return { ...snapshot, items, submissions }
+    },
     snapshot: (): AgentJournalSnapshot =>
       view.items.size === 0 && view.submissions.size === 0
         ? snapshot
