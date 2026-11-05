@@ -6,7 +6,7 @@ import { projectStructuredAgentSessionStatus } from '../../../../shared/agent-se
 import {
   createDeferredStructuredAgentSessionEventSink,
   type StructuredAgentSessionEventSink
-} from '../../../native-chat/agent-session-wire/structured-agent-session-event-sink'
+} from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import {
   createCodexHistoryTranslator,
   createCodexJournalTranslator
@@ -17,7 +17,7 @@ import {
 } from '../prompts/codex-prompt-registry'
 import type { CodexStructuredSessionEvent } from '../session-lifecycle/codex-structured-session-state'
 import { deferredTarget } from './codex-deferred-sink-target-test-support'
-import { testEventSinkLogging } from '../../../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+import { testEventSinkLogging } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
 
 const SESSION_ID = 'session-1'
 const THREAD_ID = 'thread-abc'

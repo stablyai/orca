@@ -15,12 +15,12 @@ import {
 import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { agentSessionSendBodyFingerprint } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
-import { structuredAgentSessionCurrentWork } from '../agent-session-wire/structured-agent-session-current-work'
+import { structuredAgentSessionCurrentWork } from '../agent-session-wire/observations/structured-agent-session-current-work'
 import {
   readQueuePublication,
   type QueuePublication
-} from '../agent-session-wire/structured-agent-session-queued-publication'
-import type { Subscriber } from '../agent-session-wire/structured-agent-session-subscribers'
+} from '../agent-session-wire/delivery/structured-agent-session-queued-publication'
+import type { Subscriber } from '../agent-session-wire/publication/subscribers/structured-agent-session-subscribers'
 import {
   appendTestJournalQueueRow,
   openTestJournalHostDatabase,
@@ -100,16 +100,17 @@ async function receipt(id: string) {
 
 it('delivers newly loaded saved image choices in bounded semantic batches without resetting expanded history', async () => {
   const { AgentSessionSubscribers } =
-    await import('../agent-session-wire/structured-agent-session-subscribers')
+    await import('../agent-session-wire/publication/subscribers/structured-agent-session-subscribers')
   const { queuedImageReaderSnapshot, queuedImageReaderEvent, queuedImageSourceIds } =
-    await import('../agent-session-wire/agent-session-queued-image-reader')
+    await import('../agent-session-wire/publication/history/agent-session-queued-image-reader')
   const { projectQueuedImageCardPublication } =
     await import('../../runtime/rpc/methods/structured-agent-session-queued-image-capability')
   const { MOBILE_BRIDGE_MAX_FRAME_BYTES } =
     await import('../../../shared/mobile-bridge-frame-bytes')
   const { emitSubscriberFrame } =
-    await import('../agent-session-wire/agent-session-subscriber-frame-fields')
-  const { emptyAgentSessionBatch } = await import('../agent-session-wire/agent-session-empty-batch')
+    await import('../agent-session-wire/publication/subscribers/agent-session-subscriber-frame-fields')
+  const { emptyAgentSessionBatch } =
+    await import('../agent-session-wire/publication/subscribers/agent-session-empty-batch')
   const frames: AgentSessionSubscribeEvent[] = []
   for (let i = 0; i < 10; i++) {
     await send(
@@ -358,9 +359,9 @@ it.each([100, 1000].flatMap((n) => ['none', 'visible', 'cut'].map((source) => ({
   'avoids added history population work for $source source and $n visible rows on ten real publishes',
   async ({ n, source }) => {
     const { AgentSessionSubscribers } =
-      await import('../agent-session-wire/structured-agent-session-subscribers')
+      await import('../agent-session-wire/publication/subscribers/structured-agent-session-subscribers')
     const { queuedImageReaderSnapshot, queuedImageReaderEvent, queuedImageSourceIds } =
-      await import('../agent-session-wire/agent-session-queued-image-reader')
+      await import('../agent-session-wire/publication/history/agent-session-queued-image-reader')
     const idleWork = structuredAgentSessionCurrentWork(journal, {
       record: agentSessionConversationView(
         agentSessionRecordFixture(
@@ -498,9 +499,9 @@ it('projects a still-active cut source before stateless and middle-page catch-up
   const { queuedImageHistoryReader, queuedImageSubscriber } =
     await import('../../runtime/rpc/methods/structured-agent-session-queued-image-capability')
   const { readAgentSessionHistory, createAgentSessionCatchUpReader } =
-    await import('../agent-session-wire/agent-session-history-page')
+    await import('../agent-session-wire/publication/history/agent-session-history-page')
   const { AgentSessionSubscribers } =
-    await import('../agent-session-wire/structured-agent-session-subscribers')
+    await import('../agent-session-wire/publication/subscribers/structured-agent-session-subscribers')
   const idleWork = structuredAgentSessionCurrentWork(journal, {
     record: agentSessionConversationView(
       agentSessionRecordFixture(
@@ -608,9 +609,9 @@ it('projects a still-active cut source before stateless and middle-page catch-up
 it('keeps proven unwritten input waiting after both old-process hold writes fail, then preserves one exact actionable copy', async () => {
   const { holdUnsentSends } = await import('./journal-unsent-send-hold')
   const { bindStructuredAgentSessionInputWork, heldStructuredAgentSessionCurrentWork } =
-    await import('../agent-session-wire/structured-agent-session-host-current-work')
+    await import('../agent-session-wire/observations/structured-agent-session-host-current-work')
   const { StructuredAgentSessionSendSettlement } =
-    await import('../agent-session-wire/structured-agent-session-send-settlement')
+    await import('../agent-session-wire/delivery/structured-agent-session-send-settlement')
   const open = async () => {
     journal = await journals.open({ identity, stateDirectory: root, now: () => ++clock })
     journal.queuedMessages.inputWork = () =>

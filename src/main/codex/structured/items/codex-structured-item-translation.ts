@@ -12,7 +12,7 @@ import type { AgentJournalItemBody } from '../../../../shared/agent-session/jour
 import type { NativeChatBlock } from '../../../../shared/native-chat/native-chat-types'
 import { CODEX_ASYNC_QUESTION_TOOL } from '../../../../shared/codex-async-question-input'
 import { journalPayload } from '../../../native-chat/agent-session-journal/journal-payload-bounds'
-import { unhandledProviderFrameJournalItem } from '../../../native-chat/agent-session-wire/unhandled-provider-frame'
+import { unhandledProviderFrameJournalItem } from '../../../native-chat/agent-session-wire/providers/unhandled-provider-frame'
 import { codexImageItemBody } from './codex-image-item-translation'
 import { commandActionFacts } from './codex-command-action-class'
 import {

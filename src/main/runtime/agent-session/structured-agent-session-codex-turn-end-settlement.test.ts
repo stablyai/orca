@@ -22,14 +22,14 @@ import {
   HOST_TEST_THREAD as THREAD,
   hostTestAttachParams,
   hostTestMessage
-} from '../../native-chat/agent-session-wire/structured-agent-session-host-test-data'
-import type { StructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-host'
-import { CHILD_EVICTION_TIMEOUT_MS } from '../../native-chat/agent-session-wire/structured-agent-session-host-teardown'
+} from '../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+import type { StructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-host'
+import { CHILD_EVICTION_TIMEOUT_MS } from '../../native-chat/agent-session-wire/termination/structured-agent-session-host-teardown'
 import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
 } from './structured-agent-session-runtime'
-import { createStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/structured-agent-session-logger'
+import { createStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { createCoordinatorMailObservationClock } from '../orchestration/terminal-authority/structured-sessions/structured-chat-coordinator-observation-clock.test-fixture'
 import { scriptedCodexTransport } from '../orca-runtime-tests/scripted-codex-transport.test-fixture'
 // A Codex send without an exact receipt stays in doubt after Stop; execution still ends. A send made while that turn runs, a

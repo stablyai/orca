@@ -11,7 +11,7 @@ import {
 } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { describeNativeChatTurnStatus } from '../../shared/native-chat/transcript/native-chat-turn-status'
 import { selectStructuredAgentSettledTurns } from '../../shared/agent-session/view/structured-agent-session-turn-timing'
-import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import type { JournalStopEvent } from '../native-chat/agent-session-journal/journal-row-schema'
 import {
   personStopDecidesTurn,

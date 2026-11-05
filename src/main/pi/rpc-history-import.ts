@@ -5,13 +5,13 @@ import type { AgentJournalItemIdentity } from '../../shared/agent-session/journa
 import { legacyItemBody } from '../native-chat/agent-session-journal/journal-legacy-import'
 import { decodePiSessionEntryLine } from '../native-chat/agent-session-journal/journal-pi-active-branch'
 import { journalLifecycleItemMutation } from '../native-chat/agent-session-journal/journal-row-builders'
-import type { StructuredAgentSessionTransitionJournal } from '../native-chat/agent-session-wire/structured-agent-session-transition'
+import type { StructuredAgentSessionTransitionJournal } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-transition'
 import {
   continuedOutsideNotice,
   continuedOutsideRecordId,
   createHistoryCatchUpBatch,
   type HistoryCatchUpPlan
-} from '../native-chat/agent-session-wire/structured-agent-session-history-catch-up'
+} from '../native-chat/agent-session-wire/acquisition/structured-agent-session-history-catch-up'
 
 const piEntrySchema = z.looseObject({
   id: z.string().min(1),

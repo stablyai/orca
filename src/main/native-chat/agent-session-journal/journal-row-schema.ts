@@ -17,7 +17,7 @@ import {
   type AgentJournalContentVerdict
 } from '../../../shared/agent-session/journal/agent-session-journal-body-admission'
 import { isJournalTag } from '../../../shared/agent-session/journal/agent-session-journal-open-union'
-import type { StructuredAgentSessionStopCause } from '../agent-session-wire/structured-agent-session-stop-cause'
+import type { StructuredAgentSessionStopCause } from '../agent-session-wire/termination/structured-agent-session-stop-cause'
 import { dropUnusableRowAnnotations } from './journal-row-unusable-annotations'
 import { journalRowDeclaresMore } from './journal-storage-row-schema'
 import { journalQueueRowContent, type JournalQueueRow } from './journal-queue-events'

@@ -7,7 +7,7 @@ import {
   agentJournalLinkageFields,
   isRootAgentJournalItem
 } from '../../../shared/agent-session/journal/agent-session-journal-producer'
-import { isStructuredAgentSessionCommandTurnId } from '../agent-session-wire/structured-agent-session-command-turn'
+import { isStructuredAgentSessionCommandTurnId } from '../agent-session-wire/operations/structured-agent-session-command-turn'
 import type { JournalReducerState } from './journal-reducer'
 import type { JournalRow } from './journal-row-schema'
 import {

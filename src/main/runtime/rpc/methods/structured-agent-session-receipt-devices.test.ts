@@ -1,6 +1,6 @@
 import '../unused-default-rpc-methods.test-fixture'
 import { afterEach, beforeEach, expect, it } from 'vitest'
-import type { AgentSessionSubscribeInput } from '../../../native-chat/agent-session-wire/structured-agent-session-subscribers'
+import type { AgentSessionSubscribeInput } from '../../../native-chat/agent-session-wire/publication/subscribers/agent-session-subscribe-input'
 import {
   call,
   clearStructuredHostStub,

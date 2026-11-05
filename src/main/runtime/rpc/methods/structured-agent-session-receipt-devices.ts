@@ -16,7 +16,7 @@ import {
   historyContentBytes,
   measureHistoryItem,
   submissionBytesByItemId
-} from '../../../native-chat/agent-session-wire/agent-session-history-page-bounds'
+} from '../../../native-chat/agent-session-wire/publication/history/agent-session-history-page-bounds'
 import type { RpcContext } from '../core'
 import { structuredCallerFor } from './structured-agent-session-gate'
 

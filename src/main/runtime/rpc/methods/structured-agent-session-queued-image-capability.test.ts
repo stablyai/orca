@@ -4,10 +4,10 @@ import type { AgentSessionSubscribeEvent } from '../../../../shared/agent-sessio
 import {
   buildSubscriberFrame,
   type SubscriberFieldState
-} from '../../../native-chat/agent-session-wire/agent-session-subscriber-frame-fields'
-import { boundedQueuePublication } from '../../../native-chat/agent-session-wire/agent-session-bounded-queue'
+} from '../../../native-chat/agent-session-wire/publication/subscribers/agent-session-subscriber-frame-fields'
+import { boundedQueuePublication } from '../../../native-chat/agent-session-wire/publication/subscribers/agent-session-bounded-queue'
 import { DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES } from '../../../ipc/desktop-renderer-runtime-capabilities'
-import type { AgentSessionSubscribeInput } from '../../../native-chat/agent-session-wire/structured-agent-session-subscribers'
+import type { AgentSessionSubscribeInput } from '../../../native-chat/agent-session-wire/publication/subscribers/agent-session-subscribe-input'
 import {
   call,
   clearStructuredHostStub,

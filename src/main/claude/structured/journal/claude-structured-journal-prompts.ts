@@ -10,7 +10,7 @@ import { cancelledJournalPromptBody } from '../../../native-chat/agent-session-j
 import type {
   StructuredAgentSessionEventSink,
   StructuredAgentSessionSinkAdmission
-} from '../../../native-chat/agent-session-wire/structured-agent-session-event-sink'
+} from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import {
   claudeApprovalItem,
   claudePromptIdentity,

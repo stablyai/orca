@@ -6,8 +6,8 @@ import {
   tearDownRuntime,
   type InstalledRuntime
 } from './structured-agent-session-runtime-teardown'
-import type { StructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-host'
-import { setStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
+import type { StructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-host'
+import { setStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { stopAgentSessionAttachments } from './structured-agent-session-attachment-wiring'
 import {
   closeAgentSessionRecordStoreDatabase,
@@ -18,7 +18,7 @@ import { agentModelCatalogStore } from '../../native-chat/agent-model-catalog/ag
 import {
   neverThrowingStructuredAgentSessionLogger,
   type StructuredAgentSessionLogger
-} from '../../native-chat/agent-session-wire/structured-agent-session-logger'
+} from '../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { migrateLegacyNativeChatVisualsFolders } from '../../native-chat/native-chat-scratch-folder-migration'
 
 import type { StructuredAgentSessionRuntimeDeps } from './installation/structured-agent-session-runtime-contract'

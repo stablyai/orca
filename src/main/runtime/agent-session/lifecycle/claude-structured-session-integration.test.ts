@@ -18,9 +18,9 @@ import {
 } from '../installation/claude-structured-fake-connection-test-fixture'
 import { claudeSessionIdForOrcaSession } from '../../../claude/structured/claude-structured-session-id'
 import { ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV } from '../../../../shared/agent-session/lifecycle/agent-session-caller-env'
-import { attachFingerprintFields } from '../../../native-chat/agent-session-wire/structured-agent-session-attach'
-import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
-import type { StructuredAgentSessionStatusSink } from '../../../native-chat/agent-session-wire/structured-agent-session-status-ownership'
+import { attachFingerprintFields } from '../../../native-chat/agent-session-wire/acquisition/structured-agent-session-attach'
+import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
+import type { StructuredAgentSessionStatusSink } from '../../../native-chat/agent-session-wire/observations/structured-agent-session-status-ownership'
 import { AgentHookServer, _internals } from '../../../agent-hooks/server'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { RpcRequest, RpcResponse } from '../../rpc/core'
@@ -33,7 +33,7 @@ import {
   stopStructuredAgentSessionRuntime,
   waitForStructuredAgentSessionRecovery
 } from '../structured-agent-session-runtime'
-import { createStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/structured-agent-session-logger'
+import { createStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { claudeProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import '../../rpc/unused-default-rpc-methods.test-fixture'
 

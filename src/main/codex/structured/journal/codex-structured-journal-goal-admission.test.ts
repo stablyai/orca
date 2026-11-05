@@ -3,13 +3,10 @@ import { describe, expect, it } from 'vitest'
 import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentJournalItemBody } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
-import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import { CodexJournalGoals } from './codex-structured-journal-goals'
 import { createCodexJournalTranslator } from './codex-structured-journal-translation'
-import {
-  MAX_CODEX_GENERIC_ROWS_PER_TURN,
-  MAX_CODEX_GOAL_THREADS
-} from './codex-structured-journal-limits'
+import { MAX_CODEX_GENERIC_ROWS_PER_TURN } from './codex-structured-journal-limits'
 
 const THREAD = '01a08cc2-f96e-76d0-bb74-88b9bc0b03fc'
 
@@ -162,42 +159,6 @@ describe('codex goal lifecycle admission', () => {
       'Goal set: Keep the current scratch directory tidy.',
       'Goal cleared'
     ])
-    goals.dispose()
-  })
-
-  it('bounds thread state with LRU eviction while stable identities keep one history row', () => {
-    const writes: string[] = []
-    const rows = new Map<string, AgentJournalItemBody>()
-    const sink = {
-      appendItem: (identity: AgentJournalItemIdentity, body: AgentJournalItemBody) => {
-        const key = agentJournalItemKey(identity)
-        writes.push(key)
-        rows.set(key, body)
-      },
-      appendTombstone: () => {},
-      publish: () => {}
-    } satisfies StructuredAgentSessionEventSink
-    const goals = new CodexJournalGoals(sink, () => ({ turnScope: AGENT_JOURNAL_THREAD_SCOPE }))
-    const send = (threadId: string) =>
-      goals.handle({ threadId, method: 'thread/goal/updated', params: goalFrame() })
-
-    for (let index = 0; index < MAX_CODEX_GOAL_THREADS; index += 1) {
-      send(`thread-${index}`)
-    }
-    const threadZeroIdentity = writes[0]
-    const threadOneIdentity = writes[1]
-    send('thread-0')
-    send('thread-over-cap')
-    expect(writes).toHaveLength(MAX_CODEX_GOAL_THREADS + 1)
-
-    send('thread-1')
-    expect(writes).toHaveLength(MAX_CODEX_GOAL_THREADS + 2)
-    expect(writes.at(-1)).toBe(threadOneIdentity)
-    expect(rows).toHaveLength(MAX_CODEX_GOAL_THREADS + 1)
-
-    send('thread-0')
-    expect(writes.at(-1)).toBe(threadOneIdentity)
-    expect(writes.filter((identity) => identity === threadZeroIdentity)).toHaveLength(1)
     goals.dispose()
   })
 

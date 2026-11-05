@@ -9,7 +9,7 @@ import {
   closeProviderTimelineRigs,
   SESSION
 } from '../agent-session-timeline/provider-timeline-assembler-test-support'
-import { AgentSessionOptionRejectedError } from '../agent-session-wire/structured-agent-session-option-error'
+import { AgentSessionOptionRejectedError } from '../agent-session-wire/options/structured-agent-session-option-error'
 import {
   recordedEffortSource,
   recordedEffortCase,
@@ -20,7 +20,7 @@ import {
 import { acpLaunchSpecFor } from '../../acp/acp-launch-specs'
 import { applyAcpMessageOptions } from '../../acp/acp-message-execution-options'
 import type { AcpStructuredSession } from '../../acp/acp-structured-session'
-import { captureStructuredExecutionOptions } from '../agent-session-wire/structured-agent-session-execution-options'
+import { captureStructuredExecutionOptions } from '../agent-session-wire/options/structured-agent-session-execution-options'
 import { structuredAgentSessionSeedCatalog } from '../../../shared/agent-session/options/structured-agent-session-seed-catalog'
 import {
   applyStructuredAgentSessionModelCatalog,

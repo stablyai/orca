@@ -8,8 +8,8 @@ import {
   type StructuredAgentSessionEventTarget,
   type StructuredAgentSessionEventSink,
   type StructuredAgentSessionReadingControl
-} from '../../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import type { StructuredAgentSessionLinkageJournal } from '../../native-chat/agent-session-wire/structured-agent-session-journal-views'
+} from '../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
+import type { StructuredAgentSessionLinkageJournal } from '../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-journal-views'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentJournalItemIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionJournal } from '../../native-chat/agent-session-journal/journal-store'
@@ -20,8 +20,8 @@ import {
   identityFor,
   PROVIDER_SESSION_ID
 } from './claude-structured-session-test-support'
-import { withJournalQueueMembers } from '../../native-chat/agent-session-wire/structured-agent-session-journal-double-test-support'
-import { testEventSinkLogging } from '../../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+import { withJournalQueueMembers } from '../../native-chat/agent-session-wire/journal-ingress/testing/structured-agent-session-journal-double-test-support'
+import { testEventSinkLogging } from '../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
 
 function controlledSink(): {
   sink: StructuredAgentSessionEventSink

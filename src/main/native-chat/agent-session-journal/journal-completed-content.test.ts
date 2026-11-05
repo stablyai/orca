@@ -11,7 +11,7 @@ import {
   GENERATION,
   NAMESPACE
 } from '../agent-session-timeline/provider-timeline-assembler-test-support'
-import { estimateStructuredAgentSessionItemBytes } from '../agent-session-wire/structured-agent-session-event-sink-estimate'
+import { estimateStructuredAgentSessionItemBytes } from '../agent-session-wire/journal-ingress/structured-agent-session-event-sink-estimate'
 import { journalPayload } from './journal-payload-bounds'
 
 const cleanups: (() => void)[] = []

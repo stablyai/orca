@@ -16,7 +16,7 @@ import {
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionJournalIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
-import { readAgentSessionHydrationPage } from '../agent-session-wire/agent-session-history-page'
+import { readAgentSessionHydrationPage } from '../agent-session-wire/publication/history/agent-session-history-page'
 import { createTrackedJournalOpener } from './journal-host-database-test-support'
 
 export function registerJournalSubmissionPositionsTests(): void {

@@ -10,7 +10,7 @@ import { isDefinitiveAbsence } from '../../../../shared/definitive-filesystem-ab
 import { agentSessionPinnedLaunchDirectory } from '../../../runtime/agent-session/records/agent-session-record-launch-directory'
 import { resolveHiddenProbeCwd } from '../../../rate-limits/hidden-probe-cwd'
 import { isNativeLocalLocation as supportsCodexStructuredLocation } from '../../../../shared/execution-host'
-import { agentDrivesSession } from '../../../native-chat/agent-session-wire/structured-agent-session-provider-support'
+import { agentDrivesSession } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-provider-support'
 import { CODEX_STRUCTURED_AGENT } from '../launch/codex-structured-agent-definition'
 import { codexStructuredLaunchArgs } from '../launch/codex-structured-launch-args'
 import {

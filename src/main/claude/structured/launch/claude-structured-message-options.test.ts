@@ -1,4 +1,4 @@
-import { StructuredAgentSessionInputNotAdmitted } from '../../../native-chat/agent-session-wire/structured-agent-session-input-admission'
+import { StructuredAgentSessionInputNotAdmitted } from '../../../native-chat/agent-session-wire/delivery/structured-agent-session-input-admission'
 import { describe, expect, it, vi } from 'vitest'
 import {
   acquired,
@@ -9,8 +9,8 @@ import {
   recordingJournalSink,
   USER_MESSAGE
 } from '../claude-structured-session-test-support'
-import { captureStructuredExecutionOptions } from '../../../native-chat/agent-session-wire/structured-agent-session-execution-options'
-import { claudeAndCodexAgents } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter-router-test-support'
+import { captureStructuredExecutionOptions } from '../../../native-chat/agent-session-wire/options/structured-agent-session-execution-options'
+import { claudeAndCodexAgents } from '../../../native-chat/agent-session-wire/providers/testing/structured-agent-session-adapter-router-test-support'
 import type { ClaudeStructuredSessionEvent } from '../claude-structured-session-state'
 import * as dispatchContent from '../claude-structured-dispatch-content'
 import { ClaudeControlRequestError } from '../../claude-agent-sdk-control-requests'

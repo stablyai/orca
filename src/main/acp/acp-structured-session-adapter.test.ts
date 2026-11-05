@@ -10,7 +10,8 @@ import {
   closeProviderTimelineRigs,
   SESSION
 } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
-import { AgentSessionAcquisitionRootExitObservedError } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import { AgentSessionAcquisitionRootExitObservedError } from '../native-chat/agent-session-wire/acquisition/structured-agent-session-acquisition-errors'
 import { GENERIC_ACP_DIALECT } from './acp-dialects/acp-dialect'
 import { OPENCODE_ACP_DIALECT } from './acp-dialects/opencode-dialect'
 import { OMP_ACP_DIALECT } from './acp-dialects/omp-dialect'

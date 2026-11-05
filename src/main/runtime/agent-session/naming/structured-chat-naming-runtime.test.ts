@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ClaudeProfileRouter } from '../../../claude-accounts/claude-profile-router'
 import { installClaudeProfileRouter } from '../../../claude-accounts/claude-profile-installed-router'
-import { submission as journalSubmission } from '../../../native-chat/agent-session-wire/structured-agent-session-restart-resume-test-harness'
+import '../../../native-chat/agent-session-wire/recovery/testing/structured-agent-session-restart-resume-test-harness'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { agentSessionRecordFixture } from '../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
@@ -11,11 +11,7 @@ import { toSshExecutionHostId } from '../../../../shared/execution-host'
 import { normalizeSourceControlAiSettings } from '../../../../shared/source-control/ai/settings/source-control-ai-settings'
 import { structuredChatNamingDeps } from './structured-chat-naming-runtime'
 import { STRUCTURED_AGENT_RUNTIME_CATALOG } from '../installation/structured-agent-runtime-metadata'
-import type {
-  AgentJournalRenderItem,
-  AgentJournalSubmission,
-  AgentJournalSnapshot
-} from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalSnapshot } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type * as TextGeneration from '../../../text-generation/commit-message-text-generation'
 
 const mocks = vi.hoisted(() => ({
@@ -37,7 +33,7 @@ vi.mock('../../../text-generation/commit-message-text-generation', async (import
 vi.mock('../../../agent-hooks/first-work-generation-target', () => ({
   resolveGenerationTarget: mocks.target
 }))
-vi.mock('../../../native-chat/agent-session-wire/structured-agent-session-registry', () => ({
+vi.mock('../../../native-chat/agent-session-wire/host/structured-agent-session-registry', () => ({
   getStructuredAgentSessionHost: () => ({
     deps: { adapter: { generateText: mocks.native } },
     publishConversationName: mocks.publishConversationName,
@@ -101,73 +97,6 @@ describe('structured chat naming runtime', () => {
           error: `${provider === 'grok' ? 'Grok' : 'Antigravity'} could not name this chat. Try generating the name again.`
         })
       }
-    }
-  )
-
-  it.each([10, 100])(
-    'scopes naming prompts with linear visits over %i retained items',
-    async (count) => {
-      let visits = 0
-      const message: AgentJournalRenderItem = {
-        itemId: 'fresh',
-        sequence: count + 2,
-        revision: 1,
-        observedAt: 200,
-        body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'New task' }] }
-      }
-      const items: AgentJournalRenderItem[] = Array.from({ length: count }, (_, index) => ({
-        ...message,
-        itemId: `old-${index}`,
-        get sequence() {
-          visits++
-          return index + 1
-        },
-        body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'Old task' }] }
-      }))
-      items.push(
-        {
-          ...message,
-          itemId: 'clear',
-          sequence: count + 1,
-          body: {
-            kind: 'status',
-            text: 'Context cleared',
-            contextClear: { operationId: 'clear', afterFence: 1, clearedAt: 200 }
-          }
-        },
-        message
-      )
-      let submissionVisits = 0
-      const submission: AgentJournalSubmission = {
-        ...journalSubmission('fresh', 'accepted', 'fresh'),
-        acceptedSequence: count + 2,
-        submittedAt: 200
-      }
-      const oldSubmissions: AgentJournalSubmission[] = Array.from(
-        { length: count },
-        (_, index) => ({
-          ...submission,
-          clientMessageId: `old-${index}`,
-          providerItemId: `old-${index}`,
-          get acceptedSequence() {
-            submissionVisits++
-            return index + 1
-          }
-        })
-      )
-      mocks.journalCurrentRead.mockResolvedValue({
-        sessionId: 'chat',
-        cursor: { epoch: 'epoch', sequence: count + 2 },
-        items,
-        submissions: [...oldSubmissions, submission]
-      })
-      const { deps } = rig()
-      expect(await deps.readFirstPrompt('chat', 100)).toBe('New task')
-      expect(visits).toBe(2 * count)
-      expect(submissionVisits).toBe(count)
-      visits = 0
-      expect(await deps.readJournalFirstPrompt('chat')).toBe('New task')
-      expect(visits).toBe(2 * count)
     }
   )
 

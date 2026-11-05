@@ -8,7 +8,7 @@ import { codexItemBody } from '../../codex/structured/items/codex-structured-ite
 import {
   AGENT_SESSION_WIRE_PAYLOAD_HEAD_BYTES,
   agentJournalItemForWire
-} from '../agent-session-wire/agent-session-item-wire-form'
+} from '../agent-session-wire/publication/history/agent-session-item-wire-form'
 import { journalPayload } from './journal-payload-bounds'
 import { createJournalReducerState } from './journal-reducer'
 import { buildJournalItemRow, journalLifecycleBatchRowBuilder } from './journal-row-builders'

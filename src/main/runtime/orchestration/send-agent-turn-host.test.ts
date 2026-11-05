@@ -3,17 +3,16 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { AgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
-import {
-  createQueuedMessageTestRig,
-  eventually,
-  type QueuedMessageTestRig
-} from '../../native-chat/agent-session-wire/structured-agent-session-queued-message-rig.test-fixture'
+import { createQueuedMessageTestRig } from '../../native-chat/agent-session-wire/host/testing/structured-agent-session-queued-message-rig.test-fixture'
+
+import { eventually } from '../../native-chat/agent-session-wire/host/testing/structured-agent-session-queued-message-rig-provider.test-fixture'
+import type { QueuedMessageTestRig } from '../../native-chat/agent-session-wire/host/testing/structured-agent-session-queued-message-rig.test-fixture'
 import {
   HOST_TEST_SESSION as SESSION,
   hostTestMessage,
   hostTestOperationId
-} from '../../native-chat/agent-session-wire/structured-agent-session-host-test-data'
-import { openRigTurnFor } from '../../native-chat/agent-session-wire/structured-agent-session-queued-rig-turn.test-fixture'
+} from '../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+import { openRigTurnFor } from '../../native-chat/agent-session-wire/host/testing/structured-agent-session-queued-rig-turn.test-fixture'
 import {
   sendAgentTurn,
   type AgentTurnDelivery,

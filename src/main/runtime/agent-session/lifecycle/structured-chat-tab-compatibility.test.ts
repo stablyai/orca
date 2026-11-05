@@ -191,7 +191,7 @@ it('cancellation carries the actual create reservation across a held commit, nev
   const rig = await openAuthorityRuntime(await authorityProfile([], { records: [] }))
   await rig.runtime.restoreStructuredAgentSessionTabs()
   const { createTestParams, CREATE_TEST_CALLER } =
-    await import('../../../native-chat/agent-session-wire/structured-agent-session-create-test-fixture')
+    await import('../../../native-chat/agent-session-wire/host/testing/structured-agent-session-create-test-fixture')
   const { commitStructuredAgentSessionCreate } =
     await import('../../rpc/methods/structured-agent-session-create')
   const {

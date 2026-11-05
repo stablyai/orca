@@ -1,4 +1,4 @@
-import { STRUCTURED_AGENT_SESSION_START_WAIT_MS } from '../../../native-chat/agent-session-wire/structured-agent-session-send-settlement'
+import { STRUCTURED_AGENT_SESSION_START_WAIT_MS } from '../../../native-chat/agent-session-wire/delivery/structured-agent-session-send-settlement'
 import { readFileSync } from 'node:fs'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../../shared/electron-remote-runtime-client-capabilities'
@@ -14,7 +14,7 @@ import { remoteRuntimeClientCapabilities } from '../../../../shared/remote-runti
 import { AcpStructuredOptions } from '../../../acp/acp-structured-options'
 import { NewSessionResponseSchema } from '../../../acp/generated/acp-protocol.generated'
 import { DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES } from '../../../ipc/desktop-renderer-runtime-capabilities'
-import type { AgentSessionSubscribeInput } from '../../../native-chat/agent-session-wire/structured-agent-session-subscribers'
+import type { AgentSessionSubscribeInput } from '../../../native-chat/agent-session-wire/publication/subscribers/agent-session-subscribe-input'
 import {
   sendParams,
   attachParams,
@@ -29,15 +29,16 @@ import {
 } from './structured-agent-session-rpc.test-fixture'
 import {
   createQueuedMessageTestRig,
-  eventually,
   QUEUED_RIG_CALLER
-} from '../../../native-chat/agent-session-wire/structured-agent-session-queued-message-rig.test-fixture'
+} from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-queued-message-rig.test-fixture'
+
+import { eventually } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-queued-message-rig-provider.test-fixture'
 import {
   HOST_TEST_SESSION as HOST_SESSION,
   hostTestMessage,
   hostTestOperationId
-} from '../../../native-chat/agent-session-wire/structured-agent-session-host-test-data'
-import { holdDelivery } from '../../../native-chat/agent-session-wire/structured-agent-session-delivery-hold.test-fixture'
+} from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+import { holdDelivery } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-delivery-hold.test-fixture'
 import { queuedImageHistoryReader } from './structured-agent-session-queued-image-capability'
 import '../unused-default-rpc-methods.test-fixture'
 

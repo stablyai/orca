@@ -29,10 +29,10 @@ import {
   agentReadsProjectModelConfig,
   workspaceMayOverrideDefaultModel
 } from '../../../native-chat/agent-model-catalog/agent-project-model-override'
-import type { StructuredAgentSessionAdapter } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter'
-import type { StructuredAgentSessionMutationContext } from '../../../native-chat/agent-session-wire/structured-agent-session-mutation-context'
-import { readStructuredAgentSessionOptions } from '../../../native-chat/agent-session-wire/structured-agent-session-options-read'
-import { StructuredAgentRegistry } from '../../../native-chat/agent-session-wire/structured-agent-registry'
+import type { StructuredAgentSessionAdapter } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import type { StructuredAgentSessionMutationContext } from '../../../native-chat/agent-session-wire/operations/structured-agent-session-mutation-context'
+import { readStructuredAgentSessionOptions } from '../../../native-chat/agent-session-wire/options/structured-agent-session-options-read'
+import { StructuredAgentRegistry } from '../../../native-chat/agent-session-wire/providers/structured-agent-registry'
 import { PI_RPC_AGENT } from '../../../pi/rpc-agent-definition'
 
 // A chat whose agent offers permission modes also names its own, which a new chat leaves at Ask.

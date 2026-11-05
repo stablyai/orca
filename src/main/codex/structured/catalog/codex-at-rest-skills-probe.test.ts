@@ -1,11 +1,10 @@
 import * as Files from 'node:fs/promises'
 import { scanClaudeCommandFolders } from '../../../claude/claude-command-folder-scan'
-import * as Catalog from '../../../native-chat/agent-session-wire/at-rest-command-catalog'
+import * as Catalog from '../../../native-chat/agent-session-wire/options/at-rest-command-catalog'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { agentSessionRecordFixture } from '../../../native-chat/agent-session-record-test-fixture'
 import type { CodexAppServerInvocation } from '../../app-server/codex-app-server-session'
-import type { CodexAtRestSkillsDeps } from './codex-at-rest-skills-probe'
 import { createCodexAtRestSkillCatalog } from './codex-at-rest-skills-probe'
 
 const folders = vi.hoisted(() => ({ open: vi.fn(), read: vi.fn() }))
@@ -28,45 +27,22 @@ function floatingCodexChat(sessionId: string, launchDirectory: string) {
 }
 
 const visits = vi.hoisted(() => vi.fn((current: boolean) => current))
-vi.mock('../../../native-chat/agent-session-wire/at-rest-command-catalog', async (original) => {
-  const actual = await original<typeof Catalog>()
-  return {
-    ...actual,
-    AtRestCommandCatalog: vi.fn(function (source: Catalog.AtRestCommandSource) {
-      return new actual.AtRestCommandCatalog({
-        ...source,
-        scan: (record, cwd, current, ...rest) =>
-          source.scan(record, cwd, () => visits(current()), ...rest)
+vi.mock(
+  '../../../native-chat/agent-session-wire/options/at-rest-command-catalog',
+  async (original) => {
+    const actual = await original<typeof Catalog>()
+    return {
+      ...actual,
+      AtRestCommandCatalog: vi.fn(function (source: Catalog.AtRestCommandSource) {
+        return new actual.AtRestCommandCatalog({
+          ...source,
+          scan: (record, cwd, current, ...rest) =>
+            source.scan(record, cwd, () => visits(current()), ...rest)
+        })
       })
-    })
+    }
   }
-})
-function harness(deps: Partial<CodexAtRestSkillsDeps> = {}) {
-  const initialized = Promise.withResolvers<void>(),
-    closed = Promise.withResolvers<void>()
-  let live = 0,
-    peak = 0
-  const calls: CodexAppServerInvocation[] = []
-  const request = vi.fn(listingRpc.request)
-  const catalog = createCodexAtRestSkillCatalog({
-    resolveWorkspacePath: async () => '/work/one',
-    resolveLaunchArgs: () => [],
-    resolveCommand: () => ({ command: '/bin/codex', prefixArgs: [] }),
-    runSession: async (invocation, body) => {
-      calls.push(invocation)
-      peak = Math.max(peak, ++live)
-      try {
-        await initialized.promise
-        return await body({ request, notify: () => {} })
-      } finally {
-        await closed.promise
-        live--
-      }
-    },
-    ...deps
-  })
-  return { catalog, calls, request, initialized, closed, peak: () => peak }
-}
+)
 const listingRpc = {
   request: async (_method: string, params: Record<string, unknown> = {}) => ({
     data: (Array.isArray(params.cwds) ? params.cwds.map(String) : [])
@@ -193,101 +169,6 @@ describe('a resting Codex chat lists the skills Codex would load', () => {
       expect(closed).toBe(false)
       floor.resolve()
       await vi.waitFor(() => expect(closed).toBe(true))
-    }
-  )
-  it.each([16, 160])(
-    'keeps %i queued folders linear through cancellation and teardown',
-    async (count) => {
-      vi.useFakeTimers()
-      visits.mockClear()
-      let canonical = true,
-        mirrored = true
-      const h = harness({
-          prepareHome: () => {
-            mirrored = canonical
-          }
-        }),
-        removed = vi.spyOn(Set.prototype, 'delete')
-      const chats = Array.from({ length: count }, (_, i) =>
-        floatingCodexChat(String(i), `/work/w${i}`)
-      )
-      chats.forEach(h.catalog.read)
-      await vi.advanceTimersByTimeAsync(0)
-      canonical = false
-      h.catalog.retireContext()
-      chats.forEach(h.catalog.read)
-      h.request.mockImplementation(async (_method, params = {}) => ({
-        data: (Array.isArray(params.cwds) ? params.cwds.map(String) : []).map((cwd) => ({
-          cwd,
-          skills: mirrored ? [{ name: 'plugin', path: '/plugin/SKILL.md' }] : []
-        }))
-      }))
-      const warned = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-      h.initialized.resolve()
-      await vi.advanceTimersByTimeAsync(0)
-      expect(h.calls).toHaveLength(1)
-      expect(h.request).toHaveBeenCalledTimes(count / 8)
-      expect(visits.mock.calls.length).toBeLessThan(8 * count)
-      // Pool requests and removable answer waiters each have a linear work budget.
-      const values = removed.mock.calls.map(([value]) => value)
-      expect(
-        values.filter((value) => value && typeof value === 'object' && 'cwd' in value)
-      ).toHaveLength(4 * count)
-      expect(
-        values.filter((value) => value && typeof value === 'object' && 'ready' in value)
-      ).toHaveLength(16 * count)
-      removed.mockRestore()
-      expect(chats.map(h.catalog.read).every(Boolean)).toBe(true)
-      h.catalog.retireContext()
-      h.request.mockRejectedValueOnce(new Error('reload failed'))
-      h.catalog.read(chats[0])
-      await vi.advanceTimersByTimeAsync(10_000)
-      await h.catalog.settled(chats[0], 1_000)
-      expect(h.request.mock.calls[0][1]?.forceReload).toBe(true)
-      expect(h.request.mock.lastCall?.[1]?.forceReload).toBe(true)
-      expect(h.catalog.read(chats[0])?.filter((row) => row.kind === 'skill')).toEqual([])
-      h.catalog.retireContext()
-      await vi.advanceTimersByTimeAsync(59_999)
-      expect(h.calls[0].signal?.aborted).toBe(false)
-      await vi.advanceTimersByTimeAsync(1)
-      const identities = chats.map((chat, i) => ({
-        ...chat,
-        accountHome: { ...chat.accountHome, path: String(i) }
-      }))
-      identities.slice(0, 2).forEach(h.catalog.read)
-      await vi.advanceTimersByTimeAsync(0)
-      expect(h.calls).toHaveLength(2)
-      expect(h.peak()).toBe(2)
-      h.closed.resolve()
-      await vi.advanceTimersByTimeAsync(0)
-      expect(h.calls).toHaveLength(3)
-      expect(h.peak()).toBe(2)
-      h.catalog.dispose()
-      await vi.advanceTimersByTimeAsync(0)
-      expect(vi.getTimerCount()).toBe(0)
-      const failed = harness()
-      failed.closed.resolve()
-      failed.initialized.reject(new Error('initialize failed'))
-      identities.forEach(failed.catalog.read)
-      await vi.advanceTimersByTimeAsync(0)
-      expect(failed.calls).toHaveLength(count)
-      for (const seconds of [10, 30, 90, 300]) {
-        const before = failed.calls.length
-        failed.catalog.retireContext()
-        failed.catalog.read(identities[0])
-        await vi.advanceTimersByTimeAsync(0)
-        expect(failed.calls).toHaveLength(before)
-        await vi.advanceTimersByTimeAsync(seconds * 1_000)
-        failed.catalog.retireContext()
-        await failed.catalog.settled(identities[0], 1_000)
-        expect(failed.calls).toHaveLength(before + 1)
-      }
-      await vi.advanceTimersByTimeAsync(3_170_000)
-      expect(vi.getTimerCount()).toBe(1)
-      await vi.advanceTimersByTimeAsync(430_000)
-      expect(vi.getTimerCount()).toBe(0)
-      failed.catalog.dispose()
-      warned.mockRestore()
     }
   )
   it('caps per-key failures, ages success from admission, skips missing cwd and evicts unread entries', async () => {

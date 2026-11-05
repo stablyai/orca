@@ -20,7 +20,7 @@ import {
   openTestAgentSessionRecordStore
 } from './agent-session/records/agent-session-record-store-test-harness'
 import type { AgentSessionRecordStore } from './agent-session/records/agent-session-record-store'
-import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
+import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
 
 const roots: string[] = []
 export const journals = createTrackedJournalOpener()

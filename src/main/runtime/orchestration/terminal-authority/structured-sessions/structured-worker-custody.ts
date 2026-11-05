@@ -12,7 +12,7 @@ import {
   deriveWorkerTerminalListState,
   type WorkerTerminalResourceRow
 } from '../../worker-terminal-ownership'
-import { getStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/structured-agent-session-registry'
+import { getStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import {
   structuredWorkerHostScope,
   structuredWorkerProcessIncarnation,

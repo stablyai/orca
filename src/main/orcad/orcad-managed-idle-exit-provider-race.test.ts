@@ -10,7 +10,7 @@ import { restartDaemon } from '../daemon/providers/lifecycle/daemon-provider-res
 
 const { hasLoadedProviders } = vi.hoisted(() => ({ hasLoadedProviders: vi.fn(() => false) }))
 
-vi.mock('../native-chat/agent-session-wire/structured-agent-session-registry', () => ({
+vi.mock('../native-chat/agent-session-wire/host/structured-agent-session-registry', () => ({
   getStructuredAgentSessionHost: () => ({ hasLoadedProviders })
 }))
 vi.mock('../ipc/pty/provider/registry', () => ({

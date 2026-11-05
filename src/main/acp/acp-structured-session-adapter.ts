@@ -1,18 +1,19 @@
 import { randomUUID } from 'node:crypto'
 import type { AgentSessionExecutionLocation } from '../../shared/agent-session/lifecycle/agent-session-record'
+import '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import * as acquisition from '../native-chat/agent-session-wire/acquisition/structured-agent-session-acquisition-errors'
 import {
-  AgentSessionAcquisitionExitProvenError,
-  AgentSessionAcquisitionExitUnprovenError,
-  AgentSessionAcquisitionRootExitObservedError,
   AgentSessionPreSpawnError,
-  isAgentSessionPreSpawnError,
-  type AgentSessionAcquisition,
-  type AgentSessionDispatchOutcome as DispatchOutcome,
-  type StructuredAgentSessionAcquireInput,
-  type StructuredAgentSessionAdapter as SessionAdapter,
-  type StructuredAgentSessionSetOptionInput as SetOptionInput
-} from '../native-chat/agent-session-wire/structured-agent-session-adapter'
-import { withObservedProviderExit } from '../native-chat/agent-session-wire/structured-agent-session-failure-text'
+  isAgentSessionPreSpawnError
+} from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
+import type {
+  AgentSessionAcquisition,
+  AgentSessionDispatchOutcome as DispatchOutcome,
+  StructuredAgentSessionAcquireInput,
+  StructuredAgentSessionAdapter as SessionAdapter,
+  StructuredAgentSessionSetOptionInput as SetOptionInput
+} from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import { withObservedProviderExit } from '../native-chat/agent-session-wire/startup/structured-agent-session-failure-text'
 import { acpAgentName } from './acp-structured-agent-definitions'
 import { acquireAcpStructuredSession } from './acp-structured-acquire'
 import { rejectedAcpDispatch, type AcpStructuredSession } from './acp-structured-session'
@@ -21,7 +22,7 @@ import { waitForAcpExit, type AcpStructuredConnection } from './acp-structured-c
 import { AcpConnectionClosedError } from './acp-errors'
 import { withProviderSpawnAbsence } from '../provider-process/provider-executable-missing'
 import { applyAcpMessageOptions } from './acp-message-execution-options'
-import { AgentSessionOptionRejectedError } from '../native-chat/agent-session-wire/structured-agent-session-option-error'
+import { AgentSessionOptionRejectedError } from '../native-chat/agent-session-wire/options/structured-agent-session-option-error'
 import * as stop from './acp-structured-stop'
 import { acpDispatchPrompt } from './acp-prompt-content'
 import {
@@ -39,7 +40,7 @@ import { AcpTextTasks } from './acp-text-task'
 import { supportsAcpStructuredLocation } from './acp-structured-location-support'
 import { acpAcquireFailure, acpRefusedStart } from './acp-startup-outcome'
 import { openAcpStart } from './acp-structured-start-open'
-import { admitStructuredAgentSessionInput } from '../native-chat/agent-session-wire/structured-agent-session-input-admission'
+import { admitStructuredAgentSessionInput } from '../native-chat/agent-session-wire/delivery/structured-agent-session-input-admission'
 
 export class AcpStructuredSessionAdapter implements SessionAdapter {
   readonly atRestCommands: AcpStructuredSessionAdapterDeps['atRestCommands']
@@ -70,7 +71,7 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
     const attempt = this.children.starts.begin(gate?.signal ?? input.signal)
     try {
       if (!(await this.children.stop(sessionId))) {
-        throw new AgentSessionAcquisitionExitUnprovenError(
+        throw new acquisition.AgentSessionAcquisitionExitUnprovenError(
           new Error(
             `the previous ${this.deps.spec.agent} child for ${sessionId} could not be stopped`
           )
@@ -142,10 +143,10 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
       if (connection && !cleaned) {
         // Retain failed cleanup for retry before another child can spawn.
         this.children.starts.retainFailed(sessionId, connection)
-        throw new AgentSessionAcquisitionExitUnprovenError(cause)
+        throw new acquisition.AgentSessionAcquisitionExitUnprovenError(cause)
       }
       if (connection?.lastCloseResult?.killDelivered && !connection.exited) {
-        throw new AgentSessionAcquisitionRootExitObservedError(cause, 'kill-delivered')
+        throw new acquisition.AgentSessionAcquisitionRootExitObservedError(cause, 'kill-delivered')
       }
       if (attempt.signal.aborted) {
         const closed = new Error(
@@ -159,7 +160,7 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
         withProviderSpawnAbsence(cause, connection.spawnAbsence)
       }
       if (connection && exitedOnItsOwn && !isAgentSessionPreSpawnError(error)) {
-        throw new AgentSessionAcquisitionExitProvenError(
+        throw new acquisition.AgentSessionAcquisitionExitProvenError(
           withObservedProviderExit(
             new Error(connection.stderrTail() || String(error), { cause: error })
           )

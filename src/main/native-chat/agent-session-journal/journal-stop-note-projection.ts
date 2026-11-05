@@ -1,7 +1,7 @@
 import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
-import { isStructuredAgentSessionStopNote } from '../agent-session-wire/structured-agent-session-command-turn'
-import { STOP_NOTE_CANCELLATION_REQUESTED } from '../agent-session-wire/structured-agent-session-turn-stop-notes'
+import { isStructuredAgentSessionStopNote } from '../agent-session-wire/operations/structured-agent-session-command-turn'
+import { STOP_NOTE_CANCELLATION_REQUESTED } from '../agent-session-wire/termination/structured-agent-session-turn-stop-notes'
 
 /** The recorded turn end supersedes the earlier unconfirmed Stop for display only. */
 export function projectJournalStopNote(

@@ -31,9 +31,9 @@ import {
   closeTestJournalHostDatabases,
   openTestJournalHostDatabase
 } from '../../native-chat/agent-session-journal/journal-host-database-test-support'
-import { recordingStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
-import { createStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/structured-agent-session-logger'
-import { onStructuredAgentSessionsHeldChanged } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
+import { recordingStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
+import { createStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/structured-agent-session-logger'
+import { onStructuredAgentSessionsHeldChanged } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 
 const HOST_ID = 'local'
 

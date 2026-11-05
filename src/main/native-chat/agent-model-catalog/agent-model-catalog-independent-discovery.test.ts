@@ -5,9 +5,9 @@ import {
   agentModelCatalogFingerprintForRecord,
   agentModelCatalogScopeFingerprint
 } from './agent-model-catalog-fingerprint'
-import { retireAtRestCommandContext } from '../agent-session-wire/at-rest-command-context'
-import { structuredAgentSessionLaunchPermission } from '../agent-session-wire/structured-agent-session-launch-permission'
-import { claudeAndCodexDeclared } from '../agent-session-wire/structured-agent-session-adapter-router-test-support'
+import { retireAtRestCommandContext } from '../agent-session-wire/options/at-rest-command-context'
+import { structuredAgentSessionLaunchPermission } from '../agent-session-wire/options/structured-agent-session-launch-permission'
+import { claudeAndCodexDeclared } from '../agent-session-wire/providers/testing/structured-agent-session-adapter-router-test-support'
 import { agentSessionRecordFixture } from '../agent-session-record-test-fixture'
 import { createAgentModelCatalogService } from './agent-model-catalog-service'
 import {

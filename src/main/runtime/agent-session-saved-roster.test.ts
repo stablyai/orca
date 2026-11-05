@@ -7,7 +7,7 @@ import {
   structuredAgentSessionTabId
 } from '../../shared/agent-session/view/structured-agent-session-projection'
 import type { AgentSessionStatusEvent } from '../../shared/agent-session/agent-session-wire'
-import { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
+import { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-host'
 import type { AgentSessionOwnerProbe } from '../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
 import { AgentSessionRecoveryCapsule } from './agent-session/records/agent-session-recovery-capsule'
 

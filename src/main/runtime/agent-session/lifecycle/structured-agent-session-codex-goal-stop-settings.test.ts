@@ -14,8 +14,8 @@ import {
 import {
   HOST_TEST_SESSION as SESSION,
   hostTestAttachParams
-} from '../../../native-chat/agent-session-wire/structured-agent-session-host-test-data'
-import { createStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/structured-agent-session-logger'
+} from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+import { createStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
@@ -24,7 +24,7 @@ import {
   closeProviderProcess,
   rootOnlyProviderClosePolicy
 } from '../../../provider-process/provider-process-close'
-import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
+import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host'
 
 const CALLER = { callerKey: 'goal-stop-settings' }
 let root: string | undefined

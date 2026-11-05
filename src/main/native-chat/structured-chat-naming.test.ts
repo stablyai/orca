@@ -12,7 +12,7 @@ import {
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 import { agentSessionRecordFixture } from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
-import { StructuredAgentSessionStatusFeed } from './agent-session-wire/structured-agent-session-status-feed'
+import { StructuredAgentSessionStatusFeed } from './agent-session-wire/observations/structured-agent-session-status-feed'
 import type {
   AgentSessionStatusEvent,
   AgentSessionStatusSummary
@@ -38,11 +38,11 @@ import {
   CALLER,
   envelope,
   hostTestState
-} from './agent-session-wire/structured-agent-session-host-test-harness'
+} from './agent-session-wire/host/testing/structured-agent-session-host-test-harness'
 import {
   HOST_TEST_SESSION,
   hostTestMessage
-} from './agent-session-wire/structured-agent-session-host-test-data'
+} from './agent-session-wire/host/testing/structured-agent-session-host-test-data'
 
 function deferred<T>() {
   let resolve: (value: T) => void = () => {

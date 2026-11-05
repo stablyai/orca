@@ -6,8 +6,8 @@ import {
   endedJournalReasoning,
   journalReasoningBody
 } from '../native-chat/agent-session-journal/journal-reasoning-row'
-import type { AgentSessionDeltaCoalescerDeps } from '../native-chat/agent-session-wire/agent-session-delta-coalescer'
-import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import type { AgentSessionDeltaCoalescerDeps } from '../native-chat/agent-session-wire/publication/subscribers/agent-session-delta-coalescer'
+import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import { createClaudeStreamedBlockRegistry } from './claude-streamed-block-identity'
 import {
   createClaudeStreamedTextCheckpoints,

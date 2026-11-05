@@ -5,8 +5,8 @@
 
 import type { RuntimeTerminalRead } from '../../../../../shared/runtime-terminal-contracts'
 import { formatWorkerTranscriptMessage } from '../../../../../shared/worker-transcript-text'
-import '../../../../native-chat/agent-session-wire/structured-agent-session-mutation-admission'
-import { AGENT_SESSION_NOT_ATTACHED } from '../../../../native-chat/agent-session-wire/structured-agent-session-mutation-refusals'
+import '../../../../native-chat/agent-session-wire/operations/structured-agent-session-mutation-admission'
+import { AGENT_SESSION_NOT_ATTACHED } from '../../../../native-chat/agent-session-wire/operations/structured-agent-session-mutation-refusals'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import { boundStructuredJournalTail } from '../../structured-worker-journal-archive'
 import { readStructuredLineageJournalPage } from '../../structured-worker-journal-page'

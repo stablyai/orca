@@ -8,7 +8,7 @@ import { journalDatabaseHoldsAgentSessions } from '../../../native-chat/agent-se
 import { AgentSessionRecordStore } from './agent-session-record-store'
 import type { JournalHostDatabase } from '../../../native-chat/agent-session-journal/journal-host-database'
 import { openStructuredAgentSessionJournalDatabase } from '../structured-agent-session-journal-open'
-import type { StructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/structured-agent-session-logger'
+import type { StructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 
 export type AgentSessionRecordStoreLocation = {
   stateDirectory: string

@@ -12,7 +12,7 @@ import {
   HOST_TEST_SESSION as SESSION,
   hostTestAttachParams,
   hostTestMessage
-} from '../../../native-chat/agent-session-wire/structured-agent-session-host-test-data'
+} from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
 import { JournalHostDatabase } from '../../../native-chat/agent-session-journal/journal-host-database'
 import { AgentSessionJournal } from '../../../native-chat/agent-session-journal/journal-store'
 import { AgentSessionRecordStore } from '../records/agent-session-record-store'
@@ -22,7 +22,7 @@ import {
 } from '../structured-agent-session-runtime'
 import type { DescendantSnapshot } from '../../../pty/process-retirement/pty-descendant-termination'
 import type { DescendantTreeVerdict } from '../../../pty/process-retirement/pty-descendant-exit-verification'
-import type { AgentSessionStopOutcome } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter-stop'
+import type { AgentSessionStopOutcome } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-stop'
 import { agentVerdictDisplayMark } from '../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 import { activeProviderContext } from '../../../../shared/agent-session/agent-session-provider-context'
 

@@ -13,7 +13,7 @@ import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline
 import {
   HOST_TEST_SESSION as SESSION,
   hostTestMessage
-} from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
+} from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
 import { createAgentModelCatalogService } from '../native-chat/agent-model-catalog/agent-model-catalog-service'
 import { AgentModelCatalogStore } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 import {
@@ -27,8 +27,8 @@ import { AcpStructuredOptions } from './acp-structured-options'
 import { SessionConfigOptionSchema } from './generated/acp-protocol.generated'
 import { AcpSessionRuntime } from './acp-session-runtime'
 import { GROK, GROK_CONFIG_OPTIONS } from './acp-structured-adapter.test-support'
-import { CALLER } from '../native-chat/agent-session-wire/structured-agent-session-host-test-harness'
-import { createTestParams } from '../native-chat/agent-session-wire/structured-agent-session-create-test-fixture'
+import { CALLER } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-harness'
+import { createTestParams } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-create-test-fixture'
 import type { StructuredAgentSessionFirstMessage } from '../../shared/agent-session/structured-agent-session-create'
 import { attachParams, launch, openHostRig } from './acp-structured-host.test-support'
 

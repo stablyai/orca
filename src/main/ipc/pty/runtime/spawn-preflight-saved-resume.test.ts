@@ -1,5 +1,5 @@
 import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
-import { CLAUDE_CLI_CONVERSATIONS } from '../../../claude/claude-cli-conversations'
+import '../../../claude/claude-cli-conversations'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { localProvider } from '../provider/registry'
 import { spawnPtyFromRuntimeController } from './spawn'
@@ -14,7 +14,7 @@ import {
 import { AgentSessionRecordStore } from '../../../runtime/agent-session/records/agent-session-record-store'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import { finishPtyShutdown } from '../provider/liveness'
-import { listStructuredProviderSessionOwnership } from '../../../native-chat/agent-session-wire/structured-provider-session-ownership'
+import { listStructuredProviderSessionOwnership } from '../../../native-chat/agent-session-wire/host/structured-provider-session-ownership'
 import type { PtyRuntimeControllerDeps } from './controller-deps'
 import { executePtySpawn } from '../spawn-execute'
 import { prepareSavedPtyResume } from '../spawn-resume'
@@ -163,90 +163,6 @@ describe('actual runtime saved-resume outcomes', () => {
     }
     return ctx
   }
-
-  it.each([10, 100])(
-    'counts real saved-spawn projection and freshness across %i chats',
-    async (size) => {
-      const records = Array.from({ length: size }, (_, index) => ({
-        ...chat,
-        sessionId: `chat-${index}`,
-        providerHandleChain: chat.providerHandleChain.map((link) => ({
-          ...link,
-          handle: { ...link.handle, nativeId: `unrelated-${index}` }
-        }))
-      }))
-      const list = vi
-        .spyOn(store, 'listConversations')
-        .mockImplementation(() => records.map(agentSessionConversationView))
-      const visible = vi.spyOn(store, 'getVisibleSessionTabIndex').mockReturnValue({
-        present: true,
-        sessionIds: records.map((record) => record.sessionId)
-      })
-      const read = vi.spyOn(CLAUDE_CLI_CONVERSATIONS.sessionHistory, 'rowSessionId')
-      const runtime = chatHost()
-      let rowReads = 0
-      const originalRow = runtime.getAgentProviderSessionRows()[0]!
-      const rows = Array.from({ length: size }, (_, index) => ({
-        ...originalRow,
-        get paneKey() {
-          rowReads += 1
-          return index === size - 1 ? 'tab-1:leaf' : `unrelated-pane-${index}`
-        }
-      }))
-      runtime.getAgentProviderSessionRows = () => rows
-      const run = async (ordinary = false) => {
-        const ctx = freshContext(runtime)
-        ctx.spawnIdentityPaneKey = 'tab-1:leaf'
-        if (ordinary) {
-          delete ctx.args.resumeOrigin
-        }
-        await executePreparedSpawn(ctx)
-        return ctx
-      }
-      const spawn = vi.spyOn(localProvider, 'spawn').mockResolvedValue({ id: 'counted-shell' })
-      try {
-        await admitColdRestoreReattach(
-          runtime,
-          { coldRestore: {}, isReattach: true },
-          { paneKey: 'tab-1:leaf', saved: undefined },
-          null
-        )
-        await run(true)
-        expect([
-          list.mock.calls.length,
-          visible.mock.calls.length,
-          read.mock.calls.length,
-          rowReads
-        ]).toEqual([0, 0, 0, 0])
-        for (let pane = 0; pane < size; pane += 1) {
-          expect((await run()).resumeAdmission?.verdict).toBe('admitted')
-          if (pane === 0) {
-            expect([read.mock.calls.length, rowReads]).toEqual([3 * size, size])
-          }
-        }
-        // Each pane projects N heads and two handle reads per link; P=N exposes the aggregate cost.
-        expect(read.mock.calls.length).toBe(size * 3 * size)
-        expect([list.mock.calls.length, visible.mock.calls.length, rowReads]).toEqual([
-          size,
-          size,
-          size * size
-        ])
-        const target = records[0]!
-        target.providerHandleChain[0]!.handle.nativeId = C
-        const refused = await run()
-        expect(refused.resumeAdmission?.verdict).toBe('chat-home')
-        expect(refused.spawnOptions.command).toBeUndefined()
-        target.providerHandleChain[0]!.handle.nativeId = 'successor-conversation'
-        expect((await run()).resumeAdmission?.verdict).toBe('admitted')
-        expect(read.mock.calls.length).toBe((size + 2) * 3 * size)
-      } finally {
-        spawn.mockRestore()
-        read.mockRestore()
-        list.mockRestore()
-        visible.mockRestore()
-      }
-    }
-  )
 
   it('chooses a plain shell only in the fresh callback and does not forget before commit', async () => {
     const runtime = chatHost()

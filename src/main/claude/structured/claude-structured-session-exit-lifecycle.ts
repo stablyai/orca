@@ -7,20 +7,20 @@ import {
   providerExitObserved,
   providerStartupFailureFact,
   startupAcquisitionRefusal
-} from '../../native-chat/agent-session-wire/structured-agent-session-failure-text'
+} from '../../native-chat/agent-session-wire/startup/structured-agent-session-failure-text'
 import { providerSpawnAbsent } from '../../provider-process/provider-executable-missing'
 import {
   claudeSessionHasTurnWork,
   settledClaudeTurnEndLeaf
 } from './claude-structured-resume-point'
 import { claudeHeldSends } from '../claude-command-lifecycle'
-import type { AgentSessionStartEndings } from '../../native-chat/agent-session-wire/structured-agent-session-start-failure'
+import type { AgentSessionStartEndings } from '../../native-chat/agent-session-wire/startup/structured-agent-session-start-failure'
 import { claudeExitEnding } from './claude-structured-start-ending'
 import { claudeCloseReport, settleClaudeExitedSession } from './claude-structured-session-close'
 import {
   AgentSessionAcquisitionExitUnprovenError,
   AgentSessionAcquisitionRootExitObservedError
-} from '../../native-chat/agent-session-wire/structured-agent-session-acquisition-errors'
+} from '../../native-chat/agent-session-wire/acquisition/structured-agent-session-acquisition-errors'
 import type {
   ClaudeAcquisitionAttempt,
   ClaudeSession,

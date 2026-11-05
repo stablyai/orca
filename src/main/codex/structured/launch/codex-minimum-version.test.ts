@@ -10,8 +10,8 @@ import { AgentCliInstallationError } from '../../../native-chat/agent-cli-instal
 import {
   failedAcquisitionRefusal,
   failedAcquisitionSettlement
-} from '../../../native-chat/agent-session-wire/structured-agent-session-failed-create-refusal'
-import { structuredAgentSessionStartFailure } from '../../../native-chat/agent-session-wire/structured-agent-session-failure-text'
+} from '../../../native-chat/agent-session-wire/acquisition/structured-agent-session-failed-create-refusal'
+import { structuredAgentSessionStartFailure } from '../../../native-chat/agent-session-wire/startup/structured-agent-session-failure-text'
 import { requireSupportedCodexCli, withSupportedCodexCli } from './codex-cli-installation-error'
 import {
   createCodexStructuredLaunchResolver,

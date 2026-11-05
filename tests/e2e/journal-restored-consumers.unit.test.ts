@@ -40,15 +40,18 @@ import { restoreJournal } from '../../src/main/native-chat/agent-session-journal
 import { journalOutcomeSource } from '../../src/main/native-chat/agent-session-journal/journal-outcome-format'
 import { prepareJournalOutcomeWrite } from '../../src/main/native-chat/agent-session-journal/journal-outcome-write'
 import type { JournalRow } from '../../src/main/native-chat/agent-session-journal/journal-row-schema'
-import { hostTestAttachParams } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-host-test-data'
-import { seedQueuedRigLegacyJournal } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-queued-legacy-journal.test-fixture'
+import {
+  hostTestAttachParams,
+  HOST_TEST_SESSION as SESSION
+} from '../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+import { seedQueuedRigLegacyJournal } from '../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-queued-legacy-journal.test-fixture'
 import {
   createRestTestRig,
-  REST_TEST_CALLER,
-  REST_TEST_SESSION as SESSION,
-  type RestTestRig
-} from '../../src/main/native-chat/agent-session-wire/structured-agent-session-rest-test-rig'
-import { setStructuredAgentSessionHost } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-registry'
+  REST_TEST_CALLER
+} from '../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig'
+
+import type { RestTestRig } from '../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig'
+import { setStructuredAgentSessionHost } from '../../src/main/native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { OrcaRuntimeService } from '../../src/main/runtime/orca-runtime'
 import { RpcDispatcher } from '../../src/main/runtime/rpc/dispatcher'
 import { STRUCTURED_AGENT_SESSION_METHODS } from '../../src/main/runtime/rpc/methods/structured-agent-session'

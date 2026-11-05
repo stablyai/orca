@@ -16,7 +16,7 @@ import {
   createHistoryCatchUpBatch,
   HISTORY_CATCH_UP_MAX_OPERATIONS,
   type HistoryCatchUpPlan
-} from '../native-chat/agent-session-wire/structured-agent-session-history-catch-up'
+} from '../native-chat/agent-session-wire/acquisition/structured-agent-session-history-catch-up'
 import {
   legacyItemBody,
   LEGACY_IMPORT_BLOCK_LIMITS
@@ -24,8 +24,8 @@ import {
 import type {
   StructuredAgentSessionEventSink,
   StructuredAgentSessionItemAppendOptions
-} from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import type { StructuredAgentSessionTransitionJournal } from '../native-chat/agent-session-wire/structured-agent-session-transition'
+} from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
+import type { StructuredAgentSessionTransitionJournal } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-transition'
 import { decodeClaudeTranscriptLine } from '../native-chat/transcript-line-decoders-claude'
 import { claudeSourceBlockId } from './claude-streamed-block-identity'
 import {

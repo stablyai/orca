@@ -276,7 +276,7 @@ it('main-outcome-old-prefix-source-roundtrip', async () => {
   const { encodeJournalState } = await import('./journal-state-codec')
   const { renderJournalState } = await import('./journal-reducer')
   const { carriedStoppedHistory } =
-    await import('../agent-session-wire/structured-agent-session-stopped-history-selection')
+    await import('../agent-session-wire/termination/structured-agent-session-stopped-history-selection')
   const { AGENT_JOURNAL_THREAD_SCOPE } =
     await import('../../../shared/agent-session/journal/agent-session-journal-types')
   const words = (text: string): AgentJournalMessageItem => ({

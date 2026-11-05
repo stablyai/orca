@@ -12,8 +12,8 @@ import {
   nativeChatTurnDiffEditFile,
   nativeChatTurnDiffs
 } from '../../../../shared/native-chat/tools/native-chat-turn-diffs'
-import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import { agentJournalItemForWire } from '../../../native-chat/agent-session-wire/agent-session-item-wire-form'
+import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
+import { agentJournalItemForWire } from '../../../native-chat/agent-session-wire/publication/history/agent-session-item-wire-form'
 import {
   createCodexHistoryTranslator,
   createCodexJournalTranslator

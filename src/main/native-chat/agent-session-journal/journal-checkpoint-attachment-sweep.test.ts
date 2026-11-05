@@ -11,7 +11,7 @@ import {
   installAgentSessionAttachments,
   stopAgentSessionAttachments
 } from '../../runtime/agent-session/structured-agent-session-attachment-wiring'
-import { createStructuredAgentSessionLogger } from '../agent-session-wire/structured-agent-session-logger'
+import { createStructuredAgentSessionLogger } from '../agent-session-wire/host/structured-agent-session-logger'
 
 let root: string
 let host: JournalHostDatabase | undefined

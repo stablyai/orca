@@ -1,6 +1,6 @@
 // Preserve event order across journal backpressure; hold later events until the sink accepts.
 
-import type { StructuredAgentSessionChildWorkProducer } from '../native-chat/agent-session-wire/structured-agent-session-subagent-rows'
+import type { StructuredAgentSessionChildWorkProducer } from '../native-chat/agent-session-wire/observations/structured-agent-session-subagent-rows'
 import { parseAgentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   createProviderTimelineAssembler,
@@ -10,7 +10,7 @@ import type { AcpTimelineEvent } from './acp-timeline-event'
 import { acpPromptTurnId } from './acp-prompt-turns'
 import { createLegacyProviderTimelineIdentityScheme } from '../native-chat/agent-session-timeline/provider-timeline-identity'
 import type { ProviderTimelineSink } from '../native-chat/agent-session-timeline/provider-timeline-plan'
-import type { StructuredAgentSessionCommandRun } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import type { StructuredAgentSessionCommandRun } from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import type { AcpChildStops, AcpDialect } from './acp-dialects/acp-dialect'
 import { AcpTimelineTranslator } from './acp-timeline-translator'
 import {
@@ -22,7 +22,7 @@ import type { AcpStructuredSessionAdapterDeps } from './acp-structured-session-a
 import {
   neverThrowingStructuredAgentSessionLogger,
   type StructuredAgentSessionLogger
-} from '../native-chat/agent-session-wire/structured-agent-session-logger'
+} from '../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import type { AcpTextDrop } from './acp-turn-messages'
 
 const BACKPRESSURE_RETRY_MS = 250

@@ -9,8 +9,8 @@ import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/
 import * as processSpawn from '../../../codex/app-server/codex-app-server-process-tree-kill'
 import { closeTestJournalHostDatabase } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
 import { agentSessionRecordFixture } from '../../../native-chat/agent-session-record-test-fixture'
-import { StructuredAgentSessionAdapterRouter } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter-router'
-import { createStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/structured-agent-session-logger'
+import { StructuredAgentSessionAdapterRouter } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-router'
+import { createStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { seedTestAgentSessionRecordStore } from '../records/agent-session-record-store-test-harness'
 import {
   ensureStructuredAgentSessionHost,

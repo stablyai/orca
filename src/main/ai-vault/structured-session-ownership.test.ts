@@ -13,7 +13,7 @@ import {
   acquiredAgentSessionAccount,
   withAcquiredAgentSessionAccount
 } from '../../shared/agent-session/lifecycle/agent-session-acquired-account'
-import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
+import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import {
   assertLegacyAiVaultResumeAllowed,
   assertLegacyAiVaultResumeCommandAllowed,

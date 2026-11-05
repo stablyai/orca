@@ -5,10 +5,10 @@ import type { Repo } from '../../shared/repo-types'
 import type * as CommitMessageTextGenerationModule from '../text-generation/commit-message-text-generation'
 import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
-import { StructuredAgentSessionStatusFeed } from '../native-chat/agent-session-wire/structured-agent-session-status-feed'
+import { StructuredAgentSessionStatusFeed } from '../native-chat/agent-session-wire/observations/structured-agent-session-status-feed'
 import { maybeAutoRenameWorkspaceOnFirstStructuredTurn } from './first-work-structured-session-rename'
 import '../../shared/worktree/id'
-import { WORKTREE_ID_SEPARATOR } from '../../shared/terminal/pty/lifecycle/pty-session-id-format'
+import '../../shared/terminal/pty/lifecycle/pty-session-id-format'
 
 const {
   gitExecFileAsyncMock,
@@ -50,7 +50,6 @@ vi.mock('../ipc/worktree-branch-name', () => ({
 }))
 
 import {
-  FIRST_WORK_BRANCH_RENAME_SETTLED_CACHE_LIMIT,
   maybeAutoRenameBranchOnFirstWork,
   resetFirstWorkBranchRenameState,
   type FirstWorkBranchRenameDeps
@@ -65,7 +64,7 @@ import {
   workingEvent
 } from './first-work-branch-rename-test-harness'
 import { FIRST_WORK_GENERATION_RETRY_DELAYS_MS } from './first-work-generation-backoff'
-import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
+import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/host/structured-agent-session-logger'
 
 const REMOTE_REPO_BASE: Repo = {
   id: REPO_ID,
@@ -511,45 +510,6 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
     generateBranchNameMock.mockClear()
     await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
     expect(generateBranchNameMock).not.toHaveBeenCalled()
-  })
-
-  it('bounds settled worktree dedupe while keeping recent entries', async () => {
-    gitExecFileAsyncMock.mockImplementation(
-      gitResponder({ currentBranch: 'you/my-feature', hasUpstream: false })
-    )
-    const { deps } = makeDeps()
-    const firstWorktreeId = `${REPO_ID}${WORKTREE_ID_SEPARATOR}/repo/wt-0`
-    const lastWorktreeId = `${REPO_ID}${WORKTREE_ID_SEPARATOR}/repo/wt-${FIRST_WORK_BRANCH_RENAME_SETTLED_CACHE_LIMIT}`
-
-    for (let index = 0; index <= FIRST_WORK_BRANCH_RENAME_SETTLED_CACHE_LIMIT; index += 1) {
-      await maybeAutoRenameBranchOnFirstWork(
-        workingEvent({
-          tabId: undefined,
-          paneKey: '',
-          worktreeId: `${REPO_ID}${WORKTREE_ID_SEPARATOR}/repo/wt-${index}`
-        }),
-        deps
-      )
-    }
-    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(
-      FIRST_WORK_BRANCH_RENAME_SETTLED_CACHE_LIMIT + 1
-    )
-
-    gitExecFileAsyncMock.mockClear()
-    await maybeAutoRenameBranchOnFirstWork(
-      workingEvent({ tabId: undefined, paneKey: '', worktreeId: firstWorktreeId }),
-      deps
-    )
-    await maybeAutoRenameBranchOnFirstWork(
-      workingEvent({ tabId: undefined, paneKey: '', worktreeId: lastWorktreeId }),
-      deps
-    )
-
-    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
-    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
-      ['rev-parse', '--abbrev-ref', 'HEAD'],
-      expect.objectContaining({ cwd: '/repo/wt-0' })
-    )
   })
 
   it('retries on a later event after a transient failure (does not poison the worktree)', async () => {

@@ -8,7 +8,7 @@ import { ClaudeAtRestCommandCatalog } from '../claude-at-rest-commands'
 import {
   bindAtRestCommandContexts,
   retireAtRestCommandSettings
-} from '../../native-chat/agent-session-wire/at-rest-command-context'
+} from '../../native-chat/agent-session-wire/options/at-rest-command-context'
 import {
   adapterFor,
   fakeClaude,

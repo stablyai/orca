@@ -4,7 +4,7 @@ import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/
 import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { normalizeNativeChatTaskList } from '../../../../shared/native-chat/input/native-chat-task-list'
 import { projectStructuredItemsToNativeChat } from '../../../../shared/agent-session/view/structured-agent-session-projection'
-import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import '../items/codex-structured-item-translation'
 import { CodexTurnOrdinals } from './codex-turn-ordinals'
 import { createCodexJournalTranslator } from './codex-structured-journal-translation'

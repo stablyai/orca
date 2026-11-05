@@ -9,8 +9,8 @@ import {
   DISPATCH_DOUBT_WRITE_OUTCOME_UNKNOWN
 } from '../../../native-chat/agent-session-journal/journal-dispatch-doubt-reasons'
 import { hasUnansweredStructuredAgentSessionDispatch } from '../../../../shared/agent-session/requests/structured-agent-session-unanswered-dispatch'
-import { hostTestMessage } from '../../../native-chat/agent-session-wire/structured-agent-session-host-test-data'
-import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
+import { hostTestMessage } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host'
 import {
   createScriptedClaudeRuntime,
   scriptedClaudeExitError

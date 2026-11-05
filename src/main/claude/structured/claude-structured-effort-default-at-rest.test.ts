@@ -15,13 +15,13 @@ import {
   agentModelCatalogFingerprintForRecord
 } from '../../native-chat/agent-model-catalog/agent-model-catalog-fingerprint'
 import { AgentModelCatalogStore } from '../../native-chat/agent-model-catalog/agent-model-catalog-store'
-import type { StructuredAgentSessionMutationContext } from '../../native-chat/agent-session-wire/structured-agent-session-mutation-context'
-import { readStructuredAgentSessionOptions } from '../../native-chat/agent-session-wire/structured-agent-session-options-read'
+import type { StructuredAgentSessionMutationContext } from '../../native-chat/agent-session-wire/operations/structured-agent-session-mutation-context'
+import { readStructuredAgentSessionOptions } from '../../native-chat/agent-session-wire/options/structured-agent-session-options-read'
 import {
   structuredAgentSessionSendSelection,
   structuredAgentSessionShownSnapshot
 } from '../../../shared/agent-session/options/structured-agent-session-option-view'
-import { claudeAndCodexAgents } from '../../native-chat/agent-session-wire/structured-agent-session-adapter-router-test-support'
+import { claudeAndCodexAgents } from '../../native-chat/agent-session-wire/providers/testing/structured-agent-session-adapter-router-test-support'
 import { composeCodexSessionOptionCatalog } from '../../codex/structured/catalog/codex-structured-model-catalog'
 import { listedModels } from './launch/claude-structured-model-catalog'
 import { ClaudeStructuredSessionAdapter } from './claude-structured-session-adapter'

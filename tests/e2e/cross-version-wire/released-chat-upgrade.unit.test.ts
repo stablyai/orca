@@ -19,7 +19,7 @@ import {
   type JournalStoredRow
 } from '../../../src/main/native-chat/agent-session-journal/journal-row-table'
 import { JournalWriteProjection } from '../../../src/main/native-chat/agent-session-journal/journal-write-projection'
-import { readPublishedQueuedMessages } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-queued-publication'
+import { readPublishedQueuedMessages } from '../../../src/main/native-chat/agent-session-wire/delivery/structured-agent-session-queued-publication'
 import { resolveBaselineReleaseRef } from './release-checkout'
 import {
   editReleasedCard,

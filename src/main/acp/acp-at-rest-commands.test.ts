@@ -6,9 +6,9 @@ import { afterEach, expect, it, vi } from 'vitest'
 import capture from '../../shared/__fixtures__/omp-native-commands.json'
 import { buildNativeChatPickerItems } from '../../shared/native-chat/input/native-chat-picker-items'
 import { sessionReportedSkills } from '../../shared/native-chat/input/native-chat-slash-commands'
-import { AT_REST_COMMANDS_TTL_MS } from '../native-chat/agent-session-wire/at-rest-command-catalog'
+import { AT_REST_COMMANDS_TTL_MS } from '../native-chat/agent-session-wire/options/at-rest-command-catalog'
 import '../../shared/priority-semaphore'
-import { refreshAtRestCommandContext } from '../native-chat/agent-session-wire/at-rest-command-context'
+import { refreshAtRestCommandContext } from '../native-chat/agent-session-wire/options/at-rest-command-context'
 import {
   commandDiscoveryRig,
   DISCOVERY_SESSION,

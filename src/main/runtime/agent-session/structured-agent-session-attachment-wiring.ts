@@ -13,7 +13,7 @@ import {
 } from '../../native-chat/agent-session-attachments/agent-session-attachment-sweep'
 import { agentSessionAttachmentStoreRoot } from '../../native-chat/agent-session-attachments/agent-session-attachment-references'
 import type { JournalHostDatabase } from '../../native-chat/agent-session-journal/journal-host-database'
-import type { StructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/structured-agent-session-logger'
+import type { StructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import type { AgentSessionRecordStore } from './records/agent-session-record-store'
 
 const FIRST_SWEEP_DELAY_MS = 60 * 1000

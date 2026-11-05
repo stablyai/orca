@@ -15,8 +15,8 @@ import type { RuntimePtyWorktreeRecord } from '../terminal/records/runtime-termi
 import type { BrowserSessionTabSelectionOptions } from '../browser/tabs/browser-tab-create-publication'
 import { getRuntimeBrowserPageRegistry } from '../browser/client-pages/runtime-browser-page-registry'
 import { applyBrowserSessionTabSelection } from '../browser/tabs/browser-session-tab-selection-snapshot'
-import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
-import type { StructuredAgentSessionCloseCause } from '../../native-chat/agent-session-wire/structured-agent-session-host-lifetime'
+import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
+import type { StructuredAgentSessionCloseCause } from '../../native-chat/agent-session-wire/termination/structured-agent-session-host-lifetime'
 import {
   chatTabId,
   withChatTabChanges,

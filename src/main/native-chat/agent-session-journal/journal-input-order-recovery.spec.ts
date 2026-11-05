@@ -9,7 +9,7 @@ import { holdUnsentSends } from './journal-unsent-send-hold'
 import {
   selectedStructuredSubmission,
   selectStructuredAgentSessionInput
-} from '../agent-session-wire/structured-agent-session-input-selection'
+} from '../agent-session-wire/delivery/structured-agent-session-input-selection'
 
 const message = (text: string): AgentJournalMessageItem => ({
   kind: 'message',

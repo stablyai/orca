@@ -8,8 +8,8 @@ import {
 } from './journal-host-database-test-support'
 import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import { readAgentSessionHistory } from '../agent-session-wire/agent-session-history-page'
-import { projectJournalBatch } from '../agent-session-wire/agent-session-journal-batch'
+import { readAgentSessionHistory } from '../agent-session-wire/publication/history/agent-session-history-page'
+import { projectJournalBatch } from '../agent-session-wire/publication/history/agent-session-journal-batch'
 import { readJournalOutcomeGroups } from './journal-read-row'
 import { journalOutcomeSource } from './journal-outcome-format'
 import {
@@ -22,8 +22,8 @@ import {
 import type { JournalRow } from './journal-row-schema'
 import type { AgentSessionJournal } from './journal-store'
 import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session/agent-session-wire'
-import { AgentSessionSubscribers } from '../agent-session-wire/structured-agent-session-subscribers'
-import { reusePromptProjection } from '../agent-session-wire/structured-agent-session-actionable-prompts'
+import { AgentSessionSubscribers } from '../agent-session-wire/publication/subscribers/structured-agent-session-subscribers'
+import { reusePromptProjection } from '../agent-session-wire/observations/structured-agent-session-actionable-prompts'
 
 const journals = createTrackedJournalOpener()
 let root: string

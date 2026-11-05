@@ -6,9 +6,9 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { AcpStructuredSessionAdapter } from './acp-structured-session-adapter'
 import { acpStructuredAgentDefinition } from './acp-structured-agent-definitions'
-import { StructuredAgentRegistry } from '../native-chat/agent-session-wire/structured-agent-registry'
-import { StructuredAgentSessionAdapterRouter } from '../native-chat/agent-session-wire/structured-agent-session-adapter-router'
-import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import { StructuredAgentRegistry } from '../native-chat/agent-session-wire/providers/structured-agent-registry'
+import { StructuredAgentSessionAdapterRouter } from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter-router'
+import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { structuredChatNamingDeps } from '../runtime/agent-session/naming/structured-chat-naming-runtime'
 import { agentSessionRecordFixture } from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { getDefaultSettings } from '../../shared/constants'
@@ -21,7 +21,7 @@ const boundary = vi.hoisted(() => ({
   adapter: vi.fn<() => StructuredAgentSessionAdapter>(),
   afterTemp: vi.fn<(path: string) => Promise<void>>()
 }))
-vi.mock('../native-chat/agent-session-wire/structured-agent-session-registry', () => ({
+vi.mock('../native-chat/agent-session-wire/host/structured-agent-session-registry', () => ({
   getStructuredAgentSessionHost: () => ({ deps: { adapter: boundary.adapter() } })
 }))
 vi.mock('node:fs/promises', async (importOriginal) => {

@@ -1,8 +1,8 @@
 // Track exit recovery through teardown so callbacks cannot write after journal removal.
 // Starts, option drops and requested-close ends use their own session lane to avoid waiting on another session's reacquisition.
 
-import type { StructuredAgentSessionLifecycleEvent } from '../../native-chat/agent-session-wire/structured-agent-session-adapter'
-import type { StructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/structured-agent-session-logger'
+import type { StructuredAgentSessionLifecycleEvent } from '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import type { StructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 
 export function createStructuredAgentSessionLifecycleDelivery(input: {
   handle: (event: StructuredAgentSessionLifecycleEvent) => Promise<void> | undefined

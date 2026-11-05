@@ -9,11 +9,11 @@ import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/
 import {
   createDeferredStructuredAgentSessionEventSink,
   type StructuredAgentSessionEventTarget
-} from '../../../native-chat/agent-session-wire/structured-agent-session-event-sink'
+} from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import { CodexJournalGoals } from './codex-structured-journal-goals'
 import { MAX_CODEX_GOAL_THREADS } from './codex-structured-journal-limits'
-import { withJournalQueueMembers } from '../../../native-chat/agent-session-wire/structured-agent-session-journal-double-test-support'
-import { testEventSinkLogging } from '../../../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+import { withJournalQueueMembers } from '../../../native-chat/agent-session-wire/journal-ingress/testing/structured-agent-session-journal-double-test-support'
+import { testEventSinkLogging } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
 
 const THREAD = '01a08cc2-f96e-76d0-bb74-88b9bc0b03fc'
 

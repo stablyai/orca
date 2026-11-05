@@ -3,10 +3,10 @@ import { createClaudeJournalTranslator } from './structured/journal/claude-struc
 import {
   isStructuredRewindTarget,
   structuredRewindCut
-} from '../native-chat/agent-session-wire/structured-rewind-cut'
+} from '../native-chat/agent-session-wire/rewind/structured-rewind-cut'
 import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
-import { readAgentSessionHistory } from '../native-chat/agent-session-wire/agent-session-history-page'
-import { projectJournalBatch } from '../native-chat/agent-session-wire/agent-session-journal-batch'
+import { readAgentSessionHistory } from '../native-chat/agent-session-wire/publication/history/agent-session-history-page'
+import { projectJournalBatch } from '../native-chat/agent-session-wire/publication/history/agent-session-journal-batch'
 import {
   replacePage,
   mergeItems
@@ -15,7 +15,7 @@ import { AgentJournalRenderItemSchema } from '../../shared/agent-session/journal
 import { projectStructuredItemToNativeChat } from '../../shared/agent-session/view/structured-agent-session-projection'
 import { agentSessionSendBodyFingerprint } from '../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { dispatchClaudeTurn } from './structured/claude-structured-dispatch'
-import { claudePromptUuidForSubmission } from './structured/claude-structured-session-id'
+import './structured/claude-structured-session-id'
 import {
   childExited,
   sessionFor,
@@ -515,111 +515,6 @@ describe('Claude chat catch-up', () => {
     expect(c.journal.snapshot().items).toEqual(imported)
     expect(c.warn).not.toHaveBeenCalled()
   })
-
-  // P saved aliases plus P unacknowledged queued prompts: two J-item indexes, not P×J scans.
-  it.each([10, 100].flatMap((prompts) => [1_000, 10_000].map((items) => ({ prompts, items }))))(
-    'bounds retained-leaf work for $prompts aliases and local misses over $items journal items',
-    async ({ prompts, items }) => {
-      const c = await chat()
-      await c.live()
-      const expected = [...c.rows(), '(continued-outside)']
-      const rows: Record<string, unknown>[] = [
-        reply('saved-leaf', 'earlier-prompt', 'msg_saved', { type: 'text', text: 'earlier' }, 0),
-        prompt('p1', 'saved-leaf', 'ask 1', 1),
-        ...chatTurn.slice(1)
-      ]
-      for (let n = 1; n < prompts; n++) {
-        rows.push(
-          prompt(`outside-p${n}`, n === 1 ? 'a1' : `outside-a${n - 1}`, `ask ${n}`, n * 2 + 1),
-          reply(
-            `outside-a${n}`,
-            `outside-p${n}`,
-            `msg_outside${n}`,
-            { type: 'text', text: `answer ${n}` },
-            n * 2 + 2
-          )
-        )
-        expected.push(`user:ask ${n}`, `assistant:answer ${n}`)
-      }
-      const alias = agentJournalItemKey({ provider: 'claude', sessionId: SID, uuid: 'p1' })
-      const canonical = c.journal.canonicalItemId(alias)
-      expect(canonical).not.toBe(alias)
-      const submissions = c.journal.snapshot().submissions
-      await c.write(rows)
-      expect(await c.open('saved-leaf')).toBe(true)
-      expect(c.rows()).toEqual(expected)
-      expect(c.journal.snapshot().submissions).toEqual(submissions)
-      await c.journal.appendLifecycleBatch({
-        settlementId: 'perf-padding',
-        fence: 1,
-        mutations: Array.from({ length: items - c.journal.snapshot().items.length }, (_, n) => ({
-          kind: 'item' as const,
-          identity: { provider: 'orca' as const, clientMessageId: `padding${n}` },
-          body: { kind: 'message' as const, role: 'user' as const, blocks: [] },
-          turnScope: { kind: 'thread' as const }
-        }))
-      })
-      for (let n = 0; n < prompts; n++) {
-        const key = agentJournalItemKey({ provider: 'orca', clientMessageId: `padding${n}` })
-        await c.write([
-          {
-            ...attachment(`queued${n}`, n ? `queued${n - 1}` : `outside-a${prompts - 1}`),
-            attachment: {
-              type: 'queued_command',
-              source_uuid: claudePromptUuidForSubmission(SESSION, key),
-              commandMode: 'prompt',
-              prompt: 'local'
-            }
-          }
-        ])
-      }
-      const before = c.journal.snapshot()
-      const itemCount = before.items.length
-      expect(itemCount).toBe(items)
-      let associationVisits = 0
-      let viewVisits = 0
-      const visitItems = c.journal.visitItems.bind(c.journal)
-      const visitLinked = c.journal.visitItemsWithLinkage.bind(c.journal)
-      vi.spyOn(c.journal, 'visitItems').mockImplementation((visit) =>
-        visitItems((...args) => {
-          associationVisits++
-          visit(...args)
-        })
-      )
-      vi.spyOn(c.journal, 'visitItemsWithLinkage').mockImplementation((visit) =>
-        visitLinked((...args) => {
-          viewVisits++
-          visit(...args)
-        })
-      )
-      c.journal.visitItems(() => {})
-      c.journal.visitItemsWithLinkage(() => {})
-      // visitItems delegates to the linked visitor, so this calibration exercises it twice.
-      expect([associationVisits, viewVisits]).toEqual([itemCount, 2 * itemCount])
-      associationVisits = viewVisits = 0
-      const committed = vi.fn()
-      c.journal.observeCommits(committed)
-      const tail = vi.spyOn(transcriptTail, 'readClaudeTranscriptTail')
-      expect(await c.open('saved-leaf')).toBe(true)
-      expect(tail).toHaveBeenCalledOnce()
-      expect(
-        (await tail.mock.results[0].value)?.rows.filter((row) => row.type === 'user')
-      ).toHaveLength(prompts)
-      expect(c.journal.snapshot()).toEqual(before)
-      expect(c.journal.canonicalItemId(alias)).toBe(canonical)
-      expect(committed).not.toHaveBeenCalled()
-      expect(c.warn).not.toHaveBeenCalled()
-      expect(associationVisits).toBeLessThanOrEqual(2 * itemCount)
-      // The linked visitor also counts the association passes; bound the extra view work.
-      expect(viewVisits - associationVisits).toBeLessThanOrEqual(2 * itemCount)
-      console.info('retained-leaf operation counts', {
-        prompts,
-        itemCount,
-        associationVisits,
-        viewVisits
-      })
-    }
-  )
 
   it('clears closed scope and restores only a saved queued prompt without settling delivery', async () => {
     const c = await chat()

@@ -4,7 +4,7 @@ import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalItemBody
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import { CodexJournalItems } from '../journal/codex-structured-journal-items'
 import { MAX_CODEX_ACTIVE_ITEMS } from '../journal/codex-structured-journal-limits'
 import type { CodexStructuredSessionEvent } from '../session-lifecycle/codex-structured-session-state'

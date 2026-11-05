@@ -3,10 +3,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalTurnBody } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
-import {
-  type StructuredAgentSessionAdapter,
-  AgentSessionAcquisitionRootExitObservedError
-} from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import { AgentSessionAcquisitionRootExitObservedError } from '../native-chat/agent-session-wire/acquisition/structured-agent-session-acquisition-errors'
 import { JsonlRpcResponseError } from '../jsonl-rpc/peer'
 import {
   closePiRpcAdapterFixtures,

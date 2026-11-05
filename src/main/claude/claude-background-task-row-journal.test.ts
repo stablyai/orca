@@ -1,9 +1,7 @@
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { describe, expect, it, vi } from 'vitest'
-import type {
-  StructuredAgentSessionEventSink,
-  StructuredAgentSessionLifecycleJournal
-} from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
+import type { StructuredAgentSessionLifecycleJournal } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-journal-views'
 import type { ClaudeBackgroundTaskRow } from './claude-background-task-row-lifecycle'
 import {
   ClaudeBackgroundTaskIdentityResolver,

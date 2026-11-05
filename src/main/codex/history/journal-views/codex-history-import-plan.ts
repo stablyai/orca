@@ -11,11 +11,11 @@ import type { AgentJournalTurnScope } from '../../../../shared/agent-session/jou
 import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { codexJournalItem } from '../../structured/items/codex-structured-item-translation'
 import { journalLifecycleItemMutation } from '../../../native-chat/agent-session-journal/journal-lifecycle-mutation'
-import type { StructuredAgentSessionTransitionJournal } from '../../../native-chat/agent-session-wire/structured-agent-session-transition'
+import type { StructuredAgentSessionTransitionJournal } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-transition'
 import {
   continuedOutsideRecordId,
   createHistoryCatchUpBatch
-} from '../../../native-chat/agent-session-wire/structured-agent-session-history-catch-up'
+} from '../../../native-chat/agent-session-wire/acquisition/structured-agent-session-history-catch-up'
 import { createCodexHistoryObservations } from './codex-history-observations'
 import type { HistoryAnchor } from './codex-history-source-facts'
 import {

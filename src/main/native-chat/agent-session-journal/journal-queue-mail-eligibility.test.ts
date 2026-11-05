@@ -8,13 +8,13 @@ import { QUEUED_MESSAGE_PAUSED_SEND_FAILED } from '../../../shared/agent-session
 import { createTrackedJournalOpener } from './journal-host-database-test-support'
 import type { AgentSessionJournal } from './journal-store'
 import { QueuedMessageNotConsumableError } from './queued-message-consume-error'
-import { nextStructuredQueuedMessage } from '../agent-session-wire/structured-agent-session-queued-gate'
-import { structuredAgentSessionCurrentWork } from '../agent-session-wire/structured-agent-session-current-work'
+import { nextStructuredQueuedMessage } from '../agent-session-wire/delivery/structured-agent-session-queued-gate'
+import { structuredAgentSessionCurrentWork } from '../agent-session-wire/observations/structured-agent-session-current-work'
 import { agentSessionRecordFixture } from '../agent-session-record-test-fixture'
 import type { QueuedMessageRow } from './queued-message-table'
 import { JournalInputCandidates } from './journal-input-candidates'
-import { readQueuePublication } from '../agent-session-wire/structured-agent-session-queued-publication'
-import { AgentSessionSubscribers } from '../agent-session-wire/structured-agent-session-subscribers'
+import { readQueuePublication } from '../agent-session-wire/delivery/structured-agent-session-queued-publication'
+import { AgentSessionSubscribers } from '../agent-session-wire/publication/subscribers/structured-agent-session-subscribers'
 
 const personal = (text: string): AgentJournalMessageItem => ({
   kind: 'message',

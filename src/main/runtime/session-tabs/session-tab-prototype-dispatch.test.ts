@@ -9,7 +9,7 @@ import type {
 import type { RuntimeMobileSessionSnapshotTab } from '../../../shared/runtime-mobile-session-tab-contracts'
 import type { TabGroupLayoutNode } from '../../../shared/tab-types'
 import { OrcaRuntimeService } from '../orca-runtime'
-import { setStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
+import { setStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import type { ResolvedWorktree } from '../workspaces/catalog/runtime-worktree-path-identity'
 
 function snapshot(): RuntimeMobileSessionTabsSnapshot {

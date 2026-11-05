@@ -23,8 +23,8 @@ import {
   openProviderTimelineRig,
   SESSION
 } from '../agent-session-timeline/provider-timeline-assembler-test-support'
-import { createDeferredStructuredAgentSessionEventSink } from '../agent-session-wire/structured-agent-session-event-sink'
-import { testEventSinkLogging } from '../agent-session-wire/structured-agent-session-logger-test-support'
+import { createDeferredStructuredAgentSessionEventSink } from '../agent-session-wire/journal-ingress/structured-agent-session-event-sink'
+import { testEventSinkLogging } from '../agent-session-wire/host/testing/structured-agent-session-logger-test-support'
 
 const releases: (() => void)[] = []
 afterEach(async () => {

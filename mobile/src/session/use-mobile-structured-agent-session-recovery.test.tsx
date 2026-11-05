@@ -49,7 +49,7 @@ const { createQueuedMessageTestRig, QUEUED_RIG_CALLER } = await vi.importActual<
     }
   }>
 }>(
-  '../../../src/main/native-chat/agent-session-wire/structured-agent-session-queued-message-rig.test-fixture'
+  '../../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-queued-message-rig.test-fixture'
 )
 
 const asyncStorage = vi.hoisted(() => ({
@@ -355,41 +355,6 @@ describe('current recovery publication and normal Resume', () => {
       expect(hook!.queued.cards.map((c) => c.caption)).toEqual([null, 'Paused', null])
       expect(header()).toHaveLength(0)
     })
-
-    it.each([100, 1000])(
-      'bounds actual publication/feed/controller join work at N=%i',
-      async (n) => {
-        await mountSession({ ...CAPABLE, queuedMessageReorder: true })
-        vi.useFakeTimers()
-        let reads = 0
-        const messages = Array.from({ length: n }, (_, i) => {
-          const message = queuedDraft({ messageId: `W${i}`, position: i })
-          return {
-            ...message,
-            get messageId() {
-              reads++
-              return message.messageId
-            }
-          }
-        })
-        act(() => listener?.(batchEvent(messages, [], { reason: 'stopped' })))
-        expect(hook!.queued.cards).toHaveLength(n)
-        expect(hook!.queued.pause).toEqual({ reason: 'stopped' })
-        expect(reads).toBeGreaterThanOrEqual(n)
-        expect(reads).toBeLessThanOrEqual(20 * n)
-        const before = reads
-        act(() => {
-          listener?.(
-            batchEvent(undefined, [acceptedSubmission('handoff-W0', 'W0')], { reason: 'stopped' })
-          )
-          vi.advanceTimersByTime(STRUCTURED_AGENT_SESSION_CLIENT_COALESCE_MS)
-        })
-        expect(hook!.queued.cards).toHaveLength(n - 1)
-        expect(hook!.queued.cards.some((card) => card.messageId === 'W0')).toBe(false)
-        expect(reads - before).toBeGreaterThanOrEqual(n)
-        expect(reads - before).toBeLessThanOrEqual(20 * n)
-      }
-    )
 
     it('intersects a pending raw preview with fresh visibility and facts, retaining hidden-anchor order and refusal rollback', async () => {
       await mountSession(

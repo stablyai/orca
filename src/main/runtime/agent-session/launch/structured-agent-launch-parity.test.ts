@@ -140,8 +140,8 @@ import {
   LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV,
   NATIVE_CHAT_SCRATCH_DIR_ENV
 } from '../../../native-chat/native-chat-visuals-delivery'
-import type { StructuredAgentSessionAcquireInput } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter'
-import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import type { StructuredAgentSessionAcquireInput } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import type { JournalHostDatabase } from '../../../native-chat/agent-session-journal/journal-host-database'
 import { createClaudeCliFlagSupport } from '../../../claude/claude-cli-flag-support'
 import type { AgentSessionRecordStore } from '../records/agent-session-record-store'

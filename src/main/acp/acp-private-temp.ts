@@ -2,10 +2,11 @@
 
 import { mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { join } from 'node:path'
-import { launchPreparationFailure } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import { launchPreparationFailure } from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
 import type { AcpStructuredConnection, ConnectAcpAgent } from './acp-structured-connection'
 import type { AcpStructuredSessionAdapterDeps } from './acp-structured-session-adapter-deps'
-import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
+import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/host/structured-agent-session-logger'
 
 const wipes = new Map<string, Promise<void>>()
 

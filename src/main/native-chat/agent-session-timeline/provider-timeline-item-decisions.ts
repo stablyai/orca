@@ -5,9 +5,9 @@ import {
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { cancelledJournalPromptBody } from '../agent-session-journal/journal-prompt-body-bounds'
 import { requiresTerminalSettlement } from '../agent-session-journal/journal-terminal-settlement'
-import { estimateStructuredAgentSessionItemBytes } from '../agent-session-wire/structured-agent-session-event-sink-estimate'
-import type { StructuredAgentSessionTransitionJournal } from '../agent-session-wire/structured-agent-session-transition'
-import { unhandledProviderFrameJournalItem } from '../agent-session-wire/unhandled-provider-frame'
+import { estimateStructuredAgentSessionItemBytes } from '../agent-session-wire/journal-ingress/structured-agent-session-event-sink-estimate'
+import type { StructuredAgentSessionTransitionJournal } from '../agent-session-wire/journal-ingress/structured-agent-session-transition'
+import { unhandledProviderFrameJournalItem } from '../agent-session-wire/providers/unhandled-provider-frame'
 import { relightsProviderTimelineBackgroundTask } from './provider-timeline-background-tasks'
 import { providerTimelinePlacement } from './provider-timeline-context'
 import type {

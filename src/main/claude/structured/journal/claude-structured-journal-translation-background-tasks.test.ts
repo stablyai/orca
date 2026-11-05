@@ -6,16 +6,16 @@ import {
   createDeferredStructuredAgentSessionEventSink,
   type StructuredAgentSessionEventSink,
   type StructuredAgentSessionEventTarget
-} from '../../../native-chat/agent-session-wire/structured-agent-session-event-sink'
+} from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import type {
   StructuredAgentSessionLifecycleJournal,
   StructuredAgentSessionLinkageJournal
-} from '../../../native-chat/agent-session-wire/structured-agent-session-journal-views'
+} from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-journal-views'
 import type { AgentSessionJournal } from '../../../native-chat/agent-session-journal/journal-store'
 import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
 import { blockOf } from '../../claude-background-task-row-test-support'
-import { withJournalQueueMembers } from '../../../native-chat/agent-session-wire/structured-agent-session-journal-double-test-support'
-import { testEventSinkLogging } from '../../../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+import { withJournalQueueMembers } from '../../../native-chat/agent-session-wire/journal-ingress/testing/structured-agent-session-journal-double-test-support'
+import { testEventSinkLogging } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
 
 // Captured failures formerly produced duplicate rows displaying wire opcodes.
 const TASK_ID = 'byjnee2no'

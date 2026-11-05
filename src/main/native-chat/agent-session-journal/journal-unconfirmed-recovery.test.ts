@@ -12,10 +12,10 @@ import { agentSessionSendBodyFingerprint } from '../../../shared/agent-session/r
 import { nextSendableQueuedCard } from './queued-message-pause'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { agentSessionStoppedHistoryOwed } from '../../../shared/agent-session/lifecycle/agent-session-stopped-history'
-import { structuredAgentSessionCurrentWork } from '../agent-session-wire/structured-agent-session-current-work'
-import { recordStructuredAgentSessionStartFailure } from '../agent-session-wire/structured-agent-session-start-failure-row'
-import { settleObservedExitForTest } from '../agent-session-wire/structured-agent-session-observed-exit.test-fixture'
-import { readQueuePublication } from '../agent-session-wire/structured-agent-session-queued-publication'
+import { structuredAgentSessionCurrentWork } from '../agent-session-wire/observations/structured-agent-session-current-work'
+import { recordStructuredAgentSessionStartFailure } from '../agent-session-wire/startup/structured-agent-session-start-failure-row'
+import { settleObservedExitForTest } from '../agent-session-wire/termination/testing/structured-agent-session-observed-exit.test-fixture'
+import { readQueuePublication } from '../agent-session-wire/delivery/structured-agent-session-queued-publication'
 import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import {
@@ -172,7 +172,7 @@ it('keeps uncertain input ordinary, rejects stale virtual actions, and preserves
   await journal.replaceEpochItems('handle_forked', 7, [])
   await send('carrier', false)
   const { carriedStoppedHistory } =
-    await import('../agent-session-wire/structured-agent-session-stopped-history-selection')
+    await import('../agent-session-wire/termination/structured-agent-session-stopped-history-selection')
   expect(
     carriedStoppedHistory(
       { journal },
@@ -242,9 +242,9 @@ it('retains ordinary input through restart/reconciliation and exact replay recei
   const { catchUpCodexThread } =
     await import('../../codex/structured/threads/codex-structured-thread-catch-up')
   const { createDeferredStructuredAgentSessionEventSink } =
-    await import('../agent-session-wire/structured-agent-session-event-sink')
+    await import('../agent-session-wire/journal-ingress/structured-agent-session-event-sink')
   const { testEventSinkLogging } =
-    await import('../agent-session-wire/structured-agent-session-logger-test-support')
+    await import('../agent-session-wire/host/testing/structured-agent-session-logger-test-support')
   const sink = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
   sink.bind({ journal, fence: 7, publish: () => {} })
   await catchUpCodexThread({

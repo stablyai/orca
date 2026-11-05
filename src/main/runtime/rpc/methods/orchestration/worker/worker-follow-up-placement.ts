@@ -4,7 +4,7 @@ import { OrchestrationError } from '../../../../orchestration/orchestration-erro
 import type { OrchestrationParty } from '../../../../orchestration/orchestration-party'
 import { CHAT_WORKER_AUTHORITY } from '../chat-assignee-admission'
 import type { WorkerResumeSession } from '../../../../orchestration/db/dispatch-context/worker-follow-up-lineage'
-import { getStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/structured-agent-session-registry'
+import { getStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import {
   resolveStructuredWorkerIdentity,
   structuredWorkerSession

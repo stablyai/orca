@@ -4,7 +4,7 @@ import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-sessio
 import { structuredChatNamingDeps } from '../runtime/agent-session/naming/structured-chat-naming-runtime'
 import { getDefaultSettings } from '../../shared/constants'
 import { normalizeSourceControlAiSettings } from '../../shared/source-control/ai/settings/source-control-ai-settings'
-import { setStructuredAgentSessionHost } from './agent-session-wire/structured-agent-session-registry'
+import { setStructuredAgentSessionHost } from './agent-session-wire/host/structured-agent-session-registry'
 import * as agentLaunch from '../text-generation/source-control-agent-launch'
 import * as homeLock from '../codex-cli/codex-home-process-lock'
 import { createMockDiscoveryChild } from '../text-generation/commit-message-text-generation-test-harness'
@@ -15,12 +15,12 @@ import {
   CALLER,
   envelope,
   hostTestState
-} from './agent-session-wire/structured-agent-session-host-test-harness'
+} from './agent-session-wire/host/testing/structured-agent-session-host-test-harness'
 import {
   hostTestAttachParams,
   HOST_TEST_SESSION,
   hostTestMessage
-} from './agent-session-wire/structured-agent-session-host-test-data'
+} from './agent-session-wire/host/testing/structured-agent-session-host-test-data'
 
 async function send(text: string, sessionId = HOST_TEST_SESSION) {
   const body = hostTestMessage(text)

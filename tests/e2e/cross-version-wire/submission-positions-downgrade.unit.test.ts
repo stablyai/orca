@@ -12,8 +12,8 @@ import {
   createTrackedJournalOpener,
   type TrackedJournalOpener
 } from '../../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
-import { projectJournalBatch } from '../../../src/main/native-chat/agent-session-wire/agent-session-journal-batch'
-import { readAgentSessionHydrationPage } from '../../../src/main/native-chat/agent-session-wire/agent-session-history-page'
+import { projectJournalBatch } from '../../../src/main/native-chat/agent-session-wire/publication/history/agent-session-journal-batch'
+import { readAgentSessionHydrationPage } from '../../../src/main/native-chat/agent-session-wire/publication/history/agent-session-history-page'
 import {
   importReleaseCheckoutModule,
   materializeReleaseCheckout,

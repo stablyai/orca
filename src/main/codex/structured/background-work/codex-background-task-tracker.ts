@@ -1,5 +1,5 @@
-import type { StructuredAgentSessionEndedEvent } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter'
-import type { StructuredAgentSessionChildWorkProducer } from '../../../native-chat/agent-session-wire/structured-agent-session-subagent-rows'
+import type { StructuredAgentSessionEndedEvent } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import type { StructuredAgentSessionChildWorkProducer } from '../../../native-chat/agent-session-wire/observations/structured-agent-session-subagent-rows'
 import type {
   AgentSessionBackgroundTask,
   AgentSessionBackgroundTaskState

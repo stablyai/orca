@@ -13,7 +13,7 @@ import type { AgentJournalItemIdentity } from '../../shared/agent-session/journa
 import type {
   AgentSessionCommandAdmission,
   StructuredAgentSessionCommandRun
-} from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+} from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { acpCompactPrompt } from './acp-compaction-turn'
 import { AcpAgentError, AcpAuthRequiredError, AcpConnectionClosedError } from './acp-errors'
 import type { AcpStructuredConnection } from './acp-structured-connection'

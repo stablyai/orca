@@ -5,8 +5,9 @@ import {
   type AgentJournalSnapshot
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session/agent-session-wire'
-import { AgentSessionSubscribers } from '../agent-session-wire/structured-agent-session-subscribers'
-import { settleStaleStructuredAgentSessionState } from '../agent-session-wire/structured-agent-session-dead-generation-settlement'
+import { AgentSessionSubscribers } from '../agent-session-wire/publication/subscribers/structured-agent-session-subscribers'
+import '../agent-session-wire/termination/structured-agent-session-dead-generation-settlement'
+import { settleStaleStructuredAgentSessionState } from '../agent-session-wire/termination/structured-agent-session-stale-state-settlement'
 import { openTestJournalHostDatabase } from './journal-host-database-test-support'
 import type { JournalLifecycleMutationInput } from './journal-row-builders'
 import { MAX_JOURNAL_LIFECYCLE_BATCH_BYTES } from './journal-row-schema'

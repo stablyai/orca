@@ -4,7 +4,7 @@ import { findInErrorChain } from '../../provider-process/provider-error-chain'
 import { withMissingProviderExecutable } from '../../provider-process/provider-executable-missing'
 import { claudeStartupAnswerObservation } from '../claude-startup-answer-observation'
 import { runClaudeControl } from '../claude-agent-sdk-control-requests'
-import { withObservedProviderExit } from '../../native-chat/agent-session-wire/structured-agent-session-failure-text'
+import { withObservedProviderExit } from '../../native-chat/agent-session-wire/startup/structured-agent-session-failure-text'
 import {
   PROVIDER_SESSION_ID,
   adapterAtPublishFor,
@@ -18,7 +18,7 @@ import type { ClaudeStructuredSessionEvent } from './claude-structured-session-s
 import { ClaudeStructuredSessionAdapter } from './claude-structured-session-adapter'
 import { NDJSON_MAX_LINE_BYTES } from '../../../shared/main-process-ndjson-framer'
 import { claudeAcquireFailure, claudeStartFailure } from '../claude-startup-failure'
-import { retryableAgentSessionAcquisition } from '../../native-chat/agent-session-wire/structured-agent-session-start-failure'
+import { retryableAgentSessionAcquisition } from '../../native-chat/agent-session-wire/startup/structured-agent-session-start-failure'
 
 const retryableStructuredAgentSessionStart = (error: unknown): boolean =>
   claudeStartFailure(error).retry === 'safe'

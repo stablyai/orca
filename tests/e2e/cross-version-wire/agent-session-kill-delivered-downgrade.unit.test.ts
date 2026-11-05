@@ -13,9 +13,9 @@ import {
   closeTestJournalHostDatabase,
   openTestJournalHostDatabase
 } from '../../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
-import { structuredAgentSessionLiveFence } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-current-work'
-import { upgradeStoredStructuredAgentSessionOwnerExitEvidence } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-lease-release'
-import { turnVerdictFromDeathEvidence } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-stale-turn-verdict'
+import { structuredAgentSessionLiveFence } from '../../../src/main/native-chat/agent-session-wire/observations/structured-agent-session-current-work'
+import { upgradeStoredStructuredAgentSessionOwnerExitEvidence } from '../../../src/main/native-chat/agent-session-wire/host/structured-agent-session-lease-release'
+import { turnVerdictFromDeathEvidence } from '../../../src/main/native-chat/agent-session-wire/termination/structured-agent-session-stale-turn-verdict'
 import { releaseStoredAgentSessionOwnerAfterSurfaceClose } from '../../../src/main/runtime/agent-session/ownership/agent-session-surface-release-transition'
 import { loadAgentSessionStoreRows } from '../../../src/main/runtime/agent-session/records/agent-session-record-rows'
 import {

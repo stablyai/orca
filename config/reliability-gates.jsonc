@@ -1476,7 +1476,7 @@
       "invariant": "Replay preserves latest revisions, original item order, fences, aliases, submissions, a newer schema winning over damage and cursor cleanup while retaining live items rather than all historical bodies; damage fails the load and deletes nothing.",
       "oracle": "Name a future-schema row read past a gap, name the first damage, fail a damaged load with every row kept, and name a missing epoch before a later gap. Existing journal and subscriber tests cover replayed content.",
       "commands": [
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/native-chat/agent-session-journal src/main/native-chat/agent-session-wire/agent-session-history-page.test.ts src/main/native-chat/agent-session-wire/agent-session-history-forward-read-budget.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-subscribers.test.ts",
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/native-chat/agent-session-journal src/main/native-chat/agent-session-wire/publication/history/testing/agent-session-history-page.test.ts src/main/native-chat/agent-session-wire/publication/history/testing/agent-session-history-forward-read-budget.test.ts src/main/native-chat/agent-session-wire/publication/subscribers/testing/structured-agent-session-subscribers.test.ts",
         "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/native-chat/agent-session-journal/journal-streaming-replay.test.ts src/main/native-chat/agent-session-journal/journal-damage.test.ts"
       ],
       "testFiles": [
@@ -1750,14 +1750,14 @@
       "invariant": "One structured-send operation id causes at most one provider dispatch. Each user Send on phone or desktop is a new action with a fresh id and one request; neither automatically resends an ambiguous action. The host retains the original action's outcome, and a later phone Send remains possible with equal text, after remount, or when phone storage fails. Repeated transmission of the same operation remains protected by host deduplication.",
       "oracle": "The retained unchanged-source receipts are the only current execution evidence; reduced-source assertions await validation. Historical oracle account (not a current claim for changed sources): Inject adapter/RPC acknowledgement loss, caller replacement, logical-client close after response, auth recovery with a written request, missing host submissions, legacy pending rows, stale fences, expiry, mobile remount, and phone storage refusal. Assert at most one dispatch for repeated transmission of one operation. For a later phone Send, assert a fresh id and second delivery while the original host entry remains unknown; equal images use current uploaded paths and delivery fields follow current host capabilities.",
       "commands": [
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/agent-session/lifecycle/agent-session-operation-ledger.test.ts src/shared/agent-session/requests/structured-agent-session-send-evidence.test.ts src/main/runtime/agent-session/ownership/agent-session-operation-admission.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-send.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-delivery.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-host.test.ts src/renderer/src/components/native-chat/structured-agent-session-message-sender.test.ts",
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/agent-session/lifecycle/agent-session-operation-ledger.test.ts src/shared/agent-session/requests/structured-agent-session-send-evidence.test.ts src/main/runtime/agent-session/ownership/agent-session-operation-admission.test.ts src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-send.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-delivery.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-host.test.ts src/renderer/src/components/native-chat/structured-agent-session-message-sender.test.ts",
         "ORCA_BACKGROUND_LAUNCH=1 pnpm --dir mobile test ../mobile/src/session/mobile-structured-send-new-action.test.ts ../mobile/src/session/use-mobile-structured-agent-session-send.test.tsx ../mobile/src/session/use-mobile-structured-agent-session-queued.test.tsx ../mobile/src/session/use-mobile-structured-agent-session-read-failure.test.tsx ../mobile/src/session/use-mobile-structured-agent-session.test.tsx ../mobile/src/session/native-chat/composer/mobile-native-chat-image-attachment.test.ts ../mobile/src/session/native-chat/composer/use-mobile-native-chat-image-attachments.test.ts ../mobile/src/mobile-web-shell/page-storage-keys.test.ts ../mobile/src/mobile-web-shell/bridge/page-async-storage.test.ts ../mobile/src/mobile-web-shell/use-page-host-snapshot.test.tsx ../mobile/src/mobile-web-shell/bridge-host-init.test.ts ../mobile/src/transport/mobile-relay-rpc-session.test.ts ../mobile/src/transport/rpc-client-delivery-ambiguity.test.ts ../mobile/src/transport/stable-logical-rpc-client.test.ts --maxWorkers=2"
       ],
       "testFiles": [
         "src/shared/agent-session/lifecycle/agent-session-operation-ledger.test.ts",
         "src/shared/agent-session/requests/structured-agent-session-send-evidence.test.ts",
         "src/main/runtime/agent-session/ownership/agent-session-operation-admission.test.ts",
-        "src/main/native-chat/agent-session-wire/structured-agent-session-send.test.ts",
+        "src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-send.test.ts",
         "src/main/runtime/orchestration/structured-mailbox-pointer-delivery.test.ts",
         "src/main/runtime/orchestration/structured-mailbox-pointer-host.test.ts",
         "src/renderer/src/components/native-chat/structured-agent-session-message-sender.test.ts",
@@ -1778,7 +1778,7 @@
       ],
       "assertionRefs": [
         {
-          "file": "src/main/native-chat/agent-session-wire/structured-agent-session-send.test.ts",
+          "file": "src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-send.test.ts",
           "assertions": [
             "never redelivers after admission survives without its journal submission",
             "fails closed when a legacy pending row survives without its submission",
@@ -1875,7 +1875,7 @@
           "platform": "linux",
           "result": "passed",
           "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/agent-session/lifecycle/agent-session-operation-ledger.test.ts src/shared/agent-session/requests/structured-agent-session-send-evidence.test.ts src/main/runtime/agent-session/ownership/agent-session-operation-admission.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-send.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-delivery.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-host.test.ts src/renderer/src/components/native-chat/structured-agent-session-message-sender.test.ts",
-          "currentCommand": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/agent-session/lifecycle/agent-session-operation-ledger.test.ts src/shared/agent-session/requests/structured-agent-session-send-evidence.test.ts src/main/runtime/agent-session/ownership/agent-session-operation-admission.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-send.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-delivery.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-host.test.ts src/renderer/src/components/native-chat/structured-agent-session-message-sender.test.ts",
+          "currentCommand": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/agent-session/lifecycle/agent-session-operation-ledger.test.ts src/shared/agent-session/requests/structured-agent-session-send-evidence.test.ts src/main/runtime/agent-session/ownership/agent-session-operation-admission.test.ts src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-send.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-delivery.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-host.test.ts src/renderer/src/components/native-chat/structured-agent-session-message-sender.test.ts",
           "durationSeconds": 9.682,
           "summary": "97 focused tests passed on isolated Xvfb. Deterministic fixtures; no live provider, physical mobile, mixed-version deployment or cross-platform claim. Audit1474 reduced selector."
         }

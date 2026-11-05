@@ -20,14 +20,14 @@ import { agentSessionFailureWords } from '../../../shared/agent-session/failures
 import {
   queuedImageReaderSnapshot,
   queuedImageSourceIds
-} from '../agent-session-wire/agent-session-queued-image-reader'
-import { readPublishedQueuedMessages } from '../agent-session-wire/structured-agent-session-queued-publication'
+} from '../agent-session-wire/publication/history/agent-session-queued-image-reader'
+import { readPublishedQueuedMessages } from '../agent-session-wire/delivery/structured-agent-session-queued-publication'
 import {
   projectQueuedImageCardPublication,
   queuedImageHistoryReader,
   queuedImageSubscriber
 } from '../../runtime/rpc/methods/structured-agent-session-queued-image-capability'
-import { openStructuredAgentSessionConversationJournal } from '../agent-session-wire/structured-agent-session-conversation-open'
+import { openStructuredAgentSessionConversationJournal } from '../agent-session-wire/host/structured-agent-session-conversation-open'
 import { agentSessionRecordFixture } from '../agent-session-record-test-fixture'
 import { agentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 
@@ -522,7 +522,7 @@ export function registerRetainedEchoBoundaryContract() {
                 { fence: 1, turnScope: thread }
               )
               const { structuredRewindCut } =
-                await import('../agent-session-wire/structured-rewind-cut')
+                await import('../agent-session-wire/rewind/structured-rewind-cut')
               const cut = structuredRewindCut(journal, {
                 itemId: agentJournalItemKey(target),
                 provider: 'codex',
@@ -558,9 +558,9 @@ export function registerRetainedEchoBoundaryContract() {
               })
               const store = await openTestAgentSessionRecordStore(root)
               const { applyStructuredRewindRecovery } =
-                await import('../agent-session-wire/structured-rewind-recovery')
+                await import('../agent-session-wire/rewind/structured-rewind-recovery')
               const { createStructuredAgentSessionLogger } =
-                await import('../agent-session-wire/structured-agent-session-logger')
+                await import('../agent-session-wire/host/structured-agent-session-logger')
               await applyStructuredRewindRecovery(
                 { store, logger: createStructuredAgentSessionLogger() },
                 identity.sessionId,

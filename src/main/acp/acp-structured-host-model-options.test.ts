@@ -16,19 +16,19 @@ import {
   CALLER,
   envelope,
   hostTestState
-} from '../native-chat/agent-session-wire/structured-agent-session-host-test-harness'
+} from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-harness'
 import {
   HOST_TEST_SESSION as SESSION,
   hostTestAttachParams
-} from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
+} from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
 import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import { createAgentModelCatalogService } from '../native-chat/agent-model-catalog/agent-model-catalog-service'
 import { AgentModelCatalogStore } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 import type { AgentSessionRecordStore } from '../runtime/agent-session/records/agent-session-record-store'
 import { withLiveCatalogListing } from '../native-chat/agent-model-catalog/agent-model-catalog-entry'
 import { AcpStructuredOptions } from './acp-structured-options'
-import { readStructuredAgentSessionOptions } from '../native-chat/agent-session-wire/structured-agent-session-options-read'
-import { structuredAgentSessionHandingOver } from '../native-chat/agent-session-wire/structured-agent-session-handing-over'
+import { readStructuredAgentSessionOptions } from '../native-chat/agent-session-wire/options/structured-agent-session-options-read'
+import { structuredAgentSessionHandingOver } from '../native-chat/agent-session-wire/delivery/structured-agent-session-handing-over'
 
 const recorded = (version: string) =>
   JSON.parse(

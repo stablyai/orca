@@ -12,7 +12,7 @@ import { STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS } from '../../rpc/methods
 import { DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES } from '../../../ipc/desktop-renderer-runtime-capabilities'
 import { STRUCTURED_AGENT_RUNTIME_REGISTRATIONS } from '../installation/structured-agent-runtime-registrations'
 import * as recordStore from '../records/agent-session-record-store-slot'
-import * as registry from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
+import * as registry from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import * as catalogService from '../../../native-chat/agent-model-catalog/agent-model-catalog-service'
 import * as environment from '../environment/structured-agent-shell-environment'
 import type { ProviderProcessLaunch } from '../../../provider-process/provider-process-launch'
@@ -25,7 +25,7 @@ import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
 } from '../structured-agent-session-runtime'
-import { createStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/structured-agent-session-logger'
+import { createStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 
 const profile = vi.hoisted(() => ({ root: '' }))
 vi.mock('../../../orca-profiles/profile-storage-paths', async (importOriginal) => ({

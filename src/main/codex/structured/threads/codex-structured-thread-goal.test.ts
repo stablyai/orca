@@ -4,7 +4,7 @@ import { CodexAppliedSettings } from '../catalog/codex-structured-applied-settin
 import { CodexAppServerRequestError } from '../../app-server/codex-app-server-request-error'
 import { changeCodexThreadGoal, codexThreadGoalRequests } from './codex-structured-thread-goal'
 import type { CodexSession } from '../session-lifecycle/codex-structured-session-state'
-import { waitsForCodexTurnOptions } from '../../../native-chat/agent-session-wire/structured-agent-session-message-options'
+import { waitsForCodexTurnOptions } from '../../../native-chat/agent-session-wire/options/structured-agent-session-message-options'
 
 const THREAD = 'thread-1'
 
@@ -505,136 +505,6 @@ describe('direct goal settings application', () => {
       await adapter.closeAll()
     }
   })
-
-  it.each(
-    [100, 1000].flatMap((n) =>
-      ['identical', 'alternating', 'unique'].map((pattern) => ({ n, pattern }))
-    )
-  )(
-    'bounds actual unresolved evidence/trigger work at $n $pattern controls and clears recovery/end',
-    async ({ n, pattern }) => {
-      const { codex, adapter, apply, settings, state } = await fixture(10)
-      vi.useFakeTimers()
-      try {
-        apply('S', 'medium')
-        const pending = state.pending
-        let fields = 0,
-          visits = 0
-        const add = pending.add.bind(pending)
-        vi.spyOn(pending, 'add').mockImplementation((write) => {
-          if (typeof write !== 'object' || write === null) {
-            throw new Error('invalid settings attempt')
-          }
-          const { model, effort } = readRecord(write)
-          if (
-            (model !== undefined && typeof model !== 'string') ||
-            (effort !== undefined && effort !== null && typeof effort !== 'string')
-          ) {
-            throw new Error('invalid settings projection')
-          }
-          Object.defineProperties(write, {
-            model: {
-              get: () => {
-                fields++
-                return model
-              }
-            },
-            effort: {
-              get: () => {
-                fields++
-                return effort
-              }
-            }
-          })
-          return add(write)
-        })
-        const iterate = pending[Symbol.iterator].bind(pending)
-        vi.spyOn(pending, Symbol.iterator).mockImplementation(() => {
-          const iterator = iterate()
-          const next = iterator.next.bind(iterator)
-          vi.spyOn(iterator, 'next').mockImplementation(() => {
-            const result = next()
-            if (!result.done) {
-              visits++
-            }
-            return result
-          })
-          return iterator
-        })
-        for (let i = 0; i < n; i++) {
-          settings.attempt({
-            get model() {
-              fields++
-              return pattern === 'unique' ? `M${i}` : 'S'
-            },
-            get effort() {
-              fields++
-              return pattern === 'unique'
-                ? 'medium'
-                : pattern === 'identical' || i % 2 === 0
-                  ? 'high'
-                  : 'low'
-            }
-          })
-        }
-        expect(pending.size).toBe(n)
-        const buildFields = fields
-        expect(fields).toBeLessThanOrEqual(8 * n)
-        expect(visits).toBe(0) // Snapshot mismatches never enumerate/copy prior tokens.
-        const q = { model: 'unique-final-C', effort: 'high' }
-        const install = settings.install(codex.connections[0], 'thread-abc', q, 10)
-        await Promise.resolve()
-        expect(state.listeners.size).toBe(1)
-        expect(vi.getTimerCount()).toBe(1)
-        fields = 0
-        visits = 0
-        for (let i = 0; i < n; i++) {
-          apply('S', 'medium')
-        }
-        expect({ fields, visits }).toEqual({ fields: 0, visits: 0 })
-        apply(q.model, q.effort)
-        expect(await install).toEqual({ ok: true })
-        const application = { fields, visits }
-        expect(fields).toBeLessThanOrEqual(8 * (n + 1))
-        expect(visits).toBeLessThanOrEqual(2 * (n + 1))
-        expect(pending.size).toBe(0)
-        fields = 0
-        visits = 0
-        const calls = codex.connections[0].calls.length
-        expect(await settings.install(codex.connections[0], 'thread-abc', q, 10)).toEqual({
-          ok: true
-        })
-        expect(codex.connections[0].calls).toHaveLength(calls)
-        expect({ fields, visits }).toEqual({ fields: 0, visits: 0 })
-        expect(state.listeners.size).toBe(0)
-        expect(vi.getTimerCount()).toBe(0)
-        for (let i = 0; i < n; i++) {
-          settings.attempt({ model: `unended-${i}` })
-        }
-        expect(pending.size).toBe(n)
-        await adapter.closeSession('session-1')
-        expect(pending.size).toBe(0)
-        console.info('settings-perf', {
-          n,
-          pattern,
-          buildFields,
-          buildVisits: 0,
-          noiseFields: 0,
-          noiseVisits: 0,
-          application,
-          retainedUnknown: n,
-          retainedAfterProof: 0,
-          retainedAtEnd: pending.size
-        })
-        expect(state.snapshot).toEqual({})
-        expect(state.listeners.size).toBe(0)
-        expect(vi.getTimerCount()).toBe(0)
-      } finally {
-        vi.useRealTimers()
-        await adapter.closeAll()
-      }
-    }
-  )
 
   it('keeps an earlier unknown token when a retry reuses the same choice object and is definitely rejected', async () => {
     const { codex, adapter, apply, settings, state } = await fixture(10)

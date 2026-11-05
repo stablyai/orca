@@ -13,7 +13,7 @@ import {
 import type {
   StructuredAgentSessionEventSink,
   StructuredAgentSessionSinkAdmission
-} from '../../../native-chat/agent-session-wire/structured-agent-session-event-sink'
+} from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import { cancelledJournalPromptBody } from '../../../native-chat/agent-session-journal/journal-prompt-body-bounds'
 import type { CodexTurnOrdinals } from './codex-turn-ordinals'
 import type { CodexStructuredItemStreams } from '../items/codex-structured-item-stream-contracts'

@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { JournalHostDatabase } from '../../../native-chat/agent-session-journal/journal-host-database'
-import { createStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/structured-agent-session-logger'
+import { createStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { openAgentSessionRecordStoreOnce } from './agent-session-record-store-slot'
 import { stopStructuredAgentSessionRuntime } from '../structured-agent-session-runtime'
 

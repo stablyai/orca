@@ -9,7 +9,7 @@ import {
 import { isSqliteCorruption } from '../../sqlite/sqlite-read-failure'
 import type { JournalLoad } from './journal-open'
 import { AgentSessionJournalError } from './journal-write-guards'
-import type { StructuredAgentSessionLogger } from '../agent-session-wire/structured-agent-session-logger'
+import type { StructuredAgentSessionLogger } from '../agent-session-wire/host/structured-agent-session-logger'
 
 type JournalRefusalReason = AgentSessionRefusalReason<'agent_session_journal_unreadable'>
 

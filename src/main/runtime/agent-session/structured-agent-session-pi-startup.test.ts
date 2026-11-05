@@ -8,9 +8,9 @@ import {
   hostTestMessage,
   HOST_TEST_NOW,
   HOST_TEST_SESSION
-} from '../../native-chat/agent-session-wire/structured-agent-session-host-test-data'
-import { createStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/structured-agent-session-logger'
-import { structuredAgentSessionResumeParams } from '../../native-chat/agent-session-wire/structured-agent-session-resume-eligibility'
+} from '../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+import { createStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/structured-agent-session-logger'
+import { structuredAgentSessionResumeParams } from '../../native-chat/agent-session-wire/recovery/structured-agent-session-resume-eligibility'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import { prepareStructuredAgentSessionCreateForWorktree } from '../rpc/methods/structured-agent-session-create'
 import type { AgentSessionModelOption } from '../../../shared/agent-session/agent-session-wire'

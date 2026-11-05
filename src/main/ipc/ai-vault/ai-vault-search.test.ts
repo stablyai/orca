@@ -35,7 +35,7 @@ import {
 } from '../../../shared/ai-vault/search/ai-vault-search-test-fixture'
 import { agentSessionRecordFixture } from '../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
-import { setStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
+import { setStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 beforeEach(() => {
   handlers.clear()
   sshSearch.mockReset()

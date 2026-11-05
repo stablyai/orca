@@ -8,18 +8,18 @@ import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import type { AgentSessionMutationEnvelope } from '../../../shared/agent-session/agent-session-wire'
 import { CODEX_STRUCTURED_AGENT } from '../../codex/structured/launch/codex-structured-agent-definition'
-import type { StructuredAgentDefinition } from '../../native-chat/agent-session-wire/structured-agent-definition'
+import type { StructuredAgentDefinition } from '../../native-chat/agent-session-wire/providers/structured-agent-definition'
 import {
   CODEX_SCRIPTED_THREAD,
   codexScriptedChild
 } from '../../codex/structured/session-lifecycle/codex-scripted-child.test-fixture'
-import type { StructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-host'
+import type { StructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-host'
 import {
   HOST_TEST_SESSION as SESSION,
   hostTestAttachParams,
   hostTestMessage
-} from '../../native-chat/agent-session-wire/structured-agent-session-host-test-data'
-import { createStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/structured-agent-session-logger'
+} from '../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+import { createStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import type { ScriptedAgentChild } from './installation/structured-agent-scripted-child.test-fixture'
 import {
   ensureStructuredAgentSessionHost,

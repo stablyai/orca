@@ -15,7 +15,7 @@ import { CLAUDE_INITIALIZE_TIMEOUT_MS } from './claude-structured-session-startu
 import { providerRequestTimeoutOf } from '../../provider-process/provider-request-timeout'
 import type { ClaudeStructuredLaunch } from './launch/claude-structured-launch-resolution'
 import { claudeRecord } from './journal/claude-structured-item-translation'
-import { startupAcquisitionRefusal } from '../../native-chat/agent-session-wire/structured-agent-session-failure-text'
+import { startupAcquisitionRefusal } from '../../native-chat/agent-session-wire/startup/structured-agent-session-failure-text'
 import { providerDiagnosticOf } from '../../../shared/agent-session/failures/agent-session-failure'
 import { claudeStreamJsonExitError } from '../claude-stream-json-exit-error'
 

@@ -7,8 +7,8 @@ import type {
   StructuredAgentSessionItemAppendOptions,
   StructuredAgentSessionEventSink,
   StructuredAgentSessionSinkAdmission
-} from '../../../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import type { StructuredAgentSessionIdentityResolver } from '../../../native-chat/agent-session-wire/structured-agent-session-journal-views'
+} from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
+import type { StructuredAgentSessionIdentityResolver } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-journal-views'
 import '../../../native-chat/agent-session-journal/journal-row-builders'
 import {
   journalLifecycleItemMutation,

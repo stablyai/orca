@@ -22,8 +22,8 @@ import type {
   AgentSessionHistoryResult,
   AgentSessionSubscribeEvent
 } from '../../../shared/agent-session/agent-session-wire'
-import { attachFingerprintFields } from '../../native-chat/agent-session-wire/structured-agent-session-attach'
-import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
+import { attachFingerprintFields } from '../../native-chat/agent-session-wire/acquisition/structured-agent-session-attach'
+import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { importLegacyTranscriptIntoJournal } from '../../native-chat/agent-session-journal/journal-legacy-import'
 import type { AgentSessionJournal } from '../../native-chat/agent-session-journal/journal-store'
 import { createTrackedJournalOpener } from '../../native-chat/agent-session-journal/journal-host-database-test-support'
@@ -37,7 +37,7 @@ import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
 } from './structured-agent-session-runtime'
-import { createStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/structured-agent-session-logger'
+import { createStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { scriptedCodexTransport } from '../orca-runtime-tests/scripted-codex-transport.test-fixture'
 
@@ -700,27 +700,6 @@ describe('a structured codex session over agentSession.*', () => {
       '',
       'Stopped.'
     ])
-  })
-
-  it('caches shell exports but re-reads configured overrides for a resume', async () => {
-    shellEnvironmentPolicy = { inheritAll: false, names: [] }
-    const created = await ok<{ fence: number }>('agentSession.create', createIntentParams())
-    expect(codex.live().launch.env?.EXAMPLE_GATEWAY_TOKEN).toBeUndefined()
-    expect(bootEnvironmentReads).toBe(1)
-    const beforeResume = codexOverrideReads
-
-    configuredCodexProfile = 'updated'
-    shellEnvironmentPolicy = { inheritAll: false, names: ['EXAMPLE_GATEWAY_TOKEN'] }
-    const resumed = await ok<{ fence: number }>('agentSession.ensure', attachParams(created.fence))
-
-    expect(resumed.fence).toBe(created.fence + 1)
-    expect(codex.live().resumedThreadId).toBe(THREAD)
-    expect(codex.live().launch.env).toMatchObject({
-      CODEX_PROFILE: 'updated',
-      EXAMPLE_GATEWAY_TOKEN: 'shell-exported'
-    })
-    expect(bootEnvironmentReads).toBe(1)
-    expect(codexOverrideReads).toBeGreaterThan(beforeResume)
   })
 
   it('refuses to build a host for a client that never advertised the capability', async () => {

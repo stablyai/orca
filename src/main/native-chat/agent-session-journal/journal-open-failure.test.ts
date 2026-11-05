@@ -16,7 +16,7 @@ import { AgentSessionJournalError } from './journal-write-guards'
 import { journalDatabasePath } from './journal-host-database'
 import { replayJournal } from './journal-open'
 import { createJournalReducerState } from './journal-reducer'
-import { recordingStructuredAgentSessionLogger } from '../agent-session-wire/structured-agent-session-logger-test-support'
+import { recordingStructuredAgentSessionLogger } from '../agent-session-wire/host/testing/structured-agent-session-logger-test-support'
 
 let root: string
 
