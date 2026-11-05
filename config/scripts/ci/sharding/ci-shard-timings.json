@@ -7652,7 +7652,6 @@
       "src/renderer/src/components/right-sidebar/ai-vault/scope/ai-vault-session-projects.test.ts": 117,
       "src/renderer/src/components/right-sidebar/ai-vault/scanning/ai-vault-session-publication-gate.test.ts": 196,
       "src/renderer/src/components/right-sidebar/ai-vault/scanning/ai-vault-session-refresh.test.ts": 2034,
-      "src/renderer/src/components/right-sidebar/ai-vault/session-actions/ai-vault-session-resume-in-chat-launch.test.ts": 1260,
       "src/renderer/src/components/right-sidebar/ai-vault/session-actions/ai-vault-session-resume-in-chat-workspace.test.ts": 746,
       "src/renderer/src/components/right-sidebar/ai-vault/session-actions/ai-vault-session-resume.test.ts": 1753,
       "src/renderer/src/components/right-sidebar/ai-vault/session-list/ai-vault-session-worktree-map.test.tsx": 2000,
