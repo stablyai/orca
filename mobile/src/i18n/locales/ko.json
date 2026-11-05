@@ -228,7 +228,18 @@
       "selectText": "텍스트 선택"
     },
     "nativeChatImageViewer": {
-      "closeImage": "이미지 닫기"
+      "closeImage": "이미지 닫기",
+      "imageActions": "이미지 작업",
+      "copyImage": "이미지 복사",
+      "saveImage": "이미지 저장",
+      "share": "공유…",
+      "imageCopied": "이미지를 복사했습니다",
+      "imageSaved": "이미지를 저장했습니다",
+      "copyFailed": "이미지를 복사할 수 없습니다",
+      "saveFailed": "이미지를 저장할 수 없습니다",
+      "shareFailed": "이미지를 공유할 수 없습니다",
+      "photosAccessDenied": "설정에서 Orca의 사진 추가를 허용하세요",
+      "imageTooLarge": "이미지가 너무 큽니다"
     },
     "nativeChatProse": {
       "attachedImage": "첨부 이미지",

@@ -236,7 +236,18 @@
       "selectText": "Выделить текст"
     },
     "nativeChatImageViewer": {
-      "closeImage": "Закрыть изображение"
+      "closeImage": "Закрыть изображение",
+      "imageActions": "Действия с изображением",
+      "copyImage": "Копировать изображение",
+      "saveImage": "Сохранить изображение",
+      "share": "Поделиться…",
+      "imageCopied": "Изображение скопировано",
+      "imageSaved": "Изображение сохранено",
+      "copyFailed": "Не удалось скопировать изображение",
+      "saveFailed": "Не удалось сохранить изображение",
+      "shareFailed": "Не удалось поделиться изображением",
+      "photosAccessDenied": "Разрешите Orca добавлять фото в Настройках",
+      "imageTooLarge": "Изображение слишком большое"
     },
     "nativeChatProse": {
       "attachedImage": "Прикреплённое изображение",

@@ -228,7 +228,18 @@
       "selectText": "Text auswählen"
     },
     "nativeChatImageViewer": {
-      "closeImage": "Bild schließen"
+      "closeImage": "Bild schließen",
+      "imageActions": "Bildaktionen",
+      "copyImage": "Bild kopieren",
+      "saveImage": "Bild sichern",
+      "share": "Teilen …",
+      "imageCopied": "Bild kopiert",
+      "imageSaved": "Bild gesichert",
+      "copyFailed": "Bild konnte nicht kopiert werden",
+      "saveFailed": "Bild konnte nicht gesichert werden",
+      "shareFailed": "Bild konnte nicht geteilt werden",
+      "photosAccessDenied": "Erlaube Orca in den Einstellungen, Fotos hinzuzufügen",
+      "imageTooLarge": "Dieses Bild ist zu groß"
     },
     "nativeChatProse": {
       "attachedImage": "Angehängtes Bild",
