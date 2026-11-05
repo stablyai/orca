@@ -1,5 +1,6 @@
 import type { BridgeErrorCapture } from './bridge/bridge-error-capture'
 import { gateVerdict } from './mobile-web-shell-gates'
+import { acceptsSessionEventFlow, sessionFlowFloor } from './mobile-web-shell-session-step'
 import type {
   MobileWebShellSession,
   MobileWebShellSessionEvent,
@@ -35,12 +36,12 @@ export function traceShellStep(
   event: MobileWebShellSessionEvent,
   after: MobileWebShellSession
 ): ShellLogTrace {
-  if ('flow' in event && event.flow !== before.flow) {
+  if (!acceptsSessionEventFlow(before, event)) {
     return trace
   }
   switch (event.type) {
     case 'cache-read':
-      return { ...trace, cacheReadFlow: event.flow }
+      return { ...trace, cacheReadFlow: sessionFlowFloor(before) }
     case 'activated':
       return {
         ...trace,
@@ -78,7 +79,8 @@ export function shellSessionStepLines(
   after: MobileWebShellSession,
   trace: ShellLogTrace
 ): ShellLifecycleLine[] {
-  if ('flow' in event && event.flow !== before.flow) {
+  // A superseded flow's result changed nothing and says nothing about this one.
+  if (!acceptsSessionEventFlow(before, event)) {
     return []
   }
   const lines = [...eventLines(before, event, trace)]

@@ -3,6 +3,8 @@ package expo.modules.orcamobilewebshell
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
+import android.os.Handler
+import android.os.Looper
 import expo.modules.kotlin.exception.CodedException
 import expo.modules.kotlin.exception.Exceptions
 import expo.modules.kotlin.modules.Module
@@ -11,6 +13,16 @@ import expo.modules.kotlin.modules.ModuleDefinition
 class OrcaMobileWebShellModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("OrcaMobileWebShell")
+
+    Function("clearRetainedSlot") {
+      if (Looper.myLooper() == Looper.getMainLooper()) {
+        OrcaMobileWebShellView.clearRetainedSlot()
+      } else {
+        Handler(Looper.getMainLooper()).post {
+          OrcaMobileWebShellView.clearRetainedSlot()
+        }
+      }
+    }
 
     // Takes a FileProvider content:// URI; the grant lets the chosen viewer read Orca's cache file.
     AsyncFunction("presentPdf") { uri: String ->
@@ -40,6 +52,10 @@ class OrcaMobileWebShellModule : Module() {
 
       Prop("bridgeEnabled") { view: OrcaMobileWebShellView, value: Boolean ->
         view.setBridgeEnabled(value)
+      }
+
+      Prop("retainsSlot") { view: OrcaMobileWebShellView, value: Boolean ->
+        view.setRetainsSlot(value)
       }
 
       AsyncFunction("postBridgeMessage") { view: OrcaMobileWebShellView, json: String ->

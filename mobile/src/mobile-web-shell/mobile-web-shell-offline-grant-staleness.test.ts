@@ -174,18 +174,40 @@ describe('an offline cold start after a grant-only manifest edit', () => {
     doubles.manifest = null
   })
 
+  it('opens a same-build hit online without writing to the generation directory', async () => {
+    // Do not rewrite manifest.json while the native view may read it during page open.
+    const fileSystem = createFakeGenerationFileSystem()
+    await cacheGeneration(fileSystem, manifestGranting(GRANTS_A))
+    const generationPaths = () =>
+      fileSystem.paths().filter((path) => path.startsWith(`${HOST_KEY}/generations/`))
+    const paths = generationPaths()
+    const settled = fileSystem.writes.length
+    doubles.manifest = M2
+
+    const online = await mountRoute(fileSystem)
+
+    expect(online.state()).toMatchObject({ kind: 'ready', buildId: BUILD_ID })
+    expect(online.routeGrants()).toEqual([...GRANTS_A_PLUS_B, 'native.storage.read'])
+    const generationWrites = fileSystem.writes
+      .slice(settled)
+      .filter((path) => path.startsWith(`${HOST_KEY}/generations/`))
+    expect(generationWrites).toEqual([])
+    expect(generationPaths()).toEqual(paths)
+    await online.unmount()
+  })
+
   it('reads the grants the assets arrived with, whatever a later online read accepted', async () => {
     const fileSystem = createFakeGenerationFileSystem()
     await cacheGeneration(fileSystem, manifestGranting(GRANTS_A))
     doubles.manifest = M2
     const online = await mountRoute(fileSystem)
-    expect(online.routeGrants()).toEqual(GRANTS_A_PLUS_B)
+    expect(online.routeGrants()).toEqual([...GRANTS_A_PLUS_B, 'native.storage.read'])
     await online.unmount()
 
     goOffline()
     const offline = await mountRoute(fileSystem)
 
     expect(offline.state()).toMatchObject({ kind: 'ready', buildId: BUILD_ID })
-    expect(offline.routeGrants()).toEqual(GRANTS_A)
+    expect(offline.routeGrants()).toEqual([...GRANTS_A, 'native.storage.read'])
   })
 })

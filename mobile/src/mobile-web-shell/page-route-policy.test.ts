@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
+import { MobileWebBundleRouteSchema } from '../../../src/shared/mobile-web-bundle/manifest-contract'
 
 import {
   matchesRoutePattern,
   grantsForRoute,
+  pageRouteRefusalVerdict,
   routePatternRefusal,
   routeViewOf
 } from './page-route-policy'
@@ -125,6 +127,9 @@ describe('the pairs a session publishes to the page', () => {
 describe('a route that declares an optional grant', () => {
   const pathname = '/h/[hostId]/session/[worktreeId]'
   const opened = '/h/host-1/session/wt-1'
+  const declared = [
+    { pathname, grants: ['navigate', 'storage'], optionalGrants: ['screencastBinary'] }
+  ]
 
   it('drops an optional name this shell does not implement, and serves the route anyway', () => {
     const fromTheFuture = [
@@ -133,5 +138,49 @@ describe('a route that declares an optional grant', () => {
     expect(grantsForRoute(fromTheFuture, opened)).toEqual(['navigate', 'storage'])
     // Missing optional grants hide an affordance; missing required grants leave the screen native.
     expect(pageRoutesOf(fromTheFuture)).toEqual([pathname])
+  })
+
+  // Compute session and target-pair grants identically so local hops cannot retain targets requiring capabilities absent from their session.
+  it('publishes the same list to the page as it grants the session', () => {
+    const parsed = MobileWebBundleRouteSchema.parse(declared[0])
+    expect(parsed.optionalGrants).toEqual(['screencastBinary'])
+    const view = routeViewOf([parsed], opened)
+    expect(view.pageRouteGrants).toEqual([{ pathname, grants: view.routeGrants }])
+    expect(view.routeGrants).toEqual(['navigate', 'storage', 'screencastBinary'])
+  })
+
+  it('grants the host route every child grant, so a phone keeps the workspace hop', () => {
+    const host = { pathname: '/h/[hostId]', grants: ['navigate', 'storage'] }
+    const workspace = {
+      pathname: '/h/[hostId]/session/[worktreeId]',
+      grants: ['navigate', 'storage', 'native.clipboard.read']
+    }
+    const phone = routeViewOf([host, workspace], '/h/host-1')
+    expect(phone.ownsHostArea).toBe(false)
+    expect(phone.routeGrants).toEqual([
+      'navigate',
+      'storage',
+      'native.clipboard.read',
+      'native.storage.read'
+    ])
+    for (const pair of phone.pageRouteGrants) {
+      expect(pair.grants.every((grant) => phone.routeGrants.includes(grant))).toBe(true)
+    }
+    expect(routeViewOf([host, workspace], '/h/host-1/session/wt-1').routeGrants).toEqual(
+      workspace.grants
+    )
+  })
+})
+
+describe('why the page does not serve a route', () => {
+  const reasonFor = (...args: Parameters<typeof pageRouteRefusalVerdict>) =>
+    pageRouteRefusalVerdict(...args)?.reason
+
+  it('blames the desktop on a wide layout when its page cannot own the host area', () => {
+    const routes = [{ pathname: '/h/[hostId]', grants: [] }]
+    expect(reasonFor(routes, '/h/a', true)).toBe('page-route-unlisted')
+    expect(
+      reasonFor([{ ...routes[0]!, grants: ['teleport'], canOwnHostArea: true }], '/h/a', true)
+    ).toBe('page-route-grant-missing')
   })
 })
