@@ -3668,7 +3668,6 @@
             "e8b3741ff7": "被忽略",
             "a9957007eb": "忽略 {{value0}}",
             "bef0adef9b": "分支",
-            "0b1766738a": "存放庫",
             "bbb1ab6a6f": "選擇{{value0}}",
             "b771c92598": "刪除所選內容",
             "7eee951968": "掃描工作區",
@@ -3677,7 +3676,6 @@
             "b2c1331844": "刪除閒置工作區",
             "7f451a3e2c": "無法忽略清理建議",
             "662b8ec3f8": "工作區清理掃描失敗",
-            "4d0b72481c": "忽略",
             "9cc26c019d": "移除",
             "0e2d235c63": "工作區掃描就緒",
             "4a35c08764": "檢視",
@@ -3685,9 +3683,6 @@
             "1d3503357d": "刪除作業會繼續進行，您可以先關閉此視窗，稍後再回來。",
             "4c2990886e": "已刪除 {{value0}}/{{value1}}",
             "86ba852118": "{{value0}}，{{value1}} 個失敗",
-            "deletingCount": "正在刪除工作區：{{value0}}",
-            "deleteCount": "刪除工作區：{{value0}}？",
-            "selectedForDeletionCount": "已選擇刪除：{{value0}}",
             "deleteButtonCount": "刪除 {{value0}}",
             "archivedStatus": "已封存",
             "74f6c16279": "返回"
@@ -3702,7 +3697,6 @@
           },
           "candidateRow": {
             "gitLabel": "Git",
-            "commitsLabel": "提交",
             "contextLabel": "上下文",
             "flagsLabel": "標記",
             "collapseDetails": "收起詳情",
@@ -5887,8 +5881,6 @@
           "expandAriaLabel": "展開 {{repo}} 中隱藏的工作樹",
           "hiding_one": "已隱藏 {{count}} 個偵測到的工作樹",
           "hiding_other": "已隱藏 {{count}} 個偵測到的工作樹",
-          "hidingInRepo_one": "已隱藏 {{repo}} 中的 {{count}} 個偵測到的工作樹",
-          "hidingInRepo_other": "已隱藏 {{repo}} 中的 {{count}} 個偵測到的工作樹",
           "keepHiddenAriaLabel_one": "讓 {{repo}} 中的 {{count}} 個偵測到的工作樹保持隱藏；可從專案選單恢復顯示",
           "keepHiddenAriaLabel_other": "讓 {{repo}} 中的 {{count}} 個偵測到的工作樹保持隱藏；可從專案選單恢復顯示",
           "keepHiddenTooltip": "保持隱藏，可從專案選單恢復顯示",
@@ -14850,7 +14842,6 @@
           "ff92d15436": "Orca 會在代理程式完成工作或需要協助時發出通知。",
           "b054332836": "設定通知",
           "f396db9f20": "讓這裡有家的感覺",
-          "322fc50a18": "Orca 支援所有 CLI 代理程式。選擇你最常用的一個，隨時可切換。",
           "198b148b3c": "選擇預設代理程式",
           "windowsTerminalTitle": "設定 Windows 終端機預設值",
           "windowsTerminalSubtitle": "為新窗格選擇預設 Shell，以及終端機中右鍵按一下的行為。",
@@ -15306,8 +15297,6 @@
           "AiCommitPrSettingsCard": {
             "8d4152701a": "例如 ollama run llama3.1 {{value0}}",
             "9ee54037a4": "自訂命令",
-            "4b2fc4b80c": "思考強度",
-            "be8917699e": "模型",
             "560d4feb00": "自訂",
             "29d119fe95": "代理程式",
             "f9382b48a1": "啟用 AI 作者",
@@ -17767,6 +17756,9 @@
         },
         "automationTargetAvailability": {
           "hostMismatch": "儲存的執行主機與此專案設定不再相符。"
+        },
+        "launchSettings": {
+          "needsFreshSession": "代理程式啟動設定要求每次執行都使用新工作階段。"
         }
       },
       "agent": {
@@ -19078,8 +19070,6 @@
       },
       "turnDiff": {
         "partial": "部分差異",
-        "showDiff": "顯示差異",
-        "hideDiff": "隱藏差異",
         "changedFiles_other": "{{count}} 個已變更的檔案"
       },
       "receipt": {
@@ -19837,9 +19827,7 @@
         "browse": {
           "noSizes": "尚未測量工作區大小。",
           "noSizesDescription": "測量磁碟用量後會顯示大小。",
-          "measureSizes": "掃描",
           "measureSizesTitle": "掃描工作區大小",
-          "measureSizesDescription": "掃描磁碟用量，以依大小比較、排序與篩選工作區。",
           "sizeOnDisk": "磁碟用量：{{value0}}",
           "checkingGitRow": "正在檢查 Git 狀態",
           "searchPlaceholder": "搜尋名稱、存放庫、分支、路徑、主機",
@@ -20176,6 +20164,9 @@
       },
       "nativeChat": {
         "followUpBehaviorTitle": "將後續訊息加入佇列",
+        "scrollToLatestOnSendTitle": "傳送時捲動到最新訊息",
+        "scrollToLatestOnSendCopy": "向上捲動時傳送訊息會跳到最新訊息並跟隨回覆。關閉後會保留目前位置。",
+        "scrollToLatestOnSendSearchPosition": "位置",
         "inlineVisualsTitle": "內嵌視覺化",
         "inlineVisualsCopy": "允許代理程式在其回覆中顯示圖表、示意圖和原型圖。適用於新啟動的聊天。",
         "inlineVisualsToggleLabel": "切換內嵌視覺化",
@@ -20187,7 +20178,13 @@
         "queueSearchSteer": "立即傳送",
         "shellEnvSearchVariables": "環境變數",
         "shellEnvSearchPath": "PATH",
-        "shellEnvSearchProxy": "代理"
+        "shellEnvSearchProxy": "代理",
+        "idleStopTitle": "閒置多久後停止代理",
+        "idleStopCopy": "聊天閒置達到此時長後，結束該聊天的代理以釋放記憶體。聊天會保留，你傳送下一則訊息時代理會重新啟動。如果代理在輪次之間仍會在背景繼續工作，請選擇「永不」。",
+        "idleStopSearchIdle": "idle",
+        "idleStopSearchTimeout": "逾時",
+        "idleStopSearchKeepAlive": "保持運作",
+        "idleStopNever": "永不"
       }
     },
     "agentChildRow": {
@@ -20514,10 +20511,8 @@
       "offTerminal": "比較喜歡終端機？終端機仍會獲得完整支援。在您選擇聊天之前，代理程式都會繼續在終端機中開啟。",
       "onIntro": "聊天介面已結束實驗階段，正式成為 Orca 的一部分。您的代理程式會繼續以聊天方式開啟，支援豐富訊息、視覺內容和圖片。",
       "onTerminal": "終端機同樣會獲得完整支援。您隨時可以把任何代理程式切換回終端機。",
-      "changeInSettings": "隨時可在<link>設定 → 代理程式</link>中變更。",
       "stayInTerminal": "繼續使用終端機",
       "cta": "使用聊天介面",
-      "saveFailed": "無法開啟聊天介面。請在「設定 → 代理程式」中選擇聊天。",
       "demoTabTitle": "說明登入流程",
       "demoPrompt": "說明登入是怎麼運作的",
       "demoReply": "登入從 {{file}} 開始：瀏覽器送出到 /login，伺服器檢查密碼並建立工作階段，然後將您重新導向到應用程式。流程如下：",

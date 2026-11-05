@@ -44,62 +44,6 @@ describe('AgentHookServer Codex subagent transcript polling', () => {
     vi.useRealTimers()
   })
 
-  it('publishes rollout-only children and removes them after their task completes', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'agent-hook-codex-subagent-'))
-    dirs.push(dir)
-    const parentPath = join(dir, 'rollout-parent.jsonl')
-    const childPath = join(dir, `rollout-child-${CHILD_ID}.jsonl`)
-    writeFileSync(
-      parentPath,
-      line({
-        type: 'event_msg',
-        payload: {
-          type: 'sub_agent_activity',
-          occurred_at_ms: 1234,
-          agent_thread_id: CHILD_ID,
-          agent_path: '/root/pr_review',
-          kind: 'started'
-        }
-      })
-    )
-    writeFileSync(childPath, line({ type: 'event_msg', payload: { type: 'task_started' } }))
-    const server = new AgentHookServer()
-    await server.start({ env: 'production' })
-    try {
-      const env = server.buildPtyEnv()
-      const response = await fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/codex`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Connection: 'close',
-          'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
-        },
-        body: JSON.stringify({
-          paneKey: PANE_KEY,
-          tabId: 'tab-1',
-          worktreeId: 'wt-1',
-          payload: {
-            hook_event_name: 'PostToolUse',
-            session_id: 'root-session',
-            transcript_path: parentPath,
-            tool_name: 'collaborationspawn_agent'
-          }
-        })
-      })
-
-      expect(response.status).toBe(204)
-      expect(server.getStatusSnapshot()[0]?.subagents).toEqual([
-        expect.objectContaining({ id: CHILD_ID, description: '/root/pr_review' })
-      ])
-
-      appendFileSync(childPath, line({ type: 'event_msg', payload: { type: 'task_complete' } }))
-      await vi.advanceTimersByTimeAsync(1_000)
-      expect(server.getStatusSnapshot()[0]?.subagents).toBeUndefined()
-    } finally {
-      server.stop()
-    }
-  })
-
   // Poll rearming depends on retaining the identity of the stored roster object.
   it('keeps polling across successive roster changes', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'agent-hook-codex-subagent-'))

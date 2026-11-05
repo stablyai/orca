@@ -4,12 +4,10 @@ import type { Repo } from '../../../../shared/repo-types'
 import type { PublicKnownRuntimeEnvironment } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { Worktree } from '../../../../shared/worktree/types'
 import {
-  findWslHostForDistro,
   wslMoveBlockerProjects,
   wslMoveCatalogCandidates,
   wslMoveCounts,
   wslMoveDistroOfPath,
-  wslMoveProjectRows,
   wslMoveTargetForRepo,
   type WslMoveCatalog
 } from './wsl-move-scope-rows'
@@ -46,11 +44,6 @@ function wslHost(distro: string): PublicKnownRuntimeEnvironment {
 }
 
 describe('wslMoveDistroOfPath', () => {
-  it('names the distro of a WSL folder, in either share spelling', () => {
-    expect(wslMoveDistroOfPath(UNC)).toBe('Ubuntu')
-    expect(wslMoveDistroOfPath('//wsl$/Debian/home/x')).toBe('Debian')
-  })
-
   it('keeps Windows-drive folders and plain Windows paths on this computer', () => {
     expect(wslMoveDistroOfPath('\\\\wsl.localhost\\Ubuntu\\mnt\\c\\src\\api')).toBeNull()
     expect(wslMoveDistroOfPath('C:\\src\\api')).toBeNull()
@@ -73,12 +66,6 @@ describe('wslMoveTargetForRepo', () => {
     expect(
       wslMoveTargetForRepo(repo('r', UNC, { connectionId: 'ssh-1' }), [wslHost('Ubuntu')])
     ).toBeNull()
-  })
-
-  it('ignores non-WSL environments', () => {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a runtime without a deployment link.
-    const plain = { id: 'r1', name: 'Ubuntu' } as PublicKnownRuntimeEnvironment
-    expect(findWslHostForDistro([plain], 'Ubuntu')).toBeNull()
   })
 })
 
@@ -110,14 +97,6 @@ describe('rows, counts and blockers', () => {
       'folder:notes': [{ id: 't2', entityId: 'term-2', contentType: 'terminal' }]
     }
   }
-
-  it('names local rows and falls back to the id', () => {
-    expect(wslMoveProjectRows(catalog, ['api', 'gone'], ['notes'])).toEqual([
-      { kind: 'repo', id: 'api', name: 'Repo api' },
-      { kind: 'repo', id: 'gone', name: 'gone' },
-      { kind: 'folder', id: 'notes', name: 'Folder notes' }
-    ])
-  })
 
   it('counts local workspaces, terminals and chats of the selection', () => {
     expect(

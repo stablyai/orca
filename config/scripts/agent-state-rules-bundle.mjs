@@ -6,7 +6,7 @@ import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { agentStateRulesTag } from './release-tag-patterns.mjs'
+import { agentStateRulesTag } from './release/versioning/release-tag-patterns.mjs'
 
 const RULES_DIR = join(import.meta.dirname, '..', '..', 'src/main/runtime/agent-state-rules')
 export const AGENT_STATE_RULES_ASSET = 'agent-state-rules.json'

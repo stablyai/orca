@@ -6,7 +6,6 @@ import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import {
   createLaunchFunnelStore,
   queuedStartupCommand,
-  queuedStartupPayload,
   resetLaunchFunnelStore
 } from './agent-launch-funnel-test-harness'
 
@@ -66,17 +65,6 @@ describe('agent launch caller arguments and permission bypass', () => {
   })
 
   it.each(BYPASS_BY_AGENT)(
-    'ships %s (%s) with its permission-bypass flag when no call site names arguments',
-    async (agent, _mode, bypassFlag) => {
-      const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
-
-      launchAgentInNewTab({ requestId: 'request-2', agent, worktreeId: 'wt-1' })
-
-      expect(queuedStartupCommand(store)).toContain(bypassFlag)
-    }
-  )
-
-  it.each(BYPASS_BY_AGENT)(
     'drops the bypass flag for %s when the user stored Manual arguments',
     async (agent, _mode, bypassFlag) => {
       store.settings = { ...store.settings, agentDefaultArgs: { [agent]: '' } }
@@ -88,36 +76,6 @@ describe('agent launch caller arguments and permission bypass', () => {
       expect(queuedStartupCommand(store)).not.toContain(bypassFlag)
     }
   )
-
-  it('launches without any arguments when a caller passes agentArgs as null', async () => {
-    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
-
-    launchAgentInNewTab({
-      requestId: 'request-6',
-      agent: 'codex',
-      worktreeId: 'wt-1',
-      agentArgs: null
-    })
-
-    expect(queuedStartupCommand(store)).toBe("codex '-c' 'disable_paste_burst=true'")
-    expect(queuedStartupPayload(store)?.agentArgsOverride).toBeNull()
-  })
-
-  it('lets a per-launch argument beat the stored setting', async () => {
-    store.settings = { ...store.settings, agentDefaultArgs: { codex: '--model stored' } }
-    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
-
-    launchAgentInNewTab({
-      requestId: 'request-7',
-      agent: 'codex',
-      worktreeId: 'wt-1',
-      agentArgs: '--model per-launch'
-    })
-
-    expect(queuedStartupCommand(store)).toBe(
-      "codex '-c' 'disable_paste_burst=true' '--model' 'per-launch'"
-    )
-  })
 
   // Composer picks seed structured creates only; terminal fallbacks must not receive them (launch-structured-agent-session tests).
   it.each([

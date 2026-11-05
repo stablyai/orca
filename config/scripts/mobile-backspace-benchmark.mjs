@@ -3,8 +3,8 @@ import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { build } from 'esbuild'
-import { buildCounterbalancedSchedule } from './counterbalanced-benchmark-schedule.mjs'
-import { summarizeBenchmarkSamples } from './benchmark-sample-summary.mjs'
+import { buildCounterbalancedSchedule } from './performance/measurement/counterbalanced-benchmark-schedule.mjs'
+import { summarizeBenchmarkSamples } from './performance/measurement/benchmark-sample-summary.mjs'
 
 // git show <baseline-ref>:mobile/src/terminal/terminal-live-text-commit.ts | node config/scripts/mobile-backspace-benchmark.mjs
 const target = resolve('mobile/src/terminal/terminal-live-text-commit.ts')

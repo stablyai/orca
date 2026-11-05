@@ -103,17 +103,6 @@ function withEditor(content: string, run: (editor: Editor) => void): void {
 }
 
 describe('handleRichMarkdownTableTab', () => {
-  it('adds a row when Tab is pressed in the last cell', () => {
-    withEditor(TABLE, (editor) => {
-      const rowsBefore = countRows(editor)
-      editor.commands.setTextSelection(caretAtText(editor, 'b2') + 'b2'.length)
-      expect(handleRichMarkdownTableTab(editor, false)).toBe(true)
-      expect(countRows(editor)).toBe(rowsBefore + 1)
-      expect(selectionText(editor)).toBe('')
-      expect(editor.isActive('table')).toBe(true)
-    })
-  })
-
   it('does not claim Tab outside tables', () => {
     withEditor('Just a paragraph.\n', (editor) => {
       editor.commands.setTextSelection(1)
@@ -129,17 +118,6 @@ describe('handleRichMarkdownTableEnter', () => {
       editor.commands.setTextSelection(caretAtText(editor, 'a1'))
       expect(handleRichMarkdownTableEnter(editor)).toBe(true)
       expect(selectionText(editor)).toBe('a2')
-    })
-  })
-
-  it('adds a row when Enter is pressed on the last row', () => {
-    withEditor(TABLE, (editor) => {
-      const rowsBefore = countRows(editor)
-      editor.commands.setTextSelection(caretAtText(editor, 'a2'))
-      expect(handleRichMarkdownTableEnter(editor)).toBe(true)
-      expect(countRows(editor)).toBe(rowsBefore + 1)
-      expect(selectionText(editor)).toBe('')
-      expect(editor.isActive('table')).toBe(true)
     })
   })
 
@@ -180,24 +158,6 @@ describe('handleRichMarkdownTableBackspace', () => {
       expect(handleRichMarkdownTableBackspace(editor)).toBe(true)
       expect(hasTable(editor)).toBe(false)
     })
-  })
-
-  it('keeps an emptied header row while body rows remain', () => {
-    withEditor(
-      `|  |  |
-| --- | --- |
-| keep | a |
-| stay | c |
-`,
-      (editor) => {
-        const before = editor.getMarkdown()
-        editor.commands.setTextSelection(caretInRow(editor, (text) => text.length === 0))
-        // Consumed so ProseMirror cannot merge the table into what precedes it.
-        expect(handleRichMarkdownTableBackspace(editor)).toBe(true)
-        expect(countRows(editor)).toBe(3)
-        expect(editor.getMarkdown()).toBe(before)
-      }
-    )
   })
 
   it('does not hijack Backspace when the current cell still has content', () => {

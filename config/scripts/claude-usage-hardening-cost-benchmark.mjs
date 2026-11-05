@@ -7,7 +7,7 @@ import { dirname, join, relative, sep } from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { parseArgs } from 'node:util'
 import { build } from 'esbuild'
-import { buildCounterbalancedSchedule } from './counterbalanced-benchmark-schedule.mjs'
+import { buildCounterbalancedSchedule } from './performance/measurement/counterbalanced-benchmark-schedule.mjs'
 import { runProcessSync } from '@orca/process-host'
 import {
   loadClaudeUsageBenchmarkScanner,

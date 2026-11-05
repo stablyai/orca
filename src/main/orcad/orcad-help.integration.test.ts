@@ -12,7 +12,9 @@ let launcher = ''
 beforeAll(async () => {
   directory = await mkdtemp(join(tmpdir(), 'orcad-help-'))
   launcher = join(directory, ORCAD_LAUNCHER_FILENAME)
-  const builder = pathToFileURL(join(process.cwd(), 'config/scripts/orcad-entry-build.mjs')).href
+  const builder = pathToFileURL(
+    join(process.cwd(), 'config/scripts/orcad-distribution/server-bundle/orcad-entry-build.mjs')
+  ).href
   const built = await runProcess({
     program: process.execPath,
     args: [

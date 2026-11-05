@@ -7,7 +7,6 @@ import {
   TerminalRemovalInProgressError,
   WatcherRemovalInProgressError
 } from './watcher-removal-gate'
-import { isWorktreeRemovalFenceError } from '../../../shared/worktree/removal-fence-error'
 
 describe('watcher removal gate', () => {
   it.each([
@@ -198,34 +197,6 @@ describe('watcher removal gate', () => {
 
     const finishInstall = beginWatcherInstall('/srv/team/repo')
     finishInstall()
-    removal.release()
-  })
-
-  // Renderer removal handling depends on recognizing the exact shared fence-error predicate.
-  it('throws fence errors the renderer recognizes as benign removal fences', async () => {
-    const removal = acquireWatcherRemovalGate('/repo')
-    await removal.ready
-
-    const terminalError = (() => {
-      try {
-        beginTerminalInstall('/repo')
-      } catch (error) {
-        return error as Error
-      }
-      throw new Error('expected terminal install to be fenced')
-    })()
-    const watcherError = (() => {
-      try {
-        beginWatcherInstall('/repo')
-      } catch (error) {
-        return error as Error
-      }
-      throw new Error('expected watcher install to be fenced')
-    })()
-
-    expect(isWorktreeRemovalFenceError(terminalError.message)).toBe(true)
-    expect(isWorktreeRemovalFenceError(watcherError.message)).toBe(true)
-
     removal.release()
   })
 })

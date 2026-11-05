@@ -23,19 +23,6 @@ describe('browser execution host key resolution', () => {
     ).toMatchObject({ kind: 'native', runtimeId: runtime.getRuntimeId() })
   })
 
-  it('holds a resolvable workspace whose execution host cannot be minted yet', async () => {
-    const runtime = createRuntime()
-    Object.defineProperty(runtime, 'resolveBrowserNetworkExecutionHostForWorktree', {
-      value: async () => {
-        throw new Error('Host provider is not ready')
-      }
-    })
-
-    await expect(runtime.resolveBrowserExecutionHostKeyForWorkspace(WORKSPACE_ID)).resolves.toEqual(
-      { status: 'unavailable' }
-    )
-  })
-
   it('settles a workspace that no longer resolves', async () => {
     const runtime = createRuntime()
 

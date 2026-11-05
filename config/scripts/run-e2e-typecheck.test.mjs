@@ -4,7 +4,7 @@ import { join, resolve } from 'node:path'
 import { runProcessSync } from '@orca/process-host'
 import { afterEach, expect, it, vi } from 'vitest'
 import { countTestTypeErrors } from './check-e2e-typecheck-ratchet.mjs'
-import { resolvePinnedBunExecutable } from './pinned-bun-executable.mjs'
+import { resolvePinnedBunExecutable } from './tool-invocation/pinned-bun-executable.mjs'
 import { runE2eTypecheck } from './run-e2e-typecheck.mjs'
 
 const ROOT = process.cwd()

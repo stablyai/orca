@@ -614,7 +614,7 @@ describe('real host queue publication and operation bounds', () => {
     'settles a queue-only %s without resending',
     async (outcome) => {
       const rig = await createQueuedMessageTestRig({
-        idleSweep: { idleMs: 0, intervalMs: 3600000 }
+        idleSweep: { idleMs: () => 0, intervalMs: 3600000 }
       })
       mocks.actualHost = rig.host
       try {

@@ -5,10 +5,13 @@
       "connecting": "正在连接到主机…",
       "connectingTo": "正在连接到 {{name}}…",
       "default": "系统默认",
+      "fableWindow": "Fable",
       "hostNotFound": "未找到主机",
       "invalidSnapshot": "主机返回的账户快照无效",
       "loadingAccounts": "正在加载账户…",
       "manageAccountsHint": "请在桌面的“设置 → 账户”中添加账户或重新进行账户身份验证。",
+      "mcpWindow": "MCP",
+      "otherAgents": "其他智能体",
       "refreshAccounts": "刷新账户",
       "sessionWindow": "5小时",
       "switchFailed": "无法切换账户",
@@ -736,6 +739,8 @@
     },
     "hostCard": {
       "hostActions": "{{title}} 的操作",
+      "needsYou_one": "{{count}} 个需要您处理",
+      "needsYou_other": "{{count}} 个需要您处理",
       "openHost": "打开 {{title}}",
       "pairingInvalid": "配对无效",
       "pairingTemporarilyUnavailable": "配对暂时不可用",
@@ -1269,10 +1274,30 @@
     }
   },
   "home": {
+    "agents": {
+      "activeCount": "{{count}} 个活跃",
+      "heading": "智能体",
+      "showAll": "显示全部 {{count}} 个",
+      "showFewer": "收起"
+    },
     "appUpdateCard": {
       "dismissAccessibilityLabel": "关闭 Orca {{version}} 更新提示",
       "title": "Orca {{version}} 已可用",
       "updateAccessibilityLabel": "Orca {{version}} 已可用，点按更新"
+    },
+    "automationsTab": {
+      "connectDesktop": "请连接 {{desktop}}，才能查看和运行自动化。",
+      "createHint": "轻点 + 以安排智能体。",
+      "emptyTitle": "安排智能体工作",
+      "lastStatus": "上次：{{status}}",
+      "newAutomation": "新建自动化",
+      "noAutomations": "暂无自动化",
+      "pairDesktop": "请先配对桌面，才能查看和运行自动化。",
+      "paused": "已暂停",
+      "scheduled": "已计划",
+      "showFor": "选择要显示自动化的桌面",
+      "toggleFailed": "无法更新 {{name}}",
+      "updateDesktop": "请更新 {{desktop}} 上的 Orca，以使用自动化。"
     },
     "emptyState": {
       "connectedDescription": "桌面将显示在这里。所有数据均采用端到端加密。",
@@ -1284,9 +1309,7 @@
       "title": "连接桌面"
     },
     "listFooter": {
-      "hostPickerTitle": "选择打开任务的主机",
-      "automationsHeading": "自动化",
-      "automationsHostPickerTitle": "选择主机以打开自动化"
+      "hostPickerTitle": "选择打开任务的主机"
     },
     "listHeader": {
       "desktopsHeading": "台式机"
@@ -1297,6 +1320,33 @@
       "removeHostMessage": "要移除“{{name}}”吗？之后可重新配对。",
       "removeHostTitle": "移除主机",
       "tryAgain": "请重试。"
+    },
+    "stats": {
+      "agentTime": "智能体时间",
+      "agentsSpawned": "已启动智能体",
+      "days": "{{days}} 天",
+      "heading": "你的统计",
+      "hours": "{{hours}} 小时",
+      "minutes": "{{minutes}} 分钟",
+      "prsCreated": "已创建 PR"
+    },
+    "tabs": {
+      "automations": "自动化",
+      "chooseDesktop": "{{desktop}}，选择其他桌面",
+      "feed": "动态",
+      "usage": "使用情况"
+    },
+    "usage": {
+      "active": "使用中",
+      "addAccounts": "请在桌面的“设置 → 账户”中添加账户。",
+      "connectDesktop": "请连接 {{desktop}}，才能查看智能体账户使用情况。",
+      "emptyTitle": "暂无使用情况",
+      "openAccountsHint": "打开此桌面的账户",
+      "pairDesktop": "请先配对桌面，才能查看智能体账户使用情况。",
+      "refresh": "刷新使用情况",
+      "showUsageFor": "选择要显示使用情况的桌面",
+      "updatedAgo": "{{time}}前更新",
+      "updatedJustNow": "刚刚更新"
     }
   },
   "hooks": {
@@ -1497,7 +1547,7 @@
       "notificationsTitle": "智能体需要您时，及时收到提醒",
       "openInChatUi": "在聊天界面中打开会话",
       "openInTerminal": "在终端中打开会话",
-      "sessionViewDescription": "选择在此设备上以终端还是聊天界面打开受支持的智能体会话。长按会话标签页可切换视图，也可稍后在“设置”中更改默认方式。",
+      "sessionViewDescription": "选择在此设备上以终端还是聊天界面打开受支持的智能体会话。长按会话标签页可切换视图，也可随时在“设置”→“聊天界面”中更改默认方式。",
       "sessionViewTitle": "以何种方式打开会话？",
       "skipNotifications": "暂不启用通知",
       "useChatUi": "使用聊天界面"
@@ -3882,7 +3932,6 @@
       "unknownResult": "未知结果",
       "notReported": "未报告",
       "searchOptions": "搜索选项",
-      "scheduleAgentWorkAndViewRuns": "安排代理工作并查看运行",
       "task": "任务",
       "review": "检查"
     },

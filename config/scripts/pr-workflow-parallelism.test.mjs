@@ -84,7 +84,7 @@ describe('PR workflow parallelism', () => {
           exec: async (command, args, options) => {
             expect(command).toBe('/bundled/node24')
             expect(args).toEqual([
-              'config/scripts/ci-unit-selection-review.mjs',
+              'config/scripts/ci/unit-selection/ci-unit-selection-review.mjs',
               'unit-evidence',
               ...(rebuild === 'true' ? ['ci-shards/unit-selection.json'] : [])
             ])

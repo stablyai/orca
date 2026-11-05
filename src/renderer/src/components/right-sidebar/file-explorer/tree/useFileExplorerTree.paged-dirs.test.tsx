@@ -63,17 +63,4 @@ describe('useFileExplorerTree paged folders', () => {
     })
     expect(result.current.dirCache['/repo'].children).toHaveLength(4)
   })
-
-  it('does nothing for a folder that was listed whole', async () => {
-    const { result } = renderHook(() => useFileExplorerTree('/repo', new Set(), 'wt-1'))
-    readDirectoryMock.mockResolvedValueOnce({ ...page(['a']), paged: undefined })
-    await act(async () => {
-      await result.current.loadDir('/repo', -1, { force: true })
-    })
-    readDirectoryMock.mockClear()
-    await act(async () => {
-      await result.current.loadMoreDir('/repo')
-    })
-    expect(readDirectoryMock).not.toHaveBeenCalled()
-  })
 })

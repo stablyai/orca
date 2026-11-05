@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { chromium } from 'playwright-core'
-import { buildMobileWebAppBundle } from '../build-mobile-web-app-bundle.mjs'
+import { buildMobileWebAppBundle } from '../build/mobile-web-app/build-mobile-web-app-bundle.mjs'
 import { mobileWebAppDependenciesPresent } from './mobile-web-app-bundle-dependencies.mjs'
 import {
   createBundleServer,
@@ -635,8 +635,9 @@ describeRender('the Route A page in a real browser', () => {
 // Probe mounted React Navigation canGoBack through real route chevron/router.back; page exposes no direct test hook.
 // First prove same-family tap reaches shell, since an inert handler and refused local Back both leave document unchanged.
 describeRender('the stack the page Back button rests on', () => {
-  const EDIT_ROUTE = `${HOST_ROUTE}/edit`
-  const BACK_ON_EDIT = '[aria-label="Back"]'
+  // Edit host is native-only now, so Tasks is the served screen with its own Back.
+  const TASKS_ROUTE = `${HOST_ROUTE}/tasks`
+  const BACK_ON_TASKS = '[aria-label="Back"]'
 
   async function clickAndSettle(page, selector) {
     await page.click(selector)
@@ -668,11 +669,11 @@ describeRender('the stack the page Back button rests on', () => {
   }, 60_000)
 
   it('cannot go back on the document the shell just opened, which is the one screen it has', async () => {
-    const opened = await openPage({ shellRoute: { pathname: EDIT_ROUTE } })
+    const opened = await openPage({ shellRoute: { pathname: TASKS_ROUTE } })
     await opened.page.goto(`${origin}/`, { waitUntil: 'load' })
-    await waitForRoute(opened, EDIT_ROUTE, 'Edit host')
-    expect(await opened.page.locator(BACK_ON_EDIT).count()).toBe(1)
-    expect(await clickAndSettle(opened.page, BACK_ON_EDIT)).toBe(EDIT_ROUTE)
+    await waitForRoute(opened, TASKS_ROUTE, 'Issues')
+    expect(await opened.page.locator(BACK_ON_TASKS).count()).toBe(1)
+    expect(await clickAndSettle(opened.page, BACK_ON_TASKS)).toBe(TASKS_ROUTE)
     expect(opened.errors).toEqual([])
     await opened.page.close()
   }, 60_000)
@@ -687,10 +688,10 @@ describeRender('the stack the page Back button rests on', () => {
     await opened.page.evaluate((to) => {
       history.pushState(null, '', to)
       dispatchEvent(new PopStateEvent('popstate'))
-    }, EDIT_ROUTE)
-    await waitForRoute(opened, EDIT_ROUTE, 'Edit host')
+    }, TASKS_ROUTE)
+    await waitForRoute(opened, TASKS_ROUTE, 'Issues')
     expect(await opened.page.evaluate(() => history.length)).toBe(entriesBefore + 1)
-    expect(await clickAndSettle(opened.page, BACK_ON_EDIT)).toBe(EDIT_ROUTE)
+    expect(await clickAndSettle(opened.page, BACK_ON_TASKS)).toBe(TASKS_ROUTE)
     // Synthetic popstate faults could leave page unchanged; require no boundary fault to validate absence.
     expect(opened.errors).toEqual([])
     await opened.page.close()

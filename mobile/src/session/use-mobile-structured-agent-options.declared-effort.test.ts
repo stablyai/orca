@@ -16,6 +16,8 @@ it('renders trustworthy context through the phone consumer while capturing only 
     const { agent, model, display, live, resting, launch, catalog } =
       await recordedEffortCase(input)
     for (const answer of [live, resting, launch]) {
+      // Only the chats that saved the model send it.
+      const sent = answer === launch ? {} : { model }
       let response = Promise.resolve(answer)
       const { client } = optionsClient(
         () => response,
@@ -39,13 +41,13 @@ it('renders trustworthy context through the phone consumer while capturing only 
         expect(effort).toBeUndefined()
       }
       expect(effort?.kind.currentValue).toBe(shown ?? undefined)
-      expect(harness.current().sendSelection()).toEqual({ selection: { model } })
+      expect(harness.current().sendSelection()).toEqual({ selection: sent })
       response = new Promise(() => {})
       await harness.rerender({ fence: 2 })
       expect(descriptorFor(harness.current().optionSnapshot, 'effort')?.kind.currentValue).toBe(
         shown ?? undefined
       )
-      expect(harness.current().sendSelection()).toEqual({ selection: { model } })
+      expect(harness.current().sendSelection()).toEqual({ selection: sent })
       await harness.unmount()
     }
   }

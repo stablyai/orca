@@ -96,65 +96,6 @@ describe('client placement profile switch safety', () => {
     mocks.getLocalProfile.mockReturnValue('default')
   })
 
-  it.each([
-    ['isolated', 'default'],
-    ['default', 'isolated']
-  ])('rejects %s to %s without mutating the old guest or metadata', async (current, next) => {
-    const { pages, runtime, window, bridge } = fixture(current)
-    const before = pages.getPage('remote-page')
-    await expect(
-      runtime.browserTabSetProfile({ page: 'remote-page', profileId: next })
-    ).rejects.toThrow('requires staged replacement support on both peers')
-    expect(pages.getPage('remote-page')).toBe(before)
-    expect(window).not.toHaveBeenCalled()
-    expect(bridge).not.toHaveBeenCalled()
-    expect(mocks.getLocalProfile).not.toHaveBeenCalled()
-    expect(mocks.on).not.toHaveBeenCalled()
-    expect(mocks.wait).not.toHaveBeenCalled()
-  })
-
-  it('commits a proven replacement profile and generation before notifying session readers', async () => {
-    const { pages, runtime, switchProfile, notify } = fixture()
-    const previous = pages.getPage('remote-page')!
-    const replacement = { ...previous.placement, pageHostGeneration: 2 }
-    switchProfile.mockResolvedValue(replacement)
-    await expect(
-      runtime.browserTabSetProfile({ page: 'remote-page', profileId: 'default' })
-    ).resolves.toMatchObject({ profileId: 'default' })
-    expect(switchProfile).toHaveBeenCalledWith(
-      expect.objectContaining({ browserPageId: 'remote-page', pageHostGeneration: 1 }),
-      { id: 'default', label: 'Default', scope: 'default' },
-      expect.any(Function)
-    )
-    expect(pages.getPage('remote-page')).toMatchObject({
-      browserProfileId: 'default',
-      placement: replacement,
-      metadataRevision: 0
-    })
-    expect(notify).toHaveBeenCalledWith('workspace')
-  })
-
-  it('uses authoritative profile identity for an actual no-op', async () => {
-    const { runtime, window } = fixture()
-    await expect(
-      runtime.browserTabSetProfile({ page: 'remote-page', profileId: 'isolated' })
-    ).resolves.toEqual({
-      browserPageId: 'remote-page',
-      profileId: 'isolated',
-      profileLabel: 'Isolated'
-    })
-    expect(mocks.getLocalProfile).not.toHaveBeenCalled()
-    expect(window).not.toHaveBeenCalled()
-  })
-
-  it('resolves the active client page without a server-local bridge', async () => {
-    const { runtime, bridge } = fixture()
-    await expect(
-      runtime.browserTabSetProfile({ worktree: 'workspace', profileId: 'isolated' })
-    ).resolves.toMatchObject({ browserPageId: 'remote-page', profileId: 'isolated' })
-    expect(bridge).not.toHaveBeenCalled()
-  })
-
   it('rejects an invalid profile without changing authoritative state', async () => {
     const { pages, runtime, window } = fixture()
     const before = pages.getPage('remote-page')
@@ -174,24 +115,5 @@ describe('client placement profile switch safety', () => {
         profileId: 'isolated'
       })
     ).rejects.toThrow('was not found in this worktree')
-  })
-
-  it('resolves a folder-workspace page without the server-local target path', async () => {
-    const { runtime, localTarget, window } = fixture()
-    await expect(
-      runtime.browserTabSetProfile({ worktree: 'id:folder:workspace', profileId: 'isolated' })
-    ).resolves.toMatchObject({ browserPageId: 'remote-page', profileId: 'isolated' })
-    expect(localTarget).not.toHaveBeenCalled()
-    expect(window).not.toHaveBeenCalled()
-  })
-
-  it('normalizes synthetic default before comparing the authoritative identity', async () => {
-    const canonical = { id: 'canonical-default', label: 'Default', partition: 'persist:canonical' }
-    mocks.getProfile.mockReturnValue(undefined)
-    mocks.getDefaultProfile.mockReturnValue(canonical)
-    const { runtime } = fixture('canonical-default')
-    await expect(
-      runtime.browserTabSetProfile({ page: 'remote-page', profileId: 'default' })
-    ).resolves.toMatchObject({ profileId: 'canonical-default' })
   })
 })

@@ -9,7 +9,7 @@ import {
   canAttach,
   crossingRequirements,
   parseDaemonProtocolFacts
-} from './daemon-protocol-facts.mjs'
+} from './daemon-protocol/schema-facts/daemon-protocol-facts.mjs'
 import { selectLatestStableReleaseTag } from './stable-release-tags.mjs'
 
 // Same override the cross-version-wire harness honors, so both pair against one ref.
