@@ -26,6 +26,21 @@ export function hasTerminalHandleRetirementProof(
   )
 }
 
+/** The newest handle the host recorded retiring from this pane surface; proofs are appended oldest first. */
+export function latestRetiredTerminalHandle(
+  snapshot: Pick<RuntimeMobileSessionTabsResult, 'retiredTerminalSurfaces'>,
+  surface: { tabId: string; leafId: string }
+): string | null {
+  const proofs = snapshot.retiredTerminalSurfaces ?? []
+  for (let index = proofs.length - 1; index >= 0; index -= 1) {
+    const proof = proofs[index]
+    if (proof.parentTabId === surface.tabId && proof.leafId === surface.leafId) {
+      return proof.terminal
+    }
+  }
+  return null
+}
+
 export function isRemovedSnapshot(snapshot: RuntimeMobileSessionTabsResult): boolean {
   return 'removed' in snapshot && snapshot.removed === true
 }

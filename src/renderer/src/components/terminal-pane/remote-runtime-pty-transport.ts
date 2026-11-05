@@ -60,6 +60,7 @@ import { createPtyOutputProcessor } from './pty-output-processor'
 import { localizeWslDistroHoldText } from '@/lib/wsl-distro-hold-copy'
 import { isSshSessionGoneError } from './pty-connection/pty-connect-limits'
 import { RuntimeRpcCallError, unwrapRuntimeRpcResult } from '../../runtime/runtime-rpc-result'
+import { latestRetiredTerminalHandle } from '../../runtime/web-session-terminal-orphan-recovery-surface-index'
 import {
   getRemoteRuntimePtyEnvironmentId,
   getRemoteRuntimeTerminalHandle,
@@ -69,7 +70,11 @@ import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-r
 import { getRemoteRuntimeTerminalMultiplexer } from '../../runtime/remote-runtime-terminal-multiplexer'
 import { REMOTE_TERMINAL_SNAPSHOT_TOO_LARGE } from '../../runtime/remote-runtime-terminal-snapshot-state'
 import { restoredSnapshotPaintsPrintableContent } from './restored-snapshot-coverage'
-import { hostRecordsTerminalExit, sameWhenBothKnown } from './remote-terminal-host-exit-record'
+import {
+  hostRecordedExitCode,
+  hostRecordsTerminalExit,
+  sameWhenBothKnown
+} from './remote-terminal-host-exit-record'
 import {
   watchHostRebindAfterExit,
   type HostRebindAfterExitWatch
@@ -147,6 +152,9 @@ const MAX_SURFACED_TERMINAL_ERRORS = 8
 const TERMINAL_CREATE_RETRY_DELAYS_MS = [250, 500, 1000, 2000, 4000, 8000, 15_000, 30_000] as const
 
 type HostHandleReplacementPolicy = 'reuse' | 'prefer-replacement' | 'require-replacement'
+
+/** The host closed this pane's surface for good (its process ended or it was closed); never reattach it. */
+type RetiredHostSurface = { retiredHandle: string }
 
 type PersistedHostPaneResolution =
   | { kind: 'resolved'; terminal: RuntimeTerminalResolvePane }
@@ -788,6 +796,37 @@ export function createRemoteRuntimePtyTransport(
     )
   }
 
+  function findRetiredHostSurface(
+    snapshot: RuntimeMobileSessionTabsResult,
+    hostTabId: string,
+    expectedHandle?: string
+  ): RetiredHostSurface | null {
+    if (!leafId || hasHostSessionTerminalSurface(snapshot, hostTabId)) {
+      return null
+    }
+    const retiredHandle = latestRetiredTerminalHandle(snapshot, { tabId: hostTabId, leafId })
+    return retiredHandle && (!expectedHandle || retiredHandle === expectedHandle)
+      ? { retiredHandle }
+      : null
+  }
+
+  // Why: the close record already proves the end; the host's exit record only adds its code.
+  async function endRetiredHostSurface(
+    retiredHandle: string,
+    isCurrent: () => boolean
+  ): Promise<void> {
+    const exitCode = await callRuntime<{ terminal?: RuntimeTerminalShow }>('terminal.show', {
+      terminal: retiredHandle
+    }).then(
+      ({ terminal }) =>
+        hostRecordsTerminalExit(terminal) ? hostRecordedExitCode(terminal) : undefined,
+      () => undefined
+    )
+    if (isCurrent() && !terminalEnded) {
+      retireRemoteTerminalId(exitCode)
+    }
+  }
+
   // Why: pending host surfaces materialize only through activation.
   function activateHostSessionSurface(
     hostTabId: string,
@@ -817,7 +856,7 @@ export function createRemoteRuntimePtyTransport(
   async function waitForHostSessionHandle(
     hostTabId: string,
     isCurrent: () => boolean
-  ): Promise<string | undefined | false> {
+  ): Promise<string | undefined | false | RetiredHostSurface> {
     if (!worktreeId) {
       return undefined
     }
@@ -894,6 +933,10 @@ export function createRemoteRuntimePtyTransport(
         nextRequest = 'list'
         continue
       }
+      const retired = findRetiredHostSurface(snapshot, hostTabId)
+      if (retired) {
+        return retired
+      }
       if (!hasHostSessionTerminalSurface(snapshot, hostTabId)) {
         const siblingStillExists =
           getHostSessionTerminalSurfaces(snapshot, hostTabId, {
@@ -942,7 +985,7 @@ export function createRemoteRuntimePtyTransport(
     hostTabId: string,
     isCurrent: () => boolean,
     outcome: { boundedWaitEnded: boolean }
-  ): Promise<string | undefined | false> {
+  ): Promise<string | undefined | false | RetiredHostSurface> {
     let recoveryEpoch = recovery.isActive ? recovery.currentEpoch : undefined
     while (isCurrent()) {
       try {
@@ -978,7 +1021,7 @@ export function createRemoteRuntimePtyTransport(
     previousHandle: string,
     replacementPolicy: HostHandleReplacementPolicy,
     recoveryEpoch: number
-  ): Promise<string | null | undefined> {
+  ): Promise<string | null | undefined | RetiredHostSurface> {
     if (!worktreeId) {
       return null
     }
@@ -1059,6 +1102,10 @@ export function createRemoteRuntimePtyTransport(
           return nextHandle
         }
         if (request === 'list') {
+          const retired = findRetiredHostSurface(listed, hostTabId, previousHandle)
+          if (retired) {
+            return retired
+          }
           if (hasHostSessionTerminalSurface(listed, hostTabId)) {
             if (!nextHandle) {
               // Why: the surface is published but unmaterialized, and only activation can mint its PTY.
@@ -1175,6 +1222,7 @@ export function createRemoteRuntimePtyTransport(
       (expectedAttachGeneration === undefined || expectedAttachGeneration === attachGeneration) &&
       (expectedLifecycleEpoch === undefined || expectedLifecycleEpoch === lifecycleEpoch)
     const hostTabId = toHostSessionTabId(tabId)
+    const paneHandle = handle
     const waitOutcome = { boundedWaitEnded: false }
     // Why overlap: resolvePane is a read keyed only by the pane, so it need not wait an activation round trip.
     const earlyPaneResolution = resolveHostSessionPane(hostTabId)
@@ -1206,6 +1254,20 @@ export function createRemoteRuntimePtyTransport(
       connecting = false
       emitRecoveryState()
       surfaceErrorMessage('Remote terminal was closed.')
+      return undefined
+    }
+    if (typeof hostHandle !== 'string') {
+      // A reattach ends the pty the pane already holds; a fresh open learns the ended one first, like a shell that died at once.
+      const endedHandle = notifySpawn || !paneHandle ? hostHandle.retiredHandle : paneHandle
+      handle = endedHandle
+      remotePtyId = toRemoteRuntimePtyId(endedHandle, currentRuntimeEnvironmentId)
+      if (notifySpawn) {
+        onPtySpawn?.(remotePtyId)
+      }
+      await endRetiredHostSurface(
+        hostHandle.retiredHandle,
+        () => isCurrent() && handle === endedHandle
+      )
       return undefined
     }
 
@@ -2360,8 +2422,7 @@ export function createRemoteRuntimePtyTransport(
       }
       remotePtyId ??= exitedPtyId
       const exitedIncarnationId = terminal.incarnationId ?? authoritativePtyIncarnationId
-      const cause = terminal.exitCause
-      retireRemoteTerminalId(cause?.kind === 'exited' ? cause.exitCode : undefined)
+      retireRemoteTerminalId(hostRecordedExitCode(terminal))
       if (rebindWatch && !destroyed) {
         stopWatchingHostRebind = rebindWatch.dispose
         const armed = rebindWatch
@@ -2686,6 +2747,13 @@ export function createRemoteRuntimePtyTransport(
         }
         // Unknown liveness needs scheduled backoff; healthy links may never emit online/resume to revive event-only parking (#27178).
         recovery.schedule(recoveryEpoch, retryResubscribe)
+        return
+      }
+      if (nextHandle && typeof nextHandle !== 'string') {
+        await endRetiredHostSurface(
+          nextHandle.retiredHandle,
+          () => !destroyed && connected && handle === previousHandle
+        )
         return
       }
       if (!nextHandle) {
