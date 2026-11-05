@@ -47,7 +47,7 @@ import type { AgentSenderAssociation } from '../../src/shared/agent-sender-assoc
 import type { AgentMessageSender } from '../../src/shared/agent-session/agent-session-message-source'
 import type { RuntimeClientTarget } from '../../src/shared/runtime-client-target'
 import { toRemoteRuntimePtyId } from '../../src/shared/remote-runtime/remote-runtime-pty-id'
-import { toWebTerminalSurfaceTabId } from '../../src/shared/terminal-surface-id'
+import { toWebTerminalSurfaceTabId } from '../../src/shared/workspace-layout/terminal-surface-id'
 
 const LOCAL: RuntimeClientTarget = { kind: 'local' }
 const PAIRED: RuntimeClientTarget = { kind: 'environment', environmentId: 'paired' }

@@ -1,6 +1,6 @@
 /** Repeated title-driven persists with unchanged host-visible layout must dedupe to one remote push; count at the IPC boundary. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
+import type { TerminalLayoutSnapshot } from '../../../../shared/workspace-layout/terminal-tab-types'
 
 const updateWebRuntimePaneLayout = vi.fn()
 vi.mock('@/runtime/web-runtime-terminal-actions', () => ({

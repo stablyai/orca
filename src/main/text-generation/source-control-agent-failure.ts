@@ -5,7 +5,7 @@ import {
   cleanGeneratedCommitMessage,
   excerptAgentFailureOutput,
   sanitizeAgentFailureDetail
-} from '../../shared/commit-message-prompt'
+} from '../../shared/source-control/ai/generation/commit-message-agent-output'
 import { withMacTailscaleDnsHint } from '../network/macos-tailscale-dns-diagnostic'
 import {
   captureAgentGenerationFailureOutput,
@@ -22,7 +22,7 @@ import {
   parseKimiGenerationOutput
 } from '../../shared/kimi-generation-output'
 import { formatKimiGenerationFailure } from './kimi-generation-failure'
-import type { CommitMessagePlan } from '../../shared/commit-message-plan'
+import type { CommitMessagePlan } from '../../shared/source-control/ai/generation/commit-message-plan'
 import {
   textGenerationFailure,
   type TextGenerationFailureFields

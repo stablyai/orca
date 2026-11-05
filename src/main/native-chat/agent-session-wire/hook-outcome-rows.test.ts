@@ -29,9 +29,9 @@ import { readAcpFixture } from '../../acp/acp-timeline-fixture.test-support'
 import { AcpTimelineTranslator } from '../../acp/acp-timeline-translator'
 import { PromptResponseSchema } from '../../acp/generated/acp-protocol.generated'
 import { createClaudeJournalTranslator } from '../../claude/structured/journal/claude-structured-journal-translation'
-import { createCodexJournalTranslator } from '../../codex/codex-structured-journal-translation'
-import { createCodexDispatchEchoes } from '../../codex/codex-structured-dispatch-echo'
-import { readCodexTurnId } from '../../codex/codex-structured-thread-facts'
+import { createCodexJournalTranslator } from '../../codex/structured/journal/codex-structured-journal-translation'
+import { createCodexDispatchEchoes } from '../../codex/structured/turns/codex-structured-dispatch-echo'
+import { readCodexTurnId } from '../../codex/app-server/codex-structured-thread-facts'
 import {
   closeProviderTimelineRigs,
   openProviderTimelineRig,

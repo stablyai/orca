@@ -9,7 +9,7 @@ import {
   type LocalFileSink
 } from './local-file-sink'
 import { getDaemonLogFilePath, getTraceFilePath } from './logs-directory'
-import { DAEMON_LOG_MAX_FILES } from '../daemon/daemon-file-log'
+import { DAEMON_LOG_MAX_FILES } from '../daemon/observability/daemon-file-log'
 import {
   collectBundle as _collectBundle,
   type CollectBundleOptions,

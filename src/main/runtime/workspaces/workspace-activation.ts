@@ -9,7 +9,7 @@ import { getRepoExecutionHostId } from '../../../shared/execution-host'
 import { phoneWakeReport } from '../../../shared/workspace-sleep'
 import type { Repo } from '../../../shared/repo-types'
 import type { TerminalWorkspaceLaunchScope } from '../runtime-legacy-worker-terminal-recovery-types'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { RuntimeTerminalWait } from '../../../shared/runtime-terminal-contracts'
 import {
   type WorktreeStartupDraftPaste,
@@ -45,7 +45,7 @@ import {
   waitForFreshComposerOnPty,
   watchLaunchComposer,
   type FreshComposerPtyHost
-} from '../launch-composer-watch'
+} from '../terminal/wait/launch-composer-watch'
 
 export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntimeWithForegroundInspection {
   protected abstract toAgentSessionOptions(
@@ -164,6 +164,7 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
     launchPreferences?: AgentLaunchPreferences,
     launchInputs?: {
       agentArgs?: string | null
+      sessionOptions?: Parameters<typeof buildWorktreeStartupForAgent>[0]['sessionOptions']
       extraAgentArgs?: string
       suppressStartupUpdatePrompt?: boolean
       launchSource?: string
@@ -181,6 +182,7 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
       ...(prompt !== undefined ? { prompt } : {}),
       ...(launchPreferences ? { launchPreferences } : {}),
       ...(launchInputs?.agentArgs !== undefined ? { agentArgs: launchInputs.agentArgs } : {}),
+      ...(launchInputs?.sessionOptions ? { sessionOptions: launchInputs.sessionOptions } : {}),
       ...(launchInputs?.extraAgentArgs ? { extraAgentArgs: launchInputs.extraAgentArgs } : {}),
       ...(launchInputs?.suppressStartupUpdatePrompt ? { suppressStartupUpdatePrompt: true } : {}),
       ...(launchInputs?.launchSource ? { launchSource: launchInputs.launchSource } : {}),

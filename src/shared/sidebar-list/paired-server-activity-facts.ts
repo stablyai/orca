@@ -3,8 +3,8 @@ import {
   toRuntimeExecutionHostId,
   type ExecutionHostId
 } from '../execution-host'
-import type { WorkspaceSessionState } from '../workspace-session-state-types'
-import { getWorkspaceSessionTabActivity } from '../workspace-session-tab-activity'
+import type { WorkspaceSessionState } from '../workspace-session/workspace-session-state-types'
+import { getWorkspaceSessionTabActivity } from '../workspace-session/workspace-session-tab-activity'
 import {
   composeWorktreeHostIdentity,
   type HostScopedWorktreeKey

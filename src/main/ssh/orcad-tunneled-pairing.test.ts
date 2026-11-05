@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { encodePairingOffer, parsePairingCode, PAIRING_OFFER_VERSION } from '../../shared/pairing'
+import { encodePairingOffer, parsePairingCode } from '../../shared/remote-runtime/pairing/pairing'
+import { PAIRING_OFFER_VERSION } from '../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import type { ServeReadiness } from '../server/serve-readiness'
 import { tunneledOrcadPairingCode } from './orcad-tunneled-pairing'
 

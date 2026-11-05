@@ -1,5 +1,5 @@
 import { agentPromptObservationSignal } from './agent-prompt-signals'
-import { assertTerminalInputAdmitted } from '../../terminal-input-admission'
+import { assertTerminalInputAdmitted } from './terminal-input-admission'
 import type {
   AgentPromptExpectedBinding,
   RuntimeAgentPromptWriteOptions
@@ -21,16 +21,16 @@ import {
   getAgentPromptSubmitDelayMs,
   getTerminalPasteIngestMs,
   resolveAgentPromptSubmitDelayForAgent
-} from '../../../../shared/agent-prompt-injection'
+} from '../../../../shared/agent-launch/startup/agent-prompt-injection'
 import type {
   AgentPromptActivity,
   AgentPromptWaitTextCache
-} from '../../agent-prompt-submission-verification'
+} from './agent-prompt-submission-verification'
 import {
   isTerminalSendSettlementAgent,
   resolveAgentPromptEffectTimeoutMs,
   verifyAgentPromptSubmission
-} from '../../agent-prompt-submission-verification'
+} from './agent-prompt-submission-verification'
 import { AgentPromptPermissionReturnedError } from './agent-prompt-permission-hold'
 import { OrcaRuntimeWithResubmitHeldAgentPrompt } from './terminal-agent-prompt-resubmit'
 

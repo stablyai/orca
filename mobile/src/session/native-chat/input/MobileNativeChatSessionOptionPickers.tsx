@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { AccessibilityInfo, Keyboard, Platform, Text, View } from 'react-native'
 import {
   ChevronLeft,
@@ -46,7 +46,7 @@ import {
   AGENT_CHAT_PERMISSION_MODE_ICON_NAMES,
   AGENT_CHAT_PERMISSION_MODE_OPTION_ID,
   isAgentChatPermissionMode
-} from '../../../../../src/shared/agent-chat-permission-mode'
+} from '../../../../../src/shared/agent-launch/permissions/agent-chat-permission-mode'
 import type { MobileNativeChatSessionOptionsController } from './use-mobile-native-chat-session-options'
 import { sessionOptionPickerStyles as styles } from './mobile-native-chat-session-option-picker-styles'
 
@@ -117,6 +117,8 @@ export function MobileNativeChatSessionOptionPickers({
   const t = useMobileTranslation()
   const open = presentation?.page != null
   const wasOpen = useRef(false)
+  // Aliases of listed models wait behind a toggle, as compact pickers do without search.
+  const [moreModelsShown, setMoreModelsShown] = useState(false)
   useEffect(() => {
     if (open && !wasOpen.current) {
       controller.optionSurface?.demandModelCatalog?.()
@@ -247,7 +249,10 @@ export function MobileNativeChatSessionOptionPickers({
       <BottomDrawer
         visible={activeDescriptor !== undefined}
         onClose={closePicker}
-        onAfterClose={onDrawerAfterClose}
+        onAfterClose={() => {
+          setMoreModelsShown(false)
+          onDrawerAfterClose?.()
+        }}
       >
         {activeDescriptor ? (
           <View style={styles.sheet}>
@@ -302,6 +307,10 @@ export function MobileNativeChatSessionOptionPickers({
                   disabled: locked(activeDescriptor),
                   onSetOption: (value) => applyOption(activeDescriptor, value),
                   onInvokeAction: () => invokeAction(activeDescriptor),
+                  moreChoices: {
+                    shown: moreModelsShown,
+                    onToggle: () => setMoreModelsShown((shown) => !shown)
+                  },
                   ...(permissionView ? { choiceLeading: permissionChoiceLeading } : {})
                 },
                 t

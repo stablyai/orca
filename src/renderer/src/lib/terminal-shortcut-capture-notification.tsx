@@ -10,7 +10,7 @@ import {
 } from '../../../shared/keybindings'
 import { useAppStore } from '../store'
 import { translate } from '@/i18n/i18n'
-import { localizedKeybindingTitle } from '@/components/settings/keybinding-title-copy'
+import { localizedKeybindingTitle } from '@/components/settings/shortcuts/keybinding-title-copy'
 
 const STORAGE_PREFIX = 'orca.terminalShortcutCapturedNotice.'
 const NOTICE_DURATION_MS = 20_000

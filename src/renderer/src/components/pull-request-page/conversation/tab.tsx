@@ -13,8 +13,8 @@ import {
   filterPRCommentsByAudience,
   getPRCommentAudienceCounts,
   type PRCommentAudienceFilter
-} from '../../../../../shared/pr-comment-audience'
-import { groupPRComments } from '../../../../../shared/pr-comment-groups'
+} from '../../../../../shared/source-control/review-comments/pr-comment-audience'
+import { groupPRComments } from '../../../../../shared/source-control/review-comments/pr-comment-groups'
 import { resolveCommentReplyTarget } from '@/components/comment-reply-target-state'
 import { runWorkItemBodyUpdate } from '@/components/github/github-work-item-edit-mutations'
 import {

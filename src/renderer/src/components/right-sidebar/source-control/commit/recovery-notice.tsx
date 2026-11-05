@@ -12,13 +12,13 @@ import {
 } from '@/components/ui/dialog'
 import { translate } from '@/i18n/i18n'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
-import { readSourceControlLaunchRecipeAgentId } from '../../../../../../shared/source-control-launch-agent-selection'
+import { readSourceControlLaunchRecipeAgentId } from '../../../../../../shared/source-control/ai/source-control-launch-agent-selection'
 import type {
   SourceControlActionRecipe,
   SourceControlLaunchActionId
-} from '../../../../../../shared/source-control-ai-actions'
-import type { SourceControlAiWriteTarget } from '../../../../../../shared/source-control-ai-recipe-save'
-import { SourceControlFixSplitButton } from '../../source-control-fix-split-button'
+} from '../../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
+import type { SourceControlAiWriteTarget } from '../../../../../../shared/source-control/ai/settings/source-control-ai-recipe-save'
+import { SourceControlFixSplitButton } from '../panel/source-control-fix-split-button'
 
 export type SourceControlRecoveryKind = 'commit' | 'push'
 

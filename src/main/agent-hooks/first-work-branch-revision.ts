@@ -6,7 +6,7 @@ import { statSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { probeBranchUpstream, type GitExec } from '../git/branch-rename'
 import { createTextGenerationParamsFence } from '../text-generation/text-generation-settings-fence'
-import { getCommitMessageModelDiscoveryHostKey } from '../../shared/commit-message-host-key'
+import { getCommitMessageModelDiscoveryHostKey } from '../../shared/source-control/ai/generation/commit-message-host-key'
 
 export async function captureFirstWorkBranchRevision(cwd: string, exec: GitExec, branch: string) {
   const file = await exec(['rev-parse', '--git-path', 'HEAD'])

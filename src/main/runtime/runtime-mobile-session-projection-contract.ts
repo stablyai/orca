@@ -1,4 +1,5 @@
-import type { AgentStatusEntry, AgentStatusIpcPayload } from '../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../shared/agent-status/contracts/agent-status-types'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type {
   BrowserTabInfo,
   RuntimeMobileSessionBrowserTab,
@@ -10,7 +11,10 @@ import type {
 } from '../../shared/runtime-types'
 import type { TabGroupLayoutNode } from '../../shared/tab-types'
 import type { RuntimeAgentRowSnapshot } from './runtime-worktree-agent-rows'
-import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
+import type {
+  RuntimeLeafRecord,
+  RuntimePtyWorktreeRecord
+} from './terminal/records/runtime-terminal-state-records'
 import type { TitleDisplayClear } from './runtime-worktree-status-projection'
 
 export type RuntimeMobileSessionProjectionHost = {

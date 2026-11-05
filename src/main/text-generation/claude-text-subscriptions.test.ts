@@ -15,7 +15,7 @@ import {
 } from './jira-issue-summary-requests'
 import { structuredChatNamingDeps } from '../runtime/structured-chat-naming-runtime'
 import { agentSessionRecordFixture } from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
-import { normalizeSourceControlAiSettings } from '../../shared/source-control-ai'
+import { normalizeSourceControlAiSettings } from '../../shared/source-control/ai/settings/source-control-ai-settings'
 import type * as GitRunner from '../git/runner'
 import type * as ClaudeKeychain from '../claude-accounts/keychain'
 import { utimesSync, writeFileSync } from 'node:fs'

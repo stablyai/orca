@@ -3,7 +3,7 @@ import type { TextSubscriptionFailover } from '../text-generation/text-subscript
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import { beginTextGenerationRequest } from '../text-generation/source-control-generation-lanes'
 import { SOURCE_CONTROL_GENERATION_TIMEOUT_MS } from '../text-generation/source-control-generation-limits'
-import type { ResolvedSourceControlAiGenerationParams } from '../../shared/source-control-ai'
+import type { ResolvedSourceControlAiGenerationParams } from '../../shared/source-control/ai/source-control-ai-operation-resolution'
 import type { CommitMessageGenerationTarget } from '../text-generation/commit-message-text-generation'
 import {
   prepareLocalCommitMessageAgentEnv,

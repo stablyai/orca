@@ -5,7 +5,7 @@ import {
   resolveSupportedHostedReviewCopyProvider
 } from '@/i18n/hosted-review-localized-copy'
 import { translate } from '@/i18n/i18n'
-import { resolveCreatedHostedReviewLink } from '../../source-control-created-review-link'
+import { resolveCreatedHostedReviewLink } from './source-control-created-review-link'
 import type { SourceControlStoreActions } from '../listing/use-store-actions'
 import type { SourceControlWorktreeContext } from '../listing/use-worktree-context'
 import type { SourceControlStatusRefresh } from '../sync/use-status-refresh'

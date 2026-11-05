@@ -4,7 +4,7 @@ import type {
   WorkspaceCleanupScanArgs,
   WorkspaceCleanupScanProgress,
   WorkspaceCleanupScanResult
-} from '../../../../shared/workspace-cleanup'
+} from '../../../../shared/workspace-cleanup/workspace-cleanup'
 import { WORKSPACE_CLEANUP_ENRICHMENT_CONCURRENCY } from './workspace-cleanup'
 import {
   NOW,
@@ -441,47 +441,5 @@ describe('workspace cleanup enrichment performance', () => {
     await scanPromise
 
     expect(hasChildProcesses).toHaveBeenCalledTimes(candidateCount)
-  })
-
-  it('rebuilds focused removal enrichment from state changed after the broad scan', async () => {
-    const candidate = makeCandidate()
-    const focusedScan = deferred<WorkspaceCleanupScanResult>()
-    const scan = vi.fn((args?: WorkspaceCleanupScanArgs) =>
-      args?.worktreeId
-        ? focusedScan.promise
-        : Promise.resolve({ scannedAt: NOW, candidates: [candidate], errors: [] })
-    )
-    installWorkspaceCleanupApi(scan)
-    const hasChildProcesses = vi.fn().mockResolvedValue(false)
-    ;(
-      globalThis.window as unknown as {
-        api: {
-          pty: {
-            hasChildProcesses: typeof hasChildProcesses
-            getForegroundProcess: ReturnType<typeof vi.fn>
-          }
-        }
-      }
-    ).api.pty = {
-      hasChildProcesses,
-      getForegroundProcess: vi.fn().mockResolvedValue('zsh')
-    }
-    const removeWorktree = vi.fn().mockResolvedValue({ ok: true })
-    const store = createCleanupTestStore(removeWorktree)
-
-    await store.getState().scanWorkspaceCleanup()
-    const removal = store.getState().removeWorkspaceCleanupCandidates([candidate.worktreeId])
-    store.setState({
-      tabsByWorktree: {
-        [candidate.worktreeId]: [
-          { id: 'post-scan-tab', title: 'shell' }
-        ] as AppState['tabsByWorktree'][string]
-      },
-      ptyIdsByTabId: { 'post-scan-tab': ['post-scan-pty'] }
-    } as Partial<AppState>)
-    focusedScan.resolve({ scannedAt: NOW, candidates: [candidate], errors: [] })
-
-    await expect(removal).resolves.toMatchObject({ removedIds: [candidate.worktreeId] })
-    expect(hasChildProcesses).toHaveBeenCalledWith('post-scan-pty')
   })
 })

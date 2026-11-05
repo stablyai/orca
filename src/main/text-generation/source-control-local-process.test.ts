@@ -1,4 +1,4 @@
-import type { CommitMessagePlan } from '../../shared/commit-message-plan'
+import type { CommitMessagePlan } from '../../shared/source-control/ai/generation/commit-message-plan'
 import { runGenerationRequest } from './agent-generation-request'
 import {
   beginTextGenerationRequest,

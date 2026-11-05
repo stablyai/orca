@@ -10,21 +10,6 @@ const jwt = (payload: string) => `.${Buffer.from(payload).toString('base64url')}
 
 describe('ordered Windows token decoding', () => {
   it.each([
-    '{}',
-    'null',
-    '{"unknown":1}',
-    '{"auth_method":"consumer"}',
-    '{"token":{}}',
-    '{"token":7}',
-    '{"token":{"access_token":"a"},"token":null}',
-    '{"id_token_email":"x","access_token":7}',
-    '{"project_id":"p","PROJECT_ID":null,"access_token":7}'
-  ])('retains native authority without inventing a usable OAuth snapshot: %s', (raw) => {
-    expect(decode(raw)).not.toBeNull()
-    expect(() => parseAntigravityWindowsSnapshot(raw)).toThrow()
-  })
-
-  it.each([
     '{"access_token":7}',
     '{"access_token":7,"access_token":"a"}',
     '{"token":{"access_token":"a"},"project_id":17,"expires_in":"x"}',

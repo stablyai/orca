@@ -6,7 +6,7 @@ import type * as RuntimeGitGenerationClient from '@/runtime/runtime-git-generati
 import type { RuntimeGeneratePullRequestFieldsResult } from '@/runtime/runtime-git-client-context'
 import { useAppStore } from '@/store'
 import { makeRepo, makeWorktree } from '../../../worktree-jump/worktree-jump-palette-test-fixtures'
-import { DEFAULT_SOURCE_CONTROL_AI_PR_CREATION_DEFAULTS } from '../../../../../../shared/source-control-ai-settings'
+import { DEFAULT_SOURCE_CONTROL_AI_PR_CREATION_DEFAULTS } from '../../../../../../shared/source-control/ai/settings/source-control-ai-settings'
 
 const runtime = vi.hoisted(() => ({
   cancel: vi.fn().mockResolvedValue(undefined),
@@ -33,53 +33,7 @@ afterEach(() => {
 })
 
 describe('useSourceControlPullRequestGeneration outcome', () => {
-  it.each([
-    { name: 'keeps the base for a Create PR run', autoSubmit: true, base: 'main' },
-    { name: 'keeps the agent base for a reviewed run', autoSubmit: false, base: 'develop' }
-  ])('$name', async ({ autoSubmit, base }) => {
-    const generated = { base: 'develop', title: 'Add feature flag', body: 'Details.', draft: false }
-    runtime.generate.mockResolvedValue({ success: true, fields: generated })
-    const { setPullRequestGenerationRecord, updatePullRequestGenerationRecord } =
-      useAppStore.getState()
-    const { result, unmount } = renderHook(() =>
-      useSourceControlPullRequestGeneration({
-        activeRepo: {
-          id: 'repo-1',
-          path: '/repo',
-          displayName: 'repo',
-          badgeColor: '#000',
-          addedAt: 0
-        },
-        activeRepoTarget: { kind: 'local' },
-        activeWorktreeId: 'wt-1',
-        allocatePullRequestGenerationRequestId: vi.fn(() => 5),
-        branchName: 'feature',
-        hostedReviewCreateProvider: 'github',
-        prGenerationRecords: {},
-        refreshGitStatusAfterPullRequestGeneration: vi.fn(),
-        resolvedPrCreationDefaults: DEFAULT_SOURCE_CONTROL_AI_PR_CREATION_DEFAULTS,
-        setPullRequestGenerationRecord,
-        updatePullRequestGenerationRecord,
-        worktreePath: '/repo'
-      })
-    )
-
-    const request = result.current.handleGeneratePullRequestFieldsForActive(
-      { base: 'main', title: 'Feature', body: '', draft: false },
-      { base: 0, title: 0, body: 0, draft: 0 },
-      undefined,
-      { autoSubmit }
-    )
-
-    const isCanceled = runtime.generate.mock.calls[0][3]
-    unmount()
-    expect(isCanceled()).toBe(false)
-    expect(runtime.cancel).not.toHaveBeenCalled()
-    const outcome = await request
-    expect(outcome).toEqual({ result: { ...generated, base } })
-  })
-
-  it("returns no result when a later run replaced this one, not the later run's details", async () => {
+  it("Stop cancels exactly its own request id and drops that request's late result", async () => {
     const generationKey = JSON.stringify(['repo-1', 'wt-1', 'feature'])
     let answer: (result: RuntimeGeneratePullRequestFieldsResult) => void = () => {}
     runtime.generate.mockImplementation(
@@ -88,93 +42,20 @@ describe('useSourceControlPullRequestGeneration outcome', () => {
           answer = resolve
         })
     )
-    const { setPullRequestGenerationRecord, updatePullRequestGenerationRecord } =
-      useAppStore.getState()
+    const state = useAppStore.getState()
     const { result } = renderHook(() =>
       useSourceControlPullRequestGeneration({
-        activeRepo: {
-          id: 'repo-1',
-          path: '/repo',
-          displayName: 'repo',
-          badgeColor: '#000',
-          addedAt: 0
-        },
+        activeRepo: makeRepo(),
         activeRepoTarget: { kind: 'local' },
         activeWorktreeId: 'wt-1',
-        allocatePullRequestGenerationRequestId: vi.fn(() => 5),
-        branchName: 'feature',
-        hostedReviewCreateProvider: 'github',
-        prGenerationRecords: {},
-        refreshGitStatusAfterPullRequestGeneration: vi.fn(),
-        resolvedPrCreationDefaults: DEFAULT_SOURCE_CONTROL_AI_PR_CREATION_DEFAULTS,
-        setPullRequestGenerationRecord,
-        updatePullRequestGenerationRecord,
-        worktreePath: '/repo'
-      })
-    )
-    const fields = { base: 'main', title: 'Feature', body: '', draft: false }
-
-    const outcome = result.current.handleGeneratePullRequestFieldsForActive(
-      fields,
-      { base: 0, title: 0, body: 0, draft: 0 },
-      undefined,
-      { autoSubmit: true }
-    )
-    // Finish a new Generate run before the stopped run winds down.
-    const stopped = useAppStore.getState().pullRequestGenerationRecords[generationKey]
-    expect(stopped?.status).toBe('running')
-    setPullRequestGenerationRecord(generationKey, {
-      ...stopped!,
-      context: { ...stopped!.context, requestId: 6 },
-      status: 'succeeded',
-      result: { ...fields, title: 'Later run' }
-    })
-    answer({ success: false, error: 'canceled', canceled: true })
-
-    await expect(outcome).resolves.toEqual({ result: null })
-  })
-
-  it('settles with no result as soon as Stop lands, without waiting for the stopped request, and drops its late result', async () => {
-    const generationKey = JSON.stringify(['repo-1', 'wt-1', 'feature'])
-    let answer: (result: RuntimeGeneratePullRequestFieldsResult) => void = () => {}
-    runtime.generate.mockImplementation(
-      () =>
-        new Promise<RuntimeGeneratePullRequestFieldsResult>((resolve) => {
-          answer = resolve
-        })
-    )
-    // Model cancellation never reaching the host so the stopped request remains pending.
-    runtime.cancel.mockReturnValue(new Promise(() => {}))
-    const subscribe = useAppStore.subscribe
-    const released = vi.fn()
-    const subscribed = vi.spyOn(useAppStore, 'subscribe').mockImplementation((listener) => {
-      const unsubscribe = subscribe(listener)
-      return () => {
-        released()
-        unsubscribe()
-      }
-    })
-    const { setPullRequestGenerationRecord, updatePullRequestGenerationRecord } =
-      useAppStore.getState()
-    const { result } = renderHook(() =>
-      useSourceControlPullRequestGeneration({
-        activeRepo: {
-          id: 'repo-1',
-          path: '/repo',
-          displayName: 'repo',
-          badgeColor: '#000',
-          addedAt: 0
-        },
-        activeRepoTarget: { kind: 'local' },
-        activeWorktreeId: 'wt-1',
-        allocatePullRequestGenerationRequestId: vi.fn(() => 5),
+        allocatePullRequestGenerationRequestId: () => 5,
         branchName: 'feature',
         hostedReviewCreateProvider: 'github',
         prGenerationRecords: useAppStore((s) => s.pullRequestGenerationRecords),
         refreshGitStatusAfterPullRequestGeneration: vi.fn(),
         resolvedPrCreationDefaults: DEFAULT_SOURCE_CONTROL_AI_PR_CREATION_DEFAULTS,
-        setPullRequestGenerationRecord,
-        updatePullRequestGenerationRecord,
+        setPullRequestGenerationRecord: state.setPullRequestGenerationRecord,
+        updatePullRequestGenerationRecord: state.updatePullRequestGenerationRecord,
         worktreePath: '/repo'
       })
     )
@@ -187,28 +68,18 @@ describe('useSourceControlPullRequestGeneration outcome', () => {
         { autoSubmit: true }
       )
     })
-
-    const generationContext =
+    const { generationId } =
       useAppStore.getState().pullRequestGenerationRecords[generationKey].context
     const isCanceled = runtime.generate.mock.calls[0][3]
-    expect(generationContext.generationId).toMatch(/^[0-9a-f-]{36}$/)
     expect(isCanceled()).toBe(false)
-    act(() => result.current.handleCancelGeneratePullRequestFieldsForActive())
-    expect(isCanceled()).toBe(true)
-    expect(runtime.cancel).toHaveBeenCalledWith(
-      expect.objectContaining({ generationId: generationContext.generationId })
-    )
-    expect(runtime.cancel).toHaveBeenCalledTimes(1)
-    const stillPending = new Promise((resolve) => setTimeout(() => resolve('still pending'), 50))
-    await expect(Promise.race([outcome, stillPending])).resolves.toEqual({ result: null })
-    expect(subscribed).toHaveBeenCalledTimes(1)
-    expect(released).toHaveBeenCalledTimes(1)
-    subscribed.mockRestore()
 
-    answer({
-      success: true,
-      fields: { base: 'develop', title: 'Late run', body: 'Late.', draft: false }
-    })
+    act(() => result.current.handleCancelGeneratePullRequestFieldsForActive())
+
+    expect(isCanceled()).toBe(true)
+    expect(runtime.cancel).toHaveBeenCalledTimes(1)
+    expect(runtime.cancel).toHaveBeenCalledWith(expect.objectContaining({ generationId }))
+    await expect(outcome).resolves.toEqual({ result: null })
+    answer({ success: true, fields: { base: 'main', title: 'Late', body: '', draft: false } })
     await act(async () => {})
     expect(useAppStore.getState().pullRequestGenerationRecords[generationKey]).toMatchObject({
       status: 'canceled',

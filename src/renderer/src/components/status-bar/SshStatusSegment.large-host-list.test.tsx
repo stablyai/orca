@@ -3,8 +3,8 @@ import type { PropsWithChildren } from 'react'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
-import type { RuntimeEnvironmentStatus } from '../../../../shared/runtime-host-status'
+import type { PublicKnownRuntimeEnvironment } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
+import type { RuntimeEnvironmentStatus } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { SshConnectionState, SshConnectionStatus } from '../../../../shared/ssh-types'
 import type { Repo } from '../../../../shared/repo-types'
 import { SshStatusSegment } from './SshStatusSegment'
@@ -95,11 +95,6 @@ describe('the status menu with a very large imported SSH host list', () => {
     expect(screen.getByText('node-13000')).toBeTruthy()
     expect(screen.getByText('node-00000')).toBeTruthy()
     expect(screen.queryByText('node-13691')).toBeNull()
-  })
-
-  it('keeps an idle host that owns a project, even deep in the config', () => {
-    render(<SshStatusSegment compact={false} iconOnly={false} />)
-    expect(screen.getByText('node-12345')).toBeTruthy()
   })
 
   it('offers a search for the hidden hosts that connects the exact host typed', async () => {

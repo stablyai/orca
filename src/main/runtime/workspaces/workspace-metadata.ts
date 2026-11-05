@@ -13,12 +13,12 @@ import {
 import {
   resolveRuntimeGitHubWorktreeBase,
   type RuntimeGitHubWorktreeBaseArgs
-} from '../runtime-github-worktree-base'
+} from '../integrations/github/runtime-github-worktree-base'
 import {
   resolveRuntimeGitLabWorktreeBase,
   type RuntimeGitLabWorktreeBaseArgs
-} from '../runtime-gitlab-worktree-base'
-import { listWorktreesStrict } from '../../git/worktree-listing'
+} from '../integrations/gitlab/runtime-gitlab-worktree-base'
+import { listWorktreesStrict } from '../../git/worktrees/catalog/worktree-listing'
 import {
   adoptRuntimeProvisionedRoot,
   readLocalSparseCheckoutEnabled,

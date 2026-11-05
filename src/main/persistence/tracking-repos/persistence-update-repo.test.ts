@@ -125,6 +125,27 @@ describe('Store', () => {
     expect(store.getRepo('r1')!.displayName).toBe('renamed')
   })
 
+  it('persists opt-in editor save settings and the project command across reloads', async () => {
+    const store = createStore()
+    store.addRepo(makeRepo())
+    expect(store.getSettings().editorFormatOnSave).toBe(false)
+    expect(store.getSettings().editorInsertFinalNewline).toBe(false)
+    const editorFormatter = {
+      command: 'prettier --stdin-filepath "${file}"',
+      include: ['**/*.ts']
+    }
+    store.updateSettings({ editorFormatOnSave: true, editorInsertFinalNewline: true })
+    store.updateRepo({ id: 'r1' }, { editorFormatter })
+    await store.flushPendingOrThrowAsync()
+
+    const reloaded = createStore()
+    expect(reloaded.getSettings().editorFormatOnSave).toBe(true)
+    expect(reloaded.getSettings().editorInsertFinalNewline).toBe(true)
+    expect(reloaded.getRepo('r1')?.editorFormatter).toEqual(editorFormatter)
+    reloaded.updateRepo({ id: 'r1' }, { editorFormatter: { command: '', include: [] } })
+    expect(reloaded.getRepo('r1')?.editorFormatter?.command).toBe('')
+  })
+
   it('invalidates local worktree scans across a git-folder-git update round trip', async () => {
     const store = await createStore()
     store.addRepo(makeRepo({ id: 'scan-round-trip', kind: 'git' }))

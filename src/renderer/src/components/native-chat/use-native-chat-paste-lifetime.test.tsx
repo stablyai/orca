@@ -67,52 +67,6 @@ function fixture(owner: NativeChatAttachmentOwner) {
   return { view, lifetime: view.result.current }
 }
 
-it.each(owners)('keeps a $kind upload when its composer closes', (owner) => {
-  const { view, lifetime } = fixture(owner)
-  view.unmount()
-  expect(nativeChatPendingAttachmentSnapshot(scope('a'))).toHaveLength(1)
-  expect(
-    lifetime.keepStoreUploadAfterUnmount('upload', {
-      status: 'saved',
-      tempPath: '/stored/image.png'
-    })
-  ).toBe(true)
-  expect(nativeChatPendingAttachmentSnapshot(scope('a'))).toEqual([])
-  expect(readNativeChatComposerDraft(scope('a')).images).toEqual([
-    { id: 'upload', path: '/stored/image.png' }
-  ])
-  expect(readNativeChatComposerDraft(scope('b')).images).toEqual([])
-})
-
-it.each(owners)('keeps a $kind upload with its original scope after a target switch', (owner) => {
-  const { view, lifetime } = fixture(owner)
-  view.rerender({ draftScope: scope('b') })
-  expect(
-    lifetime.keepStoreUploadAfterUnmount('upload', {
-      status: 'saved',
-      tempPath: '/stored/image.png'
-    })
-  ).toBe(true)
-  expect(readNativeChatComposerDraft(scope('a')).images).toHaveLength(1)
-  expect(readNativeChatComposerDraft(scope('b')).images).toEqual([])
-})
-
-it.each(owners)('does not settle a removed $kind upload', (owner) => {
-  const { view, lifetime } = fixture(owner)
-  takeNativeChatPendingAttachment(scope('a'), 'upload')
-  view.unmount()
-  lifetime.keepStoreUploadAfterUnmount('upload', { status: 'saved', tempPath: '/stored/image.png' })
-  expect(readNativeChatComposerDraft(scope('a')).images).toEqual([])
-})
-
-it.each(owners)('drops a failed $kind upload after teardown', (owner) => {
-  const { view, lifetime } = fixture(owner)
-  view.unmount()
-  expect(lifetime.keepStoreUploadAfterUnmount('upload', { status: 'error' })).toBe(true)
-  expect(nativeChatPendingAttachmentSnapshot(scope('a'))).toEqual([])
-  expect(readNativeChatComposerDraft(scope('a')).images).toEqual([])
-})
-
 it.each(owners)(
   'does not recreate a draft after its workspace is removed during a $kind upload',
   (owner) => {

@@ -3,8 +3,8 @@ import { beforeEach, expect, it, vi } from 'vitest'
 import filesystem from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { buildAgentResumeStartupPlan } from '../../shared/tui-agent-startup'
-import { buildAiVaultResumeShellCommand } from '../../shared/ai-vault-resume-command'
+import { buildAgentResumeStartupPlan } from '../../shared/agent-launch/startup/tui-agent-resume-startup'
+import { buildAiVaultResumeShellCommand } from '../../shared/ai-vault/resume/ai-vault-resume-command'
 
 await import('./orca-runtime-test-mocks.spec')
 await import('./orca-runtime-test-lifecycle.spec')
@@ -18,7 +18,7 @@ const {
   makeFolderProjectGroup
 } = await import('./orca-runtime-test-fixtures.spec')
 const { committingSpawn } = await import('./bind-first-pane.test-fixture')
-const { detectAgentCommandsOnHost } = await import('../preflight/agent-detection')
+const { detectAgentCommandsOnHost } = await import('../preflight/agent-command-detection')
 beforeEach(() =>
   vi
     .mocked(detectAgentCommandsOnHost)

@@ -1,5 +1,5 @@
 import { findOptionOccurrence } from '../../shared/command-option-occurrence'
-import type { CommitMessagePlan } from '../../shared/commit-message-plan'
+import type { CommitMessagePlan } from '../../shared/source-control/ai/generation/commit-message-plan'
 import { escapeRegex } from '../../shared/string-utils'
 import type { AgentGenerationFailureOutput } from './agent-failure-output'
 

@@ -67,7 +67,6 @@ ${dispatchIdentityLines(params)}
 The coordinator cannot see this ${surface}. Reach it with the \`${cli} orchestration\` commands
 below, and message it only to ask, report a blocker, or finish; it needs no progress updates
 unless the task asks.
-Don't post to Slack, GitHub, or other channels during the run.
 Do only this task, yourself: no subagents or helper workers unless the task asks.
 
 === CLI COMMANDS ===

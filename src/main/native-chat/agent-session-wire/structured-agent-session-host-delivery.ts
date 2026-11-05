@@ -83,6 +83,7 @@ export function createStructuredAgentSessionConversationDelivery(input: {
     | 'childWorkOpen'
     | 'readStopping'
     | 'publishStatus'
+    | 'publishStatusAndSettlement'
     | 'publishGenerationEnded'
   >
 }): StructuredAgentSessionConversationDelivery {
@@ -232,7 +233,7 @@ export function createStructuredAgentSessionConversationDelivery(input: {
     input.clientDelivery.publishRestored(sessionId)
     await settleInterruptedStructuredAgentSessionCommands(deps, sessionId, session)
     input.clientDelivery.publishRestored(sessionId)
-    if (session.journal.submissions().some(isQueuedAgentJournalSubmission)) {
+    if (session.journal.inputOrder.recoverableSubmissions().some(isQueuedAgentJournalSubmission)) {
       loop.wake(sessionId)
     }
   }
@@ -287,7 +288,7 @@ export function createStructuredAgentSessionConversationDelivery(input: {
     loop,
     afterCommit,
     afterSettleEdge: (sessionId, journal) => {
-      input.clientDelivery.publishStatus(sessionId)
+      input.clientDelivery.publishStatusAndSettlement(sessionId)
       afterCommit(sessionId, journal)
     },
     adoptOpened,

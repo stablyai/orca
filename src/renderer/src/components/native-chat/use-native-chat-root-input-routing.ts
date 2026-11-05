@@ -21,7 +21,7 @@ const revealedChatRoots = new Set<HTMLElement>()
 /** Route revealed-pane typing/dictation to its input when focus is unowned or within that chat. */
 export function useNativeChatRootInputRouting(
   args: Omit<NativeChatComposerRevealFocusArgs, 'scheduleFrame'> & {
-    questionAnswerInputRef: RefObject<HTMLInputElement | null>
+    questionAnswerInputRef: RefObject<HTMLInputElement | HTMLTextAreaElement | null>
   }
 ): {
   onPointerDownCapture: (event: ReactPointerEvent) => void

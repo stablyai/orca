@@ -12,7 +12,7 @@ import {
 } from '../../../shared/worktree/host-qualified-identity'
 import { projectResolvedWorktreeLineage } from '../../../shared/resolved-worktree-lineage'
 import { resolveLocalProjectRuntimesForRepos } from '../../workspaces/execution-host/local-project-runtime-resolution'
-import { getAgentLaunchPlatformForRepo } from '../runtime-agent-launch-resolution'
+import { getAgentLaunchPlatformForRepo } from '../terminal/launch/runtime-agent-launch-resolution'
 import type { ResolvedWorktreeSnapshot } from '../runtime-resolved-worktree-cache'
 import type { RuntimeStore } from '../runtime-store-contract'
 import {
@@ -29,14 +29,16 @@ export type ResolvedWorktreeRepoScans = Map<
   RepoWorktreeRowsScan & { gitRun: object | null }
 >
 
-export type ResolvedWorktreeScanJoin = ResolvedWorktreeSnapshot & {
+export type ResolvedWorktreeRowsJoin = Pick<ResolvedWorktreeSnapshot, 'worktrees'> & {
   /** Git repos the scans predate, which list no rows until scanned. */
   unscannedRepoKeys: ReadonlySet<HostScopedRepoKey>
-  /** Rows a scan that reached a verdict listed, by their git run; a stalled scan's carry no branch. */
+  /** Rows a scan that reached a verdict listed, by their git run; stalled scans remain degraded. */
   gitRunById: ReadonlyMap<HostScopedWorktreeKey, object | null>
   /** Repos whose scan reached a verdict, so a row they no longer list is gone. */
   scannedRepoKeys: ReadonlySet<HostScopedRepoKey>
 }
+
+export type ResolvedWorktreeScanJoin = ResolvedWorktreeSnapshot & ResolvedWorktreeRowsJoin
 
 function resolvedWorktreeRepoScanKey(repo: Repo): HostScopedRepoKey {
   return getRepoHostIdentityForParts(repo.id, getRepoExecutionHostId(repo))
@@ -82,40 +84,50 @@ export async function scanResolvedWorktreeRepos(
 export function joinResolvedWorktreeScans(
   store: RuntimeStore | null,
   rowDeps: () => RepoWorktreeRowDeps,
-  scans: ResolvedWorktreeRepoScans,
-  projectOnly = false
+  scans: ResolvedWorktreeRepoScans
 ): ResolvedWorktreeScanJoin {
+  const repos = store?.getRepos() ?? []
+  const platformByRepoId = store
+    ? platformsByRepoId(repos, resolveLocalProjectRuntimesForRepos(store, repos))
+    : new Map<string, NodeJS.Platform>()
+  return { ...joinRows(store, rowDeps, scans, joinRepoWorktreeRows), platformByRepoId }
+}
+
+/** The same rows from memory only: no identity stamping and no launch platforms. */
+export function projectResolvedWorktreeScans(
+  store: RuntimeStore | null,
+  rowDeps: () => RepoWorktreeRowDeps,
+  scans: ResolvedWorktreeRepoScans
+): ResolvedWorktreeRowsJoin {
+  return joinRows(store, rowDeps, scans, projectRepoWorktreeRows)
+}
+
+function joinRows(
+  store: RuntimeStore | null,
+  rowDeps: () => RepoWorktreeRowDeps,
+  scans: ResolvedWorktreeRepoScans,
+  rowsForRepo: typeof joinRepoWorktreeRows
+): ResolvedWorktreeRowsJoin {
   if (!store) {
     return {
       worktrees: [],
-      platformByRepoId: new Map(),
       unscannedRepoKeys: new Set(),
       gitRunById: new Map(),
       scannedRepoKeys: new Set()
     }
   }
   const metaById = store.getAllWorktreeMeta() ?? {}
-  const repos = store.getRepos()
-  const platformByRepoId = platformsByRepoId(
-    repos,
-    resolveLocalProjectRuntimesForRepos(store, repos)
-  )
   const deps = rowDeps()
   const unscannedRepoKeys = new Set<HostScopedRepoKey>()
   const gitRunById = new Map<HostScopedWorktreeKey, object | null>()
   const scannedRepoKeys = new Set<HostScopedRepoKey>()
-  const perRepoWorktrees = repos.map((repo) => {
+  const perRepoWorktrees = store.getRepos().map((repo) => {
     const key = resolvedWorktreeRepoScanKey(repo)
     const scan = scans.get(key) ?? null
     if (!scan && !isFolderRepo(repo)) {
       unscannedRepoKeys.add(key)
     }
-    const rows = (projectOnly ? projectRepoWorktreeRows : joinRepoWorktreeRows)(
-      deps,
-      repo,
-      scan,
-      metaById
-    )
+    const rows = rowsForRepo(deps, repo, scan, metaById)
     if (scan?.ok) {
       scannedRepoKeys.add(key)
       for (const row of rows) {
@@ -128,5 +140,5 @@ export function joinResolvedWorktreeScans(
     perRepoWorktrees.flat(),
     store.getAllWorktreeLineage?.() ?? {}
   )
-  return { worktrees, platformByRepoId, unscannedRepoKeys, gitRunById, scannedRepoKeys }
+  return { worktrees, unscannedRepoKeys, gitRunById, scannedRepoKeys }
 }

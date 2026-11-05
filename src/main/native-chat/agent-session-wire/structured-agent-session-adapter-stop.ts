@@ -3,7 +3,7 @@
 import type {
   AgentChildWorkStopAcknowledgement,
   AgentSessionBackgroundTaskStops
-} from '../../../shared/agent-child-work-stop-targets'
+} from '../../../shared/agent-status/child-work/agent-child-work-stop-targets'
 import type {
   AgentJournalApprovalItem,
   AgentJournalDispatchState,

@@ -1,4 +1,4 @@
-import { humanizeBranchSlug } from '../../shared/branch-name-from-work'
+import { humanizeBranchSlug } from '../../shared/source-control/ai/naming/branch-name-from-work'
 import {
   generateBranchNameFromContext,
   resolveTextGenerationParams

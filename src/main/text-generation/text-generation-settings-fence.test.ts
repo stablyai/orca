@@ -7,7 +7,7 @@ import {
   createSettingsFence,
   createTextGenerationParamsFence
 } from './text-generation-settings-fence'
-import { LOCAL_COMMIT_MESSAGE_HOST_KEY } from '../../shared/commit-message-host-key'
+import { LOCAL_COMMIT_MESSAGE_HOST_KEY } from '../../shared/source-control/ai/generation/commit-message-host-key'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 
 vi.mock('electron', () => ({ app: { getPath: () => testState.dir } }))

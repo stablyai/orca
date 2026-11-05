@@ -1,3 +1,4 @@
+import * as gitExecFile from '../../git/command-runner/git-exec-file'
 import { describe, expect, it, vi, type MockInstance } from 'vitest'
 import { readFile } from 'node:fs/promises'
 import { _settlePendingWorktreeRemovalsForTests } from '../../workspaces/removal/worktree-background-removal'
@@ -7,7 +8,6 @@ import {
   closeLocalWatcherForWorktreePathMock,
   deleteWorktreeHistoryDirMock,
   forceDeleteLocalBranchMock,
-  gitRunner,
   invalidateAuthorizedRootsCacheMock,
   join,
   listWorktrees,
@@ -59,7 +59,7 @@ describe('OrcaRuntimeService', () => {
     vi.mocked(removeWorktree).mockResolvedValue({
       preservedBranch: { branchName: 'feature/test', head: 'def456' }
     })
-    const gitExec = vi.spyOn(gitRunner, 'gitExecFileAsync').mockResolvedValue({
+    const gitExec = vi.spyOn(gitExecFile, 'gitExecFileAsync').mockResolvedValue({
       stdout: '',
       stderr: ''
     })
@@ -357,7 +357,7 @@ describe('OrcaRuntimeService', () => {
     const runtime = createWorktreeRemovalRuntime(runtimeStoreWithRepoPath)
     const notifier = { worktreesChanged: vi.fn() }
     runtime.setNotifier(notifier as never)
-    const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => {
+    const gitSpy = vi.spyOn(gitExecFile, 'gitExecFileAsync').mockImplementation(async (args) => {
       if (args[0] === 'status') {
         throw new Error('fatal: not a git repository')
       }

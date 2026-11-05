@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
-import type { FolderWorkspace } from '../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-workspace-types'
 import { captureFirstWorkBranchOwner } from './first-work-branch-revision'
 import { makeBranchRenameDeps, REPO_ID, WORKTREE_ID } from './first-work-branch-rename-test-harness'
 import { firstWorkRenameDeps } from './first-work-rename-runtime'

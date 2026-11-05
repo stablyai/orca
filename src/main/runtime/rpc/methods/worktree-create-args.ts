@@ -1,4 +1,4 @@
-import { terminalImageViewerSupported } from '../../terminal-image-viewer-env'
+import { terminalImageViewerSupported } from '../../terminal/launch/terminal-image-viewer-env'
 import type { z } from 'zod'
 import { resolveRuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
 import type { OrcaRuntimeService } from '../../orca-runtime'

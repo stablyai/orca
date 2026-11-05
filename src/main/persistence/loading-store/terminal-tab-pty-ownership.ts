@@ -1,4 +1,4 @@
-import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
 
 type LeafPtyIds = Readonly<Record<string, string>> | undefined
 

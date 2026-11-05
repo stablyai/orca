@@ -7,14 +7,14 @@ import {
   CODEX_MANAGED_EVENT_LABELS,
   CODEX_EVENTS,
   buildCodexManagedHook,
-  getManagedCommand,
   getManagedScriptPath
-} from '../codex/codex-hook-definition'
-import { getManagedCodexHookHome } from '../codex/codex-hook-orca-approvals'
-import { getCodexManagedHookTrustEntryKeys } from '../codex/codex-managed-trust-reconciliation'
-import { readHookTrustContent } from '../codex/config-toml-hook-trust-read'
-import { classifyHookTrustKey } from '../codex/config-toml-runtime-owned-sections'
-import { normalizeHookTrustKeyForLookup } from '../codex/config-toml-trust'
+} from '../codex/hooks/definitions/codex-hook-definition'
+import { getManagedCodexHookHome } from '../codex/trust/hooks/codex-hook-orca-approvals'
+import { getCodexManagedHookTrustEntryKeys } from '../codex/trust/grants/codex-managed-trust-reconciliation'
+import { readHookTrustContent } from '../codex/trust/toml/config-toml-hook-trust-read'
+import { classifyHookTrustKey } from '../codex/configuration/toml/config-toml-runtime-owned-sections'
+import { normalizeCodexHookTrustLookupKey as normalizeHookTrustKeyForLookup } from '../codex/trust/identity/codex-trust-identity'
+import { buildCodexHookCommand as getManagedCommand } from '../codex/hooks/definitions/codex-hook-command-form'
 
 function canonical(value: unknown): unknown {
   if (value instanceof Date) {

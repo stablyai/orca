@@ -1,9 +1,9 @@
 import type { PreloadApi } from '../../../preload/api-types'
 import {
   GITLAB_READY_FOR_REVIEW_RUNTIME_CAPABILITY,
-  GITLAB_READY_FOR_REVIEW_UPDATE_REQUIRED_MESSAGE,
-  type RuntimeCapability
-} from '../../../shared/protocol-version'
+  GITLAB_READY_FOR_REVIEW_UPDATE_REQUIRED_MESSAGE
+} from '../../../shared/source-control/runtime/source-control-runtime-capabilities'
+import type { RuntimeCapability } from '../../../shared/protocol-version'
 import {
   GITLAB_WEB_RPC_METHODS,
   type WebGitLabRuntimeMethod

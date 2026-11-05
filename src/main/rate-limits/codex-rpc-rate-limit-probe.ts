@@ -5,7 +5,7 @@ import { codexSpawnEnoent, isSpawnEnoent } from '../codex-cli/windows-only-agent
 import {
   excerptAgentFailureOutput,
   sanitizeAgentFailureDetail
-} from '../../shared/commit-message-agent-output'
+} from '../../shared/source-control/ai/generation/commit-message-agent-output'
 import { withMacTailscaleDnsHint } from '../network/macos-tailscale-dns-diagnostic'
 import { redactString } from '../observability/redactor'
 import {

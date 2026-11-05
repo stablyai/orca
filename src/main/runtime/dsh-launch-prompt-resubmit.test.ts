@@ -1,42 +1,46 @@
-import type * as WorktreeScanCacheModule from '../git/worktree-scan-cache'
-import type * as WorktreeListingModule from '../git/worktree-listing'
+import type * as WorktreeScanCacheModule from '../git/worktrees/catalog/worktree-scan-cache'
+import type * as WorktreeListingModule from '../git/worktrees/catalog/worktree-listing'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { AGENT_PROMPT_BRACKETED_PASTE_END } from '../../shared/agent-prompt-injection'
-import { createAgentPromptSubmissionRuntime } from './agent-prompt-submission-runtime-test-fixture'
+import { AGENT_PROMPT_BRACKETED_PASTE_END } from '../../shared/agent-launch/startup/agent-prompt-injection'
+import { createAgentPromptSubmissionRuntime } from './terminal/input/agent-prompt-submission-runtime-test-fixture'
 import { dispatchPreambleSendOptions } from './orchestration/preamble'
 
-vi.mock('../git/worktree-scan-cache', async (importOriginal) => {
-  const facade = await vi.importMock<typeof WorktreeScanCacheModule>('../git/worktree')
+vi.mock('../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => {
+  const listings = getWorktreeListingMocks()
   return {
     ...(await importOriginal<typeof WorktreeScanCacheModule>()),
-    listWorktrees: facade.listWorktrees
+    listWorktrees: listings.listWorktrees
   }
 })
 
-vi.mock('../git/worktree-listing', async (importOriginal) => {
-  const facade = await vi.importMock<typeof WorktreeListingModule>('../git/worktree')
+vi.mock('../git/worktrees/catalog/worktree-listing', async (importOriginal) => {
+  const listings = getWorktreeListingMocks()
   return {
     ...(await importOriginal<typeof WorktreeListingModule>()),
-    listWorktreesStrict: facade.listWorktreesStrict
+    listWorktreesStrict: listings.listWorktreesStrict
   }
 })
 
-vi.mock('../git/worktree', () => {
-  const worktrees = [
-    {
-      path: '/tmp/worktree-a',
-      head: 'abc',
-      branch: 'feature/prompt-verification',
-      isBare: false,
-      isMainWorktree: false
+const { getWorktreeListingMocks } = vi.hoisted(() => {
+  function createWorktreeListingMocks() {
+    const worktrees = [
+      {
+        path: '/tmp/worktree-a',
+        head: 'abc',
+        branch: 'feature/prompt-verification',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ]
+    return {
+      listWorktrees: vi.fn().mockResolvedValue(worktrees),
+      listWorktreesStrict: vi.fn().mockResolvedValue(worktrees)
     }
-  ]
-  return {
-    listWorktrees: vi.fn().mockResolvedValue(worktrees),
-    listWorktreesStrict: vi.fn().mockResolvedValue(worktrees)
   }
+  let listings: ReturnType<typeof createWorktreeListingMocks> | undefined
+  return { getWorktreeListingMocks: () => (listings ??= createWorktreeListingMocks()) }
 })
 
 const fixture = (name: string): string =>

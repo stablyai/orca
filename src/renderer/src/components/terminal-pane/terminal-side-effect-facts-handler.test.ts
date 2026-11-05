@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { TerminalSideEffectBatch } from '../../../../shared/terminal-side-effect-facts'
+import type { TerminalSideEffectBatch } from '../../../../shared/terminal/output/terminal-side-effect-facts'
 import {
   _dispatchTerminalSideEffectBatchForTest,
   _resetTerminalSideEffectFactConsumersForTest,

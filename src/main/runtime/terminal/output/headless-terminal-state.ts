@@ -1,13 +1,16 @@
 import { OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer } from './headless-terminal-hydration'
-import type { RuntimeHeadlessTerminal } from '../../runtime-terminal-state-records'
-import { HeadlessEmulator } from '../../../daemon/headless-emulator'
-import { shouldForwardHeadlessTerminalQueryReply } from '../../headless-terminal-query-reply-policy'
+import type { RuntimeHeadlessTerminal } from '../records/runtime-terminal-state-records'
+import { HeadlessEmulator } from '../../../daemon/emulation/headless-emulator'
+import { shouldForwardHeadlessTerminalQueryReply } from './headless-terminal-query-reply-policy'
 import { isNativeWindowsConptyPty } from '../../terminal-model-query-authority'
-import { getTerminalViewAttributes } from '../../terminal-view-attribute-store'
-import { PtyShellOwnershipMirror } from '../../pty-shell-ownership-mirror'
-import { PROCESS_BOUNDARY_GROUND } from '../../../../shared/terminal-mode-reset-profiles'
+import { getTerminalViewAttributes } from '../view/terminal-view-attribute-store'
+import { PtyShellOwnershipMirror } from '../query/pty-shell-ownership-mirror'
+import { PROCESS_BOUNDARY_GROUND } from '../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 import { release } from 'node:os'
-import { resolvePtyOwnerBackend, type PtyOwnerBackend } from '../../../../shared/pty-owner-backend'
+import {
+  resolvePtyOwnerBackend,
+  type PtyOwnerBackend
+} from '../../../../shared/terminal/pty/lifecycle/pty-owner-backend'
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import { windowsPtyForOwnerBackend } from '../../../../shared/xterm-conpty-options'

@@ -108,7 +108,7 @@ vi.mock('../ipc/worktrees', () => ({
   registerWorktreeHandlers: registerWorktreeHandlersMock
 }))
 
-vi.mock('../ipc/worktree-change-invalidators', () => ({
+vi.mock('../ipc/worktrees/listing/worktree-change-invalidators', () => ({
   runWorktreeChangeInvalidators: runWorktreeChangeInvalidatorsMock
 }))
 

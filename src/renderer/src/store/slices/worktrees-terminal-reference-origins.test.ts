@@ -1,4 +1,7 @@
-import type { HostedReviewInfo, HostedReviewForBranchArgs } from '../../../../shared/hosted-review'
+import type {
+  HostedReviewInfo,
+  HostedReviewForBranchArgs
+} from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import { singlePaneLayoutSnapshot } from './terminal-helpers'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { makeTerminalTab, makeWorktree } from './worktrees-slice-test-fixtures'
@@ -7,8 +10,8 @@ import {
   resetRemoteRuntimeMocks,
   resetWorktreeSliceModuleMemory
 } from './worktrees-slice-test-harness'
-import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments/workspace-attachments'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 
 function installReviewRead() {
   const read = vi.fn<(args: HostedReviewForBranchArgs) => Promise<HostedReviewInfo | null>>()

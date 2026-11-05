@@ -2,7 +2,7 @@ import { expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import type { Repo } from '../../../../shared/repo-types'
-import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
+import type { PublicKnownRuntimeEnvironment } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import {
   ephemeralVmCleanup,
   ephemeralVmListRuntimes,

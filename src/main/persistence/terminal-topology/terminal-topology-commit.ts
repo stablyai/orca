@@ -1,11 +1,11 @@
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import { hasClosedTerminalTabRecord } from '../../../shared/closed-terminal-tab-tombstones'
+import { hasClosedTerminalTabRecord } from '../../../shared/workspace-layout/closed-terminal-tab-tombstones'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type {
   TerminalLeafMoveRequest,
   TerminalLeafMoveResult
-} from '../../../shared/terminal-leaf-move'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+} from '../../../shared/workspace-layout/terminal-leaf-move'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import type {
   CommandOf,
   LayoutApplyOutcome,
@@ -23,7 +23,7 @@ import { startSpan } from '../../observability/tracer'
 import {
   terminalSurfaceCloseMutation,
   type TerminalSurfaceCloseCommit
-} from '../../runtime/terminal-surface-close'
+} from '../../runtime/terminal/surface/terminal-surface-close'
 import type {
   DurableProfileStateMutation,
   StoreRuntimeState

@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { isTerminalPromptMutation } from '../../../shared/orchestration-rpc-contract'
-import { parsePaneKey } from '../../../shared/stable-pane-id'
+import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import type { OrcaSessionId } from '../../../shared/orca-session-address'
 

@@ -1,7 +1,7 @@
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
-import type { ResolvedSourceControlAiGenerationParams } from '../../shared/source-control-ai'
+import type { ResolvedSourceControlAiGenerationParams } from '../../shared/source-control/ai/source-control-ai-operation-resolution'
 import { createGlobalSettingsFixture } from '../../shared/global-settings-test-fixture'
 import { ClaudeProfileRouter } from '../claude-accounts/claude-profile-router'
 import { provisionClaudeAccountProfile } from '../claude-accounts/claude-profile-setup'

@@ -1,17 +1,16 @@
 // Main restores unshown live terminals and reconnect facts at startup/window load, including headless hosts.
 
-import type { ExecutionHostId } from '../../../../shared/execution-host'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { worktreeIdentityKey, worktreeIdsEqual } from '../../../../shared/worktree/id'
 import type { LayoutApplyReply } from '../../../../shared/workspace-layout/workspace-layout-command-types'
-import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { getSshConnectionManager } from '../../../ssh/targets/ssh-target-registry'
 import {
   recordPtySurface,
   SURFACE_CLAIM_WITHOUT_STANDING
-} from '../../pty-recorded-surface-topology'
+} from '../../terminal/surface/pty-recorded-surface-topology'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import type { WindowLayoutCommand } from '../../runtime-layout-apply'
+import type { WindowLayoutCommand } from '../../terminal/layout/runtime-layout-apply'
 import {
   placeUnshownLiveTerminals,
   placeUnshownLiveTerminalsBestEffort,
@@ -27,7 +26,7 @@ import {
   panesBoundToAnotherWorkspace,
   panesBoundToGoneLocalTerminals
 } from '../../terminal/recovery/foreign-pane-bindings'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import { type ExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { getExplicitWorktreeIdSelector } from '../../runtime-worktree-selection'
 import { followExportedPaneKeys } from '../../terminal/identity/exported-pane-key-follow'
 

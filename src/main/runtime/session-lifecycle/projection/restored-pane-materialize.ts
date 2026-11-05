@@ -11,12 +11,12 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switc
 import { isUnclaimedRunningSleepRecord, markResumedRecordLive } from './sleep-record-pane-claim'
 import { isWorktreeTerminalsSleepingError } from '../../worktree-terminals-sleeping-error'
 import type { TerminalWorkspaceLaunchScope } from '../../runtime-legacy-worker-terminal-recovery-types'
-import type { TuiAgent } from '../../../../shared/tui-agent'
-import type { AgentLaunchRuntime } from '../../../../shared/agent-launch-runtime'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
+import type { AgentLaunchRuntime } from '../../../../shared/agent-launch/startup/agent-launch-runtime'
 import type { RuntimeMobileSessionCreateTerminalResult } from '../../../../shared/runtime-session-contracts'
 import type { RuntimeMobileSessionTerminalTab } from '../../../../shared/runtime-types'
 import type { RuntimeTerminalCreate } from '../../../../shared/runtime-terminal-create-contract'
-import { buildHeadlessMobileSessionTerminalTabs } from '../../mobile-session-terminal-projection'
+import { buildHeadlessMobileSessionTerminalTabs } from '../../terminal/surface/mobile-session-terminal-projection'
 import {
   RestoredPaneStarter,
   type RestoredPane,
@@ -24,14 +24,14 @@ import {
   type RestoredPaneTrigger
 } from '../../terminal/recovery/restored-pane-start'
 import { isPublishedHeld, reopenHeldPanes } from '../../terminal/recovery/held-pane-reopen'
-import { reopenNewerDaemonTerminals } from '../../../daemon/daemon-newer-protocol-hold'
+import { reopenNewerDaemonTerminals } from '../../../daemon/providers/routing/daemon-newer-protocol-hold'
 import type { NewerDaemonReopenResult } from '../../../../shared/newer-daemon-hold'
-import type { WorkspaceLayoutStream } from '../../workspace-layout-stream'
-import { getDaemonHistoryDir } from '../../../daemon/daemon-launch-paths'
-import { HistoryReader } from '../../../daemon/history-reader'
+import type { WorkspaceLayoutStream } from '../../terminal/surface/workspace-layout-stream'
+import { getDaemonHistoryDir } from '../../../daemon/launch/daemon-launch-paths'
+import { HistoryReader } from '../../../daemon/history/restoration/history-reader'
 import { servesWslMovedPaneHistory } from '../../../orcad/orcad-migration-wsl-destination'
 import { movedPaneHistorySessionId } from '../../../persistence/migrating-orcad-catalog/orcad-terminal-history-installer'
-import { makePaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey, parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { agentProviderSessionsEqual } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
 

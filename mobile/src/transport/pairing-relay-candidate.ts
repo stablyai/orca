@@ -1,4 +1,4 @@
-import type { PairingRelay } from '../../../src/shared/mobile-relay-pairing-offer'
+import type { PairingRelay } from '../../../src/shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import { hostStatusProbe } from './host-status-probe-operations'
 import type { MobileRelayPairingJournal } from './mobile-relay-pairing-journal'
 import { RelayOuterError, type PairingCandidateClient } from './mobile-relay-physical-client'

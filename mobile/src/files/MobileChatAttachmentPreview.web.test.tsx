@@ -274,7 +274,8 @@ it(
         getActiveSessionTabType: () => 'agent-session',
         switchSessionTab: vi.fn(),
         scheduleDelayedAction: vi.fn(),
-        reportChatTapFailure: vi.fn()
+        reportChatTapFailure: vi.fn(),
+        getSendCompletionGeneration: () => 0
       })
       return createElement(MobileNativeChatComposerAttachments, {
         images: [],

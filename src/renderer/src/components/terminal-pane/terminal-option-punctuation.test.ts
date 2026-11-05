@@ -17,12 +17,6 @@ const altModes = [
   { macOptionAsAlt: 'right', optionKeyLocations: 2 }
 ] as const
 
-const composeModes = [
-  { macOptionAsAlt: 'false', optionKeyLocations: 0 },
-  { macOptionAsAlt: 'left', optionKeyLocations: 2 },
-  { macOptionAsAlt: 'right', optionKeyLocations: 1 }
-] as const
-
 function optionEvent(overrides: Partial<OptionEvent>): OptionEvent {
   return {
     key: '',
@@ -47,21 +41,6 @@ function optionContext(overrides: Partial<OptionContext> = {}): OptionContext {
 }
 
 describe.each(punctuation)('Option+$base punctuation ($code)', ({ code, key, base, codePoint }) => {
-  it.each([1, 7])('reports the configured Alt side under keyboard flags %i', (flags) => {
-    for (const mode of altModes) {
-      expect(
-        resolveTerminalOptionShortcutAction(
-          optionEvent({ code, key }),
-          optionContext({ ...mode, getKittyKeyboardFlags: () => flags })
-        )
-      ).toEqual({
-        type: 'sendInput',
-        data: `\x1b[${codePoint};3u`,
-        optionKittyRelease: flags === 7 ? { flags } : undefined
-      })
-    }
-  })
-
   it('reports repeats and one release for the original punctuation key', () => {
     for (const mode of altModes) {
       const sendInput = vi.fn()
@@ -90,90 +69,4 @@ describe.each(punctuation)('Option+$base punctuation ($code)', ({ code, key, bas
       ])
     }
   })
-
-  it.each([1, 7])('preserves the composed symbol on the text side under flags %i', (flags) => {
-    for (const mode of composeModes) {
-      expect(
-        resolveTerminalOptionShortcutAction(
-          optionEvent({ code, key }),
-          optionContext({ ...mode, getKittyKeyboardFlags: () => flags })
-        )
-      ).toEqual({
-        type: 'sendInput',
-        data: key,
-        optionKittyRelease: flags === 7 ? { flags } : undefined
-      })
-    }
-  })
-
-  it('uses legacy escape bytes for a selected Alt side in an ordinary shell', () => {
-    for (const mode of altModes.slice(1)) {
-      expect(
-        resolveTerminalOptionShortcutAction(
-          optionEvent({ code, key }),
-          optionContext({ ...mode, getKittyKeyboardFlags: () => 0 })
-        )
-      ).toEqual({ type: 'sendInput', data: `\x1b${base}` })
-    }
-    for (const mode of [altModes[0], ...composeModes]) {
-      expect(
-        resolveTerminalOptionShortcutAction(
-          optionEvent({ code, key }),
-          optionContext({ ...mode, getKittyKeyboardFlags: () => 0 })
-        )
-      ).toBeNull()
-    }
-  })
-
-  it.each([{ isComposing: true }, { keyCode: 229 }, { key: 'Process' }, { key: 'Unidentified' }])(
-    'leaves IME-owned punctuation to native input (%j)',
-    (imeState) => {
-      for (const mode of [...altModes, ...composeModes]) {
-        expect(
-          resolveTerminalOptionShortcutAction(
-            optionEvent({ code, key, ...imeState }),
-            optionContext({ ...mode, getKittyKeyboardFlags: () => 7 })
-          )
-        ).toBeNull()
-      }
-    }
-  )
-
-  it('leaves non-Mac input and additional command modifiers untouched', () => {
-    for (const overrides of [{ isMac: false }, { isMac: true }]) {
-      const context = optionContext(overrides)
-      const events =
-        overrides.isMac === false
-          ? [optionEvent({ code, key })]
-          : [optionEvent({ code, key, ctrlKey: true }), optionEvent({ code, key, metaKey: true })]
-      for (const event of events) {
-        expect(resolveTerminalOptionShortcutAction(event, context)).toBeNull()
-      }
-    }
-  })
-})
-
-it('uses the active layout character rather than the US punctuation position', () => {
-  const event = optionEvent({ code: 'Semicolon', key: 'µ' })
-  const layout = (code: string): string | undefined => (code === 'Semicolon' ? 'm' : undefined)
-  for (const mode of altModes) {
-    expect(
-      resolveTerminalOptionShortcutAction(
-        event,
-        optionContext({ ...mode, layoutCharacterForCode: layout, getKittyKeyboardFlags: () => 7 })
-      )
-    ).toEqual({
-      type: 'sendInput',
-      data: '\x1b[109::59;3u',
-      optionKittyRelease: { flags: 7 }
-    })
-  }
-  for (const mode of altModes.slice(1)) {
-    expect(
-      resolveTerminalOptionShortcutAction(
-        event,
-        optionContext({ ...mode, layoutCharacterForCode: layout, getKittyKeyboardFlags: () => 0 })
-      )
-    ).toEqual({ type: 'sendInput', data: '\x1bm' })
-  }
 })

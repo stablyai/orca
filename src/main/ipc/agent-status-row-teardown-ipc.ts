@@ -1,7 +1,8 @@
 import { ipcMain } from 'electron'
-import { agentHookServer, isValidPaneKey } from '../agent-hooks/server'
-import type { AgentStatusCacheIdentity } from '../../shared/agent-status-types'
-import { parseLegacyNumericPaneKey } from '../../shared/stable-pane-id'
+import { agentHookServer } from '../agent-hooks/server'
+import { isValidPaneKey } from '../agent-hooks/server/server-status-identity'
+import type { AgentStatusCacheIdentity } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
+import { parseLegacyNumericPaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import {
   clearMigrationUnsupportedPtysByTabPrefix,
   clearMigrationUnsupportedPtysForPaneKey

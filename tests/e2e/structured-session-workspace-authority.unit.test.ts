@@ -4,8 +4,8 @@ import * as folderTeardown from '../../src/main/runtime/folder-workspace-pty-tea
 import * as pathPresence from '../../src/main/workspaces/catalog/local-worktree-path-presence'
 import { mkdir } from 'node:fs/promises'
 import { basename } from 'node:path'
-import * as worktreePaths from '../../src/main/git/worktree-path-comparison'
-import * as gitRemoval from '../../src/main/git/worktree-removal'
+import * as worktreePaths from '../../src/main/git/worktrees/catalog/worktree-path-comparison'
+import * as gitRemoval from '../../src/main/git/worktrees/removal/worktree-removal'
 import * as pushTargetCleanup from '../../src/main/ipc/worktree-remote'
 import { finishRuntimeLocalWorktreeRemoval } from '../../src/main/runtime/runtime-registered-local-worktree-removal'
 import { getRuntimeFolderWorkspaceInstanceId } from '../../src/main/runtime/runtime-folder-workspace'
@@ -19,7 +19,7 @@ import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../src/shared/ag
 import {
   acquireWatcherRemovalGate,
   beginWatcherInstall
-} from '../../src/main/ipc/watcher-removal-gate'
+} from '../../src/main/workspaces/removal/watcher-removal-gate'
 import { chatTabCommandsSettled } from '../../src/main/runtime/session-layout-apply.test-fixture'
 import {
   root,
@@ -41,7 +41,7 @@ import { hostWorktreeTarget } from '../../src/shared/worktree/host-qualified-ide
 import type { RuntimeWorktreeScanResult } from '../../src/main/runtime/repo-worktree-resolution-scan'
 import { openMobileAgentHistoryChat } from '../../mobile/src/agent-history/open-mobile-agent-history-chat'
 import type { RpcClient } from '../../mobile/src/transport/rpc-client'
-import type { AiVaultSession } from '../../src/shared/ai-vault-types'
+import type { AiVaultSession } from '../../src/shared/ai-vault/contracts/ai-vault-types'
 
 vi.mock('../../src/main/claude/claude-cli-flag-prewarm', () => ({
   prewarmClaudeCliFlags: async () => undefined

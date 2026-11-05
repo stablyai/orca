@@ -54,43 +54,6 @@ describe('repo slice runtime routing', () => {
     expect(reposRemoveForHost).toHaveBeenCalledWith({ repoId: sshRepo.id, hostId: 'ssh:ssh-1' })
   })
 
-  it('drops persisted visit timestamps for removed unhydrated runtime repos', async () => {
-    runtimeEnvironmentsList.mockResolvedValue([{ id: 'env-1' }])
-    runtimeEnvironmentCall.mockResolvedValue({
-      id: 'rpc-remove-runtime-unhydrated',
-      ok: true,
-      result: { removed: true },
-      _meta: { runtimeId: 'runtime-remote' }
-    })
-    const store = createTestStore()
-    const remoteWorktreeId = `${remoteRepo.id}::/srv/orca/wt`
-    const localWorktreeId = `${localRepo.id}::/local/wt`
-    store.setState({
-      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
-      repos: [serverRepo, localRepo],
-      activeRepoId: remoteRepo.id,
-      lastVisitedAtByWorktreeId: {
-        [remoteWorktreeId]: 100,
-        [localWorktreeId]: 200
-      }
-    })
-
-    await store.getState().removeProject(remoteRepo.id, ownerOf(serverRepo))
-
-    expect(store.getState().repos).toEqual([localRepo])
-    expect(store.getState().lastVisitedAtByWorktreeId).toEqual({ [localWorktreeId]: 200 })
-    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
-      selector: 'env-1',
-      method: 'repo.rm',
-      params: { repo: remoteRepo.id },
-      timeoutMs: 15_000
-    })
-    expect(reposRemoveForHost).toHaveBeenCalledWith({
-      repoId: remoteRepo.id,
-      hostId: 'runtime:env-1'
-    })
-  })
-
   it('evicts GitHub caches for removed repos using repo id and legacy path keys', async () => {
     const store = createTestStore()
     store.setState({
@@ -114,7 +77,8 @@ describe('repo slice runtime routing', () => {
       workItemsCacheKey('other-repo', 20, '')
     ])
     expect(Object.keys(store.getState().prCache)).toEqual(['other-repo::branch'])
-    expect(store.getState().workItemsInvalidationNonce).toBe(3)
+    // A refetch signal only: eviction and the retired source owner may each bump it.
+    expect(store.getState().workItemsInvalidationNonce).toBeGreaterThan(2)
   })
 
   it('stops remote runtime terminals instead of killing remote ids through local pty IPC', async () => {

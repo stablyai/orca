@@ -54,7 +54,9 @@ vi.mock('./worktrees/removal/registered-worktree-roots-cache', () => ({
 vi.mock('./local-worktree-runtime-options', () => ({
   getLocalGitOptionsForRegisteredWorktree: mocks.gitOptions
 }))
-vi.mock('../git/status', () => ({ getStagedCommitContext: mocks.staged }))
+vi.mock('../git/source-control/staged-commit-context', () => ({
+  getStagedCommitContext: mocks.staged
+}))
 vi.mock('../git/runner', () => ({ gitExecFileAsync: vi.fn() }))
 vi.mock('../text-generation/pull-request-context', () => ({
   getPullRequestDraftContext: mocks.draft
@@ -78,7 +80,7 @@ vi.mock('../text-generation/commit-message-text-generation', () => ({
   cancelGenerateCommitMessageLocal: mocks.cancelCommit,
   cancelGeneratePullRequestFieldsLocal: mocks.cancelReview
 }))
-vi.mock('./source-control-ai-linked-issue', () => ({
+vi.mock('./source-control/source-control-ai-linked-issue', () => ({
   resolveSourceControlAiLinkedIssue: () => undefined,
   resolveSourceControlAiLinkedIssueMeta: () => undefined
 }))

@@ -1,4 +1,4 @@
-import type { ResolvedSourceControlAiGenerationParams } from '../../shared/source-control-ai'
+import type { ResolvedSourceControlAiGenerationParams } from '../../shared/source-control/ai/source-control-ai-operation-resolution'
 import type { CommitMessageAgentEnvironmentResolvers } from './commit-message-agent-environment'
 import type { LocalGenerationTarget } from './source-control-text-generation-types'
 

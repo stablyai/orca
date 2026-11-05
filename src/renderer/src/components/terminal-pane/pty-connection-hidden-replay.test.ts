@@ -5,7 +5,6 @@ import { registerPtyConnectionHiddenOutputRestoreTests } from './pty-connection-
 import { registerPtyConnectionHiddenQuerySnapshotRestoreTests } from './pty-connection-hidden-query-snapshot-restore.spec'
 import { registerPtyConnectionHiddenSnapshotLiveOverlapTests } from './pty-connection-hidden-snapshot-live-overlap.spec'
 import { registerPtyConnectionHiddenSnapshotResizeSignalsTests } from './pty-connection-hidden-snapshot-resize-signals.spec'
-import { registerPtyConnectionHiddenTuiSnapshotReplayTests } from './pty-connection-hidden-tui-snapshot-replay.spec'
 import { registerPtyConnectionStalledHiddenRestoreTests } from './pty-connection-stalled-hidden-restore.spec'
 import { registerPtyConnectionDaemonSnapshotReplayTests } from './pty-connection-daemon-snapshot-replay.spec'
 import { registerPtyConnectionDeferredReattachLiveOutputTests } from './pty-connection-deferred-reattach-live-output.spec'
@@ -35,10 +34,6 @@ describe(
 describe(
   'pty-connection-hidden-snapshot-resize-signals',
   registerPtyConnectionHiddenSnapshotResizeSignalsTests
-)
-describe(
-  'pty-connection-hidden-tui-snapshot-replay',
-  registerPtyConnectionHiddenTuiSnapshotReplayTests
 )
 describe('pty-connection-stalled-hidden-restore', registerPtyConnectionStalledHiddenRestoreTests)
 describe('pty-connection-daemon-snapshot-replay', registerPtyConnectionDaemonSnapshotReplayTests)

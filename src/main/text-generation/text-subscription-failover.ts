@@ -3,9 +3,9 @@ import type { CommitMessageAgentEnvironmentResolvers } from './commit-message-ag
 import { createOpenCodeTextSubscriptionPreparation } from './opencode-text-subscriptions'
 import { createClaudeTextSubscriptionPreparation } from './claude-text-subscriptions'
 import { createCodexTextSubscriptionPreparation } from './codex-text-subscriptions'
-import type { ResolvedSourceControlAiGenerationParams } from '../../shared/source-control-ai'
+import type { ResolvedSourceControlAiGenerationParams } from '../../shared/source-control/ai/source-control-ai-operation-resolution'
 import type { TextGenerationRequest } from './source-control-generation-lanes'
-import type { CommitMessagePlan } from '../../shared/commit-message-plan'
+import type { CommitMessagePlan } from '../../shared/source-control/ai/generation/commit-message-plan'
 
 export type TextSubscriptionAttempt = {
   accountId: string

@@ -2,7 +2,7 @@ import { ChildProcess } from 'node:child_process'
 import { PassThrough } from 'node:stream'
 import { setImmediate as nextTurn } from 'node:timers/promises'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { CommitMessagePlan } from '../../shared/commit-message-plan'
+import type { CommitMessagePlan } from '../../shared/source-control/ai/generation/commit-message-plan'
 
 const stops = vi.hoisted(() => ({ supervised: vi.fn(), windows: vi.fn() }))
 vi.mock('../pty/native/windows-process-arguments', () => ({

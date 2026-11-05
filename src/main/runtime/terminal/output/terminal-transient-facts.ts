@@ -3,12 +3,12 @@ import type { PtyTransientFact } from '../../../providers/pty-provider-contract'
 import type {
   TerminalSideEffectBatch,
   TerminalSideEffectFact
-} from '../../../../shared/terminal-side-effect-facts'
+} from '../../../../shared/terminal/output/terminal-side-effect-facts'
 import {
   detectAgentStatusFromTitle,
-  isCursorNativeAgentTitle,
   normalizeTerminalTitle
-} from '../../../../shared/agent-detection'
+} from '../../../../shared/agent-status/title/agent-title-status'
+import { isCursorNativeAgentTitle } from '../../../../shared/agent-status/title/agent-title-core'
 import {
   getLeafDisplayRecord,
   getPtyDisplayRecord,
@@ -17,8 +17,8 @@ import {
 import type {
   RuntimeLeafRecord,
   RuntimePtyWorktreeRecord
-} from '../../runtime-terminal-state-records'
-import type { TerminalTitleFactMeta } from '../../../../shared/terminal-output-side-effects'
+} from '../records/runtime-terminal-state-records'
+import type { TerminalTitleFactMeta } from '../../../../shared/terminal/output/terminal-output-side-effects'
 
 export abstract class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRuntimeWithScheduleWaitBlockedCheck {
   protected abstract retirePtyAgentLaunchAuthority(ptyId: string): void

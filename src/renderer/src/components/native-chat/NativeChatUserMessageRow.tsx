@@ -121,6 +121,8 @@ export function NativeChatUserMessageRow({
                 messageId={message.id}
                 markdown={markdown}
                 onRefolded={onRefolded}
+                // List numbers hang into the bubble's padding; clipping at the text edge cut them off.
+                className="-mx-3.5 px-3.5"
               >
                 <NativeChatTextAttachments
                   content={markdown}
@@ -166,6 +168,16 @@ export function NativeChatUserMessageRow({
       {deliveryNotice?.text !== undefined ? (
         <div className="flex max-w-[85%] items-center gap-2 text-2xs text-destructive/80">
           <span className="min-w-0 break-words">{deliveryNotice.text}</span>
+          {deliveryNotice.onSend ? (
+            <Button type="button" variant="ghost" size="xs" onClick={deliveryNotice.onSend}>
+              {translate('components.native-chat.queuedMessages.send', 'Send')}
+            </Button>
+          ) : null}
+          {deliveryNotice.onEdit ? (
+            <Button type="button" variant="ghost" size="xs" onClick={deliveryNotice.onEdit}>
+              {translate('components.native-chat.editDeliveryNotice', 'Edit')}
+            </Button>
+          ) : null}
           {deliveryNotice.onDismiss ? (
             <Button type="button" variant="ghost" size="xs" onClick={deliveryNotice.onDismiss}>
               {translate('components.native-chat.dismissDeliveryNotice', 'Dismiss')}

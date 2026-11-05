@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { RuntimeMobileSessionTerminalTab } from '../../shared/runtime-types'
 import type { RuntimeAgentRowSnapshot } from './runtime-hook-agent-row-selection'
 import { buildRuntimeMobileAgentStatus } from './runtime-mobile-agent-status-builder'
-import type { RuntimeLeafRecord } from './runtime-terminal-state-records'
+import type { RuntimeLeafRecord } from './terminal/records/runtime-terminal-state-records'
 
 const PROVIDER_SESSION = { key: 'session_id' as const, id: 'session-1' }
 const TAB: RuntimeMobileSessionTerminalTab = {

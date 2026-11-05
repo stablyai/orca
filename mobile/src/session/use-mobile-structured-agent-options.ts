@@ -10,7 +10,7 @@ import {
   structuredAgentSessionMessageSelection,
   structuredAgentSessionShownSnapshot
 } from '../../../src/shared/agent-session/options/structured-agent-session-option-view'
-import { agentChatPermissionModes } from '../../../src/shared/agent-chat-permission-mode'
+import { agentChatPermissionModes } from '../../../src/shared/agent-launch/permissions/agent-chat-permission-support'
 import { legacyHostPermissionDescriptor } from '../../../src/shared/agent-session/options/structured-agent-session-permission-option'
 import type { RpcClient } from '../transport/rpc-client'
 import type { StructuredAgentSessionHostSupport } from './mobile-structured-agent-session-host-support'
@@ -33,6 +33,8 @@ export function useMobileStructuredAgentOptions(args: {
   enabled: boolean
   fence: number | null
   turnId: string | null
+  /** The chat has a turn or a send: its value picks keep the remembered new-chat model. */
+  hasTurn?: boolean
   mutate: StructuredAgentSessionMutate
   optionStamp?: string
   hostSupport: Pick<
@@ -40,6 +42,7 @@ export function useMobileStructuredAgentOptions(args: {
     | 'permissionModes'
     | 'permissionOwn'
     | 'coherentModelCatalog'
+    | 'modelEffortDiscovery'
     | 'statusFeed'
     | 'sendSelection'
     | 'sendOptions'
@@ -84,19 +87,6 @@ export function useMobileStructuredAgentOptions(args: {
     worktree: createdHere?.worktree,
     coherentCatalog: hostSupport?.coherentModelCatalog === true
   })
-  const demandModelCatalog = useMobileHostModelCatalogUpgrade({
-    agent,
-    client,
-    sessionId,
-    enabled,
-    fence,
-    newLaunch: createdHere !== undefined,
-    ...(createdHere ? { worktree: createdHere.worktree } : {}),
-    optionCatalog,
-    activeOptionRecordRef,
-    updateOptionState,
-    receiveCatalog
-  })
 
   // Pre-1.4.225 hosts lack per-chat modes; show their actual global agent mode.
   const legacyHostPermissions =
@@ -126,6 +116,25 @@ export function useMobileStructuredAgentOptions(args: {
   }, [acceptsPicks, legacyHostPermissions, readOptionState])
   const optionSnapshot = readOptionSnapshot()
 
+  const modelOption = optionSnapshot.find((row) => row.id === 'model')
+  const demandModelCatalog = useMobileHostModelCatalogUpgrade({
+    agent,
+    selectedModel:
+      hostSupport?.modelEffortDiscovery && modelOption?.kind.type === 'select'
+        ? modelOption.kind.currentValue
+        : undefined,
+    client,
+    sessionId,
+    enabled,
+    fence,
+    newLaunch: createdHere !== undefined,
+    ...(createdHere ? { worktree: createdHere.worktree } : {}),
+    optionCatalog,
+    activeOptionRecordRef,
+    updateOptionState,
+    receiveCatalog
+  })
+
   const readWriteContext = () => {
     const currentState = projectRuntimeReports({
       ...optionStateRef.current,
@@ -139,6 +148,7 @@ export function useMobileStructuredAgentOptions(args: {
       snapshot: readOptionSnapshot(),
       ready: acceptsPicks,
       providerStarting,
+      existingChat: createdHere === undefined || args.hasTurn === true,
       isCurrentContext,
       flush: (isCurrent: () => boolean) => {
         controller.flush(async (pick) => {

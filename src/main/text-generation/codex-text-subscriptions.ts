@@ -12,8 +12,8 @@ import {
   supportsTextSubscriptionCliVersion
 } from './text-subscription-cli-probe'
 import { readCodexTextConfiguration } from './codex-text-configuration'
-import { prepareCodexTextGenerationHooks } from '../codex/codex-text-hook-preparation'
-import { isAgentStatusHooksEnabledForAgent } from '../../shared/agent-status-hooks-setting'
+import { prepareCodexTextGenerationHooks } from '../codex/hooks/installation/codex-text-hook-preparation'
+import { isAgentStatusHooksEnabledForAgent } from '../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 import type { Store } from '../persistence/loading-store/store'
 import type { RateLimitService } from '../rate-limits/service'
 import type { CodexRuntimeHomeService } from '../codex-accounts/runtime-home-service'
@@ -25,7 +25,7 @@ import {
   readCodexSubscriptionObservation
 } from '../rate-limits/codex-subscription-observation'
 import { resolveCodexCommand } from '../codex-cli/command'
-import { parseCodexModels } from '../../shared/commit-message-model-parsers'
+import { parseCodexModels } from '../../shared/source-control/ai/generation/commit-message-model-parsers'
 import {
   withCodexHomeProcessLock,
   resolveCodexHomeProcessLockKey

@@ -31,6 +31,7 @@ export function toStoredHostProfile(host: HostProfile): StoredHostProfile {
     personalName,
     lastKnownMachineName,
     lastKnownHostPlatform,
+    lastKnownHostMachine,
     endpoint,
     publicKeyB64,
     lastConnected
@@ -41,6 +42,7 @@ export function toStoredHostProfile(host: HostProfile): StoredHostProfile {
     ...(personalName !== undefined ? { personalName } : {}),
     ...(lastKnownMachineName !== undefined ? { lastKnownMachineName } : {}),
     ...(lastKnownHostPlatform !== undefined ? { lastKnownHostPlatform } : {}),
+    ...(lastKnownHostMachine !== undefined ? { lastKnownHostMachine } : {}),
     endpoint,
     publicKeyB64,
     lastConnected

@@ -1,5 +1,5 @@
 import { RuntimeWorkspaceRepoScanRefresh } from '../../workspaces/workspace-repo-scan-refresh'
-import type { RuntimePtyWorktreeRecord } from '../../runtime-terminal-state-records'
+import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree/id'
 import { parseWslUncPath } from '../../../../shared/wsl-paths'
@@ -7,7 +7,7 @@ import { cloneAgentSessionOwnerBinding } from '../../../../shared/claimed-agent-
 import { advertisedUrlWatcher } from '../../../ports/advertised-url-watcher'
 import { maxTimestamp } from '../../runtime-worktree-status-projection'
 import type { RuntimeSyncedLeaf } from '../../../../shared/runtime-types'
-import { isTerminalLeafId, makePaneKey } from '../../../../shared/stable-pane-id'
+import { isTerminalLeafId, makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { inferWorktreeIdFromPtyId } from '../../runtime-worktree-path-identity'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import {
@@ -19,7 +19,7 @@ import {
 import {
   recordPtySurfaceClaim,
   SURFACE_CLAIM_WITHOUT_STANDING
-} from '../../pty-recorded-surface-topology'
+} from '../surface/pty-recorded-surface-topology'
 import { followExportedPaneKeys } from './exported-pane-key-follow'
 
 export abstract class OrcaRuntimeWithRecordPtyWorktree extends RuntimeWorkspaceRepoScanRefresh {

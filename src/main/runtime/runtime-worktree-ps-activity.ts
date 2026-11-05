@@ -1,11 +1,14 @@
 import type { RuntimeSyncedTab, RuntimeWorktreePsSummary } from '../../shared/runtime-types'
 import type { Repo } from '../../shared/repo-types'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
-import { parsePaneKey } from '../../shared/stable-pane-id'
-import { getWorkspaceSessionTabActivityIds } from '../../shared/workspace-session-tab-activity'
+import { parsePaneKey } from '../../shared/workspace-layout/stable-pane-id'
+import { getWorkspaceSessionTabActivityIds } from '../../shared/workspace-session/workspace-session-tab-activity'
 import type { RuntimeStore } from './runtime-store-contract'
-import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
+import type {
+  RuntimeLeafRecord,
+  RuntimePtyWorktreeRecord
+} from './terminal/records/runtime-terminal-state-records'
 import type { RuntimeWorktreePsSummaryLookup } from './runtime-worktree-summary-paths'
 import {
   getLatestPtyTitle,

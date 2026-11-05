@@ -1,11 +1,11 @@
 import { OrcaRuntimeWithListManagedWorktrees } from './managed-workspace-operations'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import {
   describeLaunchedAgentHost,
   readLaunchedAgentForeground,
   type LaunchedAgentForeground,
   type LaunchedAgentHost
-} from '../launched-agent-foreground'
+} from '../terminal/wait/launched-agent-foreground'
 
 export abstract class OrcaRuntimeWithForegroundInspection extends OrcaRuntimeWithListManagedWorktrees {
   launchedAgentTerminalIdentity(ptyId: string): unknown {

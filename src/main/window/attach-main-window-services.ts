@@ -1,5 +1,5 @@
-import { ipcMain, nativeTheme } from 'electron'
-import type { BrowserWindow, IpcMainInvokeEvent } from 'electron'
+import { ipcMain, nativeTheme, type BrowserWindow, type IpcMainInvokeEvent } from 'electron'
+
 import type { Store } from '../persistence/loading-store/store'
 import {
   acknowledgePendingTccPromptNotice,
@@ -21,7 +21,10 @@ import type {
 import { registerDaemonManagementHandlers } from '../ipc/pty/pty-management'
 import { registerSshHandlers } from '../ipc/ssh/ssh'
 import { browserManager } from '../browser/browser-manager'
-import { hasSystemMediaAccess, requestSystemMediaAccess } from '../browser/browser-media-access'
+import {
+  hasSystemMediaAccess,
+  requestSystemMediaAccess
+} from '../browser/site-settings/browser-media-access'
 import type { OrcaRuntimeService, RuntimeWorktreeLifecycleEvent } from '../runtime/orca-runtime'
 import type {
   PreQuitCleanupFailureMode,
@@ -29,7 +32,7 @@ import type {
 } from '../updater/lifecycle/updater-state'
 import { scheduleHistoryGc } from '../pty/history/terminal-history-gc'
 import { openCodeHookService, openCode2HookService } from '../opencode/hook-service'
-import { listLiveDaemonPtyIds } from '../daemon/daemon-provider-state'
+import { listLiveDaemonPtyIds } from '../daemon/providers/lifecycle/daemon-provider-state'
 import { hydrateLocalPtyRegistryAtBoot } from '../memory/hydrate-local-pty-registry'
 import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth-service'
 import { getKnownWorktreeIdsForHistoryGc } from './history-gc-worktree-ids'

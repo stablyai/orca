@@ -24,29 +24,33 @@ on:
       - 'src/shared/node-runtime-pin.ts'
       - 'src/shared/orcad-artifacts.ts'
       - 'config/scripts/build-orcad-*.mjs'
+      - 'config/scripts/orcad-distribution/prebuilds/build-orcad-*.mjs'
+      - 'config/scripts/orcad-distribution/template/build-orcad-*.mjs'
       - 'config/scripts/orcad-prebuild-*.mjs'
-      - 'config/scripts/orcad-windows-process-tree.mjs'
-      - 'config/scripts/orcad-windows-cli-launcher.mjs'
-      - 'config/scripts/orcad-windows-security.mjs'
-      - 'config/scripts/build-windows-security-addon.mjs'
+      - 'config/scripts/orcad-distribution/prebuilds/orcad-prebuild-*.mjs'
+      - 'config/scripts/orcad-distribution/server-bundle/orcad-windows-process-tree.mjs'
+      - 'config/scripts/orcad-distribution/server-bundle/orcad-windows-cli-launcher.mjs'
+      - 'config/scripts/orcad-distribution/server-bundle/orcad-windows-security.mjs'
+      - 'config/scripts/native-build/windows/build-windows-security-addon.mjs'
       - 'native/windows-security/**'
-      - 'config/scripts/build-windows-cli-launcher.mjs'
-      - 'config/scripts/windows-rust-executable-build.mjs'
+      - 'config/scripts/native-build/windows/build-windows-cli-launcher.mjs'
+      - 'config/scripts/native-build/windows/windows-rust-executable-build.mjs'
       - 'native/windows-cli-launcher/**'
       - 'src/main/orcad/orcad-cli-launcher.ts'
       - '.github/actions/prepare-windows-cli-launcher/**'
       - 'config/patches/node-pty*'
       - 'config/patches/@vscode__windows-process-tree*'
-      - 'config/scripts/build-windows-process-tree-addon.mjs'
+      - 'config/scripts/native-build/windows/build-windows-process-tree-addon.mjs'
       - 'config/scripts/windows-process-tree-prepared-addon*.mjs'
-      - 'config/scripts/windows-process-tree-gyp-rebuild.mjs'
+      - 'config/scripts/native-build/windows/windows-process-tree-prepared-addon*.mjs'
+      - 'config/scripts/native-build/windows/windows-process-tree-gyp-rebuild.mjs'
       - 'src/shared/windows-breakaway-launch*.ts'
       - 'src/main/ipc/ssh/ssh-host-server-*.ts'
       # The deploy runs over this SSH transport.
       - 'src/main/ssh/connection/**'
       - 'src/main/ssh/ssh-reconnect-error-classification.ts'
       - 'src/main/ssh/ssh-posix-command-wrapper.ts'
-      - 'src/shared/shell-argument-quoting.ts'
+      - 'src/shared/shell/launch/shell-argument-quoting.ts'
       - '!src/**/*.test.ts'
       - 'src/main/managed-server/host-state/orcad-windows-host-lane.test.ts'
       - 'tests/e2e/ssh-orcad-auto-convert.spec.ts'
@@ -61,7 +65,7 @@ on:
       - '.github/workflows/ssh-windows-hosts.yml'
       - '.github/actions/prepare-orcad-prebuilds/**'
       - '.github/actions/restore-pnpm-verification/**'
-      - 'config/scripts/orcad-windows-prebuild-cache.mjs'
+      - 'config/scripts/orcad-distribution/prebuilds/orcad-windows-prebuild-cache.mjs'
   workflow_dispatch:
     inputs:
       cells:
@@ -181,7 +185,7 @@ jobs:
           if [ "$REUSE_PREPARED_RUNTIME" = true ]; then
             reuse_args+=(--reuse-prepared-runtime)
           fi
-          node config/scripts/build-windows-process-tree-addon.mjs --arch=${{ matrix.arch }} "${reuse_args[@]}"
+          node config/scripts/native-build/windows/build-windows-process-tree-addon.mjs --arch=${{ matrix.arch }} "${reuse_args[@]}"
       - uses: ./.github/actions/prepare-orcad-prebuilds
         with:
           resolve-windows-cache: ${{ github.event_name == 'pull_request' }}
@@ -200,14 +204,14 @@ jobs:
         if: steps.mobile-bundle.outcome != 'success'
       - name: Verify the mobile bundle before staging it
         shell: bash
-        run: node -e "require('./config/scripts/verify-packaged-mobile-web-bundle.cjs').assertMobileWebBundleBuilt()"
+        run: node -e "require('./config/scripts/desktop-distribution/runtime-verification/verify-packaged-mobile-web-bundle.cjs').assertMobileWebBundleBuilt()"
       - name: Build the win32 template
         shell: bash
         env:
           ORCA_REUSE_PREPARED_WINDOWS_SECURITY: ${{ github.event_name == 'pull_request' && steps.dependencies.outcome == 'success' }}
         run: |
           pnpm build:orcad-prebuilds --require-slots "win32-${{ matrix.arch }}"
-          node config/scripts/build-orcad-template.mjs --targets "win32-${{ matrix.arch }}"
+          node config/scripts/orcad-distribution/template/build-orcad-template.mjs --targets "win32-${{ matrix.arch }}"
       - wait: inbox-capability
       - name: Prepare the Windows inbox SSH capability after the builds
         if: ${{ matrix.server == 'inbox' && matrix.arch == 'arm64' && env.INBOX_PREPARATION_MODE == 'serial' }}

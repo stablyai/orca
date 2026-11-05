@@ -8,6 +8,8 @@ import { prepareLocalWorktreeRootForRepo } from '../workspaces/creation/worktree
 import type { RuntimeStore } from './runtime-store-contract'
 import { assertWslMoveRepoWritable } from '../persistence/moving-wsl-projects/wsl-move-scope-guard'
 import { teardownStops } from './owned-session-teardown-policy'
+import { assertNoProjectWorktreeCreate } from '../workspaces/creation/worktree-create-in-flight'
+import { releaseWorktreeCreatePreparationsForRepo } from '../workspaces/creation/preparation/worktree-create-preparation-project-removal'
 
 const PROJECT_TERMINAL_STOP_BUDGET_MS = 10_000
 
@@ -34,6 +36,7 @@ type RepositoryUpdates = Partial<
     | 'repoIcon'
     | 'upstream'
     | 'hookSettings'
+    | 'editorFormatter'
     | 'worktreeBaseRef'
     | 'worktreeBasePath'
     | 'kind'
@@ -147,6 +150,7 @@ export class RuntimeRepositorySettingsController {
     }
     const repo = typeof target === 'string' ? await this.deps.resolveRepo(target) : target
     assertWslMoveRepoWritable(store, repo)
+    assertNoProjectWorktreeCreate(repo)
     // Host owns all shells; clients may stop only loaded workspaces or none. Bound teardown inside repo.rm timeout.
     const deadline = Date.now() + PROJECT_TERMINAL_STOP_BUDGET_MS
     const stopProjectTerminals = async (closeStructuredSessions: boolean): Promise<void> => {
@@ -157,8 +161,10 @@ export class RuntimeRepositorySettingsController {
         })
     }
     await stopProjectTerminals(false)
-    // Recheck WSL fence after stop awaits.
+    // Recheck both fences after stop awaits.
     assertWslMoveRepoWritable(store, repo)
+    assertNoProjectWorktreeCreate(repo)
+    releaseWorktreeCreatePreparationsForRepo(store, repo)
     store.removeProjectForHost(repo)
     // Sweep again for terminals spawned during stop. Retire chats only after the final WSL fence because that step is irreversible.
     await stopProjectTerminals(teardownStops('project-removal', 'structured-chat'))

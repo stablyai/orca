@@ -1,24 +1,24 @@
 import type {
   RuntimeHeadlessTerminal,
   RuntimeVisibleTerminalState
-} from '../../runtime-terminal-state-records'
+} from '../records/runtime-terminal-state-records'
 import { OrcaRuntimeWithSerializeTerminalBufferFromAvailableState } from './terminal-buffer-selection'
 import type { PtyProviderBufferSnapshot } from '../../../providers/pty-provider-contract'
-import { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
+import { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal/protocol/input-modes/terminal-kitty-keyboard-mode-tracker'
 import type { RuntimeTerminalRead } from '../../../../shared/runtime-types'
 import type { RuntimeProviderSnapshotReadOptions } from '../../runtime-terminal-contracts'
 import {
   buildVisibleSnapshotReadFallback,
   shouldFallbackToVisibleTerminalSnapshot,
   terminalReadLimit
-} from '../../terminal-tail-read'
+} from './tail/terminal-tail-read'
 import type { RuntimeTerminalProjection } from '../../orca-runtime-core'
-import { DEFAULT_TERMINAL_READ_LIMIT } from '../../terminal-tail-limits'
-import { HeadlessEmulator } from '../../../daemon/headless-emulator'
+import { DEFAULT_TERMINAL_READ_LIMIT } from './tail/terminal-tail-limits'
+import { HeadlessEmulator } from '../../../daemon/emulation/headless-emulator'
 import {
   projectTerminalTailLines,
   projectTerminalVisibleLines
-} from '../../orca-runtime-terminal-projection'
+} from '../view/orca-runtime-terminal-projection'
 import { VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS } from '../../orca-runtime-postlude'
 import { isNativeWindowsConptyPty } from '../../terminal-model-query-authority'
 

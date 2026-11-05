@@ -1,12 +1,12 @@
 import { captureCodexProjectConfiguration } from './codex-project-configuration'
 import { runProcessSync } from '@orca/process-host'
-import * as hookHashLookup from '../codex/codex-hook-hash-lookup'
-import { CodexHookService } from '../codex/hook-service'
+import * as hookHashLookup from '../codex/trust/hooks/codex-hook-hash-lookup'
+import { CodexHookService } from '../codex/hooks/installation/codex-hook-service-implementation'
 import { mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import type * as NodeOs from 'node:os'
 import { beforeEach, afterEach, describe, it, expect, vi } from 'vitest'
-import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
+import { installFakeAppEnvironment } from '../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 import {
   createCodexAccountRecord,
   createManagedAuth,
