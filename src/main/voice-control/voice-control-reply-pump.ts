@@ -1,5 +1,5 @@
 import type { MessageRow, MessageType } from '../runtime/orchestration/types'
-import type { MessageWaitResult } from '../runtime/runtime-message-waiters'
+import { MessageWake, type MessageWaitResult } from '../runtime/runtime-message-waiters'
 
 /**
  * Long-poll loop on the control's run mailbox: waitForMessage wakes on routed mail (push,
@@ -88,7 +88,7 @@ export class VoiceControlReplyPump {
       if (result === 'cancelled') {
         return
       }
-      if (result === 'notified') {
+      if (result instanceof MessageWake) {
         this.drain()
       }
     }

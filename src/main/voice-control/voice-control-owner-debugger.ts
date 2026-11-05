@@ -1,5 +1,5 @@
 import type { WebContents } from 'electron'
-import { sendGuestCdpCommandWithTimeout } from '../browser/guest-cdp-command'
+import { sendGuestCdpCommandWithTimeout } from '../browser/cdp/debugger/guest-cdp-command'
 import type { VoiceCdpDebugger } from './voice-control-screen-driver'
 
 /**

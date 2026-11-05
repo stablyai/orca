@@ -1,12 +1,12 @@
 import { randomUUID } from 'node:crypto'
-import { isAgentPromptStalledError } from '../runtime/agent-prompt-submission-verification'
+import { isAgentPromptStalledError } from '../runtime/terminal/input/agent-prompt-submission-verification'
 import type { OrchestrationDb } from '../runtime/orchestration/db'
 import {
   buildDispatchPreamble,
   type DispatchPreambleSendOptions
 } from '../runtime/orchestration/preamble'
 import { sendAgentTurn } from '../runtime/orchestration/send-agent-turn'
-import type { TuiAgent } from '../../shared/tui-agent'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type { VoiceRosterEntry } from './voice-control-roster'
 import { VOICE_CONTROL_HANDLE } from './voice-control-participant'
 
@@ -86,8 +86,6 @@ function prepareVoiceDispatch(
     coordinatorHandle: VOICE_CONTROL_HANDLE,
     workerHandle: args.handle,
     canDispatchSubWorkers: false,
-    // Voice dispatches report through the mailbox reply pump, not heartbeats.
-    heartbeatIntervalMinutes: null,
     // Why: agents inside a dev app must reach the dev runtime's socket, not production.
     devMode: process.env.ORCA_USER_DATA_PATH?.includes('orca-dev'),
     ...(args.cliCommand !== undefined ? { cliCommand: args.cliCommand } : {})

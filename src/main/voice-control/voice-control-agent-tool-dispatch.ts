@@ -1,6 +1,6 @@
-import { pickSourceControlLaunchAgent } from '../../shared/source-control-launch-agent-selection'
-import type { TuiAgent } from '../../shared/tui-agent'
-import { isTuiAgent } from '../../shared/tui-agent-config'
+import { pickSourceControlLaunchAgent } from '../../shared/source-control/ai/source-control-launch-agent-selection'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
+import { isTuiAgent } from '../../shared/agent-launch/catalog/tui-agent-config'
 import { ambiguousNameReply, resolveAgentBySpokenName } from './agent-name-resolution'
 import {
   dispatchVoiceMessageToAgent,

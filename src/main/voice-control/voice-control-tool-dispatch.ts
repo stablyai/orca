@@ -18,7 +18,7 @@ import {
   type VoiceUiAction,
   type VoiceUiActionResult
 } from '../../shared/voice-control-types'
-import type { TuiAgent } from '../../shared/tui-agent'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import { ambiguousNameReply, resolveAgentBySpokenName } from './agent-name-resolution'
 import {
   dispatchVoiceMessageToAgent,

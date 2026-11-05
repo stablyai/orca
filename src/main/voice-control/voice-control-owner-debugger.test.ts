@@ -3,7 +3,7 @@ import type { WebContents } from 'electron'
 import { VoiceScreenDriver } from './voice-control-screen-driver'
 import { createVoiceOwnerDebuggerCache } from './voice-control-owner-debugger'
 
-vi.mock('../browser/guest-cdp-command', () => ({
+vi.mock('../browser/cdp/debugger/guest-cdp-command', () => ({
   // The transport delegates to the fake webContents' own handler, like the real bridge.
   sendGuestCdpCommandWithTimeout: (
     webContents: { __cdp: (method: string, params?: Record<string, unknown>) => unknown },

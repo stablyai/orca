@@ -1,5 +1,9 @@
 import type { VoiceUiActionResult } from '../../shared/voice-control-types'
-import { buildSnapshot, type CdpCommandSender, type RefEntry } from '../browser/snapshot-engine'
+import {
+  buildSnapshot,
+  type CdpCommandSender,
+  type RefEntry
+} from '../browser/cdp/snapshots/snapshot-engine'
 import { traceVoiceScreenDriver } from './voice-control-tracing'
 
 function errorDetail(error: unknown): string {

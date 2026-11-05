@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { AXNode } from '../browser/snapshot-ax-tree-walk'
+import type { AXNode } from '../browser/cdp/snapshots/snapshot-ax-tree-walk'
 import { VoiceScreenDriver, type VoiceCdpDebugger } from './voice-control-screen-driver'
 
 type CdpCall = { method: string; params?: Record<string, unknown> }
