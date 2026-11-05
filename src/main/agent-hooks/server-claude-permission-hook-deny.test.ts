@@ -43,10 +43,19 @@ async function withClaudeHookServer(
 
 const DENIED = { command: 'rm -rf /tmp/orca-denied-target' }
 const RETRIED = { command: 'rm -rf /tmp/orca-retried-target' }
+const UNRELATED_READ = {
+  hook_event_name: 'PreToolUse',
+  tool_name: 'Read',
+  tool_input: { file_path: '/tmp/orca-unrelated' },
+  tool_use_id: 'toolu-unrelated'
+}
 
 describe('Claude permission wait after a PermissionRequest hook denies', () => {
   // A PermissionRequest hook deny fires no PostToolUse, so the first wait is never settled.
-  it('clears the wait when the retried request is approved', async () => {
+  it.each([
+    ['directly', []],
+    ['after an unrelated tool starts', [UNRELATED_READ]]
+  ])('clears the wait when the retried request is approved %s', async (_, between) => {
     await withClaudeHookServer(async (post, server) => {
       await post({
         hook_event_name: 'PreToolUse',
@@ -61,6 +70,9 @@ describe('Claude permission wait after a PermissionRequest hook denies', () => {
         tool_input: RETRIED,
         tool_use_id: 'toolu-retried'
       })
+      for (const payload of between) {
+        await post(payload)
+      }
       await post({ hook_event_name: 'PermissionRequest', tool_name: 'Bash', tool_input: RETRIED })
       expect(server.getStatusSnapshot()[0]).toMatchObject({ state: 'waiting', toolName: 'Bash' })
       await post({

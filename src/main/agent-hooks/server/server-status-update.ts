@@ -38,6 +38,7 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
     after: EnrichedAgentHookEventPayload | null | undefined,
     emit = true
   ): boolean {
+    this.claudePermissionHold.forgetVacatedPane(before, after)
     if (after) {
       this.claudeOwedNotificationExpiry.arm(after.paneKey, (row) => {
         if (this.server) {
