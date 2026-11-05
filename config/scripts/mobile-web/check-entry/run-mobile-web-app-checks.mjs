@@ -15,6 +15,11 @@ const mobileWebCheckArgs = [
   'config/vitest.config.ts',
   'config/scripts/mobile-web-app-',
   'config/scripts/mobile-web-app/',
+  'config/scripts/mobile-web-app/shell/',
+  'config/scripts/mobile-web-app/session/',
+  'config/scripts/mobile-web-app/routing/',
+  'config/scripts/mobile-web-app/terminal/',
+  'config/scripts/mobile-web-app/workspace/',
   'config/scripts/build/mobile-web-app/build-mobile-web-app-bundle.test.mjs'
 ]
 

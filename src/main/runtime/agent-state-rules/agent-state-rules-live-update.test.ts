@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   AGENT_STATE_RULES_ASSET,
   buildAgentStateRulesBundle
-} from '../../../../config/scripts/agent-state-rules-bundle.mjs'
+} from '../../../../config/scripts/release/agent-state-rules/agent-state-rules-bundle.mjs'
 import { agentStateRulesTag } from '../../../../config/scripts/release/versioning/release-tag-patterns.mjs'
 import { MAIN_RELEASE_REPO } from '../../../shared/release-channel'
 import { getTerminalTailSentinelMatches } from '../terminal-tail-sentinel-index'

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import * as ansi from '../../../ansi-escape-sequences'
 import * as byteLimits from '../../../utf8-byte-limits'
-import { createCheckLogFixture } from '../../../../../config/scripts/check-job-log-test-fixture.mjs'
+import { createCheckLogFixture } from '../../../../../config/scripts/performance/check-job-log/check-job-log-test-fixture.mjs'
 import { PR_CHECK_LOG_TAIL_BYTES } from './check-job-log-excerpt'
 import { PR_CHECK_LOG_TAIL_EARLIER_SEPARATOR, sliceCheckLogTail } from './check-job-log-tail-slice'
 
