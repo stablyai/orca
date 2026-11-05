@@ -29,6 +29,10 @@ export function unnamedSenderLabel(): string {
   return translate('components.native-chat.agentMessage.unnamedSender', 'an agent')
 }
 
+export function unnamedTerminalSenderLabel(): string {
+  return translate('tabHoverCard.terminal', 'Terminal')
+}
+
 const qualifiedTabs = new WeakMap<
   AppState['unifiedTabsByWorktree'],
   {
@@ -134,6 +138,7 @@ export function useAgentMessageSenderLabel(
     conversationName,
     snapshotName: sender.name,
     tabLabel: chatTab?.label,
-    fallback: unnamedSenderLabel()
+    fallback: unnamedSenderLabel(),
+    terminalFallback: unnamedTerminalSenderLabel()
   })
 }

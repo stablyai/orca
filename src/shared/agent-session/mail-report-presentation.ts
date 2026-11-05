@@ -1,7 +1,9 @@
 import type { NativeChatMessage } from '../native-chat/native-chat-types'
 import { agentMessageDisplayText } from './agent-message-display-text'
-import { agentMessageSavedKind, agentMessageSourceAddressLabel } from './agent-message-presentation'
-import { parseOrcaSessionAddress } from '../orca-session-address'
+import {
+  agentMessageSourceAddressLabel,
+  senderHasOrchestrationProvenance
+} from './agent-message-presentation'
 import type { AgentMessageSender } from './agent-session-message-source'
 import {
   mailDisplayAttachmentKey,
@@ -9,14 +11,16 @@ import {
   type MailDisplayReport
 } from './mail-display-report'
 
-export function senderHasOrchestrationProvenance(sender: AgentMessageSender): boolean {
-  return Boolean(
-    agentMessageSavedKind(sender) ||
-    sender.party.orcaSessionId ||
-    parseOrcaSessionAddress(sender.party.address) ||
-    /^(run|dispatch):.+/.test(sender.party.address) ||
-    sender.relation === 'worker' ||
-    sender.relation === 'coordinator'
+export { senderHasOrchestrationProvenance } from './agent-message-presentation'
+
+export function mailReportSourceLabel(
+  senders: readonly AgentMessageSender[],
+  terminalFallback?: string
+): string {
+  return (
+    senders
+      .map((sender) => sender.name || agentMessageSourceAddressLabel(sender, terminalFallback))
+      .join(', ') || '—'
   )
 }
 
@@ -66,10 +70,7 @@ export function mailReportPresentation(
   const invalidRange =
     single && mail.messages[0]?.content !== undefined && displayText === undefined
   const report = single && !invalidRange ? classifications[0]?.report : undefined
-  const source =
-    from.senders
-      .map((sender) => sender.name || agentMessageSourceAddressLabel(sender))
-      .join(', ') || '—'
+  const source = mailReportSourceLabel(from.senders)
   return {
     kind:
       single && !invalidRange

@@ -129,7 +129,12 @@ it('opens the very pane a reopened worker runs in, through the sidebar path', as
       ]
     }
   })
-  useAppStore.getState().setAgentSenderPublication('local', publication([row('dispatch:first', 1)]))
+  useAppStore
+    .getState()
+    .setAgentSenderPublication(
+      'local',
+      publication([{ ...row('dispatch:first', 1), dispatchActor: true }])
+    )
   const sender = terminal('term_before')
   expect(card(sender, 'first')).toEqual({
     avatar: expect.objectContaining({ dot: 'working' }),
@@ -186,6 +191,25 @@ it('asks the host, with no dot, for a terminal sender whose terminal exited or w
     { address: 'term_0' },
     { timeoutMs: 5000 }
   )
+})
+
+it('uses neutral Terminal feedback for an unnamed report endpoint opened directly', async () => {
+  const sender = {
+    party: { address: 'term_missing', terminalHandle: 'term_missing', orcaSessionId: null },
+    name: null
+  }
+  mocks.callRuntimeRpc.mockResolvedValue({ location: null, lost: 'terminal' })
+  await openAgentMessageSender(sourceOf(sender), sender, 'workspace', LOCAL)
+  expect(mocks.toastInfo).toHaveBeenCalledExactlyOnceWith(
+    'Terminal is no longer available. Open its terminal from the sidebar.'
+  )
+  expect(mocks.callRuntimeRpc).toHaveBeenCalledWith(
+    LOCAL,
+    'orchestration.partyOpen',
+    { address: 'term_missing' },
+    { timeoutMs: 5000 }
+  )
+  expect(mocks.activatePane).not.toHaveBeenCalled()
 })
 
 it('reopens a closed chat sender through the host lineage lookup', async () => {

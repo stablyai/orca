@@ -47,23 +47,30 @@ export function senderDispatchLaunch(
 }
 
 /** One async admission pass shares only committed launch/custody facts at the same relevant revision. */
-export function senderDispatchLaunchReader(getDb: () => OrchestrationDb | null) {
+export function senderDispatchLaunchReader(
+  getDb: () => OrchestrationDb | null,
+  installation: { database: OrchestrationDb | null } = { database: null }
+) {
   let database: OrchestrationDb | null = null
   let revision: string | undefined
   let launch: ReturnType<typeof senderDispatchLaunch> | undefined
   return () => {
     const db = getDb()
-    const generation = db ? readAgentSenderGeneration(db, db !== database).history : undefined
-    const transactional = db?.db.isTransaction === true
-    if (db !== database || generation !== revision || transactional) {
+    if (db?.db.isTransaction) {
+      database = null
+      revision = undefined
+      launch = undefined
+      return senderDispatchLaunch(db)
+    }
+    const generation = db
+      ? readAgentSenderGeneration(db, db !== installation.database).history
+      : undefined
+    installation.database = db
+    if (db !== database || generation !== revision) {
       launch = db ? senderDispatchLaunch(db) : undefined
     }
-    const current = launch
-    database = transactional ? null : db
-    revision = transactional ? undefined : generation
-    if (transactional) {
-      launch = undefined
-    }
-    return current
+    database = db
+    revision = generation
+    return launch
   }
 }

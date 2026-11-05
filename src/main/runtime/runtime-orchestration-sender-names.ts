@@ -15,8 +15,6 @@ import { structuredAgentSessionIdFromTabId } from '../../shared/agent-session/vi
 import type { TerminalTab } from '../../shared/workspace-layout/terminal-tab-types'
 import type { OrchestrationDb } from './orchestration/db'
 import {
-  observeOrchestrationSender,
-  orchestrationSenderAgent,
   orchestrationSenderName,
   structuredChatNaming,
   captureMirroredTabs,
@@ -26,7 +24,7 @@ import {
   type SenderNamingSources,
   type TerminalSenderNaming
 } from './orchestration/orchestration-sender-name'
-import { agentMessageSender, type SenderSnapshot } from './orchestration/agent-message-sender'
+import { agentMessageSender, observeSenderSnapshot } from './orchestration/agent-message-sender'
 import {
   type AgentSessionRecordReader,
   readAgentSessionRecordStore
@@ -68,6 +66,8 @@ type AgentRowNamingSource = Pick<
 >
 
 export class RuntimeOrchestrationSenderNames {
+  private readonly launchInstallation: { database: OrchestrationDb | null } = { database: null }
+
   constructor(private readonly deps: RuntimeSenderNameDeps) {}
 
   /** A sender recorded on a message, named now. `reportedDispatchId`: the dispatch the sender's
@@ -97,20 +97,18 @@ export class RuntimeOrchestrationSenderNames {
   }
 
   /** Name and agent share one current chat or terminal observation. */
-  snapshotOf(party: AgentMessageSender['party'], reportedDispatchId?: string): SenderSnapshot {
-    return this.snapshotReader()(party, reportedDispatchId)
+  snapshotOf(party: AgentMessageSender['party'], reportedDispatchId?: string) {
+    return observeSenderSnapshot(party, this.namingSources(), reportedDispatchId)
   }
 
   snapshotReader(): typeof this.snapshotOf {
-    const readLaunch = senderDispatchLaunchReader(this.deps.getDb)
-    return (party, reportedDispatchId) => {
-      const sources = this.namingSources(readAgentSessionRecordStore(), readLaunch())
-      const observation = observeOrchestrationSender(party, sources, reportedDispatchId)
-      return {
-        name: orchestrationSenderName(party, sources, reportedDispatchId, observation),
-        agent: orchestrationSenderAgent(sources, observation)
-      }
-    }
+    const readLaunch = senderDispatchLaunchReader(this.deps.getDb, this.launchInstallation)
+    return (party, reportedDispatchId) =>
+      observeSenderSnapshot(
+        party,
+        this.namingSources(readAgentSessionRecordStore(), readLaunch()),
+        reportedDispatchId
+      )
   }
 
   private namingSources(

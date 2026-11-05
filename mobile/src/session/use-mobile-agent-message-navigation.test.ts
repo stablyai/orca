@@ -328,26 +328,29 @@ it('retains the displayed source, respects pending selection, and fences stale s
   expect(h.sourceSelection.selectedSessionTabIdRef.current).toBe('newer')
 })
 
-it('keeps Setup endpoint failure neutral without presenting it as an agent', async () => {
-  const send = vi.fn<Parameters<typeof mount>[0]>(async (method) =>
-    method === 'orchestration.partyOpen'
-      ? reply({ location: { kind: 'terminal', handle: 'term_worker' } })
-      : refused('terminal_gone')
-  )
-  const h = mount(send)
-  await act(async () =>
-    h.open({
-      ...from,
-      senders: [{ name: 'Setup', party: from.senders[0]!.party }]
-    })
-  )
-  expect(send.mock.calls.map(([method]) => method)).toEqual([
-    'orchestration.partyOpen',
-    'terminal.focus'
-  ])
-  expect(h.toast).toHaveBeenCalledExactlyOnceWith(
-    'Setup is no longer available. Open its terminal from the sidebar.',
-    3000
-  )
-  expect(h.navigate).not.toHaveBeenCalled()
-})
+it.each(['Setup', null])(
+  'keeps a %s endpoint failure neutral without presenting it as an agent',
+  async (name) => {
+    const send = vi.fn<Parameters<typeof mount>[0]>(async (method) =>
+      method === 'orchestration.partyOpen'
+        ? reply({ location: { kind: 'terminal', handle: 'term_worker' } })
+        : refused('terminal_gone')
+    )
+    const h = mount(send)
+    await act(async () =>
+      h.open({
+        ...from,
+        senders: [{ name, party: from.senders[0]!.party }]
+      })
+    )
+    expect(send.mock.calls.map(([method]) => method)).toEqual([
+      'orchestration.partyOpen',
+      'terminal.focus'
+    ])
+    expect(h.toast).toHaveBeenCalledExactlyOnceWith(
+      `${name ?? 'Terminal'} is no longer available. Open its terminal from the sidebar.`,
+      3000
+    )
+    expect(h.navigate).not.toHaveBeenCalled()
+  }
+)

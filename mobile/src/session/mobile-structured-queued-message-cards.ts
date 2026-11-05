@@ -1,3 +1,5 @@
+import { translate } from '../i18n/mobile-i18n'
+import { mailReportSourceLabel } from '../../../src/shared/agent-session/mail-report-presentation'
 import { stripSentImagePromptMarkers } from '../../../src/shared/native-chat/transcript/native-chat-image-transcript-markers'
 import type { AgentSessionFailureFact } from '../../../src/shared/agent-session/failures/agent-session-failure'
 import { mobileAgentSessionWriteNoticeText } from './agent-session-write-notice-copy'
@@ -79,6 +81,12 @@ export function mobileQueuedMessageCards(
     }),
     needsAttention: queuedMessageCardNeedsAttention(card),
     caption: queuedMessageCardCaption(card, facts.agentName, facts.statedFailures ?? []),
-    attribution: card.report ? card.report.source : agentMessageAttribution('From', card.from)
+    attribution:
+      card.report && card.from
+        ? mailReportSourceLabel(
+            card.from.senders,
+            translate('session.terminalRecords.defaultTitle', 'Terminal')
+          )
+        : agentMessageAttribution('From', card.from)
   }))
 }

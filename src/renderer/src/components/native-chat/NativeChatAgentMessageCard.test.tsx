@@ -437,6 +437,10 @@ it.each(['task', 'mail'] as const)(
       timestamp: 1,
       from: {
         ...from,
+        senders: from.senders.map((sender) => ({
+          ...sender,
+          ...(kind === 'task' ? { relation: 'coordinator' as const } : { agent: 'claude' })
+        })),
         orchestration:
           kind === 'task'
             ? { message: 'task', runId: 'r', taskId: 't', dispatchId: 'd' }

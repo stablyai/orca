@@ -1,3 +1,4 @@
+import { translate } from '../../../i18n/mobile-i18n'
 import { sameAgentIdentity } from '../../../../../src/shared/agent-status/title/agent-title-owner'
 import { createContext, useCallback, useContext, useMemo, useSyncExternalStore } from 'react'
 import type { MobileSessionTab } from '../../mobile-session-route-types'
@@ -78,7 +79,8 @@ export function createMobileAgentMessageSource() {
         customLabel: tab?.title,
         snapshotName: sender.name,
         tabLabel: tab?.title,
-        fallback
+        fallback,
+        terminalFallback: translate('session.terminalRecords.defaultTitle', 'Terminal')
       })
     },
     view(sender: Sender | undefined): AgentMessageSenderView {
@@ -139,7 +141,13 @@ export function useMobileAgentMessageName(sender: Sender, fallback: string): str
   const read = useCallback(
     () =>
       source?.name(sender, fallback) ??
-      agentMessageSenderLabel({ sender, localChat: false, snapshotName: sender.name, fallback }),
+      agentMessageSenderLabel({
+        sender,
+        localChat: false,
+        snapshotName: sender.name,
+        fallback,
+        terminalFallback: translate('session.terminalRecords.defaultTitle', 'Terminal')
+      }),
     [source, sender, fallback]
   )
   return useSyncExternalStore(source?.subscribe ?? noopSubscribe, read, read)

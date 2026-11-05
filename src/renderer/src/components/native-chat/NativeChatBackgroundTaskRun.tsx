@@ -42,11 +42,7 @@ export function NativeChatBackgroundTaskRun({
     return (
       <div className="min-w-0 w-full py-0.5 font-sans text-sm leading-relaxed text-chat-foreground-faint">
         <div className="flex min-h-6 min-w-0 items-center gap-1.5">
-          {attribution ?? (
-            <span className="min-w-0 truncate text-chat-foreground" title={report.source}>
-              {report.source}
-            </span>
-          )}
+          {attribution}
           {result ? (
             <span className="ml-auto shrink-0 font-sans text-xs tabular-nums text-chat-foreground-faint">
               {result.type === 'exit'

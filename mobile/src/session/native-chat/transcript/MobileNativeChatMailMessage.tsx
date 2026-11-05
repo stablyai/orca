@@ -26,11 +26,7 @@ export function MobileNativeChatMailMessage({
   const result = report.report?.result
   return (
     <>
-      {from ? (
-        <MobileNativeChatAgentMessageSenders from={from} />
-      ) : (
-        <Text style={styles.agentAttribution}>{report.source}</Text>
-      )}
+      {from ? <MobileNativeChatAgentMessageSenders from={from} /> : null}
       {result ? (
         <Text style={styles.agentAttribution}>
           {result.type === 'exit'

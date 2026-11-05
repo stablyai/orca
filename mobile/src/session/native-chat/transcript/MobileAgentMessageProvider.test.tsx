@@ -37,25 +37,26 @@ describe('phone sender provider', () => {
         ]
       }
       const open = vi.fn()
-      const card = createElement(MobileNativeChatMessage, {
-        message: { ...userMessage([{ type: 'text', text: 'CI completed.' }]), from }
-      })
+      const card = (source = from) =>
+        createElement(MobileNativeChatMessage, {
+          message: { ...userMessage([{ type: 'text', text: 'CI completed.' }]), from: source }
+        })
+      const wrap = (child: ReturnType<typeof card>) =>
+        provider ? (
+          <MobileAgentMessageProvider
+            tabs={[]}
+            terminals={[]}
+            scopeKey="host/workspace"
+            open={open}
+          >
+            {child}
+          </MobileAgentMessageProvider>
+        ) : (
+          child
+        )
       try {
         act(() => {
-          renderer = create(
-            provider ? (
-              <MobileAgentMessageProvider
-                tabs={[]}
-                terminals={[]}
-                scopeKey="host/workspace"
-                open={open}
-              >
-                {card}
-              </MobileAgentMessageProvider>
-            ) : (
-              card
-            )
-          )
+          renderer = create(wrap(card()))
         })
         const name = findAllByHostType(renderer!.root, 'Pressable').find((node) =>
           findAllByHostType(node, 'Text').some((text) => text.children.includes('ci-notifier'))
@@ -72,6 +73,35 @@ describe('phone sender provider', () => {
           )
         ).toBe(false)
         expect(open).not.toHaveBeenCalled()
+        for (const savedName of [null, 'Setup']) {
+          const endpoint: AgentMessageSource = {
+            ...from,
+            senders: [
+              {
+                name: savedName,
+                party: { address: 'term_plain', terminalHandle: 'term_plain', orcaSessionId: null }
+              }
+            ]
+          }
+          if (endpoint.orchestration?.message === 'mail-notice') {
+            endpoint.orchestration = {
+              ...endpoint.orchestration,
+              messages: [{ messageId: 'mail', runId: 'r', from: 'term_plain' }]
+            }
+          }
+          act(() => renderer!.update(wrap(card(endpoint))))
+          const label = savedName ?? 'Terminal'
+          const action = findAllByHostType(renderer!.root, 'Pressable').find((node) =>
+            findAllByHostType(node, 'Text').some((text) => text.children.includes(label))
+          )
+          expect(action?.props.disabled).toBe(!provider)
+          expect(action?.props.accessibilityRole).toBe(provider ? 'button' : undefined)
+          if (provider) {
+            act(() => action!.props.onPress())
+            expect(open).toHaveBeenLastCalledWith(endpoint, endpoint.senders[0])
+          }
+          expect(findAllByHostType(renderer!.root, 'AgentStateDot')).toHaveLength(0)
+        }
       } finally {
         act(() => renderer?.unmount())
         renderer = null

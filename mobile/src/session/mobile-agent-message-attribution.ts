@@ -1,6 +1,6 @@
 import { translate } from '../i18n/mobile-i18n'
 import {
-  agentMessageSenderIsNamedSource,
+  senderHasOrchestrationProvenance,
   agentMessageSenderLabel
 } from '../../../src/shared/agent-session/agent-message-presentation'
 import {
@@ -20,7 +20,7 @@ export function agentMessageAttribution(
     shown.length === 0 ||
     (shown.length === 1 &&
       shown[0].name === null &&
-      !agentMessageSenderIsNamedSource(shown[0]) &&
+      senderHasOrchestrationProvenance(shown[0]) &&
       more === 0)
   ) {
     return lead === 'Message from'
@@ -34,7 +34,8 @@ export function agentMessageAttribution(
         sender,
         localChat: false,
         snapshotName: sender.name,
-        fallback: translate('session.agentMessageAttribution.unnamedSender', 'an agent')
+        fallback: translate('session.agentMessageAttribution.unnamedSender', 'an agent'),
+        terminalFallback: translate('session.terminalRecords.defaultTitle', 'Terminal')
       })
     )
     .join(', ')

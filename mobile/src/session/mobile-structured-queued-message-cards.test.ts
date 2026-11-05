@@ -60,11 +60,45 @@ describe('mobileQueuedMessageCards', () => {
       messageId: 'command-only-mail',
       body: { ...queued.body, from: { ...source, senders: source.senders.slice(0, 1) } }
     }
+    const terminal = {
+      name: null,
+      party: { address: 'term_plain', terminalHandle: 'term_plain', orcaSessionId: null }
+    }
+    const legacy = {
+      ...sourceOnly,
+      messageId: 'legacy',
+      body: { ...sourceOnly.body, from: { ...source, senders: [terminal] } }
+    }
+    const report = {
+      ...legacy,
+      messageId: 'report',
+      body: {
+        ...legacy.body,
+        from: {
+          ...legacy.body.from,
+          orchestration: {
+            message: 'mail-notice' as const,
+            mailbox: 'run:r',
+            dispatchId: null,
+            messages: [{ messageId: 'm', runId: 'r', from: 'term_plain' }]
+          }
+        }
+      }
+    }
+    const terminalCards = mobileQueuedMessageCards([legacy, report], [])
+    expect(terminalCards.map((card) => card.attribution)).toEqual(['From Terminal', 'Terminal'])
+    expect(terminalCards.map((card) => [card.messageId, card.line, card.caption])).toEqual([
+      ['legacy', 'Background command completed', null],
+      ['report', 'Background command completed', null]
+    ])
     expect(
       mobileQueuedMessageCards([sourceOnly, queued], []).map((card) => card.attribution)
     ).toEqual(['From ci-notifier', 'From ci-notifier, Coder'])
     try {
       await activateMobileUiLocale('fr')
+      expect(
+        mobileQueuedMessageCards([legacy, report], []).map((card) => card.attribution)
+      ).toEqual(['De la part de Terminal', 'Terminal'])
       expect(
         mobileQueuedMessageCards([sourceOnly, queued], []).map((card) => card.attribution)
       ).toEqual(['De la part de ci-notifier', 'De la part de ci-notifier, Coder'])

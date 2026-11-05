@@ -6,7 +6,10 @@ import { translate } from '@/i18n/i18n'
 import { isRuntimeCompatBlockError } from '@/runtime/runtime-protocol-compat'
 import type { OrchestrationCrewRow } from '../../../shared/orchestration-crew'
 import type { AgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
-import { agentMessageSenderIsNamedSource } from '../../../shared/agent-session/agent-message-presentation'
+import {
+  agentMessageSenderIsNamedSource,
+  agentMessageSenderLabel
+} from '../../../shared/agent-session/agent-message-presentation'
 import {
   openDesktopStructuredSession,
   structuredSessionOpenFeedback,
@@ -21,7 +24,10 @@ import {
   showLookupFailure,
   type LookupFailure
 } from './open-located-agent-message-sender'
-import { unnamedSenderLabel } from '@/components/native-chat/native-chat-agent-message-sender-label'
+import {
+  unnamedSenderLabel,
+  unnamedTerminalSenderLabel
+} from '@/components/native-chat/native-chat-agent-message-sender-label'
 import {
   agentMessageSenderOpens,
   agentMessageSenderReplacedOnHandle,
@@ -60,7 +66,15 @@ export function openAgentMessageSender(
     target,
     dispatchId
   )
-  const label = name ?? sender.name ?? unnamedSenderLabel()
+  const label =
+    name ??
+    agentMessageSenderLabel({
+      sender,
+      localChat: false,
+      snapshotName: sender.name,
+      fallback: unnamedSenderLabel(),
+      terminalFallback: unnamedTerminalSenderLabel()
+    })
   const feedback = externalSenderFeedback(sender, label)
   if (resolved.kind === 'located') {
     return openLocatedAgentMessageSender(resolved.location, label, {

@@ -30,7 +30,7 @@ export function sendRemoteRuntimeRequestAbortable(
       envelope,
       signal,
       clientCapabilities,
-      prepareRequest
+      ...(prepareRequest ? ([prepareRequest] as const) : [])
     )
   }
   return envelope

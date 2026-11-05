@@ -1,8 +1,12 @@
+import { translate } from '../i18n/mobile-i18n'
 import { senderHasOrchestrationProvenance } from '../../../src/shared/agent-session/mail-report-presentation'
 import { useCallback, useRef } from 'react'
 import { useFocusEffect } from 'expo-router'
 import type { AgentMessageSource } from '../../../src/shared/agent-session/agent-session-message-source'
-import { agentMessageSenderIsNamedSource } from '../../../src/shared/agent-session/agent-message-presentation'
+import {
+  agentMessageSenderIsNamedSource,
+  agentMessageSenderLabel
+} from '../../../src/shared/agent-session/agent-message-presentation'
 import { structuredAgentSessionPaneKey } from '../../../src/shared/agent-session/view/structured-agent-session-projection'
 import {
   structuredSessionOpenFailure,
@@ -80,12 +84,19 @@ export function useMobileAgentMessageNavigation(
         client?.getGeneration?.() === generation &&
         selectedSessionTabIdRef.current === selected &&
         pendingSelectionRef.current === pending
+      const label = agentMessageSenderLabel({
+        sender,
+        localChat: false,
+        snapshotName: sender.name,
+        fallback: '',
+        terminalFallback: translate('session.terminalRecords.defaultTitle', 'Terminal')
+      })
       const failure = (outcome: StructuredSessionOpenFailure) => {
         if (current()) {
           showToast(
             mobileStructuredSessionOpenMessage(
               outcome.reason,
-              sender.name ?? '',
+              label,
               outcome.surface,
               outcome.workspaceKind,
               !senderHasOrchestrationProvenance(sender)
@@ -109,7 +120,7 @@ export function useMobileAgentMessageNavigation(
           source: {
             kind: 'sender',
             party: sender.party,
-            displayName: sender.name ?? undefined,
+            displayName: label || undefined,
             messageIds,
             ...(known?.type === 'agent-session'
               ? {

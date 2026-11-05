@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { readAgentMessageSource, type AgentMessageSource } from './agent-session-message-source'
+import { mailReportSourceLabel } from './mail-report-presentation'
 import { testOrcaSessionId } from '../orca-session-address-test-fixture'
 import {
   agentMessageSenderCanOpen,
@@ -35,19 +36,19 @@ const FROM: AgentMessageSource = {
 }
 
 it.each([
-  ['ci-notifier', undefined, true, false],
-  ['orca-bg-wake', undefined, true, false],
-  ['ci-notifier', 'unknown', true, false],
-  ['term_gone', undefined, false, true],
-  ['structworker_gone', undefined, false, true],
-  [`orca_session_id:${SESSION}`, undefined, false, true],
-  ['dispatch:gone', undefined, false, false],
+  ['ci-notifier', undefined, true, false, 'ci-notifier'],
+  ['orca-bg-wake', undefined, true, false, 'orca-bg-wake'],
+  ['ci-notifier', 'unknown', true, false, 'ci-notifier'],
+  ['term_gone', undefined, false, true, 'Terminal'],
+  ['structworker_gone', undefined, false, true, 'Terminal'],
+  [`orca_session_id:${SESSION}`, undefined, false, true, 'an agent'],
+  ['dispatch:gone', undefined, false, false, 'an agent'],
   ...['claude', 'codex', 'grok', 'future-agent'].map(
-    (agent) => ['sender', agent, false, true] as const
+    (agent) => ['sender', agent, false, true, 'an agent'] as const
   )
 ] as const)(
   'presents %s (%s) from its saved identity, independent of live availability',
-  (address, agent, named, opens) => {
+  (address, agent, named, opens, label) => {
     const sender = {
       party: { address, terminalHandle: address, orcaSessionId: null },
       name: null,
@@ -55,11 +56,55 @@ it.each([
     }
     expect(agentMessageSenderIsNamedSource(sender)).toBe(named)
     expect(agentMessageSenderCanOpen(sender)).toBe(opens)
-    expect(agentMessageSenderLabel({ sender, localChat: false, fallback: 'an agent' })).toBe(
-      named ? address : 'an agent'
-    )
+    expect(
+      agentMessageSenderLabel({
+        sender,
+        localChat: false,
+        fallback: 'an agent',
+        terminalFallback: 'Terminal'
+      })
+    ).toBe(label)
   }
 )
+
+it('preserves observed name precedence and external identity while neutralizing unnamed terminal reports', () => {
+  const sender = {
+    party: { address: 'term_plain', terminalHandle: 'term_plain', orcaSessionId: null },
+    name: null
+  }
+  const facts = { sender, localChat: true, fallback: 'an agent', terminalFallback: 'Terminal' }
+  expect(
+    agentMessageSenderLabel({
+      ...facts,
+      customLabel: ' Custom ',
+      conversationName: 'Conversation',
+      snapshotName: 'Saved',
+      tabLabel: 'Tab'
+    })
+  ).toBe('Custom')
+  expect(
+    agentMessageSenderLabel({
+      ...facts,
+      conversationName: 'Conversation',
+      snapshotName: 'Saved',
+      tabLabel: 'Tab'
+    })
+  ).toBe('Conversation')
+  expect(agentMessageSenderLabel({ ...facts, snapshotName: 'Saved', tabLabel: 'Tab' })).toBe(
+    'Saved'
+  )
+  expect(agentMessageSenderLabel({ ...facts, tabLabel: ' Tab ' })).toBe('Tab')
+  expect(agentMessageSenderLabel({ ...facts, sender: { ...sender, relation: 'worker' } })).toBe(
+    'an agent'
+  )
+  const external = { ...sender, party: { ...sender.party, address: 'ci-notifier' } }
+  expect(agentMessageSenderLabel({ ...facts, sender: external })).toBe('ci-notifier')
+  expect(mailReportSourceLabel([sender, { ...sender, name: 'Setup' }, external], 'Terminal')).toBe(
+    'Terminal, Setup, ci-notifier'
+  )
+  expect(mailReportSourceLabel([sender], 'Terminal traduit')).toBe('Terminal traduit')
+  expect(mailReportSourceLabel([{ ...sender, agent: 'claude' }], 'Terminal')).toBe('term_plain')
+})
 
 it('bounds and normalizes a named source without making invisible addresses an agent', () => {
   const sender = {

@@ -105,6 +105,21 @@ it('preserves independently valid endpoint and actor actions in report attributi
     undefined,
     'Setup'
   )
+  const unnamed = {
+    ...setup,
+    from: { ...setup.from, senders: [{ ...setup.from.senders[0]!, name: null }] }
+  }
+  rerender(row(unnamed))
+  expect(screen.queryByText('an agent')).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: 'Terminal' }))
+  expect(open).toHaveBeenLastCalledWith(
+    unnamed.from,
+    unnamed.from.senders[0],
+    'workspace',
+    { kind: 'local' },
+    undefined,
+    'Terminal'
+  )
   const mail = actual.from.orchestration
   if (mail?.message !== 'mail-notice') {
     throw new Error('mail fixture')

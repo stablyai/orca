@@ -1,3 +1,9 @@
+import {
+  observeOrchestrationSender,
+  orchestrationSenderName,
+  orchestrationSenderAgent,
+  type SenderNamingSources
+} from './orchestration-sender-name'
 import { parseOrcaSessionAddress } from '../../../shared/orca-session-address'
 import {
   agentMessageSenderName,
@@ -9,6 +15,18 @@ import { resolveOrchestrationParty } from './orchestration-party'
 
 /** What a sender is now: its recorded name, never an agent-painted title, and its agent. */
 export type SenderSnapshot = { name: string | null; agent: AgentType | null }
+
+export function observeSenderSnapshot(
+  party: AgentMessageSender['party'],
+  sources: SenderNamingSources,
+  reportedDispatchId?: string
+): SenderSnapshot {
+  const observation = observeOrchestrationSender(party, sources, reportedDispatchId)
+  return {
+    name: orchestrationSenderName(party, sources, reportedDispatchId, observation),
+    agent: orchestrationSenderAgent(sources, observation)
+  }
+}
 
 /** reportedDispatchId comes from worker_done. */
 export type SenderSnapshotResolver = (

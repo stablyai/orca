@@ -68,9 +68,30 @@ export function agentMessageHeading(
   return 'generic'
 }
 
+export function senderHasOrchestrationProvenance(sender: AgentMessageSender): boolean {
+  return Boolean(
+    agentMessageSavedKind(sender) ||
+    sender.party.orcaSessionId ||
+    parseOrcaSessionAddress(sender.party.address) ||
+    /^(run|dispatch):.+/.test(sender.party.address) ||
+    sender.relation === 'worker' ||
+    sender.relation === 'coordinator'
+  )
+}
+
 const sourceAddressLabels = new WeakMap<AgentMessageSender, string>()
 
-export function agentMessageSourceAddressLabel(sender: AgentMessageSender): string {
+export function agentMessageSourceAddressLabel(
+  sender: AgentMessageSender,
+  terminalFallback?: string
+): string {
+  if (
+    terminalFallback !== undefined &&
+    !senderHasOrchestrationProvenance(sender) &&
+    isOrcaTerminalHandle(sender.party.address)
+  ) {
+    return terminalFallback
+  }
   let label = sourceAddressLabels.get(sender)
   if (label === undefined) {
     label = agentMessageSenderName(sender.party.address) || '—'
@@ -87,6 +108,7 @@ export function agentMessageSenderLabel(facts: {
   snapshotName?: string | null
   tabLabel?: string | null
   fallback: string
+  terminalFallback?: string
 }): string {
   if (facts.sender && agentMessageSenderIsNamedSource(facts.sender)) {
     return facts.snapshotName || agentMessageSourceAddressLabel(facts.sender)
@@ -95,7 +117,11 @@ export function agentMessageSenderLabel(facts: {
     (facts.localChat && (facts.customLabel?.trim() || facts.conversationName)) ||
     facts.snapshotName ||
     facts.tabLabel?.trim() ||
-    facts.fallback
+    (facts.sender &&
+    facts.terminalFallback !== undefined &&
+    !senderHasOrchestrationProvenance(facts.sender)
+      ? agentMessageSourceAddressLabel(facts.sender, facts.terminalFallback)
+      : facts.fallback)
   )
 }
 
