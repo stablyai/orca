@@ -4,6 +4,6 @@ import type { PersistedState } from '../../../shared/persisted-state-types'
 import { createLocalProjectRecord } from '../../workspaces/catalog/local-project-record'
 
 export function createInitialHomeWorkspaceState(state: PersistedState): PersistedState {
-  const home = createLocalProjectRecord({ path: homedir(), kind: 'folder', displayName: 'Home' })
+  const home = createLocalProjectRecord({ path: homedir(), kind: 'folder', displayName: '~' })
   return createInitialFolderWorkspaceState(state, home)
 }

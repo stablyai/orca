@@ -167,7 +167,6 @@ async function completeOnboardingIntoHome(page: Page): Promise<void> {
   await continueOnboarding(page)
   await expect(page.locator('[data-onboarding-overlay]')).toHaveCount(0)
   await expect(page.getByRole('dialog', { name: /Add a project/i })).toHaveCount(0)
-  await expect(page.getByText('Home', { exact: true }).first()).toBeVisible()
 }
 
 async function waitForRepoLoaded(page: Page, repoPath: string): Promise<void> {

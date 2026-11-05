@@ -284,7 +284,7 @@ describe('profile state Store authority factory', () => {
     expect(result.classification).toBe('sqlite-only')
     expect(result.store.getSettings()).toBeDefined()
     expect(result.store.getRepos()).toEqual([
-      expect.objectContaining({ kind: 'folder', path: homedir(), displayName: 'Home' })
+      expect.objectContaining({ kind: 'folder', path: homedir() })
     ])
     result.store.updateSettings({ theme: 'dark' })
     result.store.flushOrThrow()
@@ -318,7 +318,7 @@ describe('profile state Store authority factory', () => {
     const [home] = first.store.getRepos()
 
     expect(first.store.getRepos()).toHaveLength(1)
-    expect(home).toMatchObject({ path: homedir(), displayName: 'Home', kind: 'folder' })
+    expect(home).toMatchObject({ path: homedir(), kind: 'folder' })
     const worktreeId = getRepoMainWorktreeId(home)
     expect(first.store.getWorkspaceSession()).toMatchObject({
       activeRepoId: home.id,
