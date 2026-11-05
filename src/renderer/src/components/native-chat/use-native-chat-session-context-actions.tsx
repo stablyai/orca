@@ -1,13 +1,8 @@
 import { useCallback, useLayoutEffect, useRef, useState } from 'react'
-import { toast } from 'sonner'
 import { executionHostIdForStructuredTarget } from '@/runtime/structured-agent-session-owner'
 import { translate } from '@/i18n/i18n'
-import { buildAgentSessionForkPrompt } from '@/lib/agent-session-fork-context'
-import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
-import type { PreparedAgentSessionFork } from '../terminal-pane/terminal-agent-session-fork'
 import { copyAgentSessionContext } from '@/lib/copy-agent-session-context'
-import { TerminalAgentSessionForkDialog } from '../terminal-pane/TerminalAgentSessionForkDialog'
 import {
   resolveNativeChatSessionContext,
   type NativeChatSessionContextSource
@@ -22,7 +17,6 @@ export type NativeChatSessionMenuSource = Omit<NativeChatSessionContextSource, '
 export function useNativeChatSessionContextActions(
   source: NativeChatSessionMenuSource | undefined
 ) {
-  const [fork, setFork] = useState<PreparedAgentSessionFork | null>(null)
   const [pending, setPending] = useState(false)
   const operation = useRef(0)
   const busy = useRef(false)
@@ -34,11 +28,10 @@ export function useNativeChatSessionContextActions(
     retire()
     busy.current = false
     setPending(false)
-    setFork(null)
     return retire
   }, [source?.sessionId, hostId, source?.epoch, source?.worktreeId, retire])
 
-  const prepare = async (action: 'fork' | 'copy'): Promise<void> => {
+  const copy = async (): Promise<void> => {
     if (!source?.epoch || busy.current) {
       return
     }
@@ -54,26 +47,7 @@ export function useNativeChatSessionContextActions(
         'components.native-chat.contextMenu.noSessionContext',
         'No chat context is available.'
       )
-      if (action === 'copy') {
-        await copyAgentSessionContext(context.capturedText, source.focusSource, noContext)
-        return
-      }
-      const prompt = buildAgentSessionForkPrompt({
-        capturedText: context.capturedText,
-        sourceLabel: source.sessionId,
-        agentLabel: source.agent
-      })
-      if (!prompt) {
-        toast.error(noContext)
-        source.focusSource()
-        return
-      }
-      setFork({
-        prompt,
-        agent: isTuiAgent(source.agent) ? source.agent : null,
-        worktreeId: source.worktreeId,
-        focusSource: source.focusSource
-      })
+      await copyAgentSessionContext(context.capturedText, source.focusSource, noContext)
     } finally {
       if (operation.current === current) {
         busy.current = false
@@ -84,14 +58,6 @@ export function useNativeChatSessionContextActions(
   return {
     available: Boolean(source?.epoch),
     pending,
-    onFork: () => void prepare('fork'),
-    onCopy: () => void prepare('copy'),
-    dialog: fork ? (
-      <TerminalAgentSessionForkDialog
-        open={fork !== null}
-        fork={fork}
-        onOpenChange={(open) => !open && setFork(null)}
-      />
-    ) : null
+    onCopy: () => void copy()
   }
 }

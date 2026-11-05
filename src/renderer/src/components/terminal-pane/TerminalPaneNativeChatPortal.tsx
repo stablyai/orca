@@ -54,8 +54,6 @@ export function TerminalPaneNativeChatPortal({
     ),
     onContinueAgentSessionInNewSession: () =>
       contextMenu.runForPane(chatPane.id, contextMenu.onContinueAgentSessionInNewSession),
-    onForkAgentSession: () =>
-      void contextMenu.runForPane(chatPane.id, contextMenu.onForkAgentSession),
     onCopyAgentSessionContext: () =>
       void contextMenu.runForPane(chatPane.id, contextMenu.onCopyAgentSessionContext),
     onSetTitle: () => contextMenu.runForPane(chatPane.id, contextMenu.onSetTitle),

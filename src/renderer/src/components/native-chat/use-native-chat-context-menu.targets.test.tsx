@@ -45,12 +45,14 @@ function Chat({
   acceptsText = true,
   rewind,
   onFind,
-  actions
+  actions,
+  standalone = false
 }: {
   acceptsText?: boolean
   rewind?: NativeChatRewindSurface
   onFind?: () => void
   actions?: Partial<NativeChatContextMenuActions>
+  standalone?: boolean
 }): React.JSX.Element {
   const rootRef = useRef<HTMLDivElement>(null)
   const composerRef = useRef<NativeChatComposerHandle | null>({
@@ -68,6 +70,20 @@ function Chat({
     composerRef,
     actions: { ...emptyNativeChatContextMenuActions, ...actions, onPaste: vi.fn() },
     showTerminalPaneActions: actions !== undefined,
+    chatPane: standalone
+      ? { tabId: 'chat-tab', worktreeId: 'wt-1', groupId: 'group-1', sessionId: 'session-1' }
+      : undefined,
+    chatSession: standalone
+      ? {
+          target: { kind: 'local' },
+          sessionId: 'session-1',
+          worktreeId: 'wt-1',
+          epoch: 'epoch-1',
+          agent: 'claude',
+          messages: [],
+          focusSource: vi.fn()
+        }
+      : undefined,
     fileLinkContext: linkContext,
     rewind,
     onFind
@@ -107,6 +123,23 @@ afterEach(() => {
   vi.unstubAllGlobals()
   vi.resetAllMocks()
 })
+
+it.each(['terminal-backed', 'standalone'] as const)(
+  'omits the whole-session fork action from the %s chat menu',
+  async (surface) => {
+    render(
+      <Chat
+        actions={surface === 'terminal-backed' ? {} : undefined}
+        standalone={surface === 'standalone'}
+      />
+    )
+
+    await rightClick('Empty area')
+
+    expect(screen.getByRole('menuitem', { name: 'Copy Context' })).toBeInTheDocument()
+    expect(screen.queryByRole('menuitem', { name: 'Fork Agent Session…' })).not.toBeInTheDocument()
+  }
+)
 
 it.each([
   {
