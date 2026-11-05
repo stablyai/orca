@@ -46,6 +46,7 @@ export async function submitFolderWorkspaceCreate({
   chatSessionOptions: requestedChatSessionOptions,
   autoRenameBranchFromWork,
   settings,
+  agentLaunchPreferences,
   agentCmdOverrides,
   agentArgs: requestedAgentArgs,
   agentEnv,
@@ -88,11 +89,12 @@ export async function submitFolderWorkspaceCreate({
   const launchShell = resolveExecutionHostAgentStartupShell(launchHost, terminalWindowsShell)
   const preferences =
     quickAgent && settings
-      ? await ensureAgentLaunchPreferences(useAppStore.getState(), {
+      ? (agentLaunchPreferences ??
+        (await ensureAgentLaunchPreferences(useAppStore.getState(), {
           kind: 'folder',
           runtimeEnvironmentId,
           executionHostId: getNewWorkspaceProjectGroupHostId(projectGroup)
-        })
+        })))
       : undefined
   const effectiveSettings = settings
     ? {

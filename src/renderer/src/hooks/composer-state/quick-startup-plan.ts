@@ -2,6 +2,7 @@ import { useAppStore } from '@/store'
 import { resolveQuickCreateLinkedWorkItemPrompt } from '@/lib/linked-work-item-context'
 import type { ComposerModel } from './composer-model'
 import { ensureAgentLaunchPreferences } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
+import type { AgentLaunchPreferences } from '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { AgentStartupShell } from '../../../../shared/agent-launch/startup/tui-agent-startup-shell'
@@ -128,14 +129,17 @@ export async function prepareQuickComposerStartup(
     executionHostId: ComposerModel['selectedRepoExecutionHostId']
     linkedWorkItem: Parameters<typeof resolveQuickCreateLinkedWorkItemPrompt>[0]
     note: string
+    /** Preferences the caller already read for this attempt; otherwise read here. */
+    preferences?: AgentLaunchPreferences
   }
 ): Promise<QuickComposerStartup & { prompt: string; draftPrompt: string | null }> {
   const preferences = input.agent
-    ? await ensureAgentLaunchPreferences(useAppStore.getState(), {
+    ? (input.preferences ??
+      (await ensureAgentLaunchPreferences(useAppStore.getState(), {
         kind: 'git-worktree',
         repoId: input.repoId,
         executionHostId: input.executionHostId ?? undefined
-      })
+      })))
     : undefined
   const { prompt, draftPrompt } = resolveQuickCreateLinkedWorkItemPrompt(
     input.agent ? input.linkedWorkItem : null,

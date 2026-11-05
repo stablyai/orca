@@ -25,6 +25,8 @@ const mocks = vi.hoisted(() => {
     createFolderWorkspace: vi.fn(),
     toastError: vi.fn(),
     runBackgroundWorktreeCreation: vi.fn(),
+    resolveDirectCreateAgent: vi.fn(),
+    submitFolderWorkspaceCreate: vi.fn(),
     popoverContentProps,
     shortcutLabel,
     toast: vi.fn()
@@ -119,6 +121,20 @@ vi.mock('@/lib/worktree-creation-flow', () => ({
   runBackgroundWorktreeCreation: mocks.runBackgroundWorktreeCreation
 }))
 
+vi.mock('./folder-workspace-default-agent', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  resolveDirectCreateAgent: mocks.resolveDirectCreateAgent
+}))
+
+vi.mock('./workspace-creation/folder/folder-workspace-composer-submit', async (importOriginal) => {
+  const actual =
+    await importOriginal<
+      typeof import('./workspace-creation/folder/folder-workspace-composer-submit')
+    >()
+  mocks.submitFolderWorkspaceCreate.mockImplementation(actual.submitFolderWorkspaceCreate)
+  return { submitFolderWorkspaceCreate: mocks.submitFolderWorkspaceCreate }
+})
+
 // Expose open state directly to isolate this header test from Radix portals.
 vi.mock('@/components/ui/popover', () => ({
   Popover: ({ children, open }: { children: React.ReactNode; open?: boolean }) => (
@@ -155,6 +171,8 @@ beforeEach(() => {
   mocks.createFolderWorkspace.mockReset().mockResolvedValue(makeFolderWorkspace())
   mocks.activateAndRevealFolderWorkspace.mockReset()
   mocks.runBackgroundWorktreeCreation.mockReset()
+  mocks.resolveDirectCreateAgent.mockReset().mockResolvedValue({ agent: null, preferences: {} })
+  mocks.submitFolderWorkspaceCreate.mockClear()
   mocks.shortcutLabel.current = '⌘N'
   mockState = {
     repos: [],
@@ -283,6 +301,16 @@ describe('SidebarHeader', () => {
         connectionId: 'box'
       }),
       { runtimeEnvironmentId: null }
+    )
+    // The agent is chosen and launched on that SSH host too, not the group's unpinned host.
+    expect(mocks.resolveDirectCreateAgent).toHaveBeenCalledWith(
+      { kind: 'folder', runtimeEnvironmentId: null, executionHostId: 'ssh:box' },
+      { kind: 'ssh', connectionId: 'box' }
+    )
+    expect(mocks.submitFolderWorkspaceCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        projectGroup: expect.objectContaining({ executionHostId: 'ssh:box', connectionId: 'box' })
+      })
     )
     expect(mocks.openWorkspaceCreationComposerWithTourHandoff).not.toHaveBeenCalled()
   })
@@ -449,6 +477,99 @@ describe('SidebarHeader', () => {
     )
     expect(mockState.completeContextualTour).toHaveBeenCalledWith('workspace-agent-sessions')
     expect(mocks.openWorkspaceCreationComposerWithTourHandoff).not.toHaveBeenCalled()
+  })
+
+  it('launches the host default agent in the new folder project workspace', async () => {
+    const preferences = { defaultTuiAgent: 'codex' as const }
+    mocks.resolveDirectCreateAgent.mockResolvedValue({ agent: 'codex', preferences })
+    mocks.submitFolderWorkspaceCreate.mockResolvedValueOnce(true)
+    mockState.projectGroups = [makeProjectGroup()]
+    mockState.folderWorkspaces = [makeFolderWorkspace()]
+    mockState.activeWorkspaceKey = 'folder:folder-workspace-1'
+    act(() => root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />))
+
+    await act(async () => createButton().click())
+
+    expect(mocks.resolveDirectCreateAgent).toHaveBeenCalledWith(
+      { kind: 'folder', runtimeEnvironmentId: null, executionHostId: 'local' },
+      { kind: 'local' }
+    )
+    expect(mocks.submitFolderWorkspaceCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        quickAgent: 'codex',
+        settings: mockState.settings,
+        agentLaunchPreferences: preferences
+      })
+    )
+  })
+
+  it('launches the host default agent in a new Open as Folder workspace', async () => {
+    mocks.resolveDirectCreateAgent.mockResolvedValue({
+      agent: 'claude',
+      preferences: { defaultTuiAgent: 'claude' }
+    })
+    mockState.activeWorkspaceKey = 'worktree:notes::/tmp/notes'
+    mockState.activeWorktreeId = 'notes::/tmp/notes'
+    mockState.repos = [{ id: 'notes', kind: 'folder', path: '/tmp/notes' }]
+    mockState.worktreesByRepo = {
+      notes: [{ id: 'notes::/tmp/notes', repoId: 'notes', path: '/tmp/notes' }]
+    }
+    act(() => root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />))
+
+    await act(async () => createButton().click())
+
+    const request = mocks.runBackgroundWorktreeCreation.mock.calls[0]?.[0]
+    expect(request).toMatchObject({
+      repoId: 'notes',
+      executionHostId: 'local',
+      agent: 'claude',
+      agentLaunchRoute: 'terminal-tui',
+      worktreeCreateProgressMode: 'stepped',
+      startup: expect.objectContaining({ launchAgent: 'claude' })
+    })
+    expect(request.startupPlan?.launchCommand).toContain('claude')
+  })
+
+  it('names the agent and creates nothing when its launch cannot be built', async () => {
+    mocks.resolveDirectCreateAgent.mockResolvedValue({
+      agent: 'codex',
+      preferences: { defaultTuiAgent: 'codex' }
+    })
+    mocks.submitFolderWorkspaceCreate.mockRejectedValueOnce(
+      new Error('Could not start Codex. Check Arguments in this setup and try again.')
+    )
+    mockState.projectGroups = [makeProjectGroup()]
+    mockState.folderWorkspaces = [makeFolderWorkspace()]
+    mockState.activeWorkspaceKey = 'folder:folder-workspace-1'
+    act(() => root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />))
+
+    await act(async () => createButton().click())
+
+    expect(mocks.toastError).toHaveBeenCalledWith(
+      'Could not start Codex. Check its Arguments in Settings → Agents, then try again.'
+    )
+    expect(mocks.createFolderWorkspace).not.toHaveBeenCalled()
+  })
+
+  it('closes the final parallel tip at the click while the host is still answering', async () => {
+    mocks.resolveDirectCreateAgent.mockReturnValue(new Promise(() => {}))
+    mockState.projectGroups = [makeProjectGroup()]
+    mockState.folderWorkspaces = [makeFolderWorkspace()]
+    mockState.activeWorkspaceKey = 'folder:folder-workspace-1'
+    mockState.activeContextualTourId = 'workspace-agent-sessions'
+    mockState.activeContextualTourStepIndex = getContextualTourStepIndex(
+      'workspace-agent-sessions',
+      'agent-sessions-parallel'
+    )
+    mockState.activeContextualTourSource = 'workspace_agent_sessions_visible'
+    mockState.detachContextualTourSource = vi.fn()
+    mockState.completeContextualTour = vi.fn()
+    act(() => root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />))
+
+    await act(async () => createButton().click())
+
+    expect(mockState.completeContextualTour).toHaveBeenCalledWith('workspace-agent-sessions')
+    expect(mocks.createFolderWorkspace).not.toHaveBeenCalled()
   })
 
   it('shows the existing error toast when direct folder creation fails', async () => {
