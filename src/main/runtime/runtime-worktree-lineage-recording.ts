@@ -48,12 +48,17 @@ export type CrossStoreLineageResolution = {
   capture: WorktreeLineage['capture']
 }
 
-export function crossStoreCliLineage(parent: CrossStoreParentRef): CrossStoreLineageResolution {
+export function crossStoreCliLineage(
+  parent: CrossStoreParentRef,
+  inferredFrom: 'env-workspace' | 'cwd-context' | undefined
+): CrossStoreLineageResolution {
   return {
     kind: 'crossStore',
     parent,
     origin: 'cli',
-    capture: { source: 'explicit-cli-flag', confidence: 'explicit' }
+    capture: inferredFrom
+      ? { source: inferredFrom, confidence: 'inferred' }
+      : { source: 'explicit-cli-flag', confidence: 'explicit' }
   }
 }
 

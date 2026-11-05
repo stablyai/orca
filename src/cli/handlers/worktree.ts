@@ -199,6 +199,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       ...(await resolveCreateParentFields(client, {
         explicitParent,
         inferredParent: envParentWorkspace,
+        cwd,
         cwdContext,
         callerTerminalHandle,
         noParent

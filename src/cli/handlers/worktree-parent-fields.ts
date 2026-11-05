@@ -5,10 +5,13 @@ import {
   worktreeWorkspaceKey
 } from '../../shared/workspace-scope'
 import type { CrossStoreParentRef } from '../../shared/worktree/lineage-types'
-import { assertCrossStoreLineageSupported } from '../../shared/worktree-runtime-capabilities'
+import {
+  assertCrossStoreLineageSupported,
+  supportsCrossStoreLineage
+} from '../../shared/worktree-runtime-capabilities'
 import { getOptionalStringFlag } from '../flags'
 import { RuntimeClient, RuntimeClientError } from '../runtime-client'
-import { getOptionalWorktreeSelector } from '../selectors'
+import { getOptionalWorktreeSelector, resolveWorktreeCreateCwdContext } from '../selectors'
 import { parentCwdNextSteps, withWorktreeSelectorRecovery } from '../worktree-selector-recovery'
 
 /** This machine's own Orca, where a caller-relative parent (active, current, this terminal) lives. */
@@ -29,10 +32,14 @@ async function resolveCallerCrossStoreParent(
     return undefined
   }
   const status = (await client.call<RuntimeStatus>('status.get')).result
-  assertCrossStoreLineageSupported(
-    status.capabilities,
-    client.environmentSelector ?? 'the connected server'
-  )
+  assertCrossStoreLineageSupported(status.capabilities, serverLabel(client))
+  return await readCallerParentRef(client, selector)
+}
+
+async function readCallerParentRef(
+  client: RuntimeClient,
+  selector: string
+): Promise<CrossStoreParentRef> {
   const local = callerOrcaClient(client)
   const parent = (
     await local.call<{ worktree: RuntimeWorktreeRecord }>('worktree.show', { worktree: selector })
@@ -54,14 +61,18 @@ async function resolveCallerCrossStoreParent(
   }
 }
 
+function serverLabel(client: RuntimeClient): string {
+  return client.environmentSelector ?? 'the connected server'
+}
+
 /** `worktree create`'s parent fields. Explicit active/current against a server is a parent on this
- * machine. Only an explicit request crosses machines: this machine's terminal, cwd and env context
- * names nothing on the server, so it is never sent there, where it could match a same-store twin. */
+ * machine; with no parent flag, the caller's own workspace there is inferred the same way. */
 export async function resolveCreateParentFields(
   client: RuntimeClient,
   args: {
     explicitParent: { parentWorktree?: string; parentWorkspace?: string; onCallerMachine?: true }
     inferredParent: string | undefined
+    cwd: string
     cwdContext: { parentWorktree?: { selector: string }; parentAmbiguous?: true }
     callerTerminalHandle: string | undefined
     noParent: boolean
@@ -81,10 +92,12 @@ export async function resolveCreateParentFields(
     noParent
   }
   if (client.isRemote) {
-    if (inferredParent) {
-      await printNotNestedNote(client, inferredParent)
+    const inferParent =
+      !explicitParent.parentWorktree && !explicitParent.parentWorkspace && !noParent
+    return {
+      ...targetParent,
+      ...(inferParent ? await inferCallerCrossStoreParent(client, inferredParent, args.cwd) : {})
     }
-    return targetParent
   }
   return {
     ...targetParent,
@@ -96,17 +109,74 @@ export async function resolveCreateParentFields(
   }
 }
 
-async function printNotNestedNote(client: RuntimeClient, workspaceKey: string): Promise<void> {
-  const scope = parseWorkspaceKey(workspaceKey)
+/** The caller's workspace on this machine (env, else cwd, as on the same machine) parents a create
+ * on the server. Anything short of a verified link creates unnested with one note. */
+async function inferCallerCrossStoreParent(
+  client: RuntimeClient,
+  envParentWorkspace: string | undefined,
+  cwd: string
+): Promise<Record<string, unknown>> {
+  const caller = await findCallerWorkspace(client, envParentWorkspace, cwd)
+  if (!caller) {
+    return {}
+  }
+  try {
+    const status = (await client.call<RuntimeStatus>('status.get')).result
+    if (!supportsCrossStoreLineage(status.capabilities)) {
+      await printNotNestedNote(
+        client,
+        caller.selector,
+        `${serverLabel(client)} needs an Orca update to nest across machines.`
+      )
+      return {}
+    }
+    return {
+      crossStoreParent: await readCallerParentRef(client, caller.selector),
+      crossStoreParentInferredFrom: caller.source
+    }
+  } catch (error) {
+    await printNotNestedNote(
+      client,
+      caller.selector,
+      error instanceof Error ? error.message : String(error)
+    )
+    return {}
+  }
+}
+
+async function findCallerWorkspace(
+  client: RuntimeClient,
+  envParentWorkspace: string | undefined,
+  cwd: string
+): Promise<{ selector: string; source: 'env-workspace' | 'cwd-context' } | undefined> {
+  if (envParentWorkspace) {
+    const scope = parseWorkspaceKey(envParentWorkspace)
+    return {
+      selector: scope?.type === 'worktree' ? `id:${scope.worktreeId}` : envParentWorkspace,
+      source: 'env-workspace'
+    }
+  }
+  // No Orca running here, or cwd outside its workspaces: nothing to infer.
+  const cwdContext = await resolveWorktreeCreateCwdContext(
+    cwd,
+    callerOrcaClient(client),
+    false
+  ).catch(() => ({}) as Awaited<ReturnType<typeof resolveWorktreeCreateCwdContext>>)
+  return cwdContext.parentWorktree && !cwdContext.parentAmbiguous
+    ? { selector: cwdContext.parentWorktree.selector, source: 'cwd-context' }
+    : undefined
+}
+
+async function printNotNestedNote(
+  client: RuntimeClient,
+  selector: string,
+  reason: string
+): Promise<void> {
   const name = await callerOrcaClient(client)
-    .call<{ worktree: RuntimeWorktreeRecord }>('worktree.show', {
-      worktree: scope?.type === 'worktree' ? `id:${scope.worktreeId}` : workspaceKey
-    })
-    .then((shown) => shown.result.worktree.displayName || workspaceKey)
-    .catch(() => workspaceKey)
-  console.error(
-    `note: not nested. Add --parent-worktree active to nest it under ${name} on this machine.`
-  )
+    .call<{ worktree: RuntimeWorktreeRecord }>('worktree.show', { worktree: selector })
+    .then((shown) => shown.result.worktree.displayName || selector)
+    .catch(() => selector)
+  console.error(`note: not nested under ${name}: ${reason}`)
 }
 
 /** `worktree set`'s parent: active/current against a server names this machine's workspace. */
