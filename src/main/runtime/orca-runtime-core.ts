@@ -67,6 +67,8 @@ export const EXPLICIT_TERMINAL_CLOSE_STOP_TIMEOUT_MS = IMMEDIATE_KILL_REPLY_BUDG
 export const CLAUDE_AGENT_PROMPT_RENDER_TIMEOUT_MS = 8000
 
 export const CLAUDE_AGENT_PROMPT_RENDER_QUIET_MS = 1500
+/** How long a composer must keep showing the whole paste before Enter, outlasting paste-burst windows. */
+export const AGENT_PROMPT_RENDER_DRAFT_SETTLE_MS = 300
 
 // Claude shows its cursor before composer rendering settles.
 export const CLAUDE_AGENT_PROMPT_RENDER_MARKER = '\x1b[?25h'

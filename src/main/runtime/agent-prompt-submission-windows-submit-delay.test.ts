@@ -309,7 +309,12 @@ describe('agent prompt render gate on a ConPTY host', () => {
   /** Model a closed-loop agent repainting mid-ingest, then going quiet. */
   async function createSettlementRuntime(
     // Continuous noise forces the hard cap so its arithmetic can be measured.
-    agentOutput: { markerDelayMs?: number; noiseUntilMs?: number } = {}
+    agentOutput: {
+      markerDelayMs?: number
+      noiseUntilMs?: number
+      composer?: string
+      noise?: string
+    } = {}
   ): Promise<{
     runtime: OrcaRuntimeService
     handle: string
@@ -329,9 +334,13 @@ describe('agent prompt render gate on a ConPTY host', () => {
           submitTimes.push(Date.now() - startedAt)
         }
         if (data.includes('\x1b[201~')) {
-          setTimeout(() => runtime.onPtyData(PTY_ID, '\x1b[?25h', Date.now()), markerDelayMs)
+          const frame = agentOutput.composer ? `\x1b[H\x1b[2J${agentOutput.composer}` : ''
+          setTimeout(
+            () => runtime.onPtyData(PTY_ID, `${frame}\x1b[?25h`, Date.now()),
+            markerDelayMs
+          )
           for (let at = markerDelayMs + 500; at <= (agentOutput.noiseUntilMs ?? 0); at += 500) {
-            setTimeout(() => runtime.onPtyData(PTY_ID, '.', Date.now()), at)
+            setTimeout(() => runtime.onPtyData(PTY_ID, agentOutput.noise ?? '.', Date.now()), at)
           }
         }
         return true
@@ -388,6 +397,29 @@ describe('agent prompt render gate on a ConPTY host', () => {
     expect(submitTimes).toHaveLength(1)
     expect(submitTimes[0]).toBeGreaterThanOrEqual(ingestMs + 8_000)
     expect(submitTimes[0]).toBeLessThan(ingestMs + 8_500)
+    await stalled
+  })
+
+  it('submits once the composer keeps showing the paste, though child work never goes quiet', async () => {
+    useHostPlatform('win32')
+    vi.useFakeTimers()
+    const prompt = 'review the background agent output and report'
+    const rule = '\u2500'.repeat(40)
+    const { runtime, handle, submitTimes } = await createSettlementRuntime({
+      noiseUntilMs: 20_000,
+      // A progress row repainting elsewhere leaves the composer and its cursor as they were.
+      noise: '\x1b7\x1b[5;1Hworking\x1b8',
+      // Claude parks the cursor at the end of its composer line.
+      composer: `${rule}\r\n\u276f ${prompt}\r\n${rule}\x1b[2;${prompt.length + 3}H`
+    })
+    const submission = runtime.sendTerminalAgentPrompt(handle, prompt, { inputKind: 'driving' })
+    const stalled = expect(submission).rejects.toThrow('agent_prompt_stalled')
+
+    await vi.runAllTimersAsync()
+    expect(submitTimes).toHaveLength(1)
+    // Marker at 100ms plus the settle window, well before the 1.5s quiet window or 8s cap.
+    expect(submitTimes[0]).toBeGreaterThanOrEqual(400)
+    expect(submitTimes[0]).toBeLessThan(1_500)
     await stalled
   })
 

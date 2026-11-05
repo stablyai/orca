@@ -2,18 +2,21 @@ import { OrcaRuntimeWithSubmitTerminalAgentPrompt } from './terminal-agent-promp
 import {
   CLAUDE_AGENT_PROMPT_RENDER_MARKER,
   CLAUDE_AGENT_PROMPT_RENDER_QUIET_MS,
-  CLAUDE_AGENT_PROMPT_RENDER_TIMEOUT_MS
+  CLAUDE_AGENT_PROMPT_RENDER_TIMEOUT_MS,
+  AGENT_PROMPT_RENDER_DRAFT_SETTLE_MS
 } from '../../orca-runtime-core'
 import type {
   RuntimeTerminalWait,
   RuntimeTerminalWaitCondition
 } from '../../../../shared/runtime-types'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { isHeldAgentPromptDraft } from '../../../../shared/agent-launch/startup/agent-prompt-injection'
 
 export abstract class OrcaRuntimeWithCreateAgentPromptRenderGate extends OrcaRuntimeWithSubmitTerminalAgentPrompt {
   protected createAgentPromptRenderGate(
     ptyId: string,
-    pasteIngestMs: number
+    pasteIngestMs: number,
+    prompt?: string
   ): {
     arm: () => void
     wait: () => Promise<void>
@@ -51,6 +54,10 @@ export abstract class OrcaRuntimeWithCreateAgentPromptRenderGate extends OrcaRun
         clearTimeout(ingestTimer)
         ingestTimer = null
       }
+      if (draftSettleTimer) {
+        clearTimeout(draftSettleTimer)
+        draftSettleTimer = null
+      }
     }
     const finish = (): void => {
       if (settled) {
@@ -79,6 +86,36 @@ export abstract class OrcaRuntimeWithCreateAgentPromptRenderGate extends OrcaRun
         CLAUDE_AGENT_PROMPT_RENDER_TIMEOUT_MS + Math.max(0, ingestDeadlineAt - Date.now())
       )
     }
+    // Child work can repaint forever; a composer that keeps showing the whole paste proves it landed.
+    let draftRead: Promise<void> | null = null
+    let draftMatchedAt: number | null = null
+    let draftSettleTimer: NodeJS.Timeout | null = null
+    const checkComposerDraft = (): void => {
+      if (prompt === undefined || !observedMarker || !ingested || settled || draftRead) {
+        return
+      }
+      draftRead = this.readCurrentTerminalWaitScreen(ptyId)
+        .then((screen) => {
+          if (!isHeldAgentPromptDraft(screen?.draft, prompt, 0)) {
+            draftMatchedAt = null
+            return
+          }
+          draftMatchedAt ??= Date.now()
+          const settleLeftMs = draftMatchedAt + AGENT_PROMPT_RENDER_DRAFT_SETTLE_MS - Date.now()
+          if (settleLeftMs <= 0) {
+            finish()
+          } else if (!draftSettleTimer) {
+            draftSettleTimer = setTimeout(() => {
+              draftSettleTimer = null
+              checkComposerDraft()
+            }, settleLeftMs)
+          }
+        })
+        .catch(() => undefined)
+        .finally(() => {
+          draftRead = null
+        })
+    }
     const armIngestTimer = (): void => {
       if (ingested || ingestTimer) {
         return
@@ -89,6 +126,7 @@ export abstract class OrcaRuntimeWithCreateAgentPromptRenderGate extends OrcaRun
           ingested = true
           if (observedMarker) {
             armQuietTimer()
+            checkComposerDraft()
           }
         },
         Math.max(0, ingestDeadlineAt - Date.now())
@@ -108,6 +146,7 @@ export abstract class OrcaRuntimeWithCreateAgentPromptRenderGate extends OrcaRun
         armHardTimer()
       }
       armQuietTimer()
+      checkComposerDraft()
     })
     return {
       arm: () => {
