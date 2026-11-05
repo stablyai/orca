@@ -66,7 +66,7 @@ import {
   TUI_IDLE_DEFAULT_TIMEOUT_MS,
   TUI_IDLE_POLL_INTERVAL_MS,
   TUI_IDLE_QUIESCENCE_MS
-} from '../orca-runtime-postlude'
+} from '../terminal/wait/terminal-idle-policy'
 import { RuntimeTerminalWait as RuntimeTerminalWaitController } from '../terminal/wait/terminal-wait'
 import type { PtyLivenessVerdict } from '../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 import type { HostScopedWorktreeKey } from '../../../shared/worktree/host-qualified-identity'

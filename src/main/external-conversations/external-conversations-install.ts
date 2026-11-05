@@ -1,6 +1,6 @@
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { AgentTransitionDetector } from '../agent-hooks/agent-transition-detector'
-import type { RuntimeWorktreeLifecycleEvent } from '../runtime/orca-runtime-core'
+import type { RuntimeWorktreeLifecycleEvent } from '../runtime/workspaces/lifecycle/worktree-lifecycle-event'
 import { DeliveryReceipts, type DeliveryReceiptDb } from './external-conversation-delivery-receipts'
 import type { ExternalConversationLinkStore } from './external-conversation-links'
 import {

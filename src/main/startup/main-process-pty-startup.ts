@@ -36,7 +36,7 @@ import {
 import { startFirstWindowStartupServices } from './first-window-startup-services'
 import { logStartupMilestone } from './startup-diagnostics'
 import type { WindowsDesktopStartupServices } from './windows-desktop-shell-path-startup'
-import type { RuntimeWorktreeLifecycleEvent } from '../runtime/orca-runtime'
+import type { RuntimeWorktreeLifecycleEvent } from '../runtime/workspaces/lifecycle/worktree-lifecycle-event'
 import { mainProcessState as state } from './main-process-state'
 import { shortPluginBranchName } from '../../shared/plugins/events/plugin-events'
 import { notifyWorkspaceCreatedPluginHook } from '../plugins/hooks/workspace-create-plugin-hook'

@@ -8,7 +8,7 @@ import {
   setRepoRefMaintenanceBusyProbe
 } from '../../git/refs/maintenance/local-repo-ref-maintenance'
 import { gitExecFileAsync } from '../../git/command-runner/git-exec-file'
-import { setBoundedMapEntry } from '../runtime-async-boundaries'
+import { setBoundedMapEntry } from './remote-fetch-cache'
 
 export type RemoteFetchResult = { ok: true } | { ok: false; errorKind: 'git_error' }
 

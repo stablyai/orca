@@ -8,12 +8,13 @@ import type { Automation, AutomationRun } from '../../../../shared/automations-t
 import type {
   RuntimeAutomationCreateInput,
   RuntimeAutomationUpdateInput
-} from '../../runtime-automation-controller'
+} from '../../runtime-automation-run-context'
 import {
   automationChangePublications,
   type AutomationChangeSelector,
   type AutomationListResult
 } from '../../../../shared/automation-list-scope'
+import type { AutomationService } from '../../../automations/service'
 import { OrcaRuntimeWithCrewOperations } from './crew-operations'
 
 export abstract class OrcaRuntimeWithAutomationApiOperations extends OrcaRuntimeWithCrewOperations {
@@ -130,5 +131,13 @@ export abstract class OrcaRuntimeWithAutomationApiOperations extends OrcaRuntime
 
   automationOwnerPrecondition(id: string): AutomationOwnerPrecondition | null {
     return this.automation.ownerPrecondition(id)
+  }
+
+  setAutomationService(service: AutomationService): void {
+    this.automation.setService(service)
+  }
+
+  releaseFinishedAutomationRunTerminals(): Promise<number> {
+    return this.automation.releaseFinishedRunTerminals()
   }
 }

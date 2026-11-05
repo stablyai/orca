@@ -11,7 +11,7 @@ import {
 import { OrcaRuntimeWithAgentTransitions } from './orca-runtime-agent-transitions'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../shared/sidebar-inputs-switch'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
-import type { RuntimeCommandSurfaceHost } from './orca-runtime-core'
+import type { RuntimeCommandSurfaceHost } from './construction/runtime-installed-command-surfaces'
 import type {
   AgentLaunchTabPublished,
   AgentLaunchTabPublishRequest
@@ -39,7 +39,7 @@ import { getRepoExecutionHostId } from '../../shared/execution-host'
 import type { LayoutApplyReply } from '../../shared/workspace-layout/workspace-layout-command-types'
 import { rekeyMovedPaneOwners } from './moved-pane-owner-rekey'
 import * as Layout from './terminal/layout/runtime-layout-apply'
-import type { TerminalCreateOptions } from './runtime-terminal-contracts'
+import type { TerminalCreateOptions } from './terminal/launch/terminal-create-options'
 import {
   installStructuredAgentAvailability as installAvailability,
   type StructuredAgentAvailabilityReader as AvailabilityReader
@@ -304,42 +304,3 @@ const OrcaRuntimeServiceExport: {
 } = OrcaRuntimeService
 export { OrcaRuntimeServiceExport as OrcaRuntimeService }
 installRuntimeLinearCommandSurface(OrcaRuntimeServiceExport.prototype)
-
-export type {
-  RuntimeAutomationCreateInput,
-  RuntimeAutomationUpdateInput
-} from './runtime-automation-controller'
-export type { SubscriptionRegistration } from './runtime-subscription-registry'
-export type { MessageWaitResult } from './runtime-message-waiters'
-export type { RuntimeTerminalDataMeta } from './terminal/output/runtime-terminal-stream-consumers'
-export type {
-  RemoteFetchResult,
-  RemoteTrackingBase
-} from './repositories/runtime-remote-fetch-controller'
-export {
-  computeTerminalTailWaitState,
-  tailGainedNewerBlockedReason,
-  type TerminalTailWaitState
-} from './terminal/wait/terminal-wait-tail-state'
-export { appendNormalizedToTailBuffer } from './terminal/output/tail/terminal-tail-buffer'
-export { appendNormalizedToMultilineTailBufferUnwindowed } from './terminal/output/tail/terminal-tail-redraw-buffer'
-export { buildPreview } from './terminal/output/tail/terminal-tail-state'
-export { buildRestoredTerminalTailSeed } from './terminal/output/tail/terminal-tail-restore-seed'
-export { projectTerminalTailLines } from './terminal/view/orca-runtime-terminal-projection'
-export { resolveWorktreeScanCacheTtlMs } from './workspaces/catalog/runtime-worktree-scan-cache'
-export type {
-  OrchestrationCompatibilityCallerAuthority,
-  OrchestrationCompatibilityTerminalAuthority,
-  RuntimeTerminalAgentStatusEvent,
-  RuntimeWorktreeLifecycleEvent,
-  DriverState,
-  PtyLayoutTarget,
-  PtyLayoutState,
-  ApplyLayoutResult,
-  RuntimeRendererReloadFence
-} from './orca-runtime-core'
-export {
-  AUTHORITATIVE_TERMINAL_SNAPSHOT_TIMEOUT_MS,
-  WORKTREE_SCAN_ADMIN_RECONCILE_INTERVAL_MS,
-  WORKTREE_SCAN_ADMIN_FINGERPRINT_TIMEOUT_MS
-} from './orca-runtime-postlude'

@@ -15,10 +15,10 @@ import type { TuiIdleHookTurn } from '../terminal/wait/tui-idle-hook-lane'
 import type { RuledScreen } from '../terminal/wait/screen-input-veto'
 import type {
   TerminalHandlePty,
-  TerminalHandleLeaf,
-  TerminalWaiter,
-  OrchestrationCompatibilityTerminalAuthority
-} from '../runtime-terminal-contracts'
+  TerminalHandleLeaf
+} from '../terminal/identity/terminal-handle-records'
+import type { TerminalWaiter } from '../terminal/wait/terminal-waiter'
+import type { OrchestrationCompatibilityTerminalAuthority } from '../orchestration/terminal-authority/orchestration-compatibility-authority'
 import type { TitleDisplayClear } from '../workspaces/process-listing/runtime-worktree-status-projection'
 import type { OrchestrationDb } from '../orchestration/db/orchestration-db'
 import type { WorkerTerminalResourceRow } from '../orchestration/worker-terminal-ownership'

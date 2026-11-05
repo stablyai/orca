@@ -1,22 +1,16 @@
-import { getWorkerTerminalAutoReleaseScheduler } from '../../orchestration/worker-terminal-auto-release-scheduler'
-import type { ResolvedWorktree } from '../catalog/runtime-worktree-path-identity'
-import { OrcaRuntimeWithAutomationApiOperations } from './automation-api-operations'
-import { OrchestrationDb } from '../../orchestration/db'
-import {
-  committedHandBackTypes,
-  type MailHandBack
-} from '../../orchestration/db/messages/helper-mailbox-hand-back'
+import { getWorkerTerminalAutoReleaseScheduler } from '../worker-terminal-auto-release-scheduler'
+import { OrchestrationDb } from './orchestration-db'
+import { committedHandBackTypes, type MailHandBack } from './messages/helper-mailbox-hand-back'
 import { existsSync } from 'node:fs'
-import type { LegacyWorkerTerminalRecoveryPlan } from '../../orchestration/orchestration-legacy-worker-terminal-recovery'
-import type { LegacyWorkerTerminalRecoveryResult } from '../../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
+import { OrcaRuntimeWithAutomationApiOperations } from '../../workspaces/persisted-surfaces/automation-api-operations'
 
-export abstract class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWithAutomationApiOperations {
+export abstract class RuntimeOrchestrationDatabaseAccess extends OrcaRuntimeWithAutomationApiOperations {
   abstract ensureOrchestrationFederationRelay(runId?: string): void
+
   protected abstract scheduleRestoredMessageRepoints(): void
+
   /** Mail a worker left unread when it reported before a restart still continues it. */
   protected abstract continueRestoredWorkerMail(db: OrchestrationDb): void
-  protected abstract getResolvedWorktreeMap(): Promise<Map<string, ResolvedWorktree>>
-  protected abstract getLeafKey(tabId: string, leafId: string): string
 
   // Defer until userData is final; tests can inject an in-memory DB.
   getOrchestrationDb(): OrchestrationDb {
@@ -74,52 +68,6 @@ export abstract class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWit
     } catch (error) {
       console.warn('[orchestration] failed to offer handed-back helper mail', error)
       this.mailPointerRepointScheduler.schedule(handBack.mailbox)
-    }
-  }
-
-  protected async flushWorkspaceSessionOrThrowAsync(): Promise<void> {
-    const store = this.store
-    if (store?.flushPendingOrThrowAsync) {
-      await store.flushPendingOrThrowAsync({ drainToStableGeneration: false })
-      return
-    }
-    if (store?.flushOrThrow) {
-      store.flushOrThrow()
-      return
-    }
-    throw new Error('workspace_session_persistence_unavailable')
-  }
-
-  async reconcileLegacyWorkerTerminals(
-    options: { connectionId?: string; materializeRenderer?: boolean } = {}
-  ): Promise<LegacyWorkerTerminalRecoveryResult> {
-    return this.legacyWorkerRecovery.reconcile(options)
-  }
-
-  stopLegacyWorkerTerminalRecovery(): Promise<void> {
-    return this.legacyWorkerRecovery.stop()
-  }
-
-  protected updateLegacyWorkerTerminalRecoveryRetry(
-    plan: LegacyWorkerTerminalRecoveryPlan,
-    deferredDispatchIds: ReadonlySet<string>,
-    options: { connectionId?: string; materializeRenderer?: boolean }
-  ): void {
-    this.legacyWorkerRecovery.updateRetry(plan, deferredDispatchIds, options)
-  }
-
-  async refreshRestoredOrchestrationAuthority(connectionId: string | null = null): Promise<void> {
-    if (connectionId === null && !this.canRecoverPersistentLocalPtysFn()) {
-      return
-    }
-    const inventory = await this.refreshPtyWorktreeRecordsWithControllerInventory(
-      [...(await this.getResolvedWorktreeMap()).values()],
-      null,
-      undefined,
-      connectionId
-    )
-    if (!inventory) {
-      throw new Error('terminal_liveness_unavailable')
     }
   }
 }

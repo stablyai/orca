@@ -1,14 +1,14 @@
 import type { RuntimeHeadlessTabProperties as HeadlessTabPropertiesMethods } from './headless-tab-properties'
 import type { RuntimeHeadlessTabGroups as HeadlessTabGroupsMethods } from './headless-tab-group-moves'
-import type { OrcaRuntimeWithPersistHeadlessTerminalTitle as PersistHeadlessTerminalTitleMethods } from '../workspaces/workspace-file-session-targets'
+import type { RuntimeHeadlessTerminalTabTitles as PersistHeadlessTerminalTitleMethods } from './headless-terminal-tab-titles'
 import { OrcaRuntimeWithMainLayoutTabMoves } from './main-layout-session-tab-move'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import type {
   RuntimeMobileSessionTabMove,
   RuntimeMobileSessionTabMoveResult,
-  RuntimeMobileSessionTabsSnapshot,
-  RuntimeMobileSessionTerminalTab
-} from '../../../shared/runtime-types'
+  RuntimeMobileSessionTabsSnapshot
+} from '../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTerminalTab } from '../../../shared/runtime-mobile-session-tab-contracts'
 import { parseAppSshPtyId } from '../../../shared/ssh-pty-id'
 import { buildHeadlessMobileSessionTabGroups } from '../terminal/surface/mobile-session-layout-projection'
 import { paneTitlesForDesktopWindow } from './desktop-pane-title-forwarding'
