@@ -97,6 +97,27 @@ function compareWithin(
   return byRecencyThenKey
 }
 
+function selectPaletteAgentRows(
+  threads: readonly AgentPaneThread[],
+  limit: number,
+  compare: (a: AgentPaneThread, b: AgentPaneThread) => number
+): AgentPaneThread[] {
+  const shown: AgentPaneThread[] = []
+  for (const thread of threads) {
+    let index = shown.length
+    while (index > 0 && compare(thread, shown[index - 1]) < 0) {
+      index--
+    }
+    if (index < limit) {
+      shown.splice(index, 0, thread)
+      if (shown.length > limit) {
+        shown.pop()
+      }
+    }
+  }
+  return shown
+}
+
 /** Groups candidates under one shared row budget; groups with no members are omitted. */
 export function buildPaletteAgentGroups(
   candidates: readonly AgentPaneThread[],
@@ -122,10 +143,11 @@ export function buildPaletteAgentGroups(
     if (!threads?.length) {
       continue
     }
-    const sorted = threads.sort(compareWithin(key, context))
-    const shown = sorted.slice(0, Math.min(GROUP_ROW_LIMIT[key], remaining))
+    const limit = Math.max(0, Math.floor(Math.min(GROUP_ROW_LIMIT[key], remaining)))
+    const shown =
+      limit > 0 ? selectPaletteAgentRows(threads, limit, compareWithin(key, context)) : []
     remaining -= shown.length
-    groups.push({ key, threads: shown, total: sorted.length })
+    groups.push({ key, threads: shown, total: threads.length })
   }
   return groups
 }
