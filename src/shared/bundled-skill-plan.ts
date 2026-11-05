@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import type { SkillInstallProviderId } from './skill-install-providers'
+import { isSkillInstallProviderId, type SkillInstallProviderId } from './skill-install-providers'
 
 // Frozen per capability version: a client renders a value it does not know as "Needs attention".
 export const BUNDLED_SKILL_OP_KINDS = Object.freeze([
@@ -75,6 +75,15 @@ export type BundledSkillOp = {
   linkTarget?: string
   /** The interrupted swap's old copy a `restore` moves back. */
   restoreFrom?: { path: string; observed: BundledSkillObserved }
+  /** Verified former placement, retired only after the canonical placement succeeds. */
+  previous?: readonly {
+    path: string
+    observed: BundledSkillObserved
+    /** Preserve shared paths referenced by older agent profiles. */
+    forward?: boolean
+    /** Copy-only hosts keep the former shared copy for older profiles. */
+    retain?: boolean
+  }[]
   reason?: BundledSkillLeaveReason
   /** Whether Replace / `--force` may back this up and put Orca's copy in its place. */
   replaceable?: boolean
@@ -108,6 +117,8 @@ export type BundledSkillOpOutcome = {
   error?: string
   /** Where Replace or a non-released old copy was moved. */
   backupPath?: string
+  /** The new copy is in, but edits saved during the swap could not be backed up and remain here. */
+  strandedPath?: string
 }
 
 export type BundledSkillOutcome = {
@@ -144,3 +155,26 @@ export const BundledSkillExecuteRequestSchema = z.strictObject({
   request: BundledSkillPlanRequestSchema
 })
 export type BundledSkillExecuteRequest = z.infer<typeof BundledSkillExecuteRequestSchema>
+
+/** Silently updates only hash-verified Orca copies of the named installed skills; never writes elsewhere. */
+export const BundledSkillAutoUpdateRequestSchema = z.strictObject({
+  names: z
+    .array(z.string().regex(/^[a-z0-9][a-z0-9-]{0,63}$/u))
+    .min(1)
+    .max(64)
+})
+export type BundledSkillAutoUpdateRequest = z.infer<typeof BundledSkillAutoUpdateRequestSchema>
+// Desktop IPC may target a chat provider without a CLI on PATH; the remote v1 schema stays frozen.
+export const LocalBundledSkillPlanRequestSchema = BundledSkillPlanRequestSchema.extend({
+  agent: z
+    .custom<SkillInstallProviderId>(
+      (value) => typeof value === 'string' && isSkillInstallProviderId(value)
+    )
+    .optional()
+})
+export type LocalBundledSkillPlanRequest = z.infer<typeof LocalBundledSkillPlanRequestSchema>
+
+export const LocalBundledSkillExecuteRequestSchema = BundledSkillExecuteRequestSchema.extend({
+  request: LocalBundledSkillPlanRequestSchema
+})
+export type LocalBundledSkillExecuteRequest = z.infer<typeof LocalBundledSkillExecuteRequestSchema>

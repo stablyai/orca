@@ -3,14 +3,17 @@ import { Plug, ChevronDown, ChevronRight, LoaderCircle } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
-import { refreshWorkspacePortScanForTarget } from '@/lib/workspace-port-scan-refresh'
+import { refreshWorkspacePortScanForTarget } from '@/lib/workspace-ports/workspace-port-scan-refresh'
 import { useWorktreeRuntimeTarget } from '@/runtime/use-worktree-runtime-target'
 import {
   getUnavailableWorkspacePortHosts,
   type WorkspacePortHostRef
-} from '@/lib/workspace-port-host-availability'
+} from '@/lib/workspace-ports/workspace-port-host-availability'
 import { getLocalExecutionHostLabel } from '../../../../shared/execution-host'
-import { getExternalWorkspacePorts, getWorkspacePortGroups } from '@/lib/workspace-port-groups'
+import {
+  getExternalWorkspacePorts,
+  getWorkspacePortGroups
+} from '@/lib/workspace-ports/workspace-port-groups'
 import { SelectedTextCopyMenu } from '@/components/SelectedTextCopyMenu'
 import { STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS } from './status-bar-context-menu-policy'
 import { PortRow, WorkspaceGroupRows } from './ports-status-popover-rows'
@@ -98,19 +101,11 @@ export function PortsStatusSegment({ iconOnly }: PortsStatusSegmentProps): React
               type="button"
               {...STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS}
               className="inline-flex cursor-pointer items-center gap-1.5 rounded px-1 py-0.5 hover:bg-accent/70"
-              aria-label={
-                workspacePortCount === 1
-                  ? translate(
-                      'auto.components.status.bar.PortsStatusSegment.portsAria_one',
-                      'Ports, {{count}} workspace port',
-                      { count: workspacePortCount }
-                    )
-                  : translate(
-                      'auto.components.status.bar.PortsStatusSegment.portsAria_other',
-                      'Ports, {{count}} workspace ports',
-                      { count: workspacePortCount }
-                    )
-              }
+              aria-label={translate(
+                'auto.components.status.bar.PortsStatusSegment.portsAria',
+                'Ports, {{count}} workspace ports',
+                { count: workspacePortCount, defaultValue_one: 'Ports, {{count}} workspace port' }
+              )}
             >
               {refreshing ? (
                 <LoaderCircle className="size-3 animate-spin text-muted-foreground" />
@@ -132,34 +127,20 @@ export function PortsStatusSegment({ iconOnly }: PortsStatusSegmentProps): React
         </TooltipTrigger>
         <TooltipContent side="top" sideOffset={6}>
           {externalPorts.length > 0
-            ? workspacePortCount === 1
-              ? translate(
-                  'auto.components.status.bar.PortsStatusSegment.portsTooltipWithExternal_one',
-                  'Ports — {{count}} workspace port · {{externalCount}} external',
-                  {
-                    count: workspacePortCount,
-                    externalCount: externalPorts.length
-                  }
-                )
-              : translate(
-                  'auto.components.status.bar.PortsStatusSegment.portsTooltipWithExternal_other',
-                  'Ports — {{count}} workspace ports · {{externalCount}} external',
-                  {
-                    count: workspacePortCount,
-                    externalCount: externalPorts.length
-                  }
-                )
-            : workspacePortCount === 1
-              ? translate(
-                  'auto.components.status.bar.PortsStatusSegment.portsTooltip_one',
-                  'Ports — {{count}} workspace port',
-                  { count: workspacePortCount }
-                )
-              : translate(
-                  'auto.components.status.bar.PortsStatusSegment.portsTooltip_other',
-                  'Ports — {{count}} workspace ports',
-                  { count: workspacePortCount }
-                )}
+            ? translate(
+                'auto.components.status.bar.PortsStatusSegment.portsTooltipWithExternal',
+                'Ports — {{count}} workspace ports · {{externalCount}} external',
+                {
+                  count: workspacePortCount,
+                  externalCount: externalPorts.length,
+                  defaultValue_one: 'Ports — {{count}} workspace port · {{externalCount}} external'
+                }
+              )
+            : translate(
+                'auto.components.status.bar.PortsStatusSegment.portsTooltip',
+                'Ports — {{count}} workspace ports',
+                { count: workspacePortCount, defaultValue_one: 'Ports — {{count}} workspace port' }
+              )}
         </TooltipContent>
       </Tooltip>
 

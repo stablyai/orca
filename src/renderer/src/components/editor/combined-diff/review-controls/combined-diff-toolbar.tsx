@@ -6,7 +6,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { translate } from '@/i18n/i18n'
 import type { OpenFile } from '@/store/slices/editor'
 import type { DiffComment } from '../../../../../../shared/diff-comment-types'
-import { DiffNotesSendMenu } from '../../DiffNotesSendMenu'
+import type { DiffCommentOwner } from '@/store/diff-comment-owner'
+import { DiffNotesSendMenu } from '../../diff/review/DiffNotesSendMenu'
 import { DiffNotesPreviewPopover } from './combined-diff-notes-popover'
 
 function changedFilesSummary(
@@ -15,44 +16,24 @@ function changedFilesSummary(
   compareRef: string | null
 ): string {
   if (baseRef !== null) {
-    return count === 1
-      ? translate(
-          'auto.components.editor.CombinedDiffViewer.changedFilesVs_one',
-          '{{count}} changed file vs {{baseRef}}',
-          { count, baseRef }
-        )
-      : translate(
-          'auto.components.editor.CombinedDiffViewer.changedFilesVs_other',
-          '{{count}} changed files vs {{baseRef}}',
-          { count, baseRef }
-        )
+    return translate(
+      'auto.components.editor.CombinedDiffViewer.changedFilesVs',
+      '{{count}} changed files vs {{baseRef}}',
+      { count, baseRef, defaultValue_one: '{{count}} changed file vs {{baseRef}}' }
+    )
   }
   if (compareRef !== null) {
-    return count === 1
-      ? translate(
-          'auto.components.editor.CombinedDiffViewer.changedFilesIn_one',
-          '{{count}} changed file in {{compareRef}}',
-          { count, compareRef }
-        )
-      : translate(
-          'auto.components.editor.CombinedDiffViewer.changedFilesIn_other',
-          '{{count}} changed files in {{compareRef}}',
-          { count, compareRef }
-        )
+    return translate(
+      'auto.components.editor.CombinedDiffViewer.changedFilesIn',
+      '{{count}} changed files in {{compareRef}}',
+      { count, compareRef, defaultValue_one: '{{count}} changed file in {{compareRef}}' }
+    )
   }
-  return count === 1
-    ? translate(
-        'auto.components.editor.CombinedDiffViewer.changedFiles_one',
-        '{{count}} changed file',
-        {
-          count
-        }
-      )
-    : translate(
-        'auto.components.editor.CombinedDiffViewer.changedFiles_other',
-        '{{count}} changed files',
-        { count }
-      )
+  return translate(
+    'auto.components.editor.CombinedDiffViewer.changedFiles',
+    '{{count}} changed files',
+    { count, defaultValue_one: '{{count}} changed file' }
+  )
 }
 
 export function CombinedDiffToolbar({
@@ -60,6 +41,7 @@ export function CombinedDiffToolbar({
   allSectionsCollapsed,
   branchCompare,
   commitCompare,
+  commentOwner,
   diffCommentCount,
   diffCommentsForWorktree,
   diffShowWhitespace,
@@ -86,6 +68,7 @@ export function CombinedDiffToolbar({
   allSectionsCollapsed: boolean
   branchCompare: NonNullable<OpenFile['branchCompare']> | null
   commitCompare: NonNullable<OpenFile['commitCompare']> | null
+  commentOwner: DiffCommentOwner | null
   diffCommentCount: number
   diffCommentsForWorktree: DiffComment[]
   diffShowWhitespace: boolean | undefined
@@ -146,19 +129,11 @@ export function CombinedDiffToolbar({
                 <button
                   type="button"
                   className="inline-flex h-6 items-center gap-1 pl-2 pr-1.5 text-[11px] font-medium leading-none text-foreground/80 transition-colors hover:bg-accent hover:text-foreground"
-                  aria-label={
-                    diffCommentCount === 1
-                      ? translate(
-                          'auto.components.editor.CombinedDiffViewer.showAiNotes_one',
-                          'Show {{count}} AI note',
-                          { count: diffCommentCount }
-                        )
-                      : translate(
-                          'auto.components.editor.CombinedDiffViewer.showAiNotes_other',
-                          'Show {{count}} AI notes',
-                          { count: diffCommentCount }
-                        )
-                  }
+                  aria-label={translate(
+                    'auto.components.editor.CombinedDiffViewer.showAiNotes',
+                    'Show {{count}} AI notes',
+                    { count: diffCommentCount, defaultValue_one: 'Show {{count}} AI note' }
+                  )}
                 >
                   <Sparkles className="size-3 text-violet-500 dark:text-violet-400" />
                   <span>
@@ -180,6 +155,7 @@ export function CombinedDiffToolbar({
               </PopoverContent>
             </Popover>
             <DiffNotesSendMenu
+              owner={commentOwner}
               worktreeId={file.worktreeId}
               groupId={activeGroupId ?? file.worktreeId}
               comments={diffCommentsForWorktree}

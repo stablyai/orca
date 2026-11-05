@@ -1,15 +1,15 @@
 import type { StoreApi } from 'zustand'
 import type { AppState } from '../types'
-import type { TuiAgent } from '../../../../shared/tui-agent'
-import { isTuiAgent } from '../../../../shared/tui-agent-config'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
+import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
-import { filterEnabledTuiAgents } from '../../../../shared/tui-agent-selection'
+import { filterEnabledTuiAgents } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
 import { getLocalAgentPreflightContext } from '@/lib/local-preflight-context'
 import { localAgentInventoryContextKey } from '@/lib/local-preflight-context-key'
 import * as contextEviction from './local-agent-context-eviction'
 import { getLegacyLoadingPatch, getSupersededDetectPatch } from './local-agent-legacy-loading'
 import type { LocalAgentRefreshOptions } from './local-detected-agent-store-state'
-import { isWslDistroRefusalError } from '../../../../shared/wsl-distro-refusal'
+import { isWslDistroNotRunningRefusal } from '../../../../shared/wsl-distro-not-running-refusal'
 
 export type LocalAgentInventoryLifecycle = {
   detectPromises: Map<string, Promise<TuiAgent[]>>
@@ -33,10 +33,13 @@ export function refreshLocalAgentInventory(
   lifecycle: LocalAgentInventoryLifecycle,
   worktreeId?: string | null,
   includeDisabled = false,
-  options: LocalAgentRefreshOptions = {}
+  options: LocalAgentRefreshOptions = {},
+  nativeHost = false
 ): Promise<TuiAgent[]> {
-  const isolatedInventory = worktreeId === FLOATING_TERMINAL_WORKTREE_ID
-  const context = getLocalAgentPreflightContext(get(), undefined, undefined, worktreeId)
+  const isolatedInventory = nativeHost || worktreeId === FLOATING_TERMINAL_WORKTREE_ID
+  const context = nativeHost
+    ? undefined
+    : getLocalAgentPreflightContext(get(), undefined, undefined, worktreeId)
   const contextKey = localAgentInventoryContextKey(context, includeDisabled)
   const publishedContextKey = localAgentInventoryContextKey(context)
   const refreshContextKeys = new Set([contextKey, publishedContextKey])
@@ -212,7 +215,7 @@ export function markLocalAgentRefusal(
   contextKey: string,
   error: unknown
 ): void {
-  if (isWslDistroRefusalError(error)) {
+  if (isWslDistroNotRunningRefusal(error)) {
     lifecycle.refusedContextKeys.add(contextKey)
   } else {
     lifecycle.refusedContextKeys.delete(contextKey)

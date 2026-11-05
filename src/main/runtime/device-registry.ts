@@ -1,15 +1,14 @@
 // Per-device revocable tokens isolate compromises; persist with hardened metadata-style permissions.
 import { join } from 'node:path'
 import type { DeviceScope } from '../../shared/runtime-types'
-import { removeStaleDurableWriteTempFiles } from '../durable-file-write'
+import { removeStaleDurableWriteTempFiles } from '../filesystem/durable-file-write'
 import { DEVICE_REGISTRY_FILENAME } from './mobile-pairing-files'
-import { mintDeviceCredential } from './device-credential'
+import { mintTokenDevice } from './device-credential'
 import { planDeviceKeyFork } from './device-key-fork'
 import { planIdleEphemeralPrune, withoutEphemeralRows } from './ephemeral-device-rows'
-import { readDeviceRegistryFile } from './device-registry-file-read'
 import { DeviceRegistryWriter } from './device-registry-disk-merge'
 import type { RelayDeviceBinding } from './mobile-cloud-relay/relay-revoke-outbox'
-import type { MobilePairingConnectionMode } from '../../shared/mobile-pairing-connection-mode'
+import type { MobilePairingConnectionMode } from '../../shared/remote-runtime/pairing/mobile-pairing-connection-mode'
 import type { RuntimePairingReach } from '../../shared/runtime-pairing-reach'
 import type { DelegatedPhone } from '../../shared/delegated-mobile-device-contract'
 import {
@@ -21,7 +20,8 @@ import { validGrants } from './device-registry-row-validation'
 import {
   isPendingTokenRow,
   mobilePairingConnectionModeOf,
-  isStillAuthenticated,
+  findPrincipalDevice,
+  findTokenDevice,
   type AuthenticatedPrincipalBinding,
   lookupDeviceKeyRow,
   sameGrants,
@@ -76,16 +76,7 @@ export class DeviceRegistry {
     pairingReach: RuntimePairingReach,
     grants: readonly RuntimeDeviceGrant[]
   ): TokenDeviceEntry {
-    const validatedGrants = validGrants(grants, scope)
-    const entry: TokenDeviceEntry = {
-      ...mintDeviceCredential(),
-      name,
-      scope,
-      pairedAt: Date.now(),
-      lastSeenAt: 0,
-      pairingReach,
-      ...(validatedGrants ? { grants: validatedGrants } : {})
-    }
+    const entry = mintTokenDevice(name, scope, pairingReach, grants)
     const nextDevices = [...existingDevices, entry]
     // Credentials become valid only after durable persistence.
     this.devices = this.save(nextDevices)
@@ -99,6 +90,8 @@ export class DeviceRegistry {
     pairingReach: RuntimePairingReach = 'network',
     grants: readonly RuntimeDeviceGrant[] = []
   ): TokenDeviceEntry {
+    // Never show a QR for an offer an admin removed on disk.
+    this.adoptExternalEdits()
     // Reuse only identical grants so re-advertisement cannot expand permissions.
     const existing = this.devices.find(
       (d): d is TokenDeviceEntry =>
@@ -143,6 +136,8 @@ export class DeviceRegistry {
     parent: DeviceEntry,
     phones: readonly DelegatedPhone[]
   ): DelegatedMobileDeviceEntry[] {
+    // Plan over the file as it is: an unchanged child removed on disk would skip the save's merge.
+    this.adoptExternalEdits()
     const { nextDevices, entries } = planDelegatedMobileDevices(this.devices, parent, phones)
     if (nextDevices !== this.devices) {
       this.devices = this.save(nextDevices)
@@ -166,6 +161,7 @@ export class DeviceRegistry {
   }
 
   getPendingDevice(scope: DeviceScope = 'mobile'): TokenDeviceEntry | null {
+    this.adoptExternalEdits()
     return (
       this.devices.find(
         (device): device is TokenDeviceEntry => isPendingTokenRow(device) && device.scope === scope
@@ -206,15 +202,14 @@ export class DeviceRegistry {
   }
 
   validateToken(token: string): DeviceEntry | null {
-    return (
-      (token && this.devices.find((d) => d.credentialKind === undefined && d.token === token)) ||
-      null
-    )
+    this.adoptExternalEdits()
+    return findTokenDevice(this.devices, token)
   }
 
   // Clients erase keys on unknown; reserve that verdict for readable absence.
   lookupDeviceKey(deviceId: string): DeviceKeyLookup {
-    const lookup = lookupDeviceKeyRow(this.getDevice(deviceId))
+    this.adoptExternalEdits()
+    const lookup = lookupDeviceKeyRow(this.getDevice(deviceId), this.devices)
     return lookup.kind === 'unknown' && (this.registryUnreadable || this.registryDoubtful)
       ? { kind: 'unavailable' }
       : lookup
@@ -250,8 +245,8 @@ export class DeviceRegistry {
   }
 
   resolveAuthenticatedPrincipal(principal: AuthenticatedPrincipalBinding): DeviceEntry | null {
-    const device = this.getDevice(principal.deviceId)
-    return device && isStillAuthenticated(device, principal) ? device : null
+    this.adoptExternalEdits()
+    return findPrincipalDevice(this.devices, principal)
   }
 
   updateLastSeen(deviceId: string): void {
@@ -305,8 +300,16 @@ export class DeviceRegistry {
     }
   }
 
+  /** Auth checks see a removal made on disk (an admin revoke) without waiting for orcad's next save. */
+  private adoptExternalEdits(): void {
+    // An unreadable load refuses everything until restart; there is nothing to merge into.
+    if (!this.registryUnreadable) {
+      this.devices = this.writer.adoptExternalEdits(this.devices) ?? this.devices
+    }
+  }
+
   private load(): void {
-    const read = readDeviceRegistryFile(this.registryPath)
+    const read = this.writer.read()
     this.registryUnreadable = read.unreadable
     this.registryDoubtful = read.doubtful
     this.corruptFilePending = read.corruptFilePending

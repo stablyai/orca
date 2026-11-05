@@ -65,7 +65,7 @@ jobs:
         env:
           ORCA_REUSE_PREPARED_NATIVE_RUNTIME: '1'
         run: |
-          node config/scripts/ensure-native-runtime.mjs --runtime=electron
+          node config/scripts/native-build/node-addons/ensure-native-runtime.mjs --runtime=electron
           pnpm run build:desktop:ci
           pnpm exec electron-builder --config config/electron-builder.config.cjs --win --publish never
 
@@ -83,9 +83,9 @@ jobs:
         env:
           ORCA_REUSE_PREPARED_WINDOWS_SECURITY: 'true'
         run: |
-          node config/scripts/ensure-native-runtime.mjs --runtime=node
-          node config/scripts/build-windows-process-tree-addon.mjs --arch=x64 --reuse-prepared-runtime
-          node config/scripts/build-orcad-template.mjs --targets win32-x64
+          node config/scripts/native-build/node-addons/ensure-native-runtime.mjs --runtime=node
+          node config/scripts/native-build/windows/build-windows-process-tree-addon.mjs --arch=x64 --reuse-prepared-runtime
+          node config/scripts/orcad-distribution/template/build-orcad-template.mjs --targets win32-x64
 
       - name: Switch serve hosts on the installed app's profile
         shell: bash

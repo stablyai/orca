@@ -1,6 +1,14 @@
 /** A second desktop on a fake WSL transport whose "distro" is the HUB's orcad, for WSL host e2e. */
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  renameSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import {
@@ -96,7 +104,8 @@ export async function setWslHostsEnabled(page: Page, enabled: boolean): Promise<
 }
 
 export function createGitProject(): string {
-  const dir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-wsl-host-project-'))
+  // Real path: macOS tmpdir is a /var symlink, and the host lists the repo by its resolved path.
+  const dir = realpathSync(mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-wsl-host-project-')))
   execFileSync('git', ['init', '-q', '-b', 'main', dir])
   writeFileSync(path.join(dir, 'README.md'), '# wsl host project\n')
   execFileSync('git', ['-C', dir, 'add', '.'])

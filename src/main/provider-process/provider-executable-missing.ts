@@ -77,6 +77,11 @@ export function providerExecutableMissing(error: unknown): boolean {
   )
 }
 
+/** A spawn ENOENT blamed on the CLI or its folder: a start failure, never a provider exit. */
+export function providerSpawnAbsent(error: unknown): boolean {
+  return providerExecutableMissing(error) || providerLaunchFolderMissing(error)
+}
+
 /** The provider's working folder was gone when it spawned, e.g. a deleted worktree. */
 export function providerLaunchFolderMissing(error: unknown): boolean {
   return (

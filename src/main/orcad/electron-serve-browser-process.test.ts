@@ -1,7 +1,7 @@
 import type * as OrcadBrowserProviderModule from './orcad-browser-provider'
 import type { ProcessSpec } from '@orca/process-host/process-spec'
 import { existsSync } from 'node:fs'
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { chmod, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -10,6 +10,7 @@ import type * as RunProcessModule from '@orca/process-host'
 import type * as FsPromisesModule from 'node:fs/promises'
 import type { RuntimeBrowserCommandHost } from '../runtime/browser/browser-command-contracts'
 import { RuntimeBrowserPageRegistry } from '../runtime/runtime-browser-page-registry'
+import { readRuntimeMetadataAsync } from '../runtime/runtime-metadata'
 
 const { spawnProcessMock, lockedRemovalPaths } = vi.hoisted(() => ({
   spawnProcessMock:
@@ -37,6 +38,7 @@ vi.mock('@orca/process-host', async (importOriginal) => ({
   spawnProcess: spawnProcessMock
 }))
 
+import { BROWSER_EXPECT_URL_RUNTIME_CAPABILITY } from '../../shared/browser-runtime-capabilities'
 import { BROWSER_SIDECAR_OWNER_ENV } from '../../shared/browser-sidecar-lifetime'
 import { headlessServeOzonePlatformSwitches } from '../../shared/headless-serve-ozone-platform'
 import { ElectronServeBrowserProcess } from './electron-serve-browser-process'
@@ -49,6 +51,8 @@ import {
 } from '../runtime/runtime-browser-commands-factory'
 
 vi.mock('./orcad-browser-provider', () => ({ resolveOrcadBrowserProvider: vi.fn() }))
+// The fixture's /Applications/Orca.app path would open a real macOS install park.
+vi.mock('./orcad-browser-install-park', () => ({ openOrcadBrowserInstallPark: () => null }))
 
 vi.mock('electron', () => ({ app: { getPath: () => harnessRoot }, ipcMain: {} }))
 vi.mock('../browser/browser-manager', () => ({ browserManager: {} }))
@@ -56,7 +60,7 @@ vi.mock('../browser/cookies/browser-cookie-import', () => ({
   detectInstalledBrowsers: () => [{ family: 'chrome', profiles: [], selectedProfile: 'Default' }],
   importCookiesFromBrowser: async () => ({ ok: true, summary: {} })
 }))
-import { browserSessionRegistry } from '../browser/browser-session-registry'
+import { browserSessionRegistry } from '../browser/sessions/browser-session-registry'
 import { browserProfileRpcFixture } from '../runtime/browser/browser-profile-rpc-test-fixture'
 
 const actual = await vi.importActual<typeof OrcadBrowserProviderModule>('./orcad-browser-provider')
@@ -125,7 +129,7 @@ async function browserRequests(): Promise<SidecarRequest[]> {
 }
 
 async function startProvider(): Promise<ElectronServeBrowserProcess> {
-  const processHandle = new ElectronServeBrowserProcess(INSTALLED_EXECUTABLE)
+  const processHandle = new ElectronServeBrowserProcess(INSTALLED_EXECUTABLE, harnessRoot)
   started.push(processHandle)
   await processHandle.start()
   return processHandle
@@ -133,6 +137,19 @@ async function startProvider(): Promise<ElectronServeBrowserProcess> {
 
 function spawnSpec(): ProcessSpec {
   return spawnProcessMock.mock.calls[0][0]
+}
+
+function spawnedProfile(call: number): string {
+  const spec: ProcessSpec = spawnProcessMock.mock.calls[call][0]
+  return (spec.args ?? []).find((arg) => arg.startsWith('--user-data-dir='))!.slice(16)
+}
+
+async function sidecarPid(profile: string): Promise<number> {
+  const metadata = await readRuntimeMetadataAsync(profile)
+  if (!metadata) {
+    throw new Error(`No runtime metadata in ${profile}`)
+  }
+  return metadata.pid
 }
 
 beforeEach(async () => {
@@ -178,7 +195,7 @@ describe('ElectronServeBrowserProcess start-up', () => {
   })
 
   it('does not launch when startup is already cancelled', async () => {
-    const processHandle = new ElectronServeBrowserProcess(INSTALLED_EXECUTABLE)
+    const processHandle = new ElectronServeBrowserProcess(INSTALLED_EXECUTABLE, harnessRoot)
     started.push(processHandle)
     await expect(processHandle.start(AbortSignal.abort())).rejects.toThrow()
     expect(spawnProcessMock).not.toHaveBeenCalled()
@@ -187,7 +204,7 @@ describe('ElectronServeBrowserProcess start-up', () => {
   it('cancels readiness polling and cleans up the unready sidecar', async () => {
     await setControl({ capabilities: [['runtime.v1']] })
     const controller = new AbortController()
-    const processHandle = new ElectronServeBrowserProcess(INSTALLED_EXECUTABLE)
+    const processHandle = new ElectronServeBrowserProcess(INSTALLED_EXECUTABLE, harnessRoot)
     started.push(processHandle)
     const starting = processHandle.start(controller.signal)
     const outcome = starting.then(
@@ -283,12 +300,77 @@ describe('ElectronServeBrowserProcess start-up', () => {
 
   it('fails fast when the installed app exits before publishing runtime metadata', async () => {
     sidecarMode = 'exit-before-ready'
-    const processHandle = new ElectronServeBrowserProcess(INSTALLED_EXECUTABLE)
+    const processHandle = new ElectronServeBrowserProcess(INSTALLED_EXECUTABLE, harnessRoot)
     started.push(processHandle)
 
     await expect(processHandle.start()).rejects.toThrow(/did not become ready/)
     expect(processHandle.isAvailable()).toBe(false)
   })
+
+  it('removes the profile a killed orcad left behind on the next start', async () => {
+    await startProvider()
+    started.length = 0
+    const leftover = spawnedProfile(0)
+    process.kill(await sidecarPid(leftover), 'SIGKILL')
+
+    await startProvider()
+
+    expect(spawnedProfile(1)).not.toBe(leftover)
+    expect(existsSync(leftover)).toBe(false)
+  })
+
+  it('stops a sidecar a crashed orcad left running before removing its profile', async () => {
+    await startProvider()
+    started.length = 0
+    const orphanProfile = spawnedProfile(0)
+    const orphanPid = await sidecarPid(orphanProfile)
+
+    await startProvider()
+
+    expect(() => process.kill(orphanPid, 0)).toThrow()
+    expect(existsSync(orphanProfile)).toBe(false)
+  })
+
+  it('leaves a recorded pid alone when it cannot prove it is the sidecar', async () => {
+    await startProvider()
+    started.length = 0
+    const orphanProfile = spawnedProfile(0)
+    const metadataPath = join(orphanProfile, 'orca-runtime.json')
+    const metadata = JSON.parse(await readFile(metadataPath, 'utf8'))
+    const strangerPid = await sidecarPid(orphanProfile)
+    try {
+      // A dead endpoint stands in for a recycled pid that cannot answer with the sidecar's token.
+      metadata.transports = [{ kind: 'unix', endpoint: join(harnessRoot, 'gone.sock') }]
+      await writeFile(metadataPath, JSON.stringify(metadata))
+
+      await startProvider()
+
+      expect(() => process.kill(strangerPid, 0)).not.toThrow()
+    } finally {
+      process.kill(strangerPid, 'SIGKILL')
+    }
+  })
+
+  it.skipIf(process.platform === 'win32')(
+    'never removes a recorded profile it does not privately own',
+    async () => {
+      const planted = await mkdtemp('/tmp/orcad-browser-')
+      try {
+        await chmod(planted, 0o755)
+        await writeFile(join(planted, 'keep'), '')
+        await writeFile(
+          join(harnessRoot, 'browser-sidecar-profile.json'),
+          JSON.stringify({ profilePath: planted })
+        )
+
+        await startProvider()
+
+        expect(existsSync(join(planted, 'keep'))).toBe(true)
+      } finally {
+        await rm(planted, { recursive: true, force: true })
+      }
+    }
+  )
 
   it('stops the sidecar process and removes its user data directory', async () => {
     const processHandle = await startProvider()
@@ -334,7 +416,7 @@ describe('ElectronServeBrowserProcess start-up', () => {
 
 describe('ElectronServeBrowserProcess command routing', () => {
   it('rejects commands before start and after stop', async () => {
-    const processHandle = new ElectronServeBrowserProcess(INSTALLED_EXECUTABLE)
+    const processHandle = new ElectronServeBrowserProcess(INSTALLED_EXECUTABLE, harnessRoot)
     await expect(
       processHandle.createCommands(host).browserGoto({ url: 'https://example.test/' })
     ).rejects.toMatchObject({ code: 'browser_unavailable' })
@@ -456,6 +538,51 @@ describe('ElectronServeBrowserProcess command routing', () => {
     await setControl({})
     await expect(commands.browserTabCurrent({ worktree: 'wt-a' })).rejects.toMatchObject({
       code: 'browser_no_tab'
+    })
+  })
+
+  it('refuses --expect-url when the installed app would drop it, without reaching the sidecar', async () => {
+    const commands = (await startProvider()).createCommands(host)
+
+    await expect(
+      commands.browserClick({ page: 'p', element: '@e1', expectUrl: 'https://example.test/a' })
+    ).rejects.toMatchObject({ code: 'browser_expect_url_unsupported' })
+    expect(await browserRequests()).toEqual([])
+  })
+
+  it('forwards --expect-url to a sidecar that enforces it and names the caller’s page', async () => {
+    await setControl({
+      capabilities: [['browser.headless.v1', BROWSER_EXPECT_URL_RUNTIME_CAPABILITY]]
+    })
+    const commands = (await startProvider()).createCommands(host)
+    await commands.browserTabCreate({ worktree: 'wt-a', page: 'public-page' })
+    const expectUrl = 'https://example.test/a'
+    const sidecarPage = 'sidecar-1'
+    await setControl({
+      errors: {
+        'browser.click': {
+          code: 'browser_expected_url_mismatch',
+          message: 'moved',
+          data: {
+            expectedUrl: expectUrl,
+            actualUrl: 'https://example.test/b',
+            browserPageId: sidecarPage,
+            mayHaveStarted: false
+          }
+        }
+      }
+    })
+
+    await expect(
+      commands.browserClick({ page: 'public-page', element: '@e1', expectUrl })
+    ).rejects.toMatchObject({
+      code: 'browser_expected_url_mismatch',
+      message: expect.stringContaining('Browser page public-page is at'),
+      data: { expectedUrl: expectUrl, browserPageId: 'public-page' }
+    })
+    expect((await browserRequests()).at(-1)).toMatchObject({
+      method: 'browser.click',
+      params: { page: sidecarPage, expectUrl }
     })
   })
 

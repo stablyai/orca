@@ -1,26 +1,26 @@
-import type { TerminalAttachmentLaunchResult } from '../../../../shared/terminal-attachment-launch-result'
-import type { AgentIdleEdgeMeta } from '../../../../shared/terminal-output-side-effects'
+import type { TerminalAttachmentLaunchResult } from '../../../../shared/terminal/pty/lifecycle/terminal-attachment-launch-result'
+import type { AgentIdleEdgeMeta } from '../../../../shared/terminal/output/terminal-output-side-effects'
 import type {
   RestoreSpawnIntent,
   SpawnDeferralReason
 } from '../../../../shared/host-spawn-admission'
-import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status-types'
+import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type {
   TerminalLaunchResult,
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
-} from '../../../../shared/agent-session-resume'
+} from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type {
   AgentLaunchPreferences,
   AgentPromptDelivery
-} from '../../../../shared/agent-session-host-authority'
-import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
+} from '../../../../shared/agent-session/agent-session-host-authority'
+import type { StartupCommandDelivery } from '../../../../shared/agent-launch/startup/codex-startup-delivery'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
 import type { EventProps } from '../../../../shared/telemetry-events'
-import type { TerminalInputKind } from '../../../../shared/terminal-input-kind'
-import type { TerminalOscColorQueryReplyColors } from '../../../../shared/terminal-osc-color-reply'
-import type { TuiAgent } from '../../../../shared/tui-agent'
-import type { TerminalPanePlacement } from '../../../../shared/terminal-pane-placement'
+import type { TerminalInputKind } from '../../../../shared/terminal/input/terminal-input-kind'
+import type { TerminalOscColorQueryReplyColors } from '../../../../shared/terminal/protocol/queries/terminal-osc-color-reply'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
+import type { TerminalPanePlacement } from '../../../../shared/workspace-layout/terminal-pane-placement'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { PtyDataMeta } from './pty-dispatcher'
 import type {
@@ -28,7 +28,7 @@ import type {
   RemoteRuntimeSnapshotRequestOptions
 } from '../../runtime/remote-runtime-terminal-multiplexer-types'
 import type { AcceptedInputOptions, PtyPreconnectInputEntry } from './pty-preconnect-input-buffer'
-import type { AgentPaneLaunchRequest } from '../../../../shared/agent-pane-launch-request'
+import type { AgentPaneLaunchRequest } from '../../../../shared/agent-launch/contracts/agent-pane-launch-request'
 
 export type PtyBufferSnapshot = {
   data: string
@@ -53,6 +53,8 @@ export type PtyBufferSnapshot = {
    *  means unknown; never rewrite that silence into a known `0`. */
   kittyKeyboardFlags?: number
   terminalOwner?: 'shell'
+  /** The host's tracked title when this image was taken; absent from older hosts. */
+  lastTitle?: string
 }
 
 /** Metadata for one authoritative replay payload. */
@@ -66,6 +68,8 @@ export type PtyReplayDataMeta = {
   snapshotSeq?: number
   alternateScreen?: boolean
   terminalOwner?: 'shell'
+  /** The host's tracked title when this image was taken, so live-agent judgement cannot race a separate title publication. */
+  lastTitle?: string
   /** Grid the payload was serialized at. Present only when the producer proved
    *  it; the drain replays there and fits back to the pane afterwards. */
   snapshotCols?: number
@@ -178,6 +182,8 @@ export type PtyTransport = {
     attachOnlyView?: true
     /** Sent only when this connect resumes an agent, and only to hosts that accept it. */
     resumeSpawnIntent?: RestoreSpawnIntent
+    /** A restore no user act asked for: main holds a stopped WSL distro's pane instead of starting it. */
+    wslPassiveRestore?: true
     command?: string
     commandDelivery?: 'renderer' | 'provider'
     env?: Record<string, string>
@@ -230,6 +236,11 @@ export type PtyTransport = {
   getRecoveryState?: () => PtyTransportRecoveryState
   /** Starts a fresh connection epoch while preserving the authoritative remote PTY identity. */
   retryRecovery?: () => boolean
+  /**
+   * The host the pane met stopped is running again: reopen a pane whose connect or attach was
+   * refused and left it idle (no retry armed), the way it opened. False when there is none to reopen.
+   */
+  reopenAfterHostReturned?: () => boolean
   /** True while the transport has a retry armed or parked; pane-level remounts must defer to it. */
   ownsRecovery?: () => boolean
   /** Typed input the host has not applied yet, which a remount would discard. */
@@ -266,6 +277,8 @@ export type PtyTransport = {
 }
 
 export type IpcPtyTransportOptions = {
+  /** Renderer-local observation before admission; never controls dispatch. */
+  onDrivingInputAttempt?: (ptyId: string | null) => void
   cwd?: string
   /** Retain bounded user input until the pane's first PTY connection binds. */
   bufferInputUntilConnect?: boolean
@@ -274,6 +287,8 @@ export type IpcPtyTransportOptions = {
   keepTypeAheadForNewTerminal?: (phase: 'connect' | 'bind') => boolean
   /** Re-checked when held input would flush; false drops it (startup work appeared after the hold began). */
   releasePreconnectInput?: () => boolean
+  /** Keys typed before a remote pane bound its terminal were dropped for safety, unsent. */
+  onTypingDiscardedBeforeBind?: () => void
   /** Seed a fresh transport with input handed off from a remounted deferred split. */
   preconnectInput?: readonly PtyPreconnectInputEntry[]
   /** Records newly retained input against a remount-safe deferred split handoff. */

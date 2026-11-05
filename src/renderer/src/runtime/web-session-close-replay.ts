@@ -5,7 +5,7 @@ import {
   PAIRED_TERMINAL_TAB_CLOSE_INTENT_MAX_AGE_MS,
   pairedTerminalTabCloseIntentKey,
   type PairedTerminalTabCloseIntent
-} from '../../../shared/paired-terminal-tab-close-intent'
+} from '../../../shared/workspace-layout/paired-terminal-tab-close-intent'
 import type { PairedTerminalTabCloseIntentsByEnvironment } from './paired-terminal-tab-close-intents'
 import {
   getRuntimeEnvironmentRevision,

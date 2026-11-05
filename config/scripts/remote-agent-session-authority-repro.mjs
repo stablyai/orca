@@ -15,7 +15,10 @@ import net from 'node:net'
 import os from 'node:os'
 import path from 'node:path'
 import { createInterface } from 'node:readline'
-import { cleanupIsolatedDaemons, isProcessAlive } from './remote-agent-session-process-cleanup.mjs'
+import {
+  cleanupIsolatedDaemons,
+  isProcessAlive
+} from './development/remote-session-cleanup/remote-agent-session-process-cleanup.mjs'
 
 const repoRoot = path.resolve(import.meta.dirname, '..', '..')
 const { parsePaneKey } = createRequire(import.meta.url)(

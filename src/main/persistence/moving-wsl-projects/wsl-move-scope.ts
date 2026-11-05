@@ -1,8 +1,8 @@
 // Move local repos/folders only when every path stays in one distro outside Windows drive mounts.
 import { posix } from 'node:path'
 import { getRepoExecutionHostId } from '../../../shared/execution-host'
-import { resolveFolderWorkspaceHost } from '../../../shared/folder-workspace-execution-host'
-import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import { resolveFolderWorkspaceHost } from '../../../shared/folder-workspaces/folder-workspace-execution-host'
+import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../shared/project-group-types'
 import type { Repo } from '../../../shared/repo-types'
 import {

@@ -1,6 +1,6 @@
 /** Session routes resolve the named components to their web implementations. */
 import { describe, expect, it } from 'vitest'
-import { mobileWebAppRouteClosure } from '../build-mobile-web-app-bundle.mjs'
+import { mobileWebAppRouteClosure } from '../build/mobile-web-app/build-mobile-web-app-bundle.mjs'
 import { mobileWebAppDependenciesPresent } from './mobile-web-app-bundle-dependencies.mjs'
 
 const describeClosure = mobileWebAppDependenciesPresent() ? describe : describe.skip

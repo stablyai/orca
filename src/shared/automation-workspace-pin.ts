@@ -5,7 +5,7 @@ import type { AutomationWorkspaceHost } from './automation-list-scope'
 import {
   resolveFolderWorkspaceHost,
   type FolderWorkspaceHostState
-} from './folder-workspace-execution-host'
+} from './folder-workspaces/folder-workspace-execution-host'
 import { parseWorkspaceKey } from './workspace-scope'
 
 /** A pinned SSH target plus the generation its registration currently carries. */

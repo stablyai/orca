@@ -1,26 +1,27 @@
 import { open, realpath } from 'node:fs/promises'
 import { isAbsolute, normalize } from 'node:path'
 import { z } from 'zod'
-import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
+import { agentSessionRefusalError } from '../../shared/agent-session/failures/agent-session-wire-refusals'
 import {
   agentSessionProviderHandleChainHead,
-  agentSessionProviderHandleKey,
   type AgentSessionProviderHandleChain,
   type AgentSessionProviderHandleLink
-} from '../../shared/agent-session-provider-handle'
-import { requireLegacyAgentSessionAccountHome } from '../../shared/agent-session-account-home'
+} from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import { agentSessionProviderHandleKey } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { requireLegacyAgentSessionAccountHome } from '../../shared/agent-session/lifecycle/agent-session-account-home'
 import type { resolveCliCommand } from '../../shared/node-cli-command-resolution'
 import {
   checkAgentCliVersion,
   type AgentCliVersionCheck,
   type AgentCliVersionReader
-} from '../agent-cli-version-probe'
+} from '../agent-launch/preflight/agent-cli-version-probe'
 import { AgentCliInstallationError } from '../native-chat/agent-cli-installation-error'
 import {
   resolveAgainAfterRefreshOnMissingProgram,
   assertStructuredAgentResolutionCurrent,
   type StructuredAgentResolutionOperation,
   resolveStructuredAgentCommand,
+  type StructuredAgentCommand,
   type StructuredAgentCommandSettings
 } from '../native-chat/structured-agent-command-resolution'
 import type { StructuredAgentLaunchPartResolver } from '../runtime/structured-agent-launch-composition'
@@ -31,6 +32,11 @@ import {
   withoutPiCallerEnv,
   type PiRpcLaunchOptions
 } from './rpc-launch'
+import {
+  ensurePiBackgroundWorkBridge,
+  type PiBackgroundWorkLaunch
+} from './rpc-background-work-bridge'
+import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 
 export type PiRpcResolvedLaunch = PiRpcLaunchOptions & {
   previous: AgentSessionProviderHandleLink | null
@@ -42,6 +48,8 @@ export type PiRpcLaunchPartDeps = {
   resolveCommand?: typeof resolveCliCommand
   probeVersion?: AgentCliVersionReader
   resolveFullAccess?: () => boolean
+  ensureBackgroundWorkBridge?: () => Promise<PiBackgroundWorkLaunch | null>
+  logger?: StructuredAgentSessionLogger
 }
 
 // RPC turns require agent_settled (Pi 0.84+); older versions remain terminal-only.
@@ -51,7 +59,7 @@ export function resolvePiRpcCommand(
   env: Readonly<Record<string, string>>,
   commandSettings: StructuredAgentCommandSettings = {},
   resolve?: typeof resolveCliCommand
-): string {
+): StructuredAgentCommand {
   const homePath = env.HOME ?? env.USERPROFILE
   return resolveStructuredAgentCommand(
     'pi',
@@ -62,11 +70,16 @@ export function resolvePiRpcCommand(
 }
 
 export function checkPiRpcVersion(
-  launch: { command: string; cwd: string; env: Record<string, string> },
+  launch: {
+    command: string
+    prefixArgs?: readonly string[]
+    cwd: string
+    env: Record<string, string>
+  },
   read?: AgentCliVersionReader
 ): Promise<AgentCliVersionCheck> {
   return checkAgentCliVersion(
-    { program: launch.command, cwd: launch.cwd, env: launch.env },
+    { program: launch.command, prefixArgs: launch.prefixArgs, cwd: launch.cwd, env: launch.env },
     PI_RPC_MINIMUM_VERSIONS,
     read
   )
@@ -121,7 +134,7 @@ export function resolvePiRpcInvocation(deps: {
   refreshEnvironmentAfterMiss?: (askedAt: number) => Promise<void>
   /** Base for relative PATH entries; defaults to Orca's working directory. */
   resolveWorkingDirectory?: () => Promise<string> | string
-}): Promise<{ command: string; env: Record<string, string> }> {
+}): Promise<StructuredAgentCommand & { env: Record<string, string> }> {
   return resolveAgainAfterRefreshOnMissingProgram(
     async () => {
       const env: Record<string, string> = {}
@@ -132,7 +145,7 @@ export function resolvePiRpcInvocation(deps: {
       }
       assertStructuredAgentResolutionCurrent(deps.operation)
       env.PI_CODING_AGENT_DIR = deps.accountDir
-      return { env, command: resolvePiRpcCommand(env, deps.commandSettings, deps.resolveCommand) }
+      return { env, ...resolvePiRpcCommand(env, deps.commandSettings, deps.resolveCommand) }
     },
     deps.refreshEnvironmentAfterMiss,
     { env: ({ env }) => env, cwd: deps.resolveWorkingDirectory },
@@ -150,7 +163,7 @@ export function piRpcLaunchPart(
     }
     const accountHome = requireLegacyAgentSessionAccountHome(record.accountHome)
     const cwd = await basis.launchDirectory()
-    const { env, command } = await resolvePiRpcInvocation({
+    const { env, command, prefixArgs } = await resolvePiRpcInvocation({
       accountDir: accountHome.path,
       resolveEnvironment: basis.environment,
       commandSettings: basis.commandSettings(),
@@ -191,13 +204,27 @@ export function piRpcLaunchPart(
       }
     }
     // Recheck each launch because the PATH binary may have changed.
-    const launchVersion = await checkPiRpcVersion({ command, cwd, env }, deps.probeVersion)
+    const launchVersion = await checkPiRpcVersion(
+      { command, prefixArgs, cwd, env },
+      deps.probeVersion
+    )
     if (launchVersion.status === 'tooOld') {
       throw AgentCliInstallationError.tooOld('pi', launchVersion)
     }
+    const backgroundWork = await (
+      deps.ensureBackgroundWorkBridge ??
+      (() =>
+        ensurePiBackgroundWorkBridge((error) =>
+          deps.logger?.warn('Pi chat starts without its background-work bridge', {
+            scope: 'pi-background-work',
+            error
+          })
+        ))
+    )()
     return {
       launch: {
         command,
+        prefixArgs,
         fullAccess: deps.resolveFullAccess?.() ?? true,
         previous,
         ...(sessionFile || forkFile
@@ -205,7 +232,8 @@ export function piRpcLaunchPart(
           : {}),
         ...(sessionFile ? { sessionFile } : {}),
         ...(forkFile ? { forkFile } : {}),
-        ...(replacement ? { replacement } : {})
+        ...(replacement ? { replacement } : {}),
+        ...(backgroundWork ? { backgroundWork } : {})
       },
       env: withoutPiCallerEnv(env),
       inheritedEnvToDelete: PI_RPC_SESSION_ENV_TO_DELETE

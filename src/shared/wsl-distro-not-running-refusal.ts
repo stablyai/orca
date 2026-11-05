@@ -12,10 +12,14 @@ export function wslDistroUnverifiableMessage(distro: string): string {
   return `WSL didn't answer whether '${distro}' is running, so Orca left it alone. Retry in a moment.`
 }
 
+// Any wording after the sentence counts, so callers that phrase the remedy differently still match.
 const NOT_RUNNING_REFUSAL =
-  /WSL distro '[^']*' is not running\. (Retry|Open a terminal)|WSL didn't answer whether '[^']*' is running, so Orca left it alone/
+  /WSL distro '[^']+' is not running\.|WSL didn't answer whether '[^']+' is running/
 
-/** A poller keeps its last data on this refusal instead of reporting a failure. */
+/**
+ * The gate's stopped or unverifiable refusal, matched by text: over IPC and RPC only the message
+ * survives. A poller keeps its last data on it instead of reporting a failure.
+ */
 export function isWslDistroNotRunningRefusal(error: unknown): boolean {
   const message = error instanceof Error ? error.message : typeof error === 'string' ? error : ''
   return NOT_RUNNING_REFUSAL.test(message)

@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { MAX_ORCAD_MIGRATION_STAGED_CATALOGS } from '../../../shared/orcad-migration/orcad-migration-staged-catalog-validation'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import { folderWorkspaceKey, worktreeWorkspaceKey } from '../../../shared/workspace-scope'
-import { MAX_RETIREMENT_NAMESPACES } from '../../worktree-retirement-namespace'
+import { MAX_RETIREMENT_NAMESPACES } from '../../workspaces/removal/retirement/worktree-retirement-namespace'
 import {
   DORMANT_AUTOMATION,
   DORMANT_AUTOMATION_RUN,
@@ -13,6 +13,7 @@ import {
   DORMANT_NAMESPACE,
   DORMANT_WORKTREE_ID,
   FOLDER_WORKSPACE,
+  PROJECT_GROUP,
   REPOSITORY,
   dormantState,
   manifest
@@ -124,6 +125,64 @@ describe('orcad migration catalog persistence', () => {
     })
   })
 
+  // Two desktops on one host each carry their own focus; the second must not be refused for it.
+  it('takes a second desktop onto a host another desktop already moved, keeping the host focus whole', () => {
+    const store = createStore()
+    const first = manifest()
+    commitCatalog(store, manifest({ payload: { ...first.payload, dormantState: dormantState() } }))
+    // The host names only a project; the optional focus fields stay unset.
+    const {
+      activeWorkspaceKey: _key,
+      activeWorkspaceExecutionHostId: _host,
+      ...hostSession
+    } = store.getWorkspaceSession()
+    store.setWorkspaceSession({
+      ...hostSession,
+      activeRepoId: REPOSITORY.id,
+      activeWorktreeId: null,
+      activeTabId: null
+    })
+
+    const secondRepo = { ...REPOSITORY, id: 'repo-2', path: '/srv/repo-2' }
+    const secondWorktree = `${secondRepo.id}::/srv/repo-2`
+    const second = manifest({
+      migrationId: 'migration-second-desktop',
+      source: { sshTargetId: 'ssh-prod-b', sshTargetGeneration: 1, targetLabel: 'Production' },
+      payload: {
+        repositories: [secondRepo],
+        projectGroups: [PROJECT_GROUP],
+        folderWorkspaces: [],
+        dormantState: {
+          version: 1,
+          worktreeMeta: [],
+          worktreeLineage: [],
+          workspaceLineage: [],
+          sparsePresets: [],
+          retiredWorktreeNames: [],
+          retiredWorktreeNamespaces: [],
+          workspaceSession: {
+            ...getDefaultWorkspaceSession(),
+            activeRepoId: secondRepo.id,
+            activeWorktreeId: secondWorktree,
+            activeWorkspaceKey: worktreeWorkspaceKey(secondWorktree),
+            activeWorkspaceExecutionHostId: 'local'
+          }
+        }
+      }
+    })
+
+    expect(commitCatalog(store, second)).toMatchObject({ state: 'committed' })
+    expect(store.getRepos().map((repo) => repo.id)).toEqual([REPOSITORY.id, secondRepo.id])
+    const focus = store.getWorkspaceSession()
+    expect(focus).toMatchObject({
+      activeRepoId: REPOSITORY.id,
+      activeWorktreeId: null,
+      activeTabId: null
+    })
+    expect(focus.activeWorkspaceKey ?? null).toBeNull()
+    expect(focus.activeWorkspaceExecutionHostId ?? null).toBeNull()
+  })
+
   it('stages durably without publishing rows, then commits catalog and receipt together', async () => {
     const store = createStore()
     const input = manifest()
@@ -208,6 +267,10 @@ describe('orcad migration catalog persistence', () => {
     const restored = createStore()
     expect(restored.getOrcadMigrationCatalogState(input)).toMatchObject({ state: 'committed' })
     expect(restored.commitStagedOrcadMigrationCatalog(input)).toMatchObject({ state: 'committed' })
+    expect(restored.listAutomations()[0].launchSetup).toMatchObject({
+      launchPreferences: DORMANT_AUTOMATION.launchPreferences,
+      agentArgs: DORMANT_AUTOMATION.agentArgs
+    })
     expect(restored.getWorktreeMeta(DORMANT_WORKTREE_ID)?.comment).toBe('Preserve me')
     expect(restored.getSparsePresets(REPOSITORY.id)).toHaveLength(1)
     expect(restored.getWorkspaceSession().tabsByWorktree[DORMANT_WORKTREE_ID]).toHaveLength(1)

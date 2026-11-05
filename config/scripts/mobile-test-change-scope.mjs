@@ -1,16 +1,17 @@
 import { appendFileSync, readFileSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
-import { isDocsOnlyPath } from './pr-code-change-scope.mjs'
+import { isDocsOnlyPath } from './workflow/source-routing/pr-code-change-scope.mjs'
 
 const NON_TEST_FILES = new Set([
   'mobile/Gemfile',
   'mobile/Gemfile.lock',
   'mobile/README.md',
   '.github/workflows/mobile-ios-release.yml',
-  'config/scripts/pr-code-change-scope.mjs',
-  'config/scripts/pr-package-test-paths.mjs',
-  'config/scripts/pr-code-change-scope.test.mjs',
-  'config/scripts/pr-layout-oracle-route.mjs',
+  'config/scripts/workflow/source-routing/pr-code-change-scope.mjs',
+  'config/scripts/workflow/source-routing/pr-package-test-paths.mjs',
+  'config/scripts/workflow/source-routing/pr-code-change-scope.test.mjs',
+  'config/scripts/workflow/source-routing/pr-layout-oracle-route.mjs',
+  'config/scripts/workflow/source-routing/pr-shell-contract-prefixes.mjs',
   'config/scripts/mobile-release-check-scope.mjs',
   'config/scripts/mobile-release-check-scope.test.mjs'
 ])
@@ -22,6 +23,16 @@ const DESKTOP_SUITE_PREFIXES = [
   'src/main/runtime/rpc/',
   'src/main/runtime/runtime-rpc/',
   'src/main/runtime/agent-session-',
+  'src/main/runtime/agent-session/records/agent-session-',
+  'src/main/runtime/agent-session/agent-session-account-',
+  'src/main/runtime/agent-session/agent-session-acquisition-',
+  'src/main/runtime/agent-session/agent-session-conversation-',
+  'src/main/runtime/agent-session/agent-session-death-',
+  'src/main/runtime/agent-session/agent-session-launch-',
+  'src/main/runtime/agent-session/agent-session-operation-',
+  'src/main/runtime/agent-session/agent-session-rewind-',
+  'src/main/runtime/agent-session/agent-session-runtime-',
+  'src/main/runtime/agent-session/agent-session-unsaved-',
   'src/main/native-chat/agent-session-wire/'
 ]
 

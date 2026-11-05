@@ -87,7 +87,6 @@ export function FeatureWallTourSurface({
   )
   const selected = FEATURE_WALL_WORKFLOWS[selectedIndex]
   const taskSourcePresentation = useFeatureWallTaskSourcePresentation(isOpen, selected)
-  const selectedPresentation = taskSourcePresentation.workflow
   const agentsSteps = useMemo(() => getAgentsSteps(), [])
   const workbenchSteps = useMemo(() => getWorkbenchSteps(), [])
   const reviewSteps = useMemo(() => getReviewSteps(), [])
@@ -365,7 +364,6 @@ export function FeatureWallTourSurface({
 
   const showGif = !prefersReducedMotion && gifUrl !== null
   const previewTitleId = `${reactId}-feature-wall-preview-${selected.id}`
-  const description = activeStepCopy?.description ?? selectedPresentation.lede
   const continueButton = (
     <FeatureWallContinueButton
       label={continueLabel}
@@ -384,7 +382,6 @@ export function FeatureWallTourSurface({
       previewPanelId={previewPanelId}
       previewTitleId={previewTitleId}
       selected={selected}
-      description={description}
       activeStepCopy={activeStepCopy}
       completion={completion}
       railRefs={railRefs}

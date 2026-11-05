@@ -1,9 +1,11 @@
 import type {
   AgentJournalCursor,
   AgentSessionJournalIdentity
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import { journalDispatchRowApplies } from './journal-dispatch-settlement'
+import { journalQueueReopenRowBuilder } from './journal-stop-and-resume-rows'
 import type { JournalQueuedMessages, JournalQueuePlan } from './journal-queued-messages'
+import { QueuedMessageNotOwedError } from './queued-message-consume-error'
 import type { JournalAttachmentClaim } from './journal-submission-hook'
 import type { JournalReducerState } from './journal-reducer'
 import { journalDispatchRowBuilder, journalSubmissionRowBuilder } from './journal-row-builders'
@@ -17,6 +19,7 @@ import type {
 
 export type JournalSubmissionWriterDeps = {
   state: () => JournalReducerState
+  reopenFloor: () => AgentJournalCursor | null
   identity: AgentSessionJournalIdentity
   rowWriter: JournalRowWriter
   queuedMessages: JournalQueuedMessages
@@ -36,30 +39,46 @@ export class JournalSubmissionWriter {
   ): Promise<AgentJournalCursor> {
     const { claimAttachments, identity, queuedMessages, rowWriter, state } = this.deps
     const submission = journalSubmissionRowBuilder(state, identity, input, consume)
+    let claimsCommitted: (() => void) | void
     let card: JournalQueuePlan | undefined
     return rowWriter
       .enqueueRows(
         () => {
+          const floor = this.deps.reopenFloor()
+          const reopen =
+            floor?.epoch === state().epoch
+              ? [journalQueueReopenRowBuilder(state, input.fence, floor.sequence)]
+              : []
           if (!consume) {
-            return [submission]
+            return [...reopen, submission]
           }
           queuedMessages.assertConsumable({
             ...consume,
             consumedAs: input.clientMessageId,
             fingerprint: input.payloadFingerprint
           })
+          // Asked on the write lane, so nothing it depends on can change before the handoff row lands.
+          const owed = consume.owed?.() ?? 'owed'
+          if (owed !== 'owed') {
+            throw new QueuedMessageNotOwedError(consume.messageId, owed)
+          }
           // Adopt legacy cards in the handoff transaction.
           card = queuedMessages.plan([{ messageId: consume.messageId }])
-          return [...card.rows, submission]
+          return [...reopen, ...card.rows, submission]
         },
         {
           write: (db, row) => {
             card?.receipt.write(db)
             // New client sends require stored uploads; queued cards already claimed theirs.
-            claimAttachments(db, input.body, input.origin === 'client' && !consume)
+            claimsCommitted = claimAttachments(
+              db,
+              input.body,
+              input.origin === 'client' && !consume
+            )
             receipt?.write(db, row)
           },
           committed: () => {
+            claimsCommitted?.()
             card?.receipt.committed()
             receipt?.committed()
           }
@@ -98,10 +117,19 @@ export class JournalSubmissionWriter {
   /** Resolve late receipts on the write lane; settled sends append nothing. */
   async acceptLate(input: Extract<ResolveDispatchInput, { state: 'accepted' }>): Promise<void> {
     const { rowWriter, state } = this.deps
-    await rowWriter.enqueueRows(() =>
-      journalDispatchRowApplies(state().submissions.get(input.clientMessageId))
-        ? [journalDispatchRowBuilder(state, input)]
-        : []
+    let witness: JournalQueuePlan | undefined
+    await rowWriter.enqueueRows(
+      () => {
+        if (!journalDispatchRowApplies(state().submissions.get(input.clientMessageId))) {
+          return []
+        }
+        witness = this.deps.queuedMessages.proofWitness(input.clientMessageId)
+        return [...witness.rows, journalDispatchRowBuilder(state, input)]
+      },
+      {
+        write: (db) => witness?.receipt.write(db),
+        committed: () => witness?.receipt.committed()
+      }
     )
   }
 }

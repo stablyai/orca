@@ -1,12 +1,12 @@
 import { ipcMain } from 'electron'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { CommitMessageAgentRuntimeTarget } from '../../text-generation/commit-message-agent-environment'
 import {
   discoverCommitMessageModelsLocal,
   type DiscoverCommitMessageModelsResult
 } from '../../text-generation/commit-message-text-generation'
 import { prepareLocalCommitMessageAgentEnv } from '../../text-generation/commit-message-agent-environment'
-import { parseWslPath } from '../../wsl'
+import { parseWslPath } from '../../wsl/filesystem/unc-path-access'
 import {
   resolveModelDiscoveryLocalPath,
   getLocalAgentRuntimeTarget

@@ -4,23 +4,16 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import type { HostHeaderRow } from '../../../../../../shared/sidebar-list/host-section-rows'
-import { HostSectionHeaderMenu } from '../../HostSectionHeaderMenu'
+import { HostSectionHeaderMenu } from './HostSectionHeaderMenu'
 import { stopRepoHeaderMenuEvent } from './header-event-guards'
 import { getHostHeaderDetail } from './host-header-detail'
 
 function SectionMetricsBadge({ count }: { count: number }): React.JSX.Element {
-  const totalLabel =
-    count === 1
-      ? translate(
-          'auto.components.sidebar.HostSectionHeader.workspaceCount_one',
-          '{{count}} workspace',
-          { count }
-        )
-      : translate(
-          'auto.components.sidebar.HostSectionHeader.workspaceCount_other',
-          '{{count}} workspaces',
-          { count }
-        )
+  const totalLabel = translate(
+    'auto.components.sidebar.HostSectionHeader.workspaceCount',
+    '{{count}} workspaces',
+    { count, defaultValue_one: '{{count}} workspace' }
+  )
 
   return (
     <span

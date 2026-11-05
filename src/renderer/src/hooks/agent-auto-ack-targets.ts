@@ -1,6 +1,6 @@
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { isOrcaWindowForegroundFocused } from '@/components/terminal-pane/terminal-notification-pane-visibility'
-import { isStructuredTab } from '../../../shared/structured-agent-session-tab'
+import { isStructuredTab } from '../../../shared/agent-session/view/structured-agent-session-tab'
 import type { Tab, TabGroup, TabGroupLayoutNode } from '../../../shared/tab-types'
 import { collectTabGroupLayoutGroupIds } from '../../../shared/workspace-layout/tab-group-moves'
 import { isPresenceConfirmed } from './agent-auto-ack-presence'

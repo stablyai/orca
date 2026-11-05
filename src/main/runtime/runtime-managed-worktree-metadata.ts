@@ -4,8 +4,8 @@ import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import { worktreeWorkspaceKey } from '../../shared/workspace-scope'
 import { splitWorktreeId } from '../../shared/worktree/id'
 import type { WorktreeSortOrderUpdate } from '../../shared/worktree/sort-order-update'
-import { stripOrcaProvenanceMetaUpdates } from '../worktree-removal-safety'
-import { isRemovedFolderWorkspaceInstance } from '../folder-workspace-meta-presence'
+import { stripOrcaProvenanceMetaUpdates } from '../workspaces/removal/worktree-removal-safety'
+import { isRemovedFolderWorkspaceInstance } from '../workspaces/catalog/folder-workspace-meta-presence'
 import { worktreeRowTarget } from '../persistence/host-qualified-worktree-meta'
 import {
   writeWorktreeSortOrder,

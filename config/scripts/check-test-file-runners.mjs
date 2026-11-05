@@ -8,7 +8,7 @@ import process from 'node:process'
 import { pathToFileURL } from 'node:url'
 import ts from 'typescript-api'
 import { defaultExclude } from 'vitest/config'
-import { UNIT_EXCLUDE, UNIT_INCLUDE } from './ci-unit-files.mjs'
+import { UNIT_EXCLUDE, UNIT_INCLUDE } from './ci/unit-selection/dependency-graph/ci-unit-files.mjs'
 
 const VITEST_DEFAULT_INCLUDE = '**/*.{test,spec}.?(c|m)[jt]s?(x)'
 
@@ -21,6 +21,12 @@ const NON_UNIT_TEST_RUNNERS = [
     include: ['tests/e2e/**/*.spec.ts'],
     sources: ['tests/playwright.config.ts'],
     mirrors: ["testDir: './e2e'", "testMatch: '**/*.spec.ts'"]
+  },
+  {
+    name: 'component fixtures Playwright',
+    include: ['tests/component-fixtures/**/*.spec.ts'],
+    sources: ['tests/component-fixtures/playwright.config.ts'],
+    mirrors: ["testDir: '.'", "testMatch: '*.spec.ts'"]
   },
   {
     name: 'computer-use e2e',
@@ -58,7 +64,7 @@ const NON_UNIT_TEST_RUNNERS = [
       "'src/**/*.test.ts', 'src/**/*.test.tsx', 'scripts/**/*.test.ts'"
     ]
   },
-  ...['connector', 'push', 'relay'].map((app) => ({
+  ...['push', 'relay'].map((app) => ({
     name: `cloud ${app}`,
     include: [`cloud/apps/${app}/src/**/*.test.ts`],
     sources: [`cloud/apps/${app}/vitest.config.ts`],
@@ -88,6 +94,13 @@ const NON_UNIT_TEST_RUNNERS = [
       'dev/scripts/run-relay-tests.test.mjs',
       '../.github/actions/cloud-sql-rollout-lease/*.test.mjs'
     ]
+  },
+  {
+    // `orca plugin test` runs every example's own tests in Node; the unit test drives it.
+    name: 'example plugin tests (orca plugin test)',
+    include: ['examples/plugins/*/src/**/*.test.ts', 'examples/plugins/*/src/**/*.test.tsx'],
+    sources: ['src/cli/plugin-authoring/plugin-test-runner.test.ts'],
+    mirrors: ['readdirSync(EXAMPLES)']
   },
   {
     name: 'docs site',

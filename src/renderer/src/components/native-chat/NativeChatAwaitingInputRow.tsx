@@ -1,3 +1,5 @@
+import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
+import { NativeChatQuestionText } from './NativeChatQuestionText'
 import { ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
@@ -7,7 +9,6 @@ import {
 } from '../../../../shared/native-chat/input/native-chat-ask-row'
 import { useNativeChatDisclosure } from './native-chat-disclosure-store'
 import { NativeChatToolRunIcon } from './NativeChatToolIcon'
-import { useNativeChatClippedLine } from './use-native-chat-clipped-line'
 
 const ROW_CLASS_NAME =
   'flex min-h-6 w-full items-center gap-1.5 py-0.5 text-left text-sm leading-relaxed text-chat-foreground-faint'
@@ -17,7 +18,8 @@ export function NativeChatAwaitingInputRow({
   subject,
   pending,
   disclosureKey,
-  listsQuestions = true
+  listsQuestions = true,
+  onLinkClick
 }: {
   /** Null when the payload named no question; the label carries the row alone. */
   subject: NativeChatAskRowSubject | null
@@ -27,6 +29,7 @@ export function NativeChatAwaitingInputRow({
   disclosureKey?: string
   /** False when the caller already shows each question of a grouped prompt in full. */
   listsQuestions?: boolean
+  onLinkClick?: CommentMarkdownLinkClickHandler
 }): React.JSX.Element {
   // Separate group and question keys because a pending Codex group becomes individual rows when answered.
   const { open, setOpen } = useNativeChatDisclosure(
@@ -35,13 +38,9 @@ export function NativeChatAwaitingInputRow({
       : disclosureKey,
     false
   )
-  // Restore clipped state with an open row so collapsing cannot remove its focused toggle.
-  const [clipped, measureLine] = useNativeChatClippedLine(open)
-
   const question = subject?.kind === 'question' ? subject.text : null
   const questions = subject?.kind === 'questions' && listsQuestions ? subject.questions : null
-  // A count always hides its questions, so the list needs no clipping measurement.
-  const toggles = questions !== null || (question !== null && (open || clipped))
+  const toggles = questions !== null || question !== null
   // With nothing to name, the label must read as a whole phrase, not end on a colon.
   const label = !pending
     ? translate('components.native-chat.ask.asked', NATIVE_CHAT_ASK_ROW_COPY.asked)
@@ -56,13 +55,10 @@ export function NativeChatAwaitingInputRow({
       ? null
       : subject.kind === 'question'
         ? subject.text
-        : subject.questions.length === 1
-          ? translate('components.native-chat.ask.questionCount_one', '{{count}} question', {
-              count: subject.questions.length
-            })
-          : translate('components.native-chat.ask.questionCount_other', '{{count}} questions', {
-              count: subject.questions.length
-            })
+        : translate('components.native-chat.ask.questionCount', '{{count}} questions', {
+            count: subject.questions.length,
+            defaultValue_one: '{{count}} question'
+          })
   const header = (
     <>
       <NativeChatToolRunIcon
@@ -73,12 +69,7 @@ export function NativeChatAwaitingInputRow({
         {label}
       </span>
       {question !== null && toggles && open ? null : (
-        <span
-          ref={question === null ? undefined : measureLine}
-          className="min-w-0 truncate text-chat-foreground"
-        >
-          {text}
-        </span>
+        <span className="min-w-0 truncate text-chat-foreground">{text}</span>
       )}
       {toggles ? (
         <ChevronRight
@@ -116,16 +107,18 @@ export function NativeChatAwaitingInputRow({
       )}
       {toggles && open && question !== null ? (
         // Indented to the label, past the icon slot and its gap.
-        <p className="whitespace-pre-wrap break-words pl-5.5 text-sm leading-relaxed text-chat-foreground">
-          {question}
-        </p>
+        <NativeChatQuestionText
+          content={question}
+          onLinkClick={onLinkClick}
+          className="break-words pl-5.5 text-sm leading-relaxed text-chat-foreground"
+        />
       ) : null}
       {open && questions !== null ? (
         // Numbers hang in the icon slot so each question starts under the label.
         <ol className="list-decimal space-y-1 pl-5.5 text-sm leading-relaxed text-chat-foreground marker:text-chat-foreground-faint">
           {questions.map((entry) => (
-            <li key={entry} className="whitespace-pre-wrap break-words">
-              {entry}
+            <li key={entry} className="break-words">
+              <NativeChatQuestionText content={entry} onLinkClick={onLinkClick} />
             </li>
           ))}
         </ol>

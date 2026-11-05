@@ -38,6 +38,12 @@ export function routeRpcClientCalls(
   hostOf: (params: unknown) => ExecutionHostId | undefined
 ): RpcClient {
   return {
+    requestRoute: (params) => {
+      const executionHost = hostOf(params)
+      return executionHost
+        ? { client: scopeRpcClientToExecutionHost(client, executionHost), intermediary: client }
+        : { client }
+    },
     sendRequest: (method, params, options) =>
       client.sendRequest(method, params, onExecutionHost(options, hostOf(params))),
     subscribe: (method, params, onData, options) =>
@@ -52,6 +58,7 @@ export function routeRpcClientCalls(
     carriesRpcEnvelope: client.carriesRpcEnvelope && (() => client.carriesRpcEnvelope?.() ?? true),
     onStateChange: (listener) => client.onStateChange(listener),
     notifyForeground: (reason) => client.notifyForeground(reason),
+    probeLivenessNow: client.probeLivenessNow && (() => client.probeLivenessNow?.()),
     close: () => {}
   }
 }

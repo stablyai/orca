@@ -103,6 +103,7 @@ export async function createIssueForAgent(
     dueDate?: string | null
     labelIds?: string[]
     signal?: AbortSignal
+    beforeInvoke?: () => void
   }
 ): Promise<LinearIssueWriteRecord> {
   const entry = getClients(workspaceId)[0]
@@ -110,41 +111,49 @@ export async function createIssueForAgent(
     throw new LinearWriteFailure('failed', 'Not connected to Linear')
   }
 
-  return runLinearWrite(entry, options.signal, async (client) => {
-    const result = await client.createIssue({
-      id: options.id,
-      teamId,
-      title,
-      ...(description ? { description } : {}),
-      ...(options.parentId ? { parentId: options.parentId } : {}),
-      ...(options.projectId ? { projectId: options.projectId } : {}),
-      ...(options.stateId ? { stateId: options.stateId } : {}),
-      ...(options.assigneeId !== undefined ? { assigneeId: options.assigneeId } : {}),
-      ...(options.priority !== undefined ? { priority: options.priority } : {}),
-      ...(options.estimate !== undefined ? { estimate: options.estimate } : {}),
-      ...(options.dueDate !== undefined ? { dueDate: options.dueDate } : {}),
-      ...(options.labelIds !== undefined ? { labelIds: options.labelIds } : {})
-    })
-    if (!result.success) {
-      throw new LinearWriteFailure('failed', 'Linear create failed')
-    }
-    const issue = await confirmLinearWrite(
-      'Issue was created but could not be retrieved',
-      async () => result.issue
-    )
-    if (!issue?.id) {
-      throw new LinearWriteFailure('unconfirmed', 'Issue was created but could not be retrieved')
-    }
-    return confirmLinearWrite('Issue was created but could not be retrieved', () =>
-      getCreatedIssueRecord(issue.id, client)
-    )
-  })
+  return runLinearWrite(
+    entry,
+    options.signal,
+    async (client) => {
+      const result = await client.createIssue({
+        id: options.id,
+        teamId,
+        title,
+        ...(description ? { description } : {}),
+        ...(options.parentId ? { parentId: options.parentId } : {}),
+        ...(options.projectId ? { projectId: options.projectId } : {}),
+        ...(options.stateId ? { stateId: options.stateId } : {}),
+        ...(options.assigneeId !== undefined ? { assigneeId: options.assigneeId } : {}),
+        ...(options.priority !== undefined ? { priority: options.priority } : {}),
+        ...(options.estimate !== undefined ? { estimate: options.estimate } : {}),
+        ...(options.dueDate !== undefined ? { dueDate: options.dueDate } : {}),
+        ...(options.labelIds !== undefined ? { labelIds: options.labelIds } : {})
+      })
+      if (!result.success) {
+        throw new LinearWriteFailure('failed', 'Linear create failed')
+      }
+      options.signal?.throwIfAborted()
+      const issue = await confirmLinearWrite(
+        'Issue was created but could not be retrieved',
+        async () => result.issue
+      )
+      if (!issue?.id) {
+        throw new LinearWriteFailure('unconfirmed', 'Issue was created but could not be retrieved')
+      }
+      return confirmLinearWrite('Issue was created but could not be retrieved', () =>
+        getCreatedIssueRecord(issue.id, client, options.signal)
+      )
+    },
+    options.beforeInvoke
+  )
 }
 
 async function getCreatedIssueRecord(
   issueId: string,
-  client: LinearClient
+  client: LinearClient,
+  signal?: AbortSignal
 ): Promise<LinearIssueWriteRecord> {
+  signal?.throwIfAborted()
   const result = await client.client.rawRequest<LinearIssueByUuidResponse, LinearRawVariables>(
     ISSUE_BY_UUID_QUERY,
     { id: issueId }
@@ -224,51 +233,56 @@ export async function updateIssueForAgent(
   id: string,
   updates: LinearIssueUpdate,
   workspaceId: string,
-  options: { signal?: AbortSignal } = {}
+  options: { signal?: AbortSignal; beforeInvoke?: () => void } = {}
 ): Promise<LinearIssueWriteRecord> {
   const entry = getClients(workspaceId)[0]
   if (!entry) {
     throw new LinearWriteFailure('failed', 'Not connected to Linear')
   }
 
-  return runLinearWrite(entry, options.signal, async (client) => {
-    const payload: Record<string, unknown> = {}
-    if (updates.stateId !== undefined) {
-      payload.stateId = updates.stateId
-    }
-    if (updates.title !== undefined) {
-      payload.title = updates.title
-    }
-    if (updates.description !== undefined) {
-      payload.description = updates.description
-    }
-    if (updates.assigneeId !== undefined) {
-      payload.assigneeId = updates.assigneeId
-    }
-    if (updates.priority !== undefined) {
-      payload.priority = updates.priority
-    }
-    if (updates.estimate !== undefined) {
-      payload.estimate = updates.estimate
-    }
-    if (updates.dueDate !== undefined) {
-      payload.dueDate = updates.dueDate
-    }
-    if (updates.labelIds !== undefined) {
-      payload.labelIds = updates.labelIds
-    }
-    if (updates.projectId !== undefined) {
-      payload.projectId = updates.projectId
-    }
-    if (updates.parentId !== undefined) {
-      payload.parentId = updates.parentId
-    }
-    const result = await client.updateIssue(id, payload)
-    if (!result.success) {
-      throw new LinearWriteFailure('failed', 'Linear update failed')
-    }
-    return confirmLinearWrite('Issue was updated but could not be retrieved', () =>
-      getCreatedIssueRecord(id, client)
-    )
-  })
+  return runLinearWrite(
+    entry,
+    options.signal,
+    async (client) => {
+      const payload: Record<string, unknown> = {}
+      if (updates.stateId !== undefined) {
+        payload.stateId = updates.stateId
+      }
+      if (updates.title !== undefined) {
+        payload.title = updates.title
+      }
+      if (updates.description !== undefined) {
+        payload.description = updates.description
+      }
+      if (updates.assigneeId !== undefined) {
+        payload.assigneeId = updates.assigneeId
+      }
+      if (updates.priority !== undefined) {
+        payload.priority = updates.priority
+      }
+      if (updates.estimate !== undefined) {
+        payload.estimate = updates.estimate
+      }
+      if (updates.dueDate !== undefined) {
+        payload.dueDate = updates.dueDate
+      }
+      if (updates.labelIds !== undefined) {
+        payload.labelIds = updates.labelIds
+      }
+      if (updates.projectId !== undefined) {
+        payload.projectId = updates.projectId
+      }
+      if (updates.parentId !== undefined) {
+        payload.parentId = updates.parentId
+      }
+      const result = await client.updateIssue(id, payload)
+      if (!result.success) {
+        throw new LinearWriteFailure('failed', 'Linear update failed')
+      }
+      return confirmLinearWrite('Issue was updated but could not be retrieved', () =>
+        getCreatedIssueRecord(id, client, options.signal)
+      )
+    },
+    options.beforeInvoke
+  )
 }

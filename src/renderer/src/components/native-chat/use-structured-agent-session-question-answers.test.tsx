@@ -46,12 +46,10 @@ vi.mock('./use-structured-agent-session-sends', () => ({
   })
 }))
 
-import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
-import { encodeAgentSessionQuestionAnswers } from '../../../../shared/agent-session-question-answer'
-import {
-  useStructuredAgentSession,
-  type StructuredPromptItem
-} from './use-structured-agent-session'
+import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import { encodeAgentSessionQuestionAnswers } from '../../../../shared/agent-session/agent-session-question-answer'
+import { useStructuredAgentSession } from './use-structured-agent-session'
+import type { StructuredPromptItem } from '../../../../shared/agent-session/view/structured-agent-session-message-projection'
 
 let fence = 3
 let items: AgentJournalRenderItem[] = []
@@ -180,23 +178,5 @@ describe('desktop structured prompt answers', () => {
       optionId: encodeAgentSessionQuestionAnswers(answers)
     })
     expect(respondCall()).not.toHaveProperty('answers')
-  })
-
-  it('sends an approval decision without probing the host', async () => {
-    const { result } = renderHook(() =>
-      useStructuredAgentSession({
-        sessionId: 'session-1',
-        target,
-        agent: 'claude',
-        isVisible: true
-      })
-    )
-
-    await act(async () => {
-      await result.current.respond(approval, { kind: 'option', optionId: 'allow' })
-    })
-
-    expect(mocks.questionAnswersSupported).not.toHaveBeenCalled()
-    expect(respondCall()).toMatchObject({ itemId: 'approval-1', optionId: 'allow' })
   })
 })

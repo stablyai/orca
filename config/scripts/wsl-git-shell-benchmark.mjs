@@ -8,8 +8,8 @@ import { createJiti } from 'jiti'
 import {
   BENCHMARK_SAMPLE_AGGREGATION,
   summarizeBenchmarkSamples
-} from './benchmark-sample-summary.mjs'
-import { buildCounterbalancedSchedule } from './counterbalanced-benchmark-schedule.mjs'
+} from './performance/measurement/benchmark-sample-summary.mjs'
+import { buildCounterbalancedSchedule } from './performance/measurement/counterbalanced-benchmark-schedule.mjs'
 
 const DEFAULT_SAMPLES = 20
 const DEFAULT_WARMUPS = 3
@@ -131,7 +131,9 @@ async function main() {
   const { buildWslLoginShellCommand } = await jiti.import(
     '../../src/shared/wsl-login-shell-command.ts'
   )
-  const { quotePosixShell } = await jiti.import('../../src/shared/shell-argument-quoting.ts')
+  const { quotePosixShell } = await jiti.import(
+    '../../src/shared/shell/launch/shell-argument-quoting.ts'
+  )
 
   const loginProbe = buildWslLoginShellCommand(
     `printf '\\n__ORCA_PATH__%s\\n__ORCA_GIT__%s\\n__ORCA_HOME__%s\\n' "$PATH" "$(command -v git)" "$HOME"`

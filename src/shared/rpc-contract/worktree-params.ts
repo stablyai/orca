@@ -1,7 +1,8 @@
 import { z } from 'zod'
 import { normalizeExecutionHostId } from '../execution-host'
-import { isTuiAgent } from '../tui-agent-config'
-import type { TuiAgent } from '../tui-agent'
+import { CLIENT_PROVENANCE_SNAPSHOT_MAX } from '../automation-workspace-provenance'
+import { isTuiAgent } from '../agent-launch/catalog/tui-agent-config'
+import type { TuiAgent } from '../agent-launch/catalog/tui-agent'
 import {
   OptionalBoolean,
   OptionalFiniteNumber,
@@ -10,11 +11,11 @@ import {
   TriStateLinkedIssue
 } from './rpc-param-primitives'
 import { RUNTIME_NAVIGATION_TARGETS } from '../runtime-navigation'
-import { WorkspaceLinkedItemSchema } from '../workspace-linked-item-schema'
-import { WorkspaceAttachmentsSchema } from '../workspace-attachment-schema'
+import { WorkspaceLinkedItemSchema } from '../workspace-attachments/workspace-linked-item-schema'
+import { WorkspaceAttachmentsSchema } from '../workspace-attachments/workspace-attachment-schema'
 import { DiffCommentSchema, MobileDiffReviewSchema } from '../diff-comment-schema'
 import { TaskSourceContextSchema } from '../task-source-context-schema'
-import { isWorkspaceLinkedItemSourceContextMatch } from '../workspace-linked-item-source-context'
+import { isWorkspaceLinkedItemSourceContextMatch } from '../workspace-attachments/workspace-linked-item-source-context'
 
 export const OptionalExecutionHostId = z
   .string()
@@ -45,6 +46,21 @@ export const AutomationWorkspaceProvenanceRequest = z.object({
   createRequestId: z.string()
 })
 
+// A label for another owner's run: the host records it only for automations it does not hold, and stamps createdAt.
+const ProvenanceId = z.string().min(1).max(256)
+const ProvenanceSnapshot = z.string().max(CLIENT_PROVENANCE_SNAPSHOT_MAX)
+export const ClientAutomationWorkspaceProvenance = z.object({
+  automationId: ProvenanceId,
+  automationNameSnapshot: ProvenanceSnapshot,
+  automationRunId: ProvenanceId,
+  automationRunTitleSnapshot: ProvenanceSnapshot,
+  executionTargetType: z.enum(['local', 'ssh']),
+  executionTargetId: z.string().max(256),
+  projectId: z.string().max(256),
+  repoId: z.string().max(256).optional(),
+  hostId: OptionalExecutionHostId
+})
+
 // Descriptive provenance grants no authority; the host stamps createdAt to avoid client-clock sort skew.
 export const CliWorkspaceProvenanceRequest = z.object({
   callerTerminalHandle: OptionalString
@@ -70,6 +86,8 @@ export const WorktreeTeardownMissingTerminalsParams = WorktreeDetectedListParams
 export const WorktreePsParams = z.object({
   limit: OptionalFiniteNumber,
   afterSnapshotId: z.string().min(1).max(128).nullable().optional(),
+  // Opt-in: the caller holds afterSnapshotId's rows and can rebuild a catalog from rowsFromBase; older hosts ignore it.
+  acceptRowDelta: z.literal(true).optional(),
   supportsWorktreeVisibilitySourceDefaults: z.literal(true).optional(),
   // Opt-in: wait lookups read screens and probe PTYs, too costly for pollers; older hosts omit agentWait.
   includeAgentWait: z.literal(true).optional()
@@ -121,6 +139,7 @@ export function assertLinkedWorkItemSourceContextMatch(
 export const WorktreeSet = WorktreeSelector.extend({
   // Empty clears to branch/folder fallback; OptionalString would drop remote clears and restore the old name.
   displayName: OptionalPlainString,
+  firstAgentMessageRenameError: z.null().optional(),
   // Preserve empty comment updates instead of coercing them to absent.
   comment: OptionalPlainString,
   linkedIssue: TriStateLinkedIssue,
@@ -141,6 +160,8 @@ export const WorktreeSet = WorktreeSelector.extend({
   linkedTaskSourceContext: TaskSourceContextSchema.nullable().optional(),
   isArchived: OptionalBoolean,
   isUnread: OptionalBoolean,
+  // Explicit whole-workspace read intent; older hosts strip this field.
+  acknowledgeAttention: z.boolean().optional(),
   isPinned: OptionalBoolean,
   sortOrder: OptionalFiniteNumber,
   manualOrder: OptionalFiniteNumber,
@@ -177,6 +198,8 @@ export const WorktreeSet = WorktreeSelector.extend({
 })
 
 export const WorktreeRemove = WorktreeSelector.extend({
+  // Omission retains legacy/UI metadata policy; explicit CLI intent overrides it.
+  deleteBranch: OptionalBoolean,
   hostId: OptionalExecutionHostId,
   force: OptionalBoolean,
   // Desktop force also means ordinary confirmed delete; PTY-stop waivers need their own field (#11960).
@@ -211,7 +234,9 @@ export const WorktreeResolvePrBase = z.object({
     .pipe(z.number().int().positive('Missing PR number')),
   headRefName: OptionalString,
   baseRefName: OptionalString,
-  isCrossRepository: OptionalBoolean
+  isCrossRepository: OptionalBoolean,
+  /** The user creating or launching from the PR; older hosts drop it. */
+  wakeWslDistro: OptionalBoolean
 })
 
 export const WorktreeResolveMrBase = z.object({
@@ -225,5 +250,7 @@ export const WorktreeResolveMrBase = z.object({
     .pipe(z.number().int().positive('Missing MR number')),
   sourceBranch: OptionalString,
   targetBranch: OptionalString,
-  isCrossRepository: OptionalBoolean
+  isCrossRepository: OptionalBoolean,
+  /** The user creating from the MR; older hosts drop it. */
+  wakeWslDistro: OptionalBoolean
 })

@@ -4,6 +4,7 @@ import {
   LinearCustomViewTable,
   LinearCollectionNotice
 } from '@/components/linear-project-view-surfaces'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 export function TaskPageLinearCustomViewList({
   model
 }: {
@@ -40,7 +41,7 @@ export function TaskPageLinearCustomViewList({
           onSelectView={openLinearCustomViewContext}
           onOpenView={(view) => {
             if (view.url) {
-              void window.api.shell.openUrl(view.url)
+              openAppHttpLink(view.url)
             }
           }}
         />

@@ -1,6 +1,6 @@
 import { useCallback } from 'react'
 import { toast } from 'sonner'
-import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-space-types'
+import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-disk-space/workspace-space-types'
 import {
   toWorktreeRemovalTarget,
   type WorktreeRemovalTarget
@@ -8,10 +8,10 @@ import {
 import { composeWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import { useAppStore } from '../../store'
 import { getWorktreeOnHostFromState } from '../../store/selectors'
-import { runWorktreeBatchDelete } from '../sidebar/delete-worktree-flow'
-import { dismissDeleteWorktreeFailureToast } from '../sidebar/delete-worktree-failure-toast'
-import { showWorkspaceListChangedToast } from '../sidebar/stale-workspace-list-toast'
-import { toWorktreeDeleteIdentities } from '../sidebar/worktree-delete-request'
+import { runWorktreeBatchDelete } from '../sidebar/workspace-actions/deletion/delete-worktree-flow'
+import { dismissDeleteWorktreeFailureToast } from '../sidebar/workspace-actions/deletion/delete-worktree-failure-toast'
+import { showWorkspaceListChangedToast } from '../sidebar/worktree-list/listing/stale-workspace-list-toast'
+import { toWorktreeDeleteIdentities } from '../sidebar/workspace-actions/deletion/worktree-delete-request'
 import { translate } from '@/i18n/i18n'
 import type { WorkspaceSpaceSortKey } from './workspace-space-presentation'
 import { useWorkspaceSpaceManagerBindings } from './use-workspace-space-manager-bindings'
@@ -19,7 +19,7 @@ import { useWorkspaceSpaceDecisionProjection } from './use-workspace-space-decis
 import { useWorkspaceSpaceGitRefreshAction } from './use-workspace-space-git-refresh-action'
 import { useWorkspaceSpaceManagerProjection } from './use-workspace-space-manager-projection'
 import { getWorkspaceSpaceWorktreeIdentity } from './workspace-space-delete-selection'
-import { blockRemovalForUnsavedFiles } from '../sidebar/removal-unsaved-files'
+import { blockRemovalForUnsavedFiles } from '../sidebar/workspace-actions/deletion/removal-unsaved-files'
 
 export function useWorkspaceSpaceManagerPanel() {
   const bindings = useWorkspaceSpaceManagerBindings()
@@ -140,18 +140,14 @@ export function useWorkspaceSpaceManagerPanel() {
               'Workspaces deleted'
             ),
         {
-          description:
-            deletedTargets.length === 1
-              ? translate(
-                  'auto.components.status.bar.WorkspaceSpaceManagerPanel.removedFromSpace_one',
-                  '{{count}} workspace removed from Space.',
-                  { count: deletedTargets.length }
-                )
-              : translate(
-                  'auto.components.status.bar.WorkspaceSpaceManagerPanel.removedFromSpace_other',
-                  '{{count}} workspaces removed from Space.',
-                  { count: deletedTargets.length }
-                )
+          description: translate(
+            'auto.components.status.bar.WorkspaceSpaceManagerPanel.removedFromSpace',
+            '{{count}} workspaces removed from Space.',
+            {
+              count: deletedTargets.length,
+              defaultValue_one: '{{count}} workspace removed from Space.'
+            }
+          )
         }
       )
     },

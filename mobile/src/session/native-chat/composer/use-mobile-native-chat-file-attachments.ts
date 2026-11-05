@@ -1,4 +1,4 @@
-import { createUuidV4 } from '../../../../../src/shared/uuid-v4'
+import { createNonSecureContextUuid as createUuidV4 } from '../../../../../src/shared/non-secure-context-uuid'
 import {
   useMobileNativeChatDraftInputs,
   updateMobileNativeChatDraftInputs,
@@ -20,7 +20,10 @@ export type MobileNativeChatFileAttachments = {
   readonly files: readonly PendingNativeChatFile[]
   readonly attachFiles: () => Promise<void>
   // Drop only files removed or carried by this send; attachments added while sending must survive.
-  readonly removeFiles: (ids: readonly string[]) => void
+  readonly removeFiles: (
+    ids: readonly string[],
+    destination?: MobileNativeChatDraftDestination
+  ) => void
 }
 
 export function useMobileNativeChatFileAttachments(args: {
@@ -33,7 +36,7 @@ export function useMobileNativeChatFileAttachments(args: {
   const { client, sessionId, scopeKey, enabled, showToast } = args
 
   const picker = useMediaPicker()
-  const files = useMobileNativeChatDraftInputs(scopeKey).files
+  const files = useMobileNativeChatDraftInputs(scopeKey, 'files')
 
   const updateScope = useCallback(
     (
@@ -92,10 +95,11 @@ export function useMobileNativeChatFileAttachments(args: {
   }, [client, enabled, picker, scopeKey, sessionId, showToast, updateScope])
 
   const removeFiles = useCallback(
-    (ids: readonly string[]) => {
-      if (scopeKey) {
+    (ids: readonly string[], destination?: MobileNativeChatDraftDestination) => {
+      const target = destination ?? scopeKey
+      if (target) {
         const removed = new Set(ids)
-        updateScope(scopeKey, (current) => current.filter((file) => !removed.has(file.id)))
+        updateScope(target, (current) => current.filter((file) => !removed.has(file.id)))
       }
     },
     [scopeKey, updateScope]

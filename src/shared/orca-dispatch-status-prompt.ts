@@ -119,6 +119,36 @@ export function findOrcaDispatchTaskMarkerIndex(value: string): number {
     : value.indexOf(ORCA_DISPATCH_STATUS_TASK_MARKER)
 }
 
+/** Offset into the original task input; detection is bounded, the authored suffix is not. */
+export function orcaDispatchTaskBodyOffset(value: string): number | undefined {
+  const start = findOrcaDispatchPreambleStart(value)
+  if (start === -1) {
+    return undefined
+  }
+  const scanEnd = Math.min(value.length, ORCA_DISPATCH_STATUS_SOURCE_SCAN_LIMIT)
+  const scan = value.slice(start, scanEnd)
+  const marker = findOrcaDispatchTaskMarkerIndex(scan)
+  if (marker === -1) {
+    return undefined
+  }
+  let offset = start + marker + ORCA_DISPATCH_STATUS_TASK_MARKER.length
+  // A marker at the scan bound must still end its original delimiter line.
+  if (
+    offset < value.length &&
+    !isLineBreak(value.charCodeAt(offset)) &&
+    (scan.includes('\n') || scan.includes('\r'))
+  ) {
+    return undefined
+  }
+  if (value.charCodeAt(offset) === 13) {
+    offset++
+  }
+  if (value.charCodeAt(offset) === 10) {
+    offset++
+  }
+  return offset
+}
+
 function isLineBreak(code: number): boolean {
   return code === 10 || code === 13
 }

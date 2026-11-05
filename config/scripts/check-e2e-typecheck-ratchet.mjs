@@ -8,7 +8,7 @@ import {
   parseCountBaseline,
   pruneCountBaseline,
   totalCount
-} from './ratchet-baseline.mjs'
+} from './static-analysis/ratchet-baseline/ratchet-baseline.mjs'
 
 // Ratchet tests/ type errors downward: missing helpers otherwise hide until gated hosts run their specs (#30231).
 
@@ -53,6 +53,7 @@ export function main(
     console.error(`${file}: ${now} type error(s), baseline allows ${allowed}.`)
   }
   if (grown.length > 0) {
+    console.error(tscOutput.trimEnd())
     console.error(`See the errors with: pnpm typecheck:e2e`)
   }
   for (const { file, now, allowed } of shrunk) {

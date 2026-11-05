@@ -14,8 +14,8 @@ import {
 } from '@/lib/setup-script-prompt'
 import { checkRuntimeHooks, inspectRuntimeSetupScriptImports } from '@/runtime/runtime-hooks-client'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
-import type { SetupScriptImportCandidate } from '../../../../shared/setup-script-imports'
-import { buildSetupScriptPromptActionTelemetry } from '../../../../shared/setup-script-telemetry'
+import type { SetupScriptImportCandidate } from '../../../../shared/workspace-setup/setup-script-imports'
+import { buildSetupScriptPromptActionTelemetry } from '../../../../shared/workspace-setup/setup-script-telemetry'
 import { SetupScriptPromptCardShell } from './SetupScriptPromptCardShell'
 import { showSavedInProjectSettingsToast } from './SetupScriptPromptToast'
 import { openSetupScriptSettings } from './open-setup-script-settings'
@@ -270,17 +270,15 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
             onOpenSettings: () => openLocalCommandSettings(importedRepoId, importedHostId),
             description:
               skippedCount > 0
-                ? skippedCount === 1
-                  ? translate(
-                      'auto.components.sidebar.SetupScriptPromptCard.savedWithSkippedFields_one',
-                      '{{count}} unsupported field skipped. Saved the setup command.',
-                      { count: skippedCount }
-                    )
-                  : translate(
-                      'auto.components.sidebar.SetupScriptPromptCard.savedWithSkippedFields_other',
-                      '{{count}} unsupported fields skipped. Saved the setup command.',
-                      { count: skippedCount }
-                    )
+                ? translate(
+                    'auto.components.sidebar.SetupScriptPromptCard.savedWithSkippedFields',
+                    '{{count}} unsupported fields skipped. Saved the setup command.',
+                    {
+                      count: skippedCount,
+                      defaultValue_one:
+                        '{{count}} unsupported field skipped. Saved the setup command.'
+                    }
+                  )
                 : translate(
                     'auto.components.sidebar.SetupScriptPromptCard.savedSetupCommand',
                     'Saved the setup command.'

@@ -1,9 +1,10 @@
 import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
-import { translate } from '@/i18n/i18n'
+import { getIntlLocale, translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { Button } from '@/components/ui/button'
 import { ArrowRight, ExternalLink } from 'lucide-react'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 export function TaskPageGitLabItemList({
   model
 }: {
@@ -101,7 +102,7 @@ export function TaskPageGitLabItemList({
                 · {item.state}
               </span>
               <span className="text-xs text-muted-foreground">
-                {item.updatedAt ? new Date(item.updatedAt).toLocaleDateString() : ''}
+                {item.updatedAt ? new Date(item.updatedAt).toLocaleDateString(getIntlLocale()) : ''}
               </span>
               <div className="flex items-center justify-end gap-1">
                 <Tooltip>
@@ -139,7 +140,7 @@ export function TaskPageGitLabItemList({
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation()
-                    void window.api.shell.openUrl(item.url)
+                    openAppHttpLink(item.url, { event: e })
                   }}
                   aria-label={translate('auto.components.TaskPage.bcdc1330b2', 'Open in GitLab')}
                   className="text-muted-foreground hover:text-foreground"

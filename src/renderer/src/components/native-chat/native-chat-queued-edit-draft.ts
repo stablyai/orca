@@ -1,6 +1,5 @@
-import type { JSONContent } from '@tiptap/react'
-import type { AgentJournalMessageItem } from '../../../../shared/agent-session-journal-types'
-import { imageReferenceToken } from '../../../../shared/native-chat-image-reference'
+import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import { withoutImageReference } from '../../../../shared/native-chat/native-chat-image-reference'
 import {
   imageReferencesToPromptMarkers,
   promptMarkersToImageReferences
@@ -10,10 +9,14 @@ import {
   queuedMessageEditableText,
   type QueuedMessageEdit
 } from '../../../../shared/queued-message-edit'
-import { pickedSkillsInText } from '../../../../shared/structured-agent-session-send-mutation'
+import { pickedSkillsInText } from '../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { createUuidV4 } from '../../../../shared/uuid-v4'
 import { promptSkillRefs } from './native-chat-prompt-document'
-import { promptTextContent, withoutImageReferenceNodes } from './native-chat-prompt-document-text'
+import {
+  promptTextContent,
+  seedPromptSkillReferences,
+  withoutImageReferenceNodes
+} from './native-chat-prompt-document-text'
 import {
   appendToNativeChatComposerDraft,
   redirectNativeChatEditDraft,
@@ -41,53 +44,6 @@ import type {
   NativeChatComposerDraftImage
 } from './native-chat-composer-draft-storage'
 
-function seedSkills(
-  node: JSONContent,
-  body: AgentJournalMessageItem,
-  occurrences = new Map<string, number>()
-): JSONContent {
-  if (node.type === 'text' && node.text) {
-    return node
-  }
-  return {
-    ...node,
-    content: node.content?.flatMap((child) => {
-      if (child.type !== 'text' || !child.text) {
-        return [seedSkills(child, body, occurrences)]
-      }
-      const pieces: JSONContent[] = []
-      const text = child.text
-      let start = 0
-      const names = [...new Set(body.skills?.map(({ name }) => name) ?? [])]
-        .sort((a, b) => b.length - a.length)
-        .map((name) => name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
-      const pattern = new RegExp(`[$/](?:${names.join('|')})(?![\\w:-])`, 'gu')
-      for (const match of text.matchAll(pattern)) {
-        if (match[0].startsWith('/') && match.index > 0 && !/\s/u.test(text[match.index - 1])) {
-          continue
-        }
-        const name = match[0].slice(1)
-        const matching = body.skills?.filter((skill) => skill.name === name) ?? []
-        const occurrence = occurrences.get(name) ?? 0
-        const skill = matching[occurrence] ?? matching[0]
-        occurrences.set(name, occurrence + 1)
-        if (!skill) {
-          continue
-        }
-        if (match.index > start) {
-          pieces.push({ type: 'text', text: text.slice(start, match.index) })
-        }
-        pieces.push({ type: 'nativeChatSkill', attrs: { token: match[0], path: skill.path } })
-        start = match.index + match[0].length
-      }
-      if (start < text.length) {
-        pieces.push({ type: 'text', text: text.slice(start) })
-      }
-      return pieces
-    })
-  }
-}
-
 export type NativeChatQueuedEditDraft = {
   scopeKey: string
   destination: string
@@ -111,7 +67,7 @@ export function createNativeChatQueuedEditDraft(
   )
   const initial: NativeChatComposerDraft = {
     text,
-    document: seedSkills(promptTextContent(text), body),
+    document: seedPromptSkillReferences(promptTextContent(text), body.skills),
     images: kept.map(({ id, block }) => ({ id, path: block.path ?? block.url ?? '' }))
   }
   openNativeChatEditDraft(scopeKey, initial)
@@ -180,7 +136,7 @@ export function handBackNativeChatQueuedEdit(
     draft.images.some((image) => sameQueuedEditImage(entry.image, image))
   )
   for (const { id } of kept) {
-    text = text.replaceAll(imageReferenceToken(id), '')
+    text = withoutImageReference(text, id)
     if (document) {
       document = withoutImageReferenceNodes(document, id)
     }

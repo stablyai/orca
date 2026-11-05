@@ -2,7 +2,7 @@ import { z } from 'zod'
 import {
   isAgentLaunchResult,
   type AgentLaunchResult
-} from '../../../src/shared/agent-launch-intent'
+} from '../../../src/shared/agent-launch/contracts/agent-launch-intent'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
 import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
 import {

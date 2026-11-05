@@ -1,7 +1,6 @@
 import { StyleSheet } from 'react-native'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { colors, feedback, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
-import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
 
 export const mobileDiffReviewControlStyles = themedStyleSheet(() => ({
   footer: {
@@ -16,56 +15,35 @@ export const mobileDiffReviewControlStyles = themedStyleSheet(() => ({
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.borderSubtle
   },
-  fileActionRow: {
-    flexDirection: 'row',
-    gap: spacing.sm
-  },
   footerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm
   },
+  // Sized like SheetPrimaryButton so the bar matches every other bottom action.
   navButton: {
-    width: 44,
-    minHeight: 44,
-    borderRadius: radii.button,
+    width: 48,
+    height: 48,
+    borderRadius: radii.control,
     backgroundColor: colors.bgRaised,
     alignItems: 'center',
     justifyContent: 'center'
   },
-  footerButton: {
-    minHeight: 44,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.md,
-    borderRadius: radii.button,
-    backgroundColor: colors.bgRaised
-  },
-  footerButtonText: {
-    color: colors.textSecondary,
-    fontSize: typography.bodySize,
-    fontWeight: '700'
-  },
   primaryButton: {
     flex: 1,
-    minHeight: 44,
+    height: 48,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.xs,
     paddingHorizontal: spacing.md,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     backgroundColor: colors.textPrimary
-  },
-  primaryButtonDone: {
-    backgroundColor: colors.statusGreen
   },
   primaryButtonText: {
     color: colors.bgBase,
-    fontSize: typography.bodySize,
-    fontWeight: '800'
+    fontSize: 15,
+    fontWeight: '600'
   },
   secondaryButton: {
     flex: 1,
@@ -75,8 +53,11 @@ export const mobileDiffReviewControlStyles = themedStyleSheet(() => ({
     justifyContent: 'center',
     gap: spacing.xs,
     paddingHorizontal: spacing.md,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     backgroundColor: colors.bgRaised
+  },
+  sheetSecondaryButton: {
+    backgroundColor: colors.sheetGroup
   },
   secondaryButtonText: {
     color: colors.textSecondary,
@@ -89,10 +70,10 @@ export const mobileDiffReviewControlStyles = themedStyleSheet(() => ({
     fontWeight: '700'
   },
   buttonPressed: {
-    opacity: 0.76
+    opacity: feedback.pressedOpacity
   },
   buttonDisabled: {
-    opacity: 0.45
+    opacity: feedback.disabledOpacity
   },
   composerHeader: {
     flexDirection: 'row',
@@ -103,26 +84,22 @@ export const mobileDiffReviewControlStyles = themedStyleSheet(() => ({
   },
   drawerTitle: {
     color: colors.textPrimary,
-    fontSize: typography.titleSize,
-    fontWeight: '700'
+    fontSize: 16,
+    fontWeight: '600'
   },
   drawerSubtitle: {
     color: colors.textMuted,
     fontSize: typography.metaSize,
     marginTop: 2
   },
-  composerInput: {
-    minHeight: 112,
-    borderRadius: radii.input,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
-    backgroundColor: colors.bgPanel,
-    color: colors.textPrimary,
-    // Through the seam, as the commit bar is: 14px focuses into a zoomed page on iOS.
-    fontSize: TEXT_INPUT_FONT_SIZE,
-    lineHeight: 20,
-    padding: spacing.md,
-    textAlignVertical: 'top'
+  rangeField: {
+    minHeight: 96,
+    alignItems: 'flex-start'
+  },
+  rangeError: {
+    marginTop: spacing.sm,
+    color: colors.statusRed,
+    fontSize: typography.metaSize
   },
   drawerButtonRow: {
     flexDirection: 'row',

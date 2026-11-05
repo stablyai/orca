@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
-import { projectRemovalTargets } from '../../removal-unsaved-files'
+import { projectRemovalTargets } from '../../workspace-actions/deletion/removal-unsaved-files'
 import { confirmUnsavedDiscard } from '@/store/slices/worktrees/teardown/removed-workspace-unsaved-files'
 import { translate } from '@/i18n/i18n'
 import { selectProjectGroupRemovalTargets } from '@/store/slices/project-group-removal-targets'
@@ -61,18 +61,16 @@ function reportProjectGroupDeleteFailures(result: {
         'Some projects could not be removed from Orca'
       ),
       {
-        description:
-          requestedCount === 1
-            ? translate(
-                'auto.components.sidebar.WorktreeList.groupProjectsRemained_one',
-                '{{remaining}} of {{count}} contained project remained after deleting the group.',
-                { remaining: result.failedProjectRemovals.length, count: requestedCount }
-              )
-            : translate(
-                'auto.components.sidebar.WorktreeList.groupProjectsRemained_other',
-                '{{remaining}} of {{count}} contained projects remained after deleting the group.',
-                { remaining: result.failedProjectRemovals.length, count: requestedCount }
-              )
+        description: translate(
+          'auto.components.sidebar.WorktreeList.groupProjectsRemained',
+          '{{remaining}} of {{count}} contained projects remained after deleting the group.',
+          {
+            remaining: result.failedProjectRemovals.length,
+            count: requestedCount,
+            defaultValue_one:
+              '{{remaining}} of {{count}} contained project remained after deleting the group.'
+          }
+        )
       }
     )
   }

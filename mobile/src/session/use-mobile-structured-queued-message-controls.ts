@@ -1,22 +1,21 @@
 import type { DragReorderMove } from '../components/drag-reorder-positions'
 import { useMobileQueuedMessageComposerActions } from './use-mobile-queued-message-composer-actions'
-// The host owns queued drafts; render its published cards even when it cannot queue new sends.
-
 import { useCallback, useMemo } from 'react'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
-} from '../../../src/shared/agent-session-journal-types'
-import { agentSessionVisibleFailureFacts } from '../../../src/shared/agent-session-visible-failures'
+} from '../../../src/shared/agent-session/journal/agent-session-journal-types'
+import { agentSessionVisibleFailureFacts } from '../../../src/shared/agent-session/failures/agent-session-visible-failures'
 import { mapSettledWithConcurrency } from '../../../src/shared/map-with-concurrency'
 import type {
   AgentSessionQueuedMessage,
   AgentSessionQueuedMessageDeleteResult,
   AgentSessionQueuedMessagesResumeResult,
-  AgentSessionQueuePause,
-  AgentSessionSendResult
-} from '../../../src/shared/agent-session-wire'
-import { queuedMessagesQueuePause } from '../../../src/shared/structured-agent-session-queued-cards'
+  AgentSessionQueuePause
+} from '../../../src/shared/agent-session/requests/agent-session-queued-message-wire'
+import type { AgentSessionSendResult } from '../../../src/shared/agent-session/agent-session-wire'
+import { queuedMessagesQueuePause } from '../../../src/shared/agent-session/view/structured-agent-session-queued-cards'
 import {
   mobileQueuedMessageCards,
   type MobileQueuedMessageCard
@@ -27,6 +26,7 @@ import {
   useMobileStructuredQueuedEdit,
   type MobileQueuedMessageInlineEditor
 } from './use-mobile-structured-queued-edit'
+// The host owns queued drafts; render its published cards even when it cannot queue new sends.
 
 const CLEAR_DELETE_CONCURRENCY = 8
 
@@ -70,6 +70,7 @@ export function useMobileStructuredQueuedMessageControls(args: {
   onSendError: (message: string) => void
   onActionResolved?: () => void
 }): MobileStructuredQueuedMessageControls {
+  const t = useMobileTranslation()
   const {
     appendComposerText,
     mutate,
@@ -87,26 +88,31 @@ export function useMobileStructuredQueuedMessageControls(args: {
   })
   const orderedMessages = composerActions.messages
   const agentWorking = args.agentWorking === true
-  const cards = useMemo(
-    () =>
-      mobileQueuedMessageCards(orderedMessages, submissions, {
-        agentWorking,
-        queuePaused: queuePause !== null,
-        agentName: args.agentName,
-        statedFailures: queuedMessages?.some((draft) => draft.state === 'returned')
-          ? agentSessionVisibleFailureFacts(args.journalItems ?? [])
-          : []
-      }),
-    [
+  const cards = useMemo(() => {
+    const visibleCards = mobileQueuedMessageCards(queuedMessages, submissions, {
       agentWorking,
-      args.agentName,
-      args.journalItems,
-      orderedMessages,
-      queuePause,
-      queuedMessages,
-      submissions
-    ]
-  )
+      queuePaused: queuePause !== null,
+      agentName: args.agentName,
+      statedFailures: queuedMessages?.some((draft) => draft.state === 'returned')
+        ? agentSessionVisibleFailureFacts(args.journalItems ?? [])
+        : []
+    })
+    // Preview changes display order; published membership and current handoff visibility stay intact.
+    const visibleById = new Map(visibleCards.map((card) => [card.messageId, card]))
+    return (orderedMessages ?? []).flatMap((message) => {
+      const card = visibleById.get(message.messageId)
+      return card ? [card] : []
+    })
+  }, [
+    agentWorking,
+    args.agentName,
+    args.journalItems,
+    orderedMessages,
+    queuePause,
+    queuedMessages,
+    submissions,
+    t
+  ])
   const { begin: beginInlineEdit, editor } = useMobileStructuredQueuedEdit({
     ...args,
     enabled: args.enabled && args.editCapable === true,

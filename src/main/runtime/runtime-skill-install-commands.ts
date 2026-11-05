@@ -12,12 +12,17 @@ import type {
 import type { SkillInstallRequest, SkillInstallResult } from '../../shared/skill-install-contract'
 import type { RuntimeSkillCommandHost } from './runtime-skill-command-contract'
 import type {
-  BundledSkillExecuteRequest,
+  BundledSkillAutoUpdateRequest,
+  LocalBundledSkillExecuteRequest,
   BundledSkillInstallResult,
   BundledSkillPlan,
-  BundledSkillPlanRequest
+  LocalBundledSkillPlanRequest
 } from '../../shared/bundled-skill-plan'
-import { executeLocalBundledSkills, planLocalBundledSkills } from './runtime-bundled-skill-install'
+import {
+  autoUpdateLocalBundledSkills,
+  executeLocalBundledSkills,
+  planLocalBundledSkills
+} from './runtime-bundled-skill-install'
 import {
   createSkillInstallAuthority,
   folderExecutionHostId,
@@ -171,13 +176,18 @@ export class RuntimeSkillInstallCommands {
       this.progress.delete(request.operationId)
     }
   }
-  planLocalBundledSkills(request: BundledSkillPlanRequest): Promise<BundledSkillPlan> {
+  planLocalBundledSkills(request: LocalBundledSkillPlanRequest): Promise<BundledSkillPlan> {
     return planLocalBundledSkills(this.host, request)
   }
   executeLocalBundledSkills(
-    request: BundledSkillExecuteRequest
+    request: LocalBundledSkillExecuteRequest
   ): Promise<BundledSkillInstallResult> {
     return executeLocalBundledSkills(this.host, request)
+  }
+  autoUpdateLocalBundledSkills(
+    request: BundledSkillAutoUpdateRequest
+  ): Promise<BundledSkillInstallResult> {
+    return autoUpdateLocalBundledSkills(this.host, request)
   }
   getSharedSkillInstallProgress(operationId: string) {
     return this.progress.get(operationId) ?? null

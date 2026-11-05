@@ -1,7 +1,7 @@
 import { getFishClaudeShellFunction } from './claude-shell-function'
 import { FISH_WSL_CWD_REPORT_FUNCTION } from './fish-wsl-cwd-report'
 import { buildPosixStdoutFence, type PosixStdoutFence } from './posix-stdout-fence'
-import { quotePosixShell } from './shell-argument-quoting'
+import { quotePosixShell } from './shell/launch/shell-argument-quoting'
 
 /** Use --exec to preserve guest argv. WSL’s -- expands $name even without a shell, corrupting scripts such as awk field references; host escaping cannot reliably prevent it. */
 export function buildWslExecArgs(
@@ -76,12 +76,33 @@ export function buildWslInteractiveLoginShellCommand(): string {
     '    fi',
     '    ;;',
     // Why: a WSL fish pane gets no shell-ready wrapper or XDG handoff, so this is its only `claude`.
+    // fish before 2.7 rejects -C and would fail the pane; it starts plain (no claude, no cwd hook).
+    // fish 2.x prints --version to stderr, so both streams are read.
     '  fish)',
-    `    exec "$_orca_wsl_shell" -l -C ${quotePosixShell(getWslFishInitCommand())}`,
+    '    _orca_fish_version=$("$_orca_wsl_shell" --version 2>&1)',
+    '    case "${_orca_fish_version##*version }" in',
+    '      [01].*|2.[0-6]|2.[0-6].*) ;;',
+    `      *) exec "$_orca_wsl_shell" -l -C ${quotePosixShell(getWslFishInitCommand())} ;;`,
+    '    esac',
     '    ;;',
     '  zsh)',
     '    if [ -n "${_orca_shell_ready_root:-}" ] && [ -d "${_orca_shell_ready_root}/zsh" ]; then',
     '      export ZDOTDIR="${_orca_shell_ready_root}/zsh"',
+    '    fi',
+    '    ;;',
+    // Why ENV: dash has no rcfile flag or prompt hook; an interactive sh reads $ENV after ~/.profile.
+    // The shell expands ENV's value, so a root containing $, ` or \ is skipped, never mangled.
+    '  sh|dash|ash)',
+    '    if [ -n "${_orca_shell_ready_root:-}" ] && [ -f "${_orca_shell_ready_root}/sh/env" ]; then',
+    '      case "$_orca_shell_ready_root" in',
+    "        *'$'*|*'`'*|*'\\'*) ;;",
+    '        *)',
+    // If ~/.profile replaces ENV, nothing of ours runs after it to unset this; it then holds only the
+    // user's own former ENV value.
+    '          if [ -n "${ENV+x}" ]; then export ORCA_WSL_USER_ENV="$ENV"; fi',
+    '          export ENV="${_orca_shell_ready_root}/sh/env"',
+    '          ;;',
+    '      esac',
     '    fi',
     '    ;;',
     'esac',

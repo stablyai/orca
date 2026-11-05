@@ -2,7 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as FsPromises from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { isAiVaultScanCancelledError, type AiVaultScanIssue } from '../../shared/ai-vault-types'
+import {
+  isAiVaultScanCancelledError,
+  type AiVaultScanIssue
+} from '../../shared/ai-vault/contracts/ai-vault-types'
 
 const fsMocks = vi.hoisted(() => ({ readdir: vi.fn(), stat: vi.fn() }))
 vi.mock('node:fs/promises', async (importOriginal) => ({
@@ -116,7 +119,8 @@ describe('fresh discovery pipeline', () => {
       {
         agent: 'claude',
         path: `${file}.meta`,
-        message: 'Session metadata could not be read this scan.'
+        message: 'Session metadata could not be read this scan.',
+        messageCode: 'sessionMetadataUnreadable'
       },
       { agent: 'claude', path: file, message: expect.stringMatching(/Invalid (?:time value|Date)/) }
     ])
@@ -273,7 +277,8 @@ describe('fresh discovery pipeline', () => {
       {
         agent: 'claude',
         path: `${paths[1]}.meta`,
-        message: 'Session metadata could not be read this scan.'
+        message: 'Session metadata could not be read this scan.',
+        messageCode: 'sessionMetadataUnreadable'
       }
     ])
   })

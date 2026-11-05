@@ -203,17 +203,11 @@ export function renderResourceUsageSummary({
       </div>
       {orphanCount > 0 && (
         <span className="shrink-0 text-yellow-500" aria-live="polite">
-          {orphanCount === 1
-            ? translate(
-                'auto.components.status.bar.ResourceUsageStatusSegment.orphanCount_one',
-                '{{count}} orphan',
-                { count: orphanCount }
-              )
-            : translate(
-                'auto.components.status.bar.ResourceUsageStatusSegment.orphanCount_other',
-                '{{count}} orphans',
-                { count: orphanCount }
-              )}
+          {translate(
+            'auto.components.status.bar.ResourceUsageStatusSegment.orphanCount',
+            '{{count}} orphans',
+            { count: orphanCount, defaultValue_one: '{{count}} orphan' }
+          )}
         </span>
       )}
     </div>

@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { durableSessionLayoutApply } from '../__fixtures__/main-layout-close-fixture'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { registerBoundPty } from '../bind-first-pane.test-fixture'
-import type { AgentStatusIpcPayload } from '../../../shared/agent-status-types'
+import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { OrcaRuntimeService, electronMocks } from '../orca-runtime-test-mocks.spec'
 import {
   HEADLESS_LEAF_ID,
@@ -651,7 +651,7 @@ describe('OrcaRuntimeService', () => {
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {
       await expect(
         runtime.closeMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'host-tab')
-      ).resolves.toEqual({ closed: true })
+      ).resolves.toEqual({ closed: true, retirementConfirmed: true })
       expect(closeTerminalTab).not.toHaveBeenCalled()
       expect(kill).toHaveBeenCalledWith(servePtyId)
       expect(getSession().terminalLayoutsByTabId['host-tab']).toBeUndefined()

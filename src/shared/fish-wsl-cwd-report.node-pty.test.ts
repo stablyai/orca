@@ -5,21 +5,35 @@ import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { fishRequirementViolation, resolveFishBinary } from './fish-binary-requirement'
 import { getWslFishInitCommand } from './wsl-login-shell-command'
+import { toWindowsWslPath } from './wsl-paths'
+import { parseFileUriPath } from '../main/daemon/osc7-file-uri'
 
 const FISH = resolveFishBinary(3)
 const FISH_PATH = FISH.available ? FISH.path : ''
 const itWithFish = FISH.available ? it : it.skip
 const PROMPT_MARK = 'ORCAFISH> '
 
-// Orca's reports and the foreign one carry no host; fish 4's own (file://<host>/…) are left out.
-function hostlessReports(output: string): string[] {
+type Report = { hosted: boolean; folder: string }
+
+// Every OSC 7 the run printed, read the way the daemon reads a WSL pane's (host ignored).
+function reports(output: string): Report[] {
   return output
     .split('\x1b]7;')
     .slice(1)
     .map((report) => report.slice(0, report.indexOf('\x07')))
-    .filter((uri) => uri.startsWith('file:///'))
-    .map((uri) => decodeURIComponent(uri.slice('file://'.length)))
+    .map((uri) => ({
+      hosted: !uri.startsWith('file:///'),
+      folder: parseFileUriPath(uri, { wslDistro: 'Ubuntu' }) ?? 'unparsed'
+    }))
 }
+
+// Orca's reports and the foreign one carry no host; fish 4 also sends its own, with one.
+const hostless = (output: string): string[] =>
+  reports(output)
+    .filter((report) => !report.hosted)
+    .map((report) => report.folder)
+
+const unc = (folder: string): string => toWindowsWslPath(folder, 'Ubuntu')
 
 describe('a WSL bridge fish pane reports its folder', () => {
   let home: string
@@ -103,7 +117,13 @@ describe('a WSL bridge fish pane reports its folder', () => {
     'at every prompt, after the user config, keeping their prompt and hook',
     async () => {
       const output = await runFish({ WSL_DISTRO_NAME: 'Ubuntu' })
-      expect(hostlessReports(output)).toEqual([home, deep, deep, '/elsewhere', deep])
+      expect(hostless(output)).toEqual([home, deep, deep, '/elsewhere', deep].map(unc))
+      // fish 4's own hosted reports name the same folders, so the two never disagree.
+      const hosted = reports(output).filter((report) => report.hosted)
+      expect(hosted.length > 0).toBe(FISH.majorVersion >= 4)
+      for (const report of hosted) {
+        expect([unc(home), unc(deep)]).toContain(report.folder)
+      }
       expect(output).toContain('USER_PROMPT_HOOK')
     },
     60_000
@@ -112,7 +132,7 @@ describe('a WSL bridge fish pane reports its folder', () => {
   itWithFish(
     'only inside WSL',
     async () => {
-      expect(hostlessReports(await runFish({}))).toEqual(['/elsewhere'])
+      expect(hostless(await runFish({}))).toEqual([unc('/elsewhere')])
     },
     60_000
   )

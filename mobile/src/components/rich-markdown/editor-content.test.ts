@@ -9,13 +9,14 @@ import type { RichMarkdownEditorDocument } from './document-host-seams'
 // Round-trip host generation unchanged so pre-replacement changes can be discarded; suppress document’s own rewrites to avoid echo.
 const started: RichMarkdownEditorDocument[] = []
 
-function editorDocument() {
+function editorDocument(loadImageSource?: (path: string) => Promise<string>) {
   document.body.innerHTML = RICH_MARKDOWN_EDITOR_MARKUP
   const posted: MobileRichMarkdownEditorMessage[] = []
   const document_ = createRichMarkdownEditorDocument(
     quietRichMarkdownEditorHost({
       postToHost: (message) => posted.push(message),
-      keyboardInsetSource: () => null
+      keyboardInsetSource: () => null,
+      loadImageSource
     })
   )
   started.push(document_)
@@ -36,44 +37,22 @@ afterEach(() => {
 })
 
 describe('the editor document content', () => {
-  it('carries the generation it was set under into every change', () => {
-    const editor = editorDocument()
-    editor.handle.setMarkdown('first', 4)
+  it('shows workspace images from the host and saves their markdown paths', async () => {
+    const loadImageSource = vi.fn(async (path: string) => `data:image/png;base64,${btoa(path)}`)
+    const editor = editorDocument(loadImageSource)
+    const markdown = '![Diagram](images/diagram.png)\n\n![Remote](https://example.com/remote.png)'
+    editor.handle.setMarkdown(markdown, 1)
+    await vi.waitFor(() =>
+      expect(editor.editor.querySelector('img')?.getAttribute('src')).toBe(
+        `data:image/png;base64,${btoa('images/diagram.png')}`
+      )
+    )
+    expect(loadImageSource).toHaveBeenCalledExactlyOnceWith('images/diagram.png')
+    expect(editor.editor.querySelectorAll('img')[1]?.getAttribute('src')).toBe(
+      'https://example.com/remote.png'
+    )
     editor.type()
-    editor.handle.setMarkdown('second', 5)
-    editor.type()
-    expect(editor.posted).toEqual([
-      { type: 'change', markdown: 'first', generation: 4 },
-      { type: 'change', markdown: 'second', generation: 5 }
-    ])
-  })
-
-  it('reads a generation that is not a number as zero', () => {
-    const editor = editorDocument()
-    editor.handle.setMarkdown('body', Number.NaN)
-    editor.type()
-    expect(editor.posted).toEqual([{ type: 'change', markdown: 'body', generation: 0 }])
-  })
-
-  it('posts the change on the spot, with no timer between the edit and the host', () => {
-    const editor = editorDocument()
-    vi.useFakeTimers()
-    try {
-      editor.handle.setMarkdown('body', 1)
-      editor.type()
-      expect(editor.posted).toHaveLength(1)
-      expect(vi.getTimerCount()).toBe(0)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('says nothing while it is rewriting itself', () => {
-    // setMarkdown’s DOM rewrite must not echo host’s content as new user change.
-    const editor = editorDocument()
-    editor.handle.setMarkdown('# Title', 2)
-    expect(editor.posted).toEqual([])
-    expect(editor.editor.innerHTML).toBe('<h1>Title</h1>')
+    expect(editor.posted).toEqual([{ type: 'change', markdown, generation: 1 }])
   })
 
   it('stops reporting, and disables every checkbox, once it is read-only', () => {

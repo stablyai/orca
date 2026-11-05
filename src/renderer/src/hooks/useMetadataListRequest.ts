@@ -19,11 +19,12 @@ export function useMetadataListRequest<T>({
   store,
   load,
   errorFallback
-}: MetadataListRequest<T>): MetadataListState<T> {
-  const [state, setState] = useState<MetadataListState<T>>({
+}: MetadataListRequest<T>): MetadataListState<T> & { resolvedKey: string | null } {
+  const [state, setState] = useState<MetadataListState<T> & { resolvedKey: string | null }>({
     data: [],
     loading: false,
-    error: null
+    error: null,
+    resolvedKey: null
   })
   const activeKeyRef = useRef<string | null>(null)
   const loadLatest = useEffectEvent(load)
@@ -36,7 +37,7 @@ export function useMetadataListRequest<T>({
     const cached = getFreshMetadata(store, cacheKey)
     if (cached) {
       if (activeKeyRef.current !== cacheKey) {
-        setState({ data: cached.data, loading: false, error: null })
+        setState({ data: cached.data, loading: false, error: null, resolvedKey: cacheKey })
       }
       activeKeyRef.current = cacheKey
       return
@@ -47,12 +48,13 @@ export function useMetadataListRequest<T>({
       ...current,
       data: current.data.length ? [] : current.data,
       loading: true,
-      error: null
+      error: null,
+      resolvedKey: null
     }))
     void loadMetadata(store, cacheKey, () => loadLatest())
       .then((data) => {
         if (activeKeyRef.current === requestKey) {
-          setState({ data, loading: false, error: null })
+          setState({ data, loading: false, error: null, resolvedKey: requestKey })
         }
       })
       .catch((error: unknown) => {

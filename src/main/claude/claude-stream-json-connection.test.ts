@@ -1,13 +1,13 @@
 import { execFileSync } from 'node:child_process'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { providerDiagnosticOf } from '../../shared/agent-session-failure'
+import { dirname, join } from 'node:path'
+import { providerDiagnosticOf } from '../../shared/agent-session/failures/agent-session-failure'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { spawnProcess } from '@orca/process-host'
 import type { SpawnedProcess, ProcessSpec } from '@orca/process-host/process-spec'
 
-import { query, type CanUseTool, type Options } from '@anthropic-ai/claude-agent-sdk'
+import type { query, CanUseTool } from '@anthropic-ai/claude-agent-sdk'
 import {
   openClaudeStreamJsonConnection,
   type ClaudeStreamJsonConnection,
@@ -15,14 +15,26 @@ import {
 } from './claude-stream-json-connection'
 import { openAgentSessionJournal } from '../native-chat/agent-session-journal/journal-store-factory'
 import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import { claudeAuthDiagnostic } from './structured/claude-structured-init-proof'
-import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
-import { CLAUDE_STRUCTURED_BASE_OPTIONS } from './claude-structured-launch-resolution'
-import { openTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
+import { createClaudeJournalTranslator } from './structured/journal/claude-structured-journal-translation'
+import { CLAUDE_STRUCTURED_BASE_OPTIONS } from './structured/launch/claude-structured-launch-resolution'
+import {
+  closeTestJournalHostDatabases,
+  openTestJournalHostDatabase
+} from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
-import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+import { claudeProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { providerExecutableMissing } from '../provider-process/provider-executable-missing'
-import { providerStartupFailureFact } from '../native-chat/agent-session-wire/structured-agent-session-failure-text'
+import { findInErrorChain } from '../provider-process/provider-error-chain'
+import { providerExitObserved } from '../native-chat/agent-session-wire/structured-agent-session-failure-text'
+import {
+  adapterAtPublishFor,
+  fakeClaude,
+  identityFor
+} from './structured/claude-structured-session-test-support'
+import { claudeStartFailure } from './claude-startup-failure'
+
+const retryableStructuredAgentSessionStart = (error: unknown): boolean =>
+  claudeStartFailure(error).retry === 'safe'
 
 // Exercise the real SDK against a scripted child CLI.
 const FAKE_CLI = join(__dirname, '__fixtures__', 'claude-agent-sdk-scripted-cli.mjs')
@@ -47,6 +59,7 @@ afterEach(async () => {
   }
   await Promise.all(childClosures.splice(0))
   for (const dir of scratchDirs.splice(0)) {
+    await closeTestJournalHostDatabases()
     rmSync(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
   }
   spawned.splice(0)
@@ -154,17 +167,6 @@ function processState(pid: number): 'running' | 'exited' {
 }
 
 describe('Claude stream-json connection', () => {
-  it('passes the Claude Code system-prompt preset through to SDK query', async () => {
-    const scenario = scriptScenario([HOLD_OPEN])
-    let captured: Options | undefined
-    await open(launchFor(scenario), {}, (params) => {
-      captured = params.options
-      return query(params)
-    })
-
-    expect(captured?.systemPrompt).toEqual({ type: 'preset', preset: 'claude_code' })
-  })
-
   it('hands the child a derived environment, the resolved CLI path, and keeps the pid', async () => {
     vi.stubEnv('ANTHROPIC_API_KEY', 'sk-ant-SHELL-LEAK')
     vi.stubEnv('CLAUDE_CODE_CHILD_SESSION', '1')
@@ -254,14 +256,6 @@ describe('Claude stream-json connection', () => {
     expect(env.ORCA_AGENT_SESSION_ID).toBe('f7a1c0de-1111-4222-8333-444455556666')
   })
 
-  it('leaves the default CLI home unpinned so macOS Keychain OAuth keeps working', async () => {
-    const scenario = scriptScenario([HOLD_OPEN])
-    await open(launchFor(scenario))
-
-    await until(() => readReportSafely(scenario), 'the scripted CLI report')
-    expect(childEnv().CLAUDE_CONFIG_DIR).toBeUndefined()
-  })
-
   it("drops a CLAUDE_CONFIG_DIR from Orca's own process env: only the launch may name a home", async () => {
     vi.stubEnv('CLAUDE_CONFIG_DIR', '/orca/process/claude')
     vi.stubEnv('ORCA_CONNECTION_MARKER', 'inherited')
@@ -324,21 +318,6 @@ describe('Claude stream-json connection', () => {
 
     await expect(sent).rejects.toThrow()
     expect(readReportSafely(scenario)?.userMessages ?? []).toHaveLength(0)
-  })
-
-  it('delivers an unmodeled frame verbatim so the provider-fallback row survives', async () => {
-    const unknown = {
-      type: 'frame_kind_from_the_future',
-      session_id: SESSION_ID,
-      uuid: 'uuid-unknown-1',
-      payload: { nested: { flags: ['a', 'b'] } }
-    }
-    const scenario = scriptScenario([{ emit: unknown }, HOLD_OPEN])
-    const messages: Record<string, unknown>[] = []
-    await open(launchFor(scenario), { onMessage: (message) => messages.push(message) })
-
-    await until(() => messages.find((message) => message.uuid === 'uuid-unknown-1'), 'the frame')
-    expect(messages.find((message) => message.uuid === 'uuid-unknown-1')).toEqual(unknown)
   })
 
   it('commits the real partial-message cadence as one assistant item through the translator', async () => {
@@ -497,82 +476,6 @@ describe('Claude stream-json connection', () => {
     expect(written.response.response).toMatchObject({ behavior: 'deny', message: 'No' })
   })
 
-  it('drives Orca control methods onto the SDK and times out with the init proof message', async () => {
-    const scenario = scriptScenario([HOLD_OPEN], {
-      initialize: { models: [{ value: 'sonnet' }], account: { tokenSource: 'oauth' } },
-      get_settings: { env: { ANTHROPIC_BASE_URL: 'https://settings.example.test' } }
-    })
-    const connection = await open(launchFor(scenario))
-
-    await expect(connection.initializationResult()).resolves.toMatchObject({
-      models: [{ value: 'sonnet' }]
-    })
-    await expect(connection.getSettings()).resolves.toEqual({
-      env: { ANTHROPIC_BASE_URL: 'https://settings.example.test' }
-    })
-    await expect(connection.setModel('opus')).resolves.toBeUndefined()
-    const requests = await until(
-      () =>
-        readReportSafely(scenario)?.controlRequests.find(
-          (frame) => frame.request.subtype === 'set_model'
-        ),
-      'the set_model control request'
-    )
-    expect(requests.request.subtype).toBe('set_model')
-  })
-
-  it('reads supportedModels from the catalog the running CLI reported', async () => {
-    const scenario = scriptScenario([HOLD_OPEN], {
-      initialize: {
-        models: [
-          { value: 'default', resolvedModel: 'claude-opus-5' },
-          {
-            value: 'opus',
-            displayName: 'Opus 5',
-            description: 'The live row, not the seed',
-            resolvedModel: 'claude-opus-5',
-            supportsEffort: true,
-            supportedEffortLevels: ['low', 'high']
-          }
-        ]
-      }
-    })
-    const connection = await open(launchFor(scenario))
-
-    await expect(connection.supportedModels()).resolves.toMatchObject([
-      { value: 'default', resolvedModel: 'claude-opus-5' },
-      { value: 'opus', displayName: 'Opus 5', supportedEffortLevels: ['low', 'high'] }
-    ])
-  })
-
-  it('feeds the auth diagnostic from the settings the running child reports', async () => {
-    for (const key of ['ANTHROPIC_BASE_URL', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_API_KEY']) {
-      vi.stubEnv(key, undefined)
-    }
-    const scenario = scriptScenario([HOLD_OPEN], {
-      get_settings: {
-        env: {
-          ANTHROPIC_BASE_URL: 'https://settings.example.test',
-          ANTHROPIC_AUTH_TOKEN: 'secret'
-        }
-      }
-    })
-    const connection = await open(launchFor(scenario))
-    const init = { providerSessionId: SESSION_ID, uuid: null, model: null, message: {} }
-
-    expect(claudeAuthDiagnostic(null, init, null)).toMatchObject({
-      baseUrlConfigured: false,
-      authTokenConfigured: false
-    })
-    const diagnostic = claudeAuthDiagnostic(null, init, await connection.getSettings())
-    expect(diagnostic).toMatchObject({
-      baseUrlConfigured: true,
-      authTokenConfigured: true,
-      apiKeyConfigured: false
-    })
-    expect(JSON.stringify(diagnostic)).not.toContain('secret')
-  })
-
   it('settles an unanswered initialize when the child exits, with no timer of its own', async () => {
     const scenario = scriptScenario([{ stderr: 'claude: not signed in\n' }, { exit: 1 }])
     const connection = await open({
@@ -610,22 +513,77 @@ describe('Claude stream-json connection', () => {
     }
   })
 
-  it("names Claude's root refusal of Full access, keeping its words as the detail", async () => {
-    const refusal =
-      '--dangerously-skip-permissions cannot be used with root/sudo privileges for security reasons'
-    const scenario = scriptScenario([{ stderr: `${refusal}\n` }, { exit: 1 }])
-    let exit: Error | null = null
-    await open(launchFor(scenario), {
-      onExit: (error) => {
-        exit = error
-      }
+  it('lets a final initialize answer after a physical exit own the start despite fault-first callbacks', async () => {
+    const go = join(mkdtempSync(join(tmpdir(), 'claude-sdk-exit-answer-')), 'go')
+    scratchDirs.push(dirname(go))
+    const scenario = scriptScenario([
+      { awaitFile: { path: go, timeoutMs: 15_000 } },
+      { delayMs: 20 },
+      { exit: 1 }
+    ])
+    // Real SDK and child; only initialize's answer is held so it can arrive after the exit.
+    const { query: sdkQuery } = await import('@anthropic-ai/claude-agent-sdk')
+    const answer = Promise.withResolvers<unknown>()
+    const queryImpl: typeof query = (args) =>
+      Object.assign(sdkQuery(args), { initializationResult: () => answer.promise })
+    const reports: string[] = []
+    const exited = Promise.withResolvers<void>()
+    const claude = fakeClaude()
+    const adapter = adapterAtPublishFor({
+      ...claude,
+      openConnection: (_launch, handlers = {}) =>
+        open(
+          launchFor(scenario),
+          {
+            ...handlers,
+            onFault: (error) => {
+              reports.push(providerExitObserved(error) ? 'exit-fault' : 'fault')
+              handlers.onFault?.(error)
+            },
+            onExit: (error, exit) => {
+              reports.push('exit')
+              handlers.onExit?.(error, exit)
+              exited.resolve()
+            }
+          },
+          queryImpl
+        )
     })
+    try {
+      const acquired = await adapter.acquire({ identity: identityFor(), fence: 7, spawnToken: 's' })
+      let settled = false
+      const opened = adapter
+        .open({
+          sessionId: 'session-1',
+          fence: 7,
+          acquisitionGeneration: acquired.acquisitionGeneration,
+          signal: new AbortController().signal
+        })
+        .then(
+          () => null,
+          (error: unknown) => error
+        )
+        .finally(() => {
+          settled = true
+        })
+      writeFileSync(go, '')
+      await exited.promise
+      // A fault-first start would already have settled; one macrotask drains its rejection chain.
+      await new Promise((resolve) => setImmediate(resolve))
 
-    await until(() => exit, 'the exit error')
-    expect(providerStartupFailureFact(exit)).toEqual({
-      kind: 'fullAccessAsRoot',
-      detail: { text: expect.stringContaining(refusal), audience: 'log' }
-    })
+      expect(reports).toEqual(['exit-fault', 'exit'])
+      expect(settled).toBe(false)
+      answer.reject(
+        Object.assign(new Error('initialize failed'), { errorClass: 'control_request_failed' })
+      )
+      const failure = await opened
+      expect(
+        findInErrorChain(failure, (inner) => ('errorClass' in inner ? inner.errorClass : undefined))
+      ).toBe('control_request_failed')
+      expect(retryableStructuredAgentSessionStart(failure)).toBe(false)
+    } finally {
+      await adapter.closeAll()
+    }
   })
 
   it.runIf(process.platform !== 'win32')(

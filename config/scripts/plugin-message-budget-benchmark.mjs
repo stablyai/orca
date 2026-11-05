@@ -4,10 +4,10 @@ import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { build } from 'esbuild'
-import { buildCounterbalancedSchedule } from './counterbalanced-benchmark-schedule.mjs'
+import { buildCounterbalancedSchedule } from './performance/measurement/counterbalanced-benchmark-schedule.mjs'
 
 const baseline = process.argv[2] ?? '20ab9950654'
-const file = 'src/shared/plugins/plugin-panel-message-budget.ts'
+const file = 'src/shared/plugins/frames/plugin-panel-message-budget.ts'
 async function load(contents) {
   const result = await build({
     stdin: { contents, loader: 'ts', resolveDir: dirname(resolve(file)) },

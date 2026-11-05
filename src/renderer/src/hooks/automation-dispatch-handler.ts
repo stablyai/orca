@@ -1,3 +1,4 @@
+import { automationTerminalLaunchInputs } from '../../../shared/automation-launch-setup'
 import { listAutomationRunsForTarget } from '@/components/automations/automation-host-client'
 import { translate } from '@/i18n/i18n'
 import { submitPromptToAgentPty } from '@/lib/agent-paste-draft'
@@ -6,6 +7,7 @@ import { observeExistingAutomationSession } from '@/lib/automation-session-obser
 import { findReusableAutomationSession } from '@/lib/automation-session-reuse'
 import type { AutomationTerminalOwnership } from '@/lib/automation-terminal-ownership'
 import { useAppStore } from '@/store'
+import { getRepoExecutionHostId } from '../../../shared/execution-host'
 import { captureWorkspaceSelection, restoreWorkspaceSelection } from '@/lib/active-workspace-host'
 import type {
   AutomationDispatchRequest,
@@ -13,6 +15,7 @@ import type {
 } from '../../../shared/automations-types'
 import { createAutomationDispatchCompletion } from './automation-dispatch-completion'
 import {
+  connectAutomationDispatchWorkspace,
   prepareAutomationDispatchWorkspace,
   resolveAutomationDispatchWorkspace
 } from './automation-dispatch-workspace'
@@ -97,6 +100,16 @@ export async function handleAutomationDispatchRequest({
         automationId: automation.id,
         agentId: automation.agentId,
         worktreeId: worktree.id,
+        target: {
+          hostId: getRepoExecutionHostId(resolved.repo),
+          repoId: resolved.repo.id,
+          path: resolved.repo.path,
+          runtimeEnvironmentId: worktree.runtimeOwnerEnvironmentId
+        },
+        physicalTarget: {
+          hostId: worktree.hostId ?? getRepoExecutionHostId(resolved.repo),
+          runtimeEnvironmentId: worktree.runtimeOwnerEnvironmentId
+        },
         currentRunId: run.id,
         // Dispatch runs only on desktop authority, so history reads explicitly target the local runtime.
         runs: await listAutomationRunsForTarget({ kind: 'local' }, automation.id),
@@ -116,13 +129,16 @@ export async function handleAutomationDispatchRequest({
               completion.cleanupRunObservers()
             } else {
               let reuseSawWorking = false
-              const handleReusableAgentStatus = (payload: { state: string }): void => {
+              const handleReusableAgentStatus = (payload: {
+                state: string
+                interrupted?: boolean
+              }): void => {
                 if (payload.state === 'working') {
                   reuseSawWorking = true
                   return
                 }
                 if (payload.state === 'done' && reuseSawWorking) {
-                  completion.handleAgentDone()
+                  completion.handleAgentDone(payload)
                 }
               }
               const reuseCompletionStartedAt = Date.now()
@@ -163,11 +179,22 @@ export async function handleAutomationDispatchRequest({
         }
       }
     }
+    if (
+      automation.workspaceMode === 'existing' &&
+      !(await connectAutomationDispatchWorkspace({
+        run,
+        context: resolved.context,
+        markDispatchResult
+      }))
+    ) {
+      return
+    }
     const result = await launchAgentBackgroundSession({
       agent: automation.agentId,
       worktreeId: worktree.id,
+      resolvedTarget: { worktree, repo: resolved.repo },
       prompt: automation.prompt,
-      ...(automation.extraAgentArgs ? { extraAgentArgs: automation.extraAgentArgs } : {}),
+      ...automationTerminalLaunchInputs(automation),
       launchSource: 'unknown',
       title: run.title,
       onData: completion.appendOutput,
@@ -177,7 +204,7 @@ export async function handleAutomationDispatchRequest({
         if (payload.state !== 'done' || payload.sessionBoundary === true) {
           return
         }
-        completion.handleAgentDone()
+        completion.handleAgentDone(payload)
       },
       onExit: (_ptyId, code) => {
         completion.handleExit(code)

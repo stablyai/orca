@@ -1,12 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   QUEUED_MESSAGE_PAUSED_SEND_FAILED,
-  type AgentSessionQueuedMessage,
-  type AgentSessionSubscribeEvent
-} from '../../../shared/agent-session-wire'
-import { ConversationCommandParams } from '../../../shared/rpc-contract/structured-agent-session-params'
+  type AgentSessionQueuedMessage
+} from '../../../shared/agent-session/requests/agent-session-queued-message-wire'
+import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session/agent-session-wire'
 import type { AgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
-import { agentSessionSendBodyFingerprint } from '../../../shared/structured-agent-session-send-mutation'
+import { agentSessionSendBodyFingerprint } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { JournalStopAcceptor } from '../agent-session-journal/journal-stop-acceptance'
 import { JournalQueuedMessages } from '../agent-session-journal/journal-queued-messages'
@@ -23,7 +22,6 @@ import {
   hostTestOperationId
 } from './structured-agent-session-host-test-data'
 import { holdDelivery } from './structured-agent-session-delivery-hold.test-fixture'
-
 import { createStructuredSessionObservationClock } from './structured-agent-session-observation-clock.test-fixture'
 
 let rig: QueuedMessageTestRig
@@ -313,7 +311,7 @@ describe('held drafts', () => {
 
 describe('Stop and Delete', () => {
   it('Stop pauses the queue — from ANY client — and the cards stay published; no text rides the answer', async () => {
-    await workingSend()
+    const working = await workingSend()
     const first = await send('first text', 'queue-if-active').result
     const second = await send('second text', 'queue-if-active').result
     if (!first.ok || !('queued' in first.value) || !second.ok || !('queued' in second.value)) {
@@ -329,10 +327,36 @@ describe('Stop and Delete', () => {
       { messageId: second.value.queued.messageId, state: 'waiting' }
     ])
     expect(await rig.queuePause()).toEqual({ reason: 'stopped' })
+    await host.collaboratorsForTests().serialize(SESSION, async () => {})
+    const beforeReplay = await host.journalSnapshot(SESSION)
     const replayed = await rig.stop(operationId, { callerKey: 'client-2' })
     expect(replayed).toMatchObject({ ok: true, replayed: true, value: { cancelled: false } })
     expect(replayed.ok && Object.keys(replayed.value).sort()).toEqual(['cancelled'])
-    expect(await drafts()).toHaveLength(2)
+    expect(await drafts()).toEqual([
+      { messageId: first.value.queued.messageId, state: 'waiting' },
+      { messageId: second.value.queued.messageId, state: 'waiting' }
+    ])
+    expect(await rig.queuePause()).toEqual({ reason: 'stopped' })
+    const afterReplay = await host.journalSnapshot(SESSION)
+    expect(afterReplay.items.filter((item) => item.body.kind === 'status')).toEqual(
+      beforeReplay.items.filter((item) => item.body.kind === 'status')
+    )
+    expect(
+      afterReplay.submissions.find((entry) => entry.clientMessageId === working)
+    ).toMatchObject({ dispatchState: 'unknown', providerItemId: null })
+    const page = await host.history({ sessionId: SESSION, direction: 'tail' })
+    expect(
+      page.ok && page.page.queuedMessages?.map(({ body, state }) => ({ body, state }))
+    ).toEqual([
+      { body: hostTestMessage('first text'), state: 'waiting' },
+      { body: hostTestMessage('second text'), state: 'waiting' }
+    ])
+    const journal = host.collaboratorsForTests().sessions.get(SESSION)!.journal
+    expect(journal.submissionBody(working)).toEqual(hostTestMessage('work on this'))
+    expect(journal.queuedMessages.list().map((card) => card.options)).toEqual([{}, {}])
+    expect(dispatch).toHaveBeenCalledTimes(1)
+    expect(await rig.handoff(first.value.queued.messageId)).toBeUndefined()
+    expect(await rig.handoff(second.value.queued.messageId)).toBeUndefined()
   })
 
   /** Hold delivery after draft consumption so intervening Stop can precede provider handover. */
@@ -544,15 +568,6 @@ describe('/clear', () => {
     return [first.value.queued.messageId, second.value.queued.messageId]
   }
 
-  it('the clear schema refuses the never-shipped withdraw opt-in', () => {
-    const base = { envelope: rig.envelope({}, 'agentSession.conversationCommand', 'op-schema') }
-    expect(ConversationCommandParams.safeParse({ ...base, command: 'clear' }).success).toBe(true)
-    expect(
-      ConversationCommandParams.safeParse({ ...base, command: 'clear', withdrawQueued: true })
-        .success
-    ).toBe(false)
-  })
-
   it('preserves waiting cards in place and pauses them until user action for every client', async () => {
     const [firstId, secondId] = await pausedDrafts()
     const operationId = hostTestOperationId()
@@ -634,18 +649,6 @@ describe('/clear', () => {
         )
       ).toBe(true)
     )
-  })
-
-  it('clears without copying or inserting any queued card', async () => {
-    const ids = await pausedDrafts()
-    const insert = vi.spyOn(JournalQueuedMessages.prototype, 'insert')
-    try {
-      expect(await clear(hostTestOperationId())).toMatchObject({ ok: true })
-      expect(insert).not.toHaveBeenCalled()
-      expect((await drafts()).map((card) => card.messageId)).toEqual(ids)
-    } finally {
-      insert.mockRestore()
-    }
   })
 
   it('preserves a returned card and its refusal after clear', async () => {

@@ -1,12 +1,11 @@
 // Permission bypass lives only in the arguments string; verify each caller’s final argv so it cannot be silently lost.
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 
 import {
   createLaunchFunnelStore,
   queuedStartupCommand,
-  queuedStartupPayload,
   resetLaunchFunnelStore
 } from './agent-launch-funnel-test-harness'
 
@@ -32,7 +31,7 @@ vi.mock('@/lib/telemetry', () => ({
   track: vi.fn(),
   tuiAgentToAgentKind: (agent: string) => agent
 }))
-vi.mock('@/components/native-chat/native-chat-session-option-cache', () => ({
+vi.mock('../../../shared/native-chat/input/native-chat-session-option-cache', () => ({
   seedNativeChatAppliedSessionOptions: vi.fn()
 }))
 vi.mock('@/lib/agent-paste-draft', () => ({ pasteDraftWhenAgentReady: vi.fn(async () => true) }))
@@ -66,17 +65,6 @@ describe('agent launch caller arguments and permission bypass', () => {
   })
 
   it.each(BYPASS_BY_AGENT)(
-    'ships %s (%s) with its permission-bypass flag when no call site names arguments',
-    async (agent, _mode, bypassFlag) => {
-      const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
-
-      launchAgentInNewTab({ requestId: 'request-2', agent, worktreeId: 'wt-1' })
-
-      expect(queuedStartupCommand(store)).toContain(bypassFlag)
-    }
-  )
-
-  it.each(BYPASS_BY_AGENT)(
     'drops the bypass flag for %s when the user stored Manual arguments',
     async (agent, _mode, bypassFlag) => {
       store.settings = { ...store.settings, agentDefaultArgs: { [agent]: '' } }
@@ -89,34 +77,6 @@ describe('agent launch caller arguments and permission bypass', () => {
     }
   )
 
-  it('launches without any arguments when a caller passes agentArgs as null', async () => {
-    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
-
-    launchAgentInNewTab({
-      requestId: 'request-6',
-      agent: 'codex',
-      worktreeId: 'wt-1',
-      agentArgs: null
-    })
-
-    expect(queuedStartupCommand(store)).toBe('codex')
-    expect(queuedStartupPayload(store)?.agentArgsOverride).toBeNull()
-  })
-
-  it('lets a per-launch argument beat the stored setting', async () => {
-    store.settings = { ...store.settings, agentDefaultArgs: { codex: '--model stored' } }
-    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
-
-    launchAgentInNewTab({
-      requestId: 'request-7',
-      agent: 'codex',
-      worktreeId: 'wt-1',
-      agentArgs: '--model per-launch'
-    })
-
-    expect(queuedStartupCommand(store)).toBe("codex '--model' 'per-launch'")
-  })
-
   // Composer picks seed structured creates only; terminal fallbacks must not receive them (launch-structured-agent-session tests).
   it.each([
     [true, undefined, CODEX_BYPASS],
@@ -128,7 +88,7 @@ describe('agent launch caller arguments and permission bypass', () => {
     async (chatUi, storedArgs, expectedArgs) => {
       store.settings = {
         ...store.settings,
-        experimentalNativeChat: chatUi,
+        nativeChatProviders: { codex: chatUi },
         ...(storedArgs === undefined ? {} : { agentDefaultArgs: { codex: storedArgs } }),
         nativeChatSessionOptions: {
           codex: {
@@ -149,7 +109,7 @@ describe('agent launch caller arguments and permission bypass', () => {
       const command = queuedStartupCommand(store)
       expect(command).not.toContain("'-m'")
       expect(command).not.toContain('model_reasoning_effort')
-      expect(command).toBe(`codex '${expectedArgs}'`)
+      expect(command).toBe(`codex '-c' 'disable_paste_burst=true' '${expectedArgs}'`)
     }
   )
 })

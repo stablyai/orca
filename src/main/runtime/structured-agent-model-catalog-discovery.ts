@@ -6,10 +6,10 @@ import {
   createClaudeModelCatalogProbe,
   type ClaudeModelCatalogProbeDeps
 } from '../claude/claude-model-catalog-probe'
-import { createCodexModelCatalogProbe } from '../codex/codex-model-catalog-probe'
+import { createCodexModelCatalogProbe } from '../codex/structured/catalog/codex-model-catalog-probe'
 import type { AgentModelCatalogDiscovery } from '../native-chat/agent-model-catalog/agent-model-catalog-discovery'
 import type { StructuredAgentModelCatalogContext } from './structured-agent-runtime-registrations'
-import type { StructuredAgentSessionRuntimeDeps } from './structured-agent-session-runtime'
+import type { StructuredAgentSessionRuntimeDeps } from './structured-agent-session-runtime-contract'
 
 /** Claude's overlay, laid over its base env minus an inherited config dir; absent when none. */
 export function claudeLaunchEnvOverlay(

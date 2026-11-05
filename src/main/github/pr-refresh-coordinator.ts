@@ -23,7 +23,7 @@ import { PRRefreshQueueDrainer, type PRRefreshRegistrationCheck } from './pr-ref
 import { prRefreshRateLimitPausedUntil } from './pr-refresh-rate-limit-gate'
 import { PRRefreshRetryState } from './pr-refresh-retry-state'
 import { PRRefreshVisibility } from './pr-refresh-visibility'
-import { blockedWslDistroForPath, wslDistroForPath } from '../wsl/wsl-unc-access-gate'
+import { blockedWslDistroForPath, wslDistroForPath } from '../wsl/filesystem/wsl-unc-access-gate'
 
 const retry = new PRRefreshRetryState()
 const queue = new PRRefreshQueue((key) => retry.reset(key))
@@ -141,7 +141,8 @@ export function _getPRRefreshAliasCountForTests(key: string): number {
 
 export async function refreshPRNow(
   candidate: GitHubPRRefreshCandidate,
-  reason: GitHubPRRefreshReason = 'manual'
+  reason: GitHubPRRefreshReason = 'manual',
+  options: { userRefresh?: boolean } = {}
 ): Promise<PRRefreshOutcome> {
   const alias = aliasFromCandidate(candidate)
   const key = refreshKey(candidate)
@@ -219,7 +220,7 @@ export async function refreshPRNow(
     candidate.linkedPRNumber ?? null,
     candidate.connectionId ?? null,
     candidate.linkedPRNumber == null ? (candidate.fallbackPRNumber ?? null) : null,
-    ...hostedReviewOptionArgs(candidate, reason)
+    ...hostedReviewOptionArgs(candidate, reason, options)
   )
   if (!queue.ownsRequest(key, requestSequence)) {
     events.broadcast({ aliases, reason, outcome, requestStartedAt }, requestSequence)

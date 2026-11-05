@@ -1,7 +1,11 @@
 import type { ProviderProcessExit } from '../provider-process/managed-provider-process'
 import type { ProviderProcessLaunch } from '../provider-process/provider-process-launch'
+import {
+  withProviderSpawnAbsence,
+  type ProviderSpawnAbsence
+} from '../provider-process/provider-executable-missing'
 import type { AcpAgentConnectionOptions } from './acp-agent-connection'
-import { AcpConnectionClosedError } from './acp-errors'
+import { AcpAgentExitedError, AcpConnectionClosedError } from './acp-errors'
 import { AcpSessionRuntime } from './acp-session-runtime'
 import type { AcpStructuredConnection } from './acp-structured-connection'
 import { AcpScriptedAgent } from './acp-scripted-agent.test-support'
@@ -11,6 +15,7 @@ export const PID = 4242
 export class FakeAcpChild extends AcpSessionRuntime implements AcpStructuredConnection {
   readonly agent: AcpScriptedAgent
   readonly pid: number | undefined = PID
+  spawnAbsence: ProviderSpawnAbsence | null = null
   readonly spawned = Promise.resolve()
   stderr = ''
   processTreeUnproven = false
@@ -73,8 +78,14 @@ export class FakeAcpChild extends AcpSessionRuntime implements AcpStructuredConn
       return
     }
     this.exitedWith = status
-    const error =
-      this.lostWith ?? new AcpConnectionClosedError(this.stderr || `${this.launch.command} exited`)
+    // As the real connection: a spawn ENOENT marks the exit error with what it proved absent.
+    const error = withProviderSpawnAbsence(
+      this.lostWith ??
+        (this.closing
+          ? new AcpConnectionClosedError(this.stderr || `${this.launch.command} exited`)
+          : new AcpAgentExitedError(this.stderr || `${this.launch.command} exited`, this.stderr)),
+      this.spawnAbsence
+    )
     super.close(error)
     this.connectionOptions.onExit?.(error, { expected: this.closing, exit: status })
     for (const listener of this.exitListeners.splice(0)) {

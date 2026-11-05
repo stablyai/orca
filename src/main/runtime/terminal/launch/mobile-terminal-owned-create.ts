@@ -1,6 +1,7 @@
+import type { OrcaRuntimeWithScheduleMobileSessionTabsChanged as SessionTabsPublication } from '../../session-tabs/session-tabs-change-publication'
 import { OrcaRuntimeWithResolveMobileSessionTerminalCommand } from './mobile-terminal-startup'
-import type { TuiAgent } from '../../../../shared/tui-agent'
-import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session-resume'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
+import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type {
   RuntimeMobileSessionCreateTerminalResult,
   RuntimeMobileSessionTabsSnapshot,
@@ -10,7 +11,7 @@ import type { OwnedMobileTerminalCreateOptions } from './mobile-terminal-create'
 import { randomUUID } from 'node:crypto'
 import { copySleepingAgentLaunchConfig } from '../../runtime-agent-launch-resolution'
 import { deriveRemoteRuntimeTerminalCreateHandle } from '../../remote-runtime-terminal-create-identity'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { placeCreatedSessionTab } from '../../../../shared/session-tab-placement'
 import { insertTabIdIntoOrder } from '../../../../shared/workspace-layout/tab-order'
 import type { OrcaRuntimeWithBuildPtyTerminalSummary as PtyTerminalSummaryMethods } from '../query/pty-terminal-summary'
@@ -23,6 +24,10 @@ import {
 const OWNED_MOBILE_DISPATCH_RECIPE_TTL_MS = 15 * 60_000
 
 export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal extends OrcaRuntimeWithResolveMobileSessionTerminalCommand {
+  protected abstract createMobileSessionTabsDelivery(): ReturnType<
+    SessionTabsPublication['createMobileSessionTabsDelivery']
+  >
+
   protected abstract getPtyManualTitle(
     ...args: Parameters<PtyTerminalSummaryMethods['getPtyManualTitle']>
   ): ReturnType<PtyTerminalSummaryMethods['getPtyManualTitle']>
@@ -53,7 +58,13 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
     opts: OwnedMobileTerminalCreateOptions = {}
   ): Promise<RuntimeMobileSessionCreateTerminalResult> {
     this.pruneOwnedMobileDispatchRecipes()
-    const workspace = await this.resolveTerminalWorkspaceLaunchScope(`id:${worktreeId}`)
+    const workspace = await this.resolveTerminalWorkspaceLaunchScope(
+      `id:${worktreeId}`,
+      undefined,
+      {
+        wslUserAct: opts.wslUserAct === true
+      }
+    )
     const cwd = this.resolveWorkspaceTerminalStartupCwd(workspace, opts.cwd)
     // Why: an SSH sessionId means reattach; only synthesize local serve ids so SSH fresh terminals still call pty.spawn.
     const stableSessionId =
@@ -103,6 +114,7 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
           ? { resumeProviderSession: opts.resumeProviderSession }
           : {}),
         ...(opts.spawnIntent ? { spawnIntent: opts.spawnIntent } : {}),
+        ...(opts.wslUserAct ? { wslUserAct: true } : {}),
         ...(opts.resumeOrigin ? { resumeOrigin: opts.resumeOrigin } : {}),
         ...(opts.launchAgent ? { launchAgent: opts.launchAgent } : {}),
         ...(opts.launchRuntime ? { launchRuntime: opts.launchRuntime } : {}),
@@ -124,7 +136,8 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
         deferMobileSessionPublish: true,
         signal: opts.signal,
         ...(opts.refuseSleptWorktree ? { refuseSleptWorktree: true } : {}),
-        ...(opts.resumesSleepingRecord ? { resumesSleepingRecord: true } : {})
+        ...(opts.resumesSleepingRecord ? { resumesSleepingRecord: true } : {}),
+        ...(opts.reopensPane ? { reopensPane: true } : {})
       })
     const terminal = opts.createMutation
       ? await this.dedupeTerminalCreate(
@@ -132,7 +145,8 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
           `id:${worktreeId}`,
           opts.createMutation.id,
           true,
-          (_selector, handle) => create(handle)
+          (_selector, handle) => create(handle),
+          { wslUserAct: opts.wslUserAct === true }
         )
       : await create()
     if (terminal.ptyId) {
@@ -274,13 +288,7 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
     // Store adds retirement proofs; emit that snapshot because version-deduping subscribers would miss proofs from a pre-store frame.
     const stored = this.storeMobileSessionSnapshot(worktreeId, next)
     const result = this.toMobileSessionTabsResult(stored)
-    const changeSequence = ++this.mobileSessionTabsChangeSequence
-    for (const subscription of this.mobileSessionTabListeners) {
-      subscription.listener(
-        this.projectMobileSessionTabsForClient(result, subscription.clientNavigationId),
-        changeSequence
-      )
-    }
+    this.createMobileSessionTabsDelivery()(result, ++this.mobileSessionTabsChangeSequence)
     const created = result.tabs.find((candidate) => candidate.id === tab.id)
     if (!created || created.type !== 'terminal') {
       throw new Error('terminal_handle_stale')

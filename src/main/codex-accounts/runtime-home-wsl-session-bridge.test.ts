@@ -3,11 +3,11 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type * as WslPaths from '../../shared/wsl-paths'
-import type * as CodexConfigMirror from '../codex/codex-config-mirror'
-import type * as CodexHomePaths from '../codex/codex-home-paths'
+import type * as CodexConfigMirror from '../codex/configuration/settings/codex-config-mirror'
+import type * as CodexHomePaths from '../codex/configuration/homes/codex-home-paths'
 import type * as LegacyWslRuntimeAuthDrain from './legacy-wsl-runtime-auth-drain'
 import type * as WslCodexAuthBatchReader from './wsl-codex-auth-batch-reader'
-import type * as WslCodexSessionBridge from '../codex/wsl-codex-session-bridge'
+import type * as WslCodexSessionBridge from '../codex/history/bridges/wsl-codex-session-bridge'
 import { createSettings } from './runtime-home-settings-test-fixtures'
 import {
   createCodexAuthJson,
@@ -18,6 +18,10 @@ import {
   testState
 } from './runtime-home-service-test-harness'
 
+// These launches are the user's own, so the E9 exec gate lets their prep run.
+vi.mock('../wsl/discovery/wsl-background-exec-gate', () => ({
+  blockedWslDistroForExec: async () => null
+}))
 vi.mock('electron', () => ({
   app: {
     getPath: () => testState.userDataDir
@@ -45,13 +49,14 @@ describe('CodexRuntimeHomeService', () => {
     const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
     const startWslCodexSessionBridgeInBackground = vi.fn(() => Promise.resolve())
-    vi.doMock('../codex/wsl-codex-session-bridge', () => ({
+    vi.doMock('../codex/history/bridges/wsl-codex-session-bridge', () => ({
       startWslCodexSessionBridgeInBackground
     }))
     const wslHome = join(testState.userDataDir, 'wsl-home')
-    vi.doMock('../wsl', () => ({
+    vi.doMock('../wsl/discovery/distro-catalog', () => ({
       getDefaultWslDistro: () => 'Ubuntu',
-      getWslHome: () => wslHome
+      getWslHome: () => wslHome,
+      getWslHomeAsync: async () => wslHome
     }))
     const wslSystemHomePath = join(wslHome, '.codex')
     mkdirSync(wslSystemHomePath, { recursive: true })
@@ -84,8 +89,8 @@ describe('CodexRuntimeHomeService', () => {
       )
       expect(existsSync(join(wslRuntimeHomePath, 'AGENTS.md'))).toBe(false)
     } finally {
-      vi.doUnmock('../codex/wsl-codex-session-bridge')
-      vi.doUnmock('../wsl')
+      vi.doUnmock('../codex/history/bridges/wsl-codex-session-bridge')
+      vi.doUnmock('../wsl/discovery/distro-catalog')
       if (originalPlatform) {
         Object.defineProperty(process, 'platform', originalPlatform)
       }
@@ -95,13 +100,14 @@ describe('CodexRuntimeHomeService', () => {
   it('keeps WSL in-Codex setting changes in the direct system home', async () => {
     const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-    vi.doMock('../codex/wsl-codex-session-bridge', () => ({
+    vi.doMock('../codex/history/bridges/wsl-codex-session-bridge', () => ({
       startWslCodexSessionBridgeInBackground: vi.fn(() => Promise.resolve())
     }))
     const wslHome = join(testState.userDataDir, 'wsl-home')
-    vi.doMock('../wsl', () => ({
+    vi.doMock('../wsl/discovery/distro-catalog', () => ({
       getDefaultWslDistro: () => 'Ubuntu',
-      getWslHome: () => wslHome
+      getWslHome: () => wslHome,
+      getWslHomeAsync: async () => wslHome
     }))
     const store = createStore(
       createSettings({
@@ -140,8 +146,8 @@ describe('CodexRuntimeHomeService', () => {
       expect(readFileSync(wslSystemConfigPath, 'utf-8')).toBe('model = "o4"\n')
       expect(existsSync(baselinePath)).toBe(false)
     } finally {
-      vi.doUnmock('../codex/wsl-codex-session-bridge')
-      vi.doUnmock('../wsl')
+      vi.doUnmock('../codex/history/bridges/wsl-codex-session-bridge')
+      vi.doUnmock('../wsl/discovery/distro-catalog')
       if (originalPlatform) {
         Object.defineProperty(process, 'platform', originalPlatform)
       }
@@ -152,13 +158,14 @@ describe('CodexRuntimeHomeService', () => {
     const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
     const startWslCodexSessionBridgeInBackground = vi.fn(() => Promise.resolve())
-    vi.doMock('../codex/wsl-codex-session-bridge', () => ({
+    vi.doMock('../codex/history/bridges/wsl-codex-session-bridge', () => ({
       startWslCodexSessionBridgeInBackground
     }))
     const wslHome = join(testState.userDataDir, 'wsl-home')
-    vi.doMock('../wsl', () => ({
+    vi.doMock('../wsl/discovery/distro-catalog', () => ({
       getDefaultWslDistro: () => 'Ubuntu',
-      getWslHome: () => wslHome
+      getWslHome: () => wslHome,
+      getWslHomeAsync: async () => wslHome
     }))
     const store = createStore(
       createSettings({
@@ -180,8 +187,8 @@ describe('CodexRuntimeHomeService', () => {
         managedCodexHomePath: join(wslHome, '.codex')
       })
     } finally {
-      vi.doUnmock('../codex/wsl-codex-session-bridge')
-      vi.doUnmock('../wsl')
+      vi.doUnmock('../codex/history/bridges/wsl-codex-session-bridge')
+      vi.doUnmock('../wsl/discovery/distro-catalog')
       if (originalPlatform) {
         Object.defineProperty(process, 'platform', originalPlatform)
       }
@@ -192,13 +199,14 @@ describe('CodexRuntimeHomeService', () => {
     const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
     const startWslCodexSessionBridgeInBackground = vi.fn(() => Promise.resolve())
-    vi.doMock('../codex/wsl-codex-session-bridge', () => ({
+    vi.doMock('../codex/history/bridges/wsl-codex-session-bridge', () => ({
       startWslCodexSessionBridgeInBackground
     }))
     const wslHome = join(testState.userDataDir, 'debian-wsl-home')
-    vi.doMock('../wsl', () => ({
+    vi.doMock('../wsl/discovery/distro-catalog', () => ({
       getDefaultWslDistro: () => null,
-      getWslHome: (distro: string) => (distro === 'Debian' ? wslHome : null)
+      getWslHome: (distro: string) => (distro === 'Debian' ? wslHome : null),
+      getWslHomeAsync: async (distro: string) => (distro === 'Debian' ? wslHome : null)
     }))
     vi.doMock('../../shared/wsl-paths', async (importOriginal) => {
       const actual = await importOriginal<typeof WslPaths>()
@@ -254,8 +262,8 @@ describe('CodexRuntimeHomeService', () => {
         managedCodexHomePath: managedHomePath
       })
     } finally {
-      vi.doUnmock('../codex/wsl-codex-session-bridge')
-      vi.doUnmock('../wsl')
+      vi.doUnmock('../codex/history/bridges/wsl-codex-session-bridge')
+      vi.doUnmock('../wsl/discovery/distro-catalog')
       vi.doUnmock('../../shared/wsl-paths')
       if (originalPlatform) {
         Object.defineProperty(process, 'platform', originalPlatform)
@@ -267,13 +275,14 @@ describe('CodexRuntimeHomeService', () => {
     const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
     const startWslCodexSessionBridgeInBackground = vi.fn(() => Promise.resolve())
-    vi.doMock('../codex/wsl-codex-session-bridge', () => ({
+    vi.doMock('../codex/history/bridges/wsl-codex-session-bridge', () => ({
       startWslCodexSessionBridgeInBackground
     }))
     const wslHome = join(testState.userDataDir, 'ubuntu-home')
-    vi.doMock('../wsl', () => ({
+    vi.doMock('../wsl/discovery/distro-catalog', () => ({
       getDefaultWslDistro: () => 'Ubuntu',
-      getWslHome: () => wslHome
+      getWslHome: () => wslHome,
+      getWslHomeAsync: async () => wslHome
     }))
     const managedHomePath = join(wslHome, '.local', 'share', 'orca', 'codex-accounts', 'a', 'home')
     const retiredBridgeRuns = vi.fn()
@@ -328,8 +337,8 @@ describe('CodexRuntimeHomeService', () => {
       })
     } finally {
       vi.doUnmock('./legacy-wsl-runtime-auth-drain')
-      vi.doUnmock('../codex/wsl-codex-session-bridge')
-      vi.doUnmock('../wsl')
+      vi.doUnmock('../codex/history/bridges/wsl-codex-session-bridge')
+      vi.doUnmock('../wsl/discovery/distro-catalog')
       if (originalPlatform) {
         Object.defineProperty(process, 'platform', originalPlatform)
       }
@@ -343,9 +352,10 @@ describe('CodexRuntimeHomeService', () => {
       Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
       const guestHome = join(testState.userDataDir, 'ubuntu-home')
       const wslHome = `\\\\wsl.localhost\\Ubuntu${guestHome.replaceAll('/', '\\')}`
-      vi.doMock('../wsl', () => ({
+      vi.doMock('../wsl/discovery/distro-catalog', () => ({
         getDefaultWslDistro: () => 'Ubuntu',
-        getWslHome: () => wslHome
+        getWslHome: () => wslHome,
+        getWslHomeAsync: async () => wslHome
       }))
       const ownerAuth = createCodexAuthJson(
         'owner@example.com',
@@ -376,7 +386,7 @@ describe('CodexRuntimeHomeService', () => {
         )
       }))
       const drainTasks: Promise<void>[] = []
-      vi.doMock('../wsl/wsl-runner', () => ({
+      vi.doMock('../wsl/execution/wsl-runner', () => ({
         runWslProcess: vi.fn(
           async (options: { args?: string[]; script: string; shell?: 'bash' }) => {
             try {
@@ -418,16 +428,16 @@ describe('CodexRuntimeHomeService', () => {
           }
         }
       })
-      vi.doMock('../codex/codex-home-paths', async (importOriginal) => ({
+      vi.doMock('../codex/configuration/homes/codex-home-paths', async (importOriginal) => ({
         ...(await importOriginal<typeof CodexHomePaths>()),
         syncCodexGlobalInstructionsIntoManagedHome: vi.fn()
       }))
-      vi.doMock('../codex/codex-config-mirror', async (importOriginal) => ({
+      vi.doMock('../codex/configuration/settings/codex-config-mirror', async (importOriginal) => ({
         ...(await importOriginal<typeof CodexConfigMirror>()),
         syncSystemConfigIntoManagedCodexHome: vi.fn()
       }))
       // Launch-time sibling bridging is covered elsewhere; this pins only the drain's own target.
-      vi.doMock('../codex/wsl-codex-session-bridge', async (importOriginal) => ({
+      vi.doMock('../codex/history/bridges/wsl-codex-session-bridge', async (importOriginal) => ({
         ...(await importOriginal<typeof WslCodexSessionBridge>()),
         startWslCodexSessionBridgeInBackground: vi.fn(() => Promise.resolve())
       }))
@@ -501,13 +511,13 @@ describe('CodexRuntimeHomeService', () => {
         await Promise.all(drainTasks)
         expect(existsSync(linkedSessionPath)).toBe(false)
       } finally {
-        vi.doUnmock('../codex/wsl-codex-session-bridge')
-        vi.doUnmock('../codex/codex-config-mirror')
-        vi.doUnmock('../codex/codex-home-paths')
+        vi.doUnmock('../codex/history/bridges/wsl-codex-session-bridge')
+        vi.doUnmock('../codex/configuration/settings/codex-config-mirror')
+        vi.doUnmock('../codex/configuration/homes/codex-home-paths')
         vi.doUnmock('./legacy-wsl-runtime-auth-drain')
         vi.doUnmock('./wsl-codex-auth-batch-reader')
-        vi.doUnmock('../wsl/wsl-runner')
-        vi.doUnmock('../wsl')
+        vi.doUnmock('../wsl/execution/wsl-runner')
+        vi.doUnmock('../wsl/discovery/distro-catalog')
         if (originalPlatform) {
           Object.defineProperty(process, 'platform', originalPlatform)
         }

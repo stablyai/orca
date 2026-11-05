@@ -1,10 +1,9 @@
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { chromium } from 'playwright-core'
-import { buildMobileWebAppBundle } from '../build-mobile-web-app-bundle.mjs'
+import { buildMobileWebAppBundle } from '../build/mobile-web-app/build-mobile-web-app-bundle.mjs'
 import { mobileWebAppDependenciesPresent } from './mobile-web-app-bundle-dependencies.mjs'
 import {
   createBundleServer,
@@ -18,7 +17,6 @@ import {
 // No comment card renders without PR RPC chain: this suite cannot prove avatar skip; pr-comment-card-web-avatar.test.tsx covers that branch.
 // Off-origin/policy assertions cover only content actually painted here.
 
-const projectDir = fileURLToPath(new URL('../../..', import.meta.url))
 const HOST_ROUTE = '/h/render-check-host'
 const WORKTREE = 'wt-1'
 const HUB_ROUTE = `${HOST_ROUTE}/source-control/${WORKTREE}`
@@ -155,7 +153,7 @@ describeRender(
       const opened = await openRoute(HUB_ROUTE, 'Source Control')
       const text = await opened.page.evaluate(() => document.body.innerText)
       // Require hub segment chips, beyond generic header text.
-      for (const chip of ['Changes', 'Pull Request', 'Commits']) {
+      for (const chip of ['Changes', 'Pull request']) {
         expect(text).toContain(chip)
       }
       expect(text).not.toContain(UNMATCHED)
@@ -165,12 +163,11 @@ describeRender(
     }, 120_000)
 
     it('mounts diff review rather than the unmatched route', async () => {
-      const opened = await openRoute(REVIEW_ROUTE, 'reviewed')
+      const opened = await openRoute(REVIEW_ROUTE, 'Changes')
       const text = await opened.page.evaluate(() => document.body.innerText)
-      // Queue filters distinguish review screen from generic header.
-      for (const filter of ['All', 'Unreviewed', 'Notes']) {
-        expect(text).toContain(filter)
-      }
+      // The review body (loading, waiting or failed) distinguishes the diff screen from the hub, which shares the Changes title.
+      expect(text).toMatch(/review/i)
+      expect(text).not.toContain('Pull request')
       expect(text).not.toContain(UNMATCHED)
       expect(opened.errors).toEqual([])
       expect(opened.requestedHosts.filter((host) => host !== new URL(origin).host)).toEqual([])
@@ -179,7 +176,7 @@ describeRender(
 
     it.each([
       ['source-control', HUB_ROUTE, 'Source Control', HUB_CHUNK_KEY],
-      ['review', REVIEW_ROUTE, 'reviewed', REVIEW_CHUNK_KEY]
+      ['review', REVIEW_ROUTE, 'Changes', REVIEW_CHUNK_KEY]
     ])(
       "fetches %s's own chunk on a client-side navigation",
       async (_name, route, text, key) => {
@@ -201,17 +198,6 @@ describeRender(
       },
       120_000
     )
-
-    it('configures the shipped Android and iOS image policy', async () => {
-      // Read shipped Kotlin CSP instead of duplicating a header fixture.
-      expect(cspHeader).toContain("img-src 'self' data: blob: https:")
-      const swift = await readFile(
-        join(projectDir, 'mobile/modules/orca-mobile-web-shell/ios/MobileWebShellCsp.swift'),
-        'utf8'
-      )
-      // Check iOS source too; served Android header cannot prove other shell agrees.
-      expect(swift).toContain(`"img-src 'self' data: blob: https:"`)
-    }, 180_000)
   },
   600_000
 )

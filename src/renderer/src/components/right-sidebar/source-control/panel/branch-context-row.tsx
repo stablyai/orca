@@ -1,7 +1,7 @@
 import React from 'react'
 import { ExternalLink, Loader2, RefreshCw } from 'lucide-react'
-import type { GitBranchCompareSummary } from '../../../../../../shared/git-diff-compare-types'
-import type { GitBranchLineTotal } from '../../../../../../shared/git-status-types'
+import type { GitBranchCompareSummary } from '../../../../../../shared/git/diff/git-diff-compare-types'
+import type { GitBranchLineTotal } from '../../../../../../shared/git/status/git-status-types'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -15,6 +15,7 @@ import {
   resolveSourceControlDisplayedBaseRef,
   type SourceControlBranchContextStat
 } from './branch-context-stats'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 
 function BaseRefButton({
   baseRef,
@@ -81,7 +82,7 @@ function ManualReviewLinkButton({
         'Open review page in browser'
       )}
       onClick={() => {
-        void window.api.shell.openUrl(url)
+        openAppHttpLink(url)
       }}
     />
   )

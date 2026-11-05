@@ -113,7 +113,7 @@ jobs:
           # Keep capture under runner.temp; all-negation files would include checkout leftovers in app.asar.
           ORCA_WIN_UNINSTALLER_EXPORT_PATH: ${{ runner.temp }}\uninstaller-signing\unsigned\orca-uninstaller.exe
         run: |
-          node config/scripts/ensure-native-runtime.mjs --runtime=electron
+          node config/scripts/native-build/node-addons/ensure-native-runtime.mjs --runtime=electron
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           pnpm exec electron-builder --config config/electron-builder.config.cjs --win --publish never
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -248,7 +248,7 @@ jobs:
 
       # Recompute template checksums over the signed bytes, then verify the template as release-cut does.
       - name: Reseal the orcad template over its signed binaries
-        run: node config/scripts/packaged-orcad-template.cjs --reseal-signed dist/win-unpacked inner-signing-list.txt
+        run: node config/scripts/orcad-distribution/template/packaged-orcad-template.cjs --reseal-signed dist/win-unpacked inner-signing-list.txt
 
       - name: Restore signed uninstaller for the installer rebuild
         shell: pwsh

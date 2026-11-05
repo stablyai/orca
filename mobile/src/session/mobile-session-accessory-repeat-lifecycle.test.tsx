@@ -1,3 +1,4 @@
+import { terminalInputSend } from '../terminal/mobile-terminal-operations'
 import { createElement, useLayoutEffect, useRef } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -85,6 +86,7 @@ describe('mounted accessory-repeat delivery lifecycle', () => {
         connStateRef.current = props.state
       }, [props.client, props.handle, props.state])
       const scope = {
+        sendTerminalUserInput: terminalInputSend.request,
         client: props.client,
         clientRef,
         activeHandle: props.handle,
@@ -97,7 +99,6 @@ describe('mounted accessory-repeat delivery lifecycle', () => {
         sessionTabActionSheetKeyboardHideSubRef: { current: null },
         deviceTokenRef: { current: null },
         ptyModesRef: { current: new Map() },
-        commandInputRef: { current: null },
         liveInputRef: { current: null },
         handleLiveInputAccessoryBytes: props.preflight ?? preflight,
         worktreeId: 'workspace',
@@ -161,7 +162,7 @@ describe('mounted accessory-repeat delivery lifecycle', () => {
     'unmount'
   ] as const)('retires a hold across %s and does not restart it on return', async (cutover) => {
     const view = await mount()
-    act(() => view.current().startAccessoryRepeat(input))
+    act(() => view.current().prepareAccessoryPress(input).hold())
     await view.advance(445)
     expect(view.writes().length).toBeGreaterThan(0)
     view.client.sendRequest.mockClear()
@@ -210,7 +211,7 @@ describe('mounted accessory-repeat delivery lifecycle', () => {
             finishPreflight = resolve
           })
       )
-      act(() => view.current().startAccessoryRepeat(input))
+      act(() => view.current().prepareAccessoryPress(input).hold())
       if (cutover === 'terminal') {
         await view.update({ handle: 'b' })
         await view.update({ handle: 'a' })
@@ -229,35 +230,25 @@ describe('mounted accessory-repeat delivery lifecycle', () => {
     }
   )
 
-  it.each([
-    ['handled', 3],
-    ['suppress-raw', 1]
-  ] as const)(
-    'follows the live editor’s %s result when repeating a local edit',
-    async (kind, expectedEdits) => {
+  it.each(['terminal', 'background'] as const)(
+    'retires a prepared tap and hold after %s returns to the same owner',
+    async (cutover) => {
       const view = await mount()
-      view.preflight.mockResolvedValue({ kind })
-      act(() => view.current().startAccessoryRepeat(input))
-      await view.advance(445)
-      expect(view.preflight).toHaveBeenCalledTimes(expectedEdits)
+      const press = view.current().prepareAccessoryPress(input)
+      if (cutover === 'terminal') {
+        await view.update({ handle: 'b' })
+        await view.update({ handle: 'a' })
+      } else {
+        act(() => lifecycle.listeners.forEach((listener) => listener('background')))
+        act(() => lifecycle.listeners.forEach((listener) => listener('active')))
+      }
+
+      await expect(press.tap()).resolves.toBe(false)
+      act(() => press.hold())
+      await view.advance(500)
       expect(view.writes()).toHaveLength(0)
     }
   )
-
-  it('repeats through the latest live editor when live input turns on mid-hold', async () => {
-    const view = await mount()
-    act(() => view.current().startAccessoryRepeat(input))
-    await view.advance(445)
-    expect(view.writes().length).toBeGreaterThan(0)
-    const liveEditor = vi.fn<() => Promise<TerminalLiveAccessoryInputCommitResult>>(async () => ({
-      kind: 'handled'
-    }))
-    await view.update({ preflight: liveEditor })
-    view.client.sendRequest.mockClear()
-    await view.advance(200)
-    expect(liveEditor).toHaveBeenCalled()
-    expect(view.writes()).toHaveLength(0)
-  })
 
   it('waits for each host acknowledgment and drops pending preflight after the terminal changes', async () => {
     const view = await mount()
@@ -268,7 +259,7 @@ describe('mounted accessory-repeat delivery lifecycle', () => {
           answerSend = resolve
         })
     )
-    act(() => view.current().startAccessoryRepeat(input))
+    act(() => view.current().prepareAccessoryPress(input).hold())
     await view.advance(1000)
     expect(view.writes()).toHaveLength(1)
     act(() => view.current().stopAccessoryRepeat())
@@ -283,7 +274,7 @@ describe('mounted accessory-repeat delivery lifecycle', () => {
           finishPreflight = resolve
         })
     )
-    act(() => view.current().startAccessoryRepeat(input))
+    act(() => view.current().prepareAccessoryPress(input).hold())
     await view.update({ handle: 'b' })
     await act(async () => finishPreflight({ kind: 'allow-raw' }))
     expect(view.writes()).toHaveLength(0)
@@ -302,13 +293,13 @@ describe('mounted accessory-repeat delivery lifecycle', () => {
       } else {
         view.client.sendRequest.mockRejectedValue(new Error('Disconnected'))
       }
-      act(() => view.current().startAccessoryRepeat(input))
+      act(() => view.current().prepareAccessoryPress(input).hold())
       await view.advance(1000)
       expect(view.writes()).toHaveLength(1)
       view.client.sendRequest.mockResolvedValue(accepted)
       await view.advance(1000)
       expect(view.writes()).toHaveLength(1)
-      act(() => view.current().startAccessoryRepeat(input))
+      act(() => view.current().prepareAccessoryPress(input).hold())
       await view.advance(445)
       expect(view.writes().length).toBeGreaterThan(2)
       expect(

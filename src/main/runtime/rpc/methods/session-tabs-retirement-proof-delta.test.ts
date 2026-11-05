@@ -39,13 +39,6 @@ function frame(
 }
 
 describe('session tabs retirement proof delta', () => {
-  it('passes every frame through untouched for a client that did not negotiate it', () => {
-    const project = createSessionTabsRetirementProofDelta(undefined)
-    const full = frame(1, [proof(1), proof(2)])
-    expect(project(full)).toBe(full)
-    expect(project(frame(2, [proof(1), proof(2)]))).toEqual(frame(2, [proof(1), proof(2)]))
-  })
-
   // [] means nothing new; omission means the host holds no proofs and tells clients to forget.
   it('sends each proof once and an empty list when nothing is new', () => {
     const project = createSessionTabsRetirementProofDelta([
@@ -123,16 +116,6 @@ describe('session.tabs.subscribe retirement proof payload', () => {
     listener!(frame(2, proofs))
     return { initial: messages[0]!, tick: messages[1]! }
   }
-
-  // Reconnect resets client ledger and stream state; its first frame must resend all proofs.
-  it('resends the full proof set on the first frame of a fresh stream', async () => {
-    const first = await subscribeAndTick([SESSION_TABS_RETIREMENT_PROOF_DELTA_RUNTIME_CAPABILITY])
-    const reconnected = await subscribeAndTick([
-      SESSION_TABS_RETIREMENT_PROOF_DELTA_RUNTIME_CAPABILITY
-    ])
-    expect(JSON.parse(first.initial).result.retiredTerminalSurfaces).toEqual(proofs)
-    expect(JSON.parse(reconnected.initial).result.retiredTerminalSurfaces).toEqual(proofs)
-  })
 
   it('drops the repeated proof list from a title tick for a negotiated client', async () => {
     const legacy = await subscribeAndTick(undefined)

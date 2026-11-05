@@ -5,11 +5,12 @@ import { translate } from '@/i18n/i18n'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
-import { isEligibleWorktreeParent } from '../../worktree-parent-candidates'
+import { isEligibleWorktreeParent } from '../../workspace-actions/parenting/worktree-parent-candidates'
 import { getCyclicProjectedWorktreeLineageIds } from '../../../../../../shared/sidebar-list/worktree-lineage-projection'
-import { getReorderedWorktreeIdsToUnnest } from '../../worktree-lineage-drag-drop'
-import { unnestWorktrees } from '../../worktree-unnest'
-import type { WorktreeDragGroup } from '../../worktree-manual-order'
+import { getReorderedWorktreeIdsToUnnest } from './worktree-lineage-drag-drop'
+import { unnestWorktrees } from '../../workspace-actions/parenting/worktree-unnest'
+import { getWorktreeIdFromHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
+import type { WorktreeDragGroup } from './worktree-manual-order'
 import type { WorktreeSidebarLineageDropTarget } from './row-state'
 
 export type WorktreeLineageDropCommit = ReturnType<typeof useWorktreeLineageDropCommit>
@@ -95,7 +96,8 @@ export function useWorktreeLineageDropCommit(args: {
       }
       const ids = getReorderedWorktreeIdsToUnnest({
         draggedIds: unnestArgs.draggedIds,
-        sourceGroupIds: sourceGroup.worktreeIds,
+        // Lineage is keyed by worktree id; drag groups key members by host identity.
+        sourceGroupIds: sourceGroup.worktreeIds.map(getWorktreeIdFromHostIdentity),
         lineageById: worktreeLineageById,
         worktreeMap,
         cyclicLineageIds

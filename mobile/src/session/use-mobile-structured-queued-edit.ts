@@ -9,8 +9,8 @@ import {
   useRef,
   useState
 } from 'react'
-import type { AgentSessionQueuedMessageUpdateResult } from '../../../src/shared/agent-session-wire'
-import { agentSessionSendBodyFingerprint } from '../../../src/shared/structured-agent-session-send-mutation'
+import type { AgentSessionQueuedMessageUpdateResult } from '../../../src/shared/agent-session/requests/agent-session-queued-message-wire'
+import { agentSessionSendBodyFingerprint } from '../../../src/shared/agent-session/requests/structured-agent-session-send-mutation'
 import { queuedMessageWithEdit } from '../../../src/shared/queued-message-edit'
 import {
   mobileQueuedEditValueKey,
@@ -266,11 +266,11 @@ export function useMobileStructuredQueuedEdit(args: MobileStructuredQueuedEditAr
               shown.body,
               serializeMobileQueuedEdit(shown, args.imagesCapable, args.skillsCapable)
             ).ok,
-          insertDictation: (text) => {
+          insertDictation: (insert) => {
             const inserted =
               editing &&
               inputDestination &&
-              insertMobileQueuedEditDictation(editing, inputDestination, text)
+              insertMobileQueuedEditDictation(editing, inputDestination, insert)
             if (inserted && active.current === editing) {
               render(editing)
             }

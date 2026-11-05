@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { checkDaemonProtocolCrossing } from './check-daemon-protocol-crossing.mjs'
-import { DAEMON_PROTOCOL_SOURCE_PATH } from './daemon-protocol-facts.mjs'
+import { DAEMON_PROTOCOL_SOURCE_PATH } from './daemon-protocol/schema-facts/daemon-protocol-facts.mjs'
 import { selectLatestStableReleaseTag } from './stable-release-tags.mjs'
 
 const repos = []

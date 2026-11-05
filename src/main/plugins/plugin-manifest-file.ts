@@ -1,6 +1,6 @@
 import { createReadStream } from 'node:fs'
 import { join } from 'node:path'
-import { PLUGIN_MANIFEST_FILENAME } from '../../shared/plugins/plugin-manifest'
+import { PLUGIN_MANIFEST_FILENAME } from '../../shared/plugins/manifest/plugin-manifest'
 
 // Bound startup/preview metadata reads independently of artifact payload sizes.
 export const PLUGIN_MANIFEST_MAX_BYTES = 1024 * 1024

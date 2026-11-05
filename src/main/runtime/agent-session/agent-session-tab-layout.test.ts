@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Tab } from '../../../shared/tab-types'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { withChatTabChanges, type ChatTabChange } from './agent-session-tab-layout'
 
 // rollback build (switch-off) — delete with the switch-off code post-flip
@@ -32,7 +32,7 @@ describe('a windowless host’s chat tab saves', () => {
   it('open a chat in a freshly minted group once the last one closed', () => {
     const first = change(EMPTY, [open('chat-a')])
     const firstGroup = first.tabGroups?.[WT]?.[0]?.id
-    const closed = change(first, [{ close: 'chat-a' }])
+    const closed = change(first, [{ close: 'chat-a', tabId: 'structured-agent-session-chat-a' }])
     const remembering = {
       ...closed,
       activeGroupIdByWorktree: { ...closed.activeGroupIdByWorktree, [WT]: firstGroup! }

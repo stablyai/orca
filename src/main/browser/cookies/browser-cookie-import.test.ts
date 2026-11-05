@@ -5,7 +5,7 @@ import type * as NodeFs from 'node:fs'
 const {
   appGetPathMock,
   copyFileSyncMock,
-  runProcessSyncMock,
+  runProcessMock,
   sessionFromPartitionMock,
   dialogShowOpenDialogMock,
   setPendingCookieImportMock,
@@ -14,7 +14,7 @@ const {
 } = vi.hoisted(() => ({
   appGetPathMock: vi.fn(),
   copyFileSyncMock: vi.fn(),
-  runProcessSyncMock: vi.fn(),
+  runProcessMock: vi.fn(),
   sessionFromPartitionMock: vi.fn(),
   dialogShowOpenDialogMock: vi.fn(),
   setPendingCookieImportMock: vi.fn(),
@@ -22,7 +22,7 @@ const {
   writeCookieIdentityMock: vi.fn()
 }))
 
-vi.mock('../browser-session-registry', () => ({
+vi.mock('../sessions/browser-session-registry', () => ({
   browserSessionRegistry: {
     setPendingCookieImport: setPendingCookieImportMock,
     clearPendingCookieImport: clearPendingCookieImportMock
@@ -31,7 +31,7 @@ vi.mock('../browser-session-registry', () => ({
 
 // Mock credential output at the process wrapper; it owns timeouts and console hiding.
 vi.mock('@orca/process-host', () => ({
-  runProcessSync: runProcessSyncMock
+  runProcess: runProcessMock
 }))
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFs>()
@@ -73,7 +73,7 @@ import {
   importCookiesFromBrowser,
   detectInstalledBrowsers
 } from './browser-cookie-import'
-import type { DetectedBrowser } from './sources/browser-cookie-detection-types'
+import type { DetectedBrowser } from './sources/browser-cookie-source-profiles'
 
 import { summarizeCookieImportError } from './browser-cookie-import-diagnostics'
 
@@ -441,7 +441,7 @@ describe('importCookiesFromBrowser Safari', () => {
 
     const result = await importCookiesFromBrowser(browser, 'persist:test')
 
-    expect(result).toEqual({ ok: false, reason: 'All Safari cookies are expired.' })
+    expect(result).toMatchObject({ ok: false, reason: 'All Safari cookies are expired.' })
     expect(cookieWriteMock).not.toHaveBeenCalled()
   })
 })
@@ -468,10 +468,10 @@ describe('importCookiesFromBrowser Chromium', () => {
     copyFileSyncMock.mockClear()
     setPendingCookieImportMock.mockClear()
     clearPendingCookieImportMock.mockClear()
-    runProcessSyncMock.mockReset()
-    runProcessSyncMock.mockImplementation(() => {
-      throw new Error('OS credential commands are unavailable in this test')
-    })
+    runProcessMock.mockReset()
+    runProcessMock.mockRejectedValue(
+      new Error('OS credential commands are unavailable in this test')
+    )
     sessionFromPartitionMock.mockReset()
     sessionFromPartitionMock.mockReturnValue({
       cookies: {
@@ -522,7 +522,7 @@ describe('importCookiesFromBrowser Chromium', () => {
           value: 'source-value'
         })
       )
-      expect(runProcessSyncMock).not.toHaveBeenCalled()
+      expect(runProcessMock).not.toHaveBeenCalled()
       expect(copyFileSyncMock.mock.calls.some(([source]) => source === sourceCookiesPath)).toBe(
         true
       )
@@ -554,7 +554,7 @@ describe('importCookiesFromBrowser Chromium', () => {
       }
     ]).close()
     createChromiumCookieTestDatabase(targetCookiesPath, []).close()
-    runProcessSyncMock.mockReturnValue({
+    runProcessMock.mockResolvedValue({
       code: 0,
       signal: null,
       stdout: `${password}\n`,
@@ -570,7 +570,7 @@ describe('importCookiesFromBrowser Chromium', () => {
       )
 
       expect(result.ok).toBe(true)
-      expect(runProcessSyncMock).toHaveBeenCalledWith({
+      expect(runProcessMock).toHaveBeenCalledWith({
         program: 'security',
         args: ['find-generic-password', '-s', 'Chrome Safe Storage', '-a', 'Chrome', '-w'],
         timeoutMs: 30_000

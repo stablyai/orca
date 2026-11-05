@@ -1,10 +1,11 @@
 import { translate } from '../i18n/i18n'
-import { summarizeProviderChecks } from '../../../shared/provider-check-summary'
+import { summarizeProviderChecks } from '../../../shared/source-control/checks/provider-check-summary'
 import type { PRCheckDetail } from '../../../shared/github/check-types'
 
 export type PRCheckCounts = {
   passing: number
   failing: number
+  cancelled: number
   needsAction: number
   pending: number
   neutral: number
@@ -26,7 +27,8 @@ export function getCheckCounts(checks: readonly PRCheckDetail[]): PRCheckCounts 
   ).length
   return {
     passing: summary.passed,
-    failing: summary.failed - needsAction,
+    failing: summary.failed - needsAction - (summary.cancelled ?? 0),
+    cancelled: summary.cancelled ?? 0,
     needsAction,
     pending: summary.pending,
     neutral: summary.neutral
@@ -35,7 +37,7 @@ export function getCheckCounts(checks: readonly PRCheckDetail[]): PRCheckCounts 
 
 /** `tone` keys the caller's `CHECK_COLOR`/`CHECK_ICON` maps so styling stays with the surface. */
 export type PRCheckCountChip = {
-  tone: 'success' | 'failure' | 'action_required' | 'pending' | 'neutral'
+  tone: 'success' | 'failure' | 'cancelled' | 'action_required' | 'pending' | 'neutral'
   label: string
 }
 
@@ -56,6 +58,12 @@ export function getCheckCountChips(counts: PRCheckCounts): PRCheckCountChip[] {
       label: translate('auto.components.pr-check-counts.failingChip', '{{value0}} failing', {
         value0: counts.failing
       })
+    })
+  }
+  if (counts.cancelled > 0) {
+    chips.push({
+      tone: 'cancelled',
+      label: `${counts.cancelled} ${translate('auto.components.editor.CheckRunDetailsPanel.91a4c7e2b0', 'Cancelled')}`
     })
   }
   if (counts.needsAction > 0) {
@@ -93,49 +101,38 @@ export function getChecksSummaryLabel(checks: readonly PRCheckDetail[]): string 
     return translate('auto.components.prCheckCounts.noChecksFound', 'No checks found')
   }
   if (counts.failing > 0) {
-    return counts.failing === 1
-      ? translate('auto.components.prCheckCounts.checksFailing_one', '{{count}} check failing', {
-          count: counts.failing
-        })
-      : translate('auto.components.prCheckCounts.checksFailing_other', '{{count}} checks failing', {
-          count: counts.failing
-        })
+    return translate('auto.components.prCheckCounts.checksFailing', '{{count}} checks failing', {
+      count: counts.failing,
+      defaultValue_one: '{{count}} check failing'
+    })
   }
   // Why: action_required (e.g. workflow awaiting approval) blocks merge but isn't a failure, so surface it distinctly.
   if (counts.needsAction > 0) {
-    return counts.needsAction === 1
-      ? translate(
-          'auto.components.prCheckCounts.checksNeedAction_one',
-          '{{count}} check needs action',
-          { count: counts.needsAction }
-        )
-      : translate(
-          'auto.components.prCheckCounts.checksNeedAction_other',
-          '{{count}} checks need action',
-          { count: counts.needsAction }
-        )
+    return translate(
+      'auto.components.prCheckCounts.checksNeedAction',
+      '{{count}} checks need action',
+      { count: counts.needsAction, defaultValue_one: '{{count}} check needs action' }
+    )
   }
   if (counts.pending > 0) {
-    return counts.pending === 1
-      ? translate('auto.components.prCheckCounts.checksPending_one', '{{count}} check pending', {
-          count: counts.pending
-        })
-      : translate('auto.components.prCheckCounts.checksPending_other', '{{count}} checks pending', {
-          count: counts.pending
-        })
+    return translate('auto.components.prCheckCounts.checksPending', '{{count}} checks pending', {
+      count: counts.pending,
+      defaultValue_one: '{{count}} check pending'
+    })
+  }
+  if (counts.cancelled > 0) {
+    return translate('auto.components.editor.CheckRunDetailsPanel.91a4c7e2b0', 'Cancelled')
   }
   if (counts.passing === checks.length) {
     return translate('auto.components.prCheckCounts.allChecksPassing', 'All checks passing')
   }
-  return checks.length === 1
-    ? translate(
-        'auto.components.prCheckCounts.checksPassingOfTotal_one',
-        '{{passing}} of {{count}} check passing',
-        { count: checks.length, passing: counts.passing }
-      )
-    : translate(
-        'auto.components.prCheckCounts.checksPassingOfTotal_other',
-        '{{passing}} of {{count}} checks passing',
-        { count: checks.length, passing: counts.passing }
-      )
+  return translate(
+    'auto.components.prCheckCounts.checksPassingOfTotal',
+    '{{passing}} of {{count}} checks passing',
+    {
+      count: checks.length,
+      passing: counts.passing,
+      defaultValue_one: '{{passing}} of {{count}} check passing'
+    }
+  )
 }

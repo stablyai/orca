@@ -85,14 +85,22 @@ export function createRepoRowExecutionHostLookup<T extends ExecutionHostOwnerRow
 ): ExecutionHostOwnerLookup<T> {
   const rowsById = new Map<string, T[]>()
   for (const repo of repos) {
-    const rows = rowsById.get(repo.id)
+    const repoId = repo.id
+    const rows = rowsById.get(repoId)
     if (rows) {
       rows.push(repo)
     } else {
-      rowsById.set(repo.id, [repo])
+      rowsById.set(repoId, [repo])
     }
   }
   const rowsFor = (repoId: string): readonly T[] => rowsById.get(repoId) ?? EMPTY_ROWS
+  return createRepoExecutionHostLookup(rowsFor)
+}
+
+/** Reuse an existing complete repo index without changing execution-host matching semantics. */
+export function createRepoExecutionHostLookup<T extends ExecutionHostOwnerRow>(
+  rowsFor: (repoId: string) => readonly T[]
+): ExecutionHostOwnerLookup<T> {
   return {
     byId: (repoId) => {
       const rows = rowsFor(repoId)

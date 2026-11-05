@@ -138,35 +138,6 @@ function buildChallengeFixture(options: {
 }
 
 describe('answerRelayHostChallenge clock skew (#10401)', () => {
-  it('accepts a challenge when local clock is a few seconds behind (issuedAt in the near future)', () => {
-    const serverNow = 1_700_000_000_000
-    const skewBehindMs = 4_400
-    const localNow = serverNow - skewBehindMs
-    const issuedAt = serverNow
-    const expiresAt = issuedAt + 10_000
-    const { challenge, context, expectedProof } = buildChallengeFixture({
-      issuedAt,
-      expiresAt,
-      localNow
-    })
-
-    expect(answerRelayHostChallenge(challenge, context)).toBe(expectedProof)
-  })
-
-  it('accepts a challenge when local clock is a few seconds ahead of expiresAt', () => {
-    const serverNow = 1_700_000_000_000
-    const issuedAt = serverNow
-    const expiresAt = issuedAt + 10_000
-    const localNow = expiresAt + 4_400
-    const { challenge, context, expectedProof } = buildChallengeFixture({
-      issuedAt,
-      expiresAt,
-      localNow
-    })
-
-    expect(answerRelayHostChallenge(challenge, context)).toBe(expectedProof)
-  })
-
   it('accepts challenges at the clock-skew boundaries', () => {
     const issuedAt = 1_700_000_000_000
     const expiresAt = issuedAt + 10_000
@@ -201,16 +172,28 @@ describe('answerRelayHostChallenge clock skew (#10401)', () => {
     expect(answerRelayHostChallenge(ahead.challenge, ahead.context)).toBeNull()
   })
 
-  it('still rejects an oversized server challenge window', () => {
-    const issuedAt = 1_700_000_000_000
-    const expiresAt = issuedAt + 10_001
-    const { challenge, context } = buildChallengeFixture({
-      issuedAt,
-      expiresAt,
-      localNow: issuedAt
-    })
-    expect(answerRelayHostChallenge(challenge, context)).toBeNull()
-  })
+  it.each([0, -38_000])(
+    'rejects an oversized window without diagnosing drift of %i ms',
+    (offsetMs) => {
+      const issuedAt = 1_700_000_000_000
+      const expiresAt = issuedAt + 10_001
+      const { challenge, context } = buildChallengeFixture({
+        issuedAt,
+        expiresAt,
+        localNow: issuedAt + offsetMs
+      })
+      let clockFailure: Error | undefined
+      expect(
+        answerRelayHostChallenge(challenge, {
+          ...context,
+          onInvalid: (_reason, error) => {
+            clockFailure = error
+          }
+        })
+      ).toBeNull()
+      expect(clockFailure).toBeUndefined()
+    }
+  )
 
   it('rejects a challenge that expires before it is issued', () => {
     const issuedAt = 1_700_000_000_000

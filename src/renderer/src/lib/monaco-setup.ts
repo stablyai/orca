@@ -9,6 +9,7 @@ import cssWorker from 'monaco-editor/esm/vs/language/css/css.worker?worker'
 import htmlWorker from 'monaco-editor/esm/vs/language/html/html.worker?worker'
 import tsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker'
 import { registerAstroLanguage } from './monaco-languages/register-astro'
+import { registerCMakeLanguage } from './monaco-languages/register-cmake'
 import { registerCudaLanguage } from './monaco-languages/register-cuda'
 import { registerDotenvLanguage } from './monaco-languages/register-dotenv'
 import { registerGlimmerLanguages } from './monaco-languages/register-glimmer'
@@ -25,6 +26,7 @@ import { registerVueLanguage } from './monaco-languages/register-vue'
 import { registerZigLanguage } from './monaco-languages/register-zig'
 import { installMonacoDelayerCancellationGuard } from './monaco-delayer-cancellation-guard'
 import { installMonacoDiffEditorDisposalGuard } from './monaco-diff-editor-disposal'
+import { installMonacoDiffViewportTokenization } from './monaco-diff-viewport-tokenization'
 import { installMonacoPeekReferencesPreviewOptions } from './monaco-peek-preview-options'
 import { installMonacoContextMenuPaste } from '@/components/editor/install-monaco-context-menu-paste'
 import { runMonacoSetupSteps } from './monaco-setup-steps'
@@ -82,6 +84,7 @@ runMonacoSetupSteps([
   ['Typst language registration', () => registerTypstLanguage(monaco)],
   ['Zig language registration', () => registerZigLanguage(monaco)],
   ['Groovy language registration', () => registerGroovyLanguage(monaco)],
+  ['CMake language registration', () => registerCMakeLanguage(monaco)],
   ['JSONL language registration', () => registerJsonlLanguage(monaco)],
   ['dotenv language registration', () => registerDotenvLanguage(monaco)],
   ['Quarto language registration', () => registerQuartoLanguage(monaco)],
@@ -89,6 +92,7 @@ runMonacoSetupSteps([
   ['shell Markdown alias registration', () => registerShellMarkdownAliases(monaco)],
   ['delayer cancellation guard', installMonacoDelayerCancellationGuard],
   ['diff editor disposal guard', () => installMonacoDiffEditorDisposalGuard(monaco)],
+  ['diff viewport tokenization', () => installMonacoDiffViewportTokenization(monaco)],
   ['peek references preview options', installMonacoPeekReferencesPreviewOptions],
   // Sandboxed navigator.clipboard blocks Monaco Paste; use trusted IPC as native Cmd+V does.
   ['context-menu paste', () => installMonacoContextMenuPaste(monaco)],

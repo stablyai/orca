@@ -10,9 +10,9 @@ import {
 } from '@/runtime/runtime-git-diff-client'
 import { getRuntimeGitScope } from '@/runtime/runtime-git-client-context'
 import type { DiffContent, InFlightContentRead } from './editor-panel-content-types'
-import { canUseChangesModeForFile } from './editor-panel-file-mode'
-import type { EditorPanelContentLoadOptions } from './useEditorPanelExternalContentEvents'
-import { stampCleanTabDiskBaseline } from './editor-clean-tab-disk-baseline'
+import { canUseChangesModeForFile } from './view-mode/editor-panel-file-mode'
+import type { EditorPanelContentLoadOptions } from './external-changes/useEditorPanelExternalContentEvents'
+import { stampCleanTabDiskBaseline } from './external-changes/editor-clean-tab-disk-baseline'
 import { translate } from '@/i18n/i18n'
 import { isWslDistroNotRunningRefusal } from '../../../../shared/wsl-distro-not-running-refusal'
 
@@ -43,7 +43,7 @@ function inFlightDiffKey(
     file.diffSource === 'commit' && file.commitCompare
       ? `${file.commitCompare.parentOid ?? 'empty-tree'}..${file.commitCompare.commitOid}::${file.branchOldPath ?? ''}`
       : ''
-  return `${connectionId ?? ''}::${file.diffSource ?? ''}::${compareAgainstHead ? 'head' : 'default'}::${file.filePath}::${branch}::${commit}`
+  return `${connectionId ?? ''}::${file.diffSource ?? ''}::${compareAgainstHead ? 'head' : 'default'}::${file.filePath}::${file.branchOldPath ?? ''}::${branch}::${commit}`
 }
 
 export function useEditorPanelDiffContentLoader({
@@ -148,7 +148,10 @@ export function useEditorPanelDiffContentLoader({
                     {
                       filePath: file.relativePath,
                       staged: effectiveDiffSource === 'staged',
-                      compareAgainstHead
+                      compareAgainstHead,
+                      ...(effectiveDiffSource === 'staged' && file.branchOldPath
+                        ? { oldPath: file.branchOldPath }
+                        : {})
                     },
                     wake
                   )

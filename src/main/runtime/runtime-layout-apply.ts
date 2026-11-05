@@ -6,7 +6,7 @@ import type {
   RenameTabsCommand,
   UntitledTab
 } from '../../shared/workspace-layout/workspace-layout-command-types'
-import type { TerminalLeafMoveRequest } from '../../shared/terminal-leaf-move'
+import type { TerminalLeafMoveRequest } from '../../shared/workspace-layout/terminal-leaf-move'
 import { renameTabCommandsOf } from '../../shared/workspace-layout/workspace-layout-commands'
 import { markAgentLaunchesClosedByUser } from '../agent-launch/agent-launch-pane-attachment'
 import { isWslMoveWorkspaceSessionFrozen } from '../persistence/moving-wsl-projects/wsl-move-scope-guard'
@@ -79,7 +79,8 @@ export async function applyWindowLayoutCommand(
     const terminalTabId = terminalIdOf(store, hostIds[0], command.workspace, command.tabIds[0])
     const reply = await store.applyLayoutCommand(
       { ...command, force: command.refusePinned ? command.force === true : true },
-      holders
+      holders,
+      run
     )
     // Cancel launches only for tabs actually closed; refused pinned tabs still receive theirs.
     if (
@@ -107,7 +108,8 @@ export async function applyWindowLayoutCommand(
             : {})
         }
       },
-      holders
+      holders,
+      run
     )
     if (reply.ok && reply.result.tabId) {
       const move = {

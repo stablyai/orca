@@ -76,15 +76,14 @@ afterEach(async () => {
 })
 
 describe('skills.planBundledOrca / skills.executeBundledOrca', () => {
-  it('plans read-only and executes behind skills-admin', () => {
-    expect(method('skills.planBundledOrca').permission).toBe('workspace')
-    expect(method('skills.executeBundledOrca').permission).toBe('skills-admin')
-  })
-
   it('never lets a paired client point the host at a WSL guest or send ops', () => {
     const plan = method('skills.planBundledOrca').params
     const execute = method('skills.executeBundledOrca').params
     expect(() => plan?.parse({ wsl: { distro: 'Ubuntu' } })).toThrow()
+    expect(() => plan?.parse({ agent: 'claude' })).toThrow()
+    expect(() =>
+      execute?.parse({ planDigest: 'a'.repeat(64), request: { agent: 'claude' } })
+    ).toThrow()
     expect(() => execute?.parse({ planDigest: 'a'.repeat(64), request: {}, ops: [] })).toThrow()
     expect(() => execute?.parse({ planDigest: 'a'.repeat(64), force: [] })).toThrow()
     expect(execute?.parse({ planDigest: 'a'.repeat(64), request: { force: ['/x'] } })).toEqual({

@@ -13,7 +13,7 @@
   "rules": [
     {
       "id": "idle_title",
-      "why": "Orca writes an explicit `Pi ready` title at rest, while a shell auto-title names Pi from launch, mid-turn too, so a bare name counts only once quiet (#6011).",
+      "why": "Pi's session title announces rest, while a shell auto-title names Pi from launch, mid-turn too, so a bare name counts only once quiet (#6011).",
       "priority": 100,
       "when": { "region": "title", "status": "idle" },
       "answer": { "state": "idle", "strength": "weak", "requiresQuiet": true }

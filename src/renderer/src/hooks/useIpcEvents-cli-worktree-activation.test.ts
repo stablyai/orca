@@ -1,3 +1,4 @@
+import type * as UIZoomLevelModule from '../../../shared/ui-zoom-level'
 import type * as ReactModule from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -83,17 +84,18 @@ describe('useIpcEvents CLI-created worktree activation', () => {
       activateAndRevealWorktree,
       ensureWorktreeHasInitialTerminal: vi.fn()
     }))
-    vi.doMock('@/components/sidebar/visible-worktrees', () => ({
+    vi.doMock('@/components/sidebar/worktree-list/listing/visible-worktrees', () => ({
       getVisibleWorktreeIds: () => []
     }))
     vi.doMock('@/lib/editor-font-zoom', () => ({
       nextEditorFontZoomLevel: vi.fn(() => 0),
       computeEditorFontSize: vi.fn(() => 13)
     }))
-    vi.doMock('@/components/settings/SettingsConstants', () => ({
+    vi.doMock('../../../shared/ui-zoom-level', async (importOriginal) => ({
+      ...(await importOriginal<typeof UIZoomLevelModule>()),
       zoomLevelToPercent: vi.fn(() => 100),
-      ZOOM_MIN: -3,
-      ZOOM_MAX: 3
+      UI_ZOOM_MIN: -3,
+      UI_ZOOM_MAX: 3
     }))
     vi.doMock('@/lib/zoom-events', () => ({
       dispatchZoomLevelChanged: vi.fn()
@@ -350,17 +352,18 @@ describe('useIpcEvents CLI-created worktree activation', () => {
       activateAndRevealWorktree: vi.fn(),
       ensureWorktreeHasInitialTerminal: vi.fn()
     }))
-    vi.doMock('@/components/sidebar/visible-worktrees', () => ({
+    vi.doMock('@/components/sidebar/worktree-list/listing/visible-worktrees', () => ({
       getVisibleWorktreeIds: () => []
     }))
     vi.doMock('@/lib/editor-font-zoom', () => ({
       nextEditorFontZoomLevel: vi.fn(() => 0),
       computeEditorFontSize: vi.fn(() => 13)
     }))
-    vi.doMock('@/components/settings/SettingsConstants', () => ({
+    vi.doMock('../../../shared/ui-zoom-level', async (importOriginal) => ({
+      ...(await importOriginal<typeof UIZoomLevelModule>()),
       zoomLevelToPercent: vi.fn(() => 100),
-      ZOOM_MIN: -3,
-      ZOOM_MAX: 3
+      UI_ZOOM_MIN: -3,
+      UI_ZOOM_MAX: 3
     }))
     vi.doMock('@/lib/zoom-events', () => ({
       dispatchZoomLevelChanged: vi.fn()

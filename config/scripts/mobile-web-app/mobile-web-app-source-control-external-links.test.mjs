@@ -2,7 +2,7 @@
 // Each route independently reaches PR sidebar’s check/permalink/Markdown openers; census also covers future callers.
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { mobileWebAppRouteClosure } from '../build-mobile-web-app-bundle.mjs'
+import { mobileWebAppRouteClosure } from '../build/mobile-web-app/build-mobile-web-app-bundle.mjs'
 import { mobileWebAppDependenciesPresent } from './mobile-web-app-bundle-dependencies.mjs'
 import {
   EXTERNAL_LINK_SEAM as SEAM,
@@ -15,7 +15,7 @@ const describeClosure = mobileWebAppDependenciesPresent() ? describe : describe.
 const HUB = 'app/h/[hostId]/source-control/[worktreeId].tsx'
 const REVIEW = 'app/h/[hostId]/review/[worktreeId].tsx'
 
-const PR_COMMENT_CARD = 'src/components/pr-sidebar/PRCommentCard.tsx'
+const PR_COMMENT_CARD = 'src/components/pr-sidebar/PrThreadRow.tsx'
 
 const CLIPBOARD_SEAM = 'src/platform/clipboard.web.ts'
 

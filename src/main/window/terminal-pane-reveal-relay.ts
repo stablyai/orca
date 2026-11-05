@@ -1,12 +1,12 @@
 import { randomUUID } from 'node:crypto'
 
-import { app, ipcMain } from 'electron'
-import type { BrowserWindow } from 'electron'
+import { app, ipcMain, type BrowserWindow } from 'electron'
+
 import type {
   TerminalPaneRevealReply,
   TerminalPaneRevealTarget
-} from '../../shared/terminal-pane-reveal'
-import { addFanoutListener } from '../event-listener-fanout'
+} from '../../shared/workspace-layout/terminal-pane-reveal'
+import { addFanoutListener } from '../runtime/events/event-listener-fanout'
 import { abortWhenRendererGone } from '../ipc/renderer-lifetime-abort'
 import { focusExistingMainWindow } from './focus-existing-window'
 

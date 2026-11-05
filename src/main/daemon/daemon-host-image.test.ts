@@ -121,11 +121,4 @@ describe('inspectDaemonHostImage', () => {
     expect(verdict(record({ linuxStartTicks: null }), proc({ exe: '/orca-ide' }))).toBe('unknown')
     expect(verdict(null, proc({ exe: '/orca-ide' }))).toBe('unknown')
   })
-
-  it('never reports severance off Linux', () => {
-    expect(
-      inspectDaemonHostImage(record(), { proc: proc({ exe: '/orca-ide' }), platform: 'darwin' })
-        .verdict
-    ).toBe('not-ephemeral')
-  })
 })

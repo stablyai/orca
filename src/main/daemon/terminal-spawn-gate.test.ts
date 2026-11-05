@@ -4,7 +4,7 @@ import type { SubprocessHandle } from './session-subprocess-handle'
 import { TerminalHost, type TerminalHostOptions } from './terminal-host'
 import { TerminalSpawnGate, type TerminalSpawnAdmissionMode } from './terminal-spawn-gate'
 import type { HostPressureLevel, SpawnIntent } from '../../shared/host-spawn-admission'
-import { TERMINAL_HOST_CAP_HINT } from '../../shared/terminal-spawn-error-copy'
+import { TERMINAL_HOST_CAP_HINT } from '../../shared/terminal/pty/lifecycle/terminal-spawn-error-copy'
 import { HostTerminalLedger } from './host-terminal-ledger'
 
 type SpawnSubprocess = TerminalHostOptions['spawnSubprocess']
@@ -153,7 +153,8 @@ describe('TerminalSpawnGate', () => {
     expect(gate.snapshot()).toMatchObject({ liveAutomatic: 0, inFlight: { interactive: 0 } })
     expect(log).not.toHaveBeenCalled()
 
-    spawnSubprocess.mockImplementationOnce(() => {
+    spawnSubprocess.mockImplementationOnce((options) => {
+      options.onCreationDisposition?.({ kind: 'no-fork' })
       throw new Error('spawn failed')
     })
     await expect(restore('restore-fails')).rejects.toThrow('spawn failed')
@@ -269,7 +270,8 @@ describe('TerminalSpawnGate', () => {
 
     it('frees the slot of a fork that failed', async () => {
       capAt(1)
-      spawnSubprocess.mockImplementationOnce(() => {
+      spawnSubprocess.mockImplementationOnce((options) => {
+        options.onCreationDisposition?.({ kind: 'no-fork' })
         throw new Error('spawn failed')
       })
       await expect(shell('a')).rejects.toThrow('spawn failed')

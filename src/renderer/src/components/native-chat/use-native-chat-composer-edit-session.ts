@@ -1,7 +1,15 @@
 import { captureNativeChatEditDraftDestination } from './native-chat-composer-draft-store'
 import { useNativeChatPickerCommandDispatch } from './use-native-chat-picker-command-dispatch'
-import { useCallback, useLayoutEffect, useMemo, type RefObject } from 'react'
-import type { AgentType } from '../../../../shared/agent-status-types'
+import {
+  useCallback,
+  useImperativeHandle,
+  useLayoutEffect,
+  useMemo,
+  type ForwardedRef,
+  type RefObject
+} from 'react'
+import { useLatestHandler } from '@/lib/use-latest-handler'
+import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { NativeChatPickerItem } from '../../../../shared/native-chat/input/native-chat-picker-items'
 import { prepareQueuedMessageEditText } from '../../../../shared/queued-message-edit-command'
 import { translate } from '@/i18n/i18n'
@@ -9,6 +17,7 @@ import { registerDictationComposerTarget } from '../dictation/dictation-insertio
 import { insertNativeChatComposerDraftText } from './native-chat-composer-draft-insertion'
 import { registerNativeChatComposerDestination } from './native-chat-composer-destination'
 import type {
+  NativeChatComposerSendIntent,
   NativeChatComposerProps,
   NativeChatComposerHandle,
   NativeChatStructuredComposerTransport
@@ -18,6 +27,7 @@ export function useNativeChatComposerEditSession({
   editSession,
   root,
   handle,
+  ref,
   draftScopeKey,
   agent,
   structuredTransport,
@@ -32,6 +42,8 @@ export function useNativeChatComposerEditSession({
   editSession: NativeChatComposerProps['editSession']
   root: RefObject<HTMLDivElement | null>
   handle: RefObject<NativeChatComposerHandle | null>
+  /** The composer's own ref: its handle plus `submit`, which sends as Enter does. */
+  ref: ForwardedRef<NativeChatComposerHandle>
   draftScopeKey: string
   agent: AgentType
   structuredTransport: NativeChatStructuredComposerTransport | undefined
@@ -40,7 +52,7 @@ export function useNativeChatComposerEditSession({
   setNotice: (text: string) => void
   disabled: boolean
   sendHeld: boolean
-  sendMessage: () => void
+  sendMessage: (intent?: NativeChatComposerSendIntent) => void
   completeItem: (item: NativeChatPickerItem) => void
 }) {
   const sessionCommands = structuredTransport?.sessionCommands
@@ -59,17 +71,21 @@ export function useNativeChatComposerEditSession({
 
   useLayoutEffect(() => {
     const element = root.current
-    const destination = captureNativeChatEditDraftDestination(draftScopeKey)
-    if (!element || !destination) {
+    if (!element) {
       return
     }
+    const destination = captureNativeChatEditDraftDestination(draftScopeKey)
     return registerDictationComposerTarget(element, (text) => {
-      if (!destination.active) {
+      if (destination?.active === false) {
         return
       }
-      insertNativeChatComposerDraftText(destination.scopeKey, text)
+      const focused = element.ownerDocument.activeElement
+      insertNativeChatComposerDraftText(destination?.scopeKey ?? draftScopeKey, text, {
+        // The mounted editor takes focus; don't pull it from a field the user moved to mid-dictation.
+        draftOnly: !!focused && focused !== element.ownerDocument.body && !element.contains(focused)
+      })
     })
-  }, [draftScopeKey, root, handle])
+  }, [draftScopeKey, root])
 
   const refuseEditCommand = useCallback(
     (text: string): boolean => {
@@ -86,15 +102,21 @@ export function useNativeChatComposerEditSession({
     },
     [editSession, setNotice, acceptsText]
   )
-  const send = useCallback(() => {
-    if (!editSession) {
-      sendMessage()
-      return
-    }
-    if (!disabled && !sendHeld && editSession.canSave) {
-      editSession.save()
-    }
-  }, [disabled, editSession, sendHeld, sendMessage])
+  const send = useCallback(
+    (intent?: NativeChatComposerSendIntent) => {
+      if (!editSession) {
+        sendMessage(intent)
+        return
+      }
+      if (!disabled && !sendHeld && editSession.canSave) {
+        editSession.save()
+      }
+    },
+    [disabled, editSession, sendHeld, sendMessage]
+  )
+  const submit = useLatestHandler(() => send())
+  // The pane's own handle object, so its identity changes only when that handle does.
+  useImperativeHandle(ref, () => Object.assign(handle.current!, { submit }))
   const chooseEditItem = useCallback(
     (item: Parameters<typeof completeItem>[0]) => {
       if (item.kind === 'command' && refuseEditCommand(`/${item.name}`)) {

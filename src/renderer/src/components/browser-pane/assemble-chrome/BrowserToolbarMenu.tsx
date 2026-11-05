@@ -19,6 +19,8 @@ import { BrowserToolbarMenuDropdown } from './browser-toolbar-menu-dropdown'
 import { BrowserToolbarProfileDialogs } from './browser-toolbar-profile-dialogs'
 import { translate } from '@/i18n/i18n'
 import type { BrowserChromeOverflowMenuProps } from './browser-chrome-folded-tools'
+import { browserCookieImportFailureText } from '@/lib/browser-cookie-import-error-copy'
+import { setBrowserPageAgentViewportSize } from '../host-guest/browser-page-viewport'
 
 type BrowserToolbarMenuProps = {
   currentProfileId: string | null
@@ -64,6 +66,8 @@ export function BrowserToolbarMenu({
   const shouldForceMenuOpen = browserCookieTourStepActive && isActive && !importHintVisible
 
   const applyViewportPreset = (nextId: BrowserViewportPresetId | null): void => {
+    // The user's pick replaces an agent's viewport, in the box and in the page.
+    setBrowserPageAgentViewportSize(browserPageId, null)
     setBrowserPageViewportPreset(browserPageId, nextId)
     const preset = getBrowserViewportPreset(nextId)
     const override = preset ? browserViewportPresetToOverride(preset) : null
@@ -240,7 +244,7 @@ export function BrowserToolbarMenu({
         result
       )
     } else {
-      toast.error(result.reason)
+      toast.error(browserCookieImportFailureText(result))
     }
   }
 
@@ -257,7 +261,7 @@ export function BrowserToolbarMenu({
         result
       )
     } else if (result.reason !== 'canceled') {
-      toast.error(result.reason)
+      toast.error(browserCookieImportFailureText(result))
     }
   }
 

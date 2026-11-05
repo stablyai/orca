@@ -73,23 +73,15 @@ export function WorkspaceSpaceCompactPanel({
                           value1: analysis.unavailableWorktreeCount
                         }
                       )
-                    : analysis.scannedWorktreeCount === 1
-                      ? translate(
-                          'workspaceSpace.compact.linkedAndScannedCount_one',
-                          '{{size}} in linked worktrees · {{count}} workspace',
-                          {
-                            size: formatBytes(analysis.reclaimableBytes),
-                            count: analysis.scannedWorktreeCount
-                          }
-                        )
-                      : translate(
-                          'workspaceSpace.compact.linkedAndScannedCount_other',
-                          '{{size}} in linked worktrees · {{count}} workspaces',
-                          {
-                            size: formatBytes(analysis.reclaimableBytes),
-                            count: analysis.scannedWorktreeCount
-                          }
-                        )
+                    : translate(
+                        'workspaceSpace.compact.linkedAndScannedCount',
+                        '{{size}} in linked worktrees · {{count}} workspaces',
+                        {
+                          size: formatBytes(analysis.reclaimableBytes),
+                          count: analysis.scannedWorktreeCount,
+                          defaultValue_one: '{{size}} in linked worktrees · {{count}} workspace'
+                        }
+                      )
                 : isScanning
                   ? (progressLabel ??
                     translate(

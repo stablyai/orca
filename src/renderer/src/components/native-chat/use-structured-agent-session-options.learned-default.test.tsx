@@ -13,20 +13,30 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
 vi.mock('./native-chat-session-option-settings-write', () => ({
   enqueueSessionOptionSettingsWrite: vi.fn()
 }))
-vi.mock('@/lib/structured-agent-session-launch-options', () => ({
+vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-options', () => ({
   holdStructuredAgentSessionLaunchOption: vi.fn(),
   getStructuredAgentSessionLaunchSelection: () => null
 }))
 
 import type {
   AgentSessionModelCatalogResult,
-  AgentSessionModelOption,
-  AgentSessionOptionsResult
-} from '../../../../shared/agent-session-wire'
+  AgentSessionModelOption
+} from '../../../../shared/agent-session/agent-session-wire'
+import type { AgentSessionOptionsResult } from '../../../../shared/agent-session/options/agent-session-options-result'
 import type { SessionOptionDescriptor } from '../../../../shared/native-chat/input/native-chat-session-options'
-import { resetHostModelCatalogSnapshotsForTests } from '@/runtime/host-model-catalog-snapshots'
+import {
+  recordHostModelCatalogSnapshot,
+  resetHostModelCatalogSnapshotsForTests
+} from '@/runtime/host-model-catalog-snapshots'
 import type { StructuredAgentSessionMutate } from './use-structured-agent-session-mutate'
 import { useStructuredAgentSessionOptions } from './use-structured-agent-session-options'
+import { useStructuredAgentSessionSendOptions } from './use-structured-agent-session-send-options'
+import type { AcpDeclaredEffortFixtureModule } from '../../../../shared/acp-declared-effort.test-fixture-contract'
+import {
+  structuredAgentSessionMessageSelection,
+  structuredAgentSessionShownSnapshot
+} from '../../../../shared/agent-session/options/structured-agent-session-option-view'
+import { firstFrameOptionState } from './structured-agent-session-option-first-frame'
 
 // Only the first chat without a saved pick may wait to name its model; later launches use the host’s learned default.
 
@@ -85,13 +95,12 @@ function pill(snapshot: readonly SessionOptionDescriptor[]): Pill {
 
 const LOCAL = { kind: 'local' } as const
 const NOT_STARTED: { running: { fence: number } | null } = { running: null }
-const NO_HELD = {}
 const NO_MUTATE: StructuredAgentSessionMutate = vi.fn()
 
 function renderChat(agent: string, sessionId: string, worktree: string) {
   const frames: Pill[] = []
   // Stable across renders, as the pane's own props are: a new object would re-run every read.
-  const launch = { kind: 'new' as const, heldOptions: NO_HELD, worktree }
+  const launch = { kind: 'new' as const, worktree }
   const view = renderHook(
     ({ running }: { running: { fence: number } | null }) => {
       const options = useStructuredAgentSessionOptions({
@@ -108,7 +117,11 @@ function renderChat(agent: string, sessionId: string, worktree: string) {
         launch
       })
       frames.push(pill(options.optionSnapshot))
-      return options
+      const capture = useStructuredAgentSessionSendOptions(sessionId, launch, {
+        ...options.sendSource,
+        takesSelection: true
+      })
+      return { ...options, capture }
     },
     { initialProps: NOT_STARTED }
   )
@@ -169,10 +182,10 @@ describe('a second new chat after one that named no model', () => {
       const first = await firstChatRuns(agent, 'id:wt-1')
 
       const second = renderChat(agent, `${agent}-2`, 'id:wt-1')
-      expect(second.frames[0]).toEqual({ model: CASES[agent].runs, effort: 'high' })
+      expect(second.frames[0]).toEqual({ model: CASES[agent].runs, effort: null })
       await new Promise((resolve) => setTimeout(resolve, 0))
       expect(
-        second.frames.every((frame) => frame.model === CASES[agent].runs && frame.effort === 'high')
+        second.frames.every((frame) => frame.model === CASES[agent].runs && frame.effort === null)
       ).toBe(true)
       first.unmount()
       second.unmount()
@@ -183,8 +196,74 @@ describe('a second new chat after one that named no model', () => {
     hostFor('grok')
     const first = await firstChatRuns('grok', 'id:wt-1')
     const elsewhere = renderChat('grok', 'grok-2', 'id:wt-2')
-    expect(elsewhere.frames[0]).toEqual({ model: 'grok-4.6', effort: 'high' })
+    expect(elsewhere.frames[0]).toEqual({ model: 'grok-4.6', effort: null })
     first.unmount()
     elsewhere.unmount()
   })
+})
+
+const { recordedEffortCase } = await vi.importActual<AcpDeclaredEffortFixtureModule>(
+  '../../../../main/acp/acp-declared-effort.test-fixture'
+)
+
+describe('declared context at the desktop consumer', () => {
+  it.each(['low', 'max', 'opencode', 'absent'] as const)(
+    'shows %s configured context without turning it into first-send effort',
+    async (input) => {
+      const { agent, model, display, catalog, live, resting, launch } =
+        await recordedEffortCase(input)
+      resetHostModelCatalogSnapshotsForTests()
+      recordHostModelCatalogSnapshot(LOCAL, agent, '/declared-folder', catalog)
+      const first = firstFrameOptionState(agent, LOCAL, {
+        newLaunch: true,
+        seedsModel: false,
+        worktree: '/declared-folder'
+      })
+      expect(structuredAgentSessionMessageSelection(first)).toEqual({})
+      expect(pill(structuredAgentSessionShownSnapshot(first))).toEqual({
+        model,
+        effort: display ?? null
+      })
+      for (const answer of [live, resting, launch]) {
+        mocks.call.mockReset()
+        resetHostModelCatalogSnapshotsForTests()
+        mocks.call.mockImplementation(async (_target: unknown, method: string) =>
+          method === 'agentSession.modelCatalog'
+            ? catalog
+            : method === 'agentSession.options'
+              ? answer
+              : new Promise(() => {})
+        )
+        // Only the chats that saved the model send it.
+        const sent = answer === launch ? {} : { model }
+        const chat = renderChat(
+          agent,
+          `declaration-${input}-${answer === live ? 'live' : 'rest'}`,
+          'id:declaration'
+        )
+        chat.rerender({ running: { fence: 1 } })
+        await waitFor(() =>
+          expect(chat.result.current.sendSource.optionStateRef.current.optionsAnswerPresent).toBe(
+            true
+          )
+        )
+        // A readback without this model's effort menu shows no effort, whatever the declaration.
+        const offersEffort = answer.models.find((row) => row.id === model)!.efforts.length > 0
+        const shown = offersEffort ? display : null
+        expect(chat.frames.at(-1)).toEqual({ model, effort: shown ?? null })
+        const effort = chat.result.current.optionSnapshot.find((o) => o.id === 'effort')
+        if (offersEffort) {
+          expect(effort?.valueSource).toBe(display ? 'default' : 'unknown')
+        } else {
+          expect(effort).toBeUndefined()
+        }
+        expect(chat.result.current.capture()).toEqual({ selection: sent })
+        mocks.call.mockImplementation(() => new Promise(() => {}))
+        chat.rerender({ running: { fence: 2 } })
+        expect(chat.frames.at(-1)).toEqual({ model, effort: shown ?? null })
+        expect(chat.result.current.capture()).toEqual({ selection: sent })
+        chat.unmount()
+      }
+    }
+  )
 })

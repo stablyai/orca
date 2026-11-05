@@ -5,7 +5,7 @@ on:
     types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
     paths:
       - '.github/workflows/macos-updater-tests.yml'
-      - 'src/main/macos-update-running-instances*'
+      - 'src/main/updater/mac-install/macos-update-running-instances*'
       - 'src/main/updater*'
       - 'src/main/updater/**'
       - 'native/macos-shipit-scheduling/**'
@@ -44,18 +44,17 @@ jobs:
           native-runtime: node
           cache-electron-package: 'true'
       - name: Install the pinned Electron binary for native updater probes
-        run: node config/scripts/install-electron-package-binary.mjs
+        run: node config/scripts/electron-installation/platform-layout/install-electron-package-binary.mjs
       - name: Exercise native application registry and update shutdown
         env:
           ORCA_BACKGROUND_LAUNCH: '1'
         run: >-
           pnpm exec vitest run --config config/vitest.config.ts
           config/scripts/macos-shipit-scheduling.test.mjs
-          src/main/macos-update-running-instances.test.ts
-          src/main/macos-update-running-instances.integration.test.ts
-          src/main/updater.mac-install.test.ts
-          src/main/updater.headless-serve-install.test.ts
-          src/main/updater-mac-quit-guard.test.ts
+          src/main/updater/mac-install/macos-update-running-instances.integration.test.ts
+          src/main/updater/mac-install/updater.mac-install.test.ts
+          src/main/updater/updater.headless-serve-install.test.ts
+          src/main/updater/mac-install/updater-mac-quit-guard.test.ts
           src/main/startup/main-process-quit-update-veto.test.ts
           src/main/window/main-window-state-lifecycle.test.ts
           src/main/window/dashboard-popout-window.test.ts

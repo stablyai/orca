@@ -1,7 +1,7 @@
 import type {
   PtyFencedTerminationRequest,
   PtyFencedTerminationOutcome
-} from '../../shared/pty-fenced-termination'
+} from '../../shared/terminal/pty/lifecycle/pty-fenced-termination'
 import type { Session } from './session'
 import type { ClaimedAgentPtyOwnerRegistry } from '../../shared/claimed-agent-pty-owner'
 
@@ -13,7 +13,7 @@ export function beginTerminalHostFencedTermination(
   request: PtyFencedTerminationRequest,
   deps: {
     sessions: ReadonlyMap<string, Session>
-    pendingCreations: ReadonlyMap<string, Promise<void>>
+    pendingCreations: ReadonlyMap<string, unknown>
     owners: ClaimedAgentPtyOwnerRegistry
     kill: (id: string, options: { immediate: true }) => Promise<void>
   }

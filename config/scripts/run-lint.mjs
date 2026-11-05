@@ -5,8 +5,8 @@ import { availableParallelism } from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
-import { resolveOxlintInvocation } from './oxlint-cli-invocation.mjs'
-import { resolvePnpmCliInvocation } from './pnpm-cli-invocation.mjs'
+import { resolveOxlintInvocation } from './tool-invocation/oxlint-cli-invocation.mjs'
+import { resolvePnpmCliInvocation } from './tool-invocation/pnpm-cli-invocation.mjs'
 
 // package.json script names, slowest first so short steps fill in around them.
 export const LINT_STEPS = [
@@ -14,6 +14,7 @@ export const LINT_STEPS = [
   'verify:localization-extraction',
   'audit:anti-slop',
   'audit:code-quality:type-aware',
+  'check:code-quality:changed',
   'check:test-file-runners',
   'verify:localization-catalogs',
   'verify:localization-coverage',
@@ -21,6 +22,7 @@ export const LINT_STEPS = [
   'verify:mobile-localization-coverage',
   'lint:ast-grep-gates',
   'check:main-sync-spawn-ratchet',
+  'check:has-restyle-scope',
   'lint:js-plugins',
   'oxlint',
   'check:dead-classes',
@@ -45,6 +47,7 @@ export const LINT_STEPS = [
   'verify:skill-bundle-manifest',
   'check:reliability-gates',
   'verify:bundled-skill-guides',
+  'verify:plugin-authoring-skill-references',
   'check:readme-local-links',
   'check:id-only-store-write-ratchet',
   'verify:acp-protocol'

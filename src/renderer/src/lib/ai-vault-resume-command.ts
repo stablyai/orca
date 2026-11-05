@@ -3,41 +3,26 @@ import {
   buildAntigravityReferenceStartup
 } from './ai-vault-antigravity-reference-startup'
 import { isAntigravityReferenceSession } from '../../../shared/antigravity-session-origin'
-import { normalizeAiVaultResumeFilePath } from '../../../shared/ai-vault-resume-path'
-import type { AppState } from '@/store/types'
+import { normalizeAiVaultResumeFilePath } from '../../../shared/ai-vault/resume/ai-vault-resume-path'
 import type { AiVaultSessionDragPayload } from '@/lib/ai-vault-session-drag'
 import { resolveAiVaultResumeStartupShell } from '@/lib/ai-vault-resume-shell'
-import { getAiVaultResumePlatform } from '@/lib/ai-vault-resume-platform'
+import {
+  getAiVaultResumePlatform,
+  type AiVaultResumePlatformState
+} from '@/lib/ai-vault-resume-platform'
 import {
   buildAiVaultLocalResumeStartup,
-  getAiVaultAgentProviderSession,
   type AiVaultResumeCommandSession,
   type AiVaultResumeHostShell,
   type AiVaultResumeStartup
-} from '../../../shared/ai-vault-resume-startup'
+} from '../../../shared/ai-vault/resume/ai-vault-resume-startup'
 import {
   buildAiVaultRemoteResumeStartup,
   resolveAiVaultResumeHostShell
-} from '../../../shared/ai-vault-resume-host-startup'
-
-export type {
-  AiVaultResumeCommandSession,
-  AiVaultResumeStartup
-} from '../../../shared/ai-vault-resume-startup'
-export { getAiVaultAgentProviderSession }
+} from '../../../shared/ai-vault/resume/ai-vault-resume-host-startup'
 
 export type AiVaultResumeWorktreeArgs = {
-  state: Pick<
-    AppState,
-    | 'activeRepoId'
-    | 'activeWorktreeId'
-    | 'folderWorkspaces'
-    | 'projectGroups'
-    | 'projects'
-    | 'repos'
-    | 'settings'
-    | 'worktreesByRepo'
-  >
+  state: AiVaultResumePlatformState
   worktreeId?: string | null
   session: AiVaultResumeCommandSession
   commandOverride?: string | null

@@ -1,5 +1,5 @@
 import { translate } from '@/i18n/i18n'
-import type { MobileNetworkInterface } from '../settings/mobile-network-interface-selection'
+import type { MobileNetworkInterface } from '../settings/mobile/pairing/mobile-network-interface-selection'
 import {
   HeroFlow,
   HeroIntro,
@@ -8,12 +8,12 @@ import {
   type Platform,
   type StepIndex
 } from './MobileHero'
-import { getInstallCopy, type IosChannel } from './mobile-platform-copy'
+import { getInstallCopy } from './mobile-platform-copy'
 import type { MobilePageStage } from './mobile-page-stage'
 import { MobilePageToolbar } from './MobilePageToolbar'
 import { PhoneCarousel } from './PhoneCarousel'
-import type { MobilePairingConnectionMode } from '../../../../shared/mobile-pairing-connection-mode'
-import type { MobileRelayMintFailure } from '../../../../shared/mobile-relay-mint-failure'
+import type { MobilePairingConnectionMode } from '../../../../shared/remote-runtime/pairing/mobile-pairing-connection-mode'
+import type { MobileRelayMintFailure } from '../../../../shared/remote-runtime/relay/mobile-relay-mint-failure'
 
 type MobilePageContentProps = {
   closeMobilePage: () => void
@@ -32,8 +32,6 @@ type MobilePageContentProps = {
   handleBack: () => void
   handleContinue: () => void
   installQrUrl: string | null
-  iosChannel: IosChannel
-  setIosChannel: (channel: IosChannel) => void
   loadNetworkInterfaces: () => void
   networkInterfaces: MobileNetworkInterface[]
   openAndroidInstallGuide: () => void
@@ -80,8 +78,6 @@ export function MobilePageContent({
   handleBack,
   handleContinue,
   installQrUrl,
-  iosChannel,
-  setIosChannel,
   loadNetworkInterfaces,
   networkInterfaces,
   openAndroidInstallGuide,
@@ -134,9 +130,7 @@ export function MobilePageContent({
               platform={platform}
               onPlatformChange={setPlatform}
               installQrUrl={installQrUrl}
-              installCopy={getInstallCopy(platform, iosChannel)}
-              iosChannel={iosChannel}
-              onIosChannelChange={setIosChannel}
+              installCopy={getInstallCopy(platform)}
               onOpenAndroidInstallGuide={openAndroidInstallGuide}
               onOpenInstallUrl={openInstallUrl}
               onCopyInstallUrl={copyInstallUrl}

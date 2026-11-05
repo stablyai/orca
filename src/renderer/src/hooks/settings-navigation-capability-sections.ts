@@ -1,15 +1,15 @@
 import { LinearIcon } from '@/components/icons/LinearIcon'
-import { getAccountsPaneSearchEntries } from '@/components/settings/accounts-search'
-import { getAgentsPaneSearchEntries } from '@/components/settings/agents-search'
-import { getComputerUsePaneSearchEntries } from '@/components/settings/computer-use-search'
-import { getGeneralPaneSearchEntries } from '@/components/settings/general-search'
-import { getIntegrationsPaneSearchEntries } from '@/components/settings/integrations-search'
-import { getLinearAgentSkillPaneSearchEntries } from '@/components/settings/linear-agent-skill-search'
-import { getMobileSettingsPaneSearchEntries } from '@/components/settings/mobile-settings-search'
-import { getOrcaAccountSettingsSearchEntries } from '@/components/settings/orca-account-settings-search'
-import { OrcaLogoSettingsIcon } from '@/components/settings/orca-logo-settings-icon'
-import { getOrchestrationPaneSearchEntries } from '@/components/settings/orchestration-search'
-import { getVoicePaneSearchEntries } from '@/components/settings/voice-pane-search'
+import { getAccountsPaneSearchEntries } from '@/components/settings/accounts/accounts-search'
+import { getAgentsPaneSearchEntries } from '@/components/settings/agents/agents-search'
+import { getComputerUsePaneSearchEntries } from '@/components/settings/computer-use/computer-use-search'
+import { getGeneralPaneSearchEntries } from '@/components/settings/general/general-search'
+import { getIntegrationsPaneSearchEntries } from '@/components/settings/integrations/integrations-search'
+import { getLinearAgentSkillPaneSearchEntries } from '@/components/settings/skills/linear/linear-agent-skill-search'
+import { getMobileSettingsPaneSearchEntries } from '@/components/settings/mobile/mobile-settings-search'
+import { getOrcaAccountSettingsSearchEntries } from '@/components/settings/accounts/orca/orca-account-settings-search'
+import { OrcaLogoSettingsIcon } from '@/components/settings/page/orca-logo-settings-icon'
+import { getOrchestrationPaneSearchEntries } from '@/components/settings/orchestration/orchestration-search'
+import { getVoicePaneSearchEntries } from '@/components/settings/voice/voice-pane-search'
 import { translate } from '@/i18n/i18n'
 import type { SettingsNavSection } from '@/lib/settings-navigation-types'
 import {
@@ -42,6 +42,7 @@ export function buildCapabilitySettingsSections({
       icon: Bot,
       searchEntries: getAgentsPaneSearchEntries({
         includeAgentAwake: !isWebClient,
+        includeAgentChatChoice: !isWebClient,
         includeAgentRuntime: isLocalWindowsHost,
         includeAgentWorkspaceTrust: !isWebClient,
         includeCodexTerminalServerIsolation: !isWebClient

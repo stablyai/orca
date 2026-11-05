@@ -54,14 +54,23 @@ describe('prepareComputerCliJsonResult', () => {
 })
 
 describe('formatComputerAction', () => {
-  it('does not treat legacy action results without metadata as completed', () => {
+  it.each([
+    { kind: 'full tree', treeText: 'tree', treeDiff: undefined },
+    {
+      kind: 'diff',
+      treeText: '~ 1 button Save',
+      treeDiff: { baseSnapshotId: 'snap-before', changed: 1, added: 0, removed: 0 }
+    },
+    { kind: 'empty tree', treeText: '', treeDiff: undefined }
+  ])('prints $kind without claiming unverified actions completed', ({ treeText, treeDiff }) => {
     const result: ComputerActionResult = {
       snapshot: {
         id: 'snap-1',
         app: { name: 'Finder', bundleId: 'com.apple.finder', pid: 100 },
         window: { title: 'Finder', id: 42, width: 800, height: 600 },
         coordinateSpace: 'window',
-        treeText: 'tree',
+        treeText,
+        treeDiff,
         elementCount: 5,
         focusedElementId: null
       },
@@ -74,6 +83,11 @@ describe('formatComputerAction', () => {
     expect(output).toContain('Click attempted, unverified (verification metadata unavailable)')
     expect(output).toContain('Inspect with the command above')
     expect(output).not.toContain('Click completed')
+    if (treeText) {
+      expect(output).toContain(`\n\n${treeText}`)
+    } else {
+      expect(output).not.toContain('\n\n')
+    }
   })
 
   it('does not treat accessibility actions without verification as completed', () => {

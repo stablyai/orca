@@ -26,6 +26,7 @@ export function buildWorktreeNavigationActions(args: Args): ActionSheetAction[] 
   const executionHost = args.executionHost
   const actions: ActionSheetAction[] = [
     {
+      id: 'sourceControl',
       label: translate('agentHistory.worktreeNavigationActions.sourceControl', 'Source Control'),
       icon: GitBranch,
       onPress: () => {
@@ -42,6 +43,7 @@ export function buildWorktreeNavigationActions(args: Args): ActionSheetAction[] 
   ]
   if (args.hostCapabilities.includes(MOBILE_AI_VAULT_CAPABILITY)) {
     actions.push({
+      id: 'agentSessionHistory',
       label: translate(
         'agentHistory.worktreeNavigationActions.agentSessionHistory',
         'Agent Session History'

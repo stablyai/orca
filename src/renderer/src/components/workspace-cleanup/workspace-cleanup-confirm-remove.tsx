@@ -1,5 +1,5 @@
 import React from 'react'
-import { AlertTriangle, Loader2, Monitor, Trash2, X } from 'lucide-react'
+import { Folder, Loader2, Monitor, Trash2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Progress } from '@/components/ui/progress'
@@ -9,7 +9,7 @@ import { translate } from '@/i18n/i18n'
 import {
   shouldForceWorkspaceCleanupRemoval,
   type WorkspaceCleanupCandidate
-} from '../../../../shared/workspace-cleanup'
+} from '../../../../shared/workspace-cleanup/workspace-cleanup'
 import type { WorkspaceCleanupRemovalProgress } from './workspace-cleanup-background-removal'
 import {
   getCandidateFactStatuses,
@@ -23,16 +23,17 @@ import { getReviewStateTone } from '@/components/github/review-state-presentatio
 import { getReviewStateSrText } from './workspace-cleanup-row-labels'
 import { StatusPill } from './workspace-cleanup-status-pill'
 import { WorkspaceCleanupCandidateList } from './workspace-cleanup-candidate-list'
+import './workspace-cleanup-host-identity'
 import {
   getWorkspaceCleanupCandidateHostId,
   getWorkspaceCleanupCandidateIdentity,
   getWorkspaceCleanupHostIdentity
-} from './workspace-cleanup-host-identity'
+} from '../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
 import {
   getWorkspaceCleanupCandidateAccessibleName,
   getWorkspaceCleanupCandidateHostLabel
 } from './workspace-cleanup-host-label'
-import { WorkspaceCleanupMetadataChip } from './workspace-cleanup-metadata-chip'
+import { WorkspaceCleanupMetadataText } from './workspace-cleanup-metadata-chip'
 
 const CONFIRM_REMOVE_ROW_ESTIMATE_PX = 76
 
@@ -73,40 +74,44 @@ export function WorkspaceCleanupConfirmRemove({
     <>
       <DialogHeader className="border-b border-border px-5 py-4">
         <div className="flex items-start justify-between gap-4">
-          <div className="flex min-w-0 items-start gap-3">
-            <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md border border-destructive/25 bg-destructive/10 text-destructive">
-              {deleting ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <AlertTriangle className="size-4" />
-              )}
-            </div>
-            <div className="min-w-0">
-              <DialogTitle className="text-base">
-                {deleting
-                  ? translate(
-                      'auto.components.workspace.cleanup.WorkspaceCleanupDialog.deletingCount',
-                      'Deleting workspaces: {{value0}}',
-                      { value0: count }
-                    )
-                  : translate(
-                      'auto.components.workspace.cleanup.WorkspaceCleanupDialog.deleteCount',
-                      'Delete workspaces: {{value0}}?',
-                      { value0: count }
-                    )}
-              </DialogTitle>
-              <DialogDescription className="mt-1.5 text-xs leading-5">
-                {deleting
-                  ? translate(
-                      'auto.components.workspace.cleanup.WorkspaceCleanupDialog.1d3503357d',
-                      'You can close this and come back while deletion continues.'
-                    )
-                  : translate(
-                      'auto.components.workspace.cleanup.WorkspaceCleanupDialog.38ca0b1400',
-                      "This permanently deletes their local files. You can't undo this."
-                    )}
-              </DialogDescription>
-            </div>
+          <div className="min-w-0">
+            <DialogTitle className="text-base">
+              {deleting
+                ? translate(
+                    'components.workspace.cleanup.confirm.deletingTitle',
+                    'Deleting {{count}} workspaces',
+                    { count, defaultValue_one: 'Deleting {{count}} workspace' }
+                  )
+                : translate(
+                    'components.workspace.cleanup.confirm.deleteTitle',
+                    'Delete {{count}} workspaces?',
+                    { count, defaultValue_one: 'Delete {{count}} workspace?' }
+                  )}
+            </DialogTitle>
+            <DialogDescription className="mt-1.5 text-xs leading-5">
+              {deleting
+                ? translate(
+                    'auto.components.workspace.cleanup.WorkspaceCleanupDialog.1d3503357d',
+                    'You can close this and come back while deletion continues.'
+                  )
+                : translate(
+                    'auto.components.workspace.cleanup.WorkspaceCleanupDialog.38ca0b1400',
+                    "This permanently deletes their local files. You can't undo this."
+                  )}
+            </DialogDescription>
+            {riskCount > 0 && !deleting ? (
+              <p className="mt-1 text-xs text-destructive">
+                {translate(
+                  'components.workspace.cleanup.browse.forceDeleteRisk',
+                  '{{count}} workspaces currently show risk and may need a force delete',
+                  {
+                    count: riskCount,
+                    defaultValue_one:
+                      '{{count}} workspace currently shows risk and may need a force delete'
+                  }
+                )}
+              </p>
+            ) : null}
           </div>
           <Button
             variant="ghost"
@@ -133,30 +138,6 @@ export function WorkspaceCleanupConfirmRemove({
             <Progress value={progressValue} className="mt-2 h-1.5" />
           </div>
         ) : null}
-        <div className="flex items-center justify-between border-b border-border px-5 py-2.5">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-            {translate(
-              'auto.components.workspace.cleanup.WorkspaceCleanupDialog.selectedForDeletionCount',
-              'Selected for deletion: {{value0}}',
-              { value0: count }
-            )}
-          </div>
-          {riskCount > 0 ? (
-            <div className="text-xs text-destructive">
-              {riskCount === 1
-                ? translate(
-                    'components.workspace.cleanup.browse.forceDeleteRisk_one',
-                    '{{count}} workspace currently shows risk and may need a force delete',
-                    { count: riskCount }
-                  )
-                : translate(
-                    'components.workspace.cleanup.browse.forceDeleteRisk_other',
-                    '{{count}} workspaces currently show risk and may need a force delete',
-                    { count: riskCount }
-                  )}
-            </div>
-          ) : null}
-        </div>
         <ScrollArea className="min-h-0 flex-1" viewportRef={setScrollElement}>
           <WorkspaceCleanupCandidateList
             rows={candidates}
@@ -234,51 +215,58 @@ function ConfirmRemoveRow({
       aria-label={getWorkspaceCleanupCandidateAccessibleName(candidate)}
       className={cn('border-b border-border/60 px-5 py-2.5', last && 'border-b-0')}
     >
-      <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
+      <div className="flex min-w-0 items-center gap-2">
         <span className="min-w-0 truncate text-sm font-medium">{candidate.displayName}</span>
-        <WorkspaceCleanupMetadataChip
+        <WorkspaceCleanupMetadataText
+          icon={Folder}
+          label={translate(
+            'components.workspace.cleanup.browse.projectNamed',
+            'Project: {{value0}}',
+            {
+              value0: candidate.repoName
+            }
+          )}
+          value={candidate.repoName}
+          className="min-w-0 shrink-[4]"
+        />
+        <WorkspaceCleanupMetadataText
           icon={Monitor}
           label={translate('components.workspace.cleanup.host.label', 'Host: {{value0}}', {
             value0: hostLabel
           })}
           value={hostLabel}
+          className="min-w-0 shrink-[4]"
         />
-        <span className="text-xs text-muted-foreground">
-          {translate(
-            'auto.components.workspace.cleanup.WorkspaceCleanupDialog.352f15d6fc',
-            'Last active'
-          )}{' '}
+        <span className="ml-auto shrink-0 text-xs tabular-nums text-muted-foreground">
           {formatWorkspaceCleanupRelativeTime(candidate.lastActivityAt, now)}
         </span>
-        {factStatuses.map((status) => (
-          <StatusPill key={status.label} tone={status.tone}>
-            {status.label}
-          </StatusPill>
-        ))}
-        {reviewInfo.label ? (
-          <StatusPill toneClassName={getReviewStateTone(reviewInfo.state)}>
-            {reviewInfo.label}
-            <span className="sr-only">{getReviewStateSrText(reviewInfo)}</span>
-          </StatusPill>
-        ) : null}
-        {contextPillLabels.map((label) => (
-          <StatusPill key={label}>{label}</StatusPill>
-        ))}
-        {dirtyLabel && showGitMetadataChip ? (
-          <StatusPill tone="destructive">{dirtyLabel}</StatusPill>
-        ) : null}
       </div>
-      <div className="mt-0.5 flex min-w-0 flex-wrap items-baseline gap-x-2 text-xs text-muted-foreground">
-        <span className="min-w-0 truncate">{candidate.repoName}</span>
-        {branchDiffersFromName ? (
-          <>
-            <span aria-hidden="true">·</span>
-            <span className="min-w-0 truncate font-mono">{candidate.branch}</span>
-          </>
-        ) : null}
-      </div>
-      <div className="mt-0.5 min-w-0 truncate font-mono text-[11px] text-muted-foreground/80">
-        {candidate.path}
+      {factStatuses.length > 0 ||
+      reviewInfo.label ||
+      contextPillLabels.length > 0 ||
+      (dirtyLabel && showGitMetadataChip) ? (
+        <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1.5">
+          {factStatuses.map((status) => (
+            <StatusPill key={status.label} tone={status.tone}>
+              {status.label}
+            </StatusPill>
+          ))}
+          {reviewInfo.label ? (
+            <StatusPill toneClassName={getReviewStateTone(reviewInfo.state)}>
+              {reviewInfo.label}
+              <span className="sr-only">{getReviewStateSrText(reviewInfo)}</span>
+            </StatusPill>
+          ) : null}
+          {contextPillLabels.map((label) => (
+            <StatusPill key={label}>{label}</StatusPill>
+          ))}
+          {dirtyLabel && showGitMetadataChip ? (
+            <StatusPill tone="destructive">{dirtyLabel}</StatusPill>
+          ) : null}
+        </div>
+      ) : null}
+      <div className="mt-1 min-w-0 truncate font-mono text-[11px] text-muted-foreground/80">
+        {branchDiffersFromName ? `${candidate.branch} · ${candidate.path}` : candidate.path}
       </div>
     </div>
   )

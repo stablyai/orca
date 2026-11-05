@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../orca-runtime-test-mocks.spec'
 import type { PtyProviderBufferSnapshot } from '../../providers/pty-provider-contract'
-import { TerminalKittyKeyboardModeTracker } from '../../../shared/terminal-kitty-keyboard-mode-tracker'
+import { TerminalKittyKeyboardModeTracker } from '../../../shared/terminal/protocol/input-modes/terminal-kitty-keyboard-mode-tracker'
 import {
   HEADLESS_LEAF_ID,
   TEST_WORKTREE_ID,
