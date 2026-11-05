@@ -190,7 +190,7 @@ export function useTerminalPaneCloseActions(controller: TerminalPaneBindingContr
           clearTimeout(probeTimeout)
           decide(() => {
             if (
-              (pending ? probes[0]?.verdict === 'exited' : probes[0]?.verdict !== 'live') ||
+              probes[0]?.verdict === 'exited' ||
               settings?.skipCloseTerminalWithRunningProcessConfirm
             ) {
               close()

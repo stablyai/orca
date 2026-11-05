@@ -27,6 +27,8 @@ import type { MobileStructuredQueuedMessageControls } from './use-mobile-structu
 import type { MobileStructuredBackgroundTasks } from './use-mobile-structured-background-tasks'
 import type { NativeChatContextUsageSummary } from '../../../src/shared/native-chat/native-chat-context-usage-summary'
 import type { MobileStructuredInterruptedContinue } from './use-mobile-structured-interrupted-continue'
+import type { MobileStructuredThreadGoal } from './use-mobile-structured-thread-goal'
+import type { AgentSessionRewindSurface } from '../../../src/shared/agent-session/lifecycle/agent-session-rewind-request'
 
 export type StructuredMobileSession = Omit<
   ReturnType<typeof useMobileStructuredAgentOptions>,
@@ -66,6 +68,10 @@ export type StructuredMobileSession = Omit<
     commandRefusalCauses: MobileNativeChatCommandRefusalCauses
     backgroundTasks: MobileStructuredBackgroundTasks
     interruptedContinue: MobileStructuredInterruptedContinue
+    /** Null unless the host reports goals for this chat. */
+    threadGoal: MobileStructuredThreadGoal | null
+    /** "Rewind to here" for the chat's own turn openers; absent where the chat cannot rewind. */
+    rewind: AgentSessionRewindSurface | undefined
     visualSource: MobileNativeChatVisualSource | null
     imagePreviewsByMessageId: Record<string, string[]>
   }

@@ -17748,7 +17748,7 @@
       "providers": ["paired-runtime"],
       "coveredPlatforms": ["linux"],
       "coveredProviders": ["paired-runtime"],
-      "coverageNotes": "Published Linux 1.4.188 desktop against current source in both directions; scheduled weekly and manually runnable. No required PR check.",
+      "coverageNotes": "Audit1579 removes workflow/manifest/regex/private binary-header and diagnostic metric inventories, fixture selectors, injected forwarding/platform/signature/process examples, unproven overlap and internal churn counters without equivalent replacement coverage. Retains actual Git trust/diffs; filesystem hash/ELF-region/native discovery; child CLI module repair; compiler/lock/publication/rollback and synthetic Electron install/cache ownership; executable shell quoting/exit; controlled notary/timer cleanup; local patched extractor file/AST freshness; real Chromium/WebKit CSP/sandbox/HTTPS image/referrer/link/preservation controls under parsed Android headers. Five unchanged setup-pnpm/VM request-cleanup definitions reviewed and not rerun. GitHub, installer/archive, OS metric, client, native delegate, compressor, builder and Apple boundaries injected or absent where recorded. No actual native PTY, shipped full/native app, real Actions/cache/npm signature authority, downloaded Electron archive, real objdump/linker/native CLI/AppImage, signing/NSIS/notary/upload/updater or live freeze proof. Historical scope before this audit: Published Linux 1.4.188 desktop against current source in both directions; scheduled weekly and manually runnable. No required PR check.",
       "motivatingLinks": ["https://github.com/stablyai/orca/actions/runs/34069063016"],
       "invariant": "A paired client and host without client-hosted browser capabilities retain server-hosted browser placement across supported version skew.",
       "oracle": "Require both existing named browser placement scenarios to pass three times with one attempt, zero skips, zero failures, and no report errors.",
@@ -17756,12 +17756,9 @@
         "gh workflow run packaged-browser-e2e.yml",
         "pnpm exec playwright test tests/e2e/packaged-mixed-version-browser-placement.spec.ts --config tests/playwright.config.ts --project=electron-headless --workers=1 --repeat-each=3 --retries=0",
         "gh run view 34069063016 --log",
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts config/scripts/desktop-distribution/runtime-verification/verify-packaged-browser-participation.test.mjs --maxWorkers=2 --reporter=dot"
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=2 --reporter=dot"
       ],
-      "testFiles": [
-        "tests/e2e/packaged-mixed-version-browser-placement.spec.ts",
-        "config/scripts/desktop-distribution/runtime-verification/verify-packaged-browser-participation.test.mjs"
-      ],
+      "testFiles": ["tests/e2e/packaged-mixed-version-browser-placement.spec.ts"],
       "assertionRefs": [
         {
           "file": "tests/e2e/packaged-mixed-version-browser-placement.spec.ts",
@@ -17769,10 +17766,6 @@
             "old client and old host lack client-host and browser-tunnel capabilities",
             "browser contents remain owned by the server and the expected snapshot marker is readable"
           ]
-        },
-        {
-          "file": "config/scripts/desktop-distribution/runtime-verification/verify-packaged-browser-participation.test.mjs",
-          "assertions": ["reject missing, substituted, skipped and retried scenarios"]
         }
       ],
       "evidenceRuns": [
@@ -17807,6 +17800,7 @@
         "Collect repeated scheduled history before making this required."
       ],
       "knownGaps": [
+        "Audit1579 removes workflow/manifest/regex/private binary-header and diagnostic metric inventories, fixture selectors, injected forwarding/platform/signature/process examples, unproven overlap and internal churn counters without equivalent replacement coverage. Retains actual Git trust/diffs; filesystem hash/ELF-region/native discovery; child CLI module repair; compiler/lock/publication/rollback and synthetic Electron install/cache ownership; executable shell quoting/exit; controlled notary/timer cleanup; local patched extractor file/AST freshness; real Chromium/WebKit CSP/sandbox/HTTPS image/referrer/link/preservation controls under parsed Android headers. Five unchanged setup-pnpm/VM request-cleanup definitions reviewed and not rerun. GitHub, installer/archive, OS metric, client, native delegate, compressor, builder and Apple boundaries injected or absent where recorded. No actual native PTY, shipped full/native app, real Actions/cache/npm signature authority, downloaded Electron archive, real objdump/linker/native CLI/AppImage, signing/NSIS/notary/upload/updater or live freeze proof.",
         "Linux1.4.188 only; no macOS or Windows packaged coverage.",
         "No folder workspace, SSH execution host or live-service coverage.",
         "Other released version pairs remain untested; not a required PR check."
