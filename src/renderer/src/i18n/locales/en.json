@@ -9379,7 +9379,11 @@
           "4415beb958": "disabled",
           "4e7d41a9f0": "enabled",
           "dimUnfocusedPanes": "Dim unfocused panes.",
-          "kitty_import": "Import from Kitty"
+          "kitty_import": "Import from Kitty",
+          "linkUnderlines": {
+            "always": "Always",
+            "hover": "On hover"
+          }
         },
         "TerminalAdvancedTypographyControls": {
           "f5fa1a08f1": "Bold Font Weight",
@@ -11392,7 +11396,14 @@
             "3de504994c": "Shell and arguments used for new local interactive terminal panes",
             "1733ccd3e9": "Terminal shell",
             "kitty_import": "Import from Kitty",
-            "kitty_import_description": "One-time import of supported settings from kitty.conf."
+            "kitty_import_description": "One-time import of supported settings from kitty.conf.",
+            "linkUnderlines": {
+              "title": "Link Underlines",
+              "description": "Underline OSC 8 terminal links always or only on hover. Explicit ANSI underlines are preserved.",
+              "links": "links",
+              "osc8": "OSC 8",
+              "underline": "underline"
+            }
           },
           "windows": {
             "search": {

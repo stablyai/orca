@@ -64,6 +64,10 @@ Fan one prompt across five agents, each in its own isolated git worktree — com
 
 Ghostty-class terminals with WebGL rendering, infinite splits, and scrollback that survives restarts.
 
+Appearance → Terminal → Terminal Panes → Link Underlines controls whether OSC 8 links are underlined always or only on hover. Changes apply to existing terminals; explicit application underlines are preserved.
+HTML exports preserve displayed link underlines; ANSI snapshots preserve only explicit application underlines so replay follows the destination terminal's preference.
+New and respawned local terminals advertise OSC 8 support to OMP with `PI_FORCE_HYPERLINKS=1`, including sessions resumed after restart. Already-running processes retain their original environment.
+
 [Docs →](https://www.onorca.dev/docs/terminal)
 
 </td>

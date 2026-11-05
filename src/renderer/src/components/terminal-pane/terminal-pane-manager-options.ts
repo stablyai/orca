@@ -158,6 +158,7 @@ export function createTerminalPaneManagerOptions(
         cursorStyle,
         cursorInactiveStyle: resolveTerminalCursorInactiveStyle(cursorStyle),
         cursorBlink: currentSettings?.terminalCursorBlink ?? true,
+        linkUnderlines: currentSettings?.terminalLinkUnderlines === 'always',
         scrollSensitivity: normalizeTerminalScrollSensitivity(
           currentSettings?.terminalScrollSensitivity
         ),
