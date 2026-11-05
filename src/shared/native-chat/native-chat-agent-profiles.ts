@@ -60,7 +60,8 @@ const NATIVE_CHAT_AGENT_PROFILES: Partial<Record<AgentType, NativeChatAgentProfi
   pi: {
     skillPrefix: '/',
     skillSourceOwner: 'pi',
-    skillNamePrefix: 'skill:'
+    skillNamePrefix: 'skill:',
+    textDrivenCommands: []
   }
 }
 
