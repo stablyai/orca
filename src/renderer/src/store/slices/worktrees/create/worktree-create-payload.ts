@@ -167,11 +167,7 @@ export function buildRuntimeWorktreeCreateParams(
       ? {
           ...(creationAgentLaunch.draft
             ? {
-                startupDraft: creationAgentLaunch.draft,
-                ...(creationAgentLaunch.launchSource
-                  ? { launchSource: creationAgentLaunch.launchSource }
-                  : {}),
-                activate: true
+                startupDraft: creationAgentLaunch.draft
               }
             : buildHostAgentLaunchParams(creationAgentLaunch)),
           ...(creationAgentLaunch.inputs?.agentArgs !== undefined

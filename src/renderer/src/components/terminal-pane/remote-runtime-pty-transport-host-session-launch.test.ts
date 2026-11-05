@@ -1,5 +1,12 @@
 import { ExplicitEnsure } from '../../../../shared/rpc-contract/agent-session-params'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { deliverCreatedWebRuntimeAgentSessionPrompt } from '@/runtime/web-runtime-terminal-creation'
+const delivery = vi.hoisted(() =>
+  vi.fn<typeof deliverCreatedWebRuntimeAgentSessionPrompt>(async () => true)
+)
+vi.mock('@/runtime/web-runtime-terminal-creation', () => ({
+  deliverCreatedWebRuntimeAgentSessionPrompt: delivery
+}))
 const appStore = vi.hoisted(() => ({
   getState: vi.fn(() => {
     throw new Error('These transport fixtures must not read app-store ownership')
@@ -38,6 +45,7 @@ describe('createRemoteRuntimePtyTransport', () => {
 
   beforeEach(() => {
     vi.resetModules()
+    delivery.mockClear()
     runtimeCall.mockReset()
     runtimeSubscribe.mockReset()
     subscriptionCallbacks = null
@@ -572,26 +580,67 @@ describe('createRemoteRuntimePtyTransport', () => {
     )
   })
 
-  it('sends fresh workspace picks and authored empty Arguments through host composition', async () => {
+  it('normalizes a non-native draft through a real host compiler and delivers to the returned pane once', async () => {
     const original = runtimeCall.getMockImplementation()!
-    runtimeCall.mockImplementation(async (args: { method?: string }) => {
-      const response = await original(args)
-      return args.method === 'status.get'
-        ? {
+    const { buildExecutionHostAgentStartupPlan } =
+      await import('../../../../main/opencode/opencode-model-startup-plan')
+    const { resolveAgentStartupPlanInputs } =
+      await import('../../../../shared/agent-launch/startup/agent-startup-plan-inputs')
+    runtimeCall.mockImplementation(
+      async (args: { method?: string; params?: Record<string, unknown> }) => {
+        const response = await original(args)
+        if (args.method === 'terminal.createAgentSession') {
+          const params = args.params!
+          const plan = await buildExecutionHostAgentStartupPlan({
+            inputs: resolveAgentStartupPlanInputs({
+              agent: 'codex',
+              settings: {},
+              agentArgs: '',
+              sessionOptions: {
+                model: 'gpt-host-pick',
+                effort: 'high',
+                permissionMode: 'full-access'
+              },
+              platform: 'linux',
+              shell: 'posix',
+              isRemote: false
+            }),
+            cwd: '/host/wt',
+            prompt: String(params.prompt ?? ''),
+            promptDelivery: params.promptDelivery === 'draft' ? 'draft' : 'auto-submit'
+          })
+          if (!plan) {
+            return {
+              ok: false,
+              error: { code: 'capability_unsupported', message: 'No native draft' }
+            }
+          }
+          return {
             ...response,
             result: {
               ...response.result,
-              capabilities: ['agent-session.host-authority.v1', 'agent-session.create-options.v1']
+              terminal: { ...response.result.terminal, tabId: 'host-adopted' }
             }
           }
-        : response
-    })
+        }
+        return args.method === 'status.get'
+          ? {
+              ...response,
+              result: {
+                ...response.result,
+                capabilities: ['agent-session.host-authority.v1', 'agent-session.create-options.v1']
+              }
+            }
+          : response
+      }
+    )
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'repo1::/remote/wt',
       command: '/desktop/codex --model desktop',
       env: { DESKTOP_ONLY: 'yes' },
       launchAgent: 'codex',
+      launchToken: 'draft-recovery-token',
       freshAgentLaunch: {
         agentArgs: '',
         sessionOptions: { model: 'gpt-host-pick', effort: 'high', permissionMode: 'full-access' },
@@ -608,9 +657,7 @@ describe('createRemoteRuntimePtyTransport', () => {
         params: expect.objectContaining({
           agent: 'codex',
           agentArgs: '',
-          sessionOptions: { model: 'gpt-host-pick', effort: 'high', permissionMode: 'full-access' },
-          prompt: 'ship it',
-          promptDelivery: 'draft'
+          sessionOptions: { model: 'gpt-host-pick', effort: 'high', permissionMode: 'full-access' }
         })
       })
     )
@@ -619,7 +666,20 @@ describe('createRemoteRuntimePtyTransport', () => {
     )?.[0]
     expect(create?.params).not.toHaveProperty('command')
     expect(create?.params).not.toHaveProperty('env')
+    expect(delivery).toHaveBeenCalledExactlyOnceWith(
+      { outcome: { status: 'created' }, hostTabId: 'host-adopted' },
+      expect.objectContaining({
+        agent: 'codex',
+        promptAfterReady: 'ship it',
+        submitPrompt: false,
+        forcePromptPaste: true
+      })
+    )
+    const delivered = delivery.mock.calls[0]?.[1]
+    await expect(delivered?.launchPty).resolves.toBe('remote:env-1@@term-remote')
+    expect(delivered?.beforePaste?.()).toBe(true)
     transport.disconnect()
+    expect(delivered?.beforePaste?.()).toBe(false)
   })
 
   it('keeps the existing pane request when an old host needs a prepared launch', async () => {
@@ -653,6 +713,58 @@ describe('createRemoteRuntimePtyTransport', () => {
     expect(create?.params).not.toHaveProperty('sessionOptions')
     transport.disconnect()
   })
+
+  it.each([
+    { agent: 'codex' as const, delivery: 'draft' as const, submit: false },
+    { agent: 'aider' as const, delivery: 'auto-submit' as const, submit: true }
+  ])(
+    'delivers ordinary legacy $agent text once without a recovery flag',
+    async ({ agent, delivery: promptDelivery, submit }) => {
+      const original = runtimeCall.getMockImplementation()!
+      runtimeCall.mockImplementation(async (args: { method?: string }) => {
+        const result = await original(args)
+        return args.method === 'status.get'
+          ? { ...result, result: { ...result.result, capabilities: [] } }
+          : result
+      })
+      const { planLaunchAgentStartupPrompt } =
+        await import('@/lib/launch-agent-startup-prompt-plan')
+      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+      const prepare = () =>
+        planLaunchAgentStartupPrompt({
+          base: { agent, cmdOverrides: {}, agentArgs: null, platform: 'linux', isRemote: true },
+          prompt: 'ordinary work',
+          promptDelivery,
+          isFollowupPath: agent === 'aider'
+        })
+      const startup = prepare().startupPlan!
+      const transport = createRemoteRuntimePtyTransport('env-1', {
+        worktreeId: 'repo1::/remote/wt',
+        launchAgent: agent,
+        launchToken: `ordinary-${agent}`,
+        command: startup.launchCommand,
+        freshAgentLaunch: { prompt: 'ordinary work', promptDelivery, legacy: prepare },
+        tabId: 'ordinary-tab',
+        leafId: '11111111-1111-4111-8111-111111111111'
+      })
+      await transport.connect({ url: '', callbacks: {} })
+      expect(runtimeCall).toHaveBeenCalledWith(
+        expect.objectContaining({
+          method: 'terminal.create',
+          params: expect.objectContaining({ command: agent })
+        })
+      )
+      expect(delivery).toHaveBeenCalledExactlyOnceWith(
+        { outcome: { status: 'created' }, hostTabId: 'ordinary-tab' },
+        expect.objectContaining({
+          promptAfterReady: 'ordinary work',
+          submitPrompt: submit,
+          forcePromptPaste: true
+        })
+      )
+      transport.disconnect()
+    }
+  )
 
   it('forwards input over the stream and disconnects without closing shared remote sessions', async () => {
     vi.useFakeTimers()

@@ -37,7 +37,7 @@ export function openBackgroundDeclinedTerminal(
       : built
   if (host.kind === 'environment' && args.request.agent) {
     const completion = launchAgentInWebHostTab({
-      ...args.request.launchInputs,
+      ...built?.freshAgentLaunch,
       agent: args.request.agent,
       environmentId: host.environmentId,
       worktreeId: args.worktreeId,
@@ -47,7 +47,14 @@ export function openBackgroundDeclinedTerminal(
       selectWorktree: false,
       isCancelled: () => signal?.aborted === true,
       buildStartup: () => {
-        const plan = args.request.creationStartup?.legacy().startupPlan ?? args.request.startupPlan
+        const rebuilt = args.request.creationStartup?.legacy(
+          heldChatMessage ?? args.request.launchDraftPrompt ?? args.request.quickPrompt,
+          heldChatMessage || args.request.launchDraftPrompt ? 'draft' : 'auto-submit'
+        )
+        if (rebuilt?.promptPlan) {
+          return rebuilt.promptPlan
+        }
+        const plan = rebuilt?.startupPlan ?? args.request.startupPlan
         return {
           startupPlan: plan,
           pasteDraftAfterLaunch: plan?.draftPrompt ?? plan?.followupPrompt ?? null,

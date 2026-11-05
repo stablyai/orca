@@ -103,7 +103,9 @@ vi.mock('@/runtime/runtime-hooks-client', () => ({
 
 vi.mock('@/runtime/runtime-rpc-client', () => ({
   callRuntimeRpc: hostMocks.callRuntimeRpc,
-  runtimeEnvironmentSupportsCapability: hostMocks.supports
+  runtimeEnvironmentSupportsCapability: hostMocks.supports,
+  runtimeEnvironmentSupportsCapabilities: async (_host: string, capabilities: string[]) =>
+    Promise.all(capabilities.map((capability) => hostMocks.supports(_host, capability)))
 }))
 vi.mock('@/runtime/runtime-rpc-subscribe', () => ({ subscribeRuntimeRpc: hostMocks.subscribe }))
 

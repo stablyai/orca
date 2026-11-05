@@ -1,3 +1,4 @@
+import { useAppStore } from '@/store'
 import { resolveBackendDraftStartup } from '@/lib/worktree-draft-startup-view-mode'
 import type { CreateWorktreeCallOptions } from '@/store/slices/worktrees/create/worktree-create-payload'
 import { toast } from 'sonner'
@@ -117,7 +118,12 @@ export function worktreeCreationAgentLaunchOptions(
     ...(intent
       ? {
           legacyStartup: () => {
-            const legacy = intent.legacy()
+            let legacy
+            try {
+              legacy = intent.legacy()
+            } catch (error) {
+              throw new WorktreeLegacyPreparationError(error)
+            }
             request.startupPlan = legacy.startupPlan
             request.startup = legacy.backendStartup
             return resolveBackendDraftStartup(request)
@@ -125,4 +131,26 @@ export function worktreeCreationAgentLaunchOptions(
         }
       : {})
   }
+}
+
+export class WorktreeLegacyPreparationError extends Error {
+  constructor(readonly preparationError: unknown) {
+    super('Workspace launch preparation failed', { cause: preparationError })
+  }
+}
+
+export function recoverWorktreeLegacyPreparation(
+  creationId: string,
+  request: WorktreeCreationRequest,
+  error: unknown
+): boolean {
+  if (
+    !(error instanceof WorktreeLegacyPreparationError) ||
+    !request.creationStartup?.onLegacyPreparationFailure
+  ) {
+    return false
+  }
+  useAppStore.getState().removePendingWorktreeCreation(creationId)
+  request.creationStartup.onLegacyPreparationFailure(error.preparationError)
+  return true
 }

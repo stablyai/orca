@@ -258,3 +258,101 @@ describe('direct workspace defaults', () => {
     expect(unsubscribe).toHaveBeenCalledOnce()
   })
 })
+
+it.each(['dialog', 'saved-action'] as const)(
+  'keeps raw Fix Checks Arguments through %s creation and the real paired pane selector',
+  async (source) => {
+    const { createRemoteRuntimePtyTransport } =
+      await import('../components/terminal-pane/remote-runtime-pty-transport')
+    mocks.ensureDetectedAgents.mockResolvedValue(['claude'])
+    mocks.ensureRemoteDetectedAgents.mockResolvedValue(['claude'])
+    mocks.store.settings = {
+      defaultTuiAgent: 'claude',
+      agentPermissionDefault: 'own',
+      agentCmdOverrides: { claude: '/desktop/claude' },
+      nativeChatProviders: {}
+    }
+    mocks.store.repos = [{ id: 'repo-1', path: '/repo', executionHostId: 'runtime:host' }]
+    mocks.store.ensureRuntimeDetectedAgents = vi.fn(async () => ['claude'])
+    mocks.store.runtimeDetectedAgents = { host: ['claude'] }
+    mocks.store.runtimeStatusByEnvironmentId = new Map([
+      ['host', { status: { runtimeId: 'rt', hostPlatform: 'linux' } }]
+    ])
+    const hostSettings = {
+      defaultTuiAgent: 'claude',
+      disabledTuiAgents: [],
+      agentCmdOverrides: { claude: '/host/claude' },
+      agentDefaultArgs: { claude: '--dangerously-skip-permissions' },
+      environmentNames: {},
+      permissionMode: 'mixed' as const
+    }
+    hostMocks.supports.mockResolvedValue(true)
+    hostMocks.callRuntimeRpc.mockImplementation(async (_target, method) =>
+      method === 'settings.getAgentLaunch' ? { settings: hostSettings } : { agents: ['claude'] }
+    )
+    vi.spyOn(inventory, 'loadProjectLaunchContext').mockResolvedValue(undefined)
+    const recipe = sourceControlActionRecipeEntry({ agentId: 'claude', agentArgs: '--verbose' })
+    await (source === 'dialog'
+      ? runSourceControlAgentActionStart({
+          recipe,
+          selectedAgent: 'claude',
+          trimmedCommandInput: 'Fix checks',
+          saveTargetValue: 'none',
+          actionId: 'fixChecks',
+          repoId: 'repo-1',
+          repo: null,
+          settings: useAppStore.getState().settings,
+          promptDelivery: 'submit-after-ready',
+          launchPlatform: 'linux',
+          launchSource: 'task_page',
+          onStart: (input) =>
+            startFixChecksFromDialog({
+              ...input,
+              targetRepoId: 'repo-1',
+              item: { ...pr, type: 'issue', repoId: 'repo-1' }
+            }),
+          onClose: vi.fn()
+        })
+      : launch({
+          agentOverride: 'claude',
+          resolveLaunchInputs: (agent) =>
+            projectSourceControlActionLaunch(recipe, agent, {
+              renderedPrompt: 'Fix checks',
+              settings: useAppStore.getState().settings
+            })
+        }))
+    const startup = mocks.activateAndRevealWorktree.mock.lastCall?.[1].startup
+    expect(startup?.freshAgentLaunch).toMatchObject({ actionAgentArgs: '--verbose' })
+    expect(startup?.freshAgentLaunch).not.toHaveProperty('agentArgs')
+    const call = vi.fn(async () => ({
+      ok: true as const,
+      id: 'create',
+      result: {
+        terminal: { handle: 'fix-checks', worktreeId: 'repo-1::/repo/worktree', title: null }
+      }
+    }))
+    const subscribe = vi.fn(async (_args, callbacks) => {
+      queueMicrotask(() => callbacks.onResponse({ ok: true, result: { type: 'ready' } }))
+      return { unsubscribe: vi.fn(), sendBinary: vi.fn() }
+    })
+    Object.assign(window.api, { runtimeEnvironments: { call, subscribe } })
+    const transport = createRemoteRuntimePtyTransport('host', {
+      worktreeId: 'repo-1::/repo/worktree',
+      ...startup,
+      launchToken: undefined,
+      tabId: 'checks-tab',
+      leafId: '11111111-1111-4111-8111-111111111111'
+    })
+    await transport.connect({ url: '', callbacks: {} })
+    expect(call).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'terminal.createAgentSession',
+        params: expect.objectContaining({
+          agent: 'claude',
+          agentArgs: '--dangerously-skip-permissions --verbose'
+        })
+      })
+    )
+    transport.disconnect()
+  }
+)

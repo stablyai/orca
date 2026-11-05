@@ -1,3 +1,5 @@
+import { planLaunchAgentStartupPrompt } from '@/lib/launch-agent-startup-prompt-plan'
+import { TUI_AGENT_CONFIG } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
 import { ensureAgentLaunchPreferences } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
 import { resolveAgentStartupPlanInputs } from '../../../../../../shared/agent-launch/startup/agent-startup-plan-inputs'
 import { ensureAgentStartupInTerminal } from '@/lib/new-workspace'
@@ -42,6 +44,7 @@ export async function submitFolderWorkspaceCreate({
   quickAgent,
   launchChoice,
   launchInputs,
+  legacyLaunchInputs,
   sessionOptions: requestedSessionOptions,
   chatSessionOptions: requestedChatSessionOptions,
   autoRenameBranchFromWork,
@@ -55,7 +58,8 @@ export async function submitFolderWorkspaceCreate({
   createFolderWorkspace,
   onOpenChange
 }: SubmitFolderWorkspaceCreateParams): Promise<boolean> {
-  const agentArgs = launchInputs ? launchInputs.agentArgs : requestedAgentArgs
+  const legacyInputs = legacyLaunchInputs ?? launchInputs
+  const agentArgs = legacyInputs ? legacyInputs.agentArgs : requestedAgentArgs
   const sessionOptions = launchInputs ? launchInputs.sessionOptions : requestedSessionOptions
   const chatSessionOptions = launchInputs
     ? launchInputs.chatSessionOptions
@@ -204,13 +208,26 @@ export async function submitFolderWorkspaceCreate({
           ...(startupPlan.launchToken ? { launchToken: startupPlan.launchToken } : {}),
           launchAgent: quickAgent,
           freshAgentLaunch: {
-            agentArgs,
+            agentArgs: launchInputs ? launchInputs.agentArgs : requestedAgentArgs,
             sessionOptions,
-            prompt:
-              startupPlan.followupPrompt || startupPlan.draftPrompt
-                ? ''
-                : (launchDraftPrompt ?? note),
-            promptDelivery: launchDraftPrompt ? ('draft' as const) : ('auto-submit' as const)
+            prompt: launchDraftPrompt ?? note,
+            promptDelivery: launchDraftPrompt ? ('draft' as const) : ('auto-submit' as const),
+            legacy: () =>
+              planLaunchAgentStartupPrompt({
+                base: resolveAgentStartupPlanInputs({
+                  agent: quickAgent,
+                  settings: effectiveSettings ?? { agentCmdOverrides },
+                  agentArgs,
+                  sessionOptions,
+                  platform: launchPlatform!,
+                  shell: launchShell,
+                  isRemote: launchIsRemote
+                }),
+                prompt: launchDraftPrompt ?? note,
+                promptDelivery: launchDraftPrompt ? 'draft' : 'auto-submit',
+                isFollowupPath:
+                  TUI_AGENT_CONFIG[quickAgent].promptInjectionMode === 'stdin-after-start'
+              })
           },
           ...(startupPlan.draftPrompt ? { draftPrompt: startupPlan.draftPrompt } : {}),
           ...(startupPlan.startupCommandDelivery
@@ -265,6 +282,7 @@ export async function submitFolderWorkspaceCreate({
       })
     }
     if (
+      !runtimeEnvironmentId &&
       !structuredLaunch &&
       startupPlan &&
       (startupPlan.followupPrompt || startupPlan.draftPrompt) &&

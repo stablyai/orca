@@ -168,6 +168,10 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
       if (isSubmissionCancelled()) {
         return
       }
+      if (quickStartup.creationStartup) {
+        quickStartup.creationStartup.onLegacyPreparationFailure =
+          options?.onLegacyPreparationFailure
+      }
       const request = buildQuickCreationRequest({
         repoId,
         ephemeralVmRecipe,

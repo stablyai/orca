@@ -61,6 +61,7 @@ export type QuickCreationRequestInput = {
 }
 
 export type QuickSubmitOptions = {
+  onLegacyPreparationFailure?: (error: unknown) => void
   setupOnly?: boolean
   launchChoice?: AgentLaunchChoice
   launchInputs?: WorktreeCreationRequest['launchInputs']

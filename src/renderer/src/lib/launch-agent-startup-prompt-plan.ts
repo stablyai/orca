@@ -1,3 +1,5 @@
+import { TUI_AGENT_CONFIG } from '../../../shared/agent-launch/catalog/tui-agent-config'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import {
   buildAgentDraftLaunchPlan,
   buildAgentStartupPlan,
@@ -66,7 +68,7 @@ export function planLaunchAgentStartupPrompt(args: {
     }
   }
   if (hasPrompt && isFollowupPath) {
-    return pasteAfterReady(false)
+    return pasteAfterReady(true)
   }
   return {
     startupPlan: buildAgentStartupPlan({
@@ -77,4 +79,47 @@ export function planLaunchAgentStartupPrompt(args: {
     pasteDraftAfterLaunch: null,
     submitPastedPrompt: false
   }
+}
+
+/** Normalize fresh hosted text without reading the desktop's launch settings. */
+export function planHostedAgentPrompt(
+  agent: TuiAgent,
+  prompt: string,
+  promptDelivery: 'auto-submit' | 'draft' | 'submit-after-ready'
+) {
+  return planLaunchAgentStartupPrompt({
+    base: { agent, cmdOverrides: {}, agentArgs: null, platform: 'linux', isRemote: true },
+    prompt,
+    promptDelivery,
+    isFollowupPath: TUI_AGENT_CONFIG[agent].promptInjectionMode === 'stdin-after-start'
+  })
+}
+
+export function hostedAgentPromptDelivery(
+  plan: LaunchAgentStartupPromptPlan,
+  prompt: string,
+  delivery: 'auto-submit' | 'draft' | 'submit-after-ready'
+) {
+  return plan.pasteDraftAfterLaunch !== null
+    ? {
+        promptAfterReady: plan.pasteDraftAfterLaunch,
+        submitPrompt: plan.submitPastedPrompt,
+        forcePromptPaste: true
+      }
+    : delivery === 'draft'
+      ? { launchDraft: prompt }
+      : {}
+}
+
+export function hostedAgentPromptRequest(
+  plan: LaunchAgentStartupPromptPlan,
+  prompt: string,
+  delivery: 'auto-submit' | 'draft' | 'submit-after-ready'
+) {
+  return prompt && plan.pasteDraftAfterLaunch === null
+    ? {
+        prompt,
+        promptDelivery: delivery === 'draft' ? ('draft' as const) : ('auto-submit' as const)
+      }
+    : {}
 }

@@ -78,7 +78,7 @@ export function installSleepingRecordAccess(session: ConnectPanePtySession): voi
       ? session.paneStartup.draftPrompt
       : null
   session.startupDraftPromptNeedsPaste =
-    !(session.runtimeEnvironmentId && session.paneStartup?.freshAgentLaunch?.recovery) &&
+    !(session.runtimeEnvironmentId && session.paneStartup?.freshAgentLaunch) &&
     session.startupDraftPrompt !== null &&
     !session.startupDraftAgentConfig?.draftPromptFlag &&
     !session.startupDraftAgentConfig?.draftPromptEnvVar

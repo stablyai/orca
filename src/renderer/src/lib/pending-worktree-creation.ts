@@ -1,3 +1,4 @@
+import type { LaunchAgentStartupPromptPlan } from './launch-agent-startup-prompt-plan'
 import type { agentPickerLaunchInputs } from '../../../shared/agent-launch/picker/agent-launch-picker'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { worktreeIdsEqual } from '../../../shared/worktree/id'
@@ -88,11 +89,16 @@ export type WorktreeCreationRequest = {
   launchInputs?: ReturnType<typeof agentPickerLaunchInputs>
   legacyLaunchInputs?: ReturnType<typeof agentPickerLaunchInputs>
   creationStartup?: {
+    onLegacyPreparationFailure?: (error: unknown) => void
     sessionOptions?: AgentStartupPlan['sessionOptions']
     launchToken?: string
-    legacy: () => {
+    legacy: (
+      prompt?: string,
+      delivery?: 'draft' | 'auto-submit'
+    ) => {
       startupPlan: AgentStartupPlan | null
       backendStartup: WorktreeStartupLaunch | undefined
+      promptPlan?: LaunchAgentStartupPromptPlan
     }
   }
   linkedLinearIssue?: string

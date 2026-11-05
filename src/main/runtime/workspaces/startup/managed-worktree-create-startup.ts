@@ -15,7 +15,7 @@ type StartupBuilders = {
     launchSource?: string,
     inputs?: Pick<
       RuntimeManagedWorktreeCreateArgs,
-      'startupAgentArgs' | 'startupSessionOptions' | 'startupLaunchPreferences'
+      'createdWithAgent' | 'startupAgentArgs' | 'startupSessionOptions' | 'startupLaunchPreferences'
     >
   ) => ReturnType<typeof buildWorktreeStartupForDraft>
 }
@@ -41,7 +41,7 @@ export async function resolveManagedWorktreeCreateStartup(
   }
   const agentStartup = args.startupDraft
     ? null
-    : resolveWorktreeCreateAgentStartup(args, build.agent)
+    : await resolveWorktreeCreateAgentStartup(args, build.agent)
   const draftStartup =
     !args.startup && !agentStartup && args.startupDraft
       ? await build.draft(

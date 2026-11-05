@@ -43,6 +43,7 @@ export async function startFixChecksFromDialog(args: {
   commandInput: string
   /** Omitted when CLI arguments do not apply, so the launch resolves the global Agents setting. */
   agentArgs?: string
+  actionAgentArgs?: string
   sessionOptions?: Readonly<Record<string, string>>
   chatSessionOptions?: Readonly<Record<string, string>>
   preferredSurface?: 'chat'
@@ -65,6 +66,7 @@ export async function startFixChecksFromDialog(args: {
     agentOverride: args.agent,
     agentLaunchPreferences: args.agentLaunchPreferences,
     agentArgs: args.agentArgs,
+    actionAgentArgs: args.actionAgentArgs,
     ...(args.sessionOptions ? { sessionOptions: args.sessionOptions } : {}),
     ...(args.chatSessionOptions !== undefined
       ? { chatSessionOptions: args.chatSessionOptions }

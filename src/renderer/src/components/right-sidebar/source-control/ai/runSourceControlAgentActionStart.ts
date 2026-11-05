@@ -58,6 +58,7 @@ export type RunSourceControlAgentActionStartArgs = {
     commandInput: string
     /** Omitted when CLI arguments do not apply, so the launch resolves the global setting. */
     agentArgs?: string
+    actionAgentArgs?: string
     /** The action's saved choice, on either route. */
     sessionOptions?: Readonly<Record<string, string>>
     chatSessionOptions?: Readonly<Record<string, string>>
@@ -198,6 +199,7 @@ export async function runSourceControlAgentActionStart({
       agent: selectedAgent,
       commandInput: trimmedCommandInput,
       agentArgs: launchAgentArgs,
+      ...(actionAgentArgs !== undefined ? { actionAgentArgs } : {}),
       ...launchOptions,
       ...(launchChoice ? { launchChoice } : {})
     })

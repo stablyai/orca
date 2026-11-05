@@ -24,7 +24,12 @@ export function buildWorktreeCreationStartupOpt(
         prompt: request.launchDraftPrompt ?? request.quickPrompt,
         promptDelivery: request.launchDraftPrompt ? ('draft' as const) : ('auto-submit' as const),
         recovery: true as const,
-        legacy: () => intent?.legacy().startupPlan ?? request.startupPlan
+        legacy: () =>
+          intent?.legacy().promptPlan ?? {
+            startupPlan: plan ?? null,
+            pasteDraftAfterLaunch: plan?.draftPrompt ?? plan?.followupPrompt ?? null,
+            submitPastedPrompt: Boolean(plan?.followupPrompt)
+          }
       }
     : undefined
   const launchToken = intent ? (intent.launchToken ??= createBrowserUuid()) : plan?.launchToken

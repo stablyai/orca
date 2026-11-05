@@ -45,6 +45,8 @@ export async function deliverCreatedWebRuntimeAgentSessionPrompt(
   created: CreatedWebRuntimeSessionTerminal,
   args: {
     agent: TuiAgent
+    beforePaste?: () => boolean
+    launchPty?: Promise<string | null>
     promptAfterReady?: string
     submitPrompt?: boolean
     forcePromptPaste?: boolean
@@ -63,7 +65,9 @@ export async function deliverCreatedWebRuntimeAgentSessionPrompt(
       content: args.promptAfterReady,
       agent: args.agent,
       submit: args.submitPrompt === true,
-      forcePaste: args.forcePromptPaste === true
+      forcePaste: args.forcePromptPaste === true,
+      beforePaste: args.beforePaste,
+      launchPty: args.launchPty
     }).catch(() => false)
   }
   if (args.launchDraft !== undefined && created.hostTabId) {

@@ -1,3 +1,5 @@
+import { getDefaultSettings } from '../../../shared/constants'
+import { buildQuickComposerStartup } from '@/hooks/composer-state/quick-startup-plan'
 // @vitest-environment happy-dom
 import { afterEach, expect, it, vi } from 'vitest'
 import type { WorktreeCreationRequest } from './pending-worktree-creation'
@@ -157,4 +159,42 @@ it('does not seed the requested agent picks onto a substituted agent tab', () =>
     text: 'ship it'
   })
   mocks.agent = 'claude'
+})
+
+it('prepares the held background message with the real compatibility builder and original picks', () => {
+  const legacyRequest: WorktreeCreationRequest = {
+    ...request,
+    quickPrompt: 'original prompt',
+    launchDraftPrompt: undefined,
+    creationStartup: {
+      legacy: (prompt, delivery) =>
+        buildQuickComposerStartup({
+          agent: 'claude',
+          prompt: prompt ?? 'original prompt',
+          draftPrompt: delivery === 'draft' ? prompt : null,
+          settings: {
+            ...getDefaultSettings('/tmp'),
+            agentCmdOverrides: { claude: '/desktop/claude' }
+          },
+          launchHost: { kind: 'known', hostKind: 'runtime', platform: 'linux' },
+          shell: 'posix',
+          isRemote: true,
+          telemetrySource: undefined,
+          launchInputs: { agentArgs: '--add-dir /host/shared', sessionOptions: { model: 'opus' } }
+        })
+    }
+  }
+  mocks.launch.mockResolvedValue({ outcome: { status: 'created' } })
+  openBackgroundDeclinedTerminal(
+    { request: legacyRequest, worktreeId: 'wt' },
+    { kind: 'environment', environmentId: 'host' },
+    'held message'
+  )
+  const prepared = mocks.launch.mock.calls[0]?.[0].buildStartup()
+  expect(prepared.startupPlan.launchCommand).toContain("'held message'")
+  expect(prepared.startupPlan.launchCommand).toContain("'/host/shared'")
+  expect(prepared.startupPlan.launchCommand).toContain("'opus'")
+  expect(prepared.startupPlan.launchCommand).not.toContain('original prompt')
+  expect(prepared.pasteDraftAfterLaunch).toBeNull()
+  expect(prepared.submitPastedPrompt).toBe(false)
 })

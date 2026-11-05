@@ -202,6 +202,7 @@ export async function launchWorkItemDirect(
       agentOverride,
       agentLaunchPreferences: args.agentLaunchPreferences,
       agentArgs: args.agentArgs,
+      actionAgentArgs: args.actionAgentArgs,
       ...(args.sessionOptions ? { sessionOptions: args.sessionOptions } : {}),
       resolveLaunchInputs: args.resolveLaunchInputs,
       ...(preflightInputs ? { preflightInputs } : {}),
@@ -246,8 +247,13 @@ export async function launchWorkItemDirect(
           ? { providesInitialSurface: true }
           : buildDirectWorkItemStartupOpts(effectiveAgent, startupPlan, launchSource, {
               ...launchPreparation.freshLaunchInputs,
-              prompt: promptDelivery === 'draft' && draftLaunchedNatively ? draftContent : '',
-              promptDelivery
+              prompt: draftContent,
+              promptDelivery,
+              legacy: () => ({
+                startupPlan,
+                pasteDraftAfterLaunch: draftLaunchedNatively ? null : draftContent,
+                submitPastedPrompt: promptDelivery !== 'draft'
+              })
             }))
       })
       return activationHolder.value !== false
@@ -281,15 +287,18 @@ export async function launchWorkItemDirect(
       return true
     }
 
-    const completed = finishDirectWorkItemPrompt({
-      primaryTabId,
-      effectiveAgent,
-      promptDelivery,
-      draftContent,
-      startupPlan,
-      draftLaunchedNatively,
-      startupPlanFailed
-    })
+    const completed =
+      context.target.kind === 'environment' && !startupPlanFailed
+        ? true
+        : finishDirectWorkItemPrompt({
+            primaryTabId,
+            effectiveAgent,
+            promptDelivery,
+            draftContent,
+            startupPlan,
+            draftLaunchedNatively,
+            startupPlanFailed
+          })
     if (!completed) {
       args.onFailureNotified?.()
     }

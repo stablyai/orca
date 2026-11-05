@@ -22,7 +22,12 @@ import {
   type createWebRuntimeSessionTerminal
 } from '@/runtime/web-runtime-terminal-creation'
 import type { CreateWebRuntimeSessionTerminalArgs } from '@/runtime/web-runtime-session-types'
-import { planLaunchAgentStartupPrompt } from './launch-agent-startup-prompt-plan'
+import {
+  planLaunchAgentStartupPrompt,
+  planHostedAgentPrompt,
+  hostedAgentPromptDelivery,
+  hostedAgentPromptRequest
+} from './launch-agent-startup-prompt-plan'
 import { TUI_AGENT_CONFIG } from '../../../shared/agent-launch/catalog/tui-agent-config'
 import type { LaunchAgentStartupPromptPlan } from '@/lib/launch-agent-startup-prompt-plan'
 import type { Tab } from '../../../shared/tab-types'
@@ -101,19 +106,7 @@ export async function launchAgentInWebHostTab(args: {
       throw new DOMException('Agent launch cancelled', 'AbortError')
     }
     // Why: prompt delivery is client-owned; the host supplies launch settings.
-    startup = planLaunchAgentStartupPrompt({
-      base: {
-        agent,
-        cmdOverrides: {},
-        agentArgs: null,
-        platform: args.launchPlatform ?? 'linux',
-        shell: args.launchShell,
-        isRemote: true
-      },
-      prompt,
-      promptDelivery,
-      isFollowupPath: TUI_AGENT_CONFIG[agent].promptInjectionMode === 'stdin-after-start'
-    })
+    startup = planHostedAgentPrompt(agent, prompt, promptDelivery)
     launch = {
       worktreeId,
       environmentId,
@@ -130,11 +123,7 @@ export async function launchAgentInWebHostTab(args: {
       ...(complete
         ? { agentSessionCreateCapability: AGENT_SESSION_CREATE_OPTIONS_RUNTIME_CAPABILITY }
         : {}),
-      ...(hasPrompt && startup.pasteDraftAfterLaunch === null ? { prompt } : {}),
-      ...((hasPrompt && startup.pasteDraftAfterLaunch === null) ||
-      promptDelivery === 'submit-after-ready'
-        ? { promptDelivery: promptDelivery === 'draft' ? 'draft' : 'auto-submit' }
-        : {}),
+      ...hostedAgentPromptRequest(startup, prompt, promptDelivery),
       legacyAgentLaunch: async () => {
         if (
           !Object.keys(args.sessionOptions ?? {}).length &&
@@ -159,6 +148,9 @@ export async function launchAgentInWebHostTab(args: {
                 useAppStore.getState().runtimeStatusByEnvironmentId.get(environmentId)
               )
             : undefined
+          if (args.isCancelled?.()) {
+            throw new DOMException('Agent launch cancelled', 'AbortError')
+          }
           if (
             environmentId &&
             (getRuntimeEnvironmentRevision(environmentId) !== pairingRevision ||
@@ -215,6 +207,10 @@ export async function launchAgentInWebHostTab(args: {
         } catch (error) {
           legacyPreparationCancelled = error instanceof Error && error.name === 'AbortError'
           throw error
+        }
+        if (args.isCancelled?.()) {
+          legacyPreparationCancelled = true
+          throw new DOMException('Agent launch cancelled', 'AbortError')
         }
         const plan = startup.startupPlan
         if (!plan) {
@@ -290,19 +286,19 @@ export async function launchAgentInWebHostTab(args: {
     return { delivered: false, failureNotified: false, outcome: { status: 'failed', message: '' } }
   }
   const created = await createWebRuntimeSessionTerminalResult(launch)
+  if (args.isCancelled?.()) {
+    return { delivered: false, failureNotified: false, outcome: created.outcome }
+  }
   const promptDelivered =
     hasPrompt &&
+    !args.isCancelled?.() &&
     (await deliverCreatedWebRuntimeAgentSessionPrompt(created, {
       agent,
-      ...(startup.pasteDraftAfterLaunch !== null
-        ? {
-            promptAfterReady: startup.pasteDraftAfterLaunch,
-            submitPrompt: startup.submitPastedPrompt,
-            forcePromptPaste: true
-          }
-        : promptDelivery === 'draft'
-          ? { launchDraft: prompt }
-          : {})
+      beforePaste: () => !args.isCancelled?.(),
+      ...hostedAgentPromptDelivery(startup, prompt, promptDelivery)
     }))
+  if (args.isCancelled?.()) {
+    return { delivered: false, failureNotified: false, outcome: created.outcome }
+  }
   return handleCreation({ ...created, promptDelivered })
 }

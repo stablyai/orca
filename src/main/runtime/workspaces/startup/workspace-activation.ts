@@ -144,6 +144,7 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
     requestedAgent?: TuiAgent,
     launchSource?: string,
     inputs?: {
+      createdWithAgent?: TuiAgent
       startupAgentArgs?: string | null
       startupSessionOptions?: Parameters<typeof buildWorktreeStartupForDraft>[0]['sessionOptions']
       startupLaunchPreferences?: AgentLaunchPreferences
@@ -155,6 +156,7 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
     return buildWorktreeStartupForDraft({
       repo,
       draft,
+      originalAgent: inputs?.createdWithAgent ?? requestedAgent,
       agentArgs: inputs?.startupAgentArgs,
       sessionOptions:
         inputs?.startupSessionOptions ??

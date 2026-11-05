@@ -43,6 +43,7 @@ export async function pasteDraftWhenAgentReady(args: {
   onUnconfirmedDelivery?: () => void
   /** The launch pane's PTY once its spawn says the agent started there; null when it didn't. */
   launchPty?: Promise<string | null>
+  beforePaste?: () => boolean
 }): Promise<boolean> {
   const { tabId, content, agent, submit, forcePaste, timeoutMs, onTimeout, onUnconfirmedDelivery } =
     args
@@ -88,12 +89,16 @@ export async function pasteDraftWhenAgentReady(args: {
     onUnconfirmedDelivery?.()
   }
 
+  if (args.beforePaste && !args.beforePaste()) {
+    return false
+  }
   return await sendBracketedPasteToAgent({
     ptyId,
     content,
     submit: submit === true,
     agent,
-    inputKind: 'launch'
+    inputKind: 'launch',
+    beforePaste: args.beforePaste
   })
 }
 
@@ -170,6 +175,7 @@ async function sendBracketedPasteToAgent(args: {
   submit: boolean
   agent?: TuiAgent
   inputKind: TerminalInputKind
+  beforePaste?: () => boolean
 }): Promise<boolean> {
   const { ptyId, content, submit, agent } = args
   const { inputKind } = args
@@ -177,6 +183,9 @@ async function sendBracketedPasteToAgent(args: {
   try {
     // Keep paste, Enter and retry under one PTY lock or another paste could submit a half-written prompt.
     return await runTerminalPtyInputTransaction(ptyId, async () => {
+      if (args.beforePaste && !args.beforePaste()) {
+        return false
+      }
       const pasted = await sendAgentDraftPasteContentNow(ptyId, content, inputKind)
       if (!pasted || !submit) {
         return pasted
@@ -184,13 +193,18 @@ async function sendBracketedPasteToAgent(args: {
 
       // Defer Enter to the next turn so Claude processes bracketed-paste termination before submission.
       await new Promise<void>((resolve) => window.setTimeout(resolve, POST_PASTE_SUBMIT_DELAY_MS))
+      if (args.beforePaste && !args.beforePaste()) {
+        return false
+      }
       const submitted = await sendRuntimePtyInputVerified(ptyId, '\r', inputKind)
 
       if (submitRetryDelayMs !== undefined) {
         // Some composers render before accepting Enter; retry best-effort without downgrading the first submission verdict.
         await new Promise<void>((resolve) => window.setTimeout(resolve, submitRetryDelayMs))
         try {
-          await sendRuntimePtyInputVerified(ptyId, '\r', inputKind)
+          if (!args.beforePaste || args.beforePaste()) {
+            await sendRuntimePtyInputVerified(ptyId, '\r', inputKind)
+          }
         } catch {
           // Why: a rejected retry leaves the first Enter's verdict untouched.
         }

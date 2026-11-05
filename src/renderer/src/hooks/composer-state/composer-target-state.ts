@@ -66,6 +66,7 @@ export function useComposerTargetState(
     initialLinkedWorkItem: composerTargetStore.initialLinkedWorkItem,
     initialName: composerTargetStore.initialName,
     initialPrompt: composerTargetStore.initialPrompt,
+    initialNote: composerTargetStore.initialNote,
     initialTaskSourceContext: composerTargetStore.initialTaskSourceContext,
     isProjectGroupTarget: runtimeTargetSelection.isProjectGroupTarget,
     newWorkspaceDraft: composerTargetStore.newWorkspaceDraft,

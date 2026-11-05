@@ -191,8 +191,10 @@ it.each(['terminal', 'structured'] as const)(
     act(() => {
       start = view.result.current.startWithDetectedAgents({ detectedAgents: ['codex'] })
     })
-    await vi.waitFor(() => expect(mocks.createWorktree).toHaveBeenCalledOnce())
-    expect(view.result.current.isCreateAccepted).toBe(true)
+    await vi.waitFor(() => {
+      expect(mocks.createWorktree).toHaveBeenCalledOnce()
+      expect(view.result.current.isCreateAccepted).toBe(true)
+    })
     act(() => view.result.current.cancelStart())
     view.rerender({ open: false, connectionId: 'another-context' })
     view.rerender({ open: true, connectionId: 'another-context' })

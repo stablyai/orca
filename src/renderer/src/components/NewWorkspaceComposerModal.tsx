@@ -1,9 +1,14 @@
+import type { ComposerModalData } from './new-workspace/composer-modal-data'
+import { toast } from 'sonner'
+import {
+  formatWorkspaceCreateError,
+  getWorkspaceCreateErrorToastMessage
+} from '@/lib/workspace-create-error-format'
 import type {
   AgentPickerDraft,
   AgentPickerEntry
 } from '../../../shared/agent-launch/picker/agent-launch-picker'
 import { DirectWorkItemSetupDialog } from './new-workspace/DirectWorkItemSetupDialog'
-import type { DirectWorkItemSetupRequest } from '@/lib/direct-work-item-setup'
 import { agentChoicePending } from '@/lib/host-chat-program'
 import type { AgentLaunchSurface } from '@/lib/agent-session-launch-plan'
 import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -28,20 +33,14 @@ import {
   pickQuickWorkspaceAgent,
   resolveQuickWorkspaceAgentSelection
 } from '@/lib/quick-workspace-agent-selection'
-import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import { useAgentsOfferedForLaunch } from '@/lib/host-chat-program-acquisition'
 import { shouldAllowComposerEnterSubmitTarget } from '@/lib/new-workspace-enter-guard'
 import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
-import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
-import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../shared/workspace-source'
-import type { WorkspaceStatus } from '../../../shared/worktree/types'
-import type { TaskSourceContext } from '../../../shared/task-source-context'
 import { translate } from '@/i18n/i18n'
 import { getWorkspaceComposerInitialFocusTarget } from '@/lib/workspace-composer-initial-focus'
 import '@/components/sidebar/workspace-creation/folder/folder-workspace-source-repos'
 import { getFolderWorkspacePrimaryActionLabel } from '@/components/sidebar/workspace-creation/folder/folder-workspace-source-selection'
-import type { WorkspaceCreationTargetHint } from '@/lib/project-host-workspace-target'
 import { useAgentMenuObservation } from '@/components/tab-bar/use-new-tab-agent-menu-rows'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
 
@@ -52,25 +51,6 @@ const HostedAddRepoDialog = lazyWithRetry(
     reloadKey: 'composer-add-repo'
   }
 )
-
-type ComposerModalData = {
-  directSetup?: DirectWorkItemSetupRequest
-  prefilledName?: string
-  initialRepoId?: string
-  initialEphemeralVmRecipeId?: string
-  initialProjectGroupId?: string
-  linkedWorkItem?: LinkedWorkItemSummary | null
-  initialGitHubWorkItem?: GitHubWorkItem | null
-  taskSourceContext?: TaskSourceContext | null
-  initialWorkspaceTarget?: WorkspaceCreationTargetHint | null
-  initialBaseBranch?: string
-  initialWorkspaceStatus?: WorkspaceStatus
-  enableIssueAutomation?: boolean
-  /** Creation-surface telemetry; each opener supplies it, otherwise use unknown. */
-  telemetrySource?: WorkspaceCreateTelemetrySource
-  contextualTourSource?: string
-  setupGuideTourRequestId?: string
-}
 
 export default function NewWorkspaceComposerModal(): React.JSX.Element | null {
   const visible = useAppStore((s) => s.activeModal === 'new-workspace-composer')
@@ -158,6 +138,7 @@ function QuickTabBody({
     initialName: modalData.prefilledName ?? '',
     // Quick create ignores legacy prompt-prefill payloads.
     initialPrompt: '',
+    initialNote: modalData.recovery?.note,
     initialLinkedWorkItem: modalData.linkedWorkItem ?? null,
     initialGitHubWorkItem: modalData.initialGitHubWorkItem ?? null,
     initialTaskSourceContext: modalData.taskSourceContext ?? null,
@@ -178,7 +159,7 @@ function QuickTabBody({
   const agentSettingsInvoker = useRef<HTMLButtonElement | null>(null)
   // User picks outrank newly detected preferences. Derive from an override so detection stays current without an effect-driven extra commit.
   const [quickAgentOverride, setQuickAgentOverride] = useState<TuiAgent | null | undefined>(
-    undefined
+    modalData.recovery?.agent
   )
   // The picker rows' workspace when known, so the offered list and the rows read one host.
   const launchWorkspace =
@@ -213,13 +194,9 @@ function QuickTabBody({
     offeredAgentIds &&
     new Set([...offeredAgentIds, ...(quickAgent && choicePending(quickAgent) ? [quickAgent] : [])])
   // Why keyed by agent: a pick repaired to another agent must not carry the old one's surface.
-  const [quickAgentPick, setQuickAgentPick] = useState<{
-    agent: TuiAgent | null
-    surface?: AgentLaunchSurface
-    draft?: AgentPickerDraft
-    entry?: AgentPickerEntry
-    contextKey?: string
-  }>({ agent: null })
+  const [quickAgentPick, setQuickAgentPick] = useState<
+    Omit<NonNullable<ComposerModalData['recovery']>, 'note'>
+  >(modalData.recovery ?? { agent: null })
   const observation = useAgentMenuObservation(
     cardProps.agentRows?.target ?? null,
     active && Boolean(cardProps.agentRows),
@@ -255,6 +232,37 @@ function QuickTabBody({
       // Blank Terminal is the setup-only create: no agent, and no extra shell beside setup.
       setupOnly: quickAgent === null,
       launchChoice: launchSelection.choice,
+      onLegacyPreparationFailure: (error) => {
+        if (isSubmissionCancelled()) {
+          return
+        }
+        const snapshot = {
+          ...modalData,
+          prefilledName: cardProps.name,
+          initialRepoId: cardProps.repoId,
+          initialBaseBranch: cardProps.baseBranch,
+          initialWorkspaceTarget:
+            cardProps.selectedProjectId && cardProps.selectedRepoExecutionHostId
+              ? {
+                  projectId: cardProps.selectedProjectId,
+                  hostId: cardProps.selectedRepoExecutionHostId,
+                  projectHostSetupId: cardProps.selectedProjectHostSetupId ?? null
+                }
+              : modalData.initialWorkspaceTarget,
+          linkedWorkItem: cardProps.linkedWorkItem,
+          recovery: { ...quickAgentPick, agent: quickAgent, note: cardProps.note }
+        }
+        toast.error(getWorkspaceCreateErrorToastMessage(formatWorkspaceCreateError(error)), {
+          action: {
+            label: translate('auto.lib.composerCreateHandoff.reopen', 'Reopen'),
+            onClick: () => {
+              if (!isSubmissionCancelled() && useAppStore.getState().activeModal === 'none') {
+                useAppStore.getState().openModal('new-workspace-composer', snapshot)
+              }
+            }
+          }
+        })
+      },
       ...quickWorkspacePickerInputs(
         pickerDraft,
         quickAgentPick.entry,
@@ -267,7 +275,10 @@ function QuickTabBody({
     launchSelection.choice,
     submitQuick,
     pickerDraft,
-    quickAgentPick.entry
+    quickAgentPick,
+    isSubmissionCancelled,
+    modalData,
+    cardProps
   ])
   // Layer Add Project without replacing the composer. Retain it for close animation and clone/scan cancellation; folder/non-Git navigation still tears down the modal.
   const [addProjectOpen, setAddProjectOpen] = useState(false)

@@ -1,4 +1,4 @@
-import { toAgentLaunchPreferences } from '../../../../shared/agent-launch/choices/agent-launch-preferences'
+import { assertOpenCodeModelLaunchPreferencesAbsent } from '../../../opencode/opencode-model-startup-plan'
 import * as Lineage from '../lineage/runtime-worktree-lineage-resolution'
 import type { Repo } from '../../../../shared/repo-types'
 import { OrcaRuntimeWithGetWorktreeTerminalProvisioningHost } from '../startup/workspace-terminal-provisioning'
@@ -16,7 +16,6 @@ import { prepareRuntimeLocalWorktreeSetup } from './runtime-local-worktree-setup
 import { invalidateAuthorizedRootsCacheForRepo } from '../../../ipc/worktrees/removal/registered-worktree-roots-scoped-invalidation'
 import { startRuntimeLocalWorktreeTerminals } from '../startup/runtime-local-worktree-terminal-startup'
 import { trackRuntimeWorkspaceCreate } from '../../../workspaces/creation/workspace-create-telemetry'
-import { assertOpenCodeModelLaunchPreferencesAbsent } from '../../../opencode/opencode-model-startup-plan'
 import type { RuntimeWorkspaceCreateEvents } from '../../../workspaces/creation/workspace-create-telemetry'
 import {
   createdWorkspaceActivationCallbacks,
@@ -58,10 +57,8 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
     this.requireStore()
 
     assertOpenCodeModelLaunchPreferencesAbsent(
-      args.startupAgent ?? args.createdWithAgent,
-      args.startupSessionOptions && args.startupAgent
-        ? toAgentLaunchPreferences(args.startupSessionOptions, args.startupAgent)
-        : args.startupLaunchPreferences
+      args.startup ? (args.startupAgent ?? args.createdWithAgent) : undefined,
+      args.startupSessionOptions ?? args.startupLaunchPreferences
     )
 
     const repo = await this.resolveRepoSelector(args.repoSelector)

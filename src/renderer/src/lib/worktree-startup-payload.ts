@@ -1,4 +1,4 @@
-import type { AgentStartupPlan } from '../../../shared/agent-launch/startup/tui-agent-startup'
+import type { LaunchAgentStartupPromptPlan } from './launch-agent-startup-prompt-plan'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { EventProps } from '../../../shared/telemetry-events'
 import type { StartupCommandDelivery } from '../../../shared/agent-launch/startup/codex-startup-delivery'
@@ -14,12 +14,13 @@ export type AgentStartedTelemetry = EventProps<'agent_started'>
 
 export type FreshWorkspaceAgentLaunch = {
   agentArgs?: string | null
+  actionAgentArgs?: string
   sessionOptions?: Readonly<Record<string, SessionOptionValue>>
   prompt: string
   promptDelivery: 'draft' | 'auto-submit' | 'submit-after-ready'
-  /** Recovery owns delivery; ordinary pane seeds retain their existing completion owner. */
+  /** Recovery may replace the compatibility command; all hosted fresh launches own text delivery. */
   recovery?: true
-  legacy?: () => AgentStartupPlan | null
+  legacy?: () => LaunchAgentStartupPromptPlan
 }
 
 /** Startup command threaded onto a worktree's first terminal at activation. */

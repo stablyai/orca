@@ -124,14 +124,12 @@ export function ensureWebRuntimeWorktreeTerminalAfterWake(
           worktreeId,
           activate: opts?.activate !== false,
           selectWorktree: false,
-          buildStartup: () => {
-            const plan = startup.freshAgentLaunch?.legacy?.() ?? null
-            return {
-              startupPlan: plan,
-              pasteDraftAfterLaunch: plan?.draftPrompt ?? plan?.followupPrompt ?? null,
-              submitPastedPrompt: Boolean(plan?.followupPrompt)
+          buildStartup: () =>
+            startup.freshAgentLaunch?.legacy?.() ?? {
+              startupPlan: null,
+              pasteDraftAfterLaunch: null,
+              submitPastedPrompt: false
             }
-          }
         }).then((result) => result.outcome)
       : createWebRuntimeSessionTerminal(
           {

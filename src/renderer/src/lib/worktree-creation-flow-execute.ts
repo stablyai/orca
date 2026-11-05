@@ -16,6 +16,7 @@ import type { CreatedWorktreeResult } from '@/store/slices/worktrees/create/work
 import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
 import { resolveBackendDraftStartup } from '@/lib/worktree-draft-startup-view-mode'
 import {
+  recoverWorktreeLegacyPreparation,
   hostPlannableAgentLaunch,
   worktreeCreationAgentLaunchOptions,
   windowStartupAfterCreate
@@ -126,6 +127,9 @@ export async function executeWorktreeCreation(
     if (preparedRequest.ephemeralVmRuntimeId) {
       await cleanupEphemeralVmRuntimeForFailedCreate(preparedRequest)
     }
+    if (recoverWorktreeLegacyPreparation(creationId, preparedRequest, error)) {
+      return
+    }
     const message = getWorkspaceCreateErrorToastMessage(formatWorkspaceCreateError(error))
     showWorktreeCreationError(
       useAppStore.getState(),
@@ -214,11 +218,7 @@ export async function executeWorktreeCreation(
             unknownHostCountIsEmpty: true
           })
         } catch (recoveryError) {
-          console.error(
-            'worktree create: activation recovery after-wake seeding failed',
-            worktree.id,
-            recoveryError
-          )
+          console.error('worktree create: after-wake recovery failed', worktree.id, recoveryError)
         }
       }
     }

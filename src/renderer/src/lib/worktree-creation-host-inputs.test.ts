@@ -7,6 +7,8 @@ import { quickWorkspacePickerInputs } from './quick-workspace-agent-selection'
 import { createWorktreeOnRuntimeHost } from '@/store/slices/worktrees/create/host-planned-agent-launch'
 import type { WorktreeCreateRequest } from '@/store/slices/worktrees/create/worktree-create-payload'
 import { prepareQuickComposerStartup } from '@/hooks/composer-state/quick-startup-plan'
+import { worktreeCreationAgentLaunchOptions } from './worktree-creation-host-agent-launch'
+import type { WorktreeCreationRequest } from './pending-worktree-creation'
 import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
 
 const mocks = vi.hoisted(() => ({ call: vi.fn(), supports: vi.fn(), cached: vi.fn() }))
@@ -34,6 +36,24 @@ const entry: AgentPickerEntry = {
   catalog: { origin: 'unknown' }
 }
 const attempt = { name: 'test' }
+function creationRequest(
+  quick: Awaited<ReturnType<typeof prepareQuickComposerStartup>>,
+  launchInputs?: WorktreeCreationRequest['launchInputs']
+): WorktreeCreationRequest {
+  return {
+    repoId: 'repo',
+    name: 'test',
+    setupDecision: 'skip',
+    agent: 'claude',
+    pendingFirstAgentMessageRename: false,
+    note: '',
+    quickPrompt: quick.prompt,
+    launchDraftPrompt: quick.draftPrompt ?? undefined,
+    launchInputs,
+    quickTelemetry: quick.telemetry,
+    ...quick
+  }
+}
 const input = {
   agent: 'claude' as const,
   repoId: 'repo',
@@ -143,10 +163,7 @@ it('keeps the legacy modal Arguments projection on a host without the new capabi
       name: 'test',
       setupDecision: 'skip',
       startup: quick.backendStartup,
-      options: {
-        creationAgentLaunch: { agent: 'claude', inputs: projection.launchInputs },
-        legacyStartup: () => quick.creationStartup?.legacy().backendStartup
-      }
+      options: worktreeCreationAgentLaunchOptions(creationRequest(quick, projection.launchInputs))
     },
     attempt,
     {}
@@ -167,23 +184,30 @@ it('keeps the legacy modal Arguments projection on a host without the new capabi
 })
 
 it('uses the draft host path without startupAgent and retries unknown agents with the legacy projection', async () => {
+  const quick = await prepareQuickComposerStartup({
+    ...input,
+    note: 'ship it',
+    linkedWorkItem: {
+      provider: 'github',
+      number: 42,
+      title: 'fix',
+      url: 'https://example.com/42'
+    },
+    launchInputs: { agentArgs: null, sessionOptions: { model: 'opus' } },
+    legacyLaunchInputs: { agentArgs: '--add-dir /host/shared', sessionOptions: { model: 'opus' } }
+  })
   const request: WorktreeCreateRequest = {
     repoId: 'repo',
     name: 'test',
     createdWithAgent: 'claude',
-    options: {
-      creationAgentLaunch: {
-        agent: 'claude',
-        draft: 'ship it',
-        inputs: { agentArgs: null, sessionOptions: { model: 'opus' } }
-      },
-      legacyStartup: () => ({ command: 'legacy --add-dir /host/shared' })
-    }
+    options: worktreeCreationAgentLaunchOptions(
+      creationRequest(quick, { agentArgs: null, sessionOptions: { model: 'opus' } })
+    )
   }
   await createWorktreeOnRuntimeHost('host', request, attempt, {})
   expect(mocks.call.mock.calls[0]?.[2]).toMatchObject({
     createdWithAgent: 'claude',
-    startupDraft: 'ship it',
+    startupDraft: expect.stringContaining('ship it'),
     startupAgentArgs: null,
     startupSessionOptions: { model: 'opus' }
   })
@@ -197,7 +221,7 @@ it('uses the draft host path without startupAgent and retries unknown agents wit
   )
   await createWorktreeOnRuntimeHost('host', request, attempt, {})
   expect(mocks.call.mock.calls[2]?.[2]).toMatchObject({
-    startupCommand: 'legacy --add-dir /host/shared'
+    startupCommand: expect.stringContaining("'/host/shared'")
   })
   expect(mocks.call.mock.calls[2]?.[2]).not.toHaveProperty('startupDraft')
 })
@@ -215,3 +239,40 @@ it.each([false, null])(
     ).rejects.toThrow()
   }
 )
+
+it('seeds the eager legacy plan after command flags override the host default', async () => {
+  mocks.cached.mockReturnValue(false)
+  const quick = await prepareQuickComposerStartup({
+    ...input,
+    settings: { ...input.settings, agentCmdOverrides: { claude: '/desktop/claude --model haiku' } }
+  })
+  expect(quick.startupPlan?.launchCommand).toContain('haiku')
+  expect(quick.startupPlan?.launchCommand).not.toContain('sonnet')
+  expect(quick.creationStartup?.sessionOptions?.model).toBeUndefined()
+})
+
+it('preserves the untouched draft payload shape and prepares the current held message', async () => {
+  const quick = await prepareQuickComposerStartup({
+    ...input,
+    linkedWorkItem: {
+      provider: 'github',
+      number: 42,
+      title: 'fix',
+      url: 'https://example.com/42'
+    }
+  })
+  const options = worktreeCreationAgentLaunchOptions(creationRequest(quick))
+  await createWorktreeOnRuntimeHost(
+    'host',
+    { repoId: 'repo', name: 'test', createdWithAgent: 'claude', options },
+    attempt,
+    {}
+  )
+  const payload = mocks.call.mock.calls[0]?.[2]
+  expect(payload).toHaveProperty('startupDraft', 'https://example.com/42')
+  expect(payload).not.toHaveProperty('activate')
+  expect(payload).not.toHaveProperty('launchSource')
+  const held = quick.creationStartup?.legacy('held message', 'draft')
+  expect(held?.startupPlan?.launchCommand).toContain("'held message'")
+  expect(held?.startupPlan?.launchCommand).not.toContain('https://example.com/42')
+})
