@@ -155,7 +155,16 @@ describe('mailbox delivery into a pane awaiting the user', () => {
 
   it.each([
     ['holds a draft typed before the restart until the cap', 'please refactor the auth', true],
-    ["does not hold on Orca's own unsent pointer", 'You have 1 orchestration message.', false]
+    [
+      'holds user text that only starts like a pointer',
+      'You have 1 orchestration message. Why?',
+      true
+    ],
+    [
+      "does not hold on Orca's own unsent pointer",
+      'You have 1 orchestration message. Run `orca orchestration check --run run_1`.',
+      false
+    ]
   ] as const)(
     'after an Orca restart reattaches the agent, %s',
     async (_label, composerText, held) => {

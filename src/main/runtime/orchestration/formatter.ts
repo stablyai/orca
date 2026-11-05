@@ -123,11 +123,15 @@ export function formatMessagesForInjection(messages: MessageRow[]): string {
   return `\n--- Orchestration Messages (${messages.length}) ---\n${banners}\n---\n`
 }
 
-const MESSAGE_POINTER_TEXT = /^You have \d+ (?:new )?orchestration messages?[. ]/
+const MESSAGE_POINTER_TEXT = [
+  /^You have \d+ orchestration messages?\. Run `\S+ orchestration check(?: --run \S+)?`\.$/,
+  /^You have \d+ new orchestration messages? after delivery \S+, which you have not acknowledged\. .* for the new mail\.$/
+]
 
-/** Whether composer text is a pointer Orca typed (see formatMessagePointer) rather than the user's draft. */
+/** Whether composer text is exactly a pointer Orca typed (see formatMessagePointer), not the user's draft. */
 export function isMessagePointerText(text: string): boolean {
-  return MESSAGE_POINTER_TEXT.test(text.trimStart())
+  const flat = text.replace(/\s+/g, ' ').trim()
+  return MESSAGE_POINTER_TEXT.some((pointer) => pointer.test(flat))
 }
 
 export function formatMessagePointer(
