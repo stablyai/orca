@@ -89,6 +89,21 @@ export function useClientHostedBrowserTools({
   ])
 
   useEffect(() => {
+    // Why: the retained guest outlives this pane and may have replaced its document while no pane
+    // listened, so marker geometry from before is unverifiable (as on a local pane's reattach).
+    if (!unavailable) {
+      useAppStore.getState().invalidateBrowserPageAnnotationGeometry(browserPageId)
+    }
+  }, [
+    browserPageId,
+    runtimeEnvironmentId,
+    browserHostClientId,
+    browserHostGeneration,
+    pageHostGeneration,
+    unavailable
+  ])
+
+  useEffect(() => {
     const webview = webviewRef.current
     if (!webview || unavailable) {
       return

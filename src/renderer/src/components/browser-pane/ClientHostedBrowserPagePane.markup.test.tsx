@@ -276,6 +276,14 @@ describe('client-hosted screenshot markup', () => {
   })
 })
 
+describe('client-hosted annotation markers', () => {
+  it('drops marker geometry when a pane reattaches to a guest whose document may have changed', () => {
+    useAppStore.setState({ browserAnnotationMarkerIdsByPageId: { 'page-a': ['marker-1'] } })
+    renderPane()
+    expect(useAppStore.getState().browserAnnotationMarkerIdsByPageId['page-a']).toBeUndefined()
+  })
+})
+
 describe('client-hosted element tools', () => {
   function selectElement() {
     const payload = makeAnnotation('page-a').payload
