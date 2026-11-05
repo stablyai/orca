@@ -96,7 +96,7 @@ describe('Electron Vite output contract', () => {
         }
       }
     }
-    for (const name of ['browser-window-close-preload', 'doc-preview-link-preload']) {
+    for (const name of ['browser-guest-preload', 'doc-preview-link-preload']) {
       expect(MAIN_BUILD_ENTRY_POINTS).not.toHaveProperty(name)
       const source = emitted.get(`${name}.js`)
       if (!source) {

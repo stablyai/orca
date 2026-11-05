@@ -28,7 +28,6 @@ import {
 import { structuredAgentSessionImmediatePermission } from './structured-agent-session-launch-permission'
 import type { StructuredAgentSessionMutationContext } from './structured-agent-session-host-mutations'
 import { readStructuredSessionRecovery } from './structured-agent-session-recovery-read'
-import { structuredAgentSessionNeverSent } from './structured-agent-session-never-sent'
 import { fillUnknownModelEfforts } from '../../../shared/agent-session/options/agent-session-model-efforts'
 
 export {
@@ -182,26 +181,18 @@ export async function readStructuredAgentSessionOptions(
         ? selected.current.serviceTier
         : (options.current.serviceTier ?? selected.current.serviceTier)
   }
-  // Only the unsaved model default is pinned on first send.
+  // Unsaved defaults are shown, never sent: the agent's own config decides what an unpicked chat runs.
   const defaultedBy = (key: 'model' | 'effort') =>
     key === 'model' && !options.current.model
       ? displayDefault !== undefined || selected.current.defaulted?.includes(key) === true
       : options.current.defaulted?.includes(key) === true
-  const neverSent = structuredAgentSessionNeverSent(record, session.journal)
-  const defaultKeys = (['model', 'effort'] as const).filter(
+  const defaulted = (['model', 'effort'] as const).filter(
     (key) => saved[key] === undefined && defaultedBy(key)
   )
-  const pinsDefaults = neverSent && (agent !== 'codex' || !live || !!options.current.model)
-  const defaulted = defaultKeys.filter((key) => key === 'effort' || !pinsDefaults)
   const acceptedInputSources: AgentSessionAcceptedInputSources = {}
   for (const key of ['model', 'effort', 'fastMode', 'serviceTier'] as const) {
     if (current[key] !== undefined && saved[key] !== undefined) {
       acceptedInputSources[key] = 'saved'
-    }
-  }
-  for (const key of defaultKeys) {
-    if (key === 'model' && pinsDefaults && current[key] !== undefined) {
-      acceptedInputSources[key] = 'policy'
     }
   }
   if (saved.fastMode === undefined && selected.current.fastMode === false) {

@@ -9,7 +9,7 @@ import {
 type BundledScript = { code: string; moduleIds: string[] }
 
 const GUEST_PRELOADS = [
-  { entry: 'src/preload/browser-window-close.ts', fileName: 'browser-window-close-preload.js' },
+  { entry: 'src/preload/browser-guest.ts', fileName: 'browser-guest-preload.js' },
   { entry: 'src/preload/doc-preview-link.ts', fileName: 'doc-preview-link-preload.js' }
 ]
 
