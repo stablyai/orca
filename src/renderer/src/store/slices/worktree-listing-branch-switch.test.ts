@@ -45,4 +45,27 @@ describe('routeListingBranchSwitchesThroughGitIdentity', () => {
 
     expect(result[0]?.instanceId).toBe('instance-1')
   })
+
+  it('keeps a branch switch git status saw over a stale listing of a headless row', () => {
+    const switched = { ...restoredStub, head: 'new-head', branch: 'refs/heads/new' }
+    const staleListing: Worktree = {
+      ...restoredStub,
+      head: 'old-head',
+      branch: 'refs/heads/old',
+      instanceId: 'instance-1'
+    }
+    const updateWorktreeGitIdentity = vi.fn()
+
+    const result = routeListingBranchSwitchesThroughGitIdentity({
+      requestStarted: [restoredStub],
+      current: [switched],
+      incoming: [staleListing],
+      matchesRefreshHost: () => true,
+      hasBranchScopedReviewContext: () => true,
+      updateWorktreeGitIdentity
+    })
+
+    expect(result[0]?.branch).toBe('refs/heads/new')
+    expect(updateWorktreeGitIdentity).not.toHaveBeenCalled()
+  })
 })

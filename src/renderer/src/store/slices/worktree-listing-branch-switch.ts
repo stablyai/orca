@@ -27,6 +27,21 @@ function branchScopedReviewContextMatches(left: Worktree, right: Worktree): bool
   )
 }
 
+/** A headless row (e.g. a restored-session stub) that git status filled in with what the listing
+ * also reports gained no newer identity; keeping it would drop the listing's catalog facts. */
+function listingConfirmsFilledInIdentity(
+  requestStarted: Worktree,
+  existing: Worktree,
+  incoming: Worktree
+): boolean {
+  return (
+    requestStarted.head === '' &&
+    existing.branch === incoming.branch &&
+    existing.head === incoming.head &&
+    branchScopedReviewContextMatches(existing, requestStarted)
+  )
+}
+
 /** Clear branch-scoped review links before listing merge or git-status can miss the change and leave old PR checks pinned. Route only rows with review context so stale listings still cannot roll newer branch identity back. */
 export function routeListingBranchSwitchesThroughGitIdentity(args: {
   requestStarted: readonly Worktree[] | undefined
@@ -63,9 +78,7 @@ export function routeListingBranchSwitchesThroughGitIdentity(args: {
     if (
       requestStartedWorktree &&
       existing &&
-      // Why: no head means the row was never listed (a restored-session stub); git status filling
-      // it in is no newer identity, and keeping the stub would drop the listing's catalog facts.
-      requestStartedWorktree.head !== '' &&
+      !listingConfirmsFilledInIdentity(requestStartedWorktree, existing, worktree) &&
       (existing.branch !== requestStartedWorktree.branch ||
         existing.head !== requestStartedWorktree.head ||
         !branchScopedReviewContextMatches(existing, requestStartedWorktree))
