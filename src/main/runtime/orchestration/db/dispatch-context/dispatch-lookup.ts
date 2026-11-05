@@ -25,9 +25,12 @@ const assigneeLookups = (status: string) => ({
   byPaneKey: assigneeSql('assignee_pane_key = ?', status),
   byPaneSuffix: assigneeSql(BY_PANE_SUFFIX, status)
 })
-const ASSIGNEE_SQL = {
-  active: assigneeLookups("AND status IN ('pending', 'dispatched')"),
-  latest: assigneeLookups('')
+const ACTIVE_ASSIGNEE_SQL = assigneeLookups("AND status IN ('pending', 'dispatched')")
+// The newest Dispatch across the handle and every equivalent pane, so an older row never masks a later one.
+const LATEST_SQL = {
+  byHandle: assigneeSql('assignee_handle = ?', ''),
+  orPane: assigneeSql('(assignee_handle = ? OR assignee_pane_key = ?)', ''),
+  orLeaf: assigneeSql(`(assignee_handle = ? OR (${BY_PANE_SUFFIX}))`, '')
 }
 
 function presentationAddressKey(column: string, address: string | null): string {
@@ -257,7 +260,7 @@ export function findActiveDispatchForAssignee(
   assigneeHandle: string,
   assigneePaneKey?: string
 ): DispatchContextRow | undefined {
-  return findDispatchForAssignee(this, 'active', assigneeHandle, assigneePaneKey)
+  return findDispatchForAssignee(this, assigneeHandle, assigneePaneKey)
 }
 
 /** The newest Dispatch, settled or not; with a pane, also after the handle was reminted. */
@@ -266,16 +269,20 @@ export function getLatestDispatchForTerminal(
   handle: string,
   paneKey?: string
 ): DispatchContextRow | undefined {
-  return findDispatchForAssignee(this, 'latest', handle, paneKey)
+  const leaf = paneKey && parsePaneKey(paneKey) ? paneKeyMatchSuffix(paneKey) : undefined
+  const statement = !paneKey ? LATEST_SQL.byHandle : leaf ? LATEST_SQL.orLeaf : LATEST_SQL.orPane
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: each statement selects the schema-pinned Dispatch projection.
+  return this.db.prepare(statement).get(handle, ...(paneKey ? [leaf ?? paneKey] : [])) as
+    | DispatchContextRow
+    | undefined
 }
 
 function findDispatchForAssignee(
   db: OrchestrationDb,
-  kind: keyof typeof ASSIGNEE_SQL,
   handle: string,
   paneKey: string | undefined
 ): DispatchContextRow | undefined {
-  const sql = ASSIGNEE_SQL[kind]
+  const sql = ACTIVE_ASSIGNEE_SQL
   const read = (statement: string, value: string) =>
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: each statement selects the schema-pinned Dispatch projection.
     db.db.prepare(statement).get(value) as DispatchContextRow | undefined

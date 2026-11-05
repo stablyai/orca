@@ -126,9 +126,8 @@ export function finishedWorkerSend<P extends { to?: string; type?: string }>(
   }
 }
 
-/** The finished remote worker a caller still is: its pane's newest remote Dispatch while the pane runs that
- *  worker's process, unless a local Dispatch the caller also speaks as came strictly later. A same-second tie
- *  stays remote, so it is refused rather than sent to the wrong coordinator. */
+/** The finished remote worker a caller may still be: its pane's newest remote Dispatch, while the pane runs
+ *  that worker's process. */
 function finishedRemoteSender(
   db: OrchestrationDb,
   sender: FinishedSender
@@ -136,34 +135,41 @@ function finishedRemoteSender(
   const attachment = sender.paneKey
     ? db.findLatestRemoteAttachmentForPane(sender.paneKey)
     : undefined
-  if (
-    !attachment ||
-    (attachment.process_incarnation &&
-      !db.isRemoteAttachmentProcessCurrent({
+  return attachment &&
+    (!attachment.process_incarnation ||
+      db.isRemoteAttachmentProcessCurrent({
         dispatchId: attachment.dispatch_id,
         paneKey: sender.paneKey,
         processIncarnation: sender.processIncarnation() ?? null
       }))
-  ) {
-    return undefined
-  }
-  const local = db.getLatestDispatchForTerminal(sender.address, sender.paneKey ?? undefined)
-  return local && local.created_at > attachment.created_at && speaksAs(db, sender, local)
-    ? undefined
-    : attachment
+    ? attachment
+    : undefined
 }
 
-/** A finished worker on a paired host cannot reach its coordinator yet; say why instead of a bare refusal. */
+/** A finished worker on a paired host cannot reach its coordinator yet; say why instead of a bare refusal. A
+ *  local worker in the same process speaks instead while working; once both finished, nothing records which
+ *  came last, so it must name the local Dispatch rather than risk the wrong coordinator. */
 export function refuseFinishedRemoteWorker(
   db: OrchestrationDb,
   sender: FinishedSender,
   to: string | undefined
 ): void {
   const attachment = finishedRemoteSender(db, sender)
-  if (attachment && (!to || to === `dispatch:${attachment.dispatch_id}`)) {
+  if (!attachment || (to && to !== `dispatch:${attachment.dispatch_id}`)) {
+    return
+  }
+  const local = db.getLatestDispatchForTerminal(sender.address, sender.paneKey ?? undefined)
+  if (local && speaksAs(db, sender, local)) {
+    if (local.status === 'pending' || local.status === 'dispatched') {
+      return
+    }
     throw new OrchestrationError(
-      'run_home_unreachable',
-      `Dispatch ${attachment.dispatch_id} has finished, and its coordinator runs on another computer that a finished worker cannot reach yet. Nothing was sent; give the message to the user instead.`
+      'recipient_ambiguous',
+      `This terminal finished Dispatch ${local.id} here and Dispatch ${attachment.dispatch_id} for a coordinator on another computer. Nothing was sent; to reach this computer's coordinator, use orca orchestration send --to dispatch:${local.id}.`
     )
   }
+  throw new OrchestrationError(
+    'run_home_unreachable',
+    `Dispatch ${attachment.dispatch_id} has finished, and its coordinator runs on another computer that a finished worker cannot reach yet. Nothing was sent; give the message to the user instead.`
+  )
 }

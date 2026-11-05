@@ -171,9 +171,8 @@ describe('a worker after its worker_done', () => {
   })
 
   const PANE = 'tab_worker:leaf_worker'
-  const SECOND = '2026-11-05 07:00:00'
 
-  // A remote worker this host ran in the pane's process, settled, started in SECOND.
+  // A remote worker this host ran in the pane's process, settled.
   function finishRemoteWorker(db: OrchestrationDb, processIncarnation: string): void {
     db.createRemoteDispatchAttachment({
       dispatchId: 'ctx_remote',
@@ -200,16 +199,15 @@ describe('a worker after its worker_done', () => {
     })
     db.markRemoteAttachmentReady('ctx_remote')
     db.settleRemoteAttachmentInRelayTransaction('ctx_remote', 'succeeded')
-    db.db.prepare('UPDATE remote_dispatch_attachments SET created_at = ?').run(SECOND)
   }
 
-  // A local worker this host ran in the pane's process, finished, started at createdAt.
-  async function finishLocalWorker(
+  // A local worker this host ran in the pane's process, finished unless still working.
+  async function localWorker(
     db: OrchestrationDb,
     ctx: RpcContext,
     processIncarnation: string,
-    createdAt: string
-  ): Promise<string> {
+    finished = true
+  ): Promise<{ runId: string; dispatchId: string }> {
     const run = db.createRun({
       objective: 'local',
       coordinatorHandle: 'term_coord',
@@ -224,20 +222,23 @@ describe('a worker after its worker_done', () => {
       undefined,
       processIncarnation
     )
-    await harness.call(
-      'orchestration.send',
-      {
-        from: 'term_worker',
-        type: 'worker_done',
-        subject: 'Done',
-        payload: JSON.stringify({ taskId: task.id, dispatchId: dispatch.id, outcome: 'succeeded' })
-      },
-      ctx
-    )
-    db.db
-      .prepare('UPDATE dispatch_contexts SET created_at = ? WHERE id = ?')
-      .run(createdAt, dispatch.id)
-    return run.id
+    if (finished) {
+      await harness.call(
+        'orchestration.send',
+        {
+          from: 'term_worker',
+          type: 'worker_done',
+          subject: 'Done',
+          payload: JSON.stringify({
+            taskId: task.id,
+            dispatchId: dispatch.id,
+            outcome: 'succeeded'
+          })
+        },
+        ctx
+      )
+    }
+    return { runId: run.id, dispatchId: dispatch.id }
   }
 
   it('tells a finished worker on a paired host that its coordinator is out of reach', async () => {
@@ -259,14 +260,14 @@ describe('a worker after its worker_done', () => {
     }
   })
 
-  it('speaks for the worker whose process the pane runs, then the one that started last', async () => {
+  it('never guesses between a remote and a local worker that finished in one process', async () => {
     const { db, runtime, ctx } = harness.setup(false)
     vi.mocked(runtime.getTerminalPaneKey).mockImplementation((handle) =>
       handle === 'term_worker' ? PANE : null
     )
     const runs = vi.mocked(runtime.getTerminalProcessIncarnation)
-    const send = () =>
-      harness.call('orchestration.send', { from: 'term_worker', subject: 'Later' }, ctx)
+    const send = (params: Record<string, unknown> = {}) =>
+      harness.call('orchestration.send', { from: 'term_worker', subject: 'Later', ...params }, ctx)
     const ask = () =>
       harness.call(
         'orchestration.ask',
@@ -274,26 +275,69 @@ describe('a worker after its worker_done', () => {
         ctx
       )
 
-    // A remote worker that took over a local worker's process in the same second is the one speaking.
     runs.mockReturnValue('runtime_test:term_worker:1')
-    await finishLocalWorker(db, ctx, 'runtime_test:term_worker:1', SECOND)
+    const local = await localWorker(db, ctx, 'runtime_test:term_worker:1')
     finishRemoteWorker(db, 'runtime_test:term_worker:1')
-    await expect(send()).rejects.toMatchObject({ code: 'run_home_unreachable' })
-    await expect(ask()).rejects.toMatchObject({ code: 'run_home_unreachable' })
+    await expect(send()).rejects.toMatchObject({ code: 'recipient_ambiguous' })
+    await expect(ask()).rejects.toMatchObject({ code: 'recipient_ambiguous' })
+    await expect(send({ to: `dispatch:${local.dispatchId}` })).resolves.toMatchObject({
+      message: { to_handle: `run:${local.runId}` }
+    })
 
-    // A local worker given that process later speaks for it.
-    const later = await finishLocalWorker(
-      db,
-      ctx,
-      'runtime_test:term_worker:1',
-      '2026-11-05 07:00:01'
+    // A local worker working in that process speaks for it.
+    const working = await localWorker(db, ctx, 'runtime_test:term_worker:1', false)
+    await expect(send()).resolves.toMatchObject({ message: { run_id: working.runId } })
+  })
+
+  it('lets a new process in the pane speak as its own local worker', async () => {
+    const { db, runtime, ctx } = harness.setup(false)
+    vi.mocked(runtime.getTerminalPaneKey).mockImplementation((handle) =>
+      handle === 'term_worker' ? PANE : null
     )
-    await expect(send()).resolves.toMatchObject({ message: { to_handle: `run:${later}` } })
+    finishRemoteWorker(db, 'runtime_test:term_worker:1')
+    vi.mocked(runtime.getTerminalProcessIncarnation).mockReturnValue('runtime_test:term_worker:2')
+    const local = await localWorker(db, ctx, 'runtime_test:term_worker:2')
+    await expect(
+      harness.call('orchestration.send', { from: 'term_worker', subject: 'Later' }, ctx)
+    ).resolves.toMatchObject({ message: { to_handle: `run:${local.runId}` } })
+  })
 
-    // A new process is not the remote worker, whatever the start times say.
-    runs.mockReturnValue('runtime_test:term_worker:2')
-    const fresh = await finishLocalWorker(db, ctx, 'runtime_test:term_worker:2', SECOND)
-    await expect(send()).resolves.toMatchObject({ message: { to_handle: `run:${fresh}` } })
+  it('reaches the coordinator of the last worker in the pane after its tab moved and came back', async () => {
+    const { db, runtime, ctx } = harness.setup(false)
+    const finish = async (handle: string, paneKey: string) => {
+      const run = db.createRun({
+        objective: handle,
+        coordinatorHandle: 'term_coord',
+        coordinatorPaneKey: null
+      })
+      const task = db.createTask({ spec: handle, runId: run.id })
+      const dispatch = createRootDispatch(db, task.id, handle, paneKey)
+      vi.mocked(runtime.getTerminalPaneKey).mockReturnValue(paneKey)
+      await harness.call(
+        'orchestration.send',
+        {
+          from: handle,
+          type: 'worker_done',
+          subject: 'Done',
+          payload: JSON.stringify({
+            taskId: task.id,
+            dispatchId: dispatch.id,
+            outcome: 'succeeded'
+          })
+        },
+        ctx
+      )
+      return run.id
+    }
+    await finish('term_first', 'tab_home:cccccccc-cccc-4ccc-8ccc-cccccccccccc')
+    const last = await finish('term_moved', 'tab_away:cccccccc-cccc-4ccc-8ccc-cccccccccccc')
+    // Back in its first tab under a new handle, the pane is still the last worker's.
+    vi.mocked(runtime.getTerminalPaneKey).mockReturnValue(
+      'tab_home:cccccccc-cccc-4ccc-8ccc-cccccccccccc'
+    )
+    await expect(
+      harness.call('orchestration.send', { from: 'term_back', subject: 'Later' }, ctx)
+    ).resolves.toMatchObject({ message: { to_handle: `run:${last}` } })
   })
 
   it('takes only the chat session that finished for the finished worker', async () => {
