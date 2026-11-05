@@ -252,12 +252,12 @@ export function installPtyExitHibernate(session: ConnectPanePtySession): void {
       })
       return
     }
+    // A setup that exited its shell on success asked to close, so the newborn guards below do not apply.
+    const setupExitedOnSuccess =
+      exitCode === 0 && exitsShellOnSetupSuccess(processExitState.startup?.command)
     const panes = session.manager.getPanes()
     if (panes.length <= 1) {
       // Keep sole fresh, never-typed shell failures visible for diagnostics instead of closing the tab and deactivating the workspace; explicit exit and dead reattach still close.
-      // A setup that exited its shell on success asked to close, so the guard does not apply.
-      const setupExitedOnSuccess =
-        exitCode === 0 && exitsShellOnSetupSuccess(processExitState.startup?.command)
       if (keepsUntouchedFreshPane(session, ptyId) && !setupExitedOnSuccess) {
         return
       }
@@ -265,6 +265,7 @@ export function installPtyExitHibernate(session: ConnectPanePtySession): void {
       return
     }
     if (
+      !setupExitedOnSuccess &&
       session.deps.isVisibleRef.current &&
       session.hadExistingPaneTransportAtConnect &&
       !session.restoredPtyIdForTransport &&

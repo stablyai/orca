@@ -239,7 +239,10 @@ export function registerPtyConnectionPtyExitTeardownTests(): void {
       for (const [command, exitCode, closes] of [
         ['bash /repo/.git/orca/setup-runner.sh && exit', 0, true],
         ['cmd.exe /c "C:\\r\\setup-runner.cmd"; if ($LASTEXITCODE -eq 0) { exit }', 0, true],
-        ['bash /repo/.git/orca/setup-runner.sh', 0, false]
+        ['bash /repo/.git/orca/setup-runner.sh', 0, false],
+        // A failed setup keeps its pane open so the error stays readable.
+        ['bash /repo/.git/orca/setup-runner.sh && exit', 1, false],
+        ['cmd.exe /c "C:\\r\\setup-runner.cmd"; if ($LASTEXITCODE -eq 0) { exit }', 1, false]
       ] as const) {
         transportFactoryQueue.push(createMockTransport('tab-pty'))
         createdTransportOptions = []
@@ -258,6 +261,32 @@ export function registerPtyConnectionPtyExitTeardownTests(): void {
         } else {
           expect(deps.onPtyExitRef.current).not.toHaveBeenCalled()
         }
+      }
+    })
+
+    it('closes a visible newborn setup split whose shell exited because setup succeeded', async () => {
+      const { connectPanePty } = await import('./pty-connection')
+      transportFactoryQueue.push(createMockTransport('pty-pane-2'))
+      const manager = createManager(2, 2)
+      const deps = createDeps({
+        restoredLeafId: LEAF_2,
+        startup: { command: 'bash /repo/.git/orca/setup-runner.sh && exit' },
+        paneTransportsRef: { current: new Map([[1, createMockTransport('pty-pane-1')]]) }
+      })
+
+      connectPanePty(createPane(2) as never, manager as never, deps as never)
+      const { onPtyExit } = createdTransportOptions[0] ?? {}
+      if (typeof onPtyExit !== 'function') {
+        throw new Error('transport callbacks were not captured')
+      }
+
+      onPtyExit('pty-pane-2', 0)
+
+      expect(manager.setActivePane).not.toHaveBeenCalledWith(1, { focus: true })
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        await expectMainFrameClosesExitedSplitPaneOnce(manager)
+      } else {
+        expect(manager.closePane).toHaveBeenCalledWith(2)
       }
     })
 

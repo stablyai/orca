@@ -205,3 +205,10 @@ it('retains a pending action target only while its section remains visible', asy
   await act(async () => view.rerender(<TerminalPane {...props} />))
   expect(screen.queryByText('Pending action for synthetic-session')).toBeNull()
 })
+
+it('finds the setup auto-close setting by searching "close"', async () => {
+  fake.query = 'close'
+  render(<TerminalPane {...paneProps()} />)
+  await act(async () => {})
+  expect(screen.getAllByText('Close Setup Tab When It Succeeds').length).toBeGreaterThan(0)
+})
