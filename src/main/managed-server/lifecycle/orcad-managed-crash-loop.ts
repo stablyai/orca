@@ -30,7 +30,7 @@ export class ManagedOrcadCrashLoopBrake {
   private readonly latchedOnServingRun = new Set<string>()
   private readonly lastFailedStart = new Map<string, string>()
   /** The answering machine's boot when the brake engaged; null when it could not be read. */
-  private readonly latchedBoot = new Map<string, string | null>()
+  private readonly latchedBoot = new Map<string, MachineBoot | null>()
 
   constructor(now: () => number = Date.now) {
     this.failures = new ManagedOrcadEventWindow(FAILED_RUN_WINDOW_MS, now)
@@ -82,11 +82,11 @@ export class ManagedOrcadCrashLoopBrake {
     return this.latchedOnServingRun.has(environmentId)
   }
 
-  latchedBootOf(environmentId: string): string | null | undefined {
+  latchedBootOf(environmentId: string): MachineBoot | null | undefined {
     return this.latchedBoot.get(environmentId)
   }
 
-  setLatchedBoot(environmentId: string, boot: string | null): void {
+  setLatchedBoot(environmentId: string, boot: MachineBoot | null): void {
     if (this.engaged(environmentId)) {
       this.latchedBoot.set(environmentId, boot)
     }
@@ -127,6 +127,9 @@ export class ManagedOrcadCrashLoopBrake {
     }
   }
 }
+
+/** Seconds come from the host's own clock, so desktop clock skew never enters the comparison. */
+type MachineBoot = { bootId: string; machine: string; bootedAt: number; readAt: number }
 
 const brake = new ManagedOrcadCrashLoopBrake()
 
@@ -203,9 +206,6 @@ async function wakeUnlessEngaged(
     if (wake.outcome === 'started') {
       brake.noteStarted(environmentId, epoch, wake.readiness.health)
     }
-    if (wake.outcome === 'serving') {
-      brake.noteServing(environmentId)
-    }
     if ((wake.outcome === 'fenced' || wake.outcome === 'recovery-refused') && wake.launchFailure) {
       brake.noteFailedStart(environmentId, epoch, wake.launchFailure)
     }
@@ -228,21 +228,29 @@ async function recordLatchedBoot(environmentId: string, slot: ManagedOrcadSlot):
   }
 }
 
-/** "<boot id>\n<hostname>\n<machine id>" on Linux; null elsewhere or without a machine id. */
-async function readMachineBoot(slot: ManagedOrcadSlot): Promise<string | null> {
+/** Linux only; null elsewhere or when any part is missing. */
+async function readMachineBoot(slot: ManagedOrcadSlot): Promise<MachineBoot | null> {
   if (isWindowsRemoteHost(slot.host)) {
     return null
   }
   try {
-    const answer = (await execOrcadRemote(slot, MACHINE_BOOT_COMMAND)).trim()
-    return answer.split('\n').length === 3 ? answer : null
+    const lines = (await execOrcadRemote(slot, MACHINE_BOOT_COMMAND)).trim().split('\n')
+    const [bootId, hostname, machineId, bootedAt, readAt] = lines.map((line) => line.trim())
+    const seconds = (value: string | undefined): number | null =>
+      value && /^\d+$/.test(value) ? Number(value) : null
+    const booted = seconds(bootedAt)
+    const read = seconds(readAt)
+    return lines.length === 5 && bootId && hostname && machineId && booted !== null && read !== null
+      ? { bootId, machine: `${hostname}\n${machineId}`, bootedAt: booted, readAt: read }
+      : null
   } catch {
     return null
   }
 }
 
 const MACHINE_BOOT_COMMAND =
-  '{ cat /proc/sys/kernel/random/boot_id && uname -n && cat /etc/machine-id; } 2>/dev/null || :'
+  '{ cat /proc/sys/kernel/random/boot_id && uname -n && cat /etc/machine-id && ' +
+  "awk '/^btime /{print $2}' /proc/stat && date +%s; } 2>/dev/null || :"
 
 /**
  * A served run releases orcad.lock on a clean exit. A reboot ends every run, but only a new boot of
@@ -255,9 +263,13 @@ async function latchedRunEndedWithoutCrash(
   const latched = brake.latchedBootOf(environmentId)
   if (latched) {
     const current = await readMachineBoot(slot)
-    // Same hostname and machine id, new boot id: this machine rebooted since the brake engaged.
-    const machine = (boot: string) => boot.split('\n').slice(1).join('\n')
-    if (current && current !== latched && machine(current) === machine(latched)) {
+    // A clone shares hostname and machine id, so the new boot must also postdate the latch.
+    if (
+      current &&
+      current.machine === latched.machine &&
+      current.bootId !== latched.bootId &&
+      current.bootedAt > latched.readAt
+    ) {
       return true
     }
   }

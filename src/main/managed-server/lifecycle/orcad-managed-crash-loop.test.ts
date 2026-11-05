@@ -21,8 +21,8 @@ vi.mock('../install/orcad-remote-record-file', () => ({
   readBoundedOrcadRemoteRecord: vi.fn(async () => ({ state: 'present', raw: '{}' }))
 }))
 vi.mock('../install/orcad-remote-runtime-control', () => ({
-  // The answering machine's boot id, hostname and machine id.
-  execOrcadRemote: vi.fn(async () => 'boot-a\nnode-1\nmachine-1\n')
+  // The answering machine's boot id, hostname, machine id, boot time and clock (seconds).
+  execOrcadRemote: vi.fn(async () => 'boot-a\nnode-1\nmachine-1\n1000\n2000\n')
 }))
 vi.mock('../install/orcad-remote-log-tail', () => ({
   withOrcadLogTail: vi.fn(
@@ -98,7 +98,13 @@ const CRASHED = { pid: 4242, version: '1.2.3', acquiredAt: '2026-11-04T10:00:00.
 beforeEach(() => {
   vi.clearAllMocks()
   launches = 0
-  vi.mocked(execOrcadRemote).mockResolvedValue('boot-a\nnode-1\nmachine-1\n')
+  // Drop one-shot answers a test left unread.
+  vi.mocked(execOrcadRemote)
+    .mockReset()
+    .mockResolvedValue('boot-a\nnode-1\nmachine-1\n1000\n2000\n')
+  vi.mocked(readBoundedOrcadRemoteRecord)
+    .mockReset()
+    .mockResolvedValue({ state: 'present', raw: '{}' })
   getManagedOrcadCrashLoopBrake().forget('env-1')
   setManagedOrcadStartListener(listener)
   vi.spyOn(console, 'info').mockImplementation(() => {})
@@ -223,6 +229,22 @@ describe('a managed orcad that keeps exiting unexpectedly', () => {
     })
   })
 
+  it('does not count a live but unanswering run as served', async () => {
+    stoppedSlotLaunches(async () => {
+      throw new OrcadLaunchReadinessError('rejected', 'orcad did not become ready')
+    })
+    for (let i = 0; i < 3; i++) {
+      await findStopped()
+    }
+    vi.mocked(wakeStoppedManagedOrcad).mockResolvedValueOnce({ outcome: 'serving' })
+    await findStopped()
+    // Its lock going away is not a served run's clean exit.
+    vi.mocked(readBoundedOrcadRemoteRecord).mockResolvedValueOnce({ state: 'absent' })
+
+    expect(await findStopped()).toMatchObject({ state: 'unverifiable' })
+    expect(launches).toBe(3)
+  })
+
   it.each([
     ['crashed after serving', () => startsReporting(CRASHED)],
     [
@@ -242,7 +264,7 @@ describe('a managed orcad that keeps exiting unexpectedly', () => {
       startsReporting(null)
 
       expect(await findStopped()).toMatchObject({ state: 'unverifiable' })
-      vi.mocked(execOrcadRemote).mockResolvedValueOnce('boot-b\nnode-1\nmachine-1\n')
+      vi.mocked(execOrcadRemote).mockResolvedValueOnce('boot-b\nnode-1\nmachine-1\n3000\n3100\n')
       expect(await findStopped()).toMatchObject({ state: 'started' })
     }
   )
@@ -274,14 +296,26 @@ describe('a managed orcad that keeps exiting unexpectedly', () => {
   })
 
   it('stays braked without a machine id to tell this machine apart', async () => {
-    vi.mocked(execOrcadRemote).mockResolvedValue('boot-a\nnode-1\n')
+    vi.mocked(execOrcadRemote).mockResolvedValue('boot-a\nnode-1\n\n1000\n2000\n')
     startsReporting(CRASHED)
     for (let i = 0; i < 3; i++) {
       await findStopped()
     }
-    vi.mocked(execOrcadRemote).mockResolvedValue('boot-b\nnode-1\n')
+    vi.mocked(execOrcadRemote).mockResolvedValue('boot-b\nnode-1\n\n3000\n3100\n')
 
     expect(await findStopped()).toMatchObject({ state: 'unverifiable' })
+  })
+
+  // Cloned machines share hostname and machine id; one booted before the brake engaged is not a reboot.
+  it('stays braked when a clone that booted earlier answers', async () => {
+    startsReporting(CRASHED)
+    for (let i = 0; i < 3; i++) {
+      await findStopped()
+    }
+    vi.mocked(execOrcadRemote).mockResolvedValueOnce('boot-b\nnode-1\nmachine-1\n500\n3100\n')
+
+    expect(await findStopped()).toMatchObject({ state: 'unverifiable' })
+    expect(launches).toBe(3)
   })
 
   // Shared homes: login nodes behind one hostname may answer, each with its own boot.
@@ -290,7 +324,7 @@ describe('a managed orcad that keeps exiting unexpectedly', () => {
     for (let i = 0; i < 3; i++) {
       await findStopped()
     }
-    vi.mocked(execOrcadRemote).mockResolvedValueOnce('boot-b\nnode-1\nmachine-2\n')
+    vi.mocked(execOrcadRemote).mockResolvedValueOnce('boot-b\nnode-1\nmachine-2\n3000\n3100\n')
 
     expect(await findStopped()).toMatchObject({ state: 'unverifiable' })
     expect(launches).toBe(3)

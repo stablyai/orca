@@ -151,6 +151,7 @@ async function wakeIfStopped(
     if (wake.outcome === 'serving') {
       // A live PID alone does not prove the server answers.
       if (await input.probe(input.environment, PROBE_TIMEOUT_MS)) {
+        getManagedOrcadCrashLoopBrake().noteServing(input.environment.id)
         return { state: 'serving' }
       }
       const detail = 'This host’s Orca server process is live but is not answering.'
