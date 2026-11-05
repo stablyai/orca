@@ -4,7 +4,7 @@ import {
 } from '../../../../../src/shared/native-chat/claude-model-fallback'
 import { useContext, useId, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { AlertCircle, AlertTriangle, ChevronRight, Info } from 'lucide-react-native'
+import { AlertCircle, AlertTriangle, Info } from 'lucide-react-native'
 import { MobileNativeChatInterruptedContinueButton } from './MobileNativeChatInterruptedContinueButton'
 import {
   nativeChatNoticeBlock,
@@ -29,7 +29,7 @@ import {
 } from '../../mobile-native-chat-notice-context'
 import { MobileNativeChatMarkdown } from '../MobileNativeChatMarkdown'
 import { INLINE_TEXT_SELECTION } from '../../../components/inline-text-selection'
-import { colors, radii, spacing, typography, pressedStyle } from '../../../theme/mobile-theme'
+import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { nativeChatHostStatusCopy, nativeChatNoticeCopy } from './native-chat-notice-copy'
@@ -44,6 +44,7 @@ import { MobileNativeChatOwnedScrollView } from './MobileNativeChatOwnedScrollVi
 import { toolStyles } from './mobile-native-chat-tool-styles'
 import { styles as chatViewStyles } from '../mobile-native-chat-view-styles'
 import { MobileNativeChatUsageLimitStatus } from './MobileNativeChatUsageLimitStatus'
+import { MobileNativeChatNoticeDisclosure } from './MobileNativeChatNoticeDisclosure'
 
 function toneColor(tone: NativeChatNoticeTone): string {
   return { warning: colors.statusAmber, error: colors.statusRed, notice: colors.textMuted }[tone]
@@ -79,42 +80,6 @@ function noticeLineText(
   return failure && surface
     ? agentSessionFailureSentence(failure, surface, context, sayMobileAgentSessionFailure)
     : notice.text
-}
-
-function NoticeDisclosureSummary({
-  summary,
-  expanded,
-  fontScale,
-  onPress,
-  onLongPress
-}: {
-  summary: string
-  expanded: boolean
-  fontScale: number
-  onPress: () => void
-  onLongPress?: () => void
-}): React.JSX.Element {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={summary}
-      aria-expanded={expanded}
-      onPress={onPress}
-      onLongPress={onLongPress}
-      style={({ pressed }) => [styles.disclosure, pressed && pressedStyle]}
-    >
-      <View style={expanded ? toolStyles.caretOpen : undefined}>
-        <ChevronRight size={16 * fontScale} color={colors.textMuted} />
-      </View>
-      <Text
-        selectable={INLINE_TEXT_SELECTION}
-        numberOfLines={1}
-        style={[styles.faint, scaledType(typography.bodySize, fontScale), styles.summary]}
-      >
-        {summary}
-      </Text>
-    </Pressable>
-  )
 }
 
 // Render system notices separately so they cannot read as the agent’s own prose.
@@ -203,7 +168,7 @@ export function MobileNativeChatNoticeRow({
             )
       return (
         <View>
-          <NoticeDisclosureSummary
+          <MobileNativeChatNoticeDisclosure
             summary={summary}
             expanded={expanded}
             fontScale={fontScale}
@@ -312,7 +277,7 @@ export function MobileNativeChatNoticeRow({
           <MobileNativeChatUsageLimitStatus notice={notice} fontScale={fontScale} />
           {detail || payload ? (
             <View>
-              <NoticeDisclosureSummary
+              <MobileNativeChatNoticeDisclosure
                 summary={t('pullRequest.markdownBlocks.details', 'Details')}
                 expanded={expanded}
                 fontScale={fontScale}
@@ -345,15 +310,6 @@ export function MobileNativeChatNoticeRow({
 }
 
 const styles = themedStyleSheet(() => ({
-  disclosure: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingVertical: spacing.sm
-  },
-  summary: {
-    flex: 1
-  },
   divider: {
     flexDirection: 'row',
     alignItems: 'center',

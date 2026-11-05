@@ -195,10 +195,6 @@ export function useMobileStructuredAgentSession(
     sendSelection: options.sendSelection,
     takesSkills: hostSupport?.sendSkills === true
   })
-  const usageLimit = useMobileNativeChatUsageLimit(args, state, {
-    busy: isWorking || queueSendsNext || sendsOut.sending(),
-    send: sendWithOutcome
-  })
   const { items, currentRequests, actionablePromptIds, status, epoch } = state
   // Prefer host actionability: ended-agent prompts must receive no answer.
   const [approvalPrompt, questionPrompt] = useMemo(() => {
@@ -225,6 +221,10 @@ export function useMobileStructuredAgentSession(
     send: sendWithOutcomeUngated
   })
   useMobileStructuredThreadGoalSend(goal.sendRef, sendWithOutcome)
+  const usageLimit = useMobileNativeChatUsageLimit(args, state, {
+    busy: isWorking || queueSendsNext || sendsOut.sending(),
+    send: sendWithOutcome
+  })
   const queued = useMobileStructuredQueuedMessageControls({
     ...args,
     appendComposerText: args.appendComposerText,
