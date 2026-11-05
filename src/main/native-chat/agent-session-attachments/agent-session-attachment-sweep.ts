@@ -18,7 +18,7 @@ export const UNCLAIMED_ATTACHMENT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
 
 export type AgentSessionAttachmentSweepFacts = {
   /** Without a writable journal, only unfinished part files may be removed. */
-  database: () => Pick<JournalHostDatabase, 'transaction' | 'read'> | null
+  database: () => Pick<JournalHostDatabase, 'transaction' | 'read' | 'scan'> | null
   /** null means imports are incomplete; no chat claims can yet be judged orphaned. */
   recordedSessionIds: () => Pick<ReadonlySet<string>, 'has'> | null
   onUploadRemoved?: (uploadDir: string) => void

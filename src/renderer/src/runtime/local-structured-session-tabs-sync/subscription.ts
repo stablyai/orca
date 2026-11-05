@@ -1,7 +1,10 @@
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/agent-session-runtime-capabilities'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
-import { refreshLocalRuntimeCapabilities } from '../local-runtime-capabilities'
+import {
+  readLocalRuntimeCapabilityObservation,
+  refreshLocalRuntimeCapabilities
+} from '../local-runtime-capabilities'
 import {
   isCurrentLocalStructuredSessionGeneration,
   localStructuredSessionGeneration
@@ -37,18 +40,7 @@ export async function startLocalStructuredSessionTabsSync(args: {
   const syncGeneration = localStructuredSessionGeneration()
   const isCurrent = (): boolean =>
     !args.isDisposed() && isCurrentLocalStructuredSessionGeneration(syncGeneration)
-  const capabilities = await refreshLocalRuntimeCapabilities()
-  if (!isCurrent()) {
-    return
-  }
-  const supported = capabilities.includes(STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY)
-  await restoreLocalStructuredSessionTabsOnce(syncGeneration)
-  if (!isCurrent()) {
-    return
-  }
-  if (!supported) {
-    return
-  }
+  let restored = false
   let subscriptionGeneration = 0
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null
   let reconnectAttempt = 0
@@ -61,19 +53,32 @@ export async function startLocalStructuredSessionTabsSync(args: {
     reconnectAttempt += 1
     reconnectTimer = setTimeout(() => {
       reconnectTimer = null
-      void refreshLocalStructuredSessionTabs(syncGeneration)
-        .catch((error) => console.warn('[structured-session-tabs] resync failed', error))
-        .finally(() => {
-          if (isCurrent()) {
-            void subscribeCurrent().catch((error) => {
-              console.warn('[structured-session-tabs] resubscribe failed', error)
-              scheduleSubscribeRetry()
-            })
-          }
-        })
+      void subscribeCurrent().catch((error) => {
+        console.warn('[structured-session-tabs] resubscribe failed', error)
+        scheduleSubscribeRetry()
+      })
     }, reconnectDelay)
   }
   const subscribeCurrent = async (): Promise<void> => {
+    if (!isCurrent()) {
+      return
+    }
+    const capabilities = await refreshLocalRuntimeCapabilities()
+    if (!isCurrent()) {
+      return
+    }
+    if (readLocalRuntimeCapabilityObservation().state !== 'known') {
+      throw new Error('local runtime capabilities unavailable')
+    }
+    if (!capabilities.includes(STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY)) {
+      return
+    }
+    if (restored) {
+      await refreshLocalStructuredSessionTabs(syncGeneration)
+    } else {
+      await restoreLocalStructuredSessionTabsOnce(syncGeneration)
+      restored = true
+    }
     if (!isCurrent()) {
       return
     }
@@ -114,6 +119,7 @@ export async function startLocalStructuredSessionTabsSync(args: {
           }
           if (reconnectTimer !== null) {
             clearTimeout(reconnectTimer)
+            reconnectTimer = null
           }
           scheduleSubscribeRetry()
         }
@@ -126,6 +132,7 @@ export async function startLocalStructuredSessionTabsSync(args: {
     }
   }
   args.setUnsubscribe(() => {
+    subscriptionGeneration += 1
     if (reconnectTimer !== null) {
       clearTimeout(reconnectTimer)
       reconnectTimer = null
@@ -133,7 +140,7 @@ export async function startLocalStructuredSessionTabsSync(args: {
     activeHandle?.unsubscribe()
     activeHandle = null
   })
-  void subscribeCurrent().catch((error) => {
+  await subscribeCurrent().catch((error) => {
     console.warn('[structured-session-tabs] subscribe failed', error)
     scheduleSubscribeRetry()
   })

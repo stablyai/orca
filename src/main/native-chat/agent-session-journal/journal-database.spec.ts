@@ -98,6 +98,134 @@ export function registerJournalDatabaseTests(): void {
       }
     })
 
+    it('migrates original claim values atomically and preserves allocation across old writes and reopens', () => {
+      const seed = openJournalDatabase(dbPath).db
+      seed.exec(`DROP TABLE agent_session_attachment_claims;
+        CREATE TABLE agent_session_attachment_claims (
+          upload_id TEXT NOT NULL, session_id TEXT NOT NULL, claimed_at INTEGER NOT NULL,
+          PRIMARY KEY (upload_id, session_id));
+        INSERT INTO agent_session_attachment_claims VALUES ('u', 'z', -1), ('U', 'a', 0);`)
+      const original = seed
+        .prepare('SELECT * FROM agent_session_attachment_claims ORDER BY upload_id, session_id')
+        .all()
+      seed.close()
+      let db = openJournalDatabase(dbPath).db
+      try {
+        expect(
+          db
+            .prepare(
+              'SELECT upload_id, session_id, claimed_at FROM agent_session_attachment_claims ORDER BY upload_id, session_id'
+            )
+            .all()
+        ).toEqual(original)
+        expect(
+          db.prepare('SELECT claim_id FROM agent_session_attachment_claims ORDER BY claim_id').all()
+        ).toEqual([{ claim_id: 1 }, { claim_id: 2 }])
+        // The supported older writer neither replaces this table nor supplies its new identity.
+        db.exec(`CREATE TABLE IF NOT EXISTS agent_session_attachment_claims (
+          upload_id TEXT NOT NULL, session_id TEXT NOT NULL, claimed_at INTEGER NOT NULL,
+          PRIMARY KEY (upload_id, session_id));
+          DELETE FROM agent_session_attachment_claims;
+          INSERT INTO agent_session_attachment_claims (upload_id, session_id, claimed_at) VALUES ('u', 'old', 3);`)
+        expect(
+          db.prepare('SELECT claim_id FROM agent_session_attachment_claims').get()?.claim_id
+        ).toBe(3)
+        db.exec('DELETE FROM agent_session_attachment_claims')
+      } finally {
+        db.close()
+      }
+      db = openJournalDatabase(dbPath).db
+      try {
+        db.prepare(
+          'INSERT INTO agent_session_attachment_claims (upload_id, session_id, claimed_at) VALUES (?, ?, ?)'
+        ).run('u', 'new', 4)
+        expect(
+          db.prepare('SELECT claim_id FROM agent_session_attachment_claims').get()?.claim_id
+        ).toBe(4)
+        expect(() =>
+          db
+            .prepare(
+              'INSERT INTO agent_session_attachment_claims (upload_id, session_id, claimed_at) VALUES (?, ?, ?)'
+            )
+            .run('u', 'new', 5)
+        ).toThrow()
+        expect(journalPragmaNumber(db, 'user_version')).toBe(JOURNAL_DB_SCHEMA_VERSION)
+      } finally {
+        db.close()
+      }
+    })
+
+    it.each(['collision', 'rename', 'commit'] as const)(
+      'preserves legacy claims when migration fails at %s',
+      (boundary) => {
+        const seed = openJournalDatabase(dbPath).db
+        seed.exec(`DROP TABLE agent_session_attachment_claims;
+        CREATE TABLE agent_session_attachment_claims (
+          upload_id TEXT NOT NULL, session_id TEXT NOT NULL, claimed_at INTEGER NOT NULL,
+          PRIMARY KEY (upload_id, session_id));
+        INSERT INTO agent_session_attachment_claims VALUES ('u', 's', 7);`)
+        const schema = seed
+          .prepare("SELECT sql FROM sqlite_master WHERE name = 'agent_session_attachment_claims'")
+          .get()
+        if (boundary === 'collision') {
+          seed.exec(
+            "CREATE TABLE agent_session_attachment_claims_new (owned TEXT); INSERT INTO agent_session_attachment_claims_new VALUES ('preserve')"
+          )
+        }
+        seed.close()
+        const exec = Database.prototype.exec
+        const failing = vi.spyOn(Database.prototype, 'exec').mockImplementation(function (
+          this: Database.Database,
+          sql: string
+        ) {
+          if (
+            (boundary === 'rename' &&
+              sql.includes('ALTER TABLE agent_session_attachment_claims_new')) ||
+            (boundary === 'commit' && sql === 'COMMIT')
+          ) {
+            if (boundary === 'rename') {
+              exec.call(this, sql.slice(0, sql.indexOf('ALTER TABLE')))
+            }
+            throw new Error('migration interrupted')
+          }
+          exec.call(this, sql)
+        })
+        expect(() => openJournalDatabase(dbPath)).toThrow()
+        failing.mockRestore()
+        const inspected = new Database(dbPath)
+        try {
+          expect(
+            inspected
+              .prepare(
+                "SELECT sql FROM sqlite_master WHERE name = 'agent_session_attachment_claims'"
+              )
+              .get()
+          ).toEqual(schema)
+          expect(inspected.prepare('SELECT * FROM agent_session_attachment_claims').all()).toEqual([
+            { upload_id: 'u', session_id: 's', claimed_at: 7 }
+          ])
+          if (boundary === 'collision') {
+            expect(
+              inspected.prepare('SELECT * FROM agent_session_attachment_claims_new').all()
+            ).toEqual([{ owned: 'preserve' }])
+          } else {
+            expect(
+              inspected
+                .prepare(
+                  "SELECT name FROM sqlite_master WHERE name = 'agent_session_attachment_claims_new'"
+                )
+                .get()
+            ).toBeUndefined()
+          }
+        } finally {
+          inspected.close()
+        }
+        if (boundary !== 'collision') {
+          openJournalDatabase(dbPath).db.close()
+        }
+      }
+    )
+
     it('opens a newer user_version read-only without touching the file', async () => {
       const seeded = openJournalDatabase(dbPath).db
       publishJournalSessionEpoch(seeded, SESSION, 'epoch-1')

@@ -49,7 +49,9 @@ it.each(['expired', 'resumed', 'orphan', 'partial-prune'])(
         )
       }
       if (path === 'orphan' || path === 'partial-prune') {
-        const insert = db.prepare('INSERT INTO agent_session_attachment_claims VALUES (?, ?, ?)')
+        const insert = db.prepare(
+          'INSERT INTO agent_session_attachment_claims (upload_id, session_id, claimed_at) VALUES (?, ?, ?)'
+        )
         insert.run('expired-upload', 'gone-session', 1)
         if (path === 'partial-prune') {
           insert.run('other-upload', 'unreadable-session', 1)

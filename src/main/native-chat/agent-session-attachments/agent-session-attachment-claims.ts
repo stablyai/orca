@@ -21,12 +21,42 @@ const CLAIM_SAVEPOINT = 'agent_session_attachment_claims'
 
 /** Add tables without user_version changes so older builds stay writable; multiple chats may hold uploads. */
 export function ensureAgentSessionAttachmentClaimTables(db: Database.Database): void {
+  const columns = db.prepare('PRAGMA table_info(agent_session_attachment_claims)').all()
+  if (columns.length && !columns.some((column) => column.name === 'claim_id')) {
+    if (
+      columns.length !== 3 ||
+      columns.some(
+        (column, i) =>
+          column.name !== ['upload_id', 'session_id', 'claimed_at'][i] ||
+          column.type !== ['TEXT', 'TEXT', 'INTEGER'][i] ||
+          column.notnull !== 1 ||
+          column.pk !== [1, 2, 0][i]
+      )
+    ) {
+      throw new Error('unrecognized attachment claim schema')
+    }
+    db.exec(`
+CREATE TABLE agent_session_attachment_claims_new (
+  claim_id INTEGER PRIMARY KEY AUTOINCREMENT,
+  upload_id TEXT NOT NULL,
+  session_id TEXT NOT NULL,
+  claimed_at INTEGER NOT NULL,
+  UNIQUE (upload_id, session_id)
+);
+INSERT INTO agent_session_attachment_claims_new (upload_id, session_id, claimed_at)
+  SELECT upload_id, session_id, claimed_at FROM agent_session_attachment_claims
+  ORDER BY upload_id, session_id;
+DROP TABLE agent_session_attachment_claims;
+ALTER TABLE agent_session_attachment_claims_new RENAME TO agent_session_attachment_claims;
+`)
+  }
   db.exec(`
 CREATE TABLE IF NOT EXISTS agent_session_attachment_claims (
+  claim_id INTEGER PRIMARY KEY AUTOINCREMENT,
   upload_id  TEXT    NOT NULL,
   session_id TEXT    NOT NULL,
   claimed_at INTEGER NOT NULL,
-  PRIMARY KEY (upload_id, session_id)
+  UNIQUE (upload_id, session_id)
 );
 CREATE TABLE IF NOT EXISTS agent_session_attachment_sweeps (
   upload_id  TEXT    NOT NULL PRIMARY KEY,

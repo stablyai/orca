@@ -4,16 +4,29 @@ import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as FsPromises from 'node:fs/promises'
 import type * as Fs from 'node:fs'
+import type * as ClaimSweep from './agent-session-attachment-claim-sweep'
 const fault = vi.hoisted(
   (): {
     path: string
     sync: boolean
     inspect?: (path: string) => Promise<void>
+    completed?: (...args: Parameters<typeof ClaimSweep.sweepAttachmentClaims>) => void
   } => ({
     path: '',
     sync: false
   })
 )
+vi.mock('./agent-session-attachment-claim-sweep', async (original) => {
+  const actual = await original<typeof ClaimSweep>()
+  return {
+    ...actual,
+    sweepAttachmentClaims: async (...args: Parameters<typeof actual.sweepAttachmentClaims>) => {
+      const result = await actual.sweepAttachmentClaims(...args)
+      fault.completed?.(...args)
+      return result
+    }
+  }
+})
 vi.mock('node:fs/promises', async (original) => {
   const fs = await original<typeof FsPromises>()
   return {
@@ -46,6 +59,7 @@ vi.mock('node:fs', async (original) => {
   }
 })
 import type Database from '../../sqlite/sync-database'
+import { sweepAttachmentClaims } from './agent-session-attachment-claim-sweep'
 import type { TestJournalHostDatabase as JournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import {
@@ -96,6 +110,7 @@ afterEach(async () => {
   fault.path = ''
   fault.sync = false
   fault.inspect = undefined
+  fault.completed = undefined
   vi.useRealTimers()
   vi.restoreAllMocks()
   store.clearInFlightForTests()
@@ -166,7 +181,9 @@ describe('sweepAgentSessionAttachments', () => {
       vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] })
       await seedUpload(SENT, HOUR)
       recorded = new Set()
-      const insert = db.prepare('INSERT INTO agent_session_attachment_claims VALUES (?, ?, ?)')
+      const insert = db.prepare(
+        'INSERT INTO agent_session_attachment_claims (upload_id, session_id, claimed_at) VALUES (?, ?, ?)'
+      )
       journal.fixtureTransaction(() => {
         for (let i = 0; i < size; i++) {
           const id = `session-${String(i).padStart(5, '0')}`
@@ -174,6 +191,17 @@ describe('sweepAgentSessionAttachments', () => {
           insert.run(SENT, id, NOW)
         }
       })
+      let scans = 0
+      const scan = journal.scan.bind(journal)
+      const observedScan: typeof journal.scan = async (run) => {
+        scans++
+        try {
+          return await scan(run)
+        } finally {
+          scans--
+        }
+      }
+      vi.spyOn(journal, 'scan').mockImplementation(observedScan)
       const counts: number[] = []
       let page = -1
       let settled = false
@@ -189,18 +217,24 @@ describe('sweepAgentSessionAttachments', () => {
       const finished = new Promise<void>((resolve) => {
         completed = resolve
       })
-      let reads = 0
-      const read = journal.read.bind(journal)
-      const observedRead: typeof journal.read = async (run) => {
-        const position = ++reads
-        const result = await read(run)
-        if (position === 2) {
-          completed()
+      const sweepFacts = facts({
+        recordedSessionIds: () => {
+          expect(scans).toBe(0)
+          page++
+          counts[page] = 0
+          if (page === 1) {
+            expect(settled).toBe(true)
+          }
+          return recorded
         }
-        return result
+      })
+      fault.completed = (actualStore, actualFacts) => {
+        expect(actualStore).toBe(store)
+        expect(actualFacts).toBe(sweepFacts)
+        completed()
       }
-      vi.spyOn(journal, 'read').mockImplementation(observedRead)
       fault.inspect = async () => {
+        expect(scans).toBe(0)
         counts[page]++
         if (page === 0 && counts[page] === 1) {
           entered()
@@ -212,27 +246,14 @@ describe('sweepAgentSessionAttachments', () => {
       const errored = new Promise<void>((resolve) => {
         observedError = resolve
       })
-      const sweeper = startAgentSessionAttachmentSweeps(
-        store,
-        facts({
-          recordedSessionIds: () => {
-            page++
-            counts[page] = 0
-            if (page === 1) {
-              expect(settled).toBe(true)
-            }
-            return recorded
-          }
-        }),
-        {
-          initialDelayMs: 1,
-          intervalMs: 100_000,
-          onError: (error) => {
-            errors.push(error)
-            observedError()
-          }
+      const sweeper = startAgentSessionAttachmentSweeps(store, sweepFacts, {
+        initialDelayMs: 1,
+        intervalMs: 100_000,
+        onError: (error) => {
+          errors.push(error)
+          observedError()
         }
-      )
+      })
       try {
         await vi.advanceTimersByTimeAsync(1)
         await inspecting
@@ -257,6 +278,7 @@ describe('sweepAgentSessionAttachments', () => {
         release()
         await foreground
         await finished
+        await new Promise<void>((resolve) => setImmediate(resolve))
         expect(errors).toEqual([])
         expect(counts.reduce((a, b) => a + b, 0)).toBe(size)
         expect(Math.max(...counts)).toBeLessThanOrEqual(32)
@@ -286,17 +308,10 @@ describe('sweepAgentSessionAttachments', () => {
         const next = new Promise<void>((resolve) => {
           nextFinished = resolve
         })
-        const successorRead: typeof journal.read = async (run) => {
-          const position = ++reads
-          const result = await read(run)
-          if (position === 4) {
-            nextFinished()
-          }
-          return result
-        }
-        vi.mocked(journal.read).mockImplementation(successorRead)
+        completed = nextFinished
         await vi.advanceTimersByTimeAsync(100_000)
         await next
+        await new Promise<void>((resolve) => setImmediate(resolve))
         expect(errors).toEqual([])
         expect(claimedSessions()).toHaveLength(size)
         expect(pruneSizes.reduce((a, b) => a + b, 0)).toBe(2)
@@ -308,23 +323,7 @@ describe('sweepAgentSessionAttachments', () => {
             throw new Error('later-page uncertain inspection')
           }
         }
-        let failedRead!: () => void
-        const failed = new Promise<void>((resolve) => {
-          failedRead = resolve
-        })
-        const observeFailure: typeof journal.read = async (run) => {
-          const position = ++reads
-          try {
-            return await read(run)
-          } finally {
-            if (position === 6) {
-              failedRead()
-            }
-          }
-        }
-        vi.mocked(journal.read).mockImplementation(observeFailure)
         await vi.advanceTimersByTimeAsync(100_000)
-        await failed
         await errored
         await new Promise<void>((resolve) => setImmediate(resolve))
         expect(errors).toHaveLength(1)
@@ -336,17 +335,10 @@ describe('sweepAgentSessionAttachments', () => {
         const retry = new Promise<void>((resolve) => {
           retried = resolve
         })
-        const observeRetry: typeof journal.read = async (run) => {
-          const position = ++reads
-          const result = await read(run)
-          if (position === 8) {
-            retried()
-          }
-          return result
-        }
-        vi.mocked(journal.read).mockImplementation(observeRetry)
+        completed = retried
         await vi.advanceTimersByTimeAsync(100_000)
         await retry
+        await new Promise<void>((resolve) => setImmediate(resolve))
         expect(errors).toHaveLength(1)
         expect(claimedSessions()).toHaveLength(size - 1)
         expect(await readFile(join(store.rootDir, SENT, 'shot.png'), 'utf8')).toBe('bytes')
@@ -356,6 +348,57 @@ describe('sweepAgentSessionAttachments', () => {
       }
     }
   )
+
+  it('excludes recreated pairs and a deleted maximum until the successor', async () => {
+    const insert = db.prepare(
+      'INSERT INTO agent_session_attachment_claims (upload_id, session_id, claimed_at) VALUES (?, ?, ?)'
+    )
+    journal.fixtureTransaction(() => {
+      for (let i = 0; i < 65; i++) {
+        insert.run(SENT, `s-${i}`, NOW)
+      }
+    })
+    recorded = new Set()
+    const transaction = journal.transaction.bind(journal)
+    let replaced = false
+    const replacing: typeof journal.transaction = (prepare, streamed, committed) => {
+      if (!replaced) {
+        replaced = true
+        journal.fixtureTransaction(() => {
+          for (const id of ['s-0', 's-64']) {
+            db.prepare('DELETE FROM agent_session_attachment_claims WHERE session_id = ?').run(id)
+            insert.run(SENT, id, NOW)
+          }
+        })
+      }
+      return transaction(prepare, streamed, committed)
+    }
+    vi.spyOn(journal, 'transaction').mockImplementation(replacing)
+    await sweepAttachmentClaims(store, facts())
+    expect(claimedSessions()).toEqual(['s-0', 's-64'])
+    await sweepAttachmentClaims(store, facts())
+    expect(claimedSessions()).toEqual([])
+  })
+
+  it('traverses exact identities above the safe integer range through the allocator limit', async () => {
+    const insert = db.prepare(
+      'INSERT INTO agent_session_attachment_claims (claim_id, upload_id, session_id, claimed_at) VALUES (CAST(? AS INTEGER), ?, ?, ?)'
+    )
+    const ids = ['9007199254740991', '9007199254740992', '9007199254740993', '9223372036854775807']
+    for (const id of ids) {
+      insert.run(id, SENT, id, NOW)
+    }
+    recorded = new Set()
+    await sweepAttachmentClaims(store, facts())
+    expect(claimedSessions()).toEqual([])
+    expect(() =>
+      db
+        .prepare(
+          'INSERT INTO agent_session_attachment_claims (upload_id, session_id, claimed_at) VALUES (?, ?, ?)'
+        )
+        .run(SENT, 'exhausted', NOW)
+    ).toThrow()
+  })
 
   it('removes a part file nobody finished after an hour, and keeps a fresh one', async () => {
     await seedUpload(SENT, HOUR + 1, AGENT_SESSION_ATTACHMENT_PART_FILE)
