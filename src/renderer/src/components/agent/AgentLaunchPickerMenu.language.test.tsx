@@ -47,12 +47,12 @@ it('refreshes translated row labels on a language change with unchanged props', 
       )
     )
     const row = document.querySelector<HTMLElement>('[role="menuitem"]')!
-    expect(row.textContent).toContain('No chat over SSH')
+    expect(row.textContent).toContain('Host has no Orca server yet')
     await act(async () => {
       await i18n.changeLanguage('es')
     })
     expect(row.textContent).toContain(es.auto.components.tab.bar.QuickLaunchButton.chatNotOverSsh)
-    expect(row.textContent).not.toContain('No chat over SSH')
+    expect(row.textContent).not.toContain('Host has no Orca server yet')
   } finally {
     act(() => root.unmount())
     host.remove()
