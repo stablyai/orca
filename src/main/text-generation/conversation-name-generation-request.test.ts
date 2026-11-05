@@ -81,7 +81,7 @@ describe('generateConversationName', () => {
       target: { kind: 'local', cwd: '/repo' },
       spawnAgent
     })
-    expect(spawnAgent).toHaveBeenCalledOnce()
+    await vi.waitFor(() => expect(spawnAgent).toHaveBeenCalledOnce())
     if (outcome === 'occupied') {
       child.stdout.emit('data', Buffer.from(realKimiOccupiedOutput))
       child.emit('close', 4)
@@ -107,6 +107,7 @@ describe('generateConversationName', () => {
       target: { kind: 'local', cwd: '/repo' },
       spawnAgent
     })
+    await vi.waitFor(() => expect(spawnAgent).toHaveBeenCalledOnce())
     child.stdout.emit(
       'data',
       Buffer.from(

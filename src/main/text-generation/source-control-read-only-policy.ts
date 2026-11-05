@@ -17,6 +17,7 @@ import { TEXT_TASK_DIRECTORY } from './source-control-prompt-files'
 import { runSourceControlPolicyProbe } from './source-control-policy-probe'
 import type {
   LocalGenerationTarget,
+  LocalProcessExecution,
   SpawnSourceControlAgent
 } from './source-control-text-generation-types'
 
@@ -232,44 +233,64 @@ function dshPolicy(plan: CommitMessagePlan): CommitMessagePlan {
   }
 }
 
-export async function prepareSourceControlReadOnlyPlan(input: {
+export function prepareSourceControlReadOnlyPlan(input: {
   agentId: string
   plan: CommitMessagePlan
   target: LocalGenerationTarget
   signal: AbortSignal
   spawnAgent: SpawnSourceControlAgent
-}): Promise<CommitMessagePlan> {
-  const { plan, target, signal } = input
-  if (input.agentId === 'amp' || input.agentId === 'muse') {
-    throw new Error('The agent cannot apply the text task tool policy')
+}): LocalProcessExecution<CommitMessagePlan> {
+  let probeClosed = Promise.resolve()
+  const probe = async (args: string[]) => {
+    const execution = runSourceControlPolicyProbe({ ...input, args })
+    probeClosed = execution.processClosed
+    const output = await execution.result
+    await execution.processClosed
+    input.signal.throwIfAborted()
+    return output
   }
-  if (input.agentId === 'antigravity') {
-    const help = await runSourceControlPolicyProbe({
-      ...input,
-      args: [...(plan.policyProbeArgs ?? []), '--help']
-    })
-    if (![help.stdout, help.stderr].some((text) => /^\s*--settings(?:[= \t]|$)/m.test(text))) {
-      throw new Error('The agent cannot apply session-only text task settings')
-    }
-    return antigravityPolicy(plan, target, signal)
-  }
-  if (input.agentId === 'kimi') {
-    return kimiPolicy(plan, target, signal)
-  }
-  if (input.agentId === 'dsh') {
-    return dshPolicy(plan)
-  }
-  if (input.agentId !== 'codex') {
-    return plan
-  }
-  const raw = await runSourceControlPolicyProbe({
-    ...input,
-    args: [...(plan.policyProbeArgs ?? []), ...codexExclusions, 'mcp', 'list', '--json']
-  })
-  const servers = z.array(z.looseObject({ name: z.string() })).parse(JSON.parse(raw.stdout))
-  const entries = servers.map((server) => `${JSON.stringify(server.name)}={enabled=false}`)
+  const result = prepare()
   return {
-    ...plan,
-    args: [...plan.args, ...codexExclusions, '-c', `mcp_servers={${entries.join(',')}}`]
+    result,
+    processClosed: result.then(
+      () => probeClosed,
+      () => probeClosed
+    )
+  }
+
+  async function prepare(): Promise<CommitMessagePlan> {
+    const { plan, target, signal } = input
+    if (input.agentId === 'amp' || input.agentId === 'muse') {
+      throw new Error('The agent cannot apply the text task tool policy')
+    }
+    if (input.agentId === 'antigravity') {
+      const help = await probe([...(plan.policyProbeArgs ?? []), '--help'])
+      if (![help.stdout, help.stderr].some((text) => /^\s*--settings(?:[= \t]|$)/m.test(text))) {
+        throw new Error('The agent cannot apply session-only text task settings')
+      }
+      return antigravityPolicy(plan, target, signal)
+    }
+    if (input.agentId === 'kimi') {
+      return kimiPolicy(plan, target, signal)
+    }
+    if (input.agentId === 'dsh') {
+      return dshPolicy(plan)
+    }
+    if (input.agentId !== 'codex') {
+      return plan
+    }
+    const raw = await probe([
+      ...(plan.policyProbeArgs ?? []),
+      ...codexExclusions,
+      'mcp',
+      'list',
+      '--json'
+    ])
+    const servers = z.array(z.looseObject({ name: z.string() })).parse(JSON.parse(raw.stdout))
+    const entries = servers.map((server) => `${JSON.stringify(server.name)}={enabled=false}`)
+    return {
+      ...plan,
+      args: [...plan.args, ...codexExclusions, '-c', `mcp_servers={${entries.join(',')}}`]
+    }
   }
 }

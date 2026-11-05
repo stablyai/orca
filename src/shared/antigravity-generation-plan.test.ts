@@ -105,7 +105,8 @@ describe('Antigravity generation planning', () => {
           }
         })}\n`,
         label: 'Antigravity',
-        outputFormat: 'antigravity-stream-json'
+        outputFormat: 'antigravity-stream-json',
+        policyProbeArgs: []
       }
     })
   })

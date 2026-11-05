@@ -20,14 +20,22 @@ import { AcpTextTasks } from '../acp/acp-text-task'
 import { acpLaunchSpecFor } from '../acp/acp-launch-specs'
 import { FakeAcpChild } from '../acp/acp-scripted-connection.test-fixture'
 import recordings from './__fixtures__/chat-naming-recorded-output.json'
+import type * as OwnedOpenCodeTask from '../opencode/opencode-owned-text-task'
 
 const boundary = vi.hoisted(() => ({
   spawn: vi.fn<SpawnSourceControlAgent>(),
   native: vi.fn<NonNullable<StructuredAgentSessionAdapter['generateText']>>(),
+  openCode: vi.fn(
+    async (_input: { cwd: string; env?: NodeJS.ProcessEnv; prompt: string }) => 'Owned title'
+  ),
   account: vi.fn((_provider: string, id: string) => ({
     XDG_DATA_HOME: `/profiles/${id}/data`,
     XDG_STATE_HOME: `/profiles/${id}/state`
   }))
+}))
+vi.mock('../opencode/opencode-owned-text-task', async (importOriginal) => ({
+  ...(await importOriginal<typeof OwnedOpenCodeTask>()),
+  runOwnedOpenCodeTextTask: boundary.openCode
 }))
 vi.mock('../text-generation/source-control-agent-launch', () => ({
   spawnSourceControlAgent: boundary.spawn
@@ -45,6 +53,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   boundary.spawn.mockReset()
   boundary.native.mockReset()
+  boundary.openCode.mockClear()
   vi.stubEnv('ORCA_PI_SOURCE_AGENT_DIR', undefined)
 })
 afterEach(() => {
@@ -99,6 +108,7 @@ function reply(stdout: string, stderr = '', code = 0) {
 }
 
 function nativeReply() {
+  reply('Native title')
   const spec = acpLaunchSpecFor('grok')
   if (!spec) {
     throw new Error('Missing native task spec')
@@ -142,7 +152,7 @@ function nativeReply() {
   })
 }
 
-it.each(recordings)(
+it.each(recordings.filter((capture) => !['opencode', 'opencode2'].includes(capture.provider)))(
   'consumes recorded $provider output through runtime, request, planner and parser',
   async (capture) => {
     const { provider, stdout, stderr, exitCode, name, error } = capture
@@ -214,18 +224,7 @@ Repair login`
       expect(spawn?.args).not.toContain(prompt)
       await vi.waitFor(() => expect(existsSync(dirname(promptPath))).toBe(false))
     }
-    if (provider === 'opencode' || provider === 'opencode2') {
-      expect(spawn?.env).toMatchObject({
-        XDG_DATA_HOME: '/profiles/recorded/data',
-        XDG_STATE_HOME: '/profiles/recorded/state',
-        OPENCODE_AUTH_CONTENT: undefined
-      })
-      expect(boundary.account).toHaveBeenCalledWith('opencode', 'recorded')
-      // The v2 recording used standalone/argv; these assertions separately cover today's launch.
-      expect(spawn?.args).toEqual(['run', '--agent', 'build', '--format', 'json'])
-    } else {
-      expect(spawn?.env?.PI_CODING_AGENT_DIR).toBe('/recorded/pi')
-    }
+    expect(spawn?.env?.PI_CODING_AGENT_DIR).toBe('/recorded/pi')
     expect(boundary.native).not.toHaveBeenCalled()
     if (provider === 'pi') {
       source.actions = { conversationName: { agentId: 'pi' } }
@@ -261,7 +260,20 @@ it.each([100, 1000])(
       source.agentId = index === 0 ? null : 'claude'
       source.actions = recipe ? { conversationName: recipe } : {}
       boundary.spawn.mockClear()
-      reply('Catalog title')
+      const child = reply('Catalog title')
+      boundary.spawn.mockImplementation((input) => {
+        if (!input.args.includes('mcp')) {
+          return child
+        }
+        const probe = createMockDiscoveryChild()
+        probe.stdin.end.mockImplementation(() =>
+          queueMicrotask(() => {
+            probe.stdout.emit('data', Buffer.from('[]'))
+            probe.emit('close', 0)
+          })
+        )
+        return probe
+      })
       reset()
       expect(await state.deps.generate(record, 'Repair login')).toEqual({ name: 'Catalog title' })
       expect(work.copiedRows).toBeLessThanOrEqual(3 * size)
@@ -271,15 +283,14 @@ it.each([100, 1000])(
       expect(work.selectedRowReads).toBeLessThanOrEqual(2 * size + 2)
       expect(work.selectedRowReads).toBeGreaterThanOrEqual(index === 3 ? 0 : size)
       const agent = index === 3 ? 'codex' : 'claude'
-      expect(boundary.spawn).toHaveBeenCalledOnce()
-      expect(boundary.spawn.mock.calls[0]?.[0].binary).toBe(agent)
+      const generation = boundary.spawn.mock.calls.filter(([input]) => !input.args.includes('mcp'))
+      expect(generation).toHaveLength(1)
+      expect(generation[0]?.[0].binary).toBe(agent)
       if (index > 1) {
-        expect(boundary.spawn.mock.calls[0]?.[0].args).toEqual(
-          expect.arrayContaining(['--model', 'fast'])
-        )
+        expect(generation[0]?.[0].args).toEqual(expect.arrayContaining(['--model', 'fast']))
       }
       if (index === 0) {
-        expect(boundary.spawn.mock.calls[0]?.[0].env?.CLAUDE_CONFIG_DIR).toBe('/home/user/.claude')
+        expect(generation[0]?.[0].env?.CLAUDE_CONFIG_DIR).toBe('/home/user/.claude')
       }
       samples[`cli-${index}`] = { ...work }
     }
@@ -316,5 +327,32 @@ it.each([100, 1000])(
       samples[kind] = { ...work }
     }
     console.log(JSON.stringify({ metric: 'chat-naming-runtime-catalog', size, samples }))
+  }
+)
+
+it.each(['opencode', 'opencode2'] as const)(
+  'routes %s naming into the owned task with its selected account',
+  async (provider) => {
+    const state = rig()
+    const record = agentSessionRecordFixture()
+    record.provider = provider
+    record.accountHome = {
+      kind: 'opencode',
+      locator: { kind: 'managed', managedProfileId: 'recorded' }
+    }
+    expect(await state.deps.generate(record, 'Repair login')).toEqual({ name: 'Owned title' })
+    expect(boundary.openCode).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cwd: '/workspace/folder',
+        prompt: expect.stringContaining('Repair login'),
+        env: expect.objectContaining({
+          XDG_DATA_HOME: '/profiles/recorded/data',
+          XDG_STATE_HOME: '/profiles/recorded/state',
+          OPENCODE_AUTH_CONTENT: undefined
+        })
+      })
+    )
+    expect(boundary.spawn).not.toHaveBeenCalled()
+    expect(boundary.account).toHaveBeenCalledWith('opencode', 'recorded')
   }
 )

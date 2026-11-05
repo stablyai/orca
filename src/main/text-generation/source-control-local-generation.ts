@@ -54,47 +54,57 @@ export function runLocalPlanForAgent(input: {
       spawnAgent: input.spawnAgent,
       timeoutMs
     })
-  const prepare = async (): Promise<LocalProcessExecution<InternalTextGenerationResult>> => {
-    if (input.shouldExecute && !input.shouldExecute()) {
-      return {
-        result: Promise.resolve({ success: false, error: 'Generation canceled.', canceled: true }),
-        processClosed: Promise.resolve()
-      }
-    }
+  const prepare = (): LocalProcessExecution<InternalTextGenerationResult> => {
+    const result = Promise.withResolvers<InternalTextGenerationResult>()
     const canceled = new AbortController()
     const deadlineAt = Date.now() + SOURCE_CONTROL_GENERATION_TIMEOUT_MS
     const deadline = AbortSignal.timeout(SOURCE_CONTROL_GENERATION_TIMEOUT_MS)
     const signal = AbortSignal.any([canceled.signal, deadline])
     const lane = localGenerationLaneKey(input.operation, input.target.cwd)
+    const failure = (): InternalTextGenerationResult =>
+      canceled.signal.aborted || input.shouldExecute?.() === false
+        ? { success: false, error: 'Generation canceled.', canceled: true }
+        : {
+            success: false,
+            ...(deadline.aborted
+              ? textGenerationFailure('timedOut', {
+                  seconds: SOURCE_CONTROL_GENERATION_TIMEOUT_MS / 1000
+                })
+              : textGenerationFailure('agentCouldNotStart', { label: input.plan.label }))
+          }
+    const abort = () => result.resolve(failure())
     const cancel = () => canceled.abort()
     setLocalGenerationCancelToken(lane, cancel)
-    let plan: CommitMessagePlan
-    try {
-      plan = await prepareSourceControlReadOnlyPlan({ ...input, target, signal })
-      signal.throwIfAborted()
-      if (input.shouldExecute?.() === false) {
-        throw new Error('Generation invalidated')
+    signal.addEventListener('abort', abort, { once: true })
+    let preparation: LocalProcessExecution<CommitMessagePlan> | undefined
+    let execution: LocalProcessExecution<InternalTextGenerationResult> | undefined
+    const processClosed = (async () => {
+      try {
+        if (input.shouldExecute?.() === false) {
+          canceled.abort()
+        }
+        signal.throwIfAborted()
+        preparation = prepareSourceControlReadOnlyPlan({ ...input, target, signal })
+        const plan = await preparation.result
+        await preparation.processClosed
+        signal.throwIfAborted()
+        if (input.shouldExecute?.() === false) {
+          canceled.abort()
+          signal.throwIfAborted()
+        }
+        signal.removeEventListener('abort', abort)
+        execution = launch(plan, Math.max(1, deadlineAt - Date.now()))
+        result.resolve(await execution.result)
+      } catch {
+        result.resolve(failure())
+      } finally {
+        signal.removeEventListener('abort', abort)
+        clearLocalGenerationCancelToken(lane, cancel)
+        await preparation?.processClosed
+        await execution?.processClosed
       }
-    } catch {
-      return {
-        result: Promise.resolve(
-          canceled.signal.aborted || input.shouldExecute?.() === false
-            ? { success: false, error: 'Generation canceled.', canceled: true }
-            : {
-                success: false,
-                ...(deadline.aborted
-                  ? textGenerationFailure('timedOut', {
-                      seconds: SOURCE_CONTROL_GENERATION_TIMEOUT_MS / 1000
-                    })
-                  : textGenerationFailure('agentCouldNotStart', { label: input.plan.label }))
-              }
-        ),
-        processClosed: Promise.resolve()
-      }
-    } finally {
-      clearLocalGenerationCancelToken(lane, cancel)
-    }
-    return launch(plan, Math.max(1, deadlineAt - Date.now()))
+    })()
+    return { result: result.promise, processClosed }
   }
   const start = ():
     | LocalProcessExecution<InternalTextGenerationResult>
@@ -116,7 +126,9 @@ export function runLocalPlanForAgent(input: {
   if (input.agentId !== 'codex') {
     const execution = start()
     return Promise.resolve(execution).then((execution) =>
-      execution.result.finally(() => execution.processClosed)
+      input.shouldExecute
+        ? execution.result.finally(() => execution.processClosed)
+        : execution.result
     )
   }
   return runCodexLocalPlanUnderHomeLock(

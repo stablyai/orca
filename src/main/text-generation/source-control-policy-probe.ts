@@ -1,21 +1,22 @@
-import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
+import { abortSignalReason } from '../../shared/abort-signal-reason'
 import { mergeCommandEnvironment } from '../../shared/command-environment'
 import type { CommitMessagePlan } from '../../shared/source-control/ai/generation/commit-message-plan'
 import { killSourceControlAgentProcess } from './source-control-agent-termination'
 import { MAX_SOURCE_CONTROL_AGENT_OUTPUT_BYTES } from './source-control-generation-limits'
 import type {
   LocalGenerationTarget,
+  LocalProcessExecution,
   SpawnSourceControlAgent
 } from './source-control-text-generation-types'
 
 /** Effective configuration may contain credentials; keep both streams private even on failure. */
-export async function runSourceControlPolicyProbe(input: {
+export function runSourceControlPolicyProbe(input: {
   plan: CommitMessagePlan
   args: string[]
   target: LocalGenerationTarget
   signal: AbortSignal
   spawnAgent: SpawnSourceControlAgent
-}): Promise<{ stdout: string; stderr: string }> {
+}): LocalProcessExecution<{ stdout: string; stderr: string }> {
   input.signal.throwIfAborted()
   const child = input.spawnAgent({
     binary: input.plan.binary,
@@ -29,42 +30,92 @@ export async function runSourceControlPolicyProbe(input: {
     stdinMode: 'pipe',
     useCwdForNative: true
   })
-  const closed = new Promise<void>((resolve) => child.once('close', () => resolve()))
+  const owner = Promise.withResolvers<void>()
   const result = Promise.withResolvers<{ stdout: string; stderr: string }>()
-  void result.promise.catch(() => {})
   let output = ''
   let errors = ''
   let bytes = 0
-  const observe = (chunk: Buffer, stdout: boolean) => {
+  let settled = false
+  let terminal = false
+  let termination: Promise<void> | undefined
+  const markClosed = () => {
+    if (terminal && settled) {
+      void (termination ?? Promise.resolve()).then(owner.resolve)
+    }
+  }
+  const stop = () => {
+    if (terminal || child.exitCode != null || child.signalCode != null) {
+      return
+    }
+    termination ??= killSourceControlAgentProcess(child).catch(() => {
+      console.error('[text-generation] Configuration probe termination failed')
+    })
+  }
+  const finish = (error?: Error) => {
+    if (settled) {
+      return
+    }
+    settled = true
+    input.signal.removeEventListener('abort', abort)
+    child.stdout?.off?.('data', stdout)
+    child.stderr?.off?.('data', stderr)
+    if (error) {
+      result.reject(error)
+    } else {
+      result.resolve({ stdout: output, stderr: errors })
+    }
+    markClosed()
+  }
+  const fail = (error: Error) => {
+    if (!settled) {
+      stop()
+      finish(error)
+    }
+  }
+  const abort = () => fail(abortSignalReason(input.signal))
+  const observe = (chunk: Buffer, isStdout: boolean) => {
     bytes += chunk.byteLength
     if (bytes > MAX_SOURCE_CONTROL_AGENT_OUTPUT_BYTES) {
-      result.reject(new Error('Text task configuration exceeds its output limit'))
-    } else if (stdout) {
+      fail(new Error('Text task configuration exceeds its output limit'))
+    } else if (isStdout) {
       output += chunk.toString('utf8')
     } else {
       errors += chunk.toString('utf8')
     }
   }
-  child.stdout?.on('data', (chunk: Buffer) => observe(chunk, true))
-  child.stderr?.on('data', (chunk: Buffer) => observe(chunk, false))
-  child.once('error', () => result.reject(new Error('Text task configuration could not be read')))
-  child.once('close', (code) => {
-    if (code === 0) {
-      result.resolve({ stdout: output, stderr: errors })
-    } else {
-      result.reject(new Error('Text task configuration could not be read'))
+  const stdout = (chunk: Buffer) => observe(chunk, true)
+  const stderr = (chunk: Buffer) => observe(chunk, false)
+  child.stdout?.on('data', stdout)
+  child.stderr?.on('data', stderr)
+  child.on('error', () => {
+    if (!child.pid) {
+      terminal = true
     }
+    fail(new Error('Text task configuration could not be read'))
   })
-  child.stdin?.on('error', () =>
-    result.reject(new Error('Text task configuration could not be read'))
-  )
-  child.stdin?.end()
-  try {
-    return await waitForPromiseWithSignal(result.promise, input.signal)
-  } finally {
-    if (child.exitCode === null && child.signalCode === null) {
-      await killSourceControlAgentProcess(child)
+  child.once('exit', () => {
+    terminal = true
+    markClosed()
+  })
+  child.once('close', (code) => {
+    terminal = true
+    if (code === 0) {
+      finish()
+    } else {
+      finish(new Error('Text task configuration could not be read'))
     }
-    await closed
+    markClosed()
+  })
+  child.stdin?.on('error', () => fail(new Error('Text task configuration could not be read')))
+  input.signal.addEventListener('abort', abort, { once: true })
+  if (input.signal.aborted) {
+    abort()
+  } else {
+    try {
+      child.stdin?.end()
+    } catch {
+      fail(new Error('Text task configuration could not be read'))
+    }
   }
+  return { result: result.promise, processClosed: owner.promise }
 }

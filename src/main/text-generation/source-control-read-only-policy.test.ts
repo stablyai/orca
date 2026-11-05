@@ -40,13 +40,13 @@ const spawnAgent = vi.fn(() => {
 it('cancels during configuration admission without launching a semantic agent', async () => {
   const cwd = await directory()
   const entered = Promise.withResolvers<void>()
-  probe.mockImplementation(
-    ({ signal }: { signal: AbortSignal }) =>
-      new Promise((_resolve, reject) => {
-        signal.addEventListener('abort', () => reject(signal.reason), { once: true })
-        entered.resolve()
-      })
-  )
+  probe.mockImplementation(({ signal }: { signal: AbortSignal }) => ({
+    result: new Promise((_resolve, reject) => {
+      signal.addEventListener('abort', () => reject(signal.reason), { once: true })
+      entered.resolve()
+    }),
+    processClosed: Promise.resolve()
+  }))
   const result = runLocalPlanForAgent({
     agentId: 'codex',
     plan: planned('codex'),
@@ -88,10 +88,13 @@ it('does not launch a helper whose selected recipe cannot enforce the task polic
 })
 
 it('disables every effective Codex MCP name, including dotted names, after recipe overrides', async () => {
-  probe.mockResolvedValue({
-    stdout:
-      '[{"name":"a.b","enabled":true,"transport":{"type":"stdio"}},{"name":"second","enabled":true}]',
-    stderr: 'Warning: optional update unavailable'
+  probe.mockReturnValue({
+    result: Promise.resolve({
+      stdout:
+        '[{"name":"a.b","enabled":true,"transport":{"type":"stdio"}},{"name":"second","enabled":true}]',
+      stderr: 'Warning: optional update unavailable'
+    }),
+    processClosed: Promise.resolve()
   })
   const plan = await prepareSourceControlReadOnlyPlan({
     agentId: 'codex',
@@ -102,7 +105,7 @@ it('disables every effective Codex MCP name, including dotted names, after recip
     target: { kind: 'local', cwd: '/workspace', env: { CODEX_HOME: '/bound-account' } },
     signal: new AbortController().signal,
     spawnAgent
-  })
+  }).result
   expect(probe.mock.calls[0][0]).toMatchObject({
     target: { cwd: '/workspace', env: { CODEX_HOME: '/bound-account' } },
     args: [
@@ -131,7 +134,10 @@ it('disables every effective Codex MCP name, including dotted names, after recip
     '-c',
     'mcp_servers={"a.b"={enabled=false},"second"={enabled=false}}'
   ])
-  probe.mockRejectedValue(new Error('Unsupported configuration query'))
+  probe.mockReturnValue({
+    result: Promise.reject(new Error('Unsupported configuration query')),
+    processClosed: Promise.resolve()
+  })
   await expect(
     prepareSourceControlReadOnlyPlan({
       agentId: 'codex',
@@ -139,7 +145,7 @@ it('disables every effective Codex MCP name, including dotted names, after recip
       target: { kind: 'local', cwd: '/workspace' },
       signal: new AbortController().signal,
       spawnAgent
-    })
+    }).result
   ).rejects.toThrow('Unsupported configuration query')
 })
 
@@ -155,7 +161,7 @@ it('copies an explicit Kimi profile with its prompt and identity preserved and a
     target: { kind: 'local', cwd },
     signal: new AbortController().signal,
     spawnAgent
-  })
+  }).result
   const plan = stageLocalPromptFiles(policy, (directory) => owned.push(directory))
   const flag = plan.args.indexOf('--agent-file')
   const content = await readFile(plan.args[flag + 1], 'utf8')
@@ -172,10 +178,13 @@ it('copies an explicit Kimi profile with its prompt and identity preserved and a
 })
 
 it('composes agy session settings without losing existing read denies or selected recipe fields', async () => {
-  probe.mockResolvedValue({
-    stdout: '',
-    stderr:
-      '  --settings  Settings for this session only, never saved: a JSON object of settings.json keys, inline or as a file path'
+  probe.mockReturnValue({
+    result: Promise.resolve({
+      stdout: '',
+      stderr:
+        '  --settings  Settings for this session only, never saved: a JSON object of settings.json keys, inline or as a file path'
+    }),
+    processClosed: Promise.resolve()
   })
   const cwd = await directory()
   await writeFile(
@@ -191,7 +200,7 @@ it('composes agy session settings without losing existing read denies or selecte
     target: { kind: 'local', cwd },
     signal: new AbortController().signal,
     spawnAgent
-  })
+  }).result
   const value = policy.args[policy.args.indexOf('--settings') + 1]
   expect(JSON.parse(value)).toEqual({
     customSetting: 'retained',
@@ -218,9 +227,12 @@ it('composes agy session settings without losing existing read denies or selecte
 })
 
 it('refuses an agy build without session settings before sending the prompt', async () => {
-  probe.mockResolvedValue({
-    stdout: '',
-    stderr: '  --model  Model to use\n  --agent  Agent profile\n'
+  probe.mockReturnValue({
+    result: Promise.resolve({
+      stdout: '',
+      stderr: '  --model  Model to use\n  --agent  Agent profile\n'
+    }),
+    processClosed: Promise.resolve()
   })
   const cwd = await directory()
   await expect(

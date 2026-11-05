@@ -107,8 +107,11 @@ it.each([
     })
   const predecessor = homeLock.withCodexHomeProcessLock(home, () => held.promise)
   const order: string[] = []
-  const spawn = vi.spyOn(agentLaunch, 'spawnSourceControlAgent').mockImplementation(() => {
-    order.push(spawn.mock.calls.length === 1 ? 'B' : 'A')
+  const spawn = vi.spyOn(agentLaunch, 'spawnSourceControlAgent').mockImplementation((input) => {
+    if (input.args.includes('mcp')) {
+      return titleChild('[]')
+    }
+    order.push(order.includes('B') ? 'A' : 'B')
     return titleChild('Latest title')
   })
   await attach()
@@ -160,7 +163,9 @@ it.each([
   await vi.waitFor(() => expect(pending).toBe(0))
   expect(order).toEqual(mode === 'off' ? ['U'] : mode === 'manual' ? ['U', 'B'] : ['U', 'B', 'A'])
   expect(admissions).toHaveBeenCalledTimes(mode === 'manual' || mode === 'off' ? 4 : 5)
-  expect(spawn).toHaveBeenCalledTimes(mode === 'off' ? 0 : mode === 'manual' ? 1 : 2)
+  expect(spawn.mock.calls.filter(([input]) => !input.args.includes('mcp'))).toHaveLength(
+    mode === 'off' ? 0 : mode === 'manual' ? 1 : 2
+  )
   expect(naming.activeSessionIds()).toEqual([])
 })
 
@@ -214,7 +219,9 @@ it.each([10, 100])(
     })
     const spawn = vi
       .spyOn(agentLaunch, 'spawnSourceControlAgent')
-      .mockImplementation(() => titleChild('Current title'))
+      .mockImplementation((input) =>
+        titleChild(input.args.includes('mcp') ? '[]' : 'Current title')
+      )
     onTestFinished(() => {
       opening.resolve()
       seed.resolve()
@@ -236,7 +243,7 @@ it.each([10, 100])(
       await sendAndWait(`Input ${index}`)
     }
     expect(reads).toHaveBeenCalledTimes(2)
-    expect(spawn).toHaveBeenCalledOnce()
+    expect(spawn.mock.calls.filter(([input]) => !input.args.includes('mcp'))).toHaveLength(1)
     await clear()
     const beforeLatest = publications.mock.calls.length
     await sendAndWait('Final input')
@@ -256,6 +263,6 @@ it.each([10, 100])(
     expect(phases.at(-1)).toEqual(['result', resultPublications + 2])
     expect(publications).toHaveBeenCalledTimes(resultPublications + 4)
     expect(phases.filter(([phase]) => phase === 'seed')).toHaveLength(2)
-    expect(spawn).toHaveBeenCalledTimes(2)
+    expect(spawn.mock.calls.filter(([input]) => !input.args.includes('mcp'))).toHaveLength(2)
   }
 )

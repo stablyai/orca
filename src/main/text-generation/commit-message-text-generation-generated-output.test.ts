@@ -279,6 +279,7 @@ describe('generateCommitMessageFromContext', () => {
       }
     )
 
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce())
     listeners.get('stdout:data')?.(Buffer.from('not json'))
     listeners.get('close')?.(0)
 
