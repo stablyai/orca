@@ -17,8 +17,8 @@ import type { CodexApprovalsReviewer } from './codex-subagent-reviewer'
 
 import { codexSubagentPathLabel } from './codex-agent-path'
 import {
-  enrichCodexSubagentIdentity,
   finishCodexSubagent,
+  queueCodexSubagentIdentity,
   setCodexSubagentModel,
   upsertCodexSubagent,
   type CodexSubagentRoster
@@ -312,10 +312,8 @@ export function reconcileCodexSubagentTranscript(
       }
     } else {
       tracked.unresolvedSince = undefined
-      // Re-derive an unnamed child's name from its own rollout; a missed or early hook read must not leave it unnamed.
-      if (roster.get(id)?.description === undefined) {
-        changed = enrichCodexSubagentIdentity(roster, id, tracked.filePath) || changed
-      }
+      // A missed or early hook read must not leave the child unnamed; the poll's bounded retries read it.
+      queueCodexSubagentIdentity(roster, id, tracked.filePath)
       tracked.model = readChildModel(records) ?? tracked.model
       // Reapply each poll because parent activity can rebuild the child row and erase its discovered model.
       setCodexSubagentModel(roster, id, tracked.model)

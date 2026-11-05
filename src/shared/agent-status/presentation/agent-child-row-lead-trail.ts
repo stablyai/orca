@@ -16,7 +16,7 @@ export type AgentChildRowCopy = {
 }
 
 /** The child's reported name with an anonymous agent's id tail; '' when it reported no name. */
-export function agentChildRowLabel(row: Pick<AgentChildRowModel, 'name' | 'idSuffix'>): string {
+function agentChildRowLabel(row: Pick<AgentChildRowModel, 'name' | 'idSuffix'>): string {
   const name = row.name.trim()
   return name && row.idSuffix ? `${name} (${row.idSuffix})` : name
 }

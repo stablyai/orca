@@ -24,6 +24,7 @@ import {
 } from './codex-subagent-transcript'
 import {
   codexRosterToSnapshots,
+  retryPendingCodexSubagentIdentities,
   upsertCodexSubagent,
   type CodexSubagentRoster
 } from './codex-subagent-roster'
@@ -186,7 +187,8 @@ describe('Codex subagent transcript reconciliation', () => {
       ])
     )
 
-    expect(reconcileCodexSubagentTranscript(state, roster, parentPath)).toBe(true)
+    reconcileCodexSubagentTranscript(state, roster, parentPath)
+    expect(retryPendingCodexSubagentIdentities(roster)).toBe(true)
     expect(codexRosterToSnapshots(roster)).toEqual([
       expect.objectContaining({ id: CHILD_ID, agentType: 'worker', description: 'Planck' })
     ])

@@ -121,6 +121,23 @@ export function enrichCodexSubagentIdentity(
   return child.description !== previous
 }
 
+/** Queue an unnamed child's own rollout for the bounded identity retries. */
+export function queueCodexSubagentIdentity(
+  roster: CodexSubagentRoster,
+  id: string,
+  transcriptPath: string
+): void {
+  const child = roster.get(id)
+  if (
+    child &&
+    child.description === undefined &&
+    child.identityTranscriptPath !== transcriptPath &&
+    child.identityMissKey !== transcriptPath
+  ) {
+    child.identityPendingPath = transcriptPath
+  }
+}
+
 export function hasPendingCodexSubagentIdentity(roster: CodexSubagentRoster | undefined): boolean {
   return [...(roster?.values() ?? [])].some((child) => child.identityPendingPath !== undefined)
 }
