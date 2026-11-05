@@ -39,6 +39,15 @@ describe('envProxyWsAgent', () => {
     expect(envProxyWsAgent('wss://relay.onorca.dev/x', env)).toBeInstanceOf(SocksProxyAgent)
   })
 
+  it.each(['socks5', 'socks4'])('leaves name resolution to the proxy for %s', (scheme) => {
+    const env = { ALL_PROXY: `${scheme}://127.0.0.1:1080` }
+    const agent = envProxyWsAgent('wss://relay.onorca.dev/x', env)
+    if (!(agent instanceof SocksProxyAgent)) {
+      throw new Error('expected a SOCKS agent')
+    }
+    expect(agent.shouldLookup).toBe(false)
+  })
+
   it('honors NO_PROXY', () => {
     const env = { ALL_PROXY: 'socks5://127.0.0.1:1080', NO_PROXY: '.onorca.dev' }
     expect(envProxyWsOptions('wss://relay.onorca.dev/x', env)).toEqual({})
@@ -56,6 +65,12 @@ describe('createEnvProxyFetch', () => {
   it('is null when no proxy variable exists, so the global fetch stays in use', () => {
     expect(createEnvProxyFetch({})).toBeNull()
     expect(accountRelayFetch()).toBe(globalThis.fetch)
+  })
+
+  it('skips an empty lowercase variable and uses the uppercase one', () => {
+    expect(
+      createEnvProxyFetch({ https_proxy: '', HTTPS_PROXY: 'http://proxy.corp:8080' })
+    ).not.toBeNull()
   })
 
   it('sends a plain-http request through the configured HTTP proxy', async () => {

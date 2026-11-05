@@ -103,7 +103,14 @@ export function envProxyWsAgent(
     return new HttpsProxyAgent(proxy.url)
   }
   // Names go to the proxy to resolve, same as the fetch path above.
-  return new SocksProxyAgent(proxy.scheme === 'socks5' ? `socks5h${proxy.url.slice(6)}` : proxy.url)
+  // socks5 -> socks5h and socks4 -> socks4a (same "://..." suffix after the 6-char scheme).
+  const remoteDns =
+    proxy.scheme === 'socks5'
+      ? `socks5h${proxy.url.slice(6)}`
+      : proxy.scheme === 'socks4'
+        ? `socks4a${proxy.url.slice(6)}`
+        : proxy.url
+  return new SocksProxyAgent(remoteDns)
 }
 
 /** Spread into a relay `new WebSocket(url, {...})`: adds nothing when no proxy applies. */
@@ -116,7 +123,8 @@ export function envProxyWsOptions(
 }
 
 function hasProxyEnv(env: NodeJS.ProcessEnv): boolean {
-  return ['http_proxy', 'https_proxy', 'all_proxy'].some((name) =>
-    (env[name] ?? env[name.toUpperCase()])?.trim()
+  // Same rule as readVar: an empty lowercase value falls through to the uppercase one.
+  return ['http_proxy', 'https_proxy', 'all_proxy'].some(
+    (name) => Boolean(env[name]?.trim()) || Boolean(env[name.toUpperCase()]?.trim())
   )
 }

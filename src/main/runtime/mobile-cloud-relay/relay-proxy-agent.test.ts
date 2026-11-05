@@ -30,7 +30,9 @@ const PROXY_VARS = [
   'ALL_PROXY',
   'http_proxy',
   'https_proxy',
-  'all_proxy'
+  'all_proxy',
+  'NO_PROXY',
+  'no_proxy'
 ]
 
 function startControlSocket(): void {
