@@ -35,7 +35,7 @@ import { withUnregisteredRemovalCheckouts } from '../../workspaces/removal/workt
 import { withoutInFlightWorktreeCreates } from '../../workspaces/creation/worktree-create-in-flight'
 import { preserveFolderUpgradeWorktreePath } from '../../workspaces/catalog/folder-upgrade-worktree-path'
 import type { RuntimeWorktreeScanCache } from '../orca-runtime-core'
-import { getRepoHostIdentityForParts } from '../../../shared/repo-host-identity'
+import { getRepoHostIdentity } from '../../../shared/repo-host-identity'
 import {
   resolveWorktreeScanCacheTtlMs,
   resolveWorktreeScanRuntime
@@ -168,12 +168,12 @@ export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFi
     })
     return this.resolvedWorktrees.projectCachedScans(
       this.store,
-      cachedScans.flatMap(({ repo, entry, scan }) => [repo, entry, scan]),
+      cachedScans.flatMap(({ repo, entry, scan }) => [getRepoHostIdentity(repo), entry, scan]),
       () => {
         const scans: ResolvedWorktreeRepoScans = new Map()
         for (const { repo, entry, scan } of cachedScans) {
           if (entry && scan) {
-            scans.set(getRepoHostIdentityForParts(repo.id, getRepoExecutionHostId(repo)), {
+            scans.set(getRepoHostIdentity(repo), {
               ...scan,
               gitRun: entry
             })
