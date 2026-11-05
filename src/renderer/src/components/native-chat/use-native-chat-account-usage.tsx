@@ -14,46 +14,40 @@ export function useNativeChatAccountUsage(args: {
   const { sessionId, target, supported, fence, turnId } = args
   const identity = `${target.kind === 'local' ? 'local' : target.environmentId}:${sessionId}:${fence}`
   const [panel, setPanel] = useState<{
+    /** Which `/usage` opening this panel belongs to; late replies for any other are dropped. */
+    request: number
     identity: string
     turnId: string | null
     result: AgentSessionAccountUsage | null
     /** A reset's outcome, kept across the refresh it triggers. */
     notice: string | null
   } | null>(null)
-  const revision = useRef(0)
-  const dismiss = useCallback(() => {
-    revision.current++
-    setPanel(null)
-  }, [])
+  const nextRequest = useRef(0)
+  // The committed panel's request, for callbacks that outlive it (a reset finishing after dismissal).
+  const shownRequest = useRef<number | null>(null)
+  useEffect(() => {
+    shownRequest.current = panel?.request ?? null
+  }, [panel])
+  const dismiss = useCallback(() => setPanel(null), [])
   if (
     panel !== null &&
     (panel.identity !== identity || (turnId !== null && panel.turnId !== turnId))
   ) {
-    revision.current++
     setPanel(null)
   }
-  useEffect(
-    () => () => {
-      revision.current++
-    },
-    []
-  )
   const open = useCallback(
     async (notice: string | null = null) => {
-      const request = ++revision.current
-      setPanel({ identity, turnId, result: null, notice })
+      const request = ++nextRequest.current
+      setPanel({ request, identity, turnId, result: null, notice })
       const result = await callStructuredAgentSession<AgentSessionAccountUsage>(
         target,
         'agentSession.accountUsage',
         { sessionId }
       ).catch(() => ({ status: 'failed' as const }))
-      if (revision.current === request) {
-        setPanel({ identity, turnId, result, notice })
-      }
+      setPanel((current) => (current?.request === request ? { ...current, result } : current))
     },
     [identity, sessionId, target, turnId]
   )
-  const panelRevision = revision.current
   return {
     command: supported
       ? {
@@ -70,7 +64,7 @@ export function useNativeChatAccountUsage(args: {
           target={target}
           onDismiss={dismiss}
           onRetry={(notice) => {
-            if (revision.current === panelRevision) {
+            if (shownRequest.current === panel.request) {
               void open(notice)
             }
           }}
