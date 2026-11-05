@@ -239,4 +239,15 @@ describe('wakeStoppedManagedOrcad', () => {
     expect(launches()).toHaveLength(1)
     expect(host.fence).toBe(false)
   })
+
+  it('leaves an abandoned fence for later when the caller refuses a launch', async () => {
+    host = stoppedHost()
+    host.fence = true
+    host.wakeOwner = 'exited-run'
+
+    expect(await wakeStoppedManagedOrcad(slot, undefined, () => false)).toEqual({
+      outcome: 'launch-refused'
+    })
+    expect(launches()).toEqual([])
+  })
 })
