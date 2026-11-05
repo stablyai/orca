@@ -3,7 +3,6 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionAccountUsage } from '../../../../shared/agent-session/agent-session-account-usage'
 import { useNativeChatAccountUsage } from './use-native-chat-account-usage'
-import { createResetCreditLimits } from '../../../../main/codex-accounts/service-reset-credit-test-fixtures'
 
 const mocks = vi.hoisted(() => ({ read: vi.fn(), reset: vi.fn(), updateSettings: vi.fn() }))
 vi.mock('@/runtime/structured-agent-session-client', () => ({
@@ -26,7 +25,20 @@ const target = { kind: 'environment' as const, environmentId: 'paired-host' }
 const result: AgentSessionAccountUsage = {
   status: 'ok',
   account: { kind: 'managed', email: 'chat@example.com' },
-  rateLimits: createResetCreditLimits(),
+  rateLimits: {
+    provider: 'codex',
+    session: { usedPercent: 100, windowMinutes: 300, resetsAt: 1_000, resetDescription: 'soon' },
+    weekly: null,
+    rateLimitResetCredits: {
+      availableCount: 1,
+      totalEarnedCount: 1,
+      nextExpiresAt: 2_000,
+      credits: [{ status: 'available', expiresAt: 2_000, grantedAt: 500 }]
+    },
+    updatedAt: 30,
+    error: null,
+    status: 'ok'
+  },
   reset: {
     available: 1,
     expectedScope: {
