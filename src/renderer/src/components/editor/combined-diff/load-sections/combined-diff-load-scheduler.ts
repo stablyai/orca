@@ -12,7 +12,6 @@ export function createCombinedDiffLoadScheduler({
   getRenderedIndices,
   isSectionExpanded = () => true,
   schedule = (callback) => queueMicrotask(callback),
-  // Matches the per-repo git admission budget (ROUTE_CAP 2 + 1 headroom); more only queues in main.
   maxConcurrent = 3
 }: {
   loadSection: (index: number) => Promise<void>
