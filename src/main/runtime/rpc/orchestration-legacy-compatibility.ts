@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import type { LegacyCoordinatorAuthorityProof, RpcRequest } from './core'
-import type { OrcaRuntimeService, OrchestrationCompatibilityCallerAuthority } from '../orca-runtime'
+import type { OrcaRuntimeService } from '../orca-runtime'
+import type { OrchestrationCompatibilityCallerAuthority } from '../orchestration/terminal-authority/orchestration-compatibility-authority'
 import { CURRENT_CONTRACT_VERSION } from '../orchestration/db'
 import { LegacyCompatibilityAuthority } from './orchestration-legacy-authority'
 import { handleLegacyLifecycleSend } from './orchestration-legacy-lifecycle'

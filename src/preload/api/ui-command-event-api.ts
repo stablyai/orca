@@ -143,6 +143,7 @@ export type UiCommandEventApi = {
     code?: 'browser_tab_not_found'
   }) => void
   onBrowserPageTabShortcut: (callback: (input: BrowserPageTabShortcut) => void) => () => void
+  onToggleProjectsCollapse: (callback: () => void) => () => void
   onFocusBrowserAddressBar: (callback: (target: BrowserPageCommandTarget) => void) => () => void
   onShowBrowserHistory: (callback: (target: BrowserPageCommandTarget) => void) => () => void
   onFindInBrowserPage: (source: BrowserFindSource, callback: () => void) => () => void

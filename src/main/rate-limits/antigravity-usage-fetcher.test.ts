@@ -10,7 +10,7 @@ const { hostShellEnvironmentMock } = vi.hoisted(() => ({
   hostShellEnvironmentMock: vi.fn(async () => ({ PATH: '/usr/bin' }))
 }))
 
-vi.mock('../runtime/structured-agent-shell-environment', () => ({
+vi.mock('../runtime/agent-session/environment/structured-agent-shell-environment', () => ({
   hostShellEnvironment: hostShellEnvironmentMock
 }))
 

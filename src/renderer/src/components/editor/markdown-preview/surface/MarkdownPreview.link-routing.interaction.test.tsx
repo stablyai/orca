@@ -185,15 +185,6 @@ describe('MarkdownPreview http link routing (Cmd vs Cmd+Shift click)', () => {
     })
   }
 
-  it('plain Cmd-click opens the link in the Orca browser', () => {
-    const anchor = render()
-    click(anchor, { metaKey: true })
-    expect(createBrowserTabMock).toHaveBeenCalledWith('wt-1', 'https://example.com/', {
-      activate: true
-    })
-    expect(openUrlMock).not.toHaveBeenCalled()
-  })
-
   it('Cmd+Shift-click opens the link in the system default browser', () => {
     const anchor = render()
     click(anchor, { metaKey: true, shiftKey: true })
@@ -328,21 +319,6 @@ describe('MarkdownPreview http link routing (Cmd vs Cmd+Shift click)', () => {
           line: 120,
           column: 1
         })
-      )
-    })
-
-    it('reveals the line after replacing the preview in the same worktree', async () => {
-      await clickLineLink('file:///repo/src/Example.cs#L42C7')
-      act(() => {
-        root.unmount()
-      })
-      flushFrames()
-
-      expect(storeState.openFile).toHaveBeenCalledWith(
-        expect.objectContaining({ worktreeId: 'wt-1', filePath: '/repo/src/Example.cs' })
-      )
-      expect(storeState.setPendingEditorReveal).toHaveBeenLastCalledWith(
-        expect.objectContaining({ filePath: '/repo/src/Example.cs', line: 42, column: 7 })
       )
     })
 

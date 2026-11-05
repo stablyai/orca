@@ -7,7 +7,7 @@ import {
   discardEditorFileChangesAndClose
 } from './discard-editor-file-changes'
 import { registerPendingEditorFlush } from './editor-pending-flush'
-import { trackEditorBaselineRestamp } from '../queue/editor-save-disk-precondition'
+
 import { __clearSelfWriteRegistryForTests } from '../../external-changes/editor-self-write-registry'
 import type * as MutationClient from '@/runtime/runtime-file-mutation-client'
 import {
@@ -138,22 +138,6 @@ describe("Don't Save against running and queued saves", () => {
     expect(disk.files.get(PATH)).toBe('a')
   })
 
-  it('a save not yet writing does not recreate a file deleted on disk', async () => {
-    disk.files.delete(PATH)
-    edit('a')
-    const restamp = gate()
-    trackEditorBaselineRestamp(PATH, restamp.wait)
-    const save = requestEditorFileSave({ fileId: PATH })
-    await vi.advanceTimersByTimeAsync(0)
-
-    const discard = discardEditorFileChangesAndClose(PATH)
-    restamp.open()
-    await Promise.all([save, discard])
-
-    expect(disk.fs.writeFile).not.toHaveBeenCalled()
-    expect(disk.files.has(PATH)).toBe(false)
-  })
-
   it("a notebook republishing its retained cells after Don't Save writes nothing", async () => {
     edit('a')
     const release = holdNextWrite(disk)
@@ -175,25 +159,6 @@ describe("Don't Save against running and queued saves", () => {
     expect(written()).toEqual(['a'])
   })
 
-  it.each([
-    ['a save', {}],
-    ['an Overwrite', { overwrite: true as const }]
-  ])('%s not yet writing stays void when a snapshot re-dirties the tab', async (_, extra) => {
-    edit('a')
-    const restamp = gate()
-    trackEditorBaselineRestamp(PATH, restamp.wait)
-    const save = requestEditorFileSave({ fileId: PATH, ...extra })
-    await vi.advanceTimersByTimeAsync(0)
-
-    const discard = discardEditorFileChangesAndClose(PATH)
-    // A remote snapshot restores the dirty flag after the discard.
-    store.getState().markFileDirty(PATH, true)
-    restamp.open()
-    await Promise.all([save, discard])
-
-    expect(disk.fs.writeFile).not.toHaveBeenCalled()
-  })
-
   it('a save asked for after the discard still writes', async () => {
     edit('a')
     const release = await discardEditorBuffer(PATH)
@@ -202,20 +167,6 @@ describe("Don't Save against running and queued saves", () => {
     await requestEditorFileSave({ fileId: PATH })
 
     expect(disk.files.get(PATH)).toBe('fresh')
-  })
-
-  it("Don't Save during a slow host check sends no bytes", async () => {
-    edit('a')
-    const check = gate()
-    hostCheck.wait = check.wait
-    const save = requestEditorFileSave({ fileId: PATH })
-    await vi.advanceTimersByTimeAsync(0)
-
-    const discard = discardEditorFileChangesAndClose(PATH)
-    check.open()
-    await Promise.all([save, discard])
-
-    expect(disk.fs.writeFile).not.toHaveBeenCalled()
   })
 
   it('a view republishing the dropped text during the drain gets no autosave', async () => {

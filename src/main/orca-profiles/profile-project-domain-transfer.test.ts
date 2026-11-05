@@ -258,6 +258,7 @@ describe('profile domain transfers', () => {
               settings: {
                 uiLanguage: plugin,
                 uiLanguagePortugueseMigrationApplied: marker,
+                nestedWorkerMaxDepth: 1,
                 futureSetting: { retained: true }
               }
             })
@@ -273,6 +274,7 @@ describe('profile domain transfers', () => {
           marker !== undefined
         )
         expect(settings.futureSetting).toEqual({ retained: true })
+        expect(Object.hasOwn(settings, 'nestedWorkerMaxDepthDefaultedToFour')).toBe(false)
         const loaded = new Store({
           dataFile: join(root, 'profiles', id, 'orca-data.json'),
           profileStateAuthority: new ProfileStateSqliteAuthority(dbPath(id), id)
@@ -281,7 +283,8 @@ describe('profile domain transfers', () => {
           await loaded.flushPendingOrThrowAsync()
           expect(JSON.parse(raw(id).json).settings).toMatchObject({
             uiLanguage: marker === true ? plugin : 'pt',
-            uiLanguagePortugueseMigrationApplied: true
+            uiLanguagePortugueseMigrationApplied: true,
+            nestedWorkerMaxDepth: 4
           })
         } finally {
           await loaded.freezeWritesAsync()

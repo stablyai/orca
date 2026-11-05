@@ -1,3 +1,5 @@
+import { acceptedAnswerSender } from './orchestration/accepted-answer-sender'
+import { OrcaRuntimeService } from './orca-runtime'
 import { agentSessionConversationView } from '../../shared/agent-session/lifecycle/agent-session-conversation-view'
 // Name senders from production-owned Dispatch tasks, mirrored workspace chat/terminal tabs and PTY records.
 
@@ -641,3 +643,210 @@ it('preserves old, malformed and absent launch observations without inventing an
   expect(db.getWorkerDispatch(dispatchId)!.start_options).toBe('invalid-json')
   expect(names().snapshotOf(party)).toEqual({ name: 'Inspect parser', agent: null })
 })
+
+it('keeps the accepted answer actor after A parks and B adopts the same Run', () => {
+  const runtime = new OrcaRuntimeService()
+  runtime.setOrchestrationDb(db)
+  const run = db.createRun({
+    objective: 'A owns this',
+    coordinatorHandle: 'term_a',
+    coordinatorPaneKey: 'tab_a:leaf',
+    coordinatorOrcaSessionId: CHAT
+  })
+  const task = db.createTask({ runId: run.id, spec: 'Worker asks' })
+  const dispatch = createRootDispatch(db, task.id, 'term_worker')
+  const question = db.createQuestion({
+    runId: run.id,
+    dispatchId: dispatch.id,
+    askerHandle: 'term_worker',
+    question: 'Proceed?'
+  })
+  const snapshot = vi
+    .spyOn(runtime.orchestrationSenderNames, 'snapshotOf')
+    .mockImplementation((party) =>
+      party.address === 'term_a_new'
+        ? { name: 'Known A', agent: 'codex' }
+        : { name: 'Wrong stored actor', agent: 'claude' }
+    )
+  vi.spyOn(runtime, 'getTerminalPaneKey').mockReturnValue('tab_a:leaf')
+  const answer = db.answerQuestion({
+    messageId: question.message.id,
+    runId: run.id,
+    body: 'yes',
+    consumerGeneration: run.consumer_generation,
+    captureSender: acceptedAnswerSender(runtime, `run:${run.id}`, {
+      address: 'term_a_new',
+      terminalHandle: 'term_a_new',
+      paneKey: 'tab_a:leaf',
+      orcaSessionId: null
+    })
+  })
+  const next = db.createRun({
+    objective: 'A parks here',
+    coordinatorHandle: null,
+    coordinatorPaneKey: null
+  })
+  db.bindRun({ runId: next.id, coordinatorHandle: 'term_a_new', coordinatorPaneKey: 'tab_a:leaf' })
+  db.bindRun({ runId: run.id, coordinatorHandle: 'term_b', coordinatorPaneKey: 'tab_b:leaf' })
+  snapshot.mockReturnValue({ name: 'Known B', agent: 'claude' })
+  const delivered = structuredMailSource({
+    db,
+    mailboxHandle: `dispatch:${dispatch.id}`,
+    dispatchId: dispatch.id,
+    batch: [db.getMessageById(answer.message.id)!],
+    senderSnapshot: (party) => runtime.orchestrationSenderNames.snapshotOf(party)
+  })
+  expect(delivered.senders[0]).toMatchObject({
+    name: 'Known A',
+    agent: 'codex',
+    party: { address: `run:${run.id}`, terminalHandle: null, orcaSessionId: null }
+  })
+  snapshot.mockRestore()
+})
+
+it('uses exact saved custody for follow-up dispatch identity and refuses a later process in the same pane', () => {
+  const run = db.createRun({
+    objective: 'reuse',
+    coordinatorHandle: 'term_coord',
+    coordinatorPaneKey: null
+  })
+  const start = (agent?: string) => {
+    const task = db.createTask({ runId: run.id, spec: 'work' })
+    const started = db.createStartingWorkerDispatch({
+      creator: { kind: 'system' },
+      maxDepth: 8,
+      taskId: task.id,
+      startOptions: agent ? { agent } : {}
+    })
+    db.prepareStartingWorkerAuthority({
+      dispatchId: started.dispatch.id,
+      handle: 'term_worker',
+      paneKey: 'tab_term_worker:leaf',
+      processIncarnation: 'p:1',
+      worktreeId: WORKTREE,
+      effects: [],
+      setupState: 'not_applicable'
+    })
+    db.markWorkerDispatchReady(started.dispatch.id)
+    return db.getDispatchContextById(started.dispatch.id)!
+  }
+  const first = start('codex')
+  const resource =
+    db.getWorkerTerminalResourceByOwner(first.id) ??
+    db.createWorkerTerminalResourceStatement({
+      dispatchId: first.id,
+      terminalHandle: 'term_worker',
+      paneKey: 'tab_term_worker:leaf',
+      processIncarnation: 'p:1',
+      worktreeId: WORKTREE,
+      ownership: 'owned'
+    })
+  db.completeDispatch(first.id)
+  const next = start()
+  db.transferWorkerTerminalResourceStatement({
+    resourceId: resource.id,
+    toDispatchId: next.id,
+    terminalHandle: 'term_worker',
+    paneKey: 'tab_term_worker:leaf',
+    processIncarnation: 'p:1',
+    hostScope: null
+  })
+  pty = { foregroundAgent: 'claude' }
+  expect(names().sender(`dispatch:${next.id}`)).toMatchObject({
+    agent: 'codex',
+    party: { terminalHandle: null }
+  })
+  db.db
+    .prepare('UPDATE dispatch_contexts SET process_incarnation = ? WHERE id = ?')
+    .run('p:2', next.id)
+  expect(names().sender(`dispatch:${next.id}`).agent).toBeUndefined()
+})
+
+it('refreshes terminal observations and the current record owner within one asynchronous pass reader', () => {
+  const read = names().snapshotReader()
+  pty = { launchAgent: null, connectionId: null }
+  expect(read(terminalParty('term_plain')).agent).toBeNull()
+  pty = { foregroundAgent: 'claude', connectionId: null, launchToken: 'new' }
+  expect(read(terminalParty('term_plain')).agent).toBe('claude')
+  pty = { foregroundAgent: 'codex', connectionId: null, launchToken: 'successor' }
+  expect(read(terminalParty('term_plain')).agent).toBe('codex')
+  const prior = read(chatParty)
+  hostRef.current = {
+    deps: {
+      store: {
+        getConversation: () => ({
+          ...agentSessionConversationView(records.get(CHAT)!),
+          conversationName: 'New owner',
+          provider: 'codex'
+        }),
+        listConversations: () => []
+      }
+    }
+  }
+  expect(read(chatParty)).toEqual({ name: 'New owner', agent: 'codex' })
+  expect(prior.agent).toBe('claude')
+})
+
+it('invalidates positive and null launch knowledge and discards transaction-only facts across rollback ABA', () => {
+  const { dispatchId } = finishedWorker('Launch actor', 'term_gone')
+  const party = { address: `dispatch:${dispatchId}`, terminalHandle: null, orcaSessionId: null }
+  const read = names().snapshotReader()
+  expect(read(party).agent).toBeNull()
+  db.retainWorkerLaunchObservation(dispatchId, { requested: { agent: 'codex' }, effective: null })
+  expect(read(party).agent).toBe('codex')
+  db.db.exec('BEGIN')
+  db.db
+    .prepare('UPDATE worker_dispatches SET start_options = ? WHERE dispatch_id = ?')
+    .run(JSON.stringify({ agent: 'claude' }), dispatchId)
+  expect(read(party).agent).toBe('claude')
+  db.db.exec('ROLLBACK')
+  // Do not observe the lower generation before a different commit reaches the same value.
+  db.db
+    .prepare('UPDATE worker_dispatches SET start_options = ? WHERE dispatch_id = ?')
+    .run(JSON.stringify({ agent: 'opencode' }), dispatchId)
+  expect(read(party).agent).toBe('opencode')
+  expect(db.db.prepare('SELECT count(*) AS n FROM temp.agent_sender_tracked').get()).toEqual({
+    n: 0
+  })
+  expect(db.db.prepare('SELECT count(*) AS n FROM temp.agent_sender_dirty').get()).toEqual({ n: 0 })
+})
+
+it.each([100, 1000])(
+  'shares one exact custody cohort across %i sequential admissions and unrelated writes',
+  async (count) => {
+    const ids = Array.from(
+      { length: count },
+      (_, i) => finishedWorker(`work ${i}`, `term_gone_${i}`).dispatchId
+    )
+    db.db
+      .prepare(
+        "UPDATE dispatch_contexts SET assignee_pane_key = 'cohort:leaf', process_incarnation = 'cohort:1', status = 'completed'"
+      )
+      .run()
+    db.db
+      .prepare('UPDATE worker_dispatches SET start_options = ? WHERE dispatch_id = ?')
+      .run(JSON.stringify({ agent: 'codex' }), ids[0])
+    db.db
+      .prepare(`INSERT INTO worker_terminal_resources (id, origin_dispatch_id, owner_dispatch_id, pane_key, terminal_handle, process_incarnation, prior_owner_dispatch_ids)
+    VALUES ('cohort', ?, ?, 'cohort:leaf', 'term_cohort', 'cohort:1', ?)`)
+      .run(ids[0], ids[count - 1], JSON.stringify(ids.slice(0, -1)))
+    const prepare = vi.spyOn(db.db, 'prepare')
+    const worker = vi.spyOn(db, 'getWorkerDispatch')
+    const read = names().snapshotReader()
+    for (const id of ids) {
+      expect(
+        read({ address: `dispatch:${id}`, terminalHandle: null, orcaSessionId: null }).agent
+      ).toBe('codex')
+      db.insertMessage({ from: 'term_unrelated', to: 'elsewhere', subject: 'ordinary mail' })
+      await Promise.resolve()
+    }
+    expect(
+      prepare.mock.calls.filter(
+        ([sql]) =>
+          sql ===
+          'SELECT * FROM worker_terminal_resources WHERE process_incarnation = ? AND host_scope IS ?'
+      )
+    ).toHaveLength(1)
+    expect(worker.mock.calls.length).toBeLessThanOrEqual(count)
+  }
+)

@@ -3214,7 +3214,6 @@
             "e8b3741ff7": "被忽略",
             "a9957007eb": "忽略 {{value0}}",
             "bef0adef9b": "分支",
-            "0b1766738a": "仓库",
             "bbb1ab6a6f": "选择{{value0}}",
             "b771c92598": "删除所选内容",
             "7eee951968": "检查工作区安全",
@@ -3223,7 +3222,6 @@
             "b2c1331844": "删除不活动的工作区",
             "7f451a3e2c": "无法忽略清理建议",
             "662b8ec3f8": "工作区清理扫描失败",
-            "4d0b72481c": "忽略",
             "9cc26c019d": "移除",
             "0e2d235c63": "非活动工作区扫描已就绪",
             "4a35c08764": "查看",
@@ -3231,9 +3229,6 @@
             "1d3503357d": "删除继续期间，你可以关闭此窗口并稍后回来。",
             "4c2990886e": "已删除 {{value0}}/{{value1}}",
             "86ba852118": "{{value0}}，{{value1}} 个失败",
-            "deletingCount": "正在删除工作区：{{value0}}",
-            "deleteCount": "删除工作区：{{value0}}？",
-            "selectedForDeletionCount": "已选择删除：{{value0}}",
             "deleteButtonCount": "删除 {{value0}}",
             "archivedStatus": "已归档",
             "74f6c16279": "返回"
@@ -3248,7 +3243,6 @@
           },
           "candidateRow": {
             "gitLabel": "Git",
-            "commitsLabel": "提交",
             "contextLabel": "上下文",
             "flagsLabel": "标记",
             "collapseDetails": "收起详情",
@@ -5402,8 +5396,6 @@
           "expandAriaLabel": "展开 {{repo}} 的隐藏工作树",
           "hiding_one": "已隐藏 {{count}} 个检测到的工作树",
           "hiding_other": "已隐藏 {{count}} 个检测到的工作树",
-          "hidingInRepo_one": "已隐藏 {{repo}} 中的 {{count}} 个检测到的工作树",
-          "hidingInRepo_other": "已隐藏 {{repo}} 中的 {{count}} 个检测到的工作树",
           "keepHiddenAriaLabel_one": "为 {{repo}} 保留 {{count}} 个检测到的工作树为隐藏状态；可从项目菜单恢复",
           "keepHiddenAriaLabel_other": "为 {{repo}} 保留 {{count}} 个检测到的工作树为隐藏状态；可从项目菜单恢复",
           "keepHiddenTooltip": "保持隐藏 - 从项目菜单恢复",
@@ -14857,8 +14849,6 @@
           "AiCommitPrSettingsCard": {
             "8d4152701a": "例如llama 运行 llama3.1 {{value0}}",
             "9ee54037a4": "自定义命令",
-            "4b2fc4b80c": "思考努力",
-            "be8917699e": "模型",
             "560d4feb00": "自定义",
             "29d119fe95": "智能体",
             "f9382b48a1": "启用AI作者",
@@ -18897,8 +18887,6 @@
       },
       "turnDiff": {
         "partial": "部分差异",
-        "showDiff": "显示差异",
-        "hideDiff": "隐藏差异",
         "changedFiles_other": "{{count}} 个已更改的文件"
       },
       "receipt": {
@@ -19424,9 +19412,7 @@
           },
           "noSizes": "尚未测量工作区大小。",
           "noSizesDescription": "测量磁盘使用情况后会显示大小。",
-          "measureSizes": "扫描",
           "measureSizesTitle": "扫描工作区大小",
-          "measureSizesDescription": "扫描磁盘使用情况，按大小比较、排序和过滤工作区。",
           "sizeOnDisk": "磁盘大小：{{value0}}",
           "checkingGitRow": "检查 git 状态",
           "searchPlaceholder": "搜索名称、仓库、分支、路径、主机",
@@ -19956,7 +19942,10 @@
       "workerAutoClose": {
         "running": "临时编排工作代理 · 完成后 2 分钟关闭",
         "finished": "临时编排工作代理已完成 · {{countdown}}后关闭",
-        "keepOpen": "保持打开"
+        "keepOpen": "保持打开",
+        "bannerRunning": "编排工作代理 · 完成后 2 分钟关闭",
+        "bannerFinished": "编排工作代理已完成 · {{countdown}}后关闭",
+        "temporaryBadge": "临时"
       }
     },
     "wslHostMark": {
@@ -20556,10 +20545,8 @@
       "offTerminal": "更喜欢终端？终端将继续获得完整支持。在你选择聊天之前，智能体会继续在终端中打开。",
       "onIntro": "聊天界面已结束实验阶段，正式成为 Orca 的一部分。你的智能体会继续以聊天方式打开，支持富文本消息、可视化内容和图片。",
       "onTerminal": "终端同样会继续获得完整支持。你可以随时把任何智能体切换回终端。",
-      "changeInSettings": "可随时在<link>设置 → 智能体</link>中更改。",
       "stayInTerminal": "继续使用终端",
       "cta": "使用聊天界面",
-      "saveFailed": "无法开启聊天界面。请在“设置 → 智能体”中选择聊天。",
       "demoTabTitle": "解释登录流程",
       "demoPrompt": "梳理一下登录是怎么工作的",
       "demoReply": "登录从 {{file}} 开始：浏览器提交到 /login，服务器检查密码并创建会话，然后将你重定向到应用。流程如下：",

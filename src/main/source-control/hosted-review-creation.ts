@@ -10,7 +10,10 @@ import { supportsHostedReviewCreation } from '../../shared/source-control/hosted
 import { normalizeHostedReviewBaseRef } from '../../shared/source-control/hosted-review/hosted-review-refs'
 import { getRepoSlug } from '../github/client'
 import { isDefaultGitHubHost } from '../../shared/github/repository-identity-key'
-import { detectHostedReviewProvider, getForgeProviderForRepository } from './forge-provider'
+import {
+  detectHostedReviewProvider,
+  getForgeProviderForRepository
+} from './forge-provider-detection'
 import { invalidateHostedReviewBranchCache } from './hosted-review-branch-cache'
 import { getHostedReviewForBranch } from './hosted-review'
 import { blockedEligibilityToCreateResult } from './hosted-review-creation-blocking'

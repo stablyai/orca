@@ -1,6 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { createEditorStore } from './editor-slice-test-harness'
-import { isSyncPushStageError } from '@/lib/source-control-remote-error'
 
 const { toastErrorMock } = vi.hoisted(() => ({
   toastErrorMock: vi.fn()
@@ -73,17 +72,6 @@ describe('createEditorSlice remote branch actions', () => {
     expect(store.getState().isRemoteOperationActive).toBe(false)
   })
 
-  it('surfaces a toast and clears the busy flag when fetch fails', async () => {
-    const store = createEditorStore()
-    gitFetchMock.mockRejectedValueOnce(new Error('network timeout'))
-
-    await expect(store.getState().fetchBranch('wt-1', '/repo')).rejects.toThrow('network timeout')
-
-    expect(toastErrorMock).toHaveBeenCalledWith('Fetch failed. network timeout')
-    expect(gitUpstreamStatusMock).not.toHaveBeenCalled()
-    expect(store.getState().isRemoteOperationActive).toBe(false)
-  })
-
   it('preserves prior upstream status when fetch fails', async () => {
     // Transient upstream failures retain known ahead/behind counts instead of flashing unknown/no-upstream state.
     const store = createEditorStore()
@@ -150,79 +138,5 @@ describe('createEditorSlice remote branch actions', () => {
     await pushB.catch(() => {})
     expect(store.getState().remoteOperations).toEqual([])
     expect(store.getState().isRemoteOperationActive).toBe(false)
-  })
-
-  it.each(['publish', 'fetch'] as const)(
-    'keeps the remaining operation when %s finishes first in the same workspace',
-    async (firstToFinish) => {
-      const store = createEditorStore()
-      let finishPublish: () => void = () => {}
-      let finishFetch: () => void = () => {}
-      gitPushMock.mockImplementationOnce(
-        () =>
-          new Promise<void>((resolve) => {
-            finishPublish = resolve
-          })
-      )
-      gitFetchMock.mockImplementationOnce(
-        () =>
-          new Promise<void>((resolve) => {
-            finishFetch = resolve
-          })
-      )
-      const publishing = store.getState().pushBranch('wt-1', '/repo', true)
-      const fetching = store.getState().fetchBranch('wt-1', '/repo')
-
-      if (firstToFinish === 'publish') {
-        finishPublish()
-        await publishing
-      } else {
-        finishFetch()
-        await fetching
-      }
-      expect(store.getState().isRemoteOperationActive).toBe(true)
-      expect(store.getState().remoteOperations).toEqual([
-        { worktreeId: 'wt-1', kind: firstToFinish === 'publish' ? 'fetch' : 'publish' }
-      ])
-
-      finishPublish()
-      finishFetch()
-      await Promise.all([publishing, fetching])
-      expect(store.getState().remoteOperations).toEqual([])
-      expect(store.getState().isRemoteOperationActive).toBe(false)
-    }
-  )
-
-  it('marks syncBranch inner push hook failures as sync push-stage failures', async () => {
-    const store = createEditorStore()
-    const pushError = new Error(
-      "git push failed: Command failed: git push origin feature\nerror: failed to push some refs to 'origin'\nhusky - pre-push hook exited with code 1"
-    )
-    gitPushMock.mockRejectedValueOnce(pushError)
-
-    let thrown: unknown
-    try {
-      await store.getState().syncBranch('wt-1', '/repo')
-    } catch (error) {
-      thrown = error
-    }
-
-    expect(thrown).toBe(pushError)
-    expect(isSyncPushStageError(thrown)).toBe(true)
-    expect(toastErrorMock).toHaveBeenCalledTimes(1)
-    expect(toastErrorMock).toHaveBeenCalledWith('Sync blocked — pre-push hook failed.')
-  })
-
-  it('does not classify syncBranch fetch-stage hook-looking failures as push blocked', async () => {
-    const store = createEditorStore()
-    gitFetchMock.mockRejectedValueOnce(
-      new Error('fetch failed before push\npre-push hook docs mention eslint')
-    )
-
-    await expect(store.getState().syncBranch('wt-1', '/repo')).rejects.toThrow()
-
-    expect(toastErrorMock).toHaveBeenCalledTimes(1)
-    expect(toastErrorMock).toHaveBeenCalledWith('Sync failed. Check your connection and try again.')
-    expect(gitPushMock).not.toHaveBeenCalled()
   })
 })

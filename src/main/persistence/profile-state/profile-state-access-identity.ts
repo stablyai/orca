@@ -3,8 +3,8 @@ import { runProcessSync } from '@orca/process-host'
 import {
   parseLinuxBootTimeSeconds,
   parseLinuxProcStartTicks
-} from '../../daemon/daemon-process-start-time'
-import { getPsProcessIdentity } from '../../daemon/daemon-process-identity-query'
+} from '../../daemon/endpoint/identity/daemon-process-start-time'
+import { getPsProcessIdentity } from '../../daemon/endpoint/identity/daemon-process-identity-query'
 import { loadWindowsNativeRegistry, WINDOWS_REG_SZ } from '../../windows/windows-native-registry'
 import { readWindowsProcessCreationTime } from '../../windows/windows-process-table'
 

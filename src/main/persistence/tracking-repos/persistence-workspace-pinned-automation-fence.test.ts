@@ -20,7 +20,7 @@ import { AUTOMATION_ORPHAN_ISSUES } from '../../../shared/automation-list-scope'
 import { AUTOMATION_OWNER_CONFLICT_CODES } from '../../../shared/automation-owner-conflict'
 import { getDefaultPersistedState } from '../../../shared/constants'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
-import { installFakeAppEnvironment } from '../../../../config/scripts/vitest-host-ports-setup'
+import { installFakeAppEnvironment } from '../../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 import { resetRetirementCollisionKeyCacheForTests } from '../../workspaces/removal/retirement/worktree-name-retirement'
 
 let hasCreatedStoreInCase = false

@@ -152,6 +152,12 @@
       "needsYou_one": "{{count}} needs you",
       "needsYou_other": "{{count}} need you"
     },
+    "native-chat": {
+      "turnDiff": {
+        "changedFiles_one": "{{count}} changed file",
+        "changedFiles_other": "{{count}} changed files"
+      }
+    },
     "worktreeAgentList": {
       "hideChildAgents_one": "Hide {{count}} child agent",
       "hideChildAgents_other": "Hide {{count}} child agents",

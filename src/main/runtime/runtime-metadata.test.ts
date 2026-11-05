@@ -10,14 +10,14 @@ import {
   listEnvironments
 } from '../../shared/remote-runtime/host-store/runtime-environment-store'
 import { getEnvironmentStorePath } from '../../shared/remote-runtime/host-store/runtime-environment-store-records'
-import { DeviceRegistry } from './device-registry'
+import { DeviceRegistry } from './rpc/server/pairing/device-registry'
 import { loadOrCreateE2EEKeypair } from './e2ee-keypair'
 import {
   clearRuntimeMetadata,
   clearRuntimeMetadataIfOwned,
   readRuntimeMetadata,
   writeRuntimeMetadata
-} from './runtime-metadata'
+} from './rpc/server/runtime-metadata'
 
 const tempDirs: string[] = []
 

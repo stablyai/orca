@@ -1,7 +1,7 @@
 import {
   composeStructuredLaunch,
   composeStructuredLaunchRead
-} from '../../runtime/structured-agent-launch-composition'
+} from '../../runtime/agent-session/launch/structured-agent-launch-composition'
 import { CODEX_STRUCTURED_AGENT } from '../../codex/structured/launch/codex-structured-agent-definition'
 import { afterEach, expect, it, vi } from 'vitest'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store-test-harness'

@@ -197,6 +197,11 @@
       "sendQueueHint": "Выполнится после текущего хода",
       "sendSteerHint": "Попадёт в то, что агент делает сейчас"
     },
+    "contextUsage": {
+      "label": "Контекст: {{used}} из {{window}} токенов, использовано {{percent}}%",
+      "title": "Контекст",
+      "estimated": "Оценка по последнему ответу."
+    },
     "composerAttachments": {
       "attachedImage": "Прикреплённое изображение",
       "file": "Файл",
@@ -290,7 +295,9 @@
       "permissionDenied": "{{agent}} отказал в разрешении. Подробнее.",
       "safetyReview": "{{agent}} сообщил о предупреждении проверки безопасности. Подробнее.",
       "truncatedResponse": "Ответ поставщика обрезан (исходный размер: {{bytes}} байт).",
-      "modelFallback": "Claude переключил модель: {{from}} → {{to}}."
+      "modelFallback": "Claude переключил модель: {{from}} → {{to}}.",
+      "signIn": "Войти",
+      "signInHint": "Открывает терминал на компьютере с этим чатом"
     },
     "orcaStop": {
       "canContinue": "Вы можете продолжить этот разговор.",
@@ -299,6 +306,13 @@
       "remote": "Во время ответа Orca на {{machine}} остановилась.",
       "unnamedServer": "удалённом сервере",
       "update": "Во время ответа Orca на {{machine}} перезапустилась для обновления."
+    },
+    "interruptedContinue": {
+      "failed": "Не удалось продолжить чат. Повторите попытку или отправьте сообщение.",
+      "explanation": "При продолжении агент сначала проверит, завершился ли его последний шаг."
+    },
+    "sendError": {
+      "dismiss": "Скрыть"
     },
     "permission": {
       "needsAccessTo": "Требуется доступ: ",
@@ -383,7 +397,9 @@
     },
     "sessionOptionRows": {
       "defaultMarker": "По умолчанию",
-      "notReportedMarker": "Нет данных"
+      "notReportedMarker": "Нет данных",
+      "moreModels": "Другие модели",
+      "fewerModels": "Меньше моделей"
     },
     "sessionOptionSegments": {
       "dispatchUnconfirmed": "Отправлено агенту — получение не подтверждено"
@@ -619,6 +635,28 @@
       "byteSize": "{{size}} байт",
       "saveUpdate": "Сохранение станет доступно после обновления приложения на телефоне.",
       "fullCopySaveUpdate": "Полное копирование и сохранение этого вложения станут доступны после обновления приложения на телефоне."
+    },
+    "hostOutage": {
+      "reconnecting": "{{hostName}} переподключается…",
+      "stopped": "{{hostName}} остановлен. Запустите его на компьютере.",
+      "server": "Сервер",
+      "unavailable": "{{hostName}} недоступен с телефона. Откройте один из его проектов на компьютере."
+    },
+    "goal": {
+      "chip": "Цель",
+      "exitMode": "Выйти из режима цели",
+      "placeholder": "Опишите цель и укажите измеримые результаты",
+      "pursuing": "Достигает цели",
+      "set": "Цель задана",
+      "paused": "Цель приостановлена",
+      "blocked": "Цель заблокирована",
+      "limited": "Достигнут лимит цели",
+      "clear": "Очистить цель",
+      "expand": "Показать полную цель",
+      "collapse": "Скрыть полную цель",
+      "attachmentsUnsupported": "Уберите вложения перед постановкой цели.",
+      "pause": "Приостановить",
+      "resume": "Возобновить"
     }
   },
   "common": {
@@ -854,7 +892,9 @@
     },
     "markdownBlocks": {
       "copyCode": "Копировать код",
-      "openImage": "Открыть изображение"
+      "openImage": "Открыть изображение",
+      "wrapLines": "Переносить строки",
+      "disableLineWrap": "Выключить перенос строк"
     },
     "mountedBottomDrawer": {
       "dismissDrawer": "Закрыть панель"
@@ -1286,6 +1326,10 @@
       "retryLoading": "Повторить загрузку {{path}}",
       "unavailable": "Недоступно на мобильном устройстве"
     },
+    "fileExplorerRowActions": {
+      "copyName": "Копировать имя",
+      "copyRelativePath": "Копировать относительный путь"
+    },
     "fileMarkdownPreview": {
       "copyLoadedSource": "Скопировать загруженный исходный код Markdown",
       "copySource": "Скопировать исходный код Markdown",
@@ -1629,7 +1673,7 @@
       "notificationsTitle": "Узнавайте, когда агенту нужна ваша помощь",
       "openInChatUi": "Открывать сессии в интерфейсе чата",
       "openInTerminal": "Открывать сессии в терминале",
-      "sessionViewDescription": "Выберите, где на этом устройстве открывать поддерживаемые сессии агентов: в терминале или интерфейсе чата. Чтобы сменить режим просмотра, нажмите и удерживайте вкладку сессии. Режим по умолчанию можно позже изменить в настройках.",
+      "sessionViewDescription": "Выберите, где на этом устройстве открывать поддерживаемые сессии агентов: в терминале или интерфейсе чата. Чтобы сменить режим просмотра, нажмите и удерживайте вкладку сессии. Режим по умолчанию можно изменить в любой момент в разделе Настройки → Интерфейс чата.",
       "sessionViewTitle": "Как открывать сессии?",
       "skipNotifications": "Пока не включать уведомления",
       "useChatUi": "Использовать чат"
@@ -1875,13 +1919,8 @@
       "noUpdate": "Нет обновлений уже {{value0}}"
     },
     "agentMessageAttribution": {
-      "from": "От {{sender}}",
-      "fromMore": "От {{sender}} +{{count}}",
-      "fromUnnamed": "От агента",
-      "messageFrom": "Сообщение от {{sender}}",
-      "messageFromMore": "Сообщение от {{sender}} +{{count}}",
-      "messageFromUnnamed": "Сообщение от агента",
-      "unnamedSender": "агента"
+      "unnamedSender": "агента",
+      "fromSender": "От"
     },
     "aiVaultResumeLaunch": {
       "createFailed": "Не удалось создать терминал",
@@ -1916,6 +1955,7 @@
       "countWorkflows_one": "{{count}} процесс",
       "countWorkflows_other": "{{count}} процесса",
       "detailsUnavailable": "Подробности задач в этой сессии недоступны.",
+      "outputFile": "Вывод: {{value0}}",
       "groupAgents": "Агенты",
       "groupMonitors": "Наблюдения",
       "groupShell": "Оболочка",
@@ -2279,8 +2319,7 @@
     },
     "queuedMessageComposer": {
       "commandsNotAllowed": "Команды нельзя сохранять в сообщении в очереди.",
-      "editing": "Редактирование сообщения",
-      "editingAttributed": "Редактирование сообщения · {{attribution}}"
+      "editing": "Редактирование сообщения"
     },
     "quickCommandEditorForm": {
       "action": "Действие",

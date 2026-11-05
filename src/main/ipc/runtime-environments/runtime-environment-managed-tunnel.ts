@@ -16,6 +16,10 @@ import {
 } from '../../managed-server/lifecycle/orcad-managed-tunnel'
 import { verifyOrcadManagedServing } from '../../managed-server/lifecycle/orcad-managed-serving-verify'
 import {
+  getManagedOrcadCrashLoopBrake,
+  OrcadCrashLoopError
+} from '../../managed-server/lifecycle/orcad-managed-crash-loop'
+import {
   MANAGED_ORCAD_NOT_ACTIVATED_DETAIL,
   setManagedOrcadStartListener,
   type OrcadManagedServing
@@ -98,6 +102,12 @@ async function prepareNetworkServerForCall(
   restoreForwardsOverTunnel(environment)
   // Calls must restart managed servers stopped by idle timeout, kill or host reboot.
   const serving = await verifyOrcadManagedServing(userDataPath, environment.id)
+  const crashLoop =
+    serving.state === 'unverifiable' ? getManagedOrcadCrashLoopBrake().detail(environment.id) : null
+  if (crashLoop) {
+    // Fail with the reason instead of waiting out the status timeout against a stopped server.
+    throw new OrcadCrashLoopError(crashLoop)
+  }
   const createDeps = () => ({
     ...managedServerUpdateDeps(userDataPath),
     target: () => {
