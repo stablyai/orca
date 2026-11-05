@@ -40,7 +40,8 @@ export function stageWebRuntimeBrowserTab(args: {
       ...(args.afterTabId ? { afterTabId: args.afterTabId } : {}),
       ...(args.title !== undefined ? { title: args.title } : {}),
       ...(args.profileId !== undefined ? { sessionProfileId: args.profileId } : {}),
-      ...(args.targetGroupId ? { targetGroupId: args.targetGroupId } : {}),
+      // Why placementFixed: a named group mirrors where the host puts the page; a local redirect would diverge.
+      ...(args.targetGroupId ? { targetGroupId: args.targetGroupId, placementFixed: true } : {}),
       ...(args.focusAddressBar !== undefined ? { focusAddressBar: args.focusAddressBar } : {})
     })
     const pageId = useAppStore.getState().browserPagesByWorkspace[workspace.id]?.[0]?.id
