@@ -2,7 +2,7 @@ import { parseAgentJournalItemKey } from '../../shared/agent-session/journal/age
 import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 import { prepareLegacyTranscriptImport } from './agent-session-journal/journal-legacy-import'
 import { resolveStructuredAgentSessionAdoptionForCreate } from '../runtime/agent-session/structured-agent-session-create-adoption'
-import { structuredAgentRuntimeMetadata } from '../runtime/structured-agent-runtime-metadata'
+import { structuredAgentRuntimeMetadata } from '../runtime/agent-session/installation/structured-agent-runtime-metadata'
 
 /** An imported root has no hosted turn receipt; ask the same pinned native history importer. */
 export async function importedAgentSessionForkTipSettled(input: {

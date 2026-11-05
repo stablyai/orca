@@ -7,13 +7,15 @@ import type { Tab } from '../../shared/tab-types'
 import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 
 vi.mock('../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: false }))
-const { OrcaRuntimeService, electronMocks } = await import('./orca-runtime-test-mocks.spec')
-await import('./orca-runtime-test-lifecycle.spec')
+await import('./orca-runtime-tests/runtime-test-module-registration.spec')
+const { OrcaRuntimeService } = await import('./orca-runtime')
+const { electronMocks } = await import('./orca-runtime-test-mocks/setup.spec')
+await import('./orca-runtime-tests/orca-runtime-test-lifecycle.spec')
 const {
   makeRuntimeStoreWithWorkspaceSession,
   store,
   TEST_WORKTREE_ID: WT
-} = await import('./orca-runtime-test-fixtures.spec')
+} = await import('./orca-runtime-tests/orca-runtime-test-fixtures.spec')
 
 type Anchor = 'ordinary' | 'missing' | 'reopened' | 'stale-reopened' | 'old-alias'
 const REOPENED = 'agent-chat-tab-v1-current-source'
