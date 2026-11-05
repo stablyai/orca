@@ -249,5 +249,17 @@ export function useGrabMode(browserPageId: string): GrabModeHook {
     return () => removeAppKeyListener('keydown', handleKeyDown)
   }, [state, cancel])
 
+  // A focused page keeps Escape; main hands it back, including after a copy while the toast shows.
+  useEffect(() => {
+    if (state === 'idle') {
+      return
+    }
+    return window.api.browser.onGuestEscape(({ browserPageId: escapedPageId }) => {
+      if (escapedPageId === (grabTabIdRef.current ?? browserTabIdRef.current)) {
+        cancel()
+      }
+    })
+  }, [state, cancel])
+
   return { state, payload, error, contextMenu, toggle, cancel, rearm, exit }
 }

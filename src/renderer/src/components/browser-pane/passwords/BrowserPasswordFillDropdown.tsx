@@ -66,6 +66,18 @@ export function BrowserPasswordFillDropdown({
       clearBrowserPasswordFocusedField(browserPageId)
     }
   }, [browserPageId, isActive, focusedField])
+  const listShown = isActive && Boolean(focusedField?.suggestions.length)
+  // Like Chrome's autofill list, Escape typed in the page's field closes it.
+  useEffect(() => {
+    if (!listShown) {
+      return
+    }
+    return window.api.browser.onGuestEscape(({ browserPageId: escapedPageId }) => {
+      if (escapedPageId === browserPageId) {
+        clearBrowserPasswordFocusedField(browserPageId)
+      }
+    })
+  }, [browserPageId, listShown])
   if (!isActive || !focusedField || focusedField.suggestions.length === 0) {
     return null
   }

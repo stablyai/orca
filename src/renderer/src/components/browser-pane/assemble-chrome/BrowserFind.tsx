@@ -6,6 +6,7 @@ import { translate } from '@/i18n/i18n'
 import { getFindRequestQuery } from '@/lib/find-query-bounds'
 
 type BrowserFindProps = {
+  browserPageId: string
   isOpen: boolean
   onClose: () => void
   webviewRef: React.RefObject<Electron.WebviewTag | null>
@@ -14,6 +15,7 @@ type BrowserFindProps = {
 }
 
 export default function BrowserFind({
+  browserPageId,
   isOpen,
   onClose,
   webviewRef,
@@ -166,6 +168,18 @@ export default function BrowserFind({
   if ((!isOpen || !requestQuery) && result !== null) {
     setResult(null)
   }
+
+  // Like Chrome, Escape typed in the page closes the bar; main hands it over from the focused guest.
+  useEffect(() => {
+    if (!isOpen) {
+      return
+    }
+    return window.api.browser.onGuestEscape(({ browserPageId: escapedPageId }) => {
+      if (escapedPageId === browserPageId) {
+        onClose()
+      }
+    })
+  }, [browserPageId, isOpen, onClose])
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
