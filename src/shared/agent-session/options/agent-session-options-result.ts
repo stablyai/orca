@@ -21,6 +21,8 @@ export type AgentSessionOptionsResult = {
   /** Saved conversation on this execution host, resolved from the record's own account store. */
   transcriptPath?: string
   rewind?: AgentSessionRewindSupport
+  /** Whether this chat's agent copies its conversation natively; absent means unknown, never unsupported. */
+  forkSupport?: 'unknown' | 'supported' | 'unsupported'
   conversationCommands?: readonly AgentSessionConversationCommand[]
   /** `/compact` takes instructions here; an older host omits this and refuses the field. */
   compactInstructions?: boolean
