@@ -16,6 +16,7 @@ import { WindowMaterialSetting } from '../appearance/WindowMaterialSetting'
 import { translate } from '@/i18n/i18n'
 import {
   DEFAULT_SINGLE_PANE_MAX_WIDTH,
+  MAX_SINGLE_PANE_WIDTH,
   MIN_SINGLE_PANE_WIDTH
 } from '@/components/terminal-pane/TerminalSinglePaneWidthHandles'
 
@@ -172,7 +173,7 @@ export function TerminalWindowSection({
             value={settings.terminalSinglePaneMaxWidth ?? DEFAULT_SINGLE_PANE_MAX_WIDTH}
             defaultValue={DEFAULT_SINGLE_PANE_MAX_WIDTH}
             min={0}
-            max={4000}
+            max={MAX_SINGLE_PANE_WIDTH}
             step={10}
             suffix="px"
             onChange={(value) =>

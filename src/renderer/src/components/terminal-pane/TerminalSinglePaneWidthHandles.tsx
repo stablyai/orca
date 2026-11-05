@@ -15,6 +15,8 @@ import { translate } from '@/i18n/i18n'
 /** Floor keeps a dragged terminal wide enough to stay usable; the ceiling is the
  *  tab itself, so the cap can always be dragged back in from full width. */
 export const MIN_SINGLE_PANE_WIDTH = 400
+/** Settings field ceiling; a drag on a wider tab stops here so the field can show it. */
+export const MAX_SINGLE_PANE_WIDTH = 4000
 
 /** Pointer travel a single arrow key stands in for; Shift multiplies it. */
 const KEYBOARD_STEP_PX = 20
@@ -55,7 +57,10 @@ export function resolveDraggedSinglePaneWidth(input: {
 }): number {
   const grown = input.startWidth + input.deltaX * input.direction * 2
   return Math.round(
-    Math.min(Math.max(grown, MIN_SINGLE_PANE_WIDTH), Math.max(input.containerWidth, 0))
+    Math.min(
+      Math.max(grown, MIN_SINGLE_PANE_WIDTH),
+      Math.max(Math.min(input.containerWidth, MAX_SINGLE_PANE_WIDTH), 0)
+    )
   )
 }
 
@@ -253,7 +258,7 @@ export function TerminalSinglePaneWidthHandles({
           aria-orientation="vertical"
           tabIndex={0}
           aria-valuemin={MIN_SINGLE_PANE_WIDTH}
-          aria-valuemax={Math.round(containerWidth)}
+          aria-valuemax={Math.round(Math.min(containerWidth, MAX_SINGLE_PANE_WIDTH))}
           aria-valuenow={Math.round(width)}
           aria-label={translate(
             'auto.components.terminal.pane.TerminalSinglePaneWidthHandles.75e1cb1f51',

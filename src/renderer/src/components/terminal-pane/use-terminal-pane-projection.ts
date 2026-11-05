@@ -21,9 +21,16 @@ import { canContinueAgentSessionInNewSession } from './terminal-agent-session-co
 import type { TerminalPaneMobileController } from './use-terminal-pane-mobile-actions'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
+import { clampNumber } from '@/lib/terminal-theme'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { resolvePaneAgentSessionId } from './pane-agent-session-id'
 import { canPaneOfferResumeInNewChat } from '../tab-bar/tab-session-history-switch'
+
+type TerminalDividerStyle = CSSProperties & {
+  '--orca-terminal-divider-color': string
+  '--orca-terminal-divider-color-strong': string
+  '--divider-thickness': string
+}
 
 export function useTerminalPaneProjection(controller: TerminalPaneMobileController) {
   const {
@@ -77,13 +84,14 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
     : {}
   // Shared so sibling overlays, which do not inherit from the pane root, can paint
   // the same divider line as a split.
-  const terminalDividerStyle: CSSProperties = {
-    ['--orca-terminal-divider-color' as string]:
+  const terminalDividerStyle: TerminalDividerStyle = {
+    '--orca-terminal-divider-color':
       effectiveAppearance?.dividerColor ?? DEFAULT_TERMINAL_DIVIDER_DARK,
-    ['--orca-terminal-divider-color-strong' as string]: normalizeColor(
+    '--orca-terminal-divider-color-strong': normalizeColor(
       effectiveAppearance?.dividerColor,
       DEFAULT_TERMINAL_DIVIDER_DARK
-    )
+    ),
+    '--divider-thickness': `${clampNumber(settings?.terminalDividerThicknessPx ?? 4, 1, 32)}px`
   }
   const terminalContainerStyle: CSSProperties = {
     display: terminalContentVisible ? 'flex' : 'none',

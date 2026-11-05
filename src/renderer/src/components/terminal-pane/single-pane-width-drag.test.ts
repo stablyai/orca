@@ -23,6 +23,10 @@ describe('dragging a centered pane edge', () => {
     expect(drag(9999, 1)).toBe(1600)
   })
 
+  it('stops at the settings ceiling on a tab wider than it', () => {
+    expect(drag(9999, 1, 1000, 6000)).toBe(4000)
+  })
+
   it('keeps the terminal usable at the low end', () => {
     expect(drag(-9999, 1)).toBe(400)
   })
