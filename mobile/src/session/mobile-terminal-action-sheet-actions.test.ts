@@ -1,3 +1,4 @@
+import { HERMES_TRANSCRIPT_RUNTIME_CAPABILITY } from '../../../src/shared/native-chat/native-chat-hermes-capability'
 import { describe, expect, it, vi } from 'vitest'
 import { getMobileTerminalActionSheetActions } from './mobile-terminal-action-sheet-actions'
 
@@ -36,6 +37,14 @@ const terminalTab = (id: string, handle: string | null) => ({
 })
 
 describe('getMobileTerminalActionSheetActions', () => {
+  it.each([false, true])('gates the Hermes chat switch on host support: %s', (supported) => {
+    const actions = buildActions({
+      tabs: [{ ...terminalTab('hermes', 'terminal-1'), launchAgent: 'hermes' }],
+      hostCapabilities: supported ? [HERMES_TRANSCRIPT_RUNTIME_CAPABILITY] : []
+    })
+    expect(actions.some((action) => action.id === 'toggleChatView')).toBe(supported)
+  })
+
   it('defers Rename until after the action sheet closes', () => {
     const target = { handle: 'terminal-1' }
     const onDismiss = vi.fn()

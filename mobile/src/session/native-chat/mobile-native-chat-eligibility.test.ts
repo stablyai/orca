@@ -17,6 +17,15 @@ function status(overrides: Partial<AgentStatusEntry> = {}): AgentStatusEntry {
   } as AgentStatusEntry
 }
 
+describe('resolveMobileNativeChat', () => {
+  it('only opens a Hermes terminal overlay when the host advertises the reader', () => {
+    const tab = { type: 'terminal', launchAgent: 'hermes' }
+    expect(resolveMobileNativeChat(tab, true)).toBeNull()
+    expect(resolveMobileNativeChat(tab, true, true)).toMatchObject({ agent: 'hermes' })
+    expect(resolveMobileNativeChat(tab, false, true)).toBeNull()
+  })
+})
+
 describe('withRememberedNativeChatIdentity', () => {
   const terminalTab = (
     terminal: string | null,

@@ -3,6 +3,7 @@ import type {
   NativeChatTranscriptFrame,
   NativeChatTranscriptPage
 } from '../../../../shared/native-chat/native-chat-transcript-frames'
+import { NATIVE_CHAT_TERMINAL_QUEUE_METHODS } from './native-chat-terminal-queue'
 import { resolveNativeChatTranscriptAgent } from '../../../../shared/native-chat/native-chat-agent-support'
 import {
   readNativeChatTranscriptTail,
@@ -53,6 +54,11 @@ function windowTranscript(
   return messages.length > window ? messages.slice(-window) : messages.slice()
 }
 
+function isDatabaseTranscript(agent: string | undefined): boolean {
+  const source = resolveNativeChatTranscriptAgent(agent)
+  return source === 'opencode' || source === 'hermes'
+}
+
 function pageForClient(
   messages: readonly NativeChatMessage[],
   hasMore: boolean,
@@ -61,11 +67,11 @@ function pageForClient(
   limit = MOBILE_NATIVE_CHAT_DEFAULT_WINDOW,
   agent?: string
 ): NativeChatTranscriptPage {
-  const isOpenCode = resolveNativeChatTranscriptAgent(agent) === 'opencode'
-  const sanitized = (isOpenCode ? messages : windowTranscript(messages, limit)).map((message) =>
+  const isDatabase = isDatabaseTranscript(agent)
+  const sanitized = (isDatabase ? messages : windowTranscript(messages, limit)).map((message) =>
     sanitizeMessage(message, clientKind)
   )
-  return isOpenCode
+  return isDatabase
     ? boundNativeChatRpcPageByBytes(sanitized, hasMore, beforeOffset)
     : { messages: sanitized, hasMore, beforeOffset }
 }
@@ -89,6 +95,7 @@ function resumeIndex(
 }
 
 export const NATIVE_CHAT_METHODS = [
+  ...NATIVE_CHAT_TERMINAL_QUEUE_METHODS,
   defineMethod({
     name: 'nativeChat.readSession',
     permission: 'workspace',
@@ -220,7 +227,7 @@ export const NATIVE_CHAT_METHODS = [
           }
           const sanitized = sanitizeAppendForClient(messages, clientKind)
           const batches =
-            sanitized.length > 0 && resolveNativeChatTranscriptAgent(params.agent) === 'opencode'
+            sanitized.length > 0 && isDatabaseTranscript(params.agent)
               ? nativeChatRpcAppendBatches(sanitized)
               : [sanitized]
           for (const batch of batches) {

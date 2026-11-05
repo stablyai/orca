@@ -20640,7 +20640,8 @@
           "noCredit": "No Codex reset credit is left on this account.",
           "alreadyRedeemed": "That reset credit was already used."
         }
-      }
+      },
+      "deliveryUnconfirmed": "Delivery unconfirmed — check chat before retrying"
     },
     "tab": {
       "bar": {
