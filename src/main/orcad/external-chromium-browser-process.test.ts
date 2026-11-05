@@ -29,9 +29,9 @@ import { resolveOrcadBrowserProvider } from './orcad-browser-provider'
 import {
   createRuntimeBrowserCommands,
   setRuntimeBrowserCommandsFactory
-} from '../runtime/runtime-browser-commands-factory'
-import type { RuntimeBrowserCommandHost } from '../runtime/browser/browser-command-contracts'
-import { RuntimeBrowserPageRegistry } from '../runtime/runtime-browser-page-registry'
+} from '../runtime/browser/installation/runtime-browser-commands-factory'
+import type { RuntimeBrowserCommandHost } from '../runtime/browser/commands/browser-command-contracts'
+import { RuntimeBrowserPageRegistry } from '../runtime/browser/client-pages/runtime-browser-page-registry'
 
 vi.mock('./orcad-browser-provider', () => ({ resolveOrcadBrowserProvider: vi.fn() }))
 afterEach(() => setRuntimeBrowserCommandsFactory(null))

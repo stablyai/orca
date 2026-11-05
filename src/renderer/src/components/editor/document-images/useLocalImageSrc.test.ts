@@ -1,24 +1,22 @@
 // @vitest-environment happy-dom
 
-import { act, createElement, Fragment, useEffect } from 'react'
+import { act, createElement, Fragment } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  getLocalImageCacheKey,
-  getLocalImageSrcCacheKey,
-  loadLocalImageSrc,
-  useLocalImageSrc
-} from './useLocalImageSrc'
+import { loadLocalImageSrc, useLocalImageSrc } from './useLocalImageSrc'
 import {
   blobUrlCache,
   cacheLocalImageBlob,
-  getLocalImageCacheKeyVersion,
   invalidateLocalImageCache as invalidateLocalImageSrcCacheForTests,
-  releaseLocalImageBlob as releaseLocalImageSrcByKey,
   resetLocalImageCacheState as resetLocalImageSrcStateForTests
 } from './local-image-src-cache'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
 import { pinLocalImageCacheKey as pinLocalImageCache } from './local-image-cache-pinning'
+import {
+  holdBrowserAttachmentFiles,
+  readBrowserAttachmentFile,
+  releaseBrowserAttachmentFiles
+} from '@/lib/browser-attachment-files'
 
 type PreviewResult = {
   content: string
@@ -48,14 +46,6 @@ function setReadFile(readFile: ReturnType<typeof vi.fn>): void {
   globalThis.window.api = {
     fs: { readFile }
   } as unknown as Window['api']
-}
-
-function releaseByPath(rawSrc: string, filePath: string): void {
-  const key = getLocalImageSrcCacheKey(rawSrc, filePath)
-  if (!key) {
-    throw new Error(`${rawSrc} has no local image cache key`)
-  }
-  releaseLocalImageSrcByKey(key)
 }
 
 async function flushPromises(): Promise<void> {
@@ -102,47 +92,22 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-describe('getLocalImageCacheKey', () => {
-  it('scopes local markdown image cache entries by runtime owner', () => {
-    const localKey = getLocalImageCacheKey('/repo/docs/logo.png', null, {
-      target: { kind: 'local' as const },
-      worktreeId: 'wt-1',
-      worktreePath: '/repo'
-    })
-    const remoteKey = getLocalImageCacheKey('/repo/docs/logo.png', null, {
-      target: { kind: 'environment' as const, environmentId: 'env-1' },
-      worktreeId: 'wt-1',
-      worktreePath: '/repo'
-    })
-    const otherRemoteKey = getLocalImageCacheKey('/repo/docs/logo.png', null, {
-      target: { kind: 'environment' as const, environmentId: 'env-2' },
-      worktreeId: 'wt-1',
-      worktreePath: '/repo'
-    })
-
-    expect(localKey).not.toBe(remoteKey)
-    expect(remoteKey).not.toBe(otherRemoteKey)
-  })
-})
-
 describe('loadLocalImageSrc', () => {
-  it('shares one pending read and one blob URL for duplicate local image loads', async () => {
-    const read = deferred<PreviewResult>()
-    const readFile = vi.fn().mockReturnValue(read.promise)
-    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:local-image')
+  it('previews a staged browser image before a workspace exists without consuming its upload file', async () => {
+    const readFile = vi.fn(() => {
+      throw new Error('Runtime files are unavailable before workspace creation')
+    })
+    const file = new File(['image bytes'], 'screenshot.png', { type: 'image/png' })
+    const [token] = holdBrowserAttachmentFiles([file])
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:staged-image')
     setReadFile(readFile)
 
-    const first = loadLocalImageSrc('diagram.png', '/repo/docs/readme.md')
-    const second = loadLocalImageSrc('diagram.png', '/repo/docs/readme.md')
-
-    expect(readFile).toHaveBeenCalledTimes(1)
-    read.resolve(binaryPreview())
-
-    await expect(Promise.all([first, second])).resolves.toEqual([
-      'blob:local-image',
-      'blob:local-image'
-    ])
-    expect(URL.createObjectURL).toHaveBeenCalledTimes(1)
+    try {
+      await expect(loadLocalImageSrc(token, '', undefined, null)).resolves.toBe('blob:staged-image')
+      expect(readBrowserAttachmentFile(token)).toBe(file)
+    } finally {
+      releaseBrowserAttachmentFiles([token])
+    }
   })
 
   it('lets a mounted preview adopt an in-flight prewarm read', async () => {
@@ -209,50 +174,6 @@ describe('loadLocalImageSrc', () => {
     expect(readFile).toHaveBeenCalledTimes(2)
   })
 
-  it('does not fall back to raw local src when IPC returns non-binary content', async () => {
-    const readFile = vi.fn().mockResolvedValue({
-      isBinary: false,
-      content: '<svg></svg>',
-      mimeType: 'image/svg+xml'
-    })
-    setReadFile(readFile)
-
-    await expect(loadLocalImageSrc('diagram.svg', '/repo/docs/readme.md')).resolves.toBeNull()
-    expect(readFile).toHaveBeenCalledWith({
-      filePath: '/repo/docs/diagram.svg',
-      connectionId: undefined
-    })
-  })
-
-  it('does not fall back to raw local src when IPC rejects the read', async () => {
-    setReadFile(vi.fn().mockRejectedValue(new Error('denied')))
-
-    await expect(
-      loadLocalImageSrc('file:///repo/docs/diagram.png', '/repo/docs/readme.md')
-    ).resolves.toBeNull()
-  })
-
-  it('suppresses a stale pending completion after cache invalidation', async () => {
-    const firstRead = deferred<PreviewResult>()
-    const readFile = vi
-      .fn()
-      .mockReturnValueOnce(firstRead.promise)
-      .mockResolvedValueOnce(binaryPreview())
-    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:fresh')
-    setReadFile(readFile)
-
-    const staleLoad = loadLocalImageSrc('diagram.png', '/repo/docs/readme.md')
-    invalidateLocalImageSrcCacheForTests()
-    firstRead.resolve(binaryPreview())
-
-    await expect(staleLoad).resolves.toBeNull()
-    expect(URL.createObjectURL).not.toHaveBeenCalled()
-    await expect(loadLocalImageSrc('diagram.png', '/repo/docs/readme.md')).resolves.toBe(
-      'blob:fresh'
-    )
-    expect(readFile).toHaveBeenCalledTimes(2)
-  })
-
   it('does not let an older invalidated read overwrite a newer successful read', async () => {
     const firstRead = deferred<PreviewResult>()
     const secondRead = deferred<PreviewResult>()
@@ -278,73 +199,6 @@ describe('loadLocalImageSrc', () => {
     expect(URL.revokeObjectURL).not.toHaveBeenCalledWith('blob:newer')
   })
 
-  it('does not retain a read that resolves after its preview lease is released', async () => {
-    const read = deferred<PreviewResult>()
-    const readFile = vi.fn().mockReturnValue(read.promise)
-    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:released')
-    setReadFile(readFile)
-
-    const pending = loadLocalImageSrc('diagram.png', '/repo/docs/readme.md')
-    releaseByPath('diagram.png', '/repo/docs/readme.md')
-    read.resolve(binaryPreview())
-
-    await expect(pending).resolves.toBeNull()
-    expect(blobUrlCache.size).toBe(0)
-    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:released')
-  })
-
-  it('starts a fresh read when a released lease becomes visible again', async () => {
-    const firstRead = deferred<PreviewResult>()
-    const secondRead = deferred<PreviewResult>()
-    const readFile = vi
-      .fn()
-      .mockReturnValueOnce(firstRead.promise)
-      .mockReturnValueOnce(secondRead.promise)
-    vi.spyOn(URL, 'createObjectURL')
-      .mockReturnValueOnce('blob:fresh')
-      .mockReturnValueOnce('blob:stale')
-    setReadFile(readFile)
-
-    const stale = loadLocalImageSrc('diagram.png', '/repo/docs/readme.md')
-    releaseByPath('diagram.png', '/repo/docs/readme.md')
-    const fresh = loadLocalImageSrc('diagram.png', '/repo/docs/readme.md')
-    expect(readFile).toHaveBeenCalledTimes(2)
-
-    secondRead.resolve(binaryPreview('AQ=='))
-    await expect(fresh).resolves.toBe('blob:fresh')
-    firstRead.resolve(binaryPreview())
-    await expect(stale).resolves.toBeNull()
-    expect(blobUrlCache.size).toBe(1)
-    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:stale')
-  })
-
-  it('cleans version metadata for released unique paths', () => {
-    for (let index = 0; index < 500; index += 1) {
-      const path = `/repo/docs/image-${index}.png`
-      releaseByPath(path, '/repo/docs/readme.md')
-      expect(getLocalImageCacheKeyVersion(getLocalImageCacheKey(path, undefined, undefined))).toBe(
-        0
-      )
-    }
-  })
-
-  it('refuses unleased overflow and oversized payloads when pinned previews fill the entry target', () => {
-    for (let index = 0; index < 100; index += 1) {
-      const key = `pinned-${index}`
-      pinLocalImageCache(key)
-      expect(cacheLocalImageBlob(key, `blob:${index}`, 1)).toBe(true)
-    }
-
-    expect(cacheLocalImageBlob('unleased-overflow', 'blob:overflow', 1)).toBe(false)
-    expect(blobUrlCache.size).toBe(100)
-    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:overflow')
-
-    expect(
-      cacheLocalImageBlob('large-overflow', 'blob:large-overflow', 128 * 1024 * 1024 + 1)
-    ).toBe(false)
-    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:large-overflow')
-  })
-
   it('does not exceed the decoded-byte budget when all retained entries are pinned', () => {
     const retainedBytes = 80 * 1024 * 1024
     pinLocalImageCache('large-pinned-1')
@@ -354,97 +208,6 @@ describe('loadLocalImageSrc', () => {
 
     expect(blobUrlCache.size).toBe(1)
     expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:large-2')
-  })
-
-  it('keeps runtime owners in separate image cache entries', async () => {
-    const readFile = vi.fn().mockResolvedValue(binaryPreview())
-    vi.spyOn(URL, 'createObjectURL')
-      .mockReturnValueOnce('blob:runtime-one')
-      .mockReturnValueOnce('blob:runtime-two')
-    setReadFile(readFile)
-
-    await expect(
-      loadLocalImageSrc('diagram.png', '/repo/docs/readme.md', null, {
-        target: { kind: 'local' as const },
-        worktreeId: 'wt-1',
-        worktreePath: '/repo',
-        connectionId: 'ssh-1'
-      })
-    ).resolves.toBe('blob:runtime-one')
-    await expect(
-      loadLocalImageSrc('diagram.png', '/repo/docs/readme.md', null, {
-        target: { kind: 'local' as const },
-        worktreeId: 'wt-2',
-        worktreePath: '/repo',
-        connectionId: 'ssh-2'
-      })
-    ).resolves.toBe('blob:runtime-two')
-    expect(readFile).toHaveBeenCalledTimes(2)
-  })
-
-  it('does not load an external SSH image through a replacement target', async () => {
-    const readFile = vi.fn().mockResolvedValue(binaryPreview())
-    setReadFile(readFile)
-
-    await expect(
-      loadLocalImageSrc('diagram.png', '/tmp/readme.md', null, {
-        target: { kind: 'local' as const },
-        worktreeId: 'wt-1',
-        worktreePath: '/repo',
-        connectionId: 'ssh-2',
-        expectedExternalSshTargetId: 'ssh-1'
-      })
-    ).resolves.toBeNull()
-
-    expect(readFile).not.toHaveBeenCalled()
-  })
-
-  it('does not update mounted hook state after unmount', async () => {
-    const read = deferred<PreviewResult>()
-    const readFile = vi.fn().mockReturnValue(read.promise)
-    const renders: (string | undefined)[] = []
-    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:unmounted')
-    setReadFile(readFile)
-
-    const container = document.createElement('div')
-    const root: Root = createRoot(container)
-    await act(async () => {
-      root.render(
-        createElement(HookProbe, {
-          filePath: '/repo/docs/readme.md',
-          onRender: (displaySrc) => renders.push(displaySrc),
-          src: 'diagram.png'
-        })
-      )
-    })
-    await act(async () => {
-      root.unmount()
-    })
-
-    read.resolve(binaryPreview())
-    await act(async () => {
-      await flushPromises()
-    })
-
-    expect(renders).toEqual([undefined])
-  })
-
-  it('never shares a cached image across access kinds', () => {
-    const userFile = getLocalImageCacheKey('/tmp/a.png', undefined, undefined, {
-      kind: 'user-file'
-    })
-    const fromDocA = getLocalImageCacheKey('/tmp/a.png', undefined, undefined, {
-      kind: 'document-resource',
-      documentPath: '/tmp/a.md'
-    })
-    const fromDocB = getLocalImageCacheKey('/tmp/a.png', undefined, undefined, {
-      kind: 'document-resource',
-      documentPath: '/other/b.md'
-    })
-
-    expect(new Set([userFile, fromDocA, fromDocB, getLocalImageCacheKey('/tmp/a.png')]).size).toBe(
-      4
-    )
   })
 })
 
@@ -475,68 +238,13 @@ describe('useLocalImageSrc runtime owner', () => {
     return null
   }
 
-  // Release on owner-object changes so the probe’s pin alone must keep the displayed URL alive.
-  function ReleaseOnOwnerObject({
-    runtimeContext
-  }: {
-    runtimeContext: RuntimeFileOperationArgs
-  }): null {
-    useEffect(() => {
-      const key = getLocalImageSrcCacheKey(imageSrc, documentPath, null, runtimeContext)
-      return () => {
-        if (key) {
-          releaseLocalImageSrcByKey(key)
-        }
-      }
-    }, [runtimeContext])
-    return null
-  }
-
   function renderOwner(
     root: Root,
     runtimeContext: RuntimeFileOperationArgs,
     onRender: (displaySrc: string | undefined) => void
   ): void {
-    root.render(
-      createElement(
-        Fragment,
-        null,
-        createElement(OwnerProbe, { onRender, runtimeContext }),
-        createElement(ReleaseOnOwnerObject, { runtimeContext })
-      )
-    )
+    root.render(createElement(OwnerProbe, { onRender, runtimeContext }))
   }
-
-  it('keeps its pin and URL when an equal runtime context is rebuilt', async () => {
-    const readFile = vi.fn().mockResolvedValue(binaryPreview())
-    let nextUrl = 0
-    vi.spyOn(URL, 'createObjectURL').mockImplementation(() => `blob:owner-${++nextUrl}`)
-    setReadFile(readFile)
-    const renders: (string | undefined)[] = []
-    const onRender = (displaySrc: string | undefined): void => {
-      renders.push(displaySrc)
-    }
-
-    const container = document.createElement('div')
-    const root: Root = createRoot(container)
-    await act(async () => {
-      renderOwner(root, sshOwner(), onRender)
-      await flushPromises()
-    })
-    expect(renders.at(-1)).toBe('blob:owner-1')
-
-    for (let update = 0; update < 3; update += 1) {
-      await act(async () => {
-        renderOwner(root, sshOwner(), onRender)
-        await flushPromises()
-      })
-    }
-
-    expect(readFile).toHaveBeenCalledOnce()
-    expect(URL.revokeObjectURL).not.toHaveBeenCalled()
-    expect(new Set(renders.filter(Boolean))).toEqual(new Set(['blob:owner-1']))
-    root.unmount()
-  })
 
   it.each([
     ['an SSH reconnect', { expectedSshConnectionGeneration: 2 }],

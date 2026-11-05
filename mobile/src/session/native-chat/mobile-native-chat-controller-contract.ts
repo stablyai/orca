@@ -24,10 +24,12 @@ import type {
 import type { MobileNativeChatCommandRefusalCauses } from './use-mobile-native-chat-send-error'
 import type { MobileStructuredQueuedMessageControls } from '../use-mobile-structured-queued-message-controls'
 import type { MobileStructuredBackgroundTasks } from '../use-mobile-structured-background-tasks'
+import type { MobileStructuredInterruptedContinue } from '../use-mobile-structured-interrupted-continue'
 import type { MobileNativeChatPendingMessage } from './mobile-native-chat-pending-echo'
 import type { useMobileNativeChatSession } from './use-mobile-native-chat-session'
 import type { MobileNativeChatSessionOptionPickersProps } from './input/MobileNativeChatSessionOptionPickers'
 import type { MobileNativeChatVisualSource } from './visual/mobile-native-chat-visual-read'
+import type { NativeChatContextUsageSummary } from '../../../../src/shared/native-chat/native-chat-context-usage-summary'
 import type { useMobileStructuredSessionCommands } from '../use-mobile-structured-session-commands'
 
 export type MobileNativeChatController = {
@@ -93,6 +95,8 @@ export type MobileNativeChatController = {
   handleNativeChatStop: () => void
   nativeChatQueued: MobileStructuredQueuedMessageControls
   nativeChatBackgroundTasks: MobileStructuredBackgroundTasks | null
+  nativeChatContextUsage: NativeChatContextUsageSummary | null
+  nativeChatInterruptedContinue: MobileStructuredInterruptedContinue | null
   nativeChatFilePaths: string[]
   loadNativeChatFiles: (query: string) => void
   nativeChatSkills: NativeChatSkillDiscoverySnapshot

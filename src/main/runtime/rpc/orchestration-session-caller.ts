@@ -27,7 +27,7 @@ import { lookupOrcaAgentSession } from '../orchestration/structured-session-mail
 import { conversationRecordReader } from '../orchestration/structured-session-lineage'
 import type { AgentSessionRecordStore } from '../agent-session/records/agent-session-record-store'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
-import { structuredWorkerHostScope } from '../structured-worker-identity'
+import { structuredWorkerHostScope } from '../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
 import type { RpcRequest } from './core'
 
 type CallerParam = 'from' | 'terminal' | 'callerTerminalHandle'

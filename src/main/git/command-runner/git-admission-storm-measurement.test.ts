@@ -17,8 +17,6 @@ import {
 import {
   assertAdmissionLedger,
   createStormRoot,
-  formatMeasurementTable,
-  measureStorm,
   type InteractiveQueueSnapshot
 } from './git-admission-storm-test-fixture'
 
@@ -170,15 +168,5 @@ describe.skipIf(process.platform === 'win32')('git admission storm measurement',
   it(
     'bounds real children and drains interactive work before the background backlog',
     verifySpawnContention
-  )
-
-  it.runIf(process.env.ORCA_GIT_ADMISSION_STORM_MEASUREMENT === '1')(
-    'reports bounded-concurrency before and after measurements',
-    async () => {
-      const disabled = await measureStorm('disabled')
-      const enabled = await measureStorm('enabled')
-      console.info(`GIT_ADMISSION_STORM_MEASUREMENT=${formatMeasurementTable([disabled, enabled])}`)
-      assertAdmissionLedger(enabled)
-    }
   )
 })

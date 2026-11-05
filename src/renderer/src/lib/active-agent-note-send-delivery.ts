@@ -21,13 +21,19 @@ const ORCA_DESKTOP_TERMINAL_CLIENT = { id: 'orca-desktop', type: 'desktop' as co
 export async function sendPromptWithLegacyCombinedSend(
   runtimeTarget: Parameters<typeof callRuntimeRpc>[0],
   terminalHandle: string,
-  prompt: string
+  prompt: string,
+  submit = true
 ): Promise<ActiveAgentNotesSendResult> {
   try {
     const { send } = await callRuntimeRpc<{ send: RuntimeTerminalSend }>(
       runtimeTarget,
       'terminal.send',
-      { terminal: terminalHandle, text: prompt, enter: true, client: ORCA_DESKTOP_TERMINAL_CLIENT },
+      {
+        terminal: terminalHandle,
+        text: prompt,
+        enter: submit,
+        client: ORCA_DESKTOP_TERMINAL_CLIENT
+      },
       { timeoutMs: ACTIVE_AGENT_SEND_RPC_TIMEOUT_MS }
     )
     return send.accepted
@@ -51,7 +57,7 @@ export async function sendPromptWithGuardedPasteAndEnter(
   runtimeTarget: Parameters<typeof callRuntimeRpc>[0],
   terminalHandle: string,
   prompt: string,
-  options: { allowLegacyFallback: boolean }
+  options: { allowLegacyFallback: boolean; submit?: boolean }
 ): Promise<ActiveAgentNotesSendResult> {
   const initialAgentStatus = await getTerminalAgentSendReadiness(
     runtimeTarget,
@@ -103,6 +109,10 @@ export async function sendPromptWithGuardedPasteAndEnter(
     throw error
   }
 
+  // Without submit the pasted text waits, editable, in the agent's input (Add to chat).
+  if (options.submit === false) {
+    return { status: 'sent' }
+  }
   await new Promise<void>((resolve) => setTimeout(resolve, POST_PASTE_SUBMIT_DELAY_MS))
   try {
     const submitAgentStatus = await getTerminalAgentSendReadiness(

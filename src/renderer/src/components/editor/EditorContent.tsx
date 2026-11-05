@@ -233,6 +233,7 @@ export function EditorContent({
             filePath={activeFile.filePath}
             sourceFileId={previewSourceFileId}
             sourceWorktreeId={activeFile.worktreeId}
+            sourceRelativePath={activeFile.relativePath}
             sourceRuntimeEnvironmentId={activeFile.runtimeEnvironmentId}
             scrollCacheKey={markdownPreviewViewStateKey}
             initialAnchor={activeFile.markdownPreviewAnchor ?? null}

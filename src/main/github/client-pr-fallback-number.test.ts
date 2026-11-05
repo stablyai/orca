@@ -1,6 +1,6 @@
 import type * as GitExecFileModule from '../git/command-runner/git-exec-file'
 import type * as GhExecFileModule from '../git/command-runner/gh-exec-file'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as GithubApiRepositoryModule from './github-api-repository'
 import type * as GitHubEnterpriseRepositoryModule from './github-enterprise-repository'
 
@@ -39,7 +39,7 @@ vi.mock('./github-api-repository', async (importOriginal) =>
 
 import { getPRForBranchOutcome } from './client/lookup/pr-for-branch-outcome'
 import { getPRForBranch } from './client/lookup/get-pr-for-branch'
-import { resetPRForBranchMocks } from './client-test-harness'
+import { resetPRForBranchMocks, mockPRLookupRoutes } from './client-test-harness'
 
 const {
   ghExecFileAsyncMock,
@@ -49,95 +49,126 @@ const {
   gitExecFileAsyncMock
 } = clientMocks
 
+const unexpectedRequests: string[][] = []
+function metadataCalls() {
+  return ghExecFileAsyncMock.mock.calls.filter(
+    ([args]) =>
+      args[0] === 'pr' ||
+      (args[0] === 'api' && args[1]?.startsWith('repos/') && args[1].includes('/pulls?'))
+  )
+}
+
+function mockLookupRoutes(
+  routes: Parameters<typeof mockPRLookupRoutes>[1],
+  unavailableChecks = false
+): void {
+  mockPRLookupRoutes(clientMocks, routes, unavailableChecks, unexpectedRequests)
+}
+
 describe('getPRForBranch', () => {
+  afterEach(() => {
+    expect(unexpectedRequests).toEqual([])
+  })
   beforeEach(() => {
+    unexpectedRequests.length = 0
     resetPRForBranchMocks(clientMocks)
   })
 
   it('prefers branch lookup over a fallback PR number', async () => {
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
-    ghExecFileAsyncMock
-      .mockResolvedValueOnce({
-        stdout: JSON.stringify([
-          {
-            number: 43,
-            title: 'Branch PR wins',
-            state: 'open',
-            html_url: 'https://github.com/acme/widgets/pull/43',
-            updated_at: '2026-03-28T00:00:00Z',
-            draft: false,
-            mergeable: true,
-            head: { ref: 'feature/test', sha: 'branch-head-oid' },
-            base: { ref: 'main', sha: 'branch-base-oid' }
-          }
-        ])
-      })
-      .mockResolvedValueOnce({
-        stdout: JSON.stringify({
-          number: 43,
-          title: 'Hydrated branch PR wins',
-          state: 'OPEN',
-          url: 'https://github.com/acme/widgets/pull/43',
-          statusCheckRollup: [],
-          updatedAt: '2026-03-28T00:00:00Z',
-          isDraft: false,
-          mergeable: 'MERGEABLE',
-          baseRefName: 'main',
-          headRefName: 'feature/test',
-          baseRefOid: 'branch-base-oid',
-          headRefOid: 'branch-head-oid'
+    mockLookupRoutes([
+      [
+        'repos/acme/widgets/pulls?head=acme%3Afeature%2Ftest&state=all&per_page=10',
+        async () => ({
+          stdout: JSON.stringify([
+            {
+              number: 43,
+              title: 'Branch PR wins',
+              state: 'open',
+              html_url: 'https://github.com/acme/widgets/pull/43',
+              updated_at: '2026-03-28T00:00:00Z',
+              draft: false,
+              mergeable: true,
+              head: { ref: 'feature/test', sha: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' },
+              base: { ref: 'main', sha: 'branch-base-oid' }
+            }
+          ])
         })
-      })
+      ],
+      [
+        'view:acme/widgets:43',
+        async () => ({
+          stdout: JSON.stringify({
+            number: 43,
+            title: 'Hydrated branch PR wins',
+            state: 'OPEN',
+            url: 'https://github.com/acme/widgets/pull/43',
+            statusCheckRollup: [],
+            updatedAt: '2026-03-28T00:00:00Z',
+            isDraft: false,
+            mergeable: 'MERGEABLE',
+            baseRefName: 'main',
+            headRefName: 'feature/test',
+            baseRefOid: 'branch-base-oid',
+            headRefOid: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+          })
+        })
+      ]
+    ])
 
     const pr = await getPRForBranch('/repo-root', 'feature/test', null, null, 42)
 
-    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
-    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
-      1,
+    expect(metadataCalls()).toHaveLength(2)
+    expect(metadataCalls()[0]).toEqual([
       [
         'api',
         'repos/acme/widgets/pulls?head=acme%3Afeature%2Ftest&state=all&per_page=10',
         '--include'
       ],
       { cwd: '/repo-root' }
-    )
+    ])
     expect(pr).toMatchObject({ number: 43, title: 'Hydrated branch PR wins' })
   })
 
   it('uses a fallback PR number only after branch lookup misses', async () => {
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
-    ghExecFileAsyncMock
-      .mockResolvedValueOnce({ stdout: JSON.stringify([]) })
-      .mockResolvedValueOnce({
-        stdout: JSON.stringify({
-          number: 42,
-          title: 'Fallback PR lookup',
-          state: 'OPEN',
-          url: 'https://github.com/acme/widgets/pull/42',
-          statusCheckRollup: [],
-          updatedAt: '2026-03-28T00:00:00Z',
-          isDraft: false,
-          mergeable: 'MERGEABLE',
-          baseRefName: 'main',
-          headRefName: 'contributor/original',
-          baseRefOid: 'base-oid',
-          headRefOid: 'fallback-head-oid'
+    mockLookupRoutes([
+      [
+        'repos/acme/widgets/pulls?head=acme%3Afeature%2Ftest&state=all&per_page=10',
+        async () => ({ stdout: JSON.stringify([]) })
+      ],
+      [
+        'view:acme/widgets:42',
+        async () => ({
+          stdout: JSON.stringify({
+            number: 42,
+            title: 'Fallback PR lookup',
+            state: 'OPEN',
+            url: 'https://github.com/acme/widgets/pull/42',
+            statusCheckRollup: [],
+            updatedAt: '2026-03-28T00:00:00Z',
+            isDraft: false,
+            mergeable: 'MERGEABLE',
+            baseRefName: 'main',
+            headRefName: 'contributor/original',
+            baseRefOid: 'base-oid',
+            headRefOid: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
+          })
         })
-      })
+      ]
+    ])
 
     const pr = await getPRForBranch('/repo-root', 'feature/test', null, null, 42)
 
-    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
-      1,
+    expect(metadataCalls()[0]).toEqual([
       [
         'api',
         'repos/acme/widgets/pulls?head=acme%3Afeature%2Ftest&state=all&per_page=10',
         '--include'
       ],
       { cwd: '/repo-root' }
-    )
-    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
-      2,
+    ])
+    expect(metadataCalls()[1]).toEqual([
       [
         'pr',
         'view',
@@ -145,10 +176,10 @@ describe('getPRForBranch', () => {
         '--repo',
         'acme/widgets',
         '--json',
-        'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable,reviewDecision,mergeStateStatus,autoMergeRequest,baseRefName,headRefName,baseRefOid,headRefOid,headRepositoryOwner,headRepository,isCrossRepository'
+        'number,title,state,url,updatedAt,isDraft,mergeable,reviewDecision,mergeStateStatus,autoMergeRequest,baseRefName,headRefName,baseRefOid,headRefOid,headRepositoryOwner,headRepository,isCrossRepository'
       ],
       { cwd: '/repo-root' }
-    )
+    ])
     expect(pr).toMatchObject({ number: 42, title: 'Fallback PR lookup' })
   })
 
@@ -157,9 +188,18 @@ describe('getPRForBranch', () => {
       candidates: [{ owner: 'stablyai', repo: 'orca' }],
       headRepo: null
     })
-    ghExecFileAsyncMock
-      .mockRejectedValueOnce(new Error('HTTP 429: API rate limit exceeded'))
-      .mockResolvedValueOnce({ stdout: JSON.stringify([]) })
+    mockLookupRoutes([
+      [
+        'list:stablyai/orca:feature/test',
+        async () => {
+          throw new Error('HTTP 429: API rate limit exceeded')
+        }
+      ],
+      [
+        'repos/stablyai/orca/pulls?head=stablyai%3Afeature%2Ftest&state=all&per_page=10',
+        async () => ({ stdout: JSON.stringify([]) })
+      ]
+    ])
 
     const outcome = await getPRForBranchOutcome('/repo-root', 'feature/test')
 
@@ -167,8 +207,7 @@ describe('getPRForBranch', () => {
       kind: 'upstream-error',
       errorType: 'rate_limited'
     })
-    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
-      1,
+    expect(metadataCalls()[0]).toEqual([
       [
         'pr',
         'list',
@@ -181,19 +220,18 @@ describe('getPRForBranch', () => {
         '--limit',
         '10',
         '--json',
-        'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable,baseRefName,headRefName,baseRefOid,headRefOid,headRepositoryOwner,headRepository,isCrossRepository'
+        'number,title,state,url,updatedAt,isDraft,mergeable,baseRefName,headRefName,baseRefOid,headRefOid,headRepositoryOwner,headRepository,isCrossRepository'
       ],
       { cwd: '/repo-root' }
-    )
-    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
-      2,
+    ])
+    expect(metadataCalls()[1]).toEqual([
       [
         'api',
         'repos/stablyai/orca/pulls?head=stablyai%3Afeature%2Ftest&state=all&per_page=10',
         '--include'
       ],
       { cwd: '/repo-root' }
-    )
+    ])
   })
 
   it('propagates a Retry-After cooldown into the rate-limited retry schedule', async () => {
@@ -202,13 +240,20 @@ describe('getPRForBranch', () => {
       headRepo: null
     })
     // gh puts the diagnostic on `.stderr`; a secondary limit carries Retry-After.
-    ghExecFileAsyncMock
-      .mockRejectedValueOnce(
-        Object.assign(new Error('gh exited with 1.'), {
-          stderr: 'HTTP 403: You have exceeded a secondary rate limit\nRetry-After: 120'
-        })
-      )
-      .mockResolvedValueOnce({ stdout: JSON.stringify([]) })
+    mockLookupRoutes([
+      [
+        'list:stablyai/orca:feature/test',
+        async () => {
+          throw Object.assign(new Error('gh exited with 1.'), {
+            stderr: 'HTTP 403: You have exceeded a secondary rate limit\nRetry-After: 120'
+          })
+        }
+      ],
+      [
+        'repos/stablyai/orca/pulls?head=stablyai%3Afeature%2Ftest&state=all&per_page=10',
+        async () => ({ stdout: JSON.stringify([]) })
+      ]
+    ])
 
     const before = Date.now()
     const outcome = await getPRForBranchOutcome('/repo-root', 'feature/test')
@@ -228,12 +273,14 @@ describe('getPRForBranch', () => {
       candidates: [{ owner: 'stablyai', repo: 'orca' }],
       headRepo: null
     })
-    ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: JSON.stringify([]) })
+    mockLookupRoutes([
+      ['list:stablyai/orca:feature/test', async () => ({ stdout: JSON.stringify([]) })]
+    ])
 
     const outcome = await getPRForBranchOutcome('/repo-root', 'feature/test')
 
     expect(outcome.kind).toBe('no-pr')
-    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1)
+    expect(metadataCalls()).toHaveLength(1)
   })
 
   it('returns found when fallback branch discovery retry finds the PR', async () => {
@@ -241,39 +288,51 @@ describe('getPRForBranch', () => {
       candidates: [{ owner: 'stablyai', repo: 'orca' }],
       headRepo: null
     })
-    ghExecFileAsyncMock
-      .mockRejectedValueOnce(new Error('HTTP 429: API rate limit exceeded'))
-      .mockResolvedValueOnce({
-        stdout: JSON.stringify([
-          {
-            number: 42,
-            title: 'Retry branch PR',
-            state: 'open',
-            html_url: 'https://github.com/stablyai/orca/pull/42',
-            updated_at: '2026-03-28T00:00:00Z',
-            draft: false,
-            mergeable: true,
-            base: { ref: 'main', sha: 'base-oid' },
-            head: { ref: 'feature/test', sha: 'retry-head-oid' }
-          }
-        ])
-      })
-      .mockResolvedValueOnce({
-        stdout: JSON.stringify({
-          number: 42,
-          title: 'Hydrated retry branch PR',
-          state: 'OPEN',
-          url: 'https://github.com/stablyai/orca/pull/42',
-          statusCheckRollup: [],
-          updatedAt: '2026-03-28T00:00:00Z',
-          isDraft: false,
-          mergeable: 'MERGEABLE',
-          baseRefName: 'main',
-          headRefName: 'feature/test',
-          baseRefOid: 'base-oid',
-          headRefOid: 'retry-head-oid'
+    mockLookupRoutes([
+      [
+        'list:stablyai/orca:feature/test',
+        async () => {
+          throw new Error('HTTP 429: API rate limit exceeded')
+        }
+      ],
+      [
+        'repos/stablyai/orca/pulls?head=stablyai%3Afeature%2Ftest&state=all&per_page=10',
+        async () => ({
+          stdout: JSON.stringify([
+            {
+              number: 42,
+              title: 'Retry branch PR',
+              state: 'open',
+              html_url: 'https://github.com/stablyai/orca/pull/42',
+              updated_at: '2026-03-28T00:00:00Z',
+              draft: false,
+              mergeable: true,
+              base: { ref: 'main', sha: 'base-oid' },
+              head: { ref: 'feature/test', sha: 'dddddddddddddddddddddddddddddddddddddddd' }
+            }
+          ])
         })
-      })
+      ],
+      [
+        'view:stablyai/orca:42',
+        async () => ({
+          stdout: JSON.stringify({
+            number: 42,
+            title: 'Hydrated retry branch PR',
+            state: 'OPEN',
+            url: 'https://github.com/stablyai/orca/pull/42',
+            statusCheckRollup: [],
+            updatedAt: '2026-03-28T00:00:00Z',
+            isDraft: false,
+            mergeable: 'MERGEABLE',
+            baseRefName: 'main',
+            headRefName: 'feature/test',
+            baseRefOid: 'base-oid',
+            headRefOid: 'dddddddddddddddddddddddddddddddddddddddd'
+          })
+        })
+      ]
+    ])
 
     const outcome = await getPRForBranchOutcome('/repo-root', 'feature/test')
 
@@ -292,25 +351,39 @@ describe('getPRForBranch', () => {
       candidates: [{ owner: 'stablyai', repo: 'orca' }],
       headRepo: null
     })
-    ghExecFileAsyncMock
-      .mockRejectedValueOnce(new Error('HTTP 429: API rate limit exceeded'))
-      .mockRejectedValueOnce(new Error('HTTP 502: Bad Gateway'))
-      .mockResolvedValueOnce({
-        stdout: JSON.stringify({
-          number: 42,
-          title: 'Fallback number recovered PR',
-          state: 'OPEN',
-          url: 'https://github.com/stablyai/orca/pull/42',
-          statusCheckRollup: [],
-          updatedAt: '2026-03-28T00:00:00Z',
-          isDraft: false,
-          mergeable: 'MERGEABLE',
-          baseRefName: 'main',
-          headRefName: 'feature/test',
-          baseRefOid: 'base-oid',
-          headRefOid: 'fallback-head-oid'
+    mockLookupRoutes([
+      [
+        'list:stablyai/orca:feature/test',
+        async () => {
+          throw new Error('HTTP 429: API rate limit exceeded')
+        }
+      ],
+      [
+        'repos/stablyai/orca/pulls?head=stablyai%3Afeature%2Ftest&state=all&per_page=10',
+        async () => {
+          throw new Error('HTTP 502: Bad Gateway')
+        }
+      ],
+      [
+        'view:stablyai/orca:42',
+        async () => ({
+          stdout: JSON.stringify({
+            number: 42,
+            title: 'Fallback number recovered PR',
+            state: 'OPEN',
+            url: 'https://github.com/stablyai/orca/pull/42',
+            statusCheckRollup: [],
+            updatedAt: '2026-03-28T00:00:00Z',
+            isDraft: false,
+            mergeable: 'MERGEABLE',
+            baseRefName: 'main',
+            headRefName: 'feature/test',
+            baseRefOid: 'base-oid',
+            headRefOid: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
+          })
         })
-      })
+      ]
+    ])
 
     const outcome = await getPRForBranchOutcome('/repo-root', 'feature/test', null, null, 42)
 
@@ -321,8 +394,7 @@ describe('getPRForBranch', () => {
         title: 'Fallback number recovered PR'
       }
     })
-    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
-      3,
+    expect(metadataCalls()[2]).toEqual([
       [
         'pr',
         'view',
@@ -330,10 +402,10 @@ describe('getPRForBranch', () => {
         '--repo',
         'stablyai/orca',
         '--json',
-        'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable,reviewDecision,mergeStateStatus,autoMergeRequest,baseRefName,headRefName,baseRefOid,headRefOid,headRepositoryOwner,headRepository,isCrossRepository'
+        'number,title,state,url,updatedAt,isDraft,mergeable,reviewDecision,mergeStateStatus,autoMergeRequest,baseRefName,headRefName,baseRefOid,headRefOid,headRepositoryOwner,headRepository,isCrossRepository'
       ],
       { cwd: '/repo-root' }
-    )
+    ])
   })
 
   it('reports upstream error when fallback branch discovery has a network failure', async () => {
@@ -341,9 +413,20 @@ describe('getPRForBranch', () => {
       candidates: [{ owner: 'stablyai', repo: 'orca' }],
       headRepo: null
     })
-    ghExecFileAsyncMock
-      .mockRejectedValueOnce(new Error('could not resolve host: api.github.com'))
-      .mockRejectedValueOnce(new Error('could not resolve host: api.github.com'))
+    mockLookupRoutes([
+      [
+        'list:stablyai/orca:feature/test',
+        async () => {
+          throw new Error('could not resolve host: api.github.com')
+        }
+      ],
+      [
+        'repos/stablyai/orca/pulls?head=stablyai%3Afeature%2Ftest&state=all&per_page=10',
+        async () => {
+          throw new Error('could not resolve host: api.github.com')
+        }
+      ]
+    ])
 
     const outcome = await getPRForBranchOutcome('/repo-root', 'feature/test')
 
@@ -358,9 +441,20 @@ describe('getPRForBranch', () => {
       candidates: [{ owner: 'stablyai', repo: 'orca' }],
       headRepo: null
     })
-    ghExecFileAsyncMock
-      .mockRejectedValueOnce(new Error('HTTP 503: Service Unavailable'))
-      .mockRejectedValueOnce(new Error('HTTP 502: Bad Gateway'))
+    mockLookupRoutes([
+      [
+        'list:stablyai/orca:feature/test',
+        async () => {
+          throw new Error('HTTP 503: Service Unavailable')
+        }
+      ],
+      [
+        'repos/stablyai/orca/pulls?head=stablyai%3Afeature%2Ftest&state=all&per_page=10',
+        async () => {
+          throw new Error('HTTP 502: Bad Gateway')
+        }
+      ]
+    ])
 
     const outcome = await getPRForBranchOutcome('/repo-root', 'feature/test')
 
@@ -378,10 +472,19 @@ describe('getPRForBranch', () => {
       ],
       headRepo: null
     })
-    ghExecFileAsyncMock
-      .mockRejectedValueOnce(new Error('HTTP 429: API rate limit exceeded'))
-      .mockResolvedValueOnce({ stdout: JSON.stringify([]) })
-      .mockResolvedValueOnce({ stdout: JSON.stringify([]) })
+    mockLookupRoutes([
+      [
+        'list:stablyai/orca:feature/test',
+        async () => {
+          throw new Error('HTTP 429: API rate limit exceeded')
+        }
+      ],
+      [
+        'repos/stablyai/orca/pulls?head=stablyai%3Afeature%2Ftest&state=all&per_page=10',
+        async () => ({ stdout: JSON.stringify([]) })
+      ],
+      ['list:fork/orca:feature/test', async () => ({ stdout: JSON.stringify([]) })]
+    ])
 
     const outcome = await getPRForBranchOutcome('/repo-root', 'feature/test')
 
@@ -389,8 +492,7 @@ describe('getPRForBranch', () => {
       kind: 'upstream-error',
       errorType: 'rate_limited'
     })
-    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
-      3,
+    expect(metadataCalls()[2]).toEqual([
       [
         'pr',
         'list',
@@ -403,63 +505,76 @@ describe('getPRForBranch', () => {
         '--limit',
         '10',
         '--json',
-        'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable,baseRefName,headRefName,baseRefOid,headRefOid,headRepositoryOwner,headRepository,isCrossRepository'
+        'number,title,state,url,updatedAt,isDraft,mergeable,baseRefName,headRefName,baseRefOid,headRefOid,headRepositoryOwner,headRepository,isCrossRepository'
       ],
       { cwd: '/repo-root' }
-    )
+    ])
   })
 
   it('treats a merged branch lookup as a miss before using a fallback PR number', async () => {
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
-    ghExecFileAsyncMock
-      .mockResolvedValueOnce({
-        stdout: JSON.stringify([
-          {
-            number: 5511,
-            title: 'Merged branch PR',
-            state: 'closed',
-            merged_at: '2026-06-16T17:15:33Z',
-            html_url: 'https://github.com/stablyai/orca/pull/5511',
-            updated_at: '2026-06-16T17:15:33Z',
-            draft: false,
-            mergeable_state: 'clean',
-            head: { ref: 'feature/test', sha: 'merged-head-oid' },
-            base: { ref: 'main', sha: 'base-oid' }
-          }
-        ])
-      })
-      .mockResolvedValueOnce({
-        stdout: JSON.stringify({
-          number: 5511,
-          title: 'Merged branch PR',
-          state: 'MERGED',
-          url: 'https://github.com/stablyai/orca/pull/5511',
-          statusCheckRollup: [],
-          updatedAt: '2026-06-16T17:15:33Z',
-          isDraft: false,
-          mergeable: 'MERGEABLE',
-          baseRefName: 'main',
-          headRefName: 'feature/test',
-          baseRefOid: 'base-oid',
-          headRefOid: 'merged-head-oid'
-        })
-      })
-      .mockResolvedValueOnce({
-        stdout: JSON.stringify({
-          number: 42,
-          title: 'Open fallback PR',
-          state: 'OPEN',
-          url: 'https://github.com/acme/widgets/pull/42',
-          statusCheckRollup: [],
-          updatedAt: '2026-06-17T00:00:00Z',
-          isDraft: false,
-          mergeable: 'MERGEABLE',
-          baseRefName: 'main',
-          headRefName: 'contributor/original',
-          baseRefOid: 'base-oid',
-          headRefOid: 'fallback-head-oid'
-        })
-      })
+    mockLookupRoutes(
+      [
+        [
+          'repos/acme/widgets/pulls?head=acme%3Afeature%2Ftest&state=all&per_page=10',
+          async () => ({
+            stdout: JSON.stringify([
+              {
+                number: 5511,
+                title: 'Merged branch PR',
+                state: 'closed',
+                merged_at: '2026-06-16T17:15:33Z',
+                html_url: 'https://github.com/stablyai/orca/pull/5511',
+                updated_at: '2026-06-16T17:15:33Z',
+                draft: false,
+                mergeable_state: 'clean',
+                head: { ref: 'feature/test', sha: 'cccccccccccccccccccccccccccccccccccccccc' },
+                base: { ref: 'main', sha: 'base-oid' }
+              }
+            ])
+          })
+        ],
+        [
+          'view:acme/widgets:5511',
+          async () => ({
+            stdout: JSON.stringify({
+              number: 5511,
+              title: 'Merged branch PR',
+              state: 'MERGED',
+              url: 'https://github.com/stablyai/orca/pull/5511',
+              statusCheckRollup: [],
+              updatedAt: '2026-06-16T17:15:33Z',
+              isDraft: false,
+              mergeable: 'MERGEABLE',
+              baseRefName: 'main',
+              headRefName: 'feature/test',
+              baseRefOid: 'base-oid',
+              headRefOid: 'cccccccccccccccccccccccccccccccccccccccc'
+            })
+          })
+        ],
+        [
+          'view:acme/widgets:42',
+          async () => ({
+            stdout: JSON.stringify({
+              number: 42,
+              title: 'Open fallback PR',
+              state: 'OPEN',
+              url: 'https://github.com/acme/widgets/pull/42',
+              statusCheckRollup: [],
+              updatedAt: '2026-06-17T00:00:00Z',
+              isDraft: false,
+              mergeable: 'MERGEABLE',
+              baseRefName: 'main',
+              headRefName: 'contributor/original',
+              baseRefOid: 'base-oid',
+              headRefOid: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
+            })
+          })
+        ]
+      ],
+      true
+    )
 
     const pr = await getPRForBranch('/repo-root', 'feature/test', null, null, 42)
 
@@ -468,60 +583,69 @@ describe('getPRForBranch', () => {
 
   it('returns a merged PR when branch lookup and fallback point at the same PR', async () => {
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
-    ghExecFileAsyncMock
-      .mockResolvedValueOnce({
-        stdout: JSON.stringify([
-          {
+    mockLookupRoutes([
+      [
+        'repos/acme/widgets/pulls?head=acme%3Afeature%2Ftest&state=all&per_page=10',
+        async () => ({
+          stdout: JSON.stringify([
+            {
+              number: 5511,
+              title: 'Merged current PR',
+              state: 'closed',
+              merged_at: '2026-06-16T17:15:33Z',
+              html_url: 'https://github.com/acme/widgets/pull/5511',
+              updated_at: '2026-06-16T17:15:33Z',
+              draft: false,
+              mergeable_state: 'clean',
+              head: { ref: 'feature/test', sha: 'cccccccccccccccccccccccccccccccccccccccc' },
+              base: { ref: 'main', sha: 'base-oid' }
+            }
+          ])
+        })
+      ],
+      [
+        'view:acme/widgets:5511',
+        async () => ({
+          stdout: JSON.stringify({
             number: 5511,
             title: 'Merged current PR',
-            state: 'closed',
-            merged_at: '2026-06-16T17:15:33Z',
-            html_url: 'https://github.com/acme/widgets/pull/5511',
-            updated_at: '2026-06-16T17:15:33Z',
-            draft: false,
-            mergeable_state: 'clean',
-            head: { ref: 'feature/test', sha: 'merged-head-oid' },
-            base: { ref: 'main', sha: 'base-oid' }
-          }
-        ])
-      })
-      .mockResolvedValueOnce({
-        stdout: JSON.stringify({
-          number: 5511,
-          title: 'Merged current PR',
-          state: 'MERGED',
-          url: 'https://github.com/acme/widgets/pull/5511',
-          statusCheckRollup: [],
-          updatedAt: '2026-06-16T17:15:33Z',
-          isDraft: false,
-          mergeable: 'MERGEABLE',
-          baseRefName: 'main',
-          headRefName: 'feature/test',
-          baseRefOid: 'base-oid',
-          headRefOid: 'merged-head-oid'
+            state: 'MERGED',
+            url: 'https://github.com/acme/widgets/pull/5511',
+            statusCheckRollup: [],
+            updatedAt: '2026-06-16T17:15:33Z',
+            isDraft: false,
+            mergeable: 'MERGEABLE',
+            baseRefName: 'main',
+            headRefName: 'feature/test',
+            baseRefOid: 'base-oid',
+            headRefOid: 'cccccccccccccccccccccccccccccccccccccccc'
+          })
         })
-      })
-      .mockResolvedValueOnce({
-        stdout: JSON.stringify({
-          number: 5511,
-          title: 'Merged current PR',
-          state: 'MERGED',
-          url: 'https://github.com/acme/widgets/pull/5511',
-          statusCheckRollup: [],
-          updatedAt: '2026-06-16T17:15:33Z',
-          isDraft: false,
-          mergeable: 'MERGEABLE',
-          baseRefName: 'main',
-          headRefName: 'feature/test',
-          baseRefOid: 'base-oid',
-          headRefOid: 'merged-head-oid'
+      ],
+      [
+        'view:acme/widgets:5511',
+        async () => ({
+          stdout: JSON.stringify({
+            number: 5511,
+            title: 'Merged current PR',
+            state: 'MERGED',
+            url: 'https://github.com/acme/widgets/pull/5511',
+            statusCheckRollup: [],
+            updatedAt: '2026-06-16T17:15:33Z',
+            isDraft: false,
+            mergeable: 'MERGEABLE',
+            baseRefName: 'main',
+            headRefName: 'feature/test',
+            baseRefOid: 'base-oid',
+            headRefOid: 'cccccccccccccccccccccccccccccccccccccccc'
+          })
         })
-      })
+      ]
+    ])
 
     const pr = await getPRForBranch('/repo-root', 'feature/test', null, null, 5511)
 
-    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
-      3,
+    expect(metadataCalls()[2]).toEqual([
       [
         'pr',
         'view',
@@ -529,10 +653,10 @@ describe('getPRForBranch', () => {
         '--repo',
         'acme/widgets',
         '--json',
-        'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable,reviewDecision,mergeStateStatus,autoMergeRequest,baseRefName,headRefName,baseRefOid,headRefOid,headRepositoryOwner,headRepository,isCrossRepository'
+        'number,title,state,url,updatedAt,isDraft,mergeable,reviewDecision,mergeStateStatus,autoMergeRequest,baseRefName,headRefName,baseRefOid,headRefOid,headRepositoryOwner,headRepository,isCrossRepository'
       ],
       { cwd: '/repo-root' }
-    )
+    ])
     expect(pr).toMatchObject({ number: 5511, state: 'merged', title: 'Merged current PR' })
   })
 
@@ -546,56 +670,75 @@ describe('getPRForBranch', () => {
       stdout: 'local-created-from-pr\0fork/contributor/original\n',
       stderr: ''
     })
-    ghExecFileAsyncMock
-      .mockResolvedValueOnce({ stdout: JSON.stringify([]) })
-      .mockResolvedValueOnce({
-        stdout: JSON.stringify([
-          {
-            number: 5511,
-            title: 'Merged upstream branch PR',
-            state: 'closed',
-            merged_at: '2026-06-16T17:15:33Z',
-            html_url: 'https://github.com/stablyai/orca/pull/5511',
-            updated_at: '2026-06-16T17:15:33Z',
-            draft: false,
-            mergeable_state: 'clean',
-            head: { ref: 'contributor/original', sha: 'merged-head-oid' },
-            base: { ref: 'main', sha: 'base-oid' }
-          }
-        ])
-      })
-      .mockResolvedValueOnce({
-        stdout: JSON.stringify({
-          number: 5511,
-          title: 'Merged upstream branch PR',
-          state: 'MERGED',
-          url: 'https://github.com/stablyai/orca/pull/5511',
-          statusCheckRollup: [],
-          updatedAt: '2026-06-16T17:15:33Z',
-          isDraft: false,
-          mergeable: 'MERGEABLE',
-          baseRefName: 'main',
-          headRefName: 'contributor/original',
-          baseRefOid: 'base-oid',
-          headRefOid: 'merged-head-oid'
-        })
-      })
-      .mockResolvedValueOnce({
-        stdout: JSON.stringify({
-          number: 42,
-          title: 'Open fallback PR',
-          state: 'OPEN',
-          url: 'https://github.com/stablyai/orca/pull/42',
-          statusCheckRollup: [],
-          updatedAt: '2026-06-17T00:00:00Z',
-          isDraft: false,
-          mergeable: 'MERGEABLE',
-          baseRefName: 'main',
-          headRefName: 'fresh/fallback',
-          baseRefOid: 'base-oid',
-          headRefOid: 'fallback-head-oid'
-        })
-      })
+    mockLookupRoutes(
+      [
+        [
+          'repos/stablyai/orca/pulls?head=origin-owner%3Alocal-created-from-pr&state=all&per_page=10',
+          async () => ({ stdout: JSON.stringify([]) })
+        ],
+        [
+          'repos/stablyai/orca/pulls?head=fork-owner%3Acontributor%2Foriginal&state=all&per_page=10',
+          async () => ({
+            stdout: JSON.stringify([
+              {
+                number: 5511,
+                title: 'Merged upstream branch PR',
+                state: 'closed',
+                merged_at: '2026-06-16T17:15:33Z',
+                html_url: 'https://github.com/stablyai/orca/pull/5511',
+                updated_at: '2026-06-16T17:15:33Z',
+                draft: false,
+                mergeable_state: 'clean',
+                head: {
+                  ref: 'contributor/original',
+                  sha: 'cccccccccccccccccccccccccccccccccccccccc'
+                },
+                base: { ref: 'main', sha: 'base-oid' }
+              }
+            ])
+          })
+        ],
+        [
+          'view:stablyai/orca:5511',
+          async () => ({
+            stdout: JSON.stringify({
+              number: 5511,
+              title: 'Merged upstream branch PR',
+              state: 'MERGED',
+              url: 'https://github.com/stablyai/orca/pull/5511',
+              statusCheckRollup: [],
+              updatedAt: '2026-06-16T17:15:33Z',
+              isDraft: false,
+              mergeable: 'MERGEABLE',
+              baseRefName: 'main',
+              headRefName: 'contributor/original',
+              baseRefOid: 'base-oid',
+              headRefOid: 'cccccccccccccccccccccccccccccccccccccccc'
+            })
+          })
+        ],
+        [
+          'view:stablyai/orca:42',
+          async () => ({
+            stdout: JSON.stringify({
+              number: 42,
+              title: 'Open fallback PR',
+              state: 'OPEN',
+              url: 'https://github.com/stablyai/orca/pull/42',
+              statusCheckRollup: [],
+              updatedAt: '2026-06-17T00:00:00Z',
+              isDraft: false,
+              mergeable: 'MERGEABLE',
+              baseRefName: 'main',
+              headRefName: 'fresh/fallback',
+              baseRefOid: 'base-oid',
+              headRefOid: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
+            })
+          })
+        ]
+      ],
+      true
+    )
 
     const pr = await getPRForBranch('/repo-root', 'local-created-from-pr', null, null, 42)
 
@@ -608,24 +751,31 @@ describe('getPRForBranch', () => {
 
   it('ignores merged PRs discovered only from a fallback PR number', async () => {
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
-    ghExecFileAsyncMock
-      .mockResolvedValueOnce({ stdout: JSON.stringify([]) })
-      .mockResolvedValueOnce({
-        stdout: JSON.stringify({
-          number: 5511,
-          title: 'Merged fallback PR',
-          state: 'MERGED',
-          url: 'https://github.com/stablyai/orca/pull/5511',
-          statusCheckRollup: [],
-          updatedAt: '2026-06-16T17:15:33Z',
-          isDraft: false,
-          mergeable: 'MERGEABLE',
-          baseRefName: 'main',
-          headRefName: 'add-guide-for-mobile-emulator-use',
-          baseRefOid: 'base-oid',
-          headRefOid: 'head-oid'
+    mockLookupRoutes([
+      [
+        'repos/acme/widgets/pulls?head=acme%3Aadd-guide-for-mobile-emulator-use&state=all&per_page=10',
+        async () => ({ stdout: JSON.stringify([]) })
+      ],
+      [
+        'view:acme/widgets:5511',
+        async () => ({
+          stdout: JSON.stringify({
+            number: 5511,
+            title: 'Merged fallback PR',
+            state: 'MERGED',
+            url: 'https://github.com/stablyai/orca/pull/5511',
+            statusCheckRollup: [],
+            updatedAt: '2026-06-16T17:15:33Z',
+            isDraft: false,
+            mergeable: 'MERGEABLE',
+            baseRefName: 'main',
+            headRefName: 'add-guide-for-mobile-emulator-use',
+            baseRefOid: 'base-oid',
+            headRefOid: 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'
+          })
         })
-      })
+      ]
+    ])
 
     const pr = await getPRForBranch(
       '/repo-root',
@@ -640,24 +790,31 @@ describe('getPRForBranch', () => {
 
   it('returns a merged fallback PR when visible fallback lifecycle is accepted', async () => {
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
-    ghExecFileAsyncMock
-      .mockResolvedValueOnce({ stdout: JSON.stringify([]) })
-      .mockResolvedValueOnce({
-        stdout: JSON.stringify({
-          number: 5511,
-          title: 'Merged visible fallback PR',
-          state: 'MERGED',
-          url: 'https://github.com/acme/widgets/pull/5511',
-          statusCheckRollup: [],
-          updatedAt: '2026-06-16T17:15:33Z',
-          isDraft: false,
-          mergeable: 'MERGEABLE',
-          baseRefName: 'main',
-          headRefName: 'deleted-head',
-          baseRefOid: 'base-oid',
-          headRefOid: 'head-oid'
+    mockLookupRoutes([
+      [
+        'repos/acme/widgets/pulls?head=acme%3Adeleted-head&state=all&per_page=10',
+        async () => ({ stdout: JSON.stringify([]) })
+      ],
+      [
+        'view:acme/widgets:5511',
+        async () => ({
+          stdout: JSON.stringify({
+            number: 5511,
+            title: 'Merged visible fallback PR',
+            state: 'MERGED',
+            url: 'https://github.com/acme/widgets/pull/5511',
+            statusCheckRollup: [],
+            updatedAt: '2026-06-16T17:15:33Z',
+            isDraft: false,
+            mergeable: 'MERGEABLE',
+            baseRefName: 'main',
+            headRefName: 'deleted-head',
+            baseRefOid: 'base-oid',
+            headRefOid: 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'
+          })
         })
-      })
+      ]
+    ])
 
     const pr = await getPRForBranch('/repo-root', 'deleted-head', null, null, 5511, {
       acceptMergedFallbackPR: true

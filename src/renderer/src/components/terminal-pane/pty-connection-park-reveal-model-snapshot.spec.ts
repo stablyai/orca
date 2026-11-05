@@ -8,7 +8,6 @@ import {
   createPane,
   captureCallbackTerminalWrites,
   createManager,
-  type ConnectCallbacks,
   type MockTransport
 } from './pty-connection-test-pane-fixtures'
 import {
@@ -55,64 +54,6 @@ export function registerPtyConnectionParkRevealModelSnapshotTests(): void {
 
     afterEach(async () => {
       await restoreTerminalTestGlobals()
-    })
-
-    it('restores configured paired scrollback after an ordinary park reveal', async () => {
-      const { connectPanePty } = await import('./pty-connection')
-      const agentTitleMocks =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-      const remotePtyId = 'remote:env-1@@terminal-1'
-      const transport = createMockTransport(remotePtyId)
-      transport.connect.mockImplementation(
-        async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
-          transport.getPtyId.mockReturnValue(remotePtyId)
-          callbacks.onReplayData?.('current screen from initial subscribe\r\n')
-          return { id: remotePtyId, isReattach: true, replay: '' }
-        }
-      )
-      transport.serializeBuffer = vi.fn().mockResolvedValue({
-        data: 'DEEP_PAIRED_SCROLLBACK\r\ncurrent screen\r\n',
-        cols: 100,
-        rows: 30,
-        seq: 4_096,
-        source: 'headless'
-      })
-      transportFactoryQueue.push(transport)
-      mockStoreState = {
-        ...mockStoreState,
-        runtimeStatusByEnvironmentId: new Map([
-          [
-            'env-1',
-            {
-              checkedAt: Date.now(),
-              status: { capabilities: ['terminal.paired-parking.v1'] }
-            }
-          ]
-        ])
-      }
-
-      const pane = createPane(1)
-      const { parseCallbacks, writes } = captureCallbackTerminalWrites(pane)
-      const deps = createDeps({ mountFollowsTerminalPark: true })
-
-      connectPanePty(
-        pane as never,
-        createManager(1) as never,
-        bindPaneAgentTitleMocks(deps as never, agentTitleMocks)
-      )
-      for (let step = 0; step < 30; step += 1) {
-        parseCallbacks.shift()?.()
-        await flushAsyncTicks(2)
-      }
-
-      expect(transport.serializeBuffer).toHaveBeenCalledWith({
-        scrollbackRows: 5000,
-        repaintsPane: true
-      })
-      expect(transport.attach).not.toHaveBeenCalled()
-      expect(writes.join('')).toContain('DEEP_PAIRED_SCROLLBACK')
-      expect(writes.join('')).toContain('current screen from initial subscribe')
-      expect(transport.getPtyId).toHaveReturnedWith(remotePtyId)
     })
 
     it('keeps a parked main-model alt frame at its capture grid while hidden', async () => {

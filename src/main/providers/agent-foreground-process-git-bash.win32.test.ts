@@ -5,12 +5,15 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
 import { WINDOWS_GIT_BASH_SHELL } from '../../shared/windows-terminal-shell'
 import { confirmPtyShellForeground } from '../daemon/pty-subprocess/pty-shell-foreground-confirmation'
-import { createPtyShellLaunchPlan } from '../daemon/pty-subprocess/shell-launch-plan'
+import {
+  createPtyShellLaunchPlan,
+  type PtyShellLaunchPlan
+} from '../daemon/pty-subprocess/shell-launch-plan'
 import { spawnNativeDaemonPty } from '../daemon/pty-subprocess/native-pty-spawn'
 import { createDaemonPtyEnvironment } from '../daemon/pty-subprocess/spawn-environment'
 import { inspectSpawnFileWindowsChildProcesses } from '../daemon/pty-subprocess/spawn-file-child-processes'
-import type { PtyShellLaunchPlan } from '../daemon/pty-subprocess/shell-launch-plan'
-import type { PtySubprocessOptions } from '../daemon/pty-subprocess'
+
+import type { PtySubprocessOptions } from '../daemon/pty-subprocess/pty-subprocess'
 import { isGitForWindowsBashLauncherPath, resolveGitBashPath } from '../pty/shell-startup/git-bash'
 import { readWindowsPtyJobProcessIds } from './windows-pty-job-membership'
 

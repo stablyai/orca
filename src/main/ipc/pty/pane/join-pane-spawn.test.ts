@@ -1,6 +1,6 @@
 import { afterEach, expect, it } from 'vitest'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
-import { WORKTREE_TERMINALS_SLEEPING_ERROR } from '../../../runtime/worktree-terminals-sleeping-error'
+import { WORKTREE_TERMINALS_SLEEPING_ERROR } from '../../../../shared/workspace-sleep'
 import { adoptStablePane } from './adopt-stable'
 import {
   makePaneSpawnReservationKey,

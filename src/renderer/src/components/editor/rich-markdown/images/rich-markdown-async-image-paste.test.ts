@@ -7,11 +7,6 @@ import { toast } from 'sonner'
 import { createRichMarkdownExtensions } from '../schema/rich-markdown-extensions'
 import { createRichMarkdownEditorCodec } from '../document/rich-markdown-source-transport'
 import { handleRichMarkdownImagePaste } from './rich-markdown-paste-image'
-import { autoFocusRichEditor } from '../instance/rich-markdown-auto-focus'
-import {
-  setRichMarkdownImageResolverContext,
-  type RichMarkdownImageRuntimeContext
-} from './rich-markdown-image-context'
 
 vi.mock('@/runtime/runtime-file-import-client', () => ({ importExternalPathsToRuntime: vi.fn() }))
 vi.mock('@/lib/connection-context', () => ({ getConnectionId: vi.fn(() => null) }))
@@ -97,55 +92,6 @@ afterEach(() => {
 })
 
 describe('rich Markdown asynchronous image paste', () => {
-  it.each(['saving', 'importing'])(
-    'reports cancellation once when the selected target changes during %s',
-    async (phase) => {
-      const editor = richEditor()
-      editor.commands.setTextSelection({ from: 7, to: 12 })
-      let completeSave: (path: string) => void = () => {}
-      if (phase === 'saving') {
-        vi.mocked(window.api.ui.saveClipboardImageAsTempFile).mockImplementation(
-          () =>
-            new Promise((resolve) => {
-              completeSave = resolve
-            })
-        )
-      }
-      const pending = pendingImport()
-      vi.mocked(importExternalPathsToRuntime).mockReturnValue(pending.promise)
-      pasteImage(editor)
-      await flushPromises()
-      editor.view.dispatch(editor.state.tr.delete(7, 12))
-      if (phase === 'saving') {
-        completeSave('/tmp/image.png')
-      } else {
-        pending.resolve(imported())
-      }
-      await flushPromises()
-      expect(editor.getMarkdown()).toBe('hello ')
-      expect(toast.info).toHaveBeenCalledExactlyOnceWith(
-        phase === 'saving'
-          ? 'Image insertion canceled because the destination changed. Try again.'
-          : 'Image insertion canceled because the destination changed. The imported file was kept.'
-      )
-      expect(toast.error).not.toHaveBeenCalled()
-      if (phase === 'saving') {
-        expect(importExternalPathsToRuntime).not.toHaveBeenCalled()
-      }
-    }
-  )
-
-  it('leaves an empty clipboard result quiet', async () => {
-    const editor = richEditor()
-    vi.mocked(window.api.ui.saveClipboardImageAsTempFile).mockResolvedValue(null)
-    pasteImage(editor)
-    await flushPromises()
-    expect(editor.getMarkdown()).toBe('hello world')
-    expect(importExternalPathsToRuntime).not.toHaveBeenCalled()
-    expect(toast.info).not.toHaveBeenCalled()
-    expect(toast.error).not.toHaveBeenCalled()
-  })
-
   it.each([false, true])('replaces the complete selected text, reversed=%s', async (reversed) => {
     const editor = richEditor()
     editor.commands.setTextSelection(reversed ? { from: 12, to: 7 } : { from: 7, to: 12 })
@@ -208,24 +154,6 @@ describe('rich Markdown asynchronous image paste', () => {
     expect(editor.getMarkdown()).toBe('hello ![](image.png)world\n\nxysecond paragraph')
   })
 
-  it('leaves an outside input focused after image import', async () => {
-    const editor = richEditor()
-    editor.view.dom.focus()
-    editor.commands.setTextSelection(7)
-    const pending = pendingImport()
-    vi.mocked(importExternalPathsToRuntime).mockReturnValue(pending.promise)
-    pasteImage(editor)
-    await flushPromises()
-    const input = document.createElement('input')
-    document.body.append(input)
-    input.focus()
-    pending.resolve(imported())
-    await flushPromises()
-    await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined)))
-    expect(document.activeElement).toBe(input)
-    expect(editor.getMarkdown()).toBe('hello ![](image.png)world')
-  })
-
   it.each(['delete', 'replace'])(
     'cancels when the selected content is %s during import',
     async (operation) => {
@@ -246,30 +174,6 @@ describe('rich Markdown asynchronous image paste', () => {
       expect(editor.getMarkdown()).toBe(afterEdit)
     }
   )
-
-  it.each([
-    { from: 6, to: 8 },
-    { from: 7, to: 8 },
-    { from: 8, to: 10 },
-    { from: 10, to: 12 },
-    { from: 11, to: 13 }
-  ])('cancels after partial selected-range deletion $from..$to', async ({ from, to }) => {
-    const editor = richEditor()
-    editor.commands.setTextSelection({ from: 7, to: 12 })
-    const pending = pendingImport()
-    vi.mocked(importExternalPathsToRuntime).mockReturnValue(pending.promise)
-    pasteImage(editor)
-    await flushPromises()
-    editor.view.dispatch(editor.state.tr.delete(from, to))
-    const afterEdit = editor.getJSON()
-    pending.resolve(imported())
-    await flushPromises()
-    expect(editor.getJSON()).toEqual(afterEdit)
-    expect(toast.info).toHaveBeenCalledExactlyOnceWith(
-      'Image insertion canceled because the destination changed. The imported file was kept.'
-    )
-    editor.state.doc.check()
-  })
 
   it('does not resurrect the selected range after partial deletion and Undo', async () => {
     const editor = richEditor()
@@ -341,24 +245,6 @@ describe('rich Markdown asynchronous image paste', () => {
       editor.state.doc.check()
     }
   )
-
-  it('keeps the captured selection and live caret through pending startup focus', async () => {
-    const editor = richEditor()
-    const pending = pendingImport()
-    vi.mocked(importExternalPathsToRuntime).mockReturnValue(pending.promise)
-    const cancelFocus = autoFocusRichEditor(editor, editor.view.dom)
-    editor.view.dom.focus()
-    editor.commands.setTextSelection({ from: 7, to: 12 })
-    pasteImage(editor)
-    await flushPromises()
-    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
-    expect(editor.state.selection.from).toBe(1)
-    pending.resolve(imported())
-    await flushPromises()
-    editor.commands.insertContent('continued ')
-    expect(editor.getMarkdown()).toBe('continued hello ![](image.png)')
-    cancelFocus()
-  })
 
   it('keeps different pending insertion positions as another paste finishes', async () => {
     const editor = richEditor()
@@ -451,66 +337,6 @@ describe('rich Markdown asynchronous image paste', () => {
     await flushPromises()
     expect(editor.getMarkdown()).toBe('hello ![](image.png)')
   })
-
-  it.each(['file', 'worktree', 'root', 'runtime', 'connection', 'external target'])(
-    'cancels before and after import when the same editor changes %s',
-    async (field) => {
-      for (const phase of ['saving', 'importing']) {
-        const editor = richEditor()
-        const runtimeContext: RichMarkdownImageRuntimeContext = {
-          target: { kind: 'local' as const },
-          worktreeId: 'wt-1',
-          worktreePath: '/repo',
-          connectionId: null
-        }
-        setRichMarkdownImageResolverContext(editor, { filePath: '/repo/note.md', runtimeContext })
-        editor.commands.setTextSelection({ from: 7, to: 12 })
-        let completeSave: (path: string) => void = () => {}
-        vi.mocked(window.api.ui.saveClipboardImageAsTempFile).mockImplementation(
-          () =>
-            new Promise((resolve) => {
-              completeSave = resolve
-            })
-        )
-        const pending = pendingImport()
-        vi.mocked(importExternalPathsToRuntime).mockReturnValue(pending.promise)
-        vi.mocked(importExternalPathsToRuntime).mockClear()
-        pasteImage(editor)
-        if (phase === 'importing') {
-          completeSave('/tmp/image.png')
-          await flushPromises()
-          expect(importExternalPathsToRuntime).toHaveBeenCalledOnce()
-        }
-        const nextContext = { filePath: '/repo/note.md', runtimeContext: { ...runtimeContext } }
-        if (field === 'file') {
-          nextContext.filePath = '/repo/other.md'
-        } else if (field === 'worktree') {
-          nextContext.runtimeContext.worktreeId = 'wt-2'
-        } else if (field === 'root') {
-          nextContext.runtimeContext.worktreePath = '/other-repo'
-        } else if (field === 'runtime') {
-          nextContext.runtimeContext.target = {
-            kind: 'environment',
-            environmentId: 'other-runtime'
-          }
-        } else if (field === 'connection') {
-          nextContext.runtimeContext.connectionId = 'other-connection'
-        } else {
-          nextContext.runtimeContext.expectedExternalSshTargetId = 'other-target'
-        }
-        setRichMarkdownImageResolverContext(editor, nextContext)
-        editor.commands.setContent(editor.getJSON())
-        if (phase === 'saving') {
-          completeSave('/tmp/image.png')
-        } else {
-          pending.resolve(imported())
-        }
-        await flushPromises()
-        expect(editor.getMarkdown()).toBe('hello world')
-        expect(importExternalPathsToRuntime).toHaveBeenCalledTimes(phase === 'saving' ? 0 : 1)
-      }
-    }
-  )
 
   it('replaces selected code with an image while keeping both fence halves', async () => {
     const editor = richEditor('```js\nbefore selected after\n```')

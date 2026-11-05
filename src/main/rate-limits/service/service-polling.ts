@@ -42,7 +42,7 @@ export abstract class RateLimitServicePolling extends RateLimitServiceFetchQueue
     this.clearDeferredStartupRefresh()
     this.deferredStartupRefreshTimer = setTimeout(() => {
       this.deferredStartupRefreshTimer = null
-      void this.refreshIfWindowActive()
+      void this.refreshIfWatched()
     }, DEFERRED_STARTUP_ACTIVE_REFRESH_MS)
   }
 
@@ -54,6 +54,10 @@ export abstract class RateLimitServicePolling extends RateLimitServiceFetchQueue
   }
 
   protected shouldBackgroundPoll(): boolean {
+    // Poll only while someone watches: a paired client's stream, or the focused desktop window.
+    if (this.usageViewers > 0) {
+      return true
+    }
     if (!this.mainWindow || this.mainWindow.isDestroyed()) {
       return false
     }
@@ -174,7 +178,7 @@ export abstract class RateLimitServicePolling extends RateLimitServiceFetchQueue
     }
   }
 
-  protected async refreshIfWindowActive(): Promise<void> {
+  protected async refreshIfWatched(): Promise<void> {
     if (!this.shouldBackgroundPoll()) {
       return
     }

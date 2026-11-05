@@ -6,7 +6,7 @@ import { OrchestrationDb } from '../../orchestration/db'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { completeWorkerTerminalRelease } from './orchestration/worker/worker-release-completion'
 import type { RuntimeTerminalShow } from '../../../../shared/runtime-terminal-contracts'
-import type { OrchestrationCompatibilityTerminalAuthority } from '../../runtime-terminal-contracts'
+import type { OrchestrationCompatibilityTerminalAuthority } from '../../orchestration/terminal-authority/orchestration-compatibility-authority'
 
 const workerStartResult = z.object({ dispatchId: z.string(), state: z.string() })
 

@@ -3,7 +3,7 @@ import type { Repo } from '../../../shared/repo-types'
 import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'
 import { OrcaRuntimeService } from '../orca-runtime'
 import type { RuntimeStore } from '../runtime-store-contract'
-import { partialRuntimeStore } from '../runtime-store-partial-fixture'
+import { partialRuntimeStore } from '../orca-runtime-tests/runtime-store-partial-fixture'
 
 function catalogEventsFor(repo: Repo): RuntimeClientEvent[] {
   const store: Pick<RuntimeStore, 'getRepos'> = { getRepos: () => [repo] }
