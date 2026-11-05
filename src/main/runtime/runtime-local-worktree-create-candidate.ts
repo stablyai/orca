@@ -24,7 +24,7 @@ import {
   getSelectedReviewBranch,
   isAllowedPushTargetRemoteConflict,
   isMatchingSelectedGitHubPr
-} from './selected-review-branch'
+} from './integrations/reviews/selected-review-branch'
 import {
   canCheckoutExistingLocalBranch,
   getLocalGitHubPrForBranch,
