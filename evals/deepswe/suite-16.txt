@@ -1,0 +1,16 @@
+tomlkit-toml-table-converters
+httpx-deterministic-cookie-store
+fd-deterministic-multi-key-sorting
+abs-module-cache-flags
+obsidian-linter-auto-table-of-contents
+koota-pair-relation-tracking
+happy-dom-deterministic-intersectionobserver
+claude-code-by-agents-recursive-delegation
+expr-try-catch-errors
+go-genai-streamed-function-args
+go-critic-doc-link-checker
+arcane-drift-detection-baselines
+adaptix-name-mapping-aliases
+numba-stencil-boundary-modes
+dateutil-rfc5545-timezone-interop
+testem-bail-on-test-failure
