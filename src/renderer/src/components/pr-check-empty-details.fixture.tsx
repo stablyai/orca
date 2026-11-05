@@ -36,6 +36,7 @@ function EmptyChecks({
   return (
     <div className="bg-background text-foreground">
       <PRCheckEmptyDetails
+        dialog={dialog}
         owner={owner}
         variant={variant}
         {...presentation}

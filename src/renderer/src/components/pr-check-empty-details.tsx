@@ -7,6 +7,7 @@ import type { ProviderCheckSummary } from '../../../shared/github/pull-request-t
 
 export function PRCheckEmptyDetails({
   owner,
+  dialog = false,
   variant,
   compactHeader,
   actions,
@@ -14,6 +15,7 @@ export function PRCheckEmptyDetails({
   summaryColor,
   summaryLabel
 }: {
+  dialog?: boolean
   owner?: { checksSummary?: ProviderCheckSummary }
   variant: 'page' | 'compact'
   compactHeader: React.JSX.Element
@@ -25,7 +27,9 @@ export function PRCheckEmptyDetails({
   const complete = owner && isCompletePRCheckOwner(owner)
   const noChecks = !complete || owner.checksSummary?.total === 0
   const detailLabel = noChecks
-    ? translate('auto.components.PullRequestPage.a18d01cda3', 'No checks reported yet')
+    ? dialog
+      ? translate('auto.components.GitHubItemDialog.e52bed9264', 'No checks reported yet')
+      : translate('auto.components.PullRequestPage.a18d01cda3', 'No checks reported yet')
     : translate('auto.components.prCheckCounts.noCheckDetails', 'No check details available')
   if (variant === 'compact') {
     return (
@@ -43,13 +47,24 @@ export function PRCheckEmptyDetails({
       <div className="flex min-w-0 items-center gap-3">
         <SummaryIcon className={cn('size-4 shrink-0', summaryColor)} />
         <div className="flex min-w-0 flex-1 flex-col">
-          <span className="truncate text-[13px] font-medium text-foreground">{summaryLabel}</span>
+          <span className="truncate text-[13px] font-medium text-foreground">
+            {noChecks
+              ? dialog
+                ? translate('auto.components.GitHubItemDialog.ecffebc251', 'No checks found')
+                : translate('auto.components.PullRequestPage.45877f5089', 'No checks found')
+              : summaryLabel}
+          </span>
           <span className="truncate text-[11px] text-muted-foreground">
             {noChecks
-              ? translate(
-                  'auto.components.PullRequestPage.3912daf310',
-                  'This pull request has no reported checks yet.'
-                )
+              ? dialog
+                ? translate(
+                    'auto.components.GitHubItemDialog.90020cc1f3',
+                    'This pull request has no reported checks yet.'
+                  )
+                : translate(
+                    'auto.components.PullRequestPage.3912daf310',
+                    'This pull request has no reported checks yet.'
+                  )
               : detailLabel}
           </span>
         </div>

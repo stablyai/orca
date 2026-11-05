@@ -325,6 +325,7 @@ export function ChecksTab({
   if (list.length === 0) {
     return (
       <PRCheckEmptyDetails
+        dialog
         owner={checkOwner}
         variant={variant}
         compactHeader={compactHeader}

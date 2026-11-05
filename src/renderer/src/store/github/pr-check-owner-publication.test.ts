@@ -20,6 +20,7 @@ const repo = {
   kind: 'git' as const
 }
 const prRepo = { owner: 'acme', repo: 'widgets', host: 'github.com' }
+const now = 1_800_000_000_000
 const branch = 'feature/checks'
 const cacheKey = `${repo.id}::${branch}`
 const successfulRows: PRCheckDetail[] = [
@@ -47,16 +48,21 @@ const makeStore = () => {
   return store
 }
 async function publish(store: ReturnType<typeof makeStore>, pr: PRInfo) {
-  mockApi.gh.refreshPRNow.mockResolvedValueOnce({ kind: 'found', pr, fetchedAt: Date.now() })
+  mockApi.gh.refreshPRNow.mockResolvedValueOnce({ kind: 'found', pr, fetchedAt: now })
   await store.getState().fetchPRForBranch(repo.path, branch, { repoId: repo.id, force: true })
 }
 beforeEach(() => {
+  vi.useFakeTimers()
+  vi.setSystemTime(now)
   vi.clearAllMocks()
   resetRemoteRuntimeMocks()
   setLocalRuntimeCapabilitiesForTests([capability])
   mockApi.gh.prChecks.mockResolvedValue(successfulRows)
 })
-afterEach(() => setLocalRuntimeCapabilitiesForTests(null))
+afterEach(() => {
+  vi.useRealTimers()
+  setLocalRuntimeCapabilitiesForTests(null)
+})
 
 it('keeps complete failure through fresh and cached details, and direct full publication with those cached details', async () => {
   const store = makeStore()
@@ -88,14 +94,14 @@ it('keeps the event owner complete when the detail cache contains a successful p
     sequence: 1,
     aliases: [alias],
     reason: 'manual',
-    requestStartedAt: Date.now(),
+    requestStartedAt: now,
     status: 'in-flight'
   })
   store.getState().applyGitHubPRRefreshEvent({
     sequence: 1,
     aliases: [alias],
     reason: 'manual',
-    outcome: { kind: 'found', pr: failedPR(), fetchedAt: Date.now() }
+    outcome: { kind: 'found', pr: failedPR(), fetchedAt: now }
   })
   expect(store.getState().prCache[cacheKey].data).toMatchObject({
     checksStatus: 'failure',
@@ -174,7 +180,7 @@ it('settles missed-start outcomes and errors without granting their check prefix
         checksStatus: 'success',
         checksSummary: { ...summary, state: 'success', passed: 101, failed: 0 }
       },
-      fetchedAt: Date.now() + 1000
+      fetchedAt: now + 1000
     }
   })
   expect(store.getState().prCache[cacheKey].data).toMatchObject({
@@ -191,7 +197,7 @@ it('settles missed-start outcomes and errors without granting their check prefix
       kind: 'upstream-error',
       errorType: 'unknown',
       message: 'Unavailable',
-      fetchedAt: Date.now() + 2000
+      fetchedAt: now + 2000
     }
   })
   expect(store.getState().prRefreshStates[cacheKey].status).toBe('error')
@@ -199,7 +205,7 @@ it('settles missed-start outcomes and errors without granting their check prefix
     sequence: 11,
     aliases: [alias],
     reason: 'manual',
-    outcome: { kind: 'no-pr', fetchedAt: Date.now() + 3000 }
+    outcome: { kind: 'no-pr', fetchedAt: now + 3000 }
   })
   expect(store.getState().prCache[cacheKey].data).toBeNull()
   expect(store.getState().prRefreshStates[cacheKey]).toBeUndefined()
@@ -214,7 +220,7 @@ it('does not lose refresh settlement when its request evidence is evicted', asyn
       sequence: n,
       aliases: [{ ...alias, cacheKey: n === 1 ? cacheKey : `other-${n}` }],
       reason: 'manual',
-      requestStartedAt: Date.now(),
+      requestStartedAt: now,
       status: 'in-flight'
     })
   }
@@ -225,7 +231,7 @@ it('does not lose refresh settlement when its request evidence is evicted', asyn
     outcome: {
       kind: 'found',
       pr: { ...failedPR(), title: 'Settled' },
-      fetchedAt: Date.now() + 1000
+      fetchedAt: now + 1000
     }
   })
   expect(store.getState().prCache[cacheKey].data).toMatchObject({
