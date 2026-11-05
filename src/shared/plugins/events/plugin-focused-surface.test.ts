@@ -4,12 +4,13 @@ import { readPluginFocusedSurface } from './plugin-focused-surface'
 const WT = 'repo-1::/home/me/src/app'
 
 function session(
-  tabType: 'terminal' | 'agent-session' | 'editor' | 'browser' | 'simulator',
+  contentType: 'terminal' | 'agent-session' | 'editor' | 'diff' | 'browser' | 'simulator',
   tab: { id: string; label: string; customLabel?: string | null }
 ) {
   return {
     activeWorktreeId: WT,
-    activeTabTypeByWorktree: { [WT]: tabType },
+    // Stale on purpose: the kind must come from the resolved tab, not this stored value.
+    activeTabTypeByWorktree: { [WT]: 'agent-session' },
     activeGroupIdByWorktree: { [WT]: 'g2' },
     tabGroups: {
       [WT]: [
@@ -19,8 +20,8 @@ function session(
     },
     unifiedTabs: {
       [WT]: [
-        { id: 'other', label: 'Not this one', customLabel: null },
-        { ...tab, customLabel: tab.customLabel ?? null }
+        { id: 'other', contentType: 'terminal', label: 'Not this one', customLabel: null },
+        { ...tab, contentType, customLabel: tab.customLabel ?? null }
       ]
     }
   } as unknown as Parameters<typeof readPluginFocusedSurface>[0]
@@ -45,6 +46,14 @@ describe('readPluginFocusedSurface', () => {
       session('browser', { id: 'b1', label: 'https://internal.example.com/admin?token=abc' }),
       true
     )
+    const ssh = readPluginFocusedSurface(
+      session('terminal', { id: 't1', label: 'ssh://alice:hunter2@build.example.com/srv' }),
+      true
+    )
+    const mail = readPluginFocusedSurface(
+      session('browser', { id: 'b2', label: 'mailto:alice@example.com?subject=secret' }),
+      true
+    )
     const fileUrl = readPluginFocusedSurface(
       session('editor', { id: 'f1', label: 'file:///home/me/report.txt?token=abc#top' }),
       true
@@ -52,7 +61,11 @@ describe('readPluginFocusedSurface', () => {
     expect(editor).toEqual({ kind: 'editor', title: 'secret-plan.md' })
     expect(browser).toEqual({ kind: 'browser', title: 'internal.example.com' })
     expect(fileUrl).toEqual({ kind: 'editor', title: 'report.txt' })
-    expect(JSON.stringify([editor, browser, fileUrl])).not.toMatch(/\/home\/me|token/)
+    expect(ssh).toEqual({ kind: 'terminal', title: 'build.example.com' })
+    expect(mail).toEqual({ kind: 'browser', title: null })
+    expect(JSON.stringify([editor, browser, fileUrl, ssh, mail])).not.toMatch(
+      /\/home\/me|token|alice|hunter2|subject/
+    )
   })
 
   it('is null while the window is unfocused, no tab is active, or the tab kind is not shared', () => {

@@ -1,7 +1,6 @@
 import { z } from 'zod'
 import { clampUtf8TextPrefix } from '../../utf8-byte-limits'
 import type { WorkspaceSessionState } from '../../workspace-session/workspace-session-state-types'
-import type { WorkspaceVisibleTabType } from '../../tab-types'
 
 export const PLUGIN_FOCUSED_SURFACE_TITLE_MAX_BYTES = 80
 const PLUGIN_FOCUSED_AGENT_ID_MAX_LENGTH = 2048
@@ -24,19 +23,19 @@ export type PluginFocusedSurface = z.output<typeof pluginFocusedSurfaceSchema>
 
 type FocusSession = Pick<
   WorkspaceSessionState,
-  | 'activeWorktreeId'
-  | 'activeTabTypeByWorktree'
-  | 'unifiedTabs'
-  | 'tabGroups'
-  | 'activeGroupIdByWorktree'
+  'activeWorktreeId' | 'unifiedTabs' | 'tabGroups' | 'activeGroupIdByWorktree'
 >
+type FocusTab = NonNullable<WorkspaceSessionState['unifiedTabs']>[string][number]
 
-const KIND_BY_TAB_TYPE: Partial<
-  Record<WorkspaceVisibleTabType, NonNullable<PluginFocusedSurface>['kind']>
+const KIND_BY_CONTENT_TYPE: Partial<
+  Record<FocusTab['contentType'], NonNullable<PluginFocusedSurface>['kind']>
 > = {
   terminal: 'terminal',
   'agent-session': 'agent',
   editor: 'editor',
+  diff: 'editor',
+  'conflict-review': 'editor',
+  'check-details': 'editor',
   browser: 'browser'
 }
 
@@ -46,16 +45,16 @@ export function readPluginFocusedSurface(
   windowFocused: boolean
 ): PluginFocusedSurface {
   const worktreeId = session.activeWorktreeId
-  const tabType = worktreeId ? session.activeTabTypeByWorktree?.[worktreeId] : undefined
-  const kind = tabType ? KIND_BY_TAB_TYPE[tabType] : undefined
-  if (!windowFocused || !worktreeId || !kind) {
+  if (!windowFocused || !worktreeId) {
     return null
   }
   const groups = session.tabGroups?.[worktreeId] ?? []
   const activeGroupId = session.activeGroupIdByWorktree?.[worktreeId]
   const group = groups.find((entry) => entry.id === activeGroupId) ?? groups[0]
   const tab = session.unifiedTabs?.[worktreeId]?.find((entry) => entry.id === group?.activeTabId)
-  if (!tab) {
+  // Why the tab's own type: a separately stored active type can lag it and mislabel the tab.
+  const kind = tab ? KIND_BY_CONTENT_TYPE[tab.contentType] : undefined
+  if (!tab || !kind) {
     return null
   }
   const title = projectPluginFocusedTitle(tab.customLabel ?? tab.generatedLabel ?? tab.label)
@@ -69,30 +68,30 @@ export function readPluginFocusedSurface(
 }
 
 export function projectPluginFocusedTitle(raw: string | null | undefined): string | null {
-  const trimmed = raw?.trim()
-  if (!trimmed) {
-    return null
-  }
-  return clampUtf8TextPrefix(sanitizeTitle(trimmed), PLUGIN_FOCUSED_SURFACE_TITLE_MAX_BYTES)
+  const title = raw?.trim() ? sanitizeTitle(raw.trim()) : null
+  return title ? clampUtf8TextPrefix(title, PLUGIN_FOCUSED_SURFACE_TITLE_MAX_BYTES) : null
 }
 
-function sanitizeTitle(value: string): string {
-  const hostname = httpHostname(value)
-  if (hostname !== null) {
-    return hostname
+/** A hostname for `scheme://` URLs, a basename for other paths, null for mail and phone links. */
+function sanitizeTitle(value: string): string | null {
+  if (/^[a-z][a-z\d+.-]*:\/\//i.test(value)) {
+    return urlTitle(value)
+  }
+  if (/^(mailto|tel|sms):/i.test(value)) {
+    return null
   }
   if (!/[\\/]/.test(value)) {
     return value
   }
-  // Why: a non-http URL (file:, ssh:) reaches this branch with its query or fragment still attached.
   const withoutTrailing = value.replace(/[?#].*$/, '').replace(/[\\/]+$/, '')
-  return withoutTrailing.split(/[\\/]/).pop() || withoutTrailing
+  return withoutTrailing.split(/[\\/]/).pop() || null
 }
 
-function httpHostname(value: string): string | null {
+// Why URL parsing: it drops userinfo, query and fragment, which a slash split would keep.
+function urlTitle(value: string): string | null {
   try {
     const url = new URL(value)
-    return url.protocol === 'http:' || url.protocol === 'https:' ? url.hostname : null
+    return url.hostname || url.pathname.split('/').findLast(Boolean) || null
   } catch {
     return null
   }
