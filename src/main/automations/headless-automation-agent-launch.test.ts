@@ -23,6 +23,8 @@ const CHAT_DEFAULT_ON = { nativeChatProviders: EVERY_AGENT_CHAT }
 function harness(
   options: {
     startupTerminal?: Record<string, unknown> | null
+    /** The terminal started, then a later startup step failed. */
+    startupStepFailed?: true
     workspaceHostId?: ExecutionHostId
   } = {}
 ) {
@@ -49,7 +51,7 @@ function harness(
         }
         return {
           worktree: { id: 'repo-1::/wt/auto', displayName: 'auto-nightly' },
-          ...(options.startupTerminal === null
+          ...(options.startupTerminal === null || options.startupStepFailed
             ? { warning: 'Startup terminal failed.' }
             : { startupTerminal: options.startupTerminal ?? startupTerminalCreation })
         }
@@ -399,6 +401,20 @@ describe('headless automation agent launch', () => {
       launch(runtime, { workspaceMode: 'new_per_run', workspaceId: null })
     ).rejects.toThrow('Startup terminal failed.')
     expect(runtime.launchAgentTerminal).not.toHaveBeenCalled()
+  })
+
+  it('fails the run but keeps a terminal that started before a later startup step failed', async () => {
+    const runtime = harness({ startupStepFailed: true })
+
+    const failure = await launch(runtime, {
+      workspaceMode: 'new_per_run',
+      workspaceId: null
+    }).catch((error: unknown) => error)
+
+    expect(failure).toBeInstanceOf(AutomationRunLaunchError)
+    expect(failure).toMatchObject({
+      target: { terminalHandle: 'term_new', terminalPaneKey: 'tab-new:leaf-1' }
+    })
   })
 
   it('launches bare and delivers nothing for a blank prompt', async () => {

@@ -363,15 +363,23 @@ describe('observing a run with agent evidence', () => {
   })
 
   it.each([
-    { exitCode: 0, status: 'completed' },
-    { exitCode: 3, status: 'dispatch_failed' }
-  ])('settles a proven agent exit $exitCode as $status', async ({ exitCode, status }) => {
-    const run = observe(
-      createPane({ idle: false, tail: ['bye'], exitCause: { kind: 'exited', exitCode } })
-    )
-    await run.promise
-    expect(run.settled).toHaveBeenCalledWith(expect.objectContaining({ status }))
-  })
+    { exitCode: 0, interrupted: false, status: 'completed' },
+    { exitCode: 0, interrupted: true, status: 'dispatch_failed' },
+    { exitCode: 3, interrupted: false, status: 'dispatch_failed' }
+  ])(
+    'settles a proven agent exit $exitCode after a turn with interrupted $interrupted as $status',
+    async ({ exitCode, interrupted, status }) => {
+      const pane = createPane({
+        idle: false,
+        tail: ['bye'],
+        exitCause: { kind: 'exited', exitCode }
+      })
+      pane.report({ interrupted })
+      const run = observe(pane)
+      await run.promise
+      expect(run.settled).toHaveBeenCalledWith(expect.objectContaining({ status }))
+    }
+  )
 
   it('stops on cancellation without recording any result', async () => {
     const pane = createPane({ idle: true, tail: ['$'] })

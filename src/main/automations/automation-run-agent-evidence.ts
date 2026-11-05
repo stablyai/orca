@@ -2,6 +2,10 @@ import type { AutomationRun } from '../../shared/automations-types'
 import type { ParsedAgentStatusPayload } from '../../shared/agent-status/contracts/agent-status-types'
 import { mainAgentDoneAt } from '../../shared/agent-status/lifecycle/main-agent-status'
 import {
+  describeTerminalExitCause,
+  type TerminalExitCause
+} from '../../shared/terminal/pty/lifecycle/terminal-exit-cause'
+import {
   automationRunFailure,
   type AutomationRunFailure
 } from '../../shared/automation-run-failure-copy'
@@ -92,20 +96,23 @@ export function judgeHeldRunTurn(
 
 export type RunAgentReply = { text: string; truncated: boolean }
 
-/** A run watched with its agent's status evidence; `reply` is its latest captured answer. */
+/** This run's latest finished turn: whether it was cut off, and what the agent answered. */
+export type RunAgentTurn = { interrupted: boolean; reply: RunAgentReply | null }
+
+/** A run watched with its agent's status evidence; `turn` is its latest captured finished turn. */
 export type JudgedRun = {
   evidence: AutomationRunAgentEvidence
   run: AutomationRun
-  reply: () => RunAgentReply | null
+  turn: () => RunAgentTurn | null
 }
 
-/** What the agent answered this run: its full accepted reply, else its status preview, which the
- *  status cap may have cut by an amount its length cannot show. */
-export function runAgentReply(
+/** The run's latest finished turn. Its reply is the full accepted one, else the status preview,
+ *  which the status cap may have cut by an amount its length cannot show. */
+export function runAgentTurn(
   evidence: AutomationRunAgentEvidence,
   run: AutomationRun,
   runStartedAt: number
-): RunAgentReply | null {
+): RunAgentTurn | null {
   const paneKey = run.terminalPaneKey
   const sentAt = run.dispatchedAt ?? runStartedAt
   const row = (paneKey ? evidence.getAgentStatusRowsForPane(paneKey) : [])
@@ -114,29 +121,43 @@ export function runAgentReply(
   if (!paneKey || !row) {
     return null
   }
+  const interrupted = row.interrupted === true
   const leadTurnKey = mainAgentDoneAt(row)
   const accepted =
     leadTurnKey === undefined ? undefined : evidence.getAcceptedReply(paneKey, leadTurnKey)
   if (accepted?.trim()) {
-    return { text: accepted, truncated: false }
+    return { interrupted, reply: { text: accepted, truncated: false } }
   }
   // Tool stdout is not the agent's answer.
   const preview = row.lastAssistantMessageIsToolOutput ? undefined : row.lastAssistantMessage
-  return preview?.trim() ? { text: preview, truncated: true } : null
+  return { interrupted, reply: preview?.trim() ? { text: preview, truncated: true } : null }
 }
 
-/** Holds this run's latest reply as its status changes, so the clear when the agent exits cannot
- *  erase the reply before the run settles. */
-export function captureRunAgentReply(
+/** Holds this run's latest finished turn as its status changes, so the clear when the agent exits
+ *  cannot erase it before the run settles. */
+export function captureRunAgentTurn(
   evidence: AutomationRunAgentEvidence,
   run: AutomationRun,
   runStartedAt: number
 ): JudgedRun & { stop: () => void } {
-  let latest = runAgentReply(evidence, run, runStartedAt)
+  let latest = runAgentTurn(evidence, run, runStartedAt)
   const stop = evidence.subscribeStatusChanges((paneKey) => {
     if (paneKey === run.terminalPaneKey) {
-      latest = runAgentReply(evidence, run, runStartedAt) ?? latest
+      latest = runAgentTurn(evidence, run, runStartedAt) ?? latest
     }
   })
-  return { evidence, run, reply: () => runAgentReply(evidence, run, runStartedAt) ?? latest, stop }
+  return { evidence, run, turn: () => runAgentTurn(evidence, run, runStartedAt) ?? latest, stop }
+}
+
+/** A proven agent exit's verdict: exit 0 completes the run unless its latest turn was cut off. */
+export function judgeRunExit(
+  exit: TerminalExitCause,
+  judged: JudgedRun | null
+): Exclude<IdleRunVerdict, { kind: 'wait' }> {
+  if (judged?.turn()?.interrupted) {
+    return { kind: 'failed', ...automationRunFailure('agentInterrupted') }
+  }
+  return exit.kind === 'exited' && exit.exitCode === 0
+    ? { kind: 'completed' }
+    : { kind: 'failed', error: `${describeTerminalExitCause(exit)}.` }
 }

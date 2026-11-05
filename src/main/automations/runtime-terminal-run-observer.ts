@@ -12,12 +12,12 @@ import {
 import {
   judgeHeldRunTurn,
   judgeIdleRun,
-  captureRunAgentReply,
+  captureRunAgentTurn,
+  judgeRunExit,
   type AutomationRunAgentEvidence,
   type JudgedRun,
   type IdleRunVerdict
 } from './automation-run-agent-evidence'
-import { describeTerminalExitCause } from '../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 import { readProvenTerminalExit } from '../runtime/terminal-wait-results'
 
 const TERMINAL_SNAPSHOT_LIMIT = 2_000
@@ -62,7 +62,7 @@ function completedSnapshot(
   tail: readonly string[],
   judged: JudgedRun | null
 ): AutomationRunOutputSnapshot | null {
-  const reply = judged?.reply() ?? null
+  const reply = judged?.turn()?.reply ?? null
   const snapshot = snapshotOf(reply ? [reply.text] : tail)
   return snapshot && reply?.truncated ? { ...snapshot, truncated: true } : snapshot
 }
@@ -238,7 +238,7 @@ export function createRuntimeAutomationRunTerminalObserver(
       const startedAt = Date.now()
       const runStartedAt = run?.startedAt ?? run?.dispatchedAt ?? startedAt
       const judged =
-        evidence && run?.terminalPaneKey ? captureRunAgentReply(evidence, run, runStartedAt) : null
+        evidence && run?.terminalPaneKey ? captureRunAgentTurn(evidence, run, runStartedAt) : null
       try {
         return await observeTerminalRun(runtime, handle, signal, judged, startedAt, runStartedAt)
       } finally {
@@ -297,13 +297,7 @@ async function observeTerminalRun(
     } catch (error) {
       const exit = signal.aborted ? null : readProvenTerminalExit(error)
       if (exit) {
-        return observationOf(
-          exit.kind === 'exited' && exit.exitCode === 0
-            ? { kind: 'completed' }
-            : { kind: 'failed', error: `${describeTerminalExitCause(exit)}.` },
-          await readTail(runtime, handle),
-          judged
-        )
+        return observationOf(judgeRunExit(exit, judged), await readTail(runtime, handle), judged)
       }
       // Individual wait timeouts do not prove the agent stopped working.
       if (signal.aborted || !isTerminalWaitTimeout(error)) {

@@ -108,6 +108,8 @@ export async function launchHeadlessAutomationAgent(
         }
         const startup = created.startupTerminal
         if (!startup?.handle) {
+          // A terminal that started before a later startup step failed still belongs to the run.
+          terminal = startupTerminalCreation
           throw new Error(
             created.warning || 'Automation workspace was created, but no agent terminal started.'
           )
