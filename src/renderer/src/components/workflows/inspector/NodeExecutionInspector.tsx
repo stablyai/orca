@@ -15,6 +15,7 @@ import { useWorkflowClock } from '../use-workflow-clock'
 import { InspectorNote, InspectorSection } from './workflow-inspector-fields'
 import { WorkflowPromptSections } from './AgentPromptSection'
 import { translate } from '@/i18n/i18n'
+import { isWorkflowAgentNode } from '../../../../../shared/workflow/workflow-definition-schema'
 
 function Row({ label, value, mono }: { label: string; value: React.ReactNode; mono?: boolean }) {
   return (
@@ -148,6 +149,9 @@ export function NodeExecutionInspector({
   // A worker can end its turn on an error without reporting; it still holds the Dispatch.
   const stoppable = task?.status === 'running'
   const answer = task?.dispatches.at(-1)?.answer
+  // A missing WORKFLOW_RESULT only matters when this node asked for JSON output.
+  const expectsJson =
+    node !== undefined && isWorkflowAgentNode(node) && node.agent.prompt.outputFormat === 'json'
   const messages = run.messages.filter(
     (message) => message.sourceNodeId === nodeId || message.destinationNodeId === nodeId
   )
@@ -327,7 +331,7 @@ export function NodeExecutionInspector({
               {JSON.stringify(task.report.data, null, 2)}
             </pre>
           ) : null}
-          {task.report.dataError ? (
+          {expectsJson && task.report.dataError ? (
             <InspectorNote tone="warning">{task.report.dataError}</InspectorNote>
           ) : null}
           {task.report.filesModified.length > 0 ? (
