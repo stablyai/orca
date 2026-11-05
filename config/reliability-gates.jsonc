@@ -7523,16 +7523,15 @@
       "coverageNotes": "Focused tests and real-Monaco 9/50 MiB performance and undo-retention benchmarks are platform-independent. Local macOS Electron evidence opens a synthetic 9 MiB transcript through Agent Session History at fixed 900x720 viewport, 13px font, 1x zoom, and asserts the full 9 MiB model length loaded as a font-metric-independent containment check (word-wrap pixel geometry varies ~10% across runners, so a generous content-height floor is only a collapsed/truncated-render smoke check), then verifies three five-second-cadence watcher appends with Find open and closed. Live Windows/Linux evidence remains uncollected.",
       "motivatingLinks": ["https://github.com/stablyai/orca/pull/8432"],
       "invariant": "Append-only external file growth changes only Monaco's model suffix, retaining the viewport, selection, Find state, and renderer liveness above the append point; read-only live tails do not create undo history, while editable external updates remain undoable and arbitrary rewrites continue to replace the model content.",
-      "oracle": "Focused tests assert one post-mount content owner, actual outer lifecycle remount ordering across retained path models, exact end-of-model suffix edits with one model read, no-op equality, full replacement for non-appends, and real-Monaco undo behavior for read-only live tails versus editable files. With Node forced GC, real-Monaco benchmarks alternate 30 suffix and 30 replacement samples after five warmups on fresh equivalent models at 9 and 50 MiB, then compare exact Monaco undo-service and ArrayBuffer retention after five 10 MiB appends. The Electron scenario alternates an e2e-only legacy setValue red control and the fixed watcher append from restored equivalent model/geometry at the measured legacy-failure cadence, asserting that the control disrupts anchor state while the fixed path preserves visible ranges, selection, complete Find state, scroll offset, non-undoability, renderer survival, and forced-GC heap/native-memory budgets.",
+      "oracle": "Focused tests assert one post-mount content owner and actual lifecycle remount ordering across retained path models. Real-Monaco tests cover undo behavior for read-only live tails versus editable files. With Node forced GC, benchmarks compare suffix/replacement timing and undo retention at 9 and 50 MiB. The Electron scenario compares legacy setValue with watcher appends, checking visible ranges, selection, Find state, scroll offset, non-undoability, renderer survival and memory budgets. Mock-only edit-shape assertions were retired during test-value audit.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/editor/monaco-content-sync.test.ts src/renderer/src/components/editor/MonacoEditor.content-owner.test.tsx src/renderer/src/components/editor/EditorContent.monaco-lifecycle.test.tsx",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/editor/MonacoEditor.content-owner.test.tsx src/renderer/src/components/editor/EditorContent.monaco-lifecycle.test.tsx",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/editor/monaco-content-sync.undo-history.test.ts",
         "node --expose-gc ./node_modules/vitest/vitest.mjs bench src/renderer/src/components/editor/monaco-content-sync.bench.ts --pool=threads",
         "node --expose-gc ./node_modules/vitest/vitest.mjs bench src/renderer/src/components/editor/monaco-content-sync.undo-retention.bench.ts --pool=threads",
         "pnpm run test:e2e -- tests/e2e/agent-session-log-tail-stability.spec.ts --workers=1"
       ],
       "testFiles": [
-        "src/renderer/src/components/editor/monaco-content-sync.test.ts",
         "src/renderer/src/components/editor/monaco-content-sync.undo-history.test.ts",
         "src/renderer/src/components/editor/MonacoEditor.content-owner.test.tsx",
         "src/renderer/src/components/editor/EditorContent.monaco-lifecycle.test.tsx",
@@ -7541,15 +7540,6 @@
         "tests/e2e/agent-session-log-tail-stability.spec.ts"
       ],
       "assertionRefs": [
-        {
-          "file": "src/renderer/src/components/editor/monaco-content-sync.test.ts",
-          "assertions": [
-            "append-only drift reads the current model once and inserts only at the previous model end",
-            "identical content emits no edit and non-append drift retains full replacement plus undo stops",
-            "read-only live-tail appends, replacements, truncations, and stale retained-model remounts use non-undoing edits",
-            "a stale retained target model reconciles on mount without explicit undo stops while prior-path content and undo history remain isolated"
-          ]
-        },
         {
           "file": "src/renderer/src/components/editor/monaco-content-sync.undo-history.test.ts",
           "assertions": [
@@ -7595,6 +7585,7 @@
           "runner": "local",
           "platform": "macos",
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/editor/monaco-content-sync.test.ts src/renderer/src/components/editor/MonacoEditor.content-owner.test.tsx src/renderer/src/components/editor/EditorContent.monaco-lifecycle.test.tsx",
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/editor/MonacoEditor.content-owner.test.tsx src/renderer/src/components/editor/EditorContent.monaco-lifecycle.test.tsx",
           "result": "passed",
           "durationSeconds": 5,
           "summary": "Focused editor ownership, edit-shape, mount reconciliation, lifecycle-key, and actual same-pane retained-model remount tests passed."

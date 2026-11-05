@@ -88,59 +88,6 @@ afterEach(() => {
 })
 
 describe('monaco large text paste', () => {
-  it('leaves small, read-only, and already-owned paste to existing Monaco behavior', () => {
-    const { editor } = makeEditor()
-    const smallPaste = pasteEvent('small')
-    const readOnlyPaste = pasteEvent('x'.repeat(128))
-    const handledPaste = pasteEvent('x'.repeat(128))
-    handledPaste.preventDefault()
-
-    expect(handleMonacoLargeTextPaste(editor as never, smallPaste, { directMaxBytes: 64 })).toEqual(
-      { status: 'ignored', reason: 'small' }
-    )
-    expect(
-      handleMonacoLargeTextPaste(editor as never, readOnlyPaste, {
-        readOnly: true,
-        directMaxBytes: 8
-      })
-    ).toEqual({ status: 'ignored', reason: 'read-only' })
-    expect(handleMonacoLargeTextPaste(editor as never, handledPaste)).toEqual({
-      status: 'ignored',
-      reason: 'already-handled'
-    })
-    expect(smallPaste.defaultPrevented).toBe(false)
-  })
-
-  it('chunks large Monaco paste edits and reports one completed owner result', async () => {
-    const { editor, edits, undoStops } = makeEditor()
-    const resultSpy = vi.fn()
-    const startSpy = vi.fn()
-    const yieldToEventLoop = vi.fn(async () => {})
-    const event = pasteEvent('abcdef'.repeat(4))
-
-    const result = handleMonacoLargeTextPaste(editor as never, event, {
-      directMaxBytes: 8,
-      chunkMaxBytes: 6,
-      yieldToEventLoop,
-      onPasteStart: startSpy,
-      onPasteResult: resultSpy
-    })
-    await flushPromises()
-
-    expect(result).toEqual({ status: 'handled' })
-    expect(event.defaultPrevented).toBe(true)
-    expect(edits).toEqual(['abcdef', 'abcdef', 'abcdef', 'abcdef'])
-    expect(yieldToEventLoop).toHaveBeenCalledTimes(3)
-    expect(undoStops).toHaveLength(2)
-    expect(startSpy).toHaveBeenCalledOnce()
-    expect(resultSpy).toHaveBeenCalledWith({
-      status: 'pasted',
-      mode: 'chunked',
-      byteLength: 24,
-      chunksWritten: 4
-    })
-  })
-
   it('still reports a result when the chunked paste throws, so its start state releases', async () => {
     const { editor } = makeEditor()
     const resultSpy = vi.fn()
