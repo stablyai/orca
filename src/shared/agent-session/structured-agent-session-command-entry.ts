@@ -46,6 +46,36 @@ export function structuredAgentSessionCommandTurnItemIds(
   return ids
 }
 
+export type AgentJournalBodyLookup = (itemId: string) => AgentJournalItemBody | null | undefined
+
+/** Command-turn membership read lazily through an indexed body lookup: only the turns a scan reaches are checked, not all history. */
+export function commandTurnsByBody(
+  bodyOf: AgentJournalBodyLookup
+): Pick<ReadonlySet<string>, 'has'> {
+  const known = new Map<string, boolean>()
+  return {
+    has: (itemId) => {
+      let command = known.get(itemId)
+      if (command === undefined) {
+        command = isStructuredAgentSessionCommandTurn(
+          readAgentJournalTurn(bodyOf(itemId) ?? undefined),
+          bodyOf
+        )
+        known.set(itemId, command)
+      }
+      return command
+    }
+  }
+}
+
+/** Lazy membership when the caller has an indexed body read; otherwise the scan of `items`. */
+export function commandTurnsOf(
+  items: readonly AgentJournalRenderItem[],
+  bodyOf: AgentJournalBodyLookup | undefined
+): Pick<ReadonlySet<string>, 'has'> {
+  return bodyOf ? commandTurnsByBody(bodyOf) : structuredAgentSessionCommandTurnItemIds(items)
+}
+
 export function isStructuredAgentSessionCommandRow(
   item: Pick<AgentJournalRenderItem, 'body' | 'turnScope'>,
   commandTurnItemIds: Pick<ReadonlySet<string>, 'has'>

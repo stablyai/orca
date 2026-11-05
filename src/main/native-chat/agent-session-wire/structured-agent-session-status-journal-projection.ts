@@ -9,6 +9,7 @@ import { isStructuredAgentSessionCommandEntry } from '../../../shared/agent-sess
 import type { AgentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { projectStructuredAgentSessionStatusState } from '../../../shared/agent-session/view/structured-agent-session-projection'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import { renderJournalStatusItem } from '../agent-session-journal/journal-public-read'
 import {
   structuredAgentSessionCurrentWork,
   type StructuredAgentSessionWorkEvidence
@@ -139,7 +140,8 @@ export class StructuredAgentSessionJournalProjections {
             snapshot.items,
             snapshot.submissions,
             fence,
-            work.scope
+            work.scope,
+            (itemId) => renderJournalStatusItem(journal.queuedMessages.displayState(), itemId)
           ),
           work.diedTurn()
         ),

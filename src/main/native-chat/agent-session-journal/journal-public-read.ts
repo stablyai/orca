@@ -1,8 +1,13 @@
-import type { AgentJournalSnapshot } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type {
+  AgentJournalRenderItem,
+  AgentJournalSnapshot
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { JournalInputOrder } from './journal-input-order'
 import { renderJournalItems, renderJournalState, type JournalReducerState } from './journal-reducer'
 import { journalContextCursor } from './journal-context-cursor'
+import { journalInputPresentationMember } from './journal-input-obligations'
+import { projectJournalStopNote } from './journal-stop-note-projection'
 
 /** Only a committed journal owner can certify reuse across public reads. */
 export function createJournalPublicReader(inputOrder: () => JournalInputOrder) {
@@ -137,4 +142,15 @@ export function renderJournalStatus(state: JournalReducerState, owner: JournalIn
       failed && 'openedAfter' in failed ? failed.openedAfter : undefined
     )
   }
+}
+
+/** One row exactly as `renderJournalStatus` renders it, by key, without rendering the rest. */
+export function renderJournalStatusItem(
+  state: JournalReducerState,
+  itemId: string
+): AgentJournalRenderItem | null {
+  const item = state.items.get(itemId)
+  return item?.itemId === itemId && journalInputPresentationMember(state, itemId)
+    ? projectJournalStopNote(item, state.items)
+    : null
 }
