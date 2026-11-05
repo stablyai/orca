@@ -8,8 +8,11 @@ import {
   type FederatedLifecycleSettlement
 } from '../../../../orchestration/federation-lifecycle-settlement'
 import { defineMethod, type RpcMethod } from '../../../core'
+import { takesFinishedWorkerMail } from '../../../../orchestration/finished-worker-relay'
+import { noteRunHomeAsked } from '../../../../orchestration/run-home-listening'
 import {
   FederationAckParams,
+  FederationFinishedMailParams,
   FederationImportParams,
   FederationPullParams
 } from '../../../../../../shared/rpc-contract/orchestration-federation-relay-params'
@@ -20,7 +23,12 @@ export const ORCHESTRATION_FEDERATION_RELAY_METHODS = [
     permission: 'workspace',
     params: FederationPullParams,
     handler: (params, { runtime, authenticatedCallerFingerprint }) => {
-      requireHomeAttachment(runtime, params.dispatchId, authenticatedCallerFingerprint)
+      const attachment = requireHomeAttachment(
+        runtime,
+        params.dispatchId,
+        authenticatedCallerFingerprint
+      )
+      noteRunHomeAsked(runtime.getOrchestrationDb(), attachment.home_peer_fingerprint)
       return {
         dispatchId: params.dispatchId,
         runtimeEpoch: runtime.getRuntimeId(),
@@ -35,6 +43,16 @@ export const ORCHESTRATION_FEDERATION_RELAY_METHODS = [
               limit: params.limit
             })
       }
+    }
+  }),
+  defineMethod({
+    name: 'orchestration.federationFinishedMail',
+    permission: 'workspace',
+    params: FederationFinishedMailParams,
+    handler: (_params, { runtime, authenticatedCallerFingerprint }) => {
+      const db = runtime.getOrchestrationDb()
+      noteRunHomeAsked(db, authenticatedCallerFingerprint ?? '')
+      return db.listFinishedRemoteWorkers(authenticatedCallerFingerprint ?? '')
     }
   }),
   defineMethod({
@@ -131,12 +149,16 @@ export const ORCHESTRATION_FEDERATION_RELAY_METHODS = [
           params.dispatchId,
           authenticatedCallerFingerprint
         )
-        if (currentAttachment.state !== 'ready') {
+        const finished =
+          currentAttachment.state !== 'ready' && takesFinishedWorkerMail(currentAttachment)
+        if (currentAttachment.state !== 'ready' && !finished) {
           throw new OrchestrationError(
             'dispatch_inactive',
             `Remote Dispatch ${params.dispatchId} is not active.`
           )
         }
+        // A finished worker's waiting ask still takes its answer; other mail it can no longer read is passed
+        // over, so it cannot hold that answer back.
         if (item.kind === 'reply') {
           const reply = parseFederatedReply(item.payload)
           db.answerRemoteQuestion({
@@ -149,7 +171,7 @@ export const ORCHESTRATION_FEDERATION_RELAY_METHODS = [
             message_id: reply.questionId,
             dispatch_id: params.dispatchId
           })
-        } else if (item.kind === 'control_message') {
+        } else if (item.kind === 'control_message' && !finished) {
           if (
             currentAttachment.protocol_version <
             ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION
@@ -168,7 +190,7 @@ export const ORCHESTRATION_FEDERATION_RELAY_METHODS = [
           if (controlMessage.imported) {
             runtime.notifyMessageArrived(`dispatch:${params.dispatchId}`, controlMessage.type)
           }
-        } else {
+        } else if (!finished) {
           throw new OrchestrationError(
             'invalid_argument',
             `Federated worker relay kind ${item.kind} is not supported.`

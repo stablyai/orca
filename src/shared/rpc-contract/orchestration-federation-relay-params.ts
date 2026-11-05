@@ -8,6 +8,9 @@ export const FederationPullParams = z.object({
   limit: OptionalFiniteNumber
 })
 
+// The home asks once per host which finished workers left it mail.
+export const FederationFinishedMailParams = z.object({})
+
 export const FederationAckParams = z.object({
   dispatchId: requiredString('Missing Dispatch ID'),
   throughSequence: z.number().int().nonnegative(),

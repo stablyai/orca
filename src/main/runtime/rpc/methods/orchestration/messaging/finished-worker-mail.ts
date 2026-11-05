@@ -1,12 +1,18 @@
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import type { OrchestrationCallerIdentity } from '../../../../orchestration/orchestration-caller-identity'
-import type { DispatchContextRow } from '../../../../orchestration/types'
+import type {
+  DispatchContextRow,
+  RemoteDispatchAttachmentRow
+} from '../../../../orchestration/types'
+import { takesFinishedWorkerMail } from '../../../../orchestration/finished-worker-relay'
+import { isRunHomeListening } from '../../../../orchestration/run-home-listening'
 import { dispatchReportMailbox } from '../../../../orchestration/dispatch-report-mailbox'
 import { reportCorrectsUnobservedPrompt } from '../../../../orchestration/worker-report-admission'
 import { isDispatchAssignee } from '../../../../orchestration/db/dispatch-context/dispatch-lookup'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { isDispatchMutationMessageType } from '../schemas'
-import type { MessageRouting } from '../routing'
+import { FINISHED_WORKER_DONE_NEXT } from '../receipt-next'
+import { rejectFederatedExplicitTarget, type MessageRouting } from '../routing'
 
 /** A terminal also proves its process, so a new process in the same pane is not taken for the old worker;
  *  a session caller is already bound to its own identity. */
@@ -79,23 +85,61 @@ export function finishedWorkerSend<P extends { to?: string; type?: string }>(
               action: 'settled',
               outcome: finished.status === 'completed' ? 'succeeded' : 'failed'
             },
-            next: 'Delivered to your coordinator as a message; your finished task is unchanged. End your turn.'
+            next: FINISHED_WORKER_DONE_NEXT
           }
         : receipt
   }
 }
 
-/** A finished worker on a paired host cannot reach its coordinator yet; say why instead of a bare refusal. */
-export function refuseFinishedRemoteWorker(
+/** The remote Dispatch a paired-host pane speaks for: its live one, which reaches only its Run home, or the one
+ *  it finished, when the message is for that coordinator. */
+export function remoteSenderAttachment(
   db: OrchestrationDb,
-  paneKey: string | undefined,
-  to: string | undefined
-): void {
-  const attachment = paneKey ? db.findLatestRemoteAttachmentForPane(paneKey) : undefined
-  if (attachment && (!to || to === `dispatch:${attachment.dispatch_id}`)) {
+  paneKey: string,
+  params: { to?: string; run?: string; type?: string },
+  processIncarnation: () => string | undefined
+): { attachment: RemoteDispatchAttachmentRow; finished: boolean } | undefined {
+  const live = db.findActiveRemoteAttachmentForPane(paneKey)
+  if (live) {
+    rejectFederatedExplicitTarget(params, live.home_run_id)
+    return { attachment: live, finished: false }
+  }
+  const finished = finishedRemoteAttachment(db, paneKey, params, processIncarnation)
+  return finished && { attachment: finished, finished: true }
+}
+
+/** The settled remote Dispatch a paired-host worker is still talking about, when its message is for its
+ *  coordinator. A Run home too old to pull it, or no longer listening, gets a refusal that says why. */
+function finishedRemoteAttachment(
+  db: OrchestrationDb,
+  paneKey: string,
+  params: { to?: string; type?: string },
+  processIncarnation: () => string | undefined
+): RemoteDispatchAttachmentRow | undefined {
+  const attachment = db.findLatestRemoteAttachmentForPane(paneKey)
+  if (
+    !attachment ||
+    params.type === 'heartbeat' ||
+    (params.to && params.to !== `dispatch:${attachment.dispatch_id}`) ||
+    // A new process in the same pane is not the worker that finished.
+    (attachment.process_incarnation &&
+      !db.isRemoteAttachmentProcessCurrent({
+        dispatchId: attachment.dispatch_id,
+        paneKey,
+        processIncarnation: processIncarnation() ?? null
+      }))
+  ) {
+    return undefined
+  }
+  if (
+    !takesFinishedWorkerMail(attachment) ||
+    !db.isFinishedRemoteWorkerHeard(attachment.dispatch_id) ||
+    !isRunHomeListening(db, attachment.home_peer_fingerprint)
+  ) {
     throw new OrchestrationError(
       'run_home_unreachable',
-      `Dispatch ${attachment.dispatch_id} has finished, and its coordinator runs on another computer that a finished worker cannot reach yet. Nothing was sent; give the message to the user instead.`
+      `Dispatch ${attachment.dispatch_id} has finished, and its coordinator runs on another computer that is no longer taking mail from this worker. Nothing was sent; give the message to the user instead.`
     )
   }
+  return attachment
 }

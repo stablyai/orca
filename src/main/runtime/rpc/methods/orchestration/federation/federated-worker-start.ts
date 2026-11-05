@@ -5,6 +5,8 @@ import {
   ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
   ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION,
   ORCHESTRATION_FEDERATION_CONTROL_MAIL_RUNTIME_CAPABILITY,
+  ORCHESTRATION_FEDERATION_FINISHED_WORKER_MAIL_PROTOCOL_VERSION,
+  ORCHESTRATION_FEDERATION_FINISHED_WORKER_MAIL_RUNTIME_CAPABILITY,
   ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION,
   ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_RUNTIME_CAPABILITY,
   ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY,
@@ -103,13 +105,19 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
   const supportsControlMail = status.capabilities?.includes(
     ORCHESTRATION_FEDERATION_CONTROL_MAIL_RUNTIME_CAPABILITY
   )
-  const federationProtocolVersion =
+  const supportsLifecycleSettlement =
     supportsControlMail &&
     status.capabilities?.includes(ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_RUNTIME_CAPABILITY)
-      ? ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION
-      : supportsControlMail
-        ? ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION
-        : 1
+  // Writing v4 is this home's promise to keep pulling the worker after it finishes.
+  const federationProtocolVersion =
+    supportsLifecycleSettlement &&
+    status.capabilities?.includes(ORCHESTRATION_FEDERATION_FINISHED_WORKER_MAIL_RUNTIME_CAPABILITY)
+      ? ORCHESTRATION_FEDERATION_FINISHED_WORKER_MAIL_PROTOCOL_VERSION
+      : supportsLifecycleSettlement
+        ? ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION
+        : supportsControlMail
+          ? ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION
+          : 1
 
   const setupDecision = createsWorktree ? (params.setup ?? 'run') : 'not_applicable'
   const runId = args.bindRunId()

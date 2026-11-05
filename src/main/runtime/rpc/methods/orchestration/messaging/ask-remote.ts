@@ -1,6 +1,6 @@
 import type { z } from 'zod'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import type { WorkerDispatchState } from '../../../../orchestration/types'
+import type { RemoteDispatchAttachmentRow } from '../../../../orchestration/types'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { clampOrchestrationAskTimeoutMs } from '../../../../../../shared/orchestration-ask-timeout'
 import type { AskParams } from '../schemas'
@@ -17,22 +17,25 @@ export async function askRemoteRunHome(args: {
   recordMutationReceipt?: (receipt: unknown) => void
   from: string
   paneKey: string
-  dispatchId: string
-  taskId: string
-  workerState: WorkerDispatchState
+  attachment: Pick<RemoteDispatchAttachmentRow, 'dispatch_id' | 'task_id' | 'state'>
+  /** Its Dispatch has settled: the question goes to its coordinator and changes nothing. */
+  finished: boolean
 }): Promise<unknown> {
   const db = args.runtime.getOrchestrationDb()
   const timeoutMs = clampOrchestrationAskTimeoutMs(args.params.timeoutMs)
-  assertWorkerCanReport({
-    dispatchId: args.dispatchId,
-    from: args.from,
-    workerState: args.workerState,
-    processCurrent: db.isRemoteAttachmentProcessCurrent({
-      dispatchId: args.dispatchId,
-      paneKey: args.paneKey,
-      processIncarnation: args.runtime.getTerminalProcessIncarnation(args.from)
+  const { dispatch_id: dispatchId, task_id: taskId } = args.attachment
+  if (!args.finished) {
+    assertWorkerCanReport({
+      dispatchId,
+      from: args.from,
+      workerState: args.attachment.state,
+      processCurrent: db.isRemoteAttachmentProcessCurrent({
+        dispatchId,
+        paneKey: args.paneKey,
+        processIncarnation: args.runtime.getTerminalProcessIncarnation(args.from)
+      })
     })
-  })
+  }
   const options =
     args.params.options
       ?.split(',')
@@ -41,7 +44,7 @@ export async function askRemoteRunHome(args: {
   const resume = args.params.resume
   if (resume) {
     const existing = db.getRemoteQuestion(resume)
-    if (!existing || existing.dispatch_id !== args.dispatchId) {
+    if (!existing || existing.dispatch_id !== dispatchId) {
       throw new OrchestrationError(
         'question_not_found',
         `Question ${resume} does not belong to this remote Dispatch.`
@@ -51,7 +54,7 @@ export async function askRemoteRunHome(args: {
   const questionId =
     resume ??
     db.enqueueFederationRelay({
-      dispatchId: args.dispatchId,
+      dispatchId,
       direction: 'to_home',
       kind: 'question',
       payload: JSON.stringify({
@@ -62,8 +65,8 @@ export async function askRemoteRunHome(args: {
         priority: 'normal',
         threadId: null,
         payload: JSON.stringify({
-          taskId: args.taskId,
-          dispatchId: args.dispatchId,
+          taskId: taskId,
+          dispatchId,
           question: args.params.question,
           options
         })

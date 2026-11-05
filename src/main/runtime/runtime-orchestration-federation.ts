@@ -19,8 +19,14 @@ import {
   releaseFederationAckCheckpoint
 } from './orchestration/federation-ack-checkpoints'
 import { syncFederatedDispatch } from './orchestration/federation-sync'
+import {
+  FinishedWorkerMailRounds,
+  pullFinishedWorkerMail,
+  type FinishedWorkerHostRound
+} from './orchestration/finished-worker-relay'
 import type { OrchestrationDb } from './orchestration/db'
 import type { FederationRuntime } from './orchestration/federation-runtime'
+import { ORCHESTRATION_FEDERATION_FINISHED_WORKER_MAIL_PROTOCOL_VERSION } from '../../shared/orchestration-runtime-capabilities'
 
 export class RuntimeOrchestrationFederation {
   private readonly timers = new Map<string, ReturnType<typeof setInterval>>()
@@ -30,6 +36,10 @@ export class RuntimeOrchestrationFederation {
   private terminalRecoveryInFlight: Promise<void> | null = null
   private terminalRecoveryRowId = 0
   private relayGeneration = 0
+  private finishedMailGeneration = -1
+  private readonly finishedMail = new FinishedWorkerMailRounds((environmentId) =>
+    this.pullFinishedWorkerMail(environmentId)
+  )
 
   constructor(
     private readonly runtime: FederationRuntime,
@@ -38,6 +48,7 @@ export class RuntimeOrchestrationFederation {
 
   resetForDatabaseChange(): void {
     this.relayGeneration += 1
+    this.finishedMail.stop()
     for (const timer of this.timers.values()) {
       clearInterval(timer)
     }
@@ -137,6 +148,11 @@ export class RuntimeOrchestrationFederation {
         if (this.syncs.get(dispatchId)?.promise === sync) {
           this.warnings.delete(dispatchId)
         }
+        // A host that answers again may hold mail a finished worker sent while it was unreachable.
+        const environmentId = db.getFederatedDispatch(dispatchId)?.environment_id
+        if (environmentId) {
+          this.finishedMail.revive(environmentId)
+        }
       })
       .catch((error: unknown) => {
         if (this.syncs.get(dispatchId)?.promise === sync && !this.warnings.has(dispatchId)) {
@@ -184,6 +200,12 @@ export class RuntimeOrchestrationFederation {
           }
           this.timers.delete(dispatch.dispatch_id)
           this.warnings.delete(dispatch.dispatch_id)
+          if (
+            dispatch.protocol_version >=
+            ORCHESTRATION_FEDERATION_FINISHED_WORKER_MAIL_PROTOCOL_VERSION
+          ) {
+            this.finishedMail.ensure([dispatch.environment_id])
+          }
           return
         }
         void this.syncDispatch(dispatch.dispatch_id).catch(() => undefined)
@@ -194,6 +216,41 @@ export class RuntimeOrchestrationFederation {
       tick()
     }
     this.ensureTerminalHistoryRecovery()
+    this.ensureFinishedWorkerMail()
+  }
+
+  // Every host once per database, then a host with an answer to deliver; a host's own workers finishing ask
+  // for it too. Asking again never hurries a host that is failing.
+  private ensureFinishedWorkerMail(): void {
+    const all = this.finishedMailGeneration !== this.relayGeneration
+    this.finishedMailGeneration = this.relayGeneration
+    const finished = this.runtime.getOrchestrationDb().listFinishedFederatedWorkers()
+    this.finishedMail.ensure(
+      finished.flatMap((worker) => (all || worker.answerPending ? [worker.environmentId] : []))
+    )
+  }
+
+  private pullFinishedWorkerMail(environmentId: string): Promise<FinishedWorkerHostRound> {
+    try {
+      this.resolveWorkerServer(environmentId)
+    } catch {
+      // A removed server has nobody left to ask.
+      return Promise.resolve('done')
+    }
+    const generation = this.relayGeneration
+    const db = this.runtime.getOrchestrationDb()
+    return pullFinishedWorkerMail(db, environmentId, {
+      ask: (id) =>
+        this.runtime.callOrchestrationWorkerServer(
+          id,
+          'orchestration.federationFinishedMail',
+          {},
+          15_000
+        ),
+      sync: (dispatchId) => this.syncDispatch(dispatchId),
+      isCurrent: () =>
+        generation === this.relayGeneration && this.runtime.getOrchestrationDb() === db
+    })
   }
 
   private ensureTerminalHistoryRecovery(): void {
@@ -240,6 +297,7 @@ export class RuntimeOrchestrationFederation {
 
   stopRelay(): void {
     this.relayGeneration += 1
+    this.finishedMail.stop()
     for (const timer of this.timers.values()) {
       clearInterval(timer)
     }

@@ -1,7 +1,7 @@
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import type { MessageRow } from '../../../../orchestration/types'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import { remoteRunHomeUnreachable } from '../routing'
+import { rejectFederatedExplicitTarget, remoteRunHomeUnreachable } from '../routing'
 import { sendRemoteMessage } from './send-remote'
 
 /** Reply to mirrored remote-Run mail only at its home, through this pane's own Dispatch link. */
@@ -25,6 +25,7 @@ export async function replyToRemoteRunHome(args: {
   ) {
     throw remoteRunHomeUnreachable(db, original.run_id)
   }
+  rejectFederatedExplicitTarget(params, attachment.home_run_id)
   const subject = `Re: ${original.subject}`
   const sent = await sendRemoteMessage({
     params: {
@@ -38,7 +39,8 @@ export async function replyToRemoteRunHome(args: {
     db,
     from,
     senderPaneKey: paneKey,
-    remoteAttachment: attachment,
+    attachment,
+    finished: false,
     processIncarnation: runtime.getTerminalProcessIncarnation(from) ?? undefined,
     signal: args.signal
   })
