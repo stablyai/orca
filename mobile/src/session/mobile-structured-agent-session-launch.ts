@@ -7,7 +7,8 @@ import { isDefinitiveAgentSessionCreateRefusal } from '../../../src/shared/agent
 import {
   createStructuredAgentSessionId,
   structuredAgentSessionCreateParams,
-  type StructuredAgentSessionCreateParams
+  type StructuredAgentSessionCreateParams,
+  type StructuredAgentSessionForkSource
 } from '../../../src/shared/agent-session/structured-agent-session-create'
 import type { StructuredAgentCreateSupportReply } from '../../../src/shared/agent-session/structured-agent-create-support-reply'
 import { TUI_AGENT_DISPLAY_NAMES } from '../../../src/shared/agent-launch/catalog/tui-agent-display-names'
@@ -38,12 +39,14 @@ export type MobileStructuredAgentLaunchResult =
 
 function createParamsFor(
   agent: AgentSessionHandleProvider,
-  worktree: string
+  worktree: string,
+  forkFrom: StructuredAgentSessionForkSource | undefined
 ): StructuredAgentSessionCreateParams {
   return structuredAgentSessionCreateParams({
     sessionId: createStructuredAgentSessionId(agent, randomV4Uuid),
     worktree,
     agent,
+    ...(forkFrom ? { forkFrom } : {}),
     randomUuid: randomV4Uuid
   })
 }
@@ -79,7 +82,9 @@ function classifyCreateRefusal(
 export async function createMobileStructuredAgentSession(
   client: RpcClient,
   worktreeId: string,
-  agent: AgentSessionHandleProvider
+  agent: AgentSessionHandleProvider,
+  /** Sent only to a host advertising forks. */
+  forkFrom?: StructuredAgentSessionForkSource
 ): Promise<MobileStructuredAgentLaunchResult> {
   const worktree = `id:${worktreeId}`
   let supportResponse
@@ -120,7 +125,7 @@ export async function createMobileStructuredAgentSession(
     return { kind: 'unsupported', reason: support?.reason }
   }
 
-  const params = createParamsFor(agent, worktree)
+  const params = createParamsFor(agent, worktree, forkFrom)
   rememberMobileCreatedStructuredSession(params.envelope.sessionId, worktree)
   let response
   try {

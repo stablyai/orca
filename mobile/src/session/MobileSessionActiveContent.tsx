@@ -7,6 +7,7 @@ import { MobileBrowserPane } from '../browser/MobileBrowserPane'
 import { TerminalPaneView } from './TerminalPaneView'
 import { MobileNativeChatOverlay } from './native-chat/MobileNativeChatOverlay'
 import { MobileAgentMessageProvider } from './native-chat/transcript/MobileAgentMessageProvider'
+import { MobileNativeChatForkProvider } from './MobileNativeChatForkProvider'
 import { useMobileAgentMessageNavigation } from './use-mobile-agent-message-navigation'
 import { MobileNativeChatDictationPreviewContext } from './native-chat/composer/mobile-native-chat-dictation-preview-context'
 import { MobileDictationMeterContext } from './mobile-dictation-meter-context'
@@ -324,30 +325,32 @@ export function MobileSessionActiveContent({
               scopeKey={nativeChatImageSource}
               open={openSender}
             >
-              <MobileNativeChatOverlay
-                controller={nativeChatController}
-                imageSource={nativeChatImageSource}
-                activeSessionTabId={controller.activeSessionTab?.id}
-                onOpenFile={handleNativeChatFileTap}
-                images={nativeChatImages}
-                structuredComposer={nativeChatStructuredComposer}
-                onMicPress={dictationEnabled ? handleDictationToggle : undefined}
-                micActive={dictation.isStarting || dictation.isRecording}
-                micStarting={dictation.isStarting}
-                micProcessing={dictation.isProcessing}
-                dictationMode={dictationMode}
-                onMicPressIn={handleDictationPressIn}
-                onMicPressOut={handleDictationPressOut}
-                inputLockReason={nativeChatOverlayInputLockReason}
-                sendErrorMessage={nativeChatSendError.message}
-                onClearSendError={nativeChatSendError.clear}
-                sendSurfaceId={controller.nativeChatScopeKey ?? ''}
-                sessionId={resolveMobileNativeChatSessionId(controller.activeSessionTab)}
-                getSendCompletionGeneration={controller.getSendCompletionGeneration}
-                keyboardInset={keyboardLift}
-                // A workspace routed to another server stops with that server, whose name the phone lacks.
-                hostName={executionHost === undefined && hostProfile ? hostTitle : null}
-              />
+              <MobileNativeChatForkProvider controller={controller} navigate={navigateToSender}>
+                <MobileNativeChatOverlay
+                  controller={nativeChatController}
+                  imageSource={nativeChatImageSource}
+                  activeSessionTabId={controller.activeSessionTab?.id}
+                  onOpenFile={handleNativeChatFileTap}
+                  images={nativeChatImages}
+                  structuredComposer={nativeChatStructuredComposer}
+                  onMicPress={dictationEnabled ? handleDictationToggle : undefined}
+                  micActive={dictation.isStarting || dictation.isRecording}
+                  micStarting={dictation.isStarting}
+                  micProcessing={dictation.isProcessing}
+                  dictationMode={dictationMode}
+                  onMicPressIn={handleDictationPressIn}
+                  onMicPressOut={handleDictationPressOut}
+                  inputLockReason={nativeChatOverlayInputLockReason}
+                  sendErrorMessage={nativeChatSendError.message}
+                  onClearSendError={nativeChatSendError.clear}
+                  sendSurfaceId={controller.nativeChatScopeKey ?? ''}
+                  sessionId={resolveMobileNativeChatSessionId(controller.activeSessionTab)}
+                  getSendCompletionGeneration={controller.getSendCompletionGeneration}
+                  keyboardInset={keyboardLift}
+                  // A workspace routed to another server stops with that server, whose name the phone lacks.
+                  hostName={executionHost === undefined && hostProfile ? hostTitle : null}
+                />
+              </MobileNativeChatForkProvider>
             </MobileAgentMessageProvider>
           </MobileDictationMeterContext.Provider>
         </MobileNativeChatDictationPreviewContext.Provider>

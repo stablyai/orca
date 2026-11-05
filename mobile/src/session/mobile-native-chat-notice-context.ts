@@ -6,3 +6,8 @@ export type MobileNativeChatNoticeNames = { hostName: string | null; agentName?:
 export const MobileNativeChatNoticeContext = createContext<MobileNativeChatNoticeNames>({
   hostName: null
 })
+
+/** Opens the chat a "Forked from" divider names; absent where the view cannot open chats. */
+export const MobileNativeChatForkedFromContext = createContext<
+  ((sourceSessionId: string) => void) | undefined
+>(undefined)

@@ -22,6 +22,7 @@ import {
 import { agentSessionFailureSentence } from '../../../../../src/shared/agent-session/failures/agent-session-failure-words'
 import { nativeChatOrcaStopRowText } from '../../../../../src/shared/native-chat/native-chat-orca-stop-words'
 import {
+  MobileNativeChatForkedFromContext,
   MobileNativeChatNoticeContext,
   type MobileNativeChatNoticeNames
 } from '../../mobile-native-chat-notice-context'
@@ -131,6 +132,7 @@ export function MobileNativeChatNoticeRow({
   const detailId = useId()
   const copy = nativeChatNoticeCopy(t)
   const names = useContext(MobileNativeChatNoticeContext)
+  const openForkSource = useContext(MobileNativeChatForkedFromContext)
   const notice = nativeChatNoticeBlock(blocks)
   const aside = [styles.faint, scaledType(typography.bodySize, fontScale)]
   if (!notice) {
@@ -214,6 +216,33 @@ export function MobileNativeChatNoticeRow({
         <View style={styles.divider} accessibilityRole="text" accessibilityLabel={label}>
           <View style={styles.rule} />
           <Text style={styles.dividerLabel}>{label}</Text>
+          <View style={styles.rule} />
+        </View>
+      )
+    }
+    case 'forked-from': {
+      const { sourceName, sourceSessionId } = look
+      return (
+        <View
+          style={styles.divider}
+          accessibilityRole="text"
+          accessibilityLabel={`${copy.forkedFrom} ${sourceName}`}
+        >
+          <View style={styles.rule} />
+          <Text style={styles.dividerLabel}>
+            {copy.forkedFrom}{' '}
+            {openForkSource ? (
+              <Text
+                accessibilityRole="link"
+                style={styles.dividerLink}
+                onPress={() => openForkSource(sourceSessionId)}
+              >
+                {sourceName}
+              </Text>
+            ) : (
+              sourceName
+            )}
+          </Text>
           <View style={styles.rule} />
         </View>
       )
@@ -336,6 +365,9 @@ const styles = themedStyleSheet(() => ({
   dividerLabel: {
     color: colors.textMuted,
     fontSize: typography.metaSize
+  },
+  dividerLink: {
+    textDecorationLine: 'underline'
   },
   faint: {
     color: colors.textMuted
