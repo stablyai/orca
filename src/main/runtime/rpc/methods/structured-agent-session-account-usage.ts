@@ -120,7 +120,7 @@ export const STRUCTURED_AGENT_SESSION_ACCOUNT_USAGE_METHODS = [
             ? Promise.race([
                 rateLimits.refreshCodexForTarget(current.codexTarget).catch(() => undefined),
                 new Promise<undefined>((resolve) => {
-                  snapshotTimer = setTimeout(resolve, SNAPSHOT_WAIT_MS)
+                  snapshotTimer = setTimeout(() => resolve(undefined), SNAPSHOT_WAIT_MS)
                 })
               ]).then(() => rateLimits.getState())
             : Promise.resolve(current)

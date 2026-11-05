@@ -1,5 +1,6 @@
 import '../unused-default-rpc-methods.test-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { RateLimitState } from '../../../../shared/rate-limit-types'
 import { join } from 'node:path'
 import { homedir } from 'node:os'
 import { agentSessionRecordFixture } from '../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
@@ -93,7 +94,7 @@ describe('chat account usage', () => {
   })
 
   it('reads the selected account once when the host has no Codex snapshot yet, then offers its reset', async () => {
-    let current = { ...state, codex: null }
+    let current: RateLimitState = { ...state, codex: null }
     const refreshCodexForTarget = vi.fn(async () => {
       current = state
       return state
