@@ -278,7 +278,8 @@ describe('picks made while a chat launches', () => {
   it('remembers a held effort on a resolved-id chat without adopting a new-chat model', async () => {
     const created = deferred<{ sessionId: string; fence: number }>()
     mocks.launch.mockReturnValue(created.promise)
-    startStructuredAgentLaunch(WORKTREE_ID, 'codex', { requestId: 'request-1', prompt: 'first' })
+    mocks.createIntent.mockReturnValueOnce({ ...launchIntent(), agent: 'claude' })
+    startStructuredAgentLaunch(WORKTREE_ID, 'claude', { requestId: 'request-1', prompt: 'first' })
     // The picker draws a chat on the id Claude ran; its listing names that model as `opus`.
     const efforts = [
       { value: 'low', label: 'Low' },
@@ -310,7 +311,7 @@ describe('picks made while a chat launches', () => {
     await settle()
     expect(mocks.settingsWrite).toHaveBeenLastCalledWith(expect.anything(), {
       type: 'apply-picks',
-      agent: 'codex',
+      agent: 'claude',
       picks: [
         { modelId: 'opus', optionId: 'effort', value: 'high', adoptModelAsLaunchDefault: false }
       ]
